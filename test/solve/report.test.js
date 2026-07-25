@@ -196,4 +196,37 @@ tap.test('report projection (P2)', async (t) => {
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+
+  t.test('reports render EVERY finding, however over-budget the dossier was', (t) => {
+    // The dossier budget is a transport concern only. Reports are a durable
+    // projection of the log, so a bound that leaked into them would be data loss
+    // rather than context management.
+    const root = tmp();
+    const quest = {
+      id: 'demo',
+      statement: 's',
+      doneWhen: {probe: 'oracle', args: {file: 'o.json'}},
+      frontiers: [{id: 'demo-main',
+        metric: {probe: 'oracle', args: {file: 'o.json', metric: 'priority'}}}],
+    };
+    saveQuest(root, quest);
+    const total = 300;
+    for (let i = 0; i < total; i += 1) {
+      appendEvent(root, quest.id, {
+        type: 'finding',
+        frontier: 'demo-main',
+        claim: `durable finding ${i}`,
+        rulesOut: `lever-${i}`,
+      });
+    }
+    const log = readLog(root, quest.id);
+    const md = buildReport(quest, log, projectState(quest, log));
+    const rendered = md.split('\n')
+      .filter((line) => line.includes('durable finding')).length;
+    t.equal(rendered, total, 'all 300 findings reach the report');
+    t.match(md, /durable finding 0\b/u, 'including the oldest');
+    t.match(md, /durable finding 299\b/u, 'and the newest');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
 });

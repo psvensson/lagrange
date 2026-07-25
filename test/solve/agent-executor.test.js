@@ -229,6 +229,66 @@ tap.test('agent executor reflect() over the generic file contract', async (t) =>
     t.end();
   });
 
+  t.test('an over-budget findings set is bounded and its elision is visible', (t) => {
+    const root = tmp();
+    const findings = Array.from({length: 400}, (_, i) => ({
+      claim: `finding ${i} `.repeat(20),
+      rulesOut: `lever-${i}`,
+      // Fields no reader reads; these dominated a real Quest's dossier at 99,653 of
+      // 116,478 bytes and must not reach the agent at all.
+      verification: {blob: 'v'.repeat(2000)},
+      regressionClassification: {a: 1},
+    }));
+    let seen = null;
+    const spawn = (cmd, args) => {
+      seen = JSON.parse(fs.readFileSync(args[0], 'utf8'));
+      fs.writeFileSync(args[1], JSON.stringify({changeRef: null, summary: 'n/a'}));
+      return {status: 0};
+    };
+    const out = makeAgentExecutor(root, {config: CONFIG, spawn})
+      .run({...TASK, frontierState: {findings}});
+
+    t.ok(seen.findings.length < 400, 'the findings array is bounded');
+    t.equal(seen.findingsTotal, 400, 'the true total is stated');
+    t.ok(seen.findingsElided > 0, 'the elided count is a first-class field');
+    t.notMatch(JSON.stringify(seen.findings), /verification/u,
+      'unread fields never reach the agent');
+    t.ok(seen.ruledOutIndex.length > 0,
+      'elided ruled-out levers survive as labels');
+    t.match(seen.rungPrompt, /elided for length/u,
+      'the prompt says the list is partial, so absence never reads as not-found');
+    t.match(seen.rungPrompt, /Also already ruled out/u,
+      'the dead-lever index reaches the prompt');
+    t.ok(out.telemetry.findingsBytes < 200_000,
+      'the measured payload is a fraction of the unbounded 500KB worst case');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('metric history and evidence paths are tailed, visibly', (t) => {
+    const root = tmp();
+    let seen = null;
+    const spawn = (cmd, args) => {
+      seen = JSON.parse(fs.readFileSync(args[0], 'utf8'));
+      fs.writeFileSync(args[1], JSON.stringify({changeRef: null, summary: 'n/a'}));
+      return {status: 0};
+    };
+    makeAgentExecutor(root, {config: CONFIG, spawn}).run({
+      ...TASK,
+      metricHistory: Array.from({length: 60}, (_, i) => 60 - i),
+      evidencePaths: Array.from({length: 40}, (_, i) => `report-${i}.json`),
+    });
+    t.ok(seen.metricHistory.length <= 20, 'metric history is tailed');
+    t.equal(seen.metricHistory.at(-1), 1, 'the most recent value is retained');
+    t.ok(seen.evidencePaths.length <= 10, 'evidence paths are tailed');
+    t.ok(seen.evidencePathsElided > 0, 'the drop is reported, not silent');
+    t.match(seen.rungPrompt, /… -> /u,
+      'a truncated trend keeps a leading marker so its start is not misreported');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('every run path carries measured telemetry, including the failures', (t) => {
     const root = tmp();
     const okSpawn = (cmd, args) => {

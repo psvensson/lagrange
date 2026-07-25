@@ -28,7 +28,15 @@ import path from 'node:path';
 import os from 'node:os';
 import {spawnSync} from 'node:child_process';
 
-import {SOLVE_DATA_DIR, CONFIG_FILE} from './constants.js';
+import {
+  SOLVE_DATA_DIR,
+  CONFIG_FILE,
+  DOSSIER_FINDINGS_MAX_BYTES,
+  DOSSIER_CLAIM_MAX_BYTES,
+  DOSSIER_METRIC_HISTORY_MAX,
+  DOSSIER_EVIDENCE_PATHS_MAX,
+} from './constants.js';
+import {selectDossierFindings} from './dossier-budget.js';
 import {rungPrompt} from './ladder.js';
 
 const LOCAL_STR_OWNED_001 = '/';
@@ -207,11 +215,27 @@ function metricNameOf(frontierDef) {
   return frontierDef.metric?.args?.metric || frontierDef.metric?.probe || 'metric';
 }
 
+// Keep the most recent entries. The trend's SHAPE is what the prompt reads, and the
+// recent end of it is the part that bears on the attempt being made.
+function tail(values, limit) {
+  const list = Array.isArray(values) ? values : [];
+  return list.length > limit ? list.slice(-limit) : list;
+}
+
+function elidedCount(original, kept) {
+  const total = Array.isArray(original) ? original.length : 0;
+  return Math.max(0, total - kept.length);
+}
+
 function buildDossier(task, repoRoot) {
-  const findings = task.frontierState?.findings || [];
+  const selection = selectDossierFindings(task.frontierState?.findings, {
+    maxBytes: DOSSIER_FINDINGS_MAX_BYTES,
+    maxClaimBytes: DOSSIER_CLAIM_MAX_BYTES,
+  });
+  const findings = selection.kept;
   const metricName = metricNameOf(task.frontierDef);
-  const metricHistory = Array.isArray(task.metricHistory) ? task.metricHistory : [];
-  const evidencePaths = Array.isArray(task.evidencePaths) ? task.evidencePaths : [];
+  const metricHistory = tail(task.metricHistory, DOSSIER_METRIC_HISTORY_MAX);
+  const evidencePaths = tail(task.evidencePaths, DOSSIER_EVIDENCE_PATHS_MAX);
   return {
     questId: task.quest.id,
     statement: task.quest.statement,
@@ -224,7 +248,10 @@ function buildDossier(task, repoRoot) {
       metricName,
       rungIndex: task.rungIndex,
       metricHistory,
+      metricHistoryElided: elidedCount(task.metricHistory, metricHistory),
       findings,
+      ruledOutIndex: selection.ruledOutIndex,
+      findingsElided: selection.elidedCount,
       selectedTheory:
         task.theories?.byId?.[
           task.theories?.selectedByFrontier?.[task.frontierDef.id]
@@ -235,6 +262,14 @@ function buildDossier(task, repoRoot) {
     metricHistory,
     evidencePaths,
     findings,
+    // Elision is a first-class dossier field, not only prompt prose. The documented
+    // contract lets an adapter read request.findings programmatically, and such a
+    // reader must never see a silently short array — absence would read as "no such
+    // finding exists", which is exactly the re-derivation this bound must not cause.
+    findingsElided: selection.elidedCount,
+    findingsTotal: selection.totalCount,
+    ruledOutIndex: selection.ruledOutIndex,
+    evidencePathsElided: elidedCount(task.evidencePaths, evidencePaths),
     selectedTheory:
       task.theories?.selectedByFrontier?.[task.frontierDef.id] || null,
     constraints: task.quest.constraints || [],

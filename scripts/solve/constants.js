@@ -181,6 +181,19 @@ export const SYSTEM_THEORY_STALL_THRESHOLD = RUNG_INDEX_MODEL;
 // (split the quest, park, or author a successor), never one more override.
 export const SAME_GUARD_OVERRIDE_LIMIT = 3;
 
+// Per-attempt dossier budget (see dossier-budget.js). Each attempt hands a FRESH
+// agent a dossier rebuilt from the log, so these bound what any single agent starts
+// with rather than an accumulating conversation. 32 KB of findings is generous
+// against the measured corpus — only 6 of 388 Quests' full findings exceed 50 KB, and
+// field projection alone brings the worst offender down 99% — while capping the tail
+// that made a 74th attempt carry all 383 of its Quest's findings.
+export const DOSSIER_FINDINGS_MAX_BYTES = 32 * 1024;
+// One real claim reached 4,841 bytes. Truncate rather than drop: a truncated claim
+// still names its lever, which is the part that prevents re-derivation.
+export const DOSSIER_CLAIM_MAX_BYTES = 1500;
+export const DOSSIER_METRIC_HISTORY_MAX = 20;
+export const DOSSIER_EVIDENCE_PATHS_MAX = 10;
+
 // Convergence guards: generic Solver detectors that keep an autonomous Quest from
 // spinning on a coupled-invariant oscillation (one invariant family is fixed while a
 // definitionally-coupled family re-breaks, ad infinitum). Each guard keys off real
