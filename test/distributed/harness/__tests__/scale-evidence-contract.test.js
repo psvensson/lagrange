@@ -409,6 +409,24 @@ test('gate evidence must resolve to a declared artifact', (t) => {
   t.end();
 });
 
+test('passing feasibility and safety gates reject contradictory payloads',
+  (t) => {
+    const infeasible = evidenceInput();
+    infeasible.gates.feasibility.reasonCodes = ['insufficient_capacity'];
+    t.throws(
+      () => createScaleEvidenceReport(infeasible),
+      /gates\.feasibility\.reasonCodes:pass_requires_empty/u,
+    );
+
+    const unsafe = evidenceInput();
+    unsafe.gates.safety.violationCount = 1;
+    t.throws(
+      () => createScaleEvidenceReport(unsafe),
+      /gates\.safety\.violationCount:pass_requires_zero/u,
+    );
+    t.end();
+  });
+
 test('run completion cannot precede run start', (t) => {
   const input = evidenceInput({
     run: {

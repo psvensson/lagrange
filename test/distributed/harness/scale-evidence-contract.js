@@ -212,10 +212,23 @@ function validateGateEnvelope(report, errors) {
   if (isRecord(gates.feasibility)) {
     pushIf(errors, !Array.isArray(gates.feasibility.reasonCodes),
       'gates.feasibility.reasonCodes:array_required');
+    pushIf(
+      errors,
+      gates.feasibility.status === SCALE_GATE_STATUS.PASS &&
+        Array.isArray(gates.feasibility.reasonCodes) &&
+        gates.feasibility.reasonCodes.length > ZERO,
+      'gates.feasibility.reasonCodes:pass_requires_empty',
+    );
   }
   if (isRecord(gates.safety)) {
     pushIf(errors, !isNonNegativeInteger(gates.safety.violationCount),
       'gates.safety.violationCount:non_negative_integer_required');
+    pushIf(
+      errors,
+      gates.safety.status === SCALE_GATE_STATUS.PASS &&
+        gates.safety.violationCount !== ZERO,
+      'gates.safety.violationCount:pass_requires_zero',
+    );
   }
   if (isRecord(gates.performance)) {
     pushIf(errors, !isNonEmptyText(gates.performance.baselineId),
