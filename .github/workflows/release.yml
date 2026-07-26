@@ -1,0 +1,216 @@
+# GitHub Actions release — runs only when a maintainer pushes a `v*` tag.
+#
+# Repository configuration:
+#   variable DOCKERHUB_USERNAME — Docker Hub username (for example psvensson)
+#   secret   DOCKERHUB_TOKEN    — Docker Hub PAT with Read/Write scope
+name: release
+
+on:
+  push:
+    tags: ["v*"]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: release-publish
+  cancel-in-progress: false
+
+env:
+  DOCKERHUB_IMAGE: docker.io/psvensson/lagrange
+
+jobs:
+  release:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 180
+    permissions:
+      contents: write
+    steps:
+      - name: Checkout tagged source
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Set up Node 22
+        uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
+        with:
+          node-version: "22"
+          package-manager-cache: false
+
+      # Fail before the expensive gate if the tag, package version, or changelog
+      # section disagree. The rendered files are reused by the final publish steps.
+      - name: Resolve version and render release notes
+        id: release
+        run: |
+          set -euo pipefail
+          VERSION="${GITHUB_REF_NAME#v}"
+          test "$(git cat-file -t "refs/tags/$GITHUB_REF_NAME")" = "tag"
+          TAGGED_COMMIT="$(git rev-parse "${GITHUB_REF_NAME}^{commit}")"
+          test "$(git rev-parse HEAD)" = "$TAGGED_COMMIT"
+          git show-ref --verify --quiet refs/remotes/origin/main
+          git merge-base --is-ancestor "$TAGGED_COMMIT" origin/main
+          LATEST_TAG="$(git tag --list 'v[0-9]*' --sort=-version:refname | head -n 1)"
+          if [ "$GITHUB_REF_NAME" != "$LATEST_TAG" ]; then
+            echo "::error::Refusing to move :latest backward from $LATEST_TAG to $GITHUB_REF_NAME"
+            exit 1
+          fi
+          NOTES_DIR="$RUNNER_TEMP/lagrange-release-notes"
+          mkdir -p "$NOTES_DIR"
+          node scripts/release-notes.js --mode check --version "$VERSION"
+          node scripts/release-notes.js --mode notes --version "$VERSION" \
+            > "$NOTES_DIR/release-notes.md"
+          node scripts/release-notes.js --mode overview --version "$VERSION" \
+            > "$NOTES_DIR/dockerhub-overview.md"
+          echo "version=$VERSION" >> "$GITHUB_OUTPUT"
+          echo "tagged_commit=$TAGGED_COMMIT" >> "$GITHUB_OUTPUT"
+          echo "notes_dir=$NOTES_DIR" >> "$GITHUB_OUTPUT"
+          echo "build_date=$(date -u +%Y-%m-%dT%H:%M:%SZ)" >> "$GITHUB_OUTPUT"
+
+      - name: Install gate CLI tools
+        run: |
+          set -euo pipefail
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends \
+            ripgrep jq default-jre-headless postgresql-client curl
+          HELM_VERSION=v3.16.3
+          HELM_ARCHIVE="helm-${HELM_VERSION}-linux-amd64.tar.gz"
+          cd "$RUNNER_TEMP"
+          curl -fsSLO "https://get.helm.sh/${HELM_ARCHIVE}"
+          curl -fsSLO "https://get.helm.sh/${HELM_ARCHIVE}.sha256sum"
+          sha256sum --check "${HELM_ARCHIVE}.sha256sum"
+          tar -xzf "$HELM_ARCHIVE"
+          sudo install linux-amd64/helm /usr/local/bin/helm
+          helm version --short
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Full pre-release gate
+        run: npm run test:ci
+
+      - name: Build bundle and SEA binaries
+        run: npm run build:all
+
+      - name: Package Helm chart
+        run: helm package charts/lagrange-node --destination dist/
+
+      - name: Checksum release artifacts
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.release.outputs.version }}"
+          cd dist
+          ASSETS=(lagrange lagrange-cli "lagrange-node-${VERSION}.tgz")
+          for asset in "${ASSETS[@]}"; do
+            test -f "$asset"
+          done
+          sha256sum "${ASSETS[@]}" > SHA256SUMS
+          test -s SHA256SUMS
+          cat SHA256SUMS
+          rm -rf node_modules
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@4d04d5d9486b7bd6fa91e7baf45bbb4f8b9deedd # v4.0.0
+
+      # Build and smoke-test before Docker Hub credentials enter the job.
+      - name: Build Docker image
+        uses: docker/build-push-action@f9f3042f7e2789586610d6e8b85c8f03e5195baf # v7.2.0
+        with:
+          context: .
+          load: true
+          platforms: linux/amd64
+          tags: |
+            ${{ env.DOCKERHUB_IMAGE }}:${{ steps.release.outputs.version }}
+            ${{ env.DOCKERHUB_IMAGE }}:latest
+          build-args: |
+            VERSION=${{ steps.release.outputs.version }}
+            VCS_REF=${{ steps.release.outputs.tagged_commit }}
+            BUILD_DATE=${{ steps.release.outputs.build_date }}
+
+      - name: Smoke-test Docker image
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.release.outputs.version }}"
+          VERSION_OUTPUT="$(
+            docker run --rm "$DOCKERHUB_IMAGE:$VERSION" src/index.js --version
+          )"
+          test "$VERSION_OUTPUT" = "lagrange v$VERSION"
+          test "$(docker image inspect --format \
+            '{{ index .Config.Labels "org.opencontainers.image.version" }}' \
+            "$DOCKERHUB_IMAGE:$VERSION")" = "$VERSION"
+
+      - name: Log in to Docker Hub
+        uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+
+      - name: Push Docker images
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.release.outputs.version }}"
+          retry() {
+            local attempt=0
+            until "$@"; do
+              attempt=$((attempt + 1))
+              if [ "$attempt" -ge 3 ]; then
+                return 1
+              fi
+              sleep "$((attempt * 5))"
+            done
+          }
+          retry docker push "$DOCKERHUB_IMAGE:$VERSION"
+          LATEST_REMOTE_TAG="$(
+            gh api --paginate \
+              "repos/$GITHUB_REPOSITORY/git/matching-refs/tags/v" \
+              --jq '.[].ref' \
+              | sed 's#^refs/tags/##' \
+              | sort -V \
+              | tail -n 1
+          )"
+          if [ "$GITHUB_REF_NAME" != "$LATEST_REMOTE_TAG" ]; then
+            echo "::error::Refusing to move :latest backward from $LATEST_REMOTE_TAG to $GITHUB_REF_NAME"
+            exit 1
+          fi
+          retry docker push "$DOCKERHUB_IMAGE:latest"
+
+      - name: Update Docker Hub repository description
+        continue-on-error: true
+        uses: peter-evans/dockerhub-description@1b9a80c056b620d92cedb9d9b5a223409c68ddfa # v5.0.0
+        with:
+          username: ${{ vars.DOCKERHUB_USERNAME }}
+          password: ${{ secrets.DOCKERHUB_TOKEN }}
+          repository: psvensson/lagrange
+          readme-filepath: ${{ steps.release.outputs.notes_dir }}/dockerhub-overview.md
+
+      - name: Publish GitHub Release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.release.outputs.version }}"
+          ASSETS=(
+            dist/lagrange
+            dist/lagrange-cli
+            "dist/lagrange-node-${VERSION}.tgz"
+            dist/SHA256SUMS
+          )
+          for asset in "${ASSETS[@]}"; do
+            test -f "$asset"
+          done
+          NOTES="${{ steps.release.outputs.notes_dir }}/release-notes.md"
+          if gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1; then
+            gh release upload "$GITHUB_REF_NAME" "${ASSETS[@]}" --clobber
+            gh release edit "$GITHUB_REF_NAME" \
+              --title "Lagrange $GITHUB_REF_NAME" \
+              --notes-file "$NOTES" \
+              --draft=false \
+              --latest
+          else
+            gh release create "$GITHUB_REF_NAME" "${ASSETS[@]}" \
+              --verify-tag \
+              --title "Lagrange $GITHUB_REF_NAME" \
+              --notes-file "$NOTES"
+          fi

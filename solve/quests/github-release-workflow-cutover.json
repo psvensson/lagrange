@@ -1,0 +1,40 @@
+{
+  "id": "github-release-workflow-cutover",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The GitHub Actions release workflow is the sole release owner: a v* tag runs the full release gate, builds checksummed SEA and Helm artifacts, publishes a GitHub Release, and pushes versioned and latest images to docker.io/psvensson/lagrange; active release metadata and operator documentation contain no Codeberg or Forgejo owner path.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "release-0-1-0-alpha",
+    "planDoc": null,
+    "draftedAtCommit": "8da12a4ec4e40b672fda7f77626f6c89e6a01cd2"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/github-release-workflow-cutover.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "github-release-workflow-cutover-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/github-release-workflow-cutover.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
