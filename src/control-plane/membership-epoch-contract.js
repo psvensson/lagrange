@@ -1,3 +1,6 @@
+import {
+  CONTROL_PLANE_PUBLICATION_STATUS,
+} from './publication-owner-constants.js';
 
 const MEMBERSHIP_EPOCH_OWNER = 'topology_membership_owner';
 const MEMBERSHIP_EPOCH_BOUNDARY = 'membership_epoch';
@@ -271,6 +274,52 @@ function buildMembershipEpochFence(options = {}) {
   });
 }
 
+function readPublicationRowEpochValue(row) {
+  return buildMembershipEpochValue(
+    row?.[MEMBERSHIP_EPOCH_ROW_FIELD.PUBLICATION_EPOCH] ??
+      row?.[MEMBERSHIP_EPOCH_ROW_FIELD.PUBLICATION_EPOCH_CAMEL],
+  );
+}
+
+function isPublishedPublicationRow(row) {
+  return String(row?.status ?? MEMBERSHIP_EPOCH_EMPTY_TEXT).toUpperCase() ===
+    CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED;
+}
+
+/**
+ * Derive the latest PUBLISHED membership publication epoch from cached
+ * `control_plane_publications` rows (the S4 snapshot-identity seam). Rows
+ * whose status is not PUBLISHED are ignored; among published rows the
+ * largest available publication epoch wins; the bootstrap fallback is 0 —
+ * sound under the descriptor>=receiver identity match direction.
+ * @param {Array<Object>} publicationRows cached control_plane_publications
+ *   rows (snake_case or camelCase field spelling)
+ * @return {number} the latest published publication epoch, or 0 when none
+ *   is available
+ */
+function selectLatestPublishedMembershipEpoch(publicationRows) {
+  const rows = Array.isArray(publicationRows) ? publicationRows : [];
+  const latestPublishedPublicationRow = rows
+    .filter((row) => isPublishedPublicationRow(row) &&
+      isMembershipEpochValueAvailable(readPublicationRowEpochValue(row)))
+    .reduce((latest, row) => {
+      if (latest === null) {
+        return row;
+      }
+      return readPublicationRowEpochValue(row).value >
+        readPublicationRowEpochValue(latest).value ?
+        row :
+        latest;
+    }, null);
+  const snapshot = buildMembershipEpochSnapshot({
+    latestPublishedPublicationRow,
+  });
+  return snapshot.publicationEpochState ===
+    MEMBERSHIP_EPOCH_VALUE_STATE.AVAILABLE ?
+    snapshot.publicationEpoch :
+    0;
+}
+
 function isMembershipEpochFenceCurrent(fence) {
   return Boolean(
     fence &&
@@ -290,4 +339,5 @@ export {
   buildMembershipEpochFence,
   buildMembershipEpochSnapshot,
   isMembershipEpochFenceCurrent,
+  selectLatestPublishedMembershipEpoch,
 };

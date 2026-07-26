@@ -53,6 +53,7 @@ const CONFIG_KEY = Object.freeze({
     'raft.leaderActivationStabilizationMs',
   RAFT_LEADER_ACTIVATION_NODE_SPACING_MS:
     'raft.leaderActivationNodeSpacingMs',
+  RAFT_SNAPSHOT_CLUSTER_ID: 'raft.snapshotClusterId',
 
   MESSAGE_GROUP_REPLICA_COUNT: 'messageGroup.replicaCount',
   MESSAGE_GROUP_DELIVERY_TIMEOUT_MS: 'messageGroup.deliveryTimeoutMs',

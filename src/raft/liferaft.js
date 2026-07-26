@@ -4,6 +4,10 @@ import {
   isRaftCommittedEntryConflict,
 } from './committed-entry-guard.js';
 import {RAFT_PACKET_TYPE} from './constants.js';
+import {
+  RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME,
+  buildSnapshotCatchupDecision,
+} from './snapshot-catchup-constants.js';
 import {VirtualTick} from './virtual-tick.js';
 
 const NUMERIC_ONE = 1;
@@ -76,6 +80,46 @@ function resolveFollowerLastIndex(packet) {
   return hasFiniteNumber(packet?.last?.index) ?
     packet.last.index :
     null;
+}
+
+// S4 compacted-follower catch-up (quest raft-snapshot-compacted-follower-
+// catchup): a follower whose required prefix sits at or below this leader's
+// snapshot boundary can never be caught up by log replay — the bytes are
+// legitimately gone — so the leader emits a typed install_snapshot decision
+// instead of silently dropping the append-fail forever (the b1/b2
+// livelocks). Every OTHER empty catch-up read (boundary-0 gap, an
+// above-boundary torn log) is LOG CORRUPTION and emits the DISTINCT
+// catchup_range_empty decision, never install_snapshot, so the dispatcher's
+// create-if-none fallback cannot mint a checkpoint that papers over
+// corruption. liferaft only EMITS decisions: dispatch lives in
+// snapshot-catchup.js behind the injected onSnapshotCatchupNeeded callback
+// (stashed per the _catchupTimeSource precedent); with no callback the
+// decision is still recorded on the instance (an observable no-op), and
+// emission never throws into packet handling. The in-memory adapter has no
+// getSnapshotBoundary, so message-group raft never draws a positive
+// boundary and is structurally unaffected.
+function readLeaderSnapshotBoundaryIndex(raft) {
+  const boundary = typeof raft.log?.getSnapshotBoundary === LOCAL_STR_FUNCTION ?
+    raft.log.getSnapshotBoundary() :
+    null;
+  return hasFiniteNumber(boundary?.lastIncludedIndex) ?
+    boundary.lastIncludedIndex :
+    NUMERIC_ZERO;
+}
+
+function emitSnapshotCatchupDecision(raft, facts) {
+  const decision = buildSnapshotCatchupDecision(facts);
+  raft._lastSnapshotCatchupDecision = decision;
+  if (typeof raft._onSnapshotCatchupNeeded !== LOCAL_STR_FUNCTION) {
+    return;
+  }
+  try {
+    raft._onSnapshotCatchupNeeded(decision);
+  } catch (error) {
+    // Dispatch failures must never disturb leader packet handling; the
+    // recorded decision stays observable either way.
+    raft._lastSnapshotCatchupDecisionError = error;
+  }
 }
 
 function applyIncomingAppendPreamble(raft, packet) {
@@ -273,12 +317,6 @@ function patchIncomingDataListener(raft) {
     if (!hasFiniteNumber(failedIndex)) {
       return null;
     }
-    const recoveredEntry = await raft.log.get(failedIndex);
-    if (!isRecoverableAppendEntry(recoveredEntry)) {
-      // Existing unrecoverable guard (compacted/absent index).
-      write();
-      return true;
-    }
     // Fast-forward to the FOLLOWER'S position: packet.last is the sender's
     // own last log info. Without this the backward fail-walk persists and
     // batching is cosmetic.
@@ -286,6 +324,39 @@ function patchIncomingDataListener(raft) {
     const startIndex = followerLastIndex === null ?
       failedIndex :
       Math.min(failedIndex, followerLastIndex + 1);
+    const leaderBoundary = readLeaderSnapshotBoundaryIndex(raft);
+    const decisionFacts = {
+      followerAddress: packet.address,
+      startIndex,
+      failedIndex,
+      leaderBoundary,
+    };
+    const recoveredEntry = await raft.log.get(failedIndex);
+    if (!isRecoverableAppendEntry(recoveredEntry)) {
+      // Existing unrecoverable guard (compacted/absent index). At or below a
+      // positive boundary the entry is legitimately compacted — the b2
+      // livelock variant — and only an install makes progress; every other
+      // unrecoverable index keeps the existing drop.
+      if (leaderBoundary > NUMERIC_ZERO && failedIndex <= leaderBoundary) {
+        emitSnapshotCatchupDecision(raft, {
+          ...decisionFacts,
+          outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
+        });
+      }
+      write();
+      return true;
+    }
+    // b1 livelock variant: the follower needs entries starting at or below
+    // the boundary — the retained prefix is genuinely absent, so reading the
+    // range would come back empty and silently drop forever.
+    if (leaderBoundary > NUMERIC_ZERO && startIndex <= leaderBoundary) {
+      emitSnapshotCatchupDecision(raft, {
+        ...decisionFacts,
+        outcome: RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT,
+      });
+      write();
+      return true;
+    }
     const lastInfo = await raft.log.getLastInfo();
     const endIndex = Math.min(
       startIndex + CATCHUP_BATCH_SIZE - 1,
@@ -314,6 +385,18 @@ function patchIncomingDataListener(raft) {
     }
     const entries = await readCatchupEntries(raft, startIndex, endIndex);
     if (entries.length === 0) {
+      // At or below a positive boundary this is redundant with the b1 site
+      // above (kept as defense in depth). Every remaining empty read —
+      // boundary-0 gaps, above-boundary torn logs — is LOG CORRUPTION and
+      // emits the DISTINCT catchup_range_empty decision, NEVER
+      // install_snapshot (design-verifier MUST-CHANGE).
+      emitSnapshotCatchupDecision(raft, {
+        ...decisionFacts,
+        outcome:
+          leaderBoundary > NUMERIC_ZERO && startIndex <= leaderBoundary ?
+            RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.INSTALL_SNAPSHOT :
+            RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME.CATCHUP_RANGE_EMPTY,
+      });
       write();
       return true;
     }
@@ -520,6 +603,15 @@ class LifeRaft extends BaseLifeRaft {
     if (options && options.randomSource &&
         typeof options.randomSource.random === 'function') {
       this._electionRandomSource = options.randomSource;
+    }
+    // S4 snapshot catch-up decision seam (OPT-IN): the partition RaftNode
+    // construction site passes onSnapshotCatchupNeeded explicitly
+    // (partition-service-raft-init-base.js); stashed here per the
+    // _catchupTimeSource precedent. Absent callback, emitted decisions are
+    // still recorded on the instance as an observable typed no-op.
+    if (options &&
+        typeof options.onSnapshotCatchupNeeded === LOCAL_STR_FUNCTION) {
+      this._onSnapshotCatchupNeeded = options.onSnapshotCatchupNeeded;
     }
     // DT4 Raft election seam (OPT-IN): base liferaft schedules its heartbeat +
     // randomized election timeout through `this.timers` (a tick-tock Tick on

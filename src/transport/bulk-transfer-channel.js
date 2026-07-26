@@ -280,7 +280,7 @@ function createBulkTransferConnection(context) {
  * one channel per peer nodeId, and aggregates the byte-denominated stats the
  * router stats bridge exposes to the pressure governor.
  * @param {Object} [options] {nodeId, logger, tokenBucket, maxPendingSends,
- *   now}
+ *   now, createWebSocket}
  * @return {Object} the registry
  */
 function createBulkTransferChannelRegistry(options = {}) {
@@ -291,6 +291,13 @@ function createBulkTransferChannelRegistry(options = {}) {
     BULK_TRANSFER_CHANNEL_DEFAULT.MAX_PENDING_SENDS;
   const tokenBucket = options.tokenBucket ||
     createByteRateTokenBucket({now: options.now});
+  // Dial construction seam (guard-only injection): production always dials
+  // the real ws client; the S4 recorded-gap guard injects a capturing
+  // constructor to pin the per-socket maxPayload on the dial options.
+  const createWebSocket =
+    typeof options.createWebSocket === BULK_CHANNEL_TYPEOF.FUNCTION ?
+      options.createWebSocket :
+      (address, wsOptions) => new WebSocket(address, wsOptions);
   const connections = new Map();
 
   const dropConnection = (nodeId, closedConnection) => {
@@ -331,7 +338,7 @@ function createBulkTransferChannelRegistry(options = {}) {
           dialOptions.maxPayload > 0 ?
         dialOptions.maxPayload :
         BULK_TRANSFER_CHANNEL_DEFAULT.MAX_PAYLOAD_BYTES;
-      const ws = new WebSocket(address, {maxPayload});
+      const ws = createWebSocket(address, {maxPayload});
       await new Promise((resolve, reject) => {
         const failDial = (error) => reject(error);
         ws.once(TRANSPORT_EVENT.OPEN, () => {

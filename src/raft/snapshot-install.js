@@ -387,4 +387,5 @@ export {
   requestSnapshotInstall,
   resolveDurableElectionRule,
   resolvePendingSnapshotInstall,
+  resolveReplicaCheckpointsRoot,
 };

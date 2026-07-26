@@ -8,14 +8,17 @@ import {
 } from './partition-service-raft-lifecycle-wiring.js';
 import {PartitionServiceCoreBase} from './partition-service-core-base.js';
 import {warmHlcFromDurableWitnesses} from './partition-hlc-warmup.js';
-import {resolvePendingSnapshotInstall} from '../raft/snapshot-install.js';
+import {
+  createPartitionServiceTable,
+} from './partition-service-table-bootstrap.js';
+import {
+  resolvePendingSnapshotInstall,
+  resolveReplicaCheckpointsRoot,
+} from '../raft/snapshot-install.js';
 import {RAFT_SNAPSHOT_INSTALL_OUTCOME} from '../raft/snapshot-install-constants.js';
 import {
-  generateCreateIndexSQL,
-} from '../bootstrap/system-table-schema-sql.js';
-import {
-  getSchemaByTableName,
-} from '../bootstrap/system-table-schemas-constants.js';
+  cleanupStaleTransferStaging,
+} from '../raft/snapshot-transfer-receiver.js';
 
 const {
   AddressManager,
@@ -27,8 +30,6 @@ const {
   ENTITY_TYPE,
   LifeRaft,
   PARTITION_SERVICE_ADDRESS,
-  PARTITION_SERVICE_COLUMN,
-  PARTITION_SERVICE_COLUMN_SQL,
   PARTITION_SERVICE_DB,
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
@@ -39,7 +40,6 @@ const {
   PARTITION_SERVICE_LITERAL,
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_ROLE,
-  PARTITION_SERVICE_SQL_FRAGMENT,
   PARTITION_SERVICE_TYPE,
   PARTITION_SERVICE_VALUE,
   PartitionRaftStorage,
@@ -47,7 +47,6 @@ const {
   ReplicaStatus,
   SERVICE_TYPE,
   SQLiteLogAdapter,
-  SYSTEM_TABLE_NAME,
   TABLES,
   applyRuntimeRaftTiming,
   assertCritical,
@@ -57,15 +56,6 @@ const {
   resolveCanonicalPartitionLeaderObservation,
   resolveRaftTransportDeliveryOptions,
 } = PARTITION_SERVICE_SHARED;
-
-function quoteSqliteIdentifier(identifier) {
-  return PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE +
-    String(identifier).replaceAll(
-      PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE,
-      PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE.repeat(2),
-    ) +
-    PARTITION_SERVICE_SQL_FRAGMENT.DOUBLE_QUOTE;
-}
 
 class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
   /**
@@ -311,6 +301,11 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
           `${installResolution.detail}`,
         );
       }
+      // Recorded-gap closure (S4): sweep stale transfer staging at the same
+      // closed-handle boot boundary — no transfer is in flight during init,
+      // so every staged transfer directory here is a leftover.
+      cleanupStaleTransferStaging(
+        resolveReplicaCheckpointsRoot(this.dbPath));
     }
     this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.OPENING_DB, {
       dbPath: this.dbPath,
@@ -420,7 +415,26 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       [PARTITION_SERVICE_LIFERAFT_TIMER.LOG]: function() {
         return logAdapter;
       },
+      // S4 snapshot catch-up decision seam: forwarded to the service's
+      // settable onSnapshotCatchupNeeded (dispatch ownership is S6
+      // production wiring; guards inject their own seam).
+      onSnapshotCatchupNeeded: (decision) => {
+        if (typeof this.onSnapshotCatchupNeeded ===
+            PARTITION_SERVICE_TYPE.FUNCTION) {
+          this.onSnapshotCatchupNeeded(decision);
+        }
+      },
     });
+    // Recorded-gap closure (S4, pre-existing defect): base liferaft always
+    // boots at term 0, but an INSTALLED replica carries a durable
+    // currentTerm (nothing else persists that row today, so the blast
+    // radius is exactly installed replicas). Seed the live term before any
+    // lifecycle wiring observes it so vote/append term checks start from
+    // durable truth.
+    if (Number.isSafeInteger(this.storage?.currentTerm) &&
+        this.storage.currentTerm > 0) {
+      this.raft.term = this.storage.currentTerm;
+    }
     if (this.deferElection && this.raft) {
       this.raftProvider.clearTimers(
         this.raft,
@@ -685,115 +699,12 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
     return false;
   }
   /**
-   * Create the table based on schema.
+   * Create the table based on schema (DDL owner:
+   * partition-service-table-bootstrap.js).
    * @private
    */
   createTable() {
-    if (!this.schema || !this.schema.columns) {
-      return;
-    }
-    const columns = this.schema.columns
-      .map((col) => {
-        let def = `${col.name} ${col.type}`;
-        if (col.primaryKey) {
-          def += PARTITION_SERVICE_SQL_FRAGMENT.PRIMARY_KEY;
-        }
-        if (col.notNull) {
-          def += PARTITION_SERVICE_SQL_FRAGMENT.NOT_NULL;
-        }
-        if (col.defaultValue !== void 0) {
-          def += ` DEFAULT ${col.defaultValue}`;
-        }
-        return def;
-      })
-      .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
-    const sql =
-      `CREATE TABLE IF NOT EXISTS ${quoteSqliteIdentifier(this.tableName)} ` +
-      `(${columns})`;
-    this.db.exec(sql);
-    this.ensureNodesTableColumns();
-    this.ensureTablesTableColumns();
-    this.ensureMessageGroupsTableColumns();
-    this.ensurePartitionsTableColumns();
-    this.ensureSqlTransactionsTableColumns();
-    this.ensureReplicaOperationsTableColumns();
-    const indexSchema =
-      this.tableName === SYSTEM_TABLE_NAME.WASM_OPERATIONS ?
-        getSchemaByTableName(this.tableName) || this.schema :
-        this.schema;
-    for (const indexSql of generateCreateIndexSQL(indexSchema)) {
-      this.db.exec(indexSql);
-    }
-    this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_TABLE, {
-      tableName: this.tableName,
-      partitionId: this.partitionId,
-    });
-  }
-  /**
-   * Ensure nodes table includes connection_state column for readiness tracking.
-   * @private
-   */
-  ensureNodesTableColumns() {
-    if (this.tableName !== SYSTEM_TABLE_NAME.NODES) {
-      return;
-    }
-    const columns = this.db
-      .prepare(`PRAGMA table_info(${this.tableName})`)
-      .all();
-    const hasConnectionState = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.CONNECTION_STATE,
-    );
-    const hasLegacyWsConnectionState = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.LEGACY_WS_CONNECTION_STATE,
-    );
-    const hasCapabilities = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.CAPABILITIES,
-    );
-    const hasReadyLease = columns.some(
-      (col) => col.name === PARTITION_SERVICE_COLUMN.READY_LEASE_EXPIRES_AT,
-    );
-    let connectionStateAdded = false;
-    if (!hasConnectionState) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_CONNECTION_STATE,
-      );
-      connectionStateAdded = true;
-      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_CONNECTION_STATE, {
-        tableName: this.tableName,
-        partitionId: this.partitionId,
-      });
-    }
-    if (connectionStateAdded && hasLegacyWsConnectionState) {
-      this.db.exec(
-        `UPDATE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.BACKFILL_CONNECTION_STATE_FROM_LEGACY_WS,
-      );
-      this.logger.info(
-        PARTITION_SERVICE_LOG_MSG.MIGRATED_CONNECTION_STATE_FROM_LEGACY_WS,
-        {tableName: this.tableName, partitionId: this.partitionId},
-      );
-    }
-    if (!hasCapabilities) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_CAPABILITIES,
-      );
-      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_CAPABILITIES, {
-        tableName: this.tableName,
-        partitionId: this.partitionId,
-      });
-    }
-    if (!hasReadyLease) {
-      this.db.exec(
-        `ALTER TABLE ${this.tableName} ` +
-          PARTITION_SERVICE_COLUMN_SQL.ADD_READY_LEASE_EXPIRES_AT,
-      );
-      this.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_READY_LEASE, {
-        tableName: this.tableName,
-        partitionId: this.partitionId,
-      });
-    }
+    createPartitionServiceTable(this);
   }
 }
 export {PartitionServiceRaftInitBase};

@@ -196,6 +196,14 @@ class PartitionServiceCoreBase extends EventEmitter {
       typeof options.onInitializationStage === PARTITION_SERVICE_TYPE.FUNCTION ?
         options.onInitializationStage :
         null;
+    // S4 snapshot catch-up decision seam: settable before or after
+    // construction; threaded into the RaftNode options at the partition
+    // construction site (partition-service-raft-init-base.js).
+    this.onSnapshotCatchupNeeded =
+      typeof options.onSnapshotCatchupNeeded ===
+        PARTITION_SERVICE_TYPE.FUNCTION ?
+        options.onSnapshotCatchupNeeded :
+        null;
     this.initialized = false;
     this.isShutdown = false;
     this.isLeader = false;
