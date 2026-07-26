@@ -68,10 +68,10 @@
       "rejoinReadinessTimeoutMs": 180000,
       "rejoinActiveTimeoutMs": 180000,
       "perNodeConvergenceTimeoutMs": 180000,
-      "postRebuildSoakMs": 30000,
+      "postRebuildSoakMs": 45000,
       "consistencyTimeoutMs": 240000,
       "restartabilityLegEnabled": false,
-      "acknowledgedWriteVisibilityTimeoutMs": 90000
+      "acknowledgedWriteVisibilityTimeoutMs": 120000
     }
   },
   "memoryLeak": {

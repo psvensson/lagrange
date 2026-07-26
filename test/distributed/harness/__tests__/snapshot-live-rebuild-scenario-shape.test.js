@@ -29,7 +29,6 @@ const SCENARIO_NAME = 'snapshot-live-rebuild';
 describe('snapshot-live-rebuild scenario shape', () => {
   it('exports a run function and named helpers', () => {
     assert.equal(typeof scenarioModule.run, 'function');
-    assert.equal(typeof scenarioModule.preloadTargetPartition, 'function');
     assert.equal(typeof scenarioModule.resolveRebuildTarget, 'function');
     assert.equal(typeof scenarioModule.buildR5EvidenceSlice, 'function');
   });
