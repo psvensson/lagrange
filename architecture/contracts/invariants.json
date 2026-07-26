@@ -245,6 +245,106 @@
         "trigger": {"policy": "on-quest-closure", "scope": "owner:operation_workflow_owner", "cost": "cheap"},
         "restoration": {"autoSpawn": true}
       }
+    },
+    {
+      "id": "published-node-transport-alive-trough-retention",
+      "owner": "control_plane_projection_owner",
+      "boundary": "active_node_projection",
+      "kind": "safety",
+      "statement": "The strict-mode active-node projection retains an already-published node that is transport-alive and within the heartbeat grace through a transient heartbeat-stall trough, while never promoting a non-baseline node on that grace and still trimming a published node that is genuinely stale (CL-001 variant C).",
+      "formalPredicate": "\\A n: PublishedBaseline(n) /\\ TransportAlive(n) /\\ WithinHeartbeatGrace(n) => Retained(n); \\A m: ~PublishedBaseline(m) => ~AdmittedByGrace(m)",
+      "contractRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-001.md",
+      "liveEvidence": {
+        "tier": 2,
+        "holdsWhen": "the CL-001 deterministic repro asserts the strict-mode projection retains the published transport-alive trough node, keeps the never-published node out, trims the genuinely stale node, and attributes retention-grace misses; exits 0",
+        "evidence": {
+          "kind": "repro",
+          "ref": "npm run repro -- CL-001",
+          "test": "test/control-plane/active-node-projection.test.js"
+        },
+        "trigger": {"policy": "on-quest-closure", "scope": "owner:control_plane_projection_owner", "cost": "cheap"},
+        "restoration": {"autoSpawn": true}
+      }
+    },
+    {
+      "id": "seed-planning-snapshot-merge-memo-engaged",
+      "owner": "control_plane_readiness_owner",
+      "boundary": "seed_event_loop_liveness",
+      "kind": "liveness",
+      "statement": "The stage-3 membership-publication planning-snapshot merge (the residual readiness-build cost CL-033's projection memo does not cover) is memoized per publisher node under the same planning-source revision discipline, so per-routing-call rebuild storms cannot freeze the control-plane seed's event loop past the raft election timeout during recovery (CL-034).",
+      "formalPredicate": "\\A n, window: SourceRevisionStable(n, window) => HeavyMergeBuilds(n, window) \\leq 1",
+      "contractRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-034.md",
+      "liveEvidence": {
+        "tier": 2,
+        "holdsWhen": "the CL-034 deterministic repro counts heavy buildMembershipPublicationPlanningSnapshot/buildPriorityRecoveryPlanningProjection builds per routing call and asserts the merge memo collapses the per-call rebuild storm; goes red if the memo stops engaging; exits 0",
+        "evidence": {
+          "kind": "repro",
+          "ref": "npm run repro -- CL-034",
+          "test": "test/control-plane/cl-034-planning-snapshot-merge-memo.test.js"
+        },
+        "trigger": {"policy": "on-quest-closure", "scope": "owner:control_plane_readiness_owner", "cost": "cheap"},
+        "restoration": {"autoSpawn": true}
+      }
+    },
+    {
+      "id": "seed-planning-projection-memo-engaged",
+      "owner": "control_plane_readiness_owner",
+      "boundary": "seed_event_loop_liveness",
+      "kind": "liveness",
+      "statement": "The priority-recovery planning projection is memoized per publisher node (build once, reuse while the source revision and stale-grace window hold), so the post-restart recovery hot path cannot rebuild the heavy projection per call and freeze the control-plane seed's event loop past the raft election timeout (CL-033).",
+      "formalPredicate": "\\A n, window: SourceRevisionStable(n, window) => HeavyProjectionBuilds(n, window) \\leq 1",
+      "contractRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-033.md",
+      "liveEvidence": {
+        "tier": 2,
+        "holdsWhen": "the CL-033 deterministic repro exercises resolveMemoizedPriorityRecoveryPlanningProjectionSync directly, counts heavy builds, and asserts build-once/reuse; goes red if the memo is silently disabled; exits 0",
+        "evidence": {
+          "kind": "repro",
+          "ref": "npm run repro -- CL-033",
+          "test": "test/control-plane/cl-033-planning-projection-memo.test.js"
+        },
+        "trigger": {"policy": "on-quest-closure", "scope": "owner:control_plane_readiness_owner", "cost": "cheap"},
+        "restoration": {"autoSpawn": true}
+      }
+    },
+    {
+      "id": "replica-voter-ready-visible-to-remove-safety-gate",
+      "owner": "replica_lifecycle_owner",
+      "boundary": "replica_activation_evidence",
+      "kind": "safety",
+      "statement": "A replica's committed learner-to-voter raft promotion is seeded into its own node's local SERVICES row at voter-ready activation, so the REPLACE remove-safety gate observes the promotion instead of deferring on a stale learner/null raft_role forever (CL-035).",
+      "formalPredicate": "VoterReadyActivated(r) => raft_role(LocalServicesRow(r)) \\in VoterRoles",
+      "contractRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-035.md",
+      "liveEvidence": {
+        "tier": 2,
+        "holdsWhen": "the CL-035 deterministic repro asserts seedLocalReplicaVoterRaftRole writes the locally-decided voting role into the real SystemTableCache row, the remove-safety gate accepts the seeded role, and the activation path is wired; exits 0",
+        "evidence": {
+          "kind": "repro",
+          "ref": "npm run repro -- CL-035",
+          "test": "test/control-plane/cl-035-voter-ready-row-seed.test.js"
+        },
+        "trigger": {"policy": "on-quest-closure", "scope": "owner:replica_lifecycle_owner", "cost": "cheap"},
+        "restoration": {"autoSpawn": true}
+      }
+    },
+    {
+      "id": "raft-election-restriction-empty-log-last-term-zero",
+      "owner": "message_group_raft_owner",
+      "boundary": "leader_election",
+      "kind": "safety",
+      "statement": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the log adapters never masquerade an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
+      "formalPredicate": "\\A n: LogEmpty(n) => LastLogTerm(n) = 0",
+      "contractRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-042.md",
+      "liveEvidence": {
+        "tier": 2,
+        "holdsWhen": "the CL-042 deterministic repro asserts a voter holding a committed entry DENIES an empty-log higher-term candidate and exits 0",
+        "evidence": {
+          "kind": "repro",
+          "ref": "npm run repro -- CL-042",
+          "test": "test/closure/CL-042.repro.test.js"
+        },
+        "trigger": {"policy": "on-quest-closure", "scope": "owner:message_group_raft_owner", "cost": "cheap"},
+        "restoration": {"autoSpawn": true}
+      }
     }
   ]
 }

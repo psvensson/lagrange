@@ -1,0 +1,119 @@
+diff --git a/architecture/contracts/invariants.json b/architecture/contracts/invariants.json
+index a60fb4a76c3d115846ea5eab82b18b8c7daf2069..16cf20887a07d08d0907705d4bd42b9217dd60cf 100644
+--- a/architecture/contracts/invariants.json
++++ b/architecture/contracts/invariants.json
+@@ -245,6 +245,26 @@
+         "trigger": {"policy": "on-quest-closure", "scope": "owner:operation_workflow_owner", "cost": "cheap"},
+         "restoration": {"autoSpawn": true}
+       }
++    },
++    {
++      "id": "raft-election-restriction-empty-log-last-term-zero",
++      "owner": "message_group_raft_owner",
++      "boundary": "leader_election",
++      "kind": "safety",
++      "statement": "An empty raft log's last-log-term is 0 (Raft §5.4.1): the log adapters never masquerade an empty log as up-to-date, so a voter holding committed entries denies an empty-log candidate regardless of the candidate's election term (CL-042).",
++      "formalPredicate": "\\A n: LogEmpty(n) => LastLogTerm(n) = 0",
++      "contractRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-042.md",
++      "liveEvidence": {
++        "tier": 2,
++        "holdsWhen": "the CL-042 deterministic repro asserts a voter holding a committed entry DENIES an empty-log higher-term candidate and exits 0",
++        "evidence": {
++          "kind": "repro",
++          "ref": "npm run repro -- CL-042",
++          "test": "test/closure/CL-042.repro.test.js"
++        },
++        "trigger": {"policy": "on-quest-closure", "scope": "owner:message_group_raft_owner", "cost": "cheap"},
++        "restoration": {"autoSpawn": true}
++      }
+     }
+   ]
+ }
+diff --git a/solve/epics/quest-standing-invariants.md b/solve/epics/quest-standing-invariants.md
+index 692ed7ccf97e84c791be8c2b4379906d983eab56..98f770b0768d94d9ef6cf682c94336f279b90ac6 100644
+--- a/solve/epics/quest-standing-invariants.md
++++ b/solve/epics/quest-standing-invariants.md
+@@ -196,3 +196,12 @@ report) and add the auto-link (A) once the predicate-expressibility question is
+   verified against *live evidence*; a BREACH = "the architecture doc no longer reflects the
+   system," resolved by either fixing the runtime or amending the contract/registry/owner map.
+   Spec requirements/design/tasks revised accordingly (Reqs 8–9, design §2.5/§4/§7.5).
++- 2026-07-26 — **Record repair (stale log): the graduated spec COMPLETED 2026-06-26.**
++  WS0–WS4 plus all five follow-ons landed that day (see spec `tasks.md` Status);
++  `LAGRANGE_STANDING_INVARIANTS` was deleted the same day — the live tier now runs
++  unconditionally (quest closures always evaluate in-scope invariants; a real
++  HELD→BREACHED auto-spawns a reopen-budget-bounded restoration Quest). Live state
++  today: 3 invariants HELD; `invariants --score` coverage 3/8 repro-backed CLs.
++  Remaining epic-level axis = **coverage extension** over the scorer worklist
++  (CL-001, CL-033, CL-034, CL-035, CL-042), opened as Quest
++  `standing-invariant-coverage-worklist` this date.
+diff --git a/solve/oracle/standing-invariant-coverage-worklist.json b/solve/oracle/standing-invariant-coverage-worklist.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..275f36a0b1ae8604732f492aeb0b9a1215e6622c
+--- /dev/null
++++ b/solve/oracle/standing-invariant-coverage-worklist.json
+@@ -0,0 +1,19 @@
++{
++  "metric": 4,
++  "target": 0,
++  "done": false,
++  "classification": "standing_invariant_scorer",
++  "detail": {
++    "coverage": 0.5,
++    "coherence": 1,
++    "guarded": 4,
++    "reproBackedCLs": 8,
++    "unguarded": [
++      "CL-001",
++      "CL-033",
++      "CL-034",
++      "CL-035"
++    ],
++    "source": "node scripts/solve.js invariants --score --json"
++  }
++}
+diff --git a/solve/quests/standing-invariant-coverage-worklist.json b/solve/quests/standing-invariant-coverage-worklist.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..1dcb0c65639bbcd6b80bbd56a66b21cb0a236d45
+--- /dev/null
++++ b/solve/quests/standing-invariant-coverage-worklist.json
+@@ -0,0 +1,40 @@
++{
++  "id": "standing-invariant-coverage-worklist",
++  "authoringContractVersion": 1,
++  "verificationContractVersion": 2,
++  "statement": "Every repro-backed closure-ledger CL in the standing-invariant scorer worklist (CL-001, CL-033, CL-034, CL-035, CL-042) is guarded by a Tier-2 liveEvidence standing invariant: node scripts/solve.js invariants --score reports coverage 8/8 repro-backed CLs guarded with coherence 100% (all HELD on clean HEAD), each new entry proven by a revert round-trip (repro exits 1 with the guarded fix faithfully reverted in an isolated worktree, exits 0 restored) recorded as a finding, with npm run model:invariants and npm run model:contract-records green and no new persistent store added.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "solve/specs/standing-invariant-closure/tasks.md",
++    "closesCL": [],
++    "parentQuest": null,
++    "planDoc": null,
++    "draftedAtCommit": "9066af555ecf3ff1820d44e3a20e20279e4914bf"
++  },
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/standing-invariant-coverage-worklist.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "standing-invariant-coverage-worklist-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/standing-invariant-coverage-worklist.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
