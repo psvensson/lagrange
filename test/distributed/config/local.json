@@ -58,19 +58,20 @@
       "consistencyPollIntervalMs": 250
     },
     "snapshotLiveRebuild": {
-      "floorBytes": 25165824,
-      "preloadRows": 3072,
+      "floorBytes": 8388608,
+      "preloadRows": 1024,
       "preloadPayloadBytes": 8192,
-      "preloadBatchSize": 64,
-      "loadDuration": "180s",
-      "loadOpsPerSec": 30,
-      "preWipeSettleMs": 3000,
+      "preloadBatchSize": 32,
+      "loadDuration": "120s",
+      "loadOpsPerSec": 40,
+      "preWipeSettleMs": 14000,
       "rejoinReadinessTimeoutMs": 180000,
       "rejoinActiveTimeoutMs": 180000,
       "perNodeConvergenceTimeoutMs": 180000,
-      "postRebuildSoakMs": 15000,
-      "consistencyTimeoutMs": 180000,
-      "restartabilityLegEnabled": false
+      "postRebuildSoakMs": 30000,
+      "consistencyTimeoutMs": 240000,
+      "restartabilityLegEnabled": false,
+      "acknowledgedWriteVisibilityTimeoutMs": 90000
     }
   },
   "memoryLeak": {

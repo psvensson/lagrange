@@ -275,6 +275,13 @@ function resolveSnapshotLiveRebuildScenarioConfig(options = {}) {
       normalizeFiniteNumber(options.consistencyPollIntervalMs, 250),
     consistencyForceRepairAfterMs:
       normalizeFiniteNumber(options.consistencyForceRepairAfterMs, 0),
+    // Time to wait for the target table's replicas to spread off the seed
+    // before resolving a rebuild target (a fresh cluster hosts everything on
+    // the seed until the rebalancer spreads followers).
+    targetSpreadTimeoutMs:
+      normalizeFiniteNumber(options.targetSpreadTimeoutMs, 180000),
+    targetSpreadPollIntervalMs:
+      normalizeFiniteNumber(options.targetSpreadPollIntervalMs, 2000),
     acknowledgedWriteVisibilityTimeoutMs:
       normalizeFiniteNumber(options.acknowledgedWriteVisibilityTimeoutMs, 30000),
     acknowledgedWriteVisibilityPollIntervalMs:

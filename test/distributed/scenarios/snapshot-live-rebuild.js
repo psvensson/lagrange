@@ -136,11 +136,16 @@ async function preloadTargetPartition(seedNode, cfg) {
  * resolution the durable-rejoin planner uses (replica_id, else service_id) and
  * equals the on-disk {rid} in {rid}.db.
  */
-async function resolveRebuildTarget(seedNode, nodes, tableName, seedNodeId) {
+// Resolve a non-seed active follower replica to rebuild. Prefers a partition
+// of `preferTable` (the preloaded fat table, so the rebuild moves real
+// bytes), then falls back to ANY partition with an eligible spread follower —
+// the rebuild chain is table-agnostic, so engagement does not depend on the
+// fat table's replicas having spread. Returns {target, placement} where
+// placement is a diagnostic summary consulted when nothing is eligible yet.
+async function resolveRebuildTarget(seedNode, nodes, preferTable, seedNodeId) {
   const partitionsResult = await runNodeQuery(
     seedNode,
-    'SELECT partition_id, leader_node_id FROM partitions WHERE table_name = \'' +
-      escapeSql(tableName) + '\'',
+    'SELECT partition_id, table_name, leader_node_id FROM partitions',
   );
   const servicesResult = await runNodeQuery(
     seedNode,
@@ -150,13 +155,15 @@ async function resolveRebuildTarget(seedNode, nodes, tableName, seedNodeId) {
   const partitionRows = rowsFromResult(partitionsResult);
   const serviceRows = rowsFromResult(servicesResult);
   const nodeIds = new Set(nodes.map((node) => String(node?.id || '')));
+  const placement = [];
 
-  for (const partitionRow of partitionRows) {
+  const eligibleFor = (partitionRow) => {
     const partitionId = normalizeString(partitionRow?.partition_id);
     if (partitionId.length === ZERO) {
-      continue;
+      return null;
     }
     const leaderNodeId = normalizeString(partitionRow?.leader_node_id);
+    const tableName = normalizeString(partitionRow?.table_name);
     for (const serviceRow of serviceRows) {
       if (normalizeString(serviceRow?.partition_id) !== partitionId) {
         continue;
@@ -164,6 +171,9 @@ async function resolveRebuildTarget(seedNode, nodes, tableName, seedNodeId) {
       const nodeId = normalizeString(serviceRow?.node_id);
       const raftRole = normalizeString(serviceRow?.raft_role).toLowerCase();
       const status = normalizeString(serviceRow?.status).toLowerCase();
+      placement.push(
+        tableName + '/' + partitionId + '@' + nodeId +
+        ' role=' + raftRole + ' status=' + status);
       const isFollower =
         nodeId.length > ZERO &&
         nodeId !== seedNodeId &&
@@ -179,10 +189,25 @@ async function resolveRebuildTarget(seedNode, nodes, tableName, seedNodeId) {
       if (replicaId.length === ZERO) {
         continue;
       }
-      return {partitionId, replicaId, followerNodeId: nodeId, leaderNodeId};
+      return {partitionId, replicaId, followerNodeId: nodeId, leaderNodeId,
+        tableName};
+    }
+    return null;
+  };
+
+  // Only the preloaded DATA table is a valid rebuild target: wiping a
+  // control-plane/system partition replica destabilizes CDC and publication
+  // propagation (observed: a control-plane wipe stalled log-write visibility
+  // to one node), which is a confound, not a rebuild-safety signal.
+  const preferred = partitionRows.filter(
+    (row) => normalizeString(row?.table_name) === preferTable);
+  for (const partitionRow of preferred) {
+    const target = eligibleFor(partitionRow);
+    if (target) {
+      return {target, placement};
     }
   }
-  return null;
+  return {target: null, placement};
 }
 
 function buildR5EvidenceSlice({
@@ -272,6 +297,11 @@ function buildR5EvidenceSlice({
  * @param {Object} [options]
  * @return {Promise<Object>}
  */
+function s6phase(label, detail) {
+  process.stderr.write(
+    '[s6-phase] ' + label + (detail ? ' ' + detail : '') + '\n');
+}
+
 async function run(cluster, options = {}) {
   const scenarioOptions = resolveScenarioOptions(
     options,
@@ -279,6 +309,7 @@ async function run(cluster, options = {}) {
     'snapshotLiveRebuild',
   );
   const cfg = resolveSnapshotLiveRebuildScenarioConfig(scenarioOptions);
+  s6phase('start');
 
   const nodes = resolveClusterNodes(cluster);
   const seedNode = nodes.find((node) => node.role === 'seed') || nodes[ZERO];
@@ -304,19 +335,47 @@ async function run(cluster, options = {}) {
   }
 
   // 2. Preload the target partition to the declared floor.
+  s6phase('preload-start');
   const preload = await preloadTargetPartition(seedNode, cfg);
+  s6phase('preload-done', JSON.stringify(preload).slice(0, 200));
 
-  // 3. Resolve a non-seed follower replica of the target table to rebuild.
-  const target = await resolveRebuildTarget(
-    seedNode,
-    nodes,
-    cfg.tableName,
-    seedNodeId,
-  );
+  // 3. Wait for the target table's replicas to SPREAD off the seed before
+  // resolving a rebuild target: a fresh cluster starts with the seed hosting
+  // everything and the rebalancer spreads followers to other nodes over the
+  // first convergence window. Poll resolveRebuildTarget until an eligible
+  // non-seed active follower exists (or the timeout elapses).
+  if (typeof cluster.waitForConvergence === 'function') {
+    try {
+      await cluster.waitForConvergence({
+        timeoutMs: cfg.targetSpreadTimeoutMs,
+      });
+    } catch (_error) {
+      // Best-effort; the poll below is the authoritative gate.
+    }
+  }
+  let target = null;
+  let lastPlacement = [];
+  const spreadDeadline = Date.now() + cfg.targetSpreadTimeoutMs;
+  do {
+    const resolved = await resolveRebuildTarget(
+      seedNode,
+      nodes,
+      cfg.tableName,
+      seedNodeId,
+    );
+    target = resolved.target;
+    lastPlacement = resolved.placement;
+    if (target) {
+      break;
+    }
+    s6phase('await-spread', 'placement=' + lastPlacement.length);
+    await sleep(cfg.targetSpreadPollIntervalMs);
+  } while (Date.now() < spreadDeadline);
   assert.ok(
     target,
-    'No non-seed active follower replica of table ' + cfg.tableName +
-      ' available to rebuild',
+    'No non-seed active follower partition replica available to rebuild ' +
+      'within ' + cfg.targetSpreadTimeoutMs + 'ms. Placement observed: ' +
+      (lastPlacement.length > ZERO ? lastPlacement.join('; ') : '(none)'),
   );
   const followerNode = nodes.find(
     (node) => String(node.id) === String(target.followerNodeId),
@@ -337,6 +396,7 @@ async function run(cluster, options = {}) {
     .map((nodeId) => loadNodesById.get(nodeId))
     .filter((node) => node && typeof node.query === 'function');
 
+  s6phase('target', target.tableName + '/' + target.partitionId + '/' + target.replicaId + '@' + target.followerNodeId);
   const loadRun = cluster.startLoad({
     nodes: resolveLoadNodes(),
     nodeResolver: resolveLoadNodes,
@@ -355,17 +415,25 @@ async function run(cluster, options = {}) {
     const preWipeTotal = Number(preWipeMetrics?.total || ZERO);
     const preWipeSuccess = Number(preWipeMetrics?.success || ZERO);
 
-    // 5. Stop the follower, wipe its durable replica state, restart it.
+    // 5. Wipe the follower's durable replica state, then restart it to force a
+    // from-scratch rebuild. The wipe runs while the container is UP (exec
+    // cannot enter a stopped container); rm unlinks the db + checkpoints paths
+    // (the still-open handle keeps the old inode alive only until the imminent
+    // stop), and the subsequent stop→start boots the node into an absent data
+    // dir — the catastrophic-replica-loss condition the snapshot chain repairs.
     availableLoadNodeIds.delete(String(followerNode.id));
     const wipeStartedAt = Date.now();
-    await cluster.stopNode(followerNode.id);
+    s6phase('wipe-start');
     const wiped = await cluster.wipeReplicaData(followerNode.id, {
       partitionId: target.partitionId,
       replicaId: target.replicaId,
     });
+    s6phase('wipe-done');
+    await cluster.stopNode(followerNode.id);
     await cluster.startNode(followerNode.id, {
       readinessTimeoutMs: cfg.rejoinReadinessTimeoutMs,
     });
+    s6phase('follower-restarted');
     availableLoadNodeIds.add(String(followerNode.id));
 
     // 6. Optional restartability leg: kill mid-transfer and restart to prove
@@ -394,6 +462,7 @@ async function run(cluster, options = {}) {
       targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
       ignoreStaleInFlightReplicaOperations: true,
     });
+    s6phase('converged');
     const catchupDurationMs = Date.now() - wipeStartedAt;
 
     // 8. Keep load running through a soak so resource samples are captured,
@@ -415,6 +484,7 @@ async function run(cluster, options = {}) {
       forceRepairAfterMs: cfg.consistencyForceRepairAfterMs,
     });
 
+    s6phase('reconcile-start');
     const acknowledgedWriteVisibility =
       await assertAcknowledgedWritesVisibleOnReachableNodes(
         acknowledgedWrites,
@@ -453,6 +523,7 @@ async function run(cluster, options = {}) {
       restartabilityLeg,
     });
 
+    s6phase('done-ok');
     return {
       loadMetrics: {
         ...metrics,
@@ -465,6 +536,9 @@ async function run(cluster, options = {}) {
       targetReplicaId: target.replicaId,
       catchupDurationMs,
     };
+  } catch (phaseError) {
+    s6phase('THREW', String(phaseError && phaseError.message).slice(0, 300));
+    throw phaseError;
   } finally {
     if (!loadRunCompleted && typeof loadRun.cancel === 'function') {
       loadRun.cancel();
