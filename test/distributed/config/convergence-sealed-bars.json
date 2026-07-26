@@ -1,5 +1,5 @@
 {
-  "_source": "docs/convergence-donewhen-metric.md §5 (sealed doneWhen) + §6 (re-seal 2026-07-01). The bar re-seals UPWARD only, and only when a new N>=15 window's Wilson lower bound clears the old bar. Edit this file only together with a re-seal entry in that doc.",
+  "_source": "docs/convergence-donewhen-metric.md \u00a75 (sealed doneWhen) + \u00a76 (re-seal 2026-07-01). The bar re-seals UPWARD only, and only when a new N>=15 window's Wilson lower bound clears the old bar. Edit this file only together with a re-seal entry in that doc.",
   "confidence": 0.95,
   "scenarios": {
     "rolling-restart": {
@@ -8,6 +8,14 @@
       "nodes": 5,
       "sealedAt": "2026-07-01",
       "promotionWindowMinRuns": 15
+    },
+    "snapshot-live-rebuild": {
+      "wilsonLowerBoundBar": 0.5,
+      "qTarget": 0.871,
+      "nodes": 5,
+      "sealedAt": "2026-07-26",
+      "promotionWindowMinRuns": 15,
+      "_note": "S6 rebuild-safety pass rate (wiped follower rejoins active AND all acknowledged writes visible on every reachable node). Decoupled from cluster-wide priority-spread consistency convergence (the rolling-restart bar). First seal from the N=15 window ts=20260726T192824Z: 12/15, Wilson-95 [0.548, 0.930], safety floor 100% clean (0 corrupt/node-exit/oracle-blind/stale-source), convergeRate 1.0 (zero missing writes on all 15). Bar set below the observed lower bound; re-seals UPWARD only."
     }
   }
 }
