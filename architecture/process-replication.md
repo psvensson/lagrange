@@ -44,12 +44,13 @@ term-anchored descriptor covers the removed prefix. The only truncation on
 the live path is conflict truncation, clamped so it can never reach the
 committed prefix.
 
-Two consequences follow, and both matter operationally:
+Two consequences still hold operationally (until S6 wires the protocol):
 
 - **Logs grow without bound** for the lifetime of a group.
-- **A lagging or newly added replica can only be caught up by full log replay.**
-  There is no snapshot install shortcut, which is the missing half of why the
-  learner-promotion path is written the way it is.
+- **A lagging or newly added replica is in practice caught up by full log
+  replay.** The snapshot install shortcut exists but is not yet production-
+  wired, which remains the missing half of why the learner-promotion path is
+  written the way it is.
 
 ## The write path
 
