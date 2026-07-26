@@ -82,3 +82,17 @@ Managed split snapshot pacing is an unrelated table-copy mechanism.
   checkpoints-root layout. Identity sources remain caller-supplied — pinning
   moves to S3/S4 with the first production wiring. Next: S3
   `raft-snapshot-bulk-transfer`.
+- 2026-07-26 — **S3 SOLVED** (`raft-snapshot-bulk-transfer`, commit 81a197cb;
+  design `bulk-transfer-design.md`, twice-verified; landing round 1 REJECTED
+  on a real registry-eviction bug, fixed with a red-proven regression test).
+  Open question ANSWERED from code: no existing pressure owner sits on
+  raft's path (tryDeliverRaftDirect bypasses the reserve queue), so the
+  first implementation introduces a dedicated per-peer bulk WebSocket
+  channel under the existing identity/admission handshake, with
+  byte-denominated sender-side pacing, receiver-driven single-in-flight
+  chunks, durable verified-boundary resume, and a non-blind BULK pressure
+  partition. Reserved critical progress proven deterministically (transport
+  lane guard + DT6 cost-table guard with unbounded negative control). S4
+  inputs recorded (untested dial maxPayload/cleanup clauses, real-ws wiring,
+  identity pinning, retention pinning). Next: S4
+  `raft-snapshot-compacted-follower-catchup`.
