@@ -315,6 +315,10 @@ class PartitionReplicationHandler {
         reject,
         logIndex: logEntry.index,
       });
+      // These writes bypass raft commit, so the committed watermark can never
+      // certify this database's image; mark it durably BEFORE applying so
+      // checkpoint creation fails closed (raft-snapshot-checkpoint-format).
+      this.storage.recordDirectApplyMarker();
       this.applyCommittedEntry(entry);
     });
   }

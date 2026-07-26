@@ -50,6 +50,14 @@ function wirePartitionRaftLifecycleEvents(
     },
     onCommit: (command) => {
       service.applyCommittedEntry(command);
+      // Applied-watermark certificate (raft-snapshot-checkpoint-format):
+      // commit events arrive once per committed entry in index order and
+      // applyCommittedEntry is synchronous, so a dense +1 advance equals the
+      // applied entry's own index. The adapter committedIndex must NOT be
+      // copied here — on a batch it already sits at the batch end before the
+      // first apply. On apply throw the advance is skipped and checkpoint
+      // creation fails closed on the divergence.
+      service.storage.recordAppliedAdvance();
     },
     onLeaderChange: ({leaderId}) => {
       service.logger.debug(PARTITION_SERVICE_LOG_MSG.LEADER_CHANGED, {

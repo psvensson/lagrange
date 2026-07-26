@@ -9,6 +9,11 @@ import {STRING} from '../constants/strings.js';
 import {SQLiteLogAdapter} from '../raft/sqlite-log-adapter.js';
 import {isValidRaftLogIndex} from '../raft/log-index.js';
 import {
+  RAFT_CHECKPOINT_APPLIED_GAP_MARKER_VALUE,
+  RAFT_CHECKPOINT_APPLIED_STATE_KEY,
+  RAFT_CHECKPOINT_DIRECT_APPLY_MARKER_VALUE,
+} from '../raft/snapshot-checkpoint-constants.js';
+import {
   PARTITION_SERVICE_SQL,
   PARTITION_SERVICE_STATE_KEY,
 } from './partition-service-constants.js';
@@ -93,6 +98,41 @@ class PartitionRaftStorage {
     if (votedRow) {
       this.votedFor = votedRow.value;
     }
+
+    this.loadAppliedWatermark();
+  }
+
+  /**
+   * Load the applied watermark and detect durable divergence at startup
+   * (raft-snapshot-checkpoint-format). A crash between a batch's commits and
+   * its applies leaves lastAppliedIndex behind committedIndex durably;
+   * restart recovery does not re-apply, so the gap is permanent effect loss —
+   * record the sticky gap marker so checkpoint creation fails closed forever
+   * on this database. A legacy database with no watermark adopts the current
+   * committed index as its dense-count baseline WITHOUT writing it: the
+   * checkpoint gate still refuses until the first post-upgrade apply records
+   * a durable, aligned watermark.
+   * @private
+   */
+  loadAppliedWatermark() {
+    const committedIndex = this.logAdapter.getCommittedIndex();
+    const appliedRow = this.db.prepare(
+      PARTITION_SERVICE_SQL.SELECT_RAFT_STATE_VALUE,
+    ).get(RAFT_CHECKPOINT_APPLIED_STATE_KEY.LAST_APPLIED_INDEX);
+    if (!appliedRow) {
+      this.lastAppliedIndexCache = committedIndex;
+      return;
+    }
+    const appliedIndex = parseInt(appliedRow.value, NUM.TEN);
+    this.lastAppliedIndexCache = appliedIndex;
+    if (appliedIndex !== committedIndex) {
+      this.db.prepare(
+        PARTITION_SERVICE_SQL.UPSERT_RAFT_STATE,
+      ).run(
+        RAFT_CHECKPOINT_APPLIED_STATE_KEY.APPLIED_GAP_MARKER,
+        RAFT_CHECKPOINT_APPLIED_GAP_MARKER_VALUE,
+      );
+    }
   }
 
   get commitIndex() {
@@ -119,6 +159,42 @@ class PartitionRaftStorage {
     this.db.prepare(
       PARTITION_SERVICE_SQL.UPSERT_RAFT_STATE,
     ).run(PARTITION_SERVICE_STATE_KEY.VOTED_FOR, this.votedFor || STRING.EMPTY);
+  }
+
+  /**
+   * Durably advance the applied watermark by exactly one after a successful
+   * raft-committed apply. Commit events fire once per committed entry in
+   * index order, so a dense count from an aligned origin equals the applied
+   * entry's own index. The adapter's committedIndex is NEVER copied here: on
+   * a multi-entry commit batch the adapter watermark is already at the batch
+   * end before the first apply runs, and copying it would let a checkpoint
+   * overstate its applied prefix (the MF-1 batch divergence). Under-counting
+   * only ever refuses checkpoint creation — it never fabricates progress.
+   */
+  recordAppliedAdvance() {
+    const nextAppliedIndex = this.lastAppliedIndexCache + 1;
+    this.db.prepare(
+      PARTITION_SERVICE_SQL.UPSERT_RAFT_STATE,
+    ).run(
+      RAFT_CHECKPOINT_APPLIED_STATE_KEY.LAST_APPLIED_INDEX,
+      String(nextAppliedIndex),
+    );
+    this.lastAppliedIndexCache = nextAppliedIndex;
+  }
+
+  /**
+   * Durably mark that this replica has applied writes OUTSIDE raft commit
+   * (the single-replica direct-apply path). A marked database can never
+   * certify its image via the committed watermark, so checkpoint creation
+   * fails closed with apply_watermark_divergence.
+   */
+  recordDirectApplyMarker() {
+    this.db.prepare(
+      PARTITION_SERVICE_SQL.UPSERT_RAFT_STATE,
+    ).run(
+      RAFT_CHECKPOINT_APPLIED_STATE_KEY.DIRECT_APPLY_MARKER,
+      RAFT_CHECKPOINT_DIRECT_APPLY_MARKER_VALUE,
+    );
   }
 
   /**

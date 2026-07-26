@@ -424,9 +424,13 @@ test('PartitionReplicationHandler unified write path',
         });
 
         let committedCommand = null;
+        let directApplyMarked = false;
         handler.replicaIds = ['r-1'];
         handler.storage = {
           appendEntry: () => ({index: 7}),
+          recordDirectApplyMarker: () => {
+            directApplyMarked = true;
+          },
         };
         handler.applyCommittedEntry = (command) => {
           committedCommand = command;
@@ -450,6 +454,11 @@ test('PartitionReplicationHandler unified write path',
         t.ok(
           committedCommand !== null,
           'applyCommittedEntry should be called',
+        );
+        t.ok(
+          directApplyMarked,
+          'the direct-apply marker is durably recorded before applying ' +
+          '(raft-snapshot-checkpoint-format fail-closed certificate)',
         );
         t.equal(
           committedCommand.sql, entry.sql,
@@ -526,6 +535,7 @@ test('PartitionReplicationHandler unified write path',
         handler.replicaIds = ['r-1'];
         handler.storage = {
           appendEntry: () => ({index: 1}),
+          recordDirectApplyMarker: () => {},
         };
         handler.applyCommittedEntry = (command) => {
           // Simulate PartitionService: resolve the pending commit

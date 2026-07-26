@@ -88,6 +88,7 @@ function createTrackedHandler(replicaIds) {
       logIndex++;
       return {index: logIndex};
     },
+    recordDirectApplyMarker: () => {},
   };
 
   // Track applyCommittedEntry calls.
