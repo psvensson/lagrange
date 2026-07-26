@@ -65,11 +65,11 @@ Entity types:
 
 The in-memory adapter is ephemeral across process restart; that weaker
 durability contract does not permit deleting committed entries while the
-adapter is live. The snapshot protocol now exists END TO END for file-backed
-SQLite partition replicas (quests S1-S5 of
-`solve/specs/raft-snapshot-transfer-install/`): checkpoint CREATION
-(`src/raft/snapshot-checkpoint-{constants,format,store}.js`), atomic INSTALL
-at the closed-handle boot boundary (`snapshot-install{,-constants}.js`,
+adapter is live. The snapshot protocol now exists END TO END and is WIRED INTO PRODUCTION for
+file-backed SQLite partition replicas (quests S1-S6 of
+`solve/specs/raft-snapshot-transfer-install/`, ladder complete): checkpoint
+CREATION (`src/raft/snapshot-checkpoint-{constants,format,store}.js`), atomic
+INSTALL at the closed-handle boot boundary (`snapshot-install{,-constants}.js`,
 `snapshot-boundary.js`), bulk TRANSFER over a dedicated byte-bounded per-peer
 channel (`snapshot-transfer{,-constants,-receiver}.js`,
 `src/transport/bulk-transfer-channel.js`), compacted-follower CATCH-UP
@@ -79,12 +79,18 @@ bounded RETENTION with proof-gated physical compaction
 `compactCommittedEntries` call still returns the typed
 `snapshot_protocol_unavailable` refusal; physical prefix removal requires a
 durable, term-anchored local snapshot proof and advances the compacted-log
-boundary in the same transaction. NO production caller triggers compaction
-or transfer yet — auto-trigger cadence, production wiring, and the live
-rebuild certification are S6 (`raft-snapshot-live-rebuild`), so in practice
-both adapters still retain their full committed prefix today. Clearing an
-in-memory adapter during lifecycle teardown is whole-instance destruction,
-not live log compaction.
+boundary in the same transaction. S6 (`raft-snapshot-live-rebuild`) added the
+production trigger: a leader-only checkpoint cadence
+(`src/partition/partition-snapshot-cadence.js`) rides the 1s
+prepared-state-hold sweep, and on fire seals a generation, sweeps retention,
+and proof-gate-compacts the committed prefix past that generation — so a
+lagging or from-scratch SQLite follower is caught up by snapshot install
+rather than replaying an unbounded prefix. This was certified live on a
+five-node docker cluster (a wiped follower rebuilds ACTIVE under continuous
+foreground writes with zero lost acknowledged writes; N=15 window ABOVE_BAR).
+The in-memory adapter still retains its full committed prefix (its weaker
+durability contract forbids live prefix deletion); clearing it during
+lifecycle teardown is whole-instance destruction, not live log compaction.
 
 ## Rebalancing
 
