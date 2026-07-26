@@ -26,6 +26,7 @@
 import {CONFIG_KEY} from '../config/config-key-constants.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {RAFT_ROLE} from '../raft/constants.js';
+import {RAFT_COMPACTION_OUTCOME} from '../raft/compaction-policy.js';
 import {
   buildSnapshotCatchupIdentityFromCache,
   listInFlightGenerationIndexes,
@@ -54,6 +55,7 @@ const {
 // Typed outcomes of one cadence tick.
 const RAFT_SNAPSHOT_CADENCE_OUTCOME = Object.freeze({
   CHECKPOINTED: 'checkpointed',
+  COMPACTED: 'compacted',
   BELOW_THRESHOLD: 'below_threshold',
   NOT_LEADER: 'not_leader',
   ALREADY_IN_FLIGHT: 'already_in_flight',
@@ -112,6 +114,21 @@ function readCoveredIndex(service, checkpointsRoot) {
 function isUnsupportedPartition(service) {
   return service.dbPath === PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH ||
     CONTROL_PLANE_PARTITION_IDS.has(service.partitionId);
+}
+
+// Compact the leader's committed log prefix up to the just-sealed generation,
+// using that generation as the durable proof the S5 decision table requires.
+// A non-COMPACTED outcome (e.g. ALREADY_COMPACTED, or an adapter that does not
+// implement the protocol request) is benign and leaves the log intact.
+function compactToGeneration(service, creation) {
+  const adapter = service.logAdapter;
+  if (!adapter || typeof adapter.compactCommittedEntries !== 'function') {
+    return {outcome: RAFT_COMPACTION_OUTCOME.SNAPSHOT_PROTOCOL_UNAVAILABLE};
+  }
+  return adapter.compactCommittedEntries({
+    toIndex: creation.descriptor.lastIncludedIndex,
+    proof: {checkpointDir: creation.checkpointDir},
+  });
 }
 
 /**
@@ -196,10 +213,21 @@ function createPartitionSnapshotCadence(options) {
           inProcessPins: listInFlightGenerationIndexes(),
         }),
       });
-      return tickResult(RAFT_SNAPSHOT_CADENCE_OUTCOME.CHECKPOINTED, {
-        creation,
-        sweep,
-      });
+      // Proof-gated compaction advances the leader's snapshot boundary past
+      // the just-sealed generation, so a lagging or from-scratch follower can
+      // no longer replay the removed prefix and must be caught up by snapshot
+      // install — this is what makes the snapshot chain (not ordinary
+      // AppendEntries replay) the recovery path. The proof is the generation
+      // sealed above; the S5 decision table refuses anything unproven, so the
+      // committed prefix is never removed without durable local proof.
+      const compaction = compactToGeneration(service, creation);
+      const compacted =
+        compaction.outcome === RAFT_COMPACTION_OUTCOME.COMPACTED;
+      return tickResult(
+        compacted ?
+          RAFT_SNAPSHOT_CADENCE_OUTCOME.COMPACTED :
+          RAFT_SNAPSHOT_CADENCE_OUTCOME.CHECKPOINTED,
+        {creation, sweep, compaction});
     } finally {
       state.inFlight = false;
     }

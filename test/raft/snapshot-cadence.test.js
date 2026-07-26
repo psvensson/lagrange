@@ -19,6 +19,7 @@ import {
   createPartitionSnapshotCadence,
 } from '../../src/partition/partition-snapshot-cadence.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {readSnapshotBoundary} from '../../src/raft/snapshot-boundary.js';
 import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
 import {
   PartitionRaftStorage,
@@ -153,10 +154,15 @@ test('a leader over the entry threshold creates one generation and sweeps',
         byteThresholdBytes: HUGE_BYTE_THRESHOLD,
       });
       const result = await cadence.tick(Date.now());
-      t.equal(result.outcome, RAFT_SNAPSHOT_CADENCE_OUTCOME.CHECKPOINTED,
-        'the over-threshold tick checkpoints');
+      t.equal(result.outcome, RAFT_SNAPSHOT_CADENCE_OUTCOME.COMPACTED,
+        'the over-threshold tick checkpoints AND compacts to the boundary');
       t.equal(result.creation.descriptor.lastIncludedIndex, 5,
         'the sealed generation carries the committed boundary');
+      t.equal(result.compaction.outcome, 'compacted',
+        'proof-gated compaction advanced the leader boundary');
+      t.equal(readSnapshotBoundary(fixture.service.db).lastIncludedIndex, 5,
+        'the durable snapshot boundary moved to the generation index — a ' +
+        'lagging follower can no longer replay the removed prefix');
       t.same(listCheckpointGenerations(fixture.checkpointsRoot), [5],
         'exactly one sealed generation exists');
       t.same(result.sweep.kept, [5],
@@ -183,8 +189,8 @@ test('the byte threshold fires on new committed entries over a large ' +
       byteThresholdBytes: TINY_BYTE_THRESHOLD,
     });
     const result = await cadence.tick(Date.now());
-    t.equal(result.outcome, RAFT_SNAPSHOT_CADENCE_OUTCOME.CHECKPOINTED,
-      'the byte trigger checkpoints below the entry threshold');
+    t.equal(result.outcome, RAFT_SNAPSHOT_CADENCE_OUTCOME.COMPACTED,
+      'the byte trigger checkpoints+compacts below the entry threshold');
     t.same(listCheckpointGenerations(fixture.checkpointsRoot), [2],
       'the generation is sealed at the committed boundary');
   } finally {
@@ -233,7 +239,7 @@ test('a re-entrant tick is a typed no-op while creation is in flight',
         RAFT_SNAPSHOT_CADENCE_OUTCOME.ALREADY_IN_FLIGHT,
         'the overlapping tick is a typed already_in_flight no-op');
       const first = await firstTick;
-      t.equal(first.outcome, RAFT_SNAPSHOT_CADENCE_OUTCOME.CHECKPOINTED,
+      t.equal(first.outcome, RAFT_SNAPSHOT_CADENCE_OUTCOME.COMPACTED,
         'the original tick still completes');
       t.same(listCheckpointGenerations(fixture.checkpointsRoot), [4],
         'exactly ONE generation exists — no double creation');
