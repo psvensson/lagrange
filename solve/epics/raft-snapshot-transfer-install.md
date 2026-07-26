@@ -61,3 +61,12 @@ Managed split snapshot pacing is an unrelated table-copy mechanism.
   abort-on-epoch-change, and bounded retention contract. Graduated executable
   requirements to
   `solve/specs/raft-snapshot-transfer-install/requirements.md`.
+- 2026-07-26 — **S1 SOLVED** (`raft-snapshot-checkpoint-format`, commit
+  c340e962; design `checkpoint-format-design.md`). New owner modules
+  `src/raft/snapshot-checkpoint-{constants,format,store}.js`; adversarial
+  verification found and fixed a real batch-commit watermark overstatement
+  (MF-1) — the applied watermark now advances densely per apply with a sticky
+  startup gap marker. Identity sources for `clusterId`/`membershipEpoch` are
+  caller-supplied in S1; pinning the authoritative production sources is S2
+  scope. `_transaction_outcomes` classified as state-machine state (retained
+  in payloads). Next: S2 `raft-snapshot-atomic-install`.

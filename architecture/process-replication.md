@@ -33,10 +33,14 @@ they are not evidence of an active replicated service-state path.
 
 ### Logs are never compacted
 
-Neither log adapter implements Raft snapshot create/transfer/install. Explicit
-compaction is a typed no-op returning `snapshot_protocol_unavailable` rather
-than silently discarding entries, and the only truncation that exists is
-conflict truncation, clamped so it can never reach the committed prefix.
+Snapshot checkpoint CREATION exists for file-backed SQLite partition replicas
+(`src/raft/snapshot-checkpoint-store.js`, quest
+`raft-snapshot-checkpoint-format` — S1 of the snapshot transfer/install
+program) but is not yet invoked by any production path, and
+transfer/install do not exist. Explicit compaction remains a typed no-op
+returning `snapshot_protocol_unavailable` rather than silently discarding
+entries, and the only truncation that exists is conflict truncation, clamped
+so it can never reach the committed prefix.
 
 Two consequences follow, and both matter operationally:
 

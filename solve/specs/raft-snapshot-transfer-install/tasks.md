@@ -6,7 +6,7 @@ consume.
 
 | Order | Quest | Required terminal |
 | --- | --- | --- |
-| S1 | `raft-snapshot-checkpoint-format` | Versioned checkpoint creation is durable, binds cluster/group/entity identity, excludes follower-local consensus state, is restart-readable, and is red on corrupt/stale/foreign input. |
+| S1 | `raft-snapshot-checkpoint-format` — ✅ **SOLVED 2026-07-26** (commit c340e962; design `checkpoint-format-design.md`) | Versioned checkpoint creation is durable, binds cluster/group/entity identity, excludes follower-local consensus state, is restart-readable, and is red on corrupt/stale/foreign input. |
 | S2 | `raft-snapshot-atomic-install` | A follower stages and atomically installs a checkpoint, locally reconstructs Raft tables without regressing term or importing vote state, never advertises progress ahead of state, and recovers every partial-install restart state. |
 | S3 | `raft-snapshot-bulk-transfer` | Authenticated resumable chunks use a separately bounded pressure class; critical convergence progresses under saturation. |
 | S4 | `raft-snapshot-compacted-follower-catchup` | A follower older than the retained prefix installs the newest eligible snapshot and resumes AppendEntries exactly after it. |
