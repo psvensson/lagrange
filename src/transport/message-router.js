@@ -263,6 +263,10 @@ class MessageRouter extends EventEmitter {
         Math.floor(options.reconnectAddressSuppressionMs) :
         RECONNECT_ADDRESS_SUPPRESSION_DEFAULT_MS;
     this.suppressedReconnectAddresses = /* @__PURE__ */ new Map();
+    // Optional bulk transfer channel registry (S3): adopts identified
+    // `channel: bulk` sockets and feeds the additive bulkChannel stats
+    // section. Attached via attachBulkChannelRegistry or constructor option.
+    this.bulkChannelRegistry = options.bulkChannelRegistry || null;
     this.connectionAuthorityOwner = new RouterConnectionAuthorityOwner(this);
     this.outboundDeliveryRegistryOwner = new OutboundDeliveryRegistryOwner(
       this,

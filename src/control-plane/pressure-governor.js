@@ -9,6 +9,7 @@ const PRESSURE_GOVERNOR_LITERAL = Object.freeze({
   CONTROL_PLANE_WRITE: 'control-plane:write',
   QUERY_PLANE: 'query-plane:',
   QUERY: 'query:',
+  SNAPSHOT_TRANSFER: 'snapshot-transfer:',
   CONTROL_PLANE_PRESSURE_DEGRADED: 'control_plane_pressure_degraded',
   MESSAGEROUTER: 'messageRouter',
   LOGGER: 'logger',
@@ -86,6 +87,11 @@ const PRESSURE_CAPACITY_PARTITION = Object.freeze({
   BACKGROUND: 'background',
   CONTROL_PLANE: 'control-plane',
   QUERY_PLANE: 'query-plane',
+  // Bulk snapshot-transfer lane (S3): fed by the router's additive
+  // bulkChannel stats section, never by the outbound queues (bulk bytes do
+  // not traverse them). Sensor advisory; the sender-side token bucket is the
+  // enforcement point.
+  BULK: 'bulk',
 });
 const TRANSPORT_RESOURCE_PREFIXES = Object.freeze([
   'transport:',
@@ -96,6 +102,9 @@ const TRANSPORT_RESOURCE_PREFIXES = Object.freeze([
   'cdc:',
   'rebalancer:',
   'bootstrap:',
+  // NOT bare 'snapshot:' — 'control-plane:snapshot:repair' already occupies
+  // that vocabulary.
+  'snapshot-transfer:',
 ]);
 function normalizeWorkClass(workClass) {
   if (workClass === PRESSURE_WORK_CLASS.CRITICAL) {
@@ -208,9 +217,17 @@ function resolveCapacityPartition(
         resourceKey === PRESSURE_GOVERNOR_LITERAL.CONTROL_PLANE_WRITE
       );
     });
+  const hasBulkTransferResource =
+    resourceKeys.some((resourceKey) => {
+      return (
+        typeof resourceKey === 'string' &&
+        resourceKey.startsWith(PRESSURE_GOVERNOR_LITERAL.SNAPSHOT_TRANSFER)
+      );
+    });
   const pressurePartitionEvidence = Object.freeze({
     hasQueryPlaneResource,
     hasControlPlaneIngressResource,
+    hasBulkTransferResource,
     isBackgroundWork: workClass === PRESSURE_WORK_CLASS.BACKGROUND,
     hasControlPlaneResource,
   });
@@ -219,6 +236,9 @@ function resolveCapacityPartition(
   }
   if (pressurePartitionEvidence.hasControlPlaneIngressResource) {
     return PRESSURE_CAPACITY_PARTITION.CONTROL_PLANE;
+  }
+  if (pressurePartitionEvidence.hasBulkTransferResource) {
+    return PRESSURE_CAPACITY_PARTITION.BULK;
   }
   if (pressurePartitionEvidence.isBackgroundWork) {
     return PRESSURE_CAPACITY_PARTITION.BACKGROUND;
@@ -283,7 +303,33 @@ function isPartitionBackpressured(queue = {}, capacityPartition) {
   }
   return false;
 }
+// The BULK partition summary reads the router's additive bulkChannel stats
+// section (pending chunk requests, in-flight bytes, token depth) because bulk
+// bytes never traverse the outbound queues — without this the sensor is
+// blind to bulk load.
+function buildBulkChannelPressureSummary(routerStats = {}) {
+  const bulkChannel = routerStats?.bulkChannel || {};
+  const pendingRequests = normalizeQueueStat(bulkChannel.pendingRequests);
+  const maxPendingRequests = normalizeQueueStat(bulkChannel.maxPendingRequests);
+  const saturatedPeerCount = normalizeQueueStat(bulkChannel.saturatedPeerCount);
+  return buildTransportPressureSummary(
+    {
+      backpressured:
+        saturatedPeerCount > 0 ||
+        (maxPendingRequests > 0 && pendingRequests >= maxPendingRequests),
+      saturatedNodeCount: saturatedPeerCount,
+      totalPending: pendingRequests,
+      totalPendingBackground: pendingRequests,
+      maxPendingUtilization:
+        maxPendingRequests > 0 ? pendingRequests / maxPendingRequests : 0,
+    },
+    PRESSURE_CAPACITY_PARTITION.BULK,
+  );
+}
 function buildPartitionedTransportPressureSummary(routerStats = {}, capacityPartition) {
+  if (capacityPartition === PRESSURE_CAPACITY_PARTITION.BULK) {
+    return buildBulkChannelPressureSummary(routerStats);
+  }
   const outboundQueues = routerStats?.outboundQueues || {};
   let saturatedNodeCount = 0;
   let totalPending = 0;

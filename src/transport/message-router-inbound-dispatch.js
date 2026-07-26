@@ -1,4 +1,5 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {ROUTER_IDENTIFY_CHANNEL} from '../constants/transport.js';
 
 const {
   ConnectionState,
@@ -152,6 +153,14 @@ class MessageRouterInboundDispatch {
         }
         return;
       }
+      // Bulk-channel fork: AFTER the external-admission gate, BEFORE any
+      // record mutation. The socket is handed to the bulk channel registry;
+      // the primary per-peer connection is never rekeyed, evicted, or
+      // reconnect-fought, and no NODE_CONNECTED/NODE_IDENTIFIED is emitted.
+      if (message.channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
+        this.adoptBulkChannelSocket(connectionId, ws, nodeId);
+        return;
+      }
       const normalizedAddress =
         normalizeToWebSocketAddress(nodeAddress) || nodeAddress;
       connection.nodeId = nodeId;
@@ -234,6 +243,19 @@ class MessageRouterInboundDispatch {
         }
       }
     }
+    if (message.channel === ROUTER_IDENTIFY_CHANNEL.BULK) {
+      // A bulk-channel IDENTIFY that did not match an incoming record above
+      // has nothing to adopt and is never a primary identification.
+      try {
+        ws.close();
+      } catch (error) {
+        this.logger.warn(ROUTER_LOG_MSG.FAILED_CLOSE_UNIDENTIFIED, {
+          connectionId,
+          error: error.message,
+        });
+      }
+      return;
+    }
     this.emit(TRANSPORT_EVENT.NODE_CONNECTED, {
       nodeId,
       nodeAddress,
@@ -243,6 +265,55 @@ class MessageRouterInboundDispatch {
       nodeId,
       nodeAddress,
       connectionId,
+    });
+  }
+  /**
+   * Attach the bulk transfer channel registry that adopts identified
+   * bulk-channel sockets (src/transport/bulk-transfer-channel.js).
+   * @param {Object} registry - Bulk channel registry.
+   * @return {void}
+   */
+  attachBulkChannelRegistry(registry) {
+    this.bulkChannelRegistry = registry;
+  }
+  /**
+   * Hand an identified `channel: bulk` socket to the bulk channel registry.
+   * Deletes the pre-identify connection record, DETACHES the router's
+   * message/close/error listeners (so a binary chunk frame can never reach
+   * the router's JSON parser, and close/reconnect handling no-ops because the
+   * record is gone), then lets the registry attach its own listeners in the
+   * same tick (pre-claim frame discipline).
+   * @param {string} connectionId - Pre-identify connection ID.
+   * @param {WebSocket} ws - The bulk-channel socket.
+   * @param {string} nodeId - Identified peer node id.
+   * @private
+   */
+  adoptBulkChannelSocket(connectionId, ws, nodeId) {
+    this.nodeConnections.delete(connectionId);
+    this.nodeInboundActivityAt.delete(connectionId);
+    ws.removeAllListeners(TRANSPORT_EVENT.MESSAGE);
+    ws.removeAllListeners(TRANSPORT_EVENT.CLOSE);
+    ws.removeAllListeners(TRANSPORT_EVENT.ERROR);
+    if (!this.bulkChannelRegistry) {
+      this.logger.warn(ROUTER_LOG_MSG.BULK_CHANNEL_NO_REGISTRY, {
+        connectionId,
+        remoteNodeId: nodeId,
+      });
+      try {
+        ws.close();
+      } catch (error) {
+        this.logger.warn(ROUTER_LOG_MSG.FAILED_CLOSE_UNIDENTIFIED, {
+          connectionId,
+          error: error.message,
+        });
+      }
+      return;
+    }
+    this.bulkChannelRegistry.adoptIncomingSocket({nodeId, ws});
+    this.logger.info(ROUTER_LOG_MSG.BULK_CHANNEL_ADOPTED, {
+      connectionId,
+      remoteNodeId: nodeId,
+      localNodeId: this.nodeId,
     });
   }
   /**

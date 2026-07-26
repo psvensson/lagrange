@@ -1,4 +1,5 @@
 import {MESSAGE_ROUTER_SHARED} from './message-router-shared.js';
+import {BULK_CHANNEL_EMPTY_STATS} from '../constants/transport.js';
 
 const {
   OutboundDeliveryPriority,
@@ -99,6 +100,12 @@ class MessageRouterStatsShutdown {
       connections: connectionStats,
       connectedNodes: this.getConnectedNodes().length,
       outboundQueues: outboundQueueStats,
+      // Additive bulk-channel section: bulk bytes never traverse the
+      // outbound queues, so the pressure governor's BULK partition reads
+      // this section instead (typed zero-state when no registry attached).
+      bulkChannel: this.bulkChannelRegistry ?
+        this.bulkChannelRegistry.getStats() :
+        BULK_CHANNEL_EMPTY_STATS,
     };
   }
   /**

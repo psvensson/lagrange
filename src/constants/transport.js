@@ -207,6 +207,40 @@ const ROUTER_ADDRESS = Object.freeze({
     `${nodeId}${ADDRESS.SEPARATOR}${ROUTER_ADDRESS.SERVICE_ID}`,
 });
 
+// IDENTIFY frame `channel` markers. A bulk-channel IDENTIFY is forked out of
+// the primary identification path AFTER the external-admission gate and
+// BEFORE any router record mutation: the socket is handed to the bulk
+// transfer channel registry and never rekeys, evicts, or reconnect-fights the
+// primary per-peer connection (quest raft-snapshot-bulk-transfer, S3).
+const ROUTER_IDENTIFY_CHANNEL = Object.freeze({
+  BULK: 'bulk',
+});
+
+// Bulk transfer channel defaults (byte-denominated controls; the channel
+// never touches the primary router outbound queues or their reserves).
+const BULK_CHANNEL_KIB = 1024;
+const BULK_CHANNEL_MIB = BULK_CHANNEL_KIB * BULK_CHANNEL_KIB;
+const BULK_TRANSFER_CHANNEL_DEFAULT = Object.freeze({
+  MAX_PENDING_SENDS: 8,
+  TOKEN_BUCKET_BYTES_PER_SECOND: 8 * BULK_CHANNEL_MIB,
+  TOKEN_BUCKET_CAPACITY_BYTES: 2 * BULK_CHANNEL_MIB,
+  // One 1 MiB chunk plus the length-prefixed chunk-frame header allowance
+  // (mirrors RAFT_SNAPSHOT_TRANSFER_MAX_FRAME_BYTES without a cross-owner
+  // import); ws@8 supports per-client maxPayload on the dial.
+  MAX_PAYLOAD_BYTES: BULK_CHANNEL_MIB + BULK_CHANNEL_KIB,
+});
+
+// Additive `bulkChannel` section of MessageRouter.getStats() when no bulk
+// registry is attached: the pressure governor's BULK partition reads these
+// fields, so the shape stays present (typed zero-state, never undefined).
+const BULK_CHANNEL_EMPTY_STATS = Object.freeze({
+  pendingRequests: 0,
+  inFlightBytes: 0,
+  tokenDepth: 0,
+  maxPendingRequests: 0,
+  saturatedPeerCount: 0,
+});
+
 const TRANSPORT_ERROR_MSG = Object.freeze({
   HANDLER_MUST_BE_FUNCTION: 'Handler must be a function',
   MESSAGE_NOT_ACKNOWLEDGED: 'Message not acknowledged',
@@ -269,6 +303,9 @@ const ROUTER_LOG_MSG = Object.freeze({
   JOIN_COMPLETE_FAILED: 'Failed to process join complete message',
   RAFT_DIRECT_DELIVERY: 'Delivering raft packet directly',
   RAFT_DIRECT_DELIVERY_FAILED: 'Failed to deliver raft packet directly',
+  BULK_CHANNEL_ADOPTED: 'Adopted identified bulk-channel socket',
+  BULK_CHANNEL_NO_REGISTRY:
+    'Closing bulk-channel socket: no bulk channel registry attached',
 });
 
 const ROUTER_ERROR_MSG = Object.freeze({
@@ -383,8 +420,11 @@ const TRANSPORT_METRIC_TRIGGER = Object.freeze({
 });
 
 export {
+  BULK_CHANNEL_EMPTY_STATS,
+  BULK_TRANSFER_CHANNEL_DEFAULT,
   CONNECTION_STATE,
   OUTBOUND_DELIVERY_PRIORITY,
+  ROUTER_IDENTIFY_CHANNEL,
   ROUTER_MESSAGE_TYPE,
   ROUTER_VALID_ENTITY_TYPES,
   ROUTER_EXPECTED_ENTITY_TYPES,

@@ -16,6 +16,15 @@ correlation behavior.
 - `WebSocketTransportProvider` and `InProcTransport` own concrete transport
   implementations.
 - `RPCClient` owns request/response correlation from callers.
+- The bulk transfer channel (`bulk-transfer-channel.js`) owns a SECOND
+  per-peer socket lane for snapshot bulk bytes: admitted through the same
+  IDENTIFY/admission handshake (`channel: bulk`, forked before router record
+  mutation), byte-bounded (single in-flight chunk per peer, sender-side
+  token-bucket byte rate, bounded pending, per-socket maxPayload), never
+  carrying query/data-plane or router-queue traffic, with its pressure
+  visible through the router stats `bulkChannel` section (no hidden drops,
+  no unbounded growth). It never rekeys, evicts, or reconnect-fights the
+  primary per-peer connection.
 
 ## First Files
 
