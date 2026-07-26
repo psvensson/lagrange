@@ -1,0 +1,51 @@
+{
+  "id": "raft-snapshot-atomic-install",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A follower partition replica atomically installs a validated Raft snapshot checkpoint at the closed-handle boot boundary (PartitionService init path only; worker-path replicas are a typed refusal): staging copies and re-digests the payload against the generation descriptor before reconstruction; a reconstruction transaction creates adapter-schema _raft_log/_raft_state in the staged copy and writes snapshotLastIncludedIndex/Term boundary keys, committedIndex and lastAppliedIndex at the boundary with no divergence markers, maxCommittedHlc, a random snapshotInstallId nonce, and the durable term/votedFor rule (currentTerm := max(local durable currentTerm, lastIncludedTerm); votedFor retained iff currentTerm unchanged and cleared when raised; sender values never imported \u2014 explicitly scoped to durable _raft_state rows, with the pre-existing live-raft term boot-seeding gap recorded as a linked finding, not silently fixed); the swap deletes stale WAL/SHM sidecars and renames atomically; a durable canonical-JSON install-state marker distinguishes no-install, staging, staged, installed, and rejected, and every crash point resolves idempotently via the nonce decision procedure with typed staging_lost and install_state_conflict outcomes; foreign-cluster/group/entity and stale-epoch checkpoints are rejected at install time (abort-on-epoch-change at the install boundary); no commit watermark is observable ahead of installed state; the adapters observe the reconstructed boundary: getLastInfo/getLastEntry/getEntryInfoBefore return the boundary index/term on an empty compacted log while genuinely virgin logs keep the CL-042 zero, has() is true for compacted indexes and false for zero, truncation requests at or below the boundary are typed no-ops that do not trip the committed-truncation witness and clamps floor at max(committedIndex, boundary), and guardCommittedEntryWrite gains a typed COMPACTED idempotent outcome consumed by resolveEntryWrite and validateCommittedPrevLogIdentity; S1 creation is amended in the same protocol version: maxCommittedHlc sealed as max(copy log scan, copy's prior maxCommittedHlc key), readLastIncludedTerm falls back to the boundary keys, and prepared-but-undecided transactions at or below the boundary are a typed prepared_transactions_pending refusal; proven by deterministic guard scenario raft-snapshot-atomic-install (new guard tests plus the S1 checkpoint suite and gated-compaction regression files, all unweakened) passing 3 consecutive runs.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/raft-snapshot-transfer-install/tasks.md#S2",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/raft-snapshot-transfer-install.md",
+    "draftedAtCommit": "fde67e3ca9c3fe74175771a045764554a963bcca"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "raft-snapshot-atomic-install",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "raft-snapshot-atomic-install-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "raft-snapshot-atomic-install",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "raft-safety-invariants-unweakened",
+      "statement": "The standing raft invariants stay HELD: npm run repro -- CL-040/CL-041/CL-042 green on every attempt; the CL-042 empty-log zero stays load-bearing for genuinely virgin logs (boundary fallback applies only when snapshot boundary keys are present)."
+    },
+    {
+      "id": "s4-protocol-continuation-out-of-scope",
+      "statement": "Leader catch-up start-index selection, the stale-batch guard, the send-snapshot trigger, getEntriesFrom typed below-floor results, live raft term boot seeding, and transfer wiring are S4 scope; this Quest ends at install + boundary observability."
+    }
+  ]
+}
