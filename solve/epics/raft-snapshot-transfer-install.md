@@ -96,3 +96,20 @@ Managed split snapshot pacing is an unrelated table-copy mechanism.
   inputs recorded (untested dial maxPayload/cleanup clauses, real-ws wiring,
   identity pinning, retention pinning). Next: S4
   `raft-snapshot-compacted-follower-catchup`.
+- 2026-07-26 — **S4 SOLVED** (`raft-snapshot-compacted-follower-catchup`,
+  commit 01b7a364; design `compacted-follower-catchup-design.md`,
+  twice-verified; landing round 1 REJECTED on undiscriminating eligibility
+  coverage, closed with a stale-only-root red-proven subtest). The b1/b2
+  livelocks are closed: the leader emits typed install_snapshot decisions
+  (distinct catchup_range_empty for corruption), the dispatcher serves the
+  newest generation >= boundary with S1 create-if-none, and the follower
+  orchestrator drives receive -> shutdown -> install -> factory recreation
+  with resume proven exactly at boundary+1. Recorded-gap closures: raft.term
+  boot seeding, transfer-staging boot sweep, five previously-untested lines
+  pinned. Scenario (a) — installed follower vs full-log leader — verified
+  already working via S2 and pinned as regression. Identity pinned:
+  clusterId config key (parity with unauthenticated transport recorded),
+  membershipEpoch selector over the membership publication epoch. S5/S6
+  inputs recorded (retention pinning for admitted transfers, production
+  ReplicaHandler wiring + CDC idempotency, boot-sweep direct guard). Next:
+  S5 `raft-snapshot-retention-compaction`.
