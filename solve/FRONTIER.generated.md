@@ -1,6 +1,6 @@
 # Frontier board
 
-Latest dated gate seen in records: 20260702T075154Z. This is a projection; act on a record only after reading its file.
+Latest dated gate seen in records: 20260725T211016Z. This is a projection; act on a record only after reading its file.
 
 ## Closure frontier — 12 active of 42 records
 
