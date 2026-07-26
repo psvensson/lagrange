@@ -65,22 +65,26 @@ Entity types:
 
 The in-memory adapter is ephemeral across process restart; that weaker
 durability contract does not permit deleting committed entries while the
-adapter is live. Snapshot checkpoint CREATION and atomic INSTALL exist for
-file-backed SQLite partition replicas
-(`src/raft/snapshot-checkpoint-{constants,format,store}.js`,
-`snapshot-install{,-constants}.js`, `snapshot-boundary.js` — versioned
-identity-bound envelope, state-machine-only payload excluding
-`_raft_log`/`_raft_state`, applied-watermark fail-closed exactness gate,
-closed-handle boot-boundary install with a nonce-healed restart marker, and
-adapter-observable compacted-log boundary; quests
-`raft-snapshot-checkpoint-format` + `raft-snapshot-atomic-install`), but no
-production caller invokes them yet and transfer (S3) plus compacted-follower
-catch-up (S4) do not exist, so both adapters still retain the complete
-committed prefix needed by a lagging follower's ordinary AppendEntries
-recovery. Explicit compaction returns the typed
-`snapshot_protocol_unavailable` no-change outcome. Clearing an in-memory
-adapter during lifecycle teardown is whole-instance destruction, not live log
-compaction. Physical prefix removal is unsupported.
+adapter is live. The snapshot protocol now exists END TO END for file-backed
+SQLite partition replicas (quests S1-S5 of
+`solve/specs/raft-snapshot-transfer-install/`): checkpoint CREATION
+(`src/raft/snapshot-checkpoint-{constants,format,store}.js`), atomic INSTALL
+at the closed-handle boot boundary (`snapshot-install{,-constants}.js`,
+`snapshot-boundary.js`), bulk TRANSFER over a dedicated byte-bounded per-peer
+channel (`snapshot-transfer{,-constants,-receiver}.js`,
+`src/transport/bulk-transfer-channel.js`), compacted-follower CATCH-UP
+(typed install_snapshot dispatch + orchestrator, `snapshot-catchup.js`), and
+bounded RETENTION with proof-gated physical compaction
+(`snapshot-retention.js`, `snapshot-compaction.js`). A proofless
+`compactCommittedEntries` call still returns the typed
+`snapshot_protocol_unavailable` refusal; physical prefix removal requires a
+durable, term-anchored local snapshot proof and advances the compacted-log
+boundary in the same transaction. NO production caller triggers compaction
+or transfer yet — auto-trigger cadence, production wiring, and the live
+rebuild certification are S6 (`raft-snapshot-live-rebuild`), so in practice
+both adapters still retain their full committed prefix today. Clearing an
+in-memory adapter during lifecycle teardown is whole-instance destruction,
+not live log compaction.
 
 ## Rebalancing
 
