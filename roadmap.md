@@ -187,6 +187,46 @@ currently satisfied. This roadmap records the criteria and sequence only.
 
 ---
 
+## Phase 0.2 — Stable Core Release
+
+*"A narrow, credible release of the core cluster."*
+
+Phase 0.2 packages stable core cluster operation and snapshot work already
+integrated into the core. It does not expand the product claim to full snapshot
+recovery, automatic data-affinity placement, distributed-reduce certification,
+or OCI container execution.
+
+| Id | Item | Roadmap state | Scope notes |
+|----|------|---------------|-------------|
+| `RM-0.2-five-node-convergence` | Five-node cold formation and runtime-service initial placement | 🔧 | Formation, table creation, and initial service placement complete without stalled control-plane or service operations |
+| `RM-0.2-topology-safety` | Topology-operation safety closure | 🔧 | Authoritative operation-ledger release, safe surplus removal, and ready-lease candidate admission retain their safety invariants |
+| `RM-0.2-snapshot-integration` | Compacted-follower snapshot catch-up integration | 🔧 | Current snapshot catch-up work is landed and independently verified; this row does not claim complete snapshot recovery |
+| `RM-0.2-release-verification` | Core release verification | 🔧 | Enforcing memory-soak evidence and all required CI and release checks are green |
+
+### Phase 0.2 Exit Criteria
+
+- The representative cold five-node workload completes three consecutive runs
+  without a formation, table-readiness, or initial-service-placement stall.
+- The topology safety cases linked to the release scope have terminal evidence.
+- Compacted-follower snapshot catch-up is integrated and independently
+  verified.
+- An enforcing memory-soak run reports sufficient samples and no detected leak.
+- Required CI and release checks are green, and remaining limitations are
+  documented.
+
+Snapshot protocol foundations may ship in 0.2, but the release must not claim
+complete snapshot recovery or large-follower live rebuild until the retention,
+compaction, and live-rebuild Quests required by
+`solve/specs/raft-snapshot-transfer-install/requirements.md` are terminal.
+Automatic data affinity, the distributed-reduce live demonstration, and OCI
+container execution remain outside the 0.2 claim unless their own live
+acceptance Quests become terminal before the release cutoff.
+
+Phase 0.5 deployment CLI, Docker Compose, WASM CLI, and onboarding work is not
+part of the 0.2 release gate.
+
+---
+
 ## Phase 0.5 — External Usability
 
 Focus shifts to developer experience.
