@@ -1,0 +1,791 @@
+diff --git a/scripts/checks/run-scale-certification-evidence-contract-scenarios.js b/scripts/checks/run-scale-certification-evidence-contract-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f12a83ab2d638c3067d5241fa0fea431ce267ac5
+--- /dev/null
++++ b/scripts/checks/run-scale-certification-evidence-contract-scenarios.js
+@@ -0,0 +1,11 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'scale-certification-evidence-contract': [
++    'test/distributed/harness/__tests__/scale-evidence-contract.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/test/distributed/harness/__tests__/scale-evidence-contract.test.js b/test/distributed/harness/__tests__/scale-evidence-contract.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..90fb424e16aa64f5376331dc9f53e57527462673
+--- /dev/null
++++ b/test/distributed/harness/__tests__/scale-evidence-contract.test.js
+@@ -0,0 +1,291 @@
++import {test} from '../../../../src/test-helpers/tap.js';
++import {
++  SCALE_CERTIFICATION_STATE,
++  SCALE_CLAIM_REASON,
++  SCALE_EVIDENCE_FIDELITY,
++  SCALE_GATE_STATUS,
++  SCALE_PROFILE_ID,
++  computeScaleProfileIdentity,
++  computeScaleReportIdentity,
++  computeScaleRunIdentity,
++  createScaleEvidenceReport,
++  validateScaleEvidenceReport,
++} from '../scale-evidence-contract.js';
++
++const DIGEST_A = `sha256:${'a'.repeat(64)}`;
++const DIGEST_B = `sha256:${'b'.repeat(64)}`;
++const DIGEST_C = `sha256:${'c'.repeat(64)}`;
++
++function passingGates() {
++  return {
++    feasibility: {status: SCALE_GATE_STATUS.PASS, reasonCodes: []},
++    safety: {status: SCALE_GATE_STATUS.PASS, violationCount: 0},
++    performance: {
++      status: SCALE_GATE_STATUS.PASS,
++      baselineId: 'p0-seven-node-baseline-v1',
++      offeredOperations: 1000,
++      correctOperations: 997,
++      p95LatencyMs: 8,
++      p99LatencyMs: 12,
++      errorRate: 0.003,
++    },
++    resources: {
++      status: SCALE_GATE_STATUS.PASS,
++      maxHeapBytes: 32_000_000,
++      maxRssBytes: 64_000_000,
++      maxFileDescriptors: 128,
++      maxEventLoopLagMs: 4,
++      maxQueueDepth: 10,
++      maxInFlight: 8,
++      retryRate: 0.01,
++      diskAmplification: 3,
++      retainedRaftBytes: 4_000_000,
++    },
++    convergence: {
++      status: SCALE_GATE_STATUS.PASS,
++      sampleCount: 20,
++      passRate: 0.95,
++      confidenceInterval: {lower: 0.76, upper: 0.99},
++      p50Ms: 1200,
++      p95Ms: 2400,
++    },
++  };
++}
++
++function evidenceInput(overrides = {}) {
++  const base = {
++    profile: {id: SCALE_PROFILE_ID.DEVELOPMENT, version: 1},
++    run: {
++      id: 'p0-run-001',
++      startedAt: '2026-07-26T10:00:00.000Z',
++      completedAt: '2026-07-26T10:10:00.000Z',
++      fidelity: SCALE_EVIDENCE_FIDELITY.DETERMINISTIC_GUARD,
++    },
++    software: {
++      revision: '02503b7f645123f4589fd61be93092383acb4abb',
++      runtime: 'node-v22.12.0',
++      packageVersion: '0.1.0',
++    },
++    hardware: {
++      provider: 'local',
++      region: 'local',
++      instanceClass: 'development-host',
++      cpuCount: 8,
++      memoryBytes: 16_000_000_000,
++      storageClass: 'local-ssd',
++    },
++    topology: {
++      nodeCount: 7,
++      failureDomainCount: 1,
++      tableCount: 4,
++      partitionCount: 16,
++      replicaCount: 48,
++      manifestDigest: DIGEST_A,
++    },
++    data: {
++      logicalBytes: 1_000_000,
++      physicalBytes: 3_200_000,
++      manifestDigest: DIGEST_B,
++      shape: 'uniform-fixture',
++    },
++    workload: {
++      id: 'mixed-read-write-v1',
++      manifestDigest: DIGEST_C,
++      duration: {warmupMs: 10_000, measuredMs: 60_000},
++    },
++    gates: passingGates(),
++    provenance: {
++      producer: 'scale-certification-evidence-contract-test',
++      invocation: 'node scripts/checks/run-scale-certification-evidence-contract-scenarios.js',
++      environmentDigest: DIGEST_B,
++      artifactManifestDigest: DIGEST_C,
++    },
++    artifacts: [{
++      kind: 'raw_samples',
++      path: 'test-output/reports/p0/samples.ndjson',
++      digest: DIGEST_A,
++    }],
++    certification: {
++      state: SCALE_CERTIFICATION_STATE.DEVELOPMENT,
++      questId: null,
++      terminalReceiptDigest: null,
++    },
++    extensions: {},
++  };
++  return {...base, ...overrides};
++}
++
++test('P0 report round-trips but cannot become scale certification', (t) => {
++  const report = createScaleEvidenceReport(evidenceInput());
++  const validation = validateScaleEvidenceReport(report);
++
++  t.equal(validation.valid, true);
++  t.equal(report.claimEligibility.profileEvidence, true);
++  t.equal(report.claimEligibility.scaleCertification, false);
++  t.match(report.claimEligibility.reasonCodes, [
++    SCALE_CLAIM_REASON.DEVELOPMENT_PROFILE,
++  ]);
++  t.equal(report.profileIdentity, computeScaleProfileIdentity(report));
++  t.equal(report.runIdentity, computeScaleRunIdentity(report));
++  t.equal(report.reportIdentity, computeScaleReportIdentity(report));
++  t.end();
++});
++
++test('profile identity is stable across extension and object-key order', (t) => {
++  const first = createScaleEvidenceReport(evidenceInput());
++  const reorderedHardware = {
++    storageClass: first.hardware.storageClass,
++    memoryBytes: first.hardware.memoryBytes,
++    cpuCount: first.hardware.cpuCount,
++    instanceClass: first.hardware.instanceClass,
++    region: first.hardware.region,
++    provider: first.hardware.provider,
++  };
++  const comparativeConsumer = createScaleEvidenceReport(evidenceInput({
++    hardware: reorderedHardware,
++    extensions: {
++      comparativeEfficiency: {
++        pairId: 'pair-001',
++        alternative: 'postgres',
++      },
++    },
++  }));
++
++  t.equal(comparativeConsumer.profileIdentity, first.profileIdentity);
++  t.not(comparativeConsumer.reportIdentity, first.reportIdentity);
++  t.equal(validateScaleEvidenceReport(comparativeConsumer).valid, true);
++  t.end();
++});
++
++test('complete live P1 plus terminal receipt is certification-eligible', (t) => {
++  const report = createScaleEvidenceReport(evidenceInput({
++    profile: {id: SCALE_PROFILE_ID.INTEGRATION, version: 1},
++    run: {
++      ...evidenceInput().run,
++      id: 'p1-run-001',
++      fidelity: SCALE_EVIDENCE_FIDELITY.LIVE,
++    },
++    certification: {
++      state: SCALE_CERTIFICATION_STATE.CERTIFIED,
++      questId: 'scale-topology-churn-certification',
++      terminalReceiptDigest: DIGEST_B,
++    },
++  }));
++
++  t.equal(report.claimEligibility.scaleCertification, true);
++  t.same(report.claimEligibility.reasonCodes, []);
++  t.equal(validateScaleEvidenceReport(report).valid, true);
++  t.end();
++});
++
++test('candidate P1 remains valid evidence without certification promotion', (t) => {
++  const report = createScaleEvidenceReport(evidenceInput({
++    profile: {id: SCALE_PROFILE_ID.INTEGRATION, version: 1},
++    run: {
++      ...evidenceInput().run,
++      id: 'p1-candidate-001',
++      fidelity: SCALE_EVIDENCE_FIDELITY.LIVE,
++    },
++    certification: {
++      state: SCALE_CERTIFICATION_STATE.CANDIDATE,
++      questId: null,
++      terminalReceiptDigest: null,
++    },
++  }));
++
++  t.equal(report.claimEligibility.scaleCertification, false);
++  t.match(report.claimEligibility.reasonCodes, [
++    SCALE_CLAIM_REASON.TERMINAL_CERTIFICATION_ABSENT,
++  ]);
++  t.equal(validateScaleEvidenceReport(report).valid, true);
++  t.end();
++});
++
++test('missing hardware identity is rejected before report creation', (t) => {
++  const input = evidenceInput();
++  delete input.hardware.region;
++  t.throws(
++    () => createScaleEvidenceReport(input),
++    /hardware\.region:required/u,
++  );
++  t.end();
++});
++
++test('missing artifact provenance is rejected before report creation', (t) => {
++  const input = evidenceInput();
++  delete input.provenance.artifactManifestDigest;
++  t.throws(
++    () => createScaleEvidenceReport(input),
++    /provenance\.artifactManifestDigest:sha256_required/u,
++  );
++  t.end();
++});
++
++test('tampered identities and claim promotion are rejected', (t) => {
++  const report = createScaleEvidenceReport(evidenceInput());
++  const identityTamper = structuredClone(report);
++  identityTamper.hardware.cpuCount += 1;
++  t.match(validateScaleEvidenceReport(identityTamper).errors, [
++    'profileIdentity:mismatch',
++  ]);
++
++  const claimTamper = structuredClone(report);
++  claimTamper.claimEligibility = {
++    profileEvidence: true,
++    scaleCertification: true,
++    reasonCodes: [],
++  };
++  t.match(validateScaleEvidenceReport(claimTamper).errors, [
++    'claimEligibility:mismatch',
++  ]);
++
++  const gateTamper = structuredClone(report);
++  gateTamper.gates.performance.p99LatencyMs += 1;
++  t.match(validateScaleEvidenceReport(gateTamper).errors, [
++    'reportIdentity:mismatch',
++  ]);
++  t.end();
++});
++
++test('bad artifact digest and incomplete convergence fields are rejected', (t) => {
++  const report = createScaleEvidenceReport(evidenceInput());
++  report.artifacts[0].digest = 'sha256:not-a-digest';
++  delete report.gates.convergence.confidenceInterval;
++
++  const result = validateScaleEvidenceReport(report);
++  t.equal(result.valid, false);
++  t.match(result.errors, [
++    'gates.convergence.confidenceInterval:object_required',
++    'artifacts.0.digest:sha256_required',
++  ]);
++  t.end();
++});
++
++test('run completion cannot precede run start', (t) => {
++  const input = evidenceInput({
++    run: {
++      ...evidenceInput().run,
++      completedAt: '2026-07-26T09:59:59.000Z',
++    },
++  });
++  t.throws(
++    () => createScaleEvidenceReport(input),
++    /run\.completedAt:precedes_startedAt/u,
++  );
++  t.end();
++});
++
++test('P0 cannot self-declare a certified state', (t) => {
++  const input = evidenceInput({
++    certification: {
++      state: SCALE_CERTIFICATION_STATE.CERTIFIED,
++      questId: 'not-authorized',
++      terminalReceiptDigest: DIGEST_A,
++    },
++  });
++  t.throws(
++    () => createScaleEvidenceReport(input),
++    /certification\.state:p0_must_be_development/u,
++  );
++  t.end();
++});
+diff --git a/test/distributed/harness/scale-evidence-contract.js b/test/distributed/harness/scale-evidence-contract.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b70afca4e96d2a3e650afcc0483a53aa667d5ffe
+--- /dev/null
++++ b/test/distributed/harness/scale-evidence-contract.js
+@@ -0,0 +1,449 @@
++import {createHash} from 'node:crypto';
++
++const ZERO = 0;
++const ONE = 1;
++const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/u;
++const ISO_TIMESTAMP_PATTERN =
++  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
++
++export const SCALE_EVIDENCE_CONTRACT_ID =
++  'scale-certification-evidence-contract';
++export const SCALE_EVIDENCE_SCHEMA_VERSION = 'scale-evidence-v1';
++
++export const SCALE_PROFILE_ID = Object.freeze({
++  DEVELOPMENT: 'P0',
++  INTEGRATION: 'P1',
++  PERIODIC_SCALE: 'P2',
++  TARGET_SCALE: 'P3',
++});
++
++export const SCALE_EVIDENCE_FIDELITY = Object.freeze({
++  DETERMINISTIC_GUARD: 'deterministic_guard',
++  LIVE: 'live',
++});
++
++export const SCALE_CERTIFICATION_STATE = Object.freeze({
++  DEVELOPMENT: 'development',
++  CANDIDATE: 'candidate',
++  CERTIFIED: 'certified',
++});
++
++export const SCALE_GATE_STATUS = Object.freeze({
++  PASS: 'pass',
++  FAIL: 'fail',
++  NOT_MEASURED: 'not_measured',
++});
++
++export const SCALE_CLAIM_REASON = Object.freeze({
++  DEVELOPMENT_PROFILE: 'development_profile_not_scale_certification',
++  NON_LIVE_FIDELITY: 'live_fidelity_required',
++  REQUIRED_GATE_NOT_PASSING: 'required_gate_not_passing',
++  TERMINAL_CERTIFICATION_ABSENT: 'terminal_certification_absent',
++});
++
++const PROFILE_IDS = new Set(Object.values(SCALE_PROFILE_ID));
++const FIDELITIES = new Set(Object.values(SCALE_EVIDENCE_FIDELITY));
++const CERTIFICATION_STATES = new Set(Object.values(SCALE_CERTIFICATION_STATE));
++const GATE_STATUSES = new Set(Object.values(SCALE_GATE_STATUS));
++const REQUIRED_GATE_NAMES = Object.freeze([
++  'feasibility',
++  'safety',
++  'performance',
++  'resources',
++  'convergence',
++]);
++
++function isRecord(value) {
++  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
++}
++
++function isNonEmptyText(value) {
++  return typeof value === 'string' && value.trim().length > ZERO;
++}
++
++function isNonNegativeNumber(value) {
++  return typeof value === 'number' && Number.isFinite(value) && value >= ZERO;
++}
++
++function isPositiveInteger(value) {
++  return Number.isInteger(value) && value > ZERO;
++}
++
++function isNonNegativeInteger(value) {
++  return Number.isInteger(value) && value >= ZERO;
++}
++
++function isRatio(value) {
++  return isNonNegativeNumber(value) && value <= ONE;
++}
++
++function pushIf(errors, condition, code) {
++  if (condition) errors.push(code);
++}
++
++function validateDigest(errors, value, path) {
++  pushIf(errors, !SHA256_PATTERN.test(String(value || '')),
++    `${path}:sha256_required`);
++}
++
++function validateIdentityFields(report, errors) {
++  const run = report.run;
++  pushIf(errors, !isRecord(run), 'run:object_required');
++  if (isRecord(run)) {
++    pushIf(errors, !isNonEmptyText(run.id), 'run.id:required');
++    pushIf(errors, !ISO_TIMESTAMP_PATTERN.test(String(run.startedAt || '')),
++      'run.startedAt:iso_timestamp_required');
++    pushIf(errors, !ISO_TIMESTAMP_PATTERN.test(String(run.completedAt || '')),
++      'run.completedAt:iso_timestamp_required');
++    pushIf(errors, !FIDELITIES.has(run.fidelity), 'run.fidelity:unsupported');
++    pushIf(
++      errors,
++      ISO_TIMESTAMP_PATTERN.test(String(run.startedAt || '')) &&
++        ISO_TIMESTAMP_PATTERN.test(String(run.completedAt || '')) &&
++        Date.parse(run.completedAt) < Date.parse(run.startedAt),
++      'run.completedAt:precedes_startedAt',
++    );
++  }
++
++  const software = report.software;
++  pushIf(errors, !isRecord(software), 'software:object_required');
++  if (isRecord(software)) {
++    pushIf(errors, !isNonEmptyText(software.revision), 'software.revision:required');
++    pushIf(errors, !isNonEmptyText(software.runtime), 'software.runtime:required');
++    pushIf(errors, !isNonEmptyText(software.packageVersion),
++      'software.packageVersion:required');
++  }
++
++  const hardware = report.hardware;
++  pushIf(errors, !isRecord(hardware), 'hardware:object_required');
++  if (isRecord(hardware)) {
++    for (const field of ['provider', 'region', 'instanceClass', 'storageClass']) {
++      pushIf(errors, !isNonEmptyText(hardware[field]),
++        `hardware.${field}:required`);
++    }
++    pushIf(errors, !isPositiveInteger(hardware.cpuCount),
++      'hardware.cpuCount:positive_integer_required');
++    pushIf(errors, !isPositiveInteger(hardware.memoryBytes),
++      'hardware.memoryBytes:positive_integer_required');
++  }
++
++  const topology = report.topology;
++  pushIf(errors, !isRecord(topology), 'topology:object_required');
++  if (isRecord(topology)) {
++    for (const field of [
++      'nodeCount',
++      'failureDomainCount',
++      'tableCount',
++      'partitionCount',
++      'replicaCount',
++    ]) {
++      pushIf(errors, !isPositiveInteger(topology[field]),
++        `topology.${field}:positive_integer_required`);
++    }
++    validateDigest(errors, topology.manifestDigest, 'topology.manifestDigest');
++  }
++
++  const data = report.data;
++  pushIf(errors, !isRecord(data), 'data:object_required');
++  if (isRecord(data)) {
++    pushIf(errors, !isNonNegativeInteger(data.logicalBytes),
++      'data.logicalBytes:non_negative_integer_required');
++    pushIf(errors, !isNonNegativeInteger(data.physicalBytes),
++      'data.physicalBytes:non_negative_integer_required');
++    validateDigest(errors, data.manifestDigest, 'data.manifestDigest');
++    pushIf(errors, !isNonEmptyText(data.shape), 'data.shape:required');
++  }
++
++  const workload = report.workload;
++  pushIf(errors, !isRecord(workload), 'workload:object_required');
++  if (isRecord(workload)) {
++    pushIf(errors, !isNonEmptyText(workload.id), 'workload.id:required');
++    validateDigest(errors, workload.manifestDigest, 'workload.manifestDigest');
++    pushIf(errors, !isRecord(workload.duration),
++      'workload.duration:object_required');
++    if (isRecord(workload.duration)) {
++      pushIf(errors, !isNonNegativeInteger(workload.duration.warmupMs),
++        'workload.duration.warmupMs:non_negative_integer_required');
++      pushIf(errors, !isPositiveInteger(workload.duration.measuredMs),
++        'workload.duration.measuredMs:positive_integer_required');
++    }
++  }
++}
++
++function validateProvenance(report, errors) {
++  const provenance = report.provenance;
++  pushIf(errors, !isRecord(provenance), 'provenance:object_required');
++  if (!isRecord(provenance)) return;
++  for (const field of ['producer', 'invocation']) {
++    pushIf(errors, !isNonEmptyText(provenance[field]),
++      `provenance.${field}:required`);
++  }
++  validateDigest(
++    errors,
++    provenance.environmentDigest,
++    'provenance.environmentDigest',
++  );
++  validateDigest(
++    errors,
++    provenance.artifactManifestDigest,
++    'provenance.artifactManifestDigest',
++  );
++}
++
++function validateGateEnvelope(report, errors) {
++  const gates = report.gates;
++  pushIf(errors, !isRecord(gates), 'gates:object_required');
++  if (!isRecord(gates)) return;
++
++  for (const name of REQUIRED_GATE_NAMES) {
++    pushIf(errors, !isRecord(gates[name]), `gates.${name}:object_required`);
++    if (isRecord(gates[name])) {
++      pushIf(errors, !GATE_STATUSES.has(gates[name].status),
++        `gates.${name}.status:unsupported`);
++    }
++  }
++
++  if (isRecord(gates.feasibility)) {
++    pushIf(errors, !Array.isArray(gates.feasibility.reasonCodes),
++      'gates.feasibility.reasonCodes:array_required');
++  }
++  if (isRecord(gates.safety)) {
++    pushIf(errors, !isNonNegativeInteger(gates.safety.violationCount),
++      'gates.safety.violationCount:non_negative_integer_required');
++  }
++  if (isRecord(gates.performance)) {
++    pushIf(errors, !isNonEmptyText(gates.performance.baselineId),
++      'gates.performance.baselineId:required');
++    pushIf(errors, !isNonNegativeInteger(gates.performance.offeredOperations),
++      'gates.performance.offeredOperations:non_negative_integer_required');
++    pushIf(errors, !isNonNegativeInteger(gates.performance.correctOperations),
++      'gates.performance.correctOperations:non_negative_integer_required');
++    pushIf(errors,
++      isNonNegativeInteger(gates.performance.offeredOperations) &&
++      isNonNegativeInteger(gates.performance.correctOperations) &&
++      gates.performance.correctOperations > gates.performance.offeredOperations,
++      'gates.performance.correctOperations:exceeds_offered');
++    for (const field of ['p95LatencyMs', 'p99LatencyMs']) {
++      pushIf(errors, !isNonNegativeNumber(gates.performance[field]),
++        `gates.performance.${field}:non_negative_number_required`);
++    }
++    pushIf(errors, !isRatio(gates.performance.errorRate),
++      'gates.performance.errorRate:ratio_required');
++  }
++  if (isRecord(gates.resources)) {
++    for (const field of [
++      'maxHeapBytes',
++      'maxRssBytes',
++      'maxFileDescriptors',
++      'maxEventLoopLagMs',
++      'maxQueueDepth',
++      'maxInFlight',
++      'retainedRaftBytes',
++    ]) {
++      pushIf(errors, !isNonNegativeNumber(gates.resources[field]),
++        `gates.resources.${field}:non_negative_number_required`);
++    }
++    for (const field of ['retryRate', 'diskAmplification']) {
++      pushIf(errors, !isNonNegativeNumber(gates.resources[field]),
++        `gates.resources.${field}:non_negative_number_required`);
++    }
++  }
++  if (isRecord(gates.convergence)) {
++    pushIf(errors, !isPositiveInteger(gates.convergence.sampleCount),
++      'gates.convergence.sampleCount:positive_integer_required');
++    pushIf(errors, !isRatio(gates.convergence.passRate),
++      'gates.convergence.passRate:ratio_required');
++    for (const field of ['p50Ms', 'p95Ms']) {
++      pushIf(errors, !isNonNegativeNumber(gates.convergence[field]),
++        `gates.convergence.${field}:non_negative_number_required`);
++    }
++    const interval = gates.convergence.confidenceInterval;
++    pushIf(errors, !isRecord(interval),
++      'gates.convergence.confidenceInterval:object_required');
++    if (isRecord(interval)) {
++      pushIf(errors, !isRatio(interval.lower),
++        'gates.convergence.confidenceInterval.lower:ratio_required');
++      pushIf(errors, !isRatio(interval.upper),
++        'gates.convergence.confidenceInterval.upper:ratio_required');
++      pushIf(errors, isRatio(interval.lower) && isRatio(interval.upper) &&
++        interval.lower > interval.upper,
++      'gates.convergence.confidenceInterval:reversed');
++    }
++  }
++}
++
++function validateArtifacts(report, errors) {
++  pushIf(errors, !Array.isArray(report.artifacts) ||
++    report.artifacts.length === ZERO, 'artifacts:non_empty_array_required');
++  if (!Array.isArray(report.artifacts)) return;
++  report.artifacts.forEach((artifact, index) => {
++    const prefix = `artifacts.${index}`;
++    pushIf(errors, !isRecord(artifact), `${prefix}:object_required`);
++    if (!isRecord(artifact)) return;
++    pushIf(errors, !isNonEmptyText(artifact.kind), `${prefix}.kind:required`);
++    pushIf(errors, !isNonEmptyText(artifact.path), `${prefix}.path:required`);
++    validateDigest(errors, artifact.digest, `${prefix}.digest`);
++  });
++}
++
++function validateCertification(report, errors) {
++  const certification = report.certification;
++  pushIf(errors, !isRecord(certification), 'certification:object_required');
++  if (!isRecord(certification)) return;
++  pushIf(errors, !CERTIFICATION_STATES.has(certification.state),
++    'certification.state:unsupported');
++  if (report.profile?.id === SCALE_PROFILE_ID.DEVELOPMENT) {
++    pushIf(errors, certification.state !== SCALE_CERTIFICATION_STATE.DEVELOPMENT,
++      'certification.state:p0_must_be_development');
++  }
++  if (certification.state === SCALE_CERTIFICATION_STATE.CERTIFIED) {
++    pushIf(errors, !isNonEmptyText(certification.questId),
++      'certification.questId:required_for_certified');
++    validateDigest(
++      errors,
++      certification.terminalReceiptDigest,
++      'certification.terminalReceiptDigest',
++    );
++  }
++}
++
++function canonicalize(value) {
++  if (Array.isArray(value)) return value.map(canonicalize);
++  if (!isRecord(value)) return value;
++  return Object.fromEntries(
++    Object.keys(value)
++      .sort()
++      .map((key) => [key, canonicalize(value[key])]),
++  );
++}
++
++function profileIdentityPayload(report) {
++  return {
++    contractId: report.contractId,
++    schemaVersion: report.schemaVersion,
++    profile: report.profile,
++    software: report.software,
++    hardware: report.hardware,
++    topology: report.topology,
++    data: report.data,
++    workload: report.workload,
++  };
++}
++
++export function computeScaleProfileIdentity(report) {
++  const bytes = JSON.stringify(canonicalize(profileIdentityPayload(report)));
++  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
++}
++
++export function computeScaleRunIdentity(report) {
++  const bytes = JSON.stringify(canonicalize({
++    profileIdentity: report.profileIdentity,
++    run: report.run,
++    provenance: report.provenance,
++  }));
++  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
++}
++
++export function computeScaleReportIdentity(report) {
++  const {reportIdentity: _reportIdentity, ...reportPayload} = report;
++  const bytes = JSON.stringify(canonicalize(reportPayload));
++  return `sha256:${createHash('sha256').update(bytes).digest('hex')}`;
++}
++
++function requiredGatesPass(report) {
++  return REQUIRED_GATE_NAMES.every(
++    (name) => report.gates?.[name]?.status === SCALE_GATE_STATUS.PASS,
++  );
++}
++
++export function deriveScaleClaimEligibility(report) {
++  const reasonCodes = [];
++  if (report.profile?.id === SCALE_PROFILE_ID.DEVELOPMENT) {
++    reasonCodes.push(SCALE_CLAIM_REASON.DEVELOPMENT_PROFILE);
++  }
++  if (report.run?.fidelity !== SCALE_EVIDENCE_FIDELITY.LIVE) {
++    reasonCodes.push(SCALE_CLAIM_REASON.NON_LIVE_FIDELITY);
++  }
++  if (!requiredGatesPass(report)) {
++    reasonCodes.push(SCALE_CLAIM_REASON.REQUIRED_GATE_NOT_PASSING);
++  }
++  if (report.certification?.state !== SCALE_CERTIFICATION_STATE.CERTIFIED) {
++    reasonCodes.push(SCALE_CLAIM_REASON.TERMINAL_CERTIFICATION_ABSENT);
++  }
++  return {
++    profileEvidence: true,
++    scaleCertification: reasonCodes.length === ZERO,
++    reasonCodes,
++  };
++}
++
++function validateBaseReport(report) {
++  const errors = [];
++  pushIf(errors, !isRecord(report), 'report:object_required');
++  if (!isRecord(report)) return errors;
++  pushIf(errors, report.contractId !== SCALE_EVIDENCE_CONTRACT_ID,
++    'contractId:unsupported');
++  pushIf(errors, report.schemaVersion !== SCALE_EVIDENCE_SCHEMA_VERSION,
++    'schemaVersion:unsupported');
++  pushIf(errors, !isRecord(report.profile), 'profile:object_required');
++  if (isRecord(report.profile)) {
++    pushIf(errors, !PROFILE_IDS.has(report.profile.id), 'profile.id:unsupported');
++    pushIf(errors, !isPositiveInteger(report.profile.version),
++      'profile.version:positive_integer_required');
++  }
++  validateIdentityFields(report, errors);
++  validateGateEnvelope(report, errors);
++  validateProvenance(report, errors);
++  validateArtifacts(report, errors);
++  validateCertification(report, errors);
++  pushIf(errors, !isRecord(report.extensions), 'extensions:object_required');
++  return errors;
++}
++
++export function validateScaleEvidenceReport(report) {
++  const errors = validateBaseReport(report);
++  if (errors.length === ZERO) {
++    const expectedIdentity = computeScaleProfileIdentity(report);
++    pushIf(errors, report.profileIdentity !== expectedIdentity,
++      'profileIdentity:mismatch');
++    const expectedRunIdentity = computeScaleRunIdentity(report);
++    pushIf(errors, report.runIdentity !== expectedRunIdentity,
++      'runIdentity:mismatch');
++    const expectedEligibility = deriveScaleClaimEligibility(report);
++    pushIf(
++      errors,
++      JSON.stringify(report.claimEligibility) !==
++        JSON.stringify(expectedEligibility),
++      'claimEligibility:mismatch',
++    );
++    const expectedReportIdentity = computeScaleReportIdentity(report);
++    pushIf(errors, report.reportIdentity !== expectedReportIdentity,
++      'reportIdentity:mismatch');
++  }
++  return {
++    valid: errors.length === ZERO,
++    errors,
++    profileIdentity: errors.length === ZERO ? report.profileIdentity : null,
++  };
++}
++
++export function createScaleEvidenceReport(input) {
++  const report = {
++    ...structuredClone(input),
++    contractId: SCALE_EVIDENCE_CONTRACT_ID,
++    schemaVersion: SCALE_EVIDENCE_SCHEMA_VERSION,
++  };
++  const baseErrors = validateBaseReport(report);
++  if (baseErrors.length > ZERO) {
++    throw new TypeError(`invalid scale evidence: ${baseErrors.join(', ')}`);
++  }
++  report.profileIdentity = computeScaleProfileIdentity(report);
++  report.runIdentity = computeScaleRunIdentity(report);
++  report.claimEligibility = deriveScaleClaimEligibility(report);
++  report.reportIdentity = computeScaleReportIdentity(report);
++  const result = validateScaleEvidenceReport(report);
++  if (!result.valid) {
++    throw new TypeError(`invalid scale evidence: ${result.errors.join(', ')}`);
++  }
++  return report;
++}
+diff --git a/test/distributed/scenarios/snapshot-live-rebuild.js b/test/distributed/scenarios/snapshot-live-rebuild.js
+index 0fa44d653c1d17670c76710859cedb2a0fb4d272..f0ffd8ff876cfed5660cdda7c0bef29396611ea1 100644
+--- a/test/distributed/scenarios/snapshot-live-rebuild.js
++++ b/test/distributed/scenarios/snapshot-live-rebuild.js
+@@ -31,6 +31,8 @@ import {
+   resolveScenarioOptions,
+   resolveSnapshotLiveRebuildScenarioConfig,
+ } from '../harness/scenario-config.js';
++import {SCALE_EVIDENCE_CONTRACT_ID} from
++  '../harness/scale-evidence-contract.js';
+ import {assertAcknowledgedWritesVisibleOnReachableNodes} from './rolling-restart.js';
+ import {
+   BENCHMARK_WORKLOAD_PROFILE,
+@@ -54,7 +56,7 @@ const VISIBILITY_CRITICAL_TABLES = new Set([
+   'tables',
+   'node_endpoints',
+ ]);
+-const EVIDENCE_CONTRACT_P0 = 'scale-certification-evidence-contract:P0';
++const EVIDENCE_CONTRACT_P0 = `${SCALE_EVIDENCE_CONTRACT_ID}:P0`;
+ 
+ function sleep(delayMs) {
+   return new Promise((resolve) => setTimeout(resolve, delayMs));

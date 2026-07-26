@@ -21,6 +21,10 @@ import {
   resolveSnapshotLiveRebuildScenarioConfig,
 } from '../scenario-config.js';
 import {ChaosPrimitives} from '../chaos.js';
+import {
+  SCALE_CLAIM_REASON,
+  validateScaleEvidenceReport,
+} from '../scale-evidence-contract.js';
 import * as scenarioModule from '../../scenarios/snapshot-live-rebuild.js';
 
 const SCENARIOS_DIR = fileURLToPath(new URL('../../scenarios', import.meta.url));
@@ -89,6 +93,56 @@ describe('snapshot-live-rebuild scenario shape', () => {
         .restartabilityLegEnabled,
       false,
     );
+  });
+
+  it('builds and validates the authoritative live P0 evidence report', () => {
+    const evidence = scenarioModule.buildR5EvidenceSlice({
+      preload: {source: 'benchmark_load', table: 'benchmark_logs'},
+      target: {
+        partitionId: 'partition-1',
+        replicaId: 'replica-2',
+        followerNodeId: 'node-2',
+        leaderNodeId: 'node-1',
+      },
+      wiped: {
+        dbPath: '/data/partitions/partition-1/replica-2.db',
+        checkpointsDir: '/data/partitions/partition-1/checkpoints/replica-2',
+      },
+      catchupDurationMs: 1200,
+      metrics: {
+        total: 100,
+        success: 99,
+        opsPerSec: 40,
+        latency: {p95: 8, p99: 12},
+        queueDelay: {max: 3},
+      },
+      rebuildWindow: {total: 50, success: 49, successRate: 0.98},
+      acknowledgedWriteVisibility: {visible: true},
+      restartabilityLeg: {state: 'not_requested'},
+      config: {
+        floorBytes: 8_388_608,
+        loadOpsPerSec: 40,
+        loadDuration: '120s',
+        preloadRows: 1024,
+        preloadPayloadBytes: 8192,
+        preWipeSettleMs: 14_000,
+      },
+      nodeCount: 7,
+      replicaCount: 3,
+      startedAt: '2026-07-26T10:00:00.000Z',
+      completedAt: '2026-07-26T10:02:00.000Z',
+    });
+    const report = evidence.details.scaleEvidenceReport;
+    const validation = validateScaleEvidenceReport(report);
+
+    assert.equal(validation.valid, true);
+    assert.equal(report.profile.id, 'P0');
+    assert.equal(report.run.fidelity, 'live');
+    assert.equal(report.claimEligibility.scaleCertification, false);
+    assert.ok(report.claimEligibility.reasonCodes.includes(
+      SCALE_CLAIM_REASON.DEVELOPMENT_PROFILE,
+    ));
+    assert.equal(evidence.details.contract, undefined);
   });
 });
 

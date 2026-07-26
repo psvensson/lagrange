@@ -26,11 +26,25 @@
  */
 
 import assert from 'node:assert/strict';
+import {
+  arch,
+  availableParallelism,
+  platform,
+  totalmem,
+} from 'node:os';
 import {CONVERGENCE_DEFAULTS} from '../harness/constants.js';
 import {
   resolveScenarioOptions,
   resolveSnapshotLiveRebuildScenarioConfig,
 } from '../harness/scenario-config.js';
+import {
+  SCALE_CERTIFICATION_RECEIPT_STATE,
+  SCALE_EVIDENCE_FIDELITY,
+  SCALE_GATE_STATUS,
+  SCALE_PROFILE_ID,
+  computeScaleEvidenceDigest,
+  createScaleEvidenceReport,
+} from '../harness/scale-evidence-contract.js';
 import {assertAcknowledgedWritesVisibleOnReachableNodes} from './rolling-restart.js';
 import {
   BENCHMARK_WORKLOAD_PROFILE,
@@ -54,7 +68,12 @@ const VISIBILITY_CRITICAL_TABLES = new Set([
   'tables',
   'node_endpoints',
 ]);
-const EVIDENCE_CONTRACT_P0 = 'scale-certification-evidence-contract:P0';
+const SCALE_EVIDENCE_ARTIFACT_PATH =
+  'harness://snapshot-live-rebuild/scenario-evidence';
+const SCALE_EVIDENCE_BASELINE_ID =
+  'snapshot-live-rebuild-p0-functional-floor';
+const SCALE_EVIDENCE_PACKAGE_VERSION =
+  process.env.npm_package_version || '0.1.0';
 
 function sleep(delayMs) {
   return new Promise((resolve) => setTimeout(resolve, delayMs));
@@ -83,6 +102,181 @@ function rowsFromResult(result) {
 
 function normalizeString(value) {
   return typeof value === 'string' ? value.trim() : '';
+}
+
+function nonNegativeInteger(value) {
+  return Math.max(ZERO, Math.trunc(Number(value) || ZERO));
+}
+
+function nonNegativeNumber(value) {
+  return Math.max(ZERO, Number(value) || ZERO);
+}
+
+function buildSnapshotLiveRebuildScaleEvidence({
+  preload,
+  target,
+  catchupDurationMs,
+  metrics,
+  rebuildWindow,
+  acknowledgedWriteVisibility,
+  restartabilityLeg,
+  config,
+  nodeCount,
+  replicaCount,
+  startedAt,
+  completedAt,
+}) {
+  const evidencePayload = {
+    preload,
+    target,
+    catchupDurationMs,
+    metrics,
+    rebuildWindow,
+    acknowledgedWriteVisibility,
+    restartabilityLeg,
+  };
+  const evidenceDigest = computeScaleEvidenceDigest(evidencePayload);
+  const artifacts = [{
+    kind: 'scenario_evidence',
+    path: SCALE_EVIDENCE_ARTIFACT_PATH,
+    digest: evidenceDigest,
+  }];
+  const measuredMs = Math.max(
+    1,
+    Date.parse(completedAt) - Date.parse(startedAt),
+  );
+  const offeredOperations = nonNegativeInteger(metrics?.total);
+  const correctOperations = nonNegativeInteger(metrics?.success);
+  const errorRate = offeredOperations > ZERO ?
+    Math.min(1, (offeredOperations - correctOperations) / offeredOperations) :
+    ZERO;
+  const runtimeIdentity = {
+    node: process.version,
+    platform: platform(),
+    architecture: arch(),
+    cpuCount: availableParallelism(),
+    memoryBytes: totalmem(),
+  };
+  const workloadManifest = {
+    scenario: 'snapshot-live-rebuild',
+    loadOpsPerSec: config.loadOpsPerSec,
+    loadDuration: config.loadDuration,
+    preloadRows: config.preloadRows,
+    preloadPayloadBytes: config.preloadPayloadBytes,
+    table: preload.table,
+  };
+
+  return createScaleEvidenceReport({
+    profile: {id: SCALE_PROFILE_ID.DEVELOPMENT, version: 1},
+    run: {
+      id: `snapshot-live-rebuild:${startedAt}`,
+      startedAt,
+      completedAt,
+      fidelity: SCALE_EVIDENCE_FIDELITY.LIVE,
+    },
+    software: {
+      revision: process.env.LAGRANGE_EVIDENCE_REVISION ||
+        'unsealed-development-tree',
+      runtime: process.version,
+      packageVersion: SCALE_EVIDENCE_PACKAGE_VERSION,
+    },
+    hardware: {
+      provider: 'docker-local',
+      region: 'local',
+      instanceClass: `${runtimeIdentity.platform}-${runtimeIdentity.architecture}`,
+      cpuCount: runtimeIdentity.cpuCount,
+      memoryBytes: runtimeIdentity.memoryBytes,
+      storageClass: 'docker-volume',
+    },
+    topology: {
+      nodeCount: Math.max(1, nonNegativeInteger(nodeCount)),
+      failureDomainCount: 1,
+      tableCount: 1,
+      partitionCount: 1,
+      replicaCount: Math.max(1, nonNegativeInteger(replicaCount)),
+      manifestDigest: computeScaleEvidenceDigest({
+        nodeCount,
+        replicaCount,
+        target,
+      }),
+    },
+    data: {
+      logicalBytes: nonNegativeInteger(config.floorBytes),
+      physicalBytes: nonNegativeInteger(config.floorBytes) *
+        Math.max(1, nonNegativeInteger(replicaCount)),
+      manifestDigest: computeScaleEvidenceDigest(preload),
+      shape: 'snapshot-live-rebuild-preload',
+    },
+    workload: {
+      id: 'snapshot-live-rebuild-v1',
+      manifestDigest: computeScaleEvidenceDigest(workloadManifest),
+      duration: {
+        warmupMs: nonNegativeInteger(config.preWipeSettleMs),
+        measuredMs,
+      },
+    },
+    gates: {
+      feasibility: {
+        status: SCALE_GATE_STATUS.PASS,
+        evidenceArtifactDigest: evidenceDigest,
+        reasonCodes: [],
+      },
+      safety: {
+        status: SCALE_GATE_STATUS.PASS,
+        evidenceArtifactDigest: evidenceDigest,
+        violationCount: 0,
+      },
+      performance: {
+        status: SCALE_GATE_STATUS.NOT_MEASURED,
+        evidenceArtifactDigest: evidenceDigest,
+        baselineId: SCALE_EVIDENCE_BASELINE_ID,
+        offeredOperations,
+        correctOperations,
+        p95LatencyMs: nonNegativeNumber(metrics?.latency?.p95),
+        p99LatencyMs: nonNegativeNumber(metrics?.latency?.p99),
+        errorRate,
+      },
+      resources: {
+        status: SCALE_GATE_STATUS.NOT_MEASURED,
+        evidenceArtifactDigest: evidenceDigest,
+        maxHeapBytes: 0,
+        maxRssBytes: 0,
+        maxFileDescriptors: 0,
+        maxEventLoopLagMs: 0,
+        maxQueueDepth: nonNegativeNumber(metrics?.queueDelay?.max),
+        maxInFlight: 0,
+        retryRate: 0,
+        diskAmplification: 0,
+        retainedRaftBytes: 0,
+      },
+      convergence: {
+        status: SCALE_GATE_STATUS.PASS,
+        evidenceArtifactDigest: evidenceDigest,
+        sampleCount: 1,
+        passRate: 1,
+        confidenceInterval: {lower: 1, upper: 1},
+        p50Ms: nonNegativeNumber(catchupDurationMs),
+        p95Ms: nonNegativeNumber(catchupDurationMs),
+      },
+    },
+    provenance: {
+      producer: 'snapshot-live-rebuild',
+      invocation:
+        'node test/distributed/run.js --scenario snapshot-live-rebuild',
+      environmentDigest: computeScaleEvidenceDigest(runtimeIdentity),
+      artifactManifestDigest: computeScaleEvidenceDigest(artifacts),
+    },
+    artifacts,
+    certification: {
+      receiptState: SCALE_CERTIFICATION_RECEIPT_STATE.ABSENT,
+    },
+    extensions: {
+      snapshotLiveRebuild: {
+        targetPartitionId: target.partitionId,
+        targetReplicaId: target.replicaId,
+      },
+    },
+  });
 }
 
 async function runNodeQuery(node, sql) {
@@ -225,6 +419,11 @@ function buildR5EvidenceSlice({
   rebuildWindow,
   acknowledgedWriteVisibility,
   restartabilityLeg,
+  config,
+  nodeCount,
+  replicaCount,
+  startedAt,
+  completedAt,
 }) {
   const transferBytesAndRate = {
     loadSource: preload.source,
@@ -259,6 +458,20 @@ function buildR5EvidenceSlice({
     latency: metrics?.latency || null,
     opsPerSec: metrics?.opsPerSec || null,
   };
+  const scaleEvidenceReport = buildSnapshotLiveRebuildScaleEvidence({
+    preload,
+    target,
+    catchupDurationMs,
+    metrics,
+    rebuildWindow,
+    acknowledgedWriteVisibility,
+    restartabilityLeg,
+    config,
+    nodeCount,
+    replicaCount,
+    startedAt,
+    completedAt,
+  });
   return {
     loadMetricsEvidence: {
       transferBytesAndRate,
@@ -266,7 +479,7 @@ function buildR5EvidenceSlice({
       catchupDurationMs,
     },
     details: {
-      contract: EVIDENCE_CONTRACT_P0,
+      scaleEvidenceReport,
       targetPartitionId: target.partitionId,
       targetReplicaId: target.replicaId,
       rebuiltNodeId: target.followerNodeId,
@@ -301,6 +514,7 @@ function s6phase(label, detail) {
 }
 
 async function run(cluster, options = {}) {
+  const scaleEvidenceStartedAt = new Date().toISOString();
   const scenarioOptions = resolveScenarioOptions(
     options,
     cluster,
@@ -564,6 +778,11 @@ async function run(cluster, options = {}) {
       rebuildWindow,
       acknowledgedWriteVisibility,
       restartabilityLeg,
+      config: cfg,
+      nodeCount: nodes.length,
+      replicaCount: lastPlacement.length,
+      startedAt: scaleEvidenceStartedAt,
+      completedAt: new Date().toISOString(),
     });
 
     s6phase('done-ok');
