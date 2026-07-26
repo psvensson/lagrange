@@ -19,7 +19,21 @@ const MKDIR_COMMAND = 'mkdir';
 const MKDIR_PARENTS_FLAG = '-p';
 const REMOVE_COMMAND = 'rm';
 const REMOVE_FORCE_FLAG = '-f';
+const REMOVE_RECURSIVE_FORCE_FLAG = '-rf';
 const SYNC_COMMAND = 'sync';
+// In-container data layout (DATA_DIR is /data in the container env; see
+// cluster-class-lifecycle-base.js env[DATA_DIR]=DATA_DIR_PATH='/data') and the
+// storage path grammar (src/storage/data-directory-manager.js getPartitionDbPath
+// = {dataDir}/partitions/{pid}/{rid}.db; src/raft/snapshot-install.js checkpoints
+// root = {partitionDir}/checkpoints/{rid}). Kept as local constants — matching the
+// existing DISK_PRESSURE_DIR local-constant style — to wipe a replica's durable
+// state so a restarted node must rebuild it via snapshot transfer.
+const CONTAINER_DATA_DIR = '/data';
+const PARTITIONS_DIRNAME = 'partitions';
+const CHECKPOINTS_DIRNAME = 'checkpoints';
+const REPLICA_DB_EXT = '.db';
+const REPLICA_DB_WAL_SUFFIX = '-wal';
+const REPLICA_DB_SHM_SUFFIX = '-shm';
 const NETEM_ACTION_REPLACE = 'replace';
 const DISK_PRESSURE_DEFAULT_SIZE_MB = 256;
 const DISK_PRESSURE_MIN_SIZE_MB = 1;
@@ -483,6 +497,73 @@ class ChaosPrimitives {
       SYNC_COMMAND,
     ]);
     this._diskPressureFileByNodeId.delete(nodeId);
+  }
+
+  /**
+   * Wipe one replica's durable on-disk state inside a container so a restarted
+   * node must rebuild the replica from a leader snapshot transfer (S6 live
+   * rebuild). Removes the replica database, its SQLite WAL/SHM sidecars, and the
+   * replica's checkpoints directory. The node MUST be stopped first — there must
+   * be no open database handle when the files are removed.
+   *
+   * dockerode exec has no shell, so every path is passed as an explicit argv
+   * element (no globs). Paths follow the in-container data layout:
+   *   {data}/partitions/{pid}/{rid}.db(-wal|-shm)
+   *   {data}/partitions/{pid}/checkpoints/{rid}/
+   *
+   * @param {string} nodeId
+   * @param {Object} options
+   * @param {string} options.partitionId
+   * @param {string} options.replicaId
+   * @return {Promise<{dbPath: string, walPath: string, shmPath: string,
+   *   checkpointsDir: string}>}
+   */
+  async wipeReplicaData(nodeId, options = {}) {
+    const partitionId =
+      typeof options?.partitionId === 'string' ? options.partitionId.trim() : '';
+    const replicaId =
+      typeof options?.replicaId === 'string' ? options.replicaId.trim() : '';
+    if (!partitionId || partitionId.length === 0) {
+      throw new Error(
+        'wipeReplicaData requires a non-empty partitionId for node ' + nodeId,
+      );
+    }
+    if (!replicaId || replicaId.length === 0) {
+      throw new Error(
+        'wipeReplicaData requires a non-empty replicaId for node ' + nodeId,
+      );
+    }
+    const containerId = this._getContainerId(nodeId);
+    const partitionDir = pathPosix.join(
+      CONTAINER_DATA_DIR,
+      PARTITIONS_DIRNAME,
+      partitionId,
+    );
+    const dbPath = pathPosix.join(partitionDir, replicaId + REPLICA_DB_EXT);
+    const walPath = dbPath + REPLICA_DB_WAL_SUFFIX;
+    const shmPath = dbPath + REPLICA_DB_SHM_SUFFIX;
+    const checkpointsDir = pathPosix.join(
+      partitionDir,
+      CHECKPOINTS_DIRNAME,
+      replicaId,
+    );
+
+    await this._dockerProvider.execInContainer(containerId, [
+      REMOVE_COMMAND,
+      REMOVE_FORCE_FLAG,
+      dbPath,
+      walPath,
+      shmPath,
+    ]);
+    await this._dockerProvider.execInContainer(containerId, [
+      REMOVE_COMMAND,
+      REMOVE_RECURSIVE_FORCE_FLAG,
+      checkpointsDir,
+    ]);
+    await this._dockerProvider.execInContainer(containerId, [
+      SYNC_COMMAND,
+    ]);
+    return {dbPath, walPath, shmPath, checkpointsDir};
   }
 
   /**

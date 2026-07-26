@@ -1578,6 +1578,32 @@ class ClusterLifecycleBase {
     return result;
   }
 
+  // Start a node that was previously taken down with stopNode(), the start half
+  // of restartNode() split out so a scenario can act on the node's stopped disk
+  // (e.g. wipeReplicaData for S6 live rebuild) between stop and start. Restores
+  // network identity (via chaos.startNode), marks the incarnation boundary so
+  // the new incarnation's logs are filterable, waits for admin readiness, then
+  // clears the expected-down mark so a later genuine crash is still detected.
+  async startNode(id, options = {}) {
+    const result = await this._runChaosAction('startNode', id, options, () =>
+      this._startStoppedNodeWithObservation(id, options),
+    );
+    this._clearNodeExpectedDown(id);
+    return result;
+  }
+
+  async _startStoppedNodeWithObservation(id, options = {}) {
+    const node = this._nodes.get(id) || null;
+    await this._chaos.startNode(id);
+    // Mark the boot boundary now (before readiness wait) so the marker lands
+    // ahead of the new incarnation's app logs in the capture.
+    await this._markNodeIncarnationBoundary(id);
+    if (typeof node?.closeQueryConnection === 'function') {
+      node.closeQueryConnection();
+    }
+    await this._waitForNodeAdminReadiness(id, options);
+  }
+
   async _restartNodeWithObservation(id, options = {}) {
     const node = this._nodes.get(id) || null;
     if (typeof node?.closeQueryConnection === 'function') {

@@ -1392,6 +1392,8 @@ async function main() {
       hasScenarioFailures: hasFailures,
     });
     await report.write({
+      // Distributed docker run == LIVE fidelity; audit.js special-cases 'live'.
+      fidelity: 'live',
       benchmarkRegressionGate,
       ...(failureBundle.runBundle ?
         {failureBundle: failureBundle.runBundle} :

@@ -613,6 +613,16 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
     );
   }
 
+  // S6 live rebuild: destroy one replica's durable state (db + WAL/SHM sidecars
+  // + checkpoints dir) inside the container so a restarted node must rebuild it
+  // from a leader snapshot transfer. The node must be stopped first (no open
+  // handle). options: {partitionId, replicaId}.
+  async wipeReplicaData(nodeId, options = {}) {
+    return this._runChaosAction('wipeReplicaData', nodeId, options, () =>
+      this._chaos.wipeReplicaData(nodeId, options),
+    );
+  }
+
   async resolveBenchmarkLoadAdmissionSnapshot(options = {}) {
     const nodes = Array.from(this._nodes.values());
     if (nodes.length === ZERO) {

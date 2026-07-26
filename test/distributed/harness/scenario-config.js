@@ -229,6 +229,68 @@ function resolveSeedRestartUnderLoadScenarioConfig(options = {}) {
   });
 }
 
+function resolveSnapshotLiveRebuildScenarioConfig(options = {}) {
+  return Object.freeze({
+    // Preload targeting: the default 'logs' table starts as a single data
+    // partition, so preloading it to the declared floor lands all the bytes in
+    // that one partition (whole-table == target-partition bytes at this scale).
+    // Keys use a single contiguous zero-padded prefix so they stay inside one
+    // partition's key range. Byte floor is deliberately SMALLER than the 256 MiB
+    // production snapshot default so a rebuild transfers real multi-chunk bytes
+    // without an unreasonable preload wall-time; Phase C calibrates the exact
+    // floor. preloadRows * preloadPayloadBytes approximates floorBytes.
+    tableName: normalizeNonEmptyString(options.tableName, DEFAULT_LOG_TABLE_NAME),
+    floorBytes: normalizeFiniteNumber(options.floorBytes, 25165824),
+    preloadRows: normalizeFiniteNumber(options.preloadRows, 3072),
+    preloadPayloadBytes: normalizeFiniteNumber(options.preloadPayloadBytes, 8192),
+    preloadBatchSize: normalizeFiniteNumber(options.preloadBatchSize, 64),
+    preloadQueryTimeoutMs:
+      normalizeFiniteNumber(options.preloadQueryTimeoutMs, 30000),
+    loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 30),
+    loadDuration: normalizeNonEmptyString(options.loadDuration, '180s'),
+    queryTimeoutMs: normalizeFiniteNumber(options.queryTimeoutMs, 10000),
+    preLoadReadinessStableWindowMs: normalizeFiniteNumber(
+      options.preLoadReadinessStableWindowMs,
+      SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
+    ),
+    preLoadReadinessTimeoutMs:
+      normalizeFiniteNumber(options.preLoadReadinessTimeoutMs, 300000),
+    preWipeSettleMs: normalizeFiniteNumber(
+      options.preWipeSettleMs,
+      SCENARIO_TIMING_DEFAULTS.stabilizationDelayMs,
+    ),
+    rejoinReadinessTimeoutMs:
+      normalizeFiniteNumber(options.rejoinReadinessTimeoutMs, 360000),
+    rejoinActiveTimeoutMs:
+      normalizeFiniteNumber(options.rejoinActiveTimeoutMs, 300000),
+    perNodeConvergenceTimeoutMs:
+      normalizeFiniteNumber(options.perNodeConvergenceTimeoutMs, 300000),
+    postRebuildSoakMs: normalizeFiniteNumber(
+      options.postRebuildSoakMs,
+      SCENARIO_TIMING_DEFAULTS.shortSoakMs,
+    ),
+    consistencyTimeoutMs:
+      normalizeFiniteNumber(options.consistencyTimeoutMs, 300000),
+    consistencyPollIntervalMs:
+      normalizeFiniteNumber(options.consistencyPollIntervalMs, 250),
+    consistencyForceRepairAfterMs:
+      normalizeFiniteNumber(options.consistencyForceRepairAfterMs, 0),
+    acknowledgedWriteVisibilityTimeoutMs:
+      normalizeFiniteNumber(options.acknowledgedWriteVisibilityTimeoutMs, 30000),
+    acknowledgedWriteVisibilityPollIntervalMs:
+      normalizeFiniteNumber(
+        options.acknowledgedWriteVisibilityPollIntervalMs,
+        500,
+      ),
+    // Optional restartability leg (config-gated): kill the follower again
+    // mid-transfer and restart to prove resume from the verified boundary.
+    restartabilityLegEnabled:
+      options.restartabilityLegEnabled === true,
+    restartabilityMidTransferDelayMs:
+      normalizeFiniteNumber(options.restartabilityMidTransferDelayMs, 1500),
+  });
+}
+
 function resolvePartitionKillHealUnderLoadScenarioConfig(options = {}) {
   return Object.freeze({
     loadOpsPerSec: normalizeFiniteNumber(options.loadOpsPerSec, 50),
@@ -449,6 +511,7 @@ export {
   resolveScenarioOptions,
   resolveSeedRestartUnderLoadScenarioConfig,
   resolveSlowFollowerUnderLoadScenarioConfig,
+  resolveSnapshotLiveRebuildScenarioConfig,
   resolveSevenNodeLoadDuringPartitioningScenarioConfig,
   resolveSevenNodeReadWriteLoadDistributionScenarioConfig,
   resolveSevenNodeReadWriteLoadTransactionRecoveryScenarioConfig,

@@ -379,6 +379,7 @@ const CHAOS_FAULT_STATUS_RECOVERED = 'recovered';
 const CHAOS_RECOVERY_ACTIONS = new Set([
   'unpauseNode',
   'restartNode',
+  'startNode',
   'healPartition',
   'clearNetworkSlowdown',
   'releaseDiskPressure',
