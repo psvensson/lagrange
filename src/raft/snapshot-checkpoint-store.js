@@ -46,6 +46,11 @@ import {
   matchCheckpointIdentity,
   validateCheckpointDescriptor,
 } from './snapshot-checkpoint-format.js';
+import {
+  gatherRetentionPins,
+  listCheckpointGenerations,
+  sweepCheckpointGenerations,
+} from './snapshot-retention.js';
 
 const CREATION = RAFT_CHECKPOINT_CREATION_OUTCOME;
 const VALIDATION = RAFT_CHECKPOINT_VALIDATION_OUTCOME;
@@ -243,6 +248,9 @@ function removeStagingDirectory(stagingDir) {
  * @param {Object} options.identity creating owner identity
  *   ({clusterId, raftGroupId, entity: {kind, id}, membershipEpoch})
  * @param {string} options.checkpointsRoot durable checkpoint root directory
+ * @param {number[]} [options.inProcessPins] in-process retention pins (the
+ *   S4 dispatcher's in-flight generation indexes) honored by the
+ *   opportunistic post-creation sweep
  * @return {Promise<Object>} typed creation result
  */
 async function createSqliteStateMachineCheckpoint(options) {
@@ -315,6 +323,17 @@ async function createSqliteStateMachineCheckpoint(options) {
     fsyncDirectory(generationDir);
     writeAtomicDurable(
       path.join(generationDir, RAFT_CHECKPOINT_DESCRIPTOR_FILE), descriptor);
+    // Opportunistic bounded-retention sweep (S5): the one production-adjacent
+    // moment S1 owns. The full pin set travels on EVERY invocation — durable
+    // install/transfer markers plus the caller's in-process pins — and the
+    // just-created generation is the newest complete one, so it survives.
+    sweepCheckpointGenerations({
+      checkpointsRoot,
+      pinnedGenerationIndexes: gatherRetentionPins({
+        checkpointsRoot,
+        inProcessPins: options.inProcessPins,
+      }),
+    });
     return creationResult(CREATION.CREATED, [], {
       checkpointDir: generationDir,
       descriptor,
@@ -394,28 +413,9 @@ function readCheckpoint(options) {
   });
 }
 
-/**
- * List sealed checkpoint generations (ascending lastIncludedIndex) under a
- * checkpoint root. Staging and non-generation entries are ignored.
- * @param {string} checkpointsRoot durable checkpoint root directory
- * @return {number[]} ascending generation indices
- */
-function listCheckpointGenerations(checkpointsRoot) {
-  if (!fs.existsSync(checkpointsRoot)) {
-    return [];
-  }
-  return fs.readdirSync(checkpointsRoot, {withFileTypes: true})
-    .filter((entry) => entry.isDirectory())
-    .map((entry) => ({
-      name: entry.name,
-      index: Number.parseInt(entry.name, DECIMAL_RADIX),
-    }))
-    .filter(({name, index}) => Number.isSafeInteger(index) && index >= 0 &&
-      name === String(index))
-    .map(({index}) => index)
-    .sort((left, right) => left - right);
-}
-
+// listCheckpointGenerations moved to snapshot-retention.js (S5, which owns
+// generation lifecycle); re-exported here so existing consumers keep their
+// import site.
 export {
   createSqliteStateMachineCheckpoint,
   listCheckpointGenerations,

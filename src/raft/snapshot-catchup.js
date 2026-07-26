@@ -54,9 +54,28 @@ const CATCHUP_TYPEOF = Object.freeze({
 const TRANSFER_ID_PREFIX = 'snapshot-catchup';
 const TRANSFER_ID_SEPARATOR = '-';
 
-// Default per-process single-flight registry (nodeId -> true). Tests may
+// Default per-process single-flight registry (nodeId -> in-flight value).
+// The value starts as the SELECTION_PENDING placeholder and becomes the
+// resolved generationIndex the moment a generation is selected or created
+// (recorded synchronously with selection — no await in between), so the S5
+// retention sweep can pin every generation currently being served. Tests may
 // inject their own map through options.inflightByFollower.
 const DEFAULT_INFLIGHT_BY_FOLLOWER = new Map();
+const INFLIGHT_SELECTION_PENDING = true;
+
+/**
+ * Generation indexes currently pinned by in-flight snapshot dispatches
+ * (the S5 retention in-process pin source). Entries still awaiting
+ * generation selection carry the boolean placeholder and are excluded.
+ * @param {Map} [inflightMap] injected single-flight registry (defaults to
+ *   the per-process registry)
+ * @return {number[]} frozen in-flight generation indexes
+ */
+function listInFlightGenerationIndexes(
+  inflightMap = DEFAULT_INFLIGHT_BY_FOLLOWER) {
+  return Object.freeze([...inflightMap.values()]
+    .filter((value) => Number.isSafeInteger(value)));
+}
 
 function dispatchResult(outcome, extra = {}) {
   return Object.freeze({outcome, ...extra});
@@ -122,13 +141,24 @@ async function resolveServableGeneration(options) {
   const existing = selectNewestEligibleGeneration(
     checkpointsRoot, leaderBoundary);
   if (existing.found) {
+    // Recorded synchronously with selection (no await between select and
+    // set): the S5 sweep must never observe a served generation unpinned.
+    options.recordInFlightGeneration(existing.generationIndex);
     return {ok: true, generationIndex: existing.generationIndex};
   }
-  const created = await createSqliteStateMachineCheckpoint(
-    {db, identity, checkpointsRoot});
+  // The create-if-none fallback threads the OTHER dispatches' in-flight
+  // generation pins into creation so its opportunistic retention sweep
+  // cannot remove a generation mid-serve.
+  const created = await createSqliteStateMachineCheckpoint({
+    db,
+    identity,
+    checkpointsRoot,
+    inProcessPins: listInFlightGenerationIndexes(options.inflightByFollower),
+  });
   if (created.outcome !== RAFT_CHECKPOINT_CREATION_OUTCOME.CREATED) {
     return {ok: false, creation: created};
   }
+  options.recordInFlightGeneration(created.descriptor.lastIncludedIndex);
   return {ok: true, generationIndex: created.descriptor.lastIncludedIndex};
 }
 
@@ -175,13 +205,16 @@ async function dispatchSnapshotCatchup(options) {
       followerNodeId: follower.nodeId,
     });
   }
-  inflightByFollower.set(follower.nodeId, true);
+  inflightByFollower.set(follower.nodeId, INFLIGHT_SELECTION_PENDING);
   try {
     const generation = await resolveServableGeneration({
       checkpointsRoot,
       leaderBoundary: decision.leaderBoundary,
       identity,
       db,
+      inflightByFollower,
+      recordInFlightGeneration: (generationIndex) =>
+        inflightByFollower.set(follower.nodeId, generationIndex),
     });
     if (!generation.ok) {
       return dispatchResult(DISPATCH.CHECKPOINT_CREATION_FAILED, {
@@ -322,5 +355,6 @@ async function orchestrateSnapshotCatchupInstall(options) {
 export {
   buildSnapshotCatchupIdentity,
   dispatchSnapshotCatchup,
+  listInFlightGenerationIndexes,
   orchestrateSnapshotCatchupInstall,
 };

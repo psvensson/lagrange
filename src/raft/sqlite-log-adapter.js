@@ -14,8 +14,8 @@ import {
   COMMITTED_ENTRY_WRITE_OUTCOME,
   guardCommittedEntryWrite,
 } from './committed-entry-guard.js';
-import {unsupportedRaftCompactionResult} from './compaction-policy.js';
 import {isValidRaftLogIndex} from './log-index.js';
+import {installSnapshotCompactionApi} from './snapshot-compaction.js';
 import {
   isCompactedIndex,
   readSnapshotBoundary,
@@ -33,6 +33,8 @@ const LOCAL_STR_INSERT_OR_REPLACE_INTO_RAFT_LOG_LOG_INDE = 'INSERT OR REPLACE IN
 const LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX = 'DELETE FROM _raft_log WHERE log_index >= ?';
 const LOCAL_STR_UPDATE_RAFT_LOG_SET_COMMAND_WHERE_LOG_IN = 'UPDATE _raft_log SET command = ? WHERE log_index = ?';
 const LOCAL_STR_1JYKG = 'DELETE FROM _raft_log WHERE log_index > ?';
+const LOCAL_STR_DELETE_COMMITTED_PREFIX =
+  'DELETE FROM _raft_log WHERE log_index <= ?';
 const LOCAL_STR_COMMITTED_TRUNCATION_REFUSED =
   'Refused raft log truncation into the committed prefix ' +
   '(committed-entry-loss prevented)';
@@ -159,11 +161,17 @@ class SQLiteLogAdapter {
     const existing = normalizedEntry.index <= committedIndex ?
       this.get(normalizedEntry.index) :
       null;
+    // A committed-range row MISS re-anchors the boundary cache before the
+    // guard decides (compacted row vs conflict — snapshot-compaction.js).
+    const boundary = existing === null &&
+      normalizedEntry.index <= committedIndex ?
+      this.resolveBoundaryAfterRowMiss(normalizedEntry.index) :
+      this.getSnapshotBoundary();
     const guard = guardCommittedEntryWrite(
       existing,
       normalizedEntry,
       committedIndex,
-      this.getSnapshotBoundary().lastIncludedIndex,
+      boundary.lastIncludedIndex,
     );
     return {guard, normalizedEntry};
   }
@@ -224,7 +232,7 @@ class SQLiteLogAdapter {
     ).get();
 
     if (!row) {
-      const boundary = this.getSnapshotBoundary();
+      const boundary = this.resolveBoundaryAfterLogEmpty();
       return {
         index: boundary.lastIncludedIndex,
         term: boundary.lastIncludedTerm,
@@ -332,9 +340,14 @@ class SQLiteLogAdapter {
     const row = this.db.prepare(
       'SELECT 1 FROM _raft_log WHERE log_index = ?',
     ).get(index);
+    if (row) {
+      return true;
+    }
     // A compacted index is known-present lineage (durably applied inside the
     // installed snapshot) even though its bytes are gone; has(0) stays false.
-    return !!row || isCompactedIndex(index, this.getSnapshotBoundary());
+    // The miss path re-anchors the boundary cache against durable state
+    // (live compaction is the second boundary writer — snapshot-compaction.js).
+    return isCompactedIndex(index, this.resolveBoundaryAfterRowMiss(index));
   }
 
   /**
@@ -537,7 +550,7 @@ class SQLiteLogAdapter {
     ).get();
 
     if (!row) {
-      const boundary = this.getSnapshotBoundary();
+      const boundary = this.resolveBoundaryAfterLogEmpty();
       return {
         index: boundary.lastIncludedIndex,
         term: boundary.lastIncludedTerm,
@@ -585,12 +598,24 @@ class SQLiteLogAdapter {
     this.db.prepare(LOCAL_STR_1JYKG).run(safeIndex);
   }
 
+  // compactCommittedEntries (the S5 proof-gated decision table — the
+  // proofless call keeps the frozen refusal), refreshSnapshotBoundaryFromStore
+  // and the resolveBoundaryAfter* row-miss discipline live in the
+  // snapshot-compaction.js prototype mixin.
+
   /**
-   * Refuse committed-prefix compaction until snapshot recovery exists.
-   * @return {{outcome: string, changed: boolean}} Typed no-change result.
+   * Physically delete the log rows at or below `toIndex`. ONLY the S5
+   * proof-gated compaction transaction (snapshot-compaction.js) may call
+   * this, AFTER its full decision table approved the removal and inside the
+   * same transaction that advances the boundary keys. The SQL lives here so
+   * the adapter stays the single _raft_log mutation owner (the
+   * raft-log-write-owner guard).
+   * @param {number} toIndex inclusive deletion ceiling
+   * @return {number} deleted row count
    */
-  compactCommittedEntries() {
-    return unsupportedRaftCompactionResult();
+  deleteCommittedPrefixRows(toIndex) {
+    return this.db.prepare(LOCAL_STR_DELETE_COMMITTED_PREFIX)
+      .run(toIndex).changes;
   }
 
   recordCommittedTruncationBlock(requestedIndex, committedIndex) {
@@ -758,5 +783,6 @@ class SQLiteLogAdapter {
 }
 
 installSQLiteLogAdapterCallbackApi(SQLiteLogAdapter);
+installSnapshotCompactionApi(SQLiteLogAdapter);
 
 export {SQLiteLogAdapter};

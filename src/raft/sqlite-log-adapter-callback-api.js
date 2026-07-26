@@ -246,7 +246,12 @@ const sqliteLogAdapterCallbackMethods = {
     ).get(entry.index);
 
     if (!row) {
-      const boundary = this.getSnapshotBoundary();
+      // Predecessor-row MISS: re-anchor the boundary cache against durable
+      // state before answering (live compaction is the second boundary
+      // writer — snapshot-compaction.js). Degrading to {index: 0} here would
+      // silently disable the prev-log check; a stale-low boundary would
+      // manufacture a committed hole.
+      const boundary = this.resolveBoundaryAfterRowMiss(entry.index - 1);
       if (boundary.lastIncludedIndex > 0 &&
           entry.index > boundary.lastIncludedIndex) {
         return {

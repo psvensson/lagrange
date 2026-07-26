@@ -22,13 +22,13 @@ import {
  * Build a source replica with `entryCount` committed+applied rows in
  * `stateTable` and seal a checkpoint generation into `checkpointsRoot`.
  * @param {Object} options {workDir, checkpointsRoot, partitionId,
- *   stateTable, term, identity, entryCount}
+ *   stateTable, term, identity, entryCount, inProcessPins}
  * @return {Promise<Object>} {created, sourceDbPath, boundaryIndex}
  */
 async function createSealedSourceGeneration(options) {
   const {
     workDir, checkpointsRoot, partitionId, stateTable, term, identity,
-    entryCount,
+    entryCount, inProcessPins,
   } = options;
   const sourceDbPath = path.join(workDir, 'source.db');
   const sourceDb = new Database(sourceDbPath);
@@ -50,6 +50,7 @@ async function createSealedSourceGeneration(options) {
     db: sourceDb,
     identity,
     checkpointsRoot,
+    inProcessPins,
   });
   sourceDb.close();
   return {created, sourceDbPath, boundaryIndex: lastEntry.index};
