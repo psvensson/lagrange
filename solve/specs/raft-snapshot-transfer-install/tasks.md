@@ -11,7 +11,7 @@ consume.
 | S3 | `raft-snapshot-bulk-transfer` — ✅ **SOLVED 2026-07-26** (commit 81a197cb; design `bulk-transfer-design.md`) | Authenticated resumable chunks use a separately bounded pressure class; critical convergence progresses under saturation. |
 | S4 | `raft-snapshot-compacted-follower-catchup` — ✅ **SOLVED 2026-07-26** (commit 01b7a364; design `compacted-follower-catchup-design.md`) | A follower older than the retained prefix installs the newest eligible snapshot and resumes AppendEntries exactly after it. |
 | S5 | `raft-snapshot-retention-compaction` — ✅ **SOLVED 2026-07-26** (commit 512e2118; design `retention-compaction-design.md`) | Bounded generation retention pins active installs and physical prefix removal cannot outrun durable proof. |
-| S6 | `raft-snapshot-live-rebuild` | A large replica rebuild under foreground writes is data-safe, resource-bounded, throughput-measured, restartable, and convergence-safe. |
+| S6 | `raft-snapshot-live-rebuild` — ✅ **SOLVED 2026-07-26** (handoff commit e2c36b1a; seal commit de08aa73; design `live-rebuild-design.md`) | A large replica rebuild under foreground writes is data-safe, resource-bounded, throughput-measured, restartable, and convergence-safe. |
 
 ## Quest authoring bars
 

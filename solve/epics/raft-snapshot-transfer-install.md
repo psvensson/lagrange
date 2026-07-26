@@ -130,3 +130,32 @@ Managed split snapshot pacing is an unrelated table-copy mechanism.
   inputs recorded (deletion-order pin, foreign-proof term-anchor escape,
   trigger cadence + scale calibration). Next: S6
   `raft-snapshot-live-rebuild` — the final rung.
+- 2026-07-26 — **S6 SOLVED — EPIC CLOSED** (`raft-snapshot-live-rebuild`,
+  handoff commit e2c36b1a, seal commit de08aa73; design
+  `live-rebuild-design.md`, twice-verified; landing adversarially verified by
+  an independent worktree verifier with two red-on-revert proofs). The S1–S5
+  chain is wired into production behind deterministic red-on-revert guards
+  (Phase A): a leader-only, role-gated, re-entrancy-guarded checkpoint cadence
+  tick on the 1s prepared-state-hold sweep that also proof-gate-compacts the
+  committed prefix past the just-sealed generation (so recovery is the snapshot
+  chain, not AppendEntries replay); the `onSnapshotCatchupNeeded` dispatcher at
+  the shared ReplicaHandler setup (bootstrap + join/durable-rejoin both
+  covered); a bulk-channel registry at the shared MessageRouter setup with
+  peer dial over `node_endpoints`; a transfer-socket adapter through
+  `sendChunkFrame` (authoritative pacing, non-SENT fatal, no double-pacing);
+  and a peek-then-replay follower offer router driving
+  `orchestrateSnapshotCatchupInstall` with `replaceLocalReplicaService`.
+  `raft.snapshotThreshold` is now env-configurable and container-forwarded.
+  Certification (Phase B/C): the `snapshot-live-rebuild` distributed scenario
+  wipes a non-seed follower under continuous acknowledged-write load and
+  observes dispatch→transfer→install→recreate→resume; the sealed bar isolates
+  **rebuild safety** (wiped follower rejoins ACTIVE via install AND all acked
+  writes visible cluster-wide) from rolling-restart's priority-spread axis.
+  Live N=15 terminal ts=20260726T192824Z (srcFingerprint ee792fd0):
+  ABOVE_BAR — 12/15, Wilson-95 [0.548, 0.930] ≥ sealed bar 0.50, safety floor
+  100% clean (0 corrupt/node-exit/oracle-blind/stale-source), convergeRate
+  1.0 (zero lost acked writes on every run incl. the 3 slow-rebuild liveness
+  timeouts). Open question 1 ANSWERED at S3 (dedicated bulk socket); open
+  questions 2 (non-SQLite adapter) and 3 (per-profile thresholds) remain
+  future-scale work, not blockers — the SQLite production path is certified.
+  The ladder is complete; the epic is closed.
