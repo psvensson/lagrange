@@ -33,10 +33,11 @@ they are not evidence of an active replicated service-state path.
 
 ### Logs are never compacted
 
-Snapshot checkpoint CREATION exists for file-backed SQLite partition replicas
-(`src/raft/snapshot-checkpoint-store.js`) but is not yet invoked by any
-production path, and transfer/install do not exist. Explicit compaction remains
-a typed no-op
+Snapshot checkpoint CREATION (`src/raft/snapshot-checkpoint-store.js`) and
+atomic INSTALL (`src/raft/snapshot-install.js`, at the closed-handle boot
+boundary) exist for file-backed SQLite partition replicas but are not yet
+invoked by any production path; transfer (S3) and compacted-follower catch-up
+(S4) do not exist. Explicit compaction remains a typed no-op
 returning `snapshot_protocol_unavailable` rather than silently discarding
 entries, and the only truncation that exists is conflict truncation, clamped
 so it can never reach the committed prefix.

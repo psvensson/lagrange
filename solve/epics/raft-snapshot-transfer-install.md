@@ -70,3 +70,15 @@ Managed split snapshot pacing is an unrelated table-copy mechanism.
   caller-supplied in S1; pinning the authoritative production sources is S2
   scope. `_transaction_outcomes` classified as state-machine state (retained
   in payloads). Next: S2 `raft-snapshot-atomic-install`.
+- 2026-07-26 — **S2 SOLVED** (`raft-snapshot-atomic-install`, commit 9283b579;
+  design `atomic-install-design.md`, twice-verified). Atomic install at the
+  closed-handle boot boundary with a nonce-healed five-state marker machine,
+  durable term/votedFor rule (scoped to `_raft_state` rows), compacted-log
+  boundary observability in the adapters (CL-042 virgin zero preserved), and
+  S1 creation amendments (`maxCommittedHlc`, boundary-fallback term,
+  `prepared_transactions_pending` gate). Recorded S4 inputs: leader catch-up/
+  stale-batch livelock for installed followers, wrong-term-at-boundary guard
+  test, live raft term boot-seeding gap, production wiring of the
+  checkpoints-root layout. Identity sources remain caller-supplied — pinning
+  moves to S3/S4 with the first production wiring. Next: S3
+  `raft-snapshot-bulk-transfer`.
