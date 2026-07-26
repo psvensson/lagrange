@@ -1,3 +1,8 @@
+---
+audience: development
+documentClass: current
+---
+
 # Contributions
 
 This project is open source (AGPL-3.0) but **does not accept code contributions**.

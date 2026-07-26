@@ -1,0 +1,161 @@
+---
+audience: human
+documentClass: current
+---
+
+# First Hour With Lagrange
+
+This tutorial starts one local node, performs a SQL round trip, shows how the
+row maps to a partition, and runs the supported genuine-WASI request Binding
+example.
+
+## Prerequisites
+
+- Node.js 22.12 or newer
+- npm
+- the repository checked out locally
+- `wasm-tools` on `PATH` for the service-deployment section
+
+## 1. Install And Configure
+
+From the repository root:
+
+```sh
+npm install
+cp .env.example .env
+```
+
+For a first local node, leave `NODE_ID` and `SEED_NODE_ADDRESS` unset. The node
+mints and persists its identity; no seed address means this node creates the
+cluster.
+
+## 2. Start One Node
+
+```sh
+npm start
+```
+
+The default listeners are:
+
+- REST API: `8080`
+- admin WebSocket: `8081`
+- node transport: `8082`
+
+In another terminal, distinguish process startup from traffic readiness:
+
+```sh
+curl -s http://127.0.0.1:8080/livez
+curl -s http://127.0.0.1:8080/startupz
+curl -s http://127.0.0.1:8080/readyz
+```
+
+`/livez` answers only whether the process is alive. Wait for `/startupz` and
+`/readyz` to return successful responses before querying.
+
+## 3. Run A SQL Round Trip
+
+Open the terminal administration client:
+
+```sh
+npm run cli -- localhost:8081
+```
+
+Press `6` for the SQL view. Run each statement with `Ctrl+Enter`:
+
+```sql
+CREATE TABLE users (id TEXT PRIMARY KEY, name TEXT);
+```
+
+Table creation records durable intent before every configured replica has
+necessarily converged. The response may therefore be an owner envelope with
+`contractState: "pending"` and `nextAction: "wait"` or `"retry"`. That is
+progress, not a terminal failure, and you should not resubmit `CREATE TABLE`.
+
+Use a read-only routing check as the deterministic handoff:
+
+```sql
+SELECT id
+FROM users
+WHERE id = '__readiness__';
+```
+
+If that check returns a pending or deferred envelope, wait its `retryAfterMs`
+value (or one second when no delay is supplied) and run the same check again.
+Continue only after it returns a normal successful row set; an empty row set is
+expected.
+
+```sql
+INSERT INTO users (id, name)
+VALUES ('alice', 'Alice'), ('bob', 'Bob');
+```
+
+```sql
+SELECT id, name
+FROM users
+WHERE id = 'alice';
+```
+
+Then inspect routing:
+
+```sql
+EXPLAIN DISTRIBUTED
+SELECT id, name
+FROM users
+WHERE id = 'alice';
+```
+
+The `id` predicate can narrow to the owning partition. Compare it with a query
+on `name`: a predicate the partition resolver cannot use may fan out instead of
+failing.
+
+## 4. Inspect The Physical Model
+
+In the same CLI:
+
+1. Press `3` for Tables.
+2. Select `users`.
+3. Open its Partitions view.
+4. Inspect the partition id, key range, replica count, and leader.
+
+A new table begins with one unbounded partition. In this single-node tutorial,
+writes can use direct mode because no remote leader exists. The configured
+multi-node replica policy does not mean this one-node exercise has already
+demonstrated quorum replication.
+
+## 5. Run A Genuine WASI Request Binding
+
+Stop the manually started node before running this self-contained example; the
+example starts and stops its own disposable local node.
+
+```sh
+node examples/request-binding-deployment/run-request-binding-deployment.js
+```
+
+The runner:
+
+1. builds the committed WAT component with `wasm-tools`;
+2. installs an immutable Artifact;
+3. creates a request Binding;
+4. configures declared table access;
+5. waits for a ready Cell;
+6. invokes the Cell over HTTP; and
+7. proves matched, denied, and unmatched request behavior.
+
+Expect a JSON report showing a `202` response for the matching request and the
+body `component wrote audit key 7`. The example exits non-zero if any assertion
+fails.
+
+## 6. What You Have And Have Not Proven
+
+You have exercised:
+
+- node startup and readiness;
+- SQL table creation, writes, reads, and routing diagnostics;
+- the Table → Partition relationship; and
+- genuine Artifact → Binding → Cell deployment.
+
+You have not exercised leader failover, quorum loss, learner catch-up,
+multi-node rebalancing, or cross-node Cell placement. Continue with the
+[distributed-systems primer](../distributed-systems-primer.md) and the
+[examples index](../../examples/README.md) before drawing conclusions about
+those behaviors.

@@ -66,7 +66,6 @@ the colour legend used by every process diagram.
 ### Reference
 
 - [Peer Address Resolution And Restart-With-New-IP Recovery](peer-address-resolution.md) - Logical-nodeId-vs-location identity, address resolution order, the three restart-with-new-IP recovery mechanisms, and name-first (hostname) addressing config.
-- [Current Owner Maps](current-owner-maps.md) - Current concrete owner maps and subsystem ownership detail.
 - [Readiness Gating & Owner-Contract Kernels](readiness-and-owner-contracts.md) - Readiness dimensions (repairEligible/serveEligible), membership-health guards, and the shared cross-layer owner-contract kernels.
 
 ### Service Platform
@@ -76,19 +75,7 @@ the colour legend used by every process diagram.
 - [Lagrange Service Manifest](lagrange-service-manifest.md) - Service manifest format and activation model.
 - [Lagrange Service Registry](lagrange-service-registry.md) - Service registry architecture.
 
-### Contracts & Invariants
-
-- [System Contract Records](contracts/) - Durable failure-class contracts that bind invariants to their owners, models, and runtime paths.
-- [Invariant Registry](contracts/invariants.json) - Machine-readable owner-scoped safety/liveness invariants. **Tier 1** verifies each entry's `formalPredicate` against formal models (`npm run model:invariants` / `model:contracts`). **Tier 2 (live-evidence)** verifies an entry's optional `liveEvidence` predicate against the running system or a deterministic repro; a BREACHED status means the running system has diverged from this registry.
-- [Core System Logic Contract](contracts/core-system-logic.md) - Low-resolution core owner-flow contract backed by an architecture-adjacent statechart.
-- [Readiness Handoff Liveness Contract](contracts/readiness-handoff-liveness.md) - Startup readiness and handoff temporal contract backed by TLA+.
-- [Rolling Restart Rebalancer Handoff Contract](contracts/rolling-restart-rebalancer-handoff.md) - Priority recovery handoff convergence contract and decision-table binding.
-- [Active Gate Convergence Contract](contracts/active-gate-convergence.md) - Coupled active-gate/rebalancer invariant contract backed by TLA+ and fast-check models.
-- [Quest Lifecycle Contract](contracts/quest-lifecycle.md) - Internal development-process contract (not system architecture): workflow statechart for the repository's unit of work.
-
-### Models
-
-- [Architecture Models](models/) - Architecture-owned executable and structured models that move with owner-boundary architecture changes.
-
-Unimplemented designs live under `solve/specs/` and are linked from the
-roadmap rather than from this current-architecture index.
+Contributor-only owner ledgers, executable model records, workflow contracts,
+and planning material are deliberately absent from this human architecture
+index. This tree describes the implemented system rather than the process used
+to change it.

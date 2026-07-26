@@ -189,8 +189,8 @@ No.
 WASM is the execution format for externally installed services, not the
 entire story. The repo contains built-in runtime services, regular systems
 code, the Binding/Cell component runtime, and an older JavaScript-envelope
-callback rehearsal. The README example is about the execution model more than
-the packaging format.
+callback rehearsal. That older surface is documented separately in the
+[legacy callback guide](docs/legacy-callback-guide.md).
 
 WASM matters here because a genuine component is a useful unit for sandboxed,
 portable, replicable compute — that is what a Binding-derived Cell runs. It is
@@ -245,145 +245,60 @@ Current building blocks include:
 - one SQL execution engine shared by every way a query can arrive: clients,
   services, and internal system queries
 - distributed execution primitives such as `lookup`, `emit`, and `broadcast`
-  (defined in the [Example](#example) section)
+  on the legacy callback path
 - genuine WASI component execution through the Artifact / Binding / Cell
   deployment surface, plus a separate legacy JavaScript-envelope callback path
 - cluster diagnostics, health probes, live query support, and an admin CLI
 - distributed failure and stress testing infrastructure
 
-The current roadmap focus is less about proving the core model and more about
-making it easier to run, inspect, and develop against.
-
-See [roadmap.md](roadmap.md) for the canonical implementation roadmap.
+For what works now, what is partial, and what is unsupported, use the
+[current capabilities and limitations](docs/current-capabilities-and-limitations.md)
+page.
 
 ---
 
 ## How You Deploy Code To Lagrange
 
-Two execution surfaces are available today:
+The supported external deployment surface is:
 
-1. **Artifact / Binding / Cell WASM components.** Install a digest-pinned
-   Artifact with `INSTALL SERVICE`, declare immutable request execution intent
-   with `CREATE BINDING`, and let the cluster derive ready Cells. The Cell runs
-   a genuine WASI component with budget and declared-table enforcement.
-   Request Bindings are invocable; the other accepted Binding source kinds are
-   stored and activated but do not yet have public invocation adapters.
-2. **Lagrange-aware callbacks.** An async `run(ctx)` callback can execute
-   through the embedded runtime or the uploaded callback-module path. The
-   uploaded `wasm_component` callback format is a JavaScript envelope, not a
-   WebAssembly component.
+1. Install a digest-pinned **Artifact** with `INSTALL SERVICE`.
+2. Declare immutable execution intent with `CREATE BINDING`.
+3. Let the cluster derive and place ready **Cells**.
 
-Deployment is declared with exactly three concepts — **Artifact** (installed,
-digest-pinned package), **Binding** (immutable user intent tying one Artifact
-export to a typed source: `request`, `change`, `time`, `once`, `boot`, `call`,
-or `pushdown`), and **Cell** (a ready, running Binding-derived actual whose
-replica capacity is system-policy output, never a caller request). The
-architecture is
-[`architecture/minimal-deployment-surface.md`](architecture/minimal-deployment-surface.md)
-and the operator flow is
-[`docs/wasm-services-user-guide.md`](docs/wasm-services-user-guide.md).
-
-Managed OCI container activation is unsupported. The authoritative current
-runtime matrix is
-[`docs/service-portability-capabilities.json`](docs/service-portability-capabilities.json).
-Future deployment work is tracked in
-[`solve/specs/service-portability-ladder/`](solve/specs/service-portability-ladder/requirements.md).
+Request Bindings currently run genuine WASI components with budget and
+declared-table enforcement. Other accepted Binding source kinds are stored and
+activated but do not yet have public invocation adapters. Managed OCI container
+activation is unsupported. Start with the
+[service deployment guide](docs/service-deployment-guide.md); the architecture
+contract is [Minimal Deployment Surface](architecture/minimal-deployment-surface.md).
 
 ---
 
 ## Small Mental Model
 
-**Your code is a callback.** You write an async function that takes a context
-object (`ctx`) and works with rows: `ctx.call(sql)` to read data, `ctx.out(row)`
-to emit results, and the distribution primitives below when a step genuinely has
-to cross partitions. That function is the unit Lagrange schedules — there is no
-separate worker service to stand up.
+**Tables hold durable state.** A table is split into partitions, and each
+partition is replicated as a Raft group.
 
-**Two ways to hand that function to the cluster:**
+**Artifacts hold immutable code.** A Binding connects one Artifact export to a
+source such as an HTTP request. A Cell is the ready, running actual derived from
+that Binding.
 
-Current runtime support is recorded in
-[`docs/service-portability-capabilities.json`](docs/service-portability-capabilities.json).
-**Service portability status:** the matrix is the current implementation claim;
-The uploaded `wasm_component` callback example exercises the lifecycle but does
-not run real WebAssembly: its JavaScript source is serialized into
-`js_wasm_component_v1` and evaluated as JavaScript. It is not a WebAssembly
-binary or component. This callback axis is
-separate from the Artifact / Binding / Cell deployment surface (which runs
-genuine WASI components); `native_js` remains kernel-internal.
+**Cells are disposable compute, not miniature databases.** They have no
+per-service Raft log. Durable service state belongs in ordinary tables, and the
+placement system moves Cells near replicas of the data they use.
 
-- **Embedded** — run the runtime inside your own Node process and call
-  `runtime.run(fn)` directly (the [Example](#example) below). This is the
-  quickest path for scripts, drivers, and tests: the runtime connects to the
-  cluster, and your function executes against it.
-- **Uploaded** — package the function as a callback module plus a small manifest
-  (`example.manifest.json`: the entry file, the exported `run` function, its
-  `runtimeKind` — `native_js` or `wasm_component` — and the `SELECT` that drives
-  it). A runner stores the module inside the cluster and invokes it by that
-  statement. This is how the
-  [runnable examples](examples/distributed-sql/README.md) exercise the current
-  callback lifecycle. They do not yet demonstrate an externally installable
-  service artifact.
+**SQL routing and Cell placement are related but different.** SQL predicates
+select table partitions and route work to their leaders. Binding access
+declarations feed the affinity scorer, which places Cells on nodes that already
+host relevant replicas. Requests then route to ready Cells rather than asking
+the caller to choose a machine.
 
-**Where state goes.** Treat the callback as stateless: it may be serialized and
-run on several nodes, so captured closure scope is not a place to
-keep state. Durable shared state belongs in tables.
-
-**Where it runs.** The `SELECT` in your callback names a table. The cluster
-resolves that table to the partitions that hold its rows, and the nodes that own
-those partitions — then sends your callback *to those nodes* and runs it there,
-against local data. You never name a host or assemble a worker topology; the
-cluster already knows where the partitions live. Only rows that genuinely must
-cross the network move, and results stream back to wherever you made the call.
-
-Put together, a request goes through these steps:
-
-1. a SQL query or a `runtime.run` callback enters the cluster
-2. the cluster resolves the target table to its partitions and their owner nodes
-3. your callback is sent to those nodes
-4. local execution happens there first
-5. only the rows that genuinely must cross the network are moved
-6. results stream back to the caller
-
-The important part is not the routing itself. The important part is the
-order: local work first, network traffic only for what is left. Most stacks
-are built the other way around — every step ships data somewhere else before
-the work starts.
-
----
-
-## Example
-
-```javascript
-runtime.run(async (ctx) => {
-  for await (const row of ctx.call('SELECT * FROM users')) {
-    ctx.out(row);
-  }
-});
-```
-
-This is the *embedded* form from the mental model above: the runtime lives in
-your process and you call it directly. The interesting part is not the API
-surface — it is what the runtime does for you:
-
-1. it finds the partitions that own `users`
-2. it sends this function to the nodes that own those partitions and runs it there
-3. it streams rows back without asking you to assemble a worker topology
-
-An *uploaded* callback module exports a similar `run(ctx, batch)` function and
-works with the same `ctx` surface; the only difference is that the cluster
-stores the module and drives it by the `SELECT` in its manifest instead of you
-calling `runtime.run` in-process. See
-[examples/distributed-sql](examples/distributed-sql/README.md) for runnable
-versions.
-
-For more complex cases, the runtime exposes a small set of explicit
-distribution primitives:
-
-| Primitive | Usage | Why it exists |
-|-----------|-------|---------------|
-| `ctx.lookup(table, keys[])` | Batched fetch | Read from other partitions without hand-rolling request fan-out |
-| `ctx.emit(key, value)` | Shuffle | Redistribute intermediate data when it really must move |
-| `ctx.broadcast(ref, dataset)` | Replicate | Send a small shared dataset to every node involved in the job |
+The older embedded/uploaded callback runtime still demonstrates explicit
+cross-partition movement with `lookup`, `emit`, and `broadcast`. It is a
+compatibility and distributed-query learning surface, not another way to
+install an Artifact. See the
+[legacy callback guide](docs/legacy-callback-guide.md) when that API is the
+specific subject.
 
 ---
 
@@ -425,8 +340,9 @@ existing cluster and give up after a few minutes if that seed does not exist.
 npm start
 ```
 
-The node opens three ports: `8080` (REST API), `8081` (admin websocket), and
-`8082` (node-to-node transport).
+By default the node opens `8080` (REST API), `8081` (admin WebSocket), and
+`8082` (node-to-node transport). Changing `REST_API_PORT` moves both WebSocket
+defaults; `ADMIN_WS_PORT` and `TRANSPORT_WS_PORT` can override them independently.
 
 ### Run A Query
 
@@ -451,8 +367,8 @@ seed. Three things to know:
 - leave `NODE_ID` unset on joining nodes — the seed admits joiners by a
   UUID identity, which the node generates and persists in its data
   directory on first start
-- run each node on its own host or container: the admin websocket port is
-  currently fixed at `8081`, so two nodes cannot share a network namespace
+- give every node distinct REST, admin, and transport listener ports when
+  several nodes share a network namespace
 - every node must advertise an address other nodes can reach
   (`NODE_ADDRESS`, `NODE_ADVERTISED_WS_ADDRESS`) — the localhost default
   is rejected at join admission because it collides with the seed's
@@ -523,47 +439,19 @@ helm install lagrange charts/lagrange-node \
 See [charts/lagrange-node/README.md](charts/lagrange-node/README.md) for
 values and topology details.
 
-### Useful Commands
-
-```bash
-# Short, high-signal developer proof (normally a few seconds)
-npm run test:smoke
-
-# Quick test pass: unit and non-integration suites (a few minutes)
-npm run test:fast
-
-# Full sharded test suite: thousands of files, takes much longer, and runs
-# a preflight audit gate first
-npm test
-
-# Open the admin CLI entrypoint
-npm run cli -- --help
-
-# Run static analysis and structural checks
-npm run test:static
-
-# Print common local workflows
-npm run commands
-```
-
-Always run tests through the npm scripts above. Invoking `tap test/` directly
-does not work — the argument list exceeds the OS limit (E2BIG) — so the
-scripts shard and batch the suite for you.
-
 If you are just passing through the repo, the fastest way to get oriented is:
 
 1. read this README
-2. skim the architecture walkthrough at [architecture/INDEX.md](architecture/INDEX.md)
-3. inspect [roadmap.md](roadmap.md)
-4. look at [src/index.js](src/index.js) and the directories under `src/`
-5. run `npm run test:fast` if you want to see the project as executable code
-   rather than only as documents (`npm test` is the full sharded suite and
-   takes much longer)
+2. choose a journey in [docs/start-here.md](docs/start-here.md)
+3. check [current capabilities and limitations](docs/current-capabilities-and-limitations.md)
+4. skim the [architecture walkthrough](architecture/INDEX.md)
 
 Working on this codebase with an AI agent (or as one)? Start at the steering
-entry point [AGENTS.md](AGENTS.md); `npm run quest:context` prints the active
-work handoff. Everything agent-facing hangs off that file — nothing else in
-this README is agent guidance.
+entry point [AGENTS.md](AGENTS.md). Everything agent-facing hangs off that
+single portal.
+
+Changing Lagrange itself? The test, debugging, and release workflows begin at
+[CONTRIBUTING.md](CONTRIBUTING.md).
 
 ---
 
@@ -721,11 +609,10 @@ not as a polished end-user product.
 ## Further Reading
 
 - [architecture/INDEX.md](architecture/INDEX.md) for the main architecture walkthrough
-- [roadmap.md](roadmap.md) for implementation status and scope
-- [product-roadmap.md](product-roadmap.md) for cross-edition product phases
+- [docs/current-capabilities-and-limitations.md](docs/current-capabilities-and-limitations.md)
+  for implementation status and important constraints
 - [platform-doctrine.md](platform-doctrine.md) for the platform design doctrine
 - [edition-matrix.md](edition-matrix.md) for edition ownership boundaries
-- [DEBUGGING.md](DEBUGGING.md) for debugging notes
 - [docs/](docs) for operational and feature-specific documents
 - [examples/](examples) for example scenarios and workloads
 

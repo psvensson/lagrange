@@ -10,7 +10,16 @@ This is the execution layer beneath the ingress surfaces — SQL arrives via
 partitions placed by [rebalance.md](rebalance.md). The components named here
 are catalogued in [runtime-components.md](runtime-components.md).
 
-### Distributed Movement Primitives
+The `runtime.run`, `ctx.call`, `WasmCallAdapter`, and `partition_callback`
+sections below describe the active **legacy distributed-query callback
+surface**. They are not the supported Artifact / Binding / Cell installation
+path. Current externally installed WASI components use Binding-derived
+runtime-service Cells; see
+[Service Deployment Guide](../docs/service-deployment-guide.md). The callback
+surface is isolated for users in the
+[Legacy Callback Guide](../docs/legacy-callback-guide.md).
+
+### Distributed Movement Primitives (Legacy Callback)
 Cross-partition data movement is restricted to three explicit primitives,
 preventing accidental N+1 chatter:
 
@@ -22,8 +31,9 @@ preventing accidental N+1 chatter:
   small dataset replication with hard size cap
 - **ctx.out(value)** — final output emission into result stream budgets
 
-### Programmatic Runtime v0 (Active)
-Programmatic distributed execution is implemented and active:
+### Programmatic Runtime v0 (Active Legacy Callback API)
+Programmatic distributed execution is implemented and active on the legacy
+callback surface:
 
 - `runtime.run(async (ctx) => { ... }, opts?)` — injects session, snapshot, and
   budget defaults (`src/query/runtime-runner.js`)
@@ -70,8 +80,8 @@ Ownership boundaries:
 - Drivers and lifecycle modules are consumers only — they call the executor
   but do not own query routing, caching, or partition resolution.
 
-This is distinct from `ctx.call()` in `ExecutionContext`:
-- `ctx.call()` is request-scoped, budget-bounded, and supports
+This is distinct from the legacy `ctx.call()` in `ExecutionContext`:
+- legacy `ctx.call()` is request-scoped, budget-bounded, and supports
   iterator/stage/plan modes for user functions inside `runtime.run()`.
 - `replicaContext.queryExecutor` is service-scoped, long-lived, and provides
   raw SQL execution for service replica internals.
@@ -84,7 +94,7 @@ dispatch. All three adapters produce frozen `SqlRequest` objects and delegate:
 
 - `InternalSqlAdapter` -> `SqlRequest(executionMode: sql_statement)`
 - `PostgresWireAdapter` -> `SqlRequest(executionMode: sql_statement)`
-- `WasmCallAdapter` -> `SqlRequest(executionMode: partition_callback)`
+- legacy `WasmCallAdapter` -> `SqlRequest(executionMode: partition_callback)`
 
 No adapter owns dispatch logic. `executeRequest` switches on `executionMode`
 with dedicated branches:
@@ -97,7 +107,7 @@ with dedicated branches:
 `partition_callback` is a first-class execution mode with its own dispatch
 path. It is never aliased to or folded into `sql_statement` execution.
 
-### Partition Callback Runtime Bridge (Active)
+### Partition Callback Runtime Bridge (Active Legacy Callback API)
 `partition_callback` execution follows a dedicated pipeline from SqlCore
 through to callback invocation:
 

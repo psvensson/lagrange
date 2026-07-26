@@ -1,3 +1,8 @@
+---
+audience: development
+documentClass: planning
+---
+
 # Lagrange Product Roadmap
 
 This document is a cross-edition status board for Community, Pro, and

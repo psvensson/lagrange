@@ -36,7 +36,7 @@ Complete reference for all keyboard shortcuts, commands, configuration options, 
 | Key | View | Description |
 |-----|------|-------------|
 | `1` | Nodes | Cluster nodes overview |
-| `2` | Services | Services across cluster |
+| `2` | Replicas | Replica membership and roles |
 | `3` | Tables | Database tables |
 | `4` | Partitions | Table partitions |
 | `5` | Message Groups | Message group status |
@@ -44,6 +44,7 @@ Complete reference for all keyboard shortcuts, commands, configuration options, 
 | `7` | Logs | System logs |
 | `8` | Config | Configuration settings |
 | `9` | Contexts | Function contexts |
+| `0` | Services | Services across cluster |
 
 ### Mode Switching
 
@@ -216,6 +217,7 @@ Switch to a specific view.
 **Valid views:**
 - `nodes`
 - `services`
+- `replicas`
 - `tables`
 - `partitions`
 - `message_groups`
@@ -336,7 +338,7 @@ View to display on startup.
 | Type | `string` |
 | Required | No |
 | Default | `"nodes"` |
-| Valid values | `nodes`, `services`, `tables`, `partitions`, `message_groups`, `sql`, `logs`, `config`, `contexts` |
+| Valid values | `nodes`, `services`, `replicas`, `tables`, `partitions`, `message_groups`, `sql`, `logs`, `config`, `contexts` |
 
 **Example:**
 ```json
@@ -591,7 +593,7 @@ lagrange-admin --refresh 5000 localhost:8081
 
 Start with a specific view.
 
-Valid values: `nodes`, `services`, `tables`, `partitions`, `message_groups`, `sql`, `logs`, `config`, `contexts`
+Valid values: `nodes`, `services`, `replicas`, `tables`, `partitions`, `message_groups`, `sql`, `logs`, `config`, `contexts`
 
 ```bash
 lagrange-admin --view tables localhost:8081
@@ -732,7 +734,7 @@ LIVE SELECT id, status, updated_at FROM orders WHERE status = 'processing';
 
 ```
 Navigation:     ↑↓ PgUp PgDn Home End Enter Esc
-Views:          1-9
+Views:          0-9
 Modes:          / (filter)  : (command)  ? (help)
 Actions:        d (detail)  r (refresh)  p (pause)  q (quit)
 ```

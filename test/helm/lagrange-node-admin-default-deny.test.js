@@ -78,7 +78,7 @@ function assertSafeContainer(container, expectedPorts = {}) {
     hasNamedContainerPort(ports, 'transport-ws', transportPort),
     true,
   );
-  assertHttpProbe(container.livenessProbe, '/health');
+  assertHttpProbe(container.livenessProbe, '/livez');
   assertHttpProbe(container.readinessProbe, '/readyz');
 }
 

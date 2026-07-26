@@ -46,8 +46,8 @@ not published, and owner-locality or epoch-fence deferral returns a typed
 retry/wait action instead of proving completion. The invariant is
 `publication-drain-deterministic`: while reconciled active nodes remain
 unpublished, a drain or wake action must stay enabled. Full failure class,
-risky-path list, and the model/test regression guards live in the
-[Active Gate Convergence Contract](contracts/active-gate-convergence.md).
+risky-path analysis, and executable regression guards are contributor-only
+verification material rather than part of this conceptual description.
 
 ### Convergence and Publication Ownership
 
@@ -70,10 +70,8 @@ valid terminal outcome while reconciled active nodes remain unpublished.
 Convergence-critical publication and join work uses the protected pressure
 lanes, while background node-state publication remains background work.
 
-The executable liveness and safety contract is
-[Active Gate Convergence Contract](contracts/active-gate-convergence.md).
-Historical harness diagnoses and rejected hypotheses remain in Solver evidence,
-not in this current architecture description.
+Historical diagnoses and rejected hypotheses are intentionally absent from this
+current architecture description.
 
 ### Invariant Engine
 

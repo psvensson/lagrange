@@ -51,11 +51,10 @@ Copyable partition-callback examples, from a basic iterator through an internal
 JavaScript-envelope lifecycle rehearsal, run against a live node by a
 manifest-driven runner.
 
-**Service portability status:** the current support matrix is
-[`docs/service-portability-capabilities.json`](../docs/service-portability-capabilities.json),
-and examples claim only capabilities marked as implemented there. The
-rehearsal is not a WebAssembly binary or component. Service deployment is
-declared through `INSTALL SERVICE` and `CREATE BINDING` (see
+The [current capabilities and limitations](../docs/current-capabilities-and-limitations.md)
+page is the status authority. The rehearsal is not a WebAssembly binary or
+component. Service deployment is declared through `INSTALL SERVICE` and
+`CREATE BINDING` (see
 [`architecture/minimal-deployment-surface.md`](../architecture/minimal-deployment-surface.md));
 the runnable
 [`request-binding-deployment`](request-binding-deployment/README.md) example

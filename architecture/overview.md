@@ -15,28 +15,18 @@ Use this file for:
 
 Do not use this file for:
 
-- the short-form implementation doctrine
-- stable implementation rules
-- stable testing policy
-- roadmap scope decisions
+- a first introduction to distributed systems
+- operator procedures
+- product status or future plans
 
-For those concerns, use:
-
-- [`docs/steering/doctrine.md`](../docs/steering/doctrine.md)
-- [`docs/steering/system-guidelines.md`](../docs/steering/system-guidelines.md)
-- [`docs/steering/testing-guidelines.md`](../docs/steering/testing-guidelines.md)
-- [`docs/steering/roadmap.md`](../docs/steering/roadmap.md)
-- [`roadmap.md`](../roadmap.md)
+For the learning path, start with
+[`system-model.md`](system-model.md). Current support and limitations are
+summarized in
+[`docs/current-capabilities-and-limitations.md`](../docs/current-capabilities-and-limitations.md).
 
 This document describes the architecture of the distributed database system.
-It is the first domain file of the architecture tree — [`INDEX.md`](INDEX.md)
-is the canonical entrypoint — and should be updated as features are added or
-changed. Supporting architecture documents live under `architecture/` and are
-linked from the index.
-
-Current owner-map supplement:
-
-- [`architecture/current-owner-maps.md`](current-owner-maps.md)
+[`INDEX.md`](INDEX.md) is the canonical entrypoint. Supporting architecture
+documents live under `architecture/` and are linked from the index.
 
 ## Overview
 
@@ -110,7 +100,7 @@ To prevent overlap and contradictory runtime behavior:
    rows first: `partitions.leader_node_id` for partition leaders and
    `message_groups.leader_node_id` for message-group leaders. `services`
    metadata is supporting replica detail only (`address`, `status`,
-   `raft_role`) and must not replace canonical leader identity. When the
+   `raft_role`) and must not become durable canonical leader identity. When the
    owner row names a leader but the local cache is missing that leader's
    service row, write execution may do one bounded authoritative node/service
    repair and then use a routable partition replica only as redirect transport
@@ -124,9 +114,8 @@ To prevent overlap and contradictory runtime behavior:
    benchmark admission, boundary catalog) are documented in
    [`readiness-and-owner-contracts.md`](readiness-and-owner-contracts.md). The
    rule: callers branch on `contractState`/`nextAction`; visibility, phase, and
-   owner-specific labels stay in evidence, and fixes extend the owner catalog in
-   [`current-owner-maps.md`](current-owner-maps.md) rather than adding
-   caller-local reinterpretations.
+   owner-specific labels stay in evidence rather than becoming caller-local
+   reinterpretations.
 7. **Epoch Propagation:** `config.current_epoch` + CDC is the single epoch
    authority; no secondary epoch source.
 8. **Control-Plane Progression:** Event-triggered control-plane work (dispatch,
@@ -158,8 +147,8 @@ To prevent overlap and contradictory runtime behavior:
     owner for runtime prepare/start/stop/health orchestration across all
     runtime kinds.
 16. **Adapter Boundary Ownership:** Node-local admin endpoints are ingress
-    adapters only (fixed port `ADMIN_DEFAULT.WEBSOCKET_PORT` in
-    `src/admin/admin-constants.js`), not mutation owners.
+    adapters only (REST + 1 by default, with an explicit admin-port override),
+    not mutation owners.
 17. **Runtime Mutation Ownership:** Runtime drivers must not write system
     metadata directly; service and operation mutations flow through SQL/CDC.
 18. **Timeout Budget Tree:** Every top-level control-plane operation starts

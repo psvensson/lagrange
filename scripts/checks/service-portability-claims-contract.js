@@ -13,10 +13,12 @@ const PUBLIC_DOCUMENT_PATHS = Object.freeze([
   'README.md',
   'examples/README.md',
   'examples/distributed-sql/README.md',
-  'docs/README.md',
-  'docs/dockerhub-overview.md',
-  'docs/wasm-services-user-guide.md',
+  'docs/current-capabilities-and-limitations.md',
+  'docs/service-deployment-guide.md',
+  'docs/legacy-callback-guide.md',
 ]);
+const CANONICAL_HUMAN_DOCUMENT_PATH =
+  'docs/current-capabilities-and-limitations.md';
 
 const IMPLEMENTATION_EVIDENCE_PATHS = Object.freeze({
   callbackArtifact: 'src/query/callback/callback-module-artifact.js',
@@ -39,12 +41,11 @@ const CAPABILITY_STATE = Object.freeze({
 const WASI_CELL_EXECUTION_PATH = 'binding_cell_runtime';
 
 const CLAIM_MARKER = Object.freeze({
-  CAPABILITY_LINK: 'docs/service-portability-capabilities.json',
-  DISCLOSURE: 'Service portability status:',
+  CAPABILITY_PAGE: 'Current Capabilities And Limitations',
+  PUBLIC_MODEL: 'Artifact / Binding / Cell',
   JS_NOT_WASM: 'not a WebAssembly binary or component',
-  BINDING_DEPLOYMENT: 'INSTALL SERVICE and CREATE BINDING',
-  OCI_EXECUTION_UNAVAILABLE:
-    'Managed OCI container execution is not implemented yet',
+  BINDING_DEPLOYMENT: 'Request Bindings are publicly invocable',
+  OCI_EXECUTION_UNAVAILABLE: 'Managed OCI container activation is unsupported',
   OCI_CALLBACK_UNSUPPORTED: 'OCI callback invocation remains unsupported',
 });
 
@@ -181,20 +182,16 @@ function validatePublicDocuments(documents, problems) {
     addProblem(problems, typeof content === 'string',
       `missing public claims document: ${documentPath}`);
     if (typeof content !== 'string') continue;
-    addProblem(problems, content.includes(CLAIM_MARKER.CAPABILITY_LINK),
-      `${documentPath} must link the machine-readable capability contract`);
-    addProblem(problems, content.includes(CLAIM_MARKER.DISCLOSURE),
-      `${documentPath} must carry the service-portability disclosure marker`);
     for (const pattern of FORBIDDEN_PUBLIC_CLAIMS) {
       addProblem(problems, !pattern.test(content),
         `${documentPath} contains forbidden capability claim ${pattern}`);
     }
   }
 
-  const combined = Object.values(documents).join('\n');
+  const canonicalDocument = documents[CANONICAL_HUMAN_DOCUMENT_PATH] ?? '';
   for (const marker of Object.values(CLAIM_MARKER)) {
-    addProblem(problems, combined.includes(marker),
-      `public documentation is missing capability marker: ${marker}`);
+    addProblem(problems, canonicalDocument.includes(marker),
+      `canonical human capability page is missing marker: ${marker}`);
   }
 }
 

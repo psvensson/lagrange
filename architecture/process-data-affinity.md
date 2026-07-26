@@ -203,10 +203,14 @@ and if so attaches the weights and sets the constraint. The exact condition is:
 > the entity is a **runtime service**, *and* at least one non-empty node or group
 > weight map exists from recent `service_partition_access` evidence.
 
-Partitions, message groups, and WASM services never receive the constraint, so
-affinity today steers **service placement only** — it does not pull data toward
-compute. It is also deliberately independent of `read_locality`; the two are not
-coupled.
+Partitions, message groups, and the inactive legacy `wasm_service` placement
+entity kind never receive the constraint. Current externally installed
+`wasm_component` workloads run as Binding-derived `runtime_service` Cells, so
+they can receive affinity when recent access evidence exists. Affinity today
+steers **runtime-service placement only** — it does not pull data toward
+compute. It is also deliberately independent of `read_locality`; the two are
+not coupled. The older callback terminology is mapped in the
+[Legacy Callback Guide](../docs/legacy-callback-guide.md).
 
 ## Layer 2: read-locality routing
 

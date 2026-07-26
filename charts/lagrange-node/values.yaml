@@ -57,7 +57,7 @@ resources:
 # Probes hit the bootstrap REST API on the REST port.
 probes:
   liveness:
-    path: /health
+    path: /livez
     initialDelaySeconds: 10
     periodSeconds: 10
     failureThreshold: 6

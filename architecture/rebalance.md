@@ -68,12 +68,10 @@ durability contract does not permit deleting committed entries while the
 adapter is live. Snapshot checkpoint CREATION exists for file-backed SQLite
 partition replicas (`src/raft/snapshot-checkpoint-{constants,format,store}.js`
 — versioned identity-bound envelope, state-machine-only payload excluding
-`_raft_log`/`_raft_state`, applied-watermark fail-closed exactness gate; quest
-`raft-snapshot-checkpoint-format`), but no production caller invokes it yet
-and transfer/install do not exist (S2/S3 of
-`solve/specs/raft-snapshot-transfer-install/tasks.md`), so both adapters
-retain the complete committed prefix needed by a lagging follower's ordinary
-AppendEntries recovery. Explicit compaction returns the typed
+`_raft_log`/`_raft_state`, applied-watermark fail-closed exactness gate), but no
+production caller invokes it yet and transfer/install do not exist. Both
+adapters therefore retain the complete committed prefix needed by a lagging
+follower's ordinary AppendEntries recovery. Explicit compaction returns the typed
 `snapshot_protocol_unavailable` no-change outcome. Clearing an in-memory
 adapter during lifecycle teardown is whole-instance destruction, not live log
 compaction. Physical prefix removal is unsupported.

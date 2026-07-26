@@ -36,7 +36,7 @@ tap.test('portability claims audit CLI passes the checked-in surface', (t) => {
 tap.test('runtime architecture points to the truthful capability owner', (t) => {
   const architecture = fs.readFileSync(ARCHITECTURE_PATH, 'utf8');
 
-  t.match(architecture, /docs\/service-portability-capabilities\.json/u);
+  t.match(architecture, /docs\/current-capabilities-and-limitations\.md/u);
   t.match(architecture,
     /Genuine WASI component execution on the Binding\/Cell readiness path/u);
   t.match(architecture,

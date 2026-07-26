@@ -107,8 +107,8 @@ path documented in
 
 ## Runtime Support
 
-The machine-readable implementation claim is
-[`docs/service-portability-capabilities.json`](../docs/service-portability-capabilities.json).
+The current implementation claim is
+[Current Capabilities And Limitations](../docs/current-capabilities-and-limitations.md).
 At present:
 
 - `wasm_component` supports external installation and genuine WASI Cell
@@ -119,5 +119,5 @@ At present:
 
 Registry search, registry configuration, air-gapped mirror management,
 entitlements, commercial package policy, and the external kernel API are not
-current catalog surfaces. Their work belongs in the roadmap and
-`solve/specs/`, not this architecture contract.
+current catalog surfaces. They are future work, not behavior described by this
+current architecture contract.

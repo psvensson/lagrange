@@ -56,7 +56,7 @@ Once connected, use these keys to navigate:
 
 | Key | Action |
 |-----|--------|
-| `1-9` | Switch between views (Nodes, Services, Tables, etc.) |
+| `0-9` | Switch between views (Nodes, Replicas, Tables, Services, etc.) |
 | `↑/↓` | Navigate rows |
 | `Enter` | Drill down into selected item |
 | `Escape` | Go back / Cancel |
@@ -70,7 +70,7 @@ Once connected, use these keys to navigate:
 | Key | View | Description |
 |-----|------|-------------|
 | `1` | Nodes | Cluster nodes with resource usage |
-| `2` | Services | Running services across nodes |
+| `2` | Replicas | Replica membership and role details |
 | `3` | Tables | Database tables with metadata |
 | `4` | Partitions | Table partitions and replicas |
 | `5` | Message Groups | Communication infrastructure |
@@ -78,6 +78,10 @@ Once connected, use these keys to navigate:
 | `7` | Logs | System logs with filtering |
 | `8` | Config | System configuration |
 | `9` | Contexts | Function execution contexts |
+| `0` | Services | Running services across nodes |
+
+Replica-operation workflow history is available as an Operations drill-down
+from replica and partition details; it is not a numbered top-level view.
 
 ## Configuration
 

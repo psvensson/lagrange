@@ -105,4 +105,4 @@ The relationship between package state, catalog revisions, installation state,
 and runtime actuals is documented in
 [`lagrange-service-registry.md`](lagrange-service-registry.md). The current
 runtime capability matrix is
-[`docs/service-portability-capabilities.json`](../docs/service-portability-capabilities.json).
+[Current Capabilities And Limitations](../docs/current-capabilities-and-limitations.md).

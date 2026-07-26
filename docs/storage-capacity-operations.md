@@ -182,4 +182,4 @@ If both are set, `storageBudgetBytes` takes precedence.
 | `rebalancer.partitionReplicaOverheadBytes` | integer | 10 MiB | Per-partition overhead |
 | `rebalancer.messageGroupReplicaOverheadBytes` | integer | 1 MiB | Per-message-group overhead |
 | `rebalancer.serviceReplicaOverheadBytes` | integer | 5 MiB | Per-service overhead |
-| `rebalancer.storageAdmissionMode` | string | `observe` | `observe` or `enforce` |
+| `rebalancer.storageAdmissionMode` | string | `enforce` | `observe` or `enforce` |

@@ -80,8 +80,8 @@ projection. A reconciled node is not treated as published until the durable row
 is visible. Retryable join and transport outcomes preserve the join state,
 retain their owner wake or retry action, and re-enter through the bounded join
 attempt policy; terminal outcomes stop. The publication drain obligations and
-executable guard are defined by the
-[Active Gate Convergence Contract](contracts/active-gate-convergence.md#publication-drain-obligations).
+guard require durable publication visibility while retaining an enabled wake
+or retry action for every retryable outcome.
 
 ## Data Flow
 

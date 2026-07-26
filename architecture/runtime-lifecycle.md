@@ -157,9 +157,9 @@ and control-plane workflows.
 
 1. `sys-admin-meta`, `sys-wasm-meta`, and `sys-postgres-wire` are
    replicated control-plane / ingress services.
-2. Node-local admin ingress remains fixed on
-   `ADMIN_DEFAULT.WEBSOCKET_PORT` (`src/admin/admin-constants.js`) as a
-   compatibility adapter.
+2. Node-local admin ingress defaults to REST + 1 through the shared listener
+   port model and accepts the explicit `ADMIN_WS_PORT` override. It remains a
+   compatibility adapter rather than a mutation owner.
 3. Runtime lifecycle operations are owned by
    `Service_Runtime_Lifecycle` with runtime selection through
    `Runtime_Driver_Registry`.
@@ -175,7 +175,8 @@ and control-plane workflows.
 
 Runtime descriptors remain explicit in `service_definitions`
 (`runtime_kind`, `runtime_ref`, `runtime_config`). Adapter ingress remains
-fixed, and mutation ownership remains with replicated meta services.
+node-local and configuration-driven, and mutation ownership remains with
+replicated meta services.
 
 ### Runtime Kinds
 
@@ -185,8 +186,8 @@ fixed, and mutation ownership remains with replicated meta services.
 | `wasm_component` | Run WASI component workloads with manifest/capability/dependency enforcement | Genuine WASI component execution on the Binding/Cell readiness path (transpile, instantiate, budget and declared-table enforcement); the callback example remains a JavaScript envelope rehearsal, not component execution |
 | `oci_container` | Validate digest-pinned OCI container descriptors | Descriptor and in-memory lifecycle scaffold; no real container activation |
 
-The authoritative current support matrix is
-[`../docs/service-portability-capabilities.json`](../docs/service-portability-capabilities.json).
+The authoritative human-readable support matrix is
+[Current Capabilities And Limitations](../docs/current-capabilities-and-limitations.md).
 The sections below describe the implemented owner model. The capability matrix
 is authoritative for whether a runtime has a real activation provider.
 
@@ -280,7 +281,7 @@ lifecycle ownership follow the unified runtime model above.
 Client/Admin CLI
       │
       ▼
-Node Admin Adapter (fixed :ADMIN_DEFAULT.WEBSOCKET_PORT, compatibility only)
+Node Admin Adapter (REST + 1 by default, compatibility only)
       │
       ▼
 Meta Service Router

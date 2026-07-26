@@ -58,12 +58,12 @@ against `expected.json`, and leaves an artifact under `test-output/examples/`.
 
 ## Capability notes
 
-**Service portability status:** the machine-readable support matrix is
-[`docs/service-portability-capabilities.json`](../../docs/service-portability-capabilities.json).
+The authoritative status is
+[Current Capabilities And Limitations](../../docs/current-capabilities-and-limitations.md).
 A few notes:
 
-- This directory demonstrates the callback path described by that
-  current-state contract, not the deployment surface. Service deployment is
+- This directory demonstrates the legacy callback path, not the deployment
+  surface. Service deployment is
   declared through INSTALL SERVICE and CREATE BINDING (see
   [`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md));
   the callback path here predates it.

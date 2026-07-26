@@ -83,7 +83,7 @@ During reconnection, cached data remains available but may become stale.
 | Key | View | Description |
 |-----|------|-------------|
 | `1` | Nodes | Cluster nodes with CPU, memory, disk usage |
-| `2` | Services | Services running across the cluster |
+| `2` | Replicas | Replica membership, role, and readiness |
 | `3` | Tables | Database tables with partition counts |
 | `4` | Partitions | Table partitions with replica info |
 | `5` | Message Groups | Communication infrastructure status |
@@ -91,6 +91,7 @@ During reconnection, cached data remains available but may become stale.
 | `7` | Logs | System logs with filtering |
 | `8` | Config | System configuration settings |
 | `9` | Contexts | Function execution contexts |
+| `0` | Services | Services running across the cluster |
 
 ### Nodes View
 
@@ -245,7 +246,7 @@ Filter by type or name pattern. Recently updated contexts are highlighted.
 | `Home` / `End` | Jump to first/last row |
 | `Enter` | Drill down into selected item |
 | `Escape` / `Backspace` | Go back one level |
-| `1-9` | Switch to view by number |
+| `0-9` | Switch to view by number |
 
 ### Breadcrumb Navigation
 

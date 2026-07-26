@@ -58,7 +58,7 @@ tap.test('native_js cannot become externally installable by documentation drift'
 tap.test('OCI callback support cannot be claimed while invocation fails closed',
   (t) => {
     const result = evaluateMutation((input) => {
-      input.documents['docs/wasm-services-user-guide.md'] +=
+      input.documents['docs/current-capabilities-and-limitations.md'] +=
         '\nOCI callback invocation is supported.\n';
     });
     t.equal(result.valid, false);

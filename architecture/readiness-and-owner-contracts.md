@@ -7,10 +7,8 @@ to accumulate as a single unnavigable list item. Each subsection below is one
 concern; the summary at the top of each is the invariant, and the prose is the
 mechanism and its failure mode.
 
-The concrete owner catalog (semantic owner, canonical evidence, vocabulary,
-allowed consumers, forbidden reinterpretations, diagnostics) lives in
-[`current-owner-maps.md`](current-owner-maps.md); this file is the narrative that
-explains *why* those owners exist.
+This narrative explains why the semantic owners exist without exposing the
+contributor-only file-level owner ledger.
 
 ## Readiness Gating (repairEligible vs serveEligible)
 
@@ -178,11 +176,9 @@ nominally admitted or only routable through another node.
 
 ## Boundary Catalog Rule
 
-Current hotspot boundaries are cataloged in
-[`current-owner-maps.md`](current-owner-maps.md) with the same fields each time:
-semantic owner, canonical evidence, canonical vocabulary, allowed consumers,
-forbidden reinterpretations, and primary diagnostics. The current catalog
-centers on:
+Hotspot boundaries use the same fields each time: semantic owner, canonical
+evidence, canonical vocabulary, allowed consumers, forbidden reinterpretations,
+and primary diagnostics. The current catalog centers on:
 
 - benchmark load admission
 - usable benchmark spread

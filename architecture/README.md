@@ -26,12 +26,9 @@ with the ownership and execution model in `INDEX.md`.
 
 ## Current Supporting Documents
 
-- [Architecture Models](models/)
-- [Core System Logic Contract](contracts/core-system-logic.md)
-- [Readiness Handoff Liveness Contract](contracts/readiness-handoff-liveness.md)
 - [Lagrange Service Manifest](lagrange-service-manifest.md)
 - [Lagrange Service Registry](lagrange-service-registry.md)
 
-Unimplemented designs live under `solve/specs/` and are linked from the
-roadmap. Files under `architecture/` describe implemented behavior and current
-contracts only.
+Contributor-only executable contracts, formal-model indexes, owner ledgers,
+and planning material are intentionally not part of this human reading path.
+Files linked above describe implemented behavior and current architecture only.

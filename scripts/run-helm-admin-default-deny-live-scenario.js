@@ -52,7 +52,7 @@ const ADMIN = Object.freeze({
 const REST = Object.freeze({
   PORT: LISTENER_PORT_DEFAULT.REST_API,
   PORT_NAME: 'rest',
-  HEALTH_PATH: '/health',
+  LIVENESS_PATH: '/livez',
   READINESS_PATH: '/readyz',
   OK: 200,
   NOT_READY: 503,
@@ -120,7 +120,7 @@ const deadline = Date.now() + 120000;
 let last = null;
 while (Date.now() < deadline) {
   try {
-    const response = await fetch('http://127.0.0.1:${ADMIN.PORT}/health');
+    const response = await fetch('http://127.0.0.1:${ADMIN.PORT}/livez');
     last = {status: response.status, body: await response.text()};
     if (response.status === 200) {
       console.log(JSON.stringify(last));
@@ -148,7 +148,7 @@ const waitForRest = async () => {
   let last = null;
   while (Date.now() < deadline) {
     try {
-      const response = await fetch('http://' + nodeHost + ':${REST.PORT}/health');
+      const response = await fetch('http://' + nodeHost + ':${REST.PORT}/livez');
       last = {status: response.status, body: await response.text()};
       if (response.status === 200) return last;
     } catch (error) {
@@ -261,7 +261,7 @@ function assertContainerPorts(container) {
 function assertRestProbes(container) {
   const liveness = container.livenessProbe?.httpGet;
   const readiness = container.readinessProbe?.httpGet;
-  if (liveness?.path !== REST.HEALTH_PATH ||
+  if (liveness?.path !== REST.LIVENESS_PATH ||
       liveness?.port !== REST.PORT_NAME ||
       readiness?.path !== REST.READINESS_PATH ||
       readiness?.port !== REST.PORT_NAME) {

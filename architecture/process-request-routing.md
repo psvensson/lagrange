@@ -38,8 +38,10 @@ it is worth knowing the order because the fallbacks show up in incident traces:
 4. a **unique** `services` row with `raft_role = leader` and `status = active` —
    several such witnesses means ambiguous, and the leader resolves to null.
 
-So the `services` table is a documented fallback authority rather than merely
-supporting detail. "Writes must reach the leader" likewise has three explicit
+The owner row remains the durable canonical authority. The retained runtime
+leader and a unique `services` leader row are bounded bootstrap/recovery
+witnesses used while that owner evidence is incomplete; they never rewrite the
+ownership contract. "Writes must reach the leader" likewise has three explicit
 widenings: fresh bootstrap-leader services, recovery-candidate widening, and
 leader-address quarantine.
 
@@ -55,13 +57,20 @@ directly and never construct a request object; and `stage` and `plan` are
 declared execution modes that the current request constructor cannot actually
 produce, since it drops the fields they need.
 
+The `runtime.run` and `WASM DB.call` ingress shown here belongs to the active
+legacy distributed-query callback surface, not Artifact / Binding / Cell
+service deployment. See the
+[Legacy Callback Guide](../docs/legacy-callback-guide.md) for that compatibility
+API and [Service Deployment Guide](../docs/service-deployment-guide.md) for the
+supported external service path.
+
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart TD
   PG["PostgreSQL wire<br/>PostgresWireAdapter"]:::ext --> RQ
   AD["Admin WebSocket<br/>InternalSqlAdapter"]:::ext --> RQ
-  RT["Programmatic runtime<br/>runtime.run + ctx.call"]:::ext --> RQ
-  WA["WASM DB.call<br/>WasmCallAdapter"]:::ext --> RQ
+  RT["Legacy callback runtime<br/>runtime.run + ctx.call"]:::ext --> RQ
+  WA["Legacy callback DB.call<br/>WasmCallAdapter"]:::ext --> RQ
   RQ["<b>SqlRequest</b> (frozen)"]:::svc --> EX["<b>executeRequest</b>"]:::svc
   EX --> M{"executionMode"}
   M -->|"sql_statement"| SQ["Plan · route · execute SQL"]:::data
@@ -203,7 +212,7 @@ topology:
 | Surface | Discovery | Note |
 | --- | --- | --- |
 | PostgreSQL wire | `service_endpoints` rows with `protocol = postgresql` | `sys-postgres-wire` is a replicated runtime service; its replica count is cluster-global and placed by the rebalancer |
-| Admin API | fixed WebSocket port on every node | compatibility adapter; mutations delegate to `sys-admin-meta` / `sys-wasm-meta` |
+| Admin API | node-local WebSocket, REST + 1 by default | compatibility adapter; explicit port override supported; mutations delegate to `sys-admin-meta` / `sys-wasm-meta` |
 | Service requests | Binding routes → ready Cells | see above |
 
 Because the PG wire is an ordinary replicated service, scaling it is a placement

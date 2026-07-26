@@ -4,22 +4,41 @@ audience: human
 
 # Documentation Index
 
-Guides for running, inspecting, and administering a Lagrange cluster. Material
-for developing Lagrange itself lives in the clearly marked subdirectories at
-the end of this page — you do not need any of it to use or operate the system.
+This is the human documentation index for people evaluating, running,
+integrating, or studying Lagrange. It contains product concepts, tutorials,
+operator guidance, and architecture. Development workflow is deliberately kept
+in the separate [contributor documentation](development/README.md).
 
-## Operating Lagrange
+## Start Here
 
-- **Service portability status:** the authoritative runtime matrix is
-  [`docs/service-portability-capabilities.json`](service-portability-capabilities.json).
-- [wasm-services-user-guide.md](wasm-services-user-guide.md) — supported WASM
-  installation, Binding, Cell lifecycle, and internal command surfaces
+- [Start Here](start-here.md) — choose a first-hour, service-development, or
+  architecture-learning path
+- [Current Capabilities And Limitations](current-capabilities-and-limitations.md)
+  — the authoritative human-readable implementation status
+- [Distributed-Systems Primer](distributed-systems-primer.md) — the concepts
+  Lagrange assumes, explained using Lagrange examples
+- [Vocabulary](vocabulary.md) — exact relationships between tables,
+  partitions, replicas, Artifacts, Bindings, Cells, and metadata
+- [First Hour With Lagrange](tutorials/first-hour.md) — start a node, query it,
+  inspect placement, and invoke a genuine WASI request Binding
+
+## Build And Integrate
+
+- [Service Deployment Guide](service-deployment-guide.md) — the supported
+  Artifact / Binding / Cell path
+- [Legacy Callback Guide](legacy-callback-guide.md) — the older JavaScript
+  callback rehearsal, isolated from the supported deployment path
 - [component-distribution.md](component-distribution.md) — how components are
   distributed across nodes
+- [PostgreSQL Wire And SQL Compatibility](../architecture/postgres-wire.md) —
+  connection security and the measured compatibility slice
+- [Runnable Examples](../examples/README.md) — examples labelled by whether
+  they use the public deployment path, built-ins, or legacy substrate
+
+## Operate Lagrange
+
 - [admin-api-reference.md](admin-api-reference.md) — admin API actions,
   diagnostics endpoints, and CLI message contract
-- [admin-test-run-landing.md](admin-test-run-landing.md) — admin test-run
-  landing page
 - [bootstrap-readiness-probes.md](bootstrap-readiness-probes.md) — readiness
   probes during cluster bootstrap
 - [listener-port-model.md](listener-port-model.md) — REST, admin, and transport
@@ -32,35 +51,16 @@ the end of this page — you do not need any of it to use or operate the system.
   resource diagnostics
 - [adaptive-timing-resource-diagnostics-runbook.md](adaptive-timing-resource-diagnostics-runbook.md)
   — operator runbook for adaptive timing diagnostics
-- [distributed-playback-viewer.md](distributed-playback-viewer.md) — replaying
-  and viewing distributed test runs
+## Understand The Architecture
 
-For installing and starting a node in the first place, see the root
-[README.md](../README.md); for the architecture, start at
-[architecture/INDEX.md](../architecture/INDEX.md).
+- [Architecture Index](../architecture/INDEX.md) — canonical current-system
+  entry point
+- [The Lagrange System Model](../architecture/system-model.md) — the shortest
+  conceptual explanation
+- [Process Walkthroughs](../architecture/INDEX.md#start-here) — partitioning,
+  replication, rebalancing, request routing, and data affinity
 
-## Current Internal Contracts
-
-Current internal contracts whose paths are pinned by scripts or baselines:
-
-- [deterministic-directed-testing-plan.md](deterministic-directed-testing-plan.md)
-  — deterministic in-process testing substrate map
-- [deterministic-repro-tier.md](deterministic-repro-tier.md) — deterministic
-  reproduction contract
-- [convergence-donewhen-metric.md](convergence-donewhen-metric.md) —
-  current convergence certification contract
-
-## Subdirectories By Audience
-
-Zoning rules: [`steering/audience-boundary.md`](steering/audience-boundary.md).
-
-- [development/](development/README.md) — development-process documents for
-  people working on Lagrange itself, including the Solver operator runbook
-- [steering/](steering/) — agent steering: canonical rule sources and the
-  generated compact packs (agents enter via the root [AGENTS.md](../AGENTS.md))
-- [specs/](specs/) — machine-checked decision tables and statecharts used by
-  the model-contract gates
-- [case-studies/](case-studies/) — durable investigation case studies cited by
-  steering and Quest history
-- [evidence/](evidence/) — recorded evidence artifacts referenced by Solver
-  history
+For installation from the repository root, see [README.md](../README.md).
+People changing Lagrange itself should use
+[docs/development/README.md](development/README.md); none of that process
+material is required to use the product.

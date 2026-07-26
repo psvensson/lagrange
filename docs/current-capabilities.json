@@ -1,0 +1,136 @@
+{
+  "schemaVersion": 1,
+  "productMaturity": {
+    "state": "experimental",
+    "summary": "Substantial experimental system; not a polished production database."
+  },
+  "listeners": {
+    "rest": {
+      "defaultPort": 8080,
+      "environmentVariable": "REST_API_PORT"
+    },
+    "adminWebSocket": {
+      "defaultPort": 8081,
+      "defaultRule": "REST + 1",
+      "environmentVariable": "ADMIN_WS_PORT",
+      "overrideSupported": true
+    },
+    "transportWebSocket": {
+      "defaultPort": 8082,
+      "defaultRule": "REST + 2",
+      "environmentVariable": "TRANSPORT_WS_PORT",
+      "overrideSupported": true
+    }
+  },
+  "probes": {
+    "liveness": "/livez",
+    "startup": "/startupz",
+    "readiness": "/readyz",
+    "compatibility": "/health"
+  },
+  "dataAndQueries": {
+    "tablePartitioning": "range",
+    "defaultReplicaCount": 3,
+    "sqlIngress": [
+      "admin WebSocket",
+      "PostgreSQL wire"
+    ],
+    "secondaryIndexes": "local_per_partition_only",
+    "globalSecondaryIndexes": false
+  },
+  "replication": {
+    "partitionConsensus": "raft",
+    "runtimeCellConsensus": "none",
+    "runtimeCellDurableState": "ordinary replicated tables",
+    "snapshotCheckpointCreation": "implemented_not_production_invoked",
+    "snapshotTransferInstall": "unsupported",
+    "physicalLogCompaction": "unsupported",
+    "learnerPromotion": "time_based_not_progress_based"
+  },
+  "deployment": {
+    "publicModel": [
+      "Artifact",
+      "Binding",
+      "Cell"
+    ],
+    "lifecycleSql": [
+      "INSTALL SERVICE $1",
+      "UPGRADE SERVICE $1",
+      "REMOVE SERVICE $1",
+      "SHOW SERVICE $1",
+      "SHOW SERVICES",
+      "CONFIGURE SERVICE ACCESS $1",
+      "CREATE BINDING $1"
+    ],
+    "publicInvocation": [
+      "request"
+    ],
+    "acceptedButNotPubliclyInvocable": [
+      "change",
+      "time",
+      "once",
+      "boot",
+      "call",
+      "pushdown"
+    ],
+    "servicePortabilityContract": "docs/service-portability-capabilities.json"
+  },
+  "postgresWire": {
+    "authenticationModes": [
+      "trust",
+      "password"
+    ],
+    "scramSupported": false,
+    "tlsModes": [
+      "disable",
+      "prefer",
+      "require"
+    ],
+    "compatibilityClaim": "bounded measured SQL slice, not complete PostgreSQL compatibility"
+  },
+  "operations": {
+    "storageAdmissionDefault": "enforce"
+  },
+  "limitations": [
+    {
+      "id": "partition-key-resolution",
+      "area": "Query routing",
+      "summary": "Production partition narrowing effectively requires a key column named id; other predicates may scatter to every partition."
+    },
+    {
+      "id": "partition-key-comparison",
+      "area": "Query routing",
+      "summary": "Partition range comparison is string-based, so numeric strings sort lexicographically."
+    },
+    {
+      "id": "global-secondary-index",
+      "area": "Indexes",
+      "summary": "CREATE INDEX creates a local SQLite index on every partition; it does not provide global partition narrowing."
+    },
+    {
+      "id": "raft-log-lifecycle",
+      "area": "Replication",
+      "summary": "Checkpoint creation exists but is not called by production; snapshot transfer/install and physical log compaction are unsupported, so logs grow and catch-up uses replay."
+    },
+    {
+      "id": "learner-promotion",
+      "area": "Replication",
+      "summary": "Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress."
+    },
+    {
+      "id": "binding-invocation",
+      "area": "Service deployment",
+      "summary": "Only request Bindings have a public invocation adapter; other source kinds can be declared and placed but are not publicly invocable."
+    },
+    {
+      "id": "oci-runtime",
+      "area": "Service portability",
+      "summary": "Managed OCI container activation is unsupported."
+    },
+    {
+      "id": "postgres-compatibility",
+      "area": "PostgreSQL compatibility",
+      "summary": "Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL/ORM compatibility are not claimed."
+    }
+  ]
+}

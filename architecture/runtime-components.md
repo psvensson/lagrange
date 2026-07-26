@@ -65,10 +65,8 @@ owner.
   - `/` and `/ui/tests` for operator dashboard
   - `/api/admin/tests` and `/api/admin/test-runs*` for test administration
   - `/ui/playback-viewer` and `/ui/test-output/*` for run artifact access
-- Fixed listening port: `ADMIN_DEFAULT.WEBSOCKET_PORT`
-  (`src/admin/admin-constants.js`) on every node
-- Port is intentionally fixed for operator predictability and is not
-  configuration-driven in node startup
+- Default listening port: REST + 1 (`8081` for the default REST port)
+- `ADMIN_WS_PORT` / `admin.websocketPort` may override the derived default
 - Live run output stream uses SSE endpoint:
   `/api/admin/test-runs/:runId/stream`
 - Test-run process orchestration and saved-run indexing is owned by
@@ -137,13 +135,16 @@ AdminWebSocketAPI debug route adapter
 
 ### MessageRouter
 - Unified message routing for local and remote communication
-- WebSocket-based transport (mandatory)
-- Self-connection for uniform routing (all messages go through WebSocket)
+- Remote delivery uses WebSocket transport
+- Local delivery short-circuits to a registered in-process handler; the
+  node's self-WebSocket is a fallback when no local handler is registered
 - Address format: `{nodeId}/{entityType}/{entityId}`
 
 ### SystemTableCache
 - In-memory cache of all system tables
-- Updated ONLY by CDC events (single source of truth)
+- CDC is the steady-state primary writer; the sanctioned bootstrap, join,
+  authoritative-repair, and owner-local seed paths below are explicit
+  exceptions
 - Provides read-only wrapper for safe access
 - Supports cache change listeners for reactive updates
 

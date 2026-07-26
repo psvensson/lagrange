@@ -23,12 +23,10 @@ Distributed SQL database and compute-near-data runtime: a cluster of equal
 nodes that stores partitioned, Raft-replicated SQL tables and places replicated
 runtime services near the data they read.
 
-> **Service portability status:** the current implementation matrix is
-> [`docs/service-portability-capabilities.json`](https://codeberg.org/psvensson/lagrange/src/branch/main/docs/service-portability-capabilities.json).
-> `native_js` is kernel-internal, and the current `wasm_component` callback
-> example is a JavaScript-envelope lifecycle rehearsal. External services are
-> deployed through INSTALL SERVICE and CREATE BINDING; managed OCI container
-> execution is not implemented yet.
+> The authoritative current support matrix is
+> [Current Capabilities And Limitations](https://codeberg.org/psvensson/lagrange/src/branch/main/docs/current-capabilities-and-limitations.md).
+> It separates the supported Artifact / Binding / Cell path from legacy
+> callback examples and unsupported runtime surfaces.
 
 > **Experimental / alpha.** `0.x` releases carry no backward-compatibility
 > guarantee. See the

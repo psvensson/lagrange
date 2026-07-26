@@ -1,3 +1,8 @@
+---
+audience: development
+documentClass: planning
+---
+
 # Lagrange AGPL Roadmap
 
 This document is the stable AGPL feature sequence and scope map. It answers

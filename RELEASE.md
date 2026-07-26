@@ -1,3 +1,8 @@
+---
+audience: development
+documentClass: current
+---
+
 # Release process
 
 Lagrange releases are cut from an annotated `v*` git tag on `main`. CI runs on

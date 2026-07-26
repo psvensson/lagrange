@@ -2,9 +2,8 @@
 
 This document owns the selected architecture for collapsing Lagrange's
 mechanism-first deployment surfaces into three nouns: **Artifact**, **Binding**,
-and **Cell**. It is the contract boundary for roadmap row
-`RM-2.0-minimal-deployment-surface`; implementation evidence lives in its linked
-terminal Quests.
+and **Cell**. It describes the implemented public deployment contract rather
+than the development history that produced it.
 
 ## Scope and edition boundary
 

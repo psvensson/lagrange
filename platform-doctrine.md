@@ -18,11 +18,10 @@ Do not use this file for:
 - testing policy
 - roadmap scope decisions
 
-For implementation work, use [`docs/steering/doctrine.md`](docs/steering/doctrine.md)
-as the canonical doctrine, then follow
-[`docs/steering/system-guidelines.md`](docs/steering/system-guidelines.md),
-[`docs/steering/testing-guidelines.md`](docs/steering/testing-guidelines.md),
-and [`roadmap.md`](roadmap.md).
+Current behavior and limitations are summarized in
+[`docs/current-capabilities-and-limitations.md`](docs/current-capabilities-and-limitations.md);
+the detailed current system model starts at
+[`architecture/INDEX.md`](architecture/INDEX.md).
 
 ## Purpose
 
@@ -35,9 +34,10 @@ The guiding principle is:
 Users interact with a small set of concepts.  
 The system contains the complexity required to make those concepts scalable, reliable, and programmable.
 
-## 1. Core User Primitives
+## 1. Core User Model
 
-Lagrange exposes two primary durable entities:
+Lagrange separates durable data, durable execution intent, and disposable
+execution:
 
 ### Tables
 
@@ -63,22 +63,24 @@ Users do **not** manage:
 
 Those concerns belong entirely to the system.
 
-### Services
+### Artifacts, Bindings, and Cells
 
-Services represent persistent execution.
+An **Artifact** is immutable installed code. A **Binding** is the durable
+declaration that connects one Artifact export to an invocation source. A
+**Cell** is a ready, running actual derived and placed by the system.
 
-A service is a named, durable runtime workload.
+The Artifact and Binding are durable. A Cell is replaceable compute; its durable
+application state belongs in tables.
 
 Properties:
 
 - invokable
 - scalable
-- replicated
 - placed automatically
 - versioned
 - policy-controlled
 
-Services may implement:
+Bound services may implement:
 
 - application logic
 - APIs
@@ -111,7 +113,9 @@ The system determines partition boundaries and placement.
 
 ### Replication
 
-All partitions and services are replicated through Raft groups.
+Table partitions are replicated through Raft groups. Runtime-service Cells do
+not have per-service Raft logs: the cluster replaces and re-places them, while
+their durable state uses ordinary replicated tables.
 
 The system ensures:
 

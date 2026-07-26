@@ -1,3 +1,8 @@
+---
+audience: development
+documentClass: current
+---
+
 # Debugging Lagrange
 
 This guide is the current debugging entrypoint. It points to maintained

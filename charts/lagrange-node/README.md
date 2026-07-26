@@ -34,7 +34,9 @@ For local builds, build and push your own image and pass
   override either derived WS port. Admin WS remains pod-local on loopback;
   it is absent from Services and container-port declarations. The pgwire SQL
   endpoint is a managed service started on demand — no 5432 boot listener.
-- **Probes**: liveness `/health`, readiness `/readyz` on the REST port.
+- **Probes**: process liveness `/livez`, readiness `/readyz` on the REST port.
+  `/health` remains a compatibility endpoint and is not an orchestrator
+  readiness or liveness signal.
 - **Admin exposure**: none. The chart enforces loopback binding and rejects
   wildcard/insecure values, including `node.extraEnv` overrides. External
   admin access remains unsupported until an authenticated proxy or runtime
