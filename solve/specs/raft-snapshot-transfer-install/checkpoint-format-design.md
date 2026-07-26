@@ -66,14 +66,30 @@ re-apply), and the single-replica `applyWrite` path applies with NO raft commit
 (committedIndex stale at 0 while tables hold data). The copy's committedIndex
 therefore bounds the applied prefix in neither direction.
 
-Correction adopted (exactness, fail-closed):
+Correction adopted (exactness, fail-closed), second-round-verifier hardened:
 
-- The partition apply path additionally upserts `_raft_state` key
-  `lastAppliedIndex` immediately after the state-machine SQL in the same
-  synchronous better-sqlite3 sequence (`PartitionRaftStorage` already owns a
-  `_raft_state` UPSERT — no new writer class). A crash between the two adjacent
-  synchronous statements can leave a one-entry divergence, which is exactly
-  what the creation gate detects.
+- **Dense advance, never a committedIndex copy (MF-1).** liferaft
+  `commitEntries` advances the adapter's durable committed watermark to the
+  BATCH END before the first commit event fires, so copying
+  `storage.commitIndex` at apply time overstates the applied prefix on every
+  multi-entry batch (adversarially reproduced: a sealed checkpoint claimed
+  index 2 while missing entry 2's effects). Instead the commit wiring calls
+  `recordAppliedAdvance()` — a durable +1 per successful synchronous apply.
+  Commit events fire once per committed entry in index order, so a dense
+  count from an aligned origin equals the applied entry's own index;
+  under-counting only ever refuses creation.
+- **Startup gap detection (sticky).** `PartitionRaftStorage` startup compares
+  the durable `lastAppliedIndex` with the adapter's committed index; any
+  mismatch (crash between a batch's commits and its applies — permanent
+  effect loss, restart does not re-apply) records a durable
+  `appliedGapMarker` that refuses checkpoint creation forever on that
+  database (typed reason `applied_gap_marker`). Healing is S2+ scope.
+- **Legacy adoption.** A database with no `lastAppliedIndex` adopts the
+  current committed index as its dense-count baseline WITHOUT writing it;
+  the gate still refuses (`applied_watermark_absent`) until the first
+  post-upgrade apply records a durable aligned watermark. This documents the
+  bootstrap assumption that a legacy DB is aligned at adoption — the same
+  state the replica itself serves.
 - Checkpoint creation reads BOTH watermarks from the copy (legacy-tolerant:
   `committedIndex` falling back to legacy `commitIndex`) and REQUIRES
   `lastAppliedIndex === committedIndex`; any divergence (apply-throw skew,
