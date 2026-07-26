@@ -409,12 +409,10 @@ name-first addressing per pod automatically.
 ### Docker And Kubernetes
 
 Release images (distroless, amd64) are published to
-[Docker Hub](https://hub.docker.com/r/psvensson/lagrange) — the primary
-registry — and mirrored to the Codeberg container registry:
+[Docker Hub](https://hub.docker.com/r/psvensson/lagrange):
 
 ```bash
-docker pull psvensson/lagrange:latest              # or a version tag, e.g. :0.1.0
-docker pull codeberg.org/psvensson/lagrange:latest # mirror
+docker pull psvensson/lagrange:latest # or a version tag, e.g. :0.1.0
 ```
 
 The repo also ships the Dockerfile and a Helm chart:

@@ -13,7 +13,7 @@ audience: human
   paste its output into https://hub.docker.com/r/psvensson/lagrange.
 
   Docker Hub does not resolve relative links, so every link below is an
-  absolute URL into the Codeberg repository. Keep it self-contained; the
+  absolute URL into the GitHub repository. Keep it self-contained; the
   renderer enforces Docker Hub's 25,000-character full_description limit.
 -->
 
@@ -24,20 +24,19 @@ nodes that stores partitioned, Raft-replicated SQL tables and places replicated
 runtime services near the data they read.
 
 > The authoritative current support matrix is
-> [Current Capabilities And Limitations](https://codeberg.org/psvensson/lagrange/src/branch/main/docs/current-capabilities-and-limitations.md).
+> [Current Capabilities And Limitations](https://github.com/psvensson/lagrange/blob/main/docs/current-capabilities-and-limitations.md).
 > It separates the supported Artifact / Binding / Cell path from legacy
 > callback examples and unsupported runtime surfaces.
 
 > **Experimental / alpha.** `0.x` releases carry no backward-compatibility
 > guarantee. See the
-> [changelog](https://codeberg.org/psvensson/lagrange/src/branch/main/CHANGELOG.md)
+> [changelog](https://github.com/psvensson/lagrange/blob/main/CHANGELOG.md)
 > — including its *Known limitations* section — before running anything
 > load-bearing.
 
-- **Source / issues:** <https://codeberg.org/psvensson/lagrange>
+- **Source:** <https://github.com/psvensson/lagrange>
+- **Issues:** <https://github.com/psvensson/lagrange/issues>
 - **License:** AGPL-3.0-only
-- **Mirror registry:** `codeberg.org/psvensson/lagrange` (same image,
-  best-effort mirror of this repository)
 
 ## Tags
 
@@ -74,7 +73,7 @@ To interact with the node, connect the admin CLI from a checkout of the
 repository (the image itself has no shell to exec into):
 
 ```bash
-git clone https://codeberg.org/psvensson/lagrange && cd lagrange
+git clone https://github.com/psvensson/lagrange && cd lagrange
 npm install
 npm run cli    # interactive terminal UI against localhost:8081
 ```
@@ -150,7 +149,7 @@ docker run -d -v lagrange-data:/app/data \
 
 The repository ships a Helm chart (1 seed + N joiner StatefulSets, name-first
 addressing, per-pod PVCs) that deploys this image:
-[charts/lagrange-node](https://codeberg.org/psvensson/lagrange/src/branch/main/charts/lagrange-node).
+[charts/lagrange-node](https://github.com/psvensson/lagrange/tree/main/charts/lagrange-node).
 The chart publishes REST and transport only; its unauthenticated admin listener
 stays pod-local on loopback and cannot be externally enabled through chart
 values. Its port derives from `node.restPort` unless explicitly overridden.
@@ -167,6 +166,6 @@ docker run ... psvensson/lagrange:latest --max-old-space-size=3072 src/index.js
 
 ## Learn more
 
-- [README — what Lagrange is, mental model, examples](https://codeberg.org/psvensson/lagrange/src/branch/main/README.md)
-- [Architecture overview](https://codeberg.org/psvensson/lagrange/src/branch/main/architecture.md)
-- [Release process and guarantees](https://codeberg.org/psvensson/lagrange/src/branch/main/RELEASE.md)
+- [README — what Lagrange is, mental model, examples](https://github.com/psvensson/lagrange/blob/main/README.md)
+- [Architecture overview](https://github.com/psvensson/lagrange/blob/main/architecture.md)
+- [Release process and guarantees](https://github.com/psvensson/lagrange/blob/main/RELEASE.md)

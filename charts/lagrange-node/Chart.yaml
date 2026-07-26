@@ -7,9 +7,9 @@ description: >-
 type: application
 version: 0.1.0
 appVersion: "0.1.0"
-home: https://codeberg.org/psvensson/lagrange
+home: https://github.com/psvensson/lagrange
 sources:
-  - https://codeberg.org/psvensson/lagrange
+  - https://github.com/psvensson/lagrange
 keywords:
   - database
   - distributed

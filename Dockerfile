@@ -29,8 +29,8 @@ COPY src/ ./src/
 
 # Release provenance, set by release.yml (--build-arg VERSION/VCS_REF/
 # BUILD_DATE). OCI labels are the only per-tag metadata surface registries
-# show (Docker Hub tag view, Codeberg package UI, `docker inspect`); the
-# per-release prose lives on the Codeberg release page and the Docker Hub
+# show (Docker Hub tag view and `docker inspect`); the per-release prose lives
+# on the GitHub release page and the Docker Hub
 # repository description, both generated from CHANGELOG.md. Declared after
 # the COPY layers so per-release build-args don't invalidate their cache.
 ARG VERSION=dev
@@ -41,9 +41,9 @@ LABEL org.opencontainers.image.title="Lagrange" \
   org.opencontainers.image.version="${VERSION}" \
   org.opencontainers.image.revision="${VCS_REF}" \
   org.opencontainers.image.created="${BUILD_DATE}" \
-  org.opencontainers.image.source="https://codeberg.org/psvensson/lagrange" \
+  org.opencontainers.image.source="https://github.com/psvensson/lagrange" \
   org.opencontainers.image.url="https://hub.docker.com/r/psvensson/lagrange" \
-  org.opencontainers.image.documentation="https://codeberg.org/psvensson/lagrange/src/branch/main/CHANGELOG.md" \
+  org.opencontainers.image.documentation="https://github.com/psvensson/lagrange/blob/main/CHANGELOG.md" \
   org.opencontainers.image.licenses="AGPL-3.0-only"
 
 # REST API, admin WS, transport WS (REST+2). Nothing listens on the old 9080.

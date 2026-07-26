@@ -12,7 +12,7 @@ releases without a compatibility guarantee.
 
 ### Added
 - Per-release notes on every release surface, generated from this changelog
-  (`scripts/release-notes.js`): the Codeberg/Forgejo release page carries the
+  (`scripts/release-notes.js`): the GitHub release page carries the
   tagged version's section instead of boilerplate, the Docker Hub repository
   description gains an auto-updated per-release "Release notes" history, and
   the Docker image carries OCI provenance labels
@@ -97,5 +97,5 @@ extensively tested, but not production-hardened; see _Known limitations_ below.
 - Alpha surface: SQL coverage, wire protocols, and admin/CLI behaviour may
   change between `0.x` releases without migration guarantees.
 
-[Unreleased]: https://codeberg.org/psvensson/lagrange/compare/v0.1.0...HEAD
-[0.1.0]: https://codeberg.org/psvensson/lagrange/releases/tag/v0.1.0
+[Unreleased]: https://github.com/psvensson/lagrange/compare/v0.1.0...HEAD
+[0.1.0]: https://github.com/psvensson/lagrange/releases/tag/v0.1.0

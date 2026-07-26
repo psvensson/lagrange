@@ -6,8 +6,8 @@ documentClass: current
 # Release process
 
 Lagrange releases are cut from an annotated `v*` git tag on `main`. CI runs on
-[Codeberg](https://codeberg.org/psvensson/lagrange) via **Forgejo Actions**
-(`.forgejo/workflows/`); the syntax is GitHub-Actions-compatible.
+[GitHub](https://github.com/psvensson/lagrange) via **GitHub Actions**
+(`.github/workflows/`).
 
 While the major version is `0`, releases are **experimental / alpha** and carry
 no backward-compatibility guarantee (see `CHANGELOG.md`).
@@ -16,14 +16,16 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 
 | Trigger | Workflow | What runs |
 | --- | --- | --- |
-| PR / push to `main` | `.forgejo/workflows/ci.yml` | `npm ci` → `npm run test:gate` (fast tests + static analysis + model contracts). The statistical rolling-restart convergence gate is **not** blocking here — it is a variance-bounded property, tracked as a trend, not a pass/fail gate on every push. |
-| Push of a `v*` tag | `.forgejo/workflows/release.yml` | Fail-fast release-notes gate (`node scripts/release-notes.js --mode check`: the tag must match `package.json` and have a non-empty `CHANGELOG.md` section) → `npm ci` → `npm run test:ci` → `npm run build:all` (bundle + SEA) → build the distroless Docker image with OCI provenance labels (`org.opencontainers.image.version/revision/created`) → push it to Docker Hub (`docker.io/psvensson/lagrange`, required) and the Codeberg registry (`codeberg.org/psvensson/lagrange`, best-effort mirror), tagged `<x.y.z>` + `latest` → update the Docker Hub repository description (rendered overview + per-release notes; best-effort) → `helm package charts/lagrange-node` → publish chart + SEA binaries + `SHA256SUMS` to the Forgejo Release, whose notes are the tagged version's changelog section. |
+| PR / push to `main` | `.github/workflows/ci.yml` | `npm ci` → `npm run test:gate` (fast tests + static analysis + model contracts). The statistical rolling-restart convergence gate is **not** blocking here — it is a variance-bounded property, tracked as a trend, not a pass/fail gate on every push. |
+| Nightly / manual | `.github/workflows/full-gate.yml` | Re-runs `npm run test:gate` against the current default branch without path exclusions. |
+| Push of a `v*` tag | `.github/workflows/release.yml` | Fail-fast release-notes gate (`node scripts/release-notes.js --mode check`: the tag must match `package.json` and have a non-empty `CHANGELOG.md` section) → `npm ci` → `npm run test:ci` → `npm run build:all` (bundle + SEA) → `helm package charts/lagrange-node` → checksum every release asset → build and smoke-test the distroless `linux/amd64` image with OCI provenance labels → push `<x.y.z>` + `latest` to `docker.io/psvensson/lagrange` → update the Docker Hub overview (best-effort) → publish the chart, SEA binaries, and `SHA256SUMS` to the GitHub Release with notes from the tagged changelog section. |
 
 ## Cutting a release
 
 1. **Land all release content on `main`** and let `ci.yml` go green.
 2. **Bump the version.** Edit `package.json` (and the `version` fields of the
-   root package in `package-lock.json`). The user-facing `--version` literals in
+   root package in `package-lock.json`), plus `version` and `appVersion` in
+   `charts/lagrange-node/Chart.yaml`. The user-facing `--version` literals in
    `src/cli/cli-constants.js` and `src/constants/entrypoint.js` must match; the
    guard in `test/release/version-single-source.test.js` enforces this (kept as
    literals, not a `package.json` read, so the SEA binary — which has no
@@ -52,6 +54,12 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
    git push origin v0.1.0
    ```
    `release.yml` builds and publishes every artifact from the tagged tree.
+   The workflow serializes all releases and refuses to publish an older tag
+   after a newer `v*` tag exists, preventing a rerun from moving `latest`
+   backward. It also verifies that the tag is annotated and its commit is
+   reachable from `origin/main`. A rerun of the current tag replaces existing
+   release assets and notes, then publishes any draft left by an interrupted
+   first attempt.
 6. **Docker Hub overview updates itself.**
    [`docs/dockerhub-overview.md`](docs/dockerhub-overview.md) is a template:
    `release.yml` renders it with a generated per-release "Release notes"
@@ -84,8 +92,18 @@ Do not gate ordinary pushes on the statistical convergence rate — it is
 satisfiable or violable by variance alone and would make CI flaky. Track it as a
 trend and promote only through the sealed Wilson-bar rule.
 
-## Runner prerequisite
+## GitHub repository configuration
 
-Codeberg's hosted Forgejo Actions runners must be enabled for this repository
-(one-time opt-in), or a self-hosted runner registered, before these workflows
-execute. Until then the pipeline is a documented manual runbook (steps 1–5).
+The workflows use GitHub-hosted `ubuntu-24.04` runners. Configure these values
+under **Settings → Secrets and variables → Actions** before pushing a release
+tag:
+
+- repository variable `DOCKERHUB_USERNAME`: the Docker Hub account that owns
+  `psvensson/lagrange`;
+- repository secret `DOCKERHUB_TOKEN`: a Docker Hub personal access token with
+  Read/Write permission.
+
+The release job requests only `contents: write` for GitHub's short-lived
+`GITHUB_TOKEN`, which is used by `gh release create`. Repository or organization
+policy must allow that permission. Ordinary CI and nightly jobs retain
+`contents: read` and receive no Docker Hub credentials.

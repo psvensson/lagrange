@@ -8,11 +8,9 @@ helm install lagrange charts/lagrange-node \
   --set image.tag=0.1.0 --set joiners.replicas=2
 ```
 
-The default `image.repository` (`codeberg.org/psvensson/lagrange`) is the
-published release image on the Codeberg container registry. The same image is
-published to Docker Hub as
-[`psvensson/lagrange`](https://hub.docker.com/r/psvensson/lagrange) (the
-primary registry) — select it with `--set image.repository=psvensson/lagrange`.
+The default `image.repository` (`docker.io/psvensson/lagrange`) is the
+published release image on
+[Docker Hub](https://hub.docker.com/r/psvensson/lagrange).
 For local builds, build and push your own image and pass
 `--set image.repository=<your-registry>/lagrange --set image.tag=<tag>`.
 
@@ -48,7 +46,7 @@ For local builds, build and push your own image and pass
 | Value | Default | Meaning |
 | --- | --- | --- |
 | `joiners.replicas` | `2` | Non-seed nodes; cluster size = this + 1 |
-| `image.repository` / `image.tag` | `codeberg.org/psvensson/lagrange` / appVersion | Runtime image |
+| `image.repository` / `image.tag` | `docker.io/psvensson/lagrange` / appVersion | Runtime image |
 | `node.restPort` | `8080` | REST base port; admin WS = +1 and transport WS = +2 by default |
 | `admin.websocketPort` / `node.wsPort` | derived | Optional individual admin/transport WS overrides |
 | `node.maxOldSpaceSizeMb` | `1536` | V8 heap cap; keep under the memory limit |

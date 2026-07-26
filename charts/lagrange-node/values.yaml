@@ -7,7 +7,7 @@
 # shell), so ordinal-based "pod-0 is the seed" logic cannot run in-container.
 
 image:
-  repository: codeberg.org/psvensson/lagrange
+  repository: docker.io/psvensson/lagrange
   tag: ""            # defaults to .Chart.appVersion
   pullPolicy: IfNotPresent
 
