@@ -10,7 +10,7 @@ consume.
 | S2 | `raft-snapshot-atomic-install` — ✅ **SOLVED 2026-07-26** (commit 9283b579; design `atomic-install-design.md`) | A follower stages and atomically installs a checkpoint, locally reconstructs Raft tables without regressing term or importing vote state, never advertises progress ahead of state, and recovers every partial-install restart state. |
 | S3 | `raft-snapshot-bulk-transfer` — ✅ **SOLVED 2026-07-26** (commit 81a197cb; design `bulk-transfer-design.md`) | Authenticated resumable chunks use a separately bounded pressure class; critical convergence progresses under saturation. |
 | S4 | `raft-snapshot-compacted-follower-catchup` — ✅ **SOLVED 2026-07-26** (commit 01b7a364; design `compacted-follower-catchup-design.md`) | A follower older than the retained prefix installs the newest eligible snapshot and resumes AppendEntries exactly after it. |
-| S5 | `raft-snapshot-retention-compaction` | Bounded generation retention pins active installs and physical prefix removal cannot outrun durable proof. |
+| S5 | `raft-snapshot-retention-compaction` — ✅ **SOLVED 2026-07-26** (commit 512e2118; design `retention-compaction-design.md`) | Bounded generation retention pins active installs and physical prefix removal cannot outrun durable proof. |
 | S6 | `raft-snapshot-live-rebuild` | A large replica rebuild under foreground writes is data-safe, resource-bounded, throughput-measured, restartable, and convergence-safe. |
 
 ## Quest authoring bars

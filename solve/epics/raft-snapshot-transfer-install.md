@@ -113,3 +113,20 @@ Managed split snapshot pacing is an unrelated table-copy mechanism.
   inputs recorded (retention pinning for admitted transfers, production
   ReplicaHandler wiring + CDC idempotency, boot-sweep direct guard). Next:
   S5 `raft-snapshot-retention-compaction`.
+- 2026-07-26 — **S5 SOLVED** (`raft-snapshot-retention-compaction`, commit
+  512e2118; design `retention-compaction-design.md`, twice-verified; first-pass
+  TRUSTED landing). Physical prefix removal is ENABLED behind durable local
+  snapshot proof: the typed compaction decision table keeps the proofless
+  call byte-identical to the gated refusal (the safety guard is retained,
+  not retired), a term-anchored valid proof compacts in one transaction
+  advancing the boundary and folding deleted-row HLCs, and the boundary
+  cache adopts refresh-on-row-miss (the design verifier REFUTED the
+  stale-facade-safe claim — it would have resurrected the S4 livelock).
+  Bounded retention sweeps with the full pin model (active installs,
+  transfer markers through the publish window, dispatcher in-flight
+  indexes) and an unconditional newest floor. Epic open question 3
+  ANSWERED: thresholds/counts are retention-module policy constants; the
+  protocol surface takes only explicit indexes and durable proof. S6
+  inputs recorded (deletion-order pin, foreign-proof term-anchor escape,
+  trigger cadence + scale calibration). Next: S6
+  `raft-snapshot-live-rebuild` — the final rung.
