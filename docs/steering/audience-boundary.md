@@ -28,7 +28,8 @@ external agent memory).
   (contract records under `architecture/contracts/`, statechart/spec artifacts
   under `docs/specs/`, docs whose literal path appears in scripts or baselines)
   stay where the machinery expects them, whatever their audience. Mark the
-  exception in the human index that lists them instead of moving the file.
+  exception in the development index instead of exposing the file through
+  human product navigation.
 - Top-level `docs/*.md` and `docs/development/*.md` files declare their zone
   explicitly with an `audience: human | development | agent` frontmatter key so
   the boundary is checkable; elsewhere location alone is authoritative.
@@ -38,10 +39,15 @@ external agent memory).
 - Agent docs MAY link freely into human and development docs. Shared ground
   truth (architecture, testing substrate maps) has one copy in the human tree;
   agents read it there. Never fork an agent-side copy of a human doc.
-- Human-zone docs MUST NOT deep-link into `docs/steering/llm/` (the generated
-  agent packs). The allowed portal surface is: one pointer to `AGENTS.md` from
-  the root `README.md`, and the zone pointers in `docs/README.md`. Everything
-  agent-facing hangs off `AGENTS.md`, which owns the load order.
+- Human-zone docs MUST NOT link into `docs/steering/**`, `solve/**`, or files
+  explicitly assigned to the development or agent audience. The only
+  cross-zone portals are:
+  - root `README.md` -> `AGENTS.md` for agents;
+  - root `README.md` -> `CONTRIBUTING.md` for contributors; and
+  - `docs/README.md` -> `docs/development/README.md` for repository
+    development.
+  Everything agent-facing hangs off `AGENTS.md`, which owns the load order.
+  Everything development-facing hangs off the contributor portals.
 - Human-zone docs MUST NOT embed agent workflow mechanics (Solver command
   sequences, steering load order, pack regeneration steps). State the human
   fact ("invariants are machine-evaluated in CI") and leave the mechanics to
@@ -51,9 +57,10 @@ external agent memory).
 ## Enforcement
 
 `scripts/check-doc-audience.js` (run via `npm run audit:doc-audience`, part of
-`test:static`) checks the frontmatter requirement, the `docs/steering/llm/`
-link ban outside the portal allowlist, and that relocated legacy paths do not
-reappear.
+`test:static`) checks the frontmatter requirement, all human-to-agent and
+human-to-development links outside the portal allowlist (including inline,
+reference-style, HTML, and autolink syntax), embedded Solver/Quest commands,
+and that relocated legacy paths do not reappear.
 
 Audience and lifecycle are separate classifications. The lifecycle contract in
 [`docs/development/documentation-lifecycle.md`](../development/documentation-lifecycle.md)

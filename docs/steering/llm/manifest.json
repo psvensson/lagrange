@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-25T14:21:54.255Z",
+  "generatedAt": "2026-07-26T08:23:56.967Z",
   "stats": {
     "candidateCount": 439,
     "dedupedRuleCount": 428,
@@ -307,8 +307,8 @@
       "name": "core",
       "title": "Core Steering Pack",
       "description": "Always-load compact rules for ownership, safety, scope, and quality baseline.",
-      "ruleCount": 29,
-      "estimatedTokens": 3974,
+      "ruleCount": 30,
+      "estimatedTokens": 4136,
       "domains": [
         "architecture",
         "testing",

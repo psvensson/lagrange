@@ -1,0 +1,43 @@
+{
+  "id": "documentation-audience-boundary-tooling-final",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The development and agent documentation zones declare their only permitted portals and capability-maintenance contract, generated steering indexes are fresh, standard static commands run the audience/capability/CLI drift gates, contributor test harness pages are development-only, and the rejected verification history that led to the final candidate remains durable without exposing workflow mechanics in human documentation.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "docs/steering/audience-boundary.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "8f13ad5181b012474b3ca7b65f4a16a940d82ac3"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "documentation-audience-safe-onboarding",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "documentation-audience-boundary-tooling-final-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "documentation-audience-safe-onboarding",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

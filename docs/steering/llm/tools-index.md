@@ -56,8 +56,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `audit:architecture-slices` — `node scripts/check-architecture-slices.js`
 - `audit:attempt-preflight` — `npm run audit:file-size && npm run audit:style-terminal-vocabulary && npm run audit:step-coverage-owner`
+- `audit:cli-docs` — `node scripts/check-cli-docs.js`
 - `audit:closure-ledger` — Validate closure-ledger state.
 - `audit:cure-typing-owner` — `node scripts/check-cure-typing-owner.js`
+- `audit:current-capabilities` — `node scripts/check-current-capabilities.js`
 - `audit:doc-audience` — `node scripts/check-doc-audience.js`
 - `audit:documentation-current` — `node scripts/check-documentation-current-state.js`
 - `audit:file-size` — Report oversized production and test files.
@@ -111,6 +113,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `distributed:all` — Run distributed scenarios with verbose output.
 - `distributed:rerun-failed` — Re-run only the distributed scenarios that failed in the last run.
 - `distributed:stop-containers` — Stop local Docker containers and Node processes created by the distributed harness.
+
+## docs
+
+- `docs:capabilities:generate` — `node scripts/generate-current-capabilities-doc.js`
 
 ## dt
 
@@ -243,10 +249,11 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:distributed:boundary:transition` — `node test/distributed/harness/__tests__/boundary-transition-scenarios.test.js`
 - `test:distributed:checkpoint:7node:transaction-recovery` — `node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery`
 - `test:documentation-current-state` — `node scripts/run-documentation-current-state-scenario.js documentation-current-state-contract`
+- `test:documentation-onboarding` — `node scripts/run-documentation-audience-safe-onboarding-scenario.js documentation-audience-safe-onboarding`
 - `test:duplication` — `node scripts/check-duplication.js`
 - `test:duplication:strict` — `node scripts/check-duplication.js --strict`
 - `test:fast` — Run non-bootstrap, non-integration TAP tests.
-- `test:file` — `node scripts/run-test-files.js`
+- `test:file` — Run one focused TAP test file via the fail-closed runner (npm test ignores file arguments and runs the full sharded suite).
 - `test:gate` — `node scripts/run-project-hardening-acceptance.js`
 - `test:integration:1` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-1.txt)`
 - `test:integration:2` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-2.txt)`
@@ -289,4 +296,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-193 scripts indexed; 71 have a curated description, 122 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+197 scripts indexed; 72 have a curated description, 125 fall back to their raw command. Improve coverage in the two sources named in the header comment.
