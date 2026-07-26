@@ -413,7 +413,12 @@ async function run(cluster, options = {}) {
       readinessTimeoutMs: cfg.rejoinReadinessTimeoutMs,
     });
     s6phase('follower-restarted');
-    availableLoadNodeIds.add(String(followerNode.id));
+    // Deliberately do NOT return the rebuilt node to the load pool: a node
+    // still catching up its wiped replica is not serve-ready for the load
+    // lane, and directing load at it produces nodeAdmissionBlocked stalls that
+    // are a load-routing artifact, not a rebuild-safety signal. Load continues
+    // on the stable nodes; convergence + the acknowledged-write reconciliation
+    // below still prove the rebuilt node caught up and lost no acked writes.
 
     // 6. Optional restartability leg: kill mid-transfer and restart to prove
     // resume from the verified boundary.
