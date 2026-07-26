@@ -92,7 +92,6 @@ const FORBIDDEN_NARRATIVE_PREFIXES = Object.freeze([
   'docs/reviews/',
 ]);
 const PLANNING_ROOT_FILES = Object.freeze([
-  'product-roadmap.md',
   'roadmap.md',
 ]);
 const CURRENT_DOC_SECTION_HEADINGS = Object.freeze([

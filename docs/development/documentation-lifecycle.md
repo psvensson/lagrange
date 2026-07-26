@@ -18,12 +18,18 @@ The repository derives a document class from its location. Frontmatter may state
 | Class | Home | Content contract |
 | --- | --- | --- |
 | `current` | Root guides plus maintained Markdown under `architecture/`, `charts/`, `ci/`, `docs/`, `examples/`, `src/`, and `test/` | Behavior, operations, architecture, integration, and development process implemented by the current tree |
-| `planning` | Root roadmaps, `solve/epics/`, and `solve/specs/` | Unresolved intent linked to active or draft work |
-| `steering` | Canonical sources under `docs/steering/` | Current rules that bind repository work |
+| `planning` | Human root roadmaps, `solve/epics/`, and `solve/specs/` | Unresolved intent linked to active or draft work |
+| `steering` | Canonical sources under `docs/steering/` | Current rules and stable scope/sequence maps that bind repository work |
 | `generated` | Generated steering packs and indexes | Rebuilt from canonical sources; never hand-edited |
 | `evidence` | Solver logs, changes, artifacts, retained reports, explicit case studies, and formal-model narratives under `models/` | Proof or execution provenance; never presented as runtime-current guidance. Mutable formal-model narratives still receive link and repository-path validation. |
 | `compatibility` | Small path-pinned pointer documents | Redirect only; no copied architecture or process narrative |
 | `history` | Changelog and release history | Deliberate release chronology |
+
+The human roadmap and the agent feature map intentionally have different
+classes. Root `roadmap.md` is a planning narrative for product direction.
+`docs/steering/agpl-feature-map.md` is a stable steering contract whose row
+identities constrain implementation scope; it does not record active execution
+state. Active goals and evidence remain owned by the Solver.
 
 ## Graduation Rules
 

@@ -93,6 +93,12 @@
       "priority": 120
     },
     {
+      "file": "agpl-feature-map.md",
+      "role": "direct-load",
+      "domain": "governance",
+      "loadWhen": "When changing product scope, resolving roadmapRow, or selecting or authoring a product Quest."
+    },
+    {
       "file": "memory-boundary.md",
       "role": "packed",
       "domain": "governance",
@@ -258,7 +264,7 @@
       "aliases": [
         {
           "file": "system-guidelines.md",
-          "line": 180,
+          "line": 181,
           "match": "Do not add synonyms for existing concepts"
         }
       ]
@@ -273,7 +279,7 @@
       "aliases": [
         {
           "file": "system-guidelines.md",
-          "line": 183,
+          "line": 184,
           "match": "Do not introduce ordinal, segment, or grab-bag source filenames"
         }
       ]

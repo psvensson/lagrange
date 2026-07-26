@@ -61,7 +61,8 @@ For this repository:
 
 -   in scope: manifest registration, lifecycle hooks, service-owned replicated
     state, CDC subscriptions, admin-surface registration, capability checks,
-    topology/snapshot/event substrate when backed by `roadmap.md`
+    topology/snapshot/event substrate when backed by
+    `docs/steering/agpl-feature-map.md`
 -   out of scope: backup/PITR behavior, tenant isolation, RBAC policy,
     commercial license activation, entitlement checks, KMS integration, and
     secret-provider implementations

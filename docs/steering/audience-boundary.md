@@ -24,6 +24,10 @@ external agent memory).
   by location; `docs/development/**` is development-audience by location;
   everything else under `docs/`, `architecture/`, `examples/`, and the repo
   root is human-audience by default.
+- Root `roadmap.md` is the human Now / Next / Later product narrative. The
+  stable row-level implementation-scope authority is
+  `docs/steering/agpl-feature-map.md`; its machine identities and workflow
+  detail must not be copied into the human roadmap.
 - Files whose location cannot change because machine consumers pin their path
   (contract records under `architecture/contracts/`, statechart/spec artifacts
   under `docs/specs/`, docs whose literal path appears in scripts or baselines)

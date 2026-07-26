@@ -9,7 +9,8 @@ This document is a cross-edition status board for Community, Pro, and
 Enterprise planning.
 
 It is visibility-only. Do not use this file to create specs, tasks, or code in
-the AGPL repository. Use `roadmap.md` for AGPL implementation planning.
+the AGPL repository. AGPL implementation scope is owned by the agent feature
+map under `docs/steering/`.
 
 Paid-tier source-of-truth planning remains external to this repository. Statuses
 here are mirrored so progress can be shown without turning paid backlog into
@@ -23,9 +24,10 @@ actionable work in this codebase.
 | 🔧     | In Progress  |
 | 🔲     | Not Started  |
 
-Note: in [roadmap.md](roadmap.md) the ✅ glyph means "available at roadmap
-scope" — release readiness may still need release-gate proof there, while
-here it simply means done.
+Note: in the
+[AGPL feature map](../steering/agpl-feature-map.md) the ✅ glyph means
+"available at roadmap scope" — release readiness may still need release-gate
+proof there, while here it simply means done.
 
 ## Edition Legend
 

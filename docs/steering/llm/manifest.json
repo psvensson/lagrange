@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-26T08:23:56.967Z",
+  "generatedAt": "2026-07-26T14:03:05.841Z",
   "stats": {
     "candidateCount": 439,
     "dedupedRuleCount": 428,
@@ -136,6 +136,16 @@
       "masterRuleCount": 13,
       "aliasRuleCount": 0,
       "emittedMasterRuleCount": 13
+    },
+    {
+      "file": "agpl-feature-map.md",
+      "role": "direct-load",
+      "domain": "governance",
+      "ruleCount": 0,
+      "masterRuleCount": 0,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 0,
+      "loadWhen": "When changing product scope, resolving roadmapRow, or selecting or authoring a product Quest."
     },
     {
       "file": "memory-boundary.md",
@@ -401,6 +411,7 @@
       "indexedRuleCount": 147,
       "sourceFiles": [
         "roadmap.md",
+        "agpl-feature-map.md",
         "memory-boundary.md",
         "audience-boundary.md",
         "workflow-guidelines/lifecycle.md",

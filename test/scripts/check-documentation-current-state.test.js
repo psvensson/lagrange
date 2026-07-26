@@ -51,6 +51,13 @@ async function createFixture() {
 test('documentClass derives stable lifecycle classes from repository zones', (t) => {
   t.equal(documentClass('docs/operations.md', CURRENT_DOC), 'current');
   t.equal(documentClass('roadmap.md', '# Roadmap\n'), 'planning');
+  t.equal(
+    documentClass(
+      'docs/development/product-roadmap.md',
+      '---\ndocumentClass: planning\n---\n\n# Product Roadmap\n',
+    ),
+    'planning',
+  );
   t.equal(documentClass('docs/case-studies/example.md', '# Example\n'), 'evidence');
   t.equal(documentClass('models/protocol/README.md', '# Model\n'), 'evidence');
   t.equal(documentClass('solve/changes/quest/finding.md', '# Finding\n'), 'evidence');

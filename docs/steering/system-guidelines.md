@@ -24,8 +24,9 @@ Steering precedence (mirrors `AGENTS.md` and `docs/steering/llm/boot.md`):
 1. The compact packs under `docs/steering/llm/` are the runtime execution
    surface for LLM sessions.
 2. Source steering files in this directory are consulted only to (a) chase
-   cited detail behind a compact-pack rule, or (b) repair pack drift and
-   regenerate the packs via `npm run steering:llm:pack`.
+   cited detail behind a compact-pack rule, (b) load a source whose manifest
+   role is `direct-load` when its condition applies, or (c) repair pack drift
+   and regenerate the packs via `npm run steering:llm:pack`.
 3. If a divergence exists between a compact pack and its source steering,
    fix the source, regenerate the packs, and re-validate. Do **not** treat
    the source as a parallel runtime contract that overrides the pack.
@@ -52,9 +53,9 @@ Use focused steering files for detail:
   delegated execution, guardrails, findings, and terminal reports
 - [`testing-guidelines/INDEX.md`](testing-guidelines/INDEX.md): validation policy
 - [`code-style.md`](code-style.md): formatting and lint policy
-- [`roadmap.md`](roadmap.md): roadmap **steering pointer** (the actual
-  implementation scope and edition-boundary map is the repo-root
-  [`../../roadmap.md`](../../roadmap.md), which this pointer routes to)
+- [`roadmap.md`](roadmap.md): roadmap **steering policy**
+- [`agpl-feature-map.md`](agpl-feature-map.md): detailed AGPL implementation
+  scope and broad feature sequence
 - [`../../architecture/INDEX.md`](../../architecture/INDEX.md): canonical
   architecture entrypoint, current owner maps, and subsystem detail index
 - [`../../architecture.md`](../../architecture.md): compatibility pointer for
@@ -93,7 +94,7 @@ All non-trivial implementation work MUST follow the Quest workflow.
 
 Required contract:
 
-1. Broad or scope-changing work sharpens `../../roadmap.md` before code.
+1. Broad or scope-changing work sharpens `agpl-feature-map.md` before code.
 2. Bounded implementation work runs from one Quest under `solve/quests/`.
 3. One Quest owns one sealed `doneWhen`, one primary owner boundary, and one
    focused proof surface.

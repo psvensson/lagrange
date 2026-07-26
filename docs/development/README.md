@@ -23,6 +23,13 @@ and [`docs/steering/`](../steering/)). Zoning rules:
   evidence boundaries
 - [capabilities-documentation.md](capabilities-documentation.md) — maintaining
   the generated human capabilities and limitations page
+- [product-roadmap.md](product-roadmap.md) — cross-edition planning visibility;
+  not an implementation source for the AGPL repository
+
+The human-facing product direction is in the root
+[roadmap](../../roadmap.md). The detailed AGPL implementation-scope authority
+is the agent-only
+[feature map](../steering/agpl-feature-map.md).
 
 Development-audience documents whose paths are pinned by machine consumers
 stay outside this directory (see the audience-boundary doc): notably
@@ -32,7 +39,6 @@ stay outside this directory (see the audience-boundary doc): notably
 [`../convergence-donewhen-metric.md`](../convergence-donewhen-metric.md),
 [`../admin-test-run-landing.md`](../admin-test-run-landing.md),
 [`../distributed-playback-viewer.md`](../distributed-playback-viewer.md),
-[`../../roadmap.md`](../../roadmap.md),
 [`../../architecture/current-owner-maps.md`](../../architecture/current-owner-maps.md),
 the contract records under
 [`../../architecture/contracts/`](../../architecture/contracts/), and the

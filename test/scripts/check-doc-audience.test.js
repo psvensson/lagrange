@@ -166,3 +166,12 @@ tap.test('audience audit rejects embedded Solver prose by itself',
     t.equal(result.ok, false);
     t.match(result.message, /Solver\/Quest workflow mechanics/u);
   });
+
+tap.test('audience audit rejects the relocated root product roadmap', async (t) => {
+  const root = await createFixture();
+  await writeFile(root, 'product-roadmap.md', '# Product roadmap\n');
+  const result = runCheck(root);
+
+  t.equal(result.ok, false);
+  t.match(result.message, /product-roadmap\.md: relocated path reappeared/u);
+});

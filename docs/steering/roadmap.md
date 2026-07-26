@@ -31,17 +31,22 @@ Do not use this file for:
 - style guidance;
 - current subsystem owner maps.
 
-The canonical AGPL feature sequence and scope map lives at `../../roadmap.md`.
+The canonical AGPL feature sequence and scope map lives at
+[`agpl-feature-map.md`](agpl-feature-map.md).
 
-Cross-edition visibility lives at `../../product-roadmap.md`.
+Human-readable product direction lives at [`../../roadmap.md`](../../roadmap.md).
+Cross-edition visibility lives at
+[`../development/product-roadmap.md`](../development/product-roadmap.md).
 Edition ownership and implementation-home rules live at `../../edition-matrix.md`.
 
 Use these documents as follows:
 
-- `../../roadmap.md` constrains allowed AGPL feature scope and broad sequencing.
-  It does not by itself prove a Quest is SOLVED.
-- `../../product-roadmap.md` is visibility-only and must not be used as an
-  implementation source here.
+- `agpl-feature-map.md` constrains allowed AGPL feature scope and broad
+  sequencing. It does not by itself prove a Quest is SOLVED.
+- `../../roadmap.md` communicates product direction to humans and must not be
+  used as implementation-scope authority.
+- `../development/product-roadmap.md` is visibility-only and must not be used
+  as an implementation source here.
 - Any feature whose `Implementation home` is not `AGPL repo` in
   `../../edition-matrix.md` is out of scope for implementation in this
   repository unless the user explicitly asks for AGPL-scoped preparatory work.
@@ -62,8 +67,9 @@ Use repository documents according to this ownership split:
 | Stable testing policy | `docs/steering/testing-guidelines/INDEX.md` | Durable repo-wide testing rules |
 | Style and lint | `docs/steering/code-style.md` | Formatting, lint, and local coding style |
 | Architecture entrypoint | `architecture/INDEX.md` | Canonical architecture entrypoint and subsystem detail |
-| AGPL roadmap | `roadmap.md` | Allowed feature scope and broad sequence |
-| Visibility roadmap | `product-roadmap.md` | Cross-edition status only |
+| Human roadmap | `roadmap.md` | Public Now / Next / Later product direction |
+| AGPL feature map | `docs/steering/agpl-feature-map.md` | Allowed feature scope and broad sequence |
+| Visibility roadmap | `docs/development/product-roadmap.md` | Cross-edition status only |
 | Scope matrix | `edition-matrix.md` | Edition and implementation-home mapping |
 | Quest definitions | `solve/quests/*` | Active work goals, frontiers, and constraints |
 | Workstream-local procedure | `solve/specs/*`, `test/*.local.md` | Thresholds, scripts, checklists, local proof detail |
@@ -73,7 +79,8 @@ Use repository documents according to this ownership split:
 Route work through the smallest sufficient planning surface:
 
 1. If the request changes product scope, feature sequence, or edition ownership,
-   sharpen `../../roadmap.md` or `../../edition-matrix.md` first.
+   sharpen `agpl-feature-map.md` or `../../edition-matrix.md` first. Update the
+   human roadmap in the same change when its public milestone narrative changes.
 2. Use an optional epic only while unresolved options span more than one possible
    Quest. Use a spec or architecture document for an approved multi-Quest contract.
 3. Apply the Quest threshold in `AGENTS.md`; bounded deterministic work remains
@@ -97,8 +104,8 @@ following are true:
    AGPL-scoped preparatory work only.
 2. The work does not implement paid-only behavior, paid-only operator flows, or
    paid-only control surfaces in this repository.
-3. The work remains consistent with the scope and sequence in `../../roadmap.md`
-   and the edition ownership in `../../edition-matrix.md`.
+3. The work remains consistent with the scope and sequence in
+   `agpl-feature-map.md` and the edition ownership in `../../edition-matrix.md`.
 
 Architecture documents may mention Pro or Enterprise services only as examples
 of external consumers of AGPL substrate. Such examples must not define
@@ -124,8 +131,8 @@ Roadmap state is scope and sequence metadata. It is not Solver evidence.
 
 Required workflow:
 
-1. Treat `../../roadmap.md` as a stable AGPL feature map: row presence and row
-   order constrain what can be scoped in this repository.
+1. Treat `agpl-feature-map.md` as the stable AGPL feature map: row presence and
+   row order constrain what can be scoped in this repository.
 2. Treat `solve/quests/` and Solver reports as active execution truth.
 3. A roadmap row marked available means the capability exists at roadmap scope;
    it does not mean every related Quest is SOLVED.

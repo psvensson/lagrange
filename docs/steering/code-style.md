@@ -34,7 +34,7 @@ For those concerns, use:
 - [`docs/steering/system-guidelines.md`](system-guidelines.md)
 - [`docs/steering/testing-guidelines/INDEX.md`](testing-guidelines/INDEX.md)
 - [`../../architecture/INDEX.md`](../../architecture/INDEX.md)
-- [`../../roadmap.md`](../../roadmap.md)
+- [`agpl-feature-map.md`](agpl-feature-map.md)
 
 ## Linting Compliance
 

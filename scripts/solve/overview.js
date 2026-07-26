@@ -246,7 +246,8 @@ export function renderOverview(overview) {
     '',
 
     `## 1 · Roadmap rows in play — ${roadmapRows.length}`,
-    '_Scope authority (roadmap.md). A row is in play when an epic or quest cites it via links.roadmapRow._',
+    '_Scope authority (docs/steering/agpl-feature-map.md). A row is in play ' +
+      'when an epic or quest cites it via links.roadmapRow._',
     '',
     ...(roadmapRows.length === 0 ?
       ['> No epic or quest cites a roadmap row yet (links.roadmapRow is optional and unset).', ''] :

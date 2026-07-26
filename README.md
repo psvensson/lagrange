@@ -606,6 +606,7 @@ not as a polished end-user product.
 
 ## Further Reading
 
+- [roadmap.md](roadmap.md) for the human-readable Now / Next / Later direction
 - [architecture/INDEX.md](architecture/INDEX.md) for the main architecture walkthrough
 - [docs/current-capabilities-and-limitations.md](docs/current-capabilities-and-limitations.md)
   for implementation status and important constraints

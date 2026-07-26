@@ -29,6 +29,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | testing-guidelines/proof-ladders.md | packed | testing | 14 | 1 | — |
 | code-style.md | packed | style | 14 | 0 | — |
 | roadmap.md | packed | governance | 13 | 0 | — |
+| agpl-feature-map.md | direct-load | governance | 0 | 0 | When changing product scope, resolving roadmapRow, or selecting or authoring a product Quest. |
 | memory-boundary.md | packed | governance | 6 | 0 | — |
 | audience-boundary.md | reference-only | governance | 0 | 0 | Doc-audience zoning doctrine; enforced mechanically by audit:doc-audience, so agents need the pointer, not packed rules. |
 | workflow-guidelines/lifecycle.md | reference-only | governance | 0 | 0 | Convenience lifecycle summary; solver-quests.md owns the binding workflow contract. |
@@ -52,37 +53,37 @@ are read under their load condition; `reference-only` sources are nonbinding.
 
 | id | strength | domain | source [role] | machine_check | summary |
 | --- | --- | --- | --- | --- | --- |
-| ARCH-0001 | must_not | architecture | system-guidelines.md:102 [packed] | — | docs/ holds documentation, never active work definition: end-user and operator-facing doc… |
-| ARCH-0002 | must_not | architecture | system-guidelines.md:106 [packed] | — | Model choice notes are advisory only. They never replace validation, delegated review, So… |
-| ARCH-0003 | must_not | architecture | system-guidelines.md:123 [packed] | — | If the existing owner lacks one capability, extend that owner. Do not fork a feature-loca… |
-| ARCH-0004 | must_not | architecture | system-guidelines.md:125 [packed] | — | Callers submit intent to owners. They do not reproduce owner logic locally. |
-| ARCH-0005 | must_not | architecture | system-guidelines.md:135 [packed] | — | Forbidden: duplicate helpers, wrappers, caches, snapshots, fields, or aliases for the sam… |
-| ARCH-0006 | must_not | architecture | system-guidelines.md:137 [packed] | — | Forbidden: shadow state for owner-managed lifecycle or readiness |
-| ARCH-0007 | must_not | architecture | system-guidelines.md:138 [packed] | — | Forbidden: fallback paths that reconstruct owner decisions from secondary evidence |
-| ARCH-0008 | must_not | architecture | system-guidelines.md:139 [packed] | — | Forbidden: transitional delegators without a removal task and structural guard |
-| ARCH-0009 | must_not | architecture | system-guidelines.md:149 [packed] | — | Runtime logic consumes normalized state; it must not reopen raw storage, transport, boots… |
-| ARCH-0010 | must_not | architecture | system-guidelines.md:160 [packed] | — | Forbidden: "try the new path, then the old path" logic |
-| ARCH-0011 | must_not | architecture | system-guidelines.md:161 [packed] | — | Forbidden: feature flags that keep two implementations alive for one semantic |
-| ARCH-0012 | must_not | architecture | system-guidelines.md:162 [packed] | — | Forbidden: decision branches that mix cache and SQL as equivalent truth for one meaning |
-| ARCH-0013 | must_not | architecture | system-guidelines.md:163 [packed] | — | Forbidden: bags of independent if statements around readiness, admission, retry, phase, l… |
-| ARCH-0014 | must_not | architecture | system-guidelines.md:177 [packed] | — | null and undefined MUST NOT encode runtime or domain state. Use an explicit named state v… |
-| ARCH-0015 | must_not | architecture | system-guidelines.md:180 [packed] | — | Each concept has one name. Do not add synonyms for existing concepts. _(alias of STYLE-0003)_ |
-| ARCH-0016 | must_not | architecture | system-guidelines.md:183 [packed] | — | Do not introduce ordinal, segment, or grab-bag source filenames such as part-2, segment, … _(alias of STYLE-0001)_ |
-| ARCH-0017 | must_not | architecture | system-guidelines.md:221 [packed] | — | INSERT OR REPLACE and full-row replacement are forbidden for steady-state lifecycle/statu… |
-| ARCH-0018 | must_not | architecture | system-guidelines.md:228 [packed] | — | Bootstrap shortcuts are phase-scoped exceptions only; they must not remain reachable from… |
-| ARCH-0019 | must_not | architecture | system-guidelines.md:246 [packed] | — | Events may enqueue owner-key work; they must not execute long-running progression inline. |
-| ARCH-0020 | must_not | architecture | system-guidelines.md:253 [packed] | — | Phase completion removes temporary scaffolding only, never the sole live dissemination, o… |
-| ARCH-0021 | must_not | architecture | system-guidelines.md:271 [packed] | — | Timeout budgets are canonical: nested work derives from remaining budget and never starts… |
-| ARCH-0022 | must_not | architecture | system-guidelines.md:276 [packed] | — | Missing owner dependencies fail loudly with typed errors. They do not synthesize "allow b… |
-| ARCH-0023 | must_not | architecture | system-guidelines.md:289 [packed] | — | Throughput may fall under pressure; correctness must not. |
-| ARCH-0024 | must_not | architecture | system-guidelines.md:290 [packed] | — | Operations must not fail, return incorrect results, leak memory, or silently drop work be… |
-| ARCH-0025 | must_not | architecture | system-guidelines.md:294 [packed] | — | Callers must not discover overload only through timeout expiry. |
-| ARCH-0026 | must_not | architecture | system-guidelines.md:295 [packed] | — | Control-plane pressure must not cause query/data-plane correctness failures. |
-| ARCH-0027 | must_not | architecture | system-guidelines.md:311 [packed] | — | Do not add alternate fast paths such as direct local handler calls, ad-hoc sockets, admin… |
-| ARCH-0028 | must_not | architecture | system-guidelines.md:336 [packed] | — | Users do not directly manage partitions, replicas, placement, leader election, message gr… |
-| ARCH-0029 | must_not | architecture | system-guidelines.md:204 [packed] | — | Diagnostics, admin, harness, and reporting surfaces that consume a boundary must reuse th… |
-| ARCH-0030 | must_not | architecture | system-guidelines.md:232 [packed] | — | Non-forced readers do not repair authoritative state on the hot path. |
-| ARCH-0031 | must_not | architecture | system-guidelines.md:238 [packed] | — | Steady-state correctness must not depend on phase-owned wiring after phase completion. |
+| ARCH-0001 | must_not | architecture | system-guidelines.md:103 [packed] | — | docs/ holds documentation, never active work definition: end-user and operator-facing doc… |
+| ARCH-0002 | must_not | architecture | system-guidelines.md:107 [packed] | — | Model choice notes are advisory only. They never replace validation, delegated review, So… |
+| ARCH-0003 | must_not | architecture | system-guidelines.md:124 [packed] | — | If the existing owner lacks one capability, extend that owner. Do not fork a feature-loca… |
+| ARCH-0004 | must_not | architecture | system-guidelines.md:126 [packed] | — | Callers submit intent to owners. They do not reproduce owner logic locally. |
+| ARCH-0005 | must_not | architecture | system-guidelines.md:136 [packed] | — | Forbidden: duplicate helpers, wrappers, caches, snapshots, fields, or aliases for the sam… |
+| ARCH-0006 | must_not | architecture | system-guidelines.md:138 [packed] | — | Forbidden: shadow state for owner-managed lifecycle or readiness |
+| ARCH-0007 | must_not | architecture | system-guidelines.md:139 [packed] | — | Forbidden: fallback paths that reconstruct owner decisions from secondary evidence |
+| ARCH-0008 | must_not | architecture | system-guidelines.md:140 [packed] | — | Forbidden: transitional delegators without a removal task and structural guard |
+| ARCH-0009 | must_not | architecture | system-guidelines.md:150 [packed] | — | Runtime logic consumes normalized state; it must not reopen raw storage, transport, boots… |
+| ARCH-0010 | must_not | architecture | system-guidelines.md:161 [packed] | — | Forbidden: "try the new path, then the old path" logic |
+| ARCH-0011 | must_not | architecture | system-guidelines.md:162 [packed] | — | Forbidden: feature flags that keep two implementations alive for one semantic |
+| ARCH-0012 | must_not | architecture | system-guidelines.md:163 [packed] | — | Forbidden: decision branches that mix cache and SQL as equivalent truth for one meaning |
+| ARCH-0013 | must_not | architecture | system-guidelines.md:164 [packed] | — | Forbidden: bags of independent if statements around readiness, admission, retry, phase, l… |
+| ARCH-0014 | must_not | architecture | system-guidelines.md:178 [packed] | — | null and undefined MUST NOT encode runtime or domain state. Use an explicit named state v… |
+| ARCH-0015 | must_not | architecture | system-guidelines.md:181 [packed] | — | Each concept has one name. Do not add synonyms for existing concepts. _(alias of STYLE-0003)_ |
+| ARCH-0016 | must_not | architecture | system-guidelines.md:184 [packed] | — | Do not introduce ordinal, segment, or grab-bag source filenames such as part-2, segment, … _(alias of STYLE-0001)_ |
+| ARCH-0017 | must_not | architecture | system-guidelines.md:222 [packed] | — | INSERT OR REPLACE and full-row replacement are forbidden for steady-state lifecycle/statu… |
+| ARCH-0018 | must_not | architecture | system-guidelines.md:229 [packed] | — | Bootstrap shortcuts are phase-scoped exceptions only; they must not remain reachable from… |
+| ARCH-0019 | must_not | architecture | system-guidelines.md:247 [packed] | — | Events may enqueue owner-key work; they must not execute long-running progression inline. |
+| ARCH-0020 | must_not | architecture | system-guidelines.md:254 [packed] | — | Phase completion removes temporary scaffolding only, never the sole live dissemination, o… |
+| ARCH-0021 | must_not | architecture | system-guidelines.md:272 [packed] | — | Timeout budgets are canonical: nested work derives from remaining budget and never starts… |
+| ARCH-0022 | must_not | architecture | system-guidelines.md:277 [packed] | — | Missing owner dependencies fail loudly with typed errors. They do not synthesize "allow b… |
+| ARCH-0023 | must_not | architecture | system-guidelines.md:290 [packed] | — | Throughput may fall under pressure; correctness must not. |
+| ARCH-0024 | must_not | architecture | system-guidelines.md:291 [packed] | — | Operations must not fail, return incorrect results, leak memory, or silently drop work be… |
+| ARCH-0025 | must_not | architecture | system-guidelines.md:295 [packed] | — | Callers must not discover overload only through timeout expiry. |
+| ARCH-0026 | must_not | architecture | system-guidelines.md:296 [packed] | — | Control-plane pressure must not cause query/data-plane correctness failures. |
+| ARCH-0027 | must_not | architecture | system-guidelines.md:312 [packed] | — | Do not add alternate fast paths such as direct local handler calls, ad-hoc sockets, admin… |
+| ARCH-0028 | must_not | architecture | system-guidelines.md:337 [packed] | — | Users do not directly manage partitions, replicas, placement, leader election, message gr… |
+| ARCH-0029 | must_not | architecture | system-guidelines.md:205 [packed] | — | Diagnostics, admin, harness, and reporting surfaces that consume a boundary must reuse th… |
+| ARCH-0030 | must_not | architecture | system-guidelines.md:233 [packed] | — | Non-forced readers do not repair authoritative state on the hot path. |
+| ARCH-0031 | must_not | architecture | system-guidelines.md:239 [packed] | — | Steady-state correctness must not depend on phase-owned wiring after phase completion. |
 | ARCH-0032 | must_not | architecture | runtime-contracts.md:39 [packed] | — | Temporary delegators may forward to the owner, but must not add a second decision path. |
 | ARCH-0033 | must_not | architecture | runtime-contracts.md:46 [packed] | — | Forbidden runtime patterns: local replacement logic when a composition-root owner is avai… |
 | ARCH-0034 | must_not | architecture | runtime-contracts.md:47 [packed] | — | Forbidden runtime patterns: owner-unavailable branches that reconstruct equivalent decisi… |
@@ -135,12 +136,12 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | ARCH-0081 | must_not | architecture | runtime-contracts.md:430 [packed] | — | Forbidden patterns: indefinite query queues waiting for topology transitions |
 | ARCH-0082 | must_not | architecture | runtime-contracts.md:445 [packed] | — | Forbidden patterns: receiver logic that depends on caller discipline to avoid duplicates |
 | ARCH-0083 | must_not | architecture | runtime-contracts.md:446 [packed] | — | Forbidden patterns: retryable paths that use non-idempotent counters or append-only write… |
-| ARCH-0084 | must | architecture | system-guidelines.md:223 [packed] | — | CDC-replicated row mutation must be primary-key addressed. |
-| ARCH-0085 | must | architecture | system-guidelines.md:243 [packed] | — | Subscribers, bridges, queues, retry loops, cache hydration paths, and repair scheduling c… |
-| ARCH-0086 | must | architecture | system-guidelines.md:360 [packed] | — | Static guardrail proof is required for touched runtime/control-plane, diagnostics, admin,… |
-| ARCH-0087 | must | architecture | system-guidelines.md:362 [packed] | — | Before closure, perform the affected-area deep dive required by workflow-guidelines/INDEX… |
-| ARCH-0088 | must | architecture | system-guidelines.md:365 [packed] | — | Known in-scope doctrine or system-guideline violations in the affected area must be fixed… |
-| ARCH-0089 | must | architecture | system-guidelines.md:373 [packed] | — | Architectural exceptions must be explicit, owned, time-bounded, and recorded in an active… |
+| ARCH-0084 | must | architecture | system-guidelines.md:224 [packed] | — | CDC-replicated row mutation must be primary-key addressed. |
+| ARCH-0085 | must | architecture | system-guidelines.md:244 [packed] | — | Subscribers, bridges, queues, retry loops, cache hydration paths, and repair scheduling c… |
+| ARCH-0086 | must | architecture | system-guidelines.md:361 [packed] | — | Static guardrail proof is required for touched runtime/control-plane, diagnostics, admin,… |
+| ARCH-0087 | must | architecture | system-guidelines.md:363 [packed] | — | Before closure, perform the affected-area deep dive required by workflow-guidelines/INDEX… |
+| ARCH-0088 | must | architecture | system-guidelines.md:366 [packed] | — | Known in-scope doctrine or system-guideline violations in the affected area must be fixed… |
+| ARCH-0089 | must | architecture | system-guidelines.md:374 [packed] | — | Architectural exceptions must be explicit, owned, time-bounded, and recorded in an active… |
 | STYLE-0001 | must_not | style | code-style.md:66 [packed] | — | Do not create new files with ordinal, segment, or grab-bag names such as part-2, segment,… |
 | STYLE-0002 | must_not | style | code-style.md:89 [packed] | `npm run audit:guideline:literals` | Do not inline domain/runtime scalars when an owner constant or explicit state variant sho… |
 | STYLE-0003 | must_not | style | code-style.md:101 [packed] | — | Do not introduce synonyms for an existing concept. |
@@ -171,12 +172,12 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | TEST-0023 | must_not | testing | testing-guidelines/regression-policy.md:413 [packed] | — | Treat timeouts as hard correctness failures by default. Do not raise product, harness, or… |
 | ARCH-0090 | must_not | architecture | runtime-contracts.md:223 [packed] | — | Bootstrap, join, and recovery phases must not remain the steady-state owner after the pha… |
 | ARCH-0091 | must_not | architecture | runtime-contracts.md:412 [packed] | — | During splits, moves, and leader elections, queries may be slower but must not fail becau… |
-| ARCH-0092 | must | architecture | system-guidelines.md:92 [packed] | — | All non-trivial implementation work MUST follow the Quest workflow. |
-| ARCH-0093 | must | architecture | system-guidelines.md:115 [packed] | — | Every state transition, lifecycle decision, data transformation, cache view, diagnostic g… |
-| ARCH-0094 | must | architecture | system-guidelines.md:143 [packed] | — | Any runtime function or semantic concern MUST have one active path after input normalizat… |
-| ARCH-0095 | must | architecture | system-guidelines.md:231 [packed] | — | Cache divergence, stale reads, missing rows, and repair needs must surface as typed owner… |
-| ARCH-0096 | must | architecture | system-guidelines.md:284 [packed] | — | The system must remain correct under contention, topology change, recovery, and control-p… |
-| ARCH-0097 | must | architecture | system-guidelines.md:319 [packed] | — | All state-mutating operations MUST be safe under retry, redelivery, and recovery sweeps. |
+| ARCH-0092 | must | architecture | system-guidelines.md:93 [packed] | — | All non-trivial implementation work MUST follow the Quest workflow. |
+| ARCH-0093 | must | architecture | system-guidelines.md:116 [packed] | — | Every state transition, lifecycle decision, data transformation, cache view, diagnostic g… |
+| ARCH-0094 | must | architecture | system-guidelines.md:144 [packed] | — | Any runtime function or semantic concern MUST have one active path after input normalizat… |
+| ARCH-0095 | must | architecture | system-guidelines.md:232 [packed] | — | Cache divergence, stale reads, missing rows, and repair needs must surface as typed owner… |
+| ARCH-0096 | must | architecture | system-guidelines.md:285 [packed] | — | The system must remain correct under contention, topology change, recovery, and control-p… |
+| ARCH-0097 | must | architecture | system-guidelines.md:320 [packed] | — | All state-mutating operations MUST be safe under retry, redelivery, and recovery sweeps. |
 | ARCH-0098 | must_not | architecture | doctrine/decision-experiments.md:87 [packed] | — | Broad ideas must not go straight into code. |
 | ARCH-0099 | must_not | architecture | doctrine/decision-experiments.md:98 [packed] | — | Do not treat a Quest as SOLVED when only the hot path is fixed. A Quest is complete only … |
 | ARCH-0100 | must_not | architecture | doctrine/state-encoding.md:20 [packed] | — | A phase must not tear down the only live runtime path. |
@@ -184,8 +185,8 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | ARCH-0102 | must_not | architecture | doctrine/state-encoding.md:104 [packed] | — | Contradictory — authoritative or equivalent signals disagree; produces reconciliation wit… |
 | ARCH-0103 | must_not | architecture | doctrine/state-encoding.md:131 [packed] | — | Inferences — derived signals such as error-string matching or absence of a row. An infere… |
 | GOV-0001 | must_not | governance | findings/2026-07-10-reuse-comparison-before-new-machinery.md:7 [packed] | — | Parallel or duplicated machinery discovered on contact MUST be recorded as a consolidatio… |
-| GOV-0002 | must_not | governance | roadmap.md:135 [packed] | — | Roadmap corrections discovered during implementation should land with the Quest changes t… |
-| GOV-0003 | must_not | governance | roadmap.md:138 [packed] | — | Do not use roadmap state to claim Quest closure. Closure requires Solver terminal evidenc… |
+| GOV-0002 | must_not | governance | roadmap.md:142 [packed] | — | Roadmap corrections discovered during implementation should land with the Quest changes t… |
+| GOV-0003 | must_not | governance | roadmap.md:145 [packed] | — | Do not use roadmap state to claim Quest closure. Closure requires Solver terminal evidenc… |
 | STYLE-0006 | must_not | style | code-style.md:44 [packed] | — | NEVER introduce eslint override comments. |
 | STYLE-0007 | must_not | style | code-style.md:151 [packed] | — | The root .eslintrc.json is the legacy-format file and is NOT read by the npm run lint scr… |
 | TEST-0024 | must_not | testing | findings/2026-07-10-hotpath-failure-fix-needs-aggregate-live-validation.md:5 [packed] | — | NEVER ship a change to a hot failure-handling path (retry, recovery, failure-classificati… |
@@ -237,15 +238,15 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | ARCH-0126 | must_not | architecture | doctrine/state-encoding.md:161 [packed] | — | Do not force readers to reconstruct progress from object existence, local booleans, times… |
 | ARCH-0127 | must_not | architecture | runtime-contracts.md:265 [packed] | — | Forbidden patterns: allowing a publication recovery producer to stall or wait on unknown … |
 | ARCH-0128 | must_not | architecture | runtime-contracts.md:329 [packed] | — | Use ControlPlaneReadinessService as the readiness owner (node readiness and planning surf… |
-| GOV-0005 | must_not | governance | roadmap.md:87 [packed] | — | docs/ holds documentation, never active work definition: user/operator-facing docs, the a… |
-| GOV-0006 | must_not | governance | roadmap.md:149 [packed] | — | Tests never pin a flag (see testing-guidelines/fixtures.md "No Flag-Coupled Tests"). |
+| GOV-0005 | must_not | governance | roadmap.md:94 [packed] | — | docs/ holds documentation, never active work definition: user/operator-facing docs, the a… |
+| GOV-0006 | must_not | governance | roadmap.md:156 [packed] | — | Tests never pin a flag (see testing-guidelines/fixtures.md "No Flag-Coupled Tests"). |
 | GOV-0007 | must_not | governance | workflow-guidelines/solver-quests.md:48 [packed] | — | after audit passes, commit every Quest-scoped change (the Solver never pushes; see "Regul… |
 | GOV-0008 | must_not | governance | workflow-guidelines/solver-quests.md:144 [packed] | — | Hypotheses = theory records (falsifiable, supersedable), never fields of the sealed file. |
 | GOV-0009 | must_not | governance | memory-boundary.md:3 [packed] | — | The in-repo and external memory systems have different jobs and MUST NOT duplicate each o… |
 | ARCH-0129 | must | architecture | runtime-contracts.md:101 [packed] | — | Shared truth surfaces such as startup, readiness, admin snapshot, service discovery, and … |
 | ARCH-0130 | must | architecture | runtime-contracts.md:202 [packed] | — | Runtime shared-metadata access must cross canonical ingress owners. |
-| ARCH-0131 | must | architecture | system-guidelines.md:352 [packed] | — | Quest validation must prove the owner path and affected tail consumers. Concretely: when … |
-| ARCH-0132 | must | architecture | system-guidelines.md:367 [packed] | — | Scenario-driven Quests must prove what the original scenario does next: representative gr… |
+| ARCH-0131 | must | architecture | system-guidelines.md:353 [packed] | — | Quest validation must prove the owner path and affected tail consumers. Concretely: when … |
+| ARCH-0132 | must | architecture | system-guidelines.md:368 [packed] | — | Scenario-driven Quests must prove what the original scenario does next: representative gr… |
 | GOV-0010 | must_not | governance | workflow-guidelines/solver-quests.md:1153 [packed] | — | THEORY_REQUIRED / recoverable BLOCKED: return the typed judgment action to the external d… |
 | STYLE-0011 | must_not | style | code-style.md:91 [packed] | — | JavaScript-language primitives are NOT domain scalars and do not need named constants: ty… |
 | STYLE-0012 | must_not | style | code-style.md:102 [packed] | — | terminalize is not a word: in NEW or newly edited identifiers, comments, commit messages,… |
@@ -267,10 +268,10 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | ARCH-0137 | must | architecture | doctrine/state-encoding.md:30 [packed] | — | Pressure must become admission, defer, reject, or coalescing signals. |
 | ARCH-0138 | must | architecture | doctrine/state-encoding.md:124 [packed] | — | Actuals — observed state: a raft-observed leader, an active service row, a committed oper… |
 | GOV-0016 | must | governance | findings/2026-07-10-reuse-comparison-before-new-machinery.md:5 [packed] | — | Every fix design and quest report MUST carry a visible REUSED vs EXTENDED vs NEW comparis… |
-| GOV-0017 | must | governance | roadmap.md:82 [packed] | — | A Quest must cite or encode enough scope context to prevent local invention. |
-| GOV-0018 | must | governance | roadmap.md:113 [packed] | — | The row must be in scope for this repository under the repo-root edition-matrix.md. |
-| GOV-0019 | must | governance | roadmap.md:114 [packed] | — | Broad rows must gain a linked spec or architecture document before active implementation … |
-| GOV-0020 | must | governance | roadmap.md:118 [packed] | — | The Quest must name the roadmap row, approved maintenance scope, or explicit user request… |
+| GOV-0017 | must | governance | roadmap.md:89 [packed] | — | A Quest must cite or encode enough scope context to prevent local invention. |
+| GOV-0018 | must | governance | roadmap.md:120 [packed] | — | The row must be in scope for this repository under the repo-root edition-matrix.md. |
+| GOV-0019 | must | governance | roadmap.md:121 [packed] | — | Broad rows must gain a linked spec or architecture document before active implementation … |
+| GOV-0020 | must | governance | roadmap.md:125 [packed] | — | The Quest must name the roadmap row, approved maintenance scope, or explicit user request… |
 | STYLE-0013 | must | style | code-style.md:41 [packed] | — | All code must be written with ESLint rules in mind from the start. |
 | TEST-0050 | must | testing | testing-guidelines/fixtures.md:33 [packed] | — | Every test that exists must run and pass. |
 | TEST-0051 | must | testing | testing-guidelines/fixtures.md:48 [packed] | — | Tests must exercise the real production code paths. |
@@ -315,8 +316,8 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0042 | must_not | governance | workflow-guidelines/solver-quests.md:345 [packed] | — | A Quest must not accumulate an unrecoverable dirty tree, but recording an attempt or find… |
 | GOV-0043 | must_not | governance | workflow-guidelines/solver-quests.md:363 [packed] | — | The Solver NEVER pushes: no subcommand, loop, or handoff runs git push (autoCommitQuest a… |
 | GOV-0044 | must_not | governance | workflow-guidelines/solver-quests.md:374 [packed] | — | Detectors fire only on real recorded events and never touch the sealed doneWhen. |
-| ARCH-0139 | should | architecture | system-guidelines.md:340 [packed] | — | New features should strengthen tables, services, policies, and canonical execution paths … |
-| GOV-0045 | must_not | governance | roadmap.md:104 [packed] | — | Such examples must not define implementation tasks in this repository unless the active Q… |
+| ARCH-0139 | should | architecture | system-guidelines.md:341 [packed] | — | New features should strengthen tables, services, policies, and canonical execution paths … |
+| GOV-0045 | must_not | governance | roadmap.md:111 [packed] | — | Such examples must not define implementation tasks in this repository unless the active Q… |
 | GOV-0046 | must_not | governance | workflow-guidelines/solver-quests.md:542 [packed] | — | Do not revive sprint/package theory state as active authority. |
 | GOV-0047 | must_not | governance | workflow-guidelines/solver-quests.md:607 [packed] | — | Parallelism MUST NOT be applied to the proof path: subagent verification before handoff, … |
 | GOV-0048 | must_not | governance | workflow-guidelines/solver-quests.md:652 [packed] | — | A green DT on an injected seam is not sufficient on its own — two wrong legs on this repo… |
@@ -362,7 +363,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | ARCH-0155 | must_not | architecture | runtime-contracts.md:190 [packed] | — | The services row is the canonical example of non-overlapping field owners on one row: ide… |
 | ARCH-0156 | must_not | architecture | runtime-contracts.md:195 [packed] | — | Retry is not fallback: routing MAY retry or redirect to another live replica or a new lea… |
 | GOV-0071 | must | governance | workflow-guidelines/solver-quests.md:906 [packed] | — | THEORY_REQUIRED (non-terminal): the selected rung needs system or frontier theory before … |
-| ARCH-0157 | should | architecture | system-guidelines.md:305 [packed] | — | All service communication that should be a message goes through the MessageRouter. |
+| ARCH-0157 | should | architecture | system-guidelines.md:306 [packed] | — | All service communication that should be a message goes through the MessageRouter. |
 | TEST-0071 | must | testing | testing-guidelines/proof-ladders.md:110 [packed] | — | Existing violations in touched files must be fixed when they are part of the same semanti… |
 | TEST-0072 | must | testing | testing-guidelines/regression-policy.md:114 [packed] | — | Live-refutation two-strikes. When live/measured evidence contradicts a sealed statement o… |
 | GOV-0072 | must | governance | workflow-guidelines/quest-artifacts.md:51 [packed] | — | Use source, test, architecture, and steering files for the implementation or documentatio… |
@@ -377,13 +378,13 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0080 | must_not | governance | workflow-guidelines/solver-quests.md:397 [packed] | — | Measured promotion only: a theory is promoted exclusively by a measured post-patch eviden… |
 | GOV-0081 | must_not | governance | workflow-guidelines/solver-quests.md:445 [packed] | — | Gradient refinement of the sealed metric: a frontier metric may be sharpened from the sca… |
 | GOV-0082 | must_not | governance | workflow-guidelines/solver-quests.md:452 [packed] | — | Harness-not-measuring gate (rr-G): a run that did not measure the system under test — a d… |
-| ARCH-0158 | may | architecture | system-guidelines.md:128 [packed] | — | A shared row may have several field owners only when the owned subsets are explicit and n… |
-| ARCH-0159 | may | architecture | system-guidelines.md:155 [packed] | — | Collectors may gather evidence; one canonical adjudicator emits the final ready, admit, s… |
-| ARCH-0160 | may | architecture | system-guidelines.md:226 [packed] | — | Consumers may not maintain parallel system-data caches outside the declared owner or Syst… |
-| ARCH-0161 | may | architecture | system-guidelines.md:248 [packed] | — | For one owner key, at most one reconcile execution may be in flight. |
+| ARCH-0158 | may | architecture | system-guidelines.md:129 [packed] | — | A shared row may have several field owners only when the owned subsets are explicit and n… |
+| ARCH-0159 | may | architecture | system-guidelines.md:156 [packed] | — | Collectors may gather evidence; one canonical adjudicator emits the final ready, admit, s… |
+| ARCH-0160 | may | architecture | system-guidelines.md:227 [packed] | — | Consumers may not maintain parallel system-data caches outside the declared owner or Syst… |
+| ARCH-0161 | may | architecture | system-guidelines.md:249 [packed] | — | For one owner key, at most one reconcile execution may be in flight. |
 | GOV-0083 | must_not | governance | workflow-guidelines/solver-quests.md:894 [packed] | — | EXHAUSTED (terminal): every frontier is parked as exhausted, either by the finite strateg… |
 | GOV-0084 | must_not | governance | workflow-guidelines/solver-quests.md:909 [packed] | — | BLOCKED (non-terminal): a recoverable precondition gate (scope pressure, regression-resto… |
-| ARCH-0162 | may | architecture | system-guidelines.md:338 [packed] | — | Internal machinery may appear in diagnostics, but not as ordinary user-facing control sur… |
+| ARCH-0162 | may | architecture | system-guidelines.md:339 [packed] | — | Internal machinery may appear in diagnostics, but not as ordinary user-facing control sur… |
 | GOV-0085 | must_not | governance | workflow-guidelines/solver-quests.md:1031 [packed] | — | Override-tagged advisories are excluded from soft-first quorum counting (the GUARD_QUORUM… |
 | GOV-0086 | must | governance | workflow-guidelines/solver-quests.md:20 [packed] | — | A Quest is also required up front for live/distributed work, cross-session investigation,… |
 | GOV-0087 | must | governance | workflow-guidelines/solver-quests.md:31 [packed] | — | If it produces a failed measurement, expands beyond the original bounded owner scope, or … |
@@ -410,7 +411,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0099 | must_not | governance | workflow-guidelines/solver-quests.md:230 [packed] | — | The reopen is evidence-gated: it is refused unless at least one contributing attempt re-c… |
 | GOV-0100 | must_not | governance | workflow-guidelines/solver-quests.md:255 [packed] | — | A later regression-resolution finding with resolution explained may discharge the restore… |
 | GOV-0101 | must_not | governance | workflow-guidelines/solver-quests.md:364 [packed] | — | Pushing is a separate, outward-facing action — for Quest and ad-hoc work alike, a never-b… |
-| ARCH-0164 | may | architecture | system-guidelines.md:237 [packed] | — | Bootstrap, join, rejoin, recovery, split, rebalance, and readiness phases may initialize … |
+| ARCH-0164 | may | architecture | system-guidelines.md:238 [packed] | — | Bootstrap, join, rejoin, recovery, split, rebalance, and readiness phases may initialize … |
 | GOV-0102 | must_not | governance | workflow-guidelines/solver-quests.md:754 [packed] | — | The reproducibility of recorded artifact bytes from reachable commits may be measured wit… |
 | GOV-0103 | must_not | governance | workflow-guidelines/solver-quests.md:858 [packed] | — | When a finding materially falsifies or constrains ANOTHER declared quest's premise, route… |
 | GOV-0104 | must_not | governance | workflow-guidelines/solver-quests.md:934 [packed] | — | Provenance honesty (mirroring CLOSURE_MEASURED vs CLOSURE_DECISION): a ladder park is a M… |
@@ -423,8 +424,8 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | TEST-0083 | should | testing | testing-guidelines/proof-ladders.md:123 [packed] | — | Runtime Quests that touch already oversized files should record whether they are adding l… |
 | TEST-0084 | should | testing | testing-guidelines/regression-policy.md:168 [packed] | — | These tests should be small and targeted. |
 | TEST-0085 | should | testing | testing-guidelines/release-gate.md:115 [packed] | — | The review should produce candidate findings or risks; the Solver still owns terminal sta… |
-| GOV-0107 | must | governance | roadmap.md:145 [packed] | — | Before the landing session ends, the flag MUST be resolved: validate the change (determin… |
-| GOV-0108 | must | governance | roadmap.md:152 [packed] | — | Flags inherited from before this rule are recorded debt, not license: retire or promote e… |
+| GOV-0107 | must | governance | roadmap.md:152 [packed] | — | Before the landing session ends, the flag MUST be resolved: validate the change (determin… |
+| GOV-0108 | must | governance | roadmap.md:159 [packed] | — | Flags inherited from before this rule are recorded debt, not license: retire or promote e… |
 | GOV-0109 | must | governance | workflow-guidelines/solver-quests.md:102 [packed] | — | class: "product" (default) or "process". Product goals must be MEASURED against a real ar… |
 | GOV-0110 | must | governance | workflow-guidelines/solver-quests.md:432 [packed] | — | Regression-restore gate: once a measured run records an invariant regression, the very ne… |
 | GOV-0111 | must_not | governance | findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md:5 [packed] | — | Findings promoted into steering MUST be written as a normative sentence containing a reco… |
@@ -450,7 +451,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0123 | should | governance | workflow-guidelines/subagents.md:51 [packed] | — | The review should return findings, candidate risks, or suggested frontiers. |
 | ARCH-0170 | may | architecture | doctrine/state-encoding.md:98 [packed] | — | Authoritative — owned by the same semantic owner and plane; may directly admit or reject. |
 | ARCH-0171 | may | architecture | doctrine/state-encoding.md:100 [packed] | — | Equivalent — another access path to the same owner and plane; may confirm or refute only … |
-| GOV-0124 | may | governance | roadmap.md:116 [packed] | — | A row may move to active implementation only when the intended behavior is sharp enough t… |
+| GOV-0124 | may | governance | roadmap.md:123 [packed] | — | A row may move to active implementation only when the intended behavior is sharp enough t… |
 | TEST-0091 | may | testing | testing-guidelines/fixtures.md:78 [packed] | — | The test-only-paths rule and this flag-coupling rule together close the loop — neither te… |
 | TEST-0092 | may | testing | testing-guidelines/harness.md:143 [packed] | — | Only run the complete test suite (npm test) at: - Checkpoint tasks explicitly marked in t… |
 | TEST-0093 | may | testing | testing-guidelines/regression-policy.md:316 [packed] | — | System guideline §9 (Load May Slow The System, Not Break It) requires that all subsystems… |
@@ -471,7 +472,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | ARCH-0174 | should | architecture | doctrine/decision-experiments.md:71 [packed] | — | Classification-only is a valid result only when the causal chain is still explicit, the f… |
 | GOV-0137 | may | governance | workflow-guidelines/solver-quests.md:254 [packed] | — | Only a genuinely broken or disconnected harness is globally invalid/non-measuring. |
 | GOV-0138 | may | governance | workflow-guidelines/solver-quests.md:318 [packed] | — | When a metric does not improve but the blocker moves owner, boundary, or mechanism, the s… |
-| GOV-0139 | may | governance | roadmap.md:103 [packed] | — | Architecture documents may mention Pro or Enterprise services only as examples of externa… |
+| GOV-0139 | may | governance | roadmap.md:110 [packed] | — | Architecture documents may mention Pro or Enterprise services only as examples of externa… |
 | GOV-0140 | may | governance | workflow-guidelines/solver-quests.md:542 [packed] | — | The archived theory ledger may be imported only as archive memory; imported archive theor… |
 | GOV-0141 | may | governance | workflow-guidelines/solver-quests.md:560 [packed] | — | A configured agent executor may still use autonomous run; supervised step is the componen… |
 | GOV-0142 | may | governance | workflow-guidelines/solver-quests.md:675 [packed] | — | The census is absolute and may carry inherited drift: compare its listed sites against th… |

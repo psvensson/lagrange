@@ -70,6 +70,7 @@ const EXTERNAL_LINK_PATTERN = /^(?:https?:|mailto:|tel:|data:|file:)/u;
 
 // Relocated legacy paths that must not reappear (audience-boundary migration).
 const TOMBSTONE_PATHS = Object.freeze([
+  'product-roadmap.md',
   'docs/solver-runbook.md',
   'docs/llm-ergonomics-improvement-plan.md',
   'docs/llm-dev-process-improvement-plan.md',

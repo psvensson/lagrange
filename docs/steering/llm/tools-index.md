@@ -78,6 +78,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:operation-progress-authority` — Block retired operation-progress source vocabulary and new rebalancer ordinal files outside the owner-map ledger.
 - `audit:owner-boundary-segments` — Print extraction guidance for oversized owner-boundary segment files.
 - `audit:partition-class-owner` — `node scripts/check-partition-class-owner.js`
+- `audit:roadmap-authority` — `node scripts/check-roadmap-authority.js`
 - `audit:runtime-grammar` — Check runtime grammar contracts plus state-machine pressure preflight.
 - `audit:runtime-grammar:file` — Check runtime owner-contract and grammar drift.
 - `audit:service-portability-claims` — `node scripts/check-service-portability-claims.js`
@@ -269,6 +270,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:pgwire:unit` — `node scripts/run-test-files.js $(cat test/shards/pgwire-unit.txt)`
 - `test:project-hardening` — `node scripts/run-project-hardening-acceptance.js`
 - `test:quality` — `npm run test:static && npm run test:mutation`
+- `test:roadmap-authority` — `node scripts/run-documentation-current-state-scenario.js roadmap-audience-authority-cutover`
 - `test:safety-pregate` — `node scripts/run-test-files.js $(cat test/shards/safety-pregate.txt)`
 - `test:sharded:all` — `npm run test:fast && bash scripts/run-sharded-lanes-concurrent.sh`
 - `test:sharded:serial` — `npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2`
@@ -296,4 +298,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-197 scripts indexed; 72 have a curated description, 125 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+199 scripts indexed; 72 have a curated description, 127 fall back to their raw command. Improve coverage in the two sources named in the header comment.
