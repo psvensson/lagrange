@@ -1,2 +1,7 @@
 {"ts":"2026-06-26T08:02:06.453Z","type":"invariant.evaluated","invariant":"raft-election-safety-one-vote-per-term","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-041"}
 {"ts":"2026-07-26T06:31:39.184Z","type":"invariant.evaluated","invariant":"raft-election-safety-one-vote-per-term","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-041"}
+{"ts":"2026-07-26T06:39:46.620Z","type":"invariant.evaluated","invariant":"raft-election-safety-one-vote-per-term","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-041"}
+{"ts":"2026-07-26T06:41:41.930Z","type":"invariant.evaluated","invariant":"raft-election-safety-one-vote-per-term","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-041"}
+{"ts":"2026-07-26T06:43:03.784Z","type":"invariant.evaluated","invariant":"raft-election-safety-one-vote-per-term","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-041"}
+{"ts":"2026-07-26T06:43:58.171Z","type":"invariant.evaluated","invariant":"raft-election-safety-one-vote-per-term","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-041"}
+{"ts":"2026-07-26T06:45:00.805Z","type":"invariant.evaluated","invariant":"raft-election-safety-one-vote-per-term","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-041"}

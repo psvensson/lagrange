@@ -1,0 +1,4 @@
+{"ts":"2026-07-26T06:41:43.890Z","type":"invariant.evaluated","invariant":"replica-voter-ready-visible-to-remove-safety-gate","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-035"}
+{"ts":"2026-07-26T06:43:06.436Z","type":"invariant.evaluated","invariant":"replica-voter-ready-visible-to-remove-safety-gate","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-035"}
+{"ts":"2026-07-26T06:44:01.469Z","type":"invariant.evaluated","invariant":"replica-voter-ready-visible-to-remove-safety-gate","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-035"}
+{"ts":"2026-07-26T06:45:04.680Z","type":"invariant.evaluated","invariant":"replica-voter-ready-visible-to-remove-safety-gate","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-035"}
