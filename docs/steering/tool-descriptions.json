@@ -1,5 +1,5 @@
 {
-  "release:notes": "Render per-release notes from CHANGELOG.md (--mode check|notes|overview --version x.y.z): the release.yml fail-fast changelog gate, Forgejo release-page body, and Docker Hub overview renderer.",
+  "release:notes": "Render per-release notes from CHANGELOG.md (--mode check|notes|overview --version x.y.z): the release.yml fail-fast changelog gate, GitHub release-page body, and Docker Hub overview renderer.",
   "test-output:prune": "Delete old test-harness artifacts (reports, playbacks, run dirs); keeps pinned names, today's items, and the most recent few per category.",
   "test-output:prune:dry": "Preview what test-output:prune would delete without removing anything.",
   "summarize:harness": "Summarize distributed harness runs across reports.",

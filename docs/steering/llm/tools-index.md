@@ -176,7 +176,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## release
 
-- `release:notes` — Render per-release notes from CHANGELOG.md (--mode check|notes|overview --version x.y.z): the release.yml fail-fast changelog gate, Forgejo release-page body, and Docker Hub overview renderer.
+- `release:notes` — Render per-release notes from CHANGELOG.md (--mode check|notes|overview --version x.y.z): the release.yml fail-fast changelog gate, GitHub release-page body, and Docker Hub overview renderer.
 
 ## shards
 

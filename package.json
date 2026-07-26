@@ -4,7 +4,7 @@
   "description": "Lagrange experimental distributed SQL database and compute-near-data runtime",
   "repository": {
     "type": "git",
-    "url": "https://codeberg.org/psvensson/lagrange.git"
+    "url": "https://github.com/psvensson/lagrange.git"
   },
   "type": "module",
   "main": "src/public-api.js",

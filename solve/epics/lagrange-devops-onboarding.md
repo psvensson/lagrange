@@ -140,7 +140,9 @@ but is **not** in `ENV_MAPPINGS` (cannot move WS port via env); admin port 8081 
 - Configurable: `replicas`, `resources`, `securityContext` (non-root), `storageClassName`, `image`/`tag`.
 
 ### Image publish
-- GitHub Actions buildx → `ghcr.io/<org>/lagrange:<semver>` + `:latest`, `linux/amd64`+`linux/arm64`. AGPL license labels. Consider multi-stage to drop the `python3/make/g++` build toolchain.
+- GitHub Actions buildx → `docker.io/psvensson/lagrange:<semver>` + `:latest`,
+  `linux/amd64`, with AGPL and OCI provenance labels. Multi-arch remains deferred
+  until the runtime no longer prunes native dependencies to `linux-x64`.
 
 ### Why pgwire is never placed — RESOLVED (W0b follow-up, 2026-06-28). Fake-endpoints hypothesis REFUTED.
 The deficit is not 0 because of the seeded endpoints — `sys-postgres-wire` is simply **absent from every
@@ -240,7 +242,7 @@ Each is independently verifiable. `W0` is a prerequisite falsification and runs 
   its endpoint. Doubles as the canonical "run your own service on Lagrange" lesson.
 - **W1 — Image published.** PARTIAL (parallel session, 2026-06-30): the Dockerfile is now multi-stage +
   **distroless** runtime (`gcr.io/distroless/nodejs22-debian12`, `4f1c8b38`/`16df6b24`, 377→287MB) — the
-  image-slim half is done. REMAINING W1 = publish multi-arch to `ghcr.io/<org>/lagrange` + a CI job that
+  image-slim half is done. REMAINING W1 = publish amd64 to `docker.io/psvensson/lagrange` + a CI job that
   pulls and runs `--version`/`--dry-run`, and **fix the still-stale `EXPOSE 8080 8081 9080`** →
   `8080 8081 8082 5432` (R4). NOTE the distroless runtime has **no shell and no wget/curl** — compose/k8s
   healthchecks and any verification cannot `docker exec ... sh`/`wget`; use HTTP probes hit from the host
@@ -498,7 +500,7 @@ Reuse: `test/distributed/harness/cluster-class-lifecycle-base.js` env wiring (tr
 `scripts/check-endpoint-sync-chart.js` (chart-gate template); `docs/bootstrap-readiness-probes.md`
 (probe YAML verbatim); existing Dockerfile (fix EXPOSE); `lagrange-admin` bin alias; `--version`/`--dry-run`.
 Build new: `docker-compose.yml`; `charts/lagrange/` (StatefulSet, headless + sql + admin services,
-entrypoint wrapper for ordinal→identity, NOTES.txt, values.yaml); GHCR publish workflow; the three
+entrypoint wrapper for ordinal→identity, NOTES.txt, values.yaml); Docker Hub publish workflow; the three
 verify scripts; two getting-started docs; updated `.env.example`.
 
 ## Risks
@@ -533,3 +535,10 @@ Operator-attested against the workstream acceptance checklist (mirrored in
 precondition pinned → Key open decision made), WS-API/WS-HELLO/W1–W5 are green, the chart render-gate
 (`check-lagrange-chart.js`) is in `test:ci`, and a reviewer can follow either getting-started doc to a
 psql round-trip on a ≥3-node cluster.
+
+## Decision log
+
+- 2026-07-26 — Cut release automation over to GitHub Actions with Docker Hub as
+  the image registry, retaining the runtime's proven amd64-only boundary.
+  Multi-arch and GHCR publication are explicitly deferred. Target:
+  `solve/quests/github-release-workflow-cutover.json`.

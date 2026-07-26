@@ -48,13 +48,14 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 19
+## Open quests — 21
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
 | documentation-audience-boundary-tooling | process | 1 | 0 | 2026-07-26 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | 2026-07-25 | — |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 | — |
+| github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | 2026-07-20 | — |
 | movielens-local-leader-row-visibility-model | product | 1 | 0 | 2026-07-20 | — |
@@ -68,6 +69,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | operation-ledger-quorum-authoritative-release | product | 3 | 0 | 2026-07-22 | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 | — |
 | priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 | — |
+| raft-snapshot-bulk-transfer | product | 0 | 0 | 2026-07-26 | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-22 | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 | — |

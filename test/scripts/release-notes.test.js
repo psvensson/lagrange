@@ -3,7 +3,7 @@
  *
  * release.yml uses this script as the fail-fast release gate (tag must have a
  * non-empty CHANGELOG section matching package.json's version) and as the
- * renderer for both the Forgejo release-page body and the Docker Hub
+ * renderer for both the GitHub release-page body and the Docker Hub
  * repository description. The wiring tests pin the real repo files (the
  * committed CHANGELOG.md parses; docs/dockerhub-overview.md carries the
  * injection markers) so a drift there fails here, not on release day.
@@ -18,11 +18,12 @@ import {
   DOCKERHUB_DESCRIPTION_MAX_BYTES,
   OVERVIEW_MARKER_BEGIN,
   OVERVIEW_MARKER_END,
+  assertReleaseVersions,
   demoteHeadings,
   extractChangelogSection,
   extractReleasedSections,
   renderDockerhubOverview,
-  renderForgejoReleaseNotes,
+  renderGitHubReleaseNotes,
 } from '../../scripts/release-notes.js';
 
 const TEST_DIR = dirname(fileURLToPath(import.meta.url));
@@ -91,13 +92,30 @@ test('extractChangelogSection: missing or empty section throws (release gate)', 
   t.equal(extractChangelogSection(SAMPLE_CHANGELOG, '0.2.0').version, '0.2.0');
 });
 
-test('renderForgejoReleaseNotes: changelog body + image refs + tagged links', async (t) => {
-  const notes = renderForgejoReleaseNotes(extractChangelogSection(SAMPLE_CHANGELOG, '0.2.0'));
+test('assertReleaseVersions: package and chart versions must match the tag', async (t) => {
+  const chart = 'version: 0.2.0\nappVersion: "0.2.0"\n';
+  t.doesNotThrow(() => assertReleaseVersions('0.2.0', '0.2.0', chart));
+  t.throws(
+    () => assertReleaseVersions('0.2.0', '0.1.0', chart),
+    /package\.json=0\.1\.0/u,
+  );
+  t.throws(
+    () => assertReleaseVersions(
+      '0.2.0',
+      '0.2.0',
+      'version: 0.1.0\nappVersion: "0.2.0"\n',
+    ),
+    /Chart\.yaml version=0\.1\.0/u,
+  );
+});
+
+test('renderGitHubReleaseNotes: changelog body + image refs + tagged links', async (t) => {
+  const notes = renderGitHubReleaseNotes(extractChangelogSection(SAMPLE_CHANGELOG, '0.2.0'));
   t.match(notes, /Lagrange 0\.2\.0 — 2026-08-01/);
   t.match(notes, /Second-release feature\./, 'contains the concrete changes');
   t.match(notes, /docker\.io\/psvensson\/lagrange:0\.2\.0/);
-  t.match(notes, /codeberg\.org\/psvensson\/lagrange:0\.2\.0/);
-  t.match(notes, /src\/tag\/v0\.2\.0\/CHANGELOG\.md/, 'changelog link pinned to the tag');
+  t.notMatch(notes, /codeberg|forgejo/iu);
+  t.match(notes, /blob\/v0\.2\.0\/CHANGELOG\.md/, 'changelog link pinned to the tag');
   t.notMatch(notes, /never leak/);
 });
 
