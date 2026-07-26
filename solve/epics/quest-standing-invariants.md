@@ -196,3 +196,12 @@ report) and add the auto-link (A) once the predicate-expressibility question is 
   verified against *live evidence*; a BREACH = "the architecture doc no longer reflects the
   system," resolved by either fixing the runtime or amending the contract/registry/owner map.
   Spec requirements/design/tasks revised accordingly (Reqs 8–9, design §2.5/§4/§7.5).
+- 2026-07-26 — **Record repair (stale log): the graduated spec COMPLETED 2026-06-26.**
+  WS0–WS4 plus all five follow-ons landed that day (see spec `tasks.md` Status);
+  `LAGRANGE_STANDING_INVARIANTS` was deleted the same day — the live tier now runs
+  unconditionally (quest closures always evaluate in-scope invariants; a real
+  HELD→BREACHED auto-spawns a reopen-budget-bounded restoration Quest). Live state
+  today: 3 invariants HELD; `invariants --score` coverage 3/8 repro-backed CLs.
+  Remaining epic-level axis = **coverage extension** over the scorer worklist
+  (CL-001, CL-033, CL-034, CL-035, CL-042), opened as Quest
+  `standing-invariant-coverage-worklist` this date.

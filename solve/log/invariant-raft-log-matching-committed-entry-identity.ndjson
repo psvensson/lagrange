@@ -1,1 +1,2 @@
 {"ts":"2026-06-26T08:02:07.404Z","type":"invariant.evaluated","invariant":"raft-log-matching-committed-entry-identity","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-040"}
+{"ts":"2026-07-26T06:31:39.756Z","type":"invariant.evaluated","invariant":"raft-log-matching-committed-entry-identity","verdict":"pass","exitCode":0,"evidenceRef":"npm run repro -- CL-040"}
