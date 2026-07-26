@@ -17,6 +17,16 @@ Cardinality scale and physical-data scale are independent:
 Neither a sparse cardinality run nor a small high-throughput run certifies the
 other axis.
 
+## R0 — Shared evidence identity
+
+The versioned profile/config/report envelope SHALL be the single owner of
+software revision, hardware class, topology, data shape, workload identity,
+duration, safety, performance, resources, convergence, artifact provenance,
+and claim eligibility. P0 and later P1–P3 profiles use that identity.
+Comparative-efficiency evidence may add pair, alternative, parity, statistics,
+price, and relative-claim fields, but SHALL reference this identity rather than
+forking it. A valid P0 record is not scale certification.
+
 ## R1 — Staged profiles
 
 The report contract SHALL represent at least:
@@ -95,6 +105,7 @@ measured; adding this row does not claim support.
   memory-soak leak analysis, capacity/admission owners, `UnifiedRebalancer`,
   topology analyzers, and report writers.
 - **EXTENDED:** scale configuration, balance oracle, staged execution, and
-  enforced resource/performance report fields.
+  enforced resource/performance report fields; comparative consumers extend
+  the shared identity only with pair-specific fields.
 - **NEW:** declared support-profile contract and exact/lower-bound
   feasibility-aware balance comparison. No parallel scheduler is introduced.

@@ -1,0 +1,59 @@
+{
+  "id": "comparative-efficiency-movielens-public-request-workload",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The MovieLens grouped-reduce workload executes through the public installed request Binding and WASM Cell surface with the same dataset, semantics, result oracle, durability contract, and observable operation boundary used by its named alternative.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/comparative-workload-efficiency-evidence/tasks.md#C7",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+    "draftedAtCommit": "d7bbd25608ffe49282d9e85a62263b283f219442"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "comparative-efficiency-movielens-public-request-workload",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "comparative-efficiency-movielens-public-request-workload-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "comparative-efficiency-movielens-public-request-workload",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "requires-semantic-parity",
+      "statement": "Do not seal this Quest until benchmark-semantic-parity is terminal for the MovieLens workload contract."
+    },
+    {
+      "id": "public-deployment-surface",
+      "statement": "Closure requires an installed request Binding and WASM Cell invoked through the public request path; internal native_js execution is ineligible."
+    },
+    {
+      "id": "deployment-equivalence-only",
+      "statement": "This Quest proves a comparable public workload boundary and must not itself publish a speed, cost, or scale claim."
+    },
+    {
+      "id": "harness-fidelity",
+      "statement": "Apply the harness-fidelity attack checklist and record live public-path engagement plus immutable raw artifacts."
+    }
+  ]
+}

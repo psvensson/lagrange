@@ -1,0 +1,59 @@
+{
+  "id": "benchmark-whole-topology-resource-accounting",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A live-calibrated paired run accounts for every component's provisioned and utilized compute, memory, storage, IOPS, network, amplification, minimum footprint, and headroom, then projects auditable infrastructure cost per million correct SLO-eligible operations from an immutable versioned price sheet without double counting.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/comparative-workload-efficiency-evidence/tasks.md#C4",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+    "draftedAtCommit": "d7bbd25608ffe49282d9e85a62263b283f219442"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "benchmark-whole-topology-resource-accounting",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "benchmark-whole-topology-resource-accounting-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "benchmark-whole-topology-resource-accounting",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "requires-capacity-protocol",
+      "statement": "Do not seal this Quest until benchmark-statistical-capacity-protocol is terminal."
+    },
+    {
+      "id": "whole-architecture-boundary",
+      "statement": "Fixed-resource and fixed-SLO comparisons include every architecture-specific component, provisioned and utilized units, amplification, IOPS, network and inter-zone traffic, minimum footprint, and headroom."
+    },
+    {
+      "id": "immutable-price-projection",
+      "statement": "Cost per million correct operations is a separate projection from immutable measured units using a versioned region, date, currency, billing, reservation, and exclusion contract without double counting."
+    },
+    {
+      "id": "harness-fidelity",
+      "statement": "Apply the harness-fidelity attack checklist and calibrate synthetic byte and resource counters at live transport, storage, and process seams with immutable raw artifacts."
+    }
+  ]
+}

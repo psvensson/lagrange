@@ -1,0 +1,52 @@
+{
+  "id": "comparative-efficiency-program-authoring-verifier-fix",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The full comparative-efficiency planning candidate uses one L0 scale prerequisite link, seals C0 as the prerequisite for calculator and semantic-parity work, preserves every previously verified outcome-neutral evidence contract, and passes independent exact-diff verification.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+    "draftedAtCommit": "d7bbd25608ffe49282d9e85a62263b283f219442"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/comparative-efficiency-program-authoring-verifier-fix.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "comparative-efficiency-program-authoring-verifier-fix-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/comparative-efficiency-program-authoring-verifier-fix.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "full-replacement-union",
+      "statement": "The landing candidate must contain the entire attempt-1 planning union, its rejection provenance, and the verifier-requested corrections; it may not commit a partial fix over uncommitted predecessor bytes."
+    },
+    {
+      "id": "planning-only",
+      "statement": "This Quest authors planning contracts and draft successor Quests only; it must not claim that comparative performance, cost, or scale has been measured."
+    },
+    {
+      "id": "independent-exact-diff-approval",
+      "statement": "The same independent verifier must approve the SHA-256-bound full replacement diff before handoff."
+    }
+  ]
+}

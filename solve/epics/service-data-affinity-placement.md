@@ -150,6 +150,13 @@ existing degenerate form of this alternative).
 
 ## Decision log
 
+- 2026-07-26 — **Comparative evidence consumes affinity; it does not redefine
+  it:** `solve/specs/comparative-workload-efficiency-evidence/` owns workload
+  equivalence, paired alternative runs, topology cost accounting, and relative
+  claim projection. This epic retains access attribution, routing policy,
+  placement scoring, decay, and hysteresis semantics. Comparative matrix cells
+  measure those owners and must use the public request/WASM deployment surface
+  for MovieLens product claims.
 - 2026-07-25 — **Scale proof handed to the certification program:** this epic
   continues to own access attribution, policy composition, and affinity
   semantics through the existing runtime-service policy and

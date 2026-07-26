@@ -21,6 +21,10 @@ separate proof axes and neither may stand in for the other.
   topology analyzers.
 - Add scale profiles and report schemas, not a second scheduler or diagnostics
   vocabulary.
+- Own the common run-profile/config/report identity used by both scale
+  certification and comparative-efficiency evidence; consumers extend it
+  without creating parallel hardware, workload, resource, or provenance
+  identities.
 - Qualify every balance claim by feasibility. Infeasible profiles return a
   typed reason and never masquerade as convergence.
 - Compare small worlds with an exact oracle and large worlds with declared lower
@@ -53,6 +57,10 @@ are known.
 
 ## Decision log
 
+- 2026-07-26 — Made `scale-certification-evidence-contract` the shared owner of
+  profile, hardware, topology, workload, resource, convergence, and provenance
+  identity. The comparative-efficiency spec consumes and extends this contract;
+  it owns relative pair validity and claims, not scale certification.
 - 2026-07-25 — Selected independent cardinality and byte ladders,
   feasibility-qualified balance, enforced resource/performance gates, and a
   staged target of at least 200 nodes / 200 TB. Graduated requirements to
