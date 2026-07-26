@@ -3,6 +3,9 @@ import {NodeJoiningCdcSubscriptionAndBackfill} from './node-joining-cdc-subscrip
 import {
   attachRuntimeServiceRebalancerOwner,
 } from './shared/runtime-service-rebalancer-setup.js';
+import {
+  attachSnapshotCatchupDispatcher,
+} from './shared/snapshot-catchup-wiring.js';
 
 const {
   CACHE_HYDRATION_TABLES,
@@ -218,6 +221,10 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       bootstrapReadinessState: this.bootstrapReadinessState,
     });
     await partition.initialize();
+    // S6: durable-rejoin restores bypass the ReplicaHandler factory wrapper,
+    // so the dispatcher seam attaches here for every join-built service.
+    attachSnapshotCatchupDispatcher({service: partition,
+      systemTableCache, messageRouter: this.messageRouter});
     this.partitionServices.set(options.replicaId, partition);
     this.trackJoinPartitionReplica(
       options.replicaId,

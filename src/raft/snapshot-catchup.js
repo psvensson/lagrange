@@ -19,6 +19,7 @@ import {AddressManager} from '../address/address-manager.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {CONFIG_KEY} from '../config/config-key-constants.js';
 import {ENTITY_TYPE} from '../constants/addresses.js';
+import {TABLES} from '../constants/tables.js';
 import {
   selectLatestPublishedMembershipEpoch,
 } from '../control-plane/membership-epoch-contract.js';
@@ -112,6 +113,38 @@ function buildSnapshotCatchupIdentity(options) {
     }),
     membershipEpoch: selectLatestPublishedMembershipEpoch(
       options.publicationRows),
+  });
+}
+
+// Cached control_plane_publications rows from a system-table cache (either
+// cache API surface), or the empty bootstrap view when no cache is wired.
+function readCachedPublicationRows(systemTableCache) {
+  if (typeof systemTableCache?.getAll === CATCHUP_TYPEOF.FUNCTION) {
+    return systemTableCache.getAll(TABLES.CONTROL_PLANE_PUBLICATIONS) || [];
+  }
+  if (typeof systemTableCache?.filter === CATCHUP_TYPEOF.FUNCTION) {
+    return systemTableCache.filter(
+      TABLES.CONTROL_PLANE_PUBLICATIONS, () => true) || [];
+  }
+  return [];
+}
+
+/**
+ * Build the snapshot catch-up identity for one partition service straight
+ * from the cached control-plane publication rows (the S6 production wiring
+ * shape shared by the checkpoint cadence, the dispatcher seam, and the
+ * follower offer router — one author for the identity-from-cache rule).
+ * @param {Object} options identity facts
+ * @param {string} options.partitionId owning partition (raft group) id
+ * @param {string} options.tableName partition entity (state table) name
+ * @param {Object} [options.systemTableCache] cached system tables
+ * @return {Object} frozen identity
+ */
+function buildSnapshotCatchupIdentityFromCache(options) {
+  return buildSnapshotCatchupIdentity({
+    partitionId: options.partitionId,
+    tableName: options.tableName,
+    publicationRows: readCachedPublicationRows(options.systemTableCache),
   });
 }
 
@@ -354,6 +387,7 @@ async function orchestrateSnapshotCatchupInstall(options) {
 
 export {
   buildSnapshotCatchupIdentity,
+  buildSnapshotCatchupIdentityFromCache,
   dispatchSnapshotCatchup,
   listInFlightGenerationIndexes,
   orchestrateSnapshotCatchupInstall,

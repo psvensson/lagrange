@@ -269,6 +269,39 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
       });
     }
     /**
+     * Swap a tracked replica's LIVE service instance (snapshot-install
+     * recreate, S6). DISTINCT from registerExistingReplica, whose
+     * idempotent early-return makes it unusable for a swap: this method
+     * overwrites the localServices entry AND the tracked metadata's service
+     * reference for an already-registered replica, preserving the remaining
+     * tracked fields.
+     * @param {string} replicaId - Replica ID being replaced.
+     * @param {Object} service - Replacement partition service instance.
+     * @return {Object} Updated local replica metadata.
+     */
+    replaceLocalReplicaService(replicaId, service) {
+      this.localServices.set(replicaId, service);
+      const merged = this.setLocalReplica(replicaId, {
+        replicaId,
+        partitionId:
+          service?.partitionId ||
+          this.localReplicas.get(replicaId)?.partitionId ||
+          null,
+        tableName:
+          service?.tableName ||
+          this.localReplicas.get(replicaId)?.tableName ||
+          null,
+        service,
+      });
+      this.logger.info(REPLICA_HANDLER_LOG_MSG.REGISTERED_REPLICA, {
+        replicaId,
+        partitionId: merged.partitionId,
+        tableName: merged.tableName,
+        nodeId: this.nodeId,
+      });
+      return merged;
+    }
+    /**
      * Aggregate pending-request tracker telemetry from local replica services.
      * @return {Object}
      * @private

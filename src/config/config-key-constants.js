@@ -54,6 +54,7 @@ const CONFIG_KEY = Object.freeze({
   RAFT_LEADER_ACTIVATION_NODE_SPACING_MS:
     'raft.leaderActivationNodeSpacingMs',
   RAFT_SNAPSHOT_CLUSTER_ID: 'raft.snapshotClusterId',
+  RAFT_SNAPSHOT_THRESHOLD: 'raft.snapshotThreshold',
 
   MESSAGE_GROUP_REPLICA_COUNT: 'messageGroup.replicaCount',
   MESSAGE_GROUP_DELIVERY_TIMEOUT_MS: 'messageGroup.deliveryTimeoutMs',

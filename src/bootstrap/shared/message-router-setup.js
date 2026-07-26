@@ -27,6 +27,9 @@ import {
   resolveNodeWebSocketAddress,
 } from
   '../../transport/node-address-resolution.js';
+import {
+  createBulkTransferChannelRegistry,
+} from '../../transport/bulk-transfer-channel.js';
 
 const LOCAL_STR_MESSAGEROUTERSETUP = 'MessageRouterSetup';
 const LOCAL_STR_NODEID = 'nodeId';
@@ -148,6 +151,14 @@ class MessageRouterSetup {
     });
     messageRouter.setNodeAddressResolver(
       createNodeWebSocketAddressResolver(),
+    );
+
+    // S6 bulk-channel bootstrap: instantiate the per-node bulk transfer
+    // registry and attach it BEFORE the server starts, so an inbound
+    // `channel: bulk` IDENTIFY is adopted from the first frame instead of
+    // warn-and-closed (the previously dead S3 link).
+    messageRouter.attachBulkChannelRegistry(
+      createBulkTransferChannelRegistry({nodeId}),
     );
 
     // Initialize the router

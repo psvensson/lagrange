@@ -124,6 +124,9 @@ class MessageRouterStatsShutdown {
       routerId: this.routerId,
     });
     this.isShuttingDown = true;
+    // Close the bulk transfer channel lane with the router (S6): adopted and
+    // dialed bulk sockets plus the token-bucket drain timer.
+    this.bulkChannelRegistry?.closeAll();
     for (const [, pending] of this.pendingMessages) {
       clearTimeout(pending.timeout);
       pending.resolve({

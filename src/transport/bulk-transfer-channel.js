@@ -177,20 +177,36 @@ function createBulkTransferConnection(context) {
     inFlightBytes: 0,
   };
   const messageListeners = [];
+  // Consumer-facing close hook (S6 verifier MUST-CHANGE): transfer drivers
+  // have no timeouts, so a silently-consumed ws close would hang both ends
+  // forever. Listeners fire exactly once, after the registry eviction.
+  const closeListeners = [];
+  let closeNotified = false;
   let sendChain = Promise.resolve();
   // Self-reference handed to onClosed so the registry can guard against a
   // STALE socket's async close event evicting a live replacement connection
   // for the same peer (verifier MF-1).
   let connectionSelf = null;
 
+  const notifyClosed = () => {
+    if (closeNotified) {
+      return;
+    }
+    closeNotified = true;
+    for (const listener of [...closeListeners]) {
+      listener();
+    }
+  };
+
   ws.on(TRANSPORT_EVENT.MESSAGE, (data, isBinary) => {
-    for (const listener of messageListeners) {
+    for (const listener of [...messageListeners]) {
       listener(data, isBinary);
     }
   });
   ws.on(TRANSPORT_EVENT.CLOSE, () => {
     state.open = false;
     onClosed(nodeId, connectionSelf);
+    notifyClosed();
   });
   ws.on(TRANSPORT_EVENT.ERROR, (error) => {
     logger.warn(TRANSPORT_EVENT.ERROR, {
@@ -205,6 +221,22 @@ function createBulkTransferConnection(context) {
     isOpen: () => state.open,
     onMessage(listener) {
       messageListeners.push(listener);
+    },
+    // offMessage keeps long-lived connections bounded: a completed
+    // transfer's (or the offer router's handed-off) inbox listener must not
+    // accumulate and buffer frames forever (S6 verifier MUST-CHANGE).
+    offMessage(listener) {
+      const index = messageListeners.indexOf(listener);
+      if (index >= 0) {
+        messageListeners.splice(index, 1);
+      }
+    },
+    onClose(listener) {
+      if (closeNotified || !state.open) {
+        listener();
+        return;
+      }
+      closeListeners.push(listener);
     },
     sendControl(message) {
       if (!state.open) {
@@ -299,6 +331,10 @@ function createBulkTransferChannelRegistry(options = {}) {
       options.createWebSocket :
       (address, wsOptions) => new WebSocket(address, wsOptions);
   const connections = new Map();
+  // Adoption listeners (S6): the follower-side snapshot offer router arms
+  // its first-frame peek here — INBOUND adopted sockets only, never dials
+  // (the dialing side is the transfer initiator, not an offer target).
+  const adoptListeners = [];
 
   const dropConnection = (nodeId, closedConnection) => {
     // A STALE socket's async close event must not evict a live replacement
@@ -330,7 +366,14 @@ function createBulkTransferChannelRegistry(options = {}) {
   return Object.freeze({
     tokenBucket,
     adoptIncomingSocket({nodeId, ws}) {
-      return attach(nodeId, ws);
+      const connection = attach(nodeId, ws);
+      for (const listener of [...adoptListeners]) {
+        listener(connection);
+      }
+      return connection;
+    },
+    onAdopt(listener) {
+      adoptListeners.push(listener);
     },
     async dial(dialOptions) {
       const {nodeId, address, identify, signal} = dialOptions;

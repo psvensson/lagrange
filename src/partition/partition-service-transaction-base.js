@@ -448,6 +448,8 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
       // close) must surface and shed leadership instead of freezing the
       // cluster silently (run-23).
       this.enforceLeaderDurabilityFitness?.(nowMs);
+      // Snapshot checkpoint cadence rides this sweep (S6; gates live there).
+      void this.runSnapshotCadenceTick?.(nowMs);
     }, this.preparedStateHoldSweepIntervalMs);
     this.preparedStateHoldTimer.unref();
   }
