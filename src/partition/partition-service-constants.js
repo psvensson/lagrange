@@ -430,6 +430,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
 });
 
 const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
+  SNAPSHOT_INSTALL_STATE_CONFLICT:
+    'Snapshot install state conflict; boot refused pending diagnosis',
   REQUIRE_PARTITION_ID: 'PartitionService requires partitionId',
   REQUIRE_TABLE_ID: 'PartitionService requires tableId',
   REQUIRE_REPLICA_ID: 'PartitionService requires replicaId',

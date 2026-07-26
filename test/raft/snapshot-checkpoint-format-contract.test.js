@@ -21,6 +21,7 @@ const SEALED_TERM = 7;
 const SEALED_EPOCH = 5;
 const PAYLOAD_BYTES = 4096;
 const VALID_DIGEST = `sha256:${'ab'.repeat(32)}`;
+const SEALED_MAX_HLC = '1750000000000-3-node-a';
 const IDENTITY = Object.freeze({
   clusterId: 'cluster-incarnation-1234',
   raftGroupId: 'sql_transactions-p1',
@@ -37,6 +38,7 @@ function sealedDescriptor(overrides = {}) {
       membershipEpoch: IDENTITY.membershipEpoch,
       lastIncludedIndex: SEALED_INDEX,
       lastIncludedTerm: SEALED_TERM,
+      maxCommittedHlc: SEALED_MAX_HLC,
       payloadKind: RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE,
       payloadVersion: RAFT_CHECKPOINT_PAYLOAD_VERSION[
         RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE],

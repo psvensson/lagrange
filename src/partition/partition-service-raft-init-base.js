@@ -7,7 +7,9 @@ import {
   wirePartitionRaftLifecycleEvents,
 } from './partition-service-raft-lifecycle-wiring.js';
 import {PartitionServiceCoreBase} from './partition-service-core-base.js';
-import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
+import {warmHlcFromDurableWitnesses} from './partition-hlc-warmup.js';
+import {resolvePendingSnapshotInstall} from '../raft/snapshot-install.js';
+import {RAFT_SNAPSHOT_INSTALL_OUTCOME} from '../raft/snapshot-install-constants.js';
 import {
   generateCreateIndexSQL,
 } from '../bootstrap/system-table-schema-sql.js';
@@ -247,26 +249,10 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
    */
   warmHlcFromCommittedLog() {
     try {
-      if (!this.logAdapter ||
-        typeof this.logAdapter.getCommittedIndex !== 'function' ||
-        typeof this.logAdapter.getRange !== 'function') {
-        return;
-      }
-      const committedIndex = this.logAdapter.getCommittedIndex();
-      if (!Number.isFinite(committedIndex) || committedIndex <= 0) {
-        return;
-      }
-      const entries = this.logAdapter.getRange(1, committedIndex);
-      let maxHlc = null;
-      for (const entry of entries) {
-        const witnessed = HLCTimestamp.tryFromString(entry?.command?.timestamp);
-        if (witnessed && (maxHlc === null || witnessed.compare(maxHlc) > 0)) {
-          maxHlc = witnessed;
-        }
-      }
-      if (maxHlc) {
-        this.hlcClock.update(maxHlc);
-      }
+      warmHlcFromDurableWitnesses({
+        logAdapter: this.logAdapter,
+        hlcClock: this.hlcClock,
+      });
     } catch (error) {
       this.logger.warn(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
         partitionId: this.partitionId,
@@ -310,6 +296,20 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_PARTITION_DIR, {
           path: dbDir,
         });
+      }
+    }
+    // Snapshot-install boot boundary: resolve pending install remnants while
+    // NO handle is open; a nonce conflict fails the boot closed.
+    if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
+      const installResolution = resolvePendingSnapshotInstall({
+        replicaDbPath: this.dbPath,
+      });
+      if (installResolution.outcome ===
+          RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT) {
+        throw new Error(
+          `${PARTITION_SERVICE_ERROR_MSG.SNAPSHOT_INSTALL_STATE_CONFLICT}: ` +
+          `${installResolution.detail}`,
+        );
       }
     }
     this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.OPENING_DB, {

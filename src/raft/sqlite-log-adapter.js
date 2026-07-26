@@ -17,6 +17,11 @@ import {
 import {unsupportedRaftCompactionResult} from './compaction-policy.js';
 import {isValidRaftLogIndex} from './log-index.js';
 import {
+  isCompactedIndex,
+  readSnapshotBoundary,
+  VIRGIN_BOUNDARY,
+} from './snapshot-boundary.js';
+import {
   installSQLiteLogAdapterCallbackApi,
   SQLITE_RAFT_STATE_KEY,
   SQLITE_RAFT_STATE_UPSERT_SQL,
@@ -27,7 +32,6 @@ const LOCAL_STR_LEGACY_RAFT_LOG_SCHEMA_DETECTED_MANUAL_M = 'Legacy raft log sche
 const LOCAL_STR_INSERT_OR_REPLACE_INTO_RAFT_LOG_LOG_INDE = 'INSERT OR REPLACE INTO _raft_log (log_index, term, command, timestamp) VALUES (?, ?, ?, ?)';
 const LOCAL_STR_DELETE_FROM_RAFT_LOG_WHERE_LOG_INDEX = 'DELETE FROM _raft_log WHERE log_index >= ?';
 const LOCAL_STR_UPDATE_RAFT_LOG_SET_COMMAND_WHERE_LOG_IN = 'UPDATE _raft_log SET command = ? WHERE log_index = ?';
-const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_1JYKG = 'DELETE FROM _raft_log WHERE log_index > ?';
 const LOCAL_STR_COMMITTED_TRUNCATION_REFUSED =
   'Refused raft log truncation into the committed prefix ' +
@@ -159,6 +163,7 @@ class SQLiteLogAdapter {
       existing,
       normalizedEntry,
       committedIndex,
+      this.getSnapshotBoundary().lastIncludedIndex,
     );
     return {guard, normalizedEntry};
   }
@@ -173,6 +178,9 @@ class SQLiteLogAdapter {
     const {guard, normalizedEntry} = this.resolveEntryWrite(entry);
     if (guard.outcome === COMMITTED_ENTRY_WRITE_OUTCOME.IDEMPOTENT) {
       return guard.entry;
+    }
+    if (guard.outcome === COMMITTED_ENTRY_WRITE_OUTCOME.COMPACTED) {
+      return normalizedEntry;
     }
     this.db.prepare(
       LOCAL_STR_INSERT_OR_REPLACE_INTO_RAFT_LOG_LOG_INDE,
@@ -200,7 +208,10 @@ class SQLiteLogAdapter {
     // CL-042: an empty log's last-log-term is 0 by Raft definition (§5.4.1), not the node's
     // election term — masquerading it lets an empty-log candidate out-rank a voter holding
     // committed entries (Leader-Completeness violation → committed-log divergence). See the
-    // in-memory adapter's getLastEntry for the full rationale.
+    // in-memory adapter's getLastEntry for the full rationale. A COMPACTED-empty log is the
+    // one exception: after a snapshot install the boundary keys are the exact last-log
+    // identity, and answering {0,0} would grant votes to candidates behind the installed
+    // state (quest raft-snapshot-atomic-install). Virgin logs keep the zero.
     if (!this.isOpen()) {
       return {
         index: 0,
@@ -213,9 +224,10 @@ class SQLiteLogAdapter {
     ).get();
 
     if (!row) {
+      const boundary = this.getSnapshotBoundary();
       return {
-        index: 0,
-        term: 0,
+        index: boundary.lastIncludedIndex,
+        term: boundary.lastIncludedTerm,
         committedIndex: this.getCommittedIndex(),
       };
     }
@@ -224,6 +236,20 @@ class SQLiteLogAdapter {
       term: row.term,
       committedIndex: this.getCommittedIndex(),
     };
+  }
+
+  /**
+   * Compacted-log boundary recorded by a snapshot install ({0,0} for a
+   * virgin log). Cached per instance: the boundary only ever changes at the
+   * closed-handle install transition, which no live adapter survives.
+   * @return {{lastIncludedIndex: number, lastIncludedTerm: number}}
+   */
+  getSnapshotBoundary() {
+    if (!this._snapshotBoundaryCache) {
+      this._snapshotBoundaryCache = this.isOpen() ?
+        readSnapshotBoundary(this.db) : VIRGIN_BOUNDARY;
+    }
+    return this._snapshotBoundaryCache;
   }
 
   /**
@@ -306,7 +332,9 @@ class SQLiteLogAdapter {
     const row = this.db.prepare(
       'SELECT 1 FROM _raft_log WHERE log_index = ?',
     ).get(index);
-    return !!row;
+    // A compacted index is known-present lineage (durably applied inside the
+    // installed snapshot) even though its bytes are gone; has(0) stays false.
+    return !!row || isCompactedIndex(index, this.getSnapshotBoundary());
   }
 
   /**
@@ -497,6 +525,7 @@ class SQLiteLogAdapter {
    */
   getLastEntry() {
     // CL-042: an empty log's last-log-term is 0 (§5.4.1), not the node's election term.
+    // Compacted-empty logs answer from the snapshot boundary (see getLastInfo).
     if (!this.isOpen()) {
       return {
         index: 0,
@@ -508,86 +537,18 @@ class SQLiteLogAdapter {
     ).get();
 
     if (!row) {
+      const boundary = this.getSnapshotBoundary();
       return {
-        index: 0,
-        term: 0,
+        index: boundary.lastIncludedIndex,
+        term: boundary.lastIncludedTerm,
       };
     }
 
     return this.readEntryRow(row);
   }
 
-  /**
-   * Get entry info before a given entry.
-   * Required by liferaft for append entries.
-   * Requirements: 12.2
-   * @param {Object} entry - Entry to get before
-   * @return {Object} {index, term, committedIndex}
-   */
-  getEntryInfoBefore(entry) {
-    const prevEntry = this.getEntryBefore(entry);
-    return {
-      index: prevEntry.index,
-      term: prevEntry.term,
-      committedIndex: this.getCommittedIndex(),
-    };
-  }
-
-  /**
-   * Get entry before a given entry.
-   * Required by liferaft for append entries.
-   * Requirements: 12.2
-   * @param {Object} entry - Entry to get before
-   * @return {Object} Previous entry or default
-   */
-  getEntryBefore(entry) {
-    const defaultInfo = {
-      index: 0,
-      term: this.node ? this.node.term : 0,
-    };
-
-    if (!entry || typeof entry.index !== LOCAL_STR_NUMBER || !Number.isFinite(entry.index)) {
-      return defaultInfo;
-    }
-
-    if (entry.index <= 1) {
-      return defaultInfo;
-    }
-
-    if (!this.isOpen()) {
-      return defaultInfo;
-    }
-
-    const row = this.db.prepare(
-      'SELECT log_index, term, command FROM _raft_log ' +
-      'WHERE log_index < ? ORDER BY log_index DESC LIMIT 1',
-    ).get(entry.index);
-
-    if (!row) {
-      return defaultInfo;
-    }
-
-    return this.readEntryRow(row);
-  }
-
-  /**
-   * Get entries after index.
-   * Required by liferaft for replication.
-   * Requirements: 12.2
-   * @param {number} index - Index to get after
-   * @return {Array} Entries after index
-   */
-  getEntriesAfter(index) {
-    if (!this.isOpen()) {
-      return [];
-    }
-    const committedIndex = this.getCommittedIndex();
-    const rows = this.db.prepare(
-      'SELECT log_index, term, command FROM _raft_log WHERE log_index > ? ORDER BY log_index',
-    ).all(index);
-
-    return rows.map((row) => this.readEntryRow(row, committedIndex));
-  }
+  // getEntryInfoBefore / getEntryBefore / getEntriesAfter live in the
+  // callback-api mixin (boundary-aware since raft-snapshot-atomic-install).
 
   /**
    * Remove all entries after index.
@@ -653,7 +614,13 @@ class SQLiteLogAdapter {
 
   safeExclusiveTruncationIndex(index) {
     const committedIndex = this.refreshCommittedIndexCacheFromStore();
-    if (index < committedIndex) {
+    // A truncation aimed at or below the snapshot boundary is a legitimate,
+    // expected consequence of has() answering compacted lineage — clamp it
+    // silently instead of tripping the committed-truncation raft-safety
+    // witness, which stays reserved for genuinely anomalous requests in
+    // (boundary, committedIndex).
+    const boundary = this.getSnapshotBoundary().lastIncludedIndex;
+    if (index < committedIndex && index > boundary) {
       this.recordCommittedTruncationBlock(index, committedIndex);
     }
     return Math.max(index, committedIndex);
@@ -661,7 +628,8 @@ class SQLiteLogAdapter {
 
   safeInclusiveTruncationIndex(index) {
     const committedIndex = this.refreshCommittedIndexCacheFromStore();
-    if (index <= committedIndex) {
+    const boundary = this.getSnapshotBoundary().lastIncludedIndex;
+    if (index <= committedIndex && index > boundary) {
       this.recordCommittedTruncationBlock(index, committedIndex);
     }
     return Math.max(index, committedIndex + 1);

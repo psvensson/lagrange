@@ -19,7 +19,16 @@ import {
   writeAtomicDurable,
 } from '../runtime/oci-host-agent-durable-files.js';
 
+import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
+import {
+  PARTITION_SERVICE_OPERATION,
+} from '../partition/partition-service-constants.js';
+
 import {SQLITE_RAFT_STATE_KEY} from './sqlite-log-adapter-callback-api.js';
+import {readSnapshotBoundary} from './snapshot-boundary.js';
+import {
+  RAFT_SNAPSHOT_BOUNDARY_STATE_KEY,
+} from './snapshot-install-constants.js';
 import {
   RAFT_CHECKPOINT_APPLIED_STATE_KEY,
   RAFT_CHECKPOINT_CREATION_OUTCOME,
@@ -122,9 +131,81 @@ function readLastIncludedTerm(copyDb, lastIncludedIndex) {
     return {found: true, term: EMPTY_LOG_TERM};
   }
   const row = copyDb.prepare(SELECT_LOG_TERM).get(lastIncludedIndex);
-  return row ?
-    {found: true, term: row.term} :
-    {found: false, term: EMPTY_LOG_TERM};
+  if (row) {
+    return {found: true, term: row.term};
+  }
+  // A freshly installed replica's log is compacted-empty at its boundary;
+  // the boundary keys are the exact term source for that index (S2
+  // amendment — without this the replica could never re-checkpoint at its
+  // own boundary).
+  const boundary = readSnapshotBoundary(copyDb);
+  if (boundary.lastIncludedIndex === lastIncludedIndex) {
+    return {found: true, term: boundary.lastIncludedTerm};
+  }
+  return {found: false, term: EMPTY_LOG_TERM};
+}
+
+const NO_COMMITTED_HLC = '0';
+const SELECT_LOG_COMMANDS = 'SELECT command FROM _raft_log ORDER BY log_index';
+const SELECT_LOG_COMMANDS_TO =
+  'SELECT command FROM _raft_log WHERE log_index <= ? ORDER BY log_index';
+
+function parseEntryData(rawCommand) {
+  try {
+    const envelope = JSON.parse(rawCommand);
+    return envelope && typeof envelope.command === 'object' ?
+      envelope.command : null;
+  } catch {
+    return null;
+  }
+}
+
+// Max committed HLC sealed into the descriptor: max over the copy's own log
+// command timestamps AND the copy's prior maxCommittedHlc key, so a
+// checkpoint OF an installed replica never regresses the sealed clock.
+function computeMaxCommittedHlc(copyDb) {
+  let max = null;
+  for (const row of copyDb.prepare(SELECT_LOG_COMMANDS).iterate()) {
+    const data = parseEntryData(row.command);
+    const parsed = data && typeof data.timestamp === 'string' ?
+      HLCTimestamp.tryFromString(data.timestamp) : null;
+    if (parsed && (max === null || parsed.compare(max) > 0)) {
+      max = parsed;
+    }
+  }
+  const priorRow = copyDb.prepare(SELECT_STATE_VALUE).get(
+    RAFT_SNAPSHOT_BOUNDARY_STATE_KEY.MAX_COMMITTED_HLC);
+  const prior = priorRow ? HLCTimestamp.tryFromString(priorRow.value) : null;
+  if (prior && (max === null || prior.compare(max) > 0)) {
+    max = prior;
+  }
+  return max === null ? NO_COMMITTED_HLC : max.toString();
+}
+
+// Fail-closed prepared-2PC gate: a checkpoint cannot carry prepared-but-
+// undecided transactions (they live only in the log), so creation refuses
+// when any session has a PREPARE at or below the boundary without a
+// terminal outcome at or below the boundary. PREPAREs strictly above the
+// boundary are uncommitted and irrelevant.
+function hasPendingPreparedTransactions(copyDb, boundaryIndex) {
+  const pending = new Set();
+  for (const row of copyDb.prepare(SELECT_LOG_COMMANDS_TO)
+    .iterate(boundaryIndex)) {
+    const data = parseEntryData(row.command);
+    if (!data || typeof data.sessionId !== 'string' || !data.sessionId) {
+      continue;
+    }
+    if (data.type === PARTITION_SERVICE_OPERATION.PREPARE_TRANSACTION) {
+      pending.add(data.sessionId);
+    } else if (
+      data.type === PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT ||
+      data.type === PARTITION_SERVICE_OPERATION.COMMIT ||
+      data.type === PARTITION_SERVICE_OPERATION.ROLLBACK
+    ) {
+      pending.delete(data.sessionId);
+    }
+  }
+  return pending.size > 0;
 }
 
 function scrubCopy(copyDb) {
@@ -182,6 +263,7 @@ async function createSqliteStateMachineCheckpoint(options) {
     let watermarks;
     let gate;
     let lastIncluded;
+    let maxCommittedHlc = NO_COMMITTED_HLC;
     try {
       watermarks = readCopyWatermarks(copyDb);
       gate = evaluateWatermarkGate(watermarks);
@@ -190,7 +272,13 @@ async function createSqliteStateMachineCheckpoint(options) {
         if (!lastIncluded.found) {
           gate = creationResult(
             CREATION.APPLY_WATERMARK_DIVERGENCE, ['missing_log_entry']);
+        } else if (
+          hasPendingPreparedTransactions(copyDb, watermarks.committedIndex)
+        ) {
+          gate = creationResult(
+            CREATION.PREPARED_TRANSACTIONS_PENDING, ['prepared_undecided']);
         } else {
+          maxCommittedHlc = computeMaxCommittedHlc(copyDb);
           scrubCopy(copyDb);
         }
       }
@@ -212,6 +300,7 @@ async function createSqliteStateMachineCheckpoint(options) {
       membershipEpoch: identity.membershipEpoch,
       lastIncludedIndex: watermarks.committedIndex,
       lastIncludedTerm: lastIncluded.term,
+      maxCommittedHlc,
       payloadKind: RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE,
       payloadVersion: RAFT_CHECKPOINT_PAYLOAD_VERSION[
         RAFT_CHECKPOINT_PAYLOAD_KIND.SQLITE_STATE_MACHINE_IMAGE],

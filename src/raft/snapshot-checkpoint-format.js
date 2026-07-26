@@ -59,6 +59,7 @@ function buildCheckpointDescriptor(facts) {
     membershipEpoch: facts.membershipEpoch,
     lastIncludedIndex: facts.lastIncludedIndex,
     lastIncludedTerm: facts.lastIncludedTerm,
+    maxCommittedHlc: facts.maxCommittedHlc,
     payloadKind: facts.payloadKind,
     payloadVersion: facts.payloadVersion,
     payloadByteLength: facts.payloadByteLength,
@@ -94,6 +95,10 @@ const DESCRIPTOR_FIELD_RULES = Object.freeze([
   Object.freeze({
     field: 'lastIncludedTerm',
     holds: (d) => isNonNegativeInteger(d.lastIncludedTerm),
+  }),
+  Object.freeze({
+    field: 'maxCommittedHlc',
+    holds: (d) => isNonEmptyString(d.maxCommittedHlc),
   }),
   Object.freeze({
     field: 'payloadByteLength',

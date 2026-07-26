@@ -9,6 +9,7 @@ const RAFT_COMMITTED_ENTRY_CONFLICT_CODE =
 const COMMITTED_ENTRY_WRITE_OUTCOME = Object.freeze({
   WRITE: 'write',
   IDEMPOTENT: 'idempotent',
+  COMPACTED: 'compacted',
 });
 
 class RaftCommittedEntryConflictError extends Error {
@@ -31,7 +32,9 @@ function committedEntryIdentityMatches(existing, incoming) {
     isDeepStrictEqual(existing?.command, incoming?.command);
 }
 
-function guardCommittedEntryWrite(existing, incoming, committedIndex) {
+function guardCommittedEntryWrite(
+  existing, incoming, committedIndex, lastIncludedIndex = 0,
+) {
   if (!Number.isFinite(incoming?.index) ||
     !Number.isFinite(committedIndex) ||
     incoming.index > committedIndex) {
@@ -41,6 +44,15 @@ function guardCommittedEntryWrite(existing, incoming, committedIndex) {
       outcome: COMMITTED_ENTRY_WRITE_OUTCOME.IDEMPOTENT,
       entry: existing,
     };
+  } else if (!existing &&
+    Number.isFinite(lastIncludedIndex) &&
+    incoming.index <= lastIncludedIndex) {
+    // Compacted by a snapshot install: the entry's effects are durably
+    // inside the installed state-machine image, its bytes are legitimately
+    // gone. Accepting as an idempotent no-op is the Raft-correct answer; a
+    // MISSING entry above the boundary stays a conflict (that is real
+    // committed-history loss).
+    return {outcome: COMMITTED_ENTRY_WRITE_OUTCOME.COMPACTED};
   }
   throw new RaftCommittedEntryConflictError(existing, incoming, committedIndex);
 }

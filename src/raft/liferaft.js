@@ -141,6 +141,23 @@ async function validateCommittedPrevLogIdentity(raft, packet) {
     return;
   }
   const existing = await raft.log.get(lastIndex);
+  // Compacted-boundary awareness (raft-snapshot-atomic-install): below or at
+  // the snapshot boundary the entry bytes are legitimately gone. Exactly AT
+  // the boundary the term is still verifiable against the boundary keys —
+  // a mismatch there is a genuine identity conflict, not compaction.
+  const boundary = typeof raft.log.getSnapshotBoundary === LOCAL_STR_FUNCTION ?
+    raft.log.getSnapshotBoundary() : null;
+  const lastIncludedIndex = boundary ? boundary.lastIncludedIndex : 0;
+  if (!existing && boundary &&
+      lastIndex === boundary.lastIncludedIndex &&
+      packet?.last?.term !== boundary.lastIncludedTerm) {
+    guardCommittedEntryWrite(
+      existing,
+      {index: lastIndex, term: packet?.last?.term, command: null},
+      committedIndex,
+      NUMERIC_ZERO,
+    );
+  }
   guardCommittedEntryWrite(
     existing,
     {
@@ -149,6 +166,7 @@ async function validateCommittedPrevLogIdentity(raft, packet) {
       command: existing?.command,
     },
     committedIndex,
+    lastIncludedIndex,
   );
 }
 

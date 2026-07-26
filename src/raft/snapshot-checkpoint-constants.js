@@ -61,6 +61,7 @@ const RAFT_CHECKPOINT_CREATION_OUTCOME = Object.freeze({
   CREATED: 'created',
   UNSUPPORTED_ADAPTER: 'unsupported_adapter',
   APPLY_WATERMARK_DIVERGENCE: 'apply_watermark_divergence',
+  PREPARED_TRANSACTIONS_PENDING: 'prepared_transactions_pending',
 });
 
 // Typed validation outcomes (R1: partial, corrupt, unsupported, stale, and
@@ -90,6 +91,7 @@ const RAFT_CHECKPOINT_DESCRIPTOR_FIELDS = Object.freeze([
   'membershipEpoch',
   'lastIncludedIndex',
   'lastIncludedTerm',
+  'maxCommittedHlc',
   'payloadKind',
   'payloadVersion',
   'payloadByteLength',

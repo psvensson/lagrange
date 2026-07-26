@@ -198,6 +198,85 @@ const sqliteLogAdapterCallbackMethods = {
       callback,
     );
   },
+
+  /**
+   * Get entry info before a given entry (liferaft append packets).
+   * @param {Object} entry - Entry to get before.
+   * @return {Object} {index, term, committedIndex}
+   */
+  getEntryInfoBefore(entry) {
+    const prevEntry = this.getEntryBefore(entry);
+    return {
+      index: prevEntry.index,
+      term: prevEntry.term,
+      committedIndex: this.getCommittedIndex(),
+    };
+  },
+
+  /**
+   * Get the entry before a given entry. Boundary-aware since
+   * raft-snapshot-atomic-install: when the previous entry is compacted, the
+   * snapshot boundary is the exact prev-log identity — degrading to
+   * {index: 0} would make liferaft SKIP the prev-log consistency check
+   * entirely (packet.last.index === 0 escape), silently disabling it.
+   * @param {Object} entry - Entry to get before.
+   * @return {Object} Previous entry or default.
+   */
+  getEntryBefore(entry) {
+    const defaultInfo = {
+      index: 0,
+      term: this.node ? this.node.term : 0,
+    };
+
+    if (!entry || !Number.isFinite(entry?.index)) {
+      return defaultInfo;
+    }
+
+    if (entry.index <= 1) {
+      return defaultInfo;
+    }
+
+    if (!this.isOpen()) {
+      return defaultInfo;
+    }
+
+    const row = this.db.prepare(
+      'SELECT log_index, term, command FROM _raft_log ' +
+      'WHERE log_index < ? ORDER BY log_index DESC LIMIT 1',
+    ).get(entry.index);
+
+    if (!row) {
+      const boundary = this.getSnapshotBoundary();
+      if (boundary.lastIncludedIndex > 0 &&
+          entry.index > boundary.lastIncludedIndex) {
+        return {
+          index: boundary.lastIncludedIndex,
+          term: boundary.lastIncludedTerm,
+        };
+      }
+      return defaultInfo;
+    }
+
+    return this.readEntryRow(row);
+  },
+
+  /**
+   * Get entries after index (liferaft replication).
+   * @param {number} index - Index to get after.
+   * @return {Array} Entries after index.
+   */
+  getEntriesAfter(index) {
+    if (!this.isOpen()) {
+      return [];
+    }
+    const committedIndex = this.getCommittedIndex();
+    const rows = this.db.prepare(
+      'SELECT log_index, term, command FROM _raft_log ' +
+      'WHERE log_index > ? ORDER BY log_index',
+    ).all(index);
+
+    return rows.map((row) => this.readEntryRow(row, committedIndex));
+  },
 };
 
 /**
