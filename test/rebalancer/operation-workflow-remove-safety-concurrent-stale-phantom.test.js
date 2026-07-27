@@ -22,6 +22,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {WORKFLOW_STEP, NODE_STATE} from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {MOVE_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 const CRITICAL_PARTITION_ID = 'replica_operations-p1';
@@ -122,6 +123,11 @@ async function evaluatePeerRemove(coordinator) {
     partitionId: CRITICAL_PARTITION_ID,
     nodeId: 'node-c',
     replicaId: `${CRITICAL_PARTITION_ID}-r3`,
+    // Same remove class as the CL-044 falsifier: the failed-replica cure
+    // remove, which the priority-surplus placement fence exempts by sealed
+    // design. A bare REMOVE is fenced at creation and never reaches the
+    // concurrent-op gate this falsifier pins.
+    moveReason: MOVE_REASON.REPLICA_FAILED,
   });
   return coordinator.workflowOwner.evaluateRemoveSafety(operation);
 }

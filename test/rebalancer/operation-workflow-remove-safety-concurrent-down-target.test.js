@@ -26,6 +26,7 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {WORKFLOW_STEP, NODE_STATE} from '../../src/constants/index.js';
 import {OperationType} from '../../src/rebalancer/replica-status.js';
+import {MOVE_REASON} from '../../src/rebalancer/rebalancer-constants.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 const CRITICAL_PARTITION_ID = 'replica_operations-p1';
@@ -134,6 +135,13 @@ async function evaluatePeerRemove(coordinator) {
     partitionId: CRITICAL_PARTITION_ID,
     nodeId: 'node-c',
     replicaId: `${CRITICAL_PARTITION_ID}-r3`,
+    // The recovery remove CL-044 protects is the failed-replica cure class
+    // (replica-placement-cure-policy FAILED_REPLICA -> REMOVE with this
+    // reason, threaded via unified-rebalancer-move-execution). The
+    // priority-surplus placement fence exempts exactly that class by sealed
+    // design; a bare REMOVE would model a surplus drain instead and be
+    // fenced at creation, never reaching the gate under test.
+    moveReason: MOVE_REASON.REPLICA_FAILED,
   });
   return coordinator.workflowOwner.evaluateRemoveSafety(operation);
 }
