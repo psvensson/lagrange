@@ -23,11 +23,13 @@ import path from 'node:path';
 
 import {
   loadQuest,
+  projectState,
   readLog,
   questFilePath,
   logFilePath,
   stateFilePath,
 } from './store.js';
+import {STATUS_SOLVED} from './constants.js';
 import {auditQuest, commitGate, checkpointGate} from './audit.js';
 import {analyzeScopePressure} from './scope-pressure.js';
 import {scopeTerminalStatus} from './convergence-guards.js';
@@ -45,6 +47,10 @@ import {
 import {verificationState} from './verification.js';
 import {CONTINUATION_BLOCKED_SCOPE} from './continuation.js';
 import {latestAttemptAdmissionWasOverridden} from './gate.js';
+import {
+  refreshSpecLadderForCommit,
+  specLadderPathFromRef,
+} from './spec-ladder-flip.js';
 
 const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
 const ORACLE_ARTIFACT_DIRECTORY = 'oracle';
@@ -217,9 +223,22 @@ export function buildHandoff(root, quest, options = {}) {
   };
   const artifactScope = questChangeArtifactScope(root, quest);
   const questArtifacts = questArtifactPaths(root, quest.id);
+  // A spec-ladder row flipped by this landing (autoCommitQuest, before this
+  // call) is owned scope the same way the regenerated frontier board is: dirty
+  // exactly when this quest's own landing staled it. Scope inclusion mirrors
+  // the flip's own precondition (terminal landing of a projected-SOLVED
+  // quest) — unlike the always-regenerated board, a dirty tasks.md on a
+  // checkpoint can only be a foreign hand-edit and must not ride the commit.
+  const specLadderPath = !checkpoint &&
+    projectState(quest, log).questStatus === STATUS_SOLVED ?
+    specLadderPathFromRef(quest?.links?.specRef) : null;
   const scope = {
     ...questArtifacts,
-    files: [...questArtifacts.files, ...artifactScope.contentObjects],
+    files: [
+      ...questArtifacts.files,
+      ...artifactScope.contentObjects,
+      ...(specLadderPath ? [specLadderPath] : []),
+    ],
     diffReferenced: artifactScope.diffReferenced,
   };
   const dirtyFiles = options.dirtyFiles || gitDirtyFiles(root);
@@ -235,6 +254,7 @@ export function buildHandoff(root, quest, options = {}) {
     inScope,
     outOfScope,
     summary: quest.statement || quest.id,
+    title: quest.title || null,
     coauthorTrailer: resolveCoauthorTrailer(root),
     verificationPreflight: checkpoint ? checkpointVerificationPreflight(
       root,
@@ -245,21 +265,43 @@ export function buildHandoff(root, quest, options = {}) {
   };
 }
 
+// A terminal subject without a sealed title falls back to the statement's
+// first clause, hard-capped — never the multi-KB statement itself, which made
+// `git log --oneline` unreadable across the whole 2026-07-26 epic window.
+const TERMINAL_SUBJECT_LIMIT = 72;
+const MIN_SUBJECT_SUMMARY_LENGTH = 24;
+const SUBJECT_CLAUSE_BOUNDARY = /[.;] |\s+—\s+/u;
+const SUBJECT_ELLIPSIS = '…';
+
+function terminalSubjectSummary(handoff) {
+  if (handoff.title) return handoff.title;
+  const statement = String(handoff.summary || handoff.questId);
+  const clause = statement.split(SUBJECT_CLAUSE_BOUNDARY)[0].trim();
+  // The fallback budgets for the `<questId>: ` prefix so the whole subject
+  // line stays readable; a sealed title is trusted at its lint-checked length.
+  const budget = Math.max(
+    MIN_SUBJECT_SUMMARY_LENGTH,
+    TERMINAL_SUBJECT_LIMIT - String(handoff.questId).length - 2);
+  if (clause.length <= budget) return clause;
+  return `${clause.slice(0, budget - 1).trimEnd()}${SUBJECT_ELLIPSIS}`;
+}
+
 function commitMessage(handoff) {
   // Checkpoints are squashable, mid-quest saves of one verified attempt; the
   // subject marks them so they are distinguishable from the durable terminal
-  // commit. The quest statement lives in the body: subjects stay one short
-  // line (readable `git log --oneline`) while the checkpoint parser's
-  // `checkpoint(quest): <id>:` prefix match is preserved by the trailing
-  // colon on the checkpoint form.
+  // commit. The quest statement lives in the body on BOTH forms: subjects stay
+  // one short line (readable `git log --oneline`) while the checkpoint
+  // parser's `checkpoint(quest): <id>:` prefix match is preserved by the
+  // trailing colon on the checkpoint form. The terminal body carries the full
+  // sealed statement so it stays greppable in history.
   const subject = handoff.checkpoint ?
     `checkpoint(quest): ${handoff.questId}:` :
-    `${handoff.questId}: ${handoff.summary}`;
+    `${handoff.questId}: ${terminalSubjectSummary(handoff)}`;
   const body = handoff.checkpoint ? [
     handoff.summary,
     ...(handoff.checkpointReason ?
       [`durability-boundary: ${handoff.checkpointReason}`] : []),
-  ] : [];
+  ] : [handoff.summary];
   if (handoff.coauthorTrailer) body.push(handoff.coauthorTrailer);
   return body.length > 0 ? `${subject}\n\n${body.join('\n\n')}` : subject;
 }
@@ -433,6 +475,14 @@ export function autoCommitQuest(root, questId, options = {}) {
   const checkpoint = options.checkpoint === true;
   const quest = loadQuest(root, questId);
   refreshFrontierBoardForCommit(root);
+  // Only a landing of a projected-SOLVED quest flips its spec-ladder row: a
+  // checkpoint is a mid-quest save, and a refused terminal (commit gate not
+  // met) must not stamp SOLVED onto the ladder. The flip runs before
+  // buildHandoff for the same dirty-scope reason as the frontier board.
+  if (!checkpoint &&
+    projectState(quest, readLog(root, questId)).questStatus === STATUS_SOLVED) {
+    refreshSpecLadderForCommit(root, quest);
+  }
   const handoff = buildHandoff(root, quest, {
     checkpoint,
     checkpointReason: options.checkpointReason,

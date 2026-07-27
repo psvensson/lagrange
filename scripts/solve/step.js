@@ -22,6 +22,7 @@ import {pickFrontier} from './scheduler.js';
 import {resolveAttemptTheoryRef, stepTheoryGateProblems} from './theory.js';
 import {engagementWitnessAdvisory} from './engagement-witness.js';
 import {detectUnrecordedEvidence} from './evidence-detection.js';
+import {ingestEvidence} from './evidence.js';
 import {
   SOLVE_DATA_DIR,
   STATE_SUBDIR,
@@ -283,6 +284,59 @@ export function stepAbort(root, questId) {
   return hadPending;
 }
 
+// Auto-ingest fresh frontier evidence. The detector already resolves the
+// exact report path, so blocking the step only to have the operator retype
+// the printed ingest command was a pure round-trip (10 occurrences in the
+// 2026-07-25..27 window, each re-hit in an identical pair seconds apart).
+// Ingesting here is not a silent record: it appends the same evidence and
+// theory-result events the printed command did, and a done:false doneWhen
+// ingest still reopens a solved quest. The gate remains the fallback when the
+// ingest itself refuses (unreadable report, identity mismatch) and when the
+// bound exhausts with detection still firing (e.g. the report is being
+// rewritten under us) — the step must never proceed past evidence it could
+// not record. Bounded by the quest's own frontier-spec count.
+function autoIngestFrontierEvidence(root, quest, log, state) {
+  const maxAutoIngests = quest.frontiers.length;
+  for (let round = 0; round <= maxAutoIngests; round += 1) {
+    const unrecorded = detectUnrecordedEvidence(root, quest.id, {
+      requiresMeasuredHistory: true,
+      kind: 'frontier',
+    });
+    if (!unrecorded) break;
+    if (round === maxAutoIngests) {
+      return {log, state, decision: resolveGateDecision(
+        root,
+        quest,
+        unrecordedEvidenceContinuation(unrecorded),
+        {log, frontier: unrecorded.frontier},
+      )};
+    }
+    try {
+      ingestEvidence(root, {
+        questId: quest.id,
+        frontierId: unrecorded.frontier,
+        evidencePath: unrecorded.evidence,
+        probeScope: unrecorded.probeScope,
+      });
+      process.stdout.write(
+        `auto-ingested fresh evidence: ${unrecorded.evidence} ` +
+        `[${unrecorded.frontier}]\n`);
+      log = readLog(root, quest.id);
+      state = projectState(quest, log);
+    } catch (err) {
+      process.stderr.write(
+        `auto-ingest refused for ${unrecorded.evidence}: ${err.message}\n`);
+      return {log, state, decision: resolveGateDecision(
+        root,
+        quest,
+        unrecordedEvidenceContinuation(unrecorded),
+        {log, frontier: unrecorded.frontier},
+      )};
+    }
+  }
+  return {log, state, decision: null};
+}
+
 function stepBegin(root, quest, options = {}) {
   const ctx = configureContext(root, quest, options);
   ensureSealedGoal(root, quest);
@@ -296,24 +350,17 @@ function stepBegin(root, quest, options = {}) {
     }
   }
 
-  const log = readLog(root, quest.id);
-  const state = projectState(quest, log);
+  let log = readLog(root, quest.id);
+  let state = projectState(quest, log);
   if (state.questStatus === STATUS_SOLVED) {
     return {terminal: 'solved', evidence: state.questEvidence};
   }
 
-  const unrecorded = detectUnrecordedEvidence(root, quest.id, {
-    requiresMeasuredHistory: true,
-    kind: 'frontier',
-  });
-  if (unrecorded) {
-    const decision = resolveGateDecision(
-      root,
-      quest,
-      unrecordedEvidenceContinuation(unrecorded),
-      {log, frontier: unrecorded.frontier},
-    );
-    if (decision) return gateDecisionToStepResult(decision);
+  const ingested = autoIngestFrontierEvidence(root, quest, log, state);
+  if (ingested.decision) return gateDecisionToStepResult(ingested.decision);
+  ({log, state} = ingested);
+  if (state.questStatus === STATUS_SOLVED) {
+    return {terminal: 'solved', evidence: state.questEvidence};
   }
 
   const pick = pickFrontier(quest, state, ctx.scoreFn);
@@ -337,6 +384,7 @@ function stepBegin(root, quest, options = {}) {
   const pending = {
     frontier: pick.def.id,
     rungIndex: pick.state.rungIndex,
+    beganAt: new Date().toISOString(),
     headCommit: resolveStepBaseCommit(root, quest, log, pick.def.id),
     // The persisted before-sample must carry invalidSample. Dropping it made
     // stepCommit reconstruct `metricBefore: null` with `invalidSample: false`,
@@ -390,6 +438,22 @@ function stepCommit(root, quest, options = {}) {
       cleanupWrittenChangeArtifact(autoDiffWrite);
     }
   }
+}
+
+// Descriptive attempt cost for the operator-driven step path. `agentDurationMs`
+// keeps the executor path's key so meta-friction's wasted column reads both;
+// here it measures begin-to-commit wall time, which `durationBasis` makes
+// explicit. Telemetry never gates and never enters integrityViolationId.
+function stepTelemetry(pending, changeInspection) {
+  const beganAtMs = pending.beganAt ? Date.parse(pending.beganAt) : NaN;
+  return {
+    recordedVia: 'step',
+    agentDurationMs: Number.isFinite(beganAtMs) ?
+      Math.max(0, Date.now() - beganAtMs) : null,
+    durationBasis: 'step-begin-to-commit',
+    changeBytes: Buffer.byteLength(String(changeInspection.content || ''), 'utf8'),
+    changedPathCount: (changeInspection.changedPaths || []).length,
+  };
 }
 
 function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
@@ -473,6 +537,7 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     modelNotApplicable: options.modelNotApplicable || null,
     discrimination: options.discrimination || null,
     workspaceBaseCommit: pending.headCommit || null,
+    telemetry: stepTelemetry(pending, changeInspection),
   });
   const questOutcome = recordQuestSolvedIfDone(root, quest, ctx, {
     accepted: outcome.accepted === true,

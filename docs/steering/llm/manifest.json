@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-07-26T14:03:05.841Z",
+  "generatedAt": "2026-07-27T05:51:17.132Z",
   "stats": {
-    "candidateCount": 439,
-    "dedupedRuleCount": 428,
-    "exportedRuleCount": 428,
+    "candidateCount": 441,
+    "dedupedRuleCount": 430,
+    "exportedRuleCount": 430,
     "aliasRuleCount": 4,
-    "masterRuleCount": 424,
-    "emittedMasterRuleCount": 424,
-    "estimatedAllRulesTokens": 18111
+    "masterRuleCount": 426,
+    "emittedMasterRuleCount": 426,
+    "estimatedAllRulesTokens": 18210
   },
   "sources": [
     {
@@ -207,10 +207,10 @@
       "file": "workflow-guidelines/subagents.md",
       "role": "packed",
       "domain": "governance",
-      "ruleCount": 5,
-      "masterRuleCount": 5,
+      "ruleCount": 7,
+      "masterRuleCount": 7,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 5
+      "emittedMasterRuleCount": 7
     },
     {
       "file": "workflow-guidelines/solver-quests.md",
@@ -399,16 +399,16 @@
       "name": "governance",
       "title": "Governance Steering Pack",
       "description": "Load for roadmap and edition-scope checks.",
-      "ruleCount": 147,
-      "estimatedTokens": 7840,
+      "ruleCount": 149,
+      "estimatedTokens": 7943,
       "domains": [
         "governance"
       ],
       "mode": "generated",
       "completeness": "complete",
-      "masterRuleCount": 147,
+      "masterRuleCount": 149,
       "aliasRuleCount": 0,
-      "indexedRuleCount": 147,
+      "indexedRuleCount": 149,
       "sourceFiles": [
         "roadmap.md",
         "agpl-feature-map.md",

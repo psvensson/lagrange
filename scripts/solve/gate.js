@@ -336,16 +336,35 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
     OUTCOME_THEORY_REQUIRED :
     OUTCOME_BLOCKED;
 
-  appendEvent(root, quest.id, {
-    type: EVENT_GATE_DECISION,
-    frontier,
-    rungIndex,
-    disposition,
-    code,
-    outcome,
-    problems,
-    nextCommand,
-  });
+  // An operator re-running the same blocked continuation appends nothing new:
+  // re-report the identical tail block instead of duplicating it (18 of 69
+  // gate-decision events in the 2026-07-25..27 window were exact re-fires).
+  // Scoped to OUTCOME_BLOCKED only — DISPOSITION_EXPLORE events are budget
+  // counters (exploreBudgetRemaining) and deduping them would keep the loop
+  // re-opening the same explore rung forever, un-fixing the convergence bug
+  // the park-resumable downgrade exists to fix. A stale caller log at worst
+  // appends a duplicate, never suppresses a distinct decision.
+  const tail = log[log.length - 1];
+  const duplicateOfTail = outcome === OUTCOME_BLOCKED &&
+    tail && tail.type === EVENT_GATE_DECISION &&
+    tail.outcome === OUTCOME_BLOCKED &&
+    tail.disposition === disposition &&
+    tail.code === code &&
+    tail.frontier === frontier &&
+    (tail.rungIndex ?? null) === (rungIndex ?? null) &&
+    JSON.stringify(tail.problems || []) === JSON.stringify(problems || []);
+  if (!duplicateOfTail) {
+    appendEvent(root, quest.id, {
+      type: EVENT_GATE_DECISION,
+      frontier,
+      rungIndex,
+      disposition,
+      code,
+      outcome,
+      problems,
+      nextCommand,
+    });
+  }
 
   return {disposition, code, outcome, problems, nextCommand, frontier, rungIndex};
 }

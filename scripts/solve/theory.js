@@ -2,6 +2,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
+  EVENT_FINDING,
   EVENT_THEORY_OPTION_DECLARED,
   EVENT_THEORY_RESULT,
   EVENT_THEORY_SELECTED,
@@ -529,13 +530,72 @@ function cmdSystem(root, args) {
   return `recorded system theory ${stamped.theory}`;
 }
 
+// --from-rejection pre-fill. After a verifier rejection the defect is already
+// stated in the finding, so re-authoring the full option form from blank is
+// pure re-typing (25 theory-ceremony events on one quest in the 2026-07-25..27
+// window). Pre-filled values are DEFAULTS only — every explicitly passed flag
+// wins, `--layer` stays operator-authored (that judgment is what the theory
+// gate exists to force), and passing the flag is itself the operator's
+// confirmation that this option answers that rejection.
+const REJECTION_PREFILL_FLAG = 'from-rejection';
+const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
+const REJECTION_CLAIM_EXCERPT = 140;
+
+function latestVerifierRejection(log, ref) {
+  const rejections = log.filter((event) =>
+    event.type === EVENT_FINDING &&
+    event.kind === VERIFIER_REJECTION_FINDING_KIND);
+  const wantsLatest = ref === true || normalizeText(ref) === '' ||
+    normalizeText(ref) === 'latest';
+  if (wantsLatest) return rejections[rejections.length - 1] || null;
+  const needle = normalizeText(ref);
+  return [...rejections].reverse().find((event) =>
+    String(event.ts) === needle || String(event.evidence) === needle ||
+    String(event.claim || '').includes(needle)) || null;
+}
+
+function rejectionPrefill(finding) {
+  const claim = normalizeText(finding.claim) ||
+    'the recorded verifier rejection';
+  const excerpt = claim.length > REJECTION_CLAIM_EXCERPT ?
+    `${claim.slice(0, REJECTION_CLAIM_EXCERPT)}…` : claim;
+  return {
+    'mechanism': `verifier rejection: ${excerpt}`,
+    'intervention':
+      `correct the candidate so the rejecting check passes: ${excerpt}`,
+    'expected-movement':
+      'the corrected candidate is re-verified and approved on the same frontier',
+    'negative-result':
+      'the rejection cause was misdiagnosed; re-read the finding before ' +
+      'another attempt',
+    'discriminator':
+      'the check named in the rejection passes on the corrected candidate',
+    'promotion':
+      'an independent verifier approves the corrected candidate fingerprint',
+    'rejection': 'the same finding fires again on the corrected candidate',
+  };
+}
+
+function applyRejectionPrefill(args, log) {
+  if (args[REJECTION_PREFILL_FLAG] === undefined) return;
+  const finding = latestVerifierRejection(log, args[REJECTION_PREFILL_FLAG]);
+  if (!finding) {
+    throw new Error(
+      'theory: --from-rejection matched no verifier-rejection finding');
+  }
+  for (const [key, value] of Object.entries(rejectionPrefill(finding))) {
+    if (args[key] === undefined) args[key] = value;
+  }
+}
+
 function cmdOption(root, args) {
   const quest = loadQuest(root, requireFlag(args, FLAG_ID));
-  const {state} = currentState(root, quest);
+  const {log, state} = currentState(root, quest);
   const frontier = requireFlag(args, FLAG_FRONTIER);
   if (!quest.frontiers.some((item) => item.id === frontier)) {
     throw new Error(`theory: unknown frontier "${frontier}"`);
   }
+  applyRejectionPrefill(args, log);
   const layer = requireFlag(args, 'layer');
   validateLayer(layer);
   const seed = normalizeText(args.mechanism) || normalizeText(args.intervention) ||

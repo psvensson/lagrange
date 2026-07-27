@@ -47,6 +47,9 @@ import {runParkCommand} from './solve/park.js';
 import {runPortfolioCommand, buildPortfolio, loadAllQuests} from './solve/portfolio.js';
 import {runMetaRatioCommand} from './solve/meta-ratio.js';
 import {runMetaFrictionCommand} from './solve/meta-friction.js';
+import {runCostCommand} from './solve/cost.js';
+import {runAmendCommand} from './solve/amend.js';
+import {runInheritCandidateCommand} from './solve/inherit-candidate.js';
 import {runFrontierCommand, writeFrontier} from './solve/frontier.js';
 import {runOverviewCommand, writeOverview} from './solve/overview.js';
 import {runCheckpointCommand, runHandoffCommand} from './solve/handoff.js';
@@ -996,6 +999,18 @@ function cmdMetaFriction(root, args) {
   process.stdout.write(`${runMetaFrictionCommand(root, {days: args.days})}\n`);
 }
 
+function cmdCost(root, args) {
+  process.stdout.write(`${runCostCommand(root, {days: args.days})}\n`);
+}
+
+function cmdAmend(root, args) {
+  process.stdout.write(`${runAmendCommand(root, args)}\n`);
+}
+
+function cmdInheritCandidate(root, args) {
+  process.stdout.write(`${runInheritCandidateCommand(root, args)}\n`);
+}
+
 // Frontier fuses the closure-ledger active records with the open quests into one
 // boot-orientation screen; like portfolio it is cross-cutting and takes no --id.
 // --write also persists solve/FRONTIER.generated.md (a regenerable board file).
@@ -1177,6 +1192,7 @@ const COMMANDS = {
   'portfolio': cmdPortfolio,
   'meta-ratio': cmdMetaRatio,
   'meta-friction': cmdMetaFriction,
+  'cost': cmdCost,
   'frontier': cmdFrontier,
   'overview': cmdOverview,
   'trace': cmdTrace,
@@ -1201,6 +1217,8 @@ const COMMANDS = {
   'upgrade': cmdUpgrade,
   'reopen': cmdReopen,
   'park': cmdPark,
+  'amend': cmdAmend,
+  'inherit-candidate': cmdInheritCandidate,
 };
 
 function main() {

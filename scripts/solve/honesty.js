@@ -7,6 +7,7 @@
 // Pure functions: filesystem/VCS lookups are injected via `ctx` so they can be unit
 // tested without touching disk.
 
+import {applyAmendments} from './amend.js';
 import {
   CONVERGENCE_GUARDS,
   GRADIENT_REFINEMENT_METRICS,
@@ -153,10 +154,22 @@ function isGradientRefinement(now, sealed) {
 // declaration captured when the quest was first declared. No moving goalposts — except a
 // frontier metric may be refined to a sharper search gradient (see isGradientRefinement),
 // which leaves the sealed closure intact.
-export function validateGoalpostsImmutable(quest, declaredEvent) {
+// `amendments` are recorded quest-amended events (see amend.js): the quest
+// file is compared against sealed ⊕ amendments, so a recorded narrow
+// correction is legal while the same edit without its amendment event still
+// violates. Amendments never touch the doneWhen probe, frontier identity, or
+// metrics — those comparisons always run against the amended projection.
+export function validateGoalpostsImmutable(quest, declaredEvent, amendments = []) {
   if (!declaredEvent || !declaredEvent.sealed) {
     return ['no sealed quest declaration to compare against'];
   }
+  const sealed = amendments.length > 0 ?
+    applyAmendments(declaredEvent.sealed, amendments) : declaredEvent.sealed;
+  const effectiveDeclaration = {...declaredEvent, sealed};
+  return goalpostViolationsAgainst(quest, effectiveDeclaration);
+}
+
+function goalpostViolationsAgainst(quest, declaredEvent) {
   const violations = [];
   if (JSON.stringify(quest.doneWhen) !== JSON.stringify(declaredEvent.sealed.doneWhen)) {
     violations.push('quest.doneWhen changed after declaration');
@@ -184,6 +197,14 @@ export function validateGoalpostsImmutable(quest, declaredEvent) {
     }
     if (JSON.stringify(quest.class) !== JSON.stringify(declaredEvent.sealed.class)) {
       violations.push(LOCAL_STR_OWNED_003);
+    }
+    // Declarations sealed before the title field existed (sealed.title
+    // undefined) are exempt; anything sealed since compares exactly, so the
+    // commit subject a title feeds cannot be edited after declaration.
+    if (declaredEvent.sealed.title !== undefined &&
+      JSON.stringify(quest.title || null) !==
+        JSON.stringify(declaredEvent.sealed.title || null)) {
+      violations.push('quest.title changed after declaration');
     }
     if (JSON.stringify(quest.constraints || []) !==
       JSON.stringify(declaredEvent.sealed.constraints || [])) {

@@ -91,6 +91,7 @@ import {
   baselineAbsentSample,
   METRIC_DIRECTION_LOWER_IS_BETTER,
 } from './honesty.js';
+import {questAmendments} from './amend.js';
 import {
   appendTheoryResultForAttempt,
   resolveAttemptTheoryRef,
@@ -155,6 +156,10 @@ function sealGoal(quest) {
     Object.assign(sealed, {
       authoringContractVersion: quest.authoringContractVersion,
       statement: quest.statement,
+      // The optional short title feeds the terminal commit subject, so it is
+      // sealed with the statement — an unsealed subject would be post-hoc
+      // editable narrative on an immutable result.
+      title: quest.title || null,
       class: quest.class,
       constraints: quest.constraints || [],
       frontierIds: quest.frontiers.map((frontier) => frontier.id),
@@ -806,7 +811,8 @@ export function makeRunContext(options = {}) {
 // so manual steps are held to the same immutability guarantee as the loop.
 export function ensureSealedGoal(root, quest) {
   const declared = ensureDeclared(root, quest);
-  const goalpostViolations = validateGoalpostsImmutable(quest, declared);
+  const goalpostViolations = validateGoalpostsImmutable(
+    quest, declared, questAmendments(readLog(root, quest.id)));
   if (goalpostViolations.length > 0) {
     appendEvent(root, quest.id, {
       type: EVENT_VIOLATION,
@@ -822,7 +828,12 @@ export function ensureSealedGoal(root, quest) {
       resolutionPolicy: INTEGRITY_RESOLUTION_NEW_QUEST,
       violations: goalpostViolations,
     });
-    throw new Error(`goalpost violation: ${goalpostViolations.join('; ')}`);
+    throw new Error(`goalpost violation: ${goalpostViolations.join('; ')}. ` +
+      'If this is a narrow, evidence-backed correction (wrong sealed class, ' +
+      'doneWhen validation-command wording, verifier-demanded statement ' +
+      'strengthening), record it: node scripts/solve.js amend --id ' +
+      `${quest.id} --kind <kind> --evidence <ref>; otherwise park and author ` +
+      'a successor quest.');
   }
   return declared;
 }

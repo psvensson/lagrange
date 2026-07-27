@@ -156,6 +156,7 @@ export function runAttemptCommand(root, args) {
 
   // 2. Run harness command
   console.log(`Running harness command: ${harnessCommand.join(' ')}`);
+  const harnessStartedAtMs = Date.now();
   const spawnResult = spawnSync(harnessCommand[0], harnessCommand.slice(1), {
     cwd: root,
     stdio: 'inherit',
@@ -183,6 +184,13 @@ export function runAttemptCommand(root, args) {
     modelRef: args.modelRef || null,
     modelNotApplicable: args.modelNotApplicable || null,
     workspaceBaseCommit,
+    telemetry: {
+      recordedVia: 'attempt',
+      agentDurationMs: Math.max(0, Date.now() - harnessStartedAtMs),
+      durationBasis: 'harness-command',
+      changeBytes: Buffer.byteLength(String(changeInspection.content || ''), 'utf8'),
+      changedPathCount: (changeInspection.changedPaths || []).length,
+    },
   };
   const outcome = finalizeAttempt(root, quest, ctx, pick, before, attemptResult);
 

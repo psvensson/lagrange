@@ -34,6 +34,8 @@ const LOCAL_STR_OWNED_016 = '\n';
 export const QUEST_AUTHORING_CONTRACT_VERSION = 1;
 
 const LONG_STATEMENT_CHARACTER_LIMIT = 500;
+// Bound on the title alone; the commit subject adds a `<questId>: ` prefix.
+const TITLE_CHARACTER_LIMIT = 72;
 const CONJUNCTION_ADVISORY_THRESHOLD = 3;
 const DEFAULT_STATEMENT = 'Describe the terminal success condition in one line.';
 const ORACLE_PROBE = 'oracle';
@@ -63,6 +65,41 @@ function validConstraint(constraint) {
     !Array.isArray(constraint) && text(constraint.id) && text(constraint.statement));
 }
 
+function pushConstraintErrors(quest, errors) {
+  if (!Array.isArray(quest.constraints)) {
+    errors.push(LOCAL_STR_OWNED_003);
+    return;
+  }
+  const constraintIds = new Set();
+  for (const constraint of quest.constraints) {
+    if (!validConstraint(constraint)) {
+      errors.push(LOCAL_STR_OWNED_004);
+      continue;
+    }
+    if (constraintIds.has(constraint.id.trim())) {
+      errors.push(`constraint id is duplicated: ${constraint.id.trim()}`);
+    }
+    constraintIds.add(constraint.id.trim());
+  }
+}
+
+function pushFrontierErrors(quest, errors) {
+  if (!Array.isArray(quest.frontiers) || quest.frontiers.length === 0) {
+    errors.push(LOCAL_STR_OWNED_006);
+    return;
+  }
+  const ids = new Set();
+  for (const frontier of quest.frontiers) {
+    const id = text(frontier?.id);
+    if (!id) errors.push(LOCAL_STR_OWNED_007);
+    if (ids.has(id)) errors.push(`frontier id is duplicated: ${id}`);
+    ids.add(id);
+    if (!validProbe(frontier?.metric)) {
+      errors.push(`frontier ${id || LOCAL_STR_OWNED_008} requires a metric probe`);
+    }
+  }
+}
+
 function authoringErrors(quest) {
   const errors = [];
   if (quest.authoringContractVersion !== QUEST_AUTHORING_CONTRACT_VERSION) {
@@ -76,38 +113,17 @@ function authoringErrors(quest) {
   if (!QUEST_CLASSES.includes(quest.class)) {
     errors.push(`class must be one of ${QUEST_CLASSES.join(LOCAL_STR_OWNED_002)}`);
   }
-  if (!Array.isArray(quest.constraints)) {
-    errors.push(LOCAL_STR_OWNED_003);
-  } else {
-    const constraintIds = new Set();
-    for (const constraint of quest.constraints) {
-      if (!validConstraint(constraint)) {
-        errors.push(LOCAL_STR_OWNED_004);
-        continue;
-      }
-      if (constraintIds.has(constraint.id.trim())) {
-        errors.push(`constraint id is duplicated: ${constraint.id.trim()}`);
-      }
-      constraintIds.add(constraint.id.trim());
-    }
+  if (quest.title !== undefined && quest.title !== null &&
+    (typeof quest.title !== 'string' ||
+      quest.title.length > TITLE_CHARACTER_LIMIT)) {
+    errors.push('title must be a string of at most ' +
+      `${TITLE_CHARACTER_LIMIT} characters (it becomes the terminal commit subject)`);
   }
+  pushConstraintErrors(quest, errors);
   if (!validProbe(quest.doneWhen)) {
     errors.push(LOCAL_STR_OWNED_005);
   }
-  if (!Array.isArray(quest.frontiers) || quest.frontiers.length === 0) {
-    errors.push(LOCAL_STR_OWNED_006);
-  } else {
-    const ids = new Set();
-    for (const frontier of quest.frontiers) {
-      const id = text(frontier?.id);
-      if (!id) errors.push(LOCAL_STR_OWNED_007);
-      if (ids.has(id)) errors.push(`frontier id is duplicated: ${id}`);
-      ids.add(id);
-      if (!validProbe(frontier?.metric)) {
-        errors.push(`frontier ${id || LOCAL_STR_OWNED_008} requires a metric probe`);
-      }
-    }
-  }
+  pushFrontierErrors(quest, errors);
   if (QUEST_CLASSES.includes(quest.class) &&
     questClass(quest) === QUEST_CLASS_PRODUCT) {
     if (!recognizedPlanningLink(quest.links)) {

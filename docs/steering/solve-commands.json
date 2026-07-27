@@ -36,6 +36,10 @@
     "summary": "Ranks recorded workflow friction over a bounded window: violation classes (grouped by the set that fires together), charged guard-override codes, and parks with their reasons. Starts a retrospective from what actually fired rather than from recollection; complements meta-ratio's overhead trend line.",
     "usage": "node scripts/solve.js meta-friction [--days <n>]"
   },
+  "cost": {
+    "summary": "Per-quest attempt-cost rollup over a bounded window: attempts, verifier rejection rounds, violations, telemetry coverage and measured duration, wall span, and respin-chain membership (parentQuest link, else a flagged naming heuristic). The table a retrospective reads instead of hand-mining event logs; complements meta-friction's what-fired ranking.",
+    "usage": "node scripts/solve.js cost [--days <n>]"
+  },
   "portfolio": {
     "summary": "Cross-Quest portfolio view and meta-ratio over all quests.",
     "usage": "node scripts/solve.js portfolio"
@@ -135,5 +139,13 @@
   "park": {
     "summary": "Operator-decision terminal: park an open frontier as `exhausted` with provenance `operator` when an altitude reflection concluded PARK/EXHAUST-AND-PIVOT (frame refuted or sealed symptom absent on HEAD). Requires a prior `reflect --altitude` on the quest and a falsifiable --reason; appends the quest-level EXHAUSTED terminal when every frontier is parked exhausted.",
     "usage": "node scripts/solve.js park --id <id> [--frontier <f>] --reason \"<why no honest remaining move exists>\""
+  },
+  "amend": {
+    "summary": "Record a narrow, evidence-linked amendment to a sealed quest (class-correction, oracle-command-correction of doneWhen args, or append-only statement-strengthen). Capped at 2 per quest lifetime; the doneWhen probe, frontier identity, and metrics stay immutable, and honesty checks compare the quest file against sealed + amendments. The alternative to a full park-and-redeclare respin for corrections the verifier or lint already evidenced.",
+    "usage": "node scripts/solve.js amend --id <id> --kind class-correction|oracle-command-correction|statement-strengthen [--class <c>] [--statement \"<strengthened>\"] [--done-when-args '<json>'] --evidence <finding ref>"
+  },
+  "inherit-candidate": {
+    "summary": "Re-record a parked parent quest's VERIFIED landing candidate into a declared successor: copies the candidate attempts (provenance-marked, artifacts re-homed to the child's change dir) and rebuilds the candidate approval against the child's own projection. The approval lands only when the child's content-addressed fingerprint equals the parent-approved one, so any divergence falls back to a fresh verification round.",
+    "usage": "node scripts/solve.js inherit-candidate --id <child> --from <parent>"
   }
 }

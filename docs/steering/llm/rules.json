@@ -199,10 +199,10 @@
       "file": "workflow-guidelines/subagents.md",
       "role": "packed",
       "domain": "governance",
-      "ruleCount": 5,
-      "masterRuleCount": 5,
+      "ruleCount": 7,
+      "masterRuleCount": 7,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 5
+      "emittedMasterRuleCount": 7
     },
     {
       "file": "workflow-guidelines/solver-quests.md",
@@ -305,13 +305,13 @@
     }
   ],
   "stats": {
-    "candidateCount": 439,
-    "dedupedRuleCount": 428,
-    "exportedRuleCount": 428,
+    "candidateCount": 441,
+    "dedupedRuleCount": 430,
+    "exportedRuleCount": 430,
     "aliasRuleCount": 4,
-    "masterRuleCount": 424,
-    "emittedMasterRuleCount": 424,
-    "estimatedAllRulesTokens": 18111
+    "masterRuleCount": 426,
+    "emittedMasterRuleCount": 426,
+    "estimatedAllRulesTokens": 18210
   },
   "rules": [
     {
@@ -3914,6 +3914,22 @@
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
+      "rule": "Verification rounds MUST be category-complete: instruct the verifier to enumerate every finding it can reach and group findings by category, never stopping at the first defect.",
+      "score": 211,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 68,
+          "section": "Quest Delegation > Verification Templates",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0015",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
       "rule": "The Solver never trusts an agent's claim that work succeeded.",
       "score": 211,
       "sources": [
@@ -3926,7 +3942,7 @@
       ]
     },
     {
-      "id": "GOV-0015",
+      "id": "GOV-0016",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4026,7 +4042,7 @@
       ]
     },
     {
-      "id": "GOV-0016",
+      "id": "GOV-0017",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4042,7 +4058,7 @@
       ]
     },
     {
-      "id": "GOV-0017",
+      "id": "GOV-0018",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4060,7 +4076,7 @@
       ]
     },
     {
-      "id": "GOV-0018",
+      "id": "GOV-0019",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4078,7 +4094,7 @@
       ]
     },
     {
-      "id": "GOV-0019",
+      "id": "GOV-0020",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4094,7 +4110,7 @@
       ]
     },
     {
-      "id": "GOV-0020",
+      "id": "GOV-0021",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -4466,7 +4482,7 @@
       ]
     },
     {
-      "id": "GOV-0021",
+      "id": "GOV-0022",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4482,7 +4498,7 @@
       ]
     },
     {
-      "id": "GOV-0022",
+      "id": "GOV-0023",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4498,7 +4514,7 @@
       ]
     },
     {
-      "id": "GOV-0023",
+      "id": "GOV-0024",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4514,7 +4530,7 @@
       ]
     },
     {
-      "id": "GOV-0024",
+      "id": "GOV-0025",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4530,7 +4546,7 @@
       ]
     },
     {
-      "id": "GOV-0025",
+      "id": "GOV-0026",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4548,7 +4564,7 @@
       ]
     },
     {
-      "id": "GOV-0026",
+      "id": "GOV-0027",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4564,7 +4580,7 @@
       ]
     },
     {
-      "id": "GOV-0027",
+      "id": "GOV-0028",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4580,7 +4596,7 @@
       ]
     },
     {
-      "id": "GOV-0028",
+      "id": "GOV-0029",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4596,7 +4612,7 @@
       ]
     },
     {
-      "id": "GOV-0029",
+      "id": "GOV-0030",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4612,7 +4628,7 @@
       ]
     },
     {
-      "id": "GOV-0030",
+      "id": "GOV-0031",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4630,7 +4646,7 @@
       ]
     },
     {
-      "id": "GOV-0031",
+      "id": "GOV-0032",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4646,7 +4662,7 @@
       ]
     },
     {
-      "id": "GOV-0032",
+      "id": "GOV-0033",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4662,7 +4678,7 @@
       ]
     },
     {
-      "id": "GOV-0033",
+      "id": "GOV-0034",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4678,7 +4694,7 @@
       ]
     },
     {
-      "id": "GOV-0034",
+      "id": "GOV-0035",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4694,7 +4710,7 @@
       ]
     },
     {
-      "id": "GOV-0035",
+      "id": "GOV-0036",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4710,7 +4726,7 @@
       ]
     },
     {
-      "id": "GOV-0036",
+      "id": "GOV-0037",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4726,7 +4742,7 @@
       ]
     },
     {
-      "id": "GOV-0037",
+      "id": "GOV-0038",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -4742,7 +4758,7 @@
       ]
     },
     {
-      "id": "GOV-0038",
+      "id": "GOV-0039",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4760,7 +4776,7 @@
       ]
     },
     {
-      "id": "GOV-0039",
+      "id": "GOV-0040",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4776,7 +4792,7 @@
       ]
     },
     {
-      "id": "GOV-0040",
+      "id": "GOV-0041",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4794,7 +4810,7 @@
       ]
     },
     {
-      "id": "GOV-0041",
+      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4812,7 +4828,7 @@
       ]
     },
     {
-      "id": "GOV-0042",
+      "id": "GOV-0043",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4828,7 +4844,7 @@
       ]
     },
     {
-      "id": "GOV-0043",
+      "id": "GOV-0044",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4844,7 +4860,7 @@
       ]
     },
     {
-      "id": "GOV-0044",
+      "id": "GOV-0045",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4876,7 +4892,7 @@
       ]
     },
     {
-      "id": "GOV-0045",
+      "id": "GOV-0046",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4894,7 +4910,7 @@
       ]
     },
     {
-      "id": "GOV-0046",
+      "id": "GOV-0047",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4910,7 +4926,7 @@
       ]
     },
     {
-      "id": "GOV-0047",
+      "id": "GOV-0048",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4926,7 +4942,7 @@
       ]
     },
     {
-      "id": "GOV-0048",
+      "id": "GOV-0049",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4942,7 +4958,7 @@
       ]
     },
     {
-      "id": "GOV-0049",
+      "id": "GOV-0050",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4958,7 +4974,7 @@
       ]
     },
     {
-      "id": "GOV-0050",
+      "id": "GOV-0051",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -4974,7 +4990,7 @@
       ]
     },
     {
-      "id": "GOV-0051",
+      "id": "GOV-0052",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -4992,7 +5008,7 @@
       ]
     },
     {
-      "id": "GOV-0052",
+      "id": "GOV-0053",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5008,7 +5024,7 @@
       ]
     },
     {
-      "id": "GOV-0053",
+      "id": "GOV-0054",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5024,7 +5040,7 @@
       ]
     },
     {
-      "id": "GOV-0054",
+      "id": "GOV-0055",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -5043,7 +5059,7 @@
       ]
     },
     {
-      "id": "GOV-0055",
+      "id": "GOV-0056",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -5061,7 +5077,7 @@
       ]
     },
     {
-      "id": "GOV-0056",
+      "id": "GOV-0057",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -5079,7 +5095,7 @@
       ]
     },
     {
-      "id": "GOV-0057",
+      "id": "GOV-0058",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5095,7 +5111,7 @@
       ]
     },
     {
-      "id": "GOV-0058",
+      "id": "GOV-0059",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5161,7 +5177,7 @@
       ]
     },
     {
-      "id": "GOV-0059",
+      "id": "GOV-0060",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5177,7 +5193,7 @@
       ]
     },
     {
-      "id": "GOV-0060",
+      "id": "GOV-0061",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5193,7 +5209,7 @@
       ]
     },
     {
-      "id": "GOV-0061",
+      "id": "GOV-0062",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5209,7 +5225,7 @@
       ]
     },
     {
-      "id": "GOV-0062",
+      "id": "GOV-0063",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5225,7 +5241,7 @@
       ]
     },
     {
-      "id": "GOV-0063",
+      "id": "GOV-0064",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5241,7 +5257,7 @@
       ]
     },
     {
-      "id": "GOV-0064",
+      "id": "GOV-0065",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5250,14 +5266,14 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1220,
+          "line": 1229,
           "section": "Quest Workflow > Ledger Consistency",
           "role": "packed"
         }
       ]
     },
     {
-      "id": "GOV-0065",
+      "id": "GOV-0066",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5266,7 +5282,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1221,
+          "line": 1230,
           "section": "Quest Workflow > Ledger Consistency",
           "role": "packed"
         }
@@ -5307,7 +5323,7 @@
       ]
     },
     {
-      "id": "GOV-0066",
+      "id": "GOV-0067",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5537,7 +5553,7 @@
       ]
     },
     {
-      "id": "GOV-0067",
+      "id": "GOV-0068",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5553,7 +5569,7 @@
       ]
     },
     {
-      "id": "GOV-0068",
+      "id": "GOV-0069",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5571,7 +5587,7 @@
       ]
     },
     {
-      "id": "GOV-0069",
+      "id": "GOV-0070",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5587,7 +5603,7 @@
       ]
     },
     {
-      "id": "GOV-0070",
+      "id": "GOV-0071",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5643,7 +5659,7 @@
       ]
     },
     {
-      "id": "GOV-0071",
+      "id": "GOV-0072",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5709,7 +5725,7 @@
       ]
     },
     {
-      "id": "GOV-0072",
+      "id": "GOV-0073",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -5727,7 +5743,7 @@
       ]
     },
     {
-      "id": "GOV-0073",
+      "id": "GOV-0074",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5743,7 +5759,7 @@
       ]
     },
     {
-      "id": "GOV-0074",
+      "id": "GOV-0075",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -5775,7 +5791,7 @@
       ]
     },
     {
-      "id": "GOV-0075",
+      "id": "GOV-0076",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5791,7 +5807,7 @@
       ]
     },
     {
-      "id": "GOV-0076",
+      "id": "GOV-0077",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5807,7 +5823,7 @@
       ]
     },
     {
-      "id": "GOV-0077",
+      "id": "GOV-0078",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -5825,7 +5841,7 @@
       ]
     },
     {
-      "id": "GOV-0078",
+      "id": "GOV-0079",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5841,7 +5857,7 @@
       ]
     },
     {
-      "id": "GOV-0079",
+      "id": "GOV-0080",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5857,7 +5873,7 @@
       ]
     },
     {
-      "id": "GOV-0080",
+      "id": "GOV-0081",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5873,7 +5889,7 @@
       ]
     },
     {
-      "id": "GOV-0081",
+      "id": "GOV-0082",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5889,7 +5905,7 @@
       ]
     },
     {
-      "id": "GOV-0082",
+      "id": "GOV-0083",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -5983,7 +5999,7 @@
       ]
     },
     {
-      "id": "GOV-0083",
+      "id": "GOV-0084",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -5999,7 +6015,7 @@
       ]
     },
     {
-      "id": "GOV-0084",
+      "id": "GOV-0085",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -6031,7 +6047,7 @@
       ]
     },
     {
-      "id": "GOV-0085",
+      "id": "GOV-0086",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -6047,7 +6063,7 @@
       ]
     },
     {
-      "id": "GOV-0086",
+      "id": "GOV-0087",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6063,7 +6079,7 @@
       ]
     },
     {
-      "id": "GOV-0087",
+      "id": "GOV-0088",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -6082,7 +6098,7 @@
       ]
     },
     {
-      "id": "GOV-0088",
+      "id": "GOV-0089",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6098,7 +6114,7 @@
       ]
     },
     {
-      "id": "GOV-0089",
+      "id": "GOV-0090",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -6116,7 +6132,7 @@
       ]
     },
     {
-      "id": "GOV-0090",
+      "id": "GOV-0091",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6132,7 +6148,7 @@
       ]
     },
     {
-      "id": "GOV-0091",
+      "id": "GOV-0092",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6148,7 +6164,7 @@
       ]
     },
     {
-      "id": "GOV-0092",
+      "id": "GOV-0093",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6164,7 +6180,7 @@
       ]
     },
     {
-      "id": "GOV-0093",
+      "id": "GOV-0094",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6180,7 +6196,7 @@
       ]
     },
     {
-      "id": "GOV-0094",
+      "id": "GOV-0095",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6298,7 +6314,7 @@
       ]
     },
     {
-      "id": "GOV-0095",
+      "id": "GOV-0096",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6332,7 +6348,7 @@
       ]
     },
     {
-      "id": "GOV-0096",
+      "id": "GOV-0097",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6348,7 +6364,7 @@
       ]
     },
     {
-      "id": "GOV-0097",
+      "id": "GOV-0098",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6401,7 +6417,7 @@
       ]
     },
     {
-      "id": "GOV-0098",
+      "id": "GOV-0099",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -6417,7 +6433,7 @@
       ]
     },
     {
-      "id": "GOV-0099",
+      "id": "GOV-0100",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -6433,7 +6449,7 @@
       ]
     },
     {
-      "id": "GOV-0100",
+      "id": "GOV-0101",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -6449,7 +6465,7 @@
       ]
     },
     {
-      "id": "GOV-0101",
+      "id": "GOV-0102",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -6484,7 +6500,7 @@
       ]
     },
     {
-      "id": "GOV-0102",
+      "id": "GOV-0103",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -6500,7 +6516,7 @@
       ]
     },
     {
-      "id": "GOV-0103",
+      "id": "GOV-0104",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -6516,7 +6532,7 @@
       ]
     },
     {
-      "id": "GOV-0104",
+      "id": "GOV-0105",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -6532,7 +6548,7 @@
       ]
     },
     {
-      "id": "GOV-0105",
+      "id": "GOV-0106",
       "domain": "governance",
       "strength": "must_not",
       "tags": [
@@ -6550,7 +6566,7 @@
       ]
     },
     {
-      "id": "GOV-0106",
+      "id": "GOV-0107",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -6680,7 +6696,7 @@
       ]
     },
     {
-      "id": "GOV-0107",
+      "id": "GOV-0108",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6696,7 +6712,7 @@
       ]
     },
     {
-      "id": "GOV-0108",
+      "id": "GOV-0109",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6712,7 +6728,7 @@
       ]
     },
     {
-      "id": "GOV-0109",
+      "id": "GOV-0110",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -6728,7 +6744,7 @@
       ]
     },
     {
-      "id": "GOV-0110",
+      "id": "GOV-0111",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -6746,7 +6762,7 @@
       ]
     },
     {
-      "id": "GOV-0111",
+      "id": "GOV-0112",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -6762,7 +6778,7 @@
       ]
     },
     {
-      "id": "GOV-0112",
+      "id": "GOV-0113",
       "domain": "governance",
       "strength": "must_not",
       "tags": [],
@@ -6813,7 +6829,7 @@
       ]
     },
     {
-      "id": "GOV-0113",
+      "id": "GOV-0114",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -6929,7 +6945,7 @@
       ]
     },
     {
-      "id": "GOV-0114",
+      "id": "GOV-0115",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -6945,7 +6961,7 @@
       ]
     },
     {
-      "id": "GOV-0115",
+      "id": "GOV-0116",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -6963,7 +6979,7 @@
       ]
     },
     {
-      "id": "GOV-0116",
+      "id": "GOV-0117",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -6981,7 +6997,7 @@
       ]
     },
     {
-      "id": "GOV-0117",
+      "id": "GOV-0118",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -6997,7 +7013,7 @@
       ]
     },
     {
-      "id": "GOV-0118",
+      "id": "GOV-0119",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -7015,7 +7031,7 @@
       ]
     },
     {
-      "id": "GOV-0119",
+      "id": "GOV-0120",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -7031,7 +7047,7 @@
       ]
     },
     {
-      "id": "GOV-0120",
+      "id": "GOV-0121",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -7047,7 +7063,7 @@
       ]
     },
     {
-      "id": "GOV-0121",
+      "id": "GOV-0122",
       "domain": "governance",
       "strength": "must",
       "tags": [
@@ -7065,7 +7081,7 @@
       ]
     },
     {
-      "id": "GOV-0122",
+      "id": "GOV-0123",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -7081,7 +7097,7 @@
       ]
     },
     {
-      "id": "GOV-0123",
+      "id": "GOV-0124",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -7092,6 +7108,22 @@
           "file": "workflow-guidelines/subagents.md",
           "line": 51,
           "section": "Quest Delegation > Review Delegation",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0125",
+      "domain": "governance",
+      "strength": "should",
+      "tags": [],
+      "rule": "Design vets SHOULD receive a design note structured by design-note-template.md (cited consumed surfaces, typed failure edges, cached-view audit, identity anchoring) and attack each section separately.",
+      "score": 161,
+      "sources": [
+        {
+          "file": "workflow-guidelines/subagents.md",
+          "line": 73,
+          "section": "Quest Delegation > Verification Templates",
           "role": "packed"
         }
       ]
@@ -7133,7 +7165,7 @@
       ]
     },
     {
-      "id": "GOV-0124",
+      "id": "GOV-0126",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -7201,7 +7233,7 @@
       ]
     },
     {
-      "id": "GOV-0125",
+      "id": "GOV-0127",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -7217,7 +7249,7 @@
       ]
     },
     {
-      "id": "GOV-0126",
+      "id": "GOV-0128",
       "domain": "governance",
       "strength": "should",
       "tags": [
@@ -7235,7 +7267,7 @@
       ]
     },
     {
-      "id": "GOV-0127",
+      "id": "GOV-0129",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -7251,7 +7283,7 @@
       ]
     },
     {
-      "id": "GOV-0128",
+      "id": "GOV-0130",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -7267,7 +7299,7 @@
       ]
     },
     {
-      "id": "GOV-0129",
+      "id": "GOV-0131",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -7283,7 +7315,7 @@
       ]
     },
     {
-      "id": "GOV-0130",
+      "id": "GOV-0132",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -7299,7 +7331,7 @@
       ]
     },
     {
-      "id": "GOV-0131",
+      "id": "GOV-0133",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -7315,7 +7347,7 @@
       ]
     },
     {
-      "id": "GOV-0132",
+      "id": "GOV-0134",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -7349,7 +7381,7 @@
       ]
     },
     {
-      "id": "GOV-0133",
+      "id": "GOV-0135",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -7381,7 +7413,7 @@
       ]
     },
     {
-      "id": "GOV-0134",
+      "id": "GOV-0136",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -7397,7 +7429,7 @@
       ]
     },
     {
-      "id": "GOV-0135",
+      "id": "GOV-0137",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -7415,7 +7447,7 @@
       ]
     },
     {
-      "id": "GOV-0136",
+      "id": "GOV-0138",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -7447,7 +7479,7 @@
       ]
     },
     {
-      "id": "GOV-0137",
+      "id": "GOV-0139",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -7463,7 +7495,7 @@
       ]
     },
     {
-      "id": "GOV-0138",
+      "id": "GOV-0140",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -7481,7 +7513,7 @@
       ]
     },
     {
-      "id": "GOV-0139",
+      "id": "GOV-0141",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -7499,7 +7531,7 @@
       ]
     },
     {
-      "id": "GOV-0140",
+      "id": "GOV-0142",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -7515,7 +7547,7 @@
       ]
     },
     {
-      "id": "GOV-0141",
+      "id": "GOV-0143",
       "domain": "governance",
       "strength": "may",
       "tags": [],
@@ -7531,7 +7563,7 @@
       ]
     },
     {
-      "id": "GOV-0142",
+      "id": "GOV-0144",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -7549,7 +7581,7 @@
       ]
     },
     {
-      "id": "GOV-0143",
+      "id": "GOV-0145",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -7565,7 +7597,7 @@
       ]
     },
     {
-      "id": "GOV-0144",
+      "id": "GOV-0146",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -7583,7 +7615,7 @@
       ]
     },
     {
-      "id": "GOV-0145",
+      "id": "GOV-0147",
       "domain": "governance",
       "strength": "should",
       "tags": [],
@@ -7599,7 +7631,7 @@
       ]
     },
     {
-      "id": "GOV-0146",
+      "id": "GOV-0148",
       "domain": "governance",
       "strength": "should",
       "tags": [
@@ -7617,7 +7649,7 @@
       ]
     },
     {
-      "id": "GOV-0147",
+      "id": "GOV-0149",
       "domain": "governance",
       "strength": "may",
       "tags": [
@@ -7635,5 +7667,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-07-26T14:03:05.839Z"
+  "generatedAt": "2026-07-27T06:00:12.270Z"
 }

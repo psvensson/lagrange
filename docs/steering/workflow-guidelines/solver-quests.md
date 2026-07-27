@@ -1206,6 +1206,15 @@ Rule: when you advance a quest's outcome, update its oracle/state terminal in th
 SAME change. When an epic decision changes, record the dated decision and its
 explicit target link; never mirror linked-work progress into a version 2 `status:`.
 
+Rung completion is recorded in the spec ladder (`tasks.md`, auto-flipped by the
+terminal landing when the quest's `specRef` names a ladder row) and in the quest
+log — the epic decision log records decisions only. A per-rung "SOLVED" paragraph
+restating the landing is progress mirroring in prose: it duplicates three derived
+surfaces, drifts the moment a landing is amended, and is what pushed the
+2026-07-26 snapshot epic over its own 150-line planning bound. One line naming
+the changed decision (a reframed pass criterion, an answered open question) is
+the ceiling; outcomes live in the projections.
+
 `npm run solve:consistency` ([`scripts/solve/ledger-consistency.js`](../../../scripts/solve/ledger-consistency.js))
 gates the machine-checkable half:
 
