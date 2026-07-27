@@ -61,101 +61,30 @@ Managed split snapshot pacing is an unrelated table-copy mechanism.
   abort-on-epoch-change, and bounded retention contract. Graduated executable
   requirements to
   `solve/specs/raft-snapshot-transfer-install/requirements.md`.
-- 2026-07-26 — **S1 SOLVED** (`raft-snapshot-checkpoint-format`, commit
-  c340e962; design `checkpoint-format-design.md`). New owner modules
-  `src/raft/snapshot-checkpoint-{constants,format,store}.js`; adversarial
-  verification found and fixed a real batch-commit watermark overstatement
-  (MF-1) — the applied watermark now advances densely per apply with a sticky
-  startup gap marker. Identity sources for `clusterId`/`membershipEpoch` are
-  caller-supplied in S1; pinning the authoritative production sources is S2
-  scope. `_transaction_outcomes` classified as state-machine state (retained
-  in payloads). Next: S2 `raft-snapshot-atomic-install`.
-- 2026-07-26 — **S2 SOLVED** (`raft-snapshot-atomic-install`, commit 9283b579;
-  design `atomic-install-design.md`, twice-verified). Atomic install at the
-  closed-handle boot boundary with a nonce-healed five-state marker machine,
-  durable term/votedFor rule (scoped to `_raft_state` rows), compacted-log
-  boundary observability in the adapters (CL-042 virgin zero preserved), and
-  S1 creation amendments (`maxCommittedHlc`, boundary-fallback term,
-  `prepared_transactions_pending` gate). Recorded S4 inputs: leader catch-up/
-  stale-batch livelock for installed followers, wrong-term-at-boundary guard
-  test, live raft term boot-seeding gap, production wiring of the
-  checkpoints-root layout. Identity sources remain caller-supplied — pinning
-  moves to S3/S4 with the first production wiring. Next: S3
-  `raft-snapshot-bulk-transfer`.
-- 2026-07-26 — **S3 SOLVED** (`raft-snapshot-bulk-transfer`, commit 81a197cb;
-  design `bulk-transfer-design.md`, twice-verified; landing round 1 REJECTED
-  on a real registry-eviction bug, fixed with a red-proven regression test).
-  Open question ANSWERED from code: no existing pressure owner sits on
-  raft's path (tryDeliverRaftDirect bypasses the reserve queue), so the
-  first implementation introduces a dedicated per-peer bulk WebSocket
-  channel under the existing identity/admission handshake, with
-  byte-denominated sender-side pacing, receiver-driven single-in-flight
-  chunks, durable verified-boundary resume, and a non-blind BULK pressure
-  partition. Reserved critical progress proven deterministically (transport
-  lane guard + DT6 cost-table guard with unbounded negative control). S4
-  inputs recorded (untested dial maxPayload/cleanup clauses, real-ws wiring,
-  identity pinning, retention pinning). Next: S4
-  `raft-snapshot-compacted-follower-catchup`.
-- 2026-07-26 — **S4 SOLVED** (`raft-snapshot-compacted-follower-catchup`,
-  commit 01b7a364; design `compacted-follower-catchup-design.md`,
-  twice-verified; landing round 1 REJECTED on undiscriminating eligibility
-  coverage, closed with a stale-only-root red-proven subtest). The b1/b2
-  livelocks are closed: the leader emits typed install_snapshot decisions
-  (distinct catchup_range_empty for corruption), the dispatcher serves the
-  newest generation >= boundary with S1 create-if-none, and the follower
-  orchestrator drives receive -> shutdown -> install -> factory recreation
-  with resume proven exactly at boundary+1. Recorded-gap closures: raft.term
-  boot seeding, transfer-staging boot sweep, five previously-untested lines
-  pinned. Scenario (a) — installed follower vs full-log leader — verified
-  already working via S2 and pinned as regression. Identity pinned:
-  clusterId config key (parity with unauthenticated transport recorded),
-  membershipEpoch selector over the membership publication epoch. S5/S6
-  inputs recorded (retention pinning for admitted transfers, production
-  ReplicaHandler wiring + CDC idempotency, boot-sweep direct guard). Next:
-  S5 `raft-snapshot-retention-compaction`.
-- 2026-07-26 — **S5 SOLVED** (`raft-snapshot-retention-compaction`, commit
-  512e2118; design `retention-compaction-design.md`, twice-verified; first-pass
-  TRUSTED landing). Physical prefix removal is ENABLED behind durable local
-  snapshot proof: the typed compaction decision table keeps the proofless
-  call byte-identical to the gated refusal (the safety guard is retained,
-  not retired), a term-anchored valid proof compacts in one transaction
-  advancing the boundary and folding deleted-row HLCs, and the boundary
-  cache adopts refresh-on-row-miss (the design verifier REFUTED the
-  stale-facade-safe claim — it would have resurrected the S4 livelock).
-  Bounded retention sweeps with the full pin model (active installs,
-  transfer markers through the publish window, dispatcher in-flight
-  indexes) and an unconditional newest floor. Epic open question 3
-  ANSWERED: thresholds/counts are retention-module policy constants; the
-  protocol surface takes only explicit indexes and durable proof. S6
-  inputs recorded (deletion-order pin, foreign-proof term-anchor escape,
-  trigger cadence + scale calibration). Next: S6
-  `raft-snapshot-live-rebuild` — the final rung.
-- 2026-07-26 — **S6 SOLVED — EPIC CLOSED** (`raft-snapshot-live-rebuild`,
-  handoff commit e2c36b1a, seal commit de08aa73; design
-  `live-rebuild-design.md`, twice-verified; landing adversarially verified by
-  an independent worktree verifier with two red-on-revert proofs). The S1–S5
-  chain is wired into production behind deterministic red-on-revert guards
-  (Phase A): a leader-only, role-gated, re-entrancy-guarded checkpoint cadence
-  tick on the 1s prepared-state-hold sweep that also proof-gate-compacts the
-  committed prefix past the just-sealed generation (so recovery is the snapshot
-  chain, not AppendEntries replay); the `onSnapshotCatchupNeeded` dispatcher at
-  the shared ReplicaHandler setup (bootstrap + join/durable-rejoin both
-  covered); a bulk-channel registry at the shared MessageRouter setup with
-  peer dial over `node_endpoints`; a transfer-socket adapter through
-  `sendChunkFrame` (authoritative pacing, non-SENT fatal, no double-pacing);
-  and a peek-then-replay follower offer router driving
-  `orchestrateSnapshotCatchupInstall` with `replaceLocalReplicaService`.
-  `raft.snapshotThreshold` is now env-configurable and container-forwarded.
-  Certification (Phase B/C): the `snapshot-live-rebuild` distributed scenario
-  wipes a non-seed follower under continuous acknowledged-write load and
-  observes dispatch→transfer→install→recreate→resume; the sealed bar isolates
-  **rebuild safety** (wiped follower rejoins ACTIVE via install AND all acked
-  writes visible cluster-wide) from rolling-restart's priority-spread axis.
-  Live N=15 terminal ts=20260726T192824Z (srcFingerprint ee792fd0):
-  ABOVE_BAR — 12/15, Wilson-95 [0.548, 0.930] ≥ sealed bar 0.50, safety floor
-  100% clean (0 corrupt/node-exit/oracle-blind/stale-source), convergeRate
-  1.0 (zero lost acked writes on every run incl. the 3 slow-rebuild liveness
-  timeouts). Open question 1 ANSWERED at S3 (dedicated bulk socket); open
-  questions 2 (non-SQLite adapter) and 3 (per-profile thresholds) remain
-  future-scale work, not blockers — the SQLite production path is certified.
-  The ladder is complete; the epic is closed.
+- 2026-07-26 — S1 SOLVED — commit c340e962 — see
+  `solve/specs/raft-snapshot-transfer-install/tasks.md` and
+  `checkpoint-format-design.md`.
+- 2026-07-26 — S2 SOLVED — commit 9283b579 — see tasks.md and
+  `atomic-install-design.md`.
+- 2026-07-26 — S3 SOLVED — commit 81a197cb — see tasks.md and
+  `bulk-transfer-design.md`. Open question 1 ANSWERED from code: no existing
+  transport pressure owner sits on raft's path, so the implementation
+  introduced a dedicated per-peer bulk WebSocket channel under the existing
+  identity/admission handshake.
+- 2026-07-26 — S4 SOLVED — commit 01b7a364 — see tasks.md and
+  `compacted-follower-catchup-design.md`.
+- 2026-07-26 — S5 SOLVED — commit 512e2118 — see tasks.md and
+  `retention-compaction-design.md`. Open question 3 ANSWERED:
+  entry/byte thresholds and generation counts are retention-module policy
+  constants; the protocol surface takes only explicit indexes and durable
+  proof.
+- 2026-07-26 — S6 SOLVED — EPIC CLOSED — handoff commit e2c36b1a, bar seal
+  de08aa73 — see tasks.md and `live-rebuild-design.md`. Decision (path B):
+  the sealed certification bar isolates **rebuild safety** (wiped follower
+  rejoins ACTIVE via snapshot install AND every acknowledged write is visible
+  cluster-wide) from rolling-restart's priority-spread convergence axis,
+  which had dominated pass/fail without measuring rebuild safety. Open
+  question 2 (non-SQLite adapter) and per-profile threshold calibration
+  remain future-scale work, not blockers; the SQLite production path is
+  certified live (N=15 ABOVE_BAR). The ladder is complete; the epic is
+  closed.
