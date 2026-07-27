@@ -368,6 +368,24 @@ also enable future paid system services.
 | — | Topology convergence SLO | 🔲 | Statistical, hardware-relative convergence after add, failure, restart, replacement, and decommission; no single-run or timeout-extension certification. Contract: `solve/epics/topology-convergence-hardening.md` plus `solve/specs/large-scale-data-plane-certification/`. |
 | — | Large-scale data-plane certification | 🔲 | Separate metadata-cardinality and physical-byte ladders, with enforced throughput, latency, heap/RSS, file-descriptor, queue, in-flight-work, and leak gates. Spec: `solve/specs/large-scale-data-plane-certification/`. |
 
+### 4. Query Semantics and Access Paths
+
+Removes the query-layer limitations recorded in
+`docs/current-capabilities-and-limitations.md` (partition narrowing tied to an
+`id` column, lexicographic range comparisons, no global secondary indexes —
+and, beyond what that document records, local `CREATE INDEX` currently parses
+but is rejected as an unsupported statement). The rows
+form a dependency ladder — each row builds on the sealed contract of the row
+above it — and the sequencing rationale lives in
+`solve/epics/query-access-path-ladder.md`.
+
+| Id | Item | Roadmap state | Scope notes |
+|----|------|---------------|-------------|
+| RM-1.0-qs-typed-key-ordering | Typed partition-key ordering | 🔲 | One shared type-aware comparator (or order-preserving key encoding) replacing the three duplicated `localeCompare` helpers (routing, key ranges, live queries) and the raw JS `<` compare in split routing — three disagreeing orders in play — plus a migration story for persisted partition boundaries chosen under SQLite collation. Latent correctness exposure, not only a planner gap. May justify a Quest ahead of phase order. |
+| RM-1.0-qs-pk-partition-narrowing | Primary-key partition narrowing beyond `id` | 🔲 | Read the already-persisted primary key (`tables.partition_key`, comma-joined at table creation) in partition resolution and the other `id`-fallback modules, activating the existing composite-key path; no schema migration required. Splits already compute medians over the true key while routing narrows on `id`. Depends on typed key ordering for range narrowing. |
+| RM-1.0-qs-local-index-ddl | Local per-partition index DDL | 🔲 | Wire parsed `CREATE INDEX` through statement dispatch into the existing `IndexService` (per-partition SQLite indexes, CDC-driven index creation on new partitions) and instantiate that subsystem in the runtime composition. Integration of existing code, not new index machinery. |
+| RM-1.0-qs-global-secondary-indexes | Global secondary indexes | 🔲 | Index-as-partitioned-dataset storage, index-side routing, write-path maintenance, and a sealed sync-vs-async consistency decision. Spec: `solve/specs/global-secondary-indexes/`. |
+
 ---
 
 ## Phase 2.0 — Distributed Execution Platform
