@@ -8,9 +8,14 @@ import {spawnSync} from 'node:child_process';
 
 import {EVENT_ATTEMPT, EVENT_FINDING} from './constants.js';
 import {
+  changeArtifactIdentity,
+  changeArtifactIdentityMatches,
   inspectChangeArtifact,
   requiresSourceVerification,
 } from './change-artifact.js';
+import {
+  projectAttemptBaseCorrections,
+} from './attempt-base-correction-projection.js';
 
 const LOCAL_STR_OWNED_001 = 'verifier-approval';
 const LOCAL_STR_OWNED_002 = 'attempt';
@@ -113,7 +118,7 @@ export function resolveWorkspaceBaseCommit(root) {
   return /^[0-9a-f]{40}$/u.test(sha) ? sha : null;
 }
 
-export function sourceChangingAttempts(root, quest, log, options = {}) {
+function rawSourceChangingAttempts(root, quest, log, options = {}) {
   const startIndex = options.startIndex || 0;
   const attempts = [];
   for (const [index, event] of log.entries()) {
@@ -137,6 +142,38 @@ export function sourceChangingAttempts(root, quest, log, options = {}) {
     });
   }
   return attempts;
+}
+
+export function sourceChangingAttempts(root, quest, log, options = {}) {
+  return projectAttemptBaseCorrections(
+    rawSourceChangingAttempts(root, quest, log, options),
+    log,
+    {
+      validateProof: (correction, attempt) =>
+        attemptBaseCorrectionProofProblem(
+          root,
+          quest,
+          correction,
+          attempt,
+        ),
+    },
+  ).attempts;
+}
+
+export function attemptBaseCorrectionProblems(root, quest, log, options = {}) {
+  return projectAttemptBaseCorrections(
+    rawSourceChangingAttempts(root, quest, log, options),
+    log,
+    {
+      validateProof: (correction, attempt) =>
+        attemptBaseCorrectionProofProblem(
+          root,
+          quest,
+          correction,
+          attempt,
+        ),
+    },
+  ).problems;
 }
 
 function verificationOf(event) {
@@ -340,6 +377,40 @@ export function canonicalSourceDelta(root, baseCommit, paths) {
     content: result.stdout,
     paths: sortedPaths,
   };
+}
+
+export function attemptBaseCorrectionProofProblem(
+  root,
+  quest,
+  correction,
+  attempt,
+) {
+  const currentIdentity = changeArtifactIdentity(
+    root,
+    quest.id,
+    attempt.event.changeRef,
+  );
+  if (!changeArtifactIdentityMatches(
+    attempt.event.changeRefIdentity,
+    currentIdentity,
+  )) {
+    return 'attempt base correction sealed change artifact has drifted';
+  }
+  for (const [label, baseCommit] of [
+    ['recorded-base', correction.fromBase],
+    ['target-base', correction.toBase],
+  ]) {
+    const delta = canonicalSourceDelta(
+      root,
+      baseCommit,
+      correction.paths,
+    );
+    if (!delta.ok || delta.fingerprint !== correction.fingerprint) {
+      return `attempt base correction ${label} proof does not reproduce ` +
+        correction.fingerprint;
+    }
+  }
+  return null;
 }
 
 export function aggregateSourceFingerprint(root, attempts) {
@@ -642,7 +713,17 @@ function unresolvedRejectionEntry(root, attempt, rejection) {
 
 export function verificationState(root, quest, log, options = {}) {
   const attempts = sourceChangingAttempts(root, quest, log, options);
-  const attemptProblems = [];
+  const correctionProblems = attemptBaseCorrectionProblems(
+    root,
+    quest,
+    log,
+    options,
+  );
+  const attemptProblems = correctionProblems.map((message) => ({
+    message,
+    ts: null,
+    frontier: null,
+  }));
   const pendingAttempts = [];
   const resolvedRejectedAttempts = [];
   const unresolvedRejectedAttempts = [];
@@ -743,6 +824,7 @@ export function verificationState(root, quest, log, options = {}) {
     candidateApproval: candidateState.approval,
     candidateRejection: candidateState.rejection,
     unresolvedCandidateRejection: candidateState.unresolvedRejection,
+    attemptBaseCorrectionProblems: correctionProblems,
   };
   return {
     ...state,

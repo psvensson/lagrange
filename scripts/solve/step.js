@@ -105,10 +105,16 @@ function resolveHeadPin(root) {
 }
 
 export function resolveStepBaseCommit(root, quest, log, frontierId) {
-  const unresolvedRejection = verificationState(root, quest, log)
+  const verification = verificationState(root, quest, log);
+  const unresolvedRejection = verification
     .unresolvedRejectedAttempts
     .find(({attempt}) => attempt.event.frontier === frontierId);
-  const rejectedBase = unresolvedRejection?.attempt.event.workspaceBaseCommit;
+  const candidateRejection = verification.unresolvedCandidateRejection;
+  const rejectedBase = (
+    candidateRejection?.event?.frontier === frontierId ?
+      candidateRejection.receipt?.baseCommit :
+      null
+  ) || unresolvedRejection?.attempt.event.workspaceBaseCommit;
   // A replacement is pinned to the rejected attempt's base so the rejection
   // stays binding — but pinning to a base that no longer resolves would refuse
   // the replacement before it could be recorded. The live-base coverage rule in

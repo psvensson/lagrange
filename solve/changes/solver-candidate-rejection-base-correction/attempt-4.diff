@@ -1,0 +1,1594 @@
+diff --git a/docs/steering/llm/solve-commands.md b/docs/steering/llm/solve-commands.md
+index c3fccd677d31cd65359ecf87c43409948c820e7a..bc2f9b602204f3bf9361f4eadac2234287cba87d 100644
+--- a/docs/steering/llm/solve-commands.md
++++ b/docs/steering/llm/solve-commands.md
+@@ -55,7 +55,8 @@ guardrail command map.
+ | `park` | Operator-decision terminal: park an open frontier as `exhausted` with provenance `operator` when an altitude reflection concluded PARK/EXHAUST-AND-PIVOT (frame refuted or sealed symptom absent on HEAD). Requires a prior `reflect --altitude` on the quest and a falsifiable --reason; appends the quest-level EXHAUSTED terminal when every frontier is parked exhausted. | `node scripts/solve.js park --id <id> [--frontier <f>] --reason "<why no honest remaining move exists>"` |
+ | `amend` | Record a narrow, evidence-linked amendment to a sealed quest (class-correction, oracle-command-correction of doneWhen args, or append-only statement-strengthen). Capped at 2 per quest lifetime; the doneWhen probe, frontier identity, and metrics stay immutable, and honesty checks compare the quest file against sealed + amendments. The alternative to a full park-and-redeclare respin for corrections the verifier or lint already evidenced. | `node scripts/solve.js amend --id <id> --kind class-correction|oracle-command-correction|statement-strengthen [--class <c>] [--statement "<strengthened>"] [--done-when-args '<json>'] --evidence <finding ref>` |
+ | `inherit-candidate` | Re-record a parked parent quest's VERIFIED landing candidate into a declared successor: copies the candidate attempts (provenance-marked, artifacts re-homed to the child's change dir) and rebuilds the candidate approval against the child's own projection. The approval lands only when the child's content-addressed fingerprint equals the parent-approved one, so any divergence falls back to a fresh verification round. | `node scripts/solve.js inherit-candidate --id <child> --from <parent>` |
++| `correct-attempt-base` | Append one proof-checked correction for an unverified version-2 source attempt whose recorded base missed the standing candidate-rejection base. Both reachable-base deltas and the sealed change artifact must reproduce the same fingerprint; review, drift, arbitrary targets, and repeat correction are refused. | `node scripts/solve.js correct-attempt-base --id <id> --attempt-index <log-index> --to-base <commit> --reason "<procedural cause>"` |
+ 
+ ---
+ 
+-37 subcommands registered; 37 documented, 0 undocumented. Improve coverage in `docs/steering/solve-commands.json`.
++38 subcommands registered; 38 documented, 0 undocumented. Improve coverage in `docs/steering/solve-commands.json`.
+diff --git a/docs/steering/solve-commands.json b/docs/steering/solve-commands.json
+index 7635e8628cd1317089913d4e3c9f2cd816b328a1..6da4fbc87592725c260892f1d694ae824cf4f7d8 100644
+--- a/docs/steering/solve-commands.json
++++ b/docs/steering/solve-commands.json
+@@ -147,5 +147,9 @@
+   "inherit-candidate": {
+     "summary": "Re-record a parked parent quest's VERIFIED landing candidate into a declared successor: copies the candidate attempts (provenance-marked, artifacts re-homed to the child's change dir) and rebuilds the candidate approval against the child's own projection. The approval lands only when the child's content-addressed fingerprint equals the parent-approved one, so any divergence falls back to a fresh verification round.",
+     "usage": "node scripts/solve.js inherit-candidate --id <child> --from <parent>"
++  },
++  "correct-attempt-base": {
++    "summary": "Append one proof-checked correction for an unverified version-2 source attempt whose recorded base missed the standing candidate-rejection base. Both reachable-base deltas and the sealed change artifact must reproduce the same fingerprint; review, drift, arbitrary targets, and repeat correction are refused.",
++    "usage": "node scripts/solve.js correct-attempt-base --id <id> --attempt-index <log-index> --to-base <commit> --reason \"<procedural cause>\""
+   }
+ }
+diff --git a/scripts/checks/run-solver-candidate-rejection-base-correction-scenario.js b/scripts/checks/run-solver-candidate-rejection-base-correction-scenario.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a1a252e5405d684b5764c24c021d18e5e7fd577c
+--- /dev/null
++++ b/scripts/checks/run-solver-candidate-rejection-base-correction-scenario.js
+@@ -0,0 +1,11 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = Object.freeze({
++  'solver-candidate-rejection-base-correction': Object.freeze([
++    'test/solve/attempt-base-correction.test.js',
++  ]),
++});
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/scripts/solve.js b/scripts/solve.js
+index f42d15045f8d578d3c3d1db76c0eb7749a73f97a..342a0be6686e0f1a99927c55c2ce9206dcba6e67 100644
+--- a/scripts/solve.js
++++ b/scripts/solve.js
+@@ -50,6 +50,9 @@ import {runMetaFrictionCommand} from './solve/meta-friction.js';
+ import {runCostCommand} from './solve/cost.js';
+ import {runAmendCommand} from './solve/amend.js';
+ import {runInheritCandidateCommand} from './solve/inherit-candidate.js';
++import {
++  runAttemptBaseCorrectionCommand,
++} from './solve/attempt-base-correction.js';
+ import {runFrontierCommand, writeFrontier} from './solve/frontier.js';
+ import {runOverviewCommand, writeOverview} from './solve/overview.js';
+ import {runCheckpointCommand, runHandoffCommand} from './solve/handoff.js';
+@@ -1011,6 +1014,10 @@ function cmdInheritCandidate(root, args) {
+   process.stdout.write(`${runInheritCandidateCommand(root, args)}\n`);
+ }
+ 
++function cmdCorrectAttemptBase(root, args) {
++  process.stdout.write(`${runAttemptBaseCorrectionCommand(root, args)}\n`);
++}
++
+ // Frontier fuses the closure-ledger active records with the open quests into one
+ // boot-orientation screen; like portfolio it is cross-cutting and takes no --id.
+ // --write also persists solve/FRONTIER.generated.md (a regenerable board file).
+@@ -1219,6 +1226,7 @@ const COMMANDS = {
+   'park': cmdPark,
+   'amend': cmdAmend,
+   'inherit-candidate': cmdInheritCandidate,
++  'correct-attempt-base': cmdCorrectAttemptBase,
+ };
+ 
+ function main() {
+diff --git a/scripts/solve/attempt-base-correction-projection.js b/scripts/solve/attempt-base-correction-projection.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9f0c9cffe5f8e33aed22c609c9b90f01a0800c96
+--- /dev/null
++++ b/scripts/solve/attempt-base-correction-projection.js
+@@ -0,0 +1,415 @@
++export const EVENT_ATTEMPT_BASE_CORRECTED = 'attempt-base-corrected';
++
++const arrayIsArray = Array.isArray;
++const arraySlice = Array.prototype.slice;
++const arraySort = Array.prototype.sort;
++const mapGet = Map.prototype.get;
++const mapHas = Map.prototype.has;
++const mapSet = Map.prototype.set;
++const objectHasOwn = Object.hasOwn;
++const reflectApply = Reflect.apply;
++const reflectOwnKeys = Reflect.ownKeys;
++const regexpExec = RegExp.prototype.exec;
++const stringTrim = String.prototype.trim;
++const MapConstructor = Map;
++const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
++const FINGERPRINT_PATTERN = /^sha256:[0-9a-f]{64}$/u;
++const VERIFIER_EVIDENCE_PATTERN =
++  /^subagent:[A-Za-z0-9][A-Za-z0-9_./-]*$/u;
++const VERIFIER_KINDS = Object.freeze([
++  'verifier-approval',
++  'verifier-rejection',
++]);
++const REVIEW_SCOPES = Object.freeze([
++  'aggregate',
++  'both',
++  'candidate',
++]);
++const EVENT_KEYS = Object.freeze([
++  'attemptIndex',
++  'fingerprint',
++  'fromBase',
++  'frontier',
++  'paths',
++  'proof',
++  'reason',
++  'toBase',
++  'ts',
++  'type',
++]);
++const PROOF_KEYS = Object.freeze([
++  'changeRefFingerprint',
++  'recordedBaseFingerprint',
++  'targetBaseFingerprint',
++]);
++
++function regexpMatches(pattern, value) {
++  return typeof value === 'string' &&
++    reflectApply(regexpExec, pattern, [value]) !== null;
++}
++
++function arrayCopy(value) {
++  return reflectApply(arraySlice, value, [0]);
++}
++
++function sortedCopy(value) {
++  return reflectApply(arraySort, arrayCopy(value), []);
++}
++
++function mapRead(map, key) {
++  return reflectApply(mapGet, map, [key]);
++}
++
++function mapIncludes(map, key) {
++  return reflectApply(mapHas, map, [key]);
++}
++
++function mapWrite(map, key, value) {
++  reflectApply(mapSet, map, [key, value]);
++}
++
++function allTrue(values) {
++  for (let index = 0; index < values.length; index += 1) {
++    if (!values[index]) return false;
++  }
++  return true;
++}
++
++function exactKeys(value, expected) {
++  if (!value || typeof value !== 'object' || arrayIsArray(value)) return false;
++  const keys = reflectOwnKeys(value);
++  if (keys.length !== expected.length) return false;
++  for (let index = 0; index < expected.length; index += 1) {
++    if (!objectHasOwn(value, expected[index])) return false;
++  }
++  return true;
++}
++
++function exactStringArray(value, expected) {
++  if (!arrayIsArray(value) || value.length !== expected.length) return false;
++  for (let index = 0; index < expected.length; index += 1) {
++    if (typeof value[index] !== 'string' ||
++        value[index] !== expected[index]) return false;
++  }
++  return true;
++}
++
++function nonEmptyString(value) {
++  return typeof value === 'string' &&
++    reflectApply(stringTrim, value, []).length > 0;
++}
++
++function validStringArray(value) {
++  if (!arrayIsArray(value) || value.length === 0) return false;
++  for (let index = 0; index < value.length; index += 1) {
++    if (!nonEmptyString(value[index])) return false;
++  }
++  return true;
++}
++
++function arrayContains(value, expected) {
++  for (let index = 0; index < value.length; index += 1) {
++    if (value[index] === expected) return true;
++  }
++  return false;
++}
++
++function pathSuperset(candidatePaths, rejectedPaths) {
++  if (!validStringArray(candidatePaths) ||
++      !validStringArray(rejectedPaths)) return false;
++  for (let index = 0; index < rejectedPaths.length; index += 1) {
++    if (!arrayContains(candidatePaths, rejectedPaths[index])) return false;
++  }
++  return true;
++}
++
++function correctionBindingIsExact(correction, attempt, paths) {
++  return allTrue([
++    correction.type === EVENT_ATTEMPT_BASE_CORRECTED,
++    Number.isInteger(correction.attemptIndex),
++    correction.attemptIndex === attempt.index,
++    correction.frontier === attempt.event.frontier,
++    correction.fromBase === attempt.event.workspaceBaseCommit,
++    regexpMatches(COMMIT_PATTERN, correction.fromBase),
++    regexpMatches(COMMIT_PATTERN, correction.toBase),
++    correction.fromBase !== correction.toBase,
++    correction.fingerprint === attempt.fingerprint,
++    regexpMatches(FINGERPRINT_PATTERN, correction.fingerprint),
++    exactStringArray(correction.paths, paths),
++    nonEmptyString(correction.reason),
++    nonEmptyString(correction.ts),
++    exactKeys(correction.proof, PROOF_KEYS),
++    correction.proof?.changeRefFingerprint === attempt.fingerprint,
++    correction.proof?.recordedBaseFingerprint === attempt.fingerprint,
++    correction.proof?.targetBaseFingerprint === attempt.fingerprint,
++  ]);
++}
++
++function correctionShapeProblem(correction, attempt) {
++  const paths = sortedCopy(attempt.inspection.changedPaths);
++  if (!exactKeys(correction, EVENT_KEYS)) {
++    return 'attempt base correction has an inexact event shape';
++  }
++  if (!correctionBindingIsExact(correction, attempt, paths)) {
++    return 'attempt base correction does not bind the exact recorded attempt';
++  }
++  return null;
++}
++
++function isVerifierKind(kind) {
++  return arrayContains(VERIFIER_KINDS, kind);
++}
++
++function isCandidateReceiptEnvelope(event, frontier) {
++  return allTrue([
++    event?.type === 'finding',
++    event?.frontier === frontier,
++    isVerifierKind(event?.kind),
++    event?.verification?.schemaVersion === 2,
++    event?.verification?.scope === 'candidate',
++  ]);
++}
++
++function latestCandidateReceipt(log, attempt) {
++  for (let index = attempt.index - 1; index >= 0; index -= 1) {
++    if (isCandidateReceiptEnvelope(log[index], attempt.event.frontier)) {
++      return {event: log[index], index};
++    }
++  }
++  return null;
++}
++
++function attemptAtIndex(attempts, targetIndex) {
++  for (let index = 0; index < attempts.length; index += 1) {
++    if (attempts[index].index === targetIndex) return attempts[index];
++  }
++  return null;
++}
++
++function receiptBindsRejectedAttempt(
++  receipt,
++  rejectionIndex,
++  attempt,
++  attempts,
++) {
++  if (receipt.firstAttemptIndex !== receipt.lastAttemptIndex ||
++      receipt.lastAttemptIndex >= rejectionIndex) return false;
++  const rejectedAttempt = attemptAtIndex(
++    attempts,
++    receipt.lastAttemptIndex,
++  );
++  if (!rejectedAttempt) return false;
++  return allTrue([
++    rejectedAttempt.candidateContract === true,
++    rejectedAttempt.event.integrityAccepted === true,
++    rejectedAttempt.event.frontier === attempt.event.frontier,
++    rejectedAttempt.event.workspaceBaseCommit === receipt.baseCommit,
++    rejectedAttempt.fingerprint === receipt.fingerprint,
++    exactStringArray(
++      receipt.paths,
++      sortedCopy(rejectedAttempt.inspection.changedPaths),
++    ),
++    exactStringArray(
++      receipt.sourcePaths,
++      sortedCopy(rejectedAttempt.sourcePaths),
++    ),
++  ]);
++}
++
++function validStandingRejection(entry, attempt, correction, attempts) {
++  if (!entry || !entry.event.verification) return false;
++  const {event, index: rejectionIndex} = entry;
++  const receipt = event.verification;
++  return allTrue([
++    event.kind === 'verifier-rejection',
++    regexpMatches(VERIFIER_EVIDENCE_PATTERN, event.evidence),
++    receipt.verdict === 'rejected',
++    regexpMatches(FINGERPRINT_PATTERN, receipt.fingerprint),
++    regexpMatches(COMMIT_PATTERN, receipt.baseCommit),
++    receipt.baseCommit === correction.toBase,
++    validStringArray(receipt.paths),
++    validStringArray(receipt.sourcePaths),
++    Number.isInteger(receipt.firstAttemptIndex),
++    Number.isInteger(receipt.lastAttemptIndex),
++    receipt.firstAttemptIndex >= 0,
++    receipt.firstAttemptIndex <= receipt.lastAttemptIndex,
++    receipt.lastAttemptIndex < attempt.index,
++    receiptBindsRejectedAttempt(
++      receipt,
++      rejectionIndex,
++      attempt,
++      attempts,
++    ),
++    correction.fingerprint !== receipt.fingerprint,
++    pathSuperset(correction.paths, receipt.paths),
++  ]);
++}
++
++function receiptCoversAttempt(event, attempt) {
++  if (!event || !event.verification) return false;
++  const receipt = event.verification;
++  if (!allTrue([
++    event.type === 'finding',
++    isVerifierKind(event.kind),
++    regexpMatches(VERIFIER_EVIDENCE_PATTERN, event.evidence),
++    regexpMatches(FINGERPRINT_PATTERN, receipt.fingerprint),
++  ])) return false;
++  if (receipt.fingerprint === attempt.fingerprint) return true;
++  return allTrue([
++    receipt.schemaVersion === 2,
++    arrayContains(REVIEW_SCOPES, receipt.scope),
++    Number.isInteger(receipt.firstAttemptIndex),
++    Number.isInteger(receipt.lastAttemptIndex),
++    receipt.firstAttemptIndex <= attempt.index,
++    receipt.lastAttemptIndex >= attempt.index,
++  ]);
++}
++
++function hasPriorReview(log, attempt, correctionIndex) {
++  for (let index = attempt.index + 1; index < correctionIndex; index += 1) {
++    if (receiptCoversAttempt(log[index], attempt)) return true;
++  }
++  return false;
++}
++
++export function exactStandingCandidateRejection(
++  log,
++  attempt,
++  correction,
++  attempts,
++) {
++  const entry = latestCandidateReceipt(log, attempt);
++  return validStandingRejection(entry, attempt, correction, attempts) ?
++    {event: entry.event, receipt: entry.event.verification} :
++    null;
++}
++
++export function attemptHasLaterVerifierReview(
++  log,
++  attempt,
++  endIndex = log.length,
++) {
++  return hasPriorReview(log, attempt, endIndex);
++}
++
++function correctionAuthorizationProblem(
++  correction,
++  attempt,
++  attempts,
++  log,
++  eventIndex,
++) {
++  if (!exactStandingCandidateRejection(
++    log,
++    attempt,
++    correction,
++    attempts,
++  )) {
++    return 'attempt base correction has no exact standing candidate rejection';
++  }
++  if (hasPriorReview(log, attempt, eventIndex)) {
++    return 'attempt base correction follows an exact verifier review';
++  }
++  return null;
++}
++
++function correctionProofProblem(
++  event,
++  attempt,
++  attempts,
++  log,
++  eventIndex,
++  options,
++) {
++  let problem = correctionShapeProblem(event, attempt);
++  if (problem) return problem;
++  problem = correctionAuthorizationProblem(
++    event,
++    attempt,
++    attempts,
++    log,
++    eventIndex,
++  );
++  if (problem) return problem;
++  if (typeof options.validateProof !== 'function') {
++    return 'attempt base correction has no live proof validator';
++  }
++  return options.validateProof(event, attempt);
++}
++
++function inspectCorrectionEvent(
++  event,
++  eventIndex,
++  byIndex,
++  corrections,
++  attempts,
++  log,
++  options,
++) {
++  const attempt = mapRead(byIndex, event.attemptIndex);
++  if (!attempt || eventIndex <= event.attemptIndex) {
++    return {problem: 'attempt base correction names no earlier source attempt'};
++  }
++  if (mapIncludes(corrections, event.attemptIndex)) {
++    return {
++      problem: `attempt ${event.attemptIndex} has more than one base correction`,
++    };
++  }
++  return {
++    attempt,
++    problem: correctionProofProblem(
++      event,
++      attempt,
++      attempts,
++      log,
++      eventIndex,
++      options,
++    ),
++  };
++}
++
++export function projectAttemptBaseCorrections(attempts, log, options = {}) {
++  const byIndex = new MapConstructor();
++  for (let index = 0; index < attempts.length; index += 1) {
++    mapWrite(byIndex, attempts[index].index, attempts[index]);
++  }
++  const corrections = new MapConstructor();
++  const problems = [];
++  for (let eventIndex = 0; eventIndex < log.length; eventIndex += 1) {
++    const event = log[eventIndex];
++    if (event.type !== EVENT_ATTEMPT_BASE_CORRECTED) continue;
++    const inspected = inspectCorrectionEvent(
++      event,
++      eventIndex,
++      byIndex,
++      corrections,
++      attempts,
++      log,
++      options,
++    );
++    if (inspected.problem) {
++      problems[problems.length] =
++        `attempt ${event.attemptIndex}: ${inspected.problem}`;
++      continue;
++    }
++    mapWrite(corrections, inspected.attempt.index, event);
++  }
++  const projected = [];
++  for (let index = 0; index < attempts.length; index += 1) {
++    const attempt = attempts[index];
++    const correction = mapRead(corrections, attempt.index);
++    projected[projected.length] = !correction ? attempt : {
++      ...attempt,
++      event: {
++        ...attempt.event,
++        baseCorrection: correction,
++        recordedWorkspaceBaseCommit: attempt.event.workspaceBaseCommit,
++        workspaceBaseCommit: correction.toBase,
++      },
++    };
++  }
++  return {
++    attempts: projected,
++    problems,
++  };
++}
+diff --git a/scripts/solve/attempt-base-correction.js b/scripts/solve/attempt-base-correction.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a275c91f55569ad5a9e7c83189872eb06723567a
+--- /dev/null
++++ b/scripts/solve/attempt-base-correction.js
+@@ -0,0 +1,216 @@
++import {
++  appendEvent,
++  loadQuest,
++  readLog,
++} from './store.js';
++import {
++  baseCommitReachable,
++  canonicalSourceDelta,
++  sourceChangingAttempts,
++} from './verification.js';
++import {
++  changeArtifactIdentity,
++  changeArtifactIdentityMatches,
++} from './change-artifact.js';
++import {
++  attemptHasLaterVerifierReview,
++  EVENT_ATTEMPT_BASE_CORRECTED,
++  exactStandingCandidateRejection,
++} from './attempt-base-correction-projection.js';
++
++const arraySlice = Array.prototype.slice;
++const arraySort = Array.prototype.sort;
++const reflectApply = Reflect.apply;
++const regexpExec = RegExp.prototype.exec;
++const stringTrim = String.prototype.trim;
++const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
++
++function regexpMatches(pattern, value) {
++  return typeof value === 'string' &&
++    reflectApply(regexpExec, pattern, [value]) !== null;
++}
++
++function sortedCopy(value) {
++  const copy = reflectApply(arraySlice, value, [0]);
++  return reflectApply(arraySort, copy, []);
++}
++
++function requireText(args, name) {
++  const value = args[name];
++  if (typeof value !== 'string' ||
++      reflectApply(stringTrim, value, []).length === 0) {
++    throw new Error(`correct-attempt-base: --${name} is required`);
++  }
++  return reflectApply(stringTrim, value, []);
++}
++
++function exactArrayEqual(left, right) {
++  if (left.length !== right.length) return false;
++  for (let index = 0; index < left.length; index += 1) {
++    if (left[index] !== right[index]) return false;
++  }
++  return true;
++}
++
++function requireMatchingDelta(root, base, attempt, label) {
++  const paths = sortedCopy(attempt.inspection.changedPaths);
++  const delta = canonicalSourceDelta(root, base, paths);
++  if (!delta.ok) {
++    throw new Error(
++      `correct-attempt-base: ${label} delta is unavailable: ${delta.problem}`,
++    );
++  }
++  if (
++    delta.fingerprint !== attempt.fingerprint ||
++    !exactArrayEqual(delta.paths, paths)
++  ) {
++    throw new Error(
++      `correct-attempt-base: ${label} delta does not reproduce ` +
++        `${attempt.fingerprint}`,
++    );
++  }
++  return delta.fingerprint;
++}
++
++function requireCorrectableAttempt(root, quest, log, attemptIndex) {
++  for (let index = 0; index < log.length; index += 1) {
++    const event = log[index];
++    if (event.type === EVENT_ATTEMPT_BASE_CORRECTED &&
++        event.attemptIndex === attemptIndex) {
++      throw new Error(
++        `correct-attempt-base: attempt ${attemptIndex} already has a correction`,
++      );
++    }
++  }
++  const attempts = sourceChangingAttempts(root, quest, log);
++  let attempt = null;
++  for (let index = 0; index < attempts.length; index += 1) {
++    if (attempts[index].index === attemptIndex) {
++      attempt = attempts[index];
++      break;
++    }
++  }
++  if (
++    !attempt ||
++    !attempt.candidateContract ||
++    attempt.event.integrityAccepted !== true
++  ) {
++    throw new Error(
++      'correct-attempt-base: target must be an accepted version-2 source attempt',
++    );
++  }
++  const currentIdentity = changeArtifactIdentity(
++    root,
++    quest.id,
++    attempt.event.changeRef,
++  );
++  if (!changeArtifactIdentityMatches(
++    attempt.event.changeRefIdentity,
++    currentIdentity,
++  )) {
++    throw new Error(
++      'correct-attempt-base: sealed change artifact has drifted',
++    );
++  }
++  return {attempt, attempts};
++}
++
++function requireNoReview(log, attempt) {
++  if (attemptHasLaterVerifierReview(log, attempt)) {
++    throw new Error(
++      'correct-attempt-base: an exact verifier receipt already covers the attempt',
++    );
++  }
++}
++
++function requireRejectionBase(log, attempts, attempt, targetBase) {
++  const correction = {
++    fingerprint: attempt.fingerprint,
++    paths: sortedCopy(attempt.inspection.changedPaths),
++    toBase: targetBase,
++  };
++  if (!exactStandingCandidateRejection(
++    log,
++    attempt,
++    correction,
++    attempts,
++  )) {
++    throw new Error(
++      'correct-attempt-base: target must equal the standing earlier ' +
++        'candidate-rejection base on the same frontier',
++    );
++  }
++}
++
++function requireRecordedBase(root, attempt, targetBase) {
++  const recordedBase = attempt.event.workspaceBaseCommit;
++  if (!regexpMatches(COMMIT_PATTERN, recordedBase) ||
++      !baseCommitReachable(root, recordedBase) ||
++      recordedBase === targetBase) {
++    throw new Error(
++      'correct-attempt-base: recorded base must be a different reachable commit',
++    );
++  }
++  return recordedBase;
++}
++
++export function runAttemptBaseCorrectionCommand(root, args = {}) {
++  const id = args.id || args._?.[0];
++  if (!id) throw new Error('correct-attempt-base: --id is required');
++  const attemptIndex = Number(args['attempt-index']);
++  if (!Number.isInteger(attemptIndex) || attemptIndex < 0) {
++    throw new Error(
++      'correct-attempt-base: --attempt-index must be a non-negative integer',
++    );
++  }
++  const targetBase = requireText(args, 'to-base');
++  const reason = requireText(args, 'reason');
++  if (!regexpMatches(COMMIT_PATTERN, targetBase) ||
++      !baseCommitReachable(root, targetBase)) {
++    throw new Error(
++      'correct-attempt-base: --to-base must name a reachable Git commit',
++    );
++  }
++
++  const quest = loadQuest(root, id);
++  const log = readLog(root, id);
++  const {attempt, attempts} = requireCorrectableAttempt(
++    root,
++    quest,
++    log,
++    attemptIndex,
++  );
++  requireNoReview(log, attempt);
++  requireRejectionBase(log, attempts, attempt, targetBase);
++  const recordedBase = requireRecordedBase(root, attempt, targetBase);
++  const recordedBaseFingerprint = requireMatchingDelta(
++    root,
++    recordedBase,
++    attempt,
++    'recorded-base',
++  );
++  const targetBaseFingerprint = requireMatchingDelta(
++    root,
++    targetBase,
++    attempt,
++    'target-base',
++  );
++  const paths = sortedCopy(attempt.inspection.changedPaths);
++  const stamped = appendEvent(root, id, {
++    type: EVENT_ATTEMPT_BASE_CORRECTED,
++    attemptIndex,
++    frontier: attempt.event.frontier,
++    fromBase: recordedBase,
++    toBase: targetBase,
++    fingerprint: attempt.fingerprint,
++    paths,
++    reason,
++    proof: {
++      changeRefFingerprint: attempt.fingerprint,
++      recordedBaseFingerprint,
++      targetBaseFingerprint,
++    },
++  });
++  return `corrected attempt ${attemptIndex} base ${recordedBase} -> ` +
++    `${targetBase} at ${stamped.ts}`;
++}
+diff --git a/scripts/solve/scope-pressure.js b/scripts/solve/scope-pressure.js
+index 90451f44d5dfd8326135516c57cc4014417acd7e..b5630881ed31e95f6f03c78b5b5bc57f3269b93f 100644
+--- a/scripts/solve/scope-pressure.js
++++ b/scripts/solve/scope-pressure.js
+@@ -5,8 +5,15 @@ import {
+ import {
+   changedPathsFromDiffContent,
+   inspectChangeArtifact,
++  requiresSourceVerification,
+ } from './change-artifact.js';
+ import {isRegenerableQuestReport} from './report-retention.js';
++import {
++  projectAttemptBaseCorrections,
++} from './attempt-base-correction-projection.js';
++import {
++  attemptBaseCorrectionProofProblem,
++} from './verification.js';
+ 
+ const BROAD_OWNER_AREA_LIMIT = 2;
+ const LARGE_DIFF_FILE_LIMIT = 10;
+@@ -74,16 +81,36 @@ function latestScopeBaselineIndex(log) {
+ 
+ function attemptInspections(root, quest, log, options = {}) {
+   const baselineIndex = options.ignoreBaselines ? -1 : latestScopeBaselineIndex(log);
+-  return log
++  const attempts = log
+     .map((event, index) => ({event, index}))
+     .filter(({event, index}) =>
+       event.type === EVENT_ATTEMPT &&
+       event.changeRef &&
+       index > baselineIndex)
+-    .map(({event}) => ({
+-      event,
+-      inspection: inspectChangeArtifact(root, quest, event.changeRef),
+-    }));
++    .map(({event, index}) => {
++      const inspection = inspectChangeArtifact(root, quest, event.changeRef);
++      return {
++        index,
++        event,
++        inspection,
++        sourcePaths:
++          inspection.changedPaths.filter(requiresSourceVerification),
++        fingerprint:
++          typeof event.changeRefIdentity?.sha256 === 'string' ?
++            `sha256:${event.changeRefIdentity.sha256}` :
++            null,
++        candidateContract: event.verificationContractVersion === 2,
++      };
++    });
++  return projectAttemptBaseCorrections(attempts, log, {
++    validateProof: (correction, attempt) =>
++      attemptBaseCorrectionProofProblem(
++        root,
++        quest,
++        correction,
++        attempt,
++      ),
++  }).attempts;
+ }
+ 
+ function effectiveChangeBytes(inspections) {
+diff --git a/scripts/solve/step.js b/scripts/solve/step.js
+index f02f14f134c4662eb96ab196bd228054bfd9b4a4..c1cb383e24db553e4e362506be1d6ca038a135cc 100644
+--- a/scripts/solve/step.js
++++ b/scripts/solve/step.js
+@@ -105,10 +105,16 @@ function resolveHeadPin(root) {
+ }
+ 
+ export function resolveStepBaseCommit(root, quest, log, frontierId) {
+-  const unresolvedRejection = verificationState(root, quest, log)
++  const verification = verificationState(root, quest, log);
++  const unresolvedRejection = verification
+     .unresolvedRejectedAttempts
+     .find(({attempt}) => attempt.event.frontier === frontierId);
+-  const rejectedBase = unresolvedRejection?.attempt.event.workspaceBaseCommit;
++  const candidateRejection = verification.unresolvedCandidateRejection;
++  const rejectedBase = (
++    candidateRejection?.event?.frontier === frontierId ?
++      candidateRejection.receipt?.baseCommit :
++      null
++  ) || unresolvedRejection?.attempt.event.workspaceBaseCommit;
+   // A replacement is pinned to the rejected attempt's base so the rejection
+   // stays binding — but pinning to a base that no longer resolves would refuse
+   // the replacement before it could be recorded. The live-base coverage rule in
+diff --git a/scripts/solve/verification.js b/scripts/solve/verification.js
+index 197ebf086971866956c443c9ea9556f4f125501d..9473f91b73b6c74d0a55eaa4dbab34c005cceccd 100644
+--- a/scripts/solve/verification.js
++++ b/scripts/solve/verification.js
+@@ -8,9 +8,14 @@ import {spawnSync} from 'node:child_process';
+ 
+ import {EVENT_ATTEMPT, EVENT_FINDING} from './constants.js';
+ import {
++  changeArtifactIdentity,
++  changeArtifactIdentityMatches,
+   inspectChangeArtifact,
+   requiresSourceVerification,
+ } from './change-artifact.js';
++import {
++  projectAttemptBaseCorrections,
++} from './attempt-base-correction-projection.js';
+ 
+ const LOCAL_STR_OWNED_001 = 'verifier-approval';
+ const LOCAL_STR_OWNED_002 = 'attempt';
+@@ -113,7 +118,7 @@ export function resolveWorkspaceBaseCommit(root) {
+   return /^[0-9a-f]{40}$/u.test(sha) ? sha : null;
+ }
+ 
+-export function sourceChangingAttempts(root, quest, log, options = {}) {
++function rawSourceChangingAttempts(root, quest, log, options = {}) {
+   const startIndex = options.startIndex || 0;
+   const attempts = [];
+   for (const [index, event] of log.entries()) {
+@@ -139,6 +144,38 @@ export function sourceChangingAttempts(root, quest, log, options = {}) {
+   return attempts;
+ }
+ 
++export function sourceChangingAttempts(root, quest, log, options = {}) {
++  return projectAttemptBaseCorrections(
++    rawSourceChangingAttempts(root, quest, log, options),
++    log,
++    {
++      validateProof: (correction, attempt) =>
++        attemptBaseCorrectionProofProblem(
++          root,
++          quest,
++          correction,
++          attempt,
++        ),
++    },
++  ).attempts;
++}
++
++export function attemptBaseCorrectionProblems(root, quest, log, options = {}) {
++  return projectAttemptBaseCorrections(
++    rawSourceChangingAttempts(root, quest, log, options),
++    log,
++    {
++      validateProof: (correction, attempt) =>
++        attemptBaseCorrectionProofProblem(
++          root,
++          quest,
++          correction,
++          attempt,
++        ),
++    },
++  ).problems;
++}
++
+ function verificationOf(event) {
+   return event?.verification && typeof event.verification === 'object' ?
+     event.verification : null;
+@@ -342,6 +379,40 @@ export function canonicalSourceDelta(root, baseCommit, paths) {
+   };
+ }
+ 
++export function attemptBaseCorrectionProofProblem(
++  root,
++  quest,
++  correction,
++  attempt,
++) {
++  const currentIdentity = changeArtifactIdentity(
++    root,
++    quest.id,
++    attempt.event.changeRef,
++  );
++  if (!changeArtifactIdentityMatches(
++    attempt.event.changeRefIdentity,
++    currentIdentity,
++  )) {
++    return 'attempt base correction sealed change artifact has drifted';
++  }
++  for (const [label, baseCommit] of [
++    ['recorded-base', correction.fromBase],
++    ['target-base', correction.toBase],
++  ]) {
++    const delta = canonicalSourceDelta(
++      root,
++      baseCommit,
++      correction.paths,
++    );
++    if (!delta.ok || delta.fingerprint !== correction.fingerprint) {
++      return `attempt base correction ${label} proof does not reproduce ` +
++        correction.fingerprint;
++    }
++  }
++  return null;
++}
++
+ export function aggregateSourceFingerprint(root, attempts) {
+   const contracted = attempts.filter((attempt) => attempt.contracted);
+   if (contracted.length === 0) {
+@@ -642,7 +713,17 @@ function unresolvedRejectionEntry(root, attempt, rejection) {
+ 
+ export function verificationState(root, quest, log, options = {}) {
+   const attempts = sourceChangingAttempts(root, quest, log, options);
+-  const attemptProblems = [];
++  const correctionProblems = attemptBaseCorrectionProblems(
++    root,
++    quest,
++    log,
++    options,
++  );
++  const attemptProblems = correctionProblems.map((message) => ({
++    message,
++    ts: null,
++    frontier: null,
++  }));
+   const pendingAttempts = [];
+   const resolvedRejectedAttempts = [];
+   const unresolvedRejectedAttempts = [];
+@@ -743,6 +824,7 @@ export function verificationState(root, quest, log, options = {}) {
+     candidateApproval: candidateState.approval,
+     candidateRejection: candidateState.rejection,
+     unresolvedCandidateRejection: candidateState.unresolvedRejection,
++    attemptBaseCorrectionProblems: correctionProblems,
+   };
+   return {
+     ...state,
+diff --git a/solve/quests/solver-candidate-rejection-base-correction.json b/solve/quests/solver-candidate-rejection-base-correction.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..a142f2bd18d019a96603910e5bec5587993ff24b
+--- /dev/null
++++ b/solve/quests/solver-candidate-rejection-base-correction.json
+@@ -0,0 +1,63 @@
++{
++  "id": "solver-candidate-rejection-base-correction",
++  "authoringContractVersion": 1,
++  "verificationContractVersion": 2,
++  "statement": "Solver pins replacement steps for a version-2 candidate rejection to that rejection's common base, and an accepted but not-yet-verified attempt whose recorded base was procedurally wrong may receive one append-only base correction only when the exact change artifact and canonical current delta are byte-identical at both reachable bases, the target is the standing rejected-candidate base, no review covers the mistaken attempt, and every projection preserves the original event while using the validated effective base; drift, path changes, content changes, arbitrary bases, repeated correction, or post-review correction fail closed.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": null,
++    "closesCL": [],
++    "parentQuest": null,
++    "planDoc": "docs/steering/workflow-guidelines/solver-quests.md",
++    "draftedAtCommit": "3320683e05dcc23f0d1b6d39cf8f5762e7e60038"
++  },
++  "doneWhen": {
++    "probe": "scenario-harness",
++    "args": {
++      "scenario": "solver-candidate-rejection-base-correction",
++      "consecutive": 3,
++      "metric": "priority"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "solver-candidate-rejection-base-correction-main",
++      "priority": 1,
++      "metric": {
++        "probe": "scenario-harness",
++        "args": {
++          "scenario": "solver-candidate-rejection-base-correction",
++          "metric": "priority"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    },
++    {
++      "id": "append-only-correction",
++      "statement": "Never rewrite or delete an attempt or finding. Record one typed correction event that retains the original base and names the effective base used by every verification, preflight, audit, handoff, and scope projection."
++    },
++    {
++      "id": "proof-checked-equivalence",
++      "statement": "Accept a correction only for a version-2 source attempt when the recorded and target commits both resolve, the target is the standing candidate-rejection base on the same frontier, the exact path union is unchanged, and the sealed change artifact plus canonical current deltas at both bases have the same fingerprint."
++    },
++    {
++      "id": "review-fence",
++      "statement": "Refuse correction after any exact verifier receipt covers the attempt fingerprint or attempt range, refuse a second correction, and refuse missing, malformed, drifted, path-changing, content-changing, arbitrary-base, or cross-frontier requests."
++    },
++    {
++      "id": "replacement-pin-owner",
++      "statement": "The supervised step owner consults both attempt-scoped and candidate-scoped unresolved rejections and pins a replacement to the live rejected base before edits begin."
++    },
++    {
++      "id": "focused-proof",
++      "statement": "Focused tests reproduce the candidate-scoped pin bug and the mixed-base scale recovery, prove append-only successful correction, and attack wrong target, drift, changed paths or bytes, duplicate correction, malformed event, and correction after approval or rejection."
++    }
++  ]
++}
+diff --git a/test/solve/attempt-base-correction.test.js b/test/solve/attempt-base-correction.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3ef99180b2c191ea137241dfb1a1bc70a86a1404
+--- /dev/null
++++ b/test/solve/attempt-base-correction.test.js
+@@ -0,0 +1,546 @@
++import tap from 'tap';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import {execFileSync} from 'node:child_process';
++
++import {
++  runAttemptBaseCorrectionCommand,
++} from '../../scripts/solve/attempt-base-correction.js';
++import {
++  EVENT_ATTEMPT_BASE_CORRECTED,
++  projectAttemptBaseCorrections,
++} from '../../scripts/solve/attempt-base-correction-projection.js';
++import {
++  runStep,
++  stepAbort,
++  stepPending,
++} from '../../scripts/solve/step.js';
++import {
++  analyzeScopePressure,
++} from '../../scripts/solve/scope-pressure.js';
++import {
++  appendEvent,
++  appendFinding,
++  readLog,
++  saveQuest,
++} from '../../scripts/solve/store.js';
++import {
++  verificationState,
++} from '../../scripts/solve/verification.js';
++
++function git(root, args) {
++  return execFileSync('git', args, {cwd: root, encoding: 'utf8'});
++}
++
++function fixture() {
++  const root = fs.mkdtempSync(
++    path.join(os.tmpdir(), 'attempt-base-correction-'),
++  );
++  git(root, ['init']);
++  git(root, ['config', 'user.email', 'solver@example.com']);
++  git(root, ['config', 'user.name', 'Solver']);
++  git(root, ['config', 'commit.gpgsign', 'false']);
++  fs.mkdirSync(path.join(root, 'src'), {recursive: true});
++  fs.writeFileSync(path.join(root, 'src/a.js'), 'export const a = 1;\n');
++  fs.writeFileSync(path.join(root, 'src/b.js'), 'export const b = 1;\n');
++  git(root, ['add', '-A']);
++  git(root, ['commit', '-m', 'base']);
++  const oracle = path.join(root, 'oracle.json');
++  fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
++  const quest = {
++    id: 'base-correction',
++    class: 'process',
++    verificationContractVersion: 2,
++    statement: 'Attempt base corrections are exact and append-only.',
++    doneWhen: {probe: 'oracle', args: {file: oracle}},
++    frontiers: [{
++      id: 'base-correction-main',
++      priority: 1,
++      metric: {probe: 'oracle', args: {file: oracle}},
++    }],
++    constraints: [],
++  };
++  saveQuest(root, quest);
++  return {root, quest, oracle};
++}
++
++function commitAttempt(fx, edits, metric, name, forcedBase = null) {
++  runStep(fx.root, fx.quest);
++  if (forcedBase) {
++    const pending = stepPending(fx.root, fx.quest.id);
++    pending.headCommit = forcedBase;
++    const pendingPath = path.join(
++      fx.root,
++      'solve/state',
++      `${fx.quest.id}.pending.json`,
++    );
++    fs.writeFileSync(pendingPath, `${JSON.stringify(pending, null, 2)}\n`);
++  }
++  for (const [relative, content] of Object.entries(edits)) {
++    fs.writeFileSync(path.join(fx.root, relative), content);
++  }
++  fs.writeFileSync(fx.oracle, JSON.stringify({metric, target: 0}));
++  const base = forcedBase || git(fx.root, ['rev-parse', 'HEAD']).trim();
++  const paths = Object.keys(edits);
++  const diff = git(fx.root, [
++    'diff',
++    '--binary',
++    '--full-index',
++    '--no-ext-diff',
++    base,
++    '--',
++    ...paths,
++  ]);
++  const relative = `solve/changes/${fx.quest.id}/${name}.diff`;
++  const artifact = path.join(fx.root, relative);
++  fs.mkdirSync(path.dirname(artifact), {recursive: true});
++  fs.writeFileSync(artifact, diff);
++  runStep(fx.root, fx.quest, {
++    changeRef: `diff:${relative}`,
++    summary: name,
++  });
++}
++
++function rejectCandidate(fx) {
++  const state = verificationState(
++    fx.root,
++    fx.quest,
++    readLog(fx.root, fx.quest.id),
++  );
++  const candidate = state.candidate;
++  appendFinding(fx.root, fx.quest.id, {
++    frontier: fx.quest.frontiers[0].id,
++    kind: 'verifier-rejection',
++    claim: 'exact candidate rejected',
++    evidence: 'subagent:base-correction-rejector',
++    verification: {
++      schemaVersion: 2,
++      scope: 'candidate',
++      fingerprint: candidate.fingerprint,
++      baseCommit: candidate.baseCommit,
++      paths: candidate.paths,
++      sourcePaths: candidate.sourcePaths,
++      firstAttemptIndex: candidate.firstAttemptIndex,
++      lastAttemptIndex: candidate.lastAttemptIndex,
++      verdict: 'rejected',
++    },
++  });
++  return candidate;
++}
++
++function mixedBaseFixture(t) {
++  const fx = fixture();
++  t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
++  const rejectedBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
++  commitAttempt(
++    fx,
++    {'src/a.js': 'export const a = 2;\n'},
++    1,
++    'rejected',
++  );
++  rejectCandidate(fx);
++
++  fs.mkdirSync(path.join(fx.root, 'docs'), {recursive: true});
++  fs.writeFileSync(path.join(fx.root, 'docs/planning.md'), 'planning\n');
++  git(fx.root, ['add', 'docs/planning.md']);
++  git(fx.root, ['commit', '-m', 'unrelated planning']);
++  const wrongBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
++
++  runStep(fx.root, fx.quest);
++  t.equal(
++    stepPending(fx.root, fx.quest.id).headCommit,
++    rejectedBase,
++    'candidate-scoped rejection pins the replacement step to its base',
++  );
++  stepAbort(fx.root, fx.quest.id);
++  commitAttempt(
++    fx,
++    {
++      'src/a.js': 'export const a = 3;\n',
++      'src/b.js': 'export const b = 2;\n',
++    },
++    0,
++    'wrong-base-replacement',
++    wrongBase,
++  );
++  const log = readLog(fx.root, fx.quest.id);
++  const attemptIndex = log.findLastIndex((event) => event.type === 'attempt');
++  return {fx, rejectedBase, wrongBase, attemptIndex};
++}
++
++tap.test('proof-checked correction restores one common base append-only', (t) => {
++  const {
++    fx,
++    rejectedBase,
++    wrongBase,
++    attemptIndex,
++  } = mixedBaseFixture(t);
++  let state = verificationState(
++    fx.root,
++    fx.quest,
++    readLog(fx.root, fx.quest.id),
++  );
++  t.notOk(state.candidate.ok);
++  t.match(state.candidate.problem, /one recorded common Git base/u);
++
++  t.match(
++    runAttemptBaseCorrectionCommand(fx.root, {
++      'id': fx.quest.id,
++      'attempt-index': String(attemptIndex),
++      'to-base': rejectedBase,
++      'reason': 'candidate rejection base was omitted by the step pin',
++    }),
++    /corrected attempt/u,
++  );
++  const log = readLog(fx.root, fx.quest.id);
++  const original = log[attemptIndex];
++  t.equal(original.workspaceBaseCommit, wrongBase,
++    'the original attempt event is never rewritten');
++  t.equal(log.at(-1).type, EVENT_ATTEMPT_BASE_CORRECTED);
++  t.equal(log.at(-1).fromBase, wrongBase);
++  t.equal(log.at(-1).toBase, rejectedBase);
++
++  state = verificationState(fx.root, fx.quest, log);
++  t.same(state.attemptBaseCorrectionProblems, []);
++  t.ok(state.candidate.ok);
++  t.equal(state.candidate.baseCommit, rejectedBase);
++  t.same(state.candidate.paths, ['src/a.js', 'src/b.js']);
++  t.notOk(state.unresolvedCandidateRejection,
++    'changed-fingerprint full-path replacement now resolves the rejection');
++  t.equal(
++    state.attempts.find((attempt) => attempt.index === attemptIndex)
++      .event.workspaceBaseCommit,
++    rejectedBase,
++    'verification consumers use the effective corrected base',
++  );
++  const scopePressure = analyzeScopePressure(
++    fx.root,
++    fx.quest,
++    log,
++    {ignoreBaselines: true},
++  );
++  t.same(
++    scopePressure.changedPaths,
++    ['src/a.js', 'src/b.js'],
++    'scope-pressure projects the same authorized correction and path union',
++  );
++  t.throws(
++    () => runAttemptBaseCorrectionCommand(fx.root, {
++      'id': fx.quest.id,
++      'attempt-index': String(attemptIndex),
++      'to-base': rejectedBase,
++      'reason': 'repeat',
++    }),
++    /already has a correction/u,
++  );
++  t.end();
++});
++
++tap.test('correction refuses arbitrary targets, drift, and prior review', (t) => {
++  const first = mixedBaseFixture(t);
++  t.throws(
++    () => runAttemptBaseCorrectionCommand(first.fx.root, {
++      'id': first.fx.quest.id,
++      'attempt-index': String(first.attemptIndex),
++      'to-base': first.wrongBase,
++      'reason': 'arbitrary target',
++    }),
++    /target must equal the standing earlier candidate-rejection base/u,
++  );
++  fs.writeFileSync(
++    path.join(first.fx.root, 'src/a.js'),
++    'export const a = 99;\n',
++  );
++  t.throws(
++    () => runAttemptBaseCorrectionCommand(first.fx.root, {
++      'id': first.fx.quest.id,
++      'attempt-index': String(first.attemptIndex),
++      'to-base': first.rejectedBase,
++      'reason': 'drifted',
++    }),
++    /does not reproduce/u,
++  );
++
++  const reviewed = mixedBaseFixture(t);
++  const state = verificationState(
++    reviewed.fx.root,
++    reviewed.fx.quest,
++    readLog(reviewed.fx.root, reviewed.fx.quest.id),
++  );
++  const attempt = state.attempts.find(
++    (candidate) => candidate.index === reviewed.attemptIndex,
++  );
++  appendFinding(reviewed.fx.root, reviewed.fx.quest.id, {
++    frontier: reviewed.fx.quest.frontiers[0].id,
++    kind: 'verifier-approval',
++    claim: 'attempt reviewed',
++    evidence: 'subagent:already-reviewed',
++    verification: {
++      schemaVersion: 1,
++      scope: 'attempt',
++      fingerprint: attempt.fingerprint,
++    },
++  });
++  t.throws(
++    () => runAttemptBaseCorrectionCommand(reviewed.fx.root, {
++      'id': reviewed.fx.quest.id,
++      'attempt-index': String(reviewed.attemptIndex),
++      'to-base': reviewed.rejectedBase,
++      'reason': 'too late',
++    }),
++    /verifier receipt already covers/u,
++  );
++  t.end();
++});
++
++tap.test('malformed correction events fail the verification projection', (t) => {
++  const {fx, attemptIndex} = mixedBaseFixture(t);
++  appendEvent(fx.root, fx.quest.id, {
++    type: EVENT_ATTEMPT_BASE_CORRECTED,
++    attemptIndex,
++    toBase: 'not-a-commit',
++  });
++  const state = verificationState(
++    fx.root,
++    fx.quest,
++    readLog(fx.root, fx.quest.id),
++  );
++  t.match(
++    state.attemptBaseCorrectionProblems.join('\n'),
++    /inexact event shape/u,
++  );
++  t.match(
++    state.attemptProblems.map((problem) => problem.message).join('\n'),
++    /base correction/u,
++  );
++  t.end();
++});
++
++tap.test('projection replays authorization and resists polluted intrinsics', (t) => {
++  const {
++    fx,
++    rejectedBase,
++    wrongBase,
++    attemptIndex,
++  } = mixedBaseFixture(t);
++  const log = readLog(fx.root, fx.quest.id);
++  const state = verificationState(fx.root, fx.quest, log);
++  const attempt = state.attempts.find(
++    (candidate) => candidate.index === attemptIndex,
++  );
++  const correction = {
++    type: EVENT_ATTEMPT_BASE_CORRECTED,
++    attemptIndex,
++    frontier: attempt.event.frontier,
++    fromBase: wrongBase,
++    toBase: rejectedBase,
++    fingerprint: attempt.fingerprint,
++    paths: [...attempt.inspection.changedPaths].sort(),
++    reason: 'test correction',
++    proof: {
++      changeRefFingerprint: attempt.fingerprint,
++      recordedBaseFingerprint: attempt.fingerprint,
++      targetBaseFingerprint: attempt.fingerprint,
++    },
++    ts: '2026-07-27T00:00:00.000Z',
++  };
++  const noRejectionLog = log.map((event) =>
++    event.kind === 'verifier-rejection' &&
++    event.verification?.scope === 'candidate' ?
++      {...event, type: 'rejection-removed-for-attack'} :
++      event);
++  noRejectionLog.push(correction);
++  let projection = projectAttemptBaseCorrections(
++    state.attempts,
++    noRejectionLog,
++    {validateProof: () => null},
++  );
++  t.match(
++    projection.problems.join('\n'),
++    /no exact standing candidate rejection/u,
++  );
++  t.equal(
++    projection.attempts.find(
++      (candidate) => candidate.index === attemptIndex,
++    ).event.workspaceBaseCommit,
++    wrongBase,
++    'an arbitrary exact-shaped event never changes the projected base',
++  );
++
++  const reviewedLog = [...log, {
++    type: 'finding',
++    frontier: attempt.event.frontier,
++    kind: 'verifier-approval',
++    evidence: 'subagent:prior-review',
++    verification: {
++      schemaVersion: 2,
++      scope: 'candidate',
++      fingerprint: attempt.fingerprint,
++      baseCommit: wrongBase,
++      paths: correction.paths,
++      sourcePaths: correction.paths,
++      firstAttemptIndex: attemptIndex,
++      lastAttemptIndex: attemptIndex,
++    },
++  }, correction];
++  projection = projectAttemptBaseCorrections(
++    state.attempts,
++    reviewedLog,
++    {validateProof: () => null},
++  );
++  t.match(projection.problems.join('\n'), /follows an exact verifier review/u);
++
++  const malformed = {
++    ...correction,
++    fromBase: null,
++    toBase: null,
++    proof: {},
++  };
++  const originalEvery = Object.getOwnPropertyDescriptor(
++    Array.prototype,
++    'every',
++  );
++  let pollutedProjection;
++  try {
++    Reflect.defineProperty(Array.prototype, 'every', {
++      ...originalEvery,
++      value: () => true,
++    });
++    pollutedProjection = projectAttemptBaseCorrections(
++      state.attempts,
++      [...log, malformed],
++      {validateProof: () => null},
++    );
++  } finally {
++    Reflect.defineProperty(Array.prototype, 'every', originalEvery);
++  }
++  t.match(
++    pollutedProjection.problems.join('\n'),
++    /does not bind the exact recorded attempt/u,
++  );
++  t.notOk(
++    pollutedProjection.attempts.find(
++      (candidate) => candidate.index === attemptIndex,
++    ).event.baseCorrection,
++    'post-import Array.prototype.every pollution cannot promote malformed data',
++  );
++  t.end();
++});
++
++tap.test('command refuses artifact drift and malformed rejection authority', (t) => {
++  const drifted = mixedBaseFixture(t);
++  const driftedLog = readLog(drifted.fx.root, drifted.fx.quest.id);
++  const attemptEvent = driftedLog[drifted.attemptIndex];
++  fs.appendFileSync(
++    path.join(drifted.fx.root, attemptEvent.changeRef.slice('diff:'.length)),
++    '\n',
++  );
++  t.throws(
++    () => runAttemptBaseCorrectionCommand(drifted.fx.root, {
++      'id': drifted.fx.quest.id,
++      'attempt-index': String(drifted.attemptIndex),
++      'to-base': drifted.rejectedBase,
++      'reason': 'artifact drift attack',
++    }),
++    /sealed change artifact has drifted/u,
++  );
++
++  const fx = fixture();
++  t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
++  const rejectedBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
++  commitAttempt(fx, {'src/a.js': 'export const a = 2;\n'}, 1, 'first');
++  appendEvent(fx.root, fx.quest.id, {
++    type: 'finding',
++    frontier: fx.quest.frontiers[0].id,
++    kind: 'verifier-rejection',
++    evidence: 'subagent:malformed',
++    verification: {
++      schemaVersion: 2,
++      scope: 'candidate',
++      baseCommit: rejectedBase,
++      lastAttemptIndex: 1,
++      verdict: 'rejected',
++    },
++  });
++  fs.writeFileSync(path.join(fx.root, 'planning.md'), 'planning\n');
++  git(fx.root, ['add', 'planning.md']);
++  git(fx.root, ['commit', '-m', 'different base']);
++  const wrongBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
++  commitAttempt(
++    fx,
++    {
++      'src/a.js': 'export const a = 3;\n',
++      'src/b.js': 'export const b = 2;\n',
++    },
++    0,
++    'replacement',
++    wrongBase,
++  );
++  const malformedLog = readLog(fx.root, fx.quest.id);
++  const malformedAttemptIndex =
++    malformedLog.findLastIndex((event) => event.type === 'attempt');
++  t.throws(
++    () => runAttemptBaseCorrectionCommand(fx.root, {
++      'id': fx.quest.id,
++      'attempt-index': String(malformedAttemptIndex),
++      'to-base': rejectedBase,
++      'reason': 'malformed authority attack',
++    }),
++    /standing earlier candidate-rejection base/u,
++  );
++  t.end();
++});
++
++tap.test('shape-complete rejection must bind an earlier sealed attempt', (t) => {
++  const fx = fixture();
++  t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
++  const rejectedBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
++  appendEvent(fx.root, fx.quest.id, {
++    type: 'finding',
++    frontier: fx.quest.frontiers[0].id,
++    kind: 'verifier-rejection',
++    evidence: 'subagent:unbound-rejection',
++    verification: {
++      schemaVersion: 2,
++      scope: 'candidate',
++      fingerprint: `sha256:${'a'.repeat(64)}`,
++      baseCommit: rejectedBase,
++      paths: ['src/a.js'],
++      sourcePaths: ['src/a.js'],
++      firstAttemptIndex: 0,
++      lastAttemptIndex: 0,
++      verdict: 'rejected',
++    },
++  });
++  fs.writeFileSync(path.join(fx.root, 'planning.md'), 'planning\n');
++  git(fx.root, ['add', 'planning.md']);
++  git(fx.root, ['commit', '-m', 'different base']);
++  const wrongBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
++  commitAttempt(
++    fx,
++    {'src/a.js': 'export const a = 2;\n'},
++    0,
++    'mistaken-attempt',
++    wrongBase,
++  );
++  const log = readLog(fx.root, fx.quest.id);
++  const attemptIndex =
++    log.findLastIndex((event) => event.type === 'attempt');
++  t.throws(
++    () => runAttemptBaseCorrectionCommand(fx.root, {
++      'id': fx.quest.id,
++      'attempt-index': String(attemptIndex),
++      'to-base': rejectedBase,
++      'reason': 'unbound receipt attack',
++    }),
++    /standing earlier candidate-rejection base/u,
++  );
++  t.notOk(
++    readLog(fx.root, fx.quest.id).some(
++      (event) => event.type === EVENT_ATTEMPT_BASE_CORRECTED,
++    ),
++    'the unbound receipt cannot append a correction',
++  );
++  t.end();
++});
+diff --git a/test/solve/candidate-verification.test.js b/test/solve/candidate-verification.test.js
+index c5f96c7b4bc543b35e812ebf328d5ececb1fb8c7..1722f318e57f817103b76f1b720ebfaec97ffac4 100644
+--- a/test/solve/candidate-verification.test.js
++++ b/test/solve/candidate-verification.test.js
+@@ -159,7 +159,26 @@ tap.test('invalid mixed-base replacement cannot erase a candidate rejection', (t
+   candidateFinding(fx, 'verifier-rejection');
+ 
+   git(fx.root, ['commit', '--allow-empty', '-m', 'different attempt base']);
+-  record(fx, {'src/b.js': 'export const b = 3;\n'}, 0, 'wrong-base-replacement');
++  const differentBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
++  const replacement = runStep(fx.root, fx.quest);
++  const pending = JSON.parse(fs.readFileSync(replacement.pendingFile, 'utf8'));
++  pending.headCommit = differentBase;
++  fs.writeFileSync(replacement.pendingFile, JSON.stringify(pending, null, 2));
++  fs.writeFileSync(path.join(fx.root, 'src/b.js'), 'export const b = 3;\n');
++  fs.writeFileSync(fx.oracle, JSON.stringify({metric: 0, target: 0}));
++  const diff = git(fx.root, [
++    'diff', '--binary', '--full-index', '--no-ext-diff', differentBase,
++    '--', 'src/b.js',
++  ]);
++  const relativeArtifact =
++    `solve/changes/${fx.quest.id}/wrong-base-replacement.diff`;
++  const artifact = path.join(fx.root, relativeArtifact);
++  fs.mkdirSync(path.dirname(artifact), {recursive: true});
++  fs.writeFileSync(artifact, diff);
++  runStep(fx.root, fx.quest, {
++    changeRef: `diff:${relativeArtifact}`,
++    summary: 'wrong-base-replacement',
++  });
+   let log = readLog(fx.root, fx.quest.id);
+   const state = verificationState(fx.root, fx.quest, log);
+   t.notOk(state.candidate.ok);

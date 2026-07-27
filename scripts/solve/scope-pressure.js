@@ -5,8 +5,15 @@ import {
 import {
   changedPathsFromDiffContent,
   inspectChangeArtifact,
+  requiresSourceVerification,
 } from './change-artifact.js';
 import {isRegenerableQuestReport} from './report-retention.js';
+import {
+  projectAttemptBaseCorrections,
+} from './attempt-base-correction-projection.js';
+import {
+  attemptBaseCorrectionProofProblem,
+} from './verification.js';
 
 const BROAD_OWNER_AREA_LIMIT = 2;
 const LARGE_DIFF_FILE_LIMIT = 10;
@@ -74,16 +81,36 @@ function latestScopeBaselineIndex(log) {
 
 function attemptInspections(root, quest, log, options = {}) {
   const baselineIndex = options.ignoreBaselines ? -1 : latestScopeBaselineIndex(log);
-  return log
+  const attempts = log
     .map((event, index) => ({event, index}))
     .filter(({event, index}) =>
       event.type === EVENT_ATTEMPT &&
       event.changeRef &&
       index > baselineIndex)
-    .map(({event}) => ({
-      event,
-      inspection: inspectChangeArtifact(root, quest, event.changeRef),
-    }));
+    .map(({event, index}) => {
+      const inspection = inspectChangeArtifact(root, quest, event.changeRef);
+      return {
+        index,
+        event,
+        inspection,
+        sourcePaths:
+          inspection.changedPaths.filter(requiresSourceVerification),
+        fingerprint:
+          typeof event.changeRefIdentity?.sha256 === 'string' ?
+            `sha256:${event.changeRefIdentity.sha256}` :
+            null,
+        candidateContract: event.verificationContractVersion === 2,
+      };
+    });
+  return projectAttemptBaseCorrections(attempts, log, {
+    validateProof: (correction, attempt) =>
+      attemptBaseCorrectionProofProblem(
+        root,
+        quest,
+        correction,
+        attempt,
+      ),
+  }).attempts;
 }
 
 function effectiveChangeBytes(inspections) {

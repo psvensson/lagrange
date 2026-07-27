@@ -159,7 +159,26 @@ tap.test('invalid mixed-base replacement cannot erase a candidate rejection', (t
   candidateFinding(fx, 'verifier-rejection');
 
   git(fx.root, ['commit', '--allow-empty', '-m', 'different attempt base']);
-  record(fx, {'src/b.js': 'export const b = 3;\n'}, 0, 'wrong-base-replacement');
+  const differentBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
+  const replacement = runStep(fx.root, fx.quest);
+  const pending = JSON.parse(fs.readFileSync(replacement.pendingFile, 'utf8'));
+  pending.headCommit = differentBase;
+  fs.writeFileSync(replacement.pendingFile, JSON.stringify(pending, null, 2));
+  fs.writeFileSync(path.join(fx.root, 'src/b.js'), 'export const b = 3;\n');
+  fs.writeFileSync(fx.oracle, JSON.stringify({metric: 0, target: 0}));
+  const diff = git(fx.root, [
+    'diff', '--binary', '--full-index', '--no-ext-diff', differentBase,
+    '--', 'src/b.js',
+  ]);
+  const relativeArtifact =
+    `solve/changes/${fx.quest.id}/wrong-base-replacement.diff`;
+  const artifact = path.join(fx.root, relativeArtifact);
+  fs.mkdirSync(path.dirname(artifact), {recursive: true});
+  fs.writeFileSync(artifact, diff);
+  runStep(fx.root, fx.quest, {
+    changeRef: `diff:${relativeArtifact}`,
+    summary: 'wrong-base-replacement',
+  });
   let log = readLog(fx.root, fx.quest.id);
   const state = verificationState(fx.root, fx.quest, log);
   t.notOk(state.candidate.ok);

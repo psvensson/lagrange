@@ -147,5 +147,9 @@
   "inherit-candidate": {
     "summary": "Re-record a parked parent quest's VERIFIED landing candidate into a declared successor: copies the candidate attempts (provenance-marked, artifacts re-homed to the child's change dir) and rebuilds the candidate approval against the child's own projection. The approval lands only when the child's content-addressed fingerprint equals the parent-approved one, so any divergence falls back to a fresh verification round.",
     "usage": "node scripts/solve.js inherit-candidate --id <child> --from <parent>"
+  },
+  "correct-attempt-base": {
+    "summary": "Append one proof-checked correction for an unverified version-2 source attempt whose recorded base missed the standing candidate-rejection base. Both reachable-base deltas and the sealed change artifact must reproduce the same fingerprint; review, drift, arbitrary targets, and repeat correction are refused.",
+    "usage": "node scripts/solve.js correct-attempt-base --id <id> --attempt-index <log-index> --to-base <commit> --reason \"<procedural cause>\""
   }
 }
