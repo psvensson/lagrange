@@ -61,7 +61,7 @@ function sha256(bytes) {
     .digest(BUILD.HASH_ENCODING)}`;
 }
 
-async function buildComponent(paths) {
+async function buildComponent(paths, definition = EXAMPLE) {
   await execFileAsync(BUILD.WASM_TOOLS_COMMAND, [
     BUILD.WASM_TOOLS_PARSE,
     paths.componentSourcePath,
@@ -70,60 +70,65 @@ async function buildComponent(paths) {
   ]);
   return new ServiceLocalOciLayoutBuilder().build({
     outputRoot: paths.ociOutputRoot,
-    platform: EXAMPLE.PLATFORM,
+    platform: definition.PLATFORM,
     runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
-    sourceDateEpoch: EXAMPLE.SOURCE_DATE_EPOCH,
+    sourceDateEpoch: definition.SOURCE_DATE_EPOCH,
     wasm: {payloadPath: paths.componentPath},
   });
 }
 
-function buildManifest(receipt) {
+function buildManifest(receipt, definition = EXAMPLE) {
   return {
     artifact: {
       digest: receipt.topManifestDescriptor.digest,
       media_type: EXTERNAL_SERVICE_MEDIA_TYPE.WASM_COMPONENT,
       ref:
-        `registry.example.test/examples/${EXAMPLE.SERVICE_NAME}:` +
-        EXAMPLE.VERSION,
+        `registry.example.test/examples/${definition.SERVICE_NAME}:` +
+        definition.VERSION,
       size_bytes: receipt.topManifestDescriptor.sizeBytes,
       type: BUILD.ARTIFACT_TYPE,
     },
     capabilities: [],
     exports: [{
       interface: EXTERNAL_SERVICE_EXPORT_INTERFACE.REQUEST,
-      name: EXAMPLE.COMPONENT_EXPORT,
+      name: definition.COMPONENT_EXPORT,
     }],
-    name: EXAMPLE.SERVICE_NAME,
+    name: definition.SERVICE_NAME,
     runtime: {kind: RUNTIME_KIND.WASM_COMPONENT},
     schema_version: EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION,
-    version: EXAMPLE.VERSION,
+    version: definition.VERSION,
   };
 }
 
-function buildInstallPayload(manifest, receipt) {
+function buildInstallPayload(manifest, receipt, definition = EXAMPLE) {
   return {
     artifact_source: {
       kind: BUILD.ARTIFACT_SOURCE_KIND,
       location: receipt.layoutPath,
     },
     config: {},
-    idempotency_key: EXAMPLE.IDEMPOTENCY_KEY,
+    idempotency_key: definition.IDEMPOTENCY_KEY,
     manifest,
   };
 }
 
-function buildBindingPayload(packageId, manifest) {
+function buildBindingPayload(
+  packageId,
+  manifest,
+  definition = EXAMPLE,
+  budgets = BUDGETS,
+) {
   return {
-    budgets: {...BUDGETS},
-    name: EXAMPLE.BINDING_NAME,
+    budgets: {...budgets},
+    name: definition.BINDING_NAME,
     schema_version: 2,
     source: {
       kind: BUILD.SOURCE_KIND,
-      method: EXAMPLE.METHOD,
-      path: EXAMPLE.PATH,
+      method: definition.METHOD,
+      path: definition.PATH,
     },
     target: {
-      export_name: EXAMPLE.COMPONENT_EXPORT,
+      export_name: definition.COMPONENT_EXPORT,
       manifest_digest: sha256(canonicalJson(manifest)),
       package_id: packageId,
     },

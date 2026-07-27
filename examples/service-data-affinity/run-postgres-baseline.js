@@ -1,7 +1,5 @@
-import {createReadStream} from 'node:fs';
-import {stat} from 'node:fs/promises';
-import {randomUUID} from 'node:crypto';
-import {createInterface} from 'node:readline';
+import {createHash, randomUUID} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
 import {Pool} from 'pg';
 import {DockerProvider} from '../../test/distributed/harness/docker-provider.js';
 import {
@@ -12,9 +10,11 @@ import {
 import {
   CREATE_RATINGS_SQL,
   RATINGS_FILE,
-  RATINGS_AGGREGATE_SQL,
-  rankMovieQuality,
+  RATINGS_TOP_QUALITY_SQL,
 } from './movie-ranking.js';
+import {
+  MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE,
+} from './movielens-public-request-evidence-schema.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -44,16 +44,39 @@ const POSTGRES_ENTRYPOINT_COMMAND = 'docker-entrypoint.sh postgres';
 const POSTGRES_BINARY_PATH_EXPORT =
   'export PATH="$PATH:/usr/lib/postgresql/$PG_MAJOR/bin"';
 const SYNCHRONOUS_COMMIT_ON = 'on';
+const SHA256_ALGORITHM = 'sha256';
+const SHA256_ENCODING = 'hex';
+const BYTE_ENCODING = 'utf8';
+const RATINGS_MAX_BYTES = 4 * 1_024 * 1_024;
+const RATINGS_MAX_ROWS = 100_000;
+const POSTGRES_VERSION_SQL = 'SELECT version()';
+const POSTGRES_BASELINE_FAILURE_NAME = 'PostgresBaselineFailure';
 
-async function ensureRatingsFile() {
-  try {
-    await stat(RATINGS_FILE);
-  } catch {
-    throw new Error(
-      `Ratings file not found at ${RATINGS_FILE}. ` +
-      'Run examples/service-data-affinity/download-movielens.js first.',
+class PostgresBaselineFailure extends Error {
+  constructor(cause, cleanupReceipt, failureCauseEntries) {
+    super('PostgreSQL MovieLens baseline failed');
+    this.name = POSTGRES_BASELINE_FAILURE_NAME;
+    this.cleanupReceipt = cleanupReceipt;
+    this.failureCauseEntries = Object.freeze(
+      failureCauseEntries || [
+        Object.freeze({
+          cause,
+          role:
+            MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE
+              .POSTGRES_OPERATION,
+        }),
+      ],
     );
   }
+}
+
+function unconfirmedPostgresCleanup(baseline) {
+  return Object.freeze({
+    containersAbsent: null,
+    networkAbsent: null,
+    networkName: baseline?.networkName || null,
+    removedContainerIds: Object.freeze([]),
+  });
 }
 
 function buildPsqlCommand(options = {}) {
@@ -240,15 +263,6 @@ async function startPostgresBaseline(provider, config) {
 
   const containers = [];
   let primary = null;
-  const cleanupContainers = async () => {
-    for (const container of containers.reverse()) {
-      if (!container?.containerId) {
-        continue;
-      }
-      await provider.stopContainer(container.containerId).catch(() => {});
-      await provider.removeContainer(container.containerId).catch(() => {});
-    }
-  };
   try {
     const primaryName = `${networkName}-primary`;
     primary = await provider.createContainer({
@@ -317,15 +331,97 @@ async function startPostgresBaseline(provider, config) {
       replicationState,
     };
   } catch (error) {
-    await cleanupContainers();
-    if (network?.id) {
-      await provider.removeNetwork(network.id).catch(() => {});
+    const partialBaseline = {
+      containers,
+      networkId: network?.id,
+      networkName,
+    };
+    try {
+      const cleanupReceipt =
+        await cleanupPostgresBaseline(provider, partialBaseline);
+      throw new PostgresBaselineFailure(
+        error,
+        cleanupReceipt,
+        [Object.freeze({
+          cause: error,
+          role:
+            MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE
+              .POSTGRES_OPERATION,
+        })],
+      );
+    } catch (cleanupError) {
+      if (cleanupError instanceof PostgresBaselineFailure) {
+        throw cleanupError;
+      }
+      throw new PostgresBaselineFailure(
+        error,
+        unconfirmedPostgresCleanup(partialBaseline),
+        [
+          Object.freeze({
+            cause: error,
+            role:
+              MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE
+                .POSTGRES_OPERATION,
+          }),
+          Object.freeze({
+            cause: cleanupError,
+            role:
+              MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE
+                .POSTGRES_CLEANUP,
+          }),
+        ],
+      );
     }
-    throw error;
   }
 }
 
-async function loadRatings(pool, batchSize) {
+async function cleanupPostgresContainer(provider, container) {
+  const containerId = container && container.containerId;
+  if (!containerId) return '';
+  const inspect = await provider.inspectContainerIfExists(containerId);
+  if (inspect && inspect.State && inspect.State.Running === true) {
+    await provider.stopContainer(containerId);
+  }
+  if (await provider.inspectContainerIfExists(containerId)) {
+    await provider.removeContainer(containerId);
+  }
+  if (await provider.inspectContainerIfExists(containerId)) {
+    throw new Error(`PostgreSQL container cleanup failed: ${containerId}`);
+  }
+  return containerId;
+}
+
+async function cleanupPostgresNetwork(provider, networkName) {
+  if (!networkName) return;
+  const network = await provider.getNetworkByName(networkName);
+  if (network) await provider.removeNetwork(network.id);
+  if (await provider.getNetworkByName(networkName)) {
+    throw new Error(`PostgreSQL network cleanup failed: ${networkName}`);
+  }
+}
+
+async function cleanupPostgresBaseline(provider, baseline) {
+  const removedContainerIds = [];
+  for (let index = baseline.containers.length - 1; index >= 0; index -= 1) {
+    const containerId = await cleanupPostgresContainer(
+      provider,
+      baseline.containers[index],
+    );
+    if (containerId) removedContainerIds.push(containerId);
+  }
+  await cleanupPostgresNetwork(provider, baseline.networkName);
+  return Object.freeze({
+    containersAbsent: true,
+    networkAbsent: true,
+    networkName: baseline.networkName,
+    removedContainerIds,
+  });
+}
+
+async function loadRatingsBytes(pool, batchSize, bytes) {
+  if (!Buffer.isBuffer(bytes) || bytes.length > RATINGS_MAX_BYTES) {
+    throw new TypeError('bounded MovieLens input bytes are required');
+  }
   const insertMany = async (rows) => {
     const values = rows
       .map((row) => `(${row[0]}, ${row[1]}, ${row[2]}, ${row[3]})`)
@@ -335,14 +431,10 @@ async function loadRatings(pool, batchSize) {
     await pool.query(sql);
   };
 
-  const rl = createInterface({
-    input: createReadStream(RATINGS_FILE),
-    crlfDelay: Infinity,
-  });
-
+  const lines = bytes.toString(BYTE_ENCODING).split(/\r?\n/u);
   const batch = [];
   let total = 0;
-  for await (const line of rl) {
+  for (const line of lines) {
     if (!line) {
       continue;
     }
@@ -354,6 +446,9 @@ async function loadRatings(pool, batchSize) {
       Number(ts),
     ]);
     total += 1;
+    if (total > RATINGS_MAX_ROWS) {
+      throw new RangeError('MovieLens row cap exceeded');
+    }
 
     if (batch.length >= batchSize) {
       await insertMany(batch);
@@ -368,29 +463,76 @@ async function loadRatings(pool, batchSize) {
   return total;
 }
 
-async function runPostgresBaseline() {
-  await ensureRatingsFile();
+async function resolveRatingsBytes(options) {
+  const bytes = options.ratingsBytes || await readFile(RATINGS_FILE);
+  const digest = `sha256:${createHash(SHA256_ALGORITHM)
+    .update(bytes)
+    .digest(SHA256_ENCODING)}`;
+  if (options.ratingsDigest && digest !== options.ratingsDigest) {
+    throw new Error('PostgreSQL MovieLens input digest mismatch');
+  }
+  return {bytes, digest};
+}
+
+function projectPostgresTopMovies(rows) {
+  return rows.map((row) => ({
+    avgRating: Number(row.avg_rating),
+    movieId: Number(row.movie_id),
+    ratingCount: Number(row.rating_count),
+    score: Number(row.score),
+  }));
+}
+
+function validImageInspection(imageInspect) {
+  return Boolean(
+    imageInspect &&
+    typeof imageInspect.Id === 'string' &&
+    Array.isArray(imageInspect.RepoDigests) &&
+    imageInspect.RepoDigests.length > 0,
+  );
+}
+
+async function collectPostgresProvenance(provider, baseline, imageName) {
+  const imageInspect = await provider.inspectImage(imageName);
+  if (!validImageInspection(imageInspect)) {
+    throw new Error('immutable PostgreSQL image provenance is unavailable');
+  }
+  const logs = {};
+  const measuredContainerImages = [];
+  for (const container of baseline.containers) {
+    const containerInspect =
+      await provider.inspectContainer(container.containerId);
+    if (containerInspect.Image !== imageInspect.Id) {
+      throw new Error('immutable PostgreSQL image provenance is unavailable');
+    }
+    measuredContainerImages.push({
+      containerId: container.containerId,
+      inspectImage: containerInspect.Image,
+    });
+    logs[container.containerId] =
+      await provider.getContainerLogs(container.containerId);
+  }
+  return {
+    imageInspect,
+    logs,
+    measuredContainerImages,
+  };
+}
+
+async function runPostgresBaseline(options = {}) {
+  const ratingsInput = await resolveRatingsBytes(options);
   const config = buildBaselineConfig();
   const provider = new DockerProvider({
     socketPath: '/var/run/docker.sock',
   });
 
   const baseline = await startPostgresBaseline(provider, config);
-  const cleanup = async () => {
-    for (const container of baseline.containers.reverse()) {
-      if (!container?.containerId) {
-        continue;
-      }
-      await provider.stopContainer(container.containerId).catch(() => {});
-      await provider.removeContainer(container.containerId).catch(() => {});
-    }
-    if (baseline.networkId) {
-      await provider.removeNetwork(baseline.networkId).catch(() => {});
-    }
-  };
-
+  let pool = null;
+  let result;
+  let operationFailed = false;
+  let operationError;
   try {
-    const pool = new Pool({
+    pool = new Pool({
       host: baseline.primary.ip,
       port: config.port,
       user: config.user,
@@ -403,28 +545,97 @@ async function runPostgresBaseline() {
     await pool.query(CREATE_RATINGS_SQL);
 
     const loadStart = Date.now();
-    const totalRows = await loadRatings(pool, config.batchSize);
+    const totalRows = await loadRatingsBytes(
+      pool,
+      config.batchSize,
+      ratingsInput.bytes,
+    );
     const loadDurationMs = Date.now() - loadStart;
 
     const queryStart = Date.now();
-    const rows = await pool.query(RATINGS_AGGREGATE_SQL);
-    const results = rankMovieQuality(rows.rows || []);
+    const rows = await pool.query(RATINGS_TOP_QUALITY_SQL);
     const queryDurationMs = Date.now() - queryStart;
-
-    await pool.end();
-
-    return {
+    const versionResult = await pool.query(POSTGRES_VERSION_SQL);
+    const provenance = await collectPostgresProvenance(
+      provider,
+      baseline,
+      config.baselineImage,
+    );
+    result = {
+      imageId: provenance.imageInspect.Id,
+      imageInspection: {
+        id: provenance.imageInspect.Id,
+        repoDigests: [...provenance.imageInspect.RepoDigests],
+      },
+      imageRepoDigests: [...provenance.imageInspect.RepoDigests],
+      inputDigest: ratingsInput.digest,
+      inputSizeBytes: ratingsInput.bytes.length,
+      logs: provenance.logs,
+      postgresVersion: versionResult.rows?.[0]?.version,
+      postgresVersionSql: POSTGRES_VERSION_SQL,
+      querySql: RATINGS_TOP_QUALITY_SQL,
       totalRows,
       loadDurationMs,
+      measuredContainerImages: provenance.measuredContainerImages,
       queryDurationMs,
       returnedAggregateRows: rows.rows?.length || 0,
-      topMovies: results,
+      topMovies: projectPostgresTopMovies(rows.rows || []),
       replicationFactor: config.replicationFactor,
       replicationState: baseline.replicationState || null,
     };
-  } finally {
-    await cleanup();
+  } catch (error) {
+    operationFailed = true;
+    operationError = error;
   }
+  let poolCloseFailed = false;
+  let poolCloseError;
+  try {
+    await pool?.end();
+  } catch (error) {
+    poolCloseFailed = true;
+    poolCloseError = error;
+  }
+  let cleanupReceipt;
+  let cleanupFailed = false;
+  let cleanupError;
+  try {
+    cleanupReceipt =
+      await cleanupPostgresBaseline(provider, baseline);
+  } catch (error) {
+    cleanupFailed = true;
+    cleanupError = error;
+    cleanupReceipt = unconfirmedPostgresCleanup(baseline);
+  }
+  const failureCauseEntries = [];
+  if (operationFailed) {
+    failureCauseEntries.push(Object.freeze({
+      cause: operationError,
+      role:
+        MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE.POSTGRES_OPERATION,
+    }));
+  }
+  if (poolCloseFailed) {
+    failureCauseEntries.push(Object.freeze({
+      cause: poolCloseError,
+      role:
+        MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE.POSTGRES_POOL_CLOSE,
+    }));
+  }
+  if (cleanupFailed) {
+    failureCauseEntries.push(Object.freeze({
+      cause: cleanupError,
+      role:
+        MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE.POSTGRES_CLEANUP,
+    }));
+  }
+  if (failureCauseEntries.length > 0) {
+    throw new PostgresBaselineFailure(
+      failureCauseEntries[0].cause,
+      cleanupReceipt,
+      failureCauseEntries,
+    );
+  }
+  return {...result, cleanupReceipt};
 }
 
 if (process.argv[1]?.includes('run-postgres-baseline.js')) {
@@ -439,4 +650,15 @@ if (process.argv[1]?.includes('run-postgres-baseline.js')) {
     });
 }
 
-export {buildBaselineConfig, buildPsqlCommand, runPostgresBaseline};
+export {
+  PostgresBaselineFailure,
+  POSTGRES_VERSION_SQL,
+  RATINGS_MAX_BYTES,
+  RATINGS_MAX_ROWS,
+  buildBaselineConfig,
+  buildPsqlCommand,
+  cleanupPostgresBaseline,
+  loadRatingsBytes,
+  projectPostgresTopMovies,
+  runPostgresBaseline,
+};

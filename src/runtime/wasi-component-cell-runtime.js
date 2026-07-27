@@ -6,6 +6,12 @@ import {
   resolveModuleDirectory,
   resolvePackagedRuntimeFile,
 } from '../sea/runtime-file-resolution.js';
+import {
+  RequestCellTableReadBoundError,
+  indexRequestCellTableReads,
+  requestCellTableIndexEstimatedBytes,
+  requestCellTableIndexRowBound,
+} from './request-cell-table-read-index.js';
 
 const BYTE_ENCODING = 'utf8';
 const STARTUP_TIMEOUT_MS = 10_000;
@@ -82,6 +88,20 @@ function budgetFailure(field, actual, limit) {
   );
 }
 
+function invocationWallBudget(state, options) {
+  const configuredBudgetMs = state.cell.budgets.wall_time_ms;
+  const configuredDeadlineMs = Date.now() + configuredBudgetMs;
+  const deadlineMs =
+    Number.isFinite(options.deadlineMs) ?
+      Math.min(configuredDeadlineMs, options.deadlineMs) :
+      configuredDeadlineMs;
+  return Object.freeze({
+    configuredBudgetMs,
+    deadlineMs,
+    startedAtMs: deadlineMs - configuredBudgetMs,
+  });
+}
+
 function resolveCellWorkerPath() {
   return resolvePackagedRuntimeFile({
     bundledFileName: CELL_WORKER_BUNDLE_FILE,
@@ -94,6 +114,7 @@ class WasiComponentCellRuntime {
   constructor(options = {}) {
     this.cells = new Map();
     this.operations = new Map();
+    this.nextGeneration = 1;
     this.nextMessageId = 1;
     this.workerPath = options.workerPath || resolveCellWorkerPath();
   }
@@ -134,6 +155,7 @@ class WasiComponentCellRuntime {
       workerData: {
         bytes: new Uint8Array(cell.bytes),
         capabilities: cell.capabilities,
+        contextBytes: cell.budgets.context_bytes,
         exportName: cell.exportName,
         memoryBytes: cell.budgets.memory_bytes,
         requestCellWorker: true,
@@ -142,10 +164,13 @@ class WasiComponentCellRuntime {
     const state = {
       busy: false,
       cell,
+      componentInvocationCount: 0,
+      generation: `request-cell-generation-${this.nextGeneration}`,
       pending: new Map(),
       ready: false,
       worker,
     };
+    this.nextGeneration += 1;
     this.cells.set(cell.serviceId, state);
     worker.on(
       CELL_WORKER_EVENT.MESSAGE,
@@ -282,14 +307,17 @@ class WasiComponentCellRuntime {
     }
   }
 
-  async invoke(
-    serviceId,
-    args,
-    readContexts,
-    writeEffects,
-    cancelOperation = () => {},
-    options = {},
-  ) {
+  witness(serviceId) {
+    const state = this.cells.get(serviceId);
+    if (!state?.ready) return null;
+    return Object.freeze({
+      componentInvocationCount: state.componentInvocationCount,
+      generation: state.generation,
+      serviceId,
+    });
+  }
+
+  requireInvocationState(serviceId) {
     const state = this.cells.get(serviceId);
     if (!state?.ready) {
       throw new WasiComponentCellError(
@@ -303,97 +331,148 @@ class WasiComponentCellRuntime {
         WASI_COMPONENT_CELL_ERROR_MESSAGE.ALREADY_INVOKING,
       );
     }
-    const wallTimeLimitMs = state.cell.budgets.wall_time_ms;
-    const configuredDeadlineMs = Date.now() + wallTimeLimitMs;
-    const wallDeadlineMs =
-      Number.isFinite(options.deadlineMs) ?
-        Math.min(configuredDeadlineMs, options.deadlineMs) :
-        configuredDeadlineMs;
+    return state;
+  }
+
+  async requireInputBudget(serviceId, state, args) {
     const inputBytes = encodedBytes(args);
-    if (inputBytes > state.cell.budgets.input_bytes) {
-      await this.stop(serviceId);
+    if (inputBytes <= state.cell.budgets.input_bytes) return;
+    await this.stop(serviceId);
+    throw budgetFailure(
+      CELL_BUDGET_FIELD.INPUT_BYTES,
+      inputBytes,
+      state.cell.budgets.input_bytes,
+    );
+  }
+
+  async readInvocationContexts(
+    state,
+    readContexts,
+    wallBudget,
+    cancelOperation,
+  ) {
+    const tableReads = await this.runWithinWallBudget(
+      () => readContexts(wallBudget),
+      wallBudget.deadlineMs,
+      wallBudget.configuredBudgetMs,
+      cancelOperation,
+    );
+    const contextBytes = encodedBytes(tableReads);
+    if (contextBytes > state.cell.budgets.context_bytes) {
       throw budgetFailure(
-        CELL_BUDGET_FIELD.INPUT_BYTES,
-        inputBytes,
-        state.cell.budgets.input_bytes,
+        CELL_BUDGET_FIELD.CONTEXT_BYTES,
+        contextBytes,
+        state.cell.budgets.context_bytes,
       );
     }
-    state.busy = true;
-    const wallBudget = Object.freeze({
-      configuredBudgetMs: wallTimeLimitMs,
-      deadlineMs: wallDeadlineMs,
-      startedAtMs: wallDeadlineMs - wallTimeLimitMs,
-    });
     try {
-      const tableReads = await this.runWithinWallBudget(
-        () => readContexts(wallBudget),
-        wallDeadlineMs,
-        wallTimeLimitMs,
+      indexRequestCellTableReads(
+        tableReads,
+        requestCellTableIndexRowBound(
+          state.cell.budgets.context_bytes,
+        ),
+      );
+    } catch (error) {
+      if (!(error instanceof RequestCellTableReadBoundError)) throw error;
+      throw budgetFailure(
+        CELL_BUDGET_FIELD.CONTEXT_BYTES,
+        requestCellTableIndexEstimatedBytes(error.actualRows),
+        state.cell.budgets.context_bytes,
+      );
+    }
+    return tableReads;
+  }
+
+  async invokeComponent(state, args, tableReads, wallBudget, options) {
+    const initialCpu = await state.worker.cpuUsage();
+    if (typeof options.beforeComponentInvoke === 'function') {
+      options.beforeComponentInvoke();
+    }
+    const cpuMonitor = this.monitorCpuBudget(
+      state,
+      initialCpu,
+      state.cell.budgets.cpu_time_ms,
+    );
+    let result;
+    try {
+      result = await Promise.race([
+        this.send(
+          state,
+          CELL_MESSAGE.INVOKE,
+          {args, tableReads, tables: options.tables || []},
+          this.remainingWallBudgetMs(
+            wallBudget.deadlineMs,
+            wallBudget.configuredBudgetMs,
+          ),
+          wallBudget.configuredBudgetMs,
+        ),
+        cpuMonitor.promise,
+      ]);
+    } finally {
+      cpuMonitor.cancel();
+    }
+    state.componentInvocationCount += 1;
+    await this.assertCpuBudget(
+      state,
+      initialCpu,
+      state.cell.budgets.cpu_time_ms,
+    );
+    return result;
+  }
+
+  requireResultBudgets(state, result, tableReads) {
+    const outputBytes = encodedBytes(result.value);
+    if (outputBytes > state.cell.budgets.output_bytes) {
+      throw budgetFailure(
+        CELL_BUDGET_FIELD.OUTPUT_BYTES,
+        outputBytes,
+        state.cell.budgets.output_bytes,
+      );
+    }
+    const contextBytes = encodedBytes({
+      effects: result.effects,
+      reads: tableReads,
+    });
+    if (contextBytes > state.cell.budgets.context_bytes) {
+      throw budgetFailure(
+        CELL_BUDGET_FIELD.CONTEXT_BYTES,
+        contextBytes,
+        state.cell.budgets.context_bytes,
+      );
+    }
+  }
+
+  async invoke(
+    serviceId,
+    args,
+    readContexts,
+    writeEffects,
+    cancelOperation = () => {},
+    options = {},
+  ) {
+    const state = this.requireInvocationState(serviceId);
+    state.busy = true;
+    try {
+      const wallBudget = invocationWallBudget(state, options);
+      await this.requireInputBudget(serviceId, state, args);
+      const tableReads = await this.readInvocationContexts(
+        state,
+        readContexts,
+        wallBudget,
         cancelOperation,
       );
-      const initialContextBytes = encodedBytes(tableReads);
-      if (initialContextBytes > state.cell.budgets.context_bytes) {
-        throw budgetFailure(
-          CELL_BUDGET_FIELD.CONTEXT_BYTES,
-          initialContextBytes,
-          state.cell.budgets.context_bytes,
-        );
-      }
-      const initialCpu = await state.worker.cpuUsage();
-      if (typeof options.beforeComponentInvoke === 'function') {
-        options.beforeComponentInvoke();
-      }
-      const cpuMonitor = this.monitorCpuBudget(
+      const result = await this.invokeComponent(
         state,
-        initialCpu,
-        state.cell.budgets.cpu_time_ms,
+        args,
+        tableReads,
+        wallBudget,
+        options,
       );
-      let result;
-      try {
-        result = await Promise.race([
-          this.send(
-            state,
-            CELL_MESSAGE.INVOKE,
-            {args, tableReads, tables: options.tables || []},
-            this.remainingWallBudgetMs(
-              wallDeadlineMs,
-              wallTimeLimitMs,
-            ),
-            wallTimeLimitMs,
-          ),
-          cpuMonitor.promise,
-        ]);
-      } finally {
-        cpuMonitor.cancel();
-      }
-      await this.assertCpuBudget(
-        state,
-        initialCpu,
-        state.cell.budgets.cpu_time_ms,
-      );
-      const outputBytes = encodedBytes(result.value);
-      if (outputBytes > state.cell.budgets.output_bytes) {
-        throw budgetFailure(
-          CELL_BUDGET_FIELD.OUTPUT_BYTES,
-          outputBytes,
-          state.cell.budgets.output_bytes,
-        );
-      }
-      const contextBytes = encodedBytes({
-        effects: result.effects,
-        reads: tableReads,
-      });
-      if (contextBytes > state.cell.budgets.context_bytes) {
-        throw budgetFailure(
-          CELL_BUDGET_FIELD.CONTEXT_BYTES,
-          contextBytes,
-          state.cell.budgets.context_bytes,
-        );
-      }
+      this.requireResultBudgets(state, result, tableReads);
       await this.runWithinWallBudget(
         () => writeEffects(result.effects, wallBudget),
-        wallDeadlineMs,
-        wallTimeLimitMs,
+        wallBudget.deadlineMs,
+        wallBudget.configuredBudgetMs,
         cancelOperation,
       );
       return result.value;

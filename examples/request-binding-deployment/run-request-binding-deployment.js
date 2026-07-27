@@ -39,6 +39,7 @@ const EXPECTED_AUDIT_ROW = Object.freeze({key: 7, value: 42});
 const NODE_DATA_DIRECTORY = 'node-data';
 const CONTENT_TYPE_HEADER = 'content-type';
 const JSON_CONTENT_TYPE = 'application/json';
+const REQUEST_ACCEPT = '*/*';
 const BASIC_AUTHORIZATION = `Basic ${Buffer.from(
   `${EXAMPLE_NODE.USER}:${EXAMPLE_NODE.PASSWORD}`,
 ).toString('base64')}`;
@@ -71,7 +72,7 @@ async function auditRows(node) {
   return result.rows || [];
 }
 
-async function waitForReadyCell(node) {
+async function waitForReadyCell(node, definition = EXAMPLE) {
   const systemTableCache = node.bootstrapService.systemTableCache;
   const securityContext = Object.freeze({
     principal: EXAMPLE_NODE.USER,
@@ -84,8 +85,8 @@ async function waitForReadyCell(node) {
     try {
       return node.bootstrapApi.requestCellRoutingSurface.routeResolver.resolve({
         invocationId: READINESS_INVOCATION_ID,
-        method: EXAMPLE.METHOD,
-        path: EXAMPLE.PATH,
+        method: definition.METHOD,
+        path: definition.PATH,
         securityContext,
       });
     } catch (error) {
@@ -109,14 +110,19 @@ async function waitForReadyCell(node) {
   );
 }
 
-async function request(node, pathName, body) {
+async function request(node, pathName, body, options = {}) {
+  const headers = {
+    'accept': REQUEST_ACCEPT,
+    'authorization': BASIC_AUTHORIZATION,
+    'content-type': JSON_CONTENT_TYPE,
+  };
+  if (typeof options.idempotencyKey === LOCAL_STR_STRING) {
+    headers['idempotency-key'] = options.idempotencyKey;
+  }
   const response = await fetch(`${node.baseUrl}${pathName}`, {
     body: JSON.stringify(body),
-    headers: {
-      'authorization': BASIC_AUTHORIZATION,
-      'content-type': 'application/json',
-    },
-    method: EXAMPLE.METHOD,
+    headers,
+    method: options.method || EXAMPLE.METHOD,
   });
   const text = await response.text();
   const responseContentType =
@@ -265,5 +271,9 @@ if (isDirectRun) {
 }
 
 export {
+  REQUEST_ACCEPT,
+  executeSql,
+  request,
   runRequestBindingDeploymentExample,
+  waitForReadyCell,
 };

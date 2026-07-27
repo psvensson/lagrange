@@ -153,18 +153,44 @@ async function createAuthenticatedAdapter(sqlQueryEngine, credentialEnv) {
   return adapter;
 }
 
-async function shutdownSingletons() {
-  await NodeService.getInstance().shutdown().catch(() => {});
-  await ServiceThreadManager.getInstance().shutdown().catch(() => {});
-  await LoggingService.getInstance().shutdown().catch(() => {});
-  resetSingletons();
+async function runShutdownOperations(operations, message) {
+  const failures = [];
+  for (let index = 0; index < operations.length; index += 1) {
+    try {
+      await operations[index]();
+    } catch (error) {
+      failures.push(error);
+    }
+  }
+  if (failures.length > 0) {
+    throw new AggregateError(failures, message);
+  }
 }
 
-async function shutdownSqlRuntime(sqlRuntime) {
-  sqlRuntime?.detachMigrationRecovery?.();
-  if (sqlRuntime?.sqlQueryEngine?.shutdown) {
-    await sqlRuntime.sqlQueryEngine.shutdown().catch(() => {});
-  }
+async function shutdownSingletons() {
+  await runShutdownOperations([
+    () => NodeService.getInstance().shutdown(),
+    () => ServiceThreadManager.getInstance().shutdown(),
+    () => LoggingService.getInstance().shutdown(),
+    () => resetSingletons(),
+  ], 'request binding example singleton shutdown failed');
+}
+
+async function shutdownExampleNodeResources({
+  bootstrapApi,
+  bootstrapService,
+  shutdownSingletonsOperation = shutdownSingletons,
+  sqlAdapter,
+  sqlRuntime,
+}) {
+  await runShutdownOperations([
+    () => sqlAdapter?.closeSession(EXAMPLE_RUNTIME.SQL_SESSION),
+    () => sqlRuntime?.detachMigrationRecovery(),
+    () => bootstrapApi.shutdown(),
+    () => sqlRuntime?.sqlQueryEngine?.shutdown(),
+    () => bootstrapService.shutdown(),
+    () => shutdownSingletonsOperation(),
+  ], 'request binding example node shutdown failed');
 }
 
 function hydrateExampleMetadata(
@@ -212,7 +238,7 @@ async function createExampleQueryRuntime(
   return sqlRuntime;
 }
 
-async function bootExampleNode(dataDir) {
+async function bootExampleNode(dataDir, options = {}) {
   const dataDirectoryManager = initializeEnvironment(dataDir);
   const credentialEnv = buildCredentialEnvironment();
   const readinessState = new BootstrapReadinessState();
@@ -247,6 +273,7 @@ async function bootExampleNode(dataDir) {
     replicaHandler: bootstrapService.replicaHandler,
     readinessState,
     requestCellEnv: credentialEnv,
+    requestCellDeadlineMs: options.requestCellDeadlineMs,
     runtimeOwner: bootstrapService.runtimeDependencyOwner,
     seedNodeAddress: nodeAddress,
     seedNodeId: EXAMPLE_NODE.NODE_ID,
@@ -255,6 +282,7 @@ async function bootExampleNode(dataDir) {
     wsPort: EXAMPLE_NODE.WS_PORT,
   });
   let sqlRuntime = null;
+  let sqlAdapter = null;
   try {
     await bootstrapApi.initialize(0);
     const bootstrapResult = await bootstrapService.bootstrap();
@@ -276,7 +304,7 @@ async function bootExampleNode(dataDir) {
       bootstrapResult,
       metadata,
     );
-    const sqlAdapter = await createAuthenticatedAdapter(
+    sqlAdapter = await createAuthenticatedAdapter(
       sqlRuntime.sqlQueryEngine,
       credentialEnv,
     );
@@ -287,19 +315,28 @@ async function bootExampleNode(dataDir) {
       bootstrapService,
       sqlAdapter,
       async shutdown() {
-        sqlAdapter.closeSession(EXAMPLE_RUNTIME.SQL_SESSION);
-        sqlRuntime.detachMigrationRecovery();
-        await bootstrapApi.shutdown().catch(() => {});
-        await sqlRuntime.sqlQueryEngine.shutdown().catch(() => {});
-        await bootstrapService.shutdown().catch(() => {});
-        await shutdownSingletons();
+        await shutdownExampleNodeResources({
+          bootstrapApi,
+          bootstrapService,
+          sqlAdapter,
+          sqlRuntime,
+        });
       },
     };
   } catch (error) {
-    await bootstrapApi.shutdown().catch(() => {});
-    await shutdownSqlRuntime(sqlRuntime);
-    await bootstrapService.shutdown().catch(() => {});
-    await shutdownSingletons();
+    try {
+      await shutdownExampleNodeResources({
+        bootstrapApi,
+        bootstrapService,
+        sqlAdapter,
+        sqlRuntime,
+      });
+    } catch (cleanupError) {
+      throw new AggregateError(
+        [error, cleanupError],
+        'request binding example node boot and cleanup failed',
+      );
+    }
     throw error;
   }
 }
@@ -307,4 +344,5 @@ async function bootExampleNode(dataDir) {
 export {
   EXAMPLE_NODE,
   bootExampleNode,
+  shutdownExampleNodeResources,
 };

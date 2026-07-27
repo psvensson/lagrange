@@ -20,6 +20,28 @@ const RATINGS_SELECT_SQL = 'SELECT movie_id, rating FROM ratings';
 const RATINGS_AGGREGATE_SQL =
   'SELECT movie_id, AVG(rating) AS avg_rating, ' +
   'COUNT(*) AS rating_count FROM ratings GROUP BY movie_id';
+const RATINGS_TOP_QUALITY_SQL = `
+  WITH grouped AS (
+    SELECT
+      movie_id,
+      AVG(rating) AS avg_rating,
+      COUNT(*) AS rating_count,
+      SUM(rating) AS rating_sum
+    FROM ratings
+    GROUP BY movie_id
+  )
+  SELECT
+    movie_id,
+    avg_rating,
+    rating_count,
+    (
+      (rating_sum + 87.5) / (rating_count + 25)
+      - 0.5 / SQRT(rating_count)
+    ) AS score
+  FROM grouped
+  ORDER BY score DESC, movie_id ASC
+  LIMIT 10
+`;
 const TOP_N = 10;
 const QUALITY_RANKING = Object.freeze({
   priorMean: 3.5,
@@ -101,6 +123,7 @@ export {
   RATINGS_FILE,
   RATINGS_AGGREGATE_SQL,
   RATINGS_SELECT_SQL,
+  RATINGS_TOP_QUALITY_SQL,
   RATINGS_URL,
   QUALITY_RANKING,
   TOP_N,

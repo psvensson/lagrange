@@ -106,6 +106,10 @@ const DRIVER_ENDPOINT_DEFAULT = Object.freeze({
 const DRIVER_LENGTH = Object.freeze({
   EMPTY: 0,
 });
+const RUNTIME_ACCESS = Object.freeze({
+  DENIED_CODE: 'RUNTIME_ACCESS_DENIED',
+  RESOLVED_STATUS: 'resolved',
+});
 
 function buildDriverStatusResult(status, error, detailKey, detailValue) {
   const result = {status};
@@ -173,17 +177,17 @@ async function resolveRuntimeAccessTables(replicaContext) {
   const resolver = replicaContext?.queryExecutor?.getRuntimeAccessPolicy;
   if (typeof resolver !== 'function') {
     const error = new Error(WASM_COMPONENT_ERROR.RUNTIME_ACCESS_POLICY_DENIED);
-    error.code = 'RUNTIME_ACCESS_DENIED';
+    error.code = RUNTIME_ACCESS.DENIED_CODE;
     throw error;
   }
   const resolved = await resolver();
-  if (resolved?.status !== 'resolved' ||
+  if (resolved?.status !== RUNTIME_ACCESS.RESOLVED_STATUS ||
       !Array.isArray(resolved?.policy?.tables)) {
     const error = new Error(
       `${WASM_COMPONENT_ERROR.RUNTIME_ACCESS_POLICY_DENIED}` +
       `${resolved?.reason ? `${DRIVER_SEPARATOR.DETAIL}${resolved.reason}` : ''}`,
     );
-    error.code = 'RUNTIME_ACCESS_DENIED';
+    error.code = RUNTIME_ACCESS.DENIED_CODE;
     throw error;
   }
   return resolved.policy.tables;
@@ -712,6 +716,11 @@ class WasmComponentDriver extends RuntimeDriver {
         {cause},
       );
     }
+  }
+
+  requestCellWitness(replicaContext) {
+    const serviceId = resolveDriverServiceId(replicaContext);
+    return this._componentRuntime.witness(serviceId);
   }
 }
 

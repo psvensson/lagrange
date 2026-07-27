@@ -3,6 +3,13 @@ import {parentPort, workerData} from 'node:worker_threads';
 import {transpileBytes} from '@bytecodealliance/jco-transpile';
 import {capComponentCoreMemory} from
   './wasi-component-core-memory-budget.js';
+import {
+  RequestCellTableReadBoundError,
+  indexRequestCellTableReads,
+  readIndexedRequestCellTable,
+  requestCellTableIndexEstimatedBytes,
+  requestCellTableIndexRowBound,
+} from './request-cell-table-read-index.js';
 
 const WORKER_MESSAGE = Object.freeze({
   INVOKE: 'invoke',
@@ -14,12 +21,14 @@ const WORKER_MESSAGE = Object.freeze({
 });
 
 const WORKER_ERROR_CODE = Object.freeze({
+  BUDGET_EXHAUSTED: 'request_cell_budget_exhausted',
   CAPABILITY_DENIED: 'request_cell_capability_denied',
   EXPORT_MISSING: 'request_cell_export_missing',
   INVOCATION_FAILED: 'request_cell_invocation_failed',
   TABLE_READ_DENIED: 'request_cell_table_read_denied',
   TABLE_WRITE_DENIED: 'request_cell_table_write_denied',
 });
+const CONTEXT_BUDGET_FIELD = 'context_bytes';
 const WORKER_EVENT = Object.freeze({
   MESSAGE: 'message',
 });
@@ -62,11 +71,11 @@ const componentContext = Object.freeze({
   },
   read(tableIndex, key) {
     const table = requireTable(tableIndex, 'read');
-    const snapshot = currentTableReads.find(
-      (entry) => entry.context === table.context,
+    return readIndexedRequestCellTable(
+      currentTableReads,
+      table.context,
+      key,
     );
-    const row = snapshot?.rows.find((entry) => entry.key === key);
-    return row?.value ?? 0;
   },
   write(tableIndex, key, value) {
     const table = requireTable(tableIndex, 'write');
@@ -113,9 +122,12 @@ async function instantiateComponent() {
 
 async function invoke(message) {
   currentEffects = [];
-  currentTableReads = message.tableReads;
-  currentTables = Array.isArray(message.tables) ? message.tables : [];
   try {
+    currentTableReads = indexRequestCellTableReads(
+      message.tableReads,
+      requestCellTableIndexRowBound(workerData.contextBytes),
+    );
+    currentTables = Array.isArray(message.tables) ? message.tables : [];
     const value = await selectedExport(...message.args);
     parentPort.postMessage({
       effects: currentEffects,
@@ -124,10 +136,18 @@ async function invoke(message) {
       value,
     });
   } catch (error) {
+    const contextBudgetExceeded =
+      error instanceof RequestCellTableReadBoundError;
     parentPort.postMessage({
       error: {
-        code: error.code || WORKER_ERROR_CODE.INVOCATION_FAILED,
-        message: error.message,
+        code: contextBudgetExceeded ?
+          WORKER_ERROR_CODE.BUDGET_EXHAUSTED :
+          error.code || WORKER_ERROR_CODE.INVOCATION_FAILED,
+        message: contextBudgetExceeded ?
+          `Binding ${CONTEXT_BUDGET_FIELD} budget exhausted (` +
+            `${requestCellTableIndexEstimatedBytes(error.actualRows)} > ` +
+            `${workerData.contextBytes})` :
+          error.message,
       },
       id: message.id,
       type: WORKER_MESSAGE.INVOKE_RESULT,
