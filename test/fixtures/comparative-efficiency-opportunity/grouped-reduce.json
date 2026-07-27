@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "comparative-opportunity-input-v1",
+  "formulaVersion": "comparative-opportunity-formula-v1",
+  "fixtureId": "movielens-grouped-reduce-v1",
+  "assumptions": [
+    "Grouped input is shuffled once before a reusable materialization.",
+    "Measured counters are retained only to report prediction error."
+  ],
+  "uncertainty": "high",
+  "quantities": {
+    "correctOperations": {"value": 100000, "unit": "operation"},
+    "operationRate": {"value": 100, "unit": "operation/second"},
+    "requestBytes": {"value": 128, "unit": "byte/operation"},
+    "responseBytes": {"value": 4096, "unit": "byte/operation"},
+    "lookupBytes": {"value": 1024, "unit": "byte/lookup"},
+    "lookupsPerOperation": {"value": 20, "unit": "lookup/operation"},
+    "mutationBytes": {"value": 16, "unit": "byte/operation"},
+    "groupingBytes": {"value": 65536, "unit": "byte/operation"},
+    "materializedBytes": {"value": 8192, "unit": "byte/operation"},
+    "invalidationBytes": {"value": 64, "unit": "byte/operation"},
+    "localCpuSecondsPerByte": {"value": 0.000000003, "unit": "cpu_second/byte"},
+    "remoteCpuSecondsPerByte": {"value": 0.000000008, "unit": "cpu_second/byte"},
+    "fixedCpuSecondsPerOperation": {"value": 0.0002, "unit": "cpu_second/operation"},
+    "workingSetBytes": {"value": 8000000000, "unit": "byte"},
+    "storageBytes": {"value": 250000000000, "unit": "byte"},
+    "baseIopsPerOperation": {"value": 1, "unit": "io_operation/operation"},
+    "ioBlockBytes": {"value": 4096, "unit": "byte/io_operation"},
+    "replicationFactor": {"value": 3, "unit": "replica"},
+    "remoteFraction": {"value": 0.5, "unit": "ratio"},
+    "shuffleFraction": {"value": 0.75, "unit": "ratio"},
+    "rebuildFraction": {"value": 0.02, "unit": "ratio"},
+    "compactionAmplification": {"value": 2, "unit": "ratio"},
+    "reuseRate": {"value": 0.9, "unit": "ratio"},
+    "headroomFraction": {"value": 0.3, "unit": "ratio"},
+    "averageDistanceKm": {"value": 75, "unit": "kilometer"},
+    "minimumNodes": {"value": 3, "unit": "node"},
+    "cpuCoresPerNode": {"value": 4, "unit": "cpu_core/node"},
+    "memoryBytesPerNode": {"value": 8000000000, "unit": "byte/node"},
+    "storageBytesPerNode": {"value": 100000000000, "unit": "byte/node"},
+    "lowMultiplier": {"value": 0.6, "unit": "ratio"},
+    "highMultiplier": {"value": 1.5, "unit": "ratio"}
+  },
+  "calibration": {
+    "state": "measured",
+    "artifactDigest": "sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "measuredNetworkBytesPerOperation": {"value": 85000, "unit": "byte/operation"},
+    "measuredCpuSecondsPerOperation": {"value": 0.001, "unit": "cpu_second/operation"}
+  }
+}

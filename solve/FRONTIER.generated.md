@@ -48,11 +48,10 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 22
+## Open quests — 21
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
-| comparative-efficiency-opportunity-calculator | product | 14 | 0 | 2026-07-27 | — |
 | documentation-audience-boundary-tooling | process | 1 | 0 | 2026-07-26 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | 2026-07-25 | — |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 | — |
