@@ -4,16 +4,23 @@ import {
   SCALE_PROFILE_ID,
   computeScaleEvidenceDigest,
   createScaleEvidenceReport,
+  isNonEmptyText,
+  isNonNegativeInteger,
+  isNonNegativeNumber,
+  isPositiveInteger,
+  isRatio,
+  isRecord,
+  pushIf,
+  validateDigest,
   validateScaleEvidenceReport,
 } from './scale-evidence-contract.js';
 
 const ZERO = 0;
-const ONE = 1;
 const SHA256_PATTERN = /^sha256:[a-f0-9]{64}$/u;
 
-export const COMPARATIVE_EVIDENCE_CONTRACT_ID =
+const COMPARATIVE_EVIDENCE_CONTRACT_ID =
   'comparative-efficiency-evidence-contract';
-export const COMPARATIVE_EVIDENCE_SCHEMA_VERSION =
+const COMPARATIVE_EVIDENCE_SCHEMA_VERSION =
   'comparative-efficiency-evidence-v1';
 
 export const COMPARATIVE_MEASUREMENT_STATE = Object.freeze({
@@ -74,42 +81,6 @@ const ARTIFACT_FIELDS = Object.freeze([
   'logsDigest',
   'summaryDigest',
 ]);
-
-function isRecord(value) {
-  return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
-}
-
-function isNonEmptyText(value) {
-  return typeof value === 'string' && value.trim().length > ZERO;
-}
-
-function isNonNegativeNumber(value) {
-  return typeof value === 'number' && Number.isFinite(value) && value >= ZERO;
-}
-
-function isPositiveInteger(value) {
-  return Number.isInteger(value) && value > ZERO;
-}
-
-function isNonNegativeInteger(value) {
-  return Number.isInteger(value) && value >= ZERO;
-}
-
-function isRatio(value) {
-  return isNonNegativeNumber(value) && value <= ONE;
-}
-
-function pushIf(errors, condition, code) {
-  if (condition) errors.push(code);
-}
-
-function validateDigest(errors, value, path) {
-  pushIf(
-    errors,
-    !SHA256_PATTERN.test(String(value || '')),
-    `${path}:sha256_required`,
-  );
-}
 
 function validateIdentity(extension, errors) {
   pushIf(
@@ -280,40 +251,15 @@ function validatePreregistration(extension, errors) {
     'comparative.preregistration.tailSampleMinimum:positive_integer_required');
 }
 
-function validateMeasurement(extension, errors) {
-  const measurement = extension.measurement;
-  pushIf(
-    errors,
-    !isRecord(measurement),
-    'comparative.measurement:object_required',
-  );
-  if (!isRecord(measurement)) return;
-  pushIf(errors, !MEASUREMENT_STATES.has(measurement.state),
-    'comparative.measurement.state:unsupported');
-  pushIf(errors, !Array.isArray(measurement.reasonCodes),
-    'comparative.measurement.reasonCodes:array_required');
-  if (measurement.state === COMPARATIVE_MEASUREMENT_STATE.NON_MEASURING) {
-    pushIf(
-      errors,
-      !Array.isArray(measurement.reasonCodes) ||
-        measurement.reasonCodes.length === ZERO,
-      'comparative.measurement.reasonCodes:required_when_non_measuring',
-    );
-    pushIf(
-      errors,
-      extension.result?.direction !== COMPARATIVE_RESULT_DIRECTION.NO_RESULT,
-      'comparative.result.direction:non_measuring_requires_no_result',
-    );
-    return;
-  }
-  const parityComplete =
-    extension.parity?.status === COMPARATIVE_PARITY_STATUS.PASS &&
+function isParityComplete(extension) {
+  return extension.parity?.status === COMPARATIVE_PARITY_STATUS.PASS &&
     PARITY_DIMENSIONS.every(
       (dimension) =>
         extension.parity?.[dimension] === COMPARATIVE_PARITY_STATUS.PASS,
     );
-  pushIf(errors, !parityComplete,
-    'comparative.measurement.state:measured_requires_complete_parity');
+}
+
+function validateMeasurementCounts(measurement, errors) {
   const counts = measurement.counts;
   pushIf(errors, !isRecord(counts),
     'comparative.measurement.counts:object_required');
@@ -346,6 +292,9 @@ function validateMeasurement(extension, errors) {
       'comparative.measurement.counts.correct:exceeds_dispatched',
     );
   }
+}
+
+function validateMeasurementStatistics(measurement, errors) {
   const statistics = measurement.statistics;
   pushIf(errors, !isRecord(statistics),
     'comparative.measurement.statistics:object_required');
@@ -368,6 +317,38 @@ function validateMeasurement(extension, errors) {
     pushIf(errors, !isNonEmptyText(statistics.unit),
       'comparative.measurement.statistics.unit:required');
   }
+}
+
+function validateMeasurement(extension, errors) {
+  const measurement = extension.measurement;
+  pushIf(
+    errors,
+    !isRecord(measurement),
+    'comparative.measurement:object_required',
+  );
+  if (!isRecord(measurement)) return;
+  pushIf(errors, !MEASUREMENT_STATES.has(measurement.state),
+    'comparative.measurement.state:unsupported');
+  pushIf(errors, !Array.isArray(measurement.reasonCodes),
+    'comparative.measurement.reasonCodes:array_required');
+  if (measurement.state === COMPARATIVE_MEASUREMENT_STATE.NON_MEASURING) {
+    pushIf(
+      errors,
+      !Array.isArray(measurement.reasonCodes) ||
+        measurement.reasonCodes.length === ZERO,
+      'comparative.measurement.reasonCodes:required_when_non_measuring',
+    );
+    pushIf(
+      errors,
+      extension.result?.direction !== COMPARATIVE_RESULT_DIRECTION.NO_RESULT,
+      'comparative.result.direction:non_measuring_requires_no_result',
+    );
+    return;
+  }
+  pushIf(errors, !isParityComplete(extension),
+    'comparative.measurement.state:measured_requires_complete_parity');
+  validateMeasurementCounts(measurement, errors);
+  validateMeasurementStatistics(measurement, errors);
 }
 
 function validateAccounting(extension, errors) {
@@ -420,6 +401,47 @@ function validateAccounting(extension, errors) {
   }
 }
 
+function validateComparisonEligibility(extension, claim, invalidation, errors) {
+  const comparisonIneligible =
+    extension.measurement?.state ===
+      COMPARATIVE_MEASUREMENT_STATE.NON_MEASURING ||
+    !isParityComplete(extension) ||
+    invalidation?.state === COMPARATIVE_INVALIDATION_STATE.INVALIDATED ||
+    extension.accounting?.complete !== true;
+  pushIf(
+    errors,
+    comparisonIneligible &&
+      claim?.evidenceClass !== COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
+    'comparative.claim.evidenceClass:ineligible_requires_no_claim',
+  );
+}
+
+function validateClaimClassEligibility(report, claim, errors) {
+  const evidenceClass = claim?.evidenceClass;
+  pushIf(
+    errors,
+    evidenceClass === COMPARATIVE_EVIDENCE_CLASS.MEASURED_P0 &&
+      (report.profile?.id !== SCALE_PROFILE_ID.DEVELOPMENT ||
+        report.run?.fidelity !== SCALE_EVIDENCE_FIDELITY.LIVE),
+    'comparative.claim.evidenceClass:measured_p0_requires_live_p0',
+  );
+  pushIf(
+    errors,
+    evidenceClass === COMPARATIVE_EVIDENCE_CLASS.MEASURED_P0 &&
+      report.claimEligibility?.reasonCodes?.includes(
+        SCALE_CLAIM_REASON.REQUIRED_GATE_NOT_PASSING,
+      ),
+    'comparative.claim.evidenceClass:' +
+      'measured_p0_requires_green_scale_gates',
+  );
+  pushIf(
+    errors,
+    evidenceClass === COMPARATIVE_EVIDENCE_CLASS.CERTIFIED_PROFILE &&
+      report.claimEligibility?.scaleCertification !== true,
+    'comparative.claim.evidenceClass:certified_profile_requires_scale_receipt',
+  );
+}
+
 function validateOutcome(report, extension, errors) {
   const result = extension.result;
   pushIf(errors, !isRecord(result), 'comparative.result:object_required');
@@ -455,46 +477,26 @@ function validateOutcome(report, extension, errors) {
       'comparative.invalidation.reasonCodes:required_when_invalidated',
     );
   }
-  const parityComplete =
-    extension.parity?.status === COMPARATIVE_PARITY_STATUS.PASS &&
-    PARITY_DIMENSIONS.every(
-      (dimension) =>
-        extension.parity?.[dimension] === COMPARATIVE_PARITY_STATUS.PASS,
-    );
-  const comparisonIneligible =
-    extension.measurement?.state ===
-      COMPARATIVE_MEASUREMENT_STATE.NON_MEASURING ||
-    !parityComplete ||
-    invalidation?.state === COMPARATIVE_INVALIDATION_STATE.INVALIDATED ||
-    extension.accounting?.complete !== true;
-  pushIf(
-    errors,
-    comparisonIneligible &&
-      claim?.evidenceClass !== COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
-    'comparative.claim.evidenceClass:ineligible_requires_no_claim',
-  );
-  pushIf(
-    errors,
-    claim?.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.MEASURED_P0 &&
-      (report.profile?.id !== SCALE_PROFILE_ID.DEVELOPMENT ||
-        report.run?.fidelity !== SCALE_EVIDENCE_FIDELITY.LIVE),
-    'comparative.claim.evidenceClass:measured_p0_requires_live_p0',
-  );
-  pushIf(
-    errors,
-    claim?.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.MEASURED_P0 &&
-      report.claimEligibility?.reasonCodes?.includes(
-        SCALE_CLAIM_REASON.REQUIRED_GATE_NOT_PASSING,
-      ),
-    'comparative.claim.evidenceClass:' +
-      'measured_p0_requires_green_scale_gates',
-  );
-  pushIf(
-    errors,
-    claim?.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.CERTIFIED_PROFILE &&
-      report.claimEligibility?.scaleCertification !== true,
-    'comparative.claim.evidenceClass:certified_profile_requires_scale_receipt',
-  );
+  validateComparisonEligibility(extension, claim, invalidation, errors);
+  validateClaimClassEligibility(report, claim, errors);
+}
+
+function validateArtifactIdentityMappings(extension, artifacts, errors) {
+  const expectedMappings = [
+    ['matrixManifestDigest', extension.matrix?.manifestDigest],
+    ['alternativeTopologyDigest',
+      extension.alternative?.topologyInventoryDigest],
+    ['parityReceiptDigest', extension.parity?.receiptDigest],
+    ['preregistrationDigest', extension.preregistration?.manifestDigest],
+    ['componentInventoryDigest',
+      extension.accounting?.componentInventoryDigest],
+    ['resourceSamplesDigest', extension.accounting?.resourceSamplesDigest],
+    ['priceSheetDigest', extension.price?.sheetDigest],
+  ];
+  for (const [field, expected] of expectedMappings) {
+    pushIf(errors, artifacts[field] !== expected,
+      `comparative.artifacts.${field}:identity_mismatch`);
+  }
 }
 
 function validateArtifactReferences(report, extension, errors) {
@@ -516,24 +518,10 @@ function validateArtifactReferences(report, extension, errors) {
       `comparative.artifacts.${field}:artifact_not_found`,
     );
   }
-  const expectedMappings = [
-    ['matrixManifestDigest', extension.matrix?.manifestDigest],
-    ['alternativeTopologyDigest',
-      extension.alternative?.topologyInventoryDigest],
-    ['parityReceiptDigest', extension.parity?.receiptDigest],
-    ['preregistrationDigest', extension.preregistration?.manifestDigest],
-    ['componentInventoryDigest',
-      extension.accounting?.componentInventoryDigest],
-    ['resourceSamplesDigest', extension.accounting?.resourceSamplesDigest],
-    ['priceSheetDigest', extension.price?.sheetDigest],
-  ];
-  for (const [field, expected] of expectedMappings) {
-    pushIf(errors, artifacts[field] !== expected,
-      `comparative.artifacts.${field}:identity_mismatch`);
-  }
+  validateArtifactIdentityMappings(extension, artifacts, errors);
 }
 
-export function computeComparativeMatrixIdentity(report) {
+function computeComparativeMatrixIdentity(report) {
   const extension = report.extensions?.comparativeEfficiency;
   return computeScaleEvidenceDigest({
     profileIdentity: report.profileIdentity,
@@ -542,7 +530,7 @@ export function computeComparativeMatrixIdentity(report) {
   });
 }
 
-export function computeComparativePairIdentity(report) {
+function computeComparativePairIdentity(report) {
   const extension = report.extensions?.comparativeEfficiency;
   return computeScaleEvidenceDigest({
     matrixIdentity: extension?.matrixIdentity,

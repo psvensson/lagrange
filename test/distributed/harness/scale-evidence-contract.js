@@ -54,40 +54,40 @@ const REQUIRED_GATE_NAMES = Object.freeze([
   'convergence',
 ]);
 
-function isRecord(value) {
+export function isRecord(value) {
   return Boolean(value) && typeof value === 'object' && !Array.isArray(value);
 }
 
-function isNonEmptyText(value) {
+export function isNonEmptyText(value) {
   return typeof value === 'string' && value.trim().length > ZERO;
 }
 
-function isNonNegativeNumber(value) {
+export function isNonNegativeNumber(value) {
   return typeof value === 'number' && Number.isFinite(value) && value >= ZERO;
 }
 
-function isPositiveInteger(value) {
+export function isPositiveInteger(value) {
   return Number.isInteger(value) && value > ZERO;
 }
 
-function isNonNegativeInteger(value) {
+export function isNonNegativeInteger(value) {
   return Number.isInteger(value) && value >= ZERO;
 }
 
-function isRatio(value) {
+export function isRatio(value) {
   return isNonNegativeNumber(value) && value <= ONE;
 }
 
-function pushIf(errors, condition, code) {
+export function pushIf(errors, condition, code) {
   if (condition) errors.push(code);
 }
 
-function validateDigest(errors, value, path) {
+export function validateDigest(errors, value, path) {
   pushIf(errors, !SHA256_PATTERN.test(String(value || '')),
     `${path}:sha256_required`);
 }
 
-function validateIdentityFields(report, errors) {
+function validateRunFields(report, errors) {
   const run = report.run;
   pushIf(errors, !isRecord(run), 'run:object_required');
   if (isRecord(run)) {
@@ -105,6 +105,27 @@ function validateIdentityFields(report, errors) {
       'run.completedAt:precedes_startedAt',
     );
   }
+}
+
+function validateWorkloadFields(report, errors) {
+  const workload = report.workload;
+  pushIf(errors, !isRecord(workload), 'workload:object_required');
+  if (isRecord(workload)) {
+    pushIf(errors, !isNonEmptyText(workload.id), 'workload.id:required');
+    validateDigest(errors, workload.manifestDigest, 'workload.manifestDigest');
+    pushIf(errors, !isRecord(workload.duration),
+      'workload.duration:object_required');
+    if (isRecord(workload.duration)) {
+      pushIf(errors, !isNonNegativeInteger(workload.duration.warmupMs),
+        'workload.duration.warmupMs:non_negative_integer_required');
+      pushIf(errors, !isPositiveInteger(workload.duration.measuredMs),
+        'workload.duration.measuredMs:positive_integer_required');
+    }
+  }
+}
+
+function validateIdentityFields(report, errors) {
+  validateRunFields(report, errors);
 
   const software = report.software;
   pushIf(errors, !isRecord(software), 'software:object_required');
@@ -155,20 +176,7 @@ function validateIdentityFields(report, errors) {
     pushIf(errors, !isNonEmptyText(data.shape), 'data.shape:required');
   }
 
-  const workload = report.workload;
-  pushIf(errors, !isRecord(workload), 'workload:object_required');
-  if (isRecord(workload)) {
-    pushIf(errors, !isNonEmptyText(workload.id), 'workload.id:required');
-    validateDigest(errors, workload.manifestDigest, 'workload.manifestDigest');
-    pushIf(errors, !isRecord(workload.duration),
-      'workload.duration:object_required');
-    if (isRecord(workload.duration)) {
-      pushIf(errors, !isNonNegativeInteger(workload.duration.warmupMs),
-        'workload.duration.warmupMs:non_negative_integer_required');
-      pushIf(errors, !isPositiveInteger(workload.duration.measuredMs),
-        'workload.duration.measuredMs:positive_integer_required');
-    }
-  }
+  validateWorkloadFields(report, errors);
 }
 
 function validateProvenance(report, errors) {
@@ -191,24 +199,7 @@ function validateProvenance(report, errors) {
   );
 }
 
-function validateGateEnvelope(report, errors) {
-  const gates = report.gates;
-  pushIf(errors, !isRecord(gates), 'gates:object_required');
-  if (!isRecord(gates)) return;
-
-  for (const name of REQUIRED_GATE_NAMES) {
-    pushIf(errors, !isRecord(gates[name]), `gates.${name}:object_required`);
-    if (isRecord(gates[name])) {
-      pushIf(errors, !GATE_STATUSES.has(gates[name].status),
-        `gates.${name}.status:unsupported`);
-      validateDigest(
-        errors,
-        gates[name].evidenceArtifactDigest,
-        `gates.${name}.evidenceArtifactDigest`,
-      );
-    }
-  }
-
+function validateFeasibilityGate(gates, errors) {
   if (isRecord(gates.feasibility)) {
     pushIf(errors, !Array.isArray(gates.feasibility.reasonCodes),
       'gates.feasibility.reasonCodes:array_required');
@@ -220,6 +211,9 @@ function validateGateEnvelope(report, errors) {
       'gates.feasibility.reasonCodes:pass_requires_empty',
     );
   }
+}
+
+function validateSafetyGate(gates, errors) {
   if (isRecord(gates.safety)) {
     pushIf(errors, !isNonNegativeInteger(gates.safety.violationCount),
       'gates.safety.violationCount:non_negative_integer_required');
@@ -230,6 +224,9 @@ function validateGateEnvelope(report, errors) {
       'gates.safety.violationCount:pass_requires_zero',
     );
   }
+}
+
+function validatePerformanceGate(gates, errors) {
   if (isRecord(gates.performance)) {
     pushIf(errors, !isNonEmptyText(gates.performance.baselineId),
       'gates.performance.baselineId:required');
@@ -249,6 +246,9 @@ function validateGateEnvelope(report, errors) {
     pushIf(errors, !isRatio(gates.performance.errorRate),
       'gates.performance.errorRate:ratio_required');
   }
+}
+
+function validateResourcesGate(gates, errors) {
   if (isRecord(gates.resources)) {
     for (const field of [
       'maxHeapBytes',
@@ -267,6 +267,9 @@ function validateGateEnvelope(report, errors) {
         `gates.resources.${field}:non_negative_number_required`);
     }
   }
+}
+
+function validateConvergenceGate(gates, errors) {
   if (isRecord(gates.convergence)) {
     pushIf(errors, !isPositiveInteger(gates.convergence.sampleCount),
       'gates.convergence.sampleCount:positive_integer_required');
@@ -289,6 +292,31 @@ function validateGateEnvelope(report, errors) {
       'gates.convergence.confidenceInterval:reversed');
     }
   }
+}
+
+function validateGateEnvelope(report, errors) {
+  const gates = report.gates;
+  pushIf(errors, !isRecord(gates), 'gates:object_required');
+  if (!isRecord(gates)) return;
+
+  for (const name of REQUIRED_GATE_NAMES) {
+    pushIf(errors, !isRecord(gates[name]), `gates.${name}:object_required`);
+    if (isRecord(gates[name])) {
+      pushIf(errors, !GATE_STATUSES.has(gates[name].status),
+        `gates.${name}.status:unsupported`);
+      validateDigest(
+        errors,
+        gates[name].evidenceArtifactDigest,
+        `gates.${name}.evidenceArtifactDigest`,
+      );
+    }
+  }
+
+  validateFeasibilityGate(gates, errors);
+  validateSafetyGate(gates, errors);
+  validatePerformanceGate(gates, errors);
+  validateResourcesGate(gates, errors);
+  validateConvergenceGate(gates, errors);
 }
 
 function validateArtifacts(report, errors) {
@@ -480,7 +508,7 @@ function hasVerifiedTerminalReceipt(report, options) {
       computeScaleCertificationEvidenceIdentity(report);
 }
 
-export function deriveScaleClaimEligibility(report, options = {}) {
+function deriveScaleClaimEligibility(report, options = {}) {
   const reasonCodes = [];
   if (report.profile?.id === SCALE_PROFILE_ID.DEVELOPMENT) {
     reasonCodes.push(SCALE_CLAIM_REASON.DEVELOPMENT_PROFILE);

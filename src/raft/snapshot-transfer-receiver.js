@@ -192,22 +192,13 @@ function readProgressMarker(markerPath) {
   }
 }
 
-// Decide the resume boundary for an accepted offer against durable staging.
-// Only a marker whose identity fields match the offered descriptor AND whose
-// staged prefix re-digests to the recorded verifiedPrefixDigest resumes; any
-// other staged state restarts from zero (typed).
-function resolveResumeBoundary(context) {
-  const {transferDir, descriptor, descriptorDigest, chunkSizeBytes} = context;
-  const stagingPath = path.join(
-    transferDir, RAFT_SNAPSHOT_TRANSFER_STAGING_FILE);
-  const markerPath = path.join(
-    transferDir, RAFT_SNAPSHOT_TRANSFER_PROGRESS_MARKER_FILE);
-  if (!fs.existsSync(stagingPath) && !fs.existsSync(markerPath)) {
-    return Object.freeze({mode: RESUME.FRESH});
-  }
-  const read = readProgressMarker(markerPath);
+// A staged marker is structurally resumable only when its identity fields
+// match the offered descriptor and its byte accounting matches durable
+// staging on disk.
+function isStructurallyResumableMarker(read, stagingPath, context) {
+  const {descriptor, descriptorDigest, chunkSizeBytes} = context;
   const marker = read.marker;
-  const structurallyValid = read.present &&
+  return read.present &&
     exactKeys(marker, RAFT_SNAPSHOT_TRANSFER_PROGRESS_MARKER_FIELDS) &&
     marker.generationIndex === descriptor.lastIncludedIndex &&
     marker.descriptorDigest === descriptorDigest &&
@@ -219,7 +210,24 @@ function resolveResumeBoundary(context) {
         descriptor.payloadByteLength) &&
     fs.existsSync(stagingPath) &&
     fs.statSync(stagingPath).size >= marker.verifiedByteLength;
-  if (!structurallyValid) {
+}
+
+// Decide the resume boundary for an accepted offer against durable staging.
+// Only a marker whose identity fields match the offered descriptor AND whose
+// staged prefix re-digests to the recorded verifiedPrefixDigest resumes; any
+// other staged state restarts from zero (typed).
+function resolveResumeBoundary(context) {
+  const {transferDir} = context;
+  const stagingPath = path.join(
+    transferDir, RAFT_SNAPSHOT_TRANSFER_STAGING_FILE);
+  const markerPath = path.join(
+    transferDir, RAFT_SNAPSHOT_TRANSFER_PROGRESS_MARKER_FILE);
+  if (!fs.existsSync(stagingPath) && !fs.existsSync(markerPath)) {
+    return Object.freeze({mode: RESUME.FRESH});
+  }
+  const read = readProgressMarker(markerPath);
+  const marker = read.marker;
+  if (!isStructurallyResumableMarker(read, stagingPath, context)) {
     return Object.freeze({mode: RESUME.RESTARTED_FROM_ZERO});
   }
   const hash = createHash(HASH_ALGORITHM);

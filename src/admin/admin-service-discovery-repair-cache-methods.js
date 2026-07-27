@@ -1,22 +1,26 @@
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
+function buildAuthoritativeCacheReconcileError(result, constants) {
+  const errorCode =
+    result?.error || constants.error.CACHE_NOT_RECONCILED;
+  const reconciliationReason =
+    typeof result?.reconciliationReason === 'string' &&
+    result.reconciliationReason.length > 0 ?
+      result.reconciliationReason :
+      null;
+  const error = new Error(
+    reconciliationReason ?
+      `${errorCode}:${reconciliationReason}` :
+      errorCode,
+  );
+  error.code = errorCode;
+  error.reconciliationReason = reconciliationReason;
+  return error;
+}
+
 function assertAuthoritativeCacheReconcileResult(result, receipt, constants) {
   if (result?.success !== true) {
-    const errorCode =
-      result?.error || constants.error.CACHE_NOT_RECONCILED;
-    const reconciliationReason =
-      typeof result?.reconciliationReason === 'string' &&
-      result.reconciliationReason.length > 0 ?
-        result.reconciliationReason :
-        null;
-    const error = new Error(
-      reconciliationReason ?
-        `${errorCode}:${reconciliationReason}` :
-        errorCode,
-    );
-    error.code = errorCode;
-    error.reconciliationReason = reconciliationReason;
-    throw error;
+    throw buildAuthoritativeCacheReconcileError(result, constants);
   }
   const completeObservationRequested = receipt?.scope ===
     constants.scope.COMPLETE_TABLE;

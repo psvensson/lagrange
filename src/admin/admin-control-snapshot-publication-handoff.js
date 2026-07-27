@@ -482,6 +482,16 @@ function hasControlSnapshotHandoffOwnerOutcomeProgress(
     );
 }
 
+function selectControlSnapshotHandoffPendingNodeIds(
+  handoff,
+  hasHandoff,
+  fieldName,
+) {
+  return hasHandoff ?
+    normalizeControlSnapshotNodeIdList(handoff[fieldName]) :
+    ADMIN_CACHE_DUMP.EMPTY;
+}
+
 function selectControlSnapshotHandoffEvidence(snapshot = null) {
   const controlPlaneDiagnostics =
     snapshot?.[CONTROL_SNAPSHOT_CONTROL_PLANE_DIAGNOSTICS_FIELD];
@@ -494,22 +504,18 @@ function selectControlSnapshotHandoffEvidence(snapshot = null) {
     handoff &&
     typeof handoff === 'object' &&
     !Array.isArray(handoff);
-  const pendingReconcileNodeIds = hasHandoff ?
-    normalizeControlSnapshotNodeIdList(
-      handoff[
-        CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
-          .PENDING_RECONCILE_NODE_IDS
-      ],
-    ) :
-    ADMIN_CACHE_DUMP.EMPTY;
-  const pendingRecoveryNodeIds = hasHandoff ?
-    normalizeControlSnapshotNodeIdList(
-      handoff[
-        CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
-          .PENDING_RECOVERY_NODE_IDS
-      ],
-    ) :
-    ADMIN_CACHE_DUMP.EMPTY;
+  const pendingReconcileNodeIds = selectControlSnapshotHandoffPendingNodeIds(
+    handoff,
+    hasHandoff,
+    CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+      .PENDING_RECONCILE_NODE_IDS,
+  );
+  const pendingRecoveryNodeIds = selectControlSnapshotHandoffPendingNodeIds(
+    handoff,
+    hasHandoff,
+    CONTROL_SNAPSHOT_PUBLICATION_ACTIVE_GATE_HANDOFF_FIELD
+      .PENDING_RECOVERY_NODE_IDS,
+  );
   return Object.freeze({
     available: hasHandoff === true,
     state: normalizeControlSnapshotHandoffText(

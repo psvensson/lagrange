@@ -131,6 +131,29 @@ function compactToGeneration(service, creation) {
   });
 }
 
+// Threshold evaluation for one tick: how many committed entries lie above the
+// durably covered prefix, and whether either the entry or the byte trigger
+// fires (a partition over the byte threshold checkpoints eagerly on any new
+// committed entry instead of waiting out the entry threshold).
+function evaluateCadenceThresholds(service, options, checkpointsRoot) {
+  const committedIndex = service.logAdapter.getCommittedIndex();
+  const coveredIndex = readCoveredIndex(service, checkpointsRoot);
+  const pendingEntryCount = committedIndex - coveredIndex;
+  const entryThreshold = resolveEntryThreshold(options.entryThreshold);
+  const byteThresholdBytes =
+    resolveByteThreshold(options.byteThresholdBytes);
+  const overEntryThreshold = pendingEntryCount >= entryThreshold;
+  const overByteThreshold = Number.isFinite(service.sizeBytes) &&
+    service.sizeBytes >= byteThresholdBytes;
+  return {
+    pendingEntryCount,
+    entryThreshold,
+    byteThresholdBytes,
+    belowThreshold: pendingEntryCount <= 0 ||
+      (!overEntryThreshold && !overByteThreshold),
+  };
+}
+
 /**
  * Create the checkpoint cadence owner for one partition service. The
  * returned tick NEVER rejects — every failure path is a typed frozen
@@ -163,21 +186,13 @@ function createPartitionSnapshotCadence(options) {
       });
     }
     const checkpointsRoot = resolveReplicaCheckpointsRoot(service.dbPath);
-    const committedIndex = service.logAdapter.getCommittedIndex();
-    const coveredIndex = readCoveredIndex(service, checkpointsRoot);
-    const pendingEntryCount = committedIndex - coveredIndex;
-    const entryThreshold = resolveEntryThreshold(options.entryThreshold);
-    const byteThresholdBytes =
-      resolveByteThreshold(options.byteThresholdBytes);
-    const overEntryThreshold = pendingEntryCount >= entryThreshold;
-    const overByteThreshold = Number.isFinite(service.sizeBytes) &&
-      service.sizeBytes >= byteThresholdBytes;
-    if (pendingEntryCount <= 0 ||
-        (!overEntryThreshold && !overByteThreshold)) {
+    const thresholds =
+      evaluateCadenceThresholds(service, options, checkpointsRoot);
+    if (thresholds.belowThreshold) {
       return tickResult(RAFT_SNAPSHOT_CADENCE_OUTCOME.BELOW_THRESHOLD, {
-        pendingEntryCount,
-        entryThreshold,
-        byteThresholdBytes,
+        pendingEntryCount: thresholds.pendingEntryCount,
+        entryThreshold: thresholds.entryThreshold,
+        byteThresholdBytes: thresholds.byteThresholdBytes,
       });
     }
     state.inFlight = true;

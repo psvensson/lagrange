@@ -6,6 +6,29 @@ const {
   WORKFLOW_STEP,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+/**
+ * First finite durable-progress timestamp, in the same precedence order the
+ * context fields have always carried: updatedAt, updatedAtMs, createdAt,
+ * createdAtMs.
+ *
+ * @param {Object} context
+ * @return {number|null}
+ */
+function resolveDurableProgressAtMs(context) {
+  const candidates = [
+    context.updatedAt,
+    context.updatedAtMs,
+    context.createdAt,
+    context.createdAtMs,
+  ];
+  for (const value of candidates) {
+    if (Number.isFinite(value)) {
+      return value;
+    }
+  }
+  return null;
+}
+
 class OperationWorkflowTransitionRetryGrace {
   constructor(options) {
     this.deadlineByOperationId = options.deadlineByOperationId;
@@ -51,15 +74,7 @@ class OperationWorkflowTransitionRetryGrace {
     const retryDelayMs =
       Number.isFinite(delayMs) && delayMs > 0 ? delayMs : 0;
     const requestedGraceDeadlineMs = Date.now() + retryDelayMs;
-    const durableProgressAtMs = Number.isFinite(context.updatedAt) ?
-      context.updatedAt :
-      Number.isFinite(context.updatedAtMs) ?
-        context.updatedAtMs :
-        Number.isFinite(context.createdAt) ?
-          context.createdAt :
-          Number.isFinite(context.createdAtMs) ?
-            context.createdAtMs :
-            null;
+    const durableProgressAtMs = resolveDurableProgressAtMs(context);
     const timeoutCeilingMs = this.resolveTimeoutCeilingMs(
       context,
       workflowStep,

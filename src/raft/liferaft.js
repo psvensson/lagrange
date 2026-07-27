@@ -174,11 +174,29 @@ async function truncateConflictingSameIndexTail(raft, packet) {
   }
 }
 
+function packetLastIdentity(packet) {
+  return {index: packet?.last?.index, term: packet?.last?.term};
+}
+
+function guardSnapshotBoundaryTermConflict(
+  existing, boundary, lastIndex, lastTerm, committedIndex) {
+  if (!existing && boundary &&
+      lastIndex === boundary.lastIncludedIndex &&
+      lastTerm !== boundary.lastIncludedTerm) {
+    guardCommittedEntryWrite(
+      existing,
+      {index: lastIndex, term: lastTerm, command: null},
+      committedIndex,
+      NUMERIC_ZERO,
+    );
+  }
+}
+
 async function validateCommittedPrevLogIdentity(raft, packet) {
   if (!raft.log || typeof raft.log.get !== LOCAL_STR_FUNCTION) {
     return;
   }
-  const lastIndex = packet?.last?.index;
+  const {index: lastIndex, term: lastTerm} = packetLastIdentity(packet);
   const committedIndex = getCommittedIndex(raft);
   if (!hasFiniteNumber(lastIndex) || lastIndex <= NUMERIC_ZERO ||
       lastIndex > committedIndex) {
@@ -192,21 +210,13 @@ async function validateCommittedPrevLogIdentity(raft, packet) {
   const boundary = typeof raft.log.getSnapshotBoundary === LOCAL_STR_FUNCTION ?
     raft.log.getSnapshotBoundary() : null;
   const lastIncludedIndex = boundary ? boundary.lastIncludedIndex : 0;
-  if (!existing && boundary &&
-      lastIndex === boundary.lastIncludedIndex &&
-      packet?.last?.term !== boundary.lastIncludedTerm) {
-    guardCommittedEntryWrite(
-      existing,
-      {index: lastIndex, term: packet?.last?.term, command: null},
-      committedIndex,
-      NUMERIC_ZERO,
-    );
-  }
+  guardSnapshotBoundaryTermConflict(
+    existing, boundary, lastIndex, lastTerm, committedIndex);
   guardCommittedEntryWrite(
     existing,
     {
       index: lastIndex,
-      term: packet?.last?.term,
+      term: lastTerm,
       command: existing?.command,
     },
     committedIndex,

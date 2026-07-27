@@ -51,23 +51,20 @@ function pushUniqueCause(causeChain, cause) {
   }
 }
 
+function normalizeParticipantString(value, fallback = null) {
+  return typeof value === 'string' ? value : fallback;
+}
+
 function normalizeFirstFailedParticipant(participant, tableName = null) {
   if (!participant || typeof participant !== 'object') {
     return null;
   }
   return {
-    partitionId:
-      typeof participant.partitionId === 'string' ?
-        participant.partitionId :
-        null,
+    partitionId: normalizeParticipantString(participant.partitionId),
     participantNodeId:
-      typeof participant.participantNodeId === 'string' ?
-        participant.participantNodeId :
-        null,
+      normalizeParticipantString(participant.participantNodeId),
     participantAddress:
-      typeof participant.participantAddress === 'string' ?
-        participant.participantAddress :
-        null,
+      normalizeParticipantString(participant.participantAddress),
     errorCode: getControlPlaneErrorCode(participant) || null,
     error: getControlPlaneErrorMessage(participant) || null,
     durationMs: Number.isFinite(participant.durationMs) ?
@@ -79,9 +76,7 @@ function normalizeFirstFailedParticipant(participant, tableName = null) {
         participant.backpressured :
         isRetryableControlPlaneError(participant),
     failedTable:
-      typeof participant.failedTable === 'string' ?
-        participant.failedTable :
-        tableName,
+      normalizeParticipantString(participant.failedTable, tableName),
   };
 }
 

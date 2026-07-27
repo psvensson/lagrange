@@ -293,6 +293,31 @@ function openSnapshotTransferSender(options) {
  *   transferId, chunkSizeBytes?, tokenBucket?, signal?}
  * @return {Promise<Object>} typed terminal result
  */
+// Serve one requested chunk: read + frame it, pace the send through the
+// optional token bucket, and send unless cancelled while waiting. Returns
+// the typed terminal result on abort, or null when the chunk was sent.
+async function serveRequestedChunk(context) {
+  const {socket, sender, transferId, tokenBucket, signal, chunkIndex} = context;
+  const chunk = sender.readChunk(chunkIndex);
+  if (!chunk.served) {
+    sendControl(socket, abortMessage(transferId, chunk.reason));
+    return snapshotTransferAborted(chunk.reason);
+  }
+  const encoded = encodeSnapshotChunkFrame(chunk.header, chunk.bytes);
+  if (tokenBucket) {
+    // Signal-aware so an aborted serve loop cannot park forever on a
+    // never-draining bucket (verifier non-blocking finding).
+    await tokenBucket.acquire(encoded.length, {signal});
+  }
+  if (signal?.aborted) {
+    sendControl(socket,
+      abortMessage(transferId, ABORT.TRANSFER_CANCELLED));
+    return snapshotTransferAborted(ABORT.TRANSFER_CANCELLED);
+  }
+  socket.send(encoded);
+  return null;
+}
+
 async function serveSnapshotTransfer(options) {
   const {socket, transferId, tokenBucket, signal} = options;
   const opened = openSnapshotTransferSender(options);
@@ -325,23 +350,13 @@ async function serveSnapshotTransfer(options) {
       }
       if (message.kind === KIND.CHUNK_REQUEST &&
           message.transferId === transferId) {
-        const chunk = sender.readChunk(message.chunkIndex);
-        if (!chunk.served) {
-          sendControl(socket, abortMessage(transferId, chunk.reason));
-          return snapshotTransferAborted(chunk.reason);
+        const aborted = await serveRequestedChunk({
+          socket, sender, transferId, tokenBucket, signal,
+          chunkIndex: message.chunkIndex,
+        });
+        if (aborted) {
+          return aborted;
         }
-        const encoded = encodeSnapshotChunkFrame(chunk.header, chunk.bytes);
-        if (tokenBucket) {
-          // Signal-aware so an aborted serve loop cannot park forever on a
-          // never-draining bucket (verifier non-blocking finding).
-          await tokenBucket.acquire(encoded.length, {signal});
-        }
-        if (signal?.aborted) {
-          sendControl(socket,
-            abortMessage(transferId, ABORT.TRANSFER_CANCELLED));
-          return snapshotTransferAborted(ABORT.TRANSFER_CANCELLED);
-        }
-        socket.send(encoded);
       }
     }
   } finally {
@@ -358,23 +373,67 @@ async function serveSnapshotTransfer(options) {
  *   chunkSizeBytes?, signal?, onChunkVerified?}
  * @return {Promise<Object>} typed terminal result ({outcome, ...})
  */
+// Await the opening control frame: only a well-formed OFFER proceeds; any
+// other first frame terminates the receive with a typed abort.
+async function awaitTransferOffer(inbox) {
+  const first = await inbox.next();
+  if (first.kind === FRAME.CLOSED || first.kind === FRAME.CANCELLED) {
+    return Object.freeze({aborted: snapshotTransferAborted(
+      first.kind === FRAME.CLOSED ?
+        ABORT.CHANNEL_CLOSED :
+        ABORT.TRANSFER_CANCELLED)});
+  }
+  if (first.kind === FRAME.CONTROL && first.message.kind === KIND.ABORT) {
+    return Object.freeze(
+      {aborted: snapshotTransferAborted(first.message.reason)});
+  }
+  if (first.kind !== FRAME.CONTROL || first.message.kind !== KIND.OFFER) {
+    return Object.freeze(
+      {aborted: snapshotTransferAborted(ABORT.CHUNK_FRAME_INVALID)});
+  }
+  return Object.freeze({offer: first.message});
+}
+
+// Classify one frame awaited while a chunk request is outstanding: the chunk
+// to verify, a retry (unrelated control frame), or a typed terminal abort.
+function classifyAwaitedChunkFrame(context) {
+  const {socket, receiver, transferId, frame, verified} = context;
+  if (frame.kind === FRAME.CLOSED || frame.kind === FRAME.CANCELLED) {
+    receiver.cancel();
+    if (frame.kind === FRAME.CANCELLED) {
+      sendControl(socket, abortMessage(transferId, ABORT.TRANSFER_CANCELLED));
+    }
+    return Object.freeze({aborted: snapshotTransferAborted(
+      frame.kind === FRAME.CLOSED ?
+        ABORT.CHANNEL_CLOSED :
+        ABORT.TRANSFER_CANCELLED, {verifiedChunkCount: verified})});
+  }
+  if (frame.kind === FRAME.CONTROL) {
+    if (frame.message.kind === KIND.ABORT) {
+      receiver.cancel();
+      return Object.freeze({aborted: snapshotTransferAborted(
+        frame.message.reason, {verifiedChunkCount: verified})});
+    }
+    return Object.freeze({retry: true});
+  }
+  if (frame.kind !== FRAME.CHUNK) {
+    sendControl(socket, abortMessage(transferId, ABORT.CHUNK_FRAME_INVALID));
+    receiver.cancel();
+    return Object.freeze({aborted: snapshotTransferAborted(
+      ABORT.CHUNK_FRAME_INVALID, {verifiedChunkCount: verified})});
+  }
+  return Object.freeze({chunk: frame});
+}
+
 async function receiveSnapshotTransfer(options) {
   const {socket, signal, onChunkVerified} = options;
   const inbox = createTransferFrameInbox(socket, signal);
   const receiver = createSnapshotTransferReceiver(options);
-  const first = await inbox.next();
-  if (first.kind === FRAME.CLOSED || first.kind === FRAME.CANCELLED) {
-    return snapshotTransferAborted(first.kind === FRAME.CLOSED ?
-      ABORT.CHANNEL_CLOSED :
-      ABORT.TRANSFER_CANCELLED);
+  const opening = await awaitTransferOffer(inbox);
+  if (opening.aborted) {
+    return opening.aborted;
   }
-  if (first.kind === FRAME.CONTROL && first.message.kind === KIND.ABORT) {
-    return snapshotTransferAborted(first.message.reason);
-  }
-  if (first.kind !== FRAME.CONTROL || first.message.kind !== KIND.OFFER) {
-    return snapshotTransferAborted(ABORT.CHUNK_FRAME_INVALID);
-  }
-  const offer = first.message;
+  const offer = opening.offer;
   const admission = receiver.acceptOffer(offer);
   if (admission.outcome !== ACCEPT_OUTCOME.ACCEPTED) {
     sendControl(socket, abortMessage(offer.transferId, admission.reason));
@@ -397,32 +456,16 @@ async function receiveSnapshotTransfer(options) {
       chunkIndex: verified,
     });
     const frame = await inbox.next();
-    if (frame.kind === FRAME.CLOSED || frame.kind === FRAME.CANCELLED) {
-      receiver.cancel();
-      if (frame.kind === FRAME.CANCELLED) {
-        sendControl(socket,
-          abortMessage(offer.transferId, ABORT.TRANSFER_CANCELLED));
-      }
-      return snapshotTransferAborted(frame.kind === FRAME.CLOSED ?
-        ABORT.CHANNEL_CLOSED :
-        ABORT.TRANSFER_CANCELLED, {verifiedChunkCount: verified});
+    const awaited = classifyAwaitedChunkFrame(
+      {socket, receiver, transferId: offer.transferId, frame, verified});
+    if (awaited.aborted) {
+      return awaited.aborted;
     }
-    if (frame.kind === FRAME.CONTROL) {
-      if (frame.message.kind === KIND.ABORT) {
-        receiver.cancel();
-        return snapshotTransferAborted(frame.message.reason,
-          {verifiedChunkCount: verified});
-      }
+    if (awaited.retry) {
       continue;
     }
-    if (frame.kind !== FRAME.CHUNK) {
-      sendControl(socket,
-        abortMessage(offer.transferId, ABORT.CHUNK_FRAME_INVALID));
-      receiver.cancel();
-      return snapshotTransferAborted(ABORT.CHUNK_FRAME_INVALID,
-        {verifiedChunkCount: verified});
-    }
-    const applied = receiver.receiveChunkFrame(frame.header, frame.bytes);
+    const applied = receiver.receiveChunkFrame(
+      awaited.chunk.header, awaited.chunk.bytes);
     if (applied.outcome !== CHUNK_OUTCOME.VERIFIED) {
       sendControl(socket, abortMessage(offer.transferId, applied.reason));
       return snapshotTransferAborted(

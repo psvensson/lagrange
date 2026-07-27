@@ -334,6 +334,22 @@ function fillPlaybackUrls(merged, outputDir, workspaceRoot) {
 }
 
 /**
+ * Copy defined values from right into merged, keeping existing values.
+ * @param {Object} merged
+ * @param {Object} right
+ */
+function mergeDefinedRunFields(merged, right) {
+  for (const [key, value] of Object.entries(right || {})) {
+    if (value !== undefined && value !== null &&
+      value !== EMPTY_STRING) {
+      merged[key] = value;
+    } else if (!(key in merged)) {
+      merged[key] = value;
+    }
+  }
+}
+
+/**
  * Merge two run records, preferring defined values from right.
  * @param {Object} left
  * @param {Object} right
@@ -346,14 +362,7 @@ function mergeRunRecord(
   left, right, outputDir, workspaceRoot, buildProgress,
 ) {
   const merged = {...left};
-  for (const [key, value] of Object.entries(right || {})) {
-    if (value !== undefined && value !== null &&
-      value !== EMPTY_STRING) {
-      merged[key] = value;
-    } else if (!(key in merged)) {
-      merged[key] = value;
-    }
-  }
+  mergeDefinedRunFields(merged, right);
 
   fillPlaybackPaths(merged);
   fillPlaybackUrls(merged, outputDir, workspaceRoot);

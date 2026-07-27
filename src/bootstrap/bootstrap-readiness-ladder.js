@@ -79,6 +79,5 @@ function buildBootstrapReadinessStage(options = {}) {
 
 export {
   BOOTSTRAP_READINESS_STAGE,
-  BOOTSTRAP_READINESS_STAGE_RANK,
   buildBootstrapReadinessStage,
 };

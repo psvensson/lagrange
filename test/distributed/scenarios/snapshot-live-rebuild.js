@@ -290,6 +290,55 @@ async function runNodeQuery(node, sql) {
 }
 
 
+// replicaId follows the same resolution the durable-rejoin planner uses
+// (replica_id, else service_id) and equals the on-disk {rid} in {rid}.db.
+function resolveServiceReplicaId(serviceRow) {
+  return normalizeString(serviceRow?.replica_id) ||
+    normalizeString(serviceRow?.service_id);
+}
+
+// A spread non-seed ACTIVE follower: hosted on a known node that is neither
+// the seed nor the partition leader (by node id or by reported raft role).
+function isSpreadFollowerNode({nodeId, raftRole, status}, context) {
+  return nodeId.length > ZERO &&
+    nodeId !== context.seedNodeId &&
+    nodeId !== context.leaderNodeId &&
+    raftRole !== RAFT_ROLE_LEADER &&
+    (status.length === ZERO || status === STATUS_ACTIVE) &&
+    context.nodeIds.has(nodeId);
+}
+
+// Evaluate one services row against its partition row: record the placement
+// diagnostic, then return the wipe target when the row is an eligible spread
+// follower with a resolvable on-disk replica id, else null.
+function rebuildTargetFromServiceRow(serviceRow, context) {
+  const {partitionId, leaderNodeId, tableName, placement} = context;
+  if (normalizeString(serviceRow?.partition_id) !== partitionId) {
+    return null;
+  }
+  const nodeId = normalizeString(serviceRow?.node_id);
+  const raftRole = normalizeString(serviceRow?.raft_role).toLowerCase();
+  const status = normalizeString(serviceRow?.status).toLowerCase();
+  placement.push(
+    tableName + '/' + partitionId + '@' + nodeId +
+    ' role=' + raftRole + ' status=' + status);
+  if (!isSpreadFollowerNode({nodeId, raftRole, status}, context)) {
+    return null;
+  }
+  // Never wipe the visibility substrate itself (publications + core
+  // membership tables): disrupting it stalls the CDC/publication path that
+  // makes writes cluster-visible, confounding the rebuild-safety signal.
+  if (VISIBILITY_CRITICAL_TABLES.has(tableName)) {
+    return null;
+  }
+  const replicaId = resolveServiceReplicaId(serviceRow);
+  if (replicaId.length === ZERO) {
+    return null;
+  }
+  return {partitionId, replicaId, followerNodeId: nodeId, leaderNodeId,
+    tableName};
+}
+
 /**
  * Resolve a non-seed follower replica of the target table to rebuild. Reads the
  * authoritative partitions + services system tables. replicaId follows the same
@@ -322,41 +371,19 @@ async function resolveRebuildTarget(seedNode, nodes, preferTable, seedNodeId) {
     if (partitionId.length === ZERO) {
       return null;
     }
-    const leaderNodeId = normalizeString(partitionRow?.leader_node_id);
-    const tableName = normalizeString(partitionRow?.table_name);
+    const context = {
+      partitionId,
+      leaderNodeId: normalizeString(partitionRow?.leader_node_id),
+      tableName: normalizeString(partitionRow?.table_name),
+      seedNodeId,
+      nodeIds,
+      placement,
+    };
     for (const serviceRow of serviceRows) {
-      if (normalizeString(serviceRow?.partition_id) !== partitionId) {
-        continue;
+      const target = rebuildTargetFromServiceRow(serviceRow, context);
+      if (target) {
+        return target;
       }
-      const nodeId = normalizeString(serviceRow?.node_id);
-      const raftRole = normalizeString(serviceRow?.raft_role).toLowerCase();
-      const status = normalizeString(serviceRow?.status).toLowerCase();
-      placement.push(
-        tableName + '/' + partitionId + '@' + nodeId +
-        ' role=' + raftRole + ' status=' + status);
-      const isFollower =
-        nodeId.length > ZERO &&
-        nodeId !== seedNodeId &&
-        nodeId !== leaderNodeId &&
-        raftRole !== RAFT_ROLE_LEADER &&
-        (status.length === ZERO || status === STATUS_ACTIVE) &&
-        nodeIds.has(nodeId);
-      if (!isFollower) {
-        continue;
-      }
-      // Never wipe the visibility substrate itself (publications + core
-      // membership tables): disrupting it stalls the CDC/publication path that
-      // makes writes cluster-visible, confounding the rebuild-safety signal.
-      if (VISIBILITY_CRITICAL_TABLES.has(tableName)) {
-        continue;
-      }
-      const replicaId = normalizeString(serviceRow?.replica_id) ||
-        normalizeString(serviceRow?.service_id);
-      if (replicaId.length === ZERO) {
-        continue;
-      }
-      return {partitionId, replicaId, followerNodeId: nodeId, leaderNodeId,
-        tableName};
     }
     return null;
   };
@@ -513,25 +540,8 @@ function s6phase(label, detail) {
     '[s6-phase] ' + label + (detail ? ' ' + detail : '') + '\n');
 }
 
-async function run(cluster, options = {}) {
-  const scaleEvidenceStartedAt = new Date().toISOString();
-  const scenarioOptions = resolveScenarioOptions(
-    options,
-    cluster,
-    'snapshotLiveRebuild',
-  );
-  const cfg = resolveSnapshotLiveRebuildScenarioConfig(scenarioOptions);
-  s6phase('start');
-
-  const nodes = resolveClusterNodes(cluster);
-  const seedNode = nodes.find((node) => node.role === 'seed') || nodes[ZERO];
-  assert.ok(
-    seedNode && typeof seedNode.query === 'function',
-    'snapshot-live-rebuild requires a seed query handle',
-  );
-  const seedNodeId = String(seedNode.id);
-
-  // 1. Wait until the cluster is safe for load.
+// Phase 1 helper: wait until the cluster is safe for load.
+async function awaitPreLoadReadiness(cluster, cfg) {
   if (typeof cluster.waitForLoadReadinessStability === 'function') {
     try {
       await cluster.waitForLoadReadinessStability({
@@ -545,27 +555,14 @@ async function run(cluster, options = {}) {
   } else if (typeof cluster.waitForAllActive === 'function') {
     await cluster.waitForAllActive({timeoutMs: cfg.preLoadReadinessTimeoutMs});
   }
+}
 
-  // 2. Ensure a properly-partitioned, ALL-NODE-VISIBLE benchmark table for the
-  // load AND the acknowledged-write reconciliation (the raw `logs` table is not
-  // reliably routable to every node, so reconciling against it reports false
-  // missing rows). A freshly-created partitioned table also spreads its
-  // replicas across non-seed nodes, giving a clean DATA-partition wipe target —
-  // this is the rolling-restart benchmark-load pattern.
-  const loadTableName = resolvePartitioningLoadTableName(
-    cluster, cfg.tableName, {explicitTableName: false});
-  await ensureBenchmarkPartitioningTable(seedNode, {
-    tableName: loadTableName,
-    requiredBootstrapVisibilityState:
-      TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
-    queryNodes: nodes,
-    timeoutMs: cfg.preLoadReadinessTimeoutMs,
-  });
-  s6phase('benchmark-table', loadTableName);
-
-  // 3. Wait for the benchmark table's replicas to SPREAD off the seed before
-  // adding load: poll resolveRebuildTarget until an eligible non-seed active
-  // follower of the benchmark partition exists.
+// Phase 3 helper: poll resolveRebuildTarget until an eligible non-seed active
+// follower of the benchmark partition exists. Returns {target, lastPlacement};
+// target stays null on timeout and the caller asserts with the last observed
+// placement.
+async function awaitRebuildTargetSpread(
+  cluster, seedNode, nodes, loadTableName, seedNodeId, cfg) {
   if (typeof cluster.waitForConvergence === 'function') {
     try {
       await cluster.waitForConvergence({
@@ -593,6 +590,150 @@ async function run(cluster, options = {}) {
     s6phase('await-spread', 'placement=' + lastPlacement.length);
     await sleep(cfg.targetSpreadPollIntervalMs);
   } while (Date.now() < spreadDeadline);
+  return {target, lastPlacement};
+}
+
+// Snapshot the load counters at wipe time so the rebuild-window slice can be
+// separated out of the completed run's totals.
+function snapshotPreWipeCounters(loadRun) {
+  const preWipeMetrics = loadRun.getMetrics();
+  return {
+    total: Number(preWipeMetrics?.total || ZERO),
+    success: Number(preWipeMetrics?.success || ZERO),
+  };
+}
+
+// Phase 5 helper: the wipe runs while the container is UP (exec cannot enter a
+// stopped container); rm unlinks the db + checkpoints paths (the still-open
+// handle keeps the old inode alive only until the imminent stop), and the
+// subsequent stop→start boots the node into an absent data dir — the
+// catastrophic-replica-loss condition the snapshot chain repairs.
+async function wipeAndRestartFollower(cluster, followerNode, target, cfg) {
+  s6phase('wipe-start');
+  const wiped = await cluster.wipeReplicaData(followerNode.id, {
+    partitionId: target.partitionId,
+    replicaId: target.replicaId,
+  });
+  s6phase('wipe-done');
+  await cluster.stopNode(followerNode.id);
+  await cluster.startNode(followerNode.id, {
+    readinessTimeoutMs: cfg.rejoinReadinessTimeoutMs,
+  });
+  s6phase('follower-restarted');
+  return wiped;
+}
+
+// Phase 6 helper: kill mid-transfer and restart to prove resume from the
+// verified boundary.
+async function runRestartabilityLeg(
+  cluster, followerNode, availableLoadNodeIds, cfg) {
+  await sleep(cfg.restartabilityMidTransferDelayMs);
+  availableLoadNodeIds.delete(String(followerNode.id));
+  await cluster.stopNode(followerNode.id);
+  await cluster.startNode(followerNode.id, {
+    readinessTimeoutMs: cfg.rejoinReadinessTimeoutMs,
+  });
+  availableLoadNodeIds.add(String(followerNode.id));
+  return {
+    performed: true,
+    midTransferDelayMs: cfg.restartabilityMidTransferDelayMs,
+  };
+}
+
+// Best-effort cluster settle (never hard-fails on priority-spread-pending,
+// which is unrelated to the rebuild — the acked-write gate is the real
+// data-safety assertion).
+async function settleClusterBestEffort(cluster, cfg) {
+  try {
+    await cluster.waitForConvergence({
+      settleTimeoutMs: cfg.perNodeConvergenceTimeoutMs,
+      quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
+      targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
+      ignoreStaleInFlightReplicaOperations: true,
+    });
+  } catch (_error) {
+    // Priority-spread convergence is the rolling-restart bar's concern.
+  }
+}
+
+// Best-effort consistency settle before reconciliation (bounded; the
+// acked-write reconciliation itself polls to its own deadline and is the
+// authoritative data-safety gate).
+async function settleConsistencyBestEffort(cluster, cfg) {
+  try {
+    await cluster.waitForConsistencyConvergence({
+      timeoutMs: cfg.consistencyTimeoutMs,
+      pollIntervalMs: cfg.consistencyPollIntervalMs,
+      forceRepairAfterMs: cfg.consistencyForceRepairAfterMs,
+    });
+  } catch (_error) {
+    // Priority-spread consistency is not the rebuild-safety signal.
+  }
+}
+
+// Foreground-load health during the rebuild window (the post-wipe slice of
+// the completed run's totals).
+function computeRebuildWindow(metrics, preWipeCounters) {
+  const rebuildWindowTotal = Math.max(
+    ZERO,
+    Number(metrics?.total || ZERO) - preWipeCounters.total,
+  );
+  const rebuildWindowSuccess = Math.max(
+    ZERO,
+    Number(metrics?.success || ZERO) - preWipeCounters.success,
+  );
+  return {
+    total: rebuildWindowTotal,
+    success: rebuildWindowSuccess,
+    successRate: rebuildWindowTotal > ZERO ?
+      rebuildWindowSuccess / rebuildWindowTotal :
+      1,
+  };
+}
+
+async function run(cluster, options = {}) {
+  const scaleEvidenceStartedAt = new Date().toISOString();
+  const scenarioOptions = resolveScenarioOptions(
+    options,
+    cluster,
+    'snapshotLiveRebuild',
+  );
+  const cfg = resolveSnapshotLiveRebuildScenarioConfig(scenarioOptions);
+  s6phase('start');
+
+  const nodes = resolveClusterNodes(cluster);
+  const seedNode = nodes.find((node) => node.role === 'seed') || nodes[ZERO];
+  assert.ok(
+    seedNode && typeof seedNode.query === 'function',
+    'snapshot-live-rebuild requires a seed query handle',
+  );
+  const seedNodeId = String(seedNode.id);
+
+  // 1. Wait until the cluster is safe for load.
+  await awaitPreLoadReadiness(cluster, cfg);
+
+  // 2. Ensure a properly-partitioned, ALL-NODE-VISIBLE benchmark table for the
+  // load AND the acknowledged-write reconciliation (the raw `logs` table is not
+  // reliably routable to every node, so reconciling against it reports false
+  // missing rows). A freshly-created partitioned table also spreads its
+  // replicas across non-seed nodes, giving a clean DATA-partition wipe target —
+  // this is the rolling-restart benchmark-load pattern.
+  const loadTableName = resolvePartitioningLoadTableName(
+    cluster, cfg.tableName, {explicitTableName: false});
+  await ensureBenchmarkPartitioningTable(seedNode, {
+    tableName: loadTableName,
+    requiredBootstrapVisibilityState:
+      TABLE_BOOTSTRAP_VISIBILITY_STATE.PARTITIONS_VISIBLE,
+    queryNodes: nodes,
+    timeoutMs: cfg.preLoadReadinessTimeoutMs,
+  });
+  s6phase('benchmark-table', loadTableName);
+
+  // 3. Wait for the benchmark table's replicas to SPREAD off the seed before
+  // adding load: poll resolveRebuildTarget until an eligible non-seed active
+  // follower of the benchmark partition exists.
+  const {target, lastPlacement} = await awaitRebuildTargetSpread(
+    cluster, seedNode, nodes, loadTableName, seedNodeId, cfg);
   assert.ok(
     target,
     'No non-seed active follower partition replica available to rebuild ' +
@@ -639,29 +780,15 @@ async function run(cluster, options = {}) {
 
   try {
     await sleep(cfg.preWipeSettleMs);
-    const preWipeMetrics = loadRun.getMetrics();
-    const preWipeTotal = Number(preWipeMetrics?.total || ZERO);
-    const preWipeSuccess = Number(preWipeMetrics?.success || ZERO);
+    const preWipeCounters = snapshotPreWipeCounters(loadRun);
 
     // 5. Wipe the follower's durable replica state, then restart it to force a
-    // from-scratch rebuild. The wipe runs while the container is UP (exec
-    // cannot enter a stopped container); rm unlinks the db + checkpoints paths
-    // (the still-open handle keeps the old inode alive only until the imminent
-    // stop), and the subsequent stop→start boots the node into an absent data
-    // dir — the catastrophic-replica-loss condition the snapshot chain repairs.
+    // from-scratch rebuild (see wipeAndRestartFollower for the wipe-while-up
+    // mechanics).
     availableLoadNodeIds.delete(String(followerNode.id));
     const wipeStartedAt = Date.now();
-    s6phase('wipe-start');
-    const wiped = await cluster.wipeReplicaData(followerNode.id, {
-      partitionId: target.partitionId,
-      replicaId: target.replicaId,
-    });
-    s6phase('wipe-done');
-    await cluster.stopNode(followerNode.id);
-    await cluster.startNode(followerNode.id, {
-      readinessTimeoutMs: cfg.rejoinReadinessTimeoutMs,
-    });
-    s6phase('follower-restarted');
+    const wiped = await wipeAndRestartFollower(
+      cluster, followerNode, target, cfg);
     // Deliberately do NOT return the rebuilt node to the load pool: a node
     // still catching up its wiped replica is not serve-ready for the load
     // lane, and directing load at it produces nodeAdmissionBlocked stalls that
@@ -672,17 +799,8 @@ async function run(cluster, options = {}) {
     // 6. Optional restartability leg: kill mid-transfer and restart to prove
     // resume from the verified boundary.
     if (cfg.restartabilityLegEnabled) {
-      await sleep(cfg.restartabilityMidTransferDelayMs);
-      availableLoadNodeIds.delete(String(followerNode.id));
-      await cluster.stopNode(followerNode.id);
-      await cluster.startNode(followerNode.id, {
-        readinessTimeoutMs: cfg.rejoinReadinessTimeoutMs,
-      });
-      availableLoadNodeIds.add(String(followerNode.id));
-      restartabilityLeg = {
-        performed: true,
-        midTransferDelayMs: cfg.restartabilityMidTransferDelayMs,
-      };
+      restartabilityLeg = await runRestartabilityLeg(
+        cluster, followerNode, availableLoadNodeIds, cfg);
     }
 
     // 7. REBUILD-FOCUSED readiness (the S6 pass criterion): wait for the wiped
@@ -703,16 +821,7 @@ async function run(cluster, options = {}) {
     // Best-effort cluster settle (never hard-fails on priority-spread-pending,
     // which is unrelated to the rebuild — see the acked-write gate below for
     // the real data-safety assertion).
-    try {
-      await cluster.waitForConvergence({
-        settleTimeoutMs: cfg.perNodeConvergenceTimeoutMs,
-        quietWindowMs: CONVERGENCE_DEFAULTS.quietWindowMs,
-        targetVoterCount: CONVERGENCE_DEFAULTS.targetVoterCount,
-        ignoreStaleInFlightReplicaOperations: true,
-      });
-    } catch (_error) {
-      // Priority-spread convergence is the rolling-restart bar's concern.
-    }
+    await settleClusterBestEffort(cluster, cfg);
     s6phase('converged');
     const catchupDurationMs = Date.now() - wipeStartedAt;
 
@@ -732,15 +841,7 @@ async function run(cluster, options = {}) {
     // Best-effort consistency settle before reconciliation (bounded; the
     // acked-write reconciliation itself polls to its own deadline and is the
     // authoritative data-safety gate).
-    try {
-      await cluster.waitForConsistencyConvergence({
-        timeoutMs: cfg.consistencyTimeoutMs,
-        pollIntervalMs: cfg.consistencyPollIntervalMs,
-        forceRepairAfterMs: cfg.consistencyForceRepairAfterMs,
-      });
-    } catch (_error) {
-      // Priority-spread consistency is not the rebuild-safety signal.
-    }
+    await settleConsistencyBestEffort(cluster, cfg);
 
     s6phase('reconcile-start');
     const acknowledgedWriteVisibility =
@@ -753,21 +854,7 @@ async function run(cluster, options = {}) {
         },
       );
 
-    const rebuildWindowTotal = Math.max(
-      ZERO,
-      Number(metrics?.total || ZERO) - preWipeTotal,
-    );
-    const rebuildWindowSuccess = Math.max(
-      ZERO,
-      Number(metrics?.success || ZERO) - preWipeSuccess,
-    );
-    const rebuildWindow = {
-      total: rebuildWindowTotal,
-      success: rebuildWindowSuccess,
-      successRate: rebuildWindowTotal > ZERO ?
-        rebuildWindowSuccess / rebuildWindowTotal :
-        1,
-    };
+    const rebuildWindow = computeRebuildWindow(metrics, preWipeCounters);
 
     const evidence = buildR5EvidenceSlice({
       preload,
