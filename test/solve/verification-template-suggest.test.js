@@ -54,6 +54,24 @@ tap.test('verification-template-suggest', async (t) => {
     t.end();
   });
 
+  t.test('any src/diagnostics/ path change suggests adversarial-js-intrinsics',
+    (t) => {
+      const suggestions = suggestVerificationTemplates(REPO_ROOT,
+        diffFor('src/diagnostics/opportunity-calculator.js',
+          'const value = 1;'));
+      t.ok(suggestions.some((s) => s.category === 'adversarial-js-intrinsics'));
+      t.end();
+    });
+
+  t.test('intrinsics keywords in changed lines suggest adversarial-js-intrinsics',
+    (t) => {
+      const suggestions = suggestVerificationTemplates(REPO_ROOT,
+        diffFor('src/distributed/harness/report-guard.js',
+          'if (!Object.hasOwn(record, key)) return null;'));
+      t.ok(suggestions.some((s) => s.category === 'adversarial-js-intrinsics'));
+      t.end();
+    });
+
   t.test('any test/ path change suggests harness-fidelity', (t) => {
     const suggestions = suggestVerificationTemplates(REPO_ROOT,
       diffFor('test/distributed/scenarios/foo.js', 'const value = 1;'));

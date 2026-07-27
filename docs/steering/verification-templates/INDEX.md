@@ -23,6 +23,7 @@ checklist entry that catches nothing is noise.
 | Concurrency / locking / single-flight | [concurrency-serialization.md](concurrency-serialization.md) |
 | Formation-vs-steady-state circularity | [formation-circularity.md](formation-circularity.md) |
 | Test-harness / fixture fidelity | [harness-fidelity.md](harness-fidelity.md) |
+| Guard/contract modules validating hostile input | [adversarial-js-intrinsics.md](adversarial-js-intrinsics.md) |
 
 Usage in a verification prompt: paste the relevant checklist, replace each
 placeholder with the change's specifics, and require the verifier to return
@@ -31,3 +32,15 @@ union of every matching template in the verifier's initial prompt and deduplicat
 overlapping questions. Do not include unrelated templates merely to make the
 checklist longer, and do not defer an already-applicable template until after the
 first verdict.
+
+**Category-complete rounds:** a verifier must enumerate ALL findings and group
+them by category; a rejection round must be category-complete — never stop at
+the first defect. One defect per round turned an 11-item checklist into 11
+full attempt-verify cycles on `comparative-efficiency-opportunity-calculator`
+(2026-07-27).
+
+Design-time counterpart: [design-note-template.md](design-note-template.md)
+structures a Quest design note before the design-vet subagent runs, covering
+the four refutation categories that recurred on every rung of the S1–S6
+snapshot epic (uncited consumed surfaces, untyped failure edges, stale
+cached views, unanchored identity).

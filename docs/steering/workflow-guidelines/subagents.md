@@ -64,3 +64,14 @@ closure-record anchors, so review quality does not depend on the prompt
 author recalling each one. Every checklist item demands an evidence path;
 items that pass review while their class ships twice get promoted to machine
 checks or deleted.
+
+Verification rounds MUST be category-complete: instruct the verifier to
+enumerate every finding it can reach and group findings by category, never
+stopping at the first defect. A rejection that names one defect per round
+turns a bounded checklist into an unbounded sequence of full
+attempt-verify cycles (measured: 11 single-finding rounds on one
+diagnostics quest, 2026-07-27). Design vets SHOULD receive a design note
+structured by
+[`design-note-template.md`](../verification-templates/design-note-template.md)
+(cited consumed surfaces, typed failure edges, cached-view audit, identity
+anchoring) and attack each section separately.

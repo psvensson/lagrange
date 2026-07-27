@@ -55,6 +55,8 @@ const CATEGORY_KEYWORD_RULES = Object.freeze({
   'formation-circularity':
     /\b(formation|bootstrap|seed|join|quorum|circular)/iu,
   'harness-fidelity': /\b(harness|fixture|stub|fake|mock)/iu,
+  'adversarial-js-intrinsics':
+    /^src\/diagnostics\/|\b(prototype|hasOwn|Object\.create|Number\.isFinite|intrinsic)/u,
 });
 
 // category -> template path (repo-relative), read from each template's
