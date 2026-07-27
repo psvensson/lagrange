@@ -80,6 +80,9 @@ produced valid evidence, not that Lagrange won.
 
 ## Decision log
 
+- 2026-07-27 — Assigned the exact Cartesian matrix manifest, digest-resolved
+  root evidence envelope, resource-window join, and separately recomputable
+  capacity/cost effects to C4 before any C5–C9 matrix evidence is emitted.
 - 2026-07-27 — Added the scale-owned terminal-receipt freshness prerequisite
   for claim projection. P0 workload measurement remains parallel and can
   support only `measured_p0`; `certified_profile` consumes the scale owner's

@@ -107,6 +107,17 @@ Fixed-SLO cost SHALL:
 Human operations and migration labor are reported qualitatively unless a
 separate preregistered study supplies a defensible unit model.
 
+C4 SHALL own one authoritative content-addressed matrix envelope and exact
+artifact manifest for C5, C6, C8, C9, and C10. Validation SHALL resolve bounded
+raw bytes by digest, re-hash and parse exact canonical schemas, reject missing,
+duplicate, extra, relocated, cyclic, oversized, or tampered artifacts, and
+never trust caller-supplied paths or prior validation flags. Each measuring cell
+SHALL expose independently recomputable capacity and cost effects, including
+side IDs, numerator/denominator convention, raw values, immutable units,
+estimate, confidence interval, practical threshold, sample count, and source
+digests. Capacity is higher-is-better; infrastructure cost per million correct
+SLO-eligible operations is lower-is-better.
+
 ## R6 — Preregistered workload matrix
 
 The initial matrix SHALL cover:

@@ -58,6 +58,13 @@ Inventory and meter every component. Calibrate synthetic byte accounting at
 live seams under the harness-fidelity attack checklist. Keep cost projection
 separate from measured resources and use immutable price sheets.
 
+C4 also owns the exact Cartesian matrix manifest, digest-only artifact resolver,
+bounded root evidence envelope, and per-cell resource join consumed by C5, C6,
+C8, C9, and C10. It publishes independent recomputable capacity and cost
+effects plus source revision, production time, evidence validity, and
+price-sheet validity; downstream Quests consume these owners without deriving
+effects from caller-supplied result or claim text.
+
 ## C5 — Negative controls
 
 Execute every small/simple, uniform-access, no-reuse, update-heavy, and

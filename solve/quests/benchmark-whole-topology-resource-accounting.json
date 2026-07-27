@@ -44,6 +44,18 @@
       "statement": "Do not seal this Quest until benchmark-statistical-capacity-protocol is terminal."
     },
     {
+      "id": "matrix-resource-receipt-owner",
+      "statement": "Own the shared immutable Cartesian matrix manifest, resource-window join, and per-cell evidence envelope consumed by C5, C6, C8, C9, and C10. Reject missing, duplicate, or extra cells; bind each capacity sample to its matrix, cell, pair, run, semantic receipt, live-engagement receipt, and resource window; require every sealed cell to be valid or explicitly non-measuring; and retain sourceRevision, producedAt, validUntil, and exact price-sheet validity for later eligibility checks."
+    },
+    {
+      "id": "digest-resolved-evidence-root",
+      "statement": "Define one authoritative content-addressed root envelope and exact artifact manifest for comparative matrix evidence. Validation must resolve digests to bounded raw bytes through a sealed resolver contract, re-hash and parse canonical schemas, reject missing, duplicate, extra, relocated, cyclic, oversized, or tampered artifacts, and never trust caller-supplied paths or already-parsed validation flags."
+    },
+    {
+      "id": "separate-capacity-and-cost-effects",
+      "statement": "Each measuring cell exposes independently recomputable paired capacity and cost effects. Each effect binds side IDs, numerator and denominator convention, raw values, immutable units, estimate, confidence interval, practical threshold, sample count, and every source digest; capacity is higher-is-better, cost per million correct SLO-eligible operations is lower-is-better, and neither may be inferred from caller-supplied result or claim text."
+    },
+    {
       "id": "whole-architecture-boundary",
       "statement": "Fixed-resource and fixed-SLO comparisons include every architecture-specific component, provisioned and utilized units, amplification, IOPS, network and inter-zone traffic, minimum footprint, and headroom."
     },
