@@ -14,6 +14,23 @@ import {
   RESOURCE_DEFAULTS,
   CONTAINER_LOG_TAIL_LINES,
 } from './constants.js';
+const localText = Object.freeze({
+  HTTP: 'http',
+  STARTING: 'starting',
+  COMPLETED: 'completed',
+  REUSED: 'reused',
+  FAILED: 'failed',
+  END: 'end',
+  UTF8: 'utf8',
+  ERROR: 'error',
+  DATA: 'data',
+  NEWLINE: '\n',
+  READ: 'read',
+  WRITE: 'write',
+  CONTAINER_STORAGE_USAGE_INVALID:
+    'Container storage usage was not a safe byte count',
+});
+
 
 const CONTAINER_RUNNING_STATE = 'running';
 const START_POLL_INTERVAL_MS = 250;
@@ -46,6 +63,13 @@ const CONTAINER_LOG_ERROR_STRING_TOO_LONG = 'ERR_STRING_TOO_LONG';
 const UTF8_ENCODING = 'utf8';
 const NETWORK_EXISTS_ERROR_PATTERN = 'already exists';
 const NETWORK_LIST_FILTER_NAME = 'name';
+const DOCKER_NOT_FOUND_STATUS = 404;
+const STORAGE_USAGE_COMMAND = 'du';
+const STORAGE_USAGE_BYTES_FLAG = '-sb';
+const STORAGE_USAGE_ARGUMENT_SEPARATOR = '--';
+const STORAGE_USAGE_FIELD_SEPARATOR = '\t';
+const STORAGE_USAGE_BYTE_COUNT_PATTERN = /^(?:0|[1-9]\d*)$/u;
+const STORAGE_LIMIT_PATTERN = /(?:^|,)size=(\d+)(?:,|$)/u;
 const BUILD_CONTEXT_STATIC_ENTRIES = Object.freeze([
   '.dockerignore',
   'package-lock.json',
@@ -81,7 +105,7 @@ class DockerProvider {
       this._docker = new Docker({
         host: hostname,
         port: port,
-        protocol: 'http',
+        protocol: localText.HTTP,
       });
     } else {
       this._docker = new Docker({
@@ -98,7 +122,7 @@ class DockerProvider {
    */
   async createNetwork(name, labels = {}) {
     this._emitOperation(DOCKER_OP_CREATE_NETWORK, {
-      stage: 'starting',
+      stage: localText.STARTING,
       name,
       labels,
     });
@@ -108,7 +132,7 @@ class DockerProvider {
       Labels: labels,
     });
     this._emitOperation(DOCKER_OP_CREATE_NETWORK, {
-      stage: 'completed',
+      stage: localText.COMPLETED,
       name,
       networkId: network.id,
     });
@@ -134,7 +158,7 @@ class DockerProvider {
         throw err;
       }
       this._emitOperation(DOCKER_OP_CREATE_NETWORK, {
-        stage: 'reused',
+        stage: localText.REUSED,
         name,
         networkId: existing.id,
       });
@@ -188,7 +212,7 @@ class DockerProvider {
     labels = DEFAULT_BUILD_LABELS,
   ) {
     this._emitOperation(DOCKER_OP_BUILD_IMAGE, {
-      stage: 'starting',
+      stage: localText.STARTING,
       contextPath,
       tag,
       dockerfile,
@@ -202,7 +226,7 @@ class DockerProvider {
       );
     } catch (err) {
       this._emitOperation(DOCKER_OP_BUILD_IMAGE, {
-        stage: 'failed',
+        stage: localText.FAILED,
         contextPath,
         tag,
         dockerfile,
@@ -219,7 +243,7 @@ class DockerProvider {
         .map((line) => line.stream || line.error || '')
         .join('');
       this._emitOperation(DOCKER_OP_BUILD_IMAGE, {
-        stage: 'failed',
+        stage: localText.FAILED,
         contextPath,
         tag,
         dockerfile,
@@ -231,7 +255,7 @@ class DockerProvider {
       );
     }
     this._emitOperation(DOCKER_OP_BUILD_IMAGE, {
-      stage: 'completed',
+      stage: localText.COMPLETED,
       contextPath,
       tag,
       dockerfile,
@@ -344,7 +368,7 @@ class DockerProvider {
     } = options;
 
     this._emitOperation(DOCKER_OP_CREATE_CONTAINER, {
-      stage: 'starting',
+      stage: localText.STARTING,
       name,
       image,
       network,
@@ -388,7 +412,7 @@ class DockerProvider {
     const containerId = container.id;
     try {
       this._emitOperation(DOCKER_OP_START_CONTAINER, {
-        stage: 'starting',
+        stage: localText.STARTING,
         name,
         containerId,
         startTimeout,
@@ -396,14 +420,14 @@ class DockerProvider {
       await container.start();
       await this._waitForRunning(containerId, startTimeout);
       this._emitOperation(DOCKER_OP_START_CONTAINER, {
-        stage: 'completed',
+        stage: localText.COMPLETED,
         name,
         containerId,
       });
     } catch (err) {
       await this._cleanupFailedContainer(containerId);
       this._emitOperation(DOCKER_OP_START_CONTAINER, {
-        stage: 'failed',
+        stage: localText.FAILED,
         name,
         containerId,
         error: err.message,
@@ -415,10 +439,13 @@ class DockerProvider {
     }
 
     const info = await this.inspectContainer(containerId);
-    const ip = info.NetworkSettings?.Networks?.[network]?.IPAddress || '';
+    const networks = info.NetworkSettings?.Networks || {};
+    const namedEndpoint = networks[network];
+    const firstEndpoint = Object.values(networks)[ZERO];
+    const ip = namedEndpoint?.IPAddress || firstEndpoint?.IPAddress || '';
 
     this._emitOperation(DOCKER_OP_CREATE_CONTAINER, {
-      stage: 'completed',
+      stage: localText.COMPLETED,
       name,
       image,
       network,
@@ -529,13 +556,13 @@ class DockerProvider {
    */
   async stopContainer(containerId) {
     this._emitOperation(DOCKER_OP_STOP_CONTAINER, {
-      stage: 'starting',
+      stage: localText.STARTING,
       containerId,
     });
     const container = this._docker.getContainer(containerId);
     await container.stop({t: STOP_TIMEOUT_SECONDS});
     this._emitOperation(DOCKER_OP_STOP_CONTAINER, {
-      stage: 'completed',
+      stage: localText.COMPLETED,
       containerId,
     });
   }
@@ -583,7 +610,7 @@ class DockerProvider {
    */
   async startContainer(containerId, startTimeout = TIMEOUTS.NODE_STARTUP) {
     this._emitOperation(DOCKER_OP_START_CONTAINER, {
-      stage: 'starting',
+      stage: localText.STARTING,
       containerId,
       startTimeout,
     });
@@ -591,7 +618,7 @@ class DockerProvider {
     await container.start();
     await this._waitForRunning(containerId, startTimeout);
     this._emitOperation(DOCKER_OP_START_CONTAINER, {
-      stage: 'completed',
+      stage: localText.COMPLETED,
       containerId,
     });
   }
@@ -633,13 +660,13 @@ class DockerProvider {
         {write: (chunk) => stdoutChunks.push(chunk)},
         {write: (chunk) => stderrChunks.push(chunk)},
       );
-      stream.on('end', () => {
+      stream.on(localText.END, () => {
         resolve({
-          stdout: Buffer.concat(stdoutChunks).toString('utf8'),
-          stderr: Buffer.concat(stderrChunks).toString('utf8'),
+          stdout: Buffer.concat(stdoutChunks).toString(localText.UTF8),
+          stderr: Buffer.concat(stderrChunks).toString(localText.UTF8),
         });
       });
-      stream.on('error', reject);
+      stream.on(localText.ERROR, reject);
     });
   }
 
@@ -716,10 +743,10 @@ class DockerProvider {
         return;
       }
       stream = s;
-      stream.on('data', (chunk) => {
-        callback(chunk.toString('utf8'));
+      stream.on(localText.DATA, (chunk) => {
+        callback(chunk.toString(localText.UTF8));
       });
-      stream.on('error', (_err) => {
+      stream.on(localText.ERROR, (_err) => {
         // Stream errors are expected on container stop
       });
     }).catch((_err) => {
@@ -777,7 +804,7 @@ class DockerProvider {
     const sink = new Writable({
       write(chunk, _enc, cb) {
         pending += chunk.toString('utf8');
-        let nlIdx = pending.indexOf('\n');
+        let nlIdx = pending.indexOf(localText.NEWLINE);
         while (nlIdx !== -1) {
           emitLine(pending.slice(0, nlIdx));
           pending = pending.slice(nlIdx + 1);
@@ -811,13 +838,13 @@ class DockerProvider {
         }
         stream = s;
         this._docker.modem.demuxStream(stream, sink, sink);
-        stream.on('end', () => {
+        stream.on(localText.END, () => {
           flushPending();
           if (!stopped && typeof opts.onEnd === 'function') {
             opts.onEnd();
           }
         });
-        stream.on('error', (err) => {
+        stream.on(localText.ERROR, (err) => {
           if (!stopped && typeof opts.onError === 'function') {
             opts.onError(err);
           }
@@ -852,19 +879,78 @@ class DockerProvider {
   }
 
   /**
+   * Capture cumulative runtime counters, enforced limits, and storage usage.
+   * @param {string} containerId
+   * @param {string|null} storagePath
+   * @returns {Promise<Object>}
+   */
+  async getContainerResourceSnapshot(containerId, storagePath = null) {
+    const container = this._docker.getContainer(containerId);
+    const stats = await container.stats({stream: false});
+    const inspect = await container.inspect({size: true});
+    const storageUsageBytes = storagePath === null ?
+      safeNumber(inspect?.SizeRw) :
+      await this._getContainerPathUsage(containerId, storagePath);
+    return {
+      ...parseContainerStats(stats),
+      cpuLimitNanoCpus: safeNumber(inspect?.HostConfig?.NanoCpus),
+      storageLimitBytes: parseTmpfsStorageLimit(
+        inspect?.HostConfig?.Tmpfs,
+        storagePath,
+      ),
+      storageUsageBytes,
+    };
+  }
+
+  async _getContainerPathUsage(containerId, storagePath) {
+    const result = await this.execInContainer(containerId, [
+      STORAGE_USAGE_COMMAND,
+      STORAGE_USAGE_BYTES_FLAG,
+      STORAGE_USAGE_ARGUMENT_SEPARATOR,
+      storagePath,
+    ]);
+    if (result.exitCode !== ZERO) {
+      throw new Error(`Container storage usage failed: ${result.stderr}`);
+    }
+    const output = result.stdout;
+    const record = typeof output === 'string' &&
+      output.endsWith(localText.NEWLINE) ?
+      output.slice(ZERO, -1) :
+      '';
+    const separatorIndex = record.indexOf(STORAGE_USAGE_FIELD_SEPARATOR);
+    const reportedPath = separatorIndex === -1 ?
+      '' :
+      record.slice(separatorIndex + 1);
+    const numericText = separatorIndex === -1 ?
+      '' :
+      record.slice(ZERO, separatorIndex);
+    const usage = Number(numericText);
+    if (
+      record.includes(localText.NEWLINE) ||
+      reportedPath !== storagePath ||
+      !STORAGE_USAGE_BYTE_COUNT_PATTERN.test(numericText) ||
+      !Number.isSafeInteger(usage) ||
+      usage < ZERO
+    ) {
+      throw new Error(localText.CONTAINER_STORAGE_USAGE_INVALID);
+    }
+    return usage;
+  }
+
+  /**
    * Remove a container and its associated volumes.
    * Req 1.5
    * @param {string} containerId
    */
   async removeContainer(containerId) {
     this._emitOperation(DOCKER_OP_REMOVE_CONTAINER, {
-      stage: 'starting',
+      stage: localText.STARTING,
       containerId,
     });
     const container = this._docker.getContainer(containerId);
     await container.remove({force: true, v: true});
     this._emitOperation(DOCKER_OP_REMOVE_CONTAINER, {
-      stage: 'completed',
+      stage: localText.COMPLETED,
       containerId,
     });
   }
@@ -875,13 +961,13 @@ class DockerProvider {
    */
   async removeNetwork(networkId) {
     this._emitOperation(DOCKER_OP_REMOVE_NETWORK, {
-      stage: 'starting',
+      stage: localText.STARTING,
       networkId,
     });
     const network = this._docker.getNetwork(networkId);
     await network.remove();
     this._emitOperation(DOCKER_OP_REMOVE_NETWORK, {
-      stage: 'completed',
+      stage: localText.COMPLETED,
       networkId,
     });
   }
@@ -893,14 +979,14 @@ class DockerProvider {
    */
   async disconnectFromNetwork(networkId, containerId) {
     this._emitOperation(DOCKER_OP_DISCONNECT_NETWORK, {
-      stage: 'starting',
+      stage: localText.STARTING,
       networkId,
       containerId,
     });
     const network = this._docker.getNetwork(networkId);
     await network.disconnect({Container: containerId, Force: true});
     this._emitOperation(DOCKER_OP_DISCONNECT_NETWORK, {
-      stage: 'completed',
+      stage: localText.COMPLETED,
       networkId,
       containerId,
     });
@@ -914,7 +1000,7 @@ class DockerProvider {
    */
   async connectToNetwork(networkId, containerId, aliases = []) {
     this._emitOperation(DOCKER_OP_CONNECT_NETWORK, {
-      stage: 'starting',
+      stage: localText.STARTING,
       networkId,
       containerId,
       aliases,
@@ -934,7 +1020,7 @@ class DockerProvider {
         {}),
     });
     this._emitOperation(DOCKER_OP_CONNECT_NETWORK, {
-      stage: 'completed',
+      stage: localText.COMPLETED,
       networkId,
       containerId,
       aliases: normalizedAliases,
@@ -977,8 +1063,11 @@ class DockerProvider {
   async inspectContainerIfExists(containerId) {
     try {
       return await this.inspectContainer(containerId);
-    } catch (_err) {
-      return null;
+    } catch (error) {
+      const statusCode =
+        error?.statusCode ?? error?.response?.statusCode ?? null;
+      if (statusCode === DOCKER_NOT_FOUND_STATUS) return null;
+      throw error;
     }
   }
 
@@ -1039,6 +1128,19 @@ function safeNumber(value) {
   return Number.isFinite(numeric) ? numeric : ZERO;
 }
 
+function parseTmpfsStorageLimit(tmpfs, storagePath) {
+  if (
+    storagePath === null ||
+    !tmpfs ||
+    typeof tmpfs !== 'object' ||
+    typeof tmpfs[storagePath] !== 'string'
+  ) {
+    return ZERO;
+  }
+  const match = STORAGE_LIMIT_PATTERN.exec(tmpfs[storagePath]);
+  return match ? safeNumber(match[1]) : ZERO;
+}
+
 function parseCpuPercent(stats) {
   const cpuStats = stats?.cpu_stats || {};
   const preCpuStats = stats?.precpu_stats || {};
@@ -1076,6 +1178,37 @@ function parseNetworks(stats) {
   return {rxBytes, txBytes};
 }
 
+function parseRecursiveIoEntries(entries) {
+  const result = {read: ZERO, write: ZERO};
+  if (!Array.isArray(entries)) return result;
+  for (const entry of entries) {
+    const operation =
+      typeof entry?.op === 'string' ? entry.op.toLowerCase() : '';
+    if (operation === localText.READ) {
+      result.read += safeNumber(entry.value);
+    } else if (operation === localText.WRITE) {
+      result.write += safeNumber(entry.value);
+    }
+  }
+  return result;
+}
+
+function parseBlockIo(stats) {
+  const blockIo = stats?.blkio_stats || {};
+  const bytes = parseRecursiveIoEntries(
+    blockIo.io_service_bytes_recursive,
+  );
+  const operations = parseRecursiveIoEntries(
+    blockIo.io_serviced_recursive,
+  );
+  return {
+    blockReadBytes: bytes.read,
+    blockWriteBytes: bytes.write,
+    blockReadOperations: operations.read,
+    blockWriteOperations: operations.write,
+  };
+}
+
 function parseTimestamp(readValue) {
   if (typeof readValue !== 'string' || readValue.length === ZERO) {
     return Date.now();
@@ -1089,13 +1222,18 @@ function parseTimestamp(readValue) {
 
 function parseContainerStats(stats) {
   const {rxBytes, txBytes} = parseNetworks(stats);
+  const blockIo = parseBlockIo(stats);
   return {
     timestamp: parseTimestamp(stats?.read),
     cpuPercent: parseCpuPercent(stats),
+    cpuUsageNanoseconds:
+      safeNumber(stats?.cpu_stats?.cpu_usage?.total_usage),
     memoryUsageBytes: safeNumber(stats?.memory_stats?.usage),
     memoryLimitBytes: safeNumber(stats?.memory_stats?.limit),
+    pids: safeNumber(stats?.pids_stats?.current),
     rxBytes,
     txBytes,
+    ...blockIo,
   };
 }
 

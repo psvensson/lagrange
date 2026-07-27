@@ -33,6 +33,8 @@ const LEGACY_REUSE_START_COMMAND =
   'if [ -f /harness-control/reset-data-on-start ]; then rm -rf /data/* && ' +
   'rm -f /harness-control/reset-data-on-start; fi; ' +
   'exec node --max-old-space-size=1536 /app/src/index.js';
+const REUSE_INSPECT_FAILURE_MESSAGE =
+  'reusable container inspect unavailable';
 
 function buildReuseDataDir(containerName) {
   return resolvePath('.tmp', 'reuse-data', containerName);
@@ -333,6 +335,37 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
     'already-connected reusable containers should not be reconnected',
   );
 });
+
+test('Unit: _startNode propagates reusable container inspect failures',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {
+        socketPath: '/var/run/docker.sock',
+        reuseContainers: true,
+      },
+      image: 'distributed-db:test',
+    });
+    cluster._networkName = 'ddb-test-net-reuse-inspect-failure';
+    cluster._networkId = 'net-reuse-inspect-failure';
+
+    const provider = cluster._providers[0];
+    const inspectFailure = new Error(REUSE_INSPECT_FAILURE_MESSAGE);
+    provider.inspectImage = async () => null;
+    provider.inspectContainerIfExists = async () => {
+      throw inspectFailure;
+    };
+
+    await assert.rejects(
+      cluster._startNode(
+        cluster._buildNodeId(0),
+        NODE_ROLES.SEED,
+        null,
+        0,
+      ),
+      (error) => error === inspectFailure,
+    );
+  });
 
 test('Unit: _startNode recreates legacy shell reusable container',
   async () => {

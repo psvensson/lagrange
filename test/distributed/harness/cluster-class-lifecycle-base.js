@@ -655,12 +655,8 @@ class ClusterLifecycleBase {
     }
 
     for (const containerName of reusableContainerNames) {
-      let inspect = null;
-      try {
-        inspect = await provider.inspectContainerIfExists(containerName);
-      } catch (_inspectErr) {
-        inspect = null;
-      }
+      const inspect =
+        await provider.inspectContainerIfExists(containerName);
       if (!inspect) {
         continue;
       }

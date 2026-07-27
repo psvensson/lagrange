@@ -13,6 +13,21 @@ import fc from 'fast-check';
 import {DockerProvider, parseContainerStats} from '../docker-provider.js';
 import {CONTAINER_ENV_KEYS, PORTS} from '../constants.js';
 
+const RESOURCE_SNAPSHOT_CONTAINER_ID = 'container-resource';
+const RESOURCE_SNAPSHOT_STORAGE_PATH = '/data';
+const RESOURCE_SNAPSHOT_STORAGE_COMMAND = Object.freeze([
+  'du',
+  '-sb',
+  '--',
+  RESOURCE_SNAPSHOT_STORAGE_PATH,
+]);
+const RESOURCE_SNAPSHOT_INVALID_OUTPUTS = Object.freeze([
+  '\t/data\n',
+  '4096',
+  '4096\t/other\n',
+  '4096\t/data\n8192\t/other\n',
+]);
+
 test('Property 2: Container Environment Configuration', async (t) => {
   await t.test(
     'for any node config, _buildEnvArray produces entries ' +
@@ -470,12 +485,14 @@ test('Unit: startContainer starts and waits for running state', async (t) => {
 
 test('Unit: inspectContainerIfExists returns null for missing containers', async (t) => {
   await t.test(
-    'inspectContainerIfExists suppresses inspect errors',
+    'inspectContainerIfExists suppresses only Docker not-found errors',
     async () => {
       const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
       provider._docker.getContainer = () => ({
         inspect: async () => {
-          throw new Error('No such container');
+          const error = new Error('No such container');
+          error.statusCode = 404;
+          throw error;
         },
       });
 
@@ -483,6 +500,20 @@ test('Unit: inspectContainerIfExists returns null for missing containers', async
       assert.strictEqual(result, null);
     },
   );
+  await t.test('inspectContainerIfExists preserves transient errors', async () => {
+    const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+    provider._docker.getContainer = () => ({
+      inspect: async () => {
+        const error = new Error('daemon unavailable');
+        error.statusCode = 503;
+        throw error;
+      },
+    });
+    await assert.rejects(
+      provider.inspectContainerIfExists('unknown'),
+      /daemon unavailable/u,
+    );
+  });
 });
 
 test('Unit: buildImage reports errors with build output', async (t) => {
@@ -717,6 +748,17 @@ test('Unit: parseContainerStats computes cpu/memory/network metrics', async () =
       usage: 123456,
       limit: 654321,
     },
+    pids_stats: {current: 7},
+    blkio_stats: {
+      io_service_bytes_recursive: [
+        {op: 'Read', value: 7000},
+        {op: 'Write', value: 9000},
+      ],
+      io_serviced_recursive: [
+        {op: 'Read', value: 11},
+        {op: 'Write', value: 13},
+      ],
+    },
     networks: {
       eth0: {
         rx_bytes: 1000,
@@ -733,8 +775,14 @@ test('Unit: parseContainerStats computes cpu/memory/network metrics', async () =
   assert.equal(parsed.timestamp, Date.parse(stats.read));
   assert.equal(parsed.memoryUsageBytes, 123456);
   assert.equal(parsed.memoryLimitBytes, 654321);
+  assert.equal(parsed.cpuUsageNanoseconds, 2000000000);
+  assert.equal(parsed.pids, 7);
   assert.equal(parsed.rxBytes, 4000);
   assert.equal(parsed.txBytes, 6000);
+  assert.equal(parsed.blockReadBytes, 7000);
+  assert.equal(parsed.blockWriteBytes, 9000);
+  assert.equal(parsed.blockReadOperations, 11);
+  assert.equal(parsed.blockWriteOperations, 13);
   assert.ok(parsed.cpuPercent > 0);
 });
 
@@ -773,6 +821,92 @@ test('Unit: getContainerStats reads non-stream docker stats', async () => {
   assert.deepStrictEqual(capturedOptions, {stream: false});
   assert.equal(result.memoryUsageBytes, 10);
   assert.equal(result.memoryLimitBytes, 20);
+  assert.equal(result.cpuUsageNanoseconds, 2);
+  assert.equal(result.pids, 0);
   assert.equal(result.rxBytes, 30);
   assert.equal(result.txBytes, 40);
+  assert.equal(result.blockReadBytes, 0);
+  assert.equal(result.blockWriteBytes, 0);
+  assert.equal(result.blockReadOperations, 0);
+  assert.equal(result.blockWriteOperations, 0);
 });
+
+test('Unit: resource snapshot includes writable-layer storage usage',
+  async () => {
+    const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+    let inspectOptions = null;
+    provider._docker.getContainer = () => ({
+      stats: async () => ({
+        cpu_stats: {cpu_usage: {total_usage: 2}},
+        memory_stats: {usage: 10, limit: 20},
+      }),
+      inspect: async (options) => {
+        inspectOptions = options;
+        return {
+          SizeRw: 4096,
+          HostConfig: {NanoCpus: 1_000_000_000},
+        };
+      },
+    });
+
+    const result =
+      await provider.getContainerResourceSnapshot('container-resource');
+    assert.deepStrictEqual(inspectOptions, {size: true});
+    assert.equal(result.storageUsageBytes, 4096);
+    assert.equal(result.storageLimitBytes, 0);
+    assert.equal(result.cpuLimitNanoCpus, 1_000_000_000);
+    assert.equal(result.cpuUsageNanoseconds, 2);
+  });
+
+test('Unit: resource snapshot measures a bounded container storage path',
+  async () => {
+    const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+    provider._docker.getContainer = () => ({
+      stats: async () => ({
+        cpu_stats: {cpu_usage: {total_usage: 2}},
+        memory_stats: {usage: 10, limit: 20},
+      }),
+      inspect: async () => ({
+        HostConfig: {
+          NanoCpus: 1_000_000_000,
+          Tmpfs: {'/data': 'rw,size=8192'},
+        },
+      }),
+    });
+    let observedContainerId = null;
+    let observedCommand = null;
+    provider.execInContainer = async (containerId, command) => {
+      observedContainerId = containerId;
+      observedCommand = command;
+      return {
+        exitCode: 0,
+        stdout: '4096\t/data\n',
+        stderr: '',
+      };
+    };
+
+    const result = await provider.getContainerResourceSnapshot(
+      RESOURCE_SNAPSHOT_CONTAINER_ID,
+      RESOURCE_SNAPSHOT_STORAGE_PATH,
+    );
+    assert.equal(observedContainerId, RESOURCE_SNAPSHOT_CONTAINER_ID);
+    assert.deepStrictEqual(observedCommand, RESOURCE_SNAPSHOT_STORAGE_COMMAND);
+    assert.equal(result.storageUsageBytes, 4096);
+    assert.equal(result.storageLimitBytes, 8192);
+    assert.equal(result.cpuLimitNanoCpus, 1_000_000_000);
+
+    for (const stdout of RESOURCE_SNAPSHOT_INVALID_OUTPUTS) {
+      provider.execInContainer = async () => ({
+        exitCode: 0,
+        stdout,
+        stderr: '',
+      });
+      await assert.rejects(
+        provider.getContainerResourceSnapshot(
+          RESOURCE_SNAPSHOT_CONTAINER_ID,
+          RESOURCE_SNAPSHOT_STORAGE_PATH,
+        ),
+        /not a safe byte count/u,
+      );
+    }
+  });

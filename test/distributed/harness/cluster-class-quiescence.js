@@ -1239,12 +1239,8 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
       this._config.timeouts?.nodeStartup || TIMEOUTS.NODE_STARTUP;
 
     if (reuseContainers) {
-      let existing = null;
-      try {
-        existing = await provider.inspectContainerIfExists(containerName);
-      } catch (_inspectErr) {
-        existing = null;
-      }
+      let existing =
+        await provider.inspectContainerIfExists(containerName);
       if (existing && this._shouldRecreateReusableContainer(existing, env, {
         dataBind: reusableDataBind,
         imageId: reusableImageId,

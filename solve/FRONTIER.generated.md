@@ -52,7 +52,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
-| benchmark-statistical-capacity-protocol | product | 4 | 0 | 2026-07-27 | — |
+| benchmark-whole-topology-resource-accounting | product | 1 | 0 | 2026-07-27 | — |
 | documentation-audience-boundary-tooling | process | 1 | 0 | 2026-07-26 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | 2026-07-25 | — |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 | — |

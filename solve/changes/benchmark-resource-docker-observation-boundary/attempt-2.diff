@@ -1,0 +1,804 @@
+diff --git a/scripts/checks/run-benchmark-resource-docker-observation-boundary-scenarios.js b/scripts/checks/run-benchmark-resource-docker-observation-boundary-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..de6cd274487db486f6343231f27c64e06f8e90a9
+--- /dev/null
++++ b/scripts/checks/run-benchmark-resource-docker-observation-boundary-scenarios.js
+@@ -0,0 +1,13 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'benchmark-resource-docker-observation-boundary': [
++    'test/distributed/harness/__tests__/docker-provider.test.js',
++    'test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js',
++    'test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js b/test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js
+index ae8d02ead40ade5ab823599ae268dff98bb70ee4..6c13bafafc2c8c52764bd9685dcb968c1856c050 100644
+--- a/test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js
++++ b/test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js
+@@ -33,6 +33,8 @@ const LEGACY_REUSE_START_COMMAND =
+   'if [ -f /harness-control/reset-data-on-start ]; then rm -rf /data/* && ' +
+   'rm -f /harness-control/reset-data-on-start; fi; ' +
+   'exec node --max-old-space-size=1536 /app/src/index.js';
++const REUSE_INSPECT_FAILURE_MESSAGE =
++  'reusable container inspect unavailable';
+ 
+ function buildReuseDataDir(containerName) {
+   return resolvePath('.tmp', 'reuse-data', containerName);
+@@ -334,6 +336,37 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
+   );
+ });
+ 
++test('Unit: _startNode propagates reusable container inspect failures',
++  async () => {
++    const cluster = createCluster({
++      size: 1,
++      docker: {
++        socketPath: '/var/run/docker.sock',
++        reuseContainers: true,
++      },
++      image: 'distributed-db:test',
++    });
++    cluster._networkName = 'ddb-test-net-reuse-inspect-failure';
++    cluster._networkId = 'net-reuse-inspect-failure';
++
++    const provider = cluster._providers[0];
++    const inspectFailure = new Error(REUSE_INSPECT_FAILURE_MESSAGE);
++    provider.inspectImage = async () => null;
++    provider.inspectContainerIfExists = async () => {
++      throw inspectFailure;
++    };
++
++    await assert.rejects(
++      cluster._startNode(
++        cluster._buildNodeId(0),
++        NODE_ROLES.SEED,
++        null,
++        0,
++      ),
++      (error) => error === inspectFailure,
++    );
++  });
++
+ test('Unit: _startNode recreates legacy shell reusable container',
+   async () => {
+     const cluster = createCluster({
+diff --git a/test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js b/test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js
+index e4bf407200b895354faee55bbbcc80718e8e706b..e8677a6d65d19bb13d529d4c1f79fc671cd665a0 100644
+--- a/test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js
++++ b/test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js
+@@ -43,6 +43,8 @@ const RESTART_RECOVERY_DIAGNOSTIC_TEST_REASONS_PATTERN =
+   /readinessReasons=LEADER_METADATA_INCOMPLETE\|PRIORITY_CONTROL_PLANE_RECOVERY_PENDING/;
+ const RESTART_RECOVERY_DIAGNOSTIC_TEST_PROJECTION_PATTERN =
+   /bootstrapJoinProjectionBlocker=control_snapshot_authority_unavailable/;
++const REUSE_QUIESCENCE_INSPECT_FAILURE_MESSAGE =
++  'reusable quiescence inspect unavailable';
+ 
+ /**
+  * Feature: distributed-testing-framework
+@@ -880,6 +882,30 @@ test('Unit: Cluster.stop terminates reusable containers after each run',
+     );
+   });
+ 
++test('Unit: reusable container quiescence propagates inspect failures',
++  async () => {
++    const cluster = createCluster({
++      size: 1,
++      docker: {
++        socketPath: '/var/run/docker.sock',
++        reuseContainers: true,
++      },
++      image: 'distributed-db:test',
++    });
++    const provider = cluster._providers[0];
++    const inspectFailure =
++      new Error(REUSE_QUIESCENCE_INSPECT_FAILURE_MESSAGE);
++    provider.listContainers = async () => [];
++    provider.inspectContainerIfExists = async () => {
++      throw inspectFailure;
++    };
++
++    await assert.rejects(
++      cluster._quiesceReusableContainers(),
++      (error) => error === inspectFailure,
++    );
++  });
++
+ test('Unit: Cluster.stop force-kills containers when graceful stop fails',
+   async () => {
+     const cluster = createCluster({
+diff --git a/test/distributed/harness/__tests__/docker-provider.test.js b/test/distributed/harness/__tests__/docker-provider.test.js
+index 7adfea56e13c282a5dfafdf6add42b2d6f7444bf..37253a2394a3bb7cf41e1e018f92be80eb903535 100644
+--- a/test/distributed/harness/__tests__/docker-provider.test.js
++++ b/test/distributed/harness/__tests__/docker-provider.test.js
+@@ -13,6 +13,16 @@ import fc from 'fast-check';
+ import {DockerProvider, parseContainerStats} from '../docker-provider.js';
+ import {CONTAINER_ENV_KEYS, PORTS} from '../constants.js';
+ 
++const RESOURCE_SNAPSHOT_CONTAINER_ID = 'container-resource';
++const RESOURCE_SNAPSHOT_STORAGE_PATH = '/data';
++const RESOURCE_SNAPSHOT_STORAGE_COMMAND = Object.freeze([
++  'du',
++  '-sb',
++  '--',
++  RESOURCE_SNAPSHOT_STORAGE_PATH,
++]);
++const RESOURCE_SNAPSHOT_EMPTY_USAGE = '\t/data\n';
++
+ test('Property 2: Container Environment Configuration', async (t) => {
+   await t.test(
+     'for any node config, _buildEnvArray produces entries ' +
+@@ -470,12 +480,14 @@ test('Unit: startContainer starts and waits for running state', async (t) => {
+ 
+ test('Unit: inspectContainerIfExists returns null for missing containers', async (t) => {
+   await t.test(
+-    'inspectContainerIfExists suppresses inspect errors',
++    'inspectContainerIfExists suppresses only Docker not-found errors',
+     async () => {
+       const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+       provider._docker.getContainer = () => ({
+         inspect: async () => {
+-          throw new Error('No such container');
++          const error = new Error('No such container');
++          error.statusCode = 404;
++          throw error;
+         },
+       });
+ 
+@@ -483,6 +495,20 @@ test('Unit: inspectContainerIfExists returns null for missing containers', async
+       assert.strictEqual(result, null);
+     },
+   );
++  await t.test('inspectContainerIfExists preserves transient errors', async () => {
++    const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
++    provider._docker.getContainer = () => ({
++      inspect: async () => {
++        const error = new Error('daemon unavailable');
++        error.statusCode = 503;
++        throw error;
++      },
++    });
++    await assert.rejects(
++      provider.inspectContainerIfExists('unknown'),
++      /daemon unavailable/u,
++    );
++  });
+ });
+ 
+ test('Unit: buildImage reports errors with build output', async (t) => {
+@@ -717,6 +743,17 @@ test('Unit: parseContainerStats computes cpu/memory/network metrics', async () =
+       usage: 123456,
+       limit: 654321,
+     },
++    pids_stats: {current: 7},
++    blkio_stats: {
++      io_service_bytes_recursive: [
++        {op: 'Read', value: 7000},
++        {op: 'Write', value: 9000},
++      ],
++      io_serviced_recursive: [
++        {op: 'Read', value: 11},
++        {op: 'Write', value: 13},
++      ],
++    },
+     networks: {
+       eth0: {
+         rx_bytes: 1000,
+@@ -733,8 +770,14 @@ test('Unit: parseContainerStats computes cpu/memory/network metrics', async () =
+   assert.equal(parsed.timestamp, Date.parse(stats.read));
+   assert.equal(parsed.memoryUsageBytes, 123456);
+   assert.equal(parsed.memoryLimitBytes, 654321);
++  assert.equal(parsed.cpuUsageNanoseconds, 2000000000);
++  assert.equal(parsed.pids, 7);
+   assert.equal(parsed.rxBytes, 4000);
+   assert.equal(parsed.txBytes, 6000);
++  assert.equal(parsed.blockReadBytes, 7000);
++  assert.equal(parsed.blockWriteBytes, 9000);
++  assert.equal(parsed.blockReadOperations, 11);
++  assert.equal(parsed.blockWriteOperations, 13);
+   assert.ok(parsed.cpuPercent > 0);
+ });
+ 
+@@ -773,6 +816,90 @@ test('Unit: getContainerStats reads non-stream docker stats', async () => {
+   assert.deepStrictEqual(capturedOptions, {stream: false});
+   assert.equal(result.memoryUsageBytes, 10);
+   assert.equal(result.memoryLimitBytes, 20);
++  assert.equal(result.cpuUsageNanoseconds, 2);
++  assert.equal(result.pids, 0);
+   assert.equal(result.rxBytes, 30);
+   assert.equal(result.txBytes, 40);
++  assert.equal(result.blockReadBytes, 0);
++  assert.equal(result.blockWriteBytes, 0);
++  assert.equal(result.blockReadOperations, 0);
++  assert.equal(result.blockWriteOperations, 0);
+ });
++
++test('Unit: resource snapshot includes writable-layer storage usage',
++  async () => {
++    const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
++    let inspectOptions = null;
++    provider._docker.getContainer = () => ({
++      stats: async () => ({
++        cpu_stats: {cpu_usage: {total_usage: 2}},
++        memory_stats: {usage: 10, limit: 20},
++      }),
++      inspect: async (options) => {
++        inspectOptions = options;
++        return {
++          SizeRw: 4096,
++          HostConfig: {NanoCpus: 1_000_000_000},
++        };
++      },
++    });
++
++    const result =
++      await provider.getContainerResourceSnapshot('container-resource');
++    assert.deepStrictEqual(inspectOptions, {size: true});
++    assert.equal(result.storageUsageBytes, 4096);
++    assert.equal(result.storageLimitBytes, 0);
++    assert.equal(result.cpuLimitNanoCpus, 1_000_000_000);
++    assert.equal(result.cpuUsageNanoseconds, 2);
++  });
++
++test('Unit: resource snapshot measures a bounded container storage path',
++  async () => {
++    const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
++    provider._docker.getContainer = () => ({
++      stats: async () => ({
++        cpu_stats: {cpu_usage: {total_usage: 2}},
++        memory_stats: {usage: 10, limit: 20},
++      }),
++      inspect: async () => ({
++        HostConfig: {
++          NanoCpus: 1_000_000_000,
++          Tmpfs: {'/data': 'rw,size=8192'},
++        },
++      }),
++    });
++    let observedContainerId = null;
++    let observedCommand = null;
++    provider.execInContainer = async (containerId, command) => {
++      observedContainerId = containerId;
++      observedCommand = command;
++      return {
++        exitCode: 0,
++        stdout: '4096\t/data\n',
++        stderr: '',
++      };
++    };
++
++    const result = await provider.getContainerResourceSnapshot(
++      RESOURCE_SNAPSHOT_CONTAINER_ID,
++      RESOURCE_SNAPSHOT_STORAGE_PATH,
++    );
++    assert.equal(observedContainerId, RESOURCE_SNAPSHOT_CONTAINER_ID);
++    assert.deepStrictEqual(observedCommand, RESOURCE_SNAPSHOT_STORAGE_COMMAND);
++    assert.equal(result.storageUsageBytes, 4096);
++    assert.equal(result.storageLimitBytes, 8192);
++    assert.equal(result.cpuLimitNanoCpus, 1_000_000_000);
++
++    provider.execInContainer = async () => ({
++      exitCode: 0,
++      stdout: RESOURCE_SNAPSHOT_EMPTY_USAGE,
++      stderr: '',
++    });
++    await assert.rejects(
++      provider.getContainerResourceSnapshot(
++        RESOURCE_SNAPSHOT_CONTAINER_ID,
++        RESOURCE_SNAPSHOT_STORAGE_PATH,
++      ),
++      /not a safe byte count/u,
++    );
++  });
+diff --git a/test/distributed/harness/cluster-class-lifecycle-base.js b/test/distributed/harness/cluster-class-lifecycle-base.js
+index 20db3845762a9e70b0dad83bf4b184ae38a683fd..d2c7f23e701236fd9f7f08a681dedba8a0c023aa 100644
+--- a/test/distributed/harness/cluster-class-lifecycle-base.js
++++ b/test/distributed/harness/cluster-class-lifecycle-base.js
+@@ -655,12 +655,8 @@ class ClusterLifecycleBase {
+     }
+ 
+     for (const containerName of reusableContainerNames) {
+-      let inspect = null;
+-      try {
+-        inspect = await provider.inspectContainerIfExists(containerName);
+-      } catch (_inspectErr) {
+-        inspect = null;
+-      }
++      const inspect =
++        await provider.inspectContainerIfExists(containerName);
+       if (!inspect) {
+         continue;
+       }
+diff --git a/test/distributed/harness/cluster-class-quiescence.js b/test/distributed/harness/cluster-class-quiescence.js
+index cd7c995a5c4651449d2655b7b6634e14203bdba2..d24f3ff2059d22e56db308e4a847a8bc3ed32fda 100644
+--- a/test/distributed/harness/cluster-class-quiescence.js
++++ b/test/distributed/harness/cluster-class-quiescence.js
+@@ -1239,12 +1239,8 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
+       this._config.timeouts?.nodeStartup || TIMEOUTS.NODE_STARTUP;
+ 
+     if (reuseContainers) {
+-      let existing = null;
+-      try {
+-        existing = await provider.inspectContainerIfExists(containerName);
+-      } catch (_inspectErr) {
+-        existing = null;
+-      }
++      let existing =
++        await provider.inspectContainerIfExists(containerName);
+       if (existing && this._shouldRecreateReusableContainer(existing, env, {
+         dataBind: reusableDataBind,
+         imageId: reusableImageId,
+diff --git a/test/distributed/harness/docker-provider.js b/test/distributed/harness/docker-provider.js
+index fd58f7ffc8634b0064aaec2cda6d60efe420141a..384433a879330f836ecf29083653eaf1cea283ed 100644
+--- a/test/distributed/harness/docker-provider.js
++++ b/test/distributed/harness/docker-provider.js
+@@ -14,6 +14,23 @@ import {
+   RESOURCE_DEFAULTS,
+   CONTAINER_LOG_TAIL_LINES,
+ } from './constants.js';
++const localText = Object.freeze({
++  HTTP: 'http',
++  STARTING: 'starting',
++  COMPLETED: 'completed',
++  REUSED: 'reused',
++  FAILED: 'failed',
++  END: 'end',
++  UTF8: 'utf8',
++  ERROR: 'error',
++  DATA: 'data',
++  NEWLINE: '\n',
++  READ: 'read',
++  WRITE: 'write',
++  CONTAINER_STORAGE_USAGE_INVALID:
++    'Container storage usage was not a safe byte count',
++});
++
+ 
+ const CONTAINER_RUNNING_STATE = 'running';
+ const START_POLL_INTERVAL_MS = 250;
+@@ -46,6 +63,12 @@ const CONTAINER_LOG_ERROR_STRING_TOO_LONG = 'ERR_STRING_TOO_LONG';
+ const UTF8_ENCODING = 'utf8';
+ const NETWORK_EXISTS_ERROR_PATTERN = 'already exists';
+ const NETWORK_LIST_FILTER_NAME = 'name';
++const DOCKER_NOT_FOUND_STATUS = 404;
++const STORAGE_USAGE_COMMAND = 'du';
++const STORAGE_USAGE_BYTES_FLAG = '-sb';
++const STORAGE_USAGE_ARGUMENT_SEPARATOR = '--';
++const STORAGE_USAGE_BYTE_COUNT_PATTERN = /^(?:0|[1-9]\d*)$/u;
++const STORAGE_LIMIT_PATTERN = /(?:^|,)size=(\d+)(?:,|$)/u;
+ const BUILD_CONTEXT_STATIC_ENTRIES = Object.freeze([
+   '.dockerignore',
+   'package-lock.json',
+@@ -81,7 +104,7 @@ class DockerProvider {
+       this._docker = new Docker({
+         host: hostname,
+         port: port,
+-        protocol: 'http',
++        protocol: localText.HTTP,
+       });
+     } else {
+       this._docker = new Docker({
+@@ -98,7 +121,7 @@ class DockerProvider {
+    */
+   async createNetwork(name, labels = {}) {
+     this._emitOperation(DOCKER_OP_CREATE_NETWORK, {
+-      stage: 'starting',
++      stage: localText.STARTING,
+       name,
+       labels,
+     });
+@@ -108,7 +131,7 @@ class DockerProvider {
+       Labels: labels,
+     });
+     this._emitOperation(DOCKER_OP_CREATE_NETWORK, {
+-      stage: 'completed',
++      stage: localText.COMPLETED,
+       name,
+       networkId: network.id,
+     });
+@@ -134,7 +157,7 @@ class DockerProvider {
+         throw err;
+       }
+       this._emitOperation(DOCKER_OP_CREATE_NETWORK, {
+-        stage: 'reused',
++        stage: localText.REUSED,
+         name,
+         networkId: existing.id,
+       });
+@@ -188,7 +211,7 @@ class DockerProvider {
+     labels = DEFAULT_BUILD_LABELS,
+   ) {
+     this._emitOperation(DOCKER_OP_BUILD_IMAGE, {
+-      stage: 'starting',
++      stage: localText.STARTING,
+       contextPath,
+       tag,
+       dockerfile,
+@@ -202,7 +225,7 @@ class DockerProvider {
+       );
+     } catch (err) {
+       this._emitOperation(DOCKER_OP_BUILD_IMAGE, {
+-        stage: 'failed',
++        stage: localText.FAILED,
+         contextPath,
+         tag,
+         dockerfile,
+@@ -219,7 +242,7 @@ class DockerProvider {
+         .map((line) => line.stream || line.error || '')
+         .join('');
+       this._emitOperation(DOCKER_OP_BUILD_IMAGE, {
+-        stage: 'failed',
++        stage: localText.FAILED,
+         contextPath,
+         tag,
+         dockerfile,
+@@ -231,7 +254,7 @@ class DockerProvider {
+       );
+     }
+     this._emitOperation(DOCKER_OP_BUILD_IMAGE, {
+-      stage: 'completed',
++      stage: localText.COMPLETED,
+       contextPath,
+       tag,
+       dockerfile,
+@@ -344,7 +367,7 @@ class DockerProvider {
+     } = options;
+ 
+     this._emitOperation(DOCKER_OP_CREATE_CONTAINER, {
+-      stage: 'starting',
++      stage: localText.STARTING,
+       name,
+       image,
+       network,
+@@ -388,7 +411,7 @@ class DockerProvider {
+     const containerId = container.id;
+     try {
+       this._emitOperation(DOCKER_OP_START_CONTAINER, {
+-        stage: 'starting',
++        stage: localText.STARTING,
+         name,
+         containerId,
+         startTimeout,
+@@ -396,14 +419,14 @@ class DockerProvider {
+       await container.start();
+       await this._waitForRunning(containerId, startTimeout);
+       this._emitOperation(DOCKER_OP_START_CONTAINER, {
+-        stage: 'completed',
++        stage: localText.COMPLETED,
+         name,
+         containerId,
+       });
+     } catch (err) {
+       await this._cleanupFailedContainer(containerId);
+       this._emitOperation(DOCKER_OP_START_CONTAINER, {
+-        stage: 'failed',
++        stage: localText.FAILED,
+         name,
+         containerId,
+         error: err.message,
+@@ -415,10 +438,13 @@ class DockerProvider {
+     }
+ 
+     const info = await this.inspectContainer(containerId);
+-    const ip = info.NetworkSettings?.Networks?.[network]?.IPAddress || '';
++    const networks = info.NetworkSettings?.Networks || {};
++    const namedEndpoint = networks[network];
++    const firstEndpoint = Object.values(networks)[ZERO];
++    const ip = namedEndpoint?.IPAddress || firstEndpoint?.IPAddress || '';
+ 
+     this._emitOperation(DOCKER_OP_CREATE_CONTAINER, {
+-      stage: 'completed',
++      stage: localText.COMPLETED,
+       name,
+       image,
+       network,
+@@ -529,13 +555,13 @@ class DockerProvider {
+    */
+   async stopContainer(containerId) {
+     this._emitOperation(DOCKER_OP_STOP_CONTAINER, {
+-      stage: 'starting',
++      stage: localText.STARTING,
+       containerId,
+     });
+     const container = this._docker.getContainer(containerId);
+     await container.stop({t: STOP_TIMEOUT_SECONDS});
+     this._emitOperation(DOCKER_OP_STOP_CONTAINER, {
+-      stage: 'completed',
++      stage: localText.COMPLETED,
+       containerId,
+     });
+   }
+@@ -583,7 +609,7 @@ class DockerProvider {
+    */
+   async startContainer(containerId, startTimeout = TIMEOUTS.NODE_STARTUP) {
+     this._emitOperation(DOCKER_OP_START_CONTAINER, {
+-      stage: 'starting',
++      stage: localText.STARTING,
+       containerId,
+       startTimeout,
+     });
+@@ -591,7 +617,7 @@ class DockerProvider {
+     await container.start();
+     await this._waitForRunning(containerId, startTimeout);
+     this._emitOperation(DOCKER_OP_START_CONTAINER, {
+-      stage: 'completed',
++      stage: localText.COMPLETED,
+       containerId,
+     });
+   }
+@@ -633,13 +659,13 @@ class DockerProvider {
+         {write: (chunk) => stdoutChunks.push(chunk)},
+         {write: (chunk) => stderrChunks.push(chunk)},
+       );
+-      stream.on('end', () => {
++      stream.on(localText.END, () => {
+         resolve({
+-          stdout: Buffer.concat(stdoutChunks).toString('utf8'),
+-          stderr: Buffer.concat(stderrChunks).toString('utf8'),
++          stdout: Buffer.concat(stdoutChunks).toString(localText.UTF8),
++          stderr: Buffer.concat(stderrChunks).toString(localText.UTF8),
+         });
+       });
+-      stream.on('error', reject);
++      stream.on(localText.ERROR, reject);
+     });
+   }
+ 
+@@ -716,10 +742,10 @@ class DockerProvider {
+         return;
+       }
+       stream = s;
+-      stream.on('data', (chunk) => {
+-        callback(chunk.toString('utf8'));
++      stream.on(localText.DATA, (chunk) => {
++        callback(chunk.toString(localText.UTF8));
+       });
+-      stream.on('error', (_err) => {
++      stream.on(localText.ERROR, (_err) => {
+         // Stream errors are expected on container stop
+       });
+     }).catch((_err) => {
+@@ -777,7 +803,7 @@ class DockerProvider {
+     const sink = new Writable({
+       write(chunk, _enc, cb) {
+         pending += chunk.toString('utf8');
+-        let nlIdx = pending.indexOf('\n');
++        let nlIdx = pending.indexOf(localText.NEWLINE);
+         while (nlIdx !== -1) {
+           emitLine(pending.slice(0, nlIdx));
+           pending = pending.slice(nlIdx + 1);
+@@ -811,13 +837,13 @@ class DockerProvider {
+         }
+         stream = s;
+         this._docker.modem.demuxStream(stream, sink, sink);
+-        stream.on('end', () => {
++        stream.on(localText.END, () => {
+           flushPending();
+           if (!stopped && typeof opts.onEnd === 'function') {
+             opts.onEnd();
+           }
+         });
+-        stream.on('error', (err) => {
++        stream.on(localText.ERROR, (err) => {
+           if (!stopped && typeof opts.onError === 'function') {
+             opts.onError(err);
+           }
+@@ -851,6 +877,55 @@ class DockerProvider {
+     return parseContainerStats(raw);
+   }
+ 
++  /**
++   * Capture cumulative runtime counters, enforced limits, and storage usage.
++   * @param {string} containerId
++   * @param {string|null} storagePath
++   * @returns {Promise<Object>}
++   */
++  async getContainerResourceSnapshot(containerId, storagePath = null) {
++    const container = this._docker.getContainer(containerId);
++    const stats = await container.stats({stream: false});
++    const inspect = await container.inspect({size: true});
++    const storageUsageBytes = storagePath === null ?
++      safeNumber(inspect?.SizeRw) :
++      await this._getContainerPathUsage(containerId, storagePath);
++    return {
++      ...parseContainerStats(stats),
++      cpuLimitNanoCpus: safeNumber(inspect?.HostConfig?.NanoCpus),
++      storageLimitBytes: parseTmpfsStorageLimit(
++        inspect?.HostConfig?.Tmpfs,
++        storagePath,
++      ),
++      storageUsageBytes,
++    };
++  }
++
++  async _getContainerPathUsage(containerId, storagePath) {
++    const result = await this.execInContainer(containerId, [
++      STORAGE_USAGE_COMMAND,
++      STORAGE_USAGE_BYTES_FLAG,
++      STORAGE_USAGE_ARGUMENT_SEPARATOR,
++      storagePath,
++    ]);
++    if (result.exitCode !== ZERO) {
++      throw new Error(`Container storage usage failed: ${result.stderr}`);
++    }
++    const separatorIndex = result.stdout.indexOf('\t');
++    const numericText = separatorIndex === -1 ?
++      result.stdout.trim() :
++      result.stdout.slice(ZERO, separatorIndex);
++    const usage = Number(numericText);
++    if (
++      !STORAGE_USAGE_BYTE_COUNT_PATTERN.test(numericText) ||
++      !Number.isSafeInteger(usage) ||
++      usage < ZERO
++    ) {
++      throw new Error(localText.CONTAINER_STORAGE_USAGE_INVALID);
++    }
++    return usage;
++  }
++
+   /**
+    * Remove a container and its associated volumes.
+    * Req 1.5
+@@ -858,13 +933,13 @@ class DockerProvider {
+    */
+   async removeContainer(containerId) {
+     this._emitOperation(DOCKER_OP_REMOVE_CONTAINER, {
+-      stage: 'starting',
++      stage: localText.STARTING,
+       containerId,
+     });
+     const container = this._docker.getContainer(containerId);
+     await container.remove({force: true, v: true});
+     this._emitOperation(DOCKER_OP_REMOVE_CONTAINER, {
+-      stage: 'completed',
++      stage: localText.COMPLETED,
+       containerId,
+     });
+   }
+@@ -875,13 +950,13 @@ class DockerProvider {
+    */
+   async removeNetwork(networkId) {
+     this._emitOperation(DOCKER_OP_REMOVE_NETWORK, {
+-      stage: 'starting',
++      stage: localText.STARTING,
+       networkId,
+     });
+     const network = this._docker.getNetwork(networkId);
+     await network.remove();
+     this._emitOperation(DOCKER_OP_REMOVE_NETWORK, {
+-      stage: 'completed',
++      stage: localText.COMPLETED,
+       networkId,
+     });
+   }
+@@ -893,14 +968,14 @@ class DockerProvider {
+    */
+   async disconnectFromNetwork(networkId, containerId) {
+     this._emitOperation(DOCKER_OP_DISCONNECT_NETWORK, {
+-      stage: 'starting',
++      stage: localText.STARTING,
+       networkId,
+       containerId,
+     });
+     const network = this._docker.getNetwork(networkId);
+     await network.disconnect({Container: containerId, Force: true});
+     this._emitOperation(DOCKER_OP_DISCONNECT_NETWORK, {
+-      stage: 'completed',
++      stage: localText.COMPLETED,
+       networkId,
+       containerId,
+     });
+@@ -914,7 +989,7 @@ class DockerProvider {
+    */
+   async connectToNetwork(networkId, containerId, aliases = []) {
+     this._emitOperation(DOCKER_OP_CONNECT_NETWORK, {
+-      stage: 'starting',
++      stage: localText.STARTING,
+       networkId,
+       containerId,
+       aliases,
+@@ -934,7 +1009,7 @@ class DockerProvider {
+         {}),
+     });
+     this._emitOperation(DOCKER_OP_CONNECT_NETWORK, {
+-      stage: 'completed',
++      stage: localText.COMPLETED,
+       networkId,
+       containerId,
+       aliases: normalizedAliases,
+@@ -977,8 +1052,11 @@ class DockerProvider {
+   async inspectContainerIfExists(containerId) {
+     try {
+       return await this.inspectContainer(containerId);
+-    } catch (_err) {
+-      return null;
++    } catch (error) {
++      const statusCode =
++        error?.statusCode ?? error?.response?.statusCode ?? null;
++      if (statusCode === DOCKER_NOT_FOUND_STATUS) return null;
++      throw error;
+     }
+   }
+ 
+@@ -1039,6 +1117,19 @@ function safeNumber(value) {
+   return Number.isFinite(numeric) ? numeric : ZERO;
+ }
+ 
++function parseTmpfsStorageLimit(tmpfs, storagePath) {
++  if (
++    storagePath === null ||
++    !tmpfs ||
++    typeof tmpfs !== 'object' ||
++    typeof tmpfs[storagePath] !== 'string'
++  ) {
++    return ZERO;
++  }
++  const match = STORAGE_LIMIT_PATTERN.exec(tmpfs[storagePath]);
++  return match ? safeNumber(match[1]) : ZERO;
++}
++
+ function parseCpuPercent(stats) {
+   const cpuStats = stats?.cpu_stats || {};
+   const preCpuStats = stats?.precpu_stats || {};
+@@ -1076,6 +1167,37 @@ function parseNetworks(stats) {
+   return {rxBytes, txBytes};
+ }
+ 
++function parseRecursiveIoEntries(entries) {
++  const result = {read: ZERO, write: ZERO};
++  if (!Array.isArray(entries)) return result;
++  for (const entry of entries) {
++    const operation =
++      typeof entry?.op === 'string' ? entry.op.toLowerCase() : '';
++    if (operation === localText.READ) {
++      result.read += safeNumber(entry.value);
++    } else if (operation === localText.WRITE) {
++      result.write += safeNumber(entry.value);
++    }
++  }
++  return result;
++}
++
++function parseBlockIo(stats) {
++  const blockIo = stats?.blkio_stats || {};
++  const bytes = parseRecursiveIoEntries(
++    blockIo.io_service_bytes_recursive,
++  );
++  const operations = parseRecursiveIoEntries(
++    blockIo.io_serviced_recursive,
++  );
++  return {
++    blockReadBytes: bytes.read,
++    blockWriteBytes: bytes.write,
++    blockReadOperations: operations.read,
++    blockWriteOperations: operations.write,
++  };
++}
++
+ function parseTimestamp(readValue) {
+   if (typeof readValue !== 'string' || readValue.length === ZERO) {
+     return Date.now();
+@@ -1089,13 +1211,18 @@ function parseTimestamp(readValue) {
+ 
+ function parseContainerStats(stats) {
+   const {rxBytes, txBytes} = parseNetworks(stats);
++  const blockIo = parseBlockIo(stats);
+   return {
+     timestamp: parseTimestamp(stats?.read),
+     cpuPercent: parseCpuPercent(stats),
++    cpuUsageNanoseconds:
++      safeNumber(stats?.cpu_stats?.cpu_usage?.total_usage),
+     memoryUsageBytes: safeNumber(stats?.memory_stats?.usage),
+     memoryLimitBytes: safeNumber(stats?.memory_stats?.limit),
++    pids: safeNumber(stats?.pids_stats?.current),
+     rxBytes,
+     txBytes,
++    ...blockIo,
+   };
+ }
+ 

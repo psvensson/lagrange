@@ -43,6 +43,8 @@ const RESTART_RECOVERY_DIAGNOSTIC_TEST_REASONS_PATTERN =
   /readinessReasons=LEADER_METADATA_INCOMPLETE\|PRIORITY_CONTROL_PLANE_RECOVERY_PENDING/;
 const RESTART_RECOVERY_DIAGNOSTIC_TEST_PROJECTION_PATTERN =
   /bootstrapJoinProjectionBlocker=control_snapshot_authority_unavailable/;
+const REUSE_QUIESCENCE_INSPECT_FAILURE_MESSAGE =
+  'reusable quiescence inspect unavailable';
 
 /**
  * Feature: distributed-testing-framework
@@ -877,6 +879,30 @@ test('Unit: Cluster.stop terminates reusable containers after each run',
       removeCalls,
       [],
       'reusable containers should not be removed during teardown',
+    );
+  });
+
+test('Unit: reusable container quiescence propagates inspect failures',
+  async () => {
+    const cluster = createCluster({
+      size: 1,
+      docker: {
+        socketPath: '/var/run/docker.sock',
+        reuseContainers: true,
+      },
+      image: 'distributed-db:test',
+    });
+    const provider = cluster._providers[0];
+    const inspectFailure =
+      new Error(REUSE_QUIESCENCE_INSPECT_FAILURE_MESSAGE);
+    provider.listContainers = async () => [];
+    provider.inspectContainerIfExists = async () => {
+      throw inspectFailure;
+    };
+
+    await assert.rejects(
+      cluster._quiesceReusableContainers(),
+      (error) => error === inspectFailure,
     );
   });
 
