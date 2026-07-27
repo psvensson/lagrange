@@ -152,6 +152,15 @@ describe('postgres-baseline-comparison scenario', () => {
         const first = await run(cluster);
         assert.equal(first.details.baseline.cache.hit, false);
         assert.equal(first.details.baseline.cache.reason, 'cache-stored');
+        assert.equal(
+          first.details.semanticParity.publicationEligibility.eligible,
+          false,
+        );
+        assert.ok(
+          first.details.semanticParity.publicationEligibility.reasonCodes
+            .includes('semantic_contract_missing'),
+          'injected legacy metrics must remain publication-ineligible',
+        );
         assert.equal(createdContainers.length, 3);
         assert.equal(baselineLoadCalls, 1);
         assert.equal(sutLoadCalls, 1);

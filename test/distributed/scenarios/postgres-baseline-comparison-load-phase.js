@@ -108,6 +108,7 @@ export function buildLoadPhaseHandlers(context) {
           emitPhaseProgress(phaseContext, message, details),
         progressHeartbeatIntervalMs:
           scenarioOverrides.progressHeartbeatIntervalMs,
+        semanticParityEnabled: scenarioOverrides.semanticParityEnabled,
       });
       state.loadMetrics = normalizeLoadMetrics(sutLoadResult.metrics);
       state.rebalancingPressure.load = sutLoadResult.rebalancingPressure;

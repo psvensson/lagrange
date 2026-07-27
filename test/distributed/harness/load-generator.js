@@ -1,10 +1,3 @@
-/**
- * Load Generator — drives SQL traffic against the cluster via
- * Admin API WebSocket connections on node handles.
- *
- * Requirements: 6.1, 6.2, 6.3, 6.4, 6.5
- */
-
 import {randomUUID} from 'node:crypto';
 import {LOAD_DEFAULTS} from './constants.js';
 import {
@@ -16,9 +9,15 @@ import {
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
 } from '../../../src/control-plane/control-plane-error-classification.js';
+import {createLoadGeneratorRuntimeBundle} from './load-generator-runtime-methods.js';
 import {
-  createLoadGeneratorRuntimeBundle,
-} from './load-generator-runtime-methods.js';
+  BENCHMARK_SQL_DIALECT,
+  assertBenchmarkOperationResult,
+  buildBenchmarkOperationDescriptor,
+  buildBenchmarkResultSetEvidence,
+} from './benchmark-workload-semantics.js';
+import {appendOwnArrayValue} from './benchmark-semantic-integrity.js';
+import {BENCHMARK_SEMANTIC_RESULT_ERROR_CODE} from './benchmark-workload-semantics-constants.js';
 
 const DURATION_SECONDS_SUFFIX = 's';
 const DURATION_MINUTES_SUFFIX = 'm';
@@ -28,8 +27,8 @@ const MIN_DISPATCH_DELAY_MS = 1;
 const PERCENTILE_P50 = 0.5;
 const PERCENTILE_P95 = 0.95;
 const PERCENTILE_P99 = 0.99;
-const ZERO = 0;
-const ONE = 1;
+const ZERO = 0; const ONE = 1;
+const objectCreate = Object.create; const objectHasOwn = Object.hasOwn;
 const IN_FLIGHT_PER_NODE = 2;
 const DRAIN_WAIT_MS = 10;
 const MAX_DISPATCHES_PER_TICK = 64;
@@ -57,6 +56,7 @@ const DISPATCH_STOP_REASON_DURATION = 'duration';
 const DISPATCH_STOP_REASON_CANCELLED = 'cancelled';
 const REJECTED_REASON_QUEUE_FULL = 'queueFull';
 const REJECTED_REASON_FLOW_CONTROL = 'flowControl';
+const REJECTED_REASON_ADMISSION = 'admission';
 const WAIT_REASON_NODE_SLOT_UNAVAILABLE = 'nodeSlotUnavailable';
 const WAIT_REASON_NODE_ADMISSION_BLOCKED = 'nodeAdmissionBlocked';
 const WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE =
@@ -79,7 +79,6 @@ const UPDATE_OP = 'UPDATE';
 const DELETE_OP = 'DELETE';
 const WORKLOAD_PROFILE_DEFAULT = 'default';
 const WORKLOAD_PROFILE_BENCHMARK_EVENTS = 'benchmark_events_mixed';
-const BENCHMARK_PAYLOAD_MODULO = 100000;
 const BENCHMARK_EVENT_ID_PREFIX = 'bench-';
 const IDENTIFIER_PATTERN = /^[A-Za-z_][A-Za-z0-9_]*$/;
 const ADMISSION_AWARE_QUEUE_MULTIPLIER_DEFAULT = 2;
@@ -118,6 +117,7 @@ const LOAD_GENERATOR_RUNTIME_BUNDLE = createLoadGeneratorRuntimeBundle({
   LOAD_LANE_TRANSIENT_TIMEOUT_FRAGMENT,
   LOAD_NODE_AVAILABILITY_STATE,
   LOAD_TABLE_NAME,
+  TIMEOUT_ERROR_PATTERN,
   MAX_DISTINCT_ERROR_MESSAGES,
   MS_PER_SECOND,
   NODE_BREAKER_OWNER_NODE_CLIENT,
@@ -128,6 +128,7 @@ const LOAD_GENERATOR_RUNTIME_BUNDLE = createLoadGeneratorRuntimeBundle({
   PERCENTILE_P95,
   PERCENTILE_P99,
   REJECTED_REASON_FLOW_CONTROL,
+  REJECTED_REASON_ADMISSION,
   REJECTED_REASON_QUEUE_FULL,
   SECONDS_PER_MINUTE,
   UNDISPATCHED_REASON_CANCELLED,
@@ -138,12 +139,15 @@ const LOAD_GENERATOR_RUNTIME_BUNDLE = createLoadGeneratorRuntimeBundle({
   WAIT_REASON_QUEUE_CAPACITY_REJECTED,
   WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
   WAIT_REASON_TIMEOUT_WAITS,
+  WORKLOAD_PROFILE_BENCHMARK_EVENTS,
   ZERO,
   ONE,
   buildLoadNodeAvailabilitySnapshot,
+  buildBenchmarkResultSetEvidence,
+  appendOwnArrayValue,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
-  isTimeoutShapedError,
+  objectHasOwn,
   resolveLoadNodeAvailabilityState,
 });
 
@@ -151,6 +155,7 @@ const {
   computeMetrics,
   createWaitReasonCounters,
   loadRunRuntimeMethods: LOAD_RUN_RUNTIME_METHODS,
+  isTimeoutShapedError,
   normalizePositiveInteger,
   normalizeRatio,
   normalizeTableName,
@@ -177,46 +182,11 @@ function buildLoadOperationDescriptor(operation, counter, options = {}) {
       LOAD_TABLE_NAME,
   );
   if (workloadProfile === WORKLOAD_PROFILE_BENCHMARK_EVENTS) {
-    const eventIdPrefix = typeof options.eventIdPrefix === 'string' &&
-      options.eventIdPrefix.length > ZERO ?
-      options.eventIdPrefix :
-      BENCHMARK_EVENT_ID_PREFIX;
-    const eventId = eventIdPrefix + counter;
-    const payload = counter % BENCHMARK_PAYLOAD_MODULO;
-    const timestamp = Date.now();
-    switch (operation) {
-    case INSERT_OP:
-      return {
-        sql: `INSERT OR IGNORE INTO ${tableName} ` +
-          '(event_id, payload, created_at) VALUES (' +
-          `'${eventId}', ${payload}, ${timestamp})`,
-        acknowledgedWriteId: eventId,
-      };
-    case SELECT_OP:
-      return {
-        sql: `SELECT count(*) FROM ${tableName} ` +
-          `WHERE payload = ${payload}`,
-        acknowledgedWriteId: null,
-      };
-    case UPDATE_OP:
-      return {
-        sql: `UPDATE ${tableName} ` +
-          `SET created_at = ${timestamp} ` +
-          `WHERE event_id = '${eventId}'`,
-        acknowledgedWriteId: null,
-      };
-    case DELETE_OP:
-      return {
-        sql: `DELETE FROM ${tableName} ` +
-          `WHERE event_id = '${eventId}'`,
-        acknowledgedWriteId: null,
-      };
-    default:
-      return {
-        sql: 'SELECT 1',
-        acknowledgedWriteId: null,
-      };
-    }
+    return buildBenchmarkOperationDescriptor(operation, counter, {
+      tableName,
+      eventIdPrefix: options.eventIdPrefix,
+      sqlDialect: options.sqlDialect,
+    });
   }
 
   const logIdPrefix = typeof options.logIdPrefix === 'string' &&
@@ -274,15 +244,6 @@ function isBenchmarkRetrySafeOperation(operation, workloadProfile) {
   );
 }
 
-function isTimeoutShapedError(error) {
-  const message = String(error?.message || error || '');
-  if (TIMEOUT_ERROR_PATTERN.test(message)) {
-    return true;
-  }
-  const code = String(error?.code || '').toUpperCase();
-  return code === 'ETIMEDOUT';
-}
-
 /**
  * Compute percentile from a sorted array of numbers.
  * @param {Array<number>} sorted - Sorted latency values
@@ -333,6 +294,10 @@ class LoadRun {
     this._tableName = options.tableName || LOAD_TABLE_NAME;
     this._workloadProfile =
       options.workloadProfile || WORKLOAD_PROFILE_DEFAULT;
+    this._sqlDialect =
+      options.sqlDialect || BENCHMARK_SQL_DIALECT.SQLITE;
+    this._enforceSemanticOracle =
+      options.enforceSemanticOracle === true;
     this._eventIdPrefix = typeof options.eventIdPrefix === 'string' &&
       options.eventIdPrefix.length > ZERO ?
       options.eventIdPrefix :
@@ -349,7 +314,7 @@ class LoadRun {
       null;
     this._acknowledgedWriteIds = this._trackAcknowledgedWrites ? [] : null;
     this._acknowledgedWriteIdSet =
-      this._trackAcknowledgedWrites ? new Set() : null;
+      this._trackAcknowledgedWrites ? objectCreate(null) : null;
     this._maxInFlight = options.maxInFlight ||
       initialAvailableNodes.length * IN_FLIGHT_PER_NODE;
     this._nodeFailureThreshold =
@@ -403,9 +368,17 @@ class LoadRun {
     this._successCount = ZERO;
     this._failedCount = ZERO;
     this._operationErrorCount = ZERO;
+    this._timedOutOperationCount = ZERO;
+    this._erroredOperationCount = ZERO;
+    this._admissionRejectedOperationCount = ZERO;
     this._attemptErrorCount = ZERO;
     this._suppressedRetrySafeAttemptErrorCount = ZERO;
     this._suppressedRetrySafeTimeoutWaitCount = ZERO;
+    this._semanticCompiledOperationCount = ZERO;
+    this._semanticValidatedOperationCount = ZERO;
+    this._semanticOracleFailureCount = ZERO;
+    this._semanticResultObservations = [];
+    this._cancelledOperationCount = ZERO;
     this._distinctErrorSet = new Set();
     this._distinctErrors = [];
     this._queueDelaySamples = [];
@@ -415,6 +388,7 @@ class LoadRun {
     this._rejectedByReason = {
       [REJECTED_REASON_QUEUE_FULL]: ZERO,
       [REJECTED_REASON_FLOW_CONTROL]: ZERO,
+      [REJECTED_REASON_ADMISSION]: ZERO,
     };
     this._dispatchedOperationCount = ZERO;
     this._counter = ZERO;
@@ -488,6 +462,7 @@ class LoadRun {
       rejectedByReason: {
         [REJECTED_REASON_QUEUE_FULL]: ZERO,
         [REJECTED_REASON_FLOW_CONTROL]: ZERO,
+        [REJECTED_REASON_ADMISSION]: ZERO,
       },
     };
   }
@@ -940,8 +915,12 @@ class LoadRun {
           workloadProfile: this._workloadProfile,
           eventIdPrefix: this._eventIdPrefix,
           logIdPrefix: this._logIdPrefix,
+          sqlDialect: this._sqlDialect,
         },
       );
+      if (operationDescriptor.semanticOperation) {
+        this._semanticCompiledOperationCount++;
+      }
       this._counter++;
 
       this._inFlight++;
@@ -1128,8 +1107,7 @@ class LoadRun {
     let attemptedNodes = false;
     let operationDispatched = false;
     let hasNonAdmissionFailures = false;
-    let nonAdmissionFailureCount = ZERO;
-    let suppressibleBenchmarkFailureCount = ZERO;
+    let timeoutFailureCount = ZERO;
 
     for (let attempt = ZERO; attempt < candidates.length; attempt++) {
       if (this._cancelled || this._completedMetrics) {
@@ -1158,7 +1136,19 @@ class LoadRun {
       this._recordNodeDispatchAttempt(nodeHealthKey);
       attemptedNodes = true;
       try {
-        await this._queryNode(node, sql);
+        const queryResult = await this._queryNode(node, sql);
+        if (
+          this._enforceSemanticOracle === true &&
+          operationDescriptor?.semanticOperation
+        ) {
+          const semanticResult = assertBenchmarkOperationResult(
+            operationDescriptor, queryResult,
+          );
+          appendOwnArrayValue(
+            this._semanticResultObservations, semanticResult.resultObservation,
+          );
+          this._semanticValidatedOperationCount++;
+        }
         if (this._cancelled || this._completedMetrics) {
           return;
         }
@@ -1175,6 +1165,9 @@ class LoadRun {
           return;
         }
         this._recordNodeFailure(nodeHealthKey, err);
+        if (err?.code === BENCHMARK_SEMANTIC_RESULT_ERROR_CODE) {
+          this._semanticOracleFailureCount++;
+        }
         this._attemptErrorCount++;
         this._recordNodeAttemptFailure(nodeHealthKey, err);
         if (this._isRetryableControlPlanePressureError(err)) {
@@ -1184,6 +1177,7 @@ class LoadRun {
           );
         }
         if (isTimeoutShapedError(err)) {
+          timeoutFailureCount++;
           this._recordWaitReason(
             WAIT_REASON_TIMEOUT_WAITS,
             nodeHealthKey,
@@ -1191,9 +1185,7 @@ class LoadRun {
         }
         if (!this._isAdmissionSignalError(err)) {
           hasNonAdmissionFailures = true;
-          nonAdmissionFailureCount++;
           if (this._shouldSuppressBenchmarkOperationFailure(operation, err)) {
-            suppressibleBenchmarkFailureCount++;
             this._suppressedRetrySafeAttemptErrorCount++;
             if (isTimeoutShapedError(err)) {
               this._suppressedRetrySafeTimeoutWaitCount++;
@@ -1213,12 +1205,18 @@ class LoadRun {
       return;
     }
     if (attemptedNodes && hasNonAdmissionFailures) {
-      if (nonAdmissionFailureCount > ZERO &&
-          nonAdmissionFailureCount === suppressibleBenchmarkFailureCount) {
-        return;
-      }
       this._failedCount++;
       this._operationErrorCount++;
+      if (timeoutFailureCount > ZERO) {
+        this._timedOutOperationCount++;
+      } else {
+        this._erroredOperationCount++;
+      }
+      return;
+    }
+    if (attemptedNodes && operationDispatched) {
+      this._admissionRejectedOperationCount++;
+      this._rejectedByReason[REJECTED_REASON_ADMISSION]++;
     }
   }
 
@@ -1390,6 +1388,10 @@ class LoadGenerator {
       LOAD_DEFAULTS.defaultDuration;
     this._workloadProfile =
       options.workloadProfile || WORKLOAD_PROFILE_DEFAULT;
+    this._sqlDialect =
+      options.sqlDialect || BENCHMARK_SQL_DIALECT.SQLITE;
+    this._enforceSemanticOracle =
+      options.enforceSemanticOracle === true;
     const defaultOperations = this._workloadProfile ===
       WORKLOAD_PROFILE_BENCHMARK_EVENTS ?
       BENCHMARK_OPERATIONS :
@@ -1469,6 +1471,8 @@ class LoadGenerator {
       operations: this._operations,
       tableName: this._tableName,
       workloadProfile: this._workloadProfile,
+      sqlDialect: this._sqlDialect,
+      enforceSemanticOracle: this._enforceSemanticOracle,
       eventIdPrefix,
       logIdPrefix,
       nodeFailureThreshold: this._nodeFailureThreshold,
@@ -1492,5 +1496,4 @@ class LoadGenerator {
     return run;
   }
 }
-
 export {LoadGenerator, LoadRun, computeMetrics};

@@ -11,6 +11,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
     LOAD_LANE_TRANSIENT_TIMEOUT_FRAGMENT,
     LOAD_NODE_AVAILABILITY_STATE,
     LOAD_TABLE_NAME,
+    TIMEOUT_ERROR_PATTERN,
     MAX_DISTINCT_ERROR_MESSAGES,
     MS_PER_SECOND,
     NODE_BREAKER_OWNER_NODE_CLIENT,
@@ -21,6 +22,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
     PERCENTILE_P95,
     PERCENTILE_P99,
     REJECTED_REASON_FLOW_CONTROL,
+    REJECTED_REASON_ADMISSION,
     REJECTED_REASON_QUEUE_FULL,
     SECONDS_PER_MINUTE,
     UNDISPATCHED_REASON_CANCELLED,
@@ -31,14 +33,26 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
     WAIT_REASON_QUEUE_CAPACITY_REJECTED,
     WAIT_REASON_RETRYABLE_CONTROL_PLANE_PRESSURE,
     WAIT_REASON_TIMEOUT_WAITS,
+    WORKLOAD_PROFILE_BENCHMARK_EVENTS,
     ZERO,
     ONE,
+    appendOwnArrayValue,
     buildLoadNodeAvailabilitySnapshot,
+    buildBenchmarkResultSetEvidence,
     getControlPlaneRetryAfterMs,
     isRetryableControlPlaneError,
-    isTimeoutShapedError,
+    objectHasOwn,
     resolveLoadNodeAvailabilityState,
   } = deps;
+
+  function isTimeoutShapedError(error) {
+    const message = String(error?.message || error || '');
+    if (TIMEOUT_ERROR_PATTERN.test(message)) {
+      return true;
+    }
+    const code = String(error?.code || '').toUpperCase();
+    return code === 'ETIMEDOUT';
+  }
 
   function parseDuration(duration) {
     if (typeof duration === 'number') {
@@ -113,6 +127,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
     distinctErrors, attemptErrorCount = ZERO, queueDelays = [],
     dispatchAccounting = null, perNodeMetrics = null, rejectedAccounting = null,
     queuePressure = null, waitReasons = null, dispatchGuardrail = null,
+    outcomeAccounting = null,
   ) {
     const sorted = [...latencies].sort((a, b) => a - b);
     const total = successCount + failedCount;
@@ -121,6 +136,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       total,
       success: successCount,
       failed: failedCount,
+      correct: successCount,
       errors: operationErrorCount,
       latency: {
         avg: sorted.length > ZERO ?
@@ -130,7 +146,9 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         p95: percentile(sorted, PERCENTILE_P95),
         p99: percentile(sorted, PERCENTILE_P99),
       },
-      opsPerSec: (total / elapsed) * MS_PER_SECOND,
+      correctOpsPerSec: (successCount / elapsed) * MS_PER_SECOND,
+      attemptedOpsPerSec: (total / elapsed) * MS_PER_SECOND,
+      opsPerSec: (successCount / elapsed) * MS_PER_SECOND,
     };
     if (attemptErrorCount > ZERO) {
       metrics.attemptErrors = attemptErrorCount;
@@ -163,9 +181,12 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       metrics.targetOperations = Number.isFinite(targetOperations) ?
         Math.max(ZERO, Math.floor(targetOperations)) :
         ZERO;
+      metrics.offered = metrics.targetOperations;
       metrics.dispatchedOperations = Number.isFinite(dispatchedOperations) ?
         Math.max(ZERO, Math.floor(dispatchedOperations)) :
         ZERO;
+      metrics.attemptedOpsPerSec =
+        (metrics.dispatchedOperations / elapsed) * MS_PER_SECOND;
       metrics.undispatchedOperations = Number.isFinite(undispatchedOperations) ?
         Math.max(ZERO, Math.floor(undispatchedOperations)) :
         ZERO;
@@ -205,6 +226,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         {
           [REJECTED_REASON_QUEUE_FULL]: ZERO,
           [REJECTED_REASON_FLOW_CONTROL]: ZERO,
+          [REJECTED_REASON_ADMISSION]: ZERO,
         };
     }
     if (queuePressure && typeof queuePressure === 'object') {
@@ -240,6 +262,31 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       metrics.dispatchGuardrail = {
         ...dispatchGuardrail,
       };
+    }
+    if (outcomeAccounting && typeof outcomeAccounting === 'object') {
+      metrics.timedOut = Math.max(
+        ZERO,
+        Math.floor(Number(outcomeAccounting.timedOut) || ZERO),
+      );
+      metrics.errored = Math.max(
+        ZERO,
+        Math.floor(Number(outcomeAccounting.errored) || ZERO),
+      );
+      metrics.queueOverflow = Math.max(
+        ZERO,
+        Math.floor(Number(outcomeAccounting.queueOverflow) || ZERO),
+      );
+      metrics.cancelled = Math.max(
+        ZERO,
+        Math.floor(Number(outcomeAccounting.cancelled) || ZERO),
+      );
+      metrics.incorrect = Math.max(
+        ZERO,
+        metrics.timedOut +
+          metrics.errored +
+          metrics.cancelled +
+          Number(metrics.rejectedOperations || ZERO),
+      );
     }
     return metrics;
   }
@@ -415,11 +462,14 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         idValue.length > ZERO ?
         idValue :
         null;
-      if (!normalizedId || this._acknowledgedWriteIdSet.has(normalizedId)) {
+      if (
+        !normalizedId ||
+        objectHasOwn(this._acknowledgedWriteIdSet, normalizedId)
+      ) {
         return;
       }
-      this._acknowledgedWriteIdSet.add(normalizedId);
-      this._acknowledgedWriteIds.push(normalizedId);
+      this._acknowledgedWriteIdSet[normalizedId] = true;
+      appendOwnArrayValue(this._acknowledgedWriteIds, normalizedId);
     }
 
     _recordNodeFailure(healthKey, error) {
@@ -713,6 +763,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
             rejectedByReason: {
               [REJECTED_REASON_QUEUE_FULL]: ZERO,
               [REJECTED_REASON_FLOW_CONTROL]: ZERO,
+              [REJECTED_REASON_ADMISSION]: ZERO,
             },
           };
         }
@@ -742,6 +793,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
           {
             [REJECTED_REASON_QUEUE_FULL]: ZERO,
             [REJECTED_REASON_FLOW_CONTROL]: ZERO,
+            [REJECTED_REASON_ADMISSION]: ZERO,
           };
         for (const [reason, count] of Object.entries(rejectedByReason)) {
           if (!Object.hasOwn(summary[nodeId].rejectedByReason, reason)) {
@@ -823,7 +875,8 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       const dispatchAccounting = this._buildDispatchAccounting();
       const perNodeMetrics = this._buildPerNodeMetricsSummary();
       const rejectedAccounting = {
-        rejectedOperations: this._rejectedOperations,
+        rejectedOperations:
+          this._rejectedOperations + this._admissionRejectedOperationCount,
         rejectedByReason: {
           ...this._rejectedByReason,
         },
@@ -831,6 +884,13 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       const queuePressureSummary = this._buildQueuePressureSummary();
       const waitReasonSummary = this._buildWaitReasonSummary();
       const dispatchGuardrailSummary = this._buildDispatchGuardrailSummary();
+      const outcomeAccounting = {
+        timedOut: this._timedOutOperationCount,
+        errored: this._erroredOperationCount,
+        cancelled: this._cancelledOperationCount,
+        queueOverflow:
+          Number(this._rejectedByReason[REJECTED_REASON_QUEUE_FULL] || ZERO),
+      };
       const metrics = computeMetrics(
         this._latencies,
         this._successCount,
@@ -846,6 +906,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         queuePressureSummary,
         waitReasonSummary,
         dispatchGuardrailSummary,
+        outcomeAccounting,
       );
       metrics.suppressedRetrySafeAttemptErrors = Math.max(
         ZERO,
@@ -898,10 +959,31 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       if (this._trackAcknowledgedWrites !== true) {
         return null;
       }
+      const ids = [];
+      for (let index = ZERO; index < this._acknowledgedWriteIds.length; index++) {
+        appendOwnArrayValue(ids, this._acknowledgedWriteIds[index]);
+      }
       return {
         tableName: this._tableName,
         idColumn: this._acknowledgedWriteIdColumn,
-        ids: [...this._acknowledgedWriteIds],
+        ids,
+      };
+    }
+
+    getSemanticExecutionSnapshot() {
+      if (this._workloadProfile !== WORKLOAD_PROFILE_BENCHMARK_EVENTS) {
+        return null;
+      }
+      return {
+        dialect: this._sqlDialect,
+        enforced: this._enforceSemanticOracle,
+        compiledOperations: this._semanticCompiledOperationCount,
+        validatedOperations: this._semanticValidatedOperationCount,
+        successfulOperations: this._successCount,
+        oracleFailures: this._semanticOracleFailureCount,
+        resultSet: buildBenchmarkResultSetEvidence(
+          this._semanticResultObservations,
+        ),
       };
     }
 
@@ -909,6 +991,19 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
      * Cancel the load run early.
      */
     cancel() {
+      if (this._cancelled || this._completedMetrics) {
+        return;
+      }
+      const terminalDispatched =
+        this._successCount +
+        this._timedOutOperationCount +
+        this._erroredOperationCount +
+        this._admissionRejectedOperationCount +
+        this._cancelledOperationCount;
+      this._cancelledOperationCount += Math.max(
+        ZERO,
+        this._dispatchedOperationCount - terminalDispatched,
+      );
       this._cancelled = true;
       this._schedulingStopped = true;
       this._dispatchStoppedBy = DISPATCH_STOP_REASON_CANCELLED;
@@ -928,6 +1023,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
   return {
     parseDuration,
     normalizeTableName,
+    isTimeoutShapedError,
     createWaitReasonCounters,
     normalizePositiveInteger,
     normalizeRatio,

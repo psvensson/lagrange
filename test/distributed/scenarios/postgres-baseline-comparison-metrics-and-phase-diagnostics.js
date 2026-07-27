@@ -248,6 +248,7 @@ async function resolveBaselineMetrics({
         tableName: benchmarkTableName,
         onProgress,
         progressHeartbeatIntervalMs,
+        semanticParityEnabled: scenarioOverrides.semanticParityEnabled,
       });
       try {
         cacheMetadata = await storeBaselineMetricsInCache(

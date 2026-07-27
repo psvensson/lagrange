@@ -4,6 +4,17 @@ import {
   resolveControlSnapshotCandidates,
 } from './postgres-baseline-comparison-admission-runtime-helpers.js';
 import {rowsFromQueryResult} from './postgres-baseline-comparison-query-helpers.js';
+import {
+  BENCHMARK_SQL_DIALECT,
+  buildBenchmarkSemanticReceipt,
+  verifyBenchmarkAcknowledgedWrites,
+} from '../harness/benchmark-workload-semantics.js';
+import {
+  BENCHMARK_SEMANTIC_PARITY_FAILED_PREFIX,
+  BENCHMARK_PUBLICATION_REASON,
+  BENCHMARK_SEMANTIC_RUNTIME_RECEIPT_MISSING,
+  BENCHMARK_SEMANTIC_STATUS,
+} from '../harness/benchmark-workload-semantics-constants.js';
 
 const {
   BENCHMARK_DEFAULTS,
@@ -371,6 +382,8 @@ async function querySutTableId(nodeClient, systemTableReadNodes, tableName) {
 
 function resolveScenarioOverrides(cluster) {
   const overrides = cluster?._scenarioOverrides?.postgresBaselineComparison;
+  const hasInjectedLoadGenerator =
+    typeof overrides?.createLoadGenerator === 'function';
   const createPostgresPool =
     typeof overrides?.createPostgresPool === 'function' ?
       overrides.createPostgresPool :
@@ -390,6 +403,10 @@ function resolveScenarioOverrides(cluster) {
   return {
     createPostgresPool,
     createLoadGenerator,
+    semanticParityEnabled:
+      hasInjectedLoadGenerator ?
+        overrides?.semanticParityEnabled === true :
+        true,
     getCdcTelemetryByNode,
     phaseEventSink,
     progressHeartbeatIntervalMs: resolveProgressHeartbeatIntervalMs(
@@ -438,6 +455,7 @@ function buildLoadProgressDetails(label, heartbeatCount, metrics = {}) {
       metrics.undispatchedOperations,
     ),
     rejectedOperations: normalizeNonNegativeInteger(metrics.rejectedOperations),
+    cancelled: normalizeNonNegativeInteger(metrics.cancelled),
   };
 }
 
@@ -788,6 +806,7 @@ async function runBaselineSharedLoad({
   tableName,
   onProgress,
   progressHeartbeatIntervalMs,
+  semanticParityEnabled,
 }) {
   const loadNodes = buildBaselineLoadNodes(pool, loadNodeCount);
   const loadGenerator = createLoadGenerator(loadNodes, {
@@ -797,6 +816,9 @@ async function runBaselineSharedLoad({
     tableName,
     workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
     operations: BENCHMARK_WORKLOAD_OPERATIONS,
+    sqlDialect: BENCHMARK_SQL_DIALECT.POSTGRESQL,
+    enforceSemanticOracle: semanticParityEnabled === true,
+    trackAcknowledgedWrites: semanticParityEnabled === true,
     ...(Number.isInteger(nodeFailureThreshold) && nodeFailureThreshold > ZERO ?
       {nodeFailureThreshold} :
       {}),
@@ -821,7 +843,15 @@ async function runBaselineSharedLoad({
     onProgress,
   });
   try {
-    return await baselineRun.waitComplete();
+    const metrics = await baselineRun.waitComplete();
+    return await attachSemanticParityReceipt({
+      loadRun: baselineRun,
+      metrics,
+      query: (sql) => pool.query(sql),
+      tableName,
+      dialect: BENCHMARK_SQL_DIALECT.POSTGRESQL,
+      enabled: semanticParityEnabled,
+    });
   } finally {
     progressReporter.stop();
   }
@@ -851,6 +881,7 @@ async function runSutSharedLoad({
   startLoadRebalancingPressureMonitor,
   onProgress,
   progressHeartbeatIntervalMs,
+  semanticParityEnabled,
 }) {
   let rebalancingPressureMonitor = null;
   const routedLoadNodes = loadNodes.map((node) => ({
@@ -880,6 +911,9 @@ async function runSutSharedLoad({
     tableName,
     workloadProfile: BENCHMARK_WORKLOAD_PROFILE,
     operations: BENCHMARK_WORKLOAD_OPERATIONS,
+    sqlDialect: BENCHMARK_SQL_DIALECT.SQLITE,
+    enforceSemanticOracle: semanticParityEnabled === true,
+    trackAcknowledgedWrites: semanticParityEnabled === true,
     ...(Number.isInteger(nodeFailureThreshold) && nodeFailureThreshold > ZERO ?
       {nodeFailureThreshold} :
       {}),
@@ -922,6 +956,16 @@ async function runSutSharedLoad({
   let rebalancingPressure = null;
   try {
     loadMetrics = await loadRun.waitComplete();
+    loadMetrics = await attachSemanticParityReceipt({
+      loadRun,
+      metrics: loadMetrics,
+      query: routedLoadNodes.length > ZERO ?
+        (sql) => routedLoadNodes[ZERO].query(sql) :
+        null,
+      tableName,
+      dialect: BENCHMARK_SQL_DIALECT.SQLITE,
+      enabled: semanticParityEnabled,
+    });
   } catch (error) {
     loadError = error;
   } finally {
@@ -953,6 +997,83 @@ async function runSutSharedLoad({
         heartbeatFreshness.messages :
         []),
     ],
+  };
+}
+
+async function attachSemanticParityReceipt({
+  loadRun,
+  metrics,
+  query,
+  tableName,
+  dialect,
+  enabled,
+}) {
+  if (enabled !== true) {
+    return metrics;
+  }
+  const execution =
+    typeof loadRun?.getSemanticExecutionSnapshot === 'function' ?
+      loadRun.getSemanticExecutionSnapshot() :
+      null;
+  const acknowledgedWrites =
+    typeof loadRun?.getAcknowledgedWrites === 'function' ?
+      loadRun.getAcknowledgedWrites() :
+      null;
+  if (!execution || execution.enforced !== true || !acknowledgedWrites) {
+    throw new Error(BENCHMARK_SEMANTIC_RUNTIME_RECEIPT_MISSING);
+  }
+  const durability = await verifyBenchmarkAcknowledgedWrites({
+    query,
+    tableName,
+    ids: acknowledgedWrites.ids,
+  });
+  const rejectedByReason =
+    metrics?.rejectedByReason &&
+    typeof metrics.rejectedByReason === 'object' ?
+      metrics.rejectedByReason :
+      {};
+  const accounting = {
+    offered: normalizeNonNegativeInteger(
+      metrics?.offered ?? metrics?.targetOperations,
+    ),
+    dispatched: normalizeNonNegativeInteger(metrics?.dispatchedOperations),
+    correct: normalizeNonNegativeInteger(metrics?.correct ?? metrics?.success),
+    rejected: normalizeNonNegativeInteger(metrics?.rejectedOperations),
+    timedOut: normalizeNonNegativeInteger(metrics?.timedOut),
+    errored: normalizeNonNegativeInteger(metrics?.errored),
+    queueOverflow: normalizeNonNegativeInteger(metrics?.queueOverflow),
+    undispatched: normalizeNonNegativeInteger(metrics?.undispatchedOperations),
+    cancelled: normalizeNonNegativeInteger(metrics?.cancelled),
+    rejectedByReason: {
+      queueFull: normalizeNonNegativeInteger(rejectedByReason.queueFull),
+      flowControl: normalizeNonNegativeInteger(rejectedByReason.flowControl),
+      admission: normalizeNonNegativeInteger(rejectedByReason.admission),
+    },
+  };
+  const semanticParity = buildBenchmarkSemanticReceipt({
+    dialect,
+    compiledOperations: execution.compiledOperations,
+    validatedOperations: execution.validatedOperations,
+    successfulOperations: execution.successfulOperations,
+    oracleFailures: execution.oracleFailures,
+    resultSet: execution.resultSet,
+    accounting,
+    durability,
+  });
+  if (semanticParity.status !== BENCHMARK_SEMANTIC_STATUS.PASS) {
+    const error = new Error(
+      BENCHMARK_SEMANTIC_PARITY_FAILED_PREFIX +
+        String(
+          durability.reason ||
+            BENCHMARK_PUBLICATION_REASON.SEMANTIC_ORACLE_FAILED,
+        ),
+    );
+    error.semanticParity = semanticParity;
+    throw error;
+  }
+  return {
+    ...metrics,
+    semanticParity,
   };
 }
 
@@ -1048,6 +1169,7 @@ export const POSTGRES_BASELINE_COMPARISON_BENCHMARK_TABLE_LOAD_BUNDLE = {
   buildBaselineLoadNodes,
   runBaselineSharedLoad,
   runSutSharedLoad,
+  attachSemanticParityReceipt,
   isNodeAdminReady,
   isLoadNodeCandidate,
   normalizeAdminQueryTraceTimestamp,

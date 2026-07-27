@@ -151,10 +151,13 @@ test('Property 11: Load Metrics Accuracy', async (t) => {
               errorCount, durationMs,
             );
 
-            const expected =
-              ((successCount + failedCount) / durationMs) *
-              MS_PER_SECOND;
-            assert.strictEqual(m.opsPerSec, expected);
+            const expectedCorrect =
+              (successCount / durationMs) * MS_PER_SECOND;
+            const expectedAttempted =
+              ((successCount + failedCount) / durationMs) * MS_PER_SECOND;
+            assert.strictEqual(m.opsPerSec, expectedCorrect);
+            assert.strictEqual(m.correctOpsPerSec, expectedCorrect);
+            assert.strictEqual(m.attemptedOpsPerSec, expectedAttempted);
           },
         ),
         {numRuns: 10},
@@ -733,7 +736,7 @@ test('read timeouts still fail over to another node', async () => {
   }
 });
 
-test('benchmark retry-safe operations suppress terminal failures when only transient control-plane errors remain',
+test('benchmark retry-safe operations expose exhausted transient failures without counting them as throughput',
   async () => {
     let timedOutCalls = ZERO;
     let admissionBlockedCalls = ZERO;
@@ -774,15 +777,22 @@ test('benchmark retry-safe operations suppress terminal failures when only trans
         admissionBlockedCalls > ZERO,
         'expected admission-blocked fallback attempts',
       );
-      assert.equal(
-        metrics.failed,
-        ZERO,
-        'retry-safe benchmark operations should not hard-fail on transient control-plane turbulence alone',
+      assert.ok(
+        metrics.failed > ZERO,
+        'exhausted retry-safe benchmark operations must remain terminal failures',
+      );
+      assert.ok(
+        metrics.errors > ZERO,
+        'exhausted retry-safe benchmark operations must remain explicit errors',
+      );
+      assert.ok(
+        metrics.timedOut > ZERO,
+        'exhausted timeout paths must remain an explicit denominator',
       );
       assert.equal(
-        metrics.errors,
+        metrics.correct,
         ZERO,
-        'retry-safe benchmark operations should not increment operation errors on transient control-plane turbulence alone',
+        'exhausted retry-safe operations must never count as correct',
       );
       assert.ok(
         metrics.attemptErrors > ZERO,
