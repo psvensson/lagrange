@@ -1,0 +1,55 @@
+{
+  "id": "comparative-efficiency-opportunity-calculator-v2",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A deterministic versioned opportunity calculator emits reproducible unit-checked analytical bounds, assumptions, sensitivity ranges, and uncertainty for the sealed fixture set; every admitted quantity, including zero and fractional average lookup cardinality, contributes dimensionally according to its declared units; unsupported or dimensionally inconsistent inputs fail closed; and no output is labeled as a measured claim.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/comparative-workload-efficiency-evidence/tasks.md#C1",
+    "closesCL": [],
+    "parentQuest": "comparative-efficiency-opportunity-calculator",
+    "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+    "draftedAtCommit": "4dc61c19201423009efcf178f32240630fc7ce2f"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "comparative-efficiency-opportunity-calculator",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "comparative-efficiency-opportunity-calculator-v2-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "comparative-efficiency-opportunity-calculator",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "requires-comparative-evidence-contract",
+      "statement": "Do not seal this Quest until comparative-efficiency-evidence-contract is terminal."
+    },
+    {
+      "id": "analytical-only",
+      "statement": "Calculator output is always analytical_bound and may never be presented as measured throughput, latency, capacity, scale, or infrastructure cost."
+    },
+    {
+      "id": "immutable-units",
+      "statement": "Every input and output carries explicit units, formula version, assumptions, and sensitivity bounds; unsupported or dimensionally inconsistent values fail closed."
+    }
+  ]
+}
