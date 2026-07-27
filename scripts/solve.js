@@ -74,7 +74,14 @@ import {
   verificationState,
   VERIFICATION_CONTRACT_VERSION,
   VERIFICATION_SCOPE,
+  VERIFIER_REJECTION_FINDING_KIND,
 } from './solve/verification.js';
+import {
+  parseRejectionFindings,
+  rejectionFindingBarProblem,
+  REJECTION_FINDING_USAGE,
+} from './solve/rejection-findings.js';
+import {recordRejectionDecomposition} from './solve/rejection-decomposition.js';
 import {
   continueQuestWorkflow,
   landQuestWorkflow,
@@ -356,6 +363,14 @@ function cmdLand(root, args) {
   writeFacadeResult('land', args, result);
 }
 
+// Discharge a slice of a standing candidate rejection with fresh approved
+// coverage (current candidate or --from-quest <successorId>), so split scope
+// stays dischargeable instead of forcing one ever-growing superset candidate.
+function cmdDecomposeRejection(root, args) {
+  const result = recordRejectionDecomposition(root, args);
+  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+}
+
 // Draft-time retread check (and again on each supervised pin): warn when the
 // statement cites files/CL-ids touched by a recent revert, and surface the
 // lineage's recorded dead levers. Purely advisory; must never fail the command.
@@ -546,6 +561,20 @@ function cmdFinding(root, args) {
       null;
   const kind = optionalStringArgument(args, 'kind');
   const evidence = optionalStringArgument(args, 'evidence');
+  // A rejection must carry its category-complete finding list durably; a
+  // pointer-only claim satisfies every downstream consumer mechanically while
+  // carrying zero content (measured 2026-07-27).
+  const rejectionFindings = kind === VERIFIER_REJECTION_FINDING_KIND ?
+    parseRejectionFindings(args.finding) : [];
+  if (kind === VERIFIER_REJECTION_FINDING_KIND) {
+    if (rejectionFindings.length === 0) {
+      throw new Error(
+        `finding: verifier-rejection requires ${REJECTION_FINDING_USAGE}`);
+    }
+    const barProblem = rejectionFindingBarProblem(
+      quest, readLog(root, id), rejectionFindings);
+    if (barProblem) throw new Error(`finding: ${barProblem}`);
+  }
   const verificationScope = optionalStringArgument(args, 'verification-scope');
   const verificationFingerprint =
     optionalStringArgument(args, 'verification-fingerprint');
@@ -586,6 +615,7 @@ function cmdFinding(root, args) {
     verificationFingerprint,
     verificationReceipt,
     verificationSchemaVersion,
+    rejectionFindings,
   });
   const stamped = appendFinding(root, id, {
     frontier: args.frontier,
@@ -1192,6 +1222,7 @@ const COMMANDS = {
   'start': cmdStart,
   'continue': cmdContinue,
   'land': cmdLand,
+  'decompose-rejection': cmdDecomposeRejection,
   'new': cmdNew,
   'run': cmdRun,
   'status': cmdStatus,

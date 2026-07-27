@@ -6,6 +6,12 @@ import {
 } from './constants.js';
 
 const LOCAL_STR_OWNED_001 = '--claim "<how the regressed invariant was restored or why it was abandoned>"';
+const STATIC_QUALITY_NEXT_COMMAND =
+  '# fix the listed lint/guideline violations in the changed paths, ' +
+  'then re-run the attempt';
+const REJECTION_ESCALATION_SUCCESSOR_GUIDANCE =
+  '# or author a successor quest with a sealed verification bar: ';
+const QUEST_ID_PLACEHOLDER = '<questId>';
 
 export const CONTINUATION_ALLOWED = 'allowed';
 export const CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE =
@@ -16,6 +22,16 @@ export const CONTINUATION_BLOCKED_SCOPE = 'blocked-scope';
 export const CONTINUATION_BLOCKED_REGRESSION = 'blocked-regression';
 export const CONTINUATION_BLOCKED_THEORY = 'blocked-theory';
 export const CONTINUATION_BLOCKED_MEASUREMENT = 'blocked-measurement';
+// Deterministic lint/guideline findings in the attempt's changed paths: fix
+// them before sealing so an independent verifier turn is never spent on
+// machine-checkable output.
+const LOCAL_STR_OWNED_002 = 'blocked-static-quality';
+export const CONTINUATION_BLOCKED_STATIC_QUALITY = LOCAL_STR_OWNED_002;
+// Repeated candidate rejections on one frontier without an intervening
+// approval: reframe (decompose the standing rejection or author a successor
+// quest with a sealed verification bar) instead of iterating.
+const LOCAL_STR_OWNED_003 = 'blocked-rejection-escalation';
+export const CONTINUATION_BLOCKED_REJECTION_ESCALATION = LOCAL_STR_OWNED_003;
 
 // Tiering for the override escape hatch (recorded-reason override of a soft guard). Only
 // HEURISTIC, process-shaping guards are overridable: a theory/explore gate (produce a
@@ -30,6 +46,8 @@ export const CONTINUATION_BLOCKED_MEASUREMENT = 'blocked-measurement';
 const OVERRIDABLE_CODES = Object.freeze([
   CONTINUATION_BLOCKED_THEORY,
   CONTINUATION_BLOCKED_SCOPE,
+  CONTINUATION_BLOCKED_STATIC_QUALITY,
+  CONTINUATION_BLOCKED_REJECTION_ESCALATION,
 ]);
 
 export function continuationOverridable(continuation) {
@@ -51,6 +69,8 @@ export const CONTINUATION_DISPOSITIONS = Object.freeze({
   [CONTINUATION_BLOCKED_MEASUREMENT]: DISPOSITION_PARK_RESUMABLE,
   [CONTINUATION_BLOCKED_UNRECORDED_EVIDENCE]: DISPOSITION_REROUTE,
   [CONTINUATION_BLOCKED_METRIC_PROJECTION]: DISPOSITION_REROUTE,
+  [CONTINUATION_BLOCKED_STATIC_QUALITY]: DISPOSITION_REROUTE,
+  [CONTINUATION_BLOCKED_REJECTION_ESCALATION]: DISPOSITION_REROUTE,
 });
 
 
@@ -217,6 +237,12 @@ export function continuationNextCommand(continuation, context = {}) {
   case CONTINUATION_BLOCKED_SCOPE:
     return `node scripts/solve.js status${id} ` +
         '# land or split the current changes to reduce scope before the next attempt';
+  case CONTINUATION_BLOCKED_STATIC_QUALITY:
+    return STATIC_QUALITY_NEXT_COMMAND;
+  case CONTINUATION_BLOCKED_REJECTION_ESCALATION:
+    return `node scripts/solve.js decompose-rejection${id} ` +
+        REJECTION_ESCALATION_SUCCESSOR_GUIDANCE +
+        `node scripts/solve.js new --from ${questId || QUEST_ID_PLACEHOLDER}`;
   case CONTINUATION_BLOCKED_REGRESSION:
     return `node scripts/solve.js finding${id}${f} ` +
         LOCAL_STR_OWNED_001;

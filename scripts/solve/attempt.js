@@ -14,7 +14,9 @@ import {
 import {scopeTerminalStatus} from './convergence-guards.js';
 import {analyzeQuestHealth} from './health.js';
 import {
+  CONTINUATION_BLOCKED_REJECTION_ESCALATION,
   CONTINUATION_BLOCKED_SCOPE,
+  CONTINUATION_BLOCKED_STATIC_QUALITY,
   continuationIsAllowed,
 } from './continuation.js';
 import {
@@ -22,7 +24,13 @@ import {
   gateDecisionToStepResult,
   theoryGateContinuation,
   decisionContinues,
+  candidateRejectionFingerprintsSinceApproval,
 } from './gate.js';
+import {staticQualityProblems} from './static-gate.js';
+import {
+  REJECTION_ESCALATION_GUIDANCE,
+  REJECTION_ESCALATION_LIMIT,
+} from './constants.js';
 import {
   resolveWorkspaceBaseCommit,
 } from './verification.js';
@@ -79,6 +87,31 @@ export function runAttemptCommand(root, args) {
       return {...gateDecisionToStepResult(decision), blocked: true};
     }
   }
+  // Rejection escalation: after REJECTION_ESCALATION_LIMIT distinct rejected
+  // candidates on this frontier with no intervening approval, iterating under
+  // the same unsealed bar is the measured losing move — reframe instead.
+  // Overridable (recorded reason), and decompose-rejection or a successor
+  // quest both remain available, so this can never deadlock a discharge.
+  const rejectedFingerprints =
+    candidateRejectionFingerprintsSinceApproval(log, frontierId);
+  if (rejectedFingerprints.size >= REJECTION_ESCALATION_LIMIT) {
+    const escalationProblem =
+      `candidate rejection escalation: ${rejectedFingerprints.size} distinct ` +
+      `rejected candidates on ${frontierId} with no intervening approval; ` +
+      REJECTION_ESCALATION_GUIDANCE;
+    const decision = resolveGateDecision(root, quest, {
+      status: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
+      code: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
+      problems: [escalationProblem],
+    }, {
+      log,
+      frontier: frontierId,
+      rungIndex: fState.rungIndex,
+    });
+    if (!decisionContinues(decision)) {
+      return {...gateDecisionToStepResult(decision), blocked: true};
+    }
+  }
   const health = analyzeQuestHealth(root, quest, {
     state,
     continuationOptions: {
@@ -128,6 +161,25 @@ export function runAttemptCommand(root, args) {
     changeInspection,
   );
   if (canonicalProblem) throw new Error(canonicalProblem);
+  // Machine-checkable quality findings never earn a verifier round: run the
+  // changed-path lint and literal-guideline checkers before this attempt
+  // seals its artifact.
+  const staticProblems = staticQualityProblems(
+    root, changeInspection.changedPaths);
+  if (staticProblems.length > 0) {
+    const decision = resolveGateDecision(root, quest, {
+      status: CONTINUATION_BLOCKED_STATIC_QUALITY,
+      code: CONTINUATION_BLOCKED_STATIC_QUALITY,
+      problems: staticProblems,
+    }, {
+      log,
+      frontier: frontierId,
+      rungIndex: fState.rungIndex,
+    });
+    if (!decisionContinues(decision)) {
+      return {...gateDecisionToStepResult(decision), blocked: true};
+    }
+  }
   const scopeAdmission = scopeTerminalStatus(analyzeScopePressureCandidate(
     root,
     quest,

@@ -236,12 +236,21 @@ tap.test('land rejects drift and records rejection without committing', (t) => {
     verdict: 'reject',
     fingerprint: `sha256:${'0'.repeat(64)}`,
   }), /does not match current candidate bytes/iu);
+  t.throws(() => landQuestWorkflow(root, {
+    id,
+    verifier: 'facade-reviewer',
+    verdict: 'reject',
+    fingerprint,
+    receipt: 'review:facade-rejection',
+  }), /a rejection requires/u,
+  'a rejection without a categorized finding list is refused');
   const rejected = landQuestWorkflow(root, {
     id,
     verifier: 'facade-reviewer',
     verdict: 'reject',
     fingerprint,
     receipt: 'review:facade-rejection',
+    finding: 'correctness: the rejected candidate omitted paired comparison',
   });
   t.equal(rejected.committed, false);
   t.equal(git(root, ['rev-parse', 'HEAD']), beforeHead);

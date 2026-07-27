@@ -18,6 +18,8 @@ const LOCAL_STR_OWNED_002 = 'quest statement changed after declaration';
 const LOCAL_STR_OWNED_003 = 'quest class changed after declaration';
 const LOCAL_STR_OWNED_004 = 'quest constraints changed after declaration';
 const LOCAL_STR_OWNED_005 = 'frontier identities changed after declaration';
+const LOCAL_STR_OWNED_006 =
+  'quest.verificationTemplates changed after declaration';
 
 export const METRIC_DIRECTION_LOWER_IS_BETTER = 'lower-is-better';
 
@@ -214,6 +216,15 @@ function goalpostViolationsAgainst(quest, declaredEvent) {
     if (JSON.stringify(frontierIds) !==
       JSON.stringify(declaredEvent.sealed.frontierIds || [])) {
       violations.push(LOCAL_STR_OWNED_005);
+    }
+    // Declarations sealed before the verification bar existed (undefined)
+    // are exempt; anything sealed since compares exactly, so the rejection
+    // bar cannot be widened by editing the quest file instead of the
+    // amendment path.
+    if (declaredEvent.sealed.verificationTemplates !== undefined &&
+      JSON.stringify(quest.verificationTemplates || []) !==
+        JSON.stringify(declaredEvent.sealed.verificationTemplates || [])) {
+      violations.push(LOCAL_STR_OWNED_006);
     }
   }
   return violations;

@@ -39,6 +39,16 @@ the first defect. One defect per round turned an 11-item checklist into 11
 full attempt-verify cycles on `comparative-efficiency-opportunity-calculator`
 (2026-07-27).
 
+**Sealed bars:** a quest may declare `verificationTemplates: [<category>, ...]`
+in its sealed declaration — that list becomes the rejection bar, bounding the
+NUMBER of rounds the way category-complete bounds each round's yield. Rejection
+findings are recorded per category (`--finding "<category>: <summary>"`); a
+category outside the bar passes once as `out-of-bar:<slug>`, and repeating it
+requires a `verification-bar-expansion` amendment. Category-complete rounds
+alone did not converge when the bar itself was open-ended (4 further rounds on
+`benchmark-statistical-capacity-protocol`, 2026-07-27, each surfacing new
+requirement categories).
+
 Design-time counterpart: [design-note-template.md](design-note-template.md)
 structures a Quest design note before the design-vet subagent runs, covering
 the four refutation categories that recurred on every rung of the S1–S6

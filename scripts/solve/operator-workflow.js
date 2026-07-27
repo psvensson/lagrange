@@ -20,6 +20,11 @@ import {
   VERIFICATION_SCOPE,
   verificationState,
 } from './verification.js';
+import {
+  parseRejectionFindings,
+  rejectionFindingBarProblem,
+  REJECTION_FINDING_USAGE,
+} from './rejection-findings.js';
 import {autoCommitQuest} from './handoff.js';
 import {auditQuest} from './audit.js';
 
@@ -27,6 +32,8 @@ const VERDICT_APPROVE = 'approve';
 const VERDICT_REJECT = 'reject';
 const VERIFIER_APPROVAL = 'verifier-approval';
 const VERIFIER_REJECTION = 'verifier-rejection';
+const REJECTED_CLAIM_PREFIX = 'independent landing verification rejected';
+const REJECTION_FINDING_SEPARATOR = '; ';
 
 function requireId(args, command) {
   const id = args.id || args._?.[0];
@@ -231,6 +238,20 @@ export function landQuestWorkflow(root, args = {}) {
   if (verdict === VERDICT_APPROVE) {
     assertApprovalCanCompleteAudit(root, quest, state);
   }
+  // The durable claim must carry the verifier's category-complete finding
+  // list, never only a receipt pointer: the amendment excerpt rule,
+  // `theory option --from-rejection`, and any later post-mortem all read this
+  // event, and a pointer satisfies them mechanically with zero content.
+  const rejectionFindings = verdict === VERDICT_REJECT ?
+    parseRejectionFindings(args.finding) : [];
+  if (verdict === VERDICT_REJECT) {
+    if (rejectionFindings.length === 0) {
+      throw new Error(
+        `land: a rejection requires ${REJECTION_FINDING_USAGE}`);
+    }
+    const barProblem = rejectionFindingBarProblem(quest, log, rejectionFindings);
+    if (barProblem) throw new Error(`land: ${barProblem}`);
+  }
   const verification = buildVerificationFinding({
     kind,
     evidence,
@@ -238,12 +259,17 @@ export function landQuestWorkflow(root, args = {}) {
     verificationFingerprint: fingerprint,
     verificationReceipt: receipt,
     verificationSchemaVersion: VERIFICATION_CONTRACT_VERSION,
+    rejectionFindings,
   });
   appendFinding(root, id, {
     frontier,
     claim: verdict === VERDICT_APPROVE ?
       `independent landing verification passed${receiptRef ? ` (${receiptRef})` : ''}` :
-      `independent landing verification rejected${receiptRef ? ` (${receiptRef})` : ''}`,
+      REJECTED_CLAIM_PREFIX +
+        `${receiptRef ? ` (${receiptRef})` : ''}: ` +
+        rejectionFindings.map(
+          (finding) => `${finding.category}: ${finding.summary}`)
+          .join(REJECTION_FINDING_SEPARATOR),
     kind,
     evidence,
     verification,

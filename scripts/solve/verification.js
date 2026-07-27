@@ -6,7 +6,11 @@
 import crypto from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 
-import {EVENT_ATTEMPT, EVENT_FINDING} from './constants.js';
+import {
+  EVENT_ATTEMPT,
+  EVENT_FINDING,
+  EVENT_REJECTION_DECOMPOSITION,
+} from './constants.js';
 import {
   changeArtifactIdentity,
   changeArtifactIdentityMatches,
@@ -41,7 +45,8 @@ const GIT_STATUS_UNAVAILABLE = Symbol('git_status_unavailable');
 export const LEGACY_VERIFICATION_CONTRACT_VERSION = 1;
 export const VERIFICATION_CONTRACT_VERSION = 2;
 export const VERIFIER_APPROVAL_FINDING_KIND = LOCAL_STR_OWNED_001;
-const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
+const LOCAL_STR_OWNED_020 = 'verifier-rejection';
+export const VERIFIER_REJECTION_FINDING_KIND = LOCAL_STR_OWNED_020;
 const VERIFICATION_VERDICT_REJECTED = 'rejected';
 export const VERIFICATION_SCOPE = Object.freeze({
   ATTEMPT: LOCAL_STR_OWNED_002,
@@ -51,6 +56,13 @@ export const VERIFICATION_SCOPE = Object.freeze({
 });
 
 const HASH_ALGORITHM = 'sha256';
+// Same floor as the amendment excerpt rule, for the same reason: below it a
+// "summary" is a token that satisfies the schema while carrying nothing.
+const MIN_REJECTION_SUMMARY_LENGTH = 12;
+const REJECTION_FINDINGS_REQUIRED_PROBLEM =
+  'verifier-rejection requires at least one categorized finding ' +
+  '({category, summary}); record the category-complete finding list, ' +
+  'never a bare receipt pointer';
 const FINGERPRINT_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const GIT_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
@@ -524,7 +536,7 @@ function findUncheckpointedApprovedAttempts(root, quest, log, state) {
   return candidates.filter((attempt) => !supersededIndexes.has(attempt.index));
 }
 
-function candidateReceiptOf(event) {
+export function candidateReceiptOf(event) {
   const verification = verificationOf(event);
   if (event.type !== EVENT_FINDING ||
     verification?.schemaVersion !== VERIFICATION_CONTRACT_VERSION ||
@@ -645,7 +657,7 @@ function candidateVerificationState(root, log, candidate) {
   let unresolvedRejection = null;
   const problems = [];
   if (rejection) {
-    const problem = candidateRejectionProblem(root, candidate, rejection);
+    const problem = candidateRejectionProblem(root, candidate, rejection, log);
     if (problem) {
       unresolvedRejection = rejection;
       problems.push(problem);
@@ -654,14 +666,47 @@ function candidateVerificationState(root, log, candidate) {
   return {approval, rejection, unresolvedRejection, problems};
 }
 
+// Paths of a standing candidate rejection already discharged by recorded
+// decomposition coverage: typed append-only events, each naming the exact
+// rejected fingerprint it discharges and the approval receipt that covered a
+// subset of its paths. Coverage is re-validated live, exactly like approvals:
+// an event contributes only while the recorded approval fingerprint still
+// reproduces from current bytes over its full contribution path set, so bytes
+// drifting after a decomposition was recorded re-open the obligation instead
+// of leaving drifted content discharged unreviewed. Events missing the
+// contribution receipt fields are ignored (fail-closed); events for other
+// fingerprints never contribute.
+export function rejectionDecompositionCoverage(root, log, rejection) {
+  const covered = new Set();
+  for (const event of log) {
+    if (event.type !== EVENT_REJECTION_DECOMPOSITION ||
+      event.rejectedFingerprint !== rejection.receipt.fingerprint ||
+      !Array.isArray(event.coveredPaths) ||
+      !Array.isArray(event.contributionPaths) ||
+      !validVerificationFingerprint(event.approvalFingerprint)) continue;
+    const live = canonicalSourceDelta(
+      root, event.approvalBaseCommit, event.contributionPaths);
+    if (!live.ok || live.fingerprint !== event.approvalFingerprint) continue;
+    for (const filePath of event.coveredPaths) covered.add(filePath);
+  }
+  return covered;
+}
+
 // Same-base is the strict rule; when the rejected receipt's base no longer
 // resolves, the equality is unsatisfiable by construction, so the same
 // invariant is enforced at a reachable base instead: a later, different
 // candidate covering every rejected path — which still needs its own exact
 // approval before anything lands. Nothing is waived; the review moves to
-// current bytes. Returns null when the rejection is resolved.
-function candidateRejectionProblem(root, candidate, rejection) {
-  const rejectedPaths = new Set(rejection.receipt.paths);
+// current bytes. Recorded decomposition coverage shrinks the obligation
+// path-by-path, so a rejection can also be discharged by bounded pieces
+// (including a successor quest's approved candidate) instead of one
+// ever-growing superset replacement. Returns null when the rejection is
+// resolved.
+function candidateRejectionProblem(root, candidate, rejection, log = []) {
+  const covered = rejectionDecompositionCoverage(root, log, rejection);
+  const remainingPaths = rejection.receipt.paths.filter(
+    (filePath) => !covered.has(filePath));
+  if (remainingPaths.length === 0) return null;
   const replacementPaths = new Set(candidate.paths || []);
   const rejectedBaseDead = baseRecordedButUnreachable(
     root, rejection.receipt.baseCommit);
@@ -671,15 +716,18 @@ function candidateRejectionProblem(root, candidate, rejection) {
   const replaced = baseAcceptable &&
     candidate.fingerprint !== rejection.receipt.fingerprint &&
     candidate.lastAttemptIndex > rejection.receipt.lastAttemptIndex &&
-    [...rejectedPaths].every((filePath) => replacementPaths.has(filePath));
+    remainingPaths.every((filePath) => replacementPaths.has(filePath));
   if (replaced) return null;
+  const remainingDetail = covered.size > 0 ?
+    ` covering the remaining rejected paths: ${remainingPaths.join(', ')}` :
+    '';
   return {
     message: rejectedBaseDead ?
       `landing candidate rejection anchored at a ${BASE_UNREACHABLE_CODE} ` +
         'base requires a later changed-fingerprint path-superset candidate ' +
-        'at a reachable base' :
+        `at a reachable base${remainingDetail}` :
       'landing candidate rejection requires a later same-base, ' +
-        'changed-fingerprint path-superset candidate',
+        `changed-fingerprint path-superset candidate${remainingDetail}`,
     ts: rejection.event.ts || null,
     frontier: rejection.event.frontier || null,
   };
@@ -972,6 +1020,24 @@ export function buildVerificationFinding(args) {
       `${label} requires --verification-fingerprint sha256:<64 hex>`,
     );
   }
+  // A rejection without categorized findings is a pointer, not evidence: the
+  // reasons live only in the verifier session that produced them, so the
+  // durable log cannot support amendments, --from-rejection theories, or any
+  // later post-mortem. Category-complete content is required at record time.
+  let rejectionFindings = null;
+  if (isRejection) {
+    const findings = Array.isArray(args.rejectionFindings) ?
+      args.rejectionFindings : [];
+    const wellFormed = findings.length > 0 && findings.every((finding) =>
+      finding && typeof finding.category === 'string' && finding.category &&
+      typeof finding.summary === 'string' &&
+      finding.summary.length >= MIN_REJECTION_SUMMARY_LENGTH);
+    if (!wellFormed) {
+      throw new Error(REJECTION_FINDINGS_REQUIRED_PROBLEM);
+    }
+    rejectionFindings = findings.map(
+      ({category, summary}) => ({category, summary}));
+  }
   const schemaVersion = args.verificationSchemaVersion ||
     (scope === VERIFICATION_SCOPE.CANDIDATE ?
       VERIFICATION_CONTRACT_VERSION : LEGACY_VERIFICATION_CONTRACT_VERSION);
@@ -992,6 +1058,9 @@ export function buildVerificationFinding(args) {
       firstAttemptIndex: receipt.firstAttemptIndex,
       lastAttemptIndex: receipt.lastAttemptIndex,
     } : {}),
-    ...(isRejection ? {verdict: VERIFICATION_VERDICT_REJECTED} : {}),
+    ...(isRejection ? {
+      verdict: VERIFICATION_VERDICT_REJECTED,
+      findings: rejectionFindings,
+    } : {}),
   };
 }

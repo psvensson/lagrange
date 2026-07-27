@@ -321,13 +321,23 @@ tap.test('solve CLI smoke (P2)', async (t) => {
       'finding', '--id', 'demo', '--frontier', 'demo-main',
       '--kind', 'verifier-rejection', '--claim', 'rejected',
       '--evidence', 'subagent:verify-2',
+      '--finding', 'correctness: paired values were not compared before publication',
       '--verification-scope', 'aggregate',
       '--verification-fingerprint', fingerprint,
     ]), /verification-scope attempt/u);
+    t.throws(() => run(root, [
+      'finding', '--id', 'demo', '--frontier', 'demo-main',
+      '--kind', 'verifier-rejection', '--claim', 'rejected',
+      '--evidence', 'subagent:verify-2',
+      '--verification-scope', 'attempt',
+      '--verification-fingerprint', fingerprint,
+    ]), /verifier-rejection requires/u,
+    'a rejection without a categorized finding list is refused');
     run(root, [
       'finding', '--id', 'demo', '--frontier', 'demo-main',
       '--kind', 'verifier-rejection', '--claim', 'rejected',
       '--evidence', 'subagent:verify-2',
+      '--finding', 'correctness: paired values were not compared before publication',
       '--verification-scope', 'attempt',
       '--verification-fingerprint', fingerprint,
     ]);
@@ -339,6 +349,10 @@ tap.test('solve CLI smoke (P2)', async (t) => {
       scope: 'attempt',
       fingerprint,
       verdict: 'rejected',
+      findings: [{
+        category: 'correctness',
+        summary: 'paired values were not compared before publication',
+      }],
     });
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

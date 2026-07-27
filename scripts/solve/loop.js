@@ -115,6 +115,7 @@ import {
   altitudeReflectionPrompt,
 } from './reflection.js';
 import {
+  CONTINUATION_BLOCKED_REJECTION_ESCALATION,
   CONTINUATION_BLOCKED_THEORY,
   continuationIsAllowed,
   unrecordedEvidenceContinuation,
@@ -124,7 +125,12 @@ import {
   theoryGateContinuation,
   theoryGateProblemAuthorizationKey,
   decisionContinues,
+  candidateRejectionFingerprintsSinceApproval,
 } from './gate.js';
+import {
+  REJECTION_ESCALATION_GUIDANCE,
+  REJECTION_ESCALATION_LIMIT,
+} from './constants.js';
 import {
   metricKindFromProbeSpec,
   probeSpecFromIdentity,
@@ -162,6 +168,10 @@ function sealGoal(quest) {
       title: quest.title || null,
       class: quest.class,
       constraints: quest.constraints || [],
+      // The sealed verification bar: rejection categories are enforced
+      // against the declaration event, so the bar must be captured here or
+      // it silently no-ops for every declared quest.
+      verificationTemplates: quest.verificationTemplates || [],
       frontierIds: quest.frontiers.map((frontier) => frontier.id),
     });
   }
@@ -300,6 +310,33 @@ function applyAttempt(root, quest, ctx, pick, before) {
         evidence: null,
         frontier: pick.def.id,
         problems: readinessProblems,
+        disposition: decision.disposition,
+        nextCommand: decision.nextCommand,
+      };
+    }
+  }
+  // Same escalation admission as the supervised paths (attempt.js, step.js):
+  // after REJECTION_ESCALATION_LIMIT distinct rejected candidates with no
+  // intervening approval, the loop stops iterating and reports the reframe
+  // move instead of burning executor cycles under an unsealed bar.
+  const rejectedFingerprints =
+    candidateRejectionFingerprintsSinceApproval(log, pick.def.id);
+  if (rejectedFingerprints.size >= REJECTION_ESCALATION_LIMIT) {
+    const escalationProblem =
+      `candidate rejection escalation: ${rejectedFingerprints.size} distinct ` +
+      `rejected candidates on ${pick.def.id} with no intervening approval; ` +
+      REJECTION_ESCALATION_GUIDANCE;
+    const decision = resolveGateDecision(root, quest, {
+      status: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
+      code: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
+      problems: [escalationProblem],
+    }, {log, frontier: pick.def.id, rungIndex});
+    if (!decisionContinues(decision)) {
+      return {
+        terminal: decision.outcome,
+        evidence: null,
+        frontier: pick.def.id,
+        problems: [escalationProblem],
         disposition: decision.disposition,
         nextCommand: decision.nextCommand,
       };

@@ -24,6 +24,8 @@ import {engagementWitnessAdvisory} from './engagement-witness.js';
 import {detectUnrecordedEvidence} from './evidence-detection.js';
 import {ingestEvidence} from './evidence.js';
 import {
+  REJECTION_ESCALATION_GUIDANCE,
+  REJECTION_ESCALATION_LIMIT,
   SOLVE_DATA_DIR,
   STATE_SUBDIR,
   STATUS_SOLVED,
@@ -46,9 +48,13 @@ import {
   gateDecisionToStepResult,
   theoryGateContinuation,
   decisionContinues,
+  candidateRejectionFingerprintsSinceApproval,
 } from './gate.js';
+import {staticQualityProblems} from './static-gate.js';
 import {
+  CONTINUATION_BLOCKED_REJECTION_ESCALATION,
   CONTINUATION_BLOCKED_SCOPE,
+  CONTINUATION_BLOCKED_STATIC_QUALITY,
   unrecordedEvidenceContinuation,
 } from './continuation.js';
 import {
@@ -58,6 +64,7 @@ import {
 } from './verification.js';
 import {canonicalSourceArtifactProblem} from './canonical-source-artifact.js';
 
+const STATIC_PROBLEM_SEPARATOR = '\n';
 const AUTO_DIFF_ARTIFACT_PREFIX = 'attempt-';
 const AUTO_DIFF_ARTIFACT_EXTENSION = '.diff';
 const AUTO_DIFF_ARTIFACT_PATTERN = /^attempt-(\d+)\.diff(?:\.json)?$/u;
@@ -499,6 +506,44 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
       rungIndex: pending.rungIndex,
     });
     if (!decisionContinues(decision)) throw new Error(scopeProblem);
+  }
+  // Same admission pair as the attempt wrapper (see attempt.js): repeated
+  // failed rejection rounds gate toward reframing, and machine-checkable
+  // lint/guideline findings never earn a verifier round. Both are
+  // recorded-reason overridable.
+  const rejectedFingerprints =
+    candidateRejectionFingerprintsSinceApproval(log, pending.frontier);
+  if (rejectedFingerprints.size >= REJECTION_ESCALATION_LIMIT) {
+    const escalationProblem =
+      `candidate rejection escalation: ${rejectedFingerprints.size} distinct ` +
+      `rejected candidates on ${pending.frontier} with no intervening approval; ` +
+      REJECTION_ESCALATION_GUIDANCE;
+    const decision = resolveGateDecision(root, quest, {
+      status: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
+      code: CONTINUATION_BLOCKED_REJECTION_ESCALATION,
+      problems: [escalationProblem],
+    }, {
+      log,
+      frontier: pending.frontier,
+      rungIndex: pending.rungIndex,
+    });
+    if (!decisionContinues(decision)) throw new Error(escalationProblem);
+  }
+  const staticProblems = staticQualityProblems(
+    root, changeInspection.changedPaths);
+  if (staticProblems.length > 0) {
+    const decision = resolveGateDecision(root, quest, {
+      status: CONTINUATION_BLOCKED_STATIC_QUALITY,
+      code: CONTINUATION_BLOCKED_STATIC_QUALITY,
+      problems: staticProblems,
+    }, {
+      log,
+      frontier: pending.frontier,
+      rungIndex: pending.rungIndex,
+    });
+    if (!decisionContinues(decision)) {
+      throw new Error(staticProblems.join(STATIC_PROBLEM_SEPARATOR));
+    }
   }
   const state = projectState(quest, log);
   const def = quest.frontiers.find((frontier) => frontier.id === pending.frontier);

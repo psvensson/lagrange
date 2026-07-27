@@ -7,6 +7,7 @@ import path from 'node:path';
 
 import {loadQuest} from './store.js';
 import {questClass} from './closure-kind.js';
+import {loadTemplateCategories} from './verification-template-suggest.js';
 import {
   QUEST_CLASSES,
   QUEST_CLASS_PRODUCT,
@@ -30,6 +31,11 @@ const LOCAL_STR_OWNED_013 = 'fail';
 const LOCAL_STR_OWNED_014 = '; ';
 const LOCAL_STR_OWNED_015 = '.json';
 const LOCAL_STR_OWNED_016 = '\n';
+const LOCAL_STR_OWNED_017 =
+  'verificationTemplates must be an array of non-empty category slugs';
+const LOCAL_STR_OWNED_018 = 'verificationTemplates must not contain duplicates';
+const LOCAL_STR_OWNED_019 =
+  '(no docs/steering/verification-templates entry declares it)';
 
 export const QUEST_AUTHORING_CONTRACT_VERSION = 1;
 
@@ -100,7 +106,31 @@ function pushFrontierErrors(quest, errors) {
   }
 }
 
-function authoringErrors(quest) {
+// Optional sealed verification bar. Structural rules always apply; the
+// name-exists check needs a repository root to read the template catalog, so
+// it runs only when the caller supplies one (pure lintQuest calls skip it).
+function pushVerificationTemplateErrors(quest, errors, options) {
+  const templates = quest.verificationTemplates;
+  if (templates === undefined || templates === null) return;
+  if (!Array.isArray(templates) ||
+    templates.some((entry) => typeof entry !== 'string' || !entry.trim())) {
+    errors.push(LOCAL_STR_OWNED_017);
+    return;
+  }
+  if (new Set(templates).size !== templates.length) {
+    errors.push(LOCAL_STR_OWNED_018);
+  }
+  if (!options?.root) return;
+  const known = loadTemplateCategories(options.root);
+  for (const template of templates) {
+    if (!known.has(template)) {
+      errors.push(`verificationTemplates names unknown category "${template}" ` +
+        LOCAL_STR_OWNED_019);
+    }
+  }
+}
+
+function authoringErrors(quest, options) {
   const errors = [];
   if (quest.authoringContractVersion !== QUEST_AUTHORING_CONTRACT_VERSION) {
     errors.push(
@@ -120,6 +150,7 @@ function authoringErrors(quest) {
       `${TITLE_CHARACTER_LIMIT} characters (it becomes the terminal commit subject)`);
   }
   pushConstraintErrors(quest, errors);
+  pushVerificationTemplateErrors(quest, errors, options);
   if (!validProbe(quest.doneWhen)) {
     errors.push(LOCAL_STR_OWNED_005);
   }
@@ -154,10 +185,10 @@ function authoringWarnings(quest) {
   return warnings;
 }
 
-export function lintQuest(quest) {
+export function lintQuest(quest, options = {}) {
   const version = quest?.authoringContractVersion;
   const legacy = version === undefined;
-  const errors = legacy ? [] : authoringErrors(quest);
+  const errors = legacy ? [] : authoringErrors(quest, options);
   const warnings = authoringWarnings(quest);
   return {
     questId: quest?.id || null,
@@ -188,7 +219,8 @@ function questIds(root) {
 
 export function lintQuestCorpus(root, options = {}) {
   const ids = options.all ? questIds(root) : [options.id];
-  const quests = ids.filter(Boolean).map((id) => lintQuest(loadQuest(root, id)));
+  const quests = ids.filter(Boolean)
+    .map((id) => lintQuest(loadQuest(root, id), {root}));
   return {
     status: quests.every((item) => item.status === LOCAL_STR_OWNED_012) ?
       LOCAL_STR_OWNED_012 : LOCAL_STR_OWNED_013,

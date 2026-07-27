@@ -711,16 +711,29 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       verificationScope: 'attempt',
       verificationFingerprint: fingerprint,
     }), /non-empty-stable-id/u);
+    t.throws(() => buildVerificationFinding({
+      kind: 'verifier-rejection',
+      evidence: 'subagent:rejector',
+      verificationScope: 'attempt',
+      verificationFingerprint: fingerprint,
+    }), /categorized finding/u,
+    'a rejection without its category-complete finding list is refused');
     t.same(buildVerificationFinding({
       kind: 'verifier-rejection',
       evidence: 'subagent:rejector',
       verificationScope: 'attempt',
       verificationFingerprint: fingerprint,
+      rejectionFindings: [
+        {category: 'correctness', summary: 'totals collapsed under pollution'},
+      ],
     }), {
       schemaVersion: 1,
       scope: 'attempt',
       fingerprint,
       verdict: 'rejected',
+      findings: [
+        {category: 'correctness', summary: 'totals collapsed under pollution'},
+      ],
     });
     t.end();
   });

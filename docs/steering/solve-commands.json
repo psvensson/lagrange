@@ -9,8 +9,12 @@
     "usage": "node scripts/solve.js continue --id <id> [--changeRef diff:<path> | --auto-diff] [--summary \"<what changed>\"] [--json]"
   },
   "land": {
-    "summary": "Validate an independent verifier verdict against the exact current terminal candidate, record its structured receipt, and on approval perform the existing audit-gated scope-safe commit. Rejection never commits; no path pushes.",
-    "usage": "node scripts/solve.js land --id <id> --verifier <stable-id> --verdict approve|reject --fingerprint sha256:<64hex> --receipt <ref> [--json] (omit verifier flags when the candidate has no source changes)"
+    "summary": "Validate an independent verifier verdict against the exact current terminal candidate, record its structured receipt, and on approval perform the existing audit-gated scope-safe commit. Rejection never commits, and requires the category-complete finding list via repeatable --finding \"<category>: <summary>\" flags; no path pushes.",
+    "usage": "node scripts/solve.js land --id <id> --verifier <stable-id> --verdict approve|reject --fingerprint sha256:<64hex> --receipt <ref> [--finding \"<category>: <summary>\" ...] [--json] (omit verifier flags when the candidate has no source changes)"
+  },
+  "decompose-rejection": {
+    "summary": "Discharge a slice of a standing candidate rejection with fresh independently approved coverage: the current quest's exactly approved candidate, or a successor quest's candidate receipt that still matches current bytes at an acceptable base. Records an append-only rejection-decomposition event; the standing obligation shrinks to the uncovered remainder, so split scope stays dischargeable.",
+    "usage": "node scripts/solve.js decompose-rejection --id <id> [--from-quest <successorId>]"
   },
   "new": {
     "summary": "Create a versioned Quest draft under solve/quests/<id>.json. Drafting is not sealing: the first execution command lints and declares it. Link flags author the planning graph without hand-editing JSON; --force is refused once append-only history exists.",

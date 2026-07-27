@@ -15,9 +15,11 @@
 
 import {
   EVENT_ATTEMPT,
+  EVENT_FINDING,
   EVENT_NON_MEASUREMENT,
   EVENT_GATE_DECISION,
   EVENT_GUARD_OVERRIDE,
+  EVENT_REJECTION_DECOMPOSITION,
   EXPLORE_BUDGET,
   GUARD_QUORUM,
   OUTCOME_THEORY_REQUIRED,
@@ -197,6 +199,47 @@ function softAdvisoryRecordedThisCycle(log, frontierId, code) {
 // caller that turns a decision into a stop must first check this so an advisory continues.
 export function decisionContinues(decision) {
   return !decision || decision.disposition === DISPOSITION_ADVISORY;
+}
+
+// Local copies of the verifier finding vocabulary (same pattern as amend.js):
+// importing verification.js here only for two strings would couple the generic
+// gate layer to the verification module graph.
+const VERIFIER_APPROVAL_KIND = 'verifier-approval';
+const VERIFIER_REJECTION_KIND = 'verifier-rejection';
+const CANDIDATE_VERIFICATION_SCOPES = Object.freeze(['candidate', 'both']);
+
+// Distinct rejected candidate fingerprints on `frontierId` since the last
+// successful round. ANY structured verifier approval resets it — an exact
+// attempt approval of a superset replacement (the documented discharge flow),
+// a candidate approval, a landing's aggregate approval — as does a fully
+// discharging rejection-decomposition event (remainingPaths empty). The
+// counter measures consecutive failed review rounds, not lifetime
+// rejections, and every documented discharge mechanism must be able to
+// unblock it. The decomposition reset trusts the recorded event rather than
+// re-validating coverage bytes live: this counter is a heuristic pacing
+// guard (overridable), and the fail-closed re-validation lives in the
+// verification projection that actually gates checkpoints and landing.
+export function candidateRejectionFingerprintsSinceApproval(log, frontierId) {
+  const fingerprints = new Set();
+  for (const event of log) {
+    if (event.frontier !== frontierId) continue;
+    if (event.type === EVENT_REJECTION_DECOMPOSITION &&
+      Array.isArray(event.remainingPaths) &&
+      event.remainingPaths.length === 0) {
+      fingerprints.clear();
+      continue;
+    }
+    if (event.type !== EVENT_FINDING) continue;
+    const verification = event.verification;
+    if (!verification) continue;
+    if (event.kind === VERIFIER_APPROVAL_KIND) fingerprints.clear();
+    if (event.kind === VERIFIER_REJECTION_KIND &&
+      CANDIDATE_VERIFICATION_SCOPES.includes(verification.scope) &&
+      verification.fingerprint) {
+      fingerprints.add(verification.fingerprint);
+    }
+  }
+  return fingerprints;
 }
 
 // Terminal owners must honor the exact admission decision that authorized the

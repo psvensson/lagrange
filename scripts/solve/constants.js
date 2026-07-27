@@ -60,6 +60,28 @@ export const EVENT_GUARD_OVERRIDE = 'guard-override';
 // is periodically forced to re-examine its approach instead of grinding one rung. Recorded
 // append-only; it carries the trigger (cadence/oscillation/scope-pressure) and the note.
 export const EVENT_REFLECTION = 'reflection';
+// A standing candidate rejection discharged in bounded pieces: each event
+// records fresh independent approval coverage (same-quest candidate or a
+// successor quest's candidate receipt) over a subset of the rejected paths, so
+// splitting scope no longer makes a rejection impossible to discharge.
+// Append-only; the rejection stays reported until the union of recorded
+// coverage plus the current candidate reaches every rejected path.
+export const EVENT_REJECTION_DECOMPOSITION = 'rejection-decomposition';
+// After this many distinct rejected candidate fingerprints on one frontier
+// with no intervening approval, further attempts are gated: reframe
+// (successor quest / decomposition) instead of iterating under an unsealed
+// bar. Measured 2026-07-27: one quest burned 14 rejection rounds where its
+// successor with a sealed bar landed in 2 attempts. Three, not two: a
+// two-round window also caught legitimate flows (a procedural wrong-base
+// reassert plus one substantive rejection reaches two immediately — see the
+// scale-certification-receipt-freshness history), while the doom-loop
+// pathology this bounds ran to 14. The guidance text is shared by every
+// attempt-sealing path (attempt wrapper, supervised step, autonomous loop)
+// so the recorded gate decisions stay identical.
+export const REJECTION_ESCALATION_LIMIT = 3;
+export const REJECTION_ESCALATION_GUIDANCE =
+  'decompose the standing rejection or author a successor quest with a ' +
+  'sealed verification bar before further attempts';
 
 // Terminal-integrity event vocabulary. These values cross the event-store and
 // closure-gate boundary, so the shared constants owner defines them.

@@ -712,27 +712,66 @@ attack checklist under
 include every applicable suggested template in the verifier's initial prompt.
 
 When the independent verifier rejects a version 2 candidate, record that verdict
-instead of fabricating an approval:
+instead of fabricating an approval — and record it with its category-complete
+finding list. A pointer-only claim (`rejected (subagent:<id>)`) satisfies every
+downstream consumer mechanically while carrying zero durable content; the
+recording commands refuse it:
 
 ```sh
 node scripts/solve.js finding --id <quest> --frontier <frontier> \
   --kind verifier-rejection \
   --claim "Independent verification rejected this exact candidate" \
+  --finding "adversarial-js-intrinsics: inherited toJSON changed the canonical digest" \
+  --finding "correctness: paired result values were never compared" \
   --evidence subagent:<id> \
   --verification-scope candidate \
   --verification-fingerprint sha256:<candidate-fingerprint>
 ```
 
+(`solve land --verdict reject` takes the same repeatable `--finding` flag.)
+Each entry is `<category>: <summary>`; categories are kebab-case slugs,
+normally verification-template categories. When the quest declaration seals a
+`verificationTemplates` array, those categories are the rejection bar: a
+category outside the bar is accepted once as `out-of-bar:<slug>` (a real
+defect is never waived), and repeating it requires widening the sealed bar
+first with `solve amend --kind verification-bar-expansion --template <slug>
+--evidence <verifier reference>`. Requirements discovered at verification time
+move into the declaration instead of extending an unbounded rejection
+sequence.
+
 A rejection is fail-closed and cannot be reversed by approving the rejected
-bytes later. It is resolved only when a later source attempt produces a
+bytes later. It is resolved when a later source attempt produces a
 same-base, different-fingerprint candidate whose paths are a superset of the
-rejected union. Recording a
+rejected union — or, path-by-path, through recorded decomposition: `solve
+decompose-rejection --id <quest> [--from-quest <successorId>]` records an
+append-only `rejection-decomposition` event when an exactly approved candidate
+(this quest's current one, or a successor quest's receipt that still matches
+current bytes at an acceptable base) covers a subset of the rejected paths.
+The standing obligation shrinks to the uncovered remainder, so splitting an
+oversized rejected candidate into bounded quests no longer makes its rejection
+impossible to discharge (the collision that previously forced scope-gate
+overrides). Recording a
 structured rejection reopens a terminal Quest and its solved frontier so the
-replacement step rendered by `next` is executable. Until replacement,
+replacement step rendered by `next` is executable. Until replacement or full
+recorded coverage,
 checkpoint and terminal handoff remain blocked; `next` asks for the replacement
 attempt or its fingerprint, never for dishonest approval of the rejected one.
 Aggregate verification still covers the final source delta across the complete
 attempt path union.
+
+After three distinct rejected candidates on one frontier with no intervening
+approval (or full decomposition discharge), every attempt-sealing path —
+`solve attempt`, `step --commit`, and the autonomous loop — gates further
+attempts (recorded-reason override available): iterate no further under an
+unsealed bar — decompose the standing rejection or author a successor quest
+that seals `verificationTemplates` (measured 2026-07-27: a quest burned 14
+rejection rounds where its sealed-bar successor landed in 2 attempts). The
+supervised sealing paths also run a changed-path static gate (ESLint plus the
+literal-guideline audit) before sealing, so machine-checkable violations
+never spend a verifier round. Out-of-bar markers are append-only evidence,
+not a loophole: each distinct slug passes once, every use is durably
+recorded, and a repeat needs the bar-expansion amendment — which requires the
+category to be a catalogued verification template.
 
 An attempt whose recorded `workspaceBaseCommit` is a well-formed commit id that
 no longer resolves — an unpushed local commit discarded with its working copy —

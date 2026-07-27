@@ -31,10 +31,21 @@ export const EVENT_QUEST_AMENDED = 'quest-amended';
 export const AMENDMENT_KIND_CLASS = 'class-correction';
 export const AMENDMENT_KIND_ORACLE_COMMAND = 'oracle-command-correction';
 export const AMENDMENT_KIND_STATEMENT = 'statement-strengthen';
+// Widens the sealed verification bar by one template category after a
+// verifier surfaced a genuinely new attack category (recorded once as an
+// out-of-bar rejection finding). Requirements discovered at verification time
+// land in the declaration this way instead of extending an unbounded
+// rejection sequence.
+const LOCAL_STR_OWNED_001 = 'verification-bar-expansion';
+const BAR_EXPANSION_TEMPLATE_USAGE =
+  'amend: verification-bar-expansion requires --template ' +
+  '<kebab-case-category>';
+export const AMENDMENT_KIND_BAR_EXPANSION = LOCAL_STR_OWNED_001;
 export const AMENDMENT_KINDS = Object.freeze([
   AMENDMENT_KIND_CLASS,
   AMENDMENT_KIND_ORACLE_COMMAND,
   AMENDMENT_KIND_STATEMENT,
+  AMENDMENT_KIND_BAR_EXPANSION,
 ]);
 // The 3rd correction is not a correction — it is drift. The successor path
 // (park + `solve new --from`) stays the answer, same shape as the
@@ -64,6 +75,12 @@ export function applyAmendments(sealed, amendments) {
         args: amendment.doneWhenArgs,
       };
     }
+    if (amendment.amendmentKind === AMENDMENT_KIND_BAR_EXPANSION) {
+      effective.verificationTemplates = [
+        ...(effective.verificationTemplates || []),
+        amendment.template,
+      ];
+    }
   }
   return effective;
 }
@@ -87,7 +104,7 @@ function verifierFindingReferenced(log, reference) {
         String(event.claim || '').includes(needle))));
 }
 
-function amendedQuestFile(quest, amendment) {
+function amendedQuestFile(quest, amendment, effective) {
   const next = {...quest};
   if (amendment.amendmentKind === AMENDMENT_KIND_CLASS) {
     next.class = amendment.class;
@@ -97,6 +114,14 @@ function amendedQuestFile(quest, amendment) {
   }
   if (amendment.amendmentKind === AMENDMENT_KIND_ORACLE_COMMAND) {
     next.doneWhen = {...next.doneWhen, args: amendment.doneWhenArgs};
+  }
+  if (amendment.amendmentKind === AMENDMENT_KIND_BAR_EXPANSION) {
+    // Rebuild from the sealed-effective list, never the file's own: a file
+    // that drifted from the declaration must not compound through amendment.
+    next.verificationTemplates = [
+      ...(effective.verificationTemplates || []),
+      amendment.template,
+    ];
   }
   return next;
 }
@@ -143,6 +168,19 @@ function buildAmendment(effective, args) {
     return {amendmentKind: kind, doneWhenArgs,
       prior: {doneWhenArgs: effective.doneWhen?.args || null}};
   }
+  if (kind === AMENDMENT_KIND_BAR_EXPANSION) {
+    const template = String(args.template || '').trim();
+    if (!/^[a-z0-9][a-z0-9-]*$/u.test(template)) {
+      throw new Error(BAR_EXPANSION_TEMPLATE_USAGE);
+    }
+    const current = effective.verificationTemplates || [];
+    if (current.includes(template)) {
+      throw new Error(
+        `amend: template "${template}" is already in the sealed bar`);
+    }
+    return {amendmentKind: kind, template,
+      prior: {verificationTemplates: current}};
+  }
   throw new Error(`amend: --kind must be one of ${AMENDMENT_KINDS.join('|')}`);
 }
 
@@ -181,8 +219,8 @@ export function runAmendCommand(root, args) {
       'recorded verifier-rejection finding (its ts, its evidence ref, or a ' +
       `claim excerpt of at least ${MIN_CLAIM_EXCERPT_LENGTH} characters)`);
   }
-  const nextQuest = amendedQuestFile(quest, amendment);
-  const lint = lintQuest(nextQuest);
+  const nextQuest = amendedQuestFile(quest, amendment, effective);
+  const lint = lintQuest(nextQuest, {root});
   if (lint.errors.length > 0) {
     throw new Error(
       'amend: refused — the amended quest fails authoring lint: ' +
