@@ -1,0 +1,27 @@
+export const BENCHMARK_RESOURCE_P0_PRICE_SHEET = Object.freeze({
+  priceSheetId: 'p0-normalized-infrastructure-price-sheet-v1',
+  region: 'local-p0-normalized',
+  currency: 'USD',
+  priceDate: '2026-07-27',
+  validFrom: '2026-07-27T00:00:00.000Z',
+  validUntil: '2027-01-01T00:00:00.000Z',
+  billingGranularity: 'per_second',
+  reservationPolicy: 'on_demand_equivalent',
+  spotPolicy: 'excluded',
+  taxPolicy: 'excluded',
+  creditPolicy: 'excluded',
+  exclusions: Object.freeze([
+    'tax',
+    'credits',
+    'spot_discount',
+    'operator_labor',
+  ]),
+  unitPrices: Object.freeze({
+    cpuCoreSecond: 0.00001,
+    interZoneNetworkByte: 0.000000002,
+    iop: 0.00000001,
+    memoryByteSecond: 0.000000000001,
+    networkByte: 0.000000001,
+    storageByteSecond: 0.0000000000001,
+  }),
+});
