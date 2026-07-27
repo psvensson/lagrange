@@ -39,6 +39,7 @@ automatically favor Lagrange.
 Shared prerequisite:
 
 1. `scale-certification-evidence-contract`
+2. `scale-certification-receipt-freshness`
 
 Comparative program:
 
@@ -79,6 +80,10 @@ produced valid evidence, not that Lagrange won.
 
 ## Decision log
 
+- 2026-07-27 — Added the scale-owned terminal-receipt freshness prerequisite
+  for claim projection. P0 workload measurement remains parallel and can
+  support only `measured_p0`; `certified_profile` consumes the scale owner's
+  currentness decision.
 - 2026-07-26 — Chose an outcome-neutral analytical-plus-measured program and
   graduated executable detail to
   `solve/specs/comparative-workload-efficiency-evidence/`.

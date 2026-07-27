@@ -48,10 +48,11 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 21
+## Open quests — 23
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
+| comparative-efficiency-movielens-public-request-workload | product | 1 | 0 | 2026-07-27 | — |
 | documentation-audience-boundary-tooling | process | 1 | 0 | 2026-07-26 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | 2026-07-25 | — |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 | — |
@@ -72,6 +73,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | remove-relief-falsifier-fence-fidelity | product | 1 | 0 | 2026-07-27 | CL-044, CL-043 |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-22 | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 | — |
+| scale-certification-receipt-freshness | product | 0 | 0 | 2026-07-27 | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 | — |
 
 > 2 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.

@@ -5,6 +5,7 @@
 | Order | Quest | Requires | Required terminal |
 | --- | --- | --- | --- |
 | L0 | `scale-certification-evidence-contract` | Existing scale epic/spec | Shared versioned profile/config/report identity validates P0 and future certified profiles. |
+| L0a | `scale-certification-receipt-freshness` | L0 | Scale-owned content and time validation makes terminal-certification receipt currentness consumable without a comparative freshness fork. |
 | C0 | `comparative-efficiency-evidence-contract` | L0 | Pair, parity, statistics, accounting, price, artifact, and claim fields extend the shared identity and reject incomplete evidence. |
 | C1 | `comparative-efficiency-opportunity-calculator` | C0 | Unit-checked immutable analytical estimates and sensitivity bounds are reproducible and fail closed. |
 | C2 | `benchmark-semantic-parity` | C0 | Dialect-aware execution proves result, ordering, error, transaction, durability, and correct-operation parity. |
@@ -15,7 +16,7 @@
 | C7 | `comparative-efficiency-movielens-public-request-workload` | C2 | MovieLens grouped reduce runs with equivalent results through the public installed request/WASM Cell surface. |
 | C8 | `comparative-efficiency-movielens-grouped-reduce` | C3, C4, C7 | The complete MovieLens size/skew/topology matrix yields paired capacity and cost evidence. |
 | C9 | `comparative-efficiency-change-rate-crossover` | C3, C4 | The complete size/change/diversity/materialization sweep yields crossover evidence without presuming its sign. |
-| C10 | `comparative-efficiency-claim-projection` | C1, C5, C6, C8, C9 | Digest-verified evidence projects qualified wins, neutral results, losses, and `no_claim` without promotion. |
+| C10 | `comparative-efficiency-claim-projection` | L0a, C1, C5, C6, C8, C9 | Digest-verified evidence projects qualified wins, neutral results, losses, and `no_claim` without promotion. |
 
 ## L0 — Shared scale evidence contract
 
@@ -100,9 +101,17 @@ reports, missing components, expired profiles, calculator-only input,
 inconclusive intervals, regressions, and alternative wins. `no_claim` is a
 successful fail-closed result, not an error to paper over.
 
+Certification currentness must come from
+`scale-certification-receipt-freshness`. Capacity and infrastructure-cost
+claims are projected independently from C4's recomputable effects: an invalid
+price sheet suppresses only cost, while an expired scale receipt suppresses
+`certified_profile` and never promotes another evidence class.
+
 ## Execution and cost gates
 
 - L0 and C0 precede all benchmark implementation.
+- L0a may run in parallel with P0 measurement but must be terminal before C10
+  can project `certified_profile`.
 - P0 work may run locally or in bounded CI; it supports only `measured_p0`.
 - P1–P3 comparisons require terminal certification for the exact scale profile,
   an approved budget, cleanup plan, artifact-retention plan, and price sheet.

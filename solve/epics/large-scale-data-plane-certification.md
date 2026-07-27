@@ -36,16 +36,19 @@ separate proof axes and neither may stand in for the other.
 ## Quest ladder
 
 1. `scale-certification-evidence-contract`
-2. `placement-balance-feasibility-oracle`
-3. `scale-cardinality-harness`
-4. `scale-resource-performance-gates`
-5. `scale-topology-churn-certification`
-6. `scale-hundred-node-certification`
-7. `scale-two-hundred-node-two-hundred-terabyte-certification`
+2. `scale-certification-receipt-freshness`
+3. `placement-balance-feasibility-oracle`
+4. `scale-cardinality-harness`
+5. `scale-resource-performance-gates`
+6. `scale-topology-churn-certification`
+7. `scale-hundred-node-certification`
+8. `scale-two-hundred-node-two-hundred-terabyte-certification`
 
-The first Quest seals the report and configuration contract. Later profiles
-cannot be authored until their cost, hardware class, and predecessor evidence
-are known.
+The first Quest seals the report and configuration contract. The receipt
+freshness Quest extends its external terminal-certification reference with one
+content-bound, time-bounded decision owned by scale certification. Later
+profiles cannot be authored until their cost, hardware class, and predecessor
+evidence are known.
 
 ## Open questions
 
@@ -57,6 +60,10 @@ are known.
 
 ## Decision log
 
+- 2026-07-27 — Added `scale-certification-receipt-freshness` as the scale-owned
+  child contract for exact terminal-receipt identity and expiry. Comparative
+  claim projection consumes its decision and does not duplicate freshness
+  logic.
 - 2026-07-26 — Made `scale-certification-evidence-contract` the shared owner of
   profile, hardware, topology, workload, resource, convergence, and provenance
   identity. The comparative-efficiency spec consumes and extends this contract;

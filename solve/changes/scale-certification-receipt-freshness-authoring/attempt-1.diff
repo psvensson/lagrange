@@ -1,0 +1,316 @@
+diff --git a/solve/epics/comparative-workload-efficiency-evidence.md b/solve/epics/comparative-workload-efficiency-evidence.md
+index 46b9076c560b756f00e14e80f9bd2ef15739aacb..e731f741a77aafc8d56768201d78cefcd7d84c53 100644
+--- a/solve/epics/comparative-workload-efficiency-evidence.md
++++ b/solve/epics/comparative-workload-efficiency-evidence.md
+@@ -39,6 +39,7 @@ automatically favor Lagrange.
+ Shared prerequisite:
+ 
+ 1. `scale-certification-evidence-contract`
++2. `scale-certification-receipt-freshness`
+ 
+ Comparative program:
+ 
+@@ -79,6 +80,10 @@ produced valid evidence, not that Lagrange won.
+ 
+ ## Decision log
+ 
++- 2026-07-27 — Added the scale-owned terminal-receipt freshness prerequisite
++  for claim projection. P0 workload measurement remains parallel and can
++  support only `measured_p0`; `certified_profile` consumes the scale owner's
++  currentness decision.
+ - 2026-07-26 — Chose an outcome-neutral analytical-plus-measured program and
+   graduated executable detail to
+   `solve/specs/comparative-workload-efficiency-evidence/`.
+diff --git a/solve/epics/large-scale-data-plane-certification.md b/solve/epics/large-scale-data-plane-certification.md
+index ece08b934950ff5f188f85b4b5216a118cec6d7c..789e61485ba762f8c1296f72382e25d49e50a87c 100644
+--- a/solve/epics/large-scale-data-plane-certification.md
++++ b/solve/epics/large-scale-data-plane-certification.md
+@@ -36,16 +36,19 @@ separate proof axes and neither may stand in for the other.
+ ## Quest ladder
+ 
+ 1. `scale-certification-evidence-contract`
+-2. `placement-balance-feasibility-oracle`
+-3. `scale-cardinality-harness`
+-4. `scale-resource-performance-gates`
+-5. `scale-topology-churn-certification`
+-6. `scale-hundred-node-certification`
+-7. `scale-two-hundred-node-two-hundred-terabyte-certification`
++2. `scale-certification-receipt-freshness`
++3. `placement-balance-feasibility-oracle`
++4. `scale-cardinality-harness`
++5. `scale-resource-performance-gates`
++6. `scale-topology-churn-certification`
++7. `scale-hundred-node-certification`
++8. `scale-two-hundred-node-two-hundred-terabyte-certification`
+ 
+-The first Quest seals the report and configuration contract. Later profiles
+-cannot be authored until their cost, hardware class, and predecessor evidence
+-are known.
++The first Quest seals the report and configuration contract. The receipt
++freshness Quest extends its external terminal-certification reference with one
++content-bound, time-bounded decision owned by scale certification. Later
++profiles cannot be authored until their cost, hardware class, and predecessor
++evidence are known.
+ 
+ ## Open questions
+ 
+@@ -57,6 +60,10 @@ are known.
+ 
+ ## Decision log
+ 
++- 2026-07-27 — Added `scale-certification-receipt-freshness` as the scale-owned
++  child contract for exact terminal-receipt identity and expiry. Comparative
++  claim projection consumes its decision and does not duplicate freshness
++  logic.
+ - 2026-07-26 — Made `scale-certification-evidence-contract` the shared owner of
+   profile, hardware, topology, workload, resource, convergence, and provenance
+   identity. The comparative-efficiency spec consumes and extends this contract;
+diff --git a/solve/oracle/scale-certification-receipt-freshness-authoring.json b/solve/oracle/scale-certification-receipt-freshness-authoring.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..ac9c4bbba814a4534a1856ae62afbc4e6116f617
+--- /dev/null
++++ b/solve/oracle/scale-certification-receipt-freshness-authoring.json
+@@ -0,0 +1,20 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "classification": "scale-certification-receipt-freshness-planning-complete",
++  "detail": {
++    "owner": "scale-certification-evidence-contract",
++    "draftQuest": "scale-certification-receipt-freshness",
++    "gatesOnly": "comparative-efficiency-claim-projection",
++    "p0MeasurementRemainsParallel": true,
++    "certifiedProfileRequiresOwnerDecision": true,
++    "validation": [
++      "planning graph and dependency contract review",
++      "node scripts/solve.js lint --id scale-certification-receipt-freshness-authoring",
++      "node scripts/solve.js lint --id scale-certification-receipt-freshness",
++      "node scripts/solve.js lint --id comparative-efficiency-claim-projection",
++      "git diff --check"
++    ]
++  }
++}
+diff --git a/solve/quests/comparative-efficiency-claim-projection.json b/solve/quests/comparative-efficiency-claim-projection.json
+index c23d84f70ed80c94680b3656a2bbcf70a5e8da43..2a730ea61dbc255a6c4bfa0d66e1ed810b70fa5a 100644
+--- a/solve/quests/comparative-efficiency-claim-projection.json
++++ b/solve/quests/comparative-efficiency-claim-projection.json
+@@ -43,10 +43,18 @@
+       "id": "requires-complete-evidence-ladder",
+       "statement": "Do not seal this Quest until the calculator and every preregistered comparative workload Quest are terminal."
+     },
++    {
++      "id": "requires-scale-certification-receipt-freshness",
++      "statement": "Do not seal this Quest until scale-certification-receipt-freshness is terminal; certified_profile eligibility must consume that scale-owner decision rather than re-derive receipt tuple or freshness rules."
++    },
+     {
+       "id": "fail-closed-no-claim",
+       "statement": "Absent, invalid, stale, incomparable, practically inconclusive, or calculator-only evidence projects no_claim for measured assertions."
+     },
++    {
++      "id": "separate-capacity-and-cost-eligibility",
++      "statement": "Project capacity and infrastructure-cost claims independently from C4's recomputable effects: stale or missing price evidence suppresses only the cost claim, expired scale certification suppresses certified_profile without promoting another class, and otherwise-current P0 effects remain eligible only for measured_p0."
++    },
+     {
+       "id": "preserve-unfavorable-results",
+       "statement": "The projection must preserve prediction error, regressions, neutral outcomes, practical insignificance, and alternative wins without selective omission or promotional wording."
+diff --git a/solve/quests/scale-certification-receipt-freshness-authoring.json b/solve/quests/scale-certification-receipt-freshness-authoring.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..04135c9598bdb8612ebacfabaa98d00abcf9090a
+--- /dev/null
++++ b/solve/quests/scale-certification-receipt-freshness-authoring.json
+@@ -0,0 +1,52 @@
++{
++  "id": "scale-certification-receipt-freshness-authoring",
++  "authoringContractVersion": 1,
++  "verificationContractVersion": 2,
++  "statement": "The scale-certification and comparative-efficiency planning surfaces define one scale-owned terminal-receipt freshness prerequisite, link it only to claim projection, preserve P0 measurement parallelism, and draft the implementation Quest without asserting measured or certified results.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": null,
++    "closesCL": [],
++    "parentQuest": null,
++    "planDoc": "solve/epics/large-scale-data-plane-certification.md",
++    "draftedAtCommit": "1f888084433e6675d101ca96b96320eca712b0fa"
++  },
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/scale-certification-receipt-freshness-authoring.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "scale-certification-receipt-freshness-authoring-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/scale-certification-receipt-freshness-authoring.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    },
++    {
++      "id": "planning-only",
++      "statement": "This Quest changes only planning, specification, and draft Quest contracts; it must not claim that comparative performance, cost, or scale certification was measured."
++    },
++    {
++      "id": "single-scale-owner",
++      "statement": "Receipt schema, exact certification tuple, and freshness remain owned by scale certification; comparative claim projection consumes the owner decision without forking it."
++    },
++    {
++      "id": "p0-remains-parallel",
++      "statement": "The new prerequisite gates only claim projection, not P0 workload measurement, and P0 remains eligible only for measured_p0."
++    }
++  ]
++}
+diff --git a/solve/quests/scale-certification-receipt-freshness.json b/solve/quests/scale-certification-receipt-freshness.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..e57a3bcd4f2be8ab67d4d2913b25fe370a3725e3
+--- /dev/null
++++ b/solve/quests/scale-certification-receipt-freshness.json
+@@ -0,0 +1,59 @@
++{
++  "id": "scale-certification-receipt-freshness",
++  "authoringContractVersion": 1,
++  "verificationContractVersion": 2,
++  "statement": "The scale-evidence owner accepts a terminal certification only through a content-bound exact-schema receipt matching the certification Quest, profile, and measured-evidence identity and current within its explicitly evaluated issuedAt-to-validUntil interval; missing, malformed, unresolved, replayed, not-yet-valid, or expired receipts fail closed without making P0 scale-certified.",
++  "priority": 1,
++  "class": "product",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "solve/specs/large-scale-data-plane-certification/tasks.md#L0a",
++    "closesCL": [],
++    "parentQuest": "scale-certification-evidence-contract",
++    "planDoc": "solve/epics/large-scale-data-plane-certification.md",
++    "draftedAtCommit": "1f888084433e6675d101ca96b96320eca712b0fa"
++  },
++  "doneWhen": {
++    "probe": "scenario-harness",
++    "args": {
++      "scenario": "scale-certification-receipt-freshness",
++      "consecutive": 3,
++      "metric": "priority"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "scale-certification-receipt-freshness-main",
++      "priority": 1,
++      "metric": {
++        "probe": "scenario-harness",
++        "args": {
++          "scenario": "scale-certification-receipt-freshness",
++          "metric": "priority"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    },
++    {
++      "id": "requires-scale-evidence-contract",
++      "statement": "Do not seal this Quest until scale-certification-evidence-contract is terminal."
++    },
++    {
++      "id": "single-freshness-owner",
++      "statement": "The scale-evidence contract alone owns certification-receipt schema, tuple binding, and freshness decisions; comparative consumers may resolve content and consume the decision but must not reproduce it."
++    },
++    {
++      "id": "content-and-time-fail-closed",
++      "statement": "Recompute the resolved receipt digest, require an exact versioned schema and exact Quest, profile, and evidence tuple, use an explicit injected evaluation time with a closed-open issuedAt-to-validUntil interval, and reject missing, malformed, unresolved, replayed, not-yet-valid, or expired receipts without a wall-clock fallback."
++    },
++    {
++      "id": "p0-remains-uncertified",
++      "statement": "A P0 report may remain valid measured development evidence but can never attach, inherit, or project scale certification."
++    }
++  ]
++}
+diff --git a/solve/specs/comparative-workload-efficiency-evidence/tasks.md b/solve/specs/comparative-workload-efficiency-evidence/tasks.md
+index c1ab55ac96cea83e76003617e103a3f1ace15678..ef4cd4c6dbd9b8065e0ed2f5f8482144c4a7d21b 100644
+--- a/solve/specs/comparative-workload-efficiency-evidence/tasks.md
++++ b/solve/specs/comparative-workload-efficiency-evidence/tasks.md
+@@ -5,6 +5,7 @@
+ | Order | Quest | Requires | Required terminal |
+ | --- | --- | --- | --- |
+ | L0 | `scale-certification-evidence-contract` | Existing scale epic/spec | Shared versioned profile/config/report identity validates P0 and future certified profiles. |
++| L0a | `scale-certification-receipt-freshness` | L0 | Scale-owned content and time validation makes terminal-certification receipt currentness consumable without a comparative freshness fork. |
+ | C0 | `comparative-efficiency-evidence-contract` | L0 | Pair, parity, statistics, accounting, price, artifact, and claim fields extend the shared identity and reject incomplete evidence. |
+ | C1 | `comparative-efficiency-opportunity-calculator` | C0 | Unit-checked immutable analytical estimates and sensitivity bounds are reproducible and fail closed. |
+ | C2 | `benchmark-semantic-parity` | C0 | Dialect-aware execution proves result, ordering, error, transaction, durability, and correct-operation parity. |
+@@ -15,7 +16,7 @@
+ | C7 | `comparative-efficiency-movielens-public-request-workload` | C2 | MovieLens grouped reduce runs with equivalent results through the public installed request/WASM Cell surface. |
+ | C8 | `comparative-efficiency-movielens-grouped-reduce` | C3, C4, C7 | The complete MovieLens size/skew/topology matrix yields paired capacity and cost evidence. |
+ | C9 | `comparative-efficiency-change-rate-crossover` | C3, C4 | The complete size/change/diversity/materialization sweep yields crossover evidence without presuming its sign. |
+-| C10 | `comparative-efficiency-claim-projection` | C1, C5, C6, C8, C9 | Digest-verified evidence projects qualified wins, neutral results, losses, and `no_claim` without promotion. |
++| C10 | `comparative-efficiency-claim-projection` | L0a, C1, C5, C6, C8, C9 | Digest-verified evidence projects qualified wins, neutral results, losses, and `no_claim` without promotion. |
+ 
+ ## L0 — Shared scale evidence contract
+ 
+@@ -100,9 +101,17 @@ reports, missing components, expired profiles, calculator-only input,
+ inconclusive intervals, regressions, and alternative wins. `no_claim` is a
+ successful fail-closed result, not an error to paper over.
+ 
++Certification currentness must come from
++`scale-certification-receipt-freshness`. Capacity and infrastructure-cost
++claims are projected independently from C4's recomputable effects: an invalid
++price sheet suppresses only cost, while an expired scale receipt suppresses
++`certified_profile` and never promotes another evidence class.
++
+ ## Execution and cost gates
+ 
+ - L0 and C0 precede all benchmark implementation.
++- L0a may run in parallel with P0 measurement but must be terminal before C10
++  can project `certified_profile`.
+ - P0 work may run locally or in bounded CI; it supports only `measured_p0`.
+ - P1–P3 comparisons require terminal certification for the exact scale profile,
+   an approved budget, cleanup plan, artifact-retention plan, and price sheet.
+diff --git a/solve/specs/large-scale-data-plane-certification/tasks.md b/solve/specs/large-scale-data-plane-certification/tasks.md
+index c9b06eb9f7eb07cd11952042210d8b26087677ba..f17a4ad5162e56eb7ae372f7f81a70498d6de8eb 100644
+--- a/solve/specs/large-scale-data-plane-certification/tasks.md
++++ b/solve/specs/large-scale-data-plane-certification/tasks.md
+@@ -5,6 +5,7 @@
+ | Order | Quest | Required terminal |
+ | --- | --- | --- |
+ | L0 | `scale-certification-evidence-contract` | Shared versioned profile/config/report schema records software, hardware, topology, cardinality, bytes, workload, feasibility, safety, performance, resources, convergence, provenance, and claim eligibility for scale and comparative consumers. |
++| L0a | `scale-certification-receipt-freshness` | A content-bound terminal-certification receipt binds its exact Quest, profile, measured evidence, issuance, and expiry, and the scale owner alone makes the fail-closed currentness decision consumed by claim projectors. |
+ | L1 | `placement-balance-feasibility-oracle` | Small worlds compare the existing placement owner with exact optima; infeasible inputs produce typed reasons; large-world lower bounds are defined. |
+ | L2 | `scale-cardinality-harness` | Cost-bounded sparse runs exercise high node/table/partition/replica cardinality and expose planner/control-plane amplification without claiming physical-byte proof. |
+ | L3 | `scale-resource-performance-gates` | Benchmark and leak enforcement are enabled; heap/RSS/fds/queues/in-flight work/throughput/latency are fail-closed report fields. |
+@@ -19,12 +20,25 @@ certified profiles. It must accept complete scale and comparative-consumer
+ fixtures, reject missing identity or gate fields, and keep P0 validity distinct
+ from P1–P3 certification.
+ 
++## L0a — Certification receipt freshness
++
++Extend the external terminal-certification receipt referenced by L0 without
++forking the scale report identity. The receipt must have its own exact versioned
++schema and content digest; bind the terminal Quest, profile identity, measured
++evidence identity, `issuedAt`, and `validUntil`; and be evaluated against an
++explicit injected time. The scale owner rejects missing, malformed, unresolved,
++replayed, not-yet-valid, and expired receipts. Comparative consumers resolve
++content and consume this decision rather than reimplementing it. P0 remains
++development-profile evidence and cannot become scale-certified.
++
+ ## Authoring and cost gates
+ 
+ - L0–L3 must reuse current harness/report/placement/resource mechanisms.
+ - L0 must prove P0 round-trip validation and rejection fixtures before
+   `comparative-efficiency-evidence-contract` seals; comparative fields extend
+   its identity and never fork it.
++- L0a must be terminal before a consumer projects `certified_profile`; it does
++  not gate P0 workload measurement or `measured_p0`.
+ - L4 cannot seal until Raft snapshot recovery is sufficient for its rebuild
+   envelope, or its profile explicitly retains the complete required log.
+ - L5/L6 cannot be authored until infrastructure, budget, duration, cleanup,

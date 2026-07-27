@@ -1,0 +1,52 @@
+{
+  "id": "scale-certification-receipt-freshness-authoring",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The scale-certification and comparative-efficiency planning surfaces define one scale-owned terminal-receipt freshness prerequisite, link it only to claim projection, preserve P0 measurement parallelism, and draft the implementation Quest without asserting measured or certified results.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/large-scale-data-plane-certification.md",
+    "draftedAtCommit": "1f888084433e6675d101ca96b96320eca712b0fa"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/scale-certification-receipt-freshness-authoring.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "scale-certification-receipt-freshness-authoring-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/scale-certification-receipt-freshness-authoring.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "planning-only",
+      "statement": "This Quest changes only planning, specification, and draft Quest contracts; it must not claim that comparative performance, cost, or scale certification was measured."
+    },
+    {
+      "id": "single-scale-owner",
+      "statement": "Receipt schema, exact certification tuple, and freshness remain owned by scale certification; comparative claim projection consumes the owner decision without forking it."
+    },
+    {
+      "id": "p0-remains-parallel",
+      "statement": "The new prerequisite gates only claim projection, not P0 workload measurement, and P0 remains eligible only for measured_p0."
+    }
+  ]
+}
