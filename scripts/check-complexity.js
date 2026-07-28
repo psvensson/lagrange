@@ -39,6 +39,14 @@ const FILTERED_FLAGS = new Set([
   ARG_SEPARATOR,
 ]);
 const ESLINT_OVERRIDE_CONFIG = {
+  parserOptions: {
+    ecmaVersion: 2022,
+    sourceType: 'module',
+  },
+  env: {
+    node: true,
+    es2022: true,
+  },
   ignorePatterns: [LOCAL_STR_TEST_GITKEEP],
   rules: {
     [LOCAL_STR_COMPLEXITY]: [LOCAL_STR_ERROR, TARGET_THRESHOLD],
@@ -61,8 +69,12 @@ const reportRelativePath = scoped ?
   SCOPED_REPORT_RELATIVE_PATH :
   REPORT_RELATIVE_PATH;
 
+// Self-contained like check-cognitive-complexity.js: without this, the
+// checker resolves a repo eslintrc that no longer exists and silently lints
+// nothing, emptying the complexity report the owner-debt inventory pins.
 const eslint = new LegacyESLint({
   cwd: process.cwd(),
+  useEslintrc: false,
   overrideConfig: ESLINT_OVERRIDE_CONFIG,
 });
 const results = await eslint.lintFiles(lintTargets);
