@@ -7,9 +7,11 @@
  */
 
 import * as sonarjsNamespace from 'eslint-plugin-sonarjs';
+
 import {LegacyESLint} from 'eslint/use-at-your-own-risk';
 
 import {
+  collectRuleViolations,
   printRatchetTighteningHint,
   writeJsonReport,
 } from './metric-check-helpers.js';
@@ -83,16 +85,7 @@ const eslint = new LegacyESLint({
   overrideConfig: ESLINT_OVERRIDE_CONFIG,
 });
 const results = await eslint.lintFiles(lintTargets);
-const violations = results.flatMap((result) =>
-  result.messages
-    .filter((message) => message.ruleId === SONAR_RULE_ID)
-    .map((message) => ({
-      filePath: result.filePath,
-      line: message.line,
-      column: message.column,
-      message: message.message,
-    })),
-);
+const violations = collectRuleViolations(results, SONAR_RULE_ID);
 const count = violations.length;
 
 writeJsonReport(reportRelativePath, {

@@ -43,8 +43,10 @@ const RATCHET_TARGETS = [
     name: 'src+scripts',
     directories: ['src', 'scripts'],
     // 2026-07-25: tightened 73/2239 -> 66/2095 (measured; one-way-baseline rule).
+    // 2026-07-28: tightened 66/2095 -> 66/2088 (complexity-checker violation
+    // mapping hoisted into metric-check-helpers; measured in a clean worktree).
     baselineCloneGroupCount: 66,
-    baselineDuplicatedLineCount: 2095,
+    baselineDuplicatedLineCount: 2088,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },

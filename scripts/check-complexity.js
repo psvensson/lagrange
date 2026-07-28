@@ -12,6 +12,7 @@
 import {LegacyESLint} from 'eslint/use-at-your-own-risk';
 
 import {
+  collectRuleViolations,
   writeJsonReport,
 } from './metric-check-helpers.js';
 
@@ -65,16 +66,7 @@ const eslint = new LegacyESLint({
   overrideConfig: ESLINT_OVERRIDE_CONFIG,
 });
 const results = await eslint.lintFiles(lintTargets);
-const violations = results.flatMap((result) =>
-  result.messages
-    .filter((message) => message.ruleId === LOCAL_STR_COMPLEXITY)
-    .map((message) => ({
-      filePath: result.filePath,
-      line: message.line,
-      column: message.column,
-      message: message.message,
-    })),
-);
+const violations = collectRuleViolations(results, LOCAL_STR_COMPLEXITY);
 
 const count = violations.length;
 
