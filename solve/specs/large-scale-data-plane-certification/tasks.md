@@ -5,7 +5,7 @@
 | Order | Quest | Required terminal |
 | --- | --- | --- |
 | L0 | `scale-certification-evidence-contract` | Shared versioned profile/config/report schema records software, hardware, topology, cardinality, bytes, workload, feasibility, safety, performance, resources, convergence, provenance, and claim eligibility for scale and comparative consumers. |
-| L0a | `scale-certification-receipt-freshness` | A content-bound terminal-certification receipt binds its exact Quest, profile, measured evidence, issuance, and expiry, and the scale owner alone makes the fail-closed currentness decision consumed by claim projectors. |
+| L0a | `scale-certification-receipt-freshness` — ✅ SOLVED 2026-07-28 | A content-bound terminal-certification receipt binds its exact Quest, profile, measured evidence, issuance, and expiry, and the scale owner alone makes the fail-closed currentness decision consumed by claim projectors. |
 | L1 | `placement-balance-feasibility-oracle` | Small worlds compare the existing placement owner with exact optima; infeasible inputs produce typed reasons; large-world lower bounds are defined. |
 | L2 | `scale-cardinality-harness` | Cost-bounded sparse runs exercise high node/table/partition/replica cardinality and expose planner/control-plane amplification without claiming physical-byte proof. |
 | L3 | `scale-resource-performance-gates` | Benchmark and leak enforcement are enabled; heap/RSS/fds/queues/in-flight work/throughput/latency are fail-closed report fields. |
