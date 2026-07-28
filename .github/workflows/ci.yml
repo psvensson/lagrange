@@ -70,3 +70,22 @@ jobs:
 
       - name: Post-push gate
         run: npm run test:gate:postpush
+
+      # The gate captures each manifest command's output to a file, so on
+      # failure the job log alone cannot say which command broke. Print the
+      # receipt's verdicts and the tail of every failing command's captured
+      # output.
+      - name: Dump gate receipt on failure
+        if: failure()
+        run: |
+          set -uo pipefail
+          receipt=$(ls -t test-output/acceptance/*.report.json 2>/dev/null | head -1)
+          [ -n "$receipt" ] || { echo "no receipt found"; exit 0; }
+          echo "=== $receipt ==="
+          jq '[.commands[] | {id, status, exitCode, reasons}]' "$receipt"
+          jq -r '.commands[] | select(.status == "FAIL") | .requiredArtifact.path' "$receipt" |
+          while read -r artifact; do
+            [ -f "$artifact" ] || continue
+            echo "=== tail of $artifact ==="
+            jq -r '.stdout // .output // .' "$artifact" 2>/dev/null | tail -200 || tail -c 20000 "$artifact"
+          done
