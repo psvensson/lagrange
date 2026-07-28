@@ -1,0 +1,65 @@
+{
+  "id": "comparative-efficiency-movielens-paired-runtime-adapters-m1-base-reconciliation-v2",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The independently approved 32-path MovieLens paired-runtime adapter replacement is projected without byte changes onto the parent Quest's reachable M1 base, receives exact candidate approval at that base, and contributes complete same-base coverage for decomposition of the standing parent rejection.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/comparative-workload-efficiency-evidence/tasks.md#M2",
+    "closesCL": [],
+    "parentQuest": "comparative-efficiency-movielens-paired-runtime-adapters",
+    "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+    "draftedAtCommit": "cfc8e79550b2220f500289c9ac5a49294209af7d"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "comparative-efficiency-movielens-paired-runtime-adapters",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "comparative-efficiency-movielens-paired-runtime-adapters-m1-base-reconciliation-v2-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "comparative-efficiency-movielens-paired-resource-observation",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-m1-base",
+      "statement": "The candidate base must be exactly 6d284fbc3fc03cdc9b997fd6a74428ebc7def92c, the reachable M1 commit named by the standing parent rejection."
+    },
+    {
+      "id": "exact-approved-projection",
+      "statement": "The source delta must be the exact 32-path, 411992-byte canonical delta sha256:28dbdcf505912296f2bed9c9ed8ab869d0c6fb227a2bd6eb442719e3f9ccfc7b already approved in comparative-efficiency-movielens-paired-runtime-adapters-verifier-closure; no source byte or rejected path may change."
+    },
+    {
+      "id": "no-new-measurement-claim",
+      "statement": "This Quest only reconciles the exact approved candidate receipt to the parent base. It must reuse the source-bound root sha256:609af80f5aad5ebdd84918802fe79bbe41b9b7fcada797b510c8ec925a66d5b7 and must not publish a matrix-wide claim or describe the representative adapter proof as the measured campaign."
+    },
+    {
+      "id": "exact-candidate-verification",
+      "statement": "An independent verifier must confirm the M1-base canonical delta is byte-identical to the approved successor delta, the current source bytes reproduce it, and the exact candidate receipt is eligible to discharge all remaining parent rejection paths."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "adversarial-js-intrinsics",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity",
+    "recovery-replay",
+    "sweep-timer",
+    "transport-delivery"
+  ]
+}
