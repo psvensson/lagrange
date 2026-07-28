@@ -98,6 +98,8 @@
   "verificationTemplates": [
     "admission-gating",
     "adversarial-js-intrinsics",
-    "harness-fidelity"
+    "harness-fidelity",
+    "concurrency-serialization",
+    "recovery-replay"
   ]
 }

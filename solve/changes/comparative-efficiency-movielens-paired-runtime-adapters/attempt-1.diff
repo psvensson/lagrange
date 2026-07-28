@@ -1,0 +1,5606 @@
+diff --git a/examples/service-data-affinity/movielens-capacity-runtime-adapters.js b/examples/service-data-affinity/movielens-capacity-runtime-adapters.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ae63881f565e8cbf15a525a45a77754d164b6a51
+--- /dev/null
++++ b/examples/service-data-affinity/movielens-capacity-runtime-adapters.js
+@@ -0,0 +1,389 @@
++import {
++  BENCHMARK_CAPACITY_OUTCOME,
++} from '../../test/distributed/harness/benchmark-capacity-protocol-constants.js';
++import {
++  createBenchmarkCapacityAdapterIdentity,
++  createBenchmarkCapacityAdapterOwnerReceipt,
++} from '../../test/distributed/harness/benchmark-capacity-heterogeneous-observation.js';
++import {
++  appendOwnArrayValue,
++  digestBenchmarkSemanticData,
++  isNonNegativeSafeInteger,
++} from '../../test/distributed/harness/benchmark-semantic-integrity.js';
++import {
++  BENCHMARK_SQL_DIALECT,
++  buildBenchmarkResultSetEvidence,
++  buildBenchmarkSemanticReceipt,
++} from '../../test/distributed/harness/benchmark-workload-semantics.js';
++import {
++  MOVIELENS_PUBLIC_REQUEST,
++  MOVIELENS_PUBLIC_REQUEST_TOP_N,
++  expectedRankingFromAlternative,
++} from './movielens-public-request-workload-contract.js';
++
++const ADAPTER_VERSION = 'movielens-capacity-runtime-adapter-v1';
++const RESET_VERSION = 'movielens-capacity-runtime-reset-v1';
++const ADAPTER_STATE = Object.freeze({
++  ACTIVE: 'active',
++  IDLE: 'idle',
++  NOT_FINALIZED: 'not_finalized',
++});
++const IDLE_ADAPTER_STATE = Object.freeze({kind: ADAPTER_STATE.IDLE});
++const objectFreeze = Object.freeze;
++
++function fail(reason) {
++  throw new TypeError(`MovieLens capacity adapter failed: ${reason}`);
++}
++
++function operationIdentity(adapterId, context, operationIndex) {
++  const digest = digestBenchmarkSemanticData({
++    adapterId,
++    blockIndex: context.blockIndex,
++    blockedOrderIndex: context.blockedOrderIndex,
++    sideId: context.sideId,
++    offeredLoadPerSecond: context.offeredLoadPerSecond,
++    phase: context.phase,
++    operationIndex,
++  });
++  return `${adapterId}-${digest.slice(7, 39)}`;
++}
++
++function canonicalFailure(error) {
++  return {
++    name:
++      typeof error?.name === 'string' ? error.name : 'Error',
++    message:
++      typeof error?.message === 'string' ?
++        error.message.slice(0, 512) :
++        'unknown adapter failure',
++  };
++}
++
++function semanticReceipt(
++  counts,
++  rejectedByReason,
++  correctOperationIndexes,
++) {
++  const observations = [];
++  for (let index = 0; index < correctOperationIndexes.length; index += 1) {
++    appendOwnArrayValue(observations, {
++      operationId: correctOperationIndexes[index],
++      operation: 'SELECT',
++      outcome: MOVIELENS_PUBLIC_REQUEST_TOP_N,
++    });
++  }
++  return buildBenchmarkSemanticReceipt({
++    dialect: BENCHMARK_SQL_DIALECT.POSTGRESQL,
++    compiledOperations: counts.dispatched,
++    validatedOperations: counts.correct,
++    successfulOperations: counts.correct,
++    oracleFailures: 0,
++    resultSet: buildBenchmarkResultSetEvidence(observations),
++    accounting: {
++      ...counts,
++      rejectedByReason: {...rejectedByReason},
++    },
++    durability: {
++      status: 'pass',
++      expected: counts.correct,
++      observed: counts.correct,
++      missingIds: [],
++      reason: null,
++    },
++  });
++}
++
++function copyCorrectEvidence(state, correctOperationIndexes) {
++  const operationIds = [];
++  for (let index = 0; index < correctOperationIndexes.length; index += 1) {
++    const operationIndex = correctOperationIndexes[index];
++    const evidence = state.operations[operationIndex];
++    if (
++      evidence?.status !== BENCHMARK_CAPACITY_OUTCOME.CORRECT ||
++      typeof evidence.operationId !== 'string'
++    ) {
++      fail('correct operation evidence is missing');
++    }
++    appendOwnArrayValue(operationIds, evidence.operationId);
++  }
++  return operationIds;
++}
++
++function createAdapter({
++  adapterIdentity,
++  executeOperation,
++  resetRunState,
++  projectOperation,
++  semanticOracleDigest,
++}) {
++  let state = IDLE_ADAPTER_STATE;
++  function beginWindow(context) {
++    if (state.kind !== ADAPTER_STATE.IDLE) fail('window already active');
++    state = {
++      kind: ADAPTER_STATE.ACTIVE,
++      context: objectFreeze({...context}),
++      operations: [],
++      ownerReceipt: ADAPTER_STATE.NOT_FINALIZED,
++      semanticReceipt: ADAPTER_STATE.NOT_FINALIZED,
++    };
++  }
++  async function execute({operationIndex, signal}) {
++    if (state.kind !== ADAPTER_STATE.ACTIVE) fail('window is not active');
++    if (!isNonNegativeSafeInteger(operationIndex)) {
++      fail('operation index is invalid');
++    }
++    const operationId = operationIdentity(
++      adapterIdentity.adapterId,
++      state.context,
++      operationIndex,
++    );
++    try {
++      const result = await executeOperation({
++        operationId,
++        operationIndex,
++        signal,
++      });
++      const evidence = projectOperation(result, operationId);
++      if (evidence.semanticOracleDigest !== semanticOracleDigest) {
++        fail('sealed semantic oracle mismatch');
++      }
++      state.operations[operationIndex] = objectFreeze({
++        status: BENCHMARK_CAPACITY_OUTCOME.CORRECT,
++        operationId,
++        evidence,
++      });
++      return {status: BENCHMARK_CAPACITY_OUTCOME.CORRECT};
++    } catch (error) {
++      state.operations[operationIndex] = objectFreeze({
++        status: BENCHMARK_CAPACITY_OUTCOME.ERRORED,
++        operationId,
++        failure: canonicalFailure(error),
++      });
++      throw error;
++    }
++  }
++  function finalize({
++    counts,
++    rejectedByReason,
++    correctOperationIndexes,
++  }) {
++    if (state.kind !== ADAPTER_STATE.ACTIVE) fail('window is not active');
++    const operationIds =
++      copyCorrectEvidence(state, correctOperationIndexes);
++    const evidenceDigest = digestBenchmarkSemanticData({
++      adapterIdentityDigest: adapterIdentity.adapterIdentityDigest,
++      coordinate: state.context,
++      semanticOracleDigest,
++      operations: state.operations,
++    });
++    state.ownerReceipt = createBenchmarkCapacityAdapterOwnerReceipt({
++      adapterIdentity,
++      operationIds,
++      evidenceDigest,
++    });
++    state.semanticReceipt = semanticReceipt(
++      counts,
++      rejectedByReason,
++      correctOperationIndexes,
++    );
++    return state.semanticReceipt;
++  }
++  function completeWindow() {
++    if (
++      state.kind !== ADAPTER_STATE.ACTIVE ||
++      state.ownerReceipt === ADAPTER_STATE.NOT_FINALIZED ||
++      state.semanticReceipt === ADAPTER_STATE.NOT_FINALIZED
++    ) {
++      fail('finalized window evidence is required');
++    }
++    const completed = objectFreeze({
++      coordinate: state.context,
++      operationEvidence: objectFreeze([...state.operations]),
++      ownerReceipt: state.ownerReceipt,
++      semanticReceipt: state.semanticReceipt,
++    });
++    state = IDLE_ADAPTER_STATE;
++    return completed;
++  }
++  return objectFreeze({
++    adapterIdentity,
++    beginWindow,
++    completeWindow,
++    executeOperation: execute,
++    finalizeSemanticReceipt: finalize,
++    async resetRunState(context) {
++      if (state.kind !== ADAPTER_STATE.IDLE) {
++        fail('cannot reset an active window');
++      }
++      const resetContext = {
++        blockIndex: context.blockIndex,
++        blockedOrderIndex: context.blockedOrderIndex,
++        sideId: context.sideId,
++        offeredLoadPerSecond: context.offeredLoadPerSecond,
++      };
++      const ownerReceipt = await resetRunState(resetContext);
++      return objectFreeze({
++        version: RESET_VERSION,
++        adapterIdentityDigest: adapterIdentity.adapterIdentityDigest,
++        sideId: adapterIdentity.sideId,
++        context: objectFreeze(resetContext),
++        ownerReceipt,
++        resetDigest: digestBenchmarkSemanticData({
++          adapterIdentityDigest:
++            adapterIdentity.adapterIdentityDigest,
++          sideId: adapterIdentity.sideId,
++          context: resetContext,
++          ownerReceipt,
++        }),
++      });
++    },
++  });
++}
++
++function lagrangeOperationEvidence(session, result, operationId) {
++  const oracleDigest = digestBenchmarkSemanticData(result.oracle.observed);
++  return {
++    operationId,
++    requestId: result.response.requestWitness.invocationIdentity,
++    requestDigest: result.response.requestWitness.requestDigest,
++    intentDigest: result.response.requestWitness.intentDigest,
++    journalOperationId: result.invocationJournal.operation_id,
++    journalDigest: digestBenchmarkSemanticData(result.invocationJournal),
++    bindingName: session.prepared.deployment.binding.name,
++    bindingVersionId:
++      result.response.requestWitness.bindingVersionId,
++    executableDigest: session.artifact.executableDigest,
++    runtimeKind: session.prepared.deployment.manifest.runtime.kind,
++    httpMethod: result.response.requestWitness.method,
++    httpPath: result.response.requestWitness.path,
++    httpStatus: result.response.status,
++    durableResultDigest: digestBenchmarkSemanticData(result.result),
++    semanticOracleDigest: oracleDigest,
++  };
++}
++
++export function createMovielensLagrangeCapacityAdapter({
++  session,
++  sideId,
++  operationManifestDigest,
++  semanticOracleDigest,
++}) {
++  if (!session?.prepared?.executeCapacityOperation) {
++    fail('open Lagrange public request session is required');
++  }
++  const adapterIdentity = createBenchmarkCapacityAdapterIdentity({
++    adapterId: 'movielens-lagrange-public-request',
++    adapterVersion: ADAPTER_VERSION,
++    sideId,
++    runtimeKind: 'wasm_component',
++    invocationBoundary: 'authenticated_http_request_binding',
++    operationManifestDigest,
++    executableDigest: session.artifact.executableDigest,
++  });
++  return createAdapter({
++    adapterIdentity,
++    semanticOracleDigest,
++    async executeOperation({operationId, signal}) {
++      return session.prepared.executeCapacityOperation({
++        idempotencyKey: operationId,
++        operationId,
++      }, signal);
++    },
++    async resetRunState() {
++      return session.prepared.resetRunState();
++    },
++    projectOperation(result, operationId) {
++      return lagrangeOperationEvidence(session, result, operationId);
++    },
++  });
++}
++
++function postgresqlOperationEvidence(
++  session,
++  result,
++  operationId,
++  semanticOracleDigest,
++) {
++  const observedRanking = expectedRankingFromAlternative({
++    topMovies: result.topMovies,
++  });
++  const observedDigest = digestBenchmarkSemanticData(observedRanking);
++  if (observedDigest !== semanticOracleDigest) {
++    fail('PostgreSQL grouped-reduce oracle mismatch');
++  }
++  return {
++    operationId,
++    requestId: result.requestId,
++    backendPid: result.backendPid,
++    imageId: session.imageId,
++    postgresVersion: session.postgresVersion,
++    querySqlDigest: digestBenchmarkSemanticData(session.querySql),
++    queryPlanDigest: digestBenchmarkSemanticData(session.queryPlan),
++    returnedAggregateRows: result.returnedAggregateRows,
++    resultRowsDigest: digestBenchmarkSemanticData(result.topMovies),
++    durableInputRows: result.durableInputRows,
++    inputDigest: session.inputDigest,
++    semanticOracleDigest: observedDigest,
++  };
++}
++
++export function createMovielensPostgresqlCapacityAdapter({
++  session,
++  sideId,
++  operationManifestDigest,
++  semanticOracleDigest,
++}) {
++  if (!session?.executeGroupedReduce) {
++    fail('open PostgreSQL MovieLens session is required');
++  }
++  const adapterIdentity = createBenchmarkCapacityAdapterIdentity({
++    adapterId: 'movielens-postgresql-grouped-reduce',
++    adapterVersion: ADAPTER_VERSION,
++    sideId,
++    runtimeKind: 'postgresql_16',
++    invocationBoundary: 'persistent_pg_pool_sql_query',
++    operationManifestDigest,
++    executableDigest: session.imageId,
++  });
++  return createAdapter({
++    adapterIdentity,
++    semanticOracleDigest,
++    executeOperation({operationId, signal}) {
++      return session.executeGroupedReduce(
++        {requestId: operationId},
++        signal,
++      );
++    },
++    resetRunState() {
++      return session.resetRunState();
++    },
++    projectOperation(result, operationId) {
++      return postgresqlOperationEvidence(
++        session,
++        result,
++        operationId,
++        semanticOracleDigest,
++      );
++    },
++  });
++}
++
++export function movielensCapacitySemanticOracleDigest(alternative) {
++  return digestBenchmarkSemanticData(
++    expectedRankingFromAlternative(alternative),
++  );
++}
++
++export function movielensCapacityOperationManifestDigest(dataset) {
++  return digestBenchmarkSemanticData({
++    version: ADAPTER_VERSION,
++    dataset,
++    operation: {
++      method: MOVIELENS_PUBLIC_REQUEST.METHOD,
++      path: MOVIELENS_PUBLIC_REQUEST.PATH,
++      result: 'confidence_adjusted_top_ten',
++      durability:
++        'input_preserved_and_result_visible_after_completion',
++    },
++  });
++}
+diff --git a/examples/service-data-affinity/movielens-public-request-workload-adapter.js b/examples/service-data-affinity/movielens-public-request-workload-adapter.js
+index 4ff524ced19928de502ec2c307e920f6f0eb4a41..4280d7b73f56bc3f10fa09a1f4b4d78b47f2d54d 100644
+--- a/examples/service-data-affinity/movielens-public-request-workload-adapter.js
++++ b/examples/service-data-affinity/movielens-public-request-workload-adapter.js
+@@ -67,6 +67,11 @@ const OPERATION_KEYS = Object.freeze([
+   'idempotencyKey',
+   'operationId',
+ ]);
++const OPERATION_OBSERVATION = Object.freeze({
++  CAPACITY: 'capacity_owner_observation',
++  FULL: 'full_c7_observation',
++  NOT_REQUESTED: 'capacity_observation_not_requested',
++});
+ const EMPTY_ROWS = Object.freeze([]);
+ const TABLE_DDL = Object.freeze({
+   RATINGS:
+@@ -448,18 +453,22 @@ async function prepareMovielensPublicRequestWorkload({
+   let nextResultKeyOffset = 0;
+   const inFlight = new Set();
+ 
+-  async function executeOperationInner(operation) {
++  async function executeOperationInner(operation, observationMode) {
+     const identity = assertOperation(operation);
+     const resultKeyOffset = nextResultKeyOffset;
+     if (resultKeyOffset > MAXIMUM_RESULT_KEY_OFFSET) {
+       throw new RangeError('MovieLens operation result key space exhausted');
+     }
+     nextResultKeyOffset += MOVIELENS_PUBLIC_REQUEST_TOP_N;
+-    const before = await readDurableResult(ports, resultKeyOffset);
+-    assert.equal(before.movieRows.length, 0);
+-    assert.equal(before.scoreRows.length, 0);
+-    const cellBefore =
+-      await ports.cellWitness(MOVIELENS_PUBLIC_REQUEST);
++    const fullObservation =
++      observationMode === OPERATION_OBSERVATION.FULL;
++    let cellBefore = OPERATION_OBSERVATION.NOT_REQUESTED;
++    if (fullObservation) {
++      const before = await readDurableResult(ports, resultKeyOffset);
++      assert.equal(before.movieRows.length, 0);
++      assert.equal(before.scoreRows.length, 0);
++      cellBefore = await ports.cellWitness(MOVIELENS_PUBLIC_REQUEST);
++    }
+     const request = buildOperationRequest(
+       dataset,
+       identity.idempotencyKey,
+@@ -470,9 +479,11 @@ async function prepareMovielensPublicRequestWorkload({
+       request,
+     );
+     assertPublicResponse(response);
+-    const cellAfter =
+-      await ports.cellWitness(MOVIELENS_PUBLIC_REQUEST);
+-    assertCellProgress(cellBefore, cellAfter, 1);
++    let cellAfter = OPERATION_OBSERVATION.NOT_REQUESTED;
++    if (fullObservation) {
++      cellAfter = await ports.cellWitness(MOVIELENS_PUBLIC_REQUEST);
++      assertCellProgress(cellBefore, cellAfter, 1);
++    }
+     const invocationJournal = assertJournalMatchesRequest(
+       assertCompletedJournal(
+         await ports.readInvocationJournal(identity.idempotencyKey),
+@@ -499,13 +510,21 @@ async function prepareMovielensPublicRequestWorkload({
+     });
+   }
+ 
+-  function executeOperation(operation) {
+-    const promise = executeOperationInner(operation)
++  function trackedOperation(operation, observationMode) {
++    const promise = executeOperationInner(operation, observationMode)
+       .finally(() => inFlight.delete(promise));
+     inFlight.add(promise);
+     return promise;
+   }
+ 
++  function executeOperation(operation) {
++    return trackedOperation(operation, OPERATION_OBSERVATION.FULL);
++  }
++
++  function executeCapacityOperation(operation) {
++    return trackedOperation(operation, OPERATION_OBSERVATION.CAPACITY);
++  }
++
+   async function replayOperation(operation) {
+     const request = isPlainDataRecord(operation) ?
+       ownDataValue(operation, 'request') :
+@@ -575,13 +594,40 @@ async function prepareMovielensPublicRequestWorkload({
+     });
+   }
+ 
++  async function resetRunState() {
++    const drained = await drainOperations();
++    if (drained.inFlight !== 0) {
++      throw new Error('MovieLens workload reset requires drained operations');
++    }
++    await executeSql(
++      ports,
++      `DELETE FROM "${MOVIELENS_PUBLIC_REQUEST_TABLE.RESULT_MOVIES}"`,
++    );
++    await executeSql(
++      ports,
++      `DELETE FROM "${MOVIELENS_PUBLIC_REQUEST_TABLE.RESULT_SCORES}"`,
++    );
++    await executeSql(ports, 'DELETE FROM wasm_operations');
++    const durableResults = await assertNoDurableResults(ports);
++    const invocationJournalRows =
++      await assertNoDurableInvocationJournal(ports);
++    nextResultKeyOffset = 0;
++    return Object.freeze({
++      durableResultRows: durableResults.totalRows,
++      invocationJournalRows,
++      state: 'public_request_results_and_journal_cleared',
++    });
++  }
++
+   return Object.freeze({
+     authentication,
+     deployment,
+     drainOperations,
++    executeCapacityOperation,
+     executeOperation,
+     inputDurability,
+     replayOperation,
++    resetRunState,
+     timeoutSemantics: 'ambiguous_until_drain_verified',
+     workloadManifest,
+   });
+diff --git a/examples/service-data-affinity/run-movielens-public-request-workload.js b/examples/service-data-affinity/run-movielens-public-request-workload.js
+index 91fd2d207e4df38edebc3000991b04e56da5df75..2ea149e6323ba669ff341c2988213408a57fcc86 100644
+--- a/examples/service-data-affinity/run-movielens-public-request-workload.js
++++ b/examples/service-data-affinity/run-movielens-public-request-workload.js
+@@ -533,6 +533,10 @@ async function openMovielensPublicRequestWorkloadLive(options = {}) {
+         executableBytes,
+         postgresLogs: postgres.logs,
+       }),
++      runtimeObservation: Object.freeze({
++        processId: process.pid,
++        storagePath: temporaryRoot,
++      }),
+       async close() {
+         if (closedReceipt) return closedReceipt;
+         let stopReceipt;
+diff --git a/examples/service-data-affinity/run-postgres-baseline.js b/examples/service-data-affinity/run-postgres-baseline.js
+index 0ca13c431261305f3162afc6c8ca9d4adf0f8004..cb17e8db0e54b689abd5fb2e920eac19e87c902c 100644
+--- a/examples/service-data-affinity/run-postgres-baseline.js
++++ b/examples/service-data-affinity/run-postgres-baseline.js
+@@ -256,6 +256,7 @@ function buildBaselineConfig(options = {}) {
+     readyTimeoutMs: envReadyTimeoutMs || DEFAULT_READY_TIMEOUT_MS,
+     readyPollIntervalMs: envReadyPollIntervalMs || DEFAULT_READY_POLL_INTERVAL_MS,
+     batchSize: DEFAULT_BATCH_SIZE,
++    resourceLimits: options.resourceLimits || undefined,
+     allowReplicationTimeout:
+       process.env.PG_BASELINE_ALLOW_REPLICATION_TIMEOUT === 'true',
+   };
+@@ -281,6 +282,7 @@ async function startPostgresBaseline(provider, config) {
+         [POSTGRES_ENV_DB_KEY]: config.database,
+         [POSTGRES_ENV_AUTH_METHOD_KEY]: POSTGRES_ENV_AUTH_METHOD_VALUE,
+       },
++      resourceLimits: config.resourceLimits,
+     });
+     containers.push(primary);
+ 
+@@ -312,6 +314,7 @@ async function startPostgresBaseline(provider, config) {
+           [POSTGRES_ENV_AUTH_METHOD_KEY]: POSTGRES_ENV_AUTH_METHOD_VALUE,
+         },
+         command: [SHELL_COMMAND, SHELL_LOGIN_ARG, replicaBootstrapCommand],
++        resourceLimits: config.resourceLimits,
+       });
+       containers.push(replica);
+       await waitForPostgresReady(provider, replica.containerId, {
+@@ -470,7 +473,8 @@ async function loadRatingsBytes(pool, batchSize, bytes) {
+ }
+ 
+ async function resolveRatingsBytes(options) {
+-  const bytes = options.ratingsBytes || await readFile(RATINGS_FILE);
++  const bytes = options.ratingsBytes ||
++    await readFile(options.ratingsPath || RATINGS_FILE);
+   const digest = `sha256:${createHash(SHA256_ALGORITHM)
+     .update(bytes)
+     .digest(SHA256_ENCODING)}`;
+@@ -525,6 +529,172 @@ async function collectPostgresProvenance(provider, baseline, imageName) {
+   };
+ }
+ 
++async function openPostgresBaselineSession(options = {}) {
++  const ratingsInput = await resolveRatingsBytes(options);
++  const config = buildBaselineConfig(options);
++  const provider = new DockerProvider({
++    socketPath: '/var/run/docker.sock',
++  });
++  const baseline = await startPostgresBaseline(provider, config);
++  let pool = null;
++  try {
++    pool = new Pool({
++      host: baseline.primary.ip,
++      port: config.port,
++      user: config.user,
++      password: config.password,
++      database: config.database,
++      max:
++        Number.isSafeInteger(options.poolSize) && options.poolSize > 0 ?
++          options.poolSize :
++          16,
++    });
++    await pool.query('DROP TABLE IF EXISTS ratings;');
++    await pool.query(CREATE_RATINGS_SQL);
++    const totalRows = await loadRatingsBytes(
++      pool,
++      config.batchSize,
++      ratingsInput.bytes,
++    );
++    const versionResult = await pool.query(POSTGRES_VERSION_SQL);
++    const planResult = await pool.query(
++      `EXPLAIN (FORMAT JSON) ${RATINGS_TOP_QUALITY_SQL}`,
++    );
++    const provenance = await collectPostgresProvenance(
++      provider,
++      baseline,
++      config.baselineImage,
++    );
++    let closed = false;
++    let queryTxBytes = 0;
++    let resultRxBytes = 0;
++    return Object.freeze({
++      imageId: provenance.imageInspect.Id,
++      imageInspection: Object.freeze({
++        id: provenance.imageInspect.Id,
++        repoDigests:
++          Object.freeze([...provenance.imageInspect.RepoDigests]),
++      }),
++      inputDigest: ratingsInput.digest,
++      inputSizeBytes: ratingsInput.bytes.length,
++      totalRows,
++      postgresVersion: versionResult.rows?.[0]?.version,
++      postgresVersionSql: POSTGRES_VERSION_SQL,
++      querySql: RATINGS_TOP_QUALITY_SQL,
++      queryPlan: planResult.rows,
++      replicationFactor: config.replicationFactor,
++      replicationState: baseline.replicationState || null,
++      networkId: baseline.networkId,
++      networkName: baseline.networkName,
++      containers: Object.freeze(
++        baseline.containers.map((container) => Object.freeze({
++          containerId: container.containerId,
++          ip: container.ip,
++        })),
++      ),
++      primaryContainerId: baseline.primary.containerId,
++      async executeGroupedReduce({requestId}) {
++        if (closed) {
++          throw new Error('PostgreSQL MovieLens session is closed');
++        }
++        if (typeof requestId !== 'string' || requestId.length === 0) {
++          throw new TypeError(
++            'PostgreSQL MovieLens request identity is required',
++          );
++        }
++        const client = await pool.connect();
++        try {
++          const backend =
++            await client.query('SELECT pg_backend_pid() AS backend_pid');
++          const result = await client.query(RATINGS_TOP_QUALITY_SQL);
++          const durableInput = await client.query(
++            'SELECT count(*) AS row_count FROM ratings',
++          );
++          const observedRows =
++            Number(durableInput.rows?.[0]?.row_count);
++          if (observedRows !== totalRows) {
++            throw new Error(
++              'PostgreSQL MovieLens input durability mismatch',
++            );
++          }
++          queryTxBytes += Buffer.byteLength(
++            RATINGS_TOP_QUALITY_SQL,
++            BYTE_ENCODING,
++          );
++          resultRxBytes += Buffer.byteLength(
++            JSON.stringify(result.rows || []),
++            BYTE_ENCODING,
++          );
++          return Object.freeze({
++            backendPid: Number(backend.rows?.[0]?.backend_pid),
++            durableInputRows: observedRows,
++            requestId,
++            returnedAggregateRows: result.rows?.length || 0,
++            topMovies: Object.freeze(
++              projectPostgresTopMovies(result.rows || [])
++                .map((row) => Object.freeze(row)),
++            ),
++          });
++        } finally {
++          client.release();
++        }
++      },
++      networkCounters() {
++        return {
++          rxBytes: resultRxBytes,
++          txBytes: queryTxBytes,
++        };
++      },
++      async resetRunState() {
++        if (closed) {
++          throw new Error('PostgreSQL MovieLens session is closed');
++        }
++        const result = await pool.query(
++          'SELECT count(*) AS row_count FROM ratings',
++        );
++        const observedRows = Number(result.rows?.[0]?.row_count);
++        if (observedRows !== totalRows) {
++          throw new Error(
++            'PostgreSQL MovieLens reset found changed input state',
++          );
++        }
++        return Object.freeze({
++          inputDigest: ratingsInput.digest,
++          rowCount: observedRows,
++          state: 'read_only_input_preserved',
++        });
++      },
++      async close() {
++        if (closed) {
++          throw new Error('PostgreSQL MovieLens session already closed');
++        }
++        closed = true;
++        const finalProvenance = await collectPostgresProvenance(
++          provider,
++          baseline,
++          config.baselineImage,
++        );
++        await pool.end();
++        const cleanupReceipt =
++          await cleanupPostgresBaseline(provider, baseline);
++        return Object.freeze({
++          cleanupReceipt,
++          logs: Object.freeze(finalProvenance.logs),
++        });
++      },
++    });
++  } catch (error) {
++    await pool?.end().catch(() => {});
++    let cleanupReceipt = unconfirmedPostgresCleanup(baseline);
++    try {
++      cleanupReceipt = await cleanupPostgresBaseline(provider, baseline);
++    } catch {
++      // Preserve the primary setup failure with explicit ambiguous cleanup.
++    }
++    throw new PostgresBaselineFailure(error, cleanupReceipt);
++  }
++}
++
+ async function runPostgresBaseline(options = {}) {
+   const ratingsInput = await resolveRatingsBytes(options);
+   const config = buildBaselineConfig(options);
+@@ -665,6 +835,7 @@ export {
+   buildPsqlCommand,
+   cleanupPostgresBaseline,
+   loadRatingsBytes,
++  openPostgresBaselineSession,
+   projectPostgresTopMovies,
+   runPostgresBaseline,
+ };
+diff --git a/scripts/checks/benchmark-resource-source-provenance.js b/scripts/checks/benchmark-resource-source-provenance.js
+index 9257e31743ae54f2a0b8fe9969a39b6bb23cc782..ee1d0f932a5b60d66c6b27bde25969527af8a35b 100644
+--- a/scripts/checks/benchmark-resource-source-provenance.js
++++ b/scripts/checks/benchmark-resource-source-provenance.js
+@@ -1,5 +1,6 @@
+ import {execFile} from 'node:child_process';
+ import {createHash} from 'node:crypto';
++import {readFile} from 'node:fs/promises';
+ import {promisify} from 'node:util';
+ 
+ const execFileAsync = promisify(execFile);
+@@ -14,6 +15,9 @@ const localText = Object.freeze({
+   PATH_SEPARATOR: '--',
+   UTF8: 'utf8',
+   SHA256: 'sha256',
++  HEX: 'hex',
++  LS_FILES: 'ls-files',
++  ERROR_UNMATCH: '--error-unmatch',
+ });
+ const C4_SOURCE_PATHS = Object.freeze([
+   'scripts/checks/benchmark-resource-source-provenance.js',
+@@ -52,7 +56,7 @@ export async function collectBenchmarkResourceSourceProvenance(
+     {encoding: localText.UTF8},
+   );
+   const baseCommit = revisionText.trim();
+-  const {stdout: delta} = await execFileAsync(
++  const {stdout: trackedDelta} = await execFileAsync(
+     localText.GIT,
+     [
+       localText.DIFF,
+@@ -65,6 +69,32 @@ export async function collectBenchmarkResourceSourceProvenance(
+     ],
+     {encoding: localText.UTF8},
+   );
++  let delta = trackedDelta;
++  for (let index = 0; index < sourcePaths.length; index += 1) {
++    const sourcePath = sourcePaths[index];
++    try {
++      await execFileAsync(
++        localText.GIT,
++        [
++          localText.LS_FILES,
++          localText.ERROR_UNMATCH,
++          localText.PATH_SEPARATOR,
++          sourcePath,
++        ],
++        {encoding: localText.UTF8},
++      );
++    } catch {
++      const bytes = await readFile(sourcePath);
++      delta += JSON.stringify({
++        path: sourcePath,
++        byteLength: bytes.length,
++        digest:
++          `sha256:${createHash(localText.SHA256)
++            .update(bytes)
++            .digest(localText.HEX)}`,
++      });
++    }
++  }
+   if (delta.length === 0) {
+     return {
+       sourceRevision: `git-commit:${baseCommit}`,
+diff --git a/scripts/checks/movielens-lagrange-capacity-adapter-child.js b/scripts/checks/movielens-lagrange-capacity-adapter-child.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d14c650da1ed2ee2daaf2efceecaccac36944c2e
+--- /dev/null
++++ b/scripts/checks/movielens-lagrange-capacity-adapter-child.js
+@@ -0,0 +1,163 @@
++#!/usr/bin/env node
++
++import {
++  openMovielensPublicRequestWorkloadLive,
++} from '../../examples/service-data-affinity/run-movielens-public-request-workload.js';
++import {createInterface} from 'node:readline';
++
++let session = null;
++let publicRequestRxBytes = 0;
++let publicResponseTxBytes = 0;
++let lineReader = null;
++const localText = Object.freeze({
++  CLOSE: 'close',
++  COUNTERS: 'counters',
++  DISCONNECT: 'disconnect',
++  ERROR: 'error',
++  ERROR_NAME: 'Error',
++  EXECUTE: 'execute',
++  LINE: 'line',
++  MESSAGE: 'message',
++  RESET: 'reset',
++  RESULT: 'result',
++  SESSION_ALREADY_STARTED: 'adapter session already started',
++  SESSION_NOT_STARTED: 'adapter session is not started',
++  START: 'start',
++  UNKNOWN_FAILURE: 'unknown child adapter failure',
++  UNSUPPORTED_REQUEST: 'unsupported MovieLens adapter child request',
++});
++
++function failure(error) {
++  return {
++    name: typeof error?.name === 'string' ? error.name : localText.ERROR_NAME,
++    message:
++      typeof error?.message === 'string' ?
++        error.message :
++        localText.UNKNOWN_FAILURE,
++    stack:
++      typeof error?.stack === 'string' ? error.stack : null,
++  };
++}
++
++function send(message) {
++  if (typeof process.send === 'function') {
++    process.send(message);
++    return;
++  }
++  process.stdout.write(`${JSON.stringify(message)}\n`);
++}
++
++async function handle(message) {
++  if (message?.kind === localText.START) {
++    if (session !== null) throw new Error(localText.SESSION_ALREADY_STARTED);
++    session = await openMovielensPublicRequestWorkloadLive(message.options);
++    send({
++      requestId: message.requestId,
++      kind: localText.RESULT,
++      value: {
++        alternative: session.alternative,
++        artifact: session.artifact,
++        dataset: session.dataset,
++        deployment: session.prepared.deployment,
++        runtimeObservation: session.runtimeObservation,
++      },
++    });
++    return;
++  }
++  if (session === null) throw new Error(localText.SESSION_NOT_STARTED);
++  if (message?.kind === localText.EXECUTE) {
++    const value =
++      await session.prepared.executeCapacityOperation(message.operation);
++    publicRequestRxBytes += Buffer.byteLength(
++      JSON.stringify(value.response.requestWitness.normalizedRequest),
++    );
++    publicResponseTxBytes += Buffer.byteLength(
++      JSON.stringify({
++        body: value.response.body,
++        headers: value.response.headers,
++        status: value.response.status,
++      }),
++    );
++    send({
++      requestId: message.requestId,
++      kind: localText.RESULT,
++      value,
++    });
++    return;
++  }
++  if (message?.kind === localText.COUNTERS) {
++    send({
++      requestId: message.requestId,
++      kind: localText.RESULT,
++      value: {
++        rxBytes: publicRequestRxBytes,
++        txBytes: publicResponseTxBytes,
++      },
++    });
++    return;
++  }
++  if (message?.kind === localText.RESET) {
++    const value = await session.prepared.resetRunState();
++    send({
++      requestId: message.requestId,
++      kind: localText.RESULT,
++      value,
++    });
++    return;
++  }
++  if (message?.kind === localText.CLOSE) {
++    const value = await session.close();
++    session = null;
++    send({
++      requestId: message.requestId,
++      kind: localText.RESULT,
++      value,
++    });
++    if (typeof process.disconnect === 'function') {
++      process.disconnect();
++    } else {
++      lineReader?.close();
++      process.stdin.destroy();
++      setImmediate(() => process.exit(0));
++    }
++    return;
++  }
++  throw new TypeError(localText.UNSUPPORTED_REQUEST);
++}
++
++function dispatch(message) {
++  handle(message).catch((error) => {
++    send({
++      requestId: message?.requestId || null,
++      kind: localText.ERROR,
++      error: failure(error),
++    });
++  });
++}
++
++if (typeof process.send === 'function') {
++  process.on(localText.MESSAGE, dispatch);
++} else {
++  lineReader = createInterface({input: process.stdin});
++  lineReader.on(localText.LINE, (line) => {
++    try {
++      dispatch(JSON.parse(line));
++    } catch (error) {
++      send({
++        requestId: null,
++        kind: localText.ERROR,
++        error: failure(error),
++      });
++    }
++  });
++}
++
++process.on(localText.DISCONNECT, () => {
++  if (session !== null) {
++    session.close()
++      .catch(() => {})
++      .finally(() => {
++        process.exitCode = 1;
++      });
++  }
++});
+diff --git a/scripts/checks/movielens-paired-capacity-live-environment.js b/scripts/checks/movielens-paired-capacity-live-environment.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..7924b1745c5c7b8b4bbeed4739979f58f3ad2d0b
+--- /dev/null
++++ b/scripts/checks/movielens-paired-capacity-live-environment.js
+@@ -0,0 +1,272 @@
++import {mkdtemp, rm, statfs} from 'node:fs/promises';
++import os from 'node:os';
++import path from 'node:path';
++
++import {DockerProvider} from
++  '../../test/distributed/harness/docker-provider.js';
++import {BenchmarkResourceMixedProvider} from
++  '../../test/distributed/harness/benchmark-resource-mixed-provider.js';
++import {
++  createMovielensLagrangeCapacityAdapter,
++  createMovielensPostgresqlCapacityAdapter,
++  movielensCapacityOperationManifestDigest,
++  movielensCapacitySemanticOracleDigest,
++} from
++  '../../examples/service-data-affinity/movielens-capacity-runtime-adapters.js';
++import {
++  startSystemdCapacityAdapter,
++} from './systemd-capacity-adapter-controller.js';
++
++const LAGRANGE_MEMORY = '2G';
++const LAGRANGE_CPU = '200%';
++const LAGRANGE_CPU_SET = '0,1';
++const POSTGRESQL_CLIENT_MEMORY = '1G';
++const POSTGRESQL_CLIENT_CPU = '100%';
++const POSTGRESQL_CLIENT_CPU_SET = '2';
++const POSTGRESQL_DATABASE_MEMORY = '1g';
++const POSTGRESQL_DATABASE_CPU = '0.03';
++const STORAGE_LIMIT_FLOOR_BYTES = 1_073_741_824;
++const LAGRANGE_TASKS = 256;
++const POSTGRESQL_TASKS = 128;
++const localText = Object.freeze({
++  CLEANUP_FAILED: 'paired MovieLens environment cleanup failed',
++  DOCKER_SOCKET: '/var/run/docker.sock',
++  LAGRANGE_CHILD:
++    'scripts/checks/movielens-lagrange-capacity-adapter-child.js',
++  LAGRANGE_NODE: 'lagrange-node',
++  POSTGRESQL_CHILD:
++    'scripts/checks/movielens-postgresql-capacity-adapter-child.js',
++  POSTGRESQL_CLIENT: 'postgresql-client',
++  POSTGRESQL_DATABASE: 'postgresql-database',
++  POSTGRESQL_STORAGE: '/var/lib/postgresql/data',
++});
++
++async function storageCapacity(storagePath) {
++  const stats = await statfs(storagePath);
++  return Math.max(
++    STORAGE_LIMIT_FLOOR_BYTES,
++    stats.blocks * stats.bsize,
++  );
++}
++
++function remoteLagrangeSession(controller) {
++  const metadata = controller.metadata;
++  return {
++    alternative: metadata.alternative,
++    artifact: metadata.artifact,
++    dataset: metadata.dataset,
++    prepared: {
++      deployment: metadata.deployment,
++      executeCapacityOperation(operation, signal) {
++        return controller.execute(operation, signal);
++      },
++      resetRunState() {
++        return controller.reset();
++      },
++    },
++  };
++}
++
++function remotePostgresqlSession(controller) {
++  return {
++    ...controller.metadata,
++    executeGroupedReduce(operation, signal) {
++      return controller.execute(operation, signal);
++    },
++    resetRunState() {
++      return controller.reset();
++    },
++    networkCounters() {
++      return controller.counters();
++    },
++  };
++}
++
++function liveComponents(environment) {
++  const primary = environment.postgresql.metadata.primaryContainerId;
++  return [
++    {
++      sideId: environment.sideIds[0],
++      componentId: localText.LAGRANGE_NODE,
++      containerId: environment.lagrangeResourceId,
++      storagePath:
++        environment.lagrange.metadata.runtimeObservation.storagePath,
++    },
++    {
++      sideId: environment.sideIds[1],
++      componentId: localText.POSTGRESQL_DATABASE,
++      containerId: primary,
++      storagePath: localText.POSTGRESQL_STORAGE,
++    },
++    {
++      sideId: environment.sideIds[1],
++      componentId: localText.POSTGRESQL_CLIENT,
++      containerId: environment.postgresqlResourceId,
++      storagePath: environment.postgresqlClientStoragePath,
++    },
++  ];
++}
++
++export async function openMovielensPairedCapacityLiveEnvironment({
++  runId,
++  sideIds,
++  dataset,
++  workingDirectory,
++}) {
++  const postgresqlClientStoragePath = await mkdtemp(
++    path.join(os.tmpdir(), 'movielens-capacity-postgresql-client-'),
++  );
++  let lagrange = null;
++  let postgresql = null;
++  try {
++    lagrange = await startSystemdCapacityAdapter({
++      unit: `movielens-lagrange-${process.pid}-${Date.now()}`,
++      workingDirectory,
++      scriptPath: path.resolve(
++        workingDirectory,
++        localText.LAGRANGE_CHILD,
++      ),
++      memoryMax: LAGRANGE_MEMORY,
++      cpuQuota: LAGRANGE_CPU,
++      cpuSet: LAGRANGE_CPU_SET,
++      tasksMax: LAGRANGE_TASKS,
++      startOptions: {
++        ratingsPath: dataset.path,
++        datasetIdentity: {
++          cardinality: dataset.cardinality,
++          digest: dataset.digest,
++          sizeBytes: dataset.bytes.length,
++          source: dataset.source,
++        },
++        componentSourcePath: dataset.componentSourcePath,
++        replicationFactor: 1,
++      },
++    });
++    postgresql = await startSystemdCapacityAdapter({
++      unit: `movielens-postgresql-${process.pid}-${Date.now()}`,
++      workingDirectory,
++      scriptPath: path.resolve(
++        workingDirectory,
++        localText.POSTGRESQL_CHILD,
++      ),
++      memoryMax: POSTGRESQL_CLIENT_MEMORY,
++      cpuQuota: POSTGRESQL_CLIENT_CPU,
++      cpuSet: POSTGRESQL_CLIENT_CPU_SET,
++      tasksMax: POSTGRESQL_TASKS,
++      startOptions: {
++        ratingsPath: dataset.path,
++        ratingsDigest: dataset.digest,
++        replicationFactor: 1,
++        poolSize: 1,
++        resourceLimits: {
++          memory: POSTGRESQL_DATABASE_MEMORY,
++          cpus: POSTGRESQL_DATABASE_CPU,
++        },
++      },
++    });
++    const lagrangeResourceId = `systemd:${lagrange.unit}`;
++    const postgresqlResourceId = `systemd:${postgresql.unit}`;
++    const cgroups = [
++      {
++        resourceId: lagrangeResourceId,
++        cgroupPath: lagrange.cgroupPath,
++        storagePath: lagrange.metadata.runtimeObservation.storagePath,
++        storageLimitBytes: await storageCapacity(
++          lagrange.metadata.runtimeObservation.storagePath,
++        ),
++        cpuLimitNanoCpus: 2_000_000_000,
++        networkCounters: () => lagrange.counters(),
++      },
++      {
++        resourceId: postgresqlResourceId,
++        cgroupPath: postgresql.cgroupPath,
++        storagePath: postgresqlClientStoragePath,
++        storageLimitBytes:
++          await storageCapacity(postgresqlClientStoragePath),
++        cpuLimitNanoCpus: 1_000_000_000,
++        networkCounters: () => postgresql.counters(),
++      },
++    ];
++    const environment = {
++      runId,
++      sideIds,
++      lagrange,
++      postgresql,
++      lagrangeResourceId,
++      postgresqlResourceId,
++      postgresqlClientStoragePath,
++    };
++    const operationManifestDigest =
++      movielensCapacityOperationManifestDigest({
++        cardinality: dataset.cardinality,
++        digest: dataset.digest,
++        sizeBytes: dataset.bytes.length,
++        source: dataset.source,
++      });
++    const semanticOracleDigest =
++      movielensCapacitySemanticOracleDigest(
++        lagrange.metadata.alternative,
++      );
++    return {
++      ...environment,
++      operationManifestDigest,
++      semanticOracleDigest,
++      provider: new BenchmarkResourceMixedProvider({
++        containerProvider: new DockerProvider({
++          socketPath: localText.DOCKER_SOCKET,
++        }),
++        cgroups,
++      }),
++      components: liveComponents(environment),
++      adapters: [
++        createMovielensLagrangeCapacityAdapter({
++          session: remoteLagrangeSession(lagrange),
++          sideId: sideIds[0],
++          operationManifestDigest,
++          semanticOracleDigest,
++        }),
++        createMovielensPostgresqlCapacityAdapter({
++          session: remotePostgresqlSession(postgresql),
++          sideId: sideIds[1],
++          operationManifestDigest,
++          semanticOracleDigest,
++        }),
++      ],
++      networkId: postgresql.metadata.networkId,
++      networkName: postgresql.metadata.networkName,
++      async close() {
++        const receipts = {};
++        const closeErrors = [];
++        try {
++          receipts.lagrange = await lagrange.close();
++        } catch (error) {
++          closeErrors.push(error);
++        }
++        try {
++          receipts.postgresql = await postgresql.close();
++        } catch (error) {
++          closeErrors.push(error);
++        }
++        await rm(postgresqlClientStoragePath, {
++          recursive: true,
++          force: true,
++        });
++        if (closeErrors.length > 0) {
++          throw new AggregateError(
++            closeErrors,
++            localText.CLEANUP_FAILED,
++          );
++        }
++        return receipts;
++      },
++    };
++  } catch (error) {
++    await lagrange?.close().catch(() => {});
++    await postgresql?.close().catch(() => {});
++    await rm(postgresqlClientStoragePath, {
++      recursive: true,
++      force: true,
++    });
++    throw error;
++  }
++}
+diff --git a/scripts/checks/movielens-postgresql-capacity-adapter-child.js b/scripts/checks/movielens-postgresql-capacity-adapter-child.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9aaea0937d11f244a4a000c1c298c244649e6a49
+--- /dev/null
++++ b/scripts/checks/movielens-postgresql-capacity-adapter-child.js
+@@ -0,0 +1,126 @@
++#!/usr/bin/env node
++
++import {createInterface} from 'node:readline';
++import {
++  openPostgresBaselineSession,
++} from '../../examples/service-data-affinity/run-postgres-baseline.js';
++
++let session = null;
++const lines = createInterface({input: process.stdin});
++const localText = Object.freeze({
++  CLOSE: 'close',
++  COUNTERS: 'counters',
++  ERROR: 'error',
++  ERROR_NAME: 'Error',
++  EXECUTE: 'execute',
++  LINE: 'line',
++  RESET: 'reset',
++  RESULT: 'result',
++  SESSION_ALREADY_STARTED: 'adapter session already started',
++  SESSION_NOT_STARTED: 'adapter session is not started',
++  START: 'start',
++  UNKNOWN_FAILURE: 'unknown PostgreSQL adapter child failure',
++  UNSUPPORTED_REQUEST: 'unsupported PostgreSQL adapter child request',
++});
++
++function failure(error) {
++  return {
++    name: typeof error?.name === 'string' ? error.name : localText.ERROR_NAME,
++    message:
++      typeof error?.message === 'string' ?
++        error.message :
++        localText.UNKNOWN_FAILURE,
++    stack: typeof error?.stack === 'string' ? error.stack : null,
++  };
++}
++
++function send(message) {
++  process.stdout.write(`${JSON.stringify(message)}\n`);
++}
++
++async function handle(message) {
++  if (message?.kind === localText.START) {
++    if (session !== null) throw new Error(localText.SESSION_ALREADY_STARTED);
++    session = await openPostgresBaselineSession(message.options);
++    send({
++      requestId: message.requestId,
++      kind: localText.RESULT,
++      value: {
++        imageId: session.imageId,
++        imageInspection: session.imageInspection,
++        inputDigest: session.inputDigest,
++        inputSizeBytes: session.inputSizeBytes,
++        totalRows: session.totalRows,
++        postgresVersion: session.postgresVersion,
++        postgresVersionSql: session.postgresVersionSql,
++        querySql: session.querySql,
++        queryPlan: session.queryPlan,
++        replicationFactor: session.replicationFactor,
++        replicationState: session.replicationState,
++        networkId: session.networkId,
++        networkName: session.networkName,
++        containers: session.containers,
++        primaryContainerId: session.primaryContainerId,
++      },
++    });
++    return;
++  }
++  if (session === null) throw new Error(localText.SESSION_NOT_STARTED);
++  if (message?.kind === localText.EXECUTE) {
++    const value = await session.executeGroupedReduce(message.operation);
++    send({
++      requestId: message.requestId,
++      kind: localText.RESULT,
++      value,
++    });
++    return;
++  }
++  if (message?.kind === localText.RESET) {
++    const value = await session.resetRunState();
++    send({
++      requestId: message.requestId,
++      kind: localText.RESULT,
++      value,
++    });
++    return;
++  }
++  if (message?.kind === localText.COUNTERS) {
++    send({
++      requestId: message.requestId,
++      kind: localText.RESULT,
++      value: session.networkCounters(),
++    });
++    return;
++  }
++  if (message?.kind === localText.CLOSE) {
++    const value = await session.close();
++    session = null;
++    send({
++      requestId: message.requestId,
++      kind: localText.RESULT,
++      value,
++    });
++    lines.close();
++    process.stdin.destroy();
++    setImmediate(() => process.exit(0));
++    return;
++  }
++  throw new TypeError(localText.UNSUPPORTED_REQUEST);
++}
++
++lines.on(localText.LINE, (line) => {
++  let message;
++  try {
++    message = JSON.parse(line);
++  } catch (error) {
++    send({requestId: null, kind: localText.ERROR, error: failure(error)});
++    return;
++  }
++  handle(message).catch((error) => {
++    send({
++      requestId: message?.requestId || null,
++      kind: localText.ERROR,
++      error: failure(error),
++    });
++  });
++});
+diff --git a/scripts/checks/run-comparative-efficiency-movielens-paired-runtime-adapters-guard.js b/scripts/checks/run-comparative-efficiency-movielens-paired-runtime-adapters-guard.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..170bfc1ef9e5ba2af4fe70e20f53bb43194f6df3
+--- /dev/null
++++ b/scripts/checks/run-comparative-efficiency-movielens-paired-runtime-adapters-guard.js
+@@ -0,0 +1,37 @@
++#!/usr/bin/env node
++
++import {
++  runGuardTestScenarios,
++} from './guard-test-scenario-runner.js';
++
++const C3_SCENARIO =
++  'comparative-efficiency-movielens-heterogeneous-capacity-observation';
++const C4_SCENARIO =
++  'comparative-efficiency-movielens-paired-resource-observation';
++const TERMINAL_SCENARIO =
++  'comparative-efficiency-movielens-paired-runtime-adapters';
++const GUARD_FIDELITY =
++  'deterministic-contract-guard-backed-by-one-live-adapter-root';
++const C3_TESTS = Object.freeze([
++  'test/distributed/harness/__tests__/' +
++    'benchmark-capacity-heterogeneous-observation.test.js',
++  'test/distributed/harness/__tests__/' +
++    'benchmark-capacity-heterogeneous-protocol.test.js',
++  'test/examples/movielens-capacity-runtime-adapters.test.js',
++  'test/scripts/systemd-capacity-adapter-controller.test.js',
++]);
++const C4_TESTS = Object.freeze([
++  'test/distributed/harness/__tests__/' +
++    'benchmark-resource-capacity-protocol-evidence.test.js',
++  'test/distributed/harness/__tests__/' +
++    'benchmark-resource-mixed-provider.test.js',
++  'test/scripts/benchmark-resource-source-provenance.test.js',
++]);
++
++runGuardTestScenarios({
++  [C3_SCENARIO]: [...C3_TESTS],
++  [C4_SCENARIO]: [...C4_TESTS],
++  [TERMINAL_SCENARIO]: [...C3_TESTS, ...C4_TESTS],
++}, {
++  fidelity: GUARD_FIDELITY,
++});
+diff --git a/scripts/checks/run-comparative-efficiency-movielens-paired-runtime-adapters-live.js b/scripts/checks/run-comparative-efficiency-movielens-paired-runtime-adapters-live.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..7157f350e791363e2c092b83fc9fb8f2e8f01773
+--- /dev/null
++++ b/scripts/checks/run-comparative-efficiency-movielens-paired-runtime-adapters-live.js
+@@ -0,0 +1,795 @@
++#!/usr/bin/env node
++
++import {execFile} from 'node:child_process';
++import {
++  mkdir,
++  mkdtemp,
++  readFile,
++  rm,
++  statfs,
++  writeFile,
++} from 'node:fs/promises';
++import os from 'node:os';
++import path, {resolve} from 'node:path';
++import {pathToFileURL} from 'node:url';
++import {promisify} from 'node:util';
++
++import {
++  createMovielensGroupedReduceMatrixDatasets,
++  selectMovielensGroupedReduceMatrixDataset,
++} from
++  '../../examples/service-data-affinity/movielens-grouped-reduce-matrix-dataset.js';
++import {
++  BENCHMARK_CAPACITY_ARTIFACT_POLICY,
++  BENCHMARK_CAPACITY_CACHE_POLICY,
++  BENCHMARK_CAPACITY_ESTIMATOR,
++  BENCHMARK_CAPACITY_INTERVAL,
++  BENCHMARK_CAPACITY_MULTIPLE_COMPARISON,
++  BENCHMARK_CAPACITY_RANDOMIZATION_ALGORITHM,
++  BENCHMARK_CAPACITY_REJECT_POLICY,
++  BENCHMARK_CAPACITY_RUN_ORDER_POLICY,
++  BENCHMARK_CAPACITY_STOPPING_RULE,
++  BENCHMARK_CAPACITY_TIMEOUT_POLICY,
++} from
++  '../../test/distributed/harness/benchmark-capacity-protocol-constants.js';
++import {
++  runBenchmarkCapacityHeterogeneousProtocol,
++} from
++  '../../test/distributed/harness/benchmark-capacity-heterogeneous-protocol.js';
++import {
++  sealBenchmarkCapacityPreregistration,
++} from
++  '../../test/distributed/harness/benchmark-capacity-preregistration.js';
++import {
++  inspectBenchmarkCapacityProtocolReport,
++  inspectBenchmarkCapacityTerminalMeasurement,
++} from
++  '../../test/distributed/harness/benchmark-capacity-protocol.js';
++import {
++  digestBenchmarkSemanticData,
++} from
++  '../../test/distributed/harness/benchmark-semantic-integrity.js';
++import {
++  BENCHMARK_SQL_DIALECT,
++  getBenchmarkSemanticContract,
++} from
++  '../../test/distributed/harness/benchmark-workload-semantics.js';
++import {
++  BENCHMARK_RESOURCE_ARTIFACT_KIND,
++  BENCHMARK_RESOURCE_BILLING_TREATMENT,
++  BENCHMARK_RESOURCE_COMPONENT_ROLE,
++} from
++  '../../test/distributed/harness/benchmark-resource-contract-constants.js';
++import {
++  createBenchmarkResourceSourceArtifact,
++  validateBenchmarkResourceEvidenceRoot,
++} from
++  '../../test/distributed/harness/benchmark-resource-evidence-root.js';
++import {
++  createBenchmarkResourceCapacityProtocolEvidence,
++} from
++  '../../test/distributed/harness/benchmark-resource-capacity-protocol-evidence.js';
++import {
++  createBenchmarkResourceDurableResolver,
++  persistBenchmarkResourceArtifacts,
++} from
++  '../../test/distributed/harness/benchmark-resource-durable-resolver.js';
++import {
++  beginBenchmarkResourceLiveObservation,
++  captureBenchmarkResourceLiveObservation,
++  finalizeBenchmarkResourceLiveObservation,
++  resolveBenchmarkResourceLiveObservationBounds,
++  writeExternallyObservedBenchmarkResourceCalibration,
++} from
++  '../../test/distributed/harness/benchmark-resource-live-observation-authority.js';
++import {
++  createBenchmarkResourceMatrixManifest,
++} from
++  '../../test/distributed/harness/benchmark-resource-matrix-manifest.js';
++import {
++  BENCHMARK_RESOURCE_P0_PRICE_SHEET,
++} from
++  '../../test/distributed/harness/benchmark-resource-price-sheet-p0-constants.js';
++import {
++  SCALE_PROFILE_ID,
++} from '../../test/distributed/harness/scale-evidence-contract.js';
++import {
++  createScaleProfileEnvelope,
++} from '../../test/distributed/harness/scale-profile-envelope.js';
++import {
++  collectBenchmarkResourceSourceProvenance,
++} from './benchmark-resource-source-provenance.js';
++import {
++  openMovielensPairedCapacityLiveEnvironment,
++} from './movielens-paired-capacity-live-environment.js';
++
++const execFileAsync = promisify(execFile);
++const REPORT_DIRECTORY = 'test-output/reports';
++const ARTIFACT_DIRECTORY =
++  'test-output/comparative-movielens-paired-runtime-artifacts';
++const SIDE_IDS = Object.freeze(['lagrange', 'postgresql']);
++const MATRIX_ID = 'comparative-movielens-paired-runtime-p0-v1';
++const PAIR_ID = 'lagrange-postgresql-movielens-paired-runtime-v1';
++const OFFERED_LOADS = Object.freeze([3, 10]);
++const MEASURED_MS = 34_000;
++const MINIMUM_HEADROOM_RATIO = 0.02;
++const SHARED_NETWORK_BYTES_PER_SECOND = 125_000_000;
++const VALIDITY_MS = 24 * 60 * 60 * 1_000;
++const SCENARIOS = Object.freeze([
++  'comparative-efficiency-movielens-heterogeneous-capacity-observation',
++  'comparative-efficiency-movielens-paired-resource-observation',
++  'comparative-efficiency-movielens-paired-runtime-adapters',
++]);
++const AXES = Object.freeze([
++  {id: 'dataset', values: ['movielens-10000-observed']},
++  {id: 'replication_factor', values: ['1']},
++]);
++const SOURCE_PATHS = Object.freeze([
++  'examples/service-data-affinity/movielens-capacity-runtime-adapters.js',
++  'examples/service-data-affinity/' +
++    'movielens-public-request-workload-adapter.js',
++  'examples/service-data-affinity/' +
++    'run-movielens-public-request-workload.js',
++  'examples/service-data-affinity/run-postgres-baseline.js',
++  'scripts/checks/benchmark-resource-source-provenance.js',
++  'scripts/checks/movielens-lagrange-capacity-adapter-child.js',
++  'scripts/checks/movielens-paired-capacity-live-environment.js',
++  'scripts/checks/movielens-postgresql-capacity-adapter-child.js',
++  'scripts/checks/' +
++    'run-comparative-efficiency-movielens-paired-runtime-adapters-live.js',
++  'scripts/checks/systemd-capacity-adapter-controller.js',
++  'test/distributed/harness/benchmark-capacity-heterogeneous-observation.js',
++  'test/distributed/harness/benchmark-capacity-heterogeneous-protocol.js',
++  'test/distributed/harness/' +
++    'benchmark-resource-capacity-protocol-evidence.js',
++  'test/distributed/harness/benchmark-resource-evidence-root.js',
++  'test/distributed/harness/benchmark-resource-live-observation-authority.js',
++  'test/distributed/harness/benchmark-resource-live-root-validation.js',
++  'test/distributed/harness/benchmark-resource-mixed-provider.js',
++]);
++const CAPACITY_SLO = Object.freeze({
++  maxP99LatencyMs: 2_000,
++  maxErrorRate: 0.05,
++});
++const CAPACITY_REPETITIONS = Object.freeze({minimum: 3, maximum: 3});
++const CAPACITY_STATISTICS = Object.freeze({
++  confidenceLevel: 0.95,
++  bootstrapResamples: 100,
++  practicalSignificanceRatio: 0.05,
++  targetRelativeCiWidth: 0.5,
++});
++const CAPACITY_SAMPLING = Object.freeze({
++  tailQuantile: 0.99,
++  tailSampleMinimum: 100,
++  warmupMs: 0,
++  operationTimeoutMs: 120_000,
++  semanticFinalizerTimeoutMs: 120_000,
++  resetTimeoutMs: 30_000,
++  maxReleaseLagMs: 100,
++  clientMaxInFlight: 1,
++  clientMaxQueueDepth: 1_024,
++});
++const CAPACITY_RANDOM_SEED = 20260728;
++const MILLISECONDS_PER_SECOND = 1_000;
++const NETWORK_TRANSMIT_FIELD_INDEX = 8;
++const PROFILE_NODE_COUNT = 3;
++const PROFILE_TABLE_COUNT = 4;
++const PROFILE_PARTITION_COUNT = 4;
++const localText = Object.freeze({
++  CAPACITY_STUDY: 'movielens-paired-runtime-adapter-proof-v1',
++  DATA_SHAPE: 'movielens-10000-observed-grouped-reduce',
++  DEVELOPER_HOST: 'developer-host',
++  DOCKER_STORAGE: 'local-overlay2-and-host-filesystem',
++  FRESH_EVAL: '--eval',
++  FRESH_INPUT_TYPE: '--input-type=module',
++  HEADROOM_HOST_CPU: 'host CPU',
++  HEADROOM_HOST_MEMORY: 'host memory',
++  HEADROOM_OBSERVER_CPU: 'observer CPU',
++  HEADROOM_SHARED_NETWORK: 'shared network',
++  HEADROOM_SHARED_STORAGE: 'shared storage',
++  LAGRANGE_NODE: 'lagrange-node',
++  LIVE_FAIL:
++    'comparative-efficiency-movielens-paired-runtime-live: FAIL\n',
++  LIVE_PASS:
++    'comparative-efficiency-movielens-paired-runtime-live: PASS\n',
++  NEWLINE: '\n',
++  NO_EXCLUSION: 'none',
++  OPERATION: 'confidence_adjusted_top_ten_grouped_reduce',
++  PACKAGE_VERSION: '0.1.0',
++  POSTGRESQL_CLIENT: 'postgresql-client',
++  POSTGRESQL_DATABASE: 'postgresql-database',
++  PROFILE_PROVIDER: 'local-isolated-cgroup-v2-and-docker',
++  RESOURCE_PREREGISTRATION_VERSION:
++    'movielens-paired-runtime-resource-preregistration-v1',
++  TOPOLOGY_IMAGE: 'lagrange-public-wasm-and-postgresql-16',
++  TOPOLOGY_VERSION: 'movielens-paired-runtime-live-topology-v1',
++  UTF8: 'utf8',
++  WORKLOAD_ID: 'movielens-confidence-adjusted-top-ten',
++  WORKLOAD_VERSION: 'movielens-paired-runtime-workload-v1',
++  WRITE_EXCLUSIVE: 'wx',
++});
++
++function fail(reason) {
++  throw new Error(`paired MovieLens live proof failed: ${reason}`);
++}
++
++async function networkBytes() {
++  const text = await readFile('/proc/net/dev', 'utf8');
++  let total = 0;
++  for (const line of text.split(localText.NEWLINE).slice(2)) {
++    const separator = line.indexOf(':');
++    if (separator < 0) continue;
++    const fields = line.slice(separator + 1).trim().split(/\s+/u);
++    total +=
++      Number(fields[0] || 0) +
++      Number(fields[NETWORK_TRANSMIT_FIELD_INDEX] || 0);
++  }
++  return total;
++}
++
++async function hostObservation(directory) {
++  const filesystem = await statfs(directory);
++  return {
++    cpu: process.cpuUsage(),
++    load: os.loadavg()[0],
++    freeMemory: os.freemem(),
++    networkBytes: await networkBytes(),
++    storageCapacity: filesystem.blocks * filesystem.bsize,
++    storageAvailable: filesystem.bavail * filesystem.bsize,
++  };
++}
++
++function boundedMeasurement(capacity, observedPeak, name) {
++  if (
++    !Number.isFinite(capacity) ||
++    capacity <= 0 ||
++    !Number.isFinite(observedPeak) ||
++    observedPeak < 0 ||
++    observedPeak > capacity
++  ) {
++    fail(`${name} capacity exceeded`);
++  }
++  return {capacity, observedPeak};
++}
++
++function headroom(start, end, durationMs) {
++  const cpuCount = os.cpus().length;
++  const totalMemory = os.totalmem();
++  const observerCpu =
++    end.cpu.user + end.cpu.system - start.cpu.user - start.cpu.system;
++  const networkDelta = end.networkBytes - start.networkBytes;
++  return {
++    minimumRequiredRatio: MINIMUM_HEADROOM_RATIO,
++    observerCpu: boundedMeasurement(
++      durationMs * MILLISECONDS_PER_SECOND * cpuCount,
++      observerCpu,
++      localText.HEADROOM_OBSERVER_CPU,
++    ),
++    hostCpu: boundedMeasurement(
++      cpuCount,
++      Math.max(start.load, end.load),
++      localText.HEADROOM_HOST_CPU,
++    ),
++    hostMemory: boundedMeasurement(
++      totalMemory,
++      Math.max(
++        totalMemory - start.freeMemory,
++        totalMemory - end.freeMemory,
++      ),
++      localText.HEADROOM_HOST_MEMORY,
++    ),
++    sharedNetwork: boundedMeasurement(
++      SHARED_NETWORK_BYTES_PER_SECOND *
++        durationMs / MILLISECONDS_PER_SECOND,
++      networkDelta,
++      localText.HEADROOM_SHARED_NETWORK,
++    ),
++    sharedStorage: boundedMeasurement(
++      Math.min(start.storageCapacity, end.storageCapacity),
++      Math.max(
++        start.storageCapacity - start.storageAvailable,
++        end.storageCapacity - end.storageAvailable,
++      ),
++      localText.HEADROOM_SHARED_STORAGE,
++    ),
++  };
++}
++
++function topology(environment) {
++  const primary = environment.postgresql.metadata.primaryContainerId;
++  return {
++    version: localText.TOPOLOGY_VERSION,
++    image: localText.TOPOLOGY_IMAGE,
++    imageId: digestBenchmarkSemanticData({
++      lagrangeExecutable:
++        environment.lagrange.metadata.artifact.executableDigest,
++      postgresqlImage: environment.postgresql.metadata.imageId,
++    }),
++    databaseContainers: [primary],
++    sharedClientContainers: [environment.postgresqlResourceId],
++    network: environment.networkName,
++    databaseStorage:
++      environment.components.map((component) => component.storagePath),
++    reservedIopsPerComponent: 0,
++    reservedNetworkBytesPerSecondPerComponent: 0,
++    components: [
++      {
++        sideId: SIDE_IDS[0],
++        componentId: localText.LAGRANGE_NODE,
++        role: BENCHMARK_RESOURCE_COMPONENT_ROLE.LAGRANGE_NODE,
++        physicalResourceId: environment.lagrangeResourceId,
++      },
++      {
++        sideId: SIDE_IDS[1],
++        componentId: localText.POSTGRESQL_DATABASE,
++        role: BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
++        physicalResourceId: primary,
++      },
++      {
++        sideId: SIDE_IDS[1],
++        componentId: localText.POSTGRESQL_CLIENT,
++        role: BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT,
++        physicalResourceId: environment.postgresqlResourceId,
++      },
++    ],
++  };
++}
++
++function workload(dataset, environment) {
++  return {
++    version: localText.WORKLOAD_VERSION,
++    dataset: {
++      cardinality: dataset.cardinality,
++      digest: dataset.digest,
++      sizeBytes: dataset.bytes.length,
++      skew: dataset.skew,
++    },
++    operation: localText.OPERATION,
++    operationManifestDigest: environment.operationManifestDigest,
++    semanticOracleDigest: environment.semanticOracleDigest,
++  };
++}
++
++function inventorySides() {
++  const included =
++    BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED;
++  return [
++    {
++      sideId: SIDE_IDS[0],
++      components: [{
++        componentId: localText.LAGRANGE_NODE,
++        role: BENCHMARK_RESOURCE_COMPONENT_ROLE.LAGRANGE_NODE,
++        billingTreatment: included,
++        exclusionReason: localText.NO_EXCLUSION,
++      }],
++    },
++    {
++      sideId: SIDE_IDS[1],
++      components: [
++        {
++          componentId: localText.POSTGRESQL_DATABASE,
++          role: BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
++          billingTreatment: included,
++          exclusionReason: localText.NO_EXCLUSION,
++        },
++        {
++          componentId: localText.POSTGRESQL_CLIENT,
++          role: BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT,
++          billingTreatment: included,
++          exclusionReason: localText.NO_EXCLUSION,
++        },
++      ],
++    },
++  ];
++}
++
++function profileEnvelope({
++  sourceRevision,
++  topologyDigest,
++  workloadDigest,
++  dataset,
++}) {
++  return createScaleProfileEnvelope({
++    profile: {id: SCALE_PROFILE_ID.DEVELOPMENT, version: 1},
++    software: {
++      revision: sourceRevision,
++      runtime: process.version,
++      packageVersion: localText.PACKAGE_VERSION,
++    },
++    hardware: {
++      provider: localText.PROFILE_PROVIDER,
++      region: BENCHMARK_RESOURCE_P0_PRICE_SHEET.region,
++      instanceClass: localText.DEVELOPER_HOST,
++      cpuCount: os.cpus().length,
++      memoryBytes: os.totalmem(),
++      storageClass: localText.DOCKER_STORAGE,
++    },
++    topology: {
++      manifestDigest: topologyDigest,
++      nodeCount: PROFILE_NODE_COUNT,
++      failureDomainCount: 1,
++      tableCount: PROFILE_TABLE_COUNT,
++      partitionCount: PROFILE_PARTITION_COUNT,
++      replicaCount: 1,
++    },
++    data: {
++      manifestDigest: workloadDigest,
++      logicalBytes: dataset.bytes.length,
++      physicalBytes: dataset.bytes.length,
++      shape: localText.DATA_SHAPE,
++    },
++    workload: {
++      id: localText.WORKLOAD_ID,
++      manifestDigest: workloadDigest,
++      duration: {warmupMs: 0, measuredMs: MEASURED_MS},
++    },
++  });
++}
++
++function capacityPreregistration({
++  cellId,
++  profileIdentity,
++  runId,
++  topologyDigest,
++}) {
++  const contract =
++    getBenchmarkSemanticContract(BENCHMARK_SQL_DIALECT.POSTGRESQL);
++  return sealBenchmarkCapacityPreregistration({
++    studyId: localText.CAPACITY_STUDY,
++    sideIds: SIDE_IDS,
++    sideSemanticContracts: SIDE_IDS.map((sideId) => ({
++      sideId,
++      dialect: BENCHMARK_SQL_DIALECT.POSTGRESQL,
++      contractDigest: contract.contractDigest,
++    })),
++    offeredLoadPerSecond: OFFERED_LOADS,
++    slo: CAPACITY_SLO,
++    repetitions: CAPACITY_REPETITIONS,
++    statistics: {
++      estimator: BENCHMARK_CAPACITY_ESTIMATOR,
++      interval: BENCHMARK_CAPACITY_INTERVAL,
++      ...CAPACITY_STATISTICS,
++      stoppingRule: BENCHMARK_CAPACITY_STOPPING_RULE,
++      multipleComparisonTreatment:
++        BENCHMARK_CAPACITY_MULTIPLE_COMPARISON,
++    },
++    sampling: {
++      ...CAPACITY_SAMPLING,
++      measuredMs: MEASURED_MS,
++    },
++    ...capacityExecutionPolicies(),
++    randomization: {
++      algorithm: BENCHMARK_CAPACITY_RANDOMIZATION_ALGORITHM,
++      seed: CAPACITY_RANDOM_SEED,
++    },
++    executionIdentity: {
++      matrixId: MATRIX_ID,
++      cellId,
++      cellManifestDigest:
++        digestBenchmarkSemanticData({matrixId: MATRIX_ID, cellId}),
++      profileIdentity,
++      pairIdentity: digestBenchmarkSemanticData({pairId: PAIR_ID}),
++      runId,
++      liveEnvironmentContractDigest: topologyDigest,
++    },
++  });
++}
++
++function capacityExecutionPolicies() {
++  return {
++    cachePolicy: BENCHMARK_CAPACITY_CACHE_POLICY,
++    runOrderPolicy: BENCHMARK_CAPACITY_RUN_ORDER_POLICY,
++    timeoutPolicy: BENCHMARK_CAPACITY_TIMEOUT_POLICY,
++    rejectPolicy: BENCHMARK_CAPACITY_REJECT_POLICY,
++    artifactPolicy: BENCHMARK_CAPACITY_ARTIFACT_POLICY,
++  };
++}
++
++function assertCapacityBracketing(report, preregistration) {
++  const reportInspection =
++    inspectBenchmarkCapacityProtocolReport(report, preregistration);
++  const terminalInspection =
++    inspectBenchmarkCapacityTerminalMeasurement(report, preregistration);
++  if (!reportInspection.valid || !terminalInspection.valid) {
++    fail(
++      `C3 terminal report invalid: ${reportInspection.reason}; ` +
++      `${terminalInspection.reason}; executionFailure=` +
++      JSON.stringify(report.executionFailure),
++    );
++  }
++  const topLoad = OFFERED_LOADS[OFFERED_LOADS.length - 1];
++  for (const sideId of SIDE_IDS) {
++    const capacity = report.summary.capacityBySide[sideId];
++    if (
++      capacity.maxSloOfferedLoadPerSecond === null ||
++      capacity.maxSloOfferedLoadPerSecond >= topLoad
++    ) {
++      fail(`top load did not bracket ${sideId} capacity`);
++    }
++  }
++}
++
++async function replayInFreshProcess(rootDigest, artifactDirectory) {
++  const validatorUrl = pathToFileURL(resolve(
++    'test/distributed/harness/benchmark-resource-evidence-root.js',
++  )).href;
++  const resolverUrl = pathToFileURL(resolve(
++    'test/distributed/harness/benchmark-resource-durable-resolver.js',
++  )).href;
++  const source =
++    `import {validateBenchmarkResourceEvidenceRoot as validate} from ${
++      JSON.stringify(validatorUrl)
++    };` +
++    `import {createBenchmarkResourceDurableResolver as resolver} from ${
++      JSON.stringify(resolverUrl)
++    };` +
++    'process.stdout.write(JSON.stringify(validate({' +
++    `rootDigest:${JSON.stringify(rootDigest)},` +
++    `resolver:resolver(${JSON.stringify(artifactDirectory)})` +
++    '})));';
++  const {stdout} = await execFileAsync(
++    process.execPath,
++    [localText.FRESH_INPUT_TYPE, localText.FRESH_EVAL, source],
++    {encoding: localText.UTF8},
++  );
++  return JSON.parse(stdout);
++}
++
++async function writeScenarioReport(detail) {
++  const timestamp = new Date().toISOString();
++  const scenarios = SCENARIOS.map((scenario) => ({
++    scenario,
++    passed: true,
++    current: {passed: true, verdict: 'PASS'},
++    detail,
++  }));
++  const report = {
++    timestamp,
++    scenario: SCENARIOS[2],
++    producer: 'comparative-efficiency-movielens-paired-runtime-live',
++    fidelity:
++      'live-public-wasm-and-postgresql-with-cgroup-container-metering',
++    summary: {total: scenarios.length, passed: scenarios.length, failed: 0},
++    optimizationSummary: {totalPriorityItems: 0},
++    standardSummary: {scenarios},
++  };
++  await mkdir(REPORT_DIRECTORY, {recursive: true});
++  const stamp = timestamp.replace(/[:.]/gu, '-');
++  const reportPath = resolve(
++    REPORT_DIRECTORY,
++    `${SCENARIOS[2]}-${stamp}.report.json`,
++  );
++  await writeFile(
++    reportPath,
++    JSON.stringify(report, null, 2),
++    {flag: localText.WRITE_EXCLUSIVE},
++  );
++  return reportPath;
++}
++
++async function executeLiveProof(dataset, provenance) {
++  const runId = `movielens-paired-runtime-${process.pid}-${Date.now()}`;
++  const environment =
++    await openMovielensPairedCapacityLiveEnvironment({
++      runId,
++      sideIds: SIDE_IDS,
++      dataset,
++      workingDirectory: process.cwd(),
++    });
++  const topologyPayload = topology(environment);
++  const workloadPayload = workload(dataset, environment);
++  const topologyArtifact = createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
++    topologyPayload,
++  );
++  const workloadArtifact = createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
++    workloadPayload,
++  );
++  const profile = profileEnvelope({
++    sourceRevision: provenance.sourceRevision,
++    topologyDigest: topologyArtifact.digest,
++    workloadDigest: workloadArtifact.digest,
++    dataset,
++  });
++  const placeholderPreregistration =
++    createBenchmarkResourceSourceArtifact(
++      BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
++      {version: 'movielens-paired-runtime-cell-identity-placeholder-v1'},
++    );
++  const matrix = createBenchmarkResourceMatrixManifest({
++    matrixId: MATRIX_ID,
++    axes: AXES,
++    sideIds: SIDE_IDS,
++    workloadManifestDigest: workloadArtifact.digest,
++    alternativeTopologyDigest: topologyArtifact.digest,
++    preregistrationDigest: placeholderPreregistration.digest,
++    profileEnvelopeDigest: digestBenchmarkSemanticData(profile),
++  });
++  const preregistration = capacityPreregistration({
++    cellId: matrix.artifact.payload.cells[0].cellId,
++    profileIdentity: profile.profileIdentity,
++    runId,
++    topologyDigest: topologyArtifact.digest,
++  });
++  const captured = [];
++  let cleanupReceipt;
++  let protocol;
++  try {
++    protocol = await runBenchmarkCapacityHeterogeneousProtocol({
++      preregistration,
++      adapters: environment.adapters,
++      async beginResourceObservation(context) {
++        const host = await hostObservation(process.cwd());
++        const session = await beginBenchmarkResourceLiveObservation(
++          environment.provider,
++          {
++            runId,
++            networkId: environment.networkId,
++            networkName: environment.networkName,
++            sourceRevision: provenance.sourceRevision,
++            components: environment.components,
++          },
++        );
++        return {context, host, session};
++      },
++      async completeResourceObservation({
++        resourceObservation,
++        context,
++      }) {
++        await captureBenchmarkResourceLiveObservation(
++          resourceObservation.session,
++        );
++        const bounds = resolveBenchmarkResourceLiveObservationBounds(
++          resourceObservation.session,
++          context.sideId,
++        );
++        const host = await hostObservation(process.cwd());
++        captured.push(resourceObservation);
++        return {
++          ...bounds,
++          headroom: headroom(
++            resourceObservation.host,
++            host,
++            bounds.endedAt - bounds.startedAt,
++          ),
++        };
++      },
++    });
++    cleanupReceipt = await environment.close();
++  } catch (error) {
++    await environment.close().catch(() => {});
++    throw error;
++  }
++  assertCapacityBracketing(protocol.report, preregistration);
++  const calibrationBySession = new Map();
++  for (const observation of captured) {
++    const finalization =
++      await finalizeBenchmarkResourceLiveObservation(observation.session);
++    calibrationBySession.set(
++      observation.session,
++      writeExternallyObservedBenchmarkResourceCalibration(
++        finalization.receipt,
++        finalization.authorization,
++      ),
++    );
++  }
++  const windowEvidence = protocol.windows.map((c3) => ({
++    c3,
++    calibration:
++      calibrationBySession.get(c3.resourceObservation.session),
++  }));
++  const producedAt = new Date().toISOString();
++  const validUntil =
++    new Date(Date.parse(producedAt) + VALIDITY_MS).toISOString();
++  const resourcePreregistration = {
++    version: localText.RESOURCE_PREREGISTRATION_VERSION,
++    sideIds: SIDE_IDS,
++    capacityProtocolReportDigest: protocol.report.reportDigest,
++    capacityProtocolPreregistrationDigest:
++      preregistration.manifestDigest,
++  };
++  const evidence = createBenchmarkResourceCapacityProtocolEvidence({
++    matrixId: MATRIX_ID,
++    axes: AXES,
++    pairId: PAIR_ID,
++    runId,
++    sideIds: SIDE_IDS,
++    sourceRevision: provenance.sourceRevision,
++    producedAt,
++    validUntil,
++    workloadManifest: workloadPayload,
++    alternativeTopology: topologyPayload,
++    resourcePreregistration,
++    profileEnvelope: profile,
++    inventoryId: 'movielens-paired-runtime-inventory-v1',
++    inventorySides: inventorySides(),
++    priceSheet: BENCHMARK_RESOURCE_P0_PRICE_SHEET,
++    capacityPreregistration: preregistration,
++    capacityReport: protocol.report,
++    windowEvidence,
++    practicalThreshold: 0.05,
++  });
++  const memory = validateBenchmarkResourceEvidenceRoot(evidence.receipt);
++  if (!memory.valid || !memory.claimEligible) {
++    fail(`memory evidence replay rejected: ${memory.reason}`);
++  }
++  const allArtifacts = [...evidence.artifacts, evidence.root];
++  const artifactDirectory = resolve(ARTIFACT_DIRECTORY);
++  const persisted = await persistBenchmarkResourceArtifacts(
++    artifactDirectory,
++    allArtifacts,
++  );
++  const durable = validateBenchmarkResourceEvidenceRoot({
++    rootDigest: evidence.root.digest,
++    resolver: createBenchmarkResourceDurableResolver(artifactDirectory),
++  });
++  if (!durable.valid || !durable.claimEligible) {
++    fail(`durable evidence replay rejected: ${durable.reason}`);
++  }
++  const fresh = await replayInFreshProcess(
++    evidence.root.digest,
++    artifactDirectory,
++  );
++  if (!fresh.valid || !fresh.claimEligible) {
++    fail(`fresh evidence replay rejected: ${fresh.reason}`);
++  }
++  const headroomRatios =
++    protocol.windows.map((window) => window.headroom.minimumObservedRatio);
++  return {
++    artifactCount: persisted.length,
++    calibrationCount: captured.length,
++    capacityBySide: protocol.report.summary.capacityBySide,
++    cleanupReceipt,
++    comparativeClaimEligible: true,
++    durableReplayValid: true,
++    evidenceRootDigest: evidence.root.digest,
++    freshProcessReplayValid: true,
++    matrixClaimPublished: false,
++    adapterProofOnly: true,
++    minimumObservedHeadroomRatio: Math.min(...headroomRatios),
++    operationManifestDigest: environment.operationManifestDigest,
++    semanticOracleDigest: environment.semanticOracleDigest,
++    sourceRevision: provenance.sourceRevision,
++    windowCount: protocol.windows.length,
++  };
++}
++
++async function main() {
++  const provenance =
++    await collectBenchmarkResourceSourceProvenance(SOURCE_PATHS);
++  const datasetDirectory = await mkdtemp(
++    path.join(os.tmpdir(), 'movielens-paired-runtime-dataset-'),
++  );
++  let detail;
++  try {
++    const variants =
++      await createMovielensGroupedReduceMatrixDatasets(datasetDirectory);
++    const dataset = selectMovielensGroupedReduceMatrixDataset(
++      variants,
++      10_000,
++      'observed',
++    );
++    detail = await executeLiveProof(dataset, provenance);
++  } finally {
++    await rm(datasetDirectory, {recursive: true, force: true});
++  }
++  const reportPath = await writeScenarioReport({
++    ...detail,
++    datasetDirectoryRemoved: true,
++    sourceProvenance: provenance,
++  });
++  process.stdout.write(
++    localText.LIVE_PASS +
++    `rootDigest: ${detail.evidenceRootDigest}\n` +
++    `scenarioReport: ${reportPath}\n`,
++  );
++}
++
++main().catch((error) => {
++  process.stderr.write(
++    localText.LIVE_FAIL +
++    `${error.stack}\n`,
++  );
++  process.exitCode = 1;
++});
+diff --git a/scripts/checks/systemd-capacity-adapter-controller.js b/scripts/checks/systemd-capacity-adapter-controller.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ccd4b37365fded7640f911890da8ed420e0031bc
+--- /dev/null
++++ b/scripts/checks/systemd-capacity-adapter-controller.js
+@@ -0,0 +1,265 @@
++import {spawn} from 'node:child_process';
++import {execFile} from 'node:child_process';
++import {createInterface} from 'node:readline';
++import {promisify} from 'node:util';
++
++const execFileAsync = promisify(execFile);
++const REQUEST_TIMEOUT_MS = 120_000;
++const EXIT_TIMEOUT_MS = 30_000;
++const STDERR_LIMIT = 16_384;
++const POLL_INTERVAL_MS = 25;
++const SYSTEMD_RUN_FLAGS = Object.freeze([
++  '--user',
++  '--quiet',
++  '--pipe',
++  '--wait',
++  '--collect',
++]);
++const localText = Object.freeze({
++  ABORT: 'abort',
++  ABORT_ERROR: 'AbortError',
++  CONTROL_GROUP_PROPERTY: '--property=ControlGroup',
++  CPU_LIST: '--cpu-list',
++  DATA: 'data',
++  ERROR_NAME: 'Error',
++  EVENT_EXIT: 'exit',
++  EVENT_LINE: 'line',
++  EXECUTE: 'execute',
++  FILE_EXISTS: '-e',
++  RESULT: 'result',
++  ROOT: '/',
++  START: 'start',
++  SYSTEMCTL: 'systemctl',
++  SYSTEMD_RUN: 'systemd-run',
++  TASKSET: 'taskset',
++  UTF8: 'utf8',
++  USER: '--user',
++  VALUE: '--value',
++  SHOW: 'show',
++  RESET: 'reset',
++  COUNTERS: 'counters',
++  CLOSE: 'close',
++  TEST: 'test',
++});
++
++function delay(durationMs) {
++  return new Promise((resolve) => setTimeout(resolve, durationMs));
++}
++
++function fail(reason) {
++  throw new Error(`systemd capacity adapter failed: ${reason}`);
++}
++
++function boundedText(value, suffix) {
++  const joined = value + suffix;
++  return joined.length > STDERR_LIMIT ?
++    joined.slice(joined.length - STDERR_LIMIT) :
++    joined;
++}
++
++export function systemdCapacityAdapterArguments({
++  unit,
++  workingDirectory,
++  scriptPath,
++  memoryMax,
++  cpuQuota,
++  cpuSet,
++  tasksMax,
++}) {
++  return [
++    ...SYSTEMD_RUN_FLAGS,
++    `--unit=${unit}`,
++    `--property=MemoryMax=${memoryMax}`,
++    `--property=CPUQuota=${cpuQuota}`,
++    `--property=TasksMax=${tasksMax}`,
++    `--working-directory=${workingDirectory}`,
++    localText.TASKSET,
++    localText.CPU_LIST,
++    cpuSet,
++    process.execPath,
++    scriptPath,
++  ];
++}
++
++async function resolveControlGroup(unit) {
++  const {stdout} = await execFileAsync(
++    localText.SYSTEMCTL,
++    [
++      localText.USER,
++      localText.SHOW,
++      `${unit}.service`,
++      localText.CONTROL_GROUP_PROPERTY,
++      localText.VALUE,
++    ],
++    {encoding: localText.UTF8},
++  );
++  const relative = stdout.trim();
++  if (!relative.startsWith(localText.ROOT)) {
++    fail(`control group unavailable for ${unit}`);
++  }
++  return `/sys/fs/cgroup${relative}`;
++}
++
++function processExit(child) {
++  return new Promise((resolve) => {
++    child.once(localText.EVENT_EXIT, (code, signal) => resolve({code, signal}));
++  });
++}
++
++async function waitForRemovedControlGroup(cgroupPath) {
++  const deadline = Date.now() + EXIT_TIMEOUT_MS;
++  while (Date.now() < deadline) {
++    try {
++      const {stdout} = await execFileAsync(
++        localText.TEST,
++        [localText.FILE_EXISTS, cgroupPath],
++        {encoding: localText.UTF8},
++      );
++      void stdout;
++    } catch {
++      return;
++    }
++    await delay(POLL_INTERVAL_MS);
++  }
++  fail(`control group remained after teardown: ${cgroupPath}`);
++}
++
++export async function startSystemdCapacityAdapter({
++  unit,
++  workingDirectory,
++  scriptPath,
++  memoryMax,
++  cpuQuota,
++  cpuSet,
++  tasksMax,
++  startOptions,
++}) {
++  const child = spawn(
++    localText.SYSTEMD_RUN,
++    systemdCapacityAdapterArguments({
++      unit,
++      workingDirectory,
++      scriptPath,
++      memoryMax,
++      cpuQuota,
++      cpuSet,
++      tasksMax,
++    }),
++    {
++      cwd: workingDirectory,
++      stdio: ['pipe', 'pipe', 'pipe'],
++    },
++  );
++  const exit = processExit(child);
++  const pending = new Map();
++  let requestSequence = 0;
++  let stderr = '';
++  let closed = false;
++  child.stderr.setEncoding(localText.UTF8);
++  child.stderr.on(localText.DATA, (chunk) => {
++    stderr = boundedText(stderr, chunk);
++  });
++  const lines = createInterface({input: child.stdout});
++  lines.on(localText.EVENT_LINE, (line) => {
++    let message;
++    try {
++      message = JSON.parse(line);
++    } catch {
++      return;
++    }
++    const waiter = pending.get(message.requestId);
++    if (waiter === undefined) return;
++    pending.delete(message.requestId);
++    clearTimeout(waiter.timer);
++    waiter.signal?.removeEventListener(localText.ABORT, waiter.abort);
++    if (message.kind === localText.RESULT) {
++      waiter.resolve(message.value);
++      return;
++    }
++    const error = new Error(
++      message.error?.message || 'adapter child request failed',
++    );
++    error.name = message.error?.name || localText.ERROR_NAME;
++    error.stack = message.error?.stack || error.stack;
++    waiter.reject(error);
++  });
++  function request(kind, value = {}, signal = null) {
++    if (closed) fail(`request after close: ${kind}`);
++    requestSequence += 1;
++    const requestId = `${unit}-${requestSequence}`;
++    return new Promise((resolve, reject) => {
++      const clear = () => {
++        const waiter = pending.get(requestId);
++        if (waiter === undefined) return;
++        pending.delete(requestId);
++        clearTimeout(waiter.timer);
++        signal?.removeEventListener(localText.ABORT, waiter.abort);
++      };
++      const abort = () => {
++        clear();
++        const error = new Error('adapter request aborted');
++        error.name = localText.ABORT_ERROR;
++        reject(error);
++      };
++      const timer = setTimeout(() => {
++        clear();
++        reject(new Error(
++          `adapter request timed out: ${kind}; stderr=${stderr}`,
++        ));
++      }, REQUEST_TIMEOUT_MS);
++      pending.set(requestId, {resolve, reject, timer, abort, signal});
++      if (signal?.aborted) {
++        abort();
++        return;
++      }
++      signal?.addEventListener(localText.ABORT, abort, {once: true});
++      child.stdin.write(`${JSON.stringify({
++        requestId,
++        kind,
++        ...value,
++      })}\n`);
++    });
++  }
++  child.once(localText.EVENT_EXIT, (code, signal) => {
++    const failure = new Error(
++      `adapter exited before reply: code=${code}; signal=${signal}; ` +
++      `stderr=${stderr}`,
++    );
++    for (const waiter of pending.values()) {
++      clearTimeout(waiter.timer);
++      waiter.signal?.removeEventListener(localText.ABORT, waiter.abort);
++      waiter.reject(failure);
++    }
++    pending.clear();
++  });
++  const metadata = await request(localText.START, {options: startOptions});
++  const cgroupPath = await resolveControlGroup(unit);
++  return {
++    unit,
++    cgroupPath,
++    metadata,
++    execute(operation, signal) {
++      return request(localText.EXECUTE, {operation}, signal);
++    },
++    reset() {
++      return request(localText.RESET);
++    },
++    counters() {
++      return request(localText.COUNTERS);
++    },
++    async close() {
++      const receipt = await request(localText.CLOSE);
++      closed = true;
++      child.stdin.end();
++      const result = await exit;
++      if (result.code !== 0) {
++        fail(
++          `${unit} exit code ${result.code}; signal=${result.signal}; ` +
++          `stderr=${stderr}`,
++        );
++      }
++      await waitForRemovedControlGroup(cgroupPath);
++      return receipt;
++    },
++  };
++}
+diff --git a/test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-observation.test.js b/test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-observation.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..8a96a12c05ee8ff66dbb886017fb11e231700616
+--- /dev/null
++++ b/test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-observation.test.js
+@@ -0,0 +1,209 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++
++import {
++  digestBenchmarkSemanticData,
++} from '../benchmark-semantic-integrity.js';
++import {
++  createBenchmarkCapacityAdapterIdentity,
++  createBenchmarkCapacityAdapterOwnerReceipt,
++  createBenchmarkCapacityHeadroomReceipt,
++  createBenchmarkCapacityHeterogeneousOperationReceipt,
++  inspectBenchmarkCapacityHeterogeneousOperationReceipt,
++} from '../benchmark-capacity-heterogeneous-observation.js';
++import {
++  createBenchmarkCapacityWindowReceipt,
++} from '../benchmark-capacity-window-receipt.js';
++import {
++  sealBenchmarkCapacityPreregistration,
++} from '../benchmark-capacity-preregistration.js';
++import {
++  BENCHMARK_CAPACITY_PHASE,
++} from '../benchmark-capacity-protocol-constants.js';
++import {
++  preregistrationInput,
++  SIDE_LAGRANGE,
++  successfulRunSample,
++} from './benchmark-capacity-protocol-test-fixture.js';
++
++function fixture() {
++  const preregistration =
++    sealBenchmarkCapacityPreregistration(preregistrationInput({
++      offeredLoadPerSecond: [100],
++      repetitions: {minimum: 3, maximum: 3},
++    }));
++  const sample = successfulRunSample({
++    sideId: SIDE_LAGRANGE,
++    phase: BENCHMARK_CAPACITY_PHASE.MEASURED,
++    blockIndex: 0,
++    offeredLoadPerSecond: 100,
++    windowDurationMs: preregistration.sampling.measuredMs,
++    p99LatencyMs: 20,
++    preregistration,
++  });
++  const adapterIdentity = createBenchmarkCapacityAdapterIdentity({
++    adapterId: 'movielens-lagrange-public-request',
++    adapterVersion: 'v1',
++    sideId: SIDE_LAGRANGE,
++    runtimeKind: 'wasm_component',
++    invocationBoundary: 'authenticated_http_request_binding',
++    operationManifestDigest:
++      digestBenchmarkSemanticData({operation: 'grouped_reduce'}),
++    executableDigest: digestBenchmarkSemanticData({wasm: 'fixture'}),
++  });
++  const operationIds = [];
++  for (let index = 0; index < sample.counts.correct; index += 1) {
++    operationIds.push(`request-${index}`);
++  }
++  const ownerReceipt = createBenchmarkCapacityAdapterOwnerReceipt({
++    adapterIdentity,
++    operationIds,
++    evidenceDigest: digestBenchmarkSemanticData({
++      binding: 'movielens-public-grouped-reduce',
++      journalRows: operationIds,
++    }),
++  });
++  const blockedOrderIndex =
++    preregistration.blockedPairOrders[0].indexOf(SIDE_LAGRANGE);
++  const window = {
++    blockedOrderIndex,
++    startedAt: 1_800_000_000_000,
++    endedAt: 1_800_000_001_000,
++  };
++  const headroom = createBenchmarkCapacityHeadroomReceipt({
++    minimumRequiredRatio: 0.1,
++    observerCpu: {capacity: 100, observedPeak: 5},
++    hostCpu: {capacity: 16, observedPeak: 4},
++    hostMemory: {capacity: 64_000, observedPeak: 16_000},
++    sharedNetwork: {capacity: 10_000, observedPeak: 2_000},
++    sharedStorage: {capacity: 10_000, observedPeak: 1_000},
++  }, sample);
++  const receipt = createBenchmarkCapacityHeterogeneousOperationReceipt({
++    preregistration,
++    sample,
++    adapterIdentity,
++    ownerReceipt,
++    window,
++    headroom,
++  });
++  const windowReceipt = createBenchmarkCapacityWindowReceipt(
++    {
++      blockIndex: 0,
++      blockedOrderIndex,
++      sideId: SIDE_LAGRANGE,
++      phase: BENCHMARK_CAPACITY_PHASE.MEASURED,
++      offeredLoad: 100,
++      startedAt: 1_800_000_000_000,
++      endedAt: 1_800_000_001_000,
++      capacitySampleDigest: sample.sampleDigest,
++      semanticReceiptDigest: sample.semanticReceiptDigest,
++      liveEngagementDigest: receipt.receiptDigest,
++      resourceWindowDigest: null,
++    },
++    sample,
++    preregistration,
++  );
++  return {
++    preregistration,
++    sample,
++    adapterIdentity,
++    ownerReceipt,
++    receipt,
++    window,
++    windowReceipt,
++    headroom,
++  };
++}
++
++function receiptInput(value, overrides = {}) {
++  return {
++    preregistration: value.preregistration,
++    sample: value.sample,
++    adapterIdentity: value.adapterIdentity,
++    ownerReceipt: value.ownerReceipt,
++    window: value.window,
++    headroom: value.headroom,
++    ...overrides,
++  };
++}
++
++test('heterogeneous receipt joins C2, C3, adapter, and exact window identity', () => {
++  const value = fixture();
++  const receipt = value.receipt;
++  assert.deepEqual(receipt.counts, {
++    offered: value.sample.counts.offered,
++    emitted:
++      value.sample.counts.offered -
++      value.sample.unreleasedOperations,
++    dispatched: value.sample.counts.dispatched,
++    correct: value.sample.counts.correct,
++    rejected: value.sample.counts.rejected,
++    timedOut: value.sample.counts.timedOut,
++    errored: value.sample.counts.errored,
++    queueOverflow: value.sample.counts.queueOverflow,
++  });
++  assert.equal(
++    receipt.semanticReceiptDigest,
++    value.sample.semanticReceipt.receiptDigest,
++  );
++  assert.equal(receipt.ownerReceiptDigest, value.ownerReceipt.receiptDigest);
++  assert.equal(receipt.headroom.eligible, true);
++  assert.equal(
++    inspectBenchmarkCapacityHeterogeneousOperationReceipt(receipt).valid,
++    true,
++  );
++});
++
++test('heterogeneous receipt rejects caller assertion and cross-window joins', () => {
++  const value = fixture();
++  assert.throws(
++    () => createBenchmarkCapacityHeterogeneousOperationReceipt({
++      ...receiptInput(value),
++      candidateEngaged: true,
++    }),
++    /exact_plain_data_record_required/u,
++  );
++  assert.throws(
++    () => createBenchmarkCapacityHeterogeneousOperationReceipt({
++      ...receiptInput(value),
++      ownerReceipt: {
++        ...value.ownerReceipt,
++        correctOperationCount:
++          value.ownerReceipt.correctOperationCount - 1,
++      },
++    }),
++    /owner_sample_window_identity_mismatch|identity_or_count_mismatch/u,
++  );
++});
++
++test('heterogeneous receipt rejects measurement-infrastructure saturation', () => {
++  const value = fixture();
++  const saturated = createBenchmarkCapacityHeadroomReceipt({
++    minimumRequiredRatio: 0.2,
++    observerCpu: {capacity: 100, observedPeak: 95},
++    hostCpu: {capacity: 16, observedPeak: 4},
++    hostMemory: {capacity: 64_000, observedPeak: 16_000},
++    sharedNetwork: {capacity: 10_000, observedPeak: 2_000},
++    sharedStorage: {capacity: 10_000, observedPeak: 1_000},
++  }, value.sample);
++  assert.equal(saturated.eligible, false);
++  assert.throws(
++    () => createBenchmarkCapacityHeterogeneousOperationReceipt({
++      ...receiptInput(value),
++      headroom: saturated,
++    }),
++    /headroom:ineligible_or_digest_mismatch/u,
++  );
++});
++
++test('heterogeneous receipt inspector rejects digest tampering', () => {
++  const value = fixture();
++  const receipt = value.receipt;
++  assert.equal(
++    inspectBenchmarkCapacityHeterogeneousOperationReceipt({
++      ...receipt,
++      offeredLoad: receipt.offeredLoad + 1,
++    }).valid,
++    false,
++  );
++});
+diff --git a/test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-protocol.test.js b/test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-protocol.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b8987efdcc346dcab2a716d353d2d10537d6b306
+--- /dev/null
++++ b/test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-protocol.test.js
+@@ -0,0 +1,166 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++
++import {
++  createBenchmarkCapacityAdapterIdentity,
++  createBenchmarkCapacityAdapterOwnerReceipt,
++  inspectBenchmarkCapacityHeterogeneousOperationReceipt,
++} from '../benchmark-capacity-heterogeneous-observation.js';
++import {
++  runBenchmarkCapacityHeterogeneousProtocol,
++} from '../benchmark-capacity-heterogeneous-protocol.js';
++import {
++  BENCHMARK_CAPACITY_OUTCOME,
++} from '../benchmark-capacity-protocol-constants.js';
++import {
++  inspectBenchmarkCapacityProtocolReport,
++} from '../benchmark-capacity-protocol.js';
++import {
++  sealBenchmarkCapacityPreregistration,
++} from '../benchmark-capacity-preregistration.js';
++import {
++  digestBenchmarkSemanticData,
++} from '../benchmark-semantic-integrity.js';
++import {
++  preregistrationInput,
++  semanticReceiptForCounts,
++} from './benchmark-capacity-protocol-test-fixture.js';
++
++function adapter(sideId, dialect) {
++  const identity = createBenchmarkCapacityAdapterIdentity({
++    adapterId: `${sideId}-fixture-adapter`,
++    adapterVersion: 'v1',
++    sideId,
++    runtimeKind: `${sideId}-runtime`,
++    invocationBoundary: `${sideId}-public-boundary`,
++    operationManifestDigest:
++      digestBenchmarkSemanticData({operation: 'grouped_reduce'}),
++    executableDigest: digestBenchmarkSemanticData({sideId}),
++  });
++  let operations = null;
++  let ownerReceipt = null;
++  return {
++    adapterIdentity: identity,
++    beginWindow() {
++      operations = [];
++      ownerReceipt = null;
++    },
++    async executeOperation({operationIndex}) {
++      operations[operationIndex] = `${sideId}-${operationIndex}`;
++      return {status: BENCHMARK_CAPACITY_OUTCOME.CORRECT};
++    },
++    finalizeSemanticReceipt({
++      counts,
++      rejectedByReason,
++      correctOperationIndexes,
++    }) {
++      const operationIds = correctOperationIndexes.map(
++        (index) => operations[index],
++      );
++      ownerReceipt = createBenchmarkCapacityAdapterOwnerReceipt({
++        adapterIdentity: identity,
++        operationIds,
++        evidenceDigest: digestBenchmarkSemanticData(operationIds),
++      });
++      return semanticReceiptForCounts(
++        dialect,
++        counts,
++        rejectedByReason,
++      );
++    },
++    completeWindow() {
++      return {
++        operationEvidence: operations,
++        ownerReceipt,
++      };
++    },
++    async resetRunState(context) {
++      const resetContext = {
++        blockIndex: context.blockIndex,
++        blockedOrderIndex: context.blockedOrderIndex,
++        sideId: context.sideId,
++        offeredLoadPerSecond: context.offeredLoadPerSecond,
++      };
++      return {
++        version: 'fixture-reset-v1',
++        adapterIdentityDigest: identity.adapterIdentityDigest,
++        sideId,
++        context: resetContext,
++        ownerReceipt: {state: 'reset'},
++        resetDigest: digestBenchmarkSemanticData({
++          sideId,
++          context: resetContext,
++        }),
++      };
++    },
++  };
++}
++
++test('heterogeneous protocol executes exact repeated side/window coordinates', async () => {
++  const input = preregistrationInput({
++    offeredLoadPerSecond: [1000],
++    repetitions: {minimum: 3, maximum: 3},
++  });
++  input.sampling = {
++    ...input.sampling,
++    warmupMs: 0,
++    measuredMs: 100,
++  };
++  const preregistration = sealBenchmarkCapacityPreregistration(input);
++  const adapters = preregistration.sideSemanticContracts.map(
++    (contract) => adapter(contract.sideId, contract.dialect),
++  );
++  let cursor = 1_800_000_000_000;
++  const result = await runBenchmarkCapacityHeterogeneousProtocol({
++    preregistration,
++    adapters,
++    beginResourceObservation(context) {
++      return {context, startedAt: cursor};
++    },
++    completeResourceObservation({resourceObservation, sample}) {
++      const startedAt = resourceObservation.startedAt;
++      const endedAt = startedAt + sample.observationDurationMs;
++      cursor = endedAt + 1;
++      return {
++        startedAt,
++        endedAt,
++        headroom: {
++          minimumRequiredRatio: 0.1,
++          observerCpu: {capacity: 100, observedPeak: 5},
++          hostCpu: {capacity: 16, observedPeak: 4},
++          hostMemory: {capacity: 64_000, observedPeak: 16_000},
++          sharedNetwork: {capacity: 10_000, observedPeak: 2_000},
++          sharedStorage: {capacity: 10_000, observedPeak: 1_000},
++        },
++      };
++    },
++  });
++  assert.equal(
++    result.report.executionFailure,
++    null,
++    JSON.stringify(result.report.executionFailure),
++  );
++  assert.equal(result.report.completedBlocks, 3);
++  assert.equal(result.windows.length, 6);
++  assert.equal(result.resets.length, 6);
++  assert.equal(
++    inspectBenchmarkCapacityProtocolReport(
++      result.report,
++      preregistration,
++    ).valid,
++    true,
++  );
++  for (const window of result.windows) {
++    assert.equal(
++      inspectBenchmarkCapacityHeterogeneousOperationReceipt(
++        window.engagement,
++      ).valid,
++      true,
++    );
++    assert.equal(
++      window.receipt.liveEngagementDigest,
++      window.engagement.receiptDigest,
++    );
++    assert.equal(window.headroom.eligible, true);
++  }
++});
+diff --git a/test/distributed/harness/__tests__/benchmark-resource-capacity-protocol-evidence.test.js b/test/distributed/harness/__tests__/benchmark-resource-capacity-protocol-evidence.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4600166559a70d10e1762773e5b1437284fcd301
+--- /dev/null
++++ b/test/distributed/harness/__tests__/benchmark-resource-capacity-protocol-evidence.test.js
+@@ -0,0 +1,375 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++
++import {
++  BENCHMARK_RESOURCE_ARTIFACT_KIND,
++  BENCHMARK_RESOURCE_BILLING_TREATMENT,
++  BENCHMARK_RESOURCE_COMPONENT_ROLE,
++} from '../benchmark-resource-contract-constants.js';
++import {
++  createBenchmarkResourceSourceArtifact,
++  validateBenchmarkResourceEvidenceRoot,
++} from '../benchmark-resource-evidence-root.js';
++import {
++  createBenchmarkResourceMatrixManifest,
++} from '../benchmark-resource-matrix-manifest.js';
++import {
++  createBenchmarkResourceCapacityProtocolEvidence,
++} from '../benchmark-resource-capacity-protocol-evidence.js';
++import {
++  BENCHMARK_RESOURCE_P0_PRICE_SHEET,
++} from '../benchmark-resource-price-sheet-p0-constants.js';
++import {
++  beginBenchmarkResourceLiveObservation,
++  captureBenchmarkResourceLiveObservation,
++  finalizeBenchmarkResourceLiveObservation,
++  writeExternallyObservedBenchmarkResourceCalibration,
++} from '../benchmark-resource-live-observation-authority.js';
++import {
++  createBenchmarkCapacityWindowReceipt,
++} from '../benchmark-capacity-window-receipt.js';
++import {
++  sealBenchmarkCapacityPreregistration,
++} from '../benchmark-capacity-preregistration.js';
++import {
++  digestBenchmarkSemanticData,
++} from '../benchmark-semantic-integrity.js';
++import {
++  SCALE_PROFILE_ID,
++} from '../scale-evidence-contract.js';
++import {
++  createScaleProfileEnvelope,
++} from '../scale-profile-envelope.js';
++import {
++  artifactFixtureReport,
++  preregistrationInput,
++} from './benchmark-capacity-protocol-test-fixture.js';
++
++const MATRIX_ID = 'heterogeneous-resource-adapter-fixture-matrix-v1';
++const PAIR_ID = 'lagrange-postgresql-movielens-fixture-pair-v1';
++const RUN_ID = 'heterogeneous-resource-adapter-fixture-run-v1';
++const REVISION = 'fixture-revision';
++const SIDE_IDS = ['lagrange', 'postgresql'];
++const AXES = [
++  {id: 'dataset', values: ['movielens-10k']},
++  {id: 'topology', values: ['single-replica']},
++];
++const START_EPOCH = Date.parse('2026-07-28T10:00:00.000Z');
++const COMPONENTS = [
++  {
++    sideId: SIDE_IDS[0],
++    componentId: 'lagrange-node',
++    containerId: 'lagrange-cgroup',
++    storagePath: '/fixture/lagrange',
++  },
++  {
++    sideId: SIDE_IDS[1],
++    componentId: 'postgresql-database',
++    containerId: 'postgresql-container',
++    storagePath: '/fixture/postgresql',
++  },
++];
++
++function topologyPayload() {
++  return {
++    version: 'benchmark-resource-live-topology-v1',
++    image: 'heterogeneous-runtime-pair',
++    imageId: digestBenchmarkSemanticData({pair: 'fixture'}),
++    databaseContainers: ['postgresql-container'],
++    sharedClientContainers: [],
++    network: 'managed-bridge-and-public-loopback',
++    databaseStorage: [
++      '/fixture/lagrange',
++      '/fixture/postgresql',
++    ],
++    reservedIopsPerComponent: 0,
++    reservedNetworkBytesPerSecondPerComponent: 0,
++    components: [
++      {
++        sideId: SIDE_IDS[0],
++        componentId: 'lagrange-node',
++        role: BENCHMARK_RESOURCE_COMPONENT_ROLE.LAGRANGE_NODE,
++        physicalResourceId: 'lagrange-cgroup',
++      },
++      {
++        sideId: SIDE_IDS[1],
++        componentId: 'postgresql-database',
++        role: BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
++        physicalResourceId: 'postgresql-container',
++      },
++    ],
++  };
++}
++
++function workloadPayload() {
++  return {
++    version: 'movielens-capacity-resource-fixture-v1',
++    dataset: 'movielens-10k',
++    operation: 'confidence_adjusted_top_ten',
++  };
++}
++
++function inventorySides() {
++  return [
++    {
++      sideId: SIDE_IDS[0],
++      components: [{
++        componentId: 'lagrange-node',
++        role: BENCHMARK_RESOURCE_COMPONENT_ROLE.LAGRANGE_NODE,
++        billingTreatment:
++          BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
++        exclusionReason: 'none',
++      }],
++    },
++    {
++      sideId: SIDE_IDS[1],
++      components: [{
++        componentId: 'postgresql-database',
++        role: BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
++        billingTreatment:
++          BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
++        exclusionReason: 'none',
++      }],
++    },
++  ];
++}
++
++function stats(timestamp, multiplier) {
++  return {
++    timestamp,
++    cpuPercent: 10 * multiplier,
++    cpuUsageNanoseconds: 1_000_000 * multiplier,
++    memoryUsageBytes: 100_000 * multiplier,
++    memoryLimitBytes: 10_000_000,
++    cpuLimitNanoCpus: 1_000_000_000,
++    storageLimitBytes: 100_000_000,
++    pids: 2,
++    rxBytes: 1_000 * multiplier,
++    txBytes: 2_000 * multiplier,
++    blockReadBytes: 3_000 * multiplier,
++    blockWriteBytes: 4_000 * multiplier,
++    blockReadOperations: 3 * multiplier,
++    blockWriteOperations: 4 * multiplier,
++    storageUsageBytes: 10_000 * multiplier,
++  };
++}
++
++async function calibration(startedAt, endedAt) {
++  let calls = 0;
++  let cleaned = false;
++  const provider = {
++    async inspectContainer() {
++      return {State: {Running: true}};
++    },
++    async inspectContainerIfExists() {
++      return cleaned ? null : {State: {Running: true}};
++    },
++    async getContainerResourceSnapshot() {
++      calls += 1;
++      return calls <= COMPONENTS.length ?
++        stats(startedAt, 1) :
++        stats(endedAt, 2);
++    },
++    async getNetworkByName() {
++      return cleaned ? null : {id: 'fixture-network'};
++    },
++  };
++  const session = await beginBenchmarkResourceLiveObservation(provider, {
++    runId: RUN_ID,
++    networkId: 'fixture-network',
++    networkName: 'fixture-network',
++    sourceRevision: REVISION,
++    components: COMPONENTS,
++  });
++  await captureBenchmarkResourceLiveObservation(session);
++  cleaned = true;
++  const finalization =
++    await finalizeBenchmarkResourceLiveObservation(session);
++  return writeExternallyObservedBenchmarkResourceCalibration(
++    finalization.receipt,
++    finalization.authorization,
++  );
++}
++
++function normalizedReport(preregistration, sourceReport) {
++  const report = structuredClone(sourceReport);
++  const samples = [...report.warmupSamples, ...report.rawSamples];
++  let cursor = START_EPOCH;
++  for (let index = 0; index < report.windowReceipts.length; index += 1) {
++    const receipt = report.windowReceipts[index];
++    const sample = samples.find(
++      (candidate) =>
++        candidate.sampleDigest === receipt.capacitySampleDigest,
++    );
++    const startedAt = cursor;
++    const endedAt = startedAt + sample.observationDurationMs;
++    report.windowReceipts[index] =
++      createBenchmarkCapacityWindowReceipt({
++        blockIndex: receipt.blockIndex,
++        blockedOrderIndex: receipt.blockedOrderIndex,
++        sideId: receipt.sideId,
++        phase: receipt.phase,
++        offeredLoad: receipt.offeredLoad,
++        startedAt,
++        endedAt,
++        capacitySampleDigest: receipt.capacitySampleDigest,
++        semanticReceiptDigest: receipt.semanticReceiptDigest,
++        liveEngagementDigest: receipt.liveEngagementDigest,
++        resourceWindowDigest: null,
++      }, sample, preregistration);
++    cursor = endedAt + 1;
++  }
++  delete report.reportDigest;
++  return {
++    ...report,
++    reportDigest: digestBenchmarkSemanticData(report),
++  };
++}
++
++test('C4 assembler admits a repeated heterogeneous C3 measuring pair', async () => {
++  const workload = createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
++    workloadPayload(),
++  );
++  const topology = createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
++    topologyPayload(),
++  );
++  const profileEnvelope = createScaleProfileEnvelope({
++    profile: {id: SCALE_PROFILE_ID.DEVELOPMENT, version: 1},
++    software: {
++      revision: REVISION,
++      runtime: process.version,
++      packageVersion: '0.1.0',
++    },
++    hardware: {
++      provider: 'fixture',
++      region: BENCHMARK_RESOURCE_P0_PRICE_SHEET.region,
++      instanceClass: 'fixture-host',
++      cpuCount: 2,
++      memoryBytes: 20_000_000,
++      storageClass: 'fixture-storage',
++    },
++    topology: {
++      manifestDigest: topology.digest,
++      nodeCount: 2,
++      failureDomainCount: 1,
++      tableCount: 4,
++      partitionCount: 4,
++      replicaCount: 1,
++    },
++    data: {
++      manifestDigest: workload.digest,
++      logicalBytes: 10_000,
++      physicalBytes: 20_000,
++      shape: 'movielens-grouped-reduce',
++    },
++    workload: {
++      id: 'movielens-grouped-reduce',
++      manifestDigest: workload.digest,
++      duration: {warmupMs: 100, measuredMs: 1_000},
++    },
++  });
++  const placeholderPreregistration =
++    createBenchmarkResourceSourceArtifact(
++      BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
++      {version: 'placeholder-v1'},
++    );
++  const matrix = createBenchmarkResourceMatrixManifest({
++    matrixId: MATRIX_ID,
++    axes: AXES,
++    sideIds: SIDE_IDS,
++    workloadManifestDigest: workload.digest,
++    alternativeTopologyDigest: topology.digest,
++    preregistrationDigest: placeholderPreregistration.digest,
++    profileEnvelopeDigest: digestBenchmarkSemanticData(profileEnvelope),
++  });
++  const cellId = matrix.artifact.payload.cells[0].cellId;
++  const capacityPreregistration = sealBenchmarkCapacityPreregistration(
++    preregistrationInput({
++      executionIdentity: {
++        matrixId: MATRIX_ID,
++        cellId,
++        cellManifestDigest: digestBenchmarkSemanticData({
++          matrixId: MATRIX_ID,
++          cellId,
++        }),
++        profileIdentity: profileEnvelope.profileIdentity,
++        pairIdentity: digestBenchmarkSemanticData({pairId: PAIR_ID}),
++        runId: RUN_ID,
++        liveEnvironmentContractDigest: topology.digest,
++      },
++    }),
++  );
++  const raw = await artifactFixtureReport(capacityPreregistration);
++  const capacityReport = normalizedReport(
++    capacityPreregistration,
++    raw.report,
++  );
++  const windowEvidence = [];
++  for (let index = 0;
++    index < capacityReport.windowReceipts.length;
++    index += 1) {
++    const receipt = capacityReport.windowReceipts[index];
++    if (receipt.phase !== 'measured') continue;
++    const sample = capacityReport.rawSamples.find(
++      (candidate) =>
++        candidate.sampleDigest === receipt.capacitySampleDigest,
++    );
++    windowEvidence.push({
++      c3: {
++        receipt,
++        sample,
++        engagement: {
++          receiptDigest: receipt.liveEngagementDigest,
++        },
++        adapterEvidence: {
++          operationEvidence: [{
++            operationId: `${receipt.sideId}-${receipt.blockIndex}`,
++          }],
++        },
++      },
++      calibration:
++        await calibration(receipt.startedAt, receipt.endedAt),
++    });
++  }
++  const resourcePreregistration = {
++    version: 'movielens-resource-preregistration-fixture-v1',
++    sideIds: SIDE_IDS,
++    capacityProtocolReportDigest: capacityReport.reportDigest,
++    capacityProtocolPreregistrationDigest:
++      capacityPreregistration.manifestDigest,
++  };
++  const evidence = createBenchmarkResourceCapacityProtocolEvidence({
++    matrixId: MATRIX_ID,
++    axes: AXES,
++    pairId: PAIR_ID,
++    runId: RUN_ID,
++    sideIds: SIDE_IDS,
++    sourceRevision: REVISION,
++    producedAt: '2026-07-28T12:00:00.000Z',
++    validUntil: '2026-07-29T12:00:00.000Z',
++    workloadManifest: workloadPayload(),
++    alternativeTopology: topologyPayload(),
++    resourcePreregistration,
++    profileEnvelope,
++    inventoryId: 'heterogeneous-resource-fixture-inventory-v1',
++    inventorySides: inventorySides(),
++    priceSheet: BENCHMARK_RESOURCE_P0_PRICE_SHEET,
++    capacityPreregistration,
++    capacityReport,
++    windowEvidence,
++    practicalThreshold: 0.05,
++  });
++  const validation = validateBenchmarkResourceEvidenceRoot(
++    evidence.receipt,
++  );
++  assert.equal(
++    validation.valid,
++    true,
++    `${validation.reason}: ${validation.detail || ''}`,
++  );
++  assert.equal(validation.claimEligible, true);
++  assert.equal(evidence.windows.length, windowEvidence.length);
++  assert.equal(evidence.cellEvidence.artifact.payload.state, 'measuring');
++});
+diff --git a/test/distributed/harness/__tests__/benchmark-resource-mixed-provider.test.js b/test/distributed/harness/__tests__/benchmark-resource-mixed-provider.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..8bfadc916cb24577e56d0f388db51841f87d38d3
+--- /dev/null
++++ b/test/distributed/harness/__tests__/benchmark-resource-mixed-provider.test.js
+@@ -0,0 +1,129 @@
++import assert from 'node:assert/strict';
++import {
++  mkdir,
++  mkdtemp,
++  rm,
++  writeFile,
++} from 'node:fs/promises';
++import {tmpdir} from 'node:os';
++import path from 'node:path';
++import test from 'node:test';
++
++import {
++  BenchmarkResourceMixedProvider,
++} from '../benchmark-resource-mixed-provider.js';
++
++async function fixture() {
++  const root = await mkdtemp(
++    path.join(tmpdir(), 'lagrange-mixed-provider-'),
++  );
++  const cgroup = path.join(root, 'cgroup');
++  const storage = path.join(root, 'storage');
++  await mkdir(cgroup);
++  await mkdir(storage);
++  const files = {
++    'cgroup.procs': '99999999\n',
++    'cpu.stat': 'usage_usec 1234\nuser_usec 1000\nsystem_usec 234\n',
++    'cpu.max': '200000 100000\n',
++    'memory.current': '1048576\n',
++    'memory.max': '67108864\n',
++    'pids.current': '2\n',
++    'io.stat':
++      '8:0 rbytes=100 wbytes=200 rios=3 wios=4 dbytes=0 dios=0\n',
++  };
++  for (const [name, value] of Object.entries(files)) {
++    await writeFile(path.join(cgroup, name), value);
++  }
++  await writeFile(path.join(storage, 'data'), 'retained bytes');
++  const containerProvider = {
++    inspectContainer(id) {
++      return {Id: id, State: {Running: true}};
++    },
++    inspectContainerIfExists() {
++      return null;
++    },
++    getContainerResourceSnapshot() {
++      throw new Error('unexpected container snapshot');
++    },
++    getNetworkByName() {
++      return null;
++    },
++  };
++  const provider = new BenchmarkResourceMixedProvider({
++    containerProvider,
++    cgroups: [{
++      resourceId: 'lagrange-cgroup',
++      cgroupPath: cgroup,
++      storagePath: storage,
++      storageLimitBytes: 1_073_741_824,
++      cpuLimitNanoCpus: 2_000_000_000,
++      networkCounters() {
++        return {rxBytes: 50, txBytes: 70};
++      },
++    }],
++  });
++  return {root, cgroup, storage, provider};
++}
++
++test('mixed provider meters cgroup process resources through C4 provider seam', async () => {
++  const value = await fixture();
++  try {
++    assert.equal(
++      (await value.provider.inspectContainer('lagrange-cgroup'))
++        .State.Running,
++      true,
++    );
++    const snapshot =
++      await value.provider.getContainerResourceSnapshot(
++        'lagrange-cgroup',
++        value.storage,
++      );
++    assert.equal(snapshot.cpuUsageNanoseconds, 1_234_000);
++    assert.equal(snapshot.cpuLimitNanoCpus, 2_000_000_000);
++    assert.equal(snapshot.memoryUsageBytes, 1_048_576);
++    assert.equal(snapshot.memoryLimitBytes, 67_108_864);
++    assert.equal(snapshot.rxBytes + snapshot.txBytes, 120);
++    assert.equal(snapshot.blockReadBytes, 100);
++    assert.equal(snapshot.blockWriteBytes, 200);
++    assert.equal(snapshot.blockReadOperations, 3);
++    assert.equal(snapshot.blockWriteOperations, 4);
++    assert.ok(snapshot.storageUsageBytes > 0);
++  } finally {
++    await rm(value.root, {recursive: true, force: true});
++  }
++});
++
++test('mixed provider falls back when delegated CPU and IO files are absent', async () => {
++  const value = await fixture();
++  try {
++    await rm(path.join(value.cgroup, 'cpu.max'));
++    await rm(path.join(value.cgroup, 'io.stat'));
++    const snapshot =
++      await value.provider.getContainerResourceSnapshot(
++        'lagrange-cgroup',
++        value.storage,
++      );
++    assert.equal(snapshot.cpuLimitNanoCpus, 2_000_000_000);
++    assert.equal(snapshot.blockReadBytes, 0);
++    assert.equal(snapshot.blockWriteBytes, 0);
++  } finally {
++    await rm(value.root, {recursive: true, force: true});
++  }
++});
++
++test('mixed provider cleanup observation requires cgroup removal', async () => {
++  const value = await fixture();
++  try {
++    assert.notEqual(
++      await value.provider.inspectContainerIfExists('lagrange-cgroup'),
++      null,
++    );
++    await rm(value.cgroup, {recursive: true, force: true});
++    assert.equal(
++      await value.provider.inspectContainerIfExists('lagrange-cgroup'),
++      null,
++    );
++  } finally {
++    await rm(value.root, {recursive: true, force: true});
++  }
++});
+diff --git a/test/distributed/harness/benchmark-capacity-heterogeneous-observation.js b/test/distributed/harness/benchmark-capacity-heterogeneous-observation.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d33240e278f67f4b355c9abef688fc0177faefb8
+--- /dev/null
++++ b/test/distributed/harness/benchmark-capacity-heterogeneous-observation.js
+@@ -0,0 +1,608 @@
++import {
++  appendOwnArrayValue,
++  digestBenchmarkSemanticData,
++  hasExactOwnDataKeys,
++  isDenseDataArray,
++  isNonNegativeSafeInteger,
++  isNonNegativeSafeNumber,
++  isPlainDataRecord,
++  isSha256Digest,
++} from './benchmark-semantic-integrity.js';
++import {
++  inspectBenchmarkCapacityRunSample,
++} from './benchmark-capacity-run-sample.js';
++import {
++  inspectBenchmarkSemanticReceipt,
++} from './benchmark-workload-semantics.js';
++import {
++  deriveBenchmarkCapacityExpectedWindow,
++} from './benchmark-capacity-preregistration.js';
++
++const ADAPTER_IDENTITY_KEYS = Object.freeze([
++  'adapterId',
++  'adapterVersion',
++  'sideId',
++  'runtimeKind',
++  'invocationBoundary',
++  'operationManifestDigest',
++  'executableDigest',
++]);
++const ADAPTER_IDENTITY_RECEIPT_KEYS = Object.freeze([
++  ...ADAPTER_IDENTITY_KEYS,
++  'adapterIdentityDigest',
++]);
++const OWNER_RECEIPT_KEYS = Object.freeze([
++  'version',
++  'adapterIdentityDigest',
++  'sideId',
++  'operationIds',
++  'operationIdsDigest',
++  'evidenceDigest',
++  'correctOperationCount',
++  'receiptDigest',
++]);
++const HEADROOM_INPUT_KEYS = Object.freeze([
++  'minimumRequiredRatio',
++  'observerCpu',
++  'hostCpu',
++  'hostMemory',
++  'sharedNetwork',
++  'sharedStorage',
++]);
++const EXTERNAL_HEADROOM_KEYS = Object.freeze([
++  'capacity',
++  'observedPeak',
++]);
++const HEADROOM_KEYS = Object.freeze([
++  'minimumRequiredRatio',
++  'externalEmitter',
++  'clientQueue',
++  'observerCpu',
++  'hostCpu',
++  'hostMemory',
++  'sharedNetwork',
++  'sharedStorage',
++  'minimumObservedRatio',
++  'eligible',
++  'headroomDigest',
++]);
++const HEADROOM_MEASUREMENT_KEYS = Object.freeze([
++  'capacity',
++  'observedPeak',
++  'headroomRatio',
++]);
++const OWNER_RECEIPT_INPUT_KEYS = Object.freeze([
++  'adapterIdentity',
++  'operationIds',
++  'evidenceDigest',
++]);
++const RECEIPT_INPUT_KEYS = Object.freeze([
++  'adapterIdentity',
++  'sample',
++  'window',
++  'ownerReceipt',
++  'headroom',
++  'preregistration',
++]);
++const RECEIPT_KEYS = Object.freeze([
++  'version',
++  'adapterIdentity',
++  'adapterIdentityDigest',
++  'matrixId',
++  'cellId',
++  'cellManifestDigest',
++  'profileIdentity',
++  'pairIdentity',
++  'runId',
++  'liveEnvironmentContractDigest',
++  'blockIndex',
++  'blockedOrderIndex',
++  'sideId',
++  'phase',
++  'offeredLoad',
++  'startedAt',
++  'endedAt',
++  'counts',
++  'latencyQuantilesMs',
++  'capacitySampleDigest',
++  'semanticReceiptDigest',
++  'semanticContractDigest',
++  'semanticResultSetDigest',
++  'ownerReceipt',
++  'ownerReceiptDigest',
++  'headroom',
++  'receiptDigest',
++]);
++const COUNT_KEYS = Object.freeze([
++  'offered',
++  'emitted',
++  'dispatched',
++  'correct',
++  'rejected',
++  'timedOut',
++  'errored',
++  'queueOverflow',
++]);
++const QUANTILE_KEYS = Object.freeze(['p50', 'p95', 'p99']);
++const WINDOW_KEYS = Object.freeze([
++  'blockedOrderIndex',
++  'startedAt',
++  'endedAt',
++]);
++const VERSION =
++  'benchmark-capacity-heterogeneous-operation-receipt-v1';
++const OWNER_VERSION =
++  'benchmark-capacity-adapter-owner-receipt-v1';
++const QUANTILE_P50 = 0.50;
++const QUANTILE_P95 = 0.95;
++const QUANTILE_P99 = 0.99;
++const localText = Object.freeze({
++  ADAPTER_IDENTITY_DIGEST_MISMATCH: 'adapterIdentity:digest_mismatch',
++  ADAPTER_IDENTITY_EXACT_RECORD:
++    'adapterIdentity:exact_plain_data_record_required',
++  ADAPTER_IDENTITY_SHAPE_INVALID: 'adapterIdentity:shape_invalid',
++  EMITTED: 'emitted',
++  HEADROOM_EXACT_RECORD: 'headroom:exact_plain_data_record_required',
++  HEADROOM_INELIGIBLE_OR_DIGEST_MISMATCH:
++    'headroom:ineligible_or_digest_mismatch',
++  HEADROOM_MINIMUM_REQUIRED_RATIO: 'headroom.minimumRequiredRatio',
++  HEADROOM_SAMPLE_INVALID: 'headroom.sample:invalid',
++  HEADROOM_SHAPE_INVALID: 'headroom:shape_invalid',
++  OWNER_RECEIPT_DIGEST_MISMATCH: 'ownerReceipt:digest_mismatch',
++  OWNER_RECEIPT_EVIDENCE_DIGEST: 'ownerReceipt.evidenceDigest',
++  OWNER_RECEIPT_EXACT_RECORD:
++    'ownerReceipt:exact_plain_data_record_required',
++  OWNER_RECEIPT_IDENTITY_OR_COUNT_MISMATCH:
++    'ownerReceipt:identity_or_count_mismatch',
++  OWNER_RECEIPT_OPERATION_IDS_DENSE:
++    'ownerReceipt.operationIds:dense_array_required',
++  OWNER_RECEIPT_OPERATION_IDS_MISMATCH:
++    'ownerReceipt:operation_ids_mismatch',
++  OWNER_RECEIPT_RECEIPT_DIGEST: 'ownerReceipt.receiptDigest',
++  OWNER_RECEIPT_SHAPE_INVALID: 'ownerReceipt:shape_invalid',
++  RECEIPT_C2_SEMANTIC_INVALID: 'receipt:c2_semantic_receipt_invalid',
++  RECEIPT_COUNTS_INVALID: 'receipt:counts_invalid',
++  RECEIPT_DIGEST: 'receipt.receiptDigest',
++  RECEIPT_DIGEST_MISMATCH: 'receipt:digest_mismatch',
++  RECEIPT_EXACT_RECORD: 'receipt:exact_plain_data_record_required',
++  RECEIPT_OBSERVATION_INVALID:
++    'heterogeneous capacity observation invalid',
++  RECEIPT_OWNER_SAMPLE_WINDOW_MISMATCH:
++    'receipt:owner_sample_window_identity_mismatch',
++  RECEIPT_QUANTILES_INVALID: 'receipt:quantiles_invalid',
++  RECEIPT_SHAPE_OR_VERSION_INVALID:
++    'receipt:shape_or_version_invalid',
++  RECEIPT_VALID: 'valid',
++  RECEIPT_WINDOW_SHAPE_INVALID: 'receipt:window_shape_invalid',
++});
++const objectFreeze = Object.freeze;
++
++function fail(reason) {
++  throw new TypeError(
++    `invalid heterogeneous capacity observation: ${reason}`,
++  );
++}
++
++function assertText(value, path) {
++  if (typeof value !== 'string' || value.length === 0) {
++    fail(`${path}:primitive_text_required`);
++  }
++}
++
++function assertDigest(value, path) {
++  if (!isSha256Digest(value)) fail(`${path}:sha256_digest_required`);
++}
++
++function assertRatio(value, path) {
++  if (
++    !isNonNegativeSafeNumber(value) ||
++    value > 1
++  ) {
++    fail(`${path}:ratio_required`);
++  }
++}
++
++function identityBody(value) {
++  const body = {};
++  for (let index = 0; index < ADAPTER_IDENTITY_KEYS.length; index += 1) {
++    const key = ADAPTER_IDENTITY_KEYS[index];
++    body[key] = value[key];
++  }
++  return body;
++}
++
++export function createBenchmarkCapacityAdapterIdentity(input) {
++  if (
++    !isPlainDataRecord(input) ||
++    !hasExactOwnDataKeys(input, ADAPTER_IDENTITY_KEYS)
++  ) {
++    fail(localText.ADAPTER_IDENTITY_EXACT_RECORD);
++  }
++  const digestFields = ['operationManifestDigest', 'executableDigest'];
++  for (let index = 0; index < ADAPTER_IDENTITY_KEYS.length; index += 1) {
++    const key = ADAPTER_IDENTITY_KEYS[index];
++    if (digestFields.includes(key)) {
++      assertDigest(input[key], `adapterIdentity.${key}`);
++    } else {
++      assertText(input[key], `adapterIdentity.${key}`);
++    }
++  }
++  const body = identityBody(input);
++  return objectFreeze({
++    ...body,
++    adapterIdentityDigest: digestBenchmarkSemanticData(body),
++  });
++}
++
++function inspectAdapterIdentity(value) {
++  if (!hasExactOwnDataKeys(value, ADAPTER_IDENTITY_RECEIPT_KEYS)) {
++    fail(localText.ADAPTER_IDENTITY_SHAPE_INVALID);
++  }
++  const reconstructed = createBenchmarkCapacityAdapterIdentity(
++    identityBody(value),
++  );
++  if (
++    reconstructed.adapterIdentityDigest !==
++      value.adapterIdentityDigest
++  ) {
++    fail(localText.ADAPTER_IDENTITY_DIGEST_MISMATCH);
++  }
++  return reconstructed;
++}
++
++function ownerReceiptBody(receipt) {
++  const body = {};
++  for (let index = 0; index < OWNER_RECEIPT_KEYS.length - 1; index += 1) {
++    const key = OWNER_RECEIPT_KEYS[index];
++    body[key] = receipt[key];
++  }
++  return body;
++}
++
++function inspectOwnerReceipt(receipt, identity, sample) {
++  if (!hasExactOwnDataKeys(receipt, OWNER_RECEIPT_KEYS)) {
++    fail(localText.OWNER_RECEIPT_SHAPE_INVALID);
++  }
++  if (
++    receipt.version !== OWNER_VERSION ||
++    receipt.adapterIdentityDigest !== identity.adapterIdentityDigest ||
++    receipt.sideId !== identity.sideId ||
++    receipt.sideId !== sample.sideId ||
++    !isDenseDataArray(receipt.operationIds) ||
++    !isNonNegativeSafeInteger(receipt.correctOperationCount) ||
++    receipt.correctOperationCount !== sample.counts.correct
++  ) {
++    fail(localText.OWNER_RECEIPT_IDENTITY_OR_COUNT_MISMATCH);
++  }
++  const operationIds = [];
++  for (let index = 0; index < receipt.operationIds.length; index += 1) {
++    assertText(receipt.operationIds[index], `ownerReceipt.operationIds.${index}`);
++    appendOwnArrayValue(operationIds, receipt.operationIds[index]);
++  }
++  if (
++    operationIds.length !== sample.counts.correct ||
++    digestBenchmarkSemanticData(operationIds) !==
++      receipt.operationIdsDigest
++  ) {
++    fail(localText.OWNER_RECEIPT_OPERATION_IDS_MISMATCH);
++  }
++  assertDigest(
++    receipt.evidenceDigest,
++    localText.OWNER_RECEIPT_EVIDENCE_DIGEST,
++  );
++  assertDigest(
++    receipt.receiptDigest,
++    localText.OWNER_RECEIPT_RECEIPT_DIGEST,
++  );
++  if (
++    digestBenchmarkSemanticData(ownerReceiptBody(receipt)) !==
++      receipt.receiptDigest
++  ) {
++    fail(localText.OWNER_RECEIPT_DIGEST_MISMATCH);
++  }
++}
++
++export function createBenchmarkCapacityAdapterOwnerReceipt(input) {
++  if (
++    !isPlainDataRecord(input) ||
++    !hasExactOwnDataKeys(input, OWNER_RECEIPT_INPUT_KEYS)
++  ) {
++    fail(localText.OWNER_RECEIPT_EXACT_RECORD);
++  }
++  const identity = inspectAdapterIdentity(input.adapterIdentity);
++  if (!isDenseDataArray(input.operationIds)) {
++    fail(localText.OWNER_RECEIPT_OPERATION_IDS_DENSE);
++  }
++  const operationIds = [];
++  for (let index = 0; index < input.operationIds.length; index += 1) {
++    assertText(input.operationIds[index], `ownerReceipt.operationIds.${index}`);
++    appendOwnArrayValue(operationIds, input.operationIds[index]);
++  }
++  assertDigest(
++    input.evidenceDigest,
++    localText.OWNER_RECEIPT_EVIDENCE_DIGEST,
++  );
++  const body = {
++    version: OWNER_VERSION,
++    adapterIdentityDigest: identity.adapterIdentityDigest,
++    sideId: identity.sideId,
++    operationIds,
++    operationIdsDigest: digestBenchmarkSemanticData(operationIds),
++    evidenceDigest: input.evidenceDigest,
++    correctOperationCount: operationIds.length,
++  };
++  return objectFreeze({
++    ...body,
++    receiptDigest: digestBenchmarkSemanticData(body),
++  });
++}
++
++function headroomMeasurement(input, path) {
++  if (!hasExactOwnDataKeys(input, EXTERNAL_HEADROOM_KEYS)) {
++    fail(`${path}:exact_plain_data_record_required`);
++  }
++  if (
++    !isNonNegativeSafeNumber(input.capacity) ||
++    input.capacity <= 0 ||
++    !isNonNegativeSafeNumber(input.observedPeak) ||
++    input.observedPeak > input.capacity
++  ) {
++    fail(`${path}:bounded_measurement_required`);
++  }
++  return {
++    capacity: input.capacity,
++    observedPeak: input.observedPeak,
++    headroomRatio:
++      (input.capacity - input.observedPeak) / input.capacity,
++  };
++}
++
++function maximumNonNull(values) {
++  let maximum = 0;
++  for (let index = 0; index < values.length; index += 1) {
++    if (values[index] !== null && values[index] > maximum) {
++      maximum = values[index];
++    }
++  }
++  return maximum;
++}
++
++function headroomBody(input, sample) {
++  if (
++    !isPlainDataRecord(input) ||
++    !hasExactOwnDataKeys(input, HEADROOM_INPUT_KEYS)
++  ) {
++    fail(localText.HEADROOM_EXACT_RECORD);
++  }
++  assertRatio(
++    input.minimumRequiredRatio,
++    localText.HEADROOM_MINIMUM_REQUIRED_RATIO,
++  );
++  const externalEmitter = headroomMeasurement({
++    capacity: Math.max(1, sample.maxReleaseLagMs),
++    observedPeak: maximumNonNull(sample.releaseLagMs),
++  }, 'headroom.externalEmitter');
++  const clientQueue = headroomMeasurement({
++    capacity: sample.operationTimeoutMs,
++    observedPeak: maximumNonNull(sample.clientQueueDelayMs),
++  }, 'headroom.clientQueue');
++  const body = {
++    minimumRequiredRatio: input.minimumRequiredRatio,
++    externalEmitter,
++    clientQueue,
++  };
++  const externalKeys = HEADROOM_INPUT_KEYS.slice(1);
++  for (let index = 0; index < externalKeys.length; index += 1) {
++    const key = externalKeys[index];
++    body[key] = headroomMeasurement(input[key], `headroom.${key}`);
++  }
++  let minimumObservedRatio = 1;
++  const measurementKeys = HEADROOM_KEYS.slice(1, 8);
++  for (let index = 0; index < measurementKeys.length; index += 1) {
++    minimumObservedRatio = Math.min(
++      minimumObservedRatio,
++      body[measurementKeys[index]].headroomRatio,
++    );
++  }
++  return {
++    ...body,
++    minimumObservedRatio,
++    eligible:
++      sample.counts.queueOverflow === 0 &&
++      minimumObservedRatio >= input.minimumRequiredRatio,
++  };
++}
++
++export function createBenchmarkCapacityHeadroomReceipt(input, sample) {
++  const inspection = inspectBenchmarkCapacityRunSample(sample);
++  if (!inspection.valid) fail(localText.HEADROOM_SAMPLE_INVALID);
++  const body = headroomBody(input, sample);
++  return objectFreeze({
++    ...body,
++    headroomDigest: digestBenchmarkSemanticData(body),
++  });
++}
++
++function inspectHeadroom(receipt, sample) {
++  if (!hasExactOwnDataKeys(receipt, HEADROOM_KEYS)) {
++    fail(localText.HEADROOM_SHAPE_INVALID);
++  }
++  const input = {minimumRequiredRatio: receipt.minimumRequiredRatio};
++  const externalKeys = HEADROOM_INPUT_KEYS.slice(1);
++  for (let index = 0; index < externalKeys.length; index += 1) {
++    const key = externalKeys[index];
++    if (!hasExactOwnDataKeys(receipt[key], HEADROOM_MEASUREMENT_KEYS)) {
++      fail(`headroom.${key}:shape_invalid`);
++    }
++    input[key] = {
++      capacity: receipt[key].capacity,
++      observedPeak: receipt[key].observedPeak,
++    };
++  }
++  const reconstructed =
++    createBenchmarkCapacityHeadroomReceipt(input, sample);
++  if (
++    reconstructed.headroomDigest !== receipt.headroomDigest ||
++    reconstructed.eligible !== true
++  ) {
++    fail(localText.HEADROOM_INELIGIBLE_OR_DIGEST_MISMATCH);
++  }
++}
++
++function quantile(sorted, probability) {
++  if (sorted.length === 0) return null;
++  const index = Math.min(
++    sorted.length - 1,
++    Math.ceil(probability * sorted.length) - 1,
++  );
++  return sorted[index];
++}
++
++function latencyQuantiles(values) {
++  const sorted = [...values].sort((left, right) => left - right);
++  return {
++    p50: quantile(sorted, QUANTILE_P50),
++    p95: quantile(sorted, QUANTILE_P95),
++    p99: quantile(sorted, QUANTILE_P99),
++  };
++}
++
++function receiptBody(receipt) {
++  const body = {};
++  for (let index = 0; index < RECEIPT_KEYS.length - 1; index += 1) {
++    const key = RECEIPT_KEYS[index];
++    body[key] = receipt[key];
++  }
++  return body;
++}
++
++export function createBenchmarkCapacityHeterogeneousOperationReceipt(input) {
++  if (
++    !isPlainDataRecord(input) ||
++    !hasExactOwnDataKeys(input, RECEIPT_INPUT_KEYS)
++  ) {
++    fail(localText.RECEIPT_EXACT_RECORD);
++  }
++  const identity = inspectAdapterIdentity(input.adapterIdentity);
++  const sampleInspection =
++    inspectBenchmarkCapacityRunSample(input.sample);
++  if (!hasExactOwnDataKeys(input.window, WINDOW_KEYS)) {
++    fail(localText.RECEIPT_WINDOW_SHAPE_INVALID);
++  }
++  const expected = deriveBenchmarkCapacityExpectedWindow(
++    input.preregistration,
++    {
++      blockIndex: input.sample.blockIndex,
++      blockedOrderIndex: input.window.blockedOrderIndex,
++      sideId: input.sample.sideId,
++      offeredLoad: input.sample.offeredLoadPerSecond,
++      phase: input.sample.phase,
++    },
++  );
++  if (
++    !sampleInspection.valid ||
++    identity.sideId !== input.sample.sideId ||
++    !isNonNegativeSafeInteger(input.window.startedAt) ||
++    !isNonNegativeSafeInteger(input.window.endedAt) ||
++    input.window.endedAt <= input.window.startedAt ||
++    input.sample.observationDurationMs >
++      input.window.endedAt - input.window.startedAt
++  ) {
++    fail(localText.RECEIPT_OWNER_SAMPLE_WINDOW_MISMATCH);
++  }
++  inspectOwnerReceipt(input.ownerReceipt, identity, input.sample);
++  inspectHeadroom(input.headroom, input.sample);
++  const semanticInspection = inspectBenchmarkSemanticReceipt(
++    input.sample.semanticReceipt,
++    input.sample.semanticDialect,
++  );
++  if (
++    !semanticInspection.statusPassed ||
++    !semanticInspection.digestMatches
++  ) {
++    fail(localText.RECEIPT_C2_SEMANTIC_INVALID);
++  }
++  const counts = {};
++  for (let index = 0; index < COUNT_KEYS.length; index += 1) {
++    const key = COUNT_KEYS[index];
++    counts[key] = key === localText.EMITTED ?
++      input.sample.counts.offered - input.sample.unreleasedOperations :
++      input.sample.counts[key];
++  }
++  const body = {
++    version: VERSION,
++    adapterIdentity: identity,
++    adapterIdentityDigest: identity.adapterIdentityDigest,
++    matrixId: expected.matrixId,
++    cellId: expected.cellId,
++    cellManifestDigest: expected.cellManifestDigest,
++    profileIdentity: expected.profileIdentity,
++    pairIdentity: expected.pairIdentity,
++    runId: expected.runId,
++    liveEnvironmentContractDigest:
++      expected.liveEnvironmentContractDigest,
++    blockIndex: input.sample.blockIndex,
++    blockedOrderIndex: input.window.blockedOrderIndex,
++    sideId: input.sample.sideId,
++    phase: input.sample.phase,
++    offeredLoad: input.sample.offeredLoadPerSecond,
++    startedAt: input.window.startedAt,
++    endedAt: input.window.endedAt,
++    counts,
++    latencyQuantilesMs:
++      latencyQuantiles(input.sample.endToEndLatencyMs),
++    capacitySampleDigest: input.sample.sampleDigest,
++    semanticReceiptDigest: input.sample.semanticReceiptDigest,
++    semanticContractDigest:
++      input.sample.semanticReceipt.contractDigest,
++    semanticResultSetDigest:
++      input.sample.semanticReceipt.resultSet.digest,
++    ownerReceipt: input.ownerReceipt,
++    ownerReceiptDigest: input.ownerReceipt.receiptDigest,
++    headroom: input.headroom,
++  };
++  return objectFreeze({
++    ...body,
++    receiptDigest: digestBenchmarkSemanticData(body),
++  });
++}
++
++export function inspectBenchmarkCapacityHeterogeneousOperationReceipt(
++  receipt,
++) {
++  try {
++    if (
++      !hasExactOwnDataKeys(receipt, RECEIPT_KEYS) ||
++      receipt.version !== VERSION
++    ) {
++      fail(localText.RECEIPT_SHAPE_OR_VERSION_INVALID);
++    }
++    for (let index = 0; index < COUNT_KEYS.length; index += 1) {
++      if (!isNonNegativeSafeInteger(receipt.counts[COUNT_KEYS[index]])) {
++        fail(localText.RECEIPT_COUNTS_INVALID);
++      }
++    }
++    for (let index = 0; index < QUANTILE_KEYS.length; index += 1) {
++      const value = receipt.latencyQuantilesMs[QUANTILE_KEYS[index]];
++      if (value !== null && !isNonNegativeSafeNumber(value)) {
++        fail(localText.RECEIPT_QUANTILES_INVALID);
++      }
++    }
++    assertDigest(receipt.receiptDigest, localText.RECEIPT_DIGEST);
++    if (
++      digestBenchmarkSemanticData(receiptBody(receipt)) !==
++        receipt.receiptDigest
++    ) {
++      fail(localText.RECEIPT_DIGEST_MISMATCH);
++    }
++    return {valid: true, reason: localText.RECEIPT_VALID};
++  } catch (error) {
++    return {
++      valid: false,
++      reason:
++        typeof error?.message === 'string' ?
++          error.message :
++          localText.RECEIPT_OBSERVATION_INVALID,
++    };
++  }
++}
+diff --git a/test/distributed/harness/benchmark-capacity-heterogeneous-protocol.js b/test/distributed/harness/benchmark-capacity-heterogeneous-protocol.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..48fae06b6902796c6ac259ae72f37177e1adb02f
+--- /dev/null
++++ b/test/distributed/harness/benchmark-capacity-heterogeneous-protocol.js
+@@ -0,0 +1,232 @@
++import {
++  BENCHMARK_CAPACITY_PHASE,
++} from './benchmark-capacity-protocol-constants.js';
++import {
++  createBenchmarkCapacityCacheResetReceipt,
++} from './benchmark-capacity-cache-reset-receipt.js';
++import {
++  createBenchmarkCapacityHeadroomReceipt,
++  createBenchmarkCapacityHeterogeneousOperationReceipt,
++} from './benchmark-capacity-heterogeneous-observation.js';
++import {
++  runBenchmarkCapacityOpenLoopWindow,
++} from './benchmark-capacity-open-loop.js';
++import {
++  runBenchmarkCapacityProtocol,
++} from './benchmark-capacity-protocol.js';
++import {
++  createBenchmarkCapacityWindowReceipt,
++} from './benchmark-capacity-window-receipt.js';
++
++const localText = Object.freeze({
++  ADAPTER_PAIR_AND_OBSERVER_REQUIRED:
++    'exact adapter pair and headroom observer required',
++  NOT_CONFIGURED: 'not_configured',
++});
++const delay = (durationMs) =>
++  new Promise((resolve) => setTimeout(resolve, durationMs));
++
++function fail(reason) {
++  throw new TypeError(
++    `heterogeneous capacity protocol failed: ${reason}`,
++  );
++}
++
++function adapterForSide(adapters, sideId) {
++  for (let index = 0; index < adapters.length; index += 1) {
++    if (adapters[index]?.adapterIdentity?.sideId === sideId) {
++      return adapters[index];
++    }
++  }
++  fail(`adapter missing for side ${sideId}`);
++}
++
++async function coverWallWindow(startedAt, sample) {
++  const remaining =
++    sample.observationDurationMs - (Date.now() - startedAt);
++  if (remaining > 0) await delay(remaining);
++  let endedAt = Date.now();
++  if (endedAt <= startedAt) {
++    await delay(1);
++    endedAt = Date.now();
++  }
++  return endedAt;
++}
++
++async function executeWindow({
++  adapter,
++  preregistration,
++  context,
++  phase,
++  beginResourceObservation,
++  completeResourceObservation,
++}) {
++  const duration = phase === BENCHMARK_CAPACITY_PHASE.WARMUP ?
++    preregistration.sampling.warmupMs :
++    preregistration.sampling.measuredMs;
++  const adapterContext = {
++    blockIndex: context.blockIndex,
++    blockedOrderIndex: context.blockedOrderIndex,
++    sideId: context.sideId,
++    offeredLoadPerSecond: context.offeredLoadPerSecond,
++    phase,
++  };
++  const resourceObservation =
++    await beginResourceObservation(adapterContext);
++  adapter.beginWindow(adapterContext);
++  const wallStartedAt = Date.now();
++  const sample = await runBenchmarkCapacityOpenLoopWindow({
++    sideId: context.sideId,
++    phase,
++    blockIndex: context.blockIndex,
++    offeredLoadPerSecond: context.offeredLoadPerSecond,
++    windowDurationMs: duration,
++    operationTimeoutMs:
++      preregistration.sampling.operationTimeoutMs,
++    semanticFinalizerTimeoutMs:
++      preregistration.sampling.semanticFinalizerTimeoutMs,
++    maxReleaseLagMs:
++      preregistration.sampling.maxReleaseLagMs,
++    clientMaxInFlight:
++      preregistration.sampling.clientMaxInFlight,
++    clientMaxQueueDepth:
++      preregistration.sampling.clientMaxQueueDepth,
++    semanticDialect:
++      preregistration.sideSemanticContracts.find(
++        (contract) => contract.sideId === context.sideId,
++      ).dialect,
++    signal: null,
++    executeOperation: adapter.executeOperation,
++    finalizeSemanticReceipt: adapter.finalizeSemanticReceipt,
++  });
++  await coverWallWindow(wallStartedAt, sample);
++  const adapterEvidence = adapter.completeWindow();
++  const observation = await completeResourceObservation({
++    resourceObservation,
++    adapterIdentity: adapter.adapterIdentity,
++    adapterEvidence,
++    context: adapterContext,
++    sample,
++  });
++  const headroom = createBenchmarkCapacityHeadroomReceipt(
++    observation.headroom,
++    sample,
++  );
++  const engagement =
++    createBenchmarkCapacityHeterogeneousOperationReceipt({
++      adapterIdentity: adapter.adapterIdentity,
++      sample,
++      window: {
++        blockedOrderIndex: context.blockedOrderIndex,
++        startedAt: observation.startedAt,
++        endedAt: observation.endedAt,
++      },
++      ownerReceipt: adapterEvidence.ownerReceipt,
++      headroom,
++      preregistration,
++    });
++  const receipt = createBenchmarkCapacityWindowReceipt(
++    {
++      blockIndex: context.blockIndex,
++      blockedOrderIndex: context.blockedOrderIndex,
++      sideId: context.sideId,
++      phase,
++      offeredLoad: context.offeredLoadPerSecond,
++      startedAt: observation.startedAt,
++      endedAt: observation.endedAt,
++      capacitySampleDigest: sample.sampleDigest,
++      semanticReceiptDigest: sample.semanticReceiptDigest,
++      liveEngagementDigest: engagement.receiptDigest,
++      resourceWindowDigest: null,
++    },
++    sample,
++    preregistration,
++  );
++  return {
++    sample,
++    receipt,
++    engagement,
++    adapterEvidence,
++    headroom,
++    resourceObservation,
++  };
++}
++
++export async function runBenchmarkCapacityHeterogeneousProtocol({
++  preregistration,
++  adapters,
++  beginResourceObservation,
++  completeResourceObservation,
++}) {
++  if (
++    !Array.isArray(adapters) ||
++    adapters.length !== preregistration.sideIds.length ||
++    typeof beginResourceObservation !== 'function' ||
++    typeof completeResourceObservation !== 'function'
++  ) {
++    fail(localText.ADAPTER_PAIR_AND_OBSERVER_REQUIRED);
++  }
++  const windows = [];
++  const resets = [];
++  const report = await runBenchmarkCapacityProtocol({
++    preregistration,
++    async resetRunState(context) {
++      const adapter = adapterForSide(adapters, context.sideId);
++      const startedAt = Date.now();
++      const reset = await adapter.resetRunState(context);
++      const endedAt = Math.max(Date.now(), startedAt + 1);
++      const receipt = createBenchmarkCapacityCacheResetReceipt(
++        {
++          blockIndex: context.blockIndex,
++          blockedOrderIndex: context.blockedOrderIndex,
++          sideId: context.sideId,
++          offeredLoad: context.offeredLoadPerSecond,
++          startedAt,
++          endedAt,
++          policy: preregistration.cachePolicy,
++          liveEngagementDigest: reset.resetDigest,
++        },
++        preregistration,
++      );
++      resets.push({reset, receipt});
++      return receipt;
++    },
++    async executeRun(context) {
++      const adapter = adapterForSide(adapters, context.sideId);
++      let warmup = localText.NOT_CONFIGURED;
++      if (preregistration.sampling.warmupMs > 0) {
++        warmup = await executeWindow({
++          adapter,
++          preregistration,
++          context,
++          phase: BENCHMARK_CAPACITY_PHASE.WARMUP,
++          beginResourceObservation,
++          completeResourceObservation,
++        });
++        windows.push(warmup);
++      }
++      const measured = await executeWindow({
++        adapter,
++        preregistration,
++        context,
++        phase: BENCHMARK_CAPACITY_PHASE.MEASURED,
++        beginResourceObservation,
++        completeResourceObservation,
++      });
++      windows.push(measured);
++      return {
++        warmup:
++          warmup === localText.NOT_CONFIGURED ?
++            localText.NOT_CONFIGURED :
++            warmup.sample,
++        measured: measured.sample,
++        warmupWindowReceipt:
++          warmup === localText.NOT_CONFIGURED ?
++            localText.NOT_CONFIGURED :
++            warmup.receipt,
++        measuredWindowReceipt: measured.receipt,
++      };
++    },
++  });
++  return {report, windows, resets};
++}
+diff --git a/test/distributed/harness/benchmark-resource-capacity-protocol-evidence.js b/test/distributed/harness/benchmark-resource-capacity-protocol-evidence.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..5a3d3c778138bad8994fb5eb97358ace04ece3a2
+--- /dev/null
++++ b/test/distributed/harness/benchmark-resource-capacity-protocol-evidence.js
+@@ -0,0 +1,557 @@
++import {
++  appendOwnArrayValue,
++} from './benchmark-semantic-integrity.js';
++import {
++  createBenchmarkResourceComponentInventory,
++  createBenchmarkResourceWindow,
++} from './benchmark-resource-accounting.js';
++import {
++  BENCHMARK_RESOURCE_NO_CURRENCY,
++  computeBenchmarkResourceWindowCost,
++  createBenchmarkResourcePairedEffect,
++  createBenchmarkResourcePriceSheet,
++} from './benchmark-resource-cost-and-effects.js';
++import {
++  createBenchmarkResourceCapacitySummary,
++} from './benchmark-resource-capacity-summary.js';
++import {
++  createBenchmarkResourceEvidenceRoot,
++  createBenchmarkResourceMeasuringCellEvidence,
++  createBenchmarkResourceSourceArtifact,
++} from './benchmark-resource-evidence-root.js';
++import {
++  createBenchmarkResourceMemoryResolver,
++} from './benchmark-resource-evidence-data.js';
++import {
++  createBenchmarkResourceMatrixManifest,
++} from './benchmark-resource-matrix-manifest.js';
++import {
++  deriveBenchmarkResourceLiveComponentAccounting,
++  resolveBenchmarkResourceLiveCalibrationComponent,
++} from './benchmark-resource-live-observation-authority.js';
++import {
++  deriveBenchmarkResourceLiveInventoryComponentAccounting,
++} from './benchmark-resource-live-root-validation.js';
++import {
++  createBenchmarkResourceWindowSourceArtifact,
++} from './benchmark-resource-window-source.js';
++import {
++  BENCHMARK_RESOURCE_ARTIFACT_KIND,
++  BENCHMARK_RESOURCE_CAPACITY_SOURCE,
++  BENCHMARK_RESOURCE_EFFECT,
++} from './benchmark-resource-contract-constants.js';
++
++const AMPLIFICATION_POLICY = 'semantic_events_absent_zero_only';
++const OPERATIONS_PER_MILLION = 1_000_000;
++const localText = Object.freeze({
++  MEASURED: 'measured',
++  MEASURED_COORDINATE_UNRESOLVED:
++    'measured C3 coordinate is unresolved',
++  REPRESENTATIVE_MATRIX_CELL_REQUIRED:
++    'representative adapter matrix must contain one cell',
++});
++
++function fail(reason) {
++  throw new TypeError(
++    `capacity protocol resource evidence failed: ${reason}`,
++  );
++}
++
++function source(kind, payload) {
++  return createBenchmarkResourceSourceArtifact(kind, payload);
++}
++
++function findSample(report, digest) {
++  for (let index = 0; index < report.rawSamples.length; index += 1) {
++    if (report.rawSamples[index].sampleDigest === digest) {
++      return report.rawSamples[index];
++    }
++  }
++  return undefined;
++}
++
++function findWindowEvidence(windowEvidence, receiptDigest) {
++  for (let index = 0; index < windowEvidence.length; index += 1) {
++    if (
++      windowEvidence[index].c3.receipt.windowReceiptDigest ===
++        receiptDigest
++    ) {
++      return windowEvidence[index];
++    }
++  }
++  return undefined;
++}
++
++function inventory(input, calibrations) {
++  const sides = [];
++  for (let sideIndex = 0;
++    sideIndex < input.sideIds.length;
++    sideIndex += 1) {
++    const sideId = input.sideIds[sideIndex];
++    const configuredSide =
++      input.inventorySides.find((side) => side.sideId === sideId);
++    if (configuredSide === undefined) {
++      fail(`inventory side missing: ${sideId}`);
++    }
++    const components = [];
++    for (let componentIndex = 0;
++      componentIndex < configuredSide.components.length;
++      componentIndex += 1) {
++      const definition = configuredSide.components[componentIndex];
++      const observations = [];
++      for (let index = 0; index < calibrations.length; index += 1) {
++        const observation =
++          resolveBenchmarkResourceLiveCalibrationComponent(
++            calibrations[index].artifact,
++            sideId,
++            definition.componentId,
++          );
++        if (observation === undefined) {
++          fail(`calibration component missing: ${definition.componentId}`);
++        }
++        appendOwnArrayValue(observations, observation);
++      }
++      const accounting =
++        deriveBenchmarkResourceLiveInventoryComponentAccounting(
++          observations,
++        );
++      appendOwnArrayValue(components, {
++        componentId: definition.componentId,
++        role: definition.role,
++        billingTreatment: definition.billingTreatment,
++        provisioned: accounting.provisioned,
++        minimumFootprint: accounting.minimumFootprint,
++        reservedHeadroomRatio: accounting.reservedHeadroomRatio,
++        exclusionReason: definition.exclusionReason,
++      });
++    }
++    appendOwnArrayValue(sides, {sideId, components});
++  }
++  return createBenchmarkResourceComponentInventory({
++    inventoryId: input.inventoryId,
++    matrixId: input.matrixId,
++    sides,
++  });
++}
++
++function windowComponents(
++  calibration,
++  sideId,
++  componentDefinitions,
++) {
++  const components = [];
++  for (let index = 0; index < componentDefinitions.length; index += 1) {
++    const definition = componentDefinitions[index];
++    const observation =
++      resolveBenchmarkResourceLiveCalibrationComponent(
++        calibration.artifact,
++        sideId,
++        definition.componentId,
++      );
++    if (observation === undefined) {
++      fail(`window component missing: ${definition.componentId}`);
++    }
++    const accounting =
++      deriveBenchmarkResourceLiveComponentAccounting(observation);
++    appendOwnArrayValue(components, {
++      componentId: definition.componentId,
++      observationStartDigest: calibration.digest,
++      observationEndDigest: calibration.digest,
++      utilized: accounting.utilized,
++      amplification: accounting.amplification,
++    });
++  }
++  return components;
++}
++
++function protocolEvidence(input, sideId, sideIndex) {
++  return {
++    version: BENCHMARK_RESOURCE_CAPACITY_SOURCE.VERSION,
++    evidenceClass: BENCHMARK_RESOURCE_CAPACITY_SOURCE.EVIDENCE_CLASS,
++    mappedSideId: sideId,
++    protocolSideId: input.capacityPreregistration.sideIds[sideIndex],
++    artifactReceipt: {
++      reportDigest: input.capacityReport.reportDigest,
++      preregistrationDigest:
++        input.capacityPreregistration.manifestDigest,
++    },
++    preregistration: input.capacityPreregistration,
++    report: input.capacityReport,
++  };
++}
++
++function capacitySummary(input, sideId, sideIndex, samples) {
++  const capacity = input.capacityReport.summary.capacityBySide[sideId];
++  if (
++    capacity === undefined ||
++    capacity.maxSloOfferedLoadPerSecond === null
++  ) {
++    fail(`terminal capacity missing: ${sideId}`);
++  }
++  let curve;
++  for (let index = 0;
++    index < input.capacityReport.summary.capacityCurve.length;
++    index += 1) {
++    const candidate =
++      input.capacityReport.summary.capacityCurve[index];
++    if (
++      candidate.offeredLoadPerSecond ===
++        capacity.maxSloOfferedLoadPerSecond
++    ) {
++      curve = candidate;
++      break;
++    }
++  }
++  const interval = curve?.sides?.[sideId]?.correctThroughputPerSecond;
++  if (interval === undefined || capacity.perBlock.length === 0) {
++    fail(`terminal capacity interval missing: ${sideId}`);
++  }
++  return createBenchmarkResourceCapacitySummary({
++    sideId,
++    capacityCorrectOpsPerSecond:
++      capacity.maxCorrectThroughputPerSecond,
++    sampleCount: capacity.perBlock.length,
++    confidenceInterval: {
++      lower: interval.lower,
++      upper: interval.upper,
++    },
++    sourceDigests: samples.map((sample) => sample.digest),
++  });
++}
++
++function capacityEffect(input, capacities) {
++  return createBenchmarkResourcePairedEffect({
++    effectType: BENCHMARK_RESOURCE_EFFECT.CAPACITY,
++    numeratorSideId: input.sideIds[0],
++    denominatorSideId: input.sideIds[1],
++    numeratorValue:
++      capacities[0].artifact.payload.capacityCorrectOpsPerSecond,
++    denominatorValue:
++      capacities[1].artifact.payload.capacityCorrectOpsPerSecond,
++    confidenceInterval: {
++      lower:
++        capacities[0].artifact.payload.confidenceInterval.lower /
++        capacities[1].artifact.payload.confidenceInterval.upper,
++      upper:
++        capacities[0].artifact.payload.confidenceInterval.upper /
++        capacities[1].artifact.payload.confidenceInterval.lower,
++    },
++    practicalThreshold: input.practicalThreshold,
++    sampleCount: Math.min(
++      capacities[0].artifact.payload.sampleCount,
++      capacities[1].artifact.payload.sampleCount,
++    ),
++    sourceDigests: capacities.map((capacity) => capacity.digest),
++    currency: BENCHMARK_RESOURCE_NO_CURRENCY,
++  });
++}
++
++function sideCost(windows, inventoryArtifact, priceArtifact, sideId) {
++  let totalCost = 0;
++  let correct = 0;
++  let sampleCount = 0;
++  for (let index = 0; index < windows.length; index += 1) {
++    if (windows[index].artifact.payload.sideId !== sideId) continue;
++    totalCost += computeBenchmarkResourceWindowCost(
++      windows[index].artifact.payload,
++      inventoryArtifact.artifact.payload,
++      priceArtifact.artifact.payload,
++    ).totalCost;
++    correct +=
++      windows[index].artifact.payload.correctSloEligibleOperations;
++    sampleCount += 1;
++  }
++  if (correct === 0 || sampleCount === 0) {
++    fail(`cost denominator missing: ${sideId}`);
++  }
++  return {
++    value: totalCost / correct * OPERATIONS_PER_MILLION,
++    sampleCount,
++  };
++}
++
++function costEffect(input, windows, inventoryArtifact, priceArtifact) {
++  const numerator = sideCost(
++    windows,
++    inventoryArtifact,
++    priceArtifact,
++    input.sideIds[0],
++  );
++  const denominator = sideCost(
++    windows,
++    inventoryArtifact,
++    priceArtifact,
++    input.sideIds[1],
++  );
++  return createBenchmarkResourcePairedEffect({
++    effectType: BENCHMARK_RESOURCE_EFFECT.COST,
++    numeratorSideId: input.sideIds[0],
++    denominatorSideId: input.sideIds[1],
++    numeratorValue: numerator.value,
++    denominatorValue: denominator.value,
++    confidenceInterval: {
++      lower: numerator.value / denominator.value,
++      upper: numerator.value / denominator.value,
++    },
++    practicalThreshold: input.practicalThreshold,
++    sampleCount: Math.min(
++      numerator.sampleCount,
++      denominator.sampleCount,
++    ),
++    sourceDigests: [
++      inventoryArtifact.digest,
++      priceArtifact.digest,
++      ...windows.map((window) => window.digest),
++    ],
++    currency: priceArtifact.artifact.payload.currency,
++  });
++}
++
++export function createBenchmarkResourceCapacityProtocolEvidence(input) {
++  const workloadManifest = source(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
++    input.workloadManifest,
++  );
++  const alternativeTopology = source(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
++    input.alternativeTopology,
++  );
++  const preregistration = source(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
++    input.resourcePreregistration,
++  );
++  const profileEnvelope = source(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.PROFILE_ENVELOPE,
++    input.profileEnvelope,
++  );
++  const matrix = createBenchmarkResourceMatrixManifest({
++    matrixId: input.matrixId,
++    axes: input.axes,
++    sideIds: input.sideIds,
++    workloadManifestDigest: workloadManifest.digest,
++    alternativeTopologyDigest: alternativeTopology.digest,
++    preregistrationDigest: preregistration.digest,
++    profileEnvelopeDigest: profileEnvelope.digest,
++  });
++  if (matrix.artifact.payload.cells.length !== 1) {
++    fail(localText.REPRESENTATIVE_MATRIX_CELL_REQUIRED);
++  }
++  const calibrations = input.windowEvidence
++    .filter((window) => window.c3.sample.phase === localText.MEASURED)
++    .map((window) => window.calibration);
++  const componentInventory = inventory(input, calibrations);
++  const price = createBenchmarkResourcePriceSheet(input.priceSheet);
++  const cell = matrix.artifact.payload.cells[0];
++  const sideSources = [[], []];
++  const orderedSources = [];
++  const capacitySamples = [[], []];
++  const windows = [];
++  const firstProtocolAttached = [false, false];
++  for (let index = 0;
++    index < input.capacityReport.windowReceipts.length;
++    index += 1) {
++    const receipt = input.capacityReport.windowReceipts[index];
++    if (receipt.phase !== localText.MEASURED) continue;
++    const sample = findSample(
++      input.capacityReport,
++      receipt.capacitySampleDigest,
++    );
++    const evidence = findWindowEvidence(
++      input.windowEvidence,
++      receipt.windowReceiptDigest,
++    );
++    const sideIndex = input.sideIds.indexOf(receipt.sideId);
++    const loadIndex =
++      input.capacityPreregistration.offeredLoadPerSecond
++        .indexOf(receipt.offeredLoad);
++    if (
++      sample === undefined ||
++      evidence === undefined ||
++      sideIndex < 0 ||
++      loadIndex < 0
++    ) {
++      fail(localText.MEASURED_COORDINATE_UNRESOLVED);
++    }
++    const coordinates = {
++      matrixId: input.matrixId,
++      cellId: cell.cellId,
++      pairId: input.pairId,
++      runId: input.runId,
++      pairedBlockId:
++        `${input.pairId}-block-${receipt.blockIndex}-load-${loadIndex}`,
++      profileIdentity: input.profileEnvelope.profileIdentity,
++      blockIndex: receipt.blockIndex,
++      blockedOrderIndex: receipt.blockedOrderIndex,
++      offeredLoad: receipt.offeredLoad,
++      loadIndex,
++      phase: receipt.phase,
++      sideId: receipt.sideId,
++    };
++    const capacityEvidence = {
++      capacitySampleDigest: receipt.capacitySampleDigest,
++    };
++    if (!firstProtocolAttached[sideIndex]) {
++      capacityEvidence.protocol =
++        protocolEvidence(input, receipt.sideId, sideIndex);
++      firstProtocolAttached[sideIndex] = true;
++    }
++    const capacitySample =
++      createBenchmarkResourceWindowSourceArtifact(
++        BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE,
++        {...coordinates, evidence: capacityEvidence},
++      );
++    const semanticReceipt =
++      createBenchmarkResourceWindowSourceArtifact(
++        BENCHMARK_RESOURCE_ARTIFACT_KIND.SEMANTIC_RECEIPT,
++        {
++          ...coordinates,
++          evidence: {
++            semanticReceiptDigest: receipt.semanticReceiptDigest,
++            semanticReceipt: sample.semanticReceipt,
++          },
++        },
++      );
++    const liveEngagement =
++      createBenchmarkResourceWindowSourceArtifact(
++        BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
++        {
++          ...coordinates,
++          evidence: {
++            liveEngagementDigest: receipt.liveEngagementDigest,
++            heterogeneousOperationReceipt: evidence.c3.engagement,
++            operationEvidence:
++              evidence.c3.adapterEvidence.operationEvidence,
++            amplificationPolicy: AMPLIFICATION_POLICY,
++          },
++        },
++      );
++    const windowReceipt =
++      createBenchmarkResourceWindowSourceArtifact(
++        BENCHMARK_RESOURCE_ARTIFACT_KIND.WINDOW_RECEIPT,
++        {
++          ...coordinates,
++          evidence: {capacityWindowReceipt: receipt},
++        },
++      );
++    const configuredSide =
++      input.inventorySides.find(
++        (side) => side.sideId === receipt.sideId,
++      );
++    const resourceWindow = createBenchmarkResourceWindow({
++      windowId:
++        `${input.runId}-${receipt.sideId}-${receipt.blockIndex}-` +
++        `${loadIndex}-resource-window`,
++      matrixManifestDigest: matrix.digest,
++      ...coordinates,
++      windowReceiptDigest: windowReceipt.digest,
++      capacitySampleDigest: capacitySample.digest,
++      semanticReceiptDigest: semanticReceipt.digest,
++      liveEngagementDigest: liveEngagement.digest,
++      liveCalibrationDigest: evidence.calibration.digest,
++      startedAt: new Date(receipt.startedAt).toISOString(),
++      endedAt: new Date(receipt.endedAt).toISOString(),
++      correctSloEligibleOperations: sample.counts.correct,
++      components: windowComponents(
++        evidence.calibration,
++        receipt.sideId,
++        configuredSide.components,
++      ),
++    });
++    const sources = {
++      capacitySample,
++      semanticReceipt,
++      liveEngagement,
++      windowReceipt,
++    };
++    appendOwnArrayValue(sideSources[sideIndex], sources);
++    appendOwnArrayValue(orderedSources, sources);
++    appendOwnArrayValue(capacitySamples[sideIndex], capacitySample);
++    appendOwnArrayValue(windows, resourceWindow);
++  }
++  const capacities = input.sideIds.map((sideId, sideIndex) =>
++    capacitySummary(
++      input,
++      sideId,
++      sideIndex,
++      capacitySamples[sideIndex],
++    ));
++  const pairedCapacityEffect = capacityEffect(input, capacities);
++  const pairedCostEffect = costEffect(
++    input,
++    windows,
++    componentInventory,
++    price,
++  );
++  const cellEvidence = createBenchmarkResourceMeasuringCellEvidence({
++    matrixManifestDigest: matrix.digest,
++    matrixId: input.matrixId,
++    cellId: cell.cellId,
++    pairId: input.pairId,
++    runId: input.runId,
++    sideIds: input.sideIds,
++    capacityReportDigests:
++      capacities.map((capacity) => capacity.digest),
++    semanticReceiptDigests:
++      orderedSources.map((entry) => entry.semanticReceipt.digest),
++    liveEngagementDigests:
++      orderedSources.map((entry) => entry.liveEngagement.digest),
++    componentInventoryDigest: componentInventory.digest,
++    priceSheetDigest: price.digest,
++    resourceWindowDigests: windows.map((window) => window.digest),
++    capacityEffect: pairedCapacityEffect,
++    costEffect: pairedCostEffect,
++    sourceRevision: input.sourceRevision,
++    producedAt: input.producedAt,
++    validUntil: input.validUntil,
++  });
++  const artifacts = [
++    workloadManifest,
++    alternativeTopology,
++    preregistration,
++    profileEnvelope,
++    matrix,
++    componentInventory,
++    price,
++    ...calibrations,
++  ];
++  for (let index = 0; index < orderedSources.length; index += 1) {
++    const sources = orderedSources[index];
++    appendOwnArrayValue(artifacts, sources.capacitySample);
++    appendOwnArrayValue(artifacts, sources.semanticReceipt);
++    appendOwnArrayValue(artifacts, sources.liveEngagement);
++    appendOwnArrayValue(artifacts, sources.windowReceipt);
++  }
++  for (let index = 0; index < windows.length; index += 1) {
++    appendOwnArrayValue(artifacts, windows[index]);
++  }
++  appendOwnArrayValue(artifacts, capacities[0]);
++  appendOwnArrayValue(artifacts, capacities[1]);
++  appendOwnArrayValue(artifacts, cellEvidence);
++  const root = createBenchmarkResourceEvidenceRoot({
++    matrixManifestDigest: matrix.digest,
++    componentInventoryDigest: componentInventory.digest,
++    priceSheetDigest: price.digest,
++    cellEvidenceDigests: [cellEvidence.digest],
++    sourceRevision: input.sourceRevision,
++    producedAt: input.producedAt,
++    validUntil: input.validUntil,
++    artifacts,
++  });
++  return {
++    receipt: {
++      rootDigest: root.digest,
++      resolver: createBenchmarkResourceMemoryResolver([...artifacts, root]),
++    },
++    root,
++    artifacts,
++    matrix,
++    profileEnvelope,
++    inventory: componentInventory,
++    price,
++    windows,
++    capacities,
++    cellEvidence,
++    capacityEffect: pairedCapacityEffect,
++    costEffect: pairedCostEffect,
++  };
++}
+diff --git a/test/distributed/harness/benchmark-resource-evidence-root.js b/test/distributed/harness/benchmark-resource-evidence-root.js
+index 412f1eccb112370a73d9a62debcf9bfcc876d3fd..23115959d4d8d5bc883cbde712670d66934221e4 100644
+--- a/test/distributed/harness/benchmark-resource-evidence-root.js
++++ b/test/distributed/harness/benchmark-resource-evidence-root.js
+@@ -41,6 +41,7 @@ import {
+ } from './benchmark-resource-live-observation-authority.js';
+ import {
+   assertBenchmarkResourceCapacityProtocolSummary,
++  assertBenchmarkResourceLiveInventoryAccounting,
+   assertBenchmarkResourceLiveComponentAccounting,
+   assertBenchmarkResourceLiveTopologyClosure,
+ } from './benchmark-resource-live-root-validation.js';
+@@ -1035,7 +1036,12 @@ function validateMeasuringCellWindows(payload, owners, resolved, c3Plan) {
+     c3Plan?.coordinates ?? null,
+   );
+   if (context.liveCalibrated) {
++    const calibrationArtifacts = [];
+     for (let index = 0; index < context.calibrationDigests.length; index += 1) {
++      appendOwnArrayValue(
++        calibrationArtifacts,
++        mapGet(resolved, context.calibrationDigests[index]),
++      );
+       assertBenchmarkResourceLiveTopologyClosure({
+         calibrationArtifact: mapGet(
+           resolved,
+@@ -1055,6 +1061,10 @@ function validateMeasuringCellWindows(payload, owners, resolved, c3Plan) {
+         ),
+       });
+     }
++    assertBenchmarkResourceLiveInventoryAccounting(
++      owners.inventory,
++      calibrationArtifacts,
++    );
+   }
+   return context;
+ }
+diff --git a/test/distributed/harness/benchmark-resource-live-observation-authority.js b/test/distributed/harness/benchmark-resource-live-observation-authority.js
+index 27d13b0fb8bdb1a77c95c5f7fddf6a944f40d7b3..40ae363f85509e93083aeaa7321f855a5fa981e7 100644
+--- a/test/distributed/harness/benchmark-resource-live-observation-authority.js
++++ b/test/distributed/harness/benchmark-resource-live-observation-authority.js
+@@ -30,6 +30,7 @@ const localText = Object.freeze({
+   LIVE_OBSERVATION_BLOCK_OPERATIONS: 'liveObservation.blockOperations',
+   LIVE_OBSERVATION: 'liveObservation',
+   LIVE_OBSERVATION_CAPTURE_SINGLE_TRANSITION_REQUIRED: 'liveObservation.capture:single_transition_required',
++  LIVE_OBSERVATION_BOUNDS_SIDE_ID: 'liveObservation.bounds.sideId',
+   END: 'end',
+   LIVE_OBSERVATION_CLEANUP_CONTAINER_PRESENT: 'liveObservation.cleanup:container_present',
+   LIVE_OBSERVATION_CLEANUP_NETWORK_PRESENT: 'liveObservation.cleanup:network_present',
+@@ -421,6 +422,33 @@ export async function captureBenchmarkResourceLiveObservation(session) {
+   }
+ }
+ 
++export function resolveBenchmarkResourceLiveObservationBounds(
++  session,
++  sideId,
++) {
++  const state = weakMapGet(authorityStates, session);
++  assertBenchmarkResourceText(
++    sideId,
++    localText.LIVE_OBSERVATION_BOUNDS_SIDE_ID,
++  );
++  if (state?.status !== statusCaptured) {
++    fail(localText.LIVE_OBSERVATION_FINALIZE_CAPTURED_STATE_REQUIRED);
++  }
++  let startedAt = Number.MAX_SAFE_INTEGER;
++  let endedAt = 0;
++  let matched = 0;
++  for (let index = 0; index < state.components.length; index += 1) {
++    if (state.components[index].sideId !== sideId) continue;
++    matched += 1;
++    startedAt = Math.min(startedAt, state.start[index].stats.timestamp);
++    endedAt = Math.max(endedAt, state.end[index].stats.timestamp);
++  }
++  if (matched === 0 || endedAt <= startedAt) {
++    fail(localText.LIVE_OBSERVATION_COMPONENT_IDENTITY_OR_INTERVAL_MISMATCH);
++  }
++  return objectFreeze({startedAt, endedAt});
++}
++
+ async function assertCleanup(state) {
+   for (let index = 0; index < state.components.length; index += 1) {
+     if (
+diff --git a/test/distributed/harness/benchmark-resource-live-root-validation.js b/test/distributed/harness/benchmark-resource-live-root-validation.js
+index 502f4baea716eae6bf0f50510ae0c49d0e9e056a..f48d6fef06eff9664ae03cee22d14efb7fe3d5c2 100644
+--- a/test/distributed/harness/benchmark-resource-live-root-validation.js
++++ b/test/distributed/harness/benchmark-resource-live-root-validation.js
+@@ -212,11 +212,7 @@ export function assertBenchmarkResourceLiveComponentAccounting(
+       digestBenchmarkSemanticData(expected.amplification) ||
+     inventoryComponent === undefined ||
+     digestBenchmarkSemanticData(inventoryComponent.provisioned) !==
+-      digestBenchmarkSemanticData(expected.provisioned) ||
+-    digestBenchmarkSemanticData(inventoryComponent.minimumFootprint) !==
+-      digestBenchmarkSemanticData(expected.minimumFootprint) ||
+-    inventoryComponent.reservedHeadroomRatio !==
+-      expected.reservedHeadroomRatio
++      digestBenchmarkSemanticData(expected.provisioned)
+   ) {
+     fail(
+       `${localText.LIVE_INVENTORY_MISMATCH}:` +
+@@ -225,6 +221,95 @@ export function assertBenchmarkResourceLiveComponentAccounting(
+   }
+ }
+ 
++export function deriveBenchmarkResourceLiveInventoryComponentAccounting(
++  observations,
++) {
++  let provisioned = null;
++  const minimumFootprint = {
++    instances: 1,
++    cpuCores: 0,
++    memoryBytes: 0,
++    storageBytes: 0,
++  };
++  let reservedHeadroomRatio = 1;
++  for (let index = 0; index < observations.length; index += 1) {
++    const accounting =
++      deriveBenchmarkResourceLiveComponentAccounting(observations[index]);
++    if (
++      provisioned !== null &&
++      digestBenchmarkSemanticData(provisioned) !==
++        digestBenchmarkSemanticData(accounting.provisioned)
++    ) {
++      fail(localText.LIVE_INVENTORY_MISMATCH);
++    }
++    provisioned = accounting.provisioned;
++    minimumFootprint.cpuCores = Math.max(
++      minimumFootprint.cpuCores,
++      accounting.minimumFootprint.cpuCores,
++    );
++    minimumFootprint.memoryBytes = Math.max(
++      minimumFootprint.memoryBytes,
++      accounting.minimumFootprint.memoryBytes,
++    );
++    minimumFootprint.storageBytes = Math.max(
++      minimumFootprint.storageBytes,
++      accounting.minimumFootprint.storageBytes,
++    );
++    reservedHeadroomRatio = Math.min(
++      reservedHeadroomRatio,
++      accounting.reservedHeadroomRatio,
++    );
++  }
++  return {provisioned, minimumFootprint, reservedHeadroomRatio};
++}
++
++export function assertBenchmarkResourceLiveInventoryAccounting(
++  inventory,
++  calibrationArtifacts,
++) {
++  for (let sideIndex = 0;
++    sideIndex < inventory.sides.length;
++    sideIndex += 1) {
++    const side = inventory.sides[sideIndex];
++    for (let componentIndex = 0;
++      componentIndex < side.components.length;
++      componentIndex += 1) {
++      const component = side.components[componentIndex];
++      const observations = [];
++      for (let calibrationIndex = 0;
++        calibrationIndex < calibrationArtifacts.length;
++        calibrationIndex += 1) {
++        const observation =
++          resolveBenchmarkResourceLiveCalibrationComponent(
++            calibrationArtifacts[calibrationIndex],
++            side.sideId,
++            component.componentId,
++          );
++        if (observation === undefined) {
++          fail(localText.LIVE_INVENTORY_MISMATCH);
++        }
++        observations.push(observation);
++      }
++      const expected =
++        deriveBenchmarkResourceLiveInventoryComponentAccounting(
++          observations,
++        );
++      if (
++        digestBenchmarkSemanticData(component.provisioned) !==
++          digestBenchmarkSemanticData(expected.provisioned) ||
++        digestBenchmarkSemanticData(component.minimumFootprint) !==
++          digestBenchmarkSemanticData(expected.minimumFootprint) ||
++        component.reservedHeadroomRatio !== expected.reservedHeadroomRatio
++      ) {
++        fail(
++          `${localText.LIVE_INVENTORY_MISMATCH}:` +
++          `${side.sideId}:${component.componentId}`,
++        );
++      }
++    }
++  }
++}
++
+ function findTopologyComponent(topology, sideId, componentId) {
+   for (let index = 0; index < topology.components.length; index += 1) {
+     const component = topology.components[index];
+diff --git a/test/distributed/harness/benchmark-resource-mixed-provider.js b/test/distributed/harness/benchmark-resource-mixed-provider.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d9780fcab54fc45e454fd908d080ae01c5ed5cd0
+--- /dev/null
++++ b/test/distributed/harness/benchmark-resource-mixed-provider.js
+@@ -0,0 +1,281 @@
++import {
++  access,
++  readFile,
++  readdir,
++  stat,
++} from 'node:fs/promises';
++import path from 'node:path';
++
++const TEXT = 'utf8';
++const NANOCPUS_PER_CPU = 1_000_000_000;
++const NANOSECONDS_PER_MICROSECOND = 1_000;
++const localText = Object.freeze({
++  BLOCK_READ_BYTES: 'rbytes',
++  BLOCK_READ_OPERATIONS: 'rios',
++  BLOCK_WRITE_BYTES: 'wbytes',
++  BLOCK_WRITE_OPERATIONS: 'wios',
++  CGROUP_STORAGE_IDENTITY_MISMATCH:
++    'cgroup storage identity mismatch',
++  CONTAINER_PROVIDER_REQUIRED: 'container provider is required',
++  CPU_USAGE_MICROSECONDS: 'usage_usec',
++  EXACT_CGROUP_REGISTRATIONS_REQUIRED:
++    'exact unique cgroup registrations required',
++  FIELD_ASSIGNMENT: '=',
++  FILE_NOT_FOUND: 'ENOENT',
++  HOST_PROCESS_CGROUP_IMAGE: 'host-process-cgroup-v2',
++  MAXIMUM: 'max',
++  MEMORY_CURRENT: 'memory.current',
++  PIDS_CURRENT: 'pids.current',
++  PROCESS_READ_BYTES: 'read_bytes',
++  PROCESS_READ_OPERATIONS: 'syscr',
++  PROCESS_WRITE_BYTES: 'write_bytes',
++  PROCESS_WRITE_OPERATIONS: 'syscw',
++});
++
++function fail(reason) {
++  throw new TypeError(`mixed resource provider failed: ${reason}`);
++}
++
++async function pathExists(value) {
++  try {
++    await access(value);
++    return true;
++  } catch (error) {
++    if (error?.code === localText.FILE_NOT_FOUND) return false;
++    throw error;
++  }
++}
++
++async function textFile(directory, name) {
++  return (await readFile(path.join(directory, name), TEXT)).trim();
++}
++
++function integer(value, fallback = 0) {
++  const parsed = Number.parseInt(value, 10);
++  return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : fallback;
++}
++
++function cgroupCpuLimit(value) {
++  const [quota, period] = value.split(/\s+/u);
++  if (quota === localText.MAXIMUM) return 0;
++  const quotaValue = integer(quota);
++  const periodValue = integer(period);
++  return periodValue > 0 ?
++    Math.round(quotaValue / periodValue * NANOCPUS_PER_CPU) :
++    0;
++}
++
++function cgroupStatValue(value, key) {
++  const lines = value.split('\n');
++  for (let index = 0; index < lines.length; index += 1) {
++    const [name, raw] = lines[index].trim().split(/\s+/u);
++    if (name === key) return integer(raw);
++  }
++  return 0;
++}
++
++function ioTotals(value) {
++  const totals = {
++    readBytes: 0,
++    writeBytes: 0,
++    readOperations: 0,
++    writeOperations: 0,
++  };
++  const lines = value.split('\n');
++  for (let lineIndex = 0; lineIndex < lines.length; lineIndex += 1) {
++    const fields = lines[lineIndex].trim().split(/\s+/u);
++    for (let index = 1; index < fields.length; index += 1) {
++      const [key, raw] =
++        fields[index].split(localText.FIELD_ASSIGNMENT);
++      if (key === localText.BLOCK_READ_BYTES) {
++        totals.readBytes += integer(raw);
++      }
++      if (key === localText.BLOCK_WRITE_BYTES) {
++        totals.writeBytes += integer(raw);
++      }
++      if (key === localText.BLOCK_READ_OPERATIONS) {
++        totals.readOperations += integer(raw);
++      }
++      if (key === localText.BLOCK_WRITE_OPERATIONS) {
++        totals.writeOperations += integer(raw);
++      }
++    }
++  }
++  return totals;
++}
++
++async function processIoTotals(processes) {
++  const totals = {
++    readBytes: 0,
++    writeBytes: 0,
++    readOperations: 0,
++    writeOperations: 0,
++  };
++  for (const processId of processes.split(/\s+/u)) {
++    if (processId.length === 0) continue;
++    let value;
++    try {
++      value = await readFile(`/proc/${processId}/io`, TEXT);
++    } catch (error) {
++      if (error?.code === localText.FILE_NOT_FOUND) continue;
++      throw error;
++    }
++    const lines = value.split('\n');
++    for (let index = 0; index < lines.length; index += 1) {
++      const [key, raw] = lines[index].trim().split(/:\s*/u);
++      if (key === localText.PROCESS_READ_BYTES) {
++        totals.readBytes += integer(raw);
++      }
++      if (key === localText.PROCESS_WRITE_BYTES) {
++        totals.writeBytes += integer(raw);
++      }
++      if (key === localText.PROCESS_READ_OPERATIONS) {
++        totals.readOperations += integer(raw);
++      }
++      if (key === localText.PROCESS_WRITE_OPERATIONS) {
++        totals.writeOperations += integer(raw);
++      }
++    }
++  }
++  return totals;
++}
++
++async function directoryBytes(directory) {
++  if (!await pathExists(directory)) return 0;
++  const descriptor = await stat(directory);
++  if (!descriptor.isDirectory()) return descriptor.size;
++  let bytes = descriptor.size;
++  const entries = await readdir(directory, {withFileTypes: true});
++  for (let index = 0; index < entries.length; index += 1) {
++    bytes += await directoryBytes(path.join(directory, entries[index].name));
++  }
++  return bytes;
++}
++
++function registrationIndex(registrations) {
++  const byId = new Map();
++  for (let index = 0; index < registrations.length; index += 1) {
++    const registration = registrations[index];
++    if (
++      typeof registration?.resourceId !== 'string' ||
++      registration.resourceId.length === 0 ||
++      typeof registration.cgroupPath !== 'string' ||
++      registration.cgroupPath.length === 0 ||
++      typeof registration.storagePath !== 'string' ||
++      registration.storagePath.length === 0 ||
++      !Number.isSafeInteger(registration.storageLimitBytes) ||
++      registration.storageLimitBytes <= 0 ||
++      !Number.isSafeInteger(registration.cpuLimitNanoCpus) ||
++      registration.cpuLimitNanoCpus <= 0 ||
++      typeof registration.networkCounters !== 'function' ||
++      byId.has(registration.resourceId)
++    ) {
++      fail(localText.EXACT_CGROUP_REGISTRATIONS_REQUIRED);
++    }
++    byId.set(registration.resourceId, registration);
++  }
++  return byId;
++}
++
++async function cgroupRunning(registration) {
++  if (!await pathExists(registration.cgroupPath)) return false;
++  const processes = await textFile(registration.cgroupPath, 'cgroup.procs');
++  return processes.length > 0;
++}
++
++async function cgroupSnapshot(registration, storagePath) {
++  if (storagePath !== registration.storagePath) {
++    fail(localText.CGROUP_STORAGE_IDENTITY_MISMATCH);
++  }
++  const cpu = await textFile(registration.cgroupPath, 'cpu.stat');
++  const memoryMax =
++    await textFile(registration.cgroupPath, 'memory.max');
++  const processes =
++    await textFile(registration.cgroupPath, 'cgroup.procs');
++  const ioPath = path.join(registration.cgroupPath, 'io.stat');
++  const io = await pathExists(ioPath) ?
++    ioTotals(await readFile(ioPath, TEXT)) :
++    await processIoTotals(processes);
++  const cpuMaxPath = path.join(registration.cgroupPath, 'cpu.max');
++  const network = await registration.networkCounters();
++  return {
++    timestamp: Date.now(),
++    cpuPercent: 0,
++    cpuUsageNanoseconds:
++      cgroupStatValue(cpu, localText.CPU_USAGE_MICROSECONDS) *
++        NANOSECONDS_PER_MICROSECOND,
++    memoryUsageBytes: integer(
++      await textFile(registration.cgroupPath, localText.MEMORY_CURRENT),
++    ),
++    memoryLimitBytes:
++      memoryMax === localText.MAXIMUM ?
++        0 :
++        integer(memoryMax),
++    cpuLimitNanoCpus:
++      await pathExists(cpuMaxPath) ?
++        cgroupCpuLimit(await readFile(cpuMaxPath, TEXT)) :
++        registration.cpuLimitNanoCpus,
++    storageLimitBytes: registration.storageLimitBytes,
++    pids: integer(
++      await textFile(registration.cgroupPath, localText.PIDS_CURRENT),
++    ),
++    rxBytes: network.rxBytes,
++    txBytes: network.txBytes,
++    blockReadBytes: io.readBytes,
++    blockWriteBytes: io.writeBytes,
++    blockReadOperations: io.readOperations,
++    blockWriteOperations: io.writeOperations,
++    storageUsageBytes: await directoryBytes(storagePath),
++  };
++}
++
++export class BenchmarkResourceMixedProvider {
++  constructor({containerProvider, cgroups = []}) {
++    if (!containerProvider) fail(localText.CONTAINER_PROVIDER_REQUIRED);
++    this.containerProvider = containerProvider;
++    this.cgroups = registrationIndex(cgroups);
++  }
++
++  async inspectContainer(resourceId) {
++    const registration = this.cgroups.get(resourceId);
++    if (registration === undefined) {
++      return this.containerProvider.inspectContainer(resourceId);
++    }
++    if (!await cgroupRunning(registration)) {
++      throw new Error(`cgroup resource is not running: ${resourceId}`);
++    }
++    return {
++      Id: resourceId,
++      Image: localText.HOST_PROCESS_CGROUP_IMAGE,
++      State: {Running: true},
++    };
++  }
++
++  async inspectContainerIfExists(resourceId) {
++    const registration = this.cgroups.get(resourceId);
++    if (registration === undefined) {
++      return this.containerProvider.inspectContainerIfExists(resourceId);
++    }
++    if (!await pathExists(registration.cgroupPath)) return null;
++    return {
++      Id: resourceId,
++      Image: localText.HOST_PROCESS_CGROUP_IMAGE,
++      State: {Running: await cgroupRunning(registration)},
++    };
++  }
++
++  getNetworkByName(networkName) {
++    return this.containerProvider.getNetworkByName(networkName);
++  }
++
++  getContainerResourceSnapshot(resourceId, storagePath) {
++    const registration = this.cgroups.get(resourceId);
++    if (registration === undefined) {
++      return this.containerProvider.getContainerResourceSnapshot(
++        resourceId,
++        storagePath,
++      );
++    }
++    return cgroupSnapshot(registration, storagePath);
++  }
++}
+diff --git a/test/examples/movielens-capacity-runtime-adapters.test.js b/test/examples/movielens-capacity-runtime-adapters.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ae10cf35d345fcd44136b629512a79a6cacd87e6
+--- /dev/null
++++ b/test/examples/movielens-capacity-runtime-adapters.test.js
+@@ -0,0 +1,208 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++
++import {
++  digestBenchmarkSemanticData,
++} from '../distributed/harness/benchmark-semantic-integrity.js';
++import {
++  createMovielensLagrangeCapacityAdapter,
++  createMovielensPostgresqlCapacityAdapter,
++  movielensCapacityOperationManifestDigest,
++  movielensCapacitySemanticOracleDigest,
++} from '../../examples/service-data-affinity/movielens-capacity-runtime-adapters.js';
++
++const TOP_MOVIES = Object.freeze(
++  Array.from({length: 10}, (_, index) => Object.freeze({
++    avgRating: 5 - index / 10,
++    movieId: index + 1,
++    ratingCount: 100 - index,
++    score: 5 - index / 10,
++  })),
++);
++const ALTERNATIVE = Object.freeze({topMovies: TOP_MOVIES});
++const DATASET = Object.freeze({
++  cardinality: 10_000,
++  digest: digestBenchmarkSemanticData({dataset: 'movielens-10k'}),
++  source: 'fixture',
++});
++const COUNTS = Object.freeze({
++  offered: 1,
++  dispatched: 1,
++  correct: 1,
++  rejected: 0,
++  timedOut: 0,
++  errored: 0,
++  queueOverflow: 0,
++  undispatched: 0,
++  cancelled: 0,
++});
++const REJECTED = Object.freeze({
++  queueFull: 0,
++  flowControl: 0,
++  admission: 0,
++});
++
++function coordinate(sideId) {
++  return {
++    blockIndex: 0,
++    blockedOrderIndex: 0,
++    sideId,
++    offeredLoadPerSecond: 1,
++    phase: 'measured',
++  };
++}
++
++function lagrangeSession(semanticOracleDigest) {
++  const executableDigest = digestBenchmarkSemanticData({wasm: 'fixture'});
++  return {
++    artifact: {executableDigest},
++    prepared: {
++      deployment: {
++        binding: {name: 'movielens-public-grouped-reduce'},
++        manifest: {runtime: {kind: 'wasm_component'}},
++      },
++      async executeCapacityOperation({idempotencyKey, operationId}) {
++        return {
++          oracle: {
++            observed: ALTERNATIVE.topMovies.map((row, index) => ({
++              movieId: row.movieId,
++              rank: index + 1,
++              scoreMicros: Math.trunc(row.score * 1_000_000),
++            })),
++          },
++          response: {
++            status: 200,
++            requestWitness: {
++              invocationIdentity: idempotencyKey,
++              requestDigest: digestBenchmarkSemanticData({
++                request: operationId,
++              }),
++              intentDigest: digestBenchmarkSemanticData({
++                intent: operationId,
++              }),
++              bindingVersionId: 'binding-version-v1',
++              method: 'POST',
++              path: '/benchmarks/movielens/grouped-reduce',
++            },
++          },
++          invocationJournal: {
++            operation_id: `journal-${operationId}`,
++            state: 'completed',
++          },
++          result: {
++            movies: ALTERNATIVE.topMovies.map((row) => row.movieId),
++          },
++        };
++      },
++      async resetRunState() {
++        return {
++          durableResultRows: 0,
++          invocationJournalRows: 0,
++          state: 'public_request_results_and_journal_cleared',
++        };
++      },
++    },
++    semanticOracleDigest,
++  };
++}
++
++function postgresqlSession() {
++  return {
++    imageId: digestBenchmarkSemanticData({image: 'postgres:16'}),
++    postgresVersion: 'PostgreSQL 16.10',
++    querySql: 'SELECT grouped_reduce FROM ratings',
++    queryPlan: [{Plan: {'Node Type': 'Aggregate'}}],
++    inputDigest: DATASET.digest,
++    async executeGroupedReduce({requestId}) {
++      return {
++        backendPid: 123,
++        durableInputRows: DATASET.cardinality,
++        requestId,
++        returnedAggregateRows: TOP_MOVIES.length,
++        topMovies: TOP_MOVIES,
++      };
++    },
++    async resetRunState() {
++      return {
++        inputDigest: DATASET.digest,
++        rowCount: DATASET.cardinality,
++        state: 'read_only_input_preserved',
++      };
++    },
++  };
++}
++
++async function executeOne(adapter) {
++  adapter.beginWindow(coordinate(adapter.adapterIdentity.sideId));
++  assert.deepEqual(
++    await adapter.executeOperation({operationIndex: 0, signal: null}),
++    {status: 'correct'},
++  );
++  const semanticReceipt = adapter.finalizeSemanticReceipt({
++    counts: COUNTS,
++    rejectedByReason: REJECTED,
++    correctOperationIndexes: [0],
++  });
++  return {
++    semanticReceipt,
++    completed: adapter.completeWindow(),
++  };
++}
++
++test('Lagrange and PostgreSQL adapters join the same sealed MovieLens oracle', async () => {
++  const semanticOracleDigest =
++    movielensCapacitySemanticOracleDigest(ALTERNATIVE);
++  const operationManifestDigest =
++    movielensCapacityOperationManifestDigest(DATASET);
++  const lagrange = createMovielensLagrangeCapacityAdapter({
++    session: lagrangeSession(semanticOracleDigest),
++    sideId: 'lagrange',
++    operationManifestDigest,
++    semanticOracleDigest,
++  });
++  const postgresql = createMovielensPostgresqlCapacityAdapter({
++    session: postgresqlSession(),
++    sideId: 'postgresql',
++    operationManifestDigest,
++    semanticOracleDigest,
++  });
++  const candidate = await executeOne(lagrange);
++  const alternative = await executeOne(postgresql);
++  assert.equal(
++    candidate.semanticReceipt.resultSet.digest,
++    alternative.semanticReceipt.resultSet.digest,
++  );
++  assert.equal(
++    candidate.completed.operationEvidence[0]
++      .evidence.semanticOracleDigest,
++    semanticOracleDigest,
++  );
++  assert.equal(
++    alternative.completed.operationEvidence[0]
++      .evidence.semanticOracleDigest,
++    semanticOracleDigest,
++  );
++  assert.notEqual(
++    lagrange.adapterIdentity.adapterIdentityDigest,
++    postgresql.adapterIdentity.adapterIdentityDigest,
++  );
++});
++
++test('adapter reset receipts are owner-derived and side-specific', async () => {
++  const semanticOracleDigest =
++    movielensCapacitySemanticOracleDigest(ALTERNATIVE);
++  const adapter = createMovielensLagrangeCapacityAdapter({
++    session: lagrangeSession(semanticOracleDigest),
++    sideId: 'lagrange',
++    operationManifestDigest:
++      movielensCapacityOperationManifestDigest(DATASET),
++    semanticOracleDigest,
++  });
++  const receipt = await adapter.resetRunState(coordinate('lagrange'));
++  assert.equal(receipt.sideId, 'lagrange');
++  assert.match(receipt.resetDigest, /^sha256:[0-9a-f]{64}$/u);
++  assert.equal(
++    receipt.ownerReceipt.state,
++    'public_request_results_and_journal_cleared',
++  );
++});
+diff --git a/test/scripts/benchmark-resource-source-provenance.test.js b/test/scripts/benchmark-resource-source-provenance.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b0bba78e88b41a5275c391b11251de1e1d4786e3
+--- /dev/null
++++ b/test/scripts/benchmark-resource-source-provenance.test.js
+@@ -0,0 +1,33 @@
++import assert from 'node:assert/strict';
++import {mkdir, rm, writeFile} from 'node:fs/promises';
++import path from 'node:path';
++import test from 'node:test';
++
++import {
++  collectBenchmarkResourceSourceProvenance,
++} from '../../scripts/checks/benchmark-resource-source-provenance.js';
++
++test('source provenance binds an untracked runtime source by content', async () => {
++  const directory = path.join(
++    'test-output',
++    `benchmark-source-provenance-${process.pid}-${Date.now()}`,
++  );
++  const sourcePath = path.join(directory, 'untracked-runtime-source.js');
++  await mkdir(directory, {recursive: true});
++  try {
++    await writeFile(sourcePath, 'export const observed = true;\n');
++    const first =
++      await collectBenchmarkResourceSourceProvenance([sourcePath]);
++    await writeFile(sourcePath, 'export const observed = false;\n');
++    const second =
++      await collectBenchmarkResourceSourceProvenance([sourcePath]);
++    assert.match(first.sourceRevision, /^git-delta:/u);
++    assert.match(first.changeFingerprint, /^sha256:[0-9a-f]{64}$/u);
++    assert.notEqual(
++      first.changeFingerprint,
++      second.changeFingerprint,
++    );
++  } finally {
++    await rm(directory, {recursive: true, force: true});
++  }
++});
+diff --git a/test/scripts/systemd-capacity-adapter-controller.test.js b/test/scripts/systemd-capacity-adapter-controller.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..dce3c4eb9f845e12aaa39d15c049b5d14a086f80
+--- /dev/null
++++ b/test/scripts/systemd-capacity-adapter-controller.test.js
+@@ -0,0 +1,36 @@
++import assert from 'node:assert/strict';
++import test from 'node:test';
++
++import {
++  systemdCapacityAdapterArguments,
++} from '../../scripts/checks/systemd-capacity-adapter-controller.js';
++
++test('systemd adapter launch seals memory, tasks, and CPU affinity', () => {
++  const args = systemdCapacityAdapterArguments({
++    unit: 'movielens-capacity-fixture',
++    workingDirectory: '/workspace/lagrange',
++    scriptPath: '/workspace/lagrange/scripts/checks/adapter-child.js',
++    memoryMax: '2G',
++    cpuQuota: '200%',
++    cpuSet: '0,1',
++    tasksMax: 256,
++  });
++  assert.deepEqual(args.slice(0, 10), [
++    '--user',
++    '--quiet',
++    '--pipe',
++    '--wait',
++    '--collect',
++    '--unit=movielens-capacity-fixture',
++    '--property=MemoryMax=2G',
++    '--property=CPUQuota=200%',
++    '--property=TasksMax=256',
++    '--working-directory=/workspace/lagrange',
++  ]);
++  assert.deepEqual(args.slice(10, 13), [
++    'taskset',
++    '--cpu-list',
++    '0,1',
++  ]);
++  assert.equal(args[args.length - 1].endsWith('adapter-child.js'), true);
++});
