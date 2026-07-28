@@ -1,24 +1,12 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import {
-  BENCHMARK_RESOURCE_ARTIFACT_KIND,
-  BENCHMARK_RESOURCE_BILLING_TREATMENT,
-  BENCHMARK_RESOURCE_COMPONENT_ROLE,
-} from '../benchmark-resource-contract-constants.js';
-import {
   createBenchmarkResourceMemoryResolver,
 } from '../benchmark-resource-evidence-data.js';
 import {
   createBenchmarkResourceEvidenceRoot,
   createBenchmarkResourceNonMeasuringCellEvidence,
-  createBenchmarkResourceSourceArtifact,
   validateBenchmarkResourceEvidenceRoot,
 } from '../benchmark-resource-evidence-root.js';
-import {
-  beginBenchmarkResourceLiveObservation,
-  captureBenchmarkResourceLiveObservation,
-  finalizeBenchmarkResourceLiveObservation,
-  writeExternallyObservedBenchmarkResourceCalibration,
-} from '../benchmark-resource-live-observation-authority.js';
 import {
   BENCHMARK_RESOURCE_P0_PRICE_SHEET,
 } from '../benchmark-resource-price-sheet-p0-constants.js';
@@ -33,113 +21,23 @@ import {
   createComparativeNegativeControlEvidence,
   inspectComparativeNegativeControlEvidence,
 } from '../comparative-efficiency-negative-controls.js';
+import {
+  comparativePostgresNonMeasuringInventorySides,
+  createComparativePostgresCalibrationFixture,
+  rebuildComparativeNonMeasuringSourceReceipt as rebuiltSourceReceipt,
+} from './comparative-efficiency-postgres-nonmeasuring-test-fixture.js';
 
 const SOURCE_REVISION = 'git-commit:c5-negative-control-fixture';
 const PRODUCED_AT = '2026-07-27T20:00:00.000Z';
 const VALID_UNTIL = '2026-07-28T20:00:00.000Z';
 const SIDE_IDS = ['lagrange', 'postgresql'];
-const CALIBRATION_STARTED_AT = Date.parse(PRODUCED_AT);
-const CALIBRATION_ENDED_AT = CALIBRATION_STARTED_AT + 60_000;
-
-function resourceStats(timestamp, multiplier) {
-  return {
-    timestamp,
-    cpuPercent: 10 * multiplier,
-    cpuUsageNanoseconds: 10_000 * multiplier,
-    memoryUsageBytes: 100_000 * multiplier,
-    memoryLimitBytes: 1_000_000,
-    cpuLimitNanoCpus: 1_000_000_000,
-    storageLimitBytes: 1_000_000,
-    pids: 5,
-    rxBytes: 1_000 * multiplier,
-    txBytes: 2_000 * multiplier,
-    blockReadBytes: 3_000 * multiplier,
-    blockWriteBytes: 4_000 * multiplier,
-    blockReadOperations: 3 * multiplier,
-    blockWriteOperations: 4 * multiplier,
-    storageUsageBytes: 10_000 * multiplier,
-  };
-}
 
 async function calibrationFixture(sourceRevision = SOURCE_REVISION) {
-  let calls = 0;
-  let cleaned = false;
-  const provider = {
-    async inspectContainer() {
-      return {State: {Running: true}};
-    },
-    async inspectContainerIfExists() {
-      return cleaned ? null : {State: {Running: true}};
-    },
-    async getContainerResourceSnapshot() {
-      calls += 1;
-      return resourceStats(
-        calls <= 2 ? CALIBRATION_STARTED_AT : CALIBRATION_ENDED_AT,
-        calls <= 2 ? 1 : 2,
-      );
-    },
-    async getNetworkByName() {
-      return cleaned ? null : {id: 'negative-control-network'};
-    },
-  };
-  const session = await beginBenchmarkResourceLiveObservation(provider, {
-    runId: 'negative-control-live-fixture',
-    networkId: 'negative-control-network',
-    networkName: 'negative-control-network',
+  return createComparativePostgresCalibrationFixture({
     sourceRevision,
-    components: [
-      {
-        componentId: 'postgresql-database',
-        sideId: 'postgresql',
-        containerId: 'postgresql-container',
-        storagePath: '/var/lib/postgresql/data',
-      },
-      {
-        componentId: 'postgresql-client',
-        sideId: 'postgresql',
-        containerId: 'client-container',
-        storagePath: '/tmp',
-      },
-    ],
+    producedAt: PRODUCED_AT,
+    fixtureName: 'negative-control',
   });
-  await captureBenchmarkResourceLiveObservation(session);
-  cleaned = true;
-  const finalized = await finalizeBenchmarkResourceLiveObservation(session);
-  return writeExternallyObservedBenchmarkResourceCalibration(
-    finalized.receipt,
-    finalized.authorization,
-  );
-}
-
-function provisioned() {
-  return {
-    cpuCores: 1,
-    memoryBytes: 1_000_000,
-    storageBytes: 1_000_000,
-    iops: 0,
-    networkBytesPerSecond: 0,
-  };
-}
-
-function minimumFootprint() {
-  return {
-    instances: 1,
-    cpuCores: 0,
-    memoryBytes: 0,
-    storageBytes: 0,
-  };
-}
-
-function component(componentId, role) {
-  return {
-    componentId,
-    role,
-    billingTreatment: BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
-    provisioned: provisioned(),
-    minimumFootprint: minimumFootprint(),
-    reservedHeadroomRatio: 0,
-    exclusionReason: 'none',
-  };
 }
 
 function attempts() {
@@ -226,77 +124,11 @@ async function evidenceFixture(overrides = {}) {
       ],
     },
     inventoryId: 'comparative-negative-controls-inventory-v1',
-    inventorySides: [
-      {
-        sideId: 'lagrange',
-        components: [
-          component('lagrange-node', BENCHMARK_RESOURCE_COMPONENT_ROLE.LAGRANGE_NODE),
-        ],
-      },
-      {
-        sideId: 'postgresql',
-        components: [
-          component('postgresql-database', BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE),
-          component('postgresql-client', BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT),
-        ],
-      },
-    ],
+    inventorySides: comparativePostgresNonMeasuringInventorySides(),
     priceSheet: BENCHMARK_RESOURCE_P0_PRICE_SHEET,
     calibrationArtifact,
     attempts: overrides.attempts || attempts(),
   });
-}
-
-function rebuiltSourceReceipt(evidence, mutate, options = {}) {
-  const targetIndex = options.index || 0;
-  const originalSource = evidence.engagements[targetIndex];
-  const originalCell = evidence.cells[targetIndex];
-  const payload =
-    JSON.parse(JSON.stringify(originalSource.artifact.payload));
-  mutate(payload);
-  const references =
-    options.references || originalSource.artifact.references;
-  const source = createBenchmarkResourceSourceArtifact(
-    BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
-    payload,
-    references,
-  );
-  const cellPayload = originalCell.artifact.payload;
-  const cell = createBenchmarkResourceNonMeasuringCellEvidence({
-    matrixManifestDigest: cellPayload.matrixManifestDigest,
-    matrixId: cellPayload.matrixId,
-    cellId: cellPayload.cellId,
-    pairId: cellPayload.pairId,
-    runId: cellPayload.runId,
-    sideIds: cellPayload.sideIds,
-    reasonCodes: cellPayload.reasonCodes,
-    sourceDigests: [source.digest],
-    sourceRevision: cellPayload.sourceRevision,
-    producedAt: cellPayload.producedAt,
-    validUntil: cellPayload.validUntil,
-  });
-  const artifacts = evidence.artifacts.filter((artifact) => (
-    artifact.digest !== originalSource.digest &&
-    artifact.digest !== originalCell.digest
-  ));
-  artifacts.push(source, cell);
-  const rootPayload = evidence.root.artifact.payload;
-  const cellDigests = [...rootPayload.cellEvidenceDigests];
-  cellDigests[targetIndex] = cell.digest;
-  const root = createBenchmarkResourceEvidenceRoot({
-    matrixManifestDigest: rootPayload.matrixManifestDigest,
-    componentInventoryDigest: rootPayload.componentInventoryDigest,
-    priceSheetDigest: rootPayload.priceSheetDigest,
-    cellEvidenceDigests: cellDigests,
-    sourceRevision: rootPayload.sourceRevision,
-    producedAt: rootPayload.producedAt,
-    validUntil: rootPayload.validUntil,
-    artifacts,
-  });
-  return {
-    rootDigest: root.digest,
-    resolver: createBenchmarkResourceMemoryResolver([...artifacts, root]),
-  };
 }
 
 function relabeledRevisionReceipt(evidence) {

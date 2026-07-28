@@ -1,0 +1,5451 @@
+diff --git a/scripts/checks/comparative-efficiency-postgres-nonmeasuring-live-constants.js b/scripts/checks/comparative-efficiency-postgres-nonmeasuring-live-constants.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..799cc0f121af3e8551f02b0d7cad56171cd7d5d8
+--- /dev/null
++++ b/scripts/checks/comparative-efficiency-postgres-nonmeasuring-live-constants.js
+@@ -0,0 +1 @@
++export const COMPARATIVE_POSTGRES_IMAGE = 'postgres:16';
+diff --git a/scripts/checks/comparative-efficiency-postgres-nonmeasuring-live.js b/scripts/checks/comparative-efficiency-postgres-nonmeasuring-live.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..8866867c9c65575c24bd0aa723e1ab3a0d256cd6
+--- /dev/null
++++ b/scripts/checks/comparative-efficiency-postgres-nonmeasuring-live.js
+@@ -0,0 +1,366 @@
++import {DockerProvider} from
++  '../../test/distributed/harness/docker-provider.js';
++import {
++  shellQuote,
++  waitForPostgresReady,
++} from '../../test/distributed/harness/pgbench-runner.js';
++import {
++  BENCHMARK_RESOURCE_BILLING_TREATMENT,
++  BENCHMARK_RESOURCE_COMPONENT_ROLE,
++} from
++  '../../test/distributed/harness/benchmark-resource-contract-constants.js';
++import {
++  beginBenchmarkResourceLiveObservation,
++  captureBenchmarkResourceLiveObservation,
++  deriveBenchmarkResourceLiveComponentAccounting,
++  finalizeBenchmarkResourceLiveObservation,
++  writeExternallyObservedBenchmarkResourceCalibration,
++} from
++  '../../test/distributed/harness/benchmark-resource-live-observation-authority.js';
++import {
++  BENCHMARK_RESOURCE_P0_PRICE_SHEET,
++} from
++  '../../test/distributed/harness/benchmark-resource-price-sheet-p0-constants.js';
++import {
++  COMPARATIVE_POSTGRES_IMAGE,
++} from './comparative-efficiency-postgres-nonmeasuring-live-constants.js';
++import {
++  collectBenchmarkResourceSourceProvenance,
++} from './benchmark-resource-source-provenance.js';
++
++export const COMPARATIVE_POSTGRES_PRICE_SHEET =
++  BENCHMARK_RESOURCE_P0_PRICE_SHEET;
++export {
++  COMPARATIVE_POSTGRES_IMAGE,
++} from './comparative-efficiency-postgres-nonmeasuring-live-constants.js';
++
++const DATABASE = 'postgres';
++const POSTGRES_USER = 'postgres';
++const RESOURCE_MEMORY = '256m';
++const RESOURCE_CPUS = '1.0';
++const DATABASE_STORAGE_BYTES = 128 * 1024 * 1024;
++const DATABASE_STORAGE_PATH = '/var/lib/postgresql/data';
++const CLIENT_STORAGE_PATH = '/tmp';
++const START_TIMEOUT_MS = 30_000;
++const EVIDENCE_VALIDITY_MS = 24 * 60 * 60 * 1_000;
++const LAGRANGE_SIDE = 'lagrange';
++const POSTGRES_SIDE = 'postgresql';
++const LAGRANGE_COMPONENT = 'lagrange-node';
++const DATABASE_COMPONENT = 'postgresql-database';
++const CLIENT_COMPONENT = 'postgresql-client';
++const NONE = 'none';
++const PSQL_ARGUMENTS = 'psql -v ON_ERROR_STOP=1 -qAt ';
++const SLEEP = 'sleep';
++const INFINITY = 'infinity';
++const stringTrim = Function.call.bind(String.prototype.trim);
++const localText = Object.freeze({
++  REQUIRED_IMAGE: 'required live image unavailable: ',
++  MISSING_COMPONENT: 'missing observed component ',
++});
++
++function psqlCommand(password, host, sql) {
++  return (
++    `PGPASSWORD='${shellQuote(password)}' ` +
++    PSQL_ARGUMENTS +
++    `-h '${shellQuote(host)}' -U '${POSTGRES_USER}' ` +
++    `-d '${DATABASE}' -c '${shellQuote(sql)}'`
++  );
++}
++
++function databaseOptions(config, networkId) {
++  return {
++    name: `${config.runId}-postgresql`,
++    image: COMPARATIVE_POSTGRES_IMAGE,
++    network: networkId,
++    env: {
++      POSTGRES_PASSWORD: config.password,
++      POSTGRES_DB: DATABASE,
++    },
++    labels: config.labels,
++    resourceLimits: {memory: RESOURCE_MEMORY, cpus: RESOURCE_CPUS},
++    hostConfigExtras: {
++      Tmpfs: {
++        [DATABASE_STORAGE_PATH]:
++          `rw,size=${DATABASE_STORAGE_BYTES}`,
++      },
++    },
++    startTimeout: START_TIMEOUT_MS,
++  };
++}
++
++async function createDatabase(provider, config, networkId) {
++  const container = await provider.createContainer(
++    databaseOptions(config, networkId),
++  );
++  await waitForPostgresReady(provider, container.containerId, {
++    user: POSTGRES_USER,
++    database: DATABASE,
++    timeoutMs: START_TIMEOUT_MS,
++  });
++  return container;
++}
++
++function clientOptions(config, networkId) {
++  return {
++    name: `${config.runId}-client`,
++    image: COMPARATIVE_POSTGRES_IMAGE,
++    network: networkId,
++    labels: config.labels,
++    resourceLimits: {memory: RESOURCE_MEMORY, cpus: RESOURCE_CPUS},
++    command: [SLEEP, INFINITY],
++    startTimeout: START_TIMEOUT_MS,
++  };
++}
++
++async function createClient(provider, config, networkId) {
++  return provider.createContainer(clientOptions(config, networkId));
++}
++
++async function removeIfPresent(provider, containerId) {
++  if (
++    containerId &&
++    await provider.inspectContainerIfExists(containerId) !== null
++  ) {
++    await provider.removeContainer(containerId);
++  }
++}
++
++async function cleanup(provider, config, state) {
++  const containers = [state.client, state.database];
++  for (let index = 0; index < containers.length; index += 1) {
++    await removeIfPresent(provider, containers[index]?.containerId);
++  }
++  if (
++    state.networkId &&
++    await provider.getNetworkByName(config.networkName) !== null
++  ) {
++    await provider.removeNetwork(state.networkId);
++  }
++}
++
++function observationComponents(state) {
++  return [
++    {
++      componentId: DATABASE_COMPONENT,
++      sideId: POSTGRES_SIDE,
++      containerId: state.database.containerId,
++      storagePath: DATABASE_STORAGE_PATH,
++    },
++    {
++      componentId: CLIENT_COMPONENT,
++      sideId: POSTGRES_SIDE,
++      containerId: state.client.containerId,
++      storagePath: CLIENT_STORAGE_PATH,
++    },
++  ];
++}
++
++async function executeSql(provider, config, state, sql, failurePrefix) {
++  const result = await provider.execInContainer(
++    state.client.containerId,
++    ['sh', '-lc', psqlCommand(config.password, state.database.ip, sql)],
++  );
++  if (result.exitCode !== 0) {
++    throw new Error(`${failurePrefix}${result.stderr}`);
++  }
++  return normalizeComparativePostgresOutput(result.stdout);
++}
++
++export function normalizeComparativePostgresOutput(output) {
++  return stringTrim(output);
++}
++
++async function executeObservedMatrix(
++  provider,
++  config,
++  state,
++  sourceRevision,
++  executeMatrix,
++) {
++  const image = await provider.inspectImage(COMPARATIVE_POSTGRES_IMAGE);
++  if (!image) {
++    throw new Error(
++      localText.REQUIRED_IMAGE + COMPARATIVE_POSTGRES_IMAGE,
++    );
++  }
++  const network =
++    await provider.createNetwork(config.networkName, config.labels);
++  state.networkId = network.id;
++  state.database = await createDatabase(provider, config, state.networkId);
++  state.client = await createClient(provider, config, state.networkId);
++  const session =
++    await beginBenchmarkResourceLiveObservation(provider, {
++      runId: config.runId,
++      networkId: state.networkId,
++      networkName: config.networkName,
++      sourceRevision,
++      components: observationComponents(state),
++    });
++  const attempts = await executeMatrix({
++    executeSql(sql, failurePrefix) {
++      return executeSql(
++        provider,
++        config,
++        state,
++        sql,
++        failurePrefix,
++      );
++    },
++    imageId: image.Id,
++    databaseContainerId: state.database.containerId,
++    clientContainerId: state.client.containerId,
++  });
++  await captureBenchmarkResourceLiveObservation(session);
++  await cleanup(provider, config, state);
++  return {attempts, imageId: image.Id, session};
++}
++
++export function createComparativePostgresLiveRuntime(config) {
++  const provider = new DockerProvider();
++  const state = {networkId: null, database: null, client: null};
++  return Object.freeze({
++    async runObservedMatrix(sourceRevision, executeMatrix) {
++      try {
++        return await executeObservedMatrix(
++          provider,
++          config,
++          state,
++          sourceRevision,
++          executeMatrix,
++        );
++      } catch (error) {
++        await cleanup(provider, config, state);
++        throw error;
++      }
++    },
++  });
++}
++
++export async function finalizeComparativePostgresObservation(session) {
++  const finalized =
++    await finalizeBenchmarkResourceLiveObservation(session);
++  const calibration =
++    writeExternallyObservedBenchmarkResourceCalibration(
++      finalized.receipt,
++      finalized.authorization,
++    );
++  return {finalized, calibration};
++}
++
++export async function startComparativePostgresLiveRun({
++  runtimeConfig,
++  sourcePaths,
++  executeMatrix,
++}) {
++  const runtime = createComparativePostgresLiveRuntime(runtimeConfig);
++  const provenance =
++    await collectBenchmarkResourceSourceProvenance(sourcePaths);
++  const {attempts, imageId, session} =
++    await runtime.runObservedMatrix(
++      provenance.sourceRevision,
++      executeMatrix,
++    );
++  const {finalized, calibration} =
++    await finalizeComparativePostgresObservation(session);
++  const producedAt = new Date().toISOString();
++  const validUntil =
++    new Date(
++      Date.parse(producedAt) + EVIDENCE_VALIDITY_MS,
++    ).toISOString();
++  return {
++    attempts,
++    imageId,
++    finalized,
++    calibration,
++    producedAt,
++    validUntil,
++    provenance,
++    sideIds: [LAGRANGE_SIDE, POSTGRES_SIDE],
++  };
++}
++
++function observedComponent(calibration, componentId) {
++  const components = calibration.artifact.payload.components;
++  for (let index = 0; index < components.length; index += 1) {
++    if (components[index].componentId === componentId) {
++      return components[index];
++    }
++  }
++  throw new Error(localText.MISSING_COMPONENT + componentId);
++}
++
++function inventoryShape({
++  componentId,
++  role,
++  provisioned,
++  minimumFootprint,
++  reservedHeadroomRatio,
++}) {
++  return {
++    componentId,
++    role,
++    billingTreatment: BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
++    provisioned,
++    minimumFootprint,
++    reservedHeadroomRatio,
++    exclusionReason: NONE,
++  };
++}
++
++function observedInventoryComponent(componentId, role, calibration) {
++  const accounting = deriveBenchmarkResourceLiveComponentAccounting(
++    observedComponent(calibration, componentId),
++  );
++  return inventoryShape({
++    componentId,
++    role,
++    provisioned: accounting.provisioned,
++    minimumFootprint: accounting.minimumFootprint,
++    reservedHeadroomRatio: accounting.reservedHeadroomRatio,
++  });
++}
++
++function absentCandidateInventory() {
++  return inventoryShape({
++    componentId: LAGRANGE_COMPONENT,
++    role: BENCHMARK_RESOURCE_COMPONENT_ROLE.LAGRANGE_NODE,
++    provisioned: {
++      cpuCores: 0,
++      memoryBytes: 0,
++      storageBytes: 0,
++      iops: 0,
++      networkBytesPerSecond: 0,
++    },
++    minimumFootprint: {
++      instances: 0,
++      cpuCores: 0,
++      memoryBytes: 0,
++      storageBytes: 0,
++    },
++    reservedHeadroomRatio: 0,
++  });
++}
++
++export function comparativePostgresInventorySides(calibration) {
++  return [
++    {
++      sideId: LAGRANGE_SIDE,
++      components: [absentCandidateInventory()],
++    },
++    {
++      sideId: POSTGRES_SIDE,
++      components: [
++        observedInventoryComponent(
++          DATABASE_COMPONENT,
++          BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
++          calibration,
++        ),
++        observedInventoryComponent(
++          CLIENT_COMPONENT,
++          BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT,
++          calibration,
++        ),
++      ],
++    },
++  ];
++}
+diff --git a/scripts/checks/run-comparative-efficiency-change-rate-crossover-guard.js b/scripts/checks/run-comparative-efficiency-change-rate-crossover-guard.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..12bdbc50b4b71d40ade0555911d2c0e9b6da38af
+--- /dev/null
++++ b/scripts/checks/run-comparative-efficiency-change-rate-crossover-guard.js
+@@ -0,0 +1,12 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'comparative-efficiency-change-rate-crossover-guard': [
++    'test/distributed/harness/__tests__/' +
++      'comparative-efficiency-change-rate-crossover.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/scripts/checks/run-comparative-efficiency-change-rate-crossover-live.js b/scripts/checks/run-comparative-efficiency-change-rate-crossover-live.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a4539d34aa7c397f73cdcc1e34a2598cad844178
+--- /dev/null
++++ b/scripts/checks/run-comparative-efficiency-change-rate-crossover-live.js
+@@ -0,0 +1,438 @@
++#!/usr/bin/env node
++
++import {execFile} from 'node:child_process';
++import {mkdir, writeFile} from 'node:fs/promises';
++import {resolve} from 'node:path';
++import {promisify} from 'node:util';
++import {
++  COMPARATIVE_POSTGRES_IMAGE,
++  COMPARATIVE_POSTGRES_PRICE_SHEET,
++  comparativePostgresInventorySides,
++  startComparativePostgresLiveRun,
++} from './comparative-efficiency-postgres-nonmeasuring-live.js';
++import {
++  createBenchmarkResourceDurableResolver,
++  persistBenchmarkResourceArtifacts,
++} from
++  '../../test/distributed/harness/benchmark-resource-durable-resolver.js';
++import {
++  buildComparativeChangeRateCrossoverPolicyWitness,
++} from
++  '../../test/distributed/harness/comparative-efficiency-change-rate-crossover-policy-witness.js';
++import {
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_ORACLE,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_REASON,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_SCENARIO,
++  comparativeChangeRateCrossoverExpectedResult,
++  comparativeChangeRateCrossoverSql,
++  createComparativeChangeRateCrossoverEvidence,
++  inspectComparativeChangeRateCrossoverEvidence,
++} from
++  '../../test/distributed/harness/comparative-efficiency-change-rate-crossover.js';
++import {
++  evaluateComparativeChangeRateCrossoverOracle,
++} from
++  '../../test/distributed/harness/comparative-efficiency-change-rate-crossover-admission.js';
++
++const execFileAsync = promisify(execFile);
++const arrayPush = Function.call.bind(Array.prototype.push);
++const jsonParse = JSON.parse;
++const jsonStringify = JSON.stringify;
++const stringReplace = Function.call.bind(String.prototype.replace);
++const PASSWORD = 'change-rate-crossover-live';
++const ARTIFACT_DIRECTORY =
++  'test-output/comparative-change-rate-crossover-artifacts';
++const REPORT_DIRECTORY = 'test-output/reports';
++const RUN_ID =
++  `comparative-change-rate-crossover-${process.pid}-${Date.now()}`;
++const NETWORK_NAME = `${RUN_ID}-network`;
++const LABELS = Object.freeze({
++  'lagrange.proof.run': RUN_ID,
++  'lagrange.proof.scenario': COMPARATIVE_CHANGE_RATE_CROSSOVER_SCENARIO,
++});
++const SOURCE_PATHS = Object.freeze([
++  'scripts/checks/benchmark-resource-source-provenance.js',
++  'scripts/checks/' +
++    'comparative-efficiency-postgres-nonmeasuring-live-constants.js',
++  'scripts/checks/comparative-efficiency-postgres-nonmeasuring-live.js',
++  'scripts/checks/run-comparative-efficiency-request-enrichment-live.js',
++  'scripts/checks/run-comparative-efficiency-change-rate-crossover-guard.js',
++  'scripts/checks/run-comparative-efficiency-change-rate-crossover-live.js',
++  'test/distributed/harness/__tests__/' +
++    'comparative-efficiency-negative-controls.test.js',
++  'test/distributed/harness/__tests__/' +
++    'comparative-efficiency-request-enrichment.test.js',
++  'test/distributed/harness/__tests__/' +
++    'comparative-efficiency-change-rate-crossover.test.js',
++  'test/distributed/harness/__tests__/' +
++    'comparative-efficiency-postgres-nonmeasuring-test-fixture.js',
++  'test/distributed/harness/comparative-efficiency-negative-controls.js',
++  'test/distributed/harness/' +
++    'comparative-efficiency-postgres-nonmeasuring-admission.js',
++  'test/distributed/harness/' +
++    'comparative-efficiency-postgres-nonmeasuring-evidence.js',
++  'test/distributed/harness/' +
++    'comparative-efficiency-request-enrichment-admission.js',
++  'test/distributed/harness/comparative-efficiency-request-enrichment.js',
++  'test/distributed/harness/' +
++    'comparative-efficiency-change-rate-crossover-admission.js',
++  'test/distributed/harness/' +
++    'comparative-efficiency-change-rate-crossover-policy-witness.js',
++  'test/distributed/harness/' +
++    'comparative-efficiency-change-rate-crossover-constants.js',
++  'test/distributed/harness/' +
++    'comparative-efficiency-change-rate-crossover.js',
++]);
++const candidateReason =
++  'no claim-eligible Lagrange change-rate-crossover capacity adapter was ' +
++  'available for the preregistered matrix';
++const localText = Object.freeze({
++  LAGRANGE: 'lagrange',
++  POSTGRESQL: 'postgresql',
++  PAIRED_CAPACITY_ABSENT: 'paired_capacity_absent',
++  RESOURCE_WINDOW_ABSENT: 'whole_topology_resource_window_absent',
++  COMPARATIVE_EFFECTS_ABSENT: 'comparative_effects_absent',
++  NON_MEASURING: 'non_measuring',
++  ABSENT: 'absent',
++  NOT_EVALUABLE: 'not_evaluable',
++  LIVE_EVIDENCE_VERSION: 'comparative-change-rate-crossover-live-evidence-v1',
++  INPUT_TYPE_MODULE: '--input-type=module',
++  EVAL: '--eval',
++  UTF8: 'utf8',
++  PASS: 'comparative-efficiency-change-rate-crossover-live: PASS\n',
++  FAIL: 'comparative-efficiency-change-rate-crossover-live: FAIL\n',
++  DURABLE_REJECTED: 'durable change-rate-crossover evidence rejected: ',
++  CELL_FAILED: 'PostgreSQL change-rate cell failed: ',
++  CLAIM_PREFIX:
++    'claim: no comparative claim; all 32 cells are non-measuring because ',
++  CLAIM_SUFFIX:
++    'the candidate capacity adapter was not engaged\n',
++});
++
++async function executeMatrix(runtime) {
++  const attempts = [];
++  for (let index = 0;
++    index < COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.length;
++    index += 1) {
++    const cell = COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS[index];
++    const sql = comparativeChangeRateCrossoverSql(cell);
++    process.stdout.write(
++      `cell ${index + 1}/` +
++      `${COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.length}: ` +
++      `${cell.datasetSize}/${cell.mutationRate}/` +
++      `${cell.workloadDiversity}/${cell.skew}/${cell.policy}\n`,
++    );
++    const startedAt = new Date().toISOString();
++    const stdout = await runtime.executeSql(
++      sql,
++      localText.CELL_FAILED,
++    );
++    const endedAt = new Date().toISOString();
++    if (!evaluateComparativeChangeRateCrossoverOracle(cell, stdout)) {
++      throw new Error(`change-rate-crossover oracle failed at cell ${index}`);
++    }
++    arrayPush(attempts, {
++      matrixCellIndex: index,
++      runId: `${RUN_ID}-${index}`,
++      candidateEngaged: false,
++      alternativeEngaged: true,
++      reasonCodes: [
++        COMPARATIVE_CHANGE_RATE_CROSSOVER_REASON,
++        localText.PAIRED_CAPACITY_ABSENT,
++        localText.RESOURCE_WINDOW_ABSENT,
++        localText.COMPARATIVE_EFFECTS_ABSENT,
++      ],
++      liveEvidence: {
++        version: localText.LIVE_EVIDENCE_VERSION,
++        matrixCellIndex: index,
++        startedAt,
++        endedAt,
++        candidate: {
++          architectureId: localText.LAGRANGE,
++          capacityAdapterEngaged: false,
++          reason: candidateReason,
++          policyWitness:
++            buildComparativeChangeRateCrossoverPolicyWitness(cell),
++        },
++        alternative: {
++          architectureId: localText.POSTGRESQL,
++          engaged: true,
++          image: COMPARATIVE_POSTGRES_IMAGE,
++          imageId: runtime.imageId,
++          databaseContainerId: runtime.databaseContainerId,
++          clientContainerId: runtime.clientContainerId,
++          sql,
++          stdout,
++        },
++        oracle: {
++          name: COMPARATIVE_CHANGE_RATE_CROSSOVER_ORACLE,
++          expected: comparativeChangeRateCrossoverExpectedResult(cell),
++          passed: true,
++        },
++        measurementDisposition: {
++          state: localText.NON_MEASURING,
++          capacityConfidenceInterval: localText.ABSENT,
++          wholeTopologyResourceBreakdown: localText.ABSENT,
++          infrastructureCostProjection: localText.ABSENT,
++          practicalEffectClassification: localText.NOT_EVALUABLE,
++          crossoverClassification: localText.NOT_EVALUABLE,
++        },
++      },
++    });
++  }
++  return attempts;
++}
++
++function workloadCells() {
++  const cells = [];
++  for (let index = 0;
++    index < COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.length;
++    index += 1) {
++    const cell = COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS[index];
++    arrayPush(cells, {
++      datasetSize: cell.datasetSize,
++      mutationRate: cell.mutationRate,
++      mutationDivisor: cell.mutationDivisor,
++      workloadDiversity: cell.workloadDiversity,
++      diversityCount: cell.diversityCount,
++      skew: cell.skew,
++      policy: cell.policy,
++      requestCount: cell.requestCount,
++      alternativeSql: comparativeChangeRateCrossoverSql(cell),
++      oracleName: COMPARATIVE_CHANGE_RATE_CROSSOVER_ORACLE,
++      oracleExpected: comparativeChangeRateCrossoverExpectedResult(cell),
++    });
++  }
++  return cells;
++}
++
++function cellOutcomes(attempts) {
++  const projections = [];
++  for (let index = 0; index < attempts.length; index += 1) {
++    const cell = COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS[index];
++    arrayPush(projections, {
++      matrixCellIndex: index,
++      datasetSize: cell.datasetSize,
++      mutationRate: cell.mutationRate,
++      workloadDiversity: cell.workloadDiversity,
++      skew: cell.skew,
++      policy: cell.policy,
++      alternativeOraclePassed: attempts[index].liveEvidence.oracle.passed,
++      state: localText.NON_MEASURING,
++      capacityConfidenceInterval: localText.ABSENT,
++      wholeTopologyResourceBreakdown: localText.ABSENT,
++      infrastructureCostProjection: localText.ABSENT,
++      practicalEffectClassification: localText.NOT_EVALUABLE,
++      crossoverClassification: localText.NOT_EVALUABLE,
++    });
++  }
++  return projections;
++}
++
++async function replayInFreshProcess(rootDigest) {
++  const inspectorUrl = new URL(
++    '../../test/distributed/harness/' +
++      'comparative-efficiency-change-rate-crossover.js',
++    import.meta.url,
++  ).href;
++  const resolverUrl = new URL(
++    '../../test/distributed/harness/' +
++      'benchmark-resource-durable-resolver.js',
++    import.meta.url,
++  ).href;
++  const source =
++    'import {inspectComparativeChangeRateCrossoverEvidence as inspect} from ' +
++      `${jsonStringify(inspectorUrl)};` +
++    'import {createBenchmarkResourceDurableResolver as resolver} from ' +
++      `${jsonStringify(resolverUrl)};` +
++    `const result=inspect({rootDigest:${jsonStringify(rootDigest)},` +
++      `resolver:resolver(${jsonStringify(resolve(ARTIFACT_DIRECTORY))})});` +
++    'process.stdout.write(JSON.stringify(result));';
++  const {stdout} = await execFileAsync(
++    process.execPath,
++    [localText.INPUT_TYPE_MODULE, localText.EVAL, source],
++    {encoding: localText.UTF8},
++  );
++  return jsonParse(stdout);
++}
++
++async function writeScenarioReport(detail) {
++  const timestamp = new Date().toISOString();
++  const report = {
++    timestamp,
++    scenario: COMPARATIVE_CHANGE_RATE_CROSSOVER_SCENARIO,
++    producer: 'comparative-efficiency-change-rate-crossover-live',
++    fidelity: 'live-postgresql-and-production-policy-owners',
++    summary: {total: 1, passed: 1, failed: 0},
++    optimizationSummary: {totalPriorityItems: 0},
++    standardSummary: {
++      scenarios: [{
++        scenario: COMPARATIVE_CHANGE_RATE_CROSSOVER_SCENARIO,
++        passed: true,
++        current: {passed: true, verdict: 'PASS'},
++        detail,
++      }],
++    },
++  };
++  await mkdir(REPORT_DIRECTORY, {recursive: true});
++  const stamp = stringReplace(timestamp, /[:.]/gu, '-');
++  const path = resolve(
++    REPORT_DIRECTORY,
++    `${COMPARATIVE_CHANGE_RATE_CROSSOVER_SCENARIO}-${stamp}.report.json`,
++  );
++  await writeFile(path, jsonStringify(report, null, 2));
++  return path;
++}
++
++async function main() {
++  const {
++    attempts,
++    imageId,
++    finalized,
++    calibration,
++    producedAt,
++    validUntil,
++    provenance,
++    sideIds,
++  } = await startComparativePostgresLiveRun({
++    runtimeConfig: {
++      runId: RUN_ID,
++      networkName: NETWORK_NAME,
++      labels: LABELS,
++      password: PASSWORD,
++    },
++    sourcePaths: SOURCE_PATHS,
++    executeMatrix,
++  });
++  const evidence = createComparativeChangeRateCrossoverEvidence({
++    matrixId: 'comparative-change-rate-crossover-p0-v1',
++    pairId: 'lagrange-postgresql-change-rate-crossover-v1',
++    sideIds,
++    sourceRevision: provenance.sourceRevision,
++    producedAt,
++    validUntil,
++    workloadManifest: {
++      version: 'comparative-change-rate-crossover-workloads-v1',
++      cells: workloadCells(),
++      selectionPolicy: 'complete_cartesian_matrix',
++    },
++    alternativeTopology: {
++      version: 'comparative-change-rate-crossover-topology-v1',
++      candidate: {
++        architectureId: localText.LAGRANGE,
++        required: true,
++        capacityAdapterEngaged: false,
++        reason: candidateReason,
++      },
++      alternative: {
++        architectureId: localText.POSTGRESQL,
++        image: COMPARATIVE_POSTGRES_IMAGE,
++        imageId,
++        databaseContainerId:
++          calibration.artifact.payload.components[0].containerId,
++        clientContainerId:
++          calibration.artifact.payload.components[1].containerId,
++        network: 'managed_bridge',
++      },
++    },
++    preregistration: {
++      version: 'comparative-change-rate-crossover-preregistration-v1',
++      axes: COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
++      sideIds,
++      outcomePolicy: 'direction_neutral',
++      invalidCellPolicy: 'publish_explicit_non_measuring',
++      candidateEngagementRequired: true,
++      policyOwnerIds: COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
++      requiredEvidence: [
++        'paired_capacity',
++        'whole_topology_resource_windows',
++        'capacity_uncertainty',
++        'capacity_practical_effect',
++        'cost_practical_effect',
++        'crossover_classification',
++        'immutable_raw_artifacts',
++      ],
++    },
++    inventoryId: 'comparative-change-rate-crossover-live-inventory-v1',
++    inventorySides: comparativePostgresInventorySides(calibration),
++    priceSheet: COMPARATIVE_POSTGRES_PRICE_SHEET,
++    calibrationArtifact: calibration,
++    attempts,
++  });
++  const inspection =
++    inspectComparativeChangeRateCrossoverEvidence(evidence.receipt);
++  if (!inspection.valid || !inspection.complete) {
++    throw new Error(
++      `change-rate-crossover evidence rejected: ${inspection.reason}`,
++    );
++  }
++  const allArtifacts = [];
++  for (let index = 0; index < evidence.artifacts.length; index += 1) {
++    arrayPush(allArtifacts, evidence.artifacts[index]);
++  }
++  arrayPush(allArtifacts, evidence.root);
++  const persisted = await persistBenchmarkResourceArtifacts(
++    resolve(ARTIFACT_DIRECTORY),
++    allArtifacts,
++  );
++  const durableInspection = inspectComparativeChangeRateCrossoverEvidence({
++    rootDigest: evidence.root.digest,
++    resolver: createBenchmarkResourceDurableResolver(
++      resolve(ARTIFACT_DIRECTORY),
++    ),
++  });
++  if (!durableInspection.valid || !durableInspection.complete) {
++    throw new Error(
++      localText.DURABLE_REJECTED +
++      durableInspection.reason,
++    );
++  }
++  const freshInspection = await replayInFreshProcess(evidence.root.digest);
++  if (!freshInspection.valid || !freshInspection.complete) {
++    throw new Error(
++      `fresh change-rate-crossover evidence rejected: ${freshInspection.reason}`,
++    );
++  }
++  const reportPath = await writeScenarioReport({
++    runId: RUN_ID,
++    sourceRevision: provenance.sourceRevision,
++    sourceProvenance: provenance,
++    matrixId: inspection.matrixId,
++    matrixDigest: inspection.matrixDigest,
++    evidenceRootDigest: inspection.rootDigest,
++    axes: COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
++    fullMatrixComplete: true,
++    matrixCellCount: COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.length,
++    outcomeNeutral: true,
++    comparativeClaimEligible: false,
++    claimDisposition: inspection.claimDisposition,
++    measuringCellCount: inspection.measuringCellCount,
++    nonMeasuringCellCount: inspection.nonMeasuringCellCount,
++    policyOwnerIds: COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
++    policyWitnessCount: inspection.policyWitnessCount,
++    alternativeOraclePassCount: inspection.alternativeOraclePassCount,
++    cellOutcomes: cellOutcomes(attempts),
++    crossoverEvaluable: false,
++    crossoverClassification: localText.NOT_EVALUABLE,
++    artifactCount: persisted.length,
++    liveCalibrationDigest: calibration.digest,
++    cleanupVerified: finalized.receipt.cleanupVerified,
++    durableReplayValid: durableInspection.valid,
++    freshProcessReplayValid: freshInspection.valid,
++  });
++  process.stdout.write(
++    localText.PASS +
++    localText.CLAIM_PREFIX +
++      localText.CLAIM_SUFFIX +
++    `rootDigest: ${evidence.root.digest}\n` +
++    `scenarioReport: ${reportPath}\n`,
++  );
++}
++
++main().catch((error) => {
++  process.stderr.write(`${localText.FAIL}${error.stack}\n`);
++  process.exitCode = 1;
++});
+diff --git a/scripts/checks/run-comparative-efficiency-request-enrichment-live.js b/scripts/checks/run-comparative-efficiency-request-enrichment-live.js
+index 20155aa0a00b4314a14ad279abb75996c7e4054f..c3aaf4a9fdb9661626e885ffa6a02e629ebdcc95 100644
+--- a/scripts/checks/run-comparative-efficiency-request-enrichment-live.js
++++ b/scripts/checks/run-comparative-efficiency-request-enrichment-live.js
+@@ -5,36 +5,16 @@ import {mkdir, writeFile} from 'node:fs/promises';
+ import {resolve} from 'node:path';
+ import {promisify} from 'node:util';
+ import {
+-  collectBenchmarkResourceSourceProvenance,
+-} from './benchmark-resource-source-provenance.js';
+-import {DockerProvider} from
+-  '../../test/distributed/harness/docker-provider.js';
+-import {
+-  shellQuote,
+-  waitForPostgresReady,
+-} from '../../test/distributed/harness/pgbench-runner.js';
+-import {
+-  BENCHMARK_RESOURCE_BILLING_TREATMENT,
+-  BENCHMARK_RESOURCE_COMPONENT_ROLE,
+-} from
+-  '../../test/distributed/harness/benchmark-resource-contract-constants.js';
++  COMPARATIVE_POSTGRES_IMAGE,
++  COMPARATIVE_POSTGRES_PRICE_SHEET,
++  comparativePostgresInventorySides,
++  startComparativePostgresLiveRun,
++} from './comparative-efficiency-postgres-nonmeasuring-live.js';
+ import {
+   createBenchmarkResourceDurableResolver,
+   persistBenchmarkResourceArtifacts,
+ } from
+   '../../test/distributed/harness/benchmark-resource-durable-resolver.js';
+-import {
+-  beginBenchmarkResourceLiveObservation,
+-  captureBenchmarkResourceLiveObservation,
+-  deriveBenchmarkResourceLiveComponentAccounting,
+-  finalizeBenchmarkResourceLiveObservation,
+-  writeExternallyObservedBenchmarkResourceCalibration,
+-} from
+-  '../../test/distributed/harness/benchmark-resource-live-observation-authority.js';
+-import {
+-  BENCHMARK_RESOURCE_P0_PRICE_SHEET,
+-} from
+-  '../../test/distributed/harness/benchmark-resource-price-sheet-p0-constants.js';
+ import {
+   buildComparativeRequestEnrichmentAffinityWitness,
+ } from
+@@ -62,17 +42,7 @@ const arrayPush = Function.call.bind(Array.prototype.push);
+ const jsonParse = JSON.parse;
+ const jsonStringify = JSON.stringify;
+ const stringReplace = Function.call.bind(String.prototype.replace);
+-const stringTrim = Function.call.bind(String.prototype.trim);
+-const IMAGE = 'postgres:16';
+ const PASSWORD = 'request-enrichment-live';
+-const DATABASE = 'postgres';
+-const POSTGRES_USER = 'postgres';
+-const RESOURCE_MEMORY = '256m';
+-const RESOURCE_CPUS = '1.0';
+-const DATABASE_STORAGE_BYTES = 128 * 1024 * 1024;
+-const DATABASE_STORAGE_PATH = '/var/lib/postgresql/data';
+-const CLIENT_STORAGE_PATH = '/tmp';
+-const START_TIMEOUT_MS = 30_000;
+ const ARTIFACT_DIRECTORY =
+   'test-output/comparative-request-enrichment-artifacts';
+ const REPORT_DIRECTORY = 'test-output/reports';
+@@ -85,6 +55,9 @@ const LABELS = Object.freeze({
+ });
+ const SOURCE_PATHS = Object.freeze([
+   'scripts/checks/benchmark-resource-source-provenance.js',
++  'scripts/checks/' +
++    'comparative-efficiency-postgres-nonmeasuring-live-constants.js',
++  'scripts/checks/comparative-efficiency-postgres-nonmeasuring-live.js',
+   'scripts/checks/run-comparative-efficiency-request-enrichment-guard.js',
+   'scripts/checks/run-comparative-efficiency-request-enrichment-live.js',
+   'test/distributed/harness/__tests__/' +
+@@ -102,15 +75,8 @@ const candidateReason =
+   'no claim-eligible Lagrange request-enrichment capacity adapter was ' +
+   'available for the preregistered matrix';
+ const localText = Object.freeze({
+-  PSQL_ARGUMENTS: 'psql -v ON_ERROR_STOP=1 -At ',
+-  SLEEP: 'sleep',
+-  INFINITY: 'infinity',
+   LAGRANGE: 'lagrange',
+   POSTGRESQL: 'postgresql',
+-  NONE: 'none',
+-  LAGRANGE_NODE: 'lagrange-node',
+-  POSTGRESQL_DATABASE: 'postgresql-database',
+-  POSTGRESQL_CLIENT: 'postgresql-client',
+   PAIRED_CAPACITY_ABSENT: 'paired_capacity_absent',
+   RESOURCE_WINDOW_ABSENT: 'whole_topology_resource_window_absent',
+   COMPARATIVE_EFFECTS_ABSENT: 'comparative_effects_absent',
+@@ -121,82 +87,15 @@ const localText = Object.freeze({
+   PASS: 'comparative-efficiency-request-enrichment-live: PASS\n',
+   FAIL: 'comparative-efficiency-request-enrichment-live: FAIL\n',
+   DURABLE_REJECTED: 'durable request-enrichment evidence rejected: ',
++  SETUP_FAILED: 'PostgreSQL enrichment setup failed: ',
++  CELL_FAILED: 'PostgreSQL enrichment cell failed: ',
+   CLAIM_PREFIX:
+     'claim: no comparative claim; all 16 cells are non-measuring because ',
+   CLAIM_SUFFIX:
+     'the candidate capacity adapter was not engaged\n',
+ });
+ 
+-function psqlCommand(host, sql) {
+-  return (
+-    `PGPASSWORD='${shellQuote(PASSWORD)}' ` +
+-    localText.PSQL_ARGUMENTS +
+-    `-h '${shellQuote(host)}' -U '${POSTGRES_USER}' ` +
+-    `-d '${DATABASE}' -c '${shellQuote(sql)}'`
+-  );
+-}
+-
+-async function executeSql(provider, clientId, host, sql) {
+-  const result = await provider.execInContainer(
+-    clientId,
+-    ['sh', '-lc', psqlCommand(host, sql)],
+-  );
+-  if (result.exitCode !== 0) {
+-    throw new Error(`PostgreSQL enrichment cell failed: ${result.stderr}`);
+-  }
+-  return stringTrim(result.stdout);
+-}
+-
+-function databaseContainerOptions(networkId) {
+-  return {
+-    name: `${RUN_ID}-postgresql`,
+-    image: IMAGE,
+-    network: networkId,
+-    env: {
+-      POSTGRES_PASSWORD: PASSWORD,
+-      POSTGRES_DB: DATABASE,
+-    },
+-    labels: LABELS,
+-    resourceLimits: {memory: RESOURCE_MEMORY, cpus: RESOURCE_CPUS},
+-    hostConfigExtras: {
+-      Tmpfs: {
+-        [DATABASE_STORAGE_PATH]:
+-          `rw,size=${DATABASE_STORAGE_BYTES}`,
+-      },
+-    },
+-    startTimeout: START_TIMEOUT_MS,
+-  };
+-}
+-
+-async function createDatabase(provider, networkId) {
+-  const container = await provider.createContainer(
+-    databaseContainerOptions(networkId),
+-  );
+-  await waitForPostgresReady(provider, container.containerId, {
+-    user: POSTGRES_USER,
+-    database: DATABASE,
+-    timeoutMs: START_TIMEOUT_MS,
+-  });
+-  return container;
+-}
+-
+-function clientContainerOptions(networkId) {
+-  return {
+-    name: `${RUN_ID}-client`,
+-    image: IMAGE,
+-    network: networkId,
+-    labels: LABELS,
+-    resourceLimits: {memory: RESOURCE_MEMORY, cpus: RESOURCE_CPUS},
+-    command: [localText.SLEEP, localText.INFINITY],
+-    startTimeout: START_TIMEOUT_MS,
+-  };
+-}
+-
+-async function createClient(provider, networkId) {
+-  return provider.createContainer(clientContainerOptions(networkId));
+-}
+-
+-async function prepareWorkload(provider, client, database) {
++async function prepareWorkload(runtime) {
+   const sql =
+     'CREATE TABLE request_entities (' +
+       'id INTEGER PRIMARY KEY); ' +
+@@ -210,15 +109,14 @@ async function prepareWorkload(provider, client, database) {
+       'SELECT entity_id, ordinal, (entity_id * 100) + ordinal ' +
+       'FROM generate_series(1, 1024) AS entity(entity_id) ' +
+       'CROSS JOIN generate_series(1, 8) AS enrichment(ordinal)';
+-  await executeSql(
+-    provider,
+-    client.containerId,
+-    database.ip,
++  await runtime.executeSql(
+     sql,
++    localText.SETUP_FAILED,
+   );
+ }
+ 
+-async function executeMatrix(provider, client, database, imageId) {
++async function executeMatrix(runtime) {
++  await prepareWorkload(runtime);
+   const attempts = [];
+   for (let index = 0;
+     index < COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length;
+@@ -226,11 +124,9 @@ async function executeMatrix(provider, client, database, imageId) {
+     const cell = COMPARATIVE_REQUEST_ENRICHMENT_CELLS[index];
+     const sql = comparativeRequestEnrichmentSql(cell);
+     const startedAt = new Date().toISOString();
+-    const stdout = await executeSql(
+-      provider,
+-      client.containerId,
+-      database.ip,
++    const stdout = await runtime.executeSql(
+       sql,
++      localText.CELL_FAILED,
+     );
+     const endedAt = new Date().toISOString();
+     if (!evaluateComparativeRequestEnrichmentOracle(cell, stdout)) {
+@@ -262,10 +158,10 @@ async function executeMatrix(provider, client, database, imageId) {
+         alternative: {
+           architectureId: localText.POSTGRESQL,
+           engaged: true,
+-          image: IMAGE,
+-          imageId,
+-          databaseContainerId: database.containerId,
+-          clientContainerId: client.containerId,
++          image: COMPARATIVE_POSTGRES_IMAGE,
++          imageId: runtime.imageId,
++          databaseContainerId: runtime.databaseContainerId,
++          clientContainerId: runtime.clientContainerId,
+           sql,
+           stdout,
+         },
+@@ -280,90 +176,6 @@ async function executeMatrix(provider, client, database, imageId) {
+   return attempts;
+ }
+ 
+-async function removeIfPresent(provider, containerId) {
+-  if (
+-    containerId &&
+-    await provider.inspectContainerIfExists(containerId) !== null
+-  ) {
+-    await provider.removeContainer(containerId);
+-  }
+-}
+-
+-async function cleanup(provider, state) {
+-  const containers = [state.client, state.database];
+-  for (let index = 0; index < containers.length; index += 1) {
+-    await removeIfPresent(provider, containers[index]?.containerId);
+-  }
+-  if (
+-    state.networkId &&
+-    await provider.getNetworkByName(NETWORK_NAME) !== null
+-  ) {
+-    await provider.removeNetwork(state.networkId);
+-  }
+-}
+-
+-function observedComponent(calibration, componentId) {
+-  const components = calibration.artifact.payload.components;
+-  for (let index = 0; index < components.length; index += 1) {
+-    if (components[index].componentId === componentId) {
+-      return components[index];
+-    }
+-  }
+-  throw new Error(`missing observed component ${componentId}`);
+-}
+-
+-function inventoryShape({
+-  componentId,
+-  role,
+-  provisioned,
+-  minimumFootprint,
+-  reservedHeadroomRatio,
+-}) {
+-  return {
+-    componentId,
+-    role,
+-    billingTreatment: BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
+-    provisioned,
+-    minimumFootprint,
+-    reservedHeadroomRatio,
+-    exclusionReason: localText.NONE,
+-  };
+-}
+-
+-function inventoryComponent(componentId, role, calibration) {
+-  const accounting = deriveBenchmarkResourceLiveComponentAccounting(
+-    observedComponent(calibration, componentId),
+-  );
+-  return inventoryShape({
+-    componentId,
+-    role,
+-    provisioned: accounting.provisioned,
+-    minimumFootprint: accounting.minimumFootprint,
+-    reservedHeadroomRatio: accounting.reservedHeadroomRatio,
+-  });
+-}
+-
+-function absentCandidateInventory() {
+-  return inventoryShape({
+-    componentId: localText.LAGRANGE_NODE,
+-    role: BENCHMARK_RESOURCE_COMPONENT_ROLE.LAGRANGE_NODE,
+-    provisioned: {
+-      cpuCores: 0,
+-      memoryBytes: 0,
+-      storageBytes: 0,
+-      iops: 0,
+-      networkBytesPerSecond: 0,
+-    },
+-    minimumFootprint: {
+-      instances: 0,
+-      cpuCores: 0,
+-      memoryBytes: 0,
+-      storageBytes: 0,
+-    },
+-    reservedHeadroomRatio: 0,
+-  });
+-}
+-
+ function workloadCells() {
+   const cells = [];
+   for (let index = 0;
+@@ -439,77 +251,27 @@ async function writeScenarioReport(detail) {
+   return path;
+ }
+ 
+-function observationComponents(state) {
+-  return [
+-    {
+-      componentId: localText.POSTGRESQL_DATABASE,
+-      sideId: localText.POSTGRESQL,
+-      containerId: state.database.containerId,
+-      storagePath: DATABASE_STORAGE_PATH,
+-    },
+-    {
+-      componentId: localText.POSTGRESQL_CLIENT,
+-      sideId: localText.POSTGRESQL,
+-      containerId: state.client.containerId,
+-      storagePath: CLIENT_STORAGE_PATH,
+-    },
+-  ];
+-}
+-
+-async function executeObservedMatrix(provider, state, provenance) {
+-  const image = await provider.inspectImage(IMAGE);
+-  if (!image) throw new Error(`required live image unavailable: ${IMAGE}`);
+-  const network = await provider.createNetwork(NETWORK_NAME, LABELS);
+-  state.networkId = network.id;
+-  state.database = await createDatabase(provider, state.networkId);
+-  state.client = await createClient(provider, state.networkId);
+-  await prepareWorkload(provider, state.client, state.database);
+-  const session =
+-    await beginBenchmarkResourceLiveObservation(provider, {
++async function main() {
++  const liveRun = await startComparativePostgresLiveRun({
++    runtimeConfig: {
+       runId: RUN_ID,
+-      networkId: state.networkId,
+       networkName: NETWORK_NAME,
+-      sourceRevision: provenance.sourceRevision,
+-      components: observationComponents(state),
+-    });
+-  const attempts = await executeMatrix(
+-    provider,
+-    state.client,
+-    state.database,
+-    image.Id,
+-  );
+-  await captureBenchmarkResourceLiveObservation(session);
+-  await cleanup(provider, state);
+-  return {attempts, imageId: image.Id, session};
+-}
+-
+-async function runObservedMatrix(provider, state, provenance) {
+-  try {
+-    return await executeObservedMatrix(provider, state, provenance);
+-  } catch (error) {
+-    await cleanup(provider, state);
+-    throw error;
+-  }
+-}
+-
+-async function main() {
+-  const provider = new DockerProvider();
+-  const state = {networkId: null, database: null, client: null};
+-  const provenance =
+-    await collectBenchmarkResourceSourceProvenance(SOURCE_PATHS);
+-  const {attempts, imageId, session} =
+-    await runObservedMatrix(provider, state, provenance);
+-  const finalized =
+-    await finalizeBenchmarkResourceLiveObservation(session);
+-  const calibration =
+-    writeExternallyObservedBenchmarkResourceCalibration(
+-      finalized.receipt,
+-      finalized.authorization,
+-    );
+-  const producedAt = new Date().toISOString();
+-  const validUntil =
+-    new Date(Date.parse(producedAt) + 24 * 60 * 60 * 1_000).toISOString();
+-  const sideIds = [localText.LAGRANGE, localText.POSTGRESQL];
++      labels: LABELS,
++      password: PASSWORD,
++    },
++    sourcePaths: SOURCE_PATHS,
++    executeMatrix,
++  });
++  const {
++    attempts,
++    imageId,
++    finalized,
++    calibration,
++    producedAt,
++    validUntil,
++    provenance,
++    sideIds,
++  } = liveRun;
+   const evidence = createComparativeRequestEnrichmentEvidence({
+     matrixId: 'comparative-request-enrichment-p0-v1',
+     pairId: 'lagrange-postgresql-request-enrichment-v1',
+@@ -532,7 +294,7 @@ async function main() {
+       },
+       alternative: {
+         architectureId: localText.POSTGRESQL,
+-        image: IMAGE,
++        image: COMPARATIVE_POSTGRES_IMAGE,
+         imageId,
+         databaseContainerId:
+           calibration.artifact.payload.components[0].containerId,
+@@ -558,28 +320,8 @@ async function main() {
+       ],
+     },
+     inventoryId: 'comparative-request-enrichment-live-inventory-v1',
+-    inventorySides: [
+-      {
+-        sideId: localText.LAGRANGE,
+-        components: [absentCandidateInventory()],
+-      },
+-      {
+-        sideId: localText.POSTGRESQL,
+-        components: [
+-          inventoryComponent(
+-            localText.POSTGRESQL_DATABASE,
+-            BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
+-            calibration,
+-          ),
+-          inventoryComponent(
+-            localText.POSTGRESQL_CLIENT,
+-            BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT,
+-            calibration,
+-          ),
+-        ],
+-      },
+-    ],
+-    priceSheet: BENCHMARK_RESOURCE_P0_PRICE_SHEET,
++    inventorySides: comparativePostgresInventorySides(calibration),
++    priceSheet: COMPARATIVE_POSTGRES_PRICE_SHEET,
+     calibrationArtifact: calibration,
+     attempts,
+   });
+diff --git a/test/distributed/harness/__tests__/comparative-efficiency-change-rate-crossover.test.js b/test/distributed/harness/__tests__/comparative-efficiency-change-rate-crossover.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..1de22ea41767d5788cc1caa9d420498be747ae8d
+--- /dev/null
++++ b/test/distributed/harness/__tests__/comparative-efficiency-change-rate-crossover.test.js
+@@ -0,0 +1,481 @@
++import {test} from '../../../../src/test-helpers/tap.js';
++import {
++  replacePrototypeProperty,
++  withHostileIntrinsics,
++} from '../../../helpers/hostile-intrinsics.js';
++import {
++  normalizeComparativePostgresOutput,
++} from
++  '../../../../scripts/checks/comparative-efficiency-postgres-nonmeasuring-live.js';
++import {
++  validateBenchmarkResourceEvidenceRoot,
++} from '../benchmark-resource-evidence-root.js';
++import {
++  comparativePostgresNonMeasuringInventorySides,
++  createComparativePostgresCalibrationFixture,
++  exerciseComparativeNonMeasuringHostileIntrinsics,
++  rebuildComparativeNonMeasuringSourceReceipt as rebuiltSourceReceipt,
++} from './comparative-efficiency-postgres-nonmeasuring-test-fixture.js';
++import {
++  BENCHMARK_RESOURCE_P0_PRICE_SHEET,
++} from '../benchmark-resource-price-sheet-p0-constants.js';
++import {
++  buildComparativeChangeRateCrossoverPolicyWitness,
++} from '../comparative-efficiency-change-rate-crossover-policy-witness.js';
++import {
++  evaluateComparativeChangeRateCrossoverOracle,
++} from '../comparative-efficiency-change-rate-crossover-admission.js';
++import {
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_REASON,
++  comparativeChangeRateCrossoverMutationCount,
++  comparativeChangeRateCrossoverEvidenceDigest,
++  comparativeChangeRateCrossoverExpectedResult,
++  comparativeChangeRateCrossoverSql,
++  createComparativeChangeRateCrossoverEvidence,
++  inspectComparativeChangeRateCrossoverEvidence,
++} from '../comparative-efficiency-change-rate-crossover.js';
++
++const SOURCE_REVISION = 'git-commit:c6-change-rate-crossover-fixture';
++const PRODUCED_AT = '2026-07-28T00:00:00.000Z';
++const VALID_UNTIL = '2026-07-29T00:00:00.000Z';
++const SIDE_IDS = ['lagrange', 'postgresql'];
++
++async function calibrationFixture(sourceRevision = SOURCE_REVISION) {
++  return createComparativePostgresCalibrationFixture({
++    sourceRevision,
++    producedAt: PRODUCED_AT,
++    fixtureName: 'change-rate-crossover',
++  });
++}
++
++function workloadCells() {
++  return COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.map((cell) => ({
++    datasetSize: cell.datasetSize,
++    mutationRate: cell.mutationRate,
++    mutationDivisor: cell.mutationDivisor,
++    workloadDiversity: cell.workloadDiversity,
++    diversityCount: cell.diversityCount,
++    skew: cell.skew,
++    policy: cell.policy,
++    requestCount: cell.requestCount,
++    alternativeSql: comparativeChangeRateCrossoverSql(cell),
++    oracleName: 'row_count_sum_and_diversity_exact',
++    oracleExpected: comparativeChangeRateCrossoverExpectedResult(cell),
++  }));
++}
++
++function attempts() {
++  return COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.map((cell, index) => ({
++    matrixCellIndex: index,
++    runId: `change-rate-crossover-${index}`,
++    candidateEngaged: false,
++    alternativeEngaged: true,
++    reasonCodes: [COMPARATIVE_CHANGE_RATE_CROSSOVER_REASON],
++    liveEvidence: {
++      version: 'comparative-change-rate-crossover-live-evidence-v1',
++      matrixCellIndex: index,
++      startedAt: `2026-07-28T00:00:${String(index).padStart(2, '0')}.000Z`,
++      endedAt: `2026-07-28T00:00:${String(index + 20).padStart(2, '0')}.000Z`,
++      candidate: {
++        architectureId: 'lagrange',
++        capacityAdapterEngaged: false,
++        reason: 'no claim-eligible change-rate-crossover capacity adapter',
++        policyWitness:
++          buildComparativeChangeRateCrossoverPolicyWitness(cell),
++      },
++      alternative: {
++        architectureId: 'postgresql',
++        engaged: true,
++        image: 'postgres:16',
++        imageId: 'sha256:fixture-image',
++        databaseContainerId: 'postgresql-container',
++        clientContainerId: 'client-container',
++        sql: comparativeChangeRateCrossoverSql(cell),
++        stdout: comparativeChangeRateCrossoverExpectedResult(cell),
++      },
++      oracle: {
++        name: 'row_count_sum_and_diversity_exact',
++        expected: comparativeChangeRateCrossoverExpectedResult(cell),
++        passed: true,
++      },
++      measurementDisposition: {
++        state: 'non_measuring',
++        capacityConfidenceInterval: 'absent',
++        wholeTopologyResourceBreakdown: 'absent',
++        infrastructureCostProjection: 'absent',
++        practicalEffectClassification: 'not_evaluable',
++        crossoverClassification: 'not_evaluable',
++      },
++    },
++  }));
++}
++
++async function evidenceInput(overrides = {}) {
++  const calibrationArtifact =
++    overrides.calibrationArtifact || await calibrationFixture();
++  return {
++    matrixId: 'comparative-change-rate-crossover-p0-v1',
++    pairId: 'lagrange-postgresql-change-rate-crossover-v1',
++    sideIds: SIDE_IDS,
++    sourceRevision: SOURCE_REVISION,
++    producedAt: PRODUCED_AT,
++    validUntil: VALID_UNTIL,
++    workloadManifest: {
++      version: 'comparative-change-rate-crossover-workloads-v1',
++      cells: workloadCells(),
++      selectionPolicy: 'complete_cartesian_matrix',
++    },
++    alternativeTopology: {
++      version: 'comparative-change-rate-crossover-topology-v1',
++      candidate: {
++        architectureId: 'lagrange',
++        required: true,
++        capacityAdapterEngaged: false,
++        reason: 'no claim-eligible change-rate-crossover capacity adapter',
++      },
++      alternative: {
++        architectureId: 'postgresql',
++        image: 'postgres:16',
++        imageId: 'sha256:fixture-image',
++        databaseContainerId: 'postgresql-container',
++        clientContainerId: 'client-container',
++        network: 'managed_bridge',
++      },
++    },
++    preregistration: {
++      version: 'comparative-change-rate-crossover-preregistration-v1',
++      axes: COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
++      sideIds: SIDE_IDS,
++      outcomePolicy: 'direction_neutral',
++      invalidCellPolicy: 'publish_explicit_non_measuring',
++      candidateEngagementRequired: true,
++      policyOwnerIds: COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
++      requiredEvidence: [
++        'paired_capacity',
++        'whole_topology_resource_windows',
++        'capacity_uncertainty',
++        'capacity_practical_effect',
++        'cost_practical_effect',
++        'crossover_classification',
++        'immutable_raw_artifacts',
++      ],
++    },
++    inventoryId: 'comparative-change-rate-crossover-inventory-v1',
++    inventorySides: comparativePostgresNonMeasuringInventorySides(),
++    priceSheet: BENCHMARK_RESOURCE_P0_PRICE_SHEET,
++    calibrationArtifact,
++    attempts: overrides.attempts || attempts(),
++  };
++}
++
++async function evidenceFixture(overrides = {}) {
++  return createComparativeChangeRateCrossoverEvidence(
++    await evidenceInput(overrides),
++  );
++}
++
++test('change-rate-crossover publishes the complete matrix without a claim',
++  async (t) => {
++    const evidence = await evidenceFixture();
++    t.same(inspectComparativeChangeRateCrossoverEvidence(evidence.receipt), {
++      valid: true,
++      reason: 'valid',
++      complete: true,
++      claimEligible: false,
++      claimDisposition: 'non_measuring_crossover_not_evaluable',
++      measuringCellCount: 0,
++      nonMeasuringCellCount: 32,
++      alternativeOraclePassCount: 32,
++      policyWitnessCount: 32,
++      matrixId: 'comparative-change-rate-crossover-p0-v1',
++      matrixDigest: evidence.matrix.digest,
++      rootDigest: evidence.root.digest,
++    });
++    t.equal(evidence.cells.length, 32);
++    t.match(
++      comparativeChangeRateCrossoverEvidenceDigest(evidence),
++      /^sha256:[0-9a-f]{64}$/u,
++    );
++    t.end();
++  });
++
++test('change-rate-crossover rejects selective matrix omission', async (t) => {
++  await t.rejects(
++    evidenceFixture({attempts: attempts().slice(0, 31)}),
++    /attempts:exact_matrix_required/u,
++  );
++  t.end();
++});
++
++test('change-rate-crossover rejects reordered matrix results', async (t) => {
++  const reordered = attempts();
++  [reordered[0], reordered[1]] = [reordered[1], reordered[0]];
++  await t.rejects(
++    evidenceFixture({attempts: reordered}),
++    /matrix_cell_order_mismatch/u,
++  );
++  t.end();
++});
++
++test('change-rate-crossover rejects surrogate candidate capacity', async (t) => {
++  const surrogate = attempts();
++  surrogate[0].candidateEngaged = true;
++  await t.rejects(
++    evidenceFixture({attempts: surrogate}),
++    /candidate_must_be_absent/u,
++  );
++  t.end();
++});
++
++test('change-rate-crossover requires the alternative live attempt', async (t) => {
++  const disconnected = attempts();
++  disconnected[0].alternativeEngaged = false;
++  await t.rejects(
++    evidenceFixture({attempts: disconnected}),
++    /alternative_must_be_engaged/u,
++  );
++  t.end();
++});
++
++test('change-rate-crossover requires explicit capacity absence', async (t) => {
++  const unexplained = attempts();
++  unexplained[0].reasonCodes = ['unknown'];
++  await t.rejects(
++    evidenceFixture({attempts: unexplained}),
++    /candidate_absence_reason_required/u,
++  );
++  t.end();
++});
++
++test('change-rate-crossover policy witnesses bind every swept owner', (t) => {
++  for (let index = 0;
++    index < COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.length;
++    index += 1) {
++    const cell = COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS[index];
++    const witness = buildComparativeChangeRateCrossoverPolicyWitness(cell);
++    t.equal(
++      witness.mutationSchedule.mutationCount,
++      comparativeChangeRateCrossoverMutationCount(cell),
++    );
++    t.equal(
++      witness.workloadDiversity.groupCount,
++      cell.diversityCount,
++    );
++    t.equal(witness.accessSkew.id, cell.skew);
++    t.equal(witness.recomputationMaterializationPolicy.id, cell.policy);
++  }
++  t.end();
++});
++
++test('change-rate-crossover alternative oracles bind every cell', (t) => {
++  for (let index = 0;
++    index < COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.length;
++    index += 1) {
++    const cell = COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS[index];
++    const expected = comparativeChangeRateCrossoverExpectedResult(cell);
++    t.equal(evaluateComparativeChangeRateCrossoverOracle(cell, expected), true);
++    t.equal(
++      evaluateComparativeChangeRateCrossoverOracle(cell, `${expected}0`),
++      false,
++    );
++  }
++  t.end();
++});
++
++test('change-rate-crossover rejects a rebuilt policy-owner witness',
++  async (t) => {
++    const evidence = await evidenceFixture();
++    const receipt = rebuiltSourceReceipt(evidence, (payload) => {
++      payload.liveEvidence.candidate.policyWitness.mutationSchedule
++        .mutationCount += 1;
++    });
++    t.equal(validateBenchmarkResourceEvidenceRoot(receipt).valid, true);
++    t.equal(inspectComparativeChangeRateCrossoverEvidence(receipt).valid, false);
++    t.end();
++  });
++
++test('change-rate-crossover rejects rebuilt SQL and oracle output',
++  async (t) => {
++    const evidence = await evidenceFixture();
++    const receipt = rebuiltSourceReceipt(evidence, (payload) => {
++      payload.liveEvidence.alternative.sql = 'SELECT 1';
++      payload.liveEvidence.alternative.stdout = '128|1';
++      payload.liveEvidence.oracle.expected = '128|1';
++    });
++    t.equal(validateBenchmarkResourceEvidenceRoot(receipt).valid, true);
++    t.equal(inspectComparativeChangeRateCrossoverEvidence(receipt).valid, false);
++    t.end();
++  });
++
++test('change-rate-crossover rejects fabricated measurement fields',
++  async (t) => {
++    const evidence = await evidenceFixture();
++    const receipt = rebuiltSourceReceipt(evidence, (payload) => {
++      payload.liveEvidence.measurementDisposition
++        .capacityConfidenceInterval = '[1,2]';
++    });
++    t.equal(validateBenchmarkResourceEvidenceRoot(receipt).valid, true);
++    t.equal(inspectComparativeChangeRateCrossoverEvidence(receipt).valid, false);
++    t.end();
++  });
++
++test('change-rate-crossover snapshots evidence before caller mutation',
++  async (t) => {
++    const input = await evidenceInput();
++    const evidence = createComparativeChangeRateCrossoverEvidence(input);
++    input.attempts[0].liveEvidence.oracle.passed = false;
++    input.attempts[0].liveEvidence.alternative.stdout = 'forged';
++    const inspection =
++      inspectComparativeChangeRateCrossoverEvidence(evidence.receipt);
++    t.equal(inspection.valid, true);
++    t.equal(inspection.alternativeOraclePassCount, 32);
++    t.end();
++  });
++
++test('change-rate-crossover rejects receipt accessors without invoking them',
++  (t) => {
++    let getterCalls = 0;
++    const receipt = {
++      get rootDigest() {
++        getterCalls += 1;
++        return 'sha256:forged';
++      },
++      resolver: {resolve() {}},
++    };
++    const inspection = inspectComparativeChangeRateCrossoverEvidence(receipt);
++    t.equal(inspection.valid, false);
++    t.equal(getterCalls, 0);
++    t.end();
++  });
++
++test('change-rate-crossover rejects proxy receipts', (t) => {
++  const receipt = new Proxy({}, {
++    get() {
++      throw new Error('proxy trap must not establish evidence');
++    },
++  });
++  const inspection = inspectComparativeChangeRateCrossoverEvidence(receipt);
++  t.equal(inspection.valid, false);
++  t.end();
++});
++
++test('change-rate-crossover calibration revision is root-bound', async (t) => {
++  const calibrationArtifact =
++    await calibrationFixture('git-commit:different-source');
++  await t.rejects(
++    evidenceFixture({calibrationArtifact}),
++    /external_observation_required/u,
++  );
++  t.end();
++});
++
++test('change-rate-crossover root rejects tampered raw live bytes', async (t) => {
++  const evidence = await evidenceFixture();
++  const target = evidence.engagements[0];
++  const tampered = Buffer.from(target.bytes);
++  tampered[tampered.length - 2] ^= 1;
++  const receipt = {
++    rootDigest: evidence.root.digest,
++    resolver: {
++      resolve(digest) {
++        if (digest === target.digest) return tampered;
++        return evidence.receipt.resolver.resolve(digest);
++      },
++    },
++  };
++  const inspection = inspectComparativeChangeRateCrossoverEvidence(receipt);
++  t.equal(inspection.valid, false);
++  t.match(inspection.reason, /digest_mismatch|canonical/u);
++  t.end();
++});
++
++test('change-rate-crossover validates resolver bytes before cloning', (t) => {
++  let valueOfCalls = 0;
++  const hostile = {
++    valueOf() {
++      valueOfCalls += 1;
++      return 1;
++    },
++  };
++  const inspection = inspectComparativeChangeRateCrossoverEvidence({
++    rootDigest:
++      'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
++    resolver: {resolve: () => hostile},
++  });
++  t.equal(inspection.valid, false);
++  t.equal(valueOfCalls, 0);
++  t.end();
++});
++
++test('change-rate-crossover ignores poisoned String trim', (t) => {
++  const cell = COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS[0];
++  const expected = comparativeChangeRateCrossoverExpectedResult(cell);
++  withHostileIntrinsics([
++    replacePrototypeProperty(
++      String.prototype,
++      'trim',
++      () => 'forged',
++    ),
++  ], () => {
++    t.equal(evaluateComparativeChangeRateCrossoverOracle(cell, expected), true);
++    t.equal(evaluateComparativeChangeRateCrossoverOracle(cell, 'forged'), false);
++  });
++  t.end();
++});
++
++test('shared PostgreSQL output normalization ignores poisoned String trim',
++  (t) => {
++    let normalized;
++    withHostileIntrinsics([
++      replacePrototypeProperty(
++        String.prototype,
++        'trim',
++        () => 'forged-postgresql-output',
++      ),
++    ], () => {
++      normalized = normalizeComparativePostgresOutput(
++        '  externally observed PostgreSQL output  \n',
++      );
++    });
++    t.equal(normalized, 'externally observed PostgreSQL output');
++    t.end();
++  });
++
++test('change-rate-crossover admission ignores mutable owner intrinsics',
++  async (t) => {
++    const input = await evidenceInput();
++    const evidence = createComparativeChangeRateCrossoverEvidence(input);
++    const {
++      calls,
++      inspection,
++      produced,
++      witness,
++    } = exerciseComparativeNonMeasuringHostileIntrinsics({
++      input,
++      evidence,
++      firstCell: COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS[0],
++      buildWitness: buildComparativeChangeRateCrossoverPolicyWitness,
++      createEvidence: createComparativeChangeRateCrossoverEvidence,
++      inspectEvidence: inspectComparativeChangeRateCrossoverEvidence,
++    });
++    t.equal(
++      witness.version,
++      'comparative-change-rate-crossover-policy-witness-v1',
++    );
++    t.equal(produced.root.digest, evidence.root.digest);
++    t.equal(inspection.valid, true);
++    t.equal(inspection.complete, true);
++    t.same(calls, {
++      arrayFilter: 0,
++      arrayIterator: 0,
++      arrayMap: 0,
++      jsonStringify: 0,
++      mapGet: 0,
++      mapSet: 0,
++      mathFloor: 0,
++    });
++    t.end();
++  });
+diff --git a/test/distributed/harness/__tests__/comparative-efficiency-negative-controls.test.js b/test/distributed/harness/__tests__/comparative-efficiency-negative-controls.test.js
+index 002aa65878414f76e1095687fb908c3c9d2946c8..e51566fd2023a55a43fdfaf7be9de5642b91788f 100644
+--- a/test/distributed/harness/__tests__/comparative-efficiency-negative-controls.test.js
++++ b/test/distributed/harness/__tests__/comparative-efficiency-negative-controls.test.js
+@@ -1,24 +1,12 @@
+ import {test} from '../../../../src/test-helpers/tap.js';
+-import {
+-  BENCHMARK_RESOURCE_ARTIFACT_KIND,
+-  BENCHMARK_RESOURCE_BILLING_TREATMENT,
+-  BENCHMARK_RESOURCE_COMPONENT_ROLE,
+-} from '../benchmark-resource-contract-constants.js';
+ import {
+   createBenchmarkResourceMemoryResolver,
+ } from '../benchmark-resource-evidence-data.js';
+ import {
+   createBenchmarkResourceEvidenceRoot,
+   createBenchmarkResourceNonMeasuringCellEvidence,
+-  createBenchmarkResourceSourceArtifact,
+   validateBenchmarkResourceEvidenceRoot,
+ } from '../benchmark-resource-evidence-root.js';
+-import {
+-  beginBenchmarkResourceLiveObservation,
+-  captureBenchmarkResourceLiveObservation,
+-  finalizeBenchmarkResourceLiveObservation,
+-  writeExternallyObservedBenchmarkResourceCalibration,
+-} from '../benchmark-resource-live-observation-authority.js';
+ import {
+   BENCHMARK_RESOURCE_P0_PRICE_SHEET,
+ } from '../benchmark-resource-price-sheet-p0-constants.js';
+@@ -33,113 +21,23 @@ import {
+   createComparativeNegativeControlEvidence,
+   inspectComparativeNegativeControlEvidence,
+ } from '../comparative-efficiency-negative-controls.js';
++import {
++  comparativePostgresNonMeasuringInventorySides,
++  createComparativePostgresCalibrationFixture,
++  rebuildComparativeNonMeasuringSourceReceipt as rebuiltSourceReceipt,
++} from './comparative-efficiency-postgres-nonmeasuring-test-fixture.js';
+ 
+ const SOURCE_REVISION = 'git-commit:c5-negative-control-fixture';
+ const PRODUCED_AT = '2026-07-27T20:00:00.000Z';
+ const VALID_UNTIL = '2026-07-28T20:00:00.000Z';
+ const SIDE_IDS = ['lagrange', 'postgresql'];
+-const CALIBRATION_STARTED_AT = Date.parse(PRODUCED_AT);
+-const CALIBRATION_ENDED_AT = CALIBRATION_STARTED_AT + 60_000;
+-
+-function resourceStats(timestamp, multiplier) {
+-  return {
+-    timestamp,
+-    cpuPercent: 10 * multiplier,
+-    cpuUsageNanoseconds: 10_000 * multiplier,
+-    memoryUsageBytes: 100_000 * multiplier,
+-    memoryLimitBytes: 1_000_000,
+-    cpuLimitNanoCpus: 1_000_000_000,
+-    storageLimitBytes: 1_000_000,
+-    pids: 5,
+-    rxBytes: 1_000 * multiplier,
+-    txBytes: 2_000 * multiplier,
+-    blockReadBytes: 3_000 * multiplier,
+-    blockWriteBytes: 4_000 * multiplier,
+-    blockReadOperations: 3 * multiplier,
+-    blockWriteOperations: 4 * multiplier,
+-    storageUsageBytes: 10_000 * multiplier,
+-  };
+-}
+ 
+ async function calibrationFixture(sourceRevision = SOURCE_REVISION) {
+-  let calls = 0;
+-  let cleaned = false;
+-  const provider = {
+-    async inspectContainer() {
+-      return {State: {Running: true}};
+-    },
+-    async inspectContainerIfExists() {
+-      return cleaned ? null : {State: {Running: true}};
+-    },
+-    async getContainerResourceSnapshot() {
+-      calls += 1;
+-      return resourceStats(
+-        calls <= 2 ? CALIBRATION_STARTED_AT : CALIBRATION_ENDED_AT,
+-        calls <= 2 ? 1 : 2,
+-      );
+-    },
+-    async getNetworkByName() {
+-      return cleaned ? null : {id: 'negative-control-network'};
+-    },
+-  };
+-  const session = await beginBenchmarkResourceLiveObservation(provider, {
+-    runId: 'negative-control-live-fixture',
+-    networkId: 'negative-control-network',
+-    networkName: 'negative-control-network',
++  return createComparativePostgresCalibrationFixture({
+     sourceRevision,
+-    components: [
+-      {
+-        componentId: 'postgresql-database',
+-        sideId: 'postgresql',
+-        containerId: 'postgresql-container',
+-        storagePath: '/var/lib/postgresql/data',
+-      },
+-      {
+-        componentId: 'postgresql-client',
+-        sideId: 'postgresql',
+-        containerId: 'client-container',
+-        storagePath: '/tmp',
+-      },
+-    ],
++    producedAt: PRODUCED_AT,
++    fixtureName: 'negative-control',
+   });
+-  await captureBenchmarkResourceLiveObservation(session);
+-  cleaned = true;
+-  const finalized = await finalizeBenchmarkResourceLiveObservation(session);
+-  return writeExternallyObservedBenchmarkResourceCalibration(
+-    finalized.receipt,
+-    finalized.authorization,
+-  );
+-}
+-
+-function provisioned() {
+-  return {
+-    cpuCores: 1,
+-    memoryBytes: 1_000_000,
+-    storageBytes: 1_000_000,
+-    iops: 0,
+-    networkBytesPerSecond: 0,
+-  };
+-}
+-
+-function minimumFootprint() {
+-  return {
+-    instances: 1,
+-    cpuCores: 0,
+-    memoryBytes: 0,
+-    storageBytes: 0,
+-  };
+-}
+-
+-function component(componentId, role) {
+-  return {
+-    componentId,
+-    role,
+-    billingTreatment: BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
+-    provisioned: provisioned(),
+-    minimumFootprint: minimumFootprint(),
+-    reservedHeadroomRatio: 0,
+-    exclusionReason: 'none',
+-  };
+ }
+ 
+ function attempts() {
+@@ -226,79 +124,13 @@ async function evidenceFixture(overrides = {}) {
+       ],
+     },
+     inventoryId: 'comparative-negative-controls-inventory-v1',
+-    inventorySides: [
+-      {
+-        sideId: 'lagrange',
+-        components: [
+-          component('lagrange-node', BENCHMARK_RESOURCE_COMPONENT_ROLE.LAGRANGE_NODE),
+-        ],
+-      },
+-      {
+-        sideId: 'postgresql',
+-        components: [
+-          component('postgresql-database', BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE),
+-          component('postgresql-client', BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT),
+-        ],
+-      },
+-    ],
++    inventorySides: comparativePostgresNonMeasuringInventorySides(),
+     priceSheet: BENCHMARK_RESOURCE_P0_PRICE_SHEET,
+     calibrationArtifact,
+     attempts: overrides.attempts || attempts(),
+   });
+ }
+ 
+-function rebuiltSourceReceipt(evidence, mutate, options = {}) {
+-  const targetIndex = options.index || 0;
+-  const originalSource = evidence.engagements[targetIndex];
+-  const originalCell = evidence.cells[targetIndex];
+-  const payload =
+-    JSON.parse(JSON.stringify(originalSource.artifact.payload));
+-  mutate(payload);
+-  const references =
+-    options.references || originalSource.artifact.references;
+-  const source = createBenchmarkResourceSourceArtifact(
+-    BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
+-    payload,
+-    references,
+-  );
+-  const cellPayload = originalCell.artifact.payload;
+-  const cell = createBenchmarkResourceNonMeasuringCellEvidence({
+-    matrixManifestDigest: cellPayload.matrixManifestDigest,
+-    matrixId: cellPayload.matrixId,
+-    cellId: cellPayload.cellId,
+-    pairId: cellPayload.pairId,
+-    runId: cellPayload.runId,
+-    sideIds: cellPayload.sideIds,
+-    reasonCodes: cellPayload.reasonCodes,
+-    sourceDigests: [source.digest],
+-    sourceRevision: cellPayload.sourceRevision,
+-    producedAt: cellPayload.producedAt,
+-    validUntil: cellPayload.validUntil,
+-  });
+-  const artifacts = evidence.artifacts.filter((artifact) => (
+-    artifact.digest !== originalSource.digest &&
+-    artifact.digest !== originalCell.digest
+-  ));
+-  artifacts.push(source, cell);
+-  const rootPayload = evidence.root.artifact.payload;
+-  const cellDigests = [...rootPayload.cellEvidenceDigests];
+-  cellDigests[targetIndex] = cell.digest;
+-  const root = createBenchmarkResourceEvidenceRoot({
+-    matrixManifestDigest: rootPayload.matrixManifestDigest,
+-    componentInventoryDigest: rootPayload.componentInventoryDigest,
+-    priceSheetDigest: rootPayload.priceSheetDigest,
+-    cellEvidenceDigests: cellDigests,
+-    sourceRevision: rootPayload.sourceRevision,
+-    producedAt: rootPayload.producedAt,
+-    validUntil: rootPayload.validUntil,
+-    artifacts,
+-  });
+-  return {
+-    rootDigest: root.digest,
+-    resolver: createBenchmarkResourceMemoryResolver([...artifacts, root]),
+-  };
+-}
+-
+ function relabeledRevisionReceipt(evidence) {
+   const sourceRevision = 'git-commit:forged-revision';
+   const replacements = [];
+diff --git a/test/distributed/harness/__tests__/comparative-efficiency-postgres-nonmeasuring-test-fixture.js b/test/distributed/harness/__tests__/comparative-efficiency-postgres-nonmeasuring-test-fixture.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..073487f4ecf108426f575b65a07dddbf5a89b19f
+--- /dev/null
++++ b/test/distributed/harness/__tests__/comparative-efficiency-postgres-nonmeasuring-test-fixture.js
+@@ -0,0 +1,254 @@
++import {
++  replacePrototypeProperty,
++  withHostileIntrinsics,
++} from '../../../helpers/hostile-intrinsics.js';
++import {
++  BENCHMARK_RESOURCE_ARTIFACT_KIND,
++  BENCHMARK_RESOURCE_BILLING_TREATMENT,
++  BENCHMARK_RESOURCE_COMPONENT_ROLE,
++} from '../benchmark-resource-contract-constants.js';
++import {
++  createBenchmarkResourceMemoryResolver,
++} from '../benchmark-resource-evidence-data.js';
++import {
++  createBenchmarkResourceEvidenceRoot,
++  createBenchmarkResourceNonMeasuringCellEvidence,
++  createBenchmarkResourceSourceArtifact,
++} from '../benchmark-resource-evidence-root.js';
++import {
++  beginBenchmarkResourceLiveObservation,
++  captureBenchmarkResourceLiveObservation,
++  finalizeBenchmarkResourceLiveObservation,
++  writeExternallyObservedBenchmarkResourceCalibration,
++} from '../benchmark-resource-live-observation-authority.js';
++
++function resourceStats(timestamp, multiplier) {
++  return {
++    timestamp,
++    cpuPercent: 10 * multiplier,
++    cpuUsageNanoseconds: 10_000 * multiplier,
++    memoryUsageBytes: 100_000 * multiplier,
++    memoryLimitBytes: 1_000_000,
++    cpuLimitNanoCpus: 1_000_000_000,
++    storageLimitBytes: 1_000_000,
++    pids: 5,
++    rxBytes: 1_000 * multiplier,
++    txBytes: 2_000 * multiplier,
++    blockReadBytes: 3_000 * multiplier,
++    blockWriteBytes: 4_000 * multiplier,
++    blockReadOperations: 3 * multiplier,
++    blockWriteOperations: 4 * multiplier,
++    storageUsageBytes: 10_000 * multiplier,
++  };
++}
++
++export async function createComparativePostgresCalibrationFixture({
++  sourceRevision,
++  producedAt,
++  fixtureName,
++}) {
++  const startedAt = Date.parse(producedAt);
++  const endedAt = startedAt + 60_000;
++  const networkId = `${fixtureName}-network`;
++  let calls = 0;
++  let cleaned = false;
++  const provider = {
++    async inspectContainer() {
++      return {State: {Running: true}};
++    },
++    async inspectContainerIfExists() {
++      return cleaned ? null : {State: {Running: true}};
++    },
++    async getContainerResourceSnapshot() {
++      calls += 1;
++      return resourceStats(
++        calls <= 2 ? startedAt : endedAt,
++        calls <= 2 ? 1 : 2,
++      );
++    },
++    async getNetworkByName() {
++      return cleaned ? null : {id: networkId};
++    },
++  };
++  const session = await beginBenchmarkResourceLiveObservation(provider, {
++    runId: `${fixtureName}-live-fixture`,
++    networkId,
++    networkName: networkId,
++    sourceRevision,
++    components: [
++      {
++        componentId: 'postgresql-database',
++        sideId: 'postgresql',
++        containerId: 'postgresql-container',
++        storagePath: '/var/lib/postgresql/data',
++      },
++      {
++        componentId: 'postgresql-client',
++        sideId: 'postgresql',
++        containerId: 'client-container',
++        storagePath: '/tmp',
++      },
++    ],
++  });
++  await captureBenchmarkResourceLiveObservation(session);
++  cleaned = true;
++  const finalized = await finalizeBenchmarkResourceLiveObservation(session);
++  return writeExternallyObservedBenchmarkResourceCalibration(
++    finalized.receipt,
++    finalized.authorization,
++  );
++}
++
++function component(componentId, role) {
++  return {
++    componentId,
++    role,
++    billingTreatment: BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
++    provisioned: {
++      cpuCores: 1,
++      memoryBytes: 1_000_000,
++      storageBytes: 1_000_000,
++      iops: 0,
++      networkBytesPerSecond: 0,
++    },
++    minimumFootprint: {
++      instances: 1,
++      cpuCores: 0,
++      memoryBytes: 0,
++      storageBytes: 0,
++    },
++    reservedHeadroomRatio: 0,
++    exclusionReason: 'none',
++  };
++}
++
++export function comparativePostgresNonMeasuringInventorySides() {
++  return [
++    {
++      sideId: 'lagrange',
++      components: [
++        component(
++          'lagrange-node',
++          BENCHMARK_RESOURCE_COMPONENT_ROLE.LAGRANGE_NODE,
++        ),
++      ],
++    },
++    {
++      sideId: 'postgresql',
++      components: [
++        component(
++          'postgresql-database',
++          BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
++        ),
++        component(
++          'postgresql-client',
++          BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT,
++        ),
++      ],
++    },
++  ];
++}
++
++export function rebuildComparativeNonMeasuringSourceReceipt(
++  evidence,
++  mutate,
++  options = {},
++) {
++  const normalizedOptions = typeof options === 'number' ?
++    {index: options} :
++    options;
++  const targetIndex = normalizedOptions.index || 0;
++  const originalSource = evidence.engagements[targetIndex];
++  const originalCell = evidence.cells[targetIndex];
++  const payload = JSON.parse(JSON.stringify(originalSource.artifact.payload));
++  mutate(payload);
++  const references =
++    normalizedOptions.references || originalSource.artifact.references;
++  const source = createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
++    payload,
++    references,
++  );
++  const cellPayload = originalCell.artifact.payload;
++  const cell = createBenchmarkResourceNonMeasuringCellEvidence({
++    matrixManifestDigest: cellPayload.matrixManifestDigest,
++    matrixId: cellPayload.matrixId,
++    cellId: cellPayload.cellId,
++    pairId: cellPayload.pairId,
++    runId: cellPayload.runId,
++    sideIds: cellPayload.sideIds,
++    reasonCodes: cellPayload.reasonCodes,
++    sourceDigests: [source.digest],
++    sourceRevision: cellPayload.sourceRevision,
++    producedAt: cellPayload.producedAt,
++    validUntil: cellPayload.validUntil,
++  });
++  const artifacts = evidence.artifacts.filter((artifact) => (
++    artifact.digest !== originalSource.digest &&
++    artifact.digest !== originalCell.digest
++  ));
++  artifacts.push(source, cell);
++  const rootPayload = evidence.root.artifact.payload;
++  const cellDigests = [...rootPayload.cellEvidenceDigests];
++  cellDigests[targetIndex] = cell.digest;
++  const root = createBenchmarkResourceEvidenceRoot({
++    matrixManifestDigest: rootPayload.matrixManifestDigest,
++    componentInventoryDigest: rootPayload.componentInventoryDigest,
++    priceSheetDigest: rootPayload.priceSheetDigest,
++    cellEvidenceDigests: cellDigests,
++    sourceRevision: rootPayload.sourceRevision,
++    producedAt: rootPayload.producedAt,
++    validUntil: rootPayload.validUntil,
++    artifacts,
++  });
++  return {
++    rootDigest: root.digest,
++    resolver: createBenchmarkResourceMemoryResolver([...artifacts, root]),
++  };
++}
++
++export function exerciseComparativeNonMeasuringHostileIntrinsics({
++  input,
++  evidence,
++  firstCell,
++  buildWitness,
++  createEvidence,
++  inspectEvidence,
++}) {
++  const calls = {
++    arrayFilter: 0,
++    arrayIterator: 0,
++    arrayMap: 0,
++    jsonStringify: 0,
++    mapGet: 0,
++    mapSet: 0,
++    mathFloor: 0,
++  };
++  function poison(name) {
++    return function poisonedIntrinsic() {
++      calls[name] += 1;
++      throw new Error(`mutable intrinsic invoked: ${name}`);
++    };
++  }
++  let inspection;
++  let produced;
++  let witness;
++  withHostileIntrinsics([
++    replacePrototypeProperty(Array.prototype, 'filter', poison('arrayFilter')),
++    replacePrototypeProperty(
++      Array.prototype,
++      Symbol.iterator,
++      poison('arrayIterator'),
++    ),
++    replacePrototypeProperty(Array.prototype, 'map', poison('arrayMap')),
++    replacePrototypeProperty(JSON, 'stringify', poison('jsonStringify')),
++    replacePrototypeProperty(Map.prototype, 'get', poison('mapGet')),
++    replacePrototypeProperty(Map.prototype, 'set', poison('mapSet')),
++    replacePrototypeProperty(Math, 'floor', poison('mathFloor')),
++  ], () => {
++    witness = buildWitness(firstCell);
++    produced = createEvidence(input);
++    inspection = inspectEvidence(evidence.receipt);
++  });
++  return {calls, inspection, produced, witness};
++}
+diff --git a/test/distributed/harness/__tests__/comparative-efficiency-request-enrichment.test.js b/test/distributed/harness/__tests__/comparative-efficiency-request-enrichment.test.js
+index d371c84011ac9042f1c5b414be6c97ec1dcaea6c..0bdb6e14ba4b9215eb73a25040b4c785d9b3a112 100644
+--- a/test/distributed/harness/__tests__/comparative-efficiency-request-enrichment.test.js
++++ b/test/distributed/harness/__tests__/comparative-efficiency-request-enrichment.test.js
+@@ -1,28 +1,13 @@
+ import {test} from '../../../../src/test-helpers/tap.js';
+ import {
+-  replacePrototypeProperty,
+-  withHostileIntrinsics,
+-} from '../../../helpers/hostile-intrinsics.js';
+-import {
+-  BENCHMARK_RESOURCE_ARTIFACT_KIND,
+-  BENCHMARK_RESOURCE_BILLING_TREATMENT,
+-  BENCHMARK_RESOURCE_COMPONENT_ROLE,
+-} from '../benchmark-resource-contract-constants.js';
+-import {
+-  createBenchmarkResourceMemoryResolver,
+-} from '../benchmark-resource-evidence-data.js';
+-import {
+-  createBenchmarkResourceEvidenceRoot,
+-  createBenchmarkResourceNonMeasuringCellEvidence,
+-  createBenchmarkResourceSourceArtifact,
+   validateBenchmarkResourceEvidenceRoot,
+ } from '../benchmark-resource-evidence-root.js';
+ import {
+-  beginBenchmarkResourceLiveObservation,
+-  captureBenchmarkResourceLiveObservation,
+-  finalizeBenchmarkResourceLiveObservation,
+-  writeExternallyObservedBenchmarkResourceCalibration,
+-} from '../benchmark-resource-live-observation-authority.js';
++  comparativePostgresNonMeasuringInventorySides,
++  createComparativePostgresCalibrationFixture,
++  exerciseComparativeNonMeasuringHostileIntrinsics,
++  rebuildComparativeNonMeasuringSourceReceipt as rebuiltSourceReceipt,
++} from './comparative-efficiency-postgres-nonmeasuring-test-fixture.js';
+ import {
+   BENCHMARK_RESOURCE_P0_PRICE_SHEET,
+ } from '../benchmark-resource-price-sheet-p0-constants.js';
+@@ -48,108 +33,13 @@ const SOURCE_REVISION = 'git-commit:c6-request-enrichment-fixture';
+ const PRODUCED_AT = '2026-07-28T00:00:00.000Z';
+ const VALID_UNTIL = '2026-07-29T00:00:00.000Z';
+ const SIDE_IDS = ['lagrange', 'postgresql'];
+-const CALIBRATION_STARTED_AT = Date.parse(PRODUCED_AT);
+-const CALIBRATION_ENDED_AT = CALIBRATION_STARTED_AT + 60_000;
+-
+-function resourceStats(timestamp, multiplier) {
+-  return {
+-    timestamp,
+-    cpuPercent: 10 * multiplier,
+-    cpuUsageNanoseconds: 10_000 * multiplier,
+-    memoryUsageBytes: 100_000 * multiplier,
+-    memoryLimitBytes: 1_000_000,
+-    cpuLimitNanoCpus: 1_000_000_000,
+-    storageLimitBytes: 1_000_000,
+-    pids: 5,
+-    rxBytes: 1_000 * multiplier,
+-    txBytes: 2_000 * multiplier,
+-    blockReadBytes: 3_000 * multiplier,
+-    blockWriteBytes: 4_000 * multiplier,
+-    blockReadOperations: 3 * multiplier,
+-    blockWriteOperations: 4 * multiplier,
+-    storageUsageBytes: 10_000 * multiplier,
+-  };
+-}
+ 
+ async function calibrationFixture(sourceRevision = SOURCE_REVISION) {
+-  let calls = 0;
+-  let cleaned = false;
+-  const provider = {
+-    async inspectContainer() {
+-      return {State: {Running: true}};
+-    },
+-    async inspectContainerIfExists() {
+-      return cleaned ? null : {State: {Running: true}};
+-    },
+-    async getContainerResourceSnapshot() {
+-      calls += 1;
+-      return resourceStats(
+-        calls <= 2 ? CALIBRATION_STARTED_AT : CALIBRATION_ENDED_AT,
+-        calls <= 2 ? 1 : 2,
+-      );
+-    },
+-    async getNetworkByName() {
+-      return cleaned ? null : {id: 'request-enrichment-network'};
+-    },
+-  };
+-  const session = await beginBenchmarkResourceLiveObservation(provider, {
+-    runId: 'request-enrichment-live-fixture',
+-    networkId: 'request-enrichment-network',
+-    networkName: 'request-enrichment-network',
++  return createComparativePostgresCalibrationFixture({
+     sourceRevision,
+-    components: [
+-      {
+-        componentId: 'postgresql-database',
+-        sideId: 'postgresql',
+-        containerId: 'postgresql-container',
+-        storagePath: '/var/lib/postgresql/data',
+-      },
+-      {
+-        componentId: 'postgresql-client',
+-        sideId: 'postgresql',
+-        containerId: 'client-container',
+-        storagePath: '/tmp',
+-      },
+-    ],
++    producedAt: PRODUCED_AT,
++    fixtureName: 'request-enrichment',
+   });
+-  await captureBenchmarkResourceLiveObservation(session);
+-  cleaned = true;
+-  const finalized = await finalizeBenchmarkResourceLiveObservation(session);
+-  return writeExternallyObservedBenchmarkResourceCalibration(
+-    finalized.receipt,
+-    finalized.authorization,
+-  );
+-}
+-
+-function provisioned() {
+-  return {
+-    cpuCores: 1,
+-    memoryBytes: 1_000_000,
+-    storageBytes: 1_000_000,
+-    iops: 0,
+-    networkBytesPerSecond: 0,
+-  };
+-}
+-
+-function minimumFootprint() {
+-  return {
+-    instances: 1,
+-    cpuCores: 0,
+-    memoryBytes: 0,
+-    storageBytes: 0,
+-  };
+-}
+-
+-function component(componentId, role) {
+-  return {
+-    componentId,
+-    role,
+-    billingTreatment: BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
+-    provisioned: provisioned(),
+-    minimumFootprint: minimumFootprint(),
+-    reservedHeadroomRatio: 0,
+-    exclusionReason: 'none',
+-  };
+ }
+ 
+ function workloadCells() {
+@@ -252,30 +142,7 @@ async function evidenceInput(overrides = {}) {
+       ],
+     },
+     inventoryId: 'comparative-request-enrichment-inventory-v1',
+-    inventorySides: [
+-      {
+-        sideId: 'lagrange',
+-        components: [
+-          component(
+-            'lagrange-node',
+-            BENCHMARK_RESOURCE_COMPONENT_ROLE.LAGRANGE_NODE,
+-          ),
+-        ],
+-      },
+-      {
+-        sideId: 'postgresql',
+-        components: [
+-          component(
+-            'postgresql-database',
+-            BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
+-          ),
+-          component(
+-            'postgresql-client',
+-            BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT,
+-          ),
+-        ],
+-      },
+-    ],
++    inventorySides: comparativePostgresNonMeasuringInventorySides(),
+     priceSheet: BENCHMARK_RESOURCE_P0_PRICE_SHEET,
+     calibrationArtifact,
+     attempts: overrides.attempts || attempts(),
+@@ -288,55 +155,6 @@ async function evidenceFixture(overrides = {}) {
+   );
+ }
+ 
+-function rebuiltSourceReceipt(evidence, mutate, targetIndex = 0) {
+-  const originalSource = evidence.engagements[targetIndex];
+-  const originalCell = evidence.cells[targetIndex];
+-  const payload =
+-    JSON.parse(JSON.stringify(originalSource.artifact.payload));
+-  mutate(payload);
+-  const source = createBenchmarkResourceSourceArtifact(
+-    BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
+-    payload,
+-    originalSource.artifact.references,
+-  );
+-  const cellPayload = originalCell.artifact.payload;
+-  const cell = createBenchmarkResourceNonMeasuringCellEvidence({
+-    matrixManifestDigest: cellPayload.matrixManifestDigest,
+-    matrixId: cellPayload.matrixId,
+-    cellId: cellPayload.cellId,
+-    pairId: cellPayload.pairId,
+-    runId: cellPayload.runId,
+-    sideIds: cellPayload.sideIds,
+-    reasonCodes: cellPayload.reasonCodes,
+-    sourceDigests: [source.digest],
+-    sourceRevision: cellPayload.sourceRevision,
+-    producedAt: cellPayload.producedAt,
+-    validUntil: cellPayload.validUntil,
+-  });
+-  const artifacts = evidence.artifacts.filter((artifact) => (
+-    artifact.digest !== originalSource.digest &&
+-    artifact.digest !== originalCell.digest
+-  ));
+-  artifacts.push(source, cell);
+-  const rootPayload = evidence.root.artifact.payload;
+-  const cellDigests = [...rootPayload.cellEvidenceDigests];
+-  cellDigests[targetIndex] = cell.digest;
+-  const root = createBenchmarkResourceEvidenceRoot({
+-    matrixManifestDigest: rootPayload.matrixManifestDigest,
+-    componentInventoryDigest: rootPayload.componentInventoryDigest,
+-    priceSheetDigest: rootPayload.priceSheetDigest,
+-    cellEvidenceDigests: cellDigests,
+-    sourceRevision: rootPayload.sourceRevision,
+-    producedAt: rootPayload.producedAt,
+-    validUntil: rootPayload.validUntil,
+-    artifacts,
+-  });
+-  return {
+-    rootDigest: root.digest,
+-    resolver: createBenchmarkResourceMemoryResolver([...artifacts, root]),
+-  };
+-}
+-
+ test('request-enrichment publishes the complete matrix without a claim',
+   async (t) => {
+     const evidence = await evidenceFixture();
+@@ -544,55 +362,18 @@ test('request-enrichment admission ignores mutable owner intrinsics',
+   async (t) => {
+     const input = await evidenceInput();
+     const evidence = createComparativeRequestEnrichmentEvidence(input);
+-    const calls = {
+-      arrayFilter: 0,
+-      arrayIterator: 0,
+-      arrayMap: 0,
+-      jsonStringify: 0,
+-      mapGet: 0,
+-      mapSet: 0,
+-      mathFloor: 0,
+-    };
+-    function poison(name) {
+-      return function poisonedIntrinsic() {
+-        calls[name] += 1;
+-        throw new Error(`mutable intrinsic invoked: ${name}`);
+-      };
+-    }
+-    let inspection;
+-    let produced;
+-    let witness;
+-    withHostileIntrinsics([
+-      replacePrototypeProperty(
+-        Array.prototype,
+-        'filter',
+-        poison('arrayFilter'),
+-      ),
+-      replacePrototypeProperty(
+-        Array.prototype,
+-        Symbol.iterator,
+-        poison('arrayIterator'),
+-      ),
+-      replacePrototypeProperty(
+-        Array.prototype,
+-        'map',
+-        poison('arrayMap'),
+-      ),
+-      replacePrototypeProperty(
+-        JSON,
+-        'stringify',
+-        poison('jsonStringify'),
+-      ),
+-      replacePrototypeProperty(Map.prototype, 'get', poison('mapGet')),
+-      replacePrototypeProperty(Map.prototype, 'set', poison('mapSet')),
+-      replacePrototypeProperty(Math, 'floor', poison('mathFloor')),
+-    ], () => {
+-      witness = buildComparativeRequestEnrichmentAffinityWitness(
+-        COMPARATIVE_REQUEST_ENRICHMENT_CELLS[0],
+-      );
+-      produced = createComparativeRequestEnrichmentEvidence(input);
+-      inspection =
+-        inspectComparativeRequestEnrichmentEvidence(evidence.receipt);
++    const {
++      calls,
++      inspection,
++      produced,
++      witness,
++    } = exerciseComparativeNonMeasuringHostileIntrinsics({
++      input,
++      evidence,
++      firstCell: COMPARATIVE_REQUEST_ENRICHMENT_CELLS[0],
++      buildWitness: buildComparativeRequestEnrichmentAffinityWitness,
++      createEvidence: createComparativeRequestEnrichmentEvidence,
++      inspectEvidence: inspectComparativeRequestEnrichmentEvidence,
+     });
+     t.equal(
+       witness.version,
+diff --git a/test/distributed/harness/comparative-efficiency-change-rate-crossover-admission.js b/test/distributed/harness/comparative-efficiency-change-rate-crossover-admission.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..2a1f9b2215d3752cda6fc1dc8d24d2fb8c80588d
+--- /dev/null
++++ b/test/distributed/harness/comparative-efficiency-change-rate-crossover-admission.js
+@@ -0,0 +1,116 @@
++import {
++  assertBenchmarkResourceExactRecord,
++} from './benchmark-resource-evidence-data.js';
++import {
++  createComparativePostgresNonMeasuringAdmission,
++} from './comparative-efficiency-postgres-nonmeasuring-admission.js';
++import {
++  buildComparativeChangeRateCrossoverPolicyWitness,
++} from './comparative-efficiency-change-rate-crossover-policy-witness.js';
++import {
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_REASON,
++  comparativeChangeRateCrossoverExpectedResult,
++  comparativeChangeRateCrossoverSql,
++} from './comparative-efficiency-change-rate-crossover-constants.js';
++
++const measurementDispositionKeys = Object.freeze([
++  'state',
++  'capacityConfidenceInterval',
++  'wholeTopologyResourceBreakdown',
++  'infrastructureCostProjection',
++  'practicalEffectClassification',
++  'crossoverClassification',
++]);
++const expectedDisposition = Object.freeze({
++  state: 'non_measuring',
++  capacityConfidenceInterval: 'absent',
++  wholeTopologyResourceBreakdown: 'absent',
++  infrastructureCostProjection: 'absent',
++  practicalEffectClassification: 'not_evaluable',
++  crossoverClassification: 'not_evaluable',
++});
++
++function assertMeasurementDisposition(liveEvidence, fail) {
++  const disposition = liveEvidence.measurementDisposition;
++  assertBenchmarkResourceExactRecord(
++    disposition,
++    measurementDispositionKeys,
++    'changeRateCrossover.liveEvidence.measurementDisposition',
++  );
++  for (let index = 0; index < measurementDispositionKeys.length; index += 1) {
++    const field = measurementDispositionKeys[index];
++    if (disposition[field] !== expectedDisposition[field]) {
++      fail('changeRateCrossover.attempt:live_evidence_invalid');
++    }
++  }
++}
++
++const owner = createComparativePostgresNonMeasuringAdmission({
++  pathPrefix: 'changeRateCrossover',
++  workloadVersion: 'comparative-change-rate-crossover-workloads-v1',
++  topologyVersion: 'comparative-change-rate-crossover-topology-v1',
++  preregistrationVersion:
++    'comparative-change-rate-crossover-preregistration-v1',
++  liveEvidenceVersion:
++    'comparative-change-rate-crossover-live-evidence-v1',
++  sourceVersion: 'comparative-change-rate-crossover-live-attempt-v1',
++  axes: COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
++  cells: COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS,
++  reason: COMPARATIVE_CHANGE_RATE_CROSSOVER_REASON,
++  ownerIdsField: 'policyOwnerIds',
++  ownerIds: COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
++  witnessField: 'policyWitness',
++  buildWitness: buildComparativeChangeRateCrossoverPolicyWitness,
++  oracleName: 'row_count_sum_and_diversity_exact',
++  expectedResult: comparativeChangeRateCrossoverExpectedResult,
++  sql: comparativeChangeRateCrossoverSql,
++  workloadCellKeys: Object.freeze([
++    'datasetSize',
++    'mutationRate',
++    'mutationDivisor',
++    'workloadDiversity',
++    'diversityCount',
++    'skew',
++    'policy',
++    'requestCount',
++    'alternativeSql',
++    'oracleName',
++    'oracleExpected',
++  ]),
++  projectWorkloadCell(cell, alternativeSql, oracleName, oracleExpected) {
++    return {
++      datasetSize: cell.datasetSize,
++      mutationRate: cell.mutationRate,
++      mutationDivisor: cell.mutationDivisor,
++      workloadDiversity: cell.workloadDiversity,
++      diversityCount: cell.diversityCount,
++      skew: cell.skew,
++      policy: cell.policy,
++      requestCount: cell.requestCount,
++      alternativeSql,
++      oracleName,
++      oracleExpected,
++    };
++  },
++  requiredEvidence: Object.freeze([
++    'paired_capacity',
++    'whole_topology_resource_windows',
++    'capacity_uncertainty',
++    'capacity_practical_effect',
++    'cost_practical_effect',
++    'crossover_classification',
++    'immutable_raw_artifacts',
++  ]),
++  liveEvidenceExtraKeys: Object.freeze(['measurementDisposition']),
++  assertLiveExtra: assertMeasurementDisposition,
++});
++
++export const assertComparativeChangeRateCrossoverLiveEvidence =
++  owner.assertLiveEvidence;
++export const assertComparativeChangeRateCrossoverOwners = owner.assertOwners;
++export const assertComparativeChangeRateCrossoverSource = owner.assertSource;
++export const evaluateComparativeChangeRateCrossoverOracle =
++  owner.evaluateOracle;
+diff --git a/test/distributed/harness/comparative-efficiency-change-rate-crossover-constants.js b/test/distributed/harness/comparative-efficiency-change-rate-crossover-constants.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..5d28bdabf95a202f32e0263b330269a8f64251d2
+--- /dev/null
++++ b/test/distributed/harness/comparative-efficiency-change-rate-crossover-constants.js
+@@ -0,0 +1,208 @@
++export const COMPARATIVE_CHANGE_RATE_CROSSOVER_SCENARIO =
++  'comparative-efficiency-change-rate-crossover';
++export const COMPARATIVE_CHANGE_RATE_CROSSOVER_REASON =
++  'candidate_capacity_adapter_not_engaged';
++export const COMPARATIVE_CHANGE_RATE_CROSSOVER_DISPOSITION =
++  'non_measuring_crossover_not_evaluable';
++const COMPARATIVE_CHANGE_RATE_CROSSOVER_REQUEST_COUNT = 128;
++export const COMPARATIVE_CHANGE_RATE_CROSSOVER_ORACLE =
++  'row_count_sum_and_diversity_exact';
++export const COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS =
++  Object.freeze({
++    mutationSchedule: 'primary_key_prefix_update',
++    workloadDiversity: 'request_diversity_group',
++    accessSkew: 'deterministic_request_id',
++    recomputation: 'postgresql_not_materialized_cte',
++    materialization: 'postgresql_materialized_cte',
++  });
++export const COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES = Object.freeze([
++  Object.freeze({
++    id: 'dataset_size',
++    values: Object.freeze(['128', '1024']),
++  }),
++  Object.freeze({
++    id: 'mutation_rate',
++    values: Object.freeze(['one_per_sixteen', 'one_per_two']),
++  }),
++  Object.freeze({
++    id: 'workload_diversity',
++    values: Object.freeze(['one_group', 'eight_groups']),
++  }),
++  Object.freeze({
++    id: 'skew',
++    values: Object.freeze(['uniform', 'hotspot_80_20']),
++  }),
++  Object.freeze({
++    id: 'recomputation_materialization_policy',
++    values: Object.freeze(['recompute_on_read', 'materialize_once']),
++  }),
++]);
++
++const SIZE_AXIS_INDEX = 0;
++const MUTATION_AXIS_INDEX = 1;
++const DIVERSITY_AXIS_INDEX = 2;
++const SKEW_AXIS_INDEX = 3;
++const POLICY_AXIS_INDEX = 4;
++const LOW_MUTATION_RATE = 'one_per_sixteen';
++const LOW_MUTATION_DIVISOR = 16;
++const HIGH_MUTATION_DIVISOR = 2;
++const LOW_DIVERSITY = 'one_group';
++const LOW_DIVERSITY_COUNT = 1;
++const HIGH_DIVERSITY_COUNT = 8;
++const HOTSPOT_SKEW = 'hotspot_80_20';
++const HOTSPOT_RATIO = 0.8;
++const HOT_KEY_RATIO = 0.2;
++const ENTITY_KEY_MULTIPLIER = 17;
++const ITEM_VALUE_MULTIPLIER = 10;
++const MUTATION_INCREMENT = 100_000;
++const MATERIALIZE_POLICY = 'materialize_once';
++const SQL_MATERIALIZED = 'MATERIALIZED';
++const SQL_NOT_MATERIALIZED = 'NOT MATERIALIZED';
++const SQL_CREATE =
++  'CREATE TEMP TABLE change_rate_items (' +
++  'id INTEGER PRIMARY KEY, value BIGINT NOT NULL); ';
++const SQL_INSERT = 'INSERT INTO change_rate_items (id, value) ';
++const SQL_REQUESTS = 'WITH requests AS MATERIALIZED (';
++const SQL_DIVERSITY_ALIAS = 'AS diversity_group ';
++const SQL_REQUEST_ALIAS = 'AS request(sample_id)';
++const SQL_RESOLVED_SELECT =
++  'SELECT requests.diversity_group, items.value ';
++const SQL_RESOLVED_FROM =
++  'FROM requests JOIN change_rate_items AS items ';
++const SQL_RESOLVED_JOIN = 'ON items.id = requests.item_id';
++const SQL_RESULT_COUNT = ') SELECT count(*)::text || \'|\' || ';
++const SQL_RESULT_SUM =
++  'sum(value + diversity_group)::text || \'|\' || ';
++const SQL_RESULT_DIVERSITY =
++  'count(DISTINCT diversity_group)::text FROM resolved';
++const arrayPush = Function.call.bind(Array.prototype.push);
++const mathCeil = Math.ceil;
++const mathFloor = Math.floor;
++
++function axisValues(index) {
++  return COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES[index].values;
++}
++
++const cells = [];
++for (let sizeIndex = 0;
++  sizeIndex < axisValues(SIZE_AXIS_INDEX).length;
++  sizeIndex += 1) {
++  for (let mutationIndex = 0;
++    mutationIndex < axisValues(MUTATION_AXIS_INDEX).length;
++    mutationIndex += 1) {
++    for (let diversityIndex = 0;
++      diversityIndex < axisValues(DIVERSITY_AXIS_INDEX).length;
++      diversityIndex += 1) {
++      for (let skewIndex = 0;
++        skewIndex < axisValues(SKEW_AXIS_INDEX).length;
++        skewIndex += 1) {
++        for (let policyIndex = 0;
++          policyIndex < axisValues(POLICY_AXIS_INDEX).length;
++          policyIndex += 1) {
++          const mutationRate =
++            axisValues(MUTATION_AXIS_INDEX)[mutationIndex];
++          const workloadDiversity =
++            axisValues(DIVERSITY_AXIS_INDEX)[diversityIndex];
++          arrayPush(cells, Object.freeze({
++            datasetSize: Number(axisValues(SIZE_AXIS_INDEX)[sizeIndex]),
++            mutationRate,
++            mutationDivisor: mutationRate === LOW_MUTATION_RATE ?
++              LOW_MUTATION_DIVISOR :
++              HIGH_MUTATION_DIVISOR,
++            workloadDiversity,
++            diversityCount: workloadDiversity === LOW_DIVERSITY ?
++              LOW_DIVERSITY_COUNT :
++              HIGH_DIVERSITY_COUNT,
++            skew: axisValues(SKEW_AXIS_INDEX)[skewIndex],
++            policy: axisValues(POLICY_AXIS_INDEX)[policyIndex],
++            requestCount: COMPARATIVE_CHANGE_RATE_CROSSOVER_REQUEST_COUNT,
++          }));
++        }
++      }
++    }
++  }
++}
++
++export const COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS =
++  Object.freeze(cells);
++
++export function comparativeChangeRateCrossoverMutationCount(cell) {
++  return mathCeil(cell.datasetSize / cell.mutationDivisor);
++}
++
++function comparativeChangeRateCrossoverEntityId(cell, sampleId) {
++  if (cell.skew !== HOTSPOT_SKEW) {
++    return ((sampleId * ENTITY_KEY_MULTIPLIER) % cell.datasetSize) + 1;
++  }
++  const hotRequestCount = mathFloor(cell.requestCount * HOTSPOT_RATIO);
++  const hotKeyCount = mathFloor(cell.datasetSize * HOT_KEY_RATIO);
++  if (sampleId <= hotRequestCount) {
++    return ((sampleId * ENTITY_KEY_MULTIPLIER) % hotKeyCount) + 1;
++  }
++  const coldKeyCount = cell.datasetSize - hotKeyCount;
++  return hotKeyCount +
++    ((sampleId * ENTITY_KEY_MULTIPLIER) % coldKeyCount) + 1;
++}
++
++function diversityGroup(cell, sampleId) {
++  return ((sampleId - 1) % cell.diversityCount) + 1;
++}
++
++function itemValue(cell, entityId) {
++  const base = entityId * ITEM_VALUE_MULTIPLIER;
++  return entityId <= comparativeChangeRateCrossoverMutationCount(cell) ?
++    base + MUTATION_INCREMENT :
++    base;
++}
++
++export function comparativeChangeRateCrossoverExpectedResult(cell) {
++  let valueSum = 0;
++  for (let sampleId = 1; sampleId <= cell.requestCount; sampleId += 1) {
++    const entityId =
++      comparativeChangeRateCrossoverEntityId(cell, sampleId);
++    valueSum += itemValue(cell, entityId) +
++      diversityGroup(cell, sampleId);
++  }
++  return `${cell.requestCount}|${valueSum}|${cell.diversityCount}`;
++}
++
++function requestEntityExpression(cell) {
++  if (cell.skew !== HOTSPOT_SKEW) {
++    return `((sample_id * ${ENTITY_KEY_MULTIPLIER}) % ` +
++      `${cell.datasetSize}) + 1`;
++  }
++  const hotRequestCount = mathFloor(cell.requestCount * HOTSPOT_RATIO);
++  const hotKeyCount = mathFloor(cell.datasetSize * HOT_KEY_RATIO);
++  const coldKeyCount = cell.datasetSize - hotKeyCount;
++  return `CASE WHEN sample_id <= ${hotRequestCount} THEN ` +
++    `((sample_id * ${ENTITY_KEY_MULTIPLIER}) % ${hotKeyCount}) + 1 ` +
++    `ELSE ${hotKeyCount} + ` +
++    `((sample_id * ${ENTITY_KEY_MULTIPLIER}) % ${coldKeyCount}) + 1 END`;
++}
++
++export function comparativeChangeRateCrossoverSql(cell) {
++  const policy = cell.policy === MATERIALIZE_POLICY ?
++    SQL_MATERIALIZED :
++    SQL_NOT_MATERIALIZED;
++  return (
++    SQL_CREATE +
++    SQL_INSERT +
++      `SELECT item_id, item_id * ${ITEM_VALUE_MULTIPLIER} ` +
++      `FROM generate_series(1, ${cell.datasetSize}) AS item(item_id); ` +
++    `UPDATE change_rate_items SET value = value + ${MUTATION_INCREMENT} ` +
++      `WHERE id <= ${comparativeChangeRateCrossoverMutationCount(cell)}; ` +
++    SQL_REQUESTS +
++      `SELECT sample_id, ${requestEntityExpression(cell)} AS item_id, ` +
++        `((sample_id - 1) % ${cell.diversityCount}) + 1 ` +
++        SQL_DIVERSITY_ALIAS +
++      `FROM generate_series(1, ${cell.requestCount}) ` +
++        SQL_REQUEST_ALIAS +
++    `), resolved AS ${policy} (` +
++      SQL_RESOLVED_SELECT +
++      SQL_RESOLVED_FROM +
++        SQL_RESOLVED_JOIN +
++    SQL_RESULT_COUNT +
++      SQL_RESULT_SUM +
++      SQL_RESULT_DIVERSITY
++  );
++}
+diff --git a/test/distributed/harness/comparative-efficiency-change-rate-crossover-policy-witness.js b/test/distributed/harness/comparative-efficiency-change-rate-crossover-policy-witness.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..cdb9d34705593ad840ca47ce5c6fdd3818ec1cf3
+--- /dev/null
++++ b/test/distributed/harness/comparative-efficiency-change-rate-crossover-policy-witness.js
+@@ -0,0 +1,72 @@
++import {
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
++  comparativeChangeRateCrossoverMutationCount,
++} from './comparative-efficiency-change-rate-crossover-constants.js';
++
++const VERSION = 'comparative-change-rate-crossover-policy-witness-v1';
++const HOTSPOT_RATIO = '80_percent_requests_to_20_percent_keys';
++const UNIFORM_RATIO = 'deterministic_uniform_domain';
++const HOTSPOT = 'hotspot_80_20';
++const MATERIALIZE = 'materialize_once';
++const MATERIALIZED_CTE = 'MATERIALIZED';
++const NOT_MATERIALIZED_CTE = 'NOT MATERIALIZED';
++const MUTATION_OPERATION = 'primary_key_prefix_update';
++const DIVERSITY_OPERATION = 'request_diversity_group';
++const localText = Object.freeze({
++  INVALID:
++    'change-rate crossover policy witness requires an exact matrix cell',
++});
++
++function exactCell(cell, expected) {
++  return cell.datasetSize === expected.datasetSize &&
++    cell.mutationRate === expected.mutationRate &&
++    cell.mutationDivisor === expected.mutationDivisor &&
++    cell.workloadDiversity === expected.workloadDiversity &&
++    cell.diversityCount === expected.diversityCount &&
++    cell.skew === expected.skew &&
++    cell.policy === expected.policy &&
++    cell.requestCount === expected.requestCount;
++}
++
++function canonicalCell(cell) {
++  for (let index = 0;
++    index < COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.length;
++    index += 1) {
++    const expected = COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS[index];
++    if (cell && exactCell(cell, expected)) return expected;
++  }
++  throw new TypeError(localText.INVALID);
++}
++
++export function buildComparativeChangeRateCrossoverPolicyWitness(cell) {
++  const current = canonicalCell(cell);
++  return {
++    version: VERSION,
++    owners: COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
++    mutationSchedule: {
++      rate: current.mutationRate,
++      divisor: current.mutationDivisor,
++      mutationCount:
++        comparativeChangeRateCrossoverMutationCount(current),
++      operation: MUTATION_OPERATION,
++    },
++    workloadDiversity: {
++      id: current.workloadDiversity,
++      groupCount: current.diversityCount,
++      operation: DIVERSITY_OPERATION,
++    },
++    accessSkew: {
++      id: current.skew,
++      distribution: current.skew === HOTSPOT ?
++        HOTSPOT_RATIO :
++        UNIFORM_RATIO,
++    },
++    recomputationMaterializationPolicy: {
++      id: current.policy,
++      sqlCtePolicy: current.policy === MATERIALIZE ?
++        MATERIALIZED_CTE :
++        NOT_MATERIALIZED_CTE,
++    },
++  };
++}
+diff --git a/test/distributed/harness/comparative-efficiency-change-rate-crossover.js b/test/distributed/harness/comparative-efficiency-change-rate-crossover.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9fa63393d92529c4ee55e8b6cbccf98e3f073f92
+--- /dev/null
++++ b/test/distributed/harness/comparative-efficiency-change-rate-crossover.js
+@@ -0,0 +1,48 @@
++import {
++  assertComparativeChangeRateCrossoverLiveEvidence,
++  assertComparativeChangeRateCrossoverOwners,
++  assertComparativeChangeRateCrossoverSource,
++} from './comparative-efficiency-change-rate-crossover-admission.js';
++import {
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_DISPOSITION,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_REASON,
++} from './comparative-efficiency-change-rate-crossover-constants.js';
++import {
++  createComparativePostgresNonMeasuringEvidenceOwner,
++} from './comparative-efficiency-postgres-nonmeasuring-evidence.js';
++
++export {
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_ORACLE,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_REASON,
++  COMPARATIVE_CHANGE_RATE_CROSSOVER_SCENARIO,
++  comparativeChangeRateCrossoverExpectedResult,
++  comparativeChangeRateCrossoverMutationCount,
++  comparativeChangeRateCrossoverSql,
++} from './comparative-efficiency-change-rate-crossover-constants.js';
++
++const owner = createComparativePostgresNonMeasuringEvidenceOwner({
++  pathPrefix: 'changeRateCrossover',
++  axes: COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
++  cells: COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS,
++  disposition: COMPARATIVE_CHANGE_RATE_CROSSOVER_DISPOSITION,
++  reason: COMPARATIVE_CHANGE_RATE_CROSSOVER_REASON,
++  sourceVersion: 'comparative-change-rate-crossover-live-attempt-v1',
++  witnessCountField: 'policyWitnessCount',
++  admission: Object.freeze({
++    assertLiveEvidence: assertComparativeChangeRateCrossoverLiveEvidence,
++    assertOwners: assertComparativeChangeRateCrossoverOwners,
++    assertSource: assertComparativeChangeRateCrossoverSource,
++  }),
++});
++
++export const createComparativeChangeRateCrossoverEvidence =
++  owner.createEvidence;
++export const inspectComparativeChangeRateCrossoverEvidence =
++  owner.inspectEvidence;
++export const comparativeChangeRateCrossoverEvidenceDigest =
++  owner.evidenceDigest;
+diff --git a/test/distributed/harness/comparative-efficiency-negative-controls.js b/test/distributed/harness/comparative-efficiency-negative-controls.js
+index ca0a6187656e9141b2150550c000ec10cfbab98e..83372f3e53c87a8b754b2d6b5a29d213d35d3677 100644
+--- a/test/distributed/harness/comparative-efficiency-negative-controls.js
++++ b/test/distributed/harness/comparative-efficiency-negative-controls.js
+@@ -3,24 +3,15 @@ import {
+   digestBenchmarkSemanticData,
+ } from './benchmark-semantic-integrity.js';
+ import {types} from 'node:util';
+-import {
+-  createBenchmarkResourceComponentInventory,
+-} from './benchmark-resource-accounting.js';
+-import {
+-  createBenchmarkResourcePriceSheet,
+-} from './benchmark-resource-cost-and-effects.js';
+ import {
+   assertBenchmarkResourceArray,
+   assertBenchmarkResourceBytes,
+   assertBenchmarkResourceCanonicalData,
+   assertBenchmarkResourceExactRecord,
+   assertBenchmarkResourceText,
+-  createBenchmarkResourceMemoryResolver,
+   parseBenchmarkResourceArtifact,
+ } from './benchmark-resource-evidence-data.js';
+ import {
+-  createBenchmarkResourceEvidenceRoot,
+-  createBenchmarkResourceNonMeasuringCellEvidence,
+   createBenchmarkResourceSourceArtifact,
+   validateBenchmarkResourceEvidenceRoot,
+ } from './benchmark-resource-evidence-root.js';
+@@ -44,6 +35,9 @@ import {
+   COMPARATIVE_NEGATIVE_CONTROL_IDS,
+   COMPARATIVE_NEGATIVE_CONTROL_REASON,
+ } from './comparative-efficiency-negative-controls-constants.js';
++import {
++  assembleComparativePostgresNonMeasuringEvidence,
++} from './comparative-efficiency-postgres-nonmeasuring-evidence.js';
+ export {
+   COMPARATIVE_NEGATIVE_CONTROL_CLAIM_DISPOSITION,
+   COMPARATIVE_NEGATIVE_CONTROL_IDS,
+@@ -283,13 +277,6 @@ function sourcePayload(input, attempt, cell, sideIds, owners) {
+   };
+ }
+ 
+-function rootReceipt(artifacts, root) {
+-  return {
+-    rootDigest: root.digest,
+-    resolver: createBenchmarkResourceMemoryResolver([...artifacts, root]),
+-  };
+-}
+-
+ export function createComparativeNegativeControlEvidence(input) {
+   assertBenchmarkResourceExactRecord(input, inputKeys, localText.INPUT);
+   const textFields = [
+@@ -346,81 +333,22 @@ export function createComparativeNegativeControlEvidence(input) {
+     preregistration: preregistration.artifact,
+   };
+   assertComparativeNegativeControlOwners(sourceOwners, matrix.artifact);
+-  const inventory = createBenchmarkResourceComponentInventory({
+-    inventoryId: input.inventoryId,
+-    matrixId: input.matrixId,
+-    sides: input.inventorySides,
+-  });
+-  const price = createBenchmarkResourcePriceSheet(input.priceSheet);
+-  const engagements = [];
+-  const cells = [];
+-  for (let index = 0; index < attempts.length; index += 1) {
+-    const attempt = attempts[index];
+-    const matrixCell = matrix.artifact.payload.cells[index];
+-    const engagement = createBenchmarkResourceSourceArtifact(
+-      BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
+-      sourcePayload(input, attempt, matrixCell, sideIds, {
+-        workloadManifest,
+-        alternativeTopology,
+-        preregistration,
+-      }),
+-      [
+-        input.calibrationArtifact.digest,
+-        workloadManifest.digest,
+-        alternativeTopology.digest,
+-        preregistration.digest,
+-      ],
+-    );
+-    appendOwnArrayValue(engagements, engagement);
+-    appendOwnArrayValue(
+-      cells,
+-      createBenchmarkResourceNonMeasuringCellEvidence({
+-        matrixManifestDigest: matrix.digest,
+-        matrixId: input.matrixId,
+-        cellId: matrixCell.cellId,
+-        pairId: input.pairId,
+-        runId: attempt.runId,
+-        sideIds,
+-        reasonCodes: attempt.reasonCodes,
+-        sourceDigests: [engagement.digest],
+-        sourceRevision: input.sourceRevision,
+-        producedAt: input.producedAt,
+-        validUntil: input.validUntil,
+-      }),
+-    );
+-  }
+-  const artifacts = [
++  return assembleComparativePostgresNonMeasuringEvidence({
++    input,
++    attempts,
++    sideIds,
++    matrix,
+     workloadManifest,
+     alternativeTopology,
+     preregistration,
+-    matrix,
+-    inventory,
+-    price,
+-    input.calibrationArtifact,
+-    ...engagements,
+-    ...cells,
+-  ];
+-  const root = createBenchmarkResourceEvidenceRoot({
+-    matrixManifestDigest: matrix.digest,
+-    componentInventoryDigest: inventory.digest,
+-    priceSheetDigest: price.digest,
+-    cellEvidenceDigests: cells.map((cell) => cell.digest),
+-    sourceRevision: input.sourceRevision,
+-    producedAt: input.producedAt,
+-    validUntil: input.validUntil,
+-    artifacts,
++    sourcePayloadForAttempt(attempt, matrixCell) {
++      return sourcePayload(input, attempt, matrixCell, sideIds, {
++        workloadManifest,
++        alternativeTopology,
++        preregistration,
++      });
++    },
+   });
+-  return {
+-    receipt: rootReceipt(artifacts, root),
+-    root,
+-    artifacts,
+-    matrix,
+-    inventory,
+-    price,
+-    calibration: input.calibrationArtifact,
+-    engagements,
+-    cells,
+-  };
+ }
+ 
+ function resolveArtifact(resolved, digest) {
+diff --git a/test/distributed/harness/comparative-efficiency-postgres-nonmeasuring-admission.js b/test/distributed/harness/comparative-efficiency-postgres-nonmeasuring-admission.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..6d5914553984e2ca2b4114fd865516698ae5cea9
+--- /dev/null
++++ b/test/distributed/harness/comparative-efficiency-postgres-nonmeasuring-admission.js
+@@ -0,0 +1,427 @@
++import {
++  digestBenchmarkSemanticData,
++} from './benchmark-semantic-integrity.js';
++import {
++  assertBenchmarkResourceArray,
++  assertBenchmarkResourceCanonicalData,
++  assertBenchmarkResourceExactRecord,
++  assertBenchmarkResourceText,
++} from './benchmark-resource-evidence-data.js';
++import {
++  inspectBenchmarkResourceLiveCalibrationArtifact,
++} from './benchmark-resource-live-observation-authority.js';
++import {
++  BENCHMARK_RESOURCE_ARTIFACT_KIND,
++  BENCHMARK_RESOURCE_CELL_STATE,
++} from './benchmark-resource-contract-constants.js';
++
++const workloadKeys =
++  Object.freeze(['version', 'cells', 'selectionPolicy']);
++const topologyKeys = Object.freeze(['version', 'candidate', 'alternative']);
++const topologyCandidateKeys = Object.freeze([
++  'architectureId',
++  'required',
++  'capacityAdapterEngaged',
++  'reason',
++]);
++const topologyAlternativeKeys = Object.freeze([
++  'architectureId',
++  'image',
++  'imageId',
++  'databaseContainerId',
++  'clientContainerId',
++  'network',
++]);
++const liveAlternativeKeys = Object.freeze([
++  'architectureId',
++  'engaged',
++  'image',
++  'imageId',
++  'databaseContainerId',
++  'clientContainerId',
++  'sql',
++  'stdout',
++]);
++const oracleKeys = Object.freeze(['name', 'expected', 'passed']);
++const timestampPattern =
++  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
++const dateParse = Date.parse;
++const numberIsFinite = Number.isFinite;
++const numberMax = Math.max;
++const numberMin = Math.min;
++const objectCreate = Object.create;
++const objectDefineProperty = Object.defineProperty;
++const objectFreeze = Object.freeze;
++const regexpTest = Function.call.bind(RegExp.prototype.test);
++const stringTrim = Function.call.bind(String.prototype.trim);
++
++function exactValues(actual, expected) {
++  if (actual.length !== expected.length) return false;
++  for (let index = 0; index < actual.length; index += 1) {
++    if (actual[index] !== expected[index]) return false;
++  }
++  return true;
++}
++
++function expectedWitnessDigests(config) {
++  const digests = objectCreate(null);
++  for (let index = 0; index < config.cells.length; index += 1) {
++    objectDefineProperty(digests, index, {
++      enumerable: true,
++      value: digestBenchmarkSemanticData(
++        config.buildWitness(config.cells[index]),
++      ),
++    });
++  }
++  return objectFreeze(digests);
++}
++
++function text(config, suffix) {
++  return `${config.pathPrefix}.${suffix}`;
++}
++
++export function createComparativePostgresNonMeasuringAdmission(config) {
++  const witnessDigests = expectedWitnessDigests(config);
++  const preregistrationKeys = Object.freeze([
++    'version',
++    'axes',
++    'sideIds',
++    'outcomePolicy',
++    'invalidCellPolicy',
++    'candidateEngagementRequired',
++    config.ownerIdsField,
++    'requiredEvidence',
++  ]);
++  const liveEvidenceKeys = Object.freeze([
++    'version',
++    'matrixCellIndex',
++    'startedAt',
++    'endedAt',
++    'candidate',
++    'alternative',
++    'oracle',
++    ...config.liveEvidenceExtraKeys,
++  ]);
++  const liveCandidateKeys = Object.freeze([
++    'architectureId',
++    'capacityAdapterEngaged',
++    'reason',
++    config.witnessField,
++  ]);
++
++  function fail(message = text(config, 'cells:live_attempt_source_mismatch')) {
++    throw new TypeError(message);
++  }
++
++  function assertTimestamp(value, path) {
++    if (
++      typeof value !== 'string' ||
++      !regexpTest(timestampPattern, value) ||
++      !numberIsFinite(dateParse(value))
++    ) {
++      fail(`${path}:iso_timestamp_required`);
++    }
++  }
++
++  function expectedWorkloadCell(cell) {
++    return config.projectWorkloadCell(
++      cell,
++      config.sql(cell),
++      config.oracleName,
++      config.expectedResult(cell),
++    );
++  }
++
++  function assertWorkload(workload) {
++    if (workload.kind !== BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST) {
++      fail();
++    }
++    assertBenchmarkResourceExactRecord(
++      workload.payload,
++      workloadKeys,
++      text(config, 'workload'),
++    );
++    if (
++      workload.payload.version !== config.workloadVersion ||
++      workload.payload.selectionPolicy !== 'complete_cartesian_matrix'
++    ) {
++      fail();
++    }
++    assertBenchmarkResourceArray(
++      workload.payload.cells,
++      text(config, 'workload.cells'),
++      config.cells.length,
++    );
++    if (workload.payload.cells.length !== config.cells.length) fail();
++    for (let index = 0; index < config.cells.length; index += 1) {
++      const actual = workload.payload.cells[index];
++      assertBenchmarkResourceExactRecord(
++        actual,
++        config.workloadCellKeys,
++        text(config, `workload.cells.${index}`),
++      );
++      if (
++        digestBenchmarkSemanticData(actual) !==
++          digestBenchmarkSemanticData(expectedWorkloadCell(config.cells[index]))
++      ) {
++        fail();
++      }
++    }
++  }
++
++  function assertTopology(topology) {
++    if (
++      topology.kind !== BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY
++    ) {
++      fail();
++    }
++    const payload = topology.payload;
++    assertBenchmarkResourceExactRecord(
++      payload,
++      topologyKeys,
++      text(config, 'topology'),
++    );
++    assertBenchmarkResourceExactRecord(
++      payload.candidate,
++      topologyCandidateKeys,
++      text(config, 'topology.candidate'),
++    );
++    assertBenchmarkResourceExactRecord(
++      payload.alternative,
++      topologyAlternativeKeys,
++      text(config, 'topology.alternative'),
++    );
++    if (
++      payload.version !== config.topologyVersion ||
++      payload.candidate.architectureId !== 'lagrange' ||
++      payload.candidate.required !== true ||
++      payload.candidate.capacityAdapterEngaged !== false ||
++      payload.alternative.architectureId !== 'postgresql'
++    ) {
++      fail();
++    }
++    assertBenchmarkResourceText(
++      payload.candidate.reason,
++      text(config, 'topology.candidate.reason'),
++    );
++    for (let index = 1; index < topologyAlternativeKeys.length; index += 1) {
++      const key = topologyAlternativeKeys[index];
++      assertBenchmarkResourceText(
++        payload.alternative[key],
++        text(config, `topology.alternative.${key}`),
++      );
++    }
++  }
++
++  function assertPreregistration(preregistration, matrix) {
++    if (
++      preregistration.kind !==
++        BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION
++    ) {
++      fail();
++    }
++    const payload = preregistration.payload;
++    assertBenchmarkResourceExactRecord(
++      payload,
++      preregistrationKeys,
++      text(config, 'preregistration'),
++    );
++    if (
++      payload.version !== config.preregistrationVersion ||
++      payload.outcomePolicy !== 'direction_neutral' ||
++      payload.invalidCellPolicy !== 'publish_explicit_non_measuring' ||
++      payload.candidateEngagementRequired !== true ||
++      !exactValues(payload.sideIds, matrix.payload.sideIds) ||
++      !exactValues(payload.requiredEvidence, config.requiredEvidence) ||
++      digestBenchmarkSemanticData(payload.axes) !==
++        digestBenchmarkSemanticData(config.axes) ||
++      digestBenchmarkSemanticData(payload[config.ownerIdsField]) !==
++        digestBenchmarkSemanticData(config.ownerIds)
++    ) {
++      fail();
++    }
++  }
++
++  function assertOwners(owners, matrix) {
++    assertWorkload(owners.workload);
++    assertTopology(owners.topology);
++    assertPreregistration(owners.preregistration, matrix);
++  }
++
++  function evaluateOracle(cell, stdout) {
++    return typeof stdout === 'string' &&
++      stringTrim(stdout) === config.expectedResult(cell);
++  }
++
++  function assertLiveDisposition(liveEvidence, matrixCellIndex) {
++    const cell = config.cells[matrixCellIndex];
++    if (
++      !cell ||
++      liveEvidence.version !== config.liveEvidenceVersion ||
++      liveEvidence.matrixCellIndex !== matrixCellIndex ||
++      liveEvidence.candidate.architectureId !== 'lagrange' ||
++      liveEvidence.candidate.capacityAdapterEngaged !== false ||
++      liveEvidence.alternative.architectureId !== 'postgresql' ||
++      liveEvidence.alternative.engaged !== true
++    ) {
++      fail(text(config, 'attempt:live_evidence_invalid'));
++    }
++    config.assertLiveExtra(liveEvidence, fail);
++    return cell;
++  }
++
++  function assertLiveEvidence(liveEvidence, matrixCellIndex) {
++    assertBenchmarkResourceExactRecord(
++      liveEvidence,
++      liveEvidenceKeys,
++      text(config, 'liveEvidence'),
++    );
++    assertTimestamp(
++      liveEvidence.startedAt,
++      text(config, 'liveEvidence.startedAt'),
++    );
++    assertTimestamp(
++      liveEvidence.endedAt,
++      text(config, 'liveEvidence.endedAt'),
++    );
++    if (dateParse(liveEvidence.endedAt) < dateParse(liveEvidence.startedAt)) {
++      fail(text(config, 'attempt:live_evidence_invalid'));
++    }
++    assertBenchmarkResourceExactRecord(
++      liveEvidence.candidate,
++      liveCandidateKeys,
++      text(config, 'liveEvidence.candidate'),
++    );
++    assertBenchmarkResourceExactRecord(
++      liveEvidence.alternative,
++      liveAlternativeKeys,
++      text(config, 'liveEvidence.alternative'),
++    );
++    assertBenchmarkResourceExactRecord(
++      liveEvidence.oracle,
++      oracleKeys,
++      text(config, 'liveEvidence.oracle'),
++    );
++    const cell = assertLiveDisposition(liveEvidence, matrixCellIndex);
++    if (
++      liveEvidence.oracle.name !== config.oracleName ||
++      liveEvidence.oracle.expected !== config.expectedResult(cell) ||
++      liveEvidence.oracle.passed !== true ||
++      !evaluateOracle(cell, liveEvidence.alternative.stdout)
++    ) {
++      fail(text(config, 'attempt:live_evidence_invalid'));
++    }
++    assertBenchmarkResourceText(
++      liveEvidence.candidate.reason,
++      text(config, 'liveEvidence.candidate.reason'),
++    );
++    const witness = liveEvidence.candidate[config.witnessField];
++    assertBenchmarkResourceCanonicalData(witness);
++    if (
++      digestBenchmarkSemanticData(witness) !== witnessDigests[matrixCellIndex]
++    ) {
++      fail(text(config, 'attempt:live_evidence_invalid'));
++    }
++  }
++
++  function calibrationComponent(calibration, componentId) {
++    const components = calibration.payload.components;
++    for (let index = 0; index < components.length; index += 1) {
++      if (components[index].componentId === componentId) {
++        return components[index];
++      }
++    }
++    return null;
++  }
++
++  function assertCalibration(calibration, root, liveEvidence) {
++    const inspection =
++      inspectBenchmarkResourceLiveCalibrationArtifact(calibration);
++    const database = calibrationComponent(
++      calibration,
++      'postgresql-database',
++    );
++    const client = calibrationComponent(calibration, 'postgresql-client');
++    const startedAt = dateParse(liveEvidence.startedAt);
++    const endedAt = dateParse(liveEvidence.endedAt);
++    if (
++      calibration.kind !== BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_CALIBRATION ||
++      !inspection.valid ||
++      calibration.payload.sourceRevision !== root.payload.sourceRevision ||
++      !database ||
++      !client ||
++      database.sideId !== 'postgresql' ||
++      client.sideId !== 'postgresql' ||
++      database.containerId !== liveEvidence.alternative.databaseContainerId ||
++      client.containerId !== liveEvidence.alternative.clientContainerId ||
++      startedAt < numberMax(database.start.timestamp, client.start.timestamp) ||
++      endedAt > numberMin(database.end.timestamp, client.end.timestamp)
++    ) {
++      fail(text(config, 'calibration:external_observation_required'));
++    }
++  }
++
++  function assertSource(input) {
++    const {
++      source,
++      cell,
++      matrixCell,
++      matrix,
++      root,
++      owners,
++      calibration,
++      index,
++    } = input;
++    const payload = source.payload;
++    const liveEvidence = payload.liveEvidence;
++    assertLiveEvidence(liveEvidence, index);
++    if (
++      payload.version !== config.sourceVersion ||
++      payload.matrixId !== matrix.payload.matrixId ||
++      payload.cellId !== matrixCell.cellId ||
++      payload.pairId !== cell.payload.pairId ||
++      payload.matrixCellIndex !== index ||
++      payload.runId !== cell.payload.runId ||
++      !exactValues(payload.sideIds, cell.payload.sideIds) ||
++      !exactValues(payload.sideIds, matrix.payload.sideIds) ||
++      !exactValues(payload.reasonCodes, cell.payload.reasonCodes) ||
++      payload.state !== BENCHMARK_RESOURCE_CELL_STATE.NON_MEASURING ||
++      payload.candidateEngaged !== false ||
++      payload.alternativeEngaged !== true ||
++      payload.reasonCodes[0] !== config.reason ||
++      payload.workloadManifestDigest !==
++        matrix.payload.workloadManifestDigest ||
++      payload.alternativeTopologyDigest !==
++        matrix.payload.alternativeTopologyDigest ||
++      payload.preregistrationDigest !==
++        matrix.payload.preregistrationDigest ||
++      liveEvidence.alternative.sql !== config.sql(config.cells[index]) ||
++      liveEvidence.candidate.reason !==
++        owners.topology.payload.candidate.reason ||
++      liveEvidence.alternative.image !==
++        owners.topology.payload.alternative.image ||
++      liveEvidence.alternative.imageId !==
++        owners.topology.payload.alternative.imageId ||
++      liveEvidence.alternative.databaseContainerId !==
++        owners.topology.payload.alternative.databaseContainerId ||
++      liveEvidence.alternative.clientContainerId !==
++        owners.topology.payload.alternative.clientContainerId ||
++      !exactValues(source.references, [
++        payload.calibrationDigest,
++        payload.workloadManifestDigest,
++        payload.alternativeTopologyDigest,
++        payload.preregistrationDigest,
++      ])
++    ) {
++      fail();
++    }
++    assertCalibration(calibration, root, liveEvidence);
++  }
++
++  return objectFreeze({
++    assertLiveEvidence,
++    assertOwners,
++    assertSource,
++    evaluateOracle,
++  });
++}
+diff --git a/test/distributed/harness/comparative-efficiency-postgres-nonmeasuring-evidence.js b/test/distributed/harness/comparative-efficiency-postgres-nonmeasuring-evidence.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..0cb8f0d6c7807824988f2a1bd688d845a4fab951
+--- /dev/null
++++ b/test/distributed/harness/comparative-efficiency-postgres-nonmeasuring-evidence.js
+@@ -0,0 +1,575 @@
++import {types} from 'node:util';
++import {
++  appendOwnArrayValue,
++  digestBenchmarkSemanticData,
++} from './benchmark-semantic-integrity.js';
++import {
++  createBenchmarkResourceComponentInventory,
++} from './benchmark-resource-accounting.js';
++import {
++  createBenchmarkResourcePriceSheet,
++} from './benchmark-resource-cost-and-effects.js';
++import {
++  assertBenchmarkResourceArray,
++  assertBenchmarkResourceBytes,
++  assertBenchmarkResourceCanonicalData,
++  assertBenchmarkResourceExactRecord,
++  assertBenchmarkResourceText,
++  createBenchmarkResourceMemoryResolver,
++  parseBenchmarkResourceArtifact,
++} from './benchmark-resource-evidence-data.js';
++import {
++  createBenchmarkResourceEvidenceRoot,
++  createBenchmarkResourceNonMeasuringCellEvidence,
++  createBenchmarkResourceSourceArtifact,
++  validateBenchmarkResourceEvidenceRoot,
++} from './benchmark-resource-evidence-root.js';
++import {
++  inspectBenchmarkResourceLiveCalibrationArtifact,
++} from './benchmark-resource-live-observation-authority.js';
++import {
++  createBenchmarkResourceMatrixManifest,
++} from './benchmark-resource-matrix-manifest.js';
++import {
++  BENCHMARK_RESOURCE_ARTIFACT_KIND,
++  BENCHMARK_RESOURCE_CELL_STATE,
++} from './benchmark-resource-contract-constants.js';
++
++const inputKeys = Object.freeze([
++  'matrixId',
++  'pairId',
++  'sideIds',
++  'sourceRevision',
++  'producedAt',
++  'validUntil',
++  'workloadManifest',
++  'alternativeTopology',
++  'preregistration',
++  'inventoryId',
++  'inventorySides',
++  'priceSheet',
++  'calibrationArtifact',
++  'attempts',
++]);
++const attemptKeys = Object.freeze([
++  'matrixCellIndex',
++  'runId',
++  'candidateEngaged',
++  'alternativeEngaged',
++  'reasonCodes',
++  'liveEvidence',
++]);
++const sourcePayloadKeys = Object.freeze([
++  'version',
++  'matrixId',
++  'cellId',
++  'pairId',
++  'runId',
++  'sideIds',
++  'matrixCellIndex',
++  'state',
++  'candidateEngaged',
++  'alternativeEngaged',
++  'reasonCodes',
++  'liveEvidence',
++  'calibrationDigest',
++  'workloadManifestDigest',
++  'alternativeTopologyDigest',
++  'preregistrationDigest',
++]);
++const receiptKeys = Object.freeze(['rootDigest', 'resolver']);
++const resolverKeys = Object.freeze(['resolve']);
++const maximumReasonCodes = 16;
++const dataValueKey = 'value';
++const bufferFrom = Buffer.from;
++const mapGet = Function.call.bind(Map.prototype.get);
++const mapHas = Function.call.bind(Map.prototype.has);
++const mapSet = Function.call.bind(Map.prototype.set);
++const objectFreeze = Object.freeze;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const reflectApply = Reflect.apply;
++
++function text(config, suffix) {
++  return `${config.pathPrefix}.${suffix}`;
++}
++
++function arrayContains(values, expected) {
++  for (let index = 0; index < values.length; index += 1) {
++    if (values[index] === expected) return true;
++  }
++  return false;
++}
++
++function rootReceipt(artifacts, root) {
++  const resolvedArtifacts = [];
++  for (let index = 0; index < artifacts.length; index += 1) {
++    appendOwnArrayValue(resolvedArtifacts, artifacts[index]);
++  }
++  appendOwnArrayValue(resolvedArtifacts, root);
++  return {
++    rootDigest: root.digest,
++    resolver: createBenchmarkResourceMemoryResolver(resolvedArtifacts),
++  };
++}
++
++export function assembleComparativePostgresNonMeasuringEvidence({
++  input,
++  attempts,
++  sideIds,
++  matrix,
++  workloadManifest,
++  alternativeTopology,
++  preregistration,
++  sourcePayloadForAttempt,
++}) {
++  const inventory = createBenchmarkResourceComponentInventory({
++    inventoryId: input.inventoryId,
++    matrixId: input.matrixId,
++    sides: input.inventorySides,
++  });
++  const price = createBenchmarkResourcePriceSheet(input.priceSheet);
++  const engagements = [];
++  const cells = [];
++  for (let index = 0; index < attempts.length; index += 1) {
++    const attempt = attempts[index];
++    const matrixCell = matrix.artifact.payload.cells[index];
++    const engagement = createBenchmarkResourceSourceArtifact(
++      BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
++      sourcePayloadForAttempt(attempt, matrixCell),
++      [
++        input.calibrationArtifact.digest,
++        workloadManifest.digest,
++        alternativeTopology.digest,
++        preregistration.digest,
++      ],
++    );
++    appendOwnArrayValue(engagements, engagement);
++    appendOwnArrayValue(
++      cells,
++      createBenchmarkResourceNonMeasuringCellEvidence({
++        matrixManifestDigest: matrix.digest,
++        matrixId: input.matrixId,
++        cellId: matrixCell.cellId,
++        pairId: input.pairId,
++        runId: attempt.runId,
++        sideIds,
++        reasonCodes: attempt.reasonCodes,
++        sourceDigests: [engagement.digest],
++        sourceRevision: input.sourceRevision,
++        producedAt: input.producedAt,
++        validUntil: input.validUntil,
++      }),
++    );
++  }
++  const artifacts = [
++    workloadManifest,
++    alternativeTopology,
++    preregistration,
++    matrix,
++    inventory,
++    price,
++    input.calibrationArtifact,
++  ];
++  const cellEvidenceDigests = [];
++  for (let index = 0; index < engagements.length; index += 1) {
++    appendOwnArrayValue(artifacts, engagements[index]);
++  }
++  for (let index = 0; index < cells.length; index += 1) {
++    appendOwnArrayValue(artifacts, cells[index]);
++    appendOwnArrayValue(cellEvidenceDigests, cells[index].digest);
++  }
++  const root = createBenchmarkResourceEvidenceRoot({
++    matrixManifestDigest: matrix.digest,
++    componentInventoryDigest: inventory.digest,
++    priceSheetDigest: price.digest,
++    cellEvidenceDigests,
++    sourceRevision: input.sourceRevision,
++    producedAt: input.producedAt,
++    validUntil: input.validUntil,
++    artifacts,
++  });
++  return {
++    receipt: rootReceipt(artifacts, root),
++    root,
++    artifacts,
++    matrix,
++    inventory,
++    price,
++    calibration: input.calibrationArtifact,
++    engagements,
++    cells,
++  };
++}
++
++export function createComparativePostgresNonMeasuringEvidenceOwner(config) {
++  function fail(message) {
++    throw new TypeError(message);
++  }
++
++  function ownDataValue(value, key, path) {
++    const descriptor = objectGetOwnPropertyDescriptor(value, key);
++    if (!descriptor || !objectHasOwn(descriptor, dataValueKey)) {
++      fail(`${path}:own_data_property_required`);
++    }
++    return descriptor.value;
++  }
++
++  function rootInvalid() {
++    return text(config, 'root:invalid');
++  }
++
++  function safeErrorMessage(error) {
++    if (!error || typeof error !== 'object' || types.isProxy(error)) {
++      return rootInvalid();
++    }
++    const descriptor = objectGetOwnPropertyDescriptor(error, 'message');
++    if (
++      descriptor &&
++      objectHasOwn(descriptor, dataValueKey) &&
++      typeof descriptor.value === 'string'
++    ) {
++      return descriptor.value;
++    }
++    return rootInvalid();
++  }
++
++  function copySideIds(sideIds) {
++    assertBenchmarkResourceArray(sideIds, text(config, 'sideIds'), 2);
++    if (sideIds.length !== 2 || sideIds[0] === sideIds[1]) {
++      fail(text(config, 'sideIds:distinct_exact_pair_required'));
++    }
++    const copy = [];
++    for (let index = 0; index < sideIds.length; index += 1) {
++      assertBenchmarkResourceText(
++        sideIds[index],
++        text(config, `sideIds.${index}`),
++      );
++      appendOwnArrayValue(copy, sideIds[index]);
++    }
++    return copy;
++  }
++
++  function copyReasonCodes(reasonCodes, index) {
++    const path = text(config, `attempts.${index}.reasonCodes`);
++    assertBenchmarkResourceArray(reasonCodes, path, maximumReasonCodes);
++    if (
++      reasonCodes.length === 0 ||
++      !arrayContains(reasonCodes, config.reason)
++    ) {
++      fail(text(config, 'attempt:candidate_absence_reason_required'));
++    }
++    const copy = [];
++    for (let reasonIndex = 0;
++      reasonIndex < reasonCodes.length;
++      reasonIndex += 1) {
++      assertBenchmarkResourceText(
++        reasonCodes[reasonIndex],
++        `${path}.${reasonIndex}`,
++      );
++      appendOwnArrayValue(copy, reasonCodes[reasonIndex]);
++    }
++    return copy;
++  }
++
++  function copyAttempts(attempts) {
++    assertBenchmarkResourceArray(
++      attempts,
++      text(config, 'attempts'),
++      config.cells.length,
++    );
++    if (attempts.length !== config.cells.length) {
++      fail(text(config, 'attempts:exact_matrix_required'));
++    }
++    const copy = [];
++    for (let index = 0; index < attempts.length; index += 1) {
++      const path = text(config, `attempts.${index}`);
++      const attempt = attempts[index];
++      assertBenchmarkResourceExactRecord(attempt, attemptKeys, path);
++      if (attempt.matrixCellIndex !== index) {
++        fail(text(config, 'attempts:matrix_cell_order_mismatch'));
++      }
++      assertBenchmarkResourceText(attempt.runId, `${path}.runId`);
++      if (attempt.candidateEngaged !== false) {
++        fail(text(config, 'attempt:candidate_must_be_absent'));
++      }
++      if (attempt.alternativeEngaged !== true) {
++        fail(text(config, 'attempt:alternative_must_be_engaged'));
++      }
++      assertBenchmarkResourceCanonicalData(attempt.liveEvidence);
++      config.admission.assertLiveEvidence(attempt.liveEvidence, index);
++      appendOwnArrayValue(copy, {
++        matrixCellIndex: index,
++        runId: attempt.runId,
++        candidateEngaged: false,
++        alternativeEngaged: true,
++        reasonCodes: copyReasonCodes(attempt.reasonCodes, index),
++        liveEvidence: attempt.liveEvidence,
++      });
++    }
++    return copy;
++  }
++
++  function sourcePayload(input, attempt, cell, sideIds, owners) {
++    return {
++      version: config.sourceVersion,
++      matrixId: input.matrixId,
++      cellId: cell.cellId,
++      pairId: input.pairId,
++      runId: attempt.runId,
++      sideIds,
++      matrixCellIndex: attempt.matrixCellIndex,
++      state: BENCHMARK_RESOURCE_CELL_STATE.NON_MEASURING,
++      candidateEngaged: false,
++      alternativeEngaged: true,
++      reasonCodes: attempt.reasonCodes,
++      liveEvidence: attempt.liveEvidence,
++      calibrationDigest: input.calibrationArtifact.digest,
++      workloadManifestDigest: owners.workloadManifest.digest,
++      alternativeTopologyDigest: owners.alternativeTopology.digest,
++      preregistrationDigest: owners.preregistration.digest,
++    };
++  }
++
++  function createEvidence(input) {
++    assertBenchmarkResourceExactRecord(input, inputKeys, config.pathPrefix);
++    const textFields = [
++      'matrixId',
++      'pairId',
++      'sourceRevision',
++      'producedAt',
++      'validUntil',
++      'inventoryId',
++    ];
++    for (let index = 0; index < textFields.length; index += 1) {
++      const field = textFields[index];
++      assertBenchmarkResourceText(input[field], text(config, field));
++    }
++    const sideIds = copySideIds(input.sideIds);
++    const attempts = copyAttempts(input.attempts);
++    const calibrationInspection =
++      inspectBenchmarkResourceLiveCalibrationArtifact(
++        input.calibrationArtifact.artifact,
++      );
++    if (
++      !calibrationInspection.valid ||
++      input.calibrationArtifact.artifact.payload.sourceRevision !==
++        input.sourceRevision
++    ) {
++      fail(text(config, 'calibration:external_observation_required'));
++    }
++    const workloadManifest = createBenchmarkResourceSourceArtifact(
++      BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
++      input.workloadManifest,
++    );
++    const alternativeTopology = createBenchmarkResourceSourceArtifact(
++      BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
++      input.alternativeTopology,
++    );
++    const preregistration = createBenchmarkResourceSourceArtifact(
++      BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
++      input.preregistration,
++    );
++    const matrix = createBenchmarkResourceMatrixManifest({
++      matrixId: input.matrixId,
++      axes: config.axes,
++      sideIds,
++      workloadManifestDigest: workloadManifest.digest,
++      alternativeTopologyDigest: alternativeTopology.digest,
++      preregistrationDigest: preregistration.digest,
++    });
++    config.admission.assertOwners({
++      workload: workloadManifest.artifact,
++      topology: alternativeTopology.artifact,
++      preregistration: preregistration.artifact,
++    }, matrix.artifact);
++    return assembleComparativePostgresNonMeasuringEvidence({
++      input,
++      attempts,
++      sideIds,
++      matrix,
++      workloadManifest,
++      alternativeTopology,
++      preregistration,
++      sourcePayloadForAttempt(attempt, matrixCell) {
++        return sourcePayload(input, attempt, matrixCell, sideIds, {
++          workloadManifest,
++          alternativeTopology,
++          preregistration,
++        });
++      },
++    });
++  }
++
++  function resolveArtifact(resolved, digest) {
++    const bytes = mapGet(resolved, digest);
++    if (bytes === undefined) {
++      fail(text(config, 'cells:live_attempt_source_mismatch'));
++    }
++    return parseBenchmarkResourceArtifact(bytes, digest);
++  }
++
++  function captureValidatedArtifacts(receipt) {
++    assertBenchmarkResourceExactRecord(receipt, receiptKeys, rootInvalid());
++    const rootDigest = ownDataValue(receipt, 'rootDigest', rootInvalid());
++    const resolver = ownDataValue(receipt, 'resolver', rootInvalid());
++    assertBenchmarkResourceExactRecord(resolver, resolverKeys, rootInvalid());
++    const resolve = ownDataValue(resolver, 'resolve', rootInvalid());
++    if (typeof resolve !== 'function') fail(rootInvalid());
++    const resolved = new Map();
++    const capturedResolver = {
++      resolve(digest) {
++        if (mapHas(resolved, digest)) {
++          return bufferFrom(mapGet(resolved, digest));
++        }
++        const bytes = reflectApply(resolve, resolver, [digest]);
++        if (bytes !== undefined) {
++          assertBenchmarkResourceBytes(bytes, rootInvalid());
++          mapSet(resolved, digest, bufferFrom(bytes));
++        }
++        return bytes;
++      },
++    };
++    const validation = validateBenchmarkResourceEvidenceRoot({
++      rootDigest,
++      resolver: capturedResolver,
++    });
++    if (!validation.valid) fail(`${rootInvalid()}:${validation.reason}`);
++    return {rootDigest, resolved};
++  }
++
++  function inspectCellSource(
++    resolved,
++    cell,
++    matrixCell,
++    matrix,
++    root,
++    owners,
++    index,
++  ) {
++    if (
++      cell.payload.state !== BENCHMARK_RESOURCE_CELL_STATE.NON_MEASURING ||
++      cell.payload.cellId !== matrixCell.cellId ||
++      cell.payload.sourceDigests.length !== 1 ||
++      !arrayContains(cell.payload.reasonCodes, config.reason)
++    ) {
++      fail(text(config, 'cells:explicit_non_measuring_required'));
++    }
++    const source = resolveArtifact(resolved, cell.payload.sourceDigests[0]);
++    if (source.kind !== BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT) {
++      fail(text(config, 'cells:live_attempt_source_mismatch'));
++    }
++    assertBenchmarkResourceExactRecord(
++      source.payload,
++      sourcePayloadKeys,
++      text(config, 'cells:live_attempt_source_mismatch'),
++    );
++    const calibration = resolveArtifact(
++      resolved,
++      source.payload.calibrationDigest,
++    );
++    config.admission.assertSource({
++      source,
++      cell,
++      matrixCell,
++      matrix,
++      root,
++      owners,
++      calibration,
++      index,
++    });
++  }
++
++  function emptyInspection(reason) {
++    return {
++      valid: false,
++      reason,
++      complete: false,
++      claimEligible: false,
++      claimDisposition: null,
++      measuringCellCount: 0,
++      nonMeasuringCellCount: 0,
++      alternativeOraclePassCount: 0,
++      [config.witnessCountField]: 0,
++      matrixId: null,
++      matrixDigest: null,
++      rootDigest: null,
++    };
++  }
++
++  function inspectEvidence(receipt) {
++    try {
++      const capture = captureValidatedArtifacts(receipt);
++      const root = resolveArtifact(capture.resolved, capture.rootDigest);
++      const matrix = resolveArtifact(
++        capture.resolved,
++        root.payload.matrixManifestDigest,
++      );
++      if (
++        digestBenchmarkSemanticData(matrix.payload.axes) !==
++          digestBenchmarkSemanticData(config.axes) ||
++        matrix.payload.cells.length !== config.cells.length
++      ) {
++        fail(text(config, 'matrix:exact_cartesian_axes_required'));
++      }
++      const owners = {
++        workload: resolveArtifact(
++          capture.resolved,
++          matrix.payload.workloadManifestDigest,
++        ),
++        topology: resolveArtifact(
++          capture.resolved,
++          matrix.payload.alternativeTopologyDigest,
++        ),
++        preregistration: resolveArtifact(
++          capture.resolved,
++          matrix.payload.preregistrationDigest,
++        ),
++      };
++      config.admission.assertOwners(owners, matrix);
++      for (let index = 0;
++        index < root.payload.cellEvidenceDigests.length;
++        index += 1) {
++        const cell = resolveArtifact(
++          capture.resolved,
++          root.payload.cellEvidenceDigests[index],
++        );
++        inspectCellSource(
++          capture.resolved,
++          cell,
++          matrix.payload.cells[index],
++          matrix,
++          root,
++          owners,
++          index,
++        );
++      }
++      if (root.payload.cellEvidenceDigests.length !== config.cells.length) {
++        fail(text(config, 'cells:explicit_non_measuring_required'));
++      }
++      return {
++        valid: true,
++        reason: 'valid',
++        complete: true,
++        claimEligible: false,
++        claimDisposition: config.disposition,
++        measuringCellCount: 0,
++        nonMeasuringCellCount: config.cells.length,
++        alternativeOraclePassCount: config.cells.length,
++        [config.witnessCountField]: config.cells.length,
++        matrixId: matrix.payload.matrixId,
++        matrixDigest: root.payload.matrixManifestDigest,
++        rootDigest: capture.rootDigest,
++      };
++    } catch (error) {
++      return emptyInspection(safeErrorMessage(error));
++    }
++  }
++
++  function evidenceDigest(evidence) {
++    if (!objectHasOwn(evidence, 'root')) fail(rootInvalid());
++    return digestBenchmarkSemanticData(evidence.root.artifact.payload);
++  }
++
++  return objectFreeze({createEvidence, inspectEvidence, evidenceDigest});
++}
+diff --git a/test/distributed/harness/comparative-efficiency-request-enrichment-admission.js b/test/distributed/harness/comparative-efficiency-request-enrichment-admission.js
+index 5d08d2d4c01b180884ca430c25f7d140b78c920f..1e4042e83599cc344279cbe43c5ee5f4ba38938a 100644
+--- a/test/distributed/harness/comparative-efficiency-request-enrichment-admission.js
++++ b/test/distributed/harness/comparative-efficiency-request-enrichment-admission.js
+@@ -1,19 +1,6 @@
+ import {
+-  digestBenchmarkSemanticData,
+-} from './benchmark-semantic-integrity.js';
+-import {
+-  assertBenchmarkResourceArray,
+-  assertBenchmarkResourceCanonicalData,
+-  assertBenchmarkResourceExactRecord,
+-  assertBenchmarkResourceText,
+-} from './benchmark-resource-evidence-data.js';
+-import {
+-  inspectBenchmarkResourceLiveCalibrationArtifact,
+-} from './benchmark-resource-live-observation-authority.js';
+-import {
+-  BENCHMARK_RESOURCE_ARTIFACT_KIND,
+-  BENCHMARK_RESOURCE_CELL_STATE,
+-} from './benchmark-resource-contract-constants.js';
++  createComparativePostgresNonMeasuringAdmission,
++} from './comparative-efficiency-postgres-nonmeasuring-admission.js';
+ import {
+   buildComparativeRequestEnrichmentAffinityWitness,
+ } from './comparative-efficiency-request-enrichment-affinity-witness.js';
+@@ -26,529 +13,60 @@ import {
+   comparativeRequestEnrichmentSql,
+ } from './comparative-efficiency-request-enrichment-constants.js';
+ 
+-const localText = Object.freeze({
+-  INVALID: 'requestEnrichment.cells:live_attempt_source_mismatch',
+-  CALIBRATION_INVALID:
+-    'requestEnrichment.calibration:external_observation_required',
+-  LIVE_EVIDENCE_INVALID:
+-    'requestEnrichment.attempt:live_evidence_invalid',
+-  WORKLOAD_VERSION: 'comparative-request-enrichment-workloads-v1',
+-  TOPOLOGY_VERSION: 'comparative-request-enrichment-topology-v1',
+-  PREREGISTRATION_VERSION:
++const owner = createComparativePostgresNonMeasuringAdmission({
++  pathPrefix: 'requestEnrichment',
++  workloadVersion: 'comparative-request-enrichment-workloads-v1',
++  topologyVersion: 'comparative-request-enrichment-topology-v1',
++  preregistrationVersion:
+     'comparative-request-enrichment-preregistration-v1',
+-  LIVE_EVIDENCE_VERSION:
+-    'comparative-request-enrichment-live-evidence-v1',
+-  SOURCE_VERSION: 'comparative-request-enrichment-live-attempt-v1',
+-  SELECTION_POLICY: 'complete_cartesian_matrix',
+-  OUTCOME_POLICY: 'direction_neutral',
+-  INVALID_CELL_POLICY: 'publish_explicit_non_measuring',
+-  CANDIDATE: 'lagrange',
+-  ALTERNATIVE: 'postgresql',
+-  DATABASE_COMPONENT: 'postgresql-database',
+-  CLIENT_COMPONENT: 'postgresql-client',
+-  ORACLE: 'row_count_and_sum_exact',
+-  PATH_WORKLOAD: 'requestEnrichment.workload',
+-  PATH_WORKLOAD_CELLS: 'requestEnrichment.workload.cells',
+-  PATH_TOPOLOGY: 'requestEnrichment.topology',
+-  PATH_TOPOLOGY_CANDIDATE: 'requestEnrichment.topology.candidate',
+-  PATH_TOPOLOGY_ALTERNATIVE: 'requestEnrichment.topology.alternative',
+-  PATH_TOPOLOGY_CANDIDATE_REASON:
+-    'requestEnrichment.topology.candidate.reason',
+-  PATH_PREREGISTRATION: 'requestEnrichment.preregistration',
+-  PATH_LIVE: 'requestEnrichment.liveEvidence',
+-  PATH_LIVE_STARTED_AT: 'requestEnrichment.liveEvidence.startedAt',
+-  PATH_LIVE_ENDED_AT: 'requestEnrichment.liveEvidence.endedAt',
+-  PATH_LIVE_CANDIDATE: 'requestEnrichment.liveEvidence.candidate',
+-  PATH_LIVE_ALTERNATIVE: 'requestEnrichment.liveEvidence.alternative',
+-  PATH_LIVE_ORACLE: 'requestEnrichment.liveEvidence.oracle',
+-  PATH_LIVE_CANDIDATE_REASON:
+-    'requestEnrichment.liveEvidence.candidate.reason',
++  liveEvidenceVersion: 'comparative-request-enrichment-live-evidence-v1',
++  sourceVersion: 'comparative-request-enrichment-live-attempt-v1',
++  axes: COMPARATIVE_REQUEST_ENRICHMENT_AXES,
++  cells: COMPARATIVE_REQUEST_ENRICHMENT_CELLS,
++  reason: COMPARATIVE_REQUEST_ENRICHMENT_REASON,
++  ownerIdsField: 'affinityOwnerIds',
++  ownerIds: COMPARATIVE_REQUEST_ENRICHMENT_AFFINITY_OWNER_IDS,
++  witnessField: 'affinityOwnerWitness',
++  buildWitness: buildComparativeRequestEnrichmentAffinityWitness,
++  oracleName: 'row_count_and_sum_exact',
++  expectedResult: comparativeRequestEnrichmentExpectedResult,
++  sql: comparativeRequestEnrichmentSql,
++  workloadCellKeys: Object.freeze([
++    'datasetSize',
++    'fanout',
++    'readLocality',
++    'skew',
++    'requestCount',
++    'alternativeSql',
++    'oracleName',
++    'oracleExpected',
++  ]),
++  projectWorkloadCell(cell, alternativeSql, oracleName, oracleExpected) {
++    return {
++      datasetSize: cell.datasetSize,
++      fanout: cell.fanout,
++      readLocality: cell.readLocality,
++      skew: cell.skew,
++      requestCount: cell.requestCount,
++      alternativeSql,
++      oracleName,
++      oracleExpected,
++    };
++  },
++  requiredEvidence: Object.freeze([
++    'paired_capacity',
++    'whole_topology_resource_windows',
++    'capacity_uncertainty',
++    'capacity_practical_effect',
++    'cost_practical_effect',
++  ]),
++  liveEvidenceExtraKeys: Object.freeze([]),
++  assertLiveExtra() {},
+ });
+ 
+-const workloadKeys =
+-  Object.freeze(['version', 'cells', 'selectionPolicy']);
+-const workloadCellKeys = Object.freeze([
+-  'datasetSize',
+-  'fanout',
+-  'readLocality',
+-  'skew',
+-  'requestCount',
+-  'alternativeSql',
+-  'oracleName',
+-  'oracleExpected',
+-]);
+-const topologyKeys = Object.freeze(['version', 'candidate', 'alternative']);
+-const topologyCandidateKeys = Object.freeze([
+-  'architectureId',
+-  'required',
+-  'capacityAdapterEngaged',
+-  'reason',
+-]);
+-const topologyAlternativeKeys = Object.freeze([
+-  'architectureId',
+-  'image',
+-  'imageId',
+-  'databaseContainerId',
+-  'clientContainerId',
+-  'network',
+-]);
+-const preregistrationKeys = Object.freeze([
+-  'version',
+-  'axes',
+-  'sideIds',
+-  'outcomePolicy',
+-  'invalidCellPolicy',
+-  'candidateEngagementRequired',
+-  'affinityOwnerIds',
+-  'requiredEvidence',
+-]);
+-const liveEvidenceKeys = Object.freeze([
+-  'version',
+-  'matrixCellIndex',
+-  'startedAt',
+-  'endedAt',
+-  'candidate',
+-  'alternative',
+-  'oracle',
+-]);
+-const liveCandidateKeys = Object.freeze([
+-  'architectureId',
+-  'capacityAdapterEngaged',
+-  'reason',
+-  'affinityOwnerWitness',
+-]);
+-const liveAlternativeKeys = Object.freeze([
+-  'architectureId',
+-  'engaged',
+-  'image',
+-  'imageId',
+-  'databaseContainerId',
+-  'clientContainerId',
+-  'sql',
+-  'stdout',
+-]);
+-const oracleKeys = Object.freeze([
+-  'name',
+-  'expected',
+-  'passed',
+-]);
+-const requiredEvidence = Object.freeze([
+-  'paired_capacity',
+-  'whole_topology_resource_windows',
+-  'capacity_uncertainty',
+-  'capacity_practical_effect',
+-  'cost_practical_effect',
+-]);
+-const timestampPattern =
+-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
+-const dateParse = Date.parse;
+-const numberIsFinite = Number.isFinite;
+-const numberMax = Math.max;
+-const numberMin = Math.min;
+-const objectCreate = Object.create;
+-const objectDefineProperty = Object.defineProperty;
+-const objectFreeze = Object.freeze;
+-const regexpTest = Function.call.bind(RegExp.prototype.test);
+-const stringTrim = Function.call.bind(String.prototype.trim);
+-
+-function buildExpectedAffinityWitnessDigests() {
+-  const digests = objectCreate(null);
+-  for (let index = 0;
+-    index < COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length;
+-    index += 1) {
+-    objectDefineProperty(digests, index, {
+-      enumerable: true,
+-      value: digestBenchmarkSemanticData(
+-        buildComparativeRequestEnrichmentAffinityWitness(
+-          COMPARATIVE_REQUEST_ENRICHMENT_CELLS[index],
+-        ),
+-      ),
+-    });
+-  }
+-  return objectFreeze(digests);
+-}
+-
+-const expectedAffinityWitnessDigests =
+-  buildExpectedAffinityWitnessDigests();
+-
+-function fail(message = localText.INVALID) {
+-  throw new TypeError(message);
+-}
+-
+-function exactValues(actual, expected) {
+-  if (actual.length !== expected.length) return false;
+-  for (let index = 0; index < actual.length; index += 1) {
+-    if (actual[index] !== expected[index]) return false;
+-  }
+-  return true;
+-}
+-
+-function assertTimestamp(value, path) {
+-  if (
+-    typeof value !== 'string' ||
+-    !regexpTest(timestampPattern, value) ||
+-    !numberIsFinite(dateParse(value))
+-  ) {
+-    fail(`${path}:iso_timestamp_required`);
+-  }
+-}
+-
+-function expectedWorkloadCell(cell) {
+-  return {
+-    datasetSize: cell.datasetSize,
+-    fanout: cell.fanout,
+-    readLocality: cell.readLocality,
+-    skew: cell.skew,
+-    requestCount: cell.requestCount,
+-    alternativeSql: comparativeRequestEnrichmentSql(cell),
+-    oracleName: localText.ORACLE,
+-    oracleExpected: comparativeRequestEnrichmentExpectedResult(cell),
+-  };
+-}
+-
+-function assertWorkload(workload) {
+-  if (workload.kind !== BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST) {
+-    fail();
+-  }
+-  assertBenchmarkResourceExactRecord(
+-    workload.payload,
+-    workloadKeys,
+-    localText.PATH_WORKLOAD,
+-  );
+-  if (
+-    workload.payload.version !== localText.WORKLOAD_VERSION ||
+-    workload.payload.selectionPolicy !== localText.SELECTION_POLICY
+-  ) {
+-    fail();
+-  }
+-  assertBenchmarkResourceArray(
+-    workload.payload.cells,
+-    localText.PATH_WORKLOAD_CELLS,
+-    COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length,
+-  );
+-  if (
+-    workload.payload.cells.length !==
+-      COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length
+-  ) {
+-    fail();
+-  }
+-  for (let index = 0; index < workload.payload.cells.length; index += 1) {
+-    const actual = workload.payload.cells[index];
+-    const expected = expectedWorkloadCell(
+-      COMPARATIVE_REQUEST_ENRICHMENT_CELLS[index],
+-    );
+-    assertBenchmarkResourceExactRecord(
+-      actual,
+-      workloadCellKeys,
+-      `requestEnrichment.workload.cells.${index}`,
+-    );
+-    if (
+-      digestBenchmarkSemanticData(actual) !==
+-        digestBenchmarkSemanticData(expected)
+-    ) {
+-      fail();
+-    }
+-  }
+-}
+-
+-function assertTopology(topology) {
+-  if (
+-    topology.kind !== BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY
+-  ) {
+-    fail();
+-  }
+-  const payload = topology.payload;
+-  assertBenchmarkResourceExactRecord(
+-    payload,
+-    topologyKeys,
+-    localText.PATH_TOPOLOGY,
+-  );
+-  assertBenchmarkResourceExactRecord(
+-    payload.candidate,
+-    topologyCandidateKeys,
+-    localText.PATH_TOPOLOGY_CANDIDATE,
+-  );
+-  assertBenchmarkResourceExactRecord(
+-    payload.alternative,
+-    topologyAlternativeKeys,
+-    localText.PATH_TOPOLOGY_ALTERNATIVE,
+-  );
+-  if (
+-    payload.version !== localText.TOPOLOGY_VERSION ||
+-    payload.candidate.architectureId !== localText.CANDIDATE ||
+-    payload.candidate.required !== true ||
+-    payload.candidate.capacityAdapterEngaged !== false ||
+-    payload.alternative.architectureId !== localText.ALTERNATIVE
+-  ) {
+-    fail();
+-  }
+-  assertBenchmarkResourceText(
+-    payload.candidate.reason,
+-    localText.PATH_TOPOLOGY_CANDIDATE_REASON,
+-  );
+-  for (let index = 1; index < topologyAlternativeKeys.length; index += 1) {
+-    const key = topologyAlternativeKeys[index];
+-    assertBenchmarkResourceText(
+-      payload.alternative[key],
+-      `requestEnrichment.topology.alternative.${key}`,
+-    );
+-  }
+-}
+-
+-function assertPreregistration(preregistration, matrix) {
+-  if (
+-    preregistration.kind !==
+-      BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION
+-  ) {
+-    fail();
+-  }
+-  const payload = preregistration.payload;
+-  assertBenchmarkResourceExactRecord(
+-    payload,
+-    preregistrationKeys,
+-    localText.PATH_PREREGISTRATION,
+-  );
+-  if (
+-    payload.version !== localText.PREREGISTRATION_VERSION ||
+-    payload.outcomePolicy !== localText.OUTCOME_POLICY ||
+-    payload.invalidCellPolicy !== localText.INVALID_CELL_POLICY ||
+-    payload.candidateEngagementRequired !== true ||
+-    !exactValues(payload.sideIds, matrix.payload.sideIds) ||
+-    !exactValues(payload.requiredEvidence, requiredEvidence) ||
+-    digestBenchmarkSemanticData(payload.axes) !==
+-      digestBenchmarkSemanticData(COMPARATIVE_REQUEST_ENRICHMENT_AXES) ||
+-    digestBenchmarkSemanticData(payload.affinityOwnerIds) !==
+-      digestBenchmarkSemanticData(
+-        COMPARATIVE_REQUEST_ENRICHMENT_AFFINITY_OWNER_IDS,
+-      )
+-  ) {
+-    fail();
+-  }
+-}
+-
+-export function assertComparativeRequestEnrichmentOwners(owners, matrix) {
+-  assertWorkload(owners.workload);
+-  assertTopology(owners.topology);
+-  assertPreregistration(owners.preregistration, matrix);
+-}
+-
+-export function evaluateComparativeRequestEnrichmentOracle(cell, stdout) {
+-  return typeof stdout === 'string' &&
+-    stringTrim(stdout) === comparativeRequestEnrichmentExpectedResult(cell);
+-}
+-
+-function assertLiveDisposition(liveEvidence, matrixCellIndex) {
+-  const cell = COMPARATIVE_REQUEST_ENRICHMENT_CELLS[matrixCellIndex];
+-  if (
+-    !cell ||
+-    liveEvidence.version !== localText.LIVE_EVIDENCE_VERSION ||
+-    liveEvidence.matrixCellIndex !== matrixCellIndex ||
+-    liveEvidence.candidate.architectureId !== localText.CANDIDATE ||
+-    liveEvidence.candidate.capacityAdapterEngaged !== false ||
+-    liveEvidence.alternative.architectureId !== localText.ALTERNATIVE ||
+-    liveEvidence.alternative.engaged !== true
+-  ) {
+-    fail(localText.LIVE_EVIDENCE_INVALID);
+-  }
+-  return cell;
+-}
+-
+-function assertLiveOracle(liveEvidence, cell) {
+-  if (
+-    liveEvidence.oracle.name !== localText.ORACLE ||
+-    liveEvidence.oracle.expected !==
+-      comparativeRequestEnrichmentExpectedResult(cell) ||
+-    liveEvidence.oracle.passed !== true ||
+-    !evaluateComparativeRequestEnrichmentOracle(
+-      cell,
+-      liveEvidence.alternative.stdout,
+-    )
+-  ) {
+-    fail(localText.LIVE_EVIDENCE_INVALID);
+-  }
+-}
+-
+-function assertLiveAffinityWitness(liveEvidence, matrixCellIndex) {
+-  assertBenchmarkResourceCanonicalData(
+-    liveEvidence.candidate.affinityOwnerWitness,
+-  );
+-  if (
+-    digestBenchmarkSemanticData(
+-      liveEvidence.candidate.affinityOwnerWitness,
+-    ) !== expectedAffinityWitnessDigests[matrixCellIndex]
+-  ) {
+-    fail(localText.LIVE_EVIDENCE_INVALID);
+-  }
+-}
+-
+-export function assertComparativeRequestEnrichmentLiveEvidence(
+-  liveEvidence,
+-  matrixCellIndex,
+-) {
+-  assertBenchmarkResourceExactRecord(
+-    liveEvidence,
+-    liveEvidenceKeys,
+-    localText.PATH_LIVE,
+-  );
+-  assertTimestamp(
+-    liveEvidence.startedAt,
+-    localText.PATH_LIVE_STARTED_AT,
+-  );
+-  assertTimestamp(
+-    liveEvidence.endedAt,
+-    localText.PATH_LIVE_ENDED_AT,
+-  );
+-  if (dateParse(liveEvidence.endedAt) < dateParse(liveEvidence.startedAt)) {
+-    fail(localText.LIVE_EVIDENCE_INVALID);
+-  }
+-  assertBenchmarkResourceExactRecord(
+-    liveEvidence.candidate,
+-    liveCandidateKeys,
+-    localText.PATH_LIVE_CANDIDATE,
+-  );
+-  assertBenchmarkResourceExactRecord(
+-    liveEvidence.alternative,
+-    liveAlternativeKeys,
+-    localText.PATH_LIVE_ALTERNATIVE,
+-  );
+-  assertBenchmarkResourceExactRecord(
+-    liveEvidence.oracle,
+-    oracleKeys,
+-    localText.PATH_LIVE_ORACLE,
+-  );
+-  const cell = assertLiveDisposition(liveEvidence, matrixCellIndex);
+-  assertLiveOracle(liveEvidence, cell);
+-  assertBenchmarkResourceText(
+-    liveEvidence.candidate.reason,
+-    localText.PATH_LIVE_CANDIDATE_REASON,
+-  );
+-  assertLiveAffinityWitness(liveEvidence, matrixCellIndex);
+-}
+-
+-function calibrationComponent(calibration, componentId) {
+-  const components = calibration.payload.components;
+-  for (let index = 0; index < components.length; index += 1) {
+-    if (components[index].componentId === componentId) {
+-      return components[index];
+-    }
+-  }
+-  return null;
+-}
+-
+-function assertCalibration(calibration, root, liveEvidence) {
+-  const inspection =
+-    inspectBenchmarkResourceLiveCalibrationArtifact(calibration);
+-  const database =
+-    calibrationComponent(calibration, localText.DATABASE_COMPONENT);
+-  const client =
+-    calibrationComponent(calibration, localText.CLIENT_COMPONENT);
+-  const startedAt = dateParse(liveEvidence.startedAt);
+-  const endedAt = dateParse(liveEvidence.endedAt);
+-  if (
+-    calibration.kind !== BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_CALIBRATION ||
+-    !inspection.valid ||
+-    calibration.payload.sourceRevision !== root.payload.sourceRevision ||
+-    !database ||
+-    !client ||
+-    database.sideId !== localText.ALTERNATIVE ||
+-    client.sideId !== localText.ALTERNATIVE ||
+-    database.containerId !== liveEvidence.alternative.databaseContainerId ||
+-    client.containerId !== liveEvidence.alternative.clientContainerId ||
+-    startedAt < numberMax(database.start.timestamp, client.start.timestamp) ||
+-    endedAt > numberMin(database.end.timestamp, client.end.timestamp)
+-  ) {
+-    fail(localText.CALIBRATION_INVALID);
+-  }
+-}
+-
+-function assertSourceIdentity(payload, cell, matrixCell, matrix, index) {
+-  if (
+-    payload.version !== localText.SOURCE_VERSION ||
+-    payload.matrixId !== matrix.payload.matrixId ||
+-    payload.cellId !== matrixCell.cellId ||
+-    payload.pairId !== cell.payload.pairId ||
+-    payload.matrixCellIndex !== index ||
+-    payload.runId !== cell.payload.runId ||
+-    !exactValues(payload.sideIds, cell.payload.sideIds) ||
+-    !exactValues(payload.sideIds, matrix.payload.sideIds) ||
+-    !exactValues(payload.reasonCodes, cell.payload.reasonCodes)
+-  ) {
+-    fail();
+-  }
+-}
+-
+-function assertSourceDisposition(payload) {
+-  if (
+-    payload.state !== BENCHMARK_RESOURCE_CELL_STATE.NON_MEASURING ||
+-    payload.candidateEngaged !== false ||
+-    payload.alternativeEngaged !== true ||
+-    payload.reasonCodes[0] !== COMPARATIVE_REQUEST_ENRICHMENT_REASON
+-  ) {
+-    fail();
+-  }
+-}
+-
+-function assertSourceOwners(payload, matrix) {
+-  if (
+-    payload.workloadManifestDigest !== matrix.payload.workloadManifestDigest ||
+-    payload.alternativeTopologyDigest !==
+-      matrix.payload.alternativeTopologyDigest ||
+-    payload.preregistrationDigest !== matrix.payload.preregistrationDigest
+-  ) {
+-    fail();
+-  }
+-}
+-
+-function assertLiveOwnerJoin(liveEvidence, owners, index) {
+-  if (
+-    liveEvidence.alternative.sql !==
+-      comparativeRequestEnrichmentSql(
+-        COMPARATIVE_REQUEST_ENRICHMENT_CELLS[index],
+-      ) ||
+-    liveEvidence.candidate.reason !== owners.topology.payload.candidate.reason ||
+-    liveEvidence.alternative.image !==
+-      owners.topology.payload.alternative.image ||
+-    liveEvidence.alternative.imageId !==
+-      owners.topology.payload.alternative.imageId ||
+-    liveEvidence.alternative.databaseContainerId !==
+-      owners.topology.payload.alternative.databaseContainerId ||
+-    liveEvidence.alternative.clientContainerId !==
+-      owners.topology.payload.alternative.clientContainerId
+-  ) {
+-    fail();
+-  }
+-}
+-
+-function assertSourceReferences(source, payload) {
+-  if (
+-    !exactValues(source.references, [
+-      payload.calibrationDigest,
+-      payload.workloadManifestDigest,
+-      payload.alternativeTopologyDigest,
+-      payload.preregistrationDigest,
+-    ])
+-  ) {
+-    fail();
+-  }
+-}
+-
+-export function assertComparativeRequestEnrichmentSource({
+-  source,
+-  cell,
+-  matrixCell,
+-  matrix,
+-  root,
+-  owners,
+-  calibration,
+-  index,
+-}) {
+-  const payload = source.payload;
+-  const liveEvidence = payload.liveEvidence;
+-  assertComparativeRequestEnrichmentLiveEvidence(liveEvidence, index);
+-  assertSourceIdentity(payload, cell, matrixCell, matrix, index);
+-  assertSourceDisposition(payload);
+-  assertSourceOwners(payload, matrix);
+-  assertLiveOwnerJoin(liveEvidence, owners, index);
+-  assertSourceReferences(source, payload);
+-  assertCalibration(calibration, root, liveEvidence);
+-}
++export const assertComparativeRequestEnrichmentLiveEvidence =
++  owner.assertLiveEvidence;
++export const assertComparativeRequestEnrichmentOwners = owner.assertOwners;
++export const assertComparativeRequestEnrichmentSource = owner.assertSource;
++export const evaluateComparativeRequestEnrichmentOracle =
++  owner.evaluateOracle;
+diff --git a/test/distributed/harness/comparative-efficiency-request-enrichment.js b/test/distributed/harness/comparative-efficiency-request-enrichment.js
+index b40fe75b05d5a13b702b6998539d3da7b79d9df4..71088ba9190cd46cc198f0ccf6b61271464c69ef 100644
+--- a/test/distributed/harness/comparative-efficiency-request-enrichment.js
++++ b/test/distributed/harness/comparative-efficiency-request-enrichment.js
+@@ -1,39 +1,3 @@
+-import {types} from 'node:util';
+-import {
+-  appendOwnArrayValue,
+-  digestBenchmarkSemanticData,
+-} from './benchmark-semantic-integrity.js';
+-import {
+-  createBenchmarkResourceComponentInventory,
+-} from './benchmark-resource-accounting.js';
+-import {
+-  createBenchmarkResourcePriceSheet,
+-} from './benchmark-resource-cost-and-effects.js';
+-import {
+-  assertBenchmarkResourceArray,
+-  assertBenchmarkResourceBytes,
+-  assertBenchmarkResourceCanonicalData,
+-  assertBenchmarkResourceExactRecord,
+-  assertBenchmarkResourceText,
+-  createBenchmarkResourceMemoryResolver,
+-  parseBenchmarkResourceArtifact,
+-} from './benchmark-resource-evidence-data.js';
+-import {
+-  createBenchmarkResourceEvidenceRoot,
+-  createBenchmarkResourceNonMeasuringCellEvidence,
+-  createBenchmarkResourceSourceArtifact,
+-  validateBenchmarkResourceEvidenceRoot,
+-} from './benchmark-resource-evidence-root.js';
+-import {
+-  inspectBenchmarkResourceLiveCalibrationArtifact,
+-} from './benchmark-resource-live-observation-authority.js';
+-import {
+-  createBenchmarkResourceMatrixManifest,
+-} from './benchmark-resource-matrix-manifest.js';
+-import {
+-  BENCHMARK_RESOURCE_ARTIFACT_KIND,
+-  BENCHMARK_RESOURCE_CELL_STATE,
+-} from './benchmark-resource-contract-constants.js';
+ import {
+   assertComparativeRequestEnrichmentLiveEvidence,
+   assertComparativeRequestEnrichmentOwners,
+@@ -45,6 +9,10 @@ import {
+   COMPARATIVE_REQUEST_ENRICHMENT_DISPOSITION,
+   COMPARATIVE_REQUEST_ENRICHMENT_REASON,
+ } from './comparative-efficiency-request-enrichment-constants.js';
++import {
++  createComparativePostgresNonMeasuringEvidenceOwner,
++} from './comparative-efficiency-postgres-nonmeasuring-evidence.js';
++
+ export {
+   COMPARATIVE_REQUEST_ENRICHMENT_AFFINITY_OWNER_IDS,
+   COMPARATIVE_REQUEST_ENRICHMENT_AXES,
+@@ -56,558 +24,24 @@ export {
+   comparativeRequestEnrichmentSql,
+ } from './comparative-efficiency-request-enrichment-constants.js';
+ 
+-const localText = Object.freeze({
+-  INPUT: 'requestEnrichment',
+-  ATTEMPTS: 'requestEnrichment.attempts',
+-  ATTEMPTS_EXACT_MATRIX_REQUIRED:
+-    'requestEnrichment.attempts:exact_matrix_required',
+-  ATTEMPT_ORDER_MISMATCH:
+-    'requestEnrichment.attempts:matrix_cell_order_mismatch',
+-  ATTEMPT_CANDIDATE_MUST_BE_ABSENT:
+-    'requestEnrichment.attempt:candidate_must_be_absent',
+-  ATTEMPT_ALTERNATIVE_MUST_BE_ENGAGED:
+-    'requestEnrichment.attempt:alternative_must_be_engaged',
+-  ATTEMPT_REASON_REQUIRED:
+-    'requestEnrichment.attempt:candidate_absence_reason_required',
+-  CALIBRATION_INVALID:
+-    'requestEnrichment.calibration:external_observation_required',
+-  MATRIX_SHAPE_MISMATCH:
+-    'requestEnrichment.matrix:exact_cartesian_axes_required',
+-  CELL_SHAPE_MISMATCH:
+-    'requestEnrichment.cells:explicit_non_measuring_required',
+-  CELL_SOURCE_MISMATCH:
+-    'requestEnrichment.cells:live_attempt_source_mismatch',
+-  ROOT_INVALID: 'requestEnrichment.root:invalid',
+-  SIDE_IDS: 'requestEnrichment.sideIds',
+-  SIDE_IDS_DISTINCT_EXACT_PAIR_REQUIRED:
+-    'requestEnrichment.sideIds:distinct_exact_pair_required',
+-  ROOT: 'root',
+-  VALID: 'valid',
++const owner = createComparativePostgresNonMeasuringEvidenceOwner({
++  pathPrefix: 'requestEnrichment',
++  axes: COMPARATIVE_REQUEST_ENRICHMENT_AXES,
++  cells: COMPARATIVE_REQUEST_ENRICHMENT_CELLS,
++  disposition: COMPARATIVE_REQUEST_ENRICHMENT_DISPOSITION,
++  reason: COMPARATIVE_REQUEST_ENRICHMENT_REASON,
++  sourceVersion: 'comparative-request-enrichment-live-attempt-v1',
++  witnessCountField: 'affinityOwnerWitnessCount',
++  admission: Object.freeze({
++    assertLiveEvidence: assertComparativeRequestEnrichmentLiveEvidence,
++    assertOwners: assertComparativeRequestEnrichmentOwners,
++    assertSource: assertComparativeRequestEnrichmentSource,
++  }),
+ });
+-const inputKeys = Object.freeze([
+-  'matrixId',
+-  'pairId',
+-  'sideIds',
+-  'sourceRevision',
+-  'producedAt',
+-  'validUntil',
+-  'workloadManifest',
+-  'alternativeTopology',
+-  'preregistration',
+-  'inventoryId',
+-  'inventorySides',
+-  'priceSheet',
+-  'calibrationArtifact',
+-  'attempts',
+-]);
+-const attemptKeys = Object.freeze([
+-  'matrixCellIndex',
+-  'runId',
+-  'candidateEngaged',
+-  'alternativeEngaged',
+-  'reasonCodes',
+-  'liveEvidence',
+-]);
+-const sourcePayloadKeys = Object.freeze([
+-  'version',
+-  'matrixId',
+-  'cellId',
+-  'pairId',
+-  'runId',
+-  'sideIds',
+-  'matrixCellIndex',
+-  'state',
+-  'candidateEngaged',
+-  'alternativeEngaged',
+-  'reasonCodes',
+-  'liveEvidence',
+-  'calibrationDigest',
+-  'workloadManifestDigest',
+-  'alternativeTopologyDigest',
+-  'preregistrationDigest',
+-]);
+-const receiptKeys = Object.freeze(['rootDigest', 'resolver']);
+-const resolverKeys = Object.freeze(['resolve']);
+-const sourceVersion = 'comparative-request-enrichment-live-attempt-v1';
+-const maximumReasonCodes = 16;
+-const dataValueKey = 'value';
+-const bufferFrom = Buffer.from;
+-const mapGet = Function.call.bind(Map.prototype.get);
+-const mapHas = Function.call.bind(Map.prototype.has);
+-const mapSet = Function.call.bind(Map.prototype.set);
+-const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+-const objectHasOwn = Object.hasOwn;
+-const reflectApply = Reflect.apply;
+-
+-function fail(message) {
+-  throw new TypeError(message);
+-}
+-
+-function arrayContains(values, expected) {
+-  for (let index = 0; index < values.length; index += 1) {
+-    if (values[index] === expected) return true;
+-  }
+-  return false;
+-}
+-
+-function ownDataValue(value, key, path) {
+-  const descriptor = objectGetOwnPropertyDescriptor(value, key);
+-  if (!descriptor || !objectHasOwn(descriptor, dataValueKey)) {
+-    fail(`${path}:own_data_property_required`);
+-  }
+-  return descriptor.value;
+-}
+-
+-function safeErrorMessage(error) {
+-  if (!error || typeof error !== 'object' || types.isProxy(error)) {
+-    return localText.ROOT_INVALID;
+-  }
+-  const descriptor = objectGetOwnPropertyDescriptor(error, 'message');
+-  if (
+-    descriptor &&
+-    objectHasOwn(descriptor, dataValueKey) &&
+-    typeof descriptor.value === 'string'
+-  ) {
+-    return descriptor.value;
+-  }
+-  return localText.ROOT_INVALID;
+-}
+-
+-function copySideIds(sideIds) {
+-  assertBenchmarkResourceArray(sideIds, localText.SIDE_IDS, 2);
+-  if (sideIds.length !== 2 || sideIds[0] === sideIds[1]) {
+-    fail(localText.SIDE_IDS_DISTINCT_EXACT_PAIR_REQUIRED);
+-  }
+-  const copy = [];
+-  for (let index = 0; index < sideIds.length; index += 1) {
+-    assertBenchmarkResourceText(
+-      sideIds[index],
+-      `requestEnrichment.sideIds.${index}`,
+-    );
+-    appendOwnArrayValue(copy, sideIds[index]);
+-  }
+-  return copy;
+-}
+-
+-function copyReasonCodes(reasonCodes, index) {
+-  assertBenchmarkResourceArray(
+-    reasonCodes,
+-    `requestEnrichment.attempts.${index}.reasonCodes`,
+-    maximumReasonCodes,
+-  );
+-  if (
+-    reasonCodes.length === 0 ||
+-    !arrayContains(reasonCodes, COMPARATIVE_REQUEST_ENRICHMENT_REASON)
+-  ) {
+-    fail(localText.ATTEMPT_REASON_REQUIRED);
+-  }
+-  const copy = [];
+-  for (let reasonIndex = 0;
+-    reasonIndex < reasonCodes.length;
+-    reasonIndex += 1) {
+-    assertBenchmarkResourceText(
+-      reasonCodes[reasonIndex],
+-      `requestEnrichment.attempts.${index}.reasonCodes.${reasonIndex}`,
+-    );
+-    appendOwnArrayValue(copy, reasonCodes[reasonIndex]);
+-  }
+-  return copy;
+-}
+-
+-function copyAttempts(attempts) {
+-  assertBenchmarkResourceArray(
+-    attempts,
+-    localText.ATTEMPTS,
+-    COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length,
+-  );
+-  if (attempts.length !== COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length) {
+-    fail(localText.ATTEMPTS_EXACT_MATRIX_REQUIRED);
+-  }
+-  const copy = [];
+-  for (let index = 0; index < attempts.length; index += 1) {
+-    const path = `requestEnrichment.attempts.${index}`;
+-    const attempt = attempts[index];
+-    assertBenchmarkResourceExactRecord(attempt, attemptKeys, path);
+-    if (attempt.matrixCellIndex !== index) {
+-      fail(localText.ATTEMPT_ORDER_MISMATCH);
+-    }
+-    assertBenchmarkResourceText(attempt.runId, `${path}.runId`);
+-    if (attempt.candidateEngaged !== false) {
+-      fail(localText.ATTEMPT_CANDIDATE_MUST_BE_ABSENT);
+-    }
+-    if (attempt.alternativeEngaged !== true) {
+-      fail(localText.ATTEMPT_ALTERNATIVE_MUST_BE_ENGAGED);
+-    }
+-    assertBenchmarkResourceCanonicalData(attempt.liveEvidence);
+-    assertComparativeRequestEnrichmentLiveEvidence(
+-      attempt.liveEvidence,
+-      index,
+-    );
+-    appendOwnArrayValue(copy, {
+-      matrixCellIndex: index,
+-      runId: attempt.runId,
+-      candidateEngaged: false,
+-      alternativeEngaged: true,
+-      reasonCodes: copyReasonCodes(attempt.reasonCodes, index),
+-      liveEvidence: attempt.liveEvidence,
+-    });
+-  }
+-  return copy;
+-}
+-
+-function sourcePayload(input, attempt, cell, sideIds, owners) {
+-  return {
+-    version: sourceVersion,
+-    matrixId: input.matrixId,
+-    cellId: cell.cellId,
+-    pairId: input.pairId,
+-    runId: attempt.runId,
+-    sideIds,
+-    matrixCellIndex: attempt.matrixCellIndex,
+-    state: BENCHMARK_RESOURCE_CELL_STATE.NON_MEASURING,
+-    candidateEngaged: false,
+-    alternativeEngaged: true,
+-    reasonCodes: attempt.reasonCodes,
+-    liveEvidence: attempt.liveEvidence,
+-    calibrationDigest: input.calibrationArtifact.digest,
+-    workloadManifestDigest: owners.workloadManifest.digest,
+-    alternativeTopologyDigest: owners.alternativeTopology.digest,
+-    preregistrationDigest: owners.preregistration.digest,
+-  };
+-}
+-
+-function rootReceipt(artifacts, root) {
+-  const resolvedArtifacts = [];
+-  for (let index = 0; index < artifacts.length; index += 1) {
+-    appendOwnArrayValue(resolvedArtifacts, artifacts[index]);
+-  }
+-  appendOwnArrayValue(resolvedArtifacts, root);
+-  return {
+-    rootDigest: root.digest,
+-    resolver: createBenchmarkResourceMemoryResolver(resolvedArtifacts),
+-  };
+-}
+-
+-export function createComparativeRequestEnrichmentEvidence(input) {
+-  assertBenchmarkResourceExactRecord(input, inputKeys, localText.INPUT);
+-  const textFields = [
+-    'matrixId',
+-    'pairId',
+-    'sourceRevision',
+-    'producedAt',
+-    'validUntil',
+-    'inventoryId',
+-  ];
+-  for (let index = 0; index < textFields.length; index += 1) {
+-    const field = textFields[index];
+-    assertBenchmarkResourceText(input[field], `requestEnrichment.${field}`);
+-  }
+-  const sideIds = copySideIds(input.sideIds);
+-  const attempts = copyAttempts(input.attempts);
+-  const calibrationInspection =
+-    inspectBenchmarkResourceLiveCalibrationArtifact(
+-      input.calibrationArtifact.artifact,
+-    );
+-  if (
+-    !calibrationInspection.valid ||
+-    input.calibrationArtifact.artifact.payload.sourceRevision !==
+-      input.sourceRevision
+-  ) {
+-    fail(localText.CALIBRATION_INVALID);
+-  }
+-  const workloadManifest = createBenchmarkResourceSourceArtifact(
+-    BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
+-    input.workloadManifest,
+-  );
+-  const alternativeTopology = createBenchmarkResourceSourceArtifact(
+-    BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
+-    input.alternativeTopology,
+-  );
+-  const preregistration = createBenchmarkResourceSourceArtifact(
+-    BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
+-    input.preregistration,
+-  );
+-  const matrix = createBenchmarkResourceMatrixManifest({
+-    matrixId: input.matrixId,
+-    axes: COMPARATIVE_REQUEST_ENRICHMENT_AXES,
+-    sideIds,
+-    workloadManifestDigest: workloadManifest.digest,
+-    alternativeTopologyDigest: alternativeTopology.digest,
+-    preregistrationDigest: preregistration.digest,
+-  });
+-  assertComparativeRequestEnrichmentOwners({
+-    workload: workloadManifest.artifact,
+-    topology: alternativeTopology.artifact,
+-    preregistration: preregistration.artifact,
+-  }, matrix.artifact);
+-  const inventory = createBenchmarkResourceComponentInventory({
+-    inventoryId: input.inventoryId,
+-    matrixId: input.matrixId,
+-    sides: input.inventorySides,
+-  });
+-  const price = createBenchmarkResourcePriceSheet(input.priceSheet);
+-  const engagements = [];
+-  const cells = [];
+-  for (let index = 0; index < attempts.length; index += 1) {
+-    const attempt = attempts[index];
+-    const matrixCell = matrix.artifact.payload.cells[index];
+-    const engagement = createBenchmarkResourceSourceArtifact(
+-      BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
+-      sourcePayload(input, attempt, matrixCell, sideIds, {
+-        workloadManifest,
+-        alternativeTopology,
+-        preregistration,
+-      }),
+-      [
+-        input.calibrationArtifact.digest,
+-        workloadManifest.digest,
+-        alternativeTopology.digest,
+-        preregistration.digest,
+-      ],
+-    );
+-    appendOwnArrayValue(engagements, engagement);
+-    appendOwnArrayValue(
+-      cells,
+-      createBenchmarkResourceNonMeasuringCellEvidence({
+-        matrixManifestDigest: matrix.digest,
+-        matrixId: input.matrixId,
+-        cellId: matrixCell.cellId,
+-        pairId: input.pairId,
+-        runId: attempt.runId,
+-        sideIds,
+-        reasonCodes: attempt.reasonCodes,
+-        sourceDigests: [engagement.digest],
+-        sourceRevision: input.sourceRevision,
+-        producedAt: input.producedAt,
+-        validUntil: input.validUntil,
+-      }),
+-    );
+-  }
+-  const artifacts = [
+-    workloadManifest,
+-    alternativeTopology,
+-    preregistration,
+-    matrix,
+-    inventory,
+-    price,
+-    input.calibrationArtifact,
+-  ];
+-  for (let index = 0; index < engagements.length; index += 1) {
+-    appendOwnArrayValue(artifacts, engagements[index]);
+-  }
+-  const cellEvidenceDigests = [];
+-  for (let index = 0; index < cells.length; index += 1) {
+-    appendOwnArrayValue(artifacts, cells[index]);
+-    appendOwnArrayValue(cellEvidenceDigests, cells[index].digest);
+-  }
+-  const root = createBenchmarkResourceEvidenceRoot({
+-    matrixManifestDigest: matrix.digest,
+-    componentInventoryDigest: inventory.digest,
+-    priceSheetDigest: price.digest,
+-    cellEvidenceDigests,
+-    sourceRevision: input.sourceRevision,
+-    producedAt: input.producedAt,
+-    validUntil: input.validUntil,
+-    artifacts,
+-  });
+-  return {
+-    receipt: rootReceipt(artifacts, root),
+-    root,
+-    artifacts,
+-    matrix,
+-    inventory,
+-    price,
+-    calibration: input.calibrationArtifact,
+-    engagements,
+-    cells,
+-  };
+-}
+-
+-function resolveArtifact(resolved, digest) {
+-  const bytes = mapGet(resolved, digest);
+-  if (bytes === undefined) fail(localText.CELL_SOURCE_MISMATCH);
+-  return parseBenchmarkResourceArtifact(bytes, digest);
+-}
+-
+-function captureValidatedArtifacts(receipt) {
+-  assertBenchmarkResourceExactRecord(
+-    receipt,
+-    receiptKeys,
+-    localText.ROOT_INVALID,
+-  );
+-  const rootDigest = ownDataValue(receipt, 'rootDigest', localText.ROOT_INVALID);
+-  const resolver = ownDataValue(receipt, 'resolver', localText.ROOT_INVALID);
+-  assertBenchmarkResourceExactRecord(
+-    resolver,
+-    resolverKeys,
+-    localText.ROOT_INVALID,
+-  );
+-  const resolve = ownDataValue(resolver, 'resolve', localText.ROOT_INVALID);
+-  if (typeof resolve !== 'function') fail(localText.ROOT_INVALID);
+-  const resolved = new Map();
+-  const capturedResolver = {
+-    resolve(digest) {
+-      if (mapHas(resolved, digest)) return bufferFrom(mapGet(resolved, digest));
+-      const bytes = reflectApply(resolve, resolver, [digest]);
+-      if (bytes !== undefined) {
+-        assertBenchmarkResourceBytes(bytes, localText.ROOT_INVALID);
+-        mapSet(resolved, digest, bufferFrom(bytes));
+-      }
+-      return bytes;
+-    },
+-  };
+-  const validation = validateBenchmarkResourceEvidenceRoot({
+-    rootDigest,
+-    resolver: capturedResolver,
+-  });
+-  if (!validation.valid) {
+-    fail(`${localText.ROOT_INVALID}:${validation.reason}`);
+-  }
+-  return {rootDigest, resolved};
+-}
+-
+-function inspectMatrix(matrix) {
+-  if (
+-    digestBenchmarkSemanticData(matrix.payload.axes) !==
+-      digestBenchmarkSemanticData(COMPARATIVE_REQUEST_ENRICHMENT_AXES) ||
+-    matrix.payload.cells.length !==
+-      COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length
+-  ) {
+-    fail(localText.MATRIX_SHAPE_MISMATCH);
+-  }
+-}
+-
+-function assertCellShape(cell, matrixCell) {
+-  if (
+-    cell.payload.state !== BENCHMARK_RESOURCE_CELL_STATE.NON_MEASURING ||
+-    cell.payload.cellId !== matrixCell.cellId ||
+-    cell.payload.sourceDigests.length !== 1 ||
+-    !arrayContains(
+-      cell.payload.reasonCodes,
+-      COMPARATIVE_REQUEST_ENRICHMENT_REASON,
+-    )
+-  ) {
+-    fail(localText.CELL_SHAPE_MISMATCH);
+-  }
+-}
+-
+-function inspectCellSource(
+-  resolved,
+-  cell,
+-  matrixCell,
+-  matrix,
+-  root,
+-  owners,
+-  index,
+-) {
+-  assertCellShape(cell, matrixCell);
+-  const source = resolveArtifact(resolved, cell.payload.sourceDigests[0]);
+-  if (source.kind !== BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT) {
+-    fail(localText.CELL_SOURCE_MISMATCH);
+-  }
+-  assertBenchmarkResourceExactRecord(
+-    source.payload,
+-    sourcePayloadKeys,
+-    localText.CELL_SOURCE_MISMATCH,
+-  );
+-  const calibration = resolveArtifact(
+-    resolved,
+-    source.payload.calibrationDigest,
+-  );
+-  assertComparativeRequestEnrichmentSource({
+-    source,
+-    cell,
+-    matrixCell,
+-    matrix,
+-    root,
+-    owners,
+-    calibration,
+-    index,
+-  });
+-}
+-
+-export function inspectComparativeRequestEnrichmentEvidence(receipt) {
+-  try {
+-    const capture = captureValidatedArtifacts(receipt);
+-    const root = resolveArtifact(capture.resolved, capture.rootDigest);
+-    const matrix = resolveArtifact(
+-      capture.resolved,
+-      root.payload.matrixManifestDigest,
+-    );
+-    inspectMatrix(matrix);
+-    const owners = {
+-      workload: resolveArtifact(
+-        capture.resolved,
+-        matrix.payload.workloadManifestDigest,
+-      ),
+-      topology: resolveArtifact(
+-        capture.resolved,
+-        matrix.payload.alternativeTopologyDigest,
+-      ),
+-      preregistration: resolveArtifact(
+-        capture.resolved,
+-        matrix.payload.preregistrationDigest,
+-      ),
+-    };
+-    assertComparativeRequestEnrichmentOwners(owners, matrix);
+-    for (let index = 0;
+-      index < root.payload.cellEvidenceDigests.length;
+-      index += 1) {
+-      const cell = resolveArtifact(
+-        capture.resolved,
+-        root.payload.cellEvidenceDigests[index],
+-      );
+-      inspectCellSource(
+-        capture.resolved,
+-        cell,
+-        matrix.payload.cells[index],
+-        matrix,
+-        root,
+-        owners,
+-        index,
+-      );
+-    }
+-    if (
+-      root.payload.cellEvidenceDigests.length !==
+-        COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length
+-    ) {
+-      fail(localText.CELL_SHAPE_MISMATCH);
+-    }
+-    return {
+-      valid: true,
+-      reason: localText.VALID,
+-      complete: true,
+-      claimEligible: false,
+-      claimDisposition: COMPARATIVE_REQUEST_ENRICHMENT_DISPOSITION,
+-      measuringCellCount: 0,
+-      nonMeasuringCellCount: COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length,
+-      alternativeOraclePassCount:
+-        COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length,
+-      affinityOwnerWitnessCount:
+-        COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length,
+-      matrixId: matrix.payload.matrixId,
+-      matrixDigest: root.payload.matrixManifestDigest,
+-      rootDigest: capture.rootDigest,
+-    };
+-  } catch (error) {
+-    return {
+-      valid: false,
+-      reason: safeErrorMessage(error),
+-      complete: false,
+-      claimEligible: false,
+-      claimDisposition: null,
+-      measuringCellCount: 0,
+-      nonMeasuringCellCount: 0,
+-      alternativeOraclePassCount: 0,
+-      affinityOwnerWitnessCount: 0,
+-      matrixId: null,
+-      matrixDigest: null,
+-      rootDigest: null,
+-    };
+-  }
+-}
+ 
+-export function comparativeRequestEnrichmentEvidenceDigest(evidence) {
+-  if (!objectHasOwn(evidence, localText.ROOT)) fail(localText.ROOT_INVALID);
+-  return digestBenchmarkSemanticData(evidence.root.artifact.payload);
+-}
++export const createComparativeRequestEnrichmentEvidence =
++  owner.createEvidence;
++export const inspectComparativeRequestEnrichmentEvidence =
++  owner.inspectEvidence;
++export const comparativeRequestEnrichmentEvidenceDigest =
++  owner.evidenceDigest;

@@ -16,63 +16,78 @@ import {
 } from
   '../../test/distributed/harness/benchmark-resource-durable-resolver.js';
 import {
-  buildComparativeRequestEnrichmentAffinityWitness,
+  buildComparativeChangeRateCrossoverPolicyWitness,
 } from
-  '../../test/distributed/harness/comparative-efficiency-request-enrichment-affinity-witness.js';
+  '../../test/distributed/harness/comparative-efficiency-change-rate-crossover-policy-witness.js';
 import {
-  COMPARATIVE_REQUEST_ENRICHMENT_AFFINITY_OWNER_IDS,
-  COMPARATIVE_REQUEST_ENRICHMENT_AXES,
-  COMPARATIVE_REQUEST_ENRICHMENT_CELLS,
-  COMPARATIVE_REQUEST_ENRICHMENT_ORACLE,
-  COMPARATIVE_REQUEST_ENRICHMENT_REASON,
-  COMPARATIVE_REQUEST_ENRICHMENT_SCENARIO,
-  comparativeRequestEnrichmentExpectedResult,
-  comparativeRequestEnrichmentSql,
-  createComparativeRequestEnrichmentEvidence,
-  inspectComparativeRequestEnrichmentEvidence,
+  COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
+  COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
+  COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS,
+  COMPARATIVE_CHANGE_RATE_CROSSOVER_ORACLE,
+  COMPARATIVE_CHANGE_RATE_CROSSOVER_REASON,
+  COMPARATIVE_CHANGE_RATE_CROSSOVER_SCENARIO,
+  comparativeChangeRateCrossoverExpectedResult,
+  comparativeChangeRateCrossoverSql,
+  createComparativeChangeRateCrossoverEvidence,
+  inspectComparativeChangeRateCrossoverEvidence,
 } from
-  '../../test/distributed/harness/comparative-efficiency-request-enrichment.js';
+  '../../test/distributed/harness/comparative-efficiency-change-rate-crossover.js';
 import {
-  evaluateComparativeRequestEnrichmentOracle,
+  evaluateComparativeChangeRateCrossoverOracle,
 } from
-  '../../test/distributed/harness/comparative-efficiency-request-enrichment-admission.js';
+  '../../test/distributed/harness/comparative-efficiency-change-rate-crossover-admission.js';
 
 const execFileAsync = promisify(execFile);
 const arrayPush = Function.call.bind(Array.prototype.push);
 const jsonParse = JSON.parse;
 const jsonStringify = JSON.stringify;
 const stringReplace = Function.call.bind(String.prototype.replace);
-const PASSWORD = 'request-enrichment-live';
+const PASSWORD = 'change-rate-crossover-live';
 const ARTIFACT_DIRECTORY =
-  'test-output/comparative-request-enrichment-artifacts';
+  'test-output/comparative-change-rate-crossover-artifacts';
 const REPORT_DIRECTORY = 'test-output/reports';
 const RUN_ID =
-  `comparative-request-enrichment-${process.pid}-${Date.now()}`;
+  `comparative-change-rate-crossover-${process.pid}-${Date.now()}`;
 const NETWORK_NAME = `${RUN_ID}-network`;
 const LABELS = Object.freeze({
   'lagrange.proof.run': RUN_ID,
-  'lagrange.proof.scenario': COMPARATIVE_REQUEST_ENRICHMENT_SCENARIO,
+  'lagrange.proof.scenario': COMPARATIVE_CHANGE_RATE_CROSSOVER_SCENARIO,
 });
 const SOURCE_PATHS = Object.freeze([
   'scripts/checks/benchmark-resource-source-provenance.js',
   'scripts/checks/' +
     'comparative-efficiency-postgres-nonmeasuring-live-constants.js',
   'scripts/checks/comparative-efficiency-postgres-nonmeasuring-live.js',
-  'scripts/checks/run-comparative-efficiency-request-enrichment-guard.js',
   'scripts/checks/run-comparative-efficiency-request-enrichment-live.js',
+  'scripts/checks/run-comparative-efficiency-change-rate-crossover-guard.js',
+  'scripts/checks/run-comparative-efficiency-change-rate-crossover-live.js',
+  'test/distributed/harness/__tests__/' +
+    'comparative-efficiency-negative-controls.test.js',
   'test/distributed/harness/__tests__/' +
     'comparative-efficiency-request-enrichment.test.js',
+  'test/distributed/harness/__tests__/' +
+    'comparative-efficiency-change-rate-crossover.test.js',
+  'test/distributed/harness/__tests__/' +
+    'comparative-efficiency-postgres-nonmeasuring-test-fixture.js',
+  'test/distributed/harness/comparative-efficiency-negative-controls.js',
+  'test/distributed/harness/' +
+    'comparative-efficiency-postgres-nonmeasuring-admission.js',
+  'test/distributed/harness/' +
+    'comparative-efficiency-postgres-nonmeasuring-evidence.js',
   'test/distributed/harness/' +
     'comparative-efficiency-request-enrichment-admission.js',
+  'test/distributed/harness/comparative-efficiency-request-enrichment.js',
   'test/distributed/harness/' +
-    'comparative-efficiency-request-enrichment-affinity-witness.js',
+    'comparative-efficiency-change-rate-crossover-admission.js',
   'test/distributed/harness/' +
-    'comparative-efficiency-request-enrichment-constants.js',
+    'comparative-efficiency-change-rate-crossover-policy-witness.js',
   'test/distributed/harness/' +
-    'comparative-efficiency-request-enrichment.js',
+    'comparative-efficiency-change-rate-crossover-constants.js',
+  'test/distributed/harness/' +
+    'comparative-efficiency-change-rate-crossover.js',
 ]);
 const candidateReason =
-  'no claim-eligible Lagrange request-enrichment capacity adapter was ' +
+  'no claim-eligible Lagrange change-rate-crossover capacity adapter was ' +
   'available for the preregistered matrix';
 const localText = Object.freeze({
   LAGRANGE: 'lagrange',
@@ -80,57 +95,44 @@ const localText = Object.freeze({
   PAIRED_CAPACITY_ABSENT: 'paired_capacity_absent',
   RESOURCE_WINDOW_ABSENT: 'whole_topology_resource_window_absent',
   COMPARATIVE_EFFECTS_ABSENT: 'comparative_effects_absent',
-  LIVE_EVIDENCE_VERSION: 'comparative-request-enrichment-live-evidence-v1',
+  NON_MEASURING: 'non_measuring',
+  ABSENT: 'absent',
+  NOT_EVALUABLE: 'not_evaluable',
+  LIVE_EVIDENCE_VERSION: 'comparative-change-rate-crossover-live-evidence-v1',
   INPUT_TYPE_MODULE: '--input-type=module',
   EVAL: '--eval',
   UTF8: 'utf8',
-  PASS: 'comparative-efficiency-request-enrichment-live: PASS\n',
-  FAIL: 'comparative-efficiency-request-enrichment-live: FAIL\n',
-  DURABLE_REJECTED: 'durable request-enrichment evidence rejected: ',
-  SETUP_FAILED: 'PostgreSQL enrichment setup failed: ',
-  CELL_FAILED: 'PostgreSQL enrichment cell failed: ',
+  PASS: 'comparative-efficiency-change-rate-crossover-live: PASS\n',
+  FAIL: 'comparative-efficiency-change-rate-crossover-live: FAIL\n',
+  DURABLE_REJECTED: 'durable change-rate-crossover evidence rejected: ',
+  CELL_FAILED: 'PostgreSQL change-rate cell failed: ',
   CLAIM_PREFIX:
-    'claim: no comparative claim; all 16 cells are non-measuring because ',
+    'claim: no comparative claim; all 32 cells are non-measuring because ',
   CLAIM_SUFFIX:
     'the candidate capacity adapter was not engaged\n',
 });
 
-async function prepareWorkload(runtime) {
-  const sql =
-    'CREATE TABLE request_entities (' +
-      'id INTEGER PRIMARY KEY); ' +
-    'INSERT INTO request_entities (id) ' +
-      'SELECT value FROM generate_series(1, 1024) AS value; ' +
-    'CREATE TABLE request_enrichments (' +
-      'entity_id INTEGER NOT NULL REFERENCES request_entities(id), ' +
-      'ordinal INTEGER NOT NULL, value BIGINT NOT NULL, ' +
-      'PRIMARY KEY (entity_id, ordinal)); ' +
-    'INSERT INTO request_enrichments (entity_id, ordinal, value) ' +
-      'SELECT entity_id, ordinal, (entity_id * 100) + ordinal ' +
-      'FROM generate_series(1, 1024) AS entity(entity_id) ' +
-      'CROSS JOIN generate_series(1, 8) AS enrichment(ordinal)';
-  await runtime.executeSql(
-    sql,
-    localText.SETUP_FAILED,
-  );
-}
-
 async function executeMatrix(runtime) {
-  await prepareWorkload(runtime);
   const attempts = [];
   for (let index = 0;
-    index < COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length;
+    index < COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.length;
     index += 1) {
-    const cell = COMPARATIVE_REQUEST_ENRICHMENT_CELLS[index];
-    const sql = comparativeRequestEnrichmentSql(cell);
+    const cell = COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS[index];
+    const sql = comparativeChangeRateCrossoverSql(cell);
+    process.stdout.write(
+      `cell ${index + 1}/` +
+      `${COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.length}: ` +
+      `${cell.datasetSize}/${cell.mutationRate}/` +
+      `${cell.workloadDiversity}/${cell.skew}/${cell.policy}\n`,
+    );
     const startedAt = new Date().toISOString();
     const stdout = await runtime.executeSql(
       sql,
       localText.CELL_FAILED,
     );
     const endedAt = new Date().toISOString();
-    if (!evaluateComparativeRequestEnrichmentOracle(cell, stdout)) {
-      throw new Error(`request-enrichment oracle failed at cell ${index}`);
+    if (!evaluateComparativeChangeRateCrossoverOracle(cell, stdout)) {
+      throw new Error(`change-rate-crossover oracle failed at cell ${index}`);
     }
     arrayPush(attempts, {
       matrixCellIndex: index,
@@ -138,7 +140,7 @@ async function executeMatrix(runtime) {
       candidateEngaged: false,
       alternativeEngaged: true,
       reasonCodes: [
-        COMPARATIVE_REQUEST_ENRICHMENT_REASON,
+        COMPARATIVE_CHANGE_RATE_CROSSOVER_REASON,
         localText.PAIRED_CAPACITY_ABSENT,
         localText.RESOURCE_WINDOW_ABSENT,
         localText.COMPARATIVE_EFFECTS_ABSENT,
@@ -152,8 +154,8 @@ async function executeMatrix(runtime) {
           architectureId: localText.LAGRANGE,
           capacityAdapterEngaged: false,
           reason: candidateReason,
-          affinityOwnerWitness:
-            buildComparativeRequestEnrichmentAffinityWitness(cell),
+          policyWitness:
+            buildComparativeChangeRateCrossoverPolicyWitness(cell),
         },
         alternative: {
           architectureId: localText.POSTGRESQL,
@@ -166,9 +168,17 @@ async function executeMatrix(runtime) {
           stdout,
         },
         oracle: {
-          name: COMPARATIVE_REQUEST_ENRICHMENT_ORACLE,
-          expected: comparativeRequestEnrichmentExpectedResult(cell),
+          name: COMPARATIVE_CHANGE_RATE_CROSSOVER_ORACLE,
+          expected: comparativeChangeRateCrossoverExpectedResult(cell),
           passed: true,
+        },
+        measurementDisposition: {
+          state: localText.NON_MEASURING,
+          capacityConfidenceInterval: localText.ABSENT,
+          wholeTopologyResourceBreakdown: localText.ABSENT,
+          infrastructureCostProjection: localText.ABSENT,
+          practicalEffectClassification: localText.NOT_EVALUABLE,
+          crossoverClassification: localText.NOT_EVALUABLE,
         },
       },
     });
@@ -179,27 +189,53 @@ async function executeMatrix(runtime) {
 function workloadCells() {
   const cells = [];
   for (let index = 0;
-    index < COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length;
+    index < COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.length;
     index += 1) {
-    const cell = COMPARATIVE_REQUEST_ENRICHMENT_CELLS[index];
+    const cell = COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS[index];
     arrayPush(cells, {
       datasetSize: cell.datasetSize,
-      fanout: cell.fanout,
-      readLocality: cell.readLocality,
+      mutationRate: cell.mutationRate,
+      mutationDivisor: cell.mutationDivisor,
+      workloadDiversity: cell.workloadDiversity,
+      diversityCount: cell.diversityCount,
       skew: cell.skew,
+      policy: cell.policy,
       requestCount: cell.requestCount,
-      alternativeSql: comparativeRequestEnrichmentSql(cell),
-      oracleName: COMPARATIVE_REQUEST_ENRICHMENT_ORACLE,
-      oracleExpected: comparativeRequestEnrichmentExpectedResult(cell),
+      alternativeSql: comparativeChangeRateCrossoverSql(cell),
+      oracleName: COMPARATIVE_CHANGE_RATE_CROSSOVER_ORACLE,
+      oracleExpected: comparativeChangeRateCrossoverExpectedResult(cell),
     });
   }
   return cells;
 }
 
+function cellOutcomes(attempts) {
+  const projections = [];
+  for (let index = 0; index < attempts.length; index += 1) {
+    const cell = COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS[index];
+    arrayPush(projections, {
+      matrixCellIndex: index,
+      datasetSize: cell.datasetSize,
+      mutationRate: cell.mutationRate,
+      workloadDiversity: cell.workloadDiversity,
+      skew: cell.skew,
+      policy: cell.policy,
+      alternativeOraclePassed: attempts[index].liveEvidence.oracle.passed,
+      state: localText.NON_MEASURING,
+      capacityConfidenceInterval: localText.ABSENT,
+      wholeTopologyResourceBreakdown: localText.ABSENT,
+      infrastructureCostProjection: localText.ABSENT,
+      practicalEffectClassification: localText.NOT_EVALUABLE,
+      crossoverClassification: localText.NOT_EVALUABLE,
+    });
+  }
+  return projections;
+}
+
 async function replayInFreshProcess(rootDigest) {
   const inspectorUrl = new URL(
     '../../test/distributed/harness/' +
-      'comparative-efficiency-request-enrichment.js',
+      'comparative-efficiency-change-rate-crossover.js',
     import.meta.url,
   ).href;
   const resolverUrl = new URL(
@@ -208,7 +244,7 @@ async function replayInFreshProcess(rootDigest) {
     import.meta.url,
   ).href;
   const source =
-    'import {inspectComparativeRequestEnrichmentEvidence as inspect} from ' +
+    'import {inspectComparativeChangeRateCrossoverEvidence as inspect} from ' +
       `${jsonStringify(inspectorUrl)};` +
     'import {createBenchmarkResourceDurableResolver as resolver} from ' +
       `${jsonStringify(resolverUrl)};` +
@@ -227,14 +263,14 @@ async function writeScenarioReport(detail) {
   const timestamp = new Date().toISOString();
   const report = {
     timestamp,
-    scenario: COMPARATIVE_REQUEST_ENRICHMENT_SCENARIO,
-    producer: 'comparative-efficiency-request-enrichment-live',
-    fidelity: 'live-postgresql-and-production-affinity-owners',
+    scenario: COMPARATIVE_CHANGE_RATE_CROSSOVER_SCENARIO,
+    producer: 'comparative-efficiency-change-rate-crossover-live',
+    fidelity: 'live-postgresql-and-production-policy-owners',
     summary: {total: 1, passed: 1, failed: 0},
     optimizationSummary: {totalPriorityItems: 0},
     standardSummary: {
       scenarios: [{
-        scenario: COMPARATIVE_REQUEST_ENRICHMENT_SCENARIO,
+        scenario: COMPARATIVE_CHANGE_RATE_CROSSOVER_SCENARIO,
         passed: true,
         current: {passed: true, verdict: 'PASS'},
         detail,
@@ -245,23 +281,13 @@ async function writeScenarioReport(detail) {
   const stamp = stringReplace(timestamp, /[:.]/gu, '-');
   const path = resolve(
     REPORT_DIRECTORY,
-    `${COMPARATIVE_REQUEST_ENRICHMENT_SCENARIO}-${stamp}.report.json`,
+    `${COMPARATIVE_CHANGE_RATE_CROSSOVER_SCENARIO}-${stamp}.report.json`,
   );
   await writeFile(path, jsonStringify(report, null, 2));
   return path;
 }
 
 async function main() {
-  const liveRun = await startComparativePostgresLiveRun({
-    runtimeConfig: {
-      runId: RUN_ID,
-      networkName: NETWORK_NAME,
-      labels: LABELS,
-      password: PASSWORD,
-    },
-    sourcePaths: SOURCE_PATHS,
-    executeMatrix,
-  });
   const {
     attempts,
     imageId,
@@ -271,21 +297,30 @@ async function main() {
     validUntil,
     provenance,
     sideIds,
-  } = liveRun;
-  const evidence = createComparativeRequestEnrichmentEvidence({
-    matrixId: 'comparative-request-enrichment-p0-v1',
-    pairId: 'lagrange-postgresql-request-enrichment-v1',
+  } = await startComparativePostgresLiveRun({
+    runtimeConfig: {
+      runId: RUN_ID,
+      networkName: NETWORK_NAME,
+      labels: LABELS,
+      password: PASSWORD,
+    },
+    sourcePaths: SOURCE_PATHS,
+    executeMatrix,
+  });
+  const evidence = createComparativeChangeRateCrossoverEvidence({
+    matrixId: 'comparative-change-rate-crossover-p0-v1',
+    pairId: 'lagrange-postgresql-change-rate-crossover-v1',
     sideIds,
     sourceRevision: provenance.sourceRevision,
     producedAt,
     validUntil,
     workloadManifest: {
-      version: 'comparative-request-enrichment-workloads-v1',
+      version: 'comparative-change-rate-crossover-workloads-v1',
       cells: workloadCells(),
       selectionPolicy: 'complete_cartesian_matrix',
     },
     alternativeTopology: {
-      version: 'comparative-request-enrichment-topology-v1',
+      version: 'comparative-change-rate-crossover-topology-v1',
       candidate: {
         architectureId: localText.LAGRANGE,
         required: true,
@@ -304,31 +339,35 @@ async function main() {
       },
     },
     preregistration: {
-      version: 'comparative-request-enrichment-preregistration-v1',
-      axes: COMPARATIVE_REQUEST_ENRICHMENT_AXES,
+      version: 'comparative-change-rate-crossover-preregistration-v1',
+      axes: COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
       sideIds,
       outcomePolicy: 'direction_neutral',
       invalidCellPolicy: 'publish_explicit_non_measuring',
       candidateEngagementRequired: true,
-      affinityOwnerIds: COMPARATIVE_REQUEST_ENRICHMENT_AFFINITY_OWNER_IDS,
+      policyOwnerIds: COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
       requiredEvidence: [
         'paired_capacity',
         'whole_topology_resource_windows',
         'capacity_uncertainty',
         'capacity_practical_effect',
         'cost_practical_effect',
+        'crossover_classification',
+        'immutable_raw_artifacts',
       ],
     },
-    inventoryId: 'comparative-request-enrichment-live-inventory-v1',
+    inventoryId: 'comparative-change-rate-crossover-live-inventory-v1',
     inventorySides: comparativePostgresInventorySides(calibration),
     priceSheet: COMPARATIVE_POSTGRES_PRICE_SHEET,
     calibrationArtifact: calibration,
     attempts,
   });
   const inspection =
-    inspectComparativeRequestEnrichmentEvidence(evidence.receipt);
+    inspectComparativeChangeRateCrossoverEvidence(evidence.receipt);
   if (!inspection.valid || !inspection.complete) {
-    throw new Error(`request-enrichment evidence rejected: ${inspection.reason}`);
+    throw new Error(
+      `change-rate-crossover evidence rejected: ${inspection.reason}`,
+    );
   }
   const allArtifacts = [];
   for (let index = 0; index < evidence.artifacts.length; index += 1) {
@@ -339,7 +378,7 @@ async function main() {
     resolve(ARTIFACT_DIRECTORY),
     allArtifacts,
   );
-  const durableInspection = inspectComparativeRequestEnrichmentEvidence({
+  const durableInspection = inspectComparativeChangeRateCrossoverEvidence({
     rootDigest: evidence.root.digest,
     resolver: createBenchmarkResourceDurableResolver(
       resolve(ARTIFACT_DIRECTORY),
@@ -354,7 +393,7 @@ async function main() {
   const freshInspection = await replayInFreshProcess(evidence.root.digest);
   if (!freshInspection.valid || !freshInspection.complete) {
     throw new Error(
-      `fresh request-enrichment evidence rejected: ${freshInspection.reason}`,
+      `fresh change-rate-crossover evidence rejected: ${freshInspection.reason}`,
     );
   }
   const reportPath = await writeScenarioReport({
@@ -364,17 +403,20 @@ async function main() {
     matrixId: inspection.matrixId,
     matrixDigest: inspection.matrixDigest,
     evidenceRootDigest: inspection.rootDigest,
-    axes: COMPARATIVE_REQUEST_ENRICHMENT_AXES,
+    axes: COMPARATIVE_CHANGE_RATE_CROSSOVER_AXES,
     fullMatrixComplete: true,
-    matrixCellCount: COMPARATIVE_REQUEST_ENRICHMENT_CELLS.length,
+    matrixCellCount: COMPARATIVE_CHANGE_RATE_CROSSOVER_CELLS.length,
     outcomeNeutral: true,
     comparativeClaimEligible: false,
     claimDisposition: inspection.claimDisposition,
     measuringCellCount: inspection.measuringCellCount,
     nonMeasuringCellCount: inspection.nonMeasuringCellCount,
-    affinityOwnerIds: COMPARATIVE_REQUEST_ENRICHMENT_AFFINITY_OWNER_IDS,
-    affinityOwnerWitnessCount: inspection.affinityOwnerWitnessCount,
+    policyOwnerIds: COMPARATIVE_CHANGE_RATE_CROSSOVER_POLICY_OWNER_IDS,
+    policyWitnessCount: inspection.policyWitnessCount,
     alternativeOraclePassCount: inspection.alternativeOraclePassCount,
+    cellOutcomes: cellOutcomes(attempts),
+    crossoverEvaluable: false,
+    crossoverClassification: localText.NOT_EVALUABLE,
     artifactCount: persisted.length,
     liveCalibrationDigest: calibration.digest,
     cleanupVerified: finalized.receipt.cleanupVerified,

@@ -4,23 +4,14 @@ import {
 } from './benchmark-semantic-integrity.js';
 import {types} from 'node:util';
 import {
-  createBenchmarkResourceComponentInventory,
-} from './benchmark-resource-accounting.js';
-import {
-  createBenchmarkResourcePriceSheet,
-} from './benchmark-resource-cost-and-effects.js';
-import {
   assertBenchmarkResourceArray,
   assertBenchmarkResourceBytes,
   assertBenchmarkResourceCanonicalData,
   assertBenchmarkResourceExactRecord,
   assertBenchmarkResourceText,
-  createBenchmarkResourceMemoryResolver,
   parseBenchmarkResourceArtifact,
 } from './benchmark-resource-evidence-data.js';
 import {
-  createBenchmarkResourceEvidenceRoot,
-  createBenchmarkResourceNonMeasuringCellEvidence,
   createBenchmarkResourceSourceArtifact,
   validateBenchmarkResourceEvidenceRoot,
 } from './benchmark-resource-evidence-root.js';
@@ -44,6 +35,9 @@ import {
   COMPARATIVE_NEGATIVE_CONTROL_IDS,
   COMPARATIVE_NEGATIVE_CONTROL_REASON,
 } from './comparative-efficiency-negative-controls-constants.js';
+import {
+  assembleComparativePostgresNonMeasuringEvidence,
+} from './comparative-efficiency-postgres-nonmeasuring-evidence.js';
 export {
   COMPARATIVE_NEGATIVE_CONTROL_CLAIM_DISPOSITION,
   COMPARATIVE_NEGATIVE_CONTROL_IDS,
@@ -283,13 +277,6 @@ function sourcePayload(input, attempt, cell, sideIds, owners) {
   };
 }
 
-function rootReceipt(artifacts, root) {
-  return {
-    rootDigest: root.digest,
-    resolver: createBenchmarkResourceMemoryResolver([...artifacts, root]),
-  };
-}
-
 export function createComparativeNegativeControlEvidence(input) {
   assertBenchmarkResourceExactRecord(input, inputKeys, localText.INPUT);
   const textFields = [
@@ -346,81 +333,22 @@ export function createComparativeNegativeControlEvidence(input) {
     preregistration: preregistration.artifact,
   };
   assertComparativeNegativeControlOwners(sourceOwners, matrix.artifact);
-  const inventory = createBenchmarkResourceComponentInventory({
-    inventoryId: input.inventoryId,
-    matrixId: input.matrixId,
-    sides: input.inventorySides,
-  });
-  const price = createBenchmarkResourcePriceSheet(input.priceSheet);
-  const engagements = [];
-  const cells = [];
-  for (let index = 0; index < attempts.length; index += 1) {
-    const attempt = attempts[index];
-    const matrixCell = matrix.artifact.payload.cells[index];
-    const engagement = createBenchmarkResourceSourceArtifact(
-      BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
-      sourcePayload(input, attempt, matrixCell, sideIds, {
-        workloadManifest,
-        alternativeTopology,
-        preregistration,
-      }),
-      [
-        input.calibrationArtifact.digest,
-        workloadManifest.digest,
-        alternativeTopology.digest,
-        preregistration.digest,
-      ],
-    );
-    appendOwnArrayValue(engagements, engagement);
-    appendOwnArrayValue(
-      cells,
-      createBenchmarkResourceNonMeasuringCellEvidence({
-        matrixManifestDigest: matrix.digest,
-        matrixId: input.matrixId,
-        cellId: matrixCell.cellId,
-        pairId: input.pairId,
-        runId: attempt.runId,
-        sideIds,
-        reasonCodes: attempt.reasonCodes,
-        sourceDigests: [engagement.digest],
-        sourceRevision: input.sourceRevision,
-        producedAt: input.producedAt,
-        validUntil: input.validUntil,
-      }),
-    );
-  }
-  const artifacts = [
+  return assembleComparativePostgresNonMeasuringEvidence({
+    input,
+    attempts,
+    sideIds,
+    matrix,
     workloadManifest,
     alternativeTopology,
     preregistration,
-    matrix,
-    inventory,
-    price,
-    input.calibrationArtifact,
-    ...engagements,
-    ...cells,
-  ];
-  const root = createBenchmarkResourceEvidenceRoot({
-    matrixManifestDigest: matrix.digest,
-    componentInventoryDigest: inventory.digest,
-    priceSheetDigest: price.digest,
-    cellEvidenceDigests: cells.map((cell) => cell.digest),
-    sourceRevision: input.sourceRevision,
-    producedAt: input.producedAt,
-    validUntil: input.validUntil,
-    artifacts,
+    sourcePayloadForAttempt(attempt, matrixCell) {
+      return sourcePayload(input, attempt, matrixCell, sideIds, {
+        workloadManifest,
+        alternativeTopology,
+        preregistration,
+      });
+    },
   });
-  return {
-    receipt: rootReceipt(artifacts, root),
-    root,
-    artifacts,
-    matrix,
-    inventory,
-    price,
-    calibration: input.calibrationArtifact,
-    engagements,
-    cells,
-  };
 }
 
 function resolveArtifact(resolved, digest) {
