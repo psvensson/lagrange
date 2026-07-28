@@ -15,9 +15,7 @@ sections below describe the active **legacy distributed-query callback
 surface**. They are not the supported Artifact / Binding / Cell installation
 path. Current externally installed WASI components use Binding-derived
 runtime-service Cells; see
-[Service Deployment Guide](../docs/service-deployment-guide.md). The callback
-surface is isolated for users in the
-[Legacy Callback Guide](../docs/legacy-callback-guide.md).
+[Service Deployment Guide](../docs/service-deployment-guide.md).
 
 ### Distributed Movement Primitives (Legacy Callback)
 Cross-partition data movement is restricted to three explicit primitives,

@@ -209,8 +209,7 @@ entity kind never receive the constraint. Current externally installed
 they can receive affinity when recent access evidence exists. Affinity today
 steers **runtime-service placement only** — it does not pull data toward
 compute. It is also deliberately independent of `read_locality`; the two are
-not coupled. The older callback terminology is mapped in the
-[Legacy Callback Guide](../docs/legacy-callback-guide.md).
+not coupled.
 
 ## Layer 2: read-locality routing
 

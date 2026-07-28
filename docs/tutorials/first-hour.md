@@ -131,6 +131,12 @@ example starts and stops its own disposable local node.
 node examples/request-binding-deployment/run-request-binding-deployment.js
 ```
 
+If you would rather author the component in plain JavaScript instead of WAT,
+run the
+[js-request-binding-deployment example](../../examples/js-request-binding-deployment/README.md)
+afterwards — it deploys a ComponentizeJS-built component through the identical
+lifecycle SQL and needs no `wasm-tools` binary.
+
 The runner:
 
 1. builds the committed WAT component with `wasm-tools`;

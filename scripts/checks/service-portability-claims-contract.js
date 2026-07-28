@@ -15,7 +15,6 @@ const PUBLIC_DOCUMENT_PATHS = Object.freeze([
   'examples/distributed-sql/README.md',
   'docs/current-capabilities-and-limitations.md',
   'docs/service-deployment-guide.md',
-  'docs/legacy-callback-guide.md',
 ]);
 const CANONICAL_HUMAN_DOCUMENT_PATH =
   'docs/current-capabilities-and-limitations.md';

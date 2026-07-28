@@ -232,6 +232,7 @@ async function runRequestBindingDeploymentExample(options = {}) {
     const receipt = await buildComponent(paths);
     node = await bootExampleNode(
       path.join(temporaryRoot, NODE_DATA_DIRECTORY),
+      {wsPort: options.wsPort},
     );
     const deployment = await deploy(node, receipt);
     const observations = await exerciseDeployment(node);

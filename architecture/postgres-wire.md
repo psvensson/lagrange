@@ -197,8 +197,7 @@ objects consumed by SqlCore:
   protocol sessions with authentication and feature negotiation
 - **WasmCallAdapter** (`src/query/wasm-call-adapter.js`) — legacy
   `DB.call(select, fn)` callback execution. This is not the current
-  Artifact / Binding / Cell service path; see the
-  [Legacy Callback Guide](../docs/legacy-callback-guide.md).
+  Artifact / Binding / Cell service path.
 
 All adapters produce a frozen `SqlRequest` (defined in `src/query/sql-request.js`)
 with fields: tenantId, sessionId, statement, parameters, executionMode, budgets,

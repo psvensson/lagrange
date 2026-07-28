@@ -25,9 +25,8 @@ in the separate [contributor documentation](development/README.md).
 ## Build And Integrate
 
 - [Service Deployment Guide](service-deployment-guide.md) — the supported
-  Artifact / Binding / Cell path
-- [Legacy Callback Guide](legacy-callback-guide.md) — the older JavaScript
-  callback rehearsal, isolated from the supported deployment path
+  Artifact / Binding / Cell path, including authoring the component in
+  JavaScript with ComponentizeJS
 - [component-distribution.md](component-distribution.md) — how components are
   distributed across nodes
 - [PostgreSQL Wire And SQL Compatibility](../architecture/postgres-wire.md) —

@@ -24,12 +24,15 @@ partition that owns the rows, and invoked a genuine WASI request Binding.
 1. Learn the exact terms in the [vocabulary map](vocabulary.md).
 2. Follow the [service deployment guide](service-deployment-guide.md).
 3. Run the
-   [request-binding-deployment example](../examples/request-binding-deployment/README.md).
+   [request-binding-deployment example](../examples/request-binding-deployment/README.md),
+   or the
+   [js-request-binding-deployment example](../examples/js-request-binding-deployment/README.md)
+   to author the component in plain JavaScript.
 4. Read [Minimal Deployment Surface](../architecture/minimal-deployment-surface.md)
    when you need the owner and convergence model.
 
-The older uploaded callback surface is not the public service-deployment model.
-It has a separate [legacy callback guide](legacy-callback-guide.md).
+The older uploaded callback surface is not the public service-deployment model
+and is not part of the public documentation.
 
 ## I Want To Understand The System
 

@@ -254,6 +254,7 @@
     "xml2js": "^0.6.2"
   },
   "devDependencies": {
+    "@bytecodealliance/componentize-js": "0.21.0",
     "@eslint/js": "^9.18.0",
     "@stryker-mutator/core": "^9.5.1",
     "@stryker-mutator/tap-runner": "^9.5.1",

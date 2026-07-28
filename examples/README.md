@@ -1,6 +1,6 @@
 # Examples
 
-Five runnable examples, ordered by how much infrastructure they need. Each
+Six runnable examples, ordered by how much infrastructure they need. Each
 directory has its own README with step-by-step commands — pick the one that
 matches what you want to try.
 
@@ -17,6 +17,8 @@ other examples explore neighbouring layers:
 - **request-binding-deployment** installs a source-built WASI component,
   declares its immutable request Binding and table policy, and calls a ready
   Cell over HTTP.
+- **js-request-binding-deployment** walks the same path with a component
+  compiled from plain JavaScript by ComponentizeJS.
 - **service-portability** runs a built-in (axiomatic) runtime service — the
   bootstrap set that exists before any Binding.
 - **distributed-sql** uses the partition-callback path (`code`,
@@ -35,6 +37,16 @@ requests behave against a ready Cell.
 
 - **You'll need**: Node.js 22.12+, repository dependencies, and `wasm-tools`
   on `PATH`.
+
+## [js-request-binding-deployment/](js-request-binding-deployment/README.md)
+
+Write a service in plain JavaScript, compile it into a genuine WASI component
+with ComponentizeJS, and deploy it through the identical
+`INSTALL SERVICE` / `CREATE BINDING` / `CONFIGURE SERVICE ACCESS` sequence —
+the runtime does not know the component started as JavaScript.
+
+- **You'll need**: Node.js 22.12+ and repository dependencies (no
+  `wasm-tools` binary).
 
 ## [service-portability/](service-portability/README.md)
 

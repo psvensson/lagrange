@@ -10,8 +10,6 @@ not mixed with the older callback rehearsal.
 
 - For new service deployments, use the
   [Service Deployment Guide](service-deployment-guide.md).
-- For the older embedded/uploaded JavaScript callback surface, use the
-  [Legacy Callback Guide](legacy-callback-guide.md).
 - For authoritative runtime support and limitations, use
   [Current Capabilities And Limitations](current-capabilities-and-limitations.md).
 

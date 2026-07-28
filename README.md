@@ -202,8 +202,10 @@ No.
 WASM is the execution format for externally installed services, not the
 entire story. The repo contains built-in runtime services, regular systems
 code, the Binding/Cell component runtime, and an older JavaScript-envelope
-callback rehearsal. That older surface is documented separately in the
-[legacy callback guide](docs/legacy-callback-guide.md).
+callback rehearsal that is retained for compatibility but is no longer part
+of the public documentation. Services can be written in any language with a
+WASI-component toolchain, including JavaScript; see the
+[JavaScript request-binding example](examples/js-request-binding-deployment/README.md).
 
 WASM matters here because a genuine component is a useful unit for sandboxed,
 portable, replicable compute — that is what a Binding-derived Cell runs. It is
@@ -294,6 +296,10 @@ activated but do not yet have public invocation adapters. Managed OCI container
 activation is unsupported. Start with the
 [service deployment guide](docs/service-deployment-guide.md); the architecture
 contract is [Minimal Deployment Surface](architecture/minimal-deployment-surface.md).
+For a runnable end-to-end walkthrough, use the
+[request-binding-deployment example](examples/request-binding-deployment/README.md),
+or author the component in plain JavaScript with the
+[js-request-binding-deployment example](examples/js-request-binding-deployment/README.md).
 
 ---
 
@@ -324,9 +330,7 @@ adjusts to changes in usage instead of freezing the first layout it chose.
 The older embedded/uploaded callback runtime still demonstrates explicit
 cross-partition movement with `lookup`, `emit`, and `broadcast`. It is a
 compatibility and distributed-query learning surface, not another way to
-install an Artifact. See the
-[legacy callback guide](docs/legacy-callback-guide.md) when that API is the
-specific subject.
+install an Artifact.
 
 ---
 
@@ -562,9 +566,12 @@ layout keeps matching the access patterns.
 ### WASM Component Runtime
 
 The Artifact / Binding / Cell path executes genuine WASI components with
-budget and declared-table enforcement. The separate legacy `wasm_component`
-callback example evaluates a JavaScript envelope and must not be used as
-evidence for component execution.
+budget and declared-table enforcement. Components can be authored in any
+language with a WASI-component toolchain — including plain JavaScript via
+ComponentizeJS, shown end to end in the
+[js-request-binding-deployment example](examples/js-request-binding-deployment/README.md).
+The separate legacy `wasm_component` callback example evaluates a JavaScript
+envelope and must not be used as evidence for component execution.
 
 ### Service Query Bridge
 

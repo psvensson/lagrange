@@ -78,6 +78,23 @@ See the
 [request-binding-deployment README](../examples/request-binding-deployment/README.md)
 for the exact assertions and expected output.
 
+## Write The Service In JavaScript
+
+Services can be authored in any language with a WASI-component toolchain.
+For JavaScript, [ComponentizeJS](https://github.com/bytecodealliance/ComponentizeJS)
+compiles a plain JavaScript module into a genuine WASI component; the runtime
+deploys and executes it identically to a component built from any other
+source. No `wasm-tools` binary is needed for this path.
+
+```sh
+node examples/js-request-binding-deployment/run-js-request-binding-deployment.js
+```
+
+The [js-request-binding-deployment README](../examples/js-request-binding-deployment/README.md)
+shows the committed JavaScript source, the WIT world it targets
+(`lagrange:cell/context` imports plus a `run` export), and the identical
+lifecycle SQL.
+
 ## Runtime Status
 
 - `wasm_component`: externally installable and runs genuine WASI component

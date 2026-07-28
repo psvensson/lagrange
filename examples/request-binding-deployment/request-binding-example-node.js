@@ -85,7 +85,7 @@ function resetSingletons() {
   ServiceThreadManager.resetInstance();
 }
 
-function initializeEnvironment(dataDir) {
+function initializeEnvironment(dataDir, wsPort) {
   resetSingletons();
   const configuration = ConfigurationManager.getInstance();
   configuration.initialize({
@@ -93,7 +93,7 @@ function initializeEnvironment(dataDir) {
     node: {
       id: EXAMPLE_NODE.NODE_ID,
       restApiPort: EXAMPLE_RUNTIME.REST_API_PORT,
-      wsPort: EXAMPLE_NODE.WS_PORT,
+      wsPort,
     },
     raft: {
       electionTimeoutMaxMs: EXAMPLE_RUNTIME.RAFT_ELECTION_TIMEOUT_MAX_MS,
@@ -239,13 +239,14 @@ async function createExampleQueryRuntime(
 }
 
 async function bootExampleNode(dataDir, options = {}) {
-  const dataDirectoryManager = initializeEnvironment(dataDir);
+  const wsPort = options.wsPort ?? EXAMPLE_NODE.WS_PORT;
+  const dataDirectoryManager = initializeEnvironment(dataDir, wsPort);
   const credentialEnv = buildCredentialEnvironment();
   const readinessState = new BootstrapReadinessState();
   readinessState.setMaxListeners(0);
   const nodeAddress = `${EXAMPLE_RUNTIME.HOST}:0`;
   const advertisedNodeWsAddress =
-    `ws://${EXAMPLE_RUNTIME.HOST}:${EXAMPLE_NODE.WS_PORT}`;
+    `ws://${EXAMPLE_RUNTIME.HOST}:${wsPort}`;
   const bootstrapService = new BootstrapService({
     advertisedNodeWsAddress,
     config: {
@@ -261,7 +262,7 @@ async function bootExampleNode(dataDir, options = {}) {
     nodeAddress,
     nodeId: EXAMPLE_NODE.NODE_ID,
     readinessState,
-    wsPort: EXAMPLE_NODE.WS_PORT,
+    wsPort,
   });
   const bootstrapApi = new BootstrapAPI({
     bootstrapService,
@@ -279,7 +280,7 @@ async function bootExampleNode(dataDir, options = {}) {
     seedNodeId: EXAMPLE_NODE.NODE_ID,
     seedNodeWsAddress: advertisedNodeWsAddress,
     [METADATA_OPTION]: bootstrapService[METADATA_OPTION],
-    wsPort: EXAMPLE_NODE.WS_PORT,
+    wsPort,
   });
   let sqlRuntime = null;
   let sqlAdapter = null;

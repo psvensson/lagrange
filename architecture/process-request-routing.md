@@ -60,8 +60,7 @@ produce, since it drops the fields they need.
 The `runtime.run` and `WASM DB.call` ingress shown here belongs to the active
 legacy distributed-query callback surface, not Artifact / Binding / Cell
 service deployment. See the
-[Legacy Callback Guide](../docs/legacy-callback-guide.md) for that compatibility
-API and [Service Deployment Guide](../docs/service-deployment-guide.md) for the
+[Service Deployment Guide](../docs/service-deployment-guide.md) for the
 supported external service path.
 
 ```mermaid
