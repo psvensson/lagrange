@@ -27,8 +27,13 @@ import {
   createBenchmarkResourceWindowSourceArtifact,
 } from '../benchmark-resource-window-source.js';
 import {
+  deriveBenchmarkResourceLiveComponentAccounting,
+  resolveBenchmarkResourceLiveCalibrationComponent,
+} from '../benchmark-resource-live-observation-authority.js';
+import {
   BENCHMARK_RESOURCE_ARTIFACT_KIND,
   BENCHMARK_RESOURCE_BILLING_TREATMENT,
+  BENCHMARK_RESOURCE_CAPACITY_SOURCE,
   BENCHMARK_RESOURCE_COMPONENT_ROLE,
   BENCHMARK_RESOURCE_EFFECT,
 } from '../benchmark-resource-contract-constants.js';
@@ -42,11 +47,26 @@ import {
   FIXTURE_RESOURCE_VALID_UNTIL,
 } from './benchmark-resource-evidence-test-fixture-constants.js';
 const localText = Object.freeze({
+  BASELINE_CLIENT: 'baseline-client',
+  BASELINE_DATABASE: 'baseline-database',
+  BASELINE_STORAGE: '/var/lib/baseline',
+  CANDIDATE_CLIENT: 'candidate-client',
+  CANDIDATE_DATABASE: 'candidate-database',
+  CANDIDATE_STORAGE: '/var/lib/candidate',
+  CLIENT: 'client',
+  DATABASE: 'database',
+  FIXTURE_ALTERNATIVE_TOPOLOGY: 'fixture-alternative-topology',
+  FIXTURE_IMAGE: 'fixture:live',
+  FIXTURE_IMAGE_ID: 'sha256:fixture-image',
+  FIXTURE_NETWORK: 'fixture-network',
+  FIXTURE_PREREGISTRATION: 'fixture-preregistration',
+  LIVE_TOPOLOGY_VERSION: 'benchmark-resource-live-topology-v1',
   RESOURCE_FIXTURE_SOURCE_V1: 'resource-fixture-source-v1',
   NONE: 'none',
   IDENTICAL_LOAD_GENERATOR_ON_BOTH_SIDES: 'identical_load_generator_on_both_sides',
   SMALL: 'small',
   VALUE_2026_07_27_T11_59_00_000_Z: '2026-07-27T11:59:00.000Z',
+  VALUE_2026_07_29_T00_00_00_000_Z: '2026-07-29T00:00:00.000Z',
   PREREGISTERED_NON_MEASURING_FIXTURE_CELL: 'preregistered_non_measuring_fixture_cell',
 });
 
@@ -109,49 +129,172 @@ function minimumFootprint(cpuCores, memoryBytes, storageBytes) {
   return {instances: 1, cpuCores, memoryBytes, storageBytes};
 }
 
-function inventorySide(sideId, multiplier) {
+function inventoryComponent(
+  sideId,
+  componentId,
+  role,
+  billingTreatment,
+  fallback,
+  exclusionReason,
+  calibrationArtifact,
+) {
+  const observation = calibrationArtifact === null ?
+    undefined :
+    resolveBenchmarkResourceLiveCalibrationComponent(
+      calibrationArtifact.artifact,
+      sideId,
+      componentId,
+    );
+  const accounting = observation === undefined ?
+    fallback :
+    deriveBenchmarkResourceLiveComponentAccounting(observation);
+  return {
+    componentId,
+    role,
+    billingTreatment,
+    provisioned: accounting.provisioned,
+    minimumFootprint: accounting.minimumFootprint,
+    reservedHeadroomRatio: accounting.reservedHeadroomRatio,
+    exclusionReason,
+  };
+}
+
+function inventorySide(sideId, multiplier, calibrationArtifact) {
   return {
     sideId,
     components: [
-      {
-        componentId: `${sideId}-database`,
-        role: BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
-        billingTreatment: BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
-        provisioned: provisioned(
-          FIXTURE_SCALAR.DATABASE_CPU_PER_MULTIPLIER * multiplier,
-          FIXTURE_SCALAR.DATABASE_MEMORY_PER_MULTIPLIER * multiplier,
-          FIXTURE_SCALAR.DATABASE_STORAGE_PER_MULTIPLIER * multiplier,
-          FIXTURE_SCALAR.DATABASE_IOPS_PER_MULTIPLIER * multiplier,
-        ),
-        minimumFootprint: minimumFootprint(
-          1,
-          FIXTURE_SCALAR.DATABASE_MINIMUM_MEMORY_BYTES,
-          FIXTURE_SCALAR.DATABASE_MINIMUM_STORAGE_BYTES,
-        ),
-        reservedHeadroomRatio: FIXTURE_SCALAR.DATABASE_HEADROOM_RATIO,
-        exclusionReason: localText.NONE,
-      },
-      {
-        componentId: `${sideId}-client`,
-        role: BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT,
-        billingTreatment:
-          BENCHMARK_RESOURCE_BILLING_TREATMENT.SYMMETRICALLY_EXCLUDED,
-        provisioned: provisioned(
-          1,
-          FIXTURE_SCALAR.DATABASE_MINIMUM_MEMORY_BYTES,
-          0,
-          0,
-        ),
-        minimumFootprint: minimumFootprint(
-          1,
-          FIXTURE_SCALAR.DATABASE_MINIMUM_MEMORY_BYTES,
-          0,
-        ),
-        reservedHeadroomRatio: FIXTURE_SCALAR.CLIENT_HEADROOM_RATIO,
-        exclusionReason: localText.IDENTICAL_LOAD_GENERATOR_ON_BOTH_SIDES,
-      },
+      inventoryComponent(
+        sideId,
+        `${sideId}-database`,
+        BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
+        BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
+        {
+          provisioned: provisioned(
+            FIXTURE_SCALAR.DATABASE_CPU_PER_MULTIPLIER * multiplier,
+            FIXTURE_SCALAR.DATABASE_MEMORY_PER_MULTIPLIER * multiplier,
+            FIXTURE_SCALAR.DATABASE_STORAGE_PER_MULTIPLIER * multiplier,
+            FIXTURE_SCALAR.DATABASE_IOPS_PER_MULTIPLIER * multiplier,
+          ),
+          minimumFootprint: minimumFootprint(
+            1,
+            FIXTURE_SCALAR.DATABASE_MINIMUM_MEMORY_BYTES,
+            FIXTURE_SCALAR.DATABASE_MINIMUM_STORAGE_BYTES,
+          ),
+          reservedHeadroomRatio: FIXTURE_SCALAR.DATABASE_HEADROOM_RATIO,
+        },
+        localText.NONE,
+        calibrationArtifact,
+      ),
+      inventoryComponent(
+        sideId,
+        `${sideId}-client`,
+        BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT,
+        BENCHMARK_RESOURCE_BILLING_TREATMENT.SYMMETRICALLY_EXCLUDED,
+        {
+          provisioned: provisioned(
+            1,
+            FIXTURE_SCALAR.DATABASE_MINIMUM_MEMORY_BYTES,
+            0,
+            0,
+          ),
+          minimumFootprint: minimumFootprint(
+            1,
+            FIXTURE_SCALAR.DATABASE_MINIMUM_MEMORY_BYTES,
+            0,
+          ),
+          reservedHeadroomRatio: FIXTURE_SCALAR.CLIENT_HEADROOM_RATIO,
+        },
+        localText.IDENTICAL_LOAD_GENERATOR_ON_BOTH_SIDES,
+        calibrationArtifact,
+      ),
     ],
   };
+}
+
+function liveTopology(calibrationArtifact) {
+  const components = [];
+  for (let sideIndex = 0;
+    sideIndex < FIXTURE_RESOURCE_SIDE_IDS.length;
+    sideIndex += 1) {
+    const sideId = FIXTURE_RESOURCE_SIDE_IDS[sideIndex];
+    for (const entry of [
+      [localText.DATABASE, BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE],
+      [localText.CLIENT, BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT],
+    ]) {
+      const componentId = `${sideId}-${entry[0]}`;
+      const observation = resolveBenchmarkResourceLiveCalibrationComponent(
+        calibrationArtifact.artifact,
+        sideId,
+        componentId,
+      );
+      components.push({
+        sideId,
+        componentId,
+        role: entry[1],
+        physicalResourceId: observation.containerId,
+      });
+    }
+  }
+  return createBenchmarkResourceSourceArtifact(
+    BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
+    {
+      version: localText.LIVE_TOPOLOGY_VERSION,
+      image: localText.FIXTURE_IMAGE,
+      imageId: localText.FIXTURE_IMAGE_ID,
+      databaseContainers: [
+        localText.CANDIDATE_DATABASE,
+        localText.BASELINE_DATABASE,
+      ],
+      sharedClientContainers: [
+        localText.CANDIDATE_CLIENT,
+        localText.BASELINE_CLIENT,
+      ],
+      network: localText.FIXTURE_NETWORK,
+      databaseStorage: [
+        localText.CANDIDATE_STORAGE,
+        localText.BASELINE_STORAGE,
+      ],
+      reservedIopsPerComponent: 0,
+      reservedNetworkBytesPerSecondPerComponent: 0,
+      components,
+    },
+  );
+}
+
+function alternativeTopologyFixture(calibrationArtifact) {
+  return calibrationArtifact === null ?
+    source(
+      BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
+      localText.FIXTURE_ALTERNATIVE_TOPOLOGY,
+    ) :
+    liveTopology(calibrationArtifact);
+}
+
+function fixtureIdentity(calibrationArtifact) {
+  return {
+    runId:
+      calibrationArtifact?.artifact.payload.runId ??
+      FIXTURE_RESOURCE_RUN_ID,
+    sourceRevision:
+      calibrationArtifact?.artifact.payload.sourceRevision ??
+      FIXTURE_RESOURCE_SOURCE_REVISION,
+  };
+}
+
+function fixturePreregistration(capacityProtocol) {
+  return source(
+    BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
+    localText.FIXTURE_PREREGISTRATION,
+    capacityProtocol === null ?
+      {} :
+      {
+        sideIds: FIXTURE_RESOURCE_SIDE_IDS,
+        capacityProtocolReportDigest:
+          capacityProtocol.report.reportDigest,
+        capacityProtocolPreregistrationDigest:
+          capacityProtocol.preregistration.manifestDigest,
+      },
+  );
 }
 
 function unitPrices() {
@@ -270,8 +413,12 @@ function sideSourceArtifacts(
   sideId,
   multiplier,
   calibrationArtifact,
+  capacityProtocol,
+  sideIndex,
   coordinates,
 ) {
+  const protocolSideId =
+    capacityProtocol?.preregistration.sideIds[sideIndex];
   const capacitySample = createBenchmarkResourceWindowSourceArtifact(
     BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE,
     {
@@ -281,6 +428,24 @@ function sideSourceArtifacts(
         name: `${sideId}-capacity-sample`,
         correctOpsPerSecond:
           sideId === FIXTURE_RESOURCE_SIDE_IDS[0] ? 1200 : 1000,
+        ...(capacityProtocol === null ?
+          {} :
+          {
+            protocol: {
+              version: BENCHMARK_RESOURCE_CAPACITY_SOURCE.VERSION,
+              evidenceClass:
+                BENCHMARK_RESOURCE_CAPACITY_SOURCE.EVIDENCE_CLASS,
+              mappedSideId: sideId,
+              protocolSideId,
+              artifactReceipt: {
+                reportDigest: capacityProtocol.report.reportDigest,
+                preregistrationDigest:
+                  capacityProtocol.preregistration.manifestDigest,
+              },
+              preregistration: capacityProtocol.preregistration,
+              report: capacityProtocol.report,
+            },
+          }),
       },
     },
   );
@@ -300,6 +465,9 @@ function sideSourceArtifacts(
       evidence: {
         name: `${sideId}-live-engagement`,
         transport: 'managed-postgresql',
+        ...(calibrationArtifact === null ?
+          {} :
+          {amplificationPolicy: 'semantic_events_absent_zero_only'}),
       },
     },
   );
@@ -343,7 +511,36 @@ function sideSourceArtifacts(
   };
 }
 
-function capacitySummary(sideId, capacitySample) {
+function capacitySummary(
+  sideId,
+  sideIndex,
+  capacitySample,
+  capacityProtocol,
+) {
+  if (capacityProtocol !== null) {
+    const protocolSideId =
+      capacityProtocol.preregistration.sideIds[sideIndex];
+    const capacity =
+      capacityProtocol.report.summary.capacityBySide[protocolSideId];
+    const curve = capacityProtocol.report.summary.capacityCurve.find(
+      (entry) =>
+        entry.offeredLoadPerSecond ===
+          capacity.maxSloOfferedLoadPerSecond,
+    );
+    const interval =
+      curve.sides[protocolSideId].correctThroughputPerSecond;
+    return createBenchmarkResourceCapacitySummary({
+      sideId,
+      capacityCorrectOpsPerSecond:
+        capacity.maxCorrectThroughputPerSecond,
+      sampleCount: capacity.perBlock.length,
+      confidenceInterval: {
+        lower: interval.lower,
+        upper: interval.upper,
+      },
+      sourceDigests: [capacitySample.digest],
+    });
+  }
   const value = sideId === FIXTURE_RESOURCE_SIDE_IDS[0] ?
     FIXTURE_SCALAR.CANDIDATE_CAPACITY :
     FIXTURE_SCALAR.BASELINE_CAPACITY;
@@ -396,27 +593,22 @@ function optionalFixtureArtifact(artifact) {
 
 export function createBenchmarkResourceEvidenceFixture({
   calibrationArtifact = null,
+  capacityProtocol = null,
   liveUtilizationOffset = 0,
   matrixSizeValues = [localText.SMALL],
+  priceValidUntil = localText.VALUE_2026_07_29_T00_00_00_000_Z,
   sealNonMeasuringCells = true,
 } = {}) {
-  const fixtureRunId =
-    calibrationArtifact?.artifact.payload.runId ?? FIXTURE_RESOURCE_RUN_ID;
-  const fixtureSourceRevision =
-    calibrationArtifact?.artifact.payload.sourceRevision ??
-    FIXTURE_RESOURCE_SOURCE_REVISION;
+  const identity = fixtureIdentity(calibrationArtifact);
+  const fixtureRunId = identity.runId;
+  const fixtureSourceRevision = identity.sourceRevision;
   const workloadManifest = source(
     BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
     'fixture-workload',
   );
-  const alternativeTopology = source(
-    BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
-    'fixture-alternative-topology',
-  );
-  const preregistration = source(
-    BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
-    'fixture-preregistration',
-  );
+  const alternativeTopology =
+    alternativeTopologyFixture(calibrationArtifact);
+  const preregistration = fixturePreregistration(capacityProtocol);
   const matrix = createBenchmarkResourceMatrixManifest({
     matrixId: FIXTURE_RESOURCE_MATRIX_ID,
     axes: [
@@ -432,8 +624,8 @@ export function createBenchmarkResourceEvidenceFixture({
     inventoryId: 'fixture-inventory-v1',
     matrixId: FIXTURE_RESOURCE_MATRIX_ID,
     sides: [
-      inventorySide(FIXTURE_RESOURCE_SIDE_IDS[0], 2),
-      inventorySide(FIXTURE_RESOURCE_SIDE_IDS[1], 1),
+      inventorySide(FIXTURE_RESOURCE_SIDE_IDS[0], 2, calibrationArtifact),
+      inventorySide(FIXTURE_RESOURCE_SIDE_IDS[1], 1, calibrationArtifact),
     ],
   });
   const price = createBenchmarkResourcePriceSheet({
@@ -442,7 +634,7 @@ export function createBenchmarkResourceEvidenceFixture({
     currency: 'USD',
     priceDate: '2026-07-27',
     validFrom: '2026-07-27T00:00:00.000Z',
-    validUntil: '2026-07-29T00:00:00.000Z',
+    validUntil: priceValidUntil,
     billingGranularity: 'per_second',
     reservationPolicy: 'on_demand',
     spotPolicy: 'excluded',
@@ -457,6 +649,8 @@ export function createBenchmarkResourceEvidenceFixture({
       FIXTURE_RESOURCE_SIDE_IDS[0],
       2,
       calibrationArtifact,
+      capacityProtocol,
+      0,
       {
         matrixId: FIXTURE_RESOURCE_MATRIX_ID,
         cellId: cell.cellId,
@@ -468,6 +662,8 @@ export function createBenchmarkResourceEvidenceFixture({
       FIXTURE_RESOURCE_SIDE_IDS[1],
       1,
       calibrationArtifact,
+      capacityProtocol,
+      1,
       {
         matrixId: FIXTURE_RESOURCE_MATRIX_ID,
         cellId: cell.cellId,
@@ -507,7 +703,12 @@ export function createBenchmarkResourceEvidenceFixture({
         liveUtilizationOffset,
       ),
     }));
-    capacities.push(capacitySummary(sideId, sources.capacitySample));
+    capacities.push(capacitySummary(
+      sideId,
+      index,
+      sources.capacitySample,
+      capacityProtocol,
+    ));
   }
   const costs = windows.map((window) =>
     computeBenchmarkResourceWindowCost(
@@ -519,8 +720,10 @@ export function createBenchmarkResourceEvidenceFixture({
     effectType: BENCHMARK_RESOURCE_EFFECT.CAPACITY,
     numeratorSideId: FIXTURE_RESOURCE_SIDE_IDS[0],
     denominatorSideId: FIXTURE_RESOURCE_SIDE_IDS[1],
-    numeratorValue: 1200,
-    denominatorValue: 1000,
+    numeratorValue:
+      capacities[0].artifact.payload.capacityCorrectOpsPerSecond,
+    denominatorValue:
+      capacities[1].artifact.payload.capacityCorrectOpsPerSecond,
     confidenceInterval: {
       lower:
         capacities[0].artifact.payload.confidenceInterval.lower /
@@ -530,7 +733,10 @@ export function createBenchmarkResourceEvidenceFixture({
         capacities[1].artifact.payload.confidenceInterval.lower,
     },
     practicalThreshold: 0.05,
-    sampleCount: 3,
+    sampleCount: Math.min(
+      capacities[0].artifact.payload.sampleCount,
+      capacities[1].artifact.payload.sampleCount,
+    ),
     sourceDigests: capacities.map((capacity) => capacity.digest),
     currency: BENCHMARK_RESOURCE_NO_CURRENCY,
   });

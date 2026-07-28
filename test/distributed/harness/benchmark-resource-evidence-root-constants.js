@@ -109,3 +109,56 @@ export const BENCHMARK_RESOURCE_ROOT_TEXT = Object.freeze({
   VALID: 'valid',
   UNRESOLVED: 'unresolved',
 });
+
+export const BENCHMARK_RESOURCE_MEASURING_CELL_INPUT_KEYS = Object.freeze([
+  'matrixManifestDigest',
+  'matrixId',
+  'cellId',
+  'pairId',
+  'runId',
+  'sideIds',
+  'capacityReportDigests',
+  'semanticReceiptDigests',
+  'liveEngagementDigests',
+  'componentInventoryDigest',
+  'priceSheetDigest',
+  'resourceWindowDigests',
+  'capacityEffect',
+  'costEffect',
+  'sourceRevision',
+  'producedAt',
+  'validUntil',
+]);
+
+export const BENCHMARK_RESOURCE_NON_MEASURING_CELL_INPUT_KEYS = Object.freeze([
+  'matrixManifestDigest',
+  'matrixId',
+  'cellId',
+  'pairId',
+  'runId',
+  'sideIds',
+  'reasonCodes',
+  'sourceDigests',
+  'sourceRevision',
+  'producedAt',
+  'validUntil',
+]);
+
+export const BENCHMARK_RESOURCE_ROOT_INPUT_KEYS = Object.freeze([
+  'matrixManifestDigest',
+  'componentInventoryDigest',
+  'priceSheetDigest',
+  'cellEvidenceDigests',
+  'sourceRevision',
+  'producedAt',
+  'validUntil',
+  'artifacts',
+]);
+
+export const BENCHMARK_RESOURCE_ROOT_MANIFEST_ENTRY_KEYS =
+  Object.freeze(['kind', 'digest', 'byteLength']);
+
+export const BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE = Object.freeze({
+  ACCEPTED: 'accepted',
+  REJECTED: 'rejected',
+});

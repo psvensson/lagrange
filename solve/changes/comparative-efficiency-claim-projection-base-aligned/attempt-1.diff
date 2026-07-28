@@ -1,0 +1,3180 @@
+diff --git a/scripts/checks/run-comparative-efficiency-claim-projection-guard.js b/scripts/checks/run-comparative-efficiency-claim-projection-guard.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b781522eb99dc9062dde9da9181a5d4dd2e9f12c
+--- /dev/null
++++ b/scripts/checks/run-comparative-efficiency-claim-projection-guard.js
+@@ -0,0 +1,12 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'comparative-efficiency-claim-projection-guard': [
++    'test/distributed/harness/__tests__/' +
++      'comparative-efficiency-claim-projection.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/scripts/checks/run-comparative-efficiency-claim-projection-live.js b/scripts/checks/run-comparative-efficiency-claim-projection-live.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..bd575148a4c4e34925edc6490c8e93f5b5cd0f08
+--- /dev/null
++++ b/scripts/checks/run-comparative-efficiency-claim-projection-live.js
+@@ -0,0 +1,369 @@
++#!/usr/bin/env node
++
++import {createHash} from 'node:crypto';
++import {
++  mkdirSync,
++  readFileSync,
++  readdirSync,
++  statSync,
++  writeFileSync,
++} from 'node:fs';
++import {basename, resolve} from 'node:path';
++import {
++  collectBenchmarkResourceSourceProvenance,
++} from './benchmark-resource-source-provenance.js';
++import {
++  createBenchmarkResourceDurableResolver,
++} from
++  '../../test/distributed/harness/benchmark-resource-durable-resolver.js';
++import {
++  digestBenchmarkSemanticData,
++} from '../../test/distributed/harness/benchmark-semantic-integrity.js';
++import {
++  COMPARATIVE_EVIDENCE_CLASS,
++} from
++  '../../test/distributed/harness/comparative-efficiency-evidence-contract.js';
++import {
++  COMPARATIVE_CLAIM_CERTIFICATION_STATE,
++  COMPARATIVE_CLAIM_METRIC,
++} from '../../test/distributed/harness/comparative-efficiency-claim-projection-constants.js';
++import {
++  projectComparativeEfficiencyClaims,
++} from '../../test/distributed/harness/comparative-efficiency-claim-projection.js';
++import {
++  renderComparativeEfficiencyClaimTable,
++  validateComparativeEfficiencyClaimTable,
++} from
++  '../../test/distributed/harness/comparative-efficiency-claim-table.js';
++import {
++  SCALE_PROFILE_ID,
++} from '../../test/distributed/harness/scale-evidence-contract.js';
++
++const SCENARIO = 'comparative-efficiency-claim-projection';
++const REPORT_DIRECTORY = 'test-output/reports';
++const OUTPUT_DIRECTORY =
++  'test-output/comparative-efficiency-claim-projection';
++const localText = Object.freeze({
++  CLASSIFICATION_MISMATCH:
++    'claim_projection:expected_classification_mismatch:',
++  CONTENT_SEPARATOR: '\u0000',
++  HEX: 'hex',
++  HUMAN_TABLE_DIGEST_MISSING:
++    'claim_projection:human_table_digest_missing',
++  SOURCE_REPORT_SEPARATOR: ', ',
++  UTF8: 'utf8',
++});
++const SOURCE_PATHS = Object.freeze([
++  'scripts/checks/benchmark-resource-source-provenance.js',
++  'scripts/checks/run-comparative-efficiency-claim-projection-guard.js',
++  'scripts/checks/run-comparative-efficiency-claim-projection-live.js',
++  'src/diagnostics/comparative-efficiency-opportunity-calculator.js',
++  'test/distributed/harness/__tests__/' +
++    'benchmark-resource-evidence-test-fixture.js',
++  'test/distributed/harness/__tests__/' +
++    'comparative-efficiency-claim-projection.test.js',
++  'test/distributed/harness/benchmark-resource-cost-and-effects.js',
++  'test/distributed/harness/benchmark-resource-evidence-data.js',
++  'test/distributed/harness/benchmark-resource-claim-evidence-view.js',
++  'test/distributed/harness/benchmark-resource-evidence-root-constants.js',
++  'test/distributed/harness/benchmark-resource-evidence-root.js',
++  'test/distributed/harness/benchmark-semantic-integrity.js',
++  'test/distributed/harness/comparative-efficiency-evidence-contract.js',
++  'test/distributed/harness/comparative-efficiency-claim-projection-constants.js',
++  'test/distributed/harness/comparative-efficiency-claim-projection.js',
++  'test/distributed/harness/comparative-efficiency-claim-table.js',
++  'test/distributed/harness/scale-certification-receipt-freshness.js',
++  'test/distributed/harness/scale-evidence-contract.js',
++]);
++const ANALYTICAL_FIXTURES = Object.freeze([
++  {
++    workloadId: 'alternative-favored',
++    path: 'test/fixtures/comparative-efficiency-opportunity/' +
++      'alternative-favored.json',
++  },
++  {
++    workloadId: 'movielens-grouped-reduce',
++    path: 'test/fixtures/comparative-efficiency-opportunity/' +
++      'grouped-reduce.json',
++  },
++  {
++    workloadId: 'change-rate-invalidation',
++    path: 'test/fixtures/comparative-efficiency-opportunity/' +
++      'invalidation.json',
++  },
++  {
++    workloadId: 'request-enrichment',
++    path: 'test/fixtures/comparative-efficiency-opportunity/' +
++      'request-enrichment.json',
++  },
++]);
++const MEASURED_SOURCES = Object.freeze([
++  {
++    scenario: 'comparative-efficiency-negative-controls',
++    workloadId: 'negative-controls',
++    matrixId: 'comparative-negative-controls-p0-v1',
++    artifactDirectory: 'test-output/comparative-negative-control-artifacts',
++  },
++  {
++    scenario: 'comparative-efficiency-request-enrichment',
++    workloadId: 'request-enrichment',
++    matrixId: 'comparative-request-enrichment-p0-v1',
++    artifactDirectory:
++      'test-output/comparative-request-enrichment-artifacts',
++  },
++  {
++    scenario: 'comparative-efficiency-movielens-grouped-reduce',
++    workloadId: 'movielens-grouped-reduce',
++    matrixId: 'comparative-movielens-grouped-reduce-p0-v1',
++    artifactDirectory:
++      'test-output/comparative-movielens-grouped-reduce-artifacts',
++  },
++  {
++    scenario: 'comparative-efficiency-change-rate-crossover',
++    workloadId: 'change-rate-crossover',
++    matrixId: 'comparative-change-rate-crossover-p0-v1',
++    artifactDirectory:
++      'test-output/comparative-change-rate-crossover-artifacts',
++  },
++]);
++
++function scenarioEntry(report, scenario) {
++  const entries = report.standardSummary?.scenarios;
++  return Array.isArray(entries) ?
++    entries.find((entry) => entry.scenario === scenario) :
++    undefined;
++}
++
++function reportPassedScenario(report, entry, source) {
++  return report.scenario === source.scenario &&
++    report.summary?.failed === 0 &&
++    entry?.current?.passed === true;
++}
++
++function reportDetailValid(detail, source) {
++  return detail?.matrixId === source.matrixId &&
++    typeof detail.evidenceRootDigest === 'string' &&
++    detail.durableReplayValid === true &&
++    detail.freshProcessReplayValid === true;
++}
++
++function passingReport(source, candidate) {
++  const report = JSON.parse(readFileSync(candidate.path, localText.UTF8));
++  const entry = scenarioEntry(report, source.scenario);
++  if (!reportPassedScenario(report, entry, source)) {
++    return null;
++  }
++  const detail = entry.detail;
++  if (!reportDetailValid(detail, source)) {
++    throw new Error(`${source.scenario}:latest_pass_detail_invalid`);
++  }
++  return {
++    path: candidate.path,
++    timestamp: report.timestamp,
++    detail,
++  };
++}
++
++function latestPassingReport(source) {
++  const prefix = `${source.scenario}-`;
++  const candidates = readdirSync(REPORT_DIRECTORY)
++    .filter((name) =>
++      name.startsWith(prefix) && name.endsWith('.report.json'))
++    .map((name) => {
++      const path = resolve(REPORT_DIRECTORY, name);
++      return {path, modifiedAt: statSync(path).mtimeMs};
++    })
++    .sort((left, right) => right.modifiedAt - left.modifiedAt);
++  for (let index = 0; index < candidates.length; index += 1) {
++    const report = passingReport(source, candidates[index]);
++    if (report !== null) return report;
++  }
++  throw new Error(`${source.scenario}:passing_live_report_required`);
++}
++
++function analyticalEvidence() {
++  return ANALYTICAL_FIXTURES.map((fixture) => ({
++    workloadId: fixture.workloadId,
++    input: JSON.parse(readFileSync(fixture.path, localText.UTF8)),
++  }));
++}
++
++function measuredEvidence(sourceReports) {
++  return sourceReports.map(({source, report}) => ({
++    workloadId: source.workloadId,
++    expectedMatrixId: source.matrixId,
++    profile: {
++      id: SCALE_PROFILE_ID.DEVELOPMENT,
++      identity: digestBenchmarkSemanticData({
++        profileId: SCALE_PROFILE_ID.DEVELOPMENT,
++        matrixId: source.matrixId,
++      }),
++    },
++    rootReceipt: {
++      rootDigest: report.detail.evidenceRootDigest,
++      resolver: createBenchmarkResourceDurableResolver(
++        resolve(source.artifactDirectory),
++      ),
++    },
++    certification: {
++      state: COMPARATIVE_CLAIM_CERTIFICATION_STATE.ABSENT,
++    },
++  }));
++}
++
++function increment(counts, key) {
++  counts[key] = (counts[key] || 0) + 1;
++}
++
++function tableSummary(table) {
++  const evidenceClasses = {};
++  const outcomes = {};
++  const metrics = {};
++  for (let index = 0; index < table.rows.length; index += 1) {
++    increment(evidenceClasses, table.rows[index].evidenceClass);
++    increment(outcomes, table.rows[index].outcome);
++    increment(metrics, table.rows[index].metric);
++  }
++  return {evidenceClasses, outcomes, metrics};
++}
++
++function sourceContentDigest() {
++  const hash = createHash('sha256');
++  for (let index = 0; index < SOURCE_PATHS.length; index += 1) {
++    hash.update(SOURCE_PATHS[index]);
++    hash.update(localText.CONTENT_SEPARATOR);
++    hash.update(readFileSync(SOURCE_PATHS[index]));
++    hash.update(localText.CONTENT_SEPARATOR);
++  }
++  return `sha256:${hash.digest(localText.HEX)}`;
++}
++
++function reportSource(source, report) {
++  return {
++    scenario: source.scenario,
++    reportPath: report.path,
++    reportTimestamp: report.timestamp,
++    matrixId: source.matrixId,
++    evidenceRootDigest: report.detail.evidenceRootDigest,
++    claimDisposition: report.detail.claimDisposition,
++    measuringCellCount: report.detail.measuringCellCount,
++    nonMeasuringCellCount: report.detail.nonMeasuringCellCount,
++    artifactDirectory: source.artifactDirectory,
++  };
++}
++
++async function main() {
++  const sourceReports = MEASURED_SOURCES.map((source) => ({
++    source,
++    report: latestPassingReport(source),
++  }));
++  const evaluatedAt = new Date().toISOString();
++  const table = projectComparativeEfficiencyClaims({
++    evaluatedAt,
++    analyticalEvidence: analyticalEvidence(),
++    measuredEvidence: measuredEvidence(sourceReports),
++  });
++  const validation = validateComparativeEfficiencyClaimTable(table);
++  if (!validation.valid) {
++    throw new Error(`machine_claim_table_invalid:${validation.reason}`);
++  }
++  const analyticalRows = table.rows.filter(
++    (row) => row.metric === COMPARATIVE_CLAIM_METRIC.ANALYTICAL_OPPORTUNITY,
++  );
++  const measuredRows = table.rows.filter(
++    (row) => row.metric !== COMPARATIVE_CLAIM_METRIC.ANALYTICAL_OPPORTUNITY,
++  );
++  if (
++    analyticalRows.length !== ANALYTICAL_FIXTURES.length ||
++    !analyticalRows.every(
++      (row) =>
++        row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.ANALYTICAL_BOUND,
++    ) ||
++    !measuredRows.every(
++      (row) => row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++    )
++  ) {
++    throw new Error(
++      localText.CLASSIFICATION_MISMATCH +
++      JSON.stringify({
++        analyticalRows: analyticalRows.length,
++        measuredRows: measuredRows.length,
++        summary: tableSummary(table),
++      }),
++    );
++  }
++  const markdown = renderComparativeEfficiencyClaimTable(table);
++  if (!markdown.includes(table.tableDigest)) {
++    throw new Error(localText.HUMAN_TABLE_DIGEST_MISSING);
++  }
++  mkdirSync(OUTPUT_DIRECTORY, {recursive: true});
++  const stamp = evaluatedAt.replace(/[:.]/gu, '-');
++  const machineTablePath = resolve(
++    OUTPUT_DIRECTORY,
++    `${SCENARIO}-${stamp}.table.json`,
++  );
++  const humanTablePath = resolve(
++    OUTPUT_DIRECTORY,
++    `${SCENARIO}-${stamp}.table.md`,
++  );
++  writeFileSync(machineTablePath, JSON.stringify(table, null, 2));
++  writeFileSync(humanTablePath, markdown);
++
++  const sourceProvenance =
++    await collectBenchmarkResourceSourceProvenance(SOURCE_PATHS);
++  sourceProvenance.sourceContentDigest = sourceContentDigest();
++  const detail = {
++    evaluatedAt,
++    tableDigest: table.tableDigest,
++    rowCount: table.rows.length,
++    ...tableSummary(table),
++    analyticalBoundCount: analyticalRows.length,
++    measuredNoClaimCount: measuredRows.length,
++    allMeasuredRowsFailClosed: true,
++    machineTablePath,
++    humanTablePath,
++    sourceReports: sourceReports.map(({source, report}) =>
++      reportSource(source, report)),
++    sourceProvenance,
++  };
++  const timestamp = new Date().toISOString();
++  const scenarioReport = {
++    timestamp,
++    scenario: SCENARIO,
++    producer: 'comparative-efficiency-claim-projection-live',
++    fidelity: 'current-durable-evidence-projection',
++    summary: {total: 1, passed: 1, failed: 0},
++    optimizationSummary: {totalPriorityItems: 0},
++    standardSummary: {
++      scenarios: [{
++        scenario: SCENARIO,
++        passed: true,
++        current: {passed: true, verdict: 'PASS'},
++        detail,
++      }],
++    },
++  };
++  const reportStamp = timestamp.replace(/[:.]/gu, '-');
++  const reportPath = resolve(
++    REPORT_DIRECTORY,
++    `${SCENARIO}-${reportStamp}.report.json`,
++  );
++  writeFileSync(reportPath, JSON.stringify(scenarioReport, null, 2));
++  process.stdout.write(
++    `${SCENARIO}: PASS\n` +
++    `tableDigest: ${table.tableDigest}\n` +
++    `rows: ${table.rows.length} ` +
++      `(analytical_bound=${analyticalRows.length}, ` +
++      `measured_no_claim=${measuredRows.length})\n` +
++    `machineTable: ${machineTablePath}\n` +
++    `humanTable: ${humanTablePath}\n` +
++    `scenarioReport: ${reportPath}\n` +
++    `sourceReports: ${sourceReports.map(({report}) =>
++      basename(report.path)).join(localText.SOURCE_REPORT_SEPARATOR)}\n`,
++  );
++}
++
++main().catch((error) => {
++  process.stderr.write(`${SCENARIO}: FAIL\n${error.stack}\n`);
++  process.exitCode = 1;
++});
+diff --git a/test/distributed/harness/__tests__/benchmark-resource-evidence-test-fixture.js b/test/distributed/harness/__tests__/benchmark-resource-evidence-test-fixture.js
+index d20bde4aa6b810fa9f723ad4800ced7140969a00..c60963c97f7f91ddbd142f3b202e4a8658f4d2b0 100644
+--- a/test/distributed/harness/__tests__/benchmark-resource-evidence-test-fixture.js
++++ b/test/distributed/harness/__tests__/benchmark-resource-evidence-test-fixture.js
+@@ -26,9 +26,14 @@ import {
+ import {
+   createBenchmarkResourceWindowSourceArtifact,
+ } from '../benchmark-resource-window-source.js';
++import {
++  deriveBenchmarkResourceLiveComponentAccounting,
++  resolveBenchmarkResourceLiveCalibrationComponent,
++} from '../benchmark-resource-live-observation-authority.js';
+ import {
+   BENCHMARK_RESOURCE_ARTIFACT_KIND,
+   BENCHMARK_RESOURCE_BILLING_TREATMENT,
++  BENCHMARK_RESOURCE_CAPACITY_SOURCE,
+   BENCHMARK_RESOURCE_COMPONENT_ROLE,
+   BENCHMARK_RESOURCE_EFFECT,
+ } from '../benchmark-resource-contract-constants.js';
+@@ -42,11 +47,26 @@ import {
+   FIXTURE_RESOURCE_VALID_UNTIL,
+ } from './benchmark-resource-evidence-test-fixture-constants.js';
+ const localText = Object.freeze({
++  BASELINE_CLIENT: 'baseline-client',
++  BASELINE_DATABASE: 'baseline-database',
++  BASELINE_STORAGE: '/var/lib/baseline',
++  CANDIDATE_CLIENT: 'candidate-client',
++  CANDIDATE_DATABASE: 'candidate-database',
++  CANDIDATE_STORAGE: '/var/lib/candidate',
++  CLIENT: 'client',
++  DATABASE: 'database',
++  FIXTURE_ALTERNATIVE_TOPOLOGY: 'fixture-alternative-topology',
++  FIXTURE_IMAGE: 'fixture:live',
++  FIXTURE_IMAGE_ID: 'sha256:fixture-image',
++  FIXTURE_NETWORK: 'fixture-network',
++  FIXTURE_PREREGISTRATION: 'fixture-preregistration',
++  LIVE_TOPOLOGY_VERSION: 'benchmark-resource-live-topology-v1',
+   RESOURCE_FIXTURE_SOURCE_V1: 'resource-fixture-source-v1',
+   NONE: 'none',
+   IDENTICAL_LOAD_GENERATOR_ON_BOTH_SIDES: 'identical_load_generator_on_both_sides',
+   SMALL: 'small',
+   VALUE_2026_07_27_T11_59_00_000_Z: '2026-07-27T11:59:00.000Z',
++  VALUE_2026_07_29_T00_00_00_000_Z: '2026-07-29T00:00:00.000Z',
+   PREREGISTERED_NON_MEASURING_FIXTURE_CELL: 'preregistered_non_measuring_fixture_cell',
+ });
+ 
+@@ -109,51 +129,174 @@ function minimumFootprint(cpuCores, memoryBytes, storageBytes) {
+   return {instances: 1, cpuCores, memoryBytes, storageBytes};
+ }
+ 
+-function inventorySide(sideId, multiplier) {
++function inventoryComponent(
++  sideId,
++  componentId,
++  role,
++  billingTreatment,
++  fallback,
++  exclusionReason,
++  calibrationArtifact,
++) {
++  const observation = calibrationArtifact === null ?
++    undefined :
++    resolveBenchmarkResourceLiveCalibrationComponent(
++      calibrationArtifact.artifact,
++      sideId,
++      componentId,
++    );
++  const accounting = observation === undefined ?
++    fallback :
++    deriveBenchmarkResourceLiveComponentAccounting(observation);
++  return {
++    componentId,
++    role,
++    billingTreatment,
++    provisioned: accounting.provisioned,
++    minimumFootprint: accounting.minimumFootprint,
++    reservedHeadroomRatio: accounting.reservedHeadroomRatio,
++    exclusionReason,
++  };
++}
++
++function inventorySide(sideId, multiplier, calibrationArtifact) {
+   return {
+     sideId,
+     components: [
+-      {
+-        componentId: `${sideId}-database`,
+-        role: BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
+-        billingTreatment: BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
+-        provisioned: provisioned(
+-          FIXTURE_SCALAR.DATABASE_CPU_PER_MULTIPLIER * multiplier,
+-          FIXTURE_SCALAR.DATABASE_MEMORY_PER_MULTIPLIER * multiplier,
+-          FIXTURE_SCALAR.DATABASE_STORAGE_PER_MULTIPLIER * multiplier,
+-          FIXTURE_SCALAR.DATABASE_IOPS_PER_MULTIPLIER * multiplier,
+-        ),
+-        minimumFootprint: minimumFootprint(
+-          1,
+-          FIXTURE_SCALAR.DATABASE_MINIMUM_MEMORY_BYTES,
+-          FIXTURE_SCALAR.DATABASE_MINIMUM_STORAGE_BYTES,
+-        ),
+-        reservedHeadroomRatio: FIXTURE_SCALAR.DATABASE_HEADROOM_RATIO,
+-        exclusionReason: localText.NONE,
+-      },
+-      {
+-        componentId: `${sideId}-client`,
+-        role: BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT,
+-        billingTreatment:
+-          BENCHMARK_RESOURCE_BILLING_TREATMENT.SYMMETRICALLY_EXCLUDED,
+-        provisioned: provisioned(
+-          1,
+-          FIXTURE_SCALAR.DATABASE_MINIMUM_MEMORY_BYTES,
+-          0,
+-          0,
+-        ),
+-        minimumFootprint: minimumFootprint(
+-          1,
+-          FIXTURE_SCALAR.DATABASE_MINIMUM_MEMORY_BYTES,
+-          0,
+-        ),
+-        reservedHeadroomRatio: FIXTURE_SCALAR.CLIENT_HEADROOM_RATIO,
+-        exclusionReason: localText.IDENTICAL_LOAD_GENERATOR_ON_BOTH_SIDES,
+-      },
++      inventoryComponent(
++        sideId,
++        `${sideId}-database`,
++        BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
++        BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
++        {
++          provisioned: provisioned(
++            FIXTURE_SCALAR.DATABASE_CPU_PER_MULTIPLIER * multiplier,
++            FIXTURE_SCALAR.DATABASE_MEMORY_PER_MULTIPLIER * multiplier,
++            FIXTURE_SCALAR.DATABASE_STORAGE_PER_MULTIPLIER * multiplier,
++            FIXTURE_SCALAR.DATABASE_IOPS_PER_MULTIPLIER * multiplier,
++          ),
++          minimumFootprint: minimumFootprint(
++            1,
++            FIXTURE_SCALAR.DATABASE_MINIMUM_MEMORY_BYTES,
++            FIXTURE_SCALAR.DATABASE_MINIMUM_STORAGE_BYTES,
++          ),
++          reservedHeadroomRatio: FIXTURE_SCALAR.DATABASE_HEADROOM_RATIO,
++        },
++        localText.NONE,
++        calibrationArtifact,
++      ),
++      inventoryComponent(
++        sideId,
++        `${sideId}-client`,
++        BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT,
++        BENCHMARK_RESOURCE_BILLING_TREATMENT.SYMMETRICALLY_EXCLUDED,
++        {
++          provisioned: provisioned(
++            1,
++            FIXTURE_SCALAR.DATABASE_MINIMUM_MEMORY_BYTES,
++            0,
++            0,
++          ),
++          minimumFootprint: minimumFootprint(
++            1,
++            FIXTURE_SCALAR.DATABASE_MINIMUM_MEMORY_BYTES,
++            0,
++          ),
++          reservedHeadroomRatio: FIXTURE_SCALAR.CLIENT_HEADROOM_RATIO,
++        },
++        localText.IDENTICAL_LOAD_GENERATOR_ON_BOTH_SIDES,
++        calibrationArtifact,
++      ),
+     ],
+   };
+ }
+ 
++function liveTopology(calibrationArtifact) {
++  const components = [];
++  for (let sideIndex = 0;
++    sideIndex < FIXTURE_RESOURCE_SIDE_IDS.length;
++    sideIndex += 1) {
++    const sideId = FIXTURE_RESOURCE_SIDE_IDS[sideIndex];
++    for (const entry of [
++      [localText.DATABASE, BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE],
++      [localText.CLIENT, BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT],
++    ]) {
++      const componentId = `${sideId}-${entry[0]}`;
++      const observation = resolveBenchmarkResourceLiveCalibrationComponent(
++        calibrationArtifact.artifact,
++        sideId,
++        componentId,
++      );
++      components.push({
++        sideId,
++        componentId,
++        role: entry[1],
++        physicalResourceId: observation.containerId,
++      });
++    }
++  }
++  return createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
++    {
++      version: localText.LIVE_TOPOLOGY_VERSION,
++      image: localText.FIXTURE_IMAGE,
++      imageId: localText.FIXTURE_IMAGE_ID,
++      databaseContainers: [
++        localText.CANDIDATE_DATABASE,
++        localText.BASELINE_DATABASE,
++      ],
++      sharedClientContainers: [
++        localText.CANDIDATE_CLIENT,
++        localText.BASELINE_CLIENT,
++      ],
++      network: localText.FIXTURE_NETWORK,
++      databaseStorage: [
++        localText.CANDIDATE_STORAGE,
++        localText.BASELINE_STORAGE,
++      ],
++      reservedIopsPerComponent: 0,
++      reservedNetworkBytesPerSecondPerComponent: 0,
++      components,
++    },
++  );
++}
++
++function alternativeTopologyFixture(calibrationArtifact) {
++  return calibrationArtifact === null ?
++    source(
++      BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
++      localText.FIXTURE_ALTERNATIVE_TOPOLOGY,
++    ) :
++    liveTopology(calibrationArtifact);
++}
++
++function fixtureIdentity(calibrationArtifact) {
++  return {
++    runId:
++      calibrationArtifact?.artifact.payload.runId ??
++      FIXTURE_RESOURCE_RUN_ID,
++    sourceRevision:
++      calibrationArtifact?.artifact.payload.sourceRevision ??
++      FIXTURE_RESOURCE_SOURCE_REVISION,
++  };
++}
++
++function fixturePreregistration(capacityProtocol) {
++  return source(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
++    localText.FIXTURE_PREREGISTRATION,
++    capacityProtocol === null ?
++      {} :
++      {
++        sideIds: FIXTURE_RESOURCE_SIDE_IDS,
++        capacityProtocolReportDigest:
++          capacityProtocol.report.reportDigest,
++        capacityProtocolPreregistrationDigest:
++          capacityProtocol.preregistration.manifestDigest,
++      },
++  );
++}
++
+ function unitPrices() {
+   return {
+     cpuCoreSecond: FIXTURE_SCALAR.COST_CPU_CORE_SECOND,
+@@ -270,8 +413,12 @@ function sideSourceArtifacts(
+   sideId,
+   multiplier,
+   calibrationArtifact,
++  capacityProtocol,
++  sideIndex,
+   coordinates,
+ ) {
++  const protocolSideId =
++    capacityProtocol?.preregistration.sideIds[sideIndex];
+   const capacitySample = createBenchmarkResourceWindowSourceArtifact(
+     BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE,
+     {
+@@ -281,6 +428,24 @@ function sideSourceArtifacts(
+         name: `${sideId}-capacity-sample`,
+         correctOpsPerSecond:
+           sideId === FIXTURE_RESOURCE_SIDE_IDS[0] ? 1200 : 1000,
++        ...(capacityProtocol === null ?
++          {} :
++          {
++            protocol: {
++              version: BENCHMARK_RESOURCE_CAPACITY_SOURCE.VERSION,
++              evidenceClass:
++                BENCHMARK_RESOURCE_CAPACITY_SOURCE.EVIDENCE_CLASS,
++              mappedSideId: sideId,
++              protocolSideId,
++              artifactReceipt: {
++                reportDigest: capacityProtocol.report.reportDigest,
++                preregistrationDigest:
++                  capacityProtocol.preregistration.manifestDigest,
++              },
++              preregistration: capacityProtocol.preregistration,
++              report: capacityProtocol.report,
++            },
++          }),
+       },
+     },
+   );
+@@ -300,6 +465,9 @@ function sideSourceArtifacts(
+       evidence: {
+         name: `${sideId}-live-engagement`,
+         transport: 'managed-postgresql',
++        ...(calibrationArtifact === null ?
++          {} :
++          {amplificationPolicy: 'semantic_events_absent_zero_only'}),
+       },
+     },
+   );
+@@ -343,7 +511,36 @@ function sideSourceArtifacts(
+   };
+ }
+ 
+-function capacitySummary(sideId, capacitySample) {
++function capacitySummary(
++  sideId,
++  sideIndex,
++  capacitySample,
++  capacityProtocol,
++) {
++  if (capacityProtocol !== null) {
++    const protocolSideId =
++      capacityProtocol.preregistration.sideIds[sideIndex];
++    const capacity =
++      capacityProtocol.report.summary.capacityBySide[protocolSideId];
++    const curve = capacityProtocol.report.summary.capacityCurve.find(
++      (entry) =>
++        entry.offeredLoadPerSecond ===
++          capacity.maxSloOfferedLoadPerSecond,
++    );
++    const interval =
++      curve.sides[protocolSideId].correctThroughputPerSecond;
++    return createBenchmarkResourceCapacitySummary({
++      sideId,
++      capacityCorrectOpsPerSecond:
++        capacity.maxCorrectThroughputPerSecond,
++      sampleCount: capacity.perBlock.length,
++      confidenceInterval: {
++        lower: interval.lower,
++        upper: interval.upper,
++      },
++      sourceDigests: [capacitySample.digest],
++    });
++  }
+   const value = sideId === FIXTURE_RESOURCE_SIDE_IDS[0] ?
+     FIXTURE_SCALAR.CANDIDATE_CAPACITY :
+     FIXTURE_SCALAR.BASELINE_CAPACITY;
+@@ -396,27 +593,22 @@ function optionalFixtureArtifact(artifact) {
+ 
+ export function createBenchmarkResourceEvidenceFixture({
+   calibrationArtifact = null,
++  capacityProtocol = null,
+   liveUtilizationOffset = 0,
+   matrixSizeValues = [localText.SMALL],
++  priceValidUntil = localText.VALUE_2026_07_29_T00_00_00_000_Z,
+   sealNonMeasuringCells = true,
+ } = {}) {
+-  const fixtureRunId =
+-    calibrationArtifact?.artifact.payload.runId ?? FIXTURE_RESOURCE_RUN_ID;
+-  const fixtureSourceRevision =
+-    calibrationArtifact?.artifact.payload.sourceRevision ??
+-    FIXTURE_RESOURCE_SOURCE_REVISION;
++  const identity = fixtureIdentity(calibrationArtifact);
++  const fixtureRunId = identity.runId;
++  const fixtureSourceRevision = identity.sourceRevision;
+   const workloadManifest = source(
+     BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
+     'fixture-workload',
+   );
+-  const alternativeTopology = source(
+-    BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
+-    'fixture-alternative-topology',
+-  );
+-  const preregistration = source(
+-    BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
+-    'fixture-preregistration',
+-  );
++  const alternativeTopology =
++    alternativeTopologyFixture(calibrationArtifact);
++  const preregistration = fixturePreregistration(capacityProtocol);
+   const matrix = createBenchmarkResourceMatrixManifest({
+     matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+     axes: [
+@@ -432,8 +624,8 @@ export function createBenchmarkResourceEvidenceFixture({
+     inventoryId: 'fixture-inventory-v1',
+     matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+     sides: [
+-      inventorySide(FIXTURE_RESOURCE_SIDE_IDS[0], 2),
+-      inventorySide(FIXTURE_RESOURCE_SIDE_IDS[1], 1),
++      inventorySide(FIXTURE_RESOURCE_SIDE_IDS[0], 2, calibrationArtifact),
++      inventorySide(FIXTURE_RESOURCE_SIDE_IDS[1], 1, calibrationArtifact),
+     ],
+   });
+   const price = createBenchmarkResourcePriceSheet({
+@@ -442,7 +634,7 @@ export function createBenchmarkResourceEvidenceFixture({
+     currency: 'USD',
+     priceDate: '2026-07-27',
+     validFrom: '2026-07-27T00:00:00.000Z',
+-    validUntil: '2026-07-29T00:00:00.000Z',
++    validUntil: priceValidUntil,
+     billingGranularity: 'per_second',
+     reservationPolicy: 'on_demand',
+     spotPolicy: 'excluded',
+@@ -457,6 +649,8 @@ export function createBenchmarkResourceEvidenceFixture({
+       FIXTURE_RESOURCE_SIDE_IDS[0],
+       2,
+       calibrationArtifact,
++      capacityProtocol,
++      0,
+       {
+         matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+         cellId: cell.cellId,
+@@ -468,6 +662,8 @@ export function createBenchmarkResourceEvidenceFixture({
+       FIXTURE_RESOURCE_SIDE_IDS[1],
+       1,
+       calibrationArtifact,
++      capacityProtocol,
++      1,
+       {
+         matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+         cellId: cell.cellId,
+@@ -507,7 +703,12 @@ export function createBenchmarkResourceEvidenceFixture({
+         liveUtilizationOffset,
+       ),
+     }));
+-    capacities.push(capacitySummary(sideId, sources.capacitySample));
++    capacities.push(capacitySummary(
++      sideId,
++      index,
++      sources.capacitySample,
++      capacityProtocol,
++    ));
+   }
+   const costs = windows.map((window) =>
+     computeBenchmarkResourceWindowCost(
+@@ -519,8 +720,10 @@ export function createBenchmarkResourceEvidenceFixture({
+     effectType: BENCHMARK_RESOURCE_EFFECT.CAPACITY,
+     numeratorSideId: FIXTURE_RESOURCE_SIDE_IDS[0],
+     denominatorSideId: FIXTURE_RESOURCE_SIDE_IDS[1],
+-    numeratorValue: 1200,
+-    denominatorValue: 1000,
++    numeratorValue:
++      capacities[0].artifact.payload.capacityCorrectOpsPerSecond,
++    denominatorValue:
++      capacities[1].artifact.payload.capacityCorrectOpsPerSecond,
+     confidenceInterval: {
+       lower:
+         capacities[0].artifact.payload.confidenceInterval.lower /
+@@ -530,7 +733,10 @@ export function createBenchmarkResourceEvidenceFixture({
+         capacities[1].artifact.payload.confidenceInterval.lower,
+     },
+     practicalThreshold: 0.05,
+-    sampleCount: 3,
++    sampleCount: Math.min(
++      capacities[0].artifact.payload.sampleCount,
++      capacities[1].artifact.payload.sampleCount,
++    ),
+     sourceDigests: capacities.map((capacity) => capacity.digest),
+     currency: BENCHMARK_RESOURCE_NO_CURRENCY,
+   });
+diff --git a/test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js b/test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..6962703906fca83fbd38ae7af6e220d29da60b00
+--- /dev/null
++++ b/test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js
+@@ -0,0 +1,738 @@
++import {readFileSync} from 'node:fs';
++import {test} from '../../../../src/test-helpers/tap.js';
++import {
++  COMPARATIVE_EVIDENCE_CLASS,
++} from '../comparative-efficiency-evidence-contract.js';
++import {
++  COMPARATIVE_CLAIM_CERTIFICATION_STATE,
++  COMPARATIVE_CLAIM_EFFECT_OUTCOME,
++  COMPARATIVE_CLAIM_METRIC,
++  COMPARATIVE_CLAIM_REASON,
++} from '../comparative-efficiency-claim-projection-constants.js';
++import {
++  classifyComparativeEfficiencyClaimEffect,
++  projectComparativeEfficiencyClaims,
++} from '../comparative-efficiency-claim-projection.js';
++import {
++  renderComparativeEfficiencyClaimTable,
++  validateComparativeEfficiencyClaimTable,
++} from '../comparative-efficiency-claim-table.js';
++import {
++  BENCHMARK_RESOURCE_NO_CURRENCY,
++  createBenchmarkResourcePairedEffect,
++} from '../benchmark-resource-cost-and-effects.js';
++import {
++  BENCHMARK_RESOURCE_EFFECT,
++} from '../benchmark-resource-contract-constants.js';
++import {
++  beginBenchmarkResourceLiveObservation,
++  captureBenchmarkResourceLiveObservation,
++  finalizeBenchmarkResourceLiveObservation,
++  writeExternallyObservedBenchmarkResourceCalibration,
++} from '../benchmark-resource-live-observation-authority.js';
++import {
++  sealBenchmarkCapacityPreregistration,
++} from '../benchmark-capacity-preregistration.js';
++import {
++  SCALE_CERTIFICATION_RECEIPT_CONTRACT_ID,
++  SCALE_CERTIFICATION_RECEIPT_SCHEMA_VERSION,
++  SCALE_PROFILE_ID,
++  computeScaleCertificationReceiptDigest,
++} from '../scale-evidence-contract.js';
++import {
++  createBenchmarkResourceEvidenceFixture,
++} from './benchmark-resource-evidence-test-fixture.js';
++import {
++  artifactFixtureReport,
++  preregistrationInput,
++} from './benchmark-capacity-protocol-test-fixture.js';
++import {
++  FIXTURE_RESOURCE_MATRIX_ID,
++  FIXTURE_RESOURCE_RUN_ID,
++  FIXTURE_RESOURCE_SIDE_IDS,
++  FIXTURE_RESOURCE_SOURCE_REVISION,
++  FIXTURE_RESOURCE_VALID_UNTIL,
++} from './benchmark-resource-evidence-test-fixture-constants.js';
++
++const EVALUATED_AT = '2026-07-27T12:30:00.000Z';
++const RECEIPT_ISSUED_AT = '2026-07-27T12:00:00.000Z';
++const RECEIPT_VALID_UNTIL = '2026-07-27T13:00:00.000Z';
++const PROFILE_IDENTITY = `sha256:${'a'.repeat(64)}`;
++const CERTIFICATION_QUEST = 'scale-integration-profile-certification';
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const reflectDefineProperty = Reflect.defineProperty;
++const observationScalar = Object.freeze({
++  BLOCK_READ_BYTES: 3_000,
++  BLOCK_READ_OPERATIONS: 3,
++  BLOCK_WRITE_BYTES: 4_000,
++  BLOCK_WRITE_OPERATIONS: 4,
++  CPU_LIMIT_NANO_CPUS: 1_000_000_000,
++  CPU_PERCENT: 10,
++  CPU_USAGE_NANOSECONDS: 10_000,
++  MEMORY_LIMIT_BYTES: 1_000_000,
++  MEMORY_USAGE_BYTES: 100_000,
++  PIDS: 5,
++  RX_BYTES: 1_000,
++  STORAGE_LIMIT_BYTES: 5_000_000,
++  STORAGE_USAGE_BYTES: 10_000,
++  TX_BYTES: 2_000,
++});
++
++function replaceProperty(owner, key, value) {
++  const descriptor = objectGetOwnPropertyDescriptor(owner, key);
++  reflectDefineProperty(owner, key, {
++    configurable: true,
++    writable: true,
++    value,
++  });
++  return () => reflectDefineProperty(owner, key, descriptor);
++}
++
++function resourceStats(timestamp, multiplier, provisionedMultiplier) {
++  return {
++    timestamp,
++    cpuPercent: observationScalar.CPU_PERCENT * multiplier,
++    cpuUsageNanoseconds:
++      observationScalar.CPU_USAGE_NANOSECONDS * multiplier,
++    memoryUsageBytes:
++      observationScalar.MEMORY_USAGE_BYTES * multiplier,
++    memoryLimitBytes:
++      observationScalar.MEMORY_LIMIT_BYTES * provisionedMultiplier,
++    cpuLimitNanoCpus:
++      observationScalar.CPU_LIMIT_NANO_CPUS * provisionedMultiplier,
++    storageLimitBytes:
++      observationScalar.STORAGE_LIMIT_BYTES * provisionedMultiplier,
++    pids: observationScalar.PIDS,
++    rxBytes: observationScalar.RX_BYTES * multiplier,
++    txBytes: observationScalar.TX_BYTES * multiplier,
++    blockReadBytes: observationScalar.BLOCK_READ_BYTES * multiplier,
++    blockWriteBytes: observationScalar.BLOCK_WRITE_BYTES * multiplier,
++    blockReadOperations:
++      observationScalar.BLOCK_READ_OPERATIONS * multiplier,
++    blockWriteOperations:
++      observationScalar.BLOCK_WRITE_OPERATIONS * multiplier,
++    storageUsageBytes:
++      observationScalar.STORAGE_USAGE_BYTES * multiplier,
++  };
++}
++
++function observationComponents() {
++  const components = [];
++  for (let index = 0; index < FIXTURE_RESOURCE_SIDE_IDS.length; index += 1) {
++    const sideId = FIXTURE_RESOURCE_SIDE_IDS[index];
++    components.push({
++      componentId: `${sideId}-database`,
++      sideId,
++      containerId: `${sideId}-database-container`,
++      storagePath: `/var/lib/${sideId}`,
++    });
++    components.push({
++      componentId: `${sideId}-client`,
++      sideId,
++      containerId: `${sideId}-client-container`,
++      storagePath: `/tmp/${sideId}`,
++    });
++  }
++  return components;
++}
++
++async function liveCalibrationFixture({
++  candidateEndMultiplier = 9,
++  candidateProvisionedMultiplier = 2,
++} = {}) {
++  const startedAt = Date.parse('2026-07-27T11:59:00.000Z');
++  const endedAt = Date.parse('2026-07-27T12:00:00.000Z');
++  const networkId = 'claim-projection-fixture-network';
++  const componentCount = FIXTURE_RESOURCE_SIDE_IDS.length * 2;
++  let calls = 0;
++  let cleaned = false;
++  const provider = {
++    async inspectContainer() {
++      return {State: {Running: true}};
++    },
++    async inspectContainerIfExists() {
++      return cleaned ? null : {State: {Running: true}};
++    },
++    async getContainerResourceSnapshot(containerId) {
++      calls += 1;
++      const endMultiplier = containerId.startsWith('candidate-') ?
++        candidateEndMultiplier :
++        2;
++      const provisionedMultiplier =
++        containerId.startsWith('candidate-') ?
++          candidateProvisionedMultiplier :
++          1;
++      return resourceStats(
++        calls <= componentCount ? startedAt : endedAt,
++        calls <= componentCount ? 1 : endMultiplier,
++        provisionedMultiplier,
++      );
++    },
++    async getNetworkByName() {
++      return cleaned ? null : {id: networkId};
++    },
++  };
++  const session = await beginBenchmarkResourceLiveObservation(provider, {
++    runId: FIXTURE_RESOURCE_RUN_ID,
++    networkId,
++    networkName: networkId,
++    sourceRevision: FIXTURE_RESOURCE_SOURCE_REVISION,
++    components: observationComponents(),
++  });
++  await captureBenchmarkResourceLiveObservation(session);
++  cleaned = true;
++  const finalized = await finalizeBenchmarkResourceLiveObservation(session);
++  return writeExternallyObservedBenchmarkResourceCalibration(
++    finalized.receipt,
++    finalized.authorization,
++  );
++}
++
++async function claimEligibleEvidenceFixture(
++  options = {},
++  calibrationOptions = {},
++) {
++  const calibrationArtifact =
++    await liveCalibrationFixture(calibrationOptions);
++  const capacityPreregistration =
++    sealBenchmarkCapacityPreregistration(preregistrationInput());
++  const {report} =
++    await artifactFixtureReport(capacityPreregistration);
++  return createBenchmarkResourceEvidenceFixture({
++    ...options,
++    calibrationArtifact,
++    capacityProtocol: {
++      preregistration: capacityPreregistration,
++      report,
++    },
++  });
++}
++
++function absentCertification() {
++  return {state: COMPARATIVE_CLAIM_CERTIFICATION_STATE.ABSENT};
++}
++
++function attachedCertification(rootDigest, overrides = {}) {
++  const receipt = {
++    contractId: SCALE_CERTIFICATION_RECEIPT_CONTRACT_ID,
++    schemaVersion: SCALE_CERTIFICATION_RECEIPT_SCHEMA_VERSION,
++    questId: CERTIFICATION_QUEST,
++    profileIdentity: PROFILE_IDENTITY,
++    evidenceIdentity: rootDigest,
++    issuedAt: RECEIPT_ISSUED_AT,
++    validUntil: RECEIPT_VALID_UNTIL,
++    ...overrides,
++  };
++  return {
++    state: COMPARATIVE_CLAIM_CERTIFICATION_STATE.ATTACHED,
++    receipt,
++    expected: {
++      terminalReceiptDigest:
++        computeScaleCertificationReceiptDigest(receipt),
++      questId: CERTIFICATION_QUEST,
++      profileIdentity: PROFILE_IDENTITY,
++      evidenceIdentity: rootDigest,
++    },
++  };
++}
++
++function measuredInput(fixture, options = {}) {
++  return {
++    workloadId: options.workloadId || 'fixture-workload',
++    expectedMatrixId: FIXTURE_RESOURCE_MATRIX_ID,
++    profile: {
++      id: options.profileId || SCALE_PROFILE_ID.DEVELOPMENT,
++      identity: PROFILE_IDENTITY,
++    },
++    rootReceipt: fixture.receipt,
++    certification:
++      options.certification || absentCertification(),
++  };
++}
++
++function projectionInput(overrides = {}) {
++  return {
++    evaluatedAt: overrides.evaluatedAt || EVALUATED_AT,
++    analyticalEvidence: overrides.analyticalEvidence || [],
++    measuredEvidence: overrides.measuredEvidence || [],
++  };
++}
++
++function effect(effectType, values) {
++  return createBenchmarkResourcePairedEffect({
++    effectType,
++    numeratorSideId: 'candidate',
++    denominatorSideId: 'alternative',
++    numeratorValue: values.numerator,
++    denominatorValue: values.denominator,
++    confidenceInterval: {
++      lower: values.lower,
++      upper: values.upper,
++    },
++    practicalThreshold: 0.05,
++    sampleCount: 3,
++    sourceDigests: [`sha256:${'b'.repeat(64)}`],
++    currency: effectType === BENCHMARK_RESOURCE_EFFECT.CAPACITY ?
++      BENCHMARK_RESOURCE_NO_CURRENCY :
++      'USD',
++  });
++}
++
++test('calculator evidence remains an analytical bound with full uncertainty',
++  (t) => {
++    const input = JSON.parse(readFileSync(
++      'test/fixtures/comparative-efficiency-opportunity/' +
++        'request-enrichment.json',
++      'utf8',
++    ));
++    const table = projectComparativeEfficiencyClaims(projectionInput({
++      analyticalEvidence: [{workloadId: 'request-enrichment', input}],
++    }));
++
++    t.equal(table.rows.length, 1);
++    t.equal(
++      table.rows[0].evidenceClass,
++      COMPARATIVE_EVIDENCE_CLASS.ANALYTICAL_BOUND,
++    );
++    t.equal(table.rows[0].evidence.output.uncertainty, input.uncertainty);
++    t.same(
++      table.rows[0].evidence.output.predictionError,
++      input.calibration,
++    );
++    t.match(table.rows[0].statement, /not measured/u);
++    t.end();
++  });
++
++test('calculator errors fail closed without suppressing the error', (t) => {
++  const table = projectComparativeEfficiencyClaims(projectionInput({
++    analyticalEvidence: [{
++      workloadId: 'invalid-calculator-input',
++      input: {fixtureId: 'incomplete'},
++    }],
++  }));
++
++  t.equal(table.rows[0].evidenceClass, COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM);
++  t.equal(table.rows[0].outcome, COMPARATIVE_CLAIM_EFFECT_OUTCOME.NOT_EVALUABLE);
++  t.match(table.rows[0].reasonCodes, [
++    COMPARATIVE_CLAIM_REASON.CALCULATOR_ERROR,
++  ]);
++  t.match(table.rows[0].statement, /invalid opportunity input/u);
++  t.end();
++});
++
++test('calculator prediction error preserves signed unfavorable measurements',
++  (t) => {
++    const input = JSON.parse(readFileSync(
++      'test/fixtures/comparative-efficiency-opportunity/' +
++        'grouped-reduce.json',
++      'utf8',
++    ));
++    const table = projectComparativeEfficiencyClaims(projectionInput({
++      analyticalEvidence: [{workloadId: 'grouped-reduce', input}],
++    }));
++    const predictionError = table.rows[0].evidence.output.predictionError;
++
++    t.equal(
++      table.rows[0].evidenceClass,
++      COMPARATIVE_EVIDENCE_CLASS.ANALYTICAL_BOUND,
++    );
++    t.equal(predictionError.state, 'measured');
++    t.ok(predictionError.networkBytesPerOperation.relativeError < 0);
++    t.ok(predictionError.cpuSecondsPerOperation.relativeError < 0);
++    t.match(
++      validateComparativeEfficiencyClaimTable(table),
++      {valid: true},
++    );
++    t.end();
++  });
++
++test('current live P0 root publishes a win and an alternative win',
++  async (t) => {
++    const fixture = await claimEligibleEvidenceFixture();
++    const table = projectComparativeEfficiencyClaims(projectionInput({
++      measuredEvidence: [measuredInput(fixture)],
++    }));
++    const capacity = table.rows.find(
++      (row) => row.metric === COMPARATIVE_CLAIM_METRIC.CAPACITY,
++    );
++    const cost = table.rows.find(
++      (row) => row.metric === COMPARATIVE_CLAIM_METRIC.COST,
++    );
++
++    t.equal(
++      capacity.evidenceClass,
++      COMPARATIVE_EVIDENCE_CLASS.MEASURED_P0,
++    );
++    t.equal(
++      capacity.outcome,
++      COMPARATIVE_CLAIM_EFFECT_OUTCOME.CANDIDATE_WIN,
++    );
++    t.equal(cost.evidenceClass, COMPARATIVE_EVIDENCE_CLASS.MEASURED_P0);
++    t.equal(
++      cost.outcome,
++      COMPARATIVE_CLAIM_EFFECT_OUTCOME.ALTERNATIVE_WIN,
++    );
++    t.match(cost.statement, /candidate regression/u);
++    t.end();
++  });
++
++test('current terminal certification is required for certified_profile',
++  async (t) => {
++    const fixture = await claimEligibleEvidenceFixture();
++    const current = projectComparativeEfficiencyClaims(projectionInput({
++      measuredEvidence: [measuredInput(fixture, {
++        profileId: SCALE_PROFILE_ID.INTEGRATION,
++        certification: attachedCertification(fixture.root.digest),
++      })],
++    }));
++    const expired = projectComparativeEfficiencyClaims(projectionInput({
++      evaluatedAt: RECEIPT_VALID_UNTIL,
++      measuredEvidence: [measuredInput(fixture, {
++        profileId: SCALE_PROFILE_ID.INTEGRATION,
++        certification: attachedCertification(fixture.root.digest),
++      })],
++    }));
++
++    t.ok(current.rows.every(
++      (row) =>
++        row.evidenceClass ===
++          COMPARATIVE_EVIDENCE_CLASS.CERTIFIED_PROFILE,
++    ));
++    t.ok(expired.rows.every(
++      (row) => row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++    ));
++    t.ok(expired.rows.every((row) =>
++      row.reasonCodes.includes(
++        COMPARATIVE_CLAIM_REASON.CERTIFICATION_EXPIRED,
++      ),
++    ));
++    t.end();
++  });
++
++test('expired price evidence suppresses cost without suppressing capacity',
++  async (t) => {
++    const fixture = await claimEligibleEvidenceFixture({
++      priceValidUntil: '2026-07-27T12:15:00.000Z',
++    });
++    const table = projectComparativeEfficiencyClaims(projectionInput({
++      measuredEvidence: [measuredInput(fixture)],
++    }));
++    const capacity = table.rows.find(
++      (row) => row.metric === COMPARATIVE_CLAIM_METRIC.CAPACITY,
++    );
++    const cost = table.rows.find(
++      (row) => row.metric === COMPARATIVE_CLAIM_METRIC.COST,
++    );
++
++    t.equal(
++      capacity.evidenceClass,
++      COMPARATIVE_EVIDENCE_CLASS.MEASURED_P0,
++    );
++    t.equal(cost.evidenceClass, COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM);
++    t.match(cost.reasonCodes, [COMPARATIVE_CLAIM_REASON.PRICE_EXPIRED]);
++    t.end();
++  });
++
++test('effect classification retains neutral, inconclusive, insignificant, ' +
++  'and alternative-favored outcomes', (t) => {
++  const cases = [
++    {
++      values: {numerator: 100, denominator: 100, lower: 1, upper: 1},
++      outcome: COMPARATIVE_CLAIM_EFFECT_OUTCOME.NEUTRAL,
++    },
++    {
++      values: {numerator: 110, denominator: 100, lower: 0.95, upper: 1.2},
++      outcome: COMPARATIVE_CLAIM_EFFECT_OUTCOME.INCONCLUSIVE,
++    },
++    {
++      values: {numerator: 103, denominator: 100, lower: 1.02, upper: 1.04},
++      outcome:
++        COMPARATIVE_CLAIM_EFFECT_OUTCOME.PRACTICALLY_INSIGNIFICANT,
++    },
++    {
++      values: {numerator: 80, denominator: 100, lower: 0.75, upper: 0.85},
++      outcome: COMPARATIVE_CLAIM_EFFECT_OUTCOME.ALTERNATIVE_WIN,
++    },
++  ];
++  for (let index = 0; index < cases.length; index += 1) {
++    t.equal(
++      classifyComparativeEfficiencyClaimEffect(
++        effect(BENCHMARK_RESOURCE_EFFECT.CAPACITY, cases[index].values),
++      ),
++      cases[index].outcome,
++    );
++  }
++  t.equal(
++    classifyComparativeEfficiencyClaimEffect(effect(
++      BENCHMARK_RESOURCE_EFFECT.COST,
++      {numerator: 80, denominator: 100, lower: 0.75, upper: 0.85},
++    )),
++    COMPARATIVE_CLAIM_EFFECT_OUTCOME.CANDIDATE_WIN,
++  );
++  t.end();
++});
++
++test('projected cost retains neutral and practically insignificant outcomes',
++  async (t) => {
++    const neutralFixture = await claimEligibleEvidenceFixture({}, {
++      candidateEndMultiplier: 2,
++      candidateProvisionedMultiplier: 1,
++    });
++    const insignificantFixture = await claimEligibleEvidenceFixture({}, {
++      candidateEndMultiplier: 3,
++      candidateProvisionedMultiplier: 1,
++    });
++    const neutral = projectComparativeEfficiencyClaims(projectionInput({
++      measuredEvidence: [measuredInput(neutralFixture)],
++    })).rows.find((row) => row.metric === COMPARATIVE_CLAIM_METRIC.COST);
++    const insignificant =
++      projectComparativeEfficiencyClaims(projectionInput({
++        measuredEvidence: [measuredInput(insignificantFixture)],
++      })).rows.find((row) => row.metric === COMPARATIVE_CLAIM_METRIC.COST);
++
++    t.equal(neutral.outcome, COMPARATIVE_CLAIM_EFFECT_OUTCOME.NEUTRAL);
++    t.equal(
++      neutral.evidenceClass,
++      COMPARATIVE_EVIDENCE_CLASS.MEASURED_P0,
++    );
++    t.equal(
++      insignificant.outcome,
++      COMPARATIVE_CLAIM_EFFECT_OUTCOME.PRACTICALLY_INSIGNIFICANT,
++    );
++    t.equal(
++      insignificant.evidenceClass,
++      COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++    );
++    t.match(insignificant.reasonCodes, [
++      COMPARATIVE_CLAIM_REASON.EFFECT_PRACTICALLY_INSIGNIFICANT,
++    ]);
++    t.end();
++  });
++
++test('historical or invalid evidence produces explicit no_claim rows', (t) => {
++  const historical = {
++    receipt: {
++      rootDigest: 'historical-comparator-report',
++      resolver: {resolve() {
++        return Buffer.from('historical');
++      }},
++    },
++  };
++  const table = projectComparativeEfficiencyClaims(projectionInput({
++    measuredEvidence: [{
++      ...measuredInput(historical),
++      expectedMatrixId: 'historical-comparator',
++    }],
++  }));
++
++  t.equal(table.rows.length, 2);
++  t.ok(table.rows.every(
++    (row) => row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++  ));
++  t.ok(table.rows.every((row) =>
++    row.reasonCodes.includes(
++      COMPARATIVE_CLAIM_REASON.EVIDENCE_INVALID,
++    ),
++  ));
++  t.end();
++});
++
++test('schema-valid synthetic measuring evidence cannot promote a claim',
++  (t) => {
++    const fixture = createBenchmarkResourceEvidenceFixture();
++    const table = projectComparativeEfficiencyClaims(projectionInput({
++      measuredEvidence: [measuredInput(fixture)],
++    }));
++
++    t.ok(table.rows.every(
++      (row) => row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++    ));
++    t.ok(table.rows.every((row) =>
++      row.reasonCodes.includes(
++        COMPARATIVE_CLAIM_REASON.EVIDENCE_NOT_CLAIM_ELIGIBLE,
++      ),
++    ));
++    t.end();
++  });
++
++test('non-P0 evidence requires a bound current certification', async (t) => {
++  const fixture = await claimEligibleEvidenceFixture();
++  const absent = projectComparativeEfficiencyClaims(projectionInput({
++    measuredEvidence: [measuredInput(fixture, {
++      profileId: SCALE_PROFILE_ID.INTEGRATION,
++    })],
++  }));
++  const mismatchedCertification =
++    attachedCertification(fixture.root.digest);
++  mismatchedCertification.expected.evidenceIdentity =
++    `sha256:${'c'.repeat(64)}`;
++  const mismatched = projectComparativeEfficiencyClaims(projectionInput({
++    measuredEvidence: [measuredInput(fixture, {
++      profileId: SCALE_PROFILE_ID.INTEGRATION,
++      certification: mismatchedCertification,
++    })],
++  }));
++
++  t.ok(absent.rows.every(
++    (row) => row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++  ));
++  t.ok(absent.rows.every((row) =>
++    row.reasonCodes.includes(
++      COMPARATIVE_CLAIM_REASON.CERTIFICATION_ABSENT,
++    ),
++  ));
++  t.ok(mismatched.rows.every((row) =>
++    row.reasonCodes.includes(
++      COMPARATIVE_CLAIM_REASON.CERTIFICATION_INVALID,
++    ),
++  ));
++  t.end();
++});
++
++test('an attached receipt cannot promote current P0 beyond measured_p0',
++  async (t) => {
++    const fixture = await claimEligibleEvidenceFixture();
++    const table = projectComparativeEfficiencyClaims(projectionInput({
++      measuredEvidence: [measuredInput(fixture, {
++        certification: attachedCertification(fixture.root.digest),
++      })],
++    }));
++
++    t.ok(table.rows.every(
++      (row) =>
++        row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.MEASURED_P0,
++    ));
++    t.end();
++  });
++
++test('expired roots and matrix mismatches remain explicit no_claim evidence',
++  async (t) => {
++    const fixture = await claimEligibleEvidenceFixture();
++    const expired = projectComparativeEfficiencyClaims(projectionInput({
++      evaluatedAt: FIXTURE_RESOURCE_VALID_UNTIL,
++      measuredEvidence: [measuredInput(fixture)],
++    }));
++    const mismatch = measuredInput(fixture);
++    mismatch.expectedMatrixId = 'a-different-matrix';
++    const mismatched = projectComparativeEfficiencyClaims(projectionInput({
++      measuredEvidence: [mismatch],
++    }));
++
++    t.ok(expired.rows.every((row) =>
++      row.reasonCodes.includes(COMPARATIVE_CLAIM_REASON.EVIDENCE_EXPIRED),
++    ));
++    t.ok(mismatched.rows.every((row) =>
++      row.reasonCodes.includes(
++        COMPARATIVE_CLAIM_REASON.MATRIX_ID_MISMATCH,
++      ),
++    ));
++    t.end();
++  });
++
++test('projection and effect classification reject hostile or invalid input',
++  (t) => {
++    let getterCalls = 0;
++    const hostile = {
++      analyticalEvidence: [],
++      measuredEvidence: [],
++    };
++    Object.defineProperty(hostile, 'evaluatedAt', {
++      enumerable: true,
++      get() {
++        getterCalls += 1;
++        throw new Error('evaluatedAt getter executed');
++      },
++    });
++    const table = projectComparativeEfficiencyClaims(hostile);
++    const invalidEffect = structuredClone(effect(
++      BENCHMARK_RESOURCE_EFFECT.CAPACITY,
++      {numerator: 100, denominator: 100, lower: 1, upper: 1},
++    ));
++    invalidEffect.estimate = 2;
++
++    t.equal(getterCalls, 0);
++    t.equal(table.rows[0].evidenceClass, COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM);
++    t.throws(
++      () => classifyComparativeEfficiencyClaimEffect(invalidEffect),
++      /claimEffect/u,
++    );
++    t.end();
++  });
++
++test('captured collection intrinsics preserve projection and rendering',
++  async (t) => {
++    const fixture = await claimEligibleEvidenceFixture();
++    const input = projectionInput({
++      measuredEvidence: [measuredInput(fixture)],
++    });
++    const baseline = projectComparativeEfficiencyClaims(input);
++    const baselineMarkdown =
++      renderComparativeEfficiencyClaimTable(baseline);
++    const restorations = [
++      replaceProperty(Array.prototype, 'join', () => {
++        throw new TypeError('poisoned Array.prototype.join executed');
++      }),
++      replaceProperty(Array.prototype, Symbol.iterator, function empty() {
++        return {next: () => ({done: true})};
++      }),
++      replaceProperty(Map.prototype, 'set', function noSet() {
++        return this;
++      }),
++    ];
++    let projected;
++    let markdown;
++    try {
++      projected = projectComparativeEfficiencyClaims(input);
++      markdown = renderComparativeEfficiencyClaimTable(baseline);
++    } finally {
++      for (
++        let restoreIndex = restorations.length - 1;
++        restoreIndex >= 0;
++        restoreIndex -= 1
++      ) {
++        restorations[restoreIndex]();
++      }
++    }
++
++    t.equal(projected.tableDigest, baseline.tableDigest);
++    t.equal(projected.rows.length, baseline.rows.length);
++    t.equal(markdown, baselineMarkdown);
++    t.match(
++      validateComparativeEfficiencyClaimTable(projected),
++      {valid: true},
++    );
++    t.end();
++  });
++
++test('human table is a digest-bound rendering of every machine row',
++  async (t) => {
++    const fixture = await claimEligibleEvidenceFixture();
++    const table = projectComparativeEfficiencyClaims(projectionInput({
++      measuredEvidence: [measuredInput(fixture)],
++    }));
++    const markdown = renderComparativeEfficiencyClaimTable(table);
++
++    t.match(markdown, new RegExp(table.tableDigest, 'u'));
++    for (let index = 0; index < table.rows.length; index += 1) {
++      t.match(markdown, new RegExp(table.rows[index].rowId, 'u'));
++      t.match(markdown, new RegExp(table.rows[index].evidenceClass, 'u'));
++      t.ok(markdown.includes(table.rows[index].statement));
++    }
++    const tamperedRow = structuredClone(table);
++    tamperedRow.rows[0].statement = 'promotional replacement';
++    const tamperedTable = structuredClone(table);
++    tamperedTable.tableDigest = `sha256:${'d'.repeat(64)}`;
++    t.match(
++      validateComparativeEfficiencyClaimTable(tamperedRow),
++      {valid: false},
++    );
++    t.throws(
++      () => renderComparativeEfficiencyClaimTable(tamperedRow),
++      /digest_mismatch/u,
++    );
++    t.match(
++      validateComparativeEfficiencyClaimTable(tamperedTable),
++      {valid: false},
++    );
++    t.end();
++  });
+diff --git a/test/distributed/harness/benchmark-resource-claim-evidence-view.js b/test/distributed/harness/benchmark-resource-claim-evidence-view.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..bcc53fedee4adf8b5890639254c82c0e71a19324
+--- /dev/null
++++ b/test/distributed/harness/benchmark-resource-claim-evidence-view.js
+@@ -0,0 +1,109 @@
++import {
++  BENCHMARK_RESOURCE_CELL_STATE,
++} from './benchmark-resource-contract-constants.js';
++import {
++  BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE,
++} from './benchmark-resource-evidence-root-constants.js';
++
++const structuredCloneValue = globalThis.structuredClone;
++const mapGetMethod = Map.prototype.get;
++const mapSetMethod = Map.prototype.set;
++const objectDefineProperty = Object.defineProperty;
++const reflectApply = Reflect.apply;
++
++export {
++  BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE,
++};
++
++export const BENCHMARK_RESOURCE_CLAIM_MEASUREMENT_STATE = Object.freeze({
++  MEASURING: BENCHMARK_RESOURCE_CELL_STATE.MEASURING,
++  NON_MEASURING: BENCHMARK_RESOURCE_CELL_STATE.NON_MEASURING,
++});
++
++function appendOwnArrayValue(values, value) {
++  objectDefineProperty(values, values.length, {
++    configurable: true,
++    enumerable: true,
++    writable: true,
++    value,
++  });
++}
++
++function mapGet(map, key) {
++  return reflectApply(mapGetMethod, map, [key]);
++}
++
++function mapSet(map, key, value) {
++  reflectApply(mapSetMethod, map, [key, value]);
++}
++
++function dimensionsByCellId(matrix) {
++  const dimensions = new Map();
++  for (let index = 0; index < matrix.cells.length; index += 1) {
++    const cell = matrix.cells[index];
++    mapSet(dimensions, cell.cellId, cell.dimensions);
++  }
++  return dimensions;
++}
++
++function measuringCell(payload, dimensions) {
++  return {
++    cellId: payload.cellId,
++    dimensions: structuredCloneValue(dimensions),
++    measurement: {
++      state: BENCHMARK_RESOURCE_CLAIM_MEASUREMENT_STATE.MEASURING,
++      capacityEffect: structuredCloneValue(payload.capacityEffect),
++      costEffect: structuredCloneValue(payload.costEffect),
++    },
++  };
++}
++
++function nonMeasuringCell(payload, dimensions) {
++  return {
++    cellId: payload.cellId,
++    dimensions: structuredCloneValue(dimensions),
++    measurement: {
++      state: BENCHMARK_RESOURCE_CLAIM_MEASUREMENT_STATE.NON_MEASURING,
++      reasonCodes: structuredCloneValue(payload.reasonCodes),
++    },
++  };
++}
++
++function claimCells(matrix, cellPayloads) {
++  const dimensions = dimensionsByCellId(matrix);
++  const payloadByCellId = new Map();
++  for (let index = 0; index < cellPayloads.length; index += 1) {
++    const payload = cellPayloads[index];
++    mapSet(payloadByCellId, payload.cellId, payload);
++  }
++  const cells = [];
++  for (let index = 0; index < matrix.cells.length; index += 1) {
++    const matrixCell = matrix.cells[index];
++    const payload = mapGet(payloadByCellId, matrixCell.cellId);
++    appendOwnArrayValue(
++      cells,
++      payload.state === BENCHMARK_RESOURCE_CELL_STATE.MEASURING ?
++        measuringCell(payload, mapGet(dimensions, payload.cellId)) :
++        nonMeasuringCell(payload, mapGet(dimensions, payload.cellId)),
++    );
++  }
++  return cells;
++}
++
++export function createBenchmarkResourceClaimEvidenceView(input) {
++  return {
++    rootDigest: input.rootDigest,
++    claimEligible: input.claimEligible,
++    matrixId: input.owners.matrix.matrixId,
++    sideIds: structuredCloneValue(input.owners.matrix.sideIds),
++    sourceRevision: input.root.sourceRevision,
++    producedAt: input.root.producedAt,
++    validUntil: input.root.validUntil,
++    priceSheet: {
++      digest: input.owners.priceDigest,
++      validFrom: input.owners.price.validFrom,
++      validUntil: input.owners.price.validUntil,
++    },
++    cells: claimCells(input.owners.matrix, input.cellPayloads),
++  };
++}
+diff --git a/test/distributed/harness/benchmark-resource-evidence-root-constants.js b/test/distributed/harness/benchmark-resource-evidence-root-constants.js
+index 4b11a1add8e2632e86f517c6c073d8dbd09f8d34..97a5d4f37dfdf0142c4f5151d0998577830c0af9 100644
+--- a/test/distributed/harness/benchmark-resource-evidence-root-constants.js
++++ b/test/distributed/harness/benchmark-resource-evidence-root-constants.js
+@@ -109,3 +109,56 @@ export const BENCHMARK_RESOURCE_ROOT_TEXT = Object.freeze({
+   VALID: 'valid',
+   UNRESOLVED: 'unresolved',
+ });
++
++export const BENCHMARK_RESOURCE_MEASURING_CELL_INPUT_KEYS = Object.freeze([
++  'matrixManifestDigest',
++  'matrixId',
++  'cellId',
++  'pairId',
++  'runId',
++  'sideIds',
++  'capacityReportDigests',
++  'semanticReceiptDigests',
++  'liveEngagementDigests',
++  'componentInventoryDigest',
++  'priceSheetDigest',
++  'resourceWindowDigests',
++  'capacityEffect',
++  'costEffect',
++  'sourceRevision',
++  'producedAt',
++  'validUntil',
++]);
++
++export const BENCHMARK_RESOURCE_NON_MEASURING_CELL_INPUT_KEYS = Object.freeze([
++  'matrixManifestDigest',
++  'matrixId',
++  'cellId',
++  'pairId',
++  'runId',
++  'sideIds',
++  'reasonCodes',
++  'sourceDigests',
++  'sourceRevision',
++  'producedAt',
++  'validUntil',
++]);
++
++export const BENCHMARK_RESOURCE_ROOT_INPUT_KEYS = Object.freeze([
++  'matrixManifestDigest',
++  'componentInventoryDigest',
++  'priceSheetDigest',
++  'cellEvidenceDigests',
++  'sourceRevision',
++  'producedAt',
++  'validUntil',
++  'artifacts',
++]);
++
++export const BENCHMARK_RESOURCE_ROOT_MANIFEST_ENTRY_KEYS =
++  Object.freeze(['kind', 'digest', 'byteLength']);
++
++export const BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE = Object.freeze({
++  ACCEPTED: 'accepted',
++  REJECTED: 'rejected',
++});
+diff --git a/test/distributed/harness/benchmark-resource-evidence-root.js b/test/distributed/harness/benchmark-resource-evidence-root.js
+index eda58d1dd472c4a81b164efe5a5b9e2dd39a8ab7..aedc20ac0c0344005394b02e1a24dc357c0a489e 100644
+--- a/test/distributed/harness/benchmark-resource-evidence-root.js
++++ b/test/distributed/harness/benchmark-resource-evidence-root.js
+@@ -55,6 +55,14 @@ import {
+   BENCHMARK_RESOURCE_LIMIT,
+ } from './benchmark-resource-contract-constants.js';
+ import {
++  BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE,
++  createBenchmarkResourceClaimEvidenceView,
++} from './benchmark-resource-claim-evidence-view.js';
++import {
++  BENCHMARK_RESOURCE_MEASURING_CELL_INPUT_KEYS,
++  BENCHMARK_RESOURCE_NON_MEASURING_CELL_INPUT_KEYS,
++  BENCHMARK_RESOURCE_ROOT_INPUT_KEYS,
++  BENCHMARK_RESOURCE_ROOT_MANIFEST_ENTRY_KEYS,
+   BENCHMARK_RESOURCE_ROOT_TEXT as ROOT_TEXT,
+ } from './benchmark-resource-evidence-root-constants.js';
+ const sourceArtifactKinds = new Set([
+@@ -70,25 +78,7 @@ const sourceArtifactKinds = new Set([
+ ]);
+ const allowedArtifactKinds =
+   new Set(Object.values(BENCHMARK_RESOURCE_ARTIFACT_KIND));
+-const measuringCellInputKeys = Object.freeze([
+-  'matrixManifestDigest',
+-  'matrixId',
+-  'cellId',
+-  'pairId',
+-  'runId',
+-  'sideIds',
+-  'capacityReportDigests',
+-  'semanticReceiptDigests',
+-  'liveEngagementDigests',
+-  'componentInventoryDigest',
+-  'priceSheetDigest',
+-  'resourceWindowDigests',
+-  'capacityEffect',
+-  'costEffect',
+-  'sourceRevision',
+-  'producedAt',
+-  'validUntil',
+-]);
++const measuringCellInputKeys = BENCHMARK_RESOURCE_MEASURING_CELL_INPUT_KEYS;
+ const measuringCellPayloadKeys = Object.freeze([
+   'version',
+   'state',
+@@ -96,35 +86,15 @@ const measuringCellPayloadKeys = Object.freeze([
+   'priceSheetValidAtProduction',
+   'cellEvidenceDigest',
+ ]);
+-const nonMeasuringCellInputKeys = Object.freeze([
+-  'matrixManifestDigest',
+-  'matrixId',
+-  'cellId',
+-  'pairId',
+-  'runId',
+-  'sideIds',
+-  'reasonCodes',
+-  'sourceDigests',
+-  'sourceRevision',
+-  'producedAt',
+-  'validUntil',
+-]);
++const nonMeasuringCellInputKeys =
++  BENCHMARK_RESOURCE_NON_MEASURING_CELL_INPUT_KEYS;
+ const nonMeasuringCellPayloadKeys = Object.freeze([
+   'version',
+   'state',
+   ...nonMeasuringCellInputKeys,
+   'cellEvidenceDigest',
+ ]);
+-const rootInputKeys = Object.freeze([
+-  'matrixManifestDigest',
+-  'componentInventoryDigest',
+-  'priceSheetDigest',
+-  'cellEvidenceDigests',
+-  'sourceRevision',
+-  'producedAt',
+-  'validUntil',
+-  'artifacts',
+-]);
++const rootInputKeys = BENCHMARK_RESOURCE_ROOT_INPUT_KEYS;
+ const rootPayloadKeys = Object.freeze([
+   'version',
+   'matrixManifestDigest',
+@@ -137,7 +107,7 @@ const rootPayloadKeys = Object.freeze([
+   'artifactManifest',
+   'artifactManifestDigest',
+ ]);
+-const manifestEntryKeys = Object.freeze(['kind', 'digest', 'byteLength']);
++const manifestEntryKeys = BENCHMARK_RESOURCE_ROOT_MANIFEST_ENTRY_KEYS;
+ const artifactEnvelopeKeys =
+   Object.freeze(['digest', 'bytes', 'byteLength', 'artifact']);
+ const resolverKeys = Object.freeze(['resolve']);
+@@ -1289,6 +1259,7 @@ function validateNonMeasuringCell(cellArtifact, payload, owners) {
+ 
+ function validateCells(root, owners, resolved) {
+   const expected = expectedCellIds(owners.matrix);
++  const cellPayloads = [];
+   let claimEligible = true;
+   let measuringCellCount = 0;
+   if (
+@@ -1304,6 +1275,7 @@ function validateCells(root, owners, resolved) {
+       BENCHMARK_RESOURCE_ARTIFACT_KIND.CELL_EVIDENCE,
+     );
+     const payload = artifact.payload;
++    appendOwnArrayValue(cellPayloads, payload);
+     if (!setHas(expected, payload.cellId)) {
+       fail(ROOT_TEXT.ROOT_CELLS_EXTRA_OR_DUPLICATE);
+     }
+@@ -1322,7 +1294,10 @@ function validateCells(root, owners, resolved) {
+   if (reflectApply(setSizeGetter, expected, []) !== 0) {
+     fail(ROOT_TEXT.ROOT_CELLS_MISSING);
+   }
+-  return claimEligible && measuringCellCount > 0;
++  return {
++    claimEligible: claimEligible && measuringCellCount > 0,
++    cellPayloads,
++  };
+ }
+ 
+ function allArtifactsSemanticallyOwned(root, resolved) {
+@@ -1399,7 +1374,7 @@ function resolveRootReceipt(receipt) {
+   const root = rootArtifact.payload;
+   assertProductionInterval(root, ROOT_TEXT.ROOT);
+   assertBenchmarkResourceText(root.sourceRevision, ROOT_TEXT.ROOT_SOURCE_REVISION);
+-  return {root, resolved};
++  return {rootDigest: receipt.rootDigest, root, resolved};
+ }
+ 
+ function inspectOwner(artifact, inspect, path) {
+@@ -1476,12 +1451,12 @@ export function validateBenchmarkResourceEvidenceRoot(receipt) {
+     const {root, resolved} = resolveRootReceipt(receipt);
+     const owners = resolveEvidenceOwners(root, resolved);
+     assertEvidenceOwnerJoin(owners);
+-    const claimEligible = validateCells(root, owners, resolved);
++    const cellValidation = validateCells(root, owners, resolved);
+     allArtifactsSemanticallyOwned(root, resolved);
+     return {
+       valid: true,
+       reason: ROOT_TEXT.VALID,
+-      claimEligible,
++      claimEligible: cellValidation.claimEligible,
+       matrixId: owners.matrix.matrixId,
+       cellCount: root.cellEvidenceDigests.length,
+       artifactCount: reflectApply(mapSizeGetter, resolved, []),
+@@ -1497,3 +1472,28 @@ export function validateBenchmarkResourceEvidenceRoot(receipt) {
+     };
+   }
+ }
++
++export function inspectBenchmarkResourceClaimEvidenceRoot(receipt) {
++  try {
++    const {rootDigest, root, resolved} = resolveRootReceipt(receipt);
++    const owners = resolveEvidenceOwners(root, resolved);
++    assertEvidenceOwnerJoin(owners);
++    const cellValidation = validateCells(root, owners, resolved);
++    allArtifactsSemanticallyOwned(root, resolved);
++    return {
++      state: BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.ACCEPTED,
++      evidence: createBenchmarkResourceClaimEvidenceView({
++        rootDigest,
++        claimEligible: cellValidation.claimEligible,
++        root,
++        owners,
++        cellPayloads: cellValidation.cellPayloads,
++      }),
++    };
++  } catch (error) {
++    return {
++      state: BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.REJECTED,
++      reason: safeValidationReason(error),
++    };
++  }
++}
+diff --git a/test/distributed/harness/comparative-efficiency-claim-projection-constants.js b/test/distributed/harness/comparative-efficiency-claim-projection-constants.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..51f0a1d7abde56b91fd359958878345022d9a891
+--- /dev/null
++++ b/test/distributed/harness/comparative-efficiency-claim-projection-constants.js
+@@ -0,0 +1,76 @@
++import {
++  SCALE_CLAIM_REASON,
++} from './scale-evidence-contract.js';
++
++export const COMPARATIVE_CLAIM_PROJECTION_SCHEMA_VERSION =
++  'comparative-efficiency-claim-projection-v1';
++
++export const COMPARATIVE_CLAIM_CERTIFICATION_STATE = Object.freeze({
++  ABSENT: 'absent',
++  ATTACHED: 'attached',
++});
++
++export const COMPARATIVE_CLAIM_EFFECT_OUTCOME = Object.freeze({
++  ANALYTICAL_ESTIMATE: 'analytical_estimate',
++  CANDIDATE_WIN: 'candidate_win',
++  ALTERNATIVE_WIN: 'alternative_win',
++  NEUTRAL: 'neutral',
++  INCONCLUSIVE: 'inconclusive',
++  PRACTICALLY_INSIGNIFICANT: 'practically_insignificant',
++  NOT_EVALUABLE: 'not_evaluable',
++});
++
++export const COMPARATIVE_CLAIM_METRIC = Object.freeze({
++  ANALYTICAL_OPPORTUNITY: 'analytical_opportunity',
++  CAPACITY: 'capacity',
++  COST: 'infrastructure_cost',
++});
++
++export const COMPARATIVE_CLAIM_SUBJECT_KIND = Object.freeze({
++  ANALYTICAL_WORKLOAD: 'analytical_workload',
++  EVIDENCE_ROOT: 'evidence_root',
++  MATRIX_CELL: 'matrix_cell',
++});
++
++export const COMPARATIVE_CLAIM_PROFILE_STATE = Object.freeze({
++  IDENTIFIED: 'identified',
++  NOT_APPLICABLE: 'not_applicable',
++});
++
++export const COMPARATIVE_CLAIM_EVIDENCE_STATE = Object.freeze({
++  ABSENT: 'absent',
++  ANALYTICAL_OUTPUT: 'analytical_output',
++  VERIFIED_EFFECT: 'verified_effect',
++});
++
++export const COMPARATIVE_CLAIM_SOURCE_STATE = Object.freeze({
++  CALCULATOR: 'calculator',
++  INVALID_ROOT: 'invalid_root',
++  VERIFIED_ROOT: 'verified_root',
++});
++
++export const COMPARATIVE_CLAIM_REASON = Object.freeze({
++  CALCULATOR_ERROR: 'calculator_error',
++  EVIDENCE_INVALID: 'evidence_invalid',
++  MATRIX_ID_MISMATCH: 'matrix_id_mismatch',
++  EVALUATION_TIME_INVALID: 'evaluation_time_invalid',
++  EVIDENCE_NOT_YET_VALID: 'evidence_not_yet_valid',
++  EVIDENCE_EXPIRED: 'evidence_expired',
++  EVIDENCE_NOT_CLAIM_ELIGIBLE: 'evidence_not_claim_eligible',
++  NON_MEASURING: 'non_measuring',
++  EFFECT_INCONCLUSIVE: 'effect_inconclusive',
++  EFFECT_PRACTICALLY_INSIGNIFICANT:
++    'effect_practically_insignificant',
++  PRICE_NOT_YET_VALID: 'price_not_yet_valid',
++  PRICE_EXPIRED: 'price_expired',
++  CERTIFICATION_ABSENT:
++    SCALE_CLAIM_REASON.TERMINAL_CERTIFICATION_ABSENT,
++  CERTIFICATION_INVALID:
++    SCALE_CLAIM_REASON.TERMINAL_CERTIFICATION_RECEIPT_INVALID,
++  CERTIFICATION_EVALUATION_TIME_REQUIRED:
++    SCALE_CLAIM_REASON.TERMINAL_CERTIFICATION_EVALUATION_TIME_REQUIRED,
++  CERTIFICATION_NOT_YET_VALID:
++    SCALE_CLAIM_REASON.TERMINAL_CERTIFICATION_NOT_YET_VALID,
++  CERTIFICATION_EXPIRED:
++    SCALE_CLAIM_REASON.TERMINAL_CERTIFICATION_EXPIRED,
++});
+diff --git a/test/distributed/harness/comparative-efficiency-claim-projection.js b/test/distributed/harness/comparative-efficiency-claim-projection.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..dc320cdb698bb6814166dc89daac196623121341
+--- /dev/null
++++ b/test/distributed/harness/comparative-efficiency-claim-projection.js
+@@ -0,0 +1,702 @@
++import {types} from 'node:util';
++import {
++  calculateComparativeOpportunity,
++} from '../../../src/diagnostics/comparative-efficiency-opportunity-calculator.js';
++import {
++  appendOwnArrayValue,
++  isMissingDataValue,
++  ownDataValue,
++} from './benchmark-semantic-integrity.js';
++import {
++  assertBenchmarkResourceArray,
++  assertBenchmarkResourceDigest,
++  assertBenchmarkResourceExactRecord,
++  assertBenchmarkResourceText,
++} from './benchmark-resource-evidence-data.js';
++import {
++  BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE,
++  BENCHMARK_RESOURCE_CLAIM_MEASUREMENT_STATE,
++} from './benchmark-resource-claim-evidence-view.js';
++import {
++  inspectBenchmarkResourceClaimEvidenceRoot,
++} from './benchmark-resource-evidence-root.js';
++import {
++  BENCHMARK_RESOURCE_EFFECT_DIRECTION,
++} from './benchmark-resource-contract-constants.js';
++import {
++  inspectBenchmarkResourcePairedEffect,
++} from './benchmark-resource-cost-and-effects.js';
++import {
++  COMPARATIVE_EVIDENCE_CLASS,
++} from './comparative-efficiency-evidence-contract.js';
++import {
++  COMPARATIVE_CLAIM_CERTIFICATION_STATE,
++  COMPARATIVE_CLAIM_EFFECT_OUTCOME,
++  COMPARATIVE_CLAIM_EVIDENCE_STATE,
++  COMPARATIVE_CLAIM_METRIC,
++  COMPARATIVE_CLAIM_PROFILE_STATE,
++  COMPARATIVE_CLAIM_REASON,
++  COMPARATIVE_CLAIM_SOURCE_STATE,
++  COMPARATIVE_CLAIM_SUBJECT_KIND,
++} from './comparative-efficiency-claim-projection-constants.js';
++import {
++  createComparativeEfficiencyClaimRow,
++  createComparativeEfficiencyClaimTable,
++} from './comparative-efficiency-claim-table.js';
++import {
++  SCALE_CERTIFICATION_RECEIPT_DECISION_STATE,
++  SCALE_PROFILE_ID,
++  validateScaleCertificationReceipt,
++} from './scale-evidence-contract.js';
++
++const dateParse = Date.parse;
++const ArrayConstructor = Array;
++const arrayJoinMethod = Array.prototype.join;
++const isProxy = types.isProxy;
++const numberIsFinite = Number.isFinite;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const reflectApply = Reflect.apply;
++const regexpTest = Function.call.bind(RegExp.prototype.test);
++const setHas = Function.call.bind(Set.prototype.has);
++const timestampPattern =
++  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z$/u;
++const projectionKeys = Object.freeze([
++  'evaluatedAt',
++  'analyticalEvidence',
++  'measuredEvidence',
++]);
++const analyticalKeys = Object.freeze(['workloadId', 'input']);
++const measuredKeys = Object.freeze([
++  'workloadId',
++  'expectedMatrixId',
++  'profile',
++  'rootReceipt',
++  'certification',
++]);
++const profileKeys = Object.freeze(['id', 'identity']);
++const absentCertificationKeys = Object.freeze(['state']);
++const attachedCertificationKeys =
++  Object.freeze(['state', 'receipt', 'expected']);
++const certificationExpectationKeys = Object.freeze([
++  'terminalReceiptDigest',
++  'questId',
++  'profileIdentity',
++  'evidenceIdentity',
++]);
++const maximumEvidenceItems = 256;
++const dataValueKey = 'value';
++const scaleProfileIds = new Set(Object.values(SCALE_PROFILE_ID));
++const localText = Object.freeze({
++  ANALYTICAL_ITEM: 'claimProjection.analyticalEvidence.item',
++  ANALYTICAL_WORKLOAD_ID: 'analytical.workloadId',
++  CERTIFICATION: 'claimProjection.certification',
++  CERTIFICATION_EXPECTED: 'claimProjection.certification.expected',
++  CERTIFICATION_STATE_UNSUPPORTED:
++    'claimProjection.certification.state:unsupported',
++  ELIGIBLE: 'eligible',
++  EVALUATED_AT: 'evaluatedAt',
++  INELIGIBLE: 'ineligible',
++  INVALID: 'invalid',
++  INVALID_TIMESTAMP: 'invalid',
++  MEASURED_EXPECTED_MATRIX_ID: 'measured.expectedMatrixId',
++  MEASURED_ITEM: 'claimProjection.measuredEvidence.item',
++  MEASURED_PROFILE: 'measured.profile',
++  MEASURED_PROFILE_ID: 'measured.profile.id',
++  MEASURED_PROFILE_IDENTITY: 'measured.profile.identity',
++  MEASURED_WORKLOAD_ID: 'measured.workloadId',
++  PROJECTION: 'claimProjection',
++  PROJECTION_ANALYTICAL_EVIDENCE: 'claimProjection.analyticalEvidence',
++  PROJECTION_FAILED_CLOSED: 'projection_failed_closed',
++  PROJECTION_MEASURED_EVIDENCE: 'claimProjection.measuredEvidence',
++  REASON_SEPARATOR: ', ',
++  VALID: 'valid',
++  ANALYTICAL_NOT_MEASURED_SUFFIX:
++    'scale, or infrastructure cost.',
++});
++const pairedMetrics = Object.freeze([
++  COMPARATIVE_CLAIM_METRIC.CAPACITY,
++  COMPARATIVE_CLAIM_METRIC.COST,
++]);
++
++function emptyReasonCodes() {
++  return new ArrayConstructor();
++}
++
++function appendArrayValues(target, values) {
++  for (let index = 0; index < values.length; index += 1) {
++    appendOwnArrayValue(target, ownDataValue(values, `${index}`));
++  }
++}
++
++function copiedArray(values) {
++  const copy = [];
++  appendArrayValues(copy, values);
++  return copy;
++}
++
++function combinedReasonCodes(first, second, third, fourth) {
++  const combined = [];
++  const sources = [first, second, third, fourth];
++  for (let sourceIndex = 0; sourceIndex < sources.length; sourceIndex += 1) {
++    appendArrayValues(combined, sources[sourceIndex]);
++  }
++  return combined;
++}
++
++function joinReasonCodes(reasonCodes) {
++  return reflectApply(
++    arrayJoinMethod,
++    reasonCodes,
++    [localText.REASON_SEPARATOR],
++  );
++}
++
++function safeErrorMessage(error) {
++  if (!error || typeof error !== 'object' || isProxy(error)) {
++    return localText.PROJECTION_FAILED_CLOSED;
++  }
++  const descriptor = objectGetOwnPropertyDescriptor(error, 'message');
++  return descriptor && objectHasOwn(descriptor, dataValueKey) &&
++    typeof descriptor.value === 'string' ?
++    descriptor.value :
++    localText.PROJECTION_FAILED_CLOSED;
++}
++
++function timestamp(value) {
++  if (
++    typeof value !== 'string' ||
++    !regexpTest(timestampPattern, value)
++  ) {
++    return {state: localText.INVALID_TIMESTAMP};
++  }
++  const milliseconds = dateParse(value);
++  return numberIsFinite(milliseconds) ?
++    {state: localText.VALID, milliseconds} :
++    {state: localText.INVALID_TIMESTAMP};
++}
++
++function assertProjectionInput(input) {
++  assertBenchmarkResourceExactRecord(input, projectionKeys, localText.PROJECTION);
++  assertBenchmarkResourceArray(
++    input.analyticalEvidence,
++    localText.PROJECTION_ANALYTICAL_EVIDENCE,
++    maximumEvidenceItems,
++  );
++  assertBenchmarkResourceArray(
++    input.measuredEvidence,
++    localText.PROJECTION_MEASURED_EVIDENCE,
++    maximumEvidenceItems,
++  );
++}
++
++function notApplicableProfile() {
++  return {state: COMPARATIVE_CLAIM_PROFILE_STATE.NOT_APPLICABLE};
++}
++
++function identifiedProfile(profile) {
++  return {
++    state: COMPARATIVE_CLAIM_PROFILE_STATE.IDENTIFIED,
++    id: profile.id,
++    identity: profile.identity,
++  };
++}
++
++function analyticalRow(item) {
++  assertBenchmarkResourceExactRecord(
++    item,
++    analyticalKeys,
++    localText.ANALYTICAL_ITEM,
++  );
++  assertBenchmarkResourceText(
++    item.workloadId,
++    localText.ANALYTICAL_WORKLOAD_ID,
++  );
++  try {
++    const output = calculateComparativeOpportunity(item.input);
++    return createComparativeEfficiencyClaimRow({
++      workloadId: item.workloadId,
++      metric: COMPARATIVE_CLAIM_METRIC.ANALYTICAL_OPPORTUNITY,
++      profile: notApplicableProfile(),
++      subject: {kind: COMPARATIVE_CLAIM_SUBJECT_KIND.ANALYTICAL_WORKLOAD},
++      evidenceClass: COMPARATIVE_EVIDENCE_CLASS.ANALYTICAL_BOUND,
++      outcome: COMPARATIVE_CLAIM_EFFECT_OUTCOME.ANALYTICAL_ESTIMATE,
++      evidence: {
++        state: COMPARATIVE_CLAIM_EVIDENCE_STATE.ANALYTICAL_OUTPUT,
++        output,
++      },
++      source: {state: COMPARATIVE_CLAIM_SOURCE_STATE.CALCULATOR},
++      reasonCodes: emptyReasonCodes(),
++      statement:
++        `Analytical bound for ${item.workloadId}; not measured capacity, ` +
++        localText.ANALYTICAL_NOT_MEASURED_SUFFIX,
++    });
++  } catch (error) {
++    const message = safeErrorMessage(error);
++    return createComparativeEfficiencyClaimRow({
++      workloadId: item.workloadId,
++      metric: COMPARATIVE_CLAIM_METRIC.ANALYTICAL_OPPORTUNITY,
++      profile: notApplicableProfile(),
++      subject: {kind: COMPARATIVE_CLAIM_SUBJECT_KIND.ANALYTICAL_WORKLOAD},
++      evidenceClass: COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++      outcome: COMPARATIVE_CLAIM_EFFECT_OUTCOME.NOT_EVALUABLE,
++      evidence: {
++        state: COMPARATIVE_CLAIM_EVIDENCE_STATE.ABSENT,
++        error: message,
++      },
++      source: {state: COMPARATIVE_CLAIM_SOURCE_STATE.INVALID_ROOT},
++      reasonCodes: [COMPARATIVE_CLAIM_REASON.CALCULATOR_ERROR],
++      statement: `No analytical claim for ${item.workloadId}: ${message}.`,
++    });
++  }
++}
++
++export function classifyComparativeEfficiencyClaimEffect(effect) {
++  const inspection = inspectBenchmarkResourcePairedEffect(effect);
++  if (!inspection.valid) {
++    throw new TypeError(`claimEffect:${inspection.reason}`);
++  }
++  const neutral = 1;
++  if (
++    effect.estimate === neutral &&
++    effect.confidenceInterval.lower === neutral &&
++    effect.confidenceInterval.upper === neutral
++  ) {
++    return COMPARATIVE_CLAIM_EFFECT_OUTCOME.NEUTRAL;
++  }
++  if (
++    effect.confidenceInterval.lower <= neutral &&
++    effect.confidenceInterval.upper >= neutral
++  ) {
++    return COMPARATIVE_CLAIM_EFFECT_OUTCOME.INCONCLUSIVE;
++  }
++  const favorableBoundary = neutral + effect.practicalThreshold;
++  const unfavorableBoundary = neutral - effect.practicalThreshold;
++  if (effect.direction === BENCHMARK_RESOURCE_EFFECT_DIRECTION.HIGHER_IS_BETTER) {
++    if (effect.confidenceInterval.lower > favorableBoundary) {
++      return COMPARATIVE_CLAIM_EFFECT_OUTCOME.CANDIDATE_WIN;
++    }
++    if (effect.confidenceInterval.upper < unfavorableBoundary) {
++      return COMPARATIVE_CLAIM_EFFECT_OUTCOME.ALTERNATIVE_WIN;
++    }
++  } else {
++    if (effect.confidenceInterval.upper < unfavorableBoundary) {
++      return COMPARATIVE_CLAIM_EFFECT_OUTCOME.CANDIDATE_WIN;
++    }
++    if (effect.confidenceInterval.lower > favorableBoundary) {
++      return COMPARATIVE_CLAIM_EFFECT_OUTCOME.ALTERNATIVE_WIN;
++    }
++  }
++  return COMPARATIVE_CLAIM_EFFECT_OUTCOME.PRACTICALLY_INSIGNIFICANT;
++}
++
++function rootCurrentness(evidence, evaluatedAt) {
++  if (!evidence.claimEligible) {
++    return [COMPARATIVE_CLAIM_REASON.EVIDENCE_NOT_CLAIM_ELIGIBLE];
++  }
++  const evaluation = timestamp(evaluatedAt);
++  if (evaluation.state === localText.INVALID_TIMESTAMP) {
++    return [COMPARATIVE_CLAIM_REASON.EVALUATION_TIME_INVALID];
++  }
++  if (evaluation.milliseconds < dateParse(evidence.producedAt)) {
++    return [COMPARATIVE_CLAIM_REASON.EVIDENCE_NOT_YET_VALID];
++  }
++  if (evaluation.milliseconds >= dateParse(evidence.validUntil)) {
++    return [COMPARATIVE_CLAIM_REASON.EVIDENCE_EXPIRED];
++  }
++  return [];
++}
++
++function priceCurrentness(evidence, evaluatedAt) {
++  const evaluation = timestamp(evaluatedAt);
++  if (evaluation.state === localText.INVALID_TIMESTAMP) {
++    return [COMPARATIVE_CLAIM_REASON.EVALUATION_TIME_INVALID];
++  }
++  if (evaluation.milliseconds < dateParse(evidence.priceSheet.validFrom)) {
++    return [COMPARATIVE_CLAIM_REASON.PRICE_NOT_YET_VALID];
++  }
++  if (evaluation.milliseconds >= dateParse(evidence.priceSheet.validUntil)) {
++    return [COMPARATIVE_CLAIM_REASON.PRICE_EXPIRED];
++  }
++  return [];
++}
++
++function certificationMode(item, certificationState) {
++  return !setHas(scaleProfileIds, item.profile.id) ?
++    localText.INVALID :
++    item.profile.id === SCALE_PROFILE_ID.DEVELOPMENT ?
++      SCALE_PROFILE_ID.DEVELOPMENT :
++      certificationState;
++}
++
++function attachedCertificationDecision(
++  item,
++  certification,
++  rootDigest,
++  evaluatedAt,
++) {
++  assertBenchmarkResourceExactRecord(
++    certification.expected,
++    certificationExpectationKeys,
++    localText.CERTIFICATION_EXPECTED,
++  );
++  const expected = certification.expected;
++  if (
++    expected.profileIdentity !== item.profile.identity ||
++    expected.evidenceIdentity !== rootDigest
++  ) {
++    return {
++      state: localText.INELIGIBLE,
++      reasonCodes: [COMPARATIVE_CLAIM_REASON.CERTIFICATION_INVALID],
++    };
++  }
++  const receiptDecision = validateScaleCertificationReceipt(
++    certification.receipt,
++    {
++      terminalReceiptDigest: expected.terminalReceiptDigest,
++      questId: expected.questId,
++      profileIdentity: expected.profileIdentity,
++      evidenceIdentity: expected.evidenceIdentity,
++      evaluatedAt,
++    },
++  );
++  return receiptDecision.state ===
++    SCALE_CERTIFICATION_RECEIPT_DECISION_STATE.CURRENT ?
++    {
++      state: localText.ELIGIBLE,
++      evidenceClass: COMPARATIVE_EVIDENCE_CLASS.CERTIFIED_PROFILE,
++      reasonCodes: emptyReasonCodes(),
++    } :
++    {
++      state: localText.INELIGIBLE,
++      reasonCodes: copiedArray(receiptDecision.reasonCodes),
++    };
++}
++
++function certificationDecision(item, rootDigest, evaluatedAt) {
++  const certification = item.certification;
++  const certificationState = ownDataValue(certification, 'state');
++  const keys = certificationState ===
++    COMPARATIVE_CLAIM_CERTIFICATION_STATE.ATTACHED ?
++    attachedCertificationKeys :
++    absentCertificationKeys;
++  assertBenchmarkResourceExactRecord(
++    certification,
++    keys,
++    localText.CERTIFICATION,
++  );
++  if (
++    certificationState !== COMPARATIVE_CLAIM_CERTIFICATION_STATE.ABSENT &&
++    certificationState !== COMPARATIVE_CLAIM_CERTIFICATION_STATE.ATTACHED
++  ) {
++    throw new TypeError(localText.CERTIFICATION_STATE_UNSUPPORTED);
++  }
++  const mode = certificationMode(item, certificationState);
++  let decision;
++  switch (mode) {
++  case localText.INVALID:
++    decision = {
++      state: localText.INELIGIBLE,
++      reasonCodes: [COMPARATIVE_CLAIM_REASON.CERTIFICATION_INVALID],
++    };
++    break;
++  case SCALE_PROFILE_ID.DEVELOPMENT:
++    decision = {
++      state: localText.ELIGIBLE,
++      evidenceClass: COMPARATIVE_EVIDENCE_CLASS.MEASURED_P0,
++      reasonCodes: emptyReasonCodes(),
++    };
++    break;
++  case COMPARATIVE_CLAIM_CERTIFICATION_STATE.ABSENT:
++    decision = {
++      state: localText.INELIGIBLE,
++      reasonCodes: [COMPARATIVE_CLAIM_REASON.CERTIFICATION_ABSENT],
++    };
++    break;
++  case COMPARATIVE_CLAIM_CERTIFICATION_STATE.ATTACHED:
++    decision = attachedCertificationDecision(
++      item,
++      certification,
++      rootDigest,
++      evaluatedAt,
++    );
++    break;
++  default:
++    throw new TypeError(localText.CERTIFICATION_STATE_UNSUPPORTED);
++  }
++  return decision;
++}
++
++function effectReasonCodes(outcome) {
++  if (outcome === COMPARATIVE_CLAIM_EFFECT_OUTCOME.INCONCLUSIVE) {
++    return [COMPARATIVE_CLAIM_REASON.EFFECT_INCONCLUSIVE];
++  }
++  if (
++    outcome ===
++      COMPARATIVE_CLAIM_EFFECT_OUTCOME.PRACTICALLY_INSIGNIFICANT
++  ) {
++    return [
++      COMPARATIVE_CLAIM_REASON.EFFECT_PRACTICALLY_INSIGNIFICANT,
++    ];
++  }
++  return emptyReasonCodes();
++}
++
++function outcomeStatement(item, metric, evidenceClass, outcome, reasonCodes) {
++  if (evidenceClass === COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM) {
++    return `No current ${metric} claim for ${item.workloadId}: ` +
++      `${outcome}; ${joinReasonCodes(reasonCodes)}.`;
++  }
++  if (outcome === COMPARATIVE_CLAIM_EFFECT_OUTCOME.ALTERNATIVE_WIN) {
++    return `${item.workloadId} ${metric}: alternative win; candidate ` +
++      `regression (${evidenceClass}).`;
++  }
++  return `${item.workloadId} ${metric}: ${outcome} (${evidenceClass}).`;
++}
++
++function effectRow(input) {
++  const outcome = classifyComparativeEfficiencyClaimEffect(input.effect);
++  const reasonCodes = combinedReasonCodes(
++    input.rootReasons,
++    input.metricReasons,
++    input.profileDecision.reasonCodes,
++    effectReasonCodes(outcome),
++  );
++  const evidenceClass = reasonCodes.length === 0 ?
++    input.profileDecision.evidenceClass :
++    COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM;
++  return createComparativeEfficiencyClaimRow({
++    workloadId: input.item.workloadId,
++    metric: input.metric,
++    profile: identifiedProfile(input.item.profile),
++    subject: {
++      kind: COMPARATIVE_CLAIM_SUBJECT_KIND.MATRIX_CELL,
++      matrixId: input.evidence.matrixId,
++      cellId: input.cell.cellId,
++      dimensions: input.cell.dimensions,
++    },
++    evidenceClass,
++    outcome,
++    evidence: {
++      state: COMPARATIVE_CLAIM_EVIDENCE_STATE.VERIFIED_EFFECT,
++      effect: input.effect,
++    },
++    source: {
++      state: COMPARATIVE_CLAIM_SOURCE_STATE.VERIFIED_ROOT,
++      rootDigest: input.evidence.rootDigest,
++      sourceRevision: input.evidence.sourceRevision,
++      producedAt: input.evidence.producedAt,
++      validUntil: input.evidence.validUntil,
++      priceSheetDigest: input.evidence.priceSheet.digest,
++    },
++    reasonCodes,
++    statement: outcomeStatement(
++      input.item,
++      input.metric,
++      evidenceClass,
++      outcome,
++      reasonCodes,
++    ),
++  });
++}
++
++function nonMeasuringRows(item, evidence, cell, rootReasons) {
++  const rows = [];
++  const reasonCodes = combinedReasonCodes(
++    rootReasons,
++    [COMPARATIVE_CLAIM_REASON.NON_MEASURING],
++    cell.measurement.reasonCodes,
++    emptyReasonCodes(),
++  );
++  for (
++    let metricIndex = 0;
++    metricIndex < pairedMetrics.length;
++    metricIndex += 1
++  ) {
++    const metric = pairedMetrics[metricIndex];
++    appendOwnArrayValue(rows, createComparativeEfficiencyClaimRow({
++      workloadId: item.workloadId,
++      metric,
++      profile: identifiedProfile(item.profile),
++      subject: {
++        kind: COMPARATIVE_CLAIM_SUBJECT_KIND.MATRIX_CELL,
++        matrixId: evidence.matrixId,
++        cellId: cell.cellId,
++        dimensions: cell.dimensions,
++      },
++      evidenceClass: COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++      outcome: COMPARATIVE_CLAIM_EFFECT_OUTCOME.NOT_EVALUABLE,
++      evidence: {state: COMPARATIVE_CLAIM_EVIDENCE_STATE.ABSENT},
++      source: {
++        state: COMPARATIVE_CLAIM_SOURCE_STATE.VERIFIED_ROOT,
++        rootDigest: evidence.rootDigest,
++        sourceRevision: evidence.sourceRevision,
++        producedAt: evidence.producedAt,
++        validUntil: evidence.validUntil,
++        priceSheetDigest: evidence.priceSheet.digest,
++      },
++      reasonCodes,
++      statement: `No current ${metric} claim for ${item.workloadId}: ` +
++        `non-measuring cell; ${joinReasonCodes(reasonCodes)}.`,
++    }));
++  }
++  return rows;
++}
++
++function invalidRootRows(
++  item,
++  reason,
++  reasonCode = COMPARATIVE_CLAIM_REASON.EVIDENCE_INVALID,
++) {
++  const rows = [];
++  for (
++    let metricIndex = 0;
++    metricIndex < pairedMetrics.length;
++    metricIndex += 1
++  ) {
++    const metric = pairedMetrics[metricIndex];
++    appendOwnArrayValue(rows, createComparativeEfficiencyClaimRow({
++      workloadId: item.workloadId,
++      metric,
++      profile: identifiedProfile(item.profile),
++      subject: {
++        kind: COMPARATIVE_CLAIM_SUBJECT_KIND.EVIDENCE_ROOT,
++        expectedMatrixId: item.expectedMatrixId,
++      },
++      evidenceClass: COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++      outcome: COMPARATIVE_CLAIM_EFFECT_OUTCOME.NOT_EVALUABLE,
++      evidence: {
++        state: COMPARATIVE_CLAIM_EVIDENCE_STATE.ABSENT,
++        error: reason,
++      },
++      source: {state: COMPARATIVE_CLAIM_SOURCE_STATE.INVALID_ROOT},
++      reasonCodes: [reasonCode],
++      statement: `No current ${metric} claim for ${item.workloadId}: ` +
++        `invalid evidence root (${reason}).`,
++    }));
++  }
++  return rows;
++}
++
++function measuredRows(item, evaluatedAt) {
++  assertBenchmarkResourceExactRecord(
++    item,
++    measuredKeys,
++    localText.MEASURED_ITEM,
++  );
++  assertBenchmarkResourceText(item.workloadId, localText.MEASURED_WORKLOAD_ID);
++  assertBenchmarkResourceText(
++    item.expectedMatrixId,
++    localText.MEASURED_EXPECTED_MATRIX_ID,
++  );
++  assertBenchmarkResourceExactRecord(
++    item.profile,
++    profileKeys,
++    localText.MEASURED_PROFILE,
++  );
++  assertBenchmarkResourceText(item.profile.id, localText.MEASURED_PROFILE_ID);
++  assertBenchmarkResourceDigest(
++    item.profile.identity,
++    localText.MEASURED_PROFILE_IDENTITY,
++  );
++  const inspection =
++    inspectBenchmarkResourceClaimEvidenceRoot(item.rootReceipt);
++  if (inspection.state !== BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.ACCEPTED) {
++    return invalidRootRows(item, inspection.reason);
++  }
++  const evidence = inspection.evidence;
++  if (evidence.matrixId !== item.expectedMatrixId) {
++    return invalidRootRows(
++      item,
++      COMPARATIVE_CLAIM_REASON.MATRIX_ID_MISMATCH,
++      COMPARATIVE_CLAIM_REASON.MATRIX_ID_MISMATCH,
++    );
++  }
++  const rootReasons = rootCurrentness(evidence, evaluatedAt);
++  const profileDecision = certificationDecision(
++    item,
++    evidence.rootDigest,
++    evaluatedAt,
++  );
++  const rows = [];
++  for (let index = 0; index < evidence.cells.length; index += 1) {
++    const cell = evidence.cells[index];
++    if (
++      cell.measurement.state ===
++        BENCHMARK_RESOURCE_CLAIM_MEASUREMENT_STATE.NON_MEASURING
++    ) {
++      appendArrayValues(
++        rows,
++        nonMeasuringRows(item, evidence, cell, rootReasons),
++      );
++      continue;
++    }
++    appendOwnArrayValue(rows, effectRow({
++      item,
++      evidence,
++      cell,
++      metric: COMPARATIVE_CLAIM_METRIC.CAPACITY,
++      effect: cell.measurement.capacityEffect,
++      rootReasons,
++      metricReasons: emptyReasonCodes(),
++      profileDecision,
++    }));
++    appendOwnArrayValue(rows, effectRow({
++      item,
++      evidence,
++      cell,
++      metric: COMPARATIVE_CLAIM_METRIC.COST,
++      effect: cell.measurement.costEffect,
++      rootReasons,
++      metricReasons: priceCurrentness(evidence, evaluatedAt),
++      profileDecision,
++    }));
++  }
++  return rows;
++}
++
++function projectionFailureTable(evaluatedAt, error) {
++  const message = safeErrorMessage(error);
++  const row = createComparativeEfficiencyClaimRow({
++    workloadId: 'claim-projection',
++    metric: COMPARATIVE_CLAIM_METRIC.ANALYTICAL_OPPORTUNITY,
++    profile: notApplicableProfile(),
++    subject: {kind: COMPARATIVE_CLAIM_SUBJECT_KIND.EVIDENCE_ROOT},
++    evidenceClass: COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++    outcome: COMPARATIVE_CLAIM_EFFECT_OUTCOME.NOT_EVALUABLE,
++    evidence: {state: COMPARATIVE_CLAIM_EVIDENCE_STATE.ABSENT, error: message},
++    source: {state: COMPARATIVE_CLAIM_SOURCE_STATE.INVALID_ROOT},
++    reasonCodes: [COMPARATIVE_CLAIM_REASON.EVIDENCE_INVALID],
++    statement: `No claim table: ${message}.`,
++  });
++  return createComparativeEfficiencyClaimTable(
++    typeof evaluatedAt === 'string' ? evaluatedAt : localText.INVALID,
++    [row],
++  );
++}
++
++export function projectComparativeEfficiencyClaims(input) {
++  try {
++    assertProjectionInput(input);
++    const rows = [];
++    for (let index = 0; index < input.analyticalEvidence.length; index += 1) {
++      appendOwnArrayValue(rows, analyticalRow(input.analyticalEvidence[index]));
++    }
++    for (let index = 0; index < input.measuredEvidence.length; index += 1) {
++      appendArrayValues(
++        rows,
++        measuredRows(input.measuredEvidence[index], input.evaluatedAt),
++      );
++    }
++    return createComparativeEfficiencyClaimTable(input.evaluatedAt, rows);
++  } catch (error) {
++    let evaluatedAt;
++    try {
++      evaluatedAt = ownDataValue(input, localText.EVALUATED_AT);
++      if (isMissingDataValue(evaluatedAt)) evaluatedAt = undefined;
++    } catch {
++      evaluatedAt = undefined;
++    }
++    return projectionFailureTable(evaluatedAt, error);
++  }
++}
+diff --git a/test/distributed/harness/comparative-efficiency-claim-table.js b/test/distributed/harness/comparative-efficiency-claim-table.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..7f4914ff73de77f3dd02ca4af7255e69970abb82
+--- /dev/null
++++ b/test/distributed/harness/comparative-efficiency-claim-table.js
+@@ -0,0 +1,438 @@
++import {createHash} from 'node:crypto';
++import {types} from 'node:util';
++import {
++  isDenseDataArray,
++  isMissingDataValue,
++  isPlainDataRecord,
++  ownDataValue,
++} from './benchmark-semantic-integrity.js';
++import {
++  assertBenchmarkResourceArray,
++  assertBenchmarkResourceDigest,
++  assertBenchmarkResourceExactRecord,
++  assertBenchmarkResourceText,
++} from './benchmark-resource-evidence-data.js';
++import {
++  COMPARATIVE_CLAIM_EFFECT_OUTCOME,
++  COMPARATIVE_CLAIM_METRIC,
++  COMPARATIVE_CLAIM_PROJECTION_SCHEMA_VERSION,
++  COMPARATIVE_CLAIM_PROFILE_STATE,
++  COMPARATIVE_CLAIM_SOURCE_STATE,
++  COMPARATIVE_CLAIM_SUBJECT_KIND,
++} from './comparative-efficiency-claim-projection-constants.js';
++import {
++  COMPARATIVE_EVIDENCE_CLASS,
++} from './comparative-efficiency-evidence-contract.js';
++
++const arrayIsArray = Array.isArray;
++const arrayJoinMethod = Array.prototype.join;
++const isProxy = types.isProxy;
++const jsonStringify = JSON.stringify;
++const mathAbs = Math.abs;
++const numberIsFinite = Number.isFinite;
++const objectIs = Object.is;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const objectDefineProperty = Object.defineProperty;
++const objectFreeze = Object.freeze;
++const objectIsFrozen = Object.isFrozen;
++const objectKeys = Object.keys;
++const reflectApply = Reflect.apply;
++const setAdd = Function.call.bind(Set.prototype.add);
++const setDelete = Function.call.bind(Set.prototype.delete);
++const setHas = Function.call.bind(Set.prototype.has);
++const stringReplaceMethod = String.prototype.replace;
++const structuredCloneValue = globalThis.structuredClone;
++const maximumSafeMagnitude = Number.MAX_SAFE_INTEGER;
++const maximumClaimDataDepth = 64;
++const maximumClaimDataNodes = 100_000;
++const maximumReasonCodes = 64;
++const sha256 = 'sha256';
++const sha256Encoding = 'hex';
++const sha256Prefix = 'sha256:';
++const pipePattern = /\|/gu;
++const tableBodyKeys = Object.freeze([
++  'schemaVersion',
++  'evaluatedAt',
++  'rows',
++]);
++const tableKeys = Object.freeze([...tableBodyKeys, 'tableDigest']);
++const rowKeys = Object.freeze([
++  'rowId',
++  'workloadId',
++  'metric',
++  'profile',
++  'subject',
++  'evidenceClass',
++  'outcome',
++  'evidence',
++  'source',
++  'reasonCodes',
++  'statement',
++]);
++const rowBodyKeys = Object.freeze(rowKeys.filter((key) => key !== 'rowId'));
++const dataValueKey = 'value';
++const evidenceClasses = new Set(Object.values(COMPARATIVE_EVIDENCE_CLASS));
++const outcomes = new Set(Object.values(COMPARATIVE_CLAIM_EFFECT_OUTCOME));
++const metrics = new Set(Object.values(COMPARATIVE_CLAIM_METRIC));
++const profileStates = new Set(Object.values(COMPARATIVE_CLAIM_PROFILE_STATE));
++const sourceStates = new Set(Object.values(COMPARATIVE_CLAIM_SOURCE_STATE));
++const subjectKinds = new Set(Object.values(COMPARATIVE_CLAIM_SUBJECT_KIND));
++const localText = Object.freeze({
++  CLAIM_DATA_CYCLE: 'claimData:cycle',
++  CLAIM_DATA_DENSE_ARRAY_REQUIRED: 'claimData:dense_array_required',
++  CLAIM_DATA_DEPTH_LIMIT: 'claimData:depth_limit',
++  CLAIM_DATA_NODE_LIMIT: 'claimData:node_limit',
++  CLAIM_DATA_OWN_DATA_REQUIRED: 'claimData:own_data_required',
++  CLAIM_DATA_PLAIN_DATA_REQUIRED: 'claimData:plain_data_required',
++  CLAIM_DATA_PLAIN_RECORD_REQUIRED: 'claimData:plain_record_required',
++  CLAIM_TABLE: 'claimTable',
++  CLAIM_TABLE_DIGEST_MISMATCH: 'claimTable:digest_mismatch',
++  CLAIM_TABLE_ROW: 'claimTable.row',
++  CLAIM_TABLE_ROW_DIGEST_MISMATCH: 'claimTable.row:digest_mismatch',
++  CLAIM_TABLE_ROW_ENUM_INVALID: 'claimTable.row:enum_invalid',
++  CLAIM_TABLE_ROW_PROFILE: 'claimTable.row.profile',
++  CLAIM_TABLE_ROW_PROFILE_ID: 'claimTable.row.profile.id',
++  CLAIM_TABLE_ROW_PROFILE_IDENTITY: 'claimTable.row.profile.identity',
++  CLAIM_TABLE_ROW_PROFILE_STATE_INVALID:
++    'claimTable.row.profile:state_invalid',
++  CLAIM_TABLE_ROW_REASON_CODES: 'claimTable.row.reasonCodes',
++  CLAIM_TABLE_ROW_ROW_ID: 'claimTable.row.rowId',
++  CLAIM_TABLE_ROW_STATEMENT: 'claimTable.row.statement',
++  CLAIM_TABLE_ROW_WORKLOAD_ID: 'claimTable.row.workloadId',
++  CLAIM_TABLE_SCHEMA_INVALID: 'claimTable:schema_invalid',
++  CLAIM_TABLE_TABLE_DIGEST: 'claimTable.tableDigest',
++  CLAIM_TABLE_VALIDATION_FAILED_CLOSED:
++    'claimTable:validation_failed_closed',
++  LINE_FEED: '\n',
++  MARKDOWN_PIPE_ESCAPE: '\\|',
++  VALID: 'valid',
++});
++const serializationText = Object.freeze({
++  COMMA: ',',
++  FALSE: 'false',
++  NULL: 'null',
++  TRUE: 'true',
++});
++
++function appendOwnArrayValue(values, value) {
++  objectDefineProperty(values, values.length, {
++    configurable: true,
++    enumerable: true,
++    writable: true,
++    value,
++  });
++}
++
++function joinArray(values, separator) {
++  return reflectApply(arrayJoinMethod, values, [separator]);
++}
++
++function claimScalar(value) {
++  return value === null ||
++    typeof value === 'string' ||
++    typeof value === 'boolean' ||
++    (
++      typeof value === 'number' &&
++      numberIsFinite(value) &&
++      mathAbs(value) <= maximumSafeMagnitude &&
++      !objectIs(value, -0)
++    );
++}
++
++function assertClaimChild(item, state, depth) {
++  if (isMissingDataValue(item)) {
++    throw new TypeError(localText.CLAIM_DATA_OWN_DATA_REQUIRED);
++  }
++  assertClaimCanonicalNode(item, state, depth);
++}
++
++function assertClaimChildren(value, state, depth) {
++  if (arrayIsArray(value)) {
++    if (!isDenseDataArray(value)) {
++      throw new TypeError(localText.CLAIM_DATA_DENSE_ARRAY_REQUIRED);
++    }
++    for (let index = 0; index < value.length; index += 1) {
++      assertClaimChild(ownDataValue(value, `${index}`), state, depth);
++    }
++    return;
++  }
++  if (!isPlainDataRecord(value)) {
++    throw new TypeError(localText.CLAIM_DATA_PLAIN_RECORD_REQUIRED);
++  }
++  const keys = objectKeys(value);
++  for (let index = 0; index < keys.length; index += 1) {
++    assertClaimChild(ownDataValue(value, keys[index]), state, depth);
++  }
++}
++
++function assertClaimCanonicalNode(value, state, depth) {
++  if (depth > maximumClaimDataDepth) {
++    throw new TypeError(localText.CLAIM_DATA_DEPTH_LIMIT);
++  }
++  state.nodes += 1;
++  if (state.nodes > maximumClaimDataNodes) {
++    throw new TypeError(localText.CLAIM_DATA_NODE_LIMIT);
++  }
++  if (claimScalar(value)) return;
++  if (!value || typeof value !== 'object' || isProxy(value)) {
++    throw new TypeError(localText.CLAIM_DATA_PLAIN_DATA_REQUIRED);
++  }
++  if (setHas(state.ancestors, value)) {
++    throw new TypeError(localText.CLAIM_DATA_CYCLE);
++  }
++  setAdd(state.ancestors, value);
++  assertClaimChildren(value, state, depth + 1);
++  setDelete(state.ancestors, value);
++}
++
++function assertClaimCanonicalData(value) {
++  assertClaimCanonicalNode(value, {ancestors: new Set(), nodes: 0}, 0);
++}
++
++function sortedKeys(value) {
++  const keys = objectKeys(value);
++  for (let index = 1; index < keys.length; index += 1) {
++    const current = keys[index];
++    let insertionIndex = index;
++    while (
++      insertionIndex > 0 &&
++      keys[insertionIndex - 1] > current
++    ) {
++      keys[insertionIndex] = keys[insertionIndex - 1];
++      insertionIndex -= 1;
++    }
++    keys[insertionIndex] = current;
++  }
++  return keys;
++}
++
++function serializeClaimData(value) {
++  if (value === null) return serializationText.NULL;
++  if (typeof value === 'string') return jsonStringify(value);
++  if (typeof value === 'boolean') {
++    return value ? serializationText.TRUE : serializationText.FALSE;
++  }
++  if (typeof value === 'number') return `${value}`;
++  if (arrayIsArray(value)) {
++    const items = [];
++    for (let index = 0; index < value.length; index += 1) {
++      appendOwnArrayValue(items, serializeClaimData(value[index]));
++    }
++    return `[${joinArray(items, serializationText.COMMA)}]`;
++  }
++  const fields = [];
++  const keys = sortedKeys(value);
++  for (let index = 0; index < keys.length; index += 1) {
++    appendOwnArrayValue(
++      fields,
++      `${jsonStringify(keys[index])}:` +
++      serializeClaimData(value[keys[index]]),
++    );
++  }
++  return `{${joinArray(fields, serializationText.COMMA)}}`;
++}
++
++function digestClaimData(value) {
++  assertClaimCanonicalData(value);
++  return sha256Prefix +
++    createHash(sha256)
++      .update(serializeClaimData(value))
++      .digest(sha256Encoding);
++}
++
++function safeValidationError(error) {
++  try {
++    if (!error || typeof error !== 'object') {
++      return localText.CLAIM_TABLE_VALIDATION_FAILED_CLOSED;
++    }
++    const descriptor = objectGetOwnPropertyDescriptor(error, 'message');
++    return descriptor && objectHasOwn(descriptor, dataValueKey) &&
++      typeof descriptor.value === 'string' ?
++      descriptor.value :
++      localText.CLAIM_TABLE_VALIDATION_FAILED_CLOSED;
++  } catch {
++    return localText.CLAIM_TABLE_VALIDATION_FAILED_CLOSED;
++  }
++}
++
++function deepFreeze(value) {
++  if (!value || typeof value !== 'object' || objectIsFrozen(value)) {
++    return value;
++  }
++  objectFreeze(value);
++  const keys = objectKeys(value);
++  for (let index = 0; index < keys.length; index += 1) {
++    deepFreeze(value[keys[index]]);
++  }
++  return value;
++}
++
++export function createComparativeEfficiencyClaimRow(input) {
++  assertClaimCanonicalData(input);
++  const body = structuredCloneValue(input);
++  return deepFreeze({
++    rowId: digestClaimData(body),
++    ...body,
++  });
++}
++
++export function createComparativeEfficiencyClaimTable(evaluatedAt, rows) {
++  const body = {
++    schemaVersion: COMPARATIVE_CLAIM_PROJECTION_SCHEMA_VERSION,
++    evaluatedAt,
++    rows: structuredCloneValue(rows),
++  };
++  assertClaimCanonicalData(body);
++  return deepFreeze({
++    ...body,
++    tableDigest: digestClaimData(body),
++  });
++}
++
++function rowDigestMatches(row) {
++  if (!row || typeof row !== 'object') return false;
++  const body = {};
++  for (let index = 0; index < rowBodyKeys.length; index += 1) {
++    const key = rowBodyKeys[index];
++    body[key] = row[key];
++  }
++  return row.rowId === digestClaimData(body);
++}
++
++function validateProfile(profile) {
++  const state = ownDataValue(profile, 'state');
++  if (!setHas(profileStates, state)) {
++    throw new TypeError(localText.CLAIM_TABLE_ROW_PROFILE_STATE_INVALID);
++  }
++  const keys = state === COMPARATIVE_CLAIM_PROFILE_STATE.IDENTIFIED ?
++    ['state', 'id', 'identity'] :
++    ['state'];
++  assertBenchmarkResourceExactRecord(
++    profile,
++    keys,
++    localText.CLAIM_TABLE_ROW_PROFILE,
++  );
++  if (state === COMPARATIVE_CLAIM_PROFILE_STATE.IDENTIFIED) {
++    assertBenchmarkResourceText(
++      profile.id,
++      localText.CLAIM_TABLE_ROW_PROFILE_ID,
++    );
++    assertBenchmarkResourceDigest(
++      profile.identity,
++      localText.CLAIM_TABLE_ROW_PROFILE_IDENTITY,
++    );
++  }
++}
++
++function validateRow(row) {
++  assertBenchmarkResourceExactRecord(row, rowKeys, localText.CLAIM_TABLE_ROW);
++  assertBenchmarkResourceDigest(
++    row.rowId,
++    localText.CLAIM_TABLE_ROW_ROW_ID,
++  );
++  assertBenchmarkResourceText(
++    row.workloadId,
++    localText.CLAIM_TABLE_ROW_WORKLOAD_ID,
++  );
++  assertBenchmarkResourceText(
++    row.statement,
++    localText.CLAIM_TABLE_ROW_STATEMENT,
++  );
++  validateProfile(row.profile);
++  if (
++    !setHas(metrics, row.metric) ||
++    !setHas(evidenceClasses, row.evidenceClass) ||
++    !setHas(outcomes, row.outcome) ||
++    !setHas(subjectKinds, row.subject.kind) ||
++    !setHas(sourceStates, row.source.state)
++  ) {
++    throw new TypeError(localText.CLAIM_TABLE_ROW_ENUM_INVALID);
++  }
++  assertBenchmarkResourceArray(
++    row.reasonCodes,
++    localText.CLAIM_TABLE_ROW_REASON_CODES,
++    maximumReasonCodes,
++  );
++  for (let index = 0; index < row.reasonCodes.length; index += 1) {
++    assertBenchmarkResourceText(
++      row.reasonCodes[index],
++      `${localText.CLAIM_TABLE_ROW_REASON_CODES}.${index}`,
++    );
++  }
++  if (!rowDigestMatches(row)) {
++    throw new TypeError(localText.CLAIM_TABLE_ROW_DIGEST_MISMATCH);
++  }
++}
++
++export function validateComparativeEfficiencyClaimTable(table) {
++  try {
++    assertClaimCanonicalData(table);
++    assertBenchmarkResourceExactRecord(table, tableKeys, localText.CLAIM_TABLE);
++    assertBenchmarkResourceDigest(
++      table.tableDigest,
++      localText.CLAIM_TABLE_TABLE_DIGEST,
++    );
++    if (
++      table.schemaVersion !== COMPARATIVE_CLAIM_PROJECTION_SCHEMA_VERSION ||
++      !arrayIsArray(table.rows)
++    ) {
++      throw new TypeError(localText.CLAIM_TABLE_SCHEMA_INVALID);
++    }
++    for (let index = 0; index < table.rows.length; index += 1) {
++      validateRow(table.rows[index]);
++    }
++    const body = {};
++    for (let index = 0; index < tableBodyKeys.length; index += 1) {
++      const key = tableBodyKeys[index];
++      body[key] = table[key];
++    }
++    if (table.tableDigest !== digestClaimData(body)) {
++      throw new TypeError(localText.CLAIM_TABLE_DIGEST_MISMATCH);
++    }
++    return {valid: true, reason: localText.VALID};
++  } catch (error) {
++    return {
++      valid: false,
++      reason: safeValidationError(error),
++    };
++  }
++}
++
++function markdownCell(value) {
++  return reflectApply(stringReplaceMethod, String(value), [
++    pipePattern,
++    localText.MARKDOWN_PIPE_ESCAPE,
++  ]);
++}
++
++function profileText(profile) {
++  return profile.state === COMPARATIVE_CLAIM_PROFILE_STATE.IDENTIFIED ?
++    profile.id :
++    profile.state;
++}
++
++export function renderComparativeEfficiencyClaimTable(table) {
++  const validation = validateComparativeEfficiencyClaimTable(table);
++  if (!validation.valid) throw new TypeError(validation.reason);
++  const lines = [
++    '# Comparative efficiency claims',
++    '',
++    `Machine table digest: \`${table.tableDigest}\``,
++    '',
++    '| Row | Workload | Metric | Profile | Class | Outcome | Statement |',
++    '| --- | --- | --- | --- | --- | --- | --- |',
++  ];
++  for (let index = 0; index < table.rows.length; index += 1) {
++    const row = table.rows[index];
++    appendOwnArrayValue(
++      lines,
++      `| ${markdownCell(row.rowId)} | ${markdownCell(row.workloadId)} | ` +
++      `${markdownCell(row.metric)} | ${markdownCell(profileText(row.profile))} | ` +
++      `${markdownCell(row.evidenceClass)} | ${markdownCell(row.outcome)} | ` +
++      `${markdownCell(row.statement)} |`,
++    );
++  }
++  appendOwnArrayValue(lines, '');
++  return joinArray(lines, localText.LINE_FEED);
++}

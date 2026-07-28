@@ -55,6 +55,14 @@ import {
   BENCHMARK_RESOURCE_LIMIT,
 } from './benchmark-resource-contract-constants.js';
 import {
+  BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE,
+  createBenchmarkResourceClaimEvidenceView,
+} from './benchmark-resource-claim-evidence-view.js';
+import {
+  BENCHMARK_RESOURCE_MEASURING_CELL_INPUT_KEYS,
+  BENCHMARK_RESOURCE_NON_MEASURING_CELL_INPUT_KEYS,
+  BENCHMARK_RESOURCE_ROOT_INPUT_KEYS,
+  BENCHMARK_RESOURCE_ROOT_MANIFEST_ENTRY_KEYS,
   BENCHMARK_RESOURCE_ROOT_TEXT as ROOT_TEXT,
 } from './benchmark-resource-evidence-root-constants.js';
 const sourceArtifactKinds = new Set([
@@ -70,25 +78,7 @@ const sourceArtifactKinds = new Set([
 ]);
 const allowedArtifactKinds =
   new Set(Object.values(BENCHMARK_RESOURCE_ARTIFACT_KIND));
-const measuringCellInputKeys = Object.freeze([
-  'matrixManifestDigest',
-  'matrixId',
-  'cellId',
-  'pairId',
-  'runId',
-  'sideIds',
-  'capacityReportDigests',
-  'semanticReceiptDigests',
-  'liveEngagementDigests',
-  'componentInventoryDigest',
-  'priceSheetDigest',
-  'resourceWindowDigests',
-  'capacityEffect',
-  'costEffect',
-  'sourceRevision',
-  'producedAt',
-  'validUntil',
-]);
+const measuringCellInputKeys = BENCHMARK_RESOURCE_MEASURING_CELL_INPUT_KEYS;
 const measuringCellPayloadKeys = Object.freeze([
   'version',
   'state',
@@ -96,35 +86,15 @@ const measuringCellPayloadKeys = Object.freeze([
   'priceSheetValidAtProduction',
   'cellEvidenceDigest',
 ]);
-const nonMeasuringCellInputKeys = Object.freeze([
-  'matrixManifestDigest',
-  'matrixId',
-  'cellId',
-  'pairId',
-  'runId',
-  'sideIds',
-  'reasonCodes',
-  'sourceDigests',
-  'sourceRevision',
-  'producedAt',
-  'validUntil',
-]);
+const nonMeasuringCellInputKeys =
+  BENCHMARK_RESOURCE_NON_MEASURING_CELL_INPUT_KEYS;
 const nonMeasuringCellPayloadKeys = Object.freeze([
   'version',
   'state',
   ...nonMeasuringCellInputKeys,
   'cellEvidenceDigest',
 ]);
-const rootInputKeys = Object.freeze([
-  'matrixManifestDigest',
-  'componentInventoryDigest',
-  'priceSheetDigest',
-  'cellEvidenceDigests',
-  'sourceRevision',
-  'producedAt',
-  'validUntil',
-  'artifacts',
-]);
+const rootInputKeys = BENCHMARK_RESOURCE_ROOT_INPUT_KEYS;
 const rootPayloadKeys = Object.freeze([
   'version',
   'matrixManifestDigest',
@@ -137,7 +107,7 @@ const rootPayloadKeys = Object.freeze([
   'artifactManifest',
   'artifactManifestDigest',
 ]);
-const manifestEntryKeys = Object.freeze(['kind', 'digest', 'byteLength']);
+const manifestEntryKeys = BENCHMARK_RESOURCE_ROOT_MANIFEST_ENTRY_KEYS;
 const artifactEnvelopeKeys =
   Object.freeze(['digest', 'bytes', 'byteLength', 'artifact']);
 const resolverKeys = Object.freeze(['resolve']);
@@ -1289,6 +1259,7 @@ function validateNonMeasuringCell(cellArtifact, payload, owners) {
 
 function validateCells(root, owners, resolved) {
   const expected = expectedCellIds(owners.matrix);
+  const cellPayloads = [];
   let claimEligible = true;
   let measuringCellCount = 0;
   if (
@@ -1304,6 +1275,7 @@ function validateCells(root, owners, resolved) {
       BENCHMARK_RESOURCE_ARTIFACT_KIND.CELL_EVIDENCE,
     );
     const payload = artifact.payload;
+    appendOwnArrayValue(cellPayloads, payload);
     if (!setHas(expected, payload.cellId)) {
       fail(ROOT_TEXT.ROOT_CELLS_EXTRA_OR_DUPLICATE);
     }
@@ -1322,7 +1294,10 @@ function validateCells(root, owners, resolved) {
   if (reflectApply(setSizeGetter, expected, []) !== 0) {
     fail(ROOT_TEXT.ROOT_CELLS_MISSING);
   }
-  return claimEligible && measuringCellCount > 0;
+  return {
+    claimEligible: claimEligible && measuringCellCount > 0,
+    cellPayloads,
+  };
 }
 
 function allArtifactsSemanticallyOwned(root, resolved) {
@@ -1399,7 +1374,7 @@ function resolveRootReceipt(receipt) {
   const root = rootArtifact.payload;
   assertProductionInterval(root, ROOT_TEXT.ROOT);
   assertBenchmarkResourceText(root.sourceRevision, ROOT_TEXT.ROOT_SOURCE_REVISION);
-  return {root, resolved};
+  return {rootDigest: receipt.rootDigest, root, resolved};
 }
 
 function inspectOwner(artifact, inspect, path) {
@@ -1476,12 +1451,12 @@ export function validateBenchmarkResourceEvidenceRoot(receipt) {
     const {root, resolved} = resolveRootReceipt(receipt);
     const owners = resolveEvidenceOwners(root, resolved);
     assertEvidenceOwnerJoin(owners);
-    const claimEligible = validateCells(root, owners, resolved);
+    const cellValidation = validateCells(root, owners, resolved);
     allArtifactsSemanticallyOwned(root, resolved);
     return {
       valid: true,
       reason: ROOT_TEXT.VALID,
-      claimEligible,
+      claimEligible: cellValidation.claimEligible,
       matrixId: owners.matrix.matrixId,
       cellCount: root.cellEvidenceDigests.length,
       artifactCount: reflectApply(mapSizeGetter, resolved, []),
@@ -1494,6 +1469,31 @@ export function validateBenchmarkResourceEvidenceRoot(receipt) {
       matrixId: ROOT_TEXT.UNRESOLVED,
       cellCount: 0,
       artifactCount: 0,
+    };
+  }
+}
+
+export function inspectBenchmarkResourceClaimEvidenceRoot(receipt) {
+  try {
+    const {rootDigest, root, resolved} = resolveRootReceipt(receipt);
+    const owners = resolveEvidenceOwners(root, resolved);
+    assertEvidenceOwnerJoin(owners);
+    const cellValidation = validateCells(root, owners, resolved);
+    allArtifactsSemanticallyOwned(root, resolved);
+    return {
+      state: BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.ACCEPTED,
+      evidence: createBenchmarkResourceClaimEvidenceView({
+        rootDigest,
+        claimEligible: cellValidation.claimEligible,
+        root,
+        owners,
+        cellPayloads: cellValidation.cellPayloads,
+      }),
+    };
+  } catch (error) {
+    return {
+      state: BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.REJECTED,
+      reason: safeValidationReason(error),
     };
   }
 }
