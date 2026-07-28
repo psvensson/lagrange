@@ -17,6 +17,10 @@ import {
 } from
   '../../test/distributed/harness/benchmark-resource-durable-resolver.js';
 import {
+  acceptBenchmarkResourceClaimEvidenceRoot,
+} from
+  '../../test/distributed/harness/benchmark-resource-evidence-root.js';
+import {
   digestBenchmarkSemanticData,
 } from '../../test/distributed/harness/benchmark-semantic-integrity.js';
 import {
@@ -199,12 +203,12 @@ function measuredEvidence(sourceReports) {
         matrixId: source.matrixId,
       }),
     },
-    rootReceipt: {
+    rootAcceptance: acceptBenchmarkResourceClaimEvidenceRoot({
       rootDigest: report.detail.evidenceRootDigest,
       resolver: createBenchmarkResourceDurableResolver(
         resolve(source.artifactDirectory),
       ),
-    },
+    }),
     certification: {
       state: COMPARATIVE_CLAIM_CERTIFICATION_STATE.ABSENT,
     },

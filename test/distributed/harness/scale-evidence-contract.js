@@ -369,9 +369,17 @@ function validateWorkloadFields(report, errors) {
   }
 }
 
-function validateIdentityFields(report, errors) {
-  validateRunFields(report, errors);
-
+export function validateScaleProfileFields(report, errors) {
+  pushIf(errors, !isRecord(report.profile), localText.PROFILE_OBJECT_REQUIRED);
+  if (isRecord(report.profile)) {
+    pushIf(
+      errors,
+      !intrinsicSetHas(PROFILE_IDS, report.profile.id),
+      localText.PROFILE_ID_UNSUPPORTED,
+    );
+    pushIf(errors, !isPositiveInteger(report.profile.version),
+      localText.PROFILE_VERSION_POSITIVE_INTEGER_REQUIRED);
+  }
   const software = report.software;
   pushIf(errors, !isRecord(software), localText.SOFTWARE_OBJECT_REQUIRED);
   if (isRecord(software)) {
@@ -439,6 +447,11 @@ function validateIdentityFields(report, errors) {
   }
 
   validateWorkloadFields(report, errors);
+}
+
+function validateIdentityFields(report, errors) {
+  validateRunFields(report, errors);
+  validateScaleProfileFields(report, errors);
 }
 
 function validateProvenance(report, errors) {
@@ -1389,16 +1402,6 @@ function validateBaseReport(report) {
     localText.CONTRACTID_UNSUPPORTED);
   pushIf(errors, report.schemaVersion !== SCALE_EVIDENCE_SCHEMA_VERSION,
     localText.SCHEMAVERSION_UNSUPPORTED);
-  pushIf(errors, !isRecord(report.profile), localText.PROFILE_OBJECT_REQUIRED);
-  if (isRecord(report.profile)) {
-    pushIf(
-      errors,
-      !intrinsicSetHas(PROFILE_IDS, report.profile.id),
-      localText.PROFILE_ID_UNSUPPORTED,
-    );
-    pushIf(errors, !isPositiveInteger(report.profile.version),
-      localText.PROFILE_VERSION_POSITIVE_INTEGER_REQUIRED);
-  }
   validateIdentityFields(report, errors);
   validateGateEnvelope(report, errors);
   validateProvenance(report, errors);

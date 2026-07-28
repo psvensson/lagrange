@@ -38,6 +38,12 @@ import {
   BENCHMARK_RESOURCE_EFFECT,
 } from '../benchmark-resource-contract-constants.js';
 import {
+  SCALE_PROFILE_ID,
+} from '../scale-evidence-contract.js';
+import {
+  createScaleProfileEnvelope,
+} from '../scale-profile-envelope.js';
+import {
   FIXTURE_RESOURCE_MATRIX_ID,
   FIXTURE_RESOURCE_PAIR_ID,
   FIXTURE_RESOURCE_PRODUCED_AT,
@@ -59,12 +65,27 @@ const localText = Object.freeze({
   FIXTURE_IMAGE: 'fixture:live',
   FIXTURE_IMAGE_ID: 'sha256:fixture-image',
   FIXTURE_NETWORK: 'fixture-network',
+  FIXTURE_PRICE_SHEET_ID: 'fixture-price-sheet-v1',
   FIXTURE_PREREGISTRATION: 'fixture-preregistration',
+  FIXTURE_REGION: 'eu-north-1',
+  FIXTURE_CURRENCY: 'USD',
+  FIXTURE_PRICE_DATE: '2026-07-27',
+  FIXTURE_PRICE_VALID_FROM: '2026-07-27T00:00:00.000Z',
+  FIXTURE_BILLING_GRANULARITY: 'per_second',
+  FIXTURE_RESERVATION_POLICY: 'on_demand',
+  FIXTURE_EXCLUDED: 'excluded',
+  FIXTURE_TAX: 'tax',
+  FIXTURE_CREDITS: 'credits',
+  FIXTURE_SPOT_DISCOUNT: 'spot_discount',
   LIVE_TOPOLOGY_VERSION: 'benchmark-resource-live-topology-v1',
+  MEASURED: 'measured',
+  C3_COORDINATE_UNRESOLVED:
+    'fixture C3 measured coordinate is unresolved',
   RESOURCE_FIXTURE_SOURCE_V1: 'resource-fixture-source-v1',
   NONE: 'none',
   IDENTICAL_LOAD_GENERATOR_ON_BOTH_SIDES: 'identical_load_generator_on_both_sides',
   SMALL: 'small',
+  VALUE_2026_07_27_T11_58_00_000_Z: '2026-07-27T11:58:00.000Z',
   VALUE_2026_07_27_T11_59_00_000_Z: '2026-07-27T11:59:00.000Z',
   VALUE_2026_07_29_T00_00_00_000_Z: '2026-07-29T00:00:00.000Z',
   PREREGISTERED_NON_MEASURING_FIXTURE_CELL: 'preregistered_non_measuring_fixture_cell',
@@ -88,6 +109,7 @@ const FIXTURE_SCALAR = Object.freeze({
   COST_MEMORY_BYTE_SECOND: 0.000000000001,
   COST_NETWORK_BYTE: 0.000000001,
   COST_STORAGE_BYTE_SECOND: 0.0000000000001,
+  COST_PER_MILLION_OPERATIONS: 1_000_000,
   DATABASE_CPU_PER_MULTIPLIER: 2,
   DATABASE_HEADROOM_RATIO: 0.2,
   DATABASE_IOPS_PER_MULTIPLIER: 100,
@@ -309,6 +331,48 @@ function unitPrices() {
   };
 }
 
+function fixturePriceSheet(validUntil) {
+  return createBenchmarkResourcePriceSheet({
+    priceSheetId: localText.FIXTURE_PRICE_SHEET_ID,
+    region: localText.FIXTURE_REGION,
+    currency: localText.FIXTURE_CURRENCY,
+    priceDate: localText.FIXTURE_PRICE_DATE,
+    validFrom: localText.FIXTURE_PRICE_VALID_FROM,
+    validUntil,
+    billingGranularity: localText.FIXTURE_BILLING_GRANULARITY,
+    reservationPolicy: localText.FIXTURE_RESERVATION_POLICY,
+    spotPolicy: localText.FIXTURE_EXCLUDED,
+    taxPolicy: localText.FIXTURE_EXCLUDED,
+    creditPolicy: localText.FIXTURE_EXCLUDED,
+    exclusions: [
+      localText.FIXTURE_TAX,
+      localText.FIXTURE_CREDITS,
+      localText.FIXTURE_SPOT_DISCOUNT,
+    ],
+    unitPrices: unitPrices(),
+  });
+}
+
+function aggregateSideCost(windows, costs, sideId) {
+  let billedCost = 0;
+  let correctOperations = 0;
+  let sampleCount = 0;
+  for (let index = 0; index < windows.length; index += 1) {
+    const window = windows[index].artifact.payload;
+    if (window.sideId !== sideId) continue;
+    billedCost += costs[index].totalCost;
+    correctOperations += window.correctSloEligibleOperations;
+    sampleCount += 1;
+  }
+  return {
+    value:
+      billedCost /
+      correctOperations *
+      FIXTURE_SCALAR.COST_PER_MILLION_OPERATIONS,
+    sampleCount,
+  };
+}
+
 function utilized(multiplier) {
   return {
     cpuCoreSeconds: FIXTURE_SCALAR.UTILIZED_CPU_CORE_SECONDS * multiplier,
@@ -416,6 +480,8 @@ function sideSourceArtifacts(
   capacityProtocol,
   sideIndex,
   coordinates,
+  c3Window = null,
+  includeProtocol = true,
 ) {
   const protocolSideId =
     capacityProtocol?.preregistration.sideIds[sideIndex];
@@ -428,7 +494,10 @@ function sideSourceArtifacts(
         name: `${sideId}-capacity-sample`,
         correctOpsPerSecond:
           sideId === FIXTURE_RESOURCE_SIDE_IDS[0] ? 1200 : 1000,
-        ...(capacityProtocol === null ?
+        ...(c3Window === null ?
+          {} :
+          {capacitySampleDigest: c3Window.receipt.capacitySampleDigest}),
+        ...(capacityProtocol === null || !includeProtocol ?
           {} :
           {
             protocol: {
@@ -454,7 +523,13 @@ function sideSourceArtifacts(
     {
       ...coordinates,
       sideId,
-      evidence: {name: `${sideId}-semantic-receipt`, correct: 1000},
+      evidence: {
+        name: `${sideId}-semantic-receipt`,
+        correct: c3Window?.sample.counts.correct ?? 1000,
+        ...(c3Window === null ?
+          {} :
+          {semanticReceiptDigest: c3Window.receipt.semanticReceiptDigest}),
+      },
     },
   );
   const liveEngagement = createBenchmarkResourceWindowSourceArtifact(
@@ -465,6 +540,9 @@ function sideSourceArtifacts(
       evidence: {
         name: `${sideId}-live-engagement`,
         transport: 'managed-postgresql',
+        ...(c3Window === null ?
+          {} :
+          {liveEngagementDigest: c3Window.receipt.liveEngagementDigest}),
         ...(calibrationArtifact === null ?
           {} :
           {amplificationPolicy: 'semantic_events_absent_zero_only'}),
@@ -479,6 +557,9 @@ function sideSourceArtifacts(
       evidence: {
         name: `${sideId}-window-receipt`,
         completed: true,
+        ...(c3Window === null ?
+          {} :
+          {capacityWindowReceipt: c3Window.receipt}),
       },
     },
   );
@@ -514,7 +595,7 @@ function sideSourceArtifacts(
 function capacitySummary(
   sideId,
   sideIndex,
-  capacitySample,
+  capacitySamples,
   capacityProtocol,
 ) {
   if (capacityProtocol !== null) {
@@ -538,7 +619,7 @@ function capacitySummary(
         lower: interval.lower,
         upper: interval.upper,
       },
-      sourceDigests: [capacitySample.digest],
+      sourceDigests: capacitySamples.map((sample) => sample.digest),
     });
   }
   const value = sideId === FIXTURE_RESOURCE_SIDE_IDS[0] ?
@@ -552,7 +633,7 @@ function capacitySummary(
       lower: value * FIXTURE_SCALAR.CAPACITY_CONFIDENCE_LOWER_FACTOR,
       upper: value * FIXTURE_SCALAR.CAPACITY_CONFIDENCE_UPPER_FACTOR,
     },
-    sourceDigests: [capacitySample.digest],
+    sourceDigests: capacitySamples.map((sample) => sample.digest),
   });
 }
 
@@ -591,12 +672,50 @@ function optionalFixtureArtifact(artifact) {
   return artifact === null ? [] : [artifact];
 }
 
+function protocolMeasuredWindowSpecs(capacityProtocol) {
+  if (capacityProtocol === null) return null;
+  const specs = [];
+  const preregistration = capacityProtocol.preregistration;
+  for (let index = 0;
+    index < capacityProtocol.report.windowReceipts.length;
+    index += 1) {
+    const receipt = capacityProtocol.report.windowReceipts[index];
+    if (receipt.phase !== localText.MEASURED) continue;
+    const sideIndex = preregistration.sideIds.indexOf(receipt.sideId);
+    const loadIndex =
+      preregistration.offeredLoadPerSecond.indexOf(receipt.offeredLoad);
+    const sample = capacityProtocol.report.rawSamples.find(
+      (entry) => entry.sampleDigest === receipt.capacitySampleDigest,
+    );
+    if (sideIndex < 0 || loadIndex < 0 || sample === undefined) {
+      throw new TypeError(localText.C3_COORDINATE_UNRESOLVED);
+    }
+    specs.push({
+      protocolIndex: specs.length,
+      sideIndex,
+      receipt,
+      sample,
+      startedAt: new Date(receipt.startedAt).toISOString(),
+      endedAt: new Date(receipt.endedAt).toISOString(),
+      loadIndex,
+    });
+  }
+  return specs;
+}
+
 export function createBenchmarkResourceEvidenceFixture({
   calibrationArtifact = null,
+  calibrationArtifacts = null,
   capacityProtocol = null,
+  fabricatedWindowIndex = null,
   liveUtilizationOffset = 0,
   matrixSizeValues = [localText.SMALL],
+  priceArtifactOverride = null,
   priceValidUntil = localText.VALUE_2026_07_29_T00_00_00_000_Z,
+  profileEnvelopeOverride = null,
+  profileId = SCALE_PROFILE_ID.DEVELOPMENT,
+  omittedProtocolCoordinate = null,
+  overlapWindowIndex = null,
   sealNonMeasuringCells = true,
 } = {}) {
   const identity = fixtureIdentity(calibrationArtifact);
@@ -609,6 +728,46 @@ export function createBenchmarkResourceEvidenceFixture({
   const alternativeTopology =
     alternativeTopologyFixture(calibrationArtifact);
   const preregistration = fixturePreregistration(capacityProtocol);
+  const builtProfileEnvelope = createBenchmarkResourceSourceArtifact(
+    BENCHMARK_RESOURCE_ARTIFACT_KIND.PROFILE_ENVELOPE,
+    createScaleProfileEnvelope({
+      profile: {id: profileId, version: 1},
+      software: {
+        revision: fixtureSourceRevision,
+        runtime: 'node-fixture',
+        packageVersion: '0.1.0',
+      },
+      hardware: {
+        provider: 'fixture',
+        region: 'eu-north-1',
+        instanceClass: 'resource-evidence-fixture',
+        cpuCount: 2,
+        memoryBytes: 2_000_000,
+        storageClass: 'fixture-storage',
+      },
+      topology: {
+        manifestDigest: alternativeTopology.digest,
+        nodeCount: 2,
+        failureDomainCount: 1,
+        tableCount: 1,
+        partitionCount: 1,
+        replicaCount: 1,
+      },
+      data: {
+        manifestDigest: workloadManifest.digest,
+        logicalBytes: 1_000,
+        physicalBytes: 2_000,
+        shape: 'fixture',
+      },
+      workload: {
+        id: 'fixture-workload',
+        manifestDigest: workloadManifest.digest,
+        duration: {warmupMs: 1_000, measuredMs: 60_000},
+      },
+    }),
+  );
+  const profileEnvelope =
+    profileEnvelopeOverride ?? builtProfileEnvelope;
   const matrix = createBenchmarkResourceMatrixManifest({
     matrixId: FIXTURE_RESOURCE_MATRIX_ID,
     axes: [
@@ -619,6 +778,7 @@ export function createBenchmarkResourceEvidenceFixture({
     workloadManifestDigest: workloadManifest.digest,
     alternativeTopologyDigest: alternativeTopology.digest,
     preregistrationDigest: preregistration.digest,
+    profileEnvelopeDigest: profileEnvelope.digest,
   });
   const inventory = createBenchmarkResourceComponentInventory({
     inventoryId: 'fixture-inventory-v1',
@@ -628,94 +788,147 @@ export function createBenchmarkResourceEvidenceFixture({
       inventorySide(FIXTURE_RESOURCE_SIDE_IDS[1], 1, calibrationArtifact),
     ],
   });
-  const price = createBenchmarkResourcePriceSheet({
-    priceSheetId: 'fixture-price-sheet-v1',
-    region: 'eu-north-1',
-    currency: 'USD',
-    priceDate: '2026-07-27',
-    validFrom: '2026-07-27T00:00:00.000Z',
-    validUntil: priceValidUntil,
-    billingGranularity: 'per_second',
-    reservationPolicy: 'on_demand',
-    spotPolicy: 'excluded',
-    taxPolicy: 'excluded',
-    creditPolicy: 'excluded',
-    exclusions: ['tax', 'credits', 'spot_discount'],
-    unitPrices: unitPrices(),
-  });
+  const validPrice = fixturePriceSheet(priceValidUntil);
+  const costingPrice = fixturePriceSheet(
+    localText.VALUE_2026_07_29_T00_00_00_000_Z,
+  );
+  const price = priceArtifactOverride ?? validPrice;
   const cell = matrix.artifact.payload.cells[0];
-  const sideSources = [
-    sideSourceArtifacts(
-      FIXTURE_RESOURCE_SIDE_IDS[0],
-      2,
-      calibrationArtifact,
-      capacityProtocol,
-      0,
-      {
-        matrixId: FIXTURE_RESOURCE_MATRIX_ID,
-        cellId: cell.cellId,
-        pairId: FIXTURE_RESOURCE_PAIR_ID,
-        runId: fixtureRunId,
-      },
-    ),
-    sideSourceArtifacts(
-      FIXTURE_RESOURCE_SIDE_IDS[1],
-      1,
-      calibrationArtifact,
-      capacityProtocol,
-      1,
-      {
-        matrixId: FIXTURE_RESOURCE_MATRIX_ID,
-        cellId: cell.cellId,
-        pairId: FIXTURE_RESOURCE_PAIR_ID,
-        runId: fixtureRunId,
-      },
-    ),
+  const protocolSpecs = protocolMeasuredWindowSpecs(capacityProtocol);
+  const unfilteredWindowSpecs = protocolSpecs ?? [
+    {
+      sideIndex: 0,
+      protocolIndex: 0,
+      receipt: null,
+      sample: null,
+      startedAt: calibrationArtifact === null ?
+        localText.VALUE_2026_07_27_T11_58_00_000_Z :
+        localText.VALUE_2026_07_27_T11_59_00_000_Z,
+      endedAt: calibrationArtifact === null ?
+        localText.VALUE_2026_07_27_T11_59_00_000_Z :
+        FIXTURE_RESOURCE_PRODUCED_AT,
+      loadIndex: 0,
+    },
+    {
+      sideIndex: 1,
+      protocolIndex: 1,
+      receipt: null,
+      sample: null,
+      startedAt: localText.VALUE_2026_07_27_T11_59_00_000_Z,
+      endedAt: FIXTURE_RESOURCE_PRODUCED_AT,
+      loadIndex: 0,
+    },
   ];
+  const windowSpecs = omittedProtocolCoordinate === null ?
+    unfilteredWindowSpecs :
+    unfilteredWindowSpecs.filter((spec) =>
+      spec.receipt?.blockIndex !== omittedProtocolCoordinate.blockIndex ||
+      spec.loadIndex !== omittedProtocolCoordinate.loadIndex);
+  const sideSources = [];
   const windows = [];
-  const capacities = [];
-  for (let index = 0; index < FIXTURE_RESOURCE_SIDE_IDS.length; index += 1) {
-    const sideId = FIXTURE_RESOURCE_SIDE_IDS[index];
-    const sources = sideSources[index];
-    const multiplier = index === 0 ? 2 : 1;
+  const capacitySamplesBySide = [[], []];
+  const protocolAttachedBySide = [false, false];
+  for (let index = 0; index < windowSpecs.length; index += 1) {
+    const spec = windowSpecs[index];
+    const sideId = FIXTURE_RESOURCE_SIDE_IDS[spec.sideIndex];
+    const multiplier = spec.sideIndex === 0 ? 2 : 1;
+    const windowCalibration =
+      calibrationArtifacts?.[spec.protocolIndex] ?? calibrationArtifact;
+    const fabricated = index === fabricatedWindowIndex;
+    const blockIndex = fabricated ? 777 : spec.receipt?.blockIndex ?? 0;
+    const blockedOrderIndex =
+      spec.receipt?.blockedOrderIndex ?? spec.sideIndex;
+    const offeredLoad = fabricated ?
+      999_999 :
+      spec.receipt?.offeredLoad ?? 1_000;
+    const loadIndex = fabricated ? 555 : spec.loadIndex;
+    const coordinates = {
+      matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+      cellId: cell.cellId,
+      pairId: FIXTURE_RESOURCE_PAIR_ID,
+      runId: fixtureRunId,
+      pairedBlockId:
+        `${FIXTURE_RESOURCE_PAIR_ID}-block-${blockIndex}-load-${loadIndex}`,
+      profileIdentity: profileEnvelope.artifact.payload.profileIdentity,
+      blockIndex,
+      blockedOrderIndex,
+      offeredLoad,
+      loadIndex,
+      phase: 'measured',
+    };
+    const sources = sideSourceArtifacts(
+      sideId,
+      multiplier,
+      windowCalibration,
+      capacityProtocol,
+      spec.sideIndex,
+      coordinates,
+      spec.receipt === null ? null : {
+        receipt: spec.receipt,
+        sample: spec.sample,
+      },
+      !protocolAttachedBySide[spec.sideIndex],
+    );
+    protocolAttachedBySide[spec.sideIndex] = true;
+    sideSources.push(sources);
+    capacitySamplesBySide[spec.sideIndex].push(sources.capacitySample);
     windows.push(createBenchmarkResourceWindow({
-      windowId: `${sideId}-window-v1`,
+      windowId:
+        `${sideId}-block-${blockIndex}-load-${loadIndex}-window-v1`,
       matrixManifestDigest: matrix.digest,
       matrixId: FIXTURE_RESOURCE_MATRIX_ID,
       cellId: cell.cellId,
       pairId: FIXTURE_RESOURCE_PAIR_ID,
       runId: fixtureRunId,
       sideId,
+      pairedBlockId: sources.capacitySample.artifact.payload.pairedBlockId,
+      profileIdentity: sources.capacitySample.artifact.payload.profileIdentity,
+      blockIndex: sources.capacitySample.artifact.payload.blockIndex,
+      blockedOrderIndex:
+        sources.capacitySample.artifact.payload.blockedOrderIndex,
+      offeredLoad: sources.capacitySample.artifact.payload.offeredLoad,
+      loadIndex: sources.capacitySample.artifact.payload.loadIndex,
+      phase: sources.capacitySample.artifact.payload.phase,
       windowReceiptDigest: sources.windowReceipt.digest,
       capacitySampleDigest: sources.capacitySample.digest,
       semanticReceiptDigest: sources.semanticReceipt.digest,
       liveEngagementDigest: sources.liveEngagement.digest,
       liveCalibrationDigest: sources.observationEnd.digest,
-      startedAt: localText.VALUE_2026_07_27_T11_59_00_000_Z,
-      endedAt: FIXTURE_RESOURCE_PRODUCED_AT,
-      correctSloEligibleOperations: FIXTURE_SCALAR.OPERATIONS_PER_WINDOW,
+      startedAt: index === overlapWindowIndex ?
+        windowSpecs[index - 1].startedAt :
+        spec.startedAt,
+      endedAt: index === overlapWindowIndex ?
+        windowSpecs[index - 1].endedAt :
+        spec.endedAt,
+      correctSloEligibleOperations:
+        spec.sample?.counts.correct ??
+        FIXTURE_SCALAR.OPERATIONS_PER_WINDOW,
       components: componentSamples(
         sideId,
         sources.observationStart.digest,
         sources.observationEnd.digest,
         multiplier,
-        calibrationArtifact,
+        windowCalibration,
         liveUtilizationOffset,
       ),
     }));
-    capacities.push(capacitySummary(
+  }
+  const capacities = FIXTURE_RESOURCE_SIDE_IDS.map((sideId, sideIndex) =>
+    capacitySummary(
       sideId,
-      index,
-      sources.capacitySample,
+      sideIndex,
+      capacitySamplesBySide[sideIndex],
       capacityProtocol,
     ));
-  }
-  const costs = windows.map((window) =>
+  const windowCosts = windows.map((window) =>
     computeBenchmarkResourceWindowCost(
       window.artifact.payload,
       inventory.artifact.payload,
-      price.artifact.payload,
-    ).costPerMillionCorrectOperations);
+      costingPrice.artifact.payload,
+    ));
+  const costs = windowCosts.map(
+    (cost) => cost.costPerMillionCorrectOperations,
+  );
   const capacityEffect = createBenchmarkResourcePairedEffect({
     effectType: BENCHMARK_RESOURCE_EFFECT.CAPACITY,
     numeratorSideId: FIXTURE_RESOURCE_SIDE_IDS[0],
@@ -740,18 +953,23 @@ export function createBenchmarkResourceEvidenceFixture({
     sourceDigests: capacities.map((capacity) => capacity.digest),
     currency: BENCHMARK_RESOURCE_NO_CURRENCY,
   });
+  const sideCosts = FIXTURE_RESOURCE_SIDE_IDS.map((sideId) =>
+    aggregateSideCost(windows, windowCosts, sideId));
   const costEffect = createBenchmarkResourcePairedEffect({
     effectType: BENCHMARK_RESOURCE_EFFECT.COST,
     numeratorSideId: FIXTURE_RESOURCE_SIDE_IDS[0],
     denominatorSideId: FIXTURE_RESOURCE_SIDE_IDS[1],
-    numeratorValue: costs[0],
-    denominatorValue: costs[1],
+    numeratorValue: sideCosts[0].value,
+    denominatorValue: sideCosts[1].value,
     confidenceInterval: {
-      lower: costs[0] / costs[1],
-      upper: costs[0] / costs[1],
+      lower: sideCosts[0].value / sideCosts[1].value,
+      upper: sideCosts[0].value / sideCosts[1].value,
     },
     practicalThreshold: 0.05,
-    sampleCount: 1,
+    sampleCount: Math.min(
+      sideCosts[0].sampleCount,
+      sideCosts[1].sampleCount,
+    ),
     sourceDigests: [
       inventory.digest,
       price.digest,
@@ -791,10 +1009,12 @@ export function createBenchmarkResourceEvidenceFixture({
     workloadManifest,
     alternativeTopology,
     preregistration,
+    profileEnvelope,
     matrix,
     inventory,
     price,
-    ...optionalFixtureArtifact(calibrationArtifact),
+    ...(calibrationArtifacts ??
+      optionalFixtureArtifact(calibrationArtifact)),
     ...sideSources.flatMap((sources) => sources.all),
     ...windows,
     ...capacities,
@@ -820,6 +1040,7 @@ export function createBenchmarkResourceEvidenceFixture({
     root,
     artifacts,
     matrix,
+    profileEnvelope,
     inventory,
     price,
     windows,

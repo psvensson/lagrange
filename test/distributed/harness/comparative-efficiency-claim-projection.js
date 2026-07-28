@@ -18,7 +18,7 @@ import {
   BENCHMARK_RESOURCE_CLAIM_MEASUREMENT_STATE,
 } from './benchmark-resource-claim-evidence-view.js';
 import {
-  inspectBenchmarkResourceClaimEvidenceRoot,
+  inspectBenchmarkResourceClaimEvidenceAcceptance,
 } from './benchmark-resource-evidence-root.js';
 import {
   BENCHMARK_RESOURCE_EFFECT_DIRECTION,
@@ -48,6 +48,13 @@ import {
   SCALE_PROFILE_ID,
   validateScaleCertificationReceipt,
 } from './scale-evidence-contract.js';
+import {
+  BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE,
+  BENCHMARK_RESOURCE_MEASUREMENT_REASON,
+  benchmarkResourceRejectedMeasurementOutcome,
+  benchmarkResourceStaleMeasurementOutcome,
+  createBenchmarkResourceMeasurementOutcome,
+} from './benchmark-resource-measurement-outcome.js';
 
 const dateParse = Date.parse;
 const ArrayConstructor = Array;
@@ -71,7 +78,7 @@ const measuredKeys = Object.freeze([
   'workloadId',
   'expectedMatrixId',
   'profile',
-  'rootReceipt',
+  'rootAcceptance',
   'certification',
 ]);
 const profileKeys = Object.freeze(['id', 'identity']);
@@ -133,6 +140,13 @@ function copiedArray(values) {
   const copy = [];
   appendArrayValues(copy, values);
   return copy;
+}
+
+function containsExactValue(values, expected) {
+  for (let index = 0; index < values.length; index += 1) {
+    if (ownDataValue(values, `${index}`) === expected) return true;
+  }
+  return false;
 }
 
 function combinedReasonCodes(first, second, third, fourth) {
@@ -291,7 +305,10 @@ export function classifyComparativeEfficiencyClaimEffect(effect) {
 }
 
 function rootCurrentness(evidence, evaluatedAt) {
-  if (!evidence.claimEligible) {
+  if (
+    evidence.measurementOutcome.state !==
+      BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.MEASURING
+  ) {
     return [COMPARATIVE_CLAIM_REASON.EVIDENCE_NOT_CLAIM_ELIGIBLE];
   }
   const evaluation = timestamp(evaluatedAt);
@@ -299,15 +316,47 @@ function rootCurrentness(evidence, evaluatedAt) {
     return [COMPARATIVE_CLAIM_REASON.EVALUATION_TIME_INVALID];
   }
   if (evaluation.milliseconds < dateParse(evidence.producedAt)) {
-    return [COMPARATIVE_CLAIM_REASON.EVIDENCE_NOT_YET_VALID];
+    return [benchmarkResourceStaleMeasurementOutcome(
+      COMPARATIVE_CLAIM_REASON.EVIDENCE_NOT_YET_VALID,
+    ).reason.code];
   }
   if (evaluation.milliseconds >= dateParse(evidence.validUntil)) {
-    return [COMPARATIVE_CLAIM_REASON.EVIDENCE_EXPIRED];
+    return [benchmarkResourceStaleMeasurementOutcome(
+      COMPARATIVE_CLAIM_REASON.EVIDENCE_EXPIRED,
+    ).reason.code];
   }
   return [];
 }
 
+function rootProjectionOutcome(evidence, rootReasons, profileMatches) {
+  if (!profileMatches) {
+    return benchmarkResourceStaleMeasurementOutcome(
+      BENCHMARK_RESOURCE_MEASUREMENT_REASON.PROFILE_IDENTITY_MISMATCH,
+    );
+  }
+  if (containsExactValue(
+    rootReasons,
+    COMPARATIVE_CLAIM_REASON.EVIDENCE_NOT_YET_VALID,
+  )) {
+    return benchmarkResourceStaleMeasurementOutcome(
+      BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_NOT_YET_VALID,
+    );
+  }
+  if (containsExactValue(
+    rootReasons,
+    COMPARATIVE_CLAIM_REASON.EVIDENCE_EXPIRED,
+  )) {
+    return benchmarkResourceStaleMeasurementOutcome(
+      BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_EXPIRED,
+    );
+  }
+  return evidence.measurementOutcome;
+}
+
 function priceCurrentness(evidence, evaluatedAt) {
+  if (evidence.priceSheet.state !== localText.VALID) {
+    return [COMPARATIVE_CLAIM_REASON.PRICE_INVALID];
+  }
   const evaluation = timestamp(evaluatedAt);
   if (evaluation.state === localText.INVALID_TIMESTAMP) {
     return [COMPARATIVE_CLAIM_REASON.EVALUATION_TIME_INVALID];
@@ -319,6 +368,36 @@ function priceCurrentness(evidence, evaluatedAt) {
     return [COMPARATIVE_CLAIM_REASON.PRICE_EXPIRED];
   }
   return [];
+}
+
+function metricProjectionOutcome(metric, metricReasons, rootOutcome) {
+  if (metric !== COMPARATIVE_CLAIM_METRIC.COST) return rootOutcome;
+  if (containsExactValue(
+    metricReasons,
+    COMPARATIVE_CLAIM_REASON.PRICE_INVALID,
+  )) {
+    return createBenchmarkResourceMeasurementOutcome(
+      BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.INVALID,
+      BENCHMARK_RESOURCE_MEASUREMENT_REASON.PRICE_EVIDENCE_INVALID,
+    );
+  }
+  if (containsExactValue(
+    metricReasons,
+    COMPARATIVE_CLAIM_REASON.PRICE_NOT_YET_VALID,
+  )) {
+    return benchmarkResourceStaleMeasurementOutcome(
+      BENCHMARK_RESOURCE_MEASUREMENT_REASON.PRICE_EVIDENCE_NOT_YET_VALID,
+    );
+  }
+  if (containsExactValue(
+    metricReasons,
+    COMPARATIVE_CLAIM_REASON.PRICE_EXPIRED,
+  )) {
+    return benchmarkResourceStaleMeasurementOutcome(
+      BENCHMARK_RESOURCE_MEASUREMENT_REASON.PRICE_EVIDENCE_EXPIRED,
+    );
+  }
+  return rootOutcome;
 }
 
 function certificationMode(item, certificationState) {
@@ -488,6 +567,11 @@ function effectRow(input) {
       producedAt: input.evidence.producedAt,
       validUntil: input.evidence.validUntil,
       priceSheetDigest: input.evidence.priceSheet.digest,
+      measurementOutcome: metricProjectionOutcome(
+        input.metric,
+        input.metricReasons,
+        input.measurementOutcome,
+      ),
     },
     reasonCodes,
     statement: outcomeStatement(
@@ -500,7 +584,13 @@ function effectRow(input) {
   });
 }
 
-function nonMeasuringRows(item, evidence, cell, rootReasons) {
+function nonMeasuringRows(
+  item,
+  evidence,
+  cell,
+  rootReasons,
+  measurementOutcome,
+) {
   const rows = [];
   const reasonCodes = combinedReasonCodes(
     rootReasons,
@@ -534,6 +624,7 @@ function nonMeasuringRows(item, evidence, cell, rootReasons) {
         producedAt: evidence.producedAt,
         validUntil: evidence.validUntil,
         priceSheetDigest: evidence.priceSheet.digest,
+        measurementOutcome,
       },
       reasonCodes,
       statement: `No current ${metric} claim for ${item.workloadId}: ` +
@@ -547,6 +638,8 @@ function invalidRootRows(
   item,
   reason,
   reasonCode = COMPARATIVE_CLAIM_REASON.EVIDENCE_INVALID,
+  measurementOutcome =
+  benchmarkResourceRejectedMeasurementOutcome(reason),
 ) {
   const rows = [];
   for (
@@ -569,7 +662,10 @@ function invalidRootRows(
         state: COMPARATIVE_CLAIM_EVIDENCE_STATE.ABSENT,
         error: reason,
       },
-      source: {state: COMPARATIVE_CLAIM_SOURCE_STATE.INVALID_ROOT},
+      source: {
+        state: COMPARATIVE_CLAIM_SOURCE_STATE.INVALID_ROOT,
+        measurementOutcome,
+      },
       reasonCodes: [reasonCode],
       statement: `No current ${metric} claim for ${item.workloadId}: ` +
         `invalid evidence root (${reason}).`,
@@ -600,9 +696,14 @@ function measuredRows(item, evaluatedAt) {
     localText.MEASURED_PROFILE_IDENTITY,
   );
   const inspection =
-    inspectBenchmarkResourceClaimEvidenceRoot(item.rootReceipt);
+    inspectBenchmarkResourceClaimEvidenceAcceptance(item.rootAcceptance);
   if (inspection.state !== BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.ACCEPTED) {
-    return invalidRootRows(item, inspection.reason);
+    return invalidRootRows(
+      item,
+      inspection.reason,
+      COMPARATIVE_CLAIM_REASON.EVIDENCE_INVALID,
+      inspection.measurementOutcome,
+    );
   }
   const evidence = inspection.evidence;
   if (evidence.matrixId !== item.expectedMatrixId) {
@@ -612,9 +713,29 @@ function measuredRows(item, evaluatedAt) {
       COMPARATIVE_CLAIM_REASON.MATRIX_ID_MISMATCH,
     );
   }
-  const rootReasons = rootCurrentness(evidence, evaluatedAt);
+  const profileMatches =
+    evidence.profile !== null &&
+    evidence.profile.id === item.profile.id &&
+    evidence.profile.identity === item.profile.identity;
+  const rootedItem = {
+    ...item,
+    profile: evidence.profile === null ? item.profile : evidence.profile,
+  };
+  const rootReasons = combinedReasonCodes(
+    rootCurrentness(evidence, evaluatedAt),
+    profileMatches ?
+      emptyReasonCodes() :
+      [COMPARATIVE_CLAIM_REASON.PROFILE_IDENTITY_MISMATCH],
+    emptyReasonCodes(),
+    emptyReasonCodes(),
+  );
+  const measurementOutcome = rootProjectionOutcome(
+    evidence,
+    rootReasons,
+    profileMatches,
+  );
   const profileDecision = certificationDecision(
-    item,
+    rootedItem,
     evidence.rootDigest,
     evaluatedAt,
   );
@@ -627,28 +748,36 @@ function measuredRows(item, evaluatedAt) {
     ) {
       appendArrayValues(
         rows,
-        nonMeasuringRows(item, evidence, cell, rootReasons),
+        nonMeasuringRows(
+          rootedItem,
+          evidence,
+          cell,
+          rootReasons,
+          measurementOutcome,
+        ),
       );
       continue;
     }
     appendOwnArrayValue(rows, effectRow({
-      item,
+      item: rootedItem,
       evidence,
       cell,
       metric: COMPARATIVE_CLAIM_METRIC.CAPACITY,
       effect: cell.measurement.capacityEffect,
       rootReasons,
       metricReasons: emptyReasonCodes(),
+      measurementOutcome,
       profileDecision,
     }));
     appendOwnArrayValue(rows, effectRow({
-      item,
+      item: rootedItem,
       evidence,
       cell,
       metric: COMPARATIVE_CLAIM_METRIC.COST,
       effect: cell.measurement.costEffect,
       rootReasons,
       metricReasons: priceCurrentness(evidence, evaluatedAt),
+      measurementOutcome,
       profileDecision,
     }));
   }

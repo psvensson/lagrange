@@ -23,6 +23,9 @@ import {
 import {
   COMPARATIVE_EVIDENCE_CLASS,
 } from './comparative-efficiency-evidence-contract.js';
+import {
+  inspectBenchmarkResourceMeasurementOutcome,
+} from './benchmark-resource-measurement-outcome.js';
 
 const arrayIsArray = Array.isArray;
 const arrayJoinMethod = Array.prototype.join;
@@ -91,6 +94,7 @@ const localText = Object.freeze({
   CLAIM_TABLE_ROW: 'claimTable.row',
   CLAIM_TABLE_ROW_DIGEST_MISMATCH: 'claimTable.row:digest_mismatch',
   CLAIM_TABLE_ROW_ENUM_INVALID: 'claimTable.row:enum_invalid',
+  MEASUREMENT_OUTCOME: 'measurementOutcome',
   CLAIM_TABLE_ROW_PROFILE: 'claimTable.row.profile',
   CLAIM_TABLE_ROW_PROFILE_ID: 'claimTable.row.profile.id',
   CLAIM_TABLE_ROW_PROFILE_IDENTITY: 'claimTable.row.profile.identity',
@@ -346,6 +350,14 @@ function validateRow(row) {
     !setHas(outcomes, row.outcome) ||
     !setHas(subjectKinds, row.subject.kind) ||
     !setHas(sourceStates, row.source.state)
+  ) {
+    throw new TypeError(localText.CLAIM_TABLE_ROW_ENUM_INVALID);
+  }
+  if (
+    objectHasOwn(row.source, localText.MEASUREMENT_OUTCOME) &&
+    !inspectBenchmarkResourceMeasurementOutcome(
+      row.source.measurementOutcome,
+    ).valid
   ) {
     throw new TypeError(localText.CLAIM_TABLE_ROW_ENUM_INVALID);
   }

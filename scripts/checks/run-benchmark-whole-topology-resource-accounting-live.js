@@ -19,6 +19,7 @@ import {
 } from '../../test/distributed/harness/pgbench-runner.js';
 import {
   BENCHMARK_RESOURCE_BILLING_TREATMENT,
+  BENCHMARK_RESOURCE_ARTIFACT_KIND,
   BENCHMARK_RESOURCE_CAPACITY_SOURCE,
   BENCHMARK_RESOURCE_COMPONENT_ROLE,
   BENCHMARK_RESOURCE_SCENARIO,
@@ -30,6 +31,7 @@ import {
 } from
   '../../test/distributed/harness/benchmark-resource-durable-resolver.js';
 import {
+  createBenchmarkResourceSourceArtifact,
   validateBenchmarkResourceEvidenceRoot,
 } from
   '../../test/distributed/harness/benchmark-resource-evidence-root.js';
@@ -57,6 +59,12 @@ import {
   BENCHMARK_RESOURCE_P0_PRICE_SHEET,
 } from
   '../../test/distributed/harness/benchmark-resource-price-sheet-p0-constants.js';
+import {
+  SCALE_PROFILE_ID,
+} from '../../test/distributed/harness/scale-evidence-contract.js';
+import {
+  createScaleProfileEnvelope,
+} from '../../test/distributed/harness/scale-profile-envelope.js';
 const localText = Object.freeze({
   UTF8: 'utf8',
   POSTGRES: 'postgres',
@@ -81,6 +89,9 @@ const localText = Object.freeze({
     'C3 terminal capacity artifact replay failed',
   C3_TERMINAL_CAPACITY_CURVE_MISSING:
     'C3 terminal capacity curve row is missing',
+  ALLOW_NON_MEASURING: '--allow-non-measuring',
+  FRESH_REPLAY_EXPECTED_VALID_NON_MEASURING:
+    'fresh replay did not preserve valid non-measuring evidence',
 });
 
 
@@ -532,7 +543,12 @@ async function replayInFreshProcess(rootDigest) {
   );
   const {stdout} = await execFileAsync(
     process.execPath,
-    [script, resolve(ARTIFACT_DIRECTORY), rootDigest],
+    [
+      script,
+      resolve(ARTIFACT_DIRECTORY),
+      rootDigest,
+      localText.ALLOW_NON_MEASURING,
+    ],
     {encoding: localText.UTF8},
   );
   return JSON.parse(stdout);
@@ -628,6 +644,74 @@ async function main() {
       c3Evidence,
     ));
   }
+  const workloadManifest = {
+    version: 'benchmark-resource-live-workload-v1',
+    workload: 'pgbench_insert_and_indexed_point_count',
+    repetitions: REPETITIONS,
+    durationSeconds: DURATION_SECONDS,
+    clients: CLIENTS,
+    jobs: JOBS,
+    capacitySource: BENCHMARK_RESOURCE_CAPACITY_SOURCE.EVIDENCE_CLASS,
+  };
+  const alternativeTopology = {
+    version: 'benchmark-resource-live-topology-v1',
+    image: IMAGE,
+    imageId,
+    databaseContainers: 2,
+    sharedClientContainers: 1,
+    network: 'managed_bridge',
+    databaseStorage:
+      `tmpfs:${DATABASE_STORAGE_PATH}:size=${DATABASE_STORAGE_BYTES}`,
+    reservedIopsPerComponent: 0,
+    reservedNetworkBytesPerSecondPerComponent: 0,
+    components: topologyComponents(calibration),
+  };
+  const workloadOwner = createBenchmarkResourceSourceArtifact(
+    BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
+    workloadManifest,
+  );
+  const topologyOwner = createBenchmarkResourceSourceArtifact(
+    BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
+    alternativeTopology,
+  );
+  const profileEnvelope = createScaleProfileEnvelope({
+    profile: {id: SCALE_PROFILE_ID.DEVELOPMENT, version: 1},
+    software: {
+      revision,
+      runtime: process.version,
+      packageVersion: '0.1.0',
+    },
+    hardware: {
+      provider: 'local-docker',
+      region: BENCHMARK_RESOURCE_P0_PRICE_SHEET.region,
+      instanceClass: 'development-host',
+      cpuCount: CLIENTS,
+      memoryBytes: 2 * 256 * 1024 * 1024,
+      storageClass: 'tmpfs',
+    },
+    topology: {
+      manifestDigest: topologyOwner.digest,
+      nodeCount: 2,
+      failureDomainCount: 1,
+      tableCount: 1,
+      partitionCount: 1,
+      replicaCount: 1,
+    },
+    data: {
+      manifestDigest: workloadOwner.digest,
+      logicalBytes: rowCounts.reduce((sum, count) => sum + count, 0),
+      physicalBytes: DATABASE_STORAGE_BYTES * 2,
+      shape: 'pgbench-insert',
+    },
+    workload: {
+      id: workloadManifest.workload,
+      manifestDigest: workloadOwner.digest,
+      duration: {
+        warmupMs: 0,
+        measuredMs: REPETITIONS * DURATION_SECONDS * 1_000,
+      },
+    },
+  });
   const evidence = createBenchmarkResourceSingleCellPairedEvidence({
     matrixId: 'benchmark-resource-p0-live-matrix-v1',
     axes: [
@@ -639,28 +723,8 @@ async function main() {
     sourceRevision: revision,
     producedAt,
     validUntil,
-    workloadManifest: {
-      version: 'benchmark-resource-live-workload-v1',
-      workload: 'pgbench_insert_and_indexed_point_count',
-      repetitions: REPETITIONS,
-      durationSeconds: DURATION_SECONDS,
-      clients: CLIENTS,
-      jobs: JOBS,
-      capacitySource: BENCHMARK_RESOURCE_CAPACITY_SOURCE.EVIDENCE_CLASS,
-    },
-    alternativeTopology: {
-      version: 'benchmark-resource-live-topology-v1',
-      image: IMAGE,
-      imageId,
-      databaseContainers: 2,
-      sharedClientContainers: 1,
-      network: 'managed_bridge',
-      databaseStorage:
-        `tmpfs:${DATABASE_STORAGE_PATH}:size=${DATABASE_STORAGE_BYTES}`,
-      reservedIopsPerComponent: 0,
-      reservedNetworkBytesPerSecondPerComponent: 0,
-      components: topologyComponents(calibration),
-    },
+    workloadManifest,
+    alternativeTopology,
     preregistration: {
       version: 'benchmark-resource-live-preregistration-v1',
       sideIds: SIDE_IDS,
@@ -677,12 +741,13 @@ async function main() {
     inventoryId: 'benchmark-resource-p0-live-inventory-v1',
     priceSheet: BENCHMARK_RESOURCE_P0_PRICE_SHEET,
     calibrationArtifact: calibration,
+    profileEnvelope,
     sides,
     practicalThreshold: PRACTICAL_THRESHOLD,
   });
   const validation =
     validateBenchmarkResourceEvidenceRoot(evidence.receipt);
-  if (!validation.valid || !validation.claimEligible) {
+  if (!validation.valid || validation.claimEligible) {
     throw new Error(`live evidence root rejected: ${validation.reason}`);
   }
   const allArtifacts = [...evidence.artifacts, evidence.root];
@@ -696,12 +761,15 @@ async function main() {
       resolve(ARTIFACT_DIRECTORY),
     ),
   });
-  if (!durableValidation.valid || !durableValidation.claimEligible) {
+  if (!durableValidation.valid || durableValidation.claimEligible) {
     throw new Error(
       `durable evidence root rejected: ${durableValidation.reason}`,
     );
   }
   const freshValidation = await replayInFreshProcess(evidence.root.digest);
+  if (!freshValidation.valid || freshValidation.claimEligible) {
+    throw new Error(localText.FRESH_REPLAY_EXPECTED_VALID_NON_MEASURING);
+  }
   const reportPath = await writeScenarioReport({
     runId: RUN_ID,
     sourceRevision: revision,
@@ -709,6 +777,7 @@ async function main() {
     capacityProtocolScenarioReport: c3Evidence.scenarioReportPath,
     capacityProtocolArtifactReceipt: c3Evidence.artifactReceipt,
     capacityProtocolReplayValid: true,
+    comparativeClaimEligible: validation.claimEligible,
     evidenceRootDigest: evidence.root.digest,
     artifactManifestDigest:
       evidence.root.artifact.payload.artifactManifestDigest,
@@ -724,8 +793,7 @@ async function main() {
     ),
     cleanupVerified: finalization.receipt.cleanupVerified,
     durableReplayValid: durableValidation.valid,
-    freshProcessReplayValid:
-      freshValidation.valid && freshValidation.claimEligible,
+    freshProcessReplayValid: freshValidation.valid,
   });
   process.stdout.write(
     localText.BENCHMARK_WHOLE_TOPOLOGY_RESOURCE_ACCOUNTING_LIVE_PASS +

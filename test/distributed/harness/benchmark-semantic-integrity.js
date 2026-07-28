@@ -52,6 +52,21 @@ export function appendOwnArrayValue(values, value) {
   });
 }
 
+export function arrayContainsExactValue(values, target) {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] === target) return true;
+  }
+  return false;
+}
+
+export function arraysExactlyEqual(left, right) {
+  if (left.length !== right.length) return false;
+  for (let index = 0; index < left.length; index += 1) {
+    if (left[index] !== right[index]) return false;
+  }
+  return true;
+}
+
 export function ownDataValue(record, key) {
   if (!record || typeof record !== 'object') {
     return MISSING_VALUE;

@@ -1,5 +1,7 @@
 import {readFileSync} from 'node:fs';
 import {test} from '../../../../src/test-helpers/tap.js';
+import * as claimEvidenceView from
+  '../benchmark-resource-claim-evidence-view.js';
 import {
   COMPARATIVE_EVIDENCE_CLASS,
 } from '../comparative-efficiency-evidence-contract.js';
@@ -22,8 +24,23 @@ import {
   createBenchmarkResourcePairedEffect,
 } from '../benchmark-resource-cost-and-effects.js';
 import {
+  BENCHMARK_RESOURCE_ARTIFACT_KIND,
   BENCHMARK_RESOURCE_EFFECT,
 } from '../benchmark-resource-contract-constants.js';
+import {
+  createBenchmarkResourceArtifact,
+} from '../benchmark-resource-evidence-data.js';
+import {
+  digestBenchmarkSemanticData,
+} from '../benchmark-semantic-integrity.js';
+import {
+  BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE,
+  BENCHMARK_RESOURCE_MEASUREMENT_REASON,
+} from '../benchmark-resource-measurement-outcome.js';
+import {
+  acceptBenchmarkResourceClaimEvidenceRoot,
+  validateBenchmarkResourceEvidenceRoot,
+} from '../benchmark-resource-evidence-root.js';
 import {
   beginBenchmarkResourceLiveObservation,
   captureBenchmarkResourceLiveObservation,
@@ -34,10 +51,16 @@ import {
   sealBenchmarkCapacityPreregistration,
 } from '../benchmark-capacity-preregistration.js';
 import {
+  createBenchmarkCapacityWindowReceipt,
+} from '../benchmark-capacity-window-receipt.js';
+import {
   SCALE_CERTIFICATION_RECEIPT_CONTRACT_ID,
   SCALE_CERTIFICATION_RECEIPT_SCHEMA_VERSION,
+  SCALE_EVIDENCE_CONTRACT_ID,
+  SCALE_EVIDENCE_SCHEMA_VERSION,
   SCALE_PROFILE_ID,
   computeScaleCertificationReceiptDigest,
+  computeScaleProfileIdentity,
 } from '../scale-evidence-contract.js';
 import {
   createBenchmarkResourceEvidenceFixture,
@@ -48,6 +71,7 @@ import {
 } from './benchmark-capacity-protocol-test-fixture.js';
 import {
   FIXTURE_RESOURCE_MATRIX_ID,
+  FIXTURE_RESOURCE_PAIR_ID,
   FIXTURE_RESOURCE_RUN_ID,
   FIXTURE_RESOURCE_SIDE_IDS,
   FIXTURE_RESOURCE_SOURCE_REVISION,
@@ -57,8 +81,9 @@ import {
 const EVALUATED_AT = '2026-07-27T12:30:00.000Z';
 const RECEIPT_ISSUED_AT = '2026-07-27T12:00:00.000Z';
 const RECEIPT_VALID_UNTIL = '2026-07-27T13:00:00.000Z';
-const PROFILE_IDENTITY = `sha256:${'a'.repeat(64)}`;
 const CERTIFICATION_QUEST = 'scale-integration-profile-certification';
+const CAPACITY_WINDOW_EPOCH =
+  Date.parse('2026-07-27T10:00:00.000Z');
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const reflectDefineProperty = Reflect.defineProperty;
 const observationScalar = Object.freeze({
@@ -139,9 +164,9 @@ function observationComponents() {
 async function liveCalibrationFixture({
   candidateEndMultiplier = 9,
   candidateProvisionedMultiplier = 2,
+  startedAt = Date.parse('2026-07-27T11:59:00.000Z'),
+  endedAt = Date.parse('2026-07-27T12:00:00.000Z'),
 } = {}) {
-  const startedAt = Date.parse('2026-07-27T11:59:00.000Z');
-  const endedAt = Date.parse('2026-07-27T12:00:00.000Z');
   const networkId = 'claim-projection-fixture-network';
   const componentCount = FIXTURE_RESOURCE_SIDE_IDS.length * 2;
   let calls = 0;
@@ -188,22 +213,98 @@ async function liveCalibrationFixture({
   );
 }
 
+function normalizeCapacityReportWindowTimes(preregistration, input) {
+  const report = structuredClone(input);
+  const samples = [...report.warmupSamples, ...report.rawSamples];
+  let cursor = CAPACITY_WINDOW_EPOCH;
+  for (let index = 0; index < report.windowReceipts.length; index += 1) {
+    const receipt = report.windowReceipts[index];
+    const sample = samples.find(
+      (entry) => entry.sampleDigest === receipt.capacitySampleDigest,
+    );
+    const startedAt = cursor;
+    const endedAt = startedAt + sample.observationDurationMs;
+    report.windowReceipts[index] = createBenchmarkCapacityWindowReceipt({
+      blockIndex: receipt.blockIndex,
+      blockedOrderIndex: receipt.blockedOrderIndex,
+      sideId: receipt.sideId,
+      phase: receipt.phase,
+      offeredLoad: receipt.offeredLoad,
+      startedAt,
+      endedAt,
+      capacitySampleDigest: receipt.capacitySampleDigest,
+      semanticReceiptDigest: receipt.semanticReceiptDigest,
+      liveEngagementDigest: receipt.liveEngagementDigest,
+      resourceWindowDigest: receipt.resourceWindowDigest,
+    }, sample, preregistration);
+    cursor = endedAt + 1;
+  }
+  delete report.reportDigest;
+  return {
+    ...report,
+    reportDigest: digestBenchmarkSemanticData(report),
+  };
+}
+
 async function claimEligibleEvidenceFixture(
   options = {},
   calibrationOptions = {},
 ) {
   const calibrationArtifact =
     await liveCalibrationFixture(calibrationOptions);
-  const capacityPreregistration =
-    sealBenchmarkCapacityPreregistration(preregistrationInput());
-  const {report} =
-    await artifactFixtureReport(capacityPreregistration);
-  return createBenchmarkResourceEvidenceFixture({
+  const base = createBenchmarkResourceEvidenceFixture({
     ...options,
     calibrationArtifact,
+  });
+  const cellId = base.matrix.artifact.payload.cells[0].cellId;
+  const capacityInput = preregistrationInput({
+    executionIdentity: {
+      matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+      cellId,
+      cellManifestDigest: digestBenchmarkSemanticData({
+        matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+        cellId,
+      }),
+      profileIdentity:
+        base.profileEnvelope.artifact.payload.profileIdentity,
+      pairIdentity: digestBenchmarkSemanticData({
+        pairId: FIXTURE_RESOURCE_PAIR_ID,
+      }),
+      runId: FIXTURE_RESOURCE_RUN_ID,
+      liveEnvironmentContractDigest:
+        base.matrix.artifact.payload.alternativeTopologyDigest,
+    },
+  });
+  const capacityPreregistration =
+    sealBenchmarkCapacityPreregistration(capacityInput);
+  const rawReportAndEngagements =
+    await artifactFixtureReport(capacityPreregistration);
+  const reportAndEngagements = {
+    ...rawReportAndEngagements,
+    report: normalizeCapacityReportWindowTimes(
+      capacityPreregistration,
+      rawReportAndEngagements.report,
+    ),
+  };
+  const measuredReceipts =
+    reportAndEngagements.report.windowReceipts.filter(
+      (receipt) => receipt.phase === 'measured',
+    );
+  const calibrationArtifacts = [];
+  for (let index = 0; index < measuredReceipts.length; index += 1) {
+    calibrationArtifacts.push(await liveCalibrationFixture({
+      ...calibrationOptions,
+      startedAt: measuredReceipts[index].startedAt,
+      endedAt: measuredReceipts[index].endedAt,
+    }));
+  }
+  return createBenchmarkResourceEvidenceFixture({
+    ...options,
+    calibrationArtifact: calibrationArtifacts[0],
+    calibrationArtifacts,
     capacityProtocol: {
       preregistration: capacityPreregistration,
-      report,
+      ...reportAndEngagements,
     },
   });
 }
@@ -212,12 +313,15 @@ function absentCertification() {
   return {state: COMPARATIVE_CLAIM_CERTIFICATION_STATE.ABSENT};
 }
 
-function attachedCertification(rootDigest, overrides = {}) {
+function attachedCertification(fixture, overrides = {}) {
+  const rootDigest = fixture.root.digest;
+  const profileIdentity =
+    fixture.profileEnvelope.artifact.payload.profileIdentity;
   const receipt = {
     contractId: SCALE_CERTIFICATION_RECEIPT_CONTRACT_ID,
     schemaVersion: SCALE_CERTIFICATION_RECEIPT_SCHEMA_VERSION,
     questId: CERTIFICATION_QUEST,
-    profileIdentity: PROFILE_IDENTITY,
+    profileIdentity,
     evidenceIdentity: rootDigest,
     issuedAt: RECEIPT_ISSUED_AT,
     validUntil: RECEIPT_VALID_UNTIL,
@@ -230,21 +334,26 @@ function attachedCertification(rootDigest, overrides = {}) {
       terminalReceiptDigest:
         computeScaleCertificationReceiptDigest(receipt),
       questId: CERTIFICATION_QUEST,
-      profileIdentity: PROFILE_IDENTITY,
+      profileIdentity,
       evidenceIdentity: rootDigest,
     },
   };
 }
 
 function measuredInput(fixture, options = {}) {
+  const rootedProfile = fixture.profileEnvelope?.artifact.payload ?? {
+    profile: {id: SCALE_PROFILE_ID.DEVELOPMENT},
+    profileIdentity: `sha256:${'a'.repeat(64)}`,
+  };
   return {
     workloadId: options.workloadId || 'fixture-workload',
     expectedMatrixId: FIXTURE_RESOURCE_MATRIX_ID,
     profile: {
-      id: options.profileId || SCALE_PROFILE_ID.DEVELOPMENT,
-      identity: PROFILE_IDENTITY,
+      id: options.profileId || rootedProfile.profile.id,
+      identity: options.profileIdentity || rootedProfile.profileIdentity,
     },
-    rootReceipt: fixture.receipt,
+    rootAcceptance:
+      acceptBenchmarkResourceClaimEvidenceRoot(fixture.receipt),
     certification:
       options.certification || absentCertification(),
   };
@@ -376,20 +485,162 @@ test('current live P0 root publishes a win and an alternative win',
     t.end();
   });
 
-test('current terminal certification is required for certified_profile',
+test('C3 admission requires the exact repeated measured-window set',
   async (t) => {
     const fixture = await claimEligibleEvidenceFixture();
+    const omitted = await claimEligibleEvidenceFixture({
+      omittedProtocolCoordinate: {blockIndex: 1, loadIndex: 1},
+    });
+    const fabricated = await claimEligibleEvidenceFixture({
+      fabricatedWindowIndex: 0,
+    });
+    const overlapped = await claimEligibleEvidenceFixture({
+      overlapWindowIndex: 1,
+    });
+
+    t.equal(fixture.windows.length, 18);
+    t.equal(
+      validateBenchmarkResourceEvidenceRoot(fixture.receipt).claimEligible,
+      true,
+    );
+    for (const attacked of [omitted, fabricated, overlapped]) {
+      const validation =
+        validateBenchmarkResourceEvidenceRoot(attacked.receipt);
+      const table = projectComparativeEfficiencyClaims(projectionInput({
+        measuredEvidence: [measuredInput(attacked)],
+      }));
+      t.equal(validation.valid, false);
+      t.ok(table.rows.every(
+        (row) => row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
+      ));
+      t.ok(table.rows.every(
+        (row) => row.source.measurementOutcome.state ===
+          BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.INVALID,
+      ));
+    }
+    t.end();
+  });
+
+test('caller-supplied P0 identity cannot override the evidence-rooted profile',
+  async (t) => {
+    const fixture = await claimEligibleEvidenceFixture();
+    const table = projectComparativeEfficiencyClaims(projectionInput({
+      measuredEvidence: [measuredInput(fixture, {
+        profileIdentity: `sha256:${'f'.repeat(64)}`,
+      })],
+    }));
+
+    t.ok(table.rows.every(
+      (row) => row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
+    ));
+    t.ok(table.rows.every((row) =>
+      row.reasonCodes.includes(
+        COMPARATIVE_CLAIM_REASON.PROFILE_IDENTITY_MISMATCH,
+      ),
+    ));
+    t.end();
+  });
+
+test('digest-valid but semantically invalid rooted P0 is rejected before class selection',
+  (t) => {
+    const invalidBody = {
+      contractId: SCALE_EVIDENCE_CONTRACT_ID,
+      schemaVersion: SCALE_EVIDENCE_SCHEMA_VERSION,
+      profile: {id: SCALE_PROFILE_ID.DEVELOPMENT, version: 1},
+      software: 'caller',
+      hardware: {cpuCount: 'unbounded-label'},
+      topology: null,
+      data: [],
+      workload: false,
+    };
+    const invalidEnvelope = createBenchmarkResourceArtifact(
+      BENCHMARK_RESOURCE_ARTIFACT_KIND.PROFILE_ENVELOPE,
+      {
+        ...invalidBody,
+        profileIdentity: computeScaleProfileIdentity(invalidBody),
+      },
+    );
+    const fixture = createBenchmarkResourceEvidenceFixture({
+      profileEnvelopeOverride: invalidEnvelope,
+    });
+    const table = projectComparativeEfficiencyClaims(projectionInput({
+      measuredEvidence: [measuredInput(fixture)],
+    }));
+
+    t.ok(table.rows.every(
+      (row) => row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
+    ));
+    t.ok(table.rows.every(
+      (row) => row.source.measurementOutcome.state ===
+        BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.INVALID,
+    ));
+    t.end();
+  });
+
+test('C4 acceptance is the immutable production input consumed by C10',
+  async (t) => {
+    const fixture = await claimEligibleEvidenceFixture();
+    let drifted = false;
+    let calls = 0;
+    const acceptance = acceptBenchmarkResourceClaimEvidenceRoot({
+      rootDigest: fixture.root.digest,
+      resolver: {
+        resolve(digest) {
+          calls += 1;
+          return drifted ? undefined : fixture.receipt.resolver.resolve(digest);
+        },
+      },
+    });
+    const callsAtAcceptance = calls;
+    drifted = true;
+    const acceptedInput = measuredInput(fixture);
+    acceptedInput.rootAcceptance = acceptance;
+    const accepted = projectComparativeEfficiencyClaims(projectionInput({
+      measuredEvidence: [acceptedInput],
+    }));
+    const forgedInput = measuredInput(fixture);
+    forgedInput.rootAcceptance = {...acceptance};
+    const forged = projectComparativeEfficiencyClaims(projectionInput({
+      measuredEvidence: [forgedInput],
+    }));
+
+    t.equal(calls, callsAtAcceptance);
+    t.ok(accepted.rows.every((row) =>
+      row.source.measurementOutcome.state ===
+        BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.MEASURING,
+    ));
+    t.ok(forged.rows.every((row) =>
+      row.source.measurementOutcome.state ===
+        BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.INVALID &&
+      row.source.measurementOutcome.reason.code ===
+        BENCHMARK_RESOURCE_MEASUREMENT_REASON.IMMUTABLE_RESOLUTION_DRIFT,
+    ));
+    t.equal(
+      Object.hasOwn(
+        claimEvidenceView,
+        'createBenchmarkResourceClaimEvidenceAcceptance',
+      ),
+      false,
+    );
+    t.end();
+  });
+
+test('current terminal certification is required for certified_profile',
+  async (t) => {
+    const fixture = await claimEligibleEvidenceFixture({
+      profileId: SCALE_PROFILE_ID.INTEGRATION,
+    });
     const current = projectComparativeEfficiencyClaims(projectionInput({
       measuredEvidence: [measuredInput(fixture, {
         profileId: SCALE_PROFILE_ID.INTEGRATION,
-        certification: attachedCertification(fixture.root.digest),
+        certification: attachedCertification(fixture),
       })],
     }));
     const expired = projectComparativeEfficiencyClaims(projectionInput({
       evaluatedAt: RECEIPT_VALID_UNTIL,
       measuredEvidence: [measuredInput(fixture, {
         profileId: SCALE_PROFILE_ID.INTEGRATION,
-        certification: attachedCertification(fixture.root.digest),
+        certification: attachedCertification(fixture),
       })],
     }));
 
@@ -430,6 +681,68 @@ test('expired price evidence suppresses cost without suppressing capacity',
     );
     t.equal(cost.evidenceClass, COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM);
     t.match(cost.reasonCodes, [COMPARATIVE_CLAIM_REASON.PRICE_EXPIRED]);
+    t.end();
+  });
+
+test('missing, malformed, tampered, or initially stale price suppresses cost only',
+  async (t) => {
+    const malformedPrice = createBenchmarkResourceArtifact(
+      BENCHMARK_RESOURCE_ARTIFACT_KIND.PRICE_SHEET,
+      {version: 'malformed-price-fixture'},
+    );
+    const fixtures = [
+      await claimEligibleEvidenceFixture(),
+      await claimEligibleEvidenceFixture({
+        priceArtifactOverride: malformedPrice,
+      }),
+      await claimEligibleEvidenceFixture(),
+      await claimEligibleEvidenceFixture({
+        priceValidUntil: '2026-07-27T11:00:00.000Z',
+      }),
+    ];
+    const resolverModes = ['missing', 'ordinary', 'tampered', 'ordinary'];
+    for (let index = 0; index < fixtures.length; index += 1) {
+      const fixture = fixtures[index];
+      const mode = resolverModes[index];
+      const receipt = mode === 'ordinary' ? fixture.receipt : {
+        rootDigest: fixture.root.digest,
+        resolver: {
+          resolve(digest) {
+            if (digest !== fixture.price.digest) {
+              return fixture.receipt.resolver.resolve(digest);
+            }
+            return mode === 'missing' ?
+              undefined :
+              Buffer.from('tampered-price-artifact');
+          },
+        },
+      };
+      const input = measuredInput({...fixture, receipt});
+      const table = projectComparativeEfficiencyClaims(projectionInput({
+        measuredEvidence: [input],
+      }));
+      const capacity = table.rows.find(
+        (row) => row.metric === COMPARATIVE_CLAIM_METRIC.CAPACITY,
+      );
+      const cost = table.rows.find(
+        (row) => row.metric === COMPARATIVE_CLAIM_METRIC.COST,
+      );
+      t.equal(
+        capacity.evidenceClass,
+        COMPARATIVE_EVIDENCE_CLASS.MEASURED_P0,
+        `${mode} price retains capacity`,
+      );
+      t.equal(
+        cost.evidenceClass,
+        COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
+        `${mode} price suppresses cost`,
+      );
+      t.match(cost.reasonCodes, [COMPARATIVE_CLAIM_REASON.PRICE_INVALID]);
+      t.equal(
+        cost.source.measurementOutcome.reason.code,
+        BENCHMARK_RESOURCE_MEASUREMENT_REASON.PRICE_EVIDENCE_INVALID,
+      );
+    }
     t.end();
   });
 
@@ -479,7 +792,7 @@ test('projected cost retains neutral and practically insignificant outcomes',
       candidateProvisionedMultiplier: 1,
     });
     const insignificantFixture = await claimEligibleEvidenceFixture({}, {
-      candidateEndMultiplier: 3,
+      candidateEndMultiplier: 2.05,
       candidateProvisionedMultiplier: 1,
     });
     const neutral = projectComparativeEfficiencyClaims(projectionInput({
@@ -556,14 +869,16 @@ test('schema-valid synthetic measuring evidence cannot promote a claim',
   });
 
 test('non-P0 evidence requires a bound current certification', async (t) => {
-  const fixture = await claimEligibleEvidenceFixture();
+  const fixture = await claimEligibleEvidenceFixture({
+    profileId: SCALE_PROFILE_ID.INTEGRATION,
+  });
   const absent = projectComparativeEfficiencyClaims(projectionInput({
     measuredEvidence: [measuredInput(fixture, {
       profileId: SCALE_PROFILE_ID.INTEGRATION,
     })],
   }));
   const mismatchedCertification =
-    attachedCertification(fixture.root.digest);
+    attachedCertification(fixture);
   mismatchedCertification.expected.evidenceIdentity =
     `sha256:${'c'.repeat(64)}`;
   const mismatched = projectComparativeEfficiencyClaims(projectionInput({
@@ -594,7 +909,7 @@ test('an attached receipt cannot promote current P0 beyond measured_p0',
     const fixture = await claimEligibleEvidenceFixture();
     const table = projectComparativeEfficiencyClaims(projectionInput({
       measuredEvidence: [measuredInput(fixture, {
-        certification: attachedCertification(fixture.root.digest),
+        certification: attachedCertification(fixture),
       })],
     }));
 

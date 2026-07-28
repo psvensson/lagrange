@@ -3,9 +3,9 @@ export const BENCHMARK_RESOURCE_CONTRACT = Object.freeze({
   CELL_EVIDENCE_VERSION: 'benchmark-resource-cell-evidence-v1',
   COMPONENT_INVENTORY_VERSION: 'benchmark-component-inventory-v1',
   EFFECT_VERSION: 'benchmark-paired-effect-v1',
-  MATRIX_MANIFEST_VERSION: 'benchmark-matrix-manifest-v1',
+  MATRIX_MANIFEST_VERSION: 'benchmark-matrix-manifest-v2',
   PRICE_SHEET_VERSION: 'benchmark-price-sheet-v1',
-  RESOURCE_WINDOW_VERSION: 'benchmark-resource-window-v1',
+  RESOURCE_WINDOW_VERSION: 'benchmark-resource-window-v2',
   ROOT_VERSION: 'benchmark-matrix-evidence-root-v1',
 });
 
@@ -20,6 +20,7 @@ export const BENCHMARK_RESOURCE_ARTIFACT_KIND = Object.freeze({
   MATRIX_MANIFEST: 'matrix_manifest',
   PRICE_SHEET: 'price_sheet',
   PREREGISTRATION: 'preregistration',
+  PROFILE_ENVELOPE: 'scale_profile_envelope',
   RESOURCE_WINDOW: 'resource_window',
   ROOT: 'matrix_evidence_root',
   SEMANTIC_RECEIPT: 'semantic_receipt',
@@ -31,6 +32,51 @@ export const BENCHMARK_RESOURCE_ARTIFACT_KIND = Object.freeze({
 export const BENCHMARK_RESOURCE_CELL_STATE = Object.freeze({
   MEASURING: 'measuring',
   NON_MEASURING: 'non_measuring',
+});
+
+export const BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE = Object.freeze({
+  MEASURING: 'MEASURING',
+  NON_MEASURING: 'NON_MEASURING',
+  INVALID: 'INVALID',
+  STALE_INELIGIBLE: 'STALE_INELIGIBLE',
+  TRANSIENT: 'TRANSIENT',
+});
+
+export const BENCHMARK_RESOURCE_MEASUREMENT_RETRY = Object.freeze({
+  NEVER: 'never',
+  RETRYABLE: 'retryable',
+});
+
+export const BENCHMARK_RESOURCE_MEASUREMENT_REASON = Object.freeze({
+  EVIDENCE_COMPLETE: 'evidence_complete',
+  EVIDENCE_NOT_CLAIM_ELIGIBLE: 'evidence_not_claim_eligible',
+  EVIDENCE_INVALID: 'evidence_invalid',
+  OBSERVATION_MISSING: 'observation_missing',
+  EVIDENCE_NOT_YET_VALID: 'evidence_not_yet_valid',
+  EVIDENCE_EXPIRED: 'evidence_expired',
+  PROFILE_IDENTITY_MISMATCH: 'profile_identity_mismatch',
+  PRICE_EVIDENCE_NOT_YET_VALID: 'price_evidence_not_yet_valid',
+  PRICE_EVIDENCE_EXPIRED: 'price_evidence_expired',
+  IMMUTABLE_RESOLUTION_DRIFT: 'immutable_resolution_drift',
+  PRICE_EVIDENCE_INVALID: 'price_evidence_invalid',
+});
+
+export const BENCHMARK_RESOURCE_WINDOW_PHASE = Object.freeze({
+  MEASURED: 'measured',
+  WARMUP: 'warmup',
+});
+
+export const BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON = Object.freeze({
+  MISMATCH: 'cell.resourceWindow:coordinate_mismatch',
+  PHASE: 'cell.resourceWindow:phase_mismatch',
+  DUPLICATE: 'cell.resourceWindow:coordinate_duplicate',
+  OVERLAP: 'cell.resourceWindow:interval_overlap',
+  PAIRED_BLOCK_MISMATCH:
+    'cell.resourceWindow:paired_block_coordinate_mismatch',
+  PAIRED_BLOCK_INCOMPLETE:
+    'cell.resourceWindow:paired_block_side_coverage_incomplete',
+  EXPECTED_SET_MISMATCH:
+    'cell.resourceWindow:c3_measured_coordinate_set_mismatch',
 });
 
 export const BENCHMARK_RESOURCE_BILLING_TREATMENT = Object.freeze({

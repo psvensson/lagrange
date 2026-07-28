@@ -326,6 +326,7 @@ export function createComparativeNegativeControlEvidence(input) {
     workloadManifestDigest: workloadManifest.digest,
     alternativeTopologyDigest: alternativeTopology.digest,
     preregistrationDigest: preregistration.digest,
+    profileEnvelopeDigest: null,
   });
   const sourceOwners = {
     workload: workloadManifest.artifact,

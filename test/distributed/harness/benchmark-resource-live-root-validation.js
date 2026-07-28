@@ -131,10 +131,25 @@ function capacityProtocolProjection(
     fail(localText.CAPACITY_PROTOCOL_INVALID);
   }
   return {
+    evidence,
     capacityCorrectOpsPerSecond: capacity.maxCorrectThroughputPerSecond,
     sampleCount: capacity.perBlock.length,
     confidenceInterval: {lower: interval.lower, upper: interval.upper},
   };
+}
+
+export function projectBenchmarkResourceCapacityProtocolEvidence(
+  sourceArtifact,
+  sideId,
+  protocolSideIndex,
+  resourcePreregistration,
+) {
+  return capacityProtocolProjection(
+    sourceArtifact.payload.evidence.protocol,
+    sideId,
+    protocolSideIndex,
+    resourcePreregistration,
+  );
 }
 
 export function assertBenchmarkResourceCapacityProtocolSummary(
@@ -144,8 +159,8 @@ export function assertBenchmarkResourceCapacityProtocolSummary(
   protocolSideIndex,
   resourcePreregistration,
 ) {
-  const projection = capacityProtocolProjection(
-    sourceArtifact.payload.evidence.protocol,
+  const projection = projectBenchmarkResourceCapacityProtocolEvidence(
+    sourceArtifact,
     sideId,
     protocolSideIndex,
     resourcePreregistration,
@@ -203,7 +218,10 @@ export function assertBenchmarkResourceLiveComponentAccounting(
     inventoryComponent.reservedHeadroomRatio !==
       expected.reservedHeadroomRatio
   ) {
-    fail(localText.LIVE_INVENTORY_MISMATCH);
+    fail(
+      `${localText.LIVE_INVENTORY_MISMATCH}:` +
+      `${sideId}:${component.componentId}`,
+    );
   }
 }
 

@@ -17,6 +17,14 @@
 | C8 | `comparative-efficiency-movielens-grouped-reduce` — ✅ SOLVED 2026-07-28 | C3, C4, C7 | The complete MovieLens size/skew/topology matrix yields paired capacity and cost evidence. |
 | C9 | `comparative-efficiency-change-rate-crossover` | C3, C4 | The complete size/change/diversity/materialization sweep yields crossover evidence without presuming its sign. |
 | C10 | `comparative-efficiency-claim-projection` — ✅ SOLVED 2026-07-28 | L0a, C1, C5, C6, C8, C9 | Digest-verified evidence projects qualified wins, neutral results, losses, and `no_claim` without promotion. |
+| M1 | [`comparative-efficiency-measured-cell-admission` — ✅ SOLVED 2026-07-28](../../quests/comparative-efficiency-measured-cell-admission.json) | C3, C4, C10 | Existing C4 validation and exact C10 binding consume the same heterogeneous receipts, repeated windows, effects, and scale-rooted profile identity. |
+| M2 | [`comparative-efficiency-movielens-paired-runtime-adapters`](../../quests/comparative-efficiency-movielens-paired-runtime-adapters.json) | C2, C3, C4, C7, M1 | Public Lagrange and PostgreSQL 16 adapters yield one semantically equivalent, measurement-infrastructure-unsaturated, whole-topology measuring P0 pair. |
+| M3 | [`comparative-efficiency-movielens-measured-p0-campaign`](../../quests/comparative-efficiency-movielens-measured-p0-campaign.json) | M1, M2 | All eight C8 cells measure and yield outcome-neutral capacity effects plus whole-topology regional-price cost projections. |
+
+The original C6, C8, and C10 terminal markers describe their sealed contracts:
+those contracts allowed explicit non-measurement and therefore do not imply
+that comparative figures exist. M1–M3 are successor contracts for the missing
+measuring path and first actual campaign.
 
 ## L0 — Shared scale evidence contract
 
@@ -113,6 +121,47 @@ Certification currentness must come from
 claims are projected independently from C4's recomputable effects: an invalid
 price sheet suppresses only cost, while an expired scale receipt suppresses
 `certified_profile` and never promotes another evidence class.
+
+## M1 — Measured-cell admission
+
+Extend the existing C4 measuring validator/root assembler and exact C10
+binding; do not create a new admission path. Both decisions consume the same
+snapshotted bytes, effect digests, and scale-rooted profile identity. A shared
+typed union distinguishes measuring, valid non-measuring, invalid/tampered,
+stale-ineligible, and transient evidence. C4 also owns heterogeneous,
+multi-cell, repeated-window joins; capacity and cost eligibility remain
+independently recomputable.
+
+## M2 — MovieLens paired runtime adapters
+
+Connect the public installed request/WASM Cell workload and PostgreSQL 16 to
+one C3-owned heterogeneous observation interface and C4-owned process,
+container/cgroup, storage, and network observers. One representative P0 pair
+must derive both sides' engagement, correct-operation counts, semantic parity,
+window identity, and quantitative headroom from immutable owner receipts;
+account for every component; replay from raw evidence; and clean up. This is
+adapter proof, not a workload-wide efficiency claim.
+
+## M3 — MovieLens measured P0 campaign
+
+Seal and execute the existing eight-cell C8 matrix after M1 and M2 are
+terminal. Every cell must measure; an honest explicit non-measuring result no
+longer satisfies this successor Quest, while a valid but practically
+inconclusive measured effect may still project `no_claim`. Preregister complete
+capacity and repeated-window cost statistics, per-cell equivalent topologies,
+host isolation, deterministic retry/exclusion rules, and an externally sourced
+SKU mapping rather than normalized local prices. Publish capacity plus
+whole-topology regional-price cost per million correct SLO-eligible operations
+with every interval and classification. The result is bounded to the exact P0
+profile, grouped-reduce workload, PostgreSQL image/configuration, and price
+mapping. Price policy and component-to-SKU mapping are sealed before outcomes;
+cost is computed at the same maximum SLO-passing side/load window as its
+correct-operation denominator, never by pooling the capacity search.
+
+After M3 establishes the first trustworthy figures, author separate measured
+campaign Quests for C5 negative controls before broadening to C6 or C9. Do not
+generalize or publish the MovieLens result as architectural efficiency in their
+place.
 
 ## Execution and cost gates
 

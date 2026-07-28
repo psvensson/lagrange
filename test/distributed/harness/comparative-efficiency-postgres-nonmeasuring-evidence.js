@@ -400,6 +400,7 @@ export function createComparativePostgresNonMeasuringEvidenceOwner(config) {
       workloadManifestDigest: workloadManifest.digest,
       alternativeTopologyDigest: alternativeTopology.digest,
       preregistrationDigest: preregistration.digest,
+      profileEnvelopeDigest: null,
     });
     config.admission.assertOwners({
       workload: workloadManifest.artifact,

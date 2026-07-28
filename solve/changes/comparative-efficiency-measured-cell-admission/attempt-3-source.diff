@@ -1,0 +1,4619 @@
+diff --git a/scripts/checks/replay-benchmark-resource-evidence.js b/scripts/checks/replay-benchmark-resource-evidence.js
+index f28653d41de404fd193a6229dceb97a5dba8ca16..afd54990ba80a7d79a18b71edc9603b60ba5f88d 100644
+--- a/scripts/checks/replay-benchmark-resource-evidence.js
++++ b/scripts/checks/replay-benchmark-resource-evidence.js
+@@ -7,10 +7,17 @@ import {
+   validateBenchmarkResourceEvidenceRoot,
+ } from '../../test/distributed/harness/benchmark-resource-evidence-root.js';
+ 
+-const [, , rootDirectory, rootDigest] = process.argv;
++const ALLOW_NON_MEASURING = '--allow-non-measuring';
++const [, , rootDirectory, rootDigest, ...options] = process.argv;
++const allowNonMeasuring = options.includes(ALLOW_NON_MEASURING);
+ const result = validateBenchmarkResourceEvidenceRoot({
+   rootDigest,
+   resolver: createBenchmarkResourceDurableResolver(rootDirectory),
+ });
+ process.stdout.write(`${JSON.stringify(result)}\n`);
+-if (!result.valid || !result.claimEligible) process.exitCode = 1;
++if (
++  !result.valid ||
++  (!allowNonMeasuring && !result.claimEligible)
++) {
++  process.exitCode = 1;
++}
+diff --git a/scripts/checks/run-benchmark-whole-topology-resource-accounting-live.js b/scripts/checks/run-benchmark-whole-topology-resource-accounting-live.js
+index 0d2fa8cff89cb37af48e06ea80538f831b208e0c..9d6db1f8ca414cc53d65fcdac0cea207a9ff892a 100644
+--- a/scripts/checks/run-benchmark-whole-topology-resource-accounting-live.js
++++ b/scripts/checks/run-benchmark-whole-topology-resource-accounting-live.js
+@@ -19,6 +19,7 @@ import {
+ } from '../../test/distributed/harness/pgbench-runner.js';
+ import {
+   BENCHMARK_RESOURCE_BILLING_TREATMENT,
++  BENCHMARK_RESOURCE_ARTIFACT_KIND,
+   BENCHMARK_RESOURCE_CAPACITY_SOURCE,
+   BENCHMARK_RESOURCE_COMPONENT_ROLE,
+   BENCHMARK_RESOURCE_SCENARIO,
+@@ -30,6 +31,7 @@ import {
+ } from
+   '../../test/distributed/harness/benchmark-resource-durable-resolver.js';
+ import {
++  createBenchmarkResourceSourceArtifact,
+   validateBenchmarkResourceEvidenceRoot,
+ } from
+   '../../test/distributed/harness/benchmark-resource-evidence-root.js';
+@@ -57,6 +59,12 @@ import {
+   BENCHMARK_RESOURCE_P0_PRICE_SHEET,
+ } from
+   '../../test/distributed/harness/benchmark-resource-price-sheet-p0-constants.js';
++import {
++  SCALE_PROFILE_ID,
++} from '../../test/distributed/harness/scale-evidence-contract.js';
++import {
++  createScaleProfileEnvelope,
++} from '../../test/distributed/harness/scale-profile-envelope.js';
+ const localText = Object.freeze({
+   UTF8: 'utf8',
+   POSTGRES: 'postgres',
+@@ -81,6 +89,7 @@ const localText = Object.freeze({
+     'C3 terminal capacity artifact replay failed',
+   C3_TERMINAL_CAPACITY_CURVE_MISSING:
+     'C3 terminal capacity curve row is missing',
++  ALLOW_NON_MEASURING: '--allow-non-measuring',
+ });
+ 
+ 
+@@ -532,7 +541,12 @@ async function replayInFreshProcess(rootDigest) {
+   );
+   const {stdout} = await execFileAsync(
+     process.execPath,
+-    [script, resolve(ARTIFACT_DIRECTORY), rootDigest],
++    [
++      script,
++      resolve(ARTIFACT_DIRECTORY),
++      rootDigest,
++      localText.ALLOW_NON_MEASURING,
++    ],
+     {encoding: localText.UTF8},
+   );
+   return JSON.parse(stdout);
+@@ -628,6 +642,74 @@ async function main() {
+       c3Evidence,
+     ));
+   }
++  const workloadManifest = {
++    version: 'benchmark-resource-live-workload-v1',
++    workload: 'pgbench_insert_and_indexed_point_count',
++    repetitions: REPETITIONS,
++    durationSeconds: DURATION_SECONDS,
++    clients: CLIENTS,
++    jobs: JOBS,
++    capacitySource: BENCHMARK_RESOURCE_CAPACITY_SOURCE.EVIDENCE_CLASS,
++  };
++  const alternativeTopology = {
++    version: 'benchmark-resource-live-topology-v1',
++    image: IMAGE,
++    imageId,
++    databaseContainers: 2,
++    sharedClientContainers: 1,
++    network: 'managed_bridge',
++    databaseStorage:
++      `tmpfs:${DATABASE_STORAGE_PATH}:size=${DATABASE_STORAGE_BYTES}`,
++    reservedIopsPerComponent: 0,
++    reservedNetworkBytesPerSecondPerComponent: 0,
++    components: topologyComponents(calibration),
++  };
++  const workloadOwner = createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
++    workloadManifest,
++  );
++  const topologyOwner = createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
++    alternativeTopology,
++  );
++  const profileEnvelope = createScaleProfileEnvelope({
++    profile: {id: SCALE_PROFILE_ID.DEVELOPMENT, version: 1},
++    software: {
++      revision,
++      runtime: process.version,
++      packageVersion: '0.1.0',
++    },
++    hardware: {
++      provider: 'local-docker',
++      region: BENCHMARK_RESOURCE_P0_PRICE_SHEET.region,
++      instanceClass: 'development-host',
++      cpuCount: CLIENTS,
++      memoryBytes: 2 * 256 * 1024 * 1024,
++      storageClass: 'tmpfs',
++    },
++    topology: {
++      manifestDigest: topologyOwner.digest,
++      nodeCount: 2,
++      failureDomainCount: 1,
++      tableCount: 1,
++      partitionCount: 1,
++      replicaCount: 1,
++    },
++    data: {
++      manifestDigest: workloadOwner.digest,
++      logicalBytes: rowCounts.reduce((sum, count) => sum + count, 0),
++      physicalBytes: DATABASE_STORAGE_BYTES * 2,
++      shape: 'pgbench-insert',
++    },
++    workload: {
++      id: workloadManifest.workload,
++      manifestDigest: workloadOwner.digest,
++      duration: {
++        warmupMs: 0,
++        measuredMs: REPETITIONS * DURATION_SECONDS * 1_000,
++      },
++    },
++  });
+   const evidence = createBenchmarkResourceSingleCellPairedEvidence({
+     matrixId: 'benchmark-resource-p0-live-matrix-v1',
+     axes: [
+@@ -639,28 +721,8 @@ async function main() {
+     sourceRevision: revision,
+     producedAt,
+     validUntil,
+-    workloadManifest: {
+-      version: 'benchmark-resource-live-workload-v1',
+-      workload: 'pgbench_insert_and_indexed_point_count',
+-      repetitions: REPETITIONS,
+-      durationSeconds: DURATION_SECONDS,
+-      clients: CLIENTS,
+-      jobs: JOBS,
+-      capacitySource: BENCHMARK_RESOURCE_CAPACITY_SOURCE.EVIDENCE_CLASS,
+-    },
+-    alternativeTopology: {
+-      version: 'benchmark-resource-live-topology-v1',
+-      image: IMAGE,
+-      imageId,
+-      databaseContainers: 2,
+-      sharedClientContainers: 1,
+-      network: 'managed_bridge',
+-      databaseStorage:
+-        `tmpfs:${DATABASE_STORAGE_PATH}:size=${DATABASE_STORAGE_BYTES}`,
+-      reservedIopsPerComponent: 0,
+-      reservedNetworkBytesPerSecondPerComponent: 0,
+-      components: topologyComponents(calibration),
+-    },
++    workloadManifest,
++    alternativeTopology,
+     preregistration: {
+       version: 'benchmark-resource-live-preregistration-v1',
+       sideIds: SIDE_IDS,
+@@ -677,12 +739,13 @@ async function main() {
+     inventoryId: 'benchmark-resource-p0-live-inventory-v1',
+     priceSheet: BENCHMARK_RESOURCE_P0_PRICE_SHEET,
+     calibrationArtifact: calibration,
++    profileEnvelope,
+     sides,
+     practicalThreshold: PRACTICAL_THRESHOLD,
+   });
+   const validation =
+     validateBenchmarkResourceEvidenceRoot(evidence.receipt);
+-  if (!validation.valid || !validation.claimEligible) {
++  if (!validation.valid || validation.claimEligible) {
+     throw new Error(`live evidence root rejected: ${validation.reason}`);
+   }
+   const allArtifacts = [...evidence.artifacts, evidence.root];
+@@ -696,7 +759,7 @@ async function main() {
+       resolve(ARTIFACT_DIRECTORY),
+     ),
+   });
+-  if (!durableValidation.valid || !durableValidation.claimEligible) {
++  if (!durableValidation.valid || durableValidation.claimEligible) {
+     throw new Error(
+       `durable evidence root rejected: ${durableValidation.reason}`,
+     );
+@@ -709,6 +772,7 @@ async function main() {
+     capacityProtocolScenarioReport: c3Evidence.scenarioReportPath,
+     capacityProtocolArtifactReceipt: c3Evidence.artifactReceipt,
+     capacityProtocolReplayValid: true,
++    comparativeClaimEligible: validation.claimEligible,
+     evidenceRootDigest: evidence.root.digest,
+     artifactManifestDigest:
+       evidence.root.artifact.payload.artifactManifestDigest,
+diff --git a/scripts/checks/run-comparative-efficiency-claim-projection-live.js b/scripts/checks/run-comparative-efficiency-claim-projection-live.js
+index bd575148a4c4e34925edc6490c8e93f5b5cd0f08..b754400b9024b58b12490cbc65d671f0dba44ce5 100644
+--- a/scripts/checks/run-comparative-efficiency-claim-projection-live.js
++++ b/scripts/checks/run-comparative-efficiency-claim-projection-live.js
+@@ -16,6 +16,10 @@ import {
+   createBenchmarkResourceDurableResolver,
+ } from
+   '../../test/distributed/harness/benchmark-resource-durable-resolver.js';
++import {
++  acceptBenchmarkResourceClaimEvidenceRoot,
++} from
++  '../../test/distributed/harness/benchmark-resource-evidence-root.js';
+ import {
+   digestBenchmarkSemanticData,
+ } from '../../test/distributed/harness/benchmark-semantic-integrity.js';
+@@ -199,12 +203,12 @@ function measuredEvidence(sourceReports) {
+         matrixId: source.matrixId,
+       }),
+     },
+-    rootReceipt: {
++    rootAcceptance: acceptBenchmarkResourceClaimEvidenceRoot({
+       rootDigest: report.detail.evidenceRootDigest,
+       resolver: createBenchmarkResourceDurableResolver(
+         resolve(source.artifactDirectory),
+       ),
+-    },
++    }),
+     certification: {
+       state: COMPARATIVE_CLAIM_CERTIFICATION_STATE.ABSENT,
+     },
+diff --git a/scripts/checks/run-comparative-efficiency-measured-cell-admission-scenarios.js b/scripts/checks/run-comparative-efficiency-measured-cell-admission-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..95c37c4a2183647bb12a4649cfaaf7ef78d2a099
+--- /dev/null
++++ b/scripts/checks/run-comparative-efficiency-measured-cell-admission-scenarios.js
+@@ -0,0 +1,25 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const C4_GUARDS = Object.freeze([
++  'test/distributed/harness/__tests__/' +
++    'comparative-efficiency-measured-cell-admission.test.js',
++  'test/distributed/harness/__tests__/' +
++    'benchmark-whole-topology-resource-accounting-adversarial.test.js',
++]);
++const C10_GUARDS = Object.freeze([
++  'test/distributed/harness/__tests__/' +
++    'comparative-efficiency-claim-projection.test.js',
++]);
++
++const SCENARIOS = Object.freeze({
++  'comparative-efficiency-measured-cell-validation': C4_GUARDS,
++  'comparative-efficiency-measured-cell-projection-binding': C10_GUARDS,
++  'comparative-efficiency-measured-cell-admission': Object.freeze([
++    ...C4_GUARDS,
++    ...C10_GUARDS,
++  ]),
++});
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/test/distributed/harness/__tests__/benchmark-resource-evidence-test-fixture.js b/test/distributed/harness/__tests__/benchmark-resource-evidence-test-fixture.js
+index c60963c97f7f91ddbd142f3b202e4a8658f4d2b0..adc0678a8f6594fc63e00acdf7b7c458d5fd98c3 100644
+--- a/test/distributed/harness/__tests__/benchmark-resource-evidence-test-fixture.js
++++ b/test/distributed/harness/__tests__/benchmark-resource-evidence-test-fixture.js
+@@ -37,6 +37,12 @@ import {
+   BENCHMARK_RESOURCE_COMPONENT_ROLE,
+   BENCHMARK_RESOURCE_EFFECT,
+ } from '../benchmark-resource-contract-constants.js';
++import {
++  SCALE_PROFILE_ID,
++} from '../scale-evidence-contract.js';
++import {
++  createScaleProfileEnvelope,
++} from '../scale-profile-envelope.js';
+ import {
+   FIXTURE_RESOURCE_MATRIX_ID,
+   FIXTURE_RESOURCE_PAIR_ID,
+@@ -59,12 +65,27 @@ const localText = Object.freeze({
+   FIXTURE_IMAGE: 'fixture:live',
+   FIXTURE_IMAGE_ID: 'sha256:fixture-image',
+   FIXTURE_NETWORK: 'fixture-network',
++  FIXTURE_PRICE_SHEET_ID: 'fixture-price-sheet-v1',
+   FIXTURE_PREREGISTRATION: 'fixture-preregistration',
++  FIXTURE_REGION: 'eu-north-1',
++  FIXTURE_CURRENCY: 'USD',
++  FIXTURE_PRICE_DATE: '2026-07-27',
++  FIXTURE_PRICE_VALID_FROM: '2026-07-27T00:00:00.000Z',
++  FIXTURE_BILLING_GRANULARITY: 'per_second',
++  FIXTURE_RESERVATION_POLICY: 'on_demand',
++  FIXTURE_EXCLUDED: 'excluded',
++  FIXTURE_TAX: 'tax',
++  FIXTURE_CREDITS: 'credits',
++  FIXTURE_SPOT_DISCOUNT: 'spot_discount',
+   LIVE_TOPOLOGY_VERSION: 'benchmark-resource-live-topology-v1',
++  MEASURED: 'measured',
++  C3_COORDINATE_UNRESOLVED:
++    'fixture C3 measured coordinate is unresolved',
+   RESOURCE_FIXTURE_SOURCE_V1: 'resource-fixture-source-v1',
+   NONE: 'none',
+   IDENTICAL_LOAD_GENERATOR_ON_BOTH_SIDES: 'identical_load_generator_on_both_sides',
+   SMALL: 'small',
++  VALUE_2026_07_27_T11_58_00_000_Z: '2026-07-27T11:58:00.000Z',
+   VALUE_2026_07_27_T11_59_00_000_Z: '2026-07-27T11:59:00.000Z',
+   VALUE_2026_07_29_T00_00_00_000_Z: '2026-07-29T00:00:00.000Z',
+   PREREGISTERED_NON_MEASURING_FIXTURE_CELL: 'preregistered_non_measuring_fixture_cell',
+@@ -88,6 +109,7 @@ const FIXTURE_SCALAR = Object.freeze({
+   COST_MEMORY_BYTE_SECOND: 0.000000000001,
+   COST_NETWORK_BYTE: 0.000000001,
+   COST_STORAGE_BYTE_SECOND: 0.0000000000001,
++  COST_PER_MILLION_OPERATIONS: 1_000_000,
+   DATABASE_CPU_PER_MULTIPLIER: 2,
+   DATABASE_HEADROOM_RATIO: 0.2,
+   DATABASE_IOPS_PER_MULTIPLIER: 100,
+@@ -309,6 +331,48 @@ function unitPrices() {
+   };
+ }
+ 
++function fixturePriceSheet(validUntil) {
++  return createBenchmarkResourcePriceSheet({
++    priceSheetId: localText.FIXTURE_PRICE_SHEET_ID,
++    region: localText.FIXTURE_REGION,
++    currency: localText.FIXTURE_CURRENCY,
++    priceDate: localText.FIXTURE_PRICE_DATE,
++    validFrom: localText.FIXTURE_PRICE_VALID_FROM,
++    validUntil,
++    billingGranularity: localText.FIXTURE_BILLING_GRANULARITY,
++    reservationPolicy: localText.FIXTURE_RESERVATION_POLICY,
++    spotPolicy: localText.FIXTURE_EXCLUDED,
++    taxPolicy: localText.FIXTURE_EXCLUDED,
++    creditPolicy: localText.FIXTURE_EXCLUDED,
++    exclusions: [
++      localText.FIXTURE_TAX,
++      localText.FIXTURE_CREDITS,
++      localText.FIXTURE_SPOT_DISCOUNT,
++    ],
++    unitPrices: unitPrices(),
++  });
++}
++
++function aggregateSideCost(windows, costs, sideId) {
++  let billedCost = 0;
++  let correctOperations = 0;
++  let sampleCount = 0;
++  for (let index = 0; index < windows.length; index += 1) {
++    const window = windows[index].artifact.payload;
++    if (window.sideId !== sideId) continue;
++    billedCost += costs[index].totalCost;
++    correctOperations += window.correctSloEligibleOperations;
++    sampleCount += 1;
++  }
++  return {
++    value:
++      billedCost /
++      correctOperations *
++      FIXTURE_SCALAR.COST_PER_MILLION_OPERATIONS,
++    sampleCount,
++  };
++}
++
+ function utilized(multiplier) {
+   return {
+     cpuCoreSeconds: FIXTURE_SCALAR.UTILIZED_CPU_CORE_SECONDS * multiplier,
+@@ -416,6 +480,8 @@ function sideSourceArtifacts(
+   capacityProtocol,
+   sideIndex,
+   coordinates,
++  c3Window = null,
++  includeProtocol = true,
+ ) {
+   const protocolSideId =
+     capacityProtocol?.preregistration.sideIds[sideIndex];
+@@ -428,7 +494,10 @@ function sideSourceArtifacts(
+         name: `${sideId}-capacity-sample`,
+         correctOpsPerSecond:
+           sideId === FIXTURE_RESOURCE_SIDE_IDS[0] ? 1200 : 1000,
+-        ...(capacityProtocol === null ?
++        ...(c3Window === null ?
++          {} :
++          {capacitySampleDigest: c3Window.receipt.capacitySampleDigest}),
++        ...(capacityProtocol === null || !includeProtocol ?
+           {} :
+           {
+             protocol: {
+@@ -454,7 +523,13 @@ function sideSourceArtifacts(
+     {
+       ...coordinates,
+       sideId,
+-      evidence: {name: `${sideId}-semantic-receipt`, correct: 1000},
++      evidence: {
++        name: `${sideId}-semantic-receipt`,
++        correct: c3Window?.sample.counts.correct ?? 1000,
++        ...(c3Window === null ?
++          {} :
++          {semanticReceiptDigest: c3Window.receipt.semanticReceiptDigest}),
++      },
+     },
+   );
+   const liveEngagement = createBenchmarkResourceWindowSourceArtifact(
+@@ -465,6 +540,9 @@ function sideSourceArtifacts(
+       evidence: {
+         name: `${sideId}-live-engagement`,
+         transport: 'managed-postgresql',
++        ...(c3Window === null ?
++          {} :
++          {liveEngagementDigest: c3Window.receipt.liveEngagementDigest}),
+         ...(calibrationArtifact === null ?
+           {} :
+           {amplificationPolicy: 'semantic_events_absent_zero_only'}),
+@@ -479,6 +557,9 @@ function sideSourceArtifacts(
+       evidence: {
+         name: `${sideId}-window-receipt`,
+         completed: true,
++        ...(c3Window === null ?
++          {} :
++          {capacityWindowReceipt: c3Window.receipt}),
+       },
+     },
+   );
+@@ -514,7 +595,7 @@ function sideSourceArtifacts(
+ function capacitySummary(
+   sideId,
+   sideIndex,
+-  capacitySample,
++  capacitySamples,
+   capacityProtocol,
+ ) {
+   if (capacityProtocol !== null) {
+@@ -538,7 +619,7 @@ function capacitySummary(
+         lower: interval.lower,
+         upper: interval.upper,
+       },
+-      sourceDigests: [capacitySample.digest],
++      sourceDigests: capacitySamples.map((sample) => sample.digest),
+     });
+   }
+   const value = sideId === FIXTURE_RESOURCE_SIDE_IDS[0] ?
+@@ -552,7 +633,7 @@ function capacitySummary(
+       lower: value * FIXTURE_SCALAR.CAPACITY_CONFIDENCE_LOWER_FACTOR,
+       upper: value * FIXTURE_SCALAR.CAPACITY_CONFIDENCE_UPPER_FACTOR,
+     },
+-    sourceDigests: [capacitySample.digest],
++    sourceDigests: capacitySamples.map((sample) => sample.digest),
+   });
+ }
+ 
+@@ -591,12 +672,50 @@ function optionalFixtureArtifact(artifact) {
+   return artifact === null ? [] : [artifact];
+ }
+ 
++function protocolMeasuredWindowSpecs(capacityProtocol) {
++  if (capacityProtocol === null) return null;
++  const specs = [];
++  const preregistration = capacityProtocol.preregistration;
++  for (let index = 0;
++    index < capacityProtocol.report.windowReceipts.length;
++    index += 1) {
++    const receipt = capacityProtocol.report.windowReceipts[index];
++    if (receipt.phase !== localText.MEASURED) continue;
++    const sideIndex = preregistration.sideIds.indexOf(receipt.sideId);
++    const loadIndex =
++      preregistration.offeredLoadPerSecond.indexOf(receipt.offeredLoad);
++    const sample = capacityProtocol.report.rawSamples.find(
++      (entry) => entry.sampleDigest === receipt.capacitySampleDigest,
++    );
++    if (sideIndex < 0 || loadIndex < 0 || sample === undefined) {
++      throw new TypeError(localText.C3_COORDINATE_UNRESOLVED);
++    }
++    specs.push({
++      protocolIndex: specs.length,
++      sideIndex,
++      receipt,
++      sample,
++      startedAt: new Date(receipt.startedAt).toISOString(),
++      endedAt: new Date(receipt.endedAt).toISOString(),
++      loadIndex,
++    });
++  }
++  return specs;
++}
++
+ export function createBenchmarkResourceEvidenceFixture({
+   calibrationArtifact = null,
++  calibrationArtifacts = null,
+   capacityProtocol = null,
++  fabricatedWindowIndex = null,
+   liveUtilizationOffset = 0,
+   matrixSizeValues = [localText.SMALL],
++  priceArtifactOverride = null,
+   priceValidUntil = localText.VALUE_2026_07_29_T00_00_00_000_Z,
++  profileEnvelopeOverride = null,
++  profileId = SCALE_PROFILE_ID.DEVELOPMENT,
++  omittedProtocolCoordinate = null,
++  overlapWindowIndex = null,
+   sealNonMeasuringCells = true,
+ } = {}) {
+   const identity = fixtureIdentity(calibrationArtifact);
+@@ -609,6 +728,46 @@ export function createBenchmarkResourceEvidenceFixture({
+   const alternativeTopology =
+     alternativeTopologyFixture(calibrationArtifact);
+   const preregistration = fixturePreregistration(capacityProtocol);
++  const builtProfileEnvelope = createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.PROFILE_ENVELOPE,
++    createScaleProfileEnvelope({
++      profile: {id: profileId, version: 1},
++      software: {
++        revision: fixtureSourceRevision,
++        runtime: 'node-fixture',
++        packageVersion: '0.1.0',
++      },
++      hardware: {
++        provider: 'fixture',
++        region: 'eu-north-1',
++        instanceClass: 'resource-evidence-fixture',
++        cpuCount: 2,
++        memoryBytes: 2_000_000,
++        storageClass: 'fixture-storage',
++      },
++      topology: {
++        manifestDigest: alternativeTopology.digest,
++        nodeCount: 2,
++        failureDomainCount: 1,
++        tableCount: 1,
++        partitionCount: 1,
++        replicaCount: 1,
++      },
++      data: {
++        manifestDigest: workloadManifest.digest,
++        logicalBytes: 1_000,
++        physicalBytes: 2_000,
++        shape: 'fixture',
++      },
++      workload: {
++        id: 'fixture-workload',
++        manifestDigest: workloadManifest.digest,
++        duration: {warmupMs: 1_000, measuredMs: 60_000},
++      },
++    }),
++  );
++  const profileEnvelope =
++    profileEnvelopeOverride ?? builtProfileEnvelope;
+   const matrix = createBenchmarkResourceMatrixManifest({
+     matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+     axes: [
+@@ -619,6 +778,7 @@ export function createBenchmarkResourceEvidenceFixture({
+     workloadManifestDigest: workloadManifest.digest,
+     alternativeTopologyDigest: alternativeTopology.digest,
+     preregistrationDigest: preregistration.digest,
++    profileEnvelopeDigest: profileEnvelope.digest,
+   });
+   const inventory = createBenchmarkResourceComponentInventory({
+     inventoryId: 'fixture-inventory-v1',
+@@ -628,94 +788,147 @@ export function createBenchmarkResourceEvidenceFixture({
+       inventorySide(FIXTURE_RESOURCE_SIDE_IDS[1], 1, calibrationArtifact),
+     ],
+   });
+-  const price = createBenchmarkResourcePriceSheet({
+-    priceSheetId: 'fixture-price-sheet-v1',
+-    region: 'eu-north-1',
+-    currency: 'USD',
+-    priceDate: '2026-07-27',
+-    validFrom: '2026-07-27T00:00:00.000Z',
+-    validUntil: priceValidUntil,
+-    billingGranularity: 'per_second',
+-    reservationPolicy: 'on_demand',
+-    spotPolicy: 'excluded',
+-    taxPolicy: 'excluded',
+-    creditPolicy: 'excluded',
+-    exclusions: ['tax', 'credits', 'spot_discount'],
+-    unitPrices: unitPrices(),
+-  });
++  const validPrice = fixturePriceSheet(priceValidUntil);
++  const costingPrice = fixturePriceSheet(
++    localText.VALUE_2026_07_29_T00_00_00_000_Z,
++  );
++  const price = priceArtifactOverride ?? validPrice;
+   const cell = matrix.artifact.payload.cells[0];
+-  const sideSources = [
+-    sideSourceArtifacts(
+-      FIXTURE_RESOURCE_SIDE_IDS[0],
+-      2,
+-      calibrationArtifact,
+-      capacityProtocol,
+-      0,
+-      {
+-        matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+-        cellId: cell.cellId,
+-        pairId: FIXTURE_RESOURCE_PAIR_ID,
+-        runId: fixtureRunId,
+-      },
+-    ),
+-    sideSourceArtifacts(
+-      FIXTURE_RESOURCE_SIDE_IDS[1],
+-      1,
+-      calibrationArtifact,
+-      capacityProtocol,
+-      1,
+-      {
+-        matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+-        cellId: cell.cellId,
+-        pairId: FIXTURE_RESOURCE_PAIR_ID,
+-        runId: fixtureRunId,
+-      },
+-    ),
++  const protocolSpecs = protocolMeasuredWindowSpecs(capacityProtocol);
++  const unfilteredWindowSpecs = protocolSpecs ?? [
++    {
++      sideIndex: 0,
++      protocolIndex: 0,
++      receipt: null,
++      sample: null,
++      startedAt: calibrationArtifact === null ?
++        localText.VALUE_2026_07_27_T11_58_00_000_Z :
++        localText.VALUE_2026_07_27_T11_59_00_000_Z,
++      endedAt: calibrationArtifact === null ?
++        localText.VALUE_2026_07_27_T11_59_00_000_Z :
++        FIXTURE_RESOURCE_PRODUCED_AT,
++      loadIndex: 0,
++    },
++    {
++      sideIndex: 1,
++      protocolIndex: 1,
++      receipt: null,
++      sample: null,
++      startedAt: localText.VALUE_2026_07_27_T11_59_00_000_Z,
++      endedAt: FIXTURE_RESOURCE_PRODUCED_AT,
++      loadIndex: 0,
++    },
+   ];
++  const windowSpecs = omittedProtocolCoordinate === null ?
++    unfilteredWindowSpecs :
++    unfilteredWindowSpecs.filter((spec) =>
++      spec.receipt?.blockIndex !== omittedProtocolCoordinate.blockIndex ||
++      spec.loadIndex !== omittedProtocolCoordinate.loadIndex);
++  const sideSources = [];
+   const windows = [];
+-  const capacities = [];
+-  for (let index = 0; index < FIXTURE_RESOURCE_SIDE_IDS.length; index += 1) {
+-    const sideId = FIXTURE_RESOURCE_SIDE_IDS[index];
+-    const sources = sideSources[index];
+-    const multiplier = index === 0 ? 2 : 1;
++  const capacitySamplesBySide = [[], []];
++  const protocolAttachedBySide = [false, false];
++  for (let index = 0; index < windowSpecs.length; index += 1) {
++    const spec = windowSpecs[index];
++    const sideId = FIXTURE_RESOURCE_SIDE_IDS[spec.sideIndex];
++    const multiplier = spec.sideIndex === 0 ? 2 : 1;
++    const windowCalibration =
++      calibrationArtifacts?.[spec.protocolIndex] ?? calibrationArtifact;
++    const fabricated = index === fabricatedWindowIndex;
++    const blockIndex = fabricated ? 777 : spec.receipt?.blockIndex ?? 0;
++    const blockedOrderIndex =
++      spec.receipt?.blockedOrderIndex ?? spec.sideIndex;
++    const offeredLoad = fabricated ?
++      999_999 :
++      spec.receipt?.offeredLoad ?? 1_000;
++    const loadIndex = fabricated ? 555 : spec.loadIndex;
++    const coordinates = {
++      matrixId: FIXTURE_RESOURCE_MATRIX_ID,
++      cellId: cell.cellId,
++      pairId: FIXTURE_RESOURCE_PAIR_ID,
++      runId: fixtureRunId,
++      pairedBlockId:
++        `${FIXTURE_RESOURCE_PAIR_ID}-block-${blockIndex}-load-${loadIndex}`,
++      profileIdentity: profileEnvelope.artifact.payload.profileIdentity,
++      blockIndex,
++      blockedOrderIndex,
++      offeredLoad,
++      loadIndex,
++      phase: 'measured',
++    };
++    const sources = sideSourceArtifacts(
++      sideId,
++      multiplier,
++      windowCalibration,
++      capacityProtocol,
++      spec.sideIndex,
++      coordinates,
++      spec.receipt === null ? null : {
++        receipt: spec.receipt,
++        sample: spec.sample,
++      },
++      !protocolAttachedBySide[spec.sideIndex],
++    );
++    protocolAttachedBySide[spec.sideIndex] = true;
++    sideSources.push(sources);
++    capacitySamplesBySide[spec.sideIndex].push(sources.capacitySample);
+     windows.push(createBenchmarkResourceWindow({
+-      windowId: `${sideId}-window-v1`,
++      windowId:
++        `${sideId}-block-${blockIndex}-load-${loadIndex}-window-v1`,
+       matrixManifestDigest: matrix.digest,
+       matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+       cellId: cell.cellId,
+       pairId: FIXTURE_RESOURCE_PAIR_ID,
+       runId: fixtureRunId,
+       sideId,
++      pairedBlockId: sources.capacitySample.artifact.payload.pairedBlockId,
++      profileIdentity: sources.capacitySample.artifact.payload.profileIdentity,
++      blockIndex: sources.capacitySample.artifact.payload.blockIndex,
++      blockedOrderIndex:
++        sources.capacitySample.artifact.payload.blockedOrderIndex,
++      offeredLoad: sources.capacitySample.artifact.payload.offeredLoad,
++      loadIndex: sources.capacitySample.artifact.payload.loadIndex,
++      phase: sources.capacitySample.artifact.payload.phase,
+       windowReceiptDigest: sources.windowReceipt.digest,
+       capacitySampleDigest: sources.capacitySample.digest,
+       semanticReceiptDigest: sources.semanticReceipt.digest,
+       liveEngagementDigest: sources.liveEngagement.digest,
+       liveCalibrationDigest: sources.observationEnd.digest,
+-      startedAt: localText.VALUE_2026_07_27_T11_59_00_000_Z,
+-      endedAt: FIXTURE_RESOURCE_PRODUCED_AT,
+-      correctSloEligibleOperations: FIXTURE_SCALAR.OPERATIONS_PER_WINDOW,
++      startedAt: index === overlapWindowIndex ?
++        windowSpecs[index - 1].startedAt :
++        spec.startedAt,
++      endedAt: index === overlapWindowIndex ?
++        windowSpecs[index - 1].endedAt :
++        spec.endedAt,
++      correctSloEligibleOperations:
++        spec.sample?.counts.correct ??
++        FIXTURE_SCALAR.OPERATIONS_PER_WINDOW,
+       components: componentSamples(
+         sideId,
+         sources.observationStart.digest,
+         sources.observationEnd.digest,
+         multiplier,
+-        calibrationArtifact,
++        windowCalibration,
+         liveUtilizationOffset,
+       ),
+     }));
+-    capacities.push(capacitySummary(
++  }
++  const capacities = FIXTURE_RESOURCE_SIDE_IDS.map((sideId, sideIndex) =>
++    capacitySummary(
+       sideId,
+-      index,
+-      sources.capacitySample,
++      sideIndex,
++      capacitySamplesBySide[sideIndex],
+       capacityProtocol,
+     ));
+-  }
+-  const costs = windows.map((window) =>
++  const windowCosts = windows.map((window) =>
+     computeBenchmarkResourceWindowCost(
+       window.artifact.payload,
+       inventory.artifact.payload,
+-      price.artifact.payload,
+-    ).costPerMillionCorrectOperations);
++      costingPrice.artifact.payload,
++    ));
++  const costs = windowCosts.map(
++    (cost) => cost.costPerMillionCorrectOperations,
++  );
+   const capacityEffect = createBenchmarkResourcePairedEffect({
+     effectType: BENCHMARK_RESOURCE_EFFECT.CAPACITY,
+     numeratorSideId: FIXTURE_RESOURCE_SIDE_IDS[0],
+@@ -740,18 +953,23 @@ export function createBenchmarkResourceEvidenceFixture({
+     sourceDigests: capacities.map((capacity) => capacity.digest),
+     currency: BENCHMARK_RESOURCE_NO_CURRENCY,
+   });
++  const sideCosts = FIXTURE_RESOURCE_SIDE_IDS.map((sideId) =>
++    aggregateSideCost(windows, windowCosts, sideId));
+   const costEffect = createBenchmarkResourcePairedEffect({
+     effectType: BENCHMARK_RESOURCE_EFFECT.COST,
+     numeratorSideId: FIXTURE_RESOURCE_SIDE_IDS[0],
+     denominatorSideId: FIXTURE_RESOURCE_SIDE_IDS[1],
+-    numeratorValue: costs[0],
+-    denominatorValue: costs[1],
++    numeratorValue: sideCosts[0].value,
++    denominatorValue: sideCosts[1].value,
+     confidenceInterval: {
+-      lower: costs[0] / costs[1],
+-      upper: costs[0] / costs[1],
++      lower: sideCosts[0].value / sideCosts[1].value,
++      upper: sideCosts[0].value / sideCosts[1].value,
+     },
+     practicalThreshold: 0.05,
+-    sampleCount: 1,
++    sampleCount: Math.min(
++      sideCosts[0].sampleCount,
++      sideCosts[1].sampleCount,
++    ),
+     sourceDigests: [
+       inventory.digest,
+       price.digest,
+@@ -791,10 +1009,12 @@ export function createBenchmarkResourceEvidenceFixture({
+     workloadManifest,
+     alternativeTopology,
+     preregistration,
++    profileEnvelope,
+     matrix,
+     inventory,
+     price,
+-    ...optionalFixtureArtifact(calibrationArtifact),
++    ...(calibrationArtifacts ??
++      optionalFixtureArtifact(calibrationArtifact)),
+     ...sideSources.flatMap((sources) => sources.all),
+     ...windows,
+     ...capacities,
+@@ -820,6 +1040,7 @@ export function createBenchmarkResourceEvidenceFixture({
+     root,
+     artifacts,
+     matrix,
++    profileEnvelope,
+     inventory,
+     price,
+     windows,
+diff --git a/test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js b/test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js
+index 6962703906fca83fbd38ae7af6e220d29da60b00..50623fa8c574b9a7d941d09162da80862bcfaf76 100644
+--- a/test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js
++++ b/test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js
+@@ -1,5 +1,7 @@
+ import {readFileSync} from 'node:fs';
+ import {test} from '../../../../src/test-helpers/tap.js';
++import * as claimEvidenceView from
++  '../benchmark-resource-claim-evidence-view.js';
+ import {
+   COMPARATIVE_EVIDENCE_CLASS,
+ } from '../comparative-efficiency-evidence-contract.js';
+@@ -22,8 +24,23 @@ import {
+   createBenchmarkResourcePairedEffect,
+ } from '../benchmark-resource-cost-and-effects.js';
+ import {
++  BENCHMARK_RESOURCE_ARTIFACT_KIND,
+   BENCHMARK_RESOURCE_EFFECT,
+ } from '../benchmark-resource-contract-constants.js';
++import {
++  createBenchmarkResourceArtifact,
++} from '../benchmark-resource-evidence-data.js';
++import {
++  digestBenchmarkSemanticData,
++} from '../benchmark-semantic-integrity.js';
++import {
++  BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE,
++  BENCHMARK_RESOURCE_MEASUREMENT_REASON,
++} from '../benchmark-resource-measurement-outcome.js';
++import {
++  acceptBenchmarkResourceClaimEvidenceRoot,
++  validateBenchmarkResourceEvidenceRoot,
++} from '../benchmark-resource-evidence-root.js';
+ import {
+   beginBenchmarkResourceLiveObservation,
+   captureBenchmarkResourceLiveObservation,
+@@ -33,11 +50,17 @@ import {
+ import {
+   sealBenchmarkCapacityPreregistration,
+ } from '../benchmark-capacity-preregistration.js';
++import {
++  createBenchmarkCapacityWindowReceipt,
++} from '../benchmark-capacity-window-receipt.js';
+ import {
+   SCALE_CERTIFICATION_RECEIPT_CONTRACT_ID,
+   SCALE_CERTIFICATION_RECEIPT_SCHEMA_VERSION,
++  SCALE_EVIDENCE_CONTRACT_ID,
++  SCALE_EVIDENCE_SCHEMA_VERSION,
+   SCALE_PROFILE_ID,
+   computeScaleCertificationReceiptDigest,
++  computeScaleProfileIdentity,
+ } from '../scale-evidence-contract.js';
+ import {
+   createBenchmarkResourceEvidenceFixture,
+@@ -48,6 +71,7 @@ import {
+ } from './benchmark-capacity-protocol-test-fixture.js';
+ import {
+   FIXTURE_RESOURCE_MATRIX_ID,
++  FIXTURE_RESOURCE_PAIR_ID,
+   FIXTURE_RESOURCE_RUN_ID,
+   FIXTURE_RESOURCE_SIDE_IDS,
+   FIXTURE_RESOURCE_SOURCE_REVISION,
+@@ -57,8 +81,9 @@ import {
+ const EVALUATED_AT = '2026-07-27T12:30:00.000Z';
+ const RECEIPT_ISSUED_AT = '2026-07-27T12:00:00.000Z';
+ const RECEIPT_VALID_UNTIL = '2026-07-27T13:00:00.000Z';
+-const PROFILE_IDENTITY = `sha256:${'a'.repeat(64)}`;
+ const CERTIFICATION_QUEST = 'scale-integration-profile-certification';
++const CAPACITY_WINDOW_EPOCH =
++  Date.parse('2026-07-27T10:00:00.000Z');
+ const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+ const reflectDefineProperty = Reflect.defineProperty;
+ const observationScalar = Object.freeze({
+@@ -139,9 +164,9 @@ function observationComponents() {
+ async function liveCalibrationFixture({
+   candidateEndMultiplier = 9,
+   candidateProvisionedMultiplier = 2,
++  startedAt = Date.parse('2026-07-27T11:59:00.000Z'),
++  endedAt = Date.parse('2026-07-27T12:00:00.000Z'),
+ } = {}) {
+-  const startedAt = Date.parse('2026-07-27T11:59:00.000Z');
+-  const endedAt = Date.parse('2026-07-27T12:00:00.000Z');
+   const networkId = 'claim-projection-fixture-network';
+   const componentCount = FIXTURE_RESOURCE_SIDE_IDS.length * 2;
+   let calls = 0;
+@@ -188,22 +213,98 @@ async function liveCalibrationFixture({
+   );
+ }
+ 
++function normalizeCapacityReportWindowTimes(preregistration, input) {
++  const report = structuredClone(input);
++  const samples = [...report.warmupSamples, ...report.rawSamples];
++  let cursor = CAPACITY_WINDOW_EPOCH;
++  for (let index = 0; index < report.windowReceipts.length; index += 1) {
++    const receipt = report.windowReceipts[index];
++    const sample = samples.find(
++      (entry) => entry.sampleDigest === receipt.capacitySampleDigest,
++    );
++    const startedAt = cursor;
++    const endedAt = startedAt + sample.observationDurationMs;
++    report.windowReceipts[index] = createBenchmarkCapacityWindowReceipt({
++      blockIndex: receipt.blockIndex,
++      blockedOrderIndex: receipt.blockedOrderIndex,
++      sideId: receipt.sideId,
++      phase: receipt.phase,
++      offeredLoad: receipt.offeredLoad,
++      startedAt,
++      endedAt,
++      capacitySampleDigest: receipt.capacitySampleDigest,
++      semanticReceiptDigest: receipt.semanticReceiptDigest,
++      liveEngagementDigest: receipt.liveEngagementDigest,
++      resourceWindowDigest: receipt.resourceWindowDigest,
++    }, sample, preregistration);
++    cursor = endedAt + 1;
++  }
++  delete report.reportDigest;
++  return {
++    ...report,
++    reportDigest: digestBenchmarkSemanticData(report),
++  };
++}
++
+ async function claimEligibleEvidenceFixture(
+   options = {},
+   calibrationOptions = {},
+ ) {
+   const calibrationArtifact =
+     await liveCalibrationFixture(calibrationOptions);
++  const base = createBenchmarkResourceEvidenceFixture({
++    ...options,
++    calibrationArtifact,
++  });
++  const cellId = base.matrix.artifact.payload.cells[0].cellId;
++  const capacityInput = preregistrationInput({
++    executionIdentity: {
++      matrixId: FIXTURE_RESOURCE_MATRIX_ID,
++      cellId,
++      cellManifestDigest: digestBenchmarkSemanticData({
++        matrixId: FIXTURE_RESOURCE_MATRIX_ID,
++        cellId,
++      }),
++      profileIdentity:
++        base.profileEnvelope.artifact.payload.profileIdentity,
++      pairIdentity: digestBenchmarkSemanticData({
++        pairId: FIXTURE_RESOURCE_PAIR_ID,
++      }),
++      runId: FIXTURE_RESOURCE_RUN_ID,
++      liveEnvironmentContractDigest:
++        base.matrix.artifact.payload.alternativeTopologyDigest,
++    },
++  });
+   const capacityPreregistration =
+-    sealBenchmarkCapacityPreregistration(preregistrationInput());
+-  const {report} =
++    sealBenchmarkCapacityPreregistration(capacityInput);
++  const rawReportAndEngagements =
+     await artifactFixtureReport(capacityPreregistration);
++  const reportAndEngagements = {
++    ...rawReportAndEngagements,
++    report: normalizeCapacityReportWindowTimes(
++      capacityPreregistration,
++      rawReportAndEngagements.report,
++    ),
++  };
++  const measuredReceipts =
++    reportAndEngagements.report.windowReceipts.filter(
++      (receipt) => receipt.phase === 'measured',
++    );
++  const calibrationArtifacts = [];
++  for (let index = 0; index < measuredReceipts.length; index += 1) {
++    calibrationArtifacts.push(await liveCalibrationFixture({
++      ...calibrationOptions,
++      startedAt: measuredReceipts[index].startedAt,
++      endedAt: measuredReceipts[index].endedAt,
++    }));
++  }
+   return createBenchmarkResourceEvidenceFixture({
+     ...options,
+-    calibrationArtifact,
++    calibrationArtifact: calibrationArtifacts[0],
++    calibrationArtifacts,
+     capacityProtocol: {
+       preregistration: capacityPreregistration,
+-      report,
++      ...reportAndEngagements,
+     },
+   });
+ }
+@@ -212,12 +313,15 @@ function absentCertification() {
+   return {state: COMPARATIVE_CLAIM_CERTIFICATION_STATE.ABSENT};
+ }
+ 
+-function attachedCertification(rootDigest, overrides = {}) {
++function attachedCertification(fixture, overrides = {}) {
++  const rootDigest = fixture.root.digest;
++  const profileIdentity =
++    fixture.profileEnvelope.artifact.payload.profileIdentity;
+   const receipt = {
+     contractId: SCALE_CERTIFICATION_RECEIPT_CONTRACT_ID,
+     schemaVersion: SCALE_CERTIFICATION_RECEIPT_SCHEMA_VERSION,
+     questId: CERTIFICATION_QUEST,
+-    profileIdentity: PROFILE_IDENTITY,
++    profileIdentity,
+     evidenceIdentity: rootDigest,
+     issuedAt: RECEIPT_ISSUED_AT,
+     validUntil: RECEIPT_VALID_UNTIL,
+@@ -230,21 +334,26 @@ function attachedCertification(rootDigest, overrides = {}) {
+       terminalReceiptDigest:
+         computeScaleCertificationReceiptDigest(receipt),
+       questId: CERTIFICATION_QUEST,
+-      profileIdentity: PROFILE_IDENTITY,
++      profileIdentity,
+       evidenceIdentity: rootDigest,
+     },
+   };
+ }
+ 
+ function measuredInput(fixture, options = {}) {
++  const rootedProfile = fixture.profileEnvelope?.artifact.payload ?? {
++    profile: {id: SCALE_PROFILE_ID.DEVELOPMENT},
++    profileIdentity: `sha256:${'a'.repeat(64)}`,
++  };
+   return {
+     workloadId: options.workloadId || 'fixture-workload',
+     expectedMatrixId: FIXTURE_RESOURCE_MATRIX_ID,
+     profile: {
+-      id: options.profileId || SCALE_PROFILE_ID.DEVELOPMENT,
+-      identity: PROFILE_IDENTITY,
++      id: options.profileId || rootedProfile.profile.id,
++      identity: options.profileIdentity || rootedProfile.profileIdentity,
+     },
+-    rootReceipt: fixture.receipt,
++    rootAcceptance:
++      acceptBenchmarkResourceClaimEvidenceRoot(fixture.receipt),
+     certification:
+       options.certification || absentCertification(),
+   };
+@@ -376,20 +485,162 @@ test('current live P0 root publishes a win and an alternative win',
+     t.end();
+   });
+ 
+-test('current terminal certification is required for certified_profile',
++test('C3 admission requires the exact repeated measured-window set',
+   async (t) => {
+     const fixture = await claimEligibleEvidenceFixture();
++    const omitted = await claimEligibleEvidenceFixture({
++      omittedProtocolCoordinate: {blockIndex: 1, loadIndex: 1},
++    });
++    const fabricated = await claimEligibleEvidenceFixture({
++      fabricatedWindowIndex: 0,
++    });
++    const overlapped = await claimEligibleEvidenceFixture({
++      overlapWindowIndex: 1,
++    });
++
++    t.equal(fixture.windows.length, 18);
++    t.equal(
++      validateBenchmarkResourceEvidenceRoot(fixture.receipt).claimEligible,
++      true,
++    );
++    for (const attacked of [omitted, fabricated, overlapped]) {
++      const validation =
++        validateBenchmarkResourceEvidenceRoot(attacked.receipt);
++      const table = projectComparativeEfficiencyClaims(projectionInput({
++        measuredEvidence: [measuredInput(attacked)],
++      }));
++      t.equal(validation.valid, false);
++      t.ok(table.rows.every(
++        (row) => row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++      ));
++      t.ok(table.rows.every(
++        (row) => row.source.measurementOutcome.state ===
++          BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.INVALID,
++      ));
++    }
++    t.end();
++  });
++
++test('caller-supplied P0 identity cannot override the evidence-rooted profile',
++  async (t) => {
++    const fixture = await claimEligibleEvidenceFixture();
++    const table = projectComparativeEfficiencyClaims(projectionInput({
++      measuredEvidence: [measuredInput(fixture, {
++        profileIdentity: `sha256:${'f'.repeat(64)}`,
++      })],
++    }));
++
++    t.ok(table.rows.every(
++      (row) => row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++    ));
++    t.ok(table.rows.every((row) =>
++      row.reasonCodes.includes(
++        COMPARATIVE_CLAIM_REASON.PROFILE_IDENTITY_MISMATCH,
++      ),
++    ));
++    t.end();
++  });
++
++test('digest-valid but semantically invalid rooted P0 is rejected before class selection',
++  (t) => {
++    const invalidBody = {
++      contractId: SCALE_EVIDENCE_CONTRACT_ID,
++      schemaVersion: SCALE_EVIDENCE_SCHEMA_VERSION,
++      profile: {id: SCALE_PROFILE_ID.DEVELOPMENT, version: 1},
++      software: 'caller',
++      hardware: {cpuCount: 'unbounded-label'},
++      topology: null,
++      data: [],
++      workload: false,
++    };
++    const invalidEnvelope = createBenchmarkResourceArtifact(
++      BENCHMARK_RESOURCE_ARTIFACT_KIND.PROFILE_ENVELOPE,
++      {
++        ...invalidBody,
++        profileIdentity: computeScaleProfileIdentity(invalidBody),
++      },
++    );
++    const fixture = createBenchmarkResourceEvidenceFixture({
++      profileEnvelopeOverride: invalidEnvelope,
++    });
++    const table = projectComparativeEfficiencyClaims(projectionInput({
++      measuredEvidence: [measuredInput(fixture)],
++    }));
++
++    t.ok(table.rows.every(
++      (row) => row.evidenceClass === COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++    ));
++    t.ok(table.rows.every(
++      (row) => row.source.measurementOutcome.state ===
++        BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.INVALID,
++    ));
++    t.end();
++  });
++
++test('C4 acceptance is the immutable production input consumed by C10',
++  async (t) => {
++    const fixture = await claimEligibleEvidenceFixture();
++    let drifted = false;
++    let calls = 0;
++    const acceptance = acceptBenchmarkResourceClaimEvidenceRoot({
++      rootDigest: fixture.root.digest,
++      resolver: {
++        resolve(digest) {
++          calls += 1;
++          return drifted ? undefined : fixture.receipt.resolver.resolve(digest);
++        },
++      },
++    });
++    const callsAtAcceptance = calls;
++    drifted = true;
++    const acceptedInput = measuredInput(fixture);
++    acceptedInput.rootAcceptance = acceptance;
++    const accepted = projectComparativeEfficiencyClaims(projectionInput({
++      measuredEvidence: [acceptedInput],
++    }));
++    const forgedInput = measuredInput(fixture);
++    forgedInput.rootAcceptance = {...acceptance};
++    const forged = projectComparativeEfficiencyClaims(projectionInput({
++      measuredEvidence: [forgedInput],
++    }));
++
++    t.equal(calls, callsAtAcceptance);
++    t.ok(accepted.rows.every((row) =>
++      row.source.measurementOutcome.state ===
++        BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.MEASURING,
++    ));
++    t.ok(forged.rows.every((row) =>
++      row.source.measurementOutcome.state ===
++        BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.INVALID &&
++      row.source.measurementOutcome.reason.code ===
++        BENCHMARK_RESOURCE_MEASUREMENT_REASON.IMMUTABLE_RESOLUTION_DRIFT,
++    ));
++    t.equal(
++      Object.hasOwn(
++        claimEvidenceView,
++        'createBenchmarkResourceClaimEvidenceAcceptance',
++      ),
++      false,
++    );
++    t.end();
++  });
++
++test('current terminal certification is required for certified_profile',
++  async (t) => {
++    const fixture = await claimEligibleEvidenceFixture({
++      profileId: SCALE_PROFILE_ID.INTEGRATION,
++    });
+     const current = projectComparativeEfficiencyClaims(projectionInput({
+       measuredEvidence: [measuredInput(fixture, {
+         profileId: SCALE_PROFILE_ID.INTEGRATION,
+-        certification: attachedCertification(fixture.root.digest),
++        certification: attachedCertification(fixture),
+       })],
+     }));
+     const expired = projectComparativeEfficiencyClaims(projectionInput({
+       evaluatedAt: RECEIPT_VALID_UNTIL,
+       measuredEvidence: [measuredInput(fixture, {
+         profileId: SCALE_PROFILE_ID.INTEGRATION,
+-        certification: attachedCertification(fixture.root.digest),
++        certification: attachedCertification(fixture),
+       })],
+     }));
+ 
+@@ -433,6 +684,68 @@ test('expired price evidence suppresses cost without suppressing capacity',
+     t.end();
+   });
+ 
++test('missing, malformed, tampered, or initially stale price suppresses cost only',
++  async (t) => {
++    const malformedPrice = createBenchmarkResourceArtifact(
++      BENCHMARK_RESOURCE_ARTIFACT_KIND.PRICE_SHEET,
++      {version: 'malformed-price-fixture'},
++    );
++    const fixtures = [
++      await claimEligibleEvidenceFixture(),
++      await claimEligibleEvidenceFixture({
++        priceArtifactOverride: malformedPrice,
++      }),
++      await claimEligibleEvidenceFixture(),
++      await claimEligibleEvidenceFixture({
++        priceValidUntil: '2026-07-27T11:00:00.000Z',
++      }),
++    ];
++    const resolverModes = ['missing', 'ordinary', 'tampered', 'ordinary'];
++    for (let index = 0; index < fixtures.length; index += 1) {
++      const fixture = fixtures[index];
++      const mode = resolverModes[index];
++      const receipt = mode === 'ordinary' ? fixture.receipt : {
++        rootDigest: fixture.root.digest,
++        resolver: {
++          resolve(digest) {
++            if (digest !== fixture.price.digest) {
++              return fixture.receipt.resolver.resolve(digest);
++            }
++            return mode === 'missing' ?
++              undefined :
++              Buffer.from('tampered-price-artifact');
++          },
++        },
++      };
++      const input = measuredInput({...fixture, receipt});
++      const table = projectComparativeEfficiencyClaims(projectionInput({
++        measuredEvidence: [input],
++      }));
++      const capacity = table.rows.find(
++        (row) => row.metric === COMPARATIVE_CLAIM_METRIC.CAPACITY,
++      );
++      const cost = table.rows.find(
++        (row) => row.metric === COMPARATIVE_CLAIM_METRIC.COST,
++      );
++      t.equal(
++        capacity.evidenceClass,
++        COMPARATIVE_EVIDENCE_CLASS.MEASURED_P0,
++        `${mode} price retains capacity`,
++      );
++      t.equal(
++        cost.evidenceClass,
++        COMPARATIVE_EVIDENCE_CLASS.NO_CLAIM,
++        `${mode} price suppresses cost`,
++      );
++      t.match(cost.reasonCodes, [COMPARATIVE_CLAIM_REASON.PRICE_INVALID]);
++      t.equal(
++        cost.source.measurementOutcome.reason.code,
++        BENCHMARK_RESOURCE_MEASUREMENT_REASON.PRICE_EVIDENCE_INVALID,
++      );
++    }
++    t.end();
++  });
++
+ test('effect classification retains neutral, inconclusive, insignificant, ' +
+   'and alternative-favored outcomes', (t) => {
+   const cases = [
+@@ -479,7 +792,7 @@ test('projected cost retains neutral and practically insignificant outcomes',
+       candidateProvisionedMultiplier: 1,
+     });
+     const insignificantFixture = await claimEligibleEvidenceFixture({}, {
+-      candidateEndMultiplier: 3,
++      candidateEndMultiplier: 2.05,
+       candidateProvisionedMultiplier: 1,
+     });
+     const neutral = projectComparativeEfficiencyClaims(projectionInput({
+@@ -556,14 +869,16 @@ test('schema-valid synthetic measuring evidence cannot promote a claim',
+   });
+ 
+ test('non-P0 evidence requires a bound current certification', async (t) => {
+-  const fixture = await claimEligibleEvidenceFixture();
++  const fixture = await claimEligibleEvidenceFixture({
++    profileId: SCALE_PROFILE_ID.INTEGRATION,
++  });
+   const absent = projectComparativeEfficiencyClaims(projectionInput({
+     measuredEvidence: [measuredInput(fixture, {
+       profileId: SCALE_PROFILE_ID.INTEGRATION,
+     })],
+   }));
+   const mismatchedCertification =
+-    attachedCertification(fixture.root.digest);
++    attachedCertification(fixture);
+   mismatchedCertification.expected.evidenceIdentity =
+     `sha256:${'c'.repeat(64)}`;
+   const mismatched = projectComparativeEfficiencyClaims(projectionInput({
+@@ -594,7 +909,7 @@ test('an attached receipt cannot promote current P0 beyond measured_p0',
+     const fixture = await claimEligibleEvidenceFixture();
+     const table = projectComparativeEfficiencyClaims(projectionInput({
+       measuredEvidence: [measuredInput(fixture, {
+-        certification: attachedCertification(fixture.root.digest),
++        certification: attachedCertification(fixture),
+       })],
+     }));
+ 
+diff --git a/test/distributed/harness/__tests__/comparative-efficiency-measured-cell-admission.test.js b/test/distributed/harness/__tests__/comparative-efficiency-measured-cell-admission.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9b337d8a90b9687d904745ebd643c64719076d52
+--- /dev/null
++++ b/test/distributed/harness/__tests__/comparative-efficiency-measured-cell-admission.test.js
+@@ -0,0 +1,338 @@
++import {test} from '../../../../src/test-helpers/tap.js';
++import {
++  BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE,
++} from '../benchmark-resource-claim-evidence-view.js';
++import {
++  inspectBenchmarkResourceClaimEvidenceRoot,
++  validateBenchmarkResourceEvidenceRoot,
++} from '../benchmark-resource-evidence-root.js';
++import {
++  BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE,
++  BENCHMARK_RESOURCE_MEASUREMENT_REASON,
++  BENCHMARK_RESOURCE_MEASUREMENT_RETRY,
++  benchmarkResourceStaleMeasurementOutcome,
++  createBenchmarkResourceMeasurementOutcome,
++  inspectBenchmarkResourceMeasurementOutcome,
++} from '../benchmark-resource-measurement-outcome.js';
++import {
++  BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON,
++  appendBenchmarkResourceMeasuredWindowCoordinate,
++  assertBenchmarkResourceMeasuredWindowCoordinatesComplete,
++  createBenchmarkResourceWindowCoordinateContext,
++} from '../benchmark-resource-window-coordinate-validation.js';
++import {
++  createBenchmarkResourceEvidenceFixture,
++} from './benchmark-resource-evidence-test-fixture.js';
++
++const PROFILE_IDENTITY = `sha256:${'a'.repeat(64)}`;
++const SIDE_IDS = Object.freeze(['candidate', 'baseline']);
++const expected = Object.freeze({
++  matrixManifestDigest: `sha256:${'b'.repeat(64)}`,
++  matrixId: 'matrix',
++  cellId: 'cell',
++  pairId: 'pair',
++  runId: 'run',
++  profileIdentity: PROFILE_IDENTITY,
++  sideIds: SIDE_IDS,
++});
++
++function measuredWindow(sideId, blockedOrderIndex, overrides = {}) {
++  const blockIndex = overrides.blockIndex ?? 0;
++  const loadIndex = overrides.loadIndex ?? 0;
++  const startedMinute = overrides.startedMinute ?? blockIndex;
++  return {
++    matrixManifestDigest: expected.matrixManifestDigest,
++    matrixId: expected.matrixId,
++    cellId: expected.cellId,
++    pairId: expected.pairId,
++    runId: expected.runId,
++    profileIdentity: expected.profileIdentity,
++    sideId,
++    pairedBlockId:
++      overrides.pairedBlockId ?? `block-${blockIndex}-load-${loadIndex}`,
++    blockIndex,
++    blockedOrderIndex,
++    offeredLoad: overrides.offeredLoad ?? 1_000,
++    loadIndex,
++    phase: overrides.phase ?? 'measured',
++    startedAt:
++      `2026-07-27T12:${String(startedMinute).padStart(2, '0')}:00.000Z`,
++    endedAt:
++      `2026-07-27T12:${String(startedMinute + 1).padStart(2, '0')}:00.000Z`,
++  };
++}
++
++function appendPairedBlock(context, blockIndex) {
++  appendBenchmarkResourceMeasuredWindowCoordinate(
++    context,
++    measuredWindow('candidate', blockIndex % 2, {
++      blockIndex,
++      startedMinute: blockIndex * 2,
++    }),
++    expected,
++  );
++  appendBenchmarkResourceMeasuredWindowCoordinate(
++    context,
++    measuredWindow('baseline', (blockIndex + 1) % 2, {
++      blockIndex,
++      startedMinute: blockIndex * 2 + 1,
++    }),
++    expected,
++  );
++}
++
++test('C4 admits exact repeated paired coordinates and rooted profile bytes',
++  (t) => {
++    const context = createBenchmarkResourceWindowCoordinateContext();
++    appendPairedBlock(context, 0);
++    appendPairedBlock(context, 1);
++    t.doesNotThrow(() =>
++      assertBenchmarkResourceMeasuredWindowCoordinatesComplete(
++        context,
++        SIDE_IDS,
++        [
++          measuredWindow('candidate', 0, {startedMinute: 0}),
++          measuredWindow('baseline', 1, {startedMinute: 1}),
++          measuredWindow('candidate', 1, {
++            blockIndex: 1,
++            startedMinute: 2,
++          }),
++          measuredWindow('baseline', 0, {
++            blockIndex: 1,
++            startedMinute: 3,
++          }),
++        ],
++      ));
++
++    const fixture = createBenchmarkResourceEvidenceFixture();
++    const validation = validateBenchmarkResourceEvidenceRoot(fixture.receipt);
++    const inspection =
++      inspectBenchmarkResourceClaimEvidenceRoot(fixture.receipt);
++    t.match(validation, {valid: true});
++    t.equal(inspection.state, BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.ACCEPTED);
++    t.same(inspection.evidence.profile, {
++      id: fixture.profileEnvelope.artifact.payload.profile.id,
++      identity: fixture.profileEnvelope.artifact.payload.profileIdentity,
++      envelopeDigest: fixture.profileEnvelope.digest,
++    });
++    t.equal(
++      inspection.evidence.measurementOutcome.state,
++      BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.NON_MEASURING,
++    );
++    t.end();
++  });
++
++test('C4 rejects duplicate, overlap, cross-load, phase, and missing joins',
++  (t) => {
++    const duplicate = createBenchmarkResourceWindowCoordinateContext();
++    const candidate = measuredWindow('candidate', 0);
++    appendBenchmarkResourceMeasuredWindowCoordinate(
++      duplicate,
++      candidate,
++      expected,
++    );
++    t.throws(
++      () => appendBenchmarkResourceMeasuredWindowCoordinate(
++        duplicate,
++        candidate,
++        expected,
++      ),
++      new RegExp(BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON.DUPLICATE, 'u'),
++    );
++
++    const overlap = createBenchmarkResourceWindowCoordinateContext();
++    appendBenchmarkResourceMeasuredWindowCoordinate(
++      overlap,
++      candidate,
++      expected,
++    );
++    t.throws(
++      () => appendBenchmarkResourceMeasuredWindowCoordinate(
++        overlap,
++        measuredWindow('baseline', 1),
++        expected,
++      ),
++      new RegExp(BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON.OVERLAP, 'u'),
++    );
++
++    const sameSideOverlap = createBenchmarkResourceWindowCoordinateContext();
++    appendBenchmarkResourceMeasuredWindowCoordinate(
++      sameSideOverlap,
++      candidate,
++      expected,
++    );
++    t.throws(
++      () => appendBenchmarkResourceMeasuredWindowCoordinate(
++        sameSideOverlap,
++        measuredWindow('candidate', 1, {
++          blockIndex: 1,
++          pairedBlockId: 'block-1-load-0',
++          startedMinute: 0,
++        }),
++        expected,
++      ),
++      new RegExp(BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON.OVERLAP, 'u'),
++    );
++
++    const crossLoad = createBenchmarkResourceWindowCoordinateContext();
++    appendBenchmarkResourceMeasuredWindowCoordinate(
++      crossLoad,
++      candidate,
++      expected,
++    );
++    t.throws(
++      () => appendBenchmarkResourceMeasuredWindowCoordinate(
++        crossLoad,
++        measuredWindow('baseline', 1, {
++          offeredLoad: 2_000,
++          startedMinute: 1,
++        }),
++        expected,
++      ),
++      new RegExp(
++        BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON.PAIRED_BLOCK_MISMATCH,
++        'u',
++      ),
++    );
++    const omittedPair = createBenchmarkResourceWindowCoordinateContext();
++    appendPairedBlock(omittedPair, 0);
++    t.throws(
++      () => assertBenchmarkResourceMeasuredWindowCoordinatesComplete(
++        omittedPair,
++        SIDE_IDS,
++        [
++          measuredWindow('candidate', 0, {startedMinute: 0}),
++          measuredWindow('baseline', 1, {startedMinute: 1}),
++          measuredWindow('candidate', 1, {
++            blockIndex: 1,
++            startedMinute: 2,
++          }),
++          measuredWindow('baseline', 0, {
++            blockIndex: 1,
++            startedMinute: 3,
++          }),
++        ],
++      ),
++      new RegExp(
++        BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON.EXPECTED_SET_MISMATCH,
++        'u',
++      ),
++    );
++    t.throws(
++      () => appendBenchmarkResourceMeasuredWindowCoordinate(
++        createBenchmarkResourceWindowCoordinateContext(),
++        measuredWindow('candidate', 0, {phase: 'warmup'}),
++        expected,
++      ),
++      new RegExp(BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON.PHASE, 'u'),
++    );
++    t.throws(
++      () => assertBenchmarkResourceMeasuredWindowCoordinatesComplete(
++        duplicate,
++        SIDE_IDS,
++      ),
++      new RegExp(
++        BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON.PAIRED_BLOCK_INCOMPLETE,
++        'u',
++      ),
++    );
++    t.end();
++  });
++
++test('C4 claim inspection snapshots each resolved artifact exactly once',
++  (t) => {
++    const fixture = createBenchmarkResourceEvidenceFixture();
++    const counts = new Map();
++    const resolver = {
++      resolve(digest) {
++        counts.set(digest, (counts.get(digest) ?? 0) + 1);
++        return fixture.receipt.resolver.resolve(digest);
++      },
++    };
++    const inspection = inspectBenchmarkResourceClaimEvidenceRoot({
++      rootDigest: fixture.root.digest,
++      resolver,
++    });
++
++    t.equal(inspection.state, BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.ACCEPTED);
++    t.ok([...counts.values()].every((count) => count === 1));
++    t.end();
++  });
++
++test('canonical measurement outcomes retain exact retry classification',
++  (t) => {
++    const states = Object.values(
++      BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE,
++    );
++    const reasons = [
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_COMPLETE,
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_NOT_CLAIM_ELIGIBLE,
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_INVALID,
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_EXPIRED,
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.OBSERVATION_MISSING,
++    ];
++    for (let index = 0; index < states.length; index += 1) {
++      const outcome = createBenchmarkResourceMeasurementOutcome(
++        states[index],
++        reasons[index],
++      );
++      t.match(
++        inspectBenchmarkResourceMeasurementOutcome(outcome),
++        {valid: true},
++      );
++      t.equal(
++        outcome.reason.retry,
++        states[index] ===
++          BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.TRANSIENT ?
++          BENCHMARK_RESOURCE_MEASUREMENT_RETRY.RETRYABLE :
++          BENCHMARK_RESOURCE_MEASUREMENT_RETRY.NEVER,
++      );
++    }
++    t.equal(
++      benchmarkResourceStaleMeasurementOutcome(
++        BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_EXPIRED,
++      ).state,
++      BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.STALE_INELIGIBLE,
++    );
++    const symbolExtra = {
++      state: BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.MEASURING,
++      reason: {
++        code: BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_COMPLETE,
++        retry: BENCHMARK_RESOURCE_MEASUREMENT_RETRY.NEVER,
++      },
++    };
++    Object.defineProperty(symbolExtra, Symbol('extra'), {value: true});
++    t.match(
++      inspectBenchmarkResourceMeasurementOutcome(symbolExtra),
++      {valid: false},
++    );
++    t.match(
++      inspectBenchmarkResourceMeasurementOutcome({
++        state: BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.INVALID,
++        reason: Object.assign([], {
++          code: BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_INVALID,
++          retry: BENCHMARK_RESOURCE_MEASUREMENT_RETRY.NEVER,
++        }),
++      }),
++      {valid: false},
++    );
++    t.throws(
++      () => createBenchmarkResourceMeasurementOutcome(
++        BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.INVALID,
++        '',
++      ),
++      new RegExp('measurementOutcome.reason.code:text_required', 'u'),
++    );
++
++    const missing = inspectBenchmarkResourceClaimEvidenceRoot({
++      rootDigest: `sha256:${'c'.repeat(64)}`,
++      resolver: {resolve() {
++        return undefined;
++      }},
++    });
++    t.equal(
++      missing.measurementOutcome.state,
++      BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.TRANSIENT,
++    );
++    t.end();
++  });
+diff --git a/test/distributed/harness/benchmark-resource-accounting.js b/test/distributed/harness/benchmark-resource-accounting.js
+index d67da1e9e2305543918d7848a7202b0535417046..a2eb195df2eca66f58502bc5e9ac56201959f229 100644
+--- a/test/distributed/harness/benchmark-resource-accounting.js
++++ b/test/distributed/harness/benchmark-resource-accounting.js
+@@ -18,6 +18,7 @@ import {
+   BENCHMARK_RESOURCE_COMPONENT_ROLE,
+   BENCHMARK_RESOURCE_CONTRACT,
+   BENCHMARK_RESOURCE_LIMIT,
++  BENCHMARK_RESOURCE_WINDOW_PHASE,
+ } from './benchmark-resource-contract-constants.js';
+ const localText = Object.freeze({
+   INVENTORY_SIDES: 'inventory.sides',
+@@ -33,6 +34,9 @@ const localText = Object.freeze({
+   RESOURCE_WINDOW_STARTED_AT: 'resourceWindow.startedAt',
+   RESOURCE_WINDOW_ENDED_AT: 'resourceWindow.endedAt',
+   RESOURCE_WINDOW_INTERVAL_NOT_POSITIVE: 'resourceWindow.interval:not_positive',
++  RESOURCE_WINDOW_OFFERED_LOAD_POSITIVE_REQUIRED:
++    'resourceWindow.offeredLoad:positive_required',
++  RESOURCE_WINDOW_PHASE_UNSUPPORTED: 'resourceWindow.phase:unsupported',
+   RESOURCE_WINDOW_CORRECT_SLO_ELIGIBLE_OPERATIONS: 'resourceWindow.correctSloEligibleOperations',
+   RESOURCE_WINDOW_KIND_UNSUPPORTED: 'resourceWindow.kind:unsupported',
+   RESOURCE_WINDOW_PAYLOAD: 'resourceWindow.payload',
+@@ -84,6 +88,13 @@ const windowInputKeys = Object.freeze([
+   'pairId',
+   'runId',
+   'sideId',
++  'pairedBlockId',
++  'profileIdentity',
++  'blockIndex',
++  'blockedOrderIndex',
++  'offeredLoad',
++  'loadIndex',
++  'phase',
+   'windowReceiptDigest',
+   'capacitySampleDigest',
+   'semanticReceiptDigest',
+@@ -334,6 +345,13 @@ function resourceWindowBody(input, durationSeconds) {
+     pairId: input.pairId,
+     runId: input.runId,
+     sideId: input.sideId,
++    pairedBlockId: input.pairedBlockId,
++    profileIdentity: input.profileIdentity,
++    blockIndex: input.blockIndex,
++    blockedOrderIndex: input.blockedOrderIndex,
++    offeredLoad: input.offeredLoad,
++    loadIndex: input.loadIndex,
++    phase: input.phase,
+     windowReceiptDigest: input.windowReceiptDigest,
+     capacitySampleDigest: input.capacitySampleDigest,
+     semanticReceiptDigest: input.semanticReceiptDigest,
+@@ -356,6 +374,8 @@ export function createBenchmarkResourceWindow(input) {
+     'pairId',
+     'runId',
+     'sideId',
++    'pairedBlockId',
++    'phase',
+   ];
+   for (let index = 0; index < textFields.length; index += 1) {
+     const field = textFields[index];
+@@ -363,6 +383,7 @@ export function createBenchmarkResourceWindow(input) {
+   }
+   const digestFields = [
+     'matrixManifestDigest',
++    'profileIdentity',
+     'windowReceiptDigest',
+     'capacitySampleDigest',
+     'semanticReceiptDigest',
+@@ -373,6 +394,25 @@ export function createBenchmarkResourceWindow(input) {
+     const field = digestFields[index];
+     assertBenchmarkResourceDigest(input[field], `resourceWindow.${field}`);
+   }
++  const coordinateIntegers = [
++    'blockIndex',
++    'blockedOrderIndex',
++    'offeredLoad',
++    'loadIndex',
++  ];
++  for (let index = 0; index < coordinateIntegers.length; index += 1) {
++    const field = coordinateIntegers[index];
++    assertBenchmarkResourceInteger(input[field], `resourceWindow.${field}`);
++  }
++  if (input.offeredLoad === 0) {
++    fail(localText.RESOURCE_WINDOW_OFFERED_LOAD_POSITIVE_REQUIRED);
++  }
++  if (
++    input.phase !== BENCHMARK_RESOURCE_WINDOW_PHASE.MEASURED &&
++    input.phase !== BENCHMARK_RESOURCE_WINDOW_PHASE.WARMUP
++  ) {
++    fail(localText.RESOURCE_WINDOW_PHASE_UNSUPPORTED);
++  }
+   assertTimestamp(input.startedAt, localText.RESOURCE_WINDOW_STARTED_AT);
+   assertTimestamp(input.endedAt, localText.RESOURCE_WINDOW_ENDED_AT);
+   const startedAt = dateParse(input.startedAt);
+diff --git a/test/distributed/harness/benchmark-resource-c3-window-plan.js b/test/distributed/harness/benchmark-resource-c3-window-plan.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e03cd7da741c272c4c8a56ff110f7202c63dc52f
+--- /dev/null
++++ b/test/distributed/harness/benchmark-resource-c3-window-plan.js
+@@ -0,0 +1,243 @@
++import {
++  appendOwnArrayValue,
++  digestBenchmarkSemanticData,
++} from './benchmark-semantic-integrity.js';
++import {
++  projectBenchmarkResourceCapacityProtocolEvidence,
++} from './benchmark-resource-live-root-validation.js';
++import {
++  BENCHMARK_RESOURCE_ARTIFACT_KIND,
++  BENCHMARK_RESOURCE_WINDOW_PHASE,
++} from './benchmark-resource-contract-constants.js';
++
++const arrayJoinMethod = Array.prototype.join;
++const dateToISOStringMethod = Date.prototype.toISOString;
++const mapGetMethod = Map.prototype.get;
++const mapHasMethod = Map.prototype.has;
++const mapSetMethod = Map.prototype.set;
++const objectKeys = Object.keys;
++const reflectApply = Reflect.apply;
++const coordinateSeparator = '\u0000';
++const localText = Object.freeze({
++  PLAN_INVALID: 'cell.resourceWindow:c3_measured_plan_invalid',
++  BINDING_MISMATCH: 'cell.resourceWindow:c3_receipt_binding_mismatch',
++});
++
++function fail(reason) {
++  throw new TypeError(reason);
++}
++
++function coordinateKey(value) {
++  return reflectApply(arrayJoinMethod, [
++    value.cellId,
++    value.blockIndex,
++    value.blockedOrderIndex,
++    value.sideId,
++    value.offeredLoad,
++    value.loadIndex,
++    value.phase,
++  ], [coordinateSeparator]);
++}
++
++function findLoadIndex(preregistration, offeredLoad) {
++  for (let index = 0;
++    index < preregistration.offeredLoadPerSecond.length;
++    index += 1) {
++    if (preregistration.offeredLoadPerSecond[index] === offeredLoad) {
++      return index;
++    }
++  }
++  return -1;
++}
++
++function findRawSample(report, digest) {
++  for (let index = 0; index < report.rawSamples.length; index += 1) {
++    if (report.rawSamples[index].sampleDigest === digest) {
++      return report.rawSamples[index];
++    }
++  }
++  return undefined;
++}
++
++function expectedExecutionIdentity(payload, owners) {
++  return {
++    matrixId: payload.matrixId,
++    cellId: payload.cellId,
++    cellManifestDigest: digestBenchmarkSemanticData({
++      matrixId: payload.matrixId,
++      cellId: payload.cellId,
++    }),
++    profileIdentity: owners.profile.identity,
++    pairIdentity: digestBenchmarkSemanticData({pairId: payload.pairId}),
++    runId: payload.runId,
++    liveEnvironmentContractDigest:
++      owners.matrix.alternativeTopologyDigest,
++  };
++}
++
++function receiptIdentityMatches(receipt, identity) {
++  const fields = objectKeys(identity);
++  for (let index = 0; index < fields.length; index += 1) {
++    if (receipt[fields[index]] !== identity[fields[index]]) return false;
++  }
++  return true;
++}
++
++function appendProjectionWindows(plan, projection, sideId, payload, owners) {
++  const {preregistration, report, protocolSideId} = projection.evidence;
++  const identity = expectedExecutionIdentity(payload, owners);
++  for (let index = 0; index < report.windowReceipts.length; index += 1) {
++    const receipt = report.windowReceipts[index];
++    if (
++      receipt.phase !== BENCHMARK_RESOURCE_WINDOW_PHASE.MEASURED ||
++      receipt.sideId !== protocolSideId
++    ) {
++      continue;
++    }
++    const loadIndex = findLoadIndex(preregistration, receipt.offeredLoad);
++    const sample = findRawSample(report, receipt.capacitySampleDigest);
++    if (
++      loadIndex < 0 ||
++      sample === undefined ||
++      !receiptIdentityMatches(receipt, identity) ||
++      report.blockedPairOrdersUsed[receipt.blockIndex]
++        ?.[receipt.blockedOrderIndex] !== protocolSideId
++    ) {
++      fail(localText.PLAN_INVALID);
++    }
++    const coordinate = {
++      cellId: payload.cellId,
++      blockIndex: receipt.blockIndex,
++      blockedOrderIndex: receipt.blockedOrderIndex,
++      sideId,
++      offeredLoad: receipt.offeredLoad,
++      loadIndex,
++      phase: BENCHMARK_RESOURCE_WINDOW_PHASE.MEASURED,
++    };
++    const key = coordinateKey(coordinate);
++    if (reflectApply(mapHasMethod, plan.byCoordinate, [key])) {
++      fail(localText.PLAN_INVALID);
++    }
++    const expected = {
++      ...coordinate,
++      pairedBlockId:
++        `${payload.pairId}-block-${receipt.blockIndex}-load-${loadIndex}`,
++      startedAt: reflectApply(
++        dateToISOStringMethod,
++        new Date(receipt.startedAt),
++        [],
++      ),
++      endedAt: reflectApply(
++        dateToISOStringMethod,
++        new Date(receipt.endedAt),
++        [],
++      ),
++      correctOperations: sample.counts.correct,
++      receipt,
++    };
++    reflectApply(mapSetMethod, plan.byCoordinate, [key, expected]);
++    appendOwnArrayValue(plan.coordinates, coordinate);
++  }
++}
++
++export function createBenchmarkResourceC3WindowPlan({
++  capacities,
++  resolved,
++  payload,
++  owners,
++  resourcePreregistration,
++}) {
++  const capacityArtifactsBySide = [];
++  for (let sideIndex = 0; sideIndex < capacities.length; sideIndex += 1) {
++    const artifacts = [];
++    for (let index = 0;
++      index < capacities[sideIndex].sourceDigests.length;
++      index += 1) {
++      const artifact = reflectApply(mapGetMethod, resolved, [
++        capacities[sideIndex].sourceDigests[index],
++      ]);
++      if (
++        artifact?.kind !==
++          BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE
++      ) {
++        fail(localText.PLAN_INVALID);
++      }
++      appendOwnArrayValue(artifacts, artifact);
++    }
++    appendOwnArrayValue(capacityArtifactsBySide, artifacts);
++  }
++  const firstProtocol =
++    capacityArtifactsBySide[0][0]?.payload?.evidence?.protocol;
++  if (firstProtocol === undefined) return null;
++  const plan = {coordinates: [], byCoordinate: new Map()};
++  let reportDigest = null;
++  for (let sideIndex = 0; sideIndex < payload.sideIds.length; sideIndex += 1) {
++    const source = capacityArtifactsBySide[sideIndex][0];
++    if (source === undefined) fail(localText.PLAN_INVALID);
++    const projection = projectBenchmarkResourceCapacityProtocolEvidence(
++      source,
++      payload.sideIds[sideIndex],
++      sideIndex,
++      resourcePreregistration,
++    );
++    if (
++      reportDigest !== null &&
++      reportDigest !== projection.evidence.report.reportDigest
++    ) {
++      fail(localText.PLAN_INVALID);
++    }
++    reportDigest = projection.evidence.report.reportDigest;
++    appendProjectionWindows(
++      plan,
++      projection,
++      payload.sideIds[sideIndex],
++      payload,
++      owners,
++    );
++  }
++  const report = firstProtocol.report;
++  const expectedCount =
++    report.completedBlocks *
++    firstProtocol.preregistration.offeredLoadPerSecond.length *
++    payload.sideIds.length;
++  if (plan.coordinates.length !== expectedCount) fail(localText.PLAN_INVALID);
++  return plan;
++}
++
++function sourceEvidenceMatches(sources, expected) {
++  const capacityEvidence = sources.capacity.payload.evidence;
++  const semanticEvidence = sources.semantic.payload.evidence;
++  const liveEvidence = sources.live.payload.evidence;
++  const receiptEvidence = sources.receipt.payload.evidence;
++  return capacityEvidence.capacitySampleDigest ===
++      expected.receipt.capacitySampleDigest &&
++    semanticEvidence.semanticReceiptDigest ===
++      expected.receipt.semanticReceiptDigest &&
++    liveEvidence.liveEngagementDigest ===
++      expected.receipt.liveEngagementDigest &&
++    digestBenchmarkSemanticData(receiptEvidence.capacityWindowReceipt) ===
++      digestBenchmarkSemanticData(expected.receipt);
++}
++
++export function assertBenchmarkResourceC3WindowBinding(
++  plan,
++  window,
++  sources,
++) {
++  if (plan === null) return;
++  const expected = reflectApply(
++    mapGetMethod,
++    plan.byCoordinate,
++    [coordinateKey(window)],
++  );
++  if (
++    expected === undefined ||
++    window.pairedBlockId !== expected.pairedBlockId ||
++    window.startedAt !== expected.startedAt ||
++    window.endedAt !== expected.endedAt ||
++    window.correctSloEligibleOperations !== expected.correctOperations ||
++    !sourceEvidenceMatches(sources, expected)
++  ) {
++    fail(localText.BINDING_MISMATCH);
++  }
++}
+diff --git a/test/distributed/harness/benchmark-resource-cell-effects-validation.js b/test/distributed/harness/benchmark-resource-cell-effects-validation.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..12c5c8db798bb107f05de222f738757dcdea8353
+--- /dev/null
++++ b/test/distributed/harness/benchmark-resource-cell-effects-validation.js
+@@ -0,0 +1,115 @@
++import {
++  digestBenchmarkSemanticData,
++} from './benchmark-semantic-integrity.js';
++import {
++  BENCHMARK_RESOURCE_NO_CURRENCY,
++  computeBenchmarkResourceWindowCost,
++  createBenchmarkResourcePairedEffect,
++} from './benchmark-resource-cost-and-effects.js';
++import {
++  BENCHMARK_RESOURCE_EFFECT,
++} from './benchmark-resource-contract-constants.js';
++import {
++  BENCHMARK_RESOURCE_ROOT_TEXT as ROOT_TEXT,
++} from './benchmark-resource-evidence-root-constants.js';
++
++const million = 1_000_000;
++
++function fail(message) {
++  throw new TypeError(message);
++}
++
++function sumSideCost(windows, inventory, price, sideId) {
++  let totalCost = 0;
++  let correct = 0;
++  let sampleCount = 0;
++  for (let index = 0; index < windows.length; index += 1) {
++    const payload = windows[index].payload;
++    if (payload.sideId !== sideId) continue;
++    const cost = computeBenchmarkResourceWindowCost(
++      payload,
++      inventory,
++      price,
++    );
++    totalCost += cost.totalCost;
++    correct += payload.correctSloEligibleOperations;
++    sampleCount += 1;
++  }
++  if (correct === 0) {
++    fail(ROOT_TEXT.CELL_COST_EFFECT_CORRECT_OPERATIONS_MISSING);
++  }
++  return {
++    value: totalCost / correct * million,
++    sampleCount,
++  };
++}
++
++function assertEffectEqual(actual, expected) {
++  if (
++    digestBenchmarkSemanticData(expected) !==
++      digestBenchmarkSemanticData(actual)
++  ) {
++    fail(ROOT_TEXT.CELL_EFFECTS_RECOMPUTATION_MISMATCH);
++  }
++}
++
++export function recomputeBenchmarkResourceMeasuringCellEffects(
++  payload,
++  owners,
++  capacities,
++  windows,
++) {
++  assertEffectEqual(payload.capacityEffect, createBenchmarkResourcePairedEffect({
++    effectType: BENCHMARK_RESOURCE_EFFECT.CAPACITY,
++    numeratorSideId: payload.sideIds[0],
++    denominatorSideId: payload.sideIds[1],
++    numeratorValue: capacities[0].capacityCorrectOpsPerSecond,
++    denominatorValue: capacities[1].capacityCorrectOpsPerSecond,
++    confidenceInterval: {
++      lower:
++        capacities[0].confidenceInterval.lower /
++        capacities[1].confidenceInterval.upper,
++      upper:
++        capacities[0].confidenceInterval.upper /
++        capacities[1].confidenceInterval.lower,
++    },
++    practicalThreshold: payload.capacityEffect.practicalThreshold,
++    sampleCount:
++      capacities[0].sampleCount < capacities[1].sampleCount ?
++        capacities[0].sampleCount :
++        capacities[1].sampleCount,
++    sourceDigests: payload.capacityEffect.sourceDigests,
++    currency: BENCHMARK_RESOURCE_NO_CURRENCY,
++  }));
++  if (owners.price === null) return;
++  const numeratorCost = sumSideCost(
++    windows,
++    owners.inventory,
++    owners.price,
++    payload.sideIds[0],
++  );
++  const denominatorCost = sumSideCost(
++    windows,
++    owners.inventory,
++    owners.price,
++    payload.sideIds[1],
++  );
++  assertEffectEqual(payload.costEffect, createBenchmarkResourcePairedEffect({
++    effectType: BENCHMARK_RESOURCE_EFFECT.COST,
++    numeratorSideId: payload.sideIds[0],
++    denominatorSideId: payload.sideIds[1],
++    numeratorValue: numeratorCost.value,
++    denominatorValue: denominatorCost.value,
++    confidenceInterval: {
++      lower: numeratorCost.value / denominatorCost.value,
++      upper: numeratorCost.value / denominatorCost.value,
++    },
++    practicalThreshold: payload.costEffect.practicalThreshold,
++    sampleCount:
++      numeratorCost.sampleCount < denominatorCost.sampleCount ?
++        numeratorCost.sampleCount :
++        denominatorCost.sampleCount,
++    sourceDigests: payload.costEffect.sourceDigests,
++    currency: owners.price.currency,
++  }));
++}
+diff --git a/test/distributed/harness/benchmark-resource-claim-evidence-view.js b/test/distributed/harness/benchmark-resource-claim-evidence-view.js
+index bcc53fedee4adf8b5890639254c82c0e71a19324..0f6225e7e586ad1ccceb9dd42730597bdc85c45b 100644
+--- a/test/distributed/harness/benchmark-resource-claim-evidence-view.js
++++ b/test/distributed/harness/benchmark-resource-claim-evidence-view.js
+@@ -4,15 +4,26 @@ import {
+ import {
+   BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE,
+ } from './benchmark-resource-evidence-root-constants.js';
++import {
++  benchmarkResourceAcceptedMeasurementOutcome,
++  benchmarkResourceRejectedMeasurementOutcome,
++} from './benchmark-resource-measurement-outcome.js';
+ 
+ const structuredCloneValue = globalThis.structuredClone;
+ const mapGetMethod = Map.prototype.get;
+ const mapSetMethod = Map.prototype.set;
+ const objectDefineProperty = Object.defineProperty;
++const objectFreeze = Object.freeze;
++const objectKeys = Object.keys;
+ const reflectApply = Reflect.apply;
++const localText = Object.freeze({
++  PRICE_VALID: 'valid',
++  PRICE_INVALID: 'invalid',
++});
+ 
+ export {
+   BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE,
++  benchmarkResourceRejectedMeasurementOutcome,
+ };
+ 
+ export const BENCHMARK_RESOURCE_CLAIM_MEASUREMENT_STATE = Object.freeze({
+@@ -29,6 +40,16 @@ function appendOwnArrayValue(values, value) {
+   });
+ }
+ 
++function deepFreeze(value) {
++  if (value === null || typeof value !== 'object') return value;
++  objectFreeze(value);
++  const keys = objectKeys(value);
++  for (let index = 0; index < keys.length; index += 1) {
++    deepFreeze(value[keys[index]]);
++  }
++  return value;
++}
++
+ function mapGet(map, key) {
+   return reflectApply(mapGetMethod, map, [key]);
+ }
+@@ -91,19 +112,28 @@ function claimCells(matrix, cellPayloads) {
+ }
+ 
+ export function createBenchmarkResourceClaimEvidenceView(input) {
+-  return {
++  return deepFreeze({
+     rootDigest: input.rootDigest,
+     claimEligible: input.claimEligible,
++    measurementOutcome:
++      benchmarkResourceAcceptedMeasurementOutcome(input.claimEligible),
+     matrixId: input.owners.matrix.matrixId,
+     sideIds: structuredCloneValue(input.owners.matrix.sideIds),
+     sourceRevision: input.root.sourceRevision,
+     producedAt: input.root.producedAt,
+     validUntil: input.root.validUntil,
+-    priceSheet: {
++    profile: structuredCloneValue(input.owners.profile),
++    priceSheet: input.owners.priceValidAtProduction ? {
++      state: localText.PRICE_VALID,
+       digest: input.owners.priceDigest,
+       validFrom: input.owners.price.validFrom,
+       validUntil: input.owners.price.validUntil,
++    } : {
++      state: localText.PRICE_INVALID,
++      digest: input.owners.priceDigest,
++      validFrom: null,
++      validUntil: null,
+     },
+     cells: claimCells(input.owners.matrix, input.cellPayloads),
+-  };
++  });
+ }
+diff --git a/test/distributed/harness/benchmark-resource-contract-constants.js b/test/distributed/harness/benchmark-resource-contract-constants.js
+index f49eb0f4a757f60ad275399b095afabf17156889..7561389239ed05b6a7164b27e566357c932d64e8 100644
+--- a/test/distributed/harness/benchmark-resource-contract-constants.js
++++ b/test/distributed/harness/benchmark-resource-contract-constants.js
+@@ -3,9 +3,9 @@ export const BENCHMARK_RESOURCE_CONTRACT = Object.freeze({
+   CELL_EVIDENCE_VERSION: 'benchmark-resource-cell-evidence-v1',
+   COMPONENT_INVENTORY_VERSION: 'benchmark-component-inventory-v1',
+   EFFECT_VERSION: 'benchmark-paired-effect-v1',
+-  MATRIX_MANIFEST_VERSION: 'benchmark-matrix-manifest-v1',
++  MATRIX_MANIFEST_VERSION: 'benchmark-matrix-manifest-v2',
+   PRICE_SHEET_VERSION: 'benchmark-price-sheet-v1',
+-  RESOURCE_WINDOW_VERSION: 'benchmark-resource-window-v1',
++  RESOURCE_WINDOW_VERSION: 'benchmark-resource-window-v2',
+   ROOT_VERSION: 'benchmark-matrix-evidence-root-v1',
+ });
+ 
+@@ -20,6 +20,7 @@ export const BENCHMARK_RESOURCE_ARTIFACT_KIND = Object.freeze({
+   MATRIX_MANIFEST: 'matrix_manifest',
+   PRICE_SHEET: 'price_sheet',
+   PREREGISTRATION: 'preregistration',
++  PROFILE_ENVELOPE: 'scale_profile_envelope',
+   RESOURCE_WINDOW: 'resource_window',
+   ROOT: 'matrix_evidence_root',
+   SEMANTIC_RECEIPT: 'semantic_receipt',
+@@ -33,6 +34,51 @@ export const BENCHMARK_RESOURCE_CELL_STATE = Object.freeze({
+   NON_MEASURING: 'non_measuring',
+ });
+ 
++export const BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE = Object.freeze({
++  MEASURING: 'MEASURING',
++  NON_MEASURING: 'NON_MEASURING',
++  INVALID: 'INVALID',
++  STALE_INELIGIBLE: 'STALE_INELIGIBLE',
++  TRANSIENT: 'TRANSIENT',
++});
++
++export const BENCHMARK_RESOURCE_MEASUREMENT_RETRY = Object.freeze({
++  NEVER: 'never',
++  RETRYABLE: 'retryable',
++});
++
++export const BENCHMARK_RESOURCE_MEASUREMENT_REASON = Object.freeze({
++  EVIDENCE_COMPLETE: 'evidence_complete',
++  EVIDENCE_NOT_CLAIM_ELIGIBLE: 'evidence_not_claim_eligible',
++  EVIDENCE_INVALID: 'evidence_invalid',
++  OBSERVATION_MISSING: 'observation_missing',
++  EVIDENCE_NOT_YET_VALID: 'evidence_not_yet_valid',
++  EVIDENCE_EXPIRED: 'evidence_expired',
++  PROFILE_IDENTITY_MISMATCH: 'profile_identity_mismatch',
++  PRICE_EVIDENCE_NOT_YET_VALID: 'price_evidence_not_yet_valid',
++  PRICE_EVIDENCE_EXPIRED: 'price_evidence_expired',
++  IMMUTABLE_RESOLUTION_DRIFT: 'immutable_resolution_drift',
++  PRICE_EVIDENCE_INVALID: 'price_evidence_invalid',
++});
++
++export const BENCHMARK_RESOURCE_WINDOW_PHASE = Object.freeze({
++  MEASURED: 'measured',
++  WARMUP: 'warmup',
++});
++
++export const BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON = Object.freeze({
++  MISMATCH: 'cell.resourceWindow:coordinate_mismatch',
++  PHASE: 'cell.resourceWindow:phase_mismatch',
++  DUPLICATE: 'cell.resourceWindow:coordinate_duplicate',
++  OVERLAP: 'cell.resourceWindow:interval_overlap',
++  PAIRED_BLOCK_MISMATCH:
++    'cell.resourceWindow:paired_block_coordinate_mismatch',
++  PAIRED_BLOCK_INCOMPLETE:
++    'cell.resourceWindow:paired_block_side_coverage_incomplete',
++  EXPECTED_SET_MISMATCH:
++    'cell.resourceWindow:c3_measured_coordinate_set_mismatch',
++});
++
+ export const BENCHMARK_RESOURCE_BILLING_TREATMENT = Object.freeze({
+   INCLUDED: 'included',
+   SYMMETRICALLY_EXCLUDED: 'symmetrically_excluded',
+diff --git a/test/distributed/harness/benchmark-resource-evidence-root.js b/test/distributed/harness/benchmark-resource-evidence-root.js
+index aedc20ac0c0344005394b02e1a24dc357c0a489e..412f1eccb112370a73d9a62debcf9bfcc876d3fd 100644
+--- a/test/distributed/harness/benchmark-resource-evidence-root.js
++++ b/test/distributed/harness/benchmark-resource-evidence-root.js
+@@ -1,10 +1,11 @@
+ import {
+   appendOwnArrayValue,
++  arrayContainsExactValue,
++  arraysExactlyEqual,
+   digestBenchmarkSemanticData,
+   isMissingDataValue,
+   ownDataValue,
+ } from './benchmark-semantic-integrity.js';
+-import {types} from 'node:util';
+ import {
+   assertBenchmarkResourceArray,
+   assertBenchmarkResourceBytes,
+@@ -17,17 +18,16 @@ import {
+   parseBenchmarkResourceArtifact,
+ } from './benchmark-resource-evidence-data.js';
+ import {
+-  findBenchmarkResourceInventorySide,
+   inspectBenchmarkResourceInventoryArtifact,
+   inspectBenchmarkResourceWindowArtifact,
+ } from './benchmark-resource-accounting.js';
+ import {
+-  BENCHMARK_RESOURCE_NO_CURRENCY,
+-  computeBenchmarkResourceWindowCost,
+-  createBenchmarkResourcePairedEffect,
+   inspectBenchmarkResourcePairedEffect,
+   inspectBenchmarkResourcePriceSheetArtifact,
+ } from './benchmark-resource-cost-and-effects.js';
++import {
++  recomputeBenchmarkResourceMeasuringCellEffects,
++} from './benchmark-resource-cell-effects-validation.js';
+ import {
+   inspectBenchmarkResourceCapacitySummaryArtifact,
+ } from './benchmark-resource-capacity-summary.js';
+@@ -47,15 +47,33 @@ import {
+ import {
+   inspectBenchmarkResourceWindowSourceArtifact,
+ } from './benchmark-resource-window-source.js';
++import {
++  assertBenchmarkResourceC3WindowBinding,
++  createBenchmarkResourceC3WindowPlan,
++} from './benchmark-resource-c3-window-plan.js';
++import {inspectScaleProfileEnvelope} from './scale-profile-envelope.js';
++import {
++  appendBenchmarkResourceMeasuredWindowCoordinate,
++  assertBenchmarkResourceMeasuredWindowCoordinatesComplete,
++  createBenchmarkResourceWindowCoordinateContext,
++} from './benchmark-resource-window-coordinate-validation.js';
++import {
++  assertBenchmarkResourceTimestamp,
++  assertBenchmarkResourceEvidenceOwnerJoin,
++  copyBenchmarkResourceSideIds,
++  safeBenchmarkResourceValidationReason,
++} from './benchmark-resource-validation-primitives.js';
+ import {
+   BENCHMARK_RESOURCE_ARTIFACT_KIND,
+   BENCHMARK_RESOURCE_CELL_STATE,
+   BENCHMARK_RESOURCE_CONTRACT,
+   BENCHMARK_RESOURCE_EFFECT,
+   BENCHMARK_RESOURCE_LIMIT,
++  BENCHMARK_RESOURCE_MEASUREMENT_REASON,
+ } from './benchmark-resource-contract-constants.js';
+ import {
+   BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE,
++  benchmarkResourceRejectedMeasurementOutcome,
+   createBenchmarkResourceClaimEvidenceView,
+ } from './benchmark-resource-claim-evidence-view.js';
+ import {
+@@ -71,6 +89,7 @@ const sourceArtifactKinds = new Set([
+   BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_CALIBRATION,
+   BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
+   BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
++  BENCHMARK_RESOURCE_ARTIFACT_KIND.PROFILE_ENVELOPE,
+   BENCHMARK_RESOURCE_ARTIFACT_KIND.SEMANTIC_RECEIPT,
+   BENCHMARK_RESOURCE_ARTIFACT_KIND.SYNTHETIC_CALIBRATION,
+   BENCHMARK_RESOURCE_ARTIFACT_KIND.WINDOW_RECEIPT,
+@@ -111,12 +130,9 @@ const manifestEntryKeys = BENCHMARK_RESOURCE_ROOT_MANIFEST_ENTRY_KEYS;
+ const artifactEnvelopeKeys =
+   Object.freeze(['digest', 'bytes', 'byteLength', 'artifact']);
+ const resolverKeys = Object.freeze(['resolve']);
+-const timestampPattern =
+-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
+-const million = 1_000_000;
+ const maximumReasonCodes = 64;
+-const dataValueKey = 'value';
+ const semanticEventsAbsentZeroOnly = 'semantic_events_absent_zero_only';
++const liveWindowSourceIndex = 3;
+ const bufferByteLength = Buffer.byteLength;
+ const dateParse = Date.parse;
+ const mapGet = Function.call.bind(Map.prototype.get);
+@@ -124,47 +140,22 @@ const mapHas = Function.call.bind(Map.prototype.has);
+ const mapSet = Function.call.bind(Map.prototype.set);
+ const mapSizeGetter =
+   Object.getOwnPropertyDescriptor(Map.prototype, 'size').get;
+-const numberIsFinite = Number.isFinite;
+ const numberMaxSafeInteger = Number.MAX_SAFE_INTEGER;
+-const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+-const objectHasOwn = Object.hasOwn;
+ const reflectApply = Reflect.apply;
+-const regexpTest = Function.call.bind(RegExp.prototype.test);
+ const setAdd = Function.call.bind(Set.prototype.add);
+ const setDelete = Function.call.bind(Set.prototype.delete);
+ const setHas = Function.call.bind(Set.prototype.has);
+ const setSizeGetter =
+   Object.getOwnPropertyDescriptor(Set.prototype, 'size').get;
++const acceptanceHandles = new WeakSet();
++const objectFreeze = Object.freeze;
++const weakSetAdd = Function.call.bind(WeakSet.prototype.add);
++const weakSetHas = Function.call.bind(WeakSet.prototype.has);
+ 
+ function fail(message) {
+   throw new TypeError(message);
+ }
+ 
+-function safeValidationReason(error) {
+-  if (!error || typeof error !== 'object' || types.isProxy(error)) {
+-    return ROOT_TEXT.VALIDATION_FAILED;
+-  }
+-  const descriptor = objectGetOwnPropertyDescriptor(error, 'message');
+-  if (
+-    descriptor &&
+-    objectHasOwn(descriptor, dataValueKey) &&
+-    typeof descriptor.value === 'string'
+-  ) {
+-    return descriptor.value;
+-  }
+-  return ROOT_TEXT.VALIDATION_FAILED;
+-}
+-
+-function assertTimestamp(value, path) {
+-  if (
+-    typeof value !== 'string' ||
+-    !regexpTest(timestampPattern, value) ||
+-    !numberIsFinite(dateParse(value))
+-  ) {
+-    fail(`${path}:iso_timestamp_required`);
+-  }
+-}
+-
+ function copyUniqueDigests(values, path, maximumLength) {
+   assertBenchmarkResourceArray(values, path, maximumLength);
+   const copy = [];
+@@ -179,33 +170,6 @@ function copyUniqueDigests(values, path, maximumLength) {
+   return copy;
+ }
+ 
+-function copySideIds(sideIds, path) {
+-  assertBenchmarkResourceArray(sideIds, path, 2);
+-  if (sideIds.length !== 2) fail(`${path}:exact_pair_required`);
+-  const copy = [];
+-  for (let index = 0; index < sideIds.length; index += 1) {
+-    assertBenchmarkResourceText(sideIds[index], `${path}.${index}`);
+-    appendOwnArrayValue(copy, sideIds[index]);
+-  }
+-  if (copy[0] === copy[1]) fail(`${path}:distinct_required`);
+-  return copy;
+-}
+-
+-function arrayContains(values, target) {
+-  for (let index = 0; index < values.length; index += 1) {
+-    if (values[index] === target) return true;
+-  }
+-  return false;
+-}
+-
+-function exactOrderedValues(actual, expected) {
+-  if (actual.length !== expected.length) return false;
+-  for (let index = 0; index < actual.length; index += 1) {
+-    if (actual[index] !== expected[index]) return false;
+-  }
+-  return true;
+-}
+-
+ function copyReasonCodes(reasonCodes) {
+   assertBenchmarkResourceArray(
+     reasonCodes,
+@@ -228,8 +192,8 @@ function copyReasonCodes(reasonCodes) {
+ }
+ 
+ function assertProductionInterval(input, path) {
+-  assertTimestamp(input.producedAt, `${path}.producedAt`);
+-  assertTimestamp(input.validUntil, `${path}.validUntil`);
++  assertBenchmarkResourceTimestamp(input.producedAt, `${path}.producedAt`);
++  assertBenchmarkResourceTimestamp(input.validUntil, `${path}.validUntil`);
+   if (dateParse(input.validUntil) <= dateParse(input.producedAt)) {
+     fail(`${path}.validity:not_positive`);
+   }
+@@ -250,7 +214,8 @@ export function createBenchmarkResourceSourceArtifact(
+ }
+ 
+ function measuringCellBody(input) {
+-  const sideIds = copySideIds(input.sideIds, 'cell.sideIds');
++  const sideIds =
++    copyBenchmarkResourceSideIds(input.sideIds, 'cell.sideIds');
+   const capacityReportDigests = copyUniqueDigests(
+     input.capacityReportDigests,
+     'cell.capacityReportDigests',
+@@ -363,7 +328,7 @@ export function createBenchmarkResourceMeasuringCellEvidence(input) {
+     collectionIndex += 1) {
+     const collection = collections[collectionIndex];
+     for (let index = 0; index < collection.length; index += 1) {
+-      if (!arrayContains(references, collection[index])) {
++      if (!arrayContainsExactValue(references, collection[index])) {
+         appendOwnArrayValue(references, collection[index]);
+       }
+     }
+@@ -411,7 +376,7 @@ export function createBenchmarkResourceNonMeasuringCellEvidence(input) {
+     cellId: input.cellId,
+     pairId: input.pairId,
+     runId: input.runId,
+-    sideIds: copySideIds(input.sideIds, 'cell.sideIds'),
++    sideIds: copyBenchmarkResourceSideIds(input.sideIds, 'cell.sideIds'),
+     reasonCodes: copyReasonCodes(input.reasonCodes),
+     sourceDigests,
+     sourceRevision: input.sourceRevision,
+@@ -598,27 +563,43 @@ function validateManifestEntry(entry, index, state) {
+ 
+ function resolveManifestEntry(entry, index, state) {
+   validateManifestEntry(entry, index, state);
+-  const bytes = reflectApply(
+-    state.resolve,
+-    state.resolver,
+-    [entry.digest],
+-  );
+-  if (bytes === undefined) fail(ROOT_TEXT.RESOLVER_RESOLVE_ARTIFACT_MISSING);
+-  assertBenchmarkResourceBytes(bytes, ROOT_TEXT.RESOLVER_RESOLVE_BYTES);
+-  const byteLength = bufferByteLength(bytes);
+-  if (byteLength !== entry.byteLength) {
+-    fail(ROOT_TEXT.RESOLVER_RESOLVE_BYTE_LENGTH_MISMATCH);
+-  }
+-  state.totalBytes += byteLength;
+-  if (state.totalBytes > BENCHMARK_RESOURCE_LIMIT.TOTAL_ARTIFACT_BYTES) {
+-    fail(ROOT_TEXT.RESOLVER_RESOLVE_TOTAL_BYTES_LIMIT);
+-  }
+-  const artifact = parseBenchmarkResourceArtifact(bytes, entry.digest);
+-  if (artifact.kind !== entry.kind) fail(ROOT_TEXT.RESOLVER_RESOLVE_KIND_MISMATCH);
+-  if (!setHas(allowedArtifactKinds, artifact.kind)) {
+-    fail(ROOT_TEXT.RESOLVER_RESOLVE_ARTIFACT_KIND_UNSUPPORTED);
+-  }
+-  mapSet(state.resolved, entry.digest, artifact);
++  try {
++    const bytes = reflectApply(
++      state.resolve,
++      state.resolver,
++      [entry.digest],
++    );
++    if (bytes === undefined) fail(ROOT_TEXT.RESOLVER_RESOLVE_ARTIFACT_MISSING);
++    assertBenchmarkResourceBytes(bytes, ROOT_TEXT.RESOLVER_RESOLVE_BYTES);
++    const byteLength = bufferByteLength(bytes);
++    if (byteLength !== entry.byteLength) {
++      fail(ROOT_TEXT.RESOLVER_RESOLVE_BYTE_LENGTH_MISMATCH);
++    }
++    state.totalBytes += byteLength;
++    if (state.totalBytes > BENCHMARK_RESOURCE_LIMIT.TOTAL_ARTIFACT_BYTES) {
++      fail(ROOT_TEXT.RESOLVER_RESOLVE_TOTAL_BYTES_LIMIT);
++    }
++    const artifact = parseBenchmarkResourceArtifact(bytes, entry.digest);
++    if (artifact.kind !== entry.kind) {
++      fail(ROOT_TEXT.RESOLVER_RESOLVE_KIND_MISMATCH);
++    }
++    if (!setHas(allowedArtifactKinds, artifact.kind)) {
++      fail(ROOT_TEXT.RESOLVER_RESOLVE_ARTIFACT_KIND_UNSUPPORTED);
++    }
++    mapSet(state.resolved, entry.digest, artifact);
++  } catch (error) {
++    if (
++      entry.digest !== state.optionalPriceDigest ||
++      entry.kind !== BENCHMARK_RESOURCE_ARTIFACT_KIND.PRICE_SHEET
++    ) {
++      throw error;
++    }
++    mapSet(state.resolved, entry.digest, {
++      kind: BENCHMARK_RESOURCE_ARTIFACT_KIND.PRICE_SHEET,
++      payload: null,
++      references: [],
++    });
++  }
+ }
+ 
+ function assertRootReferencesMatchManifest(rootArtifact, payload, resolved) {
+@@ -648,6 +629,7 @@ function resolveManifest(rootArtifact, resolver) {
+     resolved: new Map(),
+     totalBytes: 0,
+     previousDigest: '',
++    optionalPriceDigest: payload.priceSheetDigest,
+   };
+   for (let index = 0; index < payload.artifactManifest.length; index += 1) {
+     resolveManifestEntry(payload.artifactManifest[index], index, state);
+@@ -695,29 +677,6 @@ function resolvedArtifact(resolved, digest, expectedKind) {
+   return artifact;
+ }
+ 
+-function sumSideCost(windows, inventory, price, sideId) {
+-  let totalCost = 0;
+-  let correct = 0;
+-  let sampleCount = 0;
+-  for (let index = 0; index < windows.length; index += 1) {
+-    const payload = windows[index].payload;
+-    if (payload.sideId !== sideId) continue;
+-    const cost = computeBenchmarkResourceWindowCost(
+-      payload,
+-      inventory,
+-      price,
+-    );
+-    totalCost += cost.totalCost;
+-    correct += payload.correctSloEligibleOperations;
+-    sampleCount += 1;
+-  }
+-  if (correct === 0) fail(ROOT_TEXT.CELL_COST_EFFECT_CORRECT_OPERATIONS_MISSING);
+-  return {
+-    value: totalCost / correct * million,
+-    sampleCount,
+-  };
+-}
+-
+ function assertEffectMatchesSides(effect, sideIds) {
+   if (
+     effect.numeratorSideId !== sideIds[0] ||
+@@ -804,6 +763,7 @@ function validateMeasuringCellIdentity(cellArtifact, payload, owners) {
+     fail(ROOT_TEXT.CELL_RECONSTRUCTION_MISMATCH);
+   }
+   if (
++    owners.profile === null ||
+     payload.matrixManifestDigest !== owners.matrixDigest ||
+     payload.componentInventoryDigest !== owners.inventoryDigest ||
+     payload.priceSheetDigest !== owners.priceDigest ||
+@@ -840,19 +800,6 @@ function resolveMeasuringCellCapacities(payload, resolved) {
+   return capacities;
+ }
+ 
+-function validateResourceWindowCoordinates(window, payload, owners) {
+-  if (
+-    window.matrixManifestDigest !== owners.matrixDigest ||
+-    window.matrixId !== payload.matrixId ||
+-    window.cellId !== payload.cellId ||
+-    window.pairId !== payload.pairId ||
+-    window.runId !== payload.runId ||
+-    !arrayContains(payload.sideIds, window.sideId)
+-  ) {
+-    fail(ROOT_TEXT.CELL_RESOURCE_WINDOW_COORDINATE_MISMATCH);
+-  }
+-}
+-
+ function validateComponentCalibrations(
+   window,
+   payload,
+@@ -934,15 +881,23 @@ function validateResourceWindowSources(window, payload, owners, resolved) {
+     pairId: window.pairId,
+     runId: window.runId,
+     sideId: window.sideId,
++    pairedBlockId: window.pairedBlockId,
++    profileIdentity: window.profileIdentity,
++    blockIndex: window.blockIndex,
++    blockedOrderIndex: window.blockedOrderIndex,
++    offeredLoad: window.offeredLoad,
++    loadIndex: window.loadIndex,
++    phase: window.phase,
+   };
++  const sourceArtifacts = [];
+   for (let index = 0; index < sourceFields.length; index += 1) {
+-    assertWindowSourceArtifact(
++    appendOwnArrayValue(sourceArtifacts, assertWindowSourceArtifact(
+       resolved,
+       window[sourceFields[index][0]],
+       sourceFields[index][1],
+       `cell.resourceWindow:${sourceFields[index][0]}_missing`,
+       expected,
+-    );
++    ));
+   }
+   const windowLive = inspectCalibrationArtifact(
+     resolved,
+@@ -974,7 +929,15 @@ function validateResourceWindowSources(window, payload, owners, resolved) {
+       mapGet(resolved, window.liveCalibrationDigest),
+     );
+   }
+-  return componentsLive;
++  return {
++    componentsLive,
++    sources: {
++      receipt: sourceArtifacts[0],
++      capacity: sourceArtifacts[1],
++      semantic: sourceArtifacts[2],
++      live: sourceArtifacts[liveWindowSourceIndex],
++    },
++  };
+ }
+ 
+ function appendWindowJoinEvidence(context, window, sideIds) {
+@@ -991,10 +954,14 @@ function appendWindowJoinEvidence(context, window, sideIds) {
+     context.liveEngagementDigests,
+     window.liveEngagementDigest,
+   );
+-  if (context.calibrationDigest === null) {
+-    context.calibrationDigest = window.liveCalibrationDigest;
+-  } else if (context.calibrationDigest !== window.liveCalibrationDigest) {
+-    context.calibrationDigestMismatch = true;
++  if (!arrayContainsExactValue(
++    context.calibrationDigests,
++    window.liveCalibrationDigest,
++  )) {
++    appendOwnArrayValue(
++      context.calibrationDigests,
++      window.liveCalibrationDigest,
++    );
+   }
+   for (let index = 0; index < window.components.length; index += 1) {
+     setAdd(
+@@ -1004,7 +971,7 @@ function appendWindowJoinEvidence(context, window, sideIds) {
+   }
+ }
+ 
+-function validateMeasuringCellWindows(payload, owners, resolved) {
++function validateMeasuringCellWindows(payload, owners, resolved, c3Plan) {
+   const context = {
+     windows: [],
+     seenSides: new Set(),
+@@ -1012,9 +979,11 @@ function validateMeasuringCellWindows(payload, owners, resolved) {
+     liveEngagementDigests: [],
+     capacitySampleDigestsBySide: [[], []],
+     liveCalibrated: true,
+-    calibrationDigest: null,
+-    calibrationDigestMismatch: false,
++    calibrationDigests: [],
+     windowComponentIdentities: new Set(),
++    coordinateContext: createBenchmarkResourceWindowCoordinateContext({
++      allowCrossSideOverlap: c3Plan === null,
++    }),
+   };
+   for (let index = 0; index < payload.resourceWindowDigests.length; index += 1) {
+     const artifact = resolvedArtifact(
+@@ -1024,16 +993,33 @@ function validateMeasuringCellWindows(payload, owners, resolved) {
+     );
+     const inspection = inspectBenchmarkResourceWindowArtifact(artifact);
+     if (!inspection.valid) fail(`cell.resourceWindow:${inspection.reason}`);
+-    validateResourceWindowCoordinates(artifact.payload, payload, owners);
++    appendBenchmarkResourceMeasuredWindowCoordinate(
++      context.coordinateContext,
++      artifact.payload,
++      {
++        matrixManifestDigest: owners.matrixDigest,
++        matrixId: payload.matrixId,
++        cellId: payload.cellId,
++        pairId: payload.pairId,
++        runId: payload.runId,
++        profileIdentity: owners.profile.identity,
++        sideIds: payload.sideIds,
++      },
++    );
+     appendWindowJoinEvidence(context, artifact.payload, payload.sideIds);
++    const sourceValidation = validateResourceWindowSources(
++      artifact.payload,
++      payload,
++      owners,
++      resolved,
++    );
++    assertBenchmarkResourceC3WindowBinding(
++      c3Plan,
++      artifact.payload,
++      sourceValidation.sources,
++    );
+     context.liveCalibrated =
+-      validateResourceWindowSources(
+-        artifact.payload,
+-        payload,
+-        owners,
+-        resolved,
+-      ) &&
+-      context.liveCalibrated;
++      sourceValidation.componentsLive && context.liveCalibrated;
+     setAdd(context.seenSides, artifact.payload.sideId);
+     appendOwnArrayValue(context.windows, artifact);
+   }
+@@ -1043,25 +1029,32 @@ function validateMeasuringCellWindows(payload, owners, resolved) {
+   ) {
+     fail(ROOT_TEXT.CELL_RESOURCE_WINDOW_SIDE_COVERAGE_INCOMPLETE);
+   }
++  assertBenchmarkResourceMeasuredWindowCoordinatesComplete(
++    context.coordinateContext,
++    payload.sideIds,
++    c3Plan?.coordinates ?? null,
++  );
+   if (context.liveCalibrated) {
+-    if (context.calibrationDigestMismatch) {
+-      fail(ROOT_TEXT.CELL_RESOURCE_WINDOW_LIVE_TOPOLOGY_CLOSURE_MISMATCH);
++    for (let index = 0; index < context.calibrationDigests.length; index += 1) {
++      assertBenchmarkResourceLiveTopologyClosure({
++        calibrationArtifact: mapGet(
++          resolved,
++          context.calibrationDigests[index],
++        ),
++        topologyArtifact: resolvedArtifact(
++          resolved,
++          owners.matrix.alternativeTopologyDigest,
++          BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
++        ),
++        inventory: owners.inventory,
++        windowComponentIdentities: context.windowComponentIdentities,
++        windowComponentCount: reflectApply(
++          setSizeGetter,
++          context.windowComponentIdentities,
++          [],
++        ),
++      });
+     }
+-    assertBenchmarkResourceLiveTopologyClosure({
+-      calibrationArtifact: mapGet(resolved, context.calibrationDigest),
+-      topologyArtifact: resolvedArtifact(
+-        resolved,
+-        owners.matrix.alternativeTopologyDigest,
+-        BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
+-      ),
+-      inventory: owners.inventory,
+-      windowComponentIdentities: context.windowComponentIdentities,
+-      windowComponentCount: reflectApply(
+-        setSizeGetter,
+-        context.windowComponentIdentities,
+-        [],
+-      ),
+-    });
+   }
+   return context;
+ }
+@@ -1072,16 +1065,17 @@ function validateMeasuringCellJoins(
+   capacities,
+   context,
+   resolved,
++  c3Plan,
+ ) {
+   const resourcePreregistration = context.liveCalibrated ?
+     resolvedArtifact(resolved, owners.matrix.preregistrationDigest,
+       BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION).payload : null;
+   if (
+-    !exactOrderedValues(
++    !arraysExactlyEqual(
+       payload.semanticReceiptDigests,
+       context.semanticReceiptDigests,
+     ) ||
+-    !exactOrderedValues(
++    !arraysExactlyEqual(
+       payload.liveEngagementDigests,
+       context.liveEngagementDigests,
+     )
+@@ -1090,35 +1084,31 @@ function validateMeasuringCellJoins(
+   }
+   for (let index = 0; index < capacities.length; index += 1) {
+     if (
+-      !exactOrderedValues(
++      !arraysExactlyEqual(
+         capacities[index].sourceDigests,
+         context.capacitySampleDigestsBySide[index],
+       )
+     ) {
+       fail(ROOT_TEXT.CELL_CAPACITY_EFFECT_SAMPLE_JOIN_MISMATCH);
+     }
+-    if (context.liveCalibrated) {
+-      for (let sourceIndex = 0;
+-        sourceIndex < capacities[index].sourceDigests.length;
+-        sourceIndex += 1) {
+-        assertBenchmarkResourceCapacityProtocolSummary(
+-          capacities[index],
+-          resolvedArtifact(
+-            resolved,
+-            capacities[index].sourceDigests[sourceIndex],
+-            BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE,
+-          ),
+-          payload.sideIds[index],
+-          index,
+-          resourcePreregistration,
+-        );
+-      }
++    if (context.liveCalibrated && c3Plan !== null) {
++      assertBenchmarkResourceCapacityProtocolSummary(
++        capacities[index],
++        resolvedArtifact(
++          resolved,
++          capacities[index].sourceDigests[0],
++          BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE,
++        ),
++        payload.sideIds[index],
++        index,
++        resourcePreregistration,
++      );
+     }
+   }
+   assertEffectMatchesSides(payload.capacityEffect, payload.sideIds);
+   assertEffectMatchesSides(payload.costEffect, payload.sideIds);
+   if (
+-    !exactOrderedValues(
++    !arraysExactlyEqual(
+       payload.capacityEffect.sourceDigests,
+       payload.capacityReportDigests,
+     )
+@@ -1136,7 +1126,7 @@ function validateMeasuringCellJoins(
+     );
+   }
+   if (
+-    !exactOrderedValues(
++    !arraysExactlyEqual(
+       payload.costEffect.sourceDigests,
+       expectedCostSources,
+     )
+@@ -1145,87 +1135,37 @@ function validateMeasuringCellJoins(
+   }
+ }
+ 
+-function recomputeMeasuringCellEffects(payload, owners, capacities, windows) {
+-  const expectedCapacity = createBenchmarkResourcePairedEffect({
+-    effectType: BENCHMARK_RESOURCE_EFFECT.CAPACITY,
+-    numeratorSideId: payload.sideIds[0],
+-    denominatorSideId: payload.sideIds[1],
+-    numeratorValue: capacities[0].capacityCorrectOpsPerSecond,
+-    denominatorValue: capacities[1].capacityCorrectOpsPerSecond,
+-    confidenceInterval: {
+-      lower:
+-        capacities[0].confidenceInterval.lower /
+-        capacities[1].confidenceInterval.upper,
+-      upper:
+-        capacities[0].confidenceInterval.upper /
+-        capacities[1].confidenceInterval.lower,
+-    },
+-    practicalThreshold: payload.capacityEffect.practicalThreshold,
+-    sampleCount:
+-      capacities[0].sampleCount < capacities[1].sampleCount ?
+-        capacities[0].sampleCount :
+-        capacities[1].sampleCount,
+-    sourceDigests: payload.capacityEffect.sourceDigests,
+-    currency: BENCHMARK_RESOURCE_NO_CURRENCY,
+-  });
+-  const numeratorCost = sumSideCost(
+-    windows,
+-    owners.inventory,
+-    owners.price,
+-    payload.sideIds[0],
+-  );
+-  const denominatorCost = sumSideCost(
+-    windows,
+-    owners.inventory,
+-    owners.price,
+-    payload.sideIds[1],
+-  );
+-  const expectedCost = createBenchmarkResourcePairedEffect({
+-    effectType: BENCHMARK_RESOURCE_EFFECT.COST,
+-    numeratorSideId: payload.sideIds[0],
+-    denominatorSideId: payload.sideIds[1],
+-    numeratorValue: numeratorCost.value,
+-    denominatorValue: denominatorCost.value,
+-    confidenceInterval: {
+-      lower: numeratorCost.value / denominatorCost.value,
+-      upper: numeratorCost.value / denominatorCost.value,
+-    },
+-    practicalThreshold: payload.costEffect.practicalThreshold,
+-    sampleCount:
+-      numeratorCost.sampleCount < denominatorCost.sampleCount ?
+-        numeratorCost.sampleCount :
+-        denominatorCost.sampleCount,
+-    sourceDigests: payload.costEffect.sourceDigests,
+-    currency: owners.price.currency,
+-  });
+-  if (
+-    digestBenchmarkSemanticData(expectedCapacity) !==
+-      digestBenchmarkSemanticData(payload.capacityEffect) ||
+-    digestBenchmarkSemanticData(expectedCost) !==
+-      digestBenchmarkSemanticData(payload.costEffect)
+-  ) {
+-    fail(ROOT_TEXT.CELL_EFFECTS_RECOMPUTATION_MISMATCH);
+-  }
+-}
+-
+ function validateMeasuringCell(cellArtifact, payload, owners, resolved) {
+   validateMeasuringCellIdentity(cellArtifact, payload, owners);
+   const capacities = resolveMeasuringCellCapacities(payload, resolved);
+-  const context = validateMeasuringCellWindows(payload, owners, resolved);
++  const c3Plan = createBenchmarkResourceC3WindowPlan({
++    capacities,
++    resolved,
++    payload,
++    owners,
++    resourcePreregistration: resolvedArtifact(
++      resolved,
++      owners.matrix.preregistrationDigest,
++      BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
++    ).payload,
++  });
++  const context =
++    validateMeasuringCellWindows(payload, owners, resolved, c3Plan);
+   validateMeasuringCellJoins(
+     payload,
+     owners,
+     capacities,
+     context,
+     resolved,
++    c3Plan,
+   );
+-  recomputeMeasuringCellEffects(
++  recomputeBenchmarkResourceMeasuringCellEffects(
+     payload,
+     owners,
+     capacities,
+     context.windows,
+   );
+-  return context.liveCalibrated;
++  return context.liveCalibrated && c3Plan !== null;
+ }
+ 
+ function validateNonMeasuringCell(cellArtifact, payload, owners) {
+@@ -1314,7 +1254,7 @@ function allArtifactsSemanticallyOwned(root, resolved) {
+     root.priceSheetDigest,
+   ];
+   for (let index = 0; index < root.cellEvidenceDigests.length; index += 1) {
+-    if (!arrayContains(pending, root.cellEvidenceDigests[index])) {
++    if (!arrayContainsExactValue(pending, root.cellEvidenceDigests[index])) {
+       appendOwnArrayValue(pending, root.cellEvidenceDigests[index]);
+     }
+   }
+@@ -1393,6 +1333,23 @@ function resolveEvidenceOwners(root, resolved) {
+     inspectBenchmarkResourceMatrixManifestArtifact,
+     ROOT_TEXT.ROOT_MATRIX,
+   );
++  let profile = null;
++  if (matrixArtifact.payload.profileEnvelopeDigest !== null) {
++    const profileArtifact = resolvedArtifact(
++      resolved,
++      matrixArtifact.payload.profileEnvelopeDigest,
++      BENCHMARK_RESOURCE_ARTIFACT_KIND.PROFILE_ENVELOPE,
++    );
++    const profileInspection =
++      inspectScaleProfileEnvelope(profileArtifact.payload);
++    if (!profileInspection.valid) {
++      fail(`root.profile:${profileInspection.reason}`);
++    }
++    profile = {
++      ...profileInspection.profile,
++      envelopeDigest: matrixArtifact.payload.profileEnvelopeDigest,
++    };
++  }
+   const inventoryArtifact = resolvedArtifact(
+     resolved,
+     root.componentInventoryDigest,
+@@ -1408,80 +1365,55 @@ function resolveEvidenceOwners(root, resolved) {
+     root.priceSheetDigest,
+     BENCHMARK_RESOURCE_ARTIFACT_KIND.PRICE_SHEET,
+   );
+-  inspectOwner(
+-    priceArtifact,
+-    inspectBenchmarkResourcePriceSheetArtifact,
+-    ROOT_TEXT.ROOT_PRICE,
+-  );
+-  if (
+-    dateParse(root.producedAt) < dateParse(priceArtifact.payload.validFrom) ||
+-    dateParse(root.producedAt) >= dateParse(priceArtifact.payload.validUntil)
+-  ) {
+-    fail(ROOT_TEXT.ROOT_PRICE_NOT_VALID_AT_PRODUCTION);
+-  }
++  const priceInspection =
++    inspectBenchmarkResourcePriceSheetArtifact(priceArtifact);
++  const priceValidAtProduction = priceInspection.valid &&
++    dateParse(root.producedAt) >=
++      dateParse(priceArtifact.payload.validFrom) &&
++    dateParse(root.producedAt) <
++      dateParse(priceArtifact.payload.validUntil);
+   return {
+     matrixDigest: root.matrixManifestDigest,
+     matrix: matrixArtifact.payload,
+     inventoryDigest: root.componentInventoryDigest,
+     inventory: inventoryArtifact.payload,
+     priceDigest: root.priceSheetDigest,
+-    price: priceArtifact.payload,
++    price: priceValidAtProduction ? priceArtifact.payload : null,
++    priceValidAtProduction,
++    profile,
+     root,
+   };
+ }
+ 
+-function assertEvidenceOwnerJoin(owners) {
+-  if (owners.inventory.matrixId !== owners.matrix.matrixId) {
+-    fail(ROOT_TEXT.ROOT_OWNERS_MATRIX_INVENTORY_MISMATCH);
+-  }
+-  for (let index = 0; index < owners.matrix.sideIds.length; index += 1) {
+-    if (
+-      findBenchmarkResourceInventorySide(
+-        owners.inventory,
+-        owners.matrix.sideIds[index],
+-      ) === undefined
+-    ) {
+-      fail(ROOT_TEXT.ROOT_OWNERS_MATRIX_INVENTORY_MISMATCH);
+-    }
+-  }
+-}
+-
+ export function validateBenchmarkResourceEvidenceRoot(receipt) {
+-  try {
+-    const {root, resolved} = resolveRootReceipt(receipt);
+-    const owners = resolveEvidenceOwners(root, resolved);
+-    assertEvidenceOwnerJoin(owners);
+-    const cellValidation = validateCells(root, owners, resolved);
+-    allArtifactsSemanticallyOwned(root, resolved);
+-    return {
+-      valid: true,
+-      reason: ROOT_TEXT.VALID,
+-      claimEligible: cellValidation.claimEligible,
+-      matrixId: owners.matrix.matrixId,
+-      cellCount: root.cellEvidenceDigests.length,
+-      artifactCount: reflectApply(mapSizeGetter, resolved, []),
+-    };
+-  } catch (error) {
+-    return {
+-      valid: false,
+-      reason: safeValidationReason(error),
+-      claimEligible: false,
+-      matrixId: ROOT_TEXT.UNRESOLVED,
+-      cellCount: 0,
+-      artifactCount: 0,
+-    };
+-  }
++  const acceptance = acceptBenchmarkResourceClaimEvidenceRoot(receipt);
++  const inspection =
++    inspectBenchmarkResourceClaimEvidenceAcceptance(acceptance);
++  const valid =
++    inspection.state === BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.ACCEPTED;
++  return {
++    valid,
++    reason: valid ? ROOT_TEXT.VALID : inspection.reason,
++    claimEligible: valid && inspection.evidence.claimEligible,
++    matrixId: valid ? inspection.evidence.matrixId : ROOT_TEXT.UNRESOLVED,
++    cellCount: valid ? inspection.evidence.cells.length : 0,
++    artifactCount: valid ? inspection.artifactCount : 0,
++  };
+ }
+ 
+ export function inspectBenchmarkResourceClaimEvidenceRoot(receipt) {
+   try {
+     const {rootDigest, root, resolved} = resolveRootReceipt(receipt);
+     const owners = resolveEvidenceOwners(root, resolved);
+-    assertEvidenceOwnerJoin(owners);
++    assertBenchmarkResourceEvidenceOwnerJoin(
++      owners,
++      ROOT_TEXT.ROOT_OWNERS_MATRIX_INVENTORY_MISMATCH,
++    );
+     const cellValidation = validateCells(root, owners, resolved);
+     allArtifactsSemanticallyOwned(root, resolved);
+     return {
+       state: BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.ACCEPTED,
++      artifactCount: reflectApply(mapSizeGetter, resolved, []),
+       evidence: createBenchmarkResourceClaimEvidenceView({
+         rootDigest,
+         claimEligible: cellValidation.claimEligible,
+@@ -1491,9 +1423,41 @@ export function inspectBenchmarkResourceClaimEvidenceRoot(receipt) {
+       }),
+     };
+   } catch (error) {
++    const reason = safeBenchmarkResourceValidationReason(
++      error,
++      ROOT_TEXT.VALIDATION_FAILED,
++    );
+     return {
+       state: BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.REJECTED,
+-      reason: safeValidationReason(error),
++      reason,
++      measurementOutcome: benchmarkResourceRejectedMeasurementOutcome(reason),
+     };
+   }
+ }
++
++export function acceptBenchmarkResourceClaimEvidenceRoot(receipt) {
++  const handle = objectFreeze({
++    inspection: objectFreeze(
++      inspectBenchmarkResourceClaimEvidenceRoot(receipt),
++    ),
++  });
++  weakSetAdd(acceptanceHandles, handle);
++  return handle;
++}
++
++export function inspectBenchmarkResourceClaimEvidenceAcceptance(handle) {
++  if (
++    handle !== null &&
++    typeof handle === 'object' &&
++    weakSetHas(acceptanceHandles, handle)
++  ) {
++    return handle.inspection;
++  }
++  const reason = BENCHMARK_RESOURCE_MEASUREMENT_REASON
++    .IMMUTABLE_RESOLUTION_DRIFT;
++  return {
++    state: BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.REJECTED,
++    reason,
++    measurementOutcome: benchmarkResourceRejectedMeasurementOutcome(reason),
++  };
++}
+diff --git a/test/distributed/harness/benchmark-resource-live-root-validation.js b/test/distributed/harness/benchmark-resource-live-root-validation.js
+index 42e4a254b0665ea7efe1af7ed4b1aa5c2171864d..502f4baea716eae6bf0f50510ae0c49d0e9e056a 100644
+--- a/test/distributed/harness/benchmark-resource-live-root-validation.js
++++ b/test/distributed/harness/benchmark-resource-live-root-validation.js
+@@ -131,12 +131,27 @@ function capacityProtocolProjection(
+     fail(localText.CAPACITY_PROTOCOL_INVALID);
+   }
+   return {
++    evidence,
+     capacityCorrectOpsPerSecond: capacity.maxCorrectThroughputPerSecond,
+     sampleCount: capacity.perBlock.length,
+     confidenceInterval: {lower: interval.lower, upper: interval.upper},
+   };
+ }
+ 
++export function projectBenchmarkResourceCapacityProtocolEvidence(
++  sourceArtifact,
++  sideId,
++  protocolSideIndex,
++  resourcePreregistration,
++) {
++  return capacityProtocolProjection(
++    sourceArtifact.payload.evidence.protocol,
++    sideId,
++    protocolSideIndex,
++    resourcePreregistration,
++  );
++}
++
+ export function assertBenchmarkResourceCapacityProtocolSummary(
+   capacity,
+   sourceArtifact,
+@@ -144,8 +159,8 @@ export function assertBenchmarkResourceCapacityProtocolSummary(
+   protocolSideIndex,
+   resourcePreregistration,
+ ) {
+-  const projection = capacityProtocolProjection(
+-    sourceArtifact.payload.evidence.protocol,
++  const projection = projectBenchmarkResourceCapacityProtocolEvidence(
++    sourceArtifact,
+     sideId,
+     protocolSideIndex,
+     resourcePreregistration,
+@@ -203,7 +218,10 @@ export function assertBenchmarkResourceLiveComponentAccounting(
+     inventoryComponent.reservedHeadroomRatio !==
+       expected.reservedHeadroomRatio
+   ) {
+-    fail(localText.LIVE_INVENTORY_MISMATCH);
++    fail(
++      `${localText.LIVE_INVENTORY_MISMATCH}:` +
++      `${sideId}:${component.componentId}`,
++    );
+   }
+ }
+ 
+diff --git a/test/distributed/harness/benchmark-resource-matrix-manifest.js b/test/distributed/harness/benchmark-resource-matrix-manifest.js
+index 1ba2f5be76267cea021f2ab0f9db7085799eb6f8..22bf81ddd3706b556022e928fb7cfd99b9f901f3 100644
+--- a/test/distributed/harness/benchmark-resource-matrix-manifest.js
++++ b/test/distributed/harness/benchmark-resource-matrix-manifest.js
+@@ -30,6 +30,7 @@ const localText = Object.freeze({
+   MATRIX_CELLS: 'matrix.cells',
+   MATRIX_CELLS_COUNT_MISMATCH: 'matrix.cells:count_mismatch',
+   MATRIX_CELLS_CARTESIAN_MISMATCH: 'matrix.cells:cartesian_mismatch',
++  MATRIX_PROFILE_ENVELOPE_DIGEST: 'matrix.profileEnvelopeDigest',
+   VALID: 'valid',
+ });
+ 
+@@ -41,6 +42,7 @@ const inputKeys = Object.freeze([
+   'workloadManifestDigest',
+   'alternativeTopologyDigest',
+   'preregistrationDigest',
++  'profileEnvelopeDigest',
+ ]);
+ const axisKeys = Object.freeze(['id', 'values']);
+ const cellKeys = Object.freeze(['cellId', 'dimensions']);
+@@ -52,6 +54,7 @@ const payloadKeys = Object.freeze([
+   'workloadManifestDigest',
+   'alternativeTopologyDigest',
+   'preregistrationDigest',
++  'profileEnvelopeDigest',
+   'cells',
+ ]);
+ const setAdd = Function.call.bind(Set.prototype.add);
+@@ -170,6 +173,20 @@ export function createBenchmarkResourceMatrixManifest(input) {
+     const field = digestFields[index];
+     assertBenchmarkResourceDigest(input[field], `matrix.${field}`);
+   }
++  if (input.profileEnvelopeDigest !== null) {
++    assertBenchmarkResourceDigest(
++      input.profileEnvelopeDigest,
++      localText.MATRIX_PROFILE_ENVELOPE_DIGEST,
++    );
++  }
++  const references = [
++    input.workloadManifestDigest,
++    input.alternativeTopologyDigest,
++    input.preregistrationDigest,
++  ];
++  if (input.profileEnvelopeDigest !== null) {
++    appendOwnArrayValue(references, input.profileEnvelopeDigest);
++  }
+   return createBenchmarkResourceArtifact(
+     BENCHMARK_RESOURCE_ARTIFACT_KIND.MATRIX_MANIFEST,
+     {
+@@ -180,13 +197,10 @@ export function createBenchmarkResourceMatrixManifest(input) {
+       workloadManifestDigest: input.workloadManifestDigest,
+       alternativeTopologyDigest: input.alternativeTopologyDigest,
+       preregistrationDigest: input.preregistrationDigest,
++      profileEnvelopeDigest: input.profileEnvelopeDigest,
+       cells: buildCells(input.matrixId, axes),
+     },
+-    [
+-      input.workloadManifestDigest,
+-      input.alternativeTopologyDigest,
+-      input.preregistrationDigest,
+-    ],
++    references,
+   );
+ }
+ 
+@@ -209,6 +223,7 @@ export function inspectBenchmarkResourceMatrixManifestArtifact(artifact) {
+       workloadManifestDigest: payload.workloadManifestDigest,
+       alternativeTopologyDigest: payload.alternativeTopologyDigest,
+       preregistrationDigest: payload.preregistrationDigest,
++      profileEnvelopeDigest: payload.profileEnvelopeDigest,
+     });
+     if (
+       digestBenchmarkSemanticData(reconstructed.artifact) !==
+diff --git a/test/distributed/harness/benchmark-resource-measurement-outcome.js b/test/distributed/harness/benchmark-resource-measurement-outcome.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c2c0fb3967d2fcf54a196a68b2a99f347a0df4d7
+--- /dev/null
++++ b/test/distributed/harness/benchmark-resource-measurement-outcome.js
+@@ -0,0 +1,152 @@
++import {
++  BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE,
++  BENCHMARK_RESOURCE_MEASUREMENT_REASON,
++  BENCHMARK_RESOURCE_MEASUREMENT_RETRY,
++} from './benchmark-resource-contract-constants.js';
++import {types} from 'node:util';
++import {
++  hasExactOwnDataKeys,
++} from './benchmark-semantic-integrity.js';
++
++export {
++  BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE,
++  BENCHMARK_RESOURCE_MEASUREMENT_REASON,
++  BENCHMARK_RESOURCE_MEASUREMENT_RETRY,
++};
++
++const transientReasons = new Set([
++  'resolver.resolve:artifact_missing',
++  'rootReceipt:root_missing',
++]);
++const preservedInvalidReasons = new Set([
++  BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_INVALID,
++  BENCHMARK_RESOURCE_MEASUREMENT_REASON.IMMUTABLE_RESOLUTION_DRIFT,
++  BENCHMARK_RESOURCE_MEASUREMENT_REASON.PRICE_EVIDENCE_INVALID,
++]);
++const allowedReasonsByState = Object.freeze({
++  [BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.MEASURING]: new Set([
++    BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_COMPLETE,
++  ]),
++  [BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.NON_MEASURING]: new Set([
++    BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_NOT_CLAIM_ELIGIBLE,
++  ]),
++  [BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.INVALID]: new Set([
++    BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_INVALID,
++    BENCHMARK_RESOURCE_MEASUREMENT_REASON.IMMUTABLE_RESOLUTION_DRIFT,
++    BENCHMARK_RESOURCE_MEASUREMENT_REASON.PRICE_EVIDENCE_INVALID,
++  ]),
++  [BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.STALE_INELIGIBLE]: new Set([
++    BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_NOT_YET_VALID,
++    BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_EXPIRED,
++    BENCHMARK_RESOURCE_MEASUREMENT_REASON.PROFILE_IDENTITY_MISMATCH,
++    BENCHMARK_RESOURCE_MEASUREMENT_REASON.PRICE_EVIDENCE_NOT_YET_VALID,
++    BENCHMARK_RESOURCE_MEASUREMENT_REASON.PRICE_EVIDENCE_EXPIRED,
++  ]),
++  [BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.TRANSIENT]: new Set([
++    BENCHMARK_RESOURCE_MEASUREMENT_REASON.OBSERVATION_MISSING,
++  ]),
++});
++const objectFreeze = Object.freeze;
++const reflectApply = Reflect.apply;
++const setHasMethod = Set.prototype.has;
++const outcomeKeys = Object.freeze(['state', 'reason']);
++const reasonKeys = Object.freeze(['code', 'retry']);
++const localText = Object.freeze({
++  STATE_INVALID: 'measurementOutcome:state',
++  REASON_CODE_TEXT_REQUIRED:
++    'measurementOutcome.reason.code:text_required',
++  VALID: 'valid',
++  INVALID: 'measurementOutcome:invalid',
++});
++
++function allowedReason(state, reasonCode) {
++  const allowed = allowedReasonsByState[state];
++  return allowed !== undefined &&
++    reflectApply(setHasMethod, allowed, [reasonCode]);
++}
++
++export function createBenchmarkResourceMeasurementOutcome(
++  state,
++  reasonCode,
++) {
++  if (allowedReasonsByState[state] === undefined) {
++    throw new TypeError(localText.STATE_INVALID);
++  }
++  if (!allowedReason(state, reasonCode)) {
++    throw new TypeError(localText.REASON_CODE_TEXT_REQUIRED);
++  }
++  const retry = state ===
++    BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.TRANSIENT ?
++    BENCHMARK_RESOURCE_MEASUREMENT_RETRY.RETRYABLE :
++    BENCHMARK_RESOURCE_MEASUREMENT_RETRY.NEVER;
++  return objectFreeze({
++    state,
++    reason: objectFreeze({code: reasonCode, retry}),
++  });
++}
++
++export function inspectBenchmarkResourceMeasurementOutcome(outcome) {
++  if (
++    types.isProxy(outcome) ||
++    !hasExactOwnDataKeys(outcome, outcomeKeys) ||
++    types.isProxy(outcome.reason) ||
++    !hasExactOwnDataKeys(outcome.reason, reasonKeys)
++  ) {
++    return {valid: false, reason: localText.INVALID};
++  }
++  const valid =
++    allowedReason(outcome.state, outcome.reason.code) &&
++    (
++      outcome.state ===
++        BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.TRANSIENT
++    ) === (
++      outcome.reason.retry ===
++        BENCHMARK_RESOURCE_MEASUREMENT_RETRY.RETRYABLE
++    ) &&
++    (
++      outcome.reason.retry ===
++        BENCHMARK_RESOURCE_MEASUREMENT_RETRY.RETRYABLE ||
++      outcome.reason.retry ===
++        BENCHMARK_RESOURCE_MEASUREMENT_RETRY.NEVER
++    );
++  return {valid, reason: valid ? localText.VALID : localText.INVALID};
++}
++
++export function benchmarkResourceAcceptedMeasurementOutcome(claimEligible) {
++  return createBenchmarkResourceMeasurementOutcome(
++    claimEligible ?
++      BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.MEASURING :
++      BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.NON_MEASURING,
++    claimEligible ?
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_COMPLETE :
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_NOT_CLAIM_ELIGIBLE,
++  );
++}
++
++export function benchmarkResourceRejectedMeasurementOutcome(reasonCode) {
++  const transient = reflectApply(setHasMethod, transientReasons, [reasonCode]);
++  const preservedInvalid = reflectApply(
++    setHasMethod,
++    preservedInvalidReasons,
++    [reasonCode],
++  );
++  return createBenchmarkResourceMeasurementOutcome(
++    transient ?
++      BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.TRANSIENT :
++      BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.INVALID,
++    transient ?
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.OBSERVATION_MISSING :
++      (
++        preservedInvalid ?
++          reasonCode :
++          BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_INVALID
++      ),
++  );
++}
++
++export function benchmarkResourceStaleMeasurementOutcome(reasonCode) {
++  return createBenchmarkResourceMeasurementOutcome(
++    BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.STALE_INELIGIBLE,
++    reasonCode,
++  );
++}
+diff --git a/test/distributed/harness/benchmark-resource-paired-run-evidence.js b/test/distributed/harness/benchmark-resource-paired-run-evidence.js
+index 52115c82980d72acab6de7ee3d4ff17bebb67b85..f35ce81950438f14a4bc6914ac1cda97f670e994 100644
+--- a/test/distributed/harness/benchmark-resource-paired-run-evidence.js
++++ b/test/distributed/harness/benchmark-resource-paired-run-evidence.js
+@@ -54,6 +54,8 @@ const localText = Object.freeze({
+   PAIRED_RUN_CALIBRATION_COMPONENT_CLOSURE_REQUIRED:
+     'pairedRun.calibrationArtifact:component_closure_required',
+   PAIRED_RUN_MATRIX_SINGLE_CELL_REQUIRED: 'pairedRun.matrix:single_cell_required',
++  LEGACY_AGGREGATE_NOT_C3_ADMISSIBLE:
++    'legacy_aggregate_not_c3_admissible',
+ });
+ 
+ 
+@@ -68,6 +70,7 @@ const inputKeys = Object.freeze([
+   'workloadManifest',
+   'alternativeTopology',
+   'preregistration',
++  'profileEnvelope',
+   'inventoryId',
+   'priceSheet',
+   'calibrationArtifact',
+@@ -303,6 +306,10 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
+     BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
+     input.preregistration,
+   );
++  const profileEnvelope = source(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.PROFILE_ENVELOPE,
++    input.profileEnvelope,
++  );
+   const matrix = createBenchmarkResourceMatrixManifest({
+     matrixId: input.matrixId,
+     axes: input.axes,
+@@ -310,6 +317,7 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
+     workloadManifestDigest: workloadManifest.digest,
+     alternativeTopologyDigest: alternativeTopology.digest,
+     preregistrationDigest: preregistration.digest,
++    profileEnvelopeDigest: profileEnvelope.digest,
+   });
+   if (matrix.artifact.payload.cells.length !== 1) {
+     fail(localText.PAIRED_RUN_MATRIX_SINGLE_CELL_REQUIRED);
+@@ -344,6 +352,13 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
+   const sideSources = [];
+   const windows = [];
+   const capacities = [];
++  const pairedOfferedLoad = Math.max(
++    1,
++    Math.round(Math.min(
++      input.sides[0].capacityCorrectOpsPerSecond,
++      input.sides[1].capacityCorrectOpsPerSecond,
++    )),
++  );
+   for (let index = 0; index < input.sides.length; index += 1) {
+     const side = input.sides[index];
+     assertBenchmarkResourceArray(
+@@ -365,6 +380,13 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
+       pairId: input.pairId,
+       runId: input.runId,
+       sideId: side.sideId,
++      pairedBlockId: `${input.pairId}-block-0-load-0`,
++      profileIdentity: input.profileEnvelope.profileIdentity,
++      blockIndex: 0,
++      blockedOrderIndex: index,
++      offeredLoad: pairedOfferedLoad,
++      loadIndex: 0,
++      phase: 'measured',
+     };
+     const capacitySample = createBenchmarkResourceWindowSourceArtifact(
+       BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE,
+@@ -373,7 +395,7 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
+         evidence: {
+           version: 'benchmark-resource-capacity-samples-v1',
+           samples: side.capacitySamples,
+-          protocol: side.capacityProtocolEvidence,
++          admission: localText.LEGACY_AGGREGATE_NOT_C3_ADMISSIBLE,
+         },
+       },
+     );
+@@ -404,6 +426,13 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
+       pairId: input.pairId,
+       runId: input.runId,
+       sideId: side.sideId,
++      pairedBlockId: coordinates.pairedBlockId,
++      profileIdentity: coordinates.profileIdentity,
++      blockIndex: coordinates.blockIndex,
++      blockedOrderIndex: coordinates.blockedOrderIndex,
++      offeredLoad: coordinates.offeredLoad,
++      loadIndex: coordinates.loadIndex,
++      phase: coordinates.phase,
+       windowReceiptDigest: windowReceipt.digest,
+       capacitySampleDigest: capacitySample.digest,
+       semanticReceiptDigest: semanticReceipt.digest,
+@@ -469,6 +498,7 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
+     workloadManifest,
+     alternativeTopology,
+     preregistration,
++    profileEnvelope,
+     matrix,
+     inventory,
+     price,
+@@ -501,6 +531,7 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
+     root,
+     artifacts,
+     matrix,
++    profileEnvelope,
+     inventory,
+     price,
+     windows,
+diff --git a/test/distributed/harness/benchmark-resource-validation-primitives.js b/test/distributed/harness/benchmark-resource-validation-primitives.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..37fa2b28c665ecc5d026126f658bf7c3f0ef5d08
+--- /dev/null
++++ b/test/distributed/harness/benchmark-resource-validation-primitives.js
+@@ -0,0 +1,69 @@
++import {types} from 'node:util';
++import {
++  assertBenchmarkResourceArray,
++  assertBenchmarkResourceText,
++} from './benchmark-resource-evidence-data.js';
++import {appendOwnArrayValue} from './benchmark-semantic-integrity.js';
++import {
++  findBenchmarkResourceInventorySide,
++} from './benchmark-resource-accounting.js';
++
++const dateParse = Date.parse;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const dataValueKey = 'value';
++const regexpTest = Function.call.bind(RegExp.prototype.test);
++const timestampPattern =
++  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
++
++export function assertBenchmarkResourceTimestamp(value, path) {
++  if (
++    typeof value !== 'string' ||
++    !regexpTest(timestampPattern, value) ||
++    !Number.isFinite(dateParse(value))
++  ) {
++    throw new TypeError(`${path}:iso_timestamp_required`);
++  }
++}
++
++export function safeBenchmarkResourceValidationReason(error, fallback) {
++  if (!error || typeof error !== 'object' || types.isProxy(error)) {
++    return fallback;
++  }
++  const descriptor = objectGetOwnPropertyDescriptor(error, 'message');
++  return (
++    descriptor &&
++    objectHasOwn(descriptor, dataValueKey) &&
++    typeof descriptor.value === 'string'
++  ) ? descriptor.value : fallback;
++}
++
++export function copyBenchmarkResourceSideIds(sideIds, path) {
++  assertBenchmarkResourceArray(sideIds, path, 2);
++  if (sideIds.length !== 2) {
++    throw new TypeError(`${path}:exact_pair_required`);
++  }
++  const copy = [];
++  for (let index = 0; index < sideIds.length; index += 1) {
++    assertBenchmarkResourceText(sideIds[index], `${path}.${index}`);
++    appendOwnArrayValue(copy, sideIds[index]);
++  }
++  if (copy[0] === copy[1]) throw new TypeError(`${path}:distinct_required`);
++  return copy;
++}
++
++export function assertBenchmarkResourceEvidenceOwnerJoin(owners, reason) {
++  if (owners.inventory.matrixId !== owners.matrix.matrixId) {
++    throw new TypeError(reason);
++  }
++  for (let index = 0; index < owners.matrix.sideIds.length; index += 1) {
++    if (
++      findBenchmarkResourceInventorySide(
++        owners.inventory,
++        owners.matrix.sideIds[index],
++      ) === undefined
++    ) {
++      throw new TypeError(reason);
++    }
++  }
++}
+diff --git a/test/distributed/harness/benchmark-resource-window-coordinate-validation.js b/test/distributed/harness/benchmark-resource-window-coordinate-validation.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b47feeb2f2ce3522917cb416b1c9740c8d73c007
+--- /dev/null
++++ b/test/distributed/harness/benchmark-resource-window-coordinate-validation.js
+@@ -0,0 +1,182 @@
++import {
++  BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON,
++  BENCHMARK_RESOURCE_WINDOW_PHASE,
++} from './benchmark-resource-contract-constants.js';
++
++const dateParse = Date.parse;
++const arrayJoinMethod = Array.prototype.join;
++const arrayPushMethod = Array.prototype.push;
++const mapGetMethod = Map.prototype.get;
++const mapSetMethod = Map.prototype.set;
++const reflectApply = Reflect.apply;
++const setAddMethod = Set.prototype.add;
++const setHasMethod = Set.prototype.has;
++const setSizeGetter =
++  Object.getOwnPropertyDescriptor(Set.prototype, 'size').get;
++
++export {BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON};
++
++const coordinateSeparator = '\u0000';
++
++function fail(reason) {
++  throw new TypeError(reason);
++}
++
++function sideAllowed(sideIds, sideId) {
++  for (let index = 0; index < sideIds.length; index += 1) {
++    if (sideIds[index] === sideId) return true;
++  }
++  return false;
++}
++
++function coordinateKey(window) {
++  return reflectApply(arrayJoinMethod, [
++    window.cellId,
++    window.blockIndex,
++    window.blockedOrderIndex,
++    window.sideId,
++    window.offeredLoad,
++    window.loadIndex,
++    window.phase,
++  ], [coordinateSeparator]);
++}
++
++function pairedCoordinate(window) {
++  return reflectApply(arrayJoinMethod, [
++    window.cellId,
++    window.blockIndex,
++    window.offeredLoad,
++    window.loadIndex,
++    window.phase,
++  ], [coordinateSeparator]);
++}
++
++function overlaps(left, right) {
++  return dateParse(left.startedAt) < dateParse(right.endedAt) &&
++    dateParse(right.startedAt) < dateParse(left.endedAt);
++}
++
++export function createBenchmarkResourceWindowCoordinateContext({
++  allowCrossSideOverlap = false,
++} = {}) {
++  return {
++    allowCrossSideOverlap,
++    coordinateKeys: new Set(),
++    pairedBlocks: new Map(),
++    pairedBlockList: [],
++    windows: [],
++  };
++}
++
++export function appendBenchmarkResourceMeasuredWindowCoordinate(
++  context,
++  window,
++  expected,
++) {
++  const reason = BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON;
++  if (
++    window.matrixManifestDigest !== expected.matrixManifestDigest ||
++    window.matrixId !== expected.matrixId ||
++    window.cellId !== expected.cellId ||
++    window.pairId !== expected.pairId ||
++    window.runId !== expected.runId ||
++    window.profileIdentity !== expected.profileIdentity ||
++    !sideAllowed(expected.sideIds, window.sideId)
++  ) {
++    fail(reason.MISMATCH);
++  }
++  if (window.phase !== BENCHMARK_RESOURCE_WINDOW_PHASE.MEASURED) {
++    fail(reason.PHASE);
++  }
++  const key = coordinateKey(window);
++  if (reflectApply(setHasMethod, context.coordinateKeys, [key])) {
++    fail(reason.DUPLICATE);
++  }
++  reflectApply(setAddMethod, context.coordinateKeys, [key]);
++
++  for (let index = 0; index < context.windows.length; index += 1) {
++    const existing = context.windows[index];
++    if (
++      overlaps(existing, window) &&
++      (
++        !context.allowCrossSideOverlap ||
++        existing.sideId === window.sideId
++      )
++    ) {
++      fail(reason.OVERLAP);
++    }
++  }
++  reflectApply(arrayPushMethod, context.windows, [window]);
++
++  const paired =
++    reflectApply(mapGetMethod, context.pairedBlocks, [window.pairedBlockId]);
++  const pairedKey = pairedCoordinate(window);
++  if (paired === undefined) {
++    const sides = new Set();
++    const orders = new Set();
++    reflectApply(setAddMethod, sides, [window.sideId]);
++    reflectApply(setAddMethod, orders, [window.blockedOrderIndex]);
++    const record = {
++      pairedKey,
++      sides,
++      orders,
++    };
++    reflectApply(mapSetMethod, context.pairedBlocks, [
++      window.pairedBlockId,
++      record,
++    ]);
++    reflectApply(arrayPushMethod, context.pairedBlockList, [record]);
++    return;
++  }
++  if (
++    paired.pairedKey !== pairedKey ||
++    reflectApply(setHasMethod, paired.sides, [window.sideId]) ||
++    reflectApply(setHasMethod, paired.orders, [window.blockedOrderIndex])
++  ) {
++    fail(reason.PAIRED_BLOCK_MISMATCH);
++  }
++  reflectApply(setAddMethod, paired.sides, [window.sideId]);
++  reflectApply(setAddMethod, paired.orders, [window.blockedOrderIndex]);
++}
++
++export function assertBenchmarkResourceMeasuredWindowCoordinatesComplete(
++  context,
++  sideIds,
++  expectedWindows = null,
++) {
++  for (let pairIndex = 0;
++    pairIndex < context.pairedBlockList.length;
++    pairIndex += 1) {
++    const paired = context.pairedBlockList[pairIndex];
++    if (reflectApply(setSizeGetter, paired.sides, []) !== sideIds.length) {
++      fail(
++        BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON.PAIRED_BLOCK_INCOMPLETE,
++      );
++    }
++    for (let index = 0; index < sideIds.length; index += 1) {
++      if (!reflectApply(setHasMethod, paired.sides, [sideIds[index]])) {
++        fail(
++          BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON.PAIRED_BLOCK_INCOMPLETE,
++        );
++      }
++    }
++  }
++  if (expectedWindows === null) return;
++  if (
++    expectedWindows.length !==
++      reflectApply(setSizeGetter, context.coordinateKeys, [])
++  ) {
++    fail(BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON.EXPECTED_SET_MISMATCH);
++  }
++  const expectedKeys = new Set();
++  for (let index = 0; index < expectedWindows.length; index += 1) {
++    const key = coordinateKey(expectedWindows[index]);
++    if (
++      reflectApply(setHasMethod, expectedKeys, [key]) ||
++      !reflectApply(setHasMethod, context.coordinateKeys, [key])
++    ) {
++      fail(BENCHMARK_RESOURCE_WINDOW_COORDINATE_REASON.EXPECTED_SET_MISMATCH);
++    }
++    reflectApply(setAddMethod, expectedKeys, [key]);
++  }
++}
+diff --git a/test/distributed/harness/benchmark-resource-window-source.js b/test/distributed/harness/benchmark-resource-window-source.js
+index e02a18b76728dc70948d6ff05fc0a76624a8b03f..0ec38c2ef69b7d92264e2c880d536ac13faa4771 100644
+--- a/test/distributed/harness/benchmark-resource-window-source.js
++++ b/test/distributed/harness/benchmark-resource-window-source.js
+@@ -3,12 +3,14 @@ import {
+ } from './benchmark-semantic-integrity.js';
+ import {
+   assertBenchmarkResourceCanonicalData,
++  assertBenchmarkResourceDigest,
+   assertBenchmarkResourceExactRecord,
+   assertBenchmarkResourceText,
+   createBenchmarkResourceArtifact,
+ } from './benchmark-resource-evidence-data.js';
+ import {
+   BENCHMARK_RESOURCE_ARTIFACT_KIND,
++  BENCHMARK_RESOURCE_WINDOW_PHASE,
+ } from './benchmark-resource-contract-constants.js';
+ const localText = Object.freeze({
+   WINDOW_SOURCE_KIND_UNSUPPORTED: 'windowSource.kind:unsupported',
+@@ -16,8 +18,13 @@ const localText = Object.freeze({
+   WINDOW_SOURCE_PAYLOAD: 'windowSource.payload',
+   WINDOW_SOURCE_VERSION_UNSUPPORTED: 'windowSource.version:unsupported',
+   WINDOW_SOURCE_RECONSTRUCTION_MISMATCH: 'windowSource:reconstruction_mismatch',
++  WINDOW_SOURCE_PROFILE_IDENTITY: 'windowSource.profileIdentity',
++  WINDOW_SOURCE_OFFERED_LOAD_POSITIVE_REQUIRED:
++    'windowSource.offeredLoad:positive_required',
++  WINDOW_SOURCE_PHASE_UNSUPPORTED: 'windowSource.phase:unsupported',
+   VALID: 'valid',
+ });
++const numberIsSafeInteger = Number.isSafeInteger;
+ 
+ 
+ const inputKeys = Object.freeze([
+@@ -26,10 +33,17 @@ const inputKeys = Object.freeze([
+   'pairId',
+   'runId',
+   'sideId',
++  'pairedBlockId',
++  'profileIdentity',
++  'blockIndex',
++  'blockedOrderIndex',
++  'offeredLoad',
++  'loadIndex',
++  'phase',
+   'evidence',
+ ]);
+ const payloadKeys = Object.freeze(['version', ...inputKeys]);
+-const sourceVersion = 'benchmark-resource-window-source-v1';
++const sourceVersion = 'benchmark-resource-window-source-v2';
+ const allowedKinds = Object.freeze([
+   BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE,
+   BENCHMARK_RESOURCE_ARTIFACT_KIND.SEMANTIC_RECEIPT,
+@@ -51,11 +65,44 @@ function kindAllowed(kind) {
+ export function createBenchmarkResourceWindowSourceArtifact(kind, input) {
+   if (!kindAllowed(kind)) fail(localText.WINDOW_SOURCE_KIND_UNSUPPORTED);
+   assertBenchmarkResourceExactRecord(input, inputKeys, localText.WINDOW_SOURCE);
+-  const textFields = ['matrixId', 'cellId', 'pairId', 'runId', 'sideId'];
++  const textFields = [
++    'matrixId',
++    'cellId',
++    'pairId',
++    'runId',
++    'sideId',
++    'pairedBlockId',
++    'phase',
++  ];
+   for (let index = 0; index < textFields.length; index += 1) {
+     const field = textFields[index];
+     assertBenchmarkResourceText(input[field], `windowSource.${field}`);
+   }
++  assertBenchmarkResourceDigest(
++    input.profileIdentity,
++    localText.WINDOW_SOURCE_PROFILE_IDENTITY,
++  );
++  const integerFields = [
++    'blockIndex',
++    'blockedOrderIndex',
++    'offeredLoad',
++    'loadIndex',
++  ];
++  for (let index = 0; index < integerFields.length; index += 1) {
++    const field = integerFields[index];
++    if (!numberIsSafeInteger(input[field]) || input[field] < 0) {
++      fail(`windowSource.${field}:non_negative_integer_required`);
++    }
++  }
++  if (input.offeredLoad === 0) {
++    fail(localText.WINDOW_SOURCE_OFFERED_LOAD_POSITIVE_REQUIRED);
++  }
++  if (
++    input.phase !== BENCHMARK_RESOURCE_WINDOW_PHASE.MEASURED &&
++    input.phase !== BENCHMARK_RESOURCE_WINDOW_PHASE.WARMUP
++  ) {
++    fail(localText.WINDOW_SOURCE_PHASE_UNSUPPORTED);
++  }
+   assertBenchmarkResourceCanonicalData(input.evidence);
+   return createBenchmarkResourceArtifact(kind, {
+     version: sourceVersion,
+@@ -64,6 +111,13 @@ export function createBenchmarkResourceWindowSourceArtifact(kind, input) {
+     pairId: input.pairId,
+     runId: input.runId,
+     sideId: input.sideId,
++    pairedBlockId: input.pairedBlockId,
++    profileIdentity: input.profileIdentity,
++    blockIndex: input.blockIndex,
++    blockedOrderIndex: input.blockedOrderIndex,
++    offeredLoad: input.offeredLoad,
++    loadIndex: input.loadIndex,
++    phase: input.phase,
+     evidence: input.evidence,
+   });
+ }
+@@ -91,6 +145,13 @@ export function inspectBenchmarkResourceWindowSourceArtifact(
+         pairId: payload.pairId,
+         runId: payload.runId,
+         sideId: payload.sideId,
++        pairedBlockId: payload.pairedBlockId,
++        profileIdentity: payload.profileIdentity,
++        blockIndex: payload.blockIndex,
++        blockedOrderIndex: payload.blockedOrderIndex,
++        offeredLoad: payload.offeredLoad,
++        loadIndex: payload.loadIndex,
++        phase: payload.phase,
+         evidence: payload.evidence,
+       },
+     );
+@@ -106,6 +167,13 @@ export function inspectBenchmarkResourceWindowSourceArtifact(
+       'pairId',
+       'runId',
+       'sideId',
++      'pairedBlockId',
++      'profileIdentity',
++      'blockIndex',
++      'blockedOrderIndex',
++      'offeredLoad',
++      'loadIndex',
++      'phase',
+     ];
+     for (let index = 0; index < expectedFields.length; index += 1) {
+       const field = expectedFields[index];
+diff --git a/test/distributed/harness/benchmark-semantic-integrity.js b/test/distributed/harness/benchmark-semantic-integrity.js
+index 21d939083ee9f2acfc7c5a3a327b2c8e5ada1d8d..f895cc56599a31326c9dbf25fe6996b50af62dae 100644
+--- a/test/distributed/harness/benchmark-semantic-integrity.js
++++ b/test/distributed/harness/benchmark-semantic-integrity.js
+@@ -52,6 +52,21 @@ export function appendOwnArrayValue(values, value) {
+   });
+ }
+ 
++export function arrayContainsExactValue(values, target) {
++  for (let index = 0; index < values.length; index += 1) {
++    if (values[index] === target) return true;
++  }
++  return false;
++}
++
++export function arraysExactlyEqual(left, right) {
++  if (left.length !== right.length) return false;
++  for (let index = 0; index < left.length; index += 1) {
++    if (left[index] !== right[index]) return false;
++  }
++  return true;
++}
++
+ export function ownDataValue(record, key) {
+   if (!record || typeof record !== 'object') {
+     return MISSING_VALUE;
+diff --git a/test/distributed/harness/comparative-efficiency-claim-projection-constants.js b/test/distributed/harness/comparative-efficiency-claim-projection-constants.js
+index 51f0a1d7abde56b91fd359958878345022d9a891..781a816cfa3595e451cd25eb343c9f98d9d2dda2 100644
+--- a/test/distributed/harness/comparative-efficiency-claim-projection-constants.js
++++ b/test/distributed/harness/comparative-efficiency-claim-projection-constants.js
+@@ -53,6 +53,7 @@ export const COMPARATIVE_CLAIM_REASON = Object.freeze({
+   CALCULATOR_ERROR: 'calculator_error',
+   EVIDENCE_INVALID: 'evidence_invalid',
+   MATRIX_ID_MISMATCH: 'matrix_id_mismatch',
++  PROFILE_IDENTITY_MISMATCH: 'profile_identity_mismatch',
+   EVALUATION_TIME_INVALID: 'evaluation_time_invalid',
+   EVIDENCE_NOT_YET_VALID: 'evidence_not_yet_valid',
+   EVIDENCE_EXPIRED: 'evidence_expired',
+@@ -63,6 +64,7 @@ export const COMPARATIVE_CLAIM_REASON = Object.freeze({
+     'effect_practically_insignificant',
+   PRICE_NOT_YET_VALID: 'price_not_yet_valid',
+   PRICE_EXPIRED: 'price_expired',
++  PRICE_INVALID: 'price_invalid',
+   CERTIFICATION_ABSENT:
+     SCALE_CLAIM_REASON.TERMINAL_CERTIFICATION_ABSENT,
+   CERTIFICATION_INVALID:
+diff --git a/test/distributed/harness/comparative-efficiency-claim-projection.js b/test/distributed/harness/comparative-efficiency-claim-projection.js
+index dc320cdb698bb6814166dc89daac196623121341..80d01ac984f2b710156abf00926f8e3d4d381698 100644
+--- a/test/distributed/harness/comparative-efficiency-claim-projection.js
++++ b/test/distributed/harness/comparative-efficiency-claim-projection.js
+@@ -18,7 +18,7 @@ import {
+   BENCHMARK_RESOURCE_CLAIM_MEASUREMENT_STATE,
+ } from './benchmark-resource-claim-evidence-view.js';
+ import {
+-  inspectBenchmarkResourceClaimEvidenceRoot,
++  inspectBenchmarkResourceClaimEvidenceAcceptance,
+ } from './benchmark-resource-evidence-root.js';
+ import {
+   BENCHMARK_RESOURCE_EFFECT_DIRECTION,
+@@ -48,6 +48,13 @@ import {
+   SCALE_PROFILE_ID,
+   validateScaleCertificationReceipt,
+ } from './scale-evidence-contract.js';
++import {
++  BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE,
++  BENCHMARK_RESOURCE_MEASUREMENT_REASON,
++  benchmarkResourceRejectedMeasurementOutcome,
++  benchmarkResourceStaleMeasurementOutcome,
++  createBenchmarkResourceMeasurementOutcome,
++} from './benchmark-resource-measurement-outcome.js';
+ 
+ const dateParse = Date.parse;
+ const ArrayConstructor = Array;
+@@ -71,7 +78,7 @@ const measuredKeys = Object.freeze([
+   'workloadId',
+   'expectedMatrixId',
+   'profile',
+-  'rootReceipt',
++  'rootAcceptance',
+   'certification',
+ ]);
+ const profileKeys = Object.freeze(['id', 'identity']);
+@@ -135,6 +142,13 @@ function copiedArray(values) {
+   return copy;
+ }
+ 
++function containsExactValue(values, expected) {
++  for (let index = 0; index < values.length; index += 1) {
++    if (ownDataValue(values, `${index}`) === expected) return true;
++  }
++  return false;
++}
++
+ function combinedReasonCodes(first, second, third, fourth) {
+   const combined = [];
+   const sources = [first, second, third, fourth];
+@@ -291,7 +305,10 @@ export function classifyComparativeEfficiencyClaimEffect(effect) {
+ }
+ 
+ function rootCurrentness(evidence, evaluatedAt) {
+-  if (!evidence.claimEligible) {
++  if (
++    evidence.measurementOutcome.state !==
++      BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.MEASURING
++  ) {
+     return [COMPARATIVE_CLAIM_REASON.EVIDENCE_NOT_CLAIM_ELIGIBLE];
+   }
+   const evaluation = timestamp(evaluatedAt);
+@@ -299,15 +316,47 @@ function rootCurrentness(evidence, evaluatedAt) {
+     return [COMPARATIVE_CLAIM_REASON.EVALUATION_TIME_INVALID];
+   }
+   if (evaluation.milliseconds < dateParse(evidence.producedAt)) {
+-    return [COMPARATIVE_CLAIM_REASON.EVIDENCE_NOT_YET_VALID];
++    return [benchmarkResourceStaleMeasurementOutcome(
++      COMPARATIVE_CLAIM_REASON.EVIDENCE_NOT_YET_VALID,
++    ).reason.code];
+   }
+   if (evaluation.milliseconds >= dateParse(evidence.validUntil)) {
+-    return [COMPARATIVE_CLAIM_REASON.EVIDENCE_EXPIRED];
++    return [benchmarkResourceStaleMeasurementOutcome(
++      COMPARATIVE_CLAIM_REASON.EVIDENCE_EXPIRED,
++    ).reason.code];
+   }
+   return [];
+ }
+ 
++function rootProjectionOutcome(evidence, rootReasons, profileMatches) {
++  if (!profileMatches) {
++    return benchmarkResourceStaleMeasurementOutcome(
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.PROFILE_IDENTITY_MISMATCH,
++    );
++  }
++  if (containsExactValue(
++    rootReasons,
++    COMPARATIVE_CLAIM_REASON.EVIDENCE_NOT_YET_VALID,
++  )) {
++    return benchmarkResourceStaleMeasurementOutcome(
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_NOT_YET_VALID,
++    );
++  }
++  if (containsExactValue(
++    rootReasons,
++    COMPARATIVE_CLAIM_REASON.EVIDENCE_EXPIRED,
++  )) {
++    return benchmarkResourceStaleMeasurementOutcome(
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.EVIDENCE_EXPIRED,
++    );
++  }
++  return evidence.measurementOutcome;
++}
++
+ function priceCurrentness(evidence, evaluatedAt) {
++  if (evidence.priceSheet.state !== localText.VALID) {
++    return [COMPARATIVE_CLAIM_REASON.PRICE_INVALID];
++  }
+   const evaluation = timestamp(evaluatedAt);
+   if (evaluation.state === localText.INVALID_TIMESTAMP) {
+     return [COMPARATIVE_CLAIM_REASON.EVALUATION_TIME_INVALID];
+@@ -321,6 +370,36 @@ function priceCurrentness(evidence, evaluatedAt) {
+   return [];
+ }
+ 
++function metricProjectionOutcome(metric, metricReasons, rootOutcome) {
++  if (metric !== COMPARATIVE_CLAIM_METRIC.COST) return rootOutcome;
++  if (containsExactValue(
++    metricReasons,
++    COMPARATIVE_CLAIM_REASON.PRICE_INVALID,
++  )) {
++    return createBenchmarkResourceMeasurementOutcome(
++      BENCHMARK_RESOURCE_MEASUREMENT_OUTCOME_STATE.INVALID,
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.PRICE_EVIDENCE_INVALID,
++    );
++  }
++  if (containsExactValue(
++    metricReasons,
++    COMPARATIVE_CLAIM_REASON.PRICE_NOT_YET_VALID,
++  )) {
++    return benchmarkResourceStaleMeasurementOutcome(
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.PRICE_EVIDENCE_NOT_YET_VALID,
++    );
++  }
++  if (containsExactValue(
++    metricReasons,
++    COMPARATIVE_CLAIM_REASON.PRICE_EXPIRED,
++  )) {
++    return benchmarkResourceStaleMeasurementOutcome(
++      BENCHMARK_RESOURCE_MEASUREMENT_REASON.PRICE_EVIDENCE_EXPIRED,
++    );
++  }
++  return rootOutcome;
++}
++
+ function certificationMode(item, certificationState) {
+   return !setHas(scaleProfileIds, item.profile.id) ?
+     localText.INVALID :
+@@ -488,6 +567,11 @@ function effectRow(input) {
+       producedAt: input.evidence.producedAt,
+       validUntil: input.evidence.validUntil,
+       priceSheetDigest: input.evidence.priceSheet.digest,
++      measurementOutcome: metricProjectionOutcome(
++        input.metric,
++        input.metricReasons,
++        input.measurementOutcome,
++      ),
+     },
+     reasonCodes,
+     statement: outcomeStatement(
+@@ -500,7 +584,13 @@ function effectRow(input) {
+   });
+ }
+ 
+-function nonMeasuringRows(item, evidence, cell, rootReasons) {
++function nonMeasuringRows(
++  item,
++  evidence,
++  cell,
++  rootReasons,
++  measurementOutcome,
++) {
+   const rows = [];
+   const reasonCodes = combinedReasonCodes(
+     rootReasons,
+@@ -534,6 +624,7 @@ function nonMeasuringRows(item, evidence, cell, rootReasons) {
+         producedAt: evidence.producedAt,
+         validUntil: evidence.validUntil,
+         priceSheetDigest: evidence.priceSheet.digest,
++        measurementOutcome,
+       },
+       reasonCodes,
+       statement: `No current ${metric} claim for ${item.workloadId}: ` +
+@@ -547,6 +638,8 @@ function invalidRootRows(
+   item,
+   reason,
+   reasonCode = COMPARATIVE_CLAIM_REASON.EVIDENCE_INVALID,
++  measurementOutcome =
++  benchmarkResourceRejectedMeasurementOutcome(reason),
+ ) {
+   const rows = [];
+   for (
+@@ -569,7 +662,10 @@ function invalidRootRows(
+         state: COMPARATIVE_CLAIM_EVIDENCE_STATE.ABSENT,
+         error: reason,
+       },
+-      source: {state: COMPARATIVE_CLAIM_SOURCE_STATE.INVALID_ROOT},
++      source: {
++        state: COMPARATIVE_CLAIM_SOURCE_STATE.INVALID_ROOT,
++        measurementOutcome,
++      },
+       reasonCodes: [reasonCode],
+       statement: `No current ${metric} claim for ${item.workloadId}: ` +
+         `invalid evidence root (${reason}).`,
+@@ -600,9 +696,14 @@ function measuredRows(item, evaluatedAt) {
+     localText.MEASURED_PROFILE_IDENTITY,
+   );
+   const inspection =
+-    inspectBenchmarkResourceClaimEvidenceRoot(item.rootReceipt);
++    inspectBenchmarkResourceClaimEvidenceAcceptance(item.rootAcceptance);
+   if (inspection.state !== BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.ACCEPTED) {
+-    return invalidRootRows(item, inspection.reason);
++    return invalidRootRows(
++      item,
++      inspection.reason,
++      COMPARATIVE_CLAIM_REASON.EVIDENCE_INVALID,
++      inspection.measurementOutcome,
++    );
+   }
+   const evidence = inspection.evidence;
+   if (evidence.matrixId !== item.expectedMatrixId) {
+@@ -612,9 +713,29 @@ function measuredRows(item, evaluatedAt) {
+       COMPARATIVE_CLAIM_REASON.MATRIX_ID_MISMATCH,
+     );
+   }
+-  const rootReasons = rootCurrentness(evidence, evaluatedAt);
++  const profileMatches =
++    evidence.profile !== null &&
++    evidence.profile.id === item.profile.id &&
++    evidence.profile.identity === item.profile.identity;
++  const rootedItem = {
++    ...item,
++    profile: evidence.profile === null ? item.profile : evidence.profile,
++  };
++  const rootReasons = combinedReasonCodes(
++    rootCurrentness(evidence, evaluatedAt),
++    profileMatches ?
++      emptyReasonCodes() :
++      [COMPARATIVE_CLAIM_REASON.PROFILE_IDENTITY_MISMATCH],
++    emptyReasonCodes(),
++    emptyReasonCodes(),
++  );
++  const measurementOutcome = rootProjectionOutcome(
++    evidence,
++    rootReasons,
++    profileMatches,
++  );
+   const profileDecision = certificationDecision(
+-    item,
++    rootedItem,
+     evidence.rootDigest,
+     evaluatedAt,
+   );
+@@ -627,28 +748,36 @@ function measuredRows(item, evaluatedAt) {
+     ) {
+       appendArrayValues(
+         rows,
+-        nonMeasuringRows(item, evidence, cell, rootReasons),
++        nonMeasuringRows(
++          rootedItem,
++          evidence,
++          cell,
++          rootReasons,
++          measurementOutcome,
++        ),
+       );
+       continue;
+     }
+     appendOwnArrayValue(rows, effectRow({
+-      item,
++      item: rootedItem,
+       evidence,
+       cell,
+       metric: COMPARATIVE_CLAIM_METRIC.CAPACITY,
+       effect: cell.measurement.capacityEffect,
+       rootReasons,
+       metricReasons: emptyReasonCodes(),
++      measurementOutcome,
+       profileDecision,
+     }));
+     appendOwnArrayValue(rows, effectRow({
+-      item,
++      item: rootedItem,
+       evidence,
+       cell,
+       metric: COMPARATIVE_CLAIM_METRIC.COST,
+       effect: cell.measurement.costEffect,
+       rootReasons,
+       metricReasons: priceCurrentness(evidence, evaluatedAt),
++      measurementOutcome,
+       profileDecision,
+     }));
+   }
+diff --git a/test/distributed/harness/comparative-efficiency-claim-table.js b/test/distributed/harness/comparative-efficiency-claim-table.js
+index 7f4914ff73de77f3dd02ca4af7255e69970abb82..ae7426259ec66e1bfb729d58c7576b75b058eecc 100644
+--- a/test/distributed/harness/comparative-efficiency-claim-table.js
++++ b/test/distributed/harness/comparative-efficiency-claim-table.js
+@@ -23,6 +23,9 @@ import {
+ import {
+   COMPARATIVE_EVIDENCE_CLASS,
+ } from './comparative-efficiency-evidence-contract.js';
++import {
++  inspectBenchmarkResourceMeasurementOutcome,
++} from './benchmark-resource-measurement-outcome.js';
+ 
+ const arrayIsArray = Array.isArray;
+ const arrayJoinMethod = Array.prototype.join;
+@@ -91,6 +94,7 @@ const localText = Object.freeze({
+   CLAIM_TABLE_ROW: 'claimTable.row',
+   CLAIM_TABLE_ROW_DIGEST_MISMATCH: 'claimTable.row:digest_mismatch',
+   CLAIM_TABLE_ROW_ENUM_INVALID: 'claimTable.row:enum_invalid',
++  MEASUREMENT_OUTCOME: 'measurementOutcome',
+   CLAIM_TABLE_ROW_PROFILE: 'claimTable.row.profile',
+   CLAIM_TABLE_ROW_PROFILE_ID: 'claimTable.row.profile.id',
+   CLAIM_TABLE_ROW_PROFILE_IDENTITY: 'claimTable.row.profile.identity',
+@@ -349,6 +353,14 @@ function validateRow(row) {
+   ) {
+     throw new TypeError(localText.CLAIM_TABLE_ROW_ENUM_INVALID);
+   }
++  if (
++    objectHasOwn(row.source, localText.MEASUREMENT_OUTCOME) &&
++    !inspectBenchmarkResourceMeasurementOutcome(
++      row.source.measurementOutcome,
++    ).valid
++  ) {
++    throw new TypeError(localText.CLAIM_TABLE_ROW_ENUM_INVALID);
++  }
+   assertBenchmarkResourceArray(
+     row.reasonCodes,
+     localText.CLAIM_TABLE_ROW_REASON_CODES,
+diff --git a/test/distributed/harness/comparative-efficiency-movielens-grouped-reduce.js b/test/distributed/harness/comparative-efficiency-movielens-grouped-reduce.js
+index f36613d35e46c376792c381c40cc4f16a81eaa69..8e54717b0c6b0b1d81918d7ef593ee10bb427c7f 100644
+--- a/test/distributed/harness/comparative-efficiency-movielens-grouped-reduce.js
++++ b/test/distributed/harness/comparative-efficiency-movielens-grouped-reduce.js
+@@ -682,6 +682,7 @@ export function createComparativeMovielensGroupedReduceEvidence(input) {
+     workloadManifestDigest: workloadManifest.digest,
+     alternativeTopologyDigest: alternativeTopology.digest,
+     preregistrationDigest: preregistration.digest,
++    profileEnvelopeDigest: null,
+   });
+   const inventory = createBenchmarkResourceComponentInventory({
+     inventoryId: input.inventoryId,
+diff --git a/test/distributed/harness/comparative-efficiency-negative-controls.js b/test/distributed/harness/comparative-efficiency-negative-controls.js
+index 83372f3e53c87a8b754b2d6b5a29d213d35d3677..e1b2876332c618a4d4155b8d75f64631ccc0681e 100644
+--- a/test/distributed/harness/comparative-efficiency-negative-controls.js
++++ b/test/distributed/harness/comparative-efficiency-negative-controls.js
+@@ -326,6 +326,7 @@ export function createComparativeNegativeControlEvidence(input) {
+     workloadManifestDigest: workloadManifest.digest,
+     alternativeTopologyDigest: alternativeTopology.digest,
+     preregistrationDigest: preregistration.digest,
++    profileEnvelopeDigest: null,
+   });
+   const sourceOwners = {
+     workload: workloadManifest.artifact,
+diff --git a/test/distributed/harness/comparative-efficiency-postgres-nonmeasuring-evidence.js b/test/distributed/harness/comparative-efficiency-postgres-nonmeasuring-evidence.js
+index 768c92d66184d9136e27ecbe9245d0ff93b253b6..6cf4800f618fa2c525dd34b895cc8ebf5680fd2f 100644
+--- a/test/distributed/harness/comparative-efficiency-postgres-nonmeasuring-evidence.js
++++ b/test/distributed/harness/comparative-efficiency-postgres-nonmeasuring-evidence.js
+@@ -400,6 +400,7 @@ export function createComparativePostgresNonMeasuringEvidenceOwner(config) {
+       workloadManifestDigest: workloadManifest.digest,
+       alternativeTopologyDigest: alternativeTopology.digest,
+       preregistrationDigest: preregistration.digest,
++      profileEnvelopeDigest: null,
+     });
+     config.admission.assertOwners({
+       workload: workloadManifest.artifact,
+diff --git a/test/distributed/harness/scale-evidence-contract.js b/test/distributed/harness/scale-evidence-contract.js
+index ac68c1dcb88e2ee8ee0a760d43ff61ed63bca29c..a48e8f715ad651e79ca73de399c672bf3d4c46b1 100644
+--- a/test/distributed/harness/scale-evidence-contract.js
++++ b/test/distributed/harness/scale-evidence-contract.js
+@@ -369,9 +369,17 @@ function validateWorkloadFields(report, errors) {
+   }
+ }
+ 
+-function validateIdentityFields(report, errors) {
+-  validateRunFields(report, errors);
+-
++export function validateScaleProfileFields(report, errors) {
++  pushIf(errors, !isRecord(report.profile), localText.PROFILE_OBJECT_REQUIRED);
++  if (isRecord(report.profile)) {
++    pushIf(
++      errors,
++      !intrinsicSetHas(PROFILE_IDS, report.profile.id),
++      localText.PROFILE_ID_UNSUPPORTED,
++    );
++    pushIf(errors, !isPositiveInteger(report.profile.version),
++      localText.PROFILE_VERSION_POSITIVE_INTEGER_REQUIRED);
++  }
+   const software = report.software;
+   pushIf(errors, !isRecord(software), localText.SOFTWARE_OBJECT_REQUIRED);
+   if (isRecord(software)) {
+@@ -441,6 +449,11 @@ function validateIdentityFields(report, errors) {
+   validateWorkloadFields(report, errors);
+ }
+ 
++function validateIdentityFields(report, errors) {
++  validateRunFields(report, errors);
++  validateScaleProfileFields(report, errors);
++}
++
+ function validateProvenance(report, errors) {
+   const provenance = report.provenance;
+   pushIf(errors, !isRecord(provenance), localText.PROVENANCE_OBJECT_REQUIRED);
+@@ -1389,16 +1402,6 @@ function validateBaseReport(report) {
+     localText.CONTRACTID_UNSUPPORTED);
+   pushIf(errors, report.schemaVersion !== SCALE_EVIDENCE_SCHEMA_VERSION,
+     localText.SCHEMAVERSION_UNSUPPORTED);
+-  pushIf(errors, !isRecord(report.profile), localText.PROFILE_OBJECT_REQUIRED);
+-  if (isRecord(report.profile)) {
+-    pushIf(
+-      errors,
+-      !intrinsicSetHas(PROFILE_IDS, report.profile.id),
+-      localText.PROFILE_ID_UNSUPPORTED,
+-    );
+-    pushIf(errors, !isPositiveInteger(report.profile.version),
+-      localText.PROFILE_VERSION_POSITIVE_INTEGER_REQUIRED);
+-  }
+   validateIdentityFields(report, errors);
+   validateGateEnvelope(report, errors);
+   validateProvenance(report, errors);
+diff --git a/test/distributed/harness/scale-profile-envelope.js b/test/distributed/harness/scale-profile-envelope.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a9ca4b4b3edb7f8066cca66f03a2d3029762ee3a
+--- /dev/null
++++ b/test/distributed/harness/scale-profile-envelope.js
+@@ -0,0 +1,156 @@
++import {types} from 'node:util';
++import {
++  SCALE_EVIDENCE_CONTRACT_ID,
++  SCALE_EVIDENCE_SCHEMA_VERSION,
++  SCALE_PROFILE_ID,
++  computeScaleProfileIdentity,
++  validateScaleProfileFields,
++} from './scale-evidence-contract.js';
++
++const inputKeys = Object.freeze([
++  'profile',
++  'software',
++  'hardware',
++  'topology',
++  'data',
++  'workload',
++]);
++const envelopeKeys = Object.freeze([
++  'contractId',
++  'schemaVersion',
++  ...inputKeys,
++  'profileIdentity',
++]);
++const profileKeys = Object.freeze(['id', 'version']);
++const profileIds = new Set(Object.values(SCALE_PROFILE_ID));
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const objectCreate = Object.create;
++const reflectOwnKeys = Reflect.ownKeys;
++const reflectApply = Reflect.apply;
++const setHasMethod = Set.prototype.has;
++const arrayIsArray = Array.isArray;
++const numberIsSafeInteger = Number.isSafeInteger;
++const dataValueKey = 'value';
++const localText = Object.freeze({
++  PROFILE_ID_UNSUPPORTED: 'profileEnvelope.profile.id:unsupported',
++  PROFILE_VERSION_POSITIVE_INTEGER_REQUIRED:
++    'profileEnvelope.profile.version:positive_integer_required',
++  CONTRACT_MISMATCH: 'profileEnvelope:contract_mismatch',
++  IDENTITY_MISMATCH: 'profileEnvelope.profileIdentity:mismatch',
++  SEMANTIC_FIELDS_INVALID: 'profileEnvelope:semantic_fields_invalid',
++  VALID: 'valid',
++});
++
++function fail(message) {
++  throw new TypeError(message);
++}
++
++function copyData(value, path) {
++  if (value === null || typeof value !== 'object') return value;
++  if (types.isProxy(value)) fail(`${path}:proxy_forbidden`);
++  const keys = reflectOwnKeys(value);
++  const copy = arrayIsArray(value) ? [] : objectCreate(null);
++  for (let index = 0; index < keys.length; index += 1) {
++    const key = keys[index];
++    if (typeof key !== 'string') fail(`${path}:symbol_key_forbidden`);
++    const descriptor = objectGetOwnPropertyDescriptor(value, key);
++    if (!descriptor || !objectHasOwn(descriptor, dataValueKey)) {
++      fail(`${path}.${key}:own_data_property_required`);
++    }
++    copy[key] = copyData(descriptor.value, `${path}.${key}`);
++  }
++  return copy;
++}
++
++function exactOwnDataRecord(value, keys, path) {
++  if (
++    value === null ||
++    typeof value !== 'object' ||
++    arrayIsArray(value) ||
++    types.isProxy(value)
++  ) {
++    fail(`${path}:plain_record_required`);
++  }
++  const actual = reflectOwnKeys(value);
++  let keysMatch = actual.length === keys.length;
++  for (let index = 0; index < keys.length; index += 1) {
++    if (!objectHasOwn(value, keys[index])) keysMatch = false;
++  }
++  if (!keysMatch) {
++    fail(`${path}:exact_keys_required`);
++  }
++  const copy = {};
++  for (let index = 0; index < keys.length; index += 1) {
++    const key = keys[index];
++    const descriptor = objectGetOwnPropertyDescriptor(value, key);
++    if (!descriptor || !objectHasOwn(descriptor, dataValueKey)) {
++      fail(`${path}.${key}:own_data_property_required`);
++    }
++    copy[key] = copyData(descriptor.value, `${path}.${key}`);
++  }
++  return copy;
++}
++
++function assertProfile(profile) {
++  const copy = exactOwnDataRecord(profile, profileKeys, 'profileEnvelope.profile');
++  if (!reflectApply(setHasMethod, profileIds, [copy.id])) {
++    fail(localText.PROFILE_ID_UNSUPPORTED);
++  }
++  if (!numberIsSafeInteger(copy.version) || copy.version <= 0) {
++    fail(localText.PROFILE_VERSION_POSITIVE_INTEGER_REQUIRED);
++  }
++  return copy;
++}
++
++function assertOwnerValidatedFields(envelope) {
++  const errors = [];
++  validateScaleProfileFields(envelope, errors);
++  if (errors.length > 0) {
++    fail(`${localText.SEMANTIC_FIELDS_INVALID}:${errors[0]}`);
++  }
++}
++
++export function createScaleProfileEnvelope(input) {
++  const copied = exactOwnDataRecord(input, inputKeys, 'profileEnvelope');
++  copied.profile = assertProfile(copied.profile);
++  assertOwnerValidatedFields(copied);
++  const envelope = {
++    contractId: SCALE_EVIDENCE_CONTRACT_ID,
++    schemaVersion: SCALE_EVIDENCE_SCHEMA_VERSION,
++    ...copied,
++  };
++  envelope.profileIdentity = computeScaleProfileIdentity(envelope);
++  return envelope;
++}
++
++export function inspectScaleProfileEnvelope(envelope) {
++  try {
++    const copied = exactOwnDataRecord(
++      envelope,
++      envelopeKeys,
++      'profileEnvelope',
++    );
++    if (
++      copied.contractId !== SCALE_EVIDENCE_CONTRACT_ID ||
++      copied.schemaVersion !== SCALE_EVIDENCE_SCHEMA_VERSION
++    ) {
++      fail(localText.CONTRACT_MISMATCH);
++    }
++    copied.profile = assertProfile(copied.profile);
++    assertOwnerValidatedFields(copied);
++    if (computeScaleProfileIdentity(copied) !== copied.profileIdentity) {
++      fail(localText.IDENTITY_MISMATCH);
++    }
++    return {
++      valid: true,
++      reason: localText.VALID,
++      profile: {
++        id: copied.profile.id,
++        identity: copied.profileIdentity,
++      },
++    };
++  } catch (error) {
++    return {valid: false, reason: error.message, profile: null};
++  }
++}

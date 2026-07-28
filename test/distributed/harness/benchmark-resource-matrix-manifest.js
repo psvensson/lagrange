@@ -30,6 +30,7 @@ const localText = Object.freeze({
   MATRIX_CELLS: 'matrix.cells',
   MATRIX_CELLS_COUNT_MISMATCH: 'matrix.cells:count_mismatch',
   MATRIX_CELLS_CARTESIAN_MISMATCH: 'matrix.cells:cartesian_mismatch',
+  MATRIX_PROFILE_ENVELOPE_DIGEST: 'matrix.profileEnvelopeDigest',
   VALID: 'valid',
 });
 
@@ -41,6 +42,7 @@ const inputKeys = Object.freeze([
   'workloadManifestDigest',
   'alternativeTopologyDigest',
   'preregistrationDigest',
+  'profileEnvelopeDigest',
 ]);
 const axisKeys = Object.freeze(['id', 'values']);
 const cellKeys = Object.freeze(['cellId', 'dimensions']);
@@ -52,6 +54,7 @@ const payloadKeys = Object.freeze([
   'workloadManifestDigest',
   'alternativeTopologyDigest',
   'preregistrationDigest',
+  'profileEnvelopeDigest',
   'cells',
 ]);
 const setAdd = Function.call.bind(Set.prototype.add);
@@ -170,6 +173,20 @@ export function createBenchmarkResourceMatrixManifest(input) {
     const field = digestFields[index];
     assertBenchmarkResourceDigest(input[field], `matrix.${field}`);
   }
+  if (input.profileEnvelopeDigest !== null) {
+    assertBenchmarkResourceDigest(
+      input.profileEnvelopeDigest,
+      localText.MATRIX_PROFILE_ENVELOPE_DIGEST,
+    );
+  }
+  const references = [
+    input.workloadManifestDigest,
+    input.alternativeTopologyDigest,
+    input.preregistrationDigest,
+  ];
+  if (input.profileEnvelopeDigest !== null) {
+    appendOwnArrayValue(references, input.profileEnvelopeDigest);
+  }
   return createBenchmarkResourceArtifact(
     BENCHMARK_RESOURCE_ARTIFACT_KIND.MATRIX_MANIFEST,
     {
@@ -180,13 +197,10 @@ export function createBenchmarkResourceMatrixManifest(input) {
       workloadManifestDigest: input.workloadManifestDigest,
       alternativeTopologyDigest: input.alternativeTopologyDigest,
       preregistrationDigest: input.preregistrationDigest,
+      profileEnvelopeDigest: input.profileEnvelopeDigest,
       cells: buildCells(input.matrixId, axes),
     },
-    [
-      input.workloadManifestDigest,
-      input.alternativeTopologyDigest,
-      input.preregistrationDigest,
-    ],
+    references,
   );
 }
 
@@ -209,6 +223,7 @@ export function inspectBenchmarkResourceMatrixManifestArtifact(artifact) {
       workloadManifestDigest: payload.workloadManifestDigest,
       alternativeTopologyDigest: payload.alternativeTopologyDigest,
       preregistrationDigest: payload.preregistrationDigest,
+      profileEnvelopeDigest: payload.profileEnvelopeDigest,
     });
     if (
       digestBenchmarkSemanticData(reconstructed.artifact) !==

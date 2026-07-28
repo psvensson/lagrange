@@ -18,6 +18,7 @@ import {
   BENCHMARK_RESOURCE_COMPONENT_ROLE,
   BENCHMARK_RESOURCE_CONTRACT,
   BENCHMARK_RESOURCE_LIMIT,
+  BENCHMARK_RESOURCE_WINDOW_PHASE,
 } from './benchmark-resource-contract-constants.js';
 const localText = Object.freeze({
   INVENTORY_SIDES: 'inventory.sides',
@@ -33,6 +34,9 @@ const localText = Object.freeze({
   RESOURCE_WINDOW_STARTED_AT: 'resourceWindow.startedAt',
   RESOURCE_WINDOW_ENDED_AT: 'resourceWindow.endedAt',
   RESOURCE_WINDOW_INTERVAL_NOT_POSITIVE: 'resourceWindow.interval:not_positive',
+  RESOURCE_WINDOW_OFFERED_LOAD_POSITIVE_REQUIRED:
+    'resourceWindow.offeredLoad:positive_required',
+  RESOURCE_WINDOW_PHASE_UNSUPPORTED: 'resourceWindow.phase:unsupported',
   RESOURCE_WINDOW_CORRECT_SLO_ELIGIBLE_OPERATIONS: 'resourceWindow.correctSloEligibleOperations',
   RESOURCE_WINDOW_KIND_UNSUPPORTED: 'resourceWindow.kind:unsupported',
   RESOURCE_WINDOW_PAYLOAD: 'resourceWindow.payload',
@@ -84,6 +88,13 @@ const windowInputKeys = Object.freeze([
   'pairId',
   'runId',
   'sideId',
+  'pairedBlockId',
+  'profileIdentity',
+  'blockIndex',
+  'blockedOrderIndex',
+  'offeredLoad',
+  'loadIndex',
+  'phase',
   'windowReceiptDigest',
   'capacitySampleDigest',
   'semanticReceiptDigest',
@@ -334,6 +345,13 @@ function resourceWindowBody(input, durationSeconds) {
     pairId: input.pairId,
     runId: input.runId,
     sideId: input.sideId,
+    pairedBlockId: input.pairedBlockId,
+    profileIdentity: input.profileIdentity,
+    blockIndex: input.blockIndex,
+    blockedOrderIndex: input.blockedOrderIndex,
+    offeredLoad: input.offeredLoad,
+    loadIndex: input.loadIndex,
+    phase: input.phase,
     windowReceiptDigest: input.windowReceiptDigest,
     capacitySampleDigest: input.capacitySampleDigest,
     semanticReceiptDigest: input.semanticReceiptDigest,
@@ -356,6 +374,8 @@ export function createBenchmarkResourceWindow(input) {
     'pairId',
     'runId',
     'sideId',
+    'pairedBlockId',
+    'phase',
   ];
   for (let index = 0; index < textFields.length; index += 1) {
     const field = textFields[index];
@@ -363,6 +383,7 @@ export function createBenchmarkResourceWindow(input) {
   }
   const digestFields = [
     'matrixManifestDigest',
+    'profileIdentity',
     'windowReceiptDigest',
     'capacitySampleDigest',
     'semanticReceiptDigest',
@@ -372,6 +393,25 @@ export function createBenchmarkResourceWindow(input) {
   for (let index = 0; index < digestFields.length; index += 1) {
     const field = digestFields[index];
     assertBenchmarkResourceDigest(input[field], `resourceWindow.${field}`);
+  }
+  const coordinateIntegers = [
+    'blockIndex',
+    'blockedOrderIndex',
+    'offeredLoad',
+    'loadIndex',
+  ];
+  for (let index = 0; index < coordinateIntegers.length; index += 1) {
+    const field = coordinateIntegers[index];
+    assertBenchmarkResourceInteger(input[field], `resourceWindow.${field}`);
+  }
+  if (input.offeredLoad === 0) {
+    fail(localText.RESOURCE_WINDOW_OFFERED_LOAD_POSITIVE_REQUIRED);
+  }
+  if (
+    input.phase !== BENCHMARK_RESOURCE_WINDOW_PHASE.MEASURED &&
+    input.phase !== BENCHMARK_RESOURCE_WINDOW_PHASE.WARMUP
+  ) {
+    fail(localText.RESOURCE_WINDOW_PHASE_UNSUPPORTED);
   }
   assertTimestamp(input.startedAt, localText.RESOURCE_WINDOW_STARTED_AT);
   assertTimestamp(input.endedAt, localText.RESOURCE_WINDOW_ENDED_AT);

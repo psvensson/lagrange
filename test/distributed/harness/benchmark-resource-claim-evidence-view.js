@@ -4,15 +4,26 @@ import {
 import {
   BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE,
 } from './benchmark-resource-evidence-root-constants.js';
+import {
+  benchmarkResourceAcceptedMeasurementOutcome,
+  benchmarkResourceRejectedMeasurementOutcome,
+} from './benchmark-resource-measurement-outcome.js';
 
 const structuredCloneValue = globalThis.structuredClone;
 const mapGetMethod = Map.prototype.get;
 const mapSetMethod = Map.prototype.set;
 const objectDefineProperty = Object.defineProperty;
+const objectFreeze = Object.freeze;
+const objectKeys = Object.keys;
 const reflectApply = Reflect.apply;
+const localText = Object.freeze({
+  PRICE_VALID: 'valid',
+  PRICE_INVALID: 'invalid',
+});
 
 export {
   BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE,
+  benchmarkResourceRejectedMeasurementOutcome,
 };
 
 export const BENCHMARK_RESOURCE_CLAIM_MEASUREMENT_STATE = Object.freeze({
@@ -27,6 +38,16 @@ function appendOwnArrayValue(values, value) {
     writable: true,
     value,
   });
+}
+
+function deepFreeze(value) {
+  if (value === null || typeof value !== 'object') return value;
+  objectFreeze(value);
+  const keys = objectKeys(value);
+  for (let index = 0; index < keys.length; index += 1) {
+    deepFreeze(value[keys[index]]);
+  }
+  return value;
 }
 
 function mapGet(map, key) {
@@ -91,19 +112,28 @@ function claimCells(matrix, cellPayloads) {
 }
 
 export function createBenchmarkResourceClaimEvidenceView(input) {
-  return {
+  return deepFreeze({
     rootDigest: input.rootDigest,
     claimEligible: input.claimEligible,
+    measurementOutcome:
+      benchmarkResourceAcceptedMeasurementOutcome(input.claimEligible),
     matrixId: input.owners.matrix.matrixId,
     sideIds: structuredCloneValue(input.owners.matrix.sideIds),
     sourceRevision: input.root.sourceRevision,
     producedAt: input.root.producedAt,
     validUntil: input.root.validUntil,
-    priceSheet: {
+    profile: structuredCloneValue(input.owners.profile),
+    priceSheet: input.owners.priceValidAtProduction ? {
+      state: localText.PRICE_VALID,
       digest: input.owners.priceDigest,
       validFrom: input.owners.price.validFrom,
       validUntil: input.owners.price.validUntil,
+    } : {
+      state: localText.PRICE_INVALID,
+      digest: input.owners.priceDigest,
+      validFrom: null,
+      validUntil: null,
     },
     cells: claimCells(input.owners.matrix, input.cellPayloads),
-  };
+  });
 }

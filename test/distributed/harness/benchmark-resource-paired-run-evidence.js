@@ -54,6 +54,8 @@ const localText = Object.freeze({
   PAIRED_RUN_CALIBRATION_COMPONENT_CLOSURE_REQUIRED:
     'pairedRun.calibrationArtifact:component_closure_required',
   PAIRED_RUN_MATRIX_SINGLE_CELL_REQUIRED: 'pairedRun.matrix:single_cell_required',
+  LEGACY_AGGREGATE_NOT_C3_ADMISSIBLE:
+    'legacy_aggregate_not_c3_admissible',
 });
 
 
@@ -68,6 +70,7 @@ const inputKeys = Object.freeze([
   'workloadManifest',
   'alternativeTopology',
   'preregistration',
+  'profileEnvelope',
   'inventoryId',
   'priceSheet',
   'calibrationArtifact',
@@ -303,6 +306,10 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
     BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
     input.preregistration,
   );
+  const profileEnvelope = source(
+    BENCHMARK_RESOURCE_ARTIFACT_KIND.PROFILE_ENVELOPE,
+    input.profileEnvelope,
+  );
   const matrix = createBenchmarkResourceMatrixManifest({
     matrixId: input.matrixId,
     axes: input.axes,
@@ -310,6 +317,7 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
     workloadManifestDigest: workloadManifest.digest,
     alternativeTopologyDigest: alternativeTopology.digest,
     preregistrationDigest: preregistration.digest,
+    profileEnvelopeDigest: profileEnvelope.digest,
   });
   if (matrix.artifact.payload.cells.length !== 1) {
     fail(localText.PAIRED_RUN_MATRIX_SINGLE_CELL_REQUIRED);
@@ -344,6 +352,13 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
   const sideSources = [];
   const windows = [];
   const capacities = [];
+  const pairedOfferedLoad = Math.max(
+    1,
+    Math.round(Math.min(
+      input.sides[0].capacityCorrectOpsPerSecond,
+      input.sides[1].capacityCorrectOpsPerSecond,
+    )),
+  );
   for (let index = 0; index < input.sides.length; index += 1) {
     const side = input.sides[index];
     assertBenchmarkResourceArray(
@@ -365,6 +380,13 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
       pairId: input.pairId,
       runId: input.runId,
       sideId: side.sideId,
+      pairedBlockId: `${input.pairId}-block-0-load-0`,
+      profileIdentity: input.profileEnvelope.profileIdentity,
+      blockIndex: 0,
+      blockedOrderIndex: index,
+      offeredLoad: pairedOfferedLoad,
+      loadIndex: 0,
+      phase: 'measured',
     };
     const capacitySample = createBenchmarkResourceWindowSourceArtifact(
       BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE,
@@ -373,7 +395,7 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
         evidence: {
           version: 'benchmark-resource-capacity-samples-v1',
           samples: side.capacitySamples,
-          protocol: side.capacityProtocolEvidence,
+          admission: localText.LEGACY_AGGREGATE_NOT_C3_ADMISSIBLE,
         },
       },
     );
@@ -404,6 +426,13 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
       pairId: input.pairId,
       runId: input.runId,
       sideId: side.sideId,
+      pairedBlockId: coordinates.pairedBlockId,
+      profileIdentity: coordinates.profileIdentity,
+      blockIndex: coordinates.blockIndex,
+      blockedOrderIndex: coordinates.blockedOrderIndex,
+      offeredLoad: coordinates.offeredLoad,
+      loadIndex: coordinates.loadIndex,
+      phase: coordinates.phase,
       windowReceiptDigest: windowReceipt.digest,
       capacitySampleDigest: capacitySample.digest,
       semanticReceiptDigest: semanticReceipt.digest,
@@ -469,6 +498,7 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
     workloadManifest,
     alternativeTopology,
     preregistration,
+    profileEnvelope,
     matrix,
     inventory,
     price,
@@ -501,6 +531,7 @@ export function createBenchmarkResourceSingleCellPairedEvidence(input) {
     root,
     artifacts,
     matrix,
+    profileEnvelope,
     inventory,
     price,
     windows,

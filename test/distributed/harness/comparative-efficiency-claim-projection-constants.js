@@ -53,6 +53,7 @@ export const COMPARATIVE_CLAIM_REASON = Object.freeze({
   CALCULATOR_ERROR: 'calculator_error',
   EVIDENCE_INVALID: 'evidence_invalid',
   MATRIX_ID_MISMATCH: 'matrix_id_mismatch',
+  PROFILE_IDENTITY_MISMATCH: 'profile_identity_mismatch',
   EVALUATION_TIME_INVALID: 'evaluation_time_invalid',
   EVIDENCE_NOT_YET_VALID: 'evidence_not_yet_valid',
   EVIDENCE_EXPIRED: 'evidence_expired',
@@ -63,6 +64,7 @@ export const COMPARATIVE_CLAIM_REASON = Object.freeze({
     'effect_practically_insignificant',
   PRICE_NOT_YET_VALID: 'price_not_yet_valid',
   PRICE_EXPIRED: 'price_expired',
+  PRICE_INVALID: 'price_invalid',
   CERTIFICATION_ABSENT:
     SCALE_CLAIM_REASON.TERMINAL_CERTIFICATION_ABSENT,
   CERTIFICATION_INVALID:

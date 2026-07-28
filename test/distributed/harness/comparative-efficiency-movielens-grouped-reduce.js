@@ -682,6 +682,7 @@ export function createComparativeMovielensGroupedReduceEvidence(input) {
     workloadManifestDigest: workloadManifest.digest,
     alternativeTopologyDigest: alternativeTopology.digest,
     preregistrationDigest: preregistration.digest,
+    profileEnvelopeDigest: null,
   });
   const inventory = createBenchmarkResourceComponentInventory({
     inventoryId: input.inventoryId,

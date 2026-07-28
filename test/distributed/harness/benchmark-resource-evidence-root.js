@@ -1,10 +1,11 @@
 import {
   appendOwnArrayValue,
+  arrayContainsExactValue,
+  arraysExactlyEqual,
   digestBenchmarkSemanticData,
   isMissingDataValue,
   ownDataValue,
 } from './benchmark-semantic-integrity.js';
-import {types} from 'node:util';
 import {
   assertBenchmarkResourceArray,
   assertBenchmarkResourceBytes,
@@ -17,17 +18,16 @@ import {
   parseBenchmarkResourceArtifact,
 } from './benchmark-resource-evidence-data.js';
 import {
-  findBenchmarkResourceInventorySide,
   inspectBenchmarkResourceInventoryArtifact,
   inspectBenchmarkResourceWindowArtifact,
 } from './benchmark-resource-accounting.js';
 import {
-  BENCHMARK_RESOURCE_NO_CURRENCY,
-  computeBenchmarkResourceWindowCost,
-  createBenchmarkResourcePairedEffect,
   inspectBenchmarkResourcePairedEffect,
   inspectBenchmarkResourcePriceSheetArtifact,
 } from './benchmark-resource-cost-and-effects.js';
+import {
+  recomputeBenchmarkResourceMeasuringCellEffects,
+} from './benchmark-resource-cell-effects-validation.js';
 import {
   inspectBenchmarkResourceCapacitySummaryArtifact,
 } from './benchmark-resource-capacity-summary.js';
@@ -48,14 +48,32 @@ import {
   inspectBenchmarkResourceWindowSourceArtifact,
 } from './benchmark-resource-window-source.js';
 import {
+  assertBenchmarkResourceC3WindowBinding,
+  createBenchmarkResourceC3WindowPlan,
+} from './benchmark-resource-c3-window-plan.js';
+import {inspectScaleProfileEnvelope} from './scale-profile-envelope.js';
+import {
+  appendBenchmarkResourceMeasuredWindowCoordinate,
+  assertBenchmarkResourceMeasuredWindowCoordinatesComplete,
+  createBenchmarkResourceWindowCoordinateContext,
+} from './benchmark-resource-window-coordinate-validation.js';
+import {
+  assertBenchmarkResourceTimestamp,
+  assertBenchmarkResourceEvidenceOwnerJoin,
+  copyBenchmarkResourceSideIds,
+  safeBenchmarkResourceValidationReason,
+} from './benchmark-resource-validation-primitives.js';
+import {
   BENCHMARK_RESOURCE_ARTIFACT_KIND,
   BENCHMARK_RESOURCE_CELL_STATE,
   BENCHMARK_RESOURCE_CONTRACT,
   BENCHMARK_RESOURCE_EFFECT,
   BENCHMARK_RESOURCE_LIMIT,
+  BENCHMARK_RESOURCE_MEASUREMENT_REASON,
 } from './benchmark-resource-contract-constants.js';
 import {
   BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE,
+  benchmarkResourceRejectedMeasurementOutcome,
   createBenchmarkResourceClaimEvidenceView,
 } from './benchmark-resource-claim-evidence-view.js';
 import {
@@ -71,6 +89,7 @@ const sourceArtifactKinds = new Set([
   BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_CALIBRATION,
   BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
   BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
+  BENCHMARK_RESOURCE_ARTIFACT_KIND.PROFILE_ENVELOPE,
   BENCHMARK_RESOURCE_ARTIFACT_KIND.SEMANTIC_RECEIPT,
   BENCHMARK_RESOURCE_ARTIFACT_KIND.SYNTHETIC_CALIBRATION,
   BENCHMARK_RESOURCE_ARTIFACT_KIND.WINDOW_RECEIPT,
@@ -111,12 +130,9 @@ const manifestEntryKeys = BENCHMARK_RESOURCE_ROOT_MANIFEST_ENTRY_KEYS;
 const artifactEnvelopeKeys =
   Object.freeze(['digest', 'bytes', 'byteLength', 'artifact']);
 const resolverKeys = Object.freeze(['resolve']);
-const timestampPattern =
-  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
-const million = 1_000_000;
 const maximumReasonCodes = 64;
-const dataValueKey = 'value';
 const semanticEventsAbsentZeroOnly = 'semantic_events_absent_zero_only';
+const liveWindowSourceIndex = 3;
 const bufferByteLength = Buffer.byteLength;
 const dateParse = Date.parse;
 const mapGet = Function.call.bind(Map.prototype.get);
@@ -124,45 +140,20 @@ const mapHas = Function.call.bind(Map.prototype.has);
 const mapSet = Function.call.bind(Map.prototype.set);
 const mapSizeGetter =
   Object.getOwnPropertyDescriptor(Map.prototype, 'size').get;
-const numberIsFinite = Number.isFinite;
 const numberMaxSafeInteger = Number.MAX_SAFE_INTEGER;
-const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
-const objectHasOwn = Object.hasOwn;
 const reflectApply = Reflect.apply;
-const regexpTest = Function.call.bind(RegExp.prototype.test);
 const setAdd = Function.call.bind(Set.prototype.add);
 const setDelete = Function.call.bind(Set.prototype.delete);
 const setHas = Function.call.bind(Set.prototype.has);
 const setSizeGetter =
   Object.getOwnPropertyDescriptor(Set.prototype, 'size').get;
+const acceptanceHandles = new WeakSet();
+const objectFreeze = Object.freeze;
+const weakSetAdd = Function.call.bind(WeakSet.prototype.add);
+const weakSetHas = Function.call.bind(WeakSet.prototype.has);
 
 function fail(message) {
   throw new TypeError(message);
-}
-
-function safeValidationReason(error) {
-  if (!error || typeof error !== 'object' || types.isProxy(error)) {
-    return ROOT_TEXT.VALIDATION_FAILED;
-  }
-  const descriptor = objectGetOwnPropertyDescriptor(error, 'message');
-  if (
-    descriptor &&
-    objectHasOwn(descriptor, dataValueKey) &&
-    typeof descriptor.value === 'string'
-  ) {
-    return descriptor.value;
-  }
-  return ROOT_TEXT.VALIDATION_FAILED;
-}
-
-function assertTimestamp(value, path) {
-  if (
-    typeof value !== 'string' ||
-    !regexpTest(timestampPattern, value) ||
-    !numberIsFinite(dateParse(value))
-  ) {
-    fail(`${path}:iso_timestamp_required`);
-  }
 }
 
 function copyUniqueDigests(values, path, maximumLength) {
@@ -177,33 +168,6 @@ function copyUniqueDigests(values, path, maximumLength) {
     appendOwnArrayValue(copy, digest);
   }
   return copy;
-}
-
-function copySideIds(sideIds, path) {
-  assertBenchmarkResourceArray(sideIds, path, 2);
-  if (sideIds.length !== 2) fail(`${path}:exact_pair_required`);
-  const copy = [];
-  for (let index = 0; index < sideIds.length; index += 1) {
-    assertBenchmarkResourceText(sideIds[index], `${path}.${index}`);
-    appendOwnArrayValue(copy, sideIds[index]);
-  }
-  if (copy[0] === copy[1]) fail(`${path}:distinct_required`);
-  return copy;
-}
-
-function arrayContains(values, target) {
-  for (let index = 0; index < values.length; index += 1) {
-    if (values[index] === target) return true;
-  }
-  return false;
-}
-
-function exactOrderedValues(actual, expected) {
-  if (actual.length !== expected.length) return false;
-  for (let index = 0; index < actual.length; index += 1) {
-    if (actual[index] !== expected[index]) return false;
-  }
-  return true;
 }
 
 function copyReasonCodes(reasonCodes) {
@@ -228,8 +192,8 @@ function copyReasonCodes(reasonCodes) {
 }
 
 function assertProductionInterval(input, path) {
-  assertTimestamp(input.producedAt, `${path}.producedAt`);
-  assertTimestamp(input.validUntil, `${path}.validUntil`);
+  assertBenchmarkResourceTimestamp(input.producedAt, `${path}.producedAt`);
+  assertBenchmarkResourceTimestamp(input.validUntil, `${path}.validUntil`);
   if (dateParse(input.validUntil) <= dateParse(input.producedAt)) {
     fail(`${path}.validity:not_positive`);
   }
@@ -250,7 +214,8 @@ export function createBenchmarkResourceSourceArtifact(
 }
 
 function measuringCellBody(input) {
-  const sideIds = copySideIds(input.sideIds, 'cell.sideIds');
+  const sideIds =
+    copyBenchmarkResourceSideIds(input.sideIds, 'cell.sideIds');
   const capacityReportDigests = copyUniqueDigests(
     input.capacityReportDigests,
     'cell.capacityReportDigests',
@@ -363,7 +328,7 @@ export function createBenchmarkResourceMeasuringCellEvidence(input) {
     collectionIndex += 1) {
     const collection = collections[collectionIndex];
     for (let index = 0; index < collection.length; index += 1) {
-      if (!arrayContains(references, collection[index])) {
+      if (!arrayContainsExactValue(references, collection[index])) {
         appendOwnArrayValue(references, collection[index]);
       }
     }
@@ -411,7 +376,7 @@ export function createBenchmarkResourceNonMeasuringCellEvidence(input) {
     cellId: input.cellId,
     pairId: input.pairId,
     runId: input.runId,
-    sideIds: copySideIds(input.sideIds, 'cell.sideIds'),
+    sideIds: copyBenchmarkResourceSideIds(input.sideIds, 'cell.sideIds'),
     reasonCodes: copyReasonCodes(input.reasonCodes),
     sourceDigests,
     sourceRevision: input.sourceRevision,
@@ -598,27 +563,43 @@ function validateManifestEntry(entry, index, state) {
 
 function resolveManifestEntry(entry, index, state) {
   validateManifestEntry(entry, index, state);
-  const bytes = reflectApply(
-    state.resolve,
-    state.resolver,
-    [entry.digest],
-  );
-  if (bytes === undefined) fail(ROOT_TEXT.RESOLVER_RESOLVE_ARTIFACT_MISSING);
-  assertBenchmarkResourceBytes(bytes, ROOT_TEXT.RESOLVER_RESOLVE_BYTES);
-  const byteLength = bufferByteLength(bytes);
-  if (byteLength !== entry.byteLength) {
-    fail(ROOT_TEXT.RESOLVER_RESOLVE_BYTE_LENGTH_MISMATCH);
+  try {
+    const bytes = reflectApply(
+      state.resolve,
+      state.resolver,
+      [entry.digest],
+    );
+    if (bytes === undefined) fail(ROOT_TEXT.RESOLVER_RESOLVE_ARTIFACT_MISSING);
+    assertBenchmarkResourceBytes(bytes, ROOT_TEXT.RESOLVER_RESOLVE_BYTES);
+    const byteLength = bufferByteLength(bytes);
+    if (byteLength !== entry.byteLength) {
+      fail(ROOT_TEXT.RESOLVER_RESOLVE_BYTE_LENGTH_MISMATCH);
+    }
+    state.totalBytes += byteLength;
+    if (state.totalBytes > BENCHMARK_RESOURCE_LIMIT.TOTAL_ARTIFACT_BYTES) {
+      fail(ROOT_TEXT.RESOLVER_RESOLVE_TOTAL_BYTES_LIMIT);
+    }
+    const artifact = parseBenchmarkResourceArtifact(bytes, entry.digest);
+    if (artifact.kind !== entry.kind) {
+      fail(ROOT_TEXT.RESOLVER_RESOLVE_KIND_MISMATCH);
+    }
+    if (!setHas(allowedArtifactKinds, artifact.kind)) {
+      fail(ROOT_TEXT.RESOLVER_RESOLVE_ARTIFACT_KIND_UNSUPPORTED);
+    }
+    mapSet(state.resolved, entry.digest, artifact);
+  } catch (error) {
+    if (
+      entry.digest !== state.optionalPriceDigest ||
+      entry.kind !== BENCHMARK_RESOURCE_ARTIFACT_KIND.PRICE_SHEET
+    ) {
+      throw error;
+    }
+    mapSet(state.resolved, entry.digest, {
+      kind: BENCHMARK_RESOURCE_ARTIFACT_KIND.PRICE_SHEET,
+      payload: null,
+      references: [],
+    });
   }
-  state.totalBytes += byteLength;
-  if (state.totalBytes > BENCHMARK_RESOURCE_LIMIT.TOTAL_ARTIFACT_BYTES) {
-    fail(ROOT_TEXT.RESOLVER_RESOLVE_TOTAL_BYTES_LIMIT);
-  }
-  const artifact = parseBenchmarkResourceArtifact(bytes, entry.digest);
-  if (artifact.kind !== entry.kind) fail(ROOT_TEXT.RESOLVER_RESOLVE_KIND_MISMATCH);
-  if (!setHas(allowedArtifactKinds, artifact.kind)) {
-    fail(ROOT_TEXT.RESOLVER_RESOLVE_ARTIFACT_KIND_UNSUPPORTED);
-  }
-  mapSet(state.resolved, entry.digest, artifact);
 }
 
 function assertRootReferencesMatchManifest(rootArtifact, payload, resolved) {
@@ -648,6 +629,7 @@ function resolveManifest(rootArtifact, resolver) {
     resolved: new Map(),
     totalBytes: 0,
     previousDigest: '',
+    optionalPriceDigest: payload.priceSheetDigest,
   };
   for (let index = 0; index < payload.artifactManifest.length; index += 1) {
     resolveManifestEntry(payload.artifactManifest[index], index, state);
@@ -693,29 +675,6 @@ function resolvedArtifact(resolved, digest, expectedKind) {
     fail(`root.artifacts:${expectedKind}_missing`);
   }
   return artifact;
-}
-
-function sumSideCost(windows, inventory, price, sideId) {
-  let totalCost = 0;
-  let correct = 0;
-  let sampleCount = 0;
-  for (let index = 0; index < windows.length; index += 1) {
-    const payload = windows[index].payload;
-    if (payload.sideId !== sideId) continue;
-    const cost = computeBenchmarkResourceWindowCost(
-      payload,
-      inventory,
-      price,
-    );
-    totalCost += cost.totalCost;
-    correct += payload.correctSloEligibleOperations;
-    sampleCount += 1;
-  }
-  if (correct === 0) fail(ROOT_TEXT.CELL_COST_EFFECT_CORRECT_OPERATIONS_MISSING);
-  return {
-    value: totalCost / correct * million,
-    sampleCount,
-  };
 }
 
 function assertEffectMatchesSides(effect, sideIds) {
@@ -804,6 +763,7 @@ function validateMeasuringCellIdentity(cellArtifact, payload, owners) {
     fail(ROOT_TEXT.CELL_RECONSTRUCTION_MISMATCH);
   }
   if (
+    owners.profile === null ||
     payload.matrixManifestDigest !== owners.matrixDigest ||
     payload.componentInventoryDigest !== owners.inventoryDigest ||
     payload.priceSheetDigest !== owners.priceDigest ||
@@ -838,19 +798,6 @@ function resolveMeasuringCellCapacities(payload, resolved) {
     fail(ROOT_TEXT.CELL_CAPACITY_EFFECT_CAPACITY_SIDE_MISMATCH);
   }
   return capacities;
-}
-
-function validateResourceWindowCoordinates(window, payload, owners) {
-  if (
-    window.matrixManifestDigest !== owners.matrixDigest ||
-    window.matrixId !== payload.matrixId ||
-    window.cellId !== payload.cellId ||
-    window.pairId !== payload.pairId ||
-    window.runId !== payload.runId ||
-    !arrayContains(payload.sideIds, window.sideId)
-  ) {
-    fail(ROOT_TEXT.CELL_RESOURCE_WINDOW_COORDINATE_MISMATCH);
-  }
 }
 
 function validateComponentCalibrations(
@@ -934,15 +881,23 @@ function validateResourceWindowSources(window, payload, owners, resolved) {
     pairId: window.pairId,
     runId: window.runId,
     sideId: window.sideId,
+    pairedBlockId: window.pairedBlockId,
+    profileIdentity: window.profileIdentity,
+    blockIndex: window.blockIndex,
+    blockedOrderIndex: window.blockedOrderIndex,
+    offeredLoad: window.offeredLoad,
+    loadIndex: window.loadIndex,
+    phase: window.phase,
   };
+  const sourceArtifacts = [];
   for (let index = 0; index < sourceFields.length; index += 1) {
-    assertWindowSourceArtifact(
+    appendOwnArrayValue(sourceArtifacts, assertWindowSourceArtifact(
       resolved,
       window[sourceFields[index][0]],
       sourceFields[index][1],
       `cell.resourceWindow:${sourceFields[index][0]}_missing`,
       expected,
-    );
+    ));
   }
   const windowLive = inspectCalibrationArtifact(
     resolved,
@@ -974,7 +929,15 @@ function validateResourceWindowSources(window, payload, owners, resolved) {
       mapGet(resolved, window.liveCalibrationDigest),
     );
   }
-  return componentsLive;
+  return {
+    componentsLive,
+    sources: {
+      receipt: sourceArtifacts[0],
+      capacity: sourceArtifacts[1],
+      semantic: sourceArtifacts[2],
+      live: sourceArtifacts[liveWindowSourceIndex],
+    },
+  };
 }
 
 function appendWindowJoinEvidence(context, window, sideIds) {
@@ -991,10 +954,14 @@ function appendWindowJoinEvidence(context, window, sideIds) {
     context.liveEngagementDigests,
     window.liveEngagementDigest,
   );
-  if (context.calibrationDigest === null) {
-    context.calibrationDigest = window.liveCalibrationDigest;
-  } else if (context.calibrationDigest !== window.liveCalibrationDigest) {
-    context.calibrationDigestMismatch = true;
+  if (!arrayContainsExactValue(
+    context.calibrationDigests,
+    window.liveCalibrationDigest,
+  )) {
+    appendOwnArrayValue(
+      context.calibrationDigests,
+      window.liveCalibrationDigest,
+    );
   }
   for (let index = 0; index < window.components.length; index += 1) {
     setAdd(
@@ -1004,7 +971,7 @@ function appendWindowJoinEvidence(context, window, sideIds) {
   }
 }
 
-function validateMeasuringCellWindows(payload, owners, resolved) {
+function validateMeasuringCellWindows(payload, owners, resolved, c3Plan) {
   const context = {
     windows: [],
     seenSides: new Set(),
@@ -1012,9 +979,11 @@ function validateMeasuringCellWindows(payload, owners, resolved) {
     liveEngagementDigests: [],
     capacitySampleDigestsBySide: [[], []],
     liveCalibrated: true,
-    calibrationDigest: null,
-    calibrationDigestMismatch: false,
+    calibrationDigests: [],
     windowComponentIdentities: new Set(),
+    coordinateContext: createBenchmarkResourceWindowCoordinateContext({
+      allowCrossSideOverlap: c3Plan === null,
+    }),
   };
   for (let index = 0; index < payload.resourceWindowDigests.length; index += 1) {
     const artifact = resolvedArtifact(
@@ -1024,16 +993,33 @@ function validateMeasuringCellWindows(payload, owners, resolved) {
     );
     const inspection = inspectBenchmarkResourceWindowArtifact(artifact);
     if (!inspection.valid) fail(`cell.resourceWindow:${inspection.reason}`);
-    validateResourceWindowCoordinates(artifact.payload, payload, owners);
+    appendBenchmarkResourceMeasuredWindowCoordinate(
+      context.coordinateContext,
+      artifact.payload,
+      {
+        matrixManifestDigest: owners.matrixDigest,
+        matrixId: payload.matrixId,
+        cellId: payload.cellId,
+        pairId: payload.pairId,
+        runId: payload.runId,
+        profileIdentity: owners.profile.identity,
+        sideIds: payload.sideIds,
+      },
+    );
     appendWindowJoinEvidence(context, artifact.payload, payload.sideIds);
+    const sourceValidation = validateResourceWindowSources(
+      artifact.payload,
+      payload,
+      owners,
+      resolved,
+    );
+    assertBenchmarkResourceC3WindowBinding(
+      c3Plan,
+      artifact.payload,
+      sourceValidation.sources,
+    );
     context.liveCalibrated =
-      validateResourceWindowSources(
-        artifact.payload,
-        payload,
-        owners,
-        resolved,
-      ) &&
-      context.liveCalibrated;
+      sourceValidation.componentsLive && context.liveCalibrated;
     setAdd(context.seenSides, artifact.payload.sideId);
     appendOwnArrayValue(context.windows, artifact);
   }
@@ -1043,25 +1029,32 @@ function validateMeasuringCellWindows(payload, owners, resolved) {
   ) {
     fail(ROOT_TEXT.CELL_RESOURCE_WINDOW_SIDE_COVERAGE_INCOMPLETE);
   }
+  assertBenchmarkResourceMeasuredWindowCoordinatesComplete(
+    context.coordinateContext,
+    payload.sideIds,
+    c3Plan?.coordinates ?? null,
+  );
   if (context.liveCalibrated) {
-    if (context.calibrationDigestMismatch) {
-      fail(ROOT_TEXT.CELL_RESOURCE_WINDOW_LIVE_TOPOLOGY_CLOSURE_MISMATCH);
+    for (let index = 0; index < context.calibrationDigests.length; index += 1) {
+      assertBenchmarkResourceLiveTopologyClosure({
+        calibrationArtifact: mapGet(
+          resolved,
+          context.calibrationDigests[index],
+        ),
+        topologyArtifact: resolvedArtifact(
+          resolved,
+          owners.matrix.alternativeTopologyDigest,
+          BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
+        ),
+        inventory: owners.inventory,
+        windowComponentIdentities: context.windowComponentIdentities,
+        windowComponentCount: reflectApply(
+          setSizeGetter,
+          context.windowComponentIdentities,
+          [],
+        ),
+      });
     }
-    assertBenchmarkResourceLiveTopologyClosure({
-      calibrationArtifact: mapGet(resolved, context.calibrationDigest),
-      topologyArtifact: resolvedArtifact(
-        resolved,
-        owners.matrix.alternativeTopologyDigest,
-        BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
-      ),
-      inventory: owners.inventory,
-      windowComponentIdentities: context.windowComponentIdentities,
-      windowComponentCount: reflectApply(
-        setSizeGetter,
-        context.windowComponentIdentities,
-        [],
-      ),
-    });
   }
   return context;
 }
@@ -1072,16 +1065,17 @@ function validateMeasuringCellJoins(
   capacities,
   context,
   resolved,
+  c3Plan,
 ) {
   const resourcePreregistration = context.liveCalibrated ?
     resolvedArtifact(resolved, owners.matrix.preregistrationDigest,
       BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION).payload : null;
   if (
-    !exactOrderedValues(
+    !arraysExactlyEqual(
       payload.semanticReceiptDigests,
       context.semanticReceiptDigests,
     ) ||
-    !exactOrderedValues(
+    !arraysExactlyEqual(
       payload.liveEngagementDigests,
       context.liveEngagementDigests,
     )
@@ -1090,35 +1084,31 @@ function validateMeasuringCellJoins(
   }
   for (let index = 0; index < capacities.length; index += 1) {
     if (
-      !exactOrderedValues(
+      !arraysExactlyEqual(
         capacities[index].sourceDigests,
         context.capacitySampleDigestsBySide[index],
       )
     ) {
       fail(ROOT_TEXT.CELL_CAPACITY_EFFECT_SAMPLE_JOIN_MISMATCH);
     }
-    if (context.liveCalibrated) {
-      for (let sourceIndex = 0;
-        sourceIndex < capacities[index].sourceDigests.length;
-        sourceIndex += 1) {
-        assertBenchmarkResourceCapacityProtocolSummary(
-          capacities[index],
-          resolvedArtifact(
-            resolved,
-            capacities[index].sourceDigests[sourceIndex],
-            BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE,
-          ),
-          payload.sideIds[index],
-          index,
-          resourcePreregistration,
-        );
-      }
+    if (context.liveCalibrated && c3Plan !== null) {
+      assertBenchmarkResourceCapacityProtocolSummary(
+        capacities[index],
+        resolvedArtifact(
+          resolved,
+          capacities[index].sourceDigests[0],
+          BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE,
+        ),
+        payload.sideIds[index],
+        index,
+        resourcePreregistration,
+      );
     }
   }
   assertEffectMatchesSides(payload.capacityEffect, payload.sideIds);
   assertEffectMatchesSides(payload.costEffect, payload.sideIds);
   if (
-    !exactOrderedValues(
+    !arraysExactlyEqual(
       payload.capacityEffect.sourceDigests,
       payload.capacityReportDigests,
     )
@@ -1136,7 +1126,7 @@ function validateMeasuringCellJoins(
     );
   }
   if (
-    !exactOrderedValues(
+    !arraysExactlyEqual(
       payload.costEffect.sourceDigests,
       expectedCostSources,
     )
@@ -1145,87 +1135,37 @@ function validateMeasuringCellJoins(
   }
 }
 
-function recomputeMeasuringCellEffects(payload, owners, capacities, windows) {
-  const expectedCapacity = createBenchmarkResourcePairedEffect({
-    effectType: BENCHMARK_RESOURCE_EFFECT.CAPACITY,
-    numeratorSideId: payload.sideIds[0],
-    denominatorSideId: payload.sideIds[1],
-    numeratorValue: capacities[0].capacityCorrectOpsPerSecond,
-    denominatorValue: capacities[1].capacityCorrectOpsPerSecond,
-    confidenceInterval: {
-      lower:
-        capacities[0].confidenceInterval.lower /
-        capacities[1].confidenceInterval.upper,
-      upper:
-        capacities[0].confidenceInterval.upper /
-        capacities[1].confidenceInterval.lower,
-    },
-    practicalThreshold: payload.capacityEffect.practicalThreshold,
-    sampleCount:
-      capacities[0].sampleCount < capacities[1].sampleCount ?
-        capacities[0].sampleCount :
-        capacities[1].sampleCount,
-    sourceDigests: payload.capacityEffect.sourceDigests,
-    currency: BENCHMARK_RESOURCE_NO_CURRENCY,
-  });
-  const numeratorCost = sumSideCost(
-    windows,
-    owners.inventory,
-    owners.price,
-    payload.sideIds[0],
-  );
-  const denominatorCost = sumSideCost(
-    windows,
-    owners.inventory,
-    owners.price,
-    payload.sideIds[1],
-  );
-  const expectedCost = createBenchmarkResourcePairedEffect({
-    effectType: BENCHMARK_RESOURCE_EFFECT.COST,
-    numeratorSideId: payload.sideIds[0],
-    denominatorSideId: payload.sideIds[1],
-    numeratorValue: numeratorCost.value,
-    denominatorValue: denominatorCost.value,
-    confidenceInterval: {
-      lower: numeratorCost.value / denominatorCost.value,
-      upper: numeratorCost.value / denominatorCost.value,
-    },
-    practicalThreshold: payload.costEffect.practicalThreshold,
-    sampleCount:
-      numeratorCost.sampleCount < denominatorCost.sampleCount ?
-        numeratorCost.sampleCount :
-        denominatorCost.sampleCount,
-    sourceDigests: payload.costEffect.sourceDigests,
-    currency: owners.price.currency,
-  });
-  if (
-    digestBenchmarkSemanticData(expectedCapacity) !==
-      digestBenchmarkSemanticData(payload.capacityEffect) ||
-    digestBenchmarkSemanticData(expectedCost) !==
-      digestBenchmarkSemanticData(payload.costEffect)
-  ) {
-    fail(ROOT_TEXT.CELL_EFFECTS_RECOMPUTATION_MISMATCH);
-  }
-}
-
 function validateMeasuringCell(cellArtifact, payload, owners, resolved) {
   validateMeasuringCellIdentity(cellArtifact, payload, owners);
   const capacities = resolveMeasuringCellCapacities(payload, resolved);
-  const context = validateMeasuringCellWindows(payload, owners, resolved);
+  const c3Plan = createBenchmarkResourceC3WindowPlan({
+    capacities,
+    resolved,
+    payload,
+    owners,
+    resourcePreregistration: resolvedArtifact(
+      resolved,
+      owners.matrix.preregistrationDigest,
+      BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
+    ).payload,
+  });
+  const context =
+    validateMeasuringCellWindows(payload, owners, resolved, c3Plan);
   validateMeasuringCellJoins(
     payload,
     owners,
     capacities,
     context,
     resolved,
+    c3Plan,
   );
-  recomputeMeasuringCellEffects(
+  recomputeBenchmarkResourceMeasuringCellEffects(
     payload,
     owners,
     capacities,
     context.windows,
   );
-  return context.liveCalibrated;
+  return context.liveCalibrated && c3Plan !== null;
 }
 
 function validateNonMeasuringCell(cellArtifact, payload, owners) {
@@ -1314,7 +1254,7 @@ function allArtifactsSemanticallyOwned(root, resolved) {
     root.priceSheetDigest,
   ];
   for (let index = 0; index < root.cellEvidenceDigests.length; index += 1) {
-    if (!arrayContains(pending, root.cellEvidenceDigests[index])) {
+    if (!arrayContainsExactValue(pending, root.cellEvidenceDigests[index])) {
       appendOwnArrayValue(pending, root.cellEvidenceDigests[index]);
     }
   }
@@ -1393,6 +1333,23 @@ function resolveEvidenceOwners(root, resolved) {
     inspectBenchmarkResourceMatrixManifestArtifact,
     ROOT_TEXT.ROOT_MATRIX,
   );
+  let profile = null;
+  if (matrixArtifact.payload.profileEnvelopeDigest !== null) {
+    const profileArtifact = resolvedArtifact(
+      resolved,
+      matrixArtifact.payload.profileEnvelopeDigest,
+      BENCHMARK_RESOURCE_ARTIFACT_KIND.PROFILE_ENVELOPE,
+    );
+    const profileInspection =
+      inspectScaleProfileEnvelope(profileArtifact.payload);
+    if (!profileInspection.valid) {
+      fail(`root.profile:${profileInspection.reason}`);
+    }
+    profile = {
+      ...profileInspection.profile,
+      envelopeDigest: matrixArtifact.payload.profileEnvelopeDigest,
+    };
+  }
   const inventoryArtifact = resolvedArtifact(
     resolved,
     root.componentInventoryDigest,
@@ -1408,80 +1365,55 @@ function resolveEvidenceOwners(root, resolved) {
     root.priceSheetDigest,
     BENCHMARK_RESOURCE_ARTIFACT_KIND.PRICE_SHEET,
   );
-  inspectOwner(
-    priceArtifact,
-    inspectBenchmarkResourcePriceSheetArtifact,
-    ROOT_TEXT.ROOT_PRICE,
-  );
-  if (
-    dateParse(root.producedAt) < dateParse(priceArtifact.payload.validFrom) ||
-    dateParse(root.producedAt) >= dateParse(priceArtifact.payload.validUntil)
-  ) {
-    fail(ROOT_TEXT.ROOT_PRICE_NOT_VALID_AT_PRODUCTION);
-  }
+  const priceInspection =
+    inspectBenchmarkResourcePriceSheetArtifact(priceArtifact);
+  const priceValidAtProduction = priceInspection.valid &&
+    dateParse(root.producedAt) >=
+      dateParse(priceArtifact.payload.validFrom) &&
+    dateParse(root.producedAt) <
+      dateParse(priceArtifact.payload.validUntil);
   return {
     matrixDigest: root.matrixManifestDigest,
     matrix: matrixArtifact.payload,
     inventoryDigest: root.componentInventoryDigest,
     inventory: inventoryArtifact.payload,
     priceDigest: root.priceSheetDigest,
-    price: priceArtifact.payload,
+    price: priceValidAtProduction ? priceArtifact.payload : null,
+    priceValidAtProduction,
+    profile,
     root,
   };
 }
 
-function assertEvidenceOwnerJoin(owners) {
-  if (owners.inventory.matrixId !== owners.matrix.matrixId) {
-    fail(ROOT_TEXT.ROOT_OWNERS_MATRIX_INVENTORY_MISMATCH);
-  }
-  for (let index = 0; index < owners.matrix.sideIds.length; index += 1) {
-    if (
-      findBenchmarkResourceInventorySide(
-        owners.inventory,
-        owners.matrix.sideIds[index],
-      ) === undefined
-    ) {
-      fail(ROOT_TEXT.ROOT_OWNERS_MATRIX_INVENTORY_MISMATCH);
-    }
-  }
-}
-
 export function validateBenchmarkResourceEvidenceRoot(receipt) {
-  try {
-    const {root, resolved} = resolveRootReceipt(receipt);
-    const owners = resolveEvidenceOwners(root, resolved);
-    assertEvidenceOwnerJoin(owners);
-    const cellValidation = validateCells(root, owners, resolved);
-    allArtifactsSemanticallyOwned(root, resolved);
-    return {
-      valid: true,
-      reason: ROOT_TEXT.VALID,
-      claimEligible: cellValidation.claimEligible,
-      matrixId: owners.matrix.matrixId,
-      cellCount: root.cellEvidenceDigests.length,
-      artifactCount: reflectApply(mapSizeGetter, resolved, []),
-    };
-  } catch (error) {
-    return {
-      valid: false,
-      reason: safeValidationReason(error),
-      claimEligible: false,
-      matrixId: ROOT_TEXT.UNRESOLVED,
-      cellCount: 0,
-      artifactCount: 0,
-    };
-  }
+  const acceptance = acceptBenchmarkResourceClaimEvidenceRoot(receipt);
+  const inspection =
+    inspectBenchmarkResourceClaimEvidenceAcceptance(acceptance);
+  const valid =
+    inspection.state === BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.ACCEPTED;
+  return {
+    valid,
+    reason: valid ? ROOT_TEXT.VALID : inspection.reason,
+    claimEligible: valid && inspection.evidence.claimEligible,
+    matrixId: valid ? inspection.evidence.matrixId : ROOT_TEXT.UNRESOLVED,
+    cellCount: valid ? inspection.evidence.cells.length : 0,
+    artifactCount: valid ? inspection.artifactCount : 0,
+  };
 }
 
 export function inspectBenchmarkResourceClaimEvidenceRoot(receipt) {
   try {
     const {rootDigest, root, resolved} = resolveRootReceipt(receipt);
     const owners = resolveEvidenceOwners(root, resolved);
-    assertEvidenceOwnerJoin(owners);
+    assertBenchmarkResourceEvidenceOwnerJoin(
+      owners,
+      ROOT_TEXT.ROOT_OWNERS_MATRIX_INVENTORY_MISMATCH,
+    );
     const cellValidation = validateCells(root, owners, resolved);
     allArtifactsSemanticallyOwned(root, resolved);
     return {
       state: BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.ACCEPTED,
+      artifactCount: reflectApply(mapSizeGetter, resolved, []),
       evidence: createBenchmarkResourceClaimEvidenceView({
         rootDigest,
         claimEligible: cellValidation.claimEligible,
@@ -1491,9 +1423,41 @@ export function inspectBenchmarkResourceClaimEvidenceRoot(receipt) {
       }),
     };
   } catch (error) {
+    const reason = safeBenchmarkResourceValidationReason(
+      error,
+      ROOT_TEXT.VALIDATION_FAILED,
+    );
     return {
       state: BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.REJECTED,
-      reason: safeValidationReason(error),
+      reason,
+      measurementOutcome: benchmarkResourceRejectedMeasurementOutcome(reason),
     };
   }
+}
+
+export function acceptBenchmarkResourceClaimEvidenceRoot(receipt) {
+  const handle = objectFreeze({
+    inspection: objectFreeze(
+      inspectBenchmarkResourceClaimEvidenceRoot(receipt),
+    ),
+  });
+  weakSetAdd(acceptanceHandles, handle);
+  return handle;
+}
+
+export function inspectBenchmarkResourceClaimEvidenceAcceptance(handle) {
+  if (
+    handle !== null &&
+    typeof handle === 'object' &&
+    weakSetHas(acceptanceHandles, handle)
+  ) {
+    return handle.inspection;
+  }
+  const reason = BENCHMARK_RESOURCE_MEASUREMENT_REASON
+    .IMMUTABLE_RESOLUTION_DRIFT;
+  return {
+    state: BENCHMARK_RESOURCE_CLAIM_EVIDENCE_STATE.REJECTED,
+    reason,
+    measurementOutcome: benchmarkResourceRejectedMeasurementOutcome(reason),
+  };
 }
