@@ -43,7 +43,9 @@ const C4_SOURCE_PATHS = Object.freeze([
   'test/distributed/harness/docker-provider.js',
 ]);
 
-export async function collectBenchmarkResourceSourceProvenance() {
+export async function collectBenchmarkResourceSourceProvenance(
+  sourcePaths = C4_SOURCE_PATHS,
+) {
   const {stdout: revisionText} = await execFileAsync(
     localText.GIT,
     [localText.REV_PARSE, localText.HEAD],
@@ -59,7 +61,7 @@ export async function collectBenchmarkResourceSourceProvenance() {
       localText.NO_EXT_DIFF,
       baseCommit,
       localText.PATH_SEPARATOR,
-      ...C4_SOURCE_PATHS,
+      ...sourcePaths,
     ],
     {encoding: localText.UTF8},
   );
