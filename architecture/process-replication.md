@@ -35,8 +35,8 @@ they are not evidence of an active replicated service-state path.
 
 The Raft snapshot protocol (create / atomic install / bulk transfer /
 compacted-follower catch-up / proof-gated retention-compaction) exists for
-file-backed SQLite partition replicas (`src/raft/snapshot-*.js`, quests
-S1-S6 of `solve/specs/raft-snapshot-transfer-install/`, ladder complete) and
+file-backed SQLite partition replicas (`src/raft/snapshot-*.js`; certified
+through the six-stage snapshot-transfer-install ladder, now complete) and
 is now WIRED INTO PRODUCTION. A leader-only checkpoint cadence
 (`src/partition/partition-snapshot-cadence.js`) rides the 1s
 prepared-state-hold sweep; on fire it seals a generation and proof-gate-

@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-05T14:01:30.774Z",
-  "rawViolationCount": 836,
+  "generatedAt": "2026-07-28T06:26:20.235Z",
+  "rawViolationCount": 855,
   "violations": [
     {
       "filePath": "scripts/analyze-latent-blockers.js",
@@ -94,7 +94,7 @@
     },
     {
       "filePath": "scripts/check-guideline-hot-path-diagnostics.js",
-      "line": 170,
+      "line": 140,
       "column": 7,
       "functionName": "classifyCallViolationKind",
       "kind": "raw_null_empty_state_outcome",
@@ -103,7 +103,7 @@
     },
     {
       "filePath": "scripts/check-guideline-hot-path-diagnostics.js",
-      "line": 181,
+      "line": 151,
       "column": 5,
       "functionName": "classifyCallViolationKind",
       "kind": "raw_null_empty_state_outcome",
@@ -112,7 +112,7 @@
     },
     {
       "filePath": "scripts/check-guideline-hot-path-diagnostics.js",
-      "line": 191,
+      "line": 161,
       "column": 3,
       "functionName": "classifyCallViolationKind",
       "kind": "raw_null_empty_state_outcome",
@@ -174,8 +174,44 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
+      "filePath": "scripts/checks/probe-benchmark-semantic-parity-head.js",
+      "line": 127,
+      "column": 1,
+      "functionName": "observeHeadBehavior",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 127) and SQL/DB (line 104) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "scripts/checks/probe-benchmark-semantic-parity-head.js",
+      "line": 51,
+      "column": 9,
+      "functionName": "observeHeadBehavior",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"statements\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "scripts/checks/run-benchmark-statistical-capacity-live-engagement.js",
+      "line": 435,
+      "column": 1,
+      "functionName": "positiveResetWindow",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 435) and SQL/DB (line 418) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "scripts/checks/run-benchmark-statistical-capacity-live-engagement.js",
+      "line": 509,
+      "column": 5,
+      "functionName": "strictCleanup",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"state.pool\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
       "filePath": "scripts/closure-ledger-state.js",
-      "line": 62,
+      "line": 65,
       "column": 1,
       "functionName": "extractStatus",
       "independentIfCount": 4,
@@ -186,7 +222,7 @@
     },
     {
       "filePath": "scripts/examples/examples-runner-constants.js",
-      "line": 69,
+      "line": 73,
       "column": 3,
       "kind": "schema_unsafe_system_table_write",
       "reason": "INSERT OR REPLACE or full-row replacement is forbidden for steady-state lifecycle/status mutation of existing system rows",
@@ -194,7 +230,7 @@
     },
     {
       "filePath": "scripts/examples/examples-runner-constants.js",
-      "line": 74,
+      "line": 78,
       "column": 3,
       "kind": "schema_unsafe_system_table_write",
       "reason": "INSERT OR REPLACE or full-row replacement is forbidden for steady-state lifecycle/status mutation of existing system rows",
@@ -202,7 +238,7 @@
     },
     {
       "filePath": "scripts/generate-steering-llm-pack.js",
-      "line": 952,
+      "line": 1272,
       "column": 9,
       "functionName": "validateRulesHaveTriggerAndCitation",
       "kind": "raw_null_empty_state_outcome",
@@ -230,6 +266,33 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
+      "filePath": "scripts/run-comparative-efficiency-movielens-public-request-workload.js",
+      "line": 384,
+      "column": 7,
+      "functionName": "collectLiveEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "semantic outcome object property \"failure\" has raw null or empty-state value",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "scripts/run-comparative-efficiency-movielens-public-request-workload.js",
+      "line": 425,
+      "column": 7,
+      "functionName": "evidenceIndexValue",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "semantic outcome object property \"sourceState\" has raw null or empty-state value",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "scripts/run-live-repetitions.js",
+      "line": 275,
+      "column": 3,
+      "functionName": "reportNonMeasuringReason",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
       "filePath": "scripts/run-raft-logic-investigation-spike.js",
       "line": 411,
       "column": 7,
@@ -239,11 +302,22 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
+      "filePath": "scripts/solve/amend.js",
+      "line": 131,
+      "column": 1,
+      "functionName": "buildAmendment",
+      "independentIfCount": 10,
+      "target": "amendmentKind, statement",
+      "kind": "independent_if_semantic_returns",
+      "reason": "multiple independent if statements return semantic outcome objects",
+      "ruleReference": "system guidelines.md §4.1.1 Semantic Decision Boundaries Must Use Explicit State Models"
+    },
+    {
       "filePath": "scripts/solve/attempt.js",
-      "line": 23,
+      "line": 44,
       "column": 1,
       "functionName": "runAttemptCommand",
-      "independentIfCount": 12,
+      "independentIfCount": 19,
       "target": "blocked",
       "kind": "independent_if_semantic_returns",
       "reason": "multiple independent if statements return semantic outcome objects",
@@ -251,7 +325,7 @@
     },
     {
       "filePath": "scripts/solve/continuation.js",
-      "line": 131,
+      "line": 153,
       "column": 1,
       "functionName": "continuationFromHealth",
       "independentIfCount": 4,
@@ -262,7 +336,7 @@
     },
     {
       "filePath": "scripts/solve/current-blocker.js",
-      "line": 239,
+      "line": 267,
       "column": 1,
       "functionName": "selectedTheoryStaleness",
       "independentIfCount": 5,
@@ -273,7 +347,7 @@
     },
     {
       "filePath": "scripts/solve/current-blocker.js",
-      "line": 239,
+      "line": 267,
       "column": 52,
       "functionName": "selectedTheoryStaleness",
       "kind": "raw_null_empty_state_outcome",
@@ -282,7 +356,7 @@
     },
     {
       "filePath": "scripts/solve/current-blocker.js",
-      "line": 260,
+      "line": 288,
       "column": 35,
       "functionName": "selectedTheoryStaleness",
       "kind": "raw_null_empty_state_outcome",
@@ -291,7 +365,7 @@
     },
     {
       "filePath": "scripts/solve/current-blocker.js",
-      "line": 284,
+      "line": 312,
       "column": 33,
       "functionName": "selectedTheoryStaleness",
       "kind": "raw_null_empty_state_outcome",
@@ -300,7 +374,7 @@
     },
     {
       "filePath": "scripts/solve/evidence.js",
-      "line": 230,
+      "line": 168,
       "column": 1,
       "functionName": "ingestEvidence",
       "independentIfCount": 8,
@@ -311,10 +385,10 @@
     },
     {
       "filePath": "scripts/solve/gate.js",
-      "line": 187,
+      "line": 276,
       "column": 1,
       "functionName": "resolveGateDecision",
-      "independentIfCount": 7,
+      "independentIfCount": 8,
       "target": "outcome",
       "kind": "independent_if_semantic_returns",
       "reason": "multiple independent if statements return semantic outcome objects",
@@ -322,12 +396,21 @@
     },
     {
       "filePath": "scripts/solve/gate.js",
-      "line": 187,
+      "line": 276,
       "column": 44,
       "functionName": "resolveGateDecision",
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome returned for semantic target",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "scripts/solve/handoff.js",
+      "line": 425,
+      "column": 3,
+      "functionName": "runGitCommand",
+      "kind": "local_retry_loop",
+      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
+      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
     },
     {
       "filePath": "scripts/solve/invariant-liveness.js",
@@ -362,10 +445,10 @@
     },
     {
       "filePath": "scripts/solve/loop.js",
-      "line": 844,
+      "line": 1160,
       "column": 1,
       "functionName": "runSupervised",
-      "independentIfCount": 5,
+      "independentIfCount": 6,
       "target": "outcome",
       "kind": "independent_if_semantic_returns",
       "reason": "multiple independent if statements return semantic outcome objects",
@@ -373,7 +456,7 @@
     },
     {
       "filePath": "scripts/solve/reopen.js",
-      "line": 55,
+      "line": 58,
       "column": 1,
       "functionName": "assessReopen",
       "independentIfCount": 4,
@@ -384,7 +467,7 @@
     },
     {
       "filePath": "scripts/solve/reopen.js",
-      "line": 111,
+      "line": 116,
       "column": 5,
       "functionName": "assessReopen",
       "kind": "raw_null_empty_state_outcome",
@@ -392,8 +475,17 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
+      "filePath": "scripts/solve/step.js",
+      "line": 350,
+      "column": 23,
+      "functionName": "autoIngestFrontierEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "semantic outcome object property \"decision\" has raw null or empty-state value",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
       "filePath": "scripts/solve/store.js",
-      "line": 114,
+      "line": 189,
       "column": 5,
       "functionName": "initialFrontierState",
       "kind": "raw_null_empty_state_outcome",
@@ -402,7 +494,7 @@
     },
     {
       "filePath": "scripts/solve/store.js",
-      "line": 117,
+      "line": 192,
       "column": 5,
       "functionName": "initialFrontierState",
       "kind": "raw_null_empty_state_outcome",
@@ -411,7 +503,7 @@
     },
     {
       "filePath": "scripts/solve/store.js",
-      "line": 159,
+      "line": 241,
       "column": 3,
       "functionName": "applyReopen",
       "kind": "raw_null_empty_state_outcome",
@@ -420,7 +512,16 @@
     },
     {
       "filePath": "scripts/solve/store.js",
-      "line": 176,
+      "line": 262,
+      "column": 5,
+      "functionName": "applyFinding",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"frontier.parkKind\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "scripts/solve/store.js",
+      "line": 268,
       "column": 1,
       "functionName": "applyEvidenceIngested",
       "independentIfCount": 5,
@@ -428,6 +529,26 @@
       "kind": "independent_if_semantic_assignment",
       "reason": "multiple independent if statements assign the same semantic outcome target",
       "ruleReference": "system guidelines.md §4.1.1 Semantic Decision Boundaries Must Use Explicit State Models"
+    },
+    {
+      "filePath": "scripts/solve/verification.js",
+      "line": 960,
+      "column": 1,
+      "functionName": "probeBaseReproducibility",
+      "independentIfCount": 3,
+      "target": "unprobedReason",
+      "kind": "independent_if_semantic_returns",
+      "reason": "multiple independent if statements return semantic outcome objects",
+      "ruleReference": "system guidelines.md §4.1.1 Semantic Decision Boundaries Must Use Explicit State Models"
+    },
+    {
+      "filePath": "scripts/solve/verification.js",
+      "line": 986,
+      "column": 5,
+      "functionName": "probeBaseReproducibility",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "semantic outcome object property \"unprobedReason\" has raw null or empty-state value",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
       "filePath": "scripts/solve/work-theory-ledger.js",
@@ -440,25 +561,25 @@
     },
     {
       "filePath": "src/admin/admin-authoritative-repair-policy.js",
-      "line": 163,
+      "line": 205,
       "column": 1,
       "functionName": "deriveAuthoritativeRepairTables",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 163) and SQL/DB (line 166) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 205) and SQL/DB (line 220) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/admin/admin-authoritative-repair-policy.js",
-      "line": 253,
+      "line": 319,
       "column": 1,
       "functionName": "evaluateAuthoritativeRepairPolicy",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 253) and SQL/DB (line 252) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 319) and SQL/DB (line 318) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/admin/admin-control-snapshot-control-plane-diagnostics.js",
-      "line": 112,
+      "line": 282,
       "column": 5,
       "functionName": "buildMembershipPublicationOwnerQueueDiagnostics",
       "kind": "raw_null_empty_state_outcome",
@@ -467,34 +588,34 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-build-base.js",
-      "line": 405,
+      "line": 410,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 405) and SQL/DB (line 383) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 410) and SQL/DB (line 388) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 55,
+      "line": 71,
       "column": 1,
       "functionName": "buildControlSnapshotResolveOptions",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 55) and SQL/DB (line 51) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 71) and SQL/DB (line 67) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/admin/admin-control-snapshot-local-diagnostics-methods.js",
-      "line": 557,
+      "line": 559,
       "column": 1,
       "functionName": "assignAdminControlSnapshotLocalDiagnosticsMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 557) and SQL/DB (line 567) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 559) and SQL/DB (line 569) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/admin/admin-control-snapshot-membership-publication-reconcile.js",
-      "line": 324,
+      "line": 316,
       "column": 3,
       "functionName": "resolveMembershipPublicationHandoffRetryAfterMs",
       "kind": "raw_null_empty_state_outcome",
@@ -503,7 +624,7 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot-node-view-projection.js",
-      "line": 126,
+      "line": 145,
       "column": 9,
       "functionName": "resolveControlSnapshotReadyLeaseNodeIds",
       "kind": "raw_null_empty_state_outcome",
@@ -530,16 +651,16 @@
     },
     {
       "filePath": "src/admin/admin-control-snapshot.js",
-      "line": 140,
+      "line": 129,
       "column": 1,
       "functionName": "hasPressureOrTimeoutRepairCause",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 140) and SQL/DB (line 142) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 129) and SQL/DB (line 131) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/admin/admin-control-snapshot.js",
-      "line": 229,
+      "line": 218,
       "column": 5,
       "functionName": "resolveLatestMembershipPublicationRow",
       "kind": "raw_null_empty_state_outcome",
@@ -548,52 +669,52 @@
     },
     {
       "filePath": "src/admin/admin-preflight-snapshot.js",
-      "line": 85,
+      "line": 146,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 85) and SQL/DB (line 78) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 146) and SQL/DB (line 139) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/admin/admin-preflight-snapshot.js",
-      "line": 273,
+      "line": 335,
       "column": 1,
       "functionName": "evaluateAuthoritativePreflightRepair",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 273) and SQL/DB (line 261) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 335) and SQL/DB (line 323) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/admin/admin-preflight-snapshot.js",
-      "line": 532,
+      "line": 611,
       "column": 1,
       "functionName": "buildPreflightCacheFreshnessSummary",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 532) and SQL/DB (line 555) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 611) and SQL/DB (line 623) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/admin/admin-preflight-snapshot.js",
-      "line": 624,
+      "line": 692,
       "column": 1,
       "functionName": "buildEmptyPreflightDiscoverySummary",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 624) and SQL/DB (line 625) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 692) and SQL/DB (line 693) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/admin/admin-preflight-snapshot.js",
-      "line": 646,
+      "line": 714,
       "column": 1,
       "functionName": "buildPreflightDiscoverySummaryFromSnapshot",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 646) and SQL/DB (line 654) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 714) and SQL/DB (line 722) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/admin/admin-service-discovery-authoritative-repair-failures.js",
-      "line": 252,
+      "line": 247,
       "column": 9,
       "functionName": "resolveAuthoritativeRepairFailureBaseRetryAfterMs",
       "kind": "raw_null_empty_state_outcome",
@@ -602,11 +723,11 @@
     },
     {
       "filePath": "src/admin/admin-service-discovery-readiness-context-methods.js",
-      "line": 414,
+      "line": 423,
       "column": 1,
       "functionName": "assignAdminServiceDiscoveryReadinessContextMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 414) and SQL/DB (line 534) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 423) and SQL/DB (line 572) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -620,20 +741,20 @@
     },
     {
       "filePath": "src/admin/admin-service-discovery-repair-cache-methods.js",
-      "line": 384,
+      "line": 437,
       "column": 1,
       "functionName": "assignAdminServiceDiscoveryRepairCacheMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 384) and SQL/DB (line 362) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 437) and SQL/DB (line 415) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/admin/admin-service-discovery-repair-methods.js",
-      "line": 499,
+      "line": 504,
       "column": 1,
       "functionName": "assignAdminServiceDiscoveryRepairMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 499) and SQL/DB (line 466) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 504) and SQL/DB (line 471) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -656,11 +777,11 @@
     },
     {
       "filePath": "src/admin/admin-service-discovery.js",
-      "line": 429,
+      "line": 433,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 429) and SQL/DB (line 414) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 433) and SQL/DB (line 418) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -674,7 +795,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-api-shared.js",
-      "line": 188,
+      "line": 189,
       "column": 5,
       "functionName": "buildLoadLaneRuntimeAuthoritySummary",
       "kind": "raw_null_empty_state_outcome",
@@ -683,7 +804,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-api-shared.js",
-      "line": 269,
+      "line": 270,
       "column": 5,
       "functionName": "buildLoadLaneAdmissionErrorDetails",
       "kind": "raw_null_empty_state_outcome",
@@ -692,7 +813,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-diagnostics-route-methods.js",
-      "line": 290,
+      "line": 385,
       "column": 5,
       "functionName": "buildControlSnapshotQueryResult",
       "kind": "local_retry_loop",
@@ -701,7 +822,7 @@
     },
     {
       "filePath": "src/admin/admin-websocket-diagnostics-route-methods.js",
-      "line": 316,
+      "line": 432,
       "column": 11,
       "functionName": "buildControlSnapshotQueryResult",
       "kind": "local_retry_loop",
@@ -845,20 +966,20 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-api.js",
-      "line": 516,
+      "line": 536,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 516) and SQL/DB (line 490) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 536) and SQL/DB (line 510) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-control-plane-runtime-methods.js",
-      "line": 269,
+      "line": 279,
       "column": 1,
       "functionName": "createBootstrapServiceControlPlaneRuntimeMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 269) and SQL/DB (line 270) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 279) and SQL/DB (line 280) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -881,25 +1002,25 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-seed-delegates.js",
-      "line": 291,
+      "line": 295,
       "column": 1,
       "functionName": "buildPhaseExecutionDelegates",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 291) and SQL/DB (line 307) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 295) and SQL/DB (line 311) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-seed-delegates.js",
-      "line": 369,
+      "line": 373,
       "column": 1,
       "functionName": "buildCleanupDelegates",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 369) and SQL/DB (line 349) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 373) and SQL/DB (line 353) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/bootstrap/bootstrap-service-seed-delegates.js",
-      "line": 446,
+      "line": 451,
       "column": 9,
       "functionName": "buildCleanupDelegates",
       "kind": "raw_null_empty_state_outcome",
@@ -917,11 +1038,11 @@
     },
     {
       "filePath": "src/bootstrap/bootstrap-service.js",
-      "line": 526,
+      "line": 529,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 526) and SQL/DB (line 436) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 529) and SQL/DB (line 439) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -935,7 +1056,7 @@
     },
     {
       "filePath": "src/bootstrap/control-plane-write-health-owner.js",
-      "line": 78,
+      "line": 77,
       "column": 3,
       "functionName": "getControlPlanePublicationStory",
       "kind": "raw_null_empty_state_outcome",
@@ -1061,7 +1182,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-admission-readiness.js",
-      "line": 88,
+      "line": 60,
       "column": 5,
       "functionName": "normalizeBootstrapResponseReasons",
       "kind": "raw_null_empty_state_outcome",
@@ -1070,7 +1191,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-admission-readiness.js",
-      "line": 441,
+      "line": 399,
       "column": 5,
       "functionName": "join",
       "kind": "local_retry_loop",
@@ -1079,7 +1200,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-admission-readiness.js",
-      "line": 727,
+      "line": 697,
       "column": 9,
       "functionName": "resolveRetryableJoinResumeDecision",
       "kind": "raw_null_empty_state_outcome",
@@ -1160,43 +1281,70 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-delegate-bundles.js",
-      "line": 397,
+      "line": 398,
       "column": 1,
       "functionName": "assignNodeJoiningDelegateBundleMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 397) and SQL/DB (line 445) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 398) and SQL/DB (line 446) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/bootstrap/node-joining-owner-construction.js",
-      "line": 686,
+      "line": 706,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 686) and SQL/DB (line 467) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 706) and SQL/DB (line 487) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/bootstrap/node-joining-publication-activation.js",
-      "line": 214,
+      "line": 227,
       "column": 1,
       "functionName": "createJoinLocalPartitionService",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 214) and SQL/DB (line 216) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 227) and SQL/DB (line 219) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/bootstrap/node-joining-publication-activation.js",
-      "line": 643,
+      "line": 658,
       "column": 1,
       "functionName": "createCdcIntegrationService",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 643) and SQL/DB (line 646) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 658) and SQL/DB (line 661) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
-      "filePath": "src/bootstrap/node-joining-replica-descriptor-coordination.js",
+      "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
+      "line": 155,
+      "column": 7,
+      "functionName": "getPriorityPlacementFormationStartupAuthority",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
       "line": 163,
+      "column": 7,
+      "functionName": "getPriorityPlacementFormationStartupAuthority",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/node-joining-ready-signal-readiness.js",
+      "line": 187,
+      "column": 7,
+      "functionName": "getPriorityPlacementFormationPreReadyNodeIds",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/node-joining-replica-descriptor-coordination.js",
+      "line": 166,
       "column": 7,
       "functionName": "buildJoinActualStateRows",
       "kind": "raw_null_empty_state_outcome",
@@ -1519,6 +1667,51 @@
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
+      "filePath": "src/bootstrap/owners/service-leader-readiness-owner.js",
+      "line": 469,
+      "column": 1,
+      "functionName": "refreshAuthoritativePartitionLeaderStatus",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 469) and SQL/DB (line 444) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/bootstrap/owners/service-leader-readiness-owner.js",
+      "line": 425,
+      "column": 7,
+      "functionName": "refreshAuthoritativePartitionLeaderStatus",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/owners/service-leader-readiness-owner.js",
+      "line": 450,
+      "column": 9,
+      "functionName": "refreshAuthoritativePartitionLeaderStatus",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/owners/service-leader-readiness-owner.js",
+      "line": 473,
+      "column": 7,
+      "functionName": "refreshAuthoritativePartitionLeaderStatus",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/owners/service-leader-readiness-owner.js",
+      "line": 501,
+      "column": 1,
+      "functionName": "waitForServiceLeaders",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 501) and SQL/DB (line 495) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
       "filePath": "src/bootstrap/owners/service-registration-handoff-owner.js",
       "line": 356,
       "column": 1,
@@ -1538,16 +1731,16 @@
     },
     {
       "filePath": "src/bootstrap/phases/connect-websocket-phase.js",
-      "line": 157,
+      "line": 156,
       "column": 1,
       "functionName": "resolveBootstrapAddressScope",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 157) and SQL/DB (line 166) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 156) and SQL/DB (line 165) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/bootstrap/phases/connect-websocket-phase.js",
-      "line": 437,
+      "line": 436,
       "column": 5,
       "functionName": "connectToSeedNode",
       "kind": "local_retry_loop",
@@ -1556,11 +1749,11 @@
     },
     {
       "filePath": "src/bootstrap/phases/connect-websocket-phase.js",
-      "line": 579,
+      "line": 578,
       "column": 1,
       "functionName": "connectToClusterNodesFromSnapshot",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 579) and SQL/DB (line 550) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 578) and SQL/DB (line 549) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -1754,11 +1947,11 @@
     },
     {
       "filePath": "src/bootstrap/shared/control-plane-setup.js",
-      "line": 453,
+      "line": 513,
       "column": 1,
       "functionName": "create",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 453) and SQL/DB (line 455) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 513) and SQL/DB (line 515) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -1943,16 +2136,16 @@
     },
     {
       "filePath": "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
-      "line": 207,
+      "line": 365,
       "column": 1,
       "functionName": "_startRebalancer",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 207) and SQL/DB (line 212) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 365) and SQL/DB (line 370) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
-      "line": 330,
+      "line": 488,
       "column": 18,
       "functionName": "attachRuntimeServiceRebalancerOwner",
       "kind": "local_retry_loop",
@@ -1961,7 +2154,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
-      "line": 308,
+      "line": 466,
       "column": 7,
       "functionName": "attachRuntimeServiceRebalancerOwner",
       "kind": "raw_null_empty_state_outcome",
@@ -1970,7 +2163,7 @@
     },
     {
       "filePath": "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
-      "line": 322,
+      "line": 480,
       "column": 9,
       "functionName": "attachRuntimeServiceRebalancerOwner",
       "kind": "raw_null_empty_state_outcome",
@@ -1979,12 +2172,30 @@
     },
     {
       "filePath": "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
-      "line": 343,
+      "line": 501,
       "column": 9,
       "functionName": "attachRuntimeServiceRebalancerOwner",
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome assigned/declared for semantic target \"retryTimer\"",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/bootstrap/shared/snapshot-catchup-wiring.js",
+      "line": 117,
+      "column": 1,
+      "functionName": "attachSnapshotCatchupDispatcher",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 117) and SQL/DB (line 119) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/bootstrap/shared/snapshot-catchup-wiring.js",
+      "line": 205,
+      "column": 1,
+      "functionName": "armSnapshotOfferRouting",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 205) and SQL/DB (line 199) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/bootstrap/shared/startup-convergence-gate.js",
@@ -1997,11 +2208,11 @@
     },
     {
       "filePath": "src/bootstrap/shared/startup-sql-runtime-handoff.js",
-      "line": 103,
+      "line": 127,
       "column": 1,
       "functionName": "attachSqlRuntimeToStartupOwner",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 103) and SQL/DB (line 107) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 127) and SQL/DB (line 131) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -2033,7 +2244,7 @@
     },
     {
       "filePath": "src/bootstrap/traffic-readiness-utils.js",
-      "line": 267,
+      "line": 272,
       "column": 3,
       "functionName": "waitForLifecycleReadiness",
       "kind": "local_retry_loop",
@@ -2042,7 +2253,7 @@
     },
     {
       "filePath": "src/bootstrap/traffic-readiness-utils.js",
-      "line": 241,
+      "line": 246,
       "column": 5,
       "functionName": "waitForLifecycleReadiness",
       "kind": "raw_null_empty_state_outcome",
@@ -2051,7 +2262,7 @@
     },
     {
       "filePath": "src/bootstrap/traffic-readiness-utils.js",
-      "line": 270,
+      "line": 275,
       "column": 7,
       "functionName": "waitForLifecycleReadiness",
       "kind": "raw_null_empty_state_outcome",
@@ -2078,11 +2289,11 @@
     },
     {
       "filePath": "src/cache/read-only-system-table-cache.js",
-      "line": 184,
+      "line": 212,
       "column": 1,
       "functionName": "createReadOnlyCache",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 184) and SQL/DB (line 178) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 212) and SQL/DB (line 206) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -2127,39 +2338,30 @@
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 112) and SQL/DB (line 105) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 112) and SQL/DB (line 99) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 294,
-      "column": 7,
-      "functionName": "filterEndpointsByStatus",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/cache/system-table-cache.js",
-      "line": 848,
+      "line": 527,
       "column": 1,
       "functionName": "applySystemTableChange",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 848) and SQL/DB (line 858) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 527) and SQL/DB (line 539) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/cache/system-table-cache.js",
-      "line": 880,
+      "line": 568,
       "column": 1,
       "functionName": "clear",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 880) and SQL/DB (line 879) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 568) and SQL/DB (line 563) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/cdc/cdc-event-handler.js",
-      "line": 639,
+      "line": 640,
       "column": 7,
       "functionName": "resolveRouterConnectionState",
       "kind": "raw_null_empty_state_outcome",
@@ -2168,7 +2370,7 @@
     },
     {
       "filePath": "src/cdc/cdc-event-handler.js",
-      "line": 659,
+      "line": 660,
       "column": 5,
       "functionName": "resolveRouterConnectionState",
       "kind": "raw_null_empty_state_outcome",
@@ -2177,7 +2379,7 @@
     },
     {
       "filePath": "src/cdc/cdc-event-handler.js",
-      "line": 725,
+      "line": 701,
       "column": 5,
       "functionName": "getNodeStateEventTimestamp",
       "kind": "raw_null_empty_state_outcome",
@@ -2231,16 +2433,16 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 270,
+      "line": 281,
       "column": 1,
       "functionName": "waitForCacheUpdate",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 270) and SQL/DB (line 117) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 281) and SQL/DB (line 128) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 147,
+      "line": 158,
       "column": 21,
       "functionName": "waitForCacheUpdate",
       "kind": "local_retry_loop",
@@ -2249,7 +2451,7 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 285,
+      "line": 296,
       "column": 5,
       "functionName": "confirmCacheVisibilityHoleWithinBudget",
       "kind": "local_retry_loop",
@@ -2258,47 +2460,47 @@
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 417,
+      "line": 459,
       "column": 1,
       "functionName": "refreshAuthoritativeCacheRow",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 417) and SQL/DB (line 412) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 459) and SQL/DB (line 425) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/cdc/cdc-integration-service-cache-visibility-wait.js",
-      "line": 588,
+      "line": 626,
       "column": 1,
       "functionName": "repairCacheVisibilityHole",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 588) and SQL/DB (line 474) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 626) and SQL/DB (line 512) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/cdc/cdc-integration-service-mutation-operations.js",
-      "line": 290,
+      "line": 289,
       "column": 1,
       "functionName": "insertSystemTableRow",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 290) and SQL/DB (line 290) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 289) and SQL/DB (line 289) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/cdc/cdc-integration-service-mutation-operations.js",
-      "line": 473,
+      "line": 471,
       "column": 1,
       "functionName": "updateSystemTableRow",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 473) and SQL/DB (line 473) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 471) and SQL/DB (line 471) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/cdc/cdc-integration-service-mutations.js",
-      "line": 87,
+      "line": 86,
       "column": 1,
       "functionName": "deleteSystemTableRow",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 87) and SQL/DB (line 60) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 86) and SQL/DB (line 60) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -2307,7 +2509,7 @@
       "column": 1,
       "functionName": "upsertSystemTableRow",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 220) and SQL/DB (line 196) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 220) and SQL/DB (line 195) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -2339,7 +2541,7 @@
     },
     {
       "filePath": "src/cdc/cdc-routed-mutation-readiness.js",
-      "line": 463,
+      "line": 485,
       "column": 5,
       "functionName": "executeSQLViaQueryEngine",
       "kind": "local_retry_loop",
@@ -2348,11 +2550,11 @@
     },
     {
       "filePath": "src/cdc/cdc-routed-mutation-readiness.js",
-      "line": 632,
+      "line": 654,
       "column": 1,
       "functionName": "isTransientCdcError",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 632) and SQL/DB (line 630) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 654) and SQL/DB (line 652) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -2438,20 +2640,20 @@
     },
     {
       "filePath": "src/cli/index.js",
-      "line": 84,
+      "line": 85,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 84) and SQL/DB (line 63) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 85) and SQL/DB (line 64) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/cli/index.js",
-      "line": 150,
+      "line": 152,
       "column": 1,
       "functionName": "initializeComponents",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 150) and SQL/DB (line 155) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 152) and SQL/DB (line 157) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -2545,7 +2747,7 @@
     },
     {
       "filePath": "src/control-plane/active-node-projection.js",
-      "line": 368,
+      "line": 370,
       "column": 5,
       "functionName": "resolveTransportAliveRetentionMissReason",
       "kind": "raw_null_empty_state_outcome",
@@ -2581,20 +2783,20 @@
     },
     {
       "filePath": "src/control-plane/authoritative-control-plane-view.js",
-      "line": 541,
+      "line": 533,
       "column": 1,
       "functionName": "readRows",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 541) and SQL/DB (line 594) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 533) and SQL/DB (line 569) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/control-plane/authoritative-control-plane-view.js",
-      "line": 660,
+      "line": 635,
       "column": 1,
       "functionName": "readNodeSnapshot",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 660) and SQL/DB (line 657) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 635) and SQL/DB (line 632) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -2626,7 +2828,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-constants.js",
-      "line": 215,
+      "line": 204,
       "column": 3,
       "functionName": "normalizeControlPlaneNodeStatePublicationMode",
       "kind": "raw_null_empty_state_outcome",
@@ -2635,7 +2837,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-mutation-readiness.js",
-      "line": 340,
+      "line": 346,
       "column": 9,
       "functionName": "getSystemTableMutationRoutingGapBlocker",
       "kind": "raw_null_empty_state_outcome",
@@ -2644,7 +2846,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-mutation-readiness.js",
-      "line": 342,
+      "line": 348,
       "column": 9,
       "functionName": "getSystemTableMutationRoutingGapBlocker",
       "kind": "raw_null_empty_state_outcome",
@@ -2707,7 +2909,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
-      "line": 341,
+      "line": 344,
       "column": 5,
       "functionName": "getCapacityReasonCode",
       "kind": "raw_null_empty_state_outcome",
@@ -2716,7 +2918,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-node-service-rows.js",
-      "line": 407,
+      "line": 410,
       "column": 9,
       "functionName": "getNodeTransportState",
       "kind": "raw_null_empty_state_outcome",
@@ -2725,20 +2927,20 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-participation-base.js",
-      "line": 284,
+      "line": 291,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 284) and SQL/DB (line 280) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 291) and SQL/DB (line 287) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-participation-base.js",
-      "line": 595,
+      "line": 603,
       "column": 1,
       "functionName": "buildControlPlaneParticipation",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 595) and SQL/DB (line 603) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 603) and SQL/DB (line 611) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -2797,7 +2999,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 632,
+      "line": 635,
       "column": 7,
       "functionName": "getLatestMembershipPublicationRowSync",
       "kind": "raw_null_empty_state_outcome",
@@ -2806,7 +3008,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 654,
+      "line": 657,
       "column": 5,
       "functionName": "getLatestMembershipPublicationRowSync",
       "kind": "raw_null_empty_state_outcome",
@@ -2815,7 +3017,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 660,
+      "line": 663,
       "column": 7,
       "functionName": "getLatestMembershipPublicationRow",
       "kind": "raw_null_empty_state_outcome",
@@ -2824,7 +3026,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 679,
+      "line": 682,
       "column": 5,
       "functionName": "getLatestMembershipPublicationRow",
       "kind": "raw_null_empty_state_outcome",
@@ -2833,7 +3035,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-resolution.js",
-      "line": 690,
+      "line": 693,
       "column": 7,
       "functionName": "getLatestPublishedMembershipPublicationRowSync",
       "kind": "raw_null_empty_state_outcome",
@@ -2842,7 +3044,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 389,
+      "line": 391,
       "column": 9,
       "functionName": "getPriorityRecoveryPlanningAnswerForOwnerRead",
       "kind": "raw_null_empty_state_outcome",
@@ -2851,7 +3053,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 396,
+      "line": 398,
       "column": 7,
       "functionName": "getPriorityRecoveryPlanningAnswerForOwnerRead",
       "kind": "raw_null_empty_state_outcome",
@@ -2860,7 +3062,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 406,
+      "line": 408,
       "column": 9,
       "functionName": "getPriorityRecoveryPlanningAnswerForOwnerReadSync",
       "kind": "raw_null_empty_state_outcome",
@@ -2869,7 +3071,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 413,
+      "line": 415,
       "column": 7,
       "functionName": "getPriorityRecoveryPlanningAnswerForOwnerReadSync",
       "kind": "raw_null_empty_state_outcome",
@@ -2878,7 +3080,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 442,
+      "line": 444,
       "column": 7,
       "functionName": "buildMembershipPublicationDiagnostics",
       "kind": "raw_null_empty_state_outcome",
@@ -2887,7 +3089,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-publication-planning-snapshot.js",
-      "line": 500,
+      "line": 502,
       "column": 7,
       "functionName": "buildMembershipPublicationPlanningSnapshot",
       "kind": "raw_null_empty_state_outcome",
@@ -2923,20 +3125,20 @@
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-service-node-methods.js",
-      "line": 175,
+      "line": 426,
       "column": 1,
       "functionName": "getNodeReadiness",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 175) and SQL/DB (line 165) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 426) and SQL/DB (line 416) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/control-plane/control-plane-readiness-snapshot-store.js",
-      "line": 754,
+      "line": 815,
       "column": 1,
       "functionName": "maybeStartBackgroundSyncReadinessRefresh",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 754) and SQL/DB (line 754) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 815) and SQL/DB (line 815) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -3031,7 +3233,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-dependency-resolution.js",
-      "line": 157,
+      "line": 156,
       "column": 7,
       "functionName": "resolveLocalDeferredMutationReadinessFailure",
       "kind": "raw_null_empty_state_outcome",
@@ -3040,7 +3242,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-dependency-resolution.js",
-      "line": 162,
+      "line": 161,
       "column": 7,
       "functionName": "resolveLocalDeferredMutationReadinessFailure",
       "kind": "raw_null_empty_state_outcome",
@@ -3049,7 +3251,7 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-dependency-resolution.js",
-      "line": 170,
+      "line": 169,
       "column": 7,
       "functionName": "resolveLocalDeferredMutationReadinessFailure",
       "kind": "raw_null_empty_state_outcome",
@@ -3094,11 +3296,29 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-query-execution.js",
-      "line": 213,
+      "line": 179,
+      "column": 7,
+      "functionName": "admitExecuteQueryPressure",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-system-table-gateway-query-execution.js",
+      "line": 185,
+      "column": 7,
+      "functionName": "admitExecuteQueryPressure",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/control-plane-system-table-gateway-query-execution.js",
+      "line": 233,
       "column": 1,
       "functionName": "shouldUseSqlMutationFallback",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 213) and SQL/DB (line 233) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 233) and SQL/DB (line 253) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -3112,11 +3332,11 @@
     },
     {
       "filePath": "src/control-plane/control-plane-system-table-gateway-read-dispatch.js",
-      "line": 104,
+      "line": 105,
       "column": 1,
       "functionName": "executeRead",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 104) and SQL/DB (line 166) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 105) and SQL/DB (line 167) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -3166,20 +3386,20 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service-publication-methods.js",
-      "line": 173,
+      "line": 191,
       "column": 1,
       "functionName": "sendHeartbeat",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 173) and SQL/DB (line 194) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 191) and SQL/DB (line 212) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/control-plane/heartbeat-service-publication-methods.js",
-      "line": 442,
+      "line": 460,
       "column": 1,
       "functionName": "buildSharedHeartbeatWriteOptions",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 442) and SQL/DB (line 441) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 460) and SQL/DB (line 459) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -3193,20 +3413,20 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service.js",
-      "line": 65,
+      "line": 69,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 65) and SQL/DB (line 102) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 69) and SQL/DB (line 106) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/control-plane/lease-service.js",
-      "line": 64,
+      "line": 67,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 64) and SQL/DB (line 63) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 67) and SQL/DB (line 66) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -3366,7 +3586,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-planning-evidence.js",
-      "line": 159,
+      "line": 158,
       "column": 3,
       "functionName": "resolveControlPlanePublicationsOwner",
       "kind": "raw_null_empty_state_outcome",
@@ -3402,7 +3622,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-priority-partition-summary.js",
-      "line": 356,
+      "line": 357,
       "column": 9,
       "functionName": "buildDerivedPriorityPartitionSummary",
       "kind": "raw_null_empty_state_outcome",
@@ -3420,7 +3640,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 333,
+      "line": 330,
       "column": 5,
       "functionName": "normalizeLatestPublicationRow",
       "kind": "raw_null_empty_state_outcome",
@@ -3429,7 +3649,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 409,
+      "line": 406,
       "column": 5,
       "functionName": "safelyGetLatestMembershipPublicationRow",
       "kind": "raw_null_empty_state_outcome",
@@ -3438,7 +3658,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 414,
+      "line": 411,
       "column": 5,
       "functionName": "safelyGetLatestMembershipPublicationRow",
       "kind": "raw_null_empty_state_outcome",
@@ -3447,7 +3667,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 420,
+      "line": 417,
       "column": 5,
       "functionName": "readMembershipPublicationConvergence",
       "kind": "raw_null_empty_state_outcome",
@@ -3456,7 +3676,7 @@
     },
     {
       "filePath": "src/control-plane/membership-publication-row-helpers.js",
-      "line": 428,
+      "line": 425,
       "column": 3,
       "functionName": "readMembershipPublicationConvergence",
       "kind": "raw_null_empty_state_outcome",
@@ -3474,11 +3694,11 @@
     },
     {
       "filePath": "src/control-plane/owners/control-plane-publications-owner.js",
-      "line": 61,
+      "line": 49,
       "column": 1,
       "functionName": "getPublicationFromCache",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 61) and SQL/DB (line 61) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 49) and SQL/DB (line 49) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -3506,6 +3726,15 @@
       "functionName": "getReplicaOperationFromCache",
       "kind": "mixed_cache_and_sql_decision",
       "reason": "decision branch mixes cache (line 15) and SQL/DB (line 15) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/control-plane/owners/runtime-access-policy-owner.js",
+      "line": 520,
+      "column": 1,
+      "functionName": "getRuntimePolicy",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 520) and SQL/DB (line 520) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -3551,6 +3780,24 @@
       "functionName": "evaluateAllPhases",
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome assigned/declared for semantic target \"phases\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/pressure-governor.js",
+      "line": 727,
+      "column": 11,
+      "functionName": "drainAdmissionWaiters",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"decision\"",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/control-plane/pressure-governor.js",
+      "line": 731,
+      "column": 9,
+      "functionName": "drainAdmissionWaiters",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"decision\"",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
@@ -3609,7 +3856,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-normalization.js",
-      "line": 106,
+      "line": 307,
       "column": 5,
       "functionName": "normalizePriorityRecoverySemanticStateId",
       "kind": "raw_null_empty_state_outcome",
@@ -3618,7 +3865,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-normalization.js",
-      "line": 163,
+      "line": 364,
       "column": 5,
       "functionName": "resolvePriorityRecoveryExplicitSemanticState",
       "kind": "raw_null_empty_state_outcome",
@@ -3627,7 +3874,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-normalization.js",
-      "line": 169,
+      "line": 370,
       "column": 9,
       "functionName": "normalizePriorityRecoveryBlockedPartitions",
       "kind": "raw_null_empty_state_outcome",
@@ -3636,7 +3883,7 @@
     },
     {
       "filePath": "src/control-plane/priority-recovery-observation-normalization.js",
-      "line": 462,
+      "line": 663,
       "column": 3,
       "functionName": "resolvePriorityRecoverySnapshotSemanticState",
       "kind": "raw_null_empty_state_outcome",
@@ -3680,17 +3927,8 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/control-plane/priority-recovery-snapshot-closure.js",
-      "line": 316,
-      "column": 9,
-      "functionName": "buildPriorityRecoveryPartitionAssessment",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"blockerReasons\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/control-plane/projection-readiness-evidence.js",
-      "line": 141,
+      "line": 144,
       "column": 5,
       "functionName": "buildProjectionPublicationOwnerStreamFromSource",
       "kind": "raw_null_empty_state_outcome",
@@ -3699,7 +3937,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-builder.js",
-      "line": 141,
+      "line": 142,
       "column": 5,
       "functionName": "buildCanonicalPublicationConvergence",
       "kind": "raw_null_empty_state_outcome",
@@ -3708,7 +3946,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-convergence-gate-builder.js",
-      "line": 414,
+      "line": 457,
       "column": 5,
       "functionName": "buildCanonicalPublicationConvergenceGate",
       "kind": "raw_null_empty_state_outcome",
@@ -3717,7 +3955,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-evidence-builders.js",
-      "line": 160,
+      "line": 161,
       "column": 5,
       "functionName": "buildObservationPublicationGate",
       "kind": "raw_null_empty_state_outcome",
@@ -3771,7 +4009,7 @@
     },
     {
       "filePath": "src/control-plane/publication-recovery-stream-evidence.js",
-      "line": 138,
+      "line": 130,
       "column": 5,
       "functionName": "normalizeProvidedPublicationOwnerStream",
       "kind": "raw_null_empty_state_outcome",
@@ -3816,7 +4054,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-readiness-capture.js",
-      "line": 555,
+      "line": 575,
       "column": 7,
       "functionName": "buildReadyRetryDispatchReadiness",
       "kind": "raw_null_empty_state_outcome",
@@ -3825,7 +4063,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-readiness-capture.js",
-      "line": 567,
+      "line": 587,
       "column": 7,
       "functionName": "buildReadyRetryDispatchReadiness",
       "kind": "raw_null_empty_state_outcome",
@@ -3834,7 +4072,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-readiness-capture.js",
-      "line": 573,
+      "line": 593,
       "column": 7,
       "functionName": "buildReadyRetryDispatchReadiness",
       "kind": "raw_null_empty_state_outcome",
@@ -3843,7 +4081,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-readiness-capture.js",
-      "line": 580,
+      "line": 600,
       "column": 7,
       "functionName": "buildReadyRetryDispatchReadiness",
       "kind": "raw_null_empty_state_outcome",
@@ -3852,7 +4090,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
-      "line": 162,
+      "line": 158,
       "column": 7,
       "functionName": "getNodeReadyRetryWatermark",
       "kind": "raw_null_empty_state_outcome",
@@ -3861,7 +4099,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
-      "line": 217,
+      "line": 213,
       "column": 7,
       "functionName": "getNodeStateUpdateWatermark",
       "kind": "raw_null_empty_state_outcome",
@@ -3870,7 +4108,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
-      "line": 240,
+      "line": 236,
       "column": 7,
       "functionName": "getNodeStateUpdateWatermark",
       "kind": "raw_null_empty_state_outcome",
@@ -3879,7 +4117,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
-      "line": 247,
+      "line": 243,
       "column": 7,
       "functionName": "getNodeStateUpdateWatermark",
       "kind": "raw_null_empty_state_outcome",
@@ -3888,16 +4126,16 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
-      "line": 450,
+      "line": 445,
       "column": 1,
       "functionName": "buildNodeStateUpdateWriteOptions",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 450) and SQL/DB (line 449) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 445) and SQL/DB (line 444) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
-      "line": 459,
+      "line": 454,
       "column": 7,
       "functionName": "resolveMembershipPublicationService",
       "kind": "raw_null_empty_state_outcome",
@@ -3906,7 +4144,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
-      "line": 766,
+      "line": 759,
       "column": 7,
       "functionName": "acknowledgeMembershipPublicationForNode",
       "kind": "raw_null_empty_state_outcome",
@@ -3915,7 +4153,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-health-readiness.js",
-      "line": 785,
+      "line": 778,
       "column": 7,
       "functionName": "acknowledgeMembershipPublicationForNode",
       "kind": "raw_null_empty_state_outcome",
@@ -3924,7 +4162,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 482,
+      "line": 558,
       "column": 5,
       "functionName": "resolvePriorityRecoveryPublicationConvergence",
       "kind": "raw_null_empty_state_outcome",
@@ -3933,7 +4171,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 498,
+      "line": 574,
       "column": 7,
       "functionName": "getAuthoritativeDispatchRetryRowsForNode",
       "kind": "raw_null_empty_state_outcome",
@@ -3942,7 +4180,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 507,
+      "line": 583,
       "column": 9,
       "functionName": "getAuthoritativeDispatchRetryRowsForNode",
       "kind": "raw_null_empty_state_outcome",
@@ -3951,7 +4189,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-replay-readiness.js",
-      "line": 526,
+      "line": 602,
       "column": 7,
       "functionName": "getAuthoritativeDispatchRetryRowsForNode",
       "kind": "raw_null_empty_state_outcome",
@@ -3960,7 +4198,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-retry-scheduling.js",
-      "line": 642,
+      "line": 629,
       "column": 5,
       "functionName": "computeNodeStateUpdateRetryDelayMs",
       "kind": "local_retry_loop",
@@ -4013,38 +4251,38 @@
     },
     {
       "filePath": "src/entrypoint-runtime-admin-composition.js",
-      "line": 154,
+      "line": 157,
       "column": 1,
       "functionName": "createAdminAPIWithLiveQuery",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 154) and SQL/DB (line 173) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 157) and SQL/DB (line 176) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/entrypoint-runtime-admin-composition.js",
-      "line": 358,
+      "line": 361,
       "column": 1,
       "functionName": "createSqlRuntimeComposition",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 358) and SQL/DB (line 397) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 361) and SQL/DB (line 411) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/entrypoint-runtime-admin-composition.js",
-      "line": 440,
+      "line": 454,
       "column": 1,
       "functionName": "startEarlyAdminSqlRuntime",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 440) and SQL/DB (line 438) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 454) and SQL/DB (line 452) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/entrypoint-runtime-admin-composition.js",
-      "line": 490,
+      "line": 504,
       "column": 1,
       "functionName": "startAdminRuntimeComposition",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 490) and SQL/DB (line 526) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 504) and SQL/DB (line 550) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -4148,16 +4386,16 @@
     },
     {
       "filePath": "src/index.js",
-      "line": 440,
+      "line": 359,
       "column": 1,
       "functionName": "startJoinNode",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 440) and SQL/DB (line 476) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 359) and SQL/DB (line 395) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/index.js",
-      "line": 231,
+      "line": 145,
       "column": 11,
       "functionName": "startJoinNode",
       "kind": "raw_null_empty_state_outcome",
@@ -4166,11 +4404,11 @@
     },
     {
       "filePath": "src/index.js",
-      "line": 665,
+      "line": 586,
       "column": 1,
       "functionName": "startSeedNode",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 665) and SQL/DB (line 701) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 586) and SQL/DB (line 622) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -4283,11 +4521,11 @@
     },
     {
       "filePath": "src/logging/log-query-service.js",
-      "line": 540,
+      "line": 539,
       "column": 1,
       "functionName": "getControlPlaneSystemTableGateway",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 540) and SQL/DB (line 539) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 539) and SQL/DB (line 538) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -4301,7 +4539,7 @@
     },
     {
       "filePath": "src/logging/logs-table-service.js",
-      "line": 440,
+      "line": 465,
       "column": 7,
       "functionName": "flush",
       "kind": "local_retry_loop",
@@ -4535,7 +4773,7 @@
     },
     {
       "filePath": "src/node/node-service.js",
-      "line": 590,
+      "line": 588,
       "column": 7,
       "functionName": "getLifecycleState",
       "kind": "raw_null_empty_state_outcome",
@@ -4543,21 +4781,12 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/node/replica-handler-create-methods.js",
-      "line": 511,
-      "column": 1,
-      "functionName": "assignReplicaHandlerCreateMethods",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 511) and SQL/DB (line 763) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
       "filePath": "src/node/replica-handler-runtime-metadata-methods.js",
-      "line": 651,
+      "line": 677,
       "column": 1,
       "functionName": "assignReplicaHandlerRuntimeMetadataMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 651) and SQL/DB (line 582) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 677) and SQL/DB (line 608) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -4613,15 +4842,6 @@
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome returned for semantic target",
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/partition/managed-split-topology-adapter.js",
-      "line": 26,
-      "column": 1,
-      "functionName": "listTableInfos",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 26) and SQL/DB (line 26) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/partition/managed-split-workflow-provisioning-methods.js",
@@ -4741,33 +4961,43 @@
       "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
     },
     {
+      "filePath": "src/partition/partition-raft-storage.js",
+      "line": 127,
+      "column": 1,
+      "functionName": "loadAppliedWatermark",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 127) and SQL/DB (line 130) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/partition/partition-raft-storage.js",
+      "line": 182,
+      "column": 1,
+      "functionName": "recordAppliedAdvance",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 182) and SQL/DB (line 177) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
       "filePath": "src/partition/partition-service-constants.js",
-      "line": 56,
+      "line": 66,
       "column": 22,
       "kind": "schema_unsafe_system_table_write",
       "reason": "INSERT OR REPLACE or full-row replacement is forbidden for steady-state lifecycle/status mutation of existing system rows",
       "ruleReference": "system guidelines.md §6.3 Persistent system state authority"
     },
     {
-      "filePath": "src/partition/partition-service-constants.js",
-      "line": 58,
-      "column": 5,
-      "kind": "schema_unsafe_system_table_write",
-      "reason": "INSERT OR REPLACE or full-row replacement is forbidden for steady-state lifecycle/status mutation of existing system rows",
-      "ruleReference": "system guidelines.md §6.3 Persistent system state authority"
-    },
-    {
       "filePath": "src/partition/partition-service-core-base.js",
-      "line": 217,
+      "line": 230,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 217) and SQL/DB (line 222) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 230) and SQL/DB (line 235) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 158,
+      "line": 206,
       "column": 7,
       "functionName": "latchReadonlyWatermarkUnavailable",
       "kind": "raw_null_empty_state_outcome",
@@ -4776,7 +5006,7 @@
     },
     {
       "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 170,
+      "line": 218,
       "column": 7,
       "functionName": "closeLeaderDurabilityFitnessWitness",
       "kind": "raw_null_empty_state_outcome",
@@ -4785,7 +5015,7 @@
     },
     {
       "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 188,
+      "line": 236,
       "column": 7,
       "functionName": "enforceLeaderDurabilityFitness",
       "kind": "raw_null_empty_state_outcome",
@@ -4794,7 +5024,7 @@
     },
     {
       "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 221,
+      "line": 270,
       "column": 1,
       "functionName": "observeLeaderDurabilitySignals",
       "independentIfCount": 2,
@@ -4805,7 +5035,7 @@
     },
     {
       "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 222,
+      "line": 271,
       "column": 7,
       "functionName": "observeLeaderDurabilitySignals",
       "kind": "raw_null_empty_state_outcome",
@@ -4814,7 +5044,7 @@
     },
     {
       "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 249,
+      "line": 298,
       "column": 1,
       "functionName": "observeCommitDurabilityDivergence",
       "independentIfCount": 4,
@@ -4825,7 +5055,7 @@
     },
     {
       "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 250,
+      "line": 299,
       "column": 7,
       "functionName": "observeCommitDurabilityDivergence",
       "kind": "raw_null_empty_state_outcome",
@@ -4834,7 +5064,7 @@
     },
     {
       "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 255,
+      "line": 304,
       "column": 7,
       "functionName": "observeCommitDurabilityDivergence",
       "kind": "raw_null_empty_state_outcome",
@@ -4843,7 +5073,7 @@
     },
     {
       "filePath": "src/partition/partition-service-durability-fitness.js",
-      "line": 280,
+      "line": 329,
       "column": 1,
       "functionName": "resolveLeaderDurabilityUnfitConsequence",
       "independentIfCount": 5,
@@ -4854,20 +5084,20 @@
     },
     {
       "filePath": "src/partition/partition-service-lifecycle-methods.js",
-      "line": 103,
+      "line": 106,
       "column": 1,
       "functionName": "shutdown",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 103) and SQL/DB (line 145) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 106) and SQL/DB (line 148) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/partition/partition-service-raft-init-base.js",
-      "line": 510,
+      "line": 544,
       "column": 1,
       "functionName": "initialize",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 510) and SQL/DB (line 369) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 544) and SQL/DB (line 337) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -4925,24 +5155,6 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/partition/partition-service-transaction-base.js",
-      "line": 357,
-      "column": 1,
-      "functionName": "enforcePreparedStateHoldTimeouts",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 357) and SQL/DB (line 344) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/partition/partition-service-transaction-base.js",
-      "line": 768,
-      "column": 1,
-      "functionName": "rollbackTransaction",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 768) and SQL/DB (line 766) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
       "filePath": "src/partition/partition-service-transaction-session-methods.js",
       "line": 79,
       "column": 7,
@@ -4979,8 +5191,17 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
+      "filePath": "src/partition/partition-snapshot-cadence.js",
+      "line": 203,
+      "column": 1,
+      "functionName": "createPartitionSnapshotCadence",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 203) and SQL/DB (line 206) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
       "filePath": "src/partition/partition-split-merge-manager-transition-methods.js",
-      "line": 114,
+      "line": 249,
       "column": 7,
       "functionName": "resolveManagedSplitExecutionRetryDueAtMs",
       "kind": "raw_null_empty_state_outcome",
@@ -4989,7 +5210,7 @@
     },
     {
       "filePath": "src/partition/partition-split-merge-manager-transition-methods.js",
-      "line": 187,
+      "line": 322,
       "column": 41,
       "functionName": "scheduleDeferredManagedSplitRetry",
       "kind": "local_retry_loop",
@@ -4998,47 +5219,47 @@
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 73,
+      "line": 77,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 73) and SQL/DB (line 57) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 77) and SQL/DB (line 61) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 651,
+      "line": 663,
       "column": 1,
       "functionName": "readTableRow",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 651) and SQL/DB (line 647) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 663) and SQL/DB (line 659) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 671,
+      "line": 683,
       "column": 1,
       "functionName": "readPartitionRow",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 671) and SQL/DB (line 667) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 683) and SQL/DB (line 679) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 691,
+      "line": 703,
       "column": 1,
       "functionName": "readMessageGroupRow",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 691) and SQL/DB (line 687) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 703) and SQL/DB (line 699) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/policy/table-policy-service.js",
-      "line": 712,
+      "line": 724,
       "column": 1,
       "functionName": "getControlPlaneSystemTableGateway",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 712) and SQL/DB (line 711) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 724) and SQL/DB (line 723) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -5052,7 +5273,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-query-planner.js",
-      "line": 68,
+      "line": 69,
       "column": 7,
       "functionName": "planStatement",
       "kind": "raw_null_empty_state_outcome",
@@ -5061,7 +5282,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-transaction-protocol.js",
-      "line": 444,
+      "line": 521,
       "column": 5,
       "functionName": "executeParticipantOperationWithRetry",
       "kind": "local_retry_loop",
@@ -5070,7 +5291,7 @@
     },
     {
       "filePath": "src/query/distributed/distributed-write-coordinator.js",
-      "line": 349,
+      "line": 350,
       "column": 5,
       "functionName": "executePartitionStatement",
       "kind": "local_retry_loop",
@@ -5079,43 +5300,43 @@
     },
     {
       "filePath": "src/query/distributed/parallel-query-coordinator.js",
-      "line": 51,
+      "line": 50,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 51) and SQL/DB (line 86) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 50) and SQL/DB (line 82) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/query-executor-base.js",
-      "line": 42,
+      "line": 50,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 42) and SQL/DB (line 82) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 50) and SQL/DB (line 90) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/query-executor-base.js",
-      "line": 127,
+      "line": 135,
       "column": 1,
       "functionName": "setSystemCache",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 127) and SQL/DB (line 127) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 135) and SQL/DB (line 135) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",
-      "line": 86,
+      "line": 87,
       "column": 1,
       "functionName": "executeOnPartition",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 86) and SQL/DB (line 748) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 87) and SQL/DB (line 756) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",
-      "line": 117,
+      "line": 118,
       "column": 5,
       "functionName": "executeOnPartition",
       "kind": "local_retry_loop",
@@ -5124,7 +5345,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",
-      "line": 261,
+      "line": 262,
       "column": 7,
       "functionName": "executeOnPartition",
       "kind": "local_retry_loop",
@@ -5133,7 +5354,7 @@
     },
     {
       "filePath": "src/query/query-executor-partition-delivery.js",
-      "line": 93,
+      "line": 94,
       "column": 9,
       "functionName": "executeOnPartition",
       "kind": "raw_null_empty_state_outcome",
@@ -5196,47 +5417,47 @@
     },
     {
       "filePath": "src/query/query-executor-partition-routing-snapshot.js",
-      "line": 155,
+      "line": 157,
       "column": 1,
       "functionName": "getPartitionServiceRows",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 155) and SQL/DB (line 146) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 157) and SQL/DB (line 148) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/query-executor-partition-routing-snapshot.js",
-      "line": 575,
+      "line": 577,
       "column": 1,
       "functionName": "hasPartitionRecord",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 575) and SQL/DB (line 572) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 577) and SQL/DB (line 574) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/query-executor-partition-service-resolution.js",
-      "line": 444,
+      "line": 448,
       "column": 1,
       "functionName": "getPartitionRecord",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 444) and SQL/DB (line 442) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 448) and SQL/DB (line 446) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/query-executor-partition-service-resolution.js",
-      "line": 722,
+      "line": 726,
       "column": 1,
       "functionName": "shouldOverlayMaskCacheServices",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 722) and SQL/DB (line 718) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 726) and SQL/DB (line 722) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/query-executor-write-retry-routing.js",
-      "line": 245,
+      "line": 247,
       "column": 1,
       "functionName": "maybeAwaitRuntimeRoutingRepair",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 245) and SQL/DB (line 274) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 247) and SQL/DB (line 276) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -5313,7 +5534,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 41,
+      "line": 57,
       "column": 1,
       "functionName": "provisionInitialTablePartition",
       "independentIfCount": 31,
@@ -5324,7 +5545,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 106,
+      "line": 122,
       "column": 9,
       "functionName": "provisionInitialTablePartition",
       "kind": "raw_null_empty_state_outcome",
@@ -5333,7 +5554,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 263,
+      "line": 277,
       "column": 11,
       "functionName": "provisionInitialTablePartition",
       "kind": "raw_null_empty_state_outcome",
@@ -5342,7 +5563,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-initial-partition-provisioning.js",
-      "line": 294,
+      "line": 309,
       "column": 11,
       "functionName": "provisionInitialTablePartition",
       "kind": "raw_null_empty_state_outcome",
@@ -5351,52 +5572,52 @@
     },
     {
       "filePath": "src/query/sql-query-engine-instance-initializer.js",
-      "line": 246,
+      "line": 281,
       "column": 1,
       "functionName": "initializeSqlQueryEngineInstance",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 246) and SQL/DB (line 283) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 281) and SQL/DB (line 320) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
-      "line": 78,
+      "line": 87,
       "column": 1,
       "functionName": "setSystemCache",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 78) and SQL/DB (line 77) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 87) and SQL/DB (line 86) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/sql-query-engine-partition-routing-readiness.js",
-      "line": 277,
+      "line": 282,
       "column": 1,
       "functionName": "waitForTablePartitionMetadata",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 277) and SQL/DB (line 274) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 282) and SQL/DB (line 278) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/sql-query-engine-partition-routing-readiness.js",
-      "line": 355,
+      "line": 373,
       "column": 1,
       "functionName": "waitForPartitionServiceMetadata",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 355) and SQL/DB (line 351) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 373) and SQL/DB (line 368) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/sql-query-engine-provision-target-methods.js",
-      "line": 174,
+      "line": 179,
       "column": 1,
       "functionName": "waitForProvisionTargetNodeIds",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 174) and SQL/DB (line 205) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 179) and SQL/DB (line 211) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/sql-query-engine-provision-target-methods.js",
-      "line": 107,
+      "line": 110,
       "column": 9,
       "functionName": "waitForProvisionTargetNodeIds",
       "kind": "raw_null_empty_state_outcome",
@@ -5405,7 +5626,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provision-target-methods.js",
-      "line": 140,
+      "line": 144,
       "column": 9,
       "functionName": "waitForProvisionTargetNodeIds",
       "kind": "raw_null_empty_state_outcome",
@@ -5414,7 +5635,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provision-target-methods.js",
-      "line": 230,
+      "line": 236,
       "column": 11,
       "functionName": "buildProvisionTargetNodeConvergenceResult",
       "kind": "raw_null_empty_state_outcome",
@@ -5423,7 +5644,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
-      "line": 68,
+      "line": 69,
       "column": 7,
       "functionName": "normalizeProvisioningReasonCodes",
       "kind": "raw_null_empty_state_outcome",
@@ -5432,7 +5653,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
-      "line": 70,
+      "line": 71,
       "column": 11,
       "functionName": "normalizeProvisioningReasonCodes",
       "kind": "raw_null_empty_state_outcome",
@@ -5441,7 +5662,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
-      "line": 161,
+      "line": 162,
       "column": 13,
       "functionName": "summarizeProvisioningTargetRejections",
       "kind": "raw_null_empty_state_outcome",
@@ -5450,7 +5671,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
-      "line": 408,
+      "line": 414,
       "column": 11,
       "functionName": "probeProvisioningTargetAdmission",
       "kind": "raw_null_empty_state_outcome",
@@ -5459,7 +5680,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-provisioning-admission-methods.js",
-      "line": 411,
+      "line": 417,
       "column": 11,
       "functionName": "probeProvisioningTargetAdmission",
       "kind": "raw_null_empty_state_outcome",
@@ -5468,48 +5689,66 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 124,
+      "line": 126,
       "column": 1,
       "functionName": "hasRoutableServiceMetadata",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 124) and SQL/DB (line 101) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 126) and SQL/DB (line 103) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 608,
+      "line": 613,
       "column": 1,
       "functionName": "refreshAuthoritativeRoutingOverlay",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 608) and SQL/DB (line 575) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 613) and SQL/DB (line 580) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/sql-query-engine-select-execution.js",
-      "line": 507,
+      "line": 558,
       "column": 1,
       "functionName": "executeFromlessSelect",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 507) and SQL/DB (line 540) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 558) and SQL/DB (line 591) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 122,
+      "line": 127,
       "column": 1,
       "functionName": "ensureWasmCallbackModuleLoaded",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 122) and SQL/DB (line 91) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 127) and SQL/DB (line 96) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/query/sql-query-engine-statement-execution.js",
-      "line": 370,
+      "line": 375,
       "column": 1,
       "functionName": "executeQuery",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 370) and SQL/DB (line 507) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 375) and SQL/DB (line 517) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-statement-execution.js",
+      "line": 538,
+      "column": 7,
+      "functionName": "authorizeRuntimeServiceStatement",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/query/sql-query-engine-statement-execution.js",
+      "line": 551,
+      "column": 7,
+      "functionName": "authorizeRuntimeServiceStatement",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
       "filePath": "src/query/sql-query-engine-table-routing-methods.js",
@@ -5531,11 +5770,11 @@
     },
     {
       "filePath": "src/query/sql-query-engine-transaction-recovery-methods.js",
-      "line": 32,
+      "line": 31,
       "column": 1,
       "functionName": "recoverDistributedTransactionStateFromCache",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 32) and SQL/DB (line 51) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 31) and SQL/DB (line 50) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -5675,7 +5914,7 @@
     },
     {
       "filePath": "src/raft/authoritative-row-mutation-helper.js",
-      "line": 66,
+      "line": 67,
       "column": 3,
       "functionName": "classifyGatewayMutationOutcome",
       "kind": "raw_null_empty_state_outcome",
@@ -5683,8 +5922,17 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
+      "filePath": "src/raft/authoritative-row-mutation-helper.js",
+      "line": 472,
+      "column": 7,
+      "functionName": "resolveMutationFailure",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
       "filePath": "src/raft/constants.js",
-      "line": 166,
+      "line": 175,
       "column": 5,
       "functionName": "resolveNormalizedTargetReplicaStatus",
       "kind": "raw_null_empty_state_outcome",
@@ -5711,7 +5959,7 @@
     },
     {
       "filePath": "src/raft/replica-leadership-state.js",
-      "line": 39,
+      "line": 48,
       "column": 5,
       "functionName": "clearReplicaLeaderUpdateState",
       "kind": "raw_null_empty_state_outcome",
@@ -5719,8 +5967,62 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
+      "filePath": "src/raft/snapshot-catchup.js",
+      "line": 129,
+      "column": 3,
+      "functionName": "readCachedPublicationRows",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/raft/snapshot-compaction.js",
+      "line": 230,
+      "column": 1,
+      "functionName": "compactCommittedEntries",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 230) and SQL/DB (line 233) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/raft/snapshot-install.js",
+      "line": 130,
+      "column": 31,
+      "functionName": "readDurableStateValue",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/raft/snapshot-install.js",
+      "line": 136,
+      "column": 17,
+      "functionName": "readDurableStateValue",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/raft/snapshot-install.js",
+      "line": 355,
+      "column": 1,
+      "functionName": "resolvePendingSnapshotInstall",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 355) and SQL/DB (line 369) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
+    },
+    {
+      "filePath": "src/raft/snapshot-transfer.js",
+      "line": 445,
+      "column": 3,
+      "functionName": "receiveSnapshotTransfer",
+      "kind": "local_retry_loop",
+      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
+      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
+    },
+    {
       "filePath": "src/raft/sqlite-log-adapter.js",
-      "line": 15,
+      "line": 32,
       "column": 60,
       "kind": "schema_unsafe_system_table_write",
       "reason": "INSERT OR REPLACE or full-row replacement is forbidden for steady-state lifecycle/status mutation of existing system rows",
@@ -5728,37 +6030,30 @@
     },
     {
       "filePath": "src/raft/sqlite-log-adapter.js",
-      "line": 20,
-      "column": 60,
-      "kind": "schema_unsafe_system_table_write",
-      "reason": "INSERT OR REPLACE or full-row replacement is forbidden for steady-state lifecycle/status mutation of existing system rows",
-      "ruleReference": "system guidelines.md §6.3 Persistent system state authority"
+      "line": 260,
+      "column": 1,
+      "functionName": "getSnapshotBoundary",
+      "kind": "mixed_cache_and_sql_decision",
+      "reason": "decision branch mixes cache (line 260) and SQL/DB (line 258) as equivalent truth for one meaning",
+      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/raft/sqlite-log-adapter.js",
-      "line": 581,
+      "line": 683,
       "column": 1,
       "functionName": "getCommittedIndex",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 581) and SQL/DB (line 577) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 683) and SQL/DB (line 679) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/raft/sqlite-log-adapter.js",
-      "line": 614,
+      "line": 719,
       "column": 1,
       "functionName": "setCommittedIndex",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 614) and SQL/DB (line 611) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 719) and SQL/DB (line 718) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/raft/sqlite-log-adapter.js",
-      "line": 631,
-      "column": 19,
-      "kind": "schema_unsafe_system_table_write",
-      "reason": "INSERT OR REPLACE or full-row replacement is forbidden for steady-state lifecycle/status mutation of existing system rows",
-      "ruleReference": "system guidelines.md §6.3 Persistent system state authority"
     },
     {
       "filePath": "src/rebalancer/assignment-epoch-manager.js",
@@ -5771,16 +6066,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 195,
-      "column": 9,
-      "functionName": "createMovePlannerStateMethods",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 241,
+      "line": 346,
       "column": 7,
       "functionName": "createMovePlannerStateMethods",
       "kind": "raw_null_empty_state_outcome",
@@ -5789,7 +6075,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 359,
+      "line": 476,
       "column": 9,
       "functionName": "createMovePlannerStateMethods",
       "kind": "raw_null_empty_state_outcome",
@@ -5798,16 +6084,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 381,
-      "column": 9,
-      "functionName": "createMovePlannerStateMethods",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/move-planner-state-methods.js",
-      "line": 698,
+      "line": 498,
       "column": 9,
       "functionName": "createMovePlannerStateMethods",
       "kind": "raw_null_empty_state_outcome",
@@ -5816,7 +6093,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner.js",
-      "line": 114,
+      "line": 119,
       "column": 7,
       "functionName": "buildReplicaCountPolicyDecision",
       "kind": "raw_null_empty_state_outcome",
@@ -5825,7 +6102,7 @@
     },
     {
       "filePath": "src/rebalancer/move-planner.js",
-      "line": 507,
+      "line": 523,
       "column": 7,
       "functionName": "getDegradedReason",
       "kind": "raw_null_empty_state_outcome",
@@ -5833,17 +6110,8 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/rebalancer/operation-ledger-quorum-concentration.js",
-      "line": 69,
-      "column": 9,
-      "functionName": "readReadyNodeIds",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"readyNodeIds\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
-      "line": 451,
+      "line": 468,
       "column": 3,
       "functionName": "resolveDeferredRetryVisibleOperation",
       "kind": "raw_null_empty_state_outcome",
@@ -5852,7 +6120,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
-      "line": 346,
+      "line": 348,
       "column": 9,
       "functionName": "executeOperationInternal",
       "kind": "raw_null_empty_state_outcome",
@@ -5861,7 +6129,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
-      "line": 188,
+      "line": 115,
       "column": 7,
       "functionName": "redriveExecutorOutcomeReconcile",
       "kind": "local_retry_loop",
@@ -5897,7 +6165,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-owner-retry-registry.js",
-      "line": 544,
+      "line": 482,
       "column": 7,
       "functionName": "getTransitionRetryOperationSnapshot",
       "kind": "raw_null_empty_state_outcome",
@@ -5915,16 +6183,16 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile.js",
-      "line": 211,
+      "line": 213,
       "column": 1,
       "functionName": "handleRecovery",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 211) and SQL/DB (line 211) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 213) and SQL/DB (line 213) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile.js",
-      "line": 348,
+      "line": 347,
       "column": 7,
       "functionName": "getRemoveSafetyDeferReason",
       "kind": "raw_null_empty_state_outcome",
@@ -5933,7 +6201,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-reconcile.js",
-      "line": 358,
+      "line": 357,
       "column": 7,
       "functionName": "getRemoveSafetyDeferReason",
       "kind": "raw_null_empty_state_outcome",
@@ -5942,25 +6210,25 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 168,
+      "line": 174,
       "column": 1,
       "functionName": "checkTimeouts",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 168) and SQL/DB (line 183) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 174) and SQL/DB (line 189) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 347,
+      "line": 353,
       "column": 1,
       "functionName": "reconcileOrphanedOperations",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 347) and SQL/DB (line 347) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 353) and SQL/DB (line 353) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-timeout.js",
-      "line": 418,
+      "line": 424,
       "column": 9,
       "functionName": "shouldReconcileOrphanedOperation",
       "kind": "raw_null_empty_state_outcome",
@@ -5969,7 +6237,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
-      "line": 63,
+      "line": 126,
       "column": 1,
       "functionName": "projectQuorumAfterRemoval",
       "independentIfCount": 4,
@@ -5980,7 +6248,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
-      "line": 62,
+      "line": 136,
       "column": 7,
       "functionName": "projectQuorumAfterRemoval",
       "kind": "raw_null_empty_state_outcome",
@@ -5989,7 +6257,7 @@
     },
     {
       "filePath": "src/rebalancer/placement-owner-decision.js",
-      "line": 326,
+      "line": 329,
       "column": 9,
       "functionName": "buildPlacementOwnerReservationResult",
       "kind": "raw_null_empty_state_outcome",
@@ -5998,7 +6266,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-handoff.js",
-      "line": 57,
+      "line": 54,
       "column": 7,
       "functionName": "evaluatePriorityPublicationLeaderRemoveSafety",
       "kind": "raw_null_empty_state_outcome",
@@ -6007,7 +6275,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-handoff.js",
-      "line": 551,
+      "line": 444,
       "column": 7,
       "functionName": "normalizePriorityRecoveryDecisionSnapshotPartitionIds",
       "kind": "raw_null_empty_state_outcome",
@@ -6025,16 +6293,16 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 133,
+      "line": 181,
       "column": 1,
       "functionName": "getCriticalPartitionRowForSafety",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 133) and SQL/DB (line 122) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 181) and SQL/DB (line 159) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-rows.js",
-      "line": 289,
+      "line": 337,
       "column": 7,
       "functionName": "normalizePriorityPublicationStatus",
       "kind": "raw_null_empty_state_outcome",
@@ -6043,7 +6311,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 242,
+      "line": 239,
       "column": 7,
       "functionName": "getPriorityPublicationLeaderHandoffEvidence",
       "kind": "raw_null_empty_state_outcome",
@@ -6052,7 +6320,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 248,
+      "line": 245,
       "column": 7,
       "functionName": "getPriorityPublicationLeaderHandoffEvidence",
       "kind": "raw_null_empty_state_outcome",
@@ -6061,7 +6329,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 260,
+      "line": 257,
       "column": 7,
       "functionName": "getPriorityPublicationLeaderHandoffEvidence",
       "kind": "raw_null_empty_state_outcome",
@@ -6070,7 +6338,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 287,
+      "line": 284,
       "column": 7,
       "functionName": "getPriorityPublicationReplacementLeaderElectionEvidence",
       "kind": "raw_null_empty_state_outcome",
@@ -6079,7 +6347,16 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 294,
+      "line": 291,
+      "column": 7,
+      "functionName": "getPriorityPublicationReplacementLeaderElectionEvidence",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "raw null or empty-state outcome returned for semantic target",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
+      "line": 320,
       "column": 7,
       "functionName": "getPriorityPublicationReplacementLeaderElectionEvidence",
       "kind": "raw_null_empty_state_outcome",
@@ -6097,16 +6374,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 326,
-      "column": 7,
-      "functionName": "getPriorityPublicationReplacementLeaderElectionEvidence",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 337,
+      "line": 334,
       "column": 7,
       "functionName": "getFreshPriorityPublicationReplacementLeaderElectionEvidence",
       "kind": "raw_null_empty_state_outcome",
@@ -6115,7 +6383,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 344,
+      "line": 341,
       "column": 7,
       "functionName": "getFreshPriorityPublicationReplacementLeaderElectionEvidence",
       "kind": "raw_null_empty_state_outcome",
@@ -6124,7 +6392,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 354,
+      "line": 351,
       "column": 7,
       "functionName": "getFreshPriorityPublicationReplacementLeaderElectionEvidence",
       "kind": "raw_null_empty_state_outcome",
@@ -6133,7 +6401,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 417,
+      "line": 414,
       "column": 7,
       "functionName": "getPriorityPublicationSourceLeaderHandoffStallMs",
       "kind": "raw_null_empty_state_outcome",
@@ -6142,7 +6410,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 422,
+      "line": 419,
       "column": 7,
       "functionName": "getPriorityPublicationSourceLeaderHandoffStallMs",
       "kind": "raw_null_empty_state_outcome",
@@ -6151,7 +6419,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-publication-safety-topology.js",
-      "line": 433,
+      "line": 430,
       "column": 7,
       "functionName": "getPriorityPublicationSourceLeaderHandoffStallMs",
       "kind": "raw_null_empty_state_outcome",
@@ -6214,7 +6482,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 329,
+      "line": 332,
       "column": 7,
       "functionName": "resolveRemoveSafetyDeferredReason",
       "kind": "raw_null_empty_state_outcome",
@@ -6223,7 +6491,7 @@
     },
     {
       "filePath": "src/rebalancer/priority-recovery-superseded-target.js",
-      "line": 338,
+      "line": 341,
       "column": 7,
       "functionName": "resolveRemoveSafetyDeferredReason",
       "kind": "raw_null_empty_state_outcome",
@@ -6250,7 +6518,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-add-budget.js",
-      "line": 138,
+      "line": 206,
       "column": 7,
       "functionName": "getLatestMembershipPublicationRow",
       "kind": "raw_null_empty_state_outcome",
@@ -6259,7 +6527,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
-      "line": 364,
+      "line": 576,
       "column": 1,
       "functionName": "runOperationLedgerInterlockAccountedCreate",
       "independentIfCount": 9,
@@ -6270,7 +6538,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
-      "line": 529,
+      "line": 738,
       "column": 7,
       "functionName": "tryClearHeldOperationLedgerSelfMove",
       "kind": "raw_null_empty_state_outcome",
@@ -6279,7 +6547,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
-      "line": 530,
+      "line": 739,
       "column": 7,
       "functionName": "tryClearHeldOperationLedgerSelfMove",
       "kind": "raw_null_empty_state_outcome",
@@ -6288,20 +6556,20 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-lifecycle.js",
-      "line": 270,
+      "line": 274,
       "column": 1,
       "functionName": "initializeCoordinatorState",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 270) and SQL/DB (line 317) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 274) and SQL/DB (line 320) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-lifecycle.js",
-      "line": 441,
+      "line": 438,
       "column": 1,
       "functionName": "syncOwnerDependencies",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 441) and SQL/DB (line 363) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 438) and SQL/DB (line 365) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -6315,83 +6583,74 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-read-methods.js",
-      "line": 49,
+      "line": 72,
       "column": 1,
       "functionName": "queryIncompleteOperations",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 49) and SQL/DB (line 51) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 72) and SQL/DB (line 74) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-read-methods.js",
-      "line": 80,
+      "line": 109,
       "column": 1,
       "functionName": "resolveIncompleteOperationVisibilityReadMode",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 80) and SQL/DB (line 80) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 109) and SQL/DB (line 109) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-read-methods.js",
-      "line": 99,
+      "line": 128,
       "column": 1,
       "functionName": "queryCachedIncompleteOperations",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 99) and SQL/DB (line 98) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 128) and SQL/DB (line 127) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-read-methods.js",
-      "line": 112,
+      "line": 141,
       "column": 1,
       "functionName": "queryShutdownIncompleteOperations",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 112) and SQL/DB (line 112) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 141) and SQL/DB (line 141) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-helper.js",
-      "line": 487,
+      "line": 581,
       "column": 1,
       "functionName": "canStartAddOperation",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 487) and SQL/DB (line 512) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 581) and SQL/DB (line 575) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-helper.js",
-      "line": 600,
+      "line": 663,
       "column": 1,
       "functionName": "canStartPriorityAddOperation",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 600) and SQL/DB (line 625) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 663) and SQL/DB (line 688) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-helper.js",
-      "line": 679,
+      "line": 742,
       "column": 1,
       "functionName": "canStartRemoveOperation",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 679) and SQL/DB (line 704) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 742) and SQL/DB (line 767) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-recovery-helper.js",
-      "line": 71,
+      "line": 72,
       "column": 1,
       "functionName": "handleRecovery",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 71) and SQL/DB (line 71) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
-      "line": 175,
-      "column": 1,
-      "functionName": "buildTopologyGuardSnapshot",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 175) and SQL/DB (line 179) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 72) and SQL/DB (line 72) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -6549,7 +6808,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 67,
+      "line": 168,
       "column": 7,
       "functionName": "resolvePrioritySpreadPlanningGateDecision",
       "kind": "raw_null_empty_state_outcome",
@@ -6558,16 +6817,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 84,
-      "column": 7,
-      "functionName": "resolvePrioritySpreadPlanningGateDecision",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome returned for semantic target",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
-      "line": 350,
+      "line": 454,
       "column": 7,
       "functionName": "recordPriorityRecoveryPlanningGateDecisionDiagnostic",
       "kind": "raw_null_empty_state_outcome",
@@ -6585,20 +6835,20 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-entity-read-methods.js",
-      "line": 310,
+      "line": 315,
       "column": 1,
       "functionName": "assignReplicaOperationRepositoryEntityReadMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 310) and SQL/DB (line 255) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 315) and SQL/DB (line 259) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-incomplete-read-methods.js",
-      "line": 376,
+      "line": 364,
       "column": 1,
       "functionName": "assignReplicaOperationRepositoryIncompleteReadMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 376) and SQL/DB (line 421) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 364) and SQL/DB (line 409) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -6630,16 +6880,16 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
-      "line": 602,
+      "line": 764,
       "column": 1,
       "functionName": "assignReplicaOperationRepositoryMutationPersistenceMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 602) and SQL/DB (line 600) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 764) and SQL/DB (line 762) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
-      "line": 449,
+      "line": 578,
       "column": 7,
       "functionName": "assignReplicaOperationRepositoryMutationPersistenceMethods",
       "kind": "local_retry_loop",
@@ -6647,57 +6897,21 @@
       "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
     },
     {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
-      "line": 447,
-      "column": 11,
-      "functionName": "assignReplicaOperationRepositoryMutationPersistenceMethods",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"deferredOutcome\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
-      "line": 471,
-      "column": 13,
-      "functionName": "assignReplicaOperationRepositoryMutationPersistenceMethods",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "semantic outcome object property \"deferredOutcome\" has raw null or empty-state value",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
-      "line": 476,
-      "column": 11,
-      "functionName": "assignReplicaOperationRepositoryMutationPersistenceMethods",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"deferredOutcome\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
-      "line": 497,
-      "column": 13,
-      "functionName": "assignReplicaOperationRepositoryMutationPersistenceMethods",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "semantic outcome object property \"deferredOutcome\" has raw null or empty-state value",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/rebalancer/replica-operation-repository-observation-methods.js",
-      "line": 392,
+      "line": 466,
       "column": 1,
       "functionName": "assignReplicaOperationRepositoryObservationMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 392) and SQL/DB (line 287) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 466) and SQL/DB (line 361) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 516,
+      "line": 574,
       "column": 1,
       "functionName": "assignReplicaOperationRepositoryReadMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 516) and SQL/DB (line 479) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 574) and SQL/DB (line 537) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -6711,7 +6925,7 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-read-methods.js",
-      "line": 328,
+      "line": 331,
       "column": 13,
       "functionName": "assignReplicaOperationRepositoryReadMethods",
       "kind": "raw_null_empty_state_outcome",
@@ -6720,16 +6934,25 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-visibility-methods.js",
-      "line": 739,
+      "line": 774,
       "column": 1,
       "functionName": "assignReplicaOperationRepositoryVisibilityMethods",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 739) and SQL/DB (line 723) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 774) and SQL/DB (line 758) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository-visibility-methods.js",
-      "line": 529,
+      "line": 538,
+      "column": 9,
+      "functionName": "assignReplicaOperationRepositoryVisibilityMethods",
+      "kind": "raw_null_empty_state_outcome",
+      "reason": "semantic outcome object property \"completionState\" has raw null or empty-state value",
+      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
+    },
+    {
+      "filePath": "src/rebalancer/replica-operation-repository-visibility-methods.js",
+      "line": 564,
       "column": 9,
       "functionName": "assignReplicaOperationRepositoryVisibilityMethods",
       "kind": "raw_null_empty_state_outcome",
@@ -6738,38 +6961,38 @@
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository.js",
-      "line": 438,
+      "line": 444,
       "column": 1,
       "functionName": "normalizeReplicaOperationVisibilityReadMode",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 438) and SQL/DB (line 438) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 444) and SQL/DB (line 444) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository.js",
-      "line": 459,
+      "line": 468,
       "column": 1,
       "functionName": "resolveReplicaOperationVisibilityReadMode",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 459) and SQL/DB (line 459) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 468) and SQL/DB (line 468) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository.js",
-      "line": 480,
+      "line": 490,
       "column": 1,
       "functionName": "buildReplicaOperationVisibilityReadOptions",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 480) and SQL/DB (line 490) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 490) and SQL/DB (line 504) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/replica-operation-repository.js",
-      "line": 525,
+      "line": 540,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 525) and SQL/DB (line 521) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 540) and SQL/DB (line 536) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -6837,7 +7060,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 230,
+      "line": 252,
       "column": 7,
       "functionName": "getStartupAuthorityNodeIdSet",
       "kind": "raw_null_empty_state_outcome",
@@ -6846,7 +7069,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 238,
+      "line": 260,
       "column": 7,
       "functionName": "getStartupAuthorityNodeIdSet",
       "kind": "raw_null_empty_state_outcome",
@@ -6855,7 +7078,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-available-nodes.js",
-      "line": 253,
+      "line": 270,
       "column": 7,
       "functionName": "getStartupAuthorityNodeIdSet",
       "kind": "raw_null_empty_state_outcome",
@@ -6864,7 +7087,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-control-plane-readiness-methods.js",
-      "line": 353,
+      "line": 412,
       "column": 9,
       "functionName": "getLatestMembershipPublicationRow",
       "kind": "raw_null_empty_state_outcome",
@@ -6872,26 +7095,8 @@
       "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
     },
     {
-      "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 212,
-      "column": 1,
-      "functionName": "getCriticalSystemTopologySettlingBlocker",
-      "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 212) and SQL/DB (line 63) as equivalent truth for one meaning",
-      "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
-    },
-    {
-      "filePath": "src/rebalancer/unified-rebalancer-critical-topology-methods.js",
-      "line": 68,
-      "column": 11,
-      "functionName": "getCriticalSystemTopologySettlingBlocker",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"unreadyNodeIds\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
       "filePath": "src/rebalancer/unified-rebalancer-follow-up-decision.js",
-      "line": 76,
+      "line": 261,
       "column": 7,
       "functionName": "resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning",
       "kind": "raw_null_empty_state_outcome",
@@ -6900,7 +7105,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-follow-up-decision.js",
-      "line": 84,
+      "line": 266,
       "column": 7,
       "functionName": "resolvePriorityRecoveryFollowUpDecisionSnapshotFromPlanning",
       "kind": "raw_null_empty_state_outcome",
@@ -6909,7 +7114,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-follow-up-decision.js",
-      "line": 434,
+      "line": 621,
       "column": 7,
       "functionName": "buildPriorityRecoveryFollowUpDecisionSnapshotFromPlanning",
       "kind": "raw_null_empty_state_outcome",
@@ -6918,7 +7123,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-follow-up-decision.js",
-      "line": 442,
+      "line": 626,
       "column": 7,
       "functionName": "buildPriorityRecoveryFollowUpDecisionSnapshotFromPlanning",
       "kind": "raw_null_empty_state_outcome",
@@ -6927,7 +7132,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-follow-up-decision.js",
-      "line": 449,
+      "line": 631,
       "column": 7,
       "functionName": "buildPriorityRecoveryFollowUpDecisionSnapshotFromPlanning",
       "kind": "raw_null_empty_state_outcome",
@@ -6936,7 +7141,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-follow-up-decision.js",
-      "line": 460,
+      "line": 640,
       "column": 7,
       "functionName": "buildPriorityRecoveryFollowUpDecisionSnapshotFromPlanning",
       "kind": "raw_null_empty_state_outcome",
@@ -6945,16 +7150,16 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-follow-up-decision.js",
-      "line": 682,
+      "line": 739,
       "column": 1,
       "functionName": "getCurrentPartitionReplicasByPartitionId",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 682) and SQL/DB (line 681) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 739) and SQL/DB (line 738) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-follow-up-move.js",
-      "line": 651,
+      "line": 788,
       "column": 5,
       "functionName": "normalizeAdmissionBlockingReasonCodes",
       "kind": "raw_null_empty_state_outcome",
@@ -6963,20 +7168,20 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 279,
+      "line": 291,
       "column": 1,
       "functionName": "constructor",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 279) and SQL/DB (line 73) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 291) and SQL/DB (line 82) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 399,
+      "line": 411,
       "column": 1,
       "functionName": "syncOwnerDependencies",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 399) and SQL/DB (line 343) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 411) and SQL/DB (line 355) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -6990,16 +7195,16 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-move-execution.js",
-      "line": 420,
+      "line": 501,
       "column": 1,
       "functionName": "buildPreExecutionHandoffPlan",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 420) and SQL/DB (line 469) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 501) and SQL/DB (line 524) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 656,
+      "line": 751,
       "column": 7,
       "functionName": "getStartupAuthoritySnapshot",
       "kind": "raw_null_empty_state_outcome",
@@ -7008,7 +7213,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-readiness.js",
-      "line": 664,
+      "line": 759,
       "column": 7,
       "functionName": "getStartupAuthoritySnapshot",
       "kind": "raw_null_empty_state_outcome",
@@ -7017,7 +7222,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
-      "line": 103,
+      "line": 120,
       "column": 7,
       "functionName": "getCurrentPriorityRecoveryCoordinatorDecisionSnapshot",
       "kind": "raw_null_empty_state_outcome",
@@ -7026,7 +7231,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
-      "line": 111,
+      "line": 128,
       "column": 7,
       "functionName": "getCurrentPriorityRecoveryCoordinatorDecisionSnapshot",
       "kind": "raw_null_empty_state_outcome",
@@ -7035,7 +7240,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
-      "line": 125,
+      "line": 142,
       "column": 7,
       "functionName": "getCurrentPriorityRecoveryFollowUpDecisionSnapshot",
       "kind": "raw_null_empty_state_outcome",
@@ -7044,7 +7249,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
-      "line": 155,
+      "line": 175,
       "column": 7,
       "functionName": "getCurrentPriorityRecoveryFollowUpDecisionSnapshot",
       "kind": "raw_null_empty_state_outcome",
@@ -7053,7 +7258,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
-      "line": 287,
+      "line": 316,
       "column": 11,
       "functionName": "buildPriorityRecoverySurrogateFollowUpDecisions",
       "kind": "raw_null_empty_state_outcome",
@@ -7062,7 +7267,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
-      "line": 313,
+      "line": 335,
       "column": 9,
       "functionName": "buildPriorityRecoverySurrogateFollowUpDecisions",
       "kind": "raw_null_empty_state_outcome",
@@ -7071,7 +7276,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js",
-      "line": 402,
+      "line": 422,
       "column": 7,
       "functionName": "buildPriorityRecoverySurrogateDecisionFromPlanning",
       "kind": "raw_null_empty_state_outcome",
@@ -7080,7 +7285,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 164,
+      "line": 204,
       "column": 7,
       "functionName": "getNodeReadinessSkipReason",
       "kind": "raw_null_empty_state_outcome",
@@ -7089,11 +7294,11 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-replica-state.js",
-      "line": 268,
+      "line": 309,
       "column": 1,
       "functionName": "getCurrentReplicas",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 268) and SQL/DB (line 267) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 309) and SQL/DB (line 308) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -7125,7 +7330,7 @@
     },
     {
       "filePath": "src/runtime/service-runtime-lifecycle.js",
-      "line": 101,
+      "line": 103,
       "column": 5,
       "functionName": "resolveRuntimeKind",
       "kind": "raw_null_empty_state_outcome",
@@ -7134,7 +7339,7 @@
     },
     {
       "filePath": "src/runtime/sql-query-loop-runtime-module.js",
-      "line": 254,
+      "line": 344,
       "column": 1,
       "functionName": "prepare",
       "independentIfCount": 2,
@@ -7145,10 +7350,10 @@
     },
     {
       "filePath": "src/runtime/sql-query-loop-runtime-module.js",
-      "line": 276,
+      "line": 366,
       "column": 1,
       "functionName": "start",
-      "independentIfCount": 5,
+      "independentIfCount": 6,
       "target": "status",
       "kind": "independent_if_semantic_returns",
       "reason": "multiple independent if statements return semantic outcome objects",
@@ -7156,25 +7361,7 @@
     },
     {
       "filePath": "src/runtime/sql-query-loop-runtime-module.js",
-      "line": 359,
-      "column": 9,
-      "functionName": "runQueryLoop",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"state.timer\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/runtime/sql-query-loop-runtime-module.js",
-      "line": 361,
-      "column": 7,
-      "functionName": "runQueryLoop",
-      "kind": "raw_null_empty_state_outcome",
-      "reason": "raw null or empty-state outcome assigned/declared for semantic target \"state.wake\"",
-      "ruleReference": "system guidelines.md §4.5 Raw null or undefined must not encode runtime state"
-    },
-    {
-      "filePath": "src/runtime/sql-query-loop-runtime-module.js",
-      "line": 401,
+      "line": 571,
       "column": 9,
       "functionName": "stop",
       "kind": "raw_null_empty_state_outcome",
@@ -7183,7 +7370,7 @@
     },
     {
       "filePath": "src/runtime/sql-query-loop-runtime-module.js",
-      "line": 405,
+      "line": 575,
       "column": 9,
       "functionName": "stop",
       "kind": "raw_null_empty_state_outcome",
@@ -7192,8 +7379,8 @@
     },
     {
       "filePath": "src/runtime/wasm-component-driver.js",
-      "line": 137,
-      "column": 3,
+      "line": 155,
+      "column": 16,
       "functionName": "resolvePreparePolicyFailure",
       "kind": "raw_null_empty_state_outcome",
       "reason": "raw null or empty-state outcome returned for semantic target",
@@ -7273,7 +7460,7 @@
     },
     {
       "filePath": "src/topology/cdc-group-propagation-delivery-methods.js",
-      "line": 681,
+      "line": 679,
       "column": 11,
       "functionName": "deliverToTargets",
       "kind": "raw_null_empty_state_outcome",
@@ -7309,11 +7496,11 @@
     },
     {
       "filePath": "src/topology/latency-measurement-service.js",
-      "line": 437,
+      "line": 436,
       "column": 1,
       "functionName": "getExistingEdgeRow",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 437) and SQL/DB (line 446) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 436) and SQL/DB (line 445) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -7336,7 +7523,7 @@
     },
     {
       "filePath": "src/transport/message-router-connection-close-reconnect.js",
-      "line": 221,
+      "line": 224,
       "column": 7,
       "functionName": "resolveReconnectDisposition",
       "kind": "raw_null_empty_state_outcome",
@@ -7345,7 +7532,7 @@
     },
     {
       "filePath": "src/transport/message-router-delivery-behaviors.js",
-      "line": 571,
+      "line": 614,
       "column": 21,
       "functionName": "sendMessage",
       "kind": "local_retry_loop",
@@ -7489,11 +7676,11 @@
     },
     {
       "filePath": "src/worker/partition-worker-service.js",
-      "line": 250,
+      "line": 252,
       "column": 1,
       "functionName": "initializeRaft",
       "kind": "mixed_cache_and_sql_decision",
-      "reason": "decision branch mixes cache (line 250) and SQL/DB (line 244) as equivalent truth for one meaning",
+      "reason": "decision branch mixes cache (line 252) and SQL/DB (line 244) as equivalent truth for one meaning",
       "ruleReference": "system guidelines.md §3 One Path Per Semantic Decision (Mixed cache and SQL)"
     },
     {
@@ -7543,16 +7730,7 @@
     },
     {
       "filePath": "src/workflow/owner-key-reconcile-queue.js",
-      "line": 308,
-      "column": 7,
-      "functionName": "drain",
-      "kind": "local_retry_loop",
-      "reason": "local retry loops using while, do-while, or for statement are forbidden; use canonical retry registries or owners instead",
-      "ruleReference": "system guidelines.md §7.1 and §9.7 Local retry loop guardrails"
-    },
-    {
-      "filePath": "src/workflow/owner-key-reconcile-queue.js",
-      "line": 528,
+      "line": 549,
       "column": 19,
       "functionName": "_scheduleRetryDrain",
       "kind": "local_retry_loop",

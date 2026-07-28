@@ -126,13 +126,13 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
   const partitioning = readText(PARTITIONING_ARCHITECTURE_PATH, root);
   addProblem(problems,
     partitioning.includes('column named `id`') &&
-      partitioning.includes('no global secondary index'),
+      partitioning.includes('no secondary index support'),
     'partition-routing limitations lost their current architecture evidence');
 
   const replication = readText(REPLICATION_ARCHITECTURE_PATH, root);
   addProblem(problems,
-    /not yet invoked by any\s+production path/u.test(replication) &&
-      replication.includes('transfer/install do not exist') &&
+    replication.includes('bounded by production snapshotting') &&
+      replication.includes('grow without bound') &&
       replication.includes('time-based, not progress-based'),
     'replication limitations lost their current architecture evidence');
 

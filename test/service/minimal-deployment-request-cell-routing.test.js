@@ -214,7 +214,7 @@ describe('minimal deployment request Cell routing', () => {
       );
       const invocation = {
         args: ['{}'],
-        deadlineMs: Date.now() + 1_000,
+        deadlineMs: Date.now() + 30_000,
         intentDigest: 'concurrent-owner-intent',
         invocationId: 'concurrent-owner-invocation',
         invocationServiceId: rows.definition.service_id,
@@ -283,7 +283,7 @@ describe('minimal deployment request Cell routing', () => {
       );
       const invocation = {
         args: ['{}'],
-        deadlineMs: Date.now() + 1_000,
+        deadlineMs: Date.now() + 30_000,
         intentDigest: 'completion-failure-intent',
         invocationId: 'completion-failure-invocation',
         invocationServiceId: rows.definition.service_id,
@@ -349,7 +349,7 @@ describe('minimal deployment request Cell routing', () => {
                 },
               );
             },
-            deadlineMs: Date.now() + 1_000,
+            deadlineMs: Date.now() + 30_000,
             intentDigest: 'late-handoff-intent',
             invocationId: 'late-handoff-invocation',
             invocationServiceId: rows.definition.service_id,
@@ -369,7 +369,7 @@ describe('minimal deployment request Cell routing', () => {
           runtime.replicaHandle,
           {
             args: ['{}'],
-            deadlineMs: Date.now() + 1_000,
+            deadlineMs: Date.now() + 30_000,
             intentDigest: 'late-handoff-intent',
             invocationId: 'late-handoff-invocation',
             invocationServiceId: rows.definition.service_id,

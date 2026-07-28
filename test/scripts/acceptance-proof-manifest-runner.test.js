@@ -279,6 +279,7 @@ describe('acceptance proof manifest runner', () => {
       'focused-contracts',
       'static-analysis',
       'model-contracts',
+      'owner-debt-report-inputs',
       'fast-tests',
     ]);
     const focused = actual.commands[0].argv;

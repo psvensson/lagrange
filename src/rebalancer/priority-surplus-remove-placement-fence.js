@@ -196,7 +196,18 @@ function evaluatePrioritySurplusRemovePlacementFence(options = {}) {
       projection,
     );
   }
-  if (projectedDistinctNodeCount < currentDistinctNodeCount) {
+  // Diversity monotonicity binds only while the projection stays strictly
+  // above target: mid-drain removals must pick node duplicates first, but the
+  // endgame removal that lands exactly AT target may pass through a transient
+  // spread dip (the placement plan owns final spread — e.g. the run-21
+  // voter-surplus drain, where the last surplus voter is its node's only
+  // replica and the coupled in-flight REPLACE restores spread on a fresh
+  // node). Holding monotonicity there livelocks the drain against the
+  // learner-promotion voter ceiling (dt6-voter-surplus-promotion-drain).
+  if (
+    projectedVoterCount > targetReplicaCount &&
+    projectedDistinctNodeCount < currentDistinctNodeCount
+  ) {
     return decision(
       PRIORITY_SURPLUS_REMOVE_FENCE_STATE.UNSAFE_DIVERSITY,
       projection,

@@ -29,7 +29,7 @@ describe('dockerized pg client compatibility example contract', () => {
       const readme = await readExample('README.md');
       const runner = await readExample('run-database-portability.js');
 
-      assert.match(readme, /measured PostgreSQL slice/iu);
+      assert.match(readme, /PostgreSQL slice exercised here is intentionally explicit/iu);
       assert.match(readme, /not.*arbitrary ORM compatibility/iu);
       assert.match(readme, /run-database-portability\.js/u);
       assert.match(runner, /createRuntimeStartupWiring/u);

@@ -187,6 +187,11 @@ test('executeSelect threads the issuing service readLocality into ' +
     systemCache: cache,
     messageRouter: createMockMessageRouter(),
     nodeId: 'node-a',
+    runtimeAccessPolicyOwner: {
+      async authorizeStatement() {
+        return {decision: 'allowed'};
+      },
+    },
   });
   const capturedOptions = [];
   engine.queryExecutor = {
@@ -279,6 +284,11 @@ test('end-to-end: policy-on SELECT delivers to the local-node replica ' +
     nodeId: 'node-a',
     controlPlaneReadinessService: {
       getNodeReadinessSync: () => ({dimensions: {serveEligible: true}}),
+    },
+    runtimeAccessPolicyOwner: {
+      async authorizeStatement() {
+        return {decision: 'allowed'};
+      },
     },
   });
 

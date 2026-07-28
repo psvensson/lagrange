@@ -8,6 +8,7 @@ import {
   isTerminalStep,
 } from '../../src/rebalancer/replica-operation-progress.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
   PartitionService,
   RaftRole,
@@ -330,6 +331,38 @@ function armGatewayTerminalWriteLoss({coordinator, state, events}) {
         {success: true};
     }
     return originalExecuteQuery(sql, params, queryOptions);
+  };
+}
+
+// The priority-surplus REMOVE placement fence (d708b3db) revalidates every
+// standalone priority REMOVE against the authoritative services owner
+// (owner-RPC required, no SQL fallback) before persisting it. The fixture has
+// no owner RPC lane, so a healthy services owner is modeled at the same
+// gateway seam: the fence's owner-required read is answered from the LIVE
+// serviceRows (the same rows the promotion guard reads), every other read
+// passes through untouched.
+function armAuthoritativeServicesOwnerRead({coordinator, serviceRows}) {
+  const gateway = coordinator.repository.controlPlaneSystemTableGateway;
+  const originalReadAuthoritativeRows =
+    gateway.readAuthoritativeRows.bind(gateway);
+  gateway.readAuthoritativeRows = async (
+    tableName,
+    sql,
+    params = [],
+    queryOptions = {},
+  ) => {
+    if (
+      tableName === SYSTEM_TABLE_NAME.SERVICES &&
+      queryOptions?.authoritativeReadMode ===
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED
+    ) {
+      return {
+        success: true,
+        source: 'owner_rpc_lane',
+        rows: serviceRows.map((row) => ({...row})),
+      };
+    }
+    return originalReadAuthoritativeRows(tableName, sql, params, queryOptions);
   };
 }
 
@@ -684,6 +717,7 @@ async function runVoterSurplusScenario({lossMode}) {
     lostWrites: 0,
   };
   armGatewayTerminalWriteLoss({coordinator, state: lossState, events});
+  armAuthoritativeServicesOwnerRead({coordinator, serviceRows});
   const partitionCache = buildPartitionCache({serviceRows, trackedOperations});
   const promotedByReplicaId = new Set();
   const scenario = {

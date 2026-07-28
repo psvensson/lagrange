@@ -105,12 +105,12 @@
     {
       "id": "global-secondary-index",
       "area": "Indexes",
-      "summary": "CREATE INDEX creates a local SQLite index on every partition; it does not provide global partition narrowing."
+      "summary": "There is no secondary index support: CREATE INDEX is rejected as unsupported, and even a wired-in local index would not narrow the partition set."
     },
     {
       "id": "raft-log-lifecycle",
       "area": "Replication",
-      "summary": "Checkpoint creation exists but is not called by production; snapshot transfer/install and physical log compaction are unsupported, so logs grow and catch-up uses replay."
+      "summary": "SQLite partition logs are bounded by the production snapshot protocol, but in-memory message-group logs still grow without bound and catch up by full replay."
     },
     {
       "id": "learner-promotion",

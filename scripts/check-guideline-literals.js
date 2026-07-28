@@ -91,6 +91,13 @@ function isJsLanguagePrimitiveLiteral(node, parent, ancestors) {
   }
   return isTypeofComparisonLiteral(node, parent, ancestors);
 }
+// 2026-07-28 upward re-anchor: the required CI gate was silently red (the
+// static chain died at audit:current-capabilities before this audit ever ran
+// on the recent push range), so 499 non-baseline violations landed unmeasured
+// on top of the 2006 inherited ones. Baseline re-anchored at the measured
+// 2505; refactor target remains the existing idiom (hoist raw literals into
+// named constant owners per code-style.md). Decision-log entry:
+// solve/epics/self-hosting-circularity-generic-treatment.md (2026-07-28).
 const LITERAL_BASELINE_FILE_URL = new URL(
   './check-guideline-literals-baseline.json',
   import.meta.url,

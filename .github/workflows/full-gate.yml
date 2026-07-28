@@ -47,5 +47,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      # The MovieLens evidence tests read the real 100k ratings file; data/ is
+      # gitignored, so fetch it and fail closed on any digest drift (the same
+      # sha256 the tests pin).
+      - name: Fetch MovieLens dataset (digest-pinned)
+        run: |
+          node examples/service-data-affinity/download-movielens.js
+          echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
+
       - name: Full gate
         run: npm run test:gate

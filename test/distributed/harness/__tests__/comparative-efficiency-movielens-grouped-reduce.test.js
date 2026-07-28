@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {existsSync} from 'node:fs';
 import {mkdtemp, rm} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
@@ -327,6 +328,14 @@ function surrogateReceipt(evidence, index, mutateLive) {
 }
 
 test('builds exact observed and 80/20 MovieLens matrix variants', async () => {
+  // The observed-variant build reads the real MovieLens 100k ratings file,
+  // which lives under the gitignored data/ tree; CI fetches it digest-pinned
+  // before the gate. Fail with the remedy instead of a bare ENOENT.
+  assert.ok(
+    existsSync(path.resolve('data/examples/movielens-100k/u.data')),
+    'MovieLens 100k dataset missing; run ' +
+      'node examples/service-data-affinity/download-movielens.js',
+  );
   const directory = await mkdtemp(
     path.join(tmpdir(), 'lagrange-movielens-matrix-test-'),
   );

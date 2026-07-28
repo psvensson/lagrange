@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {existsSync} from 'node:fs';
 import {
   mkdir,
   mkdtemp,
@@ -12,6 +13,12 @@ import {
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {describe, it} from 'node:test';
+
+// The raw-index replay case reads the real MovieLens 100k ratings file, which
+// lives under the gitignored data/ tree; CI fetches it digest-pinned before
+// the gate runs.
+const MOVIELENS_DATASET_URL =
+  new URL('../../data/examples/movielens-100k/u.data', import.meta.url);
 
 import {
   replayEvidenceIndex,
@@ -1042,18 +1049,18 @@ describe('MovieLens public request evidence artifacts', () => {
 
   it('rehashes a raw index and re-derives every terminal verdict',
     async () => {
+      assert.ok(
+        existsSync(MOVIELENS_DATASET_URL),
+        'MovieLens 100k dataset missing; run ' +
+          'node examples/service-data-affinity/download-movielens.js',
+      );
       const temporaryRoot = await mkdtemp(
         path.join(tmpdir(), 'movielens-evidence-replay-'),
       );
       const artifactRoot = path.join(temporaryRoot, 'sha256');
       try {
         const live = liveFixture();
-        const datasetBytes = await readFile(
-          new URL(
-            '../../data/examples/movielens-100k/u.data',
-            import.meta.url,
-          ),
-        );
+        const datasetBytes = await readFile(MOVIELENS_DATASET_URL);
         live.dataset.sizeBytes = datasetBytes.length;
         live.alternative.inputSizeBytes = datasetBytes.length;
         const executableBytes = Buffer.from('fixture wasm executable');

@@ -279,3 +279,28 @@ establishment) graduate separately after ladder rung 1 seeds the evidence.
   derivations outside the owner; done at 0). The open formation-ledger quest
   stays open with a pivot finding; its residual (load-phase schema-job op
   confirmation) is not chased as point fixes while the ladder runs.
+- 2026-07-28 — `audit:guideline:literals` baseline upward re-anchor (silently-red
+  exception, release-gate.md "one-way ratchet"). The required CI gate had been
+  red at `audit:current-capabilities` (stale generated capabilities doc plus
+  outdated architecture-evidence anchors) for the recent push range, so the
+  literal-guideline audit never ran on those pushes and 499 non-baseline
+  violations landed unmeasured on top of the 2006 inherited ones (top sources:
+  recent solver/quest tooling under `scripts/solve/` and owner-census
+  analyzers). Baseline re-anchored at measured reality via
+  `node scripts/check-guideline-literals.js --update-baseline` run in a clean
+  worktree at the re-anchor commit (so concurrent in-flight session files
+  could not leak in); dated in-code comment at the baseline constant in
+  `scripts/check-guideline-literals.js` names the measured value and keeps the
+  refactor target (hoist raw literals into named constant owners). One-time
+  exception for this gate; future increases fail the audit again.
+- 2026-07-28 (same sweep) — `audit:guideline:decision-boundaries` baseline
+  upward re-anchor under the same silently-red exception and with the same
+  clean-worktree procedure as the literals re-anchor above: 42 non-baseline
+  violations (top sources: snapshot-install/bootstrap-owner work and recent
+  solver tooling) on top of 813 inherited; re-anchored at measured 855. Dated
+  in-code comment at the baseline constant in
+  `scripts/check-guideline-decision-boundaries.js`. Also fixed in the same
+  sweep rather than re-anchored: `audit:doc-audience` (two architecture docs
+  embedded Solver spec paths; reworded to plain provenance) and
+  `steering:check` (regenerated packs/indexes after the post-push gate npm
+  scripts were added).

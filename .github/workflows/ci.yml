@@ -1,5 +1,11 @@
 # GitHub Actions CI — the required pull-request and main-branch gate.
 #
+# Runs the post-push gate manifest: the full gate minus the checks the
+# pre-push hook (.githooks/pre-push) already ran moments earlier on the
+# pushing machine (unused files, unused-exports ratchet, duplication,
+# circular deps, eslint). The nightly full-gate workflow still runs the
+# complete manifest, so those checks keep a binding remote signal.
+#
 # The statistical rolling-restart convergence gate is deliberately not run
 # here: its pass rate is variance-bounded and is promoted only through the
 # sealed Wilson-95 rule documented in docs/convergence-donewhen-metric.md.
@@ -54,5 +60,13 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
-      - name: Full gate
-        run: npm run test:gate
+      # The MovieLens evidence tests read the real 100k ratings file; data/ is
+      # gitignored, so fetch it and fail closed on any digest drift (the same
+      # sha256 the tests pin).
+      - name: Fetch MovieLens dataset (digest-pinned)
+        run: |
+          node examples/service-data-affinity/download-movielens.js
+          echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
+
+      - name: Post-push gate
+        run: npm run test:gate:postpush

@@ -256,6 +256,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:fast` — Run non-bootstrap, non-integration TAP tests.
 - `test:file` — Run one focused TAP test file via the fail-closed runner (npm test ignores file arguments and runs the full sharded suite).
 - `test:gate` — `node scripts/run-project-hardening-acceptance.js`
+- `test:gate:postpush` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/project-hardening-proof-postpush-manifest.json`
 - `test:integration:1` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-1.txt)`
 - `test:integration:2` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-2.txt)`
 - `test:integration:3` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-3.txt)`
@@ -276,6 +277,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:sharded:serial` — `npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2`
 - `test:smoke` — Run the versioned short developer proof through the fail-closed acceptance executor.
 - `test:static` — Run unused, dependency, complexity, metadata, and runtime grammar checks.
+- `test:static:postpush` — `npm run test:unused:prod && npm run test:deps && npm run test:complexity && npm run test:complexity:cognitive && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:documentation-current && npm run audit:roadmap-authority && npm run steering:check`
 - `test:task27:ci` — `npm run test:task27:invariant-suite && npm run test:task27:distributed-stall-gate`
 - `test:task27:distributed-stall-gate` — Run the Task 27 distributed stall gate.
 - `test:task27:invariant-suite` — `bash scripts/run-task27-deterministic-invariant-suite.sh`
@@ -298,4 +300,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-199 scripts indexed; 72 have a curated description, 127 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+201 scripts indexed; 72 have a curated description, 129 fall back to their raw command. Improve coverage in the two sources named in the header comment.

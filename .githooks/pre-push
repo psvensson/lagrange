@@ -2,14 +2,42 @@
 # Push gate: unused-code check (~7s) + whole-repo cached lint (~30s cold,
 # seconds warm — cache shared with pre-commit at node_modules/.cache/eslint/)
 # + the static ratchet trio (duplication ~40s, unused-exports ~60s,
-# circular-deps ~10s). The trio also runs post-push in CI's test:static, but
-# the self-hosted lane's signal is not binding, so drift must be caught
-# BEFORE it lands on the remote (core.md Must-Not #20).
+# circular-deps ~10s). This hook is the only per-push run of these checks:
+# the per-push CI gate (test:gate:postpush) deliberately skips them and only
+# the nightly full-gate workflow re-runs them remotely, so drift must be
+# caught BEFORE it lands on the remote (core.md Must-Not #20).
 # Bypass with git push --no-verify (emergencies only).
 # Unused-file findings on untracked paths do not block: untracked files are
 # never part of a push (a concurrent session's in-flight work must not gate
 # this one). See scripts/checks/push-gate-unused-files.js.
 set -euo pipefail
+
+# Red-main guard: refuse to push while the latest completed CI run on main is
+# red, so drift cannot silently compound on top of a broken gate (the
+# 2026-07-26..28 dark period). Fails OPEN when gh/network is unavailable —
+# the guard targets ignoring a known-red signal, not offline work. Bypass
+# with LAGRANGE_PUSH_ON_RED=1 git push (NOT --no-verify, which would also
+# skip every check below); use it only for a push that fixes CI itself.
+if [ -z "${LAGRANGE_PUSH_ON_RED:-}" ]; then
+  if command -v gh >/dev/null 2>&1; then
+    ci_conclusion="$(timeout 15 gh run list --workflow ci.yml --branch main \
+      --status completed --limit 1 --json conclusion \
+      --jq '.[0].conclusion' 2>/dev/null || echo unavailable)"
+    case "$ci_conclusion" in
+      success|'') ;;
+      unavailable)
+        echo "pre-push: warning — could not query CI status (offline or gh unauthenticated); proceeding" ;;
+      *)
+        echo "pre-push: the latest completed CI run on main concluded '$ci_conclusion'."
+        echo "pre-push: pushing onto a red main compounds unmeasured drift. Fix CI first,"
+        echo "pre-push: or, for a push that itself fixes CI: LAGRANGE_PUSH_ON_RED=1 git push"
+        exit 1 ;;
+    esac
+  else
+    echo "pre-push: warning — gh CLI not installed; skipping red-main CI guard"
+  fi
+fi
+
 npm run -s test:unused:push
 npx eslint --cache --cache-location node_modules/.cache/eslint/ src/ test/ scripts/ --ignore-pattern 'test/.gitkeep'
 npm run -s test:duplication

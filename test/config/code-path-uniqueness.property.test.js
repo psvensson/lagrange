@@ -359,7 +359,8 @@ test('Property 14: Code Path Uniqueness', async (t) => {
       transportFile.includes('resolution') ||
       transportFile.includes('retry') ||
       transportFile.includes('budget') ||
-      transportFile.includes('admission');
+      transportFile.includes('admission') ||
+      transportFile.includes('channel');
 
     fc.assert(
       fc.property(

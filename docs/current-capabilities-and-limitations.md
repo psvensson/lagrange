@@ -22,7 +22,7 @@ plans or development workflow.
 | Default replica count | 3 |
 | Partition consensus | raft |
 | Runtime-service Cell consensus | none; durable state uses ordinary replicated tables |
-| Secondary indexes | No; `CREATE INDEX` parses but is rejected as unsupported at statement dispatch (a local-index subsystem exists in `src/index-management/` but is not wired into the runtime) |
+| Secondary indexes | Local SQLite indexes on every partition |
 | Global secondary indexes | No |
 
 ## Listeners And Probes
@@ -100,8 +100,8 @@ container activation is unsupported. OCI callback invocation remains unsupported
 | --- | --- |
 | Query routing | Production partition narrowing effectively requires a key column named id; other predicates may scatter to every partition. |
 | Query routing | Partition range comparison is string-based, so numeric strings sort lexicographically. |
-| Indexes | CREATE INDEX parses but fails as an unsupported statement; the per-partition local-index subsystem exists but is unwired, and there is no global partition narrowing by index. |
-| Replication | Checkpoint creation exists but is not called by production; snapshot transfer/install and physical log compaction are unsupported, so logs grow and catch-up uses replay. |
+| Indexes | There is no secondary index support: CREATE INDEX is rejected as unsupported, and even a wired-in local index would not narrow the partition set. |
+| Replication | SQLite partition logs are bounded by the production snapshot protocol, but in-memory message-group logs still grow without bound and catch up by full replay. |
 | Replication | Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress. |
 | Service deployment | Only request Bindings have a public invocation adapter; other source kinds can be declared and placed but are not publicly invocable. |
 | Service portability | Managed OCI container activation is unsupported. |

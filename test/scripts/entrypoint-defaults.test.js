@@ -28,8 +28,11 @@ describe('entrypoint-defaults script', () => {
         forbidden: /fixed at `8081`|admin stays `8081`/iu,
       },
       {
+        // Split to an audience-safe stub by 790a8aba; listener-port docs now
+        // live in the generated capabilities reference, which
+        // check-current-capabilities.js verifies against the port owner.
         path: 'docs/wasm-services-user-guide.md',
-        required: ['REST port + 1'],
+        required: [],
         forbidden: /Fixed port:/u,
       },
       {

@@ -22,6 +22,9 @@ import {
   createRequestDigest,
 } from '../../src/service/request-cell-routing-contract.js';
 import {
+  requestCellWitness,
+} from '../../src/runtime/wasm-component-driver.js';
+import {
   MOVIELENS_PUBLIC_REQUEST,
   buildMovielensPublicRequestComponent,
 } from './movielens-public-request-workload-contract.js';
@@ -137,7 +140,7 @@ function buildPorts(node) {
           .serviceRuntimeLifecycle._resolveDriver('wasm_component');
       return Object.freeze({
         route,
-        runtime: driver.requestCellWitness(replicaHandle),
+        runtime: requestCellWitness(driver, replicaHandle),
       });
     },
     executeSql(statement, parameters) {

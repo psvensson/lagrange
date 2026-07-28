@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "id": "project-hardening-proof-integrity-cutover",
+  "id": "project-hardening-proof-postpush",
   "environment": {
     "inherit": true,
     "set": {
@@ -26,18 +26,18 @@
       "acceptableExitCodes": [0],
       "requiredArtifact": {
         "mode": "captured-output",
-        "path": "test-output/acceptance/project-hardening/focused-contracts.json"
+        "path": "test-output/acceptance/project-hardening-postpush/focused-contracts.json"
       }
     },
     {
-      "id": "static-analysis",
+      "id": "static-analysis-postpush",
       "executable": "npm",
-      "argv": ["run", "test:static"],
+      "argv": ["run", "test:static:postpush"],
       "timeoutMs": 1800000,
       "acceptableExitCodes": [0],
       "requiredArtifact": {
         "mode": "captured-output",
-        "path": "test-output/acceptance/project-hardening/static-analysis.json"
+        "path": "test-output/acceptance/project-hardening-postpush/static-analysis-postpush.json"
       }
     },
     {
@@ -48,7 +48,7 @@
       "acceptableExitCodes": [0],
       "requiredArtifact": {
         "mode": "captured-output",
-        "path": "test-output/acceptance/project-hardening/model-contracts.json"
+        "path": "test-output/acceptance/project-hardening-postpush/model-contracts.json"
       }
     },
     {
@@ -56,7 +56,7 @@
       "executable": "node",
       "argv": [
         "scripts/generate-global-owner-debt-inventory.js",
-        "--refresh-import-graph",
+        "--refresh",
         "--output",
         "test-output/analysis/owner-debt-live-inventory.json"
       ],
@@ -64,7 +64,7 @@
       "acceptableExitCodes": [0],
       "requiredArtifact": {
         "mode": "captured-output",
-        "path": "test-output/acceptance/project-hardening/owner-debt-report-inputs.json"
+        "path": "test-output/acceptance/project-hardening-postpush/owner-debt-report-inputs.json"
       }
     },
     {
@@ -75,7 +75,7 @@
       "acceptableExitCodes": [0],
       "requiredArtifact": {
         "mode": "captured-output",
-        "path": "test-output/acceptance/project-hardening/fast-tests.json"
+        "path": "test-output/acceptance/project-hardening-postpush/fast-tests.json"
       }
     }
   ]

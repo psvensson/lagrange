@@ -717,11 +717,11 @@ class WasmComponentDriver extends RuntimeDriver {
       );
     }
   }
-
-  requestCellWitness(replicaContext) {
-    const serviceId = resolveDriverServiceId(replicaContext);
-    return this._componentRuntime.witness(serviceId);
-  }
 }
 
-export {WasmComponentDriver, WASM_COMPONENT_ERROR};
+function requestCellWitness(driver, replicaContext) {
+  const serviceId = resolveDriverServiceId(replicaContext);
+  return driver._componentRuntime.witness(serviceId);
+}
+
+export {WasmComponentDriver, WASM_COMPONENT_ERROR, requestCellWitness};

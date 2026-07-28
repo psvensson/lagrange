@@ -565,6 +565,26 @@ t.test(
     const cache = buildFormationCache();
     const fixture = createTimeoutTestCoordinator();
     fixture.coordinator.systemTableCache = cache;
+    // The priority surplus REMOVE placement fence only admits the drain when
+    // the strict owner-RPC services lane proves current placement, so the
+    // authoritative owner answers from the live formation cache.
+    const gateway = fixture.coordinator.controlPlaneSystemTableGateway;
+    const baseReadAuthoritativeRows =
+      gateway.readAuthoritativeRows.bind(gateway);
+    gateway.readAuthoritativeRows = async (tableName, sql, params, options) => {
+      if (
+        tableName === 'services' &&
+        options?.authoritativeReadMode ===
+          CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED
+      ) {
+        return {
+          success: true,
+          source: 'owner_rpc_lane',
+          rows: currentLedgerReplicas(cache),
+        };
+      }
+      return baseReadAuthoritativeRows(tableName, sql, params, options);
+    };
     const planner = buildRealLedgerPlanner(
       cache,
       fixture.trackedOperations,

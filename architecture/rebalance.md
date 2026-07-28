@@ -66,8 +66,8 @@ Entity types:
 The in-memory adapter is ephemeral across process restart; that weaker
 durability contract does not permit deleting committed entries while the
 adapter is live. The snapshot protocol now exists END TO END and is WIRED INTO PRODUCTION for
-file-backed SQLite partition replicas (quests S1-S6 of
-`solve/specs/raft-snapshot-transfer-install/`, ladder complete): checkpoint
+file-backed SQLite partition replicas (certified through the six-stage
+snapshot-transfer-install ladder, now complete): checkpoint
 CREATION (`src/raft/snapshot-checkpoint-{constants,format,store}.js`), atomic
 INSTALL at the closed-handle boot boundary (`snapshot-install{,-constants}.js`,
 `snapshot-boundary.js`), bulk TRANSFER over a dedicated byte-bounded per-peer

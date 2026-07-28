@@ -513,6 +513,13 @@ async function collectDecisionBoundaryViolations(pathsToScan, options = {}) {
   );
 }
 
+// 2026-07-28 upward re-anchor: the required CI gate was silently red (the
+// static chain died at audit:current-capabilities before this audit ever ran
+// on the recent push range), so 42 non-baseline violations landed unmeasured
+// on top of the 813 inherited ones. Baseline re-anchored at the measured 855;
+// refactor target remains the existing idiom (route decisions through frozen
+// STATE/ACTION decision-table owners, rule ARCH-0013). Decision-log entry:
+// solve/epics/self-hosting-circularity-generic-treatment.md (2026-07-28).
 const DECISION_BASELINE_FILE_URL = new URL(
   './check-guideline-decision-boundaries-baseline.json',
   import.meta.url,
