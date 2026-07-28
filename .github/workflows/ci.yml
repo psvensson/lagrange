@@ -27,7 +27,11 @@ permissions:
 
 jobs:
   gate:
-    runs-on: ubuntu-24.04
+    # Push events come only from the maintainer, so they run on the fast
+    # self-hosted box; pull_request events (which can carry fork code on a
+    # public repo) stay on ephemeral GitHub-hosted runners and must never be
+    # routed to self-hosted.
+    runs-on: ${{ github.event_name == 'push' && 'self-hosted' || 'ubuntu-24.04' }}
     timeout-minutes: 120
     steps:
       - name: Checkout
@@ -42,6 +46,7 @@ jobs:
           cache: npm
 
       - name: Install gate CLI tools
+        if: runner.environment == 'github-hosted'
         run: |
           set -euo pipefail
           sudo apt-get update
