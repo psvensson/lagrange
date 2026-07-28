@@ -27,6 +27,7 @@ import {
 } from './movielens-public-request-workload-contract.js';
 import {
   loadMovielensPublicRequestDataset,
+  loadMovielensPublicRequestDatasetVariant,
 } from './movielens-public-request-workload-dataset.js';
 import {
   prepareMovielensPublicRequestWorkload,
@@ -429,13 +430,17 @@ async function openMovielensPublicRequestWorkloadLive(options = {}) {
   let prepared = null;
   let prepareAttempted = false;
   try {
-    dataset = await loadMovielensPublicRequestDataset(
-      options.ratingsPath,
-    );
+    dataset = options.datasetIdentity ?
+      await loadMovielensPublicRequestDatasetVariant(
+        options.ratingsPath,
+        options.datasetIdentity,
+      ) :
+      await loadMovielensPublicRequestDataset(options.ratingsPath);
     stage = LIVE_FAILURE_STAGE.POSTGRES;
     postgres = await runPostgresBaseline({
       ratingsBytes: dataset.bytes,
       ratingsDigest: dataset.digest,
+      replicationFactor: options.replicationFactor,
     });
     postgresCleanup = postgres.cleanupReceipt;
     if (
@@ -457,14 +462,17 @@ async function openMovielensPublicRequestWorkloadLive(options = {}) {
         temporaryRoot,
         MOVIELENS_PUBLIC_REQUEST.COMPONENT_FILE,
       ),
-      componentSourcePath: path.join(
-        EXAMPLE_DIRECTORY,
-        MOVIELENS_PUBLIC_REQUEST.COMPONENT_SOURCE_FILE,
-      ),
+      componentSourcePath:
+        options.componentSourcePath ||
+        path.join(
+          EXAMPLE_DIRECTORY,
+          MOVIELENS_PUBLIC_REQUEST.COMPONENT_SOURCE_FILE,
+        ),
       ociOutputRoot: path.join(temporaryRoot, OCI_LAYOUT_DIRECTORY),
     };
     const artifactReceipt =
       await buildMovielensPublicRequestComponent(paths);
+    const componentSourceBytes = await readFile(paths.componentSourcePath);
     const executableBytes = await readFile(paths.componentPath);
     const executableDigest = sha256(executableBytes);
     const executablePayload =
@@ -517,6 +525,7 @@ async function openMovielensPublicRequestWorkloadLive(options = {}) {
       }),
       prepared,
       retained: Object.freeze({
+        componentSourceBytes,
         datasetBytes: dataset.bytes,
         executableBytes,
         postgresLogs: postgres.logs,

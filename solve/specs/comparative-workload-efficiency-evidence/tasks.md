@@ -14,7 +14,7 @@
 | C5 | `comparative-efficiency-negative-controls` | C3, C4 | The complete small/unfavorable/no-reuse/update-heavy/uniform matrix yields valid direction-neutral results. |
 | C6 | `comparative-efficiency-request-enrichment` — ✅ SOLVED 2026-07-28 | C3, C4 | The complete locality/skew/size request-enrichment matrix yields paired capacity and cost evidence. |
 | C7 | `comparative-efficiency-movielens-public-request-workload` | C2 | MovieLens grouped reduce runs with equivalent results through the public installed request/WASM Cell surface. |
-| C8 | `comparative-efficiency-movielens-grouped-reduce` | C3, C4, C7 | The complete MovieLens size/skew/topology matrix yields paired capacity and cost evidence. |
+| C8 | `comparative-efficiency-movielens-grouped-reduce` — ✅ SOLVED 2026-07-28 | C3, C4, C7 | The complete MovieLens size/skew/topology matrix yields paired capacity and cost evidence. |
 | C9 | `comparative-efficiency-change-rate-crossover` | C3, C4 | The complete size/change/diversity/materialization sweep yields crossover evidence without presuming its sign. |
 | C10 | `comparative-efficiency-claim-projection` | L0a, C1, C5, C6, C8, C9 | Digest-verified evidence projects qualified wins, neutral results, losses, and `no_claim` without promotion. |
 

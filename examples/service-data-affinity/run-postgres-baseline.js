@@ -235,7 +235,7 @@ function resolveEnvInteger(envKey) {
   return Number.isInteger(parsed) && parsed > ZERO ? parsed : null;
 }
 
-function buildBaselineConfig() {
+function buildBaselineConfig(options = {}) {
   const envReplicationFactor = resolveEnvInteger('PG_BASELINE_REPLICATION_FACTOR');
   const envReadyTimeoutMs = resolveEnvInteger('PG_BASELINE_READY_TIMEOUT_MS');
   const envReadyPollIntervalMs = resolveEnvInteger('PG_BASELINE_READY_POLL_MS');
@@ -245,7 +245,13 @@ function buildBaselineConfig() {
     password: DEFAULT_PASSWORD,
     database: DEFAULT_DATABASE,
     port: DEFAULT_PORT,
-    replicationFactor: envReplicationFactor || DEFAULT_REPLICATION_FACTOR,
+    replicationFactor:
+      (Number.isInteger(options.replicationFactor) &&
+        options.replicationFactor > ZERO ?
+        options.replicationFactor :
+        null) ||
+      envReplicationFactor ||
+      DEFAULT_REPLICATION_FACTOR,
     syncReplicaAcks: DEFAULT_SYNC_REPLICA_ACKS,
     readyTimeoutMs: envReadyTimeoutMs || DEFAULT_READY_TIMEOUT_MS,
     readyPollIntervalMs: envReadyPollIntervalMs || DEFAULT_READY_POLL_INTERVAL_MS,
@@ -521,7 +527,7 @@ async function collectPostgresProvenance(provider, baseline, imageName) {
 
 async function runPostgresBaseline(options = {}) {
   const ratingsInput = await resolveRatingsBytes(options);
-  const config = buildBaselineConfig();
+  const config = buildBaselineConfig(options);
   const provider = new DockerProvider({
     socketPath: '/var/run/docker.sock',
   });
