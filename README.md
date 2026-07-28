@@ -1,18 +1,32 @@
 # Lagrange
 
-### Distributed SQL database and compute-near-data runtime
+### A distributed SQL database that deploys your services next to your data
 
-Lagrange is an experimental distributed system that keeps storage, SQL
-execution, and programmable compute in the same runtime.
+Lagrange is a cluster runtime that combines a distributed SQL database with a
+service deployment platform. You deploy services to it much as you would
+deploy containers to Kubernetes — but where a container scheduler places
+workloads by CPU and memory, Lagrange places each service replica on the
+nodes that already store the data that service reads and writes.
 
-The basic idea is simple: if the data already lives on a node, run the work
-there first and move only the data that actually has to move.
+It is meant to be run as a large cluster, and three ideas define how that
+cluster behaves:
 
-That puts Lagrange somewhere between a distributed SQL database, a dataflow
-runtime, and a service platform. Tables are split into partitions, every
-partition is copied to several nodes, SQL goes through one execution engine,
-and the cluster places runtime-service Cells on the nodes that store the data
-they use.
+- **Data is partitioned and replicated according to usage.** Tables are split
+  into partitions — a partition that gets hot splits — and every partition is
+  replicated across several nodes with Raft, with replica placement balancing
+  load, spread, and capacity across the cluster.
+- **Services are replicated near the data they access.** A deployed service
+  runs as replicated Cells, and once the cluster has observed which
+  partitions the service actually uses, it pulls those Cells toward nodes
+  holding replicas of that data.
+- **Rebalancing is continuous, for data and services alike.** As usage
+  changes — a partition outgrows its thresholds, a service's access pattern
+  shifts, nodes join or leave — the cluster moves data replicas and service
+  replicas to match, instead of leaving you to re-engineer the layout by hand
+  and watch it decay.
+
+Today a deployed service is packaged as a digest-pinned WASM (WASI)
+component; OCI container execution is on the roadmap but not yet supported.
 
 This repo is for people interested in building or studying that model. It is
 substantial, but still experimental.
@@ -21,38 +35,34 @@ substantial, but still experimental.
 
 ## What Lagrange Is
 
-Lagrange is trying to answer a specific question:
-
-> What if a distributed database did not stop at storing and querying data,
-> but also ran the application-side compute that normally sits beside it?
-
-In practice that means:
-
-- table data is split into partitions, each replicated across nodes with Raft
-- SQL runs through a shared execution path
-- distributed compute runs on the nodes that own the relevant partitions
-- runtime services are decomposed into placed Cells, and the cluster places
-  each Cell on a node holding as many replicas of the partitions it accesses
-  as possible — then re-places it as the data layout changes
-- services can query tables without a separate data access stack
-
-If you have ever built a system that looked like this:
+Most production architectures split one job across many separately deployed
+systems:
 
 ```text
 app -> database -> queue -> workers -> cache -> database
 ```
 
-then the motivation should be familiar. Every arrow in that picture copies
-data somewhere else before any useful work happens to it.
+Every arrow in that picture copies data somewhere else before any useful work
+happens to it, and every box is deployed, scaled, and monitored on its own.
 
-Lagrange explores a tighter loop:
+Lagrange collapses that loop. You create tables and deploy services; the
+cluster runs each service where its data already lives:
 
 ```text
-client -> cluster -> execute near the data -> return results
+client -> cluster -> service runs where the data lives -> results return
 ```
 
+In practice that means:
+
+- table data is split into partitions, each replicated across nodes with Raft
+- SQL runs through a shared execution path
+- deployed services are decomposed into placed Cells, and the cluster places
+  each Cell on a node holding as many replicas of the partitions it accesses
+  as possible — then re-places it as the data layout and usage change
+- services query tables directly, without a separate data access stack
+
 To be clear about where the novelty is: any distributed system can read remote
-data over the network. What Lagrange adds is placement. Runtime services are
+data over the network. What Lagrange adds is placement. Deployed services are
 decomposed into placed Cells; unlike data partitions, they do not have a
 per-service Raft log or replicate process-local state. Their durable state lives
 in ordinary partitioned and replicated tables. The cluster continuously
@@ -66,8 +76,8 @@ those partitions across nodes, and routes each request to the right one:
 ![Classical distributed database: logical tables split into partitions, replicated across nodes, requests routed to the right partitions and run in parallel](docs/dist_db.png)
 
 Lagrange keeps that data layer and adds a placed *service* layer on top of it —
-service Cells are placed on or near the data they access, so compute moves to
-the data instead of the data moving to the compute:
+service Cells are placed on or near the data they access, so the work moves
+to the data instead of the data moving to the work:
 
 ```mermaid
 flowchart TB
@@ -117,13 +127,13 @@ problem is already distributed.
 ### How Is This Different From Kubernetes Plus A Distributed Database?
 
 Kubernetes plus a database is the usual architecture: the database stores
-state, and application compute lives outside it in a separate scheduler,
-deployment system, and failure domain.
+state, and your services live outside it in a separate scheduler, deployment
+system, and failure domain.
 
 Lagrange is not mainly about replacing a container scheduler. The difference
-is that compute placement is derived from data ownership: the cluster decides
+is that service placement is derived from data ownership: the cluster decides
 where each service Cell runs based on which nodes store the data it touches,
-and keeps adjusting that placement as the data layout changes.
+and keeps adjusting that placement as the data layout and usage change.
 
 In practice that changes a few things:
 
@@ -132,24 +142,27 @@ In practice that changes a few things:
   service tier
 - data movement becomes an explicit operation instead of something hidden in
   RPC calls, caches, and worker pipelines
-- SQL, service logic, and distributed execution can share the same routing and
+- SQL, service logic, and distributed execution share the same routing and
   metadata model
+- rebalancing data and rebalancing services are one coordinated concern, not
+  two systems that have to be tuned against each other
 
 You can still run Lagrange on Kubernetes. The point is that Kubernetes does
-not by itself give you data-local execution semantics. It schedules pods, not
-work in terms of partition ownership.
+not by itself give you data-local execution semantics. It schedules pods by
+resource requests; it does not place a service on the node that stores the
+rows that service is about to read.
 
-### Why Not Just Keep The Compute In The Application Layer?
+### Why Not Just Keep The Services In A Separate Application Layer?
 
 Sometimes that is the right answer.
 
-The application layer is simpler when:
+A separate application tier is simpler when:
 
 - the workload is small enough that data movement does not dominate
-- compute needs are not tied to data locality
+- the services' needs are not tied to data locality
 - operational separation is more important than runtime integration
 
-Lagrange becomes interesting when the application layer mostly exists to
+Lagrange becomes interesting when the application tier mostly exists to
 shuffle data between systems before doing work that could have happened near
 the partitions in the first place.
 
@@ -196,13 +209,13 @@ WASM matters here because a genuine component is a useful unit for sandboxed,
 portable, replicable compute — that is what a Binding-derived Cell runs. It is
 not the only way to think about the runtime.
 
-### Is This A Database With Extra Compute, Or A Compute System With Storage?
+### Is This A Database That Runs Services, Or A Service Platform With Storage?
 
-The honest answer is: it is trying to be a database that takes compute
-seriously enough to make it part of the runtime model.
+The honest answer is: it is trying to be a database that takes service
+execution seriously enough to make it part of the runtime model.
 
 That distinction matters because storage ownership, replication, transactions,
-and routing still anchor the design. The compute side is built around those
+and routing still anchor the design. The service side is built around those
 constraints instead of pretending the data layer is just another service to
 call.
 
@@ -213,13 +226,15 @@ call.
 Lagrange makes sense if you care about any of these:
 
 - workloads where the real cost is copying rows out of the database to
-  wherever the compute runs — the win is running that compute where the rows
-  already are
-- distributed SQL workloads that also need custom compute
+  wherever the services run — the win is running those services where the
+  rows already are
+- large clusters where data layout and service placement should follow usage
+  instead of being engineered by hand
+- distributed SQL workloads that also need custom service logic
 - service logic that should execute close to the tables it reads and writes
 - experimenting with WASM-based distributed execution
-- studying the mechanics of a database that treats compute as part of the
-  runtime instead of an external layer
+- studying the mechanics of a database that treats service execution as part
+  of the runtime instead of an external layer
 
 ## Not A Good Fit
 
@@ -228,7 +243,9 @@ Lagrange is probably the wrong tool if you need:
 - a boring, mature drop-in production database right now
 - polished one-command deployment and operations workflows
 - a general-purpose serverless platform
-- a system where the database and compute tiers must stay separate
+- deployment of unmodified OCI container images today (planned, not yet
+  supported — services are deployed as WASM components)
+- a system where the database and service tiers must stay separate
 
 ---
 
@@ -257,13 +274,19 @@ page.
 
 ---
 
-## How You Deploy Code To Lagrange
+## How You Deploy Services To Lagrange
 
 The supported external deployment surface is:
 
 1. Install a digest-pinned **Artifact** with `INSTALL SERVICE`.
 2. Declare immutable execution intent with `CREATE BINDING`.
 3. Let the cluster derive and place ready **Cells**.
+
+If you think in container terms: the Artifact is your image, the Binding is
+your deployment spec, and Cells are the running replicas — except you never
+pick a replica count or a node. The cluster chooses capacity and placement,
+adds observed data affinity to its load-and-spread scoring, and re-places
+Cells as usage changes.
 
 Request Bindings currently run genuine WASI components with budget and
 declared-table enforcement. Other accepted Binding source kinds are stored and
@@ -288,10 +311,15 @@ per-service Raft log. Durable service state belongs in ordinary tables, and the
 placement system moves Cells near replicas of the data they use.
 
 **SQL routing and Cell placement are related but different.** SQL predicates
-select table partitions and route work to their leaders. Binding access
-declarations feed the affinity scorer, which places Cells on nodes that already
-host relevant replicas. Requests then route to ready Cells rather than asking
-the caller to choose a machine.
+select table partitions and route work to their leaders. Observed
+service-to-partition access feeds the affinity scorer, which pulls Cells
+toward nodes that already host relevant replicas. Requests then route to
+ready Cells rather than asking the caller to choose a machine.
+
+**Nothing is placed once and forgotten.** Rebalancing runs continuously on
+both layers: data replicas move as nodes join, leave, or fill up, and service
+Cells are re-placed to follow the data they are observed to use. The cluster
+adjusts to changes in usage instead of freezing the first layout it chose.
 
 The older embedded/uploaded callback runtime still demonstrates explicit
 cross-partition movement with `lookup`, `emit`, and `broadcast`. It is a
@@ -524,10 +552,12 @@ SQL does not splinter into separate code paths for clients, internal system
 queries, and runtime calls. Requests converge on one execution engine and one
 canonical request model.
 
-### Distributed Compute Runtime
+### Data-Local Service Execution
 
-Compute can run on the nodes that already own the data it needs, with explicit
-primitives for cross-partition work when locality is not enough.
+Deployed services run on the nodes that already own the data they need, with
+explicit primitives for cross-partition work when locality is not enough. As
+usage shifts, rebalancing moves both data replicas and service Cells so the
+layout keeps matching the access patterns.
 
 ### WASM Component Runtime
 
