@@ -1,0 +1,146 @@
+{
+  "id": "comparative-efficiency-movielens-measured-p0-campaign",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The complete preregistered eight-cell C8 MovieLens matrix compares the exact P0 Lagrange profile with a pinned PostgreSQL 16 baseline and produces digest-verified measuring capacity effects plus whole-topology regional-price cost projections for every cell, with each outcome-neutrally projected as measured_p0 or typed no_claim.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/comparative-workload-efficiency-evidence/tasks.md#M3",
+    "closesCL": [],
+    "parentQuest": "comparative-efficiency-movielens-grouped-reduce",
+    "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+    "draftedAtCommit": "e97bda2d02d83d3919fb1f623c06e2fb27c8eb82"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "comparative-efficiency-movielens-measured-p0-campaign",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "comparative-efficiency-movielens-measured-p0-campaign-capacity",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "comparative-efficiency-movielens-measured-p0-capacity",
+          "metric": "priority"
+        }
+      }
+    },
+    {
+      "id": "comparative-efficiency-movielens-measured-p0-campaign-cost",
+      "priority": 2,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "comparative-efficiency-movielens-measured-p0-cost",
+          "metric": "priority"
+        }
+      }
+    },
+    {
+      "id": "comparative-efficiency-movielens-measured-p0-campaign-projection",
+      "priority": 3,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "comparative-efficiency-movielens-measured-p0-projection",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "requires-measuring-substrate",
+      "statement": "Do not seal this Quest until comparative-efficiency-measured-cell-admission and comparative-efficiency-movielens-paired-runtime-adapters are terminal."
+    },
+    {
+      "id": "seal-before-execution",
+      "statement": "Before the first measured run and without observing outcomes, seal the scale-owned P0 profile; owner digests for dataset bytes/schema/cardinality, access distribution/skew/mutation schedule, correctness oracle, durability/consistency, and both component graphs/configurations; client placement; warmup procedure/duration and explicit warmup-versus-measured boundary; warm/cache/materialization state; software revisions; SLO; offered-load schedule; randomized blocked order; minimum/maximum N; estimator, confidence interval, practical threshold, and stopping rule; timeouts; missing-sample/exclusion/retry policy; exact price-sheet digest, provider/region/zone, billing/reservation/spot policy, and component-to-SKU/SKU-equivalent mapping policy; and artifact retention/cleanup. Any change creates a new matrix identity."
+    },
+    {
+      "id": "complete-statistical-preregistration",
+      "statement": "Preregister and validate from raw randomized blocks the p50/p95/p99 distributions, minimum p99 tail count, offered/emitted/dispatched/correct/rejected/timed-out/errored/queue-overflow denominators, multiple-comparison treatment across eight cells and two effects, capacity and cost estimators/intervals, adaptive stopping rule, and all missing or excluded samples."
+    },
+    {
+      "id": "capacity-bracketing-and-censoring",
+      "statement": "Each side's capacity must be bracketed by a passing SLO point and a higher failing point. If the sealed schedule ends while still passing, publish only the preregistered censored lower bound; never report the maximum tested passing load as an exact capacity. Seal and enforce a quantitative load-generator and observation-path headroom threshold."
+    },
+    {
+      "id": "repeated-cost-windows",
+      "statement": "Join exactly one complete C4 resource window to every C3 measured-run coordinate (matrixCellId, blockIndex, blockedOrderIndex, sideId, offeredLoad/loadIndex, phase=measured), with distinct side/load identities and exact time bounds under a paired-block identity. Warmup windows are separate and excluded unless the sealed amortization rule consumes them. Missing, duplicate, overlapping, cross-side, cross-load, phase-mismatched, point-interval, N=1, or locally aggregated evidence is ineligible."
+    },
+    {
+      "id": "fixed-slo-cost-estimand",
+      "statement": "Preregister the fixed-SLO cost operating-point rule: for each block and side, select the exact maximum SLO-passing measured-run coordinate, integrate provisioned and utilized cost over that same window, divide by correct SLO-eligible operations from that same coordinate, and form the paired blocked cost effect and confidence interval across repeated blocks. Retain failing and exploratory windows as capacity evidence but never pool them into the production cost numerator or denominator. Any alternative estimand must be named before execution and prove the same side/load/window alignment."
+    },
+    {
+      "id": "exact-eight-cell-matrix",
+      "statement": "Execute all eight existing C8 Cartesian cells: dataset sizes 10000 and 100000, observed and movie_hotspot_80_20 skew, and single_replica and replicated topology. Missing, extra, duplicated, or selectively rerun cells invalidate the campaign."
+    },
+    {
+      "id": "all-cells-must-measure",
+      "statement": "Unlike the predecessor's semantics-only closure, every sealed cell must contain both-side owner-derived engagement, semantic parity, valid bracketed C3 capacity samples, repeated complete C4 resource windows, and independently recomputable effects. An explicit non-measuring cell is honest evidence but does not satisfy this Quest; a valid measuring cell may still project typed no_claim when its effect is practically inconclusive."
+    },
+    {
+      "id": "equivalent-per-cell-topologies",
+      "statement": "Seal the exact per-cell mapping from single_replica and replicated to both architectures' node/process graphs and prove equivalent fault-tolerance, availability scope, durability, consistency, query semantics, indexing/materialization, autoscaling policy, minimum footprint, tuning, and exclusions. The seven-node P0 envelope versus PostgreSQL RF1/RF3 is not comparable by label alone."
+    },
+    {
+      "id": "pinned-postgresql-baseline",
+      "statement": "Pin PostgreSQL 16 by exact image digest, server minor/build, extensions, configuration, query text/plan, index and tuning policy, storage, replication, and preload/cache state. Conclusions must name that bounded baseline rather than generalize to PostgreSQL."
+    },
+    {
+      "id": "regional-price-projection",
+      "statement": "Use the pre-execution-sealed immutable externally sourced price sheet and component mapping, binding provider, source locator/digest, region/zone, currency, price date/validity, SKU/product/unit, billing granularity, reservation/on-demand policy, spot policy, licenses, storage class, inter-zone rates, taxes, credits, and exclusions. Map every observed component to the sealed priced SKU or SKU-equivalent; unless execution uses those exact SKUs, label the result regional-price projection rather than observed real cost. Later repricing is allowed only as separately named complete outcome-neutral scenarios with new identities, never as one retrospectively selected result. The normalized local P0 sheet is ineligible."
+    },
+    {
+      "id": "whole-topology-cost",
+      "statement": "Cost per million correct SLO-eligible operations must include the complete provisioned and utilized architecture inventory, minimum footprint, replication and movement amplification, durable storage, IOPS, network/inter-zone traffic, and reserved headroom without double counting; shared load generation may be excluded only symmetrically after its saturation evidence is retained."
+    },
+    {
+      "id": "preprocessing-and-steady-state-scope",
+      "statement": "Seal materialization, build/load, replication, refresh, compaction, preload, and cache state. Amortize their measured costs under a preregistered policy or explicitly limit the result to warm steady-state grouped reduce; do not hide Lagrange-specific preprocessing outside the cost boundary."
+    },
+    {
+      "id": "host-interference-and-time-alignment",
+      "statement": "Seal CPU pinning/NUMA and host-interference policy, container/cgroup identity, disk/cache isolation, network/client attribution, clock synchronization, window-overlap tolerance, and overlap rejection so unrelated host work or shifted clocks cannot enter one side's measurements."
+    },
+    {
+      "id": "deterministic-failure-and-rerun-policy",
+      "statement": "Preserve every attempted block and apply the sealed retry, failure, missing-sample, and exclusion policy deterministically; operators may not selectively rerun or exclude losing blocks. Reject one-sided, empty, measurement-infrastructure-saturated, unaccounted-host/shared-path-constrained, top-load-censored-as-exact, profile-mismatched, missing-window, partial-matrix, and price-SKU-mismatched reports. Recorded saturation of an inventoried Lagrange or PostgreSQL component at the passing/failing capacity boundary is eligible and must identify the bottleneck."
+    },
+    {
+      "id": "fresh-process-recomputation",
+      "statement": "Immutable raw artifacts must be sufficient to recompute semantic parity, all denominators and percentiles, capacity bracketing, topology resource integrals, SKU mapping, capacity/cost effects, and C10 projections from the authoritative root in a fresh process; outer PASS is forbidden when any internal check is absent."
+    },
+    {
+      "id": "outcome-neutral-complete-projection",
+      "statement": "Publish every capacity and regional-price cost estimate, interval, practical-effect classification, loss, neutral result, win, and typed no_claim from the sealed matrix. No winning sign is required, and results must not be generalized beyond the exact scale-owned P0 profile/envelope, dataset, grouped-reduce semantics, topologies, revisions, or hardware/SKU mapping; certified_profile remains unavailable without a current certification receipt."
+    },
+    {
+      "id": "negative-controls-publication-limit",
+      "statement": "C5 negative controls remain a separate later measured Quest and do not block these exact MovieLens figures, but they do block broader or public claims about architectural efficiency."
+    },
+    {
+      "id": "campaign-not-iteration-loop",
+      "statement": "Use deterministic and directed adapter proofs for iteration. The complete statistical campaign runs only after preregistration and adapter closure, retains immutable raw artifacts, and is never rerun selectively to improve a result."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "adversarial-js-intrinsics",
+    "harness-fidelity"
+  ]
+}
