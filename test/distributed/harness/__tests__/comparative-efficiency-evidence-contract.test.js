@@ -9,11 +9,20 @@ import {
   validateComparativeEvidenceReport,
 } from '../comparative-efficiency-evidence-contract.js';
 import {
+  SCALE_CERTIFICATION_RECEIPT_CONTRACT_ID,
+  SCALE_CERTIFICATION_RECEIPT_SCHEMA_VERSION,
   SCALE_CERTIFICATION_RECEIPT_STATE,
+  SCALE_CLAIM_REASON,
+  SCALE_EVIDENCE_CONTRACT_ID,
   SCALE_EVIDENCE_FIDELITY,
+  SCALE_EVIDENCE_SCHEMA_VERSION,
   SCALE_GATE_STATUS,
   SCALE_PROFILE_ID,
+  computeScaleCertificationEvidenceIdentity,
+  computeScaleCertificationReceiptDigest,
   computeScaleEvidenceDigest,
+  computeScaleReportIdentity,
+  evaluateScaleClaimEligibility,
 } from '../scale-evidence-contract.js';
 
 function digest(character) {
@@ -37,6 +46,9 @@ const DIGEST = Object.freeze({
   order: digest('e'),
   topologyManifest: digest('f'),
 });
+const CERTIFICATION_ISSUED_AT = '2026-07-26T10:10:01.000Z';
+const CERTIFICATION_VALID_UNTIL = '2026-08-26T10:10:01.000Z';
+const CERTIFICATION_EVALUATED_AT = '2026-07-27T10:10:01.000Z';
 
 function artifacts() {
   return [
@@ -283,6 +295,52 @@ function comparativeInput(direction = COMPARATIVE_RESULT_DIRECTION.WIN) {
   };
 }
 
+function certifiedComparativeReport() {
+  const certifiedScaleInput = scaleInput();
+  certifiedScaleInput.profile = {
+    id: SCALE_PROFILE_ID.INTEGRATION,
+    version: 1,
+  };
+  certifiedScaleInput.run.fidelity = SCALE_EVIDENCE_FIDELITY.LIVE;
+  const report = createComparativeEvidenceReport(
+    certifiedScaleInput,
+    comparativeInput(),
+  );
+  report.extensions.comparativeEfficiency.claim = {
+    evidenceClass: COMPARATIVE_EVIDENCE_CLASS.CERTIFIED_PROFILE,
+    reasonCodes: [],
+  };
+  const evidenceIdentity = computeScaleCertificationEvidenceIdentity(report);
+  const resolvedReceipt = {
+    contractId: SCALE_CERTIFICATION_RECEIPT_CONTRACT_ID,
+    schemaVersion: SCALE_CERTIFICATION_RECEIPT_SCHEMA_VERSION,
+    questId: 'scale-topology-churn-certification',
+    profileIdentity: report.profileIdentity,
+    evidenceIdentity,
+    issuedAt: CERTIFICATION_ISSUED_AT,
+    validUntil: CERTIFICATION_VALID_UNTIL,
+  };
+  const terminalReceiptDigest =
+    computeScaleCertificationReceiptDigest(resolvedReceipt);
+  report.certification = {
+    receiptState: SCALE_CERTIFICATION_RECEIPT_STATE.ATTACHED,
+    questId: resolvedReceipt.questId,
+    terminalReceiptDigest,
+    profileIdentity: report.profileIdentity,
+    evidenceIdentity,
+  };
+  const scaleOptions = {
+    verifiedTerminalReceipts: new Map([[
+      terminalReceiptDigest,
+      resolvedReceipt,
+    ]]),
+    evaluatedAt: CERTIFICATION_EVALUATED_AT,
+  };
+  report.claimEligibility = evaluateScaleClaimEligibility(report, scaleOptions);
+  report.reportIdentity = computeScaleReportIdentity(report);
+  return {report, scaleOptions};
+}
+
 test('complete win, neutral, and loss fixtures are equally valid', (t) => {
   for (const direction of [
     COMPARATIVE_RESULT_DIRECTION.WIN,
@@ -464,6 +522,42 @@ test('measured P0 requires live fidelity and every shared scale gate green',
     );
     t.end();
   });
+
+test('certified profile delegates currentness to the scale receipt owner', (t) => {
+  const {report, scaleOptions} = certifiedComparativeReport();
+  t.equal(
+    report.contractId,
+    SCALE_EVIDENCE_CONTRACT_ID,
+  );
+  t.equal(report.schemaVersion, SCALE_EVIDENCE_SCHEMA_VERSION);
+  t.equal(
+    validateComparativeEvidenceReport(report, scaleOptions).valid,
+    true,
+  );
+
+  const expiredOptions = {
+    ...scaleOptions,
+    evaluatedAt: CERTIFICATION_VALID_UNTIL,
+  };
+  const expiredReport = structuredClone(report);
+  expiredReport.claimEligibility =
+    evaluateScaleClaimEligibility(expiredReport, expiredOptions);
+  expiredReport.reportIdentity = computeScaleReportIdentity(expiredReport);
+  const expired = validateComparativeEvidenceReport(
+    expiredReport,
+    expiredOptions,
+  );
+
+  t.match(expiredReport.claimEligibility.reasonCodes, [
+    SCALE_CLAIM_REASON.TERMINAL_CERTIFICATION_EXPIRED,
+  ]);
+  t.equal(expired.valid, false);
+  t.ok(expired.errors.includes(
+    'comparative.claim.evidenceClass:' +
+      'certified_profile_requires_scale_receipt',
+  ));
+  t.end();
+});
 
 test('all comparative artifact identities must resolve to shared artifacts',
   (t) => {
