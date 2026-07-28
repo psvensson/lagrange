@@ -1,4 +1,5 @@
 import {
+  appendOwnArrayValue,
   digestBenchmarkSemanticData,
 } from './benchmark-semantic-integrity.js';
 import {
@@ -55,6 +56,8 @@ const liveTopologyComponentKeys = Object.freeze([
   'role',
   'physicalResourceId',
 ]);
+const mathMax = Math.max;
+const mathMin = Math.min;
 const setHas = Function.call.bind(Set.prototype.has);
 
 function fail(message) {
@@ -212,16 +215,101 @@ export function assertBenchmarkResourceLiveComponentAccounting(
       digestBenchmarkSemanticData(expected.amplification) ||
     inventoryComponent === undefined ||
     digestBenchmarkSemanticData(inventoryComponent.provisioned) !==
-      digestBenchmarkSemanticData(expected.provisioned) ||
-    digestBenchmarkSemanticData(inventoryComponent.minimumFootprint) !==
-      digestBenchmarkSemanticData(expected.minimumFootprint) ||
-    inventoryComponent.reservedHeadroomRatio !==
-      expected.reservedHeadroomRatio
+      digestBenchmarkSemanticData(expected.provisioned)
   ) {
     fail(
       `${localText.LIVE_INVENTORY_MISMATCH}:` +
       `${sideId}:${component.componentId}`,
     );
+  }
+}
+
+export function deriveBenchmarkResourceLiveInventoryComponentAccounting(
+  observations,
+) {
+  let provisioned = null;
+  const minimumFootprint = {
+    instances: 1,
+    cpuCores: 0,
+    memoryBytes: 0,
+    storageBytes: 0,
+  };
+  let reservedHeadroomRatio = 1;
+  for (let index = 0; index < observations.length; index += 1) {
+    const accounting =
+      deriveBenchmarkResourceLiveComponentAccounting(observations[index]);
+    if (
+      provisioned !== null &&
+      digestBenchmarkSemanticData(provisioned) !==
+        digestBenchmarkSemanticData(accounting.provisioned)
+    ) {
+      fail(localText.LIVE_INVENTORY_MISMATCH);
+    }
+    provisioned = accounting.provisioned;
+    minimumFootprint.cpuCores = mathMax(
+      minimumFootprint.cpuCores,
+      accounting.minimumFootprint.cpuCores,
+    );
+    minimumFootprint.memoryBytes = mathMax(
+      minimumFootprint.memoryBytes,
+      accounting.minimumFootprint.memoryBytes,
+    );
+    minimumFootprint.storageBytes = mathMax(
+      minimumFootprint.storageBytes,
+      accounting.minimumFootprint.storageBytes,
+    );
+    reservedHeadroomRatio = mathMin(
+      reservedHeadroomRatio,
+      accounting.reservedHeadroomRatio,
+    );
+  }
+  return {provisioned, minimumFootprint, reservedHeadroomRatio};
+}
+
+export function assertBenchmarkResourceLiveInventoryAccounting(
+  inventory,
+  calibrationArtifacts,
+) {
+  for (let sideIndex = 0;
+    sideIndex < inventory.sides.length;
+    sideIndex += 1) {
+    const side = inventory.sides[sideIndex];
+    for (let componentIndex = 0;
+      componentIndex < side.components.length;
+      componentIndex += 1) {
+      const component = side.components[componentIndex];
+      const observations = [];
+      for (let calibrationIndex = 0;
+        calibrationIndex < calibrationArtifacts.length;
+        calibrationIndex += 1) {
+        const observation =
+          resolveBenchmarkResourceLiveCalibrationComponent(
+            calibrationArtifacts[calibrationIndex],
+            side.sideId,
+            component.componentId,
+          );
+        if (observation === undefined) {
+          fail(localText.LIVE_INVENTORY_MISMATCH);
+        }
+        appendOwnArrayValue(observations, observation);
+      }
+      const expected =
+        deriveBenchmarkResourceLiveInventoryComponentAccounting(
+          observations,
+        );
+      if (
+        digestBenchmarkSemanticData(component.provisioned) !==
+          digestBenchmarkSemanticData(expected.provisioned) ||
+        digestBenchmarkSemanticData(component.minimumFootprint) !==
+          digestBenchmarkSemanticData(expected.minimumFootprint) ||
+        component.reservedHeadroomRatio !== expected.reservedHeadroomRatio
+      ) {
+        fail(
+          `${localText.LIVE_INVENTORY_MISMATCH}:` +
+          `${side.sideId}:${component.componentId}`,
+        );
+      }
+    }
   }
 }
 

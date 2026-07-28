@@ -1,5 +1,6 @@
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
+import {EventEmitter} from 'node:events';
 import {
   mkdtemp,
   readFile,
@@ -66,6 +67,9 @@ import {
   PostgresBaselineFailure,
   projectPostgresTopMovies,
 } from '../../examples/service-data-affinity/run-postgres-baseline.js';
+import {
+  createPostgresSessionCleanupController,
+} from '../../examples/service-data-affinity/postgres-baseline-session.js';
 import {
   createInvocationIntentDigest,
   createRequestDigest,
@@ -1194,6 +1198,58 @@ describe('MovieLens public request workload contract', () => {
       score: 4.36,
     }]);
   });
+
+  it('forces a hanging PostgreSQL graceful close without stranding cleanup',
+    async () => {
+      const pool = new EventEmitter();
+      const events = [];
+      let completePoolClose;
+      let completeProvenance;
+      const poolClose = new Promise((resolve) => {
+        completePoolClose = resolve;
+      });
+      const provenance = new Promise((resolve) => {
+        completeProvenance = resolve;
+      });
+      pool.end = () => {
+        events.push('pool-end');
+        return poolClose;
+      };
+      const cleanupReceipt = {
+        containersAbsent: true,
+        networkAbsent: true,
+      };
+      const initialProvenance = {logs: {primary: 'initial'}};
+      const controller = createPostgresSessionCleanupController({
+        pool,
+        initialProvenance,
+        collectFinalProvenance: () => provenance,
+        async cleanupBaseline() {
+          events.push('baseline-cleanup');
+          pool.emit('error', Object.assign(
+            new Error('terminating connection due to administrator command'),
+            {code: '57P01'},
+          ));
+          completePoolClose();
+          return cleanupReceipt;
+        },
+        unconfirmedCleanupReceipt: {
+          containersAbsent: null,
+          networkAbsent: null,
+        },
+      });
+      const gracefulClose = controller.close();
+      await Promise.resolve();
+      const forcedReceipt = await controller.forceClose();
+      assert.deepEqual(events, ['baseline-cleanup', 'pool-end']);
+      assert.equal(forcedReceipt.forced, true);
+      assert.equal(forcedReceipt.cleanupReceipt, cleanupReceipt);
+      completeProvenance(initialProvenance);
+      await assert.rejects(
+        gracefulClose,
+        /PostgreSQL session cleanup failed/u,
+      );
+    });
 
   it('pins the row packing and confidence-adjusted result oracle', () => {
     const packed = packMovieRating(318, 5);

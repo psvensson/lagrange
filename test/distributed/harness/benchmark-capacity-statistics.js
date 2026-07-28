@@ -35,6 +35,21 @@ const mapGet = Function.call.bind(Map.prototype.get);
 const mapHas = Function.call.bind(Map.prototype.has);
 const mapSet = Function.call.bind(Map.prototype.set);
 const numericAscending = (left, right) => left - right;
+const RANDOM_INCREMENT = 0x6D2B79F5;
+const RANDOM_FIRST_SHIFT = 15;
+const RANDOM_SECOND_SHIFT = 7;
+const RANDOM_SECOND_MULTIPLIER = 61;
+const RANDOM_FINAL_SHIFT = 14;
+const UINT32_RANGE = 4_294_967_296;
+const localText = Object.freeze({
+  CONTINUE: 'continue',
+  DENSE_NUMERIC_SAMPLES_REQUIRED: 'dense numeric samples required',
+  EXACT_MATRIX_INPUTS_REQUIRED: 'exact matrix inputs required',
+  PAIRED_RATIO_BOOTSTRAP_CONTRACT_REQUIRED:
+    'paired ratio bootstrap contract required',
+  UNSAFE_MEDIAN: 'unsafe median',
+  UNSAFE_PAIRED_RATIO: 'unsafe paired ratio',
+});
 
 function fail(message) {
   throw new TypeError(`invalid capacity matrix: ${message}`);
@@ -51,7 +66,7 @@ function appendReason(reasons, reason) {
 
 function sortedNumbers(values) {
   if (!isDenseDataArray(values)) {
-    fail('dense numeric samples required');
+    fail(localText.DENSE_NUMERIC_SAMPLES_REQUIRED);
   }
   const sorted = [];
   for (let index = 0; index < values.length; index += 1) {
@@ -90,7 +105,7 @@ function median(values) {
   }
   const estimate = (sorted[midpoint - 1] + sorted[midpoint]) / 2;
   if (!isNonNegativeSafeNumber(estimate)) {
-    fail('unsafe median');
+    fail(localText.UNSAFE_MEDIAN);
   }
   return estimate;
 }
@@ -98,11 +113,18 @@ function median(values) {
 function createMulberry32(seed) {
   let state = seed >>> 0;
   return () => {
-    state = (state + 0x6D2B79F5) >>> 0;
+    state = (state + RANDOM_INCREMENT) >>> 0;
     let value = state;
-    value = mathImul(value ^ (value >>> 15), value | 1);
-    value ^= value + mathImul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    value = mathImul(
+      value ^ (value >>> RANDOM_FIRST_SHIFT),
+      value | 1,
+    );
+    value ^= value + mathImul(
+      value ^ (value >>> RANDOM_SECOND_SHIFT),
+      value | RANDOM_SECOND_MULTIPLIER,
+    );
+    return ((value ^ (value >>> RANDOM_FINAL_SHIFT)) >>> 0) /
+      UINT32_RANGE;
   };
 }
 
@@ -140,6 +162,67 @@ function bootstrapMedianInterval(
   const interval = percentileInterval(estimates, confidenceLevel);
   return {
     estimate: median(values),
+    lower: interval.lower,
+    upper: interval.upper,
+  };
+}
+
+function pairedRatio(pairs) {
+  let numerator = 0;
+  let denominator = 0;
+  for (let index = 0; index < pairs.length; index += 1) {
+    const pair = pairs[index];
+    if (
+      !isDenseDataArray(pair) ||
+      pair.length !== 2 ||
+      !isNonNegativeSafeNumber(pair[0]) ||
+      !isNonNegativeSafeNumber(pair[1]) ||
+      pair[1] === 0
+    ) {
+      fail(`unsafe paired ratio sample at ${index}`);
+    }
+    numerator += pair[0];
+    denominator += pair[1];
+  }
+  const ratio = denominator > 0 ? numerator / denominator : 0;
+  if (!isNonNegativeSafeNumber(ratio)) {
+    fail(localText.UNSAFE_PAIRED_RATIO);
+  }
+  return ratio;
+}
+
+export function bootstrapBenchmarkPairedRatioInterval(
+  pairs,
+  confidenceLevel,
+  resamples,
+  seed,
+) {
+  if (
+    !isDenseDataArray(pairs) ||
+    pairs.length === 0 ||
+    !isNonNegativeSafeNumber(confidenceLevel) ||
+    confidenceLevel <= 0 ||
+    confidenceLevel >= 1 ||
+    !isNonNegativeSafeInteger(resamples) ||
+    resamples === 0 ||
+    !isNonNegativeSafeInteger(seed)
+  ) {
+    fail(localText.PAIRED_RATIO_BOOTSTRAP_CONTRACT_REQUIRED);
+  }
+  const estimate = pairedRatio(pairs);
+  const random = createMulberry32(seed);
+  const estimates = [];
+  for (let sampleIndex = 0; sampleIndex < resamples; sampleIndex += 1) {
+    const resample = [];
+    for (let index = 0; index < pairs.length; index += 1) {
+      const sourceIndex = mathFloor(random() * pairs.length);
+      appendOwnArrayValue(resample, pairs[sourceIndex]);
+    }
+    appendOwnArrayValue(estimates, pairedRatio(resample));
+  }
+  const interval = percentileInterval(estimates, confidenceLevel);
+  return {
+    estimate,
     lower: interval.lower,
     upper: interval.upper,
   };
@@ -584,7 +667,7 @@ function resolveStopDecision({
     };
   }
   return {
-    decision: 'continue',
+    decision: localText.CONTINUE,
     shouldStop: false,
     minimumReached,
     maximumReached,
@@ -604,7 +687,7 @@ export function summarizeBenchmarkCapacityMatrix(
     !inspectBenchmarkCapacityPreregistration(sealed).valid ||
     completedBlocks > sealed.repetitions.maximum
   ) {
-    fail('exact matrix inputs required');
+    fail(localText.EXACT_MATRIX_INPUTS_REQUIRED);
   }
   const summaries = [];
   for (let index = 0; index < samples.length; index += 1) {

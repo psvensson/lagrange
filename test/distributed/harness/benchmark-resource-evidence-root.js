@@ -6,6 +6,11 @@ import {
   isMissingDataValue,
   ownDataValue,
 } from './benchmark-semantic-integrity.js';
+import {completeBenchmarkCapacityHeterogeneousReplayPlan} from
+  './benchmark-capacity-heterogeneous-observation.js';
+import {
+  assertBenchmarkCapacityEncodedOperationEvidenceReplay,
+} from './benchmark-capacity-heterogeneous-protocol.js';
 import {
   assertBenchmarkResourceArray,
   assertBenchmarkResourceBytes,
@@ -41,6 +46,7 @@ import {
 } from './benchmark-resource-live-observation-authority.js';
 import {
   assertBenchmarkResourceCapacityProtocolSummary,
+  assertBenchmarkResourceLiveInventoryAccounting,
   assertBenchmarkResourceLiveComponentAccounting,
   assertBenchmarkResourceLiveTopologyClosure,
 } from './benchmark-resource-live-root-validation.js';
@@ -138,15 +144,13 @@ const dateParse = Date.parse;
 const mapGet = Function.call.bind(Map.prototype.get);
 const mapHas = Function.call.bind(Map.prototype.has);
 const mapSet = Function.call.bind(Map.prototype.set);
-const mapSizeGetter =
-  Object.getOwnPropertyDescriptor(Map.prototype, 'size').get;
+const mapSizeGetter = Object.getOwnPropertyDescriptor(Map.prototype, 'size').get;
 const numberMaxSafeInteger = Number.MAX_SAFE_INTEGER;
 const reflectApply = Reflect.apply;
 const setAdd = Function.call.bind(Set.prototype.add);
 const setDelete = Function.call.bind(Set.prototype.delete);
 const setHas = Function.call.bind(Set.prototype.has);
-const setSizeGetter =
-  Object.getOwnPropertyDescriptor(Set.prototype, 'size').get;
+const setSizeGetter = Object.getOwnPropertyDescriptor(Set.prototype, 'size').get;
 const acceptanceHandles = new WeakSet();
 const objectFreeze = Object.freeze;
 const weakSetAdd = Function.call.bind(WeakSet.prototype.add);
@@ -974,6 +978,8 @@ function appendWindowJoinEvidence(context, window, sideIds) {
 function validateMeasuringCellWindows(payload, owners, resolved, c3Plan) {
   const context = {
     windows: [],
+    costEligibleWindows: [],
+    costEligibleWindowDigests: [],
     seenSides: new Set(),
     semanticReceiptDigests: [],
     liveEngagementDigests: [],
@@ -1008,20 +1014,25 @@ function validateMeasuringCellWindows(payload, owners, resolved, c3Plan) {
     );
     appendWindowJoinEvidence(context, artifact.payload, payload.sideIds);
     const sourceValidation = validateResourceWindowSources(
-      artifact.payload,
-      payload,
-      owners,
-      resolved,
+      artifact.payload, payload, owners, resolved,
     );
     assertBenchmarkResourceC3WindowBinding(
-      c3Plan,
-      artifact.payload,
-      sourceValidation.sources,
+      c3Plan, artifact.payload, sourceValidation.sources,
+    );
+    assertBenchmarkCapacityEncodedOperationEvidenceReplay(
+      c3Plan, artifact.payload,
+      sourceValidation.sources.live.payload.evidence,
     );
     context.liveCalibrated =
       sourceValidation.componentsLive && context.liveCalibrated;
     setAdd(context.seenSides, artifact.payload.sideId);
     appendOwnArrayValue(context.windows, artifact);
+    if (artifact.payload.correctSloEligibleOperations > 0) {
+      appendOwnArrayValue(context.costEligibleWindows, artifact);
+      appendOwnArrayValue(
+        context.costEligibleWindowDigests, payload.resourceWindowDigests[index],
+      );
+    }
   }
   if (
     reflectApply(setSizeGetter, context.seenSides, []) !==
@@ -1035,7 +1046,12 @@ function validateMeasuringCellWindows(payload, owners, resolved, c3Plan) {
     c3Plan?.coordinates ?? null,
   );
   if (context.liveCalibrated) {
+    const calibrationArtifacts = [];
     for (let index = 0; index < context.calibrationDigests.length; index += 1) {
+      appendOwnArrayValue(
+        calibrationArtifacts,
+        mapGet(resolved, context.calibrationDigests[index]),
+      );
       assertBenchmarkResourceLiveTopologyClosure({
         calibrationArtifact: mapGet(
           resolved,
@@ -1055,6 +1071,9 @@ function validateMeasuringCellWindows(payload, owners, resolved, c3Plan) {
         ),
       });
     }
+    assertBenchmarkResourceLiveInventoryAccounting(
+      owners.inventory, calibrationArtifacts,
+    );
   }
   return context;
 }
@@ -1115,15 +1134,18 @@ function validateMeasuringCellJoins(
   ) {
     fail(ROOT_TEXT.CELL_CAPACITY_EFFECT_SOURCE_DIGEST_MISMATCH);
   }
-  const expectedCostSources = [
-    owners.inventoryDigest,
-    owners.priceDigest,
-  ];
-  for (let index = 0; index < payload.resourceWindowDigests.length; index += 1) {
-    appendOwnArrayValue(
-      expectedCostSources,
-      payload.resourceWindowDigests[index],
-    );
+  const expectedCostSources = [owners.inventoryDigest, owners.priceDigest];
+  for (let sideIndex = 0; sideIndex < payload.sideIds.length; sideIndex += 1) {
+    for (let index = 0;
+      index < context.costEligibleWindows.length;
+      index += 1) {
+      const artifact = context.costEligibleWindows[index];
+      if (artifact.payload.sideId === payload.sideIds[sideIndex]) {
+        appendOwnArrayValue(
+          expectedCostSources, context.costEligibleWindowDigests[index],
+        );
+      }
+    }
   }
   if (
     !arraysExactlyEqual(
@@ -1138,17 +1160,30 @@ function validateMeasuringCellJoins(
 function validateMeasuringCell(cellArtifact, payload, owners, resolved) {
   validateMeasuringCellIdentity(cellArtifact, payload, owners);
   const capacities = resolveMeasuringCellCapacities(payload, resolved);
-  const c3Plan = createBenchmarkResourceC3WindowPlan({
-    capacities,
-    resolved,
-    payload,
-    owners,
-    resourcePreregistration: resolvedArtifact(
+  const c3Plan = completeBenchmarkCapacityHeterogeneousReplayPlan(
+    createBenchmarkResourceC3WindowPlan({
+      capacities,
       resolved,
-      owners.matrix.preregistrationDigest,
-      BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
+      payload,
+      owners,
+      resourcePreregistration: resolvedArtifact(
+        resolved,
+        owners.matrix.preregistrationDigest,
+        BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
+      ).payload,
+    }),
+    capacities,
+    resolvedArtifact(
+      resolved,
+      owners.matrix.workloadManifestDigest,
+      BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
     ).payload,
-  });
+    (capacity) => resolvedArtifact(
+      resolved,
+      capacity.sourceDigests[0],
+      BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE,
+    ).payload.evidence.protocol,
+  );
   const context =
     validateMeasuringCellWindows(payload, owners, resolved, c3Plan);
   validateMeasuringCellJoins(
@@ -1163,7 +1198,8 @@ function validateMeasuringCell(cellArtifact, payload, owners, resolved) {
     payload,
     owners,
     capacities,
-    context.windows,
+    context.costEligibleWindows,
+    c3Plan?.preregistration ?? null,
   );
   return context.liveCalibrated && c3Plan !== null;
 }

@@ -30,6 +30,7 @@ const localText = Object.freeze({
   LIVE_OBSERVATION_BLOCK_OPERATIONS: 'liveObservation.blockOperations',
   LIVE_OBSERVATION: 'liveObservation',
   LIVE_OBSERVATION_CAPTURE_SINGLE_TRANSITION_REQUIRED: 'liveObservation.capture:single_transition_required',
+  LIVE_OBSERVATION_BOUNDS_SIDE_ID: 'liveObservation.bounds.sideId',
   END: 'end',
   LIVE_OBSERVATION_CLEANUP_CONTAINER_PRESENT: 'liveObservation.cleanup:container_present',
   LIVE_OBSERVATION_CLEANUP_NETWORK_PRESENT: 'liveObservation.cleanup:network_present',
@@ -116,6 +117,8 @@ const authorizations = new WeakMap();
 const weakMapDelete = Function.call.bind(WeakMap.prototype.delete);
 const weakMapGet = Function.call.bind(WeakMap.prototype.get);
 const weakMapSet = Function.call.bind(WeakMap.prototype.set);
+const mathMax = Math.max;
+const mathMin = Math.min;
 const objectFreeze = Object.freeze;
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
@@ -241,7 +244,7 @@ function nonNegativeDelta(end, start, path) {
 }
 
 function minimumHeadroomRatio(capacity, used) {
-  return capacity > 0 ? Math.max(0, (capacity - used) / capacity) : 1;
+  return capacity > 0 ? mathMax(0, (capacity - used) / capacity) : 1;
 }
 
 export function deriveBenchmarkResourceLiveComponentAccounting(observation) {
@@ -270,16 +273,16 @@ export function deriveBenchmarkResourceLiveComponentAccounting(observation) {
   const minimumFootprint = {
     instances: 1,
     cpuCores: utilized.cpuCoreSeconds / durationSeconds,
-    memoryBytes: Math.max(
+    memoryBytes: mathMax(
       observation.start.memoryUsageBytes,
       observation.end.memoryUsageBytes,
     ),
-    storageBytes: Math.max(
+    storageBytes: mathMax(
       observation.start.storageUsageBytes,
       observation.end.storageUsageBytes,
     ),
   };
-  let reservedHeadroomRatio = Math.min(
+  let reservedHeadroomRatio = mathMin(
     minimumHeadroomRatio(
       provisioned.cpuCores,
       minimumFootprint.cpuCores,
@@ -290,7 +293,7 @@ export function deriveBenchmarkResourceLiveComponentAccounting(observation) {
     ),
   );
   if (provisioned.storageBytes > 0) {
-    reservedHeadroomRatio = Math.min(
+    reservedHeadroomRatio = mathMin(
       reservedHeadroomRatio,
       minimumHeadroomRatio(
         provisioned.storageBytes,
@@ -419,6 +422,33 @@ export async function captureBenchmarkResourceLiveObservation(session) {
     state.status = statusObserving;
     throw error;
   }
+}
+
+export function resolveBenchmarkResourceLiveObservationBounds(
+  session,
+  sideId,
+) {
+  const state = weakMapGet(authorityStates, session);
+  assertBenchmarkResourceText(
+    sideId,
+    localText.LIVE_OBSERVATION_BOUNDS_SIDE_ID,
+  );
+  if (state?.status !== statusCaptured) {
+    fail(localText.LIVE_OBSERVATION_FINALIZE_CAPTURED_STATE_REQUIRED);
+  }
+  let startedAt = Number.MAX_SAFE_INTEGER;
+  let endedAt = 0;
+  let matched = 0;
+  for (let index = 0; index < state.components.length; index += 1) {
+    if (state.components[index].sideId !== sideId) continue;
+    matched += 1;
+    startedAt = mathMin(startedAt, state.start[index].stats.timestamp);
+    endedAt = mathMax(endedAt, state.end[index].stats.timestamp);
+  }
+  if (matched === 0 || endedAt <= startedAt) {
+    fail(localText.LIVE_OBSERVATION_COMPONENT_IDENTITY_OR_INTERVAL_MISMATCH);
+  }
+  return objectFreeze({startedAt, endedAt});
 }
 
 async function assertCleanup(state) {

@@ -18,6 +18,21 @@ import {
 
 const ZERO = 0;
 const ONE = 1;
+const ArrayConstructor = Array;
+const arrayIsArray = Array.isArray;
+const arrayJoin = Function.call.bind(Array.prototype.join);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const arrayPush = Function.call.bind(Array.prototype.push);
+const jsonStringify = JSON.stringify;
+const numberConstructor = Number;
+const numberIsInteger = Number.isInteger;
+const numberIsSafeInteger = Number.isSafeInteger;
+const regExpTest = Function.call.bind(RegExp.prototype.test);
+const stringConstructor = String;
+const stringIncludes = Function.call.bind(String.prototype.includes);
+const stringSplit = Function.call.bind(String.prototype.split);
+const stringTrim = Function.call.bind(String.prototype.trim);
+const DECIMAL_COUNTER = /^(?:0|[1-9][0-9]*)$/u;
 const DEFAULT_BASELINE_IMAGE = 'postgres:16';
 const DEFAULT_USER = 'benchmark';
 const DEFAULT_PASSWORD = 'benchmark';
@@ -51,10 +66,42 @@ const RATINGS_MAX_BYTES = 4 * 1_024 * 1_024;
 const RATINGS_MAX_ROWS = 100_000;
 const POSTGRES_VERSION_SQL = 'SELECT version()';
 const POSTGRES_BASELINE_FAILURE_NAME = 'PostgresBaselineFailure';
+const DROP_RATINGS_SQL = 'DROP TABLE IF EXISTS ratings;';
+const BASELINE_POOL_MAX = 4;
+const POSTGRES_TEXT = Object.freeze({
+  BASELINE_FAILED: 'PostgreSQL MovieLens baseline failed',
+  BASELINE_METRICS: 'Postgres baseline metrics:',
+  BOUNDED_INPUT_REQUIRED: 'bounded MovieLens input bytes are required',
+  CONFIGURE_PRIMARY: 'configure postgres primary replication',
+  IMAGE_PROVENANCE_UNAVAILABLE:
+    'immutable PostgreSQL image provenance is unavailable',
+  INPUT_DIGEST_MISMATCH: 'PostgreSQL MovieLens input digest mismatch',
+  LOCALHOST_IPV4: '127.0.0.1',
+  NEWLINE: '\n',
+  PSQL: 'psql',
+  PSQL_ALIGN: '-A',
+  PSQL_TUPLES_ONLY: '-t',
+  PSQL_VARIABLE_STOP: '-v ON_ERROR_STOP=1',
+  REPLICA_BASEBACKUP: '-D "$PGDATA" -Fp -Xs -P -R',
+  REPLICA_BOOTSTRAP_DONE: 'fi',
+  REPLICA_BOOTSTRAP_OPEN: 'if [ ! -s "$PGDATA/PG_VERSION" ]; then',
+  REPLICA_BOOTSTRAP_REMOVE: '  rm -rf "$PGDATA"/*',
+  REPLICA_BOOTSTRAP_SLEEP: '    sleep 1',
+  REPLICA_BOOTSTRAP_WAIT_DONE: '  done',
+  REPLICA_SETUP: 'set -e',
+  REPLICATION_TIMEOUT_PREFIX:
+    'Postgres replicas did not reach streaming state within ',
+  ROW_CAP_EXCEEDED: 'MovieLens row cap exceeded',
+  RUN_SCRIPT: 'run-postgres-baseline.js',
+  SPACE: ' ',
+  TAB: '\t',
+  TIMEOUT_SUFFIX: 'ms',
+  TRUE: 'true',
+});
 
 class PostgresBaselineFailure extends Error {
   constructor(cause, cleanupReceipt, failureCauseEntries) {
-    super('PostgreSQL MovieLens baseline failed');
+    super(POSTGRES_TEXT.BASELINE_FAILED);
     this.name = POSTGRES_BASELINE_FAILURE_NAME;
     this.cleanupReceipt = cleanupReceipt;
     this.failureCauseEntries = Object.freeze(
@@ -80,24 +127,26 @@ function unconfirmedPostgresCleanup(baseline) {
 }
 
 function buildPsqlCommand(options = {}) {
-  const host = String(options.host || '127.0.0.1');
-  const port = Number.isInteger(options.port) ? options.port : DEFAULT_PORT;
-  const user = String(options.user || DEFAULT_USER);
-  const password = String(options.password || '');
-  const database = String(options.database || DEFAULT_DATABASE);
-  const sql = String(options.sql || '');
-  return [
+  const host = stringConstructor(
+    options.host || POSTGRES_TEXT.LOCALHOST_IPV4,
+  );
+  const port = numberIsInteger(options.port) ? options.port : DEFAULT_PORT;
+  const user = stringConstructor(options.user || DEFAULT_USER);
+  const password = stringConstructor(options.password || '');
+  const database = stringConstructor(options.database || DEFAULT_DATABASE);
+  const sql = stringConstructor(options.sql || '');
+  return arrayJoin([
     `PGPASSWORD='${shellQuote(password)}'`,
-    'psql',
-    '-v ON_ERROR_STOP=1',
-    '-t',
-    '-A',
+    POSTGRES_TEXT.PSQL,
+    POSTGRES_TEXT.PSQL_VARIABLE_STOP,
+    POSTGRES_TEXT.PSQL_TUPLES_ONLY,
+    POSTGRES_TEXT.PSQL_ALIGN,
     `-h '${shellQuote(host)}'`,
     `-p ${port}`,
     `-U '${shellQuote(user)}'`,
     `-d '${shellQuote(database)}'`,
     `-c '${shellQuote(sql)}'`,
-  ].join(' ');
+  ], POSTGRES_TEXT.SPACE);
 }
 
 function buildSynchronousStandbySetting(syncReplicaAcks) {
@@ -105,29 +154,29 @@ function buildSynchronousStandbySetting(syncReplicaAcks) {
 }
 
 function buildReplicaBootstrapCommand(primaryContainerName, replicaName, config) {
-  const basebackupConnectionString = [
+  const basebackupConnectionString = arrayJoin([
     `host=${primaryContainerName}`,
     `port=${config.port}`,
     `user=${config.user}`,
     `password=${config.password}`,
     `dbname=${BOOTSTRAP_DB_NAME}`,
     `application_name=${replicaName}`,
-  ].join(' ');
+  ], POSTGRES_TEXT.SPACE);
 
-  return [
-    'set -e',
-    'if [ ! -s "$PGDATA/PG_VERSION" ]; then',
-    '  rm -rf "$PGDATA"/*',
+  return arrayJoin([
+    POSTGRES_TEXT.REPLICA_SETUP,
+    POSTGRES_TEXT.REPLICA_BOOTSTRAP_OPEN,
+    POSTGRES_TEXT.REPLICA_BOOTSTRAP_REMOVE,
     `  until pg_isready -h '${shellQuote(primaryContainerName)}' ` +
       `-p ${config.port} -U '${shellQuote(config.user)}'; do`,
-    '    sleep 1',
-    '  done',
+    POSTGRES_TEXT.REPLICA_BOOTSTRAP_SLEEP,
+    POSTGRES_TEXT.REPLICA_BOOTSTRAP_WAIT_DONE,
     `  pg_basebackup --dbname='${shellQuote(basebackupConnectionString)}' ` +
-      '-D "$PGDATA" -Fp -Xs -P -R',
-    'fi',
+      POSTGRES_TEXT.REPLICA_BASEBACKUP,
+    POSTGRES_TEXT.REPLICA_BOOTSTRAP_DONE,
     POSTGRES_BINARY_PATH_EXPORT,
     `exec ${POSTGRES_ENTRYPOINT_COMMAND}`,
-  ].join('\n');
+  ], POSTGRES_TEXT.NEWLINE);
 }
 
 async function configurePrimaryReplication(provider, containerId, config) {
@@ -140,7 +189,7 @@ async function configurePrimaryReplication(provider, containerId, config) {
     `echo "${REPLICATION_HBA_IPV4}" >> "$PGDATA/pg_hba.conf"`,
     `echo "${REPLICATION_HBA_IPV6}" >> "$PGDATA/pg_hba.conf"`,
     buildPsqlCommand({
-      host: '127.0.0.1',
+      host: POSTGRES_TEXT.LOCALHOST_IPV4,
       port: config.port,
       user: config.user,
       password: config.password,
@@ -148,7 +197,7 @@ async function configurePrimaryReplication(provider, containerId, config) {
       sql: `ALTER SYSTEM SET synchronous_commit = '${SYNCHRONOUS_COMMIT_ON}'`,
     }),
     buildPsqlCommand({
-      host: '127.0.0.1',
+      host: POSTGRES_TEXT.LOCALHOST_IPV4,
       port: config.port,
       user: config.user,
       password: config.password,
@@ -165,29 +214,30 @@ async function configurePrimaryReplication(provider, containerId, config) {
     }),
   ];
 
-  const shellCommand = commands.join(' && ');
+  const shellCommand = arrayJoin(commands, ' && ');
   await execShell(
     provider,
     containerId,
     shellCommand,
-    'configure postgres primary replication',
+    POSTGRES_TEXT.CONFIGURE_PRIMARY,
   );
+}
+
+function replicationReadiness(ready, replicaCount) {
+  return {ready, replicaCount};
 }
 
 async function waitForStreamingReplicas(provider, containerId, config) {
   const requiredReplicaCount = config.replicationFactor - ONE;
   if (requiredReplicaCount <= ZERO) {
-    return {
-      ready: true,
-      replicaCount: ZERO,
-    };
+    return replicationReadiness(true, ZERO);
   }
 
   const deadline = Date.now() + config.readyTimeoutMs;
   let lastReplicaCount = ZERO;
   while (Date.now() < deadline) {
     const queryCommand = buildPsqlCommand({
-      host: '127.0.0.1',
+      host: POSTGRES_TEXT.LOCALHOST_IPV4,
       port: config.port,
       user: config.user,
       password: config.password,
@@ -202,28 +252,29 @@ async function waitForStreamingReplicas(provider, containerId, config) {
       queryCommand,
       'check postgres replication status',
     );
-    const replicaCount = Number.parseInt(String(output).trim(), 10);
-    lastReplicaCount = Number.isInteger(replicaCount) ? replicaCount : ZERO;
-    if (Number.isInteger(replicaCount) && replicaCount >= requiredReplicaCount) {
-      return {
-        ready: true,
-        replicaCount,
-      };
+    const replicaCount = parseCanonicalCounter(output);
+    lastReplicaCount = replicaCount === null ? ZERO : replicaCount;
+    if (replicaCount !== null && replicaCount >= requiredReplicaCount) {
+      return replicationReadiness(true, replicaCount);
     }
     await new Promise((resolve) => setTimeout(resolve, config.readyPollIntervalMs));
   }
 
   if (config.allowReplicationTimeout === true) {
-    return {
-      ready: false,
-      replicaCount: lastReplicaCount,
-    };
+    return replicationReadiness(false, lastReplicaCount);
   }
 
   throw new Error(
-    'Postgres replicas did not reach streaming state within ' +
-    config.readyTimeoutMs + 'ms',
+    POSTGRES_TEXT.REPLICATION_TIMEOUT_PREFIX +
+    config.readyTimeoutMs + POSTGRES_TEXT.TIMEOUT_SUFFIX,
   );
+}
+
+function parseCanonicalCounter(value) {
+  const raw = stringTrim(stringConstructor(value));
+  if (!regExpTest(DECIMAL_COUNTER, raw)) return null;
+  const parsed = numberConstructor(raw);
+  return numberIsSafeInteger(parsed) ? parsed : null;
 }
 
 function resolveEnvInteger(envKey) {
@@ -231,8 +282,8 @@ function resolveEnvInteger(envKey) {
   if (!raw) {
     return null;
   }
-  const parsed = Number.parseInt(raw, 10);
-  return Number.isInteger(parsed) && parsed > ZERO ? parsed : null;
+  const parsed = parseCanonicalCounter(raw);
+  return parsed !== null && parsed > ZERO ? parsed : null;
 }
 
 function buildBaselineConfig(options = {}) {
@@ -246,7 +297,7 @@ function buildBaselineConfig(options = {}) {
     database: DEFAULT_DATABASE,
     port: DEFAULT_PORT,
     replicationFactor:
-      (Number.isInteger(options.replicationFactor) &&
+      (numberIsInteger(options.replicationFactor) &&
         options.replicationFactor > ZERO ?
         options.replicationFactor :
         null) ||
@@ -256,8 +307,10 @@ function buildBaselineConfig(options = {}) {
     readyTimeoutMs: envReadyTimeoutMs || DEFAULT_READY_TIMEOUT_MS,
     readyPollIntervalMs: envReadyPollIntervalMs || DEFAULT_READY_POLL_INTERVAL_MS,
     batchSize: DEFAULT_BATCH_SIZE,
+    resourceLimits: options.resourceLimits || undefined,
     allowReplicationTimeout:
-      process.env.PG_BASELINE_ALLOW_REPLICATION_TIMEOUT === 'true',
+      process.env.PG_BASELINE_ALLOW_REPLICATION_TIMEOUT ===
+        POSTGRES_TEXT.TRUE,
   };
 }
 
@@ -281,11 +334,12 @@ async function startPostgresBaseline(provider, config) {
         [POSTGRES_ENV_DB_KEY]: config.database,
         [POSTGRES_ENV_AUTH_METHOD_KEY]: POSTGRES_ENV_AUTH_METHOD_VALUE,
       },
+      resourceLimits: config.resourceLimits,
     });
-    containers.push(primary);
+    arrayPush(containers, primary);
 
     await waitForPostgresReady(provider, primary.containerId, {
-      host: '127.0.0.1',
+      host: POSTGRES_TEXT.LOCALHOST_IPV4,
       port: config.port,
       user: config.user,
       database: config.database,
@@ -312,10 +366,11 @@ async function startPostgresBaseline(provider, config) {
           [POSTGRES_ENV_AUTH_METHOD_KEY]: POSTGRES_ENV_AUTH_METHOD_VALUE,
         },
         command: [SHELL_COMMAND, SHELL_LOGIN_ARG, replicaBootstrapCommand],
+        resourceLimits: config.resourceLimits,
       });
-      containers.push(replica);
+      arrayPush(containers, replica);
       await waitForPostgresReady(provider, replica.containerId, {
-        host: '127.0.0.1',
+        host: POSTGRES_TEXT.LOCALHOST_IPV4,
         port: config.port,
         user: config.user,
         database: config.database,
@@ -413,7 +468,7 @@ async function cleanupPostgresBaseline(provider, baseline) {
       provider,
       baseline.containers[index],
     );
-    if (containerId) removedContainerIds.push(containerId);
+    if (containerId) arrayPush(removedContainerIds, containerId);
   }
   await cleanupPostgresNetwork(provider, baseline.networkName);
   return Object.freeze({
@@ -426,34 +481,39 @@ async function cleanupPostgresBaseline(provider, baseline) {
 
 async function loadRatingsBytes(pool, batchSize, bytes) {
   if (!Buffer.isBuffer(bytes) || bytes.length > RATINGS_MAX_BYTES) {
-    throw new TypeError('bounded MovieLens input bytes are required');
+    throw new TypeError(POSTGRES_TEXT.BOUNDED_INPUT_REQUIRED);
   }
   const insertMany = async (rows) => {
-    const values = rows
-      .map((row) => `(${row[0]}, ${row[1]}, ${row[2]}, ${row[3]})`)
-      .join(',');
+    const values = arrayJoin(
+      arrayMap(
+        rows,
+        (row) => `(${row[0]}, ${row[1]}, ${row[2]}, ${row[3]})`,
+      ),
+      ',',
+    );
     const sql =
       'INSERT INTO ratings (user_id, movie_id, rating, rating_ts) VALUES ' + values;
     await pool.query(sql);
   };
 
-  const lines = bytes.toString(BYTE_ENCODING).split(/\r?\n/u);
+  const lines = stringSplit(bytes.toString(BYTE_ENCODING), /\r?\n/u);
   const batch = [];
   let total = 0;
   for (const line of lines) {
     if (!line) {
       continue;
     }
-    const [userId, movieId, rating, ts] = line.split('\t');
-    batch.push([
-      Number(userId),
-      Number(movieId),
-      Number(rating),
-      Number(ts),
+    const [userId, movieId, rating, ts] =
+      stringSplit(line, POSTGRES_TEXT.TAB);
+    arrayPush(batch, [
+      numberConstructor(userId),
+      numberConstructor(movieId),
+      numberConstructor(rating),
+      numberConstructor(ts),
     ]);
     total += 1;
     if (total > RATINGS_MAX_ROWS) {
-      throw new RangeError('MovieLens row cap exceeded');
+      throw new RangeError(POSTGRES_TEXT.ROW_CAP_EXCEEDED);
     }
 
     if (batch.length >= batchSize) {
@@ -470,22 +530,23 @@ async function loadRatingsBytes(pool, batchSize, bytes) {
 }
 
 async function resolveRatingsBytes(options) {
-  const bytes = options.ratingsBytes || await readFile(RATINGS_FILE);
+  const bytes = options.ratingsBytes ||
+    await readFile(options.ratingsPath || RATINGS_FILE);
   const digest = `sha256:${createHash(SHA256_ALGORITHM)
     .update(bytes)
     .digest(SHA256_ENCODING)}`;
   if (options.ratingsDigest && digest !== options.ratingsDigest) {
-    throw new Error('PostgreSQL MovieLens input digest mismatch');
+    throw new Error(POSTGRES_TEXT.INPUT_DIGEST_MISMATCH);
   }
   return {bytes, digest};
 }
 
 function projectPostgresTopMovies(rows) {
-  return rows.map((row) => ({
-    avgRating: Number(row.avg_rating),
-    movieId: Number(row.movie_id),
-    ratingCount: Number(row.rating_count),
-    score: Number(row.score),
+  return arrayMap(rows, (row) => ({
+    avgRating: numberConstructor(row.avg_rating),
+    movieId: numberConstructor(row.movie_id),
+    ratingCount: numberConstructor(row.rating_count),
+    score: numberConstructor(row.score),
   }));
 }
 
@@ -493,7 +554,7 @@ function validImageInspection(imageInspect) {
   return Boolean(
     imageInspect &&
     typeof imageInspect.Id === 'string' &&
-    Array.isArray(imageInspect.RepoDigests) &&
+    arrayIsArray(imageInspect.RepoDigests) &&
     imageInspect.RepoDigests.length > 0,
   );
 }
@@ -501,7 +562,7 @@ function validImageInspection(imageInspect) {
 async function collectPostgresProvenance(provider, baseline, imageName) {
   const imageInspect = await provider.inspectImage(imageName);
   if (!validImageInspection(imageInspect)) {
-    throw new Error('immutable PostgreSQL image provenance is unavailable');
+    throw new Error(POSTGRES_TEXT.IMAGE_PROVENANCE_UNAVAILABLE);
   }
   const logs = {};
   const measuredContainerImages = [];
@@ -509,9 +570,9 @@ async function collectPostgresProvenance(provider, baseline, imageName) {
     const containerInspect =
       await provider.inspectContainer(container.containerId);
     if (containerInspect.Image !== imageInspect.Id) {
-      throw new Error('immutable PostgreSQL image provenance is unavailable');
+      throw new Error(POSTGRES_TEXT.IMAGE_PROVENANCE_UNAVAILABLE);
     }
-    measuredContainerImages.push({
+    arrayPush(measuredContainerImages, {
       containerId: container.containerId,
       inspectImage: containerInspect.Image,
     });
@@ -523,6 +584,10 @@ async function collectPostgresProvenance(provider, baseline, imageName) {
     logs,
     measuredContainerImages,
   };
+}
+
+function createPostgresFailureCauseEntries() {
+  return new ArrayConstructor();
 }
 
 async function runPostgresBaseline(options = {}) {
@@ -544,10 +609,10 @@ async function runPostgresBaseline(options = {}) {
       user: config.user,
       password: config.password,
       database: config.database,
-      max: 4,
+      max: BASELINE_POOL_MAX,
     });
 
-    await pool.query('DROP TABLE IF EXISTS ratings;');
+    await pool.query(DROP_RATINGS_SQL);
     await pool.query(CREATE_RATINGS_SQL);
 
     const loadStart = Date.now();
@@ -612,23 +677,23 @@ async function runPostgresBaseline(options = {}) {
     cleanupError = error;
     cleanupReceipt = unconfirmedPostgresCleanup(baseline);
   }
-  const failureCauseEntries = [];
+  const failureCauseEntries = createPostgresFailureCauseEntries();
   if (operationFailed) {
-    failureCauseEntries.push(Object.freeze({
+    arrayPush(failureCauseEntries, Object.freeze({
       cause: operationError,
       role:
         MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE.POSTGRES_OPERATION,
     }));
   }
   if (poolCloseFailed) {
-    failureCauseEntries.push(Object.freeze({
+    arrayPush(failureCauseEntries, Object.freeze({
       cause: poolCloseError,
       role:
         MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE.POSTGRES_POOL_CLOSE,
     }));
   }
   if (cleanupFailed) {
-    failureCauseEntries.push(Object.freeze({
+    arrayPush(failureCauseEntries, Object.freeze({
       cause: cleanupError,
       role:
         MOVIELENS_PUBLIC_REQUEST_FAILURE_CAUSE_ROLE.POSTGRES_CLEANUP,
@@ -644,11 +709,14 @@ async function runPostgresBaseline(options = {}) {
   return {...result, cleanupReceipt};
 }
 
-if (process.argv[1]?.includes('run-postgres-baseline.js')) {
+if (
+  typeof process.argv[1] === 'string' &&
+  stringIncludes(process.argv[1], POSTGRES_TEXT.RUN_SCRIPT)
+) {
   runPostgresBaseline()
     .then((metrics) => {
-      console.log('Postgres baseline metrics:');
-      console.log(JSON.stringify(metrics, null, 2));
+      console.log(POSTGRES_TEXT.BASELINE_METRICS);
+      console.log(jsonStringify(metrics, null, 2));
     })
     .catch((error) => {
       console.error(error);
@@ -664,7 +732,11 @@ export {
   buildBaselineConfig,
   buildPsqlCommand,
   cleanupPostgresBaseline,
+  collectPostgresProvenance,
   loadRatingsBytes,
   projectPostgresTopMovies,
+  resolveRatingsBytes,
   runPostgresBaseline,
+  startPostgresBaseline,
+  unconfirmedPostgresCleanup,
 };

@@ -169,7 +169,11 @@ export function createBenchmarkResourceC3WindowPlan({
   const firstProtocol =
     capacityArtifactsBySide[0][0]?.payload?.evidence?.protocol;
   if (firstProtocol === undefined) return null;
-  const plan = {coordinates: [], byCoordinate: new Map()};
+  const plan = {
+    coordinates: [],
+    byCoordinate: new Map(),
+    preregistration: firstProtocol.preregistration,
+  };
   let reportDigest = null;
   for (let sideIndex = 0; sideIndex < payload.sideIds.length; sideIndex += 1) {
     const source = capacityArtifactsBySide[sideIndex][0];

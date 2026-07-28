@@ -1,8 +1,11 @@
 import {execFile} from 'node:child_process';
 import {createHash} from 'node:crypto';
+import {readFile} from 'node:fs/promises';
 import {promisify} from 'node:util';
 
 const execFileAsync = promisify(execFile);
+const jsonStringify = JSON.stringify;
+const stringTrim = Function.call.bind(String.prototype.trim);
 const localText = Object.freeze({
   GIT: 'git',
   REV_PARSE: 'rev-parse',
@@ -14,6 +17,9 @@ const localText = Object.freeze({
   PATH_SEPARATOR: '--',
   UTF8: 'utf8',
   SHA256: 'sha256',
+  HEX: 'hex',
+  LS_FILES: 'ls-files',
+  ERROR_UNMATCH: '--error-unmatch',
 });
 const C4_SOURCE_PATHS = Object.freeze([
   'scripts/checks/benchmark-resource-source-provenance.js',
@@ -51,8 +57,8 @@ export async function collectBenchmarkResourceSourceProvenance(
     [localText.REV_PARSE, localText.HEAD],
     {encoding: localText.UTF8},
   );
-  const baseCommit = revisionText.trim();
-  const {stdout: delta} = await execFileAsync(
+  const baseCommit = stringTrim(revisionText);
+  const {stdout: trackedDelta} = await execFileAsync(
     localText.GIT,
     [
       localText.DIFF,
@@ -65,6 +71,32 @@ export async function collectBenchmarkResourceSourceProvenance(
     ],
     {encoding: localText.UTF8},
   );
+  let delta = trackedDelta;
+  for (let index = 0; index < sourcePaths.length; index += 1) {
+    const sourcePath = sourcePaths[index];
+    try {
+      await execFileAsync(
+        localText.GIT,
+        [
+          localText.LS_FILES,
+          localText.ERROR_UNMATCH,
+          localText.PATH_SEPARATOR,
+          sourcePath,
+        ],
+        {encoding: localText.UTF8},
+      );
+    } catch {
+      const bytes = await readFile(sourcePath);
+      delta += jsonStringify({
+        path: sourcePath,
+        byteLength: bytes.length,
+        digest:
+          `sha256:${createHash(localText.SHA256)
+            .update(bytes)
+            .digest(localText.HEX)}`,
+      });
+    }
+  }
   if (delta.length === 0) {
     return {
       sourceRevision: `git-commit:${baseCommit}`,

@@ -67,6 +67,45 @@ const OPERATION_KEYS = Object.freeze([
   'idempotencyKey',
   'operationId',
 ]);
+const OPERATION_OBSERVATION = Object.freeze({
+  CAPACITY: 'capacity_owner_observation',
+  FULL: 'full_c7_observation',
+  NOT_REQUESTED: 'capacity_observation_not_requested',
+});
+const REQUIRED_PORTS = Object.freeze([
+  'authenticatedPrincipal',
+  'cellWitness',
+  'executeSql',
+  'invokeRequest',
+  'probeUnauthenticated',
+  'readInvocationJournal',
+  'waitForReadyCell',
+]);
+const WORKLOAD_TEXT = Object.freeze({
+  AMBIGUOUS: 'ambiguous',
+  COMPLETED: 'completed',
+  COMPLETED_JOURNAL_REQUIRED:
+    'completed invocation journal row is required',
+  CREATED_AT_KEY: 'created_at',
+  DRAINED: 'drained',
+  EXACT_JOURNAL_REQUIRED: 'exact invocation journal row is required',
+  IDENTITY_REQUIRED: 'canonical MovieLens operation identity is required',
+  JOURNAL_TIMESTAMP_REQUIRED: 'canonical journal timestamp is required',
+  OPERATION_REQUIRED: 'MovieLens completed operation is required',
+  PASS: 'pass',
+  PREPARED_INPUT_REQUIRED:
+    'MovieLens artifact, dataset, and named alternative are required',
+  RESET_DELETE_OPERATIONS_SQL: 'DELETE FROM wasm_operations',
+  RESET_REQUIRES_DRAIN:
+    'MovieLens workload reset requires drained operations',
+  RESET_STATE: 'public_request_results_and_journal_cleared',
+  RESULT_KEY_SPACE_EXHAUSTED:
+    'MovieLens operation result key space exhausted',
+  SEMANTIC_EQUIVALENT: 'equivalent',
+  TIMEOUT_SEMANTICS: 'ambiguous_until_drain_verified',
+  TYPE_STRING: 'string',
+  UPDATED_AT_KEY: 'updated_at',
+});
 const EMPTY_ROWS = Object.freeze([]);
 const TABLE_DDL = Object.freeze({
   RATINGS:
@@ -81,15 +120,7 @@ const TABLE_DDL = Object.freeze({
 });
 
 function assertPorts(ports) {
-  for (const operation of [
-    'authenticatedPrincipal',
-    'cellWitness',
-    'executeSql',
-    'invokeRequest',
-    'probeUnauthenticated',
-    'readInvocationJournal',
-    'waitForReadyCell',
-  ]) {
+  for (const operation of REQUIRED_PORTS) {
     if (typeof ports?.[operation] !== 'function') {
       throw new TypeError(`MovieLens public workload port required: ${operation}`);
     }
@@ -159,7 +190,7 @@ async function deployWorkload(ports, artifactReceipt) {
     ))],
   );
   const packageId = installed.rows?.[0]?.package_id;
-  assert.equal(typeof packageId, 'string');
+  assert.equal(typeof packageId, WORKLOAD_TEXT.TYPE_STRING);
   const binding =
     buildMovielensPublicRequestBinding(packageId, manifest);
   const created = await executeSql(
@@ -245,7 +276,7 @@ function buildDurabilityReceipt(first, replay) {
     expected,
     observed,
     replayPreserved,
-    status: 'pass',
+    status: WORKLOAD_TEXT.PASS,
   });
 }
 
@@ -280,7 +311,7 @@ function assertOperation(operation) {
     operationId.length === 0 ||
     Buffer.byteLength(operationId) > MAXIMUM_OPERATION_ID_BYTES
   ) {
-    throw new TypeError('canonical MovieLens operation identity is required');
+    throw new TypeError(WORKLOAD_TEXT.IDENTITY_REQUIRED);
   }
   return {idempotencyKey, operationId};
 }
@@ -300,25 +331,25 @@ function canonicalJournalTimestamp(value) {
     value < MINIMUM_EPOCH_MILLISECONDS ||
     value > MAXIMUM_DATE_EPOCH_MILLISECONDS
   ) {
-    throw new TypeError('canonical journal timestamp is required');
+    throw new TypeError(WORKLOAD_TEXT.JOURNAL_TIMESTAMP_REQUIRED);
   }
   try {
     const date = new CanonicalDate(value);
     const timestamp = reflectApply(dateGetTime, date, []);
     const canonical = reflectApply(dateToISOString, date, []);
     if (timestamp !== value) {
-      throw new TypeError('canonical journal timestamp is required');
+      throw new TypeError(WORKLOAD_TEXT.JOURNAL_TIMESTAMP_REQUIRED);
     }
     return canonical;
   } catch {
-    throw new TypeError('canonical journal timestamp is required');
+    throw new TypeError(WORKLOAD_TEXT.JOURNAL_TIMESTAMP_REQUIRED);
   }
 }
 
 function requiredJournalText(row, key) {
   const value = ownDataValue(row, key);
   if (typeof value !== 'string' || value.length === 0) {
-    throw new TypeError('completed invocation journal row is required');
+    throw new TypeError(WORKLOAD_TEXT.COMPLETED_JOURNAL_REQUIRED);
   }
   return value;
 }
@@ -330,7 +361,7 @@ function projectCompletedJournalRow(row) {
     utilIsProxy(row) ||
     !hasExactOwnDataKeys(row, JOURNAL_KEYS)
   ) {
-    throw new TypeError('exact invocation journal row is required');
+    throw new TypeError(WORKLOAD_TEXT.EXACT_JOURNAL_REQUIRED);
   }
   const command = requiredJournalText(row, 'command');
   const error = ownDataValue(row, 'error');
@@ -343,14 +374,16 @@ function projectCompletedJournalRow(row) {
   if (
     error !== COMPLETED_JOURNAL_ERROR ||
     result !== COMPLETED_JOURNAL_RESULT ||
-    state !== 'completed'
+    state !== WORKLOAD_TEXT.COMPLETED
   ) {
-    throw new TypeError('completed invocation journal row is required');
+    throw new TypeError(WORKLOAD_TEXT.COMPLETED_JOURNAL_REQUIRED);
   }
   return objectFreeze({
     command,
     created_at:
-      canonicalJournalTimestamp(ownDataValue(row, 'created_at')),
+      canonicalJournalTimestamp(
+        ownDataValue(row, WORKLOAD_TEXT.CREATED_AT_KEY),
+      ),
     error,
     idempotency_key: idempotencyKey,
     operation_id: operationId,
@@ -358,7 +391,9 @@ function projectCompletedJournalRow(row) {
     state,
     tenant_id: tenantId,
     updated_at:
-      canonicalJournalTimestamp(ownDataValue(row, 'updated_at')),
+      canonicalJournalTimestamp(
+        ownDataValue(row, WORKLOAD_TEXT.UPDATED_AT_KEY),
+      ),
   });
 }
 
@@ -420,7 +455,7 @@ async function prepareMovielensPublicRequestWorkload({
   assertPorts(ports);
   if (!artifactReceipt || !dataset || !alternative) {
     throw new TypeError(
-      'MovieLens artifact, dataset, and named alternative are required',
+      WORKLOAD_TEXT.PREPARED_INPUT_REQUIRED,
     );
   }
   await createWorkloadTables(ports);
@@ -448,18 +483,22 @@ async function prepareMovielensPublicRequestWorkload({
   let nextResultKeyOffset = 0;
   const inFlight = new Set();
 
-  async function executeOperationInner(operation) {
+  async function executeOperationInner(operation, observationMode) {
     const identity = assertOperation(operation);
     const resultKeyOffset = nextResultKeyOffset;
     if (resultKeyOffset > MAXIMUM_RESULT_KEY_OFFSET) {
-      throw new RangeError('MovieLens operation result key space exhausted');
+      throw new RangeError(WORKLOAD_TEXT.RESULT_KEY_SPACE_EXHAUSTED);
     }
     nextResultKeyOffset += MOVIELENS_PUBLIC_REQUEST_TOP_N;
-    const before = await readDurableResult(ports, resultKeyOffset);
-    assert.equal(before.movieRows.length, 0);
-    assert.equal(before.scoreRows.length, 0);
-    const cellBefore =
-      await ports.cellWitness(MOVIELENS_PUBLIC_REQUEST);
+    const fullObservation =
+      observationMode === OPERATION_OBSERVATION.FULL;
+    let cellBefore = OPERATION_OBSERVATION.NOT_REQUESTED;
+    if (fullObservation) {
+      const before = await readDurableResult(ports, resultKeyOffset);
+      assert.equal(before.movieRows.length, 0);
+      assert.equal(before.scoreRows.length, 0);
+      cellBefore = await ports.cellWitness(MOVIELENS_PUBLIC_REQUEST);
+    }
     const request = buildOperationRequest(
       dataset,
       identity.idempotencyKey,
@@ -470,9 +509,11 @@ async function prepareMovielensPublicRequestWorkload({
       request,
     );
     assertPublicResponse(response);
-    const cellAfter =
-      await ports.cellWitness(MOVIELENS_PUBLIC_REQUEST);
-    assertCellProgress(cellBefore, cellAfter, 1);
+    let cellAfter = OPERATION_OBSERVATION.NOT_REQUESTED;
+    if (fullObservation) {
+      cellAfter = await ports.cellWitness(MOVIELENS_PUBLIC_REQUEST);
+      assertCellProgress(cellBefore, cellAfter, 1);
+    }
     const invocationJournal = assertJournalMatchesRequest(
       assertCompletedJournal(
         await ports.readInvocationJournal(identity.idempotencyKey),
@@ -495,15 +536,23 @@ async function prepareMovielensPublicRequestWorkload({
       response,
       result,
       resultKeyOffset,
-      semanticStatus: 'equivalent',
+      semanticStatus: WORKLOAD_TEXT.SEMANTIC_EQUIVALENT,
     });
   }
 
-  function executeOperation(operation) {
-    const promise = executeOperationInner(operation)
+  function trackedOperation(operation, observationMode) {
+    const promise = executeOperationInner(operation, observationMode)
       .finally(() => inFlight.delete(promise));
     inFlight.add(promise);
     return promise;
+  }
+
+  function executeOperation(operation) {
+    return trackedOperation(operation, OPERATION_OBSERVATION.FULL);
+  }
+
+  function executeCapacityOperation(operation) {
+    return trackedOperation(operation, OPERATION_OBSERVATION.CAPACITY);
   }
 
   async function replayOperation(operation) {
@@ -521,7 +570,7 @@ async function prepareMovielensPublicRequestWorkload({
       !Number.isSafeInteger(resultKeyOffset) ||
       typeof idempotencyKey !== 'string'
     ) {
-      throw new TypeError('MovieLens completed operation is required');
+      throw new TypeError(WORKLOAD_TEXT.OPERATION_REQUIRED);
     }
     const cellBefore =
       await ports.cellWitness(MOVIELENS_PUBLIC_REQUEST);
@@ -563,7 +612,7 @@ async function prepareMovielensPublicRequestWorkload({
       }),
       response,
       result,
-      semanticStatus: 'equivalent',
+      semanticStatus: WORKLOAD_TEXT.SEMANTIC_EQUIVALENT,
     });
   }
 
@@ -571,7 +620,34 @@ async function prepareMovielensPublicRequestWorkload({
     await Promise.allSettled([...inFlight]);
     return Object.freeze({
       inFlight: inFlight.size,
-      status: inFlight.size === 0 ? 'drained' : 'ambiguous',
+      status: inFlight.size === 0 ?
+        WORKLOAD_TEXT.DRAINED :
+        WORKLOAD_TEXT.AMBIGUOUS,
+    });
+  }
+
+  async function resetRunState() {
+    const drained = await drainOperations();
+    if (drained.inFlight !== 0) {
+      throw new Error(WORKLOAD_TEXT.RESET_REQUIRES_DRAIN);
+    }
+    await executeSql(
+      ports,
+      `DELETE FROM "${MOVIELENS_PUBLIC_REQUEST_TABLE.RESULT_MOVIES}"`,
+    );
+    await executeSql(
+      ports,
+      `DELETE FROM "${MOVIELENS_PUBLIC_REQUEST_TABLE.RESULT_SCORES}"`,
+    );
+    await executeSql(ports, WORKLOAD_TEXT.RESET_DELETE_OPERATIONS_SQL);
+    const durableResults = await assertNoDurableResults(ports);
+    const invocationJournalRows =
+      await assertNoDurableInvocationJournal(ports);
+    nextResultKeyOffset = 0;
+    return Object.freeze({
+      durableResultRows: durableResults.totalRows,
+      invocationJournalRows,
+      state: WORKLOAD_TEXT.RESET_STATE,
     });
   }
 
@@ -579,10 +655,12 @@ async function prepareMovielensPublicRequestWorkload({
     authentication,
     deployment,
     drainOperations,
+    executeCapacityOperation,
     executeOperation,
     inputDurability,
     replayOperation,
-    timeoutSemantics: 'ambiguous_until_drain_verified',
+    resetRunState,
+    timeoutSemantics: WORKLOAD_TEXT.TIMEOUT_SEMANTICS,
     workloadManifest,
   });
 }

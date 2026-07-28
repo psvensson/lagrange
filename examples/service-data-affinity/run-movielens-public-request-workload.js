@@ -61,15 +61,36 @@ const REQUEST_CELL_RESPONSE_HEADER = 'x-lagrange-cell';
 const LIVE_FAILURE_NAME = 'MovielensPublicRequestLiveFailure';
 const LIVE_FAILURE_STAGE = MOVIELENS_PUBLIC_REQUEST_FAILURE_STAGE;
 const objectDefineProperties = Object.defineProperties;
+const SHA256_ALGORITHM = 'sha256';
+const SHA256_ENCODING = 'hex';
+const BYTE_ENCODING = 'utf8';
+const POSTGRES_ENGINE = 'PostgreSQL 16';
+const CLEANUP_OUTCOME = Object.freeze({
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  SKIPPED: 'skipped',
+});
+const LIVE_TEXT = Object.freeze({
+  CLEANUP_FAILED: 'MovieLens workload cleanup failed',
+  CLEANUP_RECEIPT_KEY: 'cleanupReceipt',
+  EXECUTABLE_RECEIPT_MISMATCH:
+    'WASM executable digest does not bind the OCI payload receipt',
+  FILE_NOT_FOUND_CODE: 'ENOENT',
+  POSTGRES_INPUT_MISMATCH:
+    'PostgreSQL did not consume the retained MovieLens input',
+  TEMPORARY_DIRECTORY_PREFIX: 'lagrange-movielens-public-request-',
+});
 
 function sha256(bytes) {
-  return `${SHA256_PREFIX}${createHash('sha256').update(bytes).digest('hex')}`;
+  return `${SHA256_PREFIX}${createHash(SHA256_ALGORITHM)
+    .update(bytes)
+    .digest(SHA256_ENCODING)}`;
 }
 
 function requestCellOperationId(tenantId, invocationIdentity) {
-  const digest = createHash('sha256')
+  const digest = createHash(SHA256_ALGORITHM)
     .update(JSON.stringify([tenantId, invocationIdentity]))
-    .digest('hex');
+    .digest(SHA256_ENCODING);
   return `${REQUEST_CELL_OPERATION_PREFIX}${digest}`;
 }
 
@@ -208,11 +229,11 @@ function projectPostgresAlternative(baseline) {
   const postgresLogDigests = {};
   for (const [containerId, logs] of Object.entries(baseline.logs)) {
     postgresLogDigests[containerId] =
-      sha256(Buffer.from(logs, 'utf8'));
+      sha256(Buffer.from(logs, BYTE_ENCODING));
   }
   return Object.freeze({
     cleanupReceipt: baseline.cleanupReceipt,
-    engine: 'PostgreSQL 16',
+    engine: POSTGRES_ENGINE,
     imageId: baseline.imageId,
     imageInspection: baseline.imageInspection,
     imageRepoDigests: baseline.imageRepoDigests,
@@ -256,21 +277,21 @@ async function stopPreparedCell(node, prepared) {
 }
 
 async function cleanupAttempt(alreadyCompleted, operation) {
-  if (alreadyCompleted) return {kind: 'skipped'};
+  if (alreadyCompleted) return {kind: CLEANUP_OUTCOME.SKIPPED};
   try {
     return {
-      kind: 'completed',
+      kind: CLEANUP_OUTCOME.COMPLETED,
       value: await operation(),
     };
   } catch (error) {
-    return {error, kind: 'failed'};
+    return {error, kind: CLEANUP_OUTCOME.FAILED};
   }
 }
 
 function cleanupErrors(attempts) {
   const errors = [];
   for (let index = 0; index < attempts.length; index += 1) {
-    if (attempts[index].kind === 'failed') {
+    if (attempts[index].kind === CLEANUP_OUTCOME.FAILED) {
       errors.push(attempts[index].error);
     }
   }
@@ -281,7 +302,7 @@ async function requireTemporaryDirectoryAbsent(temporaryRoot) {
   try {
     await access(temporaryRoot);
   } catch (error) {
-    if (error.code === 'ENOENT') return;
+    if (error.code === LIVE_TEXT.FILE_NOT_FOUND_CODE) return;
     throw error;
   }
   throw new Error(
@@ -299,14 +320,16 @@ async function closeWorkloadSession({
     cleanupState.cellStopped,
     () => stopPreparedCell(node, prepared),
   );
-  if (cell.kind === 'completed') {
+  if (cell.kind === CLEANUP_OUTCOME.COMPLETED) {
     cleanupState.cellStopped = cell.value.cellStopped;
   }
   const runtime = await cleanupAttempt(
     cleanupState.nodeStopped,
     () => node.shutdown(),
   );
-  if (runtime.kind === 'completed') cleanupState.nodeStopped = true;
+  if (runtime.kind === CLEANUP_OUTCOME.COMPLETED) {
+    cleanupState.nodeStopped = true;
+  }
   const temporaryDirectory = await cleanupAttempt(
     cleanupState.tempRemoved,
     async () => {
@@ -314,7 +337,7 @@ async function closeWorkloadSession({
       await requireTemporaryDirectoryAbsent(temporaryRoot);
     },
   );
-  if (temporaryDirectory.kind === 'completed') {
+  if (temporaryDirectory.kind === CLEANUP_OUTCOME.COMPLETED) {
     cleanupState.tempRemoved = true;
   }
   const failures = cleanupErrors([
@@ -325,10 +348,10 @@ async function closeWorkloadSession({
   if (failures.length > 0) {
     throw new AggregateError(
       failures,
-      'MovieLens workload cleanup failed',
+      LIVE_TEXT.CLEANUP_FAILED,
     );
   }
-  return cell.kind === 'completed' ? cell.value : null;
+  return cell.kind === CLEANUP_OUTCOME.COMPLETED ? cell.value : null;
 }
 
 function unobservedPostgresCleanup() {
@@ -365,10 +388,10 @@ async function closeFailedOpening({
       false,
       () => stopPreparedCell(node, prepared),
     );
-    cellAbsent = cell.kind === 'completed' ?
+    cellAbsent = cell.kind === CLEANUP_OUTCOME.COMPLETED ?
       cell.value.cellStopped :
       null;
-    if (cell.kind === 'failed') {
+    if (cell.kind === CLEANUP_OUTCOME.FAILED) {
       cleanupCauses.push({
         cause: cell.error,
         role:
@@ -379,8 +402,8 @@ async function closeFailedOpening({
   let nodeStopped = nodeBootAttempted ? null : true;
   if (node) {
     const runtime = await cleanupAttempt(false, () => node.shutdown());
-    nodeStopped = runtime.kind === 'completed' ? true : null;
-    if (runtime.kind === 'failed') {
+    nodeStopped = runtime.kind === CLEANUP_OUTCOME.COMPLETED ? true : null;
+    if (runtime.kind === CLEANUP_OUTCOME.FAILED) {
       cleanupCauses.push({
         cause: runtime.error,
         role:
@@ -399,8 +422,8 @@ async function closeFailedOpening({
       },
     );
     temporaryDirectoryAbsent =
-      temporaryDirectory.kind === 'completed' ? true : null;
-    if (temporaryDirectory.kind === 'failed') {
+      temporaryDirectory.kind === CLEANUP_OUTCOME.COMPLETED ? true : null;
+    if (temporaryDirectory.kind === CLEANUP_OUTCOME.FAILED) {
       cleanupCauses.push({
         cause: temporaryDirectory.error,
         role:
@@ -451,13 +474,13 @@ async function openMovielensPublicRequestWorkloadLive(options = {}) {
       postgres.inputDigest !== dataset.digest
     ) {
       throw new Error(
-        'PostgreSQL did not consume the retained MovieLens input',
+        LIVE_TEXT.POSTGRES_INPUT_MISMATCH,
       );
     }
     const alternative = projectPostgresAlternative(postgres);
     stage = LIVE_FAILURE_STAGE.TEMPORARY_DIRECTORY;
     temporaryRoot = await mkdtemp(
-      path.join(tmpdir(), 'lagrange-movielens-public-request-'),
+      path.join(tmpdir(), LIVE_TEXT.TEMPORARY_DIRECTORY_PREFIX),
     );
     stage = LIVE_FAILURE_STAGE.ARTIFACT;
     const paths = {
@@ -484,7 +507,7 @@ async function openMovielensPublicRequestWorkloadLive(options = {}) {
       );
     if (!executablePayload) {
       throw new Error(
-        'WASM executable digest does not bind the OCI payload receipt',
+        LIVE_TEXT.EXECUTABLE_RECEIPT_MISMATCH,
       );
     }
     stage = LIVE_FAILURE_STAGE.NODE;
@@ -533,6 +556,10 @@ async function openMovielensPublicRequestWorkloadLive(options = {}) {
         executableBytes,
         postgresLogs: postgres.logs,
       }),
+      runtimeObservation: Object.freeze({
+        processId: process.pid,
+        storagePath: temporaryRoot,
+      }),
       async close() {
         if (closedReceipt) return closedReceipt;
         let stopReceipt;
@@ -572,7 +599,10 @@ async function openMovielensPublicRequestWorkloadLive(options = {}) {
     });
   } catch (error) {
     postgresCleanup =
-      safeMovielensFailureOwnDataValue(error, 'cleanupReceipt') ||
+      safeMovielensFailureOwnDataValue(
+        error,
+        LIVE_TEXT.CLEANUP_RECEIPT_KEY,
+      ) ||
       postgresCleanup;
     const failedOpening = await closeFailedOpening({
       node,
