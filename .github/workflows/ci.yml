@@ -83,7 +83,7 @@ jobs:
           [ -n "$receipt" ] || { echo "no receipt found"; exit 0; }
           echo "=== $receipt ==="
           jq '[.commands[] | {id, status, exitCode, reasons}]' "$receipt"
-          jq -r '.commands[] | select(.status == "FAIL") | .requiredArtifact.path' "$receipt" |
+          jq -r '.commands[] | select(.status == "FAIL") | (.artifactIdentity.path // .requiredArtifact.path // empty)' "$receipt" |
           while read -r artifact; do
             [ -f "$artifact" ] || continue
             echo "=== tail of $artifact ==="

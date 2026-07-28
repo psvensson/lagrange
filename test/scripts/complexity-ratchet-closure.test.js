@@ -38,12 +38,14 @@ function runRatchet(command) {
 }
 
 // Two whole-repo complexity sweeps run serially here; the cyclomatic pass
-// alone exceeds tap's 30s default as the tree grows, so declare the real
-// budget explicitly at the root (the file-level timeout is what fires).
-tap.setTimeout(120000);
+// alone exceeds tap's 30s default as the tree grows (~30s on a fast local
+// machine, several times that on a 2-core CI runner under the parallel fast
+// lane), so declare the real budget explicitly at the root (the file-level
+// timeout is what fires).
+tap.setTimeout(360000);
 
 tap.test('complexity ratchets are closed at their baselines',
-  {timeout: 120000}, async (t) => {
+  {timeout: 360000}, async (t) => {
     for (const ratchet of RATCHETS) {
       t.test(`${ratchet.key} ratchet passes with no baseline raise`, (t) => {
         const exitCode = runRatchet(ratchet.command);
