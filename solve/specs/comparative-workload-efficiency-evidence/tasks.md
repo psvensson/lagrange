@@ -12,7 +12,7 @@
 | C3 | `benchmark-statistical-capacity-protocol` | C2 | Open-loop randomized blocked pairs produce preregistered SLO capacity curves and uncertainty. |
 | C4 | `benchmark-whole-topology-resource-accounting` | C3 | Live-calibrated whole-topology resources and versioned infrastructure-price projection produce auditable cost per million correct operations. |
 | C5 | `comparative-efficiency-negative-controls` | C3, C4 | The complete small/unfavorable/no-reuse/update-heavy/uniform matrix yields valid direction-neutral results. |
-| C6 | `comparative-efficiency-request-enrichment` | C3, C4 | The complete locality/skew/size request-enrichment matrix yields paired capacity and cost evidence. |
+| C6 | `comparative-efficiency-request-enrichment` — ✅ SOLVED 2026-07-28 | C3, C4 | The complete locality/skew/size request-enrichment matrix yields paired capacity and cost evidence. |
 | C7 | `comparative-efficiency-movielens-public-request-workload` | C2 | MovieLens grouped reduce runs with equivalent results through the public installed request/WASM Cell surface. |
 | C8 | `comparative-efficiency-movielens-grouped-reduce` | C3, C4, C7 | The complete MovieLens size/skew/topology matrix yields paired capacity and cost evidence. |
 | C9 | `comparative-efficiency-change-rate-crossover` | C3, C4 | The complete size/change/diversity/materialization sweep yields crossover evidence without presuming its sign. |
