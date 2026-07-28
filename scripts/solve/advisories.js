@@ -12,9 +12,11 @@
 import {
   reflectionDue,
   reflectionPrompt,
+  rejectionStreakDue,
   altitudeReflectionDue,
   altitudeReflectionPrompt,
 } from './reflection.js';
+import {candidateRejectionFingerprintsSinceApproval} from './gate.js';
 import {
   CONTINUATION_BLOCKED_THEORY,
   CONTINUATION_BLOCKED_SCOPE,
@@ -22,16 +24,20 @@ import {
   continuationOverridable,
 } from './continuation.js';
 
-// Derive the reflection triggers (oscillation / runaway scope) from the health signals,
-// exactly as the run loop does before calling maybeRunReflection. Keeping this in one place
-// means the advisory and the autonomous turn fire on identical conditions.
-export function reflectionTriggersFromHealth(health) {
+// Derive the reflection triggers (oscillation / runaway scope / rejection streak) from the
+// health signals and the log, exactly as the run loop does before calling
+// maybeRunReflection. Keeping this in one place means the advisory and the autonomous turn
+// fire on identical conditions.
+export function reflectionTriggersFromHealth(health, log = [], frontierId = null) {
   const signals = (health && health.signals) || [];
+  const frontier = frontierId || (health && health.frontier) || null;
   return {
     oscillating: signals.some(
       (signal) => signal.type === 'coupled-invariant-oscillation'),
     scope: signals.some(
       (signal) => signal.type === 'scope-pressure-terminal'),
+    rejectionStreak: rejectionStreakDue(log, frontier ?
+      candidateRejectionFingerprintsSinceApproval(log, frontier).size : 0),
   };
 }
 
@@ -96,7 +102,7 @@ export function buildAdvisories(quest, health, log) {
   // oscillation/coarse-cadence trigger pulls the agent out to question the frame before any
   // within-frame micro reframe. Only when no altitude reflection is due do we surface the
   // micro one.
-  const triggers = reflectionTriggersFromHealth(health);
+  const triggers = reflectionTriggersFromHealth(health, log || []);
   const altitudeTrigger = altitudeReflectionDue(log || [], triggers);
   if (altitudeTrigger) {
     advisories.push({

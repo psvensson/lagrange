@@ -6,7 +6,7 @@
 // inherited nothing from the parent it was authored against.
 //
 // The hard boundary is the STATEMENT. Structure (class, constraints, verification
-// contract, probe shapes) is mechanical and safe to copy. The statement is the sealed
+// contract, verification templates, probe shapes) is mechanical and safe to copy. The statement is the sealed
 // success predicate: sibling statements differ in precisely the clause a mechanical
 // substitution gets wrong — which sources stay inactive, which export binds — and
 // validateGoalpostsImmutable refuses every correction once first execution seals it.
@@ -57,6 +57,15 @@ export function applySiblingSkeleton(quest, sibling, options = {}) {
   }
   if (Array.isArray(sibling.constraints) && sibling.constraints.length > 0) {
     quest.constraints = sibling.constraints.map((item) => ({...item}));
+  }
+  // The sealed rejection bar: successor quests in a ladder almost always face
+  // the same attack surface, and a bar assembled reactively mid-quest costs a
+  // rejection round per missing template. The copy is a draft default — the
+  // operator must still review it before first execution seals it, because
+  // amendments can only EXPAND a sealed bar, never narrow it.
+  if (Array.isArray(sibling.verificationTemplates) &&
+      sibling.verificationTemplates.length > 0) {
+    quest.verificationTemplates = [...sibling.verificationTemplates];
   }
   if (Number.isInteger(sibling.verificationContractVersion)) {
     quest.verificationContractVersion = sibling.verificationContractVersion;

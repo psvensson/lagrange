@@ -111,15 +111,18 @@ import {appendReflection} from './store.js';
 import {
   reflectionDue,
   reflectionPrompt,
+  rejectionStreakDue,
   altitudeReflectionDue,
   altitudeReflectionPrompt,
 } from './reflection.js';
 import {
   CONTINUATION_BLOCKED_REJECTION_ESCALATION,
+  CONTINUATION_BLOCKED_STATIC_QUALITY,
   CONTINUATION_BLOCKED_THEORY,
   continuationIsAllowed,
   unrecordedEvidenceContinuation,
 } from './continuation.js';
+import {staticQualityProblems} from './static-gate.js';
 import {
   resolveGateDecision,
   theoryGateContinuation,
@@ -363,6 +366,35 @@ function applyAttempt(root, quest, ctx, pick, before) {
     metricHistory,
     evidencePaths,
   });
+  // Machine-checkable quality findings never earn a verifier round: the same
+  // changed-path static gate the supervised paths (attempt.js, step.js) run
+  // before sealing. The supervised paths see the diff before the harness; here
+  // the executor produces it, so the gate runs post-harness, pre-seal — the
+  // attempt is not recorded, the reroute decision is, and the working tree
+  // keeps the bytes for the fix-and-rerun cycle.
+  const inspectChangeRef = ctx.honestyCtx && ctx.honestyCtx.inspectChangeRef;
+  if (result && result.changeRef && inspectChangeRef) {
+    const changeInspection = inspectChangeRef(result.changeRef);
+    const staticProblems = changeInspection && changeInspection.valid ?
+      staticQualityProblems(root, changeInspection.changedPaths) : [];
+    if (staticProblems.length > 0) {
+      const decision = resolveGateDecision(root, quest, {
+        status: CONTINUATION_BLOCKED_STATIC_QUALITY,
+        code: CONTINUATION_BLOCKED_STATIC_QUALITY,
+        problems: staticProblems,
+      }, {log, frontier: pick.def.id, rungIndex});
+      if (!decisionContinues(decision)) {
+        return {
+          terminal: decision.outcome,
+          evidence: null,
+          frontier: pick.def.id,
+          problems: staticProblems,
+          disposition: decision.disposition,
+          nextCommand: decision.nextCommand,
+        };
+      }
+    }
+  }
   finalizeAttempt(root, quest, ctx, pick, before, {
     ...result,
     workspaceBaseCommit,
@@ -1007,9 +1039,13 @@ export function runLoop(root, quest, options = {}) {
         maybeRunReflection(root, quest, ctx, executionHealth, altitudeTrigger, 'altitude')) {
         continue;
       }
-      const reflectTrigger = reflectionDue(readLog(root, quest.id), {
+      const reflectLog = readLog(root, quest.id);
+      const reflectTrigger = reflectionDue(reflectLog, {
         scope: (executionHealth.signals || []).some(
           (signal) => signal.type === 'scope-pressure-terminal'),
+        rejectionStreak: rejectionStreakDue(reflectLog,
+          executionHealth.frontier ? candidateRejectionFingerprintsSinceApproval(
+            reflectLog, executionHealth.frontier).size : 0),
       });
       if (reflectTrigger &&
         maybeRunReflection(root, quest, ctx, executionHealth, reflectTrigger, 'micro')) {

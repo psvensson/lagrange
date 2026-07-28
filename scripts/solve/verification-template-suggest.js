@@ -33,6 +33,9 @@ const MARKDOWN_EXTENSION = '.md';
 const FRONTMATTER_CATEGORIES_PATTERN = /^categories:\s*\[([^\]]*)\]\s*$/mu;
 const HARNESS_PATH_PATTERN = /^test\//u;
 const NO_MATCH_MESSAGE = 'no verification template matched\n';
+const NO_RULE_MESSAGE_SUFFIX =
+  ' has no keyword rule and can never be suggested';
+const NO_TEMPLATE_MESSAGE_SUFFIX = ' names no template front-matter category';
 const CATEGORY_SEPARATOR = ',';
 const LINE_SEPARATOR = '\n';
 const ADDED_LINE_PREFIX = '+';
@@ -59,16 +62,14 @@ const CATEGORY_KEYWORD_RULES = Object.freeze({
     /^src\/(?:diagnostics|utils)\/|\b(prototype|hasOwn|Object\.create|Number\.isFinite|intrinsic)/u,
 });
 
-// category -> template path (repo-relative), read from each template's
-// front-matter `categories` tags so the docs stay the single source of truth.
-export function loadTemplateCategories(root) {
+function loadTemplateCategoryPairs(root) {
   const dir = path.join(root, TEMPLATE_DIR_REL);
-  const byCategory = new Map();
+  const pairs = [];
   let names = [];
   try {
     names = fs.readdirSync(dir);
   } catch {
-    return byCategory;
+    return pairs;
   }
   for (const name of names) {
     if (!name.endsWith(MARKDOWN_EXTENSION) || name === INDEX_BASENAME) continue;
@@ -77,10 +78,48 @@ export function loadTemplateCategories(root) {
     if (!match) continue;
     for (const raw of match[1].split(CATEGORY_SEPARATOR)) {
       const category = raw.trim().replace(/^['"]|['"]$/gu, '');
-      if (category) byCategory.set(category, `${TEMPLATE_DIR_REL}/${name}`);
+      if (category) pairs.push({category, template: `${TEMPLATE_DIR_REL}/${name}`});
     }
   }
+  return pairs;
+}
+
+// category -> template path (repo-relative), read from each template's
+// front-matter `categories` tags so the docs stay the single source of truth.
+export function loadTemplateCategories(root) {
+  const byCategory = new Map();
+  for (const {category, template} of loadTemplateCategoryPairs(root)) {
+    byCategory.set(category, template);
+  }
   return byCategory;
+}
+
+// A category or keyword rule that only one side knows about silently never
+// fires; a category claimed twice silently drops one template. All three
+// drift modes are invisible at suggestion time, so they are surfaced here.
+export function templateCategoryConsistencyProblems(root) {
+  const problems = [];
+  const templatesByCategory = new Map();
+  for (const {category, template} of loadTemplateCategoryPairs(root)) {
+    const templates = templatesByCategory.get(category) || [];
+    templates.push(template);
+    templatesByCategory.set(category, templates);
+  }
+  for (const [category, templates] of templatesByCategory) {
+    if (templates.length > 1) {
+      problems.push(`category ${category} is claimed by multiple templates ` +
+        `(last one wins): ${templates.join(CATEGORY_SEPARATOR)}`);
+    }
+    if (!CATEGORY_KEYWORD_RULES[category]) {
+      problems.push(`category ${category}${NO_RULE_MESSAGE_SUFFIX}`);
+    }
+  }
+  for (const category of Object.keys(CATEGORY_KEYWORD_RULES)) {
+    if (!templatesByCategory.has(category)) {
+      problems.push(`keyword rule ${category}${NO_TEMPLATE_MESSAGE_SUFFIX}`);
+    }
+  }
+  return problems;
 }
 
 // Changed (+/-) content lines only; header/context lines are excluded so a

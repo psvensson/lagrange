@@ -29,6 +29,7 @@ function sibling() {
       metric: {probe: 'scenario-harness', args: {scenario: 'family-first', metric: 'priority'}},
     }],
     constraints: [{id: 'family-invariant', statement: 'Siblings stay inactive.'}],
+    verificationTemplates: ['admission-gating', 'harness-fidelity'],
   };
 }
 
@@ -60,6 +61,19 @@ tap.test('sibling Quest derivation', async (t) => {
       'the family constraints come along');
     t.equal(derived.class, 'process', 'the sibling class is adopted');
     t.equal(derived.verificationContractVersion, 2);
+    t.same(derived.verificationTemplates,
+      ['admission-gating', 'harness-fidelity'],
+      'the sealed rejection bar is inherited as a reviewable draft default');
+    t.end();
+  });
+
+  t.test('a sibling without a bar leaves the draft bar untouched', (t) => {
+    const bare = sibling();
+    delete bare.verificationTemplates;
+    const derived = applySiblingSkeleton(draft(), bare,
+      {statement: 'A sibling without templates.'});
+    t.notOk(Object.hasOwn(derived, 'verificationTemplates'),
+      'no empty bar is manufactured');
     t.end();
   });
 

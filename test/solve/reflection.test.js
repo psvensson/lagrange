@@ -6,21 +6,27 @@ import {
   lastAltitudeReflectionIndex,
   attemptsSinceAltitudeReflection,
   reflectionDue,
+  rejectionStreakDue,
   altitudeReflectionDue,
   reflectionPrompt,
   altitudeReflectionPrompt,
 } from '../../scripts/solve/reflection.js';
 import {
   EVENT_ATTEMPT,
+  EVENT_FINDING,
   EVENT_REFLECTION,
   REFLECTION_INTERVAL,
   ALTITUDE_REFLECTION_INTERVAL,
+  REJECTION_REFLECTION_STREAK,
 } from '../../scripts/solve/constants.js';
 
 const attempt = () => ({type: EVENT_ATTEMPT, frontier: 'f', progressed: false});
 const reflection = () => ({type: EVENT_REFLECTION, frontier: 'f', trigger: 'cadence', kind: 'micro'});
 const altitudeReflection = () =>
   ({type: EVENT_REFLECTION, frontier: 'f', trigger: 'altitude-cadence', kind: 'altitude'});
+const rejectionFinding = () =>
+  ({type: EVENT_FINDING, frontier: 'f', kind: 'verifier-rejection',
+    verification: {scope: 'candidate', fingerprint: 'sha256:x'}});
 
 tap.test('micro reflection cadence', async (t) => {
   t.test('not due before REFLECTION_INTERVAL attempts have passed', (t) => {
@@ -126,6 +132,35 @@ tap.test('reflection bookkeeping helpers', async (t) => {
     t.equal(lastAltitudeReflectionIndex([]), -1, 'none recorded');
     const log = [attempt(), reflection(), altitudeReflection(), attempt(), reflection()];
     t.equal(lastAltitudeReflectionIndex(log), 2, 'index of the altitude reflection, not the later micro one');
+    t.end();
+  });
+
+  t.test('rejection streak forces a micro reflection once per new rejection', (t) => {
+    const log = [attempt(), rejectionFinding(), attempt(), rejectionFinding()];
+    t.equal(rejectionStreakDue(log, REJECTION_REFLECTION_STREAK), true,
+      'a streak at the threshold with a fresh rejection is due');
+    t.equal(rejectionStreakDue(log, REJECTION_REFLECTION_STREAK - 1), false,
+      'below the threshold nothing fires');
+    t.equal(reflectionDue(log, {rejectionStreak: true}), 'rejection-streak',
+      'the trigger label is surfaced');
+
+    // Re-fire guard: once the reflection is recorded, a persisting streak must
+    // NOT tax every later attempt — only a NEW rejection re-arms the trigger.
+    const afterReflection = [...log, reflection(), attempt()];
+    t.equal(rejectionStreakDue(afterReflection, REJECTION_REFLECTION_STREAK),
+      false, 'a standing streak does not re-fire after the reflection');
+    const afterNewRejection = [...afterReflection, rejectionFinding()];
+    t.equal(rejectionStreakDue(afterNewRejection, REJECTION_REFLECTION_STREAK),
+      true, 'a new rejection after the reflection re-arms the trigger');
+    t.end();
+  });
+
+  t.test('reflectionPrompt names the rejection streak reframing', (t) => {
+    const prompt = reflectionPrompt(
+      {id: 'q1'}, {frontier: 'main'}, 'rejection-streak');
+    t.match(prompt, /rejected/, 'names the rejection condition');
+    t.match(prompt, /fidelity, bar, or framing/,
+      'steers toward the defect classes, not another patch');
     t.end();
   });
 

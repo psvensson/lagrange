@@ -670,11 +670,17 @@ node scripts/solve.js checkpoint --id <quest> --dry-run \
   --reason <handoff|risky-tree|long-running|milestone>
 ```
 
-The attempt preflight covers file-size thresholds, STYLE-0012 vocabulary, and
-the step-coverage owner census. Its first two checks are ratcheted and must be
-green. The census is absolute and may carry inherited drift: compare its listed
-sites against the same command on the attempt's Git base — any NEW site means
-the attempt is not ready for verification.
+The attempt preflight covers file-size thresholds, STYLE-0012 vocabulary, the
+step-coverage owner census, and the whole-repo test-duplication ratchet. The
+first two checks and the duplication ratchet are ratcheted and must be green
+(the duplication scan is whole-tree, so an unrelated in-flight file can inflate
+its count — read its per-file listing before attributing the excess to the
+candidate). The census is absolute and may carry inherited drift: compare its
+listed sites against the same command on the attempt's Git base — any NEW site
+means the attempt is not ready for verification. The duplication ratchet runs
+here, at the review boundary, deliberately NOT at attempt seal: it is a
+whole-repo, cross-file scan (~90s) and the attempt-seal static gate is reserved
+for cheap changed-path checkers.
 
 The dry run applies the real narrow checkpoint gate to a copied exact-candidate
 approval. Its dossier contains the common base, current fingerprint, complete

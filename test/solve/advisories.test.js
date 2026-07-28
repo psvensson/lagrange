@@ -11,7 +11,12 @@ import {
   CONTINUATION_BLOCKED_SCOPE,
   CONTINUATION_BLOCKED_REGRESSION,
 } from '../../scripts/solve/continuation.js';
-import {EVENT_ATTEMPT, REFLECTION_INTERVAL} from '../../scripts/solve/constants.js';
+import {
+  EVENT_ATTEMPT,
+  EVENT_FINDING,
+  REFLECTION_INTERVAL,
+  REJECTION_REFLECTION_STREAK,
+} from '../../scripts/solve/constants.js';
 
 const quest = {id: 'q1'};
 const attempt = () => ({type: EVENT_ATTEMPT, frontier: 'f', progressed: false});
@@ -23,19 +28,50 @@ const health = (over = {}) => ({
   ...over,
 });
 
+// A distinct rejected candidate on frontier `f`, structured exactly as landQuestWorkflow
+// records it (verification receipt with a candidate scope and fingerprint).
+const rejection = (fingerprint) => ({
+  type: EVENT_FINDING,
+  frontier: 'f',
+  kind: 'verifier-rejection',
+  verification: {scope: 'candidate', fingerprint},
+});
+
 tap.test('reflectionTriggersFromHealth maps signals to triggers', (t) => {
-  t.same(reflectionTriggersFromHealth(health()), {oscillating: false, scope: false});
+  t.same(reflectionTriggersFromHealth(health()),
+    {oscillating: false, scope: false, rejectionStreak: false});
   t.same(
     reflectionTriggersFromHealth(health({
       signals: [{type: 'coupled-invariant-oscillation'}],
     })),
-    {oscillating: true, scope: false});
+    {oscillating: true, scope: false, rejectionStreak: false});
   t.same(
     reflectionTriggersFromHealth(health({
       signals: [{type: 'scope-pressure-terminal'}],
     })),
-    {oscillating: false, scope: true});
-  t.same(reflectionTriggersFromHealth(undefined), {oscillating: false, scope: false});
+    {oscillating: false, scope: true, rejectionStreak: false});
+  t.same(reflectionTriggersFromHealth(undefined),
+    {oscillating: false, scope: false, rejectionStreak: false});
+  t.end();
+});
+
+tap.test('rejection streak fires the reflection trigger from the log', (t) => {
+  const streak = [];
+  for (let i = 0; i < REJECTION_REFLECTION_STREAK; i += 1) {
+    streak.push(rejection(`sha256:${i}`));
+  }
+  t.equal(
+    reflectionTriggersFromHealth(health(), streak).rejectionStreak, true,
+    'distinct rejections at the threshold force a step-back');
+  t.equal(
+    reflectionTriggersFromHealth(health(), streak.slice(1)).rejectionStreak,
+    false, 'one below the threshold stays quiet');
+  const cleared = [...streak,
+    {type: EVENT_FINDING, frontier: 'f', kind: 'verifier-approval',
+      verification: {scope: 'candidate', fingerprint: 'sha256:ok'}}];
+  t.equal(
+    reflectionTriggersFromHealth(health(), cleared).rejectionStreak, false,
+    'an approval clears the streak');
   t.end();
 });
 

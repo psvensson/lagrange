@@ -115,6 +115,10 @@ const STEP_NEXT_ARGUMENTS =
   '--changeRef diff:<path> --summary "<what changed>" ' +
   '(--auto-diff snapshots the working tree as the changeRef)\n';
 const NEXT_ID_REQUIRED = 'next: --id <questId> is required';
+const INHERITED_BAR_REVIEW_SUFFIX =
+  '; review the bar BEFORE first execution — it seals then and amendments ' +
+  'can only expand it, never narrow it';
+const TEMPLATE_LIST_SEPARATOR = ', ';
 const COMMAND_SEPARATOR = '|';
 const USAGE_ARGUMENTS = '[--id <questId>] [...]\n';
 
@@ -303,9 +307,15 @@ function cmdNew(root, args) {
     inheritRulesOutFindings(root, quest, inheritedParentId) : 0;
   const inheritedLine = inherited ?
     `inherited ${inherited} rulesOut finding(s) from ${inheritedParentId}\n` : '';
+  const inheritedBarLine = siblingId &&
+    Array.isArray(quest.verificationTemplates) &&
+    quest.verificationTemplates.length > 0 ?
+    `inherited verification bar [${quest.verificationTemplates.join(
+      TEMPLATE_LIST_SEPARATOR)}] from ` +
+    `${siblingId}${INHERITED_BAR_REVIEW_SUFFIX}\n` : '';
   if (!args.quiet) {
     process.stdout.write(
-      `created ${written}\n${inheritedLine}` +
+      `created ${written}\n${inheritedLine}${inheritedBarLine}` +
       `Edit it, then: node scripts/solve.js next --id ${id}\n`);
   }
   emitRetreadWarnings(root, quest);

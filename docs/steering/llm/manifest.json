@@ -1,5 +1,5 @@
 {
-  "generatedAt": "2026-07-27T15:46:17.402Z",
+  "generatedAt": "2026-07-28T18:20:27.743Z",
   "stats": {
     "candidateCount": 443,
     "dedupedRuleCount": 432,
@@ -7,7 +7,7 @@
     "aliasRuleCount": 4,
     "masterRuleCount": 428,
     "emittedMasterRuleCount": 428,
-    "estimatedAllRulesTokens": 18357
+    "estimatedAllRulesTokens": 18405
   },
   "sources": [
     {
@@ -400,7 +400,7 @@
       "title": "Governance Steering Pack",
       "description": "Load for roadmap and edition-scope checks.",
       "ruleCount": 151,
-      "estimatedTokens": 8094,
+      "estimatedTokens": 8142,
       "domains": [
         "governance"
       ],

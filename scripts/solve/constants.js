@@ -377,6 +377,17 @@ export const GUARD_QUORUM = 2;
 // is still nudged to take the reflection turn.
 export const REFLECTION_INTERVAL = 5;
 
+// Rejection-streak reflection trigger: distinct rejected landing candidates on one frontier
+// (no intervening approval) that force a micro reflection BEFORE the next patch round. Set
+// one below REJECTION_ESCALATION_LIMIT so the think turn lands before the hard gate: the
+// measured pattern (2026-07-28, measured-cell-admission) is that the reflection reframing
+// after the second rejection — "these are fidelity/bar defects, not theory contradictions" —
+// immediately preceded the approval, while quests without it burned further rounds. The
+// trigger re-fires only when the streak has GROWN since the last reflection (a persistent
+// streak of 2 does not tax every subsequent attempt with a reflection turn). Set to 0 to
+// disable.
+export const REJECTION_REFLECTION_STREAK = 2;
+
 // Altitude (framing) reflection cadence: a deliberately COARSE beat for the higher-altitude
 // step-back that questions the FRAME itself — is this Quest at the right altitude, are the
 // formal models / harness pulling their weight, is the code arranged to be reasoned about,

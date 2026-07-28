@@ -32,10 +32,15 @@
 
 import {
   EVENT_ATTEMPT,
+  EVENT_FINDING,
   EVENT_REFLECTION,
   REFLECTION_INTERVAL,
   ALTITUDE_REFLECTION_INTERVAL,
+  REJECTION_REFLECTION_STREAK,
 } from './constants.js';
+
+const VERIFIER_REJECTION_KIND = 'verifier-rejection';
+const TRIGGER_REJECTION_STREAK = 'rejection-streak';
 
 // Reflection kinds, recorded on each EVENT_REFLECTION so the altitude cadence can count
 // attempts since the last *altitude* reflection independently of micro reflections.
@@ -95,13 +100,35 @@ export function attemptsSinceAltitudeReflection(log) {
   return count;
 }
 
-// Decide whether a MICRO step-back reflection is due. `triggers.scope` forces one
-// immediately; otherwise the cadence (REFLECTION_INTERVAL attempts since the last
-// reflection of any kind) applies. Oscillation is handled by altitudeReflectionDue, which
-// the loop checks first. Returns the trigger label that fired, or null when not due.
+// True when a rejection streak should force a micro reflection: the frontier has
+// accumulated `distinctRejections` distinct rejected candidates (the caller derives that
+// from candidateRejectionFingerprintsSinceApproval) AND at least one verifier-rejection
+// finding was recorded after the last reflection. The second condition is the re-fire
+// guard: the streak persists until an approval clears it, so without it a standing streak
+// would tax every subsequent attempt with a reflection turn instead of firing once per
+// new rejection.
+export function rejectionStreakDue(log, distinctRejections) {
+  if (REJECTION_REFLECTION_STREAK <= 0) return false;
+  if (!(distinctRejections >= REJECTION_REFLECTION_STREAK)) return false;
+  const since = lastReflectionIndex(log);
+  for (let i = since + 1; i < log.length; i += 1) {
+    if (log[i].type === EVENT_FINDING &&
+      log[i].kind === VERIFIER_REJECTION_KIND) {
+      return true;
+    }
+  }
+  return false;
+}
+
+// Decide whether a MICRO step-back reflection is due. `triggers.scope` and
+// `triggers.rejectionStreak` force one immediately; otherwise the cadence
+// (REFLECTION_INTERVAL attempts since the last reflection of any kind) applies.
+// Oscillation is handled by altitudeReflectionDue, which the loop checks first. Returns
+// the trigger label that fired, or null when not due.
 export function reflectionDue(log, triggers = {}) {
   if (reflectionRecordedThisCycle(log)) return null;
   if (triggers.scope) return 'scope-pressure';
+  if (triggers.rejectionStreak) return TRIGGER_REJECTION_STREAK;
   if (REFLECTION_INTERVAL > 0 && attemptsSinceReflection(log) >= REFLECTION_INTERVAL) {
     return 'cadence';
   }
@@ -135,7 +162,12 @@ export function reflectionPrompt(quest, health, trigger) {
     'invariant families are oscillating (a coupling, not a one-off)' :
     trigger === 'scope-pressure' ?
       'change scope has run away past its bound' :
-      `${REFLECTION_INTERVAL} attempts have passed without a step-back`;
+      trigger === TRIGGER_REJECTION_STREAK ?
+        'independent verification has rejected ' +
+        `${REJECTION_REFLECTION_STREAK}+ distinct candidates since the last ` +
+        'approval — repeated rejections are usually fidelity, bar, or framing ' +
+        'defects, and another broad patch round is usually the wrong next move' :
+        `${REFLECTION_INTERVAL} attempts have passed without a step-back`;
   return `Step back and reflect on quest ${quest.id} (${frontier}): ${reason}. ` +
     'Read the whole attempt/finding/theory history and write a short, falsifiable ' +
     'reframing: is the selected theory still the best explanation of the evidence, is ' +

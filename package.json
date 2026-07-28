@@ -140,12 +140,14 @@
     "test-output:prune:dry": "node scripts/prune-test-output.js",
     "test-output:prune": "node scripts/prune-test-output.js --apply",
     "audit:guideline:literals": "node scripts/check-guideline-literals.js",
+    "audit:guideline:ambient-intrinsics": "node scripts/check-guideline-ambient-intrinsics.js",
     "audit:guideline:decision-boundaries": "node scripts/check-guideline-decision-boundaries.js",
     "audit:guideline:boundary-mode-contracts": "node scripts/check-guideline-boundary-mode-contracts.js",
     "audit:guideline:hot-path-diagnostics": "node scripts/check-guideline-hot-path-diagnostics.js",
     "audit:voter-readiness-owner": "node scripts/check-voter-readiness-single-owner.js",
     "audit:style-terminal-vocabulary": "node scripts/check-style-terminal-vocabulary.js",
-    "audit:attempt-preflight": "npm run audit:file-size && npm run audit:style-terminal-vocabulary && npm run audit:step-coverage-owner",
+    "audit:attempt-preflight": "npm run audit:file-size && npm run audit:style-terminal-vocabulary && npm run audit:step-coverage-owner && npm run test:duplication",
+    "audit:static-gate": "node scripts/solve/static-gate.js",
     "audit:step-coverage-owner": "node scripts/check-step-coverage-owner.js",
     "audit:hold-engagement-owner": "node scripts/check-hold-engagement-owner.js",
     "audit:cure-typing-owner": "node scripts/check-cure-typing-owner.js",
@@ -217,7 +219,7 @@
     "gate:preflight": "node scripts/gate-preflight.js",
     "audit:guideline:silent-catch": "node scripts/check-guideline-silent-catch.js",
     "audit:guideline:deferred-outcomes": "node scripts/check-guideline-deferred-outcomes.js",
-    "audit:guidelines": "npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:style-terminal-vocabulary"
+    "audit:guidelines": "npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary"
   },
   "keywords": [
     "distributed",

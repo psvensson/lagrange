@@ -5,6 +5,7 @@ import {fileURLToPath} from 'node:url';
 import {
   loadTemplateCategories,
   suggestVerificationTemplates,
+  templateCategoryConsistencyProblems,
 } from '../../scripts/solve/verification-template-suggest.js';
 
 // The suggest heuristic reads the committed templates' front-matter, so the
@@ -97,6 +98,13 @@ tap.test('verification-template-suggest', async (t) => {
   t.test('a keyword-free diff yields no suggestions', (t) => {
     t.same(suggestVerificationTemplates(REPO_ROOT,
       diffFor('src/util/format.js', 'const label = 2;')), []);
+    t.end();
+  });
+
+  t.test('template catalog and keyword rules agree', (t) => {
+    t.same(templateCategoryConsistencyProblems(REPO_ROOT), [],
+      'every front-matter category has a keyword rule, every keyword rule ' +
+      'names a template, and no category is claimed twice');
     t.end();
   });
 });
