@@ -554,6 +554,7 @@ async function main() {
     fullMatrixComplete: true,
     outcomeNeutral: true,
     comparativeClaimEligible: false,
+    claimDisposition: inspection.claimDisposition,
     measuringCellCount: inspection.measuringCellCount,
     nonMeasuringCellCount: inspection.nonMeasuringCellCount,
     reasonCodesByControl: attempts.map((attempt) => ({

@@ -40,10 +40,12 @@ import {
   assertComparativeNegativeControlSource,
 } from './comparative-efficiency-negative-controls-admission.js';
 import {
+  COMPARATIVE_NEGATIVE_CONTROL_CLAIM_DISPOSITION,
   COMPARATIVE_NEGATIVE_CONTROL_IDS,
   COMPARATIVE_NEGATIVE_CONTROL_REASON,
 } from './comparative-efficiency-negative-controls-constants.js';
 export {
+  COMPARATIVE_NEGATIVE_CONTROL_CLAIM_DISPOSITION,
   COMPARATIVE_NEGATIVE_CONTROL_IDS,
   COMPARATIVE_NEGATIVE_CONTROL_REASON,
   COMPARATIVE_NEGATIVE_CONTROL_SCENARIO,
@@ -576,6 +578,7 @@ export function inspectComparativeNegativeControlEvidence(receipt) {
       reason: localText.VALID,
       complete: true,
       claimEligible: false,
+      claimDisposition: COMPARATIVE_NEGATIVE_CONTROL_CLAIM_DISPOSITION,
       measuringCellCount: 0,
       nonMeasuringCellCount: COMPARATIVE_NEGATIVE_CONTROL_IDS.length,
       matrixId: matrix.payload.matrixId,
@@ -588,6 +591,7 @@ export function inspectComparativeNegativeControlEvidence(receipt) {
       reason: safeErrorMessage(error),
       complete: false,
       claimEligible: false,
+      claimDisposition: null,
       measuringCellCount: 0,
       nonMeasuringCellCount: 0,
       matrixId: null,

@@ -2,6 +2,8 @@ export const COMPARATIVE_NEGATIVE_CONTROL_SCENARIO =
   'comparative-efficiency-negative-controls';
 export const COMPARATIVE_NEGATIVE_CONTROL_REASON =
   'candidate_architecture_not_engaged';
+export const COMPARATIVE_NEGATIVE_CONTROL_CLAIM_DISPOSITION =
+  'non_measuring_candidate_not_engaged';
 export const COMPARATIVE_NEGATIVE_CONTROL_IDS = Object.freeze([
   'small-simple',
   'uniform-access',
