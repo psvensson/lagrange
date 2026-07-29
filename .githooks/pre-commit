@@ -6,9 +6,13 @@ npm run -s audit:file-size
 npm run -s audit:guideline:hot-path-diagnostics
 node scripts/check-staged-constant-names.js
 # Lint only the staged JS files (--cache keeps repeat runs inside the hook
-# budget); the whole-repo lint gate lives in test:static.
+# budget); the whole-repo lint gate lives in test:static. The cache lives in
+# this worktree's private git dir, NOT node_modules/.cache: node_modules is
+# commonly symlinked into agent worktrees, so a cache there is shared and
+# thrashed by concurrent sessions.
+ESLINT_CACHE_DIR="$(git rev-parse --git-path eslint-cache)/"
 STAGED_JS="$(git diff --cached --name-only --diff-filter=ACMR -- 'src/*.js' 'test/*.js' 'scripts/*.js' || true)"
 if [ -n "${STAGED_JS}" ]; then
   # shellcheck disable=SC2086
-  npx eslint --cache --cache-location node_modules/.cache/eslint/ ${STAGED_JS}
+  npx eslint --cache --cache-location "${ESLINT_CACHE_DIR}" ${STAGED_JS}
 fi
