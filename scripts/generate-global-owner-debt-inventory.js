@@ -467,9 +467,23 @@ function validateInventory(inventory) {
   return inventory;
 }
 
+// The metric checkers exit 1 when their RATCHET is exceeded while still
+// writing a complete, fresh report — and elevated debt is exactly what this
+// inventory exists to measure, so a red ratchet must not make the debt
+// unmeasurable (measured 2026-07-29: three landed clone groups made every
+// downstream refresh crash, cascading into the CI owner-debt gate). Only a
+// checker CRASH (any other nonzero exit) aborts the refresh; ratchet
+// breaches are surfaced and recorded, never fatal here — the pre-push hook
+// remains the ratchet's enforcement point.
 function refreshReports(root) {
   for (const args of REFRESH_COMMANDS) {
     const result = spawnSync(process.execPath, args, {cwd: root, stdio: 'inherit'});
+    if (result.status === 1) {
+      process.stderr.write(
+        `owner-debt refresh: ratchet exceeded in node ${args.join(OWNER_DEBT.space)}; ` +
+        'report refreshed, elevated debt will be recorded\n');
+      continue;
+    }
     if (result.status !== 0) {
       throw new Error(`report refresh failed: node ${args.join(OWNER_DEBT.space)}`);
     }
