@@ -4,6 +4,7 @@ import {
   hasExactOwnDataKeys,
   isDenseDataArray,
   isNonNegativeSafeInteger,
+  isNonNegativeSafeNumber,
   isPlainDataRecord,
   isSha256Digest,
 } from './benchmark-semantic-integrity.js';
@@ -17,6 +18,8 @@ import {
   BENCHMARK_CAPACITY_STOP_DECISION,
 } from './benchmark-capacity-protocol-constants.js';
 import {
+  benchmarkCapacitySamplingHasWarmup,
+  getBenchmarkCapacitySamplingWindow,
   inspectBenchmarkCapacityPreregistration,
 } from './benchmark-capacity-preregistration.js';
 import {
@@ -84,6 +87,75 @@ const mapSizeGetter =
   Object.getOwnPropertyDescriptor(Map.prototype, 'size').get;
 const reflectApply = Reflect.apply;
 const setHas = Function.call.bind(Set.prototype.has);
+const PROTOCOL_OPTION_KEYS = [
+  'preregistration',
+  'resetRunState',
+  'executeRun',
+];
+const RESOURCE_COMPLETION_KEYS = [
+  'windowReceiptDigest',
+  'resourceWindowDigest',
+];
+const REPORT_BLOCK_COUNT_KEY = 'completedBlocks';
+const REPORT_FAILURE_KEY = 'executionFailure';
+const REPORT_RESET_RECEIPTS_KEY = 'cacheResetReceipts';
+const localText = Object.freeze({
+  BLOCKED_ORDER_DENSE: 'blocked pair order must be dense',
+  CACHE_RESET_IGNORED_ABORT: 'cache reset hook ignored bounded abort',
+  CACHE_RESET_MISMATCH:
+    'cache reset receipt does not match matrix cell',
+  CACHE_RESET_TIMEOUT: 'cache reset hook exceeded sealed timeout',
+  EXECUTION_FUNCTIONS:
+    'executeRun and resetRunState functions required',
+  EXECUTION_RESULT:
+    'executeRun must return exact samples and window receipts',
+  NO_BLOCKS: 'no capacity blocks completed',
+  NOT_CONFIGURED: 'not_configured',
+  OPTION_SHAPE: 'exact protocol options required',
+  REPORT_FIELDS_INVALID: 'report_fields_invalid',
+  REPORT_IDENTITY_MISMATCH: 'report_identity_mismatch',
+  REPORT_INTEGRITY_MISMATCH: 'report_integrity_mismatch',
+  REPORT_PREREGISTRATION_INVALID: 'preregistration_invalid',
+  REPORT_SHAPE_INVALID: 'report_shape_invalid',
+  REPORT_VALID: 'valid',
+  REPORT_VALID_PARTIAL: 'valid_non_measuring_partial',
+  REPORT_PARTIAL_INTEGRITY_MISMATCH:
+    'partial_report_integrity_mismatch',
+  RESOURCE_COMPLETION_DUPLICATED:
+    'resource completion entry is invalid or duplicated',
+  RESOURCE_COMPLETION_EXTRA:
+    'resource completion includes an extra window',
+  RESOURCE_COMPLETION_MISSING:
+    'resource completion is missing a report window',
+  RESOURCE_COMPLETION_RESOLVER:
+    'resource completion sample resolver failed',
+  RESOURCE_COMPLETION_SHAPE:
+    'resource completions must cover every window exactly',
+  RESOURCE_SAMPLE_DUPLICATED:
+    'resource window sample digest is not unique',
+  RESOURCE_WINDOW_ALREADY_COMPLETE:
+    'resource window is already complete',
+  RUN_SAMPLE_MISMATCH:
+    'run sample does not match preregistered matrix cell',
+  RESET_COMPLETED: 'completed',
+  RESET_FAILED: 'failed',
+  SIDE_CONTRACT_MISSING: 'side semantic contract missing',
+  STAGE_CACHE_RESET: 'cache_reset',
+  STAGE_EXECUTE_RUN: 'execute_run',
+  TERMINAL_EFFECT_INCOMPLETE: 'paired_effect_incomplete',
+  TERMINAL_INVALID_REASON: 'invalid_measurement_reason',
+  TERMINAL_MEASUREMENT_INCOMPLETE: 'measurement_incomplete',
+  TERMINAL_VALID: 'valid_terminal_measurement',
+  TERMINAL_ZERO_CAPACITY: 'zero_or_invalid_capacity',
+  WARMUP_ZERO: 'zero warmup must return not_configured',
+  WINDOW_RECEIPT_MISMATCH:
+    'window receipt does not match matrix cell',
+});
+const FAILURE_STAGE_SET = new SetConstructor([
+  localText.STAGE_CACHE_RESET,
+  localText.STAGE_EXECUTE_RUN,
+]);
+const NO_FAILURE = Object.freeze({});
 
 function fail(message) {
   throw new TypeError(`benchmark capacity protocol failed: ${message}`);
@@ -98,12 +170,24 @@ function reportBody(report) {
   return body;
 }
 
+function reportBlockCount(report) {
+  return report[REPORT_BLOCK_COUNT_KEY];
+}
+
+function reportFailure(report) {
+  return report[REPORT_FAILURE_KEY];
+}
+
+function reportResetReceipts(report) {
+  return report[REPORT_RESET_RECEIPTS_KEY];
+}
+
 function semanticDialectForSide(sealed, sideId) {
   for (let index = 0; index < sealed.sideSemanticContracts.length; index += 1) {
     const contract = sealed.sideSemanticContracts[index];
     if (contract.sideId === sideId) return contract.dialect;
   }
-  fail('side semantic contract missing');
+  fail(localText.SIDE_CONTRACT_MISSING);
 }
 
 function assertSampleMatches(sample, sealed, expected) {
@@ -124,7 +208,7 @@ function assertSampleMatches(sample, sealed, expected) {
     sample.semanticDialect ===
       semanticDialectForSide(sealed, expected.sideId);
   if (!matches) {
-    fail('run sample does not match preregistered matrix cell');
+    fail(localText.RUN_SAMPLE_MISMATCH);
   }
 }
 
@@ -140,7 +224,7 @@ function assertWindowMatches(receipt, sample, context, sealed) {
     receipt.offeredLoad !== context.offeredLoadPerSecond ||
     receipt.capacitySampleDigest !== sample.sampleDigest
   ) {
-    fail('window receipt does not match matrix cell');
+    fail(localText.WINDOW_RECEIPT_MISMATCH);
   }
 }
 
@@ -149,20 +233,24 @@ function assertExecutionResult(result, sealed, context) {
     !isPlainDataRecord(result) ||
     !hasExactOwnDataKeys(result, EXECUTION_RESULT_KEYS)
   ) {
-    fail('executeRun must return exact samples and window receipts');
+    fail(localText.EXECUTION_RESULT);
   }
-  if (sealed.sampling.warmupMs === 0) {
+  const samplingWindow = getBenchmarkCapacitySamplingWindow(
+    sealed,
+    context.offeredLoadPerSecond,
+  );
+  if (samplingWindow.warmupMs === 0) {
     if (
-      result.warmup !== 'not_configured' ||
-      result.warmupWindowReceipt !== 'not_configured'
+      result.warmup !== localText.NOT_CONFIGURED ||
+      result.warmupWindowReceipt !== localText.NOT_CONFIGURED
     ) {
-      fail('zero warmup must return not_configured');
+      fail(localText.WARMUP_ZERO);
     }
   } else {
     assertSampleMatches(result.warmup, sealed, {
       ...context,
       phase: BENCHMARK_CAPACITY_PHASE.WARMUP,
-      windowDurationMs: sealed.sampling.warmupMs,
+      windowDurationMs: samplingWindow.warmupMs,
     });
     assertWindowMatches(
       result.warmupWindowReceipt,
@@ -174,7 +262,7 @@ function assertExecutionResult(result, sealed, context) {
   assertSampleMatches(result.measured, sealed, {
     ...context,
     phase: BENCHMARK_CAPACITY_PHASE.MEASURED,
-    windowDurationMs: sealed.sampling.measuredMs,
+    windowDurationMs: samplingWindow.measuredMs,
   });
   assertWindowMatches(
     result.measuredWindowReceipt,
@@ -195,7 +283,7 @@ function assertResetReceipt(receipt, sealed, context) {
     receipt.sideId !== context.sideId ||
     receipt.offeredLoad !== context.offeredLoadPerSecond
   ) {
-    fail('cache reset receipt does not match matrix cell');
+    fail(localText.CACHE_RESET_MISMATCH);
   }
 }
 
@@ -206,8 +294,8 @@ async function runBoundedReset(resetRunState, context, timeoutMs) {
     resetRunState({...context, signal: controller.signal}));
   const completed = promiseThen(
     invoked,
-    (value) => ({status: 'completed', value}),
-    (error) => ({status: 'failed', error}),
+    (value) => ({status: localText.RESET_COMPLETED, value}),
+    (error) => ({status: localText.RESET_FAILED, error}),
   );
   const timeout = new Promise((resolve) => {
     timerId = setTimeout(
@@ -217,8 +305,8 @@ async function runBoundedReset(resetRunState, context, timeoutMs) {
   });
   const result = await promiseRace([completed, timeout]);
   clearTimeout(timerId);
-  if (result.status === 'completed') return result.value;
-  if (result.status === 'failed') throw result.error;
+  if (result.status === localText.RESET_COMPLETED) return result.value;
+  if (result.status === localText.RESET_FAILED) throw result.error;
   controller.abort();
   let drainTimerId;
   const drained = new Promise((resolve) => {
@@ -230,13 +318,13 @@ async function runBoundedReset(resetRunState, context, timeoutMs) {
   ]);
   clearTimeout(drainTimerId);
   fail(settled ?
-    'cache reset hook exceeded sealed timeout' :
-    'cache reset hook ignored bounded abort');
+    localText.CACHE_RESET_TIMEOUT :
+    localText.CACHE_RESET_IGNORED_ABORT);
 }
 
 function copyOrder(order) {
   if (!isDenseDataArray(order)) {
-    fail('blocked pair order must be dense');
+    fail(localText.BLOCKED_ORDER_DENSE);
   }
   const copied = [];
   for (let index = 0; index < order.length; index += 1) {
@@ -247,13 +335,13 @@ function copyOrder(order) {
 
 function buildReport({
   sealed,
-  completedBlocks,
+  blockCount,
   ordersUsed,
   warmupSamples,
   measuredSamples,
   windowReceipts,
-  cacheResetReceipts,
-  executionFailure,
+  resetReceipts,
+  failureRecord,
   summary,
 }) {
   const warmupSampleDigests = [];
@@ -276,15 +364,15 @@ function buildReport({
     preregistrationDigest: sealed.manifestDigest,
     randomizedOrderDigest: sealed.randomizedOrderDigest,
     measurementState: summary.measurementState,
-    completedBlocks,
+    [REPORT_BLOCK_COUNT_KEY]: blockCount,
     blockedPairOrdersUsed: ordersUsed,
     warmupSamples,
     rawSamples: measuredSamples,
     warmupSampleDigests,
     rawSampleDigests,
     windowReceipts,
-    cacheResetReceipts,
-    executionFailure,
+    [REPORT_RESET_RECEIPTS_KEY]: resetReceipts,
+    [REPORT_FAILURE_KEY]: failureRecord,
     summary,
   };
   return {
@@ -293,7 +381,7 @@ function buildReport({
   };
 }
 
-function buildExecutionFailure(stage, context, error) {
+function buildFailureRecord(stage, context, error) {
   const errorCode = typeof error?.code === 'string' ?
     stringSlice(error.code, 0, BENCHMARK_CAPACITY_MAX_TEXT_CODE_UNITS) :
     null;
@@ -317,7 +405,7 @@ function buildExecutionFailure(stage, context, error) {
 
 function buildIncompleteSummary(
   sealed,
-  completedBlocks,
+  blockCount,
   observedRunSampleCount,
   failure,
 ) {
@@ -327,7 +415,7 @@ function buildIncompleteSummary(
     sealed.offeredLoadPerSecond.length;
   const summary = {
     measurementState: BENCHMARK_CAPACITY_MEASUREMENT_STATE.NON_MEASURING,
-    completedBlocks,
+    completedBlocks: blockCount,
     expectedRunSampleCount,
     observedRunSampleCount,
     sampleSufficiency: {
@@ -353,9 +441,9 @@ function buildIncompleteSummary(
       decision: BENCHMARK_CAPACITY_STOP_DECISION.NON_MEASURING,
       shouldStop: true,
       minimumReached:
-        completedBlocks >= sealed.repetitions.minimum,
+        blockCount >= sealed.repetitions.minimum,
       maximumReached:
-        completedBlocks >= sealed.repetitions.maximum,
+        blockCount >= sealed.repetitions.maximum,
       relativeCiWidth: Number.MAX_SAFE_INTEGER,
       targetRelativeCiWidth: sealed.statistics.targetRelativeCiWidth,
     },
@@ -377,46 +465,45 @@ function buildIncompleteSummary(
 
 function buildPartialReport({
   sealed,
-  completedBlocks,
+  blockCount,
   ordersUsed,
   warmupSamples,
   measuredSamples,
   windowReceipts,
-  cacheResetReceipts,
+  resetReceipts,
   stage,
   context,
   error,
 }) {
-  const executionFailure = buildExecutionFailure(stage, context, error);
+  const failureRecord = buildFailureRecord(stage, context, error);
   return buildReport({
     sealed,
-    completedBlocks,
+    blockCount,
     ordersUsed,
     warmupSamples,
     measuredSamples,
     windowReceipts,
-    cacheResetReceipts,
-    executionFailure,
+    resetReceipts,
+    failureRecord,
     summary: buildIncompleteSummary(
       sealed,
-      completedBlocks,
+      blockCount,
       measuredSamples.length,
-      executionFailure,
+      failureRecord,
     ),
   });
 }
 
-async function executeProtocolCell({
+async function resetProtocolCell({
   preregistration,
   resetRunState,
-  executeRun,
   context,
-  completedBlocks,
+  blockCount,
   ordersUsed,
   warmupSamples,
   measuredSamples,
   windowReceipts,
-  cacheResetReceipts,
+  resetReceipts,
 }) {
   let resetReceipt;
   try {
@@ -429,37 +516,51 @@ async function executeProtocolCell({
   } catch (error) {
     return buildPartialReport({
       sealed: preregistration,
-      completedBlocks,
+      blockCount,
       ordersUsed,
       warmupSamples,
       measuredSamples,
       windowReceipts,
-      cacheResetReceipts,
-      stage: 'cache_reset',
+      resetReceipts,
+      stage: localText.STAGE_CACHE_RESET,
       context,
       error,
     });
   }
-  appendOwnArrayValue(cacheResetReceipts, resetReceipt);
+  appendOwnArrayValue(resetReceipts, resetReceipt);
+  return null;
+}
+
+async function runProtocolCell({
+  preregistration,
+  runOwner,
+  context,
+  blockCount,
+  ordersUsed,
+  warmupSamples,
+  measuredSamples,
+  windowReceipts,
+  resetReceipts,
+}) {
   let result;
   try {
-    result = await executeRun(context);
+    result = await runOwner(context);
     assertExecutionResult(result, preregistration, context);
   } catch (error) {
     return buildPartialReport({
       sealed: preregistration,
-      completedBlocks,
+      blockCount,
       ordersUsed,
       warmupSamples,
       measuredSamples,
       windowReceipts,
-      cacheResetReceipts,
-      stage: 'execute_run',
+      resetReceipts,
+      stage: localText.STAGE_EXECUTE_RUN,
       context,
       error,
     });
   }
-  if (result.warmup !== 'not_configured') {
+  if (result.warmup !== localText.NOT_CONFIGURED) {
     appendOwnArrayValue(warmupSamples, result.warmup);
     appendOwnArrayValue(windowReceipts, result.warmupWindowReceipt);
   }
@@ -468,37 +569,43 @@ async function executeProtocolCell({
   return null;
 }
 
+async function processProtocolCell(state) {
+  const resetFailure = await resetProtocolCell(state);
+  if (resetFailure !== null) return resetFailure;
+  return runProtocolCell(state);
+}
+
 export async function runBenchmarkCapacityProtocol(options) {
   if (
     !isPlainDataRecord(options) ||
     !hasExactOwnDataKeys(
       options,
-      ['preregistration', 'resetRunState', 'executeRun'],
+      PROTOCOL_OPTION_KEYS,
     )
   ) {
-    fail('exact protocol options required');
+    fail(localText.OPTION_SHAPE);
   }
   const preregistration = options.preregistration;
   const resetRunState = options.resetRunState;
-  const executeRun = options.executeRun;
+  const runOwner = options.executeRun;
   const inspection =
     inspectBenchmarkCapacityPreregistration(preregistration);
   if (!inspection.valid) {
     fail(`preregistration integrity: ${inspection.reason}`);
   }
   if (
-    typeof executeRun !== 'function' ||
+    typeof runOwner !== 'function' ||
     typeof resetRunState !== 'function'
   ) {
-    fail('executeRun and resetRunState functions required');
+    fail(localText.EXECUTION_FUNCTIONS);
   }
   const measuredSamples = [];
   const warmupSamples = [];
   const windowReceipts = [];
-  const cacheResetReceipts = [];
+  const resetReceipts = [];
   const ordersUsed = [];
   let summary;
-  let completedBlocks = 0;
+  let blockCount = 0;
   for (let blockIndex = 0;
     blockIndex < preregistration.repetitions.maximum;
     blockIndex += 1) {
@@ -518,40 +625,40 @@ export async function runBenchmarkCapacityProtocol(options) {
           blockedOrderIndex: orderIndex,
           offeredLoadPerSecond,
         };
-        const partialReport = await executeProtocolCell({
+        const partialReport = await processProtocolCell({
           preregistration,
           resetRunState,
-          executeRun,
+          runOwner,
           context,
-          completedBlocks,
+          blockCount,
           ordersUsed,
           warmupSamples,
           measuredSamples,
           windowReceipts,
-          cacheResetReceipts,
+          resetReceipts,
         });
         if (partialReport !== null) return partialReport;
       }
     }
     appendOwnArrayValue(ordersUsed, copyOrder(order));
-    completedBlocks = blockIndex + 1;
+    blockCount = blockIndex + 1;
     summary = summarizeBenchmarkCapacityMatrix(
       measuredSamples,
       preregistration,
-      completedBlocks,
+      blockCount,
     );
     if (summary.stoppingDecision.shouldStop) break;
   }
-  if (!summary) fail('no capacity blocks completed');
+  if (!summary) fail(localText.NO_BLOCKS);
   return buildReport({
     sealed: preregistration,
-    completedBlocks,
+    blockCount,
     ordersUsed,
     warmupSamples,
     measuredSamples,
     windowReceipts,
-    cacheResetReceipts,
-    executionFailure: null,
+    resetReceipts,
+    failureRecord: null,
     summary,
   });
 }
@@ -695,20 +802,23 @@ function sequenceCellMatches({
   });
 }
 
-function executionSequenceMatches(report, sealed) {
+function sequenceMatches(report, sealed) {
   let sampleIndex = 0;
   let windowIndex = 0;
-  for (let blockIndex = 0; blockIndex < report.completedBlocks; blockIndex += 1) {
+  const blockCount = reportBlockCount(report);
+  const resetReceipts = reportResetReceipts(report);
+  for (let blockIndex = 0; blockIndex < blockCount; blockIndex += 1) {
     const order = sealed.blockedPairOrders[blockIndex];
     for (let loadIndex = 0;
       loadIndex < sealed.offeredLoadPerSecond.length;
       loadIndex += 1) {
       const offeredLoad = sealed.offeredLoadPerSecond[loadIndex];
+      const samplingWindow = sealed.sampling.windows[loadIndex];
       for (let orderIndex = 0; orderIndex < order.length; orderIndex += 1) {
         const sideId = order[orderIndex];
         const measured = report.rawSamples[sampleIndex];
-        const reset = report.cacheResetReceipts[sampleIndex];
-        const warmup = sealed.sampling.warmupMs === 0 ?
+        const reset = resetReceipts[sampleIndex];
+        const warmup = samplingWindow.warmupMs === 0 ?
           null :
           report.warmupSamples[sampleIndex];
         const warmupReceipt = warmup === null ?
@@ -754,7 +864,7 @@ function failureErrorCodeIsValid(errorCode) {
 function failureCoordinatesAreValid(failure) {
   return isNonNegativeSafeInteger(failure.blockIndex) &&
     isNonNegativeSafeInteger(failure.blockedOrderIndex) &&
-    isNonNegativeSafeInteger(failure.offeredLoadPerSecond) &&
+    isNonNegativeSafeNumber(failure.offeredLoadPerSecond) &&
     failure.offeredLoadPerSecond > 0;
 }
 
@@ -770,10 +880,7 @@ function failureDigestIsValid(failure) {
 
 function failureIsValid(failure) {
   return hasExactOwnDataKeys(failure, FAILURE_KEYS) &&
-    (
-      failure.stage === 'cache_reset' ||
-      failure.stage === 'execute_run'
-    ) &&
+    setHas(FAILURE_STAGE_SET, failure.stage) &&
     failureTextFieldsAreValid(failure) &&
     failureErrorCodeIsValid(failure.errorCode) &&
     failureCoordinatesAreValid(failure) &&
@@ -836,7 +943,11 @@ function completedPartialCellMatches(report, sealed, cellIndex, windowIndex) {
   const coordinate = expectedCoordinateForCell(sealed, cellIndex);
   const measured = report.rawSamples[cellIndex];
   const reset = report.cacheResetReceipts[cellIndex];
-  const warmup = sealed.sampling.warmupMs === 0 ?
+  const samplingWindow = getBenchmarkCapacitySamplingWindow(
+    sealed,
+    coordinate.offeredLoad,
+  );
+  const warmup = samplingWindow.warmupMs === 0 ?
     null :
     report.warmupSamples[cellIndex];
   const warmupReceipt = warmup === null ?
@@ -869,20 +980,35 @@ function completedPartialCellMatches(report, sealed, cellIndex, windowIndex) {
     ).valid;
 }
 
+function requiredResetReceiptMatches(report, sealed, failureIndex) {
+  const reset = reportResetReceipts(report)[failureIndex];
+  const coordinate = expectedCoordinateForCell(sealed, failureIndex);
+  return inspectBenchmarkCapacityCacheResetReceipt(reset, sealed).valid &&
+    recordFieldsMatch(reset, {
+      blockIndex: coordinate.blockIndex,
+      blockedOrderIndex: coordinate.orderIndex,
+      sideId: coordinate.sideId,
+      offeredLoad: coordinate.offeredLoad,
+    });
+}
+
 function partialSequenceMatches(report, sealed) {
-  const failureIndex = failureCellIndex(report.executionFailure, sealed);
-  const hasWarmup = sealed.sampling.warmupMs > 0;
+  const failure = reportFailure(report);
+  const resetReceipts = reportResetReceipts(report);
+  const blockCount = reportBlockCount(report);
+  const failureIndex = failureCellIndex(failure, sealed);
+  const hasWarmup = benchmarkCapacitySamplingHasWarmup(sealed);
   const windowsPerCell = hasWarmup ? 2 : 1;
   const expectedResetCount =
     failureIndex +
-    (report.executionFailure.stage === 'execute_run' ? 1 : 0);
+    (failure.stage === localText.STAGE_EXECUTE_RUN ? 1 : 0);
   if (!allChecksPass([
     failureIndex >= 0,
-    report.completedBlocks === report.executionFailure.blockIndex,
+    blockCount === failure.blockIndex,
     report.rawSamples.length === failureIndex,
     report.warmupSamples.length === (hasWarmup ? failureIndex : 0),
     report.windowReceipts.length === failureIndex * windowsPerCell,
-    report.cacheResetReceipts.length === expectedResetCount,
+    resetReceipts.length === expectedResetCount,
   ])) return false;
   for (let cellIndex = 0; cellIndex < failureIndex; cellIndex += 1) {
     if (!completedPartialCellMatches(
@@ -892,40 +1018,32 @@ function partialSequenceMatches(report, sealed) {
       cellIndex * windowsPerCell,
     )) return false;
   }
-  if (report.executionFailure.stage === 'execute_run') {
-    const reset = report.cacheResetReceipts[failureIndex];
-    const coordinate = expectedCoordinateForCell(sealed, failureIndex);
-    if (
-      !inspectBenchmarkCapacityCacheResetReceipt(reset, sealed).valid ||
-      !recordFieldsMatch(reset, {
-        blockIndex: coordinate.blockIndex,
-        blockedOrderIndex: coordinate.orderIndex,
-        sideId: coordinate.sideId,
-        offeredLoad: coordinate.offeredLoad,
-      })
-    ) return false;
+  if (failure.stage === localText.STAGE_EXECUTE_RUN) {
+    return requiredResetReceiptMatches(report, sealed, failureIndex);
   }
   return true;
 }
 
 function partialReportIsValid(report, sealed) {
-  if (!failureIsValid(report.executionFailure)) return false;
+  const failure = reportFailure(report);
+  const blockCount = reportBlockCount(report);
+  if (!failureIsValid(failure)) return false;
   const expectedSummary = buildIncompleteSummary(
     sealed,
-    report.completedBlocks,
+    blockCount,
     report.rawSamples.length,
-    report.executionFailure,
+    failure,
   );
   if (!allChecksPass([
-    isNonNegativeSafeInteger(report.completedBlocks),
-    report.completedBlocks < sealed.repetitions.maximum,
+    isNonNegativeSafeInteger(blockCount),
+    blockCount < sealed.repetitions.maximum,
     report.measurementState ===
       BENCHMARK_CAPACITY_MEASUREMENT_STATE.NON_MEASURING,
     report.summary.summaryDigest === expectedSummary.summaryDigest,
     digestBenchmarkSemanticData(report.summary) ===
       digestBenchmarkSemanticData(expectedSummary),
     isDenseDataArray(report.blockedPairOrdersUsed),
-    report.blockedPairOrdersUsed.length === report.completedBlocks,
+    report.blockedPairOrdersUsed.length === blockCount,
     orderPrefixMatches(report, sealed),
     sampleBodiesMatchDigests(
       report.rawSamples,
@@ -936,7 +1054,7 @@ function partialReportIsValid(report, sealed) {
       report.warmupSampleDigests,
     ),
     isDenseDataArray(report.windowReceipts),
-    isDenseDataArray(report.cacheResetReceipts),
+    isDenseDataArray(reportResetReceipts(report)),
     partialSequenceMatches(report, sealed),
   ])) return false;
   return isSha256Digest(report.reportDigest) &&
@@ -958,7 +1076,7 @@ function normalReportIsValid(report, preregistration) {
     report.completedBlocks *
     preregistration.sideIds.length *
     preregistration.offeredLoadPerSecond.length;
-  const warmupCount = preregistration.sampling.warmupMs === 0 ?
+  const warmupCount = !benchmarkCapacitySamplingHasWarmup(preregistration) ?
     0 :
     rawCount;
   const recomputedSummary = summarizeBenchmarkCapacityMatrix(
@@ -989,43 +1107,62 @@ function normalReportIsValid(report, preregistration) {
     ),
     receiptsMatchSamples(report, preregistration),
     resetReceiptsValid(report, preregistration),
-    executionSequenceMatches(report, preregistration),
+    sequenceMatches(report, preregistration),
     isSha256Digest(report.reportDigest),
     digestBenchmarkSemanticData(reportBody(report)) === report.reportDigest,
   ]);
+}
+
+function reportPrerequisiteFailure(report, preregistration) {
+  if (!hasExactOwnDataKeys(report, REPORT_KEYS)) {
+    return localText.REPORT_SHAPE_INVALID;
+  }
+  const preregistrationInspection =
+    inspectBenchmarkCapacityPreregistration(preregistration);
+  if (!preregistrationInspection.valid) {
+    return localText.REPORT_PREREGISTRATION_INVALID;
+  }
+  return NO_FAILURE;
+}
+
+function inspectReportMeasurement(report, preregistration) {
+  if (reportFailure(report) !== null) {
+    const valid = partialReportIsValid(report, preregistration);
+    return {
+      valid,
+      reason: valid ? localText.REPORT_VALID_PARTIAL :
+        localText.REPORT_PARTIAL_INTEGRITY_MISMATCH,
+    };
+  }
+  const consistent = normalReportIsValid(report, preregistration);
+  return {
+    valid: consistent,
+    reason: consistent ?
+      localText.REPORT_VALID :
+      localText.REPORT_INTEGRITY_MISMATCH,
+  };
+}
+
+function inspectReportIntegrity(report, preregistration) {
+  if (!reportIdentityMatches(report, preregistration)) {
+    return {valid: false, reason: localText.REPORT_IDENTITY_MISMATCH};
+  }
+  return inspectReportMeasurement(report, preregistration);
 }
 
 export function inspectBenchmarkCapacityProtocolReport(
   report,
   preregistration,
 ) {
-  if (!hasExactOwnDataKeys(report, REPORT_KEYS)) {
-    return {valid: false, reason: 'report_shape_invalid'};
-  }
-  const preregistrationInspection =
-    inspectBenchmarkCapacityPreregistration(preregistration);
-  if (!preregistrationInspection.valid) {
-    return {valid: false, reason: 'preregistration_invalid'};
+  const prerequisiteFailure =
+    reportPrerequisiteFailure(report, preregistration);
+  if (prerequisiteFailure !== NO_FAILURE) {
+    return {valid: false, reason: prerequisiteFailure};
   }
   try {
-    if (!reportIdentityMatches(report, preregistration)) {
-      return {valid: false, reason: 'report_identity_mismatch'};
-    }
-    if (report.executionFailure !== null) {
-      const valid = partialReportIsValid(report, preregistration);
-      return {
-        valid,
-        reason: valid ? 'valid_non_measuring_partial' :
-          'partial_report_integrity_mismatch',
-      };
-    }
-    const consistent = normalReportIsValid(report, preregistration);
-    return {
-      valid: consistent,
-      reason: consistent ? 'valid' : 'report_integrity_mismatch',
-    };
+    return inspectReportIntegrity(report, preregistration);
   } catch {
-    return {valid: false, reason: 'report_fields_invalid'};
+    return {valid: false, reason: localText.REPORT_FIELDS_INVALID};
   }
 }
 
@@ -1081,6 +1218,26 @@ function hasForbiddenMeasurementReason(summary) {
   return false;
 }
 
+function terminalMeasurementFailureReason(
+  report,
+  summary,
+  preregistration,
+) {
+  if (!terminalMeasurementIsComplete(report, summary)) {
+    return localText.TERMINAL_MEASUREMENT_INCOMPLETE;
+  }
+  if (!capacitiesArePositive(summary, preregistration)) {
+    return localText.TERMINAL_ZERO_CAPACITY;
+  }
+  if (!pairedEffectIsComplete(summary.pairedEffect, reportBlockCount(report))) {
+    return localText.TERMINAL_EFFECT_INCOMPLETE;
+  }
+  if (hasForbiddenMeasurementReason(summary)) {
+    return localText.TERMINAL_INVALID_REASON;
+  }
+  return NO_FAILURE;
+}
+
 export function inspectBenchmarkCapacityTerminalMeasurement(
   report,
   preregistration,
@@ -1093,20 +1250,12 @@ export function inspectBenchmarkCapacityTerminalMeasurement(
     return {valid: false, reason: `report:${inspection.reason}`};
   }
   const summary = report.summary;
-  if (!terminalMeasurementIsComplete(report, summary)) {
-    return {valid: false, reason: 'measurement_incomplete'};
-  }
-  if (!capacitiesArePositive(summary, preregistration)) {
-    return {valid: false, reason: 'zero_or_invalid_capacity'};
-  }
-  const effect = summary.pairedEffect;
-  if (!pairedEffectIsComplete(effect, report.completedBlocks)) {
-    return {valid: false, reason: 'paired_effect_incomplete'};
-  }
-  if (hasForbiddenMeasurementReason(summary)) {
-    return {valid: false, reason: 'invalid_measurement_reason'};
-  }
-  return {valid: true, reason: 'valid_terminal_measurement'};
+  const reason =
+    terminalMeasurementFailureReason(report, summary, preregistration);
+  return {
+    valid: reason === NO_FAILURE,
+    reason: reason === NO_FAILURE ? localText.TERMINAL_VALID : reason,
+  };
 }
 
 function sampleResolverForReport(report) {
@@ -1119,7 +1268,7 @@ function sampleResolverForReport(report) {
     for (let index = 0; index < collection.length; index += 1) {
       const sample = collection[index];
       if (mapHas(samples, sample.sampleDigest)) {
-        fail('resource window sample digest is not unique');
+        fail(localText.RESOURCE_SAMPLE_DUPLICATED);
       }
       mapSet(samples, sample.sampleDigest, sample);
     }
@@ -1132,7 +1281,7 @@ function buildResourceCompletionIndex(completions, expectedLength) {
     !isDenseDataArray(completions) ||
     completions.length !== expectedLength
   ) {
-    fail('resource completions must cover every window exactly');
+    fail(localText.RESOURCE_COMPLETION_SHAPE);
   }
   const completionByWindow = new MapConstructor();
   for (let index = 0; index < completions.length; index += 1) {
@@ -1140,13 +1289,13 @@ function buildResourceCompletionIndex(completions, expectedLength) {
     if (
       !hasExactOwnDataKeys(
         completion,
-        ['windowReceiptDigest', 'resourceWindowDigest'],
+        RESOURCE_COMPLETION_KEYS,
       ) ||
       !isSha256Digest(completion.windowReceiptDigest) ||
       !isSha256Digest(completion.resourceWindowDigest) ||
       mapHas(completionByWindow, completion.windowReceiptDigest)
     ) {
-      fail('resource completion entry is invalid or duplicated');
+      fail(localText.RESOURCE_COMPLETION_DUPLICATED);
     }
     mapSet(
       completionByWindow,
@@ -1167,14 +1316,14 @@ function completeResourceWindowReceipts(
   for (let index = 0; index < report.windowReceipts.length; index += 1) {
     const receipt = report.windowReceipts[index];
     if (receipt.resourceWindowDigest !== null) {
-      fail('resource window is already complete');
+      fail(localText.RESOURCE_WINDOW_ALREADY_COMPLETE);
     }
     if (!mapHas(completionByWindow, receipt.windowReceiptDigest)) {
-      fail('resource completion is missing a report window');
+      fail(localText.RESOURCE_COMPLETION_MISSING);
     }
     const sample = mapGet(samples, receipt.capacitySampleDigest);
     if (sample === undefined) {
-      fail('resource completion sample resolver failed');
+      fail(localText.RESOURCE_COMPLETION_RESOLVER);
     }
     appendOwnArrayValue(
       windowReceipts,
@@ -1188,7 +1337,7 @@ function completeResourceWindowReceipts(
     mapDelete(completionByWindow, receipt.windowReceiptDigest);
   }
   if (reflectApply(mapSizeGetter, completionByWindow, []) !== 0) {
-    fail('resource completion includes an extra window');
+    fail(localText.RESOURCE_COMPLETION_EXTRA);
   }
   return windowReceipts;
 }

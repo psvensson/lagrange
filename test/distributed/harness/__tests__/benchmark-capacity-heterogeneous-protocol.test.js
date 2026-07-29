@@ -134,8 +134,11 @@ test('heterogeneous protocol executes exact repeated side/window coordinates', a
   });
   input.sampling = {
     ...input.sampling,
-    warmupMs: 0,
-    measuredMs: 100,
+    windows: [{
+      offeredLoadPerSecond: 1000,
+      warmupMs: 0,
+      measuredMs: 100,
+    }],
   };
   const preregistration = sealBenchmarkCapacityPreregistration(input);
   const adapters = preregistration.sideSemanticContracts.map(

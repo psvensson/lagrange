@@ -2,6 +2,10 @@ import {
   BENCHMARK_CAPACITY_PHASE,
 } from './benchmark-capacity-protocol-constants.js';
 import {
+  benchmarkCapacitySamplingHasWarmup,
+  getBenchmarkCapacitySamplingWindow,
+} from './benchmark-capacity-preregistration.js';
+import {
   createBenchmarkCapacityCacheResetReceipt,
 } from './benchmark-capacity-cache-reset-receipt.js';
 import {
@@ -477,9 +481,13 @@ async function executeWindow({
   beginResourceObservation,
   completeResourceObservation,
 }) {
+  const samplingWindow = getBenchmarkCapacitySamplingWindow(
+    preregistration,
+    context.offeredLoadPerSecond,
+  );
   const duration = phase === BENCHMARK_CAPACITY_PHASE.WARMUP ?
-    preregistration.sampling.warmupMs :
-    preregistration.sampling.measuredMs;
+    samplingWindow.warmupMs :
+    samplingWindow.measuredMs;
   const adapterContext = {
     blockIndex: context.blockIndex,
     blockedOrderIndex: context.blockedOrderIndex,
@@ -611,7 +619,7 @@ function createWindowExecutor({
   return async (context) => {
     const adapter = adapterForSide(adapters, context.sideId);
     let warmup = localText.NOT_CONFIGURED;
-    if (preregistration.sampling.warmupMs > 0) {
+    if (benchmarkCapacitySamplingHasWarmup(preregistration)) {
       warmup = await executeWindow({
         adapter,
         preregistration,

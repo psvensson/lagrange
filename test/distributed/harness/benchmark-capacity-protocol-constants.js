@@ -1,5 +1,5 @@
 export const BENCHMARK_CAPACITY_PROTOCOL_VERSION =
-  'benchmark-statistical-capacity-v1';
+  'benchmark-statistical-capacity-v2';
 
 export const BENCHMARK_CAPACITY_SIDE_COUNT = 2;
 export const BENCHMARK_CAPACITY_MIN_PAIRED_BLOCKS = 3;
@@ -8,7 +8,7 @@ export const BENCHMARK_CAPACITY_MIN_BOOTSTRAP_RESAMPLES = 100;
 export const BENCHMARK_CAPACITY_MAX_PAIRED_BLOCKS = 100;
 export const BENCHMARK_CAPACITY_MAX_LOAD_POINTS = 100;
 export const BENCHMARK_CAPACITY_MAX_MATRIX_RUNS = 2048;
-export const BENCHMARK_CAPACITY_MAX_PLANNED_OPERATIONS = 500000;
+export const BENCHMARK_CAPACITY_MAX_PLANNED_OPERATIONS = 1000000;
 export const BENCHMARK_CAPACITY_MAX_BOOTSTRAP_DRAWS = 5000000;
 export const BENCHMARK_CAPACITY_MAX_ARTIFACT_BYTES = 67108864;
 export const BENCHMARK_CAPACITY_MAX_LIVE_LOG_BYTES = 8388608;
@@ -90,13 +90,13 @@ export const BENCHMARK_CAPACITY_REASON = Object.freeze({
 });
 
 export const BENCHMARK_CAPACITY_SAMPLE_VERSION =
-  'benchmark-capacity-run-sample-v1';
+  'benchmark-capacity-run-sample-v2';
 
 export const BENCHMARK_CAPACITY_WINDOW_RECEIPT_VERSION =
-  'benchmark-capacity-window-receipt-v1';
+  'benchmark-capacity-window-receipt-v2';
 
 export const BENCHMARK_CAPACITY_CACHE_RESET_RECEIPT_VERSION =
-  'benchmark-capacity-cache-reset-receipt-v1';
+  'benchmark-capacity-cache-reset-receipt-v2';
 
 export const BENCHMARK_CAPACITY_LIVE_EVIDENCE_CLASS = Object.freeze({
   EXTERNALLY_OBSERVED: 'externally_observed_live',

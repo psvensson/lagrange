@@ -24,6 +24,9 @@ import {
   runBenchmarkCapacityProtocol,
 } from '../benchmark-capacity-protocol.js';
 import {
+  getBenchmarkCapacitySamplingWindow,
+} from '../benchmark-capacity-preregistration.js';
+import {
   createBenchmarkCapacityWindowReceipt,
 } from '../benchmark-capacity-window-receipt.js';
 import {
@@ -39,34 +42,79 @@ import {
   buildBenchmarkSemanticReceipt,
   getBenchmarkSemanticContract,
 } from '../benchmark-workload-semantics.js';
+import {
+  FIXTURE_BLOCK_MAXIMUM,
+  FIXTURE_BLOCK_MINIMUM,
+  FIXTURE_BOOTSTRAP_RESAMPLES,
+  FIXTURE_CELL_ID,
+  FIXTURE_CI_WIDTH,
+  FIXTURE_CONFIDENCE,
+  FIXTURE_CONTAINER_LOG,
+  FIXTURE_DURABILITY_STATUS,
+  FIXTURE_ERROR_SLO,
+  FIXTURE_FINAL_ROW_COUNT,
+  FIXTURE_FINAL_ROW_COUNT_TEXT,
+  FIXTURE_FINALIZER_TIMEOUT_MS,
+  FIXTURE_LAGRANGE_CAPACITY,
+  FIXTURE_LAGRANGE_FAST_LATENCY_MS,
+  FIXTURE_LAGRANGE_SLOW_LATENCY_MS,
+  FIXTURE_LIVE_ENVIRONMENT,
+  FIXTURE_LIVE_EVIDENCE_VERSION,
+  FIXTURE_LOADS,
+  FIXTURE_MATRIX_ID,
+  FIXTURE_MAX_IN_FLIGHT,
+  FIXTURE_MAX_QUEUE_DEPTH,
+  FIXTURE_MEASURED_MS,
+  FIXTURE_NOT_CLAIM_ELIGIBLE_REASON,
+  FIXTURE_OPERATION,
+  FIXTURE_OPERATION_OUTCOME,
+  FIXTURE_P99_SLO_MS,
+  FIXTURE_PAIR_ID,
+  FIXTURE_POSTGRESQL_CAPACITY,
+  FIXTURE_POSTGRESQL_FAST_LATENCY_MS,
+  FIXTURE_POSTGRESQL_SLOW_LATENCY_MS,
+  FIXTURE_POSTGRES_VERSION,
+  FIXTURE_PRACTICAL_RATIO,
+  FIXTURE_PROFILE_ID,
+  FIXTURE_QUEUE_DELAY_DELTA_MS,
+  FIXTURE_RELEASE_LAG_MS,
+  FIXTURE_RESET_COMMAND,
+  FIXTURE_RESET_PHASE,
+  FIXTURE_RESET_SQL,
+  FIXTURE_RESET_TIME_MULTIPLIER,
+  FIXTURE_RESET_TIMEOUT_MS,
+  FIXTURE_RUN_ID,
+  FIXTURE_SEED,
+  FIXTURE_STUDY_ID,
+  FIXTURE_TAIL_MINIMUM,
+  FIXTURE_TAIL_QUANTILE,
+  FIXTURE_TIMEOUT_MS,
+  FIXTURE_WALL_BLOCK_MULTIPLIER,
+  FIXTURE_WALL_LOAD_MULTIPLIER,
+  FIXTURE_WALL_ORDER_MULTIPLIER,
+  FIXTURE_WALL_TIME_BASE,
+  FIXTURE_WARMUP_MS,
+  FIXTURE_WINDOW_SQL_PREFIX,
+  FIXTURE_WINDOW_TIME_MULTIPLIER,
+  MILLISECONDS_PER_SECOND,
+  SIDE_LAGRANGE,
+  SIDE_POSTGRESQL,
+} from './benchmark-capacity-protocol-test-fixture-constants.js';
 
-export const SIDE_LAGRANGE = 'lagrange';
-export const SIDE_POSTGRESQL = 'postgresql';
-export const FIXTURE_LOADS = [100, 200, 300];
-const FIXTURE_MEASURED_MS = 1000;
-const FIXTURE_WARMUP_MS = 100;
-export const FIXTURE_TIMEOUT_MS = 100;
-const FIXTURE_TAIL_MINIMUM = 100;
-export const FIXTURE_BLOCK_MINIMUM = 3;
-export const FIXTURE_BLOCK_MAXIMUM = 5;
-const FIXTURE_BOOTSTRAP_RESAMPLES = 200;
-const FIXTURE_CONFIDENCE = 0.95;
-const FIXTURE_PRACTICAL_RATIO = 0.05;
-const FIXTURE_CI_WIDTH = 0.1;
-export const FIXTURE_SEED = 20260727;
-const FIXTURE_P99_SLO_MS = 50;
-const FIXTURE_ERROR_SLO = 0.05;
-export const FIXTURE_MAX_IN_FLIGHT = 8;
-export const FIXTURE_MAX_QUEUE_DEPTH = 16;
-export const FIXTURE_RELEASE_LAG_MS = 100;
-export const FIXTURE_FINALIZER_TIMEOUT_MS = 100;
-const FIXTURE_RESET_TIMEOUT_MS = 100;
-export const FIXTURE_LIVE_ENVIRONMENT = {
-  image: 'fixture-postgresql:1',
-  imageId: 'fixture-image-id',
-  transport: 'fixture-persistent-pool',
-  database: 'fixture',
-};
+export {
+  FIXTURE_BLOCK_MAXIMUM,
+  FIXTURE_BLOCK_MINIMUM,
+  FIXTURE_FINALIZER_TIMEOUT_MS,
+  FIXTURE_LIVE_ENVIRONMENT,
+  FIXTURE_LOADS,
+  FIXTURE_MAX_IN_FLIGHT,
+  FIXTURE_MAX_QUEUE_DEPTH,
+  FIXTURE_RELEASE_LAG_MS,
+  FIXTURE_SEED,
+  FIXTURE_TIMEOUT_MS,
+  SIDE_LAGRANGE,
+  SIDE_POSTGRESQL,
+} from './benchmark-capacity-protocol-test-fixture-constants.js';
 
 function semanticDialectForSide(sideId) {
   return sideId === SIDE_POSTGRESQL ?
@@ -84,8 +132,8 @@ export function semanticReceiptForCounts(
   for (let index = 0; index < counts.correct; index += 1) {
     observations.push({
       operationId: index,
-      operation: 'INSERT',
-      outcome: 'command_acknowledged',
+      operation: FIXTURE_OPERATION,
+      outcome: FIXTURE_OPERATION_OUTCOME,
     });
   }
   return buildBenchmarkSemanticReceipt({
@@ -100,7 +148,7 @@ export function semanticReceiptForCounts(
       rejectedByReason: {...rejectedByReason},
     },
     durability: {
-      status: 'pass',
+      status: FIXTURE_DURABILITY_STATUS,
       expected: counts.correct,
       observed: counts.correct,
       missingIds: [],
@@ -109,8 +157,17 @@ export function semanticReceiptForCounts(
   });
 }
 
-export function preregistrationInput(overrides = {}) {
-  const sideSemanticContracts = [
+function copyOfferedLoads(overrides) {
+  const offeredLoadSource = overrides.offeredLoadPerSecond ?? FIXTURE_LOADS;
+  const offeredLoadPerSecond = [];
+  for (let index = 0; index < offeredLoadSource.length; index += 1) {
+    offeredLoadPerSecond[index] = offeredLoadSource[index];
+  }
+  return offeredLoadPerSecond;
+}
+
+function buildSideSemanticContracts() {
+  return [
     {
       sideId: SIDE_LAGRANGE,
       dialect: BENCHMARK_SQL_DIALECT.SQLITE,
@@ -126,11 +183,42 @@ export function preregistrationInput(overrides = {}) {
       ).contractDigest,
     },
   ];
+}
+
+function buildSamplingWindows(offeredLoadPerSecond) {
+  const windows = [];
+  for (let index = 0; index < offeredLoadPerSecond.length; index += 1) {
+    windows[index] = {
+      offeredLoadPerSecond: offeredLoadPerSecond[index],
+      warmupMs: FIXTURE_WARMUP_MS,
+      measuredMs: FIXTURE_MEASURED_MS,
+    };
+  }
+  return windows;
+}
+
+function fixtureIdentityFields() {
   return {
-    studyId: 'capacity-fixture-v1',
     sideIds: [SIDE_LAGRANGE, SIDE_POSTGRESQL],
-    sideSemanticContracts,
-    offeredLoadPerSecond: FIXTURE_LOADS,
+    sideSemanticContracts: buildSideSemanticContracts(),
+  };
+}
+
+function fixturePolicyFields() {
+  return {
+    cachePolicy: BENCHMARK_CAPACITY_CACHE_POLICY,
+    runOrderPolicy: BENCHMARK_CAPACITY_RUN_ORDER_POLICY,
+    timeoutPolicy: BENCHMARK_CAPACITY_TIMEOUT_POLICY,
+    rejectPolicy: BENCHMARK_CAPACITY_REJECT_POLICY,
+    artifactPolicy: BENCHMARK_CAPACITY_ARTIFACT_POLICY,
+  };
+}
+
+export function preregistrationInput(overrides = {}) {
+  const offeredLoadPerSecond = copyOfferedLoads(overrides);
+  return {
+    studyId: FIXTURE_STUDY_ID,
+    ...fixtureIdentityFields(),
     slo: {
       maxP99LatencyMs: FIXTURE_P99_SLO_MS,
       maxErrorRate: FIXTURE_ERROR_SLO,
@@ -151,10 +239,9 @@ export function preregistrationInput(overrides = {}) {
         BENCHMARK_CAPACITY_MULTIPLE_COMPARISON,
     },
     sampling: {
-      tailQuantile: 0.99,
+      tailQuantile: FIXTURE_TAIL_QUANTILE,
       tailSampleMinimum: FIXTURE_TAIL_MINIMUM,
-      warmupMs: FIXTURE_WARMUP_MS,
-      measuredMs: FIXTURE_MEASURED_MS,
+      windows: buildSamplingWindows(offeredLoadPerSecond),
       operationTimeoutMs: FIXTURE_TIMEOUT_MS,
       semanticFinalizerTimeoutMs: FIXTURE_FINALIZER_TIMEOUT_MS,
       resetTimeoutMs: FIXTURE_RESET_TIMEOUT_MS,
@@ -162,38 +249,39 @@ export function preregistrationInput(overrides = {}) {
       clientMaxInFlight: FIXTURE_MAX_IN_FLIGHT,
       clientMaxQueueDepth: FIXTURE_MAX_QUEUE_DEPTH,
     },
-    cachePolicy: BENCHMARK_CAPACITY_CACHE_POLICY,
-    runOrderPolicy: BENCHMARK_CAPACITY_RUN_ORDER_POLICY,
-    timeoutPolicy: BENCHMARK_CAPACITY_TIMEOUT_POLICY,
-    rejectPolicy: BENCHMARK_CAPACITY_REJECT_POLICY,
-    artifactPolicy: BENCHMARK_CAPACITY_ARTIFACT_POLICY,
+    ...fixturePolicyFields(),
     randomization: {
       algorithm: BENCHMARK_CAPACITY_RANDOMIZATION_ALGORITHM,
       seed: FIXTURE_SEED,
     },
     executionIdentity: {
-      matrixId: 'capacity-fixture-matrix',
-      cellId: 'capacity-fixture-stable-workload-cell',
+      matrixId: FIXTURE_MATRIX_ID,
+      cellId: FIXTURE_CELL_ID,
       cellManifestDigest: digestBenchmarkSemanticData({
-        cell: 'capacity-fixture-stable-workload-cell',
+        cell: FIXTURE_CELL_ID,
       }),
-      profileIdentity: digestBenchmarkSemanticData({profile: 'fixture'}),
-      pairIdentity: digestBenchmarkSemanticData({pair: 'fixture'}),
-      runId: 'capacity-fixture-run',
+      profileIdentity: digestBenchmarkSemanticData({
+        profile: FIXTURE_PROFILE_ID,
+      }),
+      pairIdentity: digestBenchmarkSemanticData({pair: FIXTURE_PAIR_ID}),
+      runId: FIXTURE_RUN_ID,
       liveEnvironmentContractDigest:
         digestBenchmarkSemanticData(FIXTURE_LIVE_ENVIRONMENT),
     },
     ...overrides,
+    offeredLoadPerSecond,
   };
 }
 
 export function releaseOffsets(offeredLoadPerSecond, windowDurationMs) {
   const count = Math.floor(
-    offeredLoadPerSecond * windowDurationMs / 1000,
+    offeredLoadPerSecond * windowDurationMs / MILLISECONDS_PER_SECOND,
   );
   const offsets = [];
   for (let index = 0; index < count; index += 1) {
-    offsets.push(Math.floor(index * 1000 / offeredLoadPerSecond));
+    offsets.push(Math.floor(
+      index * MILLISECONDS_PER_SECOND / offeredLoadPerSecond,
+    ));
   }
   return offsets;
 }
@@ -217,7 +305,7 @@ export function successfulRunSample({
   preregistration,
 }) {
   const offered = Math.floor(
-    offeredLoadPerSecond * windowDurationMs / 1000,
+    offeredLoadPerSecond * windowDurationMs / MILLISECONDS_PER_SECOND,
   );
   const correctCount = correct === null ? offered : correct;
   const errored = offered - correctCount;
@@ -249,7 +337,10 @@ export function successfulRunSample({
     counts,
     rejectedByReason,
     endToEndLatencyMs: repeated(p99LatencyMs, correctCount),
-    clientQueueDelayMs: repeated(Math.max(0, p99LatencyMs - 4), correctCount),
+    clientQueueDelayMs: repeated(
+      Math.max(0, p99LatencyMs - FIXTURE_QUEUE_DELAY_DELTA_MS),
+      offered,
+    ),
     releaseOffsetsMs: releaseOffsets(
       offeredLoadPerSecond,
       windowDurationMs,
@@ -285,9 +376,13 @@ export function inputFromSample(sample, overrides = {}) {
 
 function fixtureLatency(sideId, offeredLoadPerSecond) {
   if (sideId === SIDE_LAGRANGE) {
-    return offeredLoadPerSecond <= 200 ? 20 : 80;
+    return offeredLoadPerSecond <= FIXTURE_LAGRANGE_CAPACITY ?
+      FIXTURE_LAGRANGE_FAST_LATENCY_MS :
+      FIXTURE_LAGRANGE_SLOW_LATENCY_MS;
   }
-  return offeredLoadPerSecond <= 100 ? 18 : 70;
+  return offeredLoadPerSecond <= FIXTURE_POSTGRESQL_CAPACITY ?
+    FIXTURE_POSTGRESQL_FAST_LATENCY_MS :
+    FIXTURE_POSTGRESQL_SLOW_LATENCY_MS;
 }
 
 export function fixtureWindowReceipt(sample, context) {
@@ -297,8 +392,10 @@ export function fixtureWindowReceipt(sample, context) {
     sideId: context.sideId,
     phase: sample.phase,
     offeredLoad: context.offeredLoadPerSecond,
-    startedAt: context.blockIndex * 1000,
-    endedAt: context.blockIndex * 1000 + sample.windowDurationMs,
+    startedAt: context.blockIndex * FIXTURE_WINDOW_TIME_MULTIPLIER,
+    endedAt:
+      context.blockIndex * FIXTURE_WINDOW_TIME_MULTIPLIER +
+      sample.windowDurationMs,
     capacitySampleDigest: sample.sampleDigest,
     semanticReceiptDigest: sample.semanticReceiptDigest,
     liveEngagementDigest: digestBenchmarkSemanticData({
@@ -314,8 +411,8 @@ export function fixtureResetReceipt(context) {
     blockedOrderIndex: context.blockedOrderIndex,
     sideId: context.sideId,
     offeredLoad: context.offeredLoadPerSecond,
-    startedAt: context.blockIndex * 10000 + 1,
-    endedAt: context.blockIndex * 10000 + 2,
+    startedAt: context.blockIndex * FIXTURE_RESET_TIME_MULTIPLIER + 1,
+    endedAt: context.blockIndex * FIXTURE_RESET_TIME_MULTIPLIER + 2,
     policy: BENCHMARK_CAPACITY_CACHE_POLICY,
     liveEngagementDigest: digestBenchmarkSemanticData({
       reset: context.offeredLoadPerSecond,
@@ -333,6 +430,10 @@ export function fixtureExecutor(preregistration, options = {}) {
       offeredLoadPerSecond,
     } = context;
     const p99LatencyMs = fixtureLatency(sideId, offeredLoadPerSecond);
+    const samplingWindow = getBenchmarkCapacitySamplingWindow(
+      preregistration,
+      offeredLoadPerSecond,
+    );
     const measuredCorrect = options.tailInsufficient === true ?
       Math.min(
         preregistration.sampling.tailSampleMinimum - 1,
@@ -344,7 +445,7 @@ export function fixtureExecutor(preregistration, options = {}) {
       phase: BENCHMARK_CAPACITY_PHASE.WARMUP,
       blockIndex,
       offeredLoadPerSecond,
-      windowDurationMs: preregistration.sampling.warmupMs,
+      windowDurationMs: samplingWindow.warmupMs,
       p99LatencyMs,
       preregistration,
     });
@@ -353,7 +454,7 @@ export function fixtureExecutor(preregistration, options = {}) {
       phase: BENCHMARK_CAPACITY_PHASE.MEASURED,
       blockIndex,
       offeredLoadPerSecond,
-      windowDurationMs: preregistration.sampling.measuredMs,
+      windowDurationMs: samplingWindow.measuredMs,
       p99LatencyMs,
       correct: measuredCorrect,
       preregistration,
@@ -368,10 +469,10 @@ export function fixtureExecutor(preregistration, options = {}) {
 }
 
 function fixtureWallStart(context, phaseOffset) {
-  return 1_000_000 +
-    context.blockIndex * 100_000 +
-    context.offeredLoadPerSecond * 100 +
-    context.blockedOrderIndex * 10 +
+  return FIXTURE_WALL_TIME_BASE +
+    context.blockIndex * FIXTURE_WALL_BLOCK_MULTIPLIER +
+    context.offeredLoadPerSecond * FIXTURE_WALL_LOAD_MULTIPLIER +
+    context.blockedOrderIndex * FIXTURE_WALL_ORDER_MULTIPLIER +
     phaseOffset;
 }
 
@@ -396,8 +497,8 @@ function fixtureWindowLog(
       operationIndex,
       sql: externallyObserved ?
         `INSERT ${prefix}${operationIndex}` :
-        `fixture INSERT ${operationIndex}`,
-      command: 'INSERT',
+        `${FIXTURE_WINDOW_SQL_PREFIX} ${operationIndex}`,
+      command: FIXTURE_OPERATION,
       rowCount: 1,
     });
   }
@@ -415,122 +516,137 @@ function fixtureWindowLog(
   });
 }
 
+function fixtureResetOperationLog(context) {
+  return JSON.stringify({
+    version: BENCHMARK_CAPACITY_OPERATION_LOG_VERSION,
+    issuer: BENCHMARK_CAPACITY_OPERATION_LOG_ISSUER.SYNTHETIC_FIXTURE,
+    blockIndex: context.blockIndex,
+    blockedOrderIndex: context.blockedOrderIndex,
+    sideId: context.sideId,
+    phase: FIXTURE_RESET_PHASE,
+    offeredLoad: context.offeredLoadPerSecond,
+    sql: FIXTURE_RESET_SQL,
+    command: FIXTURE_RESET_COMMAND,
+    rowCount: null,
+  });
+}
+
+function fixtureResetOwner(preregistration, resetEngagements) {
+  return (context) => {
+    const startedAt = fixtureWallStart(context, 1);
+    const engagement = createBenchmarkCapacityLiveResetEngagement(
+      {
+        blockIndex: context.blockIndex,
+        blockedOrderIndex: context.blockedOrderIndex,
+        sideId: context.sideId,
+        offeredLoad: context.offeredLoadPerSecond,
+        startedAt,
+        endedAt: startedAt + 1,
+        operationLogText: fixtureResetOperationLog(context),
+      },
+      preregistration,
+    );
+    resetEngagements.push(engagement);
+    return createBenchmarkCapacityCacheResetReceipt(
+      {
+        blockIndex: context.blockIndex,
+        blockedOrderIndex: context.blockedOrderIndex,
+        sideId: context.sideId,
+        offeredLoad: context.offeredLoadPerSecond,
+        startedAt,
+        endedAt: startedAt + 1,
+        policy: preregistration.cachePolicy,
+        liveEngagementDigest: engagement.liveEngagementDigest,
+      },
+      preregistration,
+    );
+  };
+}
+
+function fixtureRunOwner(preregistration, windowEngagements) {
+  return async (context) => {
+    const samples = [];
+    const receipts = [];
+    const phases = [
+      BENCHMARK_CAPACITY_PHASE.WARMUP,
+      BENCHMARK_CAPACITY_PHASE.MEASURED,
+    ];
+    const samplingWindow = getBenchmarkCapacitySamplingWindow(
+      preregistration,
+      context.offeredLoadPerSecond,
+    );
+    for (let phaseIndex = 0; phaseIndex < phases.length; phaseIndex += 1) {
+      const phase = phases[phaseIndex];
+      const duration = phase === BENCHMARK_CAPACITY_PHASE.WARMUP ?
+        samplingWindow.warmupMs :
+        samplingWindow.measuredMs;
+      const sample = successfulRunSample({
+        sideId: context.sideId,
+        phase,
+        blockIndex: context.blockIndex,
+        offeredLoadPerSecond: context.offeredLoadPerSecond,
+        windowDurationMs: duration,
+        p99LatencyMs: fixtureLatency(
+          context.sideId,
+          context.offeredLoadPerSecond,
+        ),
+        preregistration,
+      });
+      const startedAt = fixtureWallStart(context, 2 + phaseIndex);
+      const engagement = createBenchmarkCapacityLiveWindowEngagement(
+        {
+          blockIndex: context.blockIndex,
+          blockedOrderIndex: context.blockedOrderIndex,
+          sideId: context.sideId,
+          phase,
+          offeredLoad: context.offeredLoadPerSecond,
+          startedAt,
+          endedAt: startedAt + sample.observationDurationMs,
+          operationLogText: fixtureWindowLog(
+            context,
+            phase,
+            sample.counts.correct,
+          ),
+        },
+        sample,
+        preregistration,
+      );
+      windowEngagements.push(engagement);
+      samples.push(sample);
+      receipts.push(createBenchmarkCapacityWindowReceipt(
+        {
+          blockIndex: context.blockIndex,
+          blockedOrderIndex: context.blockedOrderIndex,
+          sideId: context.sideId,
+          phase,
+          offeredLoad: context.offeredLoadPerSecond,
+          startedAt,
+          endedAt: startedAt + sample.observationDurationMs,
+          capacitySampleDigest: sample.sampleDigest,
+          semanticReceiptDigest: sample.semanticReceiptDigest,
+          liveEngagementDigest: engagement.liveEngagementDigest,
+          resourceWindowDigest: null,
+        },
+        sample,
+        preregistration,
+      ));
+    }
+    return {
+      warmup: samples[0],
+      measured: samples[1],
+      warmupWindowReceipt: receipts[0],
+      measuredWindowReceipt: receipts[1],
+    };
+  };
+}
+
 export async function artifactFixtureReport(preregistration) {
   const windowEngagements = [];
   const resetEngagements = [];
   const report = await runBenchmarkCapacityProtocol({
     preregistration,
-    resetRunState(context) {
-      const startedAt = fixtureWallStart(context, 1);
-      const engagement = createBenchmarkCapacityLiveResetEngagement(
-        {
-          blockIndex: context.blockIndex,
-          blockedOrderIndex: context.blockedOrderIndex,
-          sideId: context.sideId,
-          offeredLoad: context.offeredLoadPerSecond,
-          startedAt,
-          endedAt: startedAt + 1,
-          operationLogText: JSON.stringify({
-            version: BENCHMARK_CAPACITY_OPERATION_LOG_VERSION,
-            issuer:
-              BENCHMARK_CAPACITY_OPERATION_LOG_ISSUER.SYNTHETIC_FIXTURE,
-            blockIndex: context.blockIndex,
-            blockedOrderIndex: context.blockedOrderIndex,
-            sideId: context.sideId,
-            phase: 'reset',
-            offeredLoad: context.offeredLoadPerSecond,
-            sql: 'fixture TRUNCATE',
-            command: 'TRUNCATE',
-            rowCount: null,
-          }),
-        },
-        preregistration,
-      );
-      resetEngagements.push(engagement);
-      return createBenchmarkCapacityCacheResetReceipt(
-        {
-          blockIndex: context.blockIndex,
-          blockedOrderIndex: context.blockedOrderIndex,
-          sideId: context.sideId,
-          offeredLoad: context.offeredLoadPerSecond,
-          startedAt,
-          endedAt: startedAt + 1,
-          policy: preregistration.cachePolicy,
-          liveEngagementDigest: engagement.liveEngagementDigest,
-        },
-        preregistration,
-      );
-    },
-    async executeRun(context) {
-      const samples = [];
-      const receipts = [];
-      const phases = [
-        BENCHMARK_CAPACITY_PHASE.WARMUP,
-        BENCHMARK_CAPACITY_PHASE.MEASURED,
-      ];
-      for (let phaseIndex = 0; phaseIndex < phases.length; phaseIndex += 1) {
-        const phase = phases[phaseIndex];
-        const duration = phase === BENCHMARK_CAPACITY_PHASE.WARMUP ?
-          preregistration.sampling.warmupMs :
-          preregistration.sampling.measuredMs;
-        const sample = successfulRunSample({
-          sideId: context.sideId,
-          phase,
-          blockIndex: context.blockIndex,
-          offeredLoadPerSecond: context.offeredLoadPerSecond,
-          windowDurationMs: duration,
-          p99LatencyMs: fixtureLatency(
-            context.sideId,
-            context.offeredLoadPerSecond,
-          ),
-          preregistration,
-        });
-        const startedAt = fixtureWallStart(context, 2 + phaseIndex);
-        const engagement = createBenchmarkCapacityLiveWindowEngagement(
-          {
-            blockIndex: context.blockIndex,
-            blockedOrderIndex: context.blockedOrderIndex,
-            sideId: context.sideId,
-            phase,
-            offeredLoad: context.offeredLoadPerSecond,
-            startedAt,
-            endedAt: startedAt + sample.observationDurationMs,
-            operationLogText: fixtureWindowLog(
-              context,
-              phase,
-              sample.counts.correct,
-            ),
-          },
-          sample,
-          preregistration,
-        );
-        windowEngagements.push(engagement);
-        samples.push(sample);
-        receipts.push(createBenchmarkCapacityWindowReceipt(
-          {
-            blockIndex: context.blockIndex,
-            blockedOrderIndex: context.blockedOrderIndex,
-            sideId: context.sideId,
-            phase,
-            offeredLoad: context.offeredLoadPerSecond,
-            startedAt,
-            endedAt: startedAt + sample.observationDurationMs,
-            capacitySampleDigest: sample.sampleDigest,
-            semanticReceiptDigest: sample.semanticReceiptDigest,
-            liveEngagementDigest: engagement.liveEngagementDigest,
-            resourceWindowDigest: null,
-          },
-          sample,
-          preregistration,
-        ));
-      }
-      return {
-        warmup: samples[0],
-        measured: samples[1],
-        warmupWindowReceipt: receipts[0],
-        measuredWindowReceipt: receipts[1],
-      };
-    },
+    resetRunState: fixtureResetOwner(preregistration, resetEngagements),
+    executeRun: fixtureRunOwner(preregistration, windowEngagements),
   });
   return {report, windowEngagements, resetEngagements};
 }
@@ -542,7 +658,7 @@ export function artifactFixtureLiveEvidence(
   const {report, windowEngagements, resetEngagements} =
     reportAndEngagements;
   return {
-    version: 'benchmark-capacity-live-evidence-v1',
+    version: FIXTURE_LIVE_EVIDENCE_VERSION,
     preregistrationDigest: preregistration.manifestDigest,
     reportDigest: report.reportDigest,
     ...preregistration.executionIdentity,
@@ -551,16 +667,16 @@ export function artifactFixtureLiveEvidence(
     provenanceReceipt: null,
     engagementOnly: true,
     comparativeClaimEligible: false,
-    reason: 'synthetic_fixture_not_claim_eligible',
+    reason: FIXTURE_NOT_CLAIM_ELIGIBLE_REASON,
     image: FIXTURE_LIVE_ENVIRONMENT.image,
     imageId: FIXTURE_LIVE_ENVIRONMENT.imageId,
-    postgresVersion: 'fixture-postgresql-1',
-    observedRowsAfterFinalResetCell: 100,
-    finalRowCountQueryText: '100',
+    postgresVersion: FIXTURE_POSTGRES_VERSION,
+    observedRowsAfterFinalResetCell: FIXTURE_FINAL_ROW_COUNT,
+    finalRowCountQueryText: FIXTURE_FINAL_ROW_COUNT_TEXT,
     queueObserved: true,
     windowEngagements,
     resetEngagements,
-    containerLogText: 'fixture managed PostgreSQL log bytes',
+    containerLogText: FIXTURE_CONTAINER_LOG,
     cleanupReceipt: null,
     observationReceipt: null,
   };

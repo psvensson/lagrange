@@ -183,6 +183,12 @@ function pairedRatio(pairs) {
     }
     numerator += pair[0];
     denominator += pair[1];
+    if (
+      !isNonNegativeSafeNumber(numerator) ||
+      !isNonNegativeSafeNumber(denominator)
+    ) {
+      fail(localText.UNSAFE_PAIRED_RATIO);
+    }
   }
   const ratio = denominator > 0 ? numerator / denominator : 0;
   if (!isNonNegativeSafeNumber(ratio)) {
@@ -223,8 +229,8 @@ export function bootstrapBenchmarkPairedRatioInterval(
   const interval = percentileInterval(estimates, confidenceLevel);
   return {
     estimate,
-    lower: interval.lower,
-    upper: interval.upper,
+    lower: mathMin(interval.lower, estimate),
+    upper: mathMax(interval.upper, estimate),
   };
 }
 
@@ -641,39 +647,32 @@ function resolveStopDecision({
     tailSufficient &&
     pairedEffect.sampleCount === completedBlocks &&
     relativeCiWidth <= sealed.statistics.targetRelativeCiWidth;
+  let decision = localText.CONTINUE;
+  let shouldStop = false;
   if (precisionReached) {
     appendReason(reasons, BENCHMARK_CAPACITY_REASON.PRECISION_TARGET_REACHED);
-    return {
-      decision: BENCHMARK_CAPACITY_STOP_DECISION.PRECISION_REACHED,
-      shouldStop: true,
-      minimumReached,
-      maximumReached,
-      relativeCiWidth,
-      targetRelativeCiWidth: sealed.statistics.targetRelativeCiWidth,
-    };
-  }
-  if (maximumReached) {
+    decision = BENCHMARK_CAPACITY_STOP_DECISION.PRECISION_REACHED;
+    shouldStop = true;
+  } else if (maximumReached) {
     appendReason(
       reasons,
       BENCHMARK_CAPACITY_REASON.MAXIMUM_REPETITIONS_REACHED,
     );
-    return {
-      decision: BENCHMARK_CAPACITY_STOP_DECISION.MAXIMUM_REPETITIONS,
-      shouldStop: true,
-      minimumReached,
-      maximumReached,
-      relativeCiWidth,
-      targetRelativeCiWidth: sealed.statistics.targetRelativeCiWidth,
-    };
+    decision = BENCHMARK_CAPACITY_STOP_DECISION.MAXIMUM_REPETITIONS;
+    shouldStop = true;
   }
   return {
-    decision: localText.CONTINUE,
-    shouldStop: false,
+    decision,
+    shouldStop,
     minimumReached,
     maximumReached,
     relativeCiWidth,
     targetRelativeCiWidth: sealed.statistics.targetRelativeCiWidth,
   };
+}
+
+function createEvidenceList() {
+  return [];
 }
 
 export function summarizeBenchmarkCapacityMatrix(
@@ -698,24 +697,27 @@ export function summarizeBenchmarkCapacityMatrix(
   }
   const index = summaryIndex(summaries);
   assertMatrixComplete(summaries, index, sealed, completedBlocks);
-  const reasons = [];
+  const statusEntries = createEvidenceList();
   const blocks = buildBlockCapacities(
     index,
     sealed,
     completedBlocks,
   );
   const capacityBySide = buildCapacityBySide(blocks, sealed);
-  const pairedEffect = buildPairedEffect(blocks, sealed, reasons);
+  const pairedEffect = buildPairedEffect(blocks, sealed, statusEntries);
   const tailSufficient = allTailSamplesSufficient(blocks, sealed);
   if (!tailSufficient) {
-    appendReason(reasons, BENCHMARK_CAPACITY_REASON.INSUFFICIENT_TAIL_SAMPLES);
+    appendReason(
+      statusEntries,
+      BENCHMARK_CAPACITY_REASON.INSUFFICIENT_TAIL_SAMPLES,
+    );
   }
   const stoppingDecision = resolveStopDecision({
     completedBlocks,
     sealed,
     pairedEffect,
     tailSufficient,
-    reasons,
+    reasons: statusEntries,
   });
   const measurementState =
     tailSufficient &&
@@ -742,7 +744,237 @@ export function summarizeBenchmarkCapacityMatrix(
         decision: BENCHMARK_CAPACITY_STOP_DECISION.NON_MEASURING,
       } :
       stoppingDecision,
-    reasonCodes: reasons,
+    reasonCodes: statusEntries,
+  };
+  return {
+    ...summary,
+    summaryDigest: digestBenchmarkSemanticData(summary),
+  };
+}
+
+function assertIndependentSideMatrixComplete(
+  summaries,
+  index,
+  sealed,
+  sideId,
+  completedBlocks,
+) {
+  const expectedCount =
+    completedBlocks * sealed.offeredLoadPerSecond.length;
+  if (summaries.length !== expectedCount) {
+    fail(BENCHMARK_CAPACITY_REASON.INCOMPLETE_MATRIX);
+  }
+  for (let blockIndex = 0; blockIndex < completedBlocks; blockIndex += 1) {
+    const block = mapGet(index.byBlock, blockIndex);
+    const side = block === undefined ? undefined : mapGet(block, sideId);
+    for (let loadIndex = 0;
+      loadIndex < sealed.offeredLoadPerSecond.length;
+      loadIndex += 1) {
+      const offeredLoad = sealed.offeredLoadPerSecond[loadIndex];
+      if (side === undefined || mapGet(side, offeredLoad) === undefined) {
+        fail(BENCHMARK_CAPACITY_REASON.INCOMPLETE_MATRIX);
+      }
+    }
+  }
+}
+
+function independentSideBlockIsBracketed(index, sealed, blockIndex, sideId) {
+  const block = mapGet(index.byBlock, blockIndex);
+  const side = block === undefined ? undefined : mapGet(block, sideId);
+  let passingLoadIndex = -1;
+  for (let loadIndex = 0;
+    loadIndex < sealed.offeredLoadPerSecond.length;
+    loadIndex += 1) {
+    const sample = side === undefined ?
+      undefined :
+      mapGet(side, sealed.offeredLoadPerSecond[loadIndex]);
+    if (sample !== undefined && sample.sloPassed === true) {
+      passingLoadIndex = loadIndex;
+    }
+  }
+  if (passingLoadIndex < 0) return false;
+  for (let loadIndex = passingLoadIndex + 1;
+    loadIndex < sealed.offeredLoadPerSecond.length;
+    loadIndex += 1) {
+    const sample = mapGet(
+      side,
+      sealed.offeredLoadPerSecond[loadIndex],
+    );
+    if (sample.sloPassed !== true) return true;
+  }
+  return false;
+}
+
+function independentSideAllTrue(values) {
+  for (let index = 0; index < values.length; index += 1) {
+    if (values[index] !== true) return false;
+  }
+  return true;
+}
+
+function assertIndependentSideInputs(
+  samples,
+  sealed,
+  sideId,
+  completedBlocks,
+) {
+  if (
+    !isDenseDataArray(samples) ||
+    !isNonNegativeSafeInteger(completedBlocks) ||
+    completedBlocks === 0
+  ) {
+    fail(localText.EXACT_MATRIX_INPUTS_REQUIRED);
+  }
+  const preregistrationInspection =
+    inspectBenchmarkCapacityPreregistration(sealed);
+  if (
+    !preregistrationInspection.valid ||
+    completedBlocks > sealed.repetitions.maximum
+  ) {
+    fail(localText.EXACT_MATRIX_INPUTS_REQUIRED);
+  }
+  let registeredSide = false;
+  for (let index = 0; index < sealed.sideIds.length; index += 1) {
+    if (sealed.sideIds[index] === sideId) registeredSide = true;
+  }
+  if (!registeredSide) fail(localText.EXACT_MATRIX_INPUTS_REQUIRED);
+}
+
+function summarizeIndependentSideSamples(samples, sealed, sideId) {
+  const summaries = [];
+  for (let index = 0; index < samples.length; index += 1) {
+    const summary = summarizeRunSample(samples[index], sealed);
+    if (summary.sideId !== sideId) {
+      fail(BENCHMARK_CAPACITY_REASON.INCOMPLETE_MATRIX);
+    }
+    appendOwnArrayValue(summaries, summary);
+  }
+  return summaries;
+}
+
+function buildIndependentSideSeries(
+  index,
+  sealed,
+  sideId,
+  completedBlocks,
+) {
+  const correct = [];
+  const offered = [];
+  const tailSufficientByBlock = [];
+  const bracketedByBlock = [];
+  for (let blockIndex = 0; blockIndex < completedBlocks; blockIndex += 1) {
+    const blockCapacity =
+      capacityForBlock(index, sealed, blockIndex, sideId);
+    appendOwnArrayValue(
+      correct,
+      blockCapacity.maxCorrectThroughputPerSecond,
+    );
+    appendOwnArrayValue(
+      offered,
+      blockCapacity.maxSloOfferedLoadPerSecond,
+    );
+    appendOwnArrayValue(
+      tailSufficientByBlock,
+      blockCapacity.tailSufficient,
+    );
+    appendOwnArrayValue(
+      bracketedByBlock,
+      independentSideBlockIsBracketed(
+        index,
+        sealed,
+        blockIndex,
+        sideId,
+      ),
+    );
+  }
+  return {
+    correct,
+    offered,
+    tailSufficientByBlock,
+    bracketedByBlock,
+  };
+}
+
+export function summarizeBenchmarkCapacityIndependentSide(
+  samples,
+  sealed,
+  sideId,
+  completedBlocks,
+) {
+  assertIndependentSideInputs(
+    samples,
+    sealed,
+    sideId,
+    completedBlocks,
+  );
+  const summaries =
+    summarizeIndependentSideSamples(samples, sealed, sideId);
+  const index = summaryIndex(summaries);
+  assertIndependentSideMatrixComplete(
+    summaries,
+    index,
+    sealed,
+    sideId,
+    completedBlocks,
+  );
+  const series = buildIndependentSideSeries(
+    index,
+    sealed,
+    sideId,
+    completedBlocks,
+  );
+  const interval = bootstrapMedianInterval(
+    series.correct,
+    sealed.statistics.confidenceLevel,
+    sealed.statistics.bootstrapResamples,
+    sealed.randomization.seed,
+  );
+  const relativeIntervalWidth = interval.estimate === 0 ?
+    Number.MAX_SAFE_INTEGER :
+    (interval.upper - interval.lower) / interval.estimate;
+  const tailSufficient =
+    independentSideAllTrue(series.tailSufficientByBlock);
+  const bracketed =
+    independentSideAllTrue(series.bracketedByBlock);
+  const precisionReached =
+    interval.estimate > 0 &&
+    relativeIntervalWidth <=
+      sealed.statistics.targetRelativeCiWidth;
+  const reusable =
+    completedBlocks >= sealed.repetitions.minimum &&
+    tailSufficient &&
+    bracketed &&
+    precisionReached;
+  const capacity = {
+    estimate: interval.estimate,
+    confidenceInterval: {
+      lower: interval.lower,
+      upper: interval.upper,
+    },
+    perBlockCorrectThroughputPerSecond: series.correct,
+    perBlockMaxSloOfferedLoadPerSecond: series.offered,
+    tailSufficientByBlock: series.tailSufficientByBlock,
+    bracketedByBlock: series.bracketedByBlock,
+    minimumBlocks: sealed.repetitions.minimum,
+    maximumBlocks: sealed.repetitions.maximum,
+    completedBlocks,
+    targetRelativeCiWidth:
+      sealed.statistics.targetRelativeCiWidth,
+  };
+  const summary = {
+    sideId,
+    completedBlocks,
+    capacity,
+    objectiveSufficiency: {
+      tailSufficient,
+      bracketed,
+      precisionReached,
+      reusable,
+      relativeIntervalWidth,
+    },
+    shouldStop:
+      reusable ||
+      completedBlocks >= sealed.repetitions.maximum,
   };
   return {
     ...summary,

@@ -33,6 +33,7 @@ import {
 import {
   sealBenchmarkCapacityPreregistration,
 } from '../../test/distributed/harness/benchmark-capacity-preregistration.js';
+import {liveDuration, liveWindows} from './benchmark-live-sampling.js';
 import {
   runBenchmarkCapacityOpenLoopWindow,
 } from '../../test/distributed/harness/benchmark-capacity-open-loop.js';
@@ -163,8 +164,7 @@ function preregistration(imageId) {
     sampling: {
       tailQuantile: 0.99,
       tailSampleMinimum: 100,
-      warmupMs: 100,
-      measuredMs: 1000,
+      windows: liveWindows(),
       operationTimeoutMs: 3000,
       semanticFinalizerTimeoutMs: 3000,
       resetTimeoutMs: 3000,
@@ -246,9 +246,8 @@ async function runLiveWindow(pool, sealed, context, phase) {
   const observationsByIndex = [];
   const acknowledgedIdsByIndex = [];
   const startedAt = Date.now();
-  const duration = phase === BENCHMARK_CAPACITY_PHASE.WARMUP ?
-    sealed.sampling.warmupMs :
-    sealed.sampling.measuredMs;
+  const duration =
+    liveDuration(sealed, context.offeredLoadPerSecond, phase);
   const prefix = `${RUN_ID}-${context.sideId}-${context.blockIndex}-` +
     `${context.blockedOrderIndex}-${context.offeredLoadPerSecond}-${phase}-`;
   const sample = await runBenchmarkCapacityOpenLoopWindow({

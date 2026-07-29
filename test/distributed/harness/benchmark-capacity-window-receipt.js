@@ -2,6 +2,7 @@ import {
   digestBenchmarkSemanticData,
   hasExactOwnDataKeys,
   isNonNegativeSafeInteger,
+  isNonNegativeSafeNumber,
   isSha256Digest,
 } from './benchmark-semantic-integrity.js';
 import {
@@ -60,6 +61,23 @@ const RECEIPT_KEYS = [
   'windowReceiptDigest',
 ];
 const objectFreeze = Object.freeze;
+const localText = objectFreeze({
+  CAPACITY_SAMPLE_MISMATCH:
+    'capacity_sample:resolver_binding_mismatch',
+  OFFERED_LOAD: 'offeredLoad:positive_safe_number_required',
+  PHASE_UNSUPPORTED: 'phase:unsupported',
+  RESOURCE_ALREADY_COMPLETE: 'resourceWindowDigest:already_complete',
+  RESOURCE_DIGEST_FIELD: 'resourceWindowDigest',
+  ROOT_SHAPE: 'root:exact_plain_data_record_required',
+  SEMANTIC_DIGEST_FIELD: 'semanticReceiptDigest',
+  SIDE_ID_FIELD: 'sideId',
+  TIME_POSITIVE: 'time_window:positive_coverage_required',
+  TIME_REVERSED: 'time_window:reversed',
+  VALID: 'valid',
+  WINDOW_DIGEST_MISMATCH: 'window_receipt_digest_mismatch',
+  WINDOW_FIELDS_INVALID: 'window_receipt_fields_invalid',
+  WINDOW_SHAPE_INVALID: 'window_receipt_shape_invalid',
+});
 
 function fail(reason) {
   throw new TypeError(`invalid benchmark capacity window receipt: ${reason}`);
@@ -83,7 +101,7 @@ function assertDigest(value, field, nullable = false) {
 }
 
 function assertInputDigests(input) {
-  assertText(input.sideId, 'sideId');
+  assertText(input.sideId, localText.SIDE_ID_FIELD);
   const digestFields = [
     'capacitySampleDigest',
     'liveEngagementDigest',
@@ -92,8 +110,16 @@ function assertInputDigests(input) {
     const field = digestFields[index];
     assertDigest(input[field], field);
   }
-  assertDigest(input.semanticReceiptDigest, 'semanticReceiptDigest', true);
-  assertDigest(input.resourceWindowDigest, 'resourceWindowDigest', true);
+  assertDigest(
+    input.semanticReceiptDigest,
+    localText.SEMANTIC_DIGEST_FIELD,
+    true,
+  );
+  assertDigest(
+    input.resourceWindowDigest,
+    localText.RESOURCE_DIGEST_FIELD,
+    true,
+  );
 }
 
 function assertWindowCoordinates(input) {
@@ -110,22 +136,22 @@ function assertWindowCoordinates(input) {
     }
   }
   if (
-    !isNonNegativeSafeInteger(input.offeredLoad) ||
+    !isNonNegativeSafeNumber(input.offeredLoad) ||
     input.offeredLoad === 0
   ) {
-    fail('offeredLoad:positive_safe_integer_required');
+    fail(localText.OFFERED_LOAD);
   }
   if (input.endedAt < input.startedAt) {
-    fail('time_window:reversed');
+    fail(localText.TIME_REVERSED);
   }
   if (input.endedAt === input.startedAt) {
-    fail('time_window:positive_coverage_required');
+    fail(localText.TIME_POSITIVE);
   }
   if (
     input.phase !== BENCHMARK_CAPACITY_PHASE.WARMUP &&
     input.phase !== BENCHMARK_CAPACITY_PHASE.MEASURED
   ) {
-    fail('phase:unsupported');
+    fail(localText.PHASE_UNSUPPORTED);
   }
 }
 
@@ -148,13 +174,13 @@ function assertSampleBinding(input, sample) {
       input.semanticReceiptDigest !== sample.semanticReceiptDigest
     )
   ) {
-    fail('capacity_sample:resolver_binding_mismatch');
+    fail(localText.CAPACITY_SAMPLE_MISMATCH);
   }
 }
 
 function assertInput(input, sample, preregistration) {
   if (!hasExactOwnDataKeys(input, INPUT_KEYS)) {
-    fail('root:exact_plain_data_record_required');
+    fail(localText.ROOT_SHAPE);
   }
   assertInputDigests(input);
   assertWindowCoordinates(input);
@@ -235,7 +261,7 @@ export function inspectBenchmarkCapacityWindowReceipt(
   preregistration,
 ) {
   if (!hasExactOwnDataKeys(receipt, RECEIPT_KEYS)) {
-    return {valid: false, reason: 'window_receipt_shape_invalid'};
+    return {valid: false, reason: localText.WINDOW_SHAPE_INVALID};
   }
   try {
     const reconstructed = createBenchmarkCapacityWindowReceipt(
@@ -254,11 +280,13 @@ export function inspectBenchmarkCapacityWindowReceipt(
       reconstructed.windowReceiptDigest === receipt.windowReceiptDigest;
     return {
       valid,
-      reason: valid ? 'valid' : 'window_receipt_digest_mismatch',
+      reason: valid ?
+        localText.VALID :
+        localText.WINDOW_DIGEST_MISMATCH,
       resourceWindowComplete: valid && receipt.resourceWindowDigest !== null,
     };
   } catch {
-    return {valid: false, reason: 'window_receipt_fields_invalid'};
+    return {valid: false, reason: localText.WINDOW_FIELDS_INVALID};
   }
 }
 
@@ -277,9 +305,9 @@ export function completeBenchmarkCapacityResourceWindow(
     fail(`completion_source:${inspection.reason}`);
   }
   if (receipt.resourceWindowDigest !== null) {
-    fail('resourceWindowDigest:already_complete');
+    fail(localText.RESOURCE_ALREADY_COMPLETE);
   }
-  assertDigest(resourceWindowDigest, 'resourceWindowDigest');
+  assertDigest(resourceWindowDigest, localText.RESOURCE_DIGEST_FIELD);
   return createBenchmarkCapacityWindowReceipt(
     inputFromReceipt(receipt, resourceWindowDigest),
     sample,

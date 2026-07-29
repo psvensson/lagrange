@@ -18,6 +18,12 @@ import {
 import {
   deriveBenchmarkCapacityExpectedWindow,
 } from './benchmark-capacity-preregistration.js';
+import {
+  assertBenchmarkCapacityHeadroomReceipt,
+} from './benchmark-capacity-heterogeneous-headroom.js';
+export {
+  createBenchmarkCapacityHeadroomReceipt,
+} from './benchmark-capacity-heterogeneous-headroom.js';
 const ADAPTER_IDENTITY_KEYS = Object.freeze([
   'adapterId', 'adapterVersion', 'sideId',
   'runtimeKind', 'invocationBoundary', 'operationManifestDigest',
@@ -31,32 +37,6 @@ const OWNER_RECEIPT_KEYS = Object.freeze([
   'version', 'adapterIdentityDigest', 'sideId',
   'operationIds', 'operationIdsDigest', 'evidenceDigest',
   'semanticOracleDigest', 'correctOperationCount', 'receiptDigest',
-]);
-const HEADROOM_INPUT_KEYS = Object.freeze([
-  'minimumRequiredRatio', 'observerCpu', 'hostCpu',
-  'hostMemory', 'sharedNetwork', 'sharedStorage',
-]);
-const EXTERNAL_HEADROOM_KEYS = Object.freeze([
-  'capacity',
-  'observedPeak',
-]);
-const HEADROOM_KEYS = Object.freeze([
-  'minimumRequiredRatio',
-  'externalEmitter',
-  'clientQueue',
-  'observerCpu',
-  'hostCpu',
-  'hostMemory',
-  'sharedNetwork',
-  'sharedStorage',
-  'minimumObservedRatio',
-  'eligible',
-  'headroomDigest',
-]);
-const HEADROOM_MEASUREMENT_KEYS = Object.freeze([
-  'capacity',
-  'observedPeak',
-  'headroomRatio',
 ]);
 const OWNER_RECEIPT_INPUT_KEYS = Object.freeze([
   'adapterIdentity',
@@ -125,7 +105,6 @@ const QUANTILE_P50 = 0.50;
 const QUANTILE_P95 = 0.95;
 const QUANTILE_P99 = 0.99;
 const mathCeil = Math.ceil;
-const mathMax = Math.max;
 const mathMin = Math.min;
 const mathTrunc = Math.trunc;
 const arrayJoin = Function.call.bind(Array.prototype.join);
@@ -267,12 +246,6 @@ const localText = Object.freeze({
   ADAPTER_IDENTITY_SHAPE_INVALID: 'adapterIdentity:shape_invalid',
   CORRECT: 'correct',
   EMITTED: 'emitted',
-  HEADROOM_EXACT_RECORD: 'headroom:exact_plain_data_record_required',
-  HEADROOM_INELIGIBLE_OR_DIGEST_MISMATCH:
-    'headroom:ineligible_or_digest_mismatch',
-  HEADROOM_MINIMUM_REQUIRED_RATIO: 'headroom.minimumRequiredRatio',
-  HEADROOM_SAMPLE_INVALID: 'headroom.sample:invalid',
-  HEADROOM_SHAPE_INVALID: 'headroom:shape_invalid',
   OWNER_RECEIPT_DIGEST_MISMATCH: 'ownerReceipt:digest_mismatch',
   OWNER_RECEIPT_EVIDENCE_DIGEST: 'ownerReceipt.evidenceDigest',
   OWNER_RECEIPT_EXACT_RECORD:
@@ -325,15 +298,6 @@ function assertText(value, path) {
 
 function assertDigest(value, path) {
   if (!isSha256Digest(value)) fail(`${path}:sha256_digest_required`);
-}
-
-function assertRatio(value, path) {
-  if (
-    !isNonNegativeSafeNumber(value) ||
-    value > 1
-  ) {
-    fail(`${path}:ratio_required`);
-  }
 }
 
 function identityBody(value) {
@@ -487,117 +451,6 @@ export function createBenchmarkCapacityAdapterOwnerReceipt(input) {
   });
 }
 
-function headroomMeasurement(input, path) {
-  if (!hasExactOwnDataKeys(input, EXTERNAL_HEADROOM_KEYS)) {
-    fail(`${path}:exact_plain_data_record_required`);
-  }
-  if (
-    !isNonNegativeSafeNumber(input.capacity) ||
-    input.capacity <= 0 ||
-    !isNonNegativeSafeNumber(input.observedPeak) ||
-    input.observedPeak > input.capacity
-  ) {
-    fail(`${path}:bounded_measurement_required`);
-  }
-  return {
-    capacity: input.capacity,
-    observedPeak: input.observedPeak,
-    headroomRatio:
-      (input.capacity - input.observedPeak) / input.capacity,
-  };
-}
-
-function maximumNonNull(values) {
-  let maximum = 0;
-  for (let index = 0; index < values.length; index += 1) {
-    if (values[index] !== null && values[index] > maximum) {
-      maximum = values[index];
-    }
-  }
-  return maximum;
-}
-
-function headroomBody(input, sample) {
-  if (
-    !isPlainDataRecord(input) ||
-    !hasExactOwnDataKeys(input, HEADROOM_INPUT_KEYS)
-  ) {
-    fail(localText.HEADROOM_EXACT_RECORD);
-  }
-  assertRatio(
-    input.minimumRequiredRatio,
-    localText.HEADROOM_MINIMUM_REQUIRED_RATIO,
-  );
-  const externalEmitter = headroomMeasurement({
-    capacity: mathMax(1, sample.maxReleaseLagMs),
-    observedPeak: maximumNonNull(sample.releaseLagMs),
-  }, 'headroom.externalEmitter');
-  const clientQueue = headroomMeasurement({
-    capacity: sample.operationTimeoutMs,
-    observedPeak: maximumNonNull(sample.clientQueueDelayMs),
-  }, 'headroom.clientQueue');
-  const body = {
-    minimumRequiredRatio: input.minimumRequiredRatio,
-    externalEmitter,
-    clientQueue,
-  };
-  for (let index = 1; index < HEADROOM_INPUT_KEYS.length; index += 1) {
-    const key = HEADROOM_INPUT_KEYS[index];
-    body[key] = headroomMeasurement(input[key], `headroom.${key}`);
-  }
-  let minimumObservedRatio = 1;
-  for (let index = 1;
-    index < HEADROOM_INPUT_KEYS.length + 2;
-    index += 1) {
-    minimumObservedRatio = mathMin(
-      minimumObservedRatio,
-      body[HEADROOM_KEYS[index]].headroomRatio,
-    );
-  }
-  return {
-    ...body,
-    minimumObservedRatio,
-    eligible:
-      sample.counts.queueOverflow === 0 &&
-      minimumObservedRatio >= input.minimumRequiredRatio,
-  };
-}
-
-export function createBenchmarkCapacityHeadroomReceipt(input, sample) {
-  const inspection = inspectBenchmarkCapacityRunSample(sample);
-  if (!inspection.valid) fail(localText.HEADROOM_SAMPLE_INVALID);
-  const body = headroomBody(input, sample);
-  return objectFreeze({
-    ...body,
-    headroomDigest: digestBenchmarkSemanticData(body),
-  });
-}
-
-function inspectHeadroom(receipt, sample) {
-  if (!hasExactOwnDataKeys(receipt, HEADROOM_KEYS)) {
-    fail(localText.HEADROOM_SHAPE_INVALID);
-  }
-  const input = {minimumRequiredRatio: receipt.minimumRequiredRatio};
-  for (let index = 1; index < HEADROOM_INPUT_KEYS.length; index += 1) {
-    const key = HEADROOM_INPUT_KEYS[index];
-    if (!hasExactOwnDataKeys(receipt[key], HEADROOM_MEASUREMENT_KEYS)) {
-      fail(`headroom.${key}:shape_invalid`);
-    }
-    input[key] = {
-      capacity: receipt[key].capacity,
-      observedPeak: receipt[key].observedPeak,
-    };
-  }
-  const reconstructed =
-    createBenchmarkCapacityHeadroomReceipt(input, sample);
-  if (
-    reconstructed.headroomDigest !== receipt.headroomDigest ||
-    reconstructed.eligible !== true
-  ) {
-    fail(localText.HEADROOM_INELIGIBLE_OR_DIGEST_MISMATCH);
-  }
-}
-
 function quantile(sorted, probability) {
   if (sorted.length === 0) return null;
   const index = mathMin(
@@ -654,6 +507,20 @@ function assertReceiptInputWindow(input, identity, sampleInspection) {
   }
 }
 
+function semanticContractDigestForSide(preregistration, sideId) {
+  for (let index = 0;
+    index < preregistration.sideSemanticContracts.length;
+    index += 1) {
+    const contract = preregistration.sideSemanticContracts[index];
+    if (contract.sideId === sideId) return contract.contractDigest;
+  }
+  fail(localText.RECEIPT_C2_SEMANTIC_INVALID);
+}
+
+function emptySemanticResultSetDigest() {
+  return buildBenchmarkResultSetEvidence([]).digest;
+}
+
 export function createBenchmarkCapacityHeterogeneousOperationReceipt(input) {
   if (
     !isPlainDataRecord(input) ||
@@ -679,16 +546,19 @@ export function createBenchmarkCapacityHeterogeneousOperationReceipt(input) {
   );
   assertReceiptInputWindow(input, identity, sampleInspection);
   inspectOwnerReceipt(input.ownerReceipt, identity, input.sample);
-  inspectHeadroom(input.headroom, input.sample);
-  const semanticInspection = inspectBenchmarkSemanticReceipt(
-    input.sample.semanticReceipt,
-    input.sample.semanticDialect,
-  );
-  if (
-    !semanticInspection.statusPassed ||
-    !semanticInspection.digestMatches
-  ) {
-    fail(localText.RECEIPT_C2_SEMANTIC_INVALID);
+  assertBenchmarkCapacityHeadroomReceipt(input.headroom, input.sample);
+  const hasCorrectOperations = input.sample.counts.correct > 0;
+  if (hasCorrectOperations) {
+    const semanticInspection = inspectBenchmarkSemanticReceipt(
+      input.sample.semanticReceipt,
+      input.sample.semanticDialect,
+    );
+    if (
+      !semanticInspection.statusPassed ||
+      !semanticInspection.digestMatches
+    ) {
+      fail(localText.RECEIPT_C2_SEMANTIC_INVALID);
+    }
   }
   const counts = {};
   for (let index = 0; index < COUNT_KEYS.length; index += 1) {
@@ -722,9 +592,16 @@ export function createBenchmarkCapacityHeterogeneousOperationReceipt(input) {
     capacitySampleDigest: input.sample.sampleDigest,
     semanticReceiptDigest: input.sample.semanticReceiptDigest,
     semanticContractDigest:
-      input.sample.semanticReceipt.contractDigest,
+      hasCorrectOperations ?
+        input.sample.semanticReceipt.contractDigest :
+        semanticContractDigestForSide(
+          input.preregistration,
+          input.sample.sideId,
+        ),
     semanticResultSetDigest:
-      input.sample.semanticReceipt.resultSet.digest,
+      hasCorrectOperations ?
+        input.sample.semanticReceipt.resultSet.digest :
+        emptySemanticResultSetDigest(),
     ownerReceipt: input.ownerReceipt,
     ownerReceiptDigest: input.ownerReceipt.receiptDigest,
     headroom: input.headroom,
@@ -752,7 +629,8 @@ function assertReceiptCoordinateIdentity(receipt, sample, expected, identity) {
   }
 }
 
-function assertReceiptSampleIdentity(receipt, sample) {
+function assertReceiptSampleIdentity(receipt, sample, preregistration) {
+  const hasCorrectOperations = sample.counts.correct > 0;
   if (
     receipt.blockIndex !== sample.blockIndex ||
     receipt.sideId !== sample.sideId ||
@@ -761,9 +639,17 @@ function assertReceiptSampleIdentity(receipt, sample) {
     receipt.capacitySampleDigest !== sample.sampleDigest ||
     receipt.semanticReceiptDigest !== sample.semanticReceiptDigest ||
     receipt.semanticContractDigest !==
-      sample.semanticReceipt.contractDigest ||
+      (
+        hasCorrectOperations ?
+          sample.semanticReceipt.contractDigest :
+          semanticContractDigestForSide(preregistration, sample.sideId)
+      ) ||
     receipt.semanticResultSetDigest !==
-      sample.semanticReceipt.resultSet.digest
+      (
+        hasCorrectOperations ?
+          sample.semanticReceipt.resultSet.digest :
+          emptySemanticResultSetDigest()
+      )
   ) {
     fail(localText.RECEIPT_OWNER_SAMPLE_WINDOW_MISMATCH);
   }
@@ -804,7 +690,7 @@ export function assertBenchmarkCapacityHeterogeneousOperationReceipt(
     },
   );
   assertReceiptCoordinateIdentity(receipt, sample, expected, identity);
-  assertReceiptSampleIdentity(receipt, sample);
+  assertReceiptSampleIdentity(receipt, sample, preregistration);
   assertReceiptBounds(receipt, sample);
   inspectOwnerReceipt(receipt.ownerReceipt, identity, sample);
   if (
@@ -812,7 +698,7 @@ export function assertBenchmarkCapacityHeterogeneousOperationReceipt(
   ) {
     fail(localText.OWNER_RECEIPT_DIGEST_MISMATCH);
   }
-  inspectHeadroom(receipt.headroom, sample);
+  assertBenchmarkCapacityHeadroomReceipt(receipt.headroom, sample);
   const expectedCounts = {};
   for (let index = 0; index < COUNT_KEYS.length; index += 1) {
     const key = COUNT_KEYS[index];
@@ -1264,24 +1150,49 @@ function ownerSemanticObservations(receipt, operationEvidence) {
   return observations;
 }
 
+function zeroSemanticEvidenceIsValid(
+  receipt,
+  semanticReceipt,
+  observations,
+) {
+  return semanticReceipt === null &&
+    observations.length === 0 &&
+    receipt.ownerReceipt.correctOperationCount === 0 &&
+    receipt.semanticReceiptDigest === null &&
+    receipt.semanticResultSetDigest === emptySemanticResultSetDigest();
+}
+
+function nonzeroSemanticReceiptMatches(
+  receipt,
+  semanticReceipt,
+  correctOperationCount,
+  observations,
+) {
+  return correctOperationCount === receipt.ownerReceipt.correctOperationCount &&
+    semanticReceipt.durability.status === localText.SEMANTIC_PASS &&
+    semanticReceipt.durability.observed === correctOperationCount &&
+    semanticReceipt.durability.expected === correctOperationCount &&
+    semanticReceipt.durability.missingIds.length === 0 &&
+    buildBenchmarkResultSetEvidence(observations).digest ===
+      semanticReceipt.resultSet.digest &&
+    semanticReceipt.resultSet.digest === receipt.semanticResultSetDigest;
+}
+
 function assertSemanticEvidence(
   receipt,
   semanticReceipt,
   correctOperationCount,
   observations,
 ) {
-  if (
-    correctOperationCount !== receipt.ownerReceipt.correctOperationCount ||
-    semanticReceipt.durability.status !== localText.SEMANTIC_PASS ||
-    semanticReceipt.durability.observed !== correctOperationCount ||
-    semanticReceipt.durability.expected !== correctOperationCount ||
-    semanticReceipt.durability.missingIds.length !== 0 ||
-    buildBenchmarkResultSetEvidence(observations).digest !==
-      semanticReceipt.resultSet.digest ||
-    semanticReceipt.resultSet.digest !== receipt.semanticResultSetDigest
-  ) {
-    fail(localText.RECEIPT_OPERATION_EVIDENCE_INVALID);
-  }
+  const valid = correctOperationCount === 0 ?
+    zeroSemanticEvidenceIsValid(receipt, semanticReceipt, observations) :
+    nonzeroSemanticReceiptMatches(
+      receipt,
+      semanticReceipt,
+      correctOperationCount,
+      observations,
+    );
+  if (!valid) fail(localText.RECEIPT_OPERATION_EVIDENCE_INVALID);
 }
 
 export function assertBenchmarkCapacityHeterogeneousOperationEvidence(
@@ -1348,7 +1259,7 @@ function replayCoordinateKey(value) {
 function replayProtocolForSide(sources, sideId, resolveProtocol) {
   for (let index = 0; index < sources.length; index += 1) {
     const protocol = resolveProtocol(sources[index]);
-    if (protocol.protocolSideId === sideId) {
+    if (protocol.mappedSideId === sideId) {
       return protocol;
     }
   }

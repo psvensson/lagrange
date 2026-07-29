@@ -178,7 +178,6 @@ const CAPACITY_STATISTICS = Object.freeze({
 const CAPACITY_SAMPLING = Object.freeze({
   tailQuantile: 0.99,
   tailSampleMinimum: 100,
-  warmupMs: 0,
   operationTimeoutMs: 120_000,
   semanticFinalizerTimeoutMs: 120_000,
   resetTimeoutMs: 30_000,
@@ -403,7 +402,11 @@ function capacityPreregistration({
     },
     sampling: {
       ...CAPACITY_SAMPLING,
-      measuredMs: MEASURED_MS,
+      windows: arrayMap(OFFERED_LOADS, (offeredLoadPerSecond) => ({
+        offeredLoadPerSecond,
+        warmupMs: 0,
+        measuredMs: MEASURED_MS,
+      })),
     },
     ...capacityExecutionPolicies(),
     randomization: {

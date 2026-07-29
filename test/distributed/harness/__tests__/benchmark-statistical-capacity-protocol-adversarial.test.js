@@ -36,6 +36,9 @@ import {
 import {
   runBenchmarkCapacityOpenLoopWindow,
 } from '../benchmark-capacity-open-loop.js';
+import {
+  bootstrapBenchmarkPairedRatioInterval,
+} from '../benchmark-capacity-statistics.js';
 
 const SIDE_IDS = ['left', 'right'];
 const DIALECTS = [
@@ -69,8 +72,18 @@ function preregistrationInput(overrides = {}) {
     sampling: {
       tailQuantile: 0.99,
       tailSampleMinimum: 100,
-      warmupMs: 0,
-      measuredMs: 1000,
+      windows: [
+        {
+          offeredLoadPerSecond: 100,
+          warmupMs: 0,
+          measuredMs: 1000,
+        },
+        {
+          offeredLoadPerSecond: 200,
+          warmupMs: 0,
+          measuredMs: 1000,
+        },
+      ],
       operationTimeoutMs: 100,
       semanticFinalizerTimeoutMs: 100,
       resetTimeoutMs: 100,
@@ -168,17 +181,56 @@ test('preregistration rejects hostile records and cumulative bootstrap work',
     t.equal(proxyTrapCalls, 0);
 
     const cumulative = preregistrationInput({
-      offeredLoadPerSecond:
-        Array.from({length: 5}, (_unused, index) => (index + 1) * 100000),
+      offeredLoadPerSecond: Array.from(
+        {length: 5},
+        (_unused, index) => (index + 1) * 100000,
+      ),
       repetitions: {minimum: 3, maximum: 100},
       sampling: {
         ...preregistrationInput().sampling,
-        measuredMs: 1,
+        windows: Array.from({length: 5}, (_unused, index) => ({
+          offeredLoadPerSecond: (index + 1) * 100000,
+          warmupMs: 0,
+          measuredMs: 1,
+        })),
       },
     });
     t.throws(
       () => sealBenchmarkCapacityPreregistration(cumulative),
       /bootstrapDraws:exceeds_bound/u,
+    );
+    t.throws(
+      () => bootstrapBenchmarkPairedRatioInterval([
+        [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
+        [Number.MAX_SAFE_INTEGER, Number.MAX_SAFE_INTEGER],
+      ], 0.95, 1, 1),
+      /unsafe paired ratio/u,
+    );
+    const plannedOperationBound = preregistrationInput({
+      offeredLoadPerSecond: [1_000],
+      sampling: {
+        ...preregistrationInput().sampling,
+        windows: [{
+          offeredLoadPerSecond: 1_000,
+          warmupMs: 0,
+          measuredMs: 100_000,
+        }],
+      },
+    });
+    t.doesNotThrow(
+      () => sealBenchmarkCapacityPreregistration(plannedOperationBound),
+    );
+    const plannedOperationOverflow = structuredClone(
+      plannedOperationBound,
+    );
+    plannedOperationOverflow.offeredLoadPerSecond[0] = 1_001;
+    plannedOperationOverflow.sampling.windows[0]
+      .offeredLoadPerSecond = 1_001;
+    t.throws(
+      () => sealBenchmarkCapacityPreregistration(
+        plannedOperationOverflow,
+      ),
+      /plannedOperations:exceeds_bound/u,
     );
     const sealed = sealBenchmarkCapacityPreregistration(
       preregistrationInput(),

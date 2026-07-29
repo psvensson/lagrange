@@ -3,6 +3,7 @@ import {
   appendOwnArrayValue,
   hasExactOwnDataKeys,
   isNonNegativeSafeInteger,
+  isNonNegativeSafeNumber,
   isPlainDataRecord,
 } from './benchmark-semantic-integrity.js';
 import {
@@ -49,11 +50,39 @@ const OPTION_KEYS = [
 const CLOCK_KEYS = ['now', 'sleep'];
 const OUTCOME_KEYS = ['status'];
 const OUTCOME_VALUES = new Set(Object.values(BENCHMARK_CAPACITY_OUTCOME));
+const RELEASE_WAIT_STATE = objectFreeze({
+  ACTIVE: 'active',
+  INACTIVE: 'inactive',
+});
+const INACTIVE_RELEASE_WAIT =
+  objectFreeze({state: RELEASE_WAIT_STATE.INACTIVE});
+const SEMANTIC_FINALIZER_STATE = objectFreeze({
+  COMPLETED: 'completed',
+  FAILED: 'failed',
+  TIMED_OUT: 'timed_out',
+});
+const localText = objectFreeze({
+  ABORT_EVENT: 'abort',
+  CLOCK_INVALID: 'open-loop clock must expose now and sleep',
+  IDENTITY_INVALID: 'invalid open-loop capacity identity',
+  OFFERED_LOAD_INVALID:
+    'invalid open-loop capacity option: offeredLoadPerSecond',
+  OPTIONS_SCHEMA_INVALID:
+    'open-loop capacity options must have the exact schema',
+  SCHEDULE_BOUND_INVALID:
+    'open-loop scheduled operation count outside sealed bound',
+  SEMANTIC_FINALIZER_LEAK:
+    'BENCHMARK_CAPACITY_SEMANTIC_FINALIZER_LEAK',
+  SEMANTIC_FINALIZER_REQUIRED:
+    'correct capacity sample requires semantic receipt finalizer',
+  SEMANTIC_FINALIZER_TIMEOUT:
+    'BENCHMARK_CAPACITY_SEMANTIC_FINALIZER_TIMEOUT',
+});
 
 function assertOptionShape(options) {
   if (!hasExactOwnDataKeys(options, OPTION_KEYS)) {
     throw new TypeError(
-      'open-loop capacity options must have the exact schema',
+      localText.OPTIONS_SCHEMA_INVALID,
     );
   }
 }
@@ -83,14 +112,13 @@ function assertOptionIdentity(options) {
     ) ||
     !signalIsValid(options.signal)
   ) {
-    throw new TypeError('invalid open-loop capacity identity');
+    throw new TypeError(localText.IDENTITY_INVALID);
   }
 }
 
 function assertOptionIntegers(options) {
   const integerFields = [
     ['blockIndex', true],
-    ['offeredLoadPerSecond', false],
     ['windowDurationMs', false],
     ['operationTimeoutMs', false],
     ['semanticFinalizerTimeoutMs', false],
@@ -107,6 +135,14 @@ function assertOptionIntegers(options) {
     ) {
       throw new TypeError(`invalid open-loop capacity option: ${key}`);
     }
+  }
+  if (
+    !isNonNegativeSafeNumber(options.offeredLoadPerSecond) ||
+    options.offeredLoadPerSecond === 0
+  ) {
+    throw new TypeError(
+      localText.OFFERED_LOAD_INVALID,
+    );
   }
 }
 
@@ -163,6 +199,7 @@ function recordOutcome(state, operation, status, completedAtMs) {
     0,
     completedAtMs - operation.scheduledAtMs,
   );
+  appendOwnArrayValue(state.clientQueueDelayMs, queueDelayMs);
   if (status === BENCHMARK_CAPACITY_OUTCOME.CORRECT) {
     state.counts.correct += 1;
     appendOwnArrayValue(
@@ -170,7 +207,6 @@ function recordOutcome(state, operation, status, completedAtMs) {
       operation.operationIndex,
     );
     appendOwnArrayValue(state.endToEndLatencyMs, endToEndLatencyMs);
-    appendOwnArrayValue(state.clientQueueDelayMs, queueDelayMs);
     return;
   }
   if (status === BENCHMARK_CAPACITY_OUTCOME.REJECTED) {
@@ -358,8 +394,8 @@ function createDrain(state) {
 function cancelWindow(state) {
   if (state.cancelled) return;
   state.cancelled = true;
-  if (state.releaseCancel !== undefined) {
-    state.releaseCancel();
+  if (state.releaseWait.state === RELEASE_WAIT_STATE.ACTIVE) {
+    state.releaseWait.cancel();
   }
   state.counts.undispatched += state.queue.length;
   state.queue.length = 0;
@@ -367,6 +403,31 @@ function cancelWindow(state) {
   for (let index = 0; index < cancellationKeys.length; index += 1) {
     state.activeCancellations[cancellationKeys[index]]();
   }
+}
+
+async function waitForScheduledRelease(state, delayMs, clock) {
+  if (delayMs === 0) return;
+  let cancel;
+  const cancelledRelease = new Promise((resolve) => {
+    cancel = resolve;
+  });
+  state.releaseWait = objectFreeze({
+    cancel,
+    state: RELEASE_WAIT_STATE.ACTIVE,
+  });
+  await promiseRace([clock.sleep(delayMs), cancelledRelease]);
+  state.releaseWait = INACTIVE_RELEASE_WAIT;
+}
+
+function recordUnreleasedOperations(state, count) {
+  state.counts.undispatched += count;
+  state.unreleasedOperations += count;
+}
+
+function recordSchedulerSaturation(state, saturation, unreleasedCount) {
+  state.schedulerSaturation = saturation;
+  recordUnreleasedOperations(state, unreleasedCount);
+  cancelWindow(state);
 }
 
 async function runSemanticFinalizer(options, state) {
@@ -388,21 +449,27 @@ async function runSemanticFinalizer(options, state) {
     }));
   const completed = promiseThen(
     invoked,
-    (value) => ({status: 'completed', value}),
-    (error) => ({status: 'failed', error}),
+    (value) => ({
+      status: SEMANTIC_FINALIZER_STATE.COMPLETED,
+      value,
+    }),
+    (error) => ({
+      status: SEMANTIC_FINALIZER_STATE.FAILED,
+      error,
+    }),
   );
   const timedOut = new Promise((resolve) => {
     timeoutId = setTimeout(
-      () => resolve({status: 'timed_out'}),
+      () => resolve({status: SEMANTIC_FINALIZER_STATE.TIMED_OUT}),
       options.semanticFinalizerTimeoutMs,
     );
   });
   const result = await promiseRace([completed, timedOut]);
   clearTimeout(timeoutId);
-  if (result.status === 'completed') {
+  if (result.status === SEMANTIC_FINALIZER_STATE.COMPLETED) {
     return result.value;
   }
-  if (result.status === 'failed') {
+  if (result.status === SEMANTIC_FINALIZER_STATE.FAILED) {
     throw result.error;
   }
   controller.abort();
@@ -416,8 +483,8 @@ async function runSemanticFinalizer(options, state) {
       'capacity semantic receipt finalizer ignored bounded abort',
   );
   error.code = settled ?
-    'BENCHMARK_CAPACITY_SEMANTIC_FINALIZER_TIMEOUT' :
-    'BENCHMARK_CAPACITY_SEMANTIC_FINALIZER_LEAK';
+    localText.SEMANTIC_FINALIZER_TIMEOUT :
+    localText.SEMANTIC_FINALIZER_LEAK;
   throw error;
 }
 
@@ -448,38 +515,35 @@ async function releaseScheduledOperations({
     operationIndex < scheduledOperations;
     operationIndex += 1) {
     if (state.cancelled) {
-      state.counts.undispatched += scheduledOperations - operationIndex;
-      state.unreleasedOperations += scheduledOperations - operationIndex;
+      recordUnreleasedOperations(
+        state,
+        scheduledOperations - operationIndex,
+      );
       break;
     }
     const releaseOffsetMs = state.releaseOffsetsMs[operationIndex];
     const scheduledAtMs = startMs + releaseOffsetMs;
     const delayMs = mathMax(0, scheduledAtMs - clock.now());
-    if (delayMs > 0) {
-      let releaseCancel;
-      const cancelledRelease = new Promise((resolve) => {
-        releaseCancel = resolve;
-      });
-      state.releaseCancel = releaseCancel;
-      await promiseRace([clock.sleep(delayMs), cancelledRelease]);
-      state.releaseCancel = undefined;
-    }
+    await waitForScheduledRelease(state, delayMs, clock);
     if (state.cancelled) {
-      state.counts.undispatched += scheduledOperations - operationIndex;
-      state.unreleasedOperations += scheduledOperations - operationIndex;
+      recordUnreleasedOperations(
+        state,
+        scheduledOperations - operationIndex,
+      );
       break;
     }
     const releaseLagMs = mathMax(0, clock.now() - scheduledAtMs);
     state.releaseLagMs[operationIndex] = releaseLagMs;
     if (releaseLagMs > options.maxReleaseLagMs) {
-      state.schedulerSaturation = {
-        operationIndex,
-        releaseLagMs,
-        maxReleaseLagMs: options.maxReleaseLagMs,
-      };
-      state.counts.undispatched += scheduledOperations - operationIndex;
-      state.unreleasedOperations += scheduledOperations - operationIndex;
-      cancelWindow(state);
+      recordSchedulerSaturation(
+        state,
+        {
+          operationIndex,
+          releaseLagMs,
+          maxReleaseLagMs: options.maxReleaseLagMs,
+        },
+        scheduledOperations - operationIndex,
+      );
       break;
     }
     releaseOperation(
@@ -527,7 +591,7 @@ function assertClock(clock) {
     typeof clock.now !== 'function' ||
     typeof clock.sleep !== 'function'
   ) {
-    throw new TypeError('open-loop clock must expose now and sleep');
+    throw new TypeError(localText.CLOCK_INVALID);
   }
 }
 
@@ -537,7 +601,7 @@ function assertScheduledOperationBound(scheduledOperations) {
     scheduledOperations > BENCHMARK_CAPACITY_MAX_OPERATIONS_PER_WINDOW
   ) {
     throw new RangeError(
-      'open-loop scheduled operation count outside sealed bound',
+      localText.SCHEDULE_BOUND_INVALID,
     );
   }
 }
@@ -552,7 +616,11 @@ function attachExternalCancellation(options, state, settle) {
     externalSignal &&
     typeof externalSignal.addEventListener === 'function'
   ) {
-    externalSignal.addEventListener('abort', cancelListener, {once: true});
+    externalSignal.addEventListener(
+      localText.ABORT_EVENT,
+      cancelListener,
+      {once: true},
+    );
     if (externalSignal.aborted) cancelListener();
   }
   return {externalSignal, cancelListener};
@@ -564,17 +632,22 @@ function detachExternalCancellation(binding) {
     typeof binding.externalSignal.removeEventListener === 'function'
   ) {
     binding.externalSignal.removeEventListener(
-      'abort',
+      localText.ABORT_EVENT,
       binding.cancelListener,
     );
   }
 }
 
 async function resolveSemanticReceipt(options, state) {
-  if (state.counts.correct === 0) return null;
+  if (state.counts.correct === 0) {
+    if (typeof options.finalizeSemanticReceipt === 'function') {
+      await runSemanticFinalizer(options, state);
+    }
+    return null;
+  }
   if (typeof options.finalizeSemanticReceipt !== 'function') {
     throw new TypeError(
-      'correct capacity sample requires semantic receipt finalizer',
+      localText.SEMANTIC_FINALIZER_REQUIRED,
     );
   }
   return runSemanticFinalizer(options, state);
@@ -598,7 +671,7 @@ export async function runBenchmarkCapacityOpenLoopWindow(
     queue: [],
     activeCancellations: objectCreate(null),
     cancelled: false,
-    releaseCancel: undefined,
+    releaseWait: INACTIVE_RELEASE_WAIT,
     releasesComplete: false,
     counts: createCounts(),
     rejectedByReason: createRejectedByReason(),

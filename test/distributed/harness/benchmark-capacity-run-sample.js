@@ -68,6 +68,39 @@ const REJECT_REASON_KEYS = ['queueFull', 'flowControl', 'admission'];
 const mathCeil = Math.ceil;
 const mathFloor = Math.floor;
 const mathMax = Math.max;
+const localText = Object.freeze({
+  CLIENT_QUEUE_DELAY_COUNT:
+    'client_queue_delay_samples:must_equal_dispatched_count',
+  COUNTS_ACCOUNTING: 'counts:accounting_does_not_reconcile',
+  COUNTS_OFFERED_SCHEDULE:
+    'counts.offered:does_not_match_open_loop_schedule',
+  COUNTS_SHAPE: 'counts:exact_plain_data_record_required',
+  DERIVED_METRICS_UNSAFE: 'derived_metrics:unsafe',
+  END_TO_END_LATENCY_COUNT:
+    'end_to_end_latency_samples:must_equal_correct_count',
+  OBSERVATION_CLOCK: 'observationClock:monotonic_interval_required',
+  OFFERED_LOAD: 'offeredLoadPerSecond:positive_safe_number_required',
+  PHASE_UNSUPPORTED: 'phase:unsupported',
+  REJECTED_REASON_SHAPE:
+    'rejectedByReason:exact_plain_data_record_required',
+  RELEASE_LAG_COUNT: 'releaseLagMs:does_not_match_offered_count',
+  RELEASE_LAG_DENSE: 'releaseLagMs:dense_array_required',
+  RELEASE_OFFSET_COUNT:
+    'releaseOffsetsMs:does_not_match_offered_count',
+  ROOT_SHAPE: 'root:exact_plain_data_record_required',
+  SAMPLE_DIGEST_MISMATCH: 'sample_digest_mismatch',
+  SAMPLE_FIELDS_INVALID: 'sample_fields_invalid',
+  SAMPLE_SHAPE_INVALID: 'sample_shape_invalid',
+  SAMPLE_VALID: 'valid',
+  SEMANTIC_DIALECT_UNSUPPORTED: 'semanticDialect:unsupported',
+  SEMANTIC_RECEIPT_REQUIRED_ABSENCE:
+    'semanticReceipt:must_be_null_without_correct_operations',
+  SEMANTIC_RECEIPT_INVALID:
+    'semanticReceipt:valid_matching_c2_receipt_required',
+  SIDE_ID: 'sideId',
+  UNRELEASED_ACCOUNTING:
+    'unreleasedOperations:accounting_mismatch',
+});
 
 function fail(path) {
   throw new TypeError(`invalid capacity run sample: ${path}`);
@@ -103,7 +136,7 @@ function copySafeNumberArray(values, path, integersOnly = false) {
 
 function copyReleaseLagArray(values) {
   if (!isDenseDataArray(values)) {
-    fail('releaseLagMs:dense_array_required');
+    fail(localText.RELEASE_LAG_DENSE);
   }
   const copied = [];
   for (let index = 0; index < values.length; index += 1) {
@@ -118,7 +151,7 @@ function copyReleaseLagArray(values) {
 
 function copyCounts(counts) {
   if (!hasExactOwnDataKeys(counts, COUNT_KEYS)) {
-    fail('counts:exact_plain_data_record_required');
+    fail(localText.COUNTS_SHAPE);
   }
   const copied = {};
   for (let index = 0; index < COUNT_KEYS.length; index += 1) {
@@ -133,7 +166,7 @@ function copyCounts(counts) {
 
 function copyRejectedByReason(reasons) {
   if (!hasExactOwnDataKeys(reasons, REJECT_REASON_KEYS)) {
-    fail('rejectedByReason:exact_plain_data_record_required');
+    fail(localText.REJECTED_REASON_SHAPE);
   }
   const copied = {};
   for (let index = 0; index < REJECT_REASON_KEYS.length; index += 1) {
@@ -169,7 +202,7 @@ function assertAccounting(counts, reasons) {
     counts.dispatched !== dispatchedTerminal ||
     counts.offered !== offeredTotal
   ) {
-    fail('counts:accounting_does_not_reconcile');
+    fail(localText.COUNTS_ACCOUNTING);
   }
 }
 
@@ -178,7 +211,7 @@ function assertReleaseLag(sample, expectedOffered) {
     sample.unreleasedOperations > sample.counts.undispatched ||
     sample.unreleasedOperations > expectedOffered
   ) {
-    fail('unreleasedOperations:accounting_mismatch');
+    fail(localText.UNRELEASED_ACCOUNTING);
   }
   let previous = -1;
   for (let index = 0; index < sample.releaseOffsetsMs.length; index += 1) {
@@ -216,13 +249,13 @@ function assertSchedule(sample) {
     BENCHMARK_CAPACITY_MILLISECONDS_PER_SECOND,
   );
   if (sample.counts.offered !== expectedOffered || expectedOffered === 0) {
-    fail('counts.offered:does_not_match_open_loop_schedule');
+    fail(localText.COUNTS_OFFERED_SCHEDULE);
   }
   if (sample.releaseOffsetsMs.length !== expectedOffered) {
-    fail('releaseOffsetsMs:does_not_match_offered_count');
+    fail(localText.RELEASE_OFFSET_COUNT);
   }
   if (sample.releaseLagMs.length !== expectedOffered) {
-    fail('releaseLagMs:does_not_match_offered_count');
+    fail(localText.RELEASE_LAG_COUNT);
   }
   assertReleaseLag(sample, expectedOffered);
 }
@@ -230,7 +263,6 @@ function assertSchedule(sample) {
 function assertIntegerFields(input) {
   const integerFields = [
     ['blockIndex', true],
-    ['offeredLoadPerSecond', false],
     ['windowDurationMs', false],
     ['operationTimeoutMs', false],
     ['maxReleaseLagMs', true],
@@ -248,6 +280,12 @@ function assertIntegerFields(input) {
       fail(`${key}:safe_integer_required`);
     }
   }
+  if (
+    !isNonNegativeSafeNumber(input.offeredLoadPerSecond) ||
+    input.offeredLoadPerSecond === 0
+  ) {
+    fail(localText.OFFERED_LOAD);
+  }
 }
 
 function assertObservationClock(input) {
@@ -256,7 +294,7 @@ function assertObservationClock(input) {
     !isNonNegativeSafeNumber(input.observationEndedAtMs) ||
     input.observationEndedAtMs < input.observationStartedAtMs
   ) {
-    fail('observationClock:monotonic_interval_required');
+    fail(localText.OBSERVATION_CLOCK);
   }
 }
 
@@ -297,11 +335,11 @@ function validateSemanticReceipt(
     semanticDialect !== BENCHMARK_SQL_DIALECT.SQLITE &&
     semanticDialect !== BENCHMARK_SQL_DIALECT.POSTGRESQL
   ) {
-    fail('semanticDialect:unsupported');
+    fail(localText.SEMANTIC_DIALECT_UNSUPPORTED);
   }
   if (counts.correct === 0) {
     if (receipt !== null) {
-      fail('semanticReceipt:must_be_null_without_correct_operations');
+      fail(localText.SEMANTIC_RECEIPT_REQUIRED_ABSENCE);
     }
     return null;
   }
@@ -311,7 +349,7 @@ function validateSemanticReceipt(
     !semanticReceiptPasses(inspection) ||
     !semanticAccountingMatches(receipt, counts, rejectedByReason)
   ) {
-    fail('semanticReceipt:valid_matching_c2_receipt_required');
+    fail(localText.SEMANTIC_RECEIPT_INVALID);
   }
   return receipt.receiptDigest;
 }
@@ -355,14 +393,14 @@ export function createBenchmarkCapacityRunSample(input) {
     !isPlainDataRecord(input) ||
     !hasExactOwnDataKeys(input, SAMPLE_INPUT_KEYS)
   ) {
-    fail('root:exact_plain_data_record_required');
+    fail(localText.ROOT_SHAPE);
   }
-  assertPrimitiveText(input.sideId, 'sideId');
+  assertPrimitiveText(input.sideId, localText.SIDE_ID);
   if (
     input.phase !== BENCHMARK_CAPACITY_PHASE.WARMUP &&
     input.phase !== BENCHMARK_CAPACITY_PHASE.MEASURED
   ) {
-    fail('phase:unsupported');
+    fail(localText.PHASE_UNSUPPORTED);
   }
   assertIntegerFields(input);
   assertObservationClock(input);
@@ -396,10 +434,12 @@ export function createBenchmarkCapacityRunSample(input) {
     rejectedByReason,
   );
   if (
-    endToEndLatencyMs.length !== counts.correct ||
-    clientQueueDelayMs.length !== counts.correct
+    endToEndLatencyMs.length !== counts.correct
   ) {
-    fail('latency_samples:must_equal_correct_count');
+    fail(localText.END_TO_END_LATENCY_COUNT);
+  }
+  if (clientQueueDelayMs.length !== counts.dispatched) {
+    fail(localText.CLIENT_QUEUE_DELAY_COUNT);
   }
   const errorRate = counts.offered > 0 ?
     (counts.offered - counts.correct) / counts.offered :
@@ -411,7 +451,7 @@ export function createBenchmarkCapacityRunSample(input) {
     !isNonNegativeSafeNumber(errorRate) ||
     !isNonNegativeSafeNumber(correctThroughputPerSecond)
   ) {
-    fail('derived_metrics:unsafe');
+    fail(localText.DERIVED_METRICS_UNSAFE);
   }
   const body = {
     version: BENCHMARK_CAPACITY_SAMPLE_VERSION,
@@ -451,7 +491,7 @@ export function createBenchmarkCapacityRunSample(input) {
 
 export function inspectBenchmarkCapacityRunSample(sample) {
   if (!hasExactOwnDataKeys(sample, SAMPLE_KEYS)) {
-    return {valid: false, reason: 'sample_shape_invalid'};
+    return {valid: false, reason: localText.SAMPLE_SHAPE_INVALID};
   }
   try {
     const reconstructed = createBenchmarkCapacityRunSample(
@@ -465,10 +505,10 @@ export function inspectBenchmarkCapacityRunSample(sample) {
     return {
       valid: digestMatches && canonicalMatches,
       reason: digestMatches && canonicalMatches ?
-        'valid' :
-        'sample_digest_mismatch',
+        localText.SAMPLE_VALID :
+        localText.SAMPLE_DIGEST_MISMATCH,
     };
   } catch {
-    return {valid: false, reason: 'sample_fields_invalid'};
+    return {valid: false, reason: localText.SAMPLE_FIELDS_INVALID};
   }
 }

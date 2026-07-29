@@ -11,14 +11,17 @@ export const BENCHMARK_RESOURCE_CONTRACT = Object.freeze({
 
 export const BENCHMARK_RESOURCE_ARTIFACT_KIND = Object.freeze({
   ALTERNATIVE_TOPOLOGY: 'alternative_topology',
+  CAMPAIGN_ROOT: 'campaign_root',
   CAPACITY_REPORT: 'capacity_report',
   CAPACITY_SAMPLE: 'capacity_sample',
   CELL_EVIDENCE: 'cell_evidence',
   COMPONENT_INVENTORY: 'component_inventory',
+  EXECUTION_ENVELOPE: 'execution_envelope',
   LIVE_CALIBRATION: 'live_calibration',
   LIVE_ENGAGEMENT: 'live_engagement',
   MATRIX_MANIFEST: 'matrix_manifest',
   PRICE_SHEET: 'price_sheet',
+  PRICE_SOURCE: 'price_source',
   PREREGISTRATION: 'preregistration',
   PROFILE_ENVELOPE: 'scale_profile_envelope',
   RESOURCE_WINDOW: 'resource_window',

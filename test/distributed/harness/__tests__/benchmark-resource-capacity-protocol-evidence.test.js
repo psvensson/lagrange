@@ -483,8 +483,6 @@ function reportWithAchievedThroughputBelowOffered(
     input.counts.errored += 1;
     input.endToEndLatencyMs =
       input.endToEndLatencyMs.slice(0, -1);
-    input.clientQueueDelayMs =
-      input.clientQueueDelayMs.slice(0, -1);
     input.semanticReceipt = semanticReceiptForCounts(
       input.semanticDialect,
       input.counts,
@@ -867,7 +865,18 @@ test('C4 assembler admits a repeated heterogeneous C3 measuring pair', async () 
   });
   capacityPreregistrationInput.sampling = {
     ...capacityPreregistrationInput.sampling,
-    measuredMs: 1_010,
+    windows: [
+      {
+        offeredLoadPerSecond: 100,
+        warmupMs: 100,
+        measuredMs: 1_010,
+      },
+      {
+        offeredLoadPerSecond: 340,
+        warmupMs: 100,
+        measuredMs: 1_010,
+      },
+    ],
   };
   const capacityPreregistration = sealBenchmarkCapacityPreregistration(
     capacityPreregistrationInput,

@@ -48,33 +48,36 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 23
+## Open quests — 26
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
+| benchmark-capacity-protocol-v2-foundation | product | 3 | 0 | 2026-07-29 | — |
 | comparative-efficiency-movielens-measured-p0-campaign | product | 0 | 0 | 2026-07-29 | — |
+| comparative-efficiency-postgresql-comparator-capture-reuse | product | 0 | 0 | 2026-07-29 | — |
+| comparative-efficiency-postgresql-comparator-reuse | product | 1 | 0 | 2026-07-29 | — |
 | documentation-audience-boundary-tooling | process | 1 | 0 | 2026-07-26 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | 2026-07-25 | — |
-| formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 | — |
+| formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 ⚠ stale | — |
 | github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-local-leader-row-visibility-model | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-nodes-priority-recovery-escape | product | 1 | 0 | 2026-07-25 | — |
 | movielens-operation-ledger-terminal-hold | product | 1 | 0 | 2026-07-25 | — |
-| movielens-parallel-reduce-result-chronology | product | 7 | 0 | 2026-07-22 | — |
+| movielens-parallel-reduce-result-chronology | product | 7 | 0 | 2026-07-22 ⚠ stale | — |
 | movielens-pre-schema-priority-spread-admission-authority | product | 0 | 0 | 2026-07-25 | — |
 | movielens-replace-bootstrap-cohort-authority | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-three-way-affinity-demo | product | 9 | 0 | 2026-07-21 ⚠ stale | — |
 | oci-container-driver-live-activation | product | 8 | 0 | 2026-07-25 | — |
-| operation-ledger-quorum-authoritative-release | product | 3 | 0 | 2026-07-22 | — |
+| operation-ledger-quorum-authoritative-release | product | 3 | 0 | 2026-07-22 ⚠ stale | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 ⚠ stale | — |
-| priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 | — |
+| priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 ⚠ stale | — |
 | remove-relief-falsifier-fence-fidelity | product | 1 | 0 | 2026-07-27 | CL-044, CL-043 |
-| runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-22 | — |
-| runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 | — |
+| runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-22 ⚠ stale | — |
+| runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 | — |
 | solver-attempt-base-correction-durable-projection | process | 1 | 0 | 2026-07-27 | — |
 
-> 6 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
+> 12 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 

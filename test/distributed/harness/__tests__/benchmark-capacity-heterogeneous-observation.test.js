@@ -28,6 +28,7 @@ import {
   createBenchmarkCapacityWindowReceipt,
 } from '../benchmark-capacity-window-receipt.js';
 import {
+  getBenchmarkCapacitySamplingWindow,
   sealBenchmarkCapacityPreregistration,
 } from '../benchmark-capacity-preregistration.js';
 import {
@@ -35,6 +36,7 @@ import {
 } from '../benchmark-capacity-protocol-constants.js';
 import {
   preregistrationInput,
+  semanticReceiptForCounts,
   SIDE_LAGRANGE,
   inputFromSample,
   successfulRunSample,
@@ -69,7 +71,10 @@ function fixture() {
     phase: BENCHMARK_CAPACITY_PHASE.MEASURED,
     blockIndex: 0,
     offeredLoadPerSecond: 100,
-    windowDurationMs: preregistration.sampling.measuredMs,
+    windowDurationMs: getBenchmarkCapacitySamplingWindow(
+      preregistration,
+      100,
+    ).measuredMs,
     p99LatencyMs: 20,
     preregistration,
   });
@@ -314,6 +319,76 @@ function fixture() {
   };
 }
 
+function zeroCorrectFixture() {
+  const value = fixture();
+  const counts = {
+    ...value.sample.counts,
+    correct: 0,
+    errored: value.sample.counts.dispatched,
+  };
+  const sample = createBenchmarkCapacityRunSample(inputFromSample(
+    value.sample,
+    {
+      counts,
+      endToEndLatencyMs: [],
+      clientQueueDelayMs: value.sample.clientQueueDelayMs,
+      semanticReceipt: null,
+    },
+  ));
+  const operationEvidence = Array.from(
+    {length: sample.counts.dispatched},
+    (_unused, operationIndex) => ({
+      status: 'errored',
+      operationIndex,
+      operationId: `request-${operationIndex}`,
+      failure: {name: 'Error', message: 'fixture operation failed'},
+    }),
+  );
+  const ownerReceipt = createBenchmarkCapacityAdapterOwnerReceipt({
+    adapterIdentity: value.adapterIdentity,
+    operationIds: [],
+    evidenceDigest: digestBenchmarkSemanticData({
+      adapterIdentityDigest:
+        value.adapterIdentity.adapterIdentityDigest,
+      coordinate: {
+        blockIndex: sample.blockIndex,
+        blockedOrderIndex: value.window.blockedOrderIndex,
+        sideId: sample.sideId,
+        offeredLoadPerSecond: sample.offeredLoadPerSecond,
+        phase: sample.phase,
+      },
+      semanticOracleDigest:
+        value.ownerReceipt.semanticOracleDigest,
+      operations: operationEvidence,
+    }),
+    semanticOracleDigest: value.ownerReceipt.semanticOracleDigest,
+  });
+  const headroom = createBenchmarkCapacityHeadroomReceipt({
+    minimumRequiredRatio: 0.1,
+    observerCpu: {capacity: 100, observedPeak: 5},
+    hostCpu: {capacity: 16, observedPeak: 4},
+    hostMemory: {capacity: 64_000, observedPeak: 16_000},
+    sharedNetwork: {capacity: 10_000, observedPeak: 2_000},
+    sharedStorage: {capacity: 10_000, observedPeak: 1_000},
+  }, sample);
+  const receipt = createBenchmarkCapacityHeterogeneousOperationReceipt({
+    preregistration: value.preregistration,
+    sample,
+    adapterIdentity: value.adapterIdentity,
+    ownerReceipt,
+    window: value.window,
+    headroom,
+  });
+  return {
+    ...value,
+    sample,
+    operationEvidence,
+    ownerReceipt,
+    headroom,
+    receipt,
+  };
+}
+
 function receiptInput(value, overrides = {}) {
   return {
     preregistration: value.preregistration,
@@ -422,6 +497,34 @@ test('heterogeneous receipt joins C2, C3, adapter, and exact window identity', (
   );
 });
 
+test('heterogeneous receipt retains an all-error owner window', () => {
+  const value = zeroCorrectFixture();
+  assert.equal(value.receipt.semanticReceiptDigest, null);
+  assert.equal(value.receipt.ownerReceipt.correctOperationCount, 0);
+  assert.deepEqual(value.receipt.latencyQuantilesMs, {
+    p50: null,
+    p95: null,
+    p99: null,
+  });
+  assert.equal(
+    assertBenchmarkCapacityHeterogeneousOperationReceipt(
+      value.receipt,
+      value.sample,
+      value.preregistration,
+    ),
+    true,
+  );
+  assert.equal(
+    assertBenchmarkCapacityHeterogeneousOperationEvidence(
+      value.receipt,
+      value.operationEvidence,
+      null,
+      value.runtimeOwnerEvidence,
+    ),
+    true,
+  );
+});
+
 test('heterogeneous receipt rejects caller assertion and cross-window joins', () => {
   const value = fixture();
   assert.throws(
@@ -462,6 +565,75 @@ test('heterogeneous receipt rejects measurement-infrastructure saturation', () =
     }),
     /headroom:ineligible_or_digest_mismatch/u,
   );
+});
+
+test('heterogeneous receipt rejects tampered derived headroom fields', () => {
+  const value = fixture();
+  const tampered = {
+    ...value.headroom,
+    externalEmitter: {
+      ...value.headroom.externalEmitter,
+      observedPeak: 0,
+      headroomRatio: 1,
+    },
+    clientQueue: {
+      ...value.headroom.clientQueue,
+      observedPeak: 0,
+      headroomRatio: 1,
+    },
+    minimumObservedRatio: 0,
+  };
+  assert.throws(
+    () => createBenchmarkCapacityHeterogeneousOperationReceipt({
+      ...receiptInput(value),
+      headroom: tampered,
+    }),
+    /headroom:ineligible_or_digest_mismatch/u,
+  );
+});
+
+test('bounded workload queue overflow remains an observed capacity outcome', () => {
+  const value = fixture();
+  const queueOverflow = 5;
+  const counts = {
+    ...value.sample.counts,
+    dispatched: value.sample.counts.dispatched - queueOverflow,
+    correct: value.sample.counts.correct - queueOverflow,
+    rejected: queueOverflow,
+    queueOverflow,
+  };
+  const rejectedByReason = {
+    ...value.sample.rejectedByReason,
+    queueFull: queueOverflow,
+  };
+  const sample = createBenchmarkCapacityRunSample(inputFromSample(
+    value.sample,
+    {
+      counts,
+      rejectedByReason,
+      endToEndLatencyMs:
+        value.sample.endToEndLatencyMs.slice(0, counts.correct),
+      clientQueueDelayMs:
+        value.sample.clientQueueDelayMs.slice(0, counts.dispatched),
+      semanticReceipt: semanticReceiptForCounts(
+        value.sample.semanticDialect,
+        counts,
+        rejectedByReason,
+      ),
+    },
+  ));
+  const headroom = createBenchmarkCapacityHeadroomReceipt({
+    minimumRequiredRatio: 0.2,
+    observerCpu: {capacity: 100, observedPeak: 5},
+    hostCpu: {capacity: 16, observedPeak: 4},
+    hostMemory: {capacity: 64_000, observedPeak: 16_000},
+    sharedNetwork: {capacity: 10_000, observedPeak: 2_000},
+    sharedStorage: {capacity: 10_000, observedPeak: 1_000},
+  }, sample);
+
+  assert.equal(headroom.eligible, true);
+  assert.equal(sample.counts.queueOverflow, queueOverflow);
+  assert.equal(sample.errorRate, queueOverflow / sample.counts.offered);
 });
 
 test('heterogeneous receipt inspector rejects digest tampering', () => {

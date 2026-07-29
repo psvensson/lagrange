@@ -20,6 +20,7 @@ import {
   BENCHMARK_CAPACITY_TIMEOUT_POLICY,
 } from '../benchmark-capacity-protocol-constants.js';
 import {
+  getBenchmarkCapacitySamplingWindow,
   inspectBenchmarkCapacityPreregistration,
   sealBenchmarkCapacityPreregistration,
 } from '../benchmark-capacity-preregistration.js';
@@ -94,6 +95,41 @@ test('preregistration seals every statistical and execution policy', (t) => {
   t.end();
 });
 
+test('sampling windows preserve fractional identity and per-load duration',
+  (t) => {
+    const firstLoad = 100.5;
+    const secondLoad = 200.5;
+    const firstMeasuredMs = 1_000;
+    const secondMeasuredMs = 2_000;
+    const input = preregistrationInput({
+      offeredLoadPerSecond: [firstLoad, secondLoad],
+    });
+    input.sampling.windows = [
+      {
+        ...input.sampling.windows[0],
+        offeredLoadPerSecond: firstLoad,
+        measuredMs: firstMeasuredMs,
+      },
+      {
+        ...input.sampling.windows[1],
+        offeredLoadPerSecond: secondLoad,
+        measuredMs: secondMeasuredMs,
+      },
+    ];
+
+    const sealed = sealBenchmarkCapacityPreregistration(input);
+
+    t.equal(
+      getBenchmarkCapacitySamplingWindow(sealed, firstLoad).measuredMs,
+      firstMeasuredMs,
+    );
+    t.equal(
+      getBenchmarkCapacitySamplingWindow(sealed, secondLoad).measuredMs,
+      secondMeasuredMs,
+    );
+    t.end();
+  });
+
 test('blocked pair order is seeded, balanced, and identity-bound', (t) => {
   const first = sealBenchmarkCapacityPreregistration(preregistrationInput());
   const same = sealBenchmarkCapacityPreregistration(preregistrationInput());
@@ -132,13 +168,41 @@ test('sealed preregistration rejects tampering and unsafe numeric edges', (t) =>
     Number.MAX_SAFE_INTEGER + 1,
   ]) {
     const input = preregistrationInput();
-    input.sampling.measuredMs = value;
+    input.sampling.windows[0].measuredMs = value;
     t.throws(
       () => sealBenchmarkCapacityPreregistration(input),
       /invalid capacity preregistration/u,
       String(value),
     );
   }
+  for (const value of [
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    -1,
+    -0,
+    0,
+  ]) {
+    const input = preregistrationInput();
+    input.offeredLoadPerSecond[0] = value;
+    input.sampling.windows[0].offeredLoadPerSecond = value;
+    t.throws(
+      () => sealBenchmarkCapacityPreregistration(input),
+      /offeredLoadPerSecond/u,
+      `offered load ${String(value)}`,
+    );
+  }
+  const misalignedWindow = preregistrationInput();
+  misalignedWindow.sampling.windows[0].offeredLoadPerSecond = 101;
+  t.throws(
+    () => sealBenchmarkCapacityPreregistration(misalignedWindow),
+    /offered_load_mismatch/u,
+  );
+  const mixedWarmup = preregistrationInput();
+  mixedWarmup.sampling.windows[0].warmupMs = 0;
+  t.throws(
+    () => sealBenchmarkCapacityPreregistration(mixedWarmup),
+    /uniform_warmup_presence_required/u,
+  );
   for (const [field, value] of [
     ['tailSampleMinimum', 1],
     ['bootstrapResamples', 1],
@@ -193,7 +257,7 @@ test('run sample reconciles every non-success denominator', (t) => {
     counts,
     rejectedByReason,
     endToEndLatencyMs: repeated(10, 80),
-    clientQueueDelayMs: repeated(4, 80),
+    clientQueueDelayMs: repeated(4, 90),
     releaseOffsetsMs: releaseOffsets(100, 1000),
     releaseLagMs: repeated(0, 100),
     unreleasedOperations: 0,
@@ -850,6 +914,38 @@ test('open-loop saturation keeps queueing and overflow observable', async (t) =>
     sample.correctThroughputPerSecond <
       sample.counts.correct * 1000 / sample.windowDurationMs,
   );
+  t.end();
+});
+
+test('all-error windows still finalize owner evidence', async (t) => {
+  let finalizerCalls = 0;
+  const sample = await runBenchmarkCapacityOpenLoopWindow({
+    sideId: SIDE_LAGRANGE,
+    phase: BENCHMARK_CAPACITY_PHASE.WARMUP,
+    blockIndex: 0,
+    offeredLoadPerSecond: 1000,
+    windowDurationMs: 10,
+    operationTimeoutMs: 100,
+    semanticFinalizerTimeoutMs: FIXTURE_FINALIZER_TIMEOUT_MS,
+    maxReleaseLagMs: FIXTURE_RELEASE_LAG_MS,
+    clientMaxInFlight: FIXTURE_MAX_IN_FLIGHT,
+    clientMaxQueueDepth: FIXTURE_MAX_QUEUE_DEPTH,
+    semanticDialect: BENCHMARK_SQL_DIALECT.SQLITE,
+    signal: null,
+    finalizeSemanticReceipt() {
+      finalizerCalls += 1;
+      return null;
+    },
+    executeOperation() {
+      return {status: BENCHMARK_CAPACITY_OUTCOME.ERRORED};
+    },
+  });
+
+  t.equal(finalizerCalls, 1);
+  t.equal(sample.counts.correct, 0);
+  t.equal(sample.counts.errored, sample.counts.dispatched);
+  t.equal(sample.clientQueueDelayMs.length, sample.counts.dispatched);
+  t.equal(sample.semanticReceipt, null);
   t.end();
 });
 

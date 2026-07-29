@@ -83,14 +83,18 @@ const STATISTICS_KEYS = [
 const SAMPLING_KEYS = [
   'tailQuantile',
   'tailSampleMinimum',
-  'warmupMs',
-  'measuredMs',
+  'windows',
   'operationTimeoutMs',
   'semanticFinalizerTimeoutMs',
   'resetTimeoutMs',
   'maxReleaseLagMs',
   'clientMaxInFlight',
   'clientMaxQueueDepth',
+];
+const SAMPLING_WINDOW_KEYS = [
+  'offeredLoadPerSecond',
+  'warmupMs',
+  'measuredMs',
 ];
 const RANDOMIZATION_KEYS = ['algorithm', 'seed'];
 const EXECUTION_IDENTITY_KEYS = [
@@ -126,6 +130,85 @@ const mathImul = Math.imul;
 const isProxy = types.isProxy.bind(types);
 const objectKeys = Object.keys;
 const regexpExec = Function.call.bind(RegExp.prototype.exec);
+const RANDOM_INCREMENT = 0x6D2B79F5;
+const RANDOM_FIRST_SHIFT = 15;
+const RANDOM_SECOND_SHIFT = 7;
+const RANDOM_SECOND_MULTIPLIER = 61;
+const RANDOM_FINAL_SHIFT = 14;
+const UINT32_RANGE = 4_294_967_296;
+const localText = Object.freeze({
+  BOOTSTRAP_DRAWS_EXCEEDED: 'bootstrapDraws:exceeds_bound',
+  EXECUTION_IDENTITY: 'executionIdentity',
+  EXPECTED_BLOCK_INDEX:
+    'expectedWindow.context.blockIndex:out_of_range',
+  EXPECTED_CONTEXT: 'expectedWindow.context',
+  EXPECTED_COORDINATE:
+    'expectedWindow.context:unregistered_coordinate',
+  EXPECTED_ORDER_INDEX:
+    'expectedWindow.context.blockedOrderIndex:out_of_range',
+  MATRIX_RUNS_EXCEEDED: 'matrixRuns:exceeds_bound',
+  NON_NEGATIVE_SAFE_INTEGER: 'non_negative_safe_integer_required',
+  OFFERED_LOADS_EMPTY:
+    'offeredLoadPerSecond:non_empty_dense_array_required',
+  OFFERED_LOADS_ORDER:
+    'offeredLoadPerSecond:strictly_increasing_required',
+  OFFERED_LOADS_TOO_MANY:
+    'offeredLoadPerSecond:too_many_load_points',
+  PLAIN_RECORD: 'plain_data_record_required',
+  PLANNED_OPERATIONS_EXCEEDED: 'plannedOperations:exceeds_bound',
+  RANDOMIZATION: 'randomization',
+  RANDOMIZATION_ALGORITHM: 'randomization.algorithm:unsupported',
+  RANDOMIZATION_SEED: 'randomization.seed',
+  REPETITIONS: 'repetitions',
+  REPETITIONS_MAXIMUM: 'repetitions.maximum',
+  REPETITIONS_MAXIMUM_EXCEEDED:
+    'repetitions.maximum:exceeds_bound',
+  REPETITIONS_MINIMUM: 'repetitions.minimum',
+  REPETITIONS_MINIMUM_FLOOR:
+    'repetitions.minimum:paired_block_floor',
+  REPETITIONS_REVERSED: 'repetitions:reversed',
+  ROOT: 'root',
+  SAMPLING: 'sampling',
+  SAMPLING_CLIENT_IN_FLIGHT: 'sampling.clientMaxInFlight',
+  SAMPLING_CLIENT_QUEUE: 'sampling.clientMaxQueueDepth',
+  SAMPLING_MAX_RELEASE_LAG:
+    'sampling.maxReleaseLagMs:non_negative_safe_integer_required',
+  SAMPLING_OPERATION_TIMEOUT: 'sampling.operationTimeoutMs',
+  SAMPLING_RESET_TIMEOUT: 'sampling.resetTimeoutMs',
+  SAMPLING_SEMANTIC_TIMEOUT: 'sampling.semanticFinalizerTimeoutMs',
+  SAMPLING_TAIL_MINIMUM: 'sampling.tailSampleMinimum',
+  SAMPLING_TAIL_MINIMUM_FLOOR:
+    'sampling.tailSampleMinimum:below_defensible_floor',
+  SAMPLING_TAIL_QUANTILE: 'sampling.tailQuantile:must_be_p99',
+  SAMPLING_WARMUP_UNIFORM:
+    'sampling.windows:uniform_warmup_presence_required',
+  SAMPLING_WINDOW_ABSENT:
+    'samplingWindow:unregistered_offered_load',
+  SAMPLING_WINDOWS_ALIGNMENT:
+    'sampling.windows:load_aligned_dense_array_required',
+  SEALED_DIGEST_MISMATCH: 'sealed_digest_mismatch',
+  SEALED_FIELDS_INVALID: 'sealed_fields_invalid',
+  SEALED_SHAPE_INVALID: 'sealed_shape_invalid',
+  SIDE_CONTRACTS:
+    'sideSemanticContracts:two_dense_contracts_required',
+  SIDE_IDS_DISTINCT: 'sideIds:must_be_distinct',
+  SIDE_IDS_REQUIRED: 'sideIds:two_dense_identifiers_required',
+  SLO: 'slo',
+  SLO_ERROR_RATE: 'slo.maxErrorRate',
+  SLO_LATENCY: 'slo.maxP99LatencyMs:positive_safe_number_required',
+  STATISTICS: 'statistics',
+  STATISTICS_BOOTSTRAP: 'statistics.bootstrapResamples',
+  STATISTICS_BOOTSTRAP_EXCEEDED:
+    'statistics.bootstrapResamples:exceeds_bound',
+  STATISTICS_BOOTSTRAP_FLOOR:
+    'statistics.bootstrapResamples:below_defensible_floor',
+  STATISTICS_CONFIDENCE: 'statistics.confidenceLevel',
+  STATISTICS_CI_WIDTH:
+    'statistics.targetRelativeCiWidth:positive_safe_number_required',
+  STATISTICS_PRACTICAL: 'statistics.practicalSignificanceRatio',
+  STUDY_ID: 'studyId',
+  VALID: 'valid',
+});
 
 function fail(path) {
   throw new TypeError(`invalid capacity preregistration: ${path}`);
@@ -175,6 +258,12 @@ function assertPositiveSafeInteger(value, path) {
   }
 }
 
+function assertPositiveSafeNumber(value, path) {
+  if (!isNonNegativeSafeNumber(value) || value === 0) {
+    fail(`${path}:positive_safe_number_required`);
+  }
+}
+
 function operationCountWithinBound(offeredLoad, durationMs) {
   const count = mathFloor(
     offeredLoad * durationMs /
@@ -200,7 +289,7 @@ function copySideIds(sideIds) {
     !isExactArray(sideIds) ||
     sideIds.length !== BENCHMARK_CAPACITY_SIDE_COUNT
   ) {
-    fail('sideIds:two_dense_identifiers_required');
+    fail(localText.SIDE_IDS_REQUIRED);
   }
   const copied = [];
   for (let index = 0; index < sideIds.length; index += 1) {
@@ -208,37 +297,28 @@ function copySideIds(sideIds) {
     appendOwnArrayValue(copied, sideIds[index]);
   }
   if (copied[0] === copied[1]) {
-    fail('sideIds:must_be_distinct');
+    fail(localText.SIDE_IDS_DISTINCT);
   }
   return copied;
 }
 
-function copyOfferedLoadSchedule(schedule, measuredMs, warmupMs) {
+function copyOfferedLoadSchedule(schedule) {
   if (!isExactArray(schedule) || schedule.length === 0) {
-    fail('offeredLoadPerSecond:non_empty_dense_array_required');
+    fail(localText.OFFERED_LOADS_EMPTY);
   }
   if (schedule.length > BENCHMARK_CAPACITY_MAX_LOAD_POINTS) {
-    fail('offeredLoadPerSecond:too_many_load_points');
+    fail(localText.OFFERED_LOADS_TOO_MANY);
   }
   const copied = [];
   let previous = 0;
   for (let index = 0; index < schedule.length; index += 1) {
     const offeredLoad = schedule[index];
-    assertPositiveSafeInteger(
+    assertPositiveSafeNumber(
       offeredLoad,
       `offeredLoadPerSecond.${index}`,
     );
     if (offeredLoad <= previous) {
-      fail('offeredLoadPerSecond:strictly_increasing_required');
-    }
-    if (!operationCountWithinBound(offeredLoad, measuredMs)) {
-      fail(`offeredLoadPerSecond.${index}:window_operation_bound`);
-    }
-    if (
-      warmupMs > 0 &&
-      !operationCountWithinBound(offeredLoad, warmupMs)
-    ) {
-      fail(`offeredLoadPerSecond.${index}:warmup_operation_bound`);
+      fail(localText.OFFERED_LOADS_ORDER);
     }
     previous = offeredLoad;
     appendOwnArrayValue(copied, offeredLoad);
@@ -251,7 +331,7 @@ function copySideSemanticContracts(contracts, sideIds) {
     !isExactArray(contracts) ||
     contracts.length !== BENCHMARK_CAPACITY_SIDE_COUNT
   ) {
-    fail('sideSemanticContracts:two_dense_contracts_required');
+    fail(localText.SIDE_CONTRACTS);
   }
   const copied = [];
   for (let index = 0; index < contracts.length; index += 1) {
@@ -282,14 +362,14 @@ function copySideSemanticContracts(contracts, sideIds) {
 }
 
 function copySlo(slo) {
-  assertExactRecord(slo, SLO_KEYS, 'slo');
+  assertExactRecord(slo, SLO_KEYS, localText.SLO);
   if (
     !isNonNegativeSafeNumber(slo.maxP99LatencyMs) ||
     slo.maxP99LatencyMs === 0
   ) {
-    fail('slo.maxP99LatencyMs:positive_safe_number_required');
+    fail(localText.SLO_LATENCY);
   }
-  assertRatio(slo.maxErrorRate, 'slo.maxErrorRate', true);
+  assertRatio(slo.maxErrorRate, localText.SLO_ERROR_RATE, true);
   return {
     maxP99LatencyMs: slo.maxP99LatencyMs,
     maxErrorRate: slo.maxErrorRate,
@@ -297,17 +377,23 @@ function copySlo(slo) {
 }
 
 function copyRepetitions(repetitions) {
-  assertExactRecord(repetitions, REPETITION_KEYS, 'repetitions');
-  assertPositiveSafeInteger(repetitions.minimum, 'repetitions.minimum');
-  assertPositiveSafeInteger(repetitions.maximum, 'repetitions.maximum');
+  assertExactRecord(repetitions, REPETITION_KEYS, localText.REPETITIONS);
+  assertPositiveSafeInteger(
+    repetitions.minimum,
+    localText.REPETITIONS_MINIMUM,
+  );
+  assertPositiveSafeInteger(
+    repetitions.maximum,
+    localText.REPETITIONS_MAXIMUM,
+  );
   if (repetitions.minimum < BENCHMARK_CAPACITY_MIN_PAIRED_BLOCKS) {
-    fail('repetitions.minimum:paired_block_floor');
+    fail(localText.REPETITIONS_MINIMUM_FLOOR);
   }
   if (repetitions.minimum > repetitions.maximum) {
-    fail('repetitions:reversed');
+    fail(localText.REPETITIONS_REVERSED);
   }
   if (repetitions.maximum > BENCHMARK_CAPACITY_MAX_PAIRED_BLOCKS) {
-    fail('repetitions.maximum:exceeds_bound');
+    fail(localText.REPETITIONS_MAXIMUM_EXCEEDED);
   }
   return {
     minimum: repetitions.minimum,
@@ -316,7 +402,7 @@ function copyRepetitions(repetitions) {
 }
 
 function copyStatistics(statistics) {
-  assertExactRecord(statistics, STATISTICS_KEYS, 'statistics');
+  assertExactRecord(statistics, STATISTICS_KEYS, localText.STATISTICS);
   const expectedText = {
     estimator: BENCHMARK_CAPACITY_ESTIMATOR,
     interval: BENCHMARK_CAPACITY_INTERVAL,
@@ -330,33 +416,36 @@ function copyStatistics(statistics) {
       fail(`statistics.${key}:unsupported`);
     }
   }
-  assertRatio(statistics.confidenceLevel, 'statistics.confidenceLevel');
+  assertRatio(
+    statistics.confidenceLevel,
+    localText.STATISTICS_CONFIDENCE,
+  );
   assertPositiveSafeInteger(
     statistics.bootstrapResamples,
-    'statistics.bootstrapResamples',
+    localText.STATISTICS_BOOTSTRAP,
   );
   if (
     statistics.bootstrapResamples >
     BENCHMARK_CAPACITY_MAX_BOOTSTRAP_RESAMPLES
   ) {
-    fail('statistics.bootstrapResamples:exceeds_bound');
+    fail(localText.STATISTICS_BOOTSTRAP_EXCEEDED);
   }
   if (
     statistics.bootstrapResamples <
     BENCHMARK_CAPACITY_MIN_BOOTSTRAP_RESAMPLES
   ) {
-    fail('statistics.bootstrapResamples:below_defensible_floor');
+    fail(localText.STATISTICS_BOOTSTRAP_FLOOR);
   }
   assertRatio(
     statistics.practicalSignificanceRatio,
-    'statistics.practicalSignificanceRatio',
+    localText.STATISTICS_PRACTICAL,
     true,
   );
   if (
     !isNonNegativeSafeNumber(statistics.targetRelativeCiWidth) ||
     statistics.targetRelativeCiWidth === 0
   ) {
-    fail('statistics.targetRelativeCiWidth:positive_safe_number_required');
+    fail(localText.STATISTICS_CI_WIDTH);
   }
   return {
     estimator: statistics.estimator,
@@ -370,50 +459,108 @@ function copyStatistics(statistics) {
   };
 }
 
-function copySampling(sampling) {
-  assertExactRecord(sampling, SAMPLING_KEYS, 'sampling');
+function copySamplingWindows(windows, offeredLoadPerSecond) {
+  if (
+    !isExactArray(windows) ||
+    windows.length !== offeredLoadPerSecond.length
+  ) {
+    fail(localText.SAMPLING_WINDOWS_ALIGNMENT);
+  }
+  const copied = [];
+  let warmupConfigured = null;
+  for (let index = 0; index < windows.length; index += 1) {
+    const window = windows[index];
+    assertExactRecord(
+      window,
+      SAMPLING_WINDOW_KEYS,
+      `sampling.windows.${index}`,
+    );
+    if (window.offeredLoadPerSecond !== offeredLoadPerSecond[index]) {
+      fail(`sampling.windows.${index}:offered_load_mismatch`);
+    }
+    if (!isNonNegativeSafeInteger(window.warmupMs)) {
+      fail(
+        `sampling.windows.${index}.warmupMs:` +
+        localText.NON_NEGATIVE_SAFE_INTEGER,
+      );
+    }
+    assertPositiveSafeInteger(
+      window.measuredMs,
+      `sampling.windows.${index}.measuredMs`,
+    );
+    const hasWarmup = window.warmupMs > 0;
+    if (warmupConfigured === null) warmupConfigured = hasWarmup;
+    if (warmupConfigured !== hasWarmup) {
+      fail(localText.SAMPLING_WARMUP_UNIFORM);
+    }
+    if (
+      !operationCountWithinBound(
+        window.offeredLoadPerSecond,
+        window.measuredMs,
+      )
+    ) {
+      fail(`sampling.windows.${index}:window_operation_bound`);
+    }
+    if (
+      hasWarmup &&
+      !operationCountWithinBound(
+        window.offeredLoadPerSecond,
+        window.warmupMs,
+      )
+    ) {
+      fail(`sampling.windows.${index}:warmup_operation_bound`);
+    }
+    appendOwnArrayValue(copied, {
+      offeredLoadPerSecond: window.offeredLoadPerSecond,
+      warmupMs: window.warmupMs,
+      measuredMs: window.measuredMs,
+    });
+  }
+  return copied;
+}
+
+function copySampling(sampling, offeredLoadPerSecond) {
+  assertExactRecord(sampling, SAMPLING_KEYS, localText.SAMPLING);
   if (sampling.tailQuantile !== BENCHMARK_CAPACITY_PERCENTILE_P99) {
-    fail('sampling.tailQuantile:must_be_p99');
+    fail(localText.SAMPLING_TAIL_QUANTILE);
   }
   assertPositiveSafeInteger(
     sampling.tailSampleMinimum,
-    'sampling.tailSampleMinimum',
+    localText.SAMPLING_TAIL_MINIMUM,
   );
   if (sampling.tailSampleMinimum < BENCHMARK_CAPACITY_MIN_TAIL_SAMPLES) {
-    fail('sampling.tailSampleMinimum:below_defensible_floor');
+    fail(localText.SAMPLING_TAIL_MINIMUM_FLOOR);
   }
-  if (!isNonNegativeSafeInteger(sampling.warmupMs)) {
-    fail('sampling.warmupMs:non_negative_safe_integer_required');
-  }
-  assertPositiveSafeInteger(sampling.measuredMs, 'sampling.measuredMs');
   assertPositiveSafeInteger(
     sampling.operationTimeoutMs,
-    'sampling.operationTimeoutMs',
+    localText.SAMPLING_OPERATION_TIMEOUT,
   );
   assertPositiveSafeInteger(
     sampling.semanticFinalizerTimeoutMs,
-    'sampling.semanticFinalizerTimeoutMs',
+    localText.SAMPLING_SEMANTIC_TIMEOUT,
   );
   assertPositiveSafeInteger(
     sampling.resetTimeoutMs,
-    'sampling.resetTimeoutMs',
+    localText.SAMPLING_RESET_TIMEOUT,
   );
   if (!isNonNegativeSafeInteger(sampling.maxReleaseLagMs)) {
-    fail('sampling.maxReleaseLagMs:non_negative_safe_integer_required');
+    fail(localText.SAMPLING_MAX_RELEASE_LAG);
   }
   assertPositiveSafeInteger(
     sampling.clientMaxInFlight,
-    'sampling.clientMaxInFlight',
+    localText.SAMPLING_CLIENT_IN_FLIGHT,
   );
   assertPositiveSafeInteger(
     sampling.clientMaxQueueDepth,
-    'sampling.clientMaxQueueDepth',
+    localText.SAMPLING_CLIENT_QUEUE,
   );
   return {
     tailQuantile: sampling.tailQuantile,
     tailSampleMinimum: sampling.tailSampleMinimum,
-    warmupMs: sampling.warmupMs,
-    measuredMs: sampling.measuredMs,
+    windows: copySamplingWindows(
+      sampling.windows,
+      offeredLoadPerSecond,
+    ),
     operationTimeoutMs: sampling.operationTimeoutMs,
     semanticFinalizerTimeoutMs: sampling.semanticFinalizerTimeoutMs,
     resetTimeoutMs: sampling.resetTimeoutMs,
@@ -424,11 +571,18 @@ function copySampling(sampling) {
 }
 
 function copyRandomization(randomization) {
-  assertExactRecord(randomization, RANDOMIZATION_KEYS, 'randomization');
+  assertExactRecord(
+    randomization,
+    RANDOMIZATION_KEYS,
+    localText.RANDOMIZATION,
+  );
   if (randomization.algorithm !== BENCHMARK_CAPACITY_RANDOMIZATION_ALGORITHM) {
-    fail('randomization.algorithm:unsupported');
+    fail(localText.RANDOMIZATION_ALGORITHM);
   }
-  assertPositiveSafeInteger(randomization.seed, 'randomization.seed');
+  assertPositiveSafeInteger(
+    randomization.seed,
+    localText.RANDOMIZATION_SEED,
+  );
   return {
     algorithm: randomization.algorithm,
     seed: randomization.seed,
@@ -439,7 +593,7 @@ function copyExecutionIdentity(executionIdentity) {
   assertExactRecord(
     executionIdentity,
     EXECUTION_IDENTITY_KEYS,
-    'executionIdentity',
+    localText.EXECUTION_IDENTITY,
   );
   const textFields = ['matrixId', 'cellId', 'runId'];
   for (let index = 0; index < textFields.length; index += 1) {
@@ -493,11 +647,18 @@ function assertFixedPolicies(input) {
 function createMulberry32(seed) {
   let state = seed >>> 0;
   return () => {
-    state = (state + 0x6D2B79F5) >>> 0;
+    state = (state + RANDOM_INCREMENT) >>> 0;
     let value = state;
-    value = mathImul(value ^ (value >>> 15), value | 1);
-    value ^= value + mathImul(value ^ (value >>> 7), value | 61);
-    return ((value ^ (value >>> 14)) >>> 0) / 4294967296;
+    value = mathImul(
+      value ^ (value >>> RANDOM_FIRST_SHIFT),
+      value | 1,
+    );
+    value ^= value + mathImul(
+      value ^ (value >>> RANDOM_SECOND_SHIFT),
+      value | RANDOM_SECOND_MULTIPLIER,
+    );
+    return ((value ^ (value >>> RANDOM_FINAL_SHIFT)) >>> 0) /
+      UINT32_RANGE;
   };
 }
 
@@ -522,28 +683,27 @@ function buildBalancedOrders(sideIds, maximum, seed) {
 
 function copyPreregistration(input) {
   if (isProxy(input) || !isPlainDataRecord(input)) {
-    fail('plain_data_record_required');
+    fail(localText.PLAIN_RECORD);
   }
-  assertExactRecord(input, PREREGISTRATION_KEYS, 'root');
-  assertPrimitiveIdentifier(input.studyId, 'studyId');
+  assertExactRecord(input, PREREGISTRATION_KEYS, localText.ROOT);
+  assertPrimitiveIdentifier(input.studyId, localText.STUDY_ID);
   assertFixedPolicies(input);
   const sideIds = copySideIds(input.sideIds);
-  const sampling = copySampling(input.sampling);
-  const repetitions = copyRepetitions(input.repetitions);
-  const statistics = copyStatistics(input.statistics);
   const offeredLoadPerSecond = copyOfferedLoadSchedule(
     input.offeredLoadPerSecond,
-    sampling.measuredMs,
-    sampling.warmupMs,
   );
+  const sampling = copySampling(input.sampling, offeredLoadPerSecond);
+  const repetitions = copyRepetitions(input.repetitions);
+  const statistics = copyStatistics(input.statistics);
   let operationsPerBlock = 0;
   for (let index = 0; index < offeredLoadPerSecond.length; index += 1) {
+    const window = sampling.windows[index];
     operationsPerBlock += mathFloor(
-      offeredLoadPerSecond[index] * sampling.measuredMs /
+      offeredLoadPerSecond[index] * window.measuredMs /
       BENCHMARK_CAPACITY_MILLISECONDS_PER_SECOND,
     );
     operationsPerBlock += mathFloor(
-      offeredLoadPerSecond[index] * sampling.warmupMs /
+      offeredLoadPerSecond[index] * window.warmupMs /
       BENCHMARK_CAPACITY_MILLISECONDS_PER_SECOND,
     );
   }
@@ -555,7 +715,7 @@ function copyPreregistration(input) {
     !isNonNegativeSafeInteger(plannedOperations) ||
     plannedOperations > BENCHMARK_CAPACITY_MAX_PLANNED_OPERATIONS
   ) {
-    fail('plannedOperations:exceeds_bound');
+    fail(localText.PLANNED_OPERATIONS_EXCEEDED);
   }
   const matrixRuns =
     repetitions.maximum *
@@ -565,7 +725,7 @@ function copyPreregistration(input) {
     !isNonNegativeSafeInteger(matrixRuns) ||
     matrixRuns > BENCHMARK_CAPACITY_MAX_MATRIX_RUNS
   ) {
-    fail('matrixRuns:exceeds_bound');
+    fail(localText.MATRIX_RUNS_EXCEEDED);
   }
   const cumulativeSummaryBlocks =
     repetitions.maximum * (repetitions.maximum + 1) / 2;
@@ -581,7 +741,7 @@ function copyPreregistration(input) {
     !isNonNegativeSafeInteger(bootstrapDraws) ||
     bootstrapDraws > BENCHMARK_CAPACITY_MAX_BOOTSTRAP_DRAWS
   ) {
-    fail('bootstrapDraws:exceeds_bound');
+    fail(localText.BOOTSTRAP_DRAWS_EXCEEDED);
   }
   return {
     studyId: input.studyId,
@@ -645,11 +805,12 @@ function blockedPairOrdersAreProxyFree(sealed) {
 }
 
 function phaseIsSupported(phase, sealed) {
+  const hasWarmup = sealed.sampling.windows[0].warmupMs > 0;
   return phase === BENCHMARK_CAPACITY_RESET_PHASE ||
     phase === BENCHMARK_CAPACITY_PHASE.MEASURED ||
     (
       phase === BENCHMARK_CAPACITY_PHASE.WARMUP &&
-      sealed.sampling.warmupMs > 0
+      hasWarmup
     );
 }
 
@@ -662,31 +823,53 @@ function offeredLoadIsRegistered(sealed, offeredLoad) {
   return false;
 }
 
+export function getBenchmarkCapacitySamplingWindow(
+  sealed,
+  offeredLoad,
+) {
+  for (let index = 0;
+    index < sealed.offeredLoadPerSecond.length;
+    index += 1) {
+    if (sealed.offeredLoadPerSecond[index] === offeredLoad) {
+      return sealed.sampling.windows[index];
+    }
+  }
+  fail(localText.SAMPLING_WINDOW_ABSENT);
+}
+
+export function benchmarkCapacitySamplingHasWarmup(sealed) {
+  return sealed.sampling.windows[0].warmupMs > 0;
+}
+
 export function deriveBenchmarkCapacityExpectedWindow(sealed, context) {
   const inspection = inspectBenchmarkCapacityPreregistration(sealed);
   if (!inspection.valid) {
     fail(`expectedWindow.preregistration:${inspection.reason}`);
   }
-  assertExactRecord(context, WINDOW_CONTEXT_KEYS, 'expectedWindow.context');
+  assertExactRecord(
+    context,
+    WINDOW_CONTEXT_KEYS,
+    localText.EXPECTED_CONTEXT,
+  );
   if (
     !isNonNegativeSafeInteger(context.blockIndex) ||
     context.blockIndex >= sealed.repetitions.maximum
   ) {
-    fail('expectedWindow.context.blockIndex:out_of_range');
+    fail(localText.EXPECTED_BLOCK_INDEX);
   }
   const order = sealed.blockedPairOrders[context.blockIndex];
   if (
     !isNonNegativeSafeInteger(context.blockedOrderIndex) ||
     context.blockedOrderIndex >= order.length
   ) {
-    fail('expectedWindow.context.blockedOrderIndex:out_of_range');
+    fail(localText.EXPECTED_ORDER_INDEX);
   }
   if (
     context.sideId !== order[context.blockedOrderIndex] ||
     !offeredLoadIsRegistered(sealed, context.offeredLoad) ||
     !phaseIsSupported(context.phase, sealed)
   ) {
-    fail('expectedWindow.context:unregistered_coordinate');
+    fail(localText.EXPECTED_COORDINATE);
   }
   return {
     ...sealed.executionIdentity,
@@ -728,7 +911,7 @@ export function inspectBenchmarkCapacityPreregistration(sealed) {
     !hasExactOwnDataKeys(sealed, SEALED_KEYS) ||
     !blockedPairOrdersAreProxyFree(sealed)
   ) {
-    return {valid: false, reason: 'sealed_shape_invalid'};
+    return {valid: false, reason: localText.SEALED_SHAPE_INVALID};
   }
   try {
     const reconstructed = sealBenchmarkCapacityPreregistration(
@@ -746,9 +929,11 @@ export function inspectBenchmarkCapacityPreregistration(sealed) {
       reconstructed.manifestDigest === sealed.manifestDigest;
     return {
       valid,
-      reason: valid ? 'valid' : 'sealed_digest_mismatch',
+      reason: valid ?
+        localText.VALID :
+        localText.SEALED_DIGEST_MISMATCH,
     };
   } catch {
-    return {valid: false, reason: 'sealed_fields_invalid'};
+    return {valid: false, reason: localText.SEALED_FIELDS_INVALID};
   }
 }

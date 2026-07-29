@@ -2,6 +2,7 @@ import {
   digestBenchmarkSemanticData,
   hasExactOwnDataKeys,
   isNonNegativeSafeInteger,
+  isNonNegativeSafeNumber,
   isSha256Digest,
 } from './benchmark-semantic-integrity.js';
 import {
@@ -49,6 +50,20 @@ const RECEIPT_KEYS = [
   'resetReceiptDigest',
 ];
 const objectFreeze = Object.freeze;
+const COORDINATE_FIELD_COUNT = 4;
+const localText = objectFreeze({
+  LIVE_ENGAGEMENT_DIGEST:
+    'liveEngagementDigest:sha256_digest_required',
+  OFFERED_LOAD: 'offeredLoad:positive_safe_number_required',
+  POLICY_UNSUPPORTED: 'policy:unsupported',
+  RESET_DIGEST_MISMATCH: 'reset_receipt_digest_mismatch',
+  RESET_FIELDS_INVALID: 'reset_receipt_fields_invalid',
+  RESET_SHAPE_INVALID: 'reset_receipt_shape_invalid',
+  ROOT_SHAPE: 'root:exact_plain_data_record_required',
+  SIDE_ID: 'sideId:primitive_text_required',
+  TIME_POSITIVE: 'time_window:positive_coverage_required',
+  VALID: 'valid',
+});
 
 function fail(reason) {
   throw new TypeError(`invalid capacity cache reset receipt: ${reason}`);
@@ -81,16 +96,16 @@ export function createBenchmarkCapacityCacheResetReceipt(
   preregistration,
 ) {
   if (!hasExactOwnDataKeys(input, INPUT_KEYS)) {
-    fail('root:exact_plain_data_record_required');
+    fail(localText.ROOT_SHAPE);
   }
   if (
     typeof input.sideId !== 'string' ||
     input.sideId.length === 0 ||
     input.sideId.length > BENCHMARK_CAPACITY_MAX_TEXT_CODE_UNITS
   ) {
-    fail('sideId:primitive_text_required');
+    fail(localText.SIDE_ID);
   }
-  for (let index = 0; index < 4; index += 1) {
+  for (let index = 0; index < COORDINATE_FIELD_COUNT; index += 1) {
     const field = [
       'blockIndex',
       'blockedOrderIndex',
@@ -102,19 +117,19 @@ export function createBenchmarkCapacityCacheResetReceipt(
     }
   }
   if (
-    !isNonNegativeSafeInteger(input.offeredLoad) ||
+    !isNonNegativeSafeNumber(input.offeredLoad) ||
     input.offeredLoad === 0
   ) {
-    fail('offeredLoad:positive_safe_integer_required');
+    fail(localText.OFFERED_LOAD);
   }
   if (input.endedAt <= input.startedAt) {
-    fail('time_window:positive_coverage_required');
+    fail(localText.TIME_POSITIVE);
   }
   if (input.policy !== BENCHMARK_CAPACITY_CACHE_POLICY) {
-    fail('policy:unsupported');
+    fail(localText.POLICY_UNSUPPORTED);
   }
   if (!isSha256Digest(input.liveEngagementDigest)) {
-    fail('liveEngagementDigest:sha256_digest_required');
+    fail(localText.LIVE_ENGAGEMENT_DIGEST);
   }
   const expected = deriveBenchmarkCapacityExpectedWindow(
     preregistration,
@@ -159,7 +174,7 @@ export function inspectBenchmarkCapacityCacheResetReceipt(
   preregistration,
 ) {
   if (!hasExactOwnDataKeys(receipt, RECEIPT_KEYS)) {
-    return {valid: false, reason: 'reset_receipt_shape_invalid'};
+    return {valid: false, reason: localText.RESET_SHAPE_INVALID};
   }
   try {
     const reconstructed = createBenchmarkCapacityCacheResetReceipt(
@@ -177,9 +192,11 @@ export function inspectBenchmarkCapacityCacheResetReceipt(
       reconstructed.resetReceiptDigest === receipt.resetReceiptDigest;
     return {
       valid,
-      reason: valid ? 'valid' : 'reset_receipt_digest_mismatch',
+      reason: valid ?
+        localText.VALID :
+        localText.RESET_DIGEST_MISMATCH,
     };
   } catch {
-    return {valid: false, reason: 'reset_receipt_fields_invalid'};
+    return {valid: false, reason: localText.RESET_FIELDS_INVALID};
   }
 }
