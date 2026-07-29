@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 1490619,
-        "sha256": "6ff729894ebf83f690b3b47b9b8aad3e7797e444aa2f5579c65f7032c5481418"
+        "bytes": 1490659,
+        "sha256": "0e17af14a44edd78bf3aed0d9b9a7a4f27f9763ae42bd48d3046dce91ed9df15"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "1c54be83c8584233abf0f91cb73447d4db1976dad831efdf9869bfb4a9d5acf5"
+        "sha256": "c277b3200336d572241135a0a55f8b587b0fd630786c6dcc69115caadb9f1ba1"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "768424044799a6c6812351b58dc3f7c238c441df15118bd9c12a7afbd8563c46"
+    "inputDigest": "04493b8115a0953a10e44ecae12f565191527fa6134874229fc476600a1053bc"
   },
   "reconciliation": {
     "complexity": {
@@ -112,13 +112,13 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "1c54be83c8584233abf0f91cb73447d4db1976dad831efdf9869bfb4a9d5acf5"
+          "sha256": "c277b3200336d572241135a0a55f8b587b0fd630786c6dcc69115caadb9f1ba1"
         },
-        "cloneGroups": 67,
-        "duplicatedLines": 2109,
-        "sourceCloneTouches": 134,
-        "sourceDuplicatedLineTouches": 4218,
-        "nonzeroSourceCount": 81,
+        "cloneGroups": 68,
+        "duplicatedLines": 2224,
+        "sourceCloneTouches": 136,
+        "sourceDuplicatedLineTouches": 4448,
+        "nonzeroSourceCount": 83,
         "touchMultiplicity": 2
       },
       {
@@ -166,38 +166,38 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 1490619,
-        "sha256": "6ff729894ebf83f690b3b47b9b8aad3e7797e444aa2f5579c65f7032c5481418"
+        "bytes": 1490659,
+        "sha256": "0e17af14a44edd78bf3aed0d9b9a7a4f27f9763ae42bd48d3046dce91ed9df15"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "2eded70ba398d98fb0078cb2bdcde315292d2dc3fc8a858b49d2cabca8b831e5",
-      "moduleCount": 4393,
+      "sourceDigest": "c570bb173a7e165f63d87a6db98d027463b93328b7f43916dd3d7b15c17ed1e6",
+      "moduleCount": 4394,
       "edgeCount": 18828,
       "unresolvedCount": 11
     }
   },
   "assignment": {
-    "sourceSignalCount": 2710,
-    "assignedSignalCount": 2710,
-    "uniqueAssignmentCount": 2710,
-    "digest": "85e9992be7ec82d86fe31114b8b5baa4a055c39725b99e7e9328d9edc0180215"
+    "sourceSignalCount": 2712,
+    "assignedSignalCount": 2712,
+    "uniqueAssignmentCount": 2712,
+    "digest": "c7daaefa0aa6194f3632b4f7f7f16f9a37ace55bc4be97042565f24635178bc3"
   },
   "signalCounts": {
     "cognitive": 179,
     "complexity": 1846,
-    "duplication": 600,
+    "duplication": 602,
     "fileSize": 47,
     "lintExclusion": 38
   },
   "summary": {
-    "filesWithDebt": 1375,
-    "rankedBoundaryCount": 123,
+    "filesWithDebt": 1377,
+    "rankedBoundaryCount": 125,
     "semanticBoundaryCount": 21,
-    "fallbackBoundaryCount": 102,
+    "fallbackBoundaryCount": 104,
     "childQuestCount": 16
   },
   "rankedBoundaries": [
@@ -2394,6 +2394,54 @@
       "score": 12,
       "topPaths": [
         "src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js"
+      ]
+    },
+    {
+      "key": "area:scripts/constants.js",
+      "owner": null,
+      "boundary": "scripts/constants.js",
+      "classification": "tool-owner-area",
+      "ownerAreas": [
+        "scripts/constants.js"
+      ],
+      "fileCount": 1,
+      "signalCount": 1,
+      "complexity": 0,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 115,
+      "cloneTouches": 1,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 0,
+      "importOut": 0,
+      "score": 11.5,
+      "topPaths": [
+        "scripts/constants.js"
+      ]
+    },
+    {
+      "key": "area:scripts/global-owner-debt-inventory",
+      "owner": null,
+      "boundary": "scripts/global-owner-debt-inventory",
+      "classification": "tool-owner-area",
+      "ownerAreas": [
+        "scripts/global-owner-debt-inventory"
+      ],
+      "fileCount": 1,
+      "signalCount": 1,
+      "complexity": 0,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 115,
+      "cloneTouches": 1,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 2,
+      "importOut": 0,
+      "score": 11.5,
+      "topPaths": [
+        "scripts/global-owner-debt-inventory/constants.js"
       ]
     },
     {

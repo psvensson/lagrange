@@ -28,6 +28,8 @@ export const OWNER_DEBT = Object.freeze({
   reconciliationError: 'owner-debt inventory reconciliation failed',
   staleImportGraphError:
     'owner-debt import graph report is stale; rerun with --refresh',
+  ratchetExceededNoticeSuffix:
+    '; report refreshed, elevated debt will be recorded\n',
   childProof:
     'focused behavior or decision-trace parity, scoped strict metrics, and a lower committed global signal count',
   expansionRule:

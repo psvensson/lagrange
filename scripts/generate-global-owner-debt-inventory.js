@@ -480,8 +480,8 @@ function refreshReports(root) {
     const result = spawnSync(process.execPath, args, {cwd: root, stdio: 'inherit'});
     if (result.status === 1) {
       process.stderr.write(
-        `owner-debt refresh: ratchet exceeded in node ${args.join(OWNER_DEBT.space)}; ` +
-        'report refreshed, elevated debt will be recorded\n');
+        `owner-debt refresh: ratchet exceeded in node ${args.join(OWNER_DEBT.space)}` +
+        OWNER_DEBT.ratchetExceededNoticeSuffix);
       continue;
     }
     if (result.status !== 0) {
