@@ -39,7 +39,17 @@ if [ -z "${LAGRANGE_PUSH_ON_RED:-}" ]; then
 fi
 
 npm run -s test:unused:push
-npx eslint --cache --cache-location node_modules/.cache/eslint/ src/ test/ scripts/ --ignore-pattern 'test/.gitkeep'
+# Lint TRACKED files only, honoring the same principle as the unused-files
+# check above: untracked files are never part of a push, so a concurrent
+# session's in-flight new files must not gate this one (measured 2026-07-29:
+# a push was blocked twice by another session's mid-refactor untracked file).
+# Tracked-but-modified files still gate — their committed versions ship.
+git ls-files -z -- 'src/**/*.js' 'src/**/*.mjs' 'src/**/*.cjs' \
+  'test/**/*.js' 'test/**/*.mjs' 'test/**/*.cjs' \
+  'scripts/**/*.js' 'scripts/**/*.mjs' 'scripts/**/*.cjs' |
+  xargs -0 -r npx eslint --cache \
+    --cache-location node_modules/.cache/eslint/ \
+    --no-warn-ignored --ignore-pattern 'test/.gitkeep'
 npm run -s test:duplication
 node scripts/check-unused-exports.js
 node scripts/check-circular-dependencies.js
