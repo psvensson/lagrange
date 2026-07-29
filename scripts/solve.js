@@ -18,6 +18,11 @@ import {loadQuest, saveQuest, readLog, projectState, appendFinding, questFilePat
   appendGuardOverride, appendReflection, readFindings, readRulesOutFindings}
   from './solve/store.js';
 import {buildSealFreshnessAdvisory} from './solve/seal-freshness.js';
+import {
+  claimQuest,
+  releaseSession,
+  QUEST_LEASE_CONFLICT_CODE,
+} from './solve/session-registry.js';
 import {retreadCheckLines} from './solve/retread.js';
 import {makeDryExecutor} from './solve/executor.js';
 import {makeAgentExecutor} from './solve/agent-executor.js';
@@ -119,6 +124,10 @@ const INHERITED_BAR_REVIEW_SUFFIX =
   '; review the bar BEFORE first execution — it seals then and amendments ' +
   'can only expand it, never narrow it';
 const TEMPLATE_LIST_SEPARATOR = ', ';
+const LEASE_OVERLAP_PATH_SEPARATOR = ' ';
+const LEASE_OVERLAP_WARNING_PREFIX =
+  'WARN lease: declared scope overlaps the live session in ';
+const LANDING_VERDICT_REJECT = 'reject';
 const COMMAND_SEPARATOR = '|';
 const USAGE_ARGUMENTS = '[--id <questId>] [...]\n';
 
@@ -346,9 +355,36 @@ function writeFacadeResult(command, args, result) {
     `${JSON.stringify(result, null, 2)}\n` : renderFacadeResult(command, result));
 }
 
+// Quest lease + scope advisory (parallel-session-architecture epic, items
+// 3 and 5): claim the quest for this worktree in the shared registry —
+// fail-closed when another LIVE worktree holds it, since two sessions on
+// one quest fork its append-only log — and surface declared-scope overlaps
+// with other live sessions as warnings (advisory, like retread warnings).
+// Registry trouble other than a live conflicting lease never blocks quest
+// work: the registry is a coordination aid, not an integrity invariant.
+function enforceQuestLease(root, id) {
+  try {
+    const {overlaps} = claimQuest(root, id);
+    for (const overlap of overlaps) {
+      process.stderr.write(LEASE_OVERLAP_WARNING_PREFIX +
+        `${overlap.session.worktree} on: ` +
+        `${overlap.paths.join(LEASE_OVERLAP_PATH_SEPARATOR)}\n`);
+    }
+  } catch (error) {
+    // Keyed on the error CODE, never message prose: a wording edit must not
+    // silently flip this fail-closed refusal into a fail-open warning.
+    if (error?.code === QUEST_LEASE_CONFLICT_CODE) throw error;
+    process.stderr.write(
+      `WARN lease: session registry unavailable (${error?.message})\n`);
+  }
+}
+
 function cmdStart(root, args) {
   const id = args.id || args._[0];
   if (!id) throw new Error('start: --id <questId> is required');
+  // Lease first: a refused start must not leave a freshly created quest
+  // file behind for the losing session.
+  enforceQuestLease(root, id);
   const doctor = buildDoctorReport(root);
   if (!fs.existsSync(questFilePath(root, id))) {
     if (typeof args.statement !== 'string') {
@@ -362,6 +398,8 @@ function cmdStart(root, args) {
 }
 
 function cmdContinue(root, args) {
+  const id = args.id || args._[0];
+  if (id) enforceQuestLease(root, id);
   const result = continueQuestWorkflow(root, args);
   if (result.executed) refreshFrontierBoard(root);
   writeFacadeResult('continue', args, result);
@@ -369,6 +407,17 @@ function cmdContinue(root, args) {
 
 function cmdLand(root, args) {
   const result = landQuestWorkflow(root, args);
+  // A landed (non-rejected) quest frees its lease; a rejection keeps it —
+  // the replacement work continues in this worktree. Registry trouble
+  // never blocks a landing.
+  if (result.verdict && result.verdict !== LANDING_VERDICT_REJECT) {
+    try {
+      releaseSession(root, {questOnly: true});
+    } catch (error) {
+      process.stderr.write(
+        `WARN lease: could not release quest lease (${error?.message})\n`);
+    }
+  }
   refreshFrontierBoard(root);
   writeFacadeResult('land', args, result);
 }

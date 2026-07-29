@@ -111,3 +111,11 @@ LAGRANGE_PUSH_ON_RED while a fix is in flight.
   hooksPath, per-worktree eslint cache, red-main guard scoped to main
   pushes. Next quests to author: session registry + quest leases (item 3),
   evidence mutex (item 4), registry-fed scope advisory (item 5).
+- 2026-07-29 (later) — Items 3-5 implemented and quest drafts authored
+  ([mutex](../quests/parallel-evidence-machine-mutex.json),
+  [leases](../quests/parallel-session-quest-leases.json),
+  [advisory](../quests/parallel-session-scope-advisory.json)). Open
+  questions resolved: leases are a solve-integrated claim (enforced at
+  `solve start`/`continue`, CLI for manual claim/release); the evidence
+  mutex is MANDATORY with a loud bypass env var, not advisory — corrupted
+  sealed evidence outranks a wait; integration cadence stays on-demand.
