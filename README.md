@@ -70,31 +70,44 @@ positions each Cell so it sits as close as possible to the data replicas it
 reads and writes. Locality is something the cluster produces and maintains for
 you, not something you engineer by hand and watch decay as the data moves.
 
-A classical distributed database splits tables into partitions, replicates
-those partitions across nodes, and routes each request to the right one:
+The distinction is easiest to see across four common paths. These diagrams
+show Lagrange's placement model, not the disappearance of distributed-systems
+costs: routing, networking, and Raft consensus still happen. Cells remain
+disposable compute; durable state remains in replicated tables.
 
-![Classical distributed database: logical tables split into partitions, replicated across nodes, requests routed to the right partitions and run in parallel](docs/dist_db.png)
+### Single-Partition Requests: Remove A Mandatory Hop
 
-Lagrange keeps that data layer and adds a placed *service* layer on top of it —
-service Cells are placed on or near the data they access, so the work moves
-to the data instead of the data moving to the work:
+![Single-partition request comparison: a conventional service tier makes remote data calls, while Lagrange routes to replica-local execution](docs/images/write-path.png)
 
-```mermaid
-flowchart TB
-  C1["Order Processor Cell<br/>node-a"]:::cell
-  C2["Order Processor Cell<br/>node-c"]:::cell
-  O1["Orders P1<br/>Raft replica"]:::data
-  O2["Orders P2<br/>Raft replica"]:::data
-  S["Durable service state<br/>ordinary tables"]:::data
+**USP: routing lands the work with the data.** Once the target partition is
+known, execution can run beside a suitable replica instead of making a
+mandatory round trip through a separately placed service tier.
 
-  C1 -. "reads / writes" .-> O1
-  C2 -. "reads / writes" .-> O2
-  C1 -. "persists" .-> S
-  C2 -. "persists" .-> S
+### Multi-Partition Operations: Move Work, Not Raw Data
 
-  classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
-  classDef cell fill:#dcfce7,stroke:#166534,color:#052e16
-```
+![Multi-partition operation comparison: a conventional service tier pulls raw rows inward, while Lagrange fans work out and returns compact partial results](docs/images/placement-and-rebalancing.png)
+
+**USP: computation fans out to the partitions.** Filters, joins, and partial
+aggregations happen near the rows; compact results move across the network
+instead of every raw or intermediate row moving to an application tier.
+
+### Writes: Keep Consensus, Shorten The Application Path
+
+![Write-path comparison: both approaches retain Raft replication, while Lagrange removes the remote service-to-leader hop](docs/images/single-partition-request.png)
+
+**USP: locality does not trade away durability.** The leader still commits
+through a Raft quorum, while validation, application logic, and response
+construction can run leader-local and avoid one remote application-to-data
+hop.
+
+### Placement And Rebalancing: Keep Locality Aligned
+
+![Placement and rebalancing sequence: execution follows a data replica as policy moves it to another node](docs/images/multi-partition-operation.png)
+
+**USP: affinity is maintained, not configured once.** When replicas move
+because of pressure, failures, or policy, Lagrange reconciles Cell placement
+and routing so execution follows the data without a manual service
+redeployment.
 
 ---
 
