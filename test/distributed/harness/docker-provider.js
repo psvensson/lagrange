@@ -6,6 +6,8 @@
  */
 
 import Docker from 'dockerode';
+import {readdirSync} from 'node:fs';
+import path from 'node:path';
 import {Writable} from 'node:stream';
 import {
   PORTS,
@@ -47,6 +49,8 @@ const STOP_TIMEOUT_SECONDS = 25;
 const PERCENT_MULTIPLIER = 100;
 const MIN_CPU_COUNT = 1;
 const ZERO = 0;
+const DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH =
+  'docker-container-writable-layer';
 const TYPEOF_FUNCTION = 'function';
 const DOCKER_OP_CREATE_NETWORK = 'network.create';
 const DOCKER_OP_REMOVE_NETWORK = 'network.remove';
@@ -70,24 +74,128 @@ const STORAGE_USAGE_ARGUMENT_SEPARATOR = '--';
 const STORAGE_USAGE_FIELD_SEPARATOR = '\t';
 const STORAGE_USAGE_BYTE_COUNT_PATTERN = /^(?:0|[1-9]\d*)$/u;
 const STORAGE_LIMIT_PATTERN = /(?:^|,)size=(\d+)(?:,|$)/u;
+const BUILD_SOURCE_DIRECTORY = 'src';
+const CONTAINER_COMMAND_FIELD = 'Cmd';
+const CONTAINER_ENTRYPOINT_FIELD = 'Entrypoint';
+// dockerode already receives an explicit allowlist. Sending .dockerignore in
+// that tar makes its broad `**` rule remove the recursively requested src
+// directory before the daemon can apply the later negations.
 const BUILD_CONTEXT_STATIC_ENTRIES = Object.freeze([
-  '.dockerignore',
   'package-lock.json',
   'package.json',
-  'src',
 ]);
 
+function appendBuildContextDirectoryFiles(entries, contextPath, relativePath) {
+  const directory = path.join(contextPath, relativePath);
+  let directoryEntries;
+  try {
+    directoryEntries = readdirSync(directory, {withFileTypes: true});
+  } catch {
+    entries.push(relativePath);
+    return;
+  }
+  for (let index = 0; index < directoryEntries.length; index += 1) {
+    const entry = directoryEntries[index];
+    const child = path.join(relativePath, entry.name);
+    if (entry.isDirectory()) {
+      appendBuildContextDirectoryFiles(entries, contextPath, child);
+    } else {
+      entries.push(child);
+    }
+  }
+}
+
 function buildImageContext(contextPath, dockerfile) {
-  const entries = Array.from(new Set([
+  const requested = [
     ...BUILD_CONTEXT_STATIC_ENTRIES,
     dockerfile,
-  ].filter((entry) => typeof entry === 'string' && entry.length > ZERO)))
+  ];
+  appendBuildContextDirectoryFiles(
+    requested,
+    contextPath,
+    BUILD_SOURCE_DIRECTORY,
+  );
+  const entries = Array.from(new Set(
+    requested.filter(
+      (entry) => typeof entry === 'string' && entry.length > ZERO,
+    ),
+  ))
     .sort();
 
   return {
     context: contextPath,
     src: entries,
   };
+}
+
+function normalizeContainerOptions(options) {
+  return {
+    name: options.name,
+    image: options.image,
+    network: options.network,
+    env: options.env ?? {},
+    labels: options.labels ?? {},
+    resourceLimits: options.resourceLimits ?? {},
+    startTimeout: options.startTimeout ?? TIMEOUTS.NODE_STARTUP,
+    command: options.command ?? null,
+    entrypoint: options.entrypoint ?? null,
+    hostConfigExtras: options.hostConfigExtras ?? null,
+  };
+}
+
+function optionalContainerArray(value, key) {
+  return Array.isArray(value) && value.length > ZERO ?
+    {[key]: value} :
+    {};
+}
+
+function containerAliases(name) {
+  return typeof name === 'string' && name.length > ZERO ? [name] : [];
+}
+
+function containerCreateOptions(options, envArray, hostConfig) {
+  return {
+    name: options.name,
+    Image: options.image,
+    Env: envArray,
+    Labels: options.labels,
+    ...optionalContainerArray(
+      options.entrypoint,
+      CONTAINER_ENTRYPOINT_FIELD,
+    ),
+    ...optionalContainerArray(options.command, CONTAINER_COMMAND_FIELD),
+    ExposedPorts: {
+      [`${PORTS.REST}/tcp`]: {},
+      [`${PORTS.ADMIN_API}/tcp`]: {},
+      [`${PORTS.WS_TRANSPORT}/tcp`]: {},
+    },
+    HostConfig: hostConfig,
+    NetworkingConfig: {
+      EndpointsConfig: {
+        [options.network]: {
+          Aliases: containerAliases(options.name),
+        },
+      },
+    },
+  };
+}
+
+function normalizeContainerLogOptions(options) {
+  const hasTailOverride =
+    options.tail !== undefined &&
+    options.tail !== null;
+  const normalizedTail = hasTailOverride ?
+    String(Math.max(ZERO, Math.floor(Number(options.tail) || ZERO))) :
+    null;
+  const logOptions = {
+    stdout: true,
+    stderr: true,
+    follow: false,
+  };
+  if (normalizedTail !== null) logOptions.tail = normalizedTail;
+  if (options.timestamps) logOptions.timestamps = true;
+  if (options.since) logOptions.since = options.since;
+  return {logOptions, normalizedTail};
 }
 
 class DockerProvider {
@@ -354,18 +462,13 @@ class DockerProvider {
    * @returns {Promise<{containerId: string, ip: string, name: string}>}
    */
   async createContainer(options) {
+    const normalized = normalizeContainerOptions(options);
     const {
       name,
       image,
       network,
-      env = {},
-      labels = {},
-      resourceLimits = {},
-      startTimeout = TIMEOUTS.NODE_STARTUP,
-      command = null,
-      entrypoint = null,
-      hostConfigExtras = null,
-    } = options;
+      startTimeout,
+    } = normalized;
 
     this._emitOperation(DOCKER_OP_CREATE_CONTAINER, {
       stage: localText.STARTING,
@@ -374,42 +477,38 @@ class DockerProvider {
       network,
       startTimeout,
     });
-    const envArray = this._buildEnvArray(env);
+    const envArray = this._buildEnvArray(normalized.env);
     const hostConfig = this._buildHostConfig(
-      resourceLimits,
+      normalized.resourceLimits,
       network,
-      hostConfigExtras,
+      normalized.hostConfigExtras,
     );
 
-    const container = await this._docker.createContainer({
-      name,
-      Image: image,
-      Env: envArray,
-      Labels: labels,
-      ...(Array.isArray(entrypoint) && entrypoint.length > ZERO ?
-        {Entrypoint: entrypoint} :
-        {}),
-      ...(Array.isArray(command) && command.length > ZERO ?
-        {Cmd: command} :
-        {}),
-      ExposedPorts: {
-        [`${PORTS.REST}/tcp`]: {},
-        [`${PORTS.ADMIN_API}/tcp`]: {},
-        [`${PORTS.WS_TRANSPORT}/tcp`]: {},
-      },
-      HostConfig: hostConfig,
-      NetworkingConfig: {
-        EndpointsConfig: {
-          [network]: {
-            Aliases: typeof name === 'string' && name.length > ZERO ?
-              [name] :
-              [],
-          },
-        },
-      },
-    });
+    const container = await this._docker.createContainer(
+      containerCreateOptions(normalized, envArray, hostConfig),
+    );
 
     const containerId = container.id;
+    await this._startCreatedContainer({
+      container,
+      containerId,
+      name,
+      startTimeout,
+    });
+    return this._createdContainerResult({
+      containerId,
+      name,
+      image,
+      network,
+    });
+  }
+
+  async _startCreatedContainer({
+    container,
+    containerId,
+    name,
+    startTimeout,
+  }) {
     try {
       this._emitOperation(DOCKER_OP_START_CONTAINER, {
         stage: localText.STARTING,
@@ -437,7 +536,14 @@ class DockerProvider {
         `${startTimeout}ms: ${err.message}`,
       );
     }
+  }
 
+  async _createdContainerResult({
+    containerId,
+    name,
+    image,
+    network,
+  }) {
     const info = await this.inspectContainer(containerId);
     const networks = info.NetworkSettings?.Networks || {};
     const namedEndpoint = networks[network];
@@ -682,29 +788,29 @@ class DockerProvider {
    */
   async getContainerLogs(containerId, options = {}) {
     const container = this._docker.getContainer(containerId);
-    const hasTailOverride =
-      options.tail !== undefined &&
-      options.tail !== null;
-    const normalizedTail = hasTailOverride ?
-      String(Math.max(ZERO, Math.floor(Number(options.tail) || ZERO))) :
-      null;
-    const logOpts = {
-      stdout: true,
-      stderr: true,
-      follow: false,
-    };
-    if (normalizedTail !== null) {
-      logOpts.tail = normalizedTail;
-    }
-    if (options.timestamps) {
-      logOpts.timestamps = true;
-    }
-    if (options.since) {
-      logOpts.since = options.since;
-    }
+    const {logOptions, normalizedTail} =
+      normalizeContainerLogOptions(options);
+    const buffer = await this._readContainerLogs({
+      container,
+      containerId,
+      options,
+      logOptions,
+      normalizedTail,
+    });
+    if (options[CONTAINER_LOG_OPTION_RAW_BUFFER] === true) return buffer;
+    return buffer.toString(UTF8_ENCODING);
+  }
+
+  async _readContainerLogs({
+    container,
+    containerId,
+    options,
+    logOptions,
+    normalizedTail,
+  }) {
     let buffer;
     try {
-      buffer = await container.logs(logOpts);
+      buffer = await container.logs(logOptions);
     } catch (error) {
       const isStringTooLongError = error?.code ===
         CONTAINER_LOG_ERROR_STRING_TOO_LONG;
@@ -716,10 +822,7 @@ class DockerProvider {
       }
       throw error;
     }
-    if (options[CONTAINER_LOG_OPTION_RAW_BUFFER] === true) {
-      return buffer;
-    }
-    return buffer.toString(UTF8_ENCODING);
+    return buffer;
   }
 
   /**
@@ -888,9 +991,11 @@ class DockerProvider {
     const container = this._docker.getContainer(containerId);
     const stats = await container.stats({stream: false});
     const inspect = await container.inspect({size: true});
-    const storageUsageBytes = storagePath === null ?
-      safeNumber(inspect?.SizeRw) :
-      await this._getContainerPathUsage(containerId, storagePath);
+    const storageUsageBytes =
+      storagePath === null ||
+      storagePath === DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH ?
+        safeNumber(inspect?.SizeRw) :
+        await this._getContainerPathUsage(containerId, storagePath);
     return {
       ...parseContainerStats(stats),
       cpuLimitNanoCpus: safeNumber(inspect?.HostConfig?.NanoCpus),
@@ -1237,4 +1342,8 @@ function parseContainerStats(stats) {
   };
 }
 
-export {DockerProvider, parseContainerStats};
+export {
+  DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
+  DockerProvider,
+  parseContainerStats,
+};

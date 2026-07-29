@@ -10,7 +10,11 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
 import fc from 'fast-check';
-import {DockerProvider, parseContainerStats} from '../docker-provider.js';
+import {
+  DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
+  DockerProvider,
+  parseContainerStats,
+} from '../docker-provider.js';
 import {CONTAINER_ENV_KEYS, PORTS} from '../constants.js';
 
 const RESOURCE_SNAPSHOT_CONTAINER_ID = 'container-resource';
@@ -613,8 +617,7 @@ test('Unit: buildImage passes labels to docker build options', async (t) => {
 
       assert.deepStrictEqual(capturedBuildContext, {
         context: '/project',
-        src: ['.dockerignore', 'Dockerfile', 'package-lock.json',
-          'package.json', 'src'],
+        src: ['Dockerfile', 'package-lock.json', 'package.json', 'src'],
       });
       assert.deepStrictEqual(capturedBuildOptions, {
         t: 'myimage:context',
@@ -909,4 +912,27 @@ test('Unit: resource snapshot measures a bounded container storage path',
         /not a safe byte count/u,
       );
     }
+  });
+
+test('Unit: resource snapshot can use the inspected writable layer',
+  async () => {
+    const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+    provider._docker.getContainer = () => ({
+      stats: async () => ({
+        cpu_stats: {cpu_usage: {total_usage: 2}},
+        memory_stats: {usage: 10, limit: 20},
+      }),
+      inspect: async () => ({
+        SizeRw: 12_345,
+        HostConfig: {NanoCpus: 1_000_000_000},
+      }),
+    });
+    provider.execInContainer = async () => {
+      throw new Error('distroless writable-layer accounting must not exec');
+    };
+    const result = await provider.getContainerResourceSnapshot(
+      RESOURCE_SNAPSHOT_CONTAINER_ID,
+      DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
+    );
+    assert.equal(result.storageUsageBytes, 12_345);
   });

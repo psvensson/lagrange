@@ -48,13 +48,12 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 26
+## Open quests — 25
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
 | benchmark-capacity-protocol-v2-foundation | product | 3 | 0 | 2026-07-29 | — |
 | comparative-efficiency-movielens-measured-p0-campaign | product | 0 | 0 | 2026-07-29 | — |
-| comparative-efficiency-postgresql-comparator-capture-reuse | product | 0 | 0 | 2026-07-29 | — |
 | comparative-efficiency-postgresql-comparator-reuse | product | 1 | 0 | 2026-07-29 | — |
 | documentation-audience-boundary-tooling | process | 1 | 0 | 2026-07-26 | — |
 | formation-ledger-self-move-blocks-cluster-ops | product | 5 | 1 | 2026-07-25 | — |

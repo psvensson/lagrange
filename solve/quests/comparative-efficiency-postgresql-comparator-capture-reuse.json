@@ -1,0 +1,72 @@
+{
+  "id": "comparative-efficiency-postgresql-comparator-capture-reuse",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A MovieLens 100K PostgreSQL comparator can be captured independently once, stopped by objective sufficiency, content-addressed over exact evidence and source identity, and reused fail-closed only as development evidence without any Lagrange setup dependency.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "comparative-efficiency-postgresql-comparator-reuse",
+    "planDoc": "solve/epics/comparative-workload-efficiency-evidence.md",
+    "draftedAtCommit": "c5ee327e8e504d5d7f90a7d55797607faa77631d"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "comparative-efficiency-postgresql-comparator-reuse",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "comparative-efficiency-postgresql-comparator-capture-reuse-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "comparative-efficiency-postgresql-comparator-reuse",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "development-only-projection",
+      "statement": "Comparator reuse is exploratory development evidence and must remain claimEligible=false. It must never satisfy or replace the contemporaneously paired full-campaign evidence."
+    },
+    {
+      "id": "content-addressed-comparator",
+      "statement": "The PostgreSQL comparator artifact is immutable and content addressed over exact raw samples, window and resource receipts, capacity summary, dataset, workload and oracle identity, PostgreSQL image, version, configuration, query plan and topology identity, harness, protocol and source identity, resource and host envelope, capture time, validity interval, and objective sufficiency decision."
+    },
+    {
+      "id": "objective-capture-sufficiency",
+      "statement": "Capture continues from the sealed minimum to maximum repetition bound until every tail sample is sufficient, capacity is bracketed in every block, and the independent capacity interval meets the sealed relative-width target. Maximum-bound evidence that misses the target remains durable but is not reusable."
+    },
+    {
+      "id": "fail-closed-revalidation",
+      "statement": "Reuse requires exact compatibility and artifact digest matches, unexpired validity, valid source and raw sample digests, and a derived drift witness within its sealed tolerance. Missing, accessor-backed, inherited, malformed, stale, mismatched, re-signed, or out-of-tolerance evidence requires fresh capture."
+    },
+    {
+      "id": "independent-statistical-projection",
+      "statement": "Any later development comparison joined to the stored comparator uses explicitly independent noncontemporaneous statistics and carries both uncertainty sources; it cannot use paired-effect terminology."
+    },
+    {
+      "id": "no-lagrange-setup-dependency",
+      "statement": "PostgreSQL comparator capture does not start or depend on the Lagrange cluster, Lagrange PostgreSQL ingress, Request Cell placement, or Binding lifecycle."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "adversarial-js-intrinsics",
+    "harness-fidelity"
+  ]
+}

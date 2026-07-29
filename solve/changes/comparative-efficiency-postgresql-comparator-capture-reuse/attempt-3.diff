@@ -1,0 +1,5624 @@
+diff --git a/scripts/checks/benchmark-comparator-host-observation.js b/scripts/checks/benchmark-comparator-host-observation.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f75895a4dafc085a84f2fec32785a04ec96c7324
+--- /dev/null
++++ b/scripts/checks/benchmark-comparator-host-observation.js
+@@ -0,0 +1,150 @@
++import {readFile, statfs} from 'node:fs/promises';
++import os from 'node:os';
++
++const DECIMAL_COUNTER = /^(?:0|[1-9][0-9]*)$/u;
++const MILLISECONDS_PER_SECOND = 1_000;
++const MINIMUM_HEADROOM_RATIO = 0.02;
++const NETWORK_TRANSMIT_FIELD_INDEX = 8;
++const SHARED_NETWORK_BYTES_PER_SECOND = 125_000_000;
++const arraySplit = Function.call.bind(String.prototype.split);
++const mathMax = Math.max;
++const mathMin = Math.min;
++const numberConstructor = Number;
++const numberIsFinite = Number.isFinite;
++const numberIsSafeInteger = Number.isSafeInteger;
++const regexpTest = Function.call.bind(RegExp.prototype.test);
++const stringIndexOf = Function.call.bind(String.prototype.indexOf);
++const stringSlice = Function.call.bind(String.prototype.slice);
++const stringTrim = Function.call.bind(String.prototype.trim);
++const localText = Object.freeze({
++  HEADROOM_HOST_CPU: 'host CPU',
++  HEADROOM_HOST_MEMORY: 'host memory',
++  HEADROOM_OBSERVER_CPU: 'observer CPU',
++  HEADROOM_SHARED_NETWORK: 'shared network',
++  HEADROOM_SHARED_STORAGE: 'shared storage',
++  NETWORK_COUNTER_INCOMPLETE: 'incomplete /proc/net/dev counters',
++  NETWORK_COUNTER_MALFORMED: 'malformed /proc/net/dev counter',
++  NETWORK_COUNTER_RANGE: 'out-of-range /proc/net/dev counter',
++  NETWORK_COUNTER_TOTAL_RANGE:
++    'out-of-range aggregate /proc/net/dev counter',
++  NETWORK_DEVICE_FILE: '/proc/net/dev',
++  NEWLINE: '\n',
++  UTF8: 'utf8',
++});
++
++function fail(reason) {
++  throw new Error(`benchmark comparator host observation failed: ${reason}`);
++}
++
++function networkCounter(value) {
++  if (
++    typeof value !== 'string' ||
++    !regexpTest(DECIMAL_COUNTER, value)
++  ) fail(localText.NETWORK_COUNTER_MALFORMED);
++  const counter = numberConstructor(value);
++  if (!numberIsSafeInteger(counter)) {
++    fail(localText.NETWORK_COUNTER_RANGE);
++  }
++  return counter;
++}
++
++function parseProcNetworkBytes(text) {
++  let total = 0;
++  const lines = arraySplit(text, localText.NEWLINE);
++  for (let lineIndex = 2; lineIndex < lines.length; lineIndex += 1) {
++    const line = lines[lineIndex];
++    const separator = stringIndexOf(line, ':');
++    if (separator < 0) continue;
++    const fields = arraySplit(
++      stringTrim(stringSlice(line, separator + 1)),
++      /\s+/u,
++    );
++    if (fields.length <= NETWORK_TRANSMIT_FIELD_INDEX) {
++      fail(localText.NETWORK_COUNTER_INCOMPLETE);
++    }
++    total +=
++      networkCounter(fields[0]) +
++      networkCounter(fields[NETWORK_TRANSMIT_FIELD_INDEX]);
++    if (!numberIsSafeInteger(total)) {
++      fail(localText.NETWORK_COUNTER_TOTAL_RANGE);
++    }
++  }
++  return total;
++}
++
++async function networkBytes() {
++  return parseProcNetworkBytes(
++    await readFile(localText.NETWORK_DEVICE_FILE, localText.UTF8),
++  );
++}
++
++export async function observeBenchmarkComparatorHost(directory) {
++  const filesystem = await statfs(directory);
++  return {
++    cpu: process.cpuUsage(),
++    load: os.loadavg()[0],
++    freeMemory: os.freemem(),
++    networkBytes: await networkBytes(),
++    storageCapacity: filesystem.blocks * filesystem.bsize,
++    storageAvailable: filesystem.bavail * filesystem.bsize,
++  };
++}
++
++function boundedMeasurement(capacity, observedPeak, name) {
++  if (
++    !numberIsFinite(capacity) ||
++    capacity <= 0 ||
++    !numberIsFinite(observedPeak) ||
++    observedPeak < 0 ||
++    observedPeak > capacity
++  ) {
++    fail(
++      `${name} capacity exceeded ` +
++      `(capacity=${capacity}, observedPeak=${observedPeak})`,
++    );
++  }
++  return {capacity, observedPeak};
++}
++
++export function benchmarkComparatorHostHeadroom(start, end, durationMs) {
++  const cpuCount = os.cpus().length;
++  const totalMemory = os.totalmem();
++  const observerCpu =
++    end.cpu.user + end.cpu.system - start.cpu.user - start.cpu.system;
++  const networkDelta = end.networkBytes - start.networkBytes;
++  return {
++    minimumRequiredRatio: MINIMUM_HEADROOM_RATIO,
++    observerCpu: boundedMeasurement(
++      durationMs * MILLISECONDS_PER_SECOND * cpuCount,
++      observerCpu,
++      localText.HEADROOM_OBSERVER_CPU,
++    ),
++    hostCpu: boundedMeasurement(
++      cpuCount,
++      mathMax(start.load, end.load),
++      localText.HEADROOM_HOST_CPU,
++    ),
++    hostMemory: boundedMeasurement(
++      totalMemory,
++      mathMax(
++        totalMemory - start.freeMemory,
++        totalMemory - end.freeMemory,
++      ),
++      localText.HEADROOM_HOST_MEMORY,
++    ),
++    sharedNetwork: boundedMeasurement(
++      SHARED_NETWORK_BYTES_PER_SECOND *
++        durationMs / MILLISECONDS_PER_SECOND,
++      networkDelta,
++      localText.HEADROOM_SHARED_NETWORK,
++    ),
++    sharedStorage: boundedMeasurement(
++      mathMin(start.storageCapacity, end.storageCapacity),
++      mathMax(
++        start.storageCapacity - start.storageAvailable,
++        end.storageCapacity - end.storageAvailable,
++      ),
++      localText.HEADROOM_SHARED_STORAGE,
++    ),
++  };
++}
+diff --git a/scripts/checks/benchmark-local-module-source-closure.js b/scripts/checks/benchmark-local-module-source-closure.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b5272d12d50282de221af1cee2bc5be659d92be6
+--- /dev/null
++++ b/scripts/checks/benchmark-local-module-source-closure.js
+@@ -0,0 +1,253 @@
++import {readFile} from 'node:fs/promises';
++import path from 'node:path';
++
++import {KEYS} from 'eslint-visitor-keys';
++import {parse} from 'espree';
++
++import {
++  appendOwnArrayValue,
++  copyDenseStringArray,
++} from
++  '../../test/distributed/harness/benchmark-semantic-integrity.js';
++
++const canonicalArrayIsArray = Array.isArray;
++const canonicalArrayPop = Array.prototype.pop;
++const canonicalArrayPush = Array.prototype.push;
++const canonicalSetAdd = Set.prototype.add;
++const canonicalSetHas = Set.prototype.has;
++const arrayIsArray = canonicalArrayIsArray;
++const arrayJoin = Function.call.bind(Array.prototype.join);
++const arrayPop = Function.call.bind(canonicalArrayPop);
++const arraySort = Function.call.bind(Array.prototype.sort);
++const setAdd = Function.call.bind(canonicalSetAdd);
++const setHas = Function.call.bind(canonicalSetHas);
++const stringSplit = Function.call.bind(String.prototype.split);
++const stringStartsWith = Function.call.bind(String.prototype.startsWith);
++const objectDefineProperty = Object.defineProperty;
++const objectFreeze = Object.freeze;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const SetConstructor = Set;
++const pathDirname = path.dirname;
++const pathExtname = path.extname;
++const pathIsAbsolute = path.isAbsolute;
++const pathRelative = path.relative;
++const pathResolve = path.resolve;
++const pathSeparator = path.sep;
++const localText = objectFreeze({
++  ARRAY_IS_ARRAY_METHOD: 'isArray',
++  ARRAY_POP_METHOD: 'pop',
++  ARRAY_PUSH_METHOD: 'push',
++  DYNAMIC_LOCAL_IMPORT:
++    'dynamic local import must use a literal module specifier',
++  ENCODING: 'utf8',
++  ECMASCRIPT_VERSION: 'latest',
++  EXPORT_ALL_DECLARATION: 'ExportAllDeclaration',
++  EXPORT_NAMED_DECLARATION: 'ExportNamedDeclaration',
++  IMPORT_DECLARATION: 'ImportDeclaration',
++  IMPORT_EXPRESSION: 'ImportExpression',
++  JAVASCRIPT_EXTENSION: '.js',
++  LITERAL: 'Literal',
++  LOCAL_PREFIX: '.',
++  MODULE: 'module',
++  OUTSIDE_ROOT: 'local module escaped the repository root',
++  PARENT: '..',
++  ROOT_SHAPE: 'source closure requires dense entry and additional paths',
++  SET_ADD_METHOD: 'add',
++  SET_HAS_METHOD: 'has',
++  SLASH: '/',
++});
++
++function fail(reason) {
++  throw new TypeError(`benchmark source closure failed: ${reason}`);
++}
++
++function repositoryPath(absolutePath, root) {
++  const relative = pathRelative(root, absolutePath);
++  if (
++    relative.length === 0 ||
++    relative === localText.PARENT ||
++    stringStartsWith(relative, `${localText.PARENT}${pathSeparator}`) ||
++    pathIsAbsolute(relative)
++  ) fail(localText.OUTSIDE_ROOT);
++  return arrayJoin(
++    stringSplit(relative, pathSeparator),
++    localText.SLASH,
++  );
++}
++
++function localSpecifier(node) {
++  if (
++    node.type === localText.IMPORT_DECLARATION ||
++    node.type === localText.EXPORT_NAMED_DECLARATION ||
++    node.type === localText.EXPORT_ALL_DECLARATION
++  ) return node.source?.value;
++  if (node.type !== localText.IMPORT_EXPRESSION) return null;
++  if (node.source?.type !== localText.LITERAL) {
++    fail(localText.DYNAMIC_LOCAL_IMPORT);
++  }
++  return node.source.value;
++}
++
++function replaceDataMethod(owner, field, value) {
++  const descriptor = objectGetOwnPropertyDescriptor(owner, field);
++  objectDefineProperty(owner, field, {
++    configurable: true,
++    writable: true,
++    value,
++  });
++  return descriptor;
++}
++
++function parseWithPristineCollectionIntrinsics(source) {
++  const arrayIsArrayDescriptor =
++    replaceDataMethod(
++      Array,
++      localText.ARRAY_IS_ARRAY_METHOD,
++      canonicalArrayIsArray,
++    );
++  const arrayPopDescriptor =
++    replaceDataMethod(
++      Array.prototype,
++      localText.ARRAY_POP_METHOD,
++      canonicalArrayPop,
++    );
++  const arrayPushDescriptor =
++    replaceDataMethod(
++      Array.prototype,
++      localText.ARRAY_PUSH_METHOD,
++      canonicalArrayPush,
++    );
++  const setAddDescriptor =
++    replaceDataMethod(
++      Set.prototype,
++      localText.SET_ADD_METHOD,
++      canonicalSetAdd,
++    );
++  const setHasDescriptor =
++    replaceDataMethod(
++      Set.prototype,
++      localText.SET_HAS_METHOD,
++      canonicalSetHas,
++    );
++  try {
++    return parse(source, {
++      ecmaVersion: localText.ECMASCRIPT_VERSION,
++      sourceType: localText.MODULE,
++    });
++  } finally {
++    objectDefineProperty(
++      Set.prototype,
++      localText.SET_HAS_METHOD,
++      setHasDescriptor,
++    );
++    objectDefineProperty(
++      Set.prototype,
++      localText.SET_ADD_METHOD,
++      setAddDescriptor,
++    );
++    objectDefineProperty(
++      Array.prototype,
++      localText.ARRAY_PUSH_METHOD,
++      arrayPushDescriptor,
++    );
++    objectDefineProperty(
++      Array.prototype,
++      localText.ARRAY_POP_METHOD,
++      arrayPopDescriptor,
++    );
++    objectDefineProperty(
++      Array,
++      localText.ARRAY_IS_ARRAY_METHOD,
++      arrayIsArrayDescriptor,
++    );
++  }
++}
++
++function importedSpecifiers(source) {
++  const program = parseWithPristineCollectionIntrinsics(source);
++  const specifiers = [];
++  const pending = [program];
++  while (pending.length > 0) {
++    const node = arrayPop(pending);
++    const specifier = localSpecifier(node);
++    if (
++      typeof specifier === 'string' &&
++      stringStartsWith(specifier, localText.LOCAL_PREFIX)
++    ) appendOwnArrayValue(specifiers, specifier);
++    const keys = KEYS[node.type] ?? [];
++    for (let keyIndex = 0; keyIndex < keys.length; keyIndex += 1) {
++      const child = node[keys[keyIndex]];
++      if (arrayIsArray(child)) {
++        for (let index = 0; index < child.length; index += 1) {
++          if (child[index] !== null) {
++            appendOwnArrayValue(pending, child[index]);
++          }
++        }
++      } else if (child !== null && typeof child === 'object') {
++        appendOwnArrayValue(pending, child);
++      }
++    }
++  }
++  return specifiers;
++}
++
++function copyPathList(values, allowEmpty) {
++  const copy = copyDenseStringArray(values);
++  if (copy === null || (!allowEmpty && copy.length === 0)) {
++    fail(localText.ROOT_SHAPE);
++  }
++  for (let index = 0; index < copy.length; index += 1) {
++    if (copy[index].length === 0) {
++      fail(localText.ROOT_SHAPE);
++    }
++  }
++  return copy;
++}
++
++export async function resolveBenchmarkLocalModuleSourcePaths({
++  entryPaths,
++  additionalPaths = [],
++}) {
++  const sealedEntryPaths = copyPathList(entryPaths, false);
++  const sealedAdditionalPaths = copyPathList(additionalPaths, true);
++  const root = process.cwd();
++  const pending = [];
++  for (let index = 0; index < sealedEntryPaths.length; index += 1) {
++    appendOwnArrayValue(
++      pending,
++      pathResolve(root, sealedEntryPaths[index]),
++    );
++  }
++  const visited = new SetConstructor();
++  const sourcePaths = [];
++  while (pending.length > 0) {
++    const absolutePath = arrayPop(pending);
++    const sourcePath = repositoryPath(absolutePath, root);
++    if (setHas(visited, sourcePath)) continue;
++    setAdd(visited, sourcePath);
++    appendOwnArrayValue(sourcePaths, sourcePath);
++    if (pathExtname(sourcePath) !== localText.JAVASCRIPT_EXTENSION) {
++      continue;
++    }
++    const source = await readFile(absolutePath, localText.ENCODING);
++    const specifiers = importedSpecifiers(source);
++    for (let index = 0; index < specifiers.length; index += 1) {
++      appendOwnArrayValue(
++        pending,
++        pathResolve(pathDirname(absolutePath), specifiers[index]),
++      );
++    }
++  }
++  for (let index = 0; index < sealedAdditionalPaths.length; index += 1) {
++    const sourcePath = repositoryPath(
++      pathResolve(root, sealedAdditionalPaths[index]),
++      root,
++    );
++    if (!setHas(visited, sourcePath)) {
++      setAdd(visited, sourcePath);
++      appendOwnArrayValue(sourcePaths, sourcePath);
++    }
++  }
++  arraySort(sourcePaths);
++  return objectFreeze(sourcePaths);
++}
+diff --git a/scripts/checks/movielens-measured-p0-comparator-live-support.js b/scripts/checks/movielens-measured-p0-comparator-live-support.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..12b7ab8dc390b86af148e87465cca2942b944266
+--- /dev/null
++++ b/scripts/checks/movielens-measured-p0-comparator-live-support.js
+@@ -0,0 +1,162 @@
++import {
++  appendOwnArrayValue,
++} from
++  '../../test/distributed/harness/benchmark-semantic-integrity.js';
++import {
++  beginBenchmarkResourceLiveObservation,
++  captureBenchmarkResourceLiveObservation,
++  finalizeBenchmarkResourceLiveObservation,
++  resolveBenchmarkResourceLiveObservationBounds,
++  writeExternallyObservedBenchmarkResourceCalibration,
++} from
++  '../../test/distributed/harness/benchmark-resource-live-observation-authority.js';
++import {
++  MOVIELENS_MEASURED_P0_STORAGE_GATES,
++} from
++  '../../test/distributed/harness/comparative-efficiency-movielens-measured-p0-constants.js';
++import {
++  benchmarkComparatorHostHeadroom,
++  observeBenchmarkComparatorHost,
++} from './benchmark-comparator-host-observation.js';
++
++const MEBIBYTE = 1_048_576;
++const objectFreeze = Object.freeze;
++const localText = objectFreeze({
++  CLEANUP_FAILED:
++    'measured comparator execution and cleanup failed',
++  NONE: 'none',
++  OBSERVED_STORAGE_EXCEEDED:
++    'observed storage exceeded the sealed baseline',
++});
++
++function fail(reason) {
++  throw new Error(`measured comparator support failed: ${reason}`);
++}
++
++function firstOperationFailure(adapterEvidence) {
++  for (let index = 0;
++    index < adapterEvidence.operationEvidence.length;
++    index += 1) {
++    const failure = adapterEvidence.operationEvidence[index].failure;
++    if (failure !== undefined) {
++      return `${failure.name}:${failure.message}`;
++    }
++  }
++  return localText.NONE;
++}
++
++function assertStorageGates(windowEvidence) {
++  for (let index = 0; index < windowEvidence.length; index += 1) {
++    const calibration =
++      windowEvidence[index].calibration.artifact.payload;
++    for (let componentIndex = 0;
++      componentIndex < calibration.components.length;
++      componentIndex += 1) {
++      const delta = calibration.components[componentIndex].delta;
++      const durationSeconds = delta.durationMilliseconds / 1_000;
++      const iops = delta.blockOperations / durationSeconds;
++      const bytesPerSecond =
++        (delta.blockReadBytes + delta.blockWriteBytes) / durationSeconds;
++      if (
++        iops > MOVIELENS_MEASURED_P0_STORAGE_GATES.maximumIops ||
++        bytesPerSecond >
++          MOVIELENS_MEASURED_P0_STORAGE_GATES
++            .maximumThroughputMiBPerSecond * MEBIBYTE
++      ) fail(localText.OBSERVED_STORAGE_EXCEEDED);
++    }
++  }
++}
++
++export function createComparatorResourceObservationHooks({
++  captured,
++  environment,
++  provenance,
++  runId,
++}) {
++  return {
++    async beginResourceObservation(context) {
++      const host = await observeBenchmarkComparatorHost(process.cwd());
++      const session = await beginBenchmarkResourceLiveObservation(
++        environment.provider,
++        {
++          runId,
++          networkId: environment.networkId,
++          networkName: environment.networkName,
++          sourceRevision: provenance.sourceRevision,
++          components: environment.components,
++        },
++      );
++      return {context, host, session};
++    },
++    async completeResourceObservation({
++      adapterEvidence,
++      resourceObservation,
++      context,
++      sample,
++    }) {
++      await captureBenchmarkResourceLiveObservation(
++        resourceObservation.session,
++      );
++      const bounds = resolveBenchmarkResourceLiveObservationBounds(
++        resourceObservation.session,
++        context.sideId,
++      );
++      const host = await observeBenchmarkComparatorHost(process.cwd());
++      appendOwnArrayValue(captured, resourceObservation);
++      process.stdout.write(
++        `comparator window: block=${context.blockIndex} ` +
++        `side=${context.sideId} load=${context.offeredLoadPerSecond} ` +
++        `phase=${context.phase} correct=${sample.counts.correct} ` +
++        `errorRate=${sample.errorRate} ` +
++        `firstFailure=${firstOperationFailure(adapterEvidence)}\n`,
++      );
++      return {
++        ...bounds,
++        headroom: benchmarkComparatorHostHeadroom(
++          resourceObservation.host,
++          host,
++          bounds.endedAt - bounds.startedAt,
++        ),
++      };
++    },
++  };
++}
++
++export async function closeComparatorEnvironmentAfterFailure(
++  environment,
++  executionError,
++) {
++  try {
++    await environment.close();
++  } catch (cleanupError) {
++    throw new AggregateError(
++      [executionError, cleanupError],
++      localText.CLEANUP_FAILED,
++    );
++  }
++}
++
++export async function finalizeComparatorWindowEvidence(captured, protocol) {
++  const calibrations = [];
++  for (let index = 0; index < captured.length; index += 1) {
++    const observation = captured[index];
++    const finalization =
++      await finalizeBenchmarkResourceLiveObservation(observation.session);
++    appendOwnArrayValue(
++      calibrations,
++      writeExternallyObservedBenchmarkResourceCalibration(
++        finalization.receipt,
++        finalization.authorization,
++      ),
++    );
++  }
++  const windowEvidence = [];
++  for (let index = 0; index < protocol.windows.length; index += 1) {
++    appendOwnArrayValue(windowEvidence, {
++      c3: protocol.windows[index],
++      calibration: calibrations[index],
++    });
++  }
++  assertStorageGates(windowEvidence);
++  return windowEvidence;
++}
+diff --git a/scripts/checks/movielens-measured-p0-comparator-plan.js b/scripts/checks/movielens-measured-p0-comparator-plan.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..41530f18306ddd3d6af0379e883ad3c5b1c0a3cb
+--- /dev/null
++++ b/scripts/checks/movielens-measured-p0-comparator-plan.js
+@@ -0,0 +1,164 @@
++import {
++  BENCHMARK_CAPACITY_ARTIFACT_POLICY,
++  BENCHMARK_CAPACITY_CACHE_POLICY,
++  BENCHMARK_CAPACITY_ESTIMATOR,
++  BENCHMARK_CAPACITY_INTERVAL,
++  BENCHMARK_CAPACITY_MULTIPLE_COMPARISON,
++  BENCHMARK_CAPACITY_RANDOMIZATION_ALGORITHM,
++  BENCHMARK_CAPACITY_REJECT_POLICY,
++  BENCHMARK_CAPACITY_RUN_ORDER_POLICY,
++  BENCHMARK_CAPACITY_STOPPING_RULE,
++  BENCHMARK_CAPACITY_TIMEOUT_POLICY,
++} from
++  '../../test/distributed/harness/benchmark-capacity-protocol-constants.js';
++import {
++  sealBenchmarkCapacityPreregistration,
++} from
++  '../../test/distributed/harness/benchmark-capacity-preregistration.js';
++import {
++  appendOwnArrayValue,
++  digestBenchmarkSemanticData,
++} from
++  '../../test/distributed/harness/benchmark-semantic-integrity.js';
++import {
++  BENCHMARK_SQL_DIALECT,
++  getBenchmarkSemanticContract,
++} from
++  '../../test/distributed/harness/benchmark-workload-semantics.js';
++import {
++  MOVIELENS_MEASURED_P0_CAPACITY,
++  MOVIELENS_MEASURED_P0_IDENTITY,
++  MOVIELENS_MEASURED_P0_SIDE_IDS,
++} from
++  '../../test/distributed/harness/comparative-efficiency-movielens-measured-p0-constants.js';
++
++const BLOCKED_ORDER_INDEX = 0;
++const CAMPAIGN_DIALECT = BENCHMARK_SQL_DIALECT.POSTGRESQL;
++const SIDE_IDS = MOVIELENS_MEASURED_P0_SIDE_IDS;
++const localText = Object.freeze({
++  CAPACITY_PROFILE_ABSENT: 'comparator capacity profile is absent',
++  ENVIRONMENT_MODE: 'independent-comparator-development',
++  MATRIX_SUFFIX: 'observed-replicated',
++  RUN_SUFFIX: ':run:0',
++  STUDY_SUFFIX: '.capacity',
++  TOPOLOGY: 'replicated',
++});
++
++function fail(reason) {
++  throw new TypeError(`invalid comparator plan: ${reason}`);
++}
++
++function capacityProfile(dataset) {
++  const profile =
++    MOVIELENS_MEASURED_P0_CAPACITY
++      .profilesByDatasetSize[dataset.cardinality];
++  if (profile === undefined) fail(localText.CAPACITY_PROFILE_ABSENT);
++  return profile;
++}
++
++function sideSemanticContracts() {
++  const semanticContract =
++    getBenchmarkSemanticContract(CAMPAIGN_DIALECT);
++  const contracts = [];
++  for (let index = 0; index < SIDE_IDS.length; index += 1) {
++    appendOwnArrayValue(contracts, {
++      sideId: SIDE_IDS[index],
++      dialect: CAMPAIGN_DIALECT,
++      contractDigest: semanticContract.contractDigest,
++    });
++  }
++  return contracts;
++}
++
++function comparatorPreregistration({
++  identity,
++  matrixId,
++  runId,
++  dataset,
++  profile,
++  replicationFactor,
++}) {
++  const cellIdentity = digestBenchmarkSemanticData({
++    identity,
++    matrixId,
++  });
++  const profileIdentity = digestBenchmarkSemanticData({
++    datasetDigest: dataset.digest,
++    profile,
++  });
++  const environmentIdentity = digestBenchmarkSemanticData({
++    mode: localText.ENVIRONMENT_MODE,
++    replicationFactor,
++  });
++  return sealBenchmarkCapacityPreregistration({
++    studyId: `${identity}${localText.STUDY_SUFFIX}`,
++    sideIds: SIDE_IDS,
++    sideSemanticContracts: sideSemanticContracts(),
++    offeredLoadPerSecond: profile.offeredLoadsPerSecond,
++    slo: profile.slo,
++    repetitions: MOVIELENS_MEASURED_P0_CAPACITY.repetitions,
++    statistics: {
++      estimator: BENCHMARK_CAPACITY_ESTIMATOR,
++      interval: BENCHMARK_CAPACITY_INTERVAL,
++      ...MOVIELENS_MEASURED_P0_CAPACITY.statistics,
++      stoppingRule: BENCHMARK_CAPACITY_STOPPING_RULE,
++      multipleComparisonTreatment:
++        BENCHMARK_CAPACITY_MULTIPLE_COMPARISON,
++    },
++    sampling: profile.sampling,
++    cachePolicy: BENCHMARK_CAPACITY_CACHE_POLICY,
++    runOrderPolicy: BENCHMARK_CAPACITY_RUN_ORDER_POLICY,
++    timeoutPolicy: BENCHMARK_CAPACITY_TIMEOUT_POLICY,
++    rejectPolicy: BENCHMARK_CAPACITY_REJECT_POLICY,
++    artifactPolicy: BENCHMARK_CAPACITY_ARTIFACT_POLICY,
++    randomization: {
++      algorithm: BENCHMARK_CAPACITY_RANDOMIZATION_ALGORITHM,
++      seed: MOVIELENS_MEASURED_P0_CAPACITY.randomSeed,
++    },
++    executionIdentity: {
++      matrixId,
++      cellId: cellIdentity,
++      cellManifestDigest: cellIdentity,
++      profileIdentity,
++      pairIdentity: digestBenchmarkSemanticData({
++        pairId: MOVIELENS_MEASURED_P0_IDENTITY.PAIR,
++      }),
++      runId,
++      liveEnvironmentContractDigest: environmentIdentity,
++    },
++  });
++}
++
++export function planMovielensMeasuredP0ComparatorCell({
++  dataset,
++  preflight,
++  identity,
++}) {
++  const profile = capacityProfile(dataset);
++  const cell = {
++    datasetSize: dataset.cardinality,
++    replicationFactor: preflight.postgres.replicationFactor,
++    skew: dataset.skew,
++    topology: localText.TOPOLOGY,
++  };
++  const matrixId =
++    `movielens-${dataset.cardinality}-${localText.MATRIX_SUFFIX}`;
++  const runId = `${identity}${localText.RUN_SUFFIX}`;
++  return {
++    blockedOrderIndex: BLOCKED_ORDER_INDEX,
++    capacityProfile: profile,
++    capacityPreregistration: comparatorPreregistration({
++      identity,
++      matrixId,
++      runId,
++      dataset,
++      profile,
++      replicationFactor: cell.replicationFactor,
++    }),
++    cell,
++    dataset,
++    matrixId,
++    runId,
++    seal: preflight,
++  };
++}
+diff --git a/scripts/checks/movielens-measured-p0-postgresql-comparator-constants.js b/scripts/checks/movielens-measured-p0-postgresql-comparator-constants.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..65405db5124225048a1ad65a0a7fe5d5fffe64b9
+--- /dev/null
++++ b/scripts/checks/movielens-measured-p0-postgresql-comparator-constants.js
+@@ -0,0 +1,11 @@
++export const MOVIELENS_MEASURED_P0_POSTGRESQL_COMPARATOR_SOURCE_ENTRY_PATHS =
++  Object.freeze([
++    'scripts/checks/' +
++      'run-comparative-efficiency-movielens-postgresql-comparator-live.js',
++  ]);
++
++export const MOVIELENS_MEASURED_P0_POSTGRESQL_COMPARATOR_ADDITIONAL_PATHS =
++  Object.freeze([
++    'package.json',
++    'package-lock.json',
++  ]);
+diff --git a/scripts/checks/movielens-measured-p0-postgresql-comparator.js b/scripts/checks/movielens-measured-p0-postgresql-comparator.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..651ed1350588bac7e089c493a4cefe55849645d9
+--- /dev/null
++++ b/scripts/checks/movielens-measured-p0-postgresql-comparator.js
+@@ -0,0 +1,471 @@
++import {createHash} from 'node:crypto';
++import {readFile} from 'node:fs/promises';
++import os from 'node:os';
++
++import {
++  createBenchmarkCapacityComparatorDriftWitness,
++  createBenchmarkCapacityReusableComparator,
++  inspectBenchmarkCapacityReusableComparator,
++} from
++  '../../test/distributed/harness/benchmark-capacity-reusable-comparator.js';
++import {
++  appendOwnArrayValue,
++  copyDenseStringArray,
++  digestBenchmarkSemanticData,
++  hasExactOwnDataKeys,
++  isDenseDataArray,
++  isNonNegativeSafeInteger,
++  isSha256Digest,
++} from
++  '../../test/distributed/harness/benchmark-semantic-integrity.js';
++import {
++  benchmarkResourceCanonicalBytes,
++  benchmarkResourceDigestBytes,
++} from
++  '../../test/distributed/harness/benchmark-resource-evidence-data.js';
++import {
++  inspectBenchmarkCapacityIndependentSideReport,
++} from
++  '../../test/distributed/harness/benchmark-capacity-independent-side-protocol.js';
++import {
++  MOVIELENS_MEASURED_P0_POSTGRESQL_COMPARATOR_ADDITIONAL_PATHS,
++  MOVIELENS_MEASURED_P0_POSTGRESQL_COMPARATOR_SOURCE_ENTRY_PATHS,
++} from './movielens-measured-p0-postgresql-comparator-constants.js';
++import {
++  resolveBenchmarkLocalModuleSourcePaths,
++} from './benchmark-local-module-source-closure.js';
++
++const HOST_LOAD_HEADROOM_METRIC = 'host-load-headroom-ratio';
++const MILLISECONDS_PER_DAY = 86_400_000;
++const DEFAULT_VALIDITY_DAYS = 30;
++const DEFAULT_MAXIMUM_RELATIVE_DRIFT = 0.25;
++const SHA256 = 'sha256';
++const HEX = 'hex';
++const BUNDLE_VERSION = 'movielens-postgresql-comparator-bundle-v1';
++const localText = Object.freeze({
++  BUNDLE_INVALID: 'bundle_invalid',
++  DIGEST: 'digest',
++  INDEPENDENT_DEVELOPMENT_REPORT_REQUIRED:
++    'independent development report required',
++  MEASUREMENT_SOURCE_PATHS_REQUIRED:
++    'measurement source paths must be a non-empty dense string array',
++  VALID_COMPARATOR_REQUIRED: 'valid comparator required',
++  WINDOW_RECEIPT_DIGEST: 'windowReceiptDigest',
++});
++const BUNDLE_BODY_KEYS = Object.freeze([
++  'version',
++  'claimEligible',
++  'comparator',
++  'protocolReport',
++  'preregistration',
++  'resourceCalibrations',
++  'cleanupReceipt',
++  'workloadSeal',
++]);
++const BUNDLE_KEYS = Object.freeze([
++  ...BUNDLE_BODY_KEYS,
++  'bundleDigest',
++]);
++const CALIBRATION_KEYS = Object.freeze([
++  'digest',
++  'byteLength',
++  'artifact',
++]);
++const CAPACITY_INPUT_KEYS = Object.freeze([
++  'estimate',
++  'confidenceInterval',
++  'perBlockCorrectThroughputPerSecond',
++  'perBlockMaxSloOfferedLoadPerSecond',
++  'tailSufficientByBlock',
++  'bracketedByBlock',
++  'minimumBlocks',
++  'maximumBlocks',
++  'completedBlocks',
++  'targetRelativeCiWidth',
++]);
++
++function fail(reason) {
++  throw new TypeError(`invalid MovieLens PostgreSQL comparator: ${reason}`);
++}
++
++export function createMovielensMeasuredP0ComparatorHostEnvelope() {
++  return Object.freeze({
++    architecture: os.arch(),
++    cpuCount: os.cpus().length,
++    memoryBytes: os.totalmem(),
++    nodeVersion: process.version,
++    platform: os.platform(),
++    release: os.release(),
++  });
++}
++
++export function captureMovielensMeasuredP0ComparatorDriftValue() {
++  const cpuCount = os.cpus().length;
++  const load = os.loadavg()[0];
++  return Math.max(
++    Number.EPSILON,
++    (cpuCount - Math.min(cpuCount, load)) / cpuCount,
++  );
++}
++
++export async function resolveMovielensMeasuredP0PostgresqlComparatorSourcePaths() {
++  return resolveBenchmarkLocalModuleSourcePaths({
++    entryPaths:
++      MOVIELENS_MEASURED_P0_POSTGRESQL_COMPARATOR_SOURCE_ENTRY_PATHS,
++    additionalPaths:
++      MOVIELENS_MEASURED_P0_POSTGRESQL_COMPARATOR_ADDITIONAL_PATHS,
++  });
++}
++
++export async function digestMovielensMeasuredP0PostgresqlComparatorSource(
++  sourcePaths = null,
++) {
++  const resolvedSourcePaths = sourcePaths ??
++    await resolveMovielensMeasuredP0PostgresqlComparatorSourcePaths();
++  const sealedSourcePaths = copyDenseStringArray(resolvedSourcePaths);
++  if (sealedSourcePaths === null || sealedSourcePaths.length === 0) {
++    fail(localText.MEASUREMENT_SOURCE_PATHS_REQUIRED);
++  }
++  const entries = [];
++  for (let index = 0;
++    index < sealedSourcePaths.length;
++    index += 1) {
++    const sourcePath = sealedSourcePaths[index];
++    const bytes = await readFile(sourcePath);
++    appendOwnArrayValue(entries, {
++      path: sourcePath,
++      digest:
++        `${SHA256}:${createHash(SHA256).update(bytes).digest(HEX)}`,
++    });
++  }
++  return digestBenchmarkSemanticData(entries);
++}
++
++export function createMovielensMeasuredP0PostgresqlCompatibility({
++  plan,
++  environment,
++  measurementSourceDigest,
++  hostEnvelope,
++}) {
++  const postgres = environment.metadata.postgres;
++  const provisioning = environment.metadata.provisioning;
++  const storagePaths = [];
++  for (let index = 0; index < environment.components.length; index += 1) {
++    appendOwnArrayValue(
++      storagePaths,
++      environment.components[index].storagePath,
++    );
++  }
++  return {
++    datasetDigest: plan.dataset.digest,
++    datasetCardinality: plan.dataset.cardinality,
++    datasetSkew: plan.dataset.skew,
++    operationManifestDigest: environment.operationManifestDigest,
++    semanticOracleDigest: environment.semanticOracleDigest,
++    postgresImageDigest: postgres.imageId,
++    postgresVersionDigest: digestBenchmarkSemanticData({
++      postgresVersion: postgres.postgresVersion,
++      postgresVersionSql: postgres.postgresVersionSql,
++    }),
++    postgresConfigDigest: digestBenchmarkSemanticData({
++      imageInspection: postgres.imageInspection,
++      replicationFactor: postgres.replicationFactor,
++      resourceLimits: provisioning.resourceLimits,
++    }),
++    querySqlDigest: digestBenchmarkSemanticData(postgres.querySql),
++    queryPlanDigest: digestBenchmarkSemanticData(postgres.queryPlan),
++    replicationFactor: postgres.replicationFactor,
++    replicationStateDigest:
++      digestBenchmarkSemanticData(postgres.replicationState),
++    resourceEnvelopeDigest: digestBenchmarkSemanticData({
++      componentCount: environment.components.length,
++      replicationFactor: postgres.replicationFactor,
++      resourceLimits: provisioning.resourceLimits,
++      storagePaths,
++    }),
++    hostEnvelopeDigest: digestBenchmarkSemanticData(hostEnvelope),
++    preregistrationDigest:
++      plan.capacityPreregistration.manifestDigest,
++    measurementSourceDigest,
++  };
++}
++
++export function expectedMovielensMeasuredP0PostgresqlCompatibility({
++  plan,
++  comparator,
++  measurementSourceDigest,
++  hostEnvelope,
++}) {
++  const inspection =
++    inspectBenchmarkCapacityReusableComparator(comparator);
++  if (!inspection.valid) fail(localText.VALID_COMPARATOR_REQUIRED);
++  return {
++    ...comparator.compatibility,
++    datasetDigest: plan.dataset.digest,
++    datasetCardinality: plan.dataset.cardinality,
++    datasetSkew: plan.dataset.skew,
++    operationManifestDigest: plan.seal.operationManifestDigest,
++    semanticOracleDigest: plan.seal.semanticOracleDigest,
++    replicationFactor: plan.cell.replicationFactor,
++    hostEnvelopeDigest: digestBenchmarkSemanticData(hostEnvelope),
++    preregistrationDigest:
++      plan.capacityPreregistration.manifestDigest,
++    measurementSourceDigest,
++  };
++}
++
++function receiptDigests(receipts, key) {
++  if (!isDenseDataArray(receipts) || receipts.length === 0) {
++    fail(`${key}:non-empty dense evidence required`);
++  }
++  const digests = [];
++  for (let index = 0; index < receipts.length; index += 1) {
++    appendOwnArrayValue(digests, receipts[index][key]);
++  }
++  return digests;
++}
++
++export function createMovielensMeasuredP0PostgresqlComparator({
++  comparatorId,
++  plan,
++  environment,
++  measurementSourceDigest,
++  hostEnvelope,
++  protocolReport,
++  resourceCalibrations,
++  capturedAtMs,
++  validityDays = DEFAULT_VALIDITY_DAYS,
++  baselineDriftValue,
++  maximumRelativeDrift = DEFAULT_MAXIMUM_RELATIVE_DRIFT,
++}) {
++  const reportInspection =
++    inspectBenchmarkCapacityIndependentSideReport(
++      protocolReport,
++      plan.capacityPreregistration,
++    );
++  if (
++    !reportInspection.valid ||
++    protocolReport.claimEligible !== false ||
++    protocolReport.sideId !== environment.sideIds[0] ||
++    protocolReport.summary.sideId !== environment.sideIds[0] ||
++    !isNonNegativeSafeInteger(validityDays) ||
++    validityDays === 0
++  ) {
++    fail(localText.INDEPENDENT_DEVELOPMENT_REPORT_REQUIRED);
++  }
++  return createBenchmarkCapacityReusableComparator({
++    comparatorId,
++    sideId: environment.sideIds[0],
++    protocolReportDigest: protocolReport.reportDigest,
++    compatibility:
++      createMovielensMeasuredP0PostgresqlCompatibility({
++        plan,
++        environment,
++        measurementSourceDigest,
++        hostEnvelope,
++      }),
++    capacity: protocolReport.summary.capacity,
++    evidence: {
++      sampleDigests: protocolReport.rawSampleDigests,
++      windowReceiptDigests:
++        receiptDigests(
++          protocolReport.windowReceipts,
++          localText.WINDOW_RECEIPT_DIGEST,
++        ),
++      resourceReceiptDigests:
++        receiptDigests(resourceCalibrations, localText.DIGEST),
++    },
++    revalidationPolicy: {
++      driftMetric: HOST_LOAD_HEADROOM_METRIC,
++      baselineValue: baselineDriftValue,
++      maximumRelativeDrift,
++    },
++    capturedAtMs,
++    validUntilMs:
++      capturedAtMs + validityDays * MILLISECONDS_PER_DAY,
++  });
++}
++
++export function createMovielensMeasuredP0ComparatorDriftWitness(
++  comparator,
++) {
++  return createBenchmarkCapacityComparatorDriftWitness({
++    metric: comparator.revalidationPolicy.driftMetric,
++    baselineValue: comparator.revalidationPolicy.baselineValue,
++    observedValue: captureMovielensMeasuredP0ComparatorDriftValue(),
++  });
++}
++
++function exactDigestArrayMatches(values, expected) {
++  if (
++    !isDenseDataArray(values) ||
++    !isDenseDataArray(expected) ||
++    values.length !== expected.length
++  ) return false;
++  for (let index = 0; index < values.length; index += 1) {
++    if (values[index] !== expected[index]) return false;
++  }
++  return true;
++}
++
++function fieldDigestArray(values, key) {
++  if (!isDenseDataArray(values)) return null;
++  const digests = [];
++  for (let index = 0; index < values.length; index += 1) {
++    if (
++      values[index] === null ||
++      typeof values[index] !== 'object' ||
++      !isSha256Digest(values[index][key])
++    ) return null;
++    appendOwnArrayValue(digests, values[index][key]);
++  }
++  return digests;
++}
++
++function calibrationsAreValid(calibrations) {
++  if (!isDenseDataArray(calibrations) || calibrations.length === 0) {
++    return false;
++  }
++  for (let index = 0; index < calibrations.length; index += 1) {
++    const calibration = calibrations[index];
++    if (!hasExactOwnDataKeys(calibration, CALIBRATION_KEYS)) return false;
++    let bytes;
++    try {
++      bytes = benchmarkResourceCanonicalBytes(calibration.artifact);
++    } catch {
++      return false;
++    }
++    if (
++      calibration.byteLength !== bytes.length ||
++      calibration.digest !== benchmarkResourceDigestBytes(bytes)
++    ) return false;
++  }
++  return true;
++}
++
++function bundleBody(bundle) {
++  const body = {};
++  for (let index = 0; index < BUNDLE_BODY_KEYS.length; index += 1) {
++    const key = BUNDLE_BODY_KEYS[index];
++    body[key] = bundle[key];
++  }
++  return body;
++}
++
++function capacityInput(capacity) {
++  const input = {};
++  for (let index = 0; index < CAPACITY_INPUT_KEYS.length; index += 1) {
++    const key = CAPACITY_INPUT_KEYS[index];
++    input[key] = capacity[key];
++  }
++  return input;
++}
++
++function workloadSealMatchesComparator(seal, compatibility) {
++  try {
++    return (
++      seal.dataset.digest === compatibility.datasetDigest &&
++      seal.dataset.cardinality === compatibility.datasetCardinality &&
++      seal.dataset.skew === compatibility.datasetSkew &&
++      seal.operationManifestDigest ===
++        compatibility.operationManifestDigest &&
++      seal.semanticOracleDigest ===
++        compatibility.semanticOracleDigest &&
++      seal.postgres.imageId === compatibility.postgresImageDigest &&
++      seal.postgres.replicationFactor ===
++        compatibility.replicationFactor &&
++      digestBenchmarkSemanticData({
++        postgresVersion: seal.postgres.postgresVersion,
++        postgresVersionSql: seal.postgres.postgresVersionSql,
++      }) === compatibility.postgresVersionDigest &&
++      digestBenchmarkSemanticData(seal.postgres.querySql) ===
++        compatibility.querySqlDigest &&
++      digestBenchmarkSemanticData(seal.postgres.queryPlan) ===
++        compatibility.queryPlanDigest &&
++      digestBenchmarkSemanticData(seal.postgres.replicationState) ===
++        compatibility.replicationStateDigest
++    );
++  } catch {
++    return false;
++  }
++}
++
++function bundleEnvelopeIsValid(bundle) {
++  return (
++    hasExactOwnDataKeys(bundle, BUNDLE_KEYS) &&
++    bundle.version === BUNDLE_VERSION &&
++    bundle.claimEligible === false &&
++    isSha256Digest(bundle.bundleDigest) &&
++    digestBenchmarkSemanticData(bundleBody(bundle)) ===
++      bundle.bundleDigest &&
++    inspectBenchmarkCapacityReusableComparator(bundle.comparator).valid &&
++    inspectBenchmarkCapacityIndependentSideReport(
++      bundle.protocolReport,
++      bundle.preregistration,
++    ).valid
++  );
++}
++
++function bundleSemanticBindingsAreValid(bundle) {
++  return (
++    bundle.protocolReport.claimEligible === false &&
++    bundle.protocolReport.sideId === bundle.comparator.sideId &&
++    bundle.protocolReport.reportDigest ===
++      bundle.comparator.protocolReportDigest &&
++    bundle.preregistration.manifestDigest ===
++      bundle.comparator.compatibility.preregistrationDigest &&
++    calibrationsAreValid(bundle.resourceCalibrations) &&
++    workloadSealMatchesComparator(
++      bundle.workloadSeal,
++      bundle.comparator.compatibility,
++    ) &&
++    digestBenchmarkSemanticData(
++      bundle.protocolReport.summary.capacity,
++    ) === digestBenchmarkSemanticData(
++      capacityInput(bundle.comparator.capacity),
++    )
++  );
++}
++
++function bundleEvidenceBindingsAreValid(bundle) {
++  const report = bundle.protocolReport;
++  const comparator = bundle.comparator;
++  const windowDigests =
++    fieldDigestArray(
++      report.windowReceipts,
++      localText.WINDOW_RECEIPT_DIGEST,
++    );
++  const resourceDigests =
++    fieldDigestArray(bundle.resourceCalibrations, localText.DIGEST);
++  return (
++    exactDigestArrayMatches(
++      report.rawSampleDigests,
++      comparator.evidence.sampleDigests,
++    ) &&
++    exactDigestArrayMatches(
++      windowDigests,
++      comparator.evidence.windowReceiptDigests,
++    ) &&
++    exactDigestArrayMatches(
++      resourceDigests,
++      comparator.evidence.resourceReceiptDigests,
++    )
++  );
++}
++
++export function inspectMovielensMeasuredP0PostgresqlComparatorBundle(bundle) {
++  try {
++    if (
++      !bundleEnvelopeIsValid(bundle) ||
++      !bundleSemanticBindingsAreValid(bundle) ||
++      !bundleEvidenceBindingsAreValid(bundle)
++    ) return Object.freeze({valid: false, reason: localText.BUNDLE_INVALID});
++    return Object.freeze({
++      valid: true,
++      reason: null,
++      artifactDigest: bundle.comparator.artifactDigest,
++    });
++  } catch {
++    return Object.freeze({valid: false, reason: localText.BUNDLE_INVALID});
++  }
++}
+diff --git a/scripts/checks/movielens-measured-p0-postgresql-environment.js b/scripts/checks/movielens-measured-p0-postgresql-environment.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e728a21a75ff6a6f017ad9bd55e19914c1d2b61d
+--- /dev/null
++++ b/scripts/checks/movielens-measured-p0-postgresql-environment.js
+@@ -0,0 +1,267 @@
++import {
++  createMovielensPostgresqlCapacityAdapter,
++  movielensCapacityOperationManifest,
++  movielensCapacityOperationManifestDigest,
++  movielensCapacitySemanticOracleDigest,
++} from
++  '../../examples/service-data-affinity/movielens-capacity-runtime-adapters.js';
++import {
++  loadMovielensPublicRequestDatasetVariant,
++} from
++  '../../examples/service-data-affinity/movielens-public-request-workload-dataset.js';
++import {
++  openPostgresBaselineSession,
++} from
++  '../../examples/service-data-affinity/postgres-baseline-session.js';
++import {
++  digestBenchmarkSemanticData,
++} from
++  '../../test/distributed/harness/benchmark-semantic-integrity.js';
++import {
++  MOVIELENS_MEASURED_P0_SIDE_IDS,
++} from
++  '../../test/distributed/harness/comparative-efficiency-movielens-measured-p0-constants.js';
++import {
++  DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
++  DockerProvider,
++} from '../../test/distributed/harness/docker-provider.js';
++
++const DOCKER_SOCKET = '/var/run/docker.sock';
++const CONTAINER_MEMORY_LIMIT = '2g';
++const CONTAINER_CPU_LIMIT = '1.0';
++const POSTGRESQL_SIDE_ID = MOVIELENS_MEASURED_P0_SIDE_IDS[1];
++const POSTGRES_COMPONENT_PREFIX = 'postgresql-node-';
++const objectFreeze = Object.freeze;
++const arrayPush = Function.call.bind(Array.prototype.push);
++const localText = objectFreeze({
++  CLEANUP_FAILED: 'PostgreSQL comparator environment cleanup failed',
++  PROVISIONING_MODE: 'postgresql_comparator_only',
++  SEALED_PREFLIGHT_MISMATCH:
++    'PostgreSQL comparator environment differs from its sealed preflight',
++});
++
++function fail(reason) {
++  throw new Error(`MovieLens PostgreSQL comparator failed: ${reason}`);
++}
++
++function postgresSeal(postgres) {
++  return {
++    imageId: postgres.imageId,
++    imageInspection: postgres.imageInspection,
++    postgresVersion: postgres.postgresVersion,
++    postgresVersionSql: postgres.postgresVersionSql,
++    queryPlan: postgres.queryPlan,
++    querySql: postgres.querySql,
++    replicationFactor: postgres.replicationFactor,
++    replicationState: postgres.replicationState,
++  };
++}
++
++function planningArtifact(dataset) {
++  const identity = {
++    purpose: 'postgresql-comparator-planning-placeholder',
++    componentSourceDigest: dataset.componentSourceDigest,
++  };
++  const digest = digestBenchmarkSemanticData(identity);
++  return objectFreeze({
++    buildInputFingerprint: digest,
++    componentSourceDigest: dataset.componentSourceDigest,
++    executableDigest: digest,
++    ociManifestDigest: digest,
++  });
++}
++
++function postgresqlSeal({
++  dataset,
++  loadedDataset,
++  postgres,
++  alternative,
++  includePlanningArtifact,
++}) {
++  const operationManifest = movielensCapacityOperationManifest(
++    loadedDataset,
++    postgres.querySql,
++  );
++  const body = {
++    dataset: objectFreeze({
++      cardinality: dataset.cardinality,
++      componentSourceDigest: dataset.componentSourceDigest,
++      digest: dataset.digest,
++      sizeBytes: dataset.bytes.length,
++      skew: dataset.skew,
++    }),
++    alternative,
++    operationManifest,
++    operationManifestDigest:
++      movielensCapacityOperationManifestDigest(
++        loadedDataset,
++        postgres.querySql,
++      ),
++    semanticOracleDigest:
++      movielensCapacitySemanticOracleDigest(alternative),
++    postgres: objectFreeze(postgresSeal(postgres)),
++  };
++  return objectFreeze(includePlanningArtifact ?
++    {...body, artifact: planningArtifact(dataset)} :
++    body);
++}
++
++function expectedPostgresqlSeal(expectedSeal) {
++  if (expectedSeal === undefined) return null;
++  return objectFreeze({
++    dataset: expectedSeal.dataset,
++    alternative: expectedSeal.alternative,
++    operationManifest: expectedSeal.operationManifest,
++    operationManifestDigest: expectedSeal.operationManifestDigest,
++    semanticOracleDigest: expectedSeal.semanticOracleDigest,
++    postgres: expectedSeal.postgres,
++  });
++}
++
++function resourceComponents(postgres) {
++  const components = [];
++  for (let index = 0; index < postgres.containers.length; index += 1) {
++    arrayPush(components, {
++      sideId: POSTGRESQL_SIDE_ID,
++      componentId: `${POSTGRES_COMPONENT_PREFIX}${index + 1}`,
++      containerId: postgres.containers[index].containerId,
++      storagePath: DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
++    });
++  }
++  return components;
++}
++
++async function openSession(dataset, replicationFactor) {
++  return openPostgresBaselineSession({
++    ratingsBytes: dataset.bytes,
++    ratingsDigest: dataset.digest,
++    replicationFactor,
++    poolSize: 1,
++    resourceLimits: {
++      memory: CONTAINER_MEMORY_LIMIT,
++      cpus: CONTAINER_CPU_LIMIT,
++    },
++  });
++}
++
++async function prepareSeal({
++  runId,
++  dataset,
++  replicationFactor,
++  includePlanningArtifact,
++}) {
++  const loadedDataset =
++    await loadMovielensPublicRequestDatasetVariant(
++      dataset.path,
++      dataset,
++    );
++  const postgres = await openSession(dataset, replicationFactor);
++  try {
++    const oracleOperation = await postgres.executeGroupedReduce({
++      requestId: `${runId}-postgresql-comparator-oracle`,
++    });
++    await postgres.resetRunState();
++    const alternative = objectFreeze({
++      topMovies: oracleOperation.topMovies,
++    });
++    return {
++      postgres,
++      loadedDataset,
++      seal: postgresqlSeal({
++        dataset,
++        loadedDataset,
++        postgres,
++        alternative,
++        includePlanningArtifact,
++      }),
++    };
++  } catch (error) {
++    try {
++      await postgres.close();
++    } catch (cleanupError) {
++      throw new AggregateError(
++        [error, cleanupError],
++        localText.CLEANUP_FAILED,
++      );
++    }
++    throw error;
++  }
++}
++
++export async function preflightMovielensMeasuredP0PostgresqlComparator({
++  runId,
++  dataset,
++  replicationFactor,
++}) {
++  const prepared = await prepareSeal({
++    runId,
++    dataset,
++    replicationFactor,
++    includePlanningArtifact: true,
++  });
++  await prepared.postgres.close();
++  return prepared.seal;
++}
++
++export async function openMovielensMeasuredP0PostgresqlEnvironment({
++  runId,
++  sideId,
++  dataset,
++  replicationFactor,
++  expectedSeal,
++}) {
++  const prepared = await prepareSeal({
++    runId,
++    dataset,
++    replicationFactor,
++    includePlanningArtifact: false,
++  });
++  const observedSeal = prepared.seal;
++  if (
++    sideId !== POSTGRESQL_SIDE_ID ||
++    digestBenchmarkSemanticData(observedSeal) !==
++      digestBenchmarkSemanticData(expectedPostgresqlSeal(expectedSeal))
++  ) {
++    await prepared.postgres.close();
++    fail(localText.SEALED_PREFLIGHT_MISMATCH);
++  }
++  const postgres = prepared.postgres;
++  const provider = new DockerProvider({socketPath: DOCKER_SOCKET});
++  const operationManifest = observedSeal.operationManifest;
++  let closePromise = null;
++  return objectFreeze({
++    runId,
++    sideIds: objectFreeze([sideId]),
++    postgres,
++    provider,
++    networkId: postgres.networkId,
++    networkName: postgres.networkName,
++    networkNames: objectFreeze([postgres.networkName]),
++    components: objectFreeze(resourceComponents(postgres)),
++    operationManifestDigest: observedSeal.operationManifestDigest,
++    semanticOracleDigest: observedSeal.semanticOracleDigest,
++    adapters: objectFreeze([
++      createMovielensPostgresqlCapacityAdapter({
++        session: postgres,
++        sideId,
++        operationManifest,
++        semanticOracleDigest: observedSeal.semanticOracleDigest,
++      }),
++    ]),
++    metadata: objectFreeze({
++      seal: observedSeal,
++      postgres: objectFreeze(postgresSeal(postgres)),
++      provisioning: objectFreeze({
++        mode: localText.PROVISIONING_MODE,
++        resourceLimits: objectFreeze({
++          memory: CONTAINER_MEMORY_LIMIT,
++          cpus: CONTAINER_CPU_LIMIT,
++        }),
++      }),
++    }),
++    close() {
++      if (closePromise === null) closePromise = postgres.close();
++      return closePromise;
++    },
++  });
++}
+diff --git a/scripts/checks/run-comparative-efficiency-movielens-postgresql-comparator-live.js b/scripts/checks/run-comparative-efficiency-movielens-postgresql-comparator-live.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..95894a17556ab79b2bb08ef24cee7437dda0252e
+--- /dev/null
++++ b/scripts/checks/run-comparative-efficiency-movielens-postgresql-comparator-live.js
+@@ -0,0 +1,343 @@
++#!/usr/bin/env node
++
++import {
++  link,
++  mkdir,
++  mkdtemp,
++  readFile,
++  rm,
++  writeFile,
++} from 'node:fs/promises';
++import os from 'node:os';
++import path, {resolve} from 'node:path';
++import {pathToFileURL} from 'node:url';
++
++import {
++  createMovielensGroupedReduceMatrixDatasets,
++  selectMovielensGroupedReduceMatrixDataset,
++} from
++  '../../examples/service-data-affinity/movielens-grouped-reduce-matrix-dataset.js';
++import {
++  runBenchmarkCapacityIndependentLiveProtocol,
++} from
++  '../../test/distributed/harness/benchmark-capacity-independent-live-protocol.js';
++import {
++  digestBenchmarkSemanticData,
++  parseBenchmarkSemanticJson,
++} from
++  '../../test/distributed/harness/benchmark-semantic-integrity.js';
++import {
++  MOVIELENS_MEASURED_P0_SIDE_IDS,
++} from
++  '../../test/distributed/harness/comparative-efficiency-movielens-measured-p0-constants.js';
++import {
++  collectBenchmarkResourceSourceProvenance,
++} from './benchmark-resource-source-provenance.js';
++import {
++  planMovielensMeasuredP0ComparatorCell,
++} from './movielens-measured-p0-comparator-plan.js';
++import {
++  openMovielensMeasuredP0PostgresqlEnvironment,
++  preflightMovielensMeasuredP0PostgresqlComparator,
++} from './movielens-measured-p0-postgresql-environment.js';
++import {
++  captureMovielensMeasuredP0ComparatorDriftValue,
++  createMovielensMeasuredP0ComparatorHostEnvelope,
++  createMovielensMeasuredP0PostgresqlComparator,
++  digestMovielensMeasuredP0PostgresqlComparatorSource,
++  inspectMovielensMeasuredP0PostgresqlComparatorBundle,
++  resolveMovielensMeasuredP0PostgresqlComparatorSourcePaths,
++} from './movielens-measured-p0-postgresql-comparator.js';
++import {
++  closeComparatorEnvironmentAfterFailure,
++  createComparatorResourceObservationHooks,
++  finalizeComparatorWindowEvidence,
++} from './movielens-measured-p0-comparator-live-support.js';
++
++const COMPARATOR_ID =
++  'movielens-postgresql-observed-100k-replicated-v1';
++const DATASET_SIZE = 100_000;
++const DATASET_SKEW = 'observed';
++const REPLICATION_FACTOR = 3;
++const POSTGRESQL_SIDE_ID = MOVIELENS_MEASURED_P0_SIDE_IDS[1];
++const OUTPUT_DIRECTORY =
++  'test-output/comparative-movielens-postgresql-comparators';
++const jsonStringify = JSON.stringify;
++const localText = Object.freeze({
++  BUNDLE_FILENAME: 'bundle.json',
++  FILE_EXISTS: 'EEXIST',
++  FAIL:
++    'comparative-efficiency-movielens-postgresql-comparator: FAIL\n',
++  PASS:
++    'comparative-efficiency-movielens-postgresql-comparator: PASS\n',
++  CAPTURE_START:
++    'PostgreSQL comparator: independent capture START\n',
++  PREFLIGHT_START:
++    'PostgreSQL comparator: replicated 100K preflight START\n',
++  READBACK_INVALID:
++    'persisted PostgreSQL comparator failed read-back inspection',
++  PUBLISH_CONFLICT:
++    'PostgreSQL comparator content-address publication conflict',
++  PUBLISH_CONFLICT_CODE:
++    'POSTGRESQL_COMPARATOR_PUBLISH_CONFLICT',
++  TEMP_DIRECTORY_PREFIX: '.postgresql-comparator-publish-',
++  UTF8: 'utf8',
++  WRITE_EXCLUSIVE: 'wx',
++});
++
++function calibrationEvidence(windowEvidence) {
++  const calibrations = [];
++  for (let index = 0; index < windowEvidence.length; index += 1) {
++    const calibration = windowEvidence[index].calibration;
++    calibrations.push({
++      digest: calibration.digest,
++      byteLength: calibration.byteLength,
++      artifact: calibration.artifact,
++    });
++  }
++  return calibrations;
++}
++
++function publishConflict() {
++  const error = new TypeError(localText.PUBLISH_CONFLICT);
++  error.code = localText.PUBLISH_CONFLICT_CODE;
++  return error;
++}
++
++async function readInspectedBundle({
++  artifactPath,
++  comparator,
++  expectedBundleDigest,
++}) {
++  const persistedBundle = parseBenchmarkSemanticJson(
++    await readFile(artifactPath, localText.UTF8),
++  );
++  const inspection =
++    inspectMovielensMeasuredP0PostgresqlComparatorBundle(
++      persistedBundle,
++    );
++  if (
++    !inspection.valid ||
++    inspection.artifactDigest !== comparator.artifactDigest ||
++    persistedBundle.bundleDigest !== expectedBundleDigest
++  ) throw new TypeError(localText.READBACK_INVALID);
++  return persistedBundle;
++}
++
++async function publishInspectedBundle({
++  artifactPath,
++  bundle,
++  comparator,
++  outputDirectory,
++}) {
++  const temporaryDirectory = await mkdtemp(
++    path.join(outputDirectory, localText.TEMP_DIRECTORY_PREFIX),
++  );
++  const temporaryPath = resolve(
++    temporaryDirectory,
++    localText.BUNDLE_FILENAME,
++  );
++  try {
++    await writeFile(
++      temporaryPath,
++      `${jsonStringify(bundle)}\n`,
++      {
++        encoding: localText.UTF8,
++        flag: localText.WRITE_EXCLUSIVE,
++        flush: true,
++      },
++    );
++    const persistedBundle = await readInspectedBundle({
++      artifactPath: temporaryPath,
++      comparator,
++      expectedBundleDigest: bundle.bundleDigest,
++    });
++    try {
++      await link(temporaryPath, artifactPath);
++      return persistedBundle;
++    } catch (error) {
++      if (error?.code !== localText.FILE_EXISTS) throw error;
++      try {
++        return await readInspectedBundle({
++          artifactPath,
++          comparator,
++          expectedBundleDigest: bundle.bundleDigest,
++        });
++      } catch {
++        throw publishConflict();
++      }
++    }
++  } finally {
++    await rm(temporaryDirectory, {recursive: true, force: true});
++  }
++}
++
++export async function persistMovielensMeasuredP0PostgresqlComparatorBundle({
++  comparator,
++  protocolReport,
++  preregistration,
++  resourceCalibrations,
++  cleanupReceipt,
++  workloadSeal,
++  outputDirectory = OUTPUT_DIRECTORY,
++}) {
++  const body = {
++    version: 'movielens-postgresql-comparator-bundle-v1',
++    claimEligible: false,
++    comparator,
++    protocolReport,
++    preregistration,
++    resourceCalibrations,
++    cleanupReceipt,
++    workloadSeal,
++  };
++  const bundle = {
++    ...body,
++    bundleDigest: digestBenchmarkSemanticData(body),
++  };
++  await mkdir(outputDirectory, {recursive: true});
++  const artifactName = comparator.artifactDigest.slice('sha256:'.length);
++  const artifactPath = resolve(
++    outputDirectory,
++    `${artifactName}.json`,
++  );
++  const persistedBundle = await publishInspectedBundle({
++    artifactPath,
++    bundle,
++    comparator,
++    outputDirectory,
++  });
++  return {artifactPath, bundle: persistedBundle};
++}
++
++async function executeComparatorCapture({
++  plan,
++  provenance,
++  measurementSourceDigest,
++}) {
++  const environment =
++    await openMovielensMeasuredP0PostgresqlEnvironment({
++      runId: plan.runId,
++      sideId: POSTGRESQL_SIDE_ID,
++      dataset: plan.dataset,
++      replicationFactor: plan.cell.replicationFactor,
++      expectedSeal: plan.seal,
++    });
++  const captured = [];
++  const hostEnvelope =
++    createMovielensMeasuredP0ComparatorHostEnvelope();
++  const baselineDriftValue =
++    captureMovielensMeasuredP0ComparatorDriftValue();
++  let protocol;
++  let cleanupReceipt;
++  try {
++    protocol = await runBenchmarkCapacityIndependentLiveProtocol({
++      preregistration: plan.capacityPreregistration,
++      adapter: environment.adapters[0],
++      sideId: POSTGRESQL_SIDE_ID,
++      ...createComparatorResourceObservationHooks({
++        blockedOrderIndex: plan.blockedOrderIndex,
++        captured,
++        environment,
++        provenance,
++        runId: plan.runId,
++      }),
++    });
++    cleanupReceipt = await environment.close();
++  } catch (error) {
++    await closeComparatorEnvironmentAfterFailure(environment, error);
++    throw error;
++  }
++  const windowEvidence =
++    await finalizeComparatorWindowEvidence(captured, protocol);
++  const resourceCalibrations = calibrationEvidence(windowEvidence);
++  const comparator = createMovielensMeasuredP0PostgresqlComparator({
++    comparatorId: COMPARATOR_ID,
++    plan,
++    environment,
++    measurementSourceDigest,
++    hostEnvelope,
++    protocolReport: protocol.report,
++    resourceCalibrations,
++    capturedAtMs: Date.now(),
++    baselineDriftValue,
++  });
++  return {
++    comparator,
++    protocolReport: protocol.report,
++    preregistration: plan.capacityPreregistration,
++    resourceCalibrations,
++    cleanupReceipt,
++    workloadSeal: plan.seal,
++  };
++}
++
++async function main() {
++  const sourcePaths =
++    await resolveMovielensMeasuredP0PostgresqlComparatorSourcePaths();
++  const provenance = await collectBenchmarkResourceSourceProvenance(
++    sourcePaths,
++  );
++  const measurementSourceDigest =
++    await digestMovielensMeasuredP0PostgresqlComparatorSource(sourcePaths);
++  const datasetDirectory = await mkdtemp(
++    path.join(os.tmpdir(), 'movielens-postgresql-comparator-'),
++  );
++  try {
++    const variants =
++      await createMovielensGroupedReduceMatrixDatasets(datasetDirectory);
++    const dataset = selectMovielensGroupedReduceMatrixDataset(
++      variants,
++      DATASET_SIZE,
++      DATASET_SKEW,
++    );
++    process.stdout.write(
++      localText.PREFLIGHT_START,
++    );
++    const preflight =
++      await preflightMovielensMeasuredP0PostgresqlComparator({
++        runId: `${COMPARATOR_ID}:preflight`,
++        dataset,
++        replicationFactor: REPLICATION_FACTOR,
++      });
++    const plan = planMovielensMeasuredP0ComparatorCell({
++      dataset,
++      preflight,
++      identity: COMPARATOR_ID,
++    });
++    process.stdout.write(
++      localText.CAPTURE_START,
++    );
++    const captured = await executeComparatorCapture({
++      plan,
++      provenance,
++      measurementSourceDigest,
++    });
++    const persisted =
++      await persistMovielensMeasuredP0PostgresqlComparatorBundle(
++        captured,
++      );
++    process.stdout.write(
++      localText.PASS +
++      `artifact: ${persisted.artifactPath}\n` +
++      `comparatorDigest: ${captured.comparator.artifactDigest}\n` +
++      `reusable: ${captured.comparator.capacity.reusable}\n` +
++      `completedBlocks: ${captured.protocolReport.completedBlocks}\n`,
++    );
++  } finally {
++    await rm(datasetDirectory, {recursive: true, force: true});
++  }
++}
++
++if (
++  typeof process.argv[1] === 'string' &&
++  pathToFileURL(resolve(process.argv[1])).href === import.meta.url
++) {
++  main().catch((error) => {
++    process.stderr.write(
++      localText.FAIL +
++      `${error?.stack || error}\n`,
++    );
++    process.exitCode = 1;
++  });
++}
+diff --git a/scripts/checks/run-comparative-efficiency-postgresql-comparator-reuse-scenarios.js b/scripts/checks/run-comparative-efficiency-postgresql-comparator-reuse-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b793e20d323021af8c8dc872ca63cc7fd4c10876
+--- /dev/null
++++ b/scripts/checks/run-comparative-efficiency-postgresql-comparator-reuse-scenarios.js
+@@ -0,0 +1,14 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = Object.freeze({
++  'comparative-efficiency-postgresql-comparator-reuse': Object.freeze([
++    'test/distributed/harness/__tests__/' +
++      'benchmark-capacity-reusable-comparator.test.js',
++    'test/distributed/harness/__tests__/' +
++      'movielens-postgresql-comparator-isolation.test.js',
++  ]),
++});
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/test/distributed/harness/__tests__/benchmark-capacity-independent-test-fixture.js b/test/distributed/harness/__tests__/benchmark-capacity-independent-test-fixture.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b5b7fa1a2a1c6d4209bb2fc588b9edcc7e0ac892
+--- /dev/null
++++ b/test/distributed/harness/__tests__/benchmark-capacity-independent-test-fixture.js
+@@ -0,0 +1,385 @@
++import {
++  digestBenchmarkSemanticData,
++} from '../benchmark-semantic-integrity.js';
++import {
++  BENCHMARK_CAPACITY_ARTIFACT_POLICY,
++  BENCHMARK_CAPACITY_CACHE_POLICY,
++  BENCHMARK_CAPACITY_ESTIMATOR,
++  BENCHMARK_CAPACITY_INTERVAL,
++  BENCHMARK_CAPACITY_MULTIPLE_COMPARISON,
++  BENCHMARK_CAPACITY_PHASE,
++  BENCHMARK_CAPACITY_RANDOMIZATION_ALGORITHM,
++  BENCHMARK_CAPACITY_REJECT_POLICY,
++  BENCHMARK_CAPACITY_RUN_ORDER_POLICY,
++  BENCHMARK_CAPACITY_STOPPING_RULE,
++  BENCHMARK_CAPACITY_TIMEOUT_POLICY,
++} from '../benchmark-capacity-protocol-constants.js';
++import {
++  getBenchmarkCapacitySamplingWindow,
++} from '../benchmark-capacity-preregistration.js';
++import {
++  createBenchmarkCapacityRunSample,
++} from '../benchmark-capacity-run-sample.js';
++import {
++  createBenchmarkCapacityWindowReceipt,
++} from '../benchmark-capacity-window-receipt.js';
++import {
++  createBenchmarkCapacityCacheResetReceipt,
++} from '../benchmark-capacity-cache-reset-receipt.js';
++import {
++  BENCHMARK_SQL_DIALECT,
++  buildBenchmarkResultSetEvidence,
++  buildBenchmarkSemanticReceipt,
++  getBenchmarkSemanticContract,
++} from '../benchmark-workload-semantics.js';
++
++const SIDE_POSTGRESQL = 'postgresql';
++const SIDE_LAGRANGE = 'lagrange';
++const FIXTURE_LOADS = Object.freeze([100, 200, 300]);
++const MILLISECONDS_PER_SECOND = 1_000;
++const FIXTURE_WINDOW_BASE_MS = 1_000;
++const FIXTURE_RESET_BASE_MS = 10_000;
++const FIXTURE_MEASURED_MS = 1_000;
++const FIXTURE_WARMUP_MS = 100;
++const FIXTURE_TIMEOUT_MS = 100;
++const FIXTURE_TAIL_MINIMUM = 100;
++const FIXTURE_BLOCK_MINIMUM = 3;
++const FIXTURE_BLOCK_MAXIMUM = 5;
++const FIXTURE_BOOTSTRAP_RESAMPLES = 200;
++const FIXTURE_CONFIDENCE = 0.95;
++const FIXTURE_PRACTICAL_RATIO = 0.05;
++const FIXTURE_CI_WIDTH = 0.1;
++const FIXTURE_SEED = 20_260_727;
++const FIXTURE_P99_SLO_MS = 50;
++const FIXTURE_ERROR_SLO = 0.05;
++const FIXTURE_MAX_IN_FLIGHT = 8;
++const FIXTURE_MAX_QUEUE_DEPTH = 16;
++const FIXTURE_RELEASE_LAG_MS = 100;
++const FIXTURE_FINALIZER_TIMEOUT_MS = 100;
++const FIXTURE_RESET_TIMEOUT_MS = 100;
++const FIXTURE_TAIL_QUANTILE = 0.99;
++const FIXTURE_QUEUE_DELAY_DELTA_MS = 4;
++const FIXTURE_PASS_LATENCY_MS = 18;
++const FIXTURE_FAIL_LATENCY_MS = 70;
++const localText = Object.freeze({
++  CELL: 'capacity-independent-fixture-cell',
++  MATRIX: 'capacity-independent-fixture-matrix',
++  PAIR: 'capacity-independent-fixture-pair',
++  PROFILE: 'capacity-independent-fixture-profile',
++  RUN: 'capacity-independent-fixture-run',
++  STUDY: 'capacity-independent-fixture-v1',
++  DURABILITY_PASS: 'pass',
++  OPERATION: 'INSERT',
++  OPERATION_OUTCOME: 'command_acknowledged',
++});
++
++export function independentFixtureSidePostgresql() {
++  return SIDE_POSTGRESQL;
++}
++
++export function independentFixtureLoads() {
++  return [...FIXTURE_LOADS];
++}
++
++function repeatValue(value, count) {
++  const values = [];
++  for (let index = 0; index < count; index += 1) {
++    values.push(value);
++  }
++  return values;
++}
++
++function releaseOffsets(offeredLoadPerSecond, windowDurationMs) {
++  const count = Math.floor(
++    offeredLoadPerSecond * windowDurationMs / MILLISECONDS_PER_SECOND,
++  );
++  const offsets = [];
++  for (let index = 0; index < count; index += 1) {
++    offsets.push(
++      Math.floor(index * MILLISECONDS_PER_SECOND / offeredLoadPerSecond),
++    );
++  }
++  return offsets;
++}
++
++function semanticDialectForSide(sideId) {
++  return sideId === SIDE_POSTGRESQL ?
++    BENCHMARK_SQL_DIALECT.POSTGRESQL :
++    BENCHMARK_SQL_DIALECT.SQLITE;
++}
++
++function semanticReceiptForCounts(dialect, counts, rejectedByReason) {
++  if (counts.correct === 0) return null;
++  const observations = [];
++  for (let index = 0; index < counts.correct; index += 1) {
++    observations.push({
++      operationId: index,
++      operation: localText.OPERATION,
++      outcome: localText.OPERATION_OUTCOME,
++    });
++  }
++  return buildBenchmarkSemanticReceipt({
++    dialect,
++    compiledOperations: counts.dispatched,
++    validatedOperations: counts.correct,
++    successfulOperations: counts.correct,
++    oracleFailures: 0,
++    resultSet: buildBenchmarkResultSetEvidence(observations),
++    accounting: {
++      ...counts,
++      rejectedByReason: {...rejectedByReason},
++    },
++    durability: {
++      status: localText.DURABILITY_PASS,
++      expected: counts.correct,
++      observed: counts.correct,
++      missingIds: [],
++      reason: null,
++    },
++  });
++}
++
++function semanticContract(sideId, dialect) {
++  return {
++    sideId,
++    dialect,
++    contractDigest:
++      getBenchmarkSemanticContract(dialect).contractDigest,
++  };
++}
++
++function samplingWindows() {
++  const windows = [];
++  for (let index = 0; index < FIXTURE_LOADS.length; index += 1) {
++    windows.push({
++      offeredLoadPerSecond: FIXTURE_LOADS[index],
++      warmupMs: FIXTURE_WARMUP_MS,
++      measuredMs: FIXTURE_MEASURED_MS,
++    });
++  }
++  return windows;
++}
++
++function fixtureSemanticRegistration() {
++  return {
++    sideIds: [SIDE_LAGRANGE, SIDE_POSTGRESQL],
++    sideSemanticContracts: [
++      semanticContract(SIDE_LAGRANGE, BENCHMARK_SQL_DIALECT.SQLITE),
++      semanticContract(
++        SIDE_POSTGRESQL,
++        BENCHMARK_SQL_DIALECT.POSTGRESQL,
++      ),
++    ],
++  };
++}
++
++function fixturePolicyRegistration() {
++  return {
++    cachePolicy: BENCHMARK_CAPACITY_CACHE_POLICY,
++    runOrderPolicy: BENCHMARK_CAPACITY_RUN_ORDER_POLICY,
++    timeoutPolicy: BENCHMARK_CAPACITY_TIMEOUT_POLICY,
++    rejectPolicy: BENCHMARK_CAPACITY_REJECT_POLICY,
++    artifactPolicy: BENCHMARK_CAPACITY_ARTIFACT_POLICY,
++  };
++}
++
++export function independentPreregistrationInput() {
++  return {
++    studyId: localText.STUDY,
++    ...fixtureSemanticRegistration(),
++    offeredLoadPerSecond: [...FIXTURE_LOADS],
++    slo: {
++      maxP99LatencyMs: FIXTURE_P99_SLO_MS,
++      maxErrorRate: FIXTURE_ERROR_SLO,
++    },
++    repetitions: {
++      minimum: FIXTURE_BLOCK_MINIMUM,
++      maximum: FIXTURE_BLOCK_MAXIMUM,
++    },
++    statistics: {
++      estimator: BENCHMARK_CAPACITY_ESTIMATOR,
++      interval: BENCHMARK_CAPACITY_INTERVAL,
++      confidenceLevel: FIXTURE_CONFIDENCE,
++      bootstrapResamples: FIXTURE_BOOTSTRAP_RESAMPLES,
++      practicalSignificanceRatio: FIXTURE_PRACTICAL_RATIO,
++      targetRelativeCiWidth: FIXTURE_CI_WIDTH,
++      stoppingRule: BENCHMARK_CAPACITY_STOPPING_RULE,
++      multipleComparisonTreatment:
++        BENCHMARK_CAPACITY_MULTIPLE_COMPARISON,
++    },
++    sampling: {
++      tailQuantile: FIXTURE_TAIL_QUANTILE,
++      tailSampleMinimum: FIXTURE_TAIL_MINIMUM,
++      windows: samplingWindows(),
++      operationTimeoutMs: FIXTURE_TIMEOUT_MS,
++      semanticFinalizerTimeoutMs: FIXTURE_FINALIZER_TIMEOUT_MS,
++      resetTimeoutMs: FIXTURE_RESET_TIMEOUT_MS,
++      maxReleaseLagMs: FIXTURE_RELEASE_LAG_MS,
++      clientMaxInFlight: FIXTURE_MAX_IN_FLIGHT,
++      clientMaxQueueDepth: FIXTURE_MAX_QUEUE_DEPTH,
++    },
++    ...fixturePolicyRegistration(),
++    randomization: {
++      algorithm: BENCHMARK_CAPACITY_RANDOMIZATION_ALGORITHM,
++      seed: FIXTURE_SEED,
++    },
++    executionIdentity: {
++      matrixId: localText.MATRIX,
++      cellId: localText.CELL,
++      cellManifestDigest: digestBenchmarkSemanticData({
++        cell: localText.CELL,
++      }),
++      profileIdentity: digestBenchmarkSemanticData({
++        profile: localText.PROFILE,
++      }),
++      pairIdentity: digestBenchmarkSemanticData({
++        pair: localText.PAIR,
++      }),
++      runId: localText.RUN,
++      liveEnvironmentContractDigest: digestBenchmarkSemanticData({
++        environment: localText.RUN,
++      }),
++    },
++  };
++}
++
++export function independentSuccessfulRunSample({
++  sideId,
++  phase,
++  blockIndex,
++  offeredLoadPerSecond,
++  windowDurationMs,
++  p99LatencyMs,
++  preregistration,
++}) {
++  const offered = Math.floor(
++    offeredLoadPerSecond * windowDurationMs / MILLISECONDS_PER_SECOND,
++  );
++  const counts = {
++    offered,
++    dispatched: offered,
++    correct: offered,
++    rejected: 0,
++    timedOut: 0,
++    errored: 0,
++    queueOverflow: 0,
++    undispatched: 0,
++    cancelled: 0,
++  };
++  const rejectedByReason = {
++    queueFull: 0,
++    flowControl: 0,
++    admission: 0,
++  };
++  const semanticDialect = semanticDialectForSide(sideId);
++  return createBenchmarkCapacityRunSample({
++    sideId,
++    phase,
++    blockIndex,
++    offeredLoadPerSecond,
++    windowDurationMs,
++    observationStartedAtMs: 0,
++    observationEndedAtMs: windowDurationMs,
++    operationTimeoutMs: preregistration.sampling.operationTimeoutMs,
++    maxReleaseLagMs: preregistration.sampling.maxReleaseLagMs,
++    clientMaxInFlight: preregistration.sampling.clientMaxInFlight,
++    clientMaxQueueDepth: preregistration.sampling.clientMaxQueueDepth,
++    counts,
++    rejectedByReason,
++    endToEndLatencyMs: repeatValue(p99LatencyMs, offered),
++    clientQueueDelayMs: repeatValue(
++      Math.max(0, p99LatencyMs - FIXTURE_QUEUE_DELAY_DELTA_MS),
++      offered,
++    ),
++    releaseOffsetsMs: releaseOffsets(
++      offeredLoadPerSecond,
++      windowDurationMs,
++    ),
++    releaseLagMs: repeatValue(0, offered),
++    unreleasedOperations: 0,
++    semanticDialect,
++    semanticReceipt: semanticReceiptForCounts(
++      semanticDialect,
++      counts,
++      rejectedByReason,
++    ),
++  });
++}
++
++function fixtureLatency(offeredLoadPerSecond) {
++  return offeredLoadPerSecond <= FIXTURE_LOADS[0] ?
++    FIXTURE_PASS_LATENCY_MS :
++    FIXTURE_FAIL_LATENCY_MS;
++}
++
++function fixtureWindowReceipt(sample, context) {
++  return createBenchmarkCapacityWindowReceipt({
++    blockIndex: context.blockIndex,
++    blockedOrderIndex: context.blockedOrderIndex,
++    sideId: context.sideId,
++    phase: sample.phase,
++    offeredLoad: context.offeredLoadPerSecond,
++    startedAt: context.blockIndex * FIXTURE_WINDOW_BASE_MS,
++    endedAt:
++      context.blockIndex * FIXTURE_WINDOW_BASE_MS +
++      sample.windowDurationMs,
++    capacitySampleDigest: sample.sampleDigest,
++    semanticReceiptDigest: sample.semanticReceiptDigest,
++    liveEngagementDigest: digestBenchmarkSemanticData({
++      sampleDigest: sample.sampleDigest,
++    }),
++    resourceWindowDigest: null,
++  }, sample, context.preregistration);
++}
++
++export function independentFixtureResetReceipt(context) {
++  return createBenchmarkCapacityCacheResetReceipt({
++    blockIndex: context.blockIndex,
++    blockedOrderIndex: context.blockedOrderIndex,
++    sideId: context.sideId,
++    offeredLoad: context.offeredLoadPerSecond,
++    startedAt: context.blockIndex * FIXTURE_RESET_BASE_MS + 1,
++    endedAt: context.blockIndex * FIXTURE_RESET_BASE_MS + 2,
++    policy: BENCHMARK_CAPACITY_CACHE_POLICY,
++    liveEngagementDigest: digestBenchmarkSemanticData({
++      reset: context.offeredLoadPerSecond,
++      sideId: context.sideId,
++      blockIndex: context.blockIndex,
++    }),
++  }, context.preregistration);
++}
++
++export function independentFixtureExecutor(preregistration) {
++  return async (context) => {
++    const samplingWindow = getBenchmarkCapacitySamplingWindow(
++      preregistration,
++      context.offeredLoadPerSecond,
++    );
++    const p99LatencyMs =
++      fixtureLatency(context.offeredLoadPerSecond);
++    const warmup = independentSuccessfulRunSample({
++      sideId: context.sideId,
++      phase: BENCHMARK_CAPACITY_PHASE.WARMUP,
++      blockIndex: context.blockIndex,
++      offeredLoadPerSecond: context.offeredLoadPerSecond,
++      windowDurationMs: samplingWindow.warmupMs,
++      p99LatencyMs,
++      preregistration,
++    });
++    const measured = independentSuccessfulRunSample({
++      sideId: context.sideId,
++      phase: BENCHMARK_CAPACITY_PHASE.MEASURED,
++      blockIndex: context.blockIndex,
++      offeredLoadPerSecond: context.offeredLoadPerSecond,
++      windowDurationMs: samplingWindow.measuredMs,
++      p99LatencyMs,
++      preregistration,
++    });
++    return {
++      warmup,
++      measured,
++      warmupWindowReceipt: fixtureWindowReceipt(warmup, context),
++      measuredWindowReceipt: fixtureWindowReceipt(measured, context),
++    };
++  };
++}
+diff --git a/test/distributed/harness/__tests__/benchmark-capacity-reusable-comparator.test.js b/test/distributed/harness/__tests__/benchmark-capacity-reusable-comparator.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..185f546736dc87120e44fdae9155a00912ce62d2
+--- /dev/null
++++ b/test/distributed/harness/__tests__/benchmark-capacity-reusable-comparator.test.js
+@@ -0,0 +1,650 @@
++import assert from 'node:assert/strict';
++import {
++  access,
++  mkdir,
++  mkdtemp,
++  readFile,
++  rm,
++  writeFile,
++} from 'node:fs/promises';
++import os from 'node:os';
++import path from 'node:path';
++import test from 'node:test';
++
++import {
++  createBenchmarkCapacityIndependentComparison,
++} from '../benchmark-capacity-independent-comparison.js';
++import {
++  createBenchmarkCapacityComparatorDriftWitness,
++  createBenchmarkCapacityReusableComparator,
++  inspectBenchmarkCapacityReusableComparator,
++  revalidateBenchmarkCapacityReusableComparator,
++} from '../benchmark-capacity-reusable-comparator.js';
++import {
++  BENCHMARK_CAPACITY_PHASE,
++} from '../benchmark-capacity-protocol-constants.js';
++import {
++  runBenchmarkCapacityIndependentSideProtocol,
++} from '../benchmark-capacity-independent-side-protocol.js';
++import {
++  sealBenchmarkCapacityPreregistration,
++} from '../benchmark-capacity-preregistration.js';
++import {
++  digestBenchmarkSemanticData,
++} from '../benchmark-semantic-integrity.js';
++import {
++  summarizeBenchmarkCapacityIndependentSide,
++} from '../benchmark-capacity-statistics.js';
++import {
++  independentFixtureLoads,
++  independentFixtureExecutor,
++  independentFixtureResetReceipt,
++  independentFixtureSidePostgresql,
++  independentPreregistrationInput,
++  independentSuccessfulRunSample,
++} from './benchmark-capacity-independent-test-fixture.js';
++import {
++  inspectMovielensMeasuredP0PostgresqlComparatorBundle,
++} from '../../../../scripts/checks/movielens-measured-p0-postgresql-comparator.js';
++import {
++  persistMovielensMeasuredP0PostgresqlComparatorBundle,
++} from '../../../../scripts/checks/run-comparative-efficiency-movielens-postgresql-comparator-live.js';
++import {
++  benchmarkResourceCanonicalBytes,
++  benchmarkResourceDigestBytes,
++} from '../benchmark-resource-evidence-data.js';
++import {
++  replacePrototypeProperty,
++} from '../../../helpers/hostile-intrinsics.js';
++
++const CAPTURED_AT_MS = 1_000;
++const VALID_UNTIL_MS = 11_000;
++const REVALIDATION_NOW_MS = 5_000;
++const arrayMap = Function.call.bind(Array.prototype.map);
++const objectKeys = Object.keys;
++const FIXTURE_LOADS = independentFixtureLoads();
++const SIDE_POSTGRESQL = independentFixtureSidePostgresql();
++
++function digest(value) {
++  return digestBenchmarkSemanticData({value});
++}
++
++function compatibility(overrides = {}) {
++  return {
++    datasetDigest: digest('dataset'),
++    datasetCardinality: 100_000,
++    datasetSkew: 'observed',
++    operationManifestDigest: digest('operation-manifest'),
++    semanticOracleDigest: digest('semantic-oracle'),
++    postgresImageDigest: digest('postgres-image'),
++    postgresVersionDigest: digest('postgres-version'),
++    postgresConfigDigest: digest('postgres-config'),
++    querySqlDigest: digest('query-sql'),
++    queryPlanDigest: digest('query-plan'),
++    replicationFactor: 3,
++    replicationStateDigest: digest('replication-state'),
++    resourceEnvelopeDigest: digest('resource-envelope'),
++    hostEnvelopeDigest: digest('host-envelope'),
++    preregistrationDigest: digest('preregistration'),
++    measurementSourceDigest: digest('measurement-source'),
++    ...overrides,
++  };
++}
++
++function artifact(overrides = {}) {
++  return createBenchmarkCapacityReusableComparator({
++    comparatorId: 'postgresql-100k-observed-rf3',
++    sideId: 'postgresql',
++    protocolReportDigest: digest('protocol-report'),
++    compatibility: compatibility(),
++    capacity: {
++      estimate: 81,
++      confidenceInterval: {lower: 80, upper: 82},
++      perBlockCorrectThroughputPerSecond: [80, 82, 81],
++      perBlockMaxSloOfferedLoadPerSecond: [80, 80, 80],
++      tailSufficientByBlock: [true, true, true],
++      bracketedByBlock: [true, true, true],
++      minimumBlocks: 3,
++      maximumBlocks: 5,
++      completedBlocks: 3,
++      targetRelativeCiWidth: 0.1,
++    },
++    evidence: {
++      sampleDigests: [digest('sample-a'), digest('sample-b')],
++      windowReceiptDigests: [digest('window-a'), digest('window-b')],
++      resourceReceiptDigests: [
++        digest('resource-a'),
++        digest('resource-b'),
++      ],
++    },
++    revalidationPolicy: {
++      driftMetric: 'host-control-throughput',
++      baselineValue: 100,
++      maximumRelativeDrift: 0.05,
++    },
++    capturedAtMs: CAPTURED_AT_MS,
++    validUntilMs: VALID_UNTIL_MS,
++    ...overrides,
++  });
++}
++
++function drift(observedValue = 104) {
++  return createBenchmarkCapacityComparatorDriftWitness({
++    metric: 'host-control-throughput',
++    baselineValue: 100,
++    observedValue,
++  });
++}
++
++function receiptDigests(receipts) {
++  return arrayMap(receipts, (receipt) => receipt.windowReceiptDigest);
++}
++
++function resignReportAndBundle(bundle) {
++  const reportBody = {};
++  const reportKeys = objectKeys(bundle.protocolReport);
++  for (let index = 0; index < reportKeys.length; index += 1) {
++    const key = reportKeys[index];
++    if (key !== 'reportDigest') {
++      reportBody[key] = bundle.protocolReport[key];
++    }
++  }
++  bundle.protocolReport.reportDigest =
++    digestBenchmarkSemanticData(reportBody);
++  const bundleBody = {};
++  const bundleKeys = objectKeys(bundle);
++  for (let index = 0; index < bundleKeys.length; index += 1) {
++    const key = bundleKeys[index];
++    if (key !== 'bundleDigest') bundleBody[key] = bundle[key];
++  }
++  bundle.bundleDigest = digestBenchmarkSemanticData(bundleBody);
++}
++
++test('objectively sufficient comparator is reusable but never claim eligible',
++  () => {
++    const comparator = artifact();
++    assert.equal(comparator.claimEligible, false);
++    assert.equal(comparator.capacity.reusable, true);
++    assert.equal(
++      inspectBenchmarkCapacityReusableComparator(comparator).valid,
++      true,
++    );
++    assert.deepEqual(
++      revalidateBenchmarkCapacityReusableComparator({
++        artifact: comparator,
++        expectedCompatibility: compatibility(),
++        driftWitness: drift(),
++        nowMs: REVALIDATION_NOW_MS,
++      }),
++      {
++        state: 'reusable',
++        artifactDigest: comparator.artifactDigest,
++        reasons: [],
++      },
++    );
++  },
++);
++
++test('compatibility, freshness, and derived drift fail closed', () => {
++  const comparator = artifact();
++  const mismatch = revalidateBenchmarkCapacityReusableComparator({
++    artifact: comparator,
++    expectedCompatibility: compatibility({replicationFactor: 1}),
++    driftWitness: drift(),
++    nowMs: REVALIDATION_NOW_MS,
++  });
++  assert.equal(mismatch.state, 'capture_required');
++  assert.deepEqual(mismatch.reasons, ['compatibility_mismatch']);
++
++  const stale = revalidateBenchmarkCapacityReusableComparator({
++    artifact: comparator,
++    expectedCompatibility: compatibility(),
++    driftWitness: drift(),
++    nowMs: VALID_UNTIL_MS + 1,
++  });
++  assert.equal(stale.state, 'capture_required');
++  assert.deepEqual(stale.reasons, ['expired']);
++
++  const shifted = revalidateBenchmarkCapacityReusableComparator({
++    artifact: comparator,
++    expectedCompatibility: compatibility(),
++    driftWitness: drift(106),
++    nowMs: REVALIDATION_NOW_MS,
++  });
++  assert.equal(shifted.state, 'capture_required');
++  assert.deepEqual(shifted.reasons, ['drift_exceeded']);
++});
++
++test('tampered, inherited, and accessor-backed comparators are rejected',
++  () => {
++    const comparator = artifact();
++    const tampered = structuredClone(comparator);
++    tampered.capacity.estimate = 999;
++    assert.equal(
++      inspectBenchmarkCapacityReusableComparator(tampered).valid,
++      false,
++    );
++    assert.equal(
++      revalidateBenchmarkCapacityReusableComparator({
++        artifact: tampered,
++        expectedCompatibility: compatibility(),
++        driftWitness: drift(),
++        nowMs: REVALIDATION_NOW_MS,
++      }).state,
++      'capture_required',
++    );
++
++    assert.equal(
++      inspectBenchmarkCapacityReusableComparator(
++        Object.create(comparator),
++      ).valid,
++      false,
++    );
++
++    let getterReads = 0;
++    const accessor = {};
++    Object.defineProperty(accessor, 'version', {
++      enumerable: true,
++      get() {
++        getterReads += 1;
++        return comparator.version;
++      },
++    });
++    assert.equal(
++      inspectBenchmarkCapacityReusableComparator(accessor).valid,
++      false,
++    );
++    assert.equal(getterReads, 0);
++  },
++);
++
++test('maximum-bound comparator without precision is durable but not reusable',
++  () => {
++    const comparator = artifact({
++      capacity: {
++        estimate: 81,
++        confidenceInterval: {lower: 40, upper: 120},
++        perBlockCorrectThroughputPerSecond: [80, 82, 81, 79, 83],
++        perBlockMaxSloOfferedLoadPerSecond: [80, 80, 80, 80, 80],
++        tailSufficientByBlock: [true, true, true, true, true],
++        bracketedByBlock: [true, true, true, true, true],
++        minimumBlocks: 3,
++        maximumBlocks: 5,
++        completedBlocks: 5,
++        targetRelativeCiWidth: 0.1,
++      },
++    });
++    assert.equal(comparator.capacity.precisionReached, false);
++    assert.equal(comparator.capacity.reusable, false);
++    const decision = revalidateBenchmarkCapacityReusableComparator({
++      artifact: comparator,
++      expectedCompatibility: compatibility(),
++      driftWitness: drift(),
++      nowMs: REVALIDATION_NOW_MS,
++    });
++    assert.equal(decision.state, 'capture_required');
++    assert.deepEqual(
++      decision.reasons,
++      ['not_objectively_sufficient'],
++    );
++  },
++);
++
++test('independent PostgreSQL blocks stop only after bracketed sufficiency',
++  () => {
++    const sealed =
++      sealBenchmarkCapacityPreregistration(
++        independentPreregistrationInput(),
++      );
++    const samples = [];
++    for (let blockIndex = 0; blockIndex < 3; blockIndex += 1) {
++      for (let loadIndex = 0; loadIndex < FIXTURE_LOADS.length;
++        loadIndex += 1) {
++        const offeredLoadPerSecond = FIXTURE_LOADS[loadIndex];
++        samples.push(independentSuccessfulRunSample({
++          sideId: SIDE_POSTGRESQL,
++          phase: BENCHMARK_CAPACITY_PHASE.MEASURED,
++          blockIndex,
++          offeredLoadPerSecond,
++          windowDurationMs: 1_000,
++          p99LatencyMs: offeredLoadPerSecond === 100 ? 10 : 80,
++          preregistration: sealed,
++        }));
++      }
++    }
++    const summary = summarizeBenchmarkCapacityIndependentSide(
++      samples,
++      sealed,
++      SIDE_POSTGRESQL,
++      3,
++    );
++    assert.equal(summary.capacity.estimate, 100);
++    assert.equal(summary.objectiveSufficiency.tailSufficient, true);
++    assert.equal(summary.objectiveSufficiency.bracketed, true);
++    assert.equal(summary.objectiveSufficiency.precisionReached, true);
++    assert.equal(summary.objectiveSufficiency.reusable, true);
++    assert.equal(summary.shouldStop, true);
++
++    const allPassing = arrayMap(samples, (sample) =>
++      independentSuccessfulRunSample({
++        sideId: SIDE_POSTGRESQL,
++        phase: BENCHMARK_CAPACITY_PHASE.MEASURED,
++        blockIndex: sample.blockIndex,
++        offeredLoadPerSecond: sample.offeredLoadPerSecond,
++        windowDurationMs: 1_000,
++        p99LatencyMs: 10,
++        preregistration: sealed,
++      }));
++    const unbracketed = summarizeBenchmarkCapacityIndependentSide(
++      allPassing,
++      sealed,
++      SIDE_POSTGRESQL,
++      3,
++    );
++    assert.equal(unbracketed.objectiveSufficiency.bracketed, false);
++    assert.equal(unbracketed.objectiveSufficiency.reusable, false);
++    assert.equal(unbracketed.shouldStop, false);
++  },
++);
++
++test('independent protocol executes PostgreSQL without invoking Lagrange',
++  async () => {
++    const sealed =
++      sealBenchmarkCapacityPreregistration(
++        independentPreregistrationInput(),
++      );
++    const report = await runBenchmarkCapacityIndependentSideProtocol({
++      preregistration: sealed,
++      sideId: SIDE_POSTGRESQL,
++      resetRunState:
++        async (context) => independentFixtureResetReceipt(context),
++      executeRun: independentFixtureExecutor(sealed),
++    });
++    assert.equal(report.claimEligible, false);
++    assert.equal(report.sideId, SIDE_POSTGRESQL);
++    assert.equal(report.completedBlocks, 3);
++    assert.equal(report.rawSamples.length, 9);
++    assert.equal(report.summary.objectiveSufficiency.reusable, true);
++    for (let index = 0; index < report.rawSamples.length; index += 1) {
++      assert.equal(report.rawSamples[index].sideId, SIDE_POSTGRESQL);
++    }
++  },
++);
++
++test('independent comparison carries both uncertainty intervals without pairing',
++  () => {
++    const comparison = createBenchmarkCapacityIndependentComparison({
++      numeratorSideId: 'lagrange',
++      numeratorCapacity: {
++        estimate: 60,
++        confidenceInterval: {lower: 50, upper: 70},
++        completedBlocks: 3,
++      },
++      numeratorEvidenceDigest: digest('lagrange-report'),
++      denominatorSideId: SIDE_POSTGRESQL,
++      denominatorCapacity: {
++        estimate: 100,
++        confidenceInterval: {lower: 90, upper: 110},
++        completedBlocks: 4,
++      },
++      denominatorEvidenceDigest: digest('postgresql-comparator'),
++    });
++    assert.equal(comparison.claimEligible, false);
++    assert.equal(
++      comparison.sampleRelation,
++      'independent_noncontemporaneous',
++    );
++    assert.equal(comparison.estimate, 0.6);
++    assert.equal(comparison.confidenceInterval.lower, 50 / 110);
++    assert.equal(comparison.confidenceInterval.upper, 70 / 90);
++    assert.equal(comparison.numerator.completedBlocks, 3);
++    assert.equal(comparison.denominator.completedBlocks, 4);
++  },
++);
++
++test('content-addressed comparator bundle binds raw and resource evidence',
++  async () => {
++    const sealed =
++      sealBenchmarkCapacityPreregistration(
++        independentPreregistrationInput(),
++      );
++    const report = await runBenchmarkCapacityIndependentSideProtocol({
++      preregistration: sealed,
++      sideId: SIDE_POSTGRESQL,
++      resetRunState:
++        async (context) => independentFixtureResetReceipt(context),
++      executeRun: independentFixtureExecutor(sealed),
++    });
++    const resourceArtifact = {
++      schemaVersion: 'fixture-v1',
++      kind: 'fixture-live-calibration',
++      references: [],
++      payload: {cleanupVerified: true},
++    };
++    const resourceBytes =
++      benchmarkResourceCanonicalBytes(resourceArtifact);
++    const resourceDigest = benchmarkResourceDigestBytes(resourceBytes);
++    const resourceCalibrations = arrayMap(report.windowReceipts, () => ({
++      digest: resourceDigest,
++      byteLength: resourceBytes.length,
++      artifact: resourceArtifact,
++    }));
++    const workloadSeal = {
++      artifact: {
++        buildInputFingerprint: digest('build'),
++        componentSourceDigest: digest('component-source'),
++        executableDigest: digest('executable'),
++        ociManifestDigest: digest('oci'),
++      },
++      dataset: {
++        cardinality: 100_000,
++        componentSourceDigest: digest('component-source'),
++        digest: digest('dataset'),
++        sizeBytes: 1,
++        skew: 'observed',
++      },
++      alternative: {topMovies: []},
++      operationManifest: {version: 'fixture'},
++      operationManifestDigest: digest('operation-manifest'),
++      semanticOracleDigest: digest('semantic-oracle'),
++      postgres: {
++        imageId: digest('postgres-image'),
++        imageInspection: {id: 'fixture', repoDigests: []},
++        postgresVersion: 'PostgreSQL fixture',
++        postgresVersionSql: 'SELECT version()',
++        queryPlan: [{Plan: 'fixture'}],
++        querySql: 'SELECT fixture',
++        replicationFactor: 3,
++        replicationState: {state: 'replicated'},
++      },
++    };
++    const exactCompatibility = compatibility({
++      datasetDigest: workloadSeal.dataset.digest,
++      datasetCardinality: workloadSeal.dataset.cardinality,
++      datasetSkew: workloadSeal.dataset.skew,
++      operationManifestDigest: workloadSeal.operationManifestDigest,
++      semanticOracleDigest: workloadSeal.semanticOracleDigest,
++      postgresImageDigest: workloadSeal.postgres.imageId,
++      postgresVersionDigest: digestBenchmarkSemanticData({
++        postgresVersion: workloadSeal.postgres.postgresVersion,
++        postgresVersionSql: workloadSeal.postgres.postgresVersionSql,
++      }),
++      querySqlDigest:
++        digestBenchmarkSemanticData(workloadSeal.postgres.querySql),
++      queryPlanDigest:
++        digestBenchmarkSemanticData(workloadSeal.postgres.queryPlan),
++      replicationFactor: workloadSeal.postgres.replicationFactor,
++      replicationStateDigest:
++        digestBenchmarkSemanticData(workloadSeal.postgres.replicationState),
++      preregistrationDigest: sealed.manifestDigest,
++    });
++    const comparator = createBenchmarkCapacityReusableComparator({
++      comparatorId: 'fixture-bundle',
++      sideId: SIDE_POSTGRESQL,
++      protocolReportDigest: report.reportDigest,
++      compatibility: exactCompatibility,
++      capacity: report.summary.capacity,
++      evidence: {
++        sampleDigests: report.rawSampleDigests,
++        windowReceiptDigests: receiptDigests(report.windowReceipts),
++        resourceReceiptDigests:
++          arrayMap(resourceCalibrations, (entry) => entry.digest),
++      },
++      revalidationPolicy: {
++        driftMetric: 'fixture',
++        baselineValue: 1,
++        maximumRelativeDrift: 0.1,
++      },
++      capturedAtMs: CAPTURED_AT_MS,
++      validUntilMs: VALID_UNTIL_MS,
++    });
++    const body = {
++      version: 'movielens-postgresql-comparator-bundle-v1',
++      claimEligible: false,
++      comparator,
++      protocolReport: report,
++      preregistration: sealed,
++      resourceCalibrations,
++      cleanupReceipt: {closed: true},
++      workloadSeal,
++    };
++    const bundle = {
++      ...body,
++      bundleDigest: digestBenchmarkSemanticData(body),
++    };
++    assert.equal(
++      inspectMovielensMeasuredP0PostgresqlComparatorBundle(bundle).valid,
++      true,
++    );
++    const tampered = structuredClone(bundle);
++    tampered.protocolReport.rawSampleDigests[0] = digest('replacement');
++    assert.equal(
++      inspectMovielensMeasuredP0PostgresqlComparatorBundle(tampered).valid,
++      false,
++    );
++    const resigned = structuredClone(bundle);
++    resigned.protocolReport.rawSamples[0].correctThroughputPerSecond += 1;
++    resignReportAndBundle(resigned);
++    assert.equal(
++      inspectMovielensMeasuredP0PostgresqlComparatorBundle(resigned).valid,
++      false,
++    );
++    const objectiveTamper = structuredClone(bundle);
++    objectiveTamper.protocolReport.summary.shouldStop = false;
++    resignReportAndBundle(objectiveTamper);
++    assert.equal(
++      objectiveTamper.comparator.artifactDigest,
++      bundle.comparator.artifactDigest,
++    );
++    assert.equal(
++      inspectMovielensMeasuredP0PostgresqlComparatorBundle(
++        objectiveTamper,
++      ).valid,
++      false,
++    );
++    const windowTamper = structuredClone(bundle);
++    windowTamper.protocolReport.windowReceipts[0].offeredLoad = 999;
++    resignReportAndBundle(windowTamper);
++    assert.equal(
++      inspectMovielensMeasuredP0PostgresqlComparatorBundle(
++        windowTamper,
++      ).valid,
++      false,
++    );
++    const resetTamper = structuredClone(bundle);
++    resetTamper.protocolReport.resetReceipts[0].endedAt += 1;
++    resignReportAndBundle(resetTamper);
++    assert.equal(
++      inspectMovielensMeasuredP0PostgresqlComparatorBundle(
++        resetTamper,
++      ).valid,
++      false,
++    );
++    const outputRoot = await mkdtemp(
++      path.join(os.tmpdir(), 'postgresql-comparator-persist-'),
++    );
++    const restoreJsonStringify = replacePrototypeProperty(
++      JSON,
++      'stringify',
++      () => '"poisoned"',
++    );
++    let persisted;
++    try {
++      persisted =
++        await persistMovielensMeasuredP0PostgresqlComparatorBundle({
++          ...body,
++          outputDirectory: path.join(outputRoot, 'valid'),
++        });
++    } finally {
++      restoreJsonStringify();
++    }
++    assert.equal(
++      inspectMovielensMeasuredP0PostgresqlComparatorBundle(
++        persisted.bundle,
++      ).valid,
++      true,
++    );
++    const replayed =
++      await persistMovielensMeasuredP0PostgresqlComparatorBundle({
++        ...body,
++        outputDirectory: path.join(outputRoot, 'valid'),
++      });
++    assert.equal(replayed.artifactPath, persisted.artifactPath);
++    assert.equal(
++      replayed.bundle.bundleDigest,
++      persisted.bundle.bundleDigest,
++    );
++    const invalidDirectory = path.join(outputRoot, 'invalid');
++    await assert.rejects(
++      persistMovielensMeasuredP0PostgresqlComparatorBundle({
++        comparator,
++        protocolReport: objectiveTamper.protocolReport,
++        preregistration: sealed,
++        resourceCalibrations,
++        cleanupReceipt: body.cleanupReceipt,
++        workloadSeal,
++        outputDirectory: invalidDirectory,
++      }),
++      /failed read-back inspection/,
++    );
++    const artifactFilename =
++      `${comparator.artifactDigest.slice('sha256:'.length)}.json`;
++    await assert.rejects(
++      access(path.join(invalidDirectory, artifactFilename)),
++    );
++    const conflictDirectory = path.join(outputRoot, 'conflict');
++    await mkdir(conflictDirectory, {recursive: true});
++    const conflictPath = path.join(
++      conflictDirectory,
++      artifactFilename,
++    );
++    await writeFile(conflictPath, 'partial', 'utf8');
++    await assert.rejects(
++      persistMovielensMeasuredP0PostgresqlComparatorBundle({
++        ...body,
++        outputDirectory: conflictDirectory,
++      }),
++      (error) =>
++        error?.code ===
++          'POSTGRESQL_COMPARATOR_PUBLISH_CONFLICT',
++    );
++    assert.equal(await readFile(conflictPath, 'utf8'), 'partial');
++    await rm(outputRoot, {recursive: true, force: true});
++    let getterReads = 0;
++    const accessorBundle = {};
++    Object.defineProperty(accessorBundle, 'version', {
++      enumerable: true,
++      get() {
++        getterReads += 1;
++        return body.version;
++      },
++    });
++    assert.equal(
++      inspectMovielensMeasuredP0PostgresqlComparatorBundle(
++        accessorBundle,
++      ).valid,
++      false,
++    );
++    assert.equal(getterReads, 0);
++  },
++);
+diff --git a/test/distributed/harness/__tests__/docker-provider.test.js b/test/distributed/harness/__tests__/docker-provider.test.js
+index 9d8cae0ff8fd7b4209408e058a8e1a0f65404486..c0413e4dd18c4ee6c1c52eab9c25e7d58eecc0fd 100644
+--- a/test/distributed/harness/__tests__/docker-provider.test.js
++++ b/test/distributed/harness/__tests__/docker-provider.test.js
+@@ -10,7 +10,11 @@
+ import {test} from '../../../../src/test-helpers/tap.js';
+ import assert from 'node:assert';
+ import fc from 'fast-check';
+-import {DockerProvider, parseContainerStats} from '../docker-provider.js';
++import {
++  DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
++  DockerProvider,
++  parseContainerStats,
++} from '../docker-provider.js';
+ import {CONTAINER_ENV_KEYS, PORTS} from '../constants.js';
+ 
+ const RESOURCE_SNAPSHOT_CONTAINER_ID = 'container-resource';
+@@ -613,8 +617,7 @@ test('Unit: buildImage passes labels to docker build options', async (t) => {
+ 
+       assert.deepStrictEqual(capturedBuildContext, {
+         context: '/project',
+-        src: ['.dockerignore', 'Dockerfile', 'package-lock.json',
+-          'package.json', 'src'],
++        src: ['Dockerfile', 'package-lock.json', 'package.json', 'src'],
+       });
+       assert.deepStrictEqual(capturedBuildOptions, {
+         t: 'myimage:context',
+@@ -910,3 +913,26 @@ test('Unit: resource snapshot measures a bounded container storage path',
+       );
+     }
+   });
++
++test('Unit: resource snapshot can use the inspected writable layer',
++  async () => {
++    const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
++    provider._docker.getContainer = () => ({
++      stats: async () => ({
++        cpu_stats: {cpu_usage: {total_usage: 2}},
++        memory_stats: {usage: 10, limit: 20},
++      }),
++      inspect: async () => ({
++        SizeRw: 12_345,
++        HostConfig: {NanoCpus: 1_000_000_000},
++      }),
++    });
++    provider.execInContainer = async () => {
++      throw new Error('distroless writable-layer accounting must not exec');
++    };
++    const result = await provider.getContainerResourceSnapshot(
++      RESOURCE_SNAPSHOT_CONTAINER_ID,
++      DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
++    );
++    assert.equal(result.storageUsageBytes, 12_345);
++  });
+diff --git a/test/distributed/harness/__tests__/movielens-postgresql-comparator-isolation.test.js b/test/distributed/harness/__tests__/movielens-postgresql-comparator-isolation.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c45c2b30ada9ea29ca71e33a7beadea00ed6c512
+--- /dev/null
++++ b/test/distributed/harness/__tests__/movielens-postgresql-comparator-isolation.test.js
+@@ -0,0 +1,180 @@
++import assert from 'node:assert/strict';
++import {spawnSync} from 'node:child_process';
++import {readFile} from 'node:fs/promises';
++import test from 'node:test';
++
++import {
++  digestMovielensMeasuredP0PostgresqlComparatorSource,
++  resolveMovielensMeasuredP0PostgresqlComparatorSourcePaths,
++} from '../../../../scripts/checks/movielens-measured-p0-postgresql-comparator.js';
++import {
++  resolveBenchmarkLocalModuleSourcePaths,
++} from '../../../../scripts/checks/benchmark-local-module-source-closure.js';
++import {
++  isSha256Digest,
++} from '../benchmark-semantic-integrity.js';
++import {
++  pollutePrototypeProperty,
++} from '../../../helpers/hostile-intrinsics.js';
++
++const POSTGRESQL_ENVIRONMENT_PATH =
++  'scripts/checks/movielens-measured-p0-postgresql-environment.js';
++const POSTGRESQL_PLAN_PATH =
++  'scripts/checks/movielens-measured-p0-comparator-plan.js';
++const POSTGRESQL_SUPPORT_PATH =
++  'scripts/checks/movielens-measured-p0-comparator-live-support.js';
++const POSTGRESQL_CAPTURE_PATH =
++  'scripts/checks/' +
++  'run-comparative-efficiency-movielens-postgresql-comparator-live.js';
++const FORBIDDEN_SOURCE_PATHS = Object.freeze([
++  'scripts/checks/movielens-measured-p0-campaign-plan.js',
++  'scripts/checks/movielens-measured-p0-distributed-environment.js',
++  'scripts/checks/movielens-measured-p0-distributed-ingress.js',
++  'scripts/checks/movielens-measured-p0-lagrange-iteration-support.js',
++]);
++const FORBIDDEN_LAGRANGE_DEPENDENCIES = Object.freeze([
++  'createCluster',
++  'buildMovielensMeasuredP0Image',
++  'openMovielensMeasuredP0AuthenticatedSqlIngress',
++  'createMovielensLagrangeCapacityAdapter',
++  'prepareMovielensPublicRequestWorkload',
++]);
++const arrayIncludes = Function.call.bind(Array.prototype.includes);
++const stringIncludes = Function.call.bind(String.prototype.includes);
++const SOURCE_CLOSURE_ENTRY_PATH =
++  'scripts/checks/movielens-measured-p0-postgresql-comparator.js';
++
++test('PostgreSQL comparator capture has no Lagrange setup dependency',
++  async () => {
++    const source = [
++      await readFile(POSTGRESQL_ENVIRONMENT_PATH, 'utf8'),
++      await readFile(POSTGRESQL_PLAN_PATH, 'utf8'),
++      await readFile(POSTGRESQL_SUPPORT_PATH, 'utf8'),
++      await readFile(POSTGRESQL_CAPTURE_PATH, 'utf8'),
++    ].join('\n');
++    for (let index = 0;
++      index < FORBIDDEN_LAGRANGE_DEPENDENCIES.length;
++      index += 1) {
++      assert.equal(
++        stringIncludes(
++          source,
++          FORBIDDEN_LAGRANGE_DEPENDENCIES[index],
++        ),
++        false,
++      );
++    }
++  },
++);
++
++test('PostgreSQL comparator source identity is content addressed',
++  async () => {
++    const first =
++      await digestMovielensMeasuredP0PostgresqlComparatorSource();
++    const second =
++      await digestMovielensMeasuredP0PostgresqlComparatorSource();
++    assert.equal(isSha256Digest(first), true);
++    assert.equal(second, first);
++    const sourcePaths =
++      await resolveMovielensMeasuredP0PostgresqlComparatorSourcePaths();
++    for (let index = 0; index < FORBIDDEN_SOURCE_PATHS.length; index += 1) {
++      assert.equal(
++        arrayIncludes(
++          sourcePaths,
++          FORBIDDEN_SOURCE_PATHS[index],
++        ),
++        false,
++      );
++    }
++    assert.equal(
++      arrayIncludes(
++        sourcePaths,
++        'test/distributed/harness/benchmark-capacity-protocol-constants.js',
++      ),
++      true,
++    );
++    assert.equal(
++      arrayIncludes(
++        sourcePaths,
++        'examples/service-data-affinity/postgres-baseline-session.js',
++      ),
++      true,
++    );
++  },
++);
++
++test('source closure resists the no-op push manifest-emptying attack',
++  () => {
++    const attack = `
++      import {
++        resolveMovielensMeasuredP0PostgresqlComparatorSourcePaths,
++      } from './scripts/checks/movielens-measured-p0-postgresql-comparator.js';
++      const descriptor = Object.getOwnPropertyDescriptor(
++        Array.prototype,
++        'push',
++      );
++      Object.defineProperty(Array.prototype, 'push', {
++        configurable: true,
++        writable: true,
++        value: () => 0,
++      });
++      let valid = false;
++      try {
++        const paths =
++          await resolveMovielensMeasuredP0PostgresqlComparatorSourcePaths();
++        valid = paths.length > 0 &&
++          paths.includes(
++            'scripts/checks/movielens-measured-p0-postgresql-comparator.js',
++          );
++      } finally {
++        Object.defineProperty(Array.prototype, 'push', descriptor);
++      }
++      process.exitCode = valid ? 0 : 1;
++    `;
++    const result = spawnSync(
++      process.execPath,
++      ['--input-type=module', '--eval', attack],
++      {encoding: 'utf8'},
++    );
++    assert.equal(result.status, 0, result.stderr);
++  });
++
++test('source closure rejects accessor and inherited path entries',
++  async () => {
++    let getterReads = 0;
++    const accessorPaths = [];
++    Object.defineProperty(accessorPaths, 0, {
++      configurable: true,
++      enumerable: true,
++      get() {
++        getterReads += 1;
++        return SOURCE_CLOSURE_ENTRY_PATH;
++      },
++    });
++    accessorPaths.length = 1;
++    await assert.rejects(
++      resolveBenchmarkLocalModuleSourcePaths({
++        entryPaths: accessorPaths,
++      }),
++      /dense entry and additional paths/,
++    );
++    assert.equal(getterReads, 0);
++
++    const inheritedPaths = [];
++    inheritedPaths.length = 1;
++    const restore = pollutePrototypeProperty(
++      Array.prototype,
++      0,
++      SOURCE_CLOSURE_ENTRY_PATH,
++    );
++    try {
++      await assert.rejects(
++        resolveBenchmarkLocalModuleSourcePaths({
++          entryPaths: inheritedPaths,
++        }),
++        /dense entry and additional paths/,
++      );
++    } finally {
++      restore();
++    }
++  },
++);
+diff --git a/test/distributed/harness/benchmark-capacity-independent-comparison.js b/test/distributed/harness/benchmark-capacity-independent-comparison.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ea8e22e6524cb583a2fc04041a4bc7a6ecfe7e63
+--- /dev/null
++++ b/test/distributed/harness/benchmark-capacity-independent-comparison.js
+@@ -0,0 +1,141 @@
++import {
++  digestBenchmarkSemanticData,
++  hasExactOwnDataKeys,
++  isNonNegativeSafeInteger,
++  isNonNegativeSafeNumber,
++  isSha256Digest,
++} from './benchmark-semantic-integrity.js';
++
++const VERSION = 'benchmark-capacity-independent-comparison-v1';
++const CAPACITY_KEYS = Object.freeze([
++  'estimate',
++  'confidenceInterval',
++  'completedBlocks',
++]);
++const INTERVAL_KEYS = Object.freeze(['lower', 'upper']);
++const INPUT_KEYS = Object.freeze([
++  'numeratorSideId',
++  'numeratorCapacity',
++  'numeratorEvidenceDigest',
++  'denominatorSideId',
++  'denominatorCapacity',
++  'denominatorEvidenceDigest',
++]);
++const SAMPLE_RELATION = 'independent_noncontemporaneous';
++const ESTIMATOR = 'ratio_of_independent_capacity_medians';
++const INTERVAL_METHOD = 'conservative_endpoint_ratio';
++const localText = Object.freeze({
++  CONTENT_ADDRESSED_EVIDENCE_REQUIRED:
++    'content-addressed evidence required',
++  DISTINCT_SIDES_REQUIRED: 'distinct sides required',
++  EXACT_OWN_DATA_INPUT_REQUIRED: 'exact own-data input required',
++});
++
++function fail(reason) {
++  throw new TypeError(`invalid independent capacity comparison: ${reason}`);
++}
++
++function primitiveSideId(value, name) {
++  if (typeof value !== 'string' || value.length === 0) {
++    fail(`${name}:primitive side identifier required`);
++  }
++  return value;
++}
++
++function copyCapacity(capacity, name) {
++  if (
++    !hasExactOwnDataKeys(capacity, CAPACITY_KEYS) ||
++    !hasExactOwnDataKeys(capacity.confidenceInterval, INTERVAL_KEYS) ||
++    !isNonNegativeSafeNumber(capacity.estimate) ||
++    capacity.estimate === 0 ||
++    !isNonNegativeSafeNumber(capacity.confidenceInterval.lower) ||
++    capacity.confidenceInterval.lower === 0 ||
++    !isNonNegativeSafeNumber(capacity.confidenceInterval.upper) ||
++    capacity.confidenceInterval.lower > capacity.estimate ||
++    capacity.confidenceInterval.upper < capacity.estimate ||
++    !isNonNegativeSafeInteger(capacity.completedBlocks) ||
++    capacity.completedBlocks === 0
++  ) {
++    fail(`${name}:positive finite capacity interval required`);
++  }
++  return Object.freeze({
++    estimate: capacity.estimate,
++    confidenceInterval: Object.freeze({
++      lower: capacity.confidenceInterval.lower,
++      upper: capacity.confidenceInterval.upper,
++    }),
++    completedBlocks: capacity.completedBlocks,
++  });
++}
++
++function safeRatio(numerator, denominator, name) {
++  const ratio = numerator / denominator;
++  if (!isNonNegativeSafeNumber(ratio)) {
++    fail(`${name}:unsafe ratio`);
++  }
++  return ratio;
++}
++
++export function createBenchmarkCapacityIndependentComparison(input) {
++  if (!hasExactOwnDataKeys(input, INPUT_KEYS)) {
++    fail(localText.EXACT_OWN_DATA_INPUT_REQUIRED);
++  }
++  const numeratorSideId =
++    primitiveSideId(input.numeratorSideId, 'numeratorSideId');
++  const denominatorSideId =
++    primitiveSideId(input.denominatorSideId, 'denominatorSideId');
++  if (numeratorSideId === denominatorSideId) {
++    fail(localText.DISTINCT_SIDES_REQUIRED);
++  }
++  if (
++    !isSha256Digest(input.numeratorEvidenceDigest) ||
++    !isSha256Digest(input.denominatorEvidenceDigest)
++  ) {
++    fail(localText.CONTENT_ADDRESSED_EVIDENCE_REQUIRED);
++  }
++  const numerator =
++    copyCapacity(input.numeratorCapacity, 'numeratorCapacity');
++  const denominator =
++    copyCapacity(input.denominatorCapacity, 'denominatorCapacity');
++  const body = Object.freeze({
++    version: VERSION,
++    claimEligible: false,
++    sampleRelation: SAMPLE_RELATION,
++    estimator: ESTIMATOR,
++    intervalMethod: INTERVAL_METHOD,
++    numeratorSideId,
++    denominatorSideId,
++    numerator,
++    denominator,
++    estimate: safeRatio(
++      numerator.estimate,
++      denominator.estimate,
++      'estimate',
++    ),
++    confidenceInterval: Object.freeze({
++      lower: safeRatio(
++        numerator.confidenceInterval.lower,
++        denominator.confidenceInterval.upper,
++        'confidenceInterval.lower',
++      ),
++      upper: safeRatio(
++        numerator.confidenceInterval.upper,
++        denominator.confidenceInterval.lower,
++        'confidenceInterval.upper',
++      ),
++    }),
++    numeratorEvidenceDigest: input.numeratorEvidenceDigest,
++    denominatorEvidenceDigest: input.denominatorEvidenceDigest,
++  });
++  return Object.freeze({
++    ...body,
++    comparisonDigest: digestBenchmarkSemanticData(body),
++  });
++}
++
++export const BENCHMARK_CAPACITY_INDEPENDENT_COMPARISON = Object.freeze({
++  VERSION,
++  SAMPLE_RELATION,
++  ESTIMATOR,
++  INTERVAL_METHOD,
++});
+diff --git a/test/distributed/harness/benchmark-capacity-independent-live-protocol.js b/test/distributed/harness/benchmark-capacity-independent-live-protocol.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..cd9676e3d179adc12d8119d14404a9558eaf59b2
+--- /dev/null
++++ b/test/distributed/harness/benchmark-capacity-independent-live-protocol.js
+@@ -0,0 +1,298 @@
++import {
++  BENCHMARK_CAPACITY_PHASE,
++} from './benchmark-capacity-protocol-constants.js';
++import {
++  benchmarkCapacitySamplingHasWarmup,
++  getBenchmarkCapacitySamplingWindow,
++} from './benchmark-capacity-preregistration.js';
++import {
++  createBenchmarkCapacityCacheResetReceipt,
++} from './benchmark-capacity-cache-reset-receipt.js';
++import {
++  assertBenchmarkCapacityHeterogeneousOperationEvidence,
++  createBenchmarkCapacityHeadroomReceipt,
++  createBenchmarkCapacityHeterogeneousOperationReceipt,
++} from './benchmark-capacity-heterogeneous-observation.js';
++import {
++  runBenchmarkCapacityOpenLoopWindow,
++} from './benchmark-capacity-open-loop.js';
++import {
++  runBenchmarkCapacityIndependentSideProtocol,
++} from './benchmark-capacity-independent-side-protocol.js';
++import {
++  createBenchmarkCapacityWindowReceipt,
++} from './benchmark-capacity-window-receipt.js';
++import {
++  appendOwnArrayValue,
++} from './benchmark-semantic-integrity.js';
++
++const LAGRANGE_RUNTIME = 'wasm_component';
++const POSTGRES_RUNTIME = 'postgresql_16';
++const mathMax = Math.max;
++const PromiseConstructor = Promise;
++const setTimer = setTimeout;
++const localText = Object.freeze({
++  ADAPTER_AND_OBSERVER_REQUIRED:
++    'exact independent adapter and resource observer required',
++  NOT_CONFIGURED: 'not_configured',
++  SEMANTIC_CONTRACT_ABSENT: 'semantic contract missing for side',
++});
++
++function fail(reason) {
++  throw new TypeError(
++    `independent live capacity protocol failed: ${reason}`,
++  );
++}
++
++function delay(durationMs) {
++  return new PromiseConstructor((resolveDelay) => {
++    setTimer(resolveDelay, durationMs);
++  });
++}
++
++function semanticDialectForSide(preregistration, sideId) {
++  for (let index = 0;
++    index < preregistration.sideSemanticContracts.length;
++    index += 1) {
++    const contract = preregistration.sideSemanticContracts[index];
++    if (contract.sideId === sideId) return contract.dialect;
++  }
++  fail(`${localText.SEMANTIC_CONTRACT_ABSENT}:${sideId}`);
++}
++
++async function coverWallWindow(startedAt, sample) {
++  const remaining =
++    sample.observationDurationMs - (Date.now() - startedAt);
++  if (remaining > 0) await delay(remaining);
++  let endedAt = Date.now();
++  if (endedAt <= startedAt) {
++    await delay(1);
++    endedAt = Date.now();
++  }
++  return endedAt;
++}
++
++async function executeWindow({
++  adapter,
++  preregistration,
++  context,
++  phase,
++  beginResourceObservation,
++  completeResourceObservation,
++}) {
++  const samplingWindow = getBenchmarkCapacitySamplingWindow(
++    preregistration,
++    context.offeredLoadPerSecond,
++  );
++  const duration = phase === BENCHMARK_CAPACITY_PHASE.WARMUP ?
++    samplingWindow.warmupMs :
++    samplingWindow.measuredMs;
++  const adapterContext = {
++    blockIndex: context.blockIndex,
++    blockedOrderIndex: context.blockedOrderIndex,
++    sideId: context.sideId,
++    offeredLoadPerSecond: context.offeredLoadPerSecond,
++    phase,
++  };
++  const resourceObservation =
++    await beginResourceObservation(adapterContext);
++  adapter.beginWindow(adapterContext);
++  const wallStartedAt = Date.now();
++  const sample = await runBenchmarkCapacityOpenLoopWindow({
++    sideId: context.sideId,
++    phase,
++    blockIndex: context.blockIndex,
++    offeredLoadPerSecond: context.offeredLoadPerSecond,
++    windowDurationMs: duration,
++    operationTimeoutMs:
++      preregistration.sampling.operationTimeoutMs,
++    semanticFinalizerTimeoutMs:
++      preregistration.sampling.semanticFinalizerTimeoutMs,
++    maxReleaseLagMs:
++      preregistration.sampling.maxReleaseLagMs,
++    clientMaxInFlight:
++      preregistration.sampling.clientMaxInFlight,
++    clientMaxQueueDepth:
++      preregistration.sampling.clientMaxQueueDepth,
++    semanticDialect:
++      semanticDialectForSide(preregistration, context.sideId),
++    signal: null,
++    executeOperation: adapter.executeOperation,
++    finalizeSemanticReceipt: adapter.finalizeSemanticReceipt,
++  });
++  await coverWallWindow(wallStartedAt, sample);
++  const adapterEvidence = adapter.completeWindow();
++  const observation = await completeResourceObservation({
++    resourceObservation,
++    adapterIdentity: adapter.adapterIdentity,
++    adapterEvidence,
++    context: adapterContext,
++    sample,
++  });
++  const headroom = createBenchmarkCapacityHeadroomReceipt(
++    observation.headroom,
++    sample,
++  );
++  const engagement =
++    createBenchmarkCapacityHeterogeneousOperationReceipt({
++      adapterIdentity: adapter.adapterIdentity,
++      sample,
++      window: {
++        blockedOrderIndex: context.blockedOrderIndex,
++        startedAt: observation.startedAt,
++        endedAt: observation.endedAt,
++      },
++      ownerReceipt: adapterEvidence.ownerReceipt,
++      headroom,
++      preregistration,
++    });
++  if (
++    adapter.adapterIdentity.runtimeKind === LAGRANGE_RUNTIME ||
++    adapter.adapterIdentity.runtimeKind === POSTGRES_RUNTIME
++  ) {
++    assertBenchmarkCapacityHeterogeneousOperationEvidence(
++      engagement,
++      adapterEvidence.operationEvidence,
++      sample.semanticReceipt,
++      adapterEvidence.runtimeOwnerEvidence,
++    );
++  }
++  const receipt = createBenchmarkCapacityWindowReceipt(
++    {
++      blockIndex: context.blockIndex,
++      blockedOrderIndex: context.blockedOrderIndex,
++      sideId: context.sideId,
++      phase,
++      offeredLoad: context.offeredLoadPerSecond,
++      startedAt: observation.startedAt,
++      endedAt: observation.endedAt,
++      capacitySampleDigest: sample.sampleDigest,
++      semanticReceiptDigest: sample.semanticReceiptDigest,
++      liveEngagementDigest: engagement.receiptDigest,
++      resourceWindowDigest: null,
++    },
++    sample,
++    preregistration,
++  );
++  return {
++    sample,
++    receipt,
++    engagement,
++    adapterEvidence,
++    headroom,
++    resourceObservation,
++  };
++}
++
++function createResetExecutor(preregistration, adapter, resets) {
++  return async (context) => {
++    const startedAt = Date.now();
++    const reset = await adapter.resetRunState(context);
++    const endedAt = mathMax(Date.now(), startedAt + 1);
++    const receipt = createBenchmarkCapacityCacheResetReceipt(
++      {
++        blockIndex: context.blockIndex,
++        blockedOrderIndex: context.blockedOrderIndex,
++        sideId: context.sideId,
++        offeredLoad: context.offeredLoadPerSecond,
++        startedAt,
++        endedAt,
++        policy: preregistration.cachePolicy,
++        liveEngagementDigest: reset.resetDigest,
++      },
++      preregistration,
++    );
++    appendOwnArrayValue(resets, {reset, receipt});
++    return receipt;
++  };
++}
++
++function createWindowExecutor({
++  preregistration,
++  adapter,
++  windows,
++  beginResourceObservation,
++  completeResourceObservation,
++}) {
++  return async (context) => {
++    let warmup = localText.NOT_CONFIGURED;
++    if (benchmarkCapacitySamplingHasWarmup(preregistration)) {
++      warmup = await executeWindow({
++        adapter,
++        preregistration,
++        context,
++        phase: BENCHMARK_CAPACITY_PHASE.WARMUP,
++        beginResourceObservation,
++        completeResourceObservation,
++      });
++      appendOwnArrayValue(windows, warmup);
++    }
++    const measured = await executeWindow({
++      adapter,
++      preregistration,
++      context,
++      phase: BENCHMARK_CAPACITY_PHASE.MEASURED,
++      beginResourceObservation,
++      completeResourceObservation,
++    });
++    appendOwnArrayValue(windows, measured);
++    return {
++      warmup:
++        warmup === localText.NOT_CONFIGURED ?
++          localText.NOT_CONFIGURED :
++          warmup.sample,
++      measured: measured.sample,
++      warmupWindowReceipt:
++        warmup === localText.NOT_CONFIGURED ?
++          localText.NOT_CONFIGURED :
++          warmup.receipt,
++      measuredWindowReceipt: measured.receipt,
++    };
++  };
++}
++
++function assertLiveOptions({
++  adapter,
++  sideId,
++  beginResourceObservation,
++  completeResourceObservation,
++}) {
++  if (
++    adapter === null ||
++    typeof adapter !== 'object' ||
++    adapter.adapterIdentity?.sideId !== sideId ||
++    typeof beginResourceObservation !== 'function' ||
++    typeof completeResourceObservation !== 'function'
++  ) fail(localText.ADAPTER_AND_OBSERVER_REQUIRED);
++}
++
++export async function runBenchmarkCapacityIndependentLiveProtocol({
++  preregistration,
++  adapter,
++  sideId,
++  beginResourceObservation,
++  completeResourceObservation,
++}) {
++  assertLiveOptions({
++    adapter,
++    sideId,
++    beginResourceObservation,
++    completeResourceObservation,
++  });
++  const windows = [];
++  const resets = [];
++  const report = await runBenchmarkCapacityIndependentSideProtocol({
++    preregistration,
++    sideId,
++    resetRunState:
++      createResetExecutor(preregistration, adapter, resets),
++    executeRun: createWindowExecutor({
++      preregistration,
++      adapter,
++      windows,
++      beginResourceObservation,
++      completeResourceObservation,
++    }),
++  });
++  return {report, windows, resets};
++}
+diff --git a/test/distributed/harness/benchmark-capacity-independent-side-protocol.js b/test/distributed/harness/benchmark-capacity-independent-side-protocol.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c77b9fb3d8809a3d5954a32cdfb234d099d4e396
+--- /dev/null
++++ b/test/distributed/harness/benchmark-capacity-independent-side-protocol.js
+@@ -0,0 +1,617 @@
++import {
++  BENCHMARK_CAPACITY_PHASE,
++} from './benchmark-capacity-protocol-constants.js';
++import {
++  getBenchmarkCapacitySamplingWindow,
++  inspectBenchmarkCapacityPreregistration,
++} from './benchmark-capacity-preregistration.js';
++import {
++  inspectBenchmarkCapacityRunSample,
++} from './benchmark-capacity-run-sample.js';
++import {
++  inspectBenchmarkCapacityCacheResetReceipt,
++} from './benchmark-capacity-cache-reset-receipt.js';
++import {
++  inspectBenchmarkCapacityWindowReceipt,
++} from './benchmark-capacity-window-receipt.js';
++import {
++  summarizeBenchmarkCapacityIndependentSide,
++} from './benchmark-capacity-statistics.js';
++import {
++  appendOwnArrayValue,
++  digestBenchmarkSemanticData,
++  hasExactOwnDataKeys,
++  isDenseDataArray,
++  isNonNegativeSafeInteger,
++  isPlainDataRecord,
++  isSha256Digest,
++} from './benchmark-semantic-integrity.js';
++
++const REPORT_VERSION =
++  'benchmark-capacity-independent-side-development-v1';
++const OPTION_KEYS = Object.freeze([
++  'preregistration',
++  'sideId',
++  'resetRunState',
++  'executeRun',
++]);
++const REPORT_BODY_KEYS = Object.freeze([
++  'contractVersion',
++  'claimEligible',
++  'studyId',
++  'sideId',
++  'preregistrationDigest',
++  'completedBlocks',
++  'blockedOrderIndexesUsed',
++  'warmupSamples',
++  'rawSamples',
++  'warmupSampleDigests',
++  'rawSampleDigests',
++  'windowReceipts',
++  'resetReceipts',
++  'summary',
++]);
++const REPORT_KEYS = Object.freeze([
++  ...REPORT_BODY_KEYS,
++  'reportDigest',
++]);
++const localText = Object.freeze({
++  BOUNDED_RESET_ABORT_IGNORED:
++    'cache reset hook ignored bounded abort',
++  BOUNDED_RESET_TIMEOUT:
++    'cache reset hook exceeded sealed timeout',
++  EXACT_OPTIONS_REQUIRED:
++    'exact independent-side protocol options required',
++  NO_BLOCKS_COMPLETED: 'no independent-side blocks completed',
++  NOT_CONFIGURED: 'not_configured',
++  REPORT_INVALID: 'independent_side_report_invalid',
++  RESET_RECEIPT_MISMATCH:
++    'cache reset receipt does not match matrix cell',
++  RUN_SAMPLE_MISMATCH:
++    'run sample does not match preregistered matrix cell',
++  RUN_SAMPLE_OR_RECEIPT_EXACT_REQUIRED:
++    'executeRun must return exact samples and window receipts',
++  SEMANTIC_CONTRACT_ABSENT: 'side semantic contract missing',
++  SIDE_MISSING_FROM_ORDER: 'independent side missing from blocked order',
++  STATUS_COMPLETED: 'completed',
++  STATUS_FAILED: 'failed',
++  STATUS_TIMED_OUT: 'timed_out',
++  VALID_CONTRACT_REQUIRED:
++    'valid independent-side protocol contract required',
++  WINDOW_RECEIPT_MISMATCH:
++    'window receipt does not match matrix cell',
++  ZERO_WARMUP_NOT_CONFIGURED:
++    'zero warmup must return not_configured',
++});
++const EXECUTION_RESULT_KEYS = Object.freeze([
++  'warmup',
++  'measured',
++  'warmupWindowReceipt',
++  'measuredWindowReceipt',
++]);
++const promiseResolve = Promise.resolve.bind(Promise);
++const promiseRace = Promise.race.bind(Promise);
++const promiseThen = Function.call.bind(Promise.prototype.then);
++const PromiseConstructor = Promise;
++const AbortControllerConstructor = AbortController;
++const setTimer = setTimeout;
++const clearTimer = clearTimeout;
++
++function fail(reason) {
++  throw new TypeError(`independent capacity protocol failed: ${reason}`);
++}
++
++function createEvidenceList() {
++  return [];
++}
++
++function registeredSide(sealed, sideId) {
++  for (let index = 0; index < sealed.sideIds.length; index += 1) {
++    if (sealed.sideIds[index] === sideId) return true;
++  }
++  return false;
++}
++
++function semanticDialectForSide(sealed, sideId) {
++  for (let index = 0;
++    index < sealed.sideSemanticContracts.length;
++    index += 1) {
++    const contract = sealed.sideSemanticContracts[index];
++    if (contract.sideId === sideId) return contract.dialect;
++  }
++  fail(localText.SEMANTIC_CONTRACT_ABSENT);
++}
++
++function assertSampleMatches(sample, sealed, expected) {
++  const inspection = inspectBenchmarkCapacityRunSample(sample);
++  if (!inspection.valid) fail(inspection.reason);
++  if (
++    sample.sideId !== expected.sideId ||
++    sample.phase !== expected.phase ||
++    sample.blockIndex !== expected.blockIndex ||
++    sample.offeredLoadPerSecond !== expected.offeredLoadPerSecond ||
++    sample.windowDurationMs !== expected.windowDurationMs ||
++    sample.operationTimeoutMs !== sealed.sampling.operationTimeoutMs ||
++    sample.maxReleaseLagMs !== sealed.sampling.maxReleaseLagMs ||
++    sample.clientMaxInFlight !== sealed.sampling.clientMaxInFlight ||
++    sample.clientMaxQueueDepth !== sealed.sampling.clientMaxQueueDepth ||
++    sample.semanticDialect !==
++      semanticDialectForSide(sealed, expected.sideId)
++  ) fail(localText.RUN_SAMPLE_MISMATCH);
++}
++
++function assertWindowMatches(receipt, sample, context, sealed) {
++  const inspection =
++    inspectBenchmarkCapacityWindowReceipt(receipt, sample, sealed);
++  if (
++    !inspection.valid ||
++    receipt.blockIndex !== context.blockIndex ||
++    receipt.blockedOrderIndex !== context.blockedOrderIndex ||
++    receipt.sideId !== context.sideId ||
++    receipt.phase !== sample.phase ||
++    receipt.offeredLoad !== context.offeredLoadPerSecond ||
++    receipt.capacitySampleDigest !== sample.sampleDigest
++  ) fail(localText.WINDOW_RECEIPT_MISMATCH);
++}
++
++function assertExecutionResult(result, sealed, context) {
++  if (
++    !isPlainDataRecord(result) ||
++    !hasExactOwnDataKeys(result, EXECUTION_RESULT_KEYS)
++  ) fail(localText.RUN_SAMPLE_OR_RECEIPT_EXACT_REQUIRED);
++  const samplingWindow = getBenchmarkCapacitySamplingWindow(
++    sealed,
++    context.offeredLoadPerSecond,
++  );
++  if (samplingWindow.warmupMs === 0) {
++    if (
++      result.warmup !== localText.NOT_CONFIGURED ||
++      result.warmupWindowReceipt !== localText.NOT_CONFIGURED
++    ) fail(localText.ZERO_WARMUP_NOT_CONFIGURED);
++  } else {
++    assertSampleMatches(result.warmup, sealed, {
++      ...context,
++      phase: BENCHMARK_CAPACITY_PHASE.WARMUP,
++      windowDurationMs: samplingWindow.warmupMs,
++    });
++    assertWindowMatches(
++      result.warmupWindowReceipt,
++      result.warmup,
++      context,
++      sealed,
++    );
++  }
++  assertSampleMatches(result.measured, sealed, {
++    ...context,
++    phase: BENCHMARK_CAPACITY_PHASE.MEASURED,
++    windowDurationMs: samplingWindow.measuredMs,
++  });
++  assertWindowMatches(
++    result.measuredWindowReceipt,
++    result.measured,
++    context,
++    sealed,
++  );
++}
++
++function assertResetReceipt(receipt, sealed, context) {
++  const inspection =
++    inspectBenchmarkCapacityCacheResetReceipt(receipt, sealed);
++  if (
++    !inspection.valid ||
++    receipt.policy !== sealed.cachePolicy ||
++    receipt.blockIndex !== context.blockIndex ||
++    receipt.blockedOrderIndex !== context.blockedOrderIndex ||
++    receipt.sideId !== context.sideId ||
++    receipt.offeredLoad !== context.offeredLoadPerSecond
++  ) fail(localText.RESET_RECEIPT_MISMATCH);
++}
++
++async function runBoundedReset(resetRunState, context, timeoutMs) {
++  const controller = new AbortControllerConstructor();
++  let timerId;
++  const invoked = promiseThen(promiseResolve(), () =>
++    resetRunState({...context, signal: controller.signal}));
++  const completed = promiseThen(
++    invoked,
++    (value) => ({status: localText.STATUS_COMPLETED, value}),
++    (error) => ({status: localText.STATUS_FAILED, error}),
++  );
++  const timeout = new PromiseConstructor((resolveTimeout) => {
++    timerId = setTimer(
++      () => resolveTimeout({status: localText.STATUS_TIMED_OUT}),
++      timeoutMs,
++    );
++  });
++  const result = await promiseRace([completed, timeout]);
++  clearTimer(timerId);
++  if (result.status === localText.STATUS_COMPLETED) return result.value;
++  if (result.status === localText.STATUS_FAILED) throw result.error;
++  controller.abort();
++  let drainTimerId;
++  const drained = new PromiseConstructor((resolveDrain) => {
++    drainTimerId = setTimer(() => resolveDrain(false), timeoutMs);
++  });
++  const settled = await promiseRace([
++    promiseThen(completed, () => true),
++    drained,
++  ]);
++  clearTimer(drainTimerId);
++  fail(settled ?
++    localText.BOUNDED_RESET_TIMEOUT :
++    localText.BOUNDED_RESET_ABORT_IGNORED);
++}
++
++function blockedOrderIndexForSide(sealed, blockIndex, sideId) {
++  const order = sealed.blockedPairOrders[blockIndex];
++  for (let index = 0; index < order.length; index += 1) {
++    if (order[index] === sideId) return index;
++  }
++  fail(localText.SIDE_MISSING_FROM_ORDER);
++}
++
++async function resetIndependentSideCell({
++  sealed,
++  resetRunState,
++  context,
++  resetReceipts,
++}) {
++  const receipt = await runBoundedReset(
++    resetRunState,
++    context,
++    sealed.sampling.resetTimeoutMs,
++  );
++  assertResetReceipt(receipt, sealed, context);
++  appendOwnArrayValue(resetReceipts, receipt);
++}
++
++async function measureIndependentSideCell({
++  sealed,
++  executeRun,
++  context,
++  warmupSamples,
++  measuredSamples,
++  windowReceipts,
++}) {
++  const result = await executeRun(context);
++  assertExecutionResult(result, sealed, context);
++  if (result.warmup !== localText.NOT_CONFIGURED) {
++    appendOwnArrayValue(warmupSamples, result.warmup);
++    appendOwnArrayValue(windowReceipts, result.warmupWindowReceipt);
++  }
++  appendOwnArrayValue(measuredSamples, result.measured);
++  appendOwnArrayValue(windowReceipts, result.measuredWindowReceipt);
++}
++
++async function executeIndependentSideCell(options) {
++  await resetIndependentSideCell(options);
++  await measureIndependentSideCell(options);
++}
++
++function sampleDigests(samples) {
++  const digests = createEvidenceList();
++  for (let index = 0; index < samples.length; index += 1) {
++    appendOwnArrayValue(digests, samples[index].sampleDigest);
++  }
++  return digests;
++}
++
++function buildIndependentSideReport({
++  sealed,
++  sideId,
++  completedBlocks,
++  blockedOrderIndexesUsed,
++  warmupSamples,
++  measuredSamples,
++  windowReceipts,
++  resetReceipts,
++  summary,
++}) {
++  const body = {
++    contractVersion: REPORT_VERSION,
++    claimEligible: false,
++    studyId: sealed.studyId,
++    sideId,
++    preregistrationDigest: sealed.manifestDigest,
++    completedBlocks,
++    blockedOrderIndexesUsed,
++    warmupSamples,
++    rawSamples: measuredSamples,
++    warmupSampleDigests: sampleDigests(warmupSamples),
++    rawSampleDigests: sampleDigests(measuredSamples),
++    windowReceipts,
++    resetReceipts,
++    summary,
++  };
++  return {
++    ...body,
++    reportDigest: digestBenchmarkSemanticData(body),
++  };
++}
++
++function samplesMatchDigests(samples, digests) {
++  if (
++    !isDenseDataArray(samples) ||
++    !isDenseDataArray(digests) ||
++    samples.length !== digests.length
++  ) return false;
++  for (let index = 0; index < samples.length; index += 1) {
++    if (
++      !inspectBenchmarkCapacityRunSample(samples[index]).valid ||
++      !isSha256Digest(digests[index]) ||
++      samples[index].sampleDigest !== digests[index]
++    ) return false;
++  }
++  return true;
++}
++
++function reportBody(report) {
++  const body = {};
++  for (let index = 0; index < REPORT_BODY_KEYS.length; index += 1) {
++    const key = REPORT_BODY_KEYS[index];
++    body[key] = report[key];
++  }
++  return body;
++}
++
++function evidenceArraysHaveExpectedShape(report, sealed) {
++  if (
++    !isDenseDataArray(report.blockedOrderIndexesUsed) ||
++    !isDenseDataArray(report.windowReceipts) ||
++    !isDenseDataArray(report.resetReceipts)
++  ) return false;
++  const rawCount =
++    report.completedBlocks * sealed.offeredLoadPerSecond.length;
++  if (
++    !isNonNegativeSafeInteger(rawCount) ||
++    report.rawSamples.length !== rawCount ||
++    report.resetReceipts.length !== rawCount ||
++    report.blockedOrderIndexesUsed.length !== report.completedBlocks
++  ) return false;
++  let warmupCount = 0;
++  for (let blockIndex = 0;
++    blockIndex < report.completedBlocks;
++    blockIndex += 1) {
++    for (let loadIndex = 0;
++      loadIndex < sealed.offeredLoadPerSecond.length;
++      loadIndex += 1) {
++      const sampling = getBenchmarkCapacitySamplingWindow(
++        sealed,
++        sealed.offeredLoadPerSecond[loadIndex],
++      );
++      if (sampling.warmupMs > 0) warmupCount += 1;
++    }
++  }
++  return report.warmupSamples.length === warmupCount &&
++    report.windowReceipts.length === rawCount + warmupCount;
++}
++
++function reportEvidenceMatchesExecution(report, sealed) {
++  if (!evidenceArraysHaveExpectedShape(report, sealed)) return false;
++  let warmupIndex = 0;
++  let rawIndex = 0;
++  let windowIndex = 0;
++  for (let blockIndex = 0;
++    blockIndex < report.completedBlocks;
++    blockIndex += 1) {
++    const blockedOrderIndex =
++      blockedOrderIndexForSide(sealed, blockIndex, report.sideId);
++    if (
++      report.blockedOrderIndexesUsed[blockIndex] !== blockedOrderIndex
++    ) return false;
++    for (let loadIndex = 0;
++      loadIndex < sealed.offeredLoadPerSecond.length;
++      loadIndex += 1) {
++      const offeredLoadPerSecond =
++        sealed.offeredLoadPerSecond[loadIndex];
++      const context = {
++        blockIndex,
++        blockedOrderIndex,
++        sideId: report.sideId,
++        offeredLoadPerSecond,
++      };
++      assertResetReceipt(report.resetReceipts[rawIndex], sealed, context);
++      const sampling = getBenchmarkCapacitySamplingWindow(
++        sealed,
++        offeredLoadPerSecond,
++      );
++      if (sampling.warmupMs > 0) {
++        const warmup = report.warmupSamples[warmupIndex];
++        assertSampleMatches(warmup, sealed, {
++          ...context,
++          phase: BENCHMARK_CAPACITY_PHASE.WARMUP,
++          windowDurationMs: sampling.warmupMs,
++        });
++        assertWindowMatches(
++          report.windowReceipts[windowIndex],
++          warmup,
++          context,
++          sealed,
++        );
++        warmupIndex += 1;
++        windowIndex += 1;
++      }
++      const measured = report.rawSamples[rawIndex];
++      assertSampleMatches(measured, sealed, {
++        ...context,
++        phase: BENCHMARK_CAPACITY_PHASE.MEASURED,
++        windowDurationMs: sampling.measuredMs,
++      });
++      assertWindowMatches(
++        report.windowReceipts[windowIndex],
++        measured,
++        context,
++        sealed,
++      );
++      rawIndex += 1;
++      windowIndex += 1;
++    }
++  }
++  return warmupIndex === report.warmupSamples.length &&
++    rawIndex === report.rawSamples.length &&
++    windowIndex === report.windowReceipts.length;
++}
++
++function samplePrefix(samples, length) {
++  const prefix = [];
++  for (let index = 0; index < length; index += 1) {
++    appendOwnArrayValue(prefix, samples[index]);
++  }
++  return prefix;
++}
++
++function summaryMatchesObjectiveStopping(report, sealed) {
++  const samplesPerBlock = sealed.offeredLoadPerSecond.length;
++  for (let blockCount = sealed.repetitions.minimum;
++    blockCount < report.completedBlocks;
++    blockCount += 1) {
++    const priorSummary = summarizeBenchmarkCapacityIndependentSide(
++      samplePrefix(report.rawSamples, blockCount * samplesPerBlock),
++      sealed,
++      report.sideId,
++      blockCount,
++    );
++    if (priorSummary.shouldStop) return false;
++  }
++  const expected = summarizeBenchmarkCapacityIndependentSide(
++    report.rawSamples,
++    sealed,
++    report.sideId,
++    report.completedBlocks,
++  );
++  return expected.shouldStop &&
++    digestBenchmarkSemanticData(report.summary) ===
++      digestBenchmarkSemanticData(expected);
++}
++
++function reportIdentityIsValid(report, sealed) {
++  return hasExactOwnDataKeys(report, REPORT_KEYS) &&
++    report.contractVersion === REPORT_VERSION &&
++    report.claimEligible === false &&
++    report.studyId === sealed.studyId &&
++    registeredSide(sealed, report.sideId) &&
++    report.preregistrationDigest === sealed.manifestDigest &&
++    isNonNegativeSafeInteger(report.completedBlocks) &&
++    report.completedBlocks >= sealed.repetitions.minimum &&
++    report.completedBlocks <= sealed.repetitions.maximum;
++}
++
++function reportSampleDigestsAreValid(report) {
++  return samplesMatchDigests(
++    report.warmupSamples,
++    report.warmupSampleDigests,
++  ) && samplesMatchDigests(
++    report.rawSamples,
++    report.rawSampleDigests,
++  );
++}
++
++function reportDigestMatchesBody(report) {
++  return isSha256Digest(report.reportDigest) &&
++    digestBenchmarkSemanticData(reportBody(report)) ===
++      report.reportDigest;
++}
++
++export function inspectBenchmarkCapacityIndependentSideReport(
++  report,
++  sealed,
++) {
++  try {
++    const preregistrationInspection =
++      inspectBenchmarkCapacityPreregistration(sealed);
++    if (
++      !preregistrationInspection.valid ||
++      !reportIdentityIsValid(report, sealed) ||
++      !reportSampleDigestsAreValid(report) ||
++      !reportEvidenceMatchesExecution(report, sealed) ||
++      !summaryMatchesObjectiveStopping(report, sealed) ||
++      !reportDigestMatchesBody(report)
++    ) {
++      return Object.freeze({
++        valid: false,
++        reason: localText.REPORT_INVALID,
++      });
++    }
++    return Object.freeze({valid: true, reason: null});
++  } catch {
++    return Object.freeze({
++      valid: false,
++      reason: localText.REPORT_INVALID,
++    });
++  }
++}
++
++function assertIndependentSideOptions(options) {
++  if (
++    !isPlainDataRecord(options) ||
++    !hasExactOwnDataKeys(options, OPTION_KEYS)
++  ) fail(localText.EXACT_OPTIONS_REQUIRED);
++  const inspection =
++    inspectBenchmarkCapacityPreregistration(options.preregistration);
++  if (
++    !inspection.valid ||
++    !registeredSide(options.preregistration, options.sideId) ||
++    typeof options.resetRunState !== 'function' ||
++    typeof options.executeRun !== 'function'
++  ) fail(localText.VALID_CONTRACT_REQUIRED);
++}
++
++export async function runBenchmarkCapacityIndependentSideProtocol(options) {
++  assertIndependentSideOptions(options);
++  const sealed = options.preregistration;
++  const warmupSamples = createEvidenceList();
++  const measuredSamples = createEvidenceList();
++  const windowReceipts = createEvidenceList();
++  const resetReceipts = createEvidenceList();
++  const blockedOrderIndexesUsed = createEvidenceList();
++  let completedBlocks = 0;
++  let summary;
++  for (let blockIndex = 0;
++    blockIndex < sealed.repetitions.maximum;
++    blockIndex += 1) {
++    const blockedOrderIndex =
++      blockedOrderIndexForSide(sealed, blockIndex, options.sideId);
++    appendOwnArrayValue(blockedOrderIndexesUsed, blockedOrderIndex);
++    for (let loadIndex = 0;
++      loadIndex < sealed.offeredLoadPerSecond.length;
++      loadIndex += 1) {
++      const context = {
++        preregistration: sealed,
++        sideId: options.sideId,
++        blockIndex,
++        blockedOrderIndex,
++        offeredLoadPerSecond: sealed.offeredLoadPerSecond[loadIndex],
++      };
++      await executeIndependentSideCell({
++        sealed,
++        resetRunState: options.resetRunState,
++        executeRun: options.executeRun,
++        context,
++        warmupSamples,
++        measuredSamples,
++        windowReceipts,
++        resetReceipts,
++      });
++    }
++    completedBlocks = blockIndex + 1;
++    summary = summarizeBenchmarkCapacityIndependentSide(
++      measuredSamples,
++      sealed,
++      options.sideId,
++      completedBlocks,
++    );
++    if (summary.shouldStop) break;
++  }
++  if (summary === undefined) fail(localText.NO_BLOCKS_COMPLETED);
++  return buildIndependentSideReport({
++    sealed,
++    sideId: options.sideId,
++    completedBlocks,
++    blockedOrderIndexesUsed,
++    warmupSamples,
++    measuredSamples,
++    windowReceipts,
++    resetReceipts,
++    summary,
++  });
++}
+diff --git a/test/distributed/harness/benchmark-capacity-reusable-comparator.js b/test/distributed/harness/benchmark-capacity-reusable-comparator.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..1a3a2c9d3d939fd1f57c7b4770ba3664e2ee8dc6
+--- /dev/null
++++ b/test/distributed/harness/benchmark-capacity-reusable-comparator.js
+@@ -0,0 +1,707 @@
++import {
++  appendOwnArrayValue,
++  digestBenchmarkSemanticData,
++  hasExactOwnDataKeys,
++  isDenseDataArray,
++  isNonNegativeSafeInteger,
++  isNonNegativeSafeNumber,
++  isSha256Digest,
++} from './benchmark-semantic-integrity.js';
++
++const objectFreeze = Object.freeze;
++const mathAbs = Math.abs;
++const mathMax = Math.max;
++const VERSION = 'benchmark-capacity-reusable-comparator-v1';
++const CLAIM_ELIGIBLE = false;
++const REVALIDATION_REUSABLE = 'reusable';
++const REVALIDATION_CAPTURE_REQUIRED = 'capture_required';
++const COMPATIBILITY_KEYS = objectFreeze([
++  'datasetDigest',
++  'datasetCardinality',
++  'datasetSkew',
++  'operationManifestDigest',
++  'semanticOracleDigest',
++  'postgresImageDigest',
++  'postgresVersionDigest',
++  'postgresConfigDigest',
++  'querySqlDigest',
++  'queryPlanDigest',
++  'replicationFactor',
++  'replicationStateDigest',
++  'resourceEnvelopeDigest',
++  'hostEnvelopeDigest',
++  'preregistrationDigest',
++  'measurementSourceDigest',
++]);
++const CONFIDENCE_INTERVAL_KEYS = objectFreeze(['lower', 'upper']);
++const CAPACITY_INPUT_KEYS = objectFreeze([
++  'estimate',
++  'confidenceInterval',
++  'perBlockCorrectThroughputPerSecond',
++  'perBlockMaxSloOfferedLoadPerSecond',
++  'tailSufficientByBlock',
++  'bracketedByBlock',
++  'minimumBlocks',
++  'maximumBlocks',
++  'completedBlocks',
++  'targetRelativeCiWidth',
++]);
++const CAPACITY_KEYS = objectFreeze([
++  ...CAPACITY_INPUT_KEYS,
++  'relativeIntervalWidth',
++  'tailSufficient',
++  'bracketed',
++  'precisionReached',
++  'reusable',
++]);
++const EVIDENCE_INPUT_KEYS = objectFreeze([
++  'sampleDigests',
++  'windowReceiptDigests',
++  'resourceReceiptDigests',
++]);
++const EVIDENCE_KEYS = objectFreeze([
++  ...EVIDENCE_INPUT_KEYS,
++  'evidenceRootDigest',
++]);
++const REVALIDATION_POLICY_KEYS = objectFreeze([
++  'driftMetric',
++  'baselineValue',
++  'maximumRelativeDrift',
++]);
++const DRIFT_WITNESS_INPUT_KEYS = objectFreeze([
++  'metric',
++  'baselineValue',
++  'observedValue',
++]);
++const DRIFT_WITNESS_KEYS = objectFreeze([
++  ...DRIFT_WITNESS_INPUT_KEYS,
++  'witnessDigest',
++]);
++const ARTIFACT_BODY_KEYS = objectFreeze([
++  'version',
++  'claimEligible',
++  'comparatorId',
++  'sideId',
++  'protocolReportDigest',
++  'compatibility',
++  'compatibilityDigest',
++  'capacity',
++  'evidence',
++  'revalidationPolicy',
++  'capturedAtMs',
++  'validUntilMs',
++]);
++const ARTIFACT_KEYS = objectFreeze([
++  ...ARTIFACT_BODY_KEYS,
++  'artifactDigest',
++]);
++const REASON = objectFreeze({
++  ARTIFACT_INVALID: 'artifact_invalid',
++  CLOCK_PRECEDES_CAPTURE: 'clock_precedes_capture',
++  COMPATIBILITY_MISMATCH: 'compatibility_mismatch',
++  DRIFT_WITNESS_INVALID: 'drift_witness_invalid',
++  DRIFT_EXCEEDED: 'drift_exceeded',
++  EXPIRED: 'expired',
++  NOT_OBJECTIVELY_SUFFICIENT: 'not_objectively_sufficient',
++});
++const ERROR = objectFreeze({
++  CAPACITY_BLOCK_BOUNDS_OR_COUNTS_INVALID:
++    'capacity:block_bounds_or_counts_invalid',
++  CAPACITY_EXACT_OWN_DATA_REQUIRED:
++    'capacity:exact_own_data_required',
++  CAPACITY_INTERVAL_OR_PRECISION_INVALID:
++    'capacity:interval_or_precision_invalid',
++  CAPACITY_RELATIVE_INTERVAL_WIDTH_INVALID:
++    'capacity:relative_interval_width_invalid',
++  COMPATIBILITY_EXACT_OWN_DATA_REQUIRED:
++    'compatibility:exact_own_data_required',
++  COMPATIBILITY_POSITIVE_INTEGER_IDENTITY_REQUIRED:
++    'compatibility:positive_integer_identity_required',
++  DRIFT_WITNESS_INVALID: 'driftWitness:invalid',
++  EVIDENCE_EXACT_OWN_DATA_REQUIRED:
++    'evidence:exact_own_data_required',
++  EVIDENCE_WINDOW_RESOURCE_CARDINALITY_MISMATCH:
++    'evidence:window_resource_cardinality_mismatch',
++  POLICY_EXACT_OWN_DATA_REQUIRED:
++    'revalidationPolicy:exact_own_data_required',
++  POLICY_NUMERIC_BOUNDS_INVALID:
++    'revalidationPolicy:numeric_bounds_invalid',
++  PROTOCOL_REPORT_DIGEST_INVALID:
++    'protocolReportDigest:sha256_digest_required',
++  VALIDITY_INTERVAL_INVALID: 'validity_interval_invalid',
++});
++const FIELD_NAME = objectFreeze({
++  CAPACITY_BRACKETED_BY_BLOCK: 'capacity.bracketedByBlock',
++  CAPACITY_CORRECT_THROUGHPUT:
++    'capacity.perBlockCorrectThroughputPerSecond',
++  CAPACITY_MAX_SLO_OFFERED_LOAD:
++    'capacity.perBlockMaxSloOfferedLoadPerSecond',
++  CAPACITY_TAIL_SUFFICIENT: 'capacity.tailSufficientByBlock',
++  COMPARATOR_ID: 'comparatorId',
++  DATASET_SKEW: 'datasetSkew',
++  DRIFT_METRIC: 'driftMetric',
++  DRIFT_WITNESS_METRIC: 'driftWitness.metric',
++  SIDE_ID: 'sideId',
++});
++
++function fail(reason) {
++  throw new TypeError(`invalid reusable comparator: ${reason}`);
++}
++
++function primitiveText(value, name) {
++  if (typeof value !== 'string' || value.length === 0) {
++    fail(`${name}:primitive_text_required`);
++  }
++  return value;
++}
++
++function copyDigestArray(values, name) {
++  if (!isDenseDataArray(values) || values.length === 0) {
++    fail(`${name}:non_empty_dense_array_required`);
++  }
++  const copy = [];
++  for (let index = 0; index < values.length; index += 1) {
++    if (!isSha256Digest(values[index])) {
++      fail(`${name}.${index}:sha256_required`);
++    }
++    appendOwnArrayValue(copy, values[index]);
++  }
++  return objectFreeze(copy);
++}
++
++function copyNumberArray(values, name) {
++  if (!isDenseDataArray(values) || values.length === 0) {
++    fail(`${name}:non_empty_dense_array_required`);
++  }
++  const copy = [];
++  for (let index = 0; index < values.length; index += 1) {
++    if (!isNonNegativeSafeNumber(values[index])) {
++      fail(`${name}.${index}:non_negative_safe_number_required`);
++    }
++    appendOwnArrayValue(copy, values[index]);
++  }
++  return objectFreeze(copy);
++}
++
++function copyBooleanArray(values, name) {
++  if (!isDenseDataArray(values) || values.length === 0) {
++    fail(`${name}:non_empty_dense_array_required`);
++  }
++  const copy = [];
++  for (let index = 0; index < values.length; index += 1) {
++    if (typeof values[index] !== 'boolean') {
++      fail(`${name}.${index}:boolean_required`);
++    }
++    appendOwnArrayValue(copy, values[index]);
++  }
++  return objectFreeze(copy);
++}
++
++function everyTrue(values) {
++  for (let index = 0; index < values.length; index += 1) {
++    if (values[index] !== true) return false;
++  }
++  return true;
++}
++
++function copyCompatibility(input) {
++  if (!hasExactOwnDataKeys(input, COMPATIBILITY_KEYS)) {
++    fail(ERROR.COMPATIBILITY_EXACT_OWN_DATA_REQUIRED);
++  }
++  const digestFields = [
++    'datasetDigest',
++    'operationManifestDigest',
++    'semanticOracleDigest',
++    'postgresImageDigest',
++    'postgresVersionDigest',
++    'postgresConfigDigest',
++    'querySqlDigest',
++    'queryPlanDigest',
++    'replicationStateDigest',
++    'resourceEnvelopeDigest',
++    'hostEnvelopeDigest',
++    'preregistrationDigest',
++    'measurementSourceDigest',
++  ];
++  for (let index = 0; index < digestFields.length; index += 1) {
++    if (!isSha256Digest(input[digestFields[index]])) {
++      fail(`compatibility.${digestFields[index]}:sha256_required`);
++    }
++  }
++  if (
++    !isNonNegativeSafeInteger(input.datasetCardinality) ||
++    input.datasetCardinality === 0 ||
++    !isNonNegativeSafeInteger(input.replicationFactor) ||
++    input.replicationFactor === 0
++  ) {
++    fail(ERROR.COMPATIBILITY_POSITIVE_INTEGER_IDENTITY_REQUIRED);
++  }
++  return objectFreeze({
++    datasetDigest: input.datasetDigest,
++    datasetCardinality: input.datasetCardinality,
++    datasetSkew:
++      primitiveText(input.datasetSkew, FIELD_NAME.DATASET_SKEW),
++    operationManifestDigest: input.operationManifestDigest,
++    semanticOracleDigest: input.semanticOracleDigest,
++    postgresImageDigest: input.postgresImageDigest,
++    postgresVersionDigest: input.postgresVersionDigest,
++    postgresConfigDigest: input.postgresConfigDigest,
++    querySqlDigest: input.querySqlDigest,
++    queryPlanDigest: input.queryPlanDigest,
++    replicationFactor: input.replicationFactor,
++    replicationStateDigest: input.replicationStateDigest,
++    resourceEnvelopeDigest: input.resourceEnvelopeDigest,
++    hostEnvelopeDigest: input.hostEnvelopeDigest,
++    preregistrationDigest: input.preregistrationDigest,
++    measurementSourceDigest: input.measurementSourceDigest,
++  });
++}
++
++function copyCapacitySeries(input) {
++  if (
++    !hasExactOwnDataKeys(input, CAPACITY_INPUT_KEYS) ||
++    !hasExactOwnDataKeys(
++      input.confidenceInterval,
++      CONFIDENCE_INTERVAL_KEYS,
++    )
++  ) {
++    fail(ERROR.CAPACITY_EXACT_OWN_DATA_REQUIRED);
++  }
++  return {
++    correct: copyNumberArray(
++      input.perBlockCorrectThroughputPerSecond,
++      FIELD_NAME.CAPACITY_CORRECT_THROUGHPUT,
++    ),
++    offered: copyNumberArray(
++      input.perBlockMaxSloOfferedLoadPerSecond,
++      FIELD_NAME.CAPACITY_MAX_SLO_OFFERED_LOAD,
++    ),
++    tail: copyBooleanArray(
++      input.tailSufficientByBlock,
++      FIELD_NAME.CAPACITY_TAIL_SUFFICIENT,
++    ),
++    bracketedByBlock: copyBooleanArray(
++      input.bracketedByBlock,
++      FIELD_NAME.CAPACITY_BRACKETED_BY_BLOCK,
++    ),
++  };
++}
++
++function assertCapacityBlockBounds(input) {
++  if (
++    !isNonNegativeSafeInteger(input.completedBlocks) ||
++    !isNonNegativeSafeInteger(input.minimumBlocks) ||
++    !isNonNegativeSafeInteger(input.maximumBlocks)
++  ) {
++    fail(ERROR.CAPACITY_BLOCK_BOUNDS_OR_COUNTS_INVALID);
++  }
++  if (
++    input.minimumBlocks === 0 ||
++    input.completedBlocks < input.minimumBlocks ||
++    input.completedBlocks > input.maximumBlocks
++  ) fail(ERROR.CAPACITY_BLOCK_BOUNDS_OR_COUNTS_INVALID);
++}
++
++function assertCapacitySeriesCounts(input, series) {
++  if (
++    series.correct.length !== input.completedBlocks ||
++    series.offered.length !== input.completedBlocks ||
++    series.tail.length !== input.completedBlocks ||
++    series.bracketedByBlock.length !== input.completedBlocks
++  ) {
++    fail(ERROR.CAPACITY_BLOCK_BOUNDS_OR_COUNTS_INVALID);
++  }
++}
++
++function assertCapacityInterval(input) {
++  const interval = input.confidenceInterval;
++  if (
++    !isNonNegativeSafeNumber(input.estimate) ||
++    !isNonNegativeSafeNumber(interval.lower) ||
++    !isNonNegativeSafeNumber(interval.upper) ||
++    interval.lower > input.estimate ||
++    interval.upper < input.estimate ||
++    (
++      input.estimate === 0 &&
++      (interval.lower !== 0 || interval.upper !== 0)
++    ) ||
++    !isNonNegativeSafeNumber(input.targetRelativeCiWidth) ||
++    input.targetRelativeCiWidth === 0
++  ) {
++    fail(ERROR.CAPACITY_INTERVAL_OR_PRECISION_INVALID);
++  }
++}
++
++function deriveCapacity(input) {
++  const series = copyCapacitySeries(input);
++  assertCapacityBlockBounds(input);
++  assertCapacitySeriesCounts(input, series);
++  assertCapacityInterval(input);
++  const interval = input.confidenceInterval;
++  const relativeIntervalWidth = input.estimate === 0 ?
++    Number.MAX_SAFE_INTEGER :
++    (interval.upper - interval.lower) / input.estimate;
++  if (!isNonNegativeSafeNumber(relativeIntervalWidth)) {
++    fail(ERROR.CAPACITY_RELATIVE_INTERVAL_WIDTH_INVALID);
++  }
++  const tailSufficient = everyTrue(series.tail);
++  const bracketed = everyTrue(series.bracketedByBlock);
++  const precisionReached =
++    input.estimate > 0 &&
++    relativeIntervalWidth <= input.targetRelativeCiWidth;
++  const reusable =
++    input.completedBlocks >= input.minimumBlocks &&
++    tailSufficient &&
++    bracketed &&
++    precisionReached;
++  return objectFreeze({
++    estimate: input.estimate,
++    confidenceInterval: objectFreeze({
++      lower: interval.lower,
++      upper: interval.upper,
++    }),
++    perBlockCorrectThroughputPerSecond: series.correct,
++    perBlockMaxSloOfferedLoadPerSecond: series.offered,
++    tailSufficientByBlock: series.tail,
++    bracketedByBlock: series.bracketedByBlock,
++    minimumBlocks: input.minimumBlocks,
++    maximumBlocks: input.maximumBlocks,
++    completedBlocks: input.completedBlocks,
++    targetRelativeCiWidth: input.targetRelativeCiWidth,
++    relativeIntervalWidth,
++    tailSufficient,
++    bracketed,
++    precisionReached,
++    reusable,
++  });
++}
++
++function inspectCapacity(capacity) {
++  if (!hasExactOwnDataKeys(capacity, CAPACITY_KEYS)) return false;
++  const input = {};
++  for (let index = 0; index < CAPACITY_INPUT_KEYS.length; index += 1) {
++    const key = CAPACITY_INPUT_KEYS[index];
++    input[key] = capacity[key];
++  }
++  try {
++    const derived = deriveCapacity(input);
++    return digestBenchmarkSemanticData(derived) ===
++      digestBenchmarkSemanticData(capacity);
++  } catch {
++    return false;
++  }
++}
++
++function buildEvidence(input) {
++  if (!hasExactOwnDataKeys(input, EVIDENCE_INPUT_KEYS)) {
++    fail(ERROR.EVIDENCE_EXACT_OWN_DATA_REQUIRED);
++  }
++  const sampleDigests =
++    copyDigestArray(input.sampleDigests, 'evidence.sampleDigests');
++  const windowReceiptDigests =
++    copyDigestArray(
++      input.windowReceiptDigests,
++      'evidence.windowReceiptDigests',
++    );
++  const resourceReceiptDigests =
++    copyDigestArray(
++      input.resourceReceiptDigests,
++      'evidence.resourceReceiptDigests',
++    );
++  if (
++    sampleDigests.length > windowReceiptDigests.length ||
++    windowReceiptDigests.length !== resourceReceiptDigests.length
++  ) {
++    fail(ERROR.EVIDENCE_WINDOW_RESOURCE_CARDINALITY_MISMATCH);
++  }
++  const body = objectFreeze({
++    sampleDigests,
++    windowReceiptDigests,
++    resourceReceiptDigests,
++  });
++  return objectFreeze({
++    sampleDigests: body.sampleDigests,
++    windowReceiptDigests: body.windowReceiptDigests,
++    resourceReceiptDigests: body.resourceReceiptDigests,
++    evidenceRootDigest: digestBenchmarkSemanticData(body),
++  });
++}
++
++function inspectEvidence(evidence) {
++  if (!hasExactOwnDataKeys(evidence, EVIDENCE_KEYS)) return false;
++  try {
++    const rebuilt = buildEvidence({
++      sampleDigests: evidence.sampleDigests,
++      windowReceiptDigests: evidence.windowReceiptDigests,
++      resourceReceiptDigests: evidence.resourceReceiptDigests,
++    });
++    return rebuilt.evidenceRootDigest === evidence.evidenceRootDigest;
++  } catch {
++    return false;
++  }
++}
++
++function copyRevalidationPolicy(input) {
++  if (!hasExactOwnDataKeys(input, REVALIDATION_POLICY_KEYS)) {
++    fail(ERROR.POLICY_EXACT_OWN_DATA_REQUIRED);
++  }
++  if (
++    !isNonNegativeSafeNumber(input.baselineValue) ||
++    input.baselineValue === 0 ||
++    !isNonNegativeSafeNumber(input.maximumRelativeDrift) ||
++    input.maximumRelativeDrift === 0 ||
++    input.maximumRelativeDrift >= 1
++  ) {
++    fail(ERROR.POLICY_NUMERIC_BOUNDS_INVALID);
++  }
++  return objectFreeze({
++    driftMetric:
++      primitiveText(input.driftMetric, FIELD_NAME.DRIFT_METRIC),
++    baselineValue: input.baselineValue,
++    maximumRelativeDrift: input.maximumRelativeDrift,
++  });
++}
++
++function artifactBody(input) {
++  if (!isSha256Digest(input.protocolReportDigest)) {
++    fail(ERROR.PROTOCOL_REPORT_DIGEST_INVALID);
++  }
++  const compatibility = copyCompatibility(input.compatibility);
++  const capacity = deriveCapacity(input.capacity);
++  const evidence = buildEvidence(input.evidence);
++  const revalidationPolicy =
++    copyRevalidationPolicy(input.revalidationPolicy);
++  if (
++    !isNonNegativeSafeInteger(input.capturedAtMs) ||
++    !isNonNegativeSafeInteger(input.validUntilMs) ||
++    input.validUntilMs <= input.capturedAtMs
++  ) {
++    fail(ERROR.VALIDITY_INTERVAL_INVALID);
++  }
++  return objectFreeze({
++    version: VERSION,
++    claimEligible: CLAIM_ELIGIBLE,
++    comparatorId:
++      primitiveText(input.comparatorId, FIELD_NAME.COMPARATOR_ID),
++    sideId: primitiveText(input.sideId, FIELD_NAME.SIDE_ID),
++    protocolReportDigest: input.protocolReportDigest,
++    compatibility,
++    compatibilityDigest: digestBenchmarkSemanticData(compatibility),
++    capacity,
++    evidence,
++    revalidationPolicy,
++    capturedAtMs: input.capturedAtMs,
++    validUntilMs: input.validUntilMs,
++  });
++}
++
++export function createBenchmarkCapacityReusableComparator(input) {
++  const body = artifactBody(input);
++  return objectFreeze({
++    version: body.version,
++    claimEligible: body.claimEligible,
++    comparatorId: body.comparatorId,
++    sideId: body.sideId,
++    protocolReportDigest: body.protocolReportDigest,
++    compatibility: body.compatibility,
++    compatibilityDigest: body.compatibilityDigest,
++    capacity: body.capacity,
++    evidence: body.evidence,
++    revalidationPolicy: body.revalidationPolicy,
++    capturedAtMs: body.capturedAtMs,
++    validUntilMs: body.validUntilMs,
++    artifactDigest: digestBenchmarkSemanticData(body),
++  });
++}
++
++function comparatorIdentityIsValid(artifact) {
++  return (
++    !hasExactOwnDataKeys(artifact, ARTIFACT_KEYS) ||
++    artifact.version !== VERSION ||
++    artifact.claimEligible !== CLAIM_ELIGIBLE ||
++    typeof artifact.comparatorId !== 'string' ||
++    artifact.comparatorId.length === 0 ||
++    typeof artifact.sideId !== 'string' ||
++    artifact.sideId.length === 0 ||
++    !isSha256Digest(artifact.protocolReportDigest)
++  ) === false;
++}
++
++function comparatorDerivedFieldsAreValid(artifact, compatibility) {
++  if (
++    artifact.compatibilityDigest !==
++      digestBenchmarkSemanticData(compatibility) ||
++    !inspectCapacity(artifact.capacity) ||
++    !inspectEvidence(artifact.evidence)
++  ) return false;
++  return (
++    isNonNegativeSafeInteger(artifact.capturedAtMs) &&
++    isNonNegativeSafeInteger(artifact.validUntilMs) &&
++    artifact.validUntilMs > artifact.capturedAtMs &&
++    isSha256Digest(artifact.artifactDigest)
++  );
++}
++
++function copyComparatorContracts(artifact) {
++  try {
++    return {
++      compatibility: copyCompatibility(artifact.compatibility),
++      policy: copyRevalidationPolicy(artifact.revalidationPolicy),
++    };
++  } catch {
++    return null;
++  }
++}
++
++export function inspectBenchmarkCapacityReusableComparator(artifact) {
++  if (!comparatorIdentityIsValid(artifact)) {
++    return objectFreeze({valid: false, reason: REASON.ARTIFACT_INVALID});
++  }
++  const contracts = copyComparatorContracts(artifact);
++  if (
++    contracts === null ||
++    !comparatorDerivedFieldsAreValid(
++      artifact,
++      contracts.compatibility,
++    )
++  ) {
++    return objectFreeze({valid: false, reason: REASON.ARTIFACT_INVALID});
++  }
++  const body = {};
++  for (let index = 0; index < ARTIFACT_BODY_KEYS.length; index += 1) {
++    const key = ARTIFACT_BODY_KEYS[index];
++    body[key] = artifact[key];
++  }
++  if (digestBenchmarkSemanticData(body) !== artifact.artifactDigest) {
++    return objectFreeze({valid: false, reason: REASON.ARTIFACT_INVALID});
++  }
++  return objectFreeze({
++    valid: true,
++    reason: null,
++    compatibility: contracts.compatibility,
++    policy: contracts.policy,
++  });
++}
++
++export function createBenchmarkCapacityComparatorDriftWitness(input) {
++  if (
++    !hasExactOwnDataKeys(input, DRIFT_WITNESS_INPUT_KEYS) ||
++    !isNonNegativeSafeNumber(input.baselineValue) ||
++    input.baselineValue === 0 ||
++    !isNonNegativeSafeNumber(input.observedValue)
++  ) {
++    fail(ERROR.DRIFT_WITNESS_INVALID);
++  }
++  const body = objectFreeze({
++    metric:
++      primitiveText(input.metric, FIELD_NAME.DRIFT_WITNESS_METRIC),
++    baselineValue: input.baselineValue,
++    observedValue: input.observedValue,
++  });
++  return objectFreeze({
++    metric: body.metric,
++    baselineValue: body.baselineValue,
++    observedValue: body.observedValue,
++    witnessDigest: digestBenchmarkSemanticData(body),
++  });
++}
++
++function inspectDriftWitness(witness, policy) {
++  if (!hasExactOwnDataKeys(witness, DRIFT_WITNESS_KEYS)) return null;
++  let rebuilt;
++  try {
++    rebuilt = createBenchmarkCapacityComparatorDriftWitness({
++      metric: witness.metric,
++      baselineValue: witness.baselineValue,
++      observedValue: witness.observedValue,
++    });
++  } catch {
++    return null;
++  }
++  if (
++    rebuilt.witnessDigest !== witness.witnessDigest ||
++    witness.metric !== policy.driftMetric ||
++    witness.baselineValue !== policy.baselineValue
++  ) {
++    return null;
++  }
++  return mathAbs(witness.observedValue - witness.baselineValue) /
++    mathMax(witness.baselineValue, Number.MIN_VALUE);
++}
++
++function createRevalidationFindings() {
++  return [];
++}
++
++export function revalidateBenchmarkCapacityReusableComparator({
++  artifact,
++  expectedCompatibility,
++  driftWitness,
++  nowMs,
++}) {
++  const decisionFindings = createRevalidationFindings();
++  const inspection =
++    inspectBenchmarkCapacityReusableComparator(artifact);
++  if (!inspection.valid) {
++    appendOwnArrayValue(decisionFindings, REASON.ARTIFACT_INVALID);
++  } else {
++    let compatibilityDigest = null;
++    try {
++      compatibilityDigest = digestBenchmarkSemanticData(
++        copyCompatibility(expectedCompatibility),
++      );
++    } catch {
++      compatibilityDigest = null;
++    }
++    if (compatibilityDigest !== artifact.compatibilityDigest) {
++      appendOwnArrayValue(
++        decisionFindings,
++        REASON.COMPATIBILITY_MISMATCH,
++      );
++    }
++    if (!artifact.capacity.reusable) {
++      appendOwnArrayValue(
++        decisionFindings,
++        REASON.NOT_OBJECTIVELY_SUFFICIENT,
++      );
++    }
++    if (
++      !isNonNegativeSafeInteger(nowMs) ||
++      nowMs < artifact.capturedAtMs
++    ) {
++      appendOwnArrayValue(
++        decisionFindings,
++        REASON.CLOCK_PRECEDES_CAPTURE,
++      );
++    } else if (nowMs > artifact.validUntilMs) {
++      appendOwnArrayValue(decisionFindings, REASON.EXPIRED);
++    }
++    const relativeDrift =
++      inspectDriftWitness(driftWitness, inspection.policy);
++    if (relativeDrift === null) {
++      appendOwnArrayValue(
++        decisionFindings,
++        REASON.DRIFT_WITNESS_INVALID,
++      );
++    } else if (
++      relativeDrift > inspection.policy.maximumRelativeDrift
++    ) {
++      appendOwnArrayValue(decisionFindings, REASON.DRIFT_EXCEEDED);
++    }
++  }
++  return objectFreeze({
++    state: decisionFindings.length === 0 ?
++      REVALIDATION_REUSABLE :
++      REVALIDATION_CAPTURE_REQUIRED,
++    artifactDigest:
++      inspection.valid ? artifact.artifactDigest : null,
++    reasons: objectFreeze(decisionFindings),
++  });
++}
++
++export const BENCHMARK_CAPACITY_REUSABLE_COMPARATOR = objectFreeze({
++  VERSION,
++  CLAIM_ELIGIBLE,
++  REVALIDATION_REUSABLE,
++  REVALIDATION_CAPTURE_REQUIRED,
++});
+diff --git a/test/distributed/harness/comparative-efficiency-movielens-measured-p0-constants.js b/test/distributed/harness/comparative-efficiency-movielens-measured-p0-constants.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f7864a6431626a912eb49f5bbdc39e412c096c18
+--- /dev/null
++++ b/test/distributed/harness/comparative-efficiency-movielens-measured-p0-constants.js
+@@ -0,0 +1,306 @@
++import {
++  COMPARATIVE_MOVIELENS_GROUPED_REDUCE_AXES,
++  COMPARATIVE_MOVIELENS_GROUPED_REDUCE_CELLS,
++} from './comparative-efficiency-movielens-grouped-reduce-constants.js';
++
++const HOURS_PER_BILLING_MONTH = 730;
++const SECONDS_PER_HOUR = 3_600;
++const BYTES_PER_GIGABYTE = 1_000_000_000;
++const C7I_LARGE_VCPU_COUNT = 2;
++const C7I_LARGE_MEMORY_BYTES = 4_294_967_296;
++const C7I_LARGE_HOURLY_USD = 0.09555;
++const GP3_GIGABYTE_MONTHLY_USD = 0.0836;
++const REGIONAL_TRANSFER_GIGABYTE_USD = 0.01;
++const GP3_INCLUDED_IOPS = 3_000;
++const GP3_INCLUDED_THROUGHPUT_MIB_PER_SECOND = 125;
++const INSTANCE_STORAGE_BYTES = 20 * BYTES_PER_GIGABYTE;
++const CAPACITY_BOOTSTRAP_RESAMPLES = 2_000;
++const FAMILY_WISE_ALPHA = 0.05;
++const EFFECT_COUNT = 16;
++export const MOVIELENS_MEASURED_P0_OPERATION_TIMEOUT_MS = 120_000;
++export const MOVIELENS_MEASURED_P0_REQUEST_CELL_TARGET_REPLICA_COUNT = 3;
++const CAPACITY_SLO = Object.freeze({
++  maxErrorRate: 0.05,
++  maxP99LatencyMs: 5_000,
++});
++const COMMON_SAMPLING = Object.freeze({
++  clientMaxInFlight: 1,
++  clientMaxQueueDepth: 1,
++  maxReleaseLagMs: 100,
++  operationTimeoutMs: MOVIELENS_MEASURED_P0_OPERATION_TIMEOUT_MS,
++  resetTimeoutMs: 30_000,
++  semanticFinalizerTimeoutMs: 120_000,
++  tailQuantile: 0.99,
++  tailSampleMinimum: 100,
++});
++const CAPACITY_PROFILES_BY_DATASET_SIZE = Object.freeze({
++  10000: Object.freeze({
++    offeredLoadsPerSecond: Object.freeze([3, 10, 240, 480]),
++    sampling: Object.freeze({
++      ...COMMON_SAMPLING,
++      windows: Object.freeze([
++        Object.freeze({
++          offeredLoadPerSecond: 3,
++          measuredMs: 34_000,
++          warmupMs: 5_000,
++        }),
++        Object.freeze({
++          offeredLoadPerSecond: 10,
++          measuredMs: 34_000,
++          warmupMs: 5_000,
++        }),
++        Object.freeze({
++          offeredLoadPerSecond: 240,
++          measuredMs: 34_000,
++          warmupMs: 5_000,
++        }),
++        Object.freeze({
++          offeredLoadPerSecond: 480,
++          measuredMs: 34_000,
++          warmupMs: 5_000,
++        }),
++      ]),
++    }),
++    slo: CAPACITY_SLO,
++  }),
++  100000: Object.freeze({
++    offeredLoadsPerSecond: Object.freeze([0.2, 1, 80, 120]),
++    sampling: Object.freeze({
++      ...COMMON_SAMPLING,
++      windows: Object.freeze([
++        Object.freeze({
++          offeredLoadPerSecond: 0.2,
++          measuredMs: 510_000,
++          warmupMs: 15_000,
++        }),
++        Object.freeze({
++          offeredLoadPerSecond: 1,
++          measuredMs: 305_000,
++          warmupMs: 10_000,
++        }),
++        Object.freeze({
++          offeredLoadPerSecond: 80,
++          measuredMs: 305_000,
++          warmupMs: 10_000,
++        }),
++        Object.freeze({
++          offeredLoadPerSecond: 120,
++          measuredMs: 305_000,
++          warmupMs: 10_000,
++        }),
++      ]),
++    }),
++    slo: CAPACITY_SLO,
++  }),
++});
++
++export const MOVIELENS_MEASURED_P0_SCENARIO = Object.freeze({
++  CAMPAIGN: 'comparative-efficiency-movielens-measured-p0-campaign',
++  CAPACITY: 'comparative-efficiency-movielens-measured-p0-capacity',
++  COST: 'comparative-efficiency-movielens-measured-p0-cost',
++  PROJECTION: 'comparative-efficiency-movielens-measured-p0-projection',
++});
++
++export const MOVIELENS_MEASURED_P0_IDENTITY = Object.freeze({
++  CAMPAIGN:
++    'comparative-efficiency-movielens-measured-p0-campaign-v1',
++  PAIR: 'lagrange-postgresql-movielens-measured-p0-v1',
++  STUDY: 'movielens-measured-p0-capacity-v2',
++  WORKLOAD: 'movielens-confidence-adjusted-top-ten',
++});
++
++export const MOVIELENS_MEASURED_P0_SIDE_IDS =
++  Object.freeze(['lagrange', 'postgresql']);
++
++export const MOVIELENS_MEASURED_P0_AXES =
++  COMPARATIVE_MOVIELENS_GROUPED_REDUCE_AXES;
++
++export const MOVIELENS_MEASURED_P0_CELLS =
++  COMPARATIVE_MOVIELENS_GROUPED_REDUCE_CELLS;
++
++export const MOVIELENS_MEASURED_P0_CAPACITY = Object.freeze({
++  profilesByDatasetSize: CAPACITY_PROFILES_BY_DATASET_SIZE,
++  calibrationBasis: Object.freeze({
++    status: 'non_outcome_pre_campaign_live_calibration',
++    commonSloPolicy: 'fixed_across_all_eight_cells',
++    maximumObservedCorrectLagrange100kOperationMs: 3_030.0355,
++    minimumObservedCorrectPostgresql100kOperationMs: 14.656428,
++    maximumObservedPostgresql10kCorrectThroughputPerSecond: 414.7,
++    maximumObservedPostgresql100kCorrectThroughputPerSecond: 85.9968,
++    lowLoadPolicy:
++      'five_second_release_interval_exceeds_observed_correct_latency',
++    highLoadPolicy:
++      '480_qps_at_10k_and_120_qps_at_100k_exceed_observed_serial_ceilings',
++    durationPolicy:
++      'minimum_100_correct_tail_samples_at_each_sealed_coordinate',
++    overloadQueuePolicy:
++      'one_waiting_operation_bounds_terminal_drain_without_hiding_rejection',
++  }),
++  repetitions: Object.freeze({
++    maximum: 5,
++    minimum: 3,
++  }),
++  statistics: Object.freeze({
++    bootstrapResamples: CAPACITY_BOOTSTRAP_RESAMPLES,
++    confidenceLevel: 1 - FAMILY_WISE_ALPHA / EFFECT_COUNT,
++    practicalSignificanceRatio: 0.05,
++    targetRelativeCiWidth: 0.35,
++  }),
++  randomSeed: 20_260_728,
++});
++
++export const MOVIELENS_MEASURED_P0_TOPOLOGY = Object.freeze({
++  provider: 'aws-regional-price-projection',
++  region: 'eu-north-1',
++  availabilityZonePolicy: 'single_zone_no_inter_zone_bytes',
++  lagrange: Object.freeze({
++    nodeCount: 7,
++    requestEndpointCount: 1,
++    automaticEndpointFailover: false,
++    tableReplicaCountByTopology: Object.freeze({
++      replicated: 3,
++      single_replica: 1,
++    }),
++  }),
++  postgresql: Object.freeze({
++    majorVersion: 16,
++    queryEndpointCount: 1,
++    automaticEndpointFailover: false,
++    streamingReplicaCountByTopology: Object.freeze({
++      replicated: 2,
++      single_replica: 0,
++    }),
++  }),
++  equivalenceScope:
++    'warm-steady-state-single-query-endpoint-with-matched-durable-copy-count',
++});
++
++export const MOVIELENS_MEASURED_P0_SKU_PROJECTION = Object.freeze({
++  instance: Object.freeze({
++    instanceType: 'c7i.large',
++    operatingSystem: 'Linux',
++    preinstalledSoftware: 'NA',
++    tenancy: 'Shared',
++    capacityStatus: 'Used',
++    sku: 'C89GPF3EGC875HD6',
++    hourlyUsd: C7I_LARGE_HOURLY_USD,
++    vcpuCount: C7I_LARGE_VCPU_COUNT,
++    memoryBytes: C7I_LARGE_MEMORY_BYTES,
++  }),
++  storage: Object.freeze({
++    volumeType: 'gp3',
++    storageSku: 'H33YTQG3Y9XKNSF3',
++    iopsSku: 'XS8EGK3XM47WU7KN',
++    throughputSku: '5S36SXRUX9DP4FTA',
++    bytesPerInstance: INSTANCE_STORAGE_BYTES,
++    includedIops: GP3_INCLUDED_IOPS,
++    includedThroughputMiBPerSecond:
++      GP3_INCLUDED_THROUGHPUT_MIB_PER_SECOND,
++  }),
++  transfer: Object.freeze({
++    regionalSku: '9SM7SWX5Q58YJD7K',
++    usdPerGigabyte: REGIONAL_TRANSFER_GIGABYTE_USD,
++  }),
++});
++
++export const MOVIELENS_MEASURED_P0_PRICE_SOURCE = Object.freeze({
++  version: 'movielens-measured-p0-aws-price-source-v1',
++  sealedBeforeExecution: true,
++  provider: 'Amazon Web Services',
++  region: 'eu-north-1',
++  currency: 'USD',
++  priceDate: '2026-07-28',
++  selectedRecordsCanonicalization:
++    'jq-cS-products-and-on-demand-price-dimensions-with-final-newline',
++  ec2: Object.freeze({
++    locator:
++      'https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/' +
++      'AmazonEC2/20260728175247/eu-north-1/index.json',
++    publicationDate: '2026-07-28T17:52:47Z',
++    fileSha256:
++      'sha256:4ce8e797c5fddf453aded6d16117f21ee6832f49df7623a4a7cc7bb09351fd84',
++    selectedRecordsSha256:
++      'sha256:ff10414a28aac9f3b73a22980e2374cc4c8dd01cfecf5f706ec6aaf06577ed43',
++  }),
++  dataTransfer: Object.freeze({
++    locator:
++      'https://pricing.us-east-1.amazonaws.com/offers/v1.0/aws/' +
++      'AWSDataTransfer/20260720184645/eu-north-1/index.json',
++    publicationDate: '2026-07-20T18:46:45Z',
++    fileSha256:
++      'sha256:9b6fde4e3d8c58ad7edd13cad59d58ca06b457e6713a948267f68d80109a10b8',
++    selectedRecordsSha256:
++      'sha256:e15ff8babf5b4135913801b9e5a17bdde30b5487a65ae76beec4b422f34516e1',
++  }),
++  skuProjection: MOVIELENS_MEASURED_P0_SKU_PROJECTION,
++});
++
++export const MOVIELENS_MEASURED_P0_PRICE_SHEET = Object.freeze({
++  priceSheetId: 'aws-eu-north-1-c7i-large-gp3-on-demand-2026-07-28-v1',
++  region: 'eu-north-1',
++  currency: 'USD',
++  priceDate: '2026-07-28',
++  validFrom: '2026-07-28T00:00:00.000Z',
++  validUntil: '2026-08-28T00:00:00.000Z',
++  billingGranularity: 'per_second_projection_from_hourly_and_monthly_rates',
++  reservationPolicy: 'on_demand_no_upfront',
++  spotPolicy: 'excluded',
++  taxPolicy: 'excluded',
++  creditPolicy: 'excluded',
++  exclusions: Object.freeze([
++    'tax',
++    'credits',
++    'spot_discount',
++    'operator_labor',
++    'load_generator_symmetric',
++  ]),
++  unitPrices: Object.freeze({
++    cpuCoreSecond:
++      C7I_LARGE_HOURLY_USD /
++      (C7I_LARGE_VCPU_COUNT * SECONDS_PER_HOUR),
++    interZoneNetworkByte:
++      REGIONAL_TRANSFER_GIGABYTE_USD / BYTES_PER_GIGABYTE,
++    iop: 0,
++    memoryByteSecond: 0,
++    networkByte: 0,
++    storageByteSecond:
++      GP3_GIGABYTE_MONTHLY_USD /
++      (
++        BYTES_PER_GIGABYTE *
++        HOURS_PER_BILLING_MONTH *
++        SECONDS_PER_HOUR
++      ),
++  }),
++});
++
++export const MOVIELENS_MEASURED_P0_INSTANCE_PROVISIONING =
++  Object.freeze({
++    cpuCores: C7I_LARGE_VCPU_COUNT,
++    iops: 0,
++    memoryBytes: C7I_LARGE_MEMORY_BYTES,
++    networkBytesPerSecond: 0,
++    storageBytes: INSTANCE_STORAGE_BYTES,
++  });
++
++export const MOVIELENS_MEASURED_P0_STORAGE_GATES = Object.freeze({
++  maximumIops: GP3_INCLUDED_IOPS,
++  maximumThroughputMiBPerSecond:
++    GP3_INCLUDED_THROUGHPUT_MIB_PER_SECOND,
++});
++
++export const MOVIELENS_MEASURED_P0_EXECUTION_POLICY = Object.freeze({
++  artifactRetention:
++    'digest_addressed_all_attempts_preserved_until_campaign_handoff',
++  cacheState: 'fresh_process_fresh_database_then_sealed_warmup',
++  exclusionPolicy: 'no_operator_exclusions',
++  hostInterference:
++    'exclusive_local_docker_campaign_no_uninventoried_workloads',
++  matrixOrder:
++    'seeded_fisher_yates_over_all_eight_cells_before_first_outcome',
++  preprocessing:
++    'dataset_load_and_replication_excluded_from_warm_steady_state_result',
++  retryPolicy:
++    'one_automatic_retry_only_for_typed_transient_infrastructure_failure',
++  stoppingPolicy:
++    'c3_adaptive_minimum_three_maximum_five_blocks_no_selective_rerun',
++});
+diff --git a/test/distributed/harness/docker-provider.js b/test/distributed/harness/docker-provider.js
+index 98c68edc17394b472182551c7773e23f846154fe..af9b748ebd4d29fee4fdf81363e8a50460eff7bb 100644
+--- a/test/distributed/harness/docker-provider.js
++++ b/test/distributed/harness/docker-provider.js
+@@ -6,6 +6,8 @@
+  */
+ 
+ import Docker from 'dockerode';
++import {readdirSync} from 'node:fs';
++import path from 'node:path';
+ import {Writable} from 'node:stream';
+ import {
+   PORTS,
+@@ -47,6 +49,8 @@ const STOP_TIMEOUT_SECONDS = 25;
+ const PERCENT_MULTIPLIER = 100;
+ const MIN_CPU_COUNT = 1;
+ const ZERO = 0;
++const DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH =
++  'docker-container-writable-layer';
+ const TYPEOF_FUNCTION = 'function';
+ const DOCKER_OP_CREATE_NETWORK = 'network.create';
+ const DOCKER_OP_REMOVE_NETWORK = 'network.remove';
+@@ -70,18 +74,52 @@ const STORAGE_USAGE_ARGUMENT_SEPARATOR = '--';
+ const STORAGE_USAGE_FIELD_SEPARATOR = '\t';
+ const STORAGE_USAGE_BYTE_COUNT_PATTERN = /^(?:0|[1-9]\d*)$/u;
+ const STORAGE_LIMIT_PATTERN = /(?:^|,)size=(\d+)(?:,|$)/u;
++const BUILD_SOURCE_DIRECTORY = 'src';
++const CONTAINER_COMMAND_FIELD = 'Cmd';
++const CONTAINER_ENTRYPOINT_FIELD = 'Entrypoint';
++// dockerode already receives an explicit allowlist. Sending .dockerignore in
++// that tar makes its broad `**` rule remove the recursively requested src
++// directory before the daemon can apply the later negations.
+ const BUILD_CONTEXT_STATIC_ENTRIES = Object.freeze([
+-  '.dockerignore',
+   'package-lock.json',
+   'package.json',
+-  'src',
+ ]);
+ 
++function appendBuildContextDirectoryFiles(entries, contextPath, relativePath) {
++  const directory = path.join(contextPath, relativePath);
++  let directoryEntries;
++  try {
++    directoryEntries = readdirSync(directory, {withFileTypes: true});
++  } catch {
++    entries.push(relativePath);
++    return;
++  }
++  for (let index = 0; index < directoryEntries.length; index += 1) {
++    const entry = directoryEntries[index];
++    const child = path.join(relativePath, entry.name);
++    if (entry.isDirectory()) {
++      appendBuildContextDirectoryFiles(entries, contextPath, child);
++    } else {
++      entries.push(child);
++    }
++  }
++}
++
+ function buildImageContext(contextPath, dockerfile) {
+-  const entries = Array.from(new Set([
++  const requested = [
+     ...BUILD_CONTEXT_STATIC_ENTRIES,
+     dockerfile,
+-  ].filter((entry) => typeof entry === 'string' && entry.length > ZERO)))
++  ];
++  appendBuildContextDirectoryFiles(
++    requested,
++    contextPath,
++    BUILD_SOURCE_DIRECTORY,
++  );
++  const entries = Array.from(new Set(
++    requested.filter(
++      (entry) => typeof entry === 'string' && entry.length > ZERO,
++    ),
++  ))
+     .sort();
+ 
+   return {
+@@ -90,6 +128,76 @@ function buildImageContext(contextPath, dockerfile) {
+   };
+ }
+ 
++function normalizeContainerOptions(options) {
++  return {
++    name: options.name,
++    image: options.image,
++    network: options.network,
++    env: options.env ?? {},
++    labels: options.labels ?? {},
++    resourceLimits: options.resourceLimits ?? {},
++    startTimeout: options.startTimeout ?? TIMEOUTS.NODE_STARTUP,
++    command: options.command ?? null,
++    entrypoint: options.entrypoint ?? null,
++    hostConfigExtras: options.hostConfigExtras ?? null,
++  };
++}
++
++function optionalContainerArray(value, key) {
++  return Array.isArray(value) && value.length > ZERO ?
++    {[key]: value} :
++    {};
++}
++
++function containerAliases(name) {
++  return typeof name === 'string' && name.length > ZERO ? [name] : [];
++}
++
++function containerCreateOptions(options, envArray, hostConfig) {
++  return {
++    name: options.name,
++    Image: options.image,
++    Env: envArray,
++    Labels: options.labels,
++    ...optionalContainerArray(
++      options.entrypoint,
++      CONTAINER_ENTRYPOINT_FIELD,
++    ),
++    ...optionalContainerArray(options.command, CONTAINER_COMMAND_FIELD),
++    ExposedPorts: {
++      [`${PORTS.REST}/tcp`]: {},
++      [`${PORTS.ADMIN_API}/tcp`]: {},
++      [`${PORTS.WS_TRANSPORT}/tcp`]: {},
++    },
++    HostConfig: hostConfig,
++    NetworkingConfig: {
++      EndpointsConfig: {
++        [options.network]: {
++          Aliases: containerAliases(options.name),
++        },
++      },
++    },
++  };
++}
++
++function normalizeContainerLogOptions(options) {
++  const hasTailOverride =
++    options.tail !== undefined &&
++    options.tail !== null;
++  const normalizedTail = hasTailOverride ?
++    String(Math.max(ZERO, Math.floor(Number(options.tail) || ZERO))) :
++    null;
++  const logOptions = {
++    stdout: true,
++    stderr: true,
++    follow: false,
++  };
++  if (normalizedTail !== null) logOptions.tail = normalizedTail;
++  if (options.timestamps) logOptions.timestamps = true;
++  if (options.since) logOptions.since = options.since;
++  return {logOptions, normalizedTail};
++}
++
+ class DockerProvider {
+   /**
+    * @param {Object} config
+@@ -354,18 +462,13 @@ class DockerProvider {
+    * @returns {Promise<{containerId: string, ip: string, name: string}>}
+    */
+   async createContainer(options) {
++    const normalized = normalizeContainerOptions(options);
+     const {
+       name,
+       image,
+       network,
+-      env = {},
+-      labels = {},
+-      resourceLimits = {},
+-      startTimeout = TIMEOUTS.NODE_STARTUP,
+-      command = null,
+-      entrypoint = null,
+-      hostConfigExtras = null,
+-    } = options;
++      startTimeout,
++    } = normalized;
+ 
+     this._emitOperation(DOCKER_OP_CREATE_CONTAINER, {
+       stage: localText.STARTING,
+@@ -374,42 +477,38 @@ class DockerProvider {
+       network,
+       startTimeout,
+     });
+-    const envArray = this._buildEnvArray(env);
++    const envArray = this._buildEnvArray(normalized.env);
+     const hostConfig = this._buildHostConfig(
+-      resourceLimits,
++      normalized.resourceLimits,
+       network,
+-      hostConfigExtras,
++      normalized.hostConfigExtras,
++    );
++
++    const container = await this._docker.createContainer(
++      containerCreateOptions(normalized, envArray, hostConfig),
+     );
+ 
+-    const container = await this._docker.createContainer({
++    const containerId = container.id;
++    await this._startCreatedContainer({
++      container,
++      containerId,
+       name,
+-      Image: image,
+-      Env: envArray,
+-      Labels: labels,
+-      ...(Array.isArray(entrypoint) && entrypoint.length > ZERO ?
+-        {Entrypoint: entrypoint} :
+-        {}),
+-      ...(Array.isArray(command) && command.length > ZERO ?
+-        {Cmd: command} :
+-        {}),
+-      ExposedPorts: {
+-        [`${PORTS.REST}/tcp`]: {},
+-        [`${PORTS.ADMIN_API}/tcp`]: {},
+-        [`${PORTS.WS_TRANSPORT}/tcp`]: {},
+-      },
+-      HostConfig: hostConfig,
+-      NetworkingConfig: {
+-        EndpointsConfig: {
+-          [network]: {
+-            Aliases: typeof name === 'string' && name.length > ZERO ?
+-              [name] :
+-              [],
+-          },
+-        },
+-      },
++      startTimeout,
+     });
++    return this._createdContainerResult({
++      containerId,
++      name,
++      image,
++      network,
++    });
++  }
+ 
+-    const containerId = container.id;
++  async _startCreatedContainer({
++    container,
++    containerId,
++    name,
++    startTimeout,
++  }) {
+     try {
+       this._emitOperation(DOCKER_OP_START_CONTAINER, {
+         stage: localText.STARTING,
+@@ -437,7 +536,14 @@ class DockerProvider {
+         `${startTimeout}ms: ${err.message}`,
+       );
+     }
++  }
+ 
++  async _createdContainerResult({
++    containerId,
++    name,
++    image,
++    network,
++  }) {
+     const info = await this.inspectContainer(containerId);
+     const networks = info.NetworkSettings?.Networks || {};
+     const namedEndpoint = networks[network];
+@@ -682,29 +788,29 @@ class DockerProvider {
+    */
+   async getContainerLogs(containerId, options = {}) {
+     const container = this._docker.getContainer(containerId);
+-    const hasTailOverride =
+-      options.tail !== undefined &&
+-      options.tail !== null;
+-    const normalizedTail = hasTailOverride ?
+-      String(Math.max(ZERO, Math.floor(Number(options.tail) || ZERO))) :
+-      null;
+-    const logOpts = {
+-      stdout: true,
+-      stderr: true,
+-      follow: false,
+-    };
+-    if (normalizedTail !== null) {
+-      logOpts.tail = normalizedTail;
+-    }
+-    if (options.timestamps) {
+-      logOpts.timestamps = true;
+-    }
+-    if (options.since) {
+-      logOpts.since = options.since;
+-    }
++    const {logOptions, normalizedTail} =
++      normalizeContainerLogOptions(options);
++    const buffer = await this._readContainerLogs({
++      container,
++      containerId,
++      options,
++      logOptions,
++      normalizedTail,
++    });
++    if (options[CONTAINER_LOG_OPTION_RAW_BUFFER] === true) return buffer;
++    return buffer.toString(UTF8_ENCODING);
++  }
++
++  async _readContainerLogs({
++    container,
++    containerId,
++    options,
++    logOptions,
++    normalizedTail,
++  }) {
+     let buffer;
+     try {
+-      buffer = await container.logs(logOpts);
++      buffer = await container.logs(logOptions);
+     } catch (error) {
+       const isStringTooLongError = error?.code ===
+         CONTAINER_LOG_ERROR_STRING_TOO_LONG;
+@@ -716,10 +822,7 @@ class DockerProvider {
+       }
+       throw error;
+     }
+-    if (options[CONTAINER_LOG_OPTION_RAW_BUFFER] === true) {
+-      return buffer;
+-    }
+-    return buffer.toString(UTF8_ENCODING);
++    return buffer;
+   }
+ 
+   /**
+@@ -888,9 +991,11 @@ class DockerProvider {
+     const container = this._docker.getContainer(containerId);
+     const stats = await container.stats({stream: false});
+     const inspect = await container.inspect({size: true});
+-    const storageUsageBytes = storagePath === null ?
+-      safeNumber(inspect?.SizeRw) :
+-      await this._getContainerPathUsage(containerId, storagePath);
++    const storageUsageBytes =
++      storagePath === null ||
++      storagePath === DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH ?
++        safeNumber(inspect?.SizeRw) :
++        await this._getContainerPathUsage(containerId, storagePath);
+     return {
+       ...parseContainerStats(stats),
+       cpuLimitNanoCpus: safeNumber(inspect?.HostConfig?.NanoCpus),
+@@ -1237,4 +1342,8 @@ function parseContainerStats(stats) {
+   };
+ }
+ 
+-export {DockerProvider, parseContainerStats};
++export {
++  DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
++  DockerProvider,
++  parseContainerStats,
++};
