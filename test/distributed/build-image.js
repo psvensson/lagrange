@@ -38,9 +38,6 @@ const BUILD_PROGRESS_STATUS_KEY = 'status';
 const BUILD_PROGRESS_STREAM_KEY = 'stream';
 const BUILD_PROGRESS_PROGRESS_KEY = 'progress';
 const BUILD_PROGRESS_ERROR_KEY = 'error';
-const DOCKER_OP_IMAGE_BUILD = 'image.build';
-const DOCKER_OP_UNKNOWN = 'unknown';
-
 /**
  * Resolve current git short hash.
  * @param {string} cwd
@@ -209,8 +206,5 @@ async function buildImage(
 
 export {
   buildImage,
-  resolveGitHash,
   resolveGitDirty,
-  DOCKER_OP_IMAGE_BUILD,
-  DOCKER_OP_UNKNOWN,
 };
