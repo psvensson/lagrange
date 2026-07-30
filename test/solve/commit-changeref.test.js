@@ -15,7 +15,7 @@ import {
   inspectChangeArtifact,
   changeArtifactIdentity,
   changeArtifactIdentityIsSealed,
-  commitChangeRefAdmissionProblem,
+  inspectCommitChangeRefAdmission,
 } from '../../scripts/solve/change-artifact.js';
 
 function git(root, args) {
@@ -97,15 +97,18 @@ tap.test('changeArtifactIdentity seals a commit ref', (t) => {
   t.end();
 });
 
-tap.test('commitChangeRefAdmissionProblem enforces clean tree + ancestry', (t) => {
+tap.test('inspectCommitChangeRefAdmission enforces clean tree + ancestry', (t) => {
   const fx = fixture();
   const inspection = inspectChangeArtifact(fx.root, fx.quest, fx.ref);
   // Clean tree, head == HEAD: admissible.
-  t.equal(commitChangeRefAdmissionProblem(fx.root, fx.ref, inspection), null);
+  t.same(
+    inspectCommitChangeRefAdmission(fx.root, fx.ref, inspection),
+    {applicable: true, ok: true},
+  );
   // Dirty the claimed path: refused.
   fs.writeFileSync(path.join(fx.root, 'src/a.js'), 'export const a = 3;\n');
   t.match(
-    commitChangeRefAdmissionProblem(fx.root, fx.ref, inspection),
+    inspectCommitChangeRefAdmission(fx.root, fx.ref, inspection).problem,
     /uncommitted changes/);
   t.end();
 });

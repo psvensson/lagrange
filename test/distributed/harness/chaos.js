@@ -8,6 +8,7 @@
 import {NETWORK} from './constants.js';
 import {posix as pathPosix} from 'node:path';
 
+const arrayMap = Function.call.bind(Array.prototype.map);
 const NETEM_DEVICE = 'eth0';
 const NETEM_QDISC_ROOT = 'root';
 const TC_COMMAND = 'tc';
@@ -349,7 +350,7 @@ class ChaosPrimitives {
    */
   _assertSingleHostPartition(nodeIds) {
     const providers = new Set(
-      nodeIds.map((nodeId) => this._providerForNode(nodeId)),
+      arrayMap(nodeIds, (nodeId) => this._providerForNode(nodeId)),
     );
     if (providers.size > 1) {
       throw new Error(

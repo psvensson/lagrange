@@ -6,7 +6,10 @@ import {evaluate} from './probe.js';
 import {ensureSealedGoal, makeRunContext, finalizeAttempt} from './loop.js';
 import {ingestEvidence} from './evidence.js';
 import {stepTheoryGateProblems} from './theory.js';
-import {inspectChangeArtifact, commitChangeRefAdmissionProblem} from './change-artifact.js';
+import {
+  inspectChangeArtifact,
+  inspectCommitChangeRefAdmission,
+} from './change-artifact.js';
 import {
   analyzeScopePressure,
   analyzeScopePressureCandidate,
@@ -161,9 +164,9 @@ export function runAttemptCommand(root, args) {
     changeInspection,
   );
   if (canonicalProblem) throw new Error(canonicalProblem);
-  const admissionProblem = commitChangeRefAdmissionProblem(
+  const admission = inspectCommitChangeRefAdmission(
     root, changeRef, changeInspection);
-  if (admissionProblem) throw new Error(admissionProblem);
+  if (!admission.ok) throw new Error(admission.problem);
   // Machine-checkable quality findings never earn a verifier round: run the
   // changed-path lint and literal-guideline checkers before this attempt
   // seals its artifact.

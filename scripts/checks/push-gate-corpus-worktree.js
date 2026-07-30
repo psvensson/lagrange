@@ -36,6 +36,18 @@ const TEXT_ENCODING = 'utf8';
 const REF_FLAG = '--ref';
 const EXIT_USAGE = 2;
 const EXIT_GATE_FAILURE = 1;
+const GIT_BINARY = 'git';
+const GIT_WORKING_TREE_FLAG = '-C';
+const GIT_ROOT_ARGUMENTS = Object.freeze(['rev-parse', '--show-toplevel']);
+const GIT_RESET_ARGUMENTS = Object.freeze(
+  ['reset', '--hard', '--quiet']);
+const LOCAL_TEXT = Object.freeze({
+  ARGUMENT_SEPARATOR: ' ',
+  CORPUS_PASSED:
+    '[push-gate-corpus] corpus gates passed on the pushed tree\n',
+  USAGE: 'usage: push-gate-corpus-worktree.js [--ref <sha>]\n',
+});
+const stringTrim = Function.call.bind(String.prototype.trim);
 
 // The corpus gates whose verdicts are only meaningful over the WHOLE tree at
 // one commit: both compare whole-corpus counts against baselines anchored on
@@ -50,15 +62,17 @@ const CORPUS_GATE_COMMANDS = Object.freeze([
 ]);
 
 function usage() {
-  process.stderr.write(
-    'usage: push-gate-corpus-worktree.js [--ref <sha>]\n');
+  process.stderr.write(LOCAL_TEXT.USAGE);
   process.exit(EXIT_USAGE);
 }
 
 function repoRoot() {
-  return execFileSync(
-    'git', ['rev-parse', '--show-toplevel'], {encoding: TEXT_ENCODING})
-    .trim();
+  const output = execFileSync(
+    GIT_BINARY,
+    GIT_ROOT_ARGUMENTS,
+    {encoding: TEXT_ENCODING},
+  );
+  return stringTrim(output);
 }
 
 // Materialize the tree under test. With --ref, reset the snapshot to the
@@ -72,7 +86,8 @@ function materializeTreeUnderTest(root, ref) {
   }
   try {
     execFileSync(
-      'git', ['-C', snapshot, 'reset', '--hard', '--quiet', ref],
+      GIT_BINARY,
+      [GIT_WORKING_TREE_FLAG, snapshot, ...GIT_RESET_ARGUMENTS, ref],
       {encoding: TEXT_ENCODING});
   } catch (error) {
     removeWorktree(root, snapshot);
@@ -87,7 +102,8 @@ function materializeTreeUnderTest(root, ref) {
 function runCorpusGates(worktreePath) {
   for (const [command, args] of CORPUS_GATE_COMMANDS) {
     process.stdout.write(
-      `[push-gate-corpus] ${command} ${args.join(' ')} ` +
+      `[push-gate-corpus] ${command} ` +
+      `${args.join(LOCAL_TEXT.ARGUMENT_SEPARATOR)} ` +
       `(in ${worktreePath})\n`);
     const result = spawnSync(command, args, {
       cwd: worktreePath,
@@ -101,7 +117,8 @@ function runCorpusGates(worktreePath) {
     }
     if (result.status !== 0) {
       process.stderr.write(
-        `[push-gate-corpus] ${command} ${args.join(' ')} failed ` +
+        `[push-gate-corpus] ${command} ` +
+        `${args.join(LOCAL_TEXT.ARGUMENT_SEPARATOR)} failed ` +
         `(exit ${result.status}) on the pushed tree\n`);
       return result.status ?? EXIT_GATE_FAILURE;
     }
@@ -132,8 +149,7 @@ function main(argv) {
   if (gateStatus !== 0) {
     return gateStatus;
   }
-  process.stdout.write(
-    '[push-gate-corpus] corpus gates passed on the pushed tree\n');
+  process.stdout.write(LOCAL_TEXT.CORPUS_PASSED);
   return 0;
 }
 

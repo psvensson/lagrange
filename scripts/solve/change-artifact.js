@@ -34,17 +34,23 @@ export function isCommitChangeRef(changeRef) {
 // the claimed paths must be CLEAN in the working tree (no uncommitted edits
 // the receipt would silently stop covering) and head must be an ancestor of
 // HEAD (the claimed delta must be in current history, not a dangling side
-// branch). Returns a problem string, or null when the ref is admissible.
-export function commitChangeRefAdmissionProblem(root, changeRef, inspection) {
+// branch). Returns one typed admission result; a non-commit ref is explicitly
+// not applicable rather than encoded as a null problem.
+export function inspectCommitChangeRefAdmission(root, changeRef, inspection) {
   const commitRef = parseCommitChangeRef(changeRef);
-  if (!commitRef) return null;
+  if (!commitRef) return {applicable: false, ok: true};
   const head = spawnSync('git', ['rev-parse', 'HEAD'],
     {cwd: root, encoding: 'utf8'});
   const headSha = String(head.stdout || '').trim();
   if (head.status !== 0 ||
     !gitIsAncestorShas(root, commitRef.head, headSha)) {
-    return LOCAL_STR_COMMIT_HEAD_NOT_ANCESTOR +
-      LOCAL_STR_COMMIT_DELTA_NOT_IN_HISTORY;
+    return {
+      applicable: true,
+      ok: false,
+      problem:
+        LOCAL_STR_COMMIT_HEAD_NOT_ANCESTOR +
+        LOCAL_STR_COMMIT_DELTA_NOT_IN_HISTORY,
+    };
   }
   const paths = (inspection?.changedPaths || []);
   if (paths.length > 0) {
@@ -53,15 +59,25 @@ export function commitChangeRefAdmissionProblem(root, changeRef, inspection) {
     // Fail CLOSED on a spawn failure: this is an integrity gate, so an
     // unreadable tree must refuse, never silently admit.
     if (status.status !== 0) {
-      return LOCAL_STR_COMMIT_CLEAN_VERIFY_FAILED +
-        String(status.stderr || LOCAL_STR_GIT_STATUS_FAILED).trim();
+      return {
+        applicable: true,
+        ok: false,
+        problem:
+          LOCAL_STR_COMMIT_CLEAN_VERIFY_FAILED +
+          String(status.stderr || LOCAL_STR_GIT_STATUS_FAILED).trim(),
+      };
     }
     if (String(status.stdout || '').trim() !== '') {
-      return LOCAL_STR_COMMIT_PATHS_DIRTY +
-        LOCAL_STR_COMMIT_PATHS_DIRTY_ACTION;
+      return {
+        applicable: true,
+        ok: false,
+        problem:
+          LOCAL_STR_COMMIT_PATHS_DIRTY +
+          LOCAL_STR_COMMIT_PATHS_DIRTY_ACTION,
+      };
     }
   }
-  return null;
+  return {applicable: true, ok: true};
 }
 
 function gitIsAncestorShas(root, ancestor, descendant) {

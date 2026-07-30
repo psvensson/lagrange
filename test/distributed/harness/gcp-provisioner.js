@@ -24,6 +24,9 @@ import {execFileSync} from 'node:child_process';
 
 import {DOCKER_DEFAULTS} from './constants.js';
 
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 // --- GCP Provisioner Constants ---
 const DEFAULT_ZONE = 'us-central1-a';
 const DEFAULT_MACHINE_TYPE = 'e2-standard-4';
@@ -199,7 +202,7 @@ class GCPProvisioner {
     if (sanIps && sanIps.length > 0) {
       const extPath = path.join(dir, `${namePrefix}-ext.cnf`);
       fs.writeFileSync(extPath,
-        `subjectAltName=${sanIps.map((ip) => `IP:${ip}`).join(',')}\n`);
+        `subjectAltName=${arrayMap(sanIps, (ip) => `IP:${ip}`).join(',')}\n`);
       signArgs.push('-extfile', extPath);
     }
     signArgs.push('-out', certPath);
@@ -213,8 +216,9 @@ class GCPProvisioner {
   // using only the internal range and warn loudly.
   _runnerSourceRanges() {
     try {
-      const ip = run('curl', ['-fsS', '-m', '10', RUNNER_IP_LOOKUP_URL])
-        .trim();
+      const ip = stringTrim(
+        run('curl', ['-fsS', '-m', '10', RUNNER_IP_LOOKUP_URL]),
+      );
       if (/^\d+\.\d+\.\d+\.\d+$/.test(ip)) {
         return [VPC_INTERNAL_RANGE, `${ip}/32`];
       }
@@ -386,14 +390,15 @@ class GCPProvisioner {
     try {
       const clientTls = this._distributeCertificates(ips);
       return {
-        hosts: ips.map(
+        hosts: arrayMap(
+          ips,
           (ip) => `${DOCKER_PORT_PROTOCOL}://${ip}:${DOCKER_PORT}`,
         ),
         // Per-host reachability for host-network multi-host runs: the runner
         // reaches a host's daemon/containers via the external IP; nodes reach
         // each other via the VPC-internal IP (firewall allows 8080-9090
         // internal). hostInfo[i] aligns with hosts[i].
-        hostInfo: ips.map((externalIp, i) => ({
+        hostInfo: arrayMap(ips, (externalIp, i) => ({
           externalIp,
           internalIp: internalIps[i],
         })),

@@ -36,6 +36,21 @@ const REASON_FLAG = '--reason';
 const EXIT_USAGE = 2;
 const EXIT_NOT_EXEMPT = 1;
 const SHA_PATTERN = /^[0-9a-f]{7,40}$/u;
+const VERB = Object.freeze({
+  ACK: 'ack',
+  CLEAR: 'clear',
+  IS_EXEMPT: 'is-exempt',
+  LIST: 'list',
+});
+const LOCAL_TEXT = Object.freeze({
+  CLEARED_ALL: 'red-main-exemption: cleared all exemptions\n',
+  NO_ACKNOWLEDGED_HEADS:
+    'red-main-exemption: no acknowledged red heads\n',
+  NO_REASON: '(no reason)',
+  USAGE_PREFIX:
+    'usage: red-main-exemption.js ack <headSha> [--reason <text>] | ',
+  USAGE_SUFFIX: 'clear [headSha] | list | is-exempt <headSha>\n',
+});
 
 function gitCommonDir(root) {
   return path.resolve(
@@ -83,7 +98,7 @@ function clear(root, headSha) {
     return 0;
   }
   fs.rmSync(exemptionDir(root), {recursive: true, force: true});
-  process.stdout.write('red-main-exemption: cleared all exemptions\n');
+  process.stdout.write(LOCAL_TEXT.CLEARED_ALL);
   return 0;
 }
 
@@ -96,7 +111,7 @@ function list(root) {
     entries = [];
   }
   if (entries.length === 0) {
-    process.stdout.write('red-main-exemption: no acknowledged red heads\n');
+    process.stdout.write(LOCAL_TEXT.NO_ACKNOWLEDGED_HEADS);
     return 0;
   }
   for (const name of entries) {
@@ -105,7 +120,7 @@ function list(root) {
         fs.readFileSync(path.join(exemptionDir(root), name), TEXT_ENCODING));
       process.stdout.write(
         `${payload.headSha}  ${payload.acknowledgedAt}  ` +
-        `${payload.reason ?? '(no reason)'}\n`);
+        `${payload.reason ?? LOCAL_TEXT.NO_REASON}\n`);
     } catch {
       process.stdout.write(`${name}  (unparsable — cleared on next clear)\n`);
     }
@@ -122,23 +137,22 @@ export function isExempt(root, headSha) {
 
 function main(argv, root = process.cwd()) {
   const [verb, first, ...rest] = argv.slice(2);
-  if (verb === 'ack' && first) {
+  if (verb === VERB.ACK && first) {
     const reasonIndex = rest.indexOf(REASON_FLAG);
     const reason = reasonIndex >= 0 ? rest[reasonIndex + 1] : null;
     return ack(root, first, reason);
   }
-  if (verb === 'clear') {
+  if (verb === VERB.CLEAR) {
     return clear(root, first ?? null);
   }
-  if (verb === 'list') {
+  if (verb === VERB.LIST) {
     return list(root);
   }
-  if (verb === 'is-exempt' && first) {
+  if (verb === VERB.IS_EXEMPT && first) {
     return isExempt(root, first) ? 0 : EXIT_NOT_EXEMPT;
   }
   process.stderr.write(
-    'usage: red-main-exemption.js ack <headSha> [--reason <text>] | ' +
-    'clear [headSha] | list | is-exempt <headSha>\n');
+    LOCAL_TEXT.USAGE_PREFIX + LOCAL_TEXT.USAGE_SUFFIX);
   return EXIT_USAGE;
 }
 
