@@ -83,6 +83,15 @@ const MS_PER_HOUR = 3600000;
 // slow, so this is generous.
 const VM_READY_TIMEOUT_MS = 600000;
 const VM_READY_POLL_MS = 15000;
+// Pulumi state backend. We pin a LOCAL file backend so stack state never
+// leaves the machine: the default (app.pulumi.com) is an external SaaS that
+// created an ephemeral account and stored state remotely, which a test
+// harness has no business depending on. Overridable for operators who
+// deliberately want a shared remote backend.
+const PULUMI_BACKEND_URL_ENV = 'PULUMI_BACKEND_URL';
+const PULUMI_CONFIG_PASSPHRASE_ENV = 'PULUMI_CONFIG_PASSPHRASE';
+const PULUMI_LOCAL_BACKEND_DIRNAME = '.pulumi-local-backend';
+const PULUMI_LOCAL_SECRETS_PASSPHRASE = 'lagrange-distributed-local';
 
 // dockerd installs with TLS enforced; certs land in VM_CERT_DIR via scp after
 // boot, then docker is restarted to pick them up.
@@ -224,9 +233,28 @@ class GCPProvisioner {
    * @returns {Promise<{hosts: Array<string>, tls: {ca: string, cert: string, key: string}}>}
    *   hosts are tcp://ip:2376; tls holds client PEM bytes for the harness.
    */
+  // Force Pulumi onto a local file backend unless the operator explicitly
+  // pointed PULUMI_BACKEND_URL somewhere. Returns the backend URL in use.
+  _configureLocalBackend() {
+    if (!process.env[PULUMI_BACKEND_URL_ENV]) {
+      const backendDir = path.join(
+        os.tmpdir(), PULUMI_LOCAL_BACKEND_DIRNAME);
+      fs.mkdirSync(backendDir, {recursive: true});
+      process.env[PULUMI_BACKEND_URL_ENV] = `file://${backendDir}`;
+    }
+    // The local backend encrypts stack secrets with a passphrase; the
+    // Automation API needs one set or it prompts (and hangs non-interactive).
+    if (!process.env[PULUMI_CONFIG_PASSPHRASE_ENV]) {
+      process.env[PULUMI_CONFIG_PASSPHRASE_ENV] =
+        PULUMI_LOCAL_SECRETS_PASSPHRASE;
+    }
+    return process.env[PULUMI_BACKEND_URL_ENV];
+  }
+
   async provision() {
     this._pulumiDeps = await loadPulumiDeps();
     const {pulumi, gcp} = this._pulumiDeps;
+    this._configureLocalBackend();
 
     // Ephemeral PKI for this provisioning run, in a 0700 temp dir.
     this._certDir = fs.mkdtempSync(
