@@ -54,6 +54,7 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     SUMMARY_RESULT_PASS,
     SUMMARY_RESULT_FAIL,
     SUMMARY_LABEL_DURATION,
+    SUMMARY_LABEL_COST,
     SUMMARY_LABEL_CLUSTER,
     SUMMARY_LABEL_LOAD,
     SUMMARY_LABEL_LATENCY,
@@ -82,6 +83,15 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     SUMMARY_FIXED_DECIMALS_RATE,
     SUMMARY_FIXED_DECIMALS_RATIO,
     SUMMARY_FIXED_DECIMALS_OPS,
+    SUMMARY_FIXED_DECIMALS_USD,
+    SUMMARY_COST_ESTIMATED_SUFFIX,
+    SUMMARY_COST_TOTAL_PREFIX,
+    SUMMARY_PHASE_HEADER,
+    SUMMARY_PHASE_SETUP_LABEL,
+    SUMMARY_PHASE_SCENARIO_LABEL,
+    SUMMARY_PHASE_TEARDOWN_LABEL,
+    SUMMARY_PHASE_SEPARATOR,
+    SUMMARY_SECONDS_SUFFIX,
     ReportWriter,
     analyzeMemoryLeakFromPlayback,
     buildPerformanceDiagnostics,
@@ -1095,6 +1105,32 @@ function createDistributedRunRuntimeBundle(deps = {}) {
     return sign + value.toFixed(SUMMARY_FIXED_DECIMALS_OPS) + suffix;
   }
 
+  // Render the setup/scenario/teardown wall-time breakdown, or null when the
+  // timing boundaries are incomplete (e.g. a run that aborted before teardown).
+  function formatPhaseBreakdown(phaseTiming) {
+    if (!phaseTiming ||
+        !Number.isFinite(phaseTiming.runStartMs) ||
+        !Number.isFinite(phaseTiming.setupEndMs) ||
+        !Number.isFinite(phaseTiming.scenarioEndMs) ||
+        !Number.isFinite(phaseTiming.teardownEndMs)) {
+      return null;
+    }
+    const toSeconds = (ms) =>
+      (ms / 1000).toFixed(SUMMARY_FIXED_DECIMALS_OPS) + SUMMARY_SECONDS_SUFFIX;
+    const setupMs = phaseTiming.setupEndMs - phaseTiming.runStartMs;
+    const scenarioMs = phaseTiming.scenarioEndMs - phaseTiming.setupEndMs;
+    const teardownMs = phaseTiming.teardownEndMs - phaseTiming.scenarioEndMs;
+    return (
+      SUMMARY_PHASE_HEADER +
+      SUMMARY_PHASE_SETUP_LABEL + toSeconds(setupMs) +
+      SUMMARY_PHASE_SEPARATOR +
+      SUMMARY_PHASE_SCENARIO_LABEL + toSeconds(scenarioMs) +
+      SUMMARY_PHASE_SEPARATOR +
+      SUMMARY_PHASE_TEARDOWN_LABEL + toSeconds(teardownMs) +
+      '\n'
+    );
+  }
+
   /**
    * Print a concise run summary to stdout after the report is
    * written. Shows per-scenario metrics, delta vs previous run,
@@ -1102,13 +1138,27 @@ function createDistributedRunRuntimeBundle(deps = {}) {
    *
    * @param {Object} reportPreview - { summary, standardSummary }
    * @param {Array<Object>} scenarioEntries - report.scenarios
+   * @param {Object|null} [costEstimate] - GCPProvisioner.estimateCost() result;
+   *   when present, each scenario gets a duration-proportional share of the
+   *   total VM cost attributed to it.
+   * @param {Object|null} [phaseTiming] - { runStartMs, setupEndMs,
+   *   scenarioEndMs, teardownEndMs }; when all boundaries are present, a
+   *   setup/scenario/teardown wall-time breakdown is printed.
    */
-  function formatRunSummary(reportPreview, scenarioEntries) {
+  function formatRunSummary(
+    reportPreview,
+    scenarioEntries,
+    costEstimate = null,
+    phaseTiming = null,
+  ) {
     const lines = [SUMMARY_HEADER];
     const summary = reportPreview.summary;
     const stdScenarios = Array.isArray(
       reportPreview.standardSummary?.scenarios,
     ) ? reportPreview.standardSummary.scenarios : [];
+    const hasCost = costEstimate &&
+      Number.isFinite(costEstimate.totalUsd) &&
+      summary.duration > 0;
 
     lines.push(
       'Run: ' + summary.passed + '/' + summary.total +
@@ -1117,6 +1167,22 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         SUMMARY_FIXED_DECIMALS_OPS,
       ) + 's)\n',
     );
+    if (hasCost) {
+      lines.push(
+        SUMMARY_COST_TOTAL_PREFIX +
+        '$' + costEstimate.totalUsd.toFixed(SUMMARY_FIXED_DECIMALS_USD) +
+        ' (' + costEstimate.vmCount + 'x ' + costEstimate.machineType +
+        (costEstimate.preemptible ? ' spot' : '') +
+        ', ' + (costEstimate.uptimeMs / 1000).toFixed(
+          SUMMARY_FIXED_DECIMALS_OPS,
+        ) + 's uptime)\n',
+      );
+    }
+
+    const phaseLine = formatPhaseBreakdown(phaseTiming);
+    if (phaseLine) {
+      lines.push(phaseLine);
+    }
 
     for (let i = 0; i < stdScenarios.length; i++) {
       const std = stdScenarios[i];
@@ -1132,6 +1198,15 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           SUMMARY_FIXED_DECIMALS_OPS,
         ) + 's\n',
       );
+      if (hasCost) {
+        const scenarioCost =
+          costEstimate.totalUsd * (current.durationMs / summary.duration);
+        lines.push(
+          SUMMARY_LABEL_COST +
+          '$' + scenarioCost.toFixed(SUMMARY_FIXED_DECIMALS_USD) +
+          SUMMARY_COST_ESTIMATED_SUFFIX + '\n',
+        );
+      }
       lines.push(
         SUMMARY_LABEL_CLUSTER + current.clusterSize +
         SUMMARY_NODES_SUFFIX + '\n',

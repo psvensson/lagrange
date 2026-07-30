@@ -52,6 +52,74 @@ test('destroy throws when no stack is active', async (t) => {
   t.end();
 });
 
+// --- Cost estimation ---
+
+test('estimateCost returns null before provision()', (t) => {
+  const p = new GCPProvisioner({project: 'proj'});
+  assert.strictEqual(p.estimateCost(), null);
+  t.end();
+});
+
+test('estimateCost computes on-demand total from uptime and vmCount', (t) => {
+  const p = new GCPProvisioner({
+    project: 'proj',
+    machineType: 'e2-standard-4',
+    vmCount: 2,
+    preemptible: false,
+  });
+  // Simulate a 1-hour uptime window without touching real infra.
+  p._provisionedAtMs = 1000000;
+  p._destroyedAtMs = 1000000 + 3600000;
+  const cost = p.estimateCost();
+  assert.strictEqual(cost.vmCount, 2);
+  assert.strictEqual(cost.machineType, 'e2-standard-4');
+  assert.strictEqual(cost.preemptible, false);
+  assert.strictEqual(cost.estimated, true);
+  // 1h * $0.134/hr * 2 VMs
+  assert.ok(Math.abs(cost.totalUsd - 0.268) < 1e-9);
+  t.end();
+});
+
+test('estimateCost applies preemptible discount', (t) => {
+  const p = new GCPProvisioner({
+    project: 'proj',
+    machineType: 'e2-standard-4',
+    vmCount: 1,
+    preemptible: true,
+  });
+  p._provisionedAtMs = 0;
+  p._destroyedAtMs = 3600000;
+  const cost = p.estimateCost();
+  assert.strictEqual(cost.preemptible, true);
+  // 1h * $0.134 * 0.31 * 1 VM
+  assert.ok(Math.abs(cost.totalUsd - 0.134 * 0.31) < 1e-9);
+  t.end();
+});
+
+test('estimateCost falls back for unknown machine type', (t) => {
+  const p = new GCPProvisioner({
+    project: 'proj',
+    machineType: 'custom-unlisted-99',
+    vmCount: 1,
+  });
+  p._provisionedAtMs = 0;
+  p._destroyedAtMs = 3600000;
+  const cost = p.estimateCost();
+  assert.ok(cost.totalUsd > 0);
+  t.end();
+});
+
+// --- installImage precondition ---
+
+test('installImage throws when provision() has not run', (t) => {
+  const p = new GCPProvisioner({project: 'proj'});
+  assert.throws(
+    () => p.installImage('distributed-db:test'),
+    /requires provision\(\) to have completed first/,
+  );
+  t.end();
+});
+
 // --- Address format validation (Req 8.6) ---
 
 test('expected address format matches tcp://{ip}:{port} pattern', (t) => {

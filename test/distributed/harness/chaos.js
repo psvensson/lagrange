@@ -131,6 +131,11 @@ class ChaosPrimitives {
    * @param {string} networkId - Main cluster network ID
    */
   constructor(dockerProvider, nodes, networkId) {
+    // Primary provider (host of node 0). Used only for network-wide resources
+    // that live on one daemon (the isolation networks). Node-targeted ops must
+    // resolve the node's OWN provider — see _providerForNode — otherwise
+    // kill/stop/start/restart on a multi-host cluster silently target the wrong
+    // Docker daemon.
     this._dockerProvider = dockerProvider;
     this._nodes = nodes;
     this._networkId = networkId;
@@ -139,11 +144,11 @@ class ChaosPrimitives {
   }
 
   /**
-   * Look up a node's container ID by nodeId.
+   * Look up a node's handle by nodeId.
    * @param {string} nodeId
-   * @returns {string} containerId
+   * @returns {Object} node handle
    */
-  _getContainerId(nodeId) {
+  _getNode(nodeId) {
     const node = this._nodes.get(nodeId);
     if (!node) {
       throw new Error(
@@ -151,7 +156,27 @@ class ChaosPrimitives {
         `Available nodes: ${[...this._nodes.keys()].join(', ')}`,
       );
     }
-    return node.containerId;
+    return node;
+  }
+
+  /**
+   * Look up a node's container ID by nodeId.
+   * @param {string} nodeId
+   * @returns {string} containerId
+   */
+  _getContainerId(nodeId) {
+    return this._getNode(nodeId).containerId;
+  }
+
+  /**
+   * Resolve the Docker provider that actually hosts a node. Each node handle
+   * carries the provider that created its container (per-host on a multi-host
+   * cluster); fall back to the primary provider when a handle lacks one.
+   * @param {string} nodeId
+   * @returns {Object} DockerProvider
+   */
+  _providerForNode(nodeId) {
+    return this._getNode(nodeId)?._dockerProvider || this._dockerProvider;
   }
 
   /**
@@ -194,7 +219,7 @@ class ChaosPrimitives {
    */
   async killNode(nodeId) {
     const containerId = this._getContainerId(nodeId);
-    await this._dockerProvider.killContainer(containerId);
+    await this._providerForNode(nodeId).killContainer(containerId);
   }
 
   /**
@@ -203,7 +228,7 @@ class ChaosPrimitives {
    */
   async stopNode(nodeId) {
     const containerId = this._getContainerId(nodeId);
-    await this._dockerProvider.stopContainer(containerId);
+    await this._providerForNode(nodeId).stopContainer(containerId);
   }
 
   /**
@@ -212,7 +237,7 @@ class ChaosPrimitives {
    */
   async pauseNode(nodeId) {
     const containerId = this._getContainerId(nodeId);
-    await this._dockerProvider.pauseContainer(containerId);
+    await this._providerForNode(nodeId).pauseContainer(containerId);
   }
 
   /**
@@ -221,7 +246,7 @@ class ChaosPrimitives {
    */
   async unpauseNode(nodeId) {
     const containerId = this._getContainerId(nodeId);
-    await this._dockerProvider.unpauseContainer(containerId);
+    await this._providerForNode(nodeId).unpauseContainer(containerId);
   }
 
   /**
@@ -230,7 +255,7 @@ class ChaosPrimitives {
    */
   async restartNode(nodeId) {
     const containerId = this._getContainerId(nodeId);
-    await this._dockerProvider.restartContainer(containerId);
+    await this._providerForNode(nodeId).restartContainer(containerId);
     await this._restoreRestartedNodeNetworkIdentity(nodeId, containerId);
   }
 
@@ -240,7 +265,7 @@ class ChaosPrimitives {
    */
   async startNode(nodeId) {
     const containerId = this._getContainerId(nodeId);
-    await this._dockerProvider.startContainer(containerId);
+    await this._providerForNode(nodeId).startContainer(containerId);
     await this._restoreRestartedNodeNetworkIdentity(nodeId, containerId);
   }
 
@@ -253,11 +278,12 @@ class ChaosPrimitives {
    */
   async _restoreRestartedNodeNetworkIdentity(nodeId, containerId) {
     const node = this._nodes.get(nodeId);
-    if (typeof this._dockerProvider.inspectContainer !== 'function') {
+    const provider = this._providerForNode(nodeId);
+    if (typeof provider.inspectContainer !== 'function') {
       return;
     }
 
-    const inspect = await this._waitForRestartRunning(containerId);
+    const inspect = await this._waitForRestartRunning(nodeId, containerId);
     const expectedAlias = resolveExpectedAlias(inspect);
     const mainEndpoint = findNetworkEndpoint(inspect, this._networkId);
 
@@ -267,7 +293,7 @@ class ChaosPrimitives {
 
     if (!this._networkId ||
         this._isolationState ||
-        typeof this._dockerProvider.connectToNetwork !== 'function' ||
+        typeof provider.connectToNetwork !== 'function' ||
         !containerId) {
       return;
     }
@@ -277,21 +303,21 @@ class ChaosPrimitives {
     }
 
     if (mainEndpoint &&
-        typeof this._dockerProvider.disconnectFromNetwork === 'function') {
-      await this._dockerProvider.disconnectFromNetwork(
+        typeof provider.disconnectFromNetwork === 'function') {
+      await provider.disconnectFromNetwork(
         this._networkId,
         containerId,
       );
     }
 
-    await this._dockerProvider.connectToNetwork(
+    await provider.connectToNetwork(
       this._networkId,
       containerId,
       expectedAlias ? [expectedAlias] : [],
     );
 
-    if (typeof this._dockerProvider.inspectContainer === 'function') {
-      const refreshedInspect = await this._dockerProvider.inspectContainer(containerId);
+    if (typeof provider.inspectContainer === 'function') {
+      const refreshedInspect = await provider.inspectContainer(containerId);
       const refreshedMainEndpoint = findNetworkEndpoint(
         refreshedInspect,
         this._networkId,
@@ -309,6 +335,27 @@ class ChaosPrimitives {
   }
 
   /**
+   * Throw when a partition would span more than one Docker host. Bridge
+   * networks are local to a single daemon, so partitionNetwork/healPartition
+   * only make sense when every affected node lives on the same host.
+   * @param {Array<string>} nodeIds
+   * @private
+   */
+  _assertSingleHostPartition(nodeIds) {
+    const providers = new Set(
+      nodeIds.map((nodeId) => this._providerForNode(nodeId)),
+    );
+    if (providers.size > 1) {
+      throw new Error(
+        'partitionNetwork/healPartition is not supported across multiple ' +
+        'Docker hosts: bridge networks are per-daemon and cannot span ' +
+        'hosts. Run partition scenarios on a single-host cluster, or place ' +
+        'all affected nodes on one host.',
+      );
+    }
+  }
+
+  /**
    * Partition network into two isolated groups. Req 4.5
    * Creates secondary isolation networks, disconnects all nodes from
    * the main network, and connects each group to its own isolation net.
@@ -316,6 +363,12 @@ class ChaosPrimitives {
    * @param {Array<string>} groupB - Node IDs for group B
    */
   async partitionNetwork(groupA, groupB) {
+    // Bridge networks are per-daemon and cannot span Docker hosts, so a
+    // cross-host partition via bridge isolation networks is semantically
+    // meaningless: isolation networks minted on the primary daemon would be
+    // "network not found" on every other host, leaving a half-partitioned
+    // cluster. Fail loudly instead of corrupting the topology.
+    this._assertSingleHostPartition([...groupA, ...groupB]);
     const isoNetA = await this._dockerProvider.createNetwork(
       `${NETWORK.ISOLATION_PREFIX}-a-${Date.now()}`,
     );
@@ -329,22 +382,22 @@ class ChaosPrimitives {
       containerId: this._getContainerId(id),
     }));
 
-    for (const {containerId} of containerIds) {
-      await this._dockerProvider.disconnectFromNetwork(
+    for (const {nodeId, containerId} of containerIds) {
+      await this._providerForNode(nodeId).disconnectFromNetwork(
         this._networkId, containerId,
       );
     }
 
     for (const nodeId of groupA) {
       const containerId = this._getContainerId(nodeId);
-      await this._dockerProvider.connectToNetwork(
+      await this._providerForNode(nodeId).connectToNetwork(
         isoNetA.id, containerId,
       );
     }
 
     for (const nodeId of groupB) {
       const containerId = this._getContainerId(nodeId);
-      await this._dockerProvider.connectToNetwork(
+      await this._providerForNode(nodeId).connectToNetwork(
         isoNetB.id, containerId,
       );
     }
@@ -371,14 +424,14 @@ class ChaosPrimitives {
 
     for (const nodeId of groupA) {
       const containerId = this._getContainerId(nodeId);
-      await this._dockerProvider.disconnectFromNetwork(
+      await this._providerForNode(nodeId).disconnectFromNetwork(
         isoNetA.id, containerId,
       );
     }
 
     for (const nodeId of groupB) {
       const containerId = this._getContainerId(nodeId);
-      await this._dockerProvider.disconnectFromNetwork(
+      await this._providerForNode(nodeId).disconnectFromNetwork(
         isoNetB.id, containerId,
       );
     }
@@ -386,7 +439,7 @@ class ChaosPrimitives {
     const allNodeIds = [...groupA, ...groupB];
     for (const nodeId of allNodeIds) {
       const containerId = this._getContainerId(nodeId);
-      await this._dockerProvider.connectToNetwork(
+      await this._providerForNode(nodeId).connectToNetwork(
         this._networkId, containerId,
       );
     }
@@ -406,7 +459,7 @@ class ChaosPrimitives {
    */
   async slowNetwork(nodeId, {latency, jitter}) {
     const containerId = this._getContainerId(nodeId);
-    await this._dockerProvider.execInContainer(containerId, [
+    await this._providerForNode(nodeId).execInContainer(containerId, [
       TC_COMMAND, 'qdisc', NETEM_ACTION_REPLACE, 'dev', NETEM_DEVICE,
       NETEM_QDISC_ROOT, 'netem', 'delay',
       `${latency}ms`, `${jitter}ms`,
@@ -420,7 +473,7 @@ class ChaosPrimitives {
   async clearNetworkSlowdown(nodeId) {
     const containerId = this._getContainerId(nodeId);
     try {
-      await this._dockerProvider.execInContainer(containerId, [
+      await this._providerForNode(nodeId).execInContainer(containerId, [
         TC_COMMAND, 'qdisc', 'del', 'dev', NETEM_DEVICE,
         NETEM_QDISC_ROOT,
       ]);
@@ -436,7 +489,7 @@ class ChaosPrimitives {
    */
   async corruptDisk(nodeId, filePath) {
     const containerId = this._getContainerId(nodeId);
-    await this._dockerProvider.execInContainer(containerId, [
+    await this._providerForNode(nodeId).execInContainer(containerId, [
       DD_COMMAND,
       'if=/dev/urandom',
       `of=${filePath}`,
@@ -455,16 +508,17 @@ class ChaosPrimitives {
    */
   async fillDisk(nodeId, options = {}) {
     const containerId = this._getContainerId(nodeId);
+    const provider = this._providerForNode(nodeId);
     const filePath = this._resolveDiskPressureFilePath(nodeId, options);
     const sizeMb = this._resolveDiskPressureSizeMb(options);
     const parentDir = pathPosix.dirname(filePath);
 
-    await this._dockerProvider.execInContainer(containerId, [
+    await provider.execInContainer(containerId, [
       MKDIR_COMMAND,
       MKDIR_PARENTS_FLAG,
       parentDir,
     ]);
-    await this._dockerProvider.execInContainer(containerId, [
+    await provider.execInContainer(containerId, [
       DD_COMMAND,
       'if=/dev/zero',
       `of=${filePath}`,
@@ -483,17 +537,18 @@ class ChaosPrimitives {
    */
   async releaseDiskPressure(nodeId, options = {}) {
     const containerId = this._getContainerId(nodeId);
+    const provider = this._providerForNode(nodeId);
     const filePath = this._resolveDiskPressureFilePath(nodeId, {
       filePath: options.filePath ||
         this._diskPressureFileByNodeId.get(nodeId) ||
         null,
     });
-    await this._dockerProvider.execInContainer(containerId, [
+    await provider.execInContainer(containerId, [
       REMOVE_COMMAND,
       REMOVE_FORCE_FLAG,
       filePath,
     ]);
-    await this._dockerProvider.execInContainer(containerId, [
+    await provider.execInContainer(containerId, [
       SYNC_COMMAND,
     ]);
     this._diskPressureFileByNodeId.delete(nodeId);
@@ -534,6 +589,7 @@ class ChaosPrimitives {
       );
     }
     const containerId = this._getContainerId(nodeId);
+    const provider = this._providerForNode(nodeId);
     const partitionDir = pathPosix.join(
       CONTAINER_DATA_DIR,
       PARTITIONS_DIRNAME,
@@ -548,19 +604,19 @@ class ChaosPrimitives {
       replicaId,
     );
 
-    await this._dockerProvider.execInContainer(containerId, [
+    await provider.execInContainer(containerId, [
       REMOVE_COMMAND,
       REMOVE_FORCE_FLAG,
       dbPath,
       walPath,
       shmPath,
     ]);
-    await this._dockerProvider.execInContainer(containerId, [
+    await provider.execInContainer(containerId, [
       REMOVE_COMMAND,
       REMOVE_RECURSIVE_FORCE_FLAG,
       checkpointsDir,
     ]);
-    await this._dockerProvider.execInContainer(containerId, [
+    await provider.execInContainer(containerId, [
       SYNC_COMMAND,
     ]);
     return {dbPath, walPath, shmPath, checkpointsDir};
@@ -568,16 +624,18 @@ class ChaosPrimitives {
 
   /**
    * Wait until a restarted container reports running state.
+   * @param {string} nodeId
    * @param {string} containerId
    * @return {Promise<Object>}
    * @private
    */
-  async _waitForRestartRunning(containerId) {
+  async _waitForRestartRunning(nodeId, containerId) {
+    const provider = this._providerForNode(nodeId);
     const deadline = Date.now() + RESTART_RUNNING_TIMEOUT_MS;
     let lastInspect = null;
 
     while (Date.now() < deadline) {
-      lastInspect = await this._dockerProvider.inspectContainer(containerId);
+      lastInspect = await provider.inspectContainer(containerId);
       if (String(lastInspect?.State?.Status || '').toLowerCase() ===
           CONTAINER_RUNNING_STATE) {
         return lastInspect;
@@ -585,7 +643,7 @@ class ChaosPrimitives {
       await sleep(RESTART_POLL_INTERVAL_MS);
     }
 
-    return lastInspect || await this._dockerProvider.inspectContainer(containerId);
+    return lastInspect || await provider.inspectContainer(containerId);
   }
 }
 

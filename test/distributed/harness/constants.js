@@ -739,7 +739,10 @@ const LOG_SUBSCRIPTION_CAPABILITY = Object.freeze({
 });
 
 // --- CLI Runner Constants ---
-const DEFAULT_CONFIG_PATH = 'test/distributed/config/local.json';
+// Default runs provision GCP Compute Engine Docker hosts (the project/zone in
+// gcp-default.json) rather than a local Docker daemon; pass --config
+// test/distributed/config/local.json explicitly to run on local Docker.
+const DEFAULT_CONFIG_PATH = 'test/distributed/config/gcp-default.json';
 const DEFAULT_REPORT_OUTPUT = 'test-output/report.json';
 const ARG_CONFIG = '--config';
 const ARG_SCENARIO = '--scenario';

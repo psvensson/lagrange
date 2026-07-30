@@ -35,6 +35,7 @@ function createCluster(config) {
       (host) =>
         new DockerProvider({
           host,
+          tls: config.docker.tls,
           operationSink: dockerOperationSink,
         }),
     );

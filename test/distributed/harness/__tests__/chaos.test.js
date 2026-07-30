@@ -157,6 +157,81 @@ test('unpauseNode delegates to dockerProvider.unpauseContainer', async () => {
   assert.strictEqual(provider.calls[0].args[0], 'container-aaa');
 });
 
+// --- Multi-host per-node provider routing ---
+
+test('node ops route to the node\'s OWN provider on a multi-host cluster',
+  async () => {
+    const primary = createMockProvider();
+    const hostB = createMockProvider();
+    // node-1 lives on the primary daemon; node-2 lives on host B. Each node
+    // handle carries the provider that created its container.
+    const nodes = new Map([
+      ['node-1', {containerId: 'container-aaa', _dockerProvider: primary}],
+      ['node-2', {containerId: 'container-bbb', _dockerProvider: hostB}],
+    ]);
+    const chaos = new ChaosPrimitives(primary, nodes, MAIN_NETWORK_ID);
+
+    await chaos.killNode('node-2');
+    await chaos.stopNode('node-2');
+    await chaos.killNode('node-1');
+
+    // node-2 ops must hit host B's daemon, not the primary.
+    assert.strictEqual(hostB.calls.length, 2);
+    assert.strictEqual(hostB.calls[0].method, 'killContainer');
+    assert.strictEqual(hostB.calls[0].args[0], 'container-bbb');
+    assert.strictEqual(hostB.calls[1].method, 'stopContainer');
+    // node-1 op hits the primary daemon.
+    assert.strictEqual(primary.calls.length, 1);
+    assert.strictEqual(primary.calls[0].method, 'killContainer');
+    assert.strictEqual(primary.calls[0].args[0], 'container-aaa');
+  });
+
+test('pause/unpause route to the owning provider per node', async () => {
+  const primary = createMockProvider();
+  const hostB = createMockProvider();
+  const nodes = new Map([
+    ['node-1', {containerId: 'container-aaa', _dockerProvider: primary}],
+    ['node-2', {containerId: 'container-bbb', _dockerProvider: hostB}],
+  ]);
+  const chaos = new ChaosPrimitives(primary, nodes, MAIN_NETWORK_ID);
+
+  await chaos.pauseNode('node-2');
+  await chaos.unpauseNode('node-2');
+
+  assert.strictEqual(hostB.calls.length, 2);
+  assert.strictEqual(hostB.calls[0].method, 'pauseContainer');
+  assert.strictEqual(hostB.calls[1].method, 'unpauseContainer');
+  assert.strictEqual(primary.calls.length, 0);
+});
+
+test('slowNetwork execs on the node\'s own provider', async () => {
+  const primary = createMockProvider();
+  const hostB = createMockProvider();
+  const nodes = new Map([
+    ['node-2', {containerId: 'container-bbb', _dockerProvider: hostB}],
+  ]);
+  const chaos = new ChaosPrimitives(primary, nodes, MAIN_NETWORK_ID);
+
+  await chaos.slowNetwork('node-2', {latency: 100, jitter: 10});
+
+  assert.strictEqual(hostB.calls.length, 1);
+  assert.strictEqual(hostB.calls[0].method, 'execInContainer');
+  assert.strictEqual(primary.calls.length, 0);
+});
+
+test('nodes without an explicit provider fall back to the primary', async () => {
+  const primary = createMockProvider();
+  const nodes = new Map([
+    ['node-9', {containerId: 'container-zzz'}],
+  ]);
+  const chaos = new ChaosPrimitives(primary, nodes, MAIN_NETWORK_ID);
+
+  await chaos.killNode('node-9');
+
+  assert.strictEqual(primary.calls.length, 1);
+  assert.strictEqual(primary.calls[0].args[0], 'container-zzz');
+});
+
 test('restartNode preserves main-network alias when it already exists',
   async () => {
     const provider = createMockProvider();

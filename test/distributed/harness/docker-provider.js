@@ -6,7 +6,7 @@
  */
 
 import Docker from 'dockerode';
-import {readdirSync} from 'node:fs';
+import {createWriteStream, readdirSync} from 'node:fs';
 import path from 'node:path';
 import {Writable} from 'node:stream';
 import {
@@ -18,6 +18,7 @@ import {
 } from './constants.js';
 const localText = Object.freeze({
   HTTP: 'http',
+  HTTPS: 'https',
   STARTING: 'starting',
   COMPLETED: 'completed',
   REUSED: 'reused',
@@ -25,6 +26,7 @@ const localText = Object.freeze({
   END: 'end',
   UTF8: 'utf8',
   ERROR: 'error',
+  FINISH: 'finish',
   DATA: 'data',
   NEWLINE: '\n',
   READ: 'read',
@@ -203,6 +205,10 @@ class DockerProvider {
    * @param {Object} config
    * @param {string} [config.socketPath] - Local Docker socket path
    * @param {string} [config.host] - Remote Docker host (tcp://host:port)
+   * @param {{ca: string, cert: string, key: string}} [config.tls] - Client
+   *   TLS material for mutual-auth daemons. When present the connection uses
+   *   HTTPS and presents the client certificate; when absent it uses plain
+   *   HTTP (only acceptable against daemons that themselves accept it).
    */
   constructor(config = {}) {
     this._operationSink = typeof config.operationSink === TYPEOF_FUNCTION ?
@@ -210,10 +216,22 @@ class DockerProvider {
       null;
     if (config.host) {
       const {hostname, port} = this._parseTcpHost(config.host);
+      const tls = config.tls;
+      // Fail fast on a partially-specified TLS object rather than silently
+      // downgrading to plain HTTP (which a tlsverify daemon would refuse with
+      // an opaque ECONNRESET long after the misconfiguration was made).
+      if (tls && !(tls.ca && tls.cert && tls.key)) {
+        throw new Error(
+          'DockerProvider config.tls requires ca, cert, and key; got a ' +
+          'partial TLS object',
+        );
+      }
+      const useTls = Boolean(tls);
       this._docker = new Docker({
         host: hostname,
         port: port,
-        protocol: localText.HTTP,
+        protocol: useTls ? localText.HTTPS : localText.HTTP,
+        ...(useTls ? {ca: tls.ca, cert: tls.cert, key: tls.key} : {}),
       });
     } else {
       this._docker = new Docker({
@@ -368,6 +386,23 @@ class DockerProvider {
       tag,
       dockerfile,
       labels,
+    });
+  }
+
+  /**
+   * Export an image as a tarball to a local file path (docker save).
+   * @param {string} tag - Image tag to export
+   * @param {string} destinationPath - Local file path to write the tarball to
+   * @returns {Promise<void>}
+   */
+  async saveImage(tag, destinationPath) {
+    const stream = await this._docker.getImage(tag).get();
+    await new Promise((resolvePromise, rejectPromise) => {
+      const file = createWriteStream(destinationPath);
+      stream.pipe(file);
+      stream.on(localText.ERROR, rejectPromise);
+      file.on(localText.ERROR, rejectPromise);
+      file.on(localText.FINISH, resolvePromise);
     });
   }
 

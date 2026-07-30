@@ -13,7 +13,7 @@
 
 import {fileURLToPath, pathToFileURL} from 'node:url';
 import {basename, dirname, extname, join, resolve} from 'node:path';
-import {execFile} from 'node:child_process';
+
 import {mkdir, readdir, readFile, writeFile} from 'node:fs/promises';
 import {
   computeSourceFingerprint,
@@ -28,7 +28,15 @@ import {
   selectCanonicalScenariosForConfig,
 } from './harness/scenario-registry.js';
 import {createCluster} from './harness/cluster.js';
-import {DockerProvider} from './harness/docker-provider.js';
+import {
+  provisionGcpDockerHosts,
+  installGcpImage,
+  teardownGcpProvisioner,
+} from './gcp-run-orchestration.js';
+import {
+  buildImage,
+  resolveGitDirty,
+} from './build-image.js';
 import {
   ReportWriter,
   computeSummary,
@@ -205,6 +213,7 @@ const SUMMARY_FOOTER = SUMMARY_SEPARATOR + '\n';
 const SUMMARY_RESULT_PASS = '✓ PASS';
 const SUMMARY_RESULT_FAIL = '✗ FAIL';
 const SUMMARY_LABEL_DURATION = '  duration: ';
+const SUMMARY_LABEL_COST = '  cost:     ';
 const SUMMARY_LABEL_CLUSTER = '  cluster:  ';
 const SUMMARY_LABEL_LOAD = '  load:     ';
 const SUMMARY_LABEL_LATENCY = '  latency:  ';
@@ -233,6 +242,15 @@ const SUMMARY_PERCENT_MULTIPLIER = 100;
 const SUMMARY_FIXED_DECIMALS_RATE = 1;
 const SUMMARY_FIXED_DECIMALS_RATIO = 2;
 const SUMMARY_FIXED_DECIMALS_OPS = 1;
+const SUMMARY_FIXED_DECIMALS_USD = 4;
+const SUMMARY_COST_ESTIMATED_SUFFIX = ' (est)';
+const SUMMARY_COST_TOTAL_PREFIX = 'Total GCP cost (all scenarios, est): ';
+const SUMMARY_PHASE_HEADER = 'Wall time: ';
+const SUMMARY_PHASE_SETUP_LABEL = 'setup ';
+const SUMMARY_PHASE_SCENARIO_LABEL = 'scenario ';
+const SUMMARY_PHASE_TEARDOWN_LABEL = 'teardown ';
+const SUMMARY_PHASE_SEPARATOR = ' | ';
+const SUMMARY_SECONDS_SUFFIX = 's';
 
 const {
   createScenarioPhaseEventSink,
@@ -352,6 +370,7 @@ const DISTRIBUTED_RUN_RUNTIME_BUNDLE = createDistributedRunRuntimeBundle({
   SUMMARY_RESULT_PASS,
   SUMMARY_RESULT_FAIL,
   SUMMARY_LABEL_DURATION,
+  SUMMARY_LABEL_COST,
   SUMMARY_LABEL_CLUSTER,
   SUMMARY_LABEL_LOAD,
   SUMMARY_LABEL_LATENCY,
@@ -380,6 +399,15 @@ const DISTRIBUTED_RUN_RUNTIME_BUNDLE = createDistributedRunRuntimeBundle({
   SUMMARY_FIXED_DECIMALS_RATE,
   SUMMARY_FIXED_DECIMALS_RATIO,
   SUMMARY_FIXED_DECIMALS_OPS,
+  SUMMARY_FIXED_DECIMALS_USD,
+  SUMMARY_COST_ESTIMATED_SUFFIX,
+  SUMMARY_COST_TOTAL_PREFIX,
+  SUMMARY_PHASE_HEADER,
+  SUMMARY_PHASE_SETUP_LABEL,
+  SUMMARY_PHASE_SCENARIO_LABEL,
+  SUMMARY_PHASE_TEARDOWN_LABEL,
+  SUMMARY_PHASE_SEPARATOR,
+  SUMMARY_SECONDS_SUFFIX,
   ReportWriter,
   analyzeMemoryLeakFromPlayback,
   buildPerformanceDiagnostics,
@@ -456,6 +484,15 @@ async function applyFastLocalConfig(config, cwd = process.cwd()) {
 }
 
 function isLocalDockerConfig(config) {
+  // A config that will provision GCP hosts is NOT local even though
+  // docker.hosts is still empty at this point (hosts are injected later by
+  // provisionGcpDockerHosts). Fast-local mounts the host's source tree into
+  // containers, which remote VMs cannot see — the remote daemons must run the
+  // baked image instead. Treating a gcp config as local here produces
+  // containers that crash with "Cannot find module /app/src/index.js".
+  if (config?.gcp && typeof config.gcp === 'object') {
+    return false;
+  }
   return !Array.isArray(config?.docker?.hosts) ||
     config.docker.hosts.length === 0;
 }
@@ -591,165 +628,6 @@ function buildReportMetadata(args, runConfig, deterministicDebug) {
  * @param {string} [options.gitHash]
  * @param {boolean} [options.gitDirty]
  */
-async function buildImage(
-  config,
-  verbose,
-  dockerOperationSink = null,
-  options = {},
-) {
-  const provider = new DockerProvider({
-    socketPath: config.docker.socketPath,
-    operationSink: dockerOperationSink,
-  });
-
-  const gitHash = options.gitHash || await resolveGitHash();
-  const gitDirty = typeof options.gitDirty === 'boolean' ?
-    options.gitDirty :
-    await resolveGitDirty();
-  const skipBuildOnDirty = config?.docker?.skipBuildOnDirty === true;
-  const existingHash = await provider.getImageLabel(
-    config.image,
-    IMAGE_LABEL_GIT_HASH,
-  );
-
-  if (gitDirty && skipBuildOnDirty) {
-    const imageExists = await provider.imageExists(config.image);
-    if (imageExists) {
-      if (verbose) {
-        process.stdout.write(
-          IMAGE_SKIP_DIRTY_REBUILD_PREFIX +
-          config.image +
-          '\n',
-        );
-      }
-      return {
-        image: config.image,
-        gitHash,
-        gitDirty,
-        reused: true,
-      };
-    }
-    if (verbose) {
-      process.stdout.write(
-        IMAGE_SKIP_DIRTY_REBUILD_PREFIX +
-        config.image +
-        IMAGE_SKIP_DIRTY_REBUILD_MISSING_SUFFIX +
-        '\n',
-      );
-    }
-  }
-
-  if (!gitDirty &&
-      existingHash === gitHash &&
-      gitHash !== GIT_HASH_FALLBACK) {
-    if (verbose) {
-      process.stdout.write(
-        IMAGE_REUSE_LOG_PREFIX +
-        gitHash +
-        ': ' +
-        config.image +
-        '\n',
-      );
-    }
-    return {
-      image: config.image,
-      gitHash,
-      gitDirty,
-      reused: true,
-    };
-  }
-
-  if (verbose) {
-    if (gitDirty) {
-      process.stdout.write(
-        IMAGE_REBUILD_DIRTY_PREFIX +
-        config.image +
-        '\n',
-      );
-    }
-    const commitSuffix = gitHash && gitHash !== GIT_HASH_FALLBACK ?
-      IMAGE_BUILD_WITH_COMMIT_PREFIX + gitHash :
-      DOCKER_LINE_EMPTY;
-    process.stdout.write(
-      IMAGE_BUILD_LOG_PREFIX +
-      commitSuffix +
-      IMAGE_BUILD_LOG_SUFFIX +
-      '\n',
-    );
-  }
-  const progressSink = verbose ?
-    (event) => {
-      const line = extractBuildProgressLine(event);
-      if (!line) {
-        return;
-      }
-      process.stdout.write(BUILD_PROGRESS_LOG_PREFIX + line + '\n');
-    } :
-    null;
-  await provider.buildImage(
-    '.',
-    config.image,
-    config.dockerfile || 'Dockerfile',
-    progressSink,
-    {[IMAGE_LABEL_GIT_HASH]: gitHash},
-  );
-  if (verbose) {
-    process.stdout.write('Image built: ' + config.image + '\n');
-  }
-
-  return {
-    image: config.image,
-    gitHash,
-    gitDirty,
-    reused: false,
-  };
-}
-
-/**
- * Resolve current git short hash.
- * @param {string} cwd
- * @return {Promise<string>}
- */
-async function resolveGitHash(cwd = process.cwd()) {
-  return new Promise((resolveHash) => {
-    execFile(
-      GIT_HASH_COMMAND,
-      GIT_HASH_ARGS,
-      {cwd},
-      (error, stdout) => {
-        if (error) {
-          resolveHash(GIT_HASH_FALLBACK);
-          return;
-        }
-        const hash = String(stdout || DOCKER_LINE_EMPTY).trim();
-        resolveHash(hash || GIT_HASH_FALLBACK);
-      },
-    );
-  });
-}
-
-/**
- * Resolve whether the current git workspace has uncommitted changes.
- * @param {string} cwd
- * @return {Promise<boolean>}
- */
-async function resolveGitDirty(cwd = process.cwd()) {
-  return new Promise((resolveDirty) => {
-    execFile(
-      GIT_STATUS_COMMAND,
-      GIT_STATUS_ARGS,
-      {cwd},
-      (error, stdout) => {
-        if (error) {
-          resolveDirty(false);
-          return;
-        }
-        resolveDirty(String(stdout || DOCKER_LINE_EMPTY).trim().length > 0);
-      },
-    );
-  });
-}
-
 /**
  * Derive per-run artifact output directory from report path.
  * @param {string} reportOutputPath
@@ -1183,6 +1061,16 @@ async function main() {
     process.env[CLI.CAPTURE_LOGS_ENV_VAR] = 'true';
   }
   let runStatusContext = null;
+  let gcpProvisioner = null;
+  // Wall-clock phase breakdown: setup (config -> image installed on hosts),
+  // scenario execution, and teardown. Stamped as the run crosses each boundary
+  // and surfaced in the final summary so operators can see where time goes.
+  const runPhaseTiming = {
+    runStartMs: Date.now(),
+    setupEndMs: null,
+    scenarioEndMs: null,
+    teardownEndMs: null,
+  };
   const writeRunnerStatus = async (status, fields = {}) => {
     if (!runStatusContext) {
       return null;
@@ -1215,6 +1103,9 @@ async function main() {
         process.stdout.write(FAST_LOCAL_LOG_PREFIX);
       }
     }
+    const gcpResult = await provisionGcpDockerHosts(runConfig, args.verbose);
+    runConfig = gcpResult.runConfig;
+    gcpProvisioner = gcpResult.provisioner;
     const deterministicDebug = resolveDeterministicDebugConfig(args, runConfig);
     if (deterministicDebug.enabled) {
       runConfig = applyDeterministicDebugConfig(runConfig, deterministicDebug);
@@ -1274,7 +1165,12 @@ async function main() {
     const dockerOperationSink = createDockerOperationSink(args.verbose);
     let imageResult = null;
     try {
-      imageResult = await buildImage(runConfig, args.verbose, dockerOperationSink);
+      imageResult = await buildImage(
+        runConfig,
+        args.verbose,
+        dockerOperationSink,
+        {extractBuildProgressLine},
+      );
     } catch (err) {
       runStatusContext.milestones.failedAt = new Date().toISOString();
       await writeRunnerStatus(RUN_STATUS_STATE_FATAL_ERROR, {
@@ -1283,6 +1179,22 @@ async function main() {
       });
       process.stderr.write(
         'Failed to build image: ' + err.message + '\n',
+      );
+      process.exit(EXIT_CODES.FAILURE);
+    }
+
+    // Distribute the freshly-built image to any provisioned GCP hosts so the
+    // per-host daemons can start containers without pulling from a registry.
+    try {
+      installGcpImage(gcpProvisioner, runConfig.image, args.verbose);
+    } catch (err) {
+      runStatusContext.milestones.failedAt = new Date().toISOString();
+      await writeRunnerStatus(RUN_STATUS_STATE_FATAL_ERROR, {
+        error: err.message,
+        stackTrace: err.stack || null,
+      });
+      process.stderr.write(
+        'Failed to install image on GCP hosts: ' + err.message + '\n',
       );
       process.exit(EXIT_CODES.FAILURE);
     }
@@ -1341,6 +1253,7 @@ async function main() {
       deterministicDebug,
     );
 
+    runPhaseTiming.setupEndMs = Date.now();
     const {report, hasFailures} = await runScenarios(
       runConfig,
       scenarios,
@@ -1353,6 +1266,7 @@ async function main() {
         stateMachinePressurePreflight,
       },
     );
+    runPhaseTiming.scenarioEndMs = Date.now();
 
     const reportPreview = {
       summary: computeSummary(report.scenarios),
@@ -1406,8 +1320,21 @@ async function main() {
       );
     }
 
+    // Tear down before printing the summary so the phase breakdown and the
+    // cost estimate both reflect the FULL VM uptime (provision -> destroyed).
+    await teardownGcpProvisioner(gcpProvisioner, args.verbose);
+    runPhaseTiming.teardownEndMs = Date.now();
+
+    const costEstimate = gcpProvisioner ?
+      gcpProvisioner.estimateCost() :
+      null;
     process.stdout.write(
-      formatRunSummary(reportPreview, report.scenarios),
+      formatRunSummary(
+        reportPreview,
+        report.scenarios,
+        costEstimate,
+        runPhaseTiming,
+      ),
     );
 
     if (args.contract) {
@@ -1442,6 +1369,9 @@ async function main() {
       hasRunFailures ? EXIT_CODES.FAILURE : EXIT_CODES.SUCCESS,
     );
   } catch (err) {
+    // Tear down provisioned GCP infra even on failure so a crashed run never
+    // leaks billable VMs; teardown failure must not mask the original error.
+    await teardownGcpProvisioner(gcpProvisioner, args.verbose);
     if (runStatusContext) {
       runStatusContext.milestones.failedAt = new Date().toISOString();
       try {

@@ -1,0 +1,92 @@
+{
+  "size": 5,
+  "docker": {},
+  "image": "distributed-db:test",
+  "nodesPerHost": 3,
+  "timeouts": {
+    "nodeStartup": 30000,
+    "convergence": 60000,
+    "quietWindow": 3000,
+    "scenarioDefault": 120000,
+    "bootstrapReadyStableWindowMs": 1000
+  },
+  "convergence": {
+    "targetVoterCount": 3,
+    "settleTimeoutMs": 30000,
+    "quietWindowMs": 3000,
+    "maxSustainedOverTargetMs": 2000,
+    "sampleIntervalMs": 250
+  },
+  "resourceLimits": {
+    "memory": "2g",
+    "cpus": "2.0"
+  },
+  "benchmark": {
+    "loadQueryTimeoutMs": 10000,
+    "controlQueryTimeoutMs": 15000
+  },
+  "scenarios": {
+    "rollingRestart": {
+      "loadDuration": "150s",
+      "preRestartSettleMs": 1000,
+      "perRestartActiveTimeoutMs": 120000,
+      "perNodeConvergenceTimeoutMs": 120000,
+      "interRestartDelayMs": 250,
+      "postRestartLoadSoakMs": 1000,
+      "postRestartQuietWindowMs": 5000,
+      "postRestartActiveTimeoutMs": 120000
+    },
+    "seedRestartUnderLoad": {
+      "loadDuration": "35s",
+      "preRestartDelayMs": 2000,
+      "preRestartActiveTimeoutMs": 60000,
+      "restartReadinessTimeoutMs": 90000,
+      "postRestartActiveTimeoutMs": 90000,
+      "postRestartQuietWindowMs": 3000,
+      "convergenceTimeoutMs": 90000,
+      "consistencyTimeoutMs": 90000
+    },
+    "nodeJoinUnderLoad": {
+      "loadDuration": "30s",
+      "preJoinSettleMs": 1000,
+      "loadReadinessStableWindowMs": 1000,
+      "loadReadinessStabilizationTimeoutMs": 10000,
+      "postJoinConvergenceTimeoutMs": 60000,
+      "postJoinActiveTimeoutMs": 60000,
+      "consistencyTimeoutMs": 90000,
+      "consistencyPollIntervalMs": 250
+    },
+    "snapshotLiveRebuild": {
+      "floorBytes": 8388608,
+      "preloadRows": 1024,
+      "preloadPayloadBytes": 8192,
+      "preloadBatchSize": 32,
+      "loadDuration": "120s",
+      "loadOpsPerSec": 40,
+      "preWipeSettleMs": 14000,
+      "rejoinReadinessTimeoutMs": 180000,
+      "rejoinActiveTimeoutMs": 180000,
+      "perNodeConvergenceTimeoutMs": 180000,
+      "postRebuildSoakMs": 45000,
+      "consistencyTimeoutMs": 240000,
+      "restartabilityLegEnabled": false,
+      "acknowledgedWriteVisibilityTimeoutMs": 120000
+    }
+  },
+  "memoryLeak": {
+    "enabled": true,
+    "failOnDetection": false,
+    "requireSamples": false
+  },
+  "load": {
+    "defaultOpsPerSec": 100,
+    "defaultDuration": "30s"
+  },
+  "gcp": {
+    "project": "something-2e584",
+    "zone": "us-central1-a",
+    "machineType": "e2-standard-4",
+    "vmCount": 2,
+    "preemptible": false
+  }
+}

@@ -656,6 +656,46 @@ test('Unit: buildImage passes labels to docker build options', async (t) => {
   );
 });
 
+test('Unit: remote host with TLS uses https and client certs', async (t) => {
+  await t.test(
+    'TLS material present -> https protocol with ca/cert/key',
+    async () => {
+      const provider = new DockerProvider({
+        host: 'tcp://203.0.113.10:2376',
+        tls: {ca: 'CA', cert: 'CERT', key: 'KEY'},
+      });
+      assert.strictEqual(provider._docker.modem.protocol, 'https');
+      assert.strictEqual(provider._docker.modem.host, '203.0.113.10');
+      assert.strictEqual(provider._docker.modem.port, 2376);
+      assert.strictEqual(provider._docker.modem.ca, 'CA');
+      assert.strictEqual(provider._docker.modem.cert, 'CERT');
+      assert.strictEqual(provider._docker.modem.key, 'KEY');
+    },
+  );
+
+  await t.test(
+    'no TLS material -> plain http (legacy/unsafe daemon)',
+    async () => {
+      const provider = new DockerProvider({host: 'tcp://203.0.113.10:2376'});
+      assert.strictEqual(provider._docker.modem.protocol, 'http');
+      assert.strictEqual(provider._docker.modem.ca, undefined);
+    },
+  );
+
+  await t.test(
+    'partial TLS material -> throws (never half-configures or downgrades)',
+    async () => {
+      assert.throws(
+        () => new DockerProvider({
+          host: 'tcp://203.0.113.10:2376',
+          tls: {ca: 'CA'},
+        }),
+        /config\.tls requires ca, cert, and key/,
+      );
+    },
+  );
+});
+
 test('Unit: image metadata helpers read inspect labels', async (t) => {
   await t.test(
     'getImageLabel and imageExists return expected values',

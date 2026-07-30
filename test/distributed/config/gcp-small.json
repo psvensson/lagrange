@@ -1,15 +1,13 @@
 {
   "size": 20,
-  "docker": {
-    "hosts": ["tcp://gcp-vm-1:2376", "tcp://gcp-vm-2:2376"]
-  },
   "nodesPerHost": 10,
   "image": "distributed-db:test",
+  "docker": {},
   "gcp": {
-    "project": "my-project",
+    "project": "something-2e584",
     "zone": "us-central1-a",
     "machineType": "e2-standard-4",
     "vmCount": 2,
-    "preemptible": true
+    "preemptible": false
   }
 }
