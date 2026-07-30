@@ -1,0 +1,43 @@
+{
+  "id": "repository-stabilization-integrity-migration",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Recovered Solver histories and operator WIP dispositions are retained as content-addressed, auditable repository state without source changes; every migrated target has its original bytes and explicit disposition, no supervised step is pending, the product portfolio is at or below 15 open Quests, and the mixed implementation candidates remain outside the live tree in verified semantic quarantine.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "docs/steering/workflow-guidelines/solver-quests.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "d68360a5f160390431e9a8e8367aff2fbd18c42a"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "repository-stabilization-integrity-migration",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "repository-stabilization-integrity-migration-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "repository-stabilization-integrity-migration",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

@@ -1,0 +1,1997 @@
+diff --git a/scripts/checks/benchmark-resource-source-provenance.js b/scripts/checks/benchmark-resource-source-provenance.js
+index e85b4af98f98a410e55bdc5d85219c9e2e53b776..9257e31743ae54f2a0b8fe9969a39b6bb23cc782 100644
+--- a/scripts/checks/benchmark-resource-source-provenance.js
++++ b/scripts/checks/benchmark-resource-source-provenance.js
+@@ -43,7 +43,9 @@ const C4_SOURCE_PATHS = Object.freeze([
+   'test/distributed/harness/docker-provider.js',
+ ]);
+ 
+-export async function collectBenchmarkResourceSourceProvenance() {
++export async function collectBenchmarkResourceSourceProvenance(
++  sourcePaths = C4_SOURCE_PATHS,
++) {
+   const {stdout: revisionText} = await execFileAsync(
+     localText.GIT,
+     [localText.REV_PARSE, localText.HEAD],
+@@ -59,7 +61,7 @@ export async function collectBenchmarkResourceSourceProvenance() {
+       localText.NO_EXT_DIFF,
+       baseCommit,
+       localText.PATH_SEPARATOR,
+-      ...C4_SOURCE_PATHS,
++      ...sourcePaths,
+     ],
+     {encoding: localText.UTF8},
+   );
+diff --git a/scripts/checks/run-comparative-efficiency-negative-controls-guard.js b/scripts/checks/run-comparative-efficiency-negative-controls-guard.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9f43ffcc1041055bf8d0671886f864748fc57801
+--- /dev/null
++++ b/scripts/checks/run-comparative-efficiency-negative-controls-guard.js
+@@ -0,0 +1,12 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'comparative-efficiency-negative-controls-guard': [
++    'test/distributed/harness/__tests__/' +
++      'comparative-efficiency-negative-controls.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/scripts/checks/run-comparative-efficiency-negative-controls-live.js b/scripts/checks/run-comparative-efficiency-negative-controls-live.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..123e23955c427c265db27e73b553bc12300587a1
+--- /dev/null
++++ b/scripts/checks/run-comparative-efficiency-negative-controls-live.js
+@@ -0,0 +1,650 @@
++#!/usr/bin/env node
++
++import {execFile} from 'node:child_process';
++import {mkdir, writeFile} from 'node:fs/promises';
++import {resolve} from 'node:path';
++import {promisify} from 'node:util';
++import {
++  collectBenchmarkResourceSourceProvenance,
++} from './benchmark-resource-source-provenance.js';
++import {DockerProvider} from
++  '../../test/distributed/harness/docker-provider.js';
++import {
++  shellQuote,
++  waitForPostgresReady,
++} from '../../test/distributed/harness/pgbench-runner.js';
++import {
++  BENCHMARK_RESOURCE_BILLING_TREATMENT,
++  BENCHMARK_RESOURCE_COMPONENT_ROLE,
++} from
++  '../../test/distributed/harness/benchmark-resource-contract-constants.js';
++import {
++  createBenchmarkResourceDurableResolver,
++  persistBenchmarkResourceArtifacts,
++} from
++  '../../test/distributed/harness/benchmark-resource-durable-resolver.js';
++import {
++  deriveBenchmarkResourceLiveComponentAccounting,
++  beginBenchmarkResourceLiveObservation,
++  captureBenchmarkResourceLiveObservation,
++  finalizeBenchmarkResourceLiveObservation,
++  writeExternallyObservedBenchmarkResourceCalibration,
++} from
++  '../../test/distributed/harness/benchmark-resource-live-observation-authority.js';
++import {
++  BENCHMARK_RESOURCE_P0_PRICE_SHEET,
++} from
++  '../../test/distributed/harness/benchmark-resource-price-sheet-p0-constants.js';
++import {
++  COMPARATIVE_NEGATIVE_CONTROL_IDS,
++  COMPARATIVE_NEGATIVE_CONTROL_REASON,
++  COMPARATIVE_NEGATIVE_CONTROL_SCENARIO,
++  createComparativeNegativeControlEvidence,
++  inspectComparativeNegativeControlEvidence,
++} from
++  '../../test/distributed/harness/comparative-efficiency-negative-controls.js';
++
++const execFileAsync = promisify(execFile);
++const IMAGE = 'postgres:16';
++const PASSWORD = 'negative-controls-live';
++const DATABASE = 'postgres';
++const POSTGRES_USER = 'postgres';
++const RESOURCE_MEMORY = '256m';
++const RESOURCE_CPUS = '1.0';
++const DATABASE_STORAGE_BYTES = 128 * 1024 * 1024;
++const DATABASE_STORAGE_PATH = '/var/lib/postgresql/data';
++const CLIENT_STORAGE_PATH = '/tmp';
++const START_TIMEOUT_MS = 30_000;
++const ARTIFACT_DIRECTORY =
++  'test-output/comparative-negative-control-artifacts';
++const REPORT_DIRECTORY = 'test-output/reports';
++const RUN_ID =
++  `comparative-negative-controls-${process.pid}-${Date.now()}`;
++const NETWORK_NAME = `${RUN_ID}-network`;
++const LABELS = Object.freeze({
++  'lagrange.proof.run': RUN_ID,
++  'lagrange.proof.scenario': COMPARATIVE_NEGATIVE_CONTROL_SCENARIO,
++});
++const SOURCE_PATHS = Object.freeze([
++  'scripts/checks/benchmark-resource-source-provenance.js',
++  'scripts/checks/run-comparative-efficiency-negative-controls-guard.js',
++  'scripts/checks/run-comparative-efficiency-negative-controls-live.js',
++  'test/distributed/harness/__tests__/' +
++    'comparative-efficiency-negative-controls.test.js',
++  'test/distributed/harness/' +
++    'comparative-efficiency-negative-controls-constants.js',
++  'test/distributed/harness/comparative-efficiency-negative-controls.js',
++]);
++const candidateReason =
++  'no claim-eligible Lagrange workload adapter was available for this ' +
++  'preregistered control identity';
++const localText = Object.freeze({
++  PSQL_ARGUMENTS: 'psql -v ON_ERROR_STOP=1 -At ',
++  SLEEP: 'sleep',
++  INFINITY: 'infinity',
++  PAIRED_CAPACITY_ABSENT: 'paired_capacity_absent',
++  RESOURCE_WINDOW_ABSENT: 'whole_topology_resource_window_absent',
++  COMPARATIVE_EFFECTS_ABSENT: 'comparative_effects_absent',
++  LIVE_EVIDENCE_VERSION: 'comparative-negative-control-live-evidence-v1',
++  LAGRANGE: 'lagrange',
++  POSTGRESQL: 'postgresql',
++  NONE: 'none',
++  LAGRANGE_NODE: 'lagrange-node',
++  POSTGRESQL_DATABASE: 'postgresql-database',
++  POSTGRESQL_CLIENT: 'postgresql-client',
++  INPUT_TYPE_MODULE: '--input-type=module',
++  EVAL: '--eval',
++  UTF8: 'utf8',
++  DURABLE_REJECTED: 'durable negative-control evidence rejected: ',
++  PASS: 'comparative-efficiency-negative-controls-live: PASS\n',
++  CLAIM_PREFIX:
++    'claim: no comparative claim; all five controls are explicitly ',
++  CLAIM_SUFFIX:
++    'non-measuring because the candidate architecture was not engaged\n',
++});
++
++function linesContain(stdout, expected) {
++  const lines = stdout.split('\n');
++  for (let index = 0; index < lines.length; index += 1) {
++    if (lines[index] === expected) return true;
++  }
++  return false;
++}
++
++const CONTROL_WORKLOADS = Object.freeze([
++  Object.freeze({
++    controlId: 'small-simple',
++    accessDistribution: 'constant',
++    randomSeed: null,
++    sql: 'SELECT 1 AS small_simple',
++    oracle: 'stdout_first_line_equals_1',
++    check(stdout) {
++      return stdout.split('\n')[0] === '1';
++    },
++  }),
++  Object.freeze({
++    controlId: 'uniform-access',
++    accessDistribution: 'uniform_pseudorandom',
++    randomSeed: 0.4242,
++    sql:
++      'SELECT setseed(0.4242); ' +
++      'WITH picks AS MATERIALIZED (' +
++        'SELECT sample_id, floor(random() * 128 + 1)::integer AS id ' +
++        'FROM generate_series(1, 128) AS sample(sample_id)' +
++      ') SELECT count(*) FROM picks JOIN control_items USING (id)',
++    oracle: 'uniform_random_128_lookups_complete',
++    check(stdout) {
++      return linesContain(stdout, '128');
++    },
++  }),
++  Object.freeze({
++    controlId: 'no-reuse',
++    accessDistribution: 'unique_insert',
++    randomSeed: null,
++    sql:
++      'INSERT INTO control_events (control_id, payload) VALUES ' +
++      '(\'no-reuse-live\', 1) RETURNING payload',
++    oracle: 'unique_insert_returns_payload_1',
++    check(stdout) {
++      return stdout.split('\n')[0] === '1';
++    },
++  }),
++  Object.freeze({
++    controlId: 'update-heavy',
++    accessDistribution: 'full_range_update',
++    randomSeed: null,
++    sql:
++      'UPDATE control_items SET version = version + 1 ' +
++      'WHERE id BETWEEN 1 AND 128; ' +
++      'SELECT sum(version) FROM control_items',
++    oracle: 'all_128_rows_invalidated_once',
++    check(stdout) {
++      return linesContain(stdout, '128');
++    },
++  }),
++  Object.freeze({
++    controlId: 'alternative-favored',
++    accessDistribution: 'indexed_point_lookup',
++    randomSeed: null,
++    sql:
++      'SET enable_seqscan = off; ' +
++      'EXPLAIN (FORMAT JSON) ' +
++      'SELECT payload FROM control_items WHERE id = 64; ' +
++      'SELECT payload FROM control_items WHERE id = 64',
++    oracle: 'postgresql_index_scan_returns_64',
++    check(stdout) {
++      return stdout.includes('Index Scan') &&
++        linesContain(stdout, '64');
++    },
++  }),
++]);
++
++function psqlCommand(host, sql) {
++  return (
++    `PGPASSWORD='${shellQuote(PASSWORD)}' ` +
++    localText.PSQL_ARGUMENTS +
++    `-h '${shellQuote(host)}' -U '${POSTGRES_USER}' ` +
++    `-d '${DATABASE}' -c '${shellQuote(sql)}'`
++  );
++}
++
++async function executeSql(provider, clientId, host, sql) {
++  const result = await provider.execInContainer(
++    clientId,
++    ['sh', '-lc', psqlCommand(host, sql)],
++  );
++  if (result.exitCode !== 0) {
++    throw new Error(`PostgreSQL control failed: ${result.stderr}`);
++  }
++  return result.stdout.trim();
++}
++
++async function createDatabase(provider, networkId) {
++  const container = await provider.createContainer({
++    name: `${RUN_ID}-postgresql`,
++    image: IMAGE,
++    network: networkId,
++    env: {
++      POSTGRES_PASSWORD: PASSWORD,
++      POSTGRES_DB: DATABASE,
++    },
++    labels: LABELS,
++    resourceLimits: {memory: RESOURCE_MEMORY, cpus: RESOURCE_CPUS},
++    hostConfigExtras: {
++      Tmpfs: {
++        [DATABASE_STORAGE_PATH]:
++          `rw,size=${DATABASE_STORAGE_BYTES}`,
++      },
++    },
++    startTimeout: START_TIMEOUT_MS,
++  });
++  await waitForPostgresReady(provider, container.containerId, {
++    user: POSTGRES_USER,
++    database: DATABASE,
++    timeoutMs: START_TIMEOUT_MS,
++  });
++  return container;
++}
++
++async function createClient(provider, networkId) {
++  return provider.createContainer({
++    name: `${RUN_ID}-client`,
++    image: IMAGE,
++    network: networkId,
++    labels: LABELS,
++    resourceLimits: {memory: RESOURCE_MEMORY, cpus: RESOURCE_CPUS},
++    command: [localText.SLEEP, localText.INFINITY],
++    startTimeout: START_TIMEOUT_MS,
++  });
++}
++
++async function prepareWorkloads(provider, client, database) {
++  const sql =
++    'CREATE TABLE control_items (' +
++      'id INTEGER PRIMARY KEY, payload BIGINT NOT NULL, ' +
++      'version BIGINT NOT NULL DEFAULT 0); ' +
++    'INSERT INTO control_items (id, payload) ' +
++      'SELECT value, value FROM generate_series(1, 128) AS value; ' +
++    'CREATE TABLE control_events (' +
++      'control_id TEXT PRIMARY KEY, payload BIGINT NOT NULL)';
++  await executeSql(
++    provider,
++    client.containerId,
++    database.ip,
++    sql,
++  );
++}
++
++async function executeControls(provider, client, database, imageId) {
++  const attempts = [];
++  for (let index = 0; index < CONTROL_WORKLOADS.length; index += 1) {
++    const workload = CONTROL_WORKLOADS[index];
++    const startedAt = new Date().toISOString();
++    const stdout = await executeSql(
++      provider,
++      client.containerId,
++      database.ip,
++      workload.sql,
++    );
++    const endedAt = new Date().toISOString();
++    const oraclePassed = workload.check(stdout);
++    if (!oraclePassed) {
++      throw new Error(
++        `${workload.controlId} alternative oracle failed: ${stdout}`,
++      );
++    }
++    attempts.push({
++      controlId: workload.controlId,
++      runId: `${RUN_ID}-${workload.controlId}`,
++      candidateEngaged: false,
++      alternativeEngaged: true,
++      reasonCodes: [
++        COMPARATIVE_NEGATIVE_CONTROL_REASON,
++        localText.PAIRED_CAPACITY_ABSENT,
++        localText.RESOURCE_WINDOW_ABSENT,
++        localText.COMPARATIVE_EFFECTS_ABSENT,
++      ],
++      liveEvidence: {
++        version: localText.LIVE_EVIDENCE_VERSION,
++        controlId: workload.controlId,
++        startedAt,
++        endedAt,
++        candidate: {
++          architectureId: localText.LAGRANGE,
++          engaged: false,
++          reason: candidateReason,
++        },
++        alternative: {
++          architectureId: localText.POSTGRESQL,
++          engaged: true,
++          image: IMAGE,
++          imageId,
++          databaseContainerId: database.containerId,
++          clientContainerId: client.containerId,
++          sql: workload.sql,
++          stdout,
++        },
++        oracle: {
++          name: workload.oracle,
++          passed: oraclePassed,
++        },
++      },
++    });
++  }
++  return attempts;
++}
++
++async function removeIfPresent(provider, containerId) {
++  if (
++    containerId &&
++    await provider.inspectContainerIfExists(containerId) !== null
++  ) {
++    await provider.removeContainer(containerId);
++  }
++}
++
++async function cleanup(provider, state) {
++  await removeIfPresent(provider, state.client?.containerId);
++  await removeIfPresent(provider, state.database?.containerId);
++  if (
++    state.networkId &&
++    await provider.getNetworkByName(NETWORK_NAME) !== null
++  ) {
++    await provider.removeNetwork(state.networkId);
++  }
++}
++
++function observedComponent(calibration, componentId) {
++  return calibration.artifact.payload.components.find(
++    (component) => component.componentId === componentId,
++  );
++}
++
++function inventoryComponent(componentId, role, calibration) {
++  const accounting = deriveBenchmarkResourceLiveComponentAccounting(
++    observedComponent(calibration, componentId),
++  );
++  return {
++    componentId,
++    role,
++    billingTreatment: BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
++    provisioned: accounting.provisioned,
++    minimumFootprint: accounting.minimumFootprint,
++    reservedHeadroomRatio: accounting.reservedHeadroomRatio,
++    exclusionReason: localText.NONE,
++  };
++}
++
++function absentCandidateInventory() {
++  return {
++    componentId: localText.LAGRANGE_NODE,
++    role: BENCHMARK_RESOURCE_COMPONENT_ROLE.LAGRANGE_NODE,
++    billingTreatment: BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
++    provisioned: {
++      cpuCores: 0,
++      memoryBytes: 0,
++      storageBytes: 0,
++      iops: 0,
++      networkBytesPerSecond: 0,
++    },
++    minimumFootprint: {
++      instances: 0,
++      cpuCores: 0,
++      memoryBytes: 0,
++      storageBytes: 0,
++    },
++    reservedHeadroomRatio: 0,
++    exclusionReason: localText.NONE,
++  };
++}
++
++async function replayInFreshProcess(rootDigest) {
++  const inspectorUrl = new URL(
++    '../../test/distributed/harness/' +
++      'comparative-efficiency-negative-controls.js',
++    import.meta.url,
++  ).href;
++  const resolverUrl = new URL(
++    '../../test/distributed/harness/' +
++      'benchmark-resource-durable-resolver.js',
++    import.meta.url,
++  ).href;
++  const source =
++    'import {inspectComparativeNegativeControlEvidence as inspect} from ' +
++      `${JSON.stringify(inspectorUrl)};` +
++    'import {createBenchmarkResourceDurableResolver as resolver} from ' +
++      `${JSON.stringify(resolverUrl)};` +
++    'const result=inspect({rootDigest:process.env.C5_ROOT_DIGEST,' +
++      'resolver:resolver(process.env.C5_ARTIFACT_DIRECTORY)});' +
++    'process.stdout.write(JSON.stringify(result));';
++  const {stdout} = await execFileAsync(
++    process.execPath,
++    [localText.INPUT_TYPE_MODULE, localText.EVAL, source],
++    {
++      encoding: localText.UTF8,
++      env: {
++        ...process.env,
++        C5_ROOT_DIGEST: rootDigest,
++        C5_ARTIFACT_DIRECTORY: resolve(ARTIFACT_DIRECTORY),
++      },
++    },
++  );
++  return JSON.parse(stdout);
++}
++
++async function writeScenarioReport(detail) {
++  const timestamp = new Date().toISOString();
++  const report = {
++    timestamp,
++    scenario: COMPARATIVE_NEGATIVE_CONTROL_SCENARIO,
++    producer: 'comparative-efficiency-negative-controls-live',
++    fidelity: 'live',
++    summary: {total: 1, passed: 1, failed: 0},
++    optimizationSummary: {totalPriorityItems: 0},
++    standardSummary: {
++      scenarios: [{
++        scenario: COMPARATIVE_NEGATIVE_CONTROL_SCENARIO,
++        passed: true,
++        current: {passed: true, verdict: 'PASS'},
++        detail,
++      }],
++    },
++  };
++  await mkdir(REPORT_DIRECTORY, {recursive: true});
++  const stamp = timestamp.replace(/[:.]/gu, '-');
++  const path = resolve(
++    REPORT_DIRECTORY,
++    `${COMPARATIVE_NEGATIVE_CONTROL_SCENARIO}-${stamp}.report.json`,
++  );
++  await writeFile(path, JSON.stringify(report, null, 2));
++  return path;
++}
++
++async function main() {
++  const provider = new DockerProvider();
++  const state = {networkId: null, database: null, client: null};
++  const provenance =
++    await collectBenchmarkResourceSourceProvenance(SOURCE_PATHS);
++  let session;
++  let attempts;
++  let imageId;
++  try {
++    const image = await provider.inspectImage(IMAGE);
++    if (!image) throw new Error(`required live image unavailable: ${IMAGE}`);
++    imageId = image.Id;
++    const network = await provider.createNetwork(NETWORK_NAME, LABELS);
++    state.networkId = network.id;
++    state.database = await createDatabase(provider, state.networkId);
++    state.client = await createClient(provider, state.networkId);
++    await prepareWorkloads(provider, state.client, state.database);
++    session = await beginBenchmarkResourceLiveObservation(provider, {
++      runId: RUN_ID,
++      networkId: state.networkId,
++      networkName: NETWORK_NAME,
++      sourceRevision: provenance.sourceRevision,
++      components: [
++        {
++          componentId: localText.POSTGRESQL_DATABASE,
++          sideId: localText.POSTGRESQL,
++          containerId: state.database.containerId,
++          storagePath: DATABASE_STORAGE_PATH,
++        },
++        {
++          componentId: localText.POSTGRESQL_CLIENT,
++          sideId: localText.POSTGRESQL,
++          containerId: state.client.containerId,
++          storagePath: CLIENT_STORAGE_PATH,
++        },
++      ],
++    });
++    attempts = await executeControls(
++      provider,
++      state.client,
++      state.database,
++      imageId,
++    );
++    await captureBenchmarkResourceLiveObservation(session);
++    await cleanup(provider, state);
++  } catch (error) {
++    await cleanup(provider, state);
++    throw error;
++  }
++  const finalized =
++    await finalizeBenchmarkResourceLiveObservation(session);
++  const calibration =
++    writeExternallyObservedBenchmarkResourceCalibration(
++      finalized.receipt,
++      finalized.authorization,
++    );
++  const producedAt = new Date().toISOString();
++  const validUntil =
++    new Date(Date.parse(producedAt) + 24 * 60 * 60 * 1_000).toISOString();
++  const sideIds = [localText.LAGRANGE, localText.POSTGRESQL];
++  const evidence = createComparativeNegativeControlEvidence({
++    matrixId: 'comparative-negative-controls-p0-v1',
++    pairId: 'lagrange-postgresql-negative-controls-v1',
++    sideIds,
++    sourceRevision: provenance.sourceRevision,
++    producedAt,
++    validUntil,
++    workloadManifest: {
++      version: 'comparative-negative-controls-workloads-v1',
++      controls: CONTROL_WORKLOADS.map((control) => ({
++        controlId: control.controlId,
++        accessDistribution: control.accessDistribution,
++        randomSeed: control.randomSeed,
++        alternativeSql: control.sql,
++        correctnessOracle: control.oracle,
++      })),
++      selectionPolicy: 'complete_preregistered_matrix',
++    },
++    alternativeTopology: {
++      version: 'comparative-negative-controls-topology-v1',
++      candidate: {
++        architectureId: localText.LAGRANGE,
++        required: true,
++        engaged: false,
++        reason: candidateReason,
++      },
++      alternative: {
++        architectureId: localText.POSTGRESQL,
++        image: IMAGE,
++        imageId,
++        databaseContainerId:
++          calibration.artifact.payload.components[0].containerId,
++        clientContainerId:
++          calibration.artifact.payload.components[1].containerId,
++        network: 'managed_bridge',
++      },
++    },
++    preregistration: {
++      version: 'comparative-negative-controls-preregistration-v1',
++      controls: COMPARATIVE_NEGATIVE_CONTROL_IDS,
++      sideIds,
++      outcomePolicy: 'direction_neutral',
++      invalidCellPolicy: 'publish_explicit_non_measuring',
++      candidateEngagementRequired: true,
++      requiredEvidence: [
++        'paired_capacity',
++        'whole_topology_resource_windows',
++        'capacity_uncertainty',
++        'capacity_practical_effect',
++        'cost_practical_effect',
++      ],
++    },
++    inventoryId: 'comparative-negative-controls-live-inventory-v1',
++    inventorySides: [
++      {
++        sideId: localText.LAGRANGE,
++        components: [absentCandidateInventory()],
++      },
++      {
++        sideId: localText.POSTGRESQL,
++        components: [
++          inventoryComponent(
++            localText.POSTGRESQL_DATABASE,
++            BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE,
++            calibration,
++          ),
++          inventoryComponent(
++            localText.POSTGRESQL_CLIENT,
++            BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT,
++            calibration,
++          ),
++        ],
++      },
++    ],
++    priceSheet: BENCHMARK_RESOURCE_P0_PRICE_SHEET,
++    calibrationArtifact: calibration,
++    attempts,
++  });
++  const inspection =
++    inspectComparativeNegativeControlEvidence(evidence.receipt);
++  if (!inspection.valid || !inspection.complete) {
++    throw new Error(`negative-control evidence rejected: ${inspection.reason}`);
++  }
++  const allArtifacts = [...evidence.artifacts, evidence.root];
++  const persisted = await persistBenchmarkResourceArtifacts(
++    resolve(ARTIFACT_DIRECTORY),
++    allArtifacts,
++  );
++  const durableInspection = inspectComparativeNegativeControlEvidence({
++    rootDigest: evidence.root.digest,
++    resolver: createBenchmarkResourceDurableResolver(
++      resolve(ARTIFACT_DIRECTORY),
++    ),
++  });
++  if (!durableInspection.valid || !durableInspection.complete) {
++    throw new Error(
++      localText.DURABLE_REJECTED +
++      `${durableInspection.reason}`,
++    );
++  }
++  const freshInspection = await replayInFreshProcess(evidence.root.digest);
++  if (!freshInspection.valid || !freshInspection.complete) {
++    throw new Error(
++      `fresh negative-control evidence rejected: ${freshInspection.reason}`,
++    );
++  }
++  const reportPath = await writeScenarioReport({
++    runId: RUN_ID,
++    sourceRevision: provenance.sourceRevision,
++    sourceProvenance: provenance,
++    matrixId: inspection.matrixId,
++    matrixDigest: inspection.matrixDigest,
++    evidenceRootDigest: inspection.rootDigest,
++    controls: COMPARATIVE_NEGATIVE_CONTROL_IDS,
++    fullMatrixComplete: true,
++    outcomeNeutral: true,
++    comparativeClaimEligible: false,
++    measuringCellCount: inspection.measuringCellCount,
++    nonMeasuringCellCount: inspection.nonMeasuringCellCount,
++    reasonCodesByControl: attempts.map((attempt) => ({
++      controlId: attempt.controlId,
++      reasonCodes: attempt.reasonCodes,
++    })),
++    alternativeOracles: attempts.map((attempt) => ({
++      controlId: attempt.controlId,
++      passed: attempt.liveEvidence.oracle.passed,
++    })),
++    artifactCount: persisted.length,
++    liveCalibrationDigest: calibration.digest,
++    cleanupVerified: finalized.receipt.cleanupVerified,
++    durableReplayValid: durableInspection.valid,
++    freshProcessReplayValid: freshInspection.valid,
++  });
++  process.stdout.write(
++    localText.PASS +
++    localText.CLAIM_PREFIX +
++      localText.CLAIM_SUFFIX +
++    `rootDigest: ${evidence.root.digest}\n` +
++    `scenarioReport: ${reportPath}\n`,
++  );
++}
++
++main().catch((error) => {
++  process.stderr.write(
++    `comparative-efficiency-negative-controls-live: FAIL\n${error.stack}\n`,
++  );
++  process.exitCode = 1;
++});
+diff --git a/test/distributed/harness/__tests__/comparative-efficiency-negative-controls.test.js b/test/distributed/harness/__tests__/comparative-efficiency-negative-controls.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..7c35df2117643da384e2dc3105453992f3d64192
+--- /dev/null
++++ b/test/distributed/harness/__tests__/comparative-efficiency-negative-controls.test.js
+@@ -0,0 +1,578 @@
++import {test} from '../../../../src/test-helpers/tap.js';
++import {
++  BENCHMARK_RESOURCE_ARTIFACT_KIND,
++  BENCHMARK_RESOURCE_BILLING_TREATMENT,
++  BENCHMARK_RESOURCE_COMPONENT_ROLE,
++} from '../benchmark-resource-contract-constants.js';
++import {
++  createBenchmarkResourceMemoryResolver,
++} from '../benchmark-resource-evidence-data.js';
++import {
++  createBenchmarkResourceEvidenceRoot,
++  createBenchmarkResourceNonMeasuringCellEvidence,
++  createBenchmarkResourceSourceArtifact,
++  validateBenchmarkResourceEvidenceRoot,
++} from '../benchmark-resource-evidence-root.js';
++import {
++  beginBenchmarkResourceLiveObservation,
++  captureBenchmarkResourceLiveObservation,
++  finalizeBenchmarkResourceLiveObservation,
++  writeExternallyObservedBenchmarkResourceCalibration,
++} from '../benchmark-resource-live-observation-authority.js';
++import {
++  BENCHMARK_RESOURCE_P0_PRICE_SHEET,
++} from '../benchmark-resource-price-sheet-p0-constants.js';
++import {
++  COMPARATIVE_NEGATIVE_CONTROL_IDS,
++  COMPARATIVE_NEGATIVE_CONTROL_REASON,
++  comparativeNegativeControlEvidenceDigest,
++  createComparativeNegativeControlEvidence,
++  inspectComparativeNegativeControlEvidence,
++} from '../comparative-efficiency-negative-controls.js';
++
++const SOURCE_REVISION = 'git-commit:c5-negative-control-fixture';
++const PRODUCED_AT = '2026-07-27T20:00:00.000Z';
++const VALID_UNTIL = '2026-07-28T20:00:00.000Z';
++const SIDE_IDS = ['lagrange', 'postgresql'];
++
++function resourceStats(timestamp, multiplier) {
++  return {
++    timestamp,
++    cpuPercent: 10 * multiplier,
++    cpuUsageNanoseconds: 10_000 * multiplier,
++    memoryUsageBytes: 100_000 * multiplier,
++    memoryLimitBytes: 1_000_000,
++    cpuLimitNanoCpus: 1_000_000_000,
++    storageLimitBytes: 1_000_000,
++    pids: 5,
++    rxBytes: 1_000 * multiplier,
++    txBytes: 2_000 * multiplier,
++    blockReadBytes: 3_000 * multiplier,
++    blockWriteBytes: 4_000 * multiplier,
++    blockReadOperations: 3 * multiplier,
++    blockWriteOperations: 4 * multiplier,
++    storageUsageBytes: 10_000 * multiplier,
++  };
++}
++
++async function calibrationFixture(sourceRevision = SOURCE_REVISION) {
++  let calls = 0;
++  let cleaned = false;
++  const provider = {
++    async inspectContainer() {
++      return {State: {Running: true}};
++    },
++    async inspectContainerIfExists() {
++      return cleaned ? null : {State: {Running: true}};
++    },
++    async getContainerResourceSnapshot() {
++      calls += 1;
++      return resourceStats(calls <= 2 ? 1_000 : 2_000, calls <= 2 ? 1 : 2);
++    },
++    async getNetworkByName() {
++      return cleaned ? null : {id: 'negative-control-network'};
++    },
++  };
++  const session = await beginBenchmarkResourceLiveObservation(provider, {
++    runId: 'negative-control-live-fixture',
++    networkId: 'negative-control-network',
++    networkName: 'negative-control-network',
++    sourceRevision,
++    components: [
++      {
++        componentId: 'postgresql-database',
++        sideId: 'postgresql',
++        containerId: 'postgresql-container',
++        storagePath: '/var/lib/postgresql/data',
++      },
++      {
++        componentId: 'postgresql-client',
++        sideId: 'postgresql',
++        containerId: 'client-container',
++        storagePath: '/tmp',
++      },
++    ],
++  });
++  await captureBenchmarkResourceLiveObservation(session);
++  cleaned = true;
++  const finalized = await finalizeBenchmarkResourceLiveObservation(session);
++  return writeExternallyObservedBenchmarkResourceCalibration(
++    finalized.receipt,
++    finalized.authorization,
++  );
++}
++
++function provisioned() {
++  return {
++    cpuCores: 1,
++    memoryBytes: 1_000_000,
++    storageBytes: 1_000_000,
++    iops: 0,
++    networkBytesPerSecond: 0,
++  };
++}
++
++function minimumFootprint() {
++  return {
++    instances: 1,
++    cpuCores: 0,
++    memoryBytes: 0,
++    storageBytes: 0,
++  };
++}
++
++function component(componentId, role) {
++  return {
++    componentId,
++    role,
++    billingTreatment: BENCHMARK_RESOURCE_BILLING_TREATMENT.INCLUDED,
++    provisioned: provisioned(),
++    minimumFootprint: minimumFootprint(),
++    reservedHeadroomRatio: 0,
++    exclusionReason: 'none',
++  };
++}
++
++function attempts() {
++  return COMPARATIVE_NEGATIVE_CONTROL_IDS.map((controlId, index) => ({
++    controlId,
++    runId: `negative-control-${index}`,
++    candidateEngaged: false,
++    alternativeEngaged: true,
++    reasonCodes: [COMPARATIVE_NEGATIVE_CONTROL_REASON],
++    liveEvidence: {
++      version: 'comparative-negative-control-live-evidence-v1',
++      controlId,
++      startedAt: `2026-07-27T20:00:0${index}.000Z`,
++      endedAt: `2026-07-27T20:00:1${index}.000Z`,
++      candidate: {
++        architectureId: 'lagrange',
++        engaged: false,
++        reason: 'no Lagrange adapter exists for this control identity',
++      },
++      alternative: {
++        architectureId: 'postgresql',
++        engaged: true,
++        image: 'postgres:16',
++        imageId: 'sha256:fixture-image',
++        databaseContainerId: 'fixture-database',
++        clientContainerId: 'fixture-client',
++        sql: `SELECT ${index + 1}`,
++        stdout: `${index + 1}`,
++      },
++      oracle: {
++        name: `fixture-oracle-${index}`,
++        passed: true,
++      },
++    },
++  }));
++}
++
++async function evidenceFixture(overrides = {}) {
++  const calibrationArtifact =
++    overrides.calibrationArtifact || await calibrationFixture();
++  return createComparativeNegativeControlEvidence({
++    matrixId: 'comparative-negative-controls-p0-v1',
++    pairId: 'lagrange-postgresql-negative-controls-v1',
++    sideIds: SIDE_IDS,
++    sourceRevision: SOURCE_REVISION,
++    producedAt: PRODUCED_AT,
++    validUntil: VALID_UNTIL,
++    workloadManifest: {
++      version: 'comparative-negative-controls-workloads-v1',
++      controls: COMPARATIVE_NEGATIVE_CONTROL_IDS,
++      selectionPolicy: 'complete_preregistered_matrix',
++    },
++    alternativeTopology: {
++      version: 'comparative-negative-controls-topology-v1',
++      candidateArchitecture: 'lagrange',
++      alternativeArchitecture: 'postgresql',
++      candidateEngagementRequired: true,
++    },
++    preregistration: {
++      version: 'comparative-negative-controls-preregistration-v1',
++      controls: COMPARATIVE_NEGATIVE_CONTROL_IDS,
++      sideIds: SIDE_IDS,
++      outcomePolicy: 'direction_neutral',
++      invalidCellPolicy: 'publish_explicit_non_measuring',
++    },
++    inventoryId: 'comparative-negative-controls-inventory-v1',
++    inventorySides: [
++      {
++        sideId: 'lagrange',
++        components: [
++          component('lagrange-node', BENCHMARK_RESOURCE_COMPONENT_ROLE.LAGRANGE_NODE),
++        ],
++      },
++      {
++        sideId: 'postgresql',
++        components: [
++          component('postgresql-database', BENCHMARK_RESOURCE_COMPONENT_ROLE.DATABASE),
++          component('postgresql-client', BENCHMARK_RESOURCE_COMPONENT_ROLE.CLIENT),
++        ],
++      },
++    ],
++    priceSheet: BENCHMARK_RESOURCE_P0_PRICE_SHEET,
++    calibrationArtifact,
++    attempts: overrides.attempts || attempts(),
++  });
++}
++
++function rebuiltSourceReceipt(evidence, mutate, options = {}) {
++  const originalSource = evidence.engagements[0];
++  const originalCell = evidence.cells[0];
++  const payload =
++    JSON.parse(JSON.stringify(originalSource.artifact.payload));
++  mutate(payload);
++  const references =
++    options.references || [payload.calibrationDigest];
++  const source = createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
++    payload,
++    references,
++  );
++  const cellPayload = originalCell.artifact.payload;
++  const cell = createBenchmarkResourceNonMeasuringCellEvidence({
++    matrixManifestDigest: cellPayload.matrixManifestDigest,
++    matrixId: cellPayload.matrixId,
++    cellId: cellPayload.cellId,
++    pairId: cellPayload.pairId,
++    runId: cellPayload.runId,
++    sideIds: cellPayload.sideIds,
++    reasonCodes: cellPayload.reasonCodes,
++    sourceDigests: [source.digest],
++    sourceRevision: cellPayload.sourceRevision,
++    producedAt: cellPayload.producedAt,
++    validUntil: cellPayload.validUntil,
++  });
++  const artifacts = evidence.artifacts.filter((artifact) => (
++    artifact.digest !== originalSource.digest &&
++    artifact.digest !== originalCell.digest
++  ));
++  artifacts.push(source, cell);
++  const rootPayload = evidence.root.artifact.payload;
++  const cellDigests = [...rootPayload.cellEvidenceDigests];
++  cellDigests[0] = cell.digest;
++  const root = createBenchmarkResourceEvidenceRoot({
++    matrixManifestDigest: rootPayload.matrixManifestDigest,
++    componentInventoryDigest: rootPayload.componentInventoryDigest,
++    priceSheetDigest: rootPayload.priceSheetDigest,
++    cellEvidenceDigests: cellDigests,
++    sourceRevision: rootPayload.sourceRevision,
++    producedAt: rootPayload.producedAt,
++    validUntil: rootPayload.validUntil,
++    artifacts,
++  });
++  return {
++    rootDigest: root.digest,
++    resolver: createBenchmarkResourceMemoryResolver([...artifacts, root]),
++  };
++}
++
++function relabeledRevisionReceipt(evidence) {
++  const sourceRevision = 'git-commit:forged-revision';
++  const replacements = [];
++  for (let index = 0; index < evidence.cells.length; index += 1) {
++    const payload = evidence.cells[index].artifact.payload;
++    replacements.push(createBenchmarkResourceNonMeasuringCellEvidence({
++      matrixManifestDigest: payload.matrixManifestDigest,
++      matrixId: payload.matrixId,
++      cellId: payload.cellId,
++      pairId: payload.pairId,
++      runId: payload.runId,
++      sideIds: payload.sideIds,
++      reasonCodes: payload.reasonCodes,
++      sourceDigests: payload.sourceDigests,
++      sourceRevision,
++      producedAt: payload.producedAt,
++      validUntil: payload.validUntil,
++    }));
++  }
++  const oldCellDigests = new Set(
++    evidence.cells.map((cell) => cell.digest),
++  );
++  const artifacts = evidence.artifacts.filter(
++    (artifact) => !oldCellDigests.has(artifact.digest),
++  );
++  artifacts.push(...replacements);
++  const payload = evidence.root.artifact.payload;
++  const root = createBenchmarkResourceEvidenceRoot({
++    matrixManifestDigest: payload.matrixManifestDigest,
++    componentInventoryDigest: payload.componentInventoryDigest,
++    priceSheetDigest: payload.priceSheetDigest,
++    cellEvidenceDigests: replacements.map((cell) => cell.digest),
++    sourceRevision,
++    producedAt: payload.producedAt,
++    validUntil: payload.validUntil,
++    artifacts,
++  });
++  return {
++    rootDigest: root.digest,
++    resolver: createBenchmarkResourceMemoryResolver([...artifacts, root]),
++  };
++}
++
++test('negative-control matrix publishes every invalid cell without a claim',
++  async (t) => {
++    const evidence = await evidenceFixture();
++    const inspection =
++      inspectComparativeNegativeControlEvidence(evidence.receipt);
++
++    t.same(inspection, {
++      valid: true,
++      reason: 'valid',
++      complete: true,
++      claimEligible: false,
++      measuringCellCount: 0,
++      nonMeasuringCellCount: 5,
++      matrixId: 'comparative-negative-controls-p0-v1',
++      matrixDigest: evidence.matrix.digest,
++      rootDigest: evidence.root.digest,
++    });
++    t.equal(evidence.cells.length, COMPARATIVE_NEGATIVE_CONTROL_IDS.length);
++    t.equal(evidence.engagements.length, COMPARATIVE_NEGATIVE_CONTROL_IDS.length);
++    t.match(
++      comparativeNegativeControlEvidenceDigest(evidence),
++      /^sha256:[0-9a-f]{64}$/u,
++    );
++    t.end();
++  });
++
++test('negative-control matrix rejects selective omission', async (t) => {
++  const selected = attempts().slice(0, 3);
++  await t.rejects(
++    evidenceFixture({attempts: selected}),
++    /attempts:exact_matrix_required/u,
++  );
++  t.end();
++});
++
++test('negative-control matrix rejects reordered result selection', async (t) => {
++  const reordered = attempts();
++  [reordered[0], reordered[1]] = [reordered[1], reordered[0]];
++  await t.rejects(
++    evidenceFixture({attempts: reordered}),
++    /control_order_mismatch/u,
++  );
++  t.end();
++});
++
++test('negative-control matrix rejects a surrogate candidate measurement',
++  async (t) => {
++    const surrogate = attempts();
++    surrogate[0].candidateEngaged = true;
++    await t.rejects(
++      evidenceFixture({attempts: surrogate}),
++      /candidate_must_be_absent/u,
++    );
++    t.end();
++  });
++
++test('negative-control matrix requires the alternative live attempt',
++  async (t) => {
++    const disconnected = attempts();
++    disconnected[2].alternativeEngaged = false;
++    await t.rejects(
++      evidenceFixture({attempts: disconnected}),
++      /alternative_must_be_engaged/u,
++    );
++    t.end();
++  });
++
++test('negative-control matrix requires explicit candidate absence reason',
++  async (t) => {
++    const unexplained = attempts();
++    unexplained[3].reasonCodes = ['unknown'];
++    await t.rejects(
++      evidenceFixture({attempts: unexplained}),
++      /candidate_absence_reason_required/u,
++    );
++    t.end();
++  });
++
++test('negative-control root rejects tampered raw live bytes', async (t) => {
++  const evidence = await evidenceFixture();
++  const target = evidence.engagements[0];
++  const tampered = Buffer.from(target.bytes);
++  tampered[tampered.length - 2] ^= 1;
++  const receipt = {
++    rootDigest: evidence.root.digest,
++    resolver: {
++      resolve(digest) {
++        if (digest === target.digest) return tampered;
++        return evidence.receipt.resolver.resolve(digest);
++      },
++    },
++  };
++  const inspection = inspectComparativeNegativeControlEvidence(receipt);
++  t.equal(inspection.valid, false);
++  t.match(inspection.reason, /digest_mismatch|canonical/u);
++  t.end();
++});
++
++test('negative-control matrix rejects mismatched live source revision',
++  async (t) => {
++    const calibrationArtifact = await calibrationFixture(
++      'git-commit:different-source',
++    );
++    await t.rejects(
++      evidenceFixture({calibrationArtifact}),
++      /external_observation_required/u,
++    );
++    t.end();
++  });
++
++test('negative-control admission binds every live source identity',
++  async (t) => {
++    const evidence = await evidenceFixture();
++    const attacks = [
++      {
++        name: 'pair',
++        mutate(payload) {
++          payload.pairId = 'forged-pair';
++        },
++      },
++      {
++        name: 'side',
++        mutate(payload) {
++          payload.sideIds = ['postgresql', 'lagrange'];
++        },
++      },
++      {
++        name: 'reason',
++        mutate(payload) {
++          payload.reasonCodes = [
++            COMPARATIVE_NEGATIVE_CONTROL_REASON,
++            'forged-reason',
++          ];
++        },
++      },
++      {
++        name: 'control',
++        mutate(payload) {
++          payload.controlId = 'uniform-access';
++        },
++      },
++      {
++        name: 'oracle',
++        mutate(payload) {
++          payload.liveEvidence.oracle.passed = false;
++        },
++      },
++    ];
++    for (let index = 0; index < attacks.length; index += 1) {
++      const attack = attacks[index];
++      const receipt = rebuiltSourceReceipt(evidence, attack.mutate);
++      t.equal(
++        validateBenchmarkResourceEvidenceRoot(receipt).valid,
++        true,
++        `${attack.name} attack retains a valid generic C4 root`,
++      );
++      t.equal(
++        inspectComparativeNegativeControlEvidence(receipt).valid,
++        false,
++        `${attack.name} attack is rejected by C5 admission`,
++      );
++    }
++    t.end();
++  });
++
++test('negative-control admission requires the referenced live calibration',
++  async (t) => {
++    const evidence = await evidenceFixture();
++    const receipt = rebuiltSourceReceipt(
++      evidence,
++      (payload) => {
++        payload.calibrationDigest = evidence.price.digest;
++      },
++      {
++        references: [evidence.price.digest],
++      },
++    );
++    t.equal(validateBenchmarkResourceEvidenceRoot(receipt).valid, true);
++    const inspection = inspectComparativeNegativeControlEvidence(receipt);
++    t.equal(inspection.valid, false);
++    t.match(inspection.reason, /external_observation_required/u);
++    t.end();
++  });
++
++test('negative-control calibration revision is bound to the evidence root',
++  async (t) => {
++    const evidence = await evidenceFixture();
++    const receipt = relabeledRevisionReceipt(evidence);
++    t.equal(validateBenchmarkResourceEvidenceRoot(receipt).valid, true);
++    const inspection = inspectComparativeNegativeControlEvidence(receipt);
++    t.equal(inspection.valid, false);
++    t.match(inspection.reason, /external_observation_required/u);
++    t.end();
++  });
++
++test('negative-control inspection resolves each artifact at most once',
++  async (t) => {
++    const evidence = await evidenceFixture();
++    const calls = new Map();
++    const resolver = evidence.receipt.resolver;
++    const receipt = {
++      rootDigest: evidence.root.digest,
++      resolver: {
++        resolve(digest) {
++          const count = (calls.get(digest) || 0) + 1;
++          calls.set(digest, count);
++          if (count > 1) throw new Error('stateful resolver reread');
++          return resolver.resolve(digest);
++        },
++      },
++    };
++    const inspection = inspectComparativeNegativeControlEvidence(receipt);
++    t.equal(inspection.valid, true);
++    for (const count of calls.values()) t.equal(count, 1);
++    t.end();
++  });
++
++test('negative-control inspection never invokes a hostile error getter',
++  async (t) => {
++    let getterCalls = 0;
++    const hostile = {};
++    Object.defineProperty(hostile, 'message', {
++      get() {
++        getterCalls += 1;
++        return 'attacker-controlled-message';
++      },
++    });
++    const inspection = inspectComparativeNegativeControlEvidence({
++      rootDigest:
++        'sha256:aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
++      resolver: {
++        resolve() {
++          throw hostile;
++        },
++      },
++    });
++    t.equal(inspection.valid, false);
++    t.equal(getterCalls, 0);
++    t.notMatch(inspection.reason, /attacker-controlled-message/u);
++    t.end();
++  });
++
++test('negative-control reason admission ignores poisoned Array includes',
++  async (t) => {
++    const poisoned = attempts();
++    poisoned[0].reasonCodes = ['forged-reason'];
++    const descriptor =
++      Object.getOwnPropertyDescriptor(Array.prototype, 'includes');
++    // eslint-disable-next-line no-extend-native -- adversarial intrinsic test
++    Object.defineProperty(Array.prototype, 'includes', {
++      ...descriptor,
++      value: () => true,
++    });
++    try {
++      await t.rejects(
++        evidenceFixture({attempts: poisoned}),
++        /candidate_absence_reason_required/u,
++      );
++    } finally {
++      // eslint-disable-next-line no-extend-native -- restore tested intrinsic
++      Object.defineProperty(Array.prototype, 'includes', descriptor);
++    }
++    t.end();
++  });
+diff --git a/test/distributed/harness/comparative-efficiency-negative-controls-constants.js b/test/distributed/harness/comparative-efficiency-negative-controls-constants.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..70d588560715ea8cd08e01689eb3f7002143c671
+--- /dev/null
++++ b/test/distributed/harness/comparative-efficiency-negative-controls-constants.js
+@@ -0,0 +1,11 @@
++export const COMPARATIVE_NEGATIVE_CONTROL_SCENARIO =
++  'comparative-efficiency-negative-controls';
++export const COMPARATIVE_NEGATIVE_CONTROL_REASON =
++  'candidate_architecture_not_engaged';
++export const COMPARATIVE_NEGATIVE_CONTROL_IDS = Object.freeze([
++  'small-simple',
++  'uniform-access',
++  'no-reuse',
++  'update-heavy',
++  'alternative-favored',
++]);
+diff --git a/test/distributed/harness/comparative-efficiency-negative-controls.js b/test/distributed/harness/comparative-efficiency-negative-controls.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..fc5165affeffcb9166df3695cb78cc2ed7c0accc
+--- /dev/null
++++ b/test/distributed/harness/comparative-efficiency-negative-controls.js
+@@ -0,0 +1,692 @@
++import {
++  appendOwnArrayValue,
++  digestBenchmarkSemanticData,
++} from './benchmark-semantic-integrity.js';
++import {types} from 'node:util';
++import {
++  createBenchmarkResourceComponentInventory,
++} from './benchmark-resource-accounting.js';
++import {
++  createBenchmarkResourcePriceSheet,
++} from './benchmark-resource-cost-and-effects.js';
++import {
++  assertBenchmarkResourceArray,
++  assertBenchmarkResourceCanonicalData,
++  assertBenchmarkResourceExactRecord,
++  assertBenchmarkResourceText,
++  createBenchmarkResourceMemoryResolver,
++  parseBenchmarkResourceArtifact,
++} from './benchmark-resource-evidence-data.js';
++import {
++  createBenchmarkResourceEvidenceRoot,
++  createBenchmarkResourceNonMeasuringCellEvidence,
++  createBenchmarkResourceSourceArtifact,
++  validateBenchmarkResourceEvidenceRoot,
++} from './benchmark-resource-evidence-root.js';
++import {
++  inspectBenchmarkResourceLiveCalibrationArtifact,
++} from './benchmark-resource-live-observation-authority.js';
++import {
++  createBenchmarkResourceMatrixManifest,
++} from './benchmark-resource-matrix-manifest.js';
++import {
++  BENCHMARK_RESOURCE_ARTIFACT_KIND,
++  BENCHMARK_RESOURCE_CELL_STATE,
++} from './benchmark-resource-contract-constants.js';
++import {
++  COMPARATIVE_NEGATIVE_CONTROL_IDS,
++  COMPARATIVE_NEGATIVE_CONTROL_REASON,
++} from './comparative-efficiency-negative-controls-constants.js';
++export {
++  COMPARATIVE_NEGATIVE_CONTROL_IDS,
++  COMPARATIVE_NEGATIVE_CONTROL_REASON,
++  COMPARATIVE_NEGATIVE_CONTROL_SCENARIO,
++} from './comparative-efficiency-negative-controls-constants.js';
++
++const localText = Object.freeze({
++  INPUT: 'negativeControls',
++  ATTEMPTS: 'negativeControls.attempts',
++  ATTEMPTS_EXACT_MATRIX_REQUIRED:
++    'negativeControls.attempts:exact_matrix_required',
++  ATTEMPT_CONTROL_ORDER_MISMATCH:
++    'negativeControls.attempts:control_order_mismatch',
++  ATTEMPT_CANDIDATE_MUST_BE_ABSENT:
++    'negativeControls.attempt:candidate_must_be_absent',
++  ATTEMPT_ALTERNATIVE_MUST_BE_ENGAGED:
++    'negativeControls.attempt:alternative_must_be_engaged',
++  ATTEMPT_REASON_REQUIRED:
++    'negativeControls.attempt:candidate_absence_reason_required',
++  CALIBRATION_INVALID:
++    'negativeControls.calibration:external_observation_required',
++  LIVE_EVIDENCE_INVALID:
++    'negativeControls.attempt:live_evidence_invalid',
++  MATRIX_SHAPE_MISMATCH:
++    'negativeControls.matrix:exact_control_axis_required',
++  CELL_SHAPE_MISMATCH:
++    'negativeControls.cells:explicit_non_measuring_required',
++  CELL_SOURCE_MISMATCH:
++    'negativeControls.cells:live_attempt_source_mismatch',
++  ROOT_INVALID: 'negativeControls.root:invalid',
++  SIDE_IDS: 'negativeControls.sideIds',
++  SIDE_IDS_DISTINCT_EXACT_PAIR_REQUIRED:
++    'negativeControls.sideIds:distinct_exact_pair_required',
++  AXIS_CONTROL: 'control',
++  CANDIDATE_ARCHITECTURE: 'lagrange',
++  ALTERNATIVE_ARCHITECTURE: 'postgresql',
++  ROOT: 'root',
++  VALID: 'valid',
++});
++
++const inputKeys = Object.freeze([
++  'matrixId',
++  'pairId',
++  'sideIds',
++  'sourceRevision',
++  'producedAt',
++  'validUntil',
++  'workloadManifest',
++  'alternativeTopology',
++  'preregistration',
++  'inventoryId',
++  'inventorySides',
++  'priceSheet',
++  'calibrationArtifact',
++  'attempts',
++]);
++const attemptKeys = Object.freeze([
++  'controlId',
++  'runId',
++  'candidateEngaged',
++  'alternativeEngaged',
++  'reasonCodes',
++  'liveEvidence',
++]);
++const sourcePayloadKeys = Object.freeze([
++  'version',
++  'matrixId',
++  'cellId',
++  'pairId',
++  'runId',
++  'sideIds',
++  'controlId',
++  'state',
++  'candidateEngaged',
++  'alternativeEngaged',
++  'reasonCodes',
++  'liveEvidence',
++  'calibrationDigest',
++]);
++const receiptKeys = Object.freeze(['rootDigest', 'resolver']);
++const resolverKeys = Object.freeze(['resolve']);
++const liveEvidenceKeys = Object.freeze([
++  'version',
++  'controlId',
++  'startedAt',
++  'endedAt',
++  'candidate',
++  'alternative',
++  'oracle',
++]);
++const liveCandidateKeys =
++  Object.freeze(['architectureId', 'engaged', 'reason']);
++const liveAlternativeKeys = Object.freeze([
++  'architectureId',
++  'engaged',
++  'image',
++  'imageId',
++  'databaseContainerId',
++  'clientContainerId',
++  'sql',
++  'stdout',
++]);
++const liveOracleKeys = Object.freeze(['name', 'passed']);
++const sourceVersion =
++  'comparative-negative-control-live-attempt-v1';
++const liveEvidenceVersion =
++  'comparative-negative-control-live-evidence-v1';
++const maximumReasonCodes = 16;
++const dataValueKey = 'value';
++const timestampPattern =
++  /^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$/u;
++const bufferFrom = Buffer.from;
++const dateParse = Date.parse;
++const mapGet = Function.call.bind(Map.prototype.get);
++const mapHas = Function.call.bind(Map.prototype.has);
++const mapSet = Function.call.bind(Map.prototype.set);
++const numberIsFinite = Number.isFinite;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const reflectApply = Reflect.apply;
++const regexpTest = Function.call.bind(RegExp.prototype.test);
++
++function fail(message) {
++  throw new TypeError(message);
++}
++
++function exactValues(actual, expected) {
++  if (actual.length !== expected.length) return false;
++  for (let index = 0; index < actual.length; index += 1) {
++    if (actual[index] !== expected[index]) return false;
++  }
++  return true;
++}
++
++function arrayContains(values, expected) {
++  for (let index = 0; index < values.length; index += 1) {
++    if (values[index] === expected) return true;
++  }
++  return false;
++}
++
++function ownDataValue(value, key, path) {
++  const descriptor = objectGetOwnPropertyDescriptor(value, key);
++  if (!descriptor || !objectHasOwn(descriptor, dataValueKey)) {
++    fail(`${path}:own_data_property_required`);
++  }
++  return descriptor.value;
++}
++
++function safeErrorMessage(error) {
++  if (!error || typeof error !== 'object' || types.isProxy(error)) {
++    return localText.ROOT_INVALID;
++  }
++  const descriptor = objectGetOwnPropertyDescriptor(error, 'message');
++  if (
++    descriptor &&
++    objectHasOwn(descriptor, dataValueKey) &&
++    typeof descriptor.value === 'string'
++  ) {
++    return descriptor.value;
++  }
++  return localText.ROOT_INVALID;
++}
++
++function assertTimestamp(value, path) {
++  if (
++    typeof value !== 'string' ||
++    !regexpTest(timestampPattern, value) ||
++    !numberIsFinite(dateParse(value))
++  ) {
++    fail(`${path}:iso_timestamp_required`);
++  }
++}
++
++function assertLiveEvidence(liveEvidence, controlId, path) {
++  assertBenchmarkResourceExactRecord(liveEvidence, liveEvidenceKeys, path);
++  if (
++    liveEvidence.version !== liveEvidenceVersion ||
++    liveEvidence.controlId !== controlId
++  ) {
++    fail(localText.LIVE_EVIDENCE_INVALID);
++  }
++  assertTimestamp(liveEvidence.startedAt, `${path}.startedAt`);
++  assertTimestamp(liveEvidence.endedAt, `${path}.endedAt`);
++  if (dateParse(liveEvidence.endedAt) < dateParse(liveEvidence.startedAt)) {
++    fail(localText.LIVE_EVIDENCE_INVALID);
++  }
++  assertBenchmarkResourceExactRecord(
++    liveEvidence.candidate,
++    liveCandidateKeys,
++    `${path}.candidate`,
++  );
++  if (
++    liveEvidence.candidate.architectureId !== localText.CANDIDATE_ARCHITECTURE ||
++    liveEvidence.candidate.engaged !== false
++  ) {
++    fail(localText.LIVE_EVIDENCE_INVALID);
++  }
++  assertBenchmarkResourceText(
++    liveEvidence.candidate.reason,
++    `${path}.candidate.reason`,
++  );
++  assertBenchmarkResourceExactRecord(
++    liveEvidence.alternative,
++    liveAlternativeKeys,
++    `${path}.alternative`,
++  );
++  if (
++    liveEvidence.alternative.architectureId !==
++      localText.ALTERNATIVE_ARCHITECTURE ||
++    liveEvidence.alternative.engaged !== true
++  ) {
++    fail(localText.LIVE_EVIDENCE_INVALID);
++  }
++  for (let index = 2; index < liveAlternativeKeys.length; index += 1) {
++    const key = liveAlternativeKeys[index];
++    assertBenchmarkResourceText(
++      liveEvidence.alternative[key],
++      `${path}.alternative.${key}`,
++    );
++  }
++  assertBenchmarkResourceExactRecord(
++    liveEvidence.oracle,
++    liveOracleKeys,
++    `${path}.oracle`,
++  );
++  assertBenchmarkResourceText(liveEvidence.oracle.name, `${path}.oracle.name`);
++  if (liveEvidence.oracle.passed !== true) {
++    fail(localText.LIVE_EVIDENCE_INVALID);
++  }
++}
++
++function copySideIds(sideIds) {
++  assertBenchmarkResourceArray(sideIds, localText.SIDE_IDS, 2);
++  if (sideIds.length !== 2 || sideIds[0] === sideIds[1]) {
++    fail(localText.SIDE_IDS_DISTINCT_EXACT_PAIR_REQUIRED);
++  }
++  const copy = [];
++  for (let index = 0; index < sideIds.length; index += 1) {
++    assertBenchmarkResourceText(
++      sideIds[index],
++      `negativeControls.sideIds.${index}`,
++    );
++    appendOwnArrayValue(copy, sideIds[index]);
++  }
++  return copy;
++}
++
++function copyReasonCodes(reasonCodes, index) {
++  assertBenchmarkResourceArray(
++    reasonCodes,
++    `negativeControls.attempts.${index}.reasonCodes`,
++    maximumReasonCodes,
++  );
++  if (
++    reasonCodes.length === 0 ||
++    !arrayContains(reasonCodes, COMPARATIVE_NEGATIVE_CONTROL_REASON)
++  ) {
++    fail(localText.ATTEMPT_REASON_REQUIRED);
++  }
++  const copy = [];
++  for (let reasonIndex = 0;
++    reasonIndex < reasonCodes.length;
++    reasonIndex += 1) {
++    assertBenchmarkResourceText(
++      reasonCodes[reasonIndex],
++      `negativeControls.attempts.${index}.reasonCodes.${reasonIndex}`,
++    );
++    appendOwnArrayValue(copy, reasonCodes[reasonIndex]);
++  }
++  return copy;
++}
++
++function copyAttempts(attempts) {
++  assertBenchmarkResourceArray(
++    attempts,
++    localText.ATTEMPTS,
++    COMPARATIVE_NEGATIVE_CONTROL_IDS.length,
++  );
++  if (attempts.length !== COMPARATIVE_NEGATIVE_CONTROL_IDS.length) {
++    fail(localText.ATTEMPTS_EXACT_MATRIX_REQUIRED);
++  }
++  const copy = [];
++  for (let index = 0; index < attempts.length; index += 1) {
++    const path = `negativeControls.attempts.${index}`;
++    const attempt = attempts[index];
++    assertBenchmarkResourceExactRecord(attempt, attemptKeys, path);
++    if (attempt.controlId !== COMPARATIVE_NEGATIVE_CONTROL_IDS[index]) {
++      fail(localText.ATTEMPT_CONTROL_ORDER_MISMATCH);
++    }
++    assertBenchmarkResourceText(attempt.runId, `${path}.runId`);
++    if (attempt.candidateEngaged !== false) {
++      fail(localText.ATTEMPT_CANDIDATE_MUST_BE_ABSENT);
++    }
++    if (attempt.alternativeEngaged !== true) {
++      fail(localText.ATTEMPT_ALTERNATIVE_MUST_BE_ENGAGED);
++    }
++    assertBenchmarkResourceCanonicalData(attempt.liveEvidence);
++    assertLiveEvidence(
++      attempt.liveEvidence,
++      attempt.controlId,
++      `${path}.liveEvidence`,
++    );
++    appendOwnArrayValue(copy, {
++      controlId: attempt.controlId,
++      runId: attempt.runId,
++      candidateEngaged: false,
++      alternativeEngaged: true,
++      reasonCodes: copyReasonCodes(attempt.reasonCodes, index),
++      liveEvidence: attempt.liveEvidence,
++    });
++  }
++  return copy;
++}
++
++function sourcePayload(input, attempt, cell, sideIds) {
++  return {
++    version: sourceVersion,
++    matrixId: input.matrixId,
++    cellId: cell.cellId,
++    pairId: input.pairId,
++    runId: attempt.runId,
++    sideIds,
++    controlId: attempt.controlId,
++    state: BENCHMARK_RESOURCE_CELL_STATE.NON_MEASURING,
++    candidateEngaged: attempt.candidateEngaged,
++    alternativeEngaged: attempt.alternativeEngaged,
++    reasonCodes: attempt.reasonCodes,
++    liveEvidence: attempt.liveEvidence,
++    calibrationDigest: input.calibrationArtifact.digest,
++  };
++}
++
++function rootReceipt(artifacts, root) {
++  return {
++    rootDigest: root.digest,
++    resolver: createBenchmarkResourceMemoryResolver([...artifacts, root]),
++  };
++}
++
++export function createComparativeNegativeControlEvidence(input) {
++  assertBenchmarkResourceExactRecord(input, inputKeys, localText.INPUT);
++  const textFields = [
++    'matrixId',
++    'pairId',
++    'sourceRevision',
++    'producedAt',
++    'validUntil',
++    'inventoryId',
++  ];
++  for (let index = 0; index < textFields.length; index += 1) {
++    const field = textFields[index];
++    assertBenchmarkResourceText(input[field], `negativeControls.${field}`);
++  }
++  const sideIds = copySideIds(input.sideIds);
++  const attempts = copyAttempts(input.attempts);
++  const calibrationInspection =
++    inspectBenchmarkResourceLiveCalibrationArtifact(
++      input.calibrationArtifact.artifact,
++    );
++  if (
++    !calibrationInspection.valid ||
++    input.calibrationArtifact.artifact.payload.sourceRevision !==
++      input.sourceRevision
++  ) {
++    fail(localText.CALIBRATION_INVALID);
++  }
++  const workloadManifest = createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
++    input.workloadManifest,
++  );
++  const alternativeTopology = createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
++    input.alternativeTopology,
++  );
++  const preregistration = createBenchmarkResourceSourceArtifact(
++    BENCHMARK_RESOURCE_ARTIFACT_KIND.PREREGISTRATION,
++    input.preregistration,
++  );
++  const matrix = createBenchmarkResourceMatrixManifest({
++    matrixId: input.matrixId,
++    axes: [{
++      id: localText.AXIS_CONTROL,
++      values: COMPARATIVE_NEGATIVE_CONTROL_IDS,
++    }],
++    sideIds,
++    workloadManifestDigest: workloadManifest.digest,
++    alternativeTopologyDigest: alternativeTopology.digest,
++    preregistrationDigest: preregistration.digest,
++  });
++  const inventory = createBenchmarkResourceComponentInventory({
++    inventoryId: input.inventoryId,
++    matrixId: input.matrixId,
++    sides: input.inventorySides,
++  });
++  const price = createBenchmarkResourcePriceSheet(input.priceSheet);
++  const engagements = [];
++  const cells = [];
++  for (let index = 0; index < attempts.length; index += 1) {
++    const attempt = attempts[index];
++    const matrixCell = matrix.artifact.payload.cells[index];
++    const engagement = createBenchmarkResourceSourceArtifact(
++      BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT,
++      sourcePayload(input, attempt, matrixCell, sideIds),
++      [input.calibrationArtifact.digest],
++    );
++    appendOwnArrayValue(engagements, engagement);
++    appendOwnArrayValue(
++      cells,
++      createBenchmarkResourceNonMeasuringCellEvidence({
++        matrixManifestDigest: matrix.digest,
++        matrixId: input.matrixId,
++        cellId: matrixCell.cellId,
++        pairId: input.pairId,
++        runId: attempt.runId,
++        sideIds,
++        reasonCodes: attempt.reasonCodes,
++        sourceDigests: [engagement.digest],
++        sourceRevision: input.sourceRevision,
++        producedAt: input.producedAt,
++        validUntil: input.validUntil,
++      }),
++    );
++  }
++  const artifacts = [
++    workloadManifest,
++    alternativeTopology,
++    preregistration,
++    matrix,
++    inventory,
++    price,
++    input.calibrationArtifact,
++    ...engagements,
++    ...cells,
++  ];
++  const root = createBenchmarkResourceEvidenceRoot({
++    matrixManifestDigest: matrix.digest,
++    componentInventoryDigest: inventory.digest,
++    priceSheetDigest: price.digest,
++    cellEvidenceDigests: cells.map((cell) => cell.digest),
++    sourceRevision: input.sourceRevision,
++    producedAt: input.producedAt,
++    validUntil: input.validUntil,
++    artifacts,
++  });
++  return {
++    receipt: rootReceipt(artifacts, root),
++    root,
++    artifacts,
++    matrix,
++    inventory,
++    price,
++    calibration: input.calibrationArtifact,
++    engagements,
++    cells,
++  };
++}
++
++function resolveArtifact(resolved, digest) {
++  const bytes = mapGet(resolved, digest);
++  if (bytes === undefined) fail(localText.CELL_SOURCE_MISMATCH);
++  return parseBenchmarkResourceArtifact(bytes, digest);
++}
++
++function captureValidatedArtifacts(receipt) {
++  assertBenchmarkResourceExactRecord(
++    receipt,
++    receiptKeys,
++    localText.ROOT_INVALID,
++  );
++  const rootDigest = ownDataValue(receipt, 'rootDigest', localText.ROOT_INVALID);
++  const resolver = ownDataValue(receipt, 'resolver', localText.ROOT_INVALID);
++  assertBenchmarkResourceExactRecord(
++    resolver,
++    resolverKeys,
++    localText.ROOT_INVALID,
++  );
++  const resolve = ownDataValue(resolver, 'resolve', localText.ROOT_INVALID);
++  if (typeof resolve !== 'function') fail(localText.ROOT_INVALID);
++  const resolved = new Map();
++  const capturedResolver = {
++    resolve(digest) {
++      if (mapHas(resolved, digest)) return bufferFrom(mapGet(resolved, digest));
++      const bytes = reflectApply(resolve, resolver, [digest]);
++      if (bytes !== undefined) mapSet(resolved, digest, bufferFrom(bytes));
++      return bytes;
++    },
++  };
++  const validation = validateBenchmarkResourceEvidenceRoot({
++    rootDigest,
++    resolver: capturedResolver,
++  });
++  if (!validation.valid) {
++    fail(`${localText.ROOT_INVALID}:${validation.reason}`);
++  }
++  return {rootDigest, resolved};
++}
++
++function inspectMatrix(matrix) {
++  const axes = matrix.payload.axes;
++  if (
++    axes.length !== 1 ||
++    axes[0].id !== localText.AXIS_CONTROL ||
++    !exactValues(axes[0].values, COMPARATIVE_NEGATIVE_CONTROL_IDS)
++  ) {
++    fail(localText.MATRIX_SHAPE_MISMATCH);
++  }
++}
++
++function assertCellShape(cell, matrixCell) {
++  if (
++    cell.payload.state !== BENCHMARK_RESOURCE_CELL_STATE.NON_MEASURING ||
++    cell.payload.cellId !== matrixCell.cellId ||
++    cell.payload.sourceDigests.length !== 1 ||
++    !arrayContains(
++      cell.payload.reasonCodes,
++      COMPARATIVE_NEGATIVE_CONTROL_REASON,
++    )
++  ) {
++    fail(localText.CELL_SHAPE_MISMATCH);
++  }
++}
++
++function assertSourceIdentity(payload, cell, matrixCell, matrix, index) {
++  if (
++    payload.version !== sourceVersion ||
++    payload.matrixId !== matrix.payload.matrixId ||
++    payload.cellId !== matrixCell.cellId ||
++    payload.pairId !== cell.payload.pairId ||
++    payload.controlId !== COMPARATIVE_NEGATIVE_CONTROL_IDS[index] ||
++    payload.runId !== cell.payload.runId ||
++    !exactValues(payload.sideIds, cell.payload.sideIds) ||
++    !exactValues(payload.sideIds, matrix.payload.sideIds) ||
++    !exactValues(payload.reasonCodes, cell.payload.reasonCodes)
++  ) {
++    fail(localText.CELL_SOURCE_MISMATCH);
++  }
++  assertLiveEvidence(
++    payload.liveEvidence,
++    payload.controlId,
++    localText.CELL_SOURCE_MISMATCH,
++  );
++}
++
++function assertSourceDisposition(payload) {
++  if (
++    payload.state !== BENCHMARK_RESOURCE_CELL_STATE.NON_MEASURING ||
++    payload.candidateEngaged !== false ||
++    payload.alternativeEngaged !== true
++  ) {
++    fail(localText.CELL_SOURCE_MISMATCH);
++  }
++}
++
++function assertSourceCalibration(source, resolved, root) {
++  const payload = source.payload;
++  if (
++    payload.calibrationDigest === undefined ||
++    source.references.length !== 1 ||
++    source.references[0] !== payload.calibrationDigest
++  ) {
++    fail(localText.CELL_SOURCE_MISMATCH);
++  }
++  const calibration = resolveArtifact(resolved, payload.calibrationDigest);
++  const inspection =
++    inspectBenchmarkResourceLiveCalibrationArtifact(calibration);
++  if (
++    calibration.kind !== BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_CALIBRATION ||
++    !inspection.valid ||
++    calibration.payload.sourceRevision !== root.payload.sourceRevision
++  ) {
++    fail(localText.CALIBRATION_INVALID);
++  }
++}
++
++function inspectCellSource(resolved, cell, matrixCell, matrix, root, index) {
++  assertCellShape(cell, matrixCell);
++  const source = resolveArtifact(resolved, cell.payload.sourceDigests[0]);
++  if (source.kind !== BENCHMARK_RESOURCE_ARTIFACT_KIND.LIVE_ENGAGEMENT) {
++    fail(localText.CELL_SOURCE_MISMATCH);
++  }
++  assertBenchmarkResourceExactRecord(
++    source.payload,
++    sourcePayloadKeys,
++    localText.CELL_SOURCE_MISMATCH,
++  );
++  const payload = source.payload;
++  assertSourceIdentity(payload, cell, matrixCell, matrix, index);
++  assertSourceDisposition(payload);
++  assertSourceCalibration(source, resolved, root);
++}
++
++export function inspectComparativeNegativeControlEvidence(receipt) {
++  try {
++    const capture = captureValidatedArtifacts(receipt);
++    const root = resolveArtifact(capture.resolved, capture.rootDigest);
++    const matrix = resolveArtifact(
++      capture.resolved,
++      root.payload.matrixManifestDigest,
++    );
++    inspectMatrix(matrix);
++    for (let index = 0;
++      index < root.payload.cellEvidenceDigests.length;
++      index += 1) {
++      const cell = resolveArtifact(
++        capture.resolved,
++        root.payload.cellEvidenceDigests[index],
++      );
++      inspectCellSource(
++        capture.resolved,
++        cell,
++        matrix.payload.cells[index],
++        matrix,
++        root,
++        index,
++      );
++    }
++    if (
++      root.payload.cellEvidenceDigests.length !==
++        COMPARATIVE_NEGATIVE_CONTROL_IDS.length
++    ) {
++      fail(localText.CELL_SHAPE_MISMATCH);
++    }
++    return {
++      valid: true,
++      reason: localText.VALID,
++      complete: true,
++      claimEligible: false,
++      measuringCellCount: 0,
++      nonMeasuringCellCount: COMPARATIVE_NEGATIVE_CONTROL_IDS.length,
++      matrixId: matrix.payload.matrixId,
++      matrixDigest: root.payload.matrixManifestDigest,
++      rootDigest: capture.rootDigest,
++    };
++  } catch (error) {
++    return {
++      valid: false,
++      reason: safeErrorMessage(error),
++      complete: false,
++      claimEligible: false,
++      measuringCellCount: 0,
++      nonMeasuringCellCount: 0,
++      matrixId: null,
++      matrixDigest: null,
++      rootDigest: null,
++    };
++  }
++}
++
++export function comparativeNegativeControlEvidenceDigest(evidence) {
++  if (!objectHasOwn(evidence, localText.ROOT)) fail(localText.ROOT_INVALID);
++  return digestBenchmarkSemanticData(evidence.root.artifact.payload);
++}

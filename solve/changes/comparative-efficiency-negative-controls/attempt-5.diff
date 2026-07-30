@@ -1,0 +1,70 @@
+diff --git a/scripts/checks/run-comparative-efficiency-negative-controls-live.js b/scripts/checks/run-comparative-efficiency-negative-controls-live.js
+index 37323663abf87824b7e746c4727e097de5691a19..a4ffb8f4e9aa8b37e4929e1a4376eda8451f540e 100644
+--- a/scripts/checks/run-comparative-efficiency-negative-controls-live.js
++++ b/scripts/checks/run-comparative-efficiency-negative-controls-live.js
+@@ -554,6 +554,7 @@ async function main() {
+     fullMatrixComplete: true,
+     outcomeNeutral: true,
+     comparativeClaimEligible: false,
++    claimDisposition: inspection.claimDisposition,
+     measuringCellCount: inspection.measuringCellCount,
+     nonMeasuringCellCount: inspection.nonMeasuringCellCount,
+     reasonCodesByControl: attempts.map((attempt) => ({
+diff --git a/test/distributed/harness/__tests__/comparative-efficiency-negative-controls.test.js b/test/distributed/harness/__tests__/comparative-efficiency-negative-controls.test.js
+index e03c2796f7601e8c2fe11bcd439f820f51f67cf3..002aa65878414f76e1095687fb908c3c9d2946c8 100644
+--- a/test/distributed/harness/__tests__/comparative-efficiency-negative-controls.test.js
++++ b/test/distributed/harness/__tests__/comparative-efficiency-negative-controls.test.js
+@@ -353,6 +353,7 @@ test('negative-control matrix publishes every invalid cell without a claim',
+       reason: 'valid',
+       complete: true,
+       claimEligible: false,
++      claimDisposition: 'non_measuring_candidate_not_engaged',
+       measuringCellCount: 0,
+       nonMeasuringCellCount: 5,
+       matrixId: 'comparative-negative-controls-p0-v1',
+diff --git a/test/distributed/harness/comparative-efficiency-negative-controls-constants.js b/test/distributed/harness/comparative-efficiency-negative-controls-constants.js
+index 06266dc68a1a93abc4c9587fb168118f6fa72133..2e986a68ae0d120ba579c45af6d361c7d65b3ca2 100644
+--- a/test/distributed/harness/comparative-efficiency-negative-controls-constants.js
++++ b/test/distributed/harness/comparative-efficiency-negative-controls-constants.js
+@@ -2,6 +2,8 @@ export const COMPARATIVE_NEGATIVE_CONTROL_SCENARIO =
+   'comparative-efficiency-negative-controls';
+ export const COMPARATIVE_NEGATIVE_CONTROL_REASON =
+   'candidate_architecture_not_engaged';
++export const COMPARATIVE_NEGATIVE_CONTROL_CLAIM_DISPOSITION =
++  'non_measuring_candidate_not_engaged';
+ export const COMPARATIVE_NEGATIVE_CONTROL_IDS = Object.freeze([
+   'small-simple',
+   'uniform-access',
+diff --git a/test/distributed/harness/comparative-efficiency-negative-controls.js b/test/distributed/harness/comparative-efficiency-negative-controls.js
+index a58aaf368ff668006e03794ea76ecb438a815b61..ca0a6187656e9141b2150550c000ec10cfbab98e 100644
+--- a/test/distributed/harness/comparative-efficiency-negative-controls.js
++++ b/test/distributed/harness/comparative-efficiency-negative-controls.js
+@@ -40,10 +40,12 @@ import {
+   assertComparativeNegativeControlSource,
+ } from './comparative-efficiency-negative-controls-admission.js';
+ import {
++  COMPARATIVE_NEGATIVE_CONTROL_CLAIM_DISPOSITION,
+   COMPARATIVE_NEGATIVE_CONTROL_IDS,
+   COMPARATIVE_NEGATIVE_CONTROL_REASON,
+ } from './comparative-efficiency-negative-controls-constants.js';
+ export {
++  COMPARATIVE_NEGATIVE_CONTROL_CLAIM_DISPOSITION,
+   COMPARATIVE_NEGATIVE_CONTROL_IDS,
+   COMPARATIVE_NEGATIVE_CONTROL_REASON,
+   COMPARATIVE_NEGATIVE_CONTROL_SCENARIO,
+@@ -576,6 +578,7 @@ export function inspectComparativeNegativeControlEvidence(receipt) {
+       reason: localText.VALID,
+       complete: true,
+       claimEligible: false,
++      claimDisposition: COMPARATIVE_NEGATIVE_CONTROL_CLAIM_DISPOSITION,
+       measuringCellCount: 0,
+       nonMeasuringCellCount: COMPARATIVE_NEGATIVE_CONTROL_IDS.length,
+       matrixId: matrix.payload.matrixId,
+@@ -588,6 +591,7 @@ export function inspectComparativeNegativeControlEvidence(receipt) {
+       reason: safeErrorMessage(error),
+       complete: false,
+       claimEligible: false,
++      claimDisposition: null,
+       measuringCellCount: 0,
+       nonMeasuringCellCount: 0,
+       matrixId: null,
