@@ -61,6 +61,68 @@ function buildReuseLabels() {
  *
  * **Validates: Requirements 2.3**
  */
+test('Unit: host-network mode allocates per-node ports and host IPs', async () => {
+  const hostInfo = [
+    {externalIp: '34.1.1.1', internalIp: '10.128.0.1'},
+    {externalIp: '34.2.2.2', internalIp: '10.128.0.2'},
+  ];
+  const cluster = createCluster({
+    size: 2,
+    nodesPerHost: 1,
+    image: 'distributed-db:test',
+    docker: {
+      hosts: ['tcp://34.1.1.1:2376', 'tcp://34.2.2.2:2376'],
+      hostInfo,
+    },
+  });
+
+  assert.strictEqual(cluster._hostNetworkMode, true, 'multi-host -> host mode');
+
+  // Node 0 on host 0, node 1 on host 1 (nodesPerHost=1).
+  const env0 = cluster._buildNodeEnv('n0', 'c0', null, 0);
+  const env1 = cluster._buildNodeEnv('n1', 'c1', '10.128.0.1', 1);
+
+  // Per-node port block: node i uses base + i*PORT_BLOCK.
+  assert.strictEqual(env0.REST_API_PORT, String(PORTS.REST));
+  assert.strictEqual(env1.REST_API_PORT, String(PORTS.REST + 10));
+  assert.strictEqual(env0.ADMIN_WS_PORT, String(PORTS.ADMIN_API));
+  assert.strictEqual(env1.ADMIN_WS_PORT, String(PORTS.ADMIN_API + 10));
+
+  // Advertise on the host's VPC-internal IP so cross-VM peers can reach it.
+  assert.strictEqual(
+    env0[CONTAINER_ENV_KEYS.NODE_ADDRESS],
+    '10.128.0.1:' + PORTS.REST,
+  );
+  assert.strictEqual(
+    env1[CONTAINER_ENV_KEYS.NODE_ADDRESS],
+    '10.128.0.2:' + (PORTS.REST + 10),
+  );
+
+  // Joiner reaches the seed at the seed host internal IP + seed's REST port.
+  assert.strictEqual(
+    env1[CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS],
+    '10.128.0.1:' + PORTS.REST,
+  );
+});
+
+test('Unit: single-host keeps bridge mode (no host-network env)', async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+  assert.strictEqual(cluster._hostNetworkMode, false);
+  const env = cluster._buildNodeEnv('n0', 'container-abc', null, 0);
+  // Bridge mode advertises the container DNS alias at the standard port and
+  // sets no per-node port overrides.
+  assert.strictEqual(
+    env[CONTAINER_ENV_KEYS.NODE_ADDRESS],
+    'container-abc:' + PORTS.REST,
+  );
+  assert.strictEqual(env.REST_API_PORT, undefined);
+  assert.strictEqual(env.ADMIN_WS_PORT, undefined);
+});
+
 test('Unit: _startNode sets joiner timeout env overrides', async () => {
   const cluster = createCluster({
     size: 1,

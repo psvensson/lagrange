@@ -156,6 +156,70 @@ test('Property 2: Container Environment Configuration', async (t) => {
 
 // --- Unit Tests for Docker Provider ---
 
+test('Unit: host-network createContainer omits bridge config and sets NetworkMode',
+  async (t) => {
+    await t.test(
+      'hostNetwork:true -> NetworkMode=host, no ExposedPorts/NetworkingConfig',
+      async () => {
+        const provider = new DockerProvider({
+          socketPath: '/var/run/docker.sock'});
+
+        let capturedOpts = null;
+        provider._docker.createContainer = async (opts) => {
+          capturedOpts = opts;
+          return {id: 'host-net-1', start: async () => {}};
+        };
+        provider._waitForRunning = async () => {};
+        provider.inspectContainer = async () => ({NetworkSettings: {}});
+
+        const result = await provider.createContainer({
+          name: 'host-node',
+          image: 'distributed-db:test',
+          network: 'ignored-net',
+          env: {NODE_ID: 'n1'},
+          hostNetwork: true,
+        });
+
+        assert.ok(capturedOpts, 'createContainer was called');
+        assert.strictEqual(capturedOpts.HostConfig.NetworkMode, 'host');
+        assert.strictEqual(capturedOpts.ExposedPorts, undefined);
+        assert.strictEqual(capturedOpts.NetworkingConfig, undefined);
+        // No bridge IP in host mode; caller substitutes the host address.
+        assert.strictEqual(result.ip, '');
+      },
+    );
+
+    await t.test(
+      'hostNetwork omitted -> bridge config preserved (no regression)',
+      async () => {
+        const provider = new DockerProvider({
+          socketPath: '/var/run/docker.sock'});
+        let capturedOpts = null;
+        provider._docker.createContainer = async (opts) => {
+          capturedOpts = opts;
+          return {id: 'bridge-1', start: async () => {}};
+        };
+        provider._waitForRunning = async () => {};
+        provider.inspectContainer = async () => ({
+          NetworkSettings: {Networks: {'test-net': {IPAddress: '172.18.0.2'}}},
+        });
+
+        const result = await provider.createContainer({
+          name: 'bridge-node',
+          image: 'distributed-db:test',
+          network: 'test-net',
+          env: {NODE_ID: 'n1'},
+        });
+
+        assert.ok(capturedOpts.ExposedPorts, 'bridge mode keeps ExposedPorts');
+        assert.ok(
+          capturedOpts.NetworkingConfig, 'bridge mode keeps NetworkingConfig');
+        assert.strictEqual(capturedOpts.HostConfig.NetworkMode, undefined);
+        assert.strictEqual(result.ip, '172.18.0.2');
+      },
+    );
+  });
+
 test('Unit: createContainer passes correct env vars to Docker', async (t) => {
   await t.test(
     'createContainer calls docker.createContainer with correct Env array',

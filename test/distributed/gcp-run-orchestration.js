@@ -39,14 +39,14 @@ async function provisionGcpDockerHosts(runConfig, verbose) {
     process.stdout.write(GCP_PROVISION_LOG_PREFIX);
   }
   const provisioner = new GCPProvisioner(gcpConfig);
-  const {hosts, tls} = await provisioner.provision();
+  const {hosts, hostInfo, tls} = await provisioner.provision();
   if (verbose) {
     process.stdout.write(GCP_PROVISIONED_LOG_PREFIX + hosts.join(', ') + '\n');
   }
   return {
     runConfig: {
       ...runConfig,
-      docker: {...runConfig.docker, hosts, tls},
+      docker: {...runConfig.docker, hosts, hostInfo, tls},
     },
     provisioner,
   };

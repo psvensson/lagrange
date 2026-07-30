@@ -113,6 +113,12 @@ function mergeWithDefaults(partial = {}) {
     {socketPath: docker.socketPath || DOCKER_DEFAULTS.socketPath};
   const mergedDocker = {
     ...mergedDockerBase,
+    // Per-host reachability (external + internal IP) injected by GCP
+    // provisioning for host-network multi-host runs. Passed through verbatim;
+    // only present on remote provisioned runs.
+    ...(Array.isArray(docker.hostInfo) && docker.hostInfo.length > 0 ?
+      {hostInfo: docker.hostInfo} :
+      {}),
     ...(parsedDockerBinds.length > 0 ?
       {binds: parsedDockerBinds} :
       {}),

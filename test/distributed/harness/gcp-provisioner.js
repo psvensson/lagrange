@@ -275,6 +275,11 @@ class GCPProvisioner {
         autoCreateSubnetworks: true,
       });
 
+      // Node-comm ports (REST/transport/admin). Node-to-node traffic uses the
+      // VPC-internal range; the runner must ALSO reach a node's readiness and
+      // admin APIs over the host external IP, so the runner's own IP is
+      // included (dockerSourceRanges already = internal + runner /32). Never
+      // world-open.
       new gcp.compute.Firewall(FIREWALL_INTERNAL_NAME, {
         project,
         network: network.selfLink,
@@ -282,7 +287,7 @@ class GCPProvisioner {
           protocol: DOCKER_PORT_PROTOCOL,
           ports: [`${NODE_COMM_PORT_START}-${NODE_COMM_PORT_END}`],
         }],
-        sourceRanges: [VPC_INTERNAL_RANGE],
+        sourceRanges: dockerSourceRanges,
         targetTags: [NETWORK_TAG],
       });
 
@@ -310,6 +315,7 @@ class GCPProvisioner {
       });
 
       const externalIps = [];
+      const internalIps = [];
       const instanceNames = [];
 
       for (let i = 0; i < vmCount; i++) {
@@ -344,6 +350,10 @@ class GCPProvisioner {
           (ifaces) => ifaces[0].accessConfigs[0].natIp,
         );
         externalIps.push(natIp);
+        const internalIp = instance.networkInterfaces.apply(
+          (ifaces) => ifaces[0].networkIp,
+        );
+        internalIps.push(internalIp);
         // Pulumi auto-names the GCP resource with a random suffix
         // (ddb-test-vm-0-1a2b3c); the ONLY correct name to SSH/scp to is the
         // one GCP actually assigned, read back from the instance itself.
@@ -352,6 +362,7 @@ class GCPProvisioner {
 
       return {
         externalIps: pulumi.all(externalIps),
+        internalIps: pulumi.all(internalIps),
         instanceNames: pulumi.all(instanceNames),
       };
     };
@@ -369,6 +380,7 @@ class GCPProvisioner {
     this._stack = stack;
 
     const ips = result.outputs.externalIps.value;
+    const internalIps = result.outputs.internalIps.value;
     this._vmNames = result.outputs.instanceNames.value;
     this._provisionedAtMs = Date.now();
     try {
@@ -377,6 +389,14 @@ class GCPProvisioner {
         hosts: ips.map(
           (ip) => `${DOCKER_PORT_PROTOCOL}://${ip}:${DOCKER_PORT}`,
         ),
+        // Per-host reachability for host-network multi-host runs: the runner
+        // reaches a host's daemon/containers via the external IP; nodes reach
+        // each other via the VPC-internal IP (firewall allows 8080-9090
+        // internal). hostInfo[i] aligns with hosts[i].
+        hostInfo: ips.map((externalIp, i) => ({
+          externalIp,
+          internalIp: internalIps[i],
+        })),
         tls: clientTls,
       };
     } catch (err) {

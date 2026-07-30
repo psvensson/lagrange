@@ -79,6 +79,7 @@ const STORAGE_LIMIT_PATTERN = /(?:^|,)size=(\d+)(?:,|$)/u;
 const BUILD_SOURCE_DIRECTORY = 'src';
 const CONTAINER_COMMAND_FIELD = 'Cmd';
 const CONTAINER_ENTRYPOINT_FIELD = 'Entrypoint';
+const HOST_NETWORK_MODE = 'host';
 // dockerode already receives an explicit allowlist. Sending .dockerignore in
 // that tar makes its broad `**` rule remove the recursively requested src
 // directory before the daemon can apply the later negations.
@@ -142,6 +143,7 @@ function normalizeContainerOptions(options) {
     command: options.command ?? null,
     entrypoint: options.entrypoint ?? null,
     hostConfigExtras: options.hostConfigExtras ?? null,
+    hostNetwork: options.hostNetwork === true,
   };
 }
 
@@ -156,6 +158,26 @@ function containerAliases(name) {
 }
 
 function containerCreateOptions(options, envArray, hostConfig) {
+  if (options.hostNetwork) {
+    // Host-network mode: the container shares the host's network namespace.
+    // There is no per-container bridge, so ExposedPorts and NetworkingConfig
+    // (bridge endpoints, DNS aliases) do not apply and must be omitted.
+    return {
+      name: options.name,
+      Image: options.image,
+      Env: envArray,
+      Labels: options.labels,
+      ...optionalContainerArray(
+        options.entrypoint,
+        CONTAINER_ENTRYPOINT_FIELD,
+      ),
+      ...optionalContainerArray(options.command, CONTAINER_COMMAND_FIELD),
+      HostConfig: {
+        ...hostConfig,
+        NetworkMode: HOST_NETWORK_MODE,
+      },
+    };
+  }
   return {
     name: options.name,
     Image: options.image,
@@ -535,6 +557,7 @@ class DockerProvider {
       name,
       image,
       network,
+      hostNetwork: normalized.hostNetwork,
     });
   }
 
@@ -578,12 +601,17 @@ class DockerProvider {
     name,
     image,
     network,
+    hostNetwork,
   }) {
     const info = await this.inspectContainer(containerId);
     const networks = info.NetworkSettings?.Networks || {};
     const namedEndpoint = networks[network];
     const firstEndpoint = Object.values(networks)[ZERO];
-    const ip = namedEndpoint?.IPAddress || firstEndpoint?.IPAddress || '';
+    // Host-network containers have no bridge IP; the caller substitutes the
+    // host's reachable address instead.
+    const ip = hostNetwork ?
+      '' :
+      (namedEndpoint?.IPAddress || firstEndpoint?.IPAddress || '');
 
     this._emitOperation(DOCKER_OP_CREATE_CONTAINER, {
       stage: localText.COMPLETED,

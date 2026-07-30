@@ -26,6 +26,13 @@ import {sweepUnexpectedNodeExits} from './unexpected-node-exit.js';
 // from the stale-code trap.
 const FAST_LOCAL_SOURCE_BIND_TARGET = '/app/src';
 const ADMIN_WS_HOST_ENV_KEY = 'ADMIN_WS_HOST';
+const REST_API_PORT_ENV_KEY = 'REST_API_PORT';
+const TRANSPORT_WS_PORT_ENV_KEY = 'TRANSPORT_WS_PORT';
+const ADMIN_WS_PORT_ENV_KEY = 'ADMIN_WS_PORT';
+// Per-node port stride in host-network mode so co-located containers on one
+// host NIC do not collide. Ports stay within the GCP firewall's 8080-9090
+// allowance for realistic cluster sizes.
+const HOST_NETWORK_PORT_BLOCK = 10;
 const ADMIN_ALLOW_INSECURE_EXTERNAL_BIND_ENV_KEY =
   'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND';
 const DOCKER_BIND_SEPARATOR = ':';
@@ -235,6 +242,41 @@ class ClusterLifecycleBase {
     this._httpGet = httpGet;
     this._httpRequest = httpRequest;
     this._activeLoadRuns = new Set();
+    // Host-network mode is implied by topology: more than one Docker host
+    // means containers cannot share a single bridge, so each container binds
+    // its host's NIC directly. Single-host and local runs keep bridge mode.
+    this._hostNetworkMode = this._computeHostNetworkMode();
+  }
+
+  _computeHostNetworkMode() {
+    return Array.isArray(this._providers) && this._providers.length > 1;
+  }
+
+  // Per-node port block so multiple containers on one host NIC do not
+  // collide. Node i gets REST=i*PORT_BLOCK, transport=+1, admin=+2 above the
+  // standard base ports; the GCP firewall already permits 8080-9090 internal.
+  _nodeRestPort(nodeIndex) {
+    return PORTS.REST + (nodeIndex * HOST_NETWORK_PORT_BLOCK);
+  }
+
+  _nodeTransportPort(nodeIndex) {
+    return PORTS.WS_TRANSPORT + (nodeIndex * HOST_NETWORK_PORT_BLOCK);
+  }
+
+  _nodeAdminPort(nodeIndex) {
+    return PORTS.ADMIN_API + (nodeIndex * HOST_NETWORK_PORT_BLOCK);
+  }
+
+  // IP a node's peers use to reach it (VPC-internal, cross-VM routable), and
+  // the IP the runner uses to reach its admin/readiness API (external).
+  _nodeHostIps(nodeIndex) {
+    const hostInfo = this._config?.docker?.hostInfo;
+    const providerIdx = this._resolveProviderIndexForNodeIndex(nodeIndex);
+    const info = Array.isArray(hostInfo) ? hostInfo[providerIdx] : null;
+    return {
+      internal: info?.internalIp || null,
+      external: info?.externalIp || null,
+    };
   }
 
   _isContainerReuseEnabled() {
@@ -353,7 +395,7 @@ class ClusterLifecycleBase {
     return 'ddb-test-' + this._clusterId.slice(0, 8) + '-' + nodeId;
   }
 
-  _buildNodeEnv(nodeId, containerName, seedIp) {
+  _buildNodeEnv(nodeId, containerName, seedIp, nodeIndex = 0) {
     const env = {};
     const partitionConfig =
       this._config?.partition && typeof this._config.partition === 'object' ?
@@ -361,7 +403,21 @@ class ClusterLifecycleBase {
         null;
     env[CONTAINER_ENV_KEYS.NODE_ID] = nodeId;
     env[CONTAINER_ENV_KEYS.DATA_DIR] = DATA_DIR_PATH;
-    env[CONTAINER_ENV_KEYS.NODE_ADDRESS] = containerName + ':' + PORTS.REST;
+    if (this._hostNetworkMode) {
+      // Host-network: the container binds the host NIC directly. Advertise and
+      // listen on per-node ports and the host's VPC-internal IP so peers on
+      // other VMs can reach it (bridge DNS aliases do not exist here).
+      const restPort = this._nodeRestPort(nodeIndex);
+      const {internal} = this._nodeHostIps(nodeIndex);
+      const advertiseHost = internal || containerName;
+      env[REST_API_PORT_ENV_KEY] = String(restPort);
+      env[TRANSPORT_WS_PORT_ENV_KEY] = String(
+        this._nodeTransportPort(nodeIndex));
+      env[ADMIN_WS_PORT_ENV_KEY] = String(this._nodeAdminPort(nodeIndex));
+      env[CONTAINER_ENV_KEYS.NODE_ADDRESS] = advertiseHost + ':' + restPort;
+    } else {
+      env[CONTAINER_ENV_KEYS.NODE_ADDRESS] = containerName + ':' + PORTS.REST;
+    }
     env[WS_HOST_ENV_KEY] = WS_BIND_ALL_HOST;
     // The harness reaches Admin over the container's isolated bridge address.
     // Production remains loopback-only by default; live test containers opt in
@@ -400,7 +456,13 @@ class ClusterLifecycleBase {
     }
 
     if (seedIp) {
-      env[CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS] = seedIp + ':' + PORTS.REST;
+      // In host-network mode seedIp is the seed host's VPC-internal IP and the
+      // seed listens on its own per-node port; in bridge mode it is the seed
+      // container IP on the shared bridge at the standard port.
+      const seedRestPort = this._hostNetworkMode ?
+        this._nodeRestPort(0) :
+        PORTS.REST;
+      env[CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS] = seedIp + ':' + seedRestPort;
       env[JOINING_HTTP_TIMEOUT_ENV_KEY] = String(
         resolvePositiveTimeoutMs(
           this._config?.timeouts?.joiningHttpTimeoutMs,
@@ -705,16 +767,23 @@ class ClusterLifecycleBase {
     this._networkName = reuseContainers ?
       this._buildReusableNetworkName() :
       NETWORK.NAME_PREFIX + '-' + this._clusterId.slice(0, 8);
-    this._recordClusterStage(CLUSTER_STAGE_SETUP_NETWORK_CREATING, {
-      networkName: this._networkName,
-    });
-    const networkLabels = {
-      [LABELS.CLUSTER]: this._clusterId,
-    };
-    const net = reuseContainers ?
-      await provider.ensureNetwork(this._networkName, networkLabels) :
-      await provider.createNetwork(this._networkName, networkLabels);
-    this._networkId = net.id;
+    if (this._hostNetworkMode) {
+      // Host-network mode: containers bind the host NIC directly, so there is
+      // no shared bridge to create. _networkId stays null and chaos network
+      // ops are not applicable across hosts.
+      this._networkId = null;
+    } else {
+      this._recordClusterStage(CLUSTER_STAGE_SETUP_NETWORK_CREATING, {
+        networkName: this._networkName,
+      });
+      const networkLabels = {
+        [LABELS.CLUSTER]: this._clusterId,
+      };
+      const net = reuseContainers ?
+        await provider.ensureNetwork(this._networkName, networkLabels) :
+        await provider.createNetwork(this._networkName, networkLabels);
+      this._networkId = net.id;
+    }
     this._recordClusterStage(CLUSTER_STAGE_SETUP_NETWORK_CREATED, {
       networkName: this._networkName,
       networkId: this._networkId,
@@ -752,6 +821,13 @@ class ClusterLifecycleBase {
     const startupGate = new StartupGate(this, seedNode, seedId);
     await startupGate.waitForSeedJoinReady();
 
+    // Joiners reach the seed over the node-to-node path: the seed host's
+    // VPC-internal IP in host-network mode, or the seed container's bridge IP
+    // otherwise (seedNode.ip already holds the bridge IP in that case).
+    const seedJoinAddress = this._hostNetworkMode ?
+      (this._nodeHostIps(0).internal || seedNode.ip) :
+      seedNode.ip;
+
     for (let i = 1; i < this._config.size; i++) {
       const joinerId = this._buildNodeId(i);
       this._recordClusterStage(CLUSTER_STAGE_SETUP_JOINER_STARTING, {
@@ -761,7 +837,7 @@ class ClusterLifecycleBase {
       const joinerNode = await this._startNode(
         joinerId,
         NODE_ROLES.JOINER,
-        seedNode.ip,
+        seedJoinAddress,
         i,
       );
       this._nodes.set(joinerId, joinerNode);

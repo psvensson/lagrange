@@ -108,6 +108,11 @@ class NodeHandle {
     this.role = role;
     this._dockerProvider = dockerProvider;
     this._adminApiPort = adminApiPort;
+    // REST port override for host-network mode (each node binds a per-node
+    // port on the host NIC). Defaults to the standard port for bridge mode.
+    this._restPort = Number.isInteger(options.restPort) ?
+      options.restPort :
+      PORTS.REST;
     this._adminSocketByLane = new Map();
     this._adminSocketReadyByLane = new Map();
     this._pendingAdminSocketByLane = new Map();
@@ -1004,7 +1009,7 @@ class NodeHandle {
       BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS,
     );
     const bootstrapJoinReadyUrl =
-      'http://' + this.ip + ':' + PORTS.REST + BOOTSTRAP_JOIN_READY_PATH;
+      'http://' + this.ip + ':' + this._restPort + BOOTSTRAP_JOIN_READY_PATH;
     const probeResponse = await httpRequest({
       url: bootstrapJoinReadyUrl,
       timeoutMs,
@@ -1026,7 +1031,7 @@ class NodeHandle {
       BOOTSTRAP_WAIT_REQUEST_TIMEOUT_MS,
     );
     const trafficReadyUrl =
-      'http://' + this.ip + ':' + PORTS.REST + BOOTSTRAP_TRAFFIC_READY_PATH;
+      'http://' + this.ip + ':' + this._restPort + BOOTSTRAP_TRAFFIC_READY_PATH;
     const probeResponse = await httpRequest({
       url: trafficReadyUrl,
       timeoutMs,
@@ -1151,7 +1156,7 @@ class NodeHandle {
         REACHABILITY_ADMIN_PROBE_TIMEOUT_MS,
       );
     const bootstrapUrl =
-      'http://' + this.ip + ':' + PORTS.REST + BOOTSTRAP_HEALTH_PATH;
+      'http://' + this.ip + ':' + this._restPort + BOOTSTRAP_HEALTH_PATH;
     const adminUrl =
       'http://' + this.ip + ':' + this._adminApiPort + ADMIN_HEALTH_PATH;
     const adminEndpoint =

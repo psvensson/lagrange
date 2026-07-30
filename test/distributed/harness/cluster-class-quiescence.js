@@ -1206,7 +1206,7 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
       await this._resolveReusableImageId(provider) :
       '';
 
-    const env = this._buildNodeEnv(nodeId, containerName, seedIp);
+    const env = this._buildNodeEnv(nodeId, containerName, seedIp, nodeIndex);
 
     const labels = {
       [LABELS.CLUSTER]: this._clusterId,
@@ -1345,6 +1345,7 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
         resourceLimits: this._config.resourceLimits || {},
         startTimeout,
         hostConfigExtras,
+        hostNetwork: this._hostNetworkMode,
       });
     } catch (err) {
       await this._collectFailureLogs();
@@ -1353,15 +1354,27 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
       );
     }
 
+    // In host-network mode the container has no bridge IP; the runner reaches
+    // it via the host's external IP on its per-node admin/REST ports.
+    const nodeIp = this._hostNetworkMode ?
+      (this._nodeHostIps(nodeIndex).external || result.ip) :
+      result.ip;
+    const adminPort = this._hostNetworkMode ?
+      this._nodeAdminPort(nodeIndex) :
+      undefined;
+    const restPort = this._hostNetworkMode ?
+      this._nodeRestPort(nodeIndex) :
+      undefined;
     return new NodeHandle(
       nodeId,
       result.containerId,
-      result.ip,
+      nodeIp,
       role,
       provider,
-      undefined,
+      adminPort,
       {
         adminQueryTimeoutMs: this._resolveNodeHandleAdminQueryTimeoutMs(),
+        ...(restPort !== undefined ? {restPort} : {}),
       },
     );
   }
@@ -1378,8 +1391,11 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
       startupTimeout * BOOTSTRAP_PROGRESS_TIMEOUT_MAX_MULTIPLIER;
     const startedAt = Date.now();
     const hardDeadline = startedAt + hardTimeoutMs;
+    const seedRestPort = this._hostNetworkMode ?
+      this._nodeRestPort(0) :
+      PORTS.REST;
     const bootstrapJoinReadyUrl =
-      'http://' + seedNode.ip + ':' + PORTS.REST + BOOTSTRAP_JOIN_READY_PATH;
+      'http://' + seedNode.ip + ':' + seedRestPort + BOOTSTRAP_JOIN_READY_PATH;
     const statusCounts = new Map();
     const phaseCounts = new Map();
     const reasonCounts = new Map();
