@@ -1,32 +1,32 @@
 {
-  "generatedAt": "2026-07-28T18:20:27.743Z",
+  "generatedAt": "2026-07-30T13:50:38.634Z",
   "stats": {
-    "candidateCount": 443,
-    "dedupedRuleCount": 432,
-    "exportedRuleCount": 432,
+    "candidateCount": 685,
+    "dedupedRuleCount": 679,
+    "exportedRuleCount": 679,
     "aliasRuleCount": 4,
-    "masterRuleCount": 428,
-    "emittedMasterRuleCount": 428,
-    "estimatedAllRulesTokens": 18405
+    "masterRuleCount": 675,
+    "emittedMasterRuleCount": 675,
+    "estimatedAllRulesTokens": 31831
   },
   "sources": [
     {
       "file": "system-guidelines.md",
       "role": "packed",
       "domain": "architecture",
-      "ruleCount": 53,
-      "masterRuleCount": 51,
+      "ruleCount": 100,
+      "masterRuleCount": 98,
       "aliasRuleCount": 2,
-      "emittedMasterRuleCount": 51
+      "emittedMasterRuleCount": 98
     },
     {
       "file": "runtime-contracts.md",
       "role": "packed",
       "domain": "architecture",
-      "ruleCount": 67,
-      "masterRuleCount": 67,
+      "ruleCount": 131,
+      "masterRuleCount": 131,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 67
+      "emittedMasterRuleCount": 131
     },
     {
       "file": "doctrine/owner-boundaries.md",
@@ -50,19 +50,19 @@
       "file": "doctrine/state-encoding.md",
       "role": "packed",
       "domain": "architecture",
-      "ruleCount": 27,
-      "masterRuleCount": 26,
+      "ruleCount": 35,
+      "masterRuleCount": 34,
       "aliasRuleCount": 1,
-      "emittedMasterRuleCount": 26
+      "emittedMasterRuleCount": 34
     },
     {
       "file": "doctrine/decision-experiments.md",
       "role": "packed",
       "domain": "architecture",
-      "ruleCount": 15,
-      "masterRuleCount": 15,
+      "ruleCount": 28,
+      "masterRuleCount": 28,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 15
+      "emittedMasterRuleCount": 28
     },
     {
       "file": "operational-ground-truth.md",
@@ -78,46 +78,46 @@
       "file": "testing-guidelines/harness.md",
       "role": "packed",
       "domain": "testing",
-      "ruleCount": 8,
-      "masterRuleCount": 8,
+      "ruleCount": 18,
+      "masterRuleCount": 18,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 8
+      "emittedMasterRuleCount": 18
     },
     {
       "file": "testing-guidelines/fixtures.md",
       "role": "packed",
       "domain": "testing",
-      "ruleCount": 22,
-      "masterRuleCount": 22,
+      "ruleCount": 26,
+      "masterRuleCount": 26,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 22
+      "emittedMasterRuleCount": 26
     },
     {
       "file": "testing-guidelines/regression-policy.md",
       "role": "packed",
       "domain": "testing",
-      "ruleCount": 34,
-      "masterRuleCount": 34,
+      "ruleCount": 77,
+      "masterRuleCount": 77,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 34
+      "emittedMasterRuleCount": 77
     },
     {
       "file": "testing-guidelines/release-gate.md",
       "role": "packed",
       "domain": "testing",
-      "ruleCount": 13,
-      "masterRuleCount": 13,
+      "ruleCount": 17,
+      "masterRuleCount": 17,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 13
+      "emittedMasterRuleCount": 17
     },
     {
       "file": "testing-guidelines/proof-ladders.md",
       "role": "packed",
       "domain": "testing",
-      "ruleCount": 15,
-      "masterRuleCount": 14,
+      "ruleCount": 25,
+      "masterRuleCount": 24,
       "aliasRuleCount": 1,
-      "emittedMasterRuleCount": 14
+      "emittedMasterRuleCount": 24
     },
     {
       "file": "code-style.md",
@@ -132,10 +132,10 @@
       "file": "roadmap.md",
       "role": "packed",
       "domain": "governance",
-      "ruleCount": 13,
-      "masterRuleCount": 13,
+      "ruleCount": 20,
+      "masterRuleCount": 20,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 13
+      "emittedMasterRuleCount": 20
     },
     {
       "file": "agpl-feature-map.md",
@@ -151,10 +151,10 @@
       "file": "memory-boundary.md",
       "role": "packed",
       "domain": "governance",
-      "ruleCount": 6,
-      "masterRuleCount": 6,
+      "ruleCount": 7,
+      "masterRuleCount": 7,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 6
+      "emittedMasterRuleCount": 7
     },
     {
       "file": "audience-boundary.md",
@@ -180,31 +180,13 @@
       "file": "workflow-guidelines/validators.md",
       "role": "packed",
       "domain": "governance",
-      "ruleCount": 4,
-      "masterRuleCount": 4,
+      "ruleCount": 9,
+      "masterRuleCount": 9,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 4
+      "emittedMasterRuleCount": 9
     },
     {
       "file": "workflow-guidelines/quest-artifacts.md",
-      "role": "packed",
-      "domain": "governance",
-      "ruleCount": 3,
-      "masterRuleCount": 3,
-      "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 3
-    },
-    {
-      "file": "workflow-guidelines/closure.md",
-      "role": "packed",
-      "domain": "governance",
-      "ruleCount": 1,
-      "masterRuleCount": 1,
-      "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 1
-    },
-    {
-      "file": "workflow-guidelines/subagents.md",
       "role": "packed",
       "domain": "governance",
       "ruleCount": 7,
@@ -213,13 +195,31 @@
       "emittedMasterRuleCount": 7
     },
     {
+      "file": "workflow-guidelines/closure.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 2,
+      "masterRuleCount": 2,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 2
+    },
+    {
+      "file": "workflow-guidelines/subagents.md",
+      "role": "packed",
+      "domain": "governance",
+      "ruleCount": 15,
+      "masterRuleCount": 15,
+      "aliasRuleCount": 0,
+      "emittedMasterRuleCount": 15
+    },
+    {
       "file": "workflow-guidelines/solver-quests.md",
       "role": "packed",
       "domain": "governance",
-      "ruleCount": 110,
-      "masterRuleCount": 110,
+      "ruleCount": 122,
+      "masterRuleCount": 122,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 110
+      "emittedMasterRuleCount": 122
     },
     {
       "file": "findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md",
@@ -252,10 +252,10 @@
       "file": "findings/2026-06-30-adversarially-vet-hypotheses-before-presenting.md",
       "role": "packed",
       "domain": "governance",
-      "ruleCount": 1,
-      "masterRuleCount": 1,
+      "ruleCount": 2,
+      "masterRuleCount": 2,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 1
+      "emittedMasterRuleCount": 2
     },
     {
       "file": "findings/2026-06-30-read-freshest-precomputed-artifact-first.md",
@@ -318,7 +318,7 @@
       "title": "Core Steering Pack",
       "description": "Always-load compact rules for ownership, safety, scope, and quality baseline.",
       "ruleCount": 30,
-      "estimatedTokens": 4136,
+      "estimatedTokens": 4153,
       "domains": [
         "architecture",
         "testing",
@@ -332,16 +332,16 @@
       "name": "architecture",
       "title": "Architecture Steering Pack",
       "description": "Load for bootstrap/join/rebalance/control-plane/runtime ownership and lifecycle work.",
-      "ruleCount": 171,
-      "estimatedTokens": 5871,
+      "ruleCount": 306,
+      "estimatedTokens": 12468,
       "domains": [
         "architecture"
       ],
       "mode": "generated",
       "completeness": "complete",
-      "masterRuleCount": 171,
+      "masterRuleCount": 306,
       "aliasRuleCount": 3,
-      "indexedRuleCount": 174,
+      "indexedRuleCount": 309,
       "sourceFiles": [
         "system-guidelines.md",
         "runtime-contracts.md",
@@ -355,16 +355,16 @@
       "name": "testing",
       "title": "Testing Steering Pack",
       "description": "Load for test-first workflow, reliability harness work, and regression policy.",
-      "ruleCount": 92,
-      "estimatedTokens": 4287,
+      "ruleCount": 165,
+      "estimatedTokens": 8928,
       "domains": [
         "testing"
       ],
       "mode": "generated",
       "completeness": "complete",
-      "masterRuleCount": 92,
+      "masterRuleCount": 165,
       "aliasRuleCount": 1,
-      "indexedRuleCount": 93,
+      "indexedRuleCount": 166,
       "sourceFiles": [
         "operational-ground-truth.md",
         "testing-guidelines/harness.md",
@@ -399,16 +399,16 @@
       "name": "governance",
       "title": "Governance Steering Pack",
       "description": "Load for roadmap and edition-scope checks.",
-      "ruleCount": 151,
-      "estimatedTokens": 8142,
+      "ruleCount": 190,
+      "estimatedTokens": 10718,
       "domains": [
         "governance"
       ],
       "mode": "generated",
       "completeness": "complete",
-      "masterRuleCount": 151,
+      "masterRuleCount": 190,
       "aliasRuleCount": 0,
-      "indexedRuleCount": 151,
+      "indexedRuleCount": 190,
       "sourceFiles": [
         "roadmap.md",
         "agpl-feature-map.md",

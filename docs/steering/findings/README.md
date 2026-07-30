@@ -44,11 +44,10 @@ npm run rule -- --id <assigned-id>      # e.g. GOV-0062
 npm run rule -- --domain governance     # browse the domain
 ```
 
-It enters the **compact** domain pack (`docs/steering/llm/<domain>.md`) only if its
-score clears that domain's `maxRules` cap — promoted findings default to
-`priority: 100`, so in a crowded domain they are queryable but may not surface in the
-always-loaded pack. To force one into the compact pack, raise its `priority` in the
-`sources[]` entry above the cap cutoff. The rule CLI is the durable home either way;
-the source citation points back to this file (whose name carries the quest id).
+It also enters the generated domain pack
+(`docs/steering/llm/<domain>.md`). Domain packs are complete for their configured
+packed sources; `priority` affects deterministic ordering and scoring, not whether
+the rule is emitted. The rule CLI remains the lookup surface, and the source
+citation points back to this file (whose name carries the quest id).
 
 Review the regenerated rule, then commit.

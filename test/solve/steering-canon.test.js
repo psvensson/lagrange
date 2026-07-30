@@ -56,3 +56,56 @@ tap.test('LLM steering canon has one owner per concern', (t) => {
     'the operator catalog does not promise a durable overview');
   t.end();
 });
+
+tap.test('LLM steering surfaces agree on generated-pack and operator contracts',
+  (t) => {
+    const system = read('docs/steering/system-guidelines.md');
+    const architecture = read('docs/steering/architecture.md');
+    const findings = read('docs/steering/findings/README.md');
+    const doctrine = [
+      'INDEX.md',
+      'decision-experiments.md',
+      'owner-boundaries.md',
+      'single-path.md',
+      'state-encoding.md',
+    ].map((file) => read(`docs/steering/doctrine/${file}`)).join('\n');
+    const core = read('docs/steering/llm/core.md');
+    const boot = read('docs/steering/llm/boot.md');
+    const closure = read('docs/steering/workflow-guidelines/closure.md');
+    const roadmap = read('docs/steering/roadmap.md');
+    const operational = read('docs/steering/operational-ground-truth.md');
+    const subagents = read('docs/steering/workflow-guidelines/subagents.md');
+    const templates = read('docs/steering/verification-templates/INDEX.md');
+    const memory = read('docs/steering/memory-boundary.md');
+    const fixtures = read('docs/steering/testing-guidelines/fixtures.md');
+    const solverCanon =
+      read('docs/steering/workflow-guidelines/solver-quests.md');
+    const config = JSON.parse(read('docs/steering/llm-pack.config.json'));
+
+    for (const source of [system, architecture, findings, doctrine]) {
+      t.notMatch(
+        source,
+        /maxRules|below (?:the )?architecture pack cap|priority-ranked subset/u,
+        'canonical sources do not describe the retired capped-pack model',
+      );
+    }
+    t.match(boot, /report --id <id>.*optional human views/su);
+    t.match(closure, /optional human-readable\s+projection/u);
+    t.match(roadmap, /Solver terminal state and its\s+evidence/u);
+    t.notMatch(closure, /regenerate the report/u);
+
+    t.match(operational, /mechanistic.*is not statistical and has no live/su);
+    t.notMatch(operational, /Mechanistic.*does-it-engage.*N=3/u);
+
+    const memorySource = config.sources.find((entry) =>
+      entry.file === 'memory-boundary.md');
+    t.equal(memorySource.role, 'packed');
+    t.match(core, /configured packed governance\s+source/u);
+
+    t.match(subagents, /MUST\s+include every attack-surface checklist/u);
+    t.match(templates, /prompt MUST include that template's checklist/u);
+    t.match(memory, /MUST NOT authenticate, manufacture, or elevate Level-1/u);
+    t.match(solverCanon, /not a runtime flag or Quest-local override/u);
+    t.match(fixtures, /does not require the complete suite during each iteration/u);
+    t.end();
+  });

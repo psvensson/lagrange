@@ -21,8 +21,13 @@ Before claiming SOLVED:
 
 1. rerun the relevant harness or probe;
 2. record the final attempt through the Solver;
-3. regenerate the report with `node scripts/solve.js report --id <id>`;
-4. cite the report and evidence path in the final response.
+3. complete Solver verification, audit, and terminal handoff;
+4. cite the terminal verdict and evidence path in the final response.
+
+`node scripts/solve.js report --id <id>` is an optional human-readable
+projection. The optional report may be generated and cited for convenience, but
+its presence is never a SOLVED precondition and it does not own the terminal
+verdict.
 
 ## EXHAUSTED
 

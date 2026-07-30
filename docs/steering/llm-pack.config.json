@@ -264,7 +264,7 @@
       "aliases": [
         {
           "file": "system-guidelines.md",
-          "line": 181,
+          "line": 180,
           "match": "Do not add synonyms for existing concepts"
         }
       ]
@@ -279,7 +279,7 @@
       "aliases": [
         {
           "file": "system-guidelines.md",
-          "line": 184,
+          "line": 183,
           "match": "Do not introduce ordinal, segment, or grab-bag source filenames"
         }
       ]

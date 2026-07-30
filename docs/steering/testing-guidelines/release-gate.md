@@ -74,9 +74,8 @@ AGENTS.md single-canonical-home rule) — consult it before queuing any gate run
 for: the admission criteria (the named irreducibly-statistical cases, including
 hot failure-path aggregate A/B validation), the mandatory
 `npm run analyze:latent-blockers` pre-gate step, the sealed-metric detail, and
-the N calibration table (mechanistic N=3–4 / rate or variance N≥8 / sealed-bar
-certification N≥15). This file only fixes the rerun-ladder ordering above; it
-does not restate those criteria.
+the statistical N calibration table. This file only fixes the rerun-ladder
+ordering above; it does not restate those criteria.
 
 ## Deterministic Proof Must Move the Binding Observable
 

@@ -75,10 +75,11 @@ any distributed-harness or convergence work:
     informative N and escalate only when the result forces it (a borderline mixed
     rate, or a rate-promotion verdict where the statistic itself is the claim).
     Never conclude a *rate* from N=1; never default to a large N every iteration.
-    Calibrate N to the question:
+    A mechanistic "does it engage?" question is not statistical and has no live
+    N: answer it with one deterministic engagement witness. For genuinely
+    statistical questions, calibrate N to the claim:
     | Question | N |
     | --- | --- |
-    | Mechanistic / does-it-engage | N=3–4 |
     | Rate or variance verdict | N≥8 |
     | Sealed-bar certification | N≥15 (the one-time certification in the sealed-metric bullet below) |
   - `rolling-restart-core-stability`'s `doneWhen` is the sealed variance-aware

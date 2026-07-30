@@ -13,6 +13,18 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Inspect Git, local adapter, execution mode, and attribution capabilities without mutation.',
       }),
       Object.freeze({
+        command: 'npm run solve:start -- --id <quest>',
+        description: 'Preflight and start or resume a Quest without beginning an attempt.',
+      }),
+      Object.freeze({
+        command: 'npm run solve:continue -- --id <quest>',
+        description: 'Execute the Quest’s next safe begin-step or attempt-record action.',
+      }),
+      Object.freeze({
+        command: 'npm run solve:land -- --id <quest> --verifier <id> --verdict <approve|reject> --fingerprint sha256:<hex> --receipt <ref>',
+        description: 'Validate an independent terminal verdict, audit, and commit eligible Quest scope; never push.',
+      }),
+      Object.freeze({
         command: 'npm run solve:next -- --id <quest> [--json]',
         description: 'Print the typed next action for an existing Quest.',
       }),

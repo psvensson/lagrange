@@ -63,11 +63,10 @@ Use focused steering files for detail:
 
 These rules are non-negotiable. The compact packs derived from this file
 carry the same authority during a session; the detailed source files explain
-proof and procedure but do not weaken this contract. Note the packs are a
-priority-ranked subset under a per-pack `maxRules` cap, not the full corpus:
-rules that fall below a pack's cap remain binding when their scope is touched
-and are queryable via `npm run rule` /
-[`llm/rules-index.md`](llm/rules-index.md).
+proof and procedure but do not weaken this contract. Each generated domain pack
+is complete for the packed sources assigned to that domain. `rules.json` and
+[`llm/rules-index.md`](llm/rules-index.md) retain the full ID, alias, source,
+and lookup surfaces; they are not an overflow path for rules omitted by a cap.
 
 The system is called lagrange.
 

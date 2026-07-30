@@ -89,7 +89,9 @@ Route work through the smallest sufficient planning surface:
 4. A Quest must cite or encode enough scope context to prevent local invention.
 5. Quest implementation begins only after `doneWhen`, frontiers, metrics, and
    constraints are clear.
-6. Quest completion is claimed only through the Solver report.
+6. Quest completion is claimed only from the Solver terminal state and its
+   evidence. A generated report is an optional human-readable projection of
+   that state, not a completion prerequisite.
 
 `docs/` holds documentation, never active work definition: user/operator-facing
 docs, the agent steering tree under `docs/steering/`, and internal engineering

@@ -3,7 +3,7 @@ scope: architecture
 status: canonical
 always_load: false
 source_of_truth: self
-compiled_pack: rules.json corpus (below architecture pack cap; query via npm run rule)
+compiled_pack: docs/steering/llm/architecture.md (complete architecture domain pack)
 last_reviewed: 2026-07-10
 ---
 

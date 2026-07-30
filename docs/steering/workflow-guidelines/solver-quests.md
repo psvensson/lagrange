@@ -69,10 +69,12 @@ The normal Quest workflow has three verbs:
    authoring flags are present, lints it, and returns the stable structured next
    action. It is read-only for an existing Quest and never seals or begins work.
 2. `solve continue --id <id>` executes only structured `begin-step`,
-   `commit-step`, or replacement equivalents. A commit requires exactly one
-   explicit `--changeRef` or `--auto-diff` plus `--summary`. It MUST NOT parse or
-   execute the human-rendered action value, and it stops on every judgment,
-   verification, checkpoint, audit-repair, or terminal action.
+   `commit-step`, or replacement equivalents. Here `commit-step` means record
+   the measured attempt in the event log; it does not create a Git commit. An
+   attempt-record action requires exactly one explicit `--changeRef` or
+   `--auto-diff` plus `--summary`. It MUST NOT parse or execute the
+   human-rendered action value, and it stops on every judgment, verification,
+   checkpoint, audit-repair, or terminal action.
 3. `solve land --id <id> --verifier <id> --verdict approve|reject
    --fingerprint <sha256>` validates the verdict against current terminal bytes
    and constructs the receipt server-side. Rejection records the fail-closed
@@ -333,9 +335,9 @@ Do not keep patching under a theory whose owner path is no longer current.
 diff stacks, mixed runtime/workflow changes, and mixed runtime/harness changes.
 The diagnostic retains every changed path and raw byte count, while terminal
 admission excludes only the fixed allowlist of deterministic generated boards
-and packed steering projections. Their authored inputs remain counted and their
-freshness gates still fail closed; mechanical output size must not force a fake
-owner split.
+and packed steering projections. The authored inputs for those generated
+projections remain counted and their freshness gates still fail closed;
+mechanical output size must not force a fake owner split.
 Scope pressure is advisory rather than terminal, but a high-severity signal
 should usually produce a finding, a narrower theory, or a split Quest before
 more code is changed.
@@ -375,10 +377,12 @@ A narrowing Quest can shuffle the same blocker between owners forever and call i
 progress. The guards below keep the loop converging instead of oscillating. Each
 detector is a pure read-model over the append-only log; the policy that turns a
 detection into a gate lives at the call site behind the master
-`CONVERGENCE_GUARDS` toggle map (`scripts/solve/constants.js`), so any single
-guard can be disabled by flag without code changes and every threshold is a named
-constant. Detectors fire only on real recorded events and never touch the sealed
-`doneWhen`.
+`CONVERGENCE_GUARDS` policy map (`scripts/solve/constants.js`), and every
+threshold is a named constant. The `CONVERGENCE_GUARDS` map is a source-owned
+compile-time policy surface, not a runtime flag or Quest-local override:
+changing it is a reviewed code and guardrail change, and a guard MUST NOT be
+disabled to make proof pass. Detectors fire only on real recorded events and
+never touch the sealed `doneWhen`.
 
 - **Oscillation detection**: returning the frontier to a previously-abandoned
   blocker (owner / boundary / dominantReason) is classified `oscillating`, never
@@ -428,7 +432,8 @@ constant. Detectors fire only on real recorded events and never touch the sealed
   climbs toward the system-theory/model rung instead of banking whack-a-mole). Because
   the detector reads the whole append-only history, the obligation persists across the
   entire coupling episode, not just the run that first tripped it. Switchable via
-  `CONVERGENCE_GUARDS.couplingReconcile`.
+  the source-owned `CONVERGENCE_GUARDS.couplingReconcile` policy; it is not a
+  runtime escape hatch.
 - **Regression-restore gate**: once a measured run records an invariant
   regression, the very next *begin*-phase move is pinned to restoring (or
   recording a finding that explains) the dropped invariant before any new theory
@@ -460,8 +465,9 @@ constant. Detectors fire only on real recorded events and never touch the sealed
   `CONTINUATION_BLOCKED_MEASUREMENT` to a **resumable measurement park** (never exhaustion;
   auto-reopens on a fresh measured sample). Its next-move text *outranks* a theory demand —
   you cannot form or falsify a theory without measurement — mirroring `CODE_PRECEDENCE`
-  where measurement precedes theory. Switchable via
-  `CONVERGENCE_GUARDS.harnessMeasurementGate`.
+  where measurement precedes theory. The source-owned
+  `CONVERGENCE_GUARDS.harnessMeasurementGate` policy is not a runtime escape
+  hatch.
 
 ## Closure Strength
 
@@ -583,13 +589,14 @@ For supervised work, one attempt is a three-phase flow:
    `solve/state/<id>.pending.json`. Nothing is recorded in the event log yet.
 2. **Work**: do the work and rerun the relevant harness/probe so fresh evidence
    exists.
-3. **Commit**: `node scripts/solve.js step --id <id> --commit --changeRef
+3. **Record attempt**: `node scripts/solve.js step --id <id> --commit --changeRef
    diff:<path> --summary "<hypothesis>"` measures against the pinned baseline,
    validates the attempt, updates the strategy ladder, records the log event,
-   and clears the pending file. The commit itself is atomic: it records the
-   attempt in one synchronous log append. `step --abort` discards the pending
-   attempt without recording anything; beginning a second step while one is
-   pending is an error (commit or abort it first).
+   and clears the pending file. The historical `--commit` flag commits only the
+   attempt record as one synchronous log append; it never creates a Git commit.
+   `step --abort` discards the pending attempt without recording anything;
+   beginning a second step while one is pending is an error (record or abort it
+   first).
 
 The agent executor writes a request dossier, runs the configured command, and
 reads back `{changeRef, summary, notes?}`. The agent reports only what changed.
@@ -1228,8 +1235,9 @@ change artifacts under `solve/changes/` and non-regenerable evidence under
 Projected state under `solve/state/` is local cache and may be rebuilt from the
 Quest plus append-only log. Ordinary `solve/report/<quest-id>.md` files with a
 matching declaration and log, plus the generated `OVERVIEW.generated.md`, are
-likewise ignored local projections. Generate either on demand. Their presence, mtime,
-or bytes MUST NOT gate `next`, audit, checkpoint, or terminal handoff.
+likewise ignored local projections. Generate either on demand. The presence,
+mtime, or bytes of ignored projections MUST NOT gate `next`, audit, checkpoint,
+or terminal handoff.
 
 Files under `solve/report/` that cannot be reconstructed from one Quest
 declaration and event log remain durable evidence. A projection-retention

@@ -2,7 +2,7 @@
 
 Attack-surface checklists for adversarial verification subagents (and human
 reviewers). When a change touches one of these categories, the verification
-prompt SHOULD include that template's checklist — filled in with the change's
+prompt MUST include that template's checklist — filled in with the change's
 specifics — so review quality does not depend on the prompt author
 remembering each classic failure mode.
 

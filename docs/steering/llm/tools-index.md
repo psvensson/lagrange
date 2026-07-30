@@ -191,19 +191,19 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `solve:audit` — Validate Quest workflow integrity, source-change verifier evidence, and git handoff readiness.
 - `solve:checkpoint` — Explicitly commit one unchanged, fingerprint-approved source attempt; never pushes.
 - `solve:consistency` — `node scripts/solve/ledger-consistency.js`
-- `solve:continue` — `node scripts/solve.js continue`
+- `solve:continue` — Execute the Quest’s next safe begin-step or attempt-record action.
 - `solve:doctor` — Inspect Git, local adapter, execution mode, and attribution capabilities without mutation.
 - `solve:finding` — Record durable Quest memory for a frontier.
 - `solve:health` — Report Quest loop-health, theory gates, divergence signals, and the next legal action.
 - `solve:ingest-evidence` — Record fresh probe evidence with a content fingerprint before the next attempt.
-- `solve:land` — `node scripts/solve.js land`
+- `solve:land` — Validate an independent terminal verdict, audit, and commit eligible Quest scope; never push.
 - `solve:lint` — Validate the versioned Quest authoring contract or report the read-only legacy census.
 - `solve:new` — Create an authored Quest file under solve/quests.
 - `solve:next` — Print the typed next action for an existing Quest.
 - `solve:probe` — Measure a scenario metric directly without recording an attempt.
 - `solve:report` — Print the Quest report projection.
 - `solve:run` — `node scripts/solve.js run`
-- `solve:start` — `node scripts/solve.js start`
+- `solve:start` — Preflight and start or resume a Quest without beginning an attempt.
 - `solve:status` — Print the Solver projection for a Quest.
 - `solve:step` — Begin a supervised attempt and pin the before metric.
 - `solve:step-pending` — Inspect the pinned supervised-step baseline without changing Quest memory.
@@ -302,4 +302,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-203 scripts indexed; 72 have a curated description, 131 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+203 scripts indexed; 75 have a curated description, 128 fall back to their raw command. Improve coverage in the two sources named in the header comment.

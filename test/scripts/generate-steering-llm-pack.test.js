@@ -1,3 +1,5 @@
+import fs from 'node:fs';
+
 import {test} from '../../src/test-helpers/tap.js';
 import {
   applyRuleAliases,
@@ -6,6 +8,7 @@ import {
   buildSourceManifest,
   classifyAphoristicText,
   countMarkdownRules,
+  dedupeCandidates,
   formatRuleCitation,
   isAphoristicText,
   locateRuleBySourceRef,
@@ -21,6 +24,18 @@ import {
 } from '../../scripts/generate-steering-llm-pack.js';
 
 const TEST_SOURCE_FILE = 'system guidelines.md';
+const SYSTEM_GUIDELINES_URL =
+  new URL('../../docs/steering/system-guidelines.md', import.meta.url);
+const RUNTIME_CONTRACTS_URL =
+  new URL('../../docs/steering/runtime-contracts.md', import.meta.url);
+const PROOF_LADDERS_URL =
+  new URL('../../docs/steering/testing-guidelines/proof-ladders.md', import.meta.url);
+const STATE_ENCODING_URL =
+  new URL('../../docs/steering/doctrine/state-encoding.md', import.meta.url);
+const DECISION_EXPERIMENTS_URL =
+  new URL('../../docs/steering/doctrine/decision-experiments.md', import.meta.url);
+const ROADMAP_URL =
+  new URL('../../docs/steering/roadmap.md', import.meta.url);
 const TEST_DOMAIN = 'architecture';
 const TEST_PRIORITY = 140;
 const TEST_PARENT_RULE_TEXT =
@@ -90,6 +105,66 @@ const TEST_FORBIDDEN_PREAMBLE_MARKDOWN = [
   TEST_FORBIDDEN_PREAMBLE,
   '',
   '- ' + TEST_FORBIDDEN_BULLET_TEXT,
+  '',
+].join('\n');
+const TEST_REQUIRED_FIRST_BULLET =
+  'Initial creation writes the full canonical row shape.';
+const TEST_REQUIRED_SECOND_BULLET =
+  'Later lifecycle changes use partial updates only.';
+const TEST_REQUIRED_PREAMBLE_MARKDOWN = [
+  '## System-Table Row Lifecycle',
+  '',
+  'Required patterns:',
+  '',
+  '1. ' + TEST_REQUIRED_FIRST_BULLET,
+  '2. ' + TEST_REQUIRED_SECOND_BULLET,
+  '',
+].join('\n');
+const TEST_WRAPPED_REQUIRED_PREAMBLE_MARKDOWN = [
+  '## Resource Lifetime',
+  '',
+  'Every queue, buffer, subscriber set, retry registry, deferred-work map, or',
+  'single-flight registry must have:',
+  '',
+  '- one owner',
+  '- one capacity or bounding rule',
+  '',
+].join('\n');
+const TEST_NON_NORMATIVE_QUESTION_PREAMBLE_MARKDOWN = [
+  '## Design Questions',
+  '',
+  'Use these questions to decide whether a change is',
+  'required:',
+  '',
+  '- Which owner exists?',
+  '- What evidence is missing?',
+  '',
+].join('\n');
+const TEST_REQUIRED_PREAMBLE_WITH_EXPLICIT_MODALITY_MARKDOWN = [
+  '## Shared Contract',
+  '',
+  'Required contract:',
+  '',
+  '- Consumers may not maintain a parallel cache.',
+  '- null and undefined MUST NOT encode runtime state.',
+  '- Initial creation writes the full canonical row shape.',
+  '',
+].join('\n');
+const TEST_FORBIDDEN_PREAMBLE_WITH_POSITIVE_WORDS_MARKDOWN = [
+  '## Handoff',
+  '',
+  'Forbidden patterns:',
+  '',
+  '- selecting from a stream without the required durable handoff edge',
+  '- a consumer may select from unpublished state',
+  '',
+].join('\n');
+const TEST_ABBREVIATION_MARKDOWN =
+  'A frontier metric may be sharpened (e.g. priority to distance) only when ' +
+  'the probe remains byte-identical. All other goalpost changes are forbidden.';
+const TEST_INLINE_CODE_MARKDOWN = [
+  '- **In-repo steering** (`docs/steering/**`) is CI-gated **ground truth**.',
+  '  Anything binding future work should apply to *everyone*.',
   '',
 ].join('\n');
 const TEST_FRAGMENT_MARKDOWN = [
@@ -229,6 +304,282 @@ test('steering pack parser preserves forbidden list preambles across blanks',
     t.ok(forbiddenRule, 'forbidden child bullet should be emitted');
     t.match(forbiddenRule.text, /^It is FORBIDDEN to:/u);
     t.match(forbiddenRule.text, TEST_FORBIDDEN_BULLET_TEXT);
+    t.end();
+  });
+
+test('steering pack parser emits required list items with section context',
+  (t) => {
+    const candidates = parseTestCandidates(TEST_REQUIRED_PREAMBLE_MARKDOWN);
+
+    t.equal(candidates.length, 2);
+    t.same(candidates.map((candidate) => candidate.line), [5, 6]);
+    for (const candidate of candidates) {
+      t.match(
+        candidate.text,
+        /^System-Table Row Lifecycle — Required patterns:/u,
+      );
+      t.equal(candidate.strength, 'must');
+    }
+    t.match(candidates[0].text, TEST_REQUIRED_FIRST_BULLET);
+    t.match(candidates[1].text, TEST_REQUIRED_SECOND_BULLET);
+    t.end();
+  });
+
+test('steering pack parser emits items beneath wrapped normative preambles',
+  (t) => {
+    const candidates = parseTestCandidates(
+      TEST_WRAPPED_REQUIRED_PREAMBLE_MARKDOWN,
+    );
+
+    t.equal(candidates.length, 2);
+    t.same(candidates.map((candidate) => candidate.line), [6, 7]);
+    for (const candidate of candidates) {
+      t.match(
+        candidate.text,
+        /^Resource Lifetime — Every queue, buffer, subscriber set, retry registry, deferred-work map, or single-flight registry must have:/u,
+      );
+      t.equal(candidate.strength, 'must');
+    }
+    t.match(candidates[0].text, /one owner/u);
+    t.match(candidates[1].text, /one capacity or bounding rule/u);
+    const deduped = dedupeCandidates(candidates);
+    t.equal(
+      deduped.length,
+      2,
+      'fuzzy dedupe must not collapse siblings that share a long preamble',
+    );
+    t.ok(deduped.some((candidate) => candidate.text.includes('one owner')));
+    t.ok(deduped.some((candidate) =>
+      candidate.text.includes('one capacity or bounding rule')));
+    t.end();
+  });
+
+test('steering pack parser does not promote non-normative question lists',
+  (t) => {
+    const candidates = parseTestCandidates(
+      TEST_NON_NORMATIVE_QUESTION_PREAMBLE_MARKDOWN,
+    );
+
+    t.same(candidates, []);
+    t.end();
+  });
+
+test('explicit child modality overrides an inherited positive preamble',
+  (t) => {
+    const candidates = parseTestCandidates(
+      TEST_REQUIRED_PREAMBLE_WITH_EXPLICIT_MODALITY_MARKDOWN,
+    );
+
+    t.same(
+      candidates.map((candidate) => candidate.strength),
+      ['must_not', 'must_not', 'must'],
+    );
+    t.match(candidates[0].text, /Consumers may not maintain/u);
+    t.match(candidates[1].text, /MUST NOT encode runtime state/u);
+    t.end();
+  });
+
+test('categorical forbidden preambles dominate positive child wording',
+  (t) => {
+    const candidates = parseTestCandidates(
+      TEST_FORBIDDEN_PREAMBLE_WITH_POSITIVE_WORDS_MARKDOWN,
+    );
+
+    t.same(
+      candidates.map((candidate) => candidate.strength),
+      ['must_not', 'must_not'],
+    );
+    t.end();
+  });
+
+test('steering pack parser does not split normative sentences at abbreviations',
+  (t) => {
+    const candidates = parseTestCandidates(TEST_ABBREVIATION_MARKDOWN);
+
+    t.equal(candidates.length, 2);
+    t.match(candidates[0].text, /\(e\.g\. priority to distance\)/u);
+    t.match(candidates[0].text, /probe remains byte-identical\.$/u);
+    t.end();
+  });
+
+test('steering pack parser isolates inline-code globs from emphasis markers',
+  (t) => {
+    const candidates = parseTestCandidates(TEST_INLINE_CODE_MARKDOWN);
+
+    t.equal(candidates.length, 1);
+    t.match(candidates[0].text, /docs\/steering\/\*\*/u);
+    t.match(candidates[0].text, /CI-gated ground truth/u);
+    t.match(candidates[0].text, /apply to everyone/u);
+    t.notMatch(candidates[0].text, /truth\*|everyone\*/u);
+    t.end();
+  });
+
+test('steering pack parser classifies restrictive may rules as binding',
+  (t) => {
+    const candidates = parseTestCandidates([
+      'Consumers may not maintain a parallel cache.',
+      '',
+      'For one owner key, at most one reconcile execution may be in flight.',
+      '',
+    ].join('\n'));
+
+    t.equal(candidates[0].strength, 'must_not');
+    t.equal(candidates[1].strength, 'must');
+    t.end();
+  });
+
+test('packed sources emit representative required-list obligations',
+  (t) => {
+    const systemCandidates = parseMarkdownCandidates(
+      fs.readFileSync(SYSTEM_GUIDELINES_URL, 'utf8'),
+      {
+        file: 'system-guidelines.md',
+        domain: 'architecture',
+        priority: TEST_PRIORITY,
+      },
+    );
+    const runtimeCandidates = parseMarkdownCandidates(
+      fs.readFileSync(RUNTIME_CONTRACTS_URL, 'utf8'),
+      {
+        file: 'runtime-contracts.md',
+        domain: 'architecture',
+        priority: TEST_PRIORITY,
+      },
+    );
+    const proofCandidates = parseMarkdownCandidates(
+      fs.readFileSync(PROOF_LADDERS_URL, 'utf8'),
+      {
+        file: 'testing-guidelines/proof-ladders.md',
+        domain: 'testing',
+        priority: TEST_PRIORITY,
+      },
+    );
+    const stateEncodingCandidates = dedupeCandidates(
+      parseMarkdownCandidates(
+        fs.readFileSync(STATE_ENCODING_URL, 'utf8'),
+        {
+          file: 'doctrine/state-encoding.md',
+          domain: 'architecture',
+          priority: TEST_PRIORITY,
+        },
+      ),
+    );
+    const decisionExperimentCandidates = dedupeCandidates(
+      parseMarkdownCandidates(
+        fs.readFileSync(DECISION_EXPERIMENTS_URL, 'utf8'),
+        {
+          file: 'doctrine/decision-experiments.md',
+          domain: 'architecture',
+          priority: TEST_PRIORITY,
+        },
+      ),
+    );
+    const roadmapCandidates = dedupeCandidates(
+      parseMarkdownCandidates(
+        fs.readFileSync(ROADMAP_URL, 'utf8'),
+        {
+          file: 'roadmap.md',
+          domain: 'governance',
+          priority: TEST_PRIORITY,
+        },
+      ),
+    );
+
+    for (const expected of [
+      'Initial creation writes the full canonical row shape.',
+      'Semantic owners submit shared-metadata writes through one canonical runtime',
+      'Use operation IDs, idempotency keys, or equivalent unique identity.',
+    ]) {
+      t.ok(
+        runtimeCandidates.some((candidate) =>
+          candidate.text.includes(expected)),
+        `runtime contract emits: ${expected}`,
+      );
+    }
+    t.equal(
+      systemCandidates.find((candidate) =>
+        candidate.text.includes(
+          'Consumers may not maintain parallel system-data caches',
+        ))?.strength,
+      'must_not',
+      'required-list preamble does not weaken an explicit may-not child',
+    );
+    t.equal(
+      runtimeCandidates.find((candidate) =>
+        candidate.text.includes(
+          'published the required durable handoff edge',
+        ))?.strength,
+      'must_not',
+      'forbidden-list preamble dominates adjectival required wording',
+    );
+    t.equal(
+      systemCandidates.find((candidate) =>
+        candidate.text.includes(
+          'nested work derives from remaining budget and never starts',
+        ))?.strength,
+      'must_not',
+      'wrapped child continuation contributes its explicit modality',
+    );
+    t.ok(
+      proofCandidates.some((candidate) =>
+        candidate.text.includes(
+          'Before editing production code, capture the relevant static guardrail',
+        )),
+      'proof ladder emits the pre-edit static baseline obligation',
+    );
+    t.equal(
+      proofCandidates.find((candidate) =>
+        candidate.text.includes('A Quest must not report SOLVED'))?.strength,
+      'must_not',
+      'required-list preamble does not weaken an explicit must-not child',
+    );
+    t.equal(
+      proofCandidates.find((candidate) =>
+        candidate.text.includes(
+          'Green behavior tests do not override a failed owner-path guard',
+        ))?.strength,
+      'must_not',
+      'later child sentences contribute their explicit modality',
+    );
+    for (const expected of [
+      'outcome or completion state',
+      'one owner',
+      'one diagnostic surface',
+    ]) {
+      const matchingCandidate = stateEncodingCandidates.find((candidate) =>
+        candidate.text.includes(expected));
+      t.ok(
+        matchingCandidate,
+        `state encoding emits wrapped obligation: ${expected}`,
+      );
+      t.equal(
+        matchingCandidate?.strength,
+        'must',
+        `section-title wording does not change modality: ${expected}`,
+      );
+    }
+    for (const expected of [
+      'the full phase chain from the scenario/probe',
+      'the bounded-progress mechanism for retryable or backpressure states',
+      'whether the result is a runtime fix',
+    ]) {
+      t.ok(
+        decisionExperimentCandidates.some((candidate) =>
+          candidate.text.includes(expected)),
+        `decision experiments emit wrapped obligation: ${expected}`,
+      );
+    }
+    for (const expected of [
+      'The implementation home remains AGPL repo',
+      'The work does not implement paid-only behavior',
+      'The work remains consistent with the scope and sequence',
+    ]) {
+      t.ok(
+        roadmapCandidates.some((candidate) =>
+          candidate.text.includes(expected)),
+        `roadmap emits wrapped obligation: ${expected}`,
+      );
+    }
     t.end();
   });
 
@@ -519,6 +870,7 @@ test('classifyAphoristicText flags dangling-pronoun openings followed by action 
   t.equal(classifyAphoristicText('They do not replace the implementation role.'), 'dangling_pronoun');
   t.equal(classifyAphoristicText('It must run before closure.'), 'dangling_pronoun');
   t.equal(classifyAphoristicText('These apply to all owners.'), 'dangling_pronoun');
+  t.equal(classifyAphoristicText('Their authored inputs remain counted.'), 'dangling_pronoun');
   t.end();
 });
 

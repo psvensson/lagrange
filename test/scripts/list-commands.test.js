@@ -17,6 +17,11 @@ const REPORT_TRIAGE_GROUP_TITLE = 'Report And Triage';
 const GUIDELINE_GUARDRAILS_GROUP_TITLE = 'Guideline Guardrails';
 
 const COMMANDS_COMMAND = 'npm run commands';
+const SOLVE_START_COMMAND = 'npm run solve:start -- --id <quest>';
+const SOLVE_CONTINUE_COMMAND = 'npm run solve:continue -- --id <quest>';
+const SOLVE_LAND_COMMAND =
+  'npm run solve:land -- --id <quest> --verifier <id> ' +
+  '--verdict <approve|reject> --fingerprint sha256:<hex> --receipt <ref>';
 const QUEST_CONTEXT_COMMAND = 'npm run quest:context -- --id <quest>';
 const SOLVE_STATUS_COMMAND = 'npm run solve:status -- --id <quest>';
 const SOLVE_STEP_COMMAND = 'npm run solve:step -- --id <quest>';
@@ -92,6 +97,12 @@ const MODEL_OWNER_TRACES_SCRIPT = 'model:owner-traces';
 const MODEL_OWNER_TRACES_SCRIPT_COMMAND = 'node scripts/check-owner-traces.js';
 const SOLVE_SCRIPT = 'solve';
 const SOLVE_SCRIPT_COMMAND = 'node scripts/solve.js';
+const SOLVE_START_SCRIPT = 'solve:start';
+const SOLVE_START_SCRIPT_COMMAND = 'node scripts/solve.js start';
+const SOLVE_CONTINUE_SCRIPT = 'solve:continue';
+const SOLVE_CONTINUE_SCRIPT_COMMAND = 'node scripts/solve.js continue';
+const SOLVE_LAND_SCRIPT = 'solve:land';
+const SOLVE_LAND_SCRIPT_COMMAND = 'node scripts/solve.js land';
 const SOLVE_STATUS_SCRIPT = 'solve:status';
 const SOLVE_STATUS_SCRIPT_COMMAND = 'node scripts/solve.js status';
 const SOLVE_STEP_SCRIPT = 'solve:step';
@@ -142,6 +153,9 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
 
   for (const command of [
     COMMANDS_COMMAND,
+    SOLVE_START_COMMAND,
+    SOLVE_CONTINUE_COMMAND,
+    SOLVE_LAND_COMMAND,
     QUEST_CONTEXT_COMMAND,
     SOLVE_STATUS_COMMAND,
     SOLVE_STEP_COMMAND,
@@ -174,6 +188,13 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
   }
 
   t.notMatch(rendered, RUNTIME_GRAMMAR_BROAD_COMMAND);
+  const orientation = COMMAND_GROUPS.find((group) =>
+    group.title === ORIENTATION_GROUP_TITLE);
+  t.same(
+    orientation.commands.slice(2, 5).map((entry) => entry.command),
+    [SOLVE_START_COMMAND, SOLVE_CONTINUE_COMMAND, SOLVE_LAND_COMMAND],
+    'the primary start/continue/land workflow leads component commands',
+  );
   t.equal(findCommandEntry(QUEST_CONTEXT_COMMAND).group.title, ORIENTATION_GROUP_TITLE);
   t.equal(findCommandEntry(SOLVE_STEP_COMMAND).group.title, ORIENTATION_GROUP_TITLE);
   t.equal(
@@ -235,6 +256,9 @@ test('package scripts expose Quest aliases and runtime grammar guards', (t) => {
 
   t.equal(scripts[COMMANDS_SCRIPT], COMMANDS_SCRIPT_COMMAND);
   t.equal(scripts[SOLVE_SCRIPT], SOLVE_SCRIPT_COMMAND);
+  t.equal(scripts[SOLVE_START_SCRIPT], SOLVE_START_SCRIPT_COMMAND);
+  t.equal(scripts[SOLVE_CONTINUE_SCRIPT], SOLVE_CONTINUE_SCRIPT_COMMAND);
+  t.equal(scripts[SOLVE_LAND_SCRIPT], SOLVE_LAND_SCRIPT_COMMAND);
   t.equal(scripts[SOLVE_STATUS_SCRIPT], SOLVE_STATUS_SCRIPT_COMMAND);
   t.equal(scripts[SOLVE_STEP_SCRIPT], SOLVE_STEP_SCRIPT_COMMAND);
   t.equal(scripts[SOLVE_STEP_PENDING_SCRIPT], SOLVE_STEP_PENDING_SCRIPT_COMMAND);

@@ -66,8 +66,10 @@ node scripts/solve.js start --id <id> --statement "<sealed result>" \
 
 Drive routine supervised work with one verb. It executes only structured
 `begin-step` and `commit-step` actions; judgment, verification, checkpoint, and
-repair actions stop for the operator. Committing requires an explicit capture
-choice and summary—working-tree capture is never implicit:
+repair actions stop for the operator. `commit-step` records a measured attempt
+in the Solver event log; it does not create a Git commit. Recording that attempt
+requires an explicit capture choice and summary—working-tree capture is never
+implicit:
 
 ```sh
 node scripts/solve.js continue --id <id>

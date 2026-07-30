@@ -3,7 +3,7 @@ scope: architecture
 status: canonical
 always_load: false
 source_of_truth: self
-compiled_pack: rules.json corpus (below architecture pack cap; query via npm run rule)
+compiled_pack: docs/steering/llm/architecture.md (complete architecture domain pack)
 parent_index: ../doctrine/INDEX.md
 last_reviewed: 2026-07-10
 ---
@@ -96,12 +96,15 @@ same owner boundary still dominates, continue the current frontier. If the
 semantic owner, owner boundary, or next required action changes, record a
 finding and add or author the frontier that owns the new boundary.
 
-Optional real sub-agents should accelerate this sequence, not replace it.
-Closure still depends on Solver measurement and report state. Use an optional
-review role for the most recently executed attempt on the same owner boundary.
-If that review finds closure, evidence, residual, guardrail, or snapshot
-problems, fix those problems before claiming SOLVED. Parent-session notes,
-local/manual labels, arbitrary text, and real agent ids are provenance only.
+Sub-agents are optional for research, implementation, and additional attempt
+review; they should accelerate this sequence, not replace it. Independent
+subagent verification is mandatory only at the explicit workflow boundaries
+that require it: adversarial vetting before a non-trivial hypothesis or lever is
+presented, and content-bound verification before source checkpoint or terminal
+handoff. Closure still depends on Solver measurement and terminal state. If any
+review finds closure, evidence, residual, guardrail, or snapshot problems, fix
+those problems before claiming SOLVED. Parent-session notes, local/manual
+labels, arbitrary text, and real agent ids are provenance only.
 
 The normal sequence is:
 

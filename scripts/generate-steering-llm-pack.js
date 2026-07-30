@@ -119,11 +119,23 @@ const BULLET_WITH_INDENT_PATTERN = /^(\s*)(?:[-*]|\d+\.)\s+(.+)$/u;
 const TABLE_PATTERN = /^\s*\|/u;
 const FENCED_CODE_PATTERN = /^\s*```/u;
 const TRAILING_COLON_PATTERN = /:\s*$/u;
-const NORMATIVE_LIST_PREAMBLE_PATTERN =
-  /\b(FORBIDDEN|MUST\s+NOT|SHALL\s+NOT|DO\s+NOT|NEVER)\b[^:]*:\s*$/iu;
+const NORMATIVE_LIST_DIRECTIVE_PATTERN =
+  /\b(MUST\s+NOT|SHALL\s+NOT|DO\s+NOT|NEVER|MUST|SHALL|SHOULD|MAY)\b/iu;
+const NORMATIVE_LIST_LABEL_PATTERN = /^(REQUIRED|FORBIDDEN)\b/iu;
+const NORMATIVE_LIST_PREDICATE_PATTERN =
+  /\b(IS|ARE|BE)\s+(REQUIRED|FORBIDDEN)\b/iu;
+const CONDITIONAL_REQUIRED_PREDICATE_PATTERN =
+  /\b(WHETHER|IF)\b[^:]*\b(IS|ARE|BE)\s+REQUIRED\b/iu;
+const POSITIVE_NORMATIVE_LIST_PREAMBLE_PATTERN =
+  /\b(MUST|SHALL|REQUIRED|SHOULD|MAY)\b[^:]*:\s*$/iu;
+const SENTENCE_BOUNDARY_PATTERN =
+  /(?<!\be\.g\.)(?<!\bi\.e\.)(?<=[.!?])\s+/iu;
+const INLINE_CODE_SEGMENT_PATTERN = /(`[^`]+`)/gu;
+const INLINE_CODE_EXACT_PATTERN = /^`[^`]+`$/u;
 const CHILD_RULE_PREFIX = '- ';
 const CHILD_RULE_JOINER = '; ';
 const RULE_BODY_JOINER = ' ';
+const LIST_CONTEXT_SEPARATOR = ' — ';
 const EMPTY_TEXT = '';
 const PROCESS_ARG_SCRIPT_INDEX = 1;
 const COMPARE_EQUAL = 0;
@@ -231,7 +243,18 @@ function isFencedCodeBoundary(line) {
 }
 
 function isNormativeListPreamble(text = '') {
-  return NORMATIVE_LIST_PREAMBLE_PATTERN.test(normalizeWhitespace(text));
+  const normalized = stripInlineMarkdown(normalizeWhitespace(text));
+  if (!TRAILING_COLON_PATTERN.test(normalized)) {
+    return false;
+  }
+  if (
+    NORMATIVE_LIST_DIRECTIVE_PATTERN.test(normalized) ||
+    NORMATIVE_LIST_LABEL_PATTERN.test(normalized)
+  ) {
+    return true;
+  }
+  return NORMATIVE_LIST_PREDICATE_PATTERN.test(normalized) &&
+    !CONDITIONAL_REQUIRED_PREDICATE_PATTERN.test(normalized);
 }
 
 function isFragmentLikeBullet(text = '') {
@@ -275,6 +298,7 @@ const APHORISM_EXPLETIVE_NORMATIVE_PATTERN =
   /^It\s+is\s+(?:not\s+)?(?:forbidden|required|mandatory)\b/iu;
 const APHORISM_DANGLING_PRONOUN_PATTERN =
   /^(?:They|It|This|That|These|Those)\s+(?:(?:never|always)\s+)?(?:is|are|was|were|has|have|had|do|does|did|must|should|shall|will|can|cannot|may|might|need|needs|require|requires|replace|replaces|prevent|prevents|apply|applies|run|runs|use|uses|fail|fails|own|owns|hold|holds|enforce|enforces)\b/iu;
+const APHORISM_DANGLING_POSSESSIVE_PATTERN = /^(?:Their|Its)\b/iu;
 
 function classifyAphoristicText(text = '') {
   const normalized = normalizeWhitespace(text);
@@ -288,7 +312,8 @@ function classifyAphoristicText(text = '') {
     return 'allcaps_label';
   }
   if (
-    APHORISM_DANGLING_PRONOUN_PATTERN.test(normalized) &&
+    (APHORISM_DANGLING_PRONOUN_PATTERN.test(normalized) ||
+      APHORISM_DANGLING_POSSESSIVE_PATTERN.test(normalized)) &&
     !APHORISM_EXPLETIVE_NORMATIVE_PATTERN.test(normalized)
   ) {
     return 'dangling_pronoun';
@@ -315,17 +340,22 @@ function formatRuleCitation(rule = {}) {
 }
 
 function stripInlineMarkdown(value) {
+  const segments = String(value || '').split(INLINE_CODE_SEGMENT_PATTERN);
   return normalizeWhitespace(
-    String(value || '')
-      .replace(/\[([^\]]+)\]\([^)]+\)/gu, LOCAL_STR_DOLLAR_1)
-      .replace(/`([^`]+)`/gu, LOCAL_STR_DOLLAR_1)
-      .replace(/\*\*([^*]+)\*\*/gu, LOCAL_STR_DOLLAR_1)
-      .replace(/__([^_]+)__/gu, LOCAL_STR_DOLLAR_1)
-      .replace(/\*([^*]+)\*/gu, LOCAL_STR_DOLLAR_1)
-      // Underscore emphasis only at word boundaries; never strip snake_case
-      // (e.g. MAX_CYCLES, THEORY_REQUIRED) where underscores are intra-word.
-      .replace(/(?<![A-Za-z0-9])_([^_]+?)_(?![A-Za-z0-9])/gu, LOCAL_STR_DOLLAR_1)
-      .replace(/^>\s*/gu, ''),
+    segments.map((segment) => {
+      if (INLINE_CODE_EXACT_PATTERN.test(segment)) {
+        return segment.slice(1, -1);
+      }
+      return segment
+        .replace(/\[([^\]]+)\]\([^)]+\)/gu, LOCAL_STR_DOLLAR_1)
+        .replace(/\*\*([^*]+)\*\*/gu, LOCAL_STR_DOLLAR_1)
+        .replace(/__([^_]+)__/gu, LOCAL_STR_DOLLAR_1)
+        .replace(/\*([^*]+)\*/gu, LOCAL_STR_DOLLAR_1)
+        // Underscore emphasis only at word boundaries; never strip snake_case
+        // (e.g. MAX_CYCLES, THEORY_REQUIRED) where underscores are intra-word.
+        .replace(/(?<![A-Za-z0-9])_([^_]+?)_(?![A-Za-z0-9])/gu, LOCAL_STR_DOLLAR_1)
+        .replace(/^>\s*/gu, '');
+    }).join(EMPTY_TEXT),
   );
 }
 
@@ -342,10 +372,13 @@ function normalizeRuleKey(value) {
 function inferStrength(text) {
   const normalized = String(text || '').toUpperCase();
   if (
-    /(MUST\s+NOT|SHALL\s+NOT|NEVER|DO\s+NOT)/u.test(normalized) ||
+    /(MUST\s+NOT|SHALL\s+NOT|MAY\s+NOT|NEVER|DO\s+NOT)/u.test(normalized) ||
     FORBIDDEN_PATTERN.test(normalized)
   ) {
     return LOCAL_STR_MUST_NOT;
+  }
+  if (/\bAT\s+MOST\b[^.]*\bMAY\b/u.test(normalized)) {
+    return LOCAL_STR_MUST;
   }
   if (/(MUST|SHALL|REQUIRED)/u.test(normalized)) {
     return LOCAL_STR_MUST;
@@ -390,7 +423,7 @@ function splitNormativeSentences(paragraph) {
     return [];
   }
 
-  const sentences = normalizedParagraph.split(/(?<=[.!?])\s+/u)
+  const sentences = normalizedParagraph.split(SENTENCE_BOUNDARY_PATTERN)
     .map((sentence) => normalizeWhitespace(sentence))
     .filter(Boolean);
 
@@ -597,6 +630,17 @@ function sectionPathFromStack(sectionStack) {
   return parts.length > 0 ? parts.join(LOCAL_STR_SPACE_GT_SPACE) : LOCAL_STR_ROOT;
 }
 
+function contextualizeListPreamble(preamble, sectionStack = []) {
+  const normalized = stripInlineMarkdown(preamble);
+  if (!POSITIVE_NORMATIVE_LIST_PREAMBLE_PATTERN.test(normalized)) {
+    return normalized;
+  }
+  const subject = [...sectionStack].reverse().find(Boolean);
+  return subject ?
+    `${stripInlineMarkdown(subject)}${LIST_CONTEXT_SEPARATOR}${normalized}` :
+    normalized;
+}
+
 function pushCandidate(container, options = {}) {
   const text = stripInlineMarkdown(options.text || '');
   if (!text) {
@@ -615,7 +659,7 @@ function pushCandidate(container, options = {}) {
     return;
   }
 
-  const strength = inferStrength(text);
+  const strength = options.strength || inferStrength(text);
   if (options.kind === LOCAL_STR_BULLET && isFragmentLikeBullet(text)) {
     return;
   }
@@ -632,6 +676,7 @@ function pushCandidate(container, options = {}) {
     line: options.line,
     section: options.section,
     kind: options.kind,
+    preserveDistinctRule: options.preserveDistinctRule === true,
     strength,
     tags: inferTags(text),
   };
@@ -710,6 +755,7 @@ function parseMarkdownCandidates(content, source = {}) {
   const candidates = [];
   let inCodeFence = false;
   let pendingListPreamble = '';
+  let pendingListPreambleStrength = null;
   let pendingListPreambleAllowsBlank = false;
   let pendingListPreambleInList = false;
 
@@ -728,6 +774,7 @@ function parseMarkdownCandidates(content, source = {}) {
     const headingMatch = rawLine.match(HEADING_PATTERN);
     if (headingMatch) {
       pendingListPreamble = '';
+      pendingListPreambleStrength = null;
       pendingListPreambleAllowsBlank = false;
       pendingListPreambleInList = false;
       const level = headingMatch[2].length;
@@ -740,11 +787,8 @@ function parseMarkdownCandidates(content, source = {}) {
     const bulletMatch = rawLine.match(BULLET_WITH_INDENT_PATTERN);
     if (bulletMatch) {
       let text = bulletMatch[2];
-      if (pendingListPreamble) {
-        text = `${pendingListPreamble}${RULE_BODY_JOINER}${text}`;
-        pendingListPreambleAllowsBlank = false;
-        pendingListPreambleInList = true;
-      }
+      const inheritedListPreamble = Boolean(pendingListPreamble);
+      const inheritedListPreambleStrength = pendingListPreambleStrength;
       let cursor = index + 1;
 
       while (cursor < lines.length) {
@@ -757,14 +801,21 @@ function parseMarkdownCandidates(content, source = {}) {
         cursor += 1;
       }
 
-      const expandedRule = appendChildBulletsForParentRule(
+      const expandedChildRule = appendChildBulletsForParentRule(
         text,
         lines,
         cursor,
         {minimumIndent: bulletMatch[1].length + 1},
       );
-      text = expandedRule.text;
-      cursor = expandedRule.nextIndex;
+      const expandedChildList = expandedChildRule.text !== text;
+      text = expandedChildRule.text;
+      cursor = expandedChildRule.nextIndex;
+      const explicitChildStrength = inferStrength(text);
+      if (pendingListPreamble) {
+        text = `${pendingListPreamble}${RULE_BODY_JOINER}${text}`;
+        pendingListPreambleAllowsBlank = false;
+        pendingListPreambleInList = true;
+      }
 
       pushCandidate(candidates, {
         text,
@@ -774,6 +825,14 @@ function parseMarkdownCandidates(content, source = {}) {
         line: index + 1,
         section: sectionPathFromStack(sectionStack),
         kind: LOCAL_STR_BULLET,
+        preserveDistinctRule: inheritedListPreamble || expandedChildList,
+        strength: inheritedListPreamble ?
+          (inheritedListPreambleStrength === LOCAL_STR_MUST_NOT ?
+            LOCAL_STR_MUST_NOT :
+            (explicitChildStrength === LOCAL_STR_INFO ?
+              inheritedListPreambleStrength :
+              explicitChildStrength)) :
+          null,
       });
 
       index = cursor - 1;
@@ -783,6 +842,7 @@ function parseMarkdownCandidates(content, source = {}) {
     if (isBlank(rawLine)) {
       if (pendingListPreambleInList || !pendingListPreambleAllowsBlank) {
         pendingListPreamble = '';
+        pendingListPreambleStrength = null;
         pendingListPreambleAllowsBlank = false;
         pendingListPreambleInList = false;
         continue;
@@ -793,12 +853,14 @@ function parseMarkdownCandidates(content, source = {}) {
 
     if (isTable(rawLine)) {
       pendingListPreamble = '';
+      pendingListPreambleStrength = null;
       pendingListPreambleAllowsBlank = false;
       pendingListPreambleInList = false;
       continue;
     }
 
     pendingListPreamble = '';
+    pendingListPreambleStrength = null;
     pendingListPreambleAllowsBlank = false;
     pendingListPreambleInList = false;
 
@@ -822,15 +884,19 @@ function parseMarkdownCandidates(content, source = {}) {
       lines,
       cursor,
     );
+    const expandedChildList = expandedRule.text !== paragraph;
     paragraph = expandedRule.text;
     cursor = expandedRule.nextIndex;
 
     if (
-      paragraph === rawLine.trim() &&
       isIncompleteRuleText(paragraph) &&
       isNormativeListPreamble(paragraph)
     ) {
-      pendingListPreamble = stripInlineMarkdown(paragraph);
+      pendingListPreamble = contextualizeListPreamble(
+        paragraph,
+        sectionStack,
+      );
+      pendingListPreambleStrength = inferStrength(paragraph);
       pendingListPreambleAllowsBlank = true;
       pendingListPreambleInList = false;
       index = cursor - 1;
@@ -853,6 +919,7 @@ function parseMarkdownCandidates(content, source = {}) {
         line: sentenceLines ? sentenceLines[sentenceIndex] : index + 1,
         section: sectionPathFromStack(sectionStack),
         kind: LOCAL_STR_PARAGRAPH,
+        preserveDistinctRule: expandedChildList,
       });
     });
 
@@ -909,6 +976,13 @@ function semanticDedupe(candidates) {
       if (existing.domain !== candidate.domain) {
         continue;
       }
+      // A normative list's shared preamble makes distinct child obligations
+      // look extremely similar. Exact-text duplicates were already folded
+      // above; fuzzy merging here would retain only one child body while
+      // attaching every sibling citation to it.
+      if (candidate.preserveDistinctRule || existing.preserveDistinctRule) {
+        continue;
+      }
       const wordsExisting = getWordSet(existing.text);
       if (isExtremelySimilar(wordsCandidate, wordsExisting)) {
         duplicateOf = existing;
@@ -953,6 +1027,8 @@ function dedupeCandidates(candidates = []) {
     if (candidate.score > existing.score) {
       deduped.set(key, {
         ...candidate,
+        preserveDistinctRule:
+          candidate.preserveDistinctRule || existing.preserveDistinctRule,
         sources: mergedSources,
       });
       continue;
@@ -960,6 +1036,8 @@ function dedupeCandidates(candidates = []) {
 
     deduped.set(key, {
       ...existing,
+      preserveDistinctRule:
+        existing.preserveDistinctRule || candidate.preserveDistinctRule,
       sources: mergedSources,
     });
   }
@@ -1825,6 +1903,7 @@ export {
   classifyAphoristicText,
   collectBulletListText,
   countMarkdownRules,
+  dedupeCandidates,
   formatRuleCitation,
   isAphoristicText,
   locateRuleBySourceRef,

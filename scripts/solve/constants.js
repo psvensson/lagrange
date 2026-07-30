@@ -220,10 +220,10 @@ export const DOSSIER_EVIDENCE_PATHS_MAX = 10;
 // spinning on a coupled-invariant oscillation (one invariant family is fixed while a
 // definitionally-coupled family re-breaks, ad infinitum). Each guard keys off real
 // recorded events only, is advisory-then-terminal (it raises a health signal before it
-// gates a step), and is independently switchable here so a guard can be disabled or
-// retuned without editing detection logic. The master map is the single on/off surface;
-// the numeric thresholds below tune each guard. Flipping a flag to false fully reverts
-// that guard to the pre-guard behaviour, which keeps the change reversible.
+// gates a step). The master map is a source-owned compile-time policy surface, not a
+// runtime flag or Quest-local override. Any disable or retune is a reviewed guardrail
+// code change and must never be used merely to make proof pass. The numeric thresholds
+// below tune each guard.
 export const CONVERGENCE_GUARDS = Object.freeze({
   // rr-A: per-invariant green/red ledger projection. Foundation for the gates below;
   // when false the ledger is still computable but the gates that consume it stand down.

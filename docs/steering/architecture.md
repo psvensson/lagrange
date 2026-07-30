@@ -12,10 +12,10 @@ last_reviewed: 2026-07-24
 > The architecture *policy* rules live in `system-guidelines.md`,
 > `runtime-contracts.md`, and the `doctrine/` sub-files. The compiled
 > architecture pack is currently filled from `system-guidelines.md` and
-> `runtime-contracts.md`; the doctrine rules live in the rule corpus
-> (`rules.json`, query via `npm run rule`) below the pack cap and are equally
-> binding. Do not treat this pointer as a co-equal source of architecture
-> policy.
+> `runtime-contracts.md` plus the configured doctrine sources. Every packed
+> architecture rule is emitted in the complete architecture domain pack;
+> `rules.json` retains IDs, aliases, and source citations for lookup. Do not
+> treat this pointer as a co-equal source of architecture policy.
 
 # Architecture Steering Pointer
 

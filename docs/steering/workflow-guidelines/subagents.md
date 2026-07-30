@@ -47,15 +47,18 @@ and re-measures the Quest.
 
 ## Review Delegation
 
-Use a review worker when the next attempt would benefit from a focused
-freshness check. The review should return findings, candidate risks, or
-suggested frontiers. Durable conclusions must be recorded with
+Additional attempt review is optional: use a review worker when the next attempt
+would benefit from a focused freshness check. The review should return findings,
+candidate risks, or suggested frontiers. This optional review does not replace
+mandatory independent adversarial vetting before presenting a non-trivial
+hypothesis or proposed lever, or content-bound verification before source
+checkpoint or terminal handoff. Durable conclusions must be recorded with
 `node scripts/solve.js finding` before they are relied on by later attempts.
 
 ## Verification Templates
 
-Adversarial verification prompts (design vets, implementation verifiers)
-SHOULD include the attack-surface checklist for the change's category from
+Adversarial verification prompts (design vets, implementation verifiers) MUST
+include every attack-surface checklist whose category matches the change from
 [`docs/steering/verification-templates/`](../verification-templates/INDEX.md),
 filled in with the change's specifics. The templates pin the classic failure
 modes per category (admission/gating, retry loops, transport delivery,
@@ -75,3 +78,7 @@ structured by
 [`design-note-template.md`](../verification-templates/design-note-template.md)
 (cited consumed surfaces, typed failure edges, cached-view audit, identity
 anchoring) and attack each section separately.
+
+If independent-agent capability is unavailable at a mandatory boundary, do not
+substitute self-review. Report the unavailable verification capability and stop
+before presenting the hypothesis as vetted or handing source changes off.

@@ -30,7 +30,11 @@ system-table write path.
 
 ## No Skipped Tests Policy
 
-Tests must never be skipped. Every test that exists must run and pass.
+Tests must never be skipped. Every test selected by the relevant targeted or
+suite command must run and pass; no selected test may be hidden by a skip
+mechanism. This does not require the complete suite during each iteration: use
+the targeted/full-suite schedule in `harness.md` "Test Execution Strategy" and
+"When to Run Full Test Suite".
 
 - **Do not use** `.skip()`, `skip:`, `xit()`, `xdescribe()`, or any skip mechanism
 - **Do not comment out** tests to avoid running them
@@ -125,4 +129,3 @@ Required workflow:
 6. For CDC-replicated system-table lifecycle changes, include at least one
    regression that fails when writes are keyed by non-primary predicates instead
    of canonical primary key.
-
