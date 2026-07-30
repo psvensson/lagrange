@@ -119,3 +119,28 @@ LAGRANGE_PUSH_ON_RED while a fix is in flight.
   `solve start`/`continue`, CLI for manual claim/release); the evidence
   mutex is MANDATORY with a loud bypass env var, not advisory — corrupted
   sealed evidence outranks a wait; integration cadence stays on-demand.
+- 2026-07-30 — Item 1 bootstrap tooling landed: `scripts/worktree-setup.sh`
+  creates `agent/<name>/<quest-id>` + a sibling worktree, installs the
+  relative hooksPath, copies gitignored `solve/config.json`/`.env*`, and
+  symlinks `node_modules` (the pre-commit eslint cache already lives in the
+  worktree-private git dir, so no cache sharing results). Refuses to reuse an
+  existing branch or path. Replaces a broken symlink to an external template
+  the file previously was.
+- 2026-07-30 — Item 6 landed: whole-corpus gates now measure the tree being
+  PUSHED. `scripts/checks/push-gate-corpus-worktree.js` materializes the
+  pushed tree into a throwaway worktree via `session-worktree.js` (the exact
+  `--ref <local-sha>` when the pre-push hook captured one, else the live
+  working-tree state) and runs `test:duplication` + `check-file-size-
+  thresholds` there; pre-push captures the first pushed local-sha and calls
+  it instead of running those two against the working tree. The eslint leg
+  stays tracked-only in the working tree (already correct without a
+  snapshot). Verified: passes on HEAD, `--ref HEAD` excludes foreign
+  untracked files, working-tree mode includes them.
+- 2026-07-30 — Item 7 follow-up landed: known-attributed-red exemption.
+  `scripts/solve/red-main-exemption.js` (ack/clear/list/is-exempt) records a
+  red CI run's exact headSha under the shared `lagrange-sessions/` dir; the
+  red-main guard now reads `headSha` alongside `conclusion` and exempts a
+  main push only while the current red head is acknowledged — a red at any
+  other head is a new signal and still blocks. Verified: block unattributed →
+  proceed when acked → block on a new head. Items 3-5 quests remain
+  open/unsealed; items 2 (integration cadence) is process-only.

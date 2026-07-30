@@ -17,11 +17,17 @@ set -euo pipefail
 # feature branch must not be blocked by main's state (decoupling parallel
 # sessions). Git feeds pre-push one "<local-ref> <local-sha> <remote-ref>
 # <remote-sha>" line per pushed ref on stdin; with no stdin lines (manual
-# hook invocation) the guard fail-closes to checking.
+# hook invocation) the guard fail-closes to checking. The local-sha of the
+# first pushed ref is also captured so the corpus gates below measure the
+# tree being pushed rather than the working tree (epic item 6).
 PUSHING_MAIN=0
 SAW_REF=0
-while read -r _local_ref _local_sha remote_ref _remote_sha; do
+PUSHED_SHA=""
+while read -r _local_ref local_sha remote_ref _remote_sha; do
   SAW_REF=1
+  if [ -z "${PUSHED_SHA}" ]; then
+    PUSHED_SHA="${local_sha}"
+  fi
   if [ "${remote_ref}" = "refs/heads/main" ]; then
     PUSHING_MAIN=1
   fi
@@ -38,18 +44,30 @@ fi
 # skip every check below); use it only for a push that fixes CI itself.
 if [ "${PUSHING_MAIN}" = "1" ] && [ -z "${LAGRANGE_PUSH_ON_RED:-}" ]; then
   if command -v gh >/dev/null 2>&1; then
-    ci_conclusion="$(timeout 15 gh run list --workflow ci.yml --branch main \
-      --status completed --limit 1 --json conclusion \
-      --jq '.[0].conclusion' 2>/dev/null || echo unavailable)"
+    ci_json="$(timeout 15 gh run list --workflow ci.yml --branch main \
+      --status completed --limit 1 --json conclusion,headSha \
+      --jq '.[0] | "\(.conclusion) \(.headSha)"' 2>/dev/null || echo unavailable)"
+    ci_conclusion="${ci_json%% *}"
+    ci_head="${ci_json#* }"
     case "$ci_conclusion" in
       success|'') ;;
       unavailable)
         echo "pre-push: warning — could not query CI status (offline or gh unauthenticated); proceeding" ;;
       *)
-        echo "pre-push: the latest completed CI run on main concluded '$ci_conclusion'."
-        echo "pre-push: pushing onto a red main compounds unmeasured drift. Fix CI first,"
-        echo "pre-push: or, for a push that itself fixes CI: LAGRANGE_PUSH_ON_RED=1 git push"
-        exit 1 ;;
+        # Known-attributed-red exemption (epic item 7 follow-up): when THIS
+        # exact red head has been acknowledged in the shared registry dir, an
+        # unrelated main push may proceed while a fix is in flight. A red run
+        # at any OTHER head is a new, unattributed signal and still blocks.
+        if node scripts/solve/red-main-exemption.js is-exempt "${ci_head}" 2>/dev/null; then
+          echo "pre-push: main CI is red at acknowledged head ${ci_head}; proceeding (exemption on record)"
+        else
+          echo "pre-push: the latest completed CI run on main concluded '$ci_conclusion' at ${ci_head}."
+          echo "pre-push: pushing onto a red main compounds unmeasured drift. Fix CI first;"
+          echo "pre-push: if this red is known and a fix is in flight, record it:"
+          echo "pre-push:   node scripts/solve/red-main-exemption.js ack ${ci_head} --reason <why>"
+          echo "pre-push: or, for a push that itself fixes CI: LAGRANGE_PUSH_ON_RED=1 git push"
+          exit 1
+        fi ;;
     esac
   else
     echo "pre-push: warning — gh CLI not installed; skipping red-main CI guard"
@@ -71,6 +89,16 @@ git ls-files -z -- 'src/**/*.js' 'src/**/*.mjs' 'src/**/*.cjs' \
   xargs -0 -r npx eslint --cache \
     --cache-location "${ESLINT_CACHE_DIR}" \
     --no-warn-ignored --ignore-pattern 'test/.gitkeep'
-npm run -s test:duplication
+# Whole-corpus ratchets (duplication, file-size) run against the tree being
+# PUSHED, materialized into a throwaway worktree, not against this working
+# tree: corpus baselines make subset runs vacuous, and a concurrent session's
+# in-flight files must neither dilute nor false-fail this push (parallel-
+# session architecture epic, item 6). With a captured pushed sha the exact
+# committed tree is gated; manual invocation gates the working-tree state.
+if [ -n "${PUSHED_SHA}" ] && [ "${PUSHED_SHA}" != "0000000000000000000000000000000000000000" ]; then
+  node scripts/checks/push-gate-corpus-worktree.js --ref "${PUSHED_SHA}"
+else
+  node scripts/checks/push-gate-corpus-worktree.js
+fi
 node scripts/check-unused-exports.js
 node scripts/check-circular-dependencies.js
