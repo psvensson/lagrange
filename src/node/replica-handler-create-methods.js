@@ -525,7 +525,12 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           });
           await this.waitForVoterReadyActivation(replicaId, partitionId);
         }
-        // Emit active outcome - coordinator will transition workflow.
+        // Voter readiness is executor evidence, not permission to complete
+        // the operation. Publish it before the SERVICES write so formation
+        // cannot depend on a round-trip through the control plane being
+        // recovered. The operation owner independently requires authoritative
+        // ACTIVE SERVICES alignment before ADD completion or REPLACE source
+        // retirement.
         this.emitExecutorOutcome(
           EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
           operationId,

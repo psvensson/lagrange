@@ -1,0 +1,1087 @@
+diff --git a/src/node/replica-handler-create-methods.js b/src/node/replica-handler-create-methods.js
+index dc2ea2b438ded2dbda14242cdf4151407262107a..33b5c192f061378c0eb5ff4df08b5db6a63f3325 100644
+--- a/src/node/replica-handler-create-methods.js
++++ b/src/node/replica-handler-create-methods.js
+@@ -525,7 +525,12 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
+           });
+           await this.waitForVoterReadyActivation(replicaId, partitionId);
+         }
+-        // Emit active outcome - coordinator will transition workflow.
++        // Voter readiness is executor evidence, not permission to complete
++        // the operation. Publish it before the SERVICES write so formation
++        // cannot depend on a round-trip through the control plane being
++        // recovered. The operation owner independently requires authoritative
++        // ACTIVE SERVICES alignment before ADD completion or REPLACE source
++        // retirement.
+         this.emitExecutorOutcome(
+           EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+           operationId,
+diff --git a/src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js b/src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js
+index 357b56c708948224c3030a8605f9b875cb7460fb..2a81c572c81fd9bd196a1e1ea05a965e3724845b 100644
+--- a/src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js
++++ b/src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js
+@@ -68,6 +68,19 @@ const EXECUTOR_OUTCOME_RETRY_WORKFLOW_STEP_RANK = Object.freeze(new Map([
+   [WORKFLOW_STEP.FAILED, NUM.SEVEN],
+ ]));
+ 
++const EXECUTOR_OUTCOME_RETRY_IDENTITY_FIELDS = Object.freeze([
++  EXECUTOR_OUTCOME_FIELD.OPERATION_ID,
++  EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE,
++  EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP,
++  EXECUTOR_OUTCOME_FIELD.REPLICA_ID,
++  EXECUTOR_OUTCOME_FIELD.PARTITION_ID,
++  EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE,
++  EXECUTOR_OUTCOME_FIELD.ERROR_CODE,
++  EXECUTOR_OUTCOME_FIELD.RETRY_AFTER_MS,
++  EXECUTOR_OUTCOME_FIELD.DEFER_RETRY,
++  EXECUTOR_OUTCOME_FIELD.TIMESTAMP,
++]);
++
+ const EXECUTOR_OUTCOME_VISIBILITY_RETRY_ERROR_MESSAGE =
+   'Executor outcome operation visibility deferred';
+ 
+@@ -166,7 +179,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+           // demonstrated live path — the previously silent orphan becomes
+           // a bounded 30s-cadence retry with a warn per arm. Consumption
+           // clears the timer and resets the backoff.
+-          this.scheduleExecutorOutcomeRetry(payload, null);
++          this.scheduleRetainedExecutorOutcomeRetry(payload, null);
+           return;
+         }
+       }
+@@ -176,7 +189,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+       const retained =
+         this.executorOutcomeRetryPayloadByOperationId.get(operationId);
+       if (retained) {
+-        this.scheduleExecutorOutcomeRetry(retained, null);
++        this.scheduleRetainedExecutorOutcomeRetry(retained, null);
+       }
+     } finally {
+       this.executorOutcomeRedriveInFlightByOperationId.delete(operationId);
+@@ -301,25 +314,35 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+     this.executorOutcomeRetryDelayMsByOperationId.delete(operationId);
+   }
+ 
++  isExecutorOutcomeRetryPayloadCurrent(operationId, outcome) {
++    const retained =
++      this.executorOutcomeRetryPayloadByOperationId.get(operationId);
++    return (
++      !retained ||
++      retained === outcome ||
++      EXECUTOR_OUTCOME_RETRY_IDENTITY_FIELDS.every(
++        (field) => retained[field] === outcome?.[field],
++      )
++    );
++  }
++
+   /**
+-   * CL-029: applying one outcome must not destroy retained evidence for a
+-   * FURTHER step (e.g. a SYNCING application while the ACTIVE payload is
+-   * retained). Clear only when the retained payload does not outrank what
+-   * was just applied.
++   * A reconcile owns only the payload object it captured from the retry map.
++   * Any replacement is newer selected evidence, even when its workflow rank
++   * is lower (a recreated success superseding retained failure). Stale work
++   * must never clear operation-wide retry state.
+    * @param {string} operationId
+    * @param {Object} appliedOutcome
++   * @return {boolean} Whether the captured payload still owned the clear.
+    */
+   clearExecutorOutcomeRetryIfNotAhead(operationId, appliedOutcome) {
+-    const retained =
+-      this.executorOutcomeRetryPayloadByOperationId.get(operationId);
+     if (
+-      retained &&
+-      this.getExecutorOutcomeRetryWorkflowStepRank(retained) >
+-        this.getExecutorOutcomeRetryWorkflowStepRank(appliedOutcome)
++      !this.isExecutorOutcomeRetryPayloadCurrent(operationId, appliedOutcome)
+     ) {
+-      return;
++      return false;
+     }
+     this.clearExecutorOutcomeRetry(operationId);
++    return true;
+   }
+ 
+   buildExecutorOutcomeVisibilityRetryError(visibilityObservation) {
+@@ -359,7 +382,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+     priorVisibilityObservation = null,
+   ) {
+     if (isRetryableControlPlaneError(error)) {
+-      return this.scheduleExecutorOutcomeRetry(
++      return this.scheduleRetainedExecutorOutcomeRetry(
+         outcome,
+         this.buildExecutorOutcomeRetryVisibilityObservation(
+           error,
+@@ -367,11 +390,16 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+         ),
+       );
+     }
+-    // Non-retryable: the evidence is undeliverable — drop it so it cannot
+-    // linger driverless and mask later outcomes (CL-029).
+-    this.clearExecutorOutcomeRetry(
+-      outcome?.[EXECUTOR_OUTCOME_FIELD.OPERATION_ID],
+-    );
++    const operationId = outcome?.[EXECUTOR_OUTCOME_FIELD.OPERATION_ID];
++    // Non-retryable: drop only the captured evidence. A newer payload can
++    // arrive while the captured reconcile awaits owner work; it keeps retry
++    // ownership and must be re-driven after the lane releases.
++    if (!this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome)) {
++      this.scheduleRetainedExecutorOutcomeRetry(
++        outcome,
++        priorVisibilityObservation,
++      );
++    }
+     const retryContext =
+       this.buildExecutorOutcomeRetryContext(outcome, priorVisibilityObservation);
+     this.logger.error(
+@@ -389,6 +417,23 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+     return false;
+   }
+ 
++  scheduleRetainedExecutorOutcomeRetry(outcome, visibilityObservation) {
++    const operationId = outcome?.[EXECUTOR_OUTCOME_FIELD.OPERATION_ID];
++    if (!operationId) {
++      return false;
++    }
++    // A reconcile awaits owner visibility and therefore holds a captured
++    // payload. Newer evidence can arrive meanwhile but cannot start another
++    // reconcile while the operation lane is in flight. Rearm the latest
++    // retained evidence so the captured payload cannot overwrite it.
++    const retainedOutcome =
++      this.executorOutcomeRetryPayloadByOperationId.get(operationId);
++    return this.scheduleExecutorOutcomeRetry(
++      retainedOutcome || outcome,
++      visibilityObservation,
++    );
++  }
++
+   scheduleExecutorOutcomeRetry(outcome, visibilityObservation) {
+     const operationId = outcome?.[EXECUTOR_OUTCOME_FIELD.OPERATION_ID];
+     if (!operationId) {
+@@ -476,12 +521,14 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+         operation.type === OperationType.ADD ||
+         operation.type === OperationType.REPLACE
+       );
+-    if (
+-      activeReplicaHandoffRequired &&
+-      !await this.confirmActiveReplicaTerminalHandoff(operation, {
+-        scheduleObservedProgressRetry: false,
+-      })
+-    ) {
++    let activeReplicaHandoffReady = true;
++    if (activeReplicaHandoffRequired) {
++      activeReplicaHandoffReady =
++        await this.confirmActiveReplicaTerminalHandoff(operation, {
++          scheduleObservedProgressRetry: false,
++        });
++    }
++    if (activeReplicaHandoffRequired && !activeReplicaHandoffReady) {
+       // Executor completion is evidence to reconcile, not permission to
+       // bypass the recovery owner's authoritative SERVICES cache handoff.
+       // Transfer the earlier delivered-create wake-up to the stronger
+@@ -489,7 +536,16 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+       this.clearObservedProgressRetry(operationId, {
+         includeDeliveredCreateProgress: true,
+       });
+-      this.scheduleExecutorOutcomeRetry(outcome, visibilityObservation);
++      this.scheduleRetainedExecutorOutcomeRetry(
++        outcome,
++        visibilityObservation,
++      );
++      return;
++    }
++    if (
++      activeReplicaHandoffRequired &&
++      !this.isExecutorOutcomeRetryPayloadCurrent(operationId, outcome)
++    ) {
+       return;
+     }
+     if (
+@@ -501,14 +557,17 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+         // CL-029: completion evidence that could not be applied (stale-CAS
+         // updateStep + replay found nothing actionable) keeps its retry
+         // owner; a later attempt re-reads fresh visibility and applies.
+-        this.scheduleExecutorOutcomeRetry(outcome, visibilityObservation);
++        this.scheduleRetainedExecutorOutcomeRetry(
++          outcome,
++          visibilityObservation,
++        );
+         return;
+       }
+       this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
+       return;
+     }
+     await this.completeOperation(operation);
+-    this.clearExecutorOutcomeRetry(operationId);
++    this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
+   }
+ 
+   async reconcileExecutorOutcome(outcome) {
+@@ -531,6 +590,11 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+           allowPriorityRecoveryDeferredVisibility: true,
+         },
+       );
++    if (
++      !this.isExecutorOutcomeRetryPayloadCurrent(operationId, outcome)
++    ) {
++      return false;
++    }
+     const visibilityAction =
+       this.resolveExecutorOutcomeOperationVisibilityAction(
+         visibilityObservation,
+@@ -540,7 +604,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+       visibilityAction ===
+       EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.RETRY_OUTCOME
+     ) {
+-      return this.scheduleExecutorOutcomeRetry(
++      return this.scheduleRetainedExecutorOutcomeRetry(
+         outcome,
+         visibilityObservation,
+       );
+@@ -555,7 +619,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+         EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.SKIP_OUTCOME ||
+       operation === EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.OPERATION
+     ) {
+-      this.clearExecutorOutcomeRetry(operationId);
++      this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
+       this.logger.debug(
+         REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_NOT_FOUND,
+         {operationId, outcomeType},
+@@ -568,7 +632,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+     // action branch clears on successful application.
+ 
+     if (this.repository.isOperationTerminal(operation)) {
+-      this.clearExecutorOutcomeRetry(operationId);
++      this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
+       this.logger.debug(
+         REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_TERMINAL,
+         {
+@@ -584,7 +648,9 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+       // The remote owner converges from the durable row + its own
+       // executor evidence; retaining the payload locally would leave a
+       // driverless entry that can mask later outcomes (CL-029).
+-      this.clearExecutorOutcomeRetry(operationId);
++      if (!this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome)) {
++        return false;
++      }
+       const handoffMode =
+         this.resolveRemoteOwnerHandoffModeForExecutorOutcome(
+           operation,
+@@ -614,7 +680,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+ 
+     const mapping = EXECUTOR_OUTCOME_ACTION_MAP[outcomeType];
+     if (!mapping) {
+-      this.clearExecutorOutcomeRetry(operationId);
++      this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
+       this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_UNKNOWN_ACTION, {
+         operationId,
+         outcomeType,
+@@ -665,14 +731,14 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
+         // operation's convergence from the durable row; a retained FAILED
+         // payload left behind would outrank and mask the recreated
+         // replica's later success outcomes.
+-        this.clearExecutorOutcomeRetry(operationId);
++        this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
+         return true;
+       }
+       await this.failOperation(
+         operation,
+         errorLike?.message || errorMessage || outcomeType,
+       );
+-      this.clearExecutorOutcomeRetry(operationId);
++      this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
+     } else {
+       this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_UNKNOWN_ACTION, {
+         operationId,
+diff --git a/test/distributed/scenarios/replica-active-outcome-persistence-deferral.js b/test/distributed/scenarios/replica-active-outcome-persistence-deferral.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..76ef332c9b74d77953f0b255f34620659cb89b5c
+--- /dev/null
++++ b/test/distributed/scenarios/replica-active-outcome-persistence-deferral.js
+@@ -0,0 +1,9 @@
++/**
++ * Quest-scoped rolling-restart certification surface.
++ *
++ * The implementation intentionally reuses the unchanged rolling-restart
++ * scenario. A distinct report identity keeps this Quest's candidate evidence
++ * separate from historical rolling-restart runs without weakening any live
++ * workload, timeout, topology, or convergence contract.
++ */
++export {run} from './rolling-restart.js';
+diff --git a/test/node/replica-handler-owner-path-bypass.test.js b/test/node/replica-handler-owner-path-bypass.test.js
+index d01d35978a7aa92b7ec0164172536f606ab703c2..006e7dd687cb92ffbc1594eb959577030cba41d9 100644
+--- a/test/node/replica-handler-owner-path-bypass.test.js
++++ b/test/node/replica-handler-owner-path-bypass.test.js
+@@ -23,7 +23,10 @@ import path from 'path';
+ import os from 'os';
+ import {test} from '../../src/test-helpers/tap.js';
+ import {ReplicaHandler} from '../../src/node/replica-handler.js';
+-import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
++import {
++  OperationType,
++  ReplicaStatus,
++} from '../../src/rebalancer/replica-status.js';
+ import {SYSTEM_TABLE_NAME} from
+   '../../src/bootstrap/system-table-schemas-constants.js';
+ import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+@@ -64,32 +67,37 @@ const TEST_SCHEMA = {
+  * service metadata sufficient for ReplicaHandler context resolution.
+  * @return {SystemTableCache} Seeded cache.
+  */
+-function createSeededCache() {
++function createSeededCache({
++  tableId = TEST_TABLE_ID,
++  tableName = TEST_TABLE_NAME,
++  partitionId = TEST_PARTITION_ID,
++  leaderReplicaId = TEST_LEADER_REPLICA_ID,
++} = {}) {
+   const cache = new SystemTableCache();
+ 
+   cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
+-    table_id: TEST_TABLE_ID,
+-    table_name: TEST_TABLE_NAME,
++    table_id: tableId,
++    table_name: tableName,
+     schema_definition: JSON.stringify(TEST_SCHEMA),
+   });
+ 
+   cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
+-    partition_id: TEST_PARTITION_ID,
+-    table_id: TEST_TABLE_ID,
++    partition_id: partitionId,
++    table_id: tableId,
+     partition_key_start: null,
+     partition_key_end: null,
+     leader_node_id: TEST_LEADER_NODE_ID,
+   });
+ 
+   cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
+-    service_id: TEST_LEADER_REPLICA_ID,
++    service_id: leaderReplicaId,
+     service_type: 'partition',
+-    partition_id: TEST_PARTITION_ID,
++    partition_id: partitionId,
+     node_id: TEST_LEADER_NODE_ID,
+     raft_role: 'leader',
+     status: ReplicaStatus.ACTIVE,
+     address:
+-      `${TEST_LEADER_NODE_ID}/partition/${TEST_LEADER_REPLICA_ID}`,
++      `${TEST_LEADER_NODE_ID}/partition/${leaderReplicaId}`,
+     created_at: Date.now(),
+     updated_at: Date.now(),
+   });
+@@ -266,6 +274,226 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
+     },
+   );
+ 
++  await t.test(
++    'voter-ready create publishes provisional ACTIVE while durable lifecycle ' +
++      'persistence remains deferred',
++    async (t) => {
++      const partitionId = `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p1`;
++      const replicaId = `${partitionId}-r2`;
++      const leaderReplicaId = `${partitionId}-r1`;
++      const emitter = new ExecutorOutcomeEmitter({logger: console});
++      const emittedOutcomes = [];
++      emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
++        emittedOutcomes.push(outcome);
++      });
++
++      const cache = createSeededCache({
++        tableId: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
++        tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
++        partitionId,
++        leaderReplicaId,
++      });
++      const cdcService = createMockCDCService(cache);
++      const handler = new ReplicaHandler({
++        nodeId: TEST_NODE_ID,
++        systemTableCache: cache,
++        cdcIntegrationService: cdcService,
++        createPartitionService: createMockPartitionServiceFactory(),
++        executorOutcomeEmitter: emitter,
++      });
++      const voterReadyWaits = [];
++      handler.waitForVoterReadyActivation = async (
++        waitedReplicaId,
++        waitedPartitionId,
++      ) => {
++        voterReadyWaits.push({
++          replicaId: waitedReplicaId,
++          partitionId: waitedPartitionId,
++        });
++      };
++      handler.initialize();
++
++      const originalPersistReplicaStatusWithRetry =
++        handler.persistReplicaStatusWithRetry.bind(handler);
++      let releaseActivePersistence;
++      const activePersistenceGate = new Promise((resolve) => {
++        releaseActivePersistence = resolve;
++      });
++      let announceActivePersistence;
++      const activePersistenceStarted = new Promise((resolve) => {
++        announceActivePersistence = resolve;
++      });
++      handler.persistReplicaStatusWithRetry = async (
++        replicaId,
++        newStatus,
++        additionalData,
++      ) => {
++        if (newStatus === ReplicaStatus.ACTIVE) {
++          announceActivePersistence();
++          await activePersistenceGate;
++        }
++        return originalPersistReplicaStatusWithRetry(
++          replicaId,
++          newStatus,
++          additionalData,
++        );
++      };
++
++      const created = waitForReplicaEvent(
++        handler,
++        REPLICA_HANDLER_EVENT.CREATED,
++        REPLICA_HANDLER_EVENT.CREATION_FAILED,
++      );
++      const response = await handler.handleMessage(
++        buildEnvelope(
++          ReplicaOperationMessageType.CREATE_REPLICA,
++          {
++            operationId: TEST_OPERATION_ID,
++            operationType: OperationType.REPLACE,
++            partitionId,
++            replicaId,
++          },
++        ),
++      );
++      t.equal(
++        response.status,
++        ReplicaOperationResponseStatus.INITIATED,
++        'create should be admitted',
++      );
++
++      await activePersistenceStarted;
++      t.same(
++        voterReadyWaits,
++        [{replicaId, partitionId}],
++        'critical REPLACE reaches the voter-ready boundary before persistence',
++      );
++      t.ok(
++        emittedOutcomes.some(
++          (outcome) =>
++            outcome.outcomeType ===
++              EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
++        ),
++        'voter-ready ACTIVE evidence is not withheld by durable persistence',
++      );
++      t.equal(
++        cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId)?.status,
++        ReplicaStatus.SYNCING,
++        'the owner still observes a non-terminal durable projection',
++      );
++
++      releaseActivePersistence();
++      await created;
++      t.equal(
++        emittedOutcomes.filter(
++          (outcome) =>
++            outcome.outcomeType ===
++              EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
++        ).length,
++        1,
++        'the provisional ACTIVE outcome is emitted exactly once',
++      );
++      t.equal(
++        cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId)?.status,
++        ReplicaStatus.ACTIVE,
++        'durable lifecycle persistence may converge after the outcome',
++      );
++
++      await handler.shutdown();
++    },
++  );
++
++  await t.test(
++    'definitive ACTIVE persistence failure follows provisional executor ' +
++      'evidence with a FAILED outcome',
++    async (t) => {
++      const persistenceErrorCode = 'ACTIVE_PERSISTENCE_REJECTED';
++      const emitter = new ExecutorOutcomeEmitter({logger: console});
++      const emittedOutcomes = [];
++      emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
++        emittedOutcomes.push(outcome);
++      });
++
++      const cache = createSeededCache();
++      const cdcService = createMockCDCService(cache);
++      const handler = new ReplicaHandler({
++        nodeId: TEST_NODE_ID,
++        systemTableCache: cache,
++        cdcIntegrationService: cdcService,
++        createPartitionService: createMockPartitionServiceFactory(),
++        executorOutcomeEmitter: emitter,
++      });
++      const originalPersistReplicaStatusWithRetry =
++        handler.persistReplicaStatusWithRetry.bind(handler);
++      handler.persistReplicaStatusWithRetry = async (
++        replicaId,
++        newStatus,
++        additionalData,
++      ) => {
++        if (newStatus === ReplicaStatus.ACTIVE) {
++          const error = new Error('definitive ACTIVE persistence rejection');
++          error.code = persistenceErrorCode;
++          throw error;
++        }
++        return originalPersistReplicaStatusWithRetry(
++          replicaId,
++          newStatus,
++          additionalData,
++        );
++      };
++      handler.initialize();
++
++      const creationFailed = new Promise((resolve) => {
++        handler.once(REPLICA_HANDLER_EVENT.CREATION_FAILED, resolve);
++      });
++      const response = await handler.handleMessage(
++        buildEnvelope(
++          ReplicaOperationMessageType.CREATE_REPLICA,
++          {
++            operationId: TEST_OPERATION_ID,
++            partitionId: TEST_PARTITION_ID,
++            replicaId: TEST_REPLICA_ID,
++          },
++        ),
++      );
++      t.equal(
++        response.status,
++        ReplicaOperationResponseStatus.INITIATED,
++        'create should be admitted before its asynchronous persistence fails',
++      );
++      await creationFailed;
++
++      const outcomeTypes = emittedOutcomes.map(
++        (outcome) => outcome.outcomeType,
++      );
++      const activeIndex = outcomeTypes.indexOf(
++        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
++      );
++      const failedIndex = outcomeTypes.indexOf(
++        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
++      );
++      t.ok(
++        activeIndex >= 0,
++        'provisional ACTIVE evidence is emitted before persistence',
++      );
++      t.ok(
++        failedIndex > activeIndex,
++        'definitive failure evidence follows and can supersede ACTIVE',
++      );
++      t.equal(
++        emittedOutcomes[failedIndex]?.errorCode,
++        persistenceErrorCode,
++        'FAILED preserves the definitive lifecycle error code',
++      );
++      t.equal(
++        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID)?.status,
++        ReplicaStatus.FAILED,
++        'the lifecycle projection converges to the definitive failure',
++      );
++
++      await handler.shutdown();
++    },
++  );
++
+   await t.test(
+     'remove flow emits outcomes through ExecutorOutcomeEmitter, ' +
+     'not direct replica_operations writes ' +
+diff --git a/test/rebalancer/operation-workflow-active-cache-handoff.test.js b/test/rebalancer/operation-workflow-active-cache-handoff.test.js
+index 1ba8ae1f31afc74bf9e052e2b60c6f3d9af6b05c..1700ff2ab2df611df7cf452e28c14ad0de86fd28 100644
+--- a/test/rebalancer/operation-workflow-active-cache-handoff.test.js
++++ b/test/rebalancer/operation-workflow-active-cache-handoff.test.js
+@@ -118,36 +118,229 @@ function buildProductionCacheRefreshHost({
+   return host;
+ }
+ 
++function createDroppedRepairHandoffFixture() {
++  const cache = new SystemTableCache();
++  const authoritativeRow = buildAuthoritativeServiceRow();
++  cache.applySystemTableChange(
++    SYSTEM_TABLE_NAME.SERVICES,
++    CDC_OPERATION.UPSERT,
++    {...authoritativeRow, status: ReplicaStatus.SYNCING},
++  );
++  const cacheRefreshHost = buildProductionCacheRefreshHost({
++    cache,
++    authoritativeRow,
++    dropRepair: true,
++  });
++  const timerHandles = [];
++  const coordinator = createTestCoordinator({
++    nodeId: TEST_NODE_ID,
++    systemTableCache: cache,
++    cdcIntegrationService: cacheRefreshHost,
++    setTimeoutFn(callback, delayMs) {
++      const timerHandle = {callback, delayMs, cleared: false};
++      timerHandles.push(timerHandle);
++      return timerHandle;
++    },
++    clearTimeoutFn(timerHandle) {
++      timerHandle.cleared = true;
++    },
++  });
++  return {cache, cacheRefreshHost, coordinator, timerHandles};
++}
++
++function createDeferred() {
++  let resolvePromise;
++  const promise = new Promise((resolve) => {
++    resolvePromise = resolve;
++  });
++  return {promise, resolve: resolvePromise};
++}
++
++function buildCreateOutcome(
++  operationId,
++  outcomeType,
++  workflowStep,
++  timestamp,
++) {
++  return Object.freeze({
++    [EXECUTOR_OUTCOME_FIELD.OPERATION_ID]: operationId,
++    [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]: outcomeType,
++    [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: workflowStep,
++    [EXECUTOR_OUTCOME_FIELD.REPLICA_ID]: TEST_REPLICA_ID,
++    [EXECUTOR_OUTCOME_FIELD.PARTITION_ID]: TEST_PARTITION_ID,
++    [EXECUTOR_OUTCOME_FIELD.TIMESTAMP]: timestamp,
++    [EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE]:
++      outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED ?
++        'definitive ACTIVE persistence failure' :
++        null,
++  });
++}
++
++async function assertFailureSupersedesBlockedActive(
++  t,
++  {
++    operation,
++    operationId,
++    activeHandoffReady = false,
++    activeHandoffThrows = false,
++  },
++) {
++  const {
++    coordinator,
++    timerHandles,
++  } = createDroppedRepairHandoffFixture();
++  const activeHandoffStarted = createDeferred();
++  const releaseActiveHandoff = createDeferred();
++  const completedOperationIds = [];
++  const failedOperationIds = [];
++  const sourceRetirementOperationIds = [];
++  const activeOutcome = buildCreateOutcome(
++    operationId,
++    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
++    WORKFLOW_STEP.ACTIVE,
++    1,
++  );
++  const failedOutcome = buildCreateOutcome(
++    operationId,
++    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
++    WORKFLOW_STEP.FAILED,
++    2,
++  );
++  coordinator.repository.getOperationByIdVisibilityObservation =
++    async () => ({
++      state: 'present',
++      operation,
++      deferredOutcome: null,
++      retryAfterMs: null,
++    });
++  coordinator.workflowOwner.confirmActiveReplicaTerminalHandoff =
++    async () => {
++      activeHandoffStarted.resolve();
++      await releaseActiveHandoff.promise;
++      if (activeHandoffThrows) {
++        throw new Error('non-retryable ACTIVE owner reconcile failure');
++      }
++      return activeHandoffReady;
++    };
++  coordinator.workflowOwner.completeOperation =
++    async (completedOperation) => {
++      completedOperationIds.push(completedOperation.operationId);
++    };
++  coordinator.workflowOwner.reconcileReplaceActualActive =
++    async (replaceOperation) => {
++      sourceRetirementOperationIds.push(replaceOperation.operationId);
++      return true;
++    };
++  coordinator.workflowOwner.failOperation = async (failedOperation) => {
++    failedOperationIds.push(failedOperation.operationId);
++  };
++
++  try {
++    coordinator.workflowOwner.retainExecutorOutcomeRetryPayload(
++      operationId,
++      activeOutcome,
++    );
++    const activeRedrive =
++      coordinator.workflowOwner.redriveExecutorOutcomeReconcile(operationId);
++    await activeHandoffStarted.promise;
++
++    coordinator.workflowOwner.retainExecutorOutcomeRetryPayload(
++      operationId,
++      failedOutcome,
++    );
++    await coordinator.workflowOwner
++      .redriveExecutorOutcomeReconcile(operationId);
++    t.equal(
++      coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
++        .get(operationId)?.outcomeType,
++      EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
++      'newer definitive failure is retained while ACTIVE owns the lane',
++    );
++
++    releaseActiveHandoff.resolve();
++    await activeRedrive;
++
++    if (activeHandoffReady) {
++      t.same(
++        failedOperationIds,
++        [operationId],
++        'newer failure is applied instead of stale ready ACTIVE',
++      );
++      t.equal(
++        coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
++          .has(operationId),
++        false,
++        'applied failure consumes retry ownership',
++      );
++      t.equal(
++        timerHandles.length,
++        0,
++        'the owner immediately re-drives newer evidence without a timer',
++      );
++      t.same(
++        completedOperationIds,
++        [],
++        'stale ready ACTIVE does not complete the operation',
++      );
++      t.same(
++        sourceRetirementOperationIds,
++        [],
++        'stale ready ACTIVE does not release REPLACE source retirement',
++      );
++      return;
++    }
++
++    t.equal(
++      coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
++        .get(operationId)?.outcomeType,
++      EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
++      'stale ACTIVE reconcile exit preserves the retained failure',
++    );
++    t.equal(
++      timerHandles.length,
++      1,
++      'the current retained evidence has exactly one retry timer',
++    );
++    t.same(
++      completedOperationIds,
++      [],
++      'stale ACTIVE does not complete the operation',
++    );
++    t.same(
++      sourceRetirementOperationIds,
++      [],
++      'stale ACTIVE does not release REPLACE source retirement',
++    );
++
++    await timerHandles[0].callback();
++
++    t.same(
++      failedOperationIds,
++      [operationId],
++      'the retry applies the definitive failure',
++    );
++    t.equal(
++      coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
++        .has(operationId),
++      false,
++      'applied failure consumes the retained evidence',
++    );
++  } finally {
++    releaseActiveHandoff.resolve();
++    await coordinator.shutdown();
++  }
++}
++
+ test(
+   'direct priority REPLACE ACTIVE outcome retains source retirement until ' +
+     'the authoritative SERVICES row is aligned into cache',
+   async (t) => {
+-    const cache = new SystemTableCache();
+-    const authoritativeRow = buildAuthoritativeServiceRow();
+-    cache.applySystemTableChange(
+-      SYSTEM_TABLE_NAME.SERVICES,
+-      CDC_OPERATION.UPSERT,
+-      {...authoritativeRow, status: ReplicaStatus.SYNCING},
+-    );
+-    const cacheRefreshHost = buildProductionCacheRefreshHost({
++    const {
+       cache,
+-      authoritativeRow,
+-      dropRepair: true,
+-    });
+-    const timerHandles = [];
+-    const coordinator = createTestCoordinator({
+-      nodeId: TEST_NODE_ID,
+-      systemTableCache: cache,
+-      cdcIntegrationService: cacheRefreshHost,
+-      setTimeoutFn(callback, delayMs) {
+-        const timerHandle = {callback, delayMs, cleared: false};
+-        timerHandles.push(timerHandle);
+-        return timerHandle;
+-      },
+-      clearTimeoutFn(timerHandle) {
+-        timerHandle.cleared = true;
+-      },
+-    });
++      cacheRefreshHost,
++      coordinator,
++      timerHandles,
++    } = createDroppedRepairHandoffFixture();
+     const operation = buildSyncingReplaceOperation();
+     const sourceRetirementOperationIds = [];
+     const observedRetryOperationIds = [];
+@@ -244,6 +437,227 @@ test(
+   },
+ );
+ 
++test(
++  'direct priority ADD ACTIVE outcome retains completion ownership until ' +
++    'the authoritative SERVICES row is aligned into cache',
++  async (t) => {
++    const {
++      cache,
++      cacheRefreshHost,
++      coordinator,
++      timerHandles,
++    } = createDroppedRepairHandoffFixture();
++    const operation = buildSyncingAddOperation();
++    const completedOperationIds = [];
++    const outcome = Object.freeze({
++      [EXECUTOR_OUTCOME_FIELD.OPERATION_ID]: TEST_OPERATION_ID,
++      [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]:
++        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
++      [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: WORKFLOW_STEP.ACTIVE,
++      [EXECUTOR_OUTCOME_FIELD.REPLICA_ID]: TEST_REPLICA_ID,
++      [EXECUTOR_OUTCOME_FIELD.PARTITION_ID]: TEST_PARTITION_ID,
++      [EXECUTOR_OUTCOME_FIELD.TIMESTAMP]: Date.now(),
++    });
++    coordinator.repository.getOperationByIdVisibilityObservation =
++      async () => ({
++        state: 'present',
++        operation,
++        deferredOutcome: null,
++        retryAfterMs: null,
++      });
++    coordinator.workflowOwner.completeOperation =
++      async (completedOperation) => {
++        completedOperationIds.push(completedOperation.operationId);
++      };
++
++    try {
++      await coordinator.workflowOwner.reconcileExecutorOutcome(outcome);
++
++      t.same(
++        completedOperationIds,
++        [],
++        'silently dropped cache repair cannot complete the ADD',
++      );
++      t.equal(
++        coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
++          .get(TEST_OPERATION_ID)?.workflowStep,
++        WORKFLOW_STEP.ACTIVE,
++        'the ADD retains provisional ACTIVE evidence under one retry owner',
++      );
++      t.equal(
++        coordinator.workflowOwner.executorOutcomeRetryTimerByOperationId
++          .has(TEST_OPERATION_ID),
++        true,
++        'the retained ADD evidence has a bounded retry wake-up',
++      );
++
++      cacheRefreshHost.cacheMutationTarget = cache;
++      await coordinator.workflowOwner.reconcileExecutorOutcome(outcome);
++
++      t.same(
++        completedOperationIds,
++        [TEST_OPERATION_ID],
++        'the ADD completes only after exact authoritative cache alignment',
++      );
++      t.equal(
++        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID).status,
++        ReplicaStatus.ACTIVE,
++        'the authoritative target row is ACTIVE before completion',
++      );
++      t.equal(
++        coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
++          .has(TEST_OPERATION_ID),
++        false,
++        'successful ADD alignment consumes retained executor evidence',
++      );
++      t.equal(
++        timerHandles.some((timerHandle) => timerHandle.cleared),
++        true,
++        'successful ADD alignment clears its retry timer',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  },
++);
++
++test(
++  'newer FAILED evidence supersedes blocked provisional ACTIVE owner exits',
++  async (t) => {
++    await t.test('ADD completion remains blocked', async (t) => {
++      await assertFailureSupersedesBlockedActive(t, {
++        operation: buildSyncingAddOperation(),
++        operationId: TEST_OPERATION_ID,
++      });
++    });
++    await t.test('REPLACE source retirement remains blocked', async (t) => {
++      await assertFailureSupersedesBlockedActive(t, {
++        operation: buildSyncingReplaceOperation(),
++        operationId: TEST_REPLACE_OPERATION_ID,
++      });
++    });
++    await t.test(
++      'non-retryable ACTIVE reconcile error preserves FAILED retry ownership',
++      async (t) => {
++        await assertFailureSupersedesBlockedActive(t, {
++          operation: buildSyncingAddOperation(),
++          operationId: TEST_OPERATION_ID,
++          activeHandoffThrows: true,
++        });
++      },
++    );
++    await t.test('ready ADD handoff cannot consume newer FAILED', async (t) => {
++      await assertFailureSupersedesBlockedActive(t, {
++        operation: buildSyncingAddOperation(),
++        operationId: TEST_OPERATION_ID,
++        activeHandoffReady: true,
++      });
++    });
++    await t.test(
++      'ready REPLACE handoff cannot retire source over newer FAILED',
++      async (t) => {
++        await assertFailureSupersedesBlockedActive(t, {
++          operation: buildSyncingReplaceOperation(),
++          operationId: TEST_REPLACE_OPERATION_ID,
++          activeHandoffReady: true,
++        });
++      },
++    );
++  },
++);
++
++test(
++  'newer FAILED survives a stale ACTIVE empty-visibility stop',
++  async (t) => {
++    const {coordinator} = createDroppedRepairHandoffFixture();
++    const operation = buildSyncingAddOperation();
++    const firstVisibilityStarted = createDeferred();
++    const releaseFirstVisibility = createDeferred();
++    const failedOperationIds = [];
++    const completedOperationIds = [];
++    let visibilityReadCount = 0;
++    coordinator.repository.getOperationByIdVisibilityObservation =
++      async () => {
++        visibilityReadCount += 1;
++        if (visibilityReadCount === 1) {
++          firstVisibilityStarted.resolve();
++          return releaseFirstVisibility.promise;
++        }
++        return {
++          state: 'present',
++          operation,
++          deferredOutcome: null,
++          retryAfterMs: null,
++        };
++      };
++    coordinator.workflowOwner.completeOperation =
++      async (completedOperation) => {
++        completedOperationIds.push(completedOperation.operationId);
++      };
++    coordinator.workflowOwner.failOperation = async (failedOperation) => {
++      failedOperationIds.push(failedOperation.operationId);
++    };
++    const activeOutcome = buildCreateOutcome(
++      TEST_OPERATION_ID,
++      EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
++      WORKFLOW_STEP.ACTIVE,
++      1,
++    );
++    const failedOutcome = buildCreateOutcome(
++      TEST_OPERATION_ID,
++      EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
++      WORKFLOW_STEP.FAILED,
++      2,
++    );
++
++    try {
++      coordinator.workflowOwner.retainExecutorOutcomeRetryPayload(
++        TEST_OPERATION_ID,
++        activeOutcome,
++      );
++      const activeRedrive = coordinator.workflowOwner
++        .redriveExecutorOutcomeReconcile(TEST_OPERATION_ID);
++      await firstVisibilityStarted.promise;
++      coordinator.workflowOwner.retainExecutorOutcomeRetryPayload(
++        TEST_OPERATION_ID,
++        failedOutcome,
++      );
++      releaseFirstVisibility.resolve({
++        state: 'empty',
++        operation: null,
++        deferredOutcome: null,
++        retryAfterMs: null,
++      });
++      await activeRedrive;
++
++      t.equal(
++        visibilityReadCount,
++        2,
++        'the same owner re-drives newer evidence after the stale stop',
++      );
++      t.same(
++        failedOperationIds,
++        [TEST_OPERATION_ID],
++        'newer definitive failure is applied after fresh visibility',
++      );
++      t.same(
++        completedOperationIds,
++        [],
++        'stale empty visibility cannot complete the ADD',
++      );
++      t.equal(
++        coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
++          .has(TEST_OPERATION_ID),
++        false,
++        'applied failure consumes retry ownership',
++      );
++    } finally {
++      releaseFirstVisibility.resolve();
++      await coordinator.shutdown();
++    }
++  },
++);
++
+ test(
+   'ACTIVE target reconciliation retains the operation until its exact ' +
+     'authoritative SERVICES row is aligned into cache',

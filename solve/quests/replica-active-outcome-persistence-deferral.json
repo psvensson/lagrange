@@ -1,0 +1,43 @@
+{
+  "id": "replica-active-outcome-persistence-deferral",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A voter-ready replica emits provisional ACTIVE executor evidence without waiting for retryable SERVICES lifecycle persistence; the operation owner retains retry ownership and forbids ADD terminalization or REPLACE source retirement until the exact authoritative SERVICES row is ACTIVE, while definitive lifecycle failure supersedes provisional evidence; deterministic sustained-deferral tests and a controlled seven-node A/B certify the sequencing.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/membership-lifecycle-placement-hard-cutover/closure-ledger/CL-016.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "0cf861a7d8821a19e5b9028fa098995ecb6d83a6"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "replica-active-outcome-persistence-deferral",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "replica-active-outcome-persistence-deferral-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "replica-active-outcome-persistence-deferral",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

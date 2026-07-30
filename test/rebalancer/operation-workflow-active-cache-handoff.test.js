@@ -118,36 +118,229 @@ function buildProductionCacheRefreshHost({
   return host;
 }
 
+function createDroppedRepairHandoffFixture() {
+  const cache = new SystemTableCache();
+  const authoritativeRow = buildAuthoritativeServiceRow();
+  cache.applySystemTableChange(
+    SYSTEM_TABLE_NAME.SERVICES,
+    CDC_OPERATION.UPSERT,
+    {...authoritativeRow, status: ReplicaStatus.SYNCING},
+  );
+  const cacheRefreshHost = buildProductionCacheRefreshHost({
+    cache,
+    authoritativeRow,
+    dropRepair: true,
+  });
+  const timerHandles = [];
+  const coordinator = createTestCoordinator({
+    nodeId: TEST_NODE_ID,
+    systemTableCache: cache,
+    cdcIntegrationService: cacheRefreshHost,
+    setTimeoutFn(callback, delayMs) {
+      const timerHandle = {callback, delayMs, cleared: false};
+      timerHandles.push(timerHandle);
+      return timerHandle;
+    },
+    clearTimeoutFn(timerHandle) {
+      timerHandle.cleared = true;
+    },
+  });
+  return {cache, cacheRefreshHost, coordinator, timerHandles};
+}
+
+function createDeferred() {
+  let resolvePromise;
+  const promise = new Promise((resolve) => {
+    resolvePromise = resolve;
+  });
+  return {promise, resolve: resolvePromise};
+}
+
+function buildCreateOutcome(
+  operationId,
+  outcomeType,
+  workflowStep,
+  timestamp,
+) {
+  return Object.freeze({
+    [EXECUTOR_OUTCOME_FIELD.OPERATION_ID]: operationId,
+    [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]: outcomeType,
+    [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: workflowStep,
+    [EXECUTOR_OUTCOME_FIELD.REPLICA_ID]: TEST_REPLICA_ID,
+    [EXECUTOR_OUTCOME_FIELD.PARTITION_ID]: TEST_PARTITION_ID,
+    [EXECUTOR_OUTCOME_FIELD.TIMESTAMP]: timestamp,
+    [EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE]:
+      outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED ?
+        'definitive ACTIVE persistence failure' :
+        null,
+  });
+}
+
+async function assertFailureSupersedesBlockedActive(
+  t,
+  {
+    operation,
+    operationId,
+    activeHandoffReady = false,
+    activeHandoffThrows = false,
+  },
+) {
+  const {
+    coordinator,
+    timerHandles,
+  } = createDroppedRepairHandoffFixture();
+  const activeHandoffStarted = createDeferred();
+  const releaseActiveHandoff = createDeferred();
+  const completedOperationIds = [];
+  const failedOperationIds = [];
+  const sourceRetirementOperationIds = [];
+  const activeOutcome = buildCreateOutcome(
+    operationId,
+    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+    WORKFLOW_STEP.ACTIVE,
+    1,
+  );
+  const failedOutcome = buildCreateOutcome(
+    operationId,
+    EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+    WORKFLOW_STEP.FAILED,
+    2,
+  );
+  coordinator.repository.getOperationByIdVisibilityObservation =
+    async () => ({
+      state: 'present',
+      operation,
+      deferredOutcome: null,
+      retryAfterMs: null,
+    });
+  coordinator.workflowOwner.confirmActiveReplicaTerminalHandoff =
+    async () => {
+      activeHandoffStarted.resolve();
+      await releaseActiveHandoff.promise;
+      if (activeHandoffThrows) {
+        throw new Error('non-retryable ACTIVE owner reconcile failure');
+      }
+      return activeHandoffReady;
+    };
+  coordinator.workflowOwner.completeOperation =
+    async (completedOperation) => {
+      completedOperationIds.push(completedOperation.operationId);
+    };
+  coordinator.workflowOwner.reconcileReplaceActualActive =
+    async (replaceOperation) => {
+      sourceRetirementOperationIds.push(replaceOperation.operationId);
+      return true;
+    };
+  coordinator.workflowOwner.failOperation = async (failedOperation) => {
+    failedOperationIds.push(failedOperation.operationId);
+  };
+
+  try {
+    coordinator.workflowOwner.retainExecutorOutcomeRetryPayload(
+      operationId,
+      activeOutcome,
+    );
+    const activeRedrive =
+      coordinator.workflowOwner.redriveExecutorOutcomeReconcile(operationId);
+    await activeHandoffStarted.promise;
+
+    coordinator.workflowOwner.retainExecutorOutcomeRetryPayload(
+      operationId,
+      failedOutcome,
+    );
+    await coordinator.workflowOwner
+      .redriveExecutorOutcomeReconcile(operationId);
+    t.equal(
+      coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
+        .get(operationId)?.outcomeType,
+      EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+      'newer definitive failure is retained while ACTIVE owns the lane',
+    );
+
+    releaseActiveHandoff.resolve();
+    await activeRedrive;
+
+    if (activeHandoffReady) {
+      t.same(
+        failedOperationIds,
+        [operationId],
+        'newer failure is applied instead of stale ready ACTIVE',
+      );
+      t.equal(
+        coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
+          .has(operationId),
+        false,
+        'applied failure consumes retry ownership',
+      );
+      t.equal(
+        timerHandles.length,
+        0,
+        'the owner immediately re-drives newer evidence without a timer',
+      );
+      t.same(
+        completedOperationIds,
+        [],
+        'stale ready ACTIVE does not complete the operation',
+      );
+      t.same(
+        sourceRetirementOperationIds,
+        [],
+        'stale ready ACTIVE does not release REPLACE source retirement',
+      );
+      return;
+    }
+
+    t.equal(
+      coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
+        .get(operationId)?.outcomeType,
+      EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+      'stale ACTIVE reconcile exit preserves the retained failure',
+    );
+    t.equal(
+      timerHandles.length,
+      1,
+      'the current retained evidence has exactly one retry timer',
+    );
+    t.same(
+      completedOperationIds,
+      [],
+      'stale ACTIVE does not complete the operation',
+    );
+    t.same(
+      sourceRetirementOperationIds,
+      [],
+      'stale ACTIVE does not release REPLACE source retirement',
+    );
+
+    await timerHandles[0].callback();
+
+    t.same(
+      failedOperationIds,
+      [operationId],
+      'the retry applies the definitive failure',
+    );
+    t.equal(
+      coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
+        .has(operationId),
+      false,
+      'applied failure consumes the retained evidence',
+    );
+  } finally {
+    releaseActiveHandoff.resolve();
+    await coordinator.shutdown();
+  }
+}
+
 test(
   'direct priority REPLACE ACTIVE outcome retains source retirement until ' +
     'the authoritative SERVICES row is aligned into cache',
   async (t) => {
-    const cache = new SystemTableCache();
-    const authoritativeRow = buildAuthoritativeServiceRow();
-    cache.applySystemTableChange(
-      SYSTEM_TABLE_NAME.SERVICES,
-      CDC_OPERATION.UPSERT,
-      {...authoritativeRow, status: ReplicaStatus.SYNCING},
-    );
-    const cacheRefreshHost = buildProductionCacheRefreshHost({
+    const {
       cache,
-      authoritativeRow,
-      dropRepair: true,
-    });
-    const timerHandles = [];
-    const coordinator = createTestCoordinator({
-      nodeId: TEST_NODE_ID,
-      systemTableCache: cache,
-      cdcIntegrationService: cacheRefreshHost,
-      setTimeoutFn(callback, delayMs) {
-        const timerHandle = {callback, delayMs, cleared: false};
-        timerHandles.push(timerHandle);
-        return timerHandle;
-      },
-      clearTimeoutFn(timerHandle) {
-        timerHandle.cleared = true;
-      },
-    });
+      cacheRefreshHost,
+      coordinator,
+      timerHandles,
+    } = createDroppedRepairHandoffFixture();
     const operation = buildSyncingReplaceOperation();
     const sourceRetirementOperationIds = [];
     const observedRetryOperationIds = [];
@@ -239,6 +432,227 @@ test(
         'successful alignment clears the bounded outcome retry timer',
       );
     } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'direct priority ADD ACTIVE outcome retains completion ownership until ' +
+    'the authoritative SERVICES row is aligned into cache',
+  async (t) => {
+    const {
+      cache,
+      cacheRefreshHost,
+      coordinator,
+      timerHandles,
+    } = createDroppedRepairHandoffFixture();
+    const operation = buildSyncingAddOperation();
+    const completedOperationIds = [];
+    const outcome = Object.freeze({
+      [EXECUTOR_OUTCOME_FIELD.OPERATION_ID]: TEST_OPERATION_ID,
+      [EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE]:
+        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+      [EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP]: WORKFLOW_STEP.ACTIVE,
+      [EXECUTOR_OUTCOME_FIELD.REPLICA_ID]: TEST_REPLICA_ID,
+      [EXECUTOR_OUTCOME_FIELD.PARTITION_ID]: TEST_PARTITION_ID,
+      [EXECUTOR_OUTCOME_FIELD.TIMESTAMP]: Date.now(),
+    });
+    coordinator.repository.getOperationByIdVisibilityObservation =
+      async () => ({
+        state: 'present',
+        operation,
+        deferredOutcome: null,
+        retryAfterMs: null,
+      });
+    coordinator.workflowOwner.completeOperation =
+      async (completedOperation) => {
+        completedOperationIds.push(completedOperation.operationId);
+      };
+
+    try {
+      await coordinator.workflowOwner.reconcileExecutorOutcome(outcome);
+
+      t.same(
+        completedOperationIds,
+        [],
+        'silently dropped cache repair cannot complete the ADD',
+      );
+      t.equal(
+        coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
+          .get(TEST_OPERATION_ID)?.workflowStep,
+        WORKFLOW_STEP.ACTIVE,
+        'the ADD retains provisional ACTIVE evidence under one retry owner',
+      );
+      t.equal(
+        coordinator.workflowOwner.executorOutcomeRetryTimerByOperationId
+          .has(TEST_OPERATION_ID),
+        true,
+        'the retained ADD evidence has a bounded retry wake-up',
+      );
+
+      cacheRefreshHost.cacheMutationTarget = cache;
+      await coordinator.workflowOwner.reconcileExecutorOutcome(outcome);
+
+      t.same(
+        completedOperationIds,
+        [TEST_OPERATION_ID],
+        'the ADD completes only after exact authoritative cache alignment',
+      );
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID).status,
+        ReplicaStatus.ACTIVE,
+        'the authoritative target row is ACTIVE before completion',
+      );
+      t.equal(
+        coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
+          .has(TEST_OPERATION_ID),
+        false,
+        'successful ADD alignment consumes retained executor evidence',
+      );
+      t.equal(
+        timerHandles.some((timerHandle) => timerHandle.cleared),
+        true,
+        'successful ADD alignment clears its retry timer',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+test(
+  'newer FAILED evidence supersedes blocked provisional ACTIVE owner exits',
+  async (t) => {
+    await t.test('ADD completion remains blocked', async (t) => {
+      await assertFailureSupersedesBlockedActive(t, {
+        operation: buildSyncingAddOperation(),
+        operationId: TEST_OPERATION_ID,
+      });
+    });
+    await t.test('REPLACE source retirement remains blocked', async (t) => {
+      await assertFailureSupersedesBlockedActive(t, {
+        operation: buildSyncingReplaceOperation(),
+        operationId: TEST_REPLACE_OPERATION_ID,
+      });
+    });
+    await t.test(
+      'non-retryable ACTIVE reconcile error preserves FAILED retry ownership',
+      async (t) => {
+        await assertFailureSupersedesBlockedActive(t, {
+          operation: buildSyncingAddOperation(),
+          operationId: TEST_OPERATION_ID,
+          activeHandoffThrows: true,
+        });
+      },
+    );
+    await t.test('ready ADD handoff cannot consume newer FAILED', async (t) => {
+      await assertFailureSupersedesBlockedActive(t, {
+        operation: buildSyncingAddOperation(),
+        operationId: TEST_OPERATION_ID,
+        activeHandoffReady: true,
+      });
+    });
+    await t.test(
+      'ready REPLACE handoff cannot retire source over newer FAILED',
+      async (t) => {
+        await assertFailureSupersedesBlockedActive(t, {
+          operation: buildSyncingReplaceOperation(),
+          operationId: TEST_REPLACE_OPERATION_ID,
+          activeHandoffReady: true,
+        });
+      },
+    );
+  },
+);
+
+test(
+  'newer FAILED survives a stale ACTIVE empty-visibility stop',
+  async (t) => {
+    const {coordinator} = createDroppedRepairHandoffFixture();
+    const operation = buildSyncingAddOperation();
+    const firstVisibilityStarted = createDeferred();
+    const releaseFirstVisibility = createDeferred();
+    const failedOperationIds = [];
+    const completedOperationIds = [];
+    let visibilityReadCount = 0;
+    coordinator.repository.getOperationByIdVisibilityObservation =
+      async () => {
+        visibilityReadCount += 1;
+        if (visibilityReadCount === 1) {
+          firstVisibilityStarted.resolve();
+          return releaseFirstVisibility.promise;
+        }
+        return {
+          state: 'present',
+          operation,
+          deferredOutcome: null,
+          retryAfterMs: null,
+        };
+      };
+    coordinator.workflowOwner.completeOperation =
+      async (completedOperation) => {
+        completedOperationIds.push(completedOperation.operationId);
+      };
+    coordinator.workflowOwner.failOperation = async (failedOperation) => {
+      failedOperationIds.push(failedOperation.operationId);
+    };
+    const activeOutcome = buildCreateOutcome(
+      TEST_OPERATION_ID,
+      EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+      WORKFLOW_STEP.ACTIVE,
+      1,
+    );
+    const failedOutcome = buildCreateOutcome(
+      TEST_OPERATION_ID,
+      EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+      WORKFLOW_STEP.FAILED,
+      2,
+    );
+
+    try {
+      coordinator.workflowOwner.retainExecutorOutcomeRetryPayload(
+        TEST_OPERATION_ID,
+        activeOutcome,
+      );
+      const activeRedrive = coordinator.workflowOwner
+        .redriveExecutorOutcomeReconcile(TEST_OPERATION_ID);
+      await firstVisibilityStarted.promise;
+      coordinator.workflowOwner.retainExecutorOutcomeRetryPayload(
+        TEST_OPERATION_ID,
+        failedOutcome,
+      );
+      releaseFirstVisibility.resolve({
+        state: 'empty',
+        operation: null,
+        deferredOutcome: null,
+        retryAfterMs: null,
+      });
+      await activeRedrive;
+
+      t.equal(
+        visibilityReadCount,
+        2,
+        'the same owner re-drives newer evidence after the stale stop',
+      );
+      t.same(
+        failedOperationIds,
+        [TEST_OPERATION_ID],
+        'newer definitive failure is applied after fresh visibility',
+      );
+      t.same(
+        completedOperationIds,
+        [],
+        'stale empty visibility cannot complete the ADD',
+      );
+      t.equal(
+        coordinator.workflowOwner.executorOutcomeRetryPayloadByOperationId
+          .has(TEST_OPERATION_ID),
+        false,
+        'applied failure consumes retry ownership',
+      );
+    } finally {
+      releaseFirstVisibility.resolve();
       await coordinator.shutdown();
     }
   },

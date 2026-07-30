@@ -23,7 +23,10 @@ import path from 'path';
 import os from 'os';
 import {test} from '../../src/test-helpers/tap.js';
 import {ReplicaHandler} from '../../src/node/replica-handler.js';
-import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
+import {
+  OperationType,
+  ReplicaStatus,
+} from '../../src/rebalancer/replica-status.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {SystemTableCache} from '../../src/cache/system-table-cache.js';
@@ -64,32 +67,37 @@ const TEST_SCHEMA = {
  * service metadata sufficient for ReplicaHandler context resolution.
  * @return {SystemTableCache} Seeded cache.
  */
-function createSeededCache() {
+function createSeededCache({
+  tableId = TEST_TABLE_ID,
+  tableName = TEST_TABLE_NAME,
+  partitionId = TEST_PARTITION_ID,
+  leaderReplicaId = TEST_LEADER_REPLICA_ID,
+} = {}) {
   const cache = new SystemTableCache();
 
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.TABLES, 'INSERT', {
-    table_id: TEST_TABLE_ID,
-    table_name: TEST_TABLE_NAME,
+    table_id: tableId,
+    table_name: tableName,
     schema_definition: JSON.stringify(TEST_SCHEMA),
   });
 
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.PARTITIONS, 'INSERT', {
-    partition_id: TEST_PARTITION_ID,
-    table_id: TEST_TABLE_ID,
+    partition_id: partitionId,
+    table_id: tableId,
     partition_key_start: null,
     partition_key_end: null,
     leader_node_id: TEST_LEADER_NODE_ID,
   });
 
   cache.applySystemTableChange(SYSTEM_TABLE_NAME.SERVICES, 'INSERT', {
-    service_id: TEST_LEADER_REPLICA_ID,
+    service_id: leaderReplicaId,
     service_type: 'partition',
-    partition_id: TEST_PARTITION_ID,
+    partition_id: partitionId,
     node_id: TEST_LEADER_NODE_ID,
     raft_role: 'leader',
     status: ReplicaStatus.ACTIVE,
     address:
-      `${TEST_LEADER_NODE_ID}/partition/${TEST_LEADER_REPLICA_ID}`,
+      `${TEST_LEADER_NODE_ID}/partition/${leaderReplicaId}`,
     created_at: Date.now(),
     updated_at: Date.now(),
   });
@@ -260,6 +268,226 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         0,
         'ReplicaHandler must not write to ' +
         'replica_operations directly',
+      );
+
+      await handler.shutdown();
+    },
+  );
+
+  await t.test(
+    'voter-ready create publishes provisional ACTIVE while durable lifecycle ' +
+      'persistence remains deferred',
+    async (t) => {
+      const partitionId = `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-p1`;
+      const replicaId = `${partitionId}-r2`;
+      const leaderReplicaId = `${partitionId}-r1`;
+      const emitter = new ExecutorOutcomeEmitter({logger: console});
+      const emittedOutcomes = [];
+      emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
+        emittedOutcomes.push(outcome);
+      });
+
+      const cache = createSeededCache({
+        tableId: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        tableName: SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
+        partitionId,
+        leaderReplicaId,
+      });
+      const cdcService = createMockCDCService(cache);
+      const handler = new ReplicaHandler({
+        nodeId: TEST_NODE_ID,
+        systemTableCache: cache,
+        cdcIntegrationService: cdcService,
+        createPartitionService: createMockPartitionServiceFactory(),
+        executorOutcomeEmitter: emitter,
+      });
+      const voterReadyWaits = [];
+      handler.waitForVoterReadyActivation = async (
+        waitedReplicaId,
+        waitedPartitionId,
+      ) => {
+        voterReadyWaits.push({
+          replicaId: waitedReplicaId,
+          partitionId: waitedPartitionId,
+        });
+      };
+      handler.initialize();
+
+      const originalPersistReplicaStatusWithRetry =
+        handler.persistReplicaStatusWithRetry.bind(handler);
+      let releaseActivePersistence;
+      const activePersistenceGate = new Promise((resolve) => {
+        releaseActivePersistence = resolve;
+      });
+      let announceActivePersistence;
+      const activePersistenceStarted = new Promise((resolve) => {
+        announceActivePersistence = resolve;
+      });
+      handler.persistReplicaStatusWithRetry = async (
+        replicaId,
+        newStatus,
+        additionalData,
+      ) => {
+        if (newStatus === ReplicaStatus.ACTIVE) {
+          announceActivePersistence();
+          await activePersistenceGate;
+        }
+        return originalPersistReplicaStatusWithRetry(
+          replicaId,
+          newStatus,
+          additionalData,
+        );
+      };
+
+      const created = waitForReplicaEvent(
+        handler,
+        REPLICA_HANDLER_EVENT.CREATED,
+        REPLICA_HANDLER_EVENT.CREATION_FAILED,
+      );
+      const response = await handler.handleMessage(
+        buildEnvelope(
+          ReplicaOperationMessageType.CREATE_REPLICA,
+          {
+            operationId: TEST_OPERATION_ID,
+            operationType: OperationType.REPLACE,
+            partitionId,
+            replicaId,
+          },
+        ),
+      );
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        'create should be admitted',
+      );
+
+      await activePersistenceStarted;
+      t.same(
+        voterReadyWaits,
+        [{replicaId, partitionId}],
+        'critical REPLACE reaches the voter-ready boundary before persistence',
+      );
+      t.ok(
+        emittedOutcomes.some(
+          (outcome) =>
+            outcome.outcomeType ===
+              EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+        ),
+        'voter-ready ACTIVE evidence is not withheld by durable persistence',
+      );
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId)?.status,
+        ReplicaStatus.SYNCING,
+        'the owner still observes a non-terminal durable projection',
+      );
+
+      releaseActivePersistence();
+      await created;
+      t.equal(
+        emittedOutcomes.filter(
+          (outcome) =>
+            outcome.outcomeType ===
+              EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+        ).length,
+        1,
+        'the provisional ACTIVE outcome is emitted exactly once',
+      );
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, replicaId)?.status,
+        ReplicaStatus.ACTIVE,
+        'durable lifecycle persistence may converge after the outcome',
+      );
+
+      await handler.shutdown();
+    },
+  );
+
+  await t.test(
+    'definitive ACTIVE persistence failure follows provisional executor ' +
+      'evidence with a FAILED outcome',
+    async (t) => {
+      const persistenceErrorCode = 'ACTIVE_PERSISTENCE_REJECTED';
+      const emitter = new ExecutorOutcomeEmitter({logger: console});
+      const emittedOutcomes = [];
+      emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
+        emittedOutcomes.push(outcome);
+      });
+
+      const cache = createSeededCache();
+      const cdcService = createMockCDCService(cache);
+      const handler = new ReplicaHandler({
+        nodeId: TEST_NODE_ID,
+        systemTableCache: cache,
+        cdcIntegrationService: cdcService,
+        createPartitionService: createMockPartitionServiceFactory(),
+        executorOutcomeEmitter: emitter,
+      });
+      const originalPersistReplicaStatusWithRetry =
+        handler.persistReplicaStatusWithRetry.bind(handler);
+      handler.persistReplicaStatusWithRetry = async (
+        replicaId,
+        newStatus,
+        additionalData,
+      ) => {
+        if (newStatus === ReplicaStatus.ACTIVE) {
+          const error = new Error('definitive ACTIVE persistence rejection');
+          error.code = persistenceErrorCode;
+          throw error;
+        }
+        return originalPersistReplicaStatusWithRetry(
+          replicaId,
+          newStatus,
+          additionalData,
+        );
+      };
+      handler.initialize();
+
+      const creationFailed = new Promise((resolve) => {
+        handler.once(REPLICA_HANDLER_EVENT.CREATION_FAILED, resolve);
+      });
+      const response = await handler.handleMessage(
+        buildEnvelope(
+          ReplicaOperationMessageType.CREATE_REPLICA,
+          {
+            operationId: TEST_OPERATION_ID,
+            partitionId: TEST_PARTITION_ID,
+            replicaId: TEST_REPLICA_ID,
+          },
+        ),
+      );
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        'create should be admitted before its asynchronous persistence fails',
+      );
+      await creationFailed;
+
+      const outcomeTypes = emittedOutcomes.map(
+        (outcome) => outcome.outcomeType,
+      );
+      const activeIndex = outcomeTypes.indexOf(
+        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+      );
+      const failedIndex = outcomeTypes.indexOf(
+        EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+      );
+      t.ok(
+        activeIndex >= 0,
+        'provisional ACTIVE evidence is emitted before persistence',
+      );
+      t.ok(
+        failedIndex > activeIndex,
+        'definitive failure evidence follows and can supersede ACTIVE',
+      );
+      t.equal(
+        emittedOutcomes[failedIndex]?.errorCode,
+        persistenceErrorCode,
+        'FAILED preserves the definitive lifecycle error code',
+      );
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID)?.status,
+        ReplicaStatus.FAILED,
+        'the lifecycle projection converges to the definitive failure',
       );
 
       await handler.shutdown();

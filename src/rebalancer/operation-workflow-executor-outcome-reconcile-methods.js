@@ -68,6 +68,19 @@ const EXECUTOR_OUTCOME_RETRY_WORKFLOW_STEP_RANK = Object.freeze(new Map([
   [WORKFLOW_STEP.FAILED, NUM.SEVEN],
 ]));
 
+const EXECUTOR_OUTCOME_RETRY_IDENTITY_FIELDS = Object.freeze([
+  EXECUTOR_OUTCOME_FIELD.OPERATION_ID,
+  EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE,
+  EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP,
+  EXECUTOR_OUTCOME_FIELD.REPLICA_ID,
+  EXECUTOR_OUTCOME_FIELD.PARTITION_ID,
+  EXECUTOR_OUTCOME_FIELD.ERROR_MESSAGE,
+  EXECUTOR_OUTCOME_FIELD.ERROR_CODE,
+  EXECUTOR_OUTCOME_FIELD.RETRY_AFTER_MS,
+  EXECUTOR_OUTCOME_FIELD.DEFER_RETRY,
+  EXECUTOR_OUTCOME_FIELD.TIMESTAMP,
+]);
+
 const EXECUTOR_OUTCOME_VISIBILITY_RETRY_ERROR_MESSAGE =
   'Executor outcome operation visibility deferred';
 
@@ -166,7 +179,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
           // demonstrated live path — the previously silent orphan becomes
           // a bounded 30s-cadence retry with a warn per arm. Consumption
           // clears the timer and resets the backoff.
-          this.scheduleExecutorOutcomeRetry(payload, null);
+          this.scheduleRetainedExecutorOutcomeRetry(payload, null);
           return;
         }
       }
@@ -176,7 +189,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       const retained =
         this.executorOutcomeRetryPayloadByOperationId.get(operationId);
       if (retained) {
-        this.scheduleExecutorOutcomeRetry(retained, null);
+        this.scheduleRetainedExecutorOutcomeRetry(retained, null);
       }
     } finally {
       this.executorOutcomeRedriveInFlightByOperationId.delete(operationId);
@@ -301,25 +314,35 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     this.executorOutcomeRetryDelayMsByOperationId.delete(operationId);
   }
 
-  /**
-   * CL-029: applying one outcome must not destroy retained evidence for a
-   * FURTHER step (e.g. a SYNCING application while the ACTIVE payload is
-   * retained). Clear only when the retained payload does not outrank what
-   * was just applied.
-   * @param {string} operationId
-   * @param {Object} appliedOutcome
-   */
-  clearExecutorOutcomeRetryIfNotAhead(operationId, appliedOutcome) {
+  isExecutorOutcomeRetryPayloadCurrent(operationId, outcome) {
     const retained =
       this.executorOutcomeRetryPayloadByOperationId.get(operationId);
+    return (
+      !retained ||
+      retained === outcome ||
+      EXECUTOR_OUTCOME_RETRY_IDENTITY_FIELDS.every(
+        (field) => retained[field] === outcome?.[field],
+      )
+    );
+  }
+
+  /**
+   * A reconcile owns only the payload object it captured from the retry map.
+   * Any replacement is newer selected evidence, even when its workflow rank
+   * is lower (a recreated success superseding retained failure). Stale work
+   * must never clear operation-wide retry state.
+   * @param {string} operationId
+   * @param {Object} appliedOutcome
+   * @return {boolean} Whether the captured payload still owned the clear.
+   */
+  clearExecutorOutcomeRetryIfNotAhead(operationId, appliedOutcome) {
     if (
-      retained &&
-      this.getExecutorOutcomeRetryWorkflowStepRank(retained) >
-        this.getExecutorOutcomeRetryWorkflowStepRank(appliedOutcome)
+      !this.isExecutorOutcomeRetryPayloadCurrent(operationId, appliedOutcome)
     ) {
-      return;
+      return false;
     }
     this.clearExecutorOutcomeRetry(operationId);
+    return true;
   }
 
   buildExecutorOutcomeVisibilityRetryError(visibilityObservation) {
@@ -359,7 +382,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     priorVisibilityObservation = null,
   ) {
     if (isRetryableControlPlaneError(error)) {
-      return this.scheduleExecutorOutcomeRetry(
+      return this.scheduleRetainedExecutorOutcomeRetry(
         outcome,
         this.buildExecutorOutcomeRetryVisibilityObservation(
           error,
@@ -367,11 +390,16 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         ),
       );
     }
-    // Non-retryable: the evidence is undeliverable — drop it so it cannot
-    // linger driverless and mask later outcomes (CL-029).
-    this.clearExecutorOutcomeRetry(
-      outcome?.[EXECUTOR_OUTCOME_FIELD.OPERATION_ID],
-    );
+    const operationId = outcome?.[EXECUTOR_OUTCOME_FIELD.OPERATION_ID];
+    // Non-retryable: drop only the captured evidence. A newer payload can
+    // arrive while the captured reconcile awaits owner work; it keeps retry
+    // ownership and must be re-driven after the lane releases.
+    if (!this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome)) {
+      this.scheduleRetainedExecutorOutcomeRetry(
+        outcome,
+        priorVisibilityObservation,
+      );
+    }
     const retryContext =
       this.buildExecutorOutcomeRetryContext(outcome, priorVisibilityObservation);
     this.logger.error(
@@ -387,6 +415,23 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       },
     );
     return false;
+  }
+
+  scheduleRetainedExecutorOutcomeRetry(outcome, visibilityObservation) {
+    const operationId = outcome?.[EXECUTOR_OUTCOME_FIELD.OPERATION_ID];
+    if (!operationId) {
+      return false;
+    }
+    // A reconcile awaits owner visibility and therefore holds a captured
+    // payload. Newer evidence can arrive meanwhile but cannot start another
+    // reconcile while the operation lane is in flight. Rearm the latest
+    // retained evidence so the captured payload cannot overwrite it.
+    const retainedOutcome =
+      this.executorOutcomeRetryPayloadByOperationId.get(operationId);
+    return this.scheduleExecutorOutcomeRetry(
+      retainedOutcome || outcome,
+      visibilityObservation,
+    );
   }
 
   scheduleExecutorOutcomeRetry(outcome, visibilityObservation) {
@@ -476,12 +521,14 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         operation.type === OperationType.ADD ||
         operation.type === OperationType.REPLACE
       );
-    if (
-      activeReplicaHandoffRequired &&
-      !await this.confirmActiveReplicaTerminalHandoff(operation, {
-        scheduleObservedProgressRetry: false,
-      })
-    ) {
+    let activeReplicaHandoffReady = true;
+    if (activeReplicaHandoffRequired) {
+      activeReplicaHandoffReady =
+        await this.confirmActiveReplicaTerminalHandoff(operation, {
+          scheduleObservedProgressRetry: false,
+        });
+    }
+    if (activeReplicaHandoffRequired && !activeReplicaHandoffReady) {
       // Executor completion is evidence to reconcile, not permission to
       // bypass the recovery owner's authoritative SERVICES cache handoff.
       // Transfer the earlier delivered-create wake-up to the stronger
@@ -489,7 +536,16 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       this.clearObservedProgressRetry(operationId, {
         includeDeliveredCreateProgress: true,
       });
-      this.scheduleExecutorOutcomeRetry(outcome, visibilityObservation);
+      this.scheduleRetainedExecutorOutcomeRetry(
+        outcome,
+        visibilityObservation,
+      );
+      return;
+    }
+    if (
+      activeReplicaHandoffRequired &&
+      !this.isExecutorOutcomeRetryPayloadCurrent(operationId, outcome)
+    ) {
       return;
     }
     if (
@@ -501,14 +557,17 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         // CL-029: completion evidence that could not be applied (stale-CAS
         // updateStep + replay found nothing actionable) keeps its retry
         // owner; a later attempt re-reads fresh visibility and applies.
-        this.scheduleExecutorOutcomeRetry(outcome, visibilityObservation);
+        this.scheduleRetainedExecutorOutcomeRetry(
+          outcome,
+          visibilityObservation,
+        );
         return;
       }
       this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
       return;
     }
     await this.completeOperation(operation);
-    this.clearExecutorOutcomeRetry(operationId);
+    this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
   }
 
   async reconcileExecutorOutcome(outcome) {
@@ -531,6 +590,11 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
           allowPriorityRecoveryDeferredVisibility: true,
         },
       );
+    if (
+      !this.isExecutorOutcomeRetryPayloadCurrent(operationId, outcome)
+    ) {
+      return false;
+    }
     const visibilityAction =
       this.resolveExecutorOutcomeOperationVisibilityAction(
         visibilityObservation,
@@ -540,7 +604,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       visibilityAction ===
       EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.RETRY_OUTCOME
     ) {
-      return this.scheduleExecutorOutcomeRetry(
+      return this.scheduleRetainedExecutorOutcomeRetry(
         outcome,
         visibilityObservation,
       );
@@ -555,7 +619,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         EXECUTOR_OUTCOME_OPERATION_VISIBILITY_ACTION.SKIP_OUTCOME ||
       operation === EXECUTOR_OUTCOME_VISIBILITY_ABSENCE.OPERATION
     ) {
-      this.clearExecutorOutcomeRetry(operationId);
+      this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
       this.logger.debug(
         REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_NOT_FOUND,
         {operationId, outcomeType},
@@ -568,7 +632,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     // action branch clears on successful application.
 
     if (this.repository.isOperationTerminal(operation)) {
-      this.clearExecutorOutcomeRetry(operationId);
+      this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
       this.logger.debug(
         REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_TERMINAL,
         {
@@ -584,7 +648,9 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
       // The remote owner converges from the durable row + its own
       // executor evidence; retaining the payload locally would leave a
       // driverless entry that can mask later outcomes (CL-029).
-      this.clearExecutorOutcomeRetry(operationId);
+      if (!this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome)) {
+        return false;
+      }
       const handoffMode =
         this.resolveRemoteOwnerHandoffModeForExecutorOutcome(
           operation,
@@ -614,7 +680,7 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
 
     const mapping = EXECUTOR_OUTCOME_ACTION_MAP[outcomeType];
     if (!mapping) {
-      this.clearExecutorOutcomeRetry(operationId);
+      this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
       this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_UNKNOWN_ACTION, {
         operationId,
         outcomeType,
@@ -665,14 +731,14 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
         // operation's convergence from the durable row; a retained FAILED
         // payload left behind would outrank and mask the recreated
         // replica's later success outcomes.
-        this.clearExecutorOutcomeRetry(operationId);
+        this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
         return true;
       }
       await this.failOperation(
         operation,
         errorLike?.message || errorMessage || outcomeType,
       );
-      this.clearExecutorOutcomeRetry(operationId);
+      this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
     } else {
       this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_UNKNOWN_ACTION, {
         operationId,
