@@ -5,13 +5,13 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 435524,
-        "sha256": "bfd1c6b529ef45684e6aff33607564c6d97fac44c2d6a4d08c9452bf26afafda"
+        "bytes": 435500,
+        "sha256": "237c6260fb252a90f9adcd7e40964293c39787a7d6e800ed988486cc20475f5e"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 41025,
-        "sha256": "c14f6e2f42a001078c3dd564a7d3b71efb713f9a41fdda595fe3f85ac1be7af1"
+        "bytes": 40818,
+        "sha256": "3e026374846e1be8f3adabac407295376aeddddc81afbb333054e118c620ac06"
       },
       {
         "path": "test-output/analysis/madge-circular-src-scripts-test.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 1491810,
-        "sha256": "5de90e3247c4a5b91658ba94b3bd5221e3fa0200ff409c1b93f15199adb7473a"
+        "bytes": 1493462,
+        "sha256": "4026806e5e0d2b676c708a7eee47ad9138bcf2486ef1f6505480f4d00a4e6232"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "486a1ae53aa683356fdadc28ac535b30cf35b33f4661a5031d931f307abacd6b"
+        "sha256": "8f330f485f156ccd0a30aec41fcb860d9c22b5fa3cc59ae956bbb1257f0e78bd"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "4e6c2a3470c97de31451d137e9f3f0ee5af9bb1285392ece4e2b8f503c8776a5"
+        "sha256": "3a7c254bb39339aebee04aec6f23e690ed80ebe6bad46cb247ecfe998d299129"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "19e2708efe13deda938b7dfcc3c008c0017afc7d55ab04cd52f7ccdb9186e09e"
+    "inputDigest": "4e1f243b65d15a296ed52713ddde063cff5d378e7e31560805e717dcdc4d443c"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 435524,
-        "sha256": "bfd1c6b529ef45684e6aff33607564c6d97fac44c2d6a4d08c9452bf26afafda"
+        "bytes": 435500,
+        "sha256": "237c6260fb252a90f9adcd7e40964293c39787a7d6e800ed988486cc20475f5e"
       },
       "declaredCount": 1846,
       "observedCount": 1846,
@@ -78,12 +78,12 @@
     "cognitive": {
       "identity": {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
-        "bytes": 41025,
-        "sha256": "c14f6e2f42a001078c3dd564a7d3b71efb713f9a41fdda595fe3f85ac1be7af1"
+        "bytes": 40818,
+        "sha256": "3e026374846e1be8f3adabac407295376aeddddc81afbb333054e118c620ac06"
       },
-      "declaredCount": 180,
-      "observedCount": 180,
-      "assignedCount": 180
+      "declaredCount": 179,
+      "observedCount": 179,
+      "assignedCount": 179
     },
     "fileSize": {
       "authority": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "486a1ae53aa683356fdadc28ac535b30cf35b33f4661a5031d931f307abacd6b"
+          "sha256": "8f330f485f156ccd0a30aec41fcb860d9c22b5fa3cc59ae956bbb1257f0e78bd"
         },
         "cloneGroups": 66,
         "duplicatedLines": 2088,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "4e6c2a3470c97de31451d137e9f3f0ee5af9bb1285392ece4e2b8f503c8776a5"
+          "sha256": "3a7c254bb39339aebee04aec6f23e690ed80ebe6bad46cb247ecfe998d299129"
         },
         "cloneGroups": 841,
         "duplicatedLines": 32119,
@@ -166,38 +166,38 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 1491810,
-        "sha256": "5de90e3247c4a5b91658ba94b3bd5221e3fa0200ff409c1b93f15199adb7473a"
+        "bytes": 1493462,
+        "sha256": "4026806e5e0d2b676c708a7eee47ad9138bcf2486ef1f6505480f4d00a4e6232"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "9c2ea20c8575db530effe37be143d6c886d06926cfe87c8cd49a0e5164cc449e",
-      "moduleCount": 4397,
-      "edgeCount": 18848,
-      "unresolvedCount": 9
+      "sourceDigest": "80895f66ec48e845b961e4ac5341c540f4e657846904915940ef7be8311d04b5",
+      "moduleCount": 4398,
+      "edgeCount": 18865,
+      "unresolvedCount": 7
     }
   },
   "assignment": {
-    "sourceSignalCount": 2709,
-    "assignedSignalCount": 2709,
-    "uniqueAssignmentCount": 2709,
-    "digest": "ee43d12229ac0b460cf24e5a5998c10fada2a9ec14ff119ef12e6528fbf158ba"
+    "sourceSignalCount": 2708,
+    "assignedSignalCount": 2708,
+    "uniqueAssignmentCount": 2708,
+    "digest": "729617eb2982d38edcdc82d046d96346f503e0dfeb8cee6d8e528d702430c868"
   },
   "signalCounts": {
-    "cognitive": 180,
+    "cognitive": 179,
     "complexity": 1846,
     "duplication": 597,
     "fileSize": 48,
     "lintExclusion": 38
   },
   "summary": {
-    "filesWithDebt": 1372,
-    "rankedBoundaryCount": 123,
+    "filesWithDebt": 1373,
+    "rankedBoundaryCount": 124,
     "semanticBoundaryCount": 21,
-    "fallbackBoundaryCount": 102,
+    "fallbackBoundaryCount": 103,
     "childQuestCount": 16
   },
   "rankedBoundaries": [
@@ -219,7 +219,7 @@
       "cycleGroups": 0,
       "lintExclusions": 10,
       "importIn": 337,
-      "importOut": 589,
+      "importOut": 591,
       "score": 2951.3,
       "topPaths": [
         "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",
@@ -1014,34 +1014,6 @@
       ]
     },
     {
-      "key": "area:scripts/solve",
-      "owner": null,
-      "boundary": "scripts/solve",
-      "classification": "tool-owner-area",
-      "ownerAreas": [
-        "scripts/solve"
-      ],
-      "fileCount": 11,
-      "signalCount": 15,
-      "complexity": 0,
-      "cognitive": 13,
-      "oversizedFiles": 0,
-      "duplicatedLines": 40,
-      "cloneTouches": 2,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 89,
-      "importOut": 107,
-      "score": 108,
-      "topPaths": [
-        "scripts/solve/theory.js",
-        "scripts/solve/verification.js",
-        "scripts/solve/health.js",
-        "scripts/solve/advisories.js",
-        "scripts/solve/attempt.js"
-      ]
-    },
-    {
       "key": "semantic:message_group_service_owner/message_group_service_workflow",
       "owner": "message_group_service_owner",
       "boundary": "message_group_service_workflow",
@@ -1067,6 +1039,34 @@
         "src/message-group/message-group-service-state.js",
         "src/message-group/message-group-service-inbound-ingress-runtime-methods.js",
         "src/message-group/message-group-service-raft-lifecycle.js"
+      ]
+    },
+    {
+      "key": "area:scripts/solve",
+      "owner": null,
+      "boundary": "scripts/solve",
+      "classification": "tool-owner-area",
+      "ownerAreas": [
+        "scripts/solve"
+      ],
+      "fileCount": 11,
+      "signalCount": 14,
+      "complexity": 0,
+      "cognitive": 12,
+      "oversizedFiles": 0,
+      "duplicatedLines": 40,
+      "cloneTouches": 2,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 89,
+      "importOut": 107,
+      "score": 100,
+      "topPaths": [
+        "scripts/solve/theory.js",
+        "scripts/solve/health.js",
+        "scripts/solve/advisories.js",
+        "scripts/solve/attempt.js",
+        "scripts/solve/continuation.js"
       ]
     },
     {
@@ -2225,30 +2225,6 @@
       ]
     },
     {
-      "key": "area:test/distributed/run.js",
-      "owner": null,
-      "boundary": "test/distributed/run.js",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/distributed/run.js"
-      ],
-      "fileCount": 1,
-      "signalCount": 4,
-      "complexity": 4,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 2,
-      "importOut": 20,
-      "score": 16,
-      "topPaths": [
-        "test/distributed/run.js"
-      ]
-    },
-    {
       "key": "semantic:table_creation_service_owner/table_creation_workflow",
       "owner": "table_creation_service_owner",
       "boundary": "table_creation_workflow",
@@ -2346,6 +2322,30 @@
       "score": 12,
       "topPaths": [
         "test/diagnostics/topology-convergence-graph.test.js"
+      ]
+    },
+    {
+      "key": "area:test/distributed/run.js",
+      "owner": null,
+      "boundary": "test/distributed/run.js",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/distributed/run.js"
+      ],
+      "fileCount": 1,
+      "signalCount": 3,
+      "complexity": 3,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 2,
+      "importOut": 20,
+      "score": 12,
+      "topPaths": [
+        "test/distributed/run.js"
       ]
     },
     {
@@ -3171,6 +3171,30 @@
       "score": 4,
       "topPaths": [
         "test/debug-runtime/debug-metadata-service.test.js"
+      ]
+    },
+    {
+      "key": "area:test/distributed/build-image.js",
+      "owner": null,
+      "boundary": "test/distributed/build-image.js",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/distributed/build-image.js"
+      ],
+      "fileCount": 1,
+      "signalCount": 1,
+      "complexity": 1,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 1,
+      "importOut": 2,
+      "score": 4,
+      "topPaths": [
+        "test/distributed/build-image.js"
       ]
     },
     {
