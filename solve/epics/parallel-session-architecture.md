@@ -144,3 +144,21 @@ LAGRANGE_PUSH_ON_RED while a fix is in flight.
   other head is a new signal and still blocks. Verified: block unattributed →
   proceed when acked → block on a new head. Items 3-5 quests remain
   open/unsealed; items 2 (integration cadence) is process-only.
+- 2026-07-30 — Items 3-5 quests CANNOT be sealed in their current form.
+  Their doneWhen probes read scenario-harness reports; the runner
+  (`scripts/checks/run-parallel-session-scenarios.js`) now produces them and
+  each probe reports done:true at consecutive=3. But the Solver seal flow has
+  NO no-change attempt path: every terminal attempt must seal a non-empty
+  `diff:` artifact, and the verifier fingerprint is `git diff <base> --
+  <paths>` recomputed LIVE from the working tree at land time. Every corpus
+  precedent (benchmark-semantic-parity, -v2, opportunity-calculator) sealed
+  with its change still UNCOMMITTED in the working tree; the land's
+  autoCommitQuest committed it afterward. Items 3-5's implementation was
+  committed at authoring time (9b2a111c, c5ee327e), so at HEAD their diff is
+  empty and no verifier fingerprint can reproduce. A "retroactive" artifact
+  would be a hand-written diff claiming content the tree does not hold —
+  fabrication the canonicalization machinery exists to reject. Resolution is
+  one of: (a) a Solver measurement-only/repro-on-HEAD attempt path for
+  already-committed process quests (a Solver feature, itself a quest); or
+  (b) re-authoring the three quests around a real future change. Do NOT
+  hand-author attempt.diff.json for already-committed code.

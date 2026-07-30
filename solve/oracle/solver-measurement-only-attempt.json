@@ -1,0 +1,22 @@
+{
+ "metric": 3,
+ "target": 0,
+ "done": false,
+ "classification": "solver-measurement-only-attempt-not-implemented",
+ "detail": {
+  "purpose": "Seal when the Solver gains a measurement-only (repro-on-HEAD) attempt path that lets already-committed process quests reach a terminal measuring attempt without a fabricated diff artifact.",
+  "blockingQuests": [
+   "parallel-evidence-machine-mutex",
+   "parallel-session-quest-leases",
+   "parallel-session-scope-advisory"
+  ],
+  "metricMeaning": "number of blocking quests still unsealable for want of a no-change attempt path (3 -> 0)",
+  "acceptance": [
+   "a measurement-only attempt records done:true against the committed HEAD with an honestly empty source delta",
+   "the verifier identity is computed from committed refs and reproduces at land time (no hand-written diff)",
+   "the path refuses when the working tree carries uncommitted changes in the claimed paths",
+   "at least one of the blocking quests is sealed through the new path, proven by its solve log",
+   "npm run lint, npm run steering:check, node scripts/solve.js lint --all --json, npm run solve:consistency all green"
+  ]
+ }
+}
