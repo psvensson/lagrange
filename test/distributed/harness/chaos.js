@@ -277,6 +277,12 @@ class ChaosPrimitives {
    * @private
    */
   async _restoreRestartedNodeNetworkIdentity(nodeId, containerId) {
+    // Host-network mode: there is no bridge network and node.ip is the host's
+    // external IP, which does not change across a container restart. Nothing
+    // to restore — return early rather than matching a null _networkId.
+    if (!this._networkId) {
+      return;
+    }
     const node = this._nodes.get(nodeId);
     const provider = this._providerForNode(nodeId);
     if (typeof provider.inspectContainer !== 'function') {

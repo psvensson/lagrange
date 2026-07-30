@@ -259,6 +259,26 @@ class ClusterLifecycleBase {
     return PORTS.REST + (nodeIndex * HOST_NETWORK_PORT_BLOCK);
   }
 
+  // Peers derive each other's transport dial address from NODE_ADDRESS (REST)
+  // as rest+2, and admin as rest+1 (see listener-port-model and the audit).
+  // That derivation only works while the per-node port block preserves the
+  // REST->admin (+1) and REST->transport (+2) offsets. Assert it here so a
+  // future change to HOST_NETWORK_PORT_BLOCK or the base ports fails loudly at
+  // harness boot instead of as a remote mesh-join timeout on GCP.
+  _assertHostNetworkPortOffsets() {
+    const restToAdmin = PORTS.ADMIN_API - PORTS.REST;
+    const restToTransport = PORTS.WS_TRANSPORT - PORTS.REST;
+    if (restToAdmin !== 1 || restToTransport !== 2) {
+      throw new Error(
+        'Host-network port-block invariant violated: peers derive transport ' +
+        'as REST+2 and admin as REST+1 from NODE_ADDRESS, but PORTS are ' +
+        `REST=${PORTS.REST} ADMIN=${PORTS.ADMIN_API} ` +
+        `TRANSPORT=${PORTS.WS_TRANSPORT}. Adjust HOST_NETWORK_PORT_BLOCK or ` +
+        'advertise per-node transport ports to peers instead.',
+      );
+    }
+  }
+
   _nodeTransportPort(nodeIndex) {
     return PORTS.WS_TRANSPORT + (nodeIndex * HOST_NETWORK_PORT_BLOCK);
   }
@@ -404,6 +424,7 @@ class ClusterLifecycleBase {
     env[CONTAINER_ENV_KEYS.NODE_ID] = nodeId;
     env[CONTAINER_ENV_KEYS.DATA_DIR] = DATA_DIR_PATH;
     if (this._hostNetworkMode) {
+      this._assertHostNetworkPortOffsets();
       // Host-network: the container binds the host NIC directly. Advertise and
       // listen on per-node ports and the host's VPC-internal IP so peers on
       // other VMs can reach it (bridge DNS aliases do not exist here).
@@ -1467,10 +1488,16 @@ class ClusterLifecycleBase {
       nodeId: joinerId,
       ordinal: nodeIndex,
     });
+    // Match start(): the joiner must dial the seed over the node-to-node
+    // (VPC-internal) path in host-network mode, not the seed's external IP
+    // that seedNode.ip holds for runner-side probes.
+    const seedJoinAddress = this._hostNetworkMode ?
+      (this._nodeHostIps(0).internal || seedNode.ip) :
+      seedNode.ip;
     const joinerNode = await this._startNode(
       joinerId,
       NODE_ROLES.JOINER,
-      seedNode.ip,
+      seedJoinAddress,
       nodeIndex,
     );
     this._nodes.set(joinerId, joinerNode);
