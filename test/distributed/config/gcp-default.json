@@ -2,7 +2,7 @@
   "size": 5,
   "docker": {},
   "image": "distributed-db:test",
-  "nodesPerHost": 3,
+  "nodesPerHost": 1,
   "timeouts": {
     "nodeStartup": 30000,
     "convergence": 60000,
@@ -86,7 +86,7 @@
     "project": "something-2e584",
     "zone": "us-central1-a",
     "machineType": "e2-standard-4",
-    "vmCount": 2,
+    "vmCount": 5,
     "preemptible": false
   }
 }
