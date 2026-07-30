@@ -940,6 +940,88 @@ export function verificationState(root, quest, log, options = {}) {
   };
 }
 
+function isCommitAttempt(attempt) {
+  return parseCommitChangeRef(attempt.event.changeRef) !== null;
+}
+
+function checkpointCoveredPaths(state) {
+  const uncheckpointed = state.uncheckpointedApprovedAttempts;
+  const coveredPaths = new Set(uncheckpointed.flatMap(
+    (attempt) => attempt.inspection.changedPaths));
+  if (state.candidateApproval) {
+    for (const filePath of state.candidate.paths) coveredPaths.add(filePath);
+  }
+  return coveredPaths;
+}
+
+function dirtyCheckpointPathProblems(root, contracted, coveredPaths) {
+  const problems = [];
+  // A measurement-only (commit:) changeRef is pinned by sha: its claimed paths
+  // are SUPPOSED to differ from the working tree once committed, so the
+  // base→working-tree dirty check and the live base→tree receipt re-check do
+  // not apply. Cleanliness for commit refs is enforced at record time (the
+  // claimed paths must be clean and head an ancestor of HEAD when sealed).
+  const allAttemptPaths = contracted.flatMap((attempt) =>
+    isCommitAttempt(attempt) ? [] : attempt.inspection.changedPaths);
+  const dirtyPaths = dirtyPathsSinceHead(root, allAttemptPaths);
+  const anchor = [...contracted].reverse()[0];
+  if (dirtyPaths === null && anchor && allAttemptPaths.length > 0) {
+    problems.push(attemptProblem(anchor, LOCAL_STR_OWNED_019));
+  } else if (anchor) {
+    for (const dirtyPath of dirtyPaths) {
+      if (!coveredPaths.has(dirtyPath)) {
+        problems.push(attemptProblem(
+          anchor,
+          `dirty path ${dirtyPath} has no uncheckpointed exact attempt receipt`,
+        ));
+      }
+    }
+  }
+  return problems;
+}
+
+function dirtyCommitClaimProblems(root, contracted) {
+  const problems = [];
+  // Commit-ref claimed paths are pinned by sha, but a later edit to one of
+  // them at HEAD is not covered by the pinned receipt — surface it (the
+  // handoff scope classifier catches source paths; this catches the rest).
+  for (const attempt of contracted) {
+    if (!isCommitAttempt(attempt)) continue;
+    const claimed = attempt.inspection.changedPaths || [];
+    if (claimed.length === 0) continue;
+    const status = spawnSync('git', ['status', '--porcelain', '--', ...claimed],
+      {cwd: root, encoding: 'utf8'});
+    if (status.status === 0 && String(status.stdout || '').trim() !== '') {
+      problems.push(attemptProblem(
+        attempt,
+        LOCAL_STR_COMMIT_CLAIMED_DIRTY,
+      ));
+    }
+  }
+  return problems;
+}
+
+function liveAttemptReceiptProblems(root, uncheckpointed) {
+  const problems = [];
+  for (const attempt of uncheckpointed) {
+    if (isCommitAttempt(attempt)) continue; // pinned by sha; see note above
+    // The attempt receipt hashes the complete canonical changeRef payload. Re-diff
+    // that same complete path set here: sourcePaths is intentionally narrower and
+    // belongs only to the terminal aggregate-verification scope.
+    const live = canonicalSourceDelta(
+      root, attempt.event.workspaceBaseCommit, attempt.inspection.changedPaths);
+    if (!live.ok) {
+      problems.push(attemptProblem(attempt, live.problem));
+    } else if (live.fingerprint !== attempt.fingerprint) {
+      problems.push(attemptProblem(
+        attempt,
+        `changed after approval (approved ${attempt.fingerprint}, current ${live.fingerprint})`,
+      ));
+    }
+  }
+  return problems;
+}
+
 // This is the verification slice of the narrow checkpoint gate. Keep it pure over
 // the supplied log so checkpoint preflight can evaluate a copied approval projection.
 export function checkpointVerificationProblems(root, quest, log, options = {}) {
@@ -958,66 +1040,12 @@ export function checkpointVerificationProblems(root, quest, log, options = {}) {
   }
   const uncheckpointed = state.uncheckpointedApprovedAttempts;
   const contracted = state.attempts.filter((attempt) => attempt.contracted);
-  const coveredPaths = new Set(uncheckpointed.flatMap(
-    (attempt) => attempt.inspection.changedPaths));
-  if (state.candidateApproval) {
-    for (const filePath of state.candidate.paths) coveredPaths.add(filePath);
-  }
-  // A measurement-only (commit:) changeRef is pinned by sha: its claimed paths
-  // are SUPPOSED to differ from the working tree once committed, so the
-  // base→working-tree dirty check and the live base→tree receipt re-check do
-  // not apply. Cleanliness for commit refs is enforced at record time (the
-  // claimed paths must be clean and head an ancestor of HEAD when sealed).
-  const isCommitAttempt = (attempt) =>
-    parseCommitChangeRef(attempt.event.changeRef) !== null;
-  const allAttemptPaths = contracted.flatMap((attempt) =>
-    isCommitAttempt(attempt) ? [] : attempt.inspection.changedPaths);
-  const dirtyPaths = dirtyPathsSinceHead(root, allAttemptPaths);
-  const anchor = [...contracted].reverse()[0];
-  if (dirtyPaths === null && anchor && allAttemptPaths.length > 0) {
-    problems.push(attemptProblem(anchor, LOCAL_STR_OWNED_019));
-  } else if (anchor) {
-    for (const dirtyPath of dirtyPaths) {
-      if (!coveredPaths.has(dirtyPath)) {
-        problems.push(attemptProblem(
-          anchor,
-          `dirty path ${dirtyPath} has no uncheckpointed exact attempt receipt`,
-        ));
-      }
-    }
-  }
-  // Commit-ref claimed paths are pinned by sha, but a later edit to one of
-  // them at HEAD is not covered by the pinned receipt — surface it (the
-  // handoff scope classifier catches source paths; this catches the rest).
-  for (const attempt of contracted) {
-    if (!isCommitAttempt(attempt)) continue;
-    const claimed = attempt.inspection.changedPaths || [];
-    if (claimed.length === 0) continue;
-    const status = spawnSync('git', ['status', '--porcelain', '--', ...claimed],
-      {cwd: root, encoding: 'utf8'});
-    if (status.status === 0 && String(status.stdout || '').trim() !== '') {
-      problems.push(attemptProblem(
-        attempt,
-        LOCAL_STR_COMMIT_CLAIMED_DIRTY,
-      ));
-    }
-  }
-  for (const attempt of uncheckpointed) {
-    if (isCommitAttempt(attempt)) continue; // pinned by sha; see note above
-    // The attempt receipt hashes the complete canonical changeRef payload. Re-diff
-    // that same complete path set here: sourcePaths is intentionally narrower and
-    // belongs only to the terminal aggregate-verification scope.
-    const live = canonicalSourceDelta(
-      root, attempt.event.workspaceBaseCommit, attempt.inspection.changedPaths);
-    if (!live.ok) {
-      problems.push(attemptProblem(attempt, live.problem));
-    } else if (live.fingerprint !== attempt.fingerprint) {
-      problems.push(attemptProblem(
-        attempt,
-        `changed after approval (approved ${attempt.fingerprint}, current ${live.fingerprint})`,
-      ));
-    }
-  }
+  const coveredPaths = checkpointCoveredPaths(state);
+  problems.push(
+    ...dirtyCheckpointPathProblems(root, contracted, coveredPaths),
+    ...dirtyCommitClaimProblems(root, contracted),
+    ...liveAttemptReceiptProblems(root, uncheckpointed),
+  );
   return problems;
 }
 
