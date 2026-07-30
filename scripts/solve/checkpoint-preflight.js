@@ -17,17 +17,25 @@ import {
   VERIFIER_APPROVAL_FINDING_KIND,
   verificationState,
 } from './verification.js';
+import {parseCommitChangeRef} from './change-artifact.js';
+import {canonicalCommitDelta} from './content-addressed-change-artifact.js';
 
 const MISSING_CHANGE_REF = '(missing changeRef)';
 const PREFLIGHT_VERIFIER_EVIDENCE = 'subagent:checkpoint-preflight-simulation';
 
 function attemptPreflightDossier(root, attempt) {
   const changedPaths = [...attempt.inspection.changedPaths].sort();
-  const live = canonicalSourceDelta(
-    root,
-    attempt.event.workspaceBaseCommit,
-    changedPaths,
-  );
+  // A measurement-only (commit:) changeRef is pinned by sha: its identity
+  // cannot drift, so compare against the committed tree-to-tree delta rather
+  // than the (always-empty-for-committed-work) base→working-tree delta.
+  const commitRef = parseCommitChangeRef(attempt.event.changeRef);
+  const live = commitRef ?
+    canonicalCommitDelta(root, commitRef.base, commitRef.head, changedPaths) :
+    canonicalSourceDelta(
+      root,
+      attempt.event.workspaceBaseCommit,
+      changedPaths,
+    );
   return {
     changeRef: attempt.event.changeRef || null,
     fingerprint: attempt.fingerprint,

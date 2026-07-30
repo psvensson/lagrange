@@ -16,7 +16,11 @@ import {
   changeArtifactIdentityMatches,
   inspectChangeArtifact,
   requiresSourceVerification,
+  parseCommitChangeRef,
 } from './change-artifact.js';
+import {
+  canonicalCommitDelta,
+} from './content-addressed-change-artifact.js';
 import {
   projectAttemptBaseCorrections,
 } from './attempt-base-correction-projection.js';
@@ -46,6 +50,13 @@ export const LEGACY_VERIFICATION_CONTRACT_VERSION = 1;
 export const VERIFICATION_CONTRACT_VERSION = 2;
 export const VERIFIER_APPROVAL_FINDING_KIND = LOCAL_STR_OWNED_001;
 const LOCAL_STR_OWNED_020 = 'verifier-rejection';
+const LOCAL_STR_COMMIT_MIXED_AGGREGATE =
+  'terminal aggregate mixes commit changeRefs across ranges';
+const LOCAL_STR_COMMIT_MIXED_CANDIDATE =
+  'landing candidate mixes commit changeRefs across ranges';
+const LOCAL_STR_COMMIT_CLAIMED_DIRTY =
+  'commit changeRef claimed path(s) have uncommitted changes the ' +
+  'pinned receipt does not cover';
 export const VERIFIER_REJECTION_FINDING_KIND = LOCAL_STR_OWNED_020;
 const VERIFICATION_VERDICT_REJECTED = 'rejected';
 export const VERIFICATION_SCOPE = Object.freeze({
@@ -425,10 +436,45 @@ export function attemptBaseCorrectionProofProblem(
   return null;
 }
 
+// When every selected attempt names a measurement-only (commit:) changeRef,
+// the reviewed delta is the committed tree-to-tree range, not base→working
+// tree (which is empty for committed work and would make the quest
+// unsealable). Mixed commit+diff attempts, or commit refs spanning more than
+// one (base, head) pair, cannot share one honest fingerprint: fail closed
+// rather than launder provenance across ranges (parallel-session epic).
+// Returns null when the working-tree path should run instead.
+function commitRangeFingerprint(root, selected) {
+  const refs = selected.map((attempt) =>
+    parseCommitChangeRef(attempt.event.changeRef));
+  if (refs.some((ref) => ref === null)) return null; // a diff ref is present
+  const bases = new Set(refs.map((ref) => ref.base));
+  const heads = new Set(refs.map((ref) => ref.head));
+  if (bases.size !== 1 || heads.size !== 1) {
+    return {mixed: true};
+  }
+  return {base: refs[0].base, head: refs[0].head};
+}
+
 export function aggregateSourceFingerprint(root, attempts) {
   const contracted = attempts.filter((attempt) => attempt.contracted);
   if (contracted.length === 0) {
     return {ok: true, fingerprint: null, content: '', paths: [], baseCommit: null};
+  }
+  const commitRange = commitRangeFingerprint(root, contracted);
+  if (commitRange && commitRange.mixed) {
+    return {ok: false, fingerprint: null, content: null, paths: [],
+      baseCommit: null,
+      problem: LOCAL_STR_COMMIT_MIXED_AGGREGATE};
+  }
+  if (commitRange) {
+    const commitPaths = contracted.flatMap((attempt) =>
+      attempt.candidateContract ?
+        attempt.inspection.changedPaths : attempt.sourcePaths);
+    return {
+      ...canonicalCommitDelta(
+        root, commitRange.base, commitRange.head, commitPaths),
+      baseCommit: commitRange.base,
+    };
   }
   // The path union always spans every contracted attempt — dead-base attempts
   // included, so their content surface stays under terminal review — while the
@@ -578,6 +624,19 @@ function buildLandingCandidate(root, quest, attempts) {
     firstAttemptIndex: selected[0].index,
     lastAttemptIndex: selected[selected.length - 1].index,
   };
+  const commitRange = commitRangeFingerprint(root, selected);
+  if (commitRange && commitRange.mixed) {
+    return {ok: false, fingerprint: null, content: null, ...shared,
+      baseCommit: null,
+      problem: LOCAL_STR_COMMIT_MIXED_CANDIDATE};
+  }
+  if (commitRange) {
+    return {
+      ...canonicalCommitDelta(root, commitRange.base, commitRange.head, paths),
+      ...shared,
+      baseCommit: commitRange.base,
+    };
+  }
   // Anchor the delta at the one reachable recorded base. Dead bases cannot
   // anchor a delta, but the union above keeps every recorded path under the
   // anchored review, so anchoring at the reachable base loses nothing.
@@ -904,11 +963,18 @@ export function checkpointVerificationProblems(root, quest, log, options = {}) {
   if (state.candidateApproval) {
     for (const filePath of state.candidate.paths) coveredPaths.add(filePath);
   }
-  const allAttemptPaths = contracted.flatMap(
-    (attempt) => attempt.inspection.changedPaths);
+  // A measurement-only (commit:) changeRef is pinned by sha: its claimed paths
+  // are SUPPOSED to differ from the working tree once committed, so the
+  // base→working-tree dirty check and the live base→tree receipt re-check do
+  // not apply. Cleanliness for commit refs is enforced at record time (the
+  // claimed paths must be clean and head an ancestor of HEAD when sealed).
+  const isCommitAttempt = (attempt) =>
+    parseCommitChangeRef(attempt.event.changeRef) !== null;
+  const allAttemptPaths = contracted.flatMap((attempt) =>
+    isCommitAttempt(attempt) ? [] : attempt.inspection.changedPaths);
   const dirtyPaths = dirtyPathsSinceHead(root, allAttemptPaths);
   const anchor = [...contracted].reverse()[0];
-  if (dirtyPaths === null && anchor) {
+  if (dirtyPaths === null && anchor && allAttemptPaths.length > 0) {
     problems.push(attemptProblem(anchor, LOCAL_STR_OWNED_019));
   } else if (anchor) {
     for (const dirtyPath of dirtyPaths) {
@@ -920,7 +986,24 @@ export function checkpointVerificationProblems(root, quest, log, options = {}) {
       }
     }
   }
+  // Commit-ref claimed paths are pinned by sha, but a later edit to one of
+  // them at HEAD is not covered by the pinned receipt — surface it (the
+  // handoff scope classifier catches source paths; this catches the rest).
+  for (const attempt of contracted) {
+    if (!isCommitAttempt(attempt)) continue;
+    const claimed = attempt.inspection.changedPaths || [];
+    if (claimed.length === 0) continue;
+    const status = spawnSync('git', ['status', '--porcelain', '--', ...claimed],
+      {cwd: root, encoding: 'utf8'});
+    if (status.status === 0 && String(status.stdout || '').trim() !== '') {
+      problems.push(attemptProblem(
+        attempt,
+        LOCAL_STR_COMMIT_CLAIMED_DIRTY,
+      ));
+    }
+  }
   for (const attempt of uncheckpointed) {
+    if (isCommitAttempt(attempt)) continue; // pinned by sha; see note above
     // The attempt receipt hashes the complete canonical changeRef payload. Re-diff
     // that same complete path set here: sourcePaths is intentionally narrower and
     // belongs only to the terminal aggregate-verification scope.

@@ -126,39 +126,18 @@ LAGRANGE_PUSH_ON_RED while a fix is in flight.
   worktree-private git dir, so no cache sharing results). Refuses to reuse an
   existing branch or path. Replaces a broken symlink to an external template
   the file previously was.
-- 2026-07-30 — Item 6 landed: whole-corpus gates now measure the tree being
-  PUSHED. `scripts/checks/push-gate-corpus-worktree.js` materializes the
-  pushed tree into a throwaway worktree via `session-worktree.js` (the exact
-  `--ref <local-sha>` when the pre-push hook captured one, else the live
-  working-tree state) and runs `test:duplication` + `check-file-size-
-  thresholds` there; pre-push captures the first pushed local-sha and calls
-  it instead of running those two against the working tree. The eslint leg
-  stays tracked-only in the working tree (already correct without a
-  snapshot). Verified: passes on HEAD, `--ref HEAD` excludes foreign
-  untracked files, working-tree mode includes them.
-- 2026-07-30 — Item 7 follow-up landed: known-attributed-red exemption.
-  `scripts/solve/red-main-exemption.js` (ack/clear/list/is-exempt) records a
-  red CI run's exact headSha under the shared `lagrange-sessions/` dir; the
-  red-main guard now reads `headSha` alongside `conclusion` and exempts a
-  main push only while the current red head is acknowledged — a red at any
-  other head is a new signal and still blocks. Verified: block unattributed →
-  proceed when acked → block on a new head. Items 3-5 quests remain
-  open/unsealed; items 2 (integration cadence) is process-only.
-- 2026-07-30 — Items 3-5 quests CANNOT be sealed in their current form.
-  Their doneWhen probes read scenario-harness reports; the runner
-  (`scripts/checks/run-parallel-session-scenarios.js`) now produces them and
-  each probe reports done:true at consecutive=3. But the Solver seal flow has
-  NO no-change attempt path: every terminal attempt must seal a non-empty
-  `diff:` artifact, and the verifier fingerprint is `git diff <base> --
-  <paths>` recomputed LIVE from the working tree at land time. Every corpus
-  precedent (benchmark-semantic-parity, -v2, opportunity-calculator) sealed
-  with its change still UNCOMMITTED in the working tree; the land's
-  autoCommitQuest committed it afterward. Items 3-5's implementation was
-  committed at authoring time (9b2a111c, c5ee327e), so at HEAD their diff is
-  empty and no verifier fingerprint can reproduce. A "retroactive" artifact
-  would be a hand-written diff claiming content the tree does not hold —
-  fabrication the canonicalization machinery exists to reject. Resolution is
-  one of: (a) a Solver measurement-only/repro-on-HEAD attempt path for
-  already-committed process quests (a Solver feature, itself a quest); or
-  (b) re-authoring the three quests around a real future change. Do NOT
-  hand-author attempt.diff.json for already-committed code.
+- 2026-07-30 — Items 6 and 7-followup landed. Item 6: whole-corpus gates
+  (duplication, file-size) measure the PUSHED tree materialized via
+  `session-worktree.js` (`scripts/checks/push-gate-corpus-worktree.js`),
+  called by pre-push with the captured local-sha; eslint stays tracked-only
+  in the working tree. Item 7 follow-up: known-attributed-red exemption —
+  `scripts/solve/red-main-exemption.js` records a red run's exact headSha
+  under the shared `lagrange-sessions/` dir and the guard exempts only while
+  that head is current.
+- 2026-07-30 — Items 3-5 quests CANNOT be sealed as-is. Their code was
+  committed at authoring time (9b2a111c, c5ee327e); the seal flow has no
+  no-change attempt path, the verifier fingerprint is `git diff <base> --
+  <paths>` recomputed live from the working tree (empty at HEAD), and every
+  corpus precedent sealed with its change still uncommitted. A hand-written
+  retroactive diff would be fabrication. Resolution: the
+  `solver-measurement-only-attempt` quest (measurement-only `commit:` refs).

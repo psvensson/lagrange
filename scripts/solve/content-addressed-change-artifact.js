@@ -1,6 +1,7 @@
 import {createHash} from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
+import {spawnSync} from 'node:child_process';
 import {gunzipSync, gzipSync} from 'node:zlib';
 
 const DESCRIPTOR_KIND = 'solve-change-artifact';
@@ -59,6 +60,85 @@ function normalizePath(value) {
 
 function hash(content) {
   return createHash(HASH_ALGORITHM).update(content).digest(HASH_ENCODING);
+}
+
+const COMMIT_SHA_PATTERN = /^[0-9a-f]{40}$/u;
+const GIT_DIFF_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+const NUL_SEPARATOR = String.fromCharCode(0);
+const LOCAL_STR_GIT = 'git';
+const LOCAL_STR_CAT_FILE = 'cat-file';
+const LOCAL_STR_OBJECT_EXISTS_FLAG = '-e';
+const LOCAL_STR_MERGE_BASE = 'merge-base';
+const LOCAL_STR_IS_ANCESTOR = '--is-ancestor';
+const LOCAL_STR_GIT_PATH_SEPARATOR = '--';
+const LOCAL_STR_COMMIT_PROBLEM_UNREACHABLE =
+  'commit changeRef must name two reachable commits';
+const LOCAL_STR_COMMIT_PROBLEM_NOT_ANCESTOR =
+  'commit changeRef base must be an ancestor of head';
+
+function gitCommitExists(root, sha) {
+  if (!COMMIT_SHA_PATTERN.test(String(sha || ''))) return false;
+  return spawnSync(LOCAL_STR_GIT,
+    [LOCAL_STR_CAT_FILE, LOCAL_STR_OBJECT_EXISTS_FLAG, `${sha}^{commit}`], {
+      cwd: root,
+      encoding: TEXT_ENCODING,
+    }).status === 0;
+}
+
+function gitIsAncestor(root, ancestor, descendant) {
+  return spawnSync(
+    LOCAL_STR_GIT,
+    [LOCAL_STR_MERGE_BASE, LOCAL_STR_IS_ANCESTOR, ancestor, descendant],
+    {cwd: root, encoding: TEXT_ENCODING}).status === 0;
+}
+
+// Canonical tree-to-tree delta for a measurement-only (commit:) changeRef.
+// Unlike canonicalSourceDelta (verification.js), which diffs a base against
+// the LIVE WORKING TREE and is therefore empty for already-committed code,
+// this diffs two committed trees against each other, so the verifier identity
+// of committed work reproduces at land time. Refuses (ok:false) when either
+// sha is not a commit or base is not an ancestor of head — a reversed or
+// criss-cross range would otherwise hash a nonsense inverse diff.
+export function canonicalCommitDelta(root, baseSha, headSha, paths = []) {
+  if (!gitCommitExists(root, baseSha) || !gitCommitExists(root, headSha)) {
+    return {ok: false, fingerprint: null, content: null, paths: [],
+      problem: LOCAL_STR_COMMIT_PROBLEM_UNREACHABLE};
+  }
+  if (!gitIsAncestor(root, baseSha, headSha)) {
+    return {ok: false, fingerprint: null, content: null, paths: [],
+      problem: LOCAL_STR_COMMIT_PROBLEM_NOT_ANCESTOR};
+  }
+  const sortedPaths = [...new Set(paths)].sort();
+  const args = ['diff', '--binary', '--full-index', '--no-ext-diff',
+    baseSha, headSha];
+  if (sortedPaths.length > 0) {
+    args.push(LOCAL_STR_GIT_PATH_SEPARATOR, ...sortedPaths);
+  }
+  const result = spawnSync('git', args, {
+    cwd: root,
+    encoding: TEXT_ENCODING,
+    maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES,
+  });
+  if (result.status !== 0 || typeof result.stdout !== 'string') {
+    return {ok: false, fingerprint: null, content: null, paths: [],
+      problem: `commit delta git diff failed: ${String(result.stderr || '').trim()}`};
+  }
+  return {
+    ok: true,
+    fingerprint: `sha256:${hash(result.stdout)}`,
+    content: result.stdout,
+    paths: sortedPaths,
+  };
+}
+
+// Path list touched by a committed tree-to-tree range (NUL-separated to
+// survive spaces), for a commit changeRef's changedPaths classification.
+export function commitDeltaChangedPaths(root, baseSha, headSha) {
+  const result = spawnSync('git', [
+    'diff', '--name-only', '-z', '--no-ext-diff', baseSha, headSha,
+  ], {cwd: root, encoding: TEXT_ENCODING, maxBuffer: GIT_DIFF_MAX_BUFFER_BYTES});
+  if (result.status !== 0) return null;
+  return result.stdout.split(NUL_SEPARATOR).filter(Boolean).sort();
 }
 
 function workspacePath(root, relative) {

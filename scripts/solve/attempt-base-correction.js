@@ -11,6 +11,7 @@ import {
 import {
   changeArtifactIdentity,
   changeArtifactIdentityMatches,
+  isCommitChangeRef,
 } from './change-artifact.js';
 import {
   attemptHasLaterVerifierReview,
@@ -24,6 +25,9 @@ const reflectApply = Reflect.apply;
 const regexpExec = RegExp.prototype.exec;
 const stringTrim = String.prototype.trim;
 const COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
+const PROBLEM_COMMIT_REF_PINNED_RANGE =
+  'correct-attempt-base: commit: changeRefs have a pinned range and cannot ' +
+  'be base-corrected';
 
 function regexpMatches(pattern, value) {
   return typeof value === 'string' &&
@@ -98,6 +102,12 @@ function requireCorrectableAttempt(root, quest, log, attemptIndex) {
     throw new Error(
       'correct-attempt-base: target must be an accepted version-2 source attempt',
     );
+  }
+  if (isCommitChangeRef(attempt.event.changeRef)) {
+    // A commit changeRef's base names one end of a pinned committed range;
+    // rewriting it would silently rename the reviewed delta, not correct an
+    // incidental base. Refuse rather than rewrite the range.
+    throw new Error(PROBLEM_COMMIT_REF_PINNED_RANGE);
   }
   const currentIdentity = changeArtifactIdentity(
     root,

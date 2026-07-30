@@ -1,4 +1,5 @@
 import path from 'node:path';
+import {spawnSync} from 'node:child_process';
 
 import {
   QUEST_CLASS_PRODUCT,
@@ -8,9 +9,92 @@ import {
   readChangeArtifact,
   requestedChangeArtifactPath,
   resolvedChangeArtifactPath,
+  canonicalCommitDelta,
+  commitDeltaChangedPaths,
 } from './content-addressed-change-artifact.js';
 
+// A measurement-only (repro-on-HEAD) changeRef names a COMMITTED tree-to-tree
+// delta `commit:<baseSha>:<headSha>` instead of a `diff:<path>` artifact, so a
+// quest whose implementation already landed can seal a measuring attempt
+// without fabricating a working-tree diff (parallel-session epic, items 3-5).
+export function parseCommitChangeRef(changeRef) {
+  if (typeof changeRef !== 'string') return null;
+  const match = COMMIT_REF_PATTERN.exec(changeRef);
+  if (!match) return null;
+  return {base: match[1], head: match[2]};
+}
+
+export function isCommitChangeRef(changeRef) {
+  return parseCommitChangeRef(changeRef) !== null;
+}
+
+// Record-time admission gate for a measurement-only (commit:) changeRef.
+// Because the receipt is pinned by sha, the checkpoint-time base→working-tree
+// dirty check cannot apply to it — so the equivalent guarantee moves here:
+// the claimed paths must be CLEAN in the working tree (no uncommitted edits
+// the receipt would silently stop covering) and head must be an ancestor of
+// HEAD (the claimed delta must be in current history, not a dangling side
+// branch). Returns a problem string, or null when the ref is admissible.
+export function commitChangeRefAdmissionProblem(root, changeRef, inspection) {
+  const commitRef = parseCommitChangeRef(changeRef);
+  if (!commitRef) return null;
+  const head = spawnSync('git', ['rev-parse', 'HEAD'],
+    {cwd: root, encoding: 'utf8'});
+  const headSha = String(head.stdout || '').trim();
+  if (head.status !== 0 ||
+    !gitIsAncestorShas(root, commitRef.head, headSha)) {
+    return LOCAL_STR_COMMIT_HEAD_NOT_ANCESTOR +
+      LOCAL_STR_COMMIT_DELTA_NOT_IN_HISTORY;
+  }
+  const paths = (inspection?.changedPaths || []);
+  if (paths.length > 0) {
+    const status = spawnSync('git', ['status', '--porcelain', '--', ...paths],
+      {cwd: root, encoding: 'utf8'});
+    // Fail CLOSED on a spawn failure: this is an integrity gate, so an
+    // unreadable tree must refuse, never silently admit.
+    if (status.status !== 0) {
+      return LOCAL_STR_COMMIT_CLEAN_VERIFY_FAILED +
+        String(status.stderr || LOCAL_STR_GIT_STATUS_FAILED).trim();
+    }
+    if (String(status.stdout || '').trim() !== '') {
+      return LOCAL_STR_COMMIT_PATHS_DIRTY +
+        LOCAL_STR_COMMIT_PATHS_DIRTY_ACTION;
+    }
+  }
+  return null;
+}
+
+function gitIsAncestorShas(root, ancestor, descendant) {
+  return spawnSync(LOCAL_STR_GIT,
+    [LOCAL_STR_MERGE_BASE, LOCAL_STR_IS_ANCESTOR, ancestor, descendant],
+    {cwd: root, encoding: TEXT_ENCODING}).status === 0;
+}
+
+const LOCAL_STR_GIT = 'git';
+const LOCAL_STR_MERGE_BASE = 'merge-base';
+const LOCAL_STR_IS_ANCESTOR = '--is-ancestor';
+const TEXT_ENCODING = 'utf8';
+const LOCAL_STR_GIT_STATUS_FAILED = 'git status failed';
+const LOCAL_STR_COMMIT_HEAD_NOT_ANCESTOR =
+  'commit changeRef head is not an ancestor of HEAD: the claimed ';
+const LOCAL_STR_COMMIT_DELTA_NOT_IN_HISTORY =
+  'delta is not in current history';
+const LOCAL_STR_COMMIT_CLEAN_VERIFY_FAILED =
+  'commit changeRef could not verify claimed paths are clean: ';
+const LOCAL_STR_COMMIT_PATHS_DIRTY =
+  'commit changeRef claimed paths have uncommitted changes the ';
+const LOCAL_STR_COMMIT_PATHS_DIRTY_ACTION =
+  'pinned receipt would not cover: commit or revert them first';
+const LOCAL_STR_COMMIT_RANGE_TOUCHES_NO_PATHS =
+  'commit changeRef range touches no paths';
+const LOCAL_STR_SHA256_PREFIX = 'sha256:';
+const LOCAL_STR_PROBLEM_WORKFLOW_SCOPE =
+  'workflow changes must be recorded in a workflow/Quest tooling Quest';
+const LOCAL_STR_PROBLEM_RUNTIME_SCOPE =
+  'runtime changes must be recorded in a runtime Quest';
 const DIFF_PREFIX = 'diff:';
+const COMMIT_REF_PATTERN = /^commit:([0-9a-f]{40}):([0-9a-f]{40})$/u;
+const COMMIT_STORAGE_KIND = 'commit';
 const DIFF_EXTENSION = '.diff';
 const DESCRIPTOR_EXTENSION = '.diff.json';
 const GZIP_EXTENSION = '.diff.gz';
@@ -90,6 +174,21 @@ export function changeArtifactPath(root, questId, changeRef) {
 }
 
 export function changeArtifactIdentity(root, questId, changeRef) {
+  const commitRef = parseCommitChangeRef(changeRef);
+  if (commitRef) {
+    // A commit changeRef's identity IS its canonical tree-to-tree delta: it is
+    // permanently reproducible (no file to edit), so no storageKind fields.
+    const delta = canonicalCommitDelta(root, commitRef.base, commitRef.head, []);
+    if (!delta.ok) {
+      return {path: changeRef, exists: false, size: null, sha256: null};
+    }
+    return {
+      path: changeRef,
+      exists: true,
+      size: delta.content.length,
+      sha256: delta.fingerprint.slice(LOCAL_STR_SHA256_PREFIX.length),
+    };
+  }
   const requestedPath = requestedChangeArtifactPath(root, changeRef);
   const artifact = readChangeArtifact(root, changeRef);
   if (!requestedPath || !artifact.valid || !artifact.payload) {
@@ -310,7 +409,49 @@ export function classifyQuestScope(quest) {
   return QUEST_SCOPE_RUNTIME;
 }
 
+// Inspection for a measurement-only (commit:) changeRef: the artifact is the
+// committed tree-to-tree delta itself, so there is no file to read and no
+// hunk presence to prove — but the same scope-cross rules apply to its paths.
+function inspectCommitChangeArtifact(root, quest, changeRef, commitRef) {
+  const problems = [];
+  const changedPaths = commitDeltaChangedPaths(
+    root, commitRef.base, commitRef.head) ?? [];
+  const delta = canonicalCommitDelta(root, commitRef.base, commitRef.head, []);
+  if (!delta.ok) {
+    problems.push(delta.problem);
+  }
+  if (changedPaths.length === 0) {
+    problems.push(LOCAL_STR_COMMIT_RANGE_TOUCHES_NO_PATHS);
+  }
+  const categories = [...new Set(changedPaths.map(classifyPath))].sort();
+  const questScope = classifyQuestScope(quest);
+  if (questScope !== QUEST_SCOPE_WORKFLOW &&
+    categories.includes(QUEST_SCOPE_WORKFLOW)) {
+    problems.push(LOCAL_STR_PROBLEM_WORKFLOW_SCOPE);
+  }
+  if (questScope === QUEST_SCOPE_WORKFLOW &&
+    categories.includes(QUEST_SCOPE_RUNTIME)) {
+    problems.push(LOCAL_STR_PROBLEM_RUNTIME_SCOPE);
+  }
+  return {
+    valid: problems.length === 0,
+    problems,
+    filePath: changeRef,
+    changedPaths,
+    categories,
+    questScope,
+    content: delta.content || '',
+    storageKind: COMMIT_STORAGE_KIND,
+    contentObjectPath: null,
+    payloadBytes: delta.content ? delta.content.length : 0,
+  };
+}
+
 export function inspectChangeArtifact(root, quest, changeRef) {
+  const commitRef = parseCommitChangeRef(changeRef);
+  if (commitRef) {
+    return inspectCommitChangeArtifact(root, quest, changeRef, commitRef);
+  }
   const problems = [];
   const filePath = changeArtifactPath(root, quest.id, changeRef);
   const artifact = readChangeArtifact(root, changeRef);
@@ -344,11 +485,11 @@ export function inspectChangeArtifact(root, quest, changeRef) {
   }
   if (questScope !== QUEST_SCOPE_WORKFLOW &&
     categories.includes(QUEST_SCOPE_WORKFLOW)) {
-    problems.push('workflow changes must be recorded in a workflow/Quest tooling Quest');
+    problems.push(LOCAL_STR_PROBLEM_WORKFLOW_SCOPE);
   }
   if (questScope === QUEST_SCOPE_WORKFLOW &&
     categories.includes(QUEST_SCOPE_RUNTIME)) {
-    problems.push('runtime changes must be recorded in a runtime Quest');
+    problems.push(LOCAL_STR_PROBLEM_RUNTIME_SCOPE);
   }
 
   return {

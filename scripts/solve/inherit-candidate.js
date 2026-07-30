@@ -24,10 +24,12 @@ import {
   baseCommitReachable,
   verificationState,
 } from './verification.js';
-import {expectedChangeDir} from './change-artifact.js';
+import {expectedChangeDir, isCommitChangeRef} from './change-artifact.js';
 
 const DIFF_REF_PREFIX = 'diff:';
 const INHERITED_ARTIFACT_PREFIX = 'inherited-';
+const PROBLEM_COMMIT_REF_UNSUPPORTED =
+  'inherit-candidate does not support commit: changeRefs';
 
 function requireDeclared(log, questId) {
   if (!log.some((event) => event.type === 'quest-declared')) {
@@ -58,6 +60,11 @@ function childFrontierFor(parent, child, parentFrontierId) {
 // requires artifacts under the owning quest's change directory, and the
 // landing scope walks that directory to find the changed source paths.
 function copyArtifact(root, childId, parentId, changeRef) {
+  if (isCommitChangeRef(changeRef)) {
+    // A commit changeRef names a committed tree-to-tree range, not a file to
+    // copy; the child's candidate must be rebuilt from its own log.
+    throw new Error(PROBLEM_COMMIT_REF_UNSUPPORTED);
+  }
   const sourceRel = String(changeRef).slice(DIFF_REF_PREFIX.length);
   const sourceAbs = path.join(root, sourceRel);
   const childDir = expectedChangeDir(root, childId);

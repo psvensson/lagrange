@@ -34,6 +34,7 @@ import {
   changedPathsFromDiffContent,
   expectedChangeDir,
   inspectChangeArtifact,
+  commitChangeRefAdmissionProblem,
 } from './change-artifact.js';
 import {
   cleanupWrittenChangeArtifact,
@@ -485,6 +486,10 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     changeInspection,
   );
   if (canonicalProblem) throw new Error(canonicalProblem);
+
+  const admissionProblem = commitChangeRefAdmissionProblem(
+    root, changeRef, changeInspection);
+  if (admissionProblem) throw new Error(admissionProblem);
 
   const log = readLog(root, quest.id);
   const scopeAdmission = scopeTerminalStatus(
