@@ -19,6 +19,14 @@
       "payloadBytes": 2975,
       "objectPath": "solve/artifacts/historical-oracles/sha256/88/88e36e3e9a533222e4a60a56338be5656f5e4f1de19cca8beedc6892382a1175.oracle.json.gz",
       "objectStorageSha256": "4b3cbc1e41b5d2eaaf69526842abbd0d0954b3189ee20f83e84c644bc4411c6b"
+    },
+    {
+      "questId": "rolling-restart-startup-recovery-regression-matrix",
+      "sealedPath": "test-output/reports/rolling-restart-startup-recovery-regression-matrix.verdict.json",
+      "terminalEvidenceSha256": "3d4267715eef631826a6cd25ea619615686639062a19ef07249ff62e76ea2773",
+      "payloadBytes": 8164,
+      "objectPath": "solve/artifacts/historical-oracles/sha256/3d/3d4267715eef631826a6cd25ea619615686639062a19ef07249ff62e76ea2773.oracle.json.gz",
+      "objectStorageSha256": "f972166a0bded63d81d1f268c1eda654ced6d026ccdeee01910f0e84b3acbbda"
     }
   ]
 }
