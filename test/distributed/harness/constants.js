@@ -739,10 +739,12 @@ const LOG_SUBSCRIPTION_CAPABILITY = Object.freeze({
 });
 
 // --- CLI Runner Constants ---
-// Default runs provision GCP Compute Engine Docker hosts (the project/zone in
-// gcp-default.json) rather than a local Docker daemon; pass --config
-// test/distributed/config/local.json explicitly to run on local Docker.
-const DEFAULT_CONFIG_PATH = 'test/distributed/config/gcp-default.json';
+// Default runs use the local Docker daemon (fast inner loop: warm image reuse,
+// no provisioning/teardown). GCP multi-host runs carry a ~15-minute
+// provision/image-distribute/teardown overhead per run, so they are an
+// explicit opt-in via --config test/distributed/config/gcp-*.json for the
+// scenarios that genuinely need cross-host distribution.
+const DEFAULT_CONFIG_PATH = 'test/distributed/config/local.json';
 const DEFAULT_REPORT_OUTPUT = 'test-output/report.json';
 const ARG_CONFIG = '--config';
 const ARG_SCENARIO = '--scenario';
