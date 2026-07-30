@@ -21,6 +21,9 @@ import {
   createBenchmarkResourceCapacitySummary,
 } from '../benchmark-resource-capacity-summary.js';
 import {
+  bootstrapBenchmarkPairedRatioInterval,
+} from '../benchmark-capacity-statistics.js';
+import {
   createBenchmarkResourceMatrixManifest,
 } from '../benchmark-resource-matrix-manifest.js';
 import {
@@ -52,6 +55,14 @@ import {
   FIXTURE_RESOURCE_SOURCE_REVISION,
   FIXTURE_RESOURCE_VALID_UNTIL,
 } from './benchmark-resource-evidence-test-fixture-constants.js';
+import {
+  benchmarkCapacityHeterogeneousWorkloadPayload,
+} from './benchmark-capacity-heterogeneous-evidence-test-fixture.js';
+const arrayEvery = Function.call.bind(Array.prototype.every);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
+const arrayMap = Function.call.bind(Array.prototype.map);
 const localText = Object.freeze({
   BASELINE_CLIENT: 'baseline-client',
   BASELINE_DATABASE: 'baseline-database',
@@ -78,10 +89,12 @@ const localText = Object.freeze({
   FIXTURE_CREDITS: 'credits',
   FIXTURE_SPOT_DISCOUNT: 'spot_discount',
   LIVE_TOPOLOGY_VERSION: 'benchmark-resource-live-topology-v1',
+  MANAGED_POSTGRESQL: 'managed-postgresql',
   MEASURED: 'measured',
   C3_COORDINATE_UNRESOLVED:
     'fixture C3 measured coordinate is unresolved',
   RESOURCE_FIXTURE_SOURCE_V1: 'resource-fixture-source-v1',
+  SEMANTIC_EVENTS_ABSENT_ZERO_ONLY: 'semantic_events_absent_zero_only',
   NONE: 'none',
   IDENTICAL_LOAD_GENERATOR_ON_BOTH_SIDES: 'identical_load_generator_on_both_sides',
   SMALL: 'small',
@@ -128,6 +141,7 @@ const FIXTURE_SCALAR = Object.freeze({
   UTILIZED_NETWORK_INTER_ZONE_BYTES: 500,
   UTILIZED_STORAGE_BYTE_SECONDS: 10_000_000,
 });
+const COST_BOOTSTRAP_SEED_OFFSET = 1_129_273_684;
 
 function source(kind, name, extra = {}) {
   return createBenchmarkResourceSourceArtifact(kind, {
@@ -373,6 +387,68 @@ function aggregateSideCost(windows, costs, sideId) {
   };
 }
 
+function pairedCostValues(windows, costs, capacityProtocol) {
+  const blocks = [];
+  for (let index = 0; index < windows.length; index += 1) {
+    const payload = windows[index].artifact.payload;
+    let block = arrayFind(
+      blocks,
+      (candidate) => candidate.blockIndex === payload.blockIndex,
+    );
+    if (block === undefined) {
+      block = {blockIndex: payload.blockIndex, costs: [null, null]};
+      blocks.push(block);
+    }
+    const sideIndex =
+      arrayIndexOf(FIXTURE_RESOURCE_SIDE_IDS, payload.sideId);
+    block.costs[sideIndex] = costs[index].costPerMillionCorrectOperations;
+  }
+  const complete = arrayEvery(
+    blocks,
+    (block) => block.costs[0] !== null && block.costs[1] !== null,
+  );
+  if (!complete) return null;
+  const pairs = arrayMap(blocks, (block) => block.costs);
+  let numeratorValue = 0;
+  let denominatorValue = 0;
+  for (let index = 0; index < pairs.length; index += 1) {
+    numeratorValue += pairs[index][0];
+    denominatorValue += pairs[index][1];
+  }
+  numeratorValue /= pairs.length;
+  denominatorValue /= pairs.length;
+  const interval = bootstrapBenchmarkPairedRatioInterval(
+    pairs,
+    capacityProtocol.preregistration.statistics.confidenceLevel,
+    capacityProtocol.preregistration.statistics.bootstrapResamples,
+    capacityProtocol.preregistration.randomization.seed +
+      COST_BOOTSTRAP_SEED_OFFSET,
+  );
+  return {
+    numeratorValue,
+    denominatorValue,
+    confidenceInterval: {lower: interval.lower, upper: interval.upper},
+    sampleCount: pairs.length,
+  };
+}
+
+function costWindowSourceDigests(windows) {
+  const digests = [];
+  for (let sideIndex = 0;
+    sideIndex < FIXTURE_RESOURCE_SIDE_IDS.length;
+    sideIndex += 1) {
+    for (let index = 0; index < windows.length; index += 1) {
+      if (
+        windows[index].artifact.payload.sideId ===
+          FIXTURE_RESOURCE_SIDE_IDS[sideIndex]
+      ) {
+        digests.push(windows[index].digest);
+      }
+    }
+  }
+  return digests;
+}
+
 function utilized(multiplier) {
   return {
     cpuCoreSeconds: FIXTURE_SCALAR.UTILIZED_CPU_CORE_SECONDS * multiplier,
@@ -473,6 +549,91 @@ function componentSamples(
   ];
 }
 
+function heterogeneousLiveEvidence(c3Window) {
+  if (c3Window === null) return {};
+  return {
+    liveEngagementDigest: c3Window.receipt.liveEngagementDigest,
+    heterogeneousOperationReceipt: c3Window.engagement,
+    encodedOperationEvidence:
+      c3Window.adapterEvidence.encodedOperationEvidence,
+    runtimeOwnerEvidence:
+      c3Window.adapterEvidence.runtimeOwnerEvidence,
+  };
+}
+
+function capacitySourceEvidence(
+  sideId,
+  capacityProtocol,
+  sideIndex,
+  c3Window,
+  includeProtocol,
+) {
+  const evidence = {
+    name: `${sideId}-capacity-sample`,
+    correctOpsPerSecond:
+      sideId === FIXTURE_RESOURCE_SIDE_IDS[0] ? 1200 : 1000,
+    ...(c3Window === null ?
+      {} :
+      {capacitySampleDigest: c3Window.receipt.capacitySampleDigest}),
+  };
+  if (capacityProtocol === null || !includeProtocol) return evidence;
+  const protocolSideId =
+    capacityProtocol.preregistration.sideIds[sideIndex];
+  return {
+    ...evidence,
+    protocol: {
+      version: BENCHMARK_RESOURCE_CAPACITY_SOURCE.VERSION,
+      evidenceClass:
+        BENCHMARK_RESOURCE_CAPACITY_SOURCE.EVIDENCE_CLASS,
+      mappedSideId: sideId,
+      protocolSideId,
+      artifactReceipt: {
+        reportDigest: capacityProtocol.report.reportDigest,
+        preregistrationDigest:
+          capacityProtocol.preregistration.manifestDigest,
+      },
+      preregistration: capacityProtocol.preregistration,
+      report: capacityProtocol.report,
+    },
+  };
+}
+
+function semanticSourceEvidence(sideId, c3Window) {
+  return {
+    name: `${sideId}-semantic-receipt`,
+    correct:
+      c3Window?.sample.counts.correct ??
+      FIXTURE_SCALAR.OPERATIONS_PER_WINDOW,
+    ...(c3Window === null ?
+      {} :
+      {semanticReceiptDigest: c3Window.receipt.semanticReceiptDigest}),
+  };
+}
+
+function liveSourceEvidence(sideId, c3Window, calibrationArtifact) {
+  return {
+    name: `${sideId}-live-engagement`,
+    transport: localText.MANAGED_POSTGRESQL,
+    ...heterogeneousLiveEvidence(c3Window),
+    ...(calibrationArtifact === null ?
+      {} :
+      {
+        amplificationPolicy:
+          localText.SEMANTIC_EVENTS_ABSENT_ZERO_ONLY,
+      }),
+  };
+}
+
+function windowSourceEvidence(sideId, c3Window) {
+  return {
+    name: `${sideId}-window-receipt`,
+    completed: true,
+    ...(c3Window === null ?
+      {} :
+      {capacityWindowReceipt: c3Window.receipt}),
+  };
+}
+
 function sideSourceArtifacts(
   sideId,
   multiplier,
@@ -483,39 +644,18 @@ function sideSourceArtifacts(
   c3Window = null,
   includeProtocol = true,
 ) {
-  const protocolSideId =
-    capacityProtocol?.preregistration.sideIds[sideIndex];
   const capacitySample = createBenchmarkResourceWindowSourceArtifact(
     BENCHMARK_RESOURCE_ARTIFACT_KIND.CAPACITY_SAMPLE,
     {
       ...coordinates,
       sideId,
-      evidence: {
-        name: `${sideId}-capacity-sample`,
-        correctOpsPerSecond:
-          sideId === FIXTURE_RESOURCE_SIDE_IDS[0] ? 1200 : 1000,
-        ...(c3Window === null ?
-          {} :
-          {capacitySampleDigest: c3Window.receipt.capacitySampleDigest}),
-        ...(capacityProtocol === null || !includeProtocol ?
-          {} :
-          {
-            protocol: {
-              version: BENCHMARK_RESOURCE_CAPACITY_SOURCE.VERSION,
-              evidenceClass:
-                BENCHMARK_RESOURCE_CAPACITY_SOURCE.EVIDENCE_CLASS,
-              mappedSideId: sideId,
-              protocolSideId,
-              artifactReceipt: {
-                reportDigest: capacityProtocol.report.reportDigest,
-                preregistrationDigest:
-                  capacityProtocol.preregistration.manifestDigest,
-              },
-              preregistration: capacityProtocol.preregistration,
-              report: capacityProtocol.report,
-            },
-          }),
-      },
+      evidence: capacitySourceEvidence(
+        sideId,
+        capacityProtocol,
+        sideIndex,
+        c3Window,
+        includeProtocol,
+      ),
     },
   );
   const semanticReceipt = createBenchmarkResourceWindowSourceArtifact(
@@ -523,13 +663,7 @@ function sideSourceArtifacts(
     {
       ...coordinates,
       sideId,
-      evidence: {
-        name: `${sideId}-semantic-receipt`,
-        correct: c3Window?.sample.counts.correct ?? 1000,
-        ...(c3Window === null ?
-          {} :
-          {semanticReceiptDigest: c3Window.receipt.semanticReceiptDigest}),
-      },
+      evidence: semanticSourceEvidence(sideId, c3Window),
     },
   );
   const liveEngagement = createBenchmarkResourceWindowSourceArtifact(
@@ -537,16 +671,8 @@ function sideSourceArtifacts(
     {
       ...coordinates,
       sideId,
-      evidence: {
-        name: `${sideId}-live-engagement`,
-        transport: 'managed-postgresql',
-        ...(c3Window === null ?
-          {} :
-          {liveEngagementDigest: c3Window.receipt.liveEngagementDigest}),
-        ...(calibrationArtifact === null ?
-          {} :
-          {amplificationPolicy: 'semantic_events_absent_zero_only'}),
-      },
+      evidence:
+        liveSourceEvidence(sideId, c3Window, calibrationArtifact),
     },
   );
   const windowReceipt = createBenchmarkResourceWindowSourceArtifact(
@@ -554,13 +680,7 @@ function sideSourceArtifacts(
     {
       ...coordinates,
       sideId,
-      evidence: {
-        name: `${sideId}-window-receipt`,
-        completed: true,
-        ...(c3Window === null ?
-          {} :
-          {capacityWindowReceipt: c3Window.receipt}),
-      },
+      evidence: windowSourceEvidence(sideId, c3Window),
     },
   );
   const observationStart = calibrationArtifact ?? source(
@@ -681,13 +801,31 @@ function protocolMeasuredWindowSpecs(capacityProtocol) {
     index += 1) {
     const receipt = capacityProtocol.report.windowReceipts[index];
     if (receipt.phase !== localText.MEASURED) continue;
-    const sideIndex = preregistration.sideIds.indexOf(receipt.sideId);
+    const sideIndex = arrayIndexOf(
+      preregistration.sideIds,
+      receipt.sideId,
+    );
     const loadIndex =
-      preregistration.offeredLoadPerSecond.indexOf(receipt.offeredLoad);
-    const sample = capacityProtocol.report.rawSamples.find(
+      arrayIndexOf(
+        preregistration.offeredLoadPerSecond,
+        receipt.offeredLoad,
+      );
+    const sample = arrayFind(
+      capacityProtocol.report.rawSamples,
       (entry) => entry.sampleDigest === receipt.capacitySampleDigest,
     );
-    if (sideIndex < 0 || loadIndex < 0 || sample === undefined) {
+    const c3Window = arrayFind(
+      capacityProtocol.windowEvidence ?? [],
+      (entry) =>
+        entry.receipt.windowReceiptDigest ===
+          receipt.windowReceiptDigest,
+    );
+    if (
+      sideIndex < 0 ||
+      loadIndex < 0 ||
+      sample === undefined ||
+      c3Window === undefined
+    ) {
       throw new TypeError(localText.C3_COORDINATE_UNRESOLVED);
     }
     specs.push({
@@ -695,12 +833,25 @@ function protocolMeasuredWindowSpecs(capacityProtocol) {
       sideIndex,
       receipt,
       sample,
+      c3Window,
       startedAt: new Date(receipt.startedAt).toISOString(),
       endedAt: new Date(receipt.endedAt).toISOString(),
       loadIndex,
     });
   }
   return specs;
+}
+
+function correctSloEligibleOperations(capacityProtocol, spec) {
+  if (capacityProtocol === null) {
+    return FIXTURE_SCALAR.OPERATIONS_PER_WINDOW;
+  }
+  const passingThroughput =
+    capacityProtocol.report.summary.capacityBySide[spec.receipt.sideId]
+      .perBlock[spec.receipt.blockIndex];
+  return spec.sample.correctThroughputPerSecond === passingThroughput ?
+    spec.sample.counts.correct :
+    0;
 }
 
 export function createBenchmarkResourceEvidenceFixture({
@@ -724,6 +875,7 @@ export function createBenchmarkResourceEvidenceFixture({
   const workloadManifest = source(
     BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
     'fixture-workload',
+    benchmarkCapacityHeterogeneousWorkloadPayload(),
   );
   const alternativeTopology =
     alternativeTopologyFixture(calibrationArtifact);
@@ -863,10 +1015,7 @@ export function createBenchmarkResourceEvidenceFixture({
       capacityProtocol,
       spec.sideIndex,
       coordinates,
-      spec.receipt === null ? null : {
-        receipt: spec.receipt,
-        sample: spec.sample,
-      },
+      spec.receipt === null ? null : spec.c3Window,
       !protocolAttachedBySide[spec.sideIndex],
     );
     protocolAttachedBySide[spec.sideIndex] = true;
@@ -901,8 +1050,7 @@ export function createBenchmarkResourceEvidenceFixture({
         windowSpecs[index - 1].endedAt :
         spec.endedAt,
       correctSloEligibleOperations:
-        spec.sample?.counts.correct ??
-        FIXTURE_SCALAR.OPERATIONS_PER_WINDOW,
+        correctSloEligibleOperations(capacityProtocol, spec),
       components: componentSamples(
         sideId,
         sources.observationStart.digest,
@@ -920,7 +1068,12 @@ export function createBenchmarkResourceEvidenceFixture({
       capacitySamplesBySide[sideIndex],
       capacityProtocol,
     ));
-  const windowCosts = windows.map((window) =>
+  const costEligibleWindows = arrayFilter(
+    windows,
+    (window) =>
+      window.artifact.payload.correctSloEligibleOperations > 0,
+  );
+  const windowCosts = costEligibleWindows.map((window) =>
     computeBenchmarkResourceWindowCost(
       window.artifact.payload,
       inventory.artifact.payload,
@@ -954,26 +1107,40 @@ export function createBenchmarkResourceEvidenceFixture({
     currency: BENCHMARK_RESOURCE_NO_CURRENCY,
   });
   const sideCosts = FIXTURE_RESOURCE_SIDE_IDS.map((sideId) =>
-    aggregateSideCost(windows, windowCosts, sideId));
-  const costEffect = createBenchmarkResourcePairedEffect({
-    effectType: BENCHMARK_RESOURCE_EFFECT.COST,
-    numeratorSideId: FIXTURE_RESOURCE_SIDE_IDS[0],
-    denominatorSideId: FIXTURE_RESOURCE_SIDE_IDS[1],
+    aggregateSideCost(costEligibleWindows, windowCosts, sideId));
+  const aggregateCostValues = {
     numeratorValue: sideCosts[0].value,
     denominatorValue: sideCosts[1].value,
     confidenceInterval: {
       lower: sideCosts[0].value / sideCosts[1].value,
       upper: sideCosts[0].value / sideCosts[1].value,
     },
-    practicalThreshold: 0.05,
     sampleCount: Math.min(
       sideCosts[0].sampleCount,
       sideCosts[1].sampleCount,
     ),
+  };
+  const pairedValues = capacityProtocol === null ?
+    null :
+    pairedCostValues(
+      costEligibleWindows,
+      windowCosts,
+      capacityProtocol,
+    );
+  const costValues = pairedValues ?? aggregateCostValues;
+  const costEffect = createBenchmarkResourcePairedEffect({
+    effectType: BENCHMARK_RESOURCE_EFFECT.COST,
+    numeratorSideId: FIXTURE_RESOURCE_SIDE_IDS[0],
+    denominatorSideId: FIXTURE_RESOURCE_SIDE_IDS[1],
+    numeratorValue: costValues.numeratorValue,
+    denominatorValue: costValues.denominatorValue,
+    confidenceInterval: costValues.confidenceInterval,
+    practicalThreshold: 0.05,
+    sampleCount: costValues.sampleCount,
     sourceDigests: [
       inventory.digest,
       price.digest,
-      ...windows.map((window) => window.digest),
+      ...costWindowSourceDigests(costEligibleWindows),
     ],
     currency: 'USD',
   });

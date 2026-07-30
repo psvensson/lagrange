@@ -70,6 +70,9 @@ import {
   preregistrationInput,
 } from './benchmark-capacity-protocol-test-fixture.js';
 import {
+  createBenchmarkCapacityHeterogeneousEvidenceFixture,
+} from './benchmark-capacity-heterogeneous-evidence-test-fixture.js';
+import {
   FIXTURE_RESOURCE_MATRIX_ID,
   FIXTURE_RESOURCE_PAIR_ID,
   FIXTURE_RESOURCE_RUN_ID,
@@ -84,6 +87,9 @@ const RECEIPT_VALID_UNTIL = '2026-07-27T13:00:00.000Z';
 const CERTIFICATION_QUEST = 'scale-integration-profile-certification';
 const CAPACITY_WINDOW_EPOCH =
   Date.parse('2026-07-27T10:00:00.000Z');
+const COST_NEUTRAL_CANDIDATE_END_MULTIPLIER = 6.745928338762216;
+const calibrationFixtureCache = new Map();
+const capacityProtocolFixtureCache = new Map();
 const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const reflectDefineProperty = Reflect.defineProperty;
 const observationScalar = Object.freeze({
@@ -167,6 +173,14 @@ async function liveCalibrationFixture({
   startedAt = Date.parse('2026-07-27T11:59:00.000Z'),
   endedAt = Date.parse('2026-07-27T12:00:00.000Z'),
 } = {}) {
+  const cacheKey = JSON.stringify({
+    candidateEndMultiplier,
+    candidateProvisionedMultiplier,
+    startedAt,
+    endedAt,
+  });
+  const cached = calibrationFixtureCache.get(cacheKey);
+  if (cached !== undefined) return cached;
   const networkId = 'claim-projection-fixture-network';
   const componentCount = FIXTURE_RESOURCE_SIDE_IDS.length * 2;
   let calls = 0;
@@ -207,10 +221,12 @@ async function liveCalibrationFixture({
   await captureBenchmarkResourceLiveObservation(session);
   cleaned = true;
   const finalized = await finalizeBenchmarkResourceLiveObservation(session);
-  return writeExternallyObservedBenchmarkResourceCalibration(
+  const artifact = writeExternallyObservedBenchmarkResourceCalibration(
     finalized.receipt,
     finalized.authorization,
   );
+  calibrationFixtureCache.set(cacheKey, artifact);
+  return artifact;
 }
 
 function normalizeCapacityReportWindowTimes(preregistration, input) {
@@ -246,6 +262,50 @@ function normalizeCapacityReportWindowTimes(preregistration, input) {
   };
 }
 
+async function capacityProtocolFixture(base) {
+  const cellId = base.matrix.artifact.payload.cells[0].cellId;
+  const executionIdentity = {
+    matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+    cellId,
+    cellManifestDigest: digestBenchmarkSemanticData({
+      matrixId: FIXTURE_RESOURCE_MATRIX_ID,
+      cellId,
+    }),
+    profileIdentity:
+      base.profileEnvelope.artifact.payload.profileIdentity,
+    pairIdentity: digestBenchmarkSemanticData({
+      pairId: FIXTURE_RESOURCE_PAIR_ID,
+    }),
+    runId: FIXTURE_RESOURCE_RUN_ID,
+    liveEnvironmentContractDigest:
+      base.matrix.artifact.payload.alternativeTopologyDigest,
+  };
+  const cacheKey = digestBenchmarkSemanticData(executionIdentity);
+  const cached = capacityProtocolFixtureCache.get(cacheKey);
+  if (cached !== undefined) return cached;
+  const preregistration = sealBenchmarkCapacityPreregistration(
+    preregistrationInput({executionIdentity}),
+  );
+  const raw = await artifactFixtureReport(preregistration);
+  const heterogeneous =
+    createBenchmarkCapacityHeterogeneousEvidenceFixture({
+      preregistration,
+      report: normalizeCapacityReportWindowTimes(
+        preregistration,
+        raw.report,
+      ),
+      lagrangeSideId: FIXTURE_RESOURCE_SIDE_IDS[0],
+    });
+  const fixture = {
+    preregistration,
+    ...raw,
+    report: heterogeneous.report,
+    windowEvidence: heterogeneous.windowEvidence,
+  };
+  capacityProtocolFixtureCache.set(cacheKey, fixture);
+  return fixture;
+}
+
 async function claimEligibleEvidenceFixture(
   options = {},
   calibrationOptions = {},
@@ -256,38 +316,9 @@ async function claimEligibleEvidenceFixture(
     ...options,
     calibrationArtifact,
   });
-  const cellId = base.matrix.artifact.payload.cells[0].cellId;
-  const capacityInput = preregistrationInput({
-    executionIdentity: {
-      matrixId: FIXTURE_RESOURCE_MATRIX_ID,
-      cellId,
-      cellManifestDigest: digestBenchmarkSemanticData({
-        matrixId: FIXTURE_RESOURCE_MATRIX_ID,
-        cellId,
-      }),
-      profileIdentity:
-        base.profileEnvelope.artifact.payload.profileIdentity,
-      pairIdentity: digestBenchmarkSemanticData({
-        pairId: FIXTURE_RESOURCE_PAIR_ID,
-      }),
-      runId: FIXTURE_RESOURCE_RUN_ID,
-      liveEnvironmentContractDigest:
-        base.matrix.artifact.payload.alternativeTopologyDigest,
-    },
-  });
-  const capacityPreregistration =
-    sealBenchmarkCapacityPreregistration(capacityInput);
-  const rawReportAndEngagements =
-    await artifactFixtureReport(capacityPreregistration);
-  const reportAndEngagements = {
-    ...rawReportAndEngagements,
-    report: normalizeCapacityReportWindowTimes(
-      capacityPreregistration,
-      rawReportAndEngagements.report,
-    ),
-  };
+  const capacityProtocol = await capacityProtocolFixture(base);
   const measuredReceipts =
-    reportAndEngagements.report.windowReceipts.filter(
+    capacityProtocol.report.windowReceipts.filter(
       (receipt) => receipt.phase === 'measured',
     );
   const calibrationArtifacts = [];
@@ -302,10 +333,7 @@ async function claimEligibleEvidenceFixture(
     ...options,
     calibrationArtifact: calibrationArtifacts[0],
     calibrationArtifacts,
-    capacityProtocol: {
-      preregistration: capacityPreregistration,
-      ...reportAndEngagements,
-    },
+    capacityProtocol,
   });
 }
 
@@ -788,11 +816,13 @@ test('effect classification retains neutral, inconclusive, insignificant, ' +
 test('projected cost retains neutral and practically insignificant outcomes',
   async (t) => {
     const neutralFixture = await claimEligibleEvidenceFixture({}, {
-      candidateEndMultiplier: 2,
+      candidateEndMultiplier:
+        COST_NEUTRAL_CANDIDATE_END_MULTIPLIER,
       candidateProvisionedMultiplier: 1,
     });
     const insignificantFixture = await claimEligibleEvidenceFixture({}, {
-      candidateEndMultiplier: 2.05,
+      candidateEndMultiplier:
+        COST_NEUTRAL_CANDIDATE_END_MULTIPLIER + 0.05,
       candidateProvisionedMultiplier: 1,
     });
     const neutral = projectComparativeEfficiencyClaims(projectionInput({
@@ -802,7 +832,6 @@ test('projected cost retains neutral and practically insignificant outcomes',
       projectComparativeEfficiencyClaims(projectionInput({
         measuredEvidence: [measuredInput(insignificantFixture)],
       })).rows.find((row) => row.metric === COMPARATIVE_CLAIM_METRIC.COST);
-
     t.equal(neutral.outcome, COMPARATIVE_CLAIM_EFFECT_OUTCOME.NEUTRAL);
     t.equal(
       neutral.evidenceClass,

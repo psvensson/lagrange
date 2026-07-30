@@ -48,10 +48,12 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 16
+## Open quests — 18
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
+| ci-red-main-push-recovery | product | 0 | 0 | 2026-07-30 | — |
+| ci-red-main-push-recovery-v2 | product | 1 | 0 | 2026-07-30 | — |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 ⚠ stale | — |
 | github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 ⚠ stale | — |

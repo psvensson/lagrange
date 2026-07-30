@@ -1,3 +1,4 @@
+import {types} from 'node:util';
 import {
   appendOwnArrayValue,
   digestBenchmarkSemanticData,
@@ -27,6 +28,7 @@ const mathFloor = Math.floor;
 const mathImul = Math.imul;
 const mathMax = Math.max;
 const mathMin = Math.min;
+const isProxy = types.isProxy.bind(types);
 const numberIsFinite = Number.isFinite;
 const objectKeys = Object.keys;
 const arraySort = Function.call.bind(Array.prototype.sort);
@@ -168,11 +170,13 @@ function bootstrapMedianInterval(
 }
 
 function pairedRatio(pairs) {
+  const pairCount = pairs.length;
   let numerator = 0;
   let denominator = 0;
-  for (let index = 0; index < pairs.length; index += 1) {
+  for (let index = 0; index < pairCount; index += 1) {
     const pair = pairs[index];
     if (
+      isProxy(pair) ||
       !isDenseDataArray(pair) ||
       pair.length !== 2 ||
       !isNonNegativeSafeNumber(pair[0]) ||
@@ -190,7 +194,11 @@ function pairedRatio(pairs) {
       fail(localText.UNSAFE_PAIRED_RATIO);
     }
   }
-  const ratio = denominator > 0 ? numerator / denominator : 0;
+  const averageNumerator = numerator / pairCount;
+  const averageDenominator = denominator / pairCount;
+  const ratio = denominator > 0 ?
+    averageNumerator / averageDenominator :
+    0;
   if (!isNonNegativeSafeNumber(ratio)) {
     fail(localText.UNSAFE_PAIRED_RATIO);
   }
@@ -204,6 +212,7 @@ export function bootstrapBenchmarkPairedRatioInterval(
   seed,
 ) {
   if (
+    isProxy(pairs) ||
     !isDenseDataArray(pairs) ||
     pairs.length === 0 ||
     !isNonNegativeSafeNumber(confidenceLevel) ||

@@ -1,0 +1,55 @@
+{
+  "id": "ci-red-main-push-recovery-v3",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The exact six-file claim-projection candidate completes three consecutive repository post-push acceptance gates with zero failing commands, so origin/main can be fast-forwarded without bypassing any test or integrity check.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "AGENTS.md",
+    "closesCL": [],
+    "parentQuest": "ci-red-main-push-recovery-v2",
+    "planDoc": null,
+    "draftedAtCommit": "779b43041f150fcfcf71a7b640f08b2507eeef16"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "ci-red-main-push-recovery-v2",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "ci-red-main-push-recovery-v3-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "ci-red-main-push-recovery-v2",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "sealed-product-pathscope",
+      "statement": "The product attempt contains only scripts/checks/run-comparative-efficiency-claim-projection-live.js, test/distributed/harness/benchmark-capacity-statistics.js, test/distributed/harness/__tests__/benchmark-capacity-heterogeneous-evidence-test-fixture.js, test/distributed/harness/__tests__/benchmark-resource-capacity-protocol-evidence.test.js, test/distributed/harness/__tests__/benchmark-resource-evidence-test-fixture.js, and test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js. Generated Solver artifacts and the mechanical global owner-debt inventory refresh land separately; package.json and package-lock.json remain unrelated user work."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "adversarial-js-intrinsics",
+    "formation-circularity",
+    "harness-fidelity",
+    "sweep-timer",
+    "transport-delivery"
+  ]
+}

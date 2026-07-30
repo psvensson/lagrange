@@ -44,7 +44,6 @@ import {
   assertBenchmarkCapacityHeterogeneousOperationEvidence,
   createBenchmarkCapacityAdapterIdentity,
   createBenchmarkCapacityAdapterOwnerReceipt,
-  createBenchmarkCapacityHeadroomReceipt,
   createBenchmarkCapacityHeterogeneousOperationReceipt,
 } from '../benchmark-capacity-heterogeneous-observation.js';
 import {
@@ -68,6 +67,10 @@ import {
   preregistrationInput,
   semanticReceiptForCounts,
 } from './benchmark-capacity-protocol-test-fixture.js';
+import {
+  benchmarkCapacityHeterogeneousWorkloadPayload,
+  createBenchmarkCapacityHeterogeneousEvidenceFixture,
+} from './benchmark-capacity-heterogeneous-evidence-test-fixture.js';
 
 const MATRIX_ID = 'heterogeneous-resource-adapter-fixture-matrix-v1';
 const PAIR_ID = 'lagrange-postgresql-movielens-fixture-pair-v1';
@@ -93,7 +96,6 @@ const COMPONENTS = [
     storagePath: '/fixture/postgresql',
   },
 ];
-const POSTGRESQL_QUERY_SQL = 'SELECT grouped_reduce FROM ratings';
 
 test('paired cost bootstrap retains observed between-block uncertainty', () => {
   const interval = bootstrapBenchmarkPairedRatioInterval([
@@ -106,25 +108,59 @@ test('paired cost bootstrap retains observed between-block uncertainty', () => {
   assert.ok(interval.estimate <= interval.upper);
 });
 
-function fixtureDatasetDigest() {
-  return digestBenchmarkSemanticData({dataset: 'fixture'});
-}
+test('paired cost bootstrap uses the effect owner averaging arithmetic', () => {
+  const pairs = [
+    [0.2378, 0.14570000000000002],
+    [0.2378, 0.14570000000000002],
+    [0.2378, 0.14570000000000002],
+  ];
+  const interval =
+    bootstrapBenchmarkPairedRatioInterval(
+      pairs,
+      0.95,
+      2_000,
+      20_260_728,
+    );
+  const expected =
+    (pairs[0][0] + pairs[1][0] + pairs[2][0]) / pairs.length /
+    ((pairs[0][1] + pairs[1][1] + pairs[2][1]) / pairs.length);
+  assert.equal(interval.estimate, expected);
+  assert.ok(interval.lower <= expected);
+  assert.ok(expected <= interval.upper);
+});
 
-function fixtureOperationManifest() {
-  return {
-    version: 'movielens-capacity-operation-manifest-v2',
-    datasetDigest: fixtureDatasetDigest(),
-    lagrangePublicRequest: {
-      method: 'POST',
-      path: '/benchmarks/movielens/grouped-reduce',
+test('paired cost bootstrap rejects Proxy-backed samples', () => {
+  const pair = [2, 1];
+  let lengthReads = 0;
+  const outerProxy = new Proxy([pair], {
+    get(target, property, receiver) {
+      if (property === 'length') {
+        lengthReads += 1;
+        return lengthReads === 1 ? 1 : 2;
+      }
+      return Reflect.get(target, property, receiver);
     },
-    postgresqlQuerySqlDigest:
-      digestBenchmarkSemanticData(POSTGRESQL_QUERY_SQL),
-    result: 'confidence_adjusted_top_ten',
-    durability:
-      'input_preserved_and_result_visible_after_completion',
-  };
-}
+  });
+  assert.throws(
+    () => bootstrapBenchmarkPairedRatioInterval(
+      outerProxy,
+      0.95,
+      1,
+      1,
+    ),
+    /paired ratio bootstrap contract required/u,
+  );
+  assert.equal(lengthReads, 0);
+  assert.throws(
+    () => bootstrapBenchmarkPairedRatioInterval(
+      [new Proxy(pair, {})],
+      0.95,
+      1,
+      1,
+    ),
+    /unsafe paired ratio sample at 0/u,
+  );
+});
 
 function topologyPayload() {
   return {
@@ -154,202 +190,6 @@ function topologyPayload() {
         physicalResourceId: 'postgresql-container',
       },
     ],
-  };
-}
-
-function workloadPayload() {
-  return {
-    version: 'movielens-capacity-resource-fixture-v1',
-    dataset: 'movielens-10k',
-    operation: 'confidence_adjusted_top_ten',
-    operationManifestDigest:
-      digestBenchmarkSemanticData(fixtureOperationManifest()),
-    semanticOracleDigest: digestBenchmarkSemanticData(fixtureRanking()),
-  };
-}
-
-function fixtureRanking() {
-  return Array.from({length: 10}, (_, index) => ({
-    movieId: index + 1,
-    rank: index + 1,
-    scoreMicros: Math.trunc((5 - index / 10) * 1_000_000),
-  }));
-}
-
-function fixtureTopMovies() {
-  return fixtureRanking().map((row) => ({
-    avgRating: row.scoreMicros / 1_000_000,
-    movieId: row.movieId,
-    ratingCount: 100 - row.rank,
-    score: row.scoreMicros / 1_000_000,
-  }));
-}
-
-function runtimeOwnerEvidence(sideId, executableDigest) {
-  if (sideId === SIDE_IDS[0]) {
-    return {
-      version: 'movielens-lagrange-runtime-owner-evidence-v2',
-      bindingName: 'movielens-public-grouped-reduce',
-      bindingVersionId: 'binding-version-v1',
-      datasetDigest: fixtureDatasetDigest(),
-      executableDigest,
-      routeServiceId: 'service-v1',
-      runtimeKind: 'wasm_component',
-      semanticOracleExpected: fixtureRanking(),
-      operationManifest: fixtureOperationManifest(),
-    };
-  }
-  return {
-    version: 'movielens-postgresql-runtime-owner-evidence-v2',
-    imageId: executableDigest,
-    imageRepoDigests: ['postgres@sha256:fixture'],
-    inputDigest: fixtureDatasetDigest(),
-    postgresVersion: 'PostgreSQL 16.10',
-    postgresVersionSql: 'SELECT version()',
-    queryPlan: [{
-      'QUERY PLAN': [{Plan: {'Node Type': 'Aggregate'}}],
-    }],
-    querySql: POSTGRESQL_QUERY_SQL,
-    totalRows: 10_000,
-    operationManifest: fixtureOperationManifest(),
-  };
-}
-
-function fixtureLagrangeOperation(
-  operationId,
-  operationIndex,
-  owner,
-  semanticOracleDigest,
-) {
-  const tenantId = 'fixture';
-  const body = {
-    datasetDigest: owner.datasetDigest,
-    resultKeyOffset: operationIndex * 10,
-    workloadVersion: 'movielens-public-request-workload-v1',
-  };
-  const normalizedRequest = {
-    body,
-    headers: {'accept': '*/*', 'content-type': 'application/json'},
-    method: 'POST',
-    path: '/benchmarks/movielens/grouped-reduce',
-    query: {},
-  };
-  const invocationIdentity =
-    `request-invocation-${digestBenchmarkSemanticData({
-      requestKey: operationId,
-      tenantId,
-    }).slice(7)}`;
-  const requestDigest = digestBenchmarkSemanticData(normalizedRequest);
-  const intentDigest = digestBenchmarkSemanticData({
-    bindingVersionId: owner.bindingVersionId,
-    method: normalizedRequest.method,
-    path: normalizedRequest.path,
-    requestDigest,
-    tenantId,
-  });
-  const journalOperationId =
-    `request-cell-operation-${digestBenchmarkSemanticData([
-      tenantId,
-      invocationIdentity,
-    ]).slice(7)}`;
-  const journalCommand =
-    `invoke:${owner.routeServiceId}:${intentDigest}`;
-  const invocationJournal = {
-    command: journalCommand,
-    created_at: '2026-07-28T00:00:00.000Z',
-    error: '{}',
-    idempotency_key: invocationIdentity,
-    operation_id: journalOperationId,
-    result: JSON.stringify(JSON.stringify({
-      body: 'MovieLens grouped reduce completed',
-      headers: [['x-lagrange-cell', owner.bindingName]],
-      status: 200,
-    })),
-    state: 'completed',
-    tenant_id: tenantId,
-    updated_at: '2026-07-28T00:00:00.001Z',
-  };
-  const ranking = fixtureRanking();
-  const durableResult = {
-    movieRows: ranking.map((row) => ({
-      key: row.rank,
-      value: row.movieId,
-    })),
-    scoreRows: ranking.map((row) => ({
-      key: row.rank,
-      value: row.scoreMicros,
-    })),
-  };
-  return {
-    executableDigest: owner.executableDigest,
-    requestWitness: {
-      bindingVersionId: owner.bindingVersionId,
-      idempotencyKey: operationId,
-      intentDigest,
-      invocationIdentity,
-      normalizedRequest,
-      requestDigest,
-      routeServiceId: owner.routeServiceId,
-      tenantId,
-    },
-    invocationJournal,
-    httpStatus: 200,
-    durableResult,
-    semanticOracleReceipt: {
-      observed: ranking,
-      passed: true,
-      version: 'confidence-adjusted-top-ten-v1',
-    },
-    semanticOracleDigest,
-    durabilityPassed: true,
-    durabilityDigest: digestBenchmarkSemanticData({
-      datasetDigest: owner.datasetDigest,
-      durableResult,
-      invocationJournal,
-    }),
-    semanticObservation: {
-      operationId: operationIndex,
-      operation: 'INSERT',
-      outcome: 'command_acknowledged',
-    },
-  };
-}
-
-function fixturePostgresOperation(
-  operationId,
-  operationIndex,
-  owner,
-  semanticOracleDigest,
-) {
-  const topMovies = fixtureTopMovies();
-  const durableResultJson = JSON.stringify(topMovies);
-  return {
-    requestId: operationId,
-    backendPid: 123,
-    imageId: owner.imageId,
-    imageRepoDigestsDigest:
-      digestBenchmarkSemanticData(owner.imageRepoDigests),
-    inputDigest: owner.inputDigest,
-    postgresVersion: owner.postgresVersion,
-    queryPlanDigest: digestBenchmarkSemanticData(owner.queryPlan),
-    querySqlDigest: digestBenchmarkSemanticData(owner.querySql),
-    returnedAggregateRows: topMovies.length,
-    durableInputRows: owner.totalRows,
-    durableResultJson,
-    topMovies,
-    durabilityDigest: digestBenchmarkSemanticData({
-      durableInputRows: owner.totalRows,
-      durableResultJson,
-      requestId: operationId,
-      topMovies,
-    }),
-    durabilityPassed: true,
-    semanticObservation: {
-      operationId: operationIndex,
-      operation: 'INSERT',
-      outcome: 'command_acknowledged',
-    },
-    semanticOracleDigest,
   };
 }
 
@@ -573,23 +413,6 @@ function resignPostgresOperationEvidence(
   });
 }
 
-function fixtureAdapterIdentity(receipt, executableDigest, runtimeOwner) {
-  const lagrange = receipt.sideId === SIDE_IDS[0];
-  return createBenchmarkCapacityAdapterIdentity({
-    adapterId: `movielens-${receipt.sideId}`,
-    adapterVersion: 'fixture-v1',
-    sideId: receipt.sideId,
-    runtimeKind: lagrange ? 'wasm_component' : 'postgresql_16',
-    invocationBoundary: lagrange ?
-      'authenticated_http_request_binding' :
-      'persistent_pg_pool_sql_query',
-    operationManifestDigest:
-      digestBenchmarkSemanticData(runtimeOwner.operationManifest),
-    executableDigest,
-    ownerEvidenceDigest: digestBenchmarkSemanticData(runtimeOwner),
-  });
-}
-
 function assertPostgresOwnerTamperingRejected(postgresReplay) {
   const ownerMutations = {
     version: (owner) => {
@@ -792,7 +615,7 @@ function assertEncodedOperationEvidenceTamperingRejected(
 test('C4 assembler admits a repeated heterogeneous C3 measuring pair', async () => {
   const workload = createBenchmarkResourceSourceArtifact(
     BENCHMARK_RESOURCE_ARTIFACT_KIND.WORKLOAD_MANIFEST,
-    workloadPayload(),
+    benchmarkCapacityHeterogeneousWorkloadPayload(),
   );
   const topology = createBenchmarkResourceSourceArtifact(
     BENCHMARK_RESOURCE_ARTIFACT_KIND.ALTERNATIVE_TOPOLOGY,
@@ -887,165 +710,30 @@ test('C4 assembler admits a repeated heterogeneous C3 measuring pair', async () 
       capacityPreregistration,
       raw.report,
     );
-  const capacityReport = normalizedReport(
-    capacityPreregistration,
-    achievedBelowOffered,
-  );
-  const windowEvidence = [];
-  let postgresReplay = null;
-  const semanticOracleDigest =
-    digestBenchmarkSemanticData(fixtureRanking());
-  for (let index = 0;
-    index < capacityReport.windowReceipts.length;
-    index += 1) {
-    const receipt = capacityReport.windowReceipts[index];
-    if (receipt.phase !== 'measured') continue;
-    const sample = capacityReport.rawSamples.find(
-      (candidate) =>
-        candidate.sampleDigest === receipt.capacitySampleDigest,
-    );
-    const executableDigest =
-      digestBenchmarkSemanticData({runtime: receipt.sideId});
-    const runtimeOwner =
-      runtimeOwnerEvidence(receipt.sideId, executableDigest);
-    const adapterIdentity =
-      fixtureAdapterIdentity(receipt, executableDigest, runtimeOwner);
-    const operationIds = [];
-    const operationEvidence = [];
-    for (let operationIndex = 0;
-      operationIndex < sample.counts.dispatched;
-      operationIndex += 1) {
-      const operationId =
-        `${receipt.sideId}-${receipt.blockIndex}-` +
-        `${receipt.offeredLoad}-${operationIndex}`;
-      if (operationIndex < sample.counts.correct) {
-        operationIds.push(operationId);
-        operationEvidence.push({
-          status: 'correct',
-          operationIndex,
-          operationId,
-          evidence:
-            receipt.sideId === SIDE_IDS[0] ?
-              fixtureLagrangeOperation(
-                operationId,
-                operationIndex,
-                runtimeOwner,
-                semanticOracleDigest,
-              ) :
-              fixturePostgresOperation(
-                operationId,
-                operationIndex,
-                runtimeOwner,
-                semanticOracleDigest,
-              ),
-        });
-      } else {
-        operationEvidence.push({
-          status: 'errored',
-          operationIndex,
-          operationId,
-          failure: {name: 'Error', message: 'fixture operation failed'},
-        });
-      }
-    }
-    const coordinate = {
-      blockIndex: receipt.blockIndex,
-      blockedOrderIndex: receipt.blockedOrderIndex,
-      sideId: receipt.sideId,
-      offeredLoadPerSecond: receipt.offeredLoad,
-      phase: receipt.phase,
-    };
-    const ownerReceipt = createBenchmarkCapacityAdapterOwnerReceipt({
-      adapterIdentity,
-      operationIds,
-      evidenceDigest: digestBenchmarkSemanticData({
-        adapterIdentityDigest: adapterIdentity.adapterIdentityDigest,
-        coordinate,
-        semanticOracleDigest,
-        operations: operationEvidence,
-      }),
-      semanticOracleDigest,
-    });
-    const engagement =
-      createBenchmarkCapacityHeterogeneousOperationReceipt({
-        preregistration: capacityPreregistration,
-        sample,
-        adapterIdentity,
-        ownerReceipt,
-        window: {
-          blockedOrderIndex: receipt.blockedOrderIndex,
-          startedAt: receipt.startedAt,
-          endedAt: receipt.endedAt,
-        },
-        headroom: createBenchmarkCapacityHeadroomReceipt({
-          minimumRequiredRatio: 0.1,
-          observerCpu: {capacity: 100, observedPeak: 5},
-          hostCpu: {capacity: 16, observedPeak: 4},
-          hostMemory: {capacity: 64_000, observedPeak: 16_000},
-          sharedNetwork: {capacity: 10_000, observedPeak: 2_000},
-          sharedStorage: {capacity: 10_000, observedPeak: 1_000},
-        }, sample),
-      });
-    assert.doesNotThrow(
-      () => assertBenchmarkCapacityHeterogeneousOperationEvidence(
-        engagement,
-        operationEvidence,
-        sample.semanticReceipt,
-        runtimeOwner,
+  const heterogeneousFixture =
+    createBenchmarkCapacityHeterogeneousEvidenceFixture({
+      preregistration: capacityPreregistration,
+      report: normalizedReport(
+        capacityPreregistration,
+        achievedBelowOffered,
       ),
-      `${receipt.sideId} block ${receipt.blockIndex} operation evidence`,
-    );
-    const rawEvidenceBytes = Buffer.byteLength(JSON.stringify({
-      heterogeneousOperationReceipt: engagement,
-      operationEvidence,
-      runtimeOwnerEvidence: runtimeOwner,
-    }));
-    assert.ok(
-      rawEvidenceBytes < BENCHMARK_RESOURCE_LIMIT.ARTIFACT_BYTES,
-      `${receipt.sideId} raw evidence is ${rawEvidenceBytes} bytes`,
-    );
-    if (receipt.sideId === SIDE_IDS[1] && postgresReplay === null) {
-      postgresReplay = {
-        preregistration: capacityPreregistration,
-        sample,
-        engagement,
-        operationEvidence,
-        runtimeOwner,
-      };
-    }
-    const boundReceipt = createBenchmarkCapacityWindowReceipt({
-      blockIndex: receipt.blockIndex,
-      blockedOrderIndex: receipt.blockedOrderIndex,
-      sideId: receipt.sideId,
-      phase: receipt.phase,
-      offeredLoad: receipt.offeredLoad,
-      startedAt: receipt.startedAt,
-      endedAt: receipt.endedAt,
-      capacitySampleDigest: receipt.capacitySampleDigest,
-      semanticReceiptDigest: receipt.semanticReceiptDigest,
-      liveEngagementDigest: engagement.receiptDigest,
-      resourceWindowDigest: null,
-    }, sample, capacityPreregistration);
-    capacityReport.windowReceipts[index] = boundReceipt;
+      lagrangeSideId: SIDE_IDS[0],
+    });
+  const capacityReport = heterogeneousFixture.report;
+  const postgresReplay = heterogeneousFixture.postgresqlReplay;
+  const windowEvidence = [];
+  for (let index = 0;
+    index < heterogeneousFixture.windowEvidence.length;
+    index += 1) {
+    const c3 = heterogeneousFixture.windowEvidence[index];
     windowEvidence.push({
-      c3: {
-        receipt: boundReceipt,
-        sample,
-        engagement,
-        adapterEvidence: {
-          operationEvidence,
-          runtimeOwnerEvidence: runtimeOwner,
-        },
-      },
+      c3,
       calibration: await calibration(
-        boundReceipt.startedAt,
-        boundReceipt.endedAt,
+        c3.receipt.startedAt,
+        c3.receipt.endedAt,
       ),
     });
   }
-  delete capacityReport.reportDigest;
-  capacityReport.reportDigest =
-    digestBenchmarkSemanticData(capacityReport);
   const resourcePreregistration = {
     version: 'movielens-resource-preregistration-fixture-v1',
     sideIds: SIDE_IDS,
@@ -1080,7 +768,7 @@ test('C4 assembler admits a repeated heterogeneous C3 measuring pair', async () 
       sourceRevision: REVISION,
       producedAt: '2026-07-28T12:00:00.000Z',
       validUntil: '2026-07-29T12:00:00.000Z',
-      workloadManifest: workloadPayload(),
+      workloadManifest: benchmarkCapacityHeterogeneousWorkloadPayload(),
       alternativeTopology: topologyPayload(),
       resourcePreregistration,
       profileEnvelope,

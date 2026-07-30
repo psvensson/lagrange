@@ -63,6 +63,8 @@ const SOURCE_PATHS = Object.freeze([
   'scripts/checks/run-comparative-efficiency-claim-projection-live.js',
   'src/diagnostics/comparative-efficiency-opportunity-calculator.js',
   'test/distributed/harness/__tests__/' +
+    'benchmark-capacity-heterogeneous-evidence-test-fixture.js',
+  'test/distributed/harness/__tests__/' +
     'benchmark-resource-evidence-test-fixture.js',
   'test/distributed/harness/__tests__/' +
     'comparative-efficiency-claim-projection.test.js',
