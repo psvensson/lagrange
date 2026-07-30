@@ -150,6 +150,11 @@ const ENV_MAPPINGS = {
   // covered index). LAGRANGE_-prefixed so the distributed harness forwards it
   // into node containers for the live rebuild certification.
   LAGRANGE_RAFT_SNAPSHOT_THRESHOLD: CONFIG_KEY.RAFT_SNAPSHOT_THRESHOLD,
+  // Per-message transport ACK timeout. LAGRANGE_-prefixed so the distributed
+  // harness forwards it into node containers; multi-host (cross-VM) runs raise
+  // it above the local-bridge 5s default so WAN latency + a saturated seed
+  // does not trigger spurious ACK-timeout connection quarantines (CL-007).
+  LAGRANGE_TRANSPORT_MESSAGE_TIMEOUT_MS: 'transport.messageTimeoutMs',
   REBALANCER_PERIODIC_CHECK_INTERVAL_MS: CONFIG_KEY.REBALANCER_PERIODIC_CHECK_INTERVAL_MS,
   REBALANCER_MAX_CONCURRENT_MOVES: CONFIG_KEY.REBALANCER_MAX_CONCURRENT_MOVES,
   REBALANCER_SYSTEM_PARTITION_START_DELAY_MS:

@@ -29,6 +29,12 @@ const ADMIN_WS_HOST_ENV_KEY = 'ADMIN_WS_HOST';
 const REST_API_PORT_ENV_KEY = 'REST_API_PORT';
 const TRANSPORT_WS_PORT_ENV_KEY = 'TRANSPORT_WS_PORT';
 const ADMIN_WS_PORT_ENV_KEY = 'ADMIN_WS_PORT';
+const TRANSPORT_MESSAGE_TIMEOUT_ENV_KEY =
+  'LAGRANGE_TRANSPORT_MESSAGE_TIMEOUT_MS';
+// Transport per-message ACK timeout for host-network (cross-VM) runs. The
+// local-bridge default is 5s; WAN RTT plus a formation-saturated seed needs
+// much more headroom or peers spuriously quarantine the connection (CL-007).
+const HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS = 30000;
 // Per-node port stride in host-network mode so co-located containers on one
 // host NIC do not collide. Ports stay within the GCP firewall's 8080-9090
 // allowance for realistic cluster sizes.
@@ -436,6 +442,12 @@ class ClusterLifecycleBase {
         this._nodeTransportPort(nodeIndex));
       env[ADMIN_WS_PORT_ENV_KEY] = String(this._nodeAdminPort(nodeIndex));
       env[CONTAINER_ENV_KEYS.NODE_ADDRESS] = advertiseHost + ':' + restPort;
+      // Cross-VM transport ACKs face WAN latency plus a seed saturated during
+      // cluster formation; the local-bridge 5s message timeout produces
+      // spurious ACK-timeout connection quarantines that prevent nodes from
+      // publishing ACTIVE (see CL-007). Raise it for host-network runs.
+      env[TRANSPORT_MESSAGE_TIMEOUT_ENV_KEY] =
+        String(HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS);
     } else {
       env[CONTAINER_ENV_KEYS.NODE_ADDRESS] = containerName + ':' + PORTS.REST;
     }
