@@ -134,10 +134,12 @@ LAGRANGE_PUSH_ON_RED while a fix is in flight.
   `scripts/solve/red-main-exemption.js` records a red run's exact headSha
   under the shared `lagrange-sessions/` dir and the guard exempts only while
   that head is current.
-- 2026-07-30 — Items 3-5 quests CANNOT be sealed as-is. Their code was
-  committed at authoring time (9b2a111c, c5ee327e); the seal flow has no
-  no-change attempt path, the verifier fingerprint is `git diff <base> --
-  <paths>` recomputed live from the working tree (empty at HEAD), and every
-  corpus precedent sealed with its change still uncommitted. A hand-written
-  retroactive diff would be fabrication. Resolution: the
-  `solver-measurement-only-attempt` quest (measurement-only `commit:` refs).
+- 2026-07-30 — Items 3-5 quests could not be sealed as-is: their code was
+  committed at authoring time (9b2a111c, c5ee327e), the seal flow had no
+  no-change attempt path, and the live-tree verifier fingerprint is empty at
+  HEAD. RESOLVED by `solver-measurement-only-attempt`: a measurement-only
+  `commit:<base>:<head>` changeRef (committed tree-to-tree delta, reproducible
+  verifier fingerprint, fail-closed on reversed/mixed/multi-range, record+
+  checkpoint cleanliness gates). All three items 3-5 quests sealed through it
+  and landed (0f9f782b, 2b7782b0, 49569890); the feature landed at a40b05d2.
+  Every code item is landed; item 2 (integration cadence) is process-only.
