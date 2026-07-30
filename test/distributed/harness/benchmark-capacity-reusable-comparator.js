@@ -698,10 +698,3 @@ export function revalidateBenchmarkCapacityReusableComparator({
     reasons: objectFreeze(decisionFindings),
   });
 }
-
-export const BENCHMARK_CAPACITY_REUSABLE_COMPARATOR = objectFreeze({
-  VERSION,
-  CLAIM_ELIGIBLE,
-  REVALIDATION_REUSABLE,
-  REVALIDATION_CAPTURE_REQUIRED,
-});

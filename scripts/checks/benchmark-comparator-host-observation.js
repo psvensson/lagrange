@@ -48,7 +48,7 @@ function networkCounter(value) {
   return counter;
 }
 
-function parseProcNetworkBytes(text) {
+export function parseProcNetworkBytes(text) {
   let total = 0;
   const lines = arraySplit(text, localText.NEWLINE);
   for (let lineIndex = 2; lineIndex < lines.length; lineIndex += 1) {

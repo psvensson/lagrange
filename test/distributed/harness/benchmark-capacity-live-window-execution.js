@@ -42,7 +42,6 @@ const POSTGRES_RUNTIME = 'postgresql_16';
 // Sentinel for a window phase the preregistration does not configure; both
 // drivers and their report consumers compare against this exact value.
 const NOT_CONFIGURED = 'not_configured';
-export {NOT_CONFIGURED as BENCHMARK_CAPACITY_WINDOW_NOT_CONFIGURED};
 
 const SEMANTIC_CONTRACT_ABSENT = 'semantic contract missing for side';
 const delay = (durationMs) =>
@@ -55,7 +54,7 @@ function fail(reason) {
   );
 }
 
-export function benchmarkCapacitySemanticDialectForSide(
+function benchmarkCapacitySemanticDialectForSide(
   preregistration,
   sideId,
 ) {
@@ -80,7 +79,7 @@ async function coverWallWindow(startedAt, sample) {
   return endedAt;
 }
 
-export async function executeBenchmarkCapacityLiveWindow({
+async function executeBenchmarkCapacityLiveWindow({
   adapter,
   preregistration,
   context,

@@ -132,10 +132,3 @@ export function createBenchmarkCapacityIndependentComparison(input) {
     comparisonDigest: digestBenchmarkSemanticData(body),
   });
 }
-
-export const BENCHMARK_CAPACITY_INDEPENDENT_COMPARISON = Object.freeze({
-  VERSION,
-  SAMPLE_RELATION,
-  ESTIMATOR,
-  INTERVAL_METHOD,
-});

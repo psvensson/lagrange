@@ -511,15 +511,10 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     const outcomeType = outcome[EXECUTOR_OUTCOME_FIELD.OUTCOME_TYPE];
     const workflowStep = outcome[EXECUTOR_OUTCOME_FIELD.WORKFLOW_STEP];
     const activeReplicaHandoffRequired =
-      (
-        outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE ||
-        outcomeType ===
-          EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE
-      ) &&
-      workflowStep === WORKFLOW_STEP.ACTIVE &&
-      (
-        operation.type === OperationType.ADD ||
-        operation.type === OperationType.REPLACE
+      this.requiresActiveReplicaTerminalHandoff(
+        operation,
+        outcomeType,
+        workflowStep,
       );
     let activeReplicaHandoffReady = true;
     if (activeReplicaHandoffRequired) {
@@ -568,6 +563,25 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     }
     await this.completeOperation(operation);
     this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome);
+  }
+
+  requiresActiveReplicaTerminalHandoff(
+    operation,
+    outcomeType,
+    workflowStep,
+  ) {
+    return (
+      (
+        outcomeType === EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE ||
+        outcomeType ===
+          EXECUTOR_OUTCOME_TYPE.RUNTIME_SERVICE_CREATE_ACTIVE
+      ) &&
+      workflowStep === WORKFLOW_STEP.ACTIVE &&
+      (
+        operation.type === OperationType.ADD ||
+        operation.type === OperationType.REPLACE
+      )
+    );
   }
 
   async reconcileExecutorOutcome(outcome) {
@@ -645,37 +659,10 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     }
 
     if (!this.repository.isOperationLocallyOwned(operation)) {
-      // The remote owner converges from the durable row + its own
-      // executor evidence; retaining the payload locally would leave a
-      // driverless entry that can mask later outcomes (CL-029).
-      if (!this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome)) {
-        return false;
-      }
-      const handoffMode =
-        this.resolveRemoteOwnerHandoffModeForExecutorOutcome(
-          operation,
-          outcome,
-        );
-      if (handoffMode !== COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.NONE) {
-        const woken = await this.wakeCoordinatorCreatedRemoteOwner(
-          operation,
-          {handoffMode},
-        );
-        this.logger.debug(
-          REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_NOT_LOCAL,
-          {
-            operationId,
-            outcomeType,
-            remoteOwnerWake: woken,
-          },
-        );
-        return woken;
-      }
-      this.logger.debug(
-        REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_NOT_LOCAL,
-        {operationId, outcomeType},
-      );
-      return false;
+      return this.reconcileRemoteOwnerExecutorOutcome(operation, outcome, {
+        operationId,
+        outcomeType,
+      });
     }
 
     const mapping = EXECUTOR_OUTCOME_ACTION_MAP[outcomeType];
@@ -755,6 +742,44 @@ class OperationWorkflowExecutorOutcomeReconcileMethods {
     });
 
     return true;
+  }
+
+  async reconcileRemoteOwnerExecutorOutcome(
+    operation,
+    outcome,
+    {operationId, outcomeType},
+  ) {
+    // The remote owner converges from the durable row + its own
+    // executor evidence; retaining the payload locally would leave a
+    // driverless entry that can mask later outcomes (CL-029).
+    if (!this.clearExecutorOutcomeRetryIfNotAhead(operationId, outcome)) {
+      return false;
+    }
+    const handoffMode =
+      this.resolveRemoteOwnerHandoffModeForExecutorOutcome(
+        operation,
+        outcome,
+      );
+    if (handoffMode !== COORDINATOR_CREATED_REMOTE_HANDOFF_MODE.NONE) {
+      const woken = await this.wakeCoordinatorCreatedRemoteOwner(
+        operation,
+        {handoffMode},
+      );
+      this.logger.debug(
+        REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_NOT_LOCAL,
+        {
+          operationId,
+          outcomeType,
+          remoteOwnerWake: woken,
+        },
+      );
+      return woken;
+    }
+    this.logger.debug(
+      REBALANCE_COORDINATOR_LOG_MSG.OUTCOME_OPERATION_NOT_LOCAL,
+      {operationId, outcomeType},
+    );
+    return false;
   }
 
   isExecutorOutcomeStepBehindOperation(operation, workflowStep) {

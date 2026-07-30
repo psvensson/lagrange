@@ -65,8 +65,10 @@ const RATCHET_TARGETS = [
     // 2026-07-25: re-measured 842/32140 after extracting the shared
     // binding-compilation test harness; line baseline tightened, group
     // baseline already exact.
-    baselineCloneGroupCount: 842,
-    baselineDuplicatedLineCount: 32140,
+    // 2026-07-30: tightened 842/32140 -> 841/32119 after removing the
+    // unconsumed measured-P0 planning export surface.
+    baselineCloneGroupCount: 841,
+    baselineDuplicatedLineCount: 32119,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

@@ -1,11 +1,8 @@
 import {execFile} from 'node:child_process';
 import {
   mkdir,
-  readFile,
-  statfs,
   writeFile,
 } from 'node:fs/promises';
-import os from 'node:os';
 import {resolve} from 'node:path';
 import {pathToFileURL} from 'node:url';
 import {promisify} from 'node:util';
@@ -19,27 +16,18 @@ import {
   BENCHMARK_RESOURCE_LIMIT,
 } from
   '../../test/distributed/harness/benchmark-resource-contract-constants.js';
+import {
+  benchmarkComparatorHostHeadroom as headroom,
+  observeBenchmarkComparatorHost as hostObservation,
+  parseProcNetworkBytes,
+} from './benchmark-comparator-host-observation.js';
 
 const execFileAsync = promisify(execFile);
-const DECIMAL_COUNTER = /^(?:0|[1-9][0-9]*)$/u;
 const arrayMap = Function.call.bind(Array.prototype.map);
 const jsonParse = JSON.parse;
 const jsonStringify = JSON.stringify;
 const mathMax = Math.max;
-const mathMin = Math.min;
-const numberConstructor = Number;
-const numberIsFinite = Number.isFinite;
-const numberIsSafeInteger = Number.isSafeInteger;
-const regExpTest = Function.call.bind(RegExp.prototype.test);
-const stringIndexOf = Function.call.bind(String.prototype.indexOf);
 const stringReplace = Function.call.bind(String.prototype.replace);
-const stringSlice = Function.call.bind(String.prototype.slice);
-const stringSplit = Function.call.bind(String.prototype.split);
-const stringTrim = Function.call.bind(String.prototype.trim);
-const MILLISECONDS_PER_SECOND = 1_000;
-const MINIMUM_HEADROOM_RATIO = 0.02;
-const NETWORK_TRANSMIT_FIELD_INDEX = 8;
-const SHARED_NETWORK_BYTES_PER_SECOND = 125_000_000;
 const REPORT_DIRECTORY = 'test-output/reports';
 const EVIDENCE_TEXT = Object.freeze({
   ARTIFACT_SCALING_HEADROOM_INSUFFICIENT:
@@ -47,20 +35,8 @@ const EVIDENCE_TEXT = Object.freeze({
   CAPACITY_FAILURE_PREFIX: 'paired MovieLens live proof failed: ',
   FRESH_EVAL: '--eval',
   FRESH_INPUT_TYPE: '--input-type=module',
-  HEADROOM_HOST_CPU: 'host CPU',
-  HEADROOM_HOST_MEMORY: 'host memory',
-  HEADROOM_OBSERVER_CPU: 'observer CPU',
-  HEADROOM_SHARED_NETWORK: 'shared network',
-  HEADROOM_SHARED_STORAGE: 'shared storage',
   LAGRANGE_NETWORK_OBSERVATION_MISSING:
     'quantitative Lagrange public HTTP payload observation missing',
-  NETWORK_COUNTER_INCOMPLETE: 'incomplete /proc/net/dev counters',
-  NETWORK_COUNTER_MALFORMED: 'malformed /proc/net/dev counter',
-  NETWORK_COUNTER_RANGE: 'out-of-range /proc/net/dev counter',
-  NETWORK_COUNTER_TOTAL_RANGE:
-    'out-of-range aggregate /proc/net/dev counter',
-  NETWORK_DEVICE_FILE: '/proc/net/dev',
-  NEWLINE: '\n',
   PASS: 'PASS',
   REPORT_FIDELITY:
     'live-public-wasm-and-postgresql-with-cgroup-container-metering',
@@ -80,121 +56,6 @@ function parsePairedRuntimeReplayOutput(value) {
 
 function serializePairedRuntimeReport(value, replacer, space) {
   return jsonStringify(value, replacer, space);
-}
-
-function networkCounter(value) {
-  if (
-    typeof value !== 'string' ||
-    !regExpTest(DECIMAL_COUNTER, value)
-  ) {
-    fail(EVIDENCE_TEXT.NETWORK_COUNTER_MALFORMED);
-  }
-  const counter = numberConstructor(value);
-  if (!numberIsSafeInteger(counter)) {
-    fail(EVIDENCE_TEXT.NETWORK_COUNTER_RANGE);
-  }
-  return counter;
-}
-
-function parseProcNetworkBytes(text) {
-  let total = 0;
-  const lines = stringSplit(text, EVIDENCE_TEXT.NEWLINE);
-  for (let lineIndex = 2; lineIndex < lines.length; lineIndex += 1) {
-    const line = lines[lineIndex];
-    const separator = stringIndexOf(line, ':');
-    if (separator < 0) continue;
-    const fields = stringSplit(
-      stringTrim(stringSlice(line, separator + 1)),
-      /\s+/u,
-    );
-    if (fields.length <= NETWORK_TRANSMIT_FIELD_INDEX) {
-      fail(EVIDENCE_TEXT.NETWORK_COUNTER_INCOMPLETE);
-    }
-    total +=
-      networkCounter(fields[0]) +
-      networkCounter(fields[NETWORK_TRANSMIT_FIELD_INDEX]);
-    if (!numberIsSafeInteger(total)) {
-      fail(EVIDENCE_TEXT.NETWORK_COUNTER_TOTAL_RANGE);
-    }
-  }
-  return total;
-}
-
-async function networkBytes() {
-  return parseProcNetworkBytes(
-    await readFile(
-      EVIDENCE_TEXT.NETWORK_DEVICE_FILE,
-      EVIDENCE_TEXT.UTF8,
-    ),
-  );
-}
-
-async function hostObservation(directory) {
-  const filesystem = await statfs(directory);
-  return {
-    cpu: process.cpuUsage(),
-    load: os.loadavg()[0],
-    freeMemory: os.freemem(),
-    networkBytes: await networkBytes(),
-    storageCapacity: filesystem.blocks * filesystem.bsize,
-    storageAvailable: filesystem.bavail * filesystem.bsize,
-  };
-}
-
-function boundedMeasurement(capacity, observedPeak, name) {
-  if (
-    !numberIsFinite(capacity) ||
-    capacity <= 0 ||
-    !numberIsFinite(observedPeak) ||
-    observedPeak < 0 ||
-    observedPeak > capacity
-  ) {
-    fail(`${name} capacity exceeded`);
-  }
-  return {capacity, observedPeak};
-}
-
-function headroom(start, end, durationMs) {
-  const cpuCount = os.cpus().length;
-  const totalMemory = os.totalmem();
-  const observerCpu =
-    end.cpu.user + end.cpu.system - start.cpu.user - start.cpu.system;
-  const networkDelta = end.networkBytes - start.networkBytes;
-  return {
-    minimumRequiredRatio: MINIMUM_HEADROOM_RATIO,
-    observerCpu: boundedMeasurement(
-      durationMs * MILLISECONDS_PER_SECOND * cpuCount,
-      observerCpu,
-      EVIDENCE_TEXT.HEADROOM_OBSERVER_CPU,
-    ),
-    hostCpu: boundedMeasurement(
-      cpuCount,
-      mathMax(start.load, end.load),
-      EVIDENCE_TEXT.HEADROOM_HOST_CPU,
-    ),
-    hostMemory: boundedMeasurement(
-      totalMemory,
-      mathMax(
-        totalMemory - start.freeMemory,
-        totalMemory - end.freeMemory,
-      ),
-      EVIDENCE_TEXT.HEADROOM_HOST_MEMORY,
-    ),
-    sharedNetwork: boundedMeasurement(
-      SHARED_NETWORK_BYTES_PER_SECOND *
-        durationMs / MILLISECONDS_PER_SECOND,
-      networkDelta,
-      EVIDENCE_TEXT.HEADROOM_SHARED_NETWORK,
-    ),
-    sharedStorage: boundedMeasurement(
-      mathMin(start.storageCapacity, end.storageCapacity),
-      mathMax(
-        start.storageCapacity - start.storageAvailable,
-        end.storageCapacity - end.storageAvailable,
-      ),
-      EVIDENCE_TEXT.HEADROOM_SHARED_STORAGE,
-    ),
-  };
 }
 
 function assertCapacityBracketing(

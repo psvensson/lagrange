@@ -139,6 +139,7 @@ const SOURCE_PATHS = Object.freeze([
     'run-movielens-public-request-workload.js',
   'examples/service-data-affinity/postgres-baseline-session.js',
   'examples/service-data-affinity/run-postgres-baseline.js',
+  'scripts/checks/benchmark-comparator-host-observation.js',
   'scripts/checks/benchmark-resource-source-provenance.js',
   'scripts/checks/capacity-adapter-outbound.js',
   'scripts/checks/movielens-lagrange-capacity-adapter-child.js',
