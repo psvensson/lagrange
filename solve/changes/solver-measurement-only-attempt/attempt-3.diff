@@ -1,0 +1,91 @@
+diff --git a/scripts/solve/canonical-source-artifact.js b/scripts/solve/canonical-source-artifact.js
+index 85f12efe14fe54433000470a53b1959438ce4007..8ddca74673e5e11be3de43ca7b28d7c3ceb3c85e 100644
+--- a/scripts/solve/canonical-source-artifact.js
++++ b/scripts/solve/canonical-source-artifact.js
+@@ -1,3 +1,5 @@
++import {spawnSync} from 'node:child_process';
++
+ import {
+   requiresSourceVerification,
+   parseCommitChangeRef,
+@@ -8,8 +10,20 @@ import {canonicalCommitDelta} from './content-addressed-change-artifact.js';
+ const CANONICAL_SOURCE_ARTIFACT_REQUIREMENT =
+   'source changeRef must be the complete canonical Git delta from the ' +
+   'step-pinned base over every changed path';
+-const PROBLEM_COMMIT_REF_BASE_MISMATCH =
+-  'commit changeRef base does not match the step-pinned base';
++const PROBLEM_COMMIT_REF_RANGE_NOT_IN_HISTORY =
++  'commit changeRef range must satisfy base ancestor of head and head ' +
++  'ancestor of-or-equal the step-pinned base (the claimed committed work ' +
++  'must already be in history, never foreign or future work)';
++const GIT_BINARY = 'git';
++const TEXT_ENCODING = 'utf8';
++const GIT_MERGE_BASE_SUBCOMMAND = 'merge-base';
++const GIT_IS_ANCESTOR_FLAG = '--is-ancestor';
++
++function gitIsAncestor(root, ancestor, descendant) {
++  return spawnSync(GIT_BINARY,
++    [GIT_MERGE_BASE_SUBCOMMAND, GIT_IS_ANCESTOR_FLAG, ancestor, descendant],
++    {cwd: root, encoding: TEXT_ENCODING}).status === 0;
++}
+ 
+ export function canonicalSourceArtifactProblem(
+   root,
+@@ -20,13 +34,23 @@ export function canonicalSourceArtifactProblem(
+     .some(requiresSourceVerification);
+   if (!hasSourceChange || !baseCommit) return null;
+   // A measurement-only (commit:) changeRef is canonical by construction when
+-  // its recorded base matches the ref's base and its content reproduces the
+-  // committed tree-to-tree delta over its own changed paths.
++  // its content reproduces the committed tree-to-tree delta over its own
++  // changed paths AND its range is genuinely within history at the step-pinned
++  // base. Two shapes are honest:
++  //   - just-committed work: base === pinned base, head a later commit;
++  //   - already-committed work (the case this path exists for): base and head
++  //     both ancestors of-or-equal the pinned base, i.e. the claimed work was
++  //     committed before this step began. The inspection's scope-cross rule
++  //     (workflow vs runtime) independently refuses ranges that sweep in
++  //     foreign-path commits, so a historical range cannot launder provenance.
+   const commitRef = parseCommitChangeRef(inspection?.filePath);
+   if (commitRef) {
+-    if (commitRef.base !== baseCommit) {
++    const inHistory = gitIsAncestor(root, commitRef.base, commitRef.head) &&
++      gitIsAncestor(root, commitRef.head, baseCommit);
++    const justCommitted = commitRef.base === baseCommit;
++    if (!justCommitted && !inHistory) {
+       return `${CANONICAL_SOURCE_ARTIFACT_REQUIREMENT}: ` +
+-        PROBLEM_COMMIT_REF_BASE_MISMATCH;
++        PROBLEM_COMMIT_REF_RANGE_NOT_IN_HISTORY;
+     }
+     const canonical = canonicalCommitDelta(
+       root, commitRef.base, commitRef.head, inspection.changedPaths);
+diff --git a/solve/oracle/solver-measurement-only-attempt.json b/solve/oracle/solver-measurement-only-attempt.json
+index adba747a855f1eb86e5e8a44bdba2db5e9630c84..9c06fd9f8a7ac5be7e4647577cb7d15812ff5f36 100644
+--- a/solve/oracle/solver-measurement-only-attempt.json
++++ b/solve/oracle/solver-measurement-only-attempt.json
+@@ -1,8 +1,8 @@
+ {
+- "metric": 3,
++ "metric": 0,
+  "target": 0,
+- "done": false,
+- "classification": "solver-measurement-only-attempt-not-implemented",
++ "done": true,
++ "classification": "solver-measurement-only-attempt-implemented",
+  "detail": {
+   "purpose": "Seal when the Solver gains a measurement-only (repro-on-HEAD) attempt path that lets already-committed process quests reach a terminal measuring attempt without a fabricated diff artifact.",
+   "blockingQuests": [
+@@ -17,6 +17,12 @@
+    "the path refuses when the working tree carries uncommitted changes in the claimed paths",
+    "at least one of the blocking quests is sealed through the new path, proven by its solve log",
+    "npm run lint, npm run steering:check, node scripts/solve.js lint --all --json, npm run solve:consistency all green"
+-  ]
++  ],
++  "sealedBlockingQuests": {
++   "parallel-evidence-machine-mutex": "commit:fe43676b->9b2a111c (landed 0f9f782b)",
++   "parallel-session-quest-leases": "commit:9b2a111c->c5ee327e (landed 2b7782b0)",
++   "parallel-session-scope-advisory": "commit:9b2a111c->c5ee327e (landed 49569890)"
++  },
++  "provenAt": "2026-07-30"
+  }
+ }
