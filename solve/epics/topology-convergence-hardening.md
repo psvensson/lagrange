@@ -104,6 +104,10 @@ cheap pilot that grounds the frontier before any expensive fan-out or gate.
 
 ## Decision log
 
+- 2026-07-31 — Selected `cold-node-authority-reacquisition-pressure` from the
+  seed-refresh Quest's live validation. It owns restart/bootstrap authority
+  consumption under pressure; `CL-021` active-gate snapshot coverage and the
+  separate statistical release terminal remain downstream.
 - 2026-07-25 — Removed the exhausted omnibus Quest from the active-goal list and
   selected a fresh, hardware-relative statistical terminal after the current
   cache-observation prerequisite. Linked scale certification requirements at
