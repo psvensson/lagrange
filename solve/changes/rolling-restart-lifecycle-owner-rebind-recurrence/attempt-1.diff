@@ -1,0 +1,347 @@
+diff --git a/src/bootstrap/node-joining-owner-construction.js b/src/bootstrap/node-joining-owner-construction.js
+index d24a24dd4fb9e7f7ed1101d32b85ee3da3043e87..75068b2e11a81d03d10e3827f2d50def03b1c3f0 100644
+--- a/src/bootstrap/node-joining-owner-construction.js
++++ b/src/bootstrap/node-joining-owner-construction.js
+@@ -258,6 +258,9 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
+       runtimeDriverCount: Object.keys(this.runtimeDrivers).length,
+       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
+     });
++    this.handoffPreviousLifecycleStateMachine(
++      options.previousLifecycleStateMachine,
++    );
+     this.runtimeHandoffOwner = new StartupRuntimeHandoffOwner({
+       delegates: {
+         getCompatibilityService: () => this,
+@@ -712,6 +715,41 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
+       },
+     });
+   }
++
++  /**
++   * Claim the canonical NodeService lifecycle from the exact stopped owner of
++   * an entrypoint-level join reattempt. Terminal join cleanup deliberately
++   * retains the NodeService singleton and its cache, so the next
++   * NodeJoiningService must perform an explicit compare-and-swap instead of
++   * letting query-system-state silently keep the predecessor's owner.
++   *
++   * @param {NodeLifecycleStateMachine|null} previousLifecycleStateMachine
++   * @return {void}
++   */
++  handoffPreviousLifecycleStateMachine(previousLifecycleStateMachine) {
++    if (!previousLifecycleStateMachine) {
++      return;
++    }
++    const nodeService = NodeService.getInstance();
++    if (!nodeService.isInitialized()) {
++      return;
++    }
++    assertCritical(
++      nodeService.getNodeId() === this.nodeId &&
++        previousLifecycleStateMachine instanceof NodeLifecycleStateMachine &&
++        previousLifecycleStateMachine.getState() === NodeState.STOPPED &&
++        nodeService.getLifecycleStateMachine() ===
++          previousLifecycleStateMachine,
++      JOINING_ERROR_MSG.LIFECYCLE_STATE_MACHINE_REBIND_FAILED,
++    );
++    assertCritical(
++      nodeService.replaceExternallyManagedLifecycleStateMachine(
++        previousLifecycleStateMachine,
++        this.lifecycleStateMachine,
++      ),
++      JOINING_ERROR_MSG.LIFECYCLE_STATE_MACHINE_REBIND_FAILED,
++    );
++  }
+ }
+ 
+ assignNodeJoiningDelegateBundleMethods(NodeJoiningOwnerConstruction);
+diff --git a/src/index.js b/src/index.js
+index edaef3fd059eb758d0097a121ce08692cfee820b..e3c5281e344e98185a11eb32c4c639d6b814fecd 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -164,6 +164,8 @@ async function startJoinNode(options) {
+     membershipOwnerOutcome: options.membershipOwnerOutcome,
+     clusterIncarnationFence,
+     membershipLifecycleController,
++    previousLifecycleStateMachine:
++      options._previousLifecycleStateMachine || null,
+     onLocalAdminRuntimeReady: async (runtime) => {
+       if (joinAdminRuntime) {
+         return;
+@@ -258,6 +260,8 @@ async function startJoinNode(options) {
+       return startJoinNode({
+         ...options,
+         _joinAttempt: joinAttempt + 1,
++        _previousLifecycleStateMachine:
++          nodeJoiningService.getLifecycleStateMachine(),
+       });
+     }
+     process.exit(1);
+diff --git a/test/bootstrap/node-joining-service-lifecycle-owner-handoff.test.js b/test/bootstrap/node-joining-service-lifecycle-owner-handoff.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..bc102541c77b4b7fc8e0ad72fdd525ee5c719b34
+--- /dev/null
++++ b/test/bootstrap/node-joining-service-lifecycle-owner-handoff.test.js
+@@ -0,0 +1,263 @@
++import {readFileSync} from 'node:fs';
++
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  JoiningPhase,
++  NodeJoiningService,
++} from '../../src/bootstrap/node-joining-service.js';
++import {
++  MESSAGE_GROUP_ASSIGNMENT_STRATEGY as AssignmentStrategy,
++} from '../../src/bootstrap/message-group-assignment.js';
++import {
++  JOIN_CHECKPOINT,
++  JoinSessionStore,
++} from '../../src/bootstrap/join-session-store.js';
++import {
++  STARTUP_JOIN_MODE,
++} from '../../src/bootstrap/rejoin-hints-constants.js';
++import {NODE_SERVICE_EVENT} from '../../src/node/node-constants.js';
++import {NodeService} from '../../src/node/node-service.js';
++import {
++  initializeTestEnvironment,
++} from './node-joining-service-test-support.js';
++
++const NODE_ID = 'durable-rejoin-owner-handoff-node';
++const NODE_ADDRESS = 'ws://localhost:9197';
++const SEED_ADDRESS = 'http://localhost:8080';
++const JOIN_SESSION_ID = 'durable-rejoin-owner-handoff-session';
++
++async function leaveExhaustedJoinLifecycleOwnerBound() {
++  const exhaustedService = new NodeJoiningService({
++    nodeId: NODE_ID,
++    nodeAddress: NODE_ADDRESS,
++    seedNodeAddress: SEED_ADDRESS,
++    startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
++  });
++  exhaustedService.bootstrapResponse = {
++    systemTableSnapshots: {},
++  };
++  await exhaustedService.querySystemStatePhase
++    .hydrateSystemCacheFromBootstrap();
++  exhaustedService.lifecycleStateMachine.transition('connecting');
++  exhaustedService.phase = JoiningPhase.CONTACTING_SEED;
++  exhaustedService.startTime = Date.now();
++
++  const exhaustedError = new Error('exhausted outer join attempt');
++  exhaustedError.retryable = true;
++  const failure = await exhaustedService.handleJoiningFailure(
++    exhaustedError,
++    {preserveForResume: false},
++  );
++
++  return {
++    exhaustedService,
++    failure,
++  };
++}
++
++function stubDurableRejoin(service, calls) {
++  service.phaseContactSeed = async () => {
++    service.bootstrapResponse = {
++      seedNodeId: 'seed-node-1',
++      seedNodeWsAddress: 'ws://localhost:8080',
++      systemTableSnapshots: {},
++      messageGroupAssignment: {
++        strategy: AssignmentStrategy.CREATE_SELF_HOSTED,
++        groupId: 'mg-owner-handoff',
++        replicaCount: 1,
++      },
++    };
++    service.seedNodeId = 'seed-node-1';
++    service.seedNodeWsAddress = 'ws://localhost:8080';
++  };
++  service.phaseConnectWebSocket = async () => {
++    service.messageRouter = {
++      deliver: async () => ({acknowledged: true}),
++      setExternalAdmissionEnabled() {},
++    };
++  };
++  service.phaseCreateSelfHostedMessageGroup = async () => {
++    service.messageGroupServices.set('mg-owner-handoff-r0', {
++      isLeaderReplica: () => true,
++      getLeaderId: () => 'mg-owner-handoff-r0',
++      completeJoinConvergence() {},
++    });
++  };
++  service.phaseJoinExistingMessageGroup = async () => {};
++  service.phaseWaitForLeadership = async () => {};
++  service.initializeJoinInfrastructure = async () => {
++    calls.infrastructure += 1;
++    service.rpcClient = {};
++    service.cdcIntegrationService = {};
++    service.heartbeatService = {
++      setNodeStateReporter() {},
++      start() {},
++      stop() {},
++    };
++    service.latencyTopology = {};
++  };
++  service.notifyLocalAdminRuntimeReady = async () => {};
++  service.phaseQuerySystemState = async () => {
++    calls.membership += 1;
++    await service.querySystemStatePhase.hydrateSystemCacheFromBootstrap();
++  };
++  service.activateMessageGroupServiceRows = async () => {
++    calls.messageGroupRows += 1;
++  };
++  service.joinReadinessEvaluator
++    .waitForCanonicalJoinReadinessConvergence = async () => {
++      calls.readiness += 1;
++      calls.sharedLifecycleOwners.push(
++        NodeService.getInstance().getLifecycleStateMachine() ===
++          service.getLifecycleStateMachine(),
++      );
++      if (calls.readiness === 1) {
++        const error = new Error('canonical readiness retry witness');
++        error.code = 'JOIN_READINESS_TIMEOUT';
++        error.deferRetry = true;
++        throw error;
++      }
++    };
++  service.signalReadyForReplicas = async () => {
++    calls.readySignal += 1;
++  };
++  service.hasActiveControlPlaneBackgroundWriters = () => calls.writers > 0;
++  service.activateControlPlaneBackgroundWriters = () => {
++    calls.writerLifecycleStates.push(
++      NodeService.getInstance().getLifecycleState(),
++    );
++    calls.writers += 1;
++  };
++  service.startLatencyTopologyLifecycle = () => {};
++  service.createMessageGroupPhase.flushDeferredCreateSelfHostedMetadata =
++    async () => {};
++}
++
++test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
++  'its retry session', async (t) => {
++  initializeTestEnvironment();
++
++  const {
++    exhaustedService,
++    failure,
++  } = await leaveExhaustedJoinLifecycleOwnerBound();
++  const exhaustedLifecycle =
++    exhaustedService.getLifecycleStateMachine();
++  const nodeService = NodeService.getInstance();
++
++  t.equal(failure.success, false, 'the prior retryable join should be exhausted');
++  t.equal(exhaustedLifecycle.getState(), 'stopped',
++    'terminal join cleanup should stop its lifecycle owner');
++  t.equal(nodeService.isInitialized(), true,
++    'production join cleanup retains the initialized NodeService singleton');
++  t.equal(nodeService.getLifecycleStateMachine(), exhaustedLifecycle,
++    'NodeService should still identify the exact exhausted owner');
++
++  const unknownOwnerService = new NodeJoiningService({
++    nodeId: NODE_ID,
++    nodeAddress: NODE_ADDRESS,
++    seedNodeAddress: SEED_ADDRESS,
++    startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
++  });
++  unknownOwnerService.getLifecycleStateMachine().transition('connecting');
++  unknownOwnerService.getLifecycleStateMachine().transition('stopped');
++  t.throws(
++    () => new NodeJoiningService({
++      nodeId: NODE_ID,
++      nodeAddress: NODE_ADDRESS,
++      seedNodeAddress: SEED_ADDRESS,
++      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
++      previousLifecycleStateMachine:
++        unknownOwnerService.getLifecycleStateMachine(),
++    }),
++    /Join retry could not restore the canonical lifecycle owner binding/,
++    'an unknown stopped predecessor must fail closed instead of stealing ownership',
++  );
++  t.equal(nodeService.getLifecycleStateMachine(), exhaustedLifecycle,
++    'a rejected predecessor must leave the canonical binding unchanged');
++
++  const joinSessionStore = new JoinSessionStore({
++    storage: new Map(),
++    now: () => Date.now(),
++  });
++  const calls = {
++    infrastructure: 0,
++    membership: 0,
++    messageGroupRows: 0,
++    readiness: 0,
++    readySignal: 0,
++    writers: 0,
++    sharedLifecycleOwners: [],
++    lifecycleTransitions: [],
++    writerLifecycleStates: [],
++  };
++  const service = new NodeJoiningService({
++    nodeId: NODE_ID,
++    nodeAddress: NODE_ADDRESS,
++    seedNodeAddress: SEED_ADDRESS,
++    startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
++    previousLifecycleStateMachine: exhaustedLifecycle,
++    joinSessionId: JOIN_SESSION_ID,
++    joinSessionStore,
++    sleep: async () => {},
++    config: {
++      autoResumeRetryableFailures: true,
++      retryableFailureResumeBaseDelayMs: 1,
++      retryableFailureResumeMaxDelayMs: 1,
++    },
++  });
++  t.equal(nodeService.getLifecycleStateMachine(),
++    service.getLifecycleStateMachine(),
++    'construction should hand off the exact predecessor before join work');
++  nodeService.on(NODE_SERVICE_EVENT.LIFECYCLE_STATE_CHANGE, (event) => {
++    calls.lifecycleTransitions.push(event.to);
++  });
++  stubDurableRejoin(service, calls);
++
++  const result = await service.join();
++  const session = await joinSessionStore.loadSession({
++    nodeId: NODE_ID,
++    sessionId: JOIN_SESSION_ID,
++  });
++
++  t.equal(result.success, true, 'the durable rejoin retry should remain alive');
++  t.same(calls.sharedLifecycleOwners, [true, true],
++    'both readiness attempts should observe one canonical lifecycle owner');
++  t.same(calls.lifecycleTransitions.slice(-5),
++    ['stopped', 'connecting', 'discovering', 'joining', 'ready'],
++    'retry should reconstruct the canonical lifecycle before READY');
++  t.same(calls.writerLifecycleStates, ['ready'],
++    'steady-state writers should activate only after canonical READY');
++  t.match(calls, {
++    infrastructure: 1,
++    membership: 1,
++    messageGroupRows: 1,
++    readiness: 2,
++    readySignal: 1,
++    writers: 1,
++  }, 'retry should not replay completed infrastructure or membership work');
++  t.equal(nodeService.getLifecycleStateMachine(),
++    service.getLifecycleStateMachine(),
++    'NodeService should remain bound to the active durable-rejoin owner');
++  t.equal(service.getLifecycleStateMachine().getState(), 'ready',
++    'the canonical lifecycle should finish READY');
++  t.equal(session?.checkpoint, JOIN_CHECKPOINT.FINALIZED,
++    'one durable join session should reach FINALIZED');
++});
++
++test('entrypoint outer reattempt carries the exact lifecycle predecessor',
++  (t) => {
++    const source = readFileSync('src/index.js', 'utf8');
++
++    t.match(
++      source,
++      /previousLifecycleStateMachine:\s*options\._previousLifecycleStateMachine \|\| null/,
++      'join construction should consume only the explicit predecessor token',
++    );
++    t.match(
++      source,
++      /_previousLifecycleStateMachine:\s*nodeJoiningService\.getLifecycleStateMachine\(\)/,
++      'recursive reattempt should pass the exact exhausted join owner',
++    );
++    t.end();
++  });
