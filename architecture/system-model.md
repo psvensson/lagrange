@@ -21,7 +21,7 @@ placed near the data they use.
 ## The system in one picture
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart TB
   CLIENT["Clients and operators"]:::ext --> INGRESS["Ingress, routing, and one SQL execution path"]:::move
 
@@ -57,6 +57,10 @@ flowchart TB
   PLACE -. "places / replaces" .-> CELL
   PLACE -. "places / repairs" .-> RA
 
+  style CLUSTER fill:#ffffff,stroke:#94a3b8,color:#0f172a
+  style A fill:#ffffff,stroke:#94a3b8,color:#0f172a
+  style B fill:#ffffff,stroke:#94a3b8,color:#0f172a
+  style C fill:#ffffff,stroke:#94a3b8,color:#0f172a
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
   classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
@@ -94,7 +98,7 @@ Every process document uses the same colour vocabulary. Colour is only a
 reading aid; labels and arrows carry the meaning.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
   D["Data<br/>tables · partitions · replicas · SQLite"]:::data
   S["Service / compute<br/>Artifacts · Bindings · Cells · handlers"]:::svc
@@ -130,7 +134,7 @@ A table is logical; each replica is physical. Replicas do not share one SQLite
 file.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart TD
   T["<b>Table</b><br/>orders"]:::data
   P1["<b>Partition P1</b><br/>[null, m)"]:::data
@@ -171,7 +175,7 @@ Every node can accept requests, participate in storage, run placed Cells, and
 make routing decisions from its local metadata view.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart TD
   subgraph NODE["One cluster node"]
     direction TB
@@ -220,7 +224,7 @@ Protocol adapters and internal callers do not own separate planners. The public
 request path normalises into `SqlRequest` and delegates to `SqlCore`.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
   I["Ingress adapter"]:::ext --> R["Normalised SQL request"]:::svc
   R --> E["SqlCore"]:::svc
@@ -251,7 +255,7 @@ Artifact, Binding, and Cell describe code, execution intent, and the resulting
 placed runtime instance. They do not create another durable-state model.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
   A["Artifact<br/>immutable code"]:::svc --> B["Binding<br/>source + export + access intent"]:::svc
   B --> C1["Cell on node-a"]:::svc
@@ -281,7 +285,7 @@ Data-local service execution can remove an avoidable application-to-database
 hop, but the partition leader and its quorum still decide durability.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','actorBkg':'#dbeafe','actorBorder':'#1e40af','actorTextColor':'#0b2545','signalColor':'#334155','signalTextColor':'#0f172a','noteBkgColor':'#fef3c7','noteBorderColor':'#b45309','noteTextColor':'#451a03'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','actorBkg':'#dbeafe','actorBorder':'#1e40af','actorTextColor':'#0b2545','signalColor':'#334155','signalTextColor':'#0f172a','noteBkgColor':'#fef3c7','noteBorderColor':'#b45309','noteTextColor':'#451a03','labelBoxBkgColor':'#ffffff','labelBoxBorderColor':'#94a3b8'}}}%%
 sequenceDiagram
   participant X as SQL caller or service Cell
   participant L as Partition leader
@@ -318,7 +322,7 @@ Placement affinity learns from actual service-to-partition access. That evidence
 is combined with load, capacity, spread, failure, and policy constraints.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
   TRAFFIC["Real service traffic"]:::ext --> OBS["Service → partition access evidence"]:::move
   OBS --> CACHE["CDC-fed cluster view"]:::move
@@ -350,7 +354,7 @@ intent and progress to system tables, those writes become durable through the
 normal partition path, and CDC updates every node's local read model.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
   INTENT["Owner writes intent or progress<br/>to a system table"]:::ctrl --> RAFT["Raft commit and apply"]:::data
   RAFT --> CDC["CDC fan-out"]:::move
