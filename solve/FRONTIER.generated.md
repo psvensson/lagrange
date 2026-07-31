@@ -48,28 +48,23 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 18
+## Open quests — 13
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
 | ci-red-main-push-recovery | product | 0 | 0 | 2026-07-30 | — |
 | ci-red-main-push-recovery-v2 | product | 1 | 0 | 2026-07-30 | — |
-| formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 ⚠ stale | — |
+| cold-node-authority-reacquisition-pressure | product | 2 | 0 | 2026-07-31 | — |
 | github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
-| movielens-local-leader-row-visibility | product | 3 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-nodes-priority-recovery-escape | product | 1 | 0 | 2026-07-25 | — |
 | movielens-operation-ledger-terminal-hold | product | 1 | 0 | 2026-07-25 | — |
 | movielens-parallel-reduce-result-chronology | product | 7 | 0 | 2026-07-22 ⚠ stale | — |
 | movielens-replace-bootstrap-cohort-authority | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
-| oci-container-driver-live-activation | product | 9 | 0 | 2026-07-31 | — |
-| operation-ledger-quorum-authoritative-release | product | 3 | 0 | 2026-07-22 ⚠ stale | — |
+| oci-container-driver-live-activation | product | 12 | 0 | 2026-07-31 | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 ⚠ stale | — |
-| priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 ⚠ stale | — |
 | remove-relief-falsifier-fence-fidelity | product | 1 | 0 | 2026-07-30 | CL-044, CL-043 |
-| runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
-| service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 | — |
 
-> 9 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
+> 5 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 
