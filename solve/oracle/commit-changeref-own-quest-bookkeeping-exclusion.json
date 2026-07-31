@@ -1,5 +1,5 @@
 {
-  "metric": 1,
+  "metric": 0,
   "target": 0,
-  "done": false
+  "done": true
 }

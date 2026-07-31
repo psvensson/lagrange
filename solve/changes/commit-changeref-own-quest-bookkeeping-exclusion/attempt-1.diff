@@ -1,0 +1,12 @@
+diff --git a/solve/oracle/commit-changeref-own-quest-bookkeeping-exclusion.json b/solve/oracle/commit-changeref-own-quest-bookkeeping-exclusion.json
+index 8cca3806..cdbcc908 100644
+--- a/solve/oracle/commit-changeref-own-quest-bookkeeping-exclusion.json
++++ b/solve/oracle/commit-changeref-own-quest-bookkeeping-exclusion.json
+@@ -1,5 +1,5 @@
+ {
+-  "metric": 1,
++  "metric": 0,
+   "target": 0,
+-  "done": false
++  "done": true
+ }
