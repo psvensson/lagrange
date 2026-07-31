@@ -21,42 +21,46 @@ placed near the data they use.
 ## The system in one picture
 
 ```mermaid
-%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart TB
-  CLIENT["Clients and operators"]:::ext --> INGRESS["Ingress, routing, and one SQL execution path"]:::move
+  subgraph CANVAS[" "]
+    direction TB
+    CLIENT["Clients and operators"]:::ext --> INGRESS["Ingress, routing, and one SQL execution path"]:::move
 
-  subgraph CLUSTER["Lagrange cluster"]
-    direction LR
+    subgraph CLUSTER["Lagrange cluster"]
+      direction LR
 
-    subgraph A["node-a"]
-      direction TB
-      CELL["Service Cell<br/>disposable compute"]:::svc
-      RA["Selected partition replica<br/>SQLite rows"]:::data
-      CELL ==>|"SQL through the same engine"| RA
+      subgraph A["node-a"]
+        direction TB
+        CELL["Service Cell<br/>disposable compute"]:::svc
+        RA["Selected partition replica<br/>SQLite rows"]:::data
+        CELL ==>|"SQL through the same engine"| RA
+      end
+
+      subgraph B["node-b"]
+        direction TB
+        RB["Partition leader / replica"]:::data
+      end
+
+      subgraph C["node-c"]
+        direction TB
+        RC["Partition replica"]:::data
+      end
     end
 
-    subgraph B["node-b"]
-      direction TB
-      RB["Partition leader / replica"]:::data
-    end
+    INGRESS -->|"service request"| CELL
+    INGRESS -->|"SQL request"| RA
+    RA <-->|"Raft"| RB
+    RB <-->|"Raft"| RC
 
-    subgraph C["node-c"]
-      direction TB
-      RC["Partition replica"]:::data
-    end
+    META["System tables<br/>topology · Bindings · operations"]:::data --> CDC["CDC-fed node-local caches"]:::move
+    CDC --> INGRESS
+    CDC --> PLACE["Placement and reconciliation"]:::ctrl
+    PLACE -. "places / replaces" .-> CELL
+    PLACE -. "places / repairs" .-> RA
   end
 
-  INGRESS -->|"service request"| CELL
-  INGRESS -->|"SQL request"| RA
-  RA <-->|"Raft"| RB
-  RB <-->|"Raft"| RC
-
-  META["System tables<br/>topology · Bindings · operations"]:::data --> CDC["CDC-fed node-local caches"]:::move
-  CDC --> INGRESS
-  CDC --> PLACE["Placement and reconciliation"]:::ctrl
-  PLACE -. "places / replaces" .-> CELL
-  PLACE -. "places / repairs" .-> RA
-
+  style CANVAS fill:#ffffff,stroke:#ffffff,color:#0f172a
   style CLUSTER fill:#ffffff,stroke:#94a3b8,color:#0f172a
   style A fill:#ffffff,stroke:#94a3b8,color:#0f172a
   style B fill:#ffffff,stroke:#94a3b8,color:#0f172a
@@ -98,15 +102,19 @@ Every process document uses the same colour vocabulary. Colour is only a
 reading aid; labels and arrows carry the meaning.
 
 ```mermaid
-%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
-  D["Data<br/>tables · partitions · replicas · SQLite"]:::data
-  S["Service / compute<br/>Artifacts · Bindings · Cells · handlers"]:::svc
-  C["Control plane<br/>owners · workflows · decisions"]:::ctrl
-  T["Routing / propagation<br/>MessageRouter · CDC · caches"]:::move
-  X["External<br/>clients · operators · cluster environment"]:::ext
-  F["Failure / refusal<br/>denied · blocked · terminal error"]:::bad
+  subgraph CANVAS[" "]
+    direction LR
+    D["Data<br/>tables · partitions · replicas · SQLite"]:::data
+    S["Service / compute<br/>Artifacts · Bindings · Cells · handlers"]:::svc
+    C["Control plane<br/>owners · workflows · decisions"]:::ctrl
+    T["Routing / propagation<br/>MessageRouter · CDC · caches"]:::move
+    X["External<br/>clients · operators · cluster environment"]:::ext
+    F["Failure / refusal<br/>denied · blocked · terminal error"]:::bad
+  end
 
+  style CANVAS fill:#ffffff,stroke:#ffffff,color:#0f172a
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
   classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
@@ -134,29 +142,33 @@ A table is logical; each replica is physical. Replicas do not share one SQLite
 file.
 
 ```mermaid
-%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart TD
-  T["<b>Table</b><br/>orders"]:::data
-  P1["<b>Partition P1</b><br/>[null, m)"]:::data
-  P2["<b>Partition P2</b><br/>[m, null)"]:::data
+  subgraph CANVAS[" "]
+    direction TD
+    T["<b>Table</b><br/>orders"]:::data
+    P1["<b>Partition P1</b><br/>[null, m)"]:::data
+    P2["<b>Partition P2</b><br/>[m, null)"]:::data
 
-  R1A["P1 replica<br/>node-a"]:::data --> S1A[("SQLite A<br/>rows + Raft state")]:::ext
-  R1B["P1 replica<br/>node-b"]:::data --> S1B[("SQLite B<br/>rows + Raft state")]:::ext
-  R1C["P1 replica<br/>node-c"]:::data --> S1C[("SQLite C<br/>rows + Raft state")]:::ext
+    R1A["P1 replica<br/>node-a"]:::data --> S1A[("SQLite A<br/>rows + Raft state")]:::ext
+    R1B["P1 replica<br/>node-b"]:::data --> S1B[("SQLite B<br/>rows + Raft state")]:::ext
+    R1C["P1 replica<br/>node-c"]:::data --> S1C[("SQLite C<br/>rows + Raft state")]:::ext
 
-  R2A["P2 replica<br/>node-b"]:::data
-  R2B["P2 replica<br/>node-c"]:::data
-  R2C["P2 replica<br/>node-d"]:::data
+    R2A["P2 replica<br/>node-b"]:::data
+    R2B["P2 replica<br/>node-c"]:::data
+    R2C["P2 replica<br/>node-d"]:::data
 
-  T --> P1
-  T --> P2
-  P1 --> R1A
-  P1 --> R1B
-  P1 --> R1C
-  P2 --> R2A
-  P2 --> R2B
-  P2 --> R2C
+    T --> P1
+    T --> P2
+    P1 --> R1A
+    P1 --> R1B
+    P1 --> R1C
+    P2 --> R2A
+    P2 --> R2B
+    P2 --> R2C
+  end
 
+  style CANVAS fill:#ffffff,stroke:#ffffff,color:#0f172a
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef ext fill:#f1f5f9,stroke:#475569,color:#0f172a
 ```
@@ -175,26 +187,30 @@ Every node can accept requests, participate in storage, run placed Cells, and
 make routing decisions from its local metadata view.
 
 ```mermaid
-%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart TD
-  subgraph NODE["One cluster node"]
-    direction TB
-    ING["Ingress adapters<br/>PostgreSQL wire · admin · service requests"]:::ext
-    CELL["Ready service Cells"]:::svc
-    SQL["SqlCore<br/>one SQL planner and executor"]:::svc
-    CACHE["SystemTableCache<br/>CDC-fed routing and topology view"]:::move
-    ROUTER["MessageRouter<br/>local short-circuit or remote transport"]:::move
-    LOCAL["Local partition and message-group replicas"]:::data
+  subgraph CANVAS[" "]
+    direction TD
+    subgraph NODE["One cluster node"]
+      direction TB
+      ING["Ingress adapters<br/>PostgreSQL wire · admin · service requests"]:::ext
+      CELL["Ready service Cells"]:::svc
+      SQL["SqlCore<br/>one SQL planner and executor"]:::svc
+      CACHE["SystemTableCache<br/>CDC-fed routing and topology view"]:::move
+      ROUTER["MessageRouter<br/>local short-circuit or remote transport"]:::move
+      LOCAL["Local partition and message-group replicas"]:::data
+    end
+
+    ING --> SQL
+    ING --> CELL
+    CELL --> SQL
+    SQL -->|"read routing metadata"| CACHE
+    SQL --> ROUTER
+    ROUTER --> LOCAL
+    LOCAL -->|"system-table CDC"| CACHE
   end
 
-  ING --> SQL
-  ING --> CELL
-  CELL --> SQL
-  SQL -->|"read routing metadata"| CACHE
-  SQL --> ROUTER
-  ROUTER --> LOCAL
-  LOCAL -->|"system-table CDC"| CACHE
-
+  style CANVAS fill:#ffffff,stroke:#ffffff,color:#0f172a
   style NODE fill:#ffffff,stroke:#94a3b8,color:#0f172a
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
@@ -224,17 +240,21 @@ Protocol adapters and internal callers do not own separate planners. The public
 request path normalises into `SqlRequest` and delegates to `SqlCore`.
 
 ```mermaid
-%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
-  I["Ingress adapter"]:::ext --> R["Normalised SQL request"]:::svc
-  R --> E["SqlCore"]:::svc
-  E --> P["Resolve relevant partitions"]:::ctrl
-  P --> C["Choose eligible replicas<br/>leader for writes"]:::ctrl
-  C --> M["MessageRouter"]:::move
-  M --> X["Partition-local execution"]:::data
-  X --> A["Merge / aggregate results"]:::svc
-  A --> O["Response"]:::ext
+  subgraph CANVAS[" "]
+    direction LR
+    I["Ingress adapter"]:::ext --> R["Normalised SQL request"]:::svc
+    R --> E["SqlCore"]:::svc
+    E --> P["Resolve relevant partitions"]:::ctrl
+    P --> C["Choose eligible replicas<br/>leader for writes"]:::ctrl
+    C --> M["MessageRouter"]:::move
+    M --> X["Partition-local execution"]:::data
+    X --> A["Merge / aggregate results"]:::svc
+    A --> O["Response"]:::ext
+  end
 
+  style CANVAS fill:#ffffff,stroke:#ffffff,color:#0f172a
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
   classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
@@ -255,18 +275,22 @@ Artifact, Binding, and Cell describe code, execution intent, and the resulting
 placed runtime instance. They do not create another durable-state model.
 
 ```mermaid
-%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
-  A["Artifact<br/>immutable code"]:::svc --> B["Binding<br/>source + export + access intent"]:::svc
-  B --> C1["Cell on node-a"]:::svc
-  B --> C2["Cell on node-c"]:::svc
+  subgraph CANVAS[" "]
+    direction LR
+    A["Artifact<br/>immutable code"]:::svc --> B["Binding<br/>source + export + access intent"]:::svc
+    B --> C1["Cell on node-a"]:::svc
+    B --> C2["Cell on node-c"]:::svc
 
-  REQ["Matching request"]:::ext --> B
-  B --> C1
-  C1 --> SQL["SqlCore"]:::move
-  SQL --> P["Partition replicas"]:::data
-  C1 -. "durable state" .-> P
+    REQ["Matching request"]:::ext --> B
+    B --> C1
+    C1 --> SQL["SqlCore"]:::move
+    SQL --> P["Partition replicas"]:::data
+    C1 -. "durable state" .-> P
+  end
 
+  style CANVAS fill:#ffffff,stroke:#ffffff,color:#0f172a
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
   classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
@@ -285,22 +309,24 @@ Data-local service execution can remove an avoidable application-to-database
 hop, but the partition leader and its quorum still decide durability.
 
 ```mermaid
-%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','actorBkg':'#dbeafe','actorBorder':'#1e40af','actorTextColor':'#0b2545','signalColor':'#334155','signalTextColor':'#0f172a','noteBkgColor':'#fef3c7','noteBorderColor':'#b45309','noteTextColor':'#451a03','labelBoxBkgColor':'#ffffff','labelBoxBorderColor':'#94a3b8'}}}%%
-sequenceDiagram
-  participant X as SQL caller or service Cell
-  participant L as Partition leader
-  participant F1 as Follower A
-  participant F2 as Follower B
+%%{init: {'theme':'base','darkMode':false,'themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+flowchart LR
+  subgraph CANVAS[" "]
+    direction LR
+    X["SQL caller or service Cell"]:::ext -->|"routed write"| L["Partition leader"]:::data
+    L -->|"append proposal"| LOG["Leader Raft log"]:::data
+    LOG -->|"AppendEntries"| F1["Follower A"]:::data
+    LOG -->|"AppendEntries"| F2["Follower B"]:::data
+    F1 -->|"acknowledge"| Q["Majority reached"]:::ctrl
+    F2 -->|"acknowledge"| Q
+    Q --> APPLY["Apply to leader SQLite"]:::data
+    APPLY -->|"success"| OK["Return to caller"]:::ext
+  end
 
-  X->>L: routed write
-  L->>L: append proposal
-  L->>F1: AppendEntries
-  L->>F2: AppendEntries
-  F1-->>L: acknowledge
-  F2-->>L: acknowledge
-  Note over L,F2: majority reached → committed
-  L->>L: apply to local SQLite
-  L-->>X: success
+  style CANVAS fill:#ffffff,stroke:#ffffff,color:#0f172a
+  classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
+  classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
+  classDef ext fill:#f1f5f9,stroke:#475569,color:#0f172a
 ```
 
 Writes are leader-owned. Read-locality and Cell placement can influence which
@@ -322,16 +348,20 @@ Placement affinity learns from actual service-to-partition access. That evidence
 is combined with load, capacity, spread, failure, and policy constraints.
 
 ```mermaid
-%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
-  TRAFFIC["Real service traffic"]:::ext --> OBS["Service → partition access evidence"]:::move
-  OBS --> CACHE["CDC-fed cluster view"]:::move
-  CACHE --> SCORE["Affinity + load + capacity + policy"]:::ctrl
-  SCORE --> PLAN["Placement plan and durable operation"]:::ctrl
-  PLAN --> PLACE["Cells and replicas reconciled"]:::svc
-  PLACE --> LOCAL["More local execution when constraints allow"]:::data
-  LOCAL --> TRAFFIC
+  subgraph CANVAS[" "]
+    direction LR
+    TRAFFIC["Real service traffic"]:::ext --> OBS["Service → partition access evidence"]:::move
+    OBS --> CACHE["CDC-fed cluster view"]:::move
+    CACHE --> SCORE["Affinity + load + capacity + policy"]:::ctrl
+    SCORE --> PLAN["Placement plan and durable operation"]:::ctrl
+    PLAN --> PLACE["Cells and replicas reconciled"]:::svc
+    PLACE --> LOCAL["More local execution when constraints allow"]:::data
+    LOCAL --> TRAFFIC
+  end
 
+  style CANVAS fill:#ffffff,stroke:#ffffff,color:#0f172a
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
   classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
@@ -354,15 +384,19 @@ intent and progress to system tables, those writes become durable through the
 normal partition path, and CDC updates every node's local read model.
 
 ```mermaid
-%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
-  INTENT["Owner writes intent or progress<br/>to a system table"]:::ctrl --> RAFT["Raft commit and apply"]:::data
-  RAFT --> CDC["CDC fan-out"]:::move
-  CDC --> CACHE["Node-local caches converge"]:::move
-  CACHE --> DECIDE["Routing, admission, and reconcilers re-evaluate"]:::ctrl
-  DECIDE --> OP["Durable operation / owner-row update"]:::ctrl
-  OP --> INTENT
+  subgraph CANVAS[" "]
+    direction LR
+    INTENT["Owner writes intent or progress<br/>to a system table"]:::ctrl --> RAFT["Raft commit and apply"]:::data
+    RAFT --> CDC["CDC fan-out"]:::move
+    CDC --> CACHE["Node-local caches converge"]:::move
+    CACHE --> DECIDE["Routing, admission, and reconcilers re-evaluate"]:::ctrl
+    DECIDE --> OP["Durable operation / owner-row update"]:::ctrl
+    OP --> INTENT
+  end
 
+  style CANVAS fill:#ffffff,stroke:#ffffff,color:#0f172a
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
   classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065

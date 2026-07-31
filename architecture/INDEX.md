@@ -18,25 +18,29 @@ near the partitions they use, and both data and compute are continuously
 reconciled as the cluster changes.
 
 ```mermaid
-%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
-  CLIENT["Clients"]:::ext --> ROUTE["Cluster ingress and routing"]:::move
+  subgraph CANVAS[" "]
+    direction LR
+    CLIENT["Clients"]:::ext --> ROUTE["Cluster ingress and routing"]:::move
 
-  subgraph NODE["A selected cluster node"]
-    direction TB
-    CELL["Service Cell<br/>disposable compute"]:::svc
-    REPLICA["Relevant partition replica<br/>durable rows"]:::data
-    CELL ==>|"local SQL when placement aligns"| REPLICA
+    subgraph NODE["A selected cluster node"]
+      direction TB
+      CELL["Service Cell<br/>disposable compute"]:::svc
+      REPLICA["Relevant partition replica<br/>durable rows"]:::data
+      CELL ==>|"local SQL when placement aligns"| REPLICA
+    end
+
+    ROUTE -->|"service request"| CELL
+    ROUTE -->|"SQL request"| REPLICA
+    REPLICA <-->|"Raft replication"| PEERS["Replica quorum<br/>on other nodes"]:::data
+
+    EVIDENCE["Observed access<br/>topology · load · policy"]:::move --> PLACE["Placement and rebalancing"]:::ctrl
+    PLACE -. "places / moves" .-> CELL
+    PLACE -. "places / repairs" .-> REPLICA
   end
 
-  ROUTE -->|"service request"| CELL
-  ROUTE -->|"SQL request"| REPLICA
-  REPLICA <-->|"Raft replication"| PEERS["Replica quorum<br/>on other nodes"]:::data
-
-  EVIDENCE["Observed access<br/>topology · load · policy"]:::move --> PLACE["Placement and rebalancing"]:::ctrl
-  PLACE -. "places / moves" .-> CELL
-  PLACE -. "places / repairs" .-> REPLICA
-
+  style CANVAS fill:#ffffff,stroke:#ffffff,color:#0f172a
   style NODE fill:#ffffff,stroke:#94a3b8,color:#0f172a
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
