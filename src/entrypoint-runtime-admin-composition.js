@@ -558,41 +558,6 @@ async function startAdminRuntimeComposition(options) {
 }
 
 /**
- * Attach the SQL engine to an already-started admin runtime.
- * @param {Object|null} adminRuntime
- * @param {Object|null} sqlQueryEngine
- */
-function attachSqlEngineToAdminRuntime(adminRuntime, sqlQueryEngine) {
-  if (!adminRuntime || !sqlQueryEngine) {
-    return;
-  }
-  const logger = adminRuntime.adminAPI?.logger;
-  if (typeof adminRuntime.adminAPI?.setSQLQueryEngine === LOCAL_STR_FUNCTION) {
-    adminRuntime.adminAPI.setSQLQueryEngine(sqlQueryEngine);
-    if (logger && typeof logger.info === LOCAL_STR_FUNCTION) {
-      logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_SQL_ENGINE_ATTACHED, {
-        nodeId: adminRuntime.nodeId || null,
-      });
-    }
-    return;
-  }
-  if (
-    adminRuntime.liveQueryWiring?.liveQueryManager &&
-    typeof adminRuntime.liveQueryWiring.liveQueryManager.initialize ===
-      LOCAL_STR_FUNCTION
-  ) {
-    adminRuntime.liveQueryWiring.liveQueryManager.initialize({
-      sqlQueryEngine,
-    });
-    if (logger && typeof logger.info === LOCAL_STR_FUNCTION) {
-      logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_SQL_ENGINE_ATTACHED, {
-        nodeId: adminRuntime.nodeId || null,
-      });
-    }
-  }
-}
-
-/**
  * Shut down admin plus live query startup composition.
  * @param {Object|null} adminRuntime
  * @return {Promise<void>}
@@ -610,7 +575,6 @@ async function shutdownAdminRuntimeComposition(adminRuntime) {
 }
 
 export {
-  attachSqlEngineToAdminRuntime,
   createAdminAPIWithLiveQuery,
   createReadinessStateWithDiagnostics,
   createServiceDiagnosticsProvider,

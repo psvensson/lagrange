@@ -12,7 +12,6 @@ export {
 } from './entrypoint-runtime-join-decision.js';
 
 export {
-  attachSqlEngineToAdminRuntime,
   createAdminAPIWithLiveQuery,
   createReadinessStateWithDiagnostics,
   createServiceDiagnosticsProvider,
@@ -23,10 +22,7 @@ export {
   resolvePartitionServiceByPartitionId,
   resolveSystemCacheHandles,
   reportStartupRuntimeHandoff,
-  shutdownAdminRuntimeComposition,
-  shutdownEarlyAdminSqlRuntime,
   startAdminRuntimeComposition,
-  startEarlyAdminSqlRuntime,
 } from './entrypoint-runtime-admin-composition.js';
 
 export {

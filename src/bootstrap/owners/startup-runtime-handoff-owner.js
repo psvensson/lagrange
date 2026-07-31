@@ -291,7 +291,4 @@ class StartupRuntimeHandoffOwner {
   }
 }
 
-export {
-  StartupRuntimeHandoffOwner,
-  TRANSACTION_RECOVERY_STATE,
-};
+export {StartupRuntimeHandoffOwner};

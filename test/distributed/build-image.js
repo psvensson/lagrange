@@ -204,7 +204,4 @@ async function buildImage(
   return {image: config.image, gitHash, gitDirty, reused: false};
 }
 
-export {
-  buildImage,
-  resolveGitDirty,
-};
+export {buildImage};

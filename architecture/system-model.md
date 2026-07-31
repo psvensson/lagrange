@@ -1,35 +1,110 @@
 # The Lagrange System Model
 
-The mental model a developer needs before reading any other architecture
-document: what Lagrange stores, what it replicates, what it places, and how a
-request finds its data.
+This document defines the mental model used by the rest of the architecture
+documentation: what owns durable state, what is distributed, what is placed,
+and how requests and topology changes move through the cluster.
 
-Read this first, then the process document for whatever you are working on:
-[partitioning](process-partitioning.md), [replication](process-replication.md),
-[rebalancing](process-rebalancing.md),
-[request routing](process-request-routing.md), or
-[data affinity](process-data-affinity.md).
+It is deliberately not a component inventory. Start here, then follow the
+process document for the mechanism you need:
+[partitioning](process-partitioning.md),
+[replication](process-replication.md),
+[request routing](process-request-routing.md),
+[data affinity](process-data-affinity.md), or
+[rebalancing](process-rebalancing.md).
 
 ## One sentence
 
-Lagrange is a distributed SQL database whose data is partitioned and
-Raft-replicated, while service Cells reuse the same placement and repair
-workflow so application code can run near the rows it reads.
+Lagrange is a distributed SQL database whose tables are split into
+Raft-replicated partitions and whose disposable service Cells are continuously
+placed near the data they use.
+
+## The system in one picture
+
+```mermaid
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+flowchart TB
+  CLIENT["Clients and operators"]:::ext --> INGRESS["Ingress, routing, and one SQL execution path"]:::move
+
+  subgraph CLUSTER["Lagrange cluster"]
+    direction LR
+
+    subgraph A["node-a"]
+      direction TB
+      CELL["Service Cell<br/>disposable compute"]:::svc
+      RA["Selected partition replica<br/>SQLite rows"]:::data
+      CELL ==>|"SQL through the same engine"| RA
+    end
+
+    subgraph B["node-b"]
+      direction TB
+      RB["Partition leader / replica"]:::data
+    end
+
+    subgraph C["node-c"]
+      direction TB
+      RC["Partition replica"]:::data
+    end
+  end
+
+  INGRESS -->|"service request"| CELL
+  INGRESS -->|"SQL request"| RA
+  RA <-->|"Raft"| RB
+  RB <-->|"Raft"| RC
+
+  META["System tables<br/>topology · Bindings · operations"]:::data --> CDC["CDC-fed node-local caches"]:::move
+  CDC --> INGRESS
+  CDC --> PLACE["Placement and reconciliation"]:::ctrl
+  PLACE -. "places / replaces" .-> CELL
+  PLACE -. "places / repairs" .-> RA
+
+  style CLUSTER fill:#ffffff,stroke:#94a3b8,color:#0f172a
+  style A fill:#ffffff,stroke:#94a3b8,color:#0f172a
+  style B fill:#ffffff,stroke:#94a3b8,color:#0f172a
+  style C fill:#ffffff,stroke:#94a3b8,color:#0f172a
+  classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
+  classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
+  classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
+  classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
+  classDef ext fill:#f1f5f9,stroke:#475569,color:#0f172a
+```
+
+The diagram is intentionally simplified. A partition normally has the
+configured replica count, requests may enter any node, and locality is an
+optimisation constrained by durability, capacity, spread, policy, and current
+cluster state. Lagrange does not remove networking or consensus; it makes data
+location part of where service execution is placed and how reads are routed.
+
+## Six anchors
+
+These statements are the stable vocabulary behind the deeper documents:
+
+1. **Tables hold durable state.** User rows, service state, and cluster metadata
+   all live in ordinary tables.
+2. **Partitions are the distribution unit.** A partition owns a contiguous key
+   range and is the unit of routing, replication, placement, split, and merge.
+3. **Replicas are durable members.** Each partition replica stores its own rows
+   and Raft state and participates in failure recovery.
+4. **Cells are disposable compute.** A runtime-service Cell runs code but has no
+   per-service consensus log; durable application state belongs in tables.
+5. **Routing decisions are local views of durable truth.** Each node uses a
+   CDC-fed cache of system tables rather than performing a request-time global
+   lookup.
+6. **Placement is continuous.** The cluster repeatedly reconciles declared
+   intent, observed access, topology, capacity, and failures.
 
 ## Diagram legend
 
-Every diagram in the architecture process documents uses one colour vocabulary.
-Colours are always dark text on a light fill so the diagrams stay readable in
-light and dark themes and in print.
+Every process document uses the same colour vocabulary. Colour is only a
+reading aid; labels and arrows carry the meaning.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
   D["Data<br/>tables · partitions · replicas · SQLite"]:::data
-  S["Service / compute<br/>runtime-service Cells · runtimes · handlers"]:::svc
+  S["Service / compute<br/>Artifacts · Bindings · Cells · handlers"]:::svc
   C["Control plane<br/>owners · workflows · decisions"]:::ctrl
-  T["Transport / propagation<br/>MessageRouter · CDC · caches"]:::move
-  X["External<br/>clients · operators · nodes as containers"]:::ext
+  T["Routing / propagation<br/>MessageRouter · CDC · caches"]:::move
+  X["External<br/>clients · operators · cluster environment"]:::ext
   F["Failure / refusal<br/>denied · blocked · terminal error"]:::bad
 
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
@@ -40,181 +115,125 @@ flowchart LR
   classDef bad fill:#fee2e2,stroke:#b91c1c,color:#450a0a
 ```
 
-## 1. The storage stack
+## 1. The objects that matter
 
-Four levels, no exceptions. Every persistent thing in the cluster — user rows
-and the cluster's own metadata alike — sits somewhere in this stack.
+| Object | What it represents | Durable state ownership |
+| --- | --- | --- |
+| **Table** | A logical SQL-visible relation | Its partitions |
+| **Partition** | A contiguous primary-key range and routing target | Its Raft group |
+| **Replica** | One physical member of a partition group on one node | Its own SQLite rows and Raft state |
+| **Artifact** | Immutable, digest-pinned service code | Artifact metadata and content records |
+| **Binding** | Immutable execution intent connecting an Artifact export to a source | Binding and access-policy rows |
+| **Cell** | A ready running instance derived from a Binding | None locally; durable service state remains in tables |
+| **Message group** | CDC transport and fan-out | Its group log, with a different durability boundary from partition storage |
+| **Operation row** | Durable progress and outcome for a topology workflow | The owning system table |
+
+### The storage hierarchy
+
+A table is logical; each replica is physical. Replicas do not share one SQLite
+file.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart TD
-  T["<b>Table</b><br/>logical, SQL-visible"]:::data
-  P1["<b>Partition</b> p1<br/>key range [null, k)"]:::data
-  P2["<b>Partition</b> p2<br/>key range [k, null)"]:::data
-  R1["Replica r1 · node-a"]:::data
-  R2["Replica r2 · node-b"]:::data
-  R3["Replica r3 · node-c"]:::data
-  S1[("SQLite<br/>rows + Raft log")]:::ext
+  T["<b>Table</b><br/>orders"]:::data
+  P1["<b>Partition P1</b><br/>[null, m)"]:::data
+  P2["<b>Partition P2</b><br/>[m, null)"]:::data
 
-  T -->|"split by primary key"| P1
+  R1A["P1 replica<br/>node-a"]:::data --> S1A[("SQLite A<br/>rows + Raft state")]:::ext
+  R1B["P1 replica<br/>node-b"]:::data --> S1B[("SQLite B<br/>rows + Raft state")]:::ext
+  R1C["P1 replica<br/>node-c"]:::data --> S1C[("SQLite C<br/>rows + Raft state")]:::ext
+
+  R2A["P2 replica<br/>node-b"]:::data
+  R2B["P2 replica<br/>node-c"]:::data
+  R2C["P2 replica<br/>node-d"]:::data
+
+  T --> P1
   T --> P2
-  P1 -->|"Raft consensus group"| R1
-  P1 --> R2
-  P1 --> R3
-  R1 --> S1
-  R2 --> S1
-  R3 --> S1
+  P1 --> R1A
+  P1 --> R1B
+  P1 --> R1C
+  P2 --> R2A
+  P2 --> R2B
+  P2 --> R2C
 
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef ext fill:#f1f5f9,stroke:#475569,color:#0f172a
 ```
 
-- A **table** is logical. It never exists as a single physical object.
-- A **partition** owns a contiguous primary-key range and is the unit of
-  routing, placement, and split/merge.
-- A **replica** is one member of the partition's Raft group and is the unit of
-  failure and repair.
-- Storage is **SQLite** — both the rows and the partition's Raft log.
+System tables such as `nodes`, `partitions`, `services`,
+`service_definitions`, Bindings, and operation records use this same storage
+model. There is no separate metadata database outside the cluster.
 
-System tables (`nodes`, `partitions`, `services`, `service_definitions`, …) are
-ordinary tables in this same stack. There is no separate metadata store.
+Read [Process: Partitioning](process-partitioning.md) for key ranges and
+split/merge, and [Process: Replication](process-replication.md) for consensus and
+repair.
 
-## 2. Two consensus-group kinds plus placed runtime services
+## 2. What runs on a node
 
-Lagrange actively places three entity kinds: partitions, message groups, and
-runtime services. The first two are Raft consensus groups. Runtime-service
-Cells reuse placement, repair, and operation accounting without claiming
-Raft-replicated process-local state.
+Every node can accept requests, participate in storage, run placed Cells, and
+make routing decisions from its local metadata view.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
-flowchart LR
-  PG["<b>Partition group</b><br/>owns a key range<br/>SQLite storage + log"]:::data
-  MG["<b>Message group</b><br/>carries CDC fan-out<br/>in-memory log"]:::move
-  SG["<b>Runtime-service Cell</b><br/>runs service code<br/>durable state stays in tables"]:::svc
-
-  GR["<b>Partition / message rebalancer</b><br/>one per Raft group<br/>gated by that group's leader"]:::ctrl
-  SR["<b>Runtime-service rebalancer</b><br/>one per placed service<br/>gated by service_definitions leader"]:::ctrl
-  MP["<b>MovePlanner</b><br/>single placement scorer"]:::ctrl
-  RC["<b>RebalanceCoordinator</b><br/>replica_operations lifecycle"]:::ctrl
-
-  PG --> GR
-  MG --> GR
-  SG --> SR
-  GR --> MP
-  SR --> MP
-  MP --> RC
-
-  classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
-  classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
-  classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
-  classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
-```
-
-This is why "a partition is a service" is more than a slogan: partitions,
-message groups, and runtime services are rows in `services`, use the same
-planner, and are repaired through the same `replica_operations` workflow. See
-[rebalancing](process-rebalancing.md).
-
-The legacy `wasm_service` enum and `WasmServiceReplica` classes are not a fourth
-active placement path: production startup constructs no rebalancer for that
-entity kind. Current WASI component workloads run as Binding-derived
-`runtime_service` Cells. See
-[replication](process-replication.md#the-unit-of-replication).
-
-## 3. What runs on one node
-
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart TD
-  subgraph Node["A single node"]
+  subgraph NODE["One cluster node"]
     direction TB
-    ING["<b>Ingress adapters</b><br/>PG wire · admin WebSocket · WASM DB.call"]:::ext
-    SQL["<b>SQLQueryEngine (SqlCore)</b><br/>the only SQL planner/executor"]:::svc
-    CACHE["<b>SystemTableCache</b><br/>CDC-fed read model — routing truth"]:::move
-    ROUTER["<b>MessageRouter</b><br/>every message, local or remote"]:::move
-    REPLICAS["<b>Local replicas</b><br/>partition · message-group · service"]:::data
+    ING["Ingress adapters<br/>PostgreSQL wire · admin · service requests"]:::ext
+    CELL["Ready service Cells"]:::svc
+    SQL["SqlCore<br/>one SQL planner and executor"]:::svc
+    CACHE["SystemTableCache<br/>CDC-fed routing and topology view"]:::move
+    ROUTER["MessageRouter<br/>local short-circuit or remote transport"]:::move
+    LOCAL["Local partition and message-group replicas"]:::data
   end
 
   ING --> SQL
-  SQL -->|"where does this table live?"| CACHE
+  ING --> CELL
+  CELL --> SQL
+  SQL -->|"read routing metadata"| CACHE
   SQL --> ROUTER
-  ROUTER --> REPLICAS
-  REPLICAS -->|"CDC events"| CACHE
+  ROUTER --> LOCAL
+  LOCAL -->|"system-table CDC"| CACHE
 
-  style Node fill:#ffffff,stroke:#94a3b8,color:#0f172a
+  style NODE fill:#ffffff,stroke:#94a3b8,color:#0f172a
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
   classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
   classDef ext fill:#f1f5f9,stroke:#475569,color:#0f172a
 ```
 
-Two things about this picture carry most of the system's behaviour:
+Two consequences explain much of the runtime behaviour:
 
-- **`SystemTableCache` is the routing brain and is read-only to its ordinary
-  consumers.** Nothing decides where to send a request by asking a peer at
-  request time; it reads the local cache. CDC is the primary writer, but not the
-  only one — bootstrap and join hydration, authoritative reconciliation and
-  repair, and a small set of owner-local truth seeds also write to it during
-  normal operation. Treat "CDC-only" as the design intent and the sanctioned
-  writer list as the actual contract.
-- **`MessageRouter` is the single addressing surface,** using
-  `{nodeId}/{entityType}/{entityId}`. It is not, however, a single *transport*:
-  a message addressed to the local node short-circuits to an in-process handler
-  call with no socket and no serialization. The node's WebSocket connection to
-  itself is the fallback for local addresses with no registered handler.
+- **There is no request-time topology service.** A node chooses targets from its
+  local `SystemTableCache`. CDC is the normal propagation path, while bootstrap,
+  join hydration, reconciliation, and bounded owner-local truth seeds cover
+  specific recovery windows.
+- **There is one addressing surface.** `MessageRouter` addresses local and
+  remote entities consistently. A registered local destination short-circuits
+  in process; a remote destination uses transport.
 
-## 4. The control loop
+The local cache is a read model of durable system-table truth. It is useful for
+routing and decisions, but it is not itself the authority that completes a
+workflow.
 
-Metadata changes are not broadcast as ad-hoc notifications. They are *writes to
-system tables*, which means they go through the same Raft path as user data and
-arrive everywhere as CDC events.
+## 3. Requests use shared paths
 
-```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','actorBkg':'#dbeafe','actorBorder':'#1e40af','actorTextColor':'#0b2545','signalColor':'#334155','signalTextColor':'#0f172a','noteBkgColor':'#fef3c7','noteBorderColor':'#b45309','noteTextColor':'#451a03'}}}%%
-sequenceDiagram
-  participant W as Writer (any node)
-  participant L as System-partition leader
-  participant MG as Message group
-  participant C as Every node's cache
-  participant D as Decision makers
+### SQL requests
 
-  W->>L: SQL write to a system table
-  L->>L: Raft replicate + commit + apply
-  L->>MG: CDC event (stamped with origin HLC)
-  MG->>C: fan out to all subscribed nodes
-  Note over C,D: routing, rebalancing and admission<br/>all read this one model
-  C->>D: cache change → decisions re-evaluate
-  D->>W: next request routes on the new state
-```
-
-Consequences worth internalising before debugging anything:
-
-- **Convergence, not ordering.** CDC delivery is point-in-time with no global
-  order, so the cache apply path is order-insensitive: an origin write HLC
-  drives a last-writer-wins compare, DELETE tombstones fence reordered
-  resurrections, and an authoritative sweep removes rows a lost DELETE left
-  behind.
-- **The cache is an observational read model, not a completion oracle.** A
-  topology workflow is finished when its owner row says so, not when your local
-  cache happens to show the result.
-- **Absence proves nothing.** A row missing from your local cache may be a row
-  that has not arrived yet.
-
-## 5. A request, end to end
+Protocol adapters and internal callers do not own separate planners. The public
+request path normalises into `SqlRequest` and delegates to `SqlCore`.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
-  C["Client"]:::ext --> I["Ingress adapter"]:::ext
-  I --> RQ["SqlRequest<br/>frozen"]:::svc
-  RQ --> E["SqlCore.executeRequest"]:::svc
-  E --> PR["Resolve partitions<br/>from primary-key predicates"]:::ctrl
-  PR --> CS["Pick replicas per partition<br/>leader for writes"]:::ctrl
-  CS --> MR["MessageRouter"]:::move
-  MR --> PX["Partition replicas<br/>execute locally"]:::data
-  PX --> AG["Merge / aggregate"]:::svc
-  AG --> C
+  I["Ingress adapter"]:::ext --> R["Normalised SQL request"]:::svc
+  R --> E["SqlCore"]:::svc
+  E --> P["Resolve relevant partitions"]:::ctrl
+  P --> C["Choose eligible replicas<br/>leader for writes"]:::ctrl
+  C --> M["MessageRouter"]:::move
+  M --> X["Partition-local execution"]:::data
+  X --> A["Merge / aggregate results"]:::svc
+  A --> O["Response"]:::ext
 
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
@@ -223,61 +242,196 @@ flowchart LR
   classDef ext fill:#f1f5f9,stroke:#475569,color:#0f172a
 ```
 
-Every entrypoint — PostgreSQL wire, admin API, the programmatic runtime,
-WASM `DB.call` — normalises into a frozen `SqlRequest` and delegates to one
-engine. There is no second planner and no fallback executor. The detail of each
-step is in [request routing](process-request-routing.md).
+A predicate the partition resolver cannot use generally widens the target set
+rather than failing. Multi-partition execution fans work out, performs local
+work, and merges results. Read
+[Process: Request Routing](process-request-routing.md) for the candidate and
+retry rules and [Process: Partitioning](process-partitioning.md) for current
+narrowing behaviour.
 
-## 6. Why the services layer exists
+### Service requests
 
-A classical distributed database splits tables into partitions, replicates each
-partition, and routes queries to the right one:
-
-![Classical distributed database: logical Orders and Customers tables split into partitions, each replicated across six nodes, with queries routed to the right partition and executed in parallel](../docs/dsitributed_db.png)
-
-Lagrange adds a *service* tier over the data layout. A runtime service is
-decomposed into placed Cells; it does not gain a per-service Raft log or
-replicate process-local state like a data partition. Its durable state remains
-in ordinary partitioned and replicated tables. The placement scorer pulls each
-Cell toward the nodes already holding the partitions that service reads and
-writes:
+Artifact, Binding, and Cell describe code, execution intent, and the resulting
+placed runtime instance. They do not create another durable-state model.
 
 ```mermaid
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
-  C1["Order Processor Cell<br/>node-a"]:::svc
-  C2["Order Processor Cell<br/>node-c"]:::svc
-  O1["Orders P1<br/>Raft replica"]:::data
-  O2["Orders P2<br/>Raft replica"]:::data
-  S["Durable service state<br/>ordinary tables"]:::data
+  A["Artifact<br/>immutable code"]:::svc --> B["Binding<br/>source + export + access intent"]:::svc
+  B --> C1["Cell on node-a"]:::svc
+  B --> C2["Cell on node-c"]:::svc
 
-  C1 -. "reads / writes" .-> O1
-  C2 -. "reads / writes" .-> O2
-  C1 -. "persists" .-> S
-  C2 -. "persists" .-> S
+  REQ["Matching request"]:::ext --> B
+  B --> C1
+  C1 --> SQL["SqlCore"]:::move
+  SQL --> P["Partition replicas"]:::data
+  C1 -. "durable state" .-> P
 
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
+  classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
+  classDef ext fill:#f1f5f9,stroke:#475569,color:#0f172a
 ```
 
-Compute moving to data instead of data moving to compute is the point of the
-whole design, and it is implemented as two independent mechanisms that are easy
-to confuse:
+Cells are replaceable. Their capacity and placement are cluster decisions, not
+application-selected node assignments. Request Bindings are the publicly
+invocable external path today; see
+[Minimal Deployment Surface](minimal-deployment-surface.md) and the
+[service deployment guide](../docs/service-deployment-guide.md).
 
-| Layer | Question it answers | When it acts |
+## 4. A write keeps the database durability model
+
+Data-local service execution can remove an avoidable application-to-database
+hop, but the partition leader and its quorum still decide durability.
+
+```mermaid
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','actorBkg':'#dbeafe','actorBorder':'#1e40af','actorTextColor':'#0b2545','signalColor':'#334155','signalTextColor':'#0f172a','noteBkgColor':'#fef3c7','noteBorderColor':'#b45309','noteTextColor':'#451a03','labelBoxBkgColor':'#ffffff','labelBoxBorderColor':'#94a3b8'}}}%%
+sequenceDiagram
+  participant X as SQL caller or service Cell
+  participant L as Partition leader
+  participant F1 as Follower A
+  participant F2 as Follower B
+
+  X->>L: routed write
+  L->>L: append proposal
+  L->>F1: AppendEntries
+  L->>F2: AppendEntries
+  F1-->>L: acknowledge
+  F2-->>L: acknowledge
+  Note over L,F2: majority reached → committed
+  L->>L: apply to local SQLite
+  L-->>X: success
+```
+
+Writes are leader-owned. Read-locality and Cell placement can influence which
+network boundaries are crossed before the write reaches the leader, but they do
+not turn followers into write authorities. The exact write modes, CDC emission,
+snapshot behaviour, and repair path are in
+[Process: Replication](process-replication.md).
+
+## 5. Placement and routing act on two timescales
+
+The phrase “compute moves to the data” covers two separate mechanisms.
+
+| Mechanism | Question | Timescale |
 | --- | --- | --- |
-| Placement affinity | *Where should this service's Cells live?* | Topology change (slow) |
-| Read-locality routing | *Which data replica should serve this read?* | Every query (fast) |
+| **Placement affinity** | Where should this service's Cells live? | Topology time: slower, structural |
+| **Read-locality routing** | Which eligible replica should serve this read? | Request time: fast, per query |
 
-Both are covered in [data affinity](process-data-affinity.md).
+Placement affinity learns from actual service-to-partition access. That evidence
+is combined with load, capacity, spread, failure, and policy constraints.
+
+```mermaid
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+flowchart LR
+  TRAFFIC["Real service traffic"]:::ext --> OBS["Service → partition access evidence"]:::move
+  OBS --> CACHE["CDC-fed cluster view"]:::move
+  CACHE --> SCORE["Affinity + load + capacity + policy"]:::ctrl
+  SCORE --> PLAN["Placement plan and durable operation"]:::ctrl
+  PLAN --> PLACE["Cells and replicas reconciled"]:::svc
+  PLACE --> LOCAL["More local execution when constraints allow"]:::data
+  LOCAL --> TRAFFIC
+
+  classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
+  classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
+  classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
+  classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
+  classDef ext fill:#f1f5f9,stroke:#475569,color:#0f172a
+```
+
+Locality is an outcome, not an unconditional promise. A healthy placement may
+remain remote because quorum spread, available capacity, latency-group policy,
+incumbent stability, or another safety constraint wins.
+
+Read [Process: Data Affinity](process-data-affinity.md) for the evidence feed and
+[Process: Rebalancing](process-rebalancing.md) for movement decisions and
+operation safety.
+
+## 6. The metadata control loop
+
+Topology changes are not coordinated through ad-hoc broadcasts. Owners write
+intent and progress to system tables, those writes become durable through the
+normal partition path, and CDC updates every node's local read model.
+
+```mermaid
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','clusterBkg':'#ffffff','clusterBorder':'#94a3b8','edgeLabelBackground':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+flowchart LR
+  INTENT["Owner writes intent or progress<br/>to a system table"]:::ctrl --> RAFT["Raft commit and apply"]:::data
+  RAFT --> CDC["CDC fan-out"]:::move
+  CDC --> CACHE["Node-local caches converge"]:::move
+  CACHE --> DECIDE["Routing, admission, and reconcilers re-evaluate"]:::ctrl
+  DECIDE --> OP["Durable operation / owner-row update"]:::ctrl
+  OP --> INTENT
+
+  classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
+  classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
+  classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
+```
+
+Three debugging rules follow:
+
+- **A cache observation is not a completion oracle.** The durable owner or
+  operation row defines whether a workflow is complete.
+- **Absence in one cache proves little.** The relevant event may not have
+  arrived yet, or reconciliation may still be in progress.
+- **Apply must tolerate reordering.** Origin HLC comparison, tombstones, and
+  authoritative reconciliation protect convergence when CDC delivery is not a
+  global total order.
+
+Read [Control Plane Architecture](control-plane.md) and
+[Bootstrap And Data Flow](bootstrap.md) for owner progression, hydration, and
+recovery detail.
+
+## 7. Active group types and their boundaries
+
+The placement machinery handles entities with different state contracts. Shared
+operation accounting does not mean shared consensus semantics.
+
+| Entity | Primary role | Consensus and durable-state boundary |
+| --- | --- | --- |
+| **Partition group** | Stores one table key range | Persistent SQLite rows and Raft state; consensus active |
+| **Message group** | Carries CDC and cluster propagation | Raft-backed in-memory transport log with a weaker restart boundary than partition storage |
+| **Runtime-service Cell** | Runs Binding-derived service code | No per-service Raft state; durable application state remains in tables |
+
+Scaffold or compatibility code must not be read as another active production
+path. In particular, current externally installed WASI workloads use
+Binding-derived `runtime_service` Cells; legacy `wasm_service` classes are not a
+fourth active placement and consensus model.
+
+## 8. Invariants that organise the code
+
+The architecture is easier to navigate when these contracts are treated as
+hard boundaries:
+
+- **One owner per concern.** Durable intent and state transitions have a
+  canonical owner rather than several competing writers.
+- **One SQL planner and executor.** Entry adapters converge instead of creating
+  protocol-specific semantics.
+- **One routing substrate.** Local and remote delivery share addressing and
+  metadata, with local short-circuit as an optimisation.
+- **No hidden durable state in Cells.** Replaceable compute cannot become an
+  accidental second database.
+- **Writes reach the partition leader.** Locality does not create alternate
+  write authorities.
+- **System-table truth drives reconciliation.** Cache views may lag, but owners
+  and operation rows remain durable evidence.
+- **No silent fallback path.** Unsupported or incomplete behaviour should be
+  explicit rather than switching to a second implementation with different
+  semantics.
+
+The detailed single-path ownership contract is in
+[Architecture Overview](overview.md).
 
 ## Where to go next
 
 | To understand… | Read |
 | --- | --- |
-| How key ranges are chosen, resolved, split and merged | [process-partitioning.md](process-partitioning.md) |
-| How a write becomes durable and how a lost replica is rebuilt | [process-replication.md](process-replication.md) |
-| How the cluster decides to move a replica, and how it executes safely | [process-rebalancing.md](process-rebalancing.md) |
-| How SQL and service requests find their target | [process-request-routing.md](process-request-routing.md) |
-| How access evidence steers placement and reads | [process-data-affinity.md](process-data-affinity.md) |
-| Component-by-component ownership | [runtime-components.md](runtime-components.md) |
-| How a cluster forms from nothing | [bootstrap.md](bootstrap.md) |
+| How key ranges are created, narrowed, split, and merged | [Process: Partitioning](process-partitioning.md) |
+| How writes commit, CDC is emitted, and replicas recover | [Process: Replication](process-replication.md) |
+| How SQL and service requests select their targets | [Process: Request Routing](process-request-routing.md) |
+| How observed access affects placement and reads | [Process: Data Affinity](process-data-affinity.md) |
+| How moves are scored, admitted, executed, and repaired | [Process: Rebalancing](process-rebalancing.md) |
+| How Artifact, Binding, and Cell lifecycle is owned | [Minimal Deployment Surface](minimal-deployment-surface.md) |
+| How nodes form and hydrate a cluster | [Bootstrap And Data Flow](bootstrap.md) |
+| Which component owns a runtime responsibility | [Runtime Components](runtime-components.md) |
+| What the current implementation actually supports | [Current capabilities and limitations](../docs/current-capabilities-and-limitations.md) |

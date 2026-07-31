@@ -33,10 +33,7 @@ import {
   installGcpImage,
   teardownGcpProvisioner,
 } from './gcp-run-orchestration.js';
-import {
-  buildImage,
-  resolveGitDirty,
-} from './build-image.js';
+import {buildImage} from './build-image.js';
 import {
   ReportWriter,
   computeSummary,
@@ -1413,13 +1410,11 @@ export {
   buildImage,
   loadScenarioModule,
   shouldPrintLiveLogEntry,
-  writeFailureBundlesForReport,
   resolveFastLocalMode,
   resolveDeterministicDebugConfig,
   applyDeterministicDebugConfig,
   buildReportMetadata,
   formatScenarioPhaseEventLine,
-  resolveGitDirty,
   deriveRunOutputDir,
   deriveRunStatusPath,
   buildRunStatusArtifact,
