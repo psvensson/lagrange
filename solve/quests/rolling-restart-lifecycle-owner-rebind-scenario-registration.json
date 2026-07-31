@@ -1,0 +1,71 @@
+{
+  "id": "rolling-restart-lifecycle-owner-rebind-scenario-registration",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "scripts/run-placement-affinity-scenarios.js registers the rolling-restart-lifecycle-owner-rebind-recurrence deterministic guard and the registered scenario reports priority metric 0 on three consecutive runs.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "specRef": "membership-lifecycle-placement-hard-cutover",
+    "closesCL": [],
+    "parentQuest": "rolling-restart-lifecycle-owner-rebind-recurrence",
+    "planDoc": "solve/epics/topology-convergence-hardening.md",
+    "draftedAtCommit": "5d19e59a003d277d3c6404fa2b8aec56dff405f0"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "rolling-restart-lifecycle-owner-rebind-recurrence",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "rolling-restart-lifecycle-owner-rebind-scenario-registration-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "rolling-restart-lifecycle-owner-rebind-recurrence",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "reuse-canonical-lifecycle-owner",
+      "statement": "Reuse the existing lifecycle state machine and resumed-infrastructure catch-up owner; do not mutate lifecycle state directly, add a parallel state path, replay completed infrastructure or membership side effects, or synthesize READY."
+    },
+    {
+      "id": "fail-closed-finalization",
+      "statement": "FINALIZED and steady-state background-writer activation must not succeed unless the canonical lifecycle owner confirms READY; an invalid transition must surface as a failure instead of logging completion or starting heartbeats."
+    },
+    {
+      "id": "real-checkpoint-resume-seam",
+      "statement": "Deterministic evidence must use the real join coordinator and durable session store: attempt one completes membership and fails retryably in readiness, cleanup leaves STOPPED, attempt two resets to STARTING, skips completed infrastructure and membership checkpoints, reruns readiness, and reaches READY with one session identity and no duplicated membership side effects."
+    },
+    {
+      "id": "heartbeat-publication-fence",
+      "statement": "The regression must prove steady-state writer activation observes local READY and cannot reassert a JOINING node row after the retry publishes the ready lease."
+    },
+    {
+      "id": "negative-controls",
+      "statement": "Fresh joins, same-state READY idempotence, and terminal non-retryable cleanup must retain their existing behavior."
+    },
+    {
+      "id": "production-owner-divergence-discriminator",
+      "statement": "Before changing source, extend the deterministic guard through the production durable-rejoin construction and cleanup sequence that leaves NodeService bound to a lifecycle owner different from the joining service at retry attempt two; prove which owner transition created the mismatch without assigning private lifecycle fields in the fixture."
+    },
+    {
+      "id": "no-assert-or-budget-workaround",
+      "statement": "Do not remove or downgrade the canonical-owner assertion, accept an unknown owner, mutate lifecycle state directly, or change join/readiness timeout and retry budgets; resolve ownership through the canonical lifecycle-owner handoff."
+    }
+  ]
+}

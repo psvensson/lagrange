@@ -162,6 +162,10 @@ const SCENARIOS = {
     'test/node/node-service.test.js',
     'test/control-plane/heartbeat-joining-fence-preservation.test.js',
   ],
+  'rolling-restart-lifecycle-owner-rebind-recurrence': [
+    'test/bootstrap/' +
+      'node-joining-service-lifecycle-owner-handoff.test.js',
+  ],
   'split-snapshot-transfer-pacing': [
     'test/partition/split-backfill-internal-pacing.test.js',
     'test/partition/partition-split-routing.test.js',
