@@ -11,8 +11,11 @@ requires repository-development or automation documentation.
 ## I Want To Understand Why Lagrange Is Different
 
 1. Read [The Lagrange Native Programming Model](native-programming-model.md).
-2. Follow [Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md).
-3. Read [Process: Data Affinity](../architecture/process-data-affinity.md) when
+2. Read
+   [Estimating Performance, Throughput, And Network Cost](performance-and-cost-estimation.md)
+   for conservative ranges and calculation methods.
+3. Follow [Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md).
+4. Read [Process: Data Affinity](../architecture/process-data-affinity.md) when
    you want the placement mechanism rather than the application model.
 
 This path explains the distinction between deploying an existing WASM or future
@@ -54,14 +57,18 @@ and is not part of the public documentation.
 ## I Want To Rewrite A Hot Path
 
 1. Measure the existing statements, rows, bytes, and latency.
-2. Follow [Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md).
-3. Run the
+2. Use
+   [Estimating Performance, Throughput, And Network Cost](performance-and-cost-estimation.md)
+   to calculate placement, round-trip, reduction, and billing opportunities
+   separately.
+3. Follow [Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md).
+4. Run the
    [MovieLens data-affinity example](../examples/service-data-affinity/README.md)
    to compare PostgreSQL grouped SQL, Lagrange distributed SQL, and bounded
    service reduction.
-4. Use [Process: Data Affinity](../architecture/process-data-affinity.md) to
+5. Use [Process: Data Affinity](../architecture/process-data-affinity.md) to
    inspect how successful service-issued access becomes placement evidence.
-5. Keep [Current Capabilities And Limitations](current-capabilities-and-limitations.md)
+6. Keep [Current Capabilities And Limitations](current-capabilities-and-limitations.md)
    open: the public `call` and `pushdown` invocation adapters are not implemented
    yet, even though their Binding source kinds are accepted.
 
