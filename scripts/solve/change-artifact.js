@@ -119,6 +119,15 @@ const CONTENT_ADDRESSED_STORAGE_KIND = 'content-addressed';
 const ROOT_PACKAGE_LOCK_PATH = 'package-lock.json';
 const QUEST_SCOPE_RUNTIME = 'runtime';
 const QUEST_SCOPE_WORKFLOW = 'workflow';
+const SOLVE_BOOKKEEPING_SUBTREES = Object.freeze([
+  'artifacts',
+  'changes',
+  'log',
+  'oracle',
+  'quests',
+  'report',
+  'state',
+]);
 const SCOPE_CITATION_FILE_TOKEN =
   /[A-Za-z0-9_./*-]*[A-Za-z0-9_*-]+\.(?:js|mjs|cjs|json|md|diff|sh|yaml|yml)\b/gu;
 const NON_OWNER_SCOPE_CITATION_PREFIXES = Object.freeze([
@@ -327,6 +336,25 @@ function hasGitBinaryPatch(content) {
   return /^GIT binary patch$/mu.test(String(content || ''));
 }
 
+// The Solver's own checkpoint commits legitimately bundle a quest's source
+// paths with that quest's OWN solve/ bookkeeping (attempt diffs under
+// solve/changes/<id>/, the event log, the report projection, oracle). When
+// such a committed range is later referenced as a measurement-only commit:
+// changeRef (e.g. to discharge a base-unreachable rejected-attempt
+// replacement), that own-quest bookkeeping must not turn the range into a
+// workflow-scope changeRef — only genuinely foreign workflow paths may. This
+// is deliberately narrow: it matches only the recording quest's id-scoped
+// subtrees and the shared frontier-board projection, never scripts/solve/,
+// another quest's solve/ tree, or any other workflow path.
+export function isOwnQuestSolveBookkeeping(filePath, questId) {
+  if (typeof questId !== 'string' || questId.length === 0) return false;
+  const normalized = normalizeSlash(filePath);
+  if (normalized === `${SOLVE_DATA_DIR}/FRONTIER.generated.md`) return true;
+  const id = String(questId);
+  return SOLVE_BOOKKEEPING_SUBTREES.some((subtree) =>
+    normalized.startsWith(`${SOLVE_DATA_DIR}/${subtree}/${id}`));
+}
+
 export function classifyPath(filePath) {
   const normalized = normalizeSlash(filePath);
   if (WORKFLOW_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
@@ -439,14 +467,19 @@ function inspectCommitChangeArtifact(root, quest, changeRef, commitRef) {
   if (changedPaths.length === 0) {
     problems.push(LOCAL_STR_COMMIT_RANGE_TOUCHES_NO_PATHS);
   }
-  const categories = [...new Set(changedPaths.map(classifyPath))].sort();
+  const scopeCategories = [
+    ...new Set(
+      changedPaths
+        .filter((filePath) => !isOwnQuestSolveBookkeeping(filePath, quest?.id))
+        .map(classifyPath)),
+  ].sort();
   const questScope = classifyQuestScope(quest);
   if (questScope !== QUEST_SCOPE_WORKFLOW &&
-    categories.includes(QUEST_SCOPE_WORKFLOW)) {
+    scopeCategories.includes(QUEST_SCOPE_WORKFLOW)) {
     problems.push(LOCAL_STR_PROBLEM_WORKFLOW_SCOPE);
   }
   if (questScope === QUEST_SCOPE_WORKFLOW &&
-    categories.includes(QUEST_SCOPE_RUNTIME)) {
+    scopeCategories.includes(QUEST_SCOPE_RUNTIME)) {
     problems.push(LOCAL_STR_PROBLEM_RUNTIME_SCOPE);
   }
   return {
@@ -454,7 +487,7 @@ function inspectCommitChangeArtifact(root, quest, changeRef, commitRef) {
     problems,
     filePath: changeRef,
     changedPaths,
-    categories,
+    categories: scopeCategories,
     questScope,
     content: delta.content || '',
     storageKind: COMMIT_STORAGE_KIND,
