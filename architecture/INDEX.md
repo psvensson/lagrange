@@ -18,7 +18,7 @@ near the partitions they use, and both data and compute are continuously
 reconciled as the cluster changes.
 
 ```mermaid
-%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+%%{init: {'theme':'base','darkMode':false,'themeCSS':'svg { background-color: #ffffff !important; }','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
   CLIENT["Clients"]:::ext --> ROUTE["Cluster ingress and routing"]:::move
 
@@ -37,6 +37,7 @@ flowchart LR
   PLACE -. "places / moves" .-> CELL
   PLACE -. "places / repairs" .-> REPLICA
 
+  style NODE fill:#ffffff,stroke:#94a3b8,color:#0f172a
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
   classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
