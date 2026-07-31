@@ -106,15 +106,38 @@ function stubDurableRejoin(service, calls, options = {}) {
       connectionState: STATE.CONNECTED,
     });
   };
-  service.querySystemStatePhase.nodeRegistrationOwner
-    .withdrawFailedJoinAdmission = async ({registeredNodeId}) => {
-      calls.withdrawals.push({attempt, registeredNodeId});
-      publishMembershipState(calls, {
-        status: NODE_STATE.STOPPED,
-        connectionState: STATE.DISCONNECTED,
-      });
+  const nodeRegistrationOwner =
+    service.querySystemStatePhase.nodeRegistrationOwner;
+  const withdrawalGateway = {
+    async updateSystemTableRow(tableName, whereClause, data) {
+      calls.withdrawalTables.push(tableName);
+      if (tableName === TABLES.NODES) {
+        calls.withdrawals.push({
+          attempt,
+          registeredNodeId: whereClause[COLUMN.NODE_ID],
+        });
+        publishMembershipState(calls, {
+          status: data[COLUMN.STATUS],
+          connectionState: data[COLUMN.CONNECTION_STATE],
+        });
+      }
       return {success: true};
-    };
+    },
+  };
+  nodeRegistrationOwner.getJoinAdmissionControlPlaneSystemTableGateway =
+    () => withdrawalGateway;
+  const productionWithdraw =
+    nodeRegistrationOwner.withdrawFailedJoinAdmission
+      .bind(nodeRegistrationOwner);
+  nodeRegistrationOwner.withdrawFailedJoinAdmission = async (withdrawOptions) => {
+    calls.withdrawalOwnerCalls.push(withdrawOptions);
+    try {
+      return await productionWithdraw(withdrawOptions);
+    } catch (error) {
+      calls.withdrawalErrors.push(error.message);
+      throw error;
+    }
+  };
   service.activateMessageGroupServiceRows = async () => {
     calls.messageGroupRows.push(attempt);
   };
@@ -194,6 +217,9 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
     readinessMembershipStates: [],
     membershipTransitions: [],
     withdrawals: [],
+    withdrawalTables: [],
+    withdrawalOwnerCalls: [],
+    withdrawalErrors: [],
   };
   const nodeService = NodeService.getInstance();
   nodeService.on(NODE_SERVICE_EVENT.LIFECYCLE_STATE_CHANGE, (event) => {
@@ -247,6 +273,12 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
     attempt: 'outer-1',
     registeredNodeId: NODE_ID,
   }], 'terminal cleanup should withdraw the registered membership once');
+  t.same(calls.withdrawalOwnerCalls, [{registeredNodeId: NODE_ID}],
+    'cleanup should invoke the production withdrawal owner with the exact node');
+  t.same(calls.withdrawalErrors, [],
+    'the production withdrawal owner should complete without fallback');
+  t.same(calls.withdrawalTables, [TABLES.NODES, TABLES.NODE_ENDPOINTS],
+    'the production withdrawal owner should stop membership and its node endpoint');
   t.match(
     nodeService.getSystemTableCache().get(TABLES.NODES, NODE_ID),
     {
