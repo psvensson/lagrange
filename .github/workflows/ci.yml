@@ -6,6 +6,10 @@
 # circular deps, eslint). The nightly full-gate workflow still runs the
 # complete manifest, so those checks keep a binding remote signal.
 #
+# Documentation-only changes do not exercise the runtime gate. GitHub applies
+# paths-ignore only when every changed path matches an ignored pattern, so any
+# code, configuration, workflow, test, chart, or package change still runs CI.
+#
 # The statistical rolling-restart convergence gate is deliberately not run
 # here: its pass rate is variance-bounded and is promoted only through the
 # sealed Wilson-95 rule documented in docs/convergence-donewhen-metric.md.
@@ -15,12 +19,19 @@ on:
   push:
     branches: [main]
     paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "architecture/**"
       - "solve/changes/**"
       - "solve/log/**"
       - "solve/report/**"
       - "solve/autonomous/**"
   pull_request:
     branches: [main]
+    paths-ignore:
+      - "**/*.md"
+      - "docs/**"
+      - "architecture/**"
 
 permissions:
   contents: read
