@@ -21,7 +21,8 @@ separate application tier.
 Start with:
 
 - [Why the programming model is different](docs/native-programming-model.md)
-- [Conservative performance and cost estimates](docs/performance-and-cost-estimation.md)
+- [Conservative performance and network estimates](docs/performance-and-cost-estimation.md)
+- [Conservative infrastructure-cost estimates](docs/infrastructure-cost-estimation.md)
 - [A thorough hot-path rewrite example](docs/tutorials/rewrite-a-hot-path.md)
 - [Current capabilities and limitations](docs/current-capabilities-and-limitations.md)
 
@@ -66,6 +67,13 @@ claims. The result depends on round trips, selectivity, bytes moved, partition
 count, topology, and the actual bottleneck. See
 [Estimating Performance, Throughput, And Network Cost](docs/performance-and-cost-estimation.md)
 for equations, examples, and claim boundaries.
+
+Infrastructure consolidation must be calculated separately. The remaining
+Lagrange nodes are usually larger and still require replication and failure
+headroom. Suitable native workloads may justify screening for `10–35%` fewer
+instances and `5–20%` lower compute cost, while small, CPU-bound, or already
+consolidated systems may save nothing or cost more. See
+[Estimating Infrastructure Consolidation](docs/infrastructure-cost-estimation.md).
 
 A migration does not require rewriting an application. Keep authentication,
 HTTP handling, presentation, and external integrations in the existing service.
@@ -223,6 +231,8 @@ already returns the final small result.
   levels, API boundary, placement, and reduction
 - [Performance and cost estimation](docs/performance-and-cost-estimation.md) —
   latency, throughput, transfer, and network-bill calculations
+- [Infrastructure cost estimation](docs/infrastructure-cost-estimation.md) —
+  capacity consolidation, VM-count, and compute-cost calculations
 - [Hot-path rewrite tutorial](docs/tutorials/rewrite-a-hot-path.md) — detailed
   before-and-after example
 - [Architecture index](architecture/INDEX.md) — system and process references
