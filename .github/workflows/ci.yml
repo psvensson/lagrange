@@ -6,9 +6,11 @@
 # circular deps, eslint). The nightly full-gate workflow still runs the
 # complete manifest, so those checks keep a binding remote signal.
 #
-# Documentation-only changes do not exercise the runtime gate. GitHub applies
-# paths-ignore only when every changed path matches an ignored pattern, so any
-# code, configuration, workflow, test, chart, or package change still runs CI.
+# The workflow always starts so a required `ci / gate` check can resolve.
+# A small GitHub-hosted classifier identifies documentation-only changes;
+# for those changes the expensive gate job is skipped, which GitHub reports
+# as a successful skipped check. Any code, configuration, workflow, test,
+# chart, or package change still runs the full gate.
 #
 # The statistical rolling-restart convergence gate is deliberately not run
 # here: its pass rate is variance-bounded and is promoted only through the
@@ -18,26 +20,78 @@ name: ci
 on:
   push:
     branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-      - "architecture/**"
-      - "solve/changes/**"
-      - "solve/log/**"
-      - "solve/report/**"
-      - "solve/autonomous/**"
   pull_request:
     branches: [main]
-    paths-ignore:
-      - "**/*.md"
-      - "docs/**"
-      - "architecture/**"
 
 permissions:
   contents: read
 
 jobs:
+  changes:
+    name: classify changes
+    runs-on: ubuntu-24.04
+    outputs:
+      run_gate: ${{ steps.classify.outputs.run_gate }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
+        with:
+          persist-credentials: false
+          fetch-depth: 0
+
+      - name: Classify changed paths
+        id: classify
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVENT_SHA: ${{ github.sha }}
+        run: |
+          set -euo pipefail
+
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE_SHA"
+            head="$PR_HEAD_SHA"
+          else
+            base="$PUSH_BEFORE_SHA"
+            head="$EVENT_SHA"
+          fi
+
+          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            base="$(git rev-parse "$head^")"
+          fi
+
+          mapfile -t changed_paths < <(git diff --name-only "$base" "$head")
+          run_gate=false
+
+          for path in "${changed_paths[@]}"; do
+            case "$path" in
+              *.md|docs/*|architecture/*)
+                continue
+                ;;
+            esac
+
+            if [ "$EVENT_NAME" = "push" ]; then
+              case "$path" in
+                solve/changes/*|solve/log/*|solve/report/*|solve/autonomous/*)
+                  continue
+                  ;;
+              esac
+            fi
+
+            run_gate=true
+            break
+          done
+
+          printf 'Changed paths:\n'
+          printf '  %s\n' "${changed_paths[@]}"
+          echo "run_gate=$run_gate" | tee -a "$GITHUB_OUTPUT"
+
   gate:
+    needs: changes
+    if: needs.changes.outputs.run_gate == 'true'
     # Push events come only from the maintainer, so they run on the fast
     # self-hosted box; pull_request events (which can carry fork code on a
     # public repo) stay on ephemeral GitHub-hosted runners and must never be
