@@ -258,6 +258,10 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       runtimeDriverCount: Object.keys(this.runtimeDrivers).length,
       ociFeatureGateEnabled: Boolean(options.ociFeatureGateEnabled),
     });
+    this.outerReattemptMembershipRestorePending = false;
+    this.handoffPreviousLifecycleStateMachine(
+      options.previousLifecycleStateMachine,
+    );
     this.runtimeHandoffOwner = new StartupRuntimeHandoffOwner({
       delegates: {
         getCompatibilityService: () => this,
@@ -711,6 +715,46 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getRebalanceCoordinator: () => this.rebalanceCoordinator,
       },
     });
+  }
+
+  /**
+   * Claim the canonical NodeService lifecycle from the exact stopped owner of
+   * an entrypoint-level join reattempt. Terminal join cleanup deliberately
+   * retains the NodeService singleton and its cache, so the next
+   * NodeJoiningService must perform an explicit compare-and-swap instead of
+   * letting query-system-state silently keep the predecessor's owner.
+   *
+   * @param {NodeLifecycleStateMachine|null} previousLifecycleStateMachine
+   * @return {void}
+   */
+  handoffPreviousLifecycleStateMachine(previousLifecycleStateMachine) {
+    if (!previousLifecycleStateMachine) {
+      return;
+    }
+    const nodeService = NodeService.getInstance();
+    if (!nodeService.isInitialized()) {
+      return;
+    }
+    assertCritical(
+      nodeService.getNodeId() === this.nodeId &&
+        previousLifecycleStateMachine instanceof NodeLifecycleStateMachine &&
+        previousLifecycleStateMachine.getState() === NodeState.STOPPED &&
+        nodeService.getLifecycleStateMachine() ===
+          previousLifecycleStateMachine,
+      JOINING_ERROR_MSG.LIFECYCLE_STATE_MACHINE_REBIND_FAILED,
+    );
+    assertCritical(
+      nodeService.replaceExternallyManagedLifecycleStateMachine(
+        previousLifecycleStateMachine,
+        this.lifecycleStateMachine,
+      ),
+      JOINING_ERROR_MSG.LIFECYCLE_STATE_MACHINE_REBIND_FAILED,
+    );
+    // The predecessor reached terminal cleanup before the entrypoint chose an
+    // outer reattempt. That cleanup deliberately withdrew join admission, so a
+    // durable MEMBERSHIP_WRITTEN checkpoint no longer describes live state.
+    // Re-run its idempotent owner once; inner retries keep the repaired state.
+    this.outerReattemptMembershipRestorePending = true;
   }
 }
 

@@ -307,12 +307,15 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
         checkpoint: JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
         phase: JOIN_SESSION_PHASE.MEMBERSHIP_WRITTEN,
         segment: JOIN_PLAN_SEGMENT.MEMBERSHIP,
+        shouldRerun: () =>
+          this.outerReattemptMembershipRestorePending === true,
         run: async () => {
           this.advanceLifecycleAfterResumedInfrastructure();
           await startupPipelineRunner.run({
             phases: joinPlan.segments[JOIN_PLAN_SEGMENT.MEMBERSHIP],
           });
           await this.activateMessageGroupServiceRows();
+          this.outerReattemptMembershipRestorePending = false;
           // The pre-arm opportunistic backfill is intentionally NOT started
           // here: it pulled the 12 non-blocking propagated tables BEFORE CDC
           // subscriptions are confirmed, so it sat inside the very

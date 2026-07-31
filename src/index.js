@@ -164,6 +164,8 @@ async function startJoinNode(options) {
     membershipOwnerOutcome: options.membershipOwnerOutcome,
     clusterIncarnationFence,
     membershipLifecycleController,
+    previousLifecycleStateMachine:
+      options._previousLifecycleStateMachine || null,
     onLocalAdminRuntimeReady: async (runtime) => {
       if (joinAdminRuntime) {
         return;
@@ -258,6 +260,8 @@ async function startJoinNode(options) {
       return startJoinNode({
         ...options,
         _joinAttempt: joinAttempt + 1,
+        _previousLifecycleStateMachine:
+          nodeJoiningService.getLifecycleStateMachine(),
       });
     }
     process.exit(1);
