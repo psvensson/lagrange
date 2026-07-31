@@ -36,25 +36,22 @@ test('shutdownAdminRuntimeComposition tolerates absent early runtime', async (t)
   t.pass('join failure cleanup may run before early admin runtime exists');
 });
 
-test('join failure path releases early admin runtime before reattempt', (t) => {
+test('join failure path has no provisional full-admin runtime to release', (t) => {
   const source = readFileSync('src/index.js', 'utf8');
   const joinFailureBlockMatch = source.match(
     /if \(!joinResult\.success\) \{[\s\S]*?const reattemptAllowed/,
   );
 
   t.ok(joinFailureBlockMatch, 'entrypoint should retain a join failure branch');
-  t.match(
-    joinFailureBlockMatch[0],
-    /await bootstrapAPI\.shutdown\(\);\s*await shutdownAdminRuntimeComposition\(joinAdminRuntime\);\s*joinAdminRuntime = null;/,
-    'join failure branch should release early admin runtime before retry logic',
+  t.notMatch(
+    source,
+    /onLocalAdminRuntimeReady:\s*async/,
+    'entrypoint must not start full admin from the pre-join runtime callback',
   );
-  // The provisional early SQL engine must also
-  // be disposed on the failure path, AFTER the admin runtime that referenced it,
-  // so a rejoin reattempt does not leak a per-engine sub-service set per attempt.
-  t.match(
+  t.notMatch(
     joinFailureBlockMatch[0],
-    /joinAdminRuntime = null;\s*(?:\/\/[^\n]*\n\s*)*await shutdownEarlyAdminSqlRuntime\(joinEarlySqlRuntime\);\s*joinEarlySqlRuntime = null;/,
-    'join failure branch should dispose the early SQL runtime after the admin runtime',
+    /shutdownAdminRuntimeComposition|shutdownEarlyAdminSqlRuntime/,
+    'failed join only owns bootstrap cleanup because admin has not started',
   );
   t.end();
 });

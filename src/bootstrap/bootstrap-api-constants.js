@@ -280,6 +280,8 @@ const BOOTSTRAP_API_PROBE_SCOPE = Object.freeze({
 
 const BOOTSTRAP_API_READINESS_FIELD = Object.freeze({
   BOOTSTRAP_JOIN_PROJECTION: 'bootstrapJoinProjection',
+  SEED_CONTACT: 'seedContact',
+  STARTUP_RUNTIME_HANDOFF: 'startupRuntimeHandoff',
 });
 
 const BOOTSTRAP_API_REQUEST_FIELD = Object.freeze({

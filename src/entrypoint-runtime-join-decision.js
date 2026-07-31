@@ -82,6 +82,16 @@ function parseSeedNodeAddressCandidates(rawValue) {
     .filter((candidate) => candidate.length > 0);
 }
 
+function mergeSeedNodeAddressCandidates(...candidateGroups) {
+  return Array.from(new Set(
+    candidateGroups
+      .flatMap((candidates) => Array.isArray(candidates) ? candidates : [])
+      .filter((candidate) =>
+        typeof candidate === 'string' && candidate.length > 0,
+      ),
+  ));
+}
+
 /**
  * Select the fresh-join contact candidate from an explicit candidate list.
  *
@@ -252,6 +262,10 @@ function buildExplicitSeedDecisionSnapshot(autoRejoinDecision) {
     autoRejoinStartupMode:
       autoRejoinDecision?.startupMode || STRING.EMPTY,
     peerAddress,
+    peerAddresses: mergeSeedNodeAddressCandidates(
+      [peerAddress],
+      autoRejoinDecision?.peerAddresses,
+    ),
     hasDurablePeerAddress,
     source: autoRejoinDecision?.source || STRING.EMPTY,
   };
@@ -289,7 +303,10 @@ function buildExplicitSeedStartupDecision(options) {
   case EXPLICIT_SEED_DECISION_STATE.DURABLE_PROBED_PEER:
     return {
       seedNodeAddress: snapshot.peerAddress,
-      seedNodeAddresses: [snapshot.peerAddress],
+      seedNodeAddresses: mergeSeedNodeAddressCandidates(
+        snapshot.peerAddresses,
+        explicitSeedNodeAddresses,
+      ),
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       source: snapshot.source,
       membershipOwnerOutcome: autoRejoinDecision.membershipOwnerOutcome,
@@ -297,7 +314,10 @@ function buildExplicitSeedStartupDecision(options) {
   case EXPLICIT_SEED_DECISION_STATE.DURABLE_EXPLICIT_SEED:
     return {
       seedNodeAddress: explicitSeedNodeAddress,
-      seedNodeAddresses: explicitSeedNodeAddresses,
+      seedNodeAddresses: mergeSeedNodeAddressCandidates(
+        explicitSeedNodeAddresses,
+        snapshot.peerAddresses,
+      ),
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       source: STARTUP_JOIN_DECISION_SOURCE.EXPLICIT,
       membershipOwnerOutcome: buildMembershipOwnerOutcome({
@@ -357,6 +377,7 @@ async function resolveStartupJoinDecision(options) {
     startupMode: autoRejoinDecision.startupMode,
     peerAddressState: autoRejoinDecision.peerAddressState,
     peerAddress: autoRejoinDecision.peerAddress || null,
+    peerAddresses: autoRejoinDecision.peerAddresses,
     durableStateDetected: autoRejoinDecision.durableStateDetected === true,
     identityMismatch: autoRejoinDecision.identityMismatch === true,
   });
@@ -396,12 +417,13 @@ async function resolveStartupJoinDecision(options) {
   options.logger.info(ENTRYPOINT_LOG_MSG.AUTO_REJOINING_CLUSTER, {
     nodeId,
     peerAddress: autoRejoinDecision.peerAddress,
+    peerAddresses: autoRejoinDecision.peerAddresses,
     source: autoRejoinDecision.source,
     startupMode: autoRejoinDecision.startupMode,
   });
   return {
     seedNodeAddress: autoRejoinDecision.peerAddress,
-    seedNodeAddresses: [autoRejoinDecision.peerAddress],
+    seedNodeAddresses: autoRejoinDecision.peerAddresses,
     startupMode: autoRejoinDecision.startupMode,
     source: autoRejoinDecision.source,
     membershipOwnerOutcome: autoRejoinDecision.membershipOwnerOutcome,

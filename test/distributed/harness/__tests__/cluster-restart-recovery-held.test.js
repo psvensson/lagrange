@@ -32,9 +32,16 @@ function buildDyingNode({probesBeforeDeath}) {
         reachable: true,
         reachableBy: 'bootstrap_health',
         adminReady: true,
-        controlPlaneRecoveryReady: false,
-        recoveryStage: null,
-        recoveryStageRank: null,
+        controlPlaneRecoveryReady: true,
+        recoveryStage: 'control_plane_recovery_ready',
+        recoveryStageRank: 2,
+        startupRuntimeHandoff: {
+          ready: true,
+          infrastructureJoinComplete: true,
+          canonicalAuthorityConsumed: true,
+          transactionRecoveryReady: true,
+          transactionRecoveryState: 'completed',
+        },
         lastError: null,
       };
     },
@@ -139,5 +146,47 @@ test('Unit: a single transient ready probe is not recovery', async () => {
       }),
     /did not become recovery-ready/,
     'one ready probe followed by death must not satisfy the readiness wait',
+  );
+});
+
+test('Unit: provisional admin reachability is not restart recovery', async () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+    timeouts: {
+      nodeStartup: READINESS_TIMEOUT_MS,
+    },
+  });
+  cluster._nodes.set(DYING_NODE_ID, {
+    id: DYING_NODE_ID,
+    async getReachabilityDiagnostics() {
+      return {
+        nodeId: DYING_NODE_ID,
+        reachable: true,
+        reachableBy: 'admin_health',
+        adminReady: true,
+        controlPlaneRecoveryReady: false,
+        startupRuntimeHandoff: {
+          ready: false,
+          infrastructureJoinComplete: false,
+          canonicalAuthorityConsumed: false,
+          transactionRecoveryReady: false,
+          transactionRecoveryState: 'not_started',
+        },
+      };
+    },
+  });
+  cluster._sleep = async () => {};
+  cluster._collectFailureLogs = async () => {};
+
+  await assert.rejects(
+    () =>
+      cluster._waitForNodeAdminReadiness(DYING_NODE_ID, {
+        readinessTimeoutMs: READINESS_TIMEOUT_MS,
+        requireAdminReady: true,
+      }),
+    /did not become recovery-ready/,
+    'admin reachability without authority and recovery must stay blocked',
   );
 });

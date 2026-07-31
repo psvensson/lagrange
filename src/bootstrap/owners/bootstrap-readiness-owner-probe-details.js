@@ -32,6 +32,8 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
       response.retryAfterMs = snapshot.retryAfterMs;
     }
     this.appendReadinessProgressFields(response, snapshot);
+    this.appendSeedContactDiagnostics(response);
+    this.appendStartupRuntimeHandoffFields(response);
     this.appendStartupRecoveryFields(response, snapshot, options);
     this.appendMembershipPublicationFields(response, snapshot);
     this.appendReadinessStageFields(response);
@@ -42,6 +44,73 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
       response.scope = options.scope;
     }
     this.appendBootstrapJoinProjectionFields(response, options);
+    return response;
+  },
+  appendSeedContactDiagnostics(response) {
+    if (!response || typeof response !== 'object') {
+      return response;
+    }
+    const diagnostics = this.getSeedContactDiagnosticsSnapshot();
+    if (!diagnostics) {
+      return response;
+    }
+    response[BOOTSTRAP_API_READINESS_FIELD.SEED_CONTACT] = {
+      phase: diagnostics.phase || null,
+      candidateSet: Array.isArray(diagnostics.candidateSet) ?
+        [...diagnostics.candidateSet] :
+        [],
+      currentCandidate: diagnostics.currentCandidate || null,
+      attempt: Number.isFinite(diagnostics.attempt) ?
+        Math.max(0, Math.floor(diagnostics.attempt)) :
+        0,
+      lastOutcome: diagnostics.lastOutcome || null,
+      remainingBudgetMs: Number.isFinite(diagnostics.remainingBudgetMs) ?
+        Math.max(0, Math.floor(diagnostics.remainingBudgetMs)) :
+        null,
+      authoritySource: diagnostics.authoritySource || null,
+    };
+    return response;
+  },
+  appendStartupRuntimeHandoffFields(response) {
+    if (!response || typeof response !== 'object') {
+      return response;
+    }
+    const handoff = this.getStartupRuntimeHandoffSnapshot?.() || null;
+    if (!handoff || typeof handoff !== 'object') {
+      return response;
+    }
+    const startupAuthority =
+      this.getSeedContactStartupAuthoritySnapshot?.() || null;
+    const seedContact = this.getSeedContactDiagnosticsSnapshot?.() || null;
+    const canonicalAuthorityConsumed =
+      handoff.infrastructureJoinComplete === true &&
+      startupAuthority !== null;
+    const transactionRecoveryState =
+      typeof handoff.transactionRecoveryState === 'string' ?
+        handoff.transactionRecoveryState :
+        null;
+    const transactionRecoveryReady =
+      handoff.transactionRecoveryReady === true;
+    response[BOOTSTRAP_API_READINESS_FIELD.STARTUP_RUNTIME_HANDOFF] = {
+      startupBranch:
+        typeof handoff.startupBranch === 'string' ?
+          handoff.startupBranch :
+          null,
+      infrastructureJoinComplete:
+        handoff.infrastructureJoinComplete === true,
+      canonicalAuthorityConsumed,
+      canonicalAuthorityState:
+        typeof startupAuthority?.state === 'string' ?
+          startupAuthority.state :
+          null,
+      canonicalAuthoritySource: seedContact?.authoritySource || null,
+      transactionRecoveryState,
+      transactionRecoveryReady,
+      ready:
+        handoff.infrastructureJoinComplete === true &&
+        canonicalAuthorityConsumed &&
+        transactionRecoveryReady,
+    };
     return response;
   },
   appendBootstrapJoinProjectionFields(response, options = {}) {

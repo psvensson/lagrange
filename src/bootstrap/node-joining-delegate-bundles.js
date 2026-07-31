@@ -273,6 +273,9 @@ function assignNodeJoiningDelegateBundleMethods(ServiceClass) {
         },
         getSeedNodeAddress: () => self.seedNodeAddress,
         getSeedNodeAddresses: () => self.seedNodeAddresses,
+        setSeedNodeAddress: (v) => {
+          self.rebindSeedContactAddress(v);
+        },
         getSeedNodeId: () => self.seedNodeId,
         setSeedNodeId: (v) => {
           self.seedNodeId = v;

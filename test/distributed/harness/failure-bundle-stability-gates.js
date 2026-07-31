@@ -28,6 +28,9 @@ const {
   buildFailoverStabilityGate,
 } = FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT;
 
+const STABILITY_GATE_BLOCKER_RESTART_BOOTSTRAP_AUTHORITY =
+  'restart_bootstrap_authority';
+
 function buildRestartRecoveryStabilityGate({
   entry,
   controlPlane = null,
@@ -56,12 +59,16 @@ function buildRestartRecoveryStabilityGate({
   const hasAdminReachabilityBlocker =
     terminalRecoveryReadiness?.ownerState ===
       STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED;
+  const hasRestartBootstrapAuthorityBlocker =
+    terminalRecoveryReadiness?.ownerState ===
+      STABILITY_GATE_BLOCKER_RESTART_BOOTSTRAP_AUTHORITY;
   const applicable =
     scenarioName.includes(SCENARIO_NAME_FRAGMENT_RESTART) ||
     restartBoundaryCount > ZERO ||
     !!startupRecovery ||
     hasStartupReadinessBlocker ||
-    hasAdminReachabilityBlocker;
+    hasAdminReachabilityBlocker ||
+    hasRestartBootstrapAuthorityBlocker;
   if (!applicable) {
     return buildStabilityGate({
       type: STABILITY_GATE_TYPE_RESTART_RECOVERY,
@@ -113,6 +120,9 @@ function buildRestartRecoveryStabilityGate({
   }
   if (hasAdminReachabilityBlocker) {
     blockers.push(STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED);
+  }
+  if (hasRestartBootstrapAuthorityBlocker) {
+    blockers.push(STABILITY_GATE_BLOCKER_RESTART_BOOTSTRAP_AUTHORITY);
   }
   if (hasBlockingClosureRecord) {
     blockers.push(STABILITY_GATE_BLOCKER_CLOSURE_RECORD);

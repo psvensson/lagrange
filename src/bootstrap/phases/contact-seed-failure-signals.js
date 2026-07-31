@@ -26,6 +26,7 @@ const LOCAL_STR_MISSINGMESSAGEGROUPLEADERS = 'missingMessageGroupLeaders=';
 const LOCAL_STR_MISSINGPARTITIONLEADERNODES = 'missingPartitionLeaderNodes=';
 const LOCAL_STR_MISSINGMESSAGEGROUPLEADERNODES = 'missingMessageGroupLeaderNodes=';
 const LOCAL_STR_SPACE = ' ';
+const PRESSURE_STATE_PRESENT = 'present';
 const MAX_RETRYABLE_SEED_CONTACT_EVIDENCE_RETRIES = 1;
 const MIN_SEED_CONTACT_REQUEST_TIMEOUT_MS = 1;
 const RETAINED_BOOTSTRAP_NOT_READY_REQUEST_TIMEOUT_MS =
@@ -43,6 +44,9 @@ const RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE = Object.freeze({
 });
 const BOOTSTRAP_NOT_READY_LIMITED_RESUME_REASON_CODES = Object.freeze([
   BOOTSTRAP_API_PROBE_REASON.CLIENT_ATTEMPT_DEADLINE_EXHAUSTED,
+  BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED,
+]);
+const SEED_CONTACT_PRESSURE_REASON_CODES = Object.freeze([
   BOOTSTRAP_API_PROBE_REASON.BOOTSTRAP_REQUEST_EXECUTION_BUDGET_EXHAUSTED,
 ]);
 const BOOTSTRAP_NOT_READY_LIMITED_RESUME_FAILURE_KIND_BY_REASON =
@@ -161,6 +165,26 @@ function resolveBootstrapNotReadySeedContactFailureKind(value) {
     ];
   }
   return JOINING_SEED_CONTACT_FAILURE_KIND.BOOTSTRAP_NOT_READY;
+}
+
+function isSeedContactPressureEvidence(value) {
+  const reasons = normalizeSeedContactEvidenceReasons(value);
+  if (SEED_CONTACT_PRESSURE_REASON_CODES.some((reason) =>
+    reasons.includes(reason),
+  )) {
+    return true;
+  }
+  const pressureAction = value?.pressureAction;
+  const pressureReason = value?.pressureReason;
+  return value?.details?.pressure?.state === PRESSURE_STATE_PRESENT ||
+    (
+      typeof pressureAction === 'string' &&
+      pressureAction.length > 0
+    ) ||
+    (
+      typeof pressureReason === 'string' &&
+      pressureReason.length > 0
+    );
 }
 
 function resolveRetryableSeedContactFailureAction(options = {}) {
@@ -344,6 +368,7 @@ export {
   normalizeRetryableSeedContactEvidence,
   parseBootstrapError,
   resolveBootstrapNotReadySeedContactFailureKind,
+  isSeedContactPressureEvidence,
   resolveRetryableSeedContactFailureAction,
   resolveSeedContactAttemptTimeoutMs,
   resolveSeedContactRequestTimeoutMs,

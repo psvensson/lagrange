@@ -1,0 +1,1519 @@
+diff --git a/scripts/checks/run-cold-node-authority-reacquisition-pressure-scenarios.js b/scripts/checks/run-cold-node-authority-reacquisition-pressure-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..17621c9cc1dd6b7cc8270e01cac1fbc112efbba1
+--- /dev/null
++++ b/scripts/checks/run-cold-node-authority-reacquisition-pressure-scenarios.js
+@@ -0,0 +1,14 @@
++#!/usr/bin/env node
++
++import {
++  runGuardTestScenarios,
++} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = Object.freeze({
++  'cold-node-authority-reacquisition-pressure': Object.freeze([
++    'test/bootstrap/cold-node-authority-reacquisition-pressure.test.js',
++    'test/distributed/harness/__tests__/failure-bundle.test.js',
++  ]),
++});
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/bootstrap/bootstrap-api-constants.js b/src/bootstrap/bootstrap-api-constants.js
+index 89d5700d625c9428a922999d44ad2a690d2aaf57..2a5aec1fe7b89c789fb20bd5a81250c32bb9cf3a 100644
+--- a/src/bootstrap/bootstrap-api-constants.js
++++ b/src/bootstrap/bootstrap-api-constants.js
+@@ -280,6 +280,7 @@ const BOOTSTRAP_API_PROBE_SCOPE = Object.freeze({
+ 
+ const BOOTSTRAP_API_READINESS_FIELD = Object.freeze({
+   BOOTSTRAP_JOIN_PROJECTION: 'bootstrapJoinProjection',
++  SEED_CONTACT: 'seedContact',
+ });
+ 
+ const BOOTSTRAP_API_REQUEST_FIELD = Object.freeze({
+diff --git a/src/bootstrap/node-joining-admission-readiness.js b/src/bootstrap/node-joining-admission-readiness.js
+index d9e91a5b71199dc975c9e4e1162d313513262361..5bf3f13f013765a9f6bab205c5a6d7b5c77c6dc3 100644
+--- a/src/bootstrap/node-joining-admission-readiness.js
++++ b/src/bootstrap/node-joining-admission-readiness.js
+@@ -92,6 +92,11 @@ function buildSeedContactFailureDiagnostics(error) {
+       Number.isFinite(bootstrapResponse?.retryAfterMs) ?
+         Math.max(0, Math.floor(bootstrapResponse.retryAfterMs)) :
+         null,
++    seedContact:
++      error?.seedContactDiagnostics &&
++      typeof error.seedContactDiagnostics === 'object' ?
++        error.seedContactDiagnostics :
++        null,
+   };
+   return diagnostics;
+ }
+diff --git a/src/bootstrap/node-joining-backfill-merge-and-status.js b/src/bootstrap/node-joining-backfill-merge-and-status.js
+index 0787d76fba1ba77f8be0be8c653a98ab00a1053a..da4c4781fb5e7462ad62cbba7d202d3f92ade424 100644
+--- a/src/bootstrap/node-joining-backfill-merge-and-status.js
++++ b/src/bootstrap/node-joining-backfill-merge-and-status.js
+@@ -561,6 +561,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
+       duration: this.startTime ? this.now() - this.startTime : 0,
+       messageGroupCount: this.messageGroupServices.size,
+       lastError: this.lastError?.message || null,
++      seedContact: this.getSeedContactDiagnosticsSnapshot(),
+     };
+     if (
+       !this.joinReadinessEvaluator ||
+@@ -619,6 +620,25 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
+       this.seedContactStartupAuthority :
+       null;
+   }
++  /**
++   * Return the bounded seed-contact progress snapshot for early diagnostics.
++   * @return {Object|null}
++   */
++  getSeedContactDiagnosticsSnapshot() {
++    const snapshot =
++      this.contactSeedPhase?.getSeedContactDiagnosticsSnapshot?.() ||
++      this.seedContactDiagnostics ||
++      null;
++    if (!snapshot || typeof snapshot !== 'object') {
++      return null;
++    }
++    return {
++      ...snapshot,
++      candidateSet: Array.isArray(snapshot.candidateSet) ?
++        [...snapshot.candidateSet] :
++        [],
++    };
++  }
+   /**
+    * Check if any joined message group has a leader in the system cache.
+    * @param {Object} systemTableCache - System table cache.
+diff --git a/src/bootstrap/node-joining-constants.js b/src/bootstrap/node-joining-constants.js
+index abea0692624bfbcf6fda6e3060aa7fca61fb9732..5bbd204ed671c38bf4f31c8465280b321b65d329 100644
+--- a/src/bootstrap/node-joining-constants.js
++++ b/src/bootstrap/node-joining-constants.js
+@@ -46,6 +46,17 @@ const JOINING_SEED_CONTACT_FAILURE_KIND = Object.freeze({
+     'client_attempt_deadline_exhausted',
+   REQUEST_EXECUTION_BUDGET_EXHAUSTED:
+     'request_execution_budget_exhausted',
++  SEED_CONTACT_PRESSURE: 'seed_contact_pressure',
++});
++
++const JOINING_SEED_CONTACT_OUTCOME = Object.freeze({
++  IDLE: 'idle',
++  ATTEMPTING: 'attempting',
++  RETRYABLE_SEED_RESPONSE: 'retryable_seed_response',
++  RETRYABLE_TRANSPORT_FAILURE: 'retryable_transport_failure',
++  CONTACT_SUCCEEDED: 'contact_succeeded',
++  SEED_CONTACT_PRESSURE: 'seed_contact_pressure',
++  TERMINAL_FAILURE: 'terminal_failure',
+ });
+ 
+ const JOINING_UNIFIED_RECONCILE = Object.freeze({
+@@ -390,6 +401,7 @@ export {
+   JOINING_ERROR_NAME,
+   JOINING_HTTP,
+   JOINING_SEED_CONTACT_FAILURE_KIND,
++  JOINING_SEED_CONTACT_OUTCOME,
+   JOINING_UNIFIED_RECONCILE,
+   JOIN_MESH_CONNECTIVITY_REPAIR,
+   JOIN_READINESS_DEFAULT_TABLE,
+diff --git a/src/bootstrap/node-joining-owner-construction.js b/src/bootstrap/node-joining-owner-construction.js
+index d8de8fea96ea580dfe54393d0f25e8ba20fddf3a..c776bfd8d25169237730f06ea167c5c67b987f8b 100644
+--- a/src/bootstrap/node-joining-owner-construction.js
++++ b/src/bootstrap/node-joining-owner-construction.js
+@@ -247,6 +247,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
+     this.bootstrapResponse = null; // Joining state
+     this.seedContactStartupAuthority = null;
+     this.lastRetryableSeedContactEvidence = null;
++    this.seedContactDiagnostics = null;
+     this.phase = JoiningPhase.NOT_STARTED;
+     this.startTime = null;
+     this.phaseStartTime = null; // Logging
+@@ -410,6 +411,9 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
+         setSeedContactStartupAuthority: (v) => {
+           this.seedContactStartupAuthority = v || null;
+         },
++        setSeedContactDiagnostics: (v) => {
++          this.seedContactDiagnostics = v || null;
++        },
+         getSeedNodeId: () => this.seedNodeId,
+         setSeedNodeId: (v) => {
+           this.seedNodeId = v;
+diff --git a/src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js b/src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js
+index 577299b68aeaedd9934048b5dff1d8f3df166f66..c16b19c01296e7a26fc7d7eb2a65da1ae7af47ce 100644
+--- a/src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js
++++ b/src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js
+@@ -32,6 +32,7 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
+       response.retryAfterMs = snapshot.retryAfterMs;
+     }
+     this.appendReadinessProgressFields(response, snapshot);
++    this.appendSeedContactDiagnostics(response);
+     this.appendStartupRecoveryFields(response, snapshot, options);
+     this.appendMembershipPublicationFields(response, snapshot);
+     this.appendReadinessStageFields(response);
+@@ -44,6 +45,31 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
+     this.appendBootstrapJoinProjectionFields(response, options);
+     return response;
+   },
++  appendSeedContactDiagnostics(response) {
++    if (!response || typeof response !== 'object') {
++      return response;
++    }
++    const diagnostics = this.getSeedContactDiagnosticsSnapshot();
++    if (!diagnostics) {
++      return response;
++    }
++    response[BOOTSTRAP_API_READINESS_FIELD.SEED_CONTACT] = {
++      phase: diagnostics.phase || null,
++      candidateSet: Array.isArray(diagnostics.candidateSet) ?
++        [...diagnostics.candidateSet] :
++        [],
++      currentCandidate: diagnostics.currentCandidate || null,
++      attempt: Number.isFinite(diagnostics.attempt) ?
++        Math.max(0, Math.floor(diagnostics.attempt)) :
++        0,
++      lastOutcome: diagnostics.lastOutcome || null,
++      remainingBudgetMs: Number.isFinite(diagnostics.remainingBudgetMs) ?
++        Math.max(0, Math.floor(diagnostics.remainingBudgetMs)) :
++        null,
++      authoritySource: diagnostics.authoritySource || null,
++    };
++    return response;
++  },
+   appendBootstrapJoinProjectionFields(response, options = {}) {
+     if (
+       options.scope !== BOOTSTRAP_API_PROBE_SCOPE.BOOTSTRAP_JOIN ||
+diff --git a/src/bootstrap/owners/bootstrap-readiness-owner.js b/src/bootstrap/owners/bootstrap-readiness-owner.js
+index dee16e723c35ffc2390acb25c970e3f053763397..60932009f2d2675c09d89957d435cc00e1e3b600 100644
+--- a/src/bootstrap/owners/bootstrap-readiness-owner.js
++++ b/src/bootstrap/owners/bootstrap-readiness-owner.js
+@@ -27,6 +27,12 @@ class BootstrapReadinessOwner {
+   getBootstrapService() {
+     return this.delegates.getBootstrapService?.() || null;
+   }
++  getSeedContactDiagnosticsSnapshot() {
++    const bootstrapService = this.getBootstrapService();
++    const snapshot =
++      bootstrapService?.getSeedContactDiagnosticsSnapshot?.() || null;
++    return snapshot && typeof snapshot === 'object' ? snapshot : null;
++  }
+   getMessageRouter() {
+     return this.delegates.getMessageRouter?.() || null;
+   }
+@@ -85,6 +91,7 @@ class BootstrapReadinessOwner {
+       response.retryAfterMs = snapshot.retryAfterMs;
+     }
+     this.appendReadinessProgressFields(response, snapshot);
++    this.appendSeedContactDiagnostics(response);
+     this.recordReadinessProbeResult(BOOTSTRAP_API_ROUTE.STARTUPZ, statusCode);
+     reply.code(statusCode);
+     return response;
+diff --git a/src/bootstrap/phases/contact-seed-phase.js b/src/bootstrap/phases/contact-seed-phase.js
+index 4362856c95cec442fbad8db484df6d7d178bd051..147e6a6271df9e6f5b5d2b634b29ade46dfa4d16 100644
+--- a/src/bootstrap/phases/contact-seed-phase.js
++++ b/src/bootstrap/phases/contact-seed-phase.js
+@@ -9,6 +9,7 @@
+ import {assertCritical} from '../../utils/assert.js';
+ import {
+   BOOTSTRAP_PIPELINE_ERROR_CODE,
++  JOINING_PHASE,
+ } from '../bootstrap-constants.js';
+ import {
+   BOOTSTRAP_API_REQUEST_FIELD,
+@@ -19,6 +20,8 @@ import {
+   JOINING_ERROR_MSG,
+   JOINING_HTTP,
+   JOINING_LOG_MSG,
++  JOINING_SEED_CONTACT_FAILURE_KIND,
++  JOINING_SEED_CONTACT_OUTCOME,
+ } from '../node-joining-constants.js';
+ import {
+   HTTP_STATUS,
+@@ -62,6 +65,15 @@ class ContactSeedPhase {
+   constructor(options = {}) {
+     this.nodeId = options.nodeId;
+     this.delegates = options.delegates || {};
++    this.seedContactDiagnostics = Object.freeze({
++      phase: JOINING_PHASE.CONTACTING_SEED,
++      candidateSet: Object.freeze([]),
++      currentCandidate: null,
++      attempt: 0,
++      lastOutcome: JOINING_SEED_CONTACT_OUTCOME.IDLE,
++      remainingBudgetMs: null,
++      authoritySource: null,
++    });
+   }
+ 
+   /**
+@@ -131,16 +143,44 @@ class ContactSeedPhase {
+           options.failureKind.length > 0) {
+         retryableError.seedContactFailureKind = options.failureKind;
+       }
++      retryableError.seedContactDiagnostics =
++        this.getSeedContactDiagnosticsSnapshot();
+       return retryableError;
+     };
++    this.updateSeedContactDiagnostics({
++      candidateSet: seedContactCandidates,
++      currentCandidate: seedContactCandidates[0],
++      attempt: 0,
++      lastOutcome: JOINING_SEED_CONTACT_OUTCOME.IDLE,
++      remainingBudgetMs: retryTimeoutMs,
++      authoritySource: null,
++    });
++    const buildSeedContactPressureError = (message) => {
++      this.updateSeedContactDiagnostics({
++        lastOutcome: JOINING_SEED_CONTACT_OUTCOME.SEED_CONTACT_PRESSURE,
++        remainingBudgetMs: Math.max(0, retryTimeoutMs - (now() - startTime)),
++      });
++      return buildRetryableSeedContactError(message, {
++        retryAfterMs: lastRetryAfterMs,
++        code: JOINING_SEED_CONTACT_FAILURE_KIND.SEED_CONTACT_PRESSURE,
++        failureKind: JOINING_SEED_CONTACT_FAILURE_KIND.SEED_CONTACT_PRESSURE,
++      });
++    };
+ 
+     while (now() - startTime < retryTimeoutMs) {
+       attempt += 1;
+       // Rotate the contact target across the candidate list on each retry;
+       // a single-candidate list reproduces today's fixed-target sequence.
+-      const attemptBootstrapUrl = this.buildSeedContactBootstrapUrl(
+-        seedContactCandidates[(attempt - 1) % seedContactCandidates.length],
+-      );
++      const currentCandidate =
++        seedContactCandidates[(attempt - 1) % seedContactCandidates.length];
++      const attemptBootstrapUrl =
++        this.buildSeedContactBootstrapUrl(currentCandidate);
++      this.updateSeedContactDiagnostics({
++        currentCandidate,
++        attempt,
++        lastOutcome: JOINING_SEED_CONTACT_OUTCOME.ATTEMPTING,
++        remainingBudgetMs: Math.max(0, retryTimeoutMs - (now() - startTime)),
++      });
+       try {
+         const httpPostImpl = this.delegates.getHttpPostImpl();
+         const attemptStartedAtMs = now();
+@@ -178,6 +218,9 @@ class ContactSeedPhase {
+           this.delegates.setSeedContactStartupAuthority?.(
+             responseStartupAuthority,
+           );
++          this.updateSeedContactDiagnostics({
++            authoritySource: currentCandidate,
++          });
+         }
+         this.delegates.setLastRetryableSeedContactEvidence?.(null);
+ 
+@@ -197,6 +240,10 @@ class ContactSeedPhase {
+             response.seedNodeWsAddress,
+           );
+         }
++        this.updateSeedContactDiagnostics({
++          lastOutcome: JOINING_SEED_CONTACT_OUTCOME.CONTACT_SUCCEEDED,
++          remainingBudgetMs: Math.max(0, retryTimeoutMs - (now() - startTime)),
++        });
+ 
+         logger.debug(JOINING_LOG_MSG.BOOTSTRAP_RESPONSE_RECEIVED, {
+           nodeId: this.nodeId,
+@@ -213,12 +260,19 @@ class ContactSeedPhase {
+           retryableTimeoutErrorMessage,
+         );
+         const parsedError = classification.parsedError;
++        this.updateSeedContactDiagnostics({
++          lastOutcome: this.resolveSeedContactAttemptOutcome(classification),
++          remainingBudgetMs: Math.max(0, retryTimeoutMs - (now() - startTime)),
++        });
+         const parsedStartupAuthority =
+           extractSeedContactStartupAuthority(parsedError);
+         if (parsedStartupAuthority) {
+           this.delegates.setSeedContactStartupAuthority?.(
+             parsedStartupAuthority,
+           );
++          this.updateSeedContactDiagnostics({
++            authoritySource: currentCandidate,
++          });
+         }
+         const retryableSeedContactEvidence =
+           normalizeRetryableSeedContactEvidence(parsedError);
+@@ -297,6 +351,18 @@ class ContactSeedPhase {
+             RETRYABLE_SEED_CONTACT_FAILURE_ACTION.SURFACE) {
+           const surfacedRetryableSeedContactEvidence =
+             parsedError || lastBootstrapError;
++          if (
++            !surfacedRetryableSeedContactEvidence &&
++            (
++              classification.retryableTimeout ||
++              classification.retryableTransportFailure ||
++              classification.retryableStatus
++            )
++          ) {
++            throw buildSeedContactPressureError(
++              JOINING_ERROR_MSG.contactSeedFailed(error.message),
++            );
++          }
+           if (parsedError?.code ===
+               BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE) {
+             throw buildRetryableSeedContactError(
+@@ -337,6 +403,9 @@ class ContactSeedPhase {
+         }
+ 
+         if (classification.terminalValidationOrConflict) {
++          this.updateSeedContactDiagnostics({
++            lastOutcome: JOINING_SEED_CONTACT_OUTCOME.TERMINAL_FAILURE,
++          });
+           logger.warn(JOINING_LOG_MSG.SEED_CONTACT_TERMINAL, {
+             nodeId: this.nodeId,
+             bootstrapUrl: attemptBootstrapUrl,
+@@ -353,6 +422,12 @@ class ContactSeedPhase {
+           (lastBootstrapError !== null ||
+             lastRetryableSeedContactError !== null);
+         if (shouldPreserveRetryableSeedContactOutcome) {
++          if (lastBootstrapError === null &&
++              lastRetryableSeedContactError !== null) {
++            throw buildSeedContactPressureError(
++              JOINING_ERROR_MSG.contactSeedFailed(error.message),
++            );
++          }
+           throw buildRetryableSeedContactError(
+             JOINING_ERROR_MSG.contactSeedFailed(error.message),
+             this.buildRetryableSeedContactErrorOptions({
+@@ -423,19 +498,67 @@ class ContactSeedPhase {
+     }
+ 
+     if (lastRetryableSeedContactError) {
+-      throw buildRetryableSeedContactError(
++      throw buildSeedContactPressureError(
+         JOINING_ERROR_MSG.contactSeedFailed(
+           lastRetryableSeedContactError,
+         ),
+-        {
+-          retryAfterMs: lastRetryAfterMs,
+-        },
+       );
+     }
+ 
+-    throw new Error(JOINING_ERROR_MSG.contactSeedFailed(
+-      SEED_READINESS_TIMEOUT_MSG(retryTimeoutMs),
+-    ));
++    throw buildSeedContactPressureError(
++      JOINING_ERROR_MSG.contactSeedFailed(
++        SEED_READINESS_TIMEOUT_MSG(retryTimeoutMs),
++      ),
++    );
++  }
++
++  updateSeedContactDiagnostics(options = {}) {
++    const candidateSet = Array.isArray(options.candidateSet) ?
++      options.candidateSet.filter((candidate) =>
++        typeof candidate === 'string' && candidate.length > 0,
++      ) :
++      this.seedContactDiagnostics.candidateSet;
++    const snapshot = Object.freeze({
++      phase: JOINING_PHASE.CONTACTING_SEED,
++      candidateSet: Object.freeze([...candidateSet]),
++      currentCandidate:
++        Object.prototype.hasOwnProperty.call(options, 'currentCandidate') ?
++          options.currentCandidate :
++          this.seedContactDiagnostics.currentCandidate,
++      attempt: Number.isFinite(options.attempt) ?
++        Math.max(0, Math.floor(options.attempt)) :
++        this.seedContactDiagnostics.attempt,
++      lastOutcome:
++        typeof options.lastOutcome === 'string' &&
++        options.lastOutcome.length > 0 ?
++          options.lastOutcome :
++          this.seedContactDiagnostics.lastOutcome,
++      remainingBudgetMs: Number.isFinite(options.remainingBudgetMs) ?
++        Math.max(0, Math.floor(options.remainingBudgetMs)) :
++        this.seedContactDiagnostics.remainingBudgetMs,
++      authoritySource:
++        Object.prototype.hasOwnProperty.call(options, 'authoritySource') ?
++          options.authoritySource :
++          this.seedContactDiagnostics.authoritySource,
++    });
++    this.seedContactDiagnostics = snapshot;
++    this.delegates.setSeedContactDiagnostics?.(snapshot);
++    return snapshot;
++  }
++
++  getSeedContactDiagnosticsSnapshot() {
++    return this.seedContactDiagnostics;
++  }
++
++  resolveSeedContactAttemptOutcome(classification = {}) {
++    if (classification.retryableTransportFailure ||
++        classification.retryableTimeout) {
++      return JOINING_SEED_CONTACT_OUTCOME.RETRYABLE_TRANSPORT_FAILURE;
++    }
++    if (classification.retryable) {
++      return JOINING_SEED_CONTACT_OUTCOME.RETRYABLE_SEED_RESPONSE;
++    }
++    return JOINING_SEED_CONTACT_OUTCOME.TERMINAL_FAILURE;
+   }
+ 
+   /**
+diff --git a/src/bootstrap/rejoin-hints-addresses.js b/src/bootstrap/rejoin-hints-addresses.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b34b1cd4b4009fc4b3a4c367d761087e56b90bfe
+--- /dev/null
++++ b/src/bootstrap/rejoin-hints-addresses.js
+@@ -0,0 +1,100 @@
++import {COLUMN} from '../constants/index.js';
++
++const REJOIN_ROLE_SEED = 'seed';
++const REJOIN_ROLE_JOINER = 'joiner';
++const MULTI_NODE_CLUSTER_THRESHOLD = 1;
++
++function normalizeAddress(value) {
++  if (typeof value !== 'string') {
++    return null;
++  }
++  const trimmed = value.trim();
++  return trimmed.length > 0 ? trimmed : null;
++}
++
++function normalizeNodeCount(nodeRows) {
++  return Array.isArray(nodeRows) ? nodeRows.length : 0;
++}
++
++function normalizeNodeRole(value) {
++  const normalized = normalizeAddress(value);
++  if (!normalized) {
++    return null;
++  }
++  const role = normalized.toLowerCase();
++  if (role === REJOIN_ROLE_SEED || role === REJOIN_ROLE_JOINER) {
++    return role;
++  }
++  return null;
++}
++
++function parseClusterNodeCount(value) {
++  const parsed = Number(value);
++  if (!Number.isFinite(parsed) || parsed < 0) {
++    return 0;
++  }
++  return Math.floor(parsed);
++}
++
++function normalizePeerAddresses(peerAddresses, nodeId, nodeAddress) {
++  const normalizedNodeId = normalizeAddress(nodeId);
++  const normalizedNodeAddress = normalizeAddress(nodeAddress);
++  const uniquePeerAddresses = new Set();
++
++  for (const value of Array.isArray(peerAddresses) ? peerAddresses : []) {
++    const rowNodeId = normalizeAddress(
++      value?.[COLUMN.NODE_ID] ?? value?.node_id ?? null,
++    );
++    const peerAddress = normalizeAddress(
++      value?.[COLUMN.NODE_ADDRESS] ?? value?.node_address ?? value,
++    );
++    if (!peerAddress) {
++      continue;
++    }
++    if (normalizedNodeId && rowNodeId === normalizedNodeId) {
++      continue;
++    }
++    if (normalizedNodeAddress && peerAddress === normalizedNodeAddress) {
++      continue;
++    }
++    uniquePeerAddresses.add(peerAddress);
++  }
++
++  return Array.from(uniquePeerAddresses);
++}
++
++function deriveRequiresPeerRejoin(options = {}) {
++  return normalizeNodeRole(options.nodeRole) === REJOIN_ROLE_JOINER ||
++    parseClusterNodeCount(options.clusterNodeCount) >
++      MULTI_NODE_CLUSTER_THRESHOLD ||
++    normalizePeerAddresses(options.peerAddresses).length > 0;
++}
++
++function extractPeerAddresses(nodeRows, nodeId, nodeAddress) {
++  return normalizePeerAddresses(nodeRows, nodeId, nodeAddress);
++}
++
++function prioritizePeerAddress(peerAddresses, selectedPeerAddress) {
++  const normalizedPeerAddresses = normalizePeerAddresses(peerAddresses);
++  const normalizedSelectedPeerAddress = normalizeAddress(selectedPeerAddress);
++  if (!normalizedSelectedPeerAddress) {
++    return normalizedPeerAddresses;
++  }
++  return [
++    normalizedSelectedPeerAddress,
++    ...normalizedPeerAddresses.filter(
++      (peerAddress) => peerAddress !== normalizedSelectedPeerAddress,
++    ),
++  ];
++}
++
++export {
++  deriveRequiresPeerRejoin,
++  extractPeerAddresses,
++  normalizeAddress,
++  normalizeNodeCount,
++  normalizeNodeRole,
++  normalizePeerAddresses,
++  parseClusterNodeCount,
++  prioritizePeerAddress,
++};
+diff --git a/src/bootstrap/rejoin-hints.js b/src/bootstrap/rejoin-hints.js
+index c14751e33b7859cbd75c20d52ead5bf89a14686f..185f84d77d581911957aa8dd77217aff4cb25533 100644
+--- a/src/bootstrap/rejoin-hints.js
++++ b/src/bootstrap/rejoin-hints.js
+@@ -12,18 +12,26 @@ import {
+   STARTUP_JOIN_MODE,
+   TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
+ } from './rejoin-hints-constants.js';
++import {
++  deriveRequiresPeerRejoin,
++  extractPeerAddresses,
++  normalizeAddress,
++  normalizeNodeCount,
++  normalizeNodeRole,
++  normalizePeerAddresses,
++  parseClusterNodeCount,
++  prioritizePeerAddress,
++} from './rejoin-hints-addresses.js';
+ 
+ const PARTITIONS_DIRNAME = 'partitions';
+ const SQLITE_DB_SUFFIX = '.db';
+ const NODES_PARTITION_PREFIX = `${TABLES.NODES}-p`;
+ const REJOIN_ROLE_SEED = 'seed';
+-const REJOIN_ROLE_JOINER = 'joiner';
+ const STARTUP_MODE_JOIN = 'join';
+ const STARTUP_MODE_SEED = 'seed';
+ const STARTUP_MODE_FAIL = 'fail';
+ const SQLITE_TABLE_TYPE = 'table';
+ const EMPTY_STRING = '';
+-const MULTI_NODE_CLUSTER_THRESHOLD = 1;
+ const RECOVERED_CLUSTER_NODE_COUNT_WITH_PEER = 2;
+ const UTF8_ENCODING = 'utf8';
+ const JSON_INDENT_SPACES = 2;
+@@ -92,76 +100,6 @@ const SQL_SELECT_NODES =
+   `${COLUMN.NODE_ADDRESS} AS node_address FROM ${TABLES.NODES}`;
+ let rejoinHintsTempSequence = 0;
+ 
+-function normalizeAddress(value) {
+-  if (typeof value !== 'string') {
+-    return null;
+-  }
+-  const trimmed = value.trim();
+-  return trimmed.length > 0 ? trimmed : null;
+-}
+-
+-function normalizeNodeCount(nodeRows) {
+-  return Array.isArray(nodeRows) ? nodeRows.length : 0;
+-}
+-
+-function normalizeNodeRole(value) {
+-  const normalized = normalizeAddress(value);
+-  if (!normalized) {
+-    return null;
+-  }
+-  const role = normalized.toLowerCase();
+-  if (role === REJOIN_ROLE_SEED || role === REJOIN_ROLE_JOINER) {
+-    return role;
+-  }
+-  return null;
+-}
+-
+-function parseClusterNodeCount(value) {
+-  const parsed = Number(value);
+-  if (!Number.isFinite(parsed) || parsed < 0) {
+-    return 0;
+-  }
+-  return Math.floor(parsed);
+-}
+-
+-function normalizePeerAddresses(peerAddresses, nodeId, nodeAddress) {
+-  const normalizedNodeId = normalizeAddress(nodeId);
+-  const normalizedNodeAddress = normalizeAddress(nodeAddress);
+-  const uniquePeerAddresses = new Set();
+-
+-  for (const value of Array.isArray(peerAddresses) ? peerAddresses : []) {
+-    const rowNodeId = normalizeAddress(
+-      value?.[COLUMN.NODE_ID] ?? value?.node_id ?? null,
+-    );
+-    const peerAddress = normalizeAddress(
+-      value?.[COLUMN.NODE_ADDRESS] ?? value?.node_address ?? value,
+-    );
+-    if (!peerAddress) {
+-      continue;
+-    }
+-    if (normalizedNodeId && rowNodeId === normalizedNodeId) {
+-      continue;
+-    }
+-    if (normalizedNodeAddress && peerAddress === normalizedNodeAddress) {
+-      continue;
+-    }
+-    uniquePeerAddresses.add(peerAddress);
+-  }
+-
+-  return Array.from(uniquePeerAddresses);
+-}
+-
+-function deriveRequiresPeerRejoin(options = {}) {
+-  return normalizeNodeRole(options.nodeRole) === REJOIN_ROLE_JOINER ||
+-    parseClusterNodeCount(options.clusterNodeCount) >
+-      MULTI_NODE_CLUSTER_THRESHOLD ||
+-    normalizePeerAddresses(options.peerAddresses).length > 0;
+-}
+-
+-function extractPeerAddresses(nodeRows, nodeId, nodeAddress) {
+-  return normalizePeerAddresses(nodeRows, nodeId, nodeAddress);
+-}
+-
+ function buildRejoinHintsSnapshot(options = {}) {
+   const systemTableCache = options.systemTableCache || null;
+   const nodeRows = typeof systemTableCache?.getAll === 'function' ?
+@@ -609,6 +547,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
+       mode: STARTUP_MODE_FAIL,
+       peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+       peerAddress: null,
++      peerAddresses: [],
+       source: REJOIN_SOURCE.DURABLE_NODES_TABLE,
+       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+       durableStateDetected: true,
+@@ -622,6 +561,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
+       mode: STARTUP_MODE_SEED,
+       peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+       peerAddress: null,
++      peerAddresses: [],
+       source: resolveDurableStartupSource(context),
+       startupMode: STARTUP_JOIN_MODE.SEED,
+       durableStateDetected: context.durableStateDetected,
+@@ -634,6 +574,10 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
+       mode: STARTUP_MODE_JOIN,
+       peerAddressState: PEER_ADDRESS_STATE.SELECTED,
+       peerAddress: context.selectedPeerAddress,
++      peerAddresses: prioritizePeerAddress(
++        context.peerAddresses,
++        context.selectedPeerAddress,
++      ),
+       source: resolveDurableJoinSource(context),
+       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+       durableStateDetected: true,
+@@ -646,6 +590,10 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
+       mode: STARTUP_MODE_JOIN,
+       peerAddressState: PEER_ADDRESS_STATE.SELECTED,
+       peerAddress: context.preferredPeerAddress,
++      peerAddresses: prioritizePeerAddress(
++        context.peerAddresses,
++        context.preferredPeerAddress,
++      ),
+       source: context.hintPeerAddresses.length > 0 ?
+         REJOIN_SOURCE.REJOIN_HINTS :
+         REJOIN_SOURCE.DURABLE_NODES_TABLE,
+@@ -660,6 +608,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
+       mode: STARTUP_MODE_FAIL,
+       peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+       peerAddress: null,
++      peerAddresses: [],
+       source: context.durableSnapshot.hasDurableNodesTable ?
+         REJOIN_SOURCE.DURABLE_NODES_TABLE :
+         REJOIN_SOURCE.REJOIN_HINTS,
+@@ -675,6 +624,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
+       mode: STARTUP_MODE_SEED,
+       peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+       peerAddress: null,
++      peerAddresses: [],
+       source: REJOIN_SOURCE.NONE,
+       startupMode: STARTUP_JOIN_MODE.SEED,
+       durableStateDetected: false,
+diff --git a/src/entrypoint-runtime-join-decision.js b/src/entrypoint-runtime-join-decision.js
+index d786b17baea5131bc1421cf9305dbdcd27af6c84..e04ccbd7dc26f32c7fecf4e53059255a317eaa3a 100644
+--- a/src/entrypoint-runtime-join-decision.js
++++ b/src/entrypoint-runtime-join-decision.js
+@@ -82,6 +82,16 @@ function parseSeedNodeAddressCandidates(rawValue) {
+     .filter((candidate) => candidate.length > 0);
+ }
+ 
++function mergeSeedNodeAddressCandidates(...candidateGroups) {
++  return Array.from(new Set(
++    candidateGroups
++      .flatMap((candidates) => Array.isArray(candidates) ? candidates : [])
++      .filter((candidate) =>
++        typeof candidate === 'string' && candidate.length > 0,
++      ),
++  ));
++}
++
+ /**
+  * Select the fresh-join contact candidate from an explicit candidate list.
+  *
+@@ -252,6 +262,10 @@ function buildExplicitSeedDecisionSnapshot(autoRejoinDecision) {
+     autoRejoinStartupMode:
+       autoRejoinDecision?.startupMode || STRING.EMPTY,
+     peerAddress,
++    peerAddresses: mergeSeedNodeAddressCandidates(
++      [peerAddress],
++      autoRejoinDecision?.peerAddresses,
++    ),
+     hasDurablePeerAddress,
+     source: autoRejoinDecision?.source || STRING.EMPTY,
+   };
+@@ -289,7 +303,10 @@ function buildExplicitSeedStartupDecision(options) {
+   case EXPLICIT_SEED_DECISION_STATE.DURABLE_PROBED_PEER:
+     return {
+       seedNodeAddress: snapshot.peerAddress,
+-      seedNodeAddresses: [snapshot.peerAddress],
++      seedNodeAddresses: mergeSeedNodeAddressCandidates(
++        snapshot.peerAddresses,
++        explicitSeedNodeAddresses,
++      ),
+       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+       source: snapshot.source,
+       membershipOwnerOutcome: autoRejoinDecision.membershipOwnerOutcome,
+@@ -297,7 +314,10 @@ function buildExplicitSeedStartupDecision(options) {
+   case EXPLICIT_SEED_DECISION_STATE.DURABLE_EXPLICIT_SEED:
+     return {
+       seedNodeAddress: explicitSeedNodeAddress,
+-      seedNodeAddresses: explicitSeedNodeAddresses,
++      seedNodeAddresses: mergeSeedNodeAddressCandidates(
++        explicitSeedNodeAddresses,
++        snapshot.peerAddresses,
++      ),
+       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+       source: STARTUP_JOIN_DECISION_SOURCE.EXPLICIT,
+       membershipOwnerOutcome: buildMembershipOwnerOutcome({
+@@ -357,6 +377,7 @@ async function resolveStartupJoinDecision(options) {
+     startupMode: autoRejoinDecision.startupMode,
+     peerAddressState: autoRejoinDecision.peerAddressState,
+     peerAddress: autoRejoinDecision.peerAddress || null,
++    peerAddresses: autoRejoinDecision.peerAddresses,
+     durableStateDetected: autoRejoinDecision.durableStateDetected === true,
+     identityMismatch: autoRejoinDecision.identityMismatch === true,
+   });
+@@ -396,12 +417,13 @@ async function resolveStartupJoinDecision(options) {
+   options.logger.info(ENTRYPOINT_LOG_MSG.AUTO_REJOINING_CLUSTER, {
+     nodeId,
+     peerAddress: autoRejoinDecision.peerAddress,
++    peerAddresses: autoRejoinDecision.peerAddresses,
+     source: autoRejoinDecision.source,
+     startupMode: autoRejoinDecision.startupMode,
+   });
+   return {
+     seedNodeAddress: autoRejoinDecision.peerAddress,
+-    seedNodeAddresses: [autoRejoinDecision.peerAddress],
++    seedNodeAddresses: autoRejoinDecision.peerAddresses,
+     startupMode: autoRejoinDecision.startupMode,
+     source: autoRejoinDecision.source,
+     membershipOwnerOutcome: autoRejoinDecision.membershipOwnerOutcome,
+diff --git a/src/index.js b/src/index.js
+index e3c5281e344e98185a11eb32c4c639d6b814fecd..2ff549d370121250b0dab3112f2bdd78f9bd1445 100644
+--- a/src/index.js
++++ b/src/index.js
+@@ -104,7 +104,7 @@ async function startJoinNode(options) {
+     dataDir: dataDirectoryManager.getDataDir(),
+     nodeId,
+     nodeAddress: joiningNodeAddress,
+-    peerAddresses: [seedNodeAddress],
++    peerAddresses: seedNodeAddresses,
+     logger: mainLogger,
+   });
+   const clusterIncarnationFence = await resolveLocalClusterIncarnationFence({
+@@ -115,6 +115,7 @@ async function startJoinNode(options) {
+ 
+   mainLogger.info(ENTRYPOINT_LOG_MSG.JOINING_CLUSTER, {
+     seedNodeAddress,
++    seedNodeAddresses,
+     startupMode,
+   });
+ 
+diff --git a/test/bootstrap/cold-node-authority-reacquisition-pressure.test.js b/test/bootstrap/cold-node-authority-reacquisition-pressure.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..faa64c911cdcfaba1bc204db074cd5349aaea743
+--- /dev/null
++++ b/test/bootstrap/cold-node-authority-reacquisition-pressure.test.js
+@@ -0,0 +1,301 @@
++import {mkdtemp, rm} from 'node:fs/promises';
++import {tmpdir} from 'node:os';
++import {join} from 'node:path';
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  ContactSeedPhase,
++} from '../../src/bootstrap/phases/contact-seed-phase.js';
++import {
++  BOOTSTRAP_API_READINESS_FIELD,
++} from '../../src/bootstrap/bootstrap-api-constants.js';
++import {
++  JOINING_SEED_CONTACT_FAILURE_KIND,
++  JOINING_SEED_CONTACT_OUTCOME,
++} from '../../src/bootstrap/node-joining-constants.js';
++import {
++  BootstrapReadinessOwner,
++} from '../../src/bootstrap/owners/bootstrap-readiness-owner.js';
++import {
++  persistBootstrapRejoinHints,
++} from '../../src/bootstrap/rejoin-hints.js';
++import {
++  STARTUP_JOIN_MODE,
++} from '../../src/bootstrap/rejoin-hints-constants.js';
++import {CONFIG_KEY} from '../../src/config/config-constants.js';
++import {ENTRYPOINT_ENV} from '../../src/constants/entrypoint.js';
++import {
++  resolveSeedContactUrls,
++  resolveStartupJoinDecision,
++} from '../../src/entrypoint-runtime-join-decision.js';
++
++const LOCAL_NODE_ID = 'restarted-node';
++const LOCAL_NODE_ADDRESS = 'restarted-node:8080';
++const EXPLICIT_SEED_ADDRESS = 'seed-primary:8080';
++const DURABLE_PEER_A = 'peer-a:8080';
++const DURABLE_PEER_B = 'peer-b:8080';
++const DURABLE_PEER_B_NODE_ID = 'peer-b-node';
++const DURABLE_PEER_B_WS_ADDRESS = 'ws://peer-b:8082';
++const NODE_REST_API_PORT = 8080;
++const NODE_WS_PORT = 8082;
++const CLUSTER_NODE_COUNT = 4;
++const PROBE_RESULT_UNREACHABLE = false;
++const TRANSPORT_REFUSED_CODE = 'ECONNREFUSED';
++const TRANSPORT_REFUSED_MESSAGE = 'connect ECONNREFUSED';
++const TEST_TMP_PREFIX = 'cold-node-authority-reacquisition-';
++const CONTACT_RETRY_CONFIG = Object.freeze({
++  httpTimeoutMs: 10,
++  leadershipWaitTimeoutMs: 50,
++  leadershipWaitInitialDelayMs: 10,
++  leadershipWaitMaxDelayMs: 10,
++  leadershipWaitBackoffMultiplier: 2,
++  leadershipWaitJitterRatio: 0,
++});
++const CANONICAL_STARTUP_AUTHORITY = Object.freeze({
++  state: 'recovery_pending',
++  authorityAvailable: true,
++  canonicalStartupNodeIds: Object.freeze([
++    'seed-node',
++    DURABLE_PEER_B_NODE_ID,
++    LOCAL_NODE_ID,
++  ]),
++});
++
++function createConfig() {
++  const values = new Map([
++    [CONFIG_KEY.NODE_ID, LOCAL_NODE_ID],
++    [CONFIG_KEY.NODE_ADDRESS, LOCAL_NODE_ADDRESS],
++    [CONFIG_KEY.NODE_REST_API_PORT, NODE_REST_API_PORT],
++    [CONFIG_KEY.NODE_WS_PORT, NODE_WS_PORT],
++  ]);
++  return {
++    get(key) {
++      return values.has(key) ? values.get(key) : null;
++    },
++  };
++}
++
++function createDecisionOptions(dataDir, probedAddresses) {
++  return {
++    cliArgs: {},
++    env: {
++      [ENTRYPOINT_ENV.SEED_NODE_ADDRESS]: EXPLICIT_SEED_ADDRESS,
++    },
++    config: createConfig(),
++    dataDirectoryManager: {
++      getDataDir() {
++        return dataDir;
++      },
++    },
++    logger: {
++      info() {},
++    },
++    async probePeerAddress(address) {
++      probedAddresses.push(address);
++      return PROBE_RESULT_UNREACHABLE;
++    },
++  };
++}
++
++function buildTransportRefusedError() {
++  const error = new Error(TRANSPORT_REFUSED_MESSAGE);
++  error.code = TRANSPORT_REFUSED_CODE;
++  return error;
++}
++
++function createContactFixture(decision, options = {}) {
++  let nowMs = 0;
++  const state = {
++    triedUrls: [],
++    startupAuthority: null,
++    bootstrapResponse: null,
++    seedNodeId: null,
++    seedNodeWsAddress: null,
++    seedContactDiagnostics: null,
++  };
++  const seedContactUrls = resolveSeedContactUrls(decision.seedNodeAddresses);
++  const successfulUrl =
++    options.successfulAddress === null ?
++      null :
++      `http://${options.successfulAddress || DURABLE_PEER_B}`;
++  const phase = new ContactSeedPhase({
++    nodeId: LOCAL_NODE_ID,
++    delegates: {
++      getSeedNodeAddress: () => seedContactUrls[0],
++      getSeedNodeAddresses: () => seedContactUrls,
++      getNodeAddress: () => LOCAL_NODE_ADDRESS,
++      getJoinStartupMode: () => decision.startupMode,
++      getMembershipOwnerOutcome: () => decision.membershipOwnerOutcome,
++      getLogger: () => ({
++        debug() {},
++        warn() {},
++        error() {},
++      }),
++      getConfig: () => CONTACT_RETRY_CONFIG,
++      getNow: () => () => nowMs,
++      getSleep: () => async (delayMs) => {
++        nowMs += delayMs;
++      },
++      getRandom: () => () => 0,
++      getHttpPostImpl: () => async (url) => {
++        state.triedUrls.push(url);
++        if (!successfulUrl || !url.startsWith(successfulUrl)) {
++          throw buildTransportRefusedError();
++        }
++        return {
++          success: true,
++          seedNodeId: DURABLE_PEER_B_NODE_ID,
++          seedNodeWsAddress: DURABLE_PEER_B_WS_ADDRESS,
++          startupAuthority: CANONICAL_STARTUP_AUTHORITY,
++        };
++      },
++      getLastRetryableSeedContactEvidence: () => null,
++      setLastRetryableSeedContactEvidence() {},
++      setSeedContactStartupAuthority(value) {
++        state.startupAuthority = value;
++      },
++      setSeedContactDiagnostics(value) {
++        state.seedContactDiagnostics = value;
++      },
++      setBootstrapResponse(value) {
++        state.bootstrapResponse = value;
++      },
++      setSeedNodeId(value) {
++        state.seedNodeId = value;
++      },
++      getSeedNodeWsAddress: () => state.seedNodeWsAddress,
++      setSeedNodeWsAddress(value) {
++        state.seedNodeWsAddress = value;
++      },
++    },
++  });
++  return {phase, state};
++}
++
++test(
++  'startup authority consumption retains durable routes after probe pressure',
++  async (t) => {
++    const dataDir = await mkdtemp(join(tmpdir(), TEST_TMP_PREFIX));
++    t.after(() => rm(dataDir, {recursive: true, force: true}));
++
++    await persistBootstrapRejoinHints({
++      dataDir,
++      nodeId: LOCAL_NODE_ID,
++      nodeAddress: LOCAL_NODE_ADDRESS,
++      nodeRole: 'joiner',
++      peerAddresses: [DURABLE_PEER_A, DURABLE_PEER_B],
++      clusterNodeCount: CLUSTER_NODE_COUNT,
++    });
++
++    const probedAddresses = [];
++    const decision = await resolveStartupJoinDecision(
++      createDecisionOptions(dataDir, probedAddresses),
++    );
++
++    t.equal(decision.startupMode, STARTUP_JOIN_MODE.DURABLE_REJOIN);
++    t.same(
++      probedAddresses,
++      [DURABLE_PEER_A, DURABLE_PEER_B],
++      'the pressure-shaped preflight probe observes every durable route',
++    );
++    t.same(
++      decision.seedNodeAddresses,
++      [EXPLICIT_SEED_ADDRESS, DURABLE_PEER_A, DURABLE_PEER_B],
++      'the owner handoff keeps explicit and durable routes after probe misses',
++    );
++
++    const {phase, state} = createContactFixture(decision);
++    await phase.phaseContactSeed();
++
++    t.same(
++      state.triedUrls,
++      [
++        `http://${EXPLICIT_SEED_ADDRESS}/bootstrap`,
++        `http://${DURABLE_PEER_A}/bootstrap`,
++        `http://${DURABLE_PEER_B}/bootstrap`,
++      ],
++      'bounded contact rotates from the pressured seed through durable peers',
++    );
++    t.same(
++      state.startupAuthority,
++      CANONICAL_STARTUP_AUTHORITY,
++      'alternate routing consumes the peer response canonical authority',
++    );
++    t.equal(state.bootstrapResponse?.success, true);
++    t.equal(state.seedNodeId, DURABLE_PEER_B_NODE_ID);
++    t.equal(state.seedNodeWsAddress, DURABLE_PEER_B_WS_ADDRESS);
++    t.same(state.seedContactDiagnostics, {
++      phase: 'contacting_seed',
++      candidateSet: [
++        `http://${EXPLICIT_SEED_ADDRESS}`,
++        `http://${DURABLE_PEER_A}`,
++        `http://${DURABLE_PEER_B}`,
++      ],
++      currentCandidate: `http://${DURABLE_PEER_B}`,
++      attempt: 3,
++      lastOutcome: JOINING_SEED_CONTACT_OUTCOME.CONTACT_SUCCEEDED,
++      remainingBudgetMs: 30,
++      authoritySource: `http://${DURABLE_PEER_B}`,
++    });
++  },
++);
++
++test(
++  'bounded seed contact pressure stays typed and visible on bootstrap diagnostics',
++  async (t) => {
++    const decision = {
++      seedNodeAddresses: [
++        EXPLICIT_SEED_ADDRESS,
++        DURABLE_PEER_A,
++        DURABLE_PEER_B,
++      ],
++      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
++      membershipOwnerOutcome: {},
++    };
++    const {phase, state} = createContactFixture(decision, {
++      successfulAddress: null,
++    });
++
++    const error = await t.rejects(
++      phase.phaseContactSeed(),
++      'bounded candidate exhaustion must surface a typed pressure outcome',
++    );
++
++    t.equal(
++      error.code,
++      JOINING_SEED_CONTACT_FAILURE_KIND.SEED_CONTACT_PRESSURE,
++    );
++    t.equal(
++      error.seedContactFailureKind,
++      JOINING_SEED_CONTACT_FAILURE_KIND.SEED_CONTACT_PRESSURE,
++    );
++    t.same(error.seedContactDiagnostics, {
++      phase: 'contacting_seed',
++      candidateSet: [
++        `http://${EXPLICIT_SEED_ADDRESS}`,
++        `http://${DURABLE_PEER_A}`,
++        `http://${DURABLE_PEER_B}`,
++      ],
++      currentCandidate: `http://${DURABLE_PEER_A}`,
++      attempt: 5,
++      lastOutcome: JOINING_SEED_CONTACT_OUTCOME.SEED_CONTACT_PRESSURE,
++      remainingBudgetMs: 0,
++      authoritySource: null,
++    });
++
++    const readinessOwner = new BootstrapReadinessOwner({
++      delegates: {
++        getBootstrapService: () => ({
++          getSeedContactDiagnosticsSnapshot: () =>
++            state.seedContactDiagnostics,
++        }),
++      },
++    });
++    const bootstrapSurface = {};
++    readinessOwner.appendSeedContactDiagnostics(bootstrapSurface);
++    t.same(
++      bootstrapSurface[BOOTSTRAP_API_READINESS_FIELD.SEED_CONTACT],
++      error.seedContactDiagnostics,
++      'the reachable bootstrap surface exposes the contact owner snapshot',
++    );
++  },
++);
+diff --git a/test/distributed/harness/__tests__/failure-bundle-restart-recovery-classification-test-cases.js b/test/distributed/harness/__tests__/failure-bundle-restart-recovery-classification-test-cases.js
+index 52685c4998b0e601337fe1bf79af5d3c061502ef..9abe5a9b290eaa12a4dcd59d2bc499a1bd80b9cb 100644
+--- a/test/distributed/harness/__tests__/failure-bundle-restart-recovery-classification-test-cases.js
++++ b/test/distributed/harness/__tests__/failure-bundle-restart-recovery-classification-test-cases.js
+@@ -11,7 +11,6 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
+     readFile,
+     ReportWriter,
+     resolve,
+-    STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+     UTF8_ENCODING,
+     writeFailureBundlesForReport,
+   } = context;
+@@ -504,7 +503,7 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
+   );
+ 
+   it(
+-    'classifies restart recovery admin refusal as the terminal owner state',
++    'routes contacting-seed admin refusal to restart bootstrap authority',
+     async () => {
+       refreshState();
+       const RESTART_RECOVERY_REPORT_PATH = join(
+@@ -518,7 +517,13 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
+         'failureBarrier=' + FAILURE_BARRIER_PHASE;
+       const ADMIN_REFUSED_SIGNAL =
+         'failureBarrierReason=' +
+-        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED;
++        'restart_bootstrap_authority';
++      const RESTART_BOOTSTRAP_AUTHORITY = 'restart_bootstrap_authority';
++      const STARTUP_PHASE_CONTACTING_SEED_SIGNAL =
++        'startupPhase=contacting_seed, ';
++      const STARTUP_AUTHORITY_CONSUMPTION = 'startup_authority_consumption';
++      const SNAPSHOT_COVERAGE_TARGET_NOT_REACHED = 'target_not_reached';
++      const SEED_CONTACT_ATTEMPT_COUNT = 3;
+       const STALE_PRIORITY_SPREAD_SIGNAL =
+         'failureBarrierReason=priority_spread_pending';
+       const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
+@@ -541,6 +546,10 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
+         'readinessReasons=none, recoveryStage=unknown, ' +
+         'bootstrapJoinProjectionBlocker=none, ' +
+         'bootstrapJoinProjectionRule=init_priority_bypass, ' +
++        STARTUP_PHASE_CONTACTING_SEED_SIGNAL +
++        'seedContactOutcome=retryable_transport_failure, ' +
++        'seedContactAttempt=3, seedContactRemainingBudgetMs=45000, ' +
++        'seedContactAuthoritySource=none, ' +
+         'reachableBy=bootstrap_health, lastError=Admin API query failed ' +
+         'for node ' +
+         RESTARTED_NODE_ID +
+@@ -613,7 +622,7 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
+ 
+       assert.equal(
+         scenarioBundle.summary.dominantReason,
+-        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
++        RESTART_BOOTSTRAP_AUTHORITY,
+       );
+       assert.equal(
+         failureClassification.failureClass,
+@@ -621,7 +630,7 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
+       );
+       assert.equal(
+         failureClassification.dominantReason,
+-        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
++        RESTART_BOOTSTRAP_AUTHORITY,
+       );
+       assert.ok(
+         failureClassification.signals.includes(FAILURE_BARRIER_SIGNAL),
+@@ -636,7 +645,7 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
+       assert.equal(
+         scenarioBundle.diagnostics.failure.failureBarrier
+           .terminalRecoveryReadiness.ownerState,
+-        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
++        RESTART_BOOTSTRAP_AUTHORITY,
+       );
+       assert.equal(
+         scenarioBundle.diagnostics.failure.failureBarrier
+@@ -644,15 +653,30 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
+         RESTARTED_NODE_ID,
+       );
+       assert.equal(restartRecoveryGate.status, 'open');
++      assert.equal(
++        scenarioBundle.diagnostics.failure.failureBarrier
++          .terminalRecoveryReadiness.ownerBoundary,
++        STARTUP_AUTHORITY_CONSUMPTION,
++      );
++      assert.equal(
++        scenarioBundle.diagnostics.failure.failureBarrier
++          .terminalRecoveryReadiness.snapshotCoverageState,
++        SNAPSHOT_COVERAGE_TARGET_NOT_REACHED,
++      );
++      assert.equal(
++        scenarioBundle.diagnostics.failure.failureBarrier
++          .terminalRecoveryReadiness.seedContactAttempt,
++        SEED_CONTACT_ATTEMPT_COUNT,
++      );
+       assert.equal(
+         restartRecoveryGate.blockers.includes(
+-          STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
++          RESTART_BOOTSTRAP_AUTHORITY,
+         ),
+         true,
+       );
+       assert.equal(
+         restartRecoveryGate.evidence.terminalRecoveryReadiness.ownerState,
+-        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
++        RESTART_BOOTSTRAP_AUTHORITY,
+       );
+       assert.equal(
+         scenarioBundle.publicationConvergence.recoveryProtocolState,
+diff --git a/test/distributed/harness/cluster-class-load-orchestration.js b/test/distributed/harness/cluster-class-load-orchestration.js
+index c153b9b81aa5c03593747e88ea18c9a216a3d1c4..f8461a0b5ac58f22ead4b95fa24eb80dc4eeadfe 100644
+--- a/test/distributed/harness/cluster-class-load-orchestration.js
++++ b/test/distributed/harness/cluster-class-load-orchestration.js
+@@ -41,10 +41,19 @@ import {ClusterLifecycleBase} from './cluster-class-lifecycle-base.js';
+ 
+ const RESTART_RECOVERY_FIELD_NONE = 'none';
+ const RESTART_RECOVERY_REASON_SEPARATOR = '|';
++const RESTART_RECOVERY_FIELD_SEPARATOR = ', ';
++const RESTART_RECOVERY_FIELD_VALUE_SEPARATOR = '=';
+ const RESTART_RECOVERY_FIELD_BOOTSTRAP_JOIN_PROJECTION_BLOCKER =
+   'bootstrapJoinProjectionBlocker';
+ const RESTART_RECOVERY_FIELD_BOOTSTRAP_JOIN_PROJECTION_RULE =
+   'bootstrapJoinProjectionRule';
++const RESTART_RECOVERY_FIELD_STARTUP_PHASE = 'startupPhase';
++const RESTART_RECOVERY_FIELD_SEED_CONTACT_OUTCOME = 'seedContactOutcome';
++const RESTART_RECOVERY_FIELD_SEED_CONTACT_ATTEMPT = 'seedContactAttempt';
++const RESTART_RECOVERY_FIELD_SEED_CONTACT_REMAINING_BUDGET_MS =
++  'seedContactRemainingBudgetMs';
++const RESTART_RECOVERY_FIELD_SEED_CONTACT_AUTHORITY_SOURCE =
++  'seedContactAuthoritySource';
+ // CL-025: a single ready probe is satisfiable by a node mid-crash (admin came
+ // up early in boot, process exited between the probe and the recovered
+ // declaration — observed in stat-gate 085908Z-run2). Readiness must hold
+@@ -524,6 +533,11 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
+       typeof bootstrapReadiness.bootstrapJoinProjection === 'object' ?
+         bootstrapReadiness.bootstrapJoinProjection :
+         null;
++    const seedContact =
++      bootstrapReadiness?.seedContact &&
++      typeof bootstrapReadiness.seedContact === 'object' ?
++        bootstrapReadiness.seedContact :
++        null;
+     return (
+       'reachable=' +
+       String(observation.reachable === true) +
+@@ -561,6 +575,26 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
+         bootstrapJoinProjection?.projectionRule ||
+           RESTART_RECOVERY_FIELD_NONE,
+       ) +
++      RESTART_RECOVERY_FIELD_SEPARATOR +
++      RESTART_RECOVERY_FIELD_STARTUP_PHASE +
++      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
++      String(seedContact?.phase || RESTART_RECOVERY_FIELD_NONE) +
++      RESTART_RECOVERY_FIELD_SEPARATOR +
++      RESTART_RECOVERY_FIELD_SEED_CONTACT_OUTCOME +
++      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
++      String(seedContact?.lastOutcome || RESTART_RECOVERY_FIELD_NONE) +
++      RESTART_RECOVERY_FIELD_SEPARATOR +
++      RESTART_RECOVERY_FIELD_SEED_CONTACT_ATTEMPT +
++      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
++      String(seedContact?.attempt ?? RESTART_RECOVERY_FIELD_NONE) +
++      RESTART_RECOVERY_FIELD_SEPARATOR +
++      RESTART_RECOVERY_FIELD_SEED_CONTACT_REMAINING_BUDGET_MS +
++      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
++      String(seedContact?.remainingBudgetMs ?? RESTART_RECOVERY_FIELD_NONE) +
++      RESTART_RECOVERY_FIELD_SEPARATOR +
++      RESTART_RECOVERY_FIELD_SEED_CONTACT_AUTHORITY_SOURCE +
++      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
++      String(seedContact?.authoritySource || RESTART_RECOVERY_FIELD_NONE) +
+       ', reachableBy=' +
+       String(observation.reachableBy || RESTART_RECOVERY_FIELD_NONE) +
+       ', lastError=' +
+diff --git a/test/distributed/harness/failure-bundle-artifact-foundation.js b/test/distributed/harness/failure-bundle-artifact-foundation.js
+index 767d2dd2eb4bc271ba30987318ba36ee4485c244..bc0b61875243a4960ec90f156db48809acb1dfa2 100644
+--- a/test/distributed/harness/failure-bundle-artifact-foundation.js
++++ b/test/distributed/harness/failure-bundle-artifact-foundation.js
+@@ -165,6 +165,11 @@ export const STABILITY_GATE_BLOCKER_STARTUP_READINESS = 'startup_readiness_block
+ export const STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED =
+   'admin_reachability_refused';
+ export const SCENARIO_NAME_FRAGMENT_RESTART = 'restart';
++const DECISION_ARTIFACT_FIELD_PEER_ADDRESSES = 'peerAddresses';
++const DECISION_ARTIFACT_FIELD_SEED_NODE_ADDRESSES = 'seedNodeAddresses';
++const DECISION_ARTIFACT_FIELD_SEED_CONTACT = 'seedContact';
++const DECISION_ARTIFACT_FIELD_SEED_CONTACT_FAILURE_KIND =
++  'seedContactFailureKind';
+ export const DECISION_ARTIFACT_FIELD = Object.freeze({
+   ADMIN_PORT: 'adminPort',
+   ADMIN_RUNTIME_STARTED: 'adminRuntimeStarted',
+@@ -182,12 +187,16 @@ export const DECISION_ARTIFACT_FIELD = Object.freeze({
+   OPERATION_ID: 'operationId',
+   PARTITION_ID: 'partitionId',
+   PEER_ADDRESS: 'peerAddress',
++  PEER_ADDRESSES: DECISION_ARTIFACT_FIELD_PEER_ADDRESSES,
+   PHASE: 'phase',
+   BOUNDARY: 'boundary',
+   DELAY_MS: 'delayMs',
+   ERROR_MESSAGE: 'errorMessage',
+   RETRY_AFTER_MS: 'retryAfterMs',
+   SEED_NODE_ADDRESS: 'seedNodeAddress',
++  SEED_NODE_ADDRESSES: DECISION_ARTIFACT_FIELD_SEED_NODE_ADDRESSES,
++  SEED_CONTACT: DECISION_ARTIFACT_FIELD_SEED_CONTACT,
++  SEED_CONTACT_FAILURE_KIND: DECISION_ARTIFACT_FIELD_SEED_CONTACT_FAILURE_KIND,
+   SOURCE: 'source',
+   STARTUP_BRANCH: 'startupBranch',
+   STARTUP_MODE: 'startupMode',
+@@ -219,10 +228,12 @@ export const AUTO_REJOIN_DECISION_ARTIFACT_FIELDS = Object.freeze([
+   DECISION_ARTIFACT_FIELD.SOURCE,
+   DECISION_ARTIFACT_FIELD.STARTUP_MODE,
+   DECISION_ARTIFACT_FIELD.PEER_ADDRESS,
++  DECISION_ARTIFACT_FIELD.PEER_ADDRESSES,
+ ]);
+ export const JOINING_CLUSTER_DECISION_ARTIFACT_FIELDS = Object.freeze([
+   DECISION_ARTIFACT_FIELD.NODE_ID,
+   DECISION_ARTIFACT_FIELD.SEED_NODE_ADDRESS,
++  DECISION_ARTIFACT_FIELD.SEED_NODE_ADDRESSES,
+   DECISION_ARTIFACT_FIELD.STARTUP_MODE,
+ ]);
+ export const STARTUP_RUNTIME_HANDOFF_ARTIFACT_FIELDS = Object.freeze([
+@@ -242,6 +253,8 @@ export const JOIN_PHASE_FAILURE_ARTIFACT_FIELDS = Object.freeze([
+   DECISION_ARTIFACT_FIELD.SUB_PHASE,
+   DECISION_ARTIFACT_FIELD.DURATION,
+   DECISION_ARTIFACT_FIELD.ERROR,
++  DECISION_ARTIFACT_FIELD.SEED_CONTACT_FAILURE_KIND,
++  DECISION_ARTIFACT_FIELD.SEED_CONTACT,
+ ]);
+ export const RETRYABLE_JOIN_RESUME_ARTIFACT_FIELDS = Object.freeze([
+   DECISION_ARTIFACT_FIELD.NODE_ID,
+diff --git a/test/distributed/harness/failure-bundle-diagnostics-foundation.js b/test/distributed/harness/failure-bundle-diagnostics-foundation.js
+index 6b778455e5ab1dfdbaa0e535825ccedff1b5029f..d1d40835881652d5892d2f80f1b7b19344edf651 100644
+--- a/test/distributed/harness/failure-bundle-diagnostics-foundation.js
++++ b/test/distributed/harness/failure-bundle-diagnostics-foundation.js
+@@ -490,6 +490,15 @@ export const RESTART_RECOVERY_READINESS_UNKNOWN_VALUE = 'unknown';
+ export const RESTART_RECOVERY_READINESS_ADMIN_REFUSED_FRAGMENT = 'econnrefused';
+ export const RESTART_RECOVERY_READINESS_REACHABLE_BY_BOOTSTRAP_HEALTH =
+   'bootstrap_health';
++const RESTART_RECOVERY_READINESS_FIELD_STARTUP_PHASE = 'startupPhase';
++const RESTART_RECOVERY_READINESS_FIELD_SEED_CONTACT_OUTCOME =
++  'seedContactOutcome';
++const RESTART_RECOVERY_READINESS_FIELD_SEED_CONTACT_ATTEMPT =
++  'seedContactAttempt';
++const RESTART_RECOVERY_READINESS_FIELD_SEED_CONTACT_REMAINING_BUDGET_MS =
++  'seedContactRemainingBudgetMs';
++const RESTART_RECOVERY_READINESS_FIELD_SEED_CONTACT_AUTHORITY_SOURCE =
++  'seedContactAuthoritySource';
+ export const RESTART_RECOVERY_READINESS_FIELD = Object.freeze({
+   REACHABLE: 'reachable',
+   READY: 'ready',
+@@ -504,6 +513,15 @@ export const RESTART_RECOVERY_READINESS_FIELD = Object.freeze({
+   RECOVERY_STAGE: 'recoveryStage',
+   BOOTSTRAP_JOIN_PROJECTION_BLOCKER: 'bootstrapJoinProjectionBlocker',
+   BOOTSTRAP_JOIN_PROJECTION_RULE: 'bootstrapJoinProjectionRule',
++  STARTUP_PHASE: RESTART_RECOVERY_READINESS_FIELD_STARTUP_PHASE,
++  SEED_CONTACT_OUTCOME:
++    RESTART_RECOVERY_READINESS_FIELD_SEED_CONTACT_OUTCOME,
++  SEED_CONTACT_ATTEMPT:
++    RESTART_RECOVERY_READINESS_FIELD_SEED_CONTACT_ATTEMPT,
++  SEED_CONTACT_REMAINING_BUDGET_MS:
++    RESTART_RECOVERY_READINESS_FIELD_SEED_CONTACT_REMAINING_BUDGET_MS,
++  SEED_CONTACT_AUTHORITY_SOURCE:
++    RESTART_RECOVERY_READINESS_FIELD_SEED_CONTACT_AUTHORITY_SOURCE,
+   REACHABLE_BY: 'reachableBy',
+   LAST_ERROR: 'lastError',
+ });
+diff --git a/test/distributed/harness/failure-bundle-diagnostics-merge.js b/test/distributed/harness/failure-bundle-diagnostics-merge.js
+index bf2ac1d62237ac9001780eed8666de692f5a47e2..b150bba740c3f07c5658383bb94d83b2afd11e95 100644
+--- a/test/distributed/harness/failure-bundle-diagnostics-merge.js
++++ b/test/distributed/harness/failure-bundle-diagnostics-merge.js
+@@ -1,6 +1,13 @@
+ import * as foundation from './failure-bundle-diagnostics-foundation.js';
+ import * as priority from './failure-bundle-diagnostics-priority-recovery.js';
+ 
++const RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY =
++  'restart_bootstrap_authority';
++const RESTART_RECOVERY_BOUNDARY_STARTUP_AUTHORITY_CONSUMPTION =
++  'startup_authority_consumption';
++const SNAPSHOT_COVERAGE_STATE_TARGET_NOT_REACHED = 'target_not_reached';
++const SNAPSHOT_COVERAGE_STATE_UNKNOWN = 'unknown';
++
+ const {
+   CONTROL_PLANE_QUIESCENCE_DISCOVERY_REASON_SET,
+   CONTROL_PLANE_QUIESCENCE_TOPOLOGY_REASON_SET,
+@@ -1041,11 +1048,16 @@ function resolveRestartRecoveryReadinessOwnerState(observation) {
+         RESTART_RECOVERY_READINESS_REACHABLE_BY_BOOTSTRAP_HEALTH &&
+       observation?.adminReady !== true &&
+       observation?.controlPlaneRecoveryReady !== true,
++    contactingSeed:
++      observation?.startupPhase === 'contacting_seed',
+   });
+   if (evidence.ready) {
+     return null;
+   }
+   if (evidence.adminRefused && evidence.bootstrapOnlyReachable) {
++    if (evidence.contactingSeed) {
++      return RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY;
++    }
+     return STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED;
+   }
+   return null;
+@@ -1126,14 +1138,39 @@ function resolveRestartRecoveryReadinessObservation(entry) {
+       fieldMap[
+         RESTART_RECOVERY_READINESS_FIELD.BOOTSTRAP_JOIN_PROJECTION_RULE
+       ],
++    startupPhase:
++      fieldMap[RESTART_RECOVERY_READINESS_FIELD.STARTUP_PHASE],
++    seedContactOutcome:
++      fieldMap[RESTART_RECOVERY_READINESS_FIELD.SEED_CONTACT_OUTCOME],
++    seedContactAttempt: normalizeRestartRecoveryReadinessNumber(
++      fieldMap[RESTART_RECOVERY_READINESS_FIELD.SEED_CONTACT_ATTEMPT],
++    ),
++    seedContactRemainingBudgetMs: normalizeRestartRecoveryReadinessNumber(
++      fieldMap[
++        RESTART_RECOVERY_READINESS_FIELD.SEED_CONTACT_REMAINING_BUDGET_MS
++      ],
++    ),
++    seedContactAuthoritySource:
++      fieldMap[
++        RESTART_RECOVERY_READINESS_FIELD.SEED_CONTACT_AUTHORITY_SOURCE
++      ],
+     reachableBy:
+       fieldMap[RESTART_RECOVERY_READINESS_FIELD.REACHABLE_BY],
+     lastError:
+       fieldMap[RESTART_RECOVERY_READINESS_FIELD.LAST_ERROR],
+   };
++  const ownerState = resolveRestartRecoveryReadinessOwnerState(observation);
+   return Object.freeze({
+     ...observation,
+-    ownerState: resolveRestartRecoveryReadinessOwnerState(observation),
++    ownerState,
++    ownerBoundary:
++      ownerState === RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY ?
++        RESTART_RECOVERY_BOUNDARY_STARTUP_AUTHORITY_CONSUMPTION :
++        null,
++    snapshotCoverageState:
++      ownerState === RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY ?
++        SNAPSHOT_COVERAGE_STATE_TARGET_NOT_REACHED :
++        SNAPSHOT_COVERAGE_STATE_UNKNOWN,
+   });
+ }
+ 
+@@ -1187,6 +1224,12 @@ function resolveRestartRecoveryFailureBarrierReason({
+   if (hasRestartRecoveryPrioritySpreadEvidence(publicationConvergence)) {
+     return STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING;
+   }
++  if (
++    terminalRecoveryReadiness?.ownerState ===
++      RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY
++  ) {
++    return RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY;
++  }
+   if (
+     terminalRecoveryReadiness?.ownerState ===
+       STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED
+diff --git a/test/distributed/harness/failure-bundle-stability-gates.js b/test/distributed/harness/failure-bundle-stability-gates.js
+index 3cd0efacd20aae04ab13c5dc2bdc0ab28772f2a6..b16641a848903c30921c6d208ab8a75039181e74 100644
+--- a/test/distributed/harness/failure-bundle-stability-gates.js
++++ b/test/distributed/harness/failure-bundle-stability-gates.js
+@@ -28,6 +28,9 @@ const {
+   buildFailoverStabilityGate,
+ } = FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT;
+ 
++const STABILITY_GATE_BLOCKER_RESTART_BOOTSTRAP_AUTHORITY =
++  'restart_bootstrap_authority';
++
+ function buildRestartRecoveryStabilityGate({
+   entry,
+   controlPlane = null,
+@@ -56,12 +59,16 @@ function buildRestartRecoveryStabilityGate({
+   const hasAdminReachabilityBlocker =
+     terminalRecoveryReadiness?.ownerState ===
+       STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED;
++  const hasRestartBootstrapAuthorityBlocker =
++    terminalRecoveryReadiness?.ownerState ===
++      STABILITY_GATE_BLOCKER_RESTART_BOOTSTRAP_AUTHORITY;
+   const applicable =
+     scenarioName.includes(SCENARIO_NAME_FRAGMENT_RESTART) ||
+     restartBoundaryCount > ZERO ||
+     !!startupRecovery ||
+     hasStartupReadinessBlocker ||
+-    hasAdminReachabilityBlocker;
++    hasAdminReachabilityBlocker ||
++    hasRestartBootstrapAuthorityBlocker;
+   if (!applicable) {
+     return buildStabilityGate({
+       type: STABILITY_GATE_TYPE_RESTART_RECOVERY,
+@@ -114,6 +121,9 @@ function buildRestartRecoveryStabilityGate({
+   if (hasAdminReachabilityBlocker) {
+     blockers.push(STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED);
+   }
++  if (hasRestartBootstrapAuthorityBlocker) {
++    blockers.push(STABILITY_GATE_BLOCKER_RESTART_BOOTSTRAP_AUTHORITY);
++  }
+   if (hasBlockingClosureRecord) {
+     blockers.push(STABILITY_GATE_BLOCKER_CLOSURE_RECORD);
+   }

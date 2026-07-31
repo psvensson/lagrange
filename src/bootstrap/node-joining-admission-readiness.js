@@ -92,6 +92,11 @@ function buildSeedContactFailureDiagnostics(error) {
       Number.isFinite(bootstrapResponse?.retryAfterMs) ?
         Math.max(0, Math.floor(bootstrapResponse.retryAfterMs)) :
         null,
+    seedContact:
+      error?.seedContactDiagnostics &&
+      typeof error.seedContactDiagnostics === 'object' ?
+        error.seedContactDiagnostics :
+        null,
   };
   return diagnostics;
 }

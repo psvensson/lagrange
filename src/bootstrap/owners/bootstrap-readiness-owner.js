@@ -27,6 +27,18 @@ class BootstrapReadinessOwner {
   getBootstrapService() {
     return this.delegates.getBootstrapService?.() || null;
   }
+  getSeedContactDiagnosticsSnapshot() {
+    const bootstrapService = this.getBootstrapService();
+    const snapshot =
+      bootstrapService?.getSeedContactDiagnosticsSnapshot?.() || null;
+    return snapshot && typeof snapshot === 'object' ? snapshot : null;
+  }
+  getStartupRuntimeHandoffSnapshot() {
+    const bootstrapService = this.getBootstrapService();
+    const snapshot =
+      bootstrapService?.getStartupRuntimeHandoffSnapshot?.() || null;
+    return snapshot && typeof snapshot === 'object' ? snapshot : null;
+  }
   getMessageRouter() {
     return this.delegates.getMessageRouter?.() || null;
   }
@@ -85,6 +97,8 @@ class BootstrapReadinessOwner {
       response.retryAfterMs = snapshot.retryAfterMs;
     }
     this.appendReadinessProgressFields(response, snapshot);
+    this.appendSeedContactDiagnostics(response);
+    this.appendStartupRuntimeHandoffFields(response);
     this.recordReadinessProbeResult(BOOTSTRAP_API_ROUTE.STARTUPZ, statusCode);
     reply.code(statusCode);
     return response;

@@ -1,0 +1,72 @@
+{
+  "timestamp": "20260731T095858Z",
+  "config": "test/distributed/config/local-benchmark-7node.json",
+  "scenario": "rolling-restart",
+  "srcFingerprint": "4e03d2c5f6f8d2bb",
+  "debugLogs": false,
+  "noProgressMaxElapsedMs": 200000,
+  "staleSourceRuns": 0,
+  "runs": 1,
+  "classTally": {
+    "TOPOLOGY_BLOCKED": 1
+  },
+  "corruptCount": 0,
+  "oracleBlindCount": 0,
+  "nodeExitCount": 0,
+  "topologyBlockedCount": 1,
+  "convergeRate": 1,
+  "stallRate": 0,
+  "healthyRate": 0,
+  "converged": 1,
+  "passRate": 0,
+  "missingHistogram": {
+    "0": 1
+  },
+  "dominantReasonTally": {
+    "admin_reachability_refused": 1
+  },
+  "wallSeconds": {
+    "p50": 345,
+    "p95": 345
+  },
+  "durationP50": 299002,
+  "durationP95": 299002,
+  "runsDetail": [
+    {
+      "passed": false,
+      "missing": 0,
+      "hardBreaches": 0,
+      "cyclesNoProgress": 0,
+      "gateState": "",
+      "oracleBlind": false,
+      "unexpectedNodeExit": false,
+      "reason": "admin_reachability_refused",
+      "closureWitnessClass": null,
+      "duration": 299002,
+      "class": "TOPOLOGY_BLOCKED",
+      "run": 1,
+      "wallSeconds": 345
+    }
+  ],
+  "gateVerdict": {
+    "verdict": "INCONCLUSIVE",
+    "reason": "Wilson-95 interval [0.000, 0.793] straddles the sealed bar 0.357; more runs would narrow it (advisory only — §4 deliberately does not compute a required N)",
+    "passes": 0,
+    "runs": 1,
+    "wilson": {
+      "lowerBound": 5.551115123125783e-17,
+      "upperBound": 0.7934506856996815,
+      "pointEstimate": 0,
+      "confidence": 0.95
+    },
+    "safetyCounts": {
+      "corrupt": 0,
+      "nodeExit": 0,
+      "oracleBlind": 0,
+      "staleSource": 0
+    },
+    "safetyClean": true,
+    "sealedBar": 0.357,
+    "promotionNote": "promotion verdicts require an N>=15 fixed-code window (§5); this gate has N=1"
+  }
+}

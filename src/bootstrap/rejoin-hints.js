@@ -12,18 +12,26 @@ import {
   STARTUP_JOIN_MODE,
   TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
 } from './rejoin-hints-constants.js';
+import {
+  deriveRequiresPeerRejoin,
+  extractPeerAddresses,
+  normalizeAddress,
+  normalizeNodeCount,
+  normalizeNodeRole,
+  normalizePeerAddresses,
+  parseClusterNodeCount,
+  prioritizePeerAddress,
+} from './rejoin-hints-addresses.js';
 
 const PARTITIONS_DIRNAME = 'partitions';
 const SQLITE_DB_SUFFIX = '.db';
 const NODES_PARTITION_PREFIX = `${TABLES.NODES}-p`;
 const REJOIN_ROLE_SEED = 'seed';
-const REJOIN_ROLE_JOINER = 'joiner';
 const STARTUP_MODE_JOIN = 'join';
 const STARTUP_MODE_SEED = 'seed';
 const STARTUP_MODE_FAIL = 'fail';
 const SQLITE_TABLE_TYPE = 'table';
 const EMPTY_STRING = '';
-const MULTI_NODE_CLUSTER_THRESHOLD = 1;
 const RECOVERED_CLUSTER_NODE_COUNT_WITH_PEER = 2;
 const UTF8_ENCODING = 'utf8';
 const JSON_INDENT_SPACES = 2;
@@ -91,76 +99,6 @@ const SQL_SELECT_NODES =
   `SELECT ${COLUMN.NODE_ID} AS node_id, ` +
   `${COLUMN.NODE_ADDRESS} AS node_address FROM ${TABLES.NODES}`;
 let rejoinHintsTempSequence = 0;
-
-function normalizeAddress(value) {
-  if (typeof value !== 'string') {
-    return null;
-  }
-  const trimmed = value.trim();
-  return trimmed.length > 0 ? trimmed : null;
-}
-
-function normalizeNodeCount(nodeRows) {
-  return Array.isArray(nodeRows) ? nodeRows.length : 0;
-}
-
-function normalizeNodeRole(value) {
-  const normalized = normalizeAddress(value);
-  if (!normalized) {
-    return null;
-  }
-  const role = normalized.toLowerCase();
-  if (role === REJOIN_ROLE_SEED || role === REJOIN_ROLE_JOINER) {
-    return role;
-  }
-  return null;
-}
-
-function parseClusterNodeCount(value) {
-  const parsed = Number(value);
-  if (!Number.isFinite(parsed) || parsed < 0) {
-    return 0;
-  }
-  return Math.floor(parsed);
-}
-
-function normalizePeerAddresses(peerAddresses, nodeId, nodeAddress) {
-  const normalizedNodeId = normalizeAddress(nodeId);
-  const normalizedNodeAddress = normalizeAddress(nodeAddress);
-  const uniquePeerAddresses = new Set();
-
-  for (const value of Array.isArray(peerAddresses) ? peerAddresses : []) {
-    const rowNodeId = normalizeAddress(
-      value?.[COLUMN.NODE_ID] ?? value?.node_id ?? null,
-    );
-    const peerAddress = normalizeAddress(
-      value?.[COLUMN.NODE_ADDRESS] ?? value?.node_address ?? value,
-    );
-    if (!peerAddress) {
-      continue;
-    }
-    if (normalizedNodeId && rowNodeId === normalizedNodeId) {
-      continue;
-    }
-    if (normalizedNodeAddress && peerAddress === normalizedNodeAddress) {
-      continue;
-    }
-    uniquePeerAddresses.add(peerAddress);
-  }
-
-  return Array.from(uniquePeerAddresses);
-}
-
-function deriveRequiresPeerRejoin(options = {}) {
-  return normalizeNodeRole(options.nodeRole) === REJOIN_ROLE_JOINER ||
-    parseClusterNodeCount(options.clusterNodeCount) >
-      MULTI_NODE_CLUSTER_THRESHOLD ||
-    normalizePeerAddresses(options.peerAddresses).length > 0;
-}
-
-function extractPeerAddresses(nodeRows, nodeId, nodeAddress) {
-  return normalizePeerAddresses(nodeRows, nodeId, nodeAddress);
-}
 
 function buildRejoinHintsSnapshot(options = {}) {
   const systemTableCache = options.systemTableCache || null;
@@ -609,6 +547,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       mode: STARTUP_MODE_FAIL,
       peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
       peerAddress: null,
+      peerAddresses: [],
       source: REJOIN_SOURCE.DURABLE_NODES_TABLE,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       durableStateDetected: true,
@@ -622,6 +561,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       mode: STARTUP_MODE_SEED,
       peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
       peerAddress: null,
+      peerAddresses: [],
       source: resolveDurableStartupSource(context),
       startupMode: STARTUP_JOIN_MODE.SEED,
       durableStateDetected: context.durableStateDetected,
@@ -634,6 +574,10 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       mode: STARTUP_MODE_JOIN,
       peerAddressState: PEER_ADDRESS_STATE.SELECTED,
       peerAddress: context.selectedPeerAddress,
+      peerAddresses: prioritizePeerAddress(
+        context.peerAddresses,
+        context.selectedPeerAddress,
+      ),
       source: resolveDurableJoinSource(context),
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
       durableStateDetected: true,
@@ -646,6 +590,10 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       mode: STARTUP_MODE_JOIN,
       peerAddressState: PEER_ADDRESS_STATE.SELECTED,
       peerAddress: context.preferredPeerAddress,
+      peerAddresses: prioritizePeerAddress(
+        context.peerAddresses,
+        context.preferredPeerAddress,
+      ),
       source: context.hintPeerAddresses.length > 0 ?
         REJOIN_SOURCE.REJOIN_HINTS :
         REJOIN_SOURCE.DURABLE_NODES_TABLE,
@@ -660,6 +608,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       mode: STARTUP_MODE_FAIL,
       peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
       peerAddress: null,
+      peerAddresses: [],
       source: context.durableSnapshot.hasDurableNodesTable ?
         REJOIN_SOURCE.DURABLE_NODES_TABLE :
         REJOIN_SOURCE.REJOIN_HINTS,
@@ -675,6 +624,7 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       mode: STARTUP_MODE_SEED,
       peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
       peerAddress: null,
+      peerAddresses: [],
       source: REJOIN_SOURCE.NONE,
       startupMode: STARTUP_JOIN_MODE.SEED,
       durableStateDetected: false,

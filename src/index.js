@@ -42,7 +42,6 @@ import {
   attachSqlRuntimeToStartupOwner,
 } from './bootstrap/shared/startup-sql-runtime-handoff.js';
 import {
-  attachSqlEngineToAdminRuntime,
   checkVersionFlag,
   createReadinessStateWithDiagnostics,
   createShutdownSignalHandler,
@@ -56,11 +55,8 @@ import {
   resolveStartupJoinDecision,
   reportStartupRuntimeHandoff,
   scheduleStartupLivenessPulse,
-  shutdownAdminRuntimeComposition,
-  shutdownEarlyAdminSqlRuntime,
   startAdminRuntimeComposition,
   startDynamicConfigWiring,
-  startEarlyAdminSqlRuntime,
   startLogsTablePersistence,
   startRejoinHintsPersistence,
   resolveSystemCacheHandles,
@@ -104,7 +100,7 @@ async function startJoinNode(options) {
     dataDir: dataDirectoryManager.getDataDir(),
     nodeId,
     nodeAddress: joiningNodeAddress,
-    peerAddresses: [seedNodeAddress],
+    peerAddresses: seedNodeAddresses,
     logger: mainLogger,
   });
   const clusterIncarnationFence = await resolveLocalClusterIncarnationFence({
@@ -115,6 +111,7 @@ async function startJoinNode(options) {
 
   mainLogger.info(ENTRYPOINT_LOG_MSG.JOINING_CLUSTER, {
     seedNodeAddress,
+    seedNodeAddresses,
     startupMode,
   });
 
@@ -127,7 +124,6 @@ async function startJoinNode(options) {
     nodeId,
   );
   let joinAdminRuntime = null;
-  let joinEarlySqlRuntime = null;
   let bootstrapAPI = null;
   const membershipLifecycleController = new MembershipLifecycleController({
     nodeId,
@@ -166,22 +162,6 @@ async function startJoinNode(options) {
     membershipLifecycleController,
     previousLifecycleStateMachine:
       options._previousLifecycleStateMachine || null,
-    onLocalAdminRuntimeReady: async (runtime) => {
-      if (joinAdminRuntime) {
-        return;
-      }
-      joinEarlySqlRuntime = await startEarlyAdminSqlRuntime(runtime);
-      joinAdminRuntime = await startAdminRuntimeComposition({
-        nodeId: runtime.nodeId,
-        systemTableCache: runtime.systemTableCache,
-        cacheMutationTarget:
-          runtime.cacheMutationTarget || runtime.systemTableCache,
-        sqlQueryEngine: joinEarlySqlRuntime?.sqlQueryEngine || null,
-        owner: runtime.owner,
-        messageRouter: runtime.messageRouter,
-        partitionServices: runtime.partitionServices,
-      });
-    },
     config: Object.keys(joiningConfig).length > 0 ?
       joiningConfig :
       undefined,
@@ -221,13 +201,9 @@ async function startJoinNode(options) {
       retryable: joinResult.retryable === true,
       attempt: joinAttempt,
     });
+    // The failed join never started the admin runtime or a provisional SQL
+    // engine; cleanup owns only the bootstrap surface.
     await bootstrapAPI.shutdown();
-    await shutdownAdminRuntimeComposition(joinAdminRuntime);
-    joinAdminRuntime = null;
-    // The admin runtime referenced the provisional early engine; dispose it
-    // only after admin surfaces are torn down so nothing queries a dead engine.
-    await shutdownEarlyAdminSqlRuntime(joinEarlySqlRuntime);
-    joinEarlySqlRuntime = null;
     // A retryable join failure re-attempts up to the bounded re-attempt count;
     // a non-retryable failure (or exhausted attempts) exits.
     const reattemptAllowed =
@@ -326,23 +302,17 @@ async function startJoinNode(options) {
   }, mainLogger);
 
   bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
-  if (!joinAdminRuntime) {
-    joinAdminRuntime = await startAdminRuntimeComposition({
-      nodeId,
-      systemTableCache,
-      cacheMutationTarget: cacheMutationTarget || systemTableCache,
-      sqlQueryEngine,
-      owner: nodeJoiningService.runtimeDependencyOwner,
-      messageRouter: joinResult.messageRouter,
-      partitionServices: joinResult.partitionServices,
-    });
-  } else {
-    attachSqlEngineToAdminRuntime(joinAdminRuntime, sqlQueryEngine);
-    // The authoritative engine now owns admin; dispose the provisional early
-    // engine (if the lever seeded one) so it stops owning per-engine services.
-    await shutdownEarlyAdminSqlRuntime(joinEarlySqlRuntime);
-    joinEarlySqlRuntime = null;
-  }
+  // Full admin starts only after infrastructure join has completed with the
+  // authoritative SQL engine; there is no provisional pre-join admin surface.
+  joinAdminRuntime = await startAdminRuntimeComposition({
+    nodeId,
+    systemTableCache,
+    cacheMutationTarget: cacheMutationTarget || systemTableCache,
+    sqlQueryEngine,
+    owner: nodeJoiningService.runtimeDependencyOwner,
+    messageRouter: joinResult.messageRouter,
+    partitionServices: joinResult.partitionServices,
+  });
 
   const adminAPI = joinAdminRuntime.adminAPI;
   const liveQueryWiring = joinAdminRuntime.liveQueryWiring;
@@ -433,7 +403,6 @@ async function startSeedNode(options) {
     nodeId,
   );
   let seedAdminRuntime = null;
-  let seedEarlySqlRuntime = null;
   const bootstrapService = new BootstrapService({
     nodeId,
     nodeAddress: seedNodeHttpAddress,
@@ -443,22 +412,6 @@ async function startSeedNode(options) {
     rolloutControls,
     clusterIncarnationFence,
     readinessState,
-    onLocalAdminRuntimeReady: async (runtime) => {
-      if (seedAdminRuntime) {
-        return;
-      }
-      seedEarlySqlRuntime = await startEarlyAdminSqlRuntime(runtime);
-      seedAdminRuntime = await startAdminRuntimeComposition({
-        nodeId: runtime.nodeId,
-        systemTableCache: runtime.systemTableCache,
-        cacheMutationTarget:
-          runtime.cacheMutationTarget || runtime.systemTableCache,
-        sqlQueryEngine: seedEarlySqlRuntime?.sqlQueryEngine || null,
-        owner: runtime.owner,
-        messageRouter: runtime.messageRouter,
-        partitionServices: runtime.partitionServices,
-      });
-    },
   });
 
   const bootstrapAPI = new BootstrapAPI({
@@ -554,23 +507,17 @@ async function startSeedNode(options) {
   }, mainLogger);
 
   bootstrapAPI.setSqlQueryEngine(sqlQueryEngine);
-  if (!seedAdminRuntime) {
-    seedAdminRuntime = await startAdminRuntimeComposition({
-      nodeId,
-      systemTableCache,
-      cacheMutationTarget: systemTableCache,
-      sqlQueryEngine,
-      owner: bootstrapService.runtimeDependencyOwner,
-      messageRouter: bootstrapResult.messageRouter,
-      partitionServices: bootstrapResult.partitionServices,
-    });
-  } else {
-    attachSqlEngineToAdminRuntime(seedAdminRuntime, sqlQueryEngine);
-    // The authoritative engine now owns admin; dispose the provisional early
-    // engine (if the lever seeded one) so it stops owning per-engine services.
-    await shutdownEarlyAdminSqlRuntime(seedEarlySqlRuntime);
-    seedEarlySqlRuntime = null;
-  }
+  // Full admin starts only after bootstrap has completed with the
+  // authoritative SQL engine; there is no provisional pre-join admin surface.
+  seedAdminRuntime = await startAdminRuntimeComposition({
+    nodeId,
+    systemTableCache,
+    cacheMutationTarget: systemTableCache,
+    sqlQueryEngine,
+    owner: bootstrapService.runtimeDependencyOwner,
+    messageRouter: bootstrapResult.messageRouter,
+    partitionServices: bootstrapResult.partitionServices,
+  });
   const adminAPI = seedAdminRuntime.adminAPI;
   const liveQueryWiring = seedAdminRuntime.liveQueryWiring;
   const adminPort = seedAdminRuntime.adminPort;

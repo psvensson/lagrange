@@ -11,6 +11,7 @@ const {
   JOINING_ERROR_NAME,
   JOINING_HTTP,
   JOIN_BACKFILL_QUERY,
+  JoiningPhase,
   NODE_JOINING_SERVICE_LITERAL,
   NodeService,
   NodeStorageBudgetSetup,
@@ -561,6 +562,7 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
       duration: this.startTime ? this.now() - this.startTime : 0,
       messageGroupCount: this.messageGroupServices.size,
       lastError: this.lastError?.message || null,
+      seedContact: this.getSeedContactDiagnosticsSnapshot(),
     };
     if (
       !this.joinReadinessEvaluator ||
@@ -618,6 +620,50 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
       typeof this.seedContactStartupAuthority === 'object' ?
       this.seedContactStartupAuthority :
       null;
+  }
+  /**
+   * Return the bounded seed-contact progress snapshot for early diagnostics.
+   * @return {Object|null}
+   */
+  getSeedContactDiagnosticsSnapshot() {
+    const snapshot =
+      this.contactSeedPhase?.getSeedContactDiagnosticsSnapshot?.() ||
+      this.seedContactDiagnostics ||
+      null;
+    if (!snapshot || typeof snapshot !== 'object') {
+      return null;
+    }
+    return {
+      ...snapshot,
+      candidateSet: Array.isArray(snapshot.candidateSet) ?
+        [...snapshot.candidateSet] :
+        [],
+    };
+  }
+  /**
+   * Return the direct-target startup runtime handoff witness: infrastructure
+   * join completion and distributed transaction replay are measured as
+   * separate prerequisites of full readiness, never conflated with early
+   * admin reachability.
+   * @return {Object|null}
+   */
+  getStartupRuntimeHandoffSnapshot() {
+    const recovery =
+      this.runtimeHandoffOwner?.getDistributedTransactionRecoverySnapshot?.() ||
+      null;
+    const transactionRecoveryState =
+      typeof recovery?.state === 'string' ? recovery.state : null;
+    return {
+      startupBranch:
+        typeof this.startupMode === 'string' ? this.startupMode : null,
+      infrastructureJoinComplete:
+        this.phase === JoiningPhase.COMPLETE,
+      transactionRecoveryState,
+      transactionRecoveryReady: recovery?.ready === true,
+      transactionRecoverySummary: recovery?.summary || null,
+      transactionRecoveryErrorCode: recovery?.errorCode || null,
+      transactionRecoveryErrorMessage: recovery?.errorMessage || null,
+    };
   }
   /**
    * Check if any joined message group has a leader in the system cache.

@@ -247,6 +247,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     this.bootstrapResponse = null; // Joining state
     this.seedContactStartupAuthority = null;
     this.lastRetryableSeedContactEvidence = null;
+    this.seedContactDiagnostics = null;
     this.phase = JoiningPhase.NOT_STARTED;
     this.startTime = null;
     this.phaseStartTime = null; // Logging
@@ -275,6 +276,9 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         buildHeartbeatStartOptions: () =>
           this.buildControlPlaneHeartbeatStartOptions(),
         activateDistributedTransactionRecoveryOnWriterActivation: false,
+        isDistributedTransactionRecoveryAvailable: () =>
+          typeof this.cdcIntegrationService?.sqlQueryEngine
+            ?.activateDistributedTransactionRecovery === 'function',
         activateDistributedTransactionRecovery: () => {
           const sqlQueryEngine = this.cdcIntegrationService?.sqlQueryEngine;
           if (
@@ -283,7 +287,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
           ) {
             return;
           }
-          void sqlQueryEngine.activateDistributedTransactionRecovery();
+          return sqlQueryEngine.activateDistributedTransactionRecovery();
         },
         flushDeferredCreateSelfHostedMetadata: () => {
           if (
@@ -389,6 +393,9 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       delegates: {
         getSeedNodeAddress: () => this.seedNodeAddress,
         getSeedNodeAddresses: () => this.seedNodeAddresses,
+        setSeedNodeAddress: (v) => {
+          this.rebindSeedContactAddress(v);
+        },
         getNodeAddress: () => this.nodeAddress,
         getJoinStartupMode: () => this.startupMode,
         getMembershipOwnerOutcome: () => this.membershipOwnerOutcome,
@@ -409,6 +416,9 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         },
         setSeedContactStartupAuthority: (v) => {
           this.seedContactStartupAuthority = v || null;
+        },
+        setSeedContactDiagnostics: (v) => {
+          this.seedContactDiagnostics = v || null;
         },
         getSeedNodeId: () => this.seedNodeId,
         setSeedNodeId: (v) => {
@@ -715,6 +725,27 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getRebalanceCoordinator: () => this.rebalanceCoordinator,
       },
     });
+  }
+
+  /**
+   * Rebind the selected HTTP bootstrap route after an alternate candidate
+   * returns the canonical bootstrap response. Later join-time HTTP consumers
+   * must follow the route that actually admitted this join.
+   * @param {string} seedNodeAddress
+   * @return {void}
+   */
+  rebindSeedContactAddress(seedNodeAddress) {
+    if (typeof seedNodeAddress !== 'string' ||
+        seedNodeAddress.length === 0) {
+      return;
+    }
+    this.seedNodeAddress = seedNodeAddress;
+    this.seedNodeAddresses = [
+      seedNodeAddress,
+      ...this.seedNodeAddresses.filter((candidate) =>
+        candidate !== seedNodeAddress,
+      ),
+    ];
   }
 
   /**

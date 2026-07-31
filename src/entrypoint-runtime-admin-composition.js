@@ -414,13 +414,15 @@ async function createSqlRuntimeComposition(options) {
 }
 
 /**
- * The early-admin SQL engine is promoted unconditional. Retained as a trivial
- * accessor (always true) for the runtime barrel re-export and external callers
- * that probed the former lever; the wiring no longer branches on it.
+ * The provisional early-admin SQL surface is retired: full admin must not
+ * exist until canonical startup authority, infrastructure join, and
+ * transaction recovery have all completed. Retained as a trivial accessor
+ * for the runtime barrel re-export and external callers that probed the
+ * former lever.
  * @return {boolean}
  */
 function isEarlyAdminSqlEngineEnabled() {
-  return true;
+  return false;
 }
 
 /**
@@ -446,6 +448,9 @@ function isEarlyAdminSqlEngineEnabled() {
  *   detachMigrationRecovery: Function}|null>}
  */
 async function startEarlyAdminSqlRuntime(runtime) {
+  if (isEarlyAdminSqlEngineEnabled() !== true) {
+    return null;
+  }
   if (!runtime || !runtime.messageRouter || !runtime.owner) {
     return null;
   }

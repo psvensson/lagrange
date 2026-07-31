@@ -35,7 +35,7 @@ function attachRuntimeAccessPolicyOwner(owner, sqlQueryEngine) {
  * @param {Object|null} [options.cacheMutationTarget]
  * @param {Object|null} [options.messageRouter]
  * @param {Function|null} [options.partitionServicesProvider]
- * @return {void}
+ * @return {*}
  */
 function attachSqlRuntimeToStartupOwner(options) {
   const owner = options.owner || null;
@@ -137,12 +137,14 @@ function attachSqlRuntimeToStartupOwner(options) {
   const backgroundWritersActive =
     typeof owner.hasActiveControlPlaneBackgroundWriters === 'function' &&
     owner.hasActiveControlPlaneBackgroundWriters() === true;
+  let transactionRecovery = null;
   if (backgroundWritersActive === true &&
       typeof owner.activateDistributedTransactionRecovery === LOCAL_STR_FUNCTION) {
-    owner.activateDistributedTransactionRecovery();
+    transactionRecovery = owner.activateDistributedTransactionRecovery();
   }
 
   ensureServiceInstallationReconcilerOwner(owner);
+  return transactionRecovery;
 }
 
 /**

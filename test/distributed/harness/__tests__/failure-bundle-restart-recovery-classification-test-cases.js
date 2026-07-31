@@ -11,7 +11,6 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
     readFile,
     ReportWriter,
     resolve,
-    STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
     UTF8_ENCODING,
     writeFailureBundlesForReport,
   } = context;
@@ -504,7 +503,7 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
   );
 
   it(
-    'classifies restart recovery admin refusal as the terminal owner state',
+    'routes contacting-seed admin refusal to restart bootstrap authority',
     async () => {
       refreshState();
       const RESTART_RECOVERY_REPORT_PATH = join(
@@ -518,7 +517,13 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
         'failureBarrier=' + FAILURE_BARRIER_PHASE;
       const ADMIN_REFUSED_SIGNAL =
         'failureBarrierReason=' +
-        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED;
+        'restart_bootstrap_authority';
+      const RESTART_BOOTSTRAP_AUTHORITY = 'restart_bootstrap_authority';
+      const STARTUP_PHASE_CONTACTING_SEED_SIGNAL =
+        'startupPhase=contacting_seed, ';
+      const STARTUP_AUTHORITY_CONSUMPTION = 'startup_authority_consumption';
+      const SNAPSHOT_COVERAGE_TARGET_NOT_REACHED = 'target_not_reached';
+      const SEED_CONTACT_ATTEMPT_COUNT = 3;
       const STALE_PRIORITY_SPREAD_SIGNAL =
         'failureBarrierReason=priority_spread_pending';
       const PUBLICATION_STATUS_PUBLISHED = 'PUBLISHED';
@@ -541,6 +546,10 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
         'readinessReasons=none, recoveryStage=unknown, ' +
         'bootstrapJoinProjectionBlocker=none, ' +
         'bootstrapJoinProjectionRule=init_priority_bypass, ' +
+        STARTUP_PHASE_CONTACTING_SEED_SIGNAL +
+        'seedContactOutcome=retryable_transport_failure, ' +
+        'seedContactAttempt=3, seedContactRemainingBudgetMs=45000, ' +
+        'seedContactAuthoritySource=none, ' +
         'reachableBy=bootstrap_health, lastError=Admin API query failed ' +
         'for node ' +
         RESTARTED_NODE_ID +
@@ -613,7 +622,7 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
 
       assert.equal(
         scenarioBundle.summary.dominantReason,
-        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+        RESTART_BOOTSTRAP_AUTHORITY,
       );
       assert.equal(
         failureClassification.failureClass,
@@ -621,7 +630,7 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
       );
       assert.equal(
         failureClassification.dominantReason,
-        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+        RESTART_BOOTSTRAP_AUTHORITY,
       );
       assert.ok(
         failureClassification.signals.includes(FAILURE_BARRIER_SIGNAL),
@@ -636,7 +645,7 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
       assert.equal(
         scenarioBundle.diagnostics.failure.failureBarrier
           .terminalRecoveryReadiness.ownerState,
-        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+        RESTART_BOOTSTRAP_AUTHORITY,
       );
       assert.equal(
         scenarioBundle.diagnostics.failure.failureBarrier
@@ -645,14 +654,29 @@ export function registerFailureBundleRestartRecoveryClassificationTests(context)
       );
       assert.equal(restartRecoveryGate.status, 'open');
       assert.equal(
+        scenarioBundle.diagnostics.failure.failureBarrier
+          .terminalRecoveryReadiness.ownerBoundary,
+        STARTUP_AUTHORITY_CONSUMPTION,
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.failure.failureBarrier
+          .terminalRecoveryReadiness.snapshotCoverageState,
+        SNAPSHOT_COVERAGE_TARGET_NOT_REACHED,
+      );
+      assert.equal(
+        scenarioBundle.diagnostics.failure.failureBarrier
+          .terminalRecoveryReadiness.seedContactAttempt,
+        SEED_CONTACT_ATTEMPT_COUNT,
+      );
+      assert.equal(
         restartRecoveryGate.blockers.includes(
-          STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+          RESTART_BOOTSTRAP_AUTHORITY,
         ),
         true,
       );
       assert.equal(
         restartRecoveryGate.evidence.terminalRecoveryReadiness.ownerState,
-        STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+        RESTART_BOOTSTRAP_AUTHORITY,
       );
       assert.equal(
         scenarioBundle.publicationConvergence.recoveryProtocolState,

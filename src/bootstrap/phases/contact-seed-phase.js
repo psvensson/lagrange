@@ -9,6 +9,7 @@
 import {assertCritical} from '../../utils/assert.js';
 import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
+  JOINING_PHASE,
 } from '../bootstrap-constants.js';
 import {
   BOOTSTRAP_API_REQUEST_FIELD,
@@ -19,6 +20,7 @@ import {
   JOINING_ERROR_MSG,
   JOINING_HTTP,
   JOINING_LOG_MSG,
+  JOINING_SEED_CONTACT_OUTCOME,
 } from '../node-joining-constants.js';
 import {
   HTTP_STATUS,
@@ -28,18 +30,24 @@ import {
   MAX_RETRYABLE_SEED_CONTACT_EVIDENCE_RETRIES,
   RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE,
   RETRYABLE_SEED_CONTACT_FAILURE_ACTION,
-  SEED_READINESS_TIMEOUT_MSG,
   formatLeaderMetadataDetails,
   isRetryableSeedContactCode,
   isRetryableSeedContactTransportFailure,
   normalizeRetryableSeedContactEvidence,
   parseBootstrapError,
   resolveBootstrapNotReadySeedContactFailureKind,
-  resolveRetryableSeedContactFailureAction,
-  resolveSeedContactAttemptTimeoutMs,
   resolveSeedContactRequestTimeoutMs,
   resolveSeedContactRetryAfterMs,
 } from './contact-seed-failure-signals.js';
+import {
+  SeedContactFailureOwner,
+} from './seed-contact-failure-owner.js';
+import {
+  SEED_CONTACT_SESSION_ABSENT,
+  hasUntriedInitialSweepCandidate,
+  resolveSeedContactCandidateAttemptTimeoutMs,
+  resolveSeedContactCandidateFailureAction,
+} from './seed-contact-candidate-policy.js';
 
 function extractSeedContactStartupAuthority(value) {
   const startupAuthority =
@@ -62,6 +70,25 @@ class ContactSeedPhase {
   constructor(options = {}) {
     this.nodeId = options.nodeId;
     this.delegates = options.delegates || {};
+    this.seedContactDiagnostics = Object.freeze({
+      phase: JOINING_PHASE.CONTACTING_SEED,
+      candidateSet: Object.freeze([]),
+      currentCandidate: null,
+      attempt: 0,
+      lastOutcome: JOINING_SEED_CONTACT_OUTCOME.IDLE,
+      remainingBudgetMs: null,
+      authoritySource: null,
+    });
+    this.failureOwner = new SeedContactFailureOwner({
+      nodeId: this.nodeId,
+      updateDiagnostics: (diagnostics) =>
+        this.updateSeedContactDiagnostics(diagnostics),
+      getDiagnostics: () => this.getSeedContactDiagnosticsSnapshot(),
+      remainingBudgetMs: (context) =>
+        this.remainingSeedContactBudgetMs(context),
+      buildRetryableErrorOptions: (errorOptions) =>
+        this.buildRetryableSeedContactErrorOptions(errorOptions),
+    });
   }
 
   /**
@@ -87,355 +114,355 @@ class ContactSeedPhase {
       bootstrapUrl,
     });
 
+    const context = this.createSeedContactContext({
+      seedContactCandidates,
+      nodeAddress,
+      startupMode,
+      logger,
+    });
+    this.updateSeedContactDiagnostics({
+      candidateSet: seedContactCandidates,
+      currentCandidate: seedContactCandidates[0],
+      attempt: 0,
+      lastOutcome: JOINING_SEED_CONTACT_OUTCOME.IDLE,
+      remainingBudgetMs: context.retryTimeoutMs,
+      authoritySource: null,
+    });
+
+    while (this.hasSeedContactBudget(context)) {
+      const attempt = this.beginSeedContactAttempt(context);
+      try {
+        await this.executeSeedContactAttempt(context, attempt);
+        return;
+      } catch (error) {
+        const failure = this.recordSeedContactFailure(
+          context,
+          attempt,
+          error,
+        );
+        if (this.shouldRetrySeedContactFailure(failure)) {
+          await this.retrySeedContactFailure(context, attempt, failure);
+          continue;
+        }
+        this.failureOwner.throwFailure(context, attempt, failure);
+      }
+    }
+
+    this.failureOwner.throwBudgetExhaustion(context);
+  }
+
+  createSeedContactContext(options) {
     const retryPolicy = this.resolveJoinRetryPolicy();
-    const retryTimeoutMs = retryPolicy.retryTimeoutMs;
-    let delayMs = retryPolicy.initialDelayMs;
-    const maxDelayMs = retryPolicy.maxDelayMs;
-    const backoffMultiplier = retryPolicy.backoffMultiplier;
     const now = this.delegates.getNow();
-    const startTime = now();
-    let attempt = 0;
-    let lastBootstrapError =
+    const lastBootstrapError =
       normalizeRetryableSeedContactEvidence(
         this.delegates.getLastRetryableSeedContactEvidence?.(),
       );
-    let lastBootstrapErrorSource = lastBootstrapError === null ?
-      RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.NONE :
-      RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.RETAINED;
-    let lastRetryableSeedContactError = null;
-    let lastRetryAfterMs =
-      resolveSeedContactRetryAfterMs(null, lastBootstrapError);
-    const evidenceWindow = {
-      budget: 0,
-      grants: 0,
-    };
     const config = this.delegates.getConfig();
-    let lastAttemptRequestTimeoutMs = resolveSeedContactRequestTimeoutMs({
-      configuredHttpTimeoutMs: config.httpTimeoutMs,
-    });
-    const buildRetryableSeedContactError = (message, options = {}) => {
-      const retryableError = new Error(message);
-      retryableError.deferRetry = true;
-      if (Number.isFinite(options.retryAfterMs) &&
-          options.retryAfterMs > 0) {
-        retryableError.retryAfterMs = Math.floor(options.retryAfterMs);
-      }
-      if (options.parsedError) {
-        retryableError.bootstrapResponse = options.parsedError;
-      }
-      if (typeof options.code === 'string' &&
-           options.code.length > 0) {
-        retryableError.code = options.code;
-      }
-      if (typeof options.failureKind === 'string' &&
-          options.failureKind.length > 0) {
-        retryableError.seedContactFailureKind = options.failureKind;
-      }
-      return retryableError;
+    return {
+      ...options,
+      config,
+      retryTimeoutMs: retryPolicy.retryTimeoutMs,
+      delayMs: retryPolicy.initialDelayMs,
+      maxDelayMs: retryPolicy.maxDelayMs,
+      backoffMultiplier: retryPolicy.backoffMultiplier,
+      now,
+      startTime: now(),
+      attempt: 0,
+      lastBootstrapError,
+      lastBootstrapErrorSource: lastBootstrapError === null ?
+        RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.NONE :
+        RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.RETAINED,
+      lastRetryableSeedContactError: SEED_CONTACT_SESSION_ABSENT,
+      lastAttemptFailure: SEED_CONTACT_SESSION_ABSENT,
+      lastRetryAfterMs:
+        resolveSeedContactRetryAfterMs(null, lastBootstrapError),
+      evidenceWindow: {
+        budget: 0,
+        grants: 0,
+      },
+      lastAttemptRequestTimeoutMs: resolveSeedContactRequestTimeoutMs({
+        configuredHttpTimeoutMs: config.httpTimeoutMs,
+      }),
     };
+  }
 
-    while (now() - startTime < retryTimeoutMs) {
-      attempt += 1;
-      // Rotate the contact target across the candidate list on each retry;
-      // a single-candidate list reproduces today's fixed-target sequence.
-      const attemptBootstrapUrl = this.buildSeedContactBootstrapUrl(
-        seedContactCandidates[(attempt - 1) % seedContactCandidates.length],
-      );
-      try {
-        const httpPostImpl = this.delegates.getHttpPostImpl();
-        const attemptStartedAtMs = now();
-        const elapsedAtAttemptStartMs = attemptStartedAtMs - startTime;
-        const requestTimeoutMs = resolveSeedContactAttemptTimeoutMs({
-          configuredHttpTimeoutMs: config.httpTimeoutMs,
-          remainingRetryBudgetMs: retryTimeoutMs - elapsedAtAttemptStartMs,
-          retryableSeedContactEvidence: lastBootstrapError,
-        });
-        lastAttemptRequestTimeoutMs = requestTimeoutMs;
-        const bootstrapRequest = {
-          nodeId: this.nodeId,
-          nodeAddress,
-          [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
-            attemptStartedAtMs + requestTimeoutMs,
-        };
-        if (typeof startupMode === 'string' &&
-            startupMode.length > 0) {
-          bootstrapRequest.startupMode = startupMode;
-        }
-        const membershipOwnerOutcome =
-          this.delegates.getMembershipOwnerOutcome?.();
-        if (membershipOwnerOutcome &&
-            typeof membershipOwnerOutcome === 'object') {
-          bootstrapRequest.membershipOwnerOutcome = membershipOwnerOutcome;
-        }
-        const response = await httpPostImpl(
-          attemptBootstrapUrl,
-          bootstrapRequest,
-          {timeoutMs: requestTimeoutMs},
-        );
-        const responseStartupAuthority =
-          extractSeedContactStartupAuthority(response);
-        if (responseStartupAuthority) {
-          this.delegates.setSeedContactStartupAuthority?.(
-            responseStartupAuthority,
-          );
-        }
-        this.delegates.setLastRetryableSeedContactEvidence?.(null);
+  hasSeedContactBudget(context) {
+    return context.now() - context.startTime < context.retryTimeoutMs;
+  }
 
-        if (!response.success) {
-          const bootstrapError = new Error(
-            this.buildBootstrapFailureError(response),
-          );
-          bootstrapError.bootstrapResponse = response;
-          throw bootstrapError;
-        }
+  remainingSeedContactBudgetMs(context) {
+    return Math.max(
+      0,
+      context.retryTimeoutMs - (context.now() - context.startTime),
+    );
+  }
 
-        this.delegates.setBootstrapResponse(response);
-        this.delegates.setSeedNodeId(response.seedNodeId || null);
-        if (!this.delegates.getSeedNodeWsAddress() &&
-            response.seedNodeWsAddress) {
-          this.delegates.setSeedNodeWsAddress(
-            response.seedNodeWsAddress,
-          );
-        }
+  beginSeedContactAttempt(context) {
+    context.attempt += 1;
+    const currentCandidate = context.seedContactCandidates[
+      (context.attempt - 1) % context.seedContactCandidates.length
+    ];
+    const startedAtMs = context.now();
+    const requestTimeoutMs =
+      resolveSeedContactCandidateAttemptTimeoutMs({
+        attempt: context.attempt,
+        candidateCount: context.seedContactCandidates.length,
+        configuredHttpTimeoutMs: context.config.httpTimeoutMs,
+        remainingRetryBudgetMs:
+          context.retryTimeoutMs - (startedAtMs - context.startTime),
+        retryableSeedContactEvidence: context.lastBootstrapError,
+      });
+    context.lastAttemptRequestTimeoutMs = requestTimeoutMs;
+    this.updateSeedContactDiagnostics({
+      currentCandidate,
+      attempt: context.attempt,
+      lastOutcome: JOINING_SEED_CONTACT_OUTCOME.ATTEMPTING,
+      remainingBudgetMs: this.remainingSeedContactBudgetMs(context),
+    });
+    return {
+      currentCandidate,
+      bootstrapUrl: this.buildSeedContactBootstrapUrl(currentCandidate),
+      startedAtMs,
+      requestTimeoutMs,
+    };
+  }
 
-        logger.debug(JOINING_LOG_MSG.BOOTSTRAP_RESPONSE_RECEIVED, {
-          nodeId: this.nodeId,
-          seedNodeId: response.seedNodeId,
-          strategy: response.messageGroupAssignment?.strategy,
-        });
-        return;
-      } catch (error) {
-        const retryableTimeoutErrorMessage = JOINING_ERROR_MSG.httpTimeout(
-          lastAttemptRequestTimeoutMs,
-        );
-        const classification = this.classifySeedContactFailure(
-          error,
-          retryableTimeoutErrorMessage,
-        );
-        const parsedError = classification.parsedError;
-        const parsedStartupAuthority =
-          extractSeedContactStartupAuthority(parsedError);
-        if (parsedStartupAuthority) {
-          this.delegates.setSeedContactStartupAuthority?.(
-            parsedStartupAuthority,
-          );
-        }
-        const retryableSeedContactEvidence =
-          normalizeRetryableSeedContactEvidence(parsedError);
-        if (retryableSeedContactEvidence) {
-          lastBootstrapError = retryableSeedContactEvidence;
-          lastBootstrapErrorSource =
-            RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.FRESH;
-          this.delegates.setLastRetryableSeedContactEvidence?.(
-            retryableSeedContactEvidence,
-          );
-          if (evidenceWindow.grants < 1) {
-            evidenceWindow.budget =
-              MAX_RETRYABLE_SEED_CONTACT_EVIDENCE_RETRIES;
-            evidenceWindow.grants += 1;
-          }
-        }
-        const elapsedMs = now() - startTime;
-        const retryableSeedContactFailureAction =
-          resolveRetryableSeedContactFailureAction({
-            classification,
-            elapsedMs,
-            retryTimeoutMs,
-            hasRetryableSeedContactEvidence: lastBootstrapError !== null,
-            retryableSeedContactEvidenceRetryBudget: evidenceWindow.budget,
-            retryableSeedContactEvidenceSource: lastBootstrapErrorSource,
-          });
-        if (retryableSeedContactFailureAction ===
-            RETRYABLE_SEED_CONTACT_FAILURE_ACTION
-              .CLEAR_RETAINED_EVIDENCE_AND_RETRY) {
-          lastBootstrapError = null;
-          lastBootstrapErrorSource =
-            RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.NONE;
-          this.delegates.setLastRetryableSeedContactEvidence?.(null);
-        }
-        if (retryableSeedContactFailureAction ===
-              RETRYABLE_SEED_CONTACT_FAILURE_ACTION.RETRY ||
-            retryableSeedContactFailureAction ===
-              RETRYABLE_SEED_CONTACT_FAILURE_ACTION
-                .CLEAR_RETAINED_EVIDENCE_AND_RETRY) {
-          if (classification.retryableTimeout ||
-              classification.retryableTransportFailure) {
-            lastRetryableSeedContactError = error.message;
-          }
-          const nextDelayMs = this.computeSeedContactRetryDelayMs({
-            baseDelayMs: delayMs,
-            maxDelayMs,
-            retryAfterMs: classification.retryAfterMs,
-          });
-          lastRetryAfterMs = nextDelayMs;
-          logger.debug(JOINING_LOG_MSG.SEED_CONTACT_RETRYING, {
-            nodeId: this.nodeId,
-            bootstrapUrl: attemptBootstrapUrl,
-            attempt,
-            elapsedMs,
-            lastCode: classification.code,
-            lastStatusCode: classification.statusCode,
-            retryAfterMs: classification.retryAfterMs,
-            retryableTransportFailure:
-              classification.retryableTransportFailure,
-            nextDelayMs,
-            retryTimeoutMs,
-          });
-          const sleep = this.delegates.getSleep();
-          await sleep(nextDelayMs);
-          if (lastBootstrapError !== null && evidenceWindow.budget > 0) {
-            evidenceWindow.budget -= 1;
-          }
-          delayMs = Math.min(
-            Math.floor(delayMs * backoffMultiplier),
-            maxDelayMs,
-          );
-          continue;
-        }
-
-        if (retryableSeedContactFailureAction ===
-            RETRYABLE_SEED_CONTACT_FAILURE_ACTION.SURFACE) {
-          const surfacedRetryableSeedContactEvidence =
-            parsedError || lastBootstrapError;
-          if (parsedError?.code ===
-              BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE) {
-            throw buildRetryableSeedContactError(
-              JOINING_ERROR_MSG.leaderMetadataIncomplete(
-                formatLeaderMetadataDetails(parsedError),
-              ),
-              {
-                retryAfterMs: lastRetryAfterMs,
-                parsedError,
-                code: classification.code,
-              },
-            );
-          }
-
-          if (parsedError?.code ===
-              BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
-            const failureKind =
-              resolveBootstrapNotReadySeedContactFailureKind(parsedError);
-            throw buildRetryableSeedContactError(
-              JOINING_ERROR_MSG.bootstrapNotReady(parsedError.phase),
-              {
-                retryAfterMs: lastRetryAfterMs,
-                parsedError,
-                code: classification.code,
-                failureKind,
-              },
-            );
-          }
-
-          throw buildRetryableSeedContactError(
-            JOINING_ERROR_MSG.contactSeedFailed(error.message),
-            this.buildRetryableSeedContactErrorOptions({
-              retryAfterMs: lastRetryAfterMs,
-              parsedError: surfacedRetryableSeedContactEvidence,
-              code: surfacedRetryableSeedContactEvidence?.code,
-            }),
-          );
-        }
-
-        if (classification.terminalValidationOrConflict) {
-          logger.warn(JOINING_LOG_MSG.SEED_CONTACT_TERMINAL, {
-            nodeId: this.nodeId,
-            bootstrapUrl: attemptBootstrapUrl,
-            attempt,
-            elapsedMs,
-            statusCode: classification.statusCode,
-            code: classification.code,
-            error: error.message,
-          });
-        }
-
-        const shouldPreserveRetryableSeedContactOutcome =
-          classification.terminalValidationOrConflict !== true &&
-          (lastBootstrapError !== null ||
-            lastRetryableSeedContactError !== null);
-        if (shouldPreserveRetryableSeedContactOutcome) {
-          throw buildRetryableSeedContactError(
-            JOINING_ERROR_MSG.contactSeedFailed(error.message),
-            this.buildRetryableSeedContactErrorOptions({
-              retryAfterMs: lastRetryAfterMs,
-              parsedError: lastBootstrapError,
-              code: lastBootstrapError?.code,
-            }),
-          );
-        }
-
-        if (parsedError) {
-          if (parsedError.code ===
-              BOOTSTRAP_PIPELINE_ERROR_CODE
-                .LEADER_METADATA_INCOMPLETE) {
-            throw new Error(
-              JOINING_ERROR_MSG.leaderMetadataIncomplete(
-                formatLeaderMetadataDetails(parsedError),
-              ),
-            );
-          }
-
-          if (parsedError.code ===
-              BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
-            throw new Error(
-              JOINING_ERROR_MSG.bootstrapNotReady(parsedError.phase),
-            );
-          }
-        }
-
-        logger.error(JOINING_LOG_MSG.SEED_CONTACT_FAILED, {
-          nodeId: this.nodeId,
-          bootstrapUrl: attemptBootstrapUrl,
-          error: error.message,
-        });
-        throw new Error(
-          JOINING_ERROR_MSG.contactSeedFailed(error.message),
-        );
-      }
+  buildSeedContactRequest(context, attempt) {
+    const bootstrapRequest = {
+      nodeId: this.nodeId,
+      nodeAddress: context.nodeAddress,
+      [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
+        attempt.startedAtMs + attempt.requestTimeoutMs,
+    };
+    if (typeof context.startupMode === 'string' &&
+        context.startupMode.length > 0) {
+      bootstrapRequest.startupMode = context.startupMode;
     }
-
-    if (lastBootstrapError?.code ===
-        BOOTSTRAP_PIPELINE_ERROR_CODE.LEADER_METADATA_INCOMPLETE) {
-      throw buildRetryableSeedContactError(
-        JOINING_ERROR_MSG.leaderMetadataIncomplete(
-          formatLeaderMetadataDetails(lastBootstrapError),
-        ),
-        {
-          retryAfterMs: lastRetryAfterMs,
-          parsedError: lastBootstrapError,
-          code: lastBootstrapError.code,
-        },
-      );
+    const membershipOwnerOutcome =
+      this.delegates.getMembershipOwnerOutcome?.();
+    if (membershipOwnerOutcome &&
+        typeof membershipOwnerOutcome === 'object') {
+      bootstrapRequest.membershipOwnerOutcome = membershipOwnerOutcome;
     }
+    return bootstrapRequest;
+  }
 
-    if (lastBootstrapError?.code ===
-        BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY) {
-      const failureKind =
-        resolveBootstrapNotReadySeedContactFailureKind(lastBootstrapError);
-      throw buildRetryableSeedContactError(
-        JOINING_ERROR_MSG.bootstrapNotReady(lastBootstrapError.phase),
-        {
-          retryAfterMs: lastRetryAfterMs,
-          parsedError: lastBootstrapError,
-          code: lastBootstrapError.code,
-          failureKind,
-        },
+  async executeSeedContactAttempt(context, attempt) {
+    const response = await this.delegates.getHttpPostImpl()(
+      attempt.bootstrapUrl,
+      this.buildSeedContactRequest(context, attempt),
+      {timeoutMs: attempt.requestTimeoutMs},
+    );
+    this.recordSeedContactStartupAuthority(
+      response,
+      attempt.currentCandidate,
+    );
+    this.delegates.setLastRetryableSeedContactEvidence?.(null);
+    if (!response.success) {
+      const bootstrapError = new Error(
+        this.buildBootstrapFailureError(response),
       );
+      bootstrapError.bootstrapResponse = response;
+      throw bootstrapError;
     }
-
-    if (lastRetryableSeedContactError) {
-      throw buildRetryableSeedContactError(
-        JOINING_ERROR_MSG.contactSeedFailed(
-          lastRetryableSeedContactError,
-        ),
-        {
-          retryAfterMs: lastRetryAfterMs,
-        },
-      );
+    this.delegates.setBootstrapResponse(response);
+    this.delegates.setSeedNodeAddress?.(attempt.currentCandidate);
+    this.delegates.setSeedNodeId(response.seedNodeId || null);
+    if (!this.delegates.getSeedNodeWsAddress() &&
+        response.seedNodeWsAddress) {
+      this.delegates.setSeedNodeWsAddress(response.seedNodeWsAddress);
     }
+    this.updateSeedContactDiagnostics({
+      lastOutcome: JOINING_SEED_CONTACT_OUTCOME.CONTACT_SUCCEEDED,
+      remainingBudgetMs: this.remainingSeedContactBudgetMs(context),
+    });
+    context.logger.debug(JOINING_LOG_MSG.BOOTSTRAP_RESPONSE_RECEIVED, {
+      nodeId: this.nodeId,
+      seedNodeId: response.seedNodeId,
+      strategy: response.messageGroupAssignment?.strategy,
+    });
+  }
 
-    throw new Error(JOINING_ERROR_MSG.contactSeedFailed(
-      SEED_READINESS_TIMEOUT_MSG(retryTimeoutMs),
-    ));
+  recordSeedContactStartupAuthority(value, currentCandidate) {
+    const startupAuthority = extractSeedContactStartupAuthority(value);
+    if (!startupAuthority) {
+      return;
+    }
+    this.delegates.setSeedContactStartupAuthority?.(startupAuthority);
+    this.updateSeedContactDiagnostics({
+      authoritySource: currentCandidate,
+    });
+  }
+
+  recordSeedContactFailure(context, attempt, error) {
+    const classification = this.classifySeedContactFailure(
+      error,
+      JOINING_ERROR_MSG.httpTimeout(context.lastAttemptRequestTimeoutMs),
+    );
+    const parsedError = classification.parsedError;
+    context.lastAttemptFailure = {
+      classification,
+      errorMessage: error.message,
+      parsedError,
+    };
+    this.updateSeedContactDiagnostics({
+      lastOutcome: this.resolveSeedContactAttemptOutcome(classification),
+      remainingBudgetMs: this.remainingSeedContactBudgetMs(context),
+    });
+    this.recordSeedContactStartupAuthority(
+      parsedError,
+      attempt.currentCandidate,
+    );
+    this.recordRetryableSeedContactEvidence(context, parsedError);
+    const elapsedMs = context.now() - context.startTime;
+    const action = resolveSeedContactCandidateFailureAction({
+      classification,
+      elapsedMs,
+      retryTimeoutMs: context.retryTimeoutMs,
+      attempt: context.attempt,
+      candidateCount: context.seedContactCandidates.length,
+      hasRetryableSeedContactEvidence:
+        context.lastBootstrapError !== null,
+      retryableSeedContactEvidenceRetryBudget:
+        context.evidenceWindow.budget,
+      retryableSeedContactEvidenceSource:
+        context.lastBootstrapErrorSource,
+    });
+    this.clearRetainedSeedContactEvidenceWhenRequested(context, action);
+    return {
+      action,
+      classification,
+      elapsedMs,
+      error,
+      parsedError,
+    };
+  }
+
+  recordRetryableSeedContactEvidence(context, parsedError) {
+    const evidence = normalizeRetryableSeedContactEvidence(parsedError);
+    if (!evidence) {
+      return;
+    }
+    context.lastBootstrapError = evidence;
+    context.lastBootstrapErrorSource =
+      RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.FRESH;
+    this.delegates.setLastRetryableSeedContactEvidence?.(evidence);
+    if (context.evidenceWindow.grants < 1) {
+      context.evidenceWindow.budget =
+        MAX_RETRYABLE_SEED_CONTACT_EVIDENCE_RETRIES;
+      context.evidenceWindow.grants += 1;
+    }
+  }
+
+  clearRetainedSeedContactEvidenceWhenRequested(context, action) {
+    if (action !== RETRYABLE_SEED_CONTACT_FAILURE_ACTION
+      .CLEAR_RETAINED_EVIDENCE_AND_RETRY) {
+      return;
+    }
+    context.lastBootstrapError = null;
+    context.lastBootstrapErrorSource =
+      RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE.NONE;
+    this.delegates.setLastRetryableSeedContactEvidence?.(null);
+  }
+
+  shouldRetrySeedContactFailure(failure) {
+    return failure.action ===
+        RETRYABLE_SEED_CONTACT_FAILURE_ACTION.RETRY ||
+      failure.action === RETRYABLE_SEED_CONTACT_FAILURE_ACTION
+        .CLEAR_RETAINED_EVIDENCE_AND_RETRY;
+  }
+
+  async retrySeedContactFailure(context, attempt, failure) {
+    if (failure.classification.retryableTimeout ||
+        failure.classification.retryableTransportFailure) {
+      context.lastRetryableSeedContactError = failure.error.message;
+    }
+    const nextDelayMs = this.computeSeedContactRetryDelayMs({
+      baseDelayMs: context.delayMs,
+      maxDelayMs: context.maxDelayMs,
+      retryAfterMs: failure.classification.retryAfterMs,
+    });
+    const delayBeforeRetry =
+      hasUntriedInitialSweepCandidate({
+        attempt: context.attempt,
+        candidateCount: context.seedContactCandidates.length,
+      }) !== true;
+    context.lastRetryAfterMs = nextDelayMs;
+    context.logger.debug(JOINING_LOG_MSG.SEED_CONTACT_RETRYING, {
+      nodeId: this.nodeId,
+      bootstrapUrl: attempt.bootstrapUrl,
+      attempt: context.attempt,
+      elapsedMs: failure.elapsedMs,
+      lastCode: failure.classification.code,
+      lastStatusCode: failure.classification.statusCode,
+      retryAfterMs: failure.classification.retryAfterMs,
+      retryableTransportFailure:
+        failure.classification.retryableTransportFailure,
+      nextDelayMs: delayBeforeRetry ? nextDelayMs : 0,
+      retryTimeoutMs: context.retryTimeoutMs,
+    });
+    if (!delayBeforeRetry) {
+      return;
+    }
+    await this.delegates.getSleep()(nextDelayMs);
+    if (context.lastBootstrapError !== null &&
+        context.evidenceWindow.budget > 0) {
+      context.evidenceWindow.budget -= 1;
+    }
+    context.delayMs = Math.min(
+      Math.floor(context.delayMs * context.backoffMultiplier),
+      context.maxDelayMs,
+    );
+  }
+
+  updateSeedContactDiagnostics(options = {}) {
+    const candidateSet = Array.isArray(options.candidateSet) ?
+      options.candidateSet.filter((candidate) =>
+        typeof candidate === 'string' && candidate.length > 0,
+      ) :
+      this.seedContactDiagnostics.candidateSet;
+    const snapshot = Object.freeze({
+      phase: JOINING_PHASE.CONTACTING_SEED,
+      candidateSet: Object.freeze([...candidateSet]),
+      currentCandidate:
+        Object.prototype.hasOwnProperty.call(options, 'currentCandidate') ?
+          options.currentCandidate :
+          this.seedContactDiagnostics.currentCandidate,
+      attempt: Number.isFinite(options.attempt) ?
+        Math.max(0, Math.floor(options.attempt)) :
+        this.seedContactDiagnostics.attempt,
+      lastOutcome:
+        typeof options.lastOutcome === 'string' &&
+        options.lastOutcome.length > 0 ?
+          options.lastOutcome :
+          this.seedContactDiagnostics.lastOutcome,
+      remainingBudgetMs: Number.isFinite(options.remainingBudgetMs) ?
+        Math.max(0, Math.floor(options.remainingBudgetMs)) :
+        this.seedContactDiagnostics.remainingBudgetMs,
+      authoritySource:
+        Object.prototype.hasOwnProperty.call(options, 'authoritySource') ?
+          options.authoritySource :
+          this.seedContactDiagnostics.authoritySource,
+    });
+    this.seedContactDiagnostics = snapshot;
+    this.delegates.setSeedContactDiagnostics?.(snapshot);
+    return snapshot;
+  }
+
+  getSeedContactDiagnosticsSnapshot() {
+    return this.seedContactDiagnostics;
+  }
+
+  resolveSeedContactAttemptOutcome(classification = {}) {
+    if (classification.retryableTransportFailure ||
+        classification.retryableTimeout) {
+      return JOINING_SEED_CONTACT_OUTCOME.RETRYABLE_TRANSPORT_FAILURE;
+    }
+    if (classification.retryable) {
+      return JOINING_SEED_CONTACT_OUTCOME.RETRYABLE_SEED_RESPONSE;
+    }
+    return JOINING_SEED_CONTACT_OUTCOME.TERMINAL_FAILURE;
   }
 
   /**

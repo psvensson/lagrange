@@ -41,10 +41,25 @@ import {ClusterLifecycleBase} from './cluster-class-lifecycle-base.js';
 
 const RESTART_RECOVERY_FIELD_NONE = 'none';
 const RESTART_RECOVERY_REASON_SEPARATOR = '|';
+const RESTART_RECOVERY_FIELD_SEPARATOR = ', ';
+const RESTART_RECOVERY_FIELD_VALUE_SEPARATOR = '=';
 const RESTART_RECOVERY_FIELD_BOOTSTRAP_JOIN_PROJECTION_BLOCKER =
   'bootstrapJoinProjectionBlocker';
 const RESTART_RECOVERY_FIELD_BOOTSTRAP_JOIN_PROJECTION_RULE =
   'bootstrapJoinProjectionRule';
+const RESTART_RECOVERY_FIELD_STARTUP_PHASE = 'startupPhase';
+const RESTART_RECOVERY_FIELD_SEED_CONTACT_OUTCOME = 'seedContactOutcome';
+const RESTART_RECOVERY_FIELD_SEED_CONTACT_ATTEMPT = 'seedContactAttempt';
+const RESTART_RECOVERY_FIELD_SEED_CONTACT_REMAINING_BUDGET_MS =
+  'seedContactRemainingBudgetMs';
+const RESTART_RECOVERY_FIELD_SEED_CONTACT_AUTHORITY_SOURCE =
+  'seedContactAuthoritySource';
+const RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_CONSUMED =
+  'canonicalAuthorityConsumed';
+const RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_STATE =
+  'transactionRecoveryState';
+const RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_READY =
+  'transactionRecoveryReady';
 // CL-025: a single ready probe is satisfiable by a node mid-crash (admin came
 // up early in boot, process exited between the probe and the recovered
 // declaration — observed in stat-gate 085908Z-run2). Readiness must hold
@@ -414,7 +429,22 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
           const diagnostics = await node.getReachabilityDiagnostics({
             timeoutMs: Math.max(MIN_TIMEOUT_MS, deadline - Date.now()),
           });
+          const startupHandoff =
+            diagnostics?.startupRuntimeHandoff &&
+            typeof diagnostics.startupRuntimeHandoff === 'object' ?
+              diagnostics.startupRuntimeHandoff :
+              null;
+          // Provisional admin reachability is not recovery: the restarted
+          // target must have consumed canonical startup authority, completed
+          // infrastructure join, and finished transaction replay before the
+          // harness may declare recovery-ready.
+          const startupHandoffComplete =
+            startupHandoff !== null &&
+            startupHandoff.infrastructureJoinComplete === true &&
+            startupHandoff.canonicalAuthorityConsumed === true &&
+            startupHandoff.transactionRecoveryReady === true;
           const ready =
+            startupHandoffComplete &&
             (requireAdminReady === true ?
               diagnostics?.adminReady === true :
               diagnostics?.adminReady === true ||
@@ -524,6 +554,19 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
       typeof bootstrapReadiness.bootstrapJoinProjection === 'object' ?
         bootstrapReadiness.bootstrapJoinProjection :
         null;
+    const seedContact =
+      bootstrapReadiness?.seedContact &&
+      typeof bootstrapReadiness.seedContact === 'object' ?
+        bootstrapReadiness.seedContact :
+        null;
+    const startupRuntimeHandoff =
+      observation?.startupRuntimeHandoff &&
+      typeof observation.startupRuntimeHandoff === 'object' ?
+        observation.startupRuntimeHandoff :
+        bootstrapReadiness?.startupRuntimeHandoff &&
+          typeof bootstrapReadiness.startupRuntimeHandoff === 'object' ?
+          bootstrapReadiness.startupRuntimeHandoff :
+          null;
     return (
       'reachable=' +
       String(observation.reachable === true) +
@@ -559,6 +602,47 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
       '=' +
       String(
         bootstrapJoinProjection?.projectionRule ||
+          RESTART_RECOVERY_FIELD_NONE,
+      ) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_STARTUP_PHASE +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(seedContact?.phase || RESTART_RECOVERY_FIELD_NONE) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_SEED_CONTACT_OUTCOME +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(seedContact?.lastOutcome || RESTART_RECOVERY_FIELD_NONE) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_SEED_CONTACT_ATTEMPT +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(seedContact?.attempt ?? RESTART_RECOVERY_FIELD_NONE) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_SEED_CONTACT_REMAINING_BUDGET_MS +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(seedContact?.remainingBudgetMs ?? RESTART_RECOVERY_FIELD_NONE) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_SEED_CONTACT_AUTHORITY_SOURCE +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(seedContact?.authoritySource || RESTART_RECOVERY_FIELD_NONE) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_CONSUMED +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(
+        startupRuntimeHandoff?.canonicalAuthorityConsumed ??
+          RESTART_RECOVERY_FIELD_NONE,
+      ) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_STATE +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(
+        startupRuntimeHandoff?.transactionRecoveryState ||
+          RESTART_RECOVERY_FIELD_NONE,
+      ) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_READY +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(
+        startupRuntimeHandoff?.transactionRecoveryReady ??
           RESTART_RECOVERY_FIELD_NONE,
       ) +
       ', reachableBy=' +

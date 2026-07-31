@@ -1,22 +1,9 @@
 /**
- * Safety pins for the early-admin SQL engine (promoted unconditional; the former
- * env lever is retired).
+ * Safety pins for the retired provisional admin SQL surface.
  *
- * A still-joining/bootstrapping node brings up its admin runtime BEFORE the
- * authoritative SQL engine exists (built from post-join artifacts). In that
- * window admin SQL reads fail `QUERY_ENGINE_UNAVAILABLE` — and under load that
- * window can span the whole readiness budget (rolling-restart gate
- * stat-gate-20260623T183833Z: a 30s acknowledged-write visibility query failing
- * "SQL query engine not available" was the actual scenario-failing assertion).
- *
- * The runtime builds a provisional cache-backed engine for that early window,
- * superseded by the authoritative engine post-join (attachSqlEngineToAdminRuntime)
- * and then disposed. This test pins the externally-observable safety contract:
- *  - the wiring degrades safely to null when the runtime cannot support an engine,
- *  - the dispose path tears down ONLY the early engine's own sub-services and is
- *    null-safe + error-swallowing.
- * The full-engine-construction + gate-fix is validated by the integration gate
- * (a real owner/runtime is required to construct SQLQueryEngine).
+ * Bootstrap remains independently reachable while startup is in progress.
+ * The full admin/SQL surface must not exist until canonical startup authority,
+ * infrastructure join, and transaction recovery have all completed.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
@@ -34,13 +21,13 @@ const READY_RUNTIME = Object.freeze({
   owner: {logger: null},
 });
 
-test('isEarlyAdminSqlEngineEnabled() is unconditionally true (promoted)',
+test('isEarlyAdminSqlEngineEnabled() is false after provisional admin retirement',
   (t) => {
-    t.equal(isEarlyAdminSqlEngineEnabled(), true);
+    t.equal(isEarlyAdminSqlEngineEnabled(), false);
     t.end();
   });
 
-test('runtime missing messageRouter/owner: degrades to null (no throw)',
+test('provisional SQL runtime remains disabled even with complete inputs',
   async (t) => {
     t.equal(await startEarlyAdminSqlRuntime(null), null, 'null runtime → null');
     t.equal(
@@ -49,6 +36,11 @@ test('runtime missing messageRouter/owner: degrades to null (no throw)',
     t.equal(
       await startEarlyAdminSqlRuntime({...READY_RUNTIME, owner: null}),
       null, 'no owner → null (engine sub-services unavailable)');
+    t.equal(
+      await startEarlyAdminSqlRuntime(READY_RUNTIME),
+      null,
+      'complete provisional inputs still cannot open SQL before handoff',
+    );
     t.end();
   });
 

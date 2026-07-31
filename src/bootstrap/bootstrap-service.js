@@ -111,6 +111,7 @@ import {
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_BOOTSTRAPSERVICE = 'BootstrapService';
+const LOCAL_STR_STARTUP_BRANCH_SEED = 'seed';
 const LOCAL_STR_OBJECT = 'object';
 const LOCAL_STR_CREATERUNTIMESTARTUPWIRING = 'createRuntimeStartupWiring';
 const LOCAL_STR_TRIGGERREBALANCINGONALLPARTITIONS = 'triggerRebalancingOnAllPartitions';
@@ -325,6 +326,8 @@ class BootstrapService extends EventEmitter {
       },
       waitForPartitionLeadership: () => self.waitForPartitionLeadership(),
       getEpochManager: () => self.getEpochManager(),
+      getStartupRuntimeHandoffSnapshot: () =>
+        self.getStartupRuntimeHandoffSnapshot(),
     };
     this.runtimeDrivers = runtimeWiring.drivers;
 
@@ -430,13 +433,16 @@ class BootstrapService extends EventEmitter {
           capabilities: [...DEFAULT_NODE_CAPABILITIES],
         }),
         getHeartbeatRunningState: () => HEARTBEAT_STATE.RUNNING,
+        isDistributedTransactionRecoveryAvailable: () =>
+          typeof this.sqlQueryEngine?.activateDistributedTransactionRecovery ===
+            LOCAL_STR_FUNCTION,
         activateDistributedTransactionRecovery: () => {
           const sqlQueryEngine = this.sqlQueryEngine;
           if (typeof sqlQueryEngine?.activateDistributedTransactionRecovery !==
             LOCAL_STR_FUNCTION) {
             return;
           }
-          void sqlQueryEngine.activateDistributedTransactionRecovery();
+          return sqlQueryEngine.activateDistributedTransactionRecovery();
         },
         startLatencyTopologyLifecycle: () =>
           this.seedRuntimeBridgeOwner?.startLatencyTopologyLifecycle?.(),
@@ -609,6 +615,29 @@ class BootstrapService extends EventEmitter {
    */
   getEpochManager() {
     return this.epochManager;
+  }
+
+  /**
+   * Return the seed-path startup runtime handoff witness: bootstrap
+   * completion and distributed transaction replay are measured as separate
+   * prerequisites of full readiness.
+   * @return {Object|null}
+   */
+  getStartupRuntimeHandoffSnapshot() {
+    const recovery =
+      this.runtimeHandoffOwner?.getDistributedTransactionRecoverySnapshot?.() ||
+      null;
+    const transactionRecoveryState =
+      typeof recovery?.state === 'string' ? recovery.state : null;
+    return {
+      startupBranch: LOCAL_STR_STARTUP_BRANCH_SEED,
+      infrastructureJoinComplete: this.phase === BootstrapPhase.COMPLETE,
+      transactionRecoveryState,
+      transactionRecoveryReady: recovery?.ready === true,
+      transactionRecoverySummary: recovery?.summary || null,
+      transactionRecoveryErrorCode: recovery?.errorCode || null,
+      transactionRecoveryErrorMessage: recovery?.errorMessage || null,
+    };
   }
 
   /**

@@ -1,6 +1,13 @@
 import * as foundation from './failure-bundle-diagnostics-foundation.js';
 import * as priority from './failure-bundle-diagnostics-priority-recovery.js';
 
+const RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY =
+  'restart_bootstrap_authority';
+const RESTART_RECOVERY_BOUNDARY_STARTUP_AUTHORITY_CONSUMPTION =
+  'startup_authority_consumption';
+const SNAPSHOT_COVERAGE_STATE_TARGET_NOT_REACHED = 'target_not_reached';
+const SNAPSHOT_COVERAGE_STATE_UNKNOWN = 'unknown';
+
 const {
   CONTROL_PLANE_QUIESCENCE_DISCOVERY_REASON_SET,
   CONTROL_PLANE_QUIESCENCE_TOPOLOGY_REASON_SET,
@@ -1041,11 +1048,16 @@ function resolveRestartRecoveryReadinessOwnerState(observation) {
         RESTART_RECOVERY_READINESS_REACHABLE_BY_BOOTSTRAP_HEALTH &&
       observation?.adminReady !== true &&
       observation?.controlPlaneRecoveryReady !== true,
+    contactingSeed:
+      observation?.startupPhase === 'contacting_seed',
   });
   if (evidence.ready) {
     return null;
   }
   if (evidence.adminRefused && evidence.bootstrapOnlyReachable) {
+    if (evidence.contactingSeed) {
+      return RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY;
+    }
     return STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED;
   }
   return null;
@@ -1126,14 +1138,39 @@ function resolveRestartRecoveryReadinessObservation(entry) {
       fieldMap[
         RESTART_RECOVERY_READINESS_FIELD.BOOTSTRAP_JOIN_PROJECTION_RULE
       ],
+    startupPhase:
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.STARTUP_PHASE],
+    seedContactOutcome:
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.SEED_CONTACT_OUTCOME],
+    seedContactAttempt: normalizeRestartRecoveryReadinessNumber(
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.SEED_CONTACT_ATTEMPT],
+    ),
+    seedContactRemainingBudgetMs: normalizeRestartRecoveryReadinessNumber(
+      fieldMap[
+        RESTART_RECOVERY_READINESS_FIELD.SEED_CONTACT_REMAINING_BUDGET_MS
+      ],
+    ),
+    seedContactAuthoritySource:
+      fieldMap[
+        RESTART_RECOVERY_READINESS_FIELD.SEED_CONTACT_AUTHORITY_SOURCE
+      ],
     reachableBy:
       fieldMap[RESTART_RECOVERY_READINESS_FIELD.REACHABLE_BY],
     lastError:
       fieldMap[RESTART_RECOVERY_READINESS_FIELD.LAST_ERROR],
   };
+  const ownerState = resolveRestartRecoveryReadinessOwnerState(observation);
   return Object.freeze({
     ...observation,
-    ownerState: resolveRestartRecoveryReadinessOwnerState(observation),
+    ownerState,
+    ownerBoundary:
+      ownerState === RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY ?
+        RESTART_RECOVERY_BOUNDARY_STARTUP_AUTHORITY_CONSUMPTION :
+        null,
+    snapshotCoverageState:
+      ownerState === RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY ?
+        SNAPSHOT_COVERAGE_STATE_TARGET_NOT_REACHED :
+        SNAPSHOT_COVERAGE_STATE_UNKNOWN,
   });
 }
 
@@ -1186,6 +1223,12 @@ function resolveRestartRecoveryFailureBarrierReason({
 }) {
   if (hasRestartRecoveryPrioritySpreadEvidence(publicationConvergence)) {
     return STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING;
+  }
+  if (
+    terminalRecoveryReadiness?.ownerState ===
+      RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY
+  ) {
+    return RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY;
   }
   if (
     terminalRecoveryReadiness?.ownerState ===

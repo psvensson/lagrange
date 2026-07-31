@@ -1,0 +1,72 @@
+{
+  "timestamp": "20260731T094947Z",
+  "config": "test/distributed/config/local-benchmark-7node.json",
+  "scenario": "rolling-restart",
+  "srcFingerprint": "a742f71ff7fc0360",
+  "debugLogs": false,
+  "noProgressMaxElapsedMs": 200000,
+  "staleSourceRuns": 0,
+  "runs": 1,
+  "classTally": {
+    "NODE_EXIT": 1
+  },
+  "corruptCount": 0,
+  "oracleBlindCount": 0,
+  "nodeExitCount": 1,
+  "topologyBlockedCount": 0,
+  "convergeRate": 1,
+  "stallRate": 0,
+  "healthyRate": 0,
+  "converged": 1,
+  "passRate": 0,
+  "missingHistogram": {
+    "0": 1
+  },
+  "dominantReasonTally": {
+    "nodeAdmissionBlocked": 1
+  },
+  "wallSeconds": {
+    "p50": 523,
+    "p95": 523
+  },
+  "durationP50": 468688,
+  "durationP95": 468688,
+  "runsDetail": [
+    {
+      "passed": false,
+      "missing": 0,
+      "hardBreaches": 0,
+      "cyclesNoProgress": 0,
+      "gateState": "",
+      "oracleBlind": false,
+      "unexpectedNodeExit": true,
+      "reason": "nodeAdmissionBlocked",
+      "closureWitnessClass": null,
+      "duration": 468688,
+      "class": "NODE_EXIT",
+      "run": 1,
+      "wallSeconds": 523
+    }
+  ],
+  "gateVerdict": {
+    "verdict": "SAFETY_VIOLATED",
+    "reason": "safety floor breached (must be 0 every run): {\"corrupt\":0,\"nodeExit\":1,\"oracleBlind\":0,\"staleSource\":0}",
+    "passes": 0,
+    "runs": 1,
+    "wilson": {
+      "lowerBound": 5.551115123125783e-17,
+      "upperBound": 0.7934506856996815,
+      "pointEstimate": 0,
+      "confidence": 0.95
+    },
+    "safetyCounts": {
+      "corrupt": 0,
+      "nodeExit": 1,
+      "oracleBlind": 0,
+      "staleSource": 0
+    },
+    "safetyClean": false,
+    "sealedBar": 0.357,
+    "promotionNote": "promotion verdicts require an N>=15 fixed-code window (§5); this gate has N=1"
+  }
+}

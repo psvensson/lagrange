@@ -46,6 +46,19 @@ const JOINING_SEED_CONTACT_FAILURE_KIND = Object.freeze({
     'client_attempt_deadline_exhausted',
   REQUEST_EXECUTION_BUDGET_EXHAUSTED:
     'request_execution_budget_exhausted',
+  SEED_CONTACT_PRESSURE: 'seed_contact_pressure',
+  SEED_CONTACT_UNAVAILABLE: 'seed_contact_unavailable',
+});
+
+const JOINING_SEED_CONTACT_OUTCOME = Object.freeze({
+  IDLE: 'idle',
+  ATTEMPTING: 'attempting',
+  RETRYABLE_SEED_RESPONSE: 'retryable_seed_response',
+  RETRYABLE_TRANSPORT_FAILURE: 'retryable_transport_failure',
+  CONTACT_SUCCEEDED: 'contact_succeeded',
+  SEED_CONTACT_PRESSURE: 'seed_contact_pressure',
+  SEED_CONTACT_UNAVAILABLE: 'seed_contact_unavailable',
+  TERMINAL_FAILURE: 'terminal_failure',
 });
 
 const JOINING_UNIFIED_RECONCILE = Object.freeze({
@@ -390,6 +403,7 @@ export {
   JOINING_ERROR_NAME,
   JOINING_HTTP,
   JOINING_SEED_CONTACT_FAILURE_KIND,
+  JOINING_SEED_CONTACT_OUTCOME,
   JOINING_UNIFIED_RECONCILE,
   JOIN_MESH_CONNECTIVITY_REPAIR,
   JOIN_READINESS_DEFAULT_TABLE,

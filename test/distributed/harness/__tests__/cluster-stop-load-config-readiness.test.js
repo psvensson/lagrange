@@ -28,6 +28,16 @@ const RESTART_RECOVERY_DIAGNOSTIC_TEST_REASON_LEADER =
   'LEADER_METADATA_INCOMPLETE';
 const RESTART_RECOVERY_DIAGNOSTIC_TEST_REASON_PRIORITY =
   'PRIORITY_CONTROL_PLANE_RECOVERY_PENDING';
+// Recovery-ready stubs model a node past canonical authority consumption with
+// completed transaction replay; provisional admin reachability alone no longer
+// satisfies the restart recovery gate.
+const STARTUP_RUNTIME_HANDOFF_COMPLETED = Object.freeze({
+  ready: true,
+  infrastructureJoinComplete: true,
+  canonicalAuthorityConsumed: true,
+  transactionRecoveryReady: true,
+  transactionRecoveryState: 'completed',
+});
 const RESTART_RECOVERY_DIAGNOSTIC_TEST_LAST_ERROR = 'admin still closed';
 const RESTART_RECOVERY_DIAGNOSTIC_TEST_TIMEOUT_MS = 1;
 const RESTART_RECOVERY_DIAGNOSTIC_TEST_PROJECTION_BLOCKER =
@@ -495,6 +505,7 @@ test('Unit: _waitForNodeAdminReadiness accepts bootstrap recovery readiness befo
             'control_plane_recovery_ready' :
             'blocked',
           recoveryStageRank: attempts >= 2 ? 2 : 1,
+          startupRuntimeHandoff: STARTUP_RUNTIME_HANDOFF_COMPLETED,
           lastError: attempts >= 2 ? null : 'admin still warming',
         };
       },
@@ -536,6 +547,7 @@ test('Unit: _waitForNodeAdminReadiness can require admin readiness',
           controlPlaneRecoveryReady: true,
           recoveryStage: 'control_plane_recovery_ready',
           recoveryStageRank: 2,
+          startupRuntimeHandoff: STARTUP_RUNTIME_HANDOFF_COMPLETED,
           lastError:
             attempts >= STRICT_RESTART_READINESS_READY_ATTEMPT ?
               null :
@@ -584,6 +596,7 @@ test('Unit: _waitForNodeAdminReadiness waits until the expected published contro
           adminReady: true,
           controlPlaneRecoveryReady: true,
           publishedControlPlaneEpoch: attempts >= 3 ? 14 : 13,
+          startupRuntimeHandoff: STARTUP_RUNTIME_HANDOFF_COMPLETED,
           lastError: null,
         };
       },

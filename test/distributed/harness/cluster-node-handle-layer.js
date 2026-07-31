@@ -1175,6 +1175,7 @@ class NodeHandle {
       readinessStageRank: null,
       recoveryStage: null,
       recoveryStageRank: null,
+      startupRuntimeHandoff: null,
       bootstrapHealth: createProbeResult({
         url: bootstrapUrl,
       }),
@@ -1241,6 +1242,11 @@ class NodeHandle {
         ) ?
           Math.max(ZERO, Math.floor(bootstrapReadiness.recoveryStageRank)) :
           null;
+        diagnostics.startupRuntimeHandoff =
+          bootstrapReadiness?.startupRuntimeHandoff &&
+          typeof bootstrapReadiness.startupRuntimeHandoff === 'object' ?
+            bootstrapReadiness.startupRuntimeHandoff :
+            null;
       } catch (_error) {
         diagnostics.bootstrapReadiness = null;
       }
