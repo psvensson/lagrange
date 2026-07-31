@@ -15,6 +15,9 @@ const SCENARIOS = Object.freeze({
     'test/runtime/oci-host-agent-enrollment.test.js',
     'test/runtime/oci-host-agent-tpm-counter.test.js',
   ]),
+  'oci-host-agent-engine-translation': Object.freeze([
+    'test/runtime/oci-host-agent-engine-translation.test.js',
+  ]),
 });
 
 runGuardTestScenarios(SCENARIOS, {reportDir: REPORT_DIR});

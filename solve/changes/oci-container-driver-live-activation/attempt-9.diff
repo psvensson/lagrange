@@ -1,0 +1,1726 @@
+diff --git a/scripts/checks/run-oci-container-driver-live-activation-scenarios.js b/scripts/checks/run-oci-container-driver-live-activation-scenarios.js
+index 09c17d4e8ae889d064b987a3a331ef25335a1bbe..9566ba163f3318ca1e26a416800c0fceaaf93079 100644
+--- a/scripts/checks/run-oci-container-driver-live-activation-scenarios.js
++++ b/scripts/checks/run-oci-container-driver-live-activation-scenarios.js
+@@ -15,6 +15,9 @@ const SCENARIOS = Object.freeze({
+     'test/runtime/oci-host-agent-enrollment.test.js',
+     'test/runtime/oci-host-agent-tpm-counter.test.js',
+   ]),
++  'oci-host-agent-engine-translation': Object.freeze([
++    'test/runtime/oci-host-agent-engine-translation.test.js',
++  ]),
+ });
+ 
+ runGuardTestScenarios(SCENARIOS, {reportDir: REPORT_DIR});
+diff --git a/src/runtime/oci-host-agent-engine-identity.js b/src/runtime/oci-host-agent-engine-identity.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a23d21b451f95b42bde292686487b6b44c88d9d2
+--- /dev/null
++++ b/src/runtime/oci-host-agent-engine-identity.js
+@@ -0,0 +1,303 @@
++/**
++ * Labelled identity resolution and typed result construction
++ * for the OCI host-agent Engine translation.
++ *
++ * Owns the ten immutable io.lagrange.* labels the agent writes
++ * at create, the complete-identity resolution rule applied to
++ * every Engine observation, and the exact typed result variants
++ * of the v1 grammar (oci-runtime-host-contract.md "Resource
++ * identity and ownership").
++ *
++ * @module runtime/oci-host-agent-engine-identity
++ */
++
++const RESULT_STATUS = Object.freeze({
++  COMPLETED: 'completed',
++  ALREADY_APPLIED: 'already_applied',
++  ALREADY_ABSENT: 'already_absent',
++  REJECTED: 'rejected',
++  RETRYABLE_FAILURE: 'retryable_failure',
++  AMBIGUOUS: 'ambiguous',
++});
++
++const ERROR_CODE = Object.freeze({
++  DEADLINE_INVALID: 'deadline_invalid',
++  POLICY_DENIED: 'policy_denied',
++  DIGEST_MISMATCH: 'digest_mismatch',
++  IDENTITY_CONFLICT: 'identity_conflict',
++  INTENT_CONFLICT: 'intent_conflict',
++  RESOURCE_CONFLICT: 'resource_conflict',
++  DEADLINE_BEFORE_DISPATCH: 'deadline_before_dispatch',
++  ENGINE_UNAVAILABLE: 'engine_unavailable',
++  ENGINE_FAILURE: 'engine_failure',
++  ENGINE_OUTCOME_UNKNOWN: 'engine_outcome_unknown',
++});
++
++const CONTAINER_STATE = Object.freeze({
++  CREATED: 'created',
++  RUNNING: 'running',
++  EXITED: 'exited',
++});
++
++const CLEANUP_STATE = Object.freeze({
++  NOT_REQUIRED: 'not_required',
++  AMBIGUOUS: 'ambiguous',
++});
++
++const OBSERVATION_KIND = Object.freeze({
++  NOT_OBSERVED: 'not_observed',
++  IMAGE: 'image',
++  CONTAINER: 'container',
++  ABSENCE: 'absence',
++});
++
++const LABEL = Object.freeze({
++  MANAGED: 'io.lagrange.managed',
++  CLUSTER_INCARNATION: 'io.lagrange.cluster_incarnation',
++  NODE_ID: 'io.lagrange.node_id',
++  SERVICE_ID: 'io.lagrange.service_id',
++  REVISION_ID: 'io.lagrange.revision_id',
++  INSTANCE_ID: 'io.lagrange.instance_id',
++  IMAGE_DIGEST: 'io.lagrange.image_digest',
++  RUNTIME_CONFIG_DIGEST: 'io.lagrange.runtime_config_digest',
++  CREATE_OPERATION_ID: 'io.lagrange.create_operation_id',
++  CREATE_INTENT_DIGEST: 'io.lagrange.create_intent_digest',
++});
++
++const IDENTITY_LABEL_BY_FIELD = Object.freeze({
++  clusterIncarnation: LABEL.CLUSTER_INCARNATION,
++  nodeId: LABEL.NODE_ID,
++  serviceId: LABEL.SERVICE_ID,
++  revisionId: LABEL.REVISION_ID,
++  instanceId: LABEL.INSTANCE_ID,
++});
++
++const TARGET = Object.freeze({
++  ABSENT: 'absent',
++  RESOLVED: 'resolved',
++  INVALID: 'invalid',
++  MULTIPLE: 'multiple',
++});
++
++const ENGINE_TRANSLATION_ERROR = Object.freeze({
++  OPTIONS_REQUIRED:
++    'engine translation options must be a non-null object',
++  ENGINE_METHOD_MISSING:
++    'engine facade requires method',
++  POLICY_FIELD_INVALID:
++    'boot policy field is missing or invalid',
++  PLAN_UNSUPPORTED:
++    'mutation plan kind is not supported',
++  INPUT_FIELD_INVALID:
++    'engine translation input field is missing or invalid',
++});
++
++const LABEL_FIELDS = Object.freeze(Object.values(LABEL));
++const IDENTITY_FIELDS = Object.freeze(Object.keys(IDENTITY_LABEL_BY_FIELD));
++const TRANSLATION_ERROR_NAME = 'OciHostAgentEngineTranslationError';
++const IDENTITY_INPUT_NAME = 'identity';
++const MANAGED_LABEL_VALUE = 'true';
++const ABSENCE_STATE = 'absent';
++const CONTAINER_STATES = new Set(Object.values(CONTAINER_STATE));
++const CONTAINER_ID_PATTERN = /^[0-9a-f]{64}$/u;
++
++class OciHostAgentEngineTranslationError extends Error {
++  constructor(message, detail) {
++    super(detail === undefined ? message : `${message}: ${detail}`);
++    this.name = TRANSLATION_ERROR_NAME;
++  }
++}
++
++function translationError(message, detail) {
++  return new OciHostAgentEngineTranslationError(message, detail);
++}
++
++function isPlainObject(value) {
++  return Boolean(value) && typeof value === 'object' &&
++    !Array.isArray(value);
++}
++
++function isNonEmptyString(value) {
++  return typeof value === 'string' && value.length > 0;
++}
++
++function isBoundedSafeInteger(value, minimum, maximum) {
++  return Number.isSafeInteger(value) && value >= minimum &&
++    value <= maximum;
++}
++
++function requireField(condition, name) {
++  if (!condition) {
++    throw translationError(
++      ENGINE_TRANSLATION_ERROR.INPUT_FIELD_INVALID, name);
++  }
++}
++
++function copyIdentity(identity) {
++  requireField(isPlainObject(identity), IDENTITY_INPUT_NAME);
++  const copy = {};
++  for (const field of IDENTITY_FIELDS) {
++    requireField(isNonEmptyString(identity[field]),
++      `${IDENTITY_INPUT_NAME}.${field}`);
++    copy[field] = identity[field];
++  }
++  return copy;
++}
++
++function copyLabels(labels) {
++  const copy = {};
++  for (const field of LABEL_FIELDS) copy[field] = labels[field];
++  return copy;
++}
++
++function buildStableLabels(identity, imageDigest, runtimeConfigDigest,
++  createOperationId, createIntentDigest) {
++  const labels = {[LABEL.MANAGED]: MANAGED_LABEL_VALUE};
++  for (const [field, label] of Object.entries(IDENTITY_LABEL_BY_FIELD)) {
++    labels[label] = identity[field];
++  }
++  labels[LABEL.IMAGE_DIGEST] = imageDigest;
++  labels[LABEL.RUNTIME_CONFIG_DIGEST] = runtimeConfigDigest;
++  labels[LABEL.CREATE_OPERATION_ID] = createOperationId;
++  labels[LABEL.CREATE_INTENT_DIGEST] = createIntentDigest;
++  return labels;
++}
++
++function matchLabelsValid(identity, match) {
++  const labels = match.labels;
++  if (!isPlainObject(labels)) return false;
++  const keys = Object.keys(labels);
++  if (keys.length !== LABEL_FIELDS.length ||
++      !LABEL_FIELDS.every((field) => isNonEmptyString(labels[field]))) {
++    return false;
++  }
++  if (labels[LABEL.MANAGED] !== MANAGED_LABEL_VALUE) return false;
++  return IDENTITY_FIELDS.every((field) =>
++    labels[IDENTITY_LABEL_BY_FIELD[field]] === identity[field]);
++}
++
++function matchShapeValid(match) {
++  return isPlainObject(match) &&
++    typeof match.containerId === 'string' &&
++    CONTAINER_ID_PATTERN.test(match.containerId) &&
++    CONTAINER_STATES.has(match.state);
++}
++
++function resolveTarget(identity, snapshot) {
++  const matches = snapshot.matches;
++  if (!Array.isArray(matches) || matches.length === 0) {
++    return {kind: TARGET.ABSENT};
++  }
++  for (const match of matches) {
++    if (!matchShapeValid(match) || !matchLabelsValid(identity, match)) {
++      return {kind: TARGET.INVALID};
++    }
++  }
++  if (matches.length > 1) return {kind: TARGET.MULTIPLE};
++  return {kind: TARGET.RESOLVED, match: matches[0]};
++}
++
++function containerObservation(match) {
++  return {
++    kind: OBSERVATION_KIND.CONTAINER,
++    containerId: match.containerId,
++    state: match.state,
++    labels: copyLabels(match.labels),
++    imageDigest: match.labels[LABEL.IMAGE_DIGEST],
++    runtimeConfigDigest: match.labels[LABEL.RUNTIME_CONFIG_DIGEST],
++  };
++}
++
++function imageObservation(imageDigest) {
++  return {kind: OBSERVATION_KIND.IMAGE, imageDigest};
++}
++
++function absenceObservation() {
++  return {kind: OBSERVATION_KIND.ABSENCE, state: ABSENCE_STATE};
++}
++
++function notObserved() {
++  return {kind: OBSERVATION_KIND.NOT_OBSERVED};
++}
++
++function emptyCleanup() {
++  return {state: CLEANUP_STATE.NOT_REQUIRED, residualResources: []};
++}
++
++function baseResult(context, status) {
++  return {
++    status,
++    operation: context.operation,
++    intentDigest: context.intentDigest,
++    cleanup: emptyCleanup(),
++    identity: copyIdentity(context.identity),
++  };
++}
++
++function successResult(context, status, observation) {
++  return {...baseResult(context, status), observation};
++}
++
++function rejectedResult(context, errorCode) {
++  return {...baseResult(context, RESULT_STATUS.REJECTED), errorCode};
++}
++
++function retryableResult(context, errorCode, lastObservation) {
++  return {
++    ...baseResult(context, RESULT_STATUS.RETRYABLE_FAILURE),
++    errorCode,
++    lastObservation,
++  };
++}
++
++function ambiguousResult(context, lastObservation, cleanup) {
++  const result = {
++    ...baseResult(context, RESULT_STATUS.AMBIGUOUS),
++    errorCode: ERROR_CODE.ENGINE_OUTCOME_UNKNOWN,
++    lastObservation,
++    fenceState: context.fenceState,
++  };
++  if (cleanup) result.cleanup = cleanup;
++  return result;
++}
++
++function createResidualCleanup(context, match) {
++  const labels = match.labels;
++  if (labels[LABEL.CREATE_OPERATION_ID] !== context.operationId ||
++      labels[LABEL.CREATE_INTENT_DIGEST] !== context.intentDigest) {
++    return emptyCleanup();
++  }
++  return {
++    state: CLEANUP_STATE.AMBIGUOUS,
++    residualResources: [{
++      containerId: match.containerId,
++      labels: copyLabels(labels),
++    }],
++  };
++}
++
++export {
++  CONTAINER_STATE,
++  ENGINE_TRANSLATION_ERROR,
++  ERROR_CODE,
++  LABEL,
++  RESULT_STATUS,
++  TARGET,
++  absenceObservation,
++  ambiguousResult,
++  buildStableLabels,
++  containerObservation,
++  copyIdentity,
++  createResidualCleanup,
++  imageObservation,
++  isBoundedSafeInteger,
++  isNonEmptyString,
++  isPlainObject,
++  notObserved,
++  rejectedResult,
++  requireField,
++  resolveTarget,
++  retryableResult,
++  successResult,
++  translationError,
++};
+diff --git a/src/runtime/oci-host-agent-engine-translation.js b/src/runtime/oci-host-agent-engine-translation.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..1aa392882aa9ecc36d0fd167ee3e9dd2235821cd
+--- /dev/null
++++ b/src/runtime/oci-host-agent-engine-translation.js
+@@ -0,0 +1,646 @@
++/**
++ * OCI host-agent Engine translation for the six C1 operations.
++ *
++ * Sole Engine-facing translation consumed by the agent dispatch
++ * orchestrator inside the held resource gate and receipt/fence
++ * sequence (oci-runtime-host-contract.md "Idempotency, cleanup,
++ * and restart posture"): fence install precedes observe() for
++ * mutating operations; classifyPreDispatch and
++ * classifyPostMutation are synchronous; mutate() invokes exactly
++ * one Engine call synchronously on entry.
++ *
++ * @module runtime/oci-host-agent-engine-translation
++ */
++
++import {
++  validateOciHostAgentResult,
++} from './oci-host-agent-schema.js';
++import {
++  CONTAINER_STATE,
++  ENGINE_TRANSLATION_ERROR,
++  ERROR_CODE,
++  LABEL,
++  RESULT_STATUS,
++  TARGET,
++  absenceObservation,
++  ambiguousResult,
++  buildStableLabels,
++  containerObservation,
++  copyIdentity,
++  createResidualCleanup,
++  imageObservation,
++  isBoundedSafeInteger,
++  isNonEmptyString,
++  isPlainObject,
++  notObserved,
++  rejectedResult,
++  requireField,
++  resolveTarget,
++  retryableResult,
++  successResult,
++  translationError,
++} from './oci-host-agent-engine-identity.js';
++
++const OPERATION = Object.freeze({
++  PULL: 'pull',
++  CREATE: 'create',
++  START: 'start',
++  INSPECT: 'inspect',
++  STOP: 'stop',
++  REMOVE: 'remove',
++});
++
++const SNAPSHOT_KIND = Object.freeze({
++  IMAGE: 'image',
++  CONTAINERS: 'containers',
++  ENGINE_ERROR: 'engine_error',
++});
++
++const PLAN_KIND = Object.freeze({
++  PULL_IMAGE: 'pull_image',
++  CREATE_CONTAINER: 'create_container',
++  START_CONTAINER: 'start_container',
++  STOP_CONTAINER: 'stop_container',
++  REMOVE_CONTAINER: 'remove_container',
++});
++
++const DECISION_KIND = Object.freeze({
++  RESULT: 'result',
++  MUTATE: 'mutate',
++});
++
++const INPUT_FIELD = Object.freeze({
++  INPUT: 'input',
++  OPERATION: 'operation',
++  OPERATION_ID: 'operationId',
++  INTENT_DIGEST: 'intentDigest',
++  NOW_MS: 'nowMs',
++  DEADLINE_AT_MS: 'deadlineAtMs',
++  PAYLOAD: 'payload',
++  FENCE_STATE: 'fenceState',
++  SNAPSHOT: 'snapshot',
++  POST_SNAPSHOT: 'postSnapshot',
++  PLAN: 'plan',
++  POLICY: 'policy',
++  IMAGE_DIGEST: 'imageDigest',
++  RUNTIME_CONFIG_DIGEST: 'runtimeConfigDigest',
++  CREATE_OPERATION_ID: 'createOperationId',
++  CREATE_INTENT_DIGEST: 'createIntentDigest',
++});
++
++const PAYLOAD_FIELD = Object.freeze({
++  REGISTRY_CREDENTIAL_ID: 'registryCredentialId',
++  CPU_MILLIS: 'cpuMillis',
++  MEMORY_BYTES: 'memoryBytes',
++  ENTRYPOINT: 'entrypoint',
++  ARGS: 'args',
++  VALUES: 'values',
++  SECRET_REFS: 'secretRefs',
++  PORTS: 'ports',
++  GRACE_MS: 'graceMs',
++});
++
++const METHOD_LIST_SEPARATOR = ', ';
++const FENCE_STATES = new Set(['none', 'mutation_unresolved']);
++const RETRYABLE_ENGINE_CODES = new Set([
++  ERROR_CODE.ENGINE_UNAVAILABLE,
++  ERROR_CODE.ENGINE_FAILURE,
++]);
++const PORT_PROTOCOLS = new Set(['tcp', 'udp']);
++
++const ENGINE_METHODS = Object.freeze([
++  'pullImage',
++  'inspectImage',
++  'listManagedContainers',
++  'inspectContainer',
++  'createContainer',
++  'startContainer',
++  'stopContainer',
++  'removeContainer',
++]);
++
++const POLICY_LIMIT = Object.freeze({
++  MINIMUM_CPU_MILLIS: 1,
++  MAXIMUM_CPU_MILLIS: 1_000_000,
++  MINIMUM_MEMORY_BYTES: 1_048_576,
++  MAXIMUM_MEMORY_BYTES: 1_099_511_627_776,
++});
++
++function validateEngine(engine) {
++  if (!isPlainObject(engine)) {
++    throw translationError(
++      ENGINE_TRANSLATION_ERROR.ENGINE_METHOD_MISSING,
++      ENGINE_METHODS.join(METHOD_LIST_SEPARATOR));
++  }
++  for (const name of ENGINE_METHODS) {
++    if (typeof engine[name] !== 'function') {
++      throw translationError(
++        ENGINE_TRANSLATION_ERROR.ENGINE_METHOD_MISSING, name);
++    }
++  }
++  return engine;
++}
++
++function validateStringList(value, allowed) {
++  return Array.isArray(value) &&
++    value.every((entry) => isNonEmptyString(entry) &&
++      (!allowed || allowed.has(entry)));
++}
++
++function validatePolicy(policy) {
++  if (!isPlainObject(policy)) {
++    throw translationError(
++      ENGINE_TRANSLATION_ERROR.POLICY_FIELD_INVALID, INPUT_FIELD.POLICY);
++  }
++  const valid = {
++    workloadNetwork: isNonEmptyString(policy.workloadNetwork),
++    allowedEnvironmentNames:
++      validateStringList(policy.allowedEnvironmentNames),
++    allowedPortProtocols:
++      validateStringList(policy.allowedPortProtocols, PORT_PROTOCOLS),
++    maximumCpuMillis: isBoundedSafeInteger(policy.maximumCpuMillis,
++      POLICY_LIMIT.MINIMUM_CPU_MILLIS, POLICY_LIMIT.MAXIMUM_CPU_MILLIS),
++    maximumMemoryBytes: isBoundedSafeInteger(policy.maximumMemoryBytes,
++      POLICY_LIMIT.MINIMUM_MEMORY_BYTES,
++      POLICY_LIMIT.MAXIMUM_MEMORY_BYTES),
++  };
++  for (const [field, ok] of Object.entries(valid)) {
++    if (!ok) {
++      throw translationError(
++        ENGINE_TRANSLATION_ERROR.POLICY_FIELD_INVALID, field);
++    }
++  }
++  return Object.freeze({
++    workloadNetwork: policy.workloadNetwork,
++    allowedEnvironmentNames: new Set(policy.allowedEnvironmentNames),
++    allowedPortProtocols: new Set(policy.allowedPortProtocols),
++    maximumCpuMillis: policy.maximumCpuMillis,
++    maximumMemoryBytes: policy.maximumMemoryBytes,
++  });
++}
++
++function collapseEngineErrorCode(error) {
++  if (isPlainObject(error) || error instanceof Error) {
++    const code = error.code;
++    if (RETRYABLE_ENGINE_CODES.has(code)) return code;
++  }
++  return ERROR_CODE.ENGINE_FAILURE;
++}
++
++function terminal(context, result) {
++  validateOciHostAgentResult(result, context.operationId);
++  return {kind: DECISION_KIND.RESULT, result};
++}
++
++function mutation(plan) {
++  return {kind: DECISION_KIND.MUTATE, plan};
++}
++
++function rejectedTargetDecision(context, target) {
++  const errorCode = target.kind === TARGET.INVALID ?
++    ERROR_CODE.IDENTITY_CONFLICT :
++    ERROR_CODE.RESOURCE_CONFLICT;
++  return terminal(context, rejectedResult(context, errorCode));
++}
++
++function classifyPullPre(context, payload, snapshot) {
++  const image = snapshot.image;
++  if (!image.present) {
++    const request = {artifactRef: payload.artifactRef};
++    if (Object.hasOwn(payload, PAYLOAD_FIELD.REGISTRY_CREDENTIAL_ID)) {
++      request.registryCredentialId = payload.registryCredentialId;
++    }
++    return mutation({kind: PLAN_KIND.PULL_IMAGE, request});
++  }
++  if (image.imageDigest === payload.expectedDigest) {
++    return terminal(context, successResult(context,
++      RESULT_STATUS.ALREADY_APPLIED,
++      imageObservation(image.imageDigest)));
++  }
++  return terminal(context,
++    rejectedResult(context, ERROR_CODE.DIGEST_MISMATCH));
++}
++
++function createPolicyViolation(policy, payload) {
++  const resources = payload.resources;
++  if (isPlainObject(resources) &&
++      ((Object.hasOwn(resources, PAYLOAD_FIELD.CPU_MILLIS) &&
++        resources.cpuMillis > policy.maximumCpuMillis) ||
++       (Object.hasOwn(resources, PAYLOAD_FIELD.MEMORY_BYTES) &&
++        resources.memoryBytes > policy.maximumMemoryBytes))) {
++    return true;
++  }
++  const environment = isPlainObject(payload.environment) ?
++    payload.environment : {};
++  const names = [
++    ...Object.keys(isPlainObject(environment.values) ?
++      environment.values : {}),
++    ...Object.keys(isPlainObject(environment.secretRefs) ?
++      environment.secretRefs : {}),
++  ];
++  if (names.some((name) => !policy.allowedEnvironmentNames.has(name))) {
++    return true;
++  }
++  const ports = Array.isArray(payload.ports) ? payload.ports : [];
++  return ports.some((port) =>
++    !policy.allowedPortProtocols.has(port.protocol));
++}
++
++function createEngineConfig(policy, payload) {
++  const config = {
++    imageDigest: payload.imageDigest,
++    network: policy.workloadNetwork,
++    resources: isPlainObject(payload.resources) ?
++      {...payload.resources} :
++      {
++        cpuMillis: policy.maximumCpuMillis,
++        memoryBytes: policy.maximumMemoryBytes,
++      },
++  };
++  if (Object.hasOwn(payload, PAYLOAD_FIELD.ENTRYPOINT)) {
++    config.entrypoint = [...payload.entrypoint];
++  }
++  if (Object.hasOwn(payload, PAYLOAD_FIELD.ARGS)) {
++    config.args = [...payload.args];
++  }
++  const environment = isPlainObject(payload.environment) ?
++    payload.environment : {};
++  if (Object.hasOwn(environment, PAYLOAD_FIELD.VALUES)) {
++    config.environmentValues = {...environment.values};
++  }
++  if (Object.hasOwn(environment, PAYLOAD_FIELD.SECRET_REFS)) {
++    config.environmentSecretRefs = {...environment.secretRefs};
++  }
++  if (Object.hasOwn(payload, PAYLOAD_FIELD.PORTS)) {
++    config.ports = payload.ports.map((port) => ({...port}));
++  }
++  return config;
++}
++
++function classifyCreateMatch(context, payload, match) {
++  const labels = match.labels;
++  if (labels[LABEL.CREATE_INTENT_DIGEST] !== context.intentDigest) {
++    return terminal(context,
++      rejectedResult(context, ERROR_CODE.INTENT_CONFLICT));
++  }
++  if (labels[LABEL.IMAGE_DIGEST] !== payload.imageDigest ||
++      labels[LABEL.RUNTIME_CONFIG_DIGEST] !== payload.runtimeConfigDigest) {
++    return terminal(context,
++      rejectedResult(context, ERROR_CODE.IDENTITY_CONFLICT));
++  }
++  if (labels[LABEL.CREATE_OPERATION_ID] !== context.operationId ||
++      match.state !== CONTAINER_STATE.CREATED) {
++    return terminal(context,
++      rejectedResult(context, ERROR_CODE.RESOURCE_CONFLICT));
++  }
++  return terminal(context, successResult(context,
++    RESULT_STATUS.ALREADY_APPLIED, containerObservation(match)));
++}
++
++function classifyCreatePre(context, payload, snapshot, policy) {
++  const target = resolveTarget(context.identity, snapshot);
++  if (target.kind === TARGET.RESOLVED) {
++    return classifyCreateMatch(context, payload, target.match);
++  }
++  if (target.kind !== TARGET.ABSENT) {
++    return rejectedTargetDecision(context, target);
++  }
++  if (createPolicyViolation(policy, payload)) {
++    return terminal(context,
++      rejectedResult(context, ERROR_CODE.POLICY_DENIED));
++  }
++  return mutation({
++    kind: PLAN_KIND.CREATE_CONTAINER,
++    request: {
++      labels: buildStableLabels(copyIdentity(context.identity),
++        payload.imageDigest, payload.runtimeConfigDigest,
++        context.operationId, context.intentDigest),
++      config: createEngineConfig(policy, payload),
++    },
++  });
++}
++
++function classifyStartPre(context, payload, snapshot) {
++  const target = resolveTarget(context.identity, snapshot);
++  if (target.kind !== TARGET.RESOLVED) {
++    return rejectedTargetDecision(context, target);
++  }
++  if (target.match.state === CONTAINER_STATE.RUNNING) {
++    return terminal(context, successResult(context,
++      RESULT_STATUS.ALREADY_APPLIED,
++      containerObservation(target.match)));
++  }
++  return mutation({
++    kind: PLAN_KIND.START_CONTAINER,
++    request: {containerId: target.match.containerId},
++  });
++}
++
++function classifyInspectPre(context, payload, snapshot) {
++  const target = resolveTarget(context.identity, snapshot);
++  if (target.kind !== TARGET.RESOLVED) {
++    return rejectedTargetDecision(context, target);
++  }
++  return terminal(context, successResult(context,
++    RESULT_STATUS.COMPLETED, containerObservation(target.match)));
++}
++
++function classifyStopPre(context, payload, snapshot) {
++  const target = resolveTarget(context.identity, snapshot);
++  if (target.kind === TARGET.ABSENT) {
++    return terminal(context, successResult(context,
++      RESULT_STATUS.ALREADY_ABSENT, absenceObservation()));
++  }
++  if (target.kind !== TARGET.RESOLVED) {
++    return rejectedTargetDecision(context, target);
++  }
++  if (target.match.state === CONTAINER_STATE.EXITED) {
++    return terminal(context, successResult(context,
++      RESULT_STATUS.ALREADY_APPLIED,
++      containerObservation(target.match)));
++  }
++  const request = {containerId: target.match.containerId};
++  if (Object.hasOwn(payload, PAYLOAD_FIELD.GRACE_MS)) {
++    if (payload.graceMs > context.deadlineAtMs - context.nowMs) {
++      return terminal(context,
++        rejectedResult(context, ERROR_CODE.DEADLINE_INVALID));
++    }
++    request.graceMs = payload.graceMs;
++  }
++  return mutation({kind: PLAN_KIND.STOP_CONTAINER, request});
++}
++
++function classifyRemovePre(context, payload, snapshot) {
++  const target = resolveTarget(context.identity, snapshot);
++  if (target.kind === TARGET.ABSENT) {
++    return terminal(context, successResult(context,
++      RESULT_STATUS.ALREADY_ABSENT, absenceObservation()));
++  }
++  if (target.kind !== TARGET.RESOLVED) {
++    return rejectedTargetDecision(context, target);
++  }
++  if (target.match.state === CONTAINER_STATE.RUNNING) {
++    return terminal(context,
++      rejectedResult(context, ERROR_CODE.RESOURCE_CONFLICT));
++  }
++  return mutation({
++    kind: PLAN_KIND.REMOVE_CONTAINER,
++    request: {containerId: target.match.containerId},
++  });
++}
++
++const PRE_DISPATCH_TABLE = Object.freeze({
++  [OPERATION.PULL]: classifyPullPre,
++  [OPERATION.CREATE]: classifyCreatePre,
++  [OPERATION.START]: classifyStartPre,
++  [OPERATION.INSPECT]: classifyInspectPre,
++  [OPERATION.STOP]: classifyStopPre,
++  [OPERATION.REMOVE]: classifyRemovePre,
++});
++
++function classifyPullPost(context, payload, snapshot) {
++  const image = snapshot.image;
++  if (image.present && image.imageDigest === payload.expectedDigest) {
++    return successResult(context, RESULT_STATUS.COMPLETED,
++      imageObservation(image.imageDigest));
++  }
++  const lastObservation = image.present ?
++    imageObservation(image.imageDigest) : notObserved();
++  return ambiguousResult(context, lastObservation);
++}
++
++function classifyCreatePost(context, payload, snapshot) {
++  const target = resolveTarget(context.identity, snapshot);
++  if (target.kind === TARGET.RESOLVED) {
++    const labels = target.match.labels;
++    if (labels[LABEL.CREATE_OPERATION_ID] === context.operationId &&
++        labels[LABEL.CREATE_INTENT_DIGEST] === context.intentDigest &&
++        labels[LABEL.IMAGE_DIGEST] === payload.imageDigest &&
++        labels[LABEL.RUNTIME_CONFIG_DIGEST] ===
++          payload.runtimeConfigDigest &&
++        target.match.state === CONTAINER_STATE.CREATED) {
++      return successResult(context, RESULT_STATUS.COMPLETED,
++        containerObservation(target.match));
++    }
++    return ambiguousResult(context, containerObservation(target.match),
++      createResidualCleanup(context, target.match));
++  }
++  return ambiguousResult(context, notObserved());
++}
++
++function classifyStatePost(desiredState) {
++  return (context, payload, snapshot) => {
++    const target = resolveTarget(context.identity, snapshot);
++    if (target.kind === TARGET.RESOLVED) {
++      if (target.match.state === desiredState) {
++        return successResult(context, RESULT_STATUS.COMPLETED,
++          containerObservation(target.match));
++      }
++      return ambiguousResult(context,
++        containerObservation(target.match));
++    }
++    if (target.kind === TARGET.ABSENT) {
++      return ambiguousResult(context, absenceObservation());
++    }
++    return ambiguousResult(context, notObserved());
++  };
++}
++
++function classifyRemovePost(context, payload, snapshot) {
++  const target = resolveTarget(context.identity, snapshot);
++  if (target.kind === TARGET.ABSENT) {
++    return successResult(context, RESULT_STATUS.COMPLETED,
++      absenceObservation());
++  }
++  if (target.kind === TARGET.RESOLVED) {
++    return ambiguousResult(context,
++      containerObservation(target.match));
++  }
++  return ambiguousResult(context, notObserved());
++}
++
++const POST_MUTATION_TABLE = Object.freeze({
++  [OPERATION.PULL]: classifyPullPost,
++  [OPERATION.CREATE]: classifyCreatePost,
++  [OPERATION.START]: classifyStatePost(CONTAINER_STATE.RUNNING),
++  [OPERATION.STOP]: classifyStatePost(CONTAINER_STATE.EXITED),
++  [OPERATION.REMOVE]: classifyRemovePost,
++});
++
++const MUTATION_DISPATCH_TABLE = Object.freeze({
++  [PLAN_KIND.PULL_IMAGE]: (engine, request) => engine.pullImage(request),
++  [PLAN_KIND.CREATE_CONTAINER]:
++    (engine, request) => engine.createContainer(request),
++  [PLAN_KIND.START_CONTAINER]:
++    (engine, request) => engine.startContainer(request),
++  [PLAN_KIND.STOP_CONTAINER]:
++    (engine, request) => engine.stopContainer(request),
++  [PLAN_KIND.REMOVE_CONTAINER]:
++    (engine, request) => engine.removeContainer(request),
++});
++
++function classifyContext(input, withFence) {
++  requireField(typeof PRE_DISPATCH_TABLE[input.operation] === 'function',
++    INPUT_FIELD.OPERATION);
++  requireField(isNonEmptyString(input.operationId),
++    INPUT_FIELD.OPERATION_ID);
++  requireField(isNonEmptyString(input.intentDigest),
++    INPUT_FIELD.INTENT_DIGEST);
++  requireField(Number.isSafeInteger(input.nowMs), INPUT_FIELD.NOW_MS);
++  requireField(Number.isSafeInteger(input.deadlineAtMs),
++    INPUT_FIELD.DEADLINE_AT_MS);
++  requireField(isPlainObject(input.payload), INPUT_FIELD.PAYLOAD);
++  const context = {
++    operation: input.operation,
++    identity: copyIdentity(input.identity),
++    operationId: input.operationId,
++    intentDigest: input.intentDigest,
++    nowMs: input.nowMs,
++    deadlineAtMs: input.deadlineAtMs,
++  };
++  if (withFence) {
++    requireField(FENCE_STATES.has(input.fenceState),
++      INPUT_FIELD.FENCE_STATE);
++    context.fenceState = input.fenceState;
++  }
++  return context;
++}
++
++function copyImageSnapshot(image) {
++  const copy = {present: image.present === true};
++  if (copy.present) copy.imageDigest = image.imageDigest;
++  return copy;
++}
++
++function copyContainerMatches(matches) {
++  return (Array.isArray(matches) ? matches : []).map((match) => ({
++    containerId: match.containerId,
++    state: match.state,
++    labels: isPlainObject(match.labels) ? {...match.labels} : {},
++  }));
++}
++
++class OciHostAgentEngineTranslation {
++  #engine;
++  #policy;
++
++  constructor(options) {
++    if (!isPlainObject(options)) {
++      throw translationError(ENGINE_TRANSLATION_ERROR.OPTIONS_REQUIRED);
++    }
++    this.#engine = validateEngine(options.engine);
++    this.#policy = validatePolicy(options.policy);
++  }
++
++  async observe(input) {
++    requireField(isPlainObject(input), INPUT_FIELD.INPUT);
++    requireField(typeof PRE_DISPATCH_TABLE[input.operation] === 'function',
++      INPUT_FIELD.OPERATION);
++    requireField(isPlainObject(input.payload), INPUT_FIELD.PAYLOAD);
++    const identity = copyIdentity(input.identity);
++    try {
++      if (input.operation === OPERATION.PULL) {
++        const image = await this.#engine.inspectImage({
++          artifactRef: input.payload.artifactRef,
++        });
++        return {
++          kind: SNAPSHOT_KIND.IMAGE,
++          image: copyImageSnapshot(isPlainObject(image) ? image : {}),
++        };
++      }
++      const listing = await this.#engine.listManagedContainers({identity});
++      return {
++        kind: SNAPSHOT_KIND.CONTAINERS,
++        matches: copyContainerMatches(
++          isPlainObject(listing) ? listing.matches : []),
++      };
++    } catch (error) {
++      return {
++        kind: SNAPSHOT_KIND.ENGINE_ERROR,
++        errorCode: collapseEngineErrorCode(error),
++      };
++    }
++  }
++
++  labelsForCreate(input) {
++    requireField(isPlainObject(input), INPUT_FIELD.INPUT);
++    requireField(isNonEmptyString(input.imageDigest),
++      INPUT_FIELD.IMAGE_DIGEST);
++    requireField(isNonEmptyString(input.runtimeConfigDigest),
++      INPUT_FIELD.RUNTIME_CONFIG_DIGEST);
++    requireField(isNonEmptyString(input.createOperationId),
++      INPUT_FIELD.CREATE_OPERATION_ID);
++    requireField(isNonEmptyString(input.createIntentDigest),
++      INPUT_FIELD.CREATE_INTENT_DIGEST);
++    return buildStableLabels(copyIdentity(input.identity),
++      input.imageDigest, input.runtimeConfigDigest,
++      input.createOperationId, input.createIntentDigest);
++  }
++
++  classifyPreDispatch(input) {
++    requireField(isPlainObject(input), INPUT_FIELD.INPUT);
++    const context = classifyContext(input, false);
++    const snapshot = input.snapshot;
++    requireField(isPlainObject(snapshot), INPUT_FIELD.SNAPSHOT);
++    if (context.nowMs >= context.deadlineAtMs) {
++      return terminal(context, retryableResult(context,
++        ERROR_CODE.DEADLINE_BEFORE_DISPATCH, notObserved()));
++    }
++    if (snapshot.kind === SNAPSHOT_KIND.ENGINE_ERROR) {
++      return terminal(context, retryableResult(context,
++        snapshot.errorCode, notObserved()));
++    }
++    return PRE_DISPATCH_TABLE[context.operation](context, input.payload,
++      snapshot, this.#policy);
++  }
++
++  mutate(plan) {
++    requireField(isPlainObject(plan), INPUT_FIELD.PLAN);
++    const dispatch = MUTATION_DISPATCH_TABLE[plan.kind];
++    if (typeof dispatch !== 'function') {
++      throw translationError(
++        ENGINE_TRANSLATION_ERROR.PLAN_UNSUPPORTED, plan.kind);
++    }
++    let pending;
++    try {
++      pending = dispatch(this.#engine, plan.request);
++    } catch (error) {
++      return Promise.resolve({
++        invoked: true,
++        settled: false,
++        errorCode: collapseEngineErrorCode(error),
++      });
++    }
++    return Promise.resolve(pending).then(
++      () => ({invoked: true, settled: true}),
++      (error) => ({
++        invoked: true,
++        settled: false,
++        errorCode: collapseEngineErrorCode(error),
++      }),
++    );
++  }
++
++  classifyPostMutation(input) {
++    requireField(isPlainObject(input), INPUT_FIELD.INPUT);
++    const context = classifyContext(input, true);
++    requireField(context.operation !== OPERATION.INSPECT,
++      INPUT_FIELD.OPERATION);
++    const snapshot = input.postSnapshot;
++    requireField(isPlainObject(snapshot), INPUT_FIELD.POST_SNAPSHOT);
++    const result = snapshot.kind === SNAPSHOT_KIND.ENGINE_ERROR ?
++      ambiguousResult(context, notObserved()) :
++      POST_MUTATION_TABLE[context.operation](context, input.payload,
++        snapshot);
++    validateOciHostAgentResult(result, context.operationId);
++    return result;
++  }
++}
++
++function createOciHostAgentEngineTranslation(options) {
++  return new OciHostAgentEngineTranslation(options);
++}
++
++export {
++  createOciHostAgentEngineTranslation,
++};
+diff --git a/test/runtime/oci-host-agent-engine-translation.test.js b/test/runtime/oci-host-agent-engine-translation.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..931b754f8b9cd5c77fb1184095fec4d09fd58bc3
+--- /dev/null
++++ b/test/runtime/oci-host-agent-engine-translation.test.js
+@@ -0,0 +1,745 @@
++import {describe, it} from 'node:test';
++import assert from 'node:assert/strict';
++
++import {
++  createOciHostAgentEngineTranslation,
++} from '../../src/runtime/oci-host-agent-engine-translation.js';
++import {
++  validateOciHostAgentResult,
++} from '../../src/runtime/oci-host-agent-schema.js';
++
++const HEX_A = 'a'.repeat(64);
++const HEX_B = 'b'.repeat(64);
++const HEX_C = 'c'.repeat(64);
++const HEX_D = 'd'.repeat(64);
++const IMAGE_DIGEST = `sha256:${HEX_A}`;
++const OTHER_IMAGE_DIGEST = `sha256:${HEX_B}`;
++const RUNTIME_CONFIG_DIGEST = `sha256:${HEX_C}`;
++const INTENT_DIGEST = `sha256:${HEX_D}`;
++const OTHER_INTENT_DIGEST = `sha256:${'e'.repeat(64)}`;
++const CREATE_OPERATION_ID = `oci-v1:${'f'.repeat(64)}`;
++const OPERATION_ID = `oci-v1:${'0'.repeat(64)}`;
++const CONTAINER_ID = `${'0'.repeat(63)}1`;
++const OTHER_CONTAINER_ID = `${'0'.repeat(63)}2`;
++const ARTIFACT_REF =
++  `registry.example.com:5000/lagrange/app@sha256:${HEX_A}`;
++const NOW_MS = 1_000_000;
++const DEADLINE_AT_MS = 1_030_000;
++const EXPIRED_NOW_MS = 1_030_000;
++const RAW_ENGINE_SECRET = 'RAW-ENGINE-DETAIL-MUST-NOT-LEAK';
++
++const IDENTITY = Object.freeze({
++  clusterIncarnation: 'ci-2026',
++  nodeId: 'node-a',
++  serviceId: 'svc-app',
++  revisionId: 'rev-7',
++  instanceId: 'replica-0',
++});
++
++const POLICY = Object.freeze({
++  workloadNetwork: 'lagrange-workload-net',
++  allowedEnvironmentNames: Object.freeze(['APP_MODE', 'APP_TOKEN']),
++  allowedPortProtocols: Object.freeze(['tcp']),
++  maximumCpuMillis: 2_000,
++  maximumMemoryBytes: 1_073_741_824,
++});
++
++function stableLabels(overrides = {}) {
++  return {
++    'io.lagrange.managed': 'true',
++    'io.lagrange.cluster_incarnation': IDENTITY.clusterIncarnation,
++    'io.lagrange.node_id': IDENTITY.nodeId,
++    'io.lagrange.service_id': IDENTITY.serviceId,
++    'io.lagrange.revision_id': IDENTITY.revisionId,
++    'io.lagrange.instance_id': IDENTITY.instanceId,
++    'io.lagrange.image_digest': IMAGE_DIGEST,
++    'io.lagrange.runtime_config_digest': RUNTIME_CONFIG_DIGEST,
++    'io.lagrange.create_operation_id': CREATE_OPERATION_ID,
++    'io.lagrange.create_intent_digest': INTENT_DIGEST,
++    ...overrides,
++  };
++}
++
++function containerMatch(overrides = {}) {
++  return {
++    containerId: CONTAINER_ID,
++    state: 'created',
++    labels: stableLabels(),
++    ...overrides,
++  };
++}
++
++function fakeEngine(overrides = {}) {
++  const calls = [];
++  const respond = (name, request, fallback) => {
++    calls.push({name, request});
++    if (Object.hasOwn(overrides, name)) {
++      const handler = overrides[name];
++      if (typeof handler === 'function') return handler(request);
++      return handler;
++    }
++    return fallback;
++  };
++  const engine = {
++    pullImage: async (request) => respond('pullImage', request, {}),
++    inspectImage: async (request) =>
++      respond('inspectImage', request, {present: false}),
++    listManagedContainers: async (request) =>
++      respond('listManagedContainers', request, {matches: []}),
++    inspectContainer: async (request) =>
++      respond('inspectContainer', request, {present: false}),
++    createContainer: async (request) =>
++      respond('createContainer', request, {containerId: CONTAINER_ID}),
++    startContainer: async (request) => respond('startContainer', request, {}),
++    stopContainer: async (request) => respond('stopContainer', request, {}),
++    removeContainer: async (request) =>
++      respond('removeContainer', request, {}),
++  };
++  return {calls, engine};
++}
++
++function translation(engineOverrides = {}, policyOverrides = {}) {
++  const {calls, engine} = fakeEngine(engineOverrides);
++  const instance = createOciHostAgentEngineTranslation({
++    engine,
++    policy: {...POLICY, ...policyOverrides},
++  });
++  return {calls, instance};
++}
++
++function pullPayload(overrides = {}) {
++  return {
++    artifactRef: ARTIFACT_REF,
++    expectedDigest: IMAGE_DIGEST,
++    ...overrides,
++  };
++}
++
++function createPayload(overrides = {}) {
++  return {
++    imageDigest: IMAGE_DIGEST,
++    runtimeConfigDigest: RUNTIME_CONFIG_DIGEST,
++    entrypoint: ['/bin/app'],
++    args: ['--serve'],
++    environment: {values: {APP_MODE: 'production'}},
++    ports: [{protocol: 'tcp', containerPort: 5432}],
++    resources: {cpuMillis: 500, memoryBytes: 268_435_456},
++    ...overrides,
++  };
++}
++
++function classifyContext(overrides = {}) {
++  return {
++    operationId: OPERATION_ID,
++    intentDigest: INTENT_DIGEST,
++    nowMs: NOW_MS,
++    deadlineAtMs: DEADLINE_AT_MS,
++    ...overrides,
++  };
++}
++
++function preClassify(instance, operation, payload, snapshot, overrides = {}) {
++  return instance.classifyPreDispatch({
++    operation,
++    identity: IDENTITY,
++    payload,
++    snapshot,
++    ...classifyContext(overrides),
++  });
++}
++
++function postClassify(instance, operation, payload, snapshot, overrides = {}) {
++  return instance.classifyPostMutation({
++    operation,
++    identity: IDENTITY,
++    payload,
++    postSnapshot: snapshot,
++    fenceState: 'mutation_unresolved',
++    ...classifyContext(overrides),
++  });
++}
++
++function imageSnapshot(image) {
++  return {kind: 'image', image};
++}
++
++function containersSnapshot(matches) {
++  return {kind: 'containers', matches};
++}
++
++function assertValidResult(result, operationId = OPERATION_ID) {
++  validateOciHostAgentResult(result, operationId);
++}
++
++function assertRejected(decision, errorCode) {
++  assert.equal(decision.kind, 'result');
++  assert.equal(decision.result.status, 'rejected');
++  assert.equal(decision.result.errorCode, errorCode);
++  assert.equal(Object.hasOwn(decision.result, 'observation'), false);
++  assert.equal(Object.hasOwn(decision.result, 'lastObservation'), false);
++  assertValidResult(decision.result);
++}
++
++describe('oci host agent engine translation construction', () => {
++  it('rejects a facade missing an engine method', () => {
++    const {engine} = fakeEngine();
++    delete engine.removeContainer;
++    assert.throws(
++      () => createOciHostAgentEngineTranslation({engine, policy: POLICY}),
++      (error) => /removeContainer/u.test(error.message),
++    );
++  });
++
++  it('rejects a policy missing boot-owned fields', () => {
++    const {engine} = fakeEngine();
++    const policy = {...POLICY};
++    delete policy.workloadNetwork;
++    assert.throws(
++      () => createOciHostAgentEngineTranslation({engine, policy}),
++      (error) => /workloadNetwork/u.test(error.message),
++    );
++  });
++});
++
++describe('oci host agent engine translation observe', () => {
++  it('observes pull through authoritative image inspection only', async () => {
++    const {calls, instance} = translation({
++      inspectImage: {present: true, imageDigest: IMAGE_DIGEST},
++    });
++    const snapshot = await instance.observe({
++      operation: 'pull',
++      identity: IDENTITY,
++      payload: pullPayload(),
++    });
++    assert.deepEqual(snapshot, imageSnapshot({
++      present: true,
++      imageDigest: IMAGE_DIGEST,
++    }));
++    assert.deepEqual(calls.map((entry) => entry.name), ['inspectImage']);
++    assert.equal(calls[0].request.artifactRef, ARTIFACT_REF);
++  });
++
++  it('observes container operations through the managed listing', async () => {
++    const {calls, instance} = translation({
++      listManagedContainers: {matches: [containerMatch()]},
++    });
++    const snapshot = await instance.observe({
++      operation: 'inspect',
++      identity: IDENTITY,
++      payload: {},
++    });
++    assert.equal(snapshot.kind, 'containers');
++    assert.equal(snapshot.matches.length, 1);
++    assert.deepEqual(calls.map((entry) => entry.name),
++      ['listManagedContainers']);
++    assert.deepEqual(calls[0].request.identity, IDENTITY);
++  });
++
++  it('collapses observe engine failures to typed codes', async () => {
++    const {instance} = translation({
++      listManagedContainers: () => {
++        throw new Error(RAW_ENGINE_SECRET);
++      },
++    });
++    const snapshot = await instance.observe({
++      operation: 'stop',
++      identity: IDENTITY,
++      payload: {graceMs: 100},
++    });
++    assert.equal(snapshot.kind, 'engine_error');
++    assert.equal(snapshot.errorCode, 'engine_failure');
++    assert.equal(JSON.stringify(snapshot).includes(RAW_ENGINE_SECRET), false);
++  });
++
++  it('preserves a typed engine_unavailable observe failure', async () => {
++    const failure = new Error(RAW_ENGINE_SECRET);
++    failure.code = 'engine_unavailable';
++    const {instance} = translation({
++      inspectImage: () => {
++        throw failure;
++      },
++    });
++    const snapshot = await instance.observe({
++      operation: 'pull',
++      identity: IDENTITY,
++      payload: pullPayload(),
++    });
++    assert.equal(snapshot.errorCode, 'engine_unavailable');
++    assert.equal(JSON.stringify(snapshot).includes(RAW_ENGINE_SECRET), false);
++  });
++});
++
++describe('oci host agent engine translation create labels', () => {
++  it('builds exactly the ten immutable labels from agent inputs', () => {
++    const {instance} = translation();
++    const labels = instance.labelsForCreate({
++      identity: IDENTITY,
++      imageDigest: IMAGE_DIGEST,
++      runtimeConfigDigest: RUNTIME_CONFIG_DIGEST,
++      createOperationId: CREATE_OPERATION_ID,
++      createIntentDigest: INTENT_DIGEST,
++    });
++    assert.deepEqual(labels, stableLabels());
++  });
++});
++
++describe('oci host agent engine translation pre-dispatch classification', () => {
++  it('returns a retryable deadline result when expired before dispatch', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'pull', pullPayload(),
++      imageSnapshot({present: false}), {nowMs: EXPIRED_NOW_MS});
++    assert.equal(decision.kind, 'result');
++    assert.equal(decision.result.status, 'retryable_failure');
++    assert.equal(decision.result.errorCode, 'deadline_before_dispatch');
++    assert.deepEqual(decision.result.lastObservation, {kind: 'not_observed'});
++    assertValidResult(decision.result);
++  });
++
++  it('returns a retryable result when the observe snapshot failed', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'start', {},
++      {kind: 'engine_error', errorCode: 'engine_unavailable'});
++    assert.equal(decision.result.status, 'retryable_failure');
++    assert.equal(decision.result.errorCode, 'engine_unavailable');
++    assertValidResult(decision.result);
++  });
++
++  it('plans a pull mutation when the image is absent', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'pull', pullPayload(),
++      imageSnapshot({present: false}));
++    assert.equal(decision.kind, 'mutate');
++    assert.equal(decision.plan.kind, 'pull_image');
++    assert.equal(decision.plan.request.artifactRef, ARTIFACT_REF);
++  });
++
++  it('returns already_applied for a present matching image digest', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'pull', pullPayload(),
++      imageSnapshot({present: true, imageDigest: IMAGE_DIGEST}));
++    assert.equal(decision.result.status, 'already_applied');
++    assert.deepEqual(decision.result.observation,
++      {kind: 'image', imageDigest: IMAGE_DIGEST});
++    assertValidResult(decision.result);
++  });
++
++  it('rejects a present image whose digest mismatches before dispatch', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'pull', pullPayload(),
++      imageSnapshot({present: true, imageDigest: OTHER_IMAGE_DIGEST}));
++    assertRejected(decision, 'digest_mismatch');
++  });
++
++  it('plans a create mutation with agent-owned labels and policy network',
++    () => {
++      const {instance} = translation();
++      const decision = preClassify(instance, 'create', createPayload(),
++        containersSnapshot([]));
++      assert.equal(decision.kind, 'mutate');
++      assert.equal(decision.plan.kind, 'create_container');
++      assert.deepEqual(decision.plan.request.labels, stableLabels({
++        'io.lagrange.create_operation_id': OPERATION_ID,
++      }));
++      assert.equal(decision.plan.request.config.network,
++        POLICY.workloadNetwork);
++      assert.equal(decision.plan.request.config.imageDigest, IMAGE_DIGEST);
++    });
++
++  it('returns already_applied for a created container with this provenance',
++    () => {
++      const {instance} = translation();
++      const match = containerMatch({
++        labels: stableLabels({
++          'io.lagrange.create_operation_id': OPERATION_ID,
++        }),
++      });
++      const decision = preClassify(instance, 'create', createPayload(),
++        containersSnapshot([match]));
++      assert.equal(decision.result.status, 'already_applied');
++      assert.equal(decision.result.observation.kind, 'container');
++      assert.equal(decision.result.observation.state, 'created');
++      assertValidResult(decision.result);
++    });
++
++  it('rejects create when the same identity carries another intent', () => {
++    const {instance} = translation();
++    const match = containerMatch({
++      labels: stableLabels({
++        'io.lagrange.create_operation_id': OPERATION_ID,
++        'io.lagrange.create_intent_digest': OTHER_INTENT_DIGEST,
++      }),
++    });
++    const decision = preClassify(instance, 'create', createPayload(),
++      containersSnapshot([match]));
++    assertRejected(decision, 'intent_conflict');
++  });
++
++  it('rejects create when the provenance container already progressed', () => {
++    const {instance} = translation();
++    const match = containerMatch({
++      state: 'running',
++      labels: stableLabels({
++        'io.lagrange.create_operation_id': OPERATION_ID,
++      }),
++    });
++    const decision = preClassify(instance, 'create', createPayload(),
++      containersSnapshot([match]));
++    assertRejected(decision, 'resource_conflict');
++  });
++
++  it('rejects create requests that widen the resource ceiling', () => {
++    const {instance} = translation();
++    const payload = createPayload({
++      resources: {cpuMillis: POLICY.maximumCpuMillis + 1},
++    });
++    const decision = preClassify(instance, 'create', payload,
++      containersSnapshot([]));
++    assertRejected(decision, 'policy_denied');
++  });
++
++  it('rejects create environment names outside the boot allowlist', () => {
++    const {instance} = translation();
++    const payload = createPayload({
++      environment: {values: {UNLISTED_NAME: 'x'}},
++    });
++    const decision = preClassify(instance, 'create', payload,
++      containersSnapshot([]));
++    assertRejected(decision, 'policy_denied');
++  });
++
++  it('rejects create secret reference names outside the allowlist', () => {
++    const {instance} = translation();
++    const payload = createPayload({
++      environment: {secretRefs: {UNLISTED_SECRET: 'credential-1'}},
++    });
++    const decision = preClassify(instance, 'create', payload,
++      containersSnapshot([]));
++    assertRejected(decision, 'policy_denied');
++  });
++
++  it('rejects create port protocols outside the boot policy', () => {
++    const {instance} = translation();
++    const payload = createPayload({
++      ports: [{protocol: 'udp', containerPort: 53}],
++    });
++    const decision = preClassify(instance, 'create', payload,
++      containersSnapshot([]));
++    assertRejected(decision, 'policy_denied');
++  });
++
++  it('plans a start mutation for a created container', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'start', {},
++      containersSnapshot([containerMatch()]));
++    assert.equal(decision.kind, 'mutate');
++    assert.equal(decision.plan.kind, 'start_container');
++    assert.equal(decision.plan.request.containerId, CONTAINER_ID);
++  });
++
++  it('returns already_applied for an already running start target', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'start', {},
++      containersSnapshot([containerMatch({state: 'running'})]));
++    assert.equal(decision.result.status, 'already_applied');
++    assert.equal(decision.result.observation.state, 'running');
++    assertValidResult(decision.result);
++  });
++
++  it('rejects start when the target container is absent', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'start', {},
++      containersSnapshot([]));
++    assertRejected(decision, 'resource_conflict');
++  });
++
++  it('completes inspect from the authoritative pre snapshot', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'inspect', {},
++      containersSnapshot([containerMatch({state: 'exited'})]));
++    assert.equal(decision.result.status, 'completed');
++    assert.equal(decision.result.observation.kind, 'container');
++    assert.equal(decision.result.observation.state, 'exited');
++    assertValidResult(decision.result);
++  });
++
++  it('rejects inspect when the target container is absent', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'inspect', {},
++      containersSnapshot([]));
++    assertRejected(decision, 'resource_conflict');
++  });
++
++  it('never plans a mutation for inspect', () => {
++    const {instance} = translation();
++    for (const state of ['created', 'running', 'exited']) {
++      const decision = preClassify(instance, 'inspect', {},
++        containersSnapshot([containerMatch({state})]));
++      assert.equal(decision.kind, 'result');
++    }
++  });
++
++  it('plans a stop mutation for a running container', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'stop', {graceMs: 1_000},
++      containersSnapshot([containerMatch({state: 'running'})]));
++    assert.equal(decision.kind, 'mutate');
++    assert.equal(decision.plan.kind, 'stop_container');
++    assert.equal(decision.plan.request.graceMs, 1_000);
++  });
++
++  it('returns already_applied for an exited stop target', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'stop', {},
++      containersSnapshot([containerMatch({state: 'exited'})]));
++    assert.equal(decision.result.status, 'already_applied');
++    assert.equal(decision.result.observation.state, 'exited');
++    assertValidResult(decision.result);
++  });
++
++  it('returns already_absent for a proven absent stop target', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'stop', {},
++      containersSnapshot([]));
++    assert.equal(decision.result.status, 'already_absent');
++    assert.deepEqual(decision.result.observation,
++      {kind: 'absence', state: 'absent'});
++    assertValidResult(decision.result);
++  });
++
++  it('rejects stop grace beyond the remaining deadline budget', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'stop', {graceMs: 30_000},
++      containersSnapshot([containerMatch({state: 'running'})]),
++      {nowMs: DEADLINE_AT_MS - 1_000});
++    assertRejected(decision, 'deadline_invalid');
++  });
++
++  it('plans a remove mutation for a stopped container', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'remove', {},
++      containersSnapshot([containerMatch({state: 'exited'})]));
++    assert.equal(decision.kind, 'mutate');
++    assert.equal(decision.plan.kind, 'remove_container');
++  });
++
++  it('rejects remove while the target is still running', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'remove', {},
++      containersSnapshot([containerMatch({state: 'running'})]));
++    assertRejected(decision, 'resource_conflict');
++  });
++
++  it('returns already_absent for a proven absent remove target', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'remove', {},
++      containersSnapshot([]));
++    assert.equal(decision.result.status, 'already_absent');
++    assertValidResult(decision.result);
++  });
++
++  it('rejects unmanaged containers returned by the engine', () => {
++    const {instance} = translation();
++    const match = containerMatch({
++      labels: stableLabels({'io.lagrange.managed': 'false'}),
++    });
++    const decision = preClassify(instance, 'start', {},
++      containersSnapshot([match]));
++    assertRejected(decision, 'identity_conflict');
++  });
++
++  it('rejects partially labelled containers', () => {
++    const {instance} = translation();
++    const labels = stableLabels();
++    delete labels['io.lagrange.create_intent_digest'];
++    const decision = preClassify(instance, 'stop', {},
++      containersSnapshot([containerMatch({state: 'running', labels})]));
++    assertRejected(decision, 'identity_conflict');
++  });
++
++  it('rejects tampered identity labels', () => {
++    const {instance} = translation();
++    const match = containerMatch({
++      labels: stableLabels({'io.lagrange.service_id': 'svc-other'}),
++    });
++    const decision = preClassify(instance, 'inspect', {},
++      containersSnapshot([match]));
++    assertRejected(decision, 'identity_conflict');
++  });
++
++  it('rejects ambiguous multiple full-identity matches', () => {
++    const {instance} = translation();
++    const decision = preClassify(instance, 'stop', {},
++      containersSnapshot([
++        containerMatch({state: 'running'}),
++        containerMatch({
++          containerId: OTHER_CONTAINER_ID,
++          state: 'running',
++        }),
++      ]));
++    assertRejected(decision, 'resource_conflict');
++  });
++});
++
++describe('oci host agent engine translation mutation', () => {
++  it('invokes exactly one engine call synchronously on entry', async () => {
++    const order = [];
++    const {calls, instance} = translation({
++      startContainer: () => {
++        order.push('engine');
++        return {};
++      },
++    });
++    const decision = preClassify(instance, 'start', {},
++      containersSnapshot([containerMatch()]));
++    const pending = instance.mutate(decision.plan);
++    order.push('after-mutate-entry');
++    const outcome = await pending;
++    assert.deepEqual(order, ['engine', 'after-mutate-entry']);
++    assert.deepEqual(calls.map((entry) => entry.name),
++      ['startContainer']);
++    assert.deepEqual(outcome, {invoked: true, settled: true});
++  });
++
++  it('collapses mutation engine errors without leaking raw detail',
++    async () => {
++      const {instance} = translation({
++        pullImage: () => {
++          throw new Error(RAW_ENGINE_SECRET);
++        },
++      });
++      const decision = preClassify(instance, 'pull', pullPayload(),
++        imageSnapshot({present: false}));
++      const outcome = await instance.mutate(decision.plan);
++      assert.equal(outcome.invoked, true);
++      assert.equal(outcome.settled, false);
++      assert.equal(outcome.errorCode, 'engine_failure');
++      assert.equal(
++        JSON.stringify(outcome).includes(RAW_ENGINE_SECRET), false);
++    });
++});
++
++describe('oci host agent engine translation post-mutation classification',
++  () => {
++    it('completes pull when the inspected digest matches', () => {
++      const {instance} = translation();
++      const result = postClassify(instance, 'pull', pullPayload(),
++        imageSnapshot({present: true, imageDigest: IMAGE_DIGEST}));
++      assert.equal(result.status, 'completed');
++      assert.deepEqual(result.observation,
++        {kind: 'image', imageDigest: IMAGE_DIGEST});
++      assertValidResult(result);
++    });
++
++    it('classifies a post-pull digest mismatch as ambiguous', () => {
++      const {instance} = translation();
++      const result = postClassify(instance, 'pull', pullPayload(),
++        imageSnapshot({present: true, imageDigest: OTHER_IMAGE_DIGEST}));
++      assert.equal(result.status, 'ambiguous');
++      assert.equal(result.errorCode, 'engine_outcome_unknown');
++      assert.equal(result.fenceState, 'mutation_unresolved');
++      assertValidResult(result);
++    });
++
++    it('completes create from a matching created container', () => {
++      const {instance} = translation();
++      const match = containerMatch({
++        labels: stableLabels({
++          'io.lagrange.create_operation_id': OPERATION_ID,
++        }),
++      });
++      const result = postClassify(instance, 'create', createPayload(),
++        containersSnapshot([match]));
++      assert.equal(result.status, 'completed');
++      assert.equal(result.observation.state, 'created');
++      assertValidResult(result);
++    });
++
++    it('classifies an absent post-create container as ambiguous', () => {
++      const {instance} = translation();
++      const result = postClassify(instance, 'create', createPayload(),
++        containersSnapshot([]));
++      assert.equal(result.status, 'ambiguous');
++      assert.equal(result.errorCode, 'engine_outcome_unknown');
++      assert.deepEqual(result.lastObservation, {kind: 'not_observed'});
++      assertValidResult(result);
++    });
++
++    it('completes start only on an authoritative running state', () => {
++      const {instance} = translation();
++      const running = postClassify(instance, 'start', {},
++        containersSnapshot([containerMatch({state: 'running'})]));
++      assert.equal(running.status, 'completed');
++      assertValidResult(running);
++      const stillCreated = postClassify(instance, 'start', {},
++        containersSnapshot([containerMatch()]));
++      assert.equal(stillCreated.status, 'ambiguous');
++      assert.equal(stillCreated.errorCode, 'engine_outcome_unknown');
++      assertValidResult(stillCreated);
++    });
++
++    it('completes stop on exited and never converts absence to success',
++      () => {
++        const {instance} = translation();
++        const exited = postClassify(instance, 'stop', {},
++          containersSnapshot([containerMatch({state: 'exited'})]));
++        assert.equal(exited.status, 'completed');
++        assertValidResult(exited);
++        const absent = postClassify(instance, 'stop', {},
++          containersSnapshot([]));
++        assert.equal(absent.status, 'ambiguous');
++        assert.equal(absent.errorCode, 'engine_outcome_unknown');
++        assert.deepEqual(absent.lastObservation,
++          {kind: 'absence', state: 'absent'});
++        assertValidResult(absent);
++      });
++
++    it('completes remove only on proven absence', () => {
++      const {instance} = translation();
++      const absent = postClassify(instance, 'remove', {},
++        containersSnapshot([]));
++      assert.equal(absent.status, 'completed');
++      assert.deepEqual(absent.observation,
++        {kind: 'absence', state: 'absent'});
++      assertValidResult(absent);
++      const present = postClassify(instance, 'remove', {},
++        containersSnapshot([containerMatch({state: 'exited'})]));
++      assert.equal(present.status, 'ambiguous');
++      assertValidResult(present);
++    });
++
++    it('classifies a failed post snapshot as ambiguous', () => {
++      const {instance} = translation();
++      const result = postClassify(instance, 'start', {},
++        {kind: 'engine_error', errorCode: 'engine_unavailable'});
++      assert.equal(result.status, 'ambiguous');
++      assert.equal(result.errorCode, 'engine_outcome_unknown');
++      assertValidResult(result);
++    });
++
++    it('classifies a tampered post snapshot as ambiguous', () => {
++      const {instance} = translation();
++      const match = containerMatch({
++        state: 'running',
++        labels: stableLabels({'io.lagrange.instance_id': 'replica-9'}),
++      });
++      const result = postClassify(instance, 'start', {},
++        containersSnapshot([match]));
++      assert.equal(result.status, 'ambiguous');
++      assertValidResult(result);
++    });
++
++    it('threads the caller fence state into ambiguous results', () => {
++      const {instance} = translation();
++      const result = instance.classifyPostMutation({
++        operation: 'start',
++        identity: IDENTITY,
++        payload: {},
++        postSnapshot: containersSnapshot([]),
++        fenceState: 'none',
++        ...classifyContext(),
++      });
++      assert.equal(result.status, 'ambiguous');
++      assert.equal(result.fenceState, 'none');
++      assertValidResult(result);
++    });
++  });
