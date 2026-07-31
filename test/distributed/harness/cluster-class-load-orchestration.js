@@ -40,6 +40,46 @@ const {
 import {ClusterLifecycleBase} from './cluster-class-lifecycle-base.js';
 
 const RESTART_RECOVERY_FIELD_NONE = 'none';
+
+/**
+ * Evaluate restart-recovery readiness from one reachability probe.
+ * Provisional admin reachability is not recovery: the restarted target must
+ * have consumed canonical startup authority, completed infrastructure join,
+ * and finished transaction replay before the harness may declare
+ * recovery-ready.
+ * @param {Object} options
+ * @param {Object|null} options.diagnostics
+ * @param {boolean} options.requireAdminReady
+ * @param {number|null} options.expectedPublicationEpoch
+ * @return {boolean}
+ */
+function evaluateRestartRecoveryReadiness({
+  diagnostics,
+  requireAdminReady,
+  expectedPublicationEpoch,
+}) {
+  const startupHandoff =
+    diagnostics?.startupRuntimeHandoff &&
+    typeof diagnostics.startupRuntimeHandoff === 'object' ?
+      diagnostics.startupRuntimeHandoff :
+      null;
+  const startupHandoffComplete =
+    startupHandoff !== null &&
+    startupHandoff.infrastructureJoinComplete === true &&
+    startupHandoff.canonicalAuthorityConsumed === true &&
+    startupHandoff.transactionRecoveryReady === true;
+  const readinessObserved =
+    requireAdminReady === true ?
+      diagnostics?.adminReady === true :
+      diagnostics?.adminReady === true ||
+        diagnostics?.controlPlaneRecoveryReady === true;
+  const epochMatches =
+    expectedPublicationEpoch === null ||
+    Number(diagnostics?.publishedControlPlaneEpoch) ===
+      expectedPublicationEpoch;
+  return startupHandoffComplete && readinessObserved && epochMatches;
+}
+
 const RESTART_RECOVERY_REASON_SEPARATOR = '|';
 const RESTART_RECOVERY_FIELD_SEPARATOR = ', ';
 const RESTART_RECOVERY_FIELD_VALUE_SEPARATOR = '=';
@@ -429,29 +469,11 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
           const diagnostics = await node.getReachabilityDiagnostics({
             timeoutMs: Math.max(MIN_TIMEOUT_MS, deadline - Date.now()),
           });
-          const startupHandoff =
-            diagnostics?.startupRuntimeHandoff &&
-            typeof diagnostics.startupRuntimeHandoff === 'object' ?
-              diagnostics.startupRuntimeHandoff :
-              null;
-          // Provisional admin reachability is not recovery: the restarted
-          // target must have consumed canonical startup authority, completed
-          // infrastructure join, and finished transaction replay before the
-          // harness may declare recovery-ready.
-          const startupHandoffComplete =
-            startupHandoff !== null &&
-            startupHandoff.infrastructureJoinComplete === true &&
-            startupHandoff.canonicalAuthorityConsumed === true &&
-            startupHandoff.transactionRecoveryReady === true;
-          const ready =
-            startupHandoffComplete &&
-            (requireAdminReady === true ?
-              diagnostics?.adminReady === true :
-              diagnostics?.adminReady === true ||
-                diagnostics?.controlPlaneRecoveryReady === true) &&
-            (expectedPublicationEpoch === null ||
-              Number(diagnostics?.publishedControlPlaneEpoch) ===
-                expectedPublicationEpoch);
+          const ready = evaluateRestartRecoveryReadiness({
+            diagnostics,
+            requireAdminReady,
+            expectedPublicationEpoch,
+          });
           consecutiveReadyProbeCount = ready ?
             consecutiveReadyProbeCount + 1 :
             ZERO;

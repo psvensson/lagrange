@@ -183,17 +183,38 @@ function matchShapeValid(match) {
     CONTAINER_STATES.has(match.state);
 }
 
+function matchesAllValid(identity, matches) {
+  return matches.every((match) =>
+    matchShapeValid(match) && matchLabelsValid(identity, match));
+}
+
+/**
+ * Resolve the semantic target kind from the match cohort. Rules are ordered:
+ * the first rule whose predicate holds supplies the outcome, so the decision
+ * table is the single authority for target classification.
+ */
+const TARGET_RESOLUTION_RULES = Object.freeze([
+  {
+    when: ({matches}) => !Array.isArray(matches) || matches.length === 0,
+    resolve: () => ({kind: TARGET.ABSENT}),
+  },
+  {
+    when: ({identity, matches}) => !matchesAllValid(identity, matches),
+    resolve: () => ({kind: TARGET.INVALID}),
+  },
+  {
+    when: ({matches}) => matches.length > 1,
+    resolve: () => ({kind: TARGET.MULTIPLE}),
+  },
+]);
+
 function resolveTarget(identity, snapshot) {
   const matches = snapshot.matches;
-  if (!Array.isArray(matches) || matches.length === 0) {
-    return {kind: TARGET.ABSENT};
-  }
-  for (const match of matches) {
-    if (!matchShapeValid(match) || !matchLabelsValid(identity, match)) {
-      return {kind: TARGET.INVALID};
+  for (const rule of TARGET_RESOLUTION_RULES) {
+    if (rule.when({identity, matches})) {
+      return rule.resolve();
     }
   }
-  if (matches.length > 1) return {kind: TARGET.MULTIPLE};
   return {kind: TARGET.RESOLVED, match: matches[0]};
 }
 

@@ -9,6 +9,20 @@ const BOOTSTRAP_LEADER_READINESS_OPTION_FIELD = Object.freeze({
   STARTUP_MODE: 'startupMode',
   TIMEOUT_BUDGET: 'timeoutBudget',
 });
+const LOCAL_STR_VALUE = 'value';
+
+function resolveTimeoutBudgetValue(descriptor, suppliedOptions, snapshot) {
+  if (descriptor?.enumerable === true) {
+    return snapshot[BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.TIMEOUT_BUDGET];
+  }
+  if (Object.hasOwn(descriptor || {}, LOCAL_STR_VALUE)) {
+    return descriptor.value;
+  }
+  if (typeof descriptor?.get === 'function') {
+    return Reflect.apply(descriptor.get, suppliedOptions, []);
+  }
+  return undefined;
+}
 
 function normalizeBootstrapLeaderReadinessOptions(options = {}) {
   const suppliedOptions =
@@ -24,15 +38,11 @@ function normalizeBootstrapLeaderReadinessOptions(options = {}) {
   // request owner intentionally attaches its budget as a non-enumerable field,
   // so preserve that field from its descriptor instead of relying on spread.
   const normalizedOptions = {...suppliedOptions};
-  const timeoutBudget = timeoutBudgetDescriptor?.enumerable === true ?
-    normalizedOptions[
-      BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.TIMEOUT_BUDGET
-    ] :
-    Object.hasOwn(timeoutBudgetDescriptor || {}, 'value') ?
-      timeoutBudgetDescriptor.value :
-      typeof timeoutBudgetDescriptor?.get === 'function' ?
-        Reflect.apply(timeoutBudgetDescriptor.get, suppliedOptions, []) :
-        undefined;
+  const timeoutBudget = resolveTimeoutBudgetValue(
+    timeoutBudgetDescriptor,
+    suppliedOptions,
+    normalizedOptions,
+  );
   const membershipOwnerOutcome = buildMembershipOwnerOutcome({
     membershipOwnerOutcome:
       normalizedOptions[

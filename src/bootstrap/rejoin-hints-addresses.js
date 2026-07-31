@@ -36,28 +36,42 @@ function parseClusterNodeCount(value) {
   return Math.floor(parsed);
 }
 
+function extractPeerAddressEntry(value) {
+  const peerAddress = normalizeAddress(
+    value?.[COLUMN.NODE_ADDRESS] ?? value?.node_address ?? value,
+  );
+  if (!peerAddress) {
+    return null;
+  }
+  return {
+    rowNodeId: normalizeAddress(
+      value?.[COLUMN.NODE_ID] ?? value?.node_id ?? null,
+    ),
+    peerAddress,
+  };
+}
+
+function isLocalPeerEntry(entry, normalizedNodeId, normalizedNodeAddress) {
+  if (normalizedNodeId && entry.rowNodeId === normalizedNodeId) {
+    return true;
+  }
+  return normalizedNodeAddress !== null &&
+    entry.peerAddress === normalizedNodeAddress;
+}
+
 function normalizePeerAddresses(peerAddresses, nodeId, nodeAddress) {
   const normalizedNodeId = normalizeAddress(nodeId);
   const normalizedNodeAddress = normalizeAddress(nodeAddress);
   const uniquePeerAddresses = new Set();
 
   for (const value of Array.isArray(peerAddresses) ? peerAddresses : []) {
-    const rowNodeId = normalizeAddress(
-      value?.[COLUMN.NODE_ID] ?? value?.node_id ?? null,
-    );
-    const peerAddress = normalizeAddress(
-      value?.[COLUMN.NODE_ADDRESS] ?? value?.node_address ?? value,
-    );
-    if (!peerAddress) {
-      continue;
+    const entry = extractPeerAddressEntry(value);
+    if (
+      entry &&
+      !isLocalPeerEntry(entry, normalizedNodeId, normalizedNodeAddress)
+    ) {
+      uniquePeerAddresses.add(entry.peerAddress);
     }
-    if (normalizedNodeId && rowNodeId === normalizedNodeId) {
-      continue;
-    }
-    if (normalizedNodeAddress && peerAddress === normalizedNodeAddress) {
-      continue;
-    }
-    uniquePeerAddresses.add(peerAddress);
   }
 
   return Array.from(uniquePeerAddresses);

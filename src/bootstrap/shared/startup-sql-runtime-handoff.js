@@ -187,7 +187,36 @@ function activateSteadyStateRuntimeHandoff(options) {
   }
 }
 
+/**
+ * Shape the startup runtime handoff witness payload from a distributed
+ * transaction recovery snapshot. Seed (bootstrap-service) and joiner
+ * (node-joining-backfill-merge-and-status) paths share this exact shape so
+ * readiness consumers observe one contract.
+ * @param {Object} options
+ * @param {string|null} options.startupBranch
+ * @param {boolean} options.infrastructureJoinComplete
+ * @param {Object|null} options.recovery
+ * @return {Object}
+ */
+function buildStartupRuntimeHandoffSnapshot({
+  startupBranch,
+  infrastructureJoinComplete,
+  recovery,
+}) {
+  return {
+    startupBranch: typeof startupBranch === 'string' ? startupBranch : null,
+    infrastructureJoinComplete,
+    transactionRecoveryState:
+      typeof recovery?.state === 'string' ? recovery.state : null,
+    transactionRecoveryReady: recovery?.ready === true,
+    transactionRecoverySummary: recovery?.summary || null,
+    transactionRecoveryErrorCode: recovery?.errorCode || null,
+    transactionRecoveryErrorMessage: recovery?.errorMessage || null,
+  };
+}
+
 export {
   activateSteadyStateRuntimeHandoff,
   attachSqlRuntimeToStartupOwner,
+  buildStartupRuntimeHandoffSnapshot,
 };

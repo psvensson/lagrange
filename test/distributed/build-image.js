@@ -97,6 +97,105 @@ function defaultExtractBuildProgressLine(event) {
 }
 
 /**
+ * When the tree is dirty and the config opts out of dirty rebuilds, reuse an
+ * existing image if one is present; otherwise log the missing-image notice
+ * and fall through to a rebuild.
+ * @param {Object} options
+ * @return {Promise<Object|null>} reuse result, or null when a build is needed
+ */
+async function resolveDirtyImageReuse({
+  provider,
+  config,
+  verbose,
+  gitHash,
+  gitDirty,
+  skipBuildOnDirty,
+}) {
+  if (!gitDirty || !skipBuildOnDirty) {
+    return null;
+  }
+  if (await provider.imageExists(config.image)) {
+    if (verbose) {
+      process.stdout.write(
+        IMAGE_SKIP_DIRTY_REBUILD_PREFIX + config.image + NEWLINE,
+      );
+    }
+    return {image: config.image, gitHash, gitDirty, reused: true};
+  }
+  if (verbose) {
+    process.stdout.write(
+      IMAGE_SKIP_DIRTY_REBUILD_PREFIX +
+      config.image +
+      IMAGE_SKIP_DIRTY_REBUILD_MISSING_SUFFIX +
+      NEWLINE,
+    );
+  }
+  return null;
+}
+
+/**
+ * Reuse the existing image when the tree is clean and the image's git-hash
+ * label already matches the current commit.
+ * @param {Object} options
+ * @return {Object|null} reuse result, or null when a build is needed
+ */
+function resolveCleanImageReuse({config, verbose, gitHash, gitDirty, existingHash}) {
+  if (
+    gitDirty ||
+    existingHash !== gitHash ||
+    gitHash === GIT_HASH_FALLBACK
+  ) {
+    return null;
+  }
+  if (verbose) {
+    process.stdout.write(
+      IMAGE_REUSE_LOG_PREFIX +
+      gitHash +
+      IMAGE_REUSE_SEPARATOR +
+      config.image +
+      NEWLINE,
+    );
+  }
+  return {image: config.image, gitHash, gitDirty, reused: true};
+}
+
+/**
+ * Build the per-event progress sink used while the image builds, or null when
+ * the run is quiet.
+ * @param {boolean} verbose
+ * @param {Function} extractBuildProgressLine
+ * @return {Function|null}
+ */
+function buildProgressSink(verbose, extractBuildProgressLine) {
+  if (!verbose) {
+    return null;
+  }
+  return (event) => {
+    const line = extractBuildProgressLine(event);
+    if (line) {
+      process.stdout.write(BUILD_PROGRESS_LOG_PREFIX + line + NEWLINE);
+    }
+  };
+}
+
+function logBuildStart({config, verbose, gitHash, gitDirty}) {
+  if (!verbose) {
+    return;
+  }
+  if (gitDirty) {
+    process.stdout.write(
+      IMAGE_REBUILD_DIRTY_PREFIX + config.image + NEWLINE,
+    );
+  }
+  const commitSuffix = gitHash && gitHash !== GIT_HASH_FALLBACK ?
+    IMAGE_BUILD_WITH_COMMIT_PREFIX + gitHash :
+    DOCKER_LINE_EMPTY;
+  process.stdout.write(
+    IMAGE_BUILD_LOG_PREFIX + commitSuffix + IMAGE_BUILD_LOG_SUFFIX + NEWLINE,
+  );
+}
+
+/**
  * Build the Docker image before running scenarios. Signature preserved from
  * run.js: (config, verbose, dockerOperationSink, options).
  *
@@ -133,63 +232,31 @@ async function buildImage(
     IMAGE_LABEL_GIT_HASH,
   );
 
-  if (gitDirty && skipBuildOnDirty) {
-    const imageExists = await provider.imageExists(config.image);
-    if (imageExists) {
-      if (verbose) {
-        process.stdout.write(
-          IMAGE_SKIP_DIRTY_REBUILD_PREFIX + config.image + NEWLINE,
-        );
-      }
-      return {image: config.image, gitHash, gitDirty, reused: true};
-    }
-    if (verbose) {
-      process.stdout.write(
-        IMAGE_SKIP_DIRTY_REBUILD_PREFIX +
-        config.image +
-        IMAGE_SKIP_DIRTY_REBUILD_MISSING_SUFFIX +
-        NEWLINE,
-      );
-    }
+  const dirtyReuse = await resolveDirtyImageReuse({
+    provider,
+    config,
+    verbose,
+    gitHash,
+    gitDirty,
+    skipBuildOnDirty,
+  });
+  if (dirtyReuse) {
+    return dirtyReuse;
   }
 
-  if (!gitDirty &&
-      existingHash === gitHash &&
-      gitHash !== GIT_HASH_FALLBACK) {
-    if (verbose) {
-      process.stdout.write(
-        IMAGE_REUSE_LOG_PREFIX +
-        gitHash +
-        IMAGE_REUSE_SEPARATOR +
-        config.image +
-        NEWLINE,
-      );
-    }
-    return {image: config.image, gitHash, gitDirty, reused: true};
+  const cleanReuse = resolveCleanImageReuse({
+    config,
+    verbose,
+    gitHash,
+    gitDirty,
+    existingHash,
+  });
+  if (cleanReuse) {
+    return cleanReuse;
   }
 
-  if (verbose) {
-    if (gitDirty) {
-      process.stdout.write(
-        IMAGE_REBUILD_DIRTY_PREFIX + config.image + NEWLINE,
-      );
-    }
-    const commitSuffix = gitHash && gitHash !== GIT_HASH_FALLBACK ?
-      IMAGE_BUILD_WITH_COMMIT_PREFIX + gitHash :
-      DOCKER_LINE_EMPTY;
-    process.stdout.write(
-      IMAGE_BUILD_LOG_PREFIX + commitSuffix + IMAGE_BUILD_LOG_SUFFIX + NEWLINE,
-    );
-  }
-  const progressSink = verbose ?
-    (event) => {
-      const line = extractBuildProgressLine(event);
-      if (!line) {
-        return;
-      }
-      process.stdout.write(BUILD_PROGRESS_LOG_PREFIX + line + NEWLINE);
-    } :
-    null;
+  logBuildStart({config, verbose, gitHash, gitDirty});
+  const progressSink = buildProgressSink(verbose, extractBuildProgressLine);
   await provider.buildImage(
     BUILD_CONTEXT_PATH,
     config.image,

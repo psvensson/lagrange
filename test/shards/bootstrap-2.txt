@@ -20,12 +20,13 @@ test/bootstrap/cdc-leader-only-replication.test.js
 test/bootstrap/cdc-propagation-message-group-selection.test.js
 test/bootstrap/cdc-subscription-consistency.property.test.js
 test/bootstrap/cluster-mesh-connectivity.property.test.js
+test/bootstrap/cold-node-authority-reacquisition-pressure.test.js
 test/bootstrap/create-message-group-phase.test.js
 test/bootstrap/create-self-hosted-registration.test.js
 test/bootstrap/duplicate-replica-assignment.test.js
 test/bootstrap/durable-rejoin-partition-restore-planner.test.js
 test/bootstrap/dynamic-partition-cdc-subscription.test.js
-test/bootstrap/fresh-join-multi-peer-contact.test.js
+test/bootstrap/fresh-join-via-non-seed-node.integration.test.js
 test/bootstrap/join-checkpoint-progression-characterization.test.js
 test/bootstrap/join-coordinator.test.js
 test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js
@@ -33,7 +34,6 @@ test/bootstrap/join-readiness-evaluator.test.js
 test/bootstrap/join-readiness-non-self-targeted-preservation.property.test.js
 test/bootstrap/join-readiness-startup-authority.test.js
 test/bootstrap/join-readiness-warming-node-preservation.property.test.js
-test/bootstrap/join-retry-patience-selectable.test.js
 test/bootstrap/join-startup-owner-routing.test.js
 test/bootstrap/joining-cdc-gate.test.js
 test/bootstrap/lifecycle-controller.test.js
@@ -53,6 +53,7 @@ test/bootstrap/node-joining-lease-registration.test.js
 test/bootstrap/node-joining-ready-signal-retry.test.js
 test/bootstrap/node-joining-service-canonical-readiness.test.js
 test/bootstrap/node-joining-service-join-lifecycle-resume.test.js
+test/bootstrap/node-joining-service-lifecycle-owner-handoff.test.js
 test/bootstrap/node-joining-service-mesh-reconciliation.test.js
 test/bootstrap/node-joining-service-node-state-update-ingress.test.js
 test/bootstrap/node-joining-service-register-service-retries.test.js

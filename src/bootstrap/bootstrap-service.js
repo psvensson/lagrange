@@ -43,6 +43,9 @@ import {CacheHydrationService as _CacheHydrationService} from '../cache/cache-hy
 import {
   StartupRuntimeSurfaceOwner,
 } from './shared/startup-runtime-surface-owner.js';
+import {
+  buildStartupRuntimeHandoffSnapshot,
+} from './shared/startup-sql-runtime-handoff.js';
 import {HEARTBEAT_STATE} from '../control-plane/heartbeat-service-constants.js';
 import {DEFAULT_NODE_CAPABILITIES} from '../control-plane/control-plane-constants.js';
 import {LEASE_STATE} from '../control-plane/lease-service-constants.js';
@@ -627,17 +630,11 @@ class BootstrapService extends EventEmitter {
     const recovery =
       this.runtimeHandoffOwner?.getDistributedTransactionRecoverySnapshot?.() ||
       null;
-    const transactionRecoveryState =
-      typeof recovery?.state === 'string' ? recovery.state : null;
-    return {
+    return buildStartupRuntimeHandoffSnapshot({
       startupBranch: LOCAL_STR_STARTUP_BRANCH_SEED,
       infrastructureJoinComplete: this.phase === BootstrapPhase.COMPLETE,
-      transactionRecoveryState,
-      transactionRecoveryReady: recovery?.ready === true,
-      transactionRecoverySummary: recovery?.summary || null,
-      transactionRecoveryErrorCode: recovery?.errorCode || null,
-      transactionRecoveryErrorMessage: recovery?.errorMessage || null,
-    };
+      recovery,
+    });
   }
 
   /**

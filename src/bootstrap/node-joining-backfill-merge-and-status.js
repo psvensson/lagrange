@@ -1,5 +1,8 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {NodeJoiningPublicationActivation} from './node-joining-publication-activation.js';
+import {
+  buildStartupRuntimeHandoffSnapshot,
+} from './shared/startup-sql-runtime-handoff.js';
 
 const {
   BootstrapTopologySnapshotOwner,
@@ -651,19 +654,11 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     const recovery =
       this.runtimeHandoffOwner?.getDistributedTransactionRecoverySnapshot?.() ||
       null;
-    const transactionRecoveryState =
-      typeof recovery?.state === 'string' ? recovery.state : null;
-    return {
-      startupBranch:
-        typeof this.startupMode === 'string' ? this.startupMode : null,
-      infrastructureJoinComplete:
-        this.phase === JoiningPhase.COMPLETE,
-      transactionRecoveryState,
-      transactionRecoveryReady: recovery?.ready === true,
-      transactionRecoverySummary: recovery?.summary || null,
-      transactionRecoveryErrorCode: recovery?.errorCode || null,
-      transactionRecoveryErrorMessage: recovery?.errorMessage || null,
-    };
+    return buildStartupRuntimeHandoffSnapshot({
+      startupBranch: this.startupMode,
+      infrastructureJoinComplete: this.phase === JoiningPhase.COMPLETE,
+      recovery,
+    });
   }
   /**
    * Check if any joined message group has a leader in the system cache.

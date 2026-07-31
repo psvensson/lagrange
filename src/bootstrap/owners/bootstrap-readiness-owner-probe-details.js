@@ -10,6 +10,47 @@ import {
   isLocalQueryTransportReady,
 } from '../shared/local-query-transport-readiness.js';
 
+/**
+ * Shape the startup-runtime-handoff readiness probe fields from the handoff
+ * snapshot plus the seed-contact authority observations.
+ * @param {Object} options
+ * @param {Object} options.handoff
+ * @param {Object|null} options.startupAuthority
+ * @param {Object|null} options.seedContact
+ * @return {Object}
+ */
+function buildStartupRuntimeHandoffProbeFields({
+  handoff,
+  startupAuthority,
+  seedContact,
+}) {
+  const canonicalAuthorityConsumed =
+    handoff.infrastructureJoinComplete === true && startupAuthority !== null;
+  const transactionRecoveryReady = handoff.transactionRecoveryReady === true;
+  return {
+    startupBranch:
+      typeof handoff.startupBranch === 'string' ?
+        handoff.startupBranch :
+        null,
+    infrastructureJoinComplete: handoff.infrastructureJoinComplete === true,
+    canonicalAuthorityConsumed,
+    canonicalAuthorityState:
+      typeof startupAuthority?.state === 'string' ?
+        startupAuthority.state :
+        null,
+    canonicalAuthoritySource: seedContact?.authoritySource || null,
+    transactionRecoveryState:
+      typeof handoff.transactionRecoveryState === 'string' ?
+        handoff.transactionRecoveryState :
+        null,
+    transactionRecoveryReady,
+    ready:
+      handoff.infrastructureJoinComplete === true &&
+      canonicalAuthorityConsumed &&
+      transactionRecoveryReady,
+  };
+}
+
 const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
   buildReadinessProbeResponse(snapshot, options = {}) {
     const response = {
@@ -82,35 +123,12 @@ const BOOTSTRAP_READINESS_PROBE_DETAIL_METHODS = Object.freeze({
     const startupAuthority =
       this.getSeedContactStartupAuthoritySnapshot?.() || null;
     const seedContact = this.getSeedContactDiagnosticsSnapshot?.() || null;
-    const canonicalAuthorityConsumed =
-      handoff.infrastructureJoinComplete === true &&
-      startupAuthority !== null;
-    const transactionRecoveryState =
-      typeof handoff.transactionRecoveryState === 'string' ?
-        handoff.transactionRecoveryState :
-        null;
-    const transactionRecoveryReady =
-      handoff.transactionRecoveryReady === true;
-    response[BOOTSTRAP_API_READINESS_FIELD.STARTUP_RUNTIME_HANDOFF] = {
-      startupBranch:
-        typeof handoff.startupBranch === 'string' ?
-          handoff.startupBranch :
-          null,
-      infrastructureJoinComplete:
-        handoff.infrastructureJoinComplete === true,
-      canonicalAuthorityConsumed,
-      canonicalAuthorityState:
-        typeof startupAuthority?.state === 'string' ?
-          startupAuthority.state :
-          null,
-      canonicalAuthoritySource: seedContact?.authoritySource || null,
-      transactionRecoveryState,
-      transactionRecoveryReady,
-      ready:
-        handoff.infrastructureJoinComplete === true &&
-        canonicalAuthorityConsumed &&
-        transactionRecoveryReady,
-    };
+    response[BOOTSTRAP_API_READINESS_FIELD.STARTUP_RUNTIME_HANDOFF] =
+      buildStartupRuntimeHandoffProbeFields({
+        handoff,
+        startupAuthority,
+        seedContact,
+      });
     return response;
   },
   appendBootstrapJoinProjectionFields(response, options = {}) {

@@ -774,6 +774,32 @@ class ClusterLifecycleBase {
    * Start the cluster: create network, start seed, wait for
    * bootstrap API, start joiners sequentially, wait for ACTIVE.
    */
+  /**
+   * Create (or reuse) the shared bridge network for the cluster. In
+   * host-network mode containers bind the host NIC directly, so there is no
+   * shared bridge to create: _networkId stays null and chaos network ops are
+   * not applicable across hosts.
+   * @param {Object} provider
+   * @param {boolean} reuseContainers
+   * @private
+   */
+  async _provisionClusterNetwork(provider, reuseContainers) {
+    if (this._hostNetworkMode) {
+      this._networkId = null;
+      return;
+    }
+    this._recordClusterStage(CLUSTER_STAGE_SETUP_NETWORK_CREATING, {
+      networkName: this._networkName,
+    });
+    const networkLabels = {
+      [LABELS.CLUSTER]: this._clusterId,
+    };
+    const net = reuseContainers ?
+      await provider.ensureNetwork(this._networkName, networkLabels) :
+      await provider.createNetwork(this._networkName, networkLabels);
+    this._networkId = net.id;
+  }
+
   async start() {
     if (!this._cleanupUnregister) {
       this._cleanupUnregister = registerClusterCleanup(
@@ -800,23 +826,7 @@ class ClusterLifecycleBase {
     this._networkName = reuseContainers ?
       this._buildReusableNetworkName() :
       NETWORK.NAME_PREFIX + '-' + this._clusterId.slice(0, 8);
-    if (this._hostNetworkMode) {
-      // Host-network mode: containers bind the host NIC directly, so there is
-      // no shared bridge to create. _networkId stays null and chaos network
-      // ops are not applicable across hosts.
-      this._networkId = null;
-    } else {
-      this._recordClusterStage(CLUSTER_STAGE_SETUP_NETWORK_CREATING, {
-        networkName: this._networkName,
-      });
-      const networkLabels = {
-        [LABELS.CLUSTER]: this._clusterId,
-      };
-      const net = reuseContainers ?
-        await provider.ensureNetwork(this._networkName, networkLabels) :
-        await provider.createNetwork(this._networkName, networkLabels);
-      this._networkId = net.id;
-    }
+    await this._provisionClusterNetwork(provider, reuseContainers);
     this._recordClusterStage(CLUSTER_STAGE_SETUP_NETWORK_CREATED, {
       networkName: this._networkName,
       networkId: this._networkId,
