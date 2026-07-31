@@ -488,7 +488,7 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
   if (canonicalProblem) throw new Error(canonicalProblem);
 
   const admission = inspectCommitChangeRefAdmission(
-    root, changeRef, changeInspection);
+    root, changeRef, changeInspection, {questId: quest.id});
   if (!admission.ok) throw new Error(admission.problem);
 
   const log = readLog(root, quest.id);

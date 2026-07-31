@@ -171,3 +171,27 @@ tap.test('commit ref still refuses foreign workflow paths in the range', (t) => 
   t.match(inspection.problems.join('; '), /workflow/);
   t.end();
 });
+
+// A discharge attempt's own gate-advisory and evidence-ingest events append to
+// the quest's OWN solve/log NDJSON during the attempt, before the admission
+// clean-check runs. That Solver-owned bookkeeping is not source drift the
+// pinned receipt must cover, so it must not block admission; a dirty genuine
+// source path must still refuse.
+tap.test('admission tolerates dirty own-quest solve/log but not dirty source', (t) => {
+  const fx = bookkeepingFixture();
+  const inspection = inspectChangeArtifact(fx.root, fx.quest, fx.ref);
+  const opts = {questId: fx.quest.id};
+  // Dirty only this quest's own event log: admissible.
+  fs.appendFileSync(path.join(fx.root, 'solve/log/q.ndjson'), '{}\n');
+  t.same(
+    inspectCommitChangeRefAdmission(fx.root, fx.ref, inspection, opts),
+    {applicable: true, ok: true},
+    'dirty own-quest solve/log must not block admission');
+  // Now dirty a genuine source path as well: still refused.
+  fs.writeFileSync(path.join(fx.root, 'src/a.js'), 'export const a = 9;\n');
+  const blocked = inspectCommitChangeRefAdmission(
+    fx.root, fx.ref, inspection, opts);
+  t.equal(blocked.ok, false, 'dirty source path must still refuse admission');
+  t.match(blocked.problem, /uncommitted changes/);
+  t.end();
+});

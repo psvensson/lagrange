@@ -36,7 +36,8 @@ export function isCommitChangeRef(changeRef) {
 // HEAD (the claimed delta must be in current history, not a dangling side
 // branch). Returns one typed admission result; a non-commit ref is explicitly
 // not applicable rather than encoded as a null problem.
-export function inspectCommitChangeRefAdmission(root, changeRef, inspection) {
+export function inspectCommitChangeRefAdmission(
+  root, changeRef, inspection, options = {}) {
   const commitRef = parseCommitChangeRef(changeRef);
   if (!commitRef) return {applicable: false, ok: true};
   const head = spawnSync('git', ['rev-parse', 'HEAD'],
@@ -52,7 +53,17 @@ export function inspectCommitChangeRefAdmission(root, changeRef, inspection) {
         LOCAL_STR_COMMIT_DELTA_NOT_IN_HISTORY,
     };
   }
-  const paths = (inspection?.changedPaths || []);
+  // The clean-tree guarantee covers genuine source drift only. A commit: range
+  // can legitimately name the recording quest's OWN solve/ bookkeeping (its
+  // event log, attempt diffs, report) — and a discharge attempt's own
+  // gate-advisory and evidence-ingest events append to that log during the
+  // attempt, before this check runs. That Solver-owned bookkeeping is not drift
+  // the pinned receipt must cover, so it is excluded here exactly as the
+  // scope classification above excludes it. Genuine source paths stay strict.
+  const questId = options.questId ?? inspection?.quest?.id ??
+    inspection?.questId ?? null;
+  const paths = (inspection?.changedPaths || [])
+    .filter((filePath) => !isOwnQuestSolveBookkeeping(filePath, questId));
   if (paths.length > 0) {
     const status = spawnSync('git', ['status', '--porcelain', '--', ...paths],
       {cwd: root, encoding: 'utf8'});

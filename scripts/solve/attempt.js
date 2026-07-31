@@ -165,7 +165,7 @@ export function runAttemptCommand(root, args) {
   );
   if (canonicalProblem) throw new Error(canonicalProblem);
   const admission = inspectCommitChangeRefAdmission(
-    root, changeRef, changeInspection);
+    root, changeRef, changeInspection, {questId: quest.id});
   if (!admission.ok) throw new Error(admission.problem);
   // Machine-checkable quality findings never earn a verifier round: run the
   // changed-path lint and literal-guideline checkers before this attempt
