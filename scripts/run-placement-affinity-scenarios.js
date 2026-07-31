@@ -152,6 +152,8 @@ const SCENARIOS = {
     'test/partition/partition-split-merge-manager.test.js',
   ],
   'seed-join-gate-authoritative-refresh': [
+    // Also seals live-attribution outcomes: confirmed ready/missing, failed or
+    // unavailable authority, exhausted budget, and no-read hit/probe paths.
     'test/bootstrap/bootstrap-api-seed-join-gate-authoritative-refresh.test.js',
   ],
   'join-retry-patience-selectable': [

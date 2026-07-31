@@ -7,13 +7,32 @@ import {buildMembershipOwnerOutcome} from
 const BOOTSTRAP_LEADER_READINESS_OPTION_FIELD = Object.freeze({
   MEMBERSHIP_OWNER_OUTCOME: 'membershipOwnerOutcome',
   STARTUP_MODE: 'startupMode',
+  TIMEOUT_BUDGET: 'timeoutBudget',
 });
 
 function normalizeBootstrapLeaderReadinessOptions(options = {}) {
-  const normalizedOptions =
+  const suppliedOptions =
     options && typeof options === 'object' && !Array.isArray(options) ?
       options :
       {};
+  const timeoutBudgetDescriptor = Object.getOwnPropertyDescriptor(
+    suppliedOptions,
+    BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.TIMEOUT_BUDGET,
+  );
+  // Snapshot caller-owned options once so accessor-backed fields cannot change
+  // between membership normalization and timeout-budget propagation. The
+  // request owner intentionally attaches its budget as a non-enumerable field,
+  // so preserve that field from its descriptor instead of relying on spread.
+  const normalizedOptions = {...suppliedOptions};
+  const timeoutBudget = timeoutBudgetDescriptor?.enumerable === true ?
+    normalizedOptions[
+      BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.TIMEOUT_BUDGET
+    ] :
+    Object.hasOwn(timeoutBudgetDescriptor || {}, 'value') ?
+      timeoutBudgetDescriptor.value :
+      typeof timeoutBudgetDescriptor?.get === 'function' ?
+        Reflect.apply(timeoutBudgetDescriptor.get, suppliedOptions, []) :
+        undefined;
   const membershipOwnerOutcome = buildMembershipOwnerOutcome({
     membershipOwnerOutcome:
       normalizedOptions[
@@ -32,16 +51,20 @@ function normalizeBootstrapLeaderReadinessOptions(options = {}) {
       membershipOwnerOutcome.startupMode,
   };
   if (
-    Object.hasOwn(normalizedOptions, 'timeoutBudget') &&
-    normalizedOptions.timeoutBudget &&
-    typeof normalizedOptions.timeoutBudget === 'object'
+    timeoutBudgetDescriptor &&
+    timeoutBudget &&
+    typeof timeoutBudget === 'object'
   ) {
-    Object.defineProperty(result, 'timeoutBudget', {
-      value: normalizedOptions.timeoutBudget,
-      enumerable: false,
-      configurable: true,
-      writable: false,
-    });
+    Object.defineProperty(
+      result,
+      BOOTSTRAP_LEADER_READINESS_OPTION_FIELD.TIMEOUT_BUDGET,
+      {
+        value: timeoutBudget,
+        enumerable: false,
+        configurable: true,
+        writable: false,
+      },
+    );
   }
   return result;
 }

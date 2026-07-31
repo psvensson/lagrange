@@ -543,6 +543,9 @@ class BootstrapAPI {
               null :
               this.getMissingServiceLeaders(),
           getLogger: () => this.logger,
+          // Keep the miss-path refresh on the same canonical authority already
+          // owned by BootstrapAPI; the readiness owner must not construct a
+          // second cache or routing authority.
           getAuthoritativeControlPlaneView: () =>
             this.getAuthoritativeControlPlaneView(),
         },

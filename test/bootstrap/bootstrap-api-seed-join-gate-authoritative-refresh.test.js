@@ -5,6 +5,8 @@ import {
   SERVICE_TYPE,
   TABLES,
 } from '../../src/constants/index.js';
+import {createTimeoutBudget} from
+  '../../src/control-plane/timeout-budget.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {initializeTestEnvironment} from './bootstrap-api-test-fixtures.js';
 
@@ -126,6 +128,12 @@ test('seed join gate refreshes stale leader metadata from bounded authoritative 
       'fresh authoritative leader metadata should admit the joiner');
     t.equal(responseBody.leaderReadiness.ready, true,
       'the bootstrap response should report a satisfied leader gate');
+    t.same(responseBody.leaderReadiness.authoritativeLeaderRefresh, {
+      outcome: 'confirmed_ready',
+      partitionIds: [TEST_PARTITION_ID, TEST_SECOND_PARTITION_ID],
+      queryTimeoutMs: 1500,
+      remainingMissingCount: 0,
+    }, 'the response should attribute readiness to the bounded authority read');
     t.equal(calls.length, 2,
       'the miss path should use a fixed two-read aggregate refresh');
     t.same(calls.map((call) => call.tableName).sort(), [
@@ -165,6 +173,12 @@ test('seed join gate still rejects genuinely leaderless authoritative metadata',
     t.equal(status.ready, false,
       'missing authoritative leader evidence should preserve the rejection');
     t.same(status.missingPartitionLeaders, [TEST_PARTITION_ID]);
+    t.same(status.authoritativeLeaderRefresh, {
+      outcome: 'confirmed_missing',
+      partitionIds: [TEST_PARTITION_ID],
+      queryTimeoutMs: 1500,
+      remainingMissingCount: 2,
+    }, 'the status should distinguish confirmed absence from stale cache');
     t.equal(calls.length, 2,
       'a cache miss should perform only the fixed aggregate refresh');
   });
@@ -192,8 +206,121 @@ test('seed join gate preserves rejection when authoritative refresh is unavailab
     t.equal(status.ready, false,
       'refresh failure should fail open to the existing not-ready result');
     t.same(status.missingPartitionLeaders, [TEST_PARTITION_ID]);
+    t.same(status.authoritativeLeaderRefresh, {
+      outcome: 'read_failed',
+      partitionIds: [TEST_PARTITION_ID],
+      queryTimeoutMs: 1500,
+      remainingMissingCount: null,
+    }, 'the status should attribute an unavailable authoritative read');
     t.equal(calls.length, 2,
       'refresh failure should not trigger retries or per-partition fanout');
+  });
+
+test('seed join gate attributes missing authority and exhausted budgets without reads',
+  async (t) => {
+    initializeTestEnvironment();
+    const partitions = [
+      createPartitionRow(TEST_PARTITION_ID, TABLES.NODES),
+    ];
+    const unavailableApi = new BootstrapAPI({
+      seedNodeId: TEST_LEADER_NODE_ID,
+      systemTableCache: createSystemTableCache({partitions}),
+    });
+
+    const unavailableStatus =
+      await unavailableApi.waitForServiceLeaders();
+    t.equal(unavailableStatus.ready, false);
+    t.same(unavailableStatus.authoritativeLeaderRefresh, {
+      outcome: 'authority_unavailable',
+      partitionIds: [TEST_PARTITION_ID],
+      queryTimeoutMs: 1500,
+      remainingMissingCount: null,
+    }, 'a missing authority should remain distinct from confirmed absence');
+
+    const calls = [];
+    const exhaustedApi = new BootstrapAPI({
+      seedNodeId: TEST_LEADER_NODE_ID,
+      systemTableCache: createSystemTableCache({partitions}),
+      authoritativeControlPlaneView: createAuthoritativeView({
+        partitionRows: partitions,
+        serviceRows: [],
+        calls,
+      }),
+    });
+    const timeoutBudget = createTimeoutBudget({
+      configuredBudgetMs: 1,
+      startedAtMs: Date.now() - 10,
+    });
+    let timeoutBudgetReadCount = 0;
+    const readinessOptions = {};
+    Object.defineProperty(readinessOptions, 'timeoutBudget', {
+      get() {
+        timeoutBudgetReadCount += 1;
+        return timeoutBudget;
+      },
+      enumerable: false,
+      configurable: true,
+    });
+
+    const exhaustedStatus =
+      await exhaustedApi.waitForServiceLeaders(readinessOptions);
+    t.equal(exhaustedStatus.ready, false);
+    t.same(exhaustedStatus.authoritativeLeaderRefresh, {
+      outcome: 'budget_exhausted',
+      partitionIds: [TEST_PARTITION_ID],
+      queryTimeoutMs: 0,
+      remainingMissingCount: null,
+    }, 'an exhausted parent budget should skip the authoritative reads');
+    t.equal(timeoutBudgetReadCount, 1,
+      'caller-owned option accessors should be snapshotted exactly once');
+    t.equal(
+      Object.getOwnPropertyDescriptor(readinessOptions, 'timeoutBudget')
+        .enumerable,
+      false,
+      'the fixture should match the request owner non-enumerable budget seam',
+    );
+    t.equal(calls.length, 0,
+      'an exhausted budget must not start either aggregate read');
+  });
+
+test('seed join gate normalizes unsafe authoritative query timeout values',
+  async (t) => {
+    initializeTestEnvironment();
+    const unsafeTimeouts = [
+      Number.NaN,
+      Number.POSITIVE_INFINITY,
+      Number.NEGATIVE_INFINITY,
+      -0,
+      0.5,
+      1501,
+      Number.MAX_SAFE_INTEGER,
+      Number.MAX_SAFE_INTEGER + 1,
+    ];
+
+    for (const queryTimeoutMs of unsafeTimeouts) {
+      const calls = [];
+      const partitions = [
+        createPartitionRow(TEST_PARTITION_ID, TABLES.NODES),
+      ];
+      const api = new BootstrapAPI({
+        seedNodeId: TEST_LEADER_NODE_ID,
+        systemTableCache: createSystemTableCache({partitions}),
+        authoritativeControlPlaneView: createAuthoritativeView({
+          partitionRows: partitions,
+          serviceRows: [],
+          calls,
+        }),
+      });
+
+      const status = await api.waitForServiceLeaders({queryTimeoutMs});
+
+      t.equal(status.authoritativeLeaderRefresh.queryTimeoutMs, 1500,
+        `unsafe timeout ${String(queryTimeoutMs)} should use the default`);
+      t.equal(calls.length, 2,
+        'normalization should retain the fixed aggregate read count');
+      t.ok(calls.every((call) => call.options.queryTimeoutMs === 1500),
+        'each aggregate read should receive the normalized safe timeout');
+    }
   });
 
 test('seed join gate performs no authoritative reads on cache-hit and probe paths',
@@ -221,6 +348,8 @@ test('seed join gate performs no authoritative reads on cache-hit and probe path
 
     const hitStatus = await hitApi.waitForServiceLeaders();
     t.equal(hitStatus.ready, true, 'cached leader metadata should stay ready');
+    t.equal(hitStatus.authoritativeLeaderRefresh, null,
+      'a cache hit should report that no authoritative refresh ran');
     t.equal(calls.length, 0,
       'the cache-hit path should not consult authoritative storage');
 
@@ -235,6 +364,8 @@ test('seed join gate performs no authoritative reads on cache-hit and probe path
     const probeStatus = missApi.getLeaderReadinessStatusForProbe();
     t.equal(probeStatus.ready, false,
       'the high-frequency probe should remain cache-only');
+    t.equal(probeStatus.authoritativeLeaderRefresh, null,
+      'the cache-only probe should not claim an authoritative outcome');
     t.equal(calls.length, 0,
       'the high-frequency probe should never trigger authoritative reads');
   });

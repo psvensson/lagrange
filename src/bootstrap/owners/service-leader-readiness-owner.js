@@ -31,6 +31,13 @@ import {
 
 const LOCAL_STR_ALL_SERVICE_LEADERS_READY = 'All service leaders ready';
 const AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS = 1500;
+const AUTHORITATIVE_LEADER_REFRESH_OUTCOME = Object.freeze({
+  AUTHORITY_UNAVAILABLE: 'authority_unavailable',
+  BUDGET_EXHAUSTED: 'budget_exhausted',
+  CONFIRMED_MISSING: 'confirmed_missing',
+  CONFIRMED_READY: 'confirmed_ready',
+  READ_FAILED: 'read_failed',
+});
 
 const BOOTSTRAP_REQUIRED_LEADER_TABLES = Object.freeze([
   TABLES.NODES,
@@ -100,6 +107,25 @@ function createAuthoritativeLeaderMetadataCache(partitions, services) {
 
 function authoritativeLeaderReadsSucceeded(results) {
   return results.every((result) => result?.success === true);
+}
+
+function buildAuthoritativeLeaderRefreshResult({
+  outcome,
+  partitionIds,
+  queryTimeoutMs,
+  missing = null,
+}) {
+  return {
+    missing,
+    diagnostics: {
+      outcome,
+      partitionIds: [...partitionIds],
+      queryTimeoutMs,
+      remainingMissingCount: missing ?
+        getMissingSystemServiceLeaderCount(missing) :
+        null,
+    },
+  };
 }
 
 class ServiceLeaderReadinessOwner {
@@ -372,9 +398,13 @@ class ServiceLeaderReadinessOwner {
   }
 
   resolveAuthoritativeLeaderRefreshQueryTimeoutMs(options = {}) {
+    const suppliedQueryTimeoutMs = options.queryTimeoutMs;
     const configuredTimeoutMs =
-      Number.isFinite(options.queryTimeoutMs) && options.queryTimeoutMs > 0 ?
-        Math.floor(options.queryTimeoutMs) :
+      typeof suppliedQueryTimeoutMs === 'number' &&
+      suppliedQueryTimeoutMs >= 1 &&
+      suppliedQueryTimeoutMs <=
+        AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS ?
+        Math.floor(suppliedQueryTimeoutMs) :
         AUTHORITATIVE_LEADER_REFRESH_QUERY_TIMEOUT_MS;
     if (!options.timeoutBudget || typeof options.timeoutBudget !== 'object') {
       return configuredTimeoutMs;
@@ -417,12 +447,23 @@ class ServiceLeaderReadinessOwner {
       this.getAuthoritativeControlPlaneView();
     const queryTimeoutMs =
       this.resolveAuthoritativeLeaderRefreshQueryTimeoutMs(options);
-    if (
-      partitionIds.length === 0 ||
-      typeof authoritativeControlPlaneView?.readRows !== 'function' ||
-      queryTimeoutMs <= 0
-    ) {
+    if (partitionIds.length === 0) {
       return null;
+    }
+    if (typeof authoritativeControlPlaneView?.readRows !== 'function') {
+      return buildAuthoritativeLeaderRefreshResult({
+        outcome:
+          AUTHORITATIVE_LEADER_REFRESH_OUTCOME.AUTHORITY_UNAVAILABLE,
+        partitionIds,
+        queryTimeoutMs,
+      });
+    }
+    if (queryTimeoutMs <= 0) {
+      return buildAuthoritativeLeaderRefreshResult({
+        outcome: AUTHORITATIVE_LEADER_REFRESH_OUTCOME.BUDGET_EXHAUSTED,
+        partitionIds,
+        queryTimeoutMs,
+      });
     }
 
     const readOptions = {
@@ -447,7 +488,11 @@ class ServiceLeaderReadinessOwner {
         ),
       ]);
       if (!authoritativeLeaderReadsSucceeded(results)) {
-        return null;
+        return buildAuthoritativeLeaderRefreshResult({
+          outcome: AUTHORITATIVE_LEADER_REFRESH_OUTCOME.READ_FAILED,
+          partitionIds,
+          queryTimeoutMs,
+        });
       }
       const [partitionResult, serviceResult] = results;
 
@@ -468,9 +513,22 @@ class ServiceLeaderReadinessOwner {
         COLUMN.PARTITION_ID,
         metadataCache,
       );
-      return this.applyAuthoritativePartitionLeaderMetadata(missing, metadata);
+      const refreshedMissing =
+        this.applyAuthoritativePartitionLeaderMetadata(missing, metadata);
+      return buildAuthoritativeLeaderRefreshResult({
+        outcome: this.countMissingLeaderInfo(refreshedMissing) === 0 ?
+          AUTHORITATIVE_LEADER_REFRESH_OUTCOME.CONFIRMED_READY :
+          AUTHORITATIVE_LEADER_REFRESH_OUTCOME.CONFIRMED_MISSING,
+        partitionIds,
+        queryTimeoutMs,
+        missing: refreshedMissing,
+      });
     } catch (_error) {
-      return null;
+      return buildAuthoritativeLeaderRefreshResult({
+        outcome: AUTHORITATIVE_LEADER_REFRESH_OUTCOME.READ_FAILED,
+        partitionIds,
+        queryTimeoutMs,
+      });
     }
   }
 
@@ -491,17 +549,19 @@ class ServiceLeaderReadinessOwner {
     );
     const cachedBlockingMissing =
       this.getBlockingLeaderStatusForReadiness(cachedMissing);
-    const authoritativeMissing =
+    const authoritativeRefresh =
       this.countMissingLeaderInfo(cachedBlockingMissing) === 0 ?
         null :
         await this.refreshAuthoritativePartitionLeaderStatus(
           cachedMissing,
           options,
         );
-    const missing = authoritativeMissing || cachedMissing;
+    const missing = authoritativeRefresh?.missing || cachedMissing;
     const blockingMissing = this.getBlockingLeaderStatusForReadiness(missing);
     const missingCount = this.countMissingLeaderInfo(blockingMissing);
     const ready = missingCount === 0;
+    const authoritativeLeaderRefresh =
+      authoritativeRefresh?.diagnostics || null;
 
     if (ready) {
       this.getLogger().info(
@@ -509,6 +569,7 @@ class ServiceLeaderReadinessOwner {
         {
           seedNodeId: this.getSeedNodeId(),
           elapsedMs: 0,
+          authoritativeLeaderRefresh,
         },
       );
     } else {
@@ -522,10 +583,16 @@ class ServiceLeaderReadinessOwner {
           missing.missingMessageGroupLeaderNodes || [],
         nonBlockingMissingMessageGroupLeaderAddresses:
           missing.missingMessageGroupLeaderAddresses || [],
+        authoritativeLeaderRefresh,
       });
     }
 
-    return this.buildLeaderStatusResult(ready, missing, missing);
+    return this.buildLeaderStatusResult(
+      ready,
+      missing,
+      missing,
+      authoritativeLeaderRefresh,
+    );
   }
 
   countMissingLeaderInfo(missing) {
@@ -599,10 +666,16 @@ class ServiceLeaderReadinessOwner {
     return leaders;
   }
 
-  buildLeaderStatusResult(ready, resultMissing = {}, fullMissing = resultMissing) {
+  buildLeaderStatusResult(
+    ready,
+    resultMissing = {},
+    fullMissing = resultMissing,
+    authoritativeLeaderRefresh = null,
+  ) {
     return {
       ready,
       ...resultMissing,
+      authoritativeLeaderRefresh,
       nonBlockingMissingMessageGroupLeaders:
         fullMissing.missingMessageGroupLeaders || [],
       nonBlockingMissingMessageGroupLeaderNodes:

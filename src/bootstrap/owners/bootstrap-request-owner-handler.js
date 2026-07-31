@@ -433,6 +433,8 @@ const bootstrapRequestOwnerHandlerMethods = {
           missingPartitionLeaderNodes: leaderStatus.missingPartitionLeaderNodes,
           missingMessageGroupLeaderNodes:
             leaderStatus.missingMessageGroupLeaderNodes,
+          authoritativeLeaderRefresh:
+            leaderStatus.authoritativeLeaderRefresh || null,
         });
         this.logBootstrapRequestDeferred({
           nodeId,
@@ -558,6 +560,8 @@ const bootstrapRequestOwnerHandlerMethods = {
             leaderStatus.missingMessageGroupLeaderNodes || [],
           missingMessageGroupLeaderAddresses:
             leaderStatus.missingMessageGroupLeaderAddresses || [],
+          authoritativeLeaderRefresh:
+            leaderStatus.authoritativeLeaderRefresh || null,
         },
         timestamp: responseTimestamp,
       };
