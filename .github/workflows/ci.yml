@@ -146,8 +146,10 @@ jobs:
 
       # The gate captures each manifest command's output to a file, so on
       # failure the job log alone cannot say which command broke. Print the
-      # receipt's verdicts and the tail of every failing command's captured
-      # output.
+      # receipt's verdicts, then every failing command's failure lines (the
+      # runner prints `not ok <file>` plus failing shard summaries) BEFORE a
+      # bounded tail — a bare tail can truncate away the exact lines that
+      # name the failing test.
       - name: Dump gate receipt on failure
         if: failure()
         run: |
@@ -159,6 +161,13 @@ jobs:
           jq -r '.commands[] | select(.status == "FAIL") | (.artifactIdentity.path // .requiredArtifact.path // empty)' "$receipt" |
           while read -r artifact; do
             [ -f "$artifact" ] || continue
+            echo "=== failures in $artifact ==="
+            jq -r '.stdout // .output // empty' "$artifact" 2>/dev/null |
+              grep -E '^(not ok|# test-files.*fail=[1-9]|FAIL|.*[Ee]rror)' |
+              head -100 || true
+            echo "=== failing shard details in $artifact ==="
+            jq -r '.stdout // .output // empty' "$artifact" 2>/dev/null |
+              grep -A 60 '^not ok' | head -200 || true
             echo "=== tail of $artifact ==="
             jq -r '.stdout // .output // .' "$artifact" 2>/dev/null | tail -200 || tail -c 20000 "$artifact"
           done
