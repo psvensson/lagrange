@@ -1,4 +1,6 @@
 import {CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER} from './cluster-active-wait-progress-layer.js';
+import {isRecord as isCanonicalJsonRecord} from
+  '../../../src/utils/canonical-json-data.js';
 const {
   ACTIVE_WAIT_BLOCKER_HISTORY_MAX_ENTRIES,
   ACTIVE_WAIT_BLOCKER_NONE,
@@ -30,6 +32,16 @@ const {
 const BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD =
   'bootstrapJoinProjection';
 const STARTUP_RUNTIME_HANDOFF_READINESS_FIELD = 'startupRuntimeHandoff';
+const numberIsFinite = Number.isFinite;
+const numberIsInteger = Number.isInteger;
+const numberIsSafeInteger = Number.isSafeInteger;
+const objectCreate = Object.create;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const objectIs = Object.is;
+const reflectOwnKeys = Reflect.ownKeys;
+const INVALID_PLAIN_DATA = objectCreate(null);
+const NEGATIVE_ZERO = -0;
 const ACTIVE_WAIT_PROGRESS_OBSERVATION_SEPARATOR = '/';
 const ACTIVE_WAIT_PROGRESS_REASON_SEPARATOR = '|';
 const ACTIVE_WAIT_PROGRESS_VALUE_NONE = 'none';
@@ -925,17 +937,61 @@ function resolveReadinessPhaseRank(phase) {
   return READINESS_PHASE_RANK[normalizedPhase] || ZERO;
 }
 
-function cloneOwnDataRecord(record, field) {
-  const descriptor = Object.getOwnPropertyDescriptor(record, field);
-  const value = descriptor && Object.hasOwn(descriptor, 'value') ?
-    descriptor.value :
-    null;
-  if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    return null;
+function plainDataAncestorContains(ancestor, value) {
+  let cursor = ancestor;
+  while (cursor) {
+    if (cursor.value === value) return true;
+    cursor = cursor.parent;
   }
+  return false;
+}
+
+function plainDataRecordSupported(value) {
+  return isCanonicalJsonRecord(value);
+}
+
+function clonePlainData(value, ancestor = null) {
+  if (value === null || typeof value === 'string' ||
+      typeof value === 'boolean') {
+    return value;
+  }
+  if (typeof value === 'number') {
+    const unsafeInteger = numberIsInteger(value) &&
+      !numberIsSafeInteger(value);
+    return numberIsFinite(value) && !objectIs(value, NEGATIVE_ZERO) &&
+      !unsafeInteger ?
+      value :
+      INVALID_PLAIN_DATA;
+  }
+  if (!plainDataRecordSupported(value) ||
+      plainDataAncestorContains(ancestor, value)) {
+    return INVALID_PLAIN_DATA;
+  }
+
+  const nextAncestor = objectCreate(null);
+  nextAncestor.value = value;
+  nextAncestor.parent = ancestor;
+  const clone = objectCreate(null);
+  for (const key of reflectOwnKeys(value)) {
+    if (typeof key !== 'string') return INVALID_PLAIN_DATA;
+    const descriptor = objectGetOwnPropertyDescriptor(value, key);
+    if (!descriptor || descriptor.enumerable !== true ||
+        !objectHasOwn(descriptor, 'value')) {
+      return INVALID_PLAIN_DATA;
+    }
+    const clonedValue = clonePlainData(descriptor.value, nextAncestor);
+    if (clonedValue === INVALID_PLAIN_DATA) return INVALID_PLAIN_DATA;
+    clone[key] = clonedValue;
+  }
+  return clone;
+}
+
+function cloneOwnDataRecord(record, field) {
   try {
-    const clone = JSON.parse(JSON.stringify(value));
-    return clone && typeof clone === 'object' && !Array.isArray(clone) ?
+    const descriptor = objectGetOwnPropertyDescriptor(record, field);
+    if (!descriptor || !objectHasOwn(descriptor, 'value')) return null;
+    const clone = clonePlainData(descriptor.value);
+    return clone !== INVALID_PLAIN_DATA && plainDataRecordSupported(clone) ?
       clone :
       null;
   } catch {
