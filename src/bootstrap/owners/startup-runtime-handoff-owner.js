@@ -5,6 +5,7 @@ import {
 const LOCAL_STR_FUNCTION = 'function';
 
 const CONTROL_PLANE_BACKGROUND_WRITER_RETRY_DELAY_MS = 1000;
+const TRANSACTION_RECOVERY_OUTCOME_INCOMPLETE = 'transaction_recovery_incomplete';
 const TRANSACTION_RECOVERY_STATE = Object.freeze({
   NOT_STARTED: 'not_started',
   PENDING: 'pending',
@@ -21,6 +22,7 @@ class StartupRuntimeHandoffOwner {
     this.transactionRecoverySummary = null;
     this.transactionRecoveryErrorCode = null;
     this.transactionRecoveryErrorMessage = null;
+    this.transactionRecoveryOutcome = null;
   }
 
   getCompatibilityService() {
@@ -194,6 +196,15 @@ class StartupRuntimeHandoffOwner {
       typeof error?.errorCode === 'string' ? error.errorCode : null;
     this.transactionRecoveryErrorMessage =
       error?.message || String(error);
+    this.transactionRecoveryOutcome = Object.freeze({
+      kind: TRANSACTION_RECOVERY_OUTCOME_INCOMPLETE,
+      errorCode: this.transactionRecoveryErrorCode,
+      decisionDimension:
+        typeof error?.decisionDimension === 'string' ?
+          error.decisionDimension :
+          null,
+      routeSource: this.delegates.getRouteSource?.() || null,
+    });
   }
 
   recordDistributedTransactionRecoveryCompletion(summary) {
@@ -202,6 +213,7 @@ class StartupRuntimeHandoffOwner {
       summary && typeof summary === 'object' ? summary : null;
     this.transactionRecoveryErrorCode = null;
     this.transactionRecoveryErrorMessage = null;
+    this.transactionRecoveryOutcome = null;
   }
 
   trackDistributedTransactionRecovery(action) {
@@ -209,6 +221,7 @@ class StartupRuntimeHandoffOwner {
     this.transactionRecoverySummary = null;
     this.transactionRecoveryErrorCode = null;
     this.transactionRecoveryErrorMessage = null;
+    this.transactionRecoveryOutcome = null;
     let result;
     try {
       result = action();
@@ -244,6 +257,7 @@ class StartupRuntimeHandoffOwner {
       summary: this.transactionRecoverySummary,
       errorCode: this.transactionRecoveryErrorCode,
       errorMessage: this.transactionRecoveryErrorMessage,
+      outcome: this.transactionRecoveryOutcome,
     });
   }
 

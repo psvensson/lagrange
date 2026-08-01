@@ -1,0 +1,304 @@
+{
+  "timestamp": "2026-08-01T06:56:12.242Z",
+  "summary": {
+    "total": 1,
+    "passed": 0,
+    "failed": 1,
+    "duration": 47
+  },
+  "optimizationSummary": {
+    "totalPriorityItems": 0,
+    "scenariosWithPriorities": 0,
+    "topComponents": [],
+    "topPartitions": []
+  },
+  "standardSummary": {
+    "historicalReportsConsidered": 1,
+    "scenariosComparedToPrevious": 1,
+    "scenariosComparedToPostgresBaseline": 0,
+    "diagnosticsCoverageSummary": {
+      "scenariosWithCoverage": 0,
+      "scenariosWithoutCoverage": 1,
+      "totalSamples": 0,
+      "coverageRate": 0,
+      "scenarios": [
+        {
+          "scenario": "transaction-recovery-poison-row-live",
+          "status": "unavailable",
+          "reason": "not_reported",
+          "sampleCount": 0
+        }
+      ]
+    },
+    "writePathAttributionSummary": {
+      "scenariosWithDiagnostics": 0,
+      "topPhases": []
+    },
+    "scaleEfficiencySummary": {
+      "observationCount": 0,
+      "comparableGroupCount": 0,
+      "groups": [],
+      "topOpportunities": []
+    },
+    "scenarios": [
+      {
+        "scenario": "transaction-recovery-poison-row-live",
+        "similarityKey": "transaction-recovery-poison-row-live|default",
+        "current": {
+          "passed": false,
+          "verdict": "BLOCK_EVIDENCE_INCOMPLETE",
+          "verdictReason": "execution_incomplete_or_metrics_missing",
+          "clusterSize": 7,
+          "durationMs": 47,
+          "performanceMetricsAvailable": false,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "metrics_unavailable",
+          "observedOpsPerSec": 0,
+          "observedP99LatencyMs": 0,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "previousSimilarRun": {
+          "reportTimestamp": "2026-08-01T06:55:22.152Z",
+          "reportPath": "/media/peter/4509da27-4751-4dee-b366-f3983d0777252/peter/projects/lagrange/solve/changes/transaction-recovery-poison-row-invariant/live-ab/fixed-preflight.report.json",
+          "passed": false,
+          "verdict": "BLOCK_EVIDENCE_INCOMPLETE",
+          "verdictReason": "execution_incomplete_or_metrics_missing",
+          "clusterSize": 7,
+          "durationMs": 96207,
+          "performanceMetricsAvailable": false,
+          "validForPerformanceComparison": false,
+          "performanceInvalidReason": "metrics_unavailable",
+          "observedOpsPerSec": 0,
+          "observedP99LatencyMs": 0,
+          "opsPerSec": null,
+          "p99LatencyMs": null,
+          "opsPerSecPerNode": null
+        },
+        "deltaVsPrevious": {
+          "passedChanged": false,
+          "clusterSizeChanged": false,
+          "durationMs": -96160,
+          "durationRatio": -0.9995114700593511,
+          "opsPerSec": 0,
+          "opsPerSecRatio": null,
+          "opsPerSecPerNode": 0,
+          "opsPerSecPerNodeRatio": null,
+          "p99LatencyMs": 0,
+          "p99LatencyMsRatio": null
+        },
+        "postgresBaseline": null,
+        "parity": null,
+        "writePathTopPhases": []
+      }
+    ]
+  },
+  "scenarios": [
+    {
+      "scenario": "transaction-recovery-poison-row-live",
+      "passed": false,
+      "verdict": "BLOCK_EVIDENCE_INCOMPLETE",
+      "verdictReason": "execution_incomplete_or_metrics_missing",
+      "duration": 47,
+      "clusterSize": 7,
+      "startedAt": "2026-08-01T06:56:12.144Z",
+      "convergenceTiming": null,
+      "analysisSummary": null,
+      "error": "Node \"7493b0ab-a054-5fad-a91b-5e331db29304\" (seed) failed to start: EACCES: permission denied, unlink '/media/peter/4509da27-4751-4dee-b366-f3983d0777252/peter/projects/lagrange/.tmp/reuse-data/ddb-test-reuse-7-1/startup-workflows/seed-7493b0ab-a054-5fad-a91b-5e331db29304.json'",
+      "stackTrace": "Error: Node \"7493b0ab-a054-5fad-a91b-5e331db29304\" (seed) failed to start: EACCES: permission denied, unlink '/media/peter/4509da27-4751-4dee-b366-f3983d0777252/peter/projects/lagrange/.tmp/reuse-data/ddb-test-reuse-7-1/startup-workflows/seed-7493b0ab-a054-5fad-a91b-5e331db29304.json'\n    at Cluster._startNode (file:///media/peter/4509da27-4751-4dee-b366-f3983d0777252/peter/projects/lagrange/test/distributed/harness/cluster-class-quiescence.js:1352:13)\n    at async Cluster.start (file:///media/peter/4509da27-4751-4dee-b366-f3983d0777252/peter/projects/lagrange/test/distributed/harness/cluster-class-lifecycle-base.js:842:22)\n    at async runScenarios (file:///media/peter/4509da27-4751-4dee-b366-f3983d0777252/peter/projects/lagrange/test/distributed/run-runtime-helpers.js:462:9)\n    at async main (file:///media/peter/4509da27-4751-4dee-b366-f3983d0777252/peter/projects/lagrange/test/distributed/run.js:1254:35)",
+      "logs": null,
+      "playback": {
+        "scenarioName": "transaction-recovery-poison-row-live",
+        "startedAt": 1785567372145,
+        "endedAt": 1785567372192,
+        "durationMs": 47,
+        "files": {
+          "events": "solve/changes/transaction-recovery-poison-row-invariant/live-ab/.playback/fixed-preflight/transaction-recovery-poison-row-live/events.ndjson",
+          "samples": "solve/changes/transaction-recovery-poison-row-invariant/live-ab/.playback/fixed-preflight/transaction-recovery-poison-row-live/samples.ndjson",
+          "snapshots": "solve/changes/transaction-recovery-poison-row-invariant/live-ab/.playback/fixed-preflight/transaction-recovery-poison-row-live/snapshots.ndjson",
+          "manifest": "solve/changes/transaction-recovery-poison-row-invariant/live-ab/.playback/fixed-preflight/transaction-recovery-poison-row-live/playback-manifest.json",
+          "viewer": "solve/changes/transaction-recovery-poison-row-invariant/live-ab/.playback/fixed-preflight/transaction-recovery-poison-row-live/playback-viewer.html"
+        },
+        "counts": {
+          "events": 8,
+          "samples": 0,
+          "snapshots": 0
+        },
+        "warnings": []
+      },
+      "trace": null,
+      "traceAssertion": null,
+      "cleanlinessAssertion": null,
+      "memoryLeak": {
+        "enabled": false,
+        "analyzed": false,
+        "leakDetected": false,
+        "sampleCount": 0,
+        "nodeCount": 0,
+        "leakingNodeCount": 0,
+        "leakingNodes": [],
+        "nodes": [],
+        "warnings": [],
+        "config": {
+          "enabled": false,
+          "failOnDetection": false,
+          "requireSamples": false,
+          "minSamplesPerNode": 8,
+          "warmupFraction": 0.2,
+          "minWarmupMs": 30000,
+          "minAnalysisWindowMs": 60000,
+          "maxPositiveSlopeBytesPerMin": 1048576,
+          "minGrowthBytes": 16777216,
+          "minPositiveDeltaRatio": 0.65,
+          "captureHeapArtifacts": false,
+          "heapSnapshotNearLimitCount": 2
+        }
+      },
+      "memoryLeakAssertion": null,
+      "performanceDiagnostics": null,
+      "details": {
+        "diagnostics": {
+          "stabilityGates": {
+            "failover": {
+              "type": "failover",
+              "status": "unknown",
+              "applicable": true,
+              "blockers": [],
+              "evidence": null
+            },
+            "convergence": {
+              "type": "convergence",
+              "status": "unknown",
+              "applicable": true,
+              "blockers": [],
+              "evidence": null
+            },
+            "restart_recovery": {
+              "type": "restart_recovery",
+              "status": "not_applicable",
+              "applicable": false,
+              "blockers": [],
+              "evidence": {
+                "restartBoundaryCount": 0
+              }
+            }
+          },
+          "decisionArtifactsByNodeId": {}
+        }
+      },
+      "invariantBreaches": {
+        "totalCount": 0,
+        "hardCount": 0,
+        "softCount": 0,
+        "failing": [],
+        "hardBreaches": [],
+        "softBreaches": []
+      },
+      "failureClassification": {
+        "failureClass": "unknown",
+        "confidence": "low",
+        "rootCauseClass": "unknown",
+        "dominantReason": null,
+        "signals": []
+      },
+      "classification": null,
+      "unexpectedNodeExits": null,
+      "publicationConvergence": null,
+      "priorityRecoveryObservation": null,
+      "priorityRecoveryProgressSummary": null,
+      "stabilityGates": {
+        "failover": {
+          "type": "failover",
+          "status": "unknown",
+          "applicable": true,
+          "blockers": [],
+          "evidence": null
+        },
+        "convergence": {
+          "type": "convergence",
+          "status": "unknown",
+          "applicable": true,
+          "blockers": [],
+          "evidence": null
+        },
+        "restart_recovery": {
+          "type": "restart_recovery",
+          "status": "not_applicable",
+          "applicable": false,
+          "blockers": [],
+          "evidence": {
+            "restartBoundaryCount": 0
+          }
+        }
+      },
+      "decisionArtifactsByNodeId": {},
+      "exampleResults": null,
+      "loadMetrics": null,
+      "performanceMeasurement": {
+        "available": false,
+        "validForComparison": false,
+        "invalidReason": "metrics_unavailable",
+        "observedOpsPerSec": null,
+        "observedP99LatencyMs": null
+      },
+      "bottleneckEstimate": null,
+      "partitionHotspots": null,
+      "optimizationPriorities": null,
+      "rootCauseClass": "unknown",
+      "failureBundle": {
+        "jsonPath": "solve/changes/transaction-recovery-poison-row-invariant/live-ab/.playback/fixed-preflight/transaction-recovery-poison-row-live/failure-bundle.json",
+        "markdownPath": "solve/changes/transaction-recovery-poison-row-invariant/live-ab/.playback/fixed-preflight/transaction-recovery-poison-row-live/failure-bundle.md",
+        "triageJsonPath": "solve/changes/transaction-recovery-poison-row-invariant/live-ab/.playback/fixed-preflight/transaction-recovery-poison-row-live/triage-summary.json",
+        "triageMarkdownPath": "solve/changes/transaction-recovery-poison-row-invariant/live-ab/.playback/fixed-preflight/transaction-recovery-poison-row-live/triage-summary.md"
+      }
+    }
+  ],
+  "fidelity": "live",
+  "benchmarkRegressionGate": {
+    "enabled": false,
+    "status": "skipped",
+    "reason": "disabled",
+    "settings": {
+      "enabled": false,
+      "maxThroughputRegressionRatio": 0.1,
+      "minimumThroughputRatioSutToBaseline": 0.1,
+      "baselineProvider": "liferaft",
+      "failIfBaselineMissing": false,
+      "approvedMitigationId": null,
+      "parityMismatchPolicy": "warn"
+    },
+    "currentProvider": "liferaft",
+    "baselineProvider": "liferaft",
+    "comparedScenarioCount": 0,
+    "failedScenarioCount": 0,
+    "mitigatedScenarioCount": 0,
+    "missingBaselineScenarios": [],
+    "comparisons": [],
+    "parityMismatchCount": 0,
+    "lowThroughputRatioCount": 0,
+    "warnings": []
+  },
+  "failureBundle": {
+    "jsonPath": "solve/changes/transaction-recovery-poison-row-invariant/live-ab/.playback/fixed-preflight/failure-bundles/run-failure-bundle.json",
+    "markdownPath": "solve/changes/transaction-recovery-poison-row-invariant/live-ab/.playback/fixed-preflight/failure-bundles/run-failure-bundle.md"
+  },
+  "metadata": {
+    "raftProvider": "liferaft",
+    "configPath": "test/distributed/config/local-poison-row-ab.json",
+    "scenarioFilter": "transaction-recovery-poison-row-live",
+    "stateMachinePressurePreflight": {
+      "resultState": "pass",
+      "ready": true,
+      "staticGrammar": {
+        "checkedPointCount": 7,
+        "issues": [],
+        "ready": true
+      },
+      "snapshots": [],
+      "issues": [],
+      "hardIssueCount": 0,
+      "warningIssueCount": 0
+    }
+  }
+}

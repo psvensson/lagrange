@@ -405,6 +405,7 @@ test(
         canonicalAuthoritySource: `http://${DURABLE_PEER_B}`,
         transactionRecoveryState: 'completed',
         transactionRecoveryReady: true,
+        transactionRecoveryOutcome: null,
         ready: true,
       },
       'the direct target proves each owner handoff instead of one aggregate ready bit',

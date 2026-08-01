@@ -276,6 +276,9 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         buildHeartbeatStartOptions: () =>
           this.buildControlPlaneHeartbeatStartOptions(),
         activateDistributedTransactionRecoveryOnWriterActivation: false,
+        getRouteSource: () =>
+          this.contactSeedPhase?.getSeedContactDiagnosticsSnapshot?.()
+            ?.authoritySource || null,
         isDistributedTransactionRecoveryAvailable: () =>
           typeof this.cdcIntegrationService?.sqlQueryEngine
             ?.activateDistributedTransactionRecovery === 'function',

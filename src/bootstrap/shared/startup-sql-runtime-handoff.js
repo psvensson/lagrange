@@ -212,6 +212,10 @@ function buildStartupRuntimeHandoffSnapshot({
     transactionRecoverySummary: recovery?.summary || null,
     transactionRecoveryErrorCode: recovery?.errorCode || null,
     transactionRecoveryErrorMessage: recovery?.errorMessage || null,
+    transactionRecoveryOutcome:
+      recovery?.outcome && typeof recovery.outcome === 'object' ?
+        recovery.outcome :
+        null,
   };
 }
 

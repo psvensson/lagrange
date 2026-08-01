@@ -44,6 +44,11 @@ function buildStartupRuntimeHandoffProbeFields({
         handoff.transactionRecoveryState :
         null,
     transactionRecoveryReady,
+    transactionRecoveryOutcome:
+      handoff.transactionRecoveryOutcome &&
+        typeof handoff.transactionRecoveryOutcome === 'object' ?
+        handoff.transactionRecoveryOutcome :
+        null,
     ready:
       handoff.infrastructureJoinComplete === true &&
       canonicalAuthorityConsumed &&

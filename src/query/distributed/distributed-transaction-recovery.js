@@ -94,7 +94,24 @@ function buildRecoveredTransactionDecisionState(row, status) {
   };
 }
 
-function validateRecoveredTransactionDecision(tx) {
+function buildTransactionRecoveryIncompleteError({decisionDimension, row}) {
+  const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
+  error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
+  if (typeof decisionDimension === 'string' && decisionDimension.length > 0) {
+    error.decisionDimension = decisionDimension;
+  }
+  const transactionId = row?.transaction_id ?? row?.transactionId;
+  const sessionId = row?.session_id ?? row?.sessionId;
+  if (typeof transactionId === 'string' && transactionId.length > 0) {
+    error.transactionId = transactionId;
+  }
+  if (typeof sessionId === 'string' && sessionId.length > 0) {
+    error.sessionId = sessionId;
+  }
+  return error;
+}
+
+function validateRecoveredTransactionDecision(tx, row = null) {
   const transactionModeValid =
     Object.values(TRANSACTION_MODE).includes(tx.transactionMode);
   const participantSetStateValid =
@@ -125,18 +142,27 @@ function validateRecoveredTransactionDecision(tx) {
     tx.commitMode !== COMMIT_MODE.ONE_PHASE_COMMIT ||
     tx.frozenParticipantCount === 1;
   if (
-    !transactionModeValid ||
-    !participantSetStateValid ||
-    !commitModeValid ||
-    !frozenCountValid ||
-    (!openStateValid && !frozenStateValid) ||
-    !onePhaseStatusValid ||
-    !onePhaseCountValid
+    transactionModeValid &&
+    participantSetStateValid &&
+    commitModeValid &&
+    frozenCountValid &&
+    (openStateValid || frozenStateValid) &&
+    onePhaseStatusValid &&
+    onePhaseCountValid
   ) {
-    const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
-    error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
-    throw error;
+    return;
   }
+  const failedDecisionDimension = !transactionModeValid ?
+    LOCAL_STR_TRANSACTION_MODE :
+    !participantSetStateValid ?
+      LOCAL_STR_PARTICIPANT_SET_STATE :
+      !commitModeValid || !onePhaseStatusValid || !onePhaseCountValid ?
+        LOCAL_STR_COMMIT_MODE :
+        LOCAL_STR_FROZEN_PARTICIPANT_COUNT;
+  throw buildTransactionRecoveryIncompleteError({
+    decisionDimension: failedDecisionDimension,
+    row,
+  });
 }
 
 function buildRecoveredParticipantKeysByTransaction(participantRows) {
@@ -169,22 +195,26 @@ function validateRecoveryRowsBeforeMutation(
     const sessionId = row.session_id || row.sessionId;
     const transactionId = row.transaction_id || row.transactionId;
     if (!sessionId || !transactionId) {
-      const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
-      error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
-      throw error;
+      throw buildTransactionRecoveryIncompleteError({
+        decisionDimension: null,
+        row,
+      });
     }
     if (coordinator.transactionsBySession.has(sessionId)) {
       continue;
     }
     const participantKeys =
       participantKeysByTransaction.get(transactionId) || new Set();
-    validateRecoveredTransactionDecision({
-      ...buildRecoveredTransactionDecisionState(row, status),
-      status,
-      participants: new Map(
-        Array.from(participantKeys, (partitionId) => [partitionId, true]),
-      ),
-    });
+    validateRecoveredTransactionDecision(
+      {
+        ...buildRecoveredTransactionDecisionState(row, status),
+        status,
+        participants: new Map(
+          Array.from(participantKeys, (partitionId) => [partitionId, true]),
+        ),
+      },
+      row,
+    );
   }
 }
 
@@ -698,7 +728,7 @@ const distributedTransactionRecoveryMethods = {
     for (const workflowId of restoredWorkflowIds) {
       const tx = this.workflowCoordinator.getWorkflowById(workflowId);
       if (tx) {
-        validateRecoveredTransactionDecision(tx);
+        validateRecoveredTransactionDecision(tx, tx);
       }
     }
     for (const row of transactionRows) {
