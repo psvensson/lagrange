@@ -1,14 +1,27 @@
 import {TABLES} from '../../constants/index.js';
-import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
+import {
+  buildSystemMetadataMutationError,
+  SystemMetadataOwnerBase,
+  unwrapRowReadResult,
+} from './system-metadata-owner-base.js';
 
 const LOCAL_STR_NODES_OWNER = 'nodes-owner';
+const LOCAL_STR_READ = 'read';
 
 class NodesOwner extends SystemMetadataOwnerBase {
   static OWNER_NAME = LOCAL_STR_NODES_OWNER;
   static TABLE_NAME = TABLES.NODES;
 
   async getNode(nodeId, options = {}) {
-    return this.readByPrimaryKey(nodeId, options);
+    const result = await this.readByPrimaryKeyObservation(nodeId, options);
+    if (result?.success === false) {
+      throw buildSystemMetadataMutationError(result, {
+        tableName: this.getTableName(),
+        ownerName: this.getOwnerName(),
+        operation: LOCAL_STR_READ,
+      });
+    }
+    return unwrapRowReadResult(result);
   }
 
   async getNodeFromCache(nodeId, options = {}) {

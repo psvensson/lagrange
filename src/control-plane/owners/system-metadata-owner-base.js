@@ -291,8 +291,8 @@ class SystemMetadataOwnerBase {
     }, options);
   }
 
-  async readByPrimaryKey(primaryKeyValue, options = {}) {
-    const result = await readAuthoritativeControlPlaneRows(
+  async readByPrimaryKeyObservation(primaryKeyValue, options = {}) {
+    return readAuthoritativeControlPlaneRows(
       this.requireGateway(),
       this.getTableName(),
       this.buildSelectByPrimaryKeySql(),
@@ -301,6 +301,13 @@ class SystemMetadataOwnerBase {
         ...options,
         owner: this.getOwnerName(),
       },
+    );
+  }
+
+  async readByPrimaryKey(primaryKeyValue, options = {}) {
+    const result = await this.readByPrimaryKeyObservation(
+      primaryKeyValue,
+      options,
     );
     return unwrapRowReadResult(result);
   }

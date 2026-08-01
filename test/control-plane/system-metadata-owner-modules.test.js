@@ -415,6 +415,74 @@ test('System metadata owners route typed read and mutation methods through the g
     }
   });
 
+test('NodesOwner preserves authoritative primary-key read failure metadata ' +
+  'without changing successful absence or cache reads', async (t) => {
+  const authoritativeResults = [
+    {
+      success: false,
+      error: 'control_plane_pressure_degraded while reading nodes',
+      errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+      retryAfterMs: 250,
+      deferRetry: true,
+      participantFailures: [{
+        error: 'participant node read unavailable',
+        errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
+        retryAfterMs: 125,
+      }],
+    },
+    {success: true, rows: []},
+    {success: true, rows: [{node_id: 'node-present'}]},
+  ];
+  const cachedNode = {node_id: 'node-cached'};
+  const owner = new NodesOwner({
+    controlPlaneSystemTableGateway: {
+      async readAuthoritativeRows() {
+        return authoritativeResults.shift();
+      },
+      async readProjectionRows(_tableName, options) {
+        return options.readFromCache({
+          get(tableName, nodeId) {
+            return tableName === TABLES.NODES && nodeId === 'node-cached' ?
+              cachedNode :
+              null;
+          },
+        });
+      },
+    },
+  });
+
+  try {
+    await owner.getNode('node-unavailable');
+    t.fail('failed authoritative reads must remain typed failures');
+  } catch (error) {
+    t.equal(error.errorCode, 'CONTROL_PLANE_PRESSURE_DEGRADED');
+    t.equal(error.retryAfterMs, 250);
+    t.equal(error.deferRetry, true);
+    t.equal(error.tableName, TABLES.NODES);
+    t.equal(error.ownerName, 'nodes-owner');
+    t.equal(error.operation, 'read');
+    t.equal(
+      error.firstFailedParticipant?.errorCode,
+      'DISTRIBUTED_PARTICIPANT_FAILURE',
+    );
+  }
+  t.equal(
+    await owner.getNode('node-absent'),
+    null,
+    'successful zero-row reads should remain definitive absence',
+  );
+  t.same(
+    await owner.getNode('node-present'),
+    {node_id: 'node-present'},
+    'successful authoritative rows should remain unchanged',
+  );
+  t.same(
+    await owner.getNodeFromCache('node-cached'),
+    cachedNode,
+    'cache observations should retain their existing contract',
+  );
+});
+
 test('System metadata owners retry transient mutation failures and apply ' +
   'primary-key upsert coalescing by default', async (t) => {
   let upsertCallCount = 0;

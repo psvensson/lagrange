@@ -1,0 +1,674 @@
+diff --git a/models/CL-INDEX.md b/models/CL-INDEX.md
+index e07e44d4e2915dc18647305ae47d0e08157c37d2..15e4725a15757094cd9d0e35fc6929bfc30fccea 100644
+--- a/models/CL-INDEX.md
++++ b/models/CL-INDEX.md
+@@ -25,6 +25,7 @@ via `npm run model:check` in `test:ci`.
+ | Serialized incremental REPLACE spread | `incremental-replace-spread/IncrementalReplaceSpread.tla` | `OpenGapRetainsSerializedProgressOwner`, `SpreadNeverRegresses`, `EventuallyReachesPublishedTarget` | enforce the published target as an eventual destination and current→projected non-regression as the per-operation remove-safety floor, so `1→2→3` can complete without admitting `2→1` |
+ | Operation-ledger terminal hold | `operation-ledger-terminal-hold/OperationLedgerTerminalHold.tla` | `SerializationHoldReleaseRequiresAuthoritativeTerminal`, `DependentBatchNeverOverlapsLedgerSurgery`, `EventuallySnapshotClosed` | route durable timeout to the workflow recovery owner while keeping the serialization hold engaged until its canonical authoritative terminal transition; a timeout-only-release mutant violates the hold invariant |
+ | Terminal operation entity observation | `terminal-operation-entity-observation/TerminalOperationEntityObservation.tla` | `ConfirmedTerminalNeverReentersCreating`, `FormationReadyRequiresTerminalDrain`, `EventuallyFormationReady` | require the existing operation-ledger owner/leader for entity-scoped recovery observation, defer while authority is unavailable, and reuse the existing surplus REMOVE after terminal evidence returns; a stale-SQL fallback mutant re-admits `CREATING` after terminal confirmation |
++| Node authority dispatch fallback | `node-authority-dispatch-fallback/NodeAuthorityDispatchFallback.tla` | `MissingMeansSuccessfulEmpty`, `SuccessfulEmptyNeverDispatches`, `NonRetryableFailureNeverDispatches`, `FallbackRequiresCanonicalRecoveryEvidence`, `EventuallyPriorityRecoveryDispatch` | preserve failed authoritative node reads as typed failures so the existing recovery-eligible sync dispatch fallback can advance priority recovery; a failure-as-missing mutant bypasses the fallback and stalls |
+ | Authoritative observation watermark | `authoritative-observation-watermark/AuthoritativeObservationWatermark.tla` | `ObservationDoesNotFabricateMutation`, `SelectedFreshnessIsNewestEvidence`, `FreshnessClassificationMatchesAge`, `EventuallySchemaAdmitted` | publish successful unchanged/confirmed-empty authoritative reads as per-table observation evidence distinct from CDC mutation time, then select and age the newest mutation-or-observation timestamp; a mutation-only freshness mutant cannot admit schema after a successful no-op repair, and an exact-equality reconcile mutant wedges admission whenever CDC churn interleaves with the repair (the live nodes heartbeat case) |
+ 
+ ## Adding a spec for a design-class CL
+diff --git a/models/node-authority-dispatch-fallback/NodeAuthorityDispatchFallback.tla b/models/node-authority-dispatch-fallback/NodeAuthorityDispatchFallback.tla
+new file mode 100644
+index 0000000000000000000000000000000000000000..c808bc05626adad548095959740e3d19318cc79f
+--- /dev/null
++++ b/models/node-authority-dispatch-fallback/NodeAuthorityDispatchFallback.tla
+@@ -0,0 +1,158 @@
++---------------- MODULE NodeAuthorityDispatchFallback ----------------
++(***************************************************************************)
++(* Authoritative node read -> typed failure or definitive absence ->       *)
++(* existing priority-recovery dispatch fallback.                           *)
++(*                                                                         *)
++(* The fixed owner preserves failed reads as typed failures. The mutant    *)
++(* collapses them into the same missing observation as a successful empty  *)
++(* read, so the already-ready synchronous recovery snapshot is never used. *)
++(***************************************************************************)
++EXTENDS Naturals
++
++CONSTANT CollapseFailureToMissing
++
++ASSUME CollapseFailureToMissing \in BOOLEAN
++
++VARIABLES workClass,
++          syncRecoveryEligible,
++          authorityResult,
++          nodeObservation,
++          dispatchRoute,
++          retryState
++
++vars == <<workClass,
++          syncRecoveryEligible,
++          authorityResult,
++          nodeObservation,
++          dispatchRoute,
++          retryState>>
++
++WorkClasses == {"priority_recovery", "ordinary_repair"}
++AuthorityResults == {
++  "pending",
++  "success_row",
++  "success_empty",
++  "retryable_failure",
++  "nonretryable_failure"
++}
++NodeObservations == {
++  "unobserved",
++  "present",
++  "missing",
++  "typed_retryable_failure",
++  "typed_nonretryable_failure"
++}
++DispatchRoutes == {"none", "authoritative", "sync_recovery_fallback"}
++RetryStates == {"idle", "fallback_used", "deferred"}
++
++TypeOK ==
++  /\ workClass \in WorkClasses
++  /\ syncRecoveryEligible \in BOOLEAN
++  /\ authorityResult \in AuthorityResults
++  /\ nodeObservation \in NodeObservations
++  /\ dispatchRoute \in DispatchRoutes
++  /\ retryState \in RetryStates
++
++Init ==
++  /\ workClass \in WorkClasses
++  /\ syncRecoveryEligible \in BOOLEAN
++  /\ authorityResult = "pending"
++  /\ nodeObservation = "unobserved"
++  /\ dispatchRoute = "none"
++  /\ retryState = "idle"
++
++ObserveAuthority ==
++  /\ authorityResult = "pending"
++  /\ \E outcome \in AuthorityResults \ {"pending"}:
++       /\ authorityResult' = outcome
++       /\ nodeObservation' =
++            CASE outcome = "success_row" -> "present"
++              [] outcome = "success_empty" -> "missing"
++              [] outcome = "retryable_failure" ->
++                   IF CollapseFailureToMissing
++                   THEN "missing"
++                   ELSE "typed_retryable_failure"
++              [] OTHER ->
++                   IF CollapseFailureToMissing
++                   THEN "missing"
++                   ELSE "typed_nonretryable_failure"
++  /\ UNCHANGED <<workClass,
++                  syncRecoveryEligible,
++                  dispatchRoute,
++                  retryState>>
++
++DispatchFromAuthoritativeRow ==
++  /\ nodeObservation = "present"
++  /\ dispatchRoute = "none"
++  /\ dispatchRoute' = "authoritative"
++  /\ UNCHANGED <<workClass,
++                  syncRecoveryEligible,
++                  authorityResult,
++                  nodeObservation,
++                  retryState>>
++
++UseExistingRecoveryFallback ==
++  /\ nodeObservation = "typed_retryable_failure"
++  /\ workClass = "priority_recovery"
++  /\ syncRecoveryEligible
++  /\ dispatchRoute = "none"
++  /\ dispatchRoute' = "sync_recovery_fallback"
++  /\ retryState' = "fallback_used"
++  /\ UNCHANGED <<workClass,
++                  syncRecoveryEligible,
++                  authorityResult,
++                  nodeObservation>>
++
++DeferWithoutFallback ==
++  /\ dispatchRoute = "none"
++  /\ retryState = "idle"
++  /\ \/ nodeObservation = "missing"
++     \/ nodeObservation = "typed_nonretryable_failure"
++     \/ /\ nodeObservation = "typed_retryable_failure"
++        /\ \/ workClass # "priority_recovery"
++           \/ ~syncRecoveryEligible
++  /\ retryState' = "deferred"
++  /\ UNCHANGED <<workClass,
++                  syncRecoveryEligible,
++                  authorityResult,
++                  nodeObservation,
++                  dispatchRoute>>
++
++Next ==
++  \/ ObserveAuthority
++  \/ DispatchFromAuthoritativeRow
++  \/ UseExistingRecoveryFallback
++  \/ DeferWithoutFallback
++
++Fairness ==
++  /\ WF_vars(ObserveAuthority)
++  /\ WF_vars(DispatchFromAuthoritativeRow)
++  /\ WF_vars(UseExistingRecoveryFallback)
++  /\ WF_vars(DeferWithoutFallback)
++
++Spec == Init /\ [][Next]_vars /\ Fairness
++
++MissingMeansSuccessfulEmpty ==
++  nodeObservation = "missing" => authorityResult = "success_empty"
++
++SuccessfulEmptyNeverDispatches ==
++  authorityResult = "success_empty" => dispatchRoute = "none"
++
++NonRetryableFailureNeverDispatches ==
++  authorityResult = "nonretryable_failure" => dispatchRoute = "none"
++
++FallbackRequiresCanonicalRecoveryEvidence ==
++  dispatchRoute = "sync_recovery_fallback" =>
++    /\ authorityResult = "retryable_failure"
++    /\ nodeObservation = "typed_retryable_failure"
++    /\ workClass = "priority_recovery"
++    /\ syncRecoveryEligible
++
++EventuallyPriorityRecoveryDispatch ==
++  [](
++    /\ authorityResult = "retryable_failure"
++    /\ workClass = "priority_recovery"
++    /\ syncRecoveryEligible
++    => <> (dispatchRoute = "sync_recovery_fallback")
++  )
++=============================================================================
+diff --git a/models/node-authority-dispatch-fallback/NodeAuthorityDispatchFallback_failure_as_missing_bug.cfg b/models/node-authority-dispatch-fallback/NodeAuthorityDispatchFallback_failure_as_missing_bug.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..4f7930ffd82d77709e2371dbb25e78f52ea624ea
+--- /dev/null
++++ b/models/node-authority-dispatch-fallback/NodeAuthorityDispatchFallback_failure_as_missing_bug.cfg
+@@ -0,0 +1,12 @@
++\* Mutant: the owner unwraps a failed authoritative read into the same
++\* missing observation as a successful empty result. The existing retryable
++\* recovery fallback therefore never sees the failure.
++SPECIFICATION Spec
++CONSTANTS
++  CollapseFailureToMissing = TRUE
++INVARIANT TypeOK
++INVARIANT SuccessfulEmptyNeverDispatches
++INVARIANT NonRetryableFailureNeverDispatches
++INVARIANT FallbackRequiresCanonicalRecoveryEvidence
++PROPERTY EventuallyPriorityRecoveryDispatch
++CHECK_DEADLOCK FALSE
+diff --git a/models/node-authority-dispatch-fallback/NodeAuthorityDispatchFallback_fixed.cfg b/models/node-authority-dispatch-fallback/NodeAuthorityDispatchFallback_fixed.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..a263166ff620aec400bc2a842813739c9fe0e993
+--- /dev/null
++++ b/models/node-authority-dispatch-fallback/NodeAuthorityDispatchFallback_fixed.cfg
+@@ -0,0 +1,13 @@
++\* Failed authoritative reads remain typed. Only a retryable failure for
++\* priority recovery with canonical sync eligibility may use the existing
++\* dispatch fallback. Successful empty and all other cases stay fail closed.
++SPECIFICATION Spec
++CONSTANTS
++  CollapseFailureToMissing = FALSE
++INVARIANT TypeOK
++INVARIANT MissingMeansSuccessfulEmpty
++INVARIANT SuccessfulEmptyNeverDispatches
++INVARIANT NonRetryableFailureNeverDispatches
++INVARIANT FallbackRequiresCanonicalRecoveryEvidence
++PROPERTY EventuallyPriorityRecoveryDispatch
++CHECK_DEADLOCK FALSE
+diff --git a/models/node-authority-dispatch-fallback/abstract-protocol.md b/models/node-authority-dispatch-fallback/abstract-protocol.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..5c6573d53e70efcf86912b4db8a9a9ec46e7bcf4
+--- /dev/null
++++ b/models/node-authority-dispatch-fallback/abstract-protocol.md
+@@ -0,0 +1,24 @@
++# Node-authority dispatch fallback — abstract protocol ↔ runtime
++
++Quest: `rolling-restart-fresh-formation-node-authority-deferred-read`.
++
++This model composes the existing system-metadata owner, canonical synchronous
++readiness snapshot, bounded authoritative refresh, priority-recovery dispatch
++fallback, and deferred retry lane. It introduces no new recovery mechanism.
++
++| Model element | Runtime surface |
++| --- | --- |
++| `ObserveAuthority` | `NodesOwner.getNode` through `SystemMetadataOwnerBase.readByPrimaryKeyObservation` and the control-plane system-table gateway |
++| `success_row` / `present` | a successful authoritative primary-key read containing the target node row |
++| `success_empty` / `missing` | a successful authoritative primary-key read with zero rows; readiness may emit `node_row_missing` and dispatch remains deferred |
++| `typed_retryable_failure` | a failed gateway envelope preserved as an error with `errorCode`, `retryAfterMs`, `deferRetry`, and participant metadata |
++| `UseExistingRecoveryFallback` | `ReplicaDispatchReadinessCapture.shouldUseSyncDispatchReadinessFallback`, restricted to `controlPlaneRecoveryEligible` priority-recovery work |
++| `DeferWithoutFallback` | the existing operation-dispatch deferred retry lane for successful absence, non-retryable failure, ordinary repair, or ineligible sync readiness |
++| `CollapseFailureToMissing = TRUE` | the pre-fix `unwrapRowReadResult({success:false, rows:[]}) -> null` behavior, which bypasses the existing fallback |
++
++The fixed configuration proves absence/failure separation, successful-empty
++and non-retryable fail-closed safety, and eventual priority-recovery dispatch
++when a retryable authoritative failure is paired with an already-satisfied
++canonical sync snapshot. The mutant configuration produces the requested
++liveness counterexample. Alloy remains unchanged because the correction alters
++temporal authority-state propagation, not owner, cohort, or replica cardinality.
+diff --git a/scripts/check-unused-exports.js b/scripts/check-unused-exports.js
+index ab5ed0652cec1043151b3011d362531572557e7a..f13c8a3ab605ce5caa52a9f979bb62929ed791e9 100644
+--- a/scripts/check-unused-exports.js
++++ b/scripts/check-unused-exports.js
+@@ -15,7 +15,7 @@ import {createOptions} from 'knip/session';
+ 
+ import {printRatchetTighteningHint} from './metric-check-helpers.js';
+ 
+-const BASELINE_UNUSED_EXPORT_COUNT = 1450;
++const BASELINE_UNUSED_EXPORT_COUNT = 1448;
+ const EXIT_FAILURE = 1;
+ const TOP_OFFENDER_COUNT = 10;
+ const SELF_REFERENCE = 'scripts/check-unused-exports.js';
+diff --git a/scripts/checks/run-rolling-restart-fresh-formation-node-authority-deferred-read-scenarios.js b/scripts/checks/run-rolling-restart-fresh-formation-node-authority-deferred-read-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..96ad3168e8c5a28aa6ad9e12d0644547484b6fa9
+--- /dev/null
++++ b/scripts/checks/run-rolling-restart-fresh-formation-node-authority-deferred-read-scenarios.js
+@@ -0,0 +1,13 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = Object.freeze({
++  'rolling-restart-fresh-formation-node-authority-deferred-read':
++    Object.freeze([
++      'test/control-plane/system-metadata-owner-modules.test.js',
++      'test/control-plane/replica-dispatch-node-authority-deferred-read.test.js',
++    ]),
++});
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/scripts/model-tlc.js b/scripts/model-tlc.js
+index de5406ebe6ce8bd05c94e081207fe4dbb48f24f8..e9064275b139cefd79481a9eaf1b2ef35645e910 100644
+--- a/scripts/model-tlc.js
++++ b/scripts/model-tlc.js
+@@ -178,6 +178,43 @@ const CONFIGS = [
+     expectedFailurePattern:
+       'Invariant ConfirmedTerminalNeverReentersCreating is violated',
+   },
++  {
++    id: 'node-authority-dispatch-fallback-fixed',
++    mode: 'node-authority-dispatch-fallback-fixed',
++    module: path.resolve(
++      'models', 'node-authority-dispatch-fallback',
++      'NodeAuthorityDispatchFallback.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'node-authority-dispatch-fallback',
++      'NodeAuthorityDispatchFallback_fixed.cfg',
++    ),
++    expectConverged: true,
++    report: 'node-authority-dispatch-fallback-fixed.model.report.json',
++    scenario: 'rolling-restart-node-authority-dispatch-fallback-model',
++    owner: 'nodes_metadata_read_owner',
++    boundary: 'authoritative_node_read_to_replica_dispatch_readiness',
++  },
++  {
++    id: 'node-authority-dispatch-fallback-failure-as-missing',
++    mode: 'node-authority-dispatch-fallback-failure-as-missing',
++    module: path.resolve(
++      'models', 'node-authority-dispatch-fallback',
++      'NodeAuthorityDispatchFallback.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'node-authority-dispatch-fallback',
++      'NodeAuthorityDispatchFallback_failure_as_missing_bug.cfg',
++    ),
++    expectConverged: false,
++    report:
++      'node-authority-dispatch-fallback-failure-as-missing.model.report.json',
++    scenario: 'rolling-restart-node-authority-dispatch-fallback-model',
++    owner: 'nodes_metadata_read_owner',
++    boundary: 'authoritative_node_read_to_replica_dispatch_readiness',
++    expectedFailurePattern:
++      'Temporal property EventuallyPriorityRecoveryDispatch was violated',
++  },
+   {
+     id: 'coupled-admission-reconciled',
+     mode: 'coupled-reconciled',
+diff --git a/src/control-plane/owners/nodes-owner.js b/src/control-plane/owners/nodes-owner.js
+index f8003d08143b0b73fd8da61700754bfb1f591b9d..23faa115f36db4531201f2acbcad5c3a09749906 100644
+--- a/src/control-plane/owners/nodes-owner.js
++++ b/src/control-plane/owners/nodes-owner.js
+@@ -1,14 +1,27 @@
+ import {TABLES} from '../../constants/index.js';
+-import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
++import {
++  buildSystemMetadataMutationError,
++  SystemMetadataOwnerBase,
++  unwrapRowReadResult,
++} from './system-metadata-owner-base.js';
+ 
+ const LOCAL_STR_NODES_OWNER = 'nodes-owner';
++const LOCAL_STR_READ = 'read';
+ 
+ class NodesOwner extends SystemMetadataOwnerBase {
+   static OWNER_NAME = LOCAL_STR_NODES_OWNER;
+   static TABLE_NAME = TABLES.NODES;
+ 
+   async getNode(nodeId, options = {}) {
+-    return this.readByPrimaryKey(nodeId, options);
++    const result = await this.readByPrimaryKeyObservation(nodeId, options);
++    if (result?.success === false) {
++      throw buildSystemMetadataMutationError(result, {
++        tableName: this.getTableName(),
++        ownerName: this.getOwnerName(),
++        operation: LOCAL_STR_READ,
++      });
++    }
++    return unwrapRowReadResult(result);
+   }
+ 
+   async getNodeFromCache(nodeId, options = {}) {
+diff --git a/src/control-plane/owners/system-metadata-owner-base.js b/src/control-plane/owners/system-metadata-owner-base.js
+index 9897ef329e2cd2ca3c5f8423f8699c5d48009f80..2c254856036e29956511d5ac571b0d2cce35767c 100644
+--- a/src/control-plane/owners/system-metadata-owner-base.js
++++ b/src/control-plane/owners/system-metadata-owner-base.js
+@@ -291,8 +291,8 @@ class SystemMetadataOwnerBase {
+     }, options);
+   }
+ 
+-  async readByPrimaryKey(primaryKeyValue, options = {}) {
+-    const result = await readAuthoritativeControlPlaneRows(
++  async readByPrimaryKeyObservation(primaryKeyValue, options = {}) {
++    return readAuthoritativeControlPlaneRows(
+       this.requireGateway(),
+       this.getTableName(),
+       this.buildSelectByPrimaryKeySql(),
+@@ -302,6 +302,13 @@ class SystemMetadataOwnerBase {
+         owner: this.getOwnerName(),
+       },
+     );
++  }
++
++  async readByPrimaryKey(primaryKeyValue, options = {}) {
++    const result = await this.readByPrimaryKeyObservation(
++      primaryKeyValue,
++      options,
++    );
+     return unwrapRowReadResult(result);
+   }
+ 
+diff --git a/test/control-plane/replica-dispatch-node-authority-deferred-read.test.js b/test/control-plane/replica-dispatch-node-authority-deferred-read.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..723cfc297bbef8f212259580429c1df15ab8d4dd
+--- /dev/null
++++ b/test/control-plane/replica-dispatch-node-authority-deferred-read.test.js
+@@ -0,0 +1,203 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  CONTROL_PLANE_READINESS_DIMENSION,
++} from '../../src/control-plane/control-plane-readiness-constants.js';
++import {NodesOwner} from '../../src/control-plane/owners/nodes-owner.js';
++import {WORKFLOW_STEP} from '../../src/constants/index.js';
++import {OperationType} from '../../src/rebalancer/replica-status.js';
++import {
++  createService,
++  initEnv,
++} from './replica-dispatch-node-state-update-test-support.js';
++
++const TEST_NODE_ID = 'node-target';
++const TEST_SYSTEM_PARTITION_ID = 'replica_operations-p1';
++const TEST_REGULAR_PARTITION_ID = 'customer-orders-p1';
++const TEST_RETRY_AFTER_MS = 111;
++
++function buildOperation(partitionId, operationId) {
++  return {
++    operation_id: operationId,
++    type: OperationType.REMOVE,
++    partition_id: partitionId,
++    replica_id: `${partitionId}-r4`,
++    source_node_id: TEST_NODE_ID,
++    target_node_id: TEST_NODE_ID,
++    status: 'pending',
++    workflow_step: WORKFLOW_STEP.SENDING,
++    created_at: Date.now(),
++    updated_at: Date.now(),
++    steps_history: '[]',
++  };
++}
++
++function buildReadiness(nodeId, decisionDimension, ready, reasonCode = null) {
++  return {
++    nodeId,
++    observedAt: new Date().toISOString(),
++    dimensions: {
++      [decisionDimension]: ready,
++    },
++    reasons: reasonCode ? [{code: reasonCode}] : [],
++  };
++}
++
++function createOwnerBackedDispatchFixture({
++  authoritativeResult,
++  partitionId = TEST_SYSTEM_PARTITION_ID,
++  syncRecoveryEligible = true,
++  syncRepairEligible = true,
++}) {
++  initEnv();
++  const scheduled = [];
++  const authoritativeCalls = [];
++  let dispatchCalls = 0;
++  const nodesOwner = new NodesOwner({
++    controlPlaneSystemTableGateway: {
++      async readAuthoritativeRows(tableName, sql, params, options) {
++        authoritativeCalls.push({tableName, sql, params, options});
++        return authoritativeResult;
++      },
++    },
++  });
++  const service = createService({
++    nodeId: 'node-dispatcher',
++    cdcIntegrationService: {
++      upsertSystemTableRow: async () => ({success: true}),
++      updateSystemTableRow: async () => ({success: true}),
++    },
++    controlPlaneReadinessService: {
++      getNodeReadinessSync(nodeId, options) {
++        const decisionDimension = options?.decisionDimension;
++        const ready = decisionDimension ===
++            CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE ?
++          syncRecoveryEligible :
++          syncRepairEligible;
++        return buildReadiness(nodeId, decisionDimension, ready);
++      },
++      async getNodeReadiness(nodeId, options) {
++        const nodeRow = await nodesOwner.getNode(nodeId, {
++          allowAuthoritativeRefresh: true,
++          ...options,
++        });
++        const decisionDimension = options?.decisionDimension;
++        return buildReadiness(
++          nodeId,
++          decisionDimension,
++          Boolean(nodeRow),
++          nodeRow ? null : 'node_row_missing',
++        );
++      },
++    },
++    rebalanceCoordinator: {
++      async dispatchOperation() {
++        dispatchCalls += 1;
++        return {success: true};
++      },
++      isOperationLocallyOwned() {
++        return true;
++      },
++    },
++    setTimeoutFn(callback, delayMs) {
++      const handle = {callback, delayMs};
++      scheduled.push(handle);
++      return handle;
++    },
++    clearTimeoutFn() {},
++  });
++  return {
++    authoritativeCalls,
++    getDispatchCalls: () => dispatchCalls,
++    operation: buildOperation(partitionId, `op-${partitionId}`),
++    scheduled,
++    service,
++  };
++}
++
++test('NodesOwner typed retryable read failure reaches the existing priority ' +
++  'recovery sync fallback', async (t) => {
++  const fixture = createOwnerBackedDispatchFixture({
++    authoritativeResult: {
++      success: false,
++      rows: [],
++      error: 'control_plane_pressure_degraded while reading nodes',
++      errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
++      retryAfterMs: TEST_RETRY_AFTER_MS,
++      deferRetry: true,
++    },
++  });
++  try {
++    await fixture.service.dispatchOperationRow(fixture.operation);
++    t.equal(fixture.authoritativeCalls.length, 1,
++      'dispatch should perform one real NodesOwner authoritative read');
++    t.equal(fixture.getDispatchCalls(), 1,
++      'typed retryable owner failure should reuse recovery-eligible sync truth');
++    t.equal(fixture.service.operationDispatchDeferredRetries.size, 0,
++      'satisfied recovery fallback should not create another retry loop');
++  } finally {
++    fixture.service.stop();
++  }
++});
++
++test('NodesOwner successful empty read remains definitive missing-node ' +
++  'evidence for priority recovery dispatch', async (t) => {
++  const fixture = createOwnerBackedDispatchFixture({
++    authoritativeResult: {success: true, rows: []},
++  });
++  try {
++    await fixture.service.dispatchOperationRow(fixture.operation);
++    t.equal(fixture.authoritativeCalls.length, 1);
++    t.equal(fixture.getDispatchCalls(), 0,
++      'successful absence must not engage the failure fallback');
++    t.equal(fixture.service.operationDispatchDeferredRetries.size, 1,
++      'successful absence should remain on the existing deferred retry lane');
++  } finally {
++    fixture.service.stop();
++  }
++});
++
++test('NodesOwner non-retryable read failure remains fail closed for priority ' +
++  'recovery dispatch', async (t) => {
++  const fixture = createOwnerBackedDispatchFixture({
++    authoritativeResult: {
++      success: false,
++      rows: [],
++      error: 'invalid authoritative node row schema',
++      errorCode: 'INVALID_AUTHORITATIVE_NODE_ROW',
++    },
++  });
++  try {
++    await fixture.service.dispatchOperationRow(fixture.operation);
++    t.equal(fixture.getDispatchCalls(), 0,
++      'non-retryable owner failures must not engage the sync fallback');
++    t.equal(fixture.service.operationDispatchDeferredRetries.size, 1,
++      'non-retryable failure should use the existing deferred retry lane');
++  } finally {
++    fixture.service.stop();
++  }
++});
++
++test('NodesOwner retryable read failure cannot widen non-priority dispatch ' +
++  'eligibility', async (t) => {
++  const fixture = createOwnerBackedDispatchFixture({
++    authoritativeResult: {
++      success: false,
++      rows: [],
++      error: 'control_plane_pressure_degraded while reading nodes',
++      errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
++      retryAfterMs: TEST_RETRY_AFTER_MS,
++      deferRetry: true,
++    },
++    partitionId: TEST_REGULAR_PARTITION_ID,
++    syncRepairEligible: true,
++  });
++  try {
++    await fixture.service.dispatchOperationRow(fixture.operation);
++    t.equal(fixture.getDispatchCalls(), 0,
++      'retryable failures must not reuse sync readiness outside recovery work');
++    t.equal(fixture.service.operationDispatchDeferredRetries.size, 1,
++      'non-priority work should remain deferred');
++  } finally {
++    fixture.service.stop();
++  }
++});
+diff --git a/test/control-plane/system-metadata-owner-modules.test.js b/test/control-plane/system-metadata-owner-modules.test.js
+index 9b72ed5580534508d0e58967f2204b12a3d54eb1..5dc733fbded9fdce9195507af21e273361277b1b 100644
+--- a/test/control-plane/system-metadata-owner-modules.test.js
++++ b/test/control-plane/system-metadata-owner-modules.test.js
+@@ -415,6 +415,74 @@ test('System metadata owners route typed read and mutation methods through the g
+     }
+   });
+ 
++test('NodesOwner preserves authoritative primary-key read failure metadata ' +
++  'without changing successful absence or cache reads', async (t) => {
++  const authoritativeResults = [
++    {
++      success: false,
++      error: 'control_plane_pressure_degraded while reading nodes',
++      errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
++      retryAfterMs: 250,
++      deferRetry: true,
++      participantFailures: [{
++        error: 'participant node read unavailable',
++        errorCode: 'DISTRIBUTED_PARTICIPANT_FAILURE',
++        retryAfterMs: 125,
++      }],
++    },
++    {success: true, rows: []},
++    {success: true, rows: [{node_id: 'node-present'}]},
++  ];
++  const cachedNode = {node_id: 'node-cached'};
++  const owner = new NodesOwner({
++    controlPlaneSystemTableGateway: {
++      async readAuthoritativeRows() {
++        return authoritativeResults.shift();
++      },
++      async readProjectionRows(_tableName, options) {
++        return options.readFromCache({
++          get(tableName, nodeId) {
++            return tableName === TABLES.NODES && nodeId === 'node-cached' ?
++              cachedNode :
++              null;
++          },
++        });
++      },
++    },
++  });
++
++  try {
++    await owner.getNode('node-unavailable');
++    t.fail('failed authoritative reads must remain typed failures');
++  } catch (error) {
++    t.equal(error.errorCode, 'CONTROL_PLANE_PRESSURE_DEGRADED');
++    t.equal(error.retryAfterMs, 250);
++    t.equal(error.deferRetry, true);
++    t.equal(error.tableName, TABLES.NODES);
++    t.equal(error.ownerName, 'nodes-owner');
++    t.equal(error.operation, 'read');
++    t.equal(
++      error.firstFailedParticipant?.errorCode,
++      'DISTRIBUTED_PARTICIPANT_FAILURE',
++    );
++  }
++  t.equal(
++    await owner.getNode('node-absent'),
++    null,
++    'successful zero-row reads should remain definitive absence',
++  );
++  t.same(
++    await owner.getNode('node-present'),
++    {node_id: 'node-present'},
++    'successful authoritative rows should remain unchanged',
++  );
++  t.same(
++    await owner.getNodeFromCache('node-cached'),
++    cachedNode,
++    'cache observations should retain their existing contract',
++  );
++});
++
+ test('System metadata owners retry transient mutation failures and apply ' +
+   'primary-key upsert coalescing by default', async (t) => {
+   let upsertCallCount = 0;
