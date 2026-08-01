@@ -5,6 +5,19 @@ const RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY =
   'restart_bootstrap_authority';
 const RESTART_RECOVERY_BOUNDARY_STARTUP_AUTHORITY_CONSUMPTION =
   'startup_authority_consumption';
+const RESTART_RECOVERY_OWNER_INFRASTRUCTURE_JOIN =
+  'restart_infrastructure_join';
+const RESTART_RECOVERY_BOUNDARY_INFRASTRUCTURE_JOIN_COMPLETION =
+  'infrastructure_join_completion';
+const RESTART_RECOVERY_OWNER_STARTUP_AUTHORITY =
+  'restart_startup_authority';
+const RESTART_RECOVERY_OWNER_TRANSACTION_RECOVERY =
+  'restart_transaction_recovery';
+const RESTART_RECOVERY_BOUNDARY_TRANSACTION_RECOVERY_COMPLETION =
+  'transaction_recovery_completion';
+const TRANSACTION_RECOVERY_STATE_NOT_STARTED = 'not_started';
+const TRANSACTION_RECOVERY_STATE_PENDING = 'pending';
+const TRANSACTION_RECOVERY_STATE_FAILED = 'failed';
 const SNAPSHOT_COVERAGE_STATE_TARGET_NOT_REACHED = 'target_not_reached';
 const SNAPSHOT_COVERAGE_STATE_UNKNOWN = 'unknown';
 
@@ -1006,8 +1019,18 @@ function normalizeRestartRecoveryReadinessNumber(value) {
   return Number.isFinite(numericValue) ? Math.floor(numericValue) : null;
 }
 
+function normalizeRestartRecoveryReadinessBoolean(value) {
+  if (value === true) {
+    return true;
+  }
+  if (value === false) {
+    return false;
+  }
+  return null;
+}
+
 function parseRestartRecoveryReadinessFieldMap(observationText) {
-  const fields = {};
+  const fields = {__proto__: null};
   for (const segment of observationText.split(
     RESTART_RECOVERY_READINESS_FIELD_SEPARATOR,
   )) {
@@ -1033,7 +1056,40 @@ function isRestartRecoveryAdminReachabilityRefused(lastError) {
     .includes(RESTART_RECOVERY_READINESS_ADMIN_REFUSED_FRAGMENT);
 }
 
+function isRestartTransactionRecoveryIncomplete(state) {
+  return (
+    state === TRANSACTION_RECOVERY_STATE_NOT_STARTED ||
+    state === TRANSACTION_RECOVERY_STATE_PENDING ||
+    state === TRANSACTION_RECOVERY_STATE_FAILED
+  );
+}
+
 function resolveRestartRecoveryReadinessOwnerState(observation) {
+  if (observation?.ready === true) {
+    return null;
+  }
+  if (observation?.infrastructureJoinComplete === false) {
+    return RESTART_RECOVERY_OWNER_INFRASTRUCTURE_JOIN;
+  }
+  if (
+    observation?.infrastructureJoinComplete === true &&
+    observation?.canonicalAuthorityConsumed === false
+  ) {
+    return RESTART_RECOVERY_OWNER_STARTUP_AUTHORITY;
+  }
+  if (
+    observation?.infrastructureJoinComplete === true &&
+    observation?.canonicalAuthorityConsumed === true &&
+    (
+      isRestartTransactionRecoveryIncomplete(
+        observation?.transactionRecoveryState,
+      ) ||
+      observation?.transactionRecoveryReady === false ||
+      observation?.transactionRecoveryOutcome !== null
+    )
+  ) {
+    return RESTART_RECOVERY_OWNER_TRANSACTION_RECOVERY;
+  }
   const evidence = Object.freeze({
     ready:
       observation?.ready === true ||
@@ -1061,6 +1117,33 @@ function resolveRestartRecoveryReadinessOwnerState(observation) {
     return STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED;
   }
   return null;
+}
+
+function resolveRestartRecoveryOwnerBoundary(ownerState) {
+  if (ownerState === RESTART_RECOVERY_OWNER_INFRASTRUCTURE_JOIN) {
+    return RESTART_RECOVERY_BOUNDARY_INFRASTRUCTURE_JOIN_COMPLETION;
+  }
+  if (
+    ownerState === RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY ||
+    ownerState === RESTART_RECOVERY_OWNER_STARTUP_AUTHORITY
+  ) {
+    return RESTART_RECOVERY_BOUNDARY_STARTUP_AUTHORITY_CONSUMPTION;
+  }
+  if (ownerState === RESTART_RECOVERY_OWNER_TRANSACTION_RECOVERY) {
+    return RESTART_RECOVERY_BOUNDARY_TRANSACTION_RECOVERY_COMPLETION;
+  }
+  return null;
+}
+
+function resolveRestartRecoverySnapshotCoverageState(ownerState) {
+  if (
+    ownerState === RESTART_RECOVERY_OWNER_INFRASTRUCTURE_JOIN ||
+    ownerState === RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY ||
+    ownerState === RESTART_RECOVERY_OWNER_STARTUP_AUTHORITY
+  ) {
+    return SNAPSHOT_COVERAGE_STATE_TARGET_NOT_REACHED;
+  }
+  return SNAPSHOT_COVERAGE_STATE_UNKNOWN;
 }
 
 function resolveRestartRecoveryReadinessObservation(entry) {
@@ -1154,23 +1237,72 @@ function resolveRestartRecoveryReadinessObservation(entry) {
       fieldMap[
         RESTART_RECOVERY_READINESS_FIELD.SEED_CONTACT_AUTHORITY_SOURCE
       ],
+    startupBranch:
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.STARTUP_BRANCH] ?? null,
+    infrastructureJoinComplete: normalizeRestartRecoveryReadinessBoolean(
+      fieldMap[
+        RESTART_RECOVERY_READINESS_FIELD.INFRASTRUCTURE_JOIN_COMPLETE
+      ],
+    ),
+    canonicalAuthorityConsumed: normalizeRestartRecoveryReadinessBoolean(
+      fieldMap[
+        RESTART_RECOVERY_READINESS_FIELD.CANONICAL_AUTHORITY_CONSUMED
+      ],
+    ),
+    canonicalAuthorityState:
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.CANONICAL_AUTHORITY_STATE] ??
+        null,
+    canonicalAuthoritySource:
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.CANONICAL_AUTHORITY_SOURCE] ??
+        null,
+    transactionRecoveryState:
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.TRANSACTION_RECOVERY_STATE] ??
+        null,
+    transactionRecoveryReady: normalizeRestartRecoveryReadinessBoolean(
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.TRANSACTION_RECOVERY_READY],
+    ),
+    transactionRecoveryOutcome: null,
     reachableBy:
       fieldMap[RESTART_RECOVERY_READINESS_FIELD.REACHABLE_BY],
     lastError:
       fieldMap[RESTART_RECOVERY_READINESS_FIELD.LAST_ERROR],
   };
+  const transactionRecoveryOutcome = {
+    kind:
+      fieldMap[
+        RESTART_RECOVERY_READINESS_FIELD.TRANSACTION_RECOVERY_OUTCOME_KIND
+      ] ?? null,
+    errorCode:
+      fieldMap[
+        RESTART_RECOVERY_READINESS_FIELD
+          .TRANSACTION_RECOVERY_OUTCOME_ERROR_CODE
+      ] ?? null,
+    decisionDimension:
+      fieldMap[
+        RESTART_RECOVERY_READINESS_FIELD
+          .TRANSACTION_RECOVERY_OUTCOME_DECISION_DIMENSION
+      ] ?? null,
+    routeSource:
+      fieldMap[
+        RESTART_RECOVERY_READINESS_FIELD
+          .TRANSACTION_RECOVERY_OUTCOME_ROUTE_SOURCE
+      ] ?? null,
+  };
+  if (
+    transactionRecoveryOutcome.kind !== null ||
+    transactionRecoveryOutcome.errorCode !== null ||
+    transactionRecoveryOutcome.decisionDimension !== null ||
+    transactionRecoveryOutcome.routeSource !== null
+  ) {
+    observation.transactionRecoveryOutcome = transactionRecoveryOutcome;
+  }
   const ownerState = resolveRestartRecoveryReadinessOwnerState(observation);
   return Object.freeze({
     ...observation,
     ownerState,
-    ownerBoundary:
-      ownerState === RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY ?
-        RESTART_RECOVERY_BOUNDARY_STARTUP_AUTHORITY_CONSUMPTION :
-        null,
+    ownerBoundary: resolveRestartRecoveryOwnerBoundary(ownerState),
     snapshotCoverageState:
-      ownerState === RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY ?
-        SNAPSHOT_COVERAGE_STATE_TARGET_NOT_REACHED :
-        SNAPSHOT_COVERAGE_STATE_UNKNOWN,
+      resolveRestartRecoverySnapshotCoverageState(ownerState),
   });
 }
 
@@ -1223,6 +1355,16 @@ function resolveRestartRecoveryFailureBarrierReason({
 }) {
   if (hasRestartRecoveryPrioritySpreadEvidence(publicationConvergence)) {
     return STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING;
+  }
+  if (
+    terminalRecoveryReadiness?.ownerState ===
+      RESTART_RECOVERY_OWNER_INFRASTRUCTURE_JOIN ||
+    terminalRecoveryReadiness?.ownerState ===
+      RESTART_RECOVERY_OWNER_STARTUP_AUTHORITY ||
+    terminalRecoveryReadiness?.ownerState ===
+      RESTART_RECOVERY_OWNER_TRANSACTION_RECOVERY
+  ) {
+    return terminalRecoveryReadiness.ownerState;
   }
   if (
     terminalRecoveryReadiness?.ownerState ===

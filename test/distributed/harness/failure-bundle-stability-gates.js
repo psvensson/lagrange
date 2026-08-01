@@ -1,4 +1,7 @@
 import {FAILURE_BUNDLE_DIAGNOSTICS_CONTRACT} from './failure-bundle-diagnostics-contract-reexport.js';
+
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+
 const {
   ZERO,
   STABILITY_GATE_STATUS_OPEN,
@@ -30,6 +33,12 @@ const {
 
 const STABILITY_GATE_BLOCKER_RESTART_BOOTSTRAP_AUTHORITY =
   'restart_bootstrap_authority';
+const STABILITY_GATE_BLOCKER_RESTART_INFRASTRUCTURE_JOIN =
+  'restart_infrastructure_join';
+const STABILITY_GATE_BLOCKER_RESTART_STARTUP_AUTHORITY =
+  'restart_startup_authority';
+const STABILITY_GATE_BLOCKER_RESTART_TRANSACTION_RECOVERY =
+  'restart_transaction_recovery';
 
 function buildRestartRecoveryStabilityGate({
   entry,
@@ -62,13 +71,21 @@ function buildRestartRecoveryStabilityGate({
   const hasRestartBootstrapAuthorityBlocker =
     terminalRecoveryReadiness?.ownerState ===
       STABILITY_GATE_BLOCKER_RESTART_BOOTSTRAP_AUTHORITY;
+  const directHandoffBlocker = arrayIncludes([
+    STABILITY_GATE_BLOCKER_RESTART_INFRASTRUCTURE_JOIN,
+    STABILITY_GATE_BLOCKER_RESTART_STARTUP_AUTHORITY,
+    STABILITY_GATE_BLOCKER_RESTART_TRANSACTION_RECOVERY,
+  ], terminalRecoveryReadiness?.ownerState) ?
+    terminalRecoveryReadiness.ownerState :
+    null;
   const applicable =
     scenarioName.includes(SCENARIO_NAME_FRAGMENT_RESTART) ||
     restartBoundaryCount > ZERO ||
     !!startupRecovery ||
     hasStartupReadinessBlocker ||
     hasAdminReachabilityBlocker ||
-    hasRestartBootstrapAuthorityBlocker;
+    hasRestartBootstrapAuthorityBlocker ||
+    directHandoffBlocker !== null;
   if (!applicable) {
     return buildStabilityGate({
       type: STABILITY_GATE_TYPE_RESTART_RECOVERY,
@@ -123,6 +140,9 @@ function buildRestartRecoveryStabilityGate({
   }
   if (hasRestartBootstrapAuthorityBlocker) {
     blockers.push(STABILITY_GATE_BLOCKER_RESTART_BOOTSTRAP_AUTHORITY);
+  }
+  if (directHandoffBlocker !== null) {
+    blockers.push(directHandoffBlocker);
   }
   if (hasBlockingClosureRecord) {
     blockers.push(STABILITY_GATE_BLOCKER_CLOSURE_RECORD);

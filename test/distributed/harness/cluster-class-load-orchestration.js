@@ -94,12 +94,27 @@ const RESTART_RECOVERY_FIELD_SEED_CONTACT_REMAINING_BUDGET_MS =
   'seedContactRemainingBudgetMs';
 const RESTART_RECOVERY_FIELD_SEED_CONTACT_AUTHORITY_SOURCE =
   'seedContactAuthoritySource';
+const RESTART_RECOVERY_FIELD_STARTUP_BRANCH = 'startupBranch';
+const RESTART_RECOVERY_FIELD_INFRASTRUCTURE_JOIN_COMPLETE =
+  'infrastructureJoinComplete';
 const RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_CONSUMED =
   'canonicalAuthorityConsumed';
+const RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_STATE =
+  'canonicalAuthorityState';
+const RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_SOURCE =
+  'canonicalAuthoritySource';
 const RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_STATE =
   'transactionRecoveryState';
 const RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_READY =
   'transactionRecoveryReady';
+const RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_OUTCOME_KIND =
+  'transactionRecoveryOutcomeKind';
+const RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_OUTCOME_ERROR_CODE =
+  'transactionRecoveryOutcomeErrorCode';
+const RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_OUTCOME_DECISION_DIMENSION =
+  'transactionRecoveryOutcomeDecisionDimension';
+const RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_OUTCOME_ROUTE_SOURCE =
+  'transactionRecoveryOutcomeRouteSource';
 // CL-025: a single ready probe is satisfiable by a node mid-crash (admin came
 // up early in boot, process exited between the probe and the recovered
 // declaration — observed in stat-gate 085908Z-run2). Readiness must hold
@@ -589,6 +604,11 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
           typeof bootstrapReadiness.startupRuntimeHandoff === 'object' ?
           bootstrapReadiness.startupRuntimeHandoff :
           null;
+    const transactionRecoveryOutcome =
+      startupRuntimeHandoff?.transactionRecoveryOutcome &&
+      typeof startupRuntimeHandoff.transactionRecoveryOutcome === 'object' ?
+        startupRuntimeHandoff.transactionRecoveryOutcome :
+        null;
     return (
       'reachable=' +
       String(observation.reachable === true) +
@@ -647,10 +667,38 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
       RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
       String(seedContact?.authoritySource || RESTART_RECOVERY_FIELD_NONE) +
       RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_STARTUP_BRANCH +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(
+        startupRuntimeHandoff?.startupBranch ||
+          RESTART_RECOVERY_FIELD_NONE,
+      ) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_INFRASTRUCTURE_JOIN_COMPLETE +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(
+        startupRuntimeHandoff?.infrastructureJoinComplete ??
+          RESTART_RECOVERY_FIELD_NONE,
+      ) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
       RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_CONSUMED +
       RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
       String(
         startupRuntimeHandoff?.canonicalAuthorityConsumed ??
+          RESTART_RECOVERY_FIELD_NONE,
+      ) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_STATE +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(
+        startupRuntimeHandoff?.canonicalAuthorityState ||
+          RESTART_RECOVERY_FIELD_NONE,
+      ) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_SOURCE +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(
+        startupRuntimeHandoff?.canonicalAuthoritySource ||
           RESTART_RECOVERY_FIELD_NONE,
       ) +
       RESTART_RECOVERY_FIELD_SEPARATOR +
@@ -665,6 +713,31 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
       RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
       String(
         startupRuntimeHandoff?.transactionRecoveryReady ??
+          RESTART_RECOVERY_FIELD_NONE,
+      ) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_OUTCOME_KIND +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(transactionRecoveryOutcome?.kind || RESTART_RECOVERY_FIELD_NONE) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_OUTCOME_ERROR_CODE +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(
+        transactionRecoveryOutcome?.errorCode ||
+          RESTART_RECOVERY_FIELD_NONE,
+      ) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_OUTCOME_DECISION_DIMENSION +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(
+        transactionRecoveryOutcome?.decisionDimension ||
+          RESTART_RECOVERY_FIELD_NONE,
+      ) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_TRANSACTION_RECOVERY_OUTCOME_ROUTE_SOURCE +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(
+        transactionRecoveryOutcome?.routeSource ||
           RESTART_RECOVERY_FIELD_NONE,
       ) +
       ', reachableBy=' +

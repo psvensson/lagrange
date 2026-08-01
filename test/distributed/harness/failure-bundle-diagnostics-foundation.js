@@ -522,6 +522,20 @@ export const RESTART_RECOVERY_READINESS_FIELD = Object.freeze({
     RESTART_RECOVERY_READINESS_FIELD_SEED_CONTACT_REMAINING_BUDGET_MS,
   SEED_CONTACT_AUTHORITY_SOURCE:
     RESTART_RECOVERY_READINESS_FIELD_SEED_CONTACT_AUTHORITY_SOURCE,
+  STARTUP_BRANCH: 'startupBranch',
+  INFRASTRUCTURE_JOIN_COMPLETE: 'infrastructureJoinComplete',
+  CANONICAL_AUTHORITY_CONSUMED: 'canonicalAuthorityConsumed',
+  CANONICAL_AUTHORITY_STATE: 'canonicalAuthorityState',
+  CANONICAL_AUTHORITY_SOURCE: 'canonicalAuthoritySource',
+  TRANSACTION_RECOVERY_STATE: 'transactionRecoveryState',
+  TRANSACTION_RECOVERY_READY: 'transactionRecoveryReady',
+  TRANSACTION_RECOVERY_OUTCOME_KIND: 'transactionRecoveryOutcomeKind',
+  TRANSACTION_RECOVERY_OUTCOME_ERROR_CODE:
+    'transactionRecoveryOutcomeErrorCode',
+  TRANSACTION_RECOVERY_OUTCOME_DECISION_DIMENSION:
+    'transactionRecoveryOutcomeDecisionDimension',
+  TRANSACTION_RECOVERY_OUTCOME_ROUTE_SOURCE:
+    'transactionRecoveryOutcomeRouteSource',
   REACHABLE_BY: 'reachableBy',
   LAST_ERROR: 'lastError',
 });
