@@ -104,6 +104,17 @@ cheap pilot that grounds the frontier before any expensive fan-out or gate.
 
 ## Decision log
 
+- 2026-08-01 — The final-SQL handoff candidate is independently approved at
+  current fingerprint `214f84db...`; its stale rejection is fully decomposed,
+  but the parent Quest honestly exhausted at its lifetime scope bound instead
+  of taking a fourth override. The first inheritance successor then exposed a
+  Solver receipt-rebinding defect and was parked; commit `3049df7fe` repairs and
+  regression-tests that mechanism. The bounded
+  `transaction-recovery-poison-row-final-sql-handoff-current-hash-closure-v2`
+  Quest owns only the one-path current-vehicle identity guard and terminal
+  handoff. After it lands, `rolling-restart-representative-certification` owns
+  one current-source N>=15 hardware-relative Wilson/safety-floor release window,
+  not another mechanism-patch loop.
 - 2026-07-31 — Selected `cold-node-authority-reacquisition-pressure` from the
   seed-refresh Quest's live validation. It owns restart/bootstrap authority
   consumption under pressure; `CL-021` active-gate snapshot coverage and the

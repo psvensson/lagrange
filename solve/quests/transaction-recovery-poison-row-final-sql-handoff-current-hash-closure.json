@@ -1,26 +1,17 @@
 {
-  "id": "transaction-recovery-poison-row-final-sql-handoff-live-ab",
+  "id": "transaction-recovery-poison-row-final-sql-handoff-current-hash-closure",
   "authoringContractVersion": 1,
   "verificationContractVersion": 2,
-  "verificationTemplates": [
-    "admission-gating",
-    "adversarial-js-intrinsics",
-    "formation-circularity",
-    "harness-fidelity",
-    "recovery-replay",
-    "retry-loops",
-    "sweep-timer"
-  ],
-  "statement": "The shared final post-hydration SQL runtime attachment engages existing StartupRuntimeHandoffOwner recovery for restarted seed and durable-rejoin paths before external readiness; a canonical poison row publishes transaction_recovery_incomplete with errorCode=transaction_recovery_incomplete, decisionDimension=commit_mode, and the restarted node's exact route source before generic admission, proven by at least two clean fixed live passes against at least two clean source-reverted failures.",
+  "statement": "The unchanged independently approved final-SQL handoff candidate remains byte-identical to fingerprint 214f84dbb932e77deba2922339eebc9fc95e85a7c8ccabba6e5197d6eaef5d4e and terminally carries the current-hash two-by-two durable-rejoin A/B plus three consecutive exact guard passes after the parent Quest's lifetime scope cap.",
   "priority": 1,
   "class": "product",
   "links": {
     "roadmapRow": "RM-0.1-fs-rolling-restart",
     "specRef": "membership-lifecycle-placement-hard-cutover",
     "closesCL": [],
-    "parentQuest": "transaction-recovery-poison-row-live-summary-attribution",
+    "parentQuest": "transaction-recovery-poison-row-final-sql-handoff-live-ab",
     "planDoc": "solve/epics/topology-convergence-hardening.md",
-    "draftedAtCommit": "edf184681afd11cb866f66ce60e81b09d92c8822"
+    "draftedAtCommit": "04c3a1fccaf393d47f9b94f80fd6230fb0b941e0"
   },
   "doneWhen": {
     "probe": "scenario-harness",
@@ -32,7 +23,7 @@
   },
   "frontiers": [
     {
-      "id": "transaction-recovery-poison-row-final-sql-handoff-live-ab-main",
+      "id": "transaction-recovery-poison-row-final-sql-handoff-current-hash-closure-main",
       "priority": 1,
       "metric": {
         "probe": "scenario-harness",
@@ -67,6 +58,19 @@
     {
       "id": "measured-report-before-attempt",
       "statement": "Produce a fresh scenario-harness report before each attempt commit, and preserve the predecessor live failure as evidence for the summary-boundary diagnosis."
+    },
+    {
+      "id": "unchanged-candidate-inheritance-only",
+      "statement": "This terminal successor authorizes no source edit or new attempt. Inherit the parent's exact approved candidate and refuse closure unless its fingerprint remains 214f84dbb932e77deba2922339eebc9fc95e85a7c8ccabba6e5197d6eaef5d4e with currentMatches=true."
     }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "adversarial-js-intrinsics",
+    "formation-circularity",
+    "harness-fidelity",
+    "recovery-replay",
+    "retry-loops",
+    "sweep-timer"
   ]
 }

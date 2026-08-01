@@ -1,43 +1,34 @@
 {
-  "id": "transaction-recovery-poison-row-final-sql-handoff-live-ab",
+  "id": "transaction-recovery-poison-row-live-summary-attribution",
   "authoringContractVersion": 1,
   "verificationContractVersion": 2,
-  "verificationTemplates": [
-    "admission-gating",
-    "adversarial-js-intrinsics",
-    "formation-circularity",
-    "harness-fidelity",
-    "recovery-replay",
-    "retry-loops",
-    "sweep-timer"
-  ],
-  "statement": "The shared final post-hydration SQL runtime attachment engages existing StartupRuntimeHandoffOwner recovery for restarted seed and durable-rejoin paths before external readiness; a canonical poison row publishes transaction_recovery_incomplete with errorCode=transaction_recovery_incomplete, decisionDimension=commit_mode, and the restarted node's exact route source before generic admission, proven by at least two clean fixed live passes against at least two clean source-reverted failures.",
+  "statement": "A restarted seed or joiner preserves canonical poison-row recovery metadata across the SQL replay-summary boundary and publishes transaction_recovery_incomplete with decisionDimension=commit_mode and the canonical route source through the startup runtime handoff owner before any generic admission classification; a fail-closed controlled live vehicle proves at least two fixed samples against at least two source-reverted samples.",
   "priority": 1,
   "class": "product",
   "links": {
     "roadmapRow": "RM-0.1-fs-rolling-restart",
     "specRef": "membership-lifecycle-placement-hard-cutover",
     "closesCL": [],
-    "parentQuest": "transaction-recovery-poison-row-live-summary-attribution",
-    "planDoc": "solve/epics/topology-convergence-hardening.md",
-    "draftedAtCommit": "edf184681afd11cb866f66ce60e81b09d92c8822"
+    "parentQuest": "transaction-recovery-poison-row-live-owner-engagement-v2",
+    "planDoc": "docs/plans/topology-convergence-plan.md",
+    "draftedAtCommit": "abf3529087cfc7138286c89012c60883bb59be7c"
   },
   "doneWhen": {
     "probe": "scenario-harness",
     "args": {
-      "scenario": "transaction-recovery-poison-row-final-sql-handoff-live-ab",
+      "scenario": "transaction-recovery-poison-row-live-summary-attribution",
       "consecutive": 3,
       "metric": "priority"
     }
   },
   "frontiers": [
     {
-      "id": "transaction-recovery-poison-row-final-sql-handoff-live-ab-main",
+      "id": "transaction-recovery-poison-row-live-summary-attribution-main",
       "priority": 1,
       "metric": {
         "probe": "scenario-harness",
         "args": {
-          "scenario": "transaction-recovery-poison-row-final-sql-handoff-live-ab",
+          "scenario": "transaction-recovery-poison-row-live-summary-attribution",
           "metric": "priority"
         }
       }
