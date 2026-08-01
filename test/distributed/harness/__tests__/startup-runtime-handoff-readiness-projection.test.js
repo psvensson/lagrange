@@ -259,6 +259,10 @@ test('readiness normalization resists toJSON and prototype fabrication',
 test('readiness normalization uses captured validation intrinsics',
   (t) => {
     const originalArrayIsArray = Array.isArray;
+    const originalArrayIterator = objectGetOwnPropertyDescriptor(
+      Array.prototype,
+      Symbol.iterator,
+    );
     const originalJsonStringify = JSON.stringify;
     const originalGetOwnPropertyDescriptor =
       Object.getOwnPropertyDescriptor;
@@ -284,31 +288,51 @@ test('readiness normalization uses captured validation intrinsics',
       'canonicalAuthorityConsumed',
       'transactionRecoveryReady',
     ];
+    reflectDefineProperty(Array.prototype, Symbol.iterator, {
+      configurable: true,
+      value() {
+        return {
+          next() {
+            return {done: true};
+          },
+        };
+      },
+      writable: true,
+    });
+    let arrayWitness;
+    let recordWitness;
     try {
-      t.equal(
-        normalize([]).startupRuntimeHandoff,
-        null,
-        'replacing Array.isArray cannot admit an array witness',
-      );
-      const normalized = normalize({
+      arrayWitness = normalize([]).startupRuntimeHandoff;
+      recordWitness = normalize({
         infrastructureJoinComplete: false,
         canonicalAuthorityConsumed: false,
         transactionRecoveryReady: false,
       }).startupRuntimeHandoff;
-      t.same(
-        normalized,
-        {
-          infrastructureJoinComplete: false,
-          canonicalAuthorityConsumed: false,
-          transactionRecoveryReady: false,
-        },
-        'replaced reflection and JSON intrinsics cannot fabricate readiness',
-      );
     } finally {
       Array.isArray = originalArrayIsArray;
       JSON.stringify = originalJsonStringify;
       Object.getOwnPropertyDescriptor = originalGetOwnPropertyDescriptor;
       Reflect.ownKeys = originalReflectOwnKeys;
+      reflectDefineProperty(
+        Array.prototype,
+        Symbol.iterator,
+        originalArrayIterator,
+      );
     }
+    t.equal(
+      arrayWitness,
+      null,
+      'replacing Array.isArray cannot admit an array witness',
+    );
+    t.same(
+      recordWitness,
+      {
+        infrastructureJoinComplete: false,
+        canonicalAuthorityConsumed: false,
+        transactionRecoveryReady: false,
+      },
+      'replaced reflection, iteration, and JSON intrinsics cannot fabricate ' +
+        'or erase readiness',
+    );
     t.end();
   });

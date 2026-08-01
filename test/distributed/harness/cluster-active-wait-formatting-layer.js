@@ -972,7 +972,9 @@ function clonePlainData(value, ancestor = null) {
   nextAncestor.value = value;
   nextAncestor.parent = ancestor;
   const clone = objectCreate(null);
-  for (const key of reflectOwnKeys(value)) {
+  const keys = reflectOwnKeys(value);
+  for (let keyIndex = ZERO; keyIndex < keys.length; keyIndex += ONE) {
+    const key = keys[keyIndex];
     if (typeof key !== 'string') return INVALID_PLAIN_DATA;
     const descriptor = objectGetOwnPropertyDescriptor(value, key);
     if (!descriptor || descriptor.enumerable !== true ||
