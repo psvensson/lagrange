@@ -12,7 +12,6 @@ import {
 
 const LOCAL_STR_SLASH = '/';
 const LOCAL_STR_TEST = '/test/';
-const LOCAL_STR_TEST_ROOT = 'test/';
 const LOCAL_STR_TEST_JS = '.test.js';
 const LOCAL_STR_TEST_MJS = '.test.mjs';
 const LOCAL_STR_TEST_CJS = '.test.cjs';
@@ -51,8 +50,7 @@ function normalizePath(filePath) {
 function classifyFilePath(filePath) {
   const normalized = normalizePath(filePath);
   const basename = path.basename(normalized).toLowerCase();
-  if (normalized.startsWith(LOCAL_STR_TEST_ROOT) ||
-      normalized.includes(LOCAL_STR_TEST) ||
+  if (normalized.includes(LOCAL_STR_TEST) ||
       basename.endsWith(LOCAL_STR_TEST_JS) ||
       basename.endsWith(LOCAL_STR_TEST_MJS) ||
       basename.endsWith(LOCAL_STR_TEST_CJS)) {

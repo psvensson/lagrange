@@ -16,11 +16,6 @@ test('classifyFilePath recognizes constants owners and tests', async (t) => {
     FILE_CLASS.TEST,
   );
   t.equal(
-    classifyFilePath('test/distributed/harness/query-executor.js'),
-    FILE_CLASS.TEST,
-    'repo-relative harness paths remain test-owned',
-  );
-  t.equal(
     classifyFilePath('/repo/src/query/query-executor.js'),
     FILE_CLASS.RUNTIME,
   );

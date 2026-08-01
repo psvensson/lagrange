@@ -1,3 +1,5 @@
+import {types as utilTypes} from 'node:util';
+
 import {CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER} from './cluster-active-wait-progress-layer.js';
 import {isRecord as isCanonicalJsonRecord} from
   '../../../src/utils/canonical-json-data.js';
@@ -32,6 +34,9 @@ const {
 const BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD =
   'bootstrapJoinProjection';
 const STARTUP_RUNTIME_HANDOFF_READINESS_FIELD = 'startupRuntimeHandoff';
+const arrayIsArray = Array.isArray;
+const mathFloor = Math.floor;
+const mathMax = Math.max;
 const numberIsFinite = Number.isFinite;
 const numberIsInteger = Number.isInteger;
 const numberIsSafeInteger = Number.isSafeInteger;
@@ -40,6 +45,7 @@ const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
 const objectHasOwn = Object.hasOwn;
 const objectIs = Object.is;
 const reflectOwnKeys = Reflect.ownKeys;
+const utilIsProxy = utilTypes.isProxy;
 const INVALID_PLAIN_DATA = objectCreate(null);
 const NEGATIVE_ZERO = -0;
 const ACTIVE_WAIT_PROGRESS_OBSERVATION_SEPARATOR = '/';
@@ -947,7 +953,7 @@ function plainDataAncestorContains(ancestor, value) {
 }
 
 function plainDataRecordSupported(value) {
-  return isCanonicalJsonRecord(value);
+  return !utilIsProxy(value) && isCanonicalJsonRecord(value);
 }
 
 function clonePlainData(value, ancestor = null) {
@@ -1028,55 +1034,71 @@ function normalizeReadinessProbeResult(probeResponse) {
   };
 
   if (typeof probeResponse === 'number') {
-    normalized.status = probeResponse;
+    normalized.status = numberIsFinite(probeResponse) ?
+      mathFloor(probeResponse) :
+      HTTP_ERROR_STATUS;
     return normalized;
   }
 
-  if (!probeResponse || typeof probeResponse !== 'object') {
+  if (!probeResponse || typeof probeResponse !== 'object' ||
+      utilIsProxy(probeResponse)) {
     return normalized;
   }
 
-  normalized.status = Number.isFinite(probeResponse.status) ?
-    Math.floor(probeResponse.status) :
-    HTTP_ERROR_STATUS;
-
-  const body = probeResponse.body;
-  if (!body || typeof body !== 'object') {
+  const statusDescriptor = objectGetOwnPropertyDescriptor(
+    probeResponse,
+    'status',
+  );
+  const bodyDescriptor = objectGetOwnPropertyDescriptor(
+    probeResponse,
+    'body',
+  );
+  if (!statusDescriptor || !objectHasOwn(statusDescriptor, 'value') ||
+      !numberIsFinite(statusDescriptor.value) || !bodyDescriptor ||
+      !objectHasOwn(bodyDescriptor, 'value')) {
     return normalized;
   }
+  normalized.status = mathFloor(statusDescriptor.value);
+
+  const body = bodyDescriptor.value;
+  if (!plainDataRecordSupported(body)) return normalized;
+
+  // Isolate structured recovery evidence before processing any diagnostic
+  // collection. Later formatting can never mutate the admitted witness.
+  normalized[STARTUP_RUNTIME_HANDOFF_READINESS_FIELD] = cloneOwnDataRecord(
+    body,
+    STARTUP_RUNTIME_HANDOFF_READINESS_FIELD,
+  );
 
   normalized.phase = typeof body.phase === 'string' ? body.phase : null;
-  normalized.phaseRank = Number.isFinite(body.phaseRank) ?
-    Math.max(ZERO, Math.floor(body.phaseRank)) :
+  normalized.phaseRank = numberIsFinite(body.phaseRank) ?
+    mathMax(ZERO, mathFloor(body.phaseRank)) :
     resolveReadinessPhaseRank(normalized.phase);
   normalized.state = typeof body.state === 'string' ? body.state : null;
   normalized.readinessStage =
     typeof body.readinessStage === 'string' ? body.readinessStage : null;
-  normalized.readinessStageRank = Number.isFinite(body.readinessStageRank) ?
-    Math.max(ZERO, Math.floor(body.readinessStageRank)) :
+  normalized.readinessStageRank = numberIsFinite(body.readinessStageRank) ?
+    mathMax(ZERO, mathFloor(body.readinessStageRank)) :
     null;
-  normalized.reasons = Array.isArray(body.reasons) ?
-    body.reasons.map((reason) => String(reason)) :
-    [];
-  normalized.retryAfterMs = Number.isFinite(body.retryAfterMs) ?
-    Math.floor(body.retryAfterMs) :
+  normalized.retryAfterMs = numberIsFinite(body.retryAfterMs) ?
+    mathFloor(body.retryAfterMs) :
     null;
-  normalized.stableWindowMs = Number.isFinite(body.stableWindowMs) ?
-    Math.max(ZERO, Math.floor(body.stableWindowMs)) :
+  normalized.stableWindowMs = numberIsFinite(body.stableWindowMs) ?
+    mathMax(ZERO, mathFloor(body.stableWindowMs)) :
     null;
-  normalized.stableElapsedMs = Number.isFinite(body.stableElapsedMs) ?
-    Math.max(ZERO, Math.floor(body.stableElapsedMs)) :
+  normalized.stableElapsedMs = numberIsFinite(body.stableElapsedMs) ?
+    mathMax(ZERO, mathFloor(body.stableElapsedMs)) :
     ZERO;
-  normalized.stableSinceMs = Number.isFinite(body.stableSinceMs) ?
-    Math.floor(body.stableSinceMs) :
+  normalized.stableSinceMs = numberIsFinite(body.stableSinceMs) ?
+    mathFloor(body.stableSinceMs) :
     null;
-  normalized.readinessEpoch = Number.isFinite(body.readinessEpoch) ?
-    Math.max(ZERO, Math.floor(body.readinessEpoch)) :
-    Number.isFinite(body.transitionCount) ?
-      Math.max(ZERO, Math.floor(body.transitionCount)) :
+  normalized.readinessEpoch = numberIsFinite(body.readinessEpoch) ?
+    mathMax(ZERO, mathFloor(body.readinessEpoch)) :
+    numberIsFinite(body.transitionCount) ?
+      mathMax(ZERO, mathFloor(body.transitionCount)) :
       null;
-  normalized.timestamp = Number.isFinite(body.timestamp) ?
-    Math.floor(body.timestamp) :
+  normalized.timestamp = numberIsFinite(body.timestamp) ?
+    mathFloor(body.timestamp) :
     null;
   normalized.controlPlaneRecoveryReady =
     typeof body.controlPlaneRecoveryReady === 'boolean' ?
@@ -1094,18 +1116,17 @@ function normalizeReadinessProbeResult(probeResponse) {
     typeof body.recoveryBlocked === 'boolean' ? body.recoveryBlocked : null;
   normalized.recoveryStage =
     typeof body.recoveryStage === 'string' ? body.recoveryStage : null;
-  normalized.recoveryStageRank = Number.isFinite(body.recoveryStageRank) ?
-    Math.max(ZERO, Math.floor(body.recoveryStageRank)) :
+  normalized.recoveryStageRank = numberIsFinite(body.recoveryStageRank) ?
+    mathMax(ZERO, mathFloor(body.recoveryStageRank)) :
     null;
-  normalized.publishedControlPlaneEpoch = Number.isFinite(
+  normalized.publishedControlPlaneEpoch = numberIsFinite(
     body.publishedControlPlaneEpoch,
   ) ?
-    Math.max(ZERO, Math.floor(body.publishedControlPlaneEpoch)) :
+    mathMax(ZERO, mathFloor(body.publishedControlPlaneEpoch)) :
     null;
-  normalized[STARTUP_RUNTIME_HANDOFF_READINESS_FIELD] = cloneOwnDataRecord(
-    body,
-    STARTUP_RUNTIME_HANDOFF_READINESS_FIELD,
-  );
+  normalized.reasons = arrayIsArray(body.reasons) ?
+    body.reasons.map((reason) => String(reason)) :
+    [];
   normalized[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD] =
     body[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD] &&
     typeof body[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD] === 'object' ?

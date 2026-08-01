@@ -187,6 +187,205 @@ test('readiness normalization never executes nested witness accessors',
     t.end();
   });
 
+test('readiness normalization rejects proxies before reflection', (t) => {
+  let descriptorReadCount = 0;
+  let reflectionTrapCount = 0;
+  const target = {
+    infrastructureJoinComplete: false,
+    canonicalAuthorityConsumed: false,
+    transactionRecoveryReady: false,
+  };
+  const proxy = new Proxy(target, {
+    getOwnPropertyDescriptor(record, key) {
+      descriptorReadCount += 1;
+      reflectionTrapCount += 1;
+      const descriptor = Reflect.getOwnPropertyDescriptor(record, key);
+      return descriptorReadCount > 3 ?
+        {...descriptor, value: true} :
+        descriptor;
+    },
+    getPrototypeOf(record) {
+      reflectionTrapCount += 1;
+      return Reflect.getPrototypeOf(record);
+    },
+    ownKeys(record) {
+      reflectionTrapCount += 1;
+      return Reflect.ownKeys(record);
+    },
+  });
+
+  t.equal(
+    normalize(proxy).startupRuntimeHandoff,
+    null,
+    'a stateful root proxy cannot change values between admission and copy',
+  );
+  t.equal(
+    reflectionTrapCount,
+    0,
+    'root proxies are rejected without invoking reflection traps',
+  );
+  t.equal(
+    normalize({transactionRecoveryOutcome: proxy})
+      .startupRuntimeHandoff,
+    null,
+    'a nested proxy invalidates the complete witness',
+  );
+  t.equal(
+    reflectionTrapCount,
+    0,
+    'nested proxies are rejected without invoking reflection traps',
+  );
+  const revoked = Proxy.revocable({}, {});
+  revoked.revoke();
+  t.equal(
+    normalize(revoked.proxy).startupRuntimeHandoff,
+    null,
+    'a revoked proxy remains fail-closed without reflection',
+  );
+  t.end();
+});
+
+test('readiness normalization rejects hostile envelopes before field reads',
+  (t) => {
+    let envelopeTrapCount = 0;
+    const fabricatedBody = {
+      startupRuntimeHandoff: {
+        infrastructureJoinComplete: true,
+        canonicalAuthorityConsumed: true,
+        transactionRecoveryReady: true,
+      },
+    };
+    const envelopeProxy = new Proxy({status: 503, body: fabricatedBody}, {
+      get(record, key) {
+        envelopeTrapCount += 1;
+        return Reflect.get(record, key);
+      },
+      getOwnPropertyDescriptor(record, key) {
+        envelopeTrapCount += 1;
+        return Reflect.getOwnPropertyDescriptor(record, key);
+      },
+    });
+    t.equal(
+      normalizeReadinessProbeResult(envelopeProxy).startupRuntimeHandoff,
+      null,
+      'a proxied response envelope cannot supply recovery evidence',
+    );
+    t.equal(
+      envelopeTrapCount,
+      0,
+      'the response proxy is rejected before any trap executes',
+    );
+
+    let bodyTrapCount = 0;
+    const bodyProxy = new Proxy(fabricatedBody, {
+      get(record, key) {
+        bodyTrapCount += 1;
+        return Reflect.get(record, key);
+      },
+      getOwnPropertyDescriptor(record, key) {
+        bodyTrapCount += 1;
+        return Reflect.getOwnPropertyDescriptor(record, key);
+      },
+    });
+    t.equal(
+      normalizeReadinessProbeResult({status: 503, body: bodyProxy})
+        .startupRuntimeHandoff,
+      null,
+      'a proxied readiness body cannot supply recovery evidence',
+    );
+    t.equal(
+      bodyTrapCount,
+      0,
+      'the body proxy is rejected before any trap executes',
+    );
+    t.end();
+  });
+
+test('readiness normalization rejects envelope and body accessors', (t) => {
+  let envelopeAccessorReadCount = 0;
+  const bodyAccessorEnvelope = {status: 503};
+  Object.defineProperty(bodyAccessorEnvelope, 'body', {
+    enumerable: true,
+    get() {
+      envelopeAccessorReadCount += 1;
+      return {
+        startupRuntimeHandoff: {
+          infrastructureJoinComplete: true,
+          canonicalAuthorityConsumed: true,
+          transactionRecoveryReady: true,
+        },
+      };
+    },
+  });
+  t.equal(
+    normalizeReadinessProbeResult(bodyAccessorEnvelope)
+      .startupRuntimeHandoff,
+    null,
+    'a body accessor cannot fabricate recovery evidence',
+  );
+
+  const statusAccessorEnvelope = {
+    body: {
+      startupRuntimeHandoff: {
+        infrastructureJoinComplete: true,
+        canonicalAuthorityConsumed: true,
+        transactionRecoveryReady: true,
+      },
+    },
+  };
+  Object.defineProperty(statusAccessorEnvelope, 'status', {
+    enumerable: true,
+    get() {
+      envelopeAccessorReadCount += 1;
+      return 200;
+    },
+  });
+  t.equal(
+    normalizeReadinessProbeResult(statusAccessorEnvelope)
+      .startupRuntimeHandoff,
+    null,
+    'a status accessor cannot mutate or authenticate recovery evidence',
+  );
+  t.equal(
+    envelopeAccessorReadCount,
+    0,
+    'response accessors are inspected but never executed',
+  );
+
+  let phaseAccessorReadCount = 0;
+  const accessorBody = {
+    startupRuntimeHandoff: {
+      infrastructureJoinComplete: false,
+      canonicalAuthorityConsumed: false,
+      transactionRecoveryReady: false,
+    },
+  };
+  Object.defineProperty(accessorBody, 'phase', {
+    enumerable: true,
+    get() {
+      phaseAccessorReadCount += 1;
+      accessorBody.startupRuntimeHandoff = {
+        infrastructureJoinComplete: true,
+        canonicalAuthorityConsumed: true,
+        transactionRecoveryReady: true,
+      };
+      return 'READY';
+    },
+  });
+  t.equal(
+    normalizeReadinessProbeResult({status: 503, body: accessorBody})
+      .startupRuntimeHandoff,
+    null,
+    'an unrelated body accessor cannot rewrite the handoff before copying',
+  );
+  t.equal(
+    phaseAccessorReadCount,
+    0,
+    'unrelated body accessors are never executed',
+  );
+  t.end();
+});
+
 test('readiness normalization resists toJSON and prototype fabrication',
   (t) => {
     const restoreToJson = polluteEnumerablePrototypeProperty(
@@ -264,9 +463,20 @@ test('readiness normalization uses captured validation intrinsics',
       Symbol.iterator,
     );
     const originalJsonStringify = JSON.stringify;
+    const originalMathFloor = Math.floor;
+    const originalMathMax = Math.max;
+    const originalNumberIsFinite = Number.isFinite;
     const originalGetOwnPropertyDescriptor =
       Object.getOwnPropertyDescriptor;
     const originalReflectOwnKeys = Reflect.ownKeys;
+    const intrinsicBody = {
+      startupRuntimeHandoff: {
+        infrastructureJoinComplete: false,
+        canonicalAuthorityConsumed: false,
+        transactionRecoveryReady: false,
+      },
+    };
+    let hostileMathCallCount = 0;
     Array.isArray = () => false;
     JSON.stringify = () => JSON.parse(
       '{"infrastructureJoinComplete":true,' +
@@ -299,20 +509,33 @@ test('readiness normalization uses captured validation intrinsics',
       },
       writable: true,
     });
+    Math.floor = (value) => {
+      hostileMathCallCount += 1;
+      intrinsicBody.startupRuntimeHandoff = {
+        infrastructureJoinComplete: true,
+        canonicalAuthorityConsumed: true,
+        transactionRecoveryReady: true,
+      };
+      return value;
+    };
+    Math.max = () => Number.MAX_SAFE_INTEGER;
+    Number.isFinite = () => true;
     let arrayWitness;
     let recordWitness;
     try {
       arrayWitness = normalize([]).startupRuntimeHandoff;
-      recordWitness = normalize({
-        infrastructureJoinComplete: false,
-        canonicalAuthorityConsumed: false,
-        transactionRecoveryReady: false,
+      recordWitness = normalizeReadinessProbeResult({
+        status: 503,
+        body: intrinsicBody,
       }).startupRuntimeHandoff;
     } finally {
       Array.isArray = originalArrayIsArray;
       JSON.stringify = originalJsonStringify;
       Object.getOwnPropertyDescriptor = originalGetOwnPropertyDescriptor;
       Reflect.ownKeys = originalReflectOwnKeys;
+      Math.floor = originalMathFloor;
+      Math.max = originalMathMax;
+      Number.isFinite = originalNumberIsFinite;
       reflectDefineProperty(
         Array.prototype,
         Symbol.iterator,
@@ -333,6 +556,11 @@ test('readiness normalization uses captured validation intrinsics',
       },
       'replaced reflection, iteration, and JSON intrinsics cannot fabricate ' +
         'or erase readiness',
+    );
+    t.equal(
+      hostileMathCallCount,
+      0,
+      'replaced numeric intrinsics are never executed',
     );
     t.end();
   });
