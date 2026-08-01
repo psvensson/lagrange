@@ -32,6 +32,7 @@ const {
   JOINING_ERROR_MSG,
   JOINING_LOG_MSG,
   NodeService,
+  STARTUP_JOIN_MODE,
 } = NODE_JOINING_SERVICE_SHARED;
 
 const OPERATION_LEDGER_FORMATION_BARRIER_STATE = Object.freeze({
@@ -420,6 +421,9 @@ class NodeJoiningOperationLedgerFormationReadiness
    * @private
    */
   async awaitOperationLedgerFormationBarrier() {
+    if (this.startupMode === STARTUP_JOIN_MODE.DURABLE_REJOIN) {
+      return;
+    }
     const readinessService =
       this.rebalanceCoordinator?.controlPlaneReadinessService || null;
     if (

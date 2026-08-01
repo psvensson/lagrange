@@ -40,6 +40,9 @@ import {
 import {
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../../src/control-plane/control-plane-constants.js';
+import {
+  STARTUP_JOIN_MODE,
+} from '../../src/bootstrap/rejoin-hints-constants.js';
 
 function deferred() {
   let resolve;
@@ -217,11 +220,13 @@ function buildFormationBarrierOwner({
   coordinator = null,
   sleep,
   now,
+  startupMode = STARTUP_JOIN_MODE.FRESH_JOIN,
   startupAuthority: providedStartupAuthority = null,
 }) {
   NodeService.getInstance().setSystemCacheProxy(cache);
   const owner = Object.create(NodeJoiningReadySignalReadiness.prototype);
   owner.nodeId = JOINER_1_NODE_ID;
+  owner.startupMode = startupMode;
   owner.config = {
     priorityPlacementFormationDiscoveryMs: 0,
     priorityPlacementFormationPollMs: 1,
@@ -736,6 +741,103 @@ t.test(
         0,
         'one pre-ready joiner retains the ordinary ready-then-rebalance growth path',
       );
+    } finally {
+      NodeService.resetInstance();
+      ConfigurationManager.resetInstance();
+      LoggingService.resetInstance();
+    }
+  },
+);
+
+t.test(
+  'durable rejoin bypasses a cold-formation cohort made solely from two ' +
+    'temporarily pre-ready canonical peers',
+  async (t) => {
+    initializeEnvironment();
+    const cache = buildFormationCache();
+    const createOwner = (startupMode) => {
+      let now = 2500;
+      let snapshotCalls = 0;
+      const owner = buildFormationBarrierOwner({
+        cache,
+        startupMode,
+        now: () => now,
+        sleep: async (delayMs) => {
+          now += delayMs;
+        },
+      });
+      owner.config.priorityPlacementFormationTimeoutMs = 2;
+      owner.getOperationLedgerFormationBarrierSnapshot = async () => {
+        snapshotCalls++;
+        return Object.freeze({
+          now,
+          partitionId: LEDGER_PARTITION_ID,
+          targetReplicaCount: 3,
+          observedVoterCount: 2,
+          observationComplete: false,
+          spreadProofComplete: false,
+          concentrated: null,
+          spreadConcentrated: null,
+          authoritativePlacementComplete: false,
+          authoritativePlacementConcentrated: null,
+          authoritativePlacementDistinctNodeCount: 0,
+          authoritativePlacementObservedVoterCount: 0,
+          authoritativePlacementSource: null,
+          operationObservationComplete: false,
+          operationObservationState: null,
+          inFlightOperationCount: null,
+          candidateNodeIds: Object.freeze([
+            JOINER_1_NODE_ID,
+            JOINER_2_NODE_ID,
+            JOINER_3_NODE_ID,
+          ]),
+          preReadyCandidateNodeIds: Object.freeze([
+            JOINER_2_NODE_ID,
+            JOINER_3_NODE_ID,
+          ]),
+        });
+      };
+      return {
+        owner,
+        getSnapshotCalls: () => snapshotCalls,
+      };
+    };
+
+    try {
+      const durable = createOwner(STARTUP_JOIN_MODE.DURABLE_REJOIN);
+      const durableError = await durable.owner
+        .awaitOperationLedgerFormationBarrier()
+        .then(() => null, (error) => error);
+
+      t.equal(
+        durableError,
+        null,
+        'durable reentry does not inherit cold-formation waiting from peer ready-lease quarantine',
+      );
+      t.equal(
+        durable.getSnapshotCalls(),
+        0,
+        'durable reentry is classified before polling formation evidence',
+      );
+
+      for (const startupMode of [
+        STARTUP_JOIN_MODE.FRESH_JOIN,
+        'unsupported_mode',
+      ]) {
+        const formation = createOwner(startupMode);
+        const formationError = await formation.owner
+          .awaitOperationLedgerFormationBarrier()
+          .then(() => null, (error) => error);
+        t.match(
+          formationError,
+          {code: 'OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT'},
+          `${startupMode} remains fail-closed on the same incomplete ledger snapshot`,
+        );
+        t.ok(
+          formation.getSnapshotCalls() > 0,
+          `${startupMode} still consumes formation evidence`,
+        );
+      }
     } finally {
       NodeService.resetInstance();
       ConfigurationManager.resetInstance();

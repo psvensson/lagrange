@@ -89,6 +89,59 @@ const CONFIGS = [
       'Invariant DeferredOutcomeHasRecoverableWake is violated',
   },
   {
+    id: 'durable-rejoin-formation-barrier-fixed',
+    mode: 'durable-rejoin-formation-barrier-fixed',
+    module: path.resolve(
+      'models', 'durable-rejoin-formation-barrier',
+      'DurableRejoinFormationBarrier.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'durable-rejoin-formation-barrier',
+      'DurableRejoinFormationBarrier_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'durable-rejoin-formation-barrier-fixed.model.report.json',
+    scenario: 'rolling-restart-durable-rejoin-formation-barrier-model',
+    owner: 'node_joining_operation_ledger_formation_owner',
+    boundary: 'ready_lease_publication',
+  },
+  {
+    id: 'durable-rejoin-formation-barrier-mode-blind',
+    mode: 'durable-rejoin-formation-barrier-mode-blind',
+    module: path.resolve(
+      'models', 'durable-rejoin-formation-barrier',
+      'DurableRejoinFormationBarrier.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'durable-rejoin-formation-barrier',
+      'DurableRejoinFormationBarrier_mode_blind_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'durable-rejoin-formation-barrier-mode-blind.model.report.json',
+    scenario: 'rolling-restart-durable-rejoin-formation-barrier-model',
+    owner: 'node_joining_operation_ledger_formation_owner',
+    boundary: 'ready_lease_publication',
+    expectedFailurePattern:
+      'Invariant DurableRejoinNeverWaitsOnFormation is violated',
+  },
+  {
+    id: 'durable-rejoin-formation-barrier-fresh',
+    mode: 'durable-rejoin-formation-barrier-fresh',
+    module: path.resolve(
+      'models', 'durable-rejoin-formation-barrier',
+      'DurableRejoinFormationBarrier.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'durable-rejoin-formation-barrier',
+      'DurableRejoinFormationBarrier_fresh.cfg',
+    ),
+    expectConverged: true,
+    report: 'durable-rejoin-formation-barrier-fresh.model.report.json',
+    scenario: 'rolling-restart-durable-rejoin-formation-barrier-model',
+    owner: 'node_joining_operation_ledger_formation_owner',
+    boundary: 'ready_lease_publication',
+  },
+  {
     id: 'coupled-admission-reconciled',
     mode: 'coupled-reconciled',
     module: path.resolve('models', 'readiness-starvation', 'CoupledAdmission.tla'),

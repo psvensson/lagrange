@@ -1,0 +1,413 @@
+diff --git a/models/durable-rejoin-formation-barrier/DurableRejoinFormationBarrier.tla b/models/durable-rejoin-formation-barrier/DurableRejoinFormationBarrier.tla
+new file mode 100644
+index 0000000000000000000000000000000000000000..a275788b7eec24f3c14b87704a248e0e0c8d817d
+--- /dev/null
++++ b/models/durable-rejoin-formation-barrier/DurableRejoinFormationBarrier.tla
+@@ -0,0 +1,117 @@
++---------------- MODULE DurableRejoinFormationBarrier ----------------
++(***************************************************************************)
++(* Startup-mode admission for the operation-ledger cold-formation barrier. *)
++(*                                                                         *)
++(* A fresh or unknown join with a sufficient pre-ready cohort must wait for *)
++(* operation-ledger spread. A durable rejoin is an existing member reentry, *)
++(* not formation; peer ready-lease quarantine must not latch that barrier.  *)
++(* RespectDurableRejoinIdentity selects the runtime correction. Turning it   *)
++(* off reproduces the rolling-restart misclassification.                    *)
++(***************************************************************************)
++EXTENDS Naturals
++
++CONSTANTS StartupMode,
++          RespectDurableRejoinIdentity,
++          PeerPreReadyCount,
++          FormationWaveNodeCount,
++          MaxWaitTicks
++
++ASSUME StartupMode \in {"fresh_join", "durable_rejoin", "unknown"}
++ASSUME RespectDurableRejoinIdentity \in BOOLEAN
++ASSUME PeerPreReadyCount \in Nat
++ASSUME FormationWaveNodeCount \in Nat
++ASSUME MaxWaitTicks \in Nat
++
++VARIABLES phase,
++          ledgerSpreadComplete,
++          waitTicks
++
++vars == <<phase, ledgerSpreadComplete, waitTicks>>
++
++Phase == {"unclassified", "formation_wait", "ready", "formation_timeout"}
++Terminal == phase \in {"ready", "formation_timeout"}
++
++FormationCohortPresent ==
++  PeerPreReadyCount >= FormationWaveNodeCount
++
++FormationBarrierEligible ==
++  StartupMode # "durable_rejoin" \/ ~RespectDurableRejoinIdentity
++
++TypeOK ==
++  /\ phase \in Phase
++  /\ ledgerSpreadComplete \in BOOLEAN
++  /\ waitTicks \in 0..MaxWaitTicks
++
++Init ==
++  /\ phase = "unclassified"
++  /\ ledgerSpreadComplete = FALSE
++  /\ waitTicks = 0
++
++ClassifyStartup ==
++  /\ phase = "unclassified"
++  /\ phase' =
++       IF FormationCohortPresent /\ FormationBarrierEligible
++       THEN "formation_wait"
++       ELSE "ready"
++  /\ UNCHANGED <<ledgerSpreadComplete, waitTicks>>
++
++(* Only an actual formation lane can cure formation spread in this model. *)
++ObserveFormationSpread ==
++  /\ phase = "formation_wait"
++  /\ StartupMode # "durable_rejoin"
++  /\ ledgerSpreadComplete = FALSE
++  /\ ledgerSpreadComplete' = TRUE
++  /\ UNCHANGED <<phase, waitTicks>>
++
++ReleaseFormation ==
++  /\ phase = "formation_wait"
++  /\ ledgerSpreadComplete
++  /\ phase' = "ready"
++  /\ UNCHANGED <<ledgerSpreadComplete, waitTicks>>
++
++TickFormationWait ==
++  /\ phase = "formation_wait"
++  /\ ~ledgerSpreadComplete
++  /\ waitTicks < MaxWaitTicks
++  /\ waitTicks' = waitTicks + 1
++  /\ UNCHANGED <<phase, ledgerSpreadComplete>>
++
++TimeoutFormationWait ==
++  /\ phase = "formation_wait"
++  /\ ~ledgerSpreadComplete
++  /\ waitTicks = MaxWaitTicks
++  /\ phase' = "formation_timeout"
++  /\ UNCHANGED <<ledgerSpreadComplete, waitTicks>>
++
++TerminalStutter ==
++  /\ Terminal
++  /\ UNCHANGED vars
++
++Next ==
++  \/ ClassifyStartup
++  \/ ObserveFormationSpread
++  \/ ReleaseFormation
++  \/ TickFormationWait
++  \/ TimeoutFormationWait
++  \/ TerminalStutter
++
++Fairness ==
++  /\ WF_vars(ClassifyStartup)
++  /\ WF_vars(ObserveFormationSpread)
++  /\ WF_vars(ReleaseFormation)
++  /\ WF_vars(TickFormationWait)
++  /\ WF_vars(TimeoutFormationWait)
++
++Spec == Init /\ [][Next]_vars /\ Fairness
++
++DurableRejoinNeverWaitsOnFormation ==
++  StartupMode = "durable_rejoin" =>
++    phase \notin {"formation_wait", "formation_timeout"}
++
++FreshFormationNeverReadyBeforeSpread ==
++  StartupMode # "durable_rejoin" /\
++  FormationCohortPresent /\
++  phase = "ready" => ledgerSpreadComplete
++
++EventuallyTerminal == <>Terminal
++=============================================================================
+diff --git a/models/durable-rejoin-formation-barrier/DurableRejoinFormationBarrier_fixed.cfg b/models/durable-rejoin-formation-barrier/DurableRejoinFormationBarrier_fixed.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..ffd68b3f4f03e40e67993a688f2d7e5342f54b76
+--- /dev/null
++++ b/models/durable-rejoin-formation-barrier/DurableRejoinFormationBarrier_fixed.cfg
+@@ -0,0 +1,12 @@
++\* Corrected route: durable reentry bypasses a peer-derived formation cohort.
++SPECIFICATION Spec
++CONSTANTS
++  StartupMode = "durable_rejoin"
++  RespectDurableRejoinIdentity = TRUE
++  PeerPreReadyCount = 2
++  FormationWaveNodeCount = 2
++  MaxWaitTicks = 2
++INVARIANT TypeOK
++INVARIANT DurableRejoinNeverWaitsOnFormation
++INVARIANT FreshFormationNeverReadyBeforeSpread
++PROPERTY EventuallyTerminal
+diff --git a/models/durable-rejoin-formation-barrier/DurableRejoinFormationBarrier_fresh.cfg b/models/durable-rejoin-formation-barrier/DurableRejoinFormationBarrier_fresh.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..e888f2e2b112df5616aefad217947189db2a90f0
+--- /dev/null
++++ b/models/durable-rejoin-formation-barrier/DurableRejoinFormationBarrier_fresh.cfg
+@@ -0,0 +1,12 @@
++\* Non-regression route: fresh formation stays closed until ledger spread.
++SPECIFICATION Spec
++CONSTANTS
++  StartupMode = "fresh_join"
++  RespectDurableRejoinIdentity = TRUE
++  PeerPreReadyCount = 2
++  FormationWaveNodeCount = 2
++  MaxWaitTicks = 2
++INVARIANT TypeOK
++INVARIANT DurableRejoinNeverWaitsOnFormation
++INVARIANT FreshFormationNeverReadyBeforeSpread
++PROPERTY EventuallyTerminal
+diff --git a/models/durable-rejoin-formation-barrier/DurableRejoinFormationBarrier_mode_blind_bug.cfg b/models/durable-rejoin-formation-barrier/DurableRejoinFormationBarrier_mode_blind_bug.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..5a38a0b3dafbd45792a5b3a92c45e9d0ddad1b6b
+--- /dev/null
++++ b/models/durable-rejoin-formation-barrier/DurableRejoinFormationBarrier_mode_blind_bug.cfg
+@@ -0,0 +1,12 @@
++\* Forbidden route: two pre-ready peers make durable reentry look like formation.
++SPECIFICATION Spec
++CONSTANTS
++  StartupMode = "durable_rejoin"
++  RespectDurableRejoinIdentity = FALSE
++  PeerPreReadyCount = 2
++  FormationWaveNodeCount = 2
++  MaxWaitTicks = 2
++INVARIANT TypeOK
++INVARIANT DurableRejoinNeverWaitsOnFormation
++INVARIANT FreshFormationNeverReadyBeforeSpread
++PROPERTY EventuallyTerminal
+diff --git a/scripts/model-tlc.js b/scripts/model-tlc.js
+index 4c806fd0b5b08e21cf8ecee9d2be68e71381f8f4..bbdd1ecd65a20ccbf2342a60fb98243b613100fa 100644
+--- a/scripts/model-tlc.js
++++ b/scripts/model-tlc.js
+@@ -88,6 +88,59 @@ const CONFIGS = [
+     expectedFailurePattern:
+       'Invariant DeferredOutcomeHasRecoverableWake is violated',
+   },
++  {
++    id: 'durable-rejoin-formation-barrier-fixed',
++    mode: 'durable-rejoin-formation-barrier-fixed',
++    module: path.resolve(
++      'models', 'durable-rejoin-formation-barrier',
++      'DurableRejoinFormationBarrier.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'durable-rejoin-formation-barrier',
++      'DurableRejoinFormationBarrier_fixed.cfg',
++    ),
++    expectConverged: true,
++    report: 'durable-rejoin-formation-barrier-fixed.model.report.json',
++    scenario: 'rolling-restart-durable-rejoin-formation-barrier-model',
++    owner: 'node_joining_operation_ledger_formation_owner',
++    boundary: 'ready_lease_publication',
++  },
++  {
++    id: 'durable-rejoin-formation-barrier-mode-blind',
++    mode: 'durable-rejoin-formation-barrier-mode-blind',
++    module: path.resolve(
++      'models', 'durable-rejoin-formation-barrier',
++      'DurableRejoinFormationBarrier.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'durable-rejoin-formation-barrier',
++      'DurableRejoinFormationBarrier_mode_blind_bug.cfg',
++    ),
++    expectConverged: false,
++    report: 'durable-rejoin-formation-barrier-mode-blind.model.report.json',
++    scenario: 'rolling-restart-durable-rejoin-formation-barrier-model',
++    owner: 'node_joining_operation_ledger_formation_owner',
++    boundary: 'ready_lease_publication',
++    expectedFailurePattern:
++      'Invariant DurableRejoinNeverWaitsOnFormation is violated',
++  },
++  {
++    id: 'durable-rejoin-formation-barrier-fresh',
++    mode: 'durable-rejoin-formation-barrier-fresh',
++    module: path.resolve(
++      'models', 'durable-rejoin-formation-barrier',
++      'DurableRejoinFormationBarrier.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'durable-rejoin-formation-barrier',
++      'DurableRejoinFormationBarrier_fresh.cfg',
++    ),
++    expectConverged: true,
++    report: 'durable-rejoin-formation-barrier-fresh.model.report.json',
++    scenario: 'rolling-restart-durable-rejoin-formation-barrier-model',
++    owner: 'node_joining_operation_ledger_formation_owner',
++    boundary: 'ready_lease_publication',
++  },
+   {
+     id: 'coupled-admission-reconciled',
+     mode: 'coupled-reconciled',
+diff --git a/scripts/run-rolling-restart-durable-rejoin-formation-barrier-scenarios.js b/scripts/run-rolling-restart-durable-rejoin-formation-barrier-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9f4a8519b844050ae78272a6b08c050b5c7f36c1
+--- /dev/null
++++ b/scripts/run-rolling-restart-durable-rejoin-formation-barrier-scenarios.js
+@@ -0,0 +1,12 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from
++  './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = Object.freeze({
++  'rolling-restart-durable-rejoin-formation-barrier': Object.freeze([
++    'test/convergence/dt-formation-priority-placement-before-active.test.js',
++  ]),
++});
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/bootstrap/node-joining-operation-ledger-formation-readiness.js b/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
+index f917c8e0d6f76c167bcc5cc962442fc29dfed2f8..deaeb5071d806865b1a5fd04e05ee20ed81c466f 100644
+--- a/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
++++ b/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
+@@ -32,6 +32,7 @@ const {
+   JOINING_ERROR_MSG,
+   JOINING_LOG_MSG,
+   NodeService,
++  STARTUP_JOIN_MODE,
+ } = NODE_JOINING_SERVICE_SHARED;
+ 
+ const OPERATION_LEDGER_FORMATION_BARRIER_STATE = Object.freeze({
+@@ -420,6 +421,9 @@ class NodeJoiningOperationLedgerFormationReadiness
+    * @private
+    */
+   async awaitOperationLedgerFormationBarrier() {
++    if (this.startupMode === STARTUP_JOIN_MODE.DURABLE_REJOIN) {
++      return;
++    }
+     const readinessService =
+       this.rebalanceCoordinator?.controlPlaneReadinessService || null;
+     if (
+diff --git a/test/convergence/dt-formation-priority-placement-before-active.test.js b/test/convergence/dt-formation-priority-placement-before-active.test.js
+index 0d8d6f5323f861ad79b671374a341405e88de382..bf41282465c3636134924f2d4a98c25173aef0d5 100644
+--- a/test/convergence/dt-formation-priority-placement-before-active.test.js
++++ b/test/convergence/dt-formation-priority-placement-before-active.test.js
+@@ -40,6 +40,9 @@ import {
+ import {
+   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
+ } from '../../src/control-plane/control-plane-constants.js';
++import {
++  STARTUP_JOIN_MODE,
++} from '../../src/bootstrap/rejoin-hints-constants.js';
+ 
+ function deferred() {
+   let resolve;
+@@ -217,11 +220,13 @@ function buildFormationBarrierOwner({
+   coordinator = null,
+   sleep,
+   now,
++  startupMode = STARTUP_JOIN_MODE.FRESH_JOIN,
+   startupAuthority: providedStartupAuthority = null,
+ }) {
+   NodeService.getInstance().setSystemCacheProxy(cache);
+   const owner = Object.create(NodeJoiningReadySignalReadiness.prototype);
+   owner.nodeId = JOINER_1_NODE_ID;
++  owner.startupMode = startupMode;
+   owner.config = {
+     priorityPlacementFormationDiscoveryMs: 0,
+     priorityPlacementFormationPollMs: 1,
+@@ -744,6 +749,103 @@ t.test(
+   },
+ );
+ 
++t.test(
++  'durable rejoin bypasses a cold-formation cohort made solely from two ' +
++    'temporarily pre-ready canonical peers',
++  async (t) => {
++    initializeEnvironment();
++    const cache = buildFormationCache();
++    const createOwner = (startupMode) => {
++      let now = 2500;
++      let snapshotCalls = 0;
++      const owner = buildFormationBarrierOwner({
++        cache,
++        startupMode,
++        now: () => now,
++        sleep: async (delayMs) => {
++          now += delayMs;
++        },
++      });
++      owner.config.priorityPlacementFormationTimeoutMs = 2;
++      owner.getOperationLedgerFormationBarrierSnapshot = async () => {
++        snapshotCalls++;
++        return Object.freeze({
++          now,
++          partitionId: LEDGER_PARTITION_ID,
++          targetReplicaCount: 3,
++          observedVoterCount: 2,
++          observationComplete: false,
++          spreadProofComplete: false,
++          concentrated: null,
++          spreadConcentrated: null,
++          authoritativePlacementComplete: false,
++          authoritativePlacementConcentrated: null,
++          authoritativePlacementDistinctNodeCount: 0,
++          authoritativePlacementObservedVoterCount: 0,
++          authoritativePlacementSource: null,
++          operationObservationComplete: false,
++          operationObservationState: null,
++          inFlightOperationCount: null,
++          candidateNodeIds: Object.freeze([
++            JOINER_1_NODE_ID,
++            JOINER_2_NODE_ID,
++            JOINER_3_NODE_ID,
++          ]),
++          preReadyCandidateNodeIds: Object.freeze([
++            JOINER_2_NODE_ID,
++            JOINER_3_NODE_ID,
++          ]),
++        });
++      };
++      return {
++        owner,
++        getSnapshotCalls: () => snapshotCalls,
++      };
++    };
++
++    try {
++      const durable = createOwner(STARTUP_JOIN_MODE.DURABLE_REJOIN);
++      const durableError = await durable.owner
++        .awaitOperationLedgerFormationBarrier()
++        .then(() => null, (error) => error);
++
++      t.equal(
++        durableError,
++        null,
++        'durable reentry does not inherit cold-formation waiting from peer ready-lease quarantine',
++      );
++      t.equal(
++        durable.getSnapshotCalls(),
++        0,
++        'durable reentry is classified before polling formation evidence',
++      );
++
++      for (const startupMode of [
++        STARTUP_JOIN_MODE.FRESH_JOIN,
++        'unsupported_mode',
++      ]) {
++        const formation = createOwner(startupMode);
++        const formationError = await formation.owner
++          .awaitOperationLedgerFormationBarrier()
++          .then(() => null, (error) => error);
++        t.match(
++          formationError,
++          {code: 'OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT'},
++          `${startupMode} remains fail-closed on the same incomplete ledger snapshot`,
++        );
++        t.ok(
++          formation.getSnapshotCalls() > 0,
++          `${startupMode} still consumes formation evidence`,
++        );
++      }
++    } finally {
++      NodeService.resetInstance();
++      ConfigurationManager.resetInstance();
++      LoggingService.resetInstance();
++    }
++  },
++);
++
+ t.test(
+   'a feasible cold-formation cohort fails closed and remains resumable when ' +
+     'ledger voter observation is incomplete',
