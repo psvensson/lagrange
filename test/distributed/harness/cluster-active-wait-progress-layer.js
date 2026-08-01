@@ -664,6 +664,22 @@ function buildActiveWaitProgressSnapshot(
     typeof snapshotCoverage.selectedControlPlaneOwnerQueueDepth === 'object' ?
       snapshotCoverage.selectedControlPlaneOwnerQueueDepth :
       null;
+  const selectedObservedControlPlaneOwnerQueueDepth =
+    snapshotCoverage?.selectedObservedControlPlaneOwnerQueueDepth &&
+    typeof snapshotCoverage.selectedObservedControlPlaneOwnerQueueDepth ===
+      'object' ?
+      snapshotCoverage.selectedObservedControlPlaneOwnerQueueDepth :
+      selectedControlPlaneOwnerQueueDepth;
+  const selectedLoggingRetentionQueueDepth =
+    snapshotCoverage?.selectedLoggingRetentionQueueDepth &&
+    typeof snapshotCoverage.selectedLoggingRetentionQueueDepth === 'object' ?
+      snapshotCoverage.selectedLoggingRetentionQueueDepth :
+      null;
+  const selectedQueueDiagnosticsSourceState =
+    typeof snapshotCoverage?.selectedQueueDiagnosticsSourceState ===
+      TYPEOF_STRING ?
+      snapshotCoverage.selectedQueueDiagnosticsSourceState :
+      null;
   const selectedCdcReplayLag =
     snapshotCoverage?.selectedCdcReplayLag &&
     typeof snapshotCoverage.selectedCdcReplayLag === 'object' ?
@@ -1072,6 +1088,9 @@ function buildActiveWaitProgressSnapshot(
     selectedSnapshotObservationRetryAfterMs,
     selectedSnapshotRepairDeferred,
     selectedControlPlaneOwnerQueueDepth,
+    selectedObservedControlPlaneOwnerQueueDepth,
+    selectedLoggingRetentionQueueDepth,
+    selectedQueueDiagnosticsSourceState,
     selectedCdcReplayLag,
     publicationActiveGateHandoffState: activeGateOwnerCohortState,
     publicationActiveGateHandoffReasonCode: activeGateOwnerCohortReasonCode,

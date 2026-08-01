@@ -18,6 +18,13 @@ const NUM_ZERO = 0;
 const NUM_ONE = 1;
 const FIRST_INDEX = 0;
 const SECOND_INDEX = 1;
+const arrayFind = Function.call.bind(Array.prototype.find);
+const arrayIsArray = Array.isArray;
+const mathFloor = Math.floor;
+const numberIsFinite = Number.isFinite;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const NUMBER_MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
 
 const PROPERTY_FAILURE_BUNDLE = 'failureBundle';
 const PROPERTY_REPORT = 'report';
@@ -37,6 +44,8 @@ const PROPERTY_ROLLING_RESTART_LIVENESS_SAMPLES =
   'rollingRestartLivenessSamples';
 const PROPERTY_SOURCE_ARTIFACT = 'sourceArtifact';
 const PROPERTY_FULL_LOG_REPLAY = 'fullLogReplay';
+const FIELD_PENDING_WRITE_GROWTH_COUNT = 'pendingWriteGrowthCount';
+const FIELD_PROPERTY_DESCRIPTOR_VALUE = 'value';
 
 const EVIDENCE_PATH_ARTIFACT = 'artifact';
 const EVIDENCE_PATH_ACTIVE_GATE_PROGRESS =
@@ -58,6 +67,7 @@ const BOUNDARY_WORKFLOW_PROGRESS = 'workflow_progress';
 const ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION =
   'reconcile_owner_membership_publication';
 const ACTION_WAIT_FOR_OPERATION_PROGRESS = 'wait_for_operation_progress';
+const ACTION_REPAIR_OWNER_QUEUE_ADMISSION = 'repair_owner_queue_admission';
 const ACTION_ABSENT = ABSENT_VALUE;
 
 const HANDOFF_OUTCOME_OWNER_RECONCILE_ENQUEUED =
@@ -74,7 +84,15 @@ const SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
 
 const WITNESS_STATE_OBSERVED = 'observed';
 const QUEUE_STATE_OBSERVED = 'observed';
+const QUEUE_STATE_AMBIGUOUS = 'ambiguous';
 const QUEUE_STATE_ABSENT = ABSENT_VALUE;
+const QUEUE_SOURCE_STATE_SEPARATED = 'separated';
+const QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION = 'logs_table_retention';
+const QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER =
+  'membership_publication_owner';
+const QUEUE_SOURCE_STATE_LEGACY_AMBIGUOUS = 'legacy_ambiguous';
+const QUEUE_CONTRADICTION_OWNER_ACTION_ENABLED_QUEUE_EMPTY =
+  'owner_action_enabled_queue_empty';
 const EVIDENCE_COMPLETENESS_COMPLETE = 'complete';
 const EVIDENCE_COMPLETENESS_SPARSE = 'sparse';
 const EVIDENCE_FULL_LOG_REPLAY_ABSENT = Object.freeze({
@@ -218,14 +236,22 @@ function buildRollingRestartLivenessVerdict(artifact = {}, options = {}) {
     publication,
     progress,
   });
-  const actionEvidence = buildActionEvidence(progress, samples);
+  const initialActionEvidence = buildActionEvidence(progress, samples);
+  const queueState = buildQueueState(
+    progress,
+    samples,
+    initialActionEvidence,
+  );
+  const actionEvidence = resolveQueueIdentityActionEvidence(
+    initialActionEvidence,
+    queueState,
+  );
   const progressWitness = selectProgressWitness(samples, actionEvidence);
   const publicationDelta = buildPublicationDelta({
     samples,
     progress,
     bestProgress,
   });
-  const queueState = buildQueueState(progress, samples);
   const executedWithoutVisibility = isExecutedWithoutVisibility({
     actionEvidence,
     progressWitness,
@@ -337,7 +363,7 @@ function buildGraphForArtifact(artifact) {
 
 function selectScenario(artifact) {
   const report = artifact[PROPERTY_REPORT] || artifact;
-  const scenarios = Array.isArray(report[PROPERTY_SCENARIOS]) ?
+  const scenarios = arrayIsArray(report[PROPERTY_SCENARIOS]) ?
     report[PROPERTY_SCENARIOS] :
     [];
   return isRecord(scenarios[FIRST_INDEX]) ? scenarios[FIRST_INDEX] : {};
@@ -555,7 +581,7 @@ function compareProgressSamples(previous, current) {
   for (const rule of METRIC_RULES) {
     const before = previous[rule.field];
     const after = current[rule.field];
-    if (!Number.isFinite(before) || !Number.isFinite(after)) {
+    if (!numberIsFinite(before) || !numberIsFinite(after)) {
       continue;
     }
     const moved = rule.decreasing ? after < before : after !== before;
@@ -591,7 +617,8 @@ function classifyDownstreamWorkflow({graph, scenario, publication, progress}) {
     progressClasses.unresolvedSemanticStateCount,
   );
   const missingPublishedCount = normalizeNumber(publication.missingPublishedCount);
-  const priorityEdge = graph.edges.find(
+  const priorityEdge = arrayFind(
+    graph.edges,
     (edge) => edge.id === EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
   );
   const hasBlockingDominantWitness =
@@ -818,20 +845,93 @@ function didPublicationChange(left, right) {
     decreasedNumber(left.missingPublishedCount, right.missingPublishedCount);
 }
 
-function buildQueueState(progress, samples) {
-  const lastSample = samples[samples.length - NUM_ONE] || {};
-  const depthRecord = firstRecord(progress.selectedControlPlaneOwnerQueueDepth);
-  const pendingWrites = firstFiniteNumber(
-    depthRecord.pendingWrites,
-    lastSample.ownerQueueDepth,
+function buildQueueDepthState(record = {}) {
+  const pendingWrites = normalizeQueueNumber(
+    readOwnField(record, 'pendingWrites'),
   );
-  if (!Number.isFinite(pendingWrites)) {
+  if (!numberIsFinite(pendingWrites)) {
+    return {
+      state: QUEUE_STATE_ABSENT,
+      pendingWrites: ABSENT_VALUE,
+      pendingWriteGrowthCount: ABSENT_VALUE,
+    };
+  }
+  return {
+    state: QUEUE_STATE_OBSERVED,
+    pendingWrites,
+    pendingWriteGrowthCount: valueOrAbsent(
+      normalizeQueueNumber(
+        readOwnField(record, FIELD_PENDING_WRITE_GROWTH_COUNT),
+      ),
+    ),
+  };
+}
+
+function buildQueueState(progress, samples, actionEvidence = {}) {
+  const lastSample = samples[samples.length - NUM_ONE] || {};
+  const depthRecord = firstRecord(
+    readOwnField(progress, 'selectedObservedControlPlaneOwnerQueueDepth'),
+    readOwnField(progress, 'selectedControlPlaneOwnerQueueDepth'),
+  );
+  const loggingDepthRecord = firstRecord(
+    readOwnField(progress, 'selectedLoggingRetentionQueueDepth'),
+  );
+  const declaredSourceState = textValue(
+    readOwnField(progress, 'selectedQueueDiagnosticsSourceState'),
+    QUEUE_SOURCE_STATE_LEGACY_AMBIGUOUS,
+  );
+  const hasSeparatedSourceIdentity =
+    declaredSourceState === QUEUE_SOURCE_STATE_SEPARATED &&
+    readOwnField(depthRecord, 'source') ===
+      QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER &&
+    readOwnField(loggingDepthRecord, 'source') ===
+      QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION;
+  const sourceState = hasSeparatedSourceIdentity ?
+    QUEUE_SOURCE_STATE_SEPARATED :
+    declaredSourceState === QUEUE_STATE_ABSENT ?
+      QUEUE_STATE_ABSENT :
+      QUEUE_SOURCE_STATE_LEGACY_AMBIGUOUS;
+  const owner = buildQueueDepthState(depthRecord);
+  const logging = buildQueueDepthState(loggingDepthRecord);
+  if (sourceState === QUEUE_SOURCE_STATE_SEPARATED) {
+    const contradiction =
+      actionEvidence.enabled === true &&
+      actionEvidence.executed !== true &&
+      owner.state === QUEUE_STATE_OBSERVED &&
+      owner.pendingWrites === NUM_ZERO ?
+        QUEUE_CONTRADICTION_OWNER_ACTION_ENABLED_QUEUE_EMPTY :
+        ABSENT_VALUE;
+    return {
+      state: QUEUE_STATE_OBSERVED,
+      sourceState,
+      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_PROGRESS,
+      pendingWrites: owner.pendingWrites,
+      pendingWriteGrowthCount: owner.pendingWriteGrowthCount,
+      inFlightDepth: valueOrAbsent(lastSample.inFlightDepth),
+      owner,
+      logging,
+      contradiction,
+    };
+  }
+  const observedOwnerPendingWrites = normalizeQueueNumber(
+    readOwnField(depthRecord, 'pendingWrites'),
+  );
+  const pendingWrites = numberIsFinite(observedOwnerPendingWrites) ?
+    observedOwnerPendingWrites :
+    firstFiniteNumber(lastSample.ownerQueueDepth);
+  if (!numberIsFinite(pendingWrites)) {
     return {
       state: QUEUE_STATE_ABSENT,
       evidencePath: ABSENT_VALUE,
       pendingWrites: ABSENT_VALUE,
       pendingWriteGrowthCount: ABSENT_VALUE,
       inFlightDepth: valueOrAbsent(lastSample.inFlightDepth),
+      sourceState,
+      owner: sourceState === QUEUE_SOURCE_STATE_LEGACY_AMBIGUOUS ?
+        {...owner, state: QUEUE_STATE_AMBIGUOUS} :
+        owner,
+      logging,
+      contradiction: ABSENT_VALUE,
     };
   }
   return {
@@ -840,8 +940,31 @@ function buildQueueState(progress, samples) {
       lastSample.evidencePath :
       EVIDENCE_PATH_ACTIVE_GATE_PROGRESS,
     pendingWrites,
-    pendingWriteGrowthCount: valueOrAbsent(depthRecord.pendingWriteGrowthCount),
+    pendingWriteGrowthCount: valueOrAbsent(
+      normalizeQueueNumber(
+        readOwnField(depthRecord, FIELD_PENDING_WRITE_GROWTH_COUNT),
+      ),
+    ),
     inFlightDepth: valueOrAbsent(lastSample.inFlightDepth),
+    sourceState,
+    owner: sourceState === QUEUE_SOURCE_STATE_LEGACY_AMBIGUOUS ?
+      {...owner, state: QUEUE_STATE_AMBIGUOUS} :
+      owner,
+    logging,
+    contradiction: ABSENT_VALUE,
+  };
+}
+
+function resolveQueueIdentityActionEvidence(actionEvidence, queueState) {
+  if (
+    queueState.contradiction !==
+      QUEUE_CONTRADICTION_OWNER_ACTION_ENABLED_QUEUE_EMPTY
+  ) {
+    return actionEvidence;
+  }
+  return {
+    ...actionEvidence,
+    enabledAction: ACTION_REPAIR_OWNER_QUEUE_ADMISSION,
   };
 }
 
@@ -888,15 +1011,15 @@ function finalizeVerdict(base, fields) {
 }
 
 function firstRecord(...values) {
-  return values.find(isRecord) || {};
+  return arrayFind(values, isRecord) || {};
 }
 
 function firstArray(...values) {
-  return values.find(Array.isArray) || [];
+  return arrayFind(values, arrayIsArray) || [];
 }
 
 function normalizeTextArray(value) {
-  if (Array.isArray(value)) {
+  if (arrayIsArray(value)) {
     return value
       .map((entry) => textValue(entry))
       .filter((entry) => entry.length > NUM_ZERO);
@@ -910,7 +1033,28 @@ function normalizeTextArray(value) {
 function isRecord(value) {
   return Boolean(value) &&
     typeof value === TYPEOF_OBJECT &&
-    !Array.isArray(value);
+    !arrayIsArray(value);
+}
+
+function readOwnField(record, field) {
+  if (!isRecord(record)) {
+    return undefined;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(record, field);
+  return descriptor &&
+    objectHasOwn(descriptor, FIELD_PROPERTY_DESCRIPTOR_VALUE) ?
+    descriptor.value :
+    undefined;
+}
+
+function normalizeQueueNumber(value) {
+  if (typeof value !== 'number' || !numberIsFinite(value) || value <= NUM_ZERO) {
+    return value === NUM_ZERO ? NUM_ZERO : Number.NaN;
+  }
+  if (value >= NUMBER_MAX_SAFE_INTEGER) {
+    return NUMBER_MAX_SAFE_INTEGER;
+  }
+  return mathFloor(value);
 }
 
 function textValue(...values) {
@@ -923,18 +1067,18 @@ function textValue(...values) {
 }
 
 function firstText(values) {
-  return Array.isArray(values) ? textValue(...values) : EMPTY_TEXT;
+  return arrayIsArray(values) ? textValue(...values) : EMPTY_TEXT;
 }
 
 function normalizeNumber(value) {
   const number = Number(value);
-  return Number.isFinite(number) ? number : Number.NaN;
+  return numberIsFinite(number) ? number : Number.NaN;
 }
 
 function firstFiniteNumber(...values) {
   for (const value of values) {
     const number = normalizeNumber(value);
-    if (Number.isFinite(number)) {
+    if (numberIsFinite(number)) {
       return number;
     }
   }
@@ -943,7 +1087,7 @@ function firstFiniteNumber(...values) {
 
 function normalizeTimestamp(value) {
   const number = normalizeNumber(value);
-  if (Number.isFinite(number)) {
+  if (numberIsFinite(number)) {
     return number;
   }
   if (typeof value === TYPEOF_STRING && value.length > NUM_ZERO) {
@@ -953,15 +1097,15 @@ function normalizeTimestamp(value) {
 }
 
 function valueOrAbsent(value) {
-  return Number.isFinite(value) ? value : ABSENT_VALUE;
+  return numberIsFinite(value) ? value : ABSENT_VALUE;
 }
 
 function changedNumber(left, right) {
-  return Number.isFinite(left) && Number.isFinite(right) && left !== right;
+  return numberIsFinite(left) && numberIsFinite(right) && left !== right;
 }
 
 function decreasedNumber(left, right) {
-  return Number.isFinite(left) && Number.isFinite(right) && right < left;
+  return numberIsFinite(left) && numberIsFinite(right) && right < left;
 }
 
 export {

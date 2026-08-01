@@ -100,6 +100,8 @@ const CONTROL_SNAPSHOT_OBSERVATION_STATE_DEFERRED =
   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH;
 const CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED =
   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.FAILED;
+const QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER =
+  'membership_publication_owner';
 function toControlSnapshotNonNegativeInteger(value) {
   const numericValue = Number(value);
   return Number.isFinite(numericValue) && numericValue > 0 ?
@@ -119,10 +121,16 @@ function buildControlSnapshotMembershipOwnerQueueDiagnostics(readinessService) {
   const ownerQueueDepth =
     membershipPublicationService.getControlPlaneOwnerQueueDepth();
   return ownerQueueDepth && typeof ownerQueueDepth === 'object' ?
-    ownerQueueDepth :
+    {
+      ...ownerQueueDepth,
+      source: QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER,
+    } :
     null;
 }
-function mergeControlSnapshotLogsTableDiagnostics(logsTable, ownerQueueDepth) {
+function buildControlSnapshotPriorityRecoveryPressureDiagnostics(
+  logsTable,
+  ownerQueueDepth,
+) {
   if (!ownerQueueDepth) {
     return logsTable;
   }
@@ -500,13 +508,18 @@ class AdminControlSnapshotLocalBuildBase {
       const readinessEntries = Object.values(
         controlPlaneDiagnostics.readinessByNodeId || {},
       );
+      const priorityRecoveryPressureDiagnostics =
+        buildControlSnapshotPriorityRecoveryPressureDiagnostics(
+          controlPlaneDiagnostics.logsTable,
+          controlPlaneDiagnostics.controlPlaneOwnerQueueDepth,
+        );
       const reevaluatedEvidence =
         this.resolveCanonicalPublicationRecoveryEvidenceDiagnostics(
           readinessEntries,
           controlPlaneDiagnostics.publicationConvergence,
           controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots,
           {
-            logsTable: controlPlaneDiagnostics.logsTable,
+            logsTable: priorityRecoveryPressureDiagnostics,
             publicationActiveGateHandoff,
           },
         );
@@ -523,7 +536,7 @@ class AdminControlSnapshotLocalBuildBase {
           publicationConvergenceGate: resolvedConvergenceGate,
           priorityRecoveryDecisionSnapshots:
             controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots,
-          logsTable: controlPlaneDiagnostics.logsTable,
+          logsTable: priorityRecoveryPressureDiagnostics,
           publicationActiveGateHandoff,
         }).priorityRecoveryObservation;
 
@@ -603,12 +616,9 @@ class AdminControlSnapshotLocalBuildBase {
             [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD]:
               membershipPublicationHandoffOutcome,
           };
-          controlPlaneDiagnostics.logsTable =
-            mergeControlSnapshotLogsTableDiagnostics(
-              controlPlaneDiagnostics.logsTable,
-              buildControlSnapshotMembershipOwnerQueueDiagnostics(
-                this.controlPlaneReadinessService,
-              ),
+          controlPlaneDiagnostics.controlPlaneOwnerQueueDepth =
+            buildControlSnapshotMembershipOwnerQueueDiagnostics(
+              this.controlPlaneReadinessService,
             );
         }
       }

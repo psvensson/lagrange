@@ -62,6 +62,21 @@ const {
 
 const TYPEOF_OBJECT = 'object';
 const TYPEOF_STRING = 'string';
+const arrayIsArray = Array.isArray;
+const mathFloor = Math.floor;
+const numberIsFinite = Number.isFinite;
+const numberIsSafeInteger = Number.isSafeInteger;
+const objectCreate = Object.create;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const NUMBER_MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
+const QUEUE_DIAGNOSTIC_KEY_LIMIT = 4096;
+const QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION = 'logs_table_retention';
+const QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER =
+  'membership_publication_owner';
+const QUEUE_DIAGNOSTICS_SOURCE_STATE_ABSENT = 'absent';
+const QUEUE_DIAGNOSTICS_SOURCE_STATE_LEGACY_AMBIGUOUS = 'legacy_ambiguous';
+const QUEUE_DIAGNOSTICS_SOURCE_STATE_SEPARATED = 'separated';
 const ACTIVE_GATE_OWNER_COHORT_FIELD = 'activeGateOwnerCohort';
 const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD =
   'membershipPublicationHandoffOutcome';
@@ -79,6 +94,188 @@ const CONTROL_SNAPSHOT_SUMMARY_RESUME_TOKEN_UNAVAILABLE = null;
 const CONTROL_SNAPSHOT_PUBLICATION_SUMMARY_UNAVAILABLE = null;
 const LOAD_ACTIVE_GATE_SNAPSHOT_COVERAGE_ATTEMPT_TIMEOUT_MS =
   ACTIVE_POLL_INTERVAL_MS;
+
+function readOwnQueueDiagnosticField(record, field) {
+  if (!record || typeof record !== TYPEOF_OBJECT) {
+    return undefined;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(record, field);
+  return descriptor && objectHasOwn(descriptor, 'value') ?
+    descriptor.value :
+    undefined;
+}
+
+function normalizeQueueDiagnosticNonNegativeInteger(value) {
+  if (
+    typeof value !== 'number' ||
+    !numberIsFinite(value) ||
+    value < ZERO
+  ) {
+    return null;
+  }
+  if (value === ZERO) {
+    return ZERO;
+  }
+  if (value >= NUMBER_MAX_SAFE_INTEGER) {
+    return NUMBER_MAX_SAFE_INTEGER;
+  }
+  return mathFloor(value);
+}
+
+function normalizeQueueDiagnosticStringArray(value) {
+  if (!arrayIsArray(value)) {
+    return [];
+  }
+  const lengthDescriptor = objectGetOwnPropertyDescriptor(value, 'length');
+  const length = lengthDescriptor && objectHasOwn(lengthDescriptor, 'value') ?
+    lengthDescriptor.value :
+    ZERO;
+  if (
+    !numberIsSafeInteger(length) ||
+    length < ZERO ||
+    length > QUEUE_DIAGNOSTIC_KEY_LIMIT
+  ) {
+    return [];
+  }
+  const seen = objectCreate(null);
+  const normalized = [];
+  for (let index = ZERO; index < length; index += 1) {
+    const descriptor = objectGetOwnPropertyDescriptor(value, String(index));
+    if (!descriptor || !objectHasOwn(descriptor, 'value')) {
+      continue;
+    }
+    const entry = descriptor.value;
+    if (
+      typeof entry !== TYPEOF_STRING ||
+      entry.length === ZERO ||
+      objectHasOwn(seen, entry)
+    ) {
+      continue;
+    }
+    seen[entry] = true;
+    normalized[normalized.length] = entry;
+  }
+  return normalized;
+}
+
+function normalizeControlSnapshotOwnerQueueDiagnostics(
+  record,
+  source = null,
+) {
+  if (!record || typeof record !== TYPEOF_OBJECT || arrayIsArray(record)) {
+    return null;
+  }
+  const pendingWrites = readOwnQueueDiagnosticField(record, 'pendingWrites');
+  const pendingWriteGrowthCount = readOwnQueueDiagnosticField(
+    record,
+    'pendingWriteGrowthCount',
+  );
+  const retainedBacklogGrowthCount = readOwnQueueDiagnosticField(
+    record,
+    'retainedBacklogGrowthCount',
+  );
+  const retryableDrainFailureCount = readOwnQueueDiagnosticField(
+    record,
+    'retryableDrainFailureCount',
+  );
+  const sharedPressureBackpressured = readOwnQueueDiagnosticField(
+    record,
+    'sharedPressureBackpressured',
+  );
+  const transportPressureBackpressured = readOwnQueueDiagnosticField(
+    record,
+    'transportPressureBackpressured',
+  );
+  const queryPressureBackpressured = readOwnQueueDiagnosticField(
+    record,
+    'queryPressureBackpressured',
+  );
+  const ownerKey = readOwnQueueDiagnosticField(record, 'ownerKey');
+  const pendingKeys = readOwnQueueDiagnosticField(record, 'pendingKeys');
+  const retryingKeys = readOwnQueueDiagnosticField(record, 'retryingKeys');
+  const inFlightKeys = readOwnQueueDiagnosticField(record, 'inFlightKeys');
+  return {
+    source,
+    pendingWrites:
+      normalizeQueueDiagnosticNonNegativeInteger(pendingWrites),
+    pendingWriteGrowthCount:
+      normalizeQueueDiagnosticNonNegativeInteger(pendingWriteGrowthCount),
+    retainedBacklogGrowthCount:
+      normalizeQueueDiagnosticNonNegativeInteger(retainedBacklogGrowthCount),
+    sharedPressureBackpressured: sharedPressureBackpressured === true,
+    transportPressureBackpressured: transportPressureBackpressured === true,
+    queryPressureBackpressured: queryPressureBackpressured === true,
+    ownerKey: typeof ownerKey === TYPEOF_STRING ?
+      ownerKey :
+      null,
+    pendingKeys: normalizeQueueDiagnosticStringArray(pendingKeys),
+    retryingKeys: normalizeQueueDiagnosticStringArray(retryingKeys),
+    inFlightKeys: normalizeQueueDiagnosticStringArray(inFlightKeys),
+    retryableDrainFailureCount:
+      normalizeQueueDiagnosticNonNegativeInteger(retryableDrainFailureCount),
+  };
+}
+
+function normalizeLoggingRetentionQueueDiagnostics(record) {
+  if (!record || typeof record !== TYPEOF_OBJECT || arrayIsArray(record)) {
+    return null;
+  }
+  const pendingWrites = readOwnQueueDiagnosticField(record, 'pendingWrites');
+  const pendingWriteGrowthCount = readOwnQueueDiagnosticField(
+    record,
+    'pendingWriteGrowthCount',
+  );
+  const retainedBacklogGrowthCount = readOwnQueueDiagnosticField(
+    record,
+    'retainedBacklogGrowthCount',
+  );
+  const retainedPressureBacklogCap = readOwnQueueDiagnosticField(
+    record,
+    'retainedPressureBacklogCap',
+  );
+  const maxPendingWrites = readOwnQueueDiagnosticField(
+    record,
+    'maxPendingWrites',
+  );
+  const consecutiveDeferredWriteFailures = readOwnQueueDiagnosticField(
+    record,
+    'consecutiveDeferredWriteFailures',
+  );
+  const isWriting = readOwnQueueDiagnosticField(record, 'isWriting');
+  const sharedPressureBackpressured = readOwnQueueDiagnosticField(
+    record,
+    'sharedPressureBackpressured',
+  );
+  const transportPressureBackpressured = readOwnQueueDiagnosticField(
+    record,
+    'transportPressureBackpressured',
+  );
+  const queryPressureBackpressured = readOwnQueueDiagnosticField(
+    record,
+    'queryPressureBackpressured',
+  );
+  return {
+    source: QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION,
+    pendingWrites:
+      normalizeQueueDiagnosticNonNegativeInteger(pendingWrites),
+    pendingWriteGrowthCount:
+      normalizeQueueDiagnosticNonNegativeInteger(pendingWriteGrowthCount),
+    retainedBacklogGrowthCount:
+      normalizeQueueDiagnosticNonNegativeInteger(retainedBacklogGrowthCount),
+    retainedPressureBacklogCap:
+      normalizeQueueDiagnosticNonNegativeInteger(retainedPressureBacklogCap),
+    maxPendingWrites:
+      normalizeQueueDiagnosticNonNegativeInteger(maxPendingWrites),
+    isWriting: isWriting === true,
+    consecutiveDeferredWriteFailures:
+      normalizeQueueDiagnosticNonNegativeInteger(
+        consecutiveDeferredWriteFailures,
+      ),
+    sharedPressureBackpressured: sharedPressureBackpressured === true,
+    transportPressureBackpressured: transportPressureBackpressured === true,
+    queryPressureBackpressured: queryPressureBackpressured === true,
+  };
+}
 
 function resolveActiveProbeOperationTimeoutMs(deadline) {
   const remainingMs = Math.floor(deadline - Date.now());
@@ -1093,50 +1290,58 @@ class ClusterPublicationEvidence extends ClusterQuiescence {
               ),
             ) :
             null;
+    const logsTableCandidate = readOwnQueueDiagnosticField(
+      controlPlaneDiagnostics,
+      'logsTable',
+    );
     const logsTable =
-      controlPlaneDiagnostics?.logsTable &&
-      typeof controlPlaneDiagnostics.logsTable === 'object' ?
-        controlPlaneDiagnostics.logsTable :
+      logsTableCandidate && typeof logsTableCandidate === TYPEOF_OBJECT &&
+      arrayIsArray(logsTableCandidate) !== true ?
+        logsTableCandidate :
+        null;
+    const ownerQueueCandidate = readOwnQueueDiagnosticField(
+      controlPlaneDiagnostics,
+      'controlPlaneOwnerQueueDepth',
+    );
+    const explicitControlPlaneOwnerQueueDepth =
+      ownerQueueCandidate &&
+      typeof ownerQueueCandidate === TYPEOF_OBJECT &&
+      arrayIsArray(ownerQueueCandidate) !== true ?
+        ownerQueueCandidate :
         null;
     const cdcReplay =
       controlPlaneDiagnostics?.cdcReplay &&
       typeof controlPlaneDiagnostics.cdcReplay === 'object' ?
         controlPlaneDiagnostics.cdcReplay :
         null;
-    const controlPlaneOwnerQueueDepth = logsTable ?
-      {
-        pendingWrites: Number.isFinite(logsTable.pendingWrites) ?
-          Math.max(ZERO, Math.floor(logsTable.pendingWrites)) :
-          ZERO,
-        pendingWriteGrowthCount: Number.isFinite(
-          logsTable.pendingWriteGrowthCount,
-        ) ?
-          Math.max(ZERO, Math.floor(logsTable.pendingWriteGrowthCount)) :
-          ZERO,
-        retainedBacklogGrowthCount: Number.isFinite(
-          logsTable.retainedBacklogGrowthCount,
-        ) ?
-          Math.max(ZERO, Math.floor(logsTable.retainedBacklogGrowthCount)) :
-          ZERO,
-        sharedPressureBackpressured:
-            logsTable.sharedPressureBackpressured === true,
-        transportPressureBackpressured:
-          logsTable.transportPressureBackpressured === true,
-        queryPressureBackpressured:
-          logsTable.queryPressureBackpressured === true,
-        ownerKey: typeof logsTable.ownerKey === TYPEOF_STRING ?
-          logsTable.ownerKey :
+    const hasSeparatedQueueSources =
+      explicitControlPlaneOwnerQueueDepth &&
+      readOwnQueueDiagnosticField(
+        explicitControlPlaneOwnerQueueDepth,
+        'source',
+      ) ===
+        QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER &&
+      logsTable &&
+      readOwnQueueDiagnosticField(logsTable, 'source') ===
+        QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION;
+    const queueDiagnosticsSourceState = hasSeparatedQueueSources ?
+      QUEUE_DIAGNOSTICS_SOURCE_STATE_SEPARATED :
+      explicitControlPlaneOwnerQueueDepth || logsTable ?
+        QUEUE_DIAGNOSTICS_SOURCE_STATE_LEGACY_AMBIGUOUS :
+        QUEUE_DIAGNOSTICS_SOURCE_STATE_ABSENT;
+    const controlPlaneOwnerQueueDepth =
+      normalizeControlSnapshotOwnerQueueDiagnostics(
+        explicitControlPlaneOwnerQueueDepth || logsTable,
+        hasSeparatedQueueSources ?
+          QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER :
           null,
-        pendingKeys: normalizeDistinctStringArray(logsTable.pendingKeys),
-        retryingKeys: normalizeDistinctStringArray(logsTable.retryingKeys),
-        inFlightKeys: normalizeDistinctStringArray(logsTable.inFlightKeys),
-        retryableDrainFailureCount: Number.isFinite(
-          logsTable.retryableDrainFailureCount,
-        ) ?
-          Math.max(ZERO, Math.floor(logsTable.retryableDrainFailureCount)) :
-          ZERO,
-      } :
-      null;
+      );
+    const loggingRetentionQueueDepth =
+      logsTable &&
+      readOwnQueueDiagnosticField(logsTable, 'source') ===
+        QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION ?
+        normalizeLoggingRetentionQueueDiagnostics(logsTable) :
+        null;
     const cdcReplayLag = cdcReplay ?
       {
         bufferedEvents: Number.isFinite(cdcReplay.bufferedEvents) ?
@@ -1205,7 +1410,9 @@ class ClusterPublicationEvidence extends ClusterQuiescence {
       activeGateOwnerCohort,
       priorityRecoveryObservation,
       priorityRecoveryDecisionSnapshots,
+      queueDiagnosticsSourceState,
       controlPlaneOwnerQueueDepth,
+      loggingRetentionQueueDepth,
       cdcReplayLag,
       healthyReadinessNodeIds,
     };

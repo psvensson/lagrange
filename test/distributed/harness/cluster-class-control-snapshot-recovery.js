@@ -344,8 +344,14 @@ class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
             snapshotDiagnostics.priorityRecoveryObservation,
           priorityRecoveryDecisionSnapshots:
             snapshotDiagnostics.priorityRecoveryDecisionSnapshots,
+          queueDiagnosticsSourceState:
+            snapshotDiagnostics.queueDiagnosticsSourceState,
           controlPlaneOwnerQueueDepth:
             snapshotDiagnostics.controlPlaneOwnerQueueDepth,
+          observedControlPlaneOwnerQueueDepth:
+            snapshotDiagnostics.controlPlaneOwnerQueueDepth,
+          loggingRetentionQueueDepth:
+            snapshotDiagnostics.loggingRetentionQueueDepth,
           cdcReplayLag: snapshotDiagnostics.cdcReplayLag,
           healthyReadinessNodeIds: snapshotDiagnostics.healthyReadinessNodeIds,
           publishedActiveNodeIds,
@@ -940,8 +946,16 @@ class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
         selectedResult?.priorityRecoveryObservation || null,
       selectedPriorityRecoveryDecisionSnapshots:
         selectedResult?.priorityRecoveryDecisionSnapshots || null,
+      selectedQueueDiagnosticsSourceState:
+        selectedResult?.queueDiagnosticsSourceState || null,
       selectedControlPlaneOwnerQueueDepth:
         selectedOwnerRecoveryQueueProjection.controlPlaneOwnerQueueDepth || null,
+      selectedObservedControlPlaneOwnerQueueDepth:
+        selectedResult?.observedControlPlaneOwnerQueueDepth ||
+        selectedResult?.controlPlaneOwnerQueueDepth ||
+        null,
+      selectedLoggingRetentionQueueDepth:
+        selectedResult?.loggingRetentionQueueDepth || null,
       selectedCdcReplayLag: selectedResult?.cdcReplayLag || null,
       publicationDisagreementByNodeId,
       selectedHealthyReadinessNodeIds: Array.isArray(

@@ -328,14 +328,15 @@ test('AdminControlSnapshot carries authoritative published fallback through loca
       'active-gate handoff should not retain reconcile debt after producer diagnostics observe durable membership',
     );
     t.match(
-      result.controlPlaneDiagnostics.logsTable,
+      result.controlPlaneDiagnostics.controlPlaneOwnerQueueDepth,
       {
+        source: 'membership_publication_owner',
         pendingWrites:
           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
         ownerKey: 'membership-publication:cluster_membership',
         pendingKeys: ['membership-publication:cluster_membership'],
       },
-      'local snapshot diagnostics should carry membership publication owner queue depth',
+      'local snapshot diagnostics should carry membership publication owner queue depth separately',
     );
   });
 

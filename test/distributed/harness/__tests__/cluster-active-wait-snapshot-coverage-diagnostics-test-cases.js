@@ -722,6 +722,13 @@ export function registerClusterActiveWaitSnapshotCoverageDiagnosticsTests(contex
         rows: [{
           controlPlaneDiagnostics: {
             logsTable: {
+              source: 'logs_table_retention',
+              pendingWrites: 0,
+              pendingWriteGrowthCount: 0,
+              retainedBacklogGrowthCount: 0,
+            },
+            controlPlaneOwnerQueueDepth: {
+              source: 'membership_publication_owner',
               pendingWrites: 1.9,
               pendingWriteGrowthCount: 0,
               retainedBacklogGrowthCount: 1,
@@ -739,6 +746,7 @@ export function registerClusterActiveWaitSnapshotCoverageDiagnosticsTests(contex
       });
 
       assert.deepEqual(snapshotDiagnostics.controlPlaneOwnerQueueDepth, {
+        source: 'membership_publication_owner',
         pendingWrites: 1,
         pendingWriteGrowthCount: 0,
         retainedBacklogGrowthCount: 1,

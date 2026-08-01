@@ -57,6 +57,9 @@ const CONTROL_SNAPSHOT_RUNTIME_READER_FIELD = 'sqlQueryEngine';
 const CONTROL_SNAPSHOT_RUNTIME_READER_EXECUTE_REQUEST_METHOD = 'executeRequest';
 const CONTROL_SNAPSHOT_PUBLICATION_READER_AVAILABLE_FIELD =
   'queryEngineAvailable';
+const QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION = 'logs_table_retention';
+const QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER =
+  'membership_publication_owner';
 const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OPTIONS = Object.freeze({
   allowOwnerLaneRetry: true,
 });
@@ -249,6 +252,7 @@ function buildLogsTableRetentionDiagnostics() {
     return null;
   }
   return {
+    source: QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION,
     pendingWrites: toNonNegativeInteger(stats.pendingWrites),
     pendingWriteGrowthCount: toNonNegativeInteger(
       stats.pendingWriteGrowthCount,
@@ -284,10 +288,13 @@ function buildMembershipPublicationOwnerQueueDiagnostics(readinessService) {
   const ownerQueueDepth =
     membershipPublicationService.getControlPlaneOwnerQueueDepth();
   return ownerQueueDepth && typeof ownerQueueDepth === 'object' ?
-    ownerQueueDepth :
+    {
+      ...ownerQueueDepth,
+      source: QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER,
+    } :
     null;
 }
-function mergeLogsTableOwnerQueueDiagnostics(logsTable, ownerQueueDepth) {
+function buildPriorityRecoveryPressureDiagnostics(logsTable, ownerQueueDepth) {
   if (!ownerQueueDepth) {
     return logsTable;
   }
@@ -596,12 +603,16 @@ class AdminControlSnapshotControlPlaneDiagnostics
           publicationConvergence,
         },
       });
-    const logsTable = mergeLogsTableOwnerQueueDiagnostics(
-      buildLogsTableRetentionDiagnostics(),
+    const logsTable = buildLogsTableRetentionDiagnostics();
+    const controlPlaneOwnerQueueDepth =
       buildMembershipPublicationOwnerQueueDiagnostics(
         this.controlPlaneReadinessService,
-      ),
-    );
+      );
+    const priorityRecoveryPressureDiagnostics =
+      buildPriorityRecoveryPressureDiagnostics(
+        logsTable,
+        controlPlaneOwnerQueueDepth,
+      );
     const priorityRecoveryDecisionSnapshots =
       this.buildPriorityRecoveryDecisionSnapshots({
         capturedAt,
@@ -614,7 +625,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
         replicaOperationRows,
         replicaOperations,
         serviceRows,
-        logsTable,
+        logsTable: priorityRecoveryPressureDiagnostics,
       });
     this.schedulePriorityRecoveryDispatchPendingReentries(
       priorityRecoveryDecisionSnapshots,
@@ -625,7 +636,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
         publicationConvergence,
         priorityRecoveryDecisionSnapshots,
         {
-          logsTable,
+          logsTable: priorityRecoveryPressureDiagnostics,
           publicationActiveGateHandoff: options.publicationActiveGateHandoff,
         },
       );
@@ -639,7 +650,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
         publicationConvergence: resolvedPublicationConvergence,
         publicationConvergenceGate,
         priorityRecoveryDecisionSnapshots,
-        logsTable,
+        logsTable: priorityRecoveryPressureDiagnostics,
         publicationActiveGateHandoff: options.publicationActiveGateHandoff,
       }).priorityRecoveryObservation;
     const splitEvaluation = this.resolveSplitEvaluationDiagnostics();
@@ -684,6 +695,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
       replicaOperations,
       splitEvaluation,
       logsTable,
+      controlPlaneOwnerQueueDepth,
       cdcReplay,
       cdcReplayByPartitionId: cdcReplay?.byPartitionId || null,
     };

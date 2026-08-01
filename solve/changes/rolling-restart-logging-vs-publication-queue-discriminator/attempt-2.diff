@@ -1,0 +1,1491 @@
+diff --git a/scripts/rolling-restart-liveness-classifier.js b/scripts/rolling-restart-liveness-classifier.js
+index af1fc0471f9ab2fa1b192cbf6b02e1bdede6ba61..97ca5d644cedd11f38c1184e6eedb789a98b5943 100644
+--- a/scripts/rolling-restart-liveness-classifier.js
++++ b/scripts/rolling-restart-liveness-classifier.js
+@@ -18,6 +18,13 @@ const NUM_ZERO = 0;
+ const NUM_ONE = 1;
+ const FIRST_INDEX = 0;
+ const SECOND_INDEX = 1;
++const arrayFind = Function.call.bind(Array.prototype.find);
++const arrayIsArray = Array.isArray;
++const mathFloor = Math.floor;
++const numberIsFinite = Number.isFinite;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const NUMBER_MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
+ 
+ const PROPERTY_FAILURE_BUNDLE = 'failureBundle';
+ const PROPERTY_REPORT = 'report';
+@@ -37,6 +44,8 @@ const PROPERTY_ROLLING_RESTART_LIVENESS_SAMPLES =
+   'rollingRestartLivenessSamples';
+ const PROPERTY_SOURCE_ARTIFACT = 'sourceArtifact';
+ const PROPERTY_FULL_LOG_REPLAY = 'fullLogReplay';
++const FIELD_PENDING_WRITE_GROWTH_COUNT = 'pendingWriteGrowthCount';
++const FIELD_PROPERTY_DESCRIPTOR_VALUE = 'value';
+ 
+ const EVIDENCE_PATH_ARTIFACT = 'artifact';
+ const EVIDENCE_PATH_ACTIVE_GATE_PROGRESS =
+@@ -58,6 +67,7 @@ const BOUNDARY_WORKFLOW_PROGRESS = 'workflow_progress';
+ const ACTION_RECONCILE_OWNER_MEMBERSHIP_PUBLICATION =
+   'reconcile_owner_membership_publication';
+ const ACTION_WAIT_FOR_OPERATION_PROGRESS = 'wait_for_operation_progress';
++const ACTION_REPAIR_OWNER_QUEUE_ADMISSION = 'repair_owner_queue_admission';
+ const ACTION_ABSENT = ABSENT_VALUE;
+ 
+ const HANDOFF_OUTCOME_OWNER_RECONCILE_ENQUEUED =
+@@ -74,7 +84,15 @@ const SEMANTIC_STATE_SPREAD_SATISFIED_IN_FLIGHT =
+ 
+ const WITNESS_STATE_OBSERVED = 'observed';
+ const QUEUE_STATE_OBSERVED = 'observed';
++const QUEUE_STATE_AMBIGUOUS = 'ambiguous';
+ const QUEUE_STATE_ABSENT = ABSENT_VALUE;
++const QUEUE_SOURCE_STATE_SEPARATED = 'separated';
++const QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION = 'logs_table_retention';
++const QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER =
++  'membership_publication_owner';
++const QUEUE_SOURCE_STATE_LEGACY_AMBIGUOUS = 'legacy_ambiguous';
++const QUEUE_CONTRADICTION_OWNER_ACTION_ENABLED_QUEUE_EMPTY =
++  'owner_action_enabled_queue_empty';
+ const EVIDENCE_COMPLETENESS_COMPLETE = 'complete';
+ const EVIDENCE_COMPLETENESS_SPARSE = 'sparse';
+ const EVIDENCE_FULL_LOG_REPLAY_ABSENT = Object.freeze({
+@@ -218,14 +236,22 @@ function buildRollingRestartLivenessVerdict(artifact = {}, options = {}) {
+     publication,
+     progress,
+   });
+-  const actionEvidence = buildActionEvidence(progress, samples);
++  const initialActionEvidence = buildActionEvidence(progress, samples);
++  const queueState = buildQueueState(
++    progress,
++    samples,
++    initialActionEvidence,
++  );
++  const actionEvidence = resolveQueueIdentityActionEvidence(
++    initialActionEvidence,
++    queueState,
++  );
+   const progressWitness = selectProgressWitness(samples, actionEvidence);
+   const publicationDelta = buildPublicationDelta({
+     samples,
+     progress,
+     bestProgress,
+   });
+-  const queueState = buildQueueState(progress, samples);
+   const executedWithoutVisibility = isExecutedWithoutVisibility({
+     actionEvidence,
+     progressWitness,
+@@ -337,7 +363,7 @@ function buildGraphForArtifact(artifact) {
+ 
+ function selectScenario(artifact) {
+   const report = artifact[PROPERTY_REPORT] || artifact;
+-  const scenarios = Array.isArray(report[PROPERTY_SCENARIOS]) ?
++  const scenarios = arrayIsArray(report[PROPERTY_SCENARIOS]) ?
+     report[PROPERTY_SCENARIOS] :
+     [];
+   return isRecord(scenarios[FIRST_INDEX]) ? scenarios[FIRST_INDEX] : {};
+@@ -555,7 +581,7 @@ function compareProgressSamples(previous, current) {
+   for (const rule of METRIC_RULES) {
+     const before = previous[rule.field];
+     const after = current[rule.field];
+-    if (!Number.isFinite(before) || !Number.isFinite(after)) {
++    if (!numberIsFinite(before) || !numberIsFinite(after)) {
+       continue;
+     }
+     const moved = rule.decreasing ? after < before : after !== before;
+@@ -591,7 +617,8 @@ function classifyDownstreamWorkflow({graph, scenario, publication, progress}) {
+     progressClasses.unresolvedSemanticStateCount,
+   );
+   const missingPublishedCount = normalizeNumber(publication.missingPublishedCount);
+-  const priorityEdge = graph.edges.find(
++  const priorityEdge = arrayFind(
++    graph.edges,
+     (edge) => edge.id === EDGE_ID.PRIORITY_RECOVERY_PARTITION_PROGRESS,
+   );
+   const hasBlockingDominantWitness =
+@@ -818,20 +845,93 @@ function didPublicationChange(left, right) {
+     decreasedNumber(left.missingPublishedCount, right.missingPublishedCount);
+ }
+ 
+-function buildQueueState(progress, samples) {
++function buildQueueDepthState(record = {}) {
++  const pendingWrites = normalizeQueueNumber(
++    readOwnField(record, 'pendingWrites'),
++  );
++  if (!numberIsFinite(pendingWrites)) {
++    return {
++      state: QUEUE_STATE_ABSENT,
++      pendingWrites: ABSENT_VALUE,
++      pendingWriteGrowthCount: ABSENT_VALUE,
++    };
++  }
++  return {
++    state: QUEUE_STATE_OBSERVED,
++    pendingWrites,
++    pendingWriteGrowthCount: valueOrAbsent(
++      normalizeQueueNumber(
++        readOwnField(record, FIELD_PENDING_WRITE_GROWTH_COUNT),
++      ),
++    ),
++  };
++}
++
++function buildQueueState(progress, samples, actionEvidence = {}) {
+   const lastSample = samples[samples.length - NUM_ONE] || {};
+-  const depthRecord = firstRecord(progress.selectedControlPlaneOwnerQueueDepth);
+-  const pendingWrites = firstFiniteNumber(
+-    depthRecord.pendingWrites,
+-    lastSample.ownerQueueDepth,
++  const depthRecord = firstRecord(
++    readOwnField(progress, 'selectedObservedControlPlaneOwnerQueueDepth'),
++    readOwnField(progress, 'selectedControlPlaneOwnerQueueDepth'),
++  );
++  const loggingDepthRecord = firstRecord(
++    readOwnField(progress, 'selectedLoggingRetentionQueueDepth'),
++  );
++  const declaredSourceState = textValue(
++    readOwnField(progress, 'selectedQueueDiagnosticsSourceState'),
++    QUEUE_SOURCE_STATE_LEGACY_AMBIGUOUS,
+   );
+-  if (!Number.isFinite(pendingWrites)) {
++  const hasSeparatedSourceIdentity =
++    declaredSourceState === QUEUE_SOURCE_STATE_SEPARATED &&
++    readOwnField(depthRecord, 'source') ===
++      QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER &&
++    readOwnField(loggingDepthRecord, 'source') ===
++      QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION;
++  const sourceState = hasSeparatedSourceIdentity ?
++    QUEUE_SOURCE_STATE_SEPARATED :
++    declaredSourceState === QUEUE_STATE_ABSENT ?
++      QUEUE_STATE_ABSENT :
++      QUEUE_SOURCE_STATE_LEGACY_AMBIGUOUS;
++  const owner = buildQueueDepthState(depthRecord);
++  const logging = buildQueueDepthState(loggingDepthRecord);
++  if (sourceState === QUEUE_SOURCE_STATE_SEPARATED) {
++    const contradiction =
++      actionEvidence.enabled === true &&
++      actionEvidence.executed !== true &&
++      owner.state === QUEUE_STATE_OBSERVED &&
++      owner.pendingWrites === NUM_ZERO ?
++        QUEUE_CONTRADICTION_OWNER_ACTION_ENABLED_QUEUE_EMPTY :
++        ABSENT_VALUE;
++    return {
++      state: QUEUE_STATE_OBSERVED,
++      sourceState,
++      evidencePath: EVIDENCE_PATH_ACTIVE_GATE_PROGRESS,
++      pendingWrites: owner.pendingWrites,
++      pendingWriteGrowthCount: owner.pendingWriteGrowthCount,
++      inFlightDepth: valueOrAbsent(lastSample.inFlightDepth),
++      owner,
++      logging,
++      contradiction,
++    };
++  }
++  const observedOwnerPendingWrites = normalizeQueueNumber(
++    readOwnField(depthRecord, 'pendingWrites'),
++  );
++  const pendingWrites = numberIsFinite(observedOwnerPendingWrites) ?
++    observedOwnerPendingWrites :
++    firstFiniteNumber(lastSample.ownerQueueDepth);
++  if (!numberIsFinite(pendingWrites)) {
+     return {
+       state: QUEUE_STATE_ABSENT,
+       evidencePath: ABSENT_VALUE,
+       pendingWrites: ABSENT_VALUE,
+       pendingWriteGrowthCount: ABSENT_VALUE,
+       inFlightDepth: valueOrAbsent(lastSample.inFlightDepth),
++      sourceState,
++      owner: sourceState === QUEUE_SOURCE_STATE_LEGACY_AMBIGUOUS ?
++        {...owner, state: QUEUE_STATE_AMBIGUOUS} :
++        owner,
++      logging,
++      contradiction: ABSENT_VALUE,
+     };
+   }
+   return {
+@@ -840,8 +940,31 @@ function buildQueueState(progress, samples) {
+       lastSample.evidencePath :
+       EVIDENCE_PATH_ACTIVE_GATE_PROGRESS,
+     pendingWrites,
+-    pendingWriteGrowthCount: valueOrAbsent(depthRecord.pendingWriteGrowthCount),
++    pendingWriteGrowthCount: valueOrAbsent(
++      normalizeQueueNumber(
++        readOwnField(depthRecord, FIELD_PENDING_WRITE_GROWTH_COUNT),
++      ),
++    ),
+     inFlightDepth: valueOrAbsent(lastSample.inFlightDepth),
++    sourceState,
++    owner: sourceState === QUEUE_SOURCE_STATE_LEGACY_AMBIGUOUS ?
++      {...owner, state: QUEUE_STATE_AMBIGUOUS} :
++      owner,
++    logging,
++    contradiction: ABSENT_VALUE,
++  };
++}
++
++function resolveQueueIdentityActionEvidence(actionEvidence, queueState) {
++  if (
++    queueState.contradiction !==
++      QUEUE_CONTRADICTION_OWNER_ACTION_ENABLED_QUEUE_EMPTY
++  ) {
++    return actionEvidence;
++  }
++  return {
++    ...actionEvidence,
++    enabledAction: ACTION_REPAIR_OWNER_QUEUE_ADMISSION,
+   };
+ }
+ 
+@@ -888,15 +1011,15 @@ function finalizeVerdict(base, fields) {
+ }
+ 
+ function firstRecord(...values) {
+-  return values.find(isRecord) || {};
++  return arrayFind(values, isRecord) || {};
+ }
+ 
+ function firstArray(...values) {
+-  return values.find(Array.isArray) || [];
++  return arrayFind(values, arrayIsArray) || [];
+ }
+ 
+ function normalizeTextArray(value) {
+-  if (Array.isArray(value)) {
++  if (arrayIsArray(value)) {
+     return value
+       .map((entry) => textValue(entry))
+       .filter((entry) => entry.length > NUM_ZERO);
+@@ -910,7 +1033,28 @@ function normalizeTextArray(value) {
+ function isRecord(value) {
+   return Boolean(value) &&
+     typeof value === TYPEOF_OBJECT &&
+-    !Array.isArray(value);
++    !arrayIsArray(value);
++}
++
++function readOwnField(record, field) {
++  if (!isRecord(record)) {
++    return undefined;
++  }
++  const descriptor = objectGetOwnPropertyDescriptor(record, field);
++  return descriptor &&
++    objectHasOwn(descriptor, FIELD_PROPERTY_DESCRIPTOR_VALUE) ?
++    descriptor.value :
++    undefined;
++}
++
++function normalizeQueueNumber(value) {
++  if (typeof value !== 'number' || !numberIsFinite(value) || value <= NUM_ZERO) {
++    return value === NUM_ZERO ? NUM_ZERO : Number.NaN;
++  }
++  if (value >= NUMBER_MAX_SAFE_INTEGER) {
++    return NUMBER_MAX_SAFE_INTEGER;
++  }
++  return mathFloor(value);
+ }
+ 
+ function textValue(...values) {
+@@ -923,18 +1067,18 @@ function textValue(...values) {
+ }
+ 
+ function firstText(values) {
+-  return Array.isArray(values) ? textValue(...values) : EMPTY_TEXT;
++  return arrayIsArray(values) ? textValue(...values) : EMPTY_TEXT;
+ }
+ 
+ function normalizeNumber(value) {
+   const number = Number(value);
+-  return Number.isFinite(number) ? number : Number.NaN;
++  return numberIsFinite(number) ? number : Number.NaN;
+ }
+ 
+ function firstFiniteNumber(...values) {
+   for (const value of values) {
+     const number = normalizeNumber(value);
+-    if (Number.isFinite(number)) {
++    if (numberIsFinite(number)) {
+       return number;
+     }
+   }
+@@ -943,7 +1087,7 @@ function firstFiniteNumber(...values) {
+ 
+ function normalizeTimestamp(value) {
+   const number = normalizeNumber(value);
+-  if (Number.isFinite(number)) {
++  if (numberIsFinite(number)) {
+     return number;
+   }
+   if (typeof value === TYPEOF_STRING && value.length > NUM_ZERO) {
+@@ -953,15 +1097,15 @@ function normalizeTimestamp(value) {
+ }
+ 
+ function valueOrAbsent(value) {
+-  return Number.isFinite(value) ? value : ABSENT_VALUE;
++  return numberIsFinite(value) ? value : ABSENT_VALUE;
+ }
+ 
+ function changedNumber(left, right) {
+-  return Number.isFinite(left) && Number.isFinite(right) && left !== right;
++  return numberIsFinite(left) && numberIsFinite(right) && left !== right;
+ }
+ 
+ function decreasedNumber(left, right) {
+-  return Number.isFinite(left) && Number.isFinite(right) && right < left;
++  return numberIsFinite(left) && numberIsFinite(right) && right < left;
+ }
+ 
+ export {
+diff --git a/scripts/run-rolling-restart-logging-vs-publication-queue-discriminator-scenarios.js b/scripts/run-rolling-restart-logging-vs-publication-queue-discriminator-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..782efd1b3070a5af2495a5207572b8a5caee9dfb
+--- /dev/null
++++ b/scripts/run-rolling-restart-logging-vs-publication-queue-discriminator-scenarios.js
+@@ -0,0 +1,13 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from
++  './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = Object.freeze({
++  'rolling-restart-logging-vs-publication-queue-discriminator': Object.freeze([
++    'test/distributed/harness/__tests__/' +
++      'logging-publication-queue-source-identity.test.js',
++  ]),
++});
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/admin/admin-control-snapshot-control-plane-diagnostics.js b/src/admin/admin-control-snapshot-control-plane-diagnostics.js
+index 59daafed3da226ac1e149aa2b1148be0bab113a2..b53809df132efd35808369e138a5be30218da370 100644
+--- a/src/admin/admin-control-snapshot-control-plane-diagnostics.js
++++ b/src/admin/admin-control-snapshot-control-plane-diagnostics.js
+@@ -57,6 +57,9 @@ const CONTROL_SNAPSHOT_RUNTIME_READER_FIELD = 'sqlQueryEngine';
+ const CONTROL_SNAPSHOT_RUNTIME_READER_EXECUTE_REQUEST_METHOD = 'executeRequest';
+ const CONTROL_SNAPSHOT_PUBLICATION_READER_AVAILABLE_FIELD =
+   'queryEngineAvailable';
++const QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION = 'logs_table_retention';
++const QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER =
++  'membership_publication_owner';
+ const PRIORITY_RECOVERY_DISPATCH_PENDING_REENTRY_OPTIONS = Object.freeze({
+   allowOwnerLaneRetry: true,
+ });
+@@ -249,6 +252,7 @@ function buildLogsTableRetentionDiagnostics() {
+     return null;
+   }
+   return {
++    source: QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION,
+     pendingWrites: toNonNegativeInteger(stats.pendingWrites),
+     pendingWriteGrowthCount: toNonNegativeInteger(
+       stats.pendingWriteGrowthCount,
+@@ -284,10 +288,13 @@ function buildMembershipPublicationOwnerQueueDiagnostics(readinessService) {
+   const ownerQueueDepth =
+     membershipPublicationService.getControlPlaneOwnerQueueDepth();
+   return ownerQueueDepth && typeof ownerQueueDepth === 'object' ?
+-    ownerQueueDepth :
++    {
++      ...ownerQueueDepth,
++      source: QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER,
++    } :
+     null;
+ }
+-function mergeLogsTableOwnerQueueDiagnostics(logsTable, ownerQueueDepth) {
++function buildPriorityRecoveryPressureDiagnostics(logsTable, ownerQueueDepth) {
+   if (!ownerQueueDepth) {
+     return logsTable;
+   }
+@@ -596,12 +603,16 @@ class AdminControlSnapshotControlPlaneDiagnostics
+           publicationConvergence,
+         },
+       });
+-    const logsTable = mergeLogsTableOwnerQueueDiagnostics(
+-      buildLogsTableRetentionDiagnostics(),
++    const logsTable = buildLogsTableRetentionDiagnostics();
++    const controlPlaneOwnerQueueDepth =
+       buildMembershipPublicationOwnerQueueDiagnostics(
+         this.controlPlaneReadinessService,
+-      ),
+-    );
++      );
++    const priorityRecoveryPressureDiagnostics =
++      buildPriorityRecoveryPressureDiagnostics(
++        logsTable,
++        controlPlaneOwnerQueueDepth,
++      );
+     const priorityRecoveryDecisionSnapshots =
+       this.buildPriorityRecoveryDecisionSnapshots({
+         capturedAt,
+@@ -614,7 +625,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
+         replicaOperationRows,
+         replicaOperations,
+         serviceRows,
+-        logsTable,
++        logsTable: priorityRecoveryPressureDiagnostics,
+       });
+     this.schedulePriorityRecoveryDispatchPendingReentries(
+       priorityRecoveryDecisionSnapshots,
+@@ -625,7 +636,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
+         publicationConvergence,
+         priorityRecoveryDecisionSnapshots,
+         {
+-          logsTable,
++          logsTable: priorityRecoveryPressureDiagnostics,
+           publicationActiveGateHandoff: options.publicationActiveGateHandoff,
+         },
+       );
+@@ -639,7 +650,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
+         publicationConvergence: resolvedPublicationConvergence,
+         publicationConvergenceGate,
+         priorityRecoveryDecisionSnapshots,
+-        logsTable,
++        logsTable: priorityRecoveryPressureDiagnostics,
+         publicationActiveGateHandoff: options.publicationActiveGateHandoff,
+       }).priorityRecoveryObservation;
+     const splitEvaluation = this.resolveSplitEvaluationDiagnostics();
+@@ -684,6 +695,7 @@ class AdminControlSnapshotControlPlaneDiagnostics
+       replicaOperations,
+       splitEvaluation,
+       logsTable,
++      controlPlaneOwnerQueueDepth,
+       cdcReplay,
+       cdcReplayByPartitionId: cdcReplay?.byPartitionId || null,
+     };
+diff --git a/src/admin/admin-control-snapshot-local-build-base.js b/src/admin/admin-control-snapshot-local-build-base.js
+index d88c6fc438389e32ee7613cd77f9cd944c72f6b9..f3dc2a01efbfacedf73cee632f7ac3abe4277c15 100644
+--- a/src/admin/admin-control-snapshot-local-build-base.js
++++ b/src/admin/admin-control-snapshot-local-build-base.js
+@@ -100,6 +100,8 @@ const CONTROL_SNAPSHOT_OBSERVATION_STATE_DEFERRED =
+   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.DEFERRED_REFRESH;
+ const CONTROL_SNAPSHOT_OBSERVATION_STATE_FAILED =
+   CONTROL_PLANE_SNAPSHOT_OBSERVATION_STATE.FAILED;
++const QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER =
++  'membership_publication_owner';
+ function toControlSnapshotNonNegativeInteger(value) {
+   const numericValue = Number(value);
+   return Number.isFinite(numericValue) && numericValue > 0 ?
+@@ -119,10 +121,16 @@ function buildControlSnapshotMembershipOwnerQueueDiagnostics(readinessService) {
+   const ownerQueueDepth =
+     membershipPublicationService.getControlPlaneOwnerQueueDepth();
+   return ownerQueueDepth && typeof ownerQueueDepth === 'object' ?
+-    ownerQueueDepth :
++    {
++      ...ownerQueueDepth,
++      source: QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER,
++    } :
+     null;
+ }
+-function mergeControlSnapshotLogsTableDiagnostics(logsTable, ownerQueueDepth) {
++function buildControlSnapshotPriorityRecoveryPressureDiagnostics(
++  logsTable,
++  ownerQueueDepth,
++) {
+   if (!ownerQueueDepth) {
+     return logsTable;
+   }
+@@ -500,13 +508,18 @@ class AdminControlSnapshotLocalBuildBase {
+       const readinessEntries = Object.values(
+         controlPlaneDiagnostics.readinessByNodeId || {},
+       );
++      const priorityRecoveryPressureDiagnostics =
++        buildControlSnapshotPriorityRecoveryPressureDiagnostics(
++          controlPlaneDiagnostics.logsTable,
++          controlPlaneDiagnostics.controlPlaneOwnerQueueDepth,
++        );
+       const reevaluatedEvidence =
+         this.resolveCanonicalPublicationRecoveryEvidenceDiagnostics(
+           readinessEntries,
+           controlPlaneDiagnostics.publicationConvergence,
+           controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots,
+           {
+-            logsTable: controlPlaneDiagnostics.logsTable,
++            logsTable: priorityRecoveryPressureDiagnostics,
+             publicationActiveGateHandoff,
+           },
+         );
+@@ -523,7 +536,7 @@ class AdminControlSnapshotLocalBuildBase {
+           publicationConvergenceGate: resolvedConvergenceGate,
+           priorityRecoveryDecisionSnapshots:
+             controlPlaneDiagnostics.priorityRecoveryDecisionSnapshots,
+-          logsTable: controlPlaneDiagnostics.logsTable,
++          logsTable: priorityRecoveryPressureDiagnostics,
+           publicationActiveGateHandoff,
+         }).priorityRecoveryObservation;
+ 
+@@ -603,12 +616,9 @@ class AdminControlSnapshotLocalBuildBase {
+             [CONTROL_SNAPSHOT_MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD]:
+               membershipPublicationHandoffOutcome,
+           };
+-          controlPlaneDiagnostics.logsTable =
+-            mergeControlSnapshotLogsTableDiagnostics(
+-              controlPlaneDiagnostics.logsTable,
+-              buildControlSnapshotMembershipOwnerQueueDiagnostics(
+-                this.controlPlaneReadinessService,
+-              ),
++          controlPlaneDiagnostics.controlPlaneOwnerQueueDepth =
++            buildControlSnapshotMembershipOwnerQueueDiagnostics(
++              this.controlPlaneReadinessService,
+             );
+         }
+       }
+diff --git a/test/admin/admin-control-snapshot-publication-convergence-active-gate-test-cases.js b/test/admin/admin-control-snapshot-publication-convergence-active-gate-test-cases.js
+index 4de3ac35f95214efde4c6e680152c0e4e0c18af3..712f9fe874358588855189290c5e4a3b5142126f 100644
+--- a/test/admin/admin-control-snapshot-publication-convergence-active-gate-test-cases.js
++++ b/test/admin/admin-control-snapshot-publication-convergence-active-gate-test-cases.js
+@@ -328,14 +328,15 @@ test('AdminControlSnapshot carries authoritative published fallback through loca
+       'active-gate handoff should not retain reconcile debt after producer diagnostics observe durable membership',
+     );
+     t.match(
+-      result.controlPlaneDiagnostics.logsTable,
++      result.controlPlaneDiagnostics.controlPlaneOwnerQueueDepth,
+       {
++        source: 'membership_publication_owner',
+         pendingWrites:
+           ACTIVE_GATE_SNAPSHOT_TEST_STATE.ACTIVE_GATE_HANDOFF_RECONCILE_PENDING_COUNT,
+         ownerKey: 'membership-publication:cluster_membership',
+         pendingKeys: ['membership-publication:cluster_membership'],
+       },
+-      'local snapshot diagnostics should carry membership publication owner queue depth',
++      'local snapshot diagnostics should carry membership publication owner queue depth separately',
+     );
+   });
+ 
+diff --git a/test/distributed/harness/__tests__/cluster-active-wait-snapshot-coverage-diagnostics-test-cases.js b/test/distributed/harness/__tests__/cluster-active-wait-snapshot-coverage-diagnostics-test-cases.js
+index 87ec7765afbb645580496db76aba2a16848b0474..b5d8e37f4da90bd664c9de4af29bcf85d6833a2d 100644
+--- a/test/distributed/harness/__tests__/cluster-active-wait-snapshot-coverage-diagnostics-test-cases.js
++++ b/test/distributed/harness/__tests__/cluster-active-wait-snapshot-coverage-diagnostics-test-cases.js
+@@ -722,6 +722,13 @@ export function registerClusterActiveWaitSnapshotCoverageDiagnosticsTests(contex
+         rows: [{
+           controlPlaneDiagnostics: {
+             logsTable: {
++              source: 'logs_table_retention',
++              pendingWrites: 0,
++              pendingWriteGrowthCount: 0,
++              retainedBacklogGrowthCount: 0,
++            },
++            controlPlaneOwnerQueueDepth: {
++              source: 'membership_publication_owner',
+               pendingWrites: 1.9,
+               pendingWriteGrowthCount: 0,
+               retainedBacklogGrowthCount: 1,
+@@ -739,6 +746,7 @@ export function registerClusterActiveWaitSnapshotCoverageDiagnosticsTests(contex
+       });
+ 
+       assert.deepEqual(snapshotDiagnostics.controlPlaneOwnerQueueDepth, {
++        source: 'membership_publication_owner',
+         pendingWrites: 1,
+         pendingWriteGrowthCount: 0,
+         retainedBacklogGrowthCount: 1,
+diff --git a/test/distributed/harness/__tests__/logging-publication-queue-source-identity.test.js b/test/distributed/harness/__tests__/logging-publication-queue-source-identity.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..7119e83c4b17d14b2c655320af945373085354c0
+--- /dev/null
++++ b/test/distributed/harness/__tests__/logging-publication-queue-source-identity.test.js
+@@ -0,0 +1,525 @@
++import assert from 'node:assert/strict';
++import {test} from 'node:test';
++import {
++  buildRollingRestartLivenessVerdict,
++} from '../../../../scripts/rolling-restart-liveness-classifier.js';
++import {AdminControlSnapshot} from
++  '../../../../src/admin/admin-control-snapshot.js';
++import {LogsTableService} from
++  '../../../../src/logging/logs-table-service.js';
++import {createCluster} from './cluster-test-helpers.js';
++import {CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER} from
++  '../cluster-active-wait-progress-layer.js';
++
++const MEMBERSHIP_OWNER_SOURCE = 'membership_publication_owner';
++const LOGGING_RETENTION_SOURCE = 'logs_table_retention';
++const SOURCE_STATE_SEPARATED = 'separated';
++const SOURCE_STATE_LEGACY_AMBIGUOUS = 'legacy_ambiguous';
++const OWNER_QUEUE_ADMISSION_REPAIR = 'repair_owner_queue_admission';
++const OWNER_QUEUE_EMPTY_CONTRADICTION =
++  'owner_action_enabled_queue_empty';
++const objectCreate = Object.create;
++const objectDefineProperty = Object.defineProperty;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const objectIs = Object.is;
++
++function buildSnapshotResult({explicitOwner = true} = {}) {
++  const controlPlaneDiagnostics = {
++    logsTable: {
++      source: LOGGING_RETENTION_SOURCE,
++      pendingWrites: 515,
++      pendingWriteGrowthCount: 1343,
++      retainedBacklogGrowthCount: 0,
++      maxPendingWrites: 10000,
++      isWriting: true,
++    },
++  };
++  if (explicitOwner) {
++    controlPlaneDiagnostics.controlPlaneOwnerQueueDepth = {
++      source: MEMBERSHIP_OWNER_SOURCE,
++      pendingWrites: 0,
++      pendingWriteGrowthCount: 0,
++      retainedBacklogGrowthCount: 0,
++      ownerKey: 'membership-publication:cluster_membership',
++      pendingKeys: [],
++      retryingKeys: [],
++      inFlightKeys: [],
++      retryableDrainFailureCount: 0,
++    };
++  }
++  return {rows: [{controlPlaneDiagnostics}]};
++}
++
++function buildLivenessArtifact({ownerPendingWrites, loggingPendingWrites}) {
++  return {
++    scenarios: [{
++      scenario: 'rolling-restart',
++      publicationConvergence: {
++        activeGate: {
++          progress: {
++            publicationEpoch: 92,
++            missingPublishedCount: 0,
++            publicationActiveGateHandoffPendingReconcileCount: 0,
++            publicationActiveGateHandoffNextAction: 'wait_owner_recovery',
++            membershipPublicationHandoffOutcomeState: 'write_deferred',
++            membershipPublicationHandoffOutcomeReasonCode:
++              'owner_reconcile_pending',
++            membershipPublicationHandoffOutcomeEnqueued: true,
++            selectedQueueDiagnosticsSourceState: SOURCE_STATE_SEPARATED,
++            selectedControlPlaneOwnerQueueDepth: {
++              source: MEMBERSHIP_OWNER_SOURCE,
++              pendingWrites: ownerPendingWrites,
++              pendingWriteGrowthCount: 0,
++              ownerKey: 'membership-publication:cluster_membership',
++              pendingKeys: ownerPendingWrites > 0 ?
++                ['membership-publication:cluster_membership'] : [],
++              retryingKeys: [],
++              inFlightKeys: [],
++            },
++            selectedLoggingRetentionQueueDepth: {
++              source: LOGGING_RETENTION_SOURCE,
++              pendingWrites: loggingPendingWrites,
++              pendingWriteGrowthCount: loggingPendingWrites > 0 ? 1343 : 0,
++            },
++          },
++        },
++        rollingRestartLivenessEvidence: {
++          complete: true,
++          samples: [],
++        },
++      },
++    }],
++  };
++}
++
++test('control snapshot producer emits independent queue witnesses', async () => {
++  const originalLogsTableInstance = LogsTableService.instance;
++  LogsTableService.instance = {
++    getStats() {
++      return {
++        pendingWrites: 515,
++        pendingWriteGrowthCount: 1343,
++        retainedBacklogGrowthCount: 0,
++        retainedPressureBacklogCap: 1000,
++        maxPendingWrites: 10000,
++        isWriting: true,
++        consecutiveDeferredWriteFailures: 0,
++        sharedPressureBackpressured: false,
++        transportPressureBackpressured: false,
++        queryPressureBackpressured: false,
++      };
++    },
++  };
++  try {
++    const snapshot = new AdminControlSnapshot({
++      nodeId: 'seed-node',
++      controlPlaneReadinessService: {
++        async getAllNodeReadiness() {
++          return [];
++        },
++        membershipPublicationService: {
++          getControlPlaneOwnerQueueDepth() {
++            return {
++              pendingWrites: 0,
++              pendingWriteGrowthCount: 0,
++              retainedBacklogGrowthCount: 0,
++              ownerKey: 'membership-publication:cluster_membership',
++              pendingKeys: [],
++              retryingKeys: [],
++              inFlightKeys: [],
++              retryableDrainFailureCount: 0,
++            };
++          },
++        },
++      },
++    });
++
++    const diagnostics = await snapshot.buildControlPlaneDiagnosticsSnapshot();
++
++    assert.equal(diagnostics.logsTable.source, LOGGING_RETENTION_SOURCE);
++    assert.equal(diagnostics.logsTable.pendingWrites, 515);
++    assert.equal(
++      objectHasOwn(diagnostics.logsTable, 'ownerKey'),
++      false,
++    );
++    assert.equal(
++      diagnostics.controlPlaneOwnerQueueDepth.source,
++      MEMBERSHIP_OWNER_SOURCE,
++    );
++    assert.equal(diagnostics.controlPlaneOwnerQueueDepth.pendingWrites, 0);
++    assert.deepEqual(diagnostics.controlPlaneOwnerQueueDepth.pendingKeys, []);
++    assert.equal(
++      objectHasOwn(
++        diagnostics.controlPlaneOwnerQueueDepth,
++        'maxPendingWrites',
++      ),
++      false,
++    );
++  } finally {
++    LogsTableService.instance = originalLogsTableInstance;
++  }
++});
++
++test('source-separated snapshot keeps logging backlog out of owner depth', () => {
++  const cluster = createCluster({
++    size: 1,
++    docker: {socketPath: '/var/run/docker.sock'},
++    image: 'distributed-db:test',
++  });
++  const diagnostics = cluster._extractControlSnapshotCoverageDiagnostics(
++    buildSnapshotResult(),
++  );
++
++  assert.equal(diagnostics.queueDiagnosticsSourceState, SOURCE_STATE_SEPARATED);
++  assert.equal(diagnostics.controlPlaneOwnerQueueDepth.pendingWrites, 0);
++  assert.equal(
++    diagnostics.controlPlaneOwnerQueueDepth.source,
++    MEMBERSHIP_OWNER_SOURCE,
++  );
++  assert.equal(diagnostics.loggingRetentionQueueDepth.pendingWrites, 515);
++  assert.equal(
++    diagnostics.loggingRetentionQueueDepth.pendingWriteGrowthCount,
++    1343,
++  );
++  assert.equal(
++    diagnostics.loggingRetentionQueueDepth.source,
++    LOGGING_RETENTION_SOURCE,
++  );
++});
++
++test('ACTIVE-gate progress carries both selected queue witnesses', () => {
++  const ownerQueue = {
++    source: MEMBERSHIP_OWNER_SOURCE,
++    pendingWrites: 0,
++    pendingWriteGrowthCount: 0,
++  };
++  const loggingQueue = {
++    source: LOGGING_RETENTION_SOURCE,
++    pendingWrites: 515,
++    pendingWriteGrowthCount: 1343,
++  };
++  const progress =
++    CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER.buildActiveWaitProgressSnapshot({
++      nodeDiagnostics: [{nodeId: 'seed-node', active: false}],
++      snapshotCoverage: {
++        expectedNodeCount: 1,
++        bestCoverageNodeCount: 1,
++        completeCoverage: true,
++        selectedQueueDiagnosticsSourceState: SOURCE_STATE_SEPARATED,
++        selectedControlPlaneOwnerQueueDepth: ownerQueue,
++        selectedObservedControlPlaneOwnerQueueDepth: ownerQueue,
++        selectedLoggingRetentionQueueDepth: loggingQueue,
++        selectedPublicationConvergence: {
++          publicationEpoch: 92,
++          publicationStatus: 'PUBLISHED',
++          publishedActiveNodeIds: ['seed-node'],
++        },
++      },
++    }, 1);
++
++  assert.equal(
++    progress.selectedQueueDiagnosticsSourceState,
++    SOURCE_STATE_SEPARATED,
++  );
++  assert.equal(
++    progress.selectedObservedControlPlaneOwnerQueueDepth.pendingWrites,
++    0,
++  );
++  assert.equal(progress.selectedLoggingRetentionQueueDepth.pendingWrites, 515);
++});
++
++test('legacy merged queue witness is marked ambiguous', () => {
++  const cluster = createCluster({
++    size: 1,
++    docker: {socketPath: '/var/run/docker.sock'},
++    image: 'distributed-db:test',
++  });
++  const legacy = buildSnapshotResult({explicitOwner: false});
++  delete legacy.rows[0].controlPlaneDiagnostics.logsTable.source;
++  legacy.rows[0].controlPlaneDiagnostics.logsTable.ownerKey =
++    'membership-publication:cluster_membership';
++  legacy.rows[0].controlPlaneDiagnostics.logsTable.pendingKeys = [];
++
++  const diagnostics = cluster._extractControlSnapshotCoverageDiagnostics(
++    legacy,
++  );
++
++  assert.equal(
++    diagnostics.queueDiagnosticsSourceState,
++    SOURCE_STATE_LEGACY_AMBIGUOUS,
++  );
++});
++
++test('inherited queue fields cannot impersonate source-owned evidence', () => {
++  const cluster = createCluster({
++    size: 1,
++    docker: {socketPath: '/var/run/docker.sock'},
++    image: 'distributed-db:test',
++  });
++  const inheritedOwner = objectCreate({
++    pendingWrites: 99,
++    pendingKeys: ['membership-publication:cluster_membership'],
++  });
++  inheritedOwner.source = MEMBERSHIP_OWNER_SOURCE;
++  const inheritedLogging = objectCreate({
++    pendingWrites: 999,
++    pendingWriteGrowthCount: 999,
++  });
++  inheritedLogging.source = LOGGING_RETENTION_SOURCE;
++  const diagnostics = cluster._extractControlSnapshotCoverageDiagnostics({
++    rows: [{
++      controlPlaneDiagnostics: {
++        controlPlaneOwnerQueueDepth: inheritedOwner,
++        logsTable: inheritedLogging,
++      },
++    }],
++  });
++
++  assert.equal(diagnostics.queueDiagnosticsSourceState, SOURCE_STATE_SEPARATED);
++  assert.equal(diagnostics.controlPlaneOwnerQueueDepth.pendingWrites, 0);
++  assert.deepEqual(diagnostics.controlPlaneOwnerQueueDepth.pendingKeys, []);
++  assert.equal(diagnostics.loggingRetentionQueueDepth.pendingWrites, 0);
++  assert.equal(
++    diagnostics.loggingRetentionQueueDepth.pendingWriteGrowthCount,
++    0,
++  );
++});
++
++test('queue source normalization rejects accessors and unsafe scalars', () => {
++  const cluster = createCluster({
++    size: 1,
++    docker: {socketPath: '/var/run/docker.sock'},
++    image: 'distributed-db:test',
++  });
++  let getterCalls = 0;
++  const trappedKeys = [];
++  objectDefineProperty(trappedKeys, 0, {
++    configurable: true,
++    get() {
++      getterCalls += 1;
++      return 'membership-publication:cluster_membership';
++    },
++  });
++  const ownerQueue = {
++    source: MEMBERSHIP_OWNER_SOURCE,
++    pendingWrites: Number.MAX_SAFE_INTEGER + 100,
++    pendingWriteGrowthCount: -0,
++    retainedBacklogGrowthCount: Number.POSITIVE_INFINITY,
++    pendingKeys: trappedKeys,
++    retryingKeys: Object('boxed'),
++    inFlightKeys: [],
++  };
++  objectDefineProperty(ownerQueue, 'ownerKey', {
++    configurable: true,
++    get() {
++      getterCalls += 1;
++      return 'membership-publication:cluster_membership';
++    },
++  });
++  const loggingQueue = {
++    source: LOGGING_RETENTION_SOURCE,
++    pendingWrites: Number.NaN,
++    pendingWriteGrowthCount: -1,
++    maxPendingWrites: Object(10000),
++  };
++
++  const diagnostics = cluster._extractControlSnapshotCoverageDiagnostics({
++    rows: [{
++      controlPlaneDiagnostics: {
++        controlPlaneOwnerQueueDepth: ownerQueue,
++        logsTable: loggingQueue,
++      },
++    }],
++  });
++
++  assert.equal(getterCalls, 0);
++  assert.equal(
++    diagnostics.controlPlaneOwnerQueueDepth.pendingWrites,
++    Number.MAX_SAFE_INTEGER,
++  );
++  assert.equal(
++    objectIs(
++      diagnostics.controlPlaneOwnerQueueDepth.pendingWriteGrowthCount,
++      -0,
++    ),
++    false,
++  );
++  assert.equal(
++    diagnostics.controlPlaneOwnerQueueDepth.retainedBacklogGrowthCount,
++    0,
++  );
++  assert.equal(diagnostics.controlPlaneOwnerQueueDepth.ownerKey, null);
++  assert.deepEqual(diagnostics.controlPlaneOwnerQueueDepth.pendingKeys, []);
++  assert.deepEqual(diagnostics.controlPlaneOwnerQueueDepth.retryingKeys, []);
++  assert.equal(diagnostics.loggingRetentionQueueDepth.pendingWrites, 0);
++  assert.equal(
++    diagnostics.loggingRetentionQueueDepth.pendingWriteGrowthCount,
++    0,
++  );
++  assert.equal(diagnostics.loggingRetentionQueueDepth.maxPendingWrites, 0);
++});
++
++test('queue source normalization ignores polluted collection prototypes', () => {
++  const originalObjectPendingWrites = objectGetOwnPropertyDescriptor(
++    Object.prototype,
++    'pendingWrites',
++  );
++  const originalArrayEntry = objectGetOwnPropertyDescriptor(
++    Array.prototype,
++    0,
++  );
++  objectDefineProperty(Object.prototype, 'pendingWrites', {
++    configurable: true,
++    writable: true,
++    value: 777,
++  });
++  objectDefineProperty(Array.prototype, 0, {
++    configurable: true,
++    writable: true,
++    value: 'membership-publication:cluster_membership',
++  });
++  let diagnostics;
++  try {
++    const cluster = createCluster({
++      size: 1,
++      docker: {socketPath: '/var/run/docker.sock'},
++      image: 'distributed-db:test',
++    });
++    diagnostics = cluster._extractControlSnapshotCoverageDiagnostics({
++      rows: [{
++        controlPlaneDiagnostics: {
++          controlPlaneOwnerQueueDepth: {
++            source: MEMBERSHIP_OWNER_SOURCE,
++            pendingKeys: [],
++            retryingKeys: [],
++            inFlightKeys: [],
++          },
++          logsTable: {source: LOGGING_RETENTION_SOURCE},
++        },
++      }],
++    });
++  } finally {
++    delete Object.prototype.pendingWrites;
++    delete Array.prototype[0];
++    if (originalObjectPendingWrites) {
++      objectDefineProperty(
++        Object.prototype,
++        'pendingWrites',
++        originalObjectPendingWrites,
++      );
++    }
++    if (originalArrayEntry) {
++      objectDefineProperty(Array.prototype, 0, originalArrayEntry);
++    }
++  }
++
++  assert.equal(diagnostics.controlPlaneOwnerQueueDepth.pendingWrites, 0);
++  assert.equal(diagnostics.loggingRetentionQueueDepth.pendingWrites, 0);
++  assert.deepEqual(diagnostics.controlPlaneOwnerQueueDepth.pendingKeys, []);
++});
++
++test('liveness queue identity survives post-import intrinsic replacement', () => {
++  const originalFind = objectGetOwnPropertyDescriptor(Array.prototype, 'find');
++  const originalNumberIsFinite = objectGetOwnPropertyDescriptor(
++    Number,
++    'isFinite',
++  );
++  let verdict;
++  objectDefineProperty(Array.prototype, 'find', {
++    ...originalFind,
++    value(predicate, thisArg) {
++      if (predicate?.name === 'isRecord') {
++        return {
++          source: MEMBERSHIP_OWNER_SOURCE,
++          pendingWrites: 777,
++        };
++      }
++      return originalFind.value.call(this, predicate, thisArg);
++    },
++  });
++  objectDefineProperty(Number, 'isFinite', {
++    ...originalNumberIsFinite,
++    value() {
++      return false;
++    },
++  });
++  try {
++    verdict = buildRollingRestartLivenessVerdict(
++      buildLivenessArtifact({ownerPendingWrites: 0, loggingPendingWrites: 515}),
++    );
++  } finally {
++    objectDefineProperty(Array.prototype, 'find', originalFind);
++    objectDefineProperty(Number, 'isFinite', originalNumberIsFinite);
++  }
++
++  assert.equal(verdict.queueState.sourceState, SOURCE_STATE_SEPARATED);
++  assert.equal(verdict.queueState.owner.pendingWrites, 0);
++  assert.equal(verdict.queueState.logging.pendingWrites, 515);
++  assert.equal(verdict.enabledAction, OWNER_QUEUE_ADMISSION_REPAIR);
++});
++
++test('liveness classifier validates nested queue source identities', () => {
++  const artifact = buildLivenessArtifact({
++    ownerPendingWrites: 515,
++    loggingPendingWrites: 0,
++  });
++  const progress = artifact.scenarios[0].publicationConvergence.activeGate
++    .progress;
++  progress.selectedControlPlaneOwnerQueueDepth.source =
++    LOGGING_RETENTION_SOURCE;
++  progress.selectedLoggingRetentionQueueDepth.source =
++    MEMBERSHIP_OWNER_SOURCE;
++
++  const verdict = buildRollingRestartLivenessVerdict(artifact);
++
++  assert.equal(verdict.queueState.sourceState, SOURCE_STATE_LEGACY_AMBIGUOUS);
++  assert.equal(verdict.queueState.owner.state, 'ambiguous');
++  assert.equal(verdict.queueState.contradiction, 'absent');
++});
++
++test('empty owner queue plus logging backlog names owner admission loss', () => {
++  const verdict = buildRollingRestartLivenessVerdict(
++    buildLivenessArtifact({ownerPendingWrites: 0, loggingPendingWrites: 515}),
++  );
++
++  assert.equal(verdict.queueState.sourceState, SOURCE_STATE_SEPARATED);
++  assert.equal(verdict.queueState.owner.pendingWrites, 0);
++  assert.equal(verdict.queueState.logging.pendingWrites, 515);
++  assert.equal(
++    verdict.queueState.contradiction,
++    OWNER_QUEUE_EMPTY_CONTRADICTION,
++  );
++  assert.equal(verdict.enabledAction, OWNER_QUEUE_ADMISSION_REPAIR);
++});
++
++test('liveness classifier does not relabel legacy merged depth as owner truth', () => {
++  const artifact = buildLivenessArtifact({
++    ownerPendingWrites: 515,
++    loggingPendingWrites: 0,
++  });
++  const progress = artifact.scenarios[0].publicationConvergence.activeGate
++    .progress;
++  progress.selectedQueueDiagnosticsSourceState =
++    SOURCE_STATE_LEGACY_AMBIGUOUS;
++  delete progress.selectedLoggingRetentionQueueDepth;
++  delete progress.selectedControlPlaneOwnerQueueDepth.source;
++
++  const verdict = buildRollingRestartLivenessVerdict(artifact);
++
++  assert.equal(verdict.queueState.sourceState, SOURCE_STATE_LEGACY_AMBIGUOUS);
++  assert.equal(verdict.queueState.owner.state, 'ambiguous');
++  assert.equal(verdict.queueState.contradiction, 'absent');
++});
++
++test('real membership owner work retains wait-owner-recovery attribution', () => {
++  const verdict = buildRollingRestartLivenessVerdict(
++    buildLivenessArtifact({ownerPendingWrites: 1, loggingPendingWrites: 0}),
++  );
++
++  assert.equal(verdict.queueState.sourceState, SOURCE_STATE_SEPARATED);
++  assert.equal(verdict.queueState.owner.pendingWrites, 1);
++  assert.equal(verdict.queueState.logging.pendingWrites, 0);
++  assert.equal(verdict.queueState.contradiction, 'absent');
++  assert.equal(verdict.enabledAction, 'wait_owner_recovery');
++});
+diff --git a/test/distributed/harness/cluster-active-wait-progress-layer.js b/test/distributed/harness/cluster-active-wait-progress-layer.js
+index eb508128a747f38812bdd7a2bc7ea5dc2ebfc242..04cceea498228ef64f50d30b2dcd1d898ea20e28 100644
+--- a/test/distributed/harness/cluster-active-wait-progress-layer.js
++++ b/test/distributed/harness/cluster-active-wait-progress-layer.js
+@@ -664,6 +664,22 @@ function buildActiveWaitProgressSnapshot(
+     typeof snapshotCoverage.selectedControlPlaneOwnerQueueDepth === 'object' ?
+       snapshotCoverage.selectedControlPlaneOwnerQueueDepth :
+       null;
++  const selectedObservedControlPlaneOwnerQueueDepth =
++    snapshotCoverage?.selectedObservedControlPlaneOwnerQueueDepth &&
++    typeof snapshotCoverage.selectedObservedControlPlaneOwnerQueueDepth ===
++      'object' ?
++      snapshotCoverage.selectedObservedControlPlaneOwnerQueueDepth :
++      selectedControlPlaneOwnerQueueDepth;
++  const selectedLoggingRetentionQueueDepth =
++    snapshotCoverage?.selectedLoggingRetentionQueueDepth &&
++    typeof snapshotCoverage.selectedLoggingRetentionQueueDepth === 'object' ?
++      snapshotCoverage.selectedLoggingRetentionQueueDepth :
++      null;
++  const selectedQueueDiagnosticsSourceState =
++    typeof snapshotCoverage?.selectedQueueDiagnosticsSourceState ===
++      TYPEOF_STRING ?
++      snapshotCoverage.selectedQueueDiagnosticsSourceState :
++      null;
+   const selectedCdcReplayLag =
+     snapshotCoverage?.selectedCdcReplayLag &&
+     typeof snapshotCoverage.selectedCdcReplayLag === 'object' ?
+@@ -1072,6 +1088,9 @@ function buildActiveWaitProgressSnapshot(
+     selectedSnapshotObservationRetryAfterMs,
+     selectedSnapshotRepairDeferred,
+     selectedControlPlaneOwnerQueueDepth,
++    selectedObservedControlPlaneOwnerQueueDepth,
++    selectedLoggingRetentionQueueDepth,
++    selectedQueueDiagnosticsSourceState,
+     selectedCdcReplayLag,
+     publicationActiveGateHandoffState: activeGateOwnerCohortState,
+     publicationActiveGateHandoffReasonCode: activeGateOwnerCohortReasonCode,
+diff --git a/test/distributed/harness/cluster-class-control-snapshot-recovery.js b/test/distributed/harness/cluster-class-control-snapshot-recovery.js
+index 7afbcdcbeed1ca78c3ff46a1686f8aab4947f78f..0f42c3ae6ba0cddf0b54402efcb8097a9bc7c5b3 100644
+--- a/test/distributed/harness/cluster-class-control-snapshot-recovery.js
++++ b/test/distributed/harness/cluster-class-control-snapshot-recovery.js
+@@ -344,8 +344,14 @@ class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
+             snapshotDiagnostics.priorityRecoveryObservation,
+           priorityRecoveryDecisionSnapshots:
+             snapshotDiagnostics.priorityRecoveryDecisionSnapshots,
++          queueDiagnosticsSourceState:
++            snapshotDiagnostics.queueDiagnosticsSourceState,
+           controlPlaneOwnerQueueDepth:
+             snapshotDiagnostics.controlPlaneOwnerQueueDepth,
++          observedControlPlaneOwnerQueueDepth:
++            snapshotDiagnostics.controlPlaneOwnerQueueDepth,
++          loggingRetentionQueueDepth:
++            snapshotDiagnostics.loggingRetentionQueueDepth,
+           cdcReplayLag: snapshotDiagnostics.cdcReplayLag,
+           healthyReadinessNodeIds: snapshotDiagnostics.healthyReadinessNodeIds,
+           publishedActiveNodeIds,
+@@ -940,8 +946,16 @@ class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
+         selectedResult?.priorityRecoveryObservation || null,
+       selectedPriorityRecoveryDecisionSnapshots:
+         selectedResult?.priorityRecoveryDecisionSnapshots || null,
++      selectedQueueDiagnosticsSourceState:
++        selectedResult?.queueDiagnosticsSourceState || null,
+       selectedControlPlaneOwnerQueueDepth:
+         selectedOwnerRecoveryQueueProjection.controlPlaneOwnerQueueDepth || null,
++      selectedObservedControlPlaneOwnerQueueDepth:
++        selectedResult?.observedControlPlaneOwnerQueueDepth ||
++        selectedResult?.controlPlaneOwnerQueueDepth ||
++        null,
++      selectedLoggingRetentionQueueDepth:
++        selectedResult?.loggingRetentionQueueDepth || null,
+       selectedCdcReplayLag: selectedResult?.cdcReplayLag || null,
+       publicationDisagreementByNodeId,
+       selectedHealthyReadinessNodeIds: Array.isArray(
+diff --git a/test/distributed/harness/cluster-class-publication-evidence.js b/test/distributed/harness/cluster-class-publication-evidence.js
+index efb9ee8cf89b78ab61a2c7fd3011a8844d608db9..c93d98aab763984f0ec79744238653c2c0b01d1b 100644
+--- a/test/distributed/harness/cluster-class-publication-evidence.js
++++ b/test/distributed/harness/cluster-class-publication-evidence.js
+@@ -62,6 +62,21 @@ const {
+ 
+ const TYPEOF_OBJECT = 'object';
+ const TYPEOF_STRING = 'string';
++const arrayIsArray = Array.isArray;
++const mathFloor = Math.floor;
++const numberIsFinite = Number.isFinite;
++const numberIsSafeInteger = Number.isSafeInteger;
++const objectCreate = Object.create;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const NUMBER_MAX_SAFE_INTEGER = Number.MAX_SAFE_INTEGER;
++const QUEUE_DIAGNOSTIC_KEY_LIMIT = 4096;
++const QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION = 'logs_table_retention';
++const QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER =
++  'membership_publication_owner';
++const QUEUE_DIAGNOSTICS_SOURCE_STATE_ABSENT = 'absent';
++const QUEUE_DIAGNOSTICS_SOURCE_STATE_LEGACY_AMBIGUOUS = 'legacy_ambiguous';
++const QUEUE_DIAGNOSTICS_SOURCE_STATE_SEPARATED = 'separated';
+ const ACTIVE_GATE_OWNER_COHORT_FIELD = 'activeGateOwnerCohort';
+ const MEMBERSHIP_PUBLICATION_HANDOFF_OUTCOME_FIELD =
+   'membershipPublicationHandoffOutcome';
+@@ -80,6 +95,181 @@ const CONTROL_SNAPSHOT_PUBLICATION_SUMMARY_UNAVAILABLE = null;
+ const LOAD_ACTIVE_GATE_SNAPSHOT_COVERAGE_ATTEMPT_TIMEOUT_MS =
+   ACTIVE_POLL_INTERVAL_MS;
+ 
++function readOwnQueueDiagnosticField(record, field) {
++  if (!record || typeof record !== TYPEOF_OBJECT) {
++    return undefined;
++  }
++  const descriptor = objectGetOwnPropertyDescriptor(record, field);
++  return descriptor && objectHasOwn(descriptor, 'value') ?
++    descriptor.value :
++    undefined;
++}
++
++function normalizeQueueDiagnosticNonNegativeInteger(value) {
++  if (!numberIsFinite(value) || value <= ZERO) {
++    return ZERO;
++  }
++  if (value >= NUMBER_MAX_SAFE_INTEGER) {
++    return NUMBER_MAX_SAFE_INTEGER;
++  }
++  return mathFloor(value);
++}
++
++function normalizeQueueDiagnosticStringArray(value) {
++  if (!arrayIsArray(value)) {
++    return [];
++  }
++  const lengthDescriptor = objectGetOwnPropertyDescriptor(value, 'length');
++  const length = lengthDescriptor && objectHasOwn(lengthDescriptor, 'value') ?
++    lengthDescriptor.value :
++    ZERO;
++  if (
++    !numberIsSafeInteger(length) ||
++    length < ZERO ||
++    length > QUEUE_DIAGNOSTIC_KEY_LIMIT
++  ) {
++    return [];
++  }
++  const seen = objectCreate(null);
++  const normalized = [];
++  for (let index = ZERO; index < length; index += 1) {
++    const descriptor = objectGetOwnPropertyDescriptor(value, String(index));
++    if (!descriptor || !objectHasOwn(descriptor, 'value')) {
++      continue;
++    }
++    const entry = descriptor.value;
++    if (
++      typeof entry !== TYPEOF_STRING ||
++      entry.length === ZERO ||
++      objectHasOwn(seen, entry)
++    ) {
++      continue;
++    }
++    seen[entry] = true;
++    normalized[normalized.length] = entry;
++  }
++  return normalized;
++}
++
++function normalizeControlSnapshotOwnerQueueDiagnostics(
++  record,
++  source = null,
++) {
++  if (!record || typeof record !== TYPEOF_OBJECT || arrayIsArray(record)) {
++    return null;
++  }
++  const pendingWrites = readOwnQueueDiagnosticField(record, 'pendingWrites');
++  const pendingWriteGrowthCount = readOwnQueueDiagnosticField(
++    record,
++    'pendingWriteGrowthCount',
++  );
++  const retainedBacklogGrowthCount = readOwnQueueDiagnosticField(
++    record,
++    'retainedBacklogGrowthCount',
++  );
++  const retryableDrainFailureCount = readOwnQueueDiagnosticField(
++    record,
++    'retryableDrainFailureCount',
++  );
++  const sharedPressureBackpressured = readOwnQueueDiagnosticField(
++    record,
++    'sharedPressureBackpressured',
++  );
++  const transportPressureBackpressured = readOwnQueueDiagnosticField(
++    record,
++    'transportPressureBackpressured',
++  );
++  const queryPressureBackpressured = readOwnQueueDiagnosticField(
++    record,
++    'queryPressureBackpressured',
++  );
++  const ownerKey = readOwnQueueDiagnosticField(record, 'ownerKey');
++  const pendingKeys = readOwnQueueDiagnosticField(record, 'pendingKeys');
++  const retryingKeys = readOwnQueueDiagnosticField(record, 'retryingKeys');
++  const inFlightKeys = readOwnQueueDiagnosticField(record, 'inFlightKeys');
++  return {
++    source,
++    pendingWrites:
++      normalizeQueueDiagnosticNonNegativeInteger(pendingWrites),
++    pendingWriteGrowthCount:
++      normalizeQueueDiagnosticNonNegativeInteger(pendingWriteGrowthCount),
++    retainedBacklogGrowthCount:
++      normalizeQueueDiagnosticNonNegativeInteger(retainedBacklogGrowthCount),
++    sharedPressureBackpressured: sharedPressureBackpressured === true,
++    transportPressureBackpressured: transportPressureBackpressured === true,
++    queryPressureBackpressured: queryPressureBackpressured === true,
++    ownerKey: typeof ownerKey === TYPEOF_STRING ?
++      ownerKey :
++      null,
++    pendingKeys: normalizeQueueDiagnosticStringArray(pendingKeys),
++    retryingKeys: normalizeQueueDiagnosticStringArray(retryingKeys),
++    inFlightKeys: normalizeQueueDiagnosticStringArray(inFlightKeys),
++    retryableDrainFailureCount:
++      normalizeQueueDiagnosticNonNegativeInteger(retryableDrainFailureCount),
++  };
++}
++
++function normalizeLoggingRetentionQueueDiagnostics(record) {
++  if (!record || typeof record !== TYPEOF_OBJECT || arrayIsArray(record)) {
++    return null;
++  }
++  const pendingWrites = readOwnQueueDiagnosticField(record, 'pendingWrites');
++  const pendingWriteGrowthCount = readOwnQueueDiagnosticField(
++    record,
++    'pendingWriteGrowthCount',
++  );
++  const retainedBacklogGrowthCount = readOwnQueueDiagnosticField(
++    record,
++    'retainedBacklogGrowthCount',
++  );
++  const retainedPressureBacklogCap = readOwnQueueDiagnosticField(
++    record,
++    'retainedPressureBacklogCap',
++  );
++  const maxPendingWrites = readOwnQueueDiagnosticField(
++    record,
++    'maxPendingWrites',
++  );
++  const consecutiveDeferredWriteFailures = readOwnQueueDiagnosticField(
++    record,
++    'consecutiveDeferredWriteFailures',
++  );
++  const isWriting = readOwnQueueDiagnosticField(record, 'isWriting');
++  const sharedPressureBackpressured = readOwnQueueDiagnosticField(
++    record,
++    'sharedPressureBackpressured',
++  );
++  const transportPressureBackpressured = readOwnQueueDiagnosticField(
++    record,
++    'transportPressureBackpressured',
++  );
++  const queryPressureBackpressured = readOwnQueueDiagnosticField(
++    record,
++    'queryPressureBackpressured',
++  );
++  return {
++    source: QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION,
++    pendingWrites:
++      normalizeQueueDiagnosticNonNegativeInteger(pendingWrites),
++    pendingWriteGrowthCount:
++      normalizeQueueDiagnosticNonNegativeInteger(pendingWriteGrowthCount),
++    retainedBacklogGrowthCount:
++      normalizeQueueDiagnosticNonNegativeInteger(retainedBacklogGrowthCount),
++    retainedPressureBacklogCap:
++      normalizeQueueDiagnosticNonNegativeInteger(retainedPressureBacklogCap),
++    maxPendingWrites:
++      normalizeQueueDiagnosticNonNegativeInteger(maxPendingWrites),
++    isWriting: isWriting === true,
++    consecutiveDeferredWriteFailures:
++      normalizeQueueDiagnosticNonNegativeInteger(
++        consecutiveDeferredWriteFailures,
++      ),
++    sharedPressureBackpressured: sharedPressureBackpressured === true,
++    transportPressureBackpressured: transportPressureBackpressured === true,
++    queryPressureBackpressured: queryPressureBackpressured === true,
++  };
++}
++
+ function resolveActiveProbeOperationTimeoutMs(deadline) {
+   const remainingMs = Math.floor(deadline - Date.now());
+   const cappedTimeoutMs = Math.min(
+@@ -1093,50 +1283,58 @@ class ClusterPublicationEvidence extends ClusterQuiescence {
+               ),
+             ) :
+             null;
++    const logsTableCandidate = readOwnQueueDiagnosticField(
++      controlPlaneDiagnostics,
++      'logsTable',
++    );
+     const logsTable =
+-      controlPlaneDiagnostics?.logsTable &&
+-      typeof controlPlaneDiagnostics.logsTable === 'object' ?
+-        controlPlaneDiagnostics.logsTable :
++      logsTableCandidate && typeof logsTableCandidate === TYPEOF_OBJECT &&
++      arrayIsArray(logsTableCandidate) !== true ?
++        logsTableCandidate :
++        null;
++    const ownerQueueCandidate = readOwnQueueDiagnosticField(
++      controlPlaneDiagnostics,
++      'controlPlaneOwnerQueueDepth',
++    );
++    const explicitControlPlaneOwnerQueueDepth =
++      ownerQueueCandidate &&
++      typeof ownerQueueCandidate === TYPEOF_OBJECT &&
++      arrayIsArray(ownerQueueCandidate) !== true ?
++        ownerQueueCandidate :
+         null;
+     const cdcReplay =
+       controlPlaneDiagnostics?.cdcReplay &&
+       typeof controlPlaneDiagnostics.cdcReplay === 'object' ?
+         controlPlaneDiagnostics.cdcReplay :
+         null;
+-    const controlPlaneOwnerQueueDepth = logsTable ?
+-      {
+-        pendingWrites: Number.isFinite(logsTable.pendingWrites) ?
+-          Math.max(ZERO, Math.floor(logsTable.pendingWrites)) :
+-          ZERO,
+-        pendingWriteGrowthCount: Number.isFinite(
+-          logsTable.pendingWriteGrowthCount,
+-        ) ?
+-          Math.max(ZERO, Math.floor(logsTable.pendingWriteGrowthCount)) :
+-          ZERO,
+-        retainedBacklogGrowthCount: Number.isFinite(
+-          logsTable.retainedBacklogGrowthCount,
+-        ) ?
+-          Math.max(ZERO, Math.floor(logsTable.retainedBacklogGrowthCount)) :
+-          ZERO,
+-        sharedPressureBackpressured:
+-            logsTable.sharedPressureBackpressured === true,
+-        transportPressureBackpressured:
+-          logsTable.transportPressureBackpressured === true,
+-        queryPressureBackpressured:
+-          logsTable.queryPressureBackpressured === true,
+-        ownerKey: typeof logsTable.ownerKey === TYPEOF_STRING ?
+-          logsTable.ownerKey :
++    const hasSeparatedQueueSources =
++      explicitControlPlaneOwnerQueueDepth &&
++      readOwnQueueDiagnosticField(
++        explicitControlPlaneOwnerQueueDepth,
++        'source',
++      ) ===
++        QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER &&
++      logsTable &&
++      readOwnQueueDiagnosticField(logsTable, 'source') ===
++        QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION;
++    const queueDiagnosticsSourceState = hasSeparatedQueueSources ?
++      QUEUE_DIAGNOSTICS_SOURCE_STATE_SEPARATED :
++      explicitControlPlaneOwnerQueueDepth || logsTable ?
++        QUEUE_DIAGNOSTICS_SOURCE_STATE_LEGACY_AMBIGUOUS :
++        QUEUE_DIAGNOSTICS_SOURCE_STATE_ABSENT;
++    const controlPlaneOwnerQueueDepth =
++      normalizeControlSnapshotOwnerQueueDiagnostics(
++        explicitControlPlaneOwnerQueueDepth || logsTable,
++        hasSeparatedQueueSources ?
++          QUEUE_DIAGNOSTICS_SOURCE_MEMBERSHIP_OWNER :
+           null,
+-        pendingKeys: normalizeDistinctStringArray(logsTable.pendingKeys),
+-        retryingKeys: normalizeDistinctStringArray(logsTable.retryingKeys),
+-        inFlightKeys: normalizeDistinctStringArray(logsTable.inFlightKeys),
+-        retryableDrainFailureCount: Number.isFinite(
+-          logsTable.retryableDrainFailureCount,
+-        ) ?
+-          Math.max(ZERO, Math.floor(logsTable.retryableDrainFailureCount)) :
+-          ZERO,
+-      } :
+-      null;
++      );
++    const loggingRetentionQueueDepth =
++      logsTable &&
++      readOwnQueueDiagnosticField(logsTable, 'source') ===
++        QUEUE_DIAGNOSTICS_SOURCE_LOGGING_RETENTION ?
++        normalizeLoggingRetentionQueueDiagnostics(logsTable) :
++        null;
+     const cdcReplayLag = cdcReplay ?
+       {
+         bufferedEvents: Number.isFinite(cdcReplay.bufferedEvents) ?
+@@ -1205,7 +1403,9 @@ class ClusterPublicationEvidence extends ClusterQuiescence {
+       activeGateOwnerCohort,
+       priorityRecoveryObservation,
+       priorityRecoveryDecisionSnapshots,
++      queueDiagnosticsSourceState,
+       controlPlaneOwnerQueueDepth,
++      loggingRetentionQueueDepth,
+       cdcReplayLag,
+       healthyReadinessNodeIds,
+     };
