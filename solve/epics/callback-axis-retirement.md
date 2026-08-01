@@ -120,9 +120,9 @@ public request-component path does not touch the axis.
 
 ## Open questions
 
-- What is the minimum emit/reduce context contract for rung 1 that the
-  native-programming-model doc can commit to publicly (the current
-  `lagrange:cell/context` is request-shaped: `read`/`write`/`capability`)?
+- ~~Minimum emit/reduce context contract for rung 1~~ — resolved: WIT-first,
+  language-neutral; shape owned by
+  `solve/epics/native-call-context-wit-contract.md` (sketch, typed ladder).
 - Guard token-set follow-up: extend the accretion guard's tokens with the
   hyphenated `partition-callback` form, `PartitionCallback` class prefix,
   `CallbackStageExecutor`, and `query/callback/` path references — the
