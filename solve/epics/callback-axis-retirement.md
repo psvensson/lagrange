@@ -78,8 +78,7 @@ plus the internal query-loop runtime (`src/runtime/sql-query-loop-*.js`).
    `docs/service-portability-capabilities.json` records the envelope), so
    both are updated in the same change or the gate breaks.
 
-Rungs 2 and 3 can proceed in parallel once rung 1 lands; rung 4 requires all
-three.
+Rungs 2 and 3 can run in parallel after rung 1; rung 4 requires all three.
 
 ## Dependency census (sweep-based; re-verified 2026-08-01)
 
@@ -106,11 +105,8 @@ public request-component path does not touch the axis.
 
 ## Options under discussion
 
-- **Deprecation posture before rung 1 lands.** (a) Freeze now: mark the axis
-  deprecated in docs and reject new features on it, keeping tests green; or
-  (b) status quo until the native adapters exist. Lean: (a) — the docs
-  already say "legacy"; an explicit freeze note costs one sentence per
-  surface and prevents accidental investment.
+- **Deprecation posture before rung 1 lands.** Resolved 2026-08-01: freeze
+  now, enforced by the landed accretion guard (see decision log).
 - **Fate of the internal `native_js` callback path.** The execution-axis
   table lists `native_js` callbacks as "internal supported path." Either the
   kernel keeps a private callback-shaped hook after external retirement, or
@@ -118,25 +114,20 @@ public request-component path does not touch the axis.
   question) move to the query-loop runtime. Lean: delete; the sweep found no
   production owner invoking the axis (`WasmCallAdapter` is exported but
   instantiated only by tests).
-- **Example migration shape.** Rewrite `examples/distributed-sql` in place on
-  the new surface (preserves pedagogy and links) vs. a fresh
-  `examples/native-call` directory with `distributed-sql` deleted. Lean:
-  fresh directory, since the upload/runner mechanics differ entirely.
+- **Example migration shape.** Rewrite `examples/distributed-sql` in place
+  vs. a fresh `examples/native-call` directory with `distributed-sql`
+  deleted. Lean: fresh directory; the upload/runner mechanics differ.
 
 ## Open questions
 
-- Does any production path *invoke* `partition_callback` internally beyond
-  the expose/dispatch chain? The 2026-08-01 sweep says no (WasmCallAdapter
-  is test-only), but a census quest should seal this with evidence before
-  rung 4's deletion scope is sealed.
-- Do `code` / `module_manifests` tables have consumers besides the callback
-  upload path, or do they retire with it (schema/migration implications)?
-- Is the admin-websocket trace/debug integration
-  (`trace-collector-multi-node`) coupled to callback execution specifically,
-  or only to the admin stream transport?
 - What is the minimum emit/reduce context contract for rung 1 that the
   native-programming-model doc can commit to publicly (the current
   `lagrange:cell/context` is request-shaped: `read`/`write`/`capability`)?
+- Guard token-set follow-up: extend the accretion guard's tokens with the
+  hyphenated `partition-callback` form, `PartitionCallback` class prefix,
+  `CallbackStageExecutor`, and `query/callback/` path references — the
+  landed guard catches the dominant `EXECUTION_MODE.PARTITION_CALLBACK`
+  vector but not class-name/filename imports (verifier-classified residual).
 
 ## Decision log
 
@@ -148,3 +139,12 @@ public request-component path does not touch the axis.
   callback-dir files, five uppercase-constant sites incl. `WasmCallAdapter`,
   ~10 test files, runner constants, docs mentions were missing). Census
   restated as sweep-defined; `WasmCallAdapter` pulled into rungs 1 and 4.
+- 2026-08-01 — Census questions sealed by quest
+  `callback-axis-accretion-census-v2` (SOLVED, verified): WasmCallAdapter is
+  export-only in production (test-only consumers); `code`/`module_manifests`
+  have non-axis consumers (`wasm-service-lifecycle`,
+  `service-definition-validator`, `function-registry`) so rung 4 excludes
+  their removal; the trace-collector coupling is a source label, not
+  execution. The deprecation freeze (option a) is now machine-enforced:
+  `test/contract/callback-axis-accretion.test.js` pins the 20-file
+  allowlist and fails on new production accretion.
