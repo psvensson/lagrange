@@ -343,6 +343,10 @@ class BootstrapService extends EventEmitter {
 
     // System table cache reference
     this.systemTableCache = null;
+    // A cache handle exists as soon as bootstrap infrastructure is composed.
+    // This witness becomes true only after SeedCacheHydrationPhase has filled
+    // and wired that cache successfully.
+    this.systemCacheHydrated = false;
     // Table policy service for partition placement decisions
     this.tablePolicyService = null;
     // Latency topology owner bundle
@@ -436,6 +440,7 @@ class BootstrapService extends EventEmitter {
           capabilities: [...DEFAULT_NODE_CAPABILITIES],
         }),
         getHeartbeatRunningState: () => HEARTBEAT_STATE.RUNNING,
+        getRouteSource: () => this.nodeAddress,
         isDistributedTransactionRecoveryAvailable: () =>
           typeof this.sqlQueryEngine?.activateDistributedTransactionRecovery ===
             LOCAL_STR_FUNCTION,

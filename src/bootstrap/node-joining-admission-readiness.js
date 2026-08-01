@@ -250,7 +250,6 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
       owner: this.runtimeHandoffOwner,
       activateControlPlaneBackgroundWriters: true,
       flushDeferredCreateSelfHostedMetadata: true,
-      activateDistributedTransactionRecovery: true,
       startLatencyTopologyLifecycle: true,
     });
     this.phase = JoiningPhase.COMPLETE;

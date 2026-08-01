@@ -94,6 +94,14 @@ class SQLQueryEngineTransactionRecoveryMethods
           failed: 1,
           results: [],
           error: error.message,
+          errorCode:
+            typeof error?.errorCode === LOCAL_STR_STRING ?
+              error.errorCode :
+              null,
+          decisionDimension:
+            typeof error?.decisionDimension === LOCAL_STR_STRING ?
+              error.decisionDimension :
+              null,
         };
         this.lastTransactionRecoveryReplayResult = summary;
         return summary;

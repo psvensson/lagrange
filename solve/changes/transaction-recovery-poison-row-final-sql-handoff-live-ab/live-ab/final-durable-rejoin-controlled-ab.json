@@ -1,0 +1,208 @@
+{
+  "schemaVersion": 1,
+  "generatedAt": "2026-08-01T16:26:51+02:00",
+  "scenario": "transaction-recovery-poison-row-live",
+  "baseCommit": "edf184681afd11cb866f66ce60e81b09d92c8822",
+  "contract": {
+    "nodeCount": 7,
+    "restartTarget": "non-seed durable-rejoin node selected dynamically from nodes with zero partition leaders",
+    "acceptedJoinCheckpoints": [
+      "MEMBERSHIP_WRITTEN",
+      "READY_LEASE_ASSIGNED"
+    ],
+    "rejectedEarlyCheckpoint": "JOIN_INFRASTRUCTURE_READY",
+    "rejectedLateCheckpoint": "FINALIZED",
+    "poisonTransactionId": "tx-poison-live-ab-1pc",
+    "poisonCommitMode": "ONE_PHASE_COMMIT",
+    "poisonDecisionDimension": "commit_mode",
+    "poisonMutation": {
+      "operation": "UPDATE",
+      "affectedRows": 1,
+      "observation": "mutation_receipt"
+    },
+    "restartCount": 1,
+    "expectedRouteSource": "ddb-test-reuse-7-7:8080",
+    "typedOutcomeKind": "transaction_recovery_incomplete",
+    "typedErrorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+    "genericAdmissionBeforeTypedOutcome": false
+  },
+  "vehicle": {
+    "config": {
+      "path": "test/distributed/config/local-poison-row-ab.json",
+      "sha256": "82ded6a20e5932f38b1767d06d56f234340ce97b1d0af223db6d89e16d9dd0a0"
+    },
+    "probe": {
+      "path": "test/distributed/harness/startup-runtime-handoff-probe.js",
+      "sha256": "47a13484bc82a48bc556e893b0cb121db9e7f2bb7e97ea812e3f57019f3fba96"
+    },
+    "scenario": {
+      "path": "test/distributed/scenarios/transaction-recovery-poison-row-live.js",
+      "sha256": "aa385fe0d9387d6f726da0a48a1e81e74b6587e77a12e54019cc15444937d255"
+    },
+    "runner": {
+      "path": "solve/changes/transaction-recovery-poison-row-invariant/live-ab/run-sample.sh",
+      "sha256": "5a0a2a92eeefea2c2e1a74f77c4b05c39f5be8695527b5acfbfe11fe2fbba3af"
+    }
+  },
+  "arms": [
+    {
+      "sampleId": "durable-rejoin-v8-fixed-1",
+      "arm": "fixed",
+      "sourceFingerprint": "cb068c83be2d0907",
+      "exitCode": 0,
+      "passed": true,
+      "durationMs": 210729,
+      "report": {
+        "path": "/tmp/lagrange-poison-final-handoff.0lPCXO/solve/changes/transaction-recovery-poison-row-invariant/live-ab/durable-rejoin-v8-fixed-1.report.json",
+        "sha256": "4e184c8997110d0f6060db622910aea5385f9ce0b8a136ee609ede13538791bb"
+      },
+      "target": {
+        "nodeId": "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+        "role": "joiner",
+        "leaderCount": 0,
+        "checkedCandidateCount": 1
+      },
+      "workflow": {
+        "kind": "join",
+        "sessionId": "f2d881f0-79b3-4ad5-bc5f-af24e5226835",
+        "checkpoint": "MEMBERSHIP_WRITTEN",
+        "createdAtMs": 1785593466704,
+        "poisonObservedAtMs": 1785593480624
+      },
+      "poisonWitness": {
+        "operation": "UPDATE",
+        "affectedRows": 1,
+        "observation": "mutation_receipt"
+      },
+      "restart": {
+        "startedAtMs": 1785593465446,
+        "settledAtMs": 1785593555698
+      },
+      "typedOutcomeObservedAtMs": 1785593486874,
+      "outcome": {
+        "state": "failed",
+        "ready": false,
+        "kind": "transaction_recovery_incomplete",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "decisionDimension": "commit_mode",
+        "routeSource": "ddb-test-reuse-7-7:8080"
+      },
+      "firstGenericAdmissionAtMs": null
+    },
+    {
+      "sampleId": "durable-rejoin-v8-fixed-2",
+      "arm": "fixed",
+      "sourceFingerprint": "cb068c83be2d0907",
+      "exitCode": 0,
+      "passed": true,
+      "durationMs": 236415,
+      "report": {
+        "path": "/tmp/lagrange-poison-final-handoff.0lPCXO/solve/changes/transaction-recovery-poison-row-invariant/live-ab/durable-rejoin-v8-fixed-2.report.json",
+        "sha256": "5228a86a1e4708fb292cdd1453ba0010a6e3171941bcec48a1b2855b45983f68"
+      },
+      "target": {
+        "nodeId": "37ab9190-8bcc-5378-ac57-9d012e3bf838",
+        "role": "joiner",
+        "leaderCount": 0,
+        "checkedCandidateCount": 1
+      },
+      "workflow": {
+        "kind": "join",
+        "sessionId": "78412dfe-9e79-4742-a31f-e873ebf38884",
+        "checkpoint": "MEMBERSHIP_WRITTEN",
+        "createdAtMs": 1785593713462,
+        "poisonObservedAtMs": 1785593717112
+      },
+      "poisonWitness": {
+        "operation": "UPDATE",
+        "affectedRows": 1,
+        "observation": "mutation_receipt"
+      },
+      "restart": {
+        "startedAtMs": 1785593711285,
+        "settledAtMs": 1785593801646
+      },
+      "typedOutcomeObservedAtMs": 1785593724149,
+      "outcome": {
+        "state": "failed",
+        "ready": false,
+        "kind": "transaction_recovery_incomplete",
+        "errorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+        "decisionDimension": "commit_mode",
+        "routeSource": "ddb-test-reuse-7-7:8080"
+      },
+      "firstGenericAdmissionAtMs": null
+    },
+    {
+      "sampleId": "durable-rejoin-v8-reverted-1",
+      "arm": "source-reverted",
+      "sourceFingerprint": "8468ea3fef3edd6b",
+      "exitCode": 1,
+      "passed": false,
+      "durationMs": 224108,
+      "report": {
+        "path": "/tmp/lagrange-poison-reverted.HZ67hr/solve/changes/transaction-recovery-poison-row-invariant/live-ab/durable-rejoin-v8-reverted-1.report.json",
+        "sha256": "fa91cebabd6e643625332405083aa29ef7c0dfd218d419ca66f1b92258e83eec"
+      },
+      "namedMissingContract": "Poison-row restart must capture a failed transaction recovery sample: actual unobserved, expected observed",
+      "preconditionProof": "The scenario can reach assertPoisonRowHandoffEvidence only after dynamic selection of a non-seed zero-leader target, a real stop/start, an incarnation-fenced join checkpoint of MEMBERSHIP_WRITTEN or READY_LEASE_ASSIGNED, and an exact one-row poison UPDATE receipt. The first handoff assertion then rejected the absent startup-owner sample. Node logs independently show the restarted joiner later encountering TRANSACTION_RECOVERY_INCOMPLETE through an incidental readiness SQL query, after the required final SQL attachment failed to publish it."
+    },
+    {
+      "sampleId": "durable-rejoin-v8-reverted-2",
+      "arm": "source-reverted",
+      "sourceFingerprint": "8468ea3fef3edd6b",
+      "exitCode": 1,
+      "passed": false,
+      "durationMs": 282305,
+      "report": {
+        "path": "/tmp/lagrange-poison-reverted.HZ67hr/solve/changes/transaction-recovery-poison-row-invariant/live-ab/durable-rejoin-v8-reverted-2.report.json",
+        "sha256": "000ac7805384d19dcdbf76bc5feef2959b2ff079ee3b7d4d5e9237efdd44e6c2"
+      },
+      "namedMissingContract": "Poison-row restart must capture a failed transaction recovery sample: actual unobserved, expected observed",
+      "preconditionProof": "The scenario can reach assertPoisonRowHandoffEvidence only after dynamic selection of a non-seed zero-leader target, a real stop/start, an incarnation-fenced join checkpoint of MEMBERSHIP_WRITTEN or READY_LEASE_ASSIGNED, and an exact one-row poison UPDATE receipt. The first handoff assertion then rejected the absent startup-owner sample."
+    }
+  ],
+  "excludedRuns": [
+    {
+      "sampleId": "durable-rejoin-fixed-1",
+      "reason": "global poison preceded restart, so the target failed while querying state before the final-attachment window"
+    },
+    {
+      "sampleId": "durable-rejoin-window-fixed-1",
+      "reason": "the external readiness projection was stale, target selection was not leader-fenced, and the selected node held critical leaders"
+    },
+    {
+      "sampleId": "durable-rejoin-v2-fixed-1",
+      "reason": "initial quiescence timed out under heartbeat publication pressure and partition splitting before the restart boundary"
+    },
+    {
+      "sampleId": "durable-rejoin-v3-fixed-1",
+      "reason": "the initial ACTIVE gate failed at a pre-scenario rebalancer handoff before poison or restart"
+    },
+    {
+      "sampleId": "durable-rejoin-v4-fixed-1",
+      "reason": "the run crossed restart, but external HTTP polling missed the short-lived final attachment window"
+    },
+    {
+      "sampleId": "durable-rejoin-v5-fixed-1",
+      "reason": "the statically chosen node had a partition leader, so the zero-leader target precondition failed"
+    },
+    {
+      "sampleId": "durable-rejoin-v6-fixed-1",
+      "reason": "diagnostic pass used an over-broad checkpoint rule that admitted JOIN_INFRASTRUCTURE_READY and was superseded by the final vehicle"
+    },
+    {
+      "sampleId": "durable-rejoin-v6-fixed-2",
+      "reason": "poison at JOIN_INFRASTRUCTURE_READY failed membership registration before final SQL attachment, proving the checkpoint was too early"
+    },
+    {
+      "sampleId": "durable-rejoin-v7-fixed-1/fixed-2/reverted-1/reverted-2",
+      "reason": "valid durable-rejoin A/B superseded after the static-quality gate required a behavior-preserving named-literal refactor of the vehicle; v8 repeats the complete A/B at the current scenario hash"
+    },
+    {
+      "sampleId": "fixed-10/fixed-11/reverted-2/reverted-3",
+      "reason": "the predecessor controlled A/B restarted the seed; it is retained as historical evidence but superseded by this durable non-seed rejoin A/B"
+    }
+  ],
+  "verdict": "Two same-fingerprint candidate passes satisfy the complete typed startup-owner handoff during an incarnation-fenced durable non-seed rejoin; two same-fingerprint base-source controls reach the same poison/restart boundary and fail on the named absent handoff sample under the byte-identical seven-node vehicle."
+}

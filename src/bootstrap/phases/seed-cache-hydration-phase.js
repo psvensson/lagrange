@@ -326,6 +326,8 @@ class SeedCacheHydrationPhase {
         d.getMessageGroupServices().size,
     });
 
+    d.setSystemCacheHydrated?.(true);
+
     logger.info(BOOTSTRAP_LOG_MSG.CACHE_HYDRATION_COMPLETE, {
       success: result.success,
       tablesHydrated: Object.keys(result.tables).length,

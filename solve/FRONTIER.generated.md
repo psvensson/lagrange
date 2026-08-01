@@ -54,6 +54,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- | --- | --- |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 ⚠ stale | — |
 | github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 | — |
+| lagrange-server-clean-release-gate | process | 1 | 0 | 2026-08-01 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-nodes-priority-recovery-escape | product | 1 | 0 | 2026-07-25 | — |
@@ -67,7 +68,6 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 | — |
-| transaction-recovery-poison-row-final-sql-handoff-live-ab | product | 2 | 0 | 2026-08-01 | — |
 | transaction-recovery-poison-row-live-owner-engagement | product | 0 | 0 | 2026-08-01 | — |
 | transaction-recovery-poison-row-live-owner-engagement-v2 | product | 2 | 0 | 2026-08-01 | — |
 | transaction-recovery-poison-row-live-summary-attribution | product | 3 | 0 | 2026-08-01 | — |

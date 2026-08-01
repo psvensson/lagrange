@@ -195,6 +195,7 @@ test('BootstrapService - seed checkpoint snapshot resolves explicit readiness st
     bootstrap.systemTableCache = createLocalServiceEndpointCache(
       bootstrap.nodeId,
     );
+    bootstrap.systemCacheHydrated = true;
     bootstrap.replicaHandler = EMPTY_SERVICE_HANDLE;
     bootstrap.messageGroupServiceHandler = {};
     bootstrap.heartbeatService = EMPTY_SERVICE_HANDLE;
@@ -252,6 +253,23 @@ test('BootstrapService - seed checkpoint rerun guards consume the checkpoint sna
         .shouldRerun(),
       false,
       'infrastructure should stop rerunning once the snapshot marks the router ready',
+    );
+
+    bootstrap.systemTableCache = createLocalServiceEndpointCache(
+      bootstrap.nodeId,
+    );
+    t.equal(
+      stepByCheckpoint.get(SEED_STARTUP_CHECKPOINT.CACHE_HYDRATED)
+        .shouldRerun(),
+      true,
+      'a constructed cache handle must not satisfy the hydration checkpoint',
+    );
+    bootstrap.systemCacheHydrated = true;
+    t.equal(
+      stepByCheckpoint.get(SEED_STARTUP_CHECKPOINT.CACHE_HYDRATED)
+        .shouldRerun(),
+      false,
+      'the hydration checkpoint closes only after its completion witness',
     );
 
     t.equal(

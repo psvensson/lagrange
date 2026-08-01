@@ -164,6 +164,12 @@ function buildPhaseExecutionDelegates(service) {
     },
     setSystemTableCacheRef: (v) => {
       self.systemTableCache = v;
+      if (v === null) {
+        self.systemCacheHydrated = false;
+      }
+    },
+    setSystemCacheHydrated: (v) => {
+      self.systemCacheHydrated = v === true;
     },
     setSystemTableWriter: (v) => {
       self.systemTableWriter = v;
@@ -371,6 +377,9 @@ function buildCleanupDelegates(service) {
     },
     setSystemTableCacheRef: (v) => {
       self.systemTableCache = v;
+      if (v === null) {
+        self.systemCacheHydrated = false;
+      }
     },
     setSystemTableWriter: (v) => {
       self.systemTableWriter = v;

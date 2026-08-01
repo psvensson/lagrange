@@ -74,7 +74,6 @@ const LATE_PHASE_RESUME_RETRY_AFTER_MS = 1000;
 const LATE_PHASE_RESUME_ATTEMPT = 1;
 const LATE_PHASE_RESUME_ERROR_MESSAGE = 'Request timeout after 30000ms';
 const LATE_PHASE_RESUME_ERROR_PHASE = 'querying_state';
-
 test('NodeJoiningService - full join with CREATE_SELF_HOSTED', async (t) => {
   initializeTestEnvironment();
 
@@ -514,70 +513,6 @@ async (t) => {
   );
 
   await sqlQueryEngine.shutdown();
-});
-
-test('NodeJoiningService - completeSuccessfulJoin activates distributed ' +
-  'transaction recovery after steady-state cutover',
-async (t) => {
-  initializeTestEnvironment();
-
-  const order = [];
-  const service = new NodeJoiningService({
-    nodeId: 'joining-node-recovery-activate',
-    nodeAddress: 'ws://localhost:19103',
-    seedNodeAddress: 'http://localhost:8080',
-  });
-
-  service.lifecycleStateMachine.transition('connecting');
-  service.lifecycleStateMachine.transition('discovering');
-  service.lifecycleStateMachine.transition('joining');
-  const transition =
-    service.lifecycleStateMachine.transition.bind(
-      service.lifecycleStateMachine,
-    );
-  service.lifecycleStateMachine.transition = (nextState) => {
-    order.push('state-transition');
-    return transition(nextState);
-  };
-  service.cdcIntegrationService = {
-    sqlQueryEngine: {
-      activateDistributedTransactionRecovery() {
-        order.push('tx-recovery');
-        return Promise.resolve({
-          totalRecovered: 0,
-          resumed: 0,
-          failed: 0,
-          results: [],
-        });
-      },
-    },
-  };
-  service.activateControlPlaneBackgroundWriters = () => {
-    order.push('background-writers');
-  };
-  service.createMessageGroupPhase = {
-    flushDeferredCreateSelfHostedMetadata() {
-      order.push('self-hosted-metadata');
-      return Promise.resolve({success: true});
-    },
-  };
-  service.startLatencyTopologyLifecycle = () => {
-    order.push('latency-topology');
-  };
-
-  service.completeSuccessfulJoin();
-
-  t.same(
-    order,
-    [
-      'state-transition',
-      'background-writers',
-      'self-hosted-metadata',
-      'tx-recovery',
-      'latency-topology',
-    ],
-    'steady-state recovery should start only after the READY cutover owners activate',
-  );
 });
 
 test('NodeJoiningService - activates message-group rows after membership write',

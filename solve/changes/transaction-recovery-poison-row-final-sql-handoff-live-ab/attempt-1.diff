@@ -1,0 +1,1749 @@
+diff --git a/scripts/run-transaction-recovery-poison-row-invariant-scenarios.js b/scripts/run-transaction-recovery-poison-row-invariant-scenarios.js
+index 95907ebb4f5eb20cc07f16cdcfb8914830212367..d23b6e6b617618fd63c680dcbf718299f69cdd5f 100644
+--- a/scripts/run-transaction-recovery-poison-row-invariant-scenarios.js
++++ b/scripts/run-transaction-recovery-poison-row-invariant-scenarios.js
+@@ -11,6 +11,30 @@ const SCENARIOS = Object.freeze({
+     'test/bootstrap/startup-runtime-handoff-owner.test.js',
+     'test/query/distributed-transaction-coordinator.test.js',
+   ]),
++  'transaction-recovery-poison-row-live-owner-engagement-v2': Object.freeze([
++    'test/bootstrap/bootstrap-service-ready-signal.test.js',
++    'test/bootstrap/transaction-recovery-handoff-outcome.test.js',
++    'test/bootstrap/startup-runtime-handoff-owner.test.js',
++    'test/query/sql-query-engine-distributed-transactions.test.js',
++    'test/distributed/harness/' +
++      'transaction-recovery-poison-row-live-contract.test.js',
++  ]),
++  'transaction-recovery-poison-row-live-summary-attribution': Object.freeze([
++    'test/bootstrap/bootstrap-service-ready-signal.test.js',
++    'test/bootstrap/transaction-recovery-handoff-outcome.test.js',
++    'test/bootstrap/startup-runtime-handoff-owner.test.js',
++    'test/query/sql-query-engine-distributed-transactions.test.js',
++    'test/distributed/harness/' +
++      'transaction-recovery-poison-row-live-contract.test.js',
++  ]),
++  'transaction-recovery-poison-row-final-sql-handoff-live-ab': Object.freeze([
++    'test/bootstrap/bootstrap-service-ready-signal.test.js',
++    'test/bootstrap/transaction-recovery-handoff-outcome.test.js',
++    'test/bootstrap/startup-runtime-handoff-owner.test.js',
++    'test/query/sql-query-engine-distributed-transactions.test.js',
++    'test/distributed/harness/' +
++      'transaction-recovery-poison-row-live-contract.test.js',
++  ]),
+ });
+ 
+ runGuardTestScenarios(SCENARIOS);
+diff --git a/src/bootstrap/bootstrap-service.js b/src/bootstrap/bootstrap-service.js
+index dbd3ce4e98709d3db59d90a9e864d0783a3c4b19..27d83b35bc094b6ea2166e4bf961fe0aa60e6eed 100644
+--- a/src/bootstrap/bootstrap-service.js
++++ b/src/bootstrap/bootstrap-service.js
+@@ -436,6 +436,7 @@ class BootstrapService extends EventEmitter {
+           capabilities: [...DEFAULT_NODE_CAPABILITIES],
+         }),
+         getHeartbeatRunningState: () => HEARTBEAT_STATE.RUNNING,
++        getRouteSource: () => this.nodeAddress,
+         isDistributedTransactionRecoveryAvailable: () =>
+           typeof this.sqlQueryEngine?.activateDistributedTransactionRecovery ===
+             LOCAL_STR_FUNCTION,
+diff --git a/src/bootstrap/node-joining-owner-construction.js b/src/bootstrap/node-joining-owner-construction.js
+index 2fd6942ee1e4d22e8c7bb311447d8791bbb2590e..ddb4d4a9d4bdbc8ef6f318ec2a1cbd87113892df 100644
+--- a/src/bootstrap/node-joining-owner-construction.js
++++ b/src/bootstrap/node-joining-owner-construction.js
+@@ -276,9 +276,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
+         buildHeartbeatStartOptions: () =>
+           this.buildControlPlaneHeartbeatStartOptions(),
+         activateDistributedTransactionRecoveryOnWriterActivation: false,
+-        getRouteSource: () =>
+-          this.contactSeedPhase?.getSeedContactDiagnosticsSnapshot?.()
+-            ?.authoritySource || null,
++        getRouteSource: () => this.nodeAddress,
+         isDistributedTransactionRecoveryAvailable: () =>
+           typeof this.cdcIntegrationService?.sqlQueryEngine
+             ?.activateDistributedTransactionRecovery === 'function',
+diff --git a/src/bootstrap/owners/startup-runtime-handoff-owner.js b/src/bootstrap/owners/startup-runtime-handoff-owner.js
+index 62bfd97b0fe4f7f5393477519abb1386452b9b21..0d9fd0abf164f1ca4cc5ffcbb66733f63a170207 100644
+--- a/src/bootstrap/owners/startup-runtime-handoff-owner.js
++++ b/src/bootstrap/owners/startup-runtime-handoff-owner.js
+@@ -58,6 +58,30 @@ class StartupRuntimeHandoffOwner {
+     return leaseRunning && heartbeatRunning;
+   }
+ 
++  needsDistributedTransactionRecoveryActivation() {
++    return this.delegates
++      .activateDistributedTransactionRecoveryOnWriterActivation !== false &&
++      this.transactionRecoveryState ===
++        TRANSACTION_RECOVERY_STATE.NOT_STARTED &&
++      this.delegates.isDistributedTransactionRecoveryAvailable?.() !== false;
++  }
++
++  hasPendingControlPlaneRuntimeActivation() {
++    return !this.hasActiveControlPlaneBackgroundWriters() ||
++      this.needsDistributedTransactionRecoveryActivation();
++  }
++
++  async settleDistributedTransactionRecoveryActivation() {
++    if (!this.needsDistributedTransactionRecoveryActivation()) {
++      return;
++    }
++    try {
++      await this.activateDistributedTransactionRecovery();
++    } catch (error) {
++      this.delegates.onDistributedTransactionRecoveryFailed?.(error);
++    }
++  }
++
+   resolveControlPlaneBackgroundWriterRetryDelayMs(error = null) {
+     const hintedDelayMs = Number(error?.retryAfterMs);
+     if (Number.isFinite(hintedDelayMs) && hintedDelayMs > 0) {
+@@ -85,7 +109,7 @@ class StartupRuntimeHandoffOwner {
+     if (this.delegates.isShuttingDown?.() === true) {
+       return;
+     }
+-    if (this.hasActiveControlPlaneBackgroundWriters()) {
++    if (!this.hasPendingControlPlaneRuntimeActivation()) {
+       return;
+     }
+     if (this.controlPlaneBackgroundWriterRetryTimer) {
+@@ -97,7 +121,7 @@ class StartupRuntimeHandoffOwner {
+     this.controlPlaneBackgroundWriterRetryTimer = setTimeoutFn(() => {
+       this.controlPlaneBackgroundWriterRetryTimer = null;
+       if (this.delegates.isShuttingDown?.() === true ||
+-          this.hasActiveControlPlaneBackgroundWriters()) {
++          !this.hasPendingControlPlaneRuntimeActivation()) {
+         return;
+       }
+       void this.activateControlPlaneBackgroundWriters();
+@@ -107,6 +131,80 @@ class StartupRuntimeHandoffOwner {
+     }
+   }
+ 
++  async awaitMetadataPublicationReadiness() {
++    const readinessOptions =
++      this.delegates.getMetadataPublicationReadinessOptions?.() || null;
++    if (!readinessOptions) {
++      return true;
++    }
++    try {
++      await waitForMetadataPublicationReadiness(readinessOptions);
++      return true;
++    } catch (error) {
++      this.delegates.onMetadataPublicationReadinessDeferred?.(error);
++      this.scheduleControlPlaneBackgroundWriterActivationRetry(error);
++      return false;
++    }
++  }
++
++  startInactiveControlPlaneBackgroundWriters() {
++    this.delegates.beforeActivateControlPlaneBackgroundWriters?.();
++
++    this.startLeaseService();
++    this.startHeartbeatService();
++  }
++
++  startLeaseService() {
++    const leaseService = this.delegates.getLeaseService?.() || null;
++    if (!leaseService) {
++      return;
++    }
++    leaseService.start();
++    const runningLeaseState = this.delegates.getLeaseRunningState?.();
++    if (runningLeaseState !== undefined) {
++      leaseService.state = runningLeaseState;
++    }
++  }
++
++  startHeartbeatService() {
++    const heartbeatService = this.delegates.getHeartbeatService?.() || null;
++    if (!heartbeatService) {
++      return;
++    }
++    const heartbeatStartOptions =
++      this.delegates.buildHeartbeatStartOptions?.();
++    if (heartbeatStartOptions === undefined) {
++      heartbeatService.start();
++    } else {
++      heartbeatService.start(heartbeatStartOptions);
++    }
++    const runningHeartbeatState =
++      this.delegates.getHeartbeatRunningState?.();
++    if (runningHeartbeatState !== undefined) {
++      heartbeatService.state = runningHeartbeatState;
++    }
++  }
++
++  async performControlPlaneRuntimeActivation() {
++    if (!await this.awaitMetadataPublicationReadiness() ||
++        this.delegates.isShuttingDown?.() === true) {
++      return;
++    }
++
++    const backgroundWritersActive =
++      this.hasActiveControlPlaneBackgroundWriters();
++    if (!backgroundWritersActive) {
++      this.startInactiveControlPlaneBackgroundWriters();
++    }
++
++    await this.settleDistributedTransactionRecoveryActivation();
++
++    this.clearControlPlaneBackgroundWriterRetryTimer();
++    if (!backgroundWritersActive) {
++      this.delegates.onControlPlaneBackgroundWritersActivated?.();
++    }
++  }
++
+   async activateControlPlaneBackgroundWriters() {
+     const override = this.getCompatibilityOverride(
+       'activateControlPlaneBackgroundWriters',
+@@ -118,7 +216,7 @@ class StartupRuntimeHandoffOwner {
+     if (this.delegates.isShuttingDown?.() === true) {
+       return;
+     }
+-    if (this.hasActiveControlPlaneBackgroundWriters()) {
++    if (!this.hasPendingControlPlaneRuntimeActivation()) {
+       this.clearControlPlaneBackgroundWriterRetryTimer();
+       return;
+     }
+@@ -127,64 +225,11 @@ class StartupRuntimeHandoffOwner {
+     }
+     this.clearControlPlaneBackgroundWriterRetryTimer();
+ 
+-    this.controlPlaneBackgroundWriterActivationPromise = (async () => {
+-      try {
+-        const readinessOptions =
+-          this.delegates.getMetadataPublicationReadinessOptions?.() || null;
+-        if (readinessOptions) {
+-          try {
+-            await waitForMetadataPublicationReadiness(readinessOptions);
+-          } catch (error) {
+-            this.delegates.onMetadataPublicationReadinessDeferred?.(error);
+-            this.scheduleControlPlaneBackgroundWriterActivationRetry(error);
+-            return;
+-          }
+-        }
+-
+-        if (this.delegates.isShuttingDown?.() === true) {
+-          return;
+-        }
+-        if (this.hasActiveControlPlaneBackgroundWriters()) {
+-          this.clearControlPlaneBackgroundWriterRetryTimer();
+-          return;
+-        }
+-
+-        this.delegates.beforeActivateControlPlaneBackgroundWriters?.();
+-
+-        const leaseService = this.delegates.getLeaseService?.() || null;
+-        if (leaseService) {
+-          leaseService.start();
+-          const runningLeaseState = this.delegates.getLeaseRunningState?.();
+-          if (runningLeaseState !== undefined) {
+-            leaseService.state = runningLeaseState;
+-          }
+-        }
+-
+-        const heartbeatService = this.delegates.getHeartbeatService?.() || null;
+-        if (heartbeatService) {
+-          const heartbeatStartOptions =
+-            this.delegates.buildHeartbeatStartOptions?.();
+-          if (heartbeatStartOptions === undefined) {
+-            heartbeatService.start();
+-          } else {
+-            heartbeatService.start(heartbeatStartOptions);
+-          }
+-          const runningHeartbeatState = this.delegates.getHeartbeatRunningState?.();
+-          if (runningHeartbeatState !== undefined) {
+-            heartbeatService.state = runningHeartbeatState;
+-          }
+-        }
+-
+-        if (this.delegates.activateDistributedTransactionRecoveryOnWriterActivation !== false) {
+-          this.activateDistributedTransactionRecovery();
+-        }
+-
+-        this.clearControlPlaneBackgroundWriterRetryTimer();
+-        this.delegates.onControlPlaneBackgroundWritersActivated?.();
+-      } finally {
+-        this.controlPlaneBackgroundWriterActivationPromise = null;
+-      }
+-    })();
++    this.controlPlaneBackgroundWriterActivationPromise =
++      this.performControlPlaneRuntimeActivation()
++        .finally(() => {
++          this.controlPlaneBackgroundWriterActivationPromise = null;
++        });
+ 
+     return this.controlPlaneBackgroundWriterActivationPromise;
+   }
+@@ -195,7 +240,7 @@ class StartupRuntimeHandoffOwner {
+     this.transactionRecoveryErrorCode =
+       typeof error?.errorCode === 'string' ? error.errorCode : null;
+     this.transactionRecoveryErrorMessage =
+-      error?.message || String(error);
++      error?.message || error?.error || String(error);
+     this.transactionRecoveryOutcome = Object.freeze({
+       kind: TRANSACTION_RECOVERY_OUTCOME_INCOMPLETE,
+       errorCode: this.transactionRecoveryErrorCode,
+@@ -208,9 +253,16 @@ class StartupRuntimeHandoffOwner {
+   }
+ 
+   recordDistributedTransactionRecoveryCompletion(summary) {
+-    this.transactionRecoveryState = TRANSACTION_RECOVERY_STATE.COMPLETED;
+-    this.transactionRecoverySummary =
++    const normalizedSummary =
+       summary && typeof summary === 'object' ? summary : null;
++    const failedCount = Number(normalizedSummary?.failed);
++    if (Number.isFinite(failedCount) && failedCount > 0) {
++      this.recordDistributedTransactionRecoveryFailure(normalizedSummary);
++      this.transactionRecoverySummary = normalizedSummary;
++      return;
++    }
++    this.transactionRecoveryState = TRANSACTION_RECOVERY_STATE.COMPLETED;
++    this.transactionRecoverySummary = normalizedSummary;
+     this.transactionRecoveryErrorCode = null;
+     this.transactionRecoveryErrorMessage = null;
+     this.transactionRecoveryOutcome = null;
+diff --git a/src/bootstrap/shared/startup-sql-runtime-handoff.js b/src/bootstrap/shared/startup-sql-runtime-handoff.js
+index 7b06896d8fbeb099a67e7dc1054858fd47b83348..fd2fc4476c6715a6b131a45670e8111155034750 100644
+--- a/src/bootstrap/shared/startup-sql-runtime-handoff.js
++++ b/src/bootstrap/shared/startup-sql-runtime-handoff.js
+@@ -134,12 +134,9 @@ function attachSqlRuntimeToStartupOwner(options) {
+     }
+   }
+ 
+-  const backgroundWritersActive =
+-    typeof owner.hasActiveControlPlaneBackgroundWriters === 'function' &&
+-    owner.hasActiveControlPlaneBackgroundWriters() === true;
+   let transactionRecovery = null;
+-  if (backgroundWritersActive === true &&
+-      typeof owner.activateDistributedTransactionRecovery === LOCAL_STR_FUNCTION) {
++  if (typeof owner.activateDistributedTransactionRecovery ===
++      LOCAL_STR_FUNCTION) {
+     transactionRecovery = owner.activateDistributedTransactionRecovery();
+   }
+ 
+diff --git a/src/query/sql-query-engine-transaction-recovery-methods.js b/src/query/sql-query-engine-transaction-recovery-methods.js
+index 0a67d9511cfef4c3cd7382671e7af4ae91b5a735..0018569e9c5b347c4574d14e9fa5b2d530eaf548 100644
+--- a/src/query/sql-query-engine-transaction-recovery-methods.js
++++ b/src/query/sql-query-engine-transaction-recovery-methods.js
+@@ -94,6 +94,14 @@ class SQLQueryEngineTransactionRecoveryMethods
+           failed: 1,
+           results: [],
+           error: error.message,
++          errorCode:
++            typeof error?.errorCode === LOCAL_STR_STRING ?
++              error.errorCode :
++              null,
++          decisionDimension:
++            typeof error?.decisionDimension === LOCAL_STR_STRING ?
++              error.decisionDimension :
++              null,
+         };
+         this.lastTransactionRecoveryReplayResult = summary;
+         return summary;
+diff --git a/test/bootstrap/bootstrap-service-ready-signal.test.js b/test/bootstrap/bootstrap-service-ready-signal.test.js
+index 60ce86b1e92c2c75e25cf963725f523b76d29f09..891a7f608f3aadfdb317825d691d96992bb64371 100644
+--- a/test/bootstrap/bootstrap-service-ready-signal.test.js
++++ b/test/bootstrap/bootstrap-service-ready-signal.test.js
+@@ -163,6 +163,68 @@ test('BootstrapService waits for lifecycle metadata publication readiness before
+       'deferred transaction recovery should arm once steady-state writers become active');
+   });
+ 
++test('BootstrapService engages the startup transaction-recovery owner when background writers are already active',
++  async (t) => {
++    initializeTestEnvironment();
++
++    const nodeAddress = 'ws://localhost:19096';
++    const recoveryError = new Error(
++      'Transaction recovery state is incomplete or incompatible',
++    );
++    recoveryError.errorCode = 'TRANSACTION_RECOVERY_INCOMPLETE';
++    recoveryError.decisionDimension = 'commit_mode';
++    let recoveryStarts = 0;
++    const service = new BootstrapService({
++      nodeId: 'seed-active-writer-recovery-gate',
++      nodeAddress,
++    });
++    service.bootstrapReadinessState = {
++      getSnapshot: () => ({
++        ready: true,
++        phase: 'TRAFFIC_READY',
++        state: 'join_ready',
++        reasons: [],
++        retryAfterMs: 0,
++        stableWindowMs: 1,
++        stableElapsedMs: 1,
++      }),
++    };
++    service.leaseService = {state: 'running'};
++    service.heartbeatService = {state: 'running'};
++    service.sqlQueryEngine = {
++      activateDistributedTransactionRecovery() {
++        recoveryStarts += 1;
++        throw recoveryError;
++      },
++    };
++
++    await service.activateControlPlaneBackgroundWriters();
++    await service.activateControlPlaneBackgroundWriters();
++
++    const recovery =
++      service.runtimeHandoffOwner.getDistributedTransactionRecoverySnapshot();
++    t.equal(
++      recoveryStarts,
++      1,
++      'the seed composition engages recovery once despite active writers',
++    );
++    t.equal(
++      recovery.state,
++      'failed',
++      'the seed startup owner records the replay failure',
++    );
++    t.equal(
++      recovery.outcome?.decisionDimension,
++      'commit_mode',
++      'the seed startup owner retains the failed decision dimension',
++    );
++    t.equal(
++      recovery.outcome?.routeSource,
++      nodeAddress,
++      'the seed startup owner attributes recovery to its canonical address',
++    );
++  });
++
+ test('BootstrapService does not start deferred steady-state writers after shutdown begins',
+   async (t) => {
+     initializeTestEnvironment();
+diff --git a/test/bootstrap/shared/startup-sql-runtime-handoff.test.js b/test/bootstrap/shared/startup-sql-runtime-handoff.test.js
+index 33f9962b89252449d5e9adfaa36a7ad431f29444..cc64a37acba21e4713f3777c5ccb8dbe9ec515bb 100644
+--- a/test/bootstrap/shared/startup-sql-runtime-handoff.test.js
++++ b/test/bootstrap/shared/startup-sql-runtime-handoff.test.js
+@@ -236,7 +236,7 @@ describe('startup-sql-runtime-handoff', () => {
+       assert.strictEqual(recovered, 1);
+     });
+ 
+-  it('does not start deferred recovery before steady-state control-plane writers are active',
++  it('starts recovery at final SQL attachment before steady-state writers are active',
+     () => {
+       const systemTableCache = {
+         get() {
+@@ -278,7 +278,7 @@ describe('startup-sql-runtime-handoff', () => {
+         systemTableCache,
+       });
+ 
+-      assert.strictEqual(recovered, 0);
++      assert.strictEqual(recovered, 1);
+       assert.strictEqual(owner.sqlQueryEngine, sqlQueryEngine);
+       assert.strictEqual(cdcIntegrationService.sqlQueryEngine, sqlQueryEngine);
+     });
+diff --git a/test/bootstrap/transaction-recovery-handoff-outcome.test.js b/test/bootstrap/transaction-recovery-handoff-outcome.test.js
+index f0f29a3c8c6de1961ec2c75eee5e9d17dfddc37d..facf84da35e0d3d416c3fce0972930ad570abf03 100644
+--- a/test/bootstrap/transaction-recovery-handoff-outcome.test.js
++++ b/test/bootstrap/transaction-recovery-handoff-outcome.test.js
+@@ -16,8 +16,13 @@
+ import {test} from '../../src/test-helpers/tap.js';
+ import {StartupRuntimeHandoffOwner} from
+   '../../src/bootstrap/owners/startup-runtime-handoff-owner.js';
++import {NodeJoiningService} from
++  '../../src/bootstrap/node-joining-service.js';
+ import {BootstrapReadinessOwner} from
+   '../../src/bootstrap/owners/bootstrap-readiness-owner.js';
++import {
++  attachSqlRuntimeToStartupOwner,
++} from '../../src/bootstrap/shared/startup-sql-runtime-handoff.js';
+ import {BOOTSTRAP_API_READINESS_FIELD} from
+   '../../src/bootstrap/bootstrap-api-constants.js';
+ import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
+@@ -185,3 +190,167 @@ test(
+     t.end();
+   },
+ );
++
++test(
++  'StartupRuntimeHandoffOwner engages transaction recovery when control-plane ' +
++    'background writers are already active',
++  async (t) => {
++    const recoveryError = buildRecoveryError();
++    recoveryError.decisionDimension = 'commit_mode';
++    let recoveryActivationCount = 0;
++    const owner = new StartupRuntimeHandoffOwner({
++      delegates: {
++        isShuttingDown: () => false,
++        getLeaseService: () => ({state: 'running'}),
++        getLeaseRunningState: () => 'running',
++        getHeartbeatService: () => ({state: 'running'}),
++        getHeartbeatRunningState: () => 'running',
++        isDistributedTransactionRecoveryAvailable: () => true,
++        activateDistributedTransactionRecovery: () => {
++          recoveryActivationCount += 1;
++          return Promise.resolve({
++            totalRecovered: 0,
++            resumed: 0,
++            failed: 1,
++            results: [],
++            error: recoveryError.message,
++            errorCode: recoveryError.errorCode,
++            decisionDimension: recoveryError.decisionDimension,
++          });
++        },
++        getRouteSource: () => SEED_AUTHORITY_SOURCE,
++      },
++    });
++
++    await owner.activateControlPlaneBackgroundWriters();
++    await owner.activateControlPlaneBackgroundWriters();
++
++    const snapshot = owner.getDistributedTransactionRecoverySnapshot();
++    t.equal(
++      recoveryActivationCount,
++      1,
++      'already-active writers do not suppress or duplicate recovery activation',
++    );
++    t.equal(
++      snapshot.state,
++      'failed',
++      'the startup owner records the poison-row replay failure',
++    );
++    t.equal(
++      snapshot.outcome?.decisionDimension,
++      'commit_mode',
++      'the startup owner retains the failed recovery decision dimension',
++    );
++    t.equal(
++      snapshot.outcome?.routeSource,
++      SEED_AUTHORITY_SOURCE,
++      'the startup owner retains the canonical seed route source',
++    );
++    t.equal(
++      snapshot.summary?.failed,
++      1,
++      'the startup owner retains the failed replay summary for diagnostics',
++    );
++  },
++);
++
++test(
++  'final SQL runtime attachment engages owner-tracked recovery before ' +
++    'steady-state writers become ready',
++  async (t) => {
++    let recoveryActivationCount = 0;
++    const startupOwner = {
++      hasActiveControlPlaneBackgroundWriters: () => false,
++      activateDistributedTransactionRecovery: null,
++    };
++    const runtimeHandoffOwner = new StartupRuntimeHandoffOwner({
++      delegates: {
++        isDistributedTransactionRecoveryAvailable: () => true,
++        activateDistributedTransactionRecovery: () => {
++          recoveryActivationCount += 1;
++          return startupOwner.sqlQueryEngine
++            .activateDistributedTransactionRecovery();
++        },
++        getRouteSource: () => SEED_AUTHORITY_SOURCE,
++      },
++    });
++    startupOwner.activateDistributedTransactionRecovery = () =>
++      runtimeHandoffOwner.activateDistributedTransactionRecovery();
++    const sqlQueryEngine = {
++      activateDistributedTransactionRecovery: async () => ({
++        totalRecovered: 0,
++        resumed: 0,
++        failed: 1,
++        results: [],
++        error: POISON_ROW_MESSAGE,
++        errorCode: QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
++        decisionDimension: 'commit_mode',
++      }),
++    };
++
++    const recovery = attachSqlRuntimeToStartupOwner({
++      owner: startupOwner,
++      sqlQueryEngine,
++      systemTableCache: null,
++    });
++    await recovery;
++
++    const snapshot =
++      runtimeHandoffOwner.getDistributedTransactionRecoverySnapshot();
++    t.equal(
++      recoveryActivationCount,
++      1,
++      'final runtime attachment activates recovery without waiting for writers',
++    );
++    t.equal(
++      snapshot.state,
++      'failed',
++      'the startup owner records the attachment-time poison-row failure',
++    );
++    t.equal(
++      snapshot.outcome?.decisionDimension,
++      'commit_mode',
++      'the attachment-time failure retains the canonical decision dimension',
++    );
++  },
++);
++
++test(
++  'durable-rejoin recovery attributes its typed outcome to the local route',
++  async (t) => {
++    const localRoute = 'ddb-test-reuse-7-1:8080';
++    const service = new NodeJoiningService({
++      nodeId: 'restarted-seed',
++      nodeAddress: localRoute,
++      seedNodeAddress: 'http://ddb-test-reuse-7-2:8080',
++    });
++    service.cdcIntegrationService = {
++      sqlQueryEngine: {
++        activateDistributedTransactionRecovery: async () => ({
++          totalRecovered: 0,
++          resumed: 0,
++          failed: 1,
++          results: [],
++          error: POISON_ROW_MESSAGE,
++          errorCode: QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
++          decisionDimension: 'commit_mode',
++        }),
++      },
++    };
++
++    await service.runtimeHandoffOwner.activateDistributedTransactionRecovery();
++
++    const snapshot =
++      service.runtimeHandoffOwner.getDistributedTransactionRecoverySnapshot();
++    t.equal(
++      snapshot.outcome?.routeSource,
++      localRoute,
++      'rejoin recovery names the restarted node rather than its seed contact',
++    );
++    t.equal(
++      snapshot.outcome?.decisionDimension,
++      'commit_mode',
++      'rejoin recovery preserves the canonical poison-row dimension',
++    );
++  },
++);
+diff --git a/test/distributed/config/local-poison-row-ab.json b/test/distributed/config/local-poison-row-ab.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..0bc33ef65aca5f012ca960886759bf09b9cf976f
+--- /dev/null
++++ b/test/distributed/config/local-poison-row-ab.json
+@@ -0,0 +1,85 @@
++{
++  "size": 7,
++  "docker": {
++    "socketPath": "/var/run/docker.sock"
++  },
++  "image": "distributed-db:test",
++  "timeouts": {
++    "nodeStartup": 90000,
++    "convergence": 90000,
++    "quietWindow": 5000,
++    "scenarioDefault": 900000,
++    "restartRecoveryHoldRecheckMs": 5000
++  },
++  "resourceLimits": {
++    "memory": "2g",
++    "cpus": "1.0"
++  },
++  "partition": {
++    "evaluationIntervalMs": 60000,
++    "splitThresholdBytes": 1048576,
++    "splitThresholdQpm": 120,
++    "mergeThresholdBytes": 1048576,
++    "mergeThresholdQpm": 1
++  },
++  "benchmark": {
++    "baselineImage": "postgres:16",
++    "user": "benchmark",
++    "password": "benchmark",
++    "database": "benchmark",
++    "port": 5432,
++    "durationSeconds": 30,
++    "clients": 8,
++    "jobs": 4,
++    "loadOpsPerSec": 120,
++    "loadDuration": "30s",
++    "loadMaxInFlight": 128,
++    "loadQueryTimeoutMs": 4000,
++    "controlQueryTimeoutMs": 15000,
++    "loadNodeMaxInFlight": 2,
++    "nodeFailureThreshold": 3,
++    "nodeFailureCooldownMs": 1500,
++    "failOnLoadParityMismatch": false,
++    "strictDiscovery": false,
++    "strictParity": true,
++    "strictPreloadReadiness": false,
++    "enforceBenchmarkLoadAdmission": false,
++    "preloadRequiredStableMs": 2000,
++    "preloadMaxReplicaOpsInFlight": 0,
++    "insufficientEvidencePolicy": "soft",
++    "readyTimeoutMs": 120000,
++    "readyPollIntervalMs": 500,
++    "quiescentTimeoutMs": 180000,
++    "quiescentPollIntervalMs": 500,
++    "quiescentStableWindowMs": 2000,
++    "quiescentNoProgressTimeoutMs": 90000,
++    "postLoadDrainTimeoutMs": 120000,
++    "postLoadDrainPollIntervalMs": 500,
++    "postLoadDrainStableWindowMs": 2000,
++    "postLoadDrainNoProgressTimeoutMs": 60000,
++    "tableName": "benchmark_events",
++    "replicationFactor": 3,
++    "syncReplicaAcks": 1
++  },
++  "benchmarkGate": {
++    "enabled": false,
++    "maxThroughputRegressionRatio": 0.1,
++    "minimumThroughputRatioSutToBaseline": 0.1,
++    "baselineProvider": "liferaft",
++    "parityMismatchPolicy": "warn",
++    "failIfBaselineMissing": false,
++    "approvedMitigationId": null
++  },
++  "raftProvider": "liferaft",
++  "memoryLeak": {
++    "enabled": false,
++    "failOnDetection": false,
++    "requireSamples": false
++  },
++  "scenarios": {
++    "transaction-recovery-poison-row-live": {
++      "expectedNodeCount": 7,
++      "expectedRouteSource": "ddb-test-reuse-7-1:8080"
++    }
++  }
++}
+diff --git a/test/distributed/harness/startup-runtime-handoff-probe.js b/test/distributed/harness/startup-runtime-handoff-probe.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..aee6b19897fed625be90fc3a82d8e45e04cbbcd2
+--- /dev/null
++++ b/test/distributed/harness/startup-runtime-handoff-probe.js
+@@ -0,0 +1,66 @@
++import {CLUSTER_ACTIVE_WAIT_FORMATTING_LAYER} from
++  './cluster-active-wait-formatting-layer.js';
++
++const {httpRequest} = CLUSTER_ACTIVE_WAIT_FORMATTING_LAYER;
++
++const HTTP_METHOD_GET = 'GET';
++const HTTP_PROTOCOL_PREFIX = 'http://';
++const HTTP_PORT_SEPARATOR = ':';
++const BOOTSTRAP_JOIN_READY_PATH = '/bootstrap/ready';
++const FIELD_BODY = 'body';
++const FIELD_STATUS = 'status';
++const FIELD_STARTUP_RUNTIME_HANDOFF = 'startupRuntimeHandoff';
++const FIELD_VALUE = 'value';
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const arrayIsArray = Array.isArray;
++
++function readOwnDataProperty(record, key) {
++  if (
++    !record ||
++    typeof record !== 'object' ||
++    !objectHasOwn(record, key)
++  ) {
++    return undefined;
++  }
++  const descriptor = objectGetOwnPropertyDescriptor(record, key);
++  return descriptor && objectHasOwn(descriptor, FIELD_VALUE) ?
++    descriptor.value :
++    undefined;
++}
++
++function isRecord(value) {
++  return value !== null &&
++    typeof value === 'object' &&
++    !arrayIsArray(value);
++}
++
++function normalizeProbeEnvelope(response) {
++  const bodyValue = readOwnDataProperty(response, FIELD_BODY);
++  const body = isRecord(bodyValue) ? bodyValue : undefined;
++  return {
++    status: readOwnDataProperty(response, FIELD_STATUS),
++    startupRuntimeHandoff: readOwnDataProperty(
++      body,
++      FIELD_STARTUP_RUNTIME_HANDOFF,
++    ),
++    bootstrapReadiness: body,
++  };
++}
++
++async function probeStartupRuntimeHandoff(node, options = {}) {
++  const url = HTTP_PROTOCOL_PREFIX +
++    node.ip +
++    HTTP_PORT_SEPARATOR +
++    node._restPort +
++    BOOTSTRAP_JOIN_READY_PATH;
++  const response = await httpRequest({
++    url,
++    timeoutMs: options.timeoutMs,
++    method: HTTP_METHOD_GET,
++    includeBody: true,
++  });
++  return normalizeProbeEnvelope(response);
++}
++
++export {normalizeProbeEnvelope, probeStartupRuntimeHandoff};
+diff --git a/test/distributed/harness/transaction-recovery-poison-row-live-contract.test.js b/test/distributed/harness/transaction-recovery-poison-row-live-contract.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..5060125038d1b7706c05917af62710f33012e59a
+--- /dev/null
++++ b/test/distributed/harness/transaction-recovery-poison-row-live-contract.test.js
+@@ -0,0 +1,236 @@
++import {test} from '../../../src/test-helpers/tap.js';
++import {
++  assertPoisonRowHandoffEvidence,
++  extractHandoffEvidence,
++} from '../scenarios/transaction-recovery-poison-row-live.js';
++import {QUERY_ERROR_CODE} from
++  '../../../src/query/query-constants.js';
++import {normalizeProbeEnvelope} from
++  './startup-runtime-handoff-probe.js';
++
++const RECOVERY_OUTCOME_INCOMPLETE = 'transaction_recovery_incomplete';
++const POISON_DIMENSION = 'commit_mode';
++const SEED_ROUTE_SOURCE = 'ddb-test-reuse-7-1:8080';
++const HANDOFF_SAMPLE_OBSERVED = 'observed';
++const HANDOFF_SAMPLE_UNOBSERVED = 'unobserved';
++const TYPED_OUTCOME_OBSERVED_AT_MS = 10;
++const RESTART_SETTLED_AT_MS = 20;
++
++const VALID_ASSERTION_OPTIONS = Object.freeze({
++  expectedRouteSource: SEED_ROUTE_SOURCE,
++  restartSettledAtMs: RESTART_SETTLED_AT_MS,
++});
++
++function buildValidCapture() {
++  const evidence = {
++    sampleState: HANDOFF_SAMPLE_OBSERVED,
++    ready: false,
++    transactionRecoveryState: 'failed',
++    transactionRecoveryReady: false,
++    outcome: {
++      kind: RECOVERY_OUTCOME_INCOMPLETE,
++      errorCode: QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
++      decisionDimension: POISON_DIMENSION,
++      routeSource: SEED_ROUTE_SOURCE,
++    },
++  };
++  return {
++    sampleCount: 2,
++    firstFailedSample: evidence,
++    typedOutcomeSample: evidence,
++    typedOutcomeObservedAtMs: TYPED_OUTCOME_OBSERVED_AT_MS,
++    genericAdmissionObservedBeforeTypedOutcome: false,
++    lastSample: {at: 1, evidence},
++  };
++}
++
++test(
++  'poison-row live validation fails closed when the startup handoff owner ' +
++    'publishes no typed sample',
++  (t) => {
++    const capture = buildValidCapture();
++    capture.typedOutcomeSample = {sampleState: HANDOFF_SAMPLE_UNOBSERVED};
++    t.throws(
++      () => assertPoisonRowHandoffEvidence(capture, VALID_ASSERTION_OPTIONS),
++      {message: /typed transaction_recovery_incomplete outcome/},
++      'an unobserved typed sample cannot produce a live PASS',
++    );
++    t.end();
++  },
++);
++
++test(
++  'poison-row live validation requires failed owner state, decision dimension, ' +
++    'and canonical route source',
++  (t) => {
++    const missingFailure = buildValidCapture();
++    missingFailure.firstFailedSample = {
++      sampleState: HANDOFF_SAMPLE_UNOBSERVED,
++    };
++    t.throws(
++      () => assertPoisonRowHandoffEvidence(
++        missingFailure,
++        VALID_ASSERTION_OPTIONS,
++      ),
++      {message: /failed transaction recovery sample/},
++      'the live vehicle requires an owner-recorded failure sample',
++    );
++
++    const wrongDimension = buildValidCapture();
++    wrongDimension.typedOutcomeSample.outcome.decisionDimension =
++      'frozen_participant_count';
++    t.throws(
++      () => assertPoisonRowHandoffEvidence(
++        wrongDimension,
++        VALID_ASSERTION_OPTIONS,
++      ),
++      {message: /commit_mode/},
++      'the live vehicle requires the poison-row decision dimension',
++    );
++
++    const missingRoute = buildValidCapture();
++    delete missingRoute.typedOutcomeSample.outcome.routeSource;
++    t.throws(
++      () => assertPoisonRowHandoffEvidence(
++        missingRoute,
++        VALID_ASSERTION_OPTIONS,
++      ),
++      {message: /route source/},
++      'the live vehicle requires canonical route attribution',
++    );
++
++    t.doesNotThrow(
++      () => assertPoisonRowHandoffEvidence(
++        buildValidCapture(),
++        VALID_ASSERTION_OPTIONS,
++      ),
++      'a complete typed owner witness satisfies the live contract',
++    );
++    t.end();
++  },
++);
++
++test(
++  'raw readiness probing retains typed startup handoff fields from a 503',
++  (t) => {
++    const handoff = {
++      startupBranch: 'seed',
++      infrastructureJoinComplete: true,
++      canonicalAuthorityConsumed: true,
++      canonicalAuthorityState: 'resolved',
++      canonicalAuthoritySource: SEED_ROUTE_SOURCE,
++      transactionRecoveryState: 'failed',
++      transactionRecoveryReady: false,
++      transactionRecoveryOutcome: {
++        kind: RECOVERY_OUTCOME_INCOMPLETE,
++        errorCode: QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
++        decisionDimension: POISON_DIMENSION,
++        routeSource: SEED_ROUTE_SOURCE,
++      },
++      ready: false,
++    };
++    const normalized = normalizeProbeEnvelope({
++      status: 503,
++      body: {startupRuntimeHandoff: handoff},
++    });
++    t.equal(normalized.status, 503, 'the unavailable status is preserved');
++    t.same(
++      normalized.startupRuntimeHandoff,
++      handoff,
++      'typed handoff metadata survives the readiness normalization seam',
++    );
++    t.end();
++  },
++);
++
++test(
++  'poison-row diagnostics reject inherited and accessor-synthesized evidence',
++  (t) => {
++    const validHandoff = {
++      ready: false,
++      transactionRecoveryState: 'failed',
++      transactionRecoveryReady: false,
++      transactionRecoveryOutcome: {
++        kind: RECOVERY_OUTCOME_INCOMPLETE,
++        errorCode: QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
++        decisionDimension: POISON_DIMENSION,
++        routeSource: SEED_ROUTE_SOURCE,
++      },
++    };
++    const inheritedDiagnostics = Object.create({
++      startupRuntimeHandoff: validHandoff,
++    });
++    t.equal(
++      extractHandoffEvidence(inheritedDiagnostics),
++      null,
++      'inherited handoff state is not evidence',
++    );
++
++    let accessorReadCount = 0;
++    const accessorDiagnostics = {};
++    Object.defineProperty(accessorDiagnostics, 'startupRuntimeHandoff', {
++      configurable: true,
++      get() {
++        accessorReadCount += 1;
++        return validHandoff;
++      },
++    });
++    t.equal(
++      extractHandoffEvidence(accessorDiagnostics),
++      null,
++      'an accessor cannot synthesize handoff evidence',
++    );
++    t.equal(accessorReadCount, 0, 'diagnostic accessors are never executed');
++
++    const inheritedCapture = Object.create(buildValidCapture());
++    t.throws(
++      () => assertPoisonRowHandoffEvidence(
++        inheritedCapture,
++        VALID_ASSERTION_OPTIONS,
++      ),
++      {message: /failed transaction recovery sample/},
++      'inherited capture fields cannot produce a pass',
++    );
++    t.end();
++  },
++);
++
++test(
++  'poison-row validation requires canonical route equality and typed-first ' +
++    'ordering',
++  (t) => {
++    const wrongRoute = buildValidCapture();
++    wrongRoute.typedOutcomeSample.outcome.routeSource = 'wrong-seed:8080';
++    t.throws(
++      () => assertPoisonRowHandoffEvidence(
++        wrongRoute,
++        VALID_ASSERTION_OPTIONS,
++      ),
++      {message: /canonical route source/},
++      'a nonempty but noncanonical route cannot pass',
++    );
++
++    const lateTypedOutcome = buildValidCapture();
++    lateTypedOutcome.typedOutcomeObservedAtMs = RESTART_SETTLED_AT_MS + 1;
++    t.throws(
++      () => assertPoisonRowHandoffEvidence(
++        lateTypedOutcome,
++        VALID_ASSERTION_OPTIONS,
++      ),
++      {message: /must precede generic admission classification/},
++      'typed attribution observed after restart settlement cannot pass',
++    );
++
++    const genericFirst = buildValidCapture();
++    genericFirst.genericAdmissionObservedBeforeTypedOutcome = true;
++    t.throws(
++      () => assertPoisonRowHandoffEvidence(
++        genericFirst,
++        VALID_ASSERTION_OPTIONS,
++      ),
++      {message: /must precede generic admission classification/},
++      'generic admission observed first cannot pass',
++    );
++    t.end();
++  },
++);
+diff --git a/test/distributed/scenarios/transaction-recovery-poison-row-live.js b/test/distributed/scenarios/transaction-recovery-poison-row-live.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..dd558b873de57dc5bb10bcde9c5a810575c338a8
+--- /dev/null
++++ b/test/distributed/scenarios/transaction-recovery-poison-row-live.js
+@@ -0,0 +1,661 @@
++/**
++ * Live A/B vehicle for the transaction-recovery-poison-row-invariant Quest.
++ *
++ * Seeds a durable distributed-transaction row, poisons it so replay validation
++ * rejects it (multi-participant ONE_PHASE_COMMIT), restarts the seed node, and
++ * captures the restarted node's startup-runtime-handoff readiness surface. The
++ * claim under test: the FIXED tree publishes a typed
++ * transaction_recovery_incomplete outcome (kind, errorCode, decisionDimension,
++ * routeSource) and attributes the poison row to its writer/replay path, while
++ * the REVERTED (base) tree publishes no typed outcome and the causal fatal is
++ * masked behind generic restart failure / nodeAdmissionBlocked.
++ *
++ * This scenario asserts NOTHING about recovery success: a poisoned row must
++ * fail replay in both arms. It returns the observed handoff evidence so the
++ * A/B driver can compare arms byte-for-byte.
++ */
++
++import assert from 'node:assert/strict';
++import {TABLES} from '../../../src/constants/index.js';
++import {
++  resolveScenarioOptions,
++} from '../harness/scenario-config.js';
++import {
++  probeStartupRuntimeHandoff,
++} from '../harness/startup-runtime-handoff-probe.js';
++import {QUERY_ERROR_CODE} from
++  '../../../src/query/query-constants.js';
++
++const ZERO = 0;
++const ONE = 1;
++const SEED_ROLE = 'seed';
++const QUERY_LANE = 'default';
++const QUERY_TIMEOUT_MS = 15000;
++const RESTART_READINESS_TIMEOUT_MS = 90000;
++const OUTCOME_CAPTURE_TIMEOUT_MS = 60000;
++const OUTCOME_CAPTURE_POLL_INTERVAL_MS = 250;
++const CONVERGENCE_TIMEOUT_MS = 180000;
++const LOAD_OPS_PER_SEC = 40;
++const LOAD_DURATION = '20s';
++
++const POISON_TRANSACTION_ID = 'tx-poison-live-ab-1pc';
++const POISON_SESSION_ID = 'session-poison-live-ab-1pc';
++const POISON_DIMENSION = 'commit_mode';
++const RECOVERY_OUTCOME_INCOMPLETE = 'transaction_recovery_incomplete';
++const HANDOFF_SAMPLE_OBSERVED = 'observed';
++const HANDOFF_SAMPLE_UNOBSERVED = 'unobserved';
++const GENERIC_ADMISSION_CLASSIFICATION = 'nodeAdmissionBlocked';
++const UNOBSERVED_HANDOFF_SAMPLE = Object.freeze({
++  sampleState: HANDOFF_SAMPLE_UNOBSERVED,
++});
++const TX_STATUS_COMMITTING = 'COMMITTING';
++const TX_MODE_EXPLICIT = 'EXPLICIT';
++const SET_STATE_FROZEN = 'FROZEN';
++const COMMIT_TWO_PHASE = 'TWO_PHASE_COMMIT';
++const COMMIT_ONE_PHASE = 'ONE_PHASE_COMMIT';
++const TRANSACTION_RECOVERY_FAILED = 'failed';
++const PARTICIPANT_ID_SEPARATOR = '-';
++const POISON_PARTITION_IDS = Object.freeze(['p1', 'p2']);
++const ASSERTION_MESSAGE = Object.freeze({
++  POISON_ROW_NOT_VISIBLE:
++    'Poisoned transaction row was not visible verbatim before restart',
++  FAILED_SAMPLE_REQUIRED:
++    'Poison-row restart must capture a failed transaction recovery sample',
++  FAILED_STATE_REQUIRED:
++    'Poison-row restart must be owned by the failed startup recovery state',
++  RECOVERY_READY_FORBIDDEN:
++    'Poison-row restart must never publish transaction recovery ready',
++  TYPED_OUTCOME_REQUIRED:
++    'Poison-row restart must publish a typed transaction_recovery_incomplete outcome',
++  INCOMPLETE_KIND_REQUIRED:
++    'Poison-row restart must publish the canonical incomplete outcome kind',
++  RECOVERY_ERROR_CODE_REQUIRED:
++    'Poison-row restart must publish the canonical recovery error code',
++  COMMIT_MODE_REQUIRED:
++    'Poison-row restart must attribute the commit_mode decision dimension',
++  ROUTE_SOURCE_REQUIRED:
++    'Poison-row restart must publish its canonical route source',
++  EXPECTED_ROUTE_SOURCE_REQUIRED:
++    'Poison-row live validation requires an expected canonical route source',
++  RECOVERY_OUTCOME_PRECEDENCE_REQUIRED:
++    'Typed poison-row recovery attribution must precede generic admission classification',
++  HANDOFF_READY_FORBIDDEN:
++    'Typed poison-row evidence must never publish handoff ready',
++  NODE_COUNT_EXPECTED_PREFIX: 'Scenario node count mismatch: expected ',
++  NODE_COUNT_ACTUAL_INFIX: ' got ',
++  SEED_REQUIRED: 'Seed node should be available',
++  RESTART_READY_FORBIDDEN:
++    'Poison-row restart must stop short of recovery readiness',
++  ADMISSION_MASK_FORBIDDEN:
++    'Generic admission load must not mask the poison-row recovery failure',
++});
++
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const arrayIsArray = Array.isArray;
++const PROPERTY_FIELD_VALUE = 'value';
++const HANDOFF_FIELD = Object.freeze({
++  STARTUP_RUNTIME_HANDOFF: 'startupRuntimeHandoff',
++  TRANSACTION_RECOVERY_OUTCOME: 'transactionRecoveryOutcome',
++  READY: 'ready',
++  TRANSACTION_RECOVERY_STATE: 'transactionRecoveryState',
++  TRANSACTION_RECOVERY_READY: 'transactionRecoveryReady',
++  KIND: 'kind',
++  ERROR_CODE: 'errorCode',
++  DECISION_DIMENSION: 'decisionDimension',
++  ROUTE_SOURCE: 'routeSource',
++  SAMPLE_STATE: 'sampleState',
++  OUTCOME: 'outcome',
++  FIRST_FAILED_SAMPLE: 'firstFailedSample',
++  TYPED_OUTCOME_SAMPLE: 'typedOutcomeSample',
++  TYPED_OUTCOME_OBSERVED_AT_MS: 'typedOutcomeObservedAtMs',
++  EXPECTED_ROUTE_SOURCE: 'expectedRouteSource',
++  RESTART_SETTLED_AT_MS: 'restartSettledAtMs',
++  GENERIC_ADMISSION_BEFORE_TYPED:
++    'genericAdmissionObservedBeforeTypedOutcome',
++  LAST_ERROR: 'lastError',
++  BOOTSTRAP_READINESS: 'bootstrapReadiness',
++  REASONS: 'reasons',
++  LENGTH: 'length',
++});
++
++const SQL_INSERT_TRANSACTION =
++  'INSERT INTO ' + TABLES.SQL_TRANSACTIONS +
++  ' (transaction_id, session_id, status, transaction_mode, ' +
++  'participant_set_state, commit_mode, frozen_participant_count, ' +
++  'created_at, updated_at) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)';
++const SQL_INSERT_PARTICIPANT =
++  'INSERT INTO ' + TABLES.SQL_TRANSACTION_PARTICIPANTS +
++  ' (participant_id, transaction_id, partition_id, status, created_at, ' +
++  'updated_at) VALUES (?, ?, ?, ?, ?, ?)';
++const SQL_POISON_UPDATE =
++  'UPDATE ' + TABLES.SQL_TRANSACTIONS +
++  ' SET commit_mode = ?, frozen_participant_count = ? ' +
++  'WHERE transaction_id = ?';
++const SQL_SELECT_POISON_ROW =
++  'SELECT transaction_id, commit_mode, frozen_participant_count FROM ' +
++  TABLES.SQL_TRANSACTIONS + ' WHERE transaction_id = ?';
++
++function normalizePositiveInteger(value, fallback = ZERO) {
++  return Number.isFinite(value) && value > ZERO ?
++    Math.floor(value) :
++    fallback;
++}
++
++function normalizeOptionalString(value) {
++  return typeof value === 'string' ? value : null;
++}
++
++function readOwnDataProperty(record, key) {
++  if (
++    !record ||
++    typeof record !== 'object' ||
++    !objectHasOwn(record, key)
++  ) {
++    return undefined;
++  }
++  const descriptor = objectGetOwnPropertyDescriptor(record, key);
++  return descriptor && objectHasOwn(descriptor, PROPERTY_FIELD_VALUE) ?
++    descriptor.value :
++    undefined;
++}
++
++function isRecord(value) {
++  return value !== null &&
++    typeof value === 'object' &&
++    !arrayIsArray(value);
++}
++
++function rowsFromResult(result) {
++  if (Array.isArray(result?.rows)) {
++    return result.rows;
++  }
++  if (Array.isArray(result)) {
++    return result;
++  }
++  return [];
++}
++
++function sleep(ms) {
++  return new Promise((resolve) => setTimeout(resolve, ms));
++}
++
++function getSeedNode(nodes) {
++  return nodes.find((node) => node.role === SEED_ROLE) || nodes[ZERO];
++}
++
++async function executeScenarioQuery(node, sql, params = []) {
++  if (typeof node?.queryWithTimeout === 'function') {
++    return node.queryWithTimeout(
++      sql,
++      params,
++      {
++        timeoutMs: QUERY_TIMEOUT_MS,
++        lane: QUERY_LANE,
++      },
++    );
++  }
++  return node.query(sql, params);
++}
++
++async function seedAndPoisonTransactionRow(seedNode, nowMs) {
++  await executeScenarioQuery(seedNode, SQL_INSERT_TRANSACTION, [
++    POISON_TRANSACTION_ID,
++    POISON_SESSION_ID,
++    TX_STATUS_COMMITTING,
++    TX_MODE_EXPLICIT,
++    SET_STATE_FROZEN,
++    COMMIT_TWO_PHASE,
++    2,
++    nowMs,
++    nowMs,
++  ]);
++  for (const partitionId of POISON_PARTITION_IDS) {
++    await executeScenarioQuery(seedNode, SQL_INSERT_PARTICIPANT, [
++      POISON_TRANSACTION_ID + PARTICIPANT_ID_SEPARATOR + partitionId,
++      POISON_TRANSACTION_ID,
++      partitionId,
++      TX_STATUS_COMMITTING,
++      nowMs,
++      nowMs,
++    ]);
++  }
++  await executeScenarioQuery(seedNode, SQL_POISON_UPDATE, [
++    COMMIT_ONE_PHASE,
++    2,
++    POISON_TRANSACTION_ID,
++  ]);
++}
++
++async function waitForPoisonRowVisible(seedNode) {
++  const deadline = Date.now() + QUERY_TIMEOUT_MS;
++  while (Date.now() < deadline) {
++    const result = await executeScenarioQuery(
++      seedNode,
++      SQL_SELECT_POISON_ROW,
++      [POISON_TRANSACTION_ID],
++    );
++    const rows = rowsFromResult(result);
++    const row = rows.find(
++      (entry) =>
++        String(entry?.transaction_id || entry?.transactionId || '') ===
++          POISON_TRANSACTION_ID,
++    );
++    const commitMode = String(row?.commit_mode || row?.commitMode || '');
++    const frozenCount = Number(
++      row?.frozen_participant_count ?? row?.frozenParticipantCount,
++    );
++    if (commitMode === COMMIT_ONE_PHASE && frozenCount === 2) {
++      return {
++        transactionId: POISON_TRANSACTION_ID,
++        commitMode,
++        frozenParticipantCount: frozenCount,
++      };
++    }
++    await sleep(OUTCOME_CAPTURE_POLL_INTERVAL_MS);
++  }
++  throw new Error(
++    ASSERTION_MESSAGE.POISON_ROW_NOT_VISIBLE,
++  );
++}
++
++function extractHandoffEvidence(diagnostics) {
++  const handoff = readOwnDataProperty(
++    diagnostics,
++    HANDOFF_FIELD.STARTUP_RUNTIME_HANDOFF,
++  );
++  if (!isRecord(handoff)) {
++    return null;
++  }
++  const outcome = readOwnDataProperty(
++    handoff,
++    HANDOFF_FIELD.TRANSACTION_RECOVERY_OUTCOME,
++  );
++  return {
++    sampleState: HANDOFF_SAMPLE_OBSERVED,
++    ready: readOwnDataProperty(handoff, HANDOFF_FIELD.READY) === true,
++    transactionRecoveryState:
++      normalizeOptionalString(
++        readOwnDataProperty(handoff, HANDOFF_FIELD.TRANSACTION_RECOVERY_STATE),
++      ),
++    transactionRecoveryReady:
++      readOwnDataProperty(
++        handoff,
++        HANDOFF_FIELD.TRANSACTION_RECOVERY_READY,
++      ) === true,
++    outcome: !isRecord(outcome) ?
++      null :
++      {
++        kind: normalizeOptionalString(
++          readOwnDataProperty(outcome, HANDOFF_FIELD.KIND),
++        ),
++        errorCode: normalizeOptionalString(
++          readOwnDataProperty(outcome, HANDOFF_FIELD.ERROR_CODE),
++        ),
++        decisionDimension: normalizeOptionalString(
++          readOwnDataProperty(outcome, HANDOFF_FIELD.DECISION_DIMENSION),
++        ),
++        routeSource: normalizeOptionalString(
++          readOwnDataProperty(outcome, HANDOFF_FIELD.ROUTE_SOURCE),
++        ),
++      },
++  };
++}
++
++function normalizeCapturedHandoffEvidence(value) {
++  if (!isRecord(value)) {
++    return null;
++  }
++  const outcome = readOwnDataProperty(value, HANDOFF_FIELD.OUTCOME);
++  return {
++    sampleState: normalizeOptionalString(
++      readOwnDataProperty(value, HANDOFF_FIELD.SAMPLE_STATE),
++    ),
++    ready: readOwnDataProperty(value, HANDOFF_FIELD.READY) === true,
++    transactionRecoveryState: normalizeOptionalString(
++      readOwnDataProperty(value, HANDOFF_FIELD.TRANSACTION_RECOVERY_STATE),
++    ),
++    transactionRecoveryReady:
++      readOwnDataProperty(
++        value,
++        HANDOFF_FIELD.TRANSACTION_RECOVERY_READY,
++      ) === true,
++    outcome: !isRecord(outcome) ?
++      null :
++      {
++        kind: normalizeOptionalString(
++          readOwnDataProperty(outcome, HANDOFF_FIELD.KIND),
++        ),
++        errorCode: normalizeOptionalString(
++          readOwnDataProperty(outcome, HANDOFF_FIELD.ERROR_CODE),
++        ),
++        decisionDimension: normalizeOptionalString(
++          readOwnDataProperty(outcome, HANDOFF_FIELD.DECISION_DIMENSION),
++        ),
++        routeSource: normalizeOptionalString(
++          readOwnDataProperty(outcome, HANDOFF_FIELD.ROUTE_SOURCE),
++        ),
++      },
++  };
++}
++
++function assertPoisonRowHandoffEvidence(handoffCapture, options = {}) {
++  const expectedRouteSource = normalizeOptionalString(
++    readOwnDataProperty(options, HANDOFF_FIELD.EXPECTED_ROUTE_SOURCE),
++  );
++  assert.ok(
++    expectedRouteSource && expectedRouteSource.length > ZERO,
++    ASSERTION_MESSAGE.EXPECTED_ROUTE_SOURCE_REQUIRED,
++  );
++  const failedSample = normalizeCapturedHandoffEvidence(
++    readOwnDataProperty(handoffCapture, HANDOFF_FIELD.FIRST_FAILED_SAMPLE),
++  );
++  assert.equal(
++    failedSample && failedSample.sampleState,
++    HANDOFF_SAMPLE_OBSERVED,
++    ASSERTION_MESSAGE.FAILED_SAMPLE_REQUIRED,
++  );
++  assert.equal(
++    failedSample.transactionRecoveryState,
++    TRANSACTION_RECOVERY_FAILED,
++    ASSERTION_MESSAGE.FAILED_STATE_REQUIRED,
++  );
++  assert.equal(
++    failedSample.transactionRecoveryReady,
++    false,
++    ASSERTION_MESSAGE.RECOVERY_READY_FORBIDDEN,
++  );
++
++  const typedSample = normalizeCapturedHandoffEvidence(
++    readOwnDataProperty(handoffCapture, HANDOFF_FIELD.TYPED_OUTCOME_SAMPLE),
++  );
++  assert.equal(
++    typedSample && typedSample.sampleState,
++    HANDOFF_SAMPLE_OBSERVED,
++    ASSERTION_MESSAGE.TYPED_OUTCOME_REQUIRED,
++  );
++  assert.equal(
++    typedSample.outcome?.kind,
++    RECOVERY_OUTCOME_INCOMPLETE,
++    ASSERTION_MESSAGE.INCOMPLETE_KIND_REQUIRED,
++  );
++  assert.equal(
++    typedSample.outcome?.errorCode,
++    QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
++    ASSERTION_MESSAGE.RECOVERY_ERROR_CODE_REQUIRED,
++  );
++  assert.equal(
++    typedSample.outcome?.decisionDimension,
++    POISON_DIMENSION,
++    ASSERTION_MESSAGE.COMMIT_MODE_REQUIRED,
++  );
++  assert.equal(
++    typedSample.outcome?.routeSource,
++    expectedRouteSource,
++    ASSERTION_MESSAGE.ROUTE_SOURCE_REQUIRED,
++  );
++  assert.equal(
++    typedSample.ready,
++    false,
++    ASSERTION_MESSAGE.HANDOFF_READY_FORBIDDEN,
++  );
++  const typedOutcomeObservedAtMs = readOwnDataProperty(
++    handoffCapture,
++    HANDOFF_FIELD.TYPED_OUTCOME_OBSERVED_AT_MS,
++  );
++  const restartSettledAtMs = readOwnDataProperty(
++    options,
++    HANDOFF_FIELD.RESTART_SETTLED_AT_MS,
++  );
++  const genericAdmissionObservedBeforeTypedOutcome = readOwnDataProperty(
++    handoffCapture,
++    HANDOFF_FIELD.GENERIC_ADMISSION_BEFORE_TYPED,
++  );
++  assert.ok(
++    Number.isFinite(typedOutcomeObservedAtMs) &&
++      Number.isFinite(restartSettledAtMs) &&
++      typedOutcomeObservedAtMs <= restartSettledAtMs &&
++      genericAdmissionObservedBeforeTypedOutcome === false,
++    ASSERTION_MESSAGE.RECOVERY_OUTCOME_PRECEDENCE_REQUIRED,
++  );
++}
++
++function recordHandoffEvidenceSample(captureState, evidence) {
++  if (!evidence) {
++    return;
++  }
++  const observedAtMs = Date.now();
++  captureState.samples.push({at: observedAtMs, evidence});
++  if (evidence.transactionRecoveryState === TRANSACTION_RECOVERY_FAILED &&
++      captureState.firstFailedSample.sampleState ===
++        HANDOFF_SAMPLE_UNOBSERVED) {
++    captureState.firstFailedSample = evidence;
++    captureState.firstFailedSampleAtMs = observedAtMs;
++  }
++  if (evidence.outcome?.kind === RECOVERY_OUTCOME_INCOMPLETE &&
++      captureState.typedOutcomeSample.sampleState ===
++        HANDOFF_SAMPLE_UNOBSERVED) {
++    captureState.typedOutcomeSample = evidence;
++    captureState.typedOutcomeObservedAtMs = observedAtMs;
++  }
++}
++
++function hasGenericAdmissionClassification(diagnostics) {
++  const lastError = readOwnDataProperty(diagnostics, HANDOFF_FIELD.LAST_ERROR);
++  if (
++    typeof lastError === 'string' &&
++    lastError.indexOf(GENERIC_ADMISSION_CLASSIFICATION) >= ZERO
++  ) {
++    return true;
++  }
++  const readiness = readOwnDataProperty(
++    diagnostics,
++    HANDOFF_FIELD.BOOTSTRAP_READINESS,
++  );
++  const reasons = readOwnDataProperty(readiness, HANDOFF_FIELD.REASONS);
++  if (!arrayIsArray(reasons)) {
++    return false;
++  }
++  const length = readOwnDataProperty(reasons, HANDOFF_FIELD.LENGTH);
++  for (let index = ZERO; Number.isInteger(length) && index < length; index++) {
++    const reason = readOwnDataProperty(reasons, String(index));
++    if (
++      typeof reason === 'string' &&
++      reason.indexOf(GENERIC_ADMISSION_CLASSIFICATION) >= ZERO
++    ) {
++      return true;
++    }
++  }
++  return false;
++}
++
++async function captureRestartHandoffEvidence(node, options = {}) {
++  const timeoutMs = normalizePositiveInteger(
++    options.timeoutMs,
++    OUTCOME_CAPTURE_TIMEOUT_MS,
++  );
++  const deadline = Date.now() + timeoutMs;
++  const captureState = {
++    startedAtMs: Date.now(),
++    samples: [],
++    typedOutcomeSample: UNOBSERVED_HANDOFF_SAMPLE,
++    firstFailedSample: UNOBSERVED_HANDOFF_SAMPLE,
++    firstFailedSampleAtMs: null,
++    typedOutcomeObservedAtMs: null,
++    firstGenericAdmissionAtMs: null,
++  };
++  while (Date.now() < deadline) {
++    let diagnostics = null;
++    try {
++      diagnostics = await probeStartupRuntimeHandoff(node, {
++        timeoutMs: QUERY_TIMEOUT_MS,
++      });
++    } catch (error) {
++      captureState.samples.push({
++        at: Date.now(),
++        probeError: String(error?.message || error),
++      });
++      await sleep(OUTCOME_CAPTURE_POLL_INTERVAL_MS);
++      continue;
++    }
++    if (
++      captureState.firstGenericAdmissionAtMs === null &&
++      hasGenericAdmissionClassification(diagnostics)
++    ) {
++      captureState.firstGenericAdmissionAtMs = Date.now();
++    }
++    const evidence = extractHandoffEvidence(diagnostics);
++    recordHandoffEvidenceSample(captureState, evidence);
++    if (
++      captureState.firstFailedSampleAtMs !== null &&
++      captureState.typedOutcomeObservedAtMs !== null
++    ) {
++      break;
++    }
++    await sleep(OUTCOME_CAPTURE_POLL_INTERVAL_MS);
++  }
++  const genericAdmissionObservedBeforeTypedOutcome =
++    captureState.firstGenericAdmissionAtMs !== null &&
++    (
++      captureState.typedOutcomeObservedAtMs === null ||
++      captureState.firstGenericAdmissionAtMs <=
++        captureState.typedOutcomeObservedAtMs
++    );
++  return {
++    startedAtMs: captureState.startedAtMs,
++    sampleCount: captureState.samples.length,
++    firstFailedSample: captureState.firstFailedSample,
++    firstFailedSampleAtMs: captureState.firstFailedSampleAtMs,
++    typedOutcomeSample: captureState.typedOutcomeSample,
++    typedOutcomeObservedAtMs: captureState.typedOutcomeObservedAtMs,
++    firstGenericAdmissionAtMs: captureState.firstGenericAdmissionAtMs,
++    genericAdmissionObservedBeforeTypedOutcome,
++    lastSample: captureState.samples.length > ZERO ?
++      captureState.samples[captureState.samples.length - ONE] :
++      null,
++  };
++}
++
++async function run(cluster, options = {}) {
++  const resolved = resolveScenarioOptions(
++    options,
++    cluster,
++    'transaction-recovery-poison-row-live',
++  );
++  const expectedNodeCount = normalizePositiveInteger(
++    resolved.expectedNodeCount,
++    ZERO,
++  );
++  const expectedRouteSource = normalizeOptionalString(
++    resolved.expectedRouteSource,
++  );
++  const nodes = cluster.getNodes();
++  assert.ok(
++    expectedNodeCount === ZERO || nodes.length === expectedNodeCount,
++    ASSERTION_MESSAGE.NODE_COUNT_EXPECTED_PREFIX + expectedNodeCount +
++      ASSERTION_MESSAGE.NODE_COUNT_ACTUAL_INFIX + nodes.length,
++  );
++  const seedNode = getSeedNode(nodes);
++  assert.ok(seedNode, ASSERTION_MESSAGE.SEED_REQUIRED);
++  assert.ok(
++    expectedRouteSource && expectedRouteSource.length > ZERO,
++    ASSERTION_MESSAGE.EXPECTED_ROUTE_SOURCE_REQUIRED,
++  );
++
++  const initialConvergence = await cluster.waitForConvergence({
++    settleTimeoutMs: CONVERGENCE_TIMEOUT_MS,
++    quietWindowMs: 5000,
++  });
++
++  const loadRun = cluster.startLoad({
++    opsPerSec: LOAD_OPS_PER_SEC,
++    duration: LOAD_DURATION,
++  });
++
++  const nowMs = Date.now();
++  await seedAndPoisonTransactionRow(seedNode, nowMs);
++  const poisonWitness = await waitForPoisonRowVisible(seedNode);
++
++  if (typeof loadRun.cancel === 'function') {
++    loadRun.cancel();
++  }
++
++  // Bounded restart: a poisoned row must fail replay (both arms), so the
++  // restarted node never reaches recovery-ready. The harness readiness wait
++  // throwing a timeout is the expected terminal; the typed outcome evidence
++  // is captured from the tight poll below.
++  const restartStartedAtMs = Date.now();
++  const handoffCapturePromise = captureRestartHandoffEvidence(seedNode, {
++    timeoutMs: RESTART_READINESS_TIMEOUT_MS + OUTCOME_CAPTURE_TIMEOUT_MS,
++  });
++  const restartOutcomePromise = (async () => {
++    try {
++      await cluster.restartNode(seedNode.id, {
++        readinessTimeoutMs: RESTART_READINESS_TIMEOUT_MS,
++      });
++      return {error: null, settledAtMs: Date.now()};
++    } catch (error) {
++      return {
++        error: String(error?.message || error),
++        settledAtMs: Date.now(),
++      };
++    }
++  })();
++  const [handoffCapture, restartOutcome] = await Promise.all([
++    handoffCapturePromise,
++    restartOutcomePromise,
++  ]);
++  const restartReadinessError = restartOutcome.error;
++  assert.ok(
++    typeof restartReadinessError === 'string' &&
++      restartReadinessError.length > ZERO,
++    ASSERTION_MESSAGE.RESTART_READY_FORBIDDEN,
++  );
++  assert.doesNotMatch(
++    restartReadinessError,
++    /nodeAdmissionBlocked/,
++    ASSERTION_MESSAGE.ADMISSION_MASK_FORBIDDEN,
++  );
++  assertPoisonRowHandoffEvidence(handoffCapture, {
++    expectedRouteSource,
++    restartSettledAtMs: restartOutcome.settledAtMs,
++  });
++
++  let metrics = null;
++  try {
++    metrics = await loadRun.waitComplete();
++  } catch (_error) {
++    metrics = null;
++  }
++
++  return {
++    seedNodeId: seedNode.id,
++    initialConvergence: {
++      settled: initialConvergence?.settled === true,
++    },
++    poison: {
++      transactionId: POISON_TRANSACTION_ID,
++      sessionId: POISON_SESSION_ID,
++      expectedDecisionDimension: POISON_DIMENSION,
++      witness: poisonWitness,
++    },
++    restartReadinessError,
++    restartTiming: {
++      startedAtMs: restartStartedAtMs,
++      settledAtMs: restartOutcome.settledAtMs,
++    },
++    handoff: handoffCapture,
++    loadMetrics: metrics === null ?
++      null :
++      {
++        total: metrics.total,
++        success: metrics.success,
++      },
++  };
++}
++
++export {
++  assertPoisonRowHandoffEvidence,
++  extractHandoffEvidence,
++  run,
++};
+diff --git a/test/query/sql-query-engine-distributed-transactions.test.js b/test/query/sql-query-engine-distributed-transactions.test.js
+index ad30441afc49c68ca2f66511468cdbceba4ff7ba..5aea79fac762e7ee5df892018e4f7d92a97c62c5 100644
+--- a/test/query/sql-query-engine-distributed-transactions.test.js
++++ b/test/query/sql-query-engine-distributed-transactions.test.js
+@@ -9,6 +9,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+ import {
+ } from '../../src/control-plane/control-plane-system-table-gateway.js';
+ import {
++  QUERY_ERROR_CODE,
+ } from '../../src/query/query-constants.js';
+ import {
+   TABLES,
+@@ -139,6 +140,42 @@ async (t) => {
+   t.equal(replay.resumed, 1);
+ });
+ 
++test('SQLQueryEngine - failed recovery replay preserves typed poison-row ' +
++  'metadata for its startup owner', async (t) => {
++  const recoveryError = new Error(
++    'Transaction recovery state is incomplete or incompatible',
++  );
++  recoveryError.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
++  recoveryError.decisionDimension = 'commit_mode';
++  const transactionCoordinator = {
++    transactionsBySession: new Map(),
++    async resumeRecoveredTransactions() {
++      throw recoveryError;
++    },
++    startRecoverySweep() {},
++  };
++  const engine = new SQLQueryEngine({
++    systemCache: createMockSystemCache([], []),
++    messageRouter: createMockMessageRouter(),
++    transactionCoordinator,
++    autoStartDistributedTransactionRecovery: false,
++  });
++
++  const replay = await engine.activateDistributedTransactionRecovery();
++
++  t.equal(replay.failed, 1, 'the replay summary remains fail-closed');
++  t.equal(
++    replay.errorCode,
++    QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
++    'the replay summary preserves the canonical recovery error code',
++  );
++  t.equal(
++    replay.decisionDimension,
++    'commit_mode',
++    'the replay summary preserves the exact failed decision dimension',
++  );
++});
++
+ test('SQLQueryEngine - EXPLAIN DISTRIBUTED returns canonical plan output',
+   async (t) => {
+     const cache = createMockSystemCache(

@@ -4,6 +4,9 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {NodeService} from '../../src/node/node-service.js';
 import {NodeStorageBudgetSetup} from '../../src/bootstrap/shared/node-storage-budget-setup.js';
+import {
+  attachSqlRuntimeToStartupOwner,
+} from '../../src/bootstrap/shared/startup-sql-runtime-handoff.js';
 
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
@@ -161,6 +164,76 @@ test('BootstrapService waits for lifecycle metadata publication readiness before
       'heartbeat writer should start once lifecycle metadata publication readiness is satisfied');
     t.equal(recoveryStarts, 1,
       'deferred transaction recovery should arm once steady-state writers become active');
+  });
+
+test('BootstrapService final SQL attachment engages transaction recovery when background writers are already active',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const nodeAddress = 'ws://localhost:19096';
+    const recoveryError = new Error(
+      'Transaction recovery state is incomplete or incompatible',
+    );
+    recoveryError.errorCode = 'TRANSACTION_RECOVERY_INCOMPLETE';
+    recoveryError.decisionDimension = 'commit_mode';
+    let recoveryStarts = 0;
+    const service = new BootstrapService({
+      nodeId: 'seed-active-writer-recovery-gate',
+      nodeAddress,
+    });
+    service.bootstrapReadinessState = {
+      getSnapshot: () => ({
+        ready: true,
+        phase: 'TRAFFIC_READY',
+        state: 'join_ready',
+        reasons: [],
+        retryAfterMs: 0,
+        stableWindowMs: 1,
+        stableElapsedMs: 1,
+      }),
+    };
+    service.leaseService = {state: 'running'};
+    service.heartbeatService = {state: 'running'};
+    const sqlQueryEngine = {
+      activateDistributedTransactionRecovery() {
+        recoveryStarts += 1;
+        throw recoveryError;
+      },
+    };
+
+    const recoveryPromise = attachSqlRuntimeToStartupOwner({
+      owner: service,
+      sqlQueryEngine,
+      systemTableCache: null,
+    });
+    await t.rejects(
+      recoveryPromise,
+      {message: recoveryError.message},
+      'the final attachment preserves the owner-classified rejection',
+    );
+
+    const recovery =
+      service.runtimeHandoffOwner.getDistributedTransactionRecoverySnapshot();
+    t.equal(
+      recoveryStarts,
+      1,
+      'the seed composition engages recovery once at final attachment',
+    );
+    t.equal(
+      recovery.state,
+      'failed',
+      'the seed startup owner records the replay failure',
+    );
+    t.equal(
+      recovery.outcome?.decisionDimension,
+      'commit_mode',
+      'the seed startup owner retains the failed decision dimension',
+    );
+    t.equal(
+      recovery.outcome?.routeSource,
+      nodeAddress,
+      'the seed startup owner attributes recovery to its canonical address',
+    );
   });
 
 test('BootstrapService does not start deferred steady-state writers after shutdown begins',

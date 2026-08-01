@@ -18,6 +18,9 @@ class StartupRuntimeHandoffOwner {
     this.delegates = options.delegates || {};
     this.controlPlaneBackgroundWriterActivationPromise = null;
     this.controlPlaneBackgroundWriterRetryTimer = null;
+    this.transactionRecoveryActivationStarted = false;
+    this.transactionRecoveryActivationResult = null;
+    this.transactionRecoveryActivationError = null;
     this.transactionRecoveryState = TRANSACTION_RECOVERY_STATE.NOT_STARTED;
     this.transactionRecoverySummary = null;
     this.transactionRecoveryErrorCode = null;
@@ -169,13 +172,15 @@ class StartupRuntimeHandoffOwner {
           } else {
             heartbeatService.start(heartbeatStartOptions);
           }
-          const runningHeartbeatState = this.delegates.getHeartbeatRunningState?.();
+          const runningHeartbeatState =
+            this.delegates.getHeartbeatRunningState?.();
           if (runningHeartbeatState !== undefined) {
             heartbeatService.state = runningHeartbeatState;
           }
         }
 
-        if (this.delegates.activateDistributedTransactionRecoveryOnWriterActivation !== false) {
+        if (this.delegates
+          .activateDistributedTransactionRecoveryOnWriterActivation !== false) {
           this.activateDistributedTransactionRecovery();
         }
 
@@ -195,7 +200,7 @@ class StartupRuntimeHandoffOwner {
     this.transactionRecoveryErrorCode =
       typeof error?.errorCode === 'string' ? error.errorCode : null;
     this.transactionRecoveryErrorMessage =
-      error?.message || String(error);
+      error?.message || error?.error || String(error);
     this.transactionRecoveryOutcome = Object.freeze({
       kind: TRANSACTION_RECOVERY_OUTCOME_INCOMPLETE,
       errorCode: this.transactionRecoveryErrorCode,
@@ -208,9 +213,16 @@ class StartupRuntimeHandoffOwner {
   }
 
   recordDistributedTransactionRecoveryCompletion(summary) {
-    this.transactionRecoveryState = TRANSACTION_RECOVERY_STATE.COMPLETED;
-    this.transactionRecoverySummary =
+    const normalizedSummary =
       summary && typeof summary === 'object' ? summary : null;
+    const failedCount = Number(normalizedSummary?.failed);
+    if (Number.isFinite(failedCount) && failedCount > 0) {
+      this.recordDistributedTransactionRecoveryFailure(normalizedSummary);
+      this.transactionRecoverySummary = normalizedSummary;
+      return;
+    }
+    this.transactionRecoveryState = TRANSACTION_RECOVERY_STATE.COMPLETED;
+    this.transactionRecoverySummary = normalizedSummary;
     this.transactionRecoveryErrorCode = null;
     this.transactionRecoveryErrorMessage = null;
     this.transactionRecoveryOutcome = null;
@@ -262,6 +274,12 @@ class StartupRuntimeHandoffOwner {
   }
 
   activateDistributedTransactionRecovery() {
+    if (this.transactionRecoveryActivationStarted) {
+      if (this.transactionRecoveryActivationError) {
+        throw this.transactionRecoveryActivationError;
+      }
+      return this.transactionRecoveryActivationResult;
+    }
     if (
       this.delegates.isDistributedTransactionRecoveryAvailable?.() === false
     ) {
@@ -270,18 +288,27 @@ class StartupRuntimeHandoffOwner {
     const override = this.getCompatibilityOverride(
       'activateDistributedTransactionRecovery',
     );
-    if (override) {
-      return this.trackDistributedTransactionRecovery(() => override());
-    }
-    if (
-      typeof this.delegates.activateDistributedTransactionRecovery !==
-        LOCAL_STR_FUNCTION
-    ) {
+    const activate = override ||
+      this.delegates.activateDistributedTransactionRecovery;
+    if (typeof activate !== LOCAL_STR_FUNCTION) {
       return null;
     }
-    return this.trackDistributedTransactionRecovery(
-      () => this.delegates.activateDistributedTransactionRecovery(),
-    );
+    this.transactionRecoveryActivationStarted = true;
+    try {
+      const result = this.trackDistributedTransactionRecovery(
+        () => activate(),
+      );
+      this.transactionRecoveryActivationResult = result;
+      if (result && typeof result.catch === LOCAL_STR_FUNCTION) {
+        void result.catch((error) => {
+          this.transactionRecoveryActivationError = error;
+        });
+      }
+      return result;
+    } catch (error) {
+      this.transactionRecoveryActivationError = error;
+      throw error;
+    }
   }
 
   flushDeferredCreateSelfHostedMetadata() {

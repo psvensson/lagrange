@@ -158,7 +158,11 @@ test('phaseCacheHydration succeeds when CDC pipeline is ready',
       .subscribeToInitialSystemTableCDC = async () => {};
 
     await service.seedCacheHydrationPhase.phaseCacheHydration();
-    t.pass('phaseCacheHydration completed with ready CDC pipeline');
+    t.equal(
+      service.systemCacheHydrated,
+      true,
+      'successful hydration publishes the seed checkpoint witness',
+    );
   });
 
 test('phaseCacheHydration fails on CDC readiness gate timeout',
@@ -198,6 +202,11 @@ test('phaseCacheHydration fails on CDC readiness gate timeout',
       service.seedCacheHydrationPhase.phaseCacheHydration(),
       /readiness.*timed out|unmet/i,
       'phaseCacheHydration should fail with descriptive error on timeout',
+    );
+    t.equal(
+      service.systemCacheHydrated,
+      false,
+      'failed hydration never publishes the seed checkpoint witness',
     );
   });
 

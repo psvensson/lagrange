@@ -9,6 +9,7 @@ import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
 import {
 } from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
+  QUERY_ERROR_CODE,
 } from '../../src/query/query-constants.js';
 import {
   TABLES,
@@ -137,6 +138,42 @@ async (t) => {
     'activation should start the periodic recovery sweep');
   t.equal(replay.totalRecovered, 1);
   t.equal(replay.resumed, 1);
+});
+
+test('SQLQueryEngine - failed recovery replay preserves typed poison-row ' +
+  'metadata for its startup owner', async (t) => {
+  const recoveryError = new Error(
+    'Transaction recovery state is incomplete or incompatible',
+  );
+  recoveryError.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
+  recoveryError.decisionDimension = 'commit_mode';
+  const transactionCoordinator = {
+    transactionsBySession: new Map(),
+    async resumeRecoveredTransactions() {
+      throw recoveryError;
+    },
+    startRecoverySweep() {},
+  };
+  const engine = new SQLQueryEngine({
+    systemCache: createMockSystemCache([], []),
+    messageRouter: createMockMessageRouter(),
+    transactionCoordinator,
+    autoStartDistributedTransactionRecovery: false,
+  });
+
+  const replay = await engine.activateDistributedTransactionRecovery();
+
+  t.equal(replay.failed, 1, 'the replay summary remains fail-closed');
+  t.equal(
+    replay.errorCode,
+    QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
+    'the replay summary preserves the canonical recovery error code',
+  );
+  t.equal(
+    replay.decisionDimension,
+    'commit_mode',
+    'the replay summary preserves the exact failed decision dimension',
+  );
 });
 
 test('SQLQueryEngine - EXPLAIN DISTRIBUTED returns canonical plan output',

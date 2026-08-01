@@ -4,7 +4,41 @@ import {CDCIntegrationSetup} from '../../../src/bootstrap/shared/cdc-integration
 import {
   attachSqlRuntimeToStartupOwner,
 } from '../../../src/bootstrap/shared/startup-sql-runtime-handoff.js';
+import {StartupRuntimeHandoffOwner} from
+  '../../../src/bootstrap/owners/startup-runtime-handoff-owner.js';
 import {SQLQueryEngine} from '../../../src/query/sql-query-engine.js';
+
+const STARTUP_SQL_RUNTIME_HANDOFF_SUITE = 'startup-sql-runtime-handoff';
+const STARTUP_SQL_RUNTIME_HANDOFF_TEST = Object.freeze({
+  runtimeAccessPolicy:
+    'rebinds runtime access policy ownership to the final engine',
+  lifecycleOwner:
+    'rebinds the exact lifecycle owner and catalog gateway to the final engine',
+  absentLifecycleOwner:
+    'does not synthesize a fallback lifecycle owner during handoff',
+  cdcRecovery:
+    'upgrades the canonical startup owner CDC path and re-arms deferred recovery after runtime handoff',
+  recoveryBeforeWriters:
+    'starts recovery at final SQL attachment before steady-state writers are active',
+  classifiedFailures:
+    'normalizes owner-classified sync and async attachment failures without hiding rejection from awaiting callers',
+  replacementAttachment:
+    'serializes replacement attachment while transaction recovery is pending',
+  rebalanceDependencies:
+    'syncs rebalance owner dependencies to the final runtime SQL engine',
+  bootstrapRouting:
+    'seeds bootstrap leader routing bridges onto the final runtime engine during handoff',
+  topologyOwnerGetter:
+    'attaches bootstrap topology owner from the owner getter when no direct property exists',
+});
+const SERVICE_LIFECYCLE_COMMAND_OWNER_UNAVAILABLE_ERROR_CODE =
+  'service_lifecycle_command_owner_unavailable';
+const TRANSACTION_RECOVERY_INCOMPLETE_ERROR_CODE =
+  'TRANSACTION_RECOVERY_INCOMPLETE';
+const COMMIT_MODE_DECISION_DIMENSION = 'commit_mode';
+const FAILED_TRANSACTION_RECOVERY_STATE = 'failed';
+const OWNER_PROMISE_IDENTITY_ASSERTION =
+  'the shared boundary must preserve the owner promise identity';
 
 const JOIN_BOOTSTRAP_SYSTEM_TABLE_SNAPSHOTS = Object.freeze({
   partitions: Object.freeze([
@@ -26,8 +60,8 @@ const JOIN_BOOTSTRAP_SYSTEM_TABLE_SNAPSHOTS = Object.freeze({
   ]),
 });
 
-describe('startup-sql-runtime-handoff', () => {
-  it('rebinds runtime access policy ownership to the final engine', () => {
+describe(STARTUP_SQL_RUNTIME_HANDOFF_SUITE, () => {
+  it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.runtimeAccessPolicy, () => {
     const runtimeAccessPolicyOwner = {
       async getRuntimePolicy() {
         return {status: 'resolved'};
@@ -51,7 +85,7 @@ describe('startup-sql-runtime-handoff', () => {
     assert.strictEqual(attachedOwner, runtimeAccessPolicyOwner);
   });
 
-  it('rebinds the exact lifecycle owner and catalog gateway to the final engine',
+  it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.lifecycleOwner,
     async () => {
       const systemTableCache = {
         filter: () => [],
@@ -133,7 +167,7 @@ describe('startup-sql-runtime-handoff', () => {
       await finalEngine.shutdown();
     });
 
-  it('does not synthesize a fallback lifecycle owner during handoff',
+  it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.absentLifecycleOwner,
     async () => {
       const systemTableCache = {
         filter: () => [],
@@ -165,11 +199,11 @@ describe('startup-sql-runtime-handoff', () => {
       );
       assert.equal(
         result.result.errorCode,
-        'service_lifecycle_command_owner_unavailable',
+        SERVICE_LIFECYCLE_COMMAND_OWNER_UNAVAILABLE_ERROR_CODE,
       );
     });
 
-  it('upgrades the canonical startup owner CDC path and re-arms deferred recovery after runtime handoff',
+  it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.cdcRecovery,
     () => {
       const systemTableCache = {
         get() {
@@ -236,7 +270,7 @@ describe('startup-sql-runtime-handoff', () => {
       assert.strictEqual(recovered, 1);
     });
 
-  it('does not start deferred recovery before steady-state control-plane writers are active',
+  it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.recoveryBeforeWriters,
     () => {
       const systemTableCache = {
         get() {
@@ -278,12 +312,102 @@ describe('startup-sql-runtime-handoff', () => {
         systemTableCache,
       });
 
-      assert.strictEqual(recovered, 0);
+      assert.strictEqual(recovered, 1);
       assert.strictEqual(owner.sqlQueryEngine, sqlQueryEngine);
       assert.strictEqual(cdcIntegrationService.sqlQueryEngine, sqlQueryEngine);
     });
 
-  it('syncs rebalance owner dependencies to the final runtime SQL engine',
+  it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.classifiedFailures, async () => {
+    const syncFailure = new Error('sync recovery failure');
+    const syncRecovery = attachSqlRuntimeToStartupOwner({
+      owner: {
+        activateDistributedTransactionRecovery() {
+          throw syncFailure;
+        },
+      },
+      sqlQueryEngine: {},
+      systemTableCache: null,
+    });
+    await assert.rejects(syncRecovery, syncFailure);
+
+    const asyncFailure = new Error('async recovery failure');
+    const rejectedRecovery = Promise.reject(asyncFailure);
+    const asyncRecovery = attachSqlRuntimeToStartupOwner({
+      owner: {
+        activateDistributedTransactionRecovery() {
+          return rejectedRecovery;
+        },
+      },
+      sqlQueryEngine: {},
+      systemTableCache: null,
+    });
+    assert.strictEqual(
+      asyncRecovery,
+      rejectedRecovery,
+      OWNER_PROMISE_IDENTITY_ASSERTION,
+    );
+    await assert.rejects(asyncRecovery, asyncFailure);
+  });
+
+  it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.replacementAttachment,
+    async () => {
+      const poisonFailure = new Error('poison recovery failure');
+      poisonFailure.errorCode = TRANSACTION_RECOVERY_INCOMPLETE_ERROR_CODE;
+      poisonFailure.decisionDimension = COMMIT_MODE_DECISION_DIMENSION;
+      let rejectFirstRecovery;
+      const firstRecovery = new Promise((_resolve, reject) => {
+        rejectFirstRecovery = reject;
+      });
+      let firstActivationCount = 0;
+      let replacementActivationCount = 0;
+      const firstEngine = {
+        activateDistributedTransactionRecovery() {
+          firstActivationCount += 1;
+          return firstRecovery;
+        },
+      };
+      const replacementEngine = {
+        activateDistributedTransactionRecovery() {
+          replacementActivationCount += 1;
+          return Promise.resolve({failed: 0});
+        },
+      };
+      const owner = new StartupRuntimeHandoffOwner({
+        delegates: {
+          isDistributedTransactionRecoveryAvailable: () => true,
+          activateDistributedTransactionRecovery: () =>
+            owner.sqlQueryEngine.activateDistributedTransactionRecovery(),
+          getRouteSource: () => 'seed-node:8080',
+        },
+      });
+
+      const original = attachSqlRuntimeToStartupOwner({
+        owner,
+        sqlQueryEngine: firstEngine,
+        systemTableCache: null,
+      });
+      const replacement = attachSqlRuntimeToStartupOwner({
+        owner,
+        sqlQueryEngine: replacementEngine,
+        systemTableCache: null,
+      });
+
+      assert.strictEqual(replacement, original);
+      assert.strictEqual(firstActivationCount, 1);
+      assert.strictEqual(replacementActivationCount, 0);
+
+      rejectFirstRecovery(poisonFailure);
+      await assert.rejects(original, poisonFailure);
+      const snapshot = owner.getDistributedTransactionRecoverySnapshot();
+      assert.strictEqual(snapshot.state, FAILED_TRANSACTION_RECOVERY_STATE);
+      assert.strictEqual(snapshot.ready, false);
+      assert.strictEqual(
+        snapshot.outcome?.decisionDimension,
+        COMMIT_MODE_DECISION_DIMENSION,
+      );
+    });
+
+  it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.rebalanceDependencies,
     () => {
       const systemTableCache = {
         get() {
@@ -348,7 +472,7 @@ describe('startup-sql-runtime-handoff', () => {
       assert.strictEqual(partitionSync.cdcIntegrationService, cdcIntegrationService);
     });
 
-  it('seeds bootstrap leader routing bridges onto the final runtime engine during handoff',
+  it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.bootstrapRouting,
     () => {
       const bootstrapTopologySnapshotOwner = {
         ownerId: 'bootstrap-topology-snapshot-owner',
@@ -386,7 +510,7 @@ describe('startup-sql-runtime-handoff', () => {
       );
     });
 
-  it('attaches bootstrap topology owner from the owner getter when no direct property exists',
+  it(STARTUP_SQL_RUNTIME_HANDOFF_TEST.topologyOwnerGetter,
     () => {
       const bootstrapTopologySnapshotOwner = {
         ownerId: 'bootstrap-topology-snapshot-owner-via-getter',

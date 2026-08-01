@@ -1,0 +1,30 @@
+{
+  "sampleId": "fixed-3",
+  "sourceFingerprint": "00b1e1d867ecf517",
+  "scenario": "transaction-recovery-poison-row-live",
+  "scenarioExit": 1,
+  "report": {
+    "path": "/tmp/lagrange-poison-final-handoff.0lPCXO/solve/changes/transaction-recovery-poison-row-invariant/live-ab/fixed-3.report.json",
+    "sha256": "8b292a049c5cb83dfebbdcdc4c209281d320f55ae9cd4cb561073bb9152a5c13",
+    "durationMs": 247671,
+    "error": "Poison-row restart must capture a failed transaction recovery sample: actual unobserved, expected observed"
+  },
+  "log": {
+    "path": "/tmp/lagrange-poison-final-handoff.0lPCXO/solve/changes/transaction-recovery-poison-row-invariant/live-ab/fixed-3.log",
+    "sha256": "3fde800a6ac9e77a5a50ccea4f04ea2e84c417e08fac96a2fb39e0dbb06b4740"
+  },
+  "restartProcess": {
+    "startedAt": "2026-08-01T10:17:28.051777057Z",
+    "finishedAt": "2026-08-01T10:17:44.36087935Z",
+    "exitCode": 1,
+    "fatalAt": "2026-08-01T10:17:44.345Z",
+    "fatalErrorCode": "TRANSACTION_RECOVERY_INCOMPLETE",
+    "fatalDecisionDimension": "commit_mode",
+    "fatalTransactionId": "tx-poison-live-ab-1pc"
+  },
+  "diagnosis": {
+    "movement": "The exact poison mutation receipt allowed the live vehicle to reach restart, and the restarted seed loaded the poison during final SQL attachment.",
+    "blockingOperation": "SQLQueryEngine.activateDistributedTransactionRecovery synchronously loads the cache before it creates its replay promise. StartupRuntimeHandoffOwner records the typed failure and rethrows it through attachSqlRuntimeToStartupOwner into the non-awaiting seed/join entrypoint, so the process exits before the 250ms readiness poll can observe the typed handoff snapshot.",
+    "nextDiscriminator": "The shared attachment must normalize an already owner-classified synchronous throw into a handled rejected return, and mark asynchronous rejections handled, while preserving rejection for explicit awaiting callers. BootstrapAPI can then remain fail-closed on a typed 503 readiness snapshot."
+  }
+}

@@ -8,6 +8,25 @@ import {
 
 const LOCAL_STR_FUNCTION = 'function';
 
+function activateOwnerTrackedTransactionRecovery(owner) {
+  let recovery;
+  try {
+    recovery = owner.activateDistributedTransactionRecovery();
+  } catch (error) {
+    // The startup owner has already classified and retained this failure.
+    // Normalize a synchronous cache-load failure so non-awaiting entrypoints
+    // can keep the fail-closed readiness surface alive for observation.
+    recovery = Promise.reject(error);
+  }
+  if (recovery && typeof recovery.catch === LOCAL_STR_FUNCTION) {
+    // Seed and join entrypoints intentionally do not await this attachment.
+    // Mark the rejection handled without changing the returned promise so an
+    // explicit caller can still await the canonical failure.
+    void recovery.catch(() => undefined);
+  }
+  return recovery;
+}
+
 function attachRuntimeAccessPolicyOwner(owner, sqlQueryEngine) {
   const runtimeAccessPolicyOwner =
     owner.systemMetadataOwners?.runtimeAccessPolicyOwner ||
@@ -134,13 +153,10 @@ function attachSqlRuntimeToStartupOwner(options) {
     }
   }
 
-  const backgroundWritersActive =
-    typeof owner.hasActiveControlPlaneBackgroundWriters === 'function' &&
-    owner.hasActiveControlPlaneBackgroundWriters() === true;
   let transactionRecovery = null;
-  if (backgroundWritersActive === true &&
-      typeof owner.activateDistributedTransactionRecovery === LOCAL_STR_FUNCTION) {
-    transactionRecovery = owner.activateDistributedTransactionRecovery();
+  if (typeof owner.activateDistributedTransactionRecovery ===
+      LOCAL_STR_FUNCTION) {
+    transactionRecovery = activateOwnerTrackedTransactionRecovery(owner);
   }
 
   ensureServiceInstallationReconcilerOwner(owner);
@@ -155,7 +171,6 @@ function attachSqlRuntimeToStartupOwner(options) {
  * @param {Object} options
  * @param {Object} options.owner
  * @param {boolean} [options.activateControlPlaneBackgroundWriters]
- * @param {boolean} [options.activateDistributedTransactionRecovery]
  * @param {boolean} [options.flushDeferredCreateSelfHostedMetadata]
  * @param {boolean} [options.startLatencyTopologyLifecycle]
  * @return {void}
@@ -174,11 +189,6 @@ function activateSteadyStateRuntimeHandoff(options) {
   if (options.flushDeferredCreateSelfHostedMetadata === true &&
       typeof owner.flushDeferredCreateSelfHostedMetadata === LOCAL_STR_FUNCTION) {
     owner.flushDeferredCreateSelfHostedMetadata();
-  }
-
-  if (options.activateDistributedTransactionRecovery === true &&
-      typeof owner.activateDistributedTransactionRecovery === LOCAL_STR_FUNCTION) {
-    owner.activateDistributedTransactionRecovery();
   }
 
   if (options.startLatencyTopologyLifecycle === true &&

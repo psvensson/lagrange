@@ -96,7 +96,8 @@ function createBootstrapServiceSeedWorkflowMethods() {
         partitionsReady:
           this.partitionServices.size > 0,
         registrationReady: this.cdcIntegrationService !== null,
-        cacheHydrated: systemTableCache !== null,
+        cacheHydrated:
+          systemTableCache !== null && this.systemCacheHydrated === true,
         replicaHandlerReady: Boolean(this.replicaHandler),
         messageGroupServiceHandlerReady:
           Boolean(this.messageGroupServiceHandler),

@@ -16,8 +16,13 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {StartupRuntimeHandoffOwner} from
   '../../src/bootstrap/owners/startup-runtime-handoff-owner.js';
+import {NodeJoiningService} from
+  '../../src/bootstrap/node-joining-service.js';
 import {BootstrapReadinessOwner} from
   '../../src/bootstrap/owners/bootstrap-readiness-owner.js';
+import {
+  attachSqlRuntimeToStartupOwner,
+} from '../../src/bootstrap/shared/startup-sql-runtime-handoff.js';
 import {BOOTSTRAP_API_READINESS_FIELD} from
   '../../src/bootstrap/bootstrap-api-constants.js';
 import {QUERY_ERROR_CODE} from '../../src/query/query-constants.js';
@@ -183,5 +188,187 @@ test(
       'a clean replay publishes no incomplete outcome',
     );
     t.end();
+  },
+);
+
+test(
+  'final SQL attachment engages transaction recovery when control-plane ' +
+    'background writers are already active',
+  async (t) => {
+    const recoveryError = buildRecoveryError();
+    recoveryError.decisionDimension = 'commit_mode';
+    let recoveryActivationCount = 0;
+    const startupOwner = {
+      activateDistributedTransactionRecovery: null,
+    };
+    const runtimeHandoffOwner = new StartupRuntimeHandoffOwner({
+      delegates: {
+        isShuttingDown: () => false,
+        getLeaseService: () => ({state: 'running'}),
+        getLeaseRunningState: () => 'running',
+        getHeartbeatService: () => ({state: 'running'}),
+        getHeartbeatRunningState: () => 'running',
+        isDistributedTransactionRecoveryAvailable: () => true,
+        activateDistributedTransactionRecovery: () => {
+          recoveryActivationCount += 1;
+          return startupOwner.sqlQueryEngine
+            .activateDistributedTransactionRecovery();
+        },
+        getRouteSource: () => SEED_AUTHORITY_SOURCE,
+      },
+    });
+    startupOwner.activateDistributedTransactionRecovery = () =>
+      runtimeHandoffOwner.activateDistributedTransactionRecovery();
+    const sqlQueryEngine = {
+      activateDistributedTransactionRecovery: async () => ({
+        totalRecovered: 0,
+        resumed: 0,
+        failed: 1,
+        results: [],
+        error: recoveryError.message,
+        errorCode: recoveryError.errorCode,
+        decisionDimension: recoveryError.decisionDimension,
+      }),
+    };
+
+    const recovery = attachSqlRuntimeToStartupOwner({
+      owner: startupOwner,
+      sqlQueryEngine,
+      systemTableCache: null,
+    });
+    await recovery;
+
+    const snapshot =
+      runtimeHandoffOwner.getDistributedTransactionRecoverySnapshot();
+    t.equal(
+      recoveryActivationCount,
+      1,
+      'already-active writers do not suppress attachment-owned recovery',
+    );
+    t.equal(
+      snapshot.state,
+      'failed',
+      'the startup owner records the poison-row replay failure',
+    );
+    t.equal(
+      snapshot.outcome?.decisionDimension,
+      'commit_mode',
+      'the startup owner retains the failed recovery decision dimension',
+    );
+    t.equal(
+      snapshot.outcome?.routeSource,
+      SEED_AUTHORITY_SOURCE,
+      'the startup owner retains the canonical seed route source',
+    );
+    t.equal(
+      snapshot.summary?.failed,
+      1,
+      'the startup owner retains the failed replay summary for diagnostics',
+    );
+  },
+);
+
+test(
+  'final SQL runtime attachment engages owner-tracked recovery before ' +
+    'steady-state writers become ready',
+  async (t) => {
+    let recoveryActivationCount = 0;
+    const startupOwner = {
+      hasActiveControlPlaneBackgroundWriters: () => false,
+      activateDistributedTransactionRecovery: null,
+    };
+    const runtimeHandoffOwner = new StartupRuntimeHandoffOwner({
+      delegates: {
+        isDistributedTransactionRecoveryAvailable: () => true,
+        activateDistributedTransactionRecovery: () => {
+          recoveryActivationCount += 1;
+          return startupOwner.sqlQueryEngine
+            .activateDistributedTransactionRecovery();
+        },
+        getRouteSource: () => SEED_AUTHORITY_SOURCE,
+      },
+    });
+    startupOwner.activateDistributedTransactionRecovery = () =>
+      runtimeHandoffOwner.activateDistributedTransactionRecovery();
+    const sqlQueryEngine = {
+      activateDistributedTransactionRecovery: async () => ({
+        totalRecovered: 0,
+        resumed: 0,
+        failed: 1,
+        results: [],
+        error: POISON_ROW_MESSAGE,
+        errorCode: QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
+        decisionDimension: 'commit_mode',
+      }),
+    };
+
+    const recovery = attachSqlRuntimeToStartupOwner({
+      owner: startupOwner,
+      sqlQueryEngine,
+      systemTableCache: null,
+    });
+    await recovery;
+
+    const snapshot =
+      runtimeHandoffOwner.getDistributedTransactionRecoverySnapshot();
+    t.equal(
+      recoveryActivationCount,
+      1,
+      'final runtime attachment activates recovery without waiting for writers',
+    );
+    t.equal(
+      snapshot.state,
+      'failed',
+      'the startup owner records the attachment-time poison-row failure',
+    );
+    t.equal(
+      snapshot.outcome?.decisionDimension,
+      'commit_mode',
+      'the attachment-time failure retains the canonical decision dimension',
+    );
+  },
+);
+
+test(
+  'durable-rejoin recovery attributes its typed outcome to the local route',
+  async (t) => {
+    const localRoute = 'ddb-test-reuse-7-1:8080';
+    const service = new NodeJoiningService({
+      nodeId: 'restarted-seed',
+      nodeAddress: localRoute,
+      seedNodeAddress: 'http://ddb-test-reuse-7-2:8080',
+    });
+    service.cdcIntegrationService = null;
+    const sqlQueryEngine = {
+      activateDistributedTransactionRecovery: async () => ({
+        totalRecovered: 0,
+        resumed: 0,
+        failed: 1,
+        results: [],
+        error: POISON_ROW_MESSAGE,
+        errorCode: QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE,
+        decisionDimension: 'commit_mode',
+      }),
+    };
+
+    const recovery = attachSqlRuntimeToStartupOwner({
+      owner: service,
+      sqlQueryEngine,
+      systemTableCache: null,
+    });
+    await recovery;
+
+    const snapshot =
+      service.runtimeHandoffOwner.getDistributedTransactionRecoverySnapshot();
+    t.equal(
+      snapshot.outcome?.routeSource,
+      localRoute,
+      'rejoin recovery names the restarted node rather than its seed contact',
+    );
+    t.equal(
+      snapshot.outcome?.decisionDimension,
+      'commit_mode',
+      'rejoin recovery preserves the canonical poison-row dimension',
+    );
   },
 );
