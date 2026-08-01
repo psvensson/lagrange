@@ -31,6 +31,15 @@ const AXIS_TOKEN_PATTERN = new RegExp(
     'callback-execution-host',
     'WasmCallAdapter',
     'wasm-call-adapter',
+    'query/callback',
+    '/callback/',
+    'PartitionCallback',
+    'CallbackStageExecutor',
+    'CallbackRuntimeDriverRegistry',
+    'CallbackDriver',
+    'buildCallbackContext',
+    'CallbackModuleArtifact',
+    'JsWasmComponentArtifact',
   ].join('|'),
   'u',
 );
@@ -38,7 +47,8 @@ const AXIS_TOKEN_PATTERN = new RegExp(
 const PRODUCTION_INSTANTIATION_PATTERN = /new\s+WasmCallAdapter\s*\(/u;
 
 // The sealed production axis chain (census of 2026-08-01, adversarially
-// verified). Paths are relative to src/.
+// verified; token-hardening re-sweep added sql-query-engine-statement-
+// execution.js). Paths are relative to src/.
 const AXIS_ALLOWLIST = new Set([
   'admin/admin-constants.js',
   'admin/admin-query-result-message-envelope.js',
@@ -53,6 +63,7 @@ const AXIS_ALLOWLIST = new Set([
   'query/callback/partition-callback-dispatcher.js',
   'query/index.js',
   'query/sql-adapter-constants.js',
+  'query/sql-query-engine-statement-execution.js',
   'query/sql-query-engine-instance-initializer.js',
   'query/sql-query-engine-lifecycle-and-callback-dispatch.js',
   'query/sql-query-engine-request-dispatch.js',

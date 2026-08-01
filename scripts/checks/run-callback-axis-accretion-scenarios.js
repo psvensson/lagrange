@@ -10,6 +10,9 @@ const SCENARIOS = {
   'callback-axis-accretion-census-v2': [
     'test/contract/callback-axis-accretion.test.js',
   ],
+  'callback-axis-accretion-token-hardening': [
+    'test/contract/callback-axis-accretion.test.js',
+  ],
 };
 
 runGuardTestScenarios(SCENARIOS);

@@ -1,0 +1,52 @@
+diff --git a/scripts/checks/run-callback-axis-accretion-scenarios.js b/scripts/checks/run-callback-axis-accretion-scenarios.js
+index c2ef6a3a2c5e88b5fcdebf2e87b2741e1eec8d4e..6e93512152d74e2faa5d954225a95fda2f7c6b0f 100644
+--- a/scripts/checks/run-callback-axis-accretion-scenarios.js
++++ b/scripts/checks/run-callback-axis-accretion-scenarios.js
+@@ -10,6 +10,9 @@ const SCENARIOS = {
+   'callback-axis-accretion-census-v2': [
+     'test/contract/callback-axis-accretion.test.js',
+   ],
++  'callback-axis-accretion-token-hardening': [
++    'test/contract/callback-axis-accretion.test.js',
++  ],
+ };
+ 
+ runGuardTestScenarios(SCENARIOS);
+diff --git a/test/contract/callback-axis-accretion.test.js b/test/contract/callback-axis-accretion.test.js
+index 5787362180c338aba0166b0db45ec750f47900c8..7d0332a31309fafdf8c7947b4d3c46541a920723 100644
+--- a/test/contract/callback-axis-accretion.test.js
++++ b/test/contract/callback-axis-accretion.test.js
+@@ -31,6 +31,15 @@ const AXIS_TOKEN_PATTERN = new RegExp(
+     'callback-execution-host',
+     'WasmCallAdapter',
+     'wasm-call-adapter',
++    'query/callback',
++    '/callback/',
++    'PartitionCallback',
++    'CallbackStageExecutor',
++    'CallbackRuntimeDriverRegistry',
++    'CallbackDriver',
++    'buildCallbackContext',
++    'CallbackModuleArtifact',
++    'JsWasmComponentArtifact',
+   ].join('|'),
+   'u',
+ );
+@@ -38,7 +47,8 @@ const AXIS_TOKEN_PATTERN = new RegExp(
+ const PRODUCTION_INSTANTIATION_PATTERN = /new\s+WasmCallAdapter\s*\(/u;
+ 
+ // The sealed production axis chain (census of 2026-08-01, adversarially
+-// verified). Paths are relative to src/.
++// verified; token-hardening re-sweep added sql-query-engine-statement-
++// execution.js). Paths are relative to src/.
+ const AXIS_ALLOWLIST = new Set([
+   'admin/admin-constants.js',
+   'admin/admin-query-result-message-envelope.js',
+@@ -53,6 +63,7 @@ const AXIS_ALLOWLIST = new Set([
+   'query/callback/partition-callback-dispatcher.js',
+   'query/index.js',
+   'query/sql-adapter-constants.js',
++  'query/sql-query-engine-statement-execution.js',
+   'query/sql-query-engine-instance-initializer.js',
+   'query/sql-query-engine-lifecycle-and-callback-dispatch.js',
+   'query/sql-query-engine-request-dispatch.js',

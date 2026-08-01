@@ -48,13 +48,12 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 19
+## Open quests — 16
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 ⚠ stale | — |
 | github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 | — |
-| lagrange-server-clean-release-gate | process | 1 | 0 | 2026-08-01 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-nodes-priority-recovery-escape | product | 1 | 0 | 2026-07-25 | — |
@@ -65,12 +64,10 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | operation-ledger-quorum-authoritative-release | product | 3 | 0 | 2026-07-22 ⚠ stale | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 ⚠ stale | — |
 | priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 ⚠ stale | — |
+| rolling-restart-representative-certification | product | 0 | 0 | 2026-08-01 | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 | — |
-| transaction-recovery-poison-row-live-owner-engagement | product | 0 | 0 | 2026-08-01 | — |
-| transaction-recovery-poison-row-live-owner-engagement-v2 | product | 2 | 0 | 2026-08-01 | — |
-| transaction-recovery-poison-row-live-summary-attribution | product | 3 | 0 | 2026-08-01 | — |
 
 > 9 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 
