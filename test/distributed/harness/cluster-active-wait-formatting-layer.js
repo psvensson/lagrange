@@ -29,6 +29,7 @@ const {
 
 const BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD =
   'bootstrapJoinProjection';
+const STARTUP_RUNTIME_HANDOFF_READINESS_FIELD = 'startupRuntimeHandoff';
 const ACTIVE_WAIT_PROGRESS_OBSERVATION_SEPARATOR = '/';
 const ACTIVE_WAIT_PROGRESS_REASON_SEPARATOR = '|';
 const ACTIVE_WAIT_PROGRESS_VALUE_NONE = 'none';
@@ -924,6 +925,24 @@ function resolveReadinessPhaseRank(phase) {
   return READINESS_PHASE_RANK[normalizedPhase] || ZERO;
 }
 
+function cloneOwnDataRecord(record, field) {
+  const descriptor = Object.getOwnPropertyDescriptor(record, field);
+  const value = descriptor && Object.hasOwn(descriptor, 'value') ?
+    descriptor.value :
+    null;
+  if (!value || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  try {
+    const clone = JSON.parse(JSON.stringify(value));
+    return clone && typeof clone === 'object' && !Array.isArray(clone) ?
+      clone :
+      null;
+  } catch {
+    return null;
+  }
+}
+
 function normalizeReadinessProbeResult(probeResponse) {
   const normalized = {
     status: HTTP_ERROR_STATUS,
@@ -946,6 +965,7 @@ function normalizeReadinessProbeResult(probeResponse) {
     recoveryStage: null,
     recoveryStageRank: null,
     publishedControlPlaneEpoch: null,
+    [STARTUP_RUNTIME_HANDOFF_READINESS_FIELD]: null,
     [BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD]: null,
   };
 
@@ -1024,6 +1044,10 @@ function normalizeReadinessProbeResult(probeResponse) {
   ) ?
     Math.max(ZERO, Math.floor(body.publishedControlPlaneEpoch)) :
     null;
+  normalized[STARTUP_RUNTIME_HANDOFF_READINESS_FIELD] = cloneOwnDataRecord(
+    body,
+    STARTUP_RUNTIME_HANDOFF_READINESS_FIELD,
+  );
   normalized[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD] =
     body[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD] &&
     typeof body[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD] === 'object' ?
