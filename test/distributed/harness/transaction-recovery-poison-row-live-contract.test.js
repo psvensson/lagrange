@@ -1,3 +1,5 @@
+import {createHash} from 'node:crypto';
+import {readFileSync} from 'node:fs';
 import {test} from '../../../src/test-helpers/tap.js';
 import {
   assertPoisonRowHandoffEvidence,
@@ -23,6 +25,27 @@ const RESTART_SETTLED_AT_MS = 20;
 const DURABLE_REJOIN_NODE_ID = 'joiner-node';
 const DURABLE_REJOIN_SESSION_ID = 'join-session-2';
 const DURABLE_REJOIN_STARTED_AT_MS = 100;
+const REPOSITORY_ROOT_URL = new URL('../../../', import.meta.url);
+const SEALED_LIVE_AB_VEHICLE = Object.freeze({
+  config: Object.freeze({
+    path: 'test/distributed/config/local-poison-row-ab.json',
+    sha256: '82ded6a20e5932f38b1767d06d56f234340ce97b1d0af223db6d89e16d9dd0a0',
+  }),
+  probe: Object.freeze({
+    path: 'test/distributed/harness/startup-runtime-handoff-probe.js',
+    sha256: '47a13484bc82a48bc556e893b0cb121db9e7f2bb7e97ea812e3f57019f3fba96',
+  }),
+  scenario: Object.freeze({
+    path: 'test/distributed/scenarios/' +
+      'transaction-recovery-poison-row-live.js',
+    sha256: 'a111a8db98f11385274a9c363060213e1c62e0d6a3a50c7ffc4954eb6d138497',
+  }),
+  runner: Object.freeze({
+    path: 'solve/changes/transaction-recovery-poison-row-invariant/' +
+      'live-ab/run-sample.sh',
+    sha256: '5a0a2a92eeefea2c2e1a74f77c4b05c39f5be8695527b5acfbfe11fe2fbba3af',
+  }),
+});
 
 const VALID_ASSERTION_OPTIONS = Object.freeze({
   expectedRouteSource: DURABLE_REJOIN_ROUTE_SOURCE,
@@ -52,6 +75,23 @@ function buildValidCapture() {
     lastSample: {at: 1, evidence},
   };
 }
+
+function sha256File(relativePath) {
+  const bytes = readFileSync(new URL(relativePath, REPOSITORY_ROOT_URL));
+  return createHash('sha256').update(bytes).digest('hex');
+}
+
+test('sealed durable poison-row A/B binds the current live vehicle', (t) => {
+  for (const [vehiclePart, identity] of
+    Object.entries(SEALED_LIVE_AB_VEHICLE)) {
+    t.equal(
+      identity.sha256,
+      sha256File(identity.path),
+      `${vehiclePart} evidence is byte-identical to the current vehicle`,
+    );
+  }
+  t.end();
+});
 
 test(
   'poison-row mutation arms only at a current durable-rejoin checkpoint',
