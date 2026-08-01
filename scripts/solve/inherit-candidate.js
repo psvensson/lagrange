@@ -24,7 +24,11 @@ import {
   baseCommitReachable,
   verificationState,
 } from './verification.js';
-import {expectedChangeDir, isCommitChangeRef} from './change-artifact.js';
+import {
+  changeArtifactIdentity,
+  expectedChangeDir,
+  isCommitChangeRef,
+} from './change-artifact.js';
 
 const DIFF_REF_PREFIX = 'diff:';
 const INHERITED_ARTIFACT_PREFIX = 'inherited-';
@@ -132,6 +136,7 @@ export function runInheritCandidateCommand(root, args) {
       ...copied,
       frontier: childFrontierFor(parent, child, attempt.event.frontier),
       changeRef,
+      changeRefIdentity: changeArtifactIdentity(root, childId, changeRef),
       theoryRef: null,
       inherited: {
         fromQuest: parentId,

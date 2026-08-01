@@ -123,6 +123,11 @@ tap.test('inherit-candidate', async (t) => {
       'attempt is provenance-marked');
     t.equal(attempt.frontier, 'child-quest-main',
       'frontier remapped to the successor');
+    t.equal(
+      attempt.changeRefIdentity.path,
+      attempt.changeRef.slice('diff:'.length),
+      'artifact integrity receipt is rebound to the successor copy',
+    );
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
