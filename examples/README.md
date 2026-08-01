@@ -1,6 +1,7 @@
 # Examples
 
-Six runnable examples, ordered by how much infrastructure they need. Each
+Six runnable examples, ordered from no-rewrite compatibility to the full
+data-local execution story. Each
 directory has its own README with step-by-step commands, a plain-language
 introduction to the problem it addresses, and references for every concept
 beyond basic programming.
