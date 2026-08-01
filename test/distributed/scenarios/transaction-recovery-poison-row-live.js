@@ -534,7 +534,7 @@ function normalizeCapturedHandoffEvidence(value) {
   };
 }
 
-function assertPoisonRowHandoffEvidence(handoffCapture, options = {}) {
+function resolveRequiredExpectedRouteSource(options) {
   const expectedRouteSource = normalizeOptionalString(
     readOwnDataProperty(options, HANDOFF_FIELD.EXPECTED_ROUTE_SOURCE),
   );
@@ -542,6 +542,39 @@ function assertPoisonRowHandoffEvidence(handoffCapture, options = {}) {
     expectedRouteSource && expectedRouteSource.length > ZERO,
     ASSERTION_MESSAGE.EXPECTED_ROUTE_SOURCE_REQUIRED,
   );
+  return expectedRouteSource;
+}
+
+function assertRecoveryOutcomePrecedence(handoffCapture, options) {
+  const typedOutcomeObservedAtMs = readOwnDataProperty(
+    handoffCapture,
+    HANDOFF_FIELD.TYPED_OUTCOME_OBSERVED_AT_MS,
+  );
+  const restartSettledAtMs = readOwnDataProperty(
+    options,
+    HANDOFF_FIELD.RESTART_SETTLED_AT_MS,
+  );
+  const restartStartedAtMs = readOwnDataProperty(
+    options,
+    HANDOFF_FIELD.RESTART_STARTED_AT_MS,
+  );
+  const genericAdmissionObservedBeforeTypedOutcome = readOwnDataProperty(
+    handoffCapture,
+    HANDOFF_FIELD.GENERIC_ADMISSION_BEFORE_TYPED,
+  );
+  assert.ok(
+    Number.isFinite(typedOutcomeObservedAtMs) &&
+      Number.isFinite(restartStartedAtMs) &&
+      Number.isFinite(restartSettledAtMs) &&
+      typedOutcomeObservedAtMs >= restartStartedAtMs &&
+      typedOutcomeObservedAtMs <= restartSettledAtMs &&
+      genericAdmissionObservedBeforeTypedOutcome === false,
+    ASSERTION_MESSAGE.RECOVERY_OUTCOME_PRECEDENCE_REQUIRED,
+  );
+}
+
+function assertPoisonRowHandoffEvidence(handoffCapture, options = {}) {
+  const expectedRouteSource = resolveRequiredExpectedRouteSource(options);
   const failedSample = normalizeCapturedHandoffEvidence(
     readOwnDataProperty(handoffCapture, HANDOFF_FIELD.FIRST_FAILED_SAMPLE),
   );
@@ -594,31 +627,7 @@ function assertPoisonRowHandoffEvidence(handoffCapture, options = {}) {
     false,
     ASSERTION_MESSAGE.HANDOFF_READY_FORBIDDEN,
   );
-  const typedOutcomeObservedAtMs = readOwnDataProperty(
-    handoffCapture,
-    HANDOFF_FIELD.TYPED_OUTCOME_OBSERVED_AT_MS,
-  );
-  const restartSettledAtMs = readOwnDataProperty(
-    options,
-    HANDOFF_FIELD.RESTART_SETTLED_AT_MS,
-  );
-  const restartStartedAtMs = readOwnDataProperty(
-    options,
-    HANDOFF_FIELD.RESTART_STARTED_AT_MS,
-  );
-  const genericAdmissionObservedBeforeTypedOutcome = readOwnDataProperty(
-    handoffCapture,
-    HANDOFF_FIELD.GENERIC_ADMISSION_BEFORE_TYPED,
-  );
-  assert.ok(
-    Number.isFinite(typedOutcomeObservedAtMs) &&
-      Number.isFinite(restartStartedAtMs) &&
-      Number.isFinite(restartSettledAtMs) &&
-      typedOutcomeObservedAtMs >= restartStartedAtMs &&
-      typedOutcomeObservedAtMs <= restartSettledAtMs &&
-      genericAdmissionObservedBeforeTypedOutcome === false,
-    ASSERTION_MESSAGE.RECOVERY_OUTCOME_PRECEDENCE_REQUIRED,
-  );
+  assertRecoveryOutcomePrecedence(handoffCapture, options);
 }
 
 function recordHandoffEvidenceSample(captureState, evidence) {
@@ -670,6 +679,24 @@ function hasGenericAdmissionClassification(diagnostics) {
   return false;
 }
 
+function hasCompleteFailedHandoffCapture(captureState) {
+  return captureState.firstFailedSampleAtMs !== null &&
+    captureState.typedOutcomeObservedAtMs !== null;
+}
+
+function didGenericAdmissionPrecedeTypedOutcome(captureState) {
+  if (captureState.firstGenericAdmissionAtMs === null) {
+    return false;
+  }
+  return captureState.typedOutcomeObservedAtMs === null ||
+    captureState.firstGenericAdmissionAtMs <=
+      captureState.typedOutcomeObservedAtMs;
+}
+
+function resolveLastHandoffSample(samples) {
+  return samples.length > ZERO ? samples[samples.length - ONE] : null;
+}
+
 async function captureRestartHandoffEvidence(node, options = {}) {
   const timeoutMs = normalizePositiveInteger(
     options.timeoutMs,
@@ -707,21 +734,13 @@ async function captureRestartHandoffEvidence(node, options = {}) {
     }
     const evidence = extractHandoffEvidence(diagnostics);
     recordHandoffEvidenceSample(captureState, evidence);
-    if (
-      captureState.firstFailedSampleAtMs !== null &&
-      captureState.typedOutcomeObservedAtMs !== null
-    ) {
+    if (hasCompleteFailedHandoffCapture(captureState)) {
       break;
     }
     await sleep(OUTCOME_CAPTURE_POLL_INTERVAL_MS);
   }
   const genericAdmissionObservedBeforeTypedOutcome =
-    captureState.firstGenericAdmissionAtMs !== null &&
-    (
-      captureState.typedOutcomeObservedAtMs === null ||
-      captureState.firstGenericAdmissionAtMs <=
-        captureState.typedOutcomeObservedAtMs
-    );
+    didGenericAdmissionPrecedeTypedOutcome(captureState);
   return {
     startedAtMs: captureState.startedAtMs,
     sampleCount: captureState.samples.length,
@@ -731,9 +750,7 @@ async function captureRestartHandoffEvidence(node, options = {}) {
     typedOutcomeObservedAtMs: captureState.typedOutcomeObservedAtMs,
     firstGenericAdmissionAtMs: captureState.firstGenericAdmissionAtMs,
     genericAdmissionObservedBeforeTypedOutcome,
-    lastSample: captureState.samples.length > ZERO ?
-      captureState.samples[captureState.samples.length - ONE] :
-      null,
+    lastSample: resolveLastHandoffSample(captureState.samples),
   };
 }
 
