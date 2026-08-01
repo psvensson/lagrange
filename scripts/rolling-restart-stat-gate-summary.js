@@ -45,6 +45,34 @@ function isTopologyBlockedScenario(scenario) {
     quiescence.state === 'critical_spread_open';
 }
 
+const ACKNOWLEDGED_WRITE_LOSS_PATTERN =
+  /Acknowledged writes missing after rolling restart/iu;
+
+function acknowledgedWriteVisibilityOf(scenario) {
+  const visibility = scenario?.details?.acknowledgedWriteVisibility;
+  const acknowledgedWriteCount = asNumber(
+    visibility?.acknowledgedWriteCount,
+    null,
+  );
+  const reachableNodeCount = asNumber(
+    visibility?.reachableNodeCount,
+    null,
+  );
+  const failureText = [
+    scenario?.error,
+    scenario?.stackTrace,
+    scenario?.dominantReason,
+  ].filter((value) => typeof value === 'string').join('\n');
+  return {
+    verified:
+      acknowledgedWriteCount !== null && acknowledgedWriteCount > 0 &&
+      reachableNodeCount !== null && reachableNodeCount > 0,
+    lossDetected: ACKNOWLEDGED_WRITE_LOSS_PATTERN.test(failureText),
+    acknowledgedWriteCount,
+    reachableNodeCount,
+  };
+}
+
 export function classifyStatGateScenario(scenario = {}) {
   const activeGate = scenario?.details?.diagnostics?.activeGate || {};
   const hardBreaches = asNumber(scenario?.invariantBreaches?.hardCount, 0);
@@ -94,6 +122,7 @@ export function classifyStatGateScenario(scenario = {}) {
     reason: scenario?.dominantReason || 'none',
     closureWitnessClass: extractClosureWitnessClass(scenario),
     duration: asNumber(scenario?.duration, null),
+    acknowledgedWriteVisibility: acknowledgedWriteVisibilityOf(scenario),
     class: classification,
   };
 }
@@ -183,14 +212,38 @@ export function buildGateVerdict(gateSummary = {}, sealedBars = {}) {
     [];
   const passes = runsDetail.filter((run) => run?.passed === true).length;
   const wilson = wilsonInterval(passes, runs);
+  const scenarioBar = sealedBars.scenarios?.[gateSummary.scenario] || null;
+  const requiresAcknowledgedWriteVisibility =
+    scenarioBar?.requiresAcknowledgedWriteVisibility === true;
+  const derivedAcknowledgedWriteUnverified = requiresAcknowledgedWriteVisibility ?
+    runsDetail.filter(
+      (run) => run?.acknowledgedWriteVisibility?.verified !== true,
+    ).length :
+    0;
+  const derivedAcknowledgedWriteLoss = requiresAcknowledgedWriteVisibility ?
+    runsDetail.filter(
+      (run) => run?.acknowledgedWriteVisibility?.lossDetected === true,
+    ).length :
+    0;
   const safetyCounts = {
     corrupt: asNumber(gateSummary.corruptCount, 0),
     nodeExit: asNumber(gateSummary.nodeExitCount, 0),
     oracleBlind: asNumber(gateSummary.oracleBlindCount, 0),
     staleSource: asNumber(gateSummary.staleSourceRuns, 0),
+    acknowledgedWriteLoss: requiresAcknowledgedWriteVisibility ?
+      Math.max(
+        asNumber(gateSummary.acknowledgedWriteLossCount, 0),
+        derivedAcknowledgedWriteLoss,
+      ) :
+      0,
+    acknowledgedWriteUnverified: requiresAcknowledgedWriteVisibility ?
+      Math.max(
+        asNumber(gateSummary.acknowledgedWriteUnverifiedCount, 0),
+        derivedAcknowledgedWriteUnverified,
+      ) :
+      0,
   };
   const safetyClean = Object.values(safetyCounts).every((count) => count === 0);
-  const scenarioBar = sealedBars.scenarios?.[gateSummary.scenario] || null;
   const bar = asNumber(scenarioBar?.wilsonLowerBoundBar, null);
   const promotionWindowMinRuns = asNumber(
     scenarioBar?.promotionWindowMinRuns,

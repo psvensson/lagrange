@@ -12,11 +12,12 @@
 # Sample size — SMALLEST FIRST (see docs/steering/operational-ground-truth.md
 # "Deterministic-first, gate-last"): start with the lowest N that could answer the
 # question and escalate ONLY when a small run is inconclusive. Default to N=3 — it
-# is also the `rolling-restart-core-stability` doneWhen streak (3 consecutive
-# scenario-PASS), so a clean 3/3 satisfies closure; a hard breach/corruption is
-# conclusive even sooner. Reserve N>=8 for a convergence-RATE promotion verdict
-# where the statistic itself is the claim. The N=10 arg-default below is a legacy
-# ceiling, NOT a recommendation — pass the run count explicitly, lowest-first.
+# is also the `rolling-restart-core-stability` liveness heartbeat (3 consecutive
+# scenario-PASS), but it does not satisfy representative certification. A hard
+# breach/corruption is conclusive even sooner. Reserve N>=15 for the sealed
+# certification/promotion verdict where the statistic itself is the claim. The N=10
+# arg-default below is a legacy ceiling, NOT a recommendation — pass the run count
+# explicitly, lowest-first.
 #
 # Usage:
 #   bash scripts/rolling-restart-stat-gate.sh 3          # N=3  (start here)
@@ -24,6 +25,7 @@
 #   bash scripts/rolling-restart-stat-gate.sh            # N=10 (legacy default — avoid)
 #   N=3 CONFIG=test/distributed/config/local.json bash scripts/rolling-restart-stat-gate.sh
 #   DEBUG_LOGS=1 bash scripts/rolling-restart-stat-gate.sh 3   # capture decision trace
+#   CERTIFICATION=1 bash scripts/rolling-restart-stat-gate.sh 15
 #
 # Output: test-output/reports/stat-gate-<ts>.{json,md}
 #
@@ -52,6 +54,8 @@ esac
 CONFIG="${CONFIG:-test/distributed/config/local.json}"
 SCENARIO="${SCENARIO:-rolling-restart}"
 DEBUG_LOGS="${DEBUG_LOGS:-}"
+CERTIFICATION="${CERTIFICATION:-0}"
+SEALED_BARS="test/distributed/config/convergence-sealed-bars.json"
 
 # Host-orchestrator heap floor. The run.js orchestrator aggregates every node's
 # events + log capture on the host; a full rolling-restart (~570s) can push its
@@ -88,6 +92,40 @@ abort_gate() {
 SRC_FP="$(node --input-type=module -e \
   'import {computeSourceFingerprint} from "./src/diagnostics/source-fingerprint.js"; process.stdout.write(await computeSourceFingerprint("src"));' \
   2>/dev/null || echo unknown)"
+SOURCE_COMMIT="$(git rev-parse HEAD 2>/dev/null || echo unknown)"
+CONFIG_FP="$(sha256sum "${CONFIG}" 2>/dev/null | awk '{print $1}')"
+MEASUREMENT_DIRTY="$(git status --porcelain --untracked-files=normal -- \
+  src test/distributed scripts/rolling-restart-stat-gate.sh \
+  scripts/rolling-restart-stat-gate-summary.js scripts/calibrate-machine.js \
+  "${CONFIG}" 2>/dev/null || true)"
+WORKING_TREE_CLEAN_JSON="true"
+[ -n "${MEASUREMENT_DIRTY}" ] && WORKING_TREE_CLEAN_JSON="false"
+
+PROMOTION_MIN_RUNS="$(jq -r --arg scenario "${SCENARIO}" \
+  '.scenarios[$scenario].promotionWindowMinRuns // 0' "${SEALED_BARS}")"
+REFERENCE_NODE_COUNT="$(jq -r --arg scenario "${SCENARIO}" \
+  '.scenarios[$scenario].nodes // 0' "${SEALED_BARS}")"
+HARDWARE_CLASS="$(jq -r --arg scenario "${SCENARIO}" \
+  '.scenarios[$scenario].hardwareClass // "undeclared"' "${SEALED_BARS}")"
+WORKLOAD_IDENTITY="$(jq -r --arg scenario "${SCENARIO}" \
+  '.scenarios[$scenario].workloadIdentity // "undeclared"' "${SEALED_BARS}")"
+FAILURE_SCHEDULE_IDENTITY="$(jq -r --arg scenario "${SCENARIO}" \
+  '.scenarios[$scenario].failureScheduleIdentity // "undeclared"' "${SEALED_BARS}")"
+CONFIG_NODE_COUNT="$(jq -r '.size // 0' "${CONFIG}")"
+CALIBRATION_WORKLOAD_VERSION="$(jq -r '.workloadVersion // 0' \
+  test/distributed/calibration-baseline.json)"
+CERTIFICATION_JSON="false"
+if [ "${CERTIFICATION}" = "1" ]; then
+  CERTIFICATION_JSON="true"
+  [ "${N}" -lt "${PROMOTION_MIN_RUNS}" ] && \
+    abort_gate "certification requires N>=${PROMOTION_MIN_RUNS}; got N=${N}"
+  [ "${WORKING_TREE_CLEAN_JSON}" != "true" ] && \
+    abort_gate "certification requires a clean measurement input set; commit or remove the listed changes: ${MEASUREMENT_DIRTY}"
+  [ "${CONFIG_NODE_COUNT}" != "${REFERENCE_NODE_COUNT}" ] && \
+    abort_gate "config node count ${CONFIG_NODE_COUNT} does not match sealed reference ${REFERENCE_NODE_COUNT}"
+  [ "${HARDWARE_CLASS}" = "undeclared" ] && \
+    abort_gate "sealed scenario has no declared hardware class"
+fi
 
 DEBUG_LOGS_ARGS=()
 DEBUG_LOGS_JSON="false"
@@ -174,6 +212,10 @@ stale_runs=0
 for i in $(seq 1 "${N}"); do
   echo "--- run ${i}/${N}: cleaning containers + launching ---"
   clean_containers
+  LEFTOVER="$(docker ps -aq --filter "name=ddb-test-reuse-" 2>/dev/null | wc -l | tr -d ' ')"
+  if [ "${LEFTOVER}" != "0" ]; then
+    abort_gate "run ${i} cleanup left ${LEFTOVER} warm container(s)"
+  fi
   RUN_REPORT="${REPORT_DIR}/stat-gate-${TS}-run${i}.report.json"
   RUN_LOG="/tmp/stat-gate-${TS}-run${i}.log"
   start_s=$(date +%s)
@@ -219,15 +261,40 @@ for i in $(seq 1 "${N}"); do
   hard=$(echo "${rec}" | jq -r '.hardBreaches')
   echo "run ${i}: class=${class} missing=${missing} hardBreaches=${hard} wall=${wall_s}s"
   echo "${rec}" | jq -c --argjson run "${i}" --argjson wall "${wall_s}" \
-    '. + {run:$run, wallSeconds:$wall}' >> "${TMP_NDJSON}"
+    --arg report "${RUN_REPORT}" --arg sourceFingerprint "${SRC_FP}" \
+    '. + {run:$run, wallSeconds:$wall, report:$report,
+      sourceFingerprint:$sourceFingerprint, cleanStart:true}' >> "${TMP_NDJSON}"
 done
 
 # Aggregate.
-jq -s '
+jq -s --arg sourceCommit "${SOURCE_COMMIT}" \
+  --arg configFingerprint "${CONFIG_FP}" \
+  --arg hardwareClass "${HARDWARE_CLASS}" \
+  --arg workloadIdentity "${WORKLOAD_IDENTITY}" \
+  --arg failureScheduleIdentity "${FAILURE_SCHEDULE_IDENTITY}" \
+  --argjson certificationMode "${CERTIFICATION_JSON}" \
+  --argjson workingTreeClean "${WORKING_TREE_CLEAN_JSON}" \
+  --argjson nodeCount "${CONFIG_NODE_COUNT}" \
+  --argjson cpusPerNode "${EFFECTIVE_CPUS}" \
+  --argjson machineFactor "${MACHINE_FACTOR}" \
+  --argjson calibrationWorkloadVersion "${CALIBRATION_WORKLOAD_VERSION}" '
   def pct(p): (sort | if length==0 then null else .[((length-1)*p)|floor] end);
   {
     timestamp: "'"${TS}"'", config: "'"${CONFIG}"'", scenario: "'"${SCENARIO}"'",
     srcFingerprint: "'"${SRC_FP}"'",
+    sourceCommit: $sourceCommit,
+    workingTreeClean: $workingTreeClean,
+    configFingerprint: $configFingerprint,
+    certificationMode: $certificationMode,
+    hardwareClass: $hardwareClass,
+    nodeCount: $nodeCount,
+    workloadIdentity: $workloadIdentity,
+    failureScheduleIdentity: $failureScheduleIdentity,
+    resourceLimits: {cpusPerNode: $cpusPerNode},
+    calibration: {
+      machineFactor: $machineFactor,
+      workloadVersion: $calibrationWorkloadVersion
+    },
     debugLogs: '"${DEBUG_LOGS_JSON}"',
     noProgressMaxElapsedMs: '"${NO_PROGRESS_MAX_ELAPSED_MS}"',
     staleSourceRuns: '"${stale_runs}"',
@@ -236,6 +303,10 @@ jq -s '
     corruptCount: ([.[] | select(.class=="CORRUPT")] | length),
     oracleBlindCount: ([.[] | select(.class=="ORACLE_BLIND")] | length),
     nodeExitCount: ([.[] | select(.class=="NODE_EXIT")] | length),
+    acknowledgedWriteLossCount:
+      ([.[] | select(.acknowledgedWriteVisibility.lossDetected==true)] | length),
+    acknowledgedWriteUnverifiedCount:
+      ([.[] | select(.acknowledgedWriteVisibility.verified!=true)] | length),
     topologyBlockedCount: ([.[] | select(.class=="TOPOLOGY_BLOCKED")] | length),
     convergeRate: ( (([.[] | select(.missing==0)] | length) ) / (length) ),
     stallRate: ( (([.[] | select(.class=="STALLED")] | length) ) / (length) ),
@@ -247,6 +318,7 @@ jq -s '
     wallSeconds: { p50: ([.[].wallSeconds]|pct(0.5)), p95: ([.[].wallSeconds]|pct(0.95)) },
     durationP50: ([.[].duration | select(.!=null)]|pct(0.5)),
     durationP95: ([.[].duration | select(.!=null)]|pct(0.95)),
+    contributingReports: [.[].report],
     runsDetail: .
   }' "${TMP_NDJSON}" > "${OUT_JSON}"
 
@@ -264,10 +336,16 @@ jq --argjson verdict "${verdict_json}" '. + {gateVerdict: $verdict}' \
   jq -r '
     "- runs: \(.runs)",
     "- srcFingerprint: \(.srcFingerprint) (debugLogs: \(.debugLogs))",
+    "- sourceCommit: \(.sourceCommit) (clean: \(.workingTreeClean); certification: \(.certificationMode))",
+    "- hardwareClass/nodeCount/cpus: \(.hardwareClass) / \(.nodeCount) / \(.resourceLimits.cpusPerNode)",
+    "- workload/failure schedule: \(.workloadIdentity) / \(.failureScheduleIdentity)",
+    "- machineFactor/workloadVersion: \(.calibration.machineFactor) / \(.calibration.workloadVersion)",
     "- **staleSourceRuns (untrustworthy — must be 0): \(.staleSourceRuns)**",
     "- **CORRUPT (hard invariant breach — must be 0): \(.corruptCount)**",
     "- **ORACLE_BLIND (unjudgeable — snapshot transport failed, CL-031): \(.oracleBlindCount)**",
     "- **NODE_EXIT (unexpected node death — read its exit evidence, CL-030): \(.nodeExitCount)**",
+    "- **ACKNOWLEDGED_WRITE_LOSS (must be 0): \(.acknowledgedWriteLossCount)**",
+    "- **ACKNOWLEDGED_WRITE_UNVERIFIED (must be 0): \(.acknowledgedWriteUnverifiedCount)**",
     "- **TOPOLOGY_BLOCKED (scenario failed after publication convergence): \(.topologyBlockedCount)**",
     "- stallRate (frozen / gave up): \(.stallRate)",
     "- healthyRate (converged or progressing): \(.healthyRate)",

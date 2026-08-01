@@ -38,6 +38,63 @@ function tmp() {
 
 const SC = 'rolling-restart';
 
+function writeStatGate(dir, name, overrides = {}) {
+  const runs = overrides.runs ?? 15;
+  const passes = overrides.passes ?? 15;
+  const sourceFingerprint = overrides.srcFingerprint || 'fixed-source-fingerprint';
+  const contributingReports = Array.from(
+    {length: runs},
+    (_, index) => `test-output/reports/${name}-run${index + 1}.report.json`,
+  );
+  const runsDetail = Array.from({length: runs}, (_, index) => ({
+    passed: index < passes,
+    class: index < passes ? 'CONVERGED' : 'STALLED',
+    report: contributingReports[index],
+    sourceFingerprint,
+    cleanStart: true,
+    acknowledgedWriteVisibility: {
+      verified: true,
+      lossDetected: false,
+      acknowledgedWriteCount: 20,
+      reachableNodeCount: 5,
+    },
+  }));
+  const data = {
+    timestamp: overrides.timestamp || '20260801T120000Z',
+    scenario: SC,
+    certificationMode: true,
+    sourceCommit: 'a'.repeat(40),
+    workingTreeClean: true,
+    srcFingerprint: sourceFingerprint,
+    configFingerprint: 'b'.repeat(64),
+    config: 'test/distributed/config/local.json',
+    hardwareClass: 'calibrated-local-container-v1',
+    nodeCount: 5,
+    workloadIdentity: 'rolling-restart-acknowledged-write-load-v1',
+    failureScheduleIdentity: 'sequential-non-seed-rolling-restart-v1',
+    resourceLimits: {cpusPerNode: 1},
+    calibration: {machineFactor: 1, workloadVersion: 1},
+    debugLogs: false,
+    staleSourceRuns: 0,
+    runs,
+    classTally: passes === runs ? {CONVERGED: runs} : {
+      CONVERGED: passes,
+      STALLED: runs - passes,
+    },
+    corruptCount: 0,
+    oracleBlindCount: 0,
+    nodeExitCount: 0,
+    acknowledgedWriteUnverifiedCount: 0,
+    acknowledgedWriteLossCount: 0,
+    durationP50: 1000,
+    durationP95: 1500,
+    contributingReports,
+    runsDetail,
+    ...overrides,
+  };
+  fs.writeFileSync(path.join(dir, `stat-gate-${name}.json`), JSON.stringify(data));
+}
+
 tap.test('scenario-harness probe (P1)', async (t) => {
   t.test('no reports => null metric, not done', (t) => {
     const dir = tmp();
@@ -229,6 +286,98 @@ tap.test('scenario-harness probe (P1)', async (t) => {
     fs.rmSync(dir, {recursive: true, force: true});
     t.end();
   });
+});
+
+tap.test('scenario-harness sealed-bar aggregate mode', async (t) => {
+  const sealedBarsFile = path.join(tmp(), 'sealed-bars.json');
+  fs.writeFileSync(sealedBarsFile, JSON.stringify({
+    scenarios: {
+      [SC]: {
+        wilsonLowerBoundBar: 0.357,
+        promotionWindowMinRuns: 15,
+        nodes: 5,
+        hardwareClass: 'calibrated-local-container-v1',
+        workloadIdentity: 'rolling-restart-acknowledged-write-load-v1',
+        failureScheduleIdentity: 'sequential-non-seed-rolling-restart-v1',
+        requiresAcknowledgedWriteVisibility: true,
+      },
+    },
+  }));
+  const args = {
+    scenario: SC,
+    metric: 'sealed-bar',
+    minimumRuns: 15,
+    certification: true,
+    sealedBarsFile,
+  };
+
+  t.test('an exact N=15 clean aggregate above the bar closes', (t) => {
+    const dir = tmp();
+    writeStatGate(dir, '20260801T120000Z');
+    const result = scenarioHarnessProbe.measure({...args, reportDir: dir});
+    t.equal(result.done, true);
+    t.equal(result.metric, 0);
+    t.equal(result.invalidSample, false);
+    t.equal(result.detail.verdict, 'ABOVE_BAR');
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('ABOVE_BAR at N=3 remains a measured non-terminal sample', (t) => {
+    const dir = tmp();
+    writeStatGate(dir, '20260801T120000Z', {runs: 3, passes: 3});
+    const result = scenarioHarnessProbe.measure({...args, reportDir: dir});
+    t.equal(result.done, false);
+    t.ok(result.metric > 0, 'sample deficit remains visible');
+    t.equal(result.invalidSample, false);
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('one acknowledged-write visibility gap violates safety', (t) => {
+    const dir = tmp();
+    writeStatGate(dir, '20260801T120000Z', {
+      acknowledgedWriteUnverifiedCount: 1,
+    });
+    const result = scenarioHarnessProbe.measure({...args, reportDir: dir});
+    t.equal(result.done, false);
+    t.equal(result.detail.verdict, 'SAFETY_VIOLATED');
+    t.equal(result.detail.safetyCounts.acknowledgedWriteUnverified, 1);
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('missing certification metadata fails closed without hiding the metric', (t) => {
+    const dir = tmp();
+    writeStatGate(dir, '20260801T120000Z', {hardwareClass: undefined});
+    const result = scenarioHarnessProbe.measure({...args, reportDir: dir});
+    t.equal(result.done, false);
+    t.ok(result.metric > 0);
+    t.match(result.detail.problems, ['hardwareClass mismatch']);
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('the newest matching aggregate is authoritative', (t) => {
+    const dir = tmp();
+    writeStatGate(dir, '20260801T110000Z', {
+      timestamp: '20260801T110000Z',
+      runs: 15,
+      passes: 15,
+    });
+    writeStatGate(dir, '20260801T120000Z', {
+      timestamp: '20260801T120000Z',
+      runs: 15,
+      passes: 8,
+    });
+    const result = scenarioHarnessProbe.measure({...args, reportDir: dir});
+    t.equal(result.done, false, 'newer below-bar aggregate wins');
+    t.ok(result.evidence.endsWith('stat-gate-20260801T120000Z.json'));
+    fs.rmSync(dir, {recursive: true, force: true});
+    t.end();
+  });
+
+  fs.rmSync(path.dirname(sealedBarsFile), {recursive: true, force: true});
 });
 
 // A node-exit run carries a topology/publication dominantReason that MASKS the crash; the

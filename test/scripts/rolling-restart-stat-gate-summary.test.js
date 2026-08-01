@@ -178,6 +178,76 @@ test('buildGateVerdict: safety floor dominates even a perfect pass rate', (t) =>
   t.end();
 });
 
+test('classifyStatGateScenario exposes acknowledged-write verification', (t) => {
+  const result = classifyStatGateScenario(scenario({
+    details: {
+      acknowledgedWriteVisibility: {
+        acknowledgedWriteCount: 37,
+        reachableNodeCount: 5,
+      },
+      diagnostics: {activeGate: {}},
+    },
+  }));
+
+  t.same(result.acknowledgedWriteVisibility, {
+    verified: true,
+    lossDetected: false,
+    acknowledgedWriteCount: 37,
+    reachableNodeCount: 5,
+  });
+  t.end();
+});
+
+test('buildGateVerdict: required acknowledged-write evidence fails closed', (t) => {
+  const sealed = {
+    scenarios: {
+      'rolling-restart': {
+        ...SEALED.scenarios['rolling-restart'],
+        requiresAcknowledgedWriteVisibility: true,
+      },
+    },
+  };
+  const summary = gateSummary({passes: 15, runs: 15});
+  const verdict = buildGateVerdict(summary, sealed);
+
+  t.equal(verdict.verdict, GATE_VERDICT.SAFETY_VIOLATED);
+  t.equal(verdict.safetyCounts.acknowledgedWriteUnverified, 15);
+  t.equal(verdict.safetyCounts.acknowledgedWriteLoss, 0);
+  t.end();
+});
+
+test('buildGateVerdict: verified acknowledged writes preserve a clean safety floor',
+  (t) => {
+    const sealed = {
+      scenarios: {
+        'rolling-restart': {
+          ...SEALED.scenarios['rolling-restart'],
+          requiresAcknowledgedWriteVisibility: true,
+        },
+      },
+    };
+    const summary = gateSummary({
+      passes: 15,
+      runs: 15,
+      summary: {
+        acknowledgedWriteUnverifiedCount: 0,
+        acknowledgedWriteLossCount: 0,
+        runsDetail: Array.from({length: 15}, () => ({
+          passed: true,
+          acknowledgedWriteVisibility: {
+            verified: true,
+            lossDetected: false,
+          },
+        })),
+      },
+    });
+    const verdict = buildGateVerdict(summary, sealed);
+
+    t.equal(verdict.verdict, GATE_VERDICT.ABOVE_BAR);
+    t.equal(verdict.safetyClean, true);
+    t.end();
+  });
+
 test('buildGateVerdict: ABOVE_BAR when the Wilson lower bound clears the sealed bar', (t) => {
   const verdict = buildGateVerdict(gateSummary({passes: 9, runs: 15}), SEALED);
   t.equal(verdict.verdict, GATE_VERDICT.ABOVE_BAR);

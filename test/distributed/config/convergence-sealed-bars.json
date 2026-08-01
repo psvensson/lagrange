@@ -6,6 +6,10 @@
       "wilsonLowerBoundBar": 0.357,
       "qTarget": 0.812,
       "nodes": 5,
+      "hardwareClass": "calibrated-local-container-v1",
+      "workloadIdentity": "rolling-restart-acknowledged-write-load-v1",
+      "failureScheduleIdentity": "sequential-non-seed-rolling-restart-v1",
+      "requiresAcknowledgedWriteVisibility": true,
       "sealedAt": "2026-07-01",
       "promotionWindowMinRuns": 15
     },

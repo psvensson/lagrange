@@ -15,13 +15,60 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {NON_MEASURING_VERDICT_REASONS} from '../constants.js';
+import {
+  buildGateVerdict,
+  GATE_VERDICT,
+} from '../../rolling-restart-stat-gate-summary.js';
 
 const DEFAULT_REPORT_DIR = 'test-output/reports';
 const REPORT_EXT = '.report.json';
 const METRIC_PRIORITY = 'priority';
 const METRIC_FAILED = 'failed';
 const METRIC_DISTANCE = 'distance';
+const METRIC_SEALED_BAR = 'sealed-bar';
 const DEFAULT_CONSECUTIVE = 1;
+const DEFAULT_SEALED_BARS_FILE =
+  'test/distributed/config/convergence-sealed-bars.json';
+const STAT_GATE_AGGREGATE_PATTERN =
+  /^stat-gate-[0-9]{8}T[0-9]{6}Z\.json$/u;
+const SOURCE_COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
+const SHA256_PATTERN = /^[0-9a-f]{64}$/u;
+const CERTIFICATION_SAFETY_WEIGHT = 1_000_000_000;
+const CERTIFICATION_REPORTING_WEIGHT = 10_000_000;
+const CERTIFICATION_SAMPLE_WEIGHT = 1_000_000;
+const CERTIFICATION_WILSON_SCALE = 1_000_000;
+const CERTIFICATION_PROBLEM = Object.freeze({
+  MODE: 'certificationMode is not true',
+  SOURCE_COMMIT: 'sourceCommit is not a full commit identity',
+  CLEAN_TREE: 'workingTreeClean is not true',
+  SOURCE_FINGERPRINT: 'srcFingerprint is missing',
+  CONFIG_FINGERPRINT: 'configFingerprint is not sha256',
+  HARDWARE_CLASS: 'hardwareClass mismatch',
+  NODE_COUNT: 'nodeCount mismatch',
+  WORKLOAD: 'workloadIdentity mismatch',
+  FAILURE_SCHEDULE: 'failureScheduleIdentity mismatch',
+  CPU_LIMIT: 'resourceLimits.cpusPerNode is missing',
+  MACHINE_FACTOR: 'calibration.machineFactor is missing',
+  CALIBRATION_VERSION: 'calibration.workloadVersion is missing',
+  DEBUG_LOGS: 'debugLogs must be false',
+  CLASS_DISTRIBUTION: 'failure-class distribution is missing',
+  CONVERGENCE_PERCENTILES: 'p50/p95 convergence time is missing',
+  CONTRIBUTING_REPORTS: 'contributing report set does not match run count',
+  REPORT_IDENTITY: 'run detail/report identity mismatch',
+  MIXED_SOURCE: 'mixed source fingerprints in contributing runs',
+  CLEAN_START: 'a contributing run lacks a clean-start receipt',
+  RUN_COUNT: 'run count is not a positive integer',
+  RUN_DETAIL: 'runsDetail length does not match run count',
+  SEALED_BAR: 'sealed scenario bar is missing',
+});
+const CERTIFICATION_INVARIANT = Object.freeze({
+  SAFETY: 'stat_gate_safety_floor',
+  MINIMUM_RUNS: 'minimum_run_window',
+  WILSON_BAR: 'wilson_lower_bound_above_sealed_bar',
+  METADATA: 'certification_metadata_complete',
+});
+const CERTIFICATION_CLASSIFICATION_OWNER = 'rolling-restart-stat-gate';
+const CERTIFICATION_CLASSIFICATION_BOUNDARY = 'representative-certification';
 // How many extra runs beyond `consecutive` the done-check may scan while
 // skipping non-measuring samples. Bounded so a long tail of invalid runs still
 // reads as "not done" instead of an unbounded directory walk.
@@ -157,6 +204,218 @@ function safeMtimeMs(file) {
   } catch (_error) {
     return 0;
   }
+}
+
+function listStatGateAggregates(dir, scenario) {
+  if (!fs.existsSync(dir)) return [];
+  const aggregates = [];
+  for (const name of fs.readdirSync(dir)) {
+    if (!STAT_GATE_AGGREGATE_PATTERN.test(name)) continue;
+    const file = path.join(dir, name);
+    const data = safeRead(file);
+    if (data?.scenario !== scenario) continue;
+    aggregates.push({file, data, mtimeMs: safeMtimeMs(file)});
+  }
+  return aggregates.sort((left, right) => {
+    const byTimestamp = String(right.data.timestamp || '')
+      .localeCompare(String(left.data.timestamp || ''));
+    return byTimestamp || right.mtimeMs - left.mtimeMs;
+  });
+}
+
+function finitePositive(value) {
+  return typeof value === 'number' && Number.isFinite(value) && value > 0;
+}
+
+function nonEmptyString(value) {
+  return typeof value === 'string' && value.length > 0;
+}
+
+function expectedCertificationMetadata(data, scenarioBar) {
+  const checks = [
+    [data.certificationMode === true, CERTIFICATION_PROBLEM.MODE],
+    [SOURCE_COMMIT_PATTERN.test(String(data.sourceCommit || '')),
+      CERTIFICATION_PROBLEM.SOURCE_COMMIT],
+    [data.workingTreeClean === true, CERTIFICATION_PROBLEM.CLEAN_TREE],
+    [nonEmptyString(data.srcFingerprint), CERTIFICATION_PROBLEM.SOURCE_FINGERPRINT],
+    [SHA256_PATTERN.test(String(data.configFingerprint || '')),
+      CERTIFICATION_PROBLEM.CONFIG_FINGERPRINT],
+    [data.hardwareClass === scenarioBar?.hardwareClass,
+      CERTIFICATION_PROBLEM.HARDWARE_CLASS],
+    [data.nodeCount === scenarioBar?.nodes, CERTIFICATION_PROBLEM.NODE_COUNT],
+    [data.workloadIdentity === scenarioBar?.workloadIdentity,
+      CERTIFICATION_PROBLEM.WORKLOAD],
+    [data.failureScheduleIdentity === scenarioBar?.failureScheduleIdentity,
+      CERTIFICATION_PROBLEM.FAILURE_SCHEDULE],
+    [finitePositive(data.resourceLimits?.cpusPerNode), CERTIFICATION_PROBLEM.CPU_LIMIT],
+    [finitePositive(data.calibration?.machineFactor),
+      CERTIFICATION_PROBLEM.MACHINE_FACTOR],
+    [Number.isInteger(data.calibration?.workloadVersion),
+      CERTIFICATION_PROBLEM.CALIBRATION_VERSION],
+    [data.debugLogs === false, CERTIFICATION_PROBLEM.DEBUG_LOGS],
+    [data.classTally && typeof data.classTally === 'object',
+      CERTIFICATION_PROBLEM.CLASS_DISTRIBUTION],
+    [finitePositive(data.durationP50) && finitePositive(data.durationP95),
+      CERTIFICATION_PROBLEM.CONVERGENCE_PERCENTILES],
+  ];
+  return checks.filter(([passed]) => !passed).map(([, problem]) => problem);
+}
+
+function contributingReportProblems(data) {
+  const problems = [];
+  const reports = Array.isArray(data.contributingReports) ?
+    data.contributingReports : [];
+  const details = Array.isArray(data.runsDetail) ? data.runsDetail : [];
+  if (reports.length !== data.runs || new Set(reports).size !== reports.length) {
+    problems.push(CERTIFICATION_PROBLEM.CONTRIBUTING_REPORTS);
+  }
+  if (details.some((run, index) => run?.report !== reports[index])) {
+    problems.push(CERTIFICATION_PROBLEM.REPORT_IDENTITY);
+  }
+  if (details.some(
+    (run) => run?.sourceFingerprint !== data.srcFingerprint,
+  )) {
+    problems.push(CERTIFICATION_PROBLEM.MIXED_SOURCE);
+  }
+  if (details.some((run) => run?.cleanStart !== true)) {
+    problems.push(CERTIFICATION_PROBLEM.CLEAN_START);
+  }
+  return problems;
+}
+
+function statGateStructureProblems(data) {
+  const problems = [];
+  if (!Number.isInteger(data?.runs) || data.runs <= 0) {
+    problems.push(CERTIFICATION_PROBLEM.RUN_COUNT);
+  }
+  if (!Array.isArray(data?.runsDetail) || data.runsDetail.length !== data.runs) {
+    problems.push(CERTIFICATION_PROBLEM.RUN_DETAIL);
+  }
+  return problems;
+}
+
+function certificationDistance(verdict, problems, minimumRuns) {
+  const safetyBreaches = Object.values(verdict.safetyCounts || {})
+    .reduce((sum, value) => sum + (finitePositive(value) ? value : 0), 0);
+  const sampleDeficit = Math.max(0, minimumRuns - verdict.runs);
+  const lowerBound = verdict.wilson?.lowerBound;
+  const wilsonDeficit = typeof lowerBound === 'number' &&
+    typeof verdict.sealedBar === 'number' ?
+    Math.ceil(Math.max(0, verdict.sealedBar - lowerBound) *
+      CERTIFICATION_WILSON_SCALE) :
+    CERTIFICATION_WILSON_SCALE;
+  const verdictDeficit = verdict.verdict === GATE_VERDICT.ABOVE_BAR ? 0 : 1;
+  return safetyBreaches * CERTIFICATION_SAFETY_WEIGHT +
+    problems.length * CERTIFICATION_REPORTING_WEIGHT +
+    sampleDeficit * CERTIFICATION_SAMPLE_WEIGHT +
+    wilsonDeficit + verdictDeficit;
+}
+
+function loadSealedBars(file) {
+  return safeRead(file);
+}
+
+function noStatGateEvidence() {
+  return {
+    metric: null,
+    done: false,
+    evidence: null,
+    invalidSample: true,
+    satisfiedInvariants: [],
+  };
+}
+
+function invalidStatGateEvidence(latest, verdict, problems) {
+  return {
+    metric: null,
+    done: false,
+    evidence: latest.file,
+    invalidSample: true,
+    satisfiedInvariants: [],
+    detail: {verdict, problems},
+  };
+}
+
+function sealedBarCertificationProblems(args, data, scenarioBar) {
+  if (args.certification !== true) return [];
+  return [
+    ...expectedCertificationMetadata(data, scenarioBar),
+    ...contributingReportProblems(data),
+  ];
+}
+
+function sealedBarSatisfiedInvariants(verdict, problems, minimumRuns) {
+  const checks = [
+    [verdict.safetyClean, CERTIFICATION_INVARIANT.SAFETY],
+    [verdict.runs >= minimumRuns, CERTIFICATION_INVARIANT.MINIMUM_RUNS],
+    [verdict.verdict === GATE_VERDICT.ABOVE_BAR, CERTIFICATION_INVARIANT.WILSON_BAR],
+    [problems.length === 0, CERTIFICATION_INVARIANT.METADATA],
+  ];
+  return checks.filter(([passed]) => passed).map(([, invariant]) => invariant);
+}
+
+function measureValidSealedBar(args, latest, sealedBars, scenarioBar) {
+  const verdict = buildGateVerdict(latest.data, sealedBars);
+  const minimumRuns = Math.max(
+    Number(args.minimumRuns) || 0,
+    Number(scenarioBar.promotionWindowMinRuns) || 0,
+  );
+  const problems = sealedBarCertificationProblems(args, latest.data, scenarioBar);
+  const done = verdict.verdict === GATE_VERDICT.ABOVE_BAR &&
+    verdict.runs >= minimumRuns && problems.length === 0;
+  const satisfiedInvariants = sealedBarSatisfiedInvariants(
+    verdict, problems, minimumRuns,
+  );
+  return {
+    metric: certificationDistance(verdict, problems, minimumRuns),
+    done,
+    evidence: latest.file,
+    invalidSample: false,
+    satisfiedInvariants,
+    classification: {
+      verdict: verdict.verdict,
+      verdictReason: verdict.reason,
+      rootCauseClass: verdict.verdict,
+      dominantReason: verdict.reason,
+      owner: CERTIFICATION_CLASSIFICATION_OWNER,
+      boundary: CERTIFICATION_CLASSIFICATION_BOUNDARY,
+    },
+    nodeExit: verdict.safetyCounts.nodeExit > 0 ?
+      {present: true, count: verdict.safetyCounts.nodeExit, nodes: []} :
+      null,
+    detail: {
+      verdict: verdict.verdict,
+      verdictReason: verdict.reason,
+      runs: verdict.runs,
+      minimumRuns,
+      wilson: verdict.wilson,
+      sealedBar: verdict.sealedBar,
+      safetyCounts: verdict.safetyCounts,
+      problems,
+    },
+  };
+}
+
+function measureSealedBar(args) {
+  const dir = args.reportDir || DEFAULT_REPORT_DIR;
+  const scenario = args.scenario;
+  const latest = listStatGateAggregates(dir, scenario)[0];
+  if (!latest) return noStatGateEvidence();
+  const sealedBarsFile = args.sealedBarsFile || DEFAULT_SEALED_BARS_FILE;
+  const sealedBars = loadSealedBars(sealedBarsFile);
+  const scenarioBar = sealedBars?.scenarios?.[scenario];
+  if (!scenarioBar) {
+    return invalidStatGateEvidence(
+      latest,
+      GATE_VERDICT.NO_SEALED_BAR,
+      [CERTIFICATION_PROBLEM.SEALED_BAR],
+    );
+  }
+  const structuralProblems = statGateStructureProblems(latest.data);
+  if (structuralProblems.length > 0) {
+    return invalidStatGateEvidence(latest, null, structuralProblems);
+  }
+  return measureValidSealedBar(args, latest, sealedBars, scenarioBar);
 }
 
 // Most-recent-first, de-duplicated by run timestamp so re-read/identical reports do
@@ -318,66 +577,72 @@ export function reportSampleIsNonMeasuring(file, args = {}) {
   return isInvalidMetricSample(data, scenario, metricKind);
 }
 
-export const scenarioHarnessProbe = {
-  name: 'scenario-harness',
-  measure(args) {
-    const dir = args.reportDir || DEFAULT_REPORT_DIR;
-    const scenario = args.scenario;
-    const consecutive = Number(args.consecutive) || DEFAULT_CONSECUTIVE;
-    const metricKind = args.metric === METRIC_FAILED ? METRIC_FAILED :
-      args.metric === METRIC_DISTANCE ? METRIC_DISTANCE : METRIC_PRIORITY;
+function measureScenarioRuns(args) {
+  const dir = args.reportDir || DEFAULT_REPORT_DIR;
+  const scenario = args.scenario;
+  const consecutive = Number(args.consecutive) || DEFAULT_CONSECUTIVE;
+  const metricKind = args.metric === METRIC_FAILED ? METRIC_FAILED :
+    args.metric === METRIC_DISTANCE ? METRIC_DISTANCE : METRIC_PRIORITY;
     // Fetch a bounded buffer beyond `consecutive` so non-measuring runs inside
     // the window can be SKIPPED rather than break the streak: the gate
     // semantics (epic: "thermally invalid runs count as non-measuring, not
     // red") are `consecutive` MEASURING passes — an invalid sample counts
     // neither for nor against, exactly as the live-repetitions runner treats
     // its re-run slots.
-    const runs = listRuns(
-      dir, scenario, consecutive + NON_MEASURING_SKIP_BUFFER,
-    );
-    if (runs.length === 0) {
-      return {
-        metric: null,
-        done: false,
-        evidence: null,
-        invalidSample: true,
-        satisfiedInvariants: [],
-      };
-    }
-    const latest = runs[0];
-    const measuring = runs.filter(
-      (r) => !isInvalidMetricSample(r.data, scenario, metricKind),
-    );
-    const recentMeasuring = measuring.slice(0, consecutive);
-    const done = recentMeasuring.length >= consecutive &&
-      recentMeasuring.every((r) => scenarioPassed(r.data, scenario));
-    let rawMetric;
-    if (metricKind === METRIC_DISTANCE) {
-      const streak = cleanStreak(runs, scenario, METRIC_PRIORITY);
-      rawMetric = distanceMetricFromReport(latest.data, scenario, {
-        streakTerm: consecutive - streak,
-      });
-    } else {
-      rawMetric = readMetric(latest.data, metricKind);
-    }
-    // An incomplete run reports null metric: the honesty layer treats this as an
-    // honest "no measurement" (not dishonest data) and the ladder treats it as a
-    // stall, so it climbs rather than registering a false improvement.
-    const invalidSample = isInvalidMetricSample(latest.data, scenario, metricKind);
+  const runs = listRuns(
+    dir, scenario, consecutive + NON_MEASURING_SKIP_BUFFER,
+  );
+  if (runs.length === 0) {
     return {
-      metric: invalidSample ? null : rawMetric,
-      done,
-      evidence: latest.file,
-      invalidSample,
-      satisfiedInvariants: extractSatisfiedInvariants(latest.data, scenario),
-      classification: classification(latest.data, scenario),
-      nodeExit: unexpectedNodeExit(latest.data, scenario),
-      detail: {
-        runs: runs.length,
-        verdict: scenarioEntry(latest.data, scenario)?.current?.verdict || null,
-        verdictReason: verdictReasonOf(latest.data, scenario),
-        invalidSample,
-      },
+      metric: null,
+      done: false,
+      evidence: null,
+      invalidSample: true,
+      satisfiedInvariants: [],
     };
+  }
+  const latest = runs[0];
+  const measuring = runs.filter(
+    (r) => !isInvalidMetricSample(r.data, scenario, metricKind),
+  );
+  const recentMeasuring = measuring.slice(0, consecutive);
+  const done = recentMeasuring.length >= consecutive &&
+      recentMeasuring.every((r) => scenarioPassed(r.data, scenario));
+  let rawMetric;
+  if (metricKind === METRIC_DISTANCE) {
+    const streak = cleanStreak(runs, scenario, METRIC_PRIORITY);
+    rawMetric = distanceMetricFromReport(latest.data, scenario, {
+      streakTerm: consecutive - streak,
+    });
+  } else {
+    rawMetric = readMetric(latest.data, metricKind);
+  }
+  // An incomplete run reports null metric: the honesty layer treats this as an
+  // honest "no measurement" (not dishonest data) and the ladder treats it as a
+  // stall, so it climbs rather than registering a false improvement.
+  const invalidSample = isInvalidMetricSample(latest.data, scenario, metricKind);
+  return {
+    metric: invalidSample ? null : rawMetric,
+    done,
+    evidence: latest.file,
+    invalidSample,
+    satisfiedInvariants: extractSatisfiedInvariants(latest.data, scenario),
+    classification: classification(latest.data, scenario),
+    nodeExit: unexpectedNodeExit(latest.data, scenario),
+    detail: {
+      runs: runs.length,
+      verdict: scenarioEntry(latest.data, scenario)?.current?.verdict || null,
+      verdictReason: verdictReasonOf(latest.data, scenario),
+      invalidSample,
+    },
+  };
+}
+
+export const scenarioHarnessProbe = {
+  name: 'scenario-harness',
+  measure(args) {
+    return args.metric === METRIC_SEALED_BAR ?
+      measureSealedBar(args) :
+      measureScenarioRuns(args);
   },
 };

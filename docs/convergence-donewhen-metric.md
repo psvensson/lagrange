@@ -14,7 +14,9 @@ implemented by the stat-gate summary plus
 A fixed-code run window is evaluated on two independent axes:
 
 - **Safety floor:** every run has zero corruption, unexpected node exits,
-  oracle blindness, and stale-source execution.
+  oracle blindness, stale-source execution, and acknowledged-write loss; a
+  run that does not complete the acknowledged-write visibility check is unsafe
+  to certify rather than implicitly clean.
 - **Convergence:** the Wilson 95% lower confidence bound of the scenario pass
   rate meets the sealed environment bar.
 
@@ -49,6 +51,14 @@ timeouts. Re-run that cheap calibration when runner hardware changes, not for
 ordinary source changes. The sealed pass-rate bar is a code-capability
 reference and is changed only through the promotion rule below.
 
+The five-node reference is named `calibrated-local-container-v1`: five local
+Linux containers at the CPU limit recorded in the aggregate, interpreted
+relative to calibration workload version 1. The name is not a claim about a
+specific processor model. The aggregate binds the actual CPU limit, machine
+factor, config digest, source commit/fingerprint, workload identity, and restart
+schedule so two materially different environments cannot be folded into one
+window.
+
 ## 4. Gate Interpretation
 
 The stat gate reports one of these outcomes:
@@ -67,7 +77,8 @@ sample only when the statistical claim is the question being answered.
 For the five-node `rolling-restart` scenario, the current contract is:
 
 1. use a fixed-code window of at least 15 runs;
-2. require `CORRUPT = NODE_EXIT = ORACLE_BLIND = staleSource = 0` in every run;
+2. require `CORRUPT = NODE_EXIT = ORACLE_BLIND = staleSource =
+   acknowledgedWriteLoss = acknowledgedWriteUnverified = 0` in every run;
 3. require the Wilson 95% lower bound of the scenario-pass rate to be at least
    **`T(5) = 0.357`**; and
 4. treat a consecutive-pass probe only as a liveness heartbeat.
@@ -121,8 +132,14 @@ new explicit reference rather than silently rewriting this one.
 
 ```sh
 node scripts/calibrate-machine.js
-bash scripts/rolling-restart-stat-gate.sh 15
+CERTIFICATION=1 bash scripts/rolling-restart-stat-gate.sh 15
 ```
+
+Certification mode additionally requires a clean committed measurement input
+set, the sealed five-node config, non-perturbing logs, per-run clean-start and
+source receipts, and the declared workload/failure-schedule identities. Ordinary
+small-N diagnostic runs remain available without certification mode and cannot
+close the representative certification Quest.
 
 Do not put the statistical gate on ordinary push CI. Run deterministic
 falsifiers and focused owner tests first, then spend the live window on release
