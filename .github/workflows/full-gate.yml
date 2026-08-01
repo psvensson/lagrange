@@ -60,3 +60,29 @@ jobs:
 
       - name: Full gate
         run: npm run test:gate
+
+      # The acceptance runner captures per-command outcomes into the receipt,
+      # not the job log; without this step a red nightly says only "N/5
+      # commands passed" and the receipt dies with the runner.
+      - name: Name the failing gate commands
+        if: failure()
+        run: |
+          set -euo pipefail
+          receipt=$(ls -t test-output/acceptance/*.report.json 2>/dev/null | head -1 || true)
+          if [ -z "$receipt" ]; then
+            echo "no acceptance receipt was produced"
+            exit 0
+          fi
+          echo "receipt: $receipt"
+          jq '{summary: .summary, commands: [.commands[] | {id, status, exitCode, reasons}]}' "$receipt"
+
+      - name: Upload gate outputs
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: full-gate-output
+          path: |
+            test-output/acceptance/
+            test-output/reports/
+          retention-days: 14
+          if-no-files-found: ignore
