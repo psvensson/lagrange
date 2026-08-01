@@ -193,6 +193,32 @@ before evaluating a real workload.
 
 Requirements: Node.js 22.12 or newer and npm.
 
+Install the published server package globally to use its two command-line
+programs:
+
+```bash
+npm install --global lagrange-server
+lagrange --dry-run
+lagrange-admin --help
+```
+
+Applications can install it locally and import the side-effect-free public API:
+
+```bash
+npm install lagrange-server
+```
+
+```js
+import {VERSION} from 'lagrange-server';
+```
+
+The npm package is named `lagrange-server`; the product and executable remain
+named `lagrange`. The distributed test-run dashboard can display packaged
+static resources, but starting repository-owned distributed scenarios still
+requires a source checkout.
+
+To run from a source checkout instead:
+
 ```bash
 npm install
 cp .env.example .env

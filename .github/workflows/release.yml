@@ -3,6 +3,7 @@
 # Repository configuration:
 #   variable DOCKERHUB_USERNAME — Docker Hub username (for example psvensson)
 #   secret   DOCKERHUB_TOKEN    — Docker Hub PAT with Read/Write scope
+#   secret   NPM_TOKEN          — bootstrap only; remove after trusted publishing
 name: release
 
 on:
@@ -25,6 +26,7 @@ jobs:
     timeout-minutes: 180
     permissions:
       contents: write
+      id-token: write
     steps:
       - name: Checkout tagged source
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
@@ -37,6 +39,7 @@ jobs:
         with:
           node-version: "22"
           package-manager-cache: false
+          registry-url: "https://registry.npmjs.org"
 
       # Fail before the expensive gate if the tag, package version, or changelog
       # section disagree. The rendered files are reused by the final publish steps.
@@ -84,7 +87,9 @@ jobs:
           helm version --short
 
       - name: Install dependencies
-        run: npm ci
+        run: |
+          npm install --global npm@11.7.0
+          npm ci
 
       # The MovieLens evidence tests read the real 100k ratings file; data/ is
       # gitignored, so fetch it and fail closed on any digest drift (the same
@@ -147,6 +152,32 @@ jobs:
             '{{ index .Config.Labels "org.opencontainers.image.version" }}' \
             "$DOCKERHUB_IMAGE:$VERSION")" = "$VERSION"
 
+      # Build one commit-bound tarball, then install and execute that exact file
+      # from a clean consumer before any release channel is mutated.
+      - name: Build and verify npm package
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.release.outputs.version }}"
+          npm run package:npm -- \
+            --output dist/npm \
+            --git-head "${{ steps.release.outputs.tagged_commit }}"
+          NPM_TARBALL="dist/npm/lagrange-server-${VERSION}.tgz"
+          test -f "$NPM_TARBALL"
+          sha256sum "$NPM_TARBALL" >> dist/SHA256SUMS
+
+      # Trusted publishing uses the job's OIDC identity. NPM_TOKEN is accepted
+      # only for the one-time first publication before npm can bind the trusted
+      # publisher; remove the secret immediately after that bootstrap release.
+      - name: Publish npm package
+        env:
+          NODE_AUTH_TOKEN: ${{ secrets.NPM_TOKEN }}
+        run: |
+          set -euo pipefail
+          VERSION="${{ steps.release.outputs.version }}"
+          npm run publish:npm -- \
+            --tarball "dist/npm/lagrange-server-${VERSION}.tgz" \
+            --git-head "${{ steps.release.outputs.tagged_commit }}"
+
       - name: Log in to Docker Hub
         uses: docker/login-action@b45d80f862d83dbcd57f89517bcf500b2ab88fb2 # v4.0.0
         with:
@@ -203,6 +234,7 @@ jobs:
             dist/lagrange
             dist/lagrange-cli
             "dist/lagrange-node-${VERSION}.tgz"
+            "dist/npm/lagrange-server-${VERSION}.tgz"
             dist/SHA256SUMS
           )
           for asset in "${ASSETS[@]}"; do

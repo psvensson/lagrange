@@ -38,11 +38,8 @@ describe('release version single-source', () => {
     );
   });
 
-  it('entrypoint package-name literal matches package.json', () => {
-    assert.equal(
-      ENTRYPOINT_APP.PACKAGE_NAME,
-      pkg.name,
-      `ENTRYPOINT_APP.PACKAGE_NAME (${ENTRYPOINT_APP.PACKAGE_NAME}) must equal package.json name (${pkg.name})`,
-    );
+  it('npm identity is separate from the executable product identity', () => {
+    assert.equal(pkg.name, 'lagrange-server');
+    assert.equal(ENTRYPOINT_APP.PACKAGE_NAME, 'lagrange');
   });
 });

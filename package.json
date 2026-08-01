@@ -1,10 +1,14 @@
 {
-  "name": "lagrange",
+  "name": "lagrange-server",
   "version": "0.1.0",
   "description": "Lagrange experimental distributed SQL database and compute-near-data runtime",
   "repository": {
     "type": "git",
     "url": "https://github.com/psvensson/lagrange.git"
+  },
+  "homepage": "https://github.com/psvensson/lagrange#readme",
+  "bugs": {
+    "url": "https://github.com/psvensson/lagrange/issues"
   },
   "type": "module",
   "main": "src/public-api.js",
@@ -16,6 +20,11 @@
     "lagrange": "./src/sea-entry.js",
     "lagrange-admin": "./src/cli/bin/lagrange-admin.js"
   },
+  "files": [
+    "src/",
+    "!src/test-helpers/",
+    "CHANGELOG.md"
+  ],
   "scripts": {
     "start": "node src/index.js",
     "start:endpoint-sync": "node scripts/start-endpoint-sync-controller.js",
@@ -101,6 +110,8 @@
     "build:bundle": "node scripts/build-sea.js",
     "build:sea": "bash scripts/build-executables.sh",
     "build:all": "npm run build:bundle && npm run build:sea",
+    "package:npm": "node scripts/release-npm-package.js verify",
+    "publish:npm": "node scripts/release-npm-package.js publish",
     "release:notes": "node scripts/release-notes.js",
     "spike:raft-logic": "node scripts/run-raft-logic-investigation-spike.js",
     "migration:raft:benchmarks": "node scripts/run-raft-migration-benchmarks.js",
@@ -209,7 +220,7 @@
     "test:documentation-onboarding": "node scripts/run-documentation-audience-safe-onboarding-scenario.js documentation-audience-safe-onboarding",
     "quest:context": "node scripts/quest-context.js",
     "hooks:install": "node scripts/install-git-hooks.js",
-    "prepare": "test ! -f scripts/install-git-hooks.js || node scripts/install-git-hooks.js",
+    "prepare": "node -e \"import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))\"",
     "test:unit": "find test -type f -name '*.test.js' ! -name '*.integration.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -n 100 node scripts/run-test-files.js",
     "test:distributed:boundary:transition": "node test/distributed/harness/__tests__/boundary-transition-scenarios.test.js",
     "test:distributed:checkpoint:7node:transaction-recovery": "node test/distributed/run.js --config test/distributed/config/local-benchmark-7node.json --scenario seven-node-read-write-load-transaction-recovery",
@@ -223,13 +234,23 @@
   },
   "keywords": [
     "distributed",
+    "distributed-database",
+    "distributed-sql",
     "database",
     "raft",
     "consensus",
-    "sqlite"
+    "sqlite",
+    "wasm",
+    "webassembly",
+    "edge-computing"
   ],
-  "author": "",
+  "author": "Peter Svensson <psvensson@gmail.com>",
   "license": "AGPL-3.0-only",
+  "publishConfig": {
+    "access": "public",
+    "provenance": true,
+    "registry": "https://registry.npmjs.org/"
+  },
   "engines": {
     "node": ">=22.12.0"
   },

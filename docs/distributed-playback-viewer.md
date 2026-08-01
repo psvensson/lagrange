@@ -18,7 +18,7 @@ each scenario run under:
 - `test-output/{scenario}/playback-manifest.json`
 - `test-output/{scenario}/playback-viewer.html`
 
-Use `test/distributed/harness/playback-viewer.html` to step through the run timeline.
+Use `src/admin/static/playback-viewer.html` to step through the run timeline.
 
 ## What It Shows
 
@@ -36,7 +36,7 @@ npx serve .
 
 Then open:
 
-- `http://localhost:3000/test/distributed/harness/playback-viewer.html`
+- `http://localhost:3000/src/admin/static/playback-viewer.html`
 - `http://localhost:3000/test-output/<scenario>/playback-viewer.html`
 
 ## Load Data
@@ -47,7 +47,7 @@ Two options:
 2. Pass a manifest URL query parameter:
 
 ```text
-http://localhost:3000/test/distributed/harness/playback-viewer.html?manifest=/test-output/<scenario>/playback-manifest.json
+http://localhost:3000/src/admin/static/playback-viewer.html?manifest=/test-output/<scenario>/playback-manifest.json
 ```
 
 ## Controls
