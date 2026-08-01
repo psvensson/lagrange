@@ -48,7 +48,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 15
+## Open quests — 19
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -67,6 +67,10 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 | — |
+| transaction-recovery-poison-row-final-sql-handoff-live-ab | product | 2 | 0 | 2026-08-01 | — |
+| transaction-recovery-poison-row-live-owner-engagement | product | 0 | 0 | 2026-08-01 | — |
+| transaction-recovery-poison-row-live-owner-engagement-v2 | product | 2 | 0 | 2026-08-01 | — |
+| transaction-recovery-poison-row-live-summary-attribution | product | 3 | 0 | 2026-08-01 | — |
 
 > 9 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 

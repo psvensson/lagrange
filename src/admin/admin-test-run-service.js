@@ -107,11 +107,11 @@ class AdminTestRunService {
       ADMIN_TEST_RUN_PATH.METADATA_DIR,
     );
     this.dashboardPath = resolve(
-      this.workspaceRoot,
+      import.meta.dirname,
       ADMIN_TEST_RUN_PATH.DASHBOARD_PAGE,
     );
     this.playbackViewerPath = resolve(
-      this.workspaceRoot,
+      import.meta.dirname,
       ADMIN_TEST_RUN_PATH.PLAYBACK_VIEWER,
     );
 

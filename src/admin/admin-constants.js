@@ -97,8 +97,8 @@ const ADMIN_TEST_RUN_PATH = Object.freeze({
   RUNNER_SCRIPT: 'test/distributed/run.js',
   OUTPUT_DIR: 'test-output',
   METADATA_DIR: '.run-metadata',
-  DASHBOARD_PAGE: 'src/admin/static/test-run-dashboard.html',
-  PLAYBACK_VIEWER: 'test/distributed/harness/playback-viewer.html',
+  DASHBOARD_PAGE: 'static/test-run-dashboard.html',
+  PLAYBACK_VIEWER: 'static/playback-viewer.html',
 });
 
 const ADMIN_TEST_RUN_STATUS = Object.freeze({
