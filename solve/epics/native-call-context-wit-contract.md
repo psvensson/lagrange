@@ -115,8 +115,12 @@ stay JSON strings. Replacing them with per-operation WIT records — e.g.
    the artifact was built against it (bindgen via jco / wit-bindgen per
    language). Evolution policy rides the single-version service contract.
 4. **Boundary cost evidence.** Canonical-ABI lift/lower copies typed lists;
-   measure representative batch shapes vs JSON parse using the existing
-   comparative-efficiency harness before committing the default.
+   measure typed vs JSON payloads before committing the default. Owner: the
+   comparative-efficiency program — its 2026-08-01 decision preregisters
+   the WASI call-cell path as a paired matrix arm beside PostgreSQL,
+   Lagrange SQL, and `native_js`
+   (`comparative-workload-efficiency-evidence.md`), so this evidence falls
+   out of the real distributed runs, not an ad-hoc microbenchmark.
 5. **Typed capability catalog.** Replace `capability: u32 -> s32` with a
    sealed enum derived from the `CONFIGURE SERVICE ACCESS` grammar; typed
    deny reasons throughout.
@@ -132,8 +136,7 @@ Rungs 1–2 are the real gate; 3–5 are mechanical once shapes are derivable.
   `sql-query-loop-parallel-reduce.js` leases + atomic snapshot), or a
   runtime-chosen singleton? Contract only requires: exactly-once visible
   final snapshot.
-- Is `capability` still `u32 -> s32` here, or does the call world drop it
-  until a typed capability enum exists?
+- Keep `capability: u32 -> s32`, or drop it until the typed enum exists?
 - Batch memory bound: max rows/bytes per `run` invocation and the typed
   refusal when the declared statement exceeds it.
 

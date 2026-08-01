@@ -80,6 +80,16 @@ produced valid evidence, not that Lagrange won.
 
 ## Decision log
 
+- 2026-08-01 — When the native call-context WIT surface lands
+  (`solve/epics/native-call-context-wit-contract.md`; rung 1 of
+  `callback-axis-retirement`), the WASI call-cell execution path SHALL join
+  the paired comparison matrix as a preregistered alternative beside the
+  PostgreSQL baseline, Lagrange distributed SQL, and the kernel-internal
+  `native_js` query-loop — sealed per spec R1 as a new matrix identity.
+  This measures the component-boundary cost the typed-API ladder (rung 4)
+  needs, extends the 2026-07-26 public-surface requirement from request
+  cells to call cells, and keeps the program outcome-neutral: a WASM arm
+  that loses to `native_js` is published as readily as one that wins.
 - 2026-07-27 — Assigned the exact Cartesian matrix manifest, digest-resolved
   root evidence envelope, resource-window join, and separately recomputable
   capacity/cost effects to C4 before any C5–C9 matrix evidence is emitted.
