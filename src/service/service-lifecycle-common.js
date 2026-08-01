@@ -33,15 +33,26 @@ async function allowRuntimeLifecyclePolicy(_policyContext) {
   return undefined;
 }
 
+function resolveServiceDescriptor(serviceContext) {
+  return serviceContext?.definition ?? serviceContext;
+}
+
+function resolveServiceReplicaId(serviceContext, descriptor, serviceId) {
+  return serviceContext?.[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID] ||
+    descriptor?.[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID] ||
+    serviceId;
+}
+
 function resolveServiceFields(serviceContext) {
-  const descriptor = serviceContext?.definition ?? serviceContext;
+  const descriptor = resolveServiceDescriptor(serviceContext);
   const serviceId = descriptor?.[SERVICE_DESCRIPTOR_FIELD.SERVICE_ID];
   const serviceType = descriptor?.[SERVICE_DESCRIPTOR_FIELD.SERVICE_TYPE];
   const tenantId = descriptor?.[SERVICE_DESCRIPTOR_FIELD.TENANT_ID] || serviceId;
-  const replicaId =
-    serviceContext?.[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID] ||
-    descriptor?.[SERVICE_DESCRIPTOR_FIELD.REPLICA_ID] ||
-    serviceId;
+  const replicaId = resolveServiceReplicaId(
+    serviceContext,
+    descriptor,
+    serviceId,
+  );
   if (!serviceId) {
     throw new TypeError(LIFECYCLE_MGR_MSG.SERVICE_ID_REQUIRED);
   }
