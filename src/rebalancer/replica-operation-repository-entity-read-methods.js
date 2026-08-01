@@ -12,8 +12,8 @@ function assignReplicaOperationRepositoryEntityReadMethods(
     ENTITY_OPERATION_VISIBILITY_OUTCOME_SOURCE,
     OperationType,
     REPLICA_OPERATION_REPOSITORY_LITERAL,
+    REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
     REPLICA_OPERATION_VISIBILITY_READ_MODE,
-    REPLICA_OPERATION_VISIBILITY_READ_QUERY_OPTIONS,
     SERVICE_TYPE,
     SQL,
     SYSTEM_TABLE_NAME,
@@ -147,7 +147,10 @@ function assignReplicaOperationRepositoryEntityReadMethods(
       const result = await this.executeReplicaOperationsRead(
         SQL.SELECT_OPERATIONS_BY_ENTITY,
         [entityType, entityId, entityId],
-        REPLICA_OPERATION_VISIBILITY_READ_QUERY_OPTIONS,
+        {
+          ...REPLICA_OPERATION_STRICT_VISIBILITY_QUERY_OPTIONS,
+          preferOwnerRpcReadLeader: true,
+        },
       );
       const queryDurationMs = Date.now() - queryStartedAtMs;
       const planningSnapshot = this.resolvePriorityRecoveryPlanningSnapshotForOwnerRead();
@@ -170,14 +173,10 @@ function assignReplicaOperationRepositoryEntityReadMethods(
 
       if (!result.success || !result.rows) {
         const deferredOutcome = this.buildDeferredEntityOperationVisibilityOutcome({
-          priorityRecoveryActive: this.shouldDeferIncompleteOperationReadFailure(
-            result,
-            planningSnapshot,
-            {
-              cachedOperations,
-              fallbackOperations,
-            },
-          ),
+          // This boundary requires the operation-ledger owner. An unavailable
+          // owner cannot prove that the entity has no operation, even when a
+          // readiness snapshot reports no active priority-recovery gap.
+          priorityRecoveryActive: true,
           retryAfterMs: this.getRetryableReplicaOperationReadRetryDelayMs(result),
           cachedOperations: fallbackOperations,
           fallbackOperations,

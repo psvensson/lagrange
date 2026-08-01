@@ -142,6 +142,43 @@ const CONFIGS = [
     boundary: 'ready_lease_publication',
   },
   {
+    id: 'terminal-operation-entity-observation-fixed',
+    mode: 'terminal-operation-entity-observation-fixed',
+    module: path.resolve(
+      'models', 'terminal-operation-entity-observation',
+      'TerminalOperationEntityObservation.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'terminal-operation-entity-observation',
+      'TerminalOperationEntityObservation_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'terminal-operation-entity-observation-fixed.model.report.json',
+    scenario: 'rolling-restart-fresh-formation-terminal-add-observation-model',
+    owner: 'replica_operation_visibility_owner',
+    boundary: 'terminal_add_to_formation_surplus_drain',
+  },
+  {
+    id: 'terminal-operation-entity-observation-stale-sql-fallback',
+    mode: 'terminal-operation-entity-observation-stale-sql-fallback',
+    module: path.resolve(
+      'models', 'terminal-operation-entity-observation',
+      'TerminalOperationEntityObservation.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'terminal-operation-entity-observation',
+      'TerminalOperationEntityObservation_stale_sql_fallback_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'terminal-operation-entity-observation-stale-sql-fallback.model.report.json',
+    scenario: 'rolling-restart-fresh-formation-terminal-add-observation-model',
+    owner: 'replica_operation_visibility_owner',
+    boundary: 'terminal_add_to_formation_surplus_drain',
+    expectedFailurePattern:
+      'Invariant ConfirmedTerminalNeverReentersCreating is violated',
+  },
+  {
     id: 'coupled-admission-reconciled',
     mode: 'coupled-reconciled',
     module: path.resolve('models', 'readiness-starvation', 'CoupledAdmission.tla'),

@@ -523,6 +523,176 @@ export function registerReplicaOperationRepositoryDeferredVisibilityTests({
   );
 
   test(
+    'getOperationsByEntityAuthoritativeObservation does not downgrade a ' +
+      'confirmed terminal ADD through stale SQL fallback',
+    async (t) => {
+      const authoritativeReads = [];
+      const creatingRow = makeRow({
+        operation_id: 'op-confirmed-terminal-add',
+        status: TEST_CREATING_STATUS,
+        workflow_step: WORKFLOW_STEP.CREATING,
+        created_at: 100,
+        updated_at: 150,
+        completed_at: null,
+      });
+      const terminalRow = makeRow({
+        operation_id: 'op-confirmed-terminal-add',
+        status: TERMINAL_STATUSES.COMPLETED,
+        workflow_step: WORKFLOW_STEP.COMPLETED,
+        created_at: 100,
+        updated_at: 200,
+        completed_at: 200,
+      });
+      const repo = createTestRepository({
+        authoritativeVisibilityTimeoutMs: 0,
+        controlPlaneSystemTableGateway: {
+          executeQuery: async () => ({success: true, changes: 1}),
+          readAuthoritativeRows: async (_tableName, _sql, _params, options = {}) => {
+            authoritativeReads.push(options);
+            if (
+              options.authoritativeReadMode ===
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY
+            ) {
+              return {success: true, rows: [terminalRow]};
+            }
+            if (
+              options.authoritativeReadMode ===
+              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED
+            ) {
+              return {
+                success: false,
+                error: 'authoritative_row_source_unavailable',
+                errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+                retryAfterMs: 25,
+              };
+            }
+            // This is the live failure shape: owner RPC is unavailable, so
+            // OWNER_RPC_PREFERRED_SQL_FALLBACK admits an older replica row.
+            return {success: true, rows: [creatingRow]};
+          },
+        },
+        controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return {
+              publicationStatus: 'PUBLISHED',
+              priorityPartitionSummary: {
+                satisfied: true,
+                blockedPartitions: [],
+              },
+            };
+          },
+        },
+        systemTableCache: {
+          get: () => null,
+          getAll: () => [],
+          filter: () => [],
+        },
+      });
+
+      const persisted = await repo.persistOperationUpdate(
+        repo.rowToOperation(terminalRow),
+      );
+      const observation = await repo.getOperationsByEntityAuthoritativeObservation(
+        TEST_ENTITY_TYPE,
+        TEST_PARTITION_ID,
+      );
+
+      t.equal(persisted, true, 'the terminal ADD transition should first confirm locally');
+      t.equal(
+        observation?.state,
+        INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
+        'unavailable terminal authority should defer instead of exposing an older CREATING row',
+      );
+      t.equal(
+        observation?.operationCount,
+        0,
+        'the stale SQL row must not re-enter priority recovery as an incomplete operation',
+      );
+      t.equal(
+        observation?.operations?.some((operation) =>
+          operation?.workflowStep === WORKFLOW_STEP.CREATING),
+        false,
+        'a confirmed terminal ADD must remain monotonic at the entity observation boundary',
+      );
+      const entityRead = authoritativeReads.at(-1);
+      t.equal(
+        entityRead?.authoritativeReadMode,
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        'entity recovery observation should require the operation-ledger owner path',
+      );
+      t.equal(
+        entityRead?.preferOwnerRpcReadLeader,
+        true,
+        'entity recovery observation should pin the read to the operation-ledger leader',
+      );
+      t.equal(
+        entityRead?.allowSqlFallback,
+        false,
+        'entity recovery observation must not fall back to an older SQL replica',
+      );
+    },
+  );
+
+  test(
+    'getOperationsByEntityAuthoritativeObservation defers owner failure ' +
+      'without local recovery evidence',
+    async (t) => {
+      const authoritativeReads = [];
+      const repo = createTestRepository({
+        authoritativeVisibilityTimeoutMs: 0,
+        controlPlaneSystemTableGateway: {
+          readAuthoritativeRows: async (_tableName, _sql, _params, options = {}) => {
+            authoritativeReads.push(options);
+            return {
+              success: false,
+              error: 'authoritative_row_source_unavailable',
+              errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
+              retryAfterMs: 25,
+            };
+          },
+        },
+        controlPlaneReadinessService: {
+          getPriorityRecoveryPlanningSnapshotBestEffort() {
+            return {
+              publicationStatus: 'PUBLISHED',
+              priorityPartitionSummary: {
+                satisfied: true,
+                blockedPartitions: [],
+              },
+            };
+          },
+        },
+        systemTableCache: {
+          get: () => null,
+          getAll: () => [],
+          filter: () => [],
+        },
+      });
+
+      const observation = await repo.getOperationsByEntityAuthoritativeObservation(
+        TEST_ENTITY_TYPE,
+        TEST_PARTITION_ID,
+      );
+
+      t.equal(
+        observation?.state,
+        INCOMPLETE_OPERATION_OBSERVATION_STATE.DEFERRED,
+        'failed required-owner reads cannot prove that an entity has no operation',
+      );
+      t.equal(
+        observation?.operationCount,
+        0,
+        'deferral should not invent an incomplete operation without evidence',
+      );
+      t.equal(
+        authoritativeReads.at(-1)?.authoritativeReadMode,
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+        'the no-witness observer should retain strict owner authority',
+      );
+    },
+  );
+
+  test(
     'queryIncompleteOperations uses the local-safe owner-read path when ' +
       'canonical participation defers only on self query transport',
     async (t) => {
