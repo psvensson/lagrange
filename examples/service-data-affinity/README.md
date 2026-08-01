@@ -1,10 +1,24 @@
 # MovieLens: distributed SQL and data-local application policy
 
-This example shows the architectural difference between running a service near
-a database and rewriting an operation so useful work happens beside each data
-shard.
+## The problem this example addresses
 
-It computes the same MovieLens 100k top-ten ranking three ways:
+Picture a familiar architecture: a database cluster holds the data, and a
+separate application service holds the business logic. Every request makes the
+service query the database, wait for results to cross the network, apply its
+logic, and respond. For data-heavy operations — rank everything, score
+everything, aggregate everything — **the network boundary between application
+and data becomes the product's bottleneck**: most of what crosses it is
+discarded moments later.
+
+This is the specific problem Lagrange exists to attack (see the
+[examples overview](../README.md)): instead of moving data to the code, move
+the code to the data, run it beside every shard in parallel, and exchange only
+small partial results.
+
+This example makes that concrete — and honest. It computes the same
+[MovieLens 100k](https://grouplens.org/datasets/movielens/100k/) top-ten movie
+ranking (100,000 real movie ratings, a standard public research dataset) three
+ways:
 
 1. **PostgreSQL grouped SQL** — a primary with two synchronous streaming
    replicas executes `AVG` and `COUNT` per movie.
@@ -27,31 +41,46 @@ read
 
 The comparison does not make the conventional service pull every raw rating
 into application memory. PostgreSQL groups first and returns one aggregate per
-movie. That is a sensible best-of-breed implementation.
+movie. That is a sensible best-of-breed implementation — the strongest
+conventional shape, not a strawman.
 
-The remaining boundary is:
+Even so, the boundary remains: *every* movie's aggregate must cross into the
+application process, because the scoring policy lives there.
 
-```text
-all partitions
-  → AVG and COUNT for every movie
-  → application service
-  → Bayesian score for every movie
-  → global sort
-  → ten results
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+flowchart LR
+  subgraph BASE["Best-of-breed conventional shape"]
+    direction LR
+    ALLP["All partitions"]:::data -- "AVG + COUNT<br/>for every movie" --> APP["Application service<br/>Bayesian score for every movie<br/>global sort"]:::svc
+    APP -- "ten results" --> OUT1["Response"]:::ctrl
+  end
+
+  classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
+  classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
+  classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
 ```
 
-The Lagrange service changes the execution shape:
+The Lagrange service changes the execution shape — the policy runs *before*
+the exchange, beside each shard, and only bounded top-ten lists cross:
 
-```text
-ratings shard A
-  → local AVG and COUNT
-  → local Bayesian policy
-  → local top ten ┐
-                  ├→ merge at most twenty → final top ten
-ratings shard B  │
-  → local AVG and COUNT
-  → local Bayesian policy
-  → local top ten ┘
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+flowchart LR
+  subgraph SHA["Ratings shard A"]
+    A1["local AVG + COUNT"]:::data --> A2["local Bayesian policy"]:::svc --> A3["local top ten"]:::move
+  end
+  subgraph SHB["Ratings shard B"]
+    B1["local AVG + COUNT"]:::data --> B2["local Bayesian policy"]:::svc --> B3["local top ten"]:::move
+  end
+  A3 -- "≤ 10 candidates" --> M["merge<br/>sees at most twenty"]:::svc
+  B3 -- "≤ 10 candidates" --> M
+  M --> OUT["final top ten"]:::ctrl
+
+  classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
+  classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
+  classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
+  classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
 ```
 
 The win is not that code has been packaged differently. The win is that policy
@@ -61,7 +90,10 @@ process now runs before the exchange, beside each shard.
 ## Why A Service, Not Just More SQL?
 
 An average and count are natural SQL. The ranking formula is application
-policy:
+policy — a
+[Bayesian average](https://en.wikipedia.org/wiki/Bayesian_average) with a
+confidence penalty, so a movie with three perfect ratings does not outrank a
+movie with three thousand very good ones:
 
 ```text
 bayesianMean = (average × count + priorMean × priorWeight)
@@ -93,8 +125,8 @@ hot path changes.
 A conventional service would execute grouped SQL, receive every movie
 aggregate, score all candidates, sort, and keep ten.
 
-The data-local service instead gives each replica responsibility for a disjoint
-movie-id shard. Each replica:
+The data-local service instead gives each replica responsibility for a
+disjoint movie-id shard. Each replica:
 
 1. executes its grouped scan;
 2. computes the Bayesian score in application code;
@@ -137,18 +169,38 @@ Then the relevant boundary shapes are approximately:
 | Strong grouped-SQL baseline | `M` aggregates |
 | Shard-local policy and bounded reduction | at most `R × K` candidates |
 
+With MovieLens 100k, `N` is 100,000 ratings and `M` is about 1,700 movies —
+but `R × K` stays at twenty no matter how many ratings or movies exist. The
+bound grows with shard count and requested results, not with the data.
+
 The demo verifies this shape and result parity. It does not claim that every
 workload should be rewritten or that every native function will be faster.
 
 ## Placement Is Part Of The Result
 
-The service starts wherever ordinary placement chooses because no access
-history exists yet.
+The second half of the demo answers a different question: **who decides where
+the ranking code runs?** In a conventional stack, a human (or a generic
+scheduler that cannot see database access) does. In Lagrange, observed access
+does.
 
-Queries carry the issuing service identity. Successful reads populate
-`service_partition_access`, which records the partitions actually executed
-against. Fresh evidence becomes node and latency-group weights, and the runtime
-service policy converges on the best weighted node set.
+The service starts wherever ordinary placement chooses because no access
+history exists yet. Then a feedback loop takes over:
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+flowchart LR
+  Q["Service-issued queries<br/>carry the service identity"]:::svc
+  EV["service_partition_access<br/>records partitions actually used"]:::data
+  W["fresh evidence →<br/>node + latency-group weights"]:::move
+  PL["runtime placement policy<br/>converges Cells toward<br/>best weighted node set"]:::ctrl
+  PL --> Q
+  Q --> EV --> W --> PL
+
+  classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
+  classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
+  classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
+  classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
+```
 
 Two separate mechanisms are visible:
 
@@ -157,8 +209,8 @@ Two separate mechanisms are visible:
 - **read locality** is a fast query-routing decision that orders suitable
   replicas for an individual read.
 
-`read_locality` does not switch placement affinity on. Placement is lifted from
-observed access when fresh evidence exists.
+`read_locality` does not switch placement affinity on. Placement is lifted
+from observed access when fresh evidence exists.
 
 Useful queries while Lagrange runs:
 
@@ -178,8 +230,9 @@ The full mechanism is documented in
 ## Prerequisites
 
 - Node.js 22 and `npm install`
-- Docker, for the PostgreSQL 16 baseline
-- internet access on the first run, to download MovieLens 100k
+- [Docker](https://docs.docker.com/), for the PostgreSQL 16 baseline
+- internet access on the first run, to download
+  [MovieLens 100k](https://grouplens.org/datasets/movielens/100k/)
 - enough local resources for PostgreSQL plus five Lagrange processes
 
 ## Run It
@@ -195,7 +248,9 @@ Lagrange phase:
 
 1. bootstraps the ratings schema and two coordination tables on its seed;
 2. joins four more nodes;
-3. waits for the operation-ledger quorum to spread;
+3. waits for the operation-ledger quorum to spread (Lagrange replicates with
+   [Raft](https://raft.github.io/) consensus, so writes need a healthy
+   majority);
 4. loads the dataset once;
 5. waits for the ratings table to split across at least two nodes;
 6. executes distributed SQL and service cases; and
@@ -219,9 +274,9 @@ Check four things in order:
 4. **Affinity** — attributed partition access produces placement evidence and
    the service converges toward a better weighted node set.
 
-Startup, loading, and topology differ between PostgreSQL and Lagrange. The demo
-therefore does not print a PostgreSQL-versus-Lagrange speedup ratio. Such a ratio
-would be misleading.
+Startup, loading, and topology differ between PostgreSQL and Lagrange. The
+demo therefore does not print a PostgreSQL-versus-Lagrange speedup ratio. Such
+a ratio would be misleading.
 
 For a performance claim, use a controlled deployment and repeated steady-state
 samples. Measure at least:
@@ -233,23 +288,29 @@ samples. Measure at least:
 - retry and timeout rates; and
 - background host load and scheduling gaps.
 
+The project's calculation-based estimation method (with equations and claim
+boundaries) is in
+[Estimating Performance, Throughput, And Network Cost](../../docs/performance-and-cost-estimation.md).
+
 ## Current API Boundary
 
 This demo proves the data-local execution, bounded-reduction, and placement
-shape, but it is not yet the public service-authoring path.
+shape, but it is **not yet the public service-authoring path**.
 
 It drives the internal placement substrate directly: the harness writes a
 `service_definitions` row for a kernel-internal `native_js` query-loop module
 and pins two replicas so the disjoint-shard arithmetic is reproducible.
 
-That direct write is demo scaffolding against a migration-input table. It is not
-how externally authored services are deployed.
+That direct write is demo scaffolding against a migration-input table. It is
+not how externally authored services are deployed.
 
-Public deployment uses Artifact / Binding / Cell. Genuine WASI request
-components are externally installable today, and the current public context
-provides `read`, `write`, and `capability`. The accepted `call` and `pushdown`
-Binding source kinds do not yet have public invocation adapters, and the richer
-partition-local SQL and reducer context remains product direction.
+Public deployment uses Artifact / Binding / Cell. Genuine
+[WASI](https://wasi.dev/) request components are externally installable today
+(see [js-request-binding-deployment](../js-request-binding-deployment/README.md)),
+and the current public context provides `read`, `write`, and `capability`. The
+accepted `call` and `pushdown` Binding source kinds do not yet have public
+invocation adapters, and the richer partition-local SQL and reducer context
+remains product direction.
 
 This distinction is intentional:
 
@@ -260,15 +321,16 @@ This distinction is intentional:
 ## Troubleshooting
 
 The demo fails closed rather than starting work the cluster cannot finish.
-Readiness includes total and ledger-specific in-flight operation counts plus the
-ledger voter shape. The run proceeds only once the ledger has at least three
-voters with no single node required for its majority.
+Readiness includes total and ledger-specific in-flight operation counts plus
+the ledger voter shape. The run proceeds only once the ledger has at least
+three voters with no single node required for its majority.
 
-If that spread is not reached before the no-progress cutoff, the run stops with
-a formation diagnosis instead of issuing a schema request that cannot succeed.
+If that spread is not reached before the no-progress cutoff, the run stops
+with a formation diagnosis instead of issuing a schema request that cannot
+succeed.
 
-If the command fails before loading ratings, inspect the emitted failure report
-and archived node logs under:
+If the command fails before loading ratings, inspect the emitted failure
+report and archived node logs under:
 
 ```text
 data/examples/service-data-affinity-demo-archive/

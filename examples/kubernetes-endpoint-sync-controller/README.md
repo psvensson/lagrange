@@ -1,9 +1,53 @@
 # Kubernetes Endpoint Sync Controller Example
 
-This example shows how to deploy a Kubernetes-side endpoint sync controller
-that projects Lagrange `service_endpoints` metadata into selector-less
-Kubernetes `Service` + `EndpointSlice` resources. Use it as a starting point
-for your own deployment.
+## The problem this example addresses
+
+Lagrange decides for itself where its services run: its rebalancer places
+service replicas near the data they use, and the cluster's canonical
+`service_endpoints` table records where every service is actually reachable
+(see the [examples overview](../README.md) for why placement is
+Lagrange-owned). [Kubernetes](https://kubernetes.io/docs/concepts/overview/),
+however, discovers endpoints its own way — by selecting Pods with labels — and
+that mechanism cannot see Lagrange's placement decisions.
+
+So how does traffic from a Kubernetes cluster (an ingress, a gateway, a load
+balancer) reach the right Lagrange replicas as they move?
+
+This example bridges the two worlds with a small **controller** — a process
+that continuously reconciles the desired state into Kubernetes, the standard
+[controller pattern](https://kubernetes.io/docs/concepts/architecture/controller/).
+It reads Lagrange's `service_endpoints` rows and projects them into
+selector-less Kubernetes
+[`Service`](https://kubernetes.io/docs/concepts/services-networking/service/) +
+[`EndpointSlice`](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/)
+objects ("selector-less" means Kubernetes does not compute the endpoints from
+Pod labels — the controller supplies them explicitly). A
+[Helm](https://helm.sh/docs/) chart packages the deployment. Use it as a
+starting point for your own deployment.
+
+```mermaid
+%%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+flowchart LR
+  SE["service_endpoints table<br/>(Lagrange source of truth)"]:::data
+  CTRL["endpoint-sync controller<br/>reads /api/admin/stream"]:::move
+  KS["Kubernetes Service<br/>svc-foo-http (selector-less)"]:::svc
+  ES["managed EndpointSlices<br/>svc-foo-http-0, -1, ..."]:::svc
+  EDGE["cluster edge<br/>Gateway / Ingress / LB"]:::ctrl
+  DNS["DNS<br/>foo.example.com"]:::ctrl
+  CL["Client"]:::ctrl
+
+  SE --> CTRL --> KS
+  CTRL --> ES
+  KS --> EDGE
+  ES --> EDGE
+  DNS --> EDGE
+  CL --> DNS
+
+  classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
+  classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
+  classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
+  classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
+```
 
 ## Kubernetes vs Lagrange (key differences)
 
@@ -40,7 +84,9 @@ deployment:
 | `sys-postgres-wire` | PostgreSQL wire ingress | Client database traffic |
 
 With default values (`sync.protocolAllowList=[postgresql]`), the main exported
-service is usually `sys-postgres-wire`.
+service is usually `sys-postgres-wire` — the listener that speaks the
+[PostgreSQL wire protocol](https://www.postgresql.org/docs/current/protocol.html),
+demonstrated in [service-portability](../service-portability/README.md).
 
 Public internet exposure should normally use user services, not `sys-*`
 internal control-plane services.
@@ -61,6 +107,10 @@ The projected name comes from:
 
 ## Render the chart
 
+Rendering needs no cluster at all —
+[`helm template`](https://helm.sh/docs/helm/helm_template/) just prints the
+Kubernetes manifests the chart would produce:
+
 ```bash
 helm template endpoint-sync \
   examples/kubernetes-endpoint-sync-controller/helm/lagrange-endpoint-sync-controller
@@ -80,8 +130,10 @@ npm run start:endpoint-sync
 Good to know:
 
 - The runner uses `scripts/start-endpoint-sync-controller.js`.
-- Kubernetes API credentials are read from in-cluster service account files.
-- If `ENDPOINT_SYNC_TARGET_NAMESPACE` is omitted, it falls back to the service account namespace.
+- Kubernetes API credentials are read from
+  [in-cluster service account files](https://kubernetes.io/docs/tasks/run-application/access-api-from-pod/).
+- If `ENDPOINT_SYNC_TARGET_NAMESPACE` is omitted, it falls back to the service
+  account namespace.
 
 ## Verify chart scenarios
 
@@ -115,7 +167,9 @@ helm upgrade --install endpoint-sync \
 - `sync.serviceIdAllowList`: optional service-id allowlist
 - `sync.strictPortMode`: enforce one port per logical service (default: true)
 - `sync.unhealthyPolicy`: `exclude` or `not_ready`
-- `leaderElection.enabled`: lease-based single-writer mode
+- `leaderElection.enabled`: lease-based single-writer mode (uses Kubernetes
+  [Lease objects](https://kubernetes.io/docs/concepts/architecture/leases/) so
+  only one controller replica writes at a time)
 - `controller.command` / `controller.args`: optional container command override
 
 ## End-to-end path to a public domain
@@ -127,13 +181,14 @@ Example target domain: `foo.example.com`
 2. Endpoint sync controller queries `/api/admin/stream` and reads those rows.
 3. Controller reconciles Kubernetes resources in the target namespace:
    `Service` (`svc-foo-http`) + managed `EndpointSlice`.
-4. Your Kubernetes edge component (for example: Gateway, ingress controller,
-   or cloud TCP load balancer integration) routes traffic to
-   `svc-foo-http`.
+4. Your Kubernetes edge component (for example:
+   [Gateway](https://kubernetes.io/docs/concepts/services-networking/gateway/),
+   [ingress controller](https://kubernetes.io/docs/concepts/services-networking/ingress/),
+   or cloud TCP load balancer integration) routes traffic to `svc-foo-http`.
 5. External DNS maps `foo.example.com` to the edge public address.
 6. Client connects to `https://foo.example.com` (or `http://foo.example.com`)
-   and traffic reaches healthy
-   runtime replicas through controller-managed EndpointSlices.
+   and traffic reaches healthy runtime replicas through controller-managed
+   EndpointSlices.
 
 Data flow summary:
 
@@ -148,5 +203,7 @@ and your Ingress/Gateway hostname could be something like `api.example.com`.
 - The controller is projection-only and does not manage runtime placement.
 - In strict port mode, mixed ports for one logical service are rejected per
   reconcile cycle.
-- The controller runtime entrypoint is `scripts/start-endpoint-sync-controller.js`.
-- Update `image.repository` and `image.tag` to your published controller image.
+- The controller runtime entrypoint is
+  `scripts/start-endpoint-sync-controller.js`.
+- Update `image.repository` and `image.tag` to your published controller
+  image.
