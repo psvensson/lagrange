@@ -182,12 +182,18 @@ function sameAuditProblem(left, right) {
 
 function assertApprovalCanCompleteAudit(root, quest, state) {
   const audit = auditQuest(root, quest);
+  // An aggregate approval recorded before `land` (the boot.md flow: verify,
+  // record the structured finding, then land) leaves zero audit problems;
+  // that is as landable as the single pending receipt problem `land` itself
+  // discharges by recording the approval.
+  const alreadyApproved = state.aggregateProblems.length === 0 &&
+    audit.problems.length === 0;
   const expected = state.aggregateProblems.length === 1 ?
     state.aggregateProblems[0] : null;
   const onlyExpectedReceiptProblem = expected !== null &&
     audit.problems.length === 1 &&
     sameAuditProblem(audit.problems[0], expected);
-  if (!onlyExpectedReceiptProblem) {
+  if (!alreadyApproved && !onlyExpectedReceiptProblem) {
     const residual = audit.problems.filter((item) =>
       !expected || !sameAuditProblem(item, expected));
     const reported = residual.length > 0 ? residual : audit.problems;
