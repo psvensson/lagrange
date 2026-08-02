@@ -196,3 +196,40 @@ its **own quest**, not a bolt-on.
   remains the wiring quest's scope.
 - Remaining open scope: `minimal-deployment-call-cell-production-wiring`
   (drafted, unsealed).
+
+## EPIC CONTINUATION 2026-08-02 (night): production wiring LANDED
+
+- **`minimal-deployment-call-cell-production-wiring` LANDED as commit `c9fe4c4ad`**
+  (17 paths, fingerprint `sha256:e3a3a322…`, verifier subagent:a16a6517f825e7f7f
+  APPROVED after adversarial re-check of all design seams).
+- What landed: `attachCallCellInvoker` composes resolver + routing surface +
+  batch executor + reduce coordinator (over new `call_cell_reduce_slots` /
+  `call_cell_reduce_results` system tables, five-point registration per the
+  wasm_operations precedent, unique index instead of composite PK because the
+  per-replica DDL path drops composite PKs) and assigns the invoker to the
+  ServiceLifecycleCommandOwner inside `attachSqlRuntimeToStartupOwner` (seed +
+  join). RuntimeServiceHandler self-defaults its CallBindingRouteResolver.
+  **Fence-replay fix**: every shard run / reduce dispatch carries a slot-scoped
+  wire identity (`#slot-N` / `#reduce`) — the durable fence keyed on
+  tenant+invocationId would otherwise replay shard 1 into shard 2 and into
+  reduce on any production node. The resolver parses the identity for
+  deterministic slot spread across replicas. Reduce acquires a dedicated
+  reduce-lease slot (shard slots + 1) and the snapshot is refused typed if the
+  executing replica is not the holder. Two-node integration evidence via the
+  REAL handler-setup factory + REAL bootstrap attachment, coordination SQL
+  through the real engine into SQLite created from the registered schemas.
+- ABI spike timeout budget widened separately as commit `3061b8d21`.
+- Verifier follow-ups (non-blocking, for future ops/hardening quests):
+  publish is not lease-expiry-guarded (safe today: single orchestrator +
+  UUID-keyed result row); receiver does not echo its replica id (wrong-replica
+  execution is prevented by its own assertSelectedRoute, the invoker check
+  detects resolution drift); parseCallInvocationIdentity would mis-split a
+  caller-supplied idempotency key ending in `#slot-N`/`#reduce` (unreachable —
+  orchestrator mints UUIDs; add a grammar guard if keys are ever exposed);
+  orphaned seed rows for failed invocations still accumulate (ops cleanup).
+- **Epic state**: the "non-request invocation" follow-on for call/pushdown is
+  now landed end-to-end (runtime foundation 5c374e6c8, orchestration
+  e723e30f5, production wiring c9fe4c4ad). The next epic follow-on,
+  data-local call activation, is owned by
+  `solve/quests/data-local-call-partition-activation.json` — authored by a
+  CONCURRENT session (with the matching epic-memo edit); not touched here.
