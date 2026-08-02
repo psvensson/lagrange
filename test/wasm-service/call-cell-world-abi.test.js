@@ -73,7 +73,10 @@ async function buildAndInstantiate(hostState) {
   );
 }
 
+// ComponentizeJS builds take ~25s on a loaded machine; the tap default 30s
+// per-test timeout is too tight a budget for a toolchain-bound test.
 test('call-cell world round-trips typed batches, budgets, and reduce',
+  {timeout: 120000},
   async (t) => {
     const hostState = {emits: []};
     const exports = await buildAndInstantiate(hostState);
