@@ -18,7 +18,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `gate` — Run the rolling-restart statistical gate (scripts/rolling-restart-stat-gate.sh).
 - `lint` — `eslint src/ test/ --ignore-pattern 'test/.gitkeep'`
 - `overview` — Top-down walk of the planning stack: roadmap -> epic -> spec -> quest -> closure ledger (solve.js overview).
-- `prepare` — `test ! -f scripts/install-git-hooks.js || node scripts/install-git-hooks.js`
+- `prepare` — `node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"`
 - `pretest` — `npm run audit:state-machine-pressure`
 - `repro` — Run a closure-ledger reproduction case (npm run repro -- CL-0NN).
 - `rule` — `node scripts/lookup-rule.js`
@@ -173,6 +173,14 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `overview:write` — Write the ignored local work-overview projection to solve/OVERVIEW.generated.md.
 
+## package
+
+- `package:npm` — `node scripts/release-npm-package.js verify`
+
+## publish
+
+- `publish:npm` — `node scripts/release-npm-package.js publish`
+
 ## quest
 
 - `quest:context` — Print Quest status, model guidance, source-change verifier rule, pending step, latest probe, findings, and dirty worktree.
@@ -231,6 +239,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## test
 
+- `test:aggregate-sensitive-pregate` — `TAP_TIMEOUT=120 node scripts/run-test-files.js --jobs=1 test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js`
 - `test:analysis` — `npm run test:unused && npm run test:deps && npm run test:complexity && npm run test:metrics`
 - `test:bootstrap:1` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/bootstrap-1.txt)`
 - `test:bootstrap:2` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/bootstrap-2.txt)`
@@ -268,6 +277,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:metrics:scoped` — Run scoped cyclomatic and cognitive complexity ratchets.
 - `test:metrics:scoped:strict` — `node scripts/check-scoped-ratchets.js --strict`
 - `test:mutation` — `stryker run`
+- `test:owner-debt:prepare` — `node scripts/generate-global-owner-debt-inventory.js --refresh --output test-output/analysis/global-owner-debt-inventory.json`
 - `test:pgwire` — `node scripts/run-test-files.js $(cat test/shards/pgwire-unit.txt test/shards/pgwire-integration.txt)`
 - `test:pgwire:integration` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/pgwire-integration.txt)`
 - `test:pgwire:unit` — `node scripts/run-test-files.js $(cat test/shards/pgwire-unit.txt)`
@@ -302,4 +312,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-203 scripts indexed; 75 have a curated description, 128 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+207 scripts indexed; 75 have a curated description, 132 fall back to their raw command. Improve coverage in the two sources named in the header comment.
