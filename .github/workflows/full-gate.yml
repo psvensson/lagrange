@@ -63,18 +63,27 @@ jobs:
 
       # The acceptance runner captures per-command outcomes into the receipt,
       # not the job log; without this step a red nightly says only "N/5
-      # commands passed" and the receipt dies with the runner.
+      # commands passed" and the receipt dies with the runner. Mirrors the
+      # ci.yml post-push dump: verdicts first, then each failing command's
+      # failure lines before a bounded tail.
       - name: Name the failing gate commands
         if: failure()
         run: |
-          set -euo pipefail
-          receipt=$(ls -t test-output/acceptance/*.report.json 2>/dev/null | head -1 || true)
-          if [ -z "$receipt" ]; then
-            echo "no acceptance receipt was produced"
-            exit 0
-          fi
-          echo "receipt: $receipt"
+          set -uo pipefail
+          receipt=$(ls -t test-output/acceptance/*.report.json 2>/dev/null | head -1)
+          [ -n "$receipt" ] || { echo "no acceptance receipt was produced"; exit 0; }
+          echo "=== $receipt ==="
           jq '{summary: .summary, commands: [.commands[] | {id, status, exitCode, reasons}]}' "$receipt"
+          jq -r '.commands[] | select(.status == "FAIL") | (.artifactIdentity.path // .requiredArtifact.path // empty)' "$receipt" |
+          while read -r artifact; do
+            [ -f "$artifact" ] || continue
+            echo "=== failures in $artifact ==="
+            jq -r '.stdout // .output // empty' "$artifact" 2>/dev/null |
+              grep -E '^(not ok|# test-files.*fail=[1-9]|FAIL|.*[Ee]rror)' |
+              head -100 || true
+            echo "=== tail of $artifact ==="
+            jq -r '.stdout // .output // .' "$artifact" 2>/dev/null | tail -200 || tail -c 20000 "$artifact"
+          done
 
       - name: Upload gate outputs
         if: always()
