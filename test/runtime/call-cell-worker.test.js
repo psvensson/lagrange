@@ -160,9 +160,15 @@ test(
       });
       const reduced = JSON.parse(reduceInvocation.value);
       assert.deepEqual(
-        reduced.map((entry) => entry.id),
+        reduced.map((entry) => entry.key),
         [String(BEYOND_F64_ID), '5', '1'],
         'reduce re-sorts unordered partials into the final ordered result',
+      );
+      assert.deepEqual(
+        reduced.map((entry) => entry.score),
+        [4.9, 4.7, 4.5],
+        'the emitted numeric aggregation values survive the reduce ' +
+          'round-trip',
       );
     } finally {
       await cellRuntime.stop(cell.serviceId);

@@ -28,7 +28,9 @@ export function run(batch, argumentsJson) {
   const denied = [];
   for (const candidate of scored) {
     try {
-      emit(candidate.id, JSON.stringify(candidate));
+      // The emitted partial is the numeric aggregation value for the group
+      // key — the shape the reduce-lease coordination gate accepts.
+      emit(candidate.id, JSON.stringify(candidate.score));
     } catch (error) {
       denied.push({id: candidate.id, code: error.payload ?? String(error)});
     }
@@ -46,7 +48,7 @@ export function reduce(partials, argumentsJson) {
   const {topN} = JSON.parse(argumentsJson);
   const merged = partials.map(([key, partial]) => ({
     key,
-    ...JSON.parse(partial),
+    score: JSON.parse(partial),
   }));
   merged.sort((a, b) => b.score - a.score);
   return JSON.stringify(merged.slice(0, topN));

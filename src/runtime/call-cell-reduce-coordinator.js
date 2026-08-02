@@ -89,7 +89,17 @@ const CALL_CELL_REDUCE_ARGUMENT_MESSAGE = Object.freeze({
     'resolveCompletePartialSet requires a positive integer limit',
   PUBLISH_SNAPSHOT_REQUIRES:
     'publishFinalSnapshot requires an invocation id and result JSON',
+  SEED_REQUIRES_INVOCATION:
+    'seedInvocation requires a fresh invocation id',
 });
+const SEED_SLOT_EMPTY_REPLICA = '';
+const SEED_EMPTY_JSON = '';
+const SEED_SLOT_INSERT_COLUMNS =
+  '(invocation_id, slot_id, replica_id, lease_expires_at, ' +
+  'partial_json, computed_at) VALUES ';
+const SEED_RESULT_INSERT_COLUMNS =
+  '(result_id, result_json, computed_at, ' +
+  `${RESULT_SNAPSHOT_WITNESS_COLUMN}) VALUES `;
 
 function isNonEmptyString(value) {
   return typeof value === 'string' && value.length > 0;
@@ -221,6 +231,40 @@ function createCallCellReduceCoordinator(options) {
     ));
     return ownedSlotRow(
       await readSlotRows(invocationId), replicaId, slotId, atMs);
+  }
+
+  // Seed the per-invocation coordination rows the guarded UPDATEs bite on:
+  // one expired-lease slot row per expected slot plus the result row the
+  // final snapshot atomically fills. Invocation ids are content-fresh
+  // (UUID identities from the routing contract), so plain INSERTs are
+  // correct — re-seeding an id would mean the orchestrator reused an
+  // identity, and the coordination table's primary key is the right place
+  // for that to fail loudly.
+  async function seedInvocation(invocationId, expectedSlotIds) {
+    if (!isNonEmptyString(invocationId)) {
+      throw new TypeError(
+        CALL_CELL_REDUCE_ARGUMENT_MESSAGE.SEED_REQUIRES_INVOCATION,
+      );
+    }
+    const slotIds = normalizeExpectedSlotIds(expectedSlotIds, config);
+    for (const slotId of slotIds) {
+      assertQuerySuccess(await config.executeInternal(
+        `INSERT INTO ${config.coordinationTable} ` +
+        SEED_SLOT_INSERT_COLUMNS +
+        `(${sqlLiteral(invocationId)}, ${slotId}, ` +
+        `${sqlLiteral(SEED_SLOT_EMPTY_REPLICA)}, 0, ` +
+        `${sqlLiteral(EMPTY_PARTIAL_JSON)}, 0)`,
+        [],
+      ));
+    }
+    assertQuerySuccess(await config.executeInternal(
+      `INSERT INTO ${config.resultTable} ` +
+      SEED_RESULT_INSERT_COLUMNS +
+      `(${sqlLiteral(invocationId)}, ${sqlLiteral(SEED_EMPTY_JSON)}, 0, ` +
+      `${sqlLiteral(SEED_EMPTY_JSON)})`,
+      [],
+    ));
+    return {slotIds};
   }
 
   async function acquireReduceLease(invocationId, replicaId, slotId) {
@@ -504,6 +548,7 @@ function createCallCellReduceCoordinator(options) {
     publishFinalSnapshot,
     parseResultSnapshotWitness,
     readSlotRows,
+    seedInvocation,
   });
 }
 

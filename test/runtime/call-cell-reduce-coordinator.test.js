@@ -142,12 +142,36 @@ function applyResultUpdate(store, sql) {
   store.resultUpdateCount += 1;
 }
 
-function createSqlStore() {
-  const store = {
-    slots: [slotRow(INVOCATION_ID, 1), slotRow(INVOCATION_ID, 2)],
-    results: [resultRow(INVOCATION_ID)],
-    resultUpdateCount: 0,
+// Parse the coordinator's seed INSERT grammar:
+// INSERT INTO <table> (col, ...) VALUES (v, ...) with quoted-string and
+// numeric literals, mirroring how the guarded-UPDATE grammar is parsed.
+function parseInsert(sql) {
+  const match =
+    /^INSERT INTO ([a-z_]+) \(([^)]+)\) VALUES \((.+)\)$/u.exec(sql);
+  if (!match) {
+    return null;
+  }
+  const [, tableName, columnsFragment, valuesFragment] = match;
+  const columns = columnsFragment.split(',').map((column) => column.trim());
+  const values = valuesFragment.match(/'(?:[^']|'')*'|[^,\s]+/gu)
+    .map((value) => (value.startsWith('\'') ?
+      value.slice(1, -1).replace(/''/gu, '\'') :
+      Number(value)));
+  return {
+    tableName,
+    row: Object.fromEntries(
+      columns.map((column, index) => [column, values[index]])),
   };
+}
+
+function createSqlStore(options = {}) {
+  const store = options.empty === true ?
+    {slots: [], results: [], resultUpdateCount: 0} :
+    {
+      slots: [slotRow(INVOCATION_ID, 1), slotRow(INVOCATION_ID, 2)],
+      results: [resultRow(INVOCATION_ID)],
+      resultUpdateCount: 0,
+    };
   const executeInternal = async (sql) => {
     if (sql.startsWith('SELECT slot_id')) {
       const invocationId = whereValue(sql, 'invocation_id');
@@ -164,6 +188,15 @@ function createSqlStore() {
     }
     if (sql.startsWith(`UPDATE ${RESULT_TABLE}`)) {
       applyResultUpdate(store, sql);
+      return {success: true};
+    }
+    const insert = parseInsert(sql);
+    if (insert?.tableName === COORDINATION_TABLE) {
+      store.slots.push(insert.row);
+      return {success: true};
+    }
+    if (insert?.tableName === RESULT_TABLE) {
+      store.results.push(insert.row);
       return {success: true};
     }
     return {success: false, error: `unexpected sql: ${sql}`};
@@ -523,5 +556,65 @@ test('replacement replica re-leases, recomputes, and the final snapshot ' +
   t.equal(store.results[0].result_json,
     JSON.stringify(recomputed.partials),
     'the single visible row flips atomically to the recomputed result');
+  t.end();
+});
+
+test('seedInvocation creates the rows the guarded coordination cycle ' +
+  'bites on, from an empty store', async (t) => {
+  const nowRef = {now: 10_000};
+  const {store, executeInternal} = createSqlStore({empty: true});
+  const coordinator = createCoordinator(executeInternal, nowRef);
+  const invocationId = 'call-invocation-seeded-1';
+
+  const seeded = await coordinator.seedInvocation(invocationId, [1, 2]);
+  t.same(seeded.slotIds, [1, 2], 'the seeded slot ids echo back sorted');
+  t.same(
+    store.slots.map((slot) =>
+      [slot.invocation_id, slot.slot_id, slot.replica_id,
+        slot.lease_expires_at, slot.partial_json, slot.computed_at]),
+    [
+      [invocationId, 1, '', 0, '[]', 0],
+      [invocationId, 2, '', 0, '[]', 0],
+    ],
+    'each expected slot starts unowned with an expired lease and an ' +
+      'empty partial',
+  );
+  t.same(
+    store.results.map((row) =>
+      [row.result_id, row.result_json, row.computed_at]),
+    [[invocationId, '', 0]],
+    'the result row exists for the final snapshot UPDATE to fill',
+  );
+
+  await coordinator.acquireReduceLease(invocationId, REPLICA_ONE, 1);
+  await coordinator.publishPartial(
+    invocationId, 1, REPLICA_ONE,
+    partialJson([{groupKey: 'a', aggValue: 3}]), nowRef.now,
+  );
+  await coordinator.acquireReduceLease(invocationId, REPLICA_ONE, 2);
+  await coordinator.publishPartial(
+    invocationId, 2, REPLICA_ONE,
+    partialJson([{groupKey: 'b', aggValue: 5}]), nowRef.now,
+  );
+  const gate = await coordinator.resolveCompletePartialSet(
+    invocationId, [1, 2], LIMIT,
+  );
+  t.same(gate.partials, [['b', 5], ['a', 3]],
+    'the seeded rows carry a full leased publish → gate cycle');
+  await coordinator.publishFinalSnapshot(
+    invocationId, JSON.stringify(gate.partials), gate.witness,
+  );
+  t.equal(store.results[0].result_json, JSON.stringify(gate.partials),
+    'the seeded result row receives the atomically visible snapshot');
+
+  await coordinator.seedInvocation(invocationId, [1, 2]).then(
+    () => t.pass('re-seeding is a plain insert; uniqueness is the ' +
+      'coordination DDL owner concern'),
+    () => t.fail('seedInvocation must not throw on the fixture store'),
+  );
+  await coordinator.seedInvocation('').then(
+    () => t.fail('expected a typed refusal for a missing invocation id'),
+    (error) => t.match(String(error.message), /fresh invocation id/u),
+  );
   t.end();
 });

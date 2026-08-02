@@ -109,7 +109,7 @@ test('call-cell world round-trips typed batches, budgets, and reduce',
       exports.reduce([...hostState.emits].reverse(), TOP_N_ARGUMENTS),
     );
     t.same(
-      reduced.map((entry) => entry.id),
+      reduced.map((entry) => entry.key),
       [String(BEYOND_F64_ID), '5', '1'],
       'reduce re-sorts unordered partials into the final ordered result',
     );

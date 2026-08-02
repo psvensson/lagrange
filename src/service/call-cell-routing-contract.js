@@ -29,6 +29,10 @@ const CALL_CELL_ROUTE_ERROR_CODE = Object.freeze({
 });
 const CALL_CELL_ROUTE_ERROR_NAME = 'CallCellRoutingError';
 const CALL_CELL_INVOCATION_ID_PREFIX = 'call-invocation-';
+// Wire prefix the runtime invocation owner stamps onto every emitted
+// partial key (call-cell-driver-invoke.js); consumers strip it to recover
+// the guest's group key.
+const CALL_CELL_PARTIAL_KEY_PREFIX = 'partial:';
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
 const BYTE_ENCODING = 'utf8';
@@ -38,6 +42,9 @@ const CALL_CELL_CONTRACT_MESSAGE = Object.freeze({
   ARGUMENTS_NOT_OBJECT: 'arguments must be a JSON object',
   COMPONENT_RESULT_JSON_INVALID:
     'Call Cell Component returned an invalid result JSON string',
+  EMITTED_PARTIAL_INVALID:
+    'Call Cell emitted partial is not a {key, partial} entry carrying a ' +
+    'finite numeric aggregation value JSON',
   SECURITY_CONTEXT_INVALID:
     'Call authentication did not produce a canonical security context',
 });
@@ -96,6 +103,47 @@ function normalizeCallComponentResult(value) {
   return value;
 }
 
+// The emitted-partial wire contract for reduce coordination: every emit
+// carries a finite numeric aggregation value as its partial JSON, keyed by
+// the guest's group key. The coordinator's completeness gate re-validates
+// the same shape fail-closed; this normalization exists so the invocation
+// owner refuses an incoherent component before anything is published.
+function normalizeEmittedPartialEntries(partials) {
+  const entries = Array.isArray(partials) ? partials : [];
+  return entries.map((entry) => {
+    const key = entry?.key;
+    const partial = entry?.partial;
+    if (typeof key !== 'string' ||
+        !key.startsWith(CALL_CELL_PARTIAL_KEY_PREFIX) ||
+        typeof partial !== 'string') {
+      throw createCallRoutingFailure(
+        CALL_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESULT,
+        CALL_CELL_CONTRACT_MESSAGE.EMITTED_PARTIAL_INVALID,
+      );
+    }
+    let aggValue;
+    try {
+      aggValue = JSON.parse(partial);
+    } catch (error) {
+      throw createCallRoutingFailure(
+        CALL_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESULT,
+        CALL_CELL_CONTRACT_MESSAGE.EMITTED_PARTIAL_INVALID,
+        {cause: error},
+      );
+    }
+    if (typeof aggValue !== 'number' || !Number.isFinite(aggValue)) {
+      throw createCallRoutingFailure(
+        CALL_CELL_ROUTE_ERROR_CODE.INVALID_COMPONENT_RESULT,
+        CALL_CELL_CONTRACT_MESSAGE.EMITTED_PARTIAL_INVALID,
+      );
+    }
+    return Object.freeze({
+      aggValue,
+      groupKey: key.slice(CALL_CELL_PARTIAL_KEY_PREFIX.length),
+    });
+  });
+}
+
 const EMPTY_ARGUMENTS_JSON = '{}';
 
 function normalizeCallArguments(value) {
@@ -125,6 +173,7 @@ function normalizeCallArguments(value) {
 
 export {
   CALL_CELL_INVOCATION_ID_PREFIX,
+  CALL_CELL_PARTIAL_KEY_PREFIX,
   CALL_CELL_ROUTE_CLASSIFICATION,
   CALL_CELL_ROUTE_ERROR_CODE,
   CALL_CELL_ROUTE_MESSAGE_TYPE,
@@ -135,4 +184,5 @@ export {
   createCallRoutingFailure,
   normalizeCallArguments,
   normalizeCallComponentResult,
+  normalizeEmittedPartialEntries,
 };
