@@ -1,0 +1,15 @@
+{
+  "metric": 1,
+  "target": 0,
+  "done": false,
+  "ownerCheck": {
+    "passed": false,
+    "owner": "src/diagnostics/playback-evidence-file.js"
+  },
+  "gates": {
+    "streamedCapture": false,
+    "plainCompatibility": false,
+    "compressedCompatibility": false,
+    "subagentVerification": false
+  }
+}

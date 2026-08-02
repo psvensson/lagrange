@@ -1,0 +1,52 @@
+{
+  "id": "playback-evidence-capture-compression",
+  "authoringContractVersion": 2,
+  "verificationContractVersion": 2,
+  "statement": "High-volume playback snapshot evidence is streamed to gzip at capture time by the recorder behind the shared owner src/diagnostics/playback-evidence-file.js, and every supported snapshot reader (failure-bundle insights, publication evidence replay, the retirement/leadership/census analyzers, admin serving in src/admin/admin-test-run-service.js, and both playback viewers) transparently accepts both legacy plain and compressed artifacts without changing replay semantics.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "docs/distributed-playback-viewer.md",
+    "closesCL": [],
+    "parentQuest": "distributed-evidence-capture-compression",
+    "planDoc": null,
+    "draftedAtCommit": "8a2aceb15e5a1aa7caa91d50a1a72a2b309a907b"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/playback-evidence-capture-compression.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "playback-evidence-capture-compression-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/playback-evidence-capture-compression.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "pre-attempt-adversarial-design-review",
+      "statement": "After explicit declaration and before first execution, record an independent approving design-review receipt bound to the sealed declaration."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "capture-integrity",
+      "statement": "Snapshot gzip is streamed during capture, fully finalized before manifest publication, and leaves no authoritative plain sibling or partial-success manifest."
+    },
+    {
+      "id": "reader-compatibility",
+      "statement": "Supported readers prefer an explicitly requested existing artifact and otherwise resolve its gzip sibling, preserving legacy plain inputs, diagnostics, and replay results."
+    }
+  ]
+}
