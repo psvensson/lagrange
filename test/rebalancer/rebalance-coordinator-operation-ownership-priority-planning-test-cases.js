@@ -1,3 +1,36 @@
+function findPriorityRecoveryDecisionSnapshot(
+  planningSnapshot,
+  partitionId,
+  operations = [],
+) {
+  const snapshots =
+    planningSnapshot?.priorityRecoveryDecisionSnapshots?.snapshots;
+  if (!Array.isArray(snapshots)) {
+    return null;
+  }
+  const operationIds = new Set(
+    (Array.isArray(operations) ? operations : [])
+      .map((operation) => operation?.operationId || operation?.operation_id)
+      .filter((operationId) => String(operationId || '').trim().length > 0),
+  );
+  return snapshots.find((snapshot) => {
+    if (snapshot?.partitionId !== partitionId) {
+      return false;
+    }
+    if (operationIds.size === 0) {
+      return true;
+    }
+    const snapshotOperationIds = Array.isArray(
+      snapshot?.coordinator?.operationIds,
+    ) ?
+      snapshot.coordinator.operationIds :
+      [snapshot?.operationId].filter(Boolean);
+    return snapshotOperationIds.some((operationId) =>
+      operationIds.has(operationId),
+    );
+  }) || null;
+}
+
 export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTests({
   test,
   RebalanceCoordinator,
@@ -468,6 +501,13 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       );
       coordinator.workflowOwner.getPriorityRecoveryPlanningSnapshot =
       async () => planningSnapshot;
+      coordinator.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations =
+      async (partitionId, operations) =>
+        findPriorityRecoveryDecisionSnapshot(
+          planningSnapshot,
+          partitionId,
+          operations,
+        );
 
       try {
         const canStartPriorityOperation =
@@ -619,6 +659,15 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
       coordinator.queryIncompleteOperations = async () => (
         [stalePriorityReplaceOperation]
       );
+      coordinator.workflowOwner.getPriorityRecoveryDecisionSnapshotForPartitionOperations =
+      async (partitionId, operations) => {
+        planningSnapshotCalls += 1;
+        return findPriorityRecoveryDecisionSnapshot(
+          planningSnapshot,
+          partitionId,
+          operations,
+        );
+      };
 
       try {
         const canStartPriorityOperation =
@@ -633,7 +682,7 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityPlanningTe
         );
         t.ok(
           planningSnapshotCalls > maxConcurrentAdds,
-          'the grouped priority add-budget path should request planning evidence beyond the pressure gate',
+          'the grouped priority add-budget path should request planning-owned decision evidence beyond the pressure gate',
         );
       } finally {
         await coordinator.shutdown();
