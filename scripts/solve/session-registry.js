@@ -218,6 +218,27 @@ function questLeaseConflictError(questId, holder) {
   return error;
 }
 
+function worktreeQuestConflictError(requestedQuestId, holder) {
+  const error = new Error(
+    `session-registry: worktree ${holder.worktree} already holds writable ` +
+    `quest ${holder.questId} and cannot claim ${requestedQuestId}; land or ` +
+    `explicitly release ${holder.questId} here first, or set ` +
+    `${LEASE_BYPASS_ENVIRONMENT_FLAG}=1 if you intentionally accept ` +
+    'abandoning that claim');
+  error.code = QUEST_LEASE_CONFLICT_CODE;
+  return error;
+}
+
+function liveCurrentWorktreeSession(root, options = {}) {
+  const worktreeKey = sessionKeyForWorktree(currentWorktree(root));
+  for (const session of listSessions(root, options)) {
+    if (session.key === worktreeKey) {
+      return session;
+    }
+  }
+  return null;
+}
+
 // Every live session holding this quest, arbitration order first: earliest
 // claimedAt wins (the established holder outranks any newcomer), and only a
 // same-instant claim falls to the deterministic key tie-break.
@@ -267,8 +288,21 @@ export function scopeOverlaps(root, scopePaths, options = {}) {
 // claimedAt, so a newcomer always loses to it, and the previous holder of a
 // dropped claim re-arbitrates cleanly instead of stalemating on a stale
 // record of its own.
+//
+// The same-worktree guard below is intentionally a pre-write sequential
+// ownership check. Concurrent solver processes in one worktree remain outside
+// the supported contract because they can both pass before either writes; use
+// separate worktrees for concurrent writable Quests.
 export function claimQuest(root, questId, {scopePaths = [], ...options} = {}) {
   const bypass = Boolean(process.env[LEASE_BYPASS_ENVIRONMENT_FLAG]);
+  if (!bypass && questId !== null && questId !== undefined) {
+    const existing = liveCurrentWorktreeSession(root, options);
+    if (existing?.questId !== null &&
+      existing?.questId !== undefined &&
+      existing.questId !== questId) {
+      throw worktreeQuestConflictError(questId, existing);
+    }
+  }
   const session = registerSession(root, {questId, scopePaths});
   if (!bypass) {
     const holders = liveQuestHolders(root, questId, options);

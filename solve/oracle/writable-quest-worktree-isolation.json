@@ -1,0 +1,16 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "ownerCheck": {
+    "passed": true,
+    "owner": "scripts/solve/session-registry.js"
+  },
+  "gates": {
+    "sameWorktreeIsolation": true,
+    "originalLeasePreserved": true,
+    "releaseAndLandingCompatibility": true,
+    "crossWorktreeCompatibility": true,
+    "subagentVerification": true
+  }
+}

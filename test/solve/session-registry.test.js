@@ -93,12 +93,27 @@ tap.test('session registry and quest leases', async (t) => {
     t.end();
   });
 
-  t.test('switching quests does not bleed the previous scope', (t) => {
+  t.test('same worktree refuses a different writable quest', (t) => {
     const {repo} = makeRepoWithWorktree(t);
     claimQuest(repo, 'quest-a', {scopePaths: ['src/a.js']});
+    const original = listSessions(repo)[0];
+    try {
+      claimQuest(repo, 'quest-b');
+      t.fail('a second writable quest in one worktree must be refused');
+    } catch (error) {
+      t.equal(error.code, QUEST_LEASE_CONFLICT_CODE,
+        'the self-conflict uses the fail-closed lease code');
+      t.match(error.message, /quest-a.*quest-b/,
+        'the refusal names both held and requested quests');
+    }
+    t.same(listSessions(repo)[0], original,
+      'refusal leaves every original session field unchanged');
+    t.doesNotThrow(() => claimQuest(repo, 'quest-a'),
+      'same-quest heartbeat refresh remains valid');
+    releaseSession(repo, {questOnly: true});
     const {session} = claimQuest(repo, 'quest-b');
     t.same(session.scopePaths, [],
-      'a new quest starts with no inherited scope');
+      'explicit release permits a new claim without inherited scope');
     claimQuest(repo, 'quest-b', {scopePaths: ['src/b.js']});
     const refreshed = claimQuest(repo, 'quest-b');
     t.same(refreshed.session.scopePaths, ['src/b.js'],
@@ -108,11 +123,16 @@ tap.test('session registry and quest leases', async (t) => {
 
   t.test('the bypass environment flag is an explicit escape', (t) => {
     const {repo, worktree} = makeRepoWithWorktree(t);
-    claimQuest(repo, 'quest-x');
+    claimQuest(repo, 'quest-a', {scopePaths: ['src/a.js']});
     process.env.LAGRANGE_SESSION_LEASE_BYPASS = '1';
     t.teardown(() => delete process.env.LAGRANGE_SESSION_LEASE_BYPASS);
+    const switched = claimQuest(repo, 'quest-b');
+    t.equal(switched.session.questId, 'quest-b',
+      'the bypass permits an intentional same-worktree switch');
+    t.same(switched.session.scopePaths, [],
+      'the bypassed switch resets the prior quest scope');
     t.doesNotThrow(() => claimQuest(worktree, 'quest-x'),
-      'the bypass claims over a live lease');
+      'the bypass still permits cross-worktree arbitration escape');
     t.end();
   });
 
@@ -143,6 +163,14 @@ tap.test('session registry and quest leases', async (t) => {
     t.equal(sessionIsLive(session,
       {now: Date.now() + 25 * 60 * 60 * 1000}), false,
     'a heartbeat older than the TTL is stale');
+    const filePath = path.join(sessionsDir(repo), `${session.key}.json`);
+    fs.writeFileSync(filePath, `${JSON.stringify({
+      ...session,
+      heartbeatAt: '2000-01-01T00:00:00.000Z',
+    })}\n`);
+    const replacement = claimQuest(repo, 'quest-new');
+    t.equal(replacement.session.questId, 'quest-new',
+      'a stale own claim is collected before isolation is enforced');
     t.end();
   });
 

@@ -1,0 +1,194 @@
+diff --git a/scripts/solve/session-registry.js b/scripts/solve/session-registry.js
+index 6b58e744eb1ce702ce4a6b909549e4a3f4bffcc8..c41c7052d7fb1aceb99e2e5ac55bf2c2f5fc0e36 100644
+--- a/scripts/solve/session-registry.js
++++ b/scripts/solve/session-registry.js
+@@ -218,6 +218,27 @@ function questLeaseConflictError(questId, holder) {
+   return error;
+ }
+ 
++function worktreeQuestConflictError(requestedQuestId, holder) {
++  const error = new Error(
++    `session-registry: worktree ${holder.worktree} already holds writable ` +
++    `quest ${holder.questId} and cannot claim ${requestedQuestId}; land or ` +
++    `explicitly release ${holder.questId} here first, or set ` +
++    `${LEASE_BYPASS_ENVIRONMENT_FLAG}=1 if you intentionally accept ` +
++    'abandoning that claim');
++  error.code = QUEST_LEASE_CONFLICT_CODE;
++  return error;
++}
++
++function liveCurrentWorktreeSession(root, options = {}) {
++  const worktreeKey = sessionKeyForWorktree(currentWorktree(root));
++  for (const session of listSessions(root, options)) {
++    if (session.key === worktreeKey) {
++      return session;
++    }
++  }
++  return null;
++}
++
+ // Every live session holding this quest, arbitration order first: earliest
+ // claimedAt wins (the established holder outranks any newcomer), and only a
+ // same-instant claim falls to the deterministic key tie-break.
+@@ -267,8 +288,21 @@ export function scopeOverlaps(root, scopePaths, options = {}) {
+ // claimedAt, so a newcomer always loses to it, and the previous holder of a
+ // dropped claim re-arbitrates cleanly instead of stalemating on a stale
+ // record of its own.
++//
++// The same-worktree guard below is intentionally a pre-write sequential
++// ownership check. Concurrent solver processes in one worktree remain outside
++// the supported contract because they can both pass before either writes; use
++// separate worktrees for concurrent writable Quests.
+ export function claimQuest(root, questId, {scopePaths = [], ...options} = {}) {
+   const bypass = Boolean(process.env[LEASE_BYPASS_ENVIRONMENT_FLAG]);
++  if (!bypass && questId !== null && questId !== undefined) {
++    const existing = liveCurrentWorktreeSession(root, options);
++    if (existing?.questId !== null &&
++      existing?.questId !== undefined &&
++      existing.questId !== questId) {
++      throw worktreeQuestConflictError(questId, existing);
++    }
++  }
+   const session = registerSession(root, {questId, scopePaths});
+   if (!bypass) {
+     const holders = liveQuestHolders(root, questId, options);
+diff --git a/solve/oracle/writable-quest-worktree-isolation.json b/solve/oracle/writable-quest-worktree-isolation.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..328bc8b517147257f498562f87172bb38512211e
+--- /dev/null
++++ b/solve/oracle/writable-quest-worktree-isolation.json
+@@ -0,0 +1,16 @@
++{
++  "metric": 0,
++  "target": 0,
++  "done": true,
++  "ownerCheck": {
++    "passed": true,
++    "owner": "scripts/solve/session-registry.js"
++  },
++  "gates": {
++    "sameWorktreeIsolation": true,
++    "originalLeasePreserved": true,
++    "releaseAndLandingCompatibility": true,
++    "crossWorktreeCompatibility": true,
++    "subagentVerification": true
++  }
++}
+diff --git a/solve/quests/writable-quest-worktree-isolation.json b/solve/quests/writable-quest-worktree-isolation.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..b4165097e783f6a37b65b9149f10c8065d83817a
+--- /dev/null
++++ b/solve/quests/writable-quest-worktree-isolation.json
+@@ -0,0 +1,44 @@
++{
++  "id": "writable-quest-worktree-isolation",
++  "authoringContractVersion": 2,
++  "verificationContractVersion": 2,
++  "statement": "The shared Solver session registry refuses a live worktree's claim of a different writable Quest before replacing its existing Quest lease, preserving the original claim until an explicit release or successful non-rejected solve land; same-Quest heartbeat refresh, cross-worktree arbitration, and the explicit lease bypass retain their current behavior.",
++  "priority": 1,
++  "class": "process",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "solve/epics/convergence-loop-and-workflow-overhead.md#owner-call-2026-08-02--measured-efficiency-follow-through-accepted",
++    "closesCL": [],
++    "parentQuest": null,
++    "planDoc": "solve/epics/convergence-loop-and-workflow-overhead.md",
++    "draftedAtCommit": "e5faf2952ef54d9dc24604e35d8f7914c7039565"
++  },
++  "doneWhen": {
++    "probe": "oracle",
++    "args": {
++      "file": "solve/oracle/writable-quest-worktree-isolation.json"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "writable-quest-worktree-isolation-main",
++      "priority": 1,
++      "metric": {
++        "probe": "oracle",
++        "args": {
++          "file": "solve/oracle/writable-quest-worktree-isolation.json"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "pre-attempt-adversarial-design-review",
++      "statement": "After explicit declaration and before first execution, record an independent approving design-review receipt bound to the sealed declaration."
++    },
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
+diff --git a/test/solve/session-registry.test.js b/test/solve/session-registry.test.js
+index 0924240a5d5ada10a57ef596ec9ec415dd206388..8ef0911a5e30898d11da9b1cfc178439762e773f 100644
+--- a/test/solve/session-registry.test.js
++++ b/test/solve/session-registry.test.js
+@@ -93,12 +93,27 @@ tap.test('session registry and quest leases', async (t) => {
+     t.end();
+   });
+ 
+-  t.test('switching quests does not bleed the previous scope', (t) => {
++  t.test('same worktree refuses a different writable quest', (t) => {
+     const {repo} = makeRepoWithWorktree(t);
+     claimQuest(repo, 'quest-a', {scopePaths: ['src/a.js']});
++    const original = listSessions(repo)[0];
++    try {
++      claimQuest(repo, 'quest-b');
++      t.fail('a second writable quest in one worktree must be refused');
++    } catch (error) {
++      t.equal(error.code, QUEST_LEASE_CONFLICT_CODE,
++        'the self-conflict uses the fail-closed lease code');
++      t.match(error.message, /quest-a.*quest-b/,
++        'the refusal names both held and requested quests');
++    }
++    t.same(listSessions(repo)[0], original,
++      'refusal leaves every original session field unchanged');
++    t.doesNotThrow(() => claimQuest(repo, 'quest-a'),
++      'same-quest heartbeat refresh remains valid');
++    releaseSession(repo, {questOnly: true});
+     const {session} = claimQuest(repo, 'quest-b');
+     t.same(session.scopePaths, [],
+-      'a new quest starts with no inherited scope');
++      'explicit release permits a new claim without inherited scope');
+     claimQuest(repo, 'quest-b', {scopePaths: ['src/b.js']});
+     const refreshed = claimQuest(repo, 'quest-b');
+     t.same(refreshed.session.scopePaths, ['src/b.js'],
+@@ -108,11 +123,16 @@ tap.test('session registry and quest leases', async (t) => {
+ 
+   t.test('the bypass environment flag is an explicit escape', (t) => {
+     const {repo, worktree} = makeRepoWithWorktree(t);
+-    claimQuest(repo, 'quest-x');
++    claimQuest(repo, 'quest-a', {scopePaths: ['src/a.js']});
+     process.env.LAGRANGE_SESSION_LEASE_BYPASS = '1';
+     t.teardown(() => delete process.env.LAGRANGE_SESSION_LEASE_BYPASS);
++    const switched = claimQuest(repo, 'quest-b');
++    t.equal(switched.session.questId, 'quest-b',
++      'the bypass permits an intentional same-worktree switch');
++    t.same(switched.session.scopePaths, [],
++      'the bypassed switch resets the prior quest scope');
+     t.doesNotThrow(() => claimQuest(worktree, 'quest-x'),
+-      'the bypass claims over a live lease');
++      'the bypass still permits cross-worktree arbitration escape');
+     t.end();
+   });
+ 
+@@ -143,6 +163,14 @@ tap.test('session registry and quest leases', async (t) => {
+     t.equal(sessionIsLive(session,
+       {now: Date.now() + 25 * 60 * 60 * 1000}), false,
+     'a heartbeat older than the TTL is stale');
++    const filePath = path.join(sessionsDir(repo), `${session.key}.json`);
++    fs.writeFileSync(filePath, `${JSON.stringify({
++      ...session,
++      heartbeatAt: '2000-01-01T00:00:00.000Z',
++    })}\n`);
++    const replacement = claimQuest(repo, 'quest-new');
++    t.equal(replacement.session.questId, 'quest-new',
++      'a stale own claim is collected before isolation is enforced');
+     t.end();
+   });
+ 

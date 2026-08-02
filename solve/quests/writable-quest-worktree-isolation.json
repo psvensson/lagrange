@@ -1,0 +1,44 @@
+{
+  "id": "writable-quest-worktree-isolation",
+  "authoringContractVersion": 2,
+  "verificationContractVersion": 2,
+  "statement": "The shared Solver session registry refuses a live worktree's claim of a different writable Quest before replacing its existing Quest lease, preserving the original claim until an explicit release or successful non-rejected solve land; same-Quest heartbeat refresh, cross-worktree arbitration, and the explicit lease bypass retain their current behavior.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/convergence-loop-and-workflow-overhead.md#owner-call-2026-08-02--measured-efficiency-follow-through-accepted",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/convergence-loop-and-workflow-overhead.md",
+    "draftedAtCommit": "e5faf2952ef54d9dc24604e35d8f7914c7039565"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/writable-quest-worktree-isolation.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "writable-quest-worktree-isolation-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/writable-quest-worktree-isolation.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "pre-attempt-adversarial-design-review",
+      "statement": "After explicit declaration and before first execution, record an independent approving design-review receipt bound to the sealed declaration."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
