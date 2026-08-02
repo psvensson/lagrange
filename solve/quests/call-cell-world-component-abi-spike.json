@@ -1,0 +1,43 @@
+{
+  "id": "call-cell-world-component-abi-spike",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A genuine WASI component compiled from plain JavaScript by ComponentizeJS against the draft call-cell WIT world (typed list<row> batch of record/variant columns, emit and call-bounded imports returning result<_, deny-code>, run and reduce exports) is transpiled by @bytecodealliance/jco-transpile and instantiated in a deterministic test using the same toolchain path as the Cell runtime worker: typed batch rows round-trip exactly through run, emitted partials are captured by the host, an over-budget emit is refused with the typed budget-exhausted deny code and the guest observes the refusal, and reduce folds the published partials into the final ordered result — proving the native-call-context contract ABI is implementable with today's toolchain before any kernel work begins.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/native-call-context-wit-contract.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "4b557bf87c412a6625c58dfcc1280488ec1cec6f"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "call-cell-world-component-abi-spike",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "call-cell-world-component-abi-spike-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "call-cell-world-component-abi-spike",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

@@ -1,0 +1,246 @@
+diff --git a/scripts/checks/run-call-cell-world-abi-scenarios.js b/scripts/checks/run-call-cell-world-abi-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..8a57d0f3560eec17d4854228ea4b59d392f1c53d
+--- /dev/null
++++ b/scripts/checks/run-call-cell-world-abi-scenarios.js
+@@ -0,0 +1,16 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++// ABI spike guard for the draft call-cell WIT world: the typed
++// native-call-context contract (list<row> batches, result<_, deny-code>
++// imports, run/reduce exports) stays buildable with ComponentizeJS and
++// executable through the jco-transpile path the Cell runtime worker uses.
++// Contract home: solve/epics/native-call-context-wit-contract.md.
++const SCENARIOS = {
++  'call-cell-world-component-abi-spike': [
++    'test/wasm-service/call-cell-world-abi.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/test/wasm-service/call-cell-world-abi.test.js b/test/wasm-service/call-cell-world-abi.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..34f6f5a8cb339448713ded4cc6be37ea91567bb5
+--- /dev/null
++++ b/test/wasm-service/call-cell-world-abi.test.js
+@@ -0,0 +1,113 @@
++/**
++ * ABI spike for the draft call-cell world
++ * (solve/epics/native-call-context-wit-contract.md): proves with the real
++ * toolchain — ComponentizeJS build, jco transpile, host-side instantiate,
++ * the same path src/runtime/wasi-component-cell-worker.js uses — that the
++ * typed contract shapes (list<row> of record/variant columns, result<_,
++ * deny-code> imports, run/reduce exports) are implementable today.
++ */
++import {readFile} from 'node:fs/promises';
++import path from 'node:path';
++import assert from 'node:assert/strict';
++import {componentize} from '@bytecodealliance/componentize-js';
++import {transpileBytes} from '@bytecodealliance/jco-transpile';
++import {test} from '../../src/test-helpers/tap.js';
++
++const FIXTURE_DIRECTORY = new URL('fixtures/call-cell-world', import.meta.url);
++const WORLD_NAME = 'call-cell';
++const COMPONENT_NAME = 'call-cell-spike';
++const DISABLED_ENGINE_FEATURES = ['random', 'stdio', 'clocks', 'http', 'fetch-event'];
++const EMIT_BUDGET = 3;
++const DENY_BUDGET_EXHAUSTED = 'budget-exhausted';
++const TOP_N_ARGUMENTS = JSON.stringify({topN: 3});
++
++function typedRow(id, score) {
++  return {
++    columns: [
++      {name: 'id', val: {tag: 'integer', val: BigInt(id)}},
++      {name: 'score', val: {tag: 'real', val: score}},
++      {name: 'label', val: {tag: 'null-value'}},
++    ],
++  };
++}
++
++async function buildAndInstantiate(hostState) {
++  const guestSource = await readFile(
++    new URL('fixtures/call-cell-world/guest.js', import.meta.url),
++    'utf8',
++  );
++  const {component} = await componentize(guestSource, {
++    disableFeatures: DISABLED_ENGINE_FEATURES,
++    witPath: path.join(FIXTURE_DIRECTORY.pathname, 'wit'),
++    worldName: WORLD_NAME,
++  });
++  const transpiled = await transpileBytes(new Uint8Array(component), {
++    emitTypescriptDeclarations: false,
++    instantiation: 'async',
++    name: COMPONENT_NAME,
++  });
++  const moduleBytes = transpiled.files[`${COMPONENT_NAME}.js`];
++  const moduleUrl = `data:text/javascript;base64,${
++    Buffer.from(moduleBytes).toString('base64')}`;
++  const generated = await import(moduleUrl);
++  return generated.instantiate(
++    async (file) => globalThis.WebAssembly.compile(transpiled.files[file]),
++    {
++      'lagrange:cell/call-context': {
++        emit(key, partial) {
++          if (hostState.emits.length >= EMIT_BUDGET) {
++            const denial = new Error(DENY_BUDGET_EXHAUSTED);
++            denial.payload = DENY_BUDGET_EXHAUSTED;
++            throw denial;
++          }
++          hostState.emits.push([key, partial]);
++        },
++        callBounded() {
++          const denial = new Error(DENY_BUDGET_EXHAUSTED);
++          denial.payload = DENY_BUDGET_EXHAUSTED;
++          throw denial;
++        },
++        capability() {
++          return 0;
++        },
++      },
++    },
++  );
++}
++
++test('call-cell world round-trips typed batches, budgets, and reduce',
++  async (t) => {
++    const hostState = {emits: []};
++    const exports = await buildAndInstantiate(hostState);
++
++    const batch = [
++      typedRow(1, 4.5), typedRow(2, 3.0), typedRow(3, 4.9),
++      typedRow(4, 2.5), typedRow(5, 4.7),
++    ];
++    const runResult = JSON.parse(exports.run(batch, TOP_N_ARGUMENTS));
++
++    t.same(
++      runResult.kept.map((entry) => entry.id),
++      [3, 5, 1],
++      'typed rows round-trip and rank by the real-typed score column',
++    );
++    assert.equal(
++      hostState.emits.length,
++      EMIT_BUDGET,
++      'the host captured exactly the budgeted number of partials',
++    );
++    t.same(
++      runResult.denied.map((entry) => entry.code),
++      [DENY_BUDGET_EXHAUSTED, DENY_BUDGET_EXHAUSTED],
++      'the guest observed the typed budget-exhausted denial for the overflow',
++    );
++
++    const reduced = JSON.parse(
++      exports.reduce(hostState.emits, TOP_N_ARGUMENTS),
++    );
++    t.same(
++      reduced.map((entry) => entry.id),
++      [3, 5, 1],
++      'reduce folds the captured partials into the final ordered result',
++    );
++  });
+diff --git a/test/wasm-service/fixtures/call-cell-world/guest.js b/test/wasm-service/fixtures/call-cell-world/guest.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f7f2851c7e070ed57e48e0436fa3d15ba061366a
+--- /dev/null
++++ b/test/wasm-service/fixtures/call-cell-world/guest.js
+@@ -0,0 +1,45 @@
++/**
++ * Spike guest for the draft call-cell world: Bayesian-style top-N over a
++ * typed batch, bounded emit, and a reduce export — plain JavaScript that
++ * ComponentizeJS compiles against wit/world.wit.
++ */
++import {emit} from 'lagrange:cell/call-context';
++
++function columnValue(row, name) {
++  for (const column of row.columns) {
++    if (column.name === name) return column.val;
++  }
++  return {tag: 'null-value'};
++}
++
++export function run(batch, argumentsJson) {
++  const {topN} = JSON.parse(argumentsJson);
++  const scored = [];
++  for (const row of batch) {
++    const id = columnValue(row, 'id');
++    const score = columnValue(row, 'score');
++    if (id.tag !== 'integer' || score.tag !== 'real') continue;
++    scored.push({id: Number(id.val), score: score.val});
++  }
++  scored.sort((a, b) => b.score - a.score);
++  const kept = scored.slice(0, topN);
++  const denied = [];
++  for (const candidate of scored) {
++    try {
++      emit(String(candidate.id), JSON.stringify(candidate));
++    } catch (error) {
++      denied.push({id: candidate.id, code: error.payload ?? String(error)});
++    }
++  }
++  return JSON.stringify({kept, denied});
++}
++
++export function reduce(partials, argumentsJson) {
++  const {topN} = JSON.parse(argumentsJson);
++  const merged = partials.map(([key, partial]) => ({
++    key,
++    ...JSON.parse(partial),
++  }));
++  merged.sort((a, b) => b.score - a.score);
++  return JSON.stringify(merged.slice(0, topN));
++}
+diff --git a/test/wasm-service/fixtures/call-cell-world/wit/world.wit b/test/wasm-service/fixtures/call-cell-world/wit/world.wit
+new file mode 100644
+index 0000000000000000000000000000000000000000..f9f489d6b8021028fa27b6684a0333cdf0218f51
+--- /dev/null
++++ b/test/wasm-service/fixtures/call-cell-world/wit/world.wit
+@@ -0,0 +1,48 @@
++package lagrange:cell;
++
++interface call-context {
++  /// A typed column value in a batch row.
++  variant cell-value {
++    null-value,
++    integer(s64),
++    real(f64),
++    text(string),
++  }
++
++  record column {
++    name: string,
++    val: cell-value,
++  }
++
++  record row {
++    columns: list<column>,
++  }
++
++  enum deny-code {
++    undeclared-capability,
++    budget-exhausted,
++    invalid-argument,
++  }
++
++  /// Publish one bounded partial under a key. The runtime enforces the
++  /// Binding-declared per-invocation emit budget.
++  emit: func(key: string, partial: string) -> result<_, deny-code>;
++
++  /// Bounded nested invocation of another declared export.
++  call-bounded: func(export-name: string, argument: string) -> result<string, deny-code>;
++
++  /// Existing request-context capability probe, carried over unchanged.
++  capability: func(capability: u32) -> s32;
++}
++
++world call-cell {
++  use call-context.{row};
++  import call-context;
++
++  /// Partition-local work: receives the Binding-declared statement's
++  /// grouped, bounded batch. Returns this shard's partial as JSON.
++  export run: func(batch: list<row>, arguments: string) -> string;
++
++  /// Reduction: folds the published partials into the final result.
++  export reduce: func(partials: list<tuple<string, string>>, arguments: string) -> string;
++}
