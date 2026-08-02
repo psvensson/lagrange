@@ -32,6 +32,34 @@ const CONTEXT_BUDGET_FIELD = 'context_bytes';
 const WORKER_EVENT = Object.freeze({
   MESSAGE: 'message',
 });
+const CELL_WORLD = Object.freeze({
+  CALL: 'call-cell',
+  REQUEST: 'request-cell',
+});
+const CELL_IMPORT_NAMESPACE = Object.freeze({
+  CALL_CONTEXT: 'lagrange:cell/call-context',
+  CONTEXT: 'lagrange:cell/context',
+});
+const WORKER_DENY_CODE = Object.freeze({
+  BUDGET_EXHAUSTED: 'budget-exhausted',
+  UNDECLARED_CAPABILITY: 'undeclared-capability',
+});
+const EMIT_BUFFER_META_SLOTS = 2;
+const EMIT_LENGTH_INDEX = 0;
+const EMIT_ERROR_INDEX = 1;
+const EMIT_DATA_OFFSET = EMIT_BUFFER_META_SLOTS * 4;
+const EMIT_OVERFLOW_MARKER = '__call_cell_emit_overflow__';
+const BYTE_ENCODING = 'utf8';
+
+function createWorkerDeny(code) {
+  const error = new Error(code);
+  error.payload = code;
+  return error;
+}
+const TABLE_ACCESS = Object.freeze({
+  READ: 'read',
+  WRITE: 'write',
+});
 
 class ComponentPolicyError extends Error {
   constructor(code, message) {
@@ -40,15 +68,19 @@ class ComponentPolicyError extends Error {
   }
 }
 
+const cellWorld = workerData.world || CELL_WORLD.REQUEST;
+
+let componentExports = null;
 let selectedExport = null;
 let currentEffects = null;
 let currentTableReads = null;
 let currentTables = null;
+let currentCallContext = null;
 
 function requireTable(index, access) {
   const table = currentTables.find((entry) => entry.slot === index);
   if (!table || !table[access]) {
-    const code = access === 'read' ?
+    const code = access === TABLE_ACCESS.READ ?
       WORKER_ERROR_CODE.TABLE_READ_DENIED :
       WORKER_ERROR_CODE.TABLE_WRITE_DENIED;
     throw new ComponentPolicyError(
@@ -70,7 +102,7 @@ const componentContext = Object.freeze({
     return 1;
   },
   read(tableIndex, key) {
-    const table = requireTable(tableIndex, 'read');
+    const table = requireTable(tableIndex, TABLE_ACCESS.READ);
     return readIndexedRequestCellTable(
       currentTableReads,
       table.context,
@@ -78,15 +110,66 @@ const componentContext = Object.freeze({
     );
   },
   write(tableIndex, key, value) {
-    const table = requireTable(tableIndex, 'write');
+    const table = requireTable(tableIndex, TABLE_ACCESS.WRITE);
     currentEffects.push({
       context: table.context,
       key,
-      operation: 'write',
+      operation: TABLE_ACCESS.WRITE,
       value,
     });
   },
 });
+
+function requireCallInvocationContext(unavailableMessage) {
+  if (currentCallContext === null) {
+    throw new ComponentPolicyError(
+      WORKER_ERROR_CODE.INVOCATION_FAILED,
+      unavailableMessage,
+    );
+  }
+  return currentCallContext;
+}
+
+function denyNestedCallWhenUndeclared() {
+  if (currentCallContext?.onCallBounded !== true) {
+    throw createWorkerDeny(WORKER_DENY_CODE.UNDECLARED_CAPABILITY);
+  }
+  throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
+}
+
+const requestHostImports = Object.freeze({
+  [CELL_IMPORT_NAMESPACE.CONTEXT]: componentContext,
+});
+const callCellHostImports = Object.freeze({
+  [CELL_IMPORT_NAMESPACE.CALL_CONTEXT]: {
+    emit(key, partial) {
+      const context = requireCallInvocationContext(
+        'Call Cell emit host import is unavailable for this invocation',
+      );
+      if (context.emits.length >= context.emitBudget) {
+        throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
+      }
+      context.emits.push([key, partial]);
+    },
+    callBounded(_exportName, _argument) {
+      const context = requireCallInvocationContext(
+        'Call Cell call-bounded host import is unavailable ' +
+          'for this invocation',
+      );
+      context.nestedCalls += 1;
+      if (context.nestedCalls > context.nestedCallBudget) {
+        throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
+      }
+      return denyNestedCallWhenUndeclared();
+    },
+  },
+});
+
+function resolveWorkerHostImports() {
+  return cellWorld === CELL_WORLD.CALL ?
+    callCellHostImports :
+    requestHostImports;
+}
 
 async function instantiateComponent() {
   const transpiled = await transpileBytes(
@@ -94,30 +177,61 @@ async function instantiateComponent() {
     {
       emitTypescriptDeclarations: false,
       instantiation: 'async',
-      name: 'request-cell',
+      name: cellWorld,
     },
   );
   const boundedCoreModules = capComponentCoreMemory(
     transpiled.files,
     workerData.memoryBytes,
   );
-  const moduleBytes = transpiled.files['request-cell.js'];
+  const moduleBytes = transpiled.files[`${cellWorld}.js`];
   const moduleUrl = `data:text/javascript;base64,${
     Buffer.from(moduleBytes).toString('base64')}`;
   const generated = await import(moduleUrl);
-  const exports = await generated.instantiate(
+  componentExports = await generated.instantiate(
     async (path) => globalThis.WebAssembly.compile(
       boundedCoreModules[path] || transpiled.files[path],
     ),
-    {'lagrange:cell/context': componentContext},
+    resolveWorkerHostImports(),
   );
-  selectedExport = exports[workerData.exportName];
+  selectedExport = componentExports[workerData.exportName];
   if (typeof selectedExport !== 'function') {
     throw new ComponentPolicyError(
       WORKER_ERROR_CODE.EXPORT_MISSING,
       `Component export '${workerData.exportName}' is unavailable`,
     );
   }
+}
+
+function requireInvocationExport(message) {
+  if (message.exportName === undefined) return selectedExport;
+  const exported = componentExports[message.exportName];
+  if (typeof exported !== 'function') {
+    throw new ComponentPolicyError(
+      WORKER_ERROR_CODE.EXPORT_MISSING,
+      `Component export '${message.exportName}' is unavailable`,
+    );
+  }
+  return exported;
+}
+
+function buildWorkerInvocationFailure(error, message) {
+  const contextBudgetExceeded =
+    error instanceof RequestCellTableReadBoundError;
+  return {
+    error: {
+      code: contextBudgetExceeded ?
+        WORKER_ERROR_CODE.BUDGET_EXHAUSTED :
+        error.code || WORKER_ERROR_CODE.INVOCATION_FAILED,
+      message: contextBudgetExceeded ?
+        `Binding ${CONTEXT_BUDGET_FIELD} budget exhausted (` +
+          `${requestCellTableIndexEstimatedBytes(error.actualRows)} > ` +
+          `${workerData.contextBytes})` :
+        error.message,
+    },
+    id: message.id,
+    type: WORKER_MESSAGE.INVOKE_RESULT,
+  };
 }
 
 async function invoke(message) {
@@ -128,41 +242,66 @@ async function invoke(message) {
       requestCellTableIndexRowBound(workerData.contextBytes),
     );
     currentTables = Array.isArray(message.tables) ? message.tables : [];
-    const value = await selectedExport(...message.args);
-    parentPort.postMessage({
+    const invocationExport = requireInvocationExport(message);
+    const value = await invocationExport(...message.args);
+    const result = {
       effects: currentEffects,
       id: message.id,
       type: WORKER_MESSAGE.INVOKE_RESULT,
       value,
-    });
+    };
+    flushCallEmits(currentCallContext);
+    parentPort.postMessage(result);
   } catch (error) {
-    const contextBudgetExceeded =
-      error instanceof RequestCellTableReadBoundError;
-    parentPort.postMessage({
-      error: {
-        code: contextBudgetExceeded ?
-          WORKER_ERROR_CODE.BUDGET_EXHAUSTED :
-          error.code || WORKER_ERROR_CODE.INVOCATION_FAILED,
-        message: contextBudgetExceeded ?
-          `Binding ${CONTEXT_BUDGET_FIELD} budget exhausted (` +
-            `${requestCellTableIndexEstimatedBytes(error.actualRows)} > ` +
-            `${workerData.contextBytes})` :
-          error.message,
-      },
-      id: message.id,
-      type: WORKER_MESSAGE.INVOKE_RESULT,
-    });
+    parentPort.postMessage(buildWorkerInvocationFailure(error, message));
   } finally {
     currentEffects = null;
     currentTableReads = null;
     currentTables = null;
+    currentCallContext = null;
   }
+}
+
+function resolveMessageCallContext(message) {
+  if (message.callContext === undefined) return null;
+  return {
+    emitBudget: Number.isSafeInteger(message.callContext.emitBudget) ?
+      message.callContext.emitBudget :
+      0,
+    emitBuffer: message.callContext.emitBuffer,
+    emits: [],
+    nestedCallBudget:
+      Number.isSafeInteger(message.callContext.nestedCallBudget) ?
+        message.callContext.nestedCallBudget :
+        0,
+    nestedCalls: 0,
+    onCallBounded: message.callContext.onCallBounded === true,
+  };
+}
+
+function flushCallEmits(context) {
+  if (context === null) return;
+  const partialsJson = JSON.stringify(context.emits);
+  const meta = new Int32Array(context.emitBuffer, 0, EMIT_BUFFER_META_SLOTS);
+  const capacity = context.emitBuffer.byteLength - EMIT_DATA_OFFSET;
+  const encoded = Buffer.from(partialsJson, BYTE_ENCODING);
+  const view = new Uint8Array(context.emitBuffer);
+  if (encoded.byteLength > capacity) {
+    const marker = Buffer.from(EMIT_OVERFLOW_MARKER, BYTE_ENCODING);
+    view.set(marker, EMIT_DATA_OFFSET);
+    Atomics.store(meta, EMIT_LENGTH_INDEX, marker.byteLength);
+    Atomics.store(meta, EMIT_ERROR_INDEX, 1);
+    return;
+  }
+  view.set(encoded, EMIT_DATA_OFFSET);
+  Atomics.store(meta, EMIT_LENGTH_INDEX, encoded.byteLength);
 }
 
 parentPort.on(WORKER_EVENT.MESSAGE, (message) => {
   if (message.type === WORKER_MESSAGE.PING) {
     parentPort.postMessage({id: message.id, type: WORKER_MESSAGE.PONG});
   } else if (message.type === WORKER_MESSAGE.INVOKE) {
+    currentCallContext = resolveMessageCallContext(message);
     void invoke(message);
   }
 });

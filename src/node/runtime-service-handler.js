@@ -40,12 +40,20 @@ import {
   assertCurrentRequestCellTarget,
   handleRequestCellInvocation,
 } from './runtime-service-request-cell-handler.js';
+import {
+  assertCurrentCallCellTarget,
+  handleCallCellInvocation,
+} from './runtime-service-call-cell-handler.js';
 import {RequestBindingRouteResolver} from
   '../service/request-binding-route-resolver.js';
 import {
   REQUEST_CELL_ROUTE_MESSAGE_TYPE,
   REQUEST_CELL_ROUTE_OPERATION,
 } from '../service/request-cell-routing-contract.js';
+import {
+  CALL_CELL_ROUTE_MESSAGE_TYPE,
+  CALL_CELL_ROUTE_OPERATION,
+} from '../service/call-cell-routing-contract.js';
 
 function buildReplicaOperationResponse(status, fields = {}) {
   return {
@@ -59,6 +67,16 @@ function resolveRequestCellServiceEnvelope(envelope) {
     return envelope;
   }
   if (envelope?.payload?.operation === REQUEST_CELL_ROUTE_OPERATION) {
+    return envelope.payload;
+  }
+  return null;
+}
+
+function resolveCallCellServiceEnvelope(envelope) {
+  if (envelope?.operation === CALL_CELL_ROUTE_OPERATION) {
+    return envelope;
+  }
+  if (envelope?.payload?.operation === CALL_CELL_ROUTE_OPERATION) {
     return envelope.payload;
   }
   return null;
@@ -78,6 +96,9 @@ async function dispatchRuntimeServiceMessage(
   }
   if (type === REQUEST_CELL_ROUTE_MESSAGE_TYPE) {
     return handler.handleRequestCellInvocation(serviceEnvelope);
+  }
+  if (type === CALL_CELL_ROUTE_MESSAGE_TYPE) {
+    return handler.handleCallCellInvocation(serviceEnvelope);
   }
   const unknownType =
     RUNTIME_SERVICE_HANDLER_ERROR_MSG.UNKNOWN_MESSAGE_TYPE;
@@ -110,6 +131,8 @@ class RuntimeServiceHandler extends EventEmitter {
       new RequestBindingRouteResolver({
         systemTableCacheProvider: () => this.systemTableCache,
       });
+    this.callBindingRouteResolver =
+      options.callBindingRouteResolver || null;
 
     // Executor outcome emitter — replaces direct replica_operations writes.
     this.executorOutcomeEmitter = options.executorOutcomeEmitter || null;
@@ -159,7 +182,8 @@ class RuntimeServiceHandler extends EventEmitter {
    */
   async handleMessage(envelope) {
     const {correlationId} = envelope;
-    const serviceEnvelope = resolveRequestCellServiceEnvelope(envelope);
+    const serviceEnvelope = resolveRequestCellServiceEnvelope(envelope) ||
+      resolveCallCellServiceEnvelope(envelope);
     const payload = serviceEnvelope?.payload || envelope.payload;
     const type = payload?.[ReplicaOperationField.TYPE] || payload?.type;
 
@@ -674,6 +698,23 @@ class RuntimeServiceHandler extends EventEmitter {
 
   async handleRequestCellInvocation(envelope) {
     return handleRequestCellInvocation(this, envelope);
+  }
+
+  assertCurrentCallCellTarget(
+    call,
+    route,
+    invocation,
+  ) {
+    return assertCurrentCallCellTarget(
+      this,
+      call,
+      route,
+      invocation,
+    );
+  }
+
+  async handleCallCellInvocation(envelope) {
+    return handleCallCellInvocation(this, envelope);
   }
 
   /**

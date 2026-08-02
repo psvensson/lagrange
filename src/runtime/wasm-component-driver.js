@@ -37,6 +37,10 @@ import {
   projectRequestCellRuntime,
 } from './request-cell-runtime-contract.js';
 import {
+  invokeCallCell,
+  isCallCell,
+} from './call-cell-driver-invoke.js';
+import {
   readRequestCellContexts,
   writeRequestCellEffects,
 } from './request-cell-component-context-owner.js';
@@ -78,6 +82,10 @@ const WASM_COMPONENT_ERROR = Object.freeze({
     'request Cell Component invocation failed',
   COMPONENT_START_FAILED:
     'request Cell Component startup failed',
+  CALL_COMPONENT_INVOKE_FAILED:
+    'call Cell Component invocation failed',
+  CALL_PARTIALS_INVALID:
+    'call Cell Component emitted invalid partials',
   RUNTIME_ACCESS_POLICY_DENIED:
     'request Cell runtime access policy is unavailable or denied',
 });
@@ -109,6 +117,9 @@ const DRIVER_LENGTH = Object.freeze({
 const RUNTIME_ACCESS = Object.freeze({
   DENIED_CODE: 'RUNTIME_ACCESS_DENIED',
   RESOLVED_STATUS: 'resolved',
+});
+const CELL_WORLD = Object.freeze({
+  CALL: 'call-cell',
 });
 
 function buildDriverStatusResult(status, error, detailKey, detailValue) {
@@ -456,7 +467,10 @@ class WasmComponentDriver extends RuntimeDriver {
 
   async #startRequestCell(requestCell, replicaContext, serviceId) {
     try {
-      await this._componentRuntime.start(requestCell);
+      const cell = isCallCell(requestCell) ?
+        Object.freeze({...requestCell, world: CELL_WORLD.CALL}) :
+        requestCell;
+      await this._componentRuntime.start(cell);
       if (!await this._componentRuntime.health(serviceId)) {
         throw new Error(WASM_COMPONENT_ERROR.NOT_STARTED);
       }
@@ -673,7 +687,12 @@ class WasmComponentDriver extends RuntimeDriver {
     const tenantId = resolveDriverTenantId(currentContext);
     const cancellationToken = new CancellationToken();
     try {
-      const tables = await resolveRuntimeAccessTables(currentContext);
+      const tables = isCallCell(cell) ?
+        [] :
+        await resolveRuntimeAccessTables(currentContext);
+      if (isCallCell(cell)) {
+        return await this.#invokeCallCell(cell, invocation, serviceId);
+      }
       return await this._componentRuntime.invoke(
         serviceId,
         invocation.args || [],
@@ -716,6 +735,28 @@ class WasmComponentDriver extends RuntimeDriver {
         {cause},
       );
     }
+  }
+
+  async #invokeCallCell(cell, invocation, serviceId) {
+    return invokeCallCell(
+      {
+        invokeComponent: (id, args, read, write, options) =>
+          this._componentRuntime.invoke(id, args, read, write, () => {}, options),
+        stopComponent: (id) => this._componentRuntime.stop(id),
+        failLifecycle: (cause) => {
+          this._running.delete(serviceId);
+          throw new DriverLifecycleError(
+            this.kind,
+            DRIVER_ACTION.INVOKE,
+            `${cause.code || WASM_COMPONENT_ERROR.CALL_COMPONENT_INVOKE_FAILED}` +
+              `${DRIVER_SEPARATOR.DETAIL}${cause.message}`,
+            {cause},
+          );
+        },
+      },
+      invocation,
+      serviceId,
+    );
   }
 }
 

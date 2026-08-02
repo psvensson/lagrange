@@ -1,0 +1,76 @@
+{
+  "id": "minimal-deployment-call-cell-invocation-v2",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "An authenticated pgwire CALL BINDING $1 command carrying {schema_version, name, arguments} resolves the tenant-scoped durable call Binding through a CallBindingRouteResolver \u2014 failing closed not-invocable when the Binding is absent, ambiguous, or carries no declared statement \u2014 executes the Binding-declared partition-local SELECT across the resolved partitions via the existing QueryExecutor fan-out with per-partition bounds and no silent partition-failure drops, marshals each shard's bounded rows into typed call-cell list<row> batches (integer s64/real/text/null; unsafe integers fail closed budget-exhausted before marshalling), and invokes the ready Cell's run export per shard through the sole ServiceDispatcher \u2192 MessageRouter \u2192 runtime invocation owner path with the lagrange:cell/call-context host imports (bounded emit, call-bounded) wired in the WASI worker; emitted partials are published under the reduce lease coordination pattern, a replica holding the reduce lease invokes the artifact's reduce export over a complete fresh disjoint partial set, and exactly one atomically published final snapshot is visible to the caller; legacy {kind,name} call bindings remain valid-but-not-invocable, pushdown maps through the same world with empty-JSON arguments, no runtime invocation mechanism is added outside the existing owners, and no feature flag survives the landing.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": "minimal-deployment-call-cell-invocation",
+    "planDoc": null,
+    "draftedAtCommit": "6e361c1a6d74a4dafde51c2ffbc3a116d7b38962"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-call-cell-invocation",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "minimal-deployment-call-cell-invocation-v2-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-call-cell-invocation",
+          "metric": "priority"
+        }
+      }
+    },
+    {
+      "id": "call-invocation-routing",
+      "priority": 2,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-call-cell-invocation",
+          "metric": "priority"
+        }
+      }
+    },
+    {
+      "id": "call-invocation-runtime",
+      "priority": 3,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-call-cell-invocation",
+          "metric": "priority"
+        }
+      }
+    },
+    {
+      "id": "call-invocation-reduce",
+      "priority": 4,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-call-cell-invocation",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

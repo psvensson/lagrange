@@ -16,6 +16,7 @@ import {RuntimeAccessPolicyError} from
   '../control-plane/owners/runtime-access-policy-owner.js';
 import {DeploymentBindingError} from
   '../control-plane/owners/deployment-binding-contract.js';
+import {CallCellRoutingError} from './call-cell-routing-contract.js';
 import {deriveTenantPackageId} from
   '../control-plane/owners/service-install-catalog-contract.js';
 import {SERVICE_LIFECYCLE_COMMAND as SERVICE_LIFECYCLE_SQL_COMMAND} from
@@ -47,6 +48,7 @@ const SERVICE_LIFECYCLE_COMMAND_STAGE = Object.freeze({
   ARTIFACT: 'artifact_resolution',
   CATALOG: 'catalog_submission',
   BINDING: 'binding_submission',
+  CALL_INVOCATION: 'call_invocation',
   COMMAND: 'command_normalization',
   MANIFEST: 'manifest_normalization',
   SECURITY: 'security_context',
@@ -394,6 +396,13 @@ function classifyDelegatedFailure(error) {
       known: true,
     };
   }
+  if (error instanceof CallCellRoutingError) {
+    return {
+      code: error.code,
+      stage: SERVICE_LIFECYCLE_COMMAND_STAGE.CALL_INVOCATION,
+      known: true,
+    };
+  }
   return {
     code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CATALOG_REJECTED,
     stage: SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG,
@@ -444,6 +453,7 @@ class ServiceLifecycleCommandOwner {
     this.catalogOwner = options.catalogOwner;
     this.bindingOwner = options.bindingOwner || null;
     this.runtimeAccessPolicyOwner = options.runtimeAccessPolicyOwner || null;
+    this.callCellInvoker = options.callCellInvoker || null;
     this.artifactResolver = options.artifactResolver;
     this.signaturePolicy = validateSignaturePolicy(options.signaturePolicy);
   }
@@ -456,6 +466,8 @@ class ServiceLifecycleCommandOwner {
         return await this.configureAccess(command, payload, context);
       case SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING:
         return await this.submitBinding(command, payload, context);
+      case SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING:
+        return await this.invokeCallBinding(command, payload, context);
       case SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL:
       case SERVICE_LIFECYCLE_SQL_COMMAND.UPGRADE:
         return await this.submitArtifactIntent(command, payload, context);
@@ -511,6 +523,28 @@ class ServiceLifecycleCommandOwner {
       service_id: policy.serviceId,
       table_slots: policy.tables.length,
     }], 1);
+  }
+
+  async invokeCallBinding(command, payload, securityContext) {
+    if (typeof this.callCellInvoker?.invoke !== 'function') {
+      commandFailure(
+        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.DEPENDENCY_REQUIRED,
+        SERVICE_LIFECYCLE_COMMAND_STAGE.COMMAND,
+        SERVICE_LIFECYCLE_COMMAND_PATH.DEPENDENCIES,
+        SERVICE_LIFECYCLE_COMMAND_MESSAGE.DEPENDENCIES_REQUIRED,
+      );
+    }
+    const resultJson = await this.callCellInvoker.invoke({
+      name: payload.name,
+      argumentsJson: payload.arguments === undefined ?
+        undefined : JSON.stringify(payload.arguments),
+      securityContext,
+    });
+    return successResult(
+      command,
+      [{name: payload.name, result: resultJson}],
+      0,
+    );
   }
 
   async submitBinding(command, payload, securityContext) {

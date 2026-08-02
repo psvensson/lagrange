@@ -1,0 +1,386 @@
+diff --git a/src/query/pg/postgres-wire-adapter.js b/src/query/pg/postgres-wire-adapter.js
+index 1295e9fc1eaab6c1d814552ec666384d7d308056..506a2521c8e45ec68455db3a953e5f0f79e966b6 100644
+--- a/src/query/pg/postgres-wire-adapter.js
++++ b/src/query/pg/postgres-wire-adapter.js
+@@ -43,6 +43,8 @@ function resolveStatementAuthorizationAction(statement) {
+     return PGWIRE_AUTH_ACTION.EXECUTE_QUERY;
+   }
+   switch (classification.command) {
++  case SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING:
++    return PGWIRE_AUTH_ACTION.BINDING_CALL;
+   case SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS:
+     return PGWIRE_AUTH_ACTION.ACCESS_CONFIGURE;
+   case SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING:
+diff --git a/src/query/service-lifecycle-sql-contract.js b/src/query/service-lifecycle-sql-contract.js
+index 272cb3c2a95862a986ffb5d5ed9810e4830abf7f..051288f109cf55713784ebe9a1e6073200567cfd 100644
+--- a/src/query/service-lifecycle-sql-contract.js
++++ b/src/query/service-lifecycle-sql-contract.js
+@@ -48,6 +48,9 @@ const SERVICE_LIFECYCLE_SQL_LITERAL = Object.freeze({
+ });
+ 
+ const MUTATION_PAYLOAD_FIELDS = Object.freeze({
++  [SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING]: Object.freeze([
++    'schema_version', 'name', 'arguments',
++  ]),
+   [SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS]: Object.freeze([
+     'schema_version', 'binding_name', 'tables',
+   ]),
+@@ -69,6 +72,9 @@ const MUTATION_PAYLOAD_FIELDS = Object.freeze({
+ });
+ 
+ const REQUIRED_PAYLOAD_FIELDS = Object.freeze({
++  [SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING]: Object.freeze([
++    'schema_version', 'name',
++  ]),
+   [SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS]: Object.freeze([
+     'schema_version', 'binding_name', 'tables',
+   ]),
+@@ -100,6 +106,10 @@ const SQL_LINE_BREAK_PATTERN = /[\r\n]/u;
+ const SQL_WHITESPACE_PATTERN = /\s/u;
+ 
+ const COMMAND_PREFIX = Object.freeze([
++  Object.freeze({
++    pattern: /^\s*CALL\s+BINDING\b/iu,
++    command: SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING,
++  }),
+   Object.freeze({
+     pattern: /^\s*CONFIGURE\s+SERVICE\s+ACCESS\b/iu,
+     command: SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS,
+@@ -127,6 +137,8 @@ const COMMAND_PREFIX = Object.freeze([
+ ]);
+ 
+ const EXACT_STATEMENT = Object.freeze({
++  [SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING]:
++    /^\s*CALL\s+BINDING\s+\$1\s*;?\s*$/iu,
+   [SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS]:
+     /^\s*CONFIGURE\s+SERVICE\s+ACCESS\s+\$1\s*;?\s*$/iu,
+   [SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING]:
+diff --git a/src/runtime/pgwire-auth-constants.js b/src/runtime/pgwire-auth-constants.js
+index 05c6340f6e8e0d65e774abb6017a47858df8e874..42c0cfc3dc7f876bbc3218902c38ee32218fe78c 100644
+--- a/src/runtime/pgwire-auth-constants.js
++++ b/src/runtime/pgwire-auth-constants.js
+@@ -19,6 +19,7 @@ const PGWIRE_AUTH_DECISION = Object.freeze({
+ 
+ const PGWIRE_AUTH_ACTION = Object.freeze({
+   ACCESS_CONFIGURE: 'pgwire.access.configure',
++  BINDING_CALL: 'pgwire.binding.call',
+   BINDING_CREATE: 'pgwire.binding.create',
+   CONNECT: 'pgwire.connect',
+   EXECUTE_QUERY: 'pgwire.execute_query',
+@@ -31,6 +32,7 @@ const PGWIRE_AUTH_ACTION = Object.freeze({
+ const PGWIRE_AUTH_DEFAULT_ACTIONS = Object.freeze({
+   PASSWORD: Object.freeze([
+     PGWIRE_AUTH_ACTION.ACCESS_CONFIGURE,
++    PGWIRE_AUTH_ACTION.BINDING_CALL,
+     PGWIRE_AUTH_ACTION.BINDING_CREATE,
+     PGWIRE_AUTH_ACTION.EXECUTE_QUERY,
+     PGWIRE_AUTH_ACTION.SERVICE_INSTALL,
+diff --git a/src/service/service-lifecycle-command-contract.js b/src/service/service-lifecycle-command-contract.js
+index decb2929f0d8d5a62375951e5da3beee652197fb..b8b4edf01cba4058ed3e5a3a14235b46dfe5d436 100644
+--- a/src/service/service-lifecycle-command-contract.js
++++ b/src/service/service-lifecycle-command-contract.js
+@@ -3,6 +3,7 @@
+  */
+ 
+ const SERVICE_LIFECYCLE_COMMAND = Object.freeze({
++  CALL_BINDING: 'call_binding',
+   CONFIGURE_ACCESS: 'configure_service_access',
+   CREATE_BINDING: 'create_binding',
+   INSTALL: 'install_service',
+diff --git a/src/service/service-lifecycle-command-owner.js b/src/service/service-lifecycle-command-owner.js
+index 4d73d90a704afb72848887fbd452943a9e47dd54..4b160fb6635f28dc30ee248aff928cb556a239ad 100644
+--- a/src/service/service-lifecycle-command-owner.js
++++ b/src/service/service-lifecycle-command-owner.js
+@@ -16,6 +16,7 @@ import {RuntimeAccessPolicyError} from
+   '../control-plane/owners/runtime-access-policy-owner.js';
+ import {DeploymentBindingError} from
+   '../control-plane/owners/deployment-binding-contract.js';
++import {CallCellRoutingError} from './call-cell-routing-contract.js';
+ import {deriveTenantPackageId} from
+   '../control-plane/owners/service-install-catalog-contract.js';
+ import {SERVICE_LIFECYCLE_COMMAND as SERVICE_LIFECYCLE_SQL_COMMAND} from
+@@ -47,6 +48,7 @@ const SERVICE_LIFECYCLE_COMMAND_STAGE = Object.freeze({
+   ARTIFACT: 'artifact_resolution',
+   CATALOG: 'catalog_submission',
+   BINDING: 'binding_submission',
++  CALL_INVOCATION: 'call_invocation',
+   COMMAND: 'command_normalization',
+   MANIFEST: 'manifest_normalization',
+   SECURITY: 'security_context',
+@@ -394,6 +396,13 @@ function classifyDelegatedFailure(error) {
+       known: true,
+     };
+   }
++  if (error instanceof CallCellRoutingError) {
++    return {
++      code: error.code,
++      stage: SERVICE_LIFECYCLE_COMMAND_STAGE.CALL_INVOCATION,
++      known: true,
++    };
++  }
+   return {
+     code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CATALOG_REJECTED,
+     stage: SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG,
+@@ -444,6 +453,7 @@ class ServiceLifecycleCommandOwner {
+     this.catalogOwner = options.catalogOwner;
+     this.bindingOwner = options.bindingOwner || null;
+     this.runtimeAccessPolicyOwner = options.runtimeAccessPolicyOwner || null;
++    this.callCellInvoker = options.callCellInvoker || null;
+     this.artifactResolver = options.artifactResolver;
+     this.signaturePolicy = validateSignaturePolicy(options.signaturePolicy);
+   }
+@@ -456,6 +466,8 @@ class ServiceLifecycleCommandOwner {
+         return await this.configureAccess(command, payload, context);
+       case SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING:
+         return await this.submitBinding(command, payload, context);
++      case SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING:
++        return await this.invokeCallBinding(command, payload, context);
+       case SERVICE_LIFECYCLE_SQL_COMMAND.INSTALL:
+       case SERVICE_LIFECYCLE_SQL_COMMAND.UPGRADE:
+         return await this.submitArtifactIntent(command, payload, context);
+@@ -513,6 +525,28 @@ class ServiceLifecycleCommandOwner {
+     }], 1);
+   }
+ 
++  async invokeCallBinding(command, payload, securityContext) {
++    if (typeof this.callCellInvoker?.invoke !== 'function') {
++      commandFailure(
++        SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.DEPENDENCY_REQUIRED,
++        SERVICE_LIFECYCLE_COMMAND_STAGE.COMMAND,
++        SERVICE_LIFECYCLE_COMMAND_PATH.DEPENDENCIES,
++        SERVICE_LIFECYCLE_COMMAND_MESSAGE.DEPENDENCIES_REQUIRED,
++      );
++    }
++    const resultJson = await this.callCellInvoker.invoke({
++      name: payload.name,
++      argumentsJson: payload.arguments === undefined ?
++        undefined : JSON.stringify(payload.arguments),
++      securityContext,
++    });
++    return successResult(
++      command,
++      [{name: payload.name, result: resultJson}],
++      0,
++    );
++  }
++
+   async submitBinding(command, payload, securityContext) {
+     if (typeof this.bindingOwner?.createBinding !== 'function') {
+       commandFailure(
+diff --git a/test/query/service-lifecycle-call-invocation.test.js b/test/query/service-lifecycle-call-invocation.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..19ae3d41d4c3b1bf8114fe428894bdbe26d0aed9
+--- /dev/null
++++ b/test/query/service-lifecycle-call-invocation.test.js
+@@ -0,0 +1,211 @@
++import assert from 'node:assert/strict';
++import {describe, test} from 'node:test';
++
++import {PostgresWireAdapter} from
++  '../../src/query/pg/postgres-wire-adapter.js';
++import {
++  SERVICE_LIFECYCLE_SQL_CLASSIFICATION,
++  SERVICE_LIFECYCLE_SQL_COMMAND,
++  SERVICE_LIFECYCLE_SQL_ERROR_CODE,
++  classifyServiceLifecycleSql,
++  parseServiceLifecycleSql,
++} from '../../src/query/service-lifecycle-sql-contract.js';
++import {
++  PGWIRE_AUTH_ACTION,
++  PGWIRE_AUTH_DEFAULT_ACTIONS,
++  PGWIRE_AUTH_HANDLER_MODE,
++} from '../../src/runtime/pgwire-auth-constants.js';
++import {PgWireAuthHandler} from
++  '../../src/runtime/pgwire-auth-handler.js';
++
++const silentLogger = Object.freeze({
++  debug() {},
++  error() {},
++  info() {},
++  warn() {},
++});
++
++function callPayload(overrides = {}) {
++  return JSON.stringify({
++    schema_version: 1,
++    name: 'daily-rollup',
++    ...overrides,
++  });
++}
++
++function createAuthHandler(allowedActions) {
++  return new PgWireAuthHandler({
++    mode: PGWIRE_AUTH_HANDLER_MODE.PASSWORD,
++    authenticator: async () => ({
++      authenticated: true,
++      roles: ['service-operator'],
++    }),
++    policy: {allowedActions: new Set(allowedActions)},
++    logger: silentLogger,
++  });
++}
++
++async function createAuthenticatedAdapter(sqlCore, allowedActions) {
++  const adapter = new PostgresWireAdapter({
++    sqlCore,
++    authHandler: createAuthHandler(allowedActions),
++    logger: silentLogger,
++  });
++  await adapter.authenticate('call-session', {
++    tenantId: 'tenant-a',
++    user: 'alice',
++    password: 'fixture-password',
++  });
++  return adapter;
++}
++
++describe('CALL BINDING SQL ingress classification', () => {
++  test('classifies CALL BINDING as a lifecycle command', () => {
++    assert.equal(
++      classifyServiceLifecycleSql('CALL BINDING $1').kind,
++      SERVICE_LIFECYCLE_SQL_CLASSIFICATION.LIFECYCLE,
++    );
++    assert.equal(
++      classifyServiceLifecycleSql('CALL BINDING $1').command,
++      SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING,
++    );
++    assert.equal(
++      classifyServiceLifecycleSql('  call   binding $1;').command,
++      SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING,
++    );
++    assert.equal(
++      classifyServiceLifecycleSql('/* lead */ CALL BINDING $1').command,
++      SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING,
++    );
++    assert.equal(
++      classifyServiceLifecycleSql('SELECT 1').kind,
++      SERVICE_LIFECYCLE_SQL_CLASSIFICATION.ORDINARY,
++    );
++  });
++
++  test('parses a valid payload with required and optional fields', () => {
++    const parsed = parseServiceLifecycleSql(
++      'CALL BINDING $1',
++      [callPayload({arguments: {shard: 2}})],
++    );
++    assert.equal(parsed.command, SERVICE_LIFECYCLE_SQL_COMMAND.CALL_BINDING);
++    assert.deepEqual(parsed.payload, {
++      arguments: {shard: 2},
++      name: 'daily-rollup',
++      schema_version: 1,
++    });
++    const minimal = parseServiceLifecycleSql(
++      'CALL BINDING $1;',
++      [callPayload()],
++    );
++    assert.deepEqual(minimal.payload, {
++      name: 'daily-rollup',
++      schema_version: 1,
++    });
++  });
++
++  test('rejects malformed grammar around the exact statement', () => {
++    assert.throws(
++      () => parseServiceLifecycleSql('CALL BINDING $1 EXTRA', [callPayload()]),
++      (error) =>
++        error.code === SERVICE_LIFECYCLE_SQL_ERROR_CODE.INVALID_GRAMMAR,
++    );
++    assert.throws(
++      () => parseServiceLifecycleSql(
++        '/* lead */ CALL BINDING $1',
++        [callPayload()],
++      ),
++      (error) =>
++        error.code === SERVICE_LIFECYCLE_SQL_ERROR_CODE.INVALID_GRAMMAR,
++    );
++    assert.throws(
++      () => parseServiceLifecycleSql('CALL BINDING', [callPayload()]),
++      (error) =>
++        error.code === SERVICE_LIFECYCLE_SQL_ERROR_CODE.INVALID_GRAMMAR,
++    );
++  });
++
++  test('rejects payloads missing required fields or carrying unknown fields',
++    () => {
++      assert.throws(
++        () => parseServiceLifecycleSql(
++          'CALL BINDING $1',
++          [JSON.stringify({name: 'daily-rollup'})],
++        ),
++        (error) =>
++          error.code === SERVICE_LIFECYCLE_SQL_ERROR_CODE.INVALID_PAYLOAD &&
++          error.path === '/payload/schema_version',
++      );
++      assert.throws(
++        () => parseServiceLifecycleSql(
++          'CALL BINDING $1',
++          [JSON.stringify({schema_version: 1})],
++        ),
++        (error) =>
++          error.code === SERVICE_LIFECYCLE_SQL_ERROR_CODE.INVALID_PAYLOAD &&
++          error.path === '/payload/name',
++      );
++      assert.throws(
++        () => parseServiceLifecycleSql(
++          'CALL BINDING $1',
++          [callPayload({tenant_id: 'attacker-selected'})],
++        ),
++        (error) =>
++          error.code === SERVICE_LIFECYCLE_SQL_ERROR_CODE.INVALID_PAYLOAD &&
++          error.path === '/payload/tenant_id',
++      );
++    });
++});
++
++describe('CALL BINDING authorization action mapping', () => {
++  test('maps the command to the BINDING_CALL auth action', async () => {
++    let ownerCalls = 0;
++    const sqlCore = {
++      async executeRequest() {
++        ownerCalls += 1;
++        return {success: true, rows: []};
++      },
++    };
++    const adapter = await createAuthenticatedAdapter(sqlCore, [
++      PGWIRE_AUTH_ACTION.BINDING_CALL,
++      PGWIRE_AUTH_ACTION.EXECUTE_QUERY,
++    ]);
++    const result = await adapter.execute(
++      'call-session',
++      'CALL BINDING $1',
++      [callPayload()],
++    );
++    assert.equal(result.success, true);
++    assert.equal(ownerCalls, 1);
++  });
++
++  test('fails closed when the session lacks the BINDING_CALL action',
++    async () => {
++      let ownerCalls = 0;
++      const sqlCore = {
++        async executeRequest() {
++          ownerCalls += 1;
++          return {success: true, rows: []};
++        },
++      };
++      const adapter = await createAuthenticatedAdapter(sqlCore, [
++        PGWIRE_AUTH_ACTION.EXECUTE_QUERY,
++      ]);
++      await assert.rejects(
++        adapter.execute('call-session', 'CALL BINDING $1', [callPayload()]),
++        /authorized/iu,
++      );
++      assert.equal(ownerCalls, 0);
++    },
++  );
++
++  test('grants BINDING_CALL to password-mode sessions by default', () => {
++    assert.equal(
++      PGWIRE_AUTH_DEFAULT_ACTIONS.PASSWORD.includes(
++        PGWIRE_AUTH_ACTION.BINDING_CALL,
++      ),
++      true,
++    );
++    assert.equal(Object.isFrozen(PGWIRE_AUTH_DEFAULT_ACTIONS.PASSWORD), true);
++  });
++});

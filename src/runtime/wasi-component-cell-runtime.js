@@ -19,6 +19,15 @@ const HEALTH_TIMEOUT_MS = 1_000;
 const CPU_SAMPLE_INTERVAL_MS = 2;
 const CELL_WORKER_SOURCE_FILE = 'wasi-component-cell-worker.js';
 const CELL_WORKER_BUNDLE_FILE = 'request-cell-worker.bundle.mjs';
+const CELL_WORLD = Object.freeze({
+  CALL: 'call-cell',
+  REQUEST: 'request-cell',
+});
+const CELL_EMIT_BUFFER_BYTES = 16 * 1024 * 1024;
+const CELL_EMIT_BUFFER_META_SLOTS = 2;
+const CELL_EMIT_LENGTH_INDEX = 0;
+const CELL_EMIT_ERROR_INDEX = 1;
+const CELL_EMIT_OVERFLOW_MARKER = '__call_cell_emit_overflow__';
 const WASI_COMPONENT_CELL_ERROR_NAME = 'WasiComponentCellError';
 const WALL_BUDGET_EXHAUSTED_ACTUAL_OFFSET_MS = 1;
 const CELL_BUDGET_FIELD = Object.freeze({
@@ -78,7 +87,13 @@ class WasiComponentCellError extends Error {
 }
 
 function encodedBytes(value) {
-  return Buffer.byteLength(JSON.stringify(value), BYTE_ENCODING);
+  return Buffer.byteLength(
+    JSON.stringify(
+      value,
+      (_key, entry) => typeof entry === 'bigint' ? String(entry) : entry,
+    ),
+    BYTE_ENCODING,
+  );
 }
 
 function budgetFailure(field, actual, limit) {
@@ -146,20 +161,27 @@ class WasiComponentCellRuntime {
     return promise;
   }
 
+  workerDataForCell(cell) {
+    return {
+      bytes: new Uint8Array(cell.bytes),
+      capabilities: cell.capabilities,
+      contextBytes: cell.budgets.context_bytes,
+      exportName: cell.exportName,
+      memoryBytes: cell.budgets.memory_bytes,
+      requestCellWorker: true,
+      world: cell.world === CELL_WORLD.CALL ?
+        CELL_WORLD.CALL :
+        CELL_WORLD.REQUEST,
+    };
+  }
+
   async _start(cell) {
     const existing = this.cells.get(cell.serviceId);
     if (existing && await this.health(cell.serviceId)) return;
     if (existing) await this._stop(cell.serviceId);
 
     const worker = new Worker(this.workerPath, {
-      workerData: {
-        bytes: new Uint8Array(cell.bytes),
-        capabilities: cell.capabilities,
-        contextBytes: cell.budgets.context_bytes,
-        exportName: cell.exportName,
-        memoryBytes: cell.budgets.memory_bytes,
-        requestCellWorker: true,
-      },
+      workerData: this.workerDataForCell(cell),
     });
     const state = {
       busy: false,
@@ -393,13 +415,32 @@ class WasiComponentCellRuntime {
       initialCpu,
       state.cell.budgets.cpu_time_ms,
     );
+    const payload = {args, tableReads, tables: options.tables || []};
+    if (options.exportName !== undefined) {
+      payload.exportName = options.exportName;
+    }
+    let emitBuffer;
+    if (options.callContext !== undefined) {
+      emitBuffer = new SharedArrayBuffer(CELL_EMIT_BUFFER_BYTES);
+      payload.callContext = {
+        emitBudget: Number.isSafeInteger(options.callContext.emitBudget) ?
+          options.callContext.emitBudget :
+          0,
+        emitBuffer,
+        nestedCallBudget:
+          Number.isSafeInteger(options.callContext.nestedCallBudget) ?
+            options.callContext.nestedCallBudget :
+            0,
+        onCallBounded: options.callContext.onCallBounded === true,
+      };
+    }
     let result;
     try {
       result = await Promise.race([
         this.send(
           state,
           CELL_MESSAGE.INVOKE,
-          {args, tableReads, tables: options.tables || []},
+          payload,
           this.remainingWallBudgetMs(
             wallBudget.deadlineMs,
             wallBudget.configuredBudgetMs,
@@ -417,7 +458,28 @@ class WasiComponentCellRuntime {
       initialCpu,
       state.cell.budgets.cpu_time_ms,
     );
+    if (emitBuffer !== undefined) {
+      result = this.attachCallEmitPartials(result, emitBuffer);
+    }
     return result;
+  }
+
+  attachCallEmitPartials(result, emitBuffer) {
+    const meta = new Int32Array(emitBuffer, 0, CELL_EMIT_BUFFER_META_SLOTS);
+    const length = Atomics.load(meta, CELL_EMIT_LENGTH_INDEX);
+    const errorCode = Atomics.load(meta, CELL_EMIT_ERROR_INDEX);
+    const byteOffset =
+      CELL_EMIT_BUFFER_META_SLOTS * Int32Array.BYTES_PER_ELEMENT;
+    const bytes = new Uint8Array(emitBuffer, byteOffset, length);
+    const partialsJson = Buffer.from(bytes).toString(BYTE_ENCODING);
+    if (errorCode !== 0 || partialsJson === CELL_EMIT_OVERFLOW_MARKER) {
+      throw budgetFailure(
+        CELL_BUDGET_FIELD.CONTEXT_BYTES,
+        CELL_EMIT_BUFFER_BYTES,
+        CELL_EMIT_BUFFER_BYTES,
+      );
+    }
+    return {...result, partials: JSON.parse(partialsJson)};
   }
 
   requireResultBudgets(state, result, tableReads) {
@@ -475,6 +537,9 @@ class WasiComponentCellRuntime {
         wallBudget.configuredBudgetMs,
         cancelOperation,
       );
+      if (result.partials !== undefined) {
+        return {partials: result.partials, value: result.value};
+      }
       return result.value;
     } catch (error) {
       if (error?.preserveReplicaState !== true) {
