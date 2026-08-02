@@ -1,0 +1,43 @@
+{
+  "id": "minimal-deployment-call-cell-production-wiring",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The production bootstrap assembles the landed call-cell invocation path end-to-end with no dead code: bootstrap-api constructs the CallCellInvoker and createCallCellRoutingSurface against the real QueryExecutor, ServiceDispatcher, and coordination store; the callBindingRouteResolver is injected into RuntimeServiceHandler through runtime-service-handler-setup so an authenticated pgwire CALL BINDING on a production-composed node reaches the invoker without test-only shims; the coordination-store DDL for the reduce lease and final-snapshot tables is created during bootstrap; and multi-node reduce evidence over a real multi-replica deployment proves partial publication from every shard-owning replica, reduce invoked only on the lease-holding replica over a complete fresh disjoint partial set, and exactly one atomically published final snapshot visible to the caller, with the minimal-deployment-call-cell-production-wiring scenario green and no feature flag surviving the landing.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": "minimal-deployment-call-cell-invocation-orchestration",
+    "planDoc": null,
+    "draftedAtCommit": "5c374e6c8cb005e9928390c5efff1c09a62afbd1"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "minimal-deployment-call-cell-production-wiring",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "minimal-deployment-call-cell-production-wiring-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "minimal-deployment-call-cell-production-wiring",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
