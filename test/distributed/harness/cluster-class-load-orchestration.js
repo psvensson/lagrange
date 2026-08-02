@@ -40,6 +40,38 @@ const {
 import {ClusterLifecycleBase} from './cluster-class-lifecycle-base.js';
 
 const RESTART_RECOVERY_FIELD_NONE = 'none';
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const numberIsSafeInteger = Number.isSafeInteger;
+const OWN_DATA_VALUE_FIELD = 'value';
+
+function readOwnRestartRecoveryHandoffDataProperty(handoff, field) {
+  if (!handoff || typeof handoff !== 'object' ||
+      !objectHasOwn(handoff, field)) {
+    return undefined;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(handoff, field);
+  return descriptor && objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD) ?
+    descriptor.value :
+    undefined;
+}
+
+function normalizeRestartRecoveryHandoffProgressString(handoff, field) {
+  const value = readOwnRestartRecoveryHandoffDataProperty(handoff, field);
+  return typeof value === 'string' && value.length > ZERO ?
+    value :
+    RESTART_RECOVERY_FIELD_NONE;
+}
+
+function normalizeRestartRecoveryHandoffAttempt(handoff) {
+  const attempt = readOwnRestartRecoveryHandoffDataProperty(
+    handoff,
+    RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_ATTEMPT,
+  );
+  return numberIsSafeInteger(attempt) && attempt > ZERO ?
+    attempt :
+    RESTART_RECOVERY_FIELD_NONE;
+}
 
 /**
  * Evaluate restart-recovery readiness from one reachability probe.
@@ -97,6 +129,14 @@ const RESTART_RECOVERY_FIELD_SEED_CONTACT_AUTHORITY_SOURCE =
 const RESTART_RECOVERY_FIELD_STARTUP_BRANCH = 'startupBranch';
 const RESTART_RECOVERY_FIELD_INFRASTRUCTURE_JOIN_COMPLETE =
   'infrastructureJoinComplete';
+const RESTART_RECOVERY_FIELD_JOIN_PHASE = 'joinPhase';
+const RESTART_RECOVERY_FIELD_JOIN_LIFECYCLE_STATE = 'joinLifecycleState';
+const RESTART_RECOVERY_FIELD_JOIN_CHECKPOINT_TARGET = 'joinCheckpointTarget';
+const RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_GATE = 'joinReadySignalGate';
+const RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_ATTEMPT =
+  'joinReadySignalAttempt';
+const RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_LAST_FAILURE_CODE =
+  'joinReadySignalLastFailureCode';
 const RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_CONSUMED =
   'canonicalAuthorityConsumed';
 const RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_STATE =
@@ -609,6 +649,33 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
       typeof startupRuntimeHandoff.transactionRecoveryOutcome === 'object' ?
         startupRuntimeHandoff.transactionRecoveryOutcome :
         null;
+    const joinPhase = normalizeRestartRecoveryHandoffProgressString(
+      startupRuntimeHandoff,
+      RESTART_RECOVERY_FIELD_JOIN_PHASE,
+    );
+    const joinLifecycleState =
+      normalizeRestartRecoveryHandoffProgressString(
+        startupRuntimeHandoff,
+        RESTART_RECOVERY_FIELD_JOIN_LIFECYCLE_STATE,
+      );
+    const joinCheckpointTarget =
+      normalizeRestartRecoveryHandoffProgressString(
+        startupRuntimeHandoff,
+        RESTART_RECOVERY_FIELD_JOIN_CHECKPOINT_TARGET,
+      );
+    const joinReadySignalGate =
+      normalizeRestartRecoveryHandoffProgressString(
+        startupRuntimeHandoff,
+        RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_GATE,
+      );
+    const joinReadySignalAttempt = normalizeRestartRecoveryHandoffAttempt(
+      startupRuntimeHandoff,
+    );
+    const joinReadySignalLastFailureCode =
+      normalizeRestartRecoveryHandoffProgressString(
+        startupRuntimeHandoff,
+        RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_LAST_FAILURE_CODE,
+      );
     return (
       'reachable=' +
       String(observation.reachable === true) +
@@ -680,6 +747,30 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
         startupRuntimeHandoff?.infrastructureJoinComplete ??
           RESTART_RECOVERY_FIELD_NONE,
       ) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_JOIN_PHASE +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(joinPhase) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_JOIN_LIFECYCLE_STATE +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(joinLifecycleState) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_JOIN_CHECKPOINT_TARGET +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(joinCheckpointTarget) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_GATE +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(joinReadySignalGate) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_ATTEMPT +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(joinReadySignalAttempt) +
+      RESTART_RECOVERY_FIELD_SEPARATOR +
+      RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_LAST_FAILURE_CODE +
+      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+      String(joinReadySignalLastFailureCode) +
       RESTART_RECOVERY_FIELD_SEPARATOR +
       RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_CONSUMED +
       RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +

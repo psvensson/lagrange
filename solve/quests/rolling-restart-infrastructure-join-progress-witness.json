@@ -1,0 +1,82 @@
+{
+  "id": "rolling-restart-infrastructure-join-progress-witness",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "verificationTemplates": [
+    "harness-fidelity",
+    "recovery-replay",
+    "retry-loops",
+    "formation-circularity",
+    "adversarial-js-intrinsics"
+  ],
+  "statement": "A restarted-node recovery timeout that is bootstrap-reachable but pre-admin preserves the direct target's own infrastructure-join phase, lifecycle state, checkpoint target, ready-signal gate, attempt, and last retryable failure in the startup-runtime handoff and terminal failure barrier, so restart_infrastructure_join distinguishes the stalled owner boundary without treating missing evidence, bootstrap reachability, or admin refusal as cause.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "specRef": "membership-lifecycle-placement-hard-cutover",
+    "closesCL": [],
+    "parentQuest": "rolling-restart-representative-certification",
+    "planDoc": "solve/epics/topology-convergence-hardening.md",
+    "draftedAtCommit": "b8fa81df0aa9aab7c9bc38806636bee82e9cd76d"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "rolling-restart-infrastructure-join-progress-witness",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "rolling-restart-infrastructure-join-progress-witness-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "rolling-restart-infrastructure-join-progress-witness",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "evidence-only-boundary",
+      "statement": "Project process-local progress only. Do not change startup ordering, timers, retry budgets, admission or readiness predicates, recovery activation, bootstrap routing, load, cleanup, or durable checkpoint advancement."
+    },
+    {
+      "id": "existing-owner-reuse",
+      "statement": "Reuse NodeJoiningService phase, lifecycle state, checkpoint execution, ready-signal flow, startupRuntimeHandoff, readiness-probe normalization, timeout formatter, failure barrier, and stability gate. Do not add a readiness, joining, recovery, retry, or diagnostic polling owner."
+    },
+    {
+      "id": "ordered-gate-witness",
+      "statement": "The direct target must distinguish CDC subscription readiness, local-query transport, metadata publication, cold-formation eligibility, and heartbeat publication in their existing execution order, including bounded attempt and last retryable failure where that owner already retries."
+    },
+    {
+      "id": "structured-trap-free-evidence",
+      "statement": "Retain structured own-data fields through the readiness probe and terminal failure bundle; preserve null/unknown honestly for legacy or incomplete observations, reject inherited/accessor fabrication, and never infer a gate from admin refusal or text-only logs."
+    },
+    {
+      "id": "retained-live-shape-reproduction",
+      "statement": "A deterministic fixture matching the retained N=1 shape (durable_rejoin, bootstrap reachable, admin refused, control-plane recovery ready, infrastructure join incomplete, canonical authority unconsumed, transaction recovery not_started) must classify the exact witnessed join progress when present and remain only restart_infrastructure_join with unknown sub-boundary when absent."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Deterministic tests must fail when the join progress producer or any projection hop is reverted while retaining the prior coarse infrastructure-join classification."
+    },
+    {
+      "id": "formal-model-scope",
+      "statement": "Run the existing model-contract gate for adjacency. Do not extend TLA+ or Alloy unless implementation changes lifecycle, retry, checkpoint, or owner-cardinality semantics beyond evidence projection."
+    },
+    {
+      "id": "bounded-live-validation",
+      "statement": "After deterministic closure and independent verification on one exact clean commit, run at most one unchanged N=1 rolling-restart engagement to identify the live join sub-boundary. Do not start an N=15 certification window in this child Quest."
+    }
+  ]
+}

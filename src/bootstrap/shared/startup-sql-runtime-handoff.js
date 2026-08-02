@@ -7,6 +7,7 @@ import {
 } from './service-installation-reconciler-setup.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const numberIsSafeInteger = Number.isSafeInteger;
 
 function activateOwnerTrackedTransactionRecovery(owner) {
   let recovery;
@@ -205,17 +206,48 @@ function activateSteadyStateRuntimeHandoff(options) {
  * @param {Object} options
  * @param {string|null} options.startupBranch
  * @param {boolean} options.infrastructureJoinComplete
+ * @param {Object|null} [options.infrastructureJoinProgress]
  * @param {Object|null} options.recovery
  * @return {Object}
  */
+function normalizeStartupHandoffString(value) {
+  return typeof value === 'string' ? value : null;
+}
+
+function normalizeStartupHandoffPositiveInteger(value) {
+  return numberIsSafeInteger(value) && value > 0 ? value : null;
+}
+
+function buildInfrastructureJoinProgressFields(progress) {
+  return {
+    joinPhase: normalizeStartupHandoffString(progress.phase),
+    joinLifecycleState: normalizeStartupHandoffString(progress.lifecycleState),
+    joinCheckpointTarget:
+      normalizeStartupHandoffString(progress.checkpointTarget),
+    joinReadySignalGate:
+      normalizeStartupHandoffString(progress.readySignalGate),
+    joinReadySignalAttempt:
+      normalizeStartupHandoffPositiveInteger(progress.readySignalAttempt),
+    joinReadySignalLastFailureCode:
+      normalizeStartupHandoffString(progress.readySignalLastFailureCode),
+  };
+}
+
 function buildStartupRuntimeHandoffSnapshot({
   startupBranch,
   infrastructureJoinComplete,
+  infrastructureJoinProgress = null,
   recovery,
 }) {
+  const joinProgressFields =
+    infrastructureJoinProgress &&
+    typeof infrastructureJoinProgress === 'object' ?
+      buildInfrastructureJoinProgressFields(infrastructureJoinProgress) :
+      {};
   return {
     startupBranch: typeof startupBranch === 'string' ? startupBranch : null,
     infrastructureJoinComplete,
+    ...joinProgressFields,
     transactionRecoveryState:
       typeof recovery?.state === 'string' ? recovery.state : null,
     transactionRecoveryReady: recovery?.ready === true,

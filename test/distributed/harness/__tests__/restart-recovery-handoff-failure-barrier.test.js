@@ -38,6 +38,12 @@ function buildError(overrides = {}) {
     seedContactAuthoritySource: 'none',
     startupBranch: 'durable_rejoin',
     infrastructureJoinComplete: false,
+    joinPhase: 'joining:readiness-convergence',
+    joinLifecycleState: 'joining',
+    joinCheckpointTarget: 'READY_LEASE_ASSIGNED',
+    joinReadySignalGate: 'metadata_publication',
+    joinReadySignalAttempt: 4,
+    joinReadySignalLastFailureCode: 'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY',
     canonicalAuthorityConsumed: false,
     canonicalAuthorityState: 'none',
     canonicalAuthoritySource: 'seed-a:8080',
@@ -92,6 +98,13 @@ test('Unit: restart timeout formatter preserves direct handoff evidence', () => 
     startupRuntimeHandoff: {
       startupBranch: 'durable_rejoin',
       infrastructureJoinComplete: true,
+      joinPhase: 'joining:readiness-convergence',
+      joinLifecycleState: 'joining',
+      joinCheckpointTarget: 'READY_LEASE_ASSIGNED',
+      joinReadySignalGate: 'metadata_publication',
+      joinReadySignalAttempt: 4,
+      joinReadySignalLastFailureCode:
+        'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY',
       canonicalAuthorityConsumed: true,
       canonicalAuthorityState: 'ready',
       canonicalAuthoritySource: 'seed-a:8080',
@@ -109,6 +122,12 @@ test('Unit: restart timeout formatter preserves direct handoff evidence', () => 
   for (const expected of [
     'startupBranch=durable_rejoin',
     'infrastructureJoinComplete=true',
+    'joinPhase=joining:readiness-convergence',
+    'joinLifecycleState=joining',
+    'joinCheckpointTarget=READY_LEASE_ASSIGNED',
+    'joinReadySignalGate=metadata_publication',
+    'joinReadySignalAttempt=4',
+    'joinReadySignalLastFailureCode=BOOTSTRAP_METADATA_PUBLICATION_NOT_READY',
     'canonicalAuthorityConsumed=true',
     'canonicalAuthorityState=ready',
     'canonicalAuthoritySource=seed-a:8080',
@@ -123,6 +142,101 @@ test('Unit: restart timeout formatter preserves direct handoff evidence', () => 
   }
 });
 
+test('Unit: timeout formatter rejects hostile join progress', () => {
+  const cluster = createCluster({
+    size: 1,
+    docker: {socketPath: '/var/run/docker.sock'},
+    image: 'distributed-db:test',
+  });
+  const hostileProgress = {
+    joinPhase: 'fabricated-inherited-phase',
+    joinLifecycleState: 'fabricated-inherited-state',
+    joinCheckpointTarget: 'fabricated-inherited-checkpoint',
+    joinReadySignalGate: 'fabricated-inherited-gate',
+    joinReadySignalAttempt: 9,
+    joinReadySignalLastFailureCode: 'fabricated-inherited-failure',
+  };
+  const progressFields = Object.keys(hostileProgress);
+  const inheritedHandoff = Object.create(hostileProgress);
+  inheritedHandoff.infrastructureJoinComplete = false;
+  const inherited = cluster._formatRestartRecoveryReadinessObservation({
+    reachable: true,
+    ready: false,
+    adminReady: false,
+    controlPlaneRecoveryReady: true,
+    startupRuntimeHandoff: inheritedHandoff,
+  }, null);
+  for (const field of progressFields) {
+    assert.match(inherited, new RegExp(`${field}=none`, 'u'));
+  }
+
+  let accessorReads = 0;
+  const accessorHandoff = {
+    infrastructureJoinComplete: false,
+  };
+  for (const [field, value] of Object.entries(hostileProgress)) {
+    Object.defineProperty(accessorHandoff, field, {
+      enumerable: true,
+      get() {
+        accessorReads += 1;
+        return value;
+      },
+    });
+  }
+  const accessor = cluster._formatRestartRecoveryReadinessObservation({
+    reachable: true,
+    ready: false,
+    adminReady: false,
+    controlPlaneRecoveryReady: true,
+    startupRuntimeHandoff: accessorHandoff,
+  }, null);
+  for (const field of progressFields) {
+    assert.match(accessor, new RegExp(`${field}=none`, 'u'));
+  }
+  assert.equal(accessorReads, 0);
+
+  const originalIsSafeInteger = Number.isSafeInteger;
+  const originalIsFinite = Number.isFinite;
+  const originalFloor = Math.floor;
+  let formattedAttempts;
+  try {
+    Number.isSafeInteger = () => true;
+    Number.isFinite = () => true;
+    Math.floor = () => 7;
+    formattedAttempts = arrayMap(
+      [
+        Number.MAX_SAFE_INTEGER + 1,
+        Number.NaN,
+        Number.POSITIVE_INFINITY,
+        Number.NEGATIVE_INFINITY,
+        -0,
+        -1,
+        1.5,
+        true,
+        Object(3),
+      ],
+      (attempt) => cluster._formatRestartRecoveryReadinessObservation({
+        reachable: true,
+        ready: false,
+        adminReady: false,
+        controlPlaneRecoveryReady: true,
+        startupRuntimeHandoff: {
+          infrastructureJoinComplete: false,
+          joinPhase: 'owned-phase',
+          joinReadySignalAttempt: attempt,
+        },
+      }, null),
+    );
+  } finally {
+    Number.isSafeInteger = originalIsSafeInteger;
+    Number.isFinite = originalIsFinite;
+    Math.floor = originalFloor;
+  }
+  for (const formatted of formattedAttempts) {
+    assert.match(formatted, /joinReadySignalAttempt=none/u);
+  }
+});
+
 test('Unit: pre-handoff timeout attributes infrastructure join first', () => {
   const barrier = resolveBarrier(buildError());
   assert.equal(barrier.dominantReason, RESTART_INFRASTRUCTURE_JOIN);
@@ -131,6 +245,17 @@ test('Unit: pre-handoff timeout attributes infrastructure join first', () => {
       startupBranch: barrier.terminalRecoveryReadiness.startupBranch,
       infrastructureJoinComplete:
         barrier.terminalRecoveryReadiness.infrastructureJoinComplete,
+      joinPhase: barrier.terminalRecoveryReadiness.joinPhase,
+      joinLifecycleState:
+        barrier.terminalRecoveryReadiness.joinLifecycleState,
+      joinCheckpointTarget:
+        barrier.terminalRecoveryReadiness.joinCheckpointTarget,
+      joinReadySignalGate:
+        barrier.terminalRecoveryReadiness.joinReadySignalGate,
+      joinReadySignalAttempt:
+        barrier.terminalRecoveryReadiness.joinReadySignalAttempt,
+      joinReadySignalLastFailureCode:
+        barrier.terminalRecoveryReadiness.joinReadySignalLastFailureCode,
       canonicalAuthorityConsumed:
         barrier.terminalRecoveryReadiness.canonicalAuthorityConsumed,
       transactionRecoveryState:
@@ -141,6 +266,13 @@ test('Unit: pre-handoff timeout attributes infrastructure join first', () => {
     {
       startupBranch: 'durable_rejoin',
       infrastructureJoinComplete: false,
+      joinPhase: 'joining:readiness-convergence',
+      joinLifecycleState: 'joining',
+      joinCheckpointTarget: 'READY_LEASE_ASSIGNED',
+      joinReadySignalGate: 'metadata_publication',
+      joinReadySignalAttempt: 4,
+      joinReadySignalLastFailureCode:
+        'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY',
       canonicalAuthorityConsumed: false,
       transactionRecoveryState: 'not_started',
       ownerState: RESTART_INFRASTRUCTURE_JOIN,
@@ -150,6 +282,29 @@ test('Unit: pre-handoff timeout attributes infrastructure join first', () => {
   const gate = buildGate({failureBarrier: barrier});
   assert.equal(gate.status, 'open');
   assert.ok(arrayIncludes(gate.blockers, RESTART_INFRASTRUCTURE_JOIN));
+});
+
+test('Unit: terminal parser rejects invalid join attempt witnesses', () => {
+  for (const attempt of [
+    Number.NaN,
+    Number.POSITIVE_INFINITY,
+    Number.NEGATIVE_INFINITY,
+    -0,
+    -3,
+    0,
+    1.5,
+    Number.MAX_SAFE_INTEGER + 1,
+    true,
+    false,
+  ]) {
+    const barrier = resolveBarrier(buildError({
+      joinReadySignalAttempt: attempt,
+    }));
+    assert.equal(
+      barrier.terminalRecoveryReadiness.joinReadySignalAttempt,
+      null,
+    );
+  }
 });
 
 test('Unit: post-join timeout attributes missing canonical authority next', () => {
@@ -234,6 +389,17 @@ test('Unit: legacy timeout with missing handoff fields stays unknown', () => {
   assert.deepEqual(
     {
       startupBranch: barrier.terminalRecoveryReadiness.startupBranch,
+      joinPhase: barrier.terminalRecoveryReadiness.joinPhase,
+      joinLifecycleState:
+        barrier.terminalRecoveryReadiness.joinLifecycleState,
+      joinCheckpointTarget:
+        barrier.terminalRecoveryReadiness.joinCheckpointTarget,
+      joinReadySignalGate:
+        barrier.terminalRecoveryReadiness.joinReadySignalGate,
+      joinReadySignalAttempt:
+        barrier.terminalRecoveryReadiness.joinReadySignalAttempt,
+      joinReadySignalLastFailureCode:
+        barrier.terminalRecoveryReadiness.joinReadySignalLastFailureCode,
       canonicalAuthorityState:
         barrier.terminalRecoveryReadiness.canonicalAuthorityState,
       canonicalAuthoritySource:
@@ -245,6 +411,12 @@ test('Unit: legacy timeout with missing handoff fields stays unknown', () => {
     },
     {
       startupBranch: null,
+      joinPhase: null,
+      joinLifecycleState: null,
+      joinCheckpointTarget: null,
+      joinReadySignalGate: null,
+      joinReadySignalAttempt: null,
+      joinReadySignalLastFailureCode: null,
       canonicalAuthorityState: null,
       canonicalAuthoritySource: null,
       transactionRecoveryState: null,

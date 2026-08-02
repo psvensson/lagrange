@@ -657,8 +657,16 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
     return buildStartupRuntimeHandoffSnapshot({
       startupBranch: this.startupMode,
       infrastructureJoinComplete: this.phase === JoiningPhase.COMPLETE,
+      infrastructureJoinProgress: this.getInfrastructureJoinProgressSnapshot(),
       recovery,
     });
+  }
+  getInfrastructureJoinProgressSnapshot() {
+    return {
+      phase: this.phase,
+      lifecycleState: this.lifecycleStateMachine.getState(),
+      ...this.infrastructureJoinProgress,
+    };
   }
   /**
    * Check if any joined message group has a leader in the system cache.

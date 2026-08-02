@@ -249,6 +249,10 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
     this.lastRetryableSeedContactEvidence = null;
     this.seedContactDiagnostics = null;
     this.phase = JoiningPhase.NOT_STARTED;
+    this.infrastructureJoinProgress = {
+      checkpointTarget: null, readySignalGate: null,
+      readySignalAttempt: null, readySignalLastFailureCode: null,
+    };
     this.startTime = null;
     this.phaseStartTime = null; // Logging
     const loggingService = LoggingService.getInstance();

@@ -290,6 +290,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
           );
         },
         run: async () => {
+          this.recordInfrastructureJoinCheckpointTarget(
+            JOIN_CHECKPOINT.SEED_CONTACTED,
+          );
           await startupPipelineRunner.run({
             phases: joinPlan.segments[JOIN_PLAN_SEGMENT.SEED_CONTACT],
           });
@@ -301,6 +304,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
         segment: JOIN_PLAN_SEGMENT.INFRASTRUCTURE,
         shouldRerun: () => !this.hasJoinInfrastructureReady(),
         run: async () => {
+          this.recordInfrastructureJoinCheckpointTarget(
+            JOIN_CHECKPOINT.JOIN_INFRASTRUCTURE_READY,
+          );
           await this.runJoinInfrastructurePhases(
             startupPipelineRunner,
             joinPlan,
@@ -314,6 +320,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
         shouldRerun: () =>
           this.outerReattemptMembershipRestorePending === true,
         run: async () => {
+          this.recordInfrastructureJoinCheckpointTarget(
+            JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
+          );
           this.advanceLifecycleAfterResumedInfrastructure();
           await startupPipelineRunner.run({
             phases: joinPlan.segments[JOIN_PLAN_SEGMENT.MEMBERSHIP],
@@ -336,6 +345,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
         phase: JOIN_SESSION_PHASE.READY_LEASE_ASSIGNED,
         segment: JOIN_PLAN_SEGMENT.READINESS,
         run: async () => {
+          this.recordInfrastructureJoinCheckpointTarget(
+            JOIN_CHECKPOINT.READY_LEASE_ASSIGNED,
+          );
           // A readiness failure skips completed membership on retry, so
           // restore process-local lifecycle at this guaranteed rerun boundary.
           this.advanceLifecycleAfterResumedInfrastructure();
@@ -358,6 +370,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
           );
         },
         run: async () => {
+          this.recordInfrastructureJoinCheckpointTarget(
+            JOIN_CHECKPOINT.FINALIZED,
+          );
           this.completeSuccessfulJoin();
         },
       },

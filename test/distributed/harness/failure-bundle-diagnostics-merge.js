@@ -1,6 +1,9 @@
 import * as foundation from './failure-bundle-diagnostics-foundation.js';
 import * as priority from './failure-bundle-diagnostics-priority-recovery.js';
 
+const numberFromValue = Number;
+const numberIsSafeInteger = Number.isSafeInteger;
+
 const RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY =
   'restart_bootstrap_authority';
 const RESTART_RECOVERY_BOUNDARY_STARTUP_AUTHORITY_CONSUMPTION =
@@ -1019,6 +1022,16 @@ function normalizeRestartRecoveryReadinessNumber(value) {
   return Number.isFinite(numericValue) ? Math.floor(numericValue) : null;
 }
 
+function normalizeRestartRecoveryReadinessPositiveInteger(value) {
+  if (typeof value !== 'string' && typeof value !== 'number') {
+    return null;
+  }
+  const numericValue = numberFromValue(value);
+  return numberIsSafeInteger(numericValue) && numericValue > ZERO ?
+    numericValue :
+    null;
+}
+
 function normalizeRestartRecoveryReadinessBoolean(value) {
   if (value === true) {
     return true;
@@ -1244,6 +1257,22 @@ function resolveRestartRecoveryReadinessObservation(entry) {
         RESTART_RECOVERY_READINESS_FIELD.INFRASTRUCTURE_JOIN_COMPLETE
       ],
     ),
+    joinPhase:
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.JOIN_PHASE] ?? null,
+    joinLifecycleState:
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.JOIN_LIFECYCLE_STATE] ?? null,
+    joinCheckpointTarget:
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.JOIN_CHECKPOINT_TARGET] ?? null,
+    joinReadySignalGate:
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.JOIN_READY_SIGNAL_GATE] ?? null,
+    joinReadySignalAttempt: normalizeRestartRecoveryReadinessPositiveInteger(
+      fieldMap[RESTART_RECOVERY_READINESS_FIELD.JOIN_READY_SIGNAL_ATTEMPT],
+    ),
+    joinReadySignalLastFailureCode:
+      fieldMap[
+        RESTART_RECOVERY_READINESS_FIELD
+          .JOIN_READY_SIGNAL_LAST_FAILURE_CODE
+      ] ?? null,
     canonicalAuthorityConsumed: normalizeRestartRecoveryReadinessBoolean(
       fieldMap[
         RESTART_RECOVERY_READINESS_FIELD.CANONICAL_AUTHORITY_CONSUMED

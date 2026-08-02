@@ -10,6 +10,82 @@ import {
   isLocalQueryTransportReady,
 } from '../shared/local-query-transport-readiness.js';
 
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const numberIsSafeInteger = Number.isSafeInteger;
+const FIELD_VALUE = 'value';
+const STARTUP_HANDOFF_PROGRESS_FIELD = Object.freeze({
+  JOIN_PHASE: 'joinPhase',
+  JOIN_LIFECYCLE_STATE: 'joinLifecycleState',
+  JOIN_CHECKPOINT_TARGET: 'joinCheckpointTarget',
+  JOIN_READY_SIGNAL_GATE: 'joinReadySignalGate',
+  JOIN_READY_SIGNAL_ATTEMPT: 'joinReadySignalAttempt',
+  JOIN_READY_SIGNAL_LAST_FAILURE_CODE: 'joinReadySignalLastFailureCode',
+});
+
+function readOwnDataProperty(record, field) {
+  if (!record || typeof record !== 'object' || !objectHasOwn(record, field)) {
+    return undefined;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(record, field);
+  return descriptor && objectHasOwn(descriptor, FIELD_VALUE) ?
+    descriptor.value :
+    undefined;
+}
+
+function hasOwnDataProperty(record, field) {
+  if (!record || typeof record !== 'object' || !objectHasOwn(record, field)) {
+    return false;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(record, field);
+  return descriptor ? objectHasOwn(descriptor, FIELD_VALUE) : false;
+}
+
+function normalizeOwnHandoffString(handoff, field) {
+  const value = readOwnDataProperty(handoff, field);
+  return typeof value === 'string' ? value : null;
+}
+
+function normalizeOwnHandoffPositiveInteger(handoff, field) {
+  const value = readOwnDataProperty(handoff, field);
+  return numberIsSafeInteger(value) && value > 0 ? value : null;
+}
+
+function buildOwnInfrastructureJoinProgressFields(handoff) {
+  if (!hasOwnDataProperty(
+    handoff,
+    STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_PHASE,
+  )) {
+    return {};
+  }
+  return {
+    joinPhase: normalizeOwnHandoffString(
+      handoff,
+      STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_PHASE,
+    ),
+    joinLifecycleState: normalizeOwnHandoffString(
+      handoff,
+      STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_LIFECYCLE_STATE,
+    ),
+    joinCheckpointTarget: normalizeOwnHandoffString(
+      handoff,
+      STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_CHECKPOINT_TARGET,
+    ),
+    joinReadySignalGate: normalizeOwnHandoffString(
+      handoff,
+      STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_READY_SIGNAL_GATE,
+    ),
+    joinReadySignalAttempt: normalizeOwnHandoffPositiveInteger(
+      handoff,
+      STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_READY_SIGNAL_ATTEMPT,
+    ),
+    joinReadySignalLastFailureCode: normalizeOwnHandoffString(
+      handoff,
+      STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_READY_SIGNAL_LAST_FAILURE_CODE,
+    ),
+  };
+}
+
 /**
  * Shape the startup-runtime-handoff readiness probe fields from the handoff
  * snapshot plus the seed-contact authority observations.
@@ -33,6 +109,7 @@ function buildStartupRuntimeHandoffProbeFields({
         handoff.startupBranch :
         null,
     infrastructureJoinComplete: handoff.infrastructureJoinComplete === true,
+    ...buildOwnInfrastructureJoinProgressFields(handoff),
     canonicalAuthorityConsumed,
     canonicalAuthorityState:
       typeof startupAuthority?.state === 'string' ?

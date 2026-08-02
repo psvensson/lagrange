@@ -1,0 +1,880 @@
+diff --git a/scripts/run-rolling-restart-infrastructure-join-progress-witness-scenarios.js b/scripts/run-rolling-restart-infrastructure-join-progress-witness-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b08c2858fb3f23547f769549931166f9fc94e8fd
+--- /dev/null
++++ b/scripts/run-rolling-restart-infrastructure-join-progress-witness-scenarios.js
+@@ -0,0 +1,15 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from
++  './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = Object.freeze({
++  'rolling-restart-infrastructure-join-progress-witness': Object.freeze([
++    'test/bootstrap/' +
++      'node-joining-infrastructure-join-progress-witness.test.js',
++    'test/distributed/harness/__tests__/' +
++      'restart-recovery-handoff-failure-barrier.test.js',
++  ]),
++});
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/bootstrap/node-joining-admission-readiness.js b/src/bootstrap/node-joining-admission-readiness.js
+index a4e10f3a452dfc19e58c845d279194f0a46e6380..d42625744509e8312b96d3c9a883f1c7551fd653 100644
+--- a/src/bootstrap/node-joining-admission-readiness.js
++++ b/src/bootstrap/node-joining-admission-readiness.js
+@@ -290,6 +290,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
+           );
+         },
+         run: async () => {
++          this.recordInfrastructureJoinCheckpointTarget(
++            JOIN_CHECKPOINT.SEED_CONTACTED,
++          );
+           await startupPipelineRunner.run({
+             phases: joinPlan.segments[JOIN_PLAN_SEGMENT.SEED_CONTACT],
+           });
+@@ -301,6 +304,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
+         segment: JOIN_PLAN_SEGMENT.INFRASTRUCTURE,
+         shouldRerun: () => !this.hasJoinInfrastructureReady(),
+         run: async () => {
++          this.recordInfrastructureJoinCheckpointTarget(
++            JOIN_CHECKPOINT.JOIN_INFRASTRUCTURE_READY,
++          );
+           await this.runJoinInfrastructurePhases(
+             startupPipelineRunner,
+             joinPlan,
+@@ -314,6 +320,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
+         shouldRerun: () =>
+           this.outerReattemptMembershipRestorePending === true,
+         run: async () => {
++          this.recordInfrastructureJoinCheckpointTarget(
++            JOIN_CHECKPOINT.MEMBERSHIP_WRITTEN,
++          );
+           this.advanceLifecycleAfterResumedInfrastructure();
+           await startupPipelineRunner.run({
+             phases: joinPlan.segments[JOIN_PLAN_SEGMENT.MEMBERSHIP],
+@@ -336,6 +345,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
+         phase: JOIN_SESSION_PHASE.READY_LEASE_ASSIGNED,
+         segment: JOIN_PLAN_SEGMENT.READINESS,
+         run: async () => {
++          this.recordInfrastructureJoinCheckpointTarget(
++            JOIN_CHECKPOINT.READY_LEASE_ASSIGNED,
++          );
+           // A readiness failure skips completed membership on retry, so
+           // restore process-local lifecycle at this guaranteed rerun boundary.
+           this.advanceLifecycleAfterResumedInfrastructure();
+@@ -358,6 +370,9 @@ class NodeJoiningAdmissionReadiness extends NodeJoiningReadySignalReadiness {
+           );
+         },
+         run: async () => {
++          this.recordInfrastructureJoinCheckpointTarget(
++            JOIN_CHECKPOINT.FINALIZED,
++          );
+           this.completeSuccessfulJoin();
+         },
+       },
+diff --git a/src/bootstrap/node-joining-backfill-merge-and-status.js b/src/bootstrap/node-joining-backfill-merge-and-status.js
+index c7d2c9e06ac050e174aede0715090a1f45dff7c1..691571089f7cd077d2d4dda5ec7fa90f879dbe1a 100644
+--- a/src/bootstrap/node-joining-backfill-merge-and-status.js
++++ b/src/bootstrap/node-joining-backfill-merge-and-status.js
+@@ -657,9 +657,17 @@ class NodeJoiningBackfillMergeAndStatus extends NodeJoiningPublicationActivation
+     return buildStartupRuntimeHandoffSnapshot({
+       startupBranch: this.startupMode,
+       infrastructureJoinComplete: this.phase === JoiningPhase.COMPLETE,
++      infrastructureJoinProgress: this.getInfrastructureJoinProgressSnapshot(),
+       recovery,
+     });
+   }
++  getInfrastructureJoinProgressSnapshot() {
++    return {
++      phase: this.phase,
++      lifecycleState: this.lifecycleStateMachine.getState(),
++      ...this.infrastructureJoinProgress,
++    };
++  }
+   /**
+    * Check if any joined message group has a leader in the system cache.
+    * @param {Object} systemTableCache - System table cache.
+diff --git a/src/bootstrap/node-joining-owner-construction.js b/src/bootstrap/node-joining-owner-construction.js
+index ee038b137918071d38a3d628e6933b6424c62f2f..926b9398123709b24d044f1053163baa7a61a59b 100644
+--- a/src/bootstrap/node-joining-owner-construction.js
++++ b/src/bootstrap/node-joining-owner-construction.js
+@@ -249,6 +249,12 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
+     this.lastRetryableSeedContactEvidence = null;
+     this.seedContactDiagnostics = null;
+     this.phase = JoiningPhase.NOT_STARTED;
++    this.infrastructureJoinProgress = {
++      checkpointTarget: null,
++      readySignalGate: null,
++      readySignalAttempt: null,
++      readySignalLastFailureCode: null,
++    };
+     this.startTime = null;
+     this.phaseStartTime = null; // Logging
+     const loggingService = LoggingService.getInstance();
+diff --git a/src/bootstrap/node-joining-ready-signal-readiness.js b/src/bootstrap/node-joining-ready-signal-readiness.js
+index f0d70e72882a814a3acd2498fba37f49c4e1a42a..d5fe2c3b08a4e7c013ebbe5d83ebf23a609bde8e 100644
+--- a/src/bootstrap/node-joining-ready-signal-readiness.js
++++ b/src/bootstrap/node-joining-ready-signal-readiness.js
+@@ -36,8 +36,59 @@ const {
+   waitForMetadataPublicationReadiness,
+ } = NODE_JOINING_SERVICE_SHARED;
+ 
++const INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE = Object.freeze({
++  CDC_SUBSCRIPTION: 'cdc_subscription',
++  LOCAL_QUERY_TRANSPORT: 'local_query_transport',
++  METADATA_PUBLICATION: 'metadata_publication',
++  OPERATION_LEDGER_FORMATION: 'operation_ledger_formation',
++  HEARTBEAT_PUBLICATION: 'heartbeat_publication',
++});
++const LOCAL_STR_BOOTSTRAP_METADATA_PUBLICATION_NOT_READY =
++  'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY';
++
+ class NodeJoiningReadySignalReadiness
+   extends NodeJoiningOperationLedgerFormationReadiness {
++  recordInfrastructureJoinCheckpointTarget(checkpointTarget) {
++    const current = this.infrastructureJoinProgress || {};
++    this.infrastructureJoinProgress = {
++      ...current,
++      checkpointTarget:
++        typeof checkpointTarget === 'string' && checkpointTarget.length > 0 ?
++          checkpointTarget :
++          null,
++    };
++  }
++  recordInfrastructureJoinReadySignalProgress({
++    gate,
++    attempt = 1,
++    lastFailureCode = null,
++  }) {
++    const current = this.infrastructureJoinProgress || {};
++    this.infrastructureJoinProgress = {
++      ...current,
++      readySignalGate:
++        typeof gate === 'string' && gate.length > 0 ? gate : null,
++      readySignalAttempt:
++        Number.isFinite(attempt) && attempt > 0 ?
++          Math.floor(attempt) :
++          null,
++      readySignalLastFailureCode:
++        typeof lastFailureCode === 'string' && lastFailureCode.length > 0 ?
++          lastFailureCode :
++          null,
++    };
++  }
++  resolveInfrastructureJoinFailureCode(error, fallback = null) {
++    if (typeof error?.code === 'string' && error.code.length > 0) {
++      return error.code;
++    }
++    if (typeof fallback === 'string' && fallback.length > 0) {
++      return fallback;
++    }
++    return typeof error?.name === 'string' && error.name.length > 0 ?
++      error.name :
++      null;
++  }
+   isLocalRouterBackpressured() {
+     const messageRouter = this.messageRouter || null;
+     if (!messageRouter || !this.nodeId) {
+@@ -69,6 +120,12 @@ class NodeJoiningReadySignalReadiness
+       maxDelayMs: this.config.readySignalRetryMaxDelayMs,
+       backoffMultiplier: this.config.readySignalRetryBackoffMultiplier,
+       onRetry: ({attempt, maxAttempts, delayMs, readiness}) => {
++        this.recordInfrastructureJoinReadySignalProgress({
++          gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.LOCAL_QUERY_TRANSPORT,
++          attempt,
++          lastFailureCode:
++            readiness?.errorCode || readiness?.reasonCode || null,
++        });
+         this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_RETRYING, {
+           nodeId: this.nodeId,
+           attempt,
+@@ -100,6 +157,12 @@ class NodeJoiningReadySignalReadiness
+       maxDelayMs: this.config.readySignalRetryMaxDelayMs,
+       backoffMultiplier: this.config.readySignalRetryBackoffMultiplier,
+       onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
++        this.recordInfrastructureJoinReadySignalProgress({
++          gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.METADATA_PUBLICATION,
++          attempt,
++          lastFailureCode:
++            LOCAL_STR_BOOTSTRAP_METADATA_PUBLICATION_NOT_READY,
++        });
+         this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_RETRYING, {
+           nodeId: this.nodeId,
+           attempt,
+@@ -245,6 +308,9 @@ class NodeJoiningReadySignalReadiness
+     // Gate: verify CDC subscriptions are active before advertising
+     // readiness. If not confirmed within timeout, proceed with
+     // degraded status rather than blocking indefinitely (Req 5.3).
++    this.recordInfrastructureJoinReadySignalProgress({
++      gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.CDC_SUBSCRIPTION,
++    });
+     await this.awaitCdcSubscriptionsForReadiness();
+     // CL-014: close the (bootstrap-snapshot, fan-out-targetability] window.
+     // Remote CDC fan-out is point-in-time with no replay, so every
+@@ -265,9 +331,17 @@ class NodeJoiningReadySignalReadiness
+     // steady-state owner-RPC repair close any residual window. Rolling-restart
+     // gate N=3 CONVERGED 3/3 (0 corrupt) with this behavior.
+     this.runBackgroundCdcCatchupAfterSubscription();
++    this.recordInfrastructureJoinReadySignalProgress({
++      gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.LOCAL_QUERY_TRANSPORT,
++    });
+     try {
+       await this.awaitLocalQueryTransportReadinessForReadySignal();
+     } catch (error) {
++      this.recordInfrastructureJoinReadySignalProgress({
++        gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.LOCAL_QUERY_TRANSPORT,
++        attempt: this.infrastructureJoinProgress?.readySignalAttempt,
++        lastFailureCode: this.resolveInfrastructureJoinFailureCode(error),
++      });
+       this.logger.error(JOINING_LOG_MSG.READY_SIGNAL_FAILED, {
+         nodeId: this.nodeId,
+         error:
+@@ -278,9 +352,20 @@ class NodeJoiningReadySignalReadiness
+       });
+       throw error;
+     }
++    this.recordInfrastructureJoinReadySignalProgress({
++      gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.METADATA_PUBLICATION,
++    });
+     try {
+       await this.awaitMetadataPublicationReadinessForReadySignal();
+     } catch (error) {
++      this.recordInfrastructureJoinReadySignalProgress({
++        gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.METADATA_PUBLICATION,
++        attempt: this.infrastructureJoinProgress?.readySignalAttempt,
++        lastFailureCode: this.resolveInfrastructureJoinFailureCode(
++          error,
++          LOCAL_STR_BOOTSTRAP_METADATA_PUBLICATION_NOT_READY,
++        ),
++      });
+       this.logger.error(JOINING_LOG_MSG.READY_SIGNAL_FAILED, {
+         nodeId: this.nodeId,
+         error:
+@@ -291,6 +376,9 @@ class NodeJoiningReadySignalReadiness
+       });
+       throw error;
+     }
++    this.recordInfrastructureJoinReadySignalProgress({
++      gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.OPERATION_LEDGER_FORMATION,
++    });
+     await this.awaitOperationLedgerFormationBarrier();
+     const heartbeat = assertCritical(
+       this.heartbeatService,
+@@ -325,6 +413,10 @@ class NodeJoiningReadySignalReadiness
+     let lastError = null;
+     const waitLogMessage = JOINING_LOG_MSG.READY_SIGNAL_RETRYING;
+     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
++      this.recordInfrastructureJoinReadySignalProgress({
++        gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.HEARTBEAT_PUBLICATION,
++        attempt,
++      });
+       try {
+         await heartbeat.sendHeartbeat(heartbeatPayload, capabilities);
+         this.logger.info(JOINING_LOG_MSG.READY_SIGNAL_SUCCESS, {
+@@ -335,6 +427,11 @@ class NodeJoiningReadySignalReadiness
+         return;
+       } catch (error) {
+         lastError = error;
++        this.recordInfrastructureJoinReadySignalProgress({
++          gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.HEARTBEAT_PUBLICATION,
++          attempt,
++          lastFailureCode: this.resolveInfrastructureJoinFailureCode(error),
++        });
+         if (attempt >= maxAttempts) {
+           break;
+         }
+diff --git a/src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js b/src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js
+index ace3ebf971dc9d6932be1d6862118be18371b396..0b0bdd4088034cf277959a0bba08fc03f5c3f6f2 100644
+--- a/src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js
++++ b/src/bootstrap/owners/bootstrap-readiness-owner-probe-details.js
+@@ -10,6 +10,81 @@ import {
+   isLocalQueryTransportReady,
+ } from '../shared/local-query-transport-readiness.js';
+ 
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const FIELD_VALUE = 'value';
++const STARTUP_HANDOFF_PROGRESS_FIELD = Object.freeze({
++  JOIN_PHASE: 'joinPhase',
++  JOIN_LIFECYCLE_STATE: 'joinLifecycleState',
++  JOIN_CHECKPOINT_TARGET: 'joinCheckpointTarget',
++  JOIN_READY_SIGNAL_GATE: 'joinReadySignalGate',
++  JOIN_READY_SIGNAL_ATTEMPT: 'joinReadySignalAttempt',
++  JOIN_READY_SIGNAL_LAST_FAILURE_CODE: 'joinReadySignalLastFailureCode',
++});
++
++function readOwnDataProperty(record, field) {
++  if (!record || typeof record !== 'object' || !objectHasOwn(record, field)) {
++    return undefined;
++  }
++  const descriptor = objectGetOwnPropertyDescriptor(record, field);
++  return descriptor && objectHasOwn(descriptor, FIELD_VALUE) ?
++    descriptor.value :
++    undefined;
++}
++
++function hasOwnDataProperty(record, field) {
++  if (!record || typeof record !== 'object' || !objectHasOwn(record, field)) {
++    return false;
++  }
++  const descriptor = objectGetOwnPropertyDescriptor(record, field);
++  return descriptor ? objectHasOwn(descriptor, FIELD_VALUE) : false;
++}
++
++function normalizeOwnHandoffString(handoff, field) {
++  const value = readOwnDataProperty(handoff, field);
++  return typeof value === 'string' ? value : null;
++}
++
++function normalizeOwnHandoffPositiveInteger(handoff, field) {
++  const value = readOwnDataProperty(handoff, field);
++  return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
++}
++
++function buildOwnInfrastructureJoinProgressFields(handoff) {
++  if (!hasOwnDataProperty(
++    handoff,
++    STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_PHASE,
++  )) {
++    return {};
++  }
++  return {
++    joinPhase: normalizeOwnHandoffString(
++      handoff,
++      STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_PHASE,
++    ),
++    joinLifecycleState: normalizeOwnHandoffString(
++      handoff,
++      STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_LIFECYCLE_STATE,
++    ),
++    joinCheckpointTarget: normalizeOwnHandoffString(
++      handoff,
++      STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_CHECKPOINT_TARGET,
++    ),
++    joinReadySignalGate: normalizeOwnHandoffString(
++      handoff,
++      STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_READY_SIGNAL_GATE,
++    ),
++    joinReadySignalAttempt: normalizeOwnHandoffPositiveInteger(
++      handoff,
++      STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_READY_SIGNAL_ATTEMPT,
++    ),
++    joinReadySignalLastFailureCode: normalizeOwnHandoffString(
++      handoff,
++      STARTUP_HANDOFF_PROGRESS_FIELD.JOIN_READY_SIGNAL_LAST_FAILURE_CODE,
++    ),
++  };
++}
++
+ /**
+  * Shape the startup-runtime-handoff readiness probe fields from the handoff
+  * snapshot plus the seed-contact authority observations.
+@@ -33,6 +108,7 @@ function buildStartupRuntimeHandoffProbeFields({
+         handoff.startupBranch :
+         null,
+     infrastructureJoinComplete: handoff.infrastructureJoinComplete === true,
++    ...buildOwnInfrastructureJoinProgressFields(handoff),
+     canonicalAuthorityConsumed,
+     canonicalAuthorityState:
+       typeof startupAuthority?.state === 'string' ?
+diff --git a/src/bootstrap/shared/startup-sql-runtime-handoff.js b/src/bootstrap/shared/startup-sql-runtime-handoff.js
+index 374c75982e8748aea36b3fa3b9c636793af9ee7d..10368dff8306939ab88c146be58e4e51caab50b4 100644
+--- a/src/bootstrap/shared/startup-sql-runtime-handoff.js
++++ b/src/bootstrap/shared/startup-sql-runtime-handoff.js
+@@ -205,17 +205,48 @@ function activateSteadyStateRuntimeHandoff(options) {
+  * @param {Object} options
+  * @param {string|null} options.startupBranch
+  * @param {boolean} options.infrastructureJoinComplete
++ * @param {Object|null} [options.infrastructureJoinProgress]
+  * @param {Object|null} options.recovery
+  * @return {Object}
+  */
++function normalizeStartupHandoffString(value) {
++  return typeof value === 'string' ? value : null;
++}
++
++function normalizeStartupHandoffPositiveInteger(value) {
++  return Number.isFinite(value) && value > 0 ? Math.floor(value) : null;
++}
++
++function buildInfrastructureJoinProgressFields(progress) {
++  return {
++    joinPhase: normalizeStartupHandoffString(progress.phase),
++    joinLifecycleState: normalizeStartupHandoffString(progress.lifecycleState),
++    joinCheckpointTarget:
++      normalizeStartupHandoffString(progress.checkpointTarget),
++    joinReadySignalGate:
++      normalizeStartupHandoffString(progress.readySignalGate),
++    joinReadySignalAttempt:
++      normalizeStartupHandoffPositiveInteger(progress.readySignalAttempt),
++    joinReadySignalLastFailureCode:
++      normalizeStartupHandoffString(progress.readySignalLastFailureCode),
++  };
++}
++
+ function buildStartupRuntimeHandoffSnapshot({
+   startupBranch,
+   infrastructureJoinComplete,
++  infrastructureJoinProgress = null,
+   recovery,
+ }) {
++  const joinProgressFields =
++    infrastructureJoinProgress &&
++    typeof infrastructureJoinProgress === 'object' ?
++      buildInfrastructureJoinProgressFields(infrastructureJoinProgress) :
++      {};
+   return {
+     startupBranch: typeof startupBranch === 'string' ? startupBranch : null,
+     infrastructureJoinComplete,
++    ...joinProgressFields,
+     transactionRecoveryState:
+       typeof recovery?.state === 'string' ? recovery.state : null,
+     transactionRecoveryReady: recovery?.ready === true,
+diff --git a/test/bootstrap/node-joining-infrastructure-join-progress-witness.test.js b/test/bootstrap/node-joining-infrastructure-join-progress-witness.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4f5e272fdc99f1b5f1bdefcbe9a7737496ed613e
+--- /dev/null
++++ b/test/bootstrap/node-joining-infrastructure-join-progress-witness.test.js
+@@ -0,0 +1,223 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {NodeJoiningService} from '../../src/bootstrap/node-joining-service.js';
++import {BootstrapReadinessOwner} from
++  '../../src/bootstrap/owners/bootstrap-readiness-owner.js';
++import {NodeService} from '../../src/node/node-service.js';
++import {STARTUP_JOIN_MODE} from
++  '../../src/bootstrap/rejoin-hints-constants.js';
++import {
++  initializeTestEnvironment,
++} from './node-joining-service-test-support.js';
++
++const READINESS_PHASE = 'joining:readiness-convergence';
++const READINESS_CHECKPOINT = 'READY_LEASE_ASSIGNED';
++
++function buildNodeStats() {
++  return {
++    cpu: {count: 4, usagePercent: 10},
++    memory: {totalBytes: 1024, usagePercent: 20},
++    diskGb: 100,
++    diskUsagePercent: 30,
++  };
++}
++
++function projectHandoff(handoff) {
++  const readinessOwner = new BootstrapReadinessOwner({
++    delegates: {
++      getBootstrapService: () => ({
++        getSeedContactDiagnosticsSnapshot: () => null,
++        getStartupRuntimeHandoffSnapshot: () => handoff,
++      }),
++    },
++  });
++  const response = {};
++  readinessOwner.appendStartupRuntimeHandoffFields(response);
++  return response.startupRuntimeHandoff;
++}
++
++test('NodeJoiningService projects the ordered ready-signal gate witness',
++  async (t) => {
++    initializeTestEnvironment();
++
++    const service = new NodeJoiningService({
++      nodeId: 'restart-progress-witness',
++      nodeAddress: 'ws://localhost:19090',
++      seedNodeAddress: 'http://localhost:18080',
++      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
++    });
++    service.phase = READINESS_PHASE;
++    service.recordInfrastructureJoinCheckpointTarget(READINESS_CHECKPOINT);
++
++    const observed = [];
++    const capture = () => {
++      observed.push(service.getStartupRuntimeHandoffSnapshot());
++    };
++    service.awaitCdcSubscriptionsForReadiness = async () => capture();
++    service.awaitLocalQueryTransportReadinessForReadySignal =
++      async () => capture();
++    service.awaitMetadataPublicationReadinessForReadySignal =
++      async () => capture();
++    service.awaitOperationLedgerFormationBarrier = async () => capture();
++    service.heartbeatService = {
++      sendHeartbeat: async () => capture(),
++    };
++
++    const originalGetInstance = NodeService.getInstance;
++    NodeService.getInstance = () => ({getNodeStats: async () => buildNodeStats()});
++    try {
++      await service.signalReadyForReplicas();
++    } finally {
++      NodeService.getInstance = originalGetInstance;
++    }
++
++    t.same(
++      observed.map((snapshot) => snapshot.joinReadySignalGate),
++      [
++        'cdc_subscription',
++        'local_query_transport',
++        'metadata_publication',
++        'operation_ledger_formation',
++        'heartbeat_publication',
++      ],
++      'the witness follows the existing ready-signal execution order',
++    );
++    for (const snapshot of observed) {
++      t.equal(snapshot.startupBranch, STARTUP_JOIN_MODE.DURABLE_REJOIN);
++      t.equal(snapshot.infrastructureJoinComplete, false);
++      t.equal(snapshot.joinPhase, READINESS_PHASE);
++      t.equal(snapshot.joinLifecycleState, 'starting');
++      t.equal(snapshot.joinCheckpointTarget, READINESS_CHECKPOINT);
++      t.equal(snapshot.joinReadySignalAttempt, 1);
++      t.equal(snapshot.joinReadySignalLastFailureCode, null);
++    }
++    t.end();
++  });
++
++test('bootstrap readiness projects only own join-progress data', (t) => {
++  const valid = projectHandoff({
++    startupBranch: STARTUP_JOIN_MODE.DURABLE_REJOIN,
++    infrastructureJoinComplete: false,
++    joinPhase: READINESS_PHASE,
++    joinLifecycleState: 'joining',
++    joinCheckpointTarget: READINESS_CHECKPOINT,
++    joinReadySignalGate: 'metadata_publication',
++    joinReadySignalAttempt: 4,
++    joinReadySignalLastFailureCode:
++      'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY',
++    transactionRecoveryReady: false,
++  });
++  t.match(valid, {
++    joinPhase: READINESS_PHASE,
++    joinLifecycleState: 'joining',
++    joinCheckpointTarget: READINESS_CHECKPOINT,
++    joinReadySignalGate: 'metadata_publication',
++    joinReadySignalAttempt: 4,
++    joinReadySignalLastFailureCode:
++      'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY',
++  });
++
++  const inherited = Object.create({
++    joinPhase: 'fabricated',
++    joinLifecycleState: 'ready',
++    joinCheckpointTarget: 'FINALIZED',
++    joinReadySignalGate: 'heartbeat_publication',
++    joinReadySignalAttempt: 99,
++    joinReadySignalLastFailureCode: 'none',
++  });
++  inherited.startupBranch = STARTUP_JOIN_MODE.DURABLE_REJOIN;
++  inherited.infrastructureJoinComplete = false;
++  inherited.transactionRecoveryReady = false;
++  const inheritedProjection = projectHandoff(inherited);
++  t.notOk(
++    Object.hasOwn(inheritedProjection, 'joinPhase'),
++    'inherited progress cannot fabricate the join-progress block',
++  );
++
++  let accessorReads = 0;
++  const accessor = {
++    startupBranch: STARTUP_JOIN_MODE.DURABLE_REJOIN,
++    infrastructureJoinComplete: false,
++    transactionRecoveryReady: false,
++  };
++  Object.defineProperty(accessor, 'joinReadySignalGate', {
++    enumerable: true,
++    get() {
++      accessorReads += 1;
++      return 'heartbeat_publication';
++    },
++  });
++  t.notOk(
++    Object.hasOwn(projectHandoff(accessor), 'joinReadySignalGate'),
++    'accessor-backed progress cannot fabricate the join-progress block',
++  );
++  t.equal(accessorReads, 0, 'the readiness projection never executes accessors');
++
++  const seedProjection = projectHandoff({
++    startupBranch: STARTUP_JOIN_MODE.SEED,
++    infrastructureJoinComplete: false,
++    transactionRecoveryReady: false,
++  });
++  t.notOk(
++    Object.hasOwn(seedProjection, 'joinPhase'),
++    'seed handoff shape remains free of join-only progress fields',
++  );
++  t.end();
++});
++
++test('NodeJoiningService retains the current ready-signal retry failure',
++  async (t) => {
++    initializeTestEnvironment();
++
++    const service = new NodeJoiningService({
++      nodeId: 'restart-progress-retry',
++      nodeAddress: 'ws://localhost:19091',
++      seedNodeAddress: 'http://localhost:18081',
++      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
++      config: {
++        readySignalMaxAttempts: 2,
++        readySignalRetryDelayMs: 1,
++        readySignalRetryBackoffMultiplier: 1,
++      },
++    });
++    service.phase = READINESS_PHASE;
++    service.recordInfrastructureJoinCheckpointTarget(READINESS_CHECKPOINT);
++    service.awaitCdcSubscriptionsForReadiness = async () => {};
++    service.awaitLocalQueryTransportReadinessForReadySignal = async () => {};
++    service.awaitMetadataPublicationReadinessForReadySignal = async () => {};
++    service.awaitOperationLedgerFormationBarrier = async () => {};
++
++    let attempt = 0;
++    let retrySnapshot = null;
++    service.sleep = async () => {
++      retrySnapshot = service.getStartupRuntimeHandoffSnapshot();
++    };
++    service.heartbeatService = {
++      sendHeartbeat: async () => {
++        attempt += 1;
++        if (attempt === 1) {
++          const error = new Error('route unavailable');
++          error.code = 'HEARTBEAT_ROUTE_UNAVAILABLE';
++          throw error;
++        }
++      },
++    };
++
++    const originalGetInstance = NodeService.getInstance;
++    NodeService.getInstance = () => ({getNodeStats: async () => buildNodeStats()});
++    try {
++      await service.signalReadyForReplicas();
++    } finally {
++      NodeService.getInstance = originalGetInstance;
++    }
++
++    t.equal(retrySnapshot.joinReadySignalGate, 'heartbeat_publication');
++    t.equal(retrySnapshot.joinReadySignalAttempt, 1);
++    t.equal(
++      retrySnapshot.joinReadySignalLastFailureCode,
++      'HEARTBEAT_ROUTE_UNAVAILABLE',
++    );
++    const completed = service.getStartupRuntimeHandoffSnapshot();
++    t.equal(completed.joinReadySignalAttempt, 2);
++    t.equal(completed.joinReadySignalLastFailureCode, null);
++    t.end();
++  });
+diff --git a/test/distributed/harness/__tests__/restart-recovery-handoff-failure-barrier.test.js b/test/distributed/harness/__tests__/restart-recovery-handoff-failure-barrier.test.js
+index d0f27d3d159c3b32bb7f1442893795cf094cb545..7651fdadcbb99346e22e05f151220802738aa095 100644
+--- a/test/distributed/harness/__tests__/restart-recovery-handoff-failure-barrier.test.js
++++ b/test/distributed/harness/__tests__/restart-recovery-handoff-failure-barrier.test.js
+@@ -38,6 +38,12 @@ function buildError(overrides = {}) {
+     seedContactAuthoritySource: 'none',
+     startupBranch: 'durable_rejoin',
+     infrastructureJoinComplete: false,
++    joinPhase: 'joining:readiness-convergence',
++    joinLifecycleState: 'joining',
++    joinCheckpointTarget: 'READY_LEASE_ASSIGNED',
++    joinReadySignalGate: 'metadata_publication',
++    joinReadySignalAttempt: 4,
++    joinReadySignalLastFailureCode: 'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY',
+     canonicalAuthorityConsumed: false,
+     canonicalAuthorityState: 'none',
+     canonicalAuthoritySource: 'seed-a:8080',
+@@ -92,6 +98,13 @@ test('Unit: restart timeout formatter preserves direct handoff evidence', () =>
+     startupRuntimeHandoff: {
+       startupBranch: 'durable_rejoin',
+       infrastructureJoinComplete: true,
++      joinPhase: 'joining:readiness-convergence',
++      joinLifecycleState: 'joining',
++      joinCheckpointTarget: 'READY_LEASE_ASSIGNED',
++      joinReadySignalGate: 'metadata_publication',
++      joinReadySignalAttempt: 4,
++      joinReadySignalLastFailureCode:
++        'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY',
+       canonicalAuthorityConsumed: true,
+       canonicalAuthorityState: 'ready',
+       canonicalAuthoritySource: 'seed-a:8080',
+@@ -109,6 +122,12 @@ test('Unit: restart timeout formatter preserves direct handoff evidence', () =>
+   for (const expected of [
+     'startupBranch=durable_rejoin',
+     'infrastructureJoinComplete=true',
++    'joinPhase=joining:readiness-convergence',
++    'joinLifecycleState=joining',
++    'joinCheckpointTarget=READY_LEASE_ASSIGNED',
++    'joinReadySignalGate=metadata_publication',
++    'joinReadySignalAttempt=4',
++    'joinReadySignalLastFailureCode=BOOTSTRAP_METADATA_PUBLICATION_NOT_READY',
+     'canonicalAuthorityConsumed=true',
+     'canonicalAuthorityState=ready',
+     'canonicalAuthoritySource=seed-a:8080',
+@@ -131,6 +150,17 @@ test('Unit: pre-handoff timeout attributes infrastructure join first', () => {
+       startupBranch: barrier.terminalRecoveryReadiness.startupBranch,
+       infrastructureJoinComplete:
+         barrier.terminalRecoveryReadiness.infrastructureJoinComplete,
++      joinPhase: barrier.terminalRecoveryReadiness.joinPhase,
++      joinLifecycleState:
++        barrier.terminalRecoveryReadiness.joinLifecycleState,
++      joinCheckpointTarget:
++        barrier.terminalRecoveryReadiness.joinCheckpointTarget,
++      joinReadySignalGate:
++        barrier.terminalRecoveryReadiness.joinReadySignalGate,
++      joinReadySignalAttempt:
++        barrier.terminalRecoveryReadiness.joinReadySignalAttempt,
++      joinReadySignalLastFailureCode:
++        barrier.terminalRecoveryReadiness.joinReadySignalLastFailureCode,
+       canonicalAuthorityConsumed:
+         barrier.terminalRecoveryReadiness.canonicalAuthorityConsumed,
+       transactionRecoveryState:
+@@ -141,6 +171,13 @@ test('Unit: pre-handoff timeout attributes infrastructure join first', () => {
+     {
+       startupBranch: 'durable_rejoin',
+       infrastructureJoinComplete: false,
++      joinPhase: 'joining:readiness-convergence',
++      joinLifecycleState: 'joining',
++      joinCheckpointTarget: 'READY_LEASE_ASSIGNED',
++      joinReadySignalGate: 'metadata_publication',
++      joinReadySignalAttempt: 4,
++      joinReadySignalLastFailureCode:
++        'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY',
+       canonicalAuthorityConsumed: false,
+       transactionRecoveryState: 'not_started',
+       ownerState: RESTART_INFRASTRUCTURE_JOIN,
+@@ -234,6 +271,17 @@ test('Unit: legacy timeout with missing handoff fields stays unknown', () => {
+   assert.deepEqual(
+     {
+       startupBranch: barrier.terminalRecoveryReadiness.startupBranch,
++      joinPhase: barrier.terminalRecoveryReadiness.joinPhase,
++      joinLifecycleState:
++        barrier.terminalRecoveryReadiness.joinLifecycleState,
++      joinCheckpointTarget:
++        barrier.terminalRecoveryReadiness.joinCheckpointTarget,
++      joinReadySignalGate:
++        barrier.terminalRecoveryReadiness.joinReadySignalGate,
++      joinReadySignalAttempt:
++        barrier.terminalRecoveryReadiness.joinReadySignalAttempt,
++      joinReadySignalLastFailureCode:
++        barrier.terminalRecoveryReadiness.joinReadySignalLastFailureCode,
+       canonicalAuthorityState:
+         barrier.terminalRecoveryReadiness.canonicalAuthorityState,
+       canonicalAuthoritySource:
+@@ -245,6 +293,12 @@ test('Unit: legacy timeout with missing handoff fields stays unknown', () => {
+     },
+     {
+       startupBranch: null,
++      joinPhase: null,
++      joinLifecycleState: null,
++      joinCheckpointTarget: null,
++      joinReadySignalGate: null,
++      joinReadySignalAttempt: null,
++      joinReadySignalLastFailureCode: null,
+       canonicalAuthorityState: null,
+       canonicalAuthoritySource: null,
+       transactionRecoveryState: null,
+diff --git a/test/distributed/harness/cluster-class-load-orchestration.js b/test/distributed/harness/cluster-class-load-orchestration.js
+index f2b5b9c8453cae2474264e307d6fe6bf74690d83..ca259402f91202cbc327fd9a655447c82141c584 100644
+--- a/test/distributed/harness/cluster-class-load-orchestration.js
++++ b/test/distributed/harness/cluster-class-load-orchestration.js
+@@ -97,6 +97,14 @@ const RESTART_RECOVERY_FIELD_SEED_CONTACT_AUTHORITY_SOURCE =
+ const RESTART_RECOVERY_FIELD_STARTUP_BRANCH = 'startupBranch';
+ const RESTART_RECOVERY_FIELD_INFRASTRUCTURE_JOIN_COMPLETE =
+   'infrastructureJoinComplete';
++const RESTART_RECOVERY_FIELD_JOIN_PHASE = 'joinPhase';
++const RESTART_RECOVERY_FIELD_JOIN_LIFECYCLE_STATE = 'joinLifecycleState';
++const RESTART_RECOVERY_FIELD_JOIN_CHECKPOINT_TARGET = 'joinCheckpointTarget';
++const RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_GATE = 'joinReadySignalGate';
++const RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_ATTEMPT =
++  'joinReadySignalAttempt';
++const RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_LAST_FAILURE_CODE =
++  'joinReadySignalLastFailureCode';
+ const RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_CONSUMED =
+   'canonicalAuthorityConsumed';
+ const RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_STATE =
+@@ -681,6 +689,47 @@ class ClusterLoadOrchestration extends ClusterLifecycleBase {
+           RESTART_RECOVERY_FIELD_NONE,
+       ) +
+       RESTART_RECOVERY_FIELD_SEPARATOR +
++      RESTART_RECOVERY_FIELD_JOIN_PHASE +
++      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
++      String(
++        startupRuntimeHandoff?.joinPhase || RESTART_RECOVERY_FIELD_NONE,
++      ) +
++      RESTART_RECOVERY_FIELD_SEPARATOR +
++      RESTART_RECOVERY_FIELD_JOIN_LIFECYCLE_STATE +
++      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
++      String(
++        startupRuntimeHandoff?.joinLifecycleState ||
++          RESTART_RECOVERY_FIELD_NONE,
++      ) +
++      RESTART_RECOVERY_FIELD_SEPARATOR +
++      RESTART_RECOVERY_FIELD_JOIN_CHECKPOINT_TARGET +
++      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
++      String(
++        startupRuntimeHandoff?.joinCheckpointTarget ||
++          RESTART_RECOVERY_FIELD_NONE,
++      ) +
++      RESTART_RECOVERY_FIELD_SEPARATOR +
++      RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_GATE +
++      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
++      String(
++        startupRuntimeHandoff?.joinReadySignalGate ||
++          RESTART_RECOVERY_FIELD_NONE,
++      ) +
++      RESTART_RECOVERY_FIELD_SEPARATOR +
++      RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_ATTEMPT +
++      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
++      String(
++        startupRuntimeHandoff?.joinReadySignalAttempt ??
++          RESTART_RECOVERY_FIELD_NONE,
++      ) +
++      RESTART_RECOVERY_FIELD_SEPARATOR +
++      RESTART_RECOVERY_FIELD_JOIN_READY_SIGNAL_LAST_FAILURE_CODE +
++      RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
++      String(
++        startupRuntimeHandoff?.joinReadySignalLastFailureCode ||
++          RESTART_RECOVERY_FIELD_NONE,
++      ) +
++      RESTART_RECOVERY_FIELD_SEPARATOR +
+       RESTART_RECOVERY_FIELD_CANONICAL_AUTHORITY_CONSUMED +
+       RESTART_RECOVERY_FIELD_VALUE_SEPARATOR +
+       String(
+diff --git a/test/distributed/harness/failure-bundle-diagnostics-foundation.js b/test/distributed/harness/failure-bundle-diagnostics-foundation.js
+index 9d8edc756baafbccf0c34810887432825ff2da63..0e7cb44fb307ab341791443158bf09eb564fec3a 100644
+--- a/test/distributed/harness/failure-bundle-diagnostics-foundation.js
++++ b/test/distributed/harness/failure-bundle-diagnostics-foundation.js
+@@ -524,6 +524,12 @@ export const RESTART_RECOVERY_READINESS_FIELD = Object.freeze({
+     RESTART_RECOVERY_READINESS_FIELD_SEED_CONTACT_AUTHORITY_SOURCE,
+   STARTUP_BRANCH: 'startupBranch',
+   INFRASTRUCTURE_JOIN_COMPLETE: 'infrastructureJoinComplete',
++  JOIN_PHASE: 'joinPhase',
++  JOIN_LIFECYCLE_STATE: 'joinLifecycleState',
++  JOIN_CHECKPOINT_TARGET: 'joinCheckpointTarget',
++  JOIN_READY_SIGNAL_GATE: 'joinReadySignalGate',
++  JOIN_READY_SIGNAL_ATTEMPT: 'joinReadySignalAttempt',
++  JOIN_READY_SIGNAL_LAST_FAILURE_CODE: 'joinReadySignalLastFailureCode',
+   CANONICAL_AUTHORITY_CONSUMED: 'canonicalAuthorityConsumed',
+   CANONICAL_AUTHORITY_STATE: 'canonicalAuthorityState',
+   CANONICAL_AUTHORITY_SOURCE: 'canonicalAuthoritySource',
+diff --git a/test/distributed/harness/failure-bundle-diagnostics-merge.js b/test/distributed/harness/failure-bundle-diagnostics-merge.js
+index a0e500cc0306245868cd49279ed63455e797b64a..9475eedbf5d40915a9571d546dea66dcf053ac72 100644
+--- a/test/distributed/harness/failure-bundle-diagnostics-merge.js
++++ b/test/distributed/harness/failure-bundle-diagnostics-merge.js
+@@ -1244,6 +1244,22 @@ function resolveRestartRecoveryReadinessObservation(entry) {
+         RESTART_RECOVERY_READINESS_FIELD.INFRASTRUCTURE_JOIN_COMPLETE
+       ],
+     ),
++    joinPhase:
++      fieldMap[RESTART_RECOVERY_READINESS_FIELD.JOIN_PHASE] ?? null,
++    joinLifecycleState:
++      fieldMap[RESTART_RECOVERY_READINESS_FIELD.JOIN_LIFECYCLE_STATE] ?? null,
++    joinCheckpointTarget:
++      fieldMap[RESTART_RECOVERY_READINESS_FIELD.JOIN_CHECKPOINT_TARGET] ?? null,
++    joinReadySignalGate:
++      fieldMap[RESTART_RECOVERY_READINESS_FIELD.JOIN_READY_SIGNAL_GATE] ?? null,
++    joinReadySignalAttempt: normalizeRestartRecoveryReadinessNumber(
++      fieldMap[RESTART_RECOVERY_READINESS_FIELD.JOIN_READY_SIGNAL_ATTEMPT],
++    ),
++    joinReadySignalLastFailureCode:
++      fieldMap[
++        RESTART_RECOVERY_READINESS_FIELD
++          .JOIN_READY_SIGNAL_LAST_FAILURE_CODE
++      ] ?? null,
+     canonicalAuthorityConsumed: normalizeRestartRecoveryReadinessBoolean(
+       fieldMap[
+         RESTART_RECOVERY_READINESS_FIELD.CANONICAL_AUTHORITY_CONSUMED

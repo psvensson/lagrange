@@ -36,8 +36,83 @@ const {
   waitForMetadataPublicationReadiness,
 } = NODE_JOINING_SERVICE_SHARED;
 
+const INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE = Object.freeze({
+  CDC_SUBSCRIPTION: 'cdc_subscription',
+  LOCAL_QUERY_TRANSPORT: 'local_query_transport',
+  METADATA_PUBLICATION: 'metadata_publication',
+  OPERATION_LEDGER_FORMATION: 'operation_ledger_formation',
+  HEARTBEAT_PUBLICATION: 'heartbeat_publication',
+});
+const LOCAL_STR_BOOTSTRAP_METADATA_PUBLICATION_NOT_READY =
+  'BOOTSTRAP_METADATA_PUBLICATION_NOT_READY';
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const numberIsSafeInteger = Number.isSafeInteger;
+const OWN_DATA_VALUE_FIELD = 'value';
+const INFRASTRUCTURE_JOIN_FAILURE_CODE_FIELD = 'code';
+const INFRASTRUCTURE_JOIN_FAILURE_NAME_FIELD = 'name';
+
+function readOwnInfrastructureJoinFailureCode(error, field) {
+  if (!error || typeof error !== 'object' || !objectHasOwn(error, field)) {
+    return null;
+  }
+  const descriptor = objectGetOwnPropertyDescriptor(error, field);
+  if (!descriptor || !objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD)) {
+    return null;
+  }
+  return typeof descriptor.value === 'string' && descriptor.value.length > 0 ?
+    descriptor.value :
+    null;
+}
+
 class NodeJoiningReadySignalReadiness
   extends NodeJoiningOperationLedgerFormationReadiness {
+  recordInfrastructureJoinCheckpointTarget(checkpointTarget) {
+    const current = this.infrastructureJoinProgress || {};
+    this.infrastructureJoinProgress = {
+      ...current,
+      checkpointTarget:
+        typeof checkpointTarget === 'string' && checkpointTarget.length > 0 ?
+          checkpointTarget :
+          null,
+    };
+  }
+  recordInfrastructureJoinReadySignalProgress({
+    gate,
+    attempt = 1,
+    lastFailureCode = null,
+  }) {
+    const current = this.infrastructureJoinProgress || {};
+    this.infrastructureJoinProgress = {
+      ...current,
+      readySignalGate:
+        typeof gate === 'string' && gate.length > 0 ? gate : null,
+      readySignalAttempt:
+        numberIsSafeInteger(attempt) && attempt > 0 ?
+          attempt :
+          null,
+      readySignalLastFailureCode:
+        typeof lastFailureCode === 'string' && lastFailureCode.length > 0 ?
+          lastFailureCode :
+          null,
+    };
+  }
+  resolveInfrastructureJoinFailureCode(error, fallback = null) {
+    const code = readOwnInfrastructureJoinFailureCode(
+      error,
+      INFRASTRUCTURE_JOIN_FAILURE_CODE_FIELD,
+    );
+    if (code !== null) {
+      return code;
+    }
+    if (typeof fallback === 'string' && fallback.length > 0) {
+      return fallback;
+    }
+    return readOwnInfrastructureJoinFailureCode(
+      error,
+      INFRASTRUCTURE_JOIN_FAILURE_NAME_FIELD,
+    );
+  }
   isLocalRouterBackpressured() {
     const messageRouter = this.messageRouter || null;
     if (!messageRouter || !this.nodeId) {
@@ -69,6 +144,12 @@ class NodeJoiningReadySignalReadiness
       maxDelayMs: this.config.readySignalRetryMaxDelayMs,
       backoffMultiplier: this.config.readySignalRetryBackoffMultiplier,
       onRetry: ({attempt, maxAttempts, delayMs, readiness}) => {
+        this.recordInfrastructureJoinReadySignalProgress({
+          gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.LOCAL_QUERY_TRANSPORT,
+          attempt,
+          lastFailureCode:
+            readiness?.errorCode || readiness?.reasonCode || null,
+        });
         this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_RETRYING, {
           nodeId: this.nodeId,
           attempt,
@@ -100,6 +181,12 @@ class NodeJoiningReadySignalReadiness
       maxDelayMs: this.config.readySignalRetryMaxDelayMs,
       backoffMultiplier: this.config.readySignalRetryBackoffMultiplier,
       onRetry: ({attempt, maxAttempts, delayMs, snapshot}) => {
+        this.recordInfrastructureJoinReadySignalProgress({
+          gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.METADATA_PUBLICATION,
+          attempt,
+          lastFailureCode:
+            LOCAL_STR_BOOTSTRAP_METADATA_PUBLICATION_NOT_READY,
+        });
         this.logger.warn(JOINING_LOG_MSG.READY_SIGNAL_RETRYING, {
           nodeId: this.nodeId,
           attempt,
@@ -245,6 +332,9 @@ class NodeJoiningReadySignalReadiness
     // Gate: verify CDC subscriptions are active before advertising
     // readiness. If not confirmed within timeout, proceed with
     // degraded status rather than blocking indefinitely (Req 5.3).
+    this.recordInfrastructureJoinReadySignalProgress({
+      gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.CDC_SUBSCRIPTION,
+    });
     await this.awaitCdcSubscriptionsForReadiness();
     // CL-014: close the (bootstrap-snapshot, fan-out-targetability] window.
     // Remote CDC fan-out is point-in-time with no replay, so every
@@ -265,9 +355,17 @@ class NodeJoiningReadySignalReadiness
     // steady-state owner-RPC repair close any residual window. Rolling-restart
     // gate N=3 CONVERGED 3/3 (0 corrupt) with this behavior.
     this.runBackgroundCdcCatchupAfterSubscription();
+    this.recordInfrastructureJoinReadySignalProgress({
+      gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.LOCAL_QUERY_TRANSPORT,
+    });
     try {
       await this.awaitLocalQueryTransportReadinessForReadySignal();
     } catch (error) {
+      this.recordInfrastructureJoinReadySignalProgress({
+        gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.LOCAL_QUERY_TRANSPORT,
+        attempt: this.infrastructureJoinProgress?.readySignalAttempt,
+        lastFailureCode: this.resolveInfrastructureJoinFailureCode(error),
+      });
       this.logger.error(JOINING_LOG_MSG.READY_SIGNAL_FAILED, {
         nodeId: this.nodeId,
         error:
@@ -278,9 +376,20 @@ class NodeJoiningReadySignalReadiness
       });
       throw error;
     }
+    this.recordInfrastructureJoinReadySignalProgress({
+      gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.METADATA_PUBLICATION,
+    });
     try {
       await this.awaitMetadataPublicationReadinessForReadySignal();
     } catch (error) {
+      this.recordInfrastructureJoinReadySignalProgress({
+        gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.METADATA_PUBLICATION,
+        attempt: this.infrastructureJoinProgress?.readySignalAttempt,
+        lastFailureCode: this.resolveInfrastructureJoinFailureCode(
+          error,
+          LOCAL_STR_BOOTSTRAP_METADATA_PUBLICATION_NOT_READY,
+        ),
+      });
       this.logger.error(JOINING_LOG_MSG.READY_SIGNAL_FAILED, {
         nodeId: this.nodeId,
         error:
@@ -291,6 +400,9 @@ class NodeJoiningReadySignalReadiness
       });
       throw error;
     }
+    this.recordInfrastructureJoinReadySignalProgress({
+      gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.OPERATION_LEDGER_FORMATION,
+    });
     await this.awaitOperationLedgerFormationBarrier();
     const heartbeat = assertCritical(
       this.heartbeatService,
@@ -325,6 +437,10 @@ class NodeJoiningReadySignalReadiness
     let lastError = null;
     const waitLogMessage = JOINING_LOG_MSG.READY_SIGNAL_RETRYING;
     for (let attempt = 1; attempt <= maxAttempts; attempt++) {
+      this.recordInfrastructureJoinReadySignalProgress({
+        gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.HEARTBEAT_PUBLICATION,
+        attempt,
+      });
       try {
         await heartbeat.sendHeartbeat(heartbeatPayload, capabilities);
         this.logger.info(JOINING_LOG_MSG.READY_SIGNAL_SUCCESS, {
@@ -335,6 +451,11 @@ class NodeJoiningReadySignalReadiness
         return;
       } catch (error) {
         lastError = error;
+        this.recordInfrastructureJoinReadySignalProgress({
+          gate: INFRASTRUCTURE_JOIN_READY_SIGNAL_GATE.HEARTBEAT_PUBLICATION,
+          attempt,
+          lastFailureCode: this.resolveInfrastructureJoinFailureCode(error),
+        });
         if (attempt >= maxAttempts) {
           break;
         }
