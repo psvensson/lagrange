@@ -15,9 +15,26 @@ LOG_DIR=test-output
 ANALYSIS_LOG="$LOG_DIR/analysis-lane.log"
 mkdir -p "$LOG_DIR"
 
+# The owner-debt inventory test consumes ignored analysis reports. Produce the
+# complete input set before starting concurrent readers so a clean checkout
+# never depends on a developer's stale test-output directory or a write race
+# with the background static lane.
+npm run test:owner-debt:prepare || exit 1
+npm run test:aggregate-sensitive-pregate || exit 1
+
 nice -n 10 bash -c 'npm run test:static && npm run model:contracts' \
   > "$ANALYSIS_LOG" 2>&1 &
 analysis_pid=$!
+
+# An interrupted run must not leave the niced analysis lane running as an
+# orphan writer against test-output; kill it and reap it before exiting.
+cleanup_analysis_lane() {
+  if kill -0 "$analysis_pid" 2>/dev/null; then
+    kill "$analysis_pid" 2>/dev/null
+    wait "$analysis_pid" 2>/dev/null
+  fi
+}
+trap 'cleanup_analysis_lane; exit 130' INT TERM
 
 npm run test:sharded:all && npm run test:chart:endpoint-sync
 tap_status=$?

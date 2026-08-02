@@ -1,0 +1,43 @@
+{
+  "id": "lagrange-server-clean-release-gate",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A fresh checkout can execute the lagrange-server tagged release gate without untracked local artifacts, stale generated shards, or aggregate-only timeout failures. The owning workflow contract is scripts/run-test-ci-overlapped.sh.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "RELEASE.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "f743f458b6ff0316fca3a23b0636f6d833cd40b9"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "lagrange-server-clean-release-gate",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "lagrange-server-clean-release-gate-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "lagrange-server-clean-release-gate",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

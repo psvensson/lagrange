@@ -41,6 +41,7 @@ import {
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = OWNER_DEBT.output;
+const IMPORT_GRAPH_EXCLUDED_PATHS = 'node_modules|^@pulumi/';
 
 function emptyFileDebt(filePath, importDegrees) {
   return {
@@ -507,7 +508,7 @@ async function buildImportGraph(root, files) {
   const result = await cruise(SOURCE_DIRECTORIES.map((directory) =>
     path.join(root, directory)), {
     baseDir: root,
-    exclude: 'node_modules',
+    exclude: IMPORT_GRAPH_EXCLUDED_PATHS,
     doNotFollow: {path: 'node_modules'},
   });
   const degrees = new Map(files.map((file) => [file, {in: 0, out: 0}]));

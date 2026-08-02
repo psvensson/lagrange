@@ -124,6 +124,13 @@ without accepting cached absence and refuses to overwrite or reinterpret an
 existing version. A package name can be claimed between releases, so the
 repository identity check is a release gate rather than an assumption.
 
+The pre-release gate is clean-checkout safe: it downloads the digest-pinned
+MovieLens input, regenerates ignored owner-debt analysis inputs before the
+overlapped test readers start, verifies generated test shards, and caps the
+fast TAP lane at the measured stable worker budget. The one aggregate-sensitive
+evidence projection runs serially before the overlapped lanes. No untracked
+developer artifact is required to release.
+
 The release job requests `contents: write` for GitHub's short-lived
 `GITHUB_TOKEN` and `id-token: write` for npm trusted publishing. Repository or
 organization policy must allow those permissions. Ordinary CI and nightly jobs

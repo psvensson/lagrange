@@ -1,11 +1,10 @@
 timeout: 5000
 allow-incomplete-coverage: true
 # Default worker parallelism for ad-hoc tap invocations. The fast lane
-# (test:fast in package.json) overrides this to --jobs=8, validated 2026-07-03
-# with a 10x targeted loop on the known timing-sensitive suites under load
-# plus multiple clean full-lane runs; the April "aggregate-only failures at
-# higher parallelism" incident was confounded with a V8 compile-cache crash
-# class fixed separately by --no-compilation-cache below. The integration and
+# (test:fast in package.json) overrides this to --jobs=4. A fresh-checkout
+# release gate on 2026-08-01 reproduced a native crash and three exact-boundary
+# timeouts at --jobs=8; the aggregate-sensitive evidence projection runs once
+# in a serial pregate before concurrent readers start. The integration and
 # bootstrap lanes stay serial within a lane (see `serial:`); cross-lane
 # concurrency lives in scripts/run-sharded-lanes-concurrent.sh.
 jobs: 4
