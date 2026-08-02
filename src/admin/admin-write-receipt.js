@@ -116,4 +116,4 @@ function buildAdminWriteReceipt(result) {
   return receipt;
 }
 
-export {buildAdminWriteReceipt, normalizeCommitWitness};
+export {buildAdminWriteReceipt};

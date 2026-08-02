@@ -563,5 +563,4 @@ async function assertAcknowledgedWritesVisibleOnReachableNodes(
 
 export {
   assertAcknowledgedWritesVisibleOnReachableNodes,
-  buildAcknowledgedWriteVisibilityQuery,
 };
