@@ -95,6 +95,13 @@ const SOURCE_FIELDS = Object.freeze({
   ]),
 });
 
+const SOURCE_OPTIONAL_FIELDS = Object.freeze({
+  [DEPLOYMENT_BINDING_SOURCE_KIND.CALL]: Object.freeze(['statement']),
+  [DEPLOYMENT_BINDING_SOURCE_KIND.PUSHDOWN]: Object.freeze(['statement']),
+});
+
+const STATEMENT_LIMITS = Object.freeze({minimum: 1});
+
 const ROOT_FIELDS = Object.freeze([
   'schema_version', 'name', 'target', 'source', 'budgets',
 ]);
@@ -177,15 +184,19 @@ function digest(value) {
     .digest(HASH_ENCODING);
 }
 
-function requireExactFields(value, fields, path) {
+function requireExactFields(value, fields, path, optionalFields = []) {
   if (!isPlainObject(value)) {
     fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD, path,
       DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
   }
-  const actual = Object.keys(value).sort();
-  const expected = [...fields].sort();
-  if (actual.length !== expected.length ||
-      actual.some((field, index) => field !== expected[index])) {
+  const actual = new Set(Object.keys(value));
+  const optional = new Set(optionalFields);
+  if ([...actual].some((field) =>
+    !fields.includes(field) && !optional.has(field))) {
+    fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD, path,
+      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
+  }
+  if (fields.some((field) => !actual.has(field))) {
     fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD, path,
       DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
   }
@@ -272,8 +283,21 @@ function normalizeChangeSource(source) {
 }
 
 function normalizeNamedSource(source) {
-  return {kind: source.kind, name: requireName(
+  const normalized = {kind: source.kind, name: requireName(
     source.name, `${DEPLOYMENT_BINDING_PATH.SOURCE}/name`)};
+  if (source.statement !== undefined) {
+    normalized.statement = requireStatement(source.statement);
+  }
+  return normalized;
+}
+
+function requireStatement(value) {
+  if (typeof value !== 'string' || value.length < STATEMENT_LIMITS.minimum) {
+    fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
+      `${DEPLOYMENT_BINDING_PATH.SOURCE}/statement`,
+      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
+  }
+  return value;
 }
 
 function normalizeTimeSource(source) {
@@ -307,7 +331,8 @@ function normalizeSource(source) {
       DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
   }
   requireExactFields(
-    source, SOURCE_FIELDS[source.kind], DEPLOYMENT_BINDING_PATH.SOURCE);
+    source, SOURCE_FIELDS[source.kind], DEPLOYMENT_BINDING_PATH.SOURCE,
+    SOURCE_OPTIONAL_FIELDS[source.kind] ?? []);
   return normalizer(source);
 }
 

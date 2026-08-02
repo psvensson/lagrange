@@ -68,9 +68,6 @@ async function buildAndInstantiate(hostState) {
           denial.payload = DENY_BUDGET_EXHAUSTED;
           throw denial;
         },
-        capability() {
-          return 0;
-        },
       },
     },
   );

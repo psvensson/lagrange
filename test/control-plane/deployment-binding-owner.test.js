@@ -400,6 +400,93 @@ describe('deployment Binding system-table owner', () => {
       assert.equal(gateway.rows(TABLES.SERVICE_ENDPOINTS).size, 0);
     });
 
+  test('admits the optional declared statement on call and pushdown sources',
+    async () => {
+      const gateway = new DurableBindingGateway();
+      const owners = createOwners(gateway);
+      const package_ = await seedPackage(owners.serviceInstallCatalogOwner);
+      const owner = owners.deploymentBindingOwner;
+
+      const statement = 'SELECT user_id, score FROM ratings';
+      const callCreated = await owner.createBinding(
+        bindingInput(package_, {
+          name: 'statement-call',
+          source: {kind: 'call', name: 'orders-call', statement},
+          target: {
+            ...bindingInput(package_).target,
+            export_name: 'call-handler',
+          },
+        }),
+        SECURITY_CONTEXT,
+      );
+      assert.deepEqual(callCreated.declaration.source, {
+        kind: 'call',
+        name: 'orders-call',
+        statement,
+      });
+
+      const pushdownCreated = await owner.createBinding(
+        bindingInput(package_, {
+          name: 'statement-pushdown',
+          source: {kind: 'pushdown', name: 'orders-filter', statement},
+          target: {
+            ...bindingInput(package_).target,
+            export_name: 'pushdown-handler',
+          },
+        }),
+        SECURITY_CONTEXT,
+      );
+      assert.deepEqual(pushdownCreated.declaration.source, {
+        kind: 'pushdown',
+        name: 'orders-filter',
+        statement,
+      });
+
+      await assert.rejects(
+        owner.createBinding(
+          bindingInput(package_, {
+            name: 'empty-statement',
+            source: {kind: 'call', name: 'orders-call', statement: ''},
+            target: {
+              ...bindingInput(package_).target,
+              export_name: 'call-handler',
+            },
+          }),
+          SECURITY_CONTEXT,
+        ),
+        (error) => assertBindingCode(
+          error, DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD),
+      );
+      await assert.rejects(
+        owner.createBinding(
+          bindingInput(package_, {
+            name: 'numeric-statement',
+            source: {kind: 'call', name: 'orders-call', statement: 42},
+            target: {
+              ...bindingInput(package_).target,
+              export_name: 'call-handler',
+            },
+          }),
+          SECURITY_CONTEXT,
+        ),
+        (error) => assertBindingCode(
+          error, DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD),
+      );
+      await assert.rejects(
+        owner.createBinding(
+          bindingInput(package_, {
+            name: 'request-statement',
+            source: {
+              kind: 'request', method: 'POST', path: '/orders', statement,
+            },
+          }),
+          SECURITY_CONTEXT,
+        ),
+        (error) => assertBindingCode(
+          error, DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD),
+      );
+    });
+
   test('projects the exact canonical immutable row', async () => {
     const gateway = new DurableBindingGateway();
     const owners = createOwners(gateway, () => 7000);

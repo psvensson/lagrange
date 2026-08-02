@@ -81,8 +81,8 @@ compatible Artifact interface:
 | --- | --- | --- |
 | `request` | `kind`, `method` in `DELETE|GET|PATCH|POST|PUT`, exact static `path` | `request_v1` |
 | `change` | `kind`, lexical unique `operations`, lexical unique `tables` | `change_v1` |
-| `call` | `kind`, registration `name` | `call_v1` |
-| `pushdown` | `kind`, registration `name` | `pushdown_v1` |
+| `call` | `kind`, registration `name`, optional declared partition-local `statement` | `call_v1` |
+| `pushdown` | `kind`, registration `name`, optional declared partition-local `statement` | `pushdown_v1` |
 | `time` | `kind`, `interval_ms` in `1..86400000` | `time_v1` |
 | `once` | `kind` | `once_v1` |
 | `boot` | `kind` | `boot_v1` |
@@ -92,7 +92,37 @@ not authorize handler reads or writes. Artifact capabilities are derived and
 stored lexically by the owner, never accepted as caller authority. Budgets are a
 closed set of safe-integer limits: CPU `1..60000` ms, wall time `1..300000` ms
 and not below CPU, memory `1..1073741824` bytes, input/output `0..16777216`
-bytes each, and context `0..67108864` bytes.
+bytes each, and context `0..67108864` bytes. The per-invocation batch bound for
+`call` and `pushdown` Cells is likewise a Binding-declared limit; an invocation
+whose declared statement exceeds it fails closed with the typed
+`budget-exhausted` refusal.
+
+`call` and `pushdown` sources may declare an optional partition-local
+`statement`: one SQL string selecting and grouping the rows each shard's `run`
+export receives as its bounded batch. A `pushdown` invocation is the declared
+statement itself; it carries no arguments channel, and the shared `call-cell`
+`arguments` parameter is the empty JSON object. A `call` invocation pairs the
+declared statement with a transient arguments JSON payload. A `call` or
+`pushdown` Binding without a declared statement is a valid durable registration
+but is not invocable. Statement validity is not the Binding owner's domain;
+compilation neither parses nor executes it.
+
+The sole public invocation surface for `call` and `pushdown` Cells is the WIT
+interface `lagrange:cell/call-context`: bounded `emit` of partials under a key,
+`call-bounded` nested invocation of a declared export, and the `run`/`reduce`
+export pair, with guardrail failures returned as typed `deny-code` results.
+`reduce` executes on any replica of the reducing service that holds the reduce
+lease; replica replacement re-leases and recomputes without a visible
+intermediate. The contract requires exactly-once visibility of the final
+reduced result — one atomically published snapshot per complete partial set, as
+in the coordination-table lease plus atomic result-snapshot exchange
+(`src/runtime/sql-query-loop-parallel-reduce.js`) — not exactly-once reduce
+execution. `call-context` v1 carries no `capability: func(u32) -> s32` import;
+the request world's `lagrange:cell/context` keeps its own probe unchanged. A
+typed capability enum derived from the `CONFIGURE SERVICE ACCESS` grammar
+replaces the untyped u32 probe when the catalog exists; until then undeclared
+operations fail closed with typed `deny-code`, and Binding-declared budgets and
+owner-derived Artifact capabilities remain the only authorization inputs.
 
 Schema v2 is create-only. `DeploymentBindingOwner` derives one tenant-scoped
 logical identity and immutable generation 1, stores a digest of the canonical

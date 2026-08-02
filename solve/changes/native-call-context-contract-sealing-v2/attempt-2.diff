@@ -1,0 +1,122 @@
+diff --git a/solve/epics/native-call-context-wit-contract.md b/solve/epics/native-call-context-wit-contract.md
+index 32e3d170d230bc8077d220b6d0a1c70937f7f9b1..1c0b77ba1ea35442d35e9ea94c3fc1ae66016e76 100644
+--- a/solve/epics/native-call-context-wit-contract.md
++++ b/solve/epics/native-call-context-wit-contract.md
+@@ -40,9 +40,6 @@ interface call-context {
+   /// Bounded nested invocation of another declared export.
+   call-bounded: func(export-name: string, argument: string)
+     -> result<string, deny-code>;
+-
+-  /// Existing request-context capability probe, carried over unchanged.
+-  capability: func(capability: u32) -> s32;
+ }
+ 
+ world call-cell {
+@@ -121,27 +118,45 @@ stay JSON strings. Replacing them with per-operation WIT records — e.g.
+    Lagrange SQL, and `native_js`
+    (`comparative-workload-efficiency-evidence.md`), so this evidence falls
+    out of the real distributed runs, not an ad-hoc microbenchmark.
+-5. **Typed capability catalog.** Replace `capability: u32 -> s32` with a
+-   sealed enum derived from the `CONFIGURE SERVICE ACCESS` grammar; typed
+-   deny reasons throughout.
++5. **Typed capability catalog.** Introduce a sealed capability enum derived
++   from the `CONFIGURE SERVICE ACCESS` grammar (v1 has no probe at all; the
++   request world's u32 probe is unaffected); typed deny reasons throughout.
+ 
+ Rungs 1–2 are the real gate; 3–5 are mechanical once shapes are derivable.
+ 
+ ## Open questions
+ 
+-- Does `pushdown` share this world or bind the statement itself as the
+-  invocation (no `arguments` channel)? Sealed at spec time with the
+-  minimal-deployment-surface follow-on.
+-- Where does `reduce` run — any replica under lease (MovieLens pattern:
+-  `sql-query-loop-parallel-reduce.js` leases + atomic snapshot), or a
+-  runtime-chosen singleton? Contract only requires: exactly-once visible
+-  final snapshot.
+-- Keep `capability: u32 -> s32`, or drop it until the typed enum exists?
+-- Batch memory bound: max rows/bytes per `run` invocation and the typed
+-  refusal when the declared statement exceeds it.
++None. The four contract questions below are sealed (see decision log,
++2026-08-02) and the sealed text now lives in
++[`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md),
++which owns the contract from this point; this epic keeps the design rationale
++and the typed-API ladder.
+ 
+ ## Decision log
+ 
++- 2026-08-02 — Pushdown sealed by quest `native-call-context-contract-sealing`:
++  pushdown shares the `call-cell` world; a pushdown invocation IS the
++  Binding-declared statement, and the shared `arguments` parameter degenerates
++  to the empty JSON object (one world, no second signature).
++- 2026-08-02 — Reduce placement sealed: reduce runs on any replica of the
++  reducing service under lease, with exactly-once *visible* final snapshot
++  (atomic result-row replace over a complete, fresh, disjoint partial set, per
++  `src/runtime/sql-query-loop-parallel-reduce.js`) — not exactly-once reduce
++  execution.
++- 2026-08-02 — Capability probe sealed: dropped from `call-context` v1; the
++  request world's `lagrange:cell/context` keeps its own u32 probe, and a typed
++  enum derived from the `CONFIGURE SERVICE ACCESS` grammar replaces it when
++  the catalog exists (ladder rung 5). No production guest ever invokes the
++  u32 probe today (host stub only).
++- 2026-08-02 — Batch bound sealed: the per-invocation batch limit is
++  Binding-declared like every other budget; exceeding it fails closed with
++  typed `budget-exhausted`. The call/pushdown Binding source contract gains an
++  optional declared partition-local `statement` (create-only; legacy
++  `{kind, name}` registrations stay valid but are not invocable). The legacy
++  axis carries statements transiently at the call site
++  (`wasm-call-adapter.js`), so the declared statement is a new durable
++  declaration, not a carry-over.
++
+ - 2026-08-01 — Epic created on operator direction: the rung-1 emit/reduce
+   contract is WIT-first and language-neutral; JS is one producer among
+   many via ComponentizeJS. WIT sketch validated with
+diff --git a/solve/quests/native-call-context-contract-sealing-v2.json b/solve/quests/native-call-context-contract-sealing-v2.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..2e3ba4e3339b83581c34d694a826e8f1efebcdae
+--- /dev/null
++++ b/solve/quests/native-call-context-contract-sealing-v2.json
+@@ -0,0 +1,43 @@
++{
++  "id": "native-call-context-contract-sealing-v2",
++  "authoringContractVersion": 1,
++  "verificationContractVersion": 2,
++  "statement": "The native call-context contract is sealed as an architecture owner-boundary contract: architecture/minimal-deployment-surface.md names the lagrange:cell/call-context WIT interface as the sole public call/pushdown invocation surface and extends the call Binding schema-v2 source contract with an optional declared partition-local statement (create-only; legacy {kind,name} bindings remain valid but non-invocable), and the four epic open questions are resolved with recorded decisions — pushdown binds the declared statement itself as the invocation within the same call-cell world, reduce runs on any replica under lease with an exactly-once visible final snapshot, the u32 capability probe is dropped from the contract until the typed enum exists, and the per-run batch memory bound is a Binding-declared budget with a typed budget-exhausted refusal — with the epic, the ABI fixture WIT, and the call-cell guard scenario updated to match and green, and no runtime invocation mechanism introduced.",
++  "priority": 1,
++  "class": "product",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "solve/epics/native-call-context-wit-contract.md",
++    "closesCL": [],
++    "parentQuest": "native-call-context-contract-sealing",
++    "planDoc": null,
++    "draftedAtCommit": "db9725b5951d821f29ee68a7d90f6714aa47ea13"
++  },
++  "doneWhen": {
++    "probe": "scenario-harness",
++    "args": {
++      "scenario": "native-call-context-contract-sealing",
++      "consecutive": 3,
++      "metric": "priority"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "native-call-context-contract-sealing-v2-main",
++      "priority": 1,
++      "metric": {
++        "probe": "scenario-harness",
++        "args": {
++          "scenario": "native-call-context-contract-sealing",
++          "metric": "priority"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}

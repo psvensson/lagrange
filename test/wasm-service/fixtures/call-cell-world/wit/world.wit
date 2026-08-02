@@ -30,9 +30,6 @@ interface call-context {
 
   /// Bounded nested invocation of another declared export.
   call-bounded: func(export-name: string, argument: string) -> result<string, deny-code>;
-
-  /// Existing request-context capability probe, carried over unchanged.
-  capability: func(capability: u32) -> s32;
 }
 
 world call-cell {
