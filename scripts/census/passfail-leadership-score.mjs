@@ -8,6 +8,10 @@
 // Separation margin (pre-committed): a feature separates only if a single split yields balanced accuracy >= 0.80.
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  readPlaybackEvidenceFileSync,
+  resolvePlaybackEvidencePathSync,
+} from '../../src/diagnostics/playback-evidence-file.js';
 
 const ROOT = 'test-output/reports';
 const FEATS = JSON.parse(fs.readFileSync(path.join(ROOT, 'passfail-census-features.json'), 'utf8'));
@@ -15,9 +19,11 @@ const FEATS = JSON.parse(fs.readFileSync(path.join(ROOT, 'passfail-census-featur
 function terminalSnapshot(file) {
   // stream last parseable snapshot line that carries partitions
   const runKey = path.basename(file).replace('.report.json', '');
-  const snap = path.join(ROOT, '.playback', runKey, 'rolling-restart', 'snapshots.ndjson');
-  if (!fs.existsSync(snap)) return null;
-  const lines = fs.readFileSync(snap, 'utf8').split('\n');
+  const snap = resolvePlaybackEvidencePathSync(
+    path.join(ROOT, '.playback', runKey, 'rolling-restart', 'snapshots.ndjson'),
+  );
+  if (!snap) return null;
+  const lines = readPlaybackEvidenceFileSync(snap, 'utf8').split('\n');
   for (let i = lines.length - 1; i >= 0; i--) {
     const l = lines[i].trim();
     if (!l) continue;

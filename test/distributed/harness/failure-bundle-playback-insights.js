@@ -3,6 +3,9 @@ import {join} from 'node:path';
 import {
   OWNER_CONTRACT_STATE,
 } from '../../../src/control-plane/owner-contract-outcome.js';
+import {
+  readPlaybackEvidenceFile,
+} from '../../../src/diagnostics/playback-evidence-file.js';
 import {buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots} from '../../../src/control-plane/priority-recovery-snapshot.js';
 import {
   PRIORITY_RECOVERY_ACTUATION_STATE,
@@ -582,7 +585,10 @@ async function collectPlaybackSnapshotInsights(scenarioDir, entry) {
     PLAYBACK_SNAPSHOTS_FILENAME,
   );
   try {
-    const content = await readFile(playbackSnapshotsAbsolutePath, UTF8_ENCODING);
+    const content = await readPlaybackEvidenceFile(
+      playbackSnapshotsAbsolutePath,
+      UTF8_ENCODING,
+    );
     const latestSnapshot = selectLatestPlaybackSnapshot(
       parsePlaybackSnapshotStates(content),
     );

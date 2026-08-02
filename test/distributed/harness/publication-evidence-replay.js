@@ -3,6 +3,8 @@ import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {deriveMembershipPublicationCandidate} from
   '../../../src/control-plane/membership-publication-coordinator.js';
+import {readPlaybackEvidenceFile} from
+  '../../../src/diagnostics/playback-evidence-file.js';
 import {
   buildPriorityRecoveryClosureWitness,
   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
@@ -543,7 +545,10 @@ async function readJsonFile(filePath) {
 }
 
 async function readSnapshotStates(filePath) {
-  const raw = await readFile(filePath, PUBLICATION_EVIDENCE_REPLAY_ENCODING);
+  const raw = await readPlaybackEvidenceFile(
+    filePath,
+    PUBLICATION_EVIDENCE_REPLAY_ENCODING,
+  );
   return raw
     .split(PUBLICATION_EVIDENCE_REPLAY_NEWLINE)
     .map((line, index) => parseSnapshotLine(line, index))

@@ -13,11 +13,16 @@ import {
   ADMIN_TEST_DEFAULT,
   ADMIN_TEST_ERROR_MSG,
   ADMIN_TEST_RUN_PATH,
+  ADMIN_TEST_RUN_STATUS,
 } from './admin-constants.js';
 import {
   getContentType,
   resolveOutputAssetPath,
 } from './admin-test-run-paths.js';
+import {
+  createPlaybackEvidenceReadStream,
+  resolvePlaybackEvidencePath,
+} from '../diagnostics/playback-evidence-file.js';
 import {adminTestRunInventoryMethods} from './admin-test-run-inventory-methods.js';
 import {adminTestRunLifecycleMethods} from './admin-test-run-lifecycle-methods.js';
 import {buildAdminTestRunServiceHelpers} from './admin-test-run-service-helpers.js';
@@ -348,9 +353,15 @@ class AdminTestRunService {
   }
 
   /**
-   * Read and return an output file payload.
+   * Read and return an output file payload. Logical playback artifacts
+   * whose plain file is missing are served from the compressed sibling
+   * as decoded NDJSON; incomplete gzip tails are tolerated only while
+   * the artifact belongs to a positively identified running run.
    * @param {string} wildcardPath
-   * @return {Promise<{contentType: string, body: Buffer}|null>}
+   * @return {Promise<{
+   *   contentType: string,
+   *   body: Buffer|import('node:stream').Readable,
+   * }|null>}
    */
   async readOutputAsset(wildcardPath) {
     const filePath = this.resolveOutputAssetPath(wildcardPath);
@@ -359,11 +370,24 @@ class AdminTestRunService {
     }
 
     try {
-      const fileStats = await stat(filePath);
+      const resolvedPath = await resolvePlaybackEvidencePath(filePath);
+      if (!resolvedPath) {
+        return null;
+      }
+      const fileStats = await stat(resolvedPath);
       if (!fileStats.isFile()) {
         return null;
       }
-      const body = await readFile(filePath);
+      if (resolvedPath === filePath) {
+        const body = await readFile(filePath);
+        return {
+          contentType: this.getContentType(filePath),
+          body,
+        };
+      }
+      const body = await createPlaybackEvidenceReadStream(filePath, {
+        allowIncomplete: this.isRunningPlaybackArtifactPath(filePath),
+      });
       return {
         contentType: this.getContentType(filePath),
         body,
@@ -371,6 +395,29 @@ class AdminTestRunService {
     } catch {
       return null;
     }
+  }
+
+  /**
+   * Returns true when the absolute path is the snapshots artifact of a
+   * run that is currently in the running state.
+   * @param {string} absolutePath
+   * @return {boolean}
+   * @private
+   */
+  isRunningPlaybackArtifactPath(absolutePath) {
+    for (const run of this.runs.values()) {
+      if (run.status !== ADMIN_TEST_RUN_STATUS.RUNNING) {
+        continue;
+      }
+      const snapshotsPath = run.playbackSnapshotsPath;
+      if (!snapshotsPath) {
+        continue;
+      }
+      if (resolve(this.workspaceRoot, snapshotsPath) === absolutePath) {
+        return true;
+      }
+    }
+    return false;
   }
 
   /**

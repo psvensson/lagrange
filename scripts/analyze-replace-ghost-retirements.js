@@ -23,6 +23,10 @@ import process from 'node:process';
 import {
   isPriorityControlPlanePartition,
 } from '../src/bootstrap/system-partition-classification.js';
+import {
+  readPlaybackEvidenceFileSync,
+  resolvePlaybackEvidencePathSync,
+} from '../src/diagnostics/playback-evidence-file.js';
 
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
@@ -46,13 +50,17 @@ function resolveSnapshotsPath(inputPath) {
   if (stats.isFile()) {
     return inputPath;
   }
-  const direct = path.join(inputPath, SNAPSHOTS_FILENAME);
-  if (fs.existsSync(direct)) {
+  const direct = resolvePlaybackEvidencePathSync(
+    path.join(inputPath, SNAPSHOTS_FILENAME),
+  );
+  if (direct) {
     return direct;
   }
   for (const entry of fs.readdirSync(inputPath)) {
-    const candidate = path.join(inputPath, entry, SNAPSHOTS_FILENAME);
-    if (fs.existsSync(candidate)) {
+    const candidate = resolvePlaybackEvidencePathSync(
+      path.join(inputPath, entry, SNAPSHOTS_FILENAME),
+    );
+    if (candidate) {
       return candidate;
     }
   }
@@ -100,8 +108,7 @@ function collectRemovalCompletedReplicaIds(snapshotsPath) {
 }
 
 function readFinalSnapshot(snapshotsPath) {
-  const lines = fs
-    .readFileSync(snapshotsPath, 'utf8')
+  const lines = readPlaybackEvidenceFileSync(snapshotsPath, 'utf8')
     .split('\n')
     .map((line) => line.trim())
     .filter((line) => line.length > 0);

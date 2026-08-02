@@ -1,13 +1,17 @@
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
-import {mkdtemp, readFile, rm} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import {join} from 'node:path';
 import {
   PlaybackRecorder,
   diffTopologySnapshots,
 } from '../playback-recorder.js';
+import {
+  readPlaybackEvidenceFile,
+} from '../../../../src/diagnostics/playback-evidence-file.js';
 
+const stringIncludes = Function.call.bind(String.prototype.includes);
 const EVENT_TYPE_REPLICA_MOVED = 'replica.moved';
 const EVENT_TYPE_PARTITION_SPLIT = 'partition.split';
 const EVENT_TYPE_PARTITION_MERGE = 'partition.merge';
@@ -209,7 +213,7 @@ test('PlaybackRecorder writes playback artifacts and manifest', async () => {
       },
     },
     async query(sql) {
-      if (sql.includes('FROM nodes')) {
+      if (stringIncludes(sql, 'FROM nodes')) {
         return {
           rows: [{
             node_id: 'node-1',
@@ -284,7 +288,7 @@ test('PlaybackRecorder writes playback artifacts and manifest', async () => {
       manifest.files.samples,
       'utf8',
     );
-    const snapshotContent = await readFile(
+    const snapshotContent = await readPlaybackEvidenceFile(
       manifest.files.snapshots,
       'utf8',
     );
@@ -397,7 +401,7 @@ test('PlaybackRecorder aggregates service rows across reachable nodes', async ()
     const manifest = await recorder.stop({
       reason: 'multi-node-service-snapshot',
     });
-    const snapshotContent = await readFile(
+    const snapshotContent = await readPlaybackEvidenceFile(
       manifest.files.snapshots,
       'utf8',
     );
@@ -1057,6 +1061,192 @@ test('PlaybackRecorder truncates scenario playback files on new run', async () =
       firstManifest.files.events,
       secondManifest.files.events,
       'test should verify truncation even when both runs target same file',
+    );
+  } finally {
+    await rm(outputDir, {recursive: true, force: true});
+  }
+});
+
+function createStatsNode(id) {
+  return {
+    id,
+    containerId: `container-${id}`,
+    _dockerProvider: {
+      async getContainerStats() {
+        return {
+          cpuPercent: 5,
+          memoryUsageBytes: 512,
+          memoryLimitBytes: 2048,
+          rxBytes: 1,
+          txBytes: 2,
+        };
+      },
+    },
+    async query(sql) {
+      if (sql.includes('FROM nodes')) {
+        return {rows: [{node_id: id, status: 'active'}]};
+      }
+      return {rows: []};
+    },
+  };
+}
+
+function createStatsCluster(id = 'node-1') {
+  const node = createStatsNode(id);
+  return {
+    getNodes() {
+      return [node];
+    },
+  };
+}
+
+async function pathExists(candidate) {
+  try {
+    await stat(candidate);
+    return true;
+  } catch (_err) {
+    return false;
+  }
+}
+
+test('PlaybackRecorder captures compressed snapshots behind the logical path', async () => {
+  const outputDir = await mkdtemp(
+    join(tmpdir(), 'playback-recorder-compressed-'),
+  );
+  const recorder = new PlaybackRecorder({
+    outputDir,
+    topologyPollIntervalMs: 60000,
+    resourcePollIntervalMs: 60000,
+  });
+
+  try {
+    await recorder.start({
+      scenarioName: 'compressed-capture',
+      cluster: createStatsCluster(),
+    });
+    const scenarioDir = join(outputDir, 'compressed-capture');
+    assert.equal(
+      await pathExists(join(scenarioDir, 'playback-manifest.json')),
+      false,
+      'manifest must not exist before finalization',
+    );
+    const manifest = await recorder.stop({reason: 'test'});
+
+    assert.equal(
+      manifest.files.snapshots,
+      join(scenarioDir, 'snapshots.ndjson'),
+      'manifest should record the logical snapshots path',
+    );
+    assert.equal(
+      await pathExists(join(scenarioDir, 'snapshots.ndjson')),
+      false,
+      'no plain snapshots artifact should be written',
+    );
+    assert.ok(
+      await pathExists(join(scenarioDir, 'snapshots.ndjson.gz')),
+      'compressed snapshots artifact should exist',
+    );
+    const decoded = await readPlaybackEvidenceFile(
+      manifest.files.snapshots,
+      'utf8',
+    );
+    assert.ok(stringIncludes(decoded, 'partitions'));
+  } finally {
+    await rm(outputDir, {recursive: true, force: true});
+  }
+});
+
+test('PlaybackRecorder rerun invalidates stale plain, gzip, and manifest artifacts', async () => {
+  const outputDir = await mkdtemp(
+    join(tmpdir(), 'playback-recorder-stale-'),
+  );
+  const scenarioDir = join(outputDir, 'stale-artifacts');
+  await mkdir(scenarioDir, {recursive: true});
+  await writeFile(
+    join(scenarioDir, 'snapshots.ndjson'),
+    '{"stale":"plain"}\n',
+  );
+  await writeFile(
+    join(scenarioDir, 'snapshots.ndjson.gz'),
+    'not-a-gzip-payload',
+  );
+  await writeFile(
+    join(scenarioDir, 'playback-manifest.json'),
+    '{"stale":true}\n',
+  );
+
+  const recorder = new PlaybackRecorder({
+    outputDir,
+    topologyPollIntervalMs: 60000,
+    resourcePollIntervalMs: 60000,
+  });
+
+  try {
+    await recorder.start({
+      scenarioName: 'stale-artifacts',
+      cluster: createStatsCluster(),
+    });
+    assert.equal(
+      await pathExists(join(scenarioDir, 'snapshots.ndjson')),
+      false,
+      'stale plain snapshots must be removed at start',
+    );
+    assert.equal(
+      await pathExists(join(scenarioDir, 'playback-manifest.json')),
+      false,
+      'stale manifest must be removed at start',
+    );
+    const manifest = await recorder.stop({reason: 'rerun'});
+    const decoded = await readPlaybackEvidenceFile(
+      manifest.files.snapshots,
+      'utf8',
+    );
+    assert.ok(!stringIncludes(decoded, 'stale'));
+    assert.ok(stringIncludes(decoded, 'partitions'));
+  } finally {
+    await rm(outputDir, {recursive: true, force: true});
+  }
+});
+
+test('PlaybackRecorder latches snapshot storage failures and discards artifacts', async () => {
+  const outputDir = await mkdtemp(
+    join(tmpdir(), 'playback-recorder-storage-fail-'),
+  );
+  const recorder = new PlaybackRecorder({
+    outputDir,
+    topologyPollIntervalMs: 60000,
+    resourcePollIntervalMs: 60000,
+  });
+  const scenarioDir = join(outputDir, 'storage-failure');
+
+  try {
+    await recorder.start({
+      scenarioName: 'storage-failure',
+      cluster: createStatsCluster(),
+    });
+    recorder._snapshotWriter.appendRecord = async () => {
+      throw new Error('simulated snapshot storage failure');
+    };
+    await assert.rejects(
+      recorder.stop({reason: 'storage-failure'}),
+      /simulated snapshot storage failure/,
+      'stop must surface the latched storage failure',
+    );
+    assert.equal(recorder.getManifest(), null);
+    assert.equal(
+      await pathExists(join(scenarioDir, 'playback-manifest.json')),
+      false,
+      'no manifest may describe a failed capture',
+    );
+    assert.equal(
+      await pathExists(join(scenarioDir, 'snapshots.ndjson.gz')),
+      false,
+      'failed compressed artifact must be removed',
+    );
+    assert.equal(
+      await pathExists(join(scenarioDir, 'snapshots.ndjson')),
+      false,
+      'no plain snapshots artifact may remain',
     );
   } finally {
     await rm(outputDir, {recursive: true, force: true});

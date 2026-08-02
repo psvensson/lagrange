@@ -269,7 +269,7 @@
         <label>Manifest JSON<input id="manifestFile" type="file" accept="application/json"></label>
         <label>Events NDJSON<input id="eventsFile" type="file" accept=".ndjson,.jsonl,.txt"></label>
         <label>Samples NDJSON<input id="samplesFile" type="file" accept=".ndjson,.jsonl,.txt"></label>
-        <label>Snapshots NDJSON<input id="snapshotsFile" type="file" accept=".ndjson,.jsonl,.txt"></label>
+        <label>Snapshots NDJSON<input id="snapshotsFile" type="file" accept=".ndjson,.jsonl,.txt,.gz"></label>
       </div>
       <div class="controls">
         <div class="row">
@@ -411,6 +411,11 @@
     }
 
     function readFileText(file) {
+      if (String(file?.name || '').toLowerCase().endsWith('.gz')) {
+        const decoded = file.stream()
+          .pipeThrough(new DecompressionStream('gzip'));
+        return new Response(decoded).text();
+      }
       return new Promise((resolve, reject) => {
         const reader = new FileReader();
         reader.onload = () => resolve(String(reader.result || ''));

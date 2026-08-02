@@ -1,0 +1,1888 @@
+diff --git a/docs/distributed-playback-viewer.md b/docs/distributed-playback-viewer.md
+index 104fb73638470f2a4c2f6ac652b0ba1e264d0443..43604b9da1727bee5a9769e338081eadebfe429b 100644
+--- a/docs/distributed-playback-viewer.md
++++ b/docs/distributed-playback-viewer.md
+@@ -14,10 +14,28 @@ each scenario run under:
+ 
+ - `test-output/{scenario}/events.ndjson`
+ - `test-output/{scenario}/samples.ndjson`
+-- `test-output/{scenario}/snapshots.ndjson`
++- `test-output/{scenario}/snapshots.ndjson.gz`
+ - `test-output/{scenario}/playback-manifest.json`
+ - `test-output/{scenario}/playback-viewer.html`
+ 
++Topology snapshots are captured gzip-compressed. The logical artifact name
++stays `snapshots.ndjson`: manifests and admin URLs keep the plain name, and
++readers resolve the `.gz` sibling through the shared owner in
++`src/diagnostics/playback-evidence-file.js` when the plain file is absent.
++Retained plain-text `snapshots.ndjson` archives keep working unchanged — an
++existing exact-path file always wins over the compressed sibling.
++
++The admin server decodes compressed snapshots on the fly, so network fetches
++(live follow and manifest URLs) always receive plain NDJSON. Only a run the
++admin positively identifies as currently running is served with
++tolerate-incomplete gzip decoding; finalized, failed, crashed, or offline
++evidence is decoded strictly, and corrupt archives fail the request instead
++of silently falling back.
++
++When loading local files into the viewer, `.gz` snapshot files can be
++selected directly; the viewer decompresses them in the browser with
++`DecompressionStream('gzip')`.
++
+ Use `src/admin/static/playback-viewer.html` to step through the run timeline.
+ 
+ ## What It Shows
+diff --git a/scripts/analyze-leadership-flap.js b/scripts/analyze-leadership-flap.js
+index e7cfc51ff4055c33097cb9e810a5876e3316e786..b64b85f813277d0c2f974adaf6d97064bbc91c99 100644
+--- a/scripts/analyze-leadership-flap.js
++++ b/scripts/analyze-leadership-flap.js
+@@ -44,6 +44,10 @@
+ 
+ import fs from 'node:fs';
+ import path from 'node:path';
++import {
++  readPlaybackEvidenceFileSync,
++  resolvePlaybackEvidencePathSync,
++} from '../src/diagnostics/playback-evidence-file.js';
+ 
+ const DEFAULT_PLAYBACK_ROOT = 'test-output/reports/.playback';
+ const SCENARIO_DIR = 'rolling-restart';
+@@ -82,8 +86,9 @@ function parseArgs(argv) {
+ }
+ 
+ function readNdjson(file) {
+-  if (!fs.existsSync(file)) return [];
+-  return fs.readFileSync(file, 'utf8')
++  const resolved = resolvePlaybackEvidencePathSync(file);
++  if (!resolved) return [];
++  return readPlaybackEvidenceFileSync(resolved, 'utf8')
+     .split('\n')
+     .filter((line) => line.trim().length > 0)
+     .map((line) => {
+@@ -104,7 +109,10 @@ function discoverRuns(playbackRoot, onlyRuns) {
+       runKey: name,
+       dir: path.join(playbackRoot, name, SCENARIO_DIR),
+     }))
+-    .filter(({dir}) => fs.existsSync(path.join(dir, 'snapshots.ndjson')));
++    .filter(({dir}) =>
++      resolvePlaybackEvidencePathSync(
++        path.join(dir, 'snapshots.ndjson'),
++      ) !== null);
+ }
+ 
+ // The node(s) the scenario restarted: any node with a stop AND a later start
+diff --git a/scripts/analyze-replace-ghost-retirements.js b/scripts/analyze-replace-ghost-retirements.js
+index 7cb60fedf60122d0060fde0fb6c86d37077fddf3..8090ecb708a912cc881adc056fe936027b40e86d 100644
+--- a/scripts/analyze-replace-ghost-retirements.js
++++ b/scripts/analyze-replace-ghost-retirements.js
+@@ -23,6 +23,10 @@ import process from 'node:process';
+ import {
+   isPriorityControlPlanePartition,
+ } from '../src/bootstrap/system-partition-classification.js';
++import {
++  readPlaybackEvidenceFileSync,
++  resolvePlaybackEvidencePathSync,
++} from '../src/diagnostics/playback-evidence-file.js';
+ 
+ const EXIT_SUCCESS = 0;
+ const EXIT_FAILURE = 1;
+@@ -46,13 +50,17 @@ function resolveSnapshotsPath(inputPath) {
+   if (stats.isFile()) {
+     return inputPath;
+   }
+-  const direct = path.join(inputPath, SNAPSHOTS_FILENAME);
+-  if (fs.existsSync(direct)) {
++  const direct = resolvePlaybackEvidencePathSync(
++    path.join(inputPath, SNAPSHOTS_FILENAME),
++  );
++  if (direct) {
+     return direct;
+   }
+   for (const entry of fs.readdirSync(inputPath)) {
+-    const candidate = path.join(inputPath, entry, SNAPSHOTS_FILENAME);
+-    if (fs.existsSync(candidate)) {
++    const candidate = resolvePlaybackEvidencePathSync(
++      path.join(inputPath, entry, SNAPSHOTS_FILENAME),
++    );
++    if (candidate) {
+       return candidate;
+     }
+   }
+@@ -100,8 +108,7 @@ function collectRemovalCompletedReplicaIds(snapshotsPath) {
+ }
+ 
+ function readFinalSnapshot(snapshotsPath) {
+-  const lines = fs
+-    .readFileSync(snapshotsPath, 'utf8')
++  const lines = readPlaybackEvidenceFileSync(snapshotsPath, 'utf8')
+     .split('\n')
+     .map((line) => line.trim())
+     .filter((line) => line.length > 0);
+diff --git a/scripts/census/passfail-leadership-score.mjs b/scripts/census/passfail-leadership-score.mjs
+index 5276832dc00947a5c9ee9f7dfc88a55d5cda0750..18fb362f86d3bc78c31f952847cd37ce364669d3 100644
+--- a/scripts/census/passfail-leadership-score.mjs
++++ b/scripts/census/passfail-leadership-score.mjs
+@@ -8,6 +8,10 @@
+ // Separation margin (pre-committed): a feature separates only if a single split yields balanced accuracy >= 0.80.
+ import fs from 'node:fs';
+ import path from 'node:path';
++import {
++  readPlaybackEvidenceFileSync,
++  resolvePlaybackEvidencePathSync,
++} from '../../src/diagnostics/playback-evidence-file.js';
+ 
+ const ROOT = 'test-output/reports';
+ const FEATS = JSON.parse(fs.readFileSync(path.join(ROOT, 'passfail-census-features.json'), 'utf8'));
+@@ -15,9 +19,11 @@ const FEATS = JSON.parse(fs.readFileSync(path.join(ROOT, 'passfail-census-featur
+ function terminalSnapshot(file) {
+   // stream last parseable snapshot line that carries partitions
+   const runKey = path.basename(file).replace('.report.json', '');
+-  const snap = path.join(ROOT, '.playback', runKey, 'rolling-restart', 'snapshots.ndjson');
+-  if (!fs.existsSync(snap)) return null;
+-  const lines = fs.readFileSync(snap, 'utf8').split('\n');
++  const snap = resolvePlaybackEvidencePathSync(
++    path.join(ROOT, '.playback', runKey, 'rolling-restart', 'snapshots.ndjson'),
++  );
++  if (!snap) return null;
++  const lines = readPlaybackEvidenceFileSync(snap, 'utf8').split('\n');
+   for (let i = lines.length - 1; i >= 0; i--) {
+     const l = lines[i].trim();
+     if (!l) continue;
+diff --git a/src/admin/admin-test-run-service.js b/src/admin/admin-test-run-service.js
+index 2c6aed1c4c4a15e56a46993b5cb33dc914cc37e6..cbf7c4fa14896503da82c2bb533d538a7bb9c072 100644
+--- a/src/admin/admin-test-run-service.js
++++ b/src/admin/admin-test-run-service.js
+@@ -13,11 +13,16 @@ import {
+   ADMIN_TEST_DEFAULT,
+   ADMIN_TEST_ERROR_MSG,
+   ADMIN_TEST_RUN_PATH,
++  ADMIN_TEST_RUN_STATUS,
+ } from './admin-constants.js';
+ import {
+   getContentType,
+   resolveOutputAssetPath,
+ } from './admin-test-run-paths.js';
++import {
++  createPlaybackEvidenceReadStream,
++  resolvePlaybackEvidencePath,
++} from '../diagnostics/playback-evidence-file.js';
+ import {adminTestRunInventoryMethods} from './admin-test-run-inventory-methods.js';
+ import {adminTestRunLifecycleMethods} from './admin-test-run-lifecycle-methods.js';
+ import {buildAdminTestRunServiceHelpers} from './admin-test-run-service-helpers.js';
+@@ -348,9 +353,15 @@ class AdminTestRunService {
+   }
+ 
+   /**
+-   * Read and return an output file payload.
++   * Read and return an output file payload. Logical playback artifacts
++   * whose plain file is missing are served from the compressed sibling
++   * as decoded NDJSON; incomplete gzip tails are tolerated only while
++   * the artifact belongs to a positively identified running run.
+    * @param {string} wildcardPath
+-   * @return {Promise<{contentType: string, body: Buffer}|null>}
++   * @return {Promise<{
++   *   contentType: string,
++   *   body: Buffer|import('node:stream').Readable,
++   * }|null>}
+    */
+   async readOutputAsset(wildcardPath) {
+     const filePath = this.resolveOutputAssetPath(wildcardPath);
+@@ -359,11 +370,24 @@ class AdminTestRunService {
+     }
+ 
+     try {
+-      const fileStats = await stat(filePath);
++      const resolvedPath = await resolvePlaybackEvidencePath(filePath);
++      if (!resolvedPath) {
++        return null;
++      }
++      const fileStats = await stat(resolvedPath);
+       if (!fileStats.isFile()) {
+         return null;
+       }
+-      const body = await readFile(filePath);
++      if (resolvedPath === filePath) {
++        const body = await readFile(filePath);
++        return {
++          contentType: this.getContentType(filePath),
++          body,
++        };
++      }
++      const body = await createPlaybackEvidenceReadStream(filePath, {
++        allowIncomplete: this.isRunningPlaybackArtifactPath(filePath),
++      });
+       return {
+         contentType: this.getContentType(filePath),
+         body,
+@@ -373,6 +397,29 @@ class AdminTestRunService {
+     }
+   }
+ 
++  /**
++   * Returns true when the absolute path is the snapshots artifact of a
++   * run that is currently in the running state.
++   * @param {string} absolutePath
++   * @return {boolean}
++   * @private
++   */
++  isRunningPlaybackArtifactPath(absolutePath) {
++    for (const run of this.runs.values()) {
++      if (run.status !== ADMIN_TEST_RUN_STATUS.RUNNING) {
++        continue;
++      }
++      const snapshotsPath = run.playbackSnapshotsPath;
++      if (!snapshotsPath) {
++        continue;
++      }
++      if (resolve(this.workspaceRoot, snapshotsPath) === absolutePath) {
++        return true;
++      }
++    }
++    return false;
++  }
++
+   /**
+    * Safely read directory entries.
+    * @param {string} dirPath
+diff --git a/src/admin/static/playback-viewer.html b/src/admin/static/playback-viewer.html
+index 1c3c2e0e4c92627d486fbf603c62170e0b2ba70c..5517863b60510962b134556431429680a3efafaf 100644
+--- a/src/admin/static/playback-viewer.html
++++ b/src/admin/static/playback-viewer.html
+@@ -269,7 +269,7 @@
+         <label>Manifest JSON<input id="manifestFile" type="file" accept="application/json"></label>
+         <label>Events NDJSON<input id="eventsFile" type="file" accept=".ndjson,.jsonl,.txt"></label>
+         <label>Samples NDJSON<input id="samplesFile" type="file" accept=".ndjson,.jsonl,.txt"></label>
+-        <label>Snapshots NDJSON<input id="snapshotsFile" type="file" accept=".ndjson,.jsonl,.txt"></label>
++        <label>Snapshots NDJSON<input id="snapshotsFile" type="file" accept=".ndjson,.jsonl,.txt,.gz"></label>
+       </div>
+       <div class="controls">
+         <div class="row">
+@@ -411,6 +411,11 @@
+     }
+ 
+     function readFileText(file) {
++      if (String(file?.name || '').toLowerCase().endsWith('.gz')) {
++        const decoded = file.stream()
++          .pipeThrough(new DecompressionStream('gzip'));
++        return new Response(decoded).text();
++      }
+       return new Promise((resolve, reject) => {
+         const reader = new FileReader();
+         reader.onload = () => resolve(String(reader.result || ''));
+diff --git a/src/diagnostics/playback-evidence-file.js b/src/diagnostics/playback-evidence-file.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e90b3915076581e0e04c00d2df717d97191df111
+--- /dev/null
++++ b/src/diagnostics/playback-evidence-file.js
+@@ -0,0 +1,268 @@
++/**
++ * Shared playback snapshot evidence codec and artifact resolver.
++ *
++ * Logical snapshot paths retain the historical `snapshots.ndjson` name. New
++ * captures are written to the adjacent `.gz` artifact; exact paths always win
++ * so retained plain-text evidence remains readable without migration.
++ */
++
++import {createReadStream, createWriteStream, lstatSync, readFileSync} from 'node:fs';
++import {lstat, readFile, rm} from 'node:fs/promises';
++import {Transform} from 'node:stream';
++import {once} from 'node:events';
++import {pipeline} from 'node:stream/promises';
++import {
++  createGunzip,
++  createGzip,
++  gunzip,
++  gunzipSync,
++  constants as zlibConstants,
++} from 'node:zlib';
++import {promisify} from 'node:util';
++
++const GZIP_SUFFIX = '.gz';
++const NEWLINE = '\n';
++const UTF8_ENCODING = 'utf8';
++const FILE_FLAGS_TRUNCATE = 'w';
++const EMPTY_BUFFER = Buffer.alloc(0);
++const ERROR_CODE_MISSING_FILE = 'ENOENT';
++const STREAM_EVENT_ERROR = 'error';
++const STREAM_EVENT_CLOSE = 'close';
++const STREAM_EVENT_OPEN = 'open';
++const STREAM_EVENT_DRAIN = 'drain';
++const ERROR_MESSAGE_OUTPUT_CLOSED_EARLY =
++  'Playback evidence output closed before opening';
++const ERROR_MESSAGE_WRITER_CLOSED = 'Playback evidence writer is closed';
++const ERROR_MESSAGE_CAPTURE_ABORTED = 'Playback evidence capture aborted';
++const gunzipAsync = promisify(gunzip);
++
++function isMissingFileError(error) {
++  return error?.code === ERROR_CODE_MISSING_FILE;
++}
++
++function gzipPlaybackEvidencePath(logicalPath) {
++  return logicalPath.endsWith(GZIP_SUFFIX) ?
++    logicalPath :
++    logicalPath + GZIP_SUFFIX;
++}
++
++function resolvePlaybackEvidencePathSync(requestedPath) {
++  try {
++    lstatSync(requestedPath);
++    return requestedPath;
++  } catch (error) {
++    if (!isMissingFileError(error)) {
++      throw error;
++    }
++  }
++  if (requestedPath.endsWith(GZIP_SUFFIX)) {
++    return null;
++  }
++  const compressedPath = gzipPlaybackEvidencePath(requestedPath);
++  try {
++    lstatSync(compressedPath);
++    return compressedPath;
++  } catch (error) {
++    if (isMissingFileError(error)) {
++      return null;
++    }
++    throw error;
++  }
++}
++
++async function resolvePlaybackEvidencePath(requestedPath) {
++  try {
++    await lstat(requestedPath);
++    return requestedPath;
++  } catch (error) {
++    if (!isMissingFileError(error)) {
++      throw error;
++    }
++  }
++  if (requestedPath.endsWith(GZIP_SUFFIX)) {
++    return null;
++  }
++  const compressedPath = gzipPlaybackEvidencePath(requestedPath);
++  try {
++    await lstat(compressedPath);
++    return compressedPath;
++  } catch (error) {
++    if (isMissingFileError(error)) {
++      return null;
++    }
++    throw error;
++  }
++}
++
++function requireResolvedPath(requestedPath, resolvedPath) {
++  if (resolvedPath) {
++    return resolvedPath;
++  }
++  readFileSync(requestedPath);
++  return requestedPath;
++}
++
++function readPlaybackEvidenceFileSync(requestedPath, encoding = UTF8_ENCODING) {
++  const resolvedPath = requireResolvedPath(
++    requestedPath,
++    resolvePlaybackEvidencePathSync(requestedPath),
++  );
++  const payload = readFileSync(resolvedPath);
++  const decoded = resolvedPath.endsWith(GZIP_SUFFIX) ?
++    gunzipSync(payload) :
++    payload;
++  return encoding ? decoded.toString(encoding) : decoded;
++}
++
++async function readPlaybackEvidenceFile(requestedPath, encoding = UTF8_ENCODING) {
++  const resolvedPath = await resolvePlaybackEvidencePath(requestedPath);
++  const payload = await readFile(resolvedPath || requestedPath);
++  const decoded = resolvedPath?.endsWith(GZIP_SUFFIX) ?
++    await gunzipAsync(payload) :
++    payload;
++  return encoding ? decoded.toString(encoding) : decoded;
++}
++
++class CompleteNdjsonRecords extends Transform {
++  constructor() {
++    super();
++    this._remainder = EMPTY_BUFFER;
++  }
++
++  _transform(chunk, _encoding, callback) {
++    const combined = this._remainder.length === 0 ?
++      chunk :
++      Buffer.concat([this._remainder, chunk]);
++    const lastNewline = combined.lastIndexOf(NEWLINE);
++    if (lastNewline < 0) {
++      this._remainder = combined;
++      callback();
++      return;
++    }
++    this.push(combined.subarray(0, lastNewline + 1));
++    this._remainder = combined.subarray(lastNewline + 1);
++    callback();
++  }
++}
++
++function pipeWithErrorForwarding(source, destination) {
++  source.on(STREAM_EVENT_ERROR, (error) => destination.destroy(error));
++  // Tear the producer down when the consumer goes away so an aborted
++  // download can never leak the underlying file descriptor.
++  destination.on(STREAM_EVENT_CLOSE, () => source.destroy());
++  return source.pipe(destination);
++}
++
++async function createPlaybackEvidenceReadStream(requestedPath, options = {}) {
++  const resolvedPath = await resolvePlaybackEvidencePath(requestedPath);
++  const filePath = resolvedPath || requestedPath;
++  const source = createReadStream(filePath);
++  if (!filePath.endsWith(GZIP_SUFFIX)) {
++    return source;
++  }
++  const active = options.allowIncomplete === true;
++  const gunzipOptions = active ?
++    {finishFlush: zlibConstants.Z_SYNC_FLUSH} :
++    {};
++  const decoded = pipeWithErrorForwarding(source, createGunzip(gunzipOptions));
++  return active ?
++    pipeWithErrorForwarding(decoded, new CompleteNdjsonRecords()) :
++    decoded;
++}
++
++function waitForWrite(stream, value) {
++  let resolveWrite;
++  let rejectWrite;
++  const callbackResult = new Promise((resolve, reject) => {
++    resolveWrite = resolve;
++    rejectWrite = reject;
++  });
++  const accepted = stream.write(value, (error) => {
++    if (error) {
++      rejectWrite(error);
++      return;
++    }
++    resolveWrite();
++  });
++  const drainResult = accepted ?
++    Promise.resolve() :
++    once(stream, STREAM_EVENT_DRAIN);
++  return Promise.all([callbackResult, drainResult]);
++}
++
++function flushGzip(stream) {
++  return new Promise((resolve, reject) => {
++    stream.flush(zlibConstants.Z_SYNC_FLUSH, (error) => {
++      if (error) {
++        reject(error);
++        return;
++      }
++      resolve();
++    });
++  });
++}
++
++async function createPlaybackEvidenceWriter(targetPath) {
++  const destination = createWriteStream(targetPath, {
++    flags: FILE_FLAGS_TRUNCATE,
++  });
++  const gzip = createGzip();
++  const pipelineResult = pipeline(gzip, destination);
++  pipelineResult.catch(() => {});
++  await Promise.race([
++    once(destination, STREAM_EVENT_OPEN),
++    pipelineResult.then(() => {
++      throw new Error(ERROR_MESSAGE_OUTPUT_CLOSED_EARLY);
++    }),
++  ]);
++
++  let tail = Promise.resolve();
++  let closed = false;
++  let failure = null;
++  const latchFailure = (error) => {
++    failure ||= error;
++  };
++
++  return {
++    path: targetPath,
++    appendRecord(record) {
++      if (closed) {
++        return Promise.reject(new Error(ERROR_MESSAGE_WRITER_CLOSED));
++      }
++      tail = tail.then(async () => {
++        if (failure) {
++          throw failure;
++        }
++        await waitForWrite(gzip, JSON.stringify(record) + NEWLINE);
++        await flushGzip(gzip);
++      });
++      tail.catch(latchFailure);
++      return tail;
++    },
++    async close() {
++      closed = true;
++      await tail;
++      gzip.end();
++      await pipelineResult;
++      if (failure) {
++        throw failure;
++      }
++    },
++    async abort() {
++      closed = true;
++      gzip.destroy(failure || new Error(ERROR_MESSAGE_CAPTURE_ABORTED));
++      await pipelineResult.catch(() => {});
++      await rm(targetPath, {force: true});
++    },
++  };
++}
++
++export {
++  createPlaybackEvidenceReadStream,
++  createPlaybackEvidenceWriter,
++  gzipPlaybackEvidencePath,
++  readPlaybackEvidenceFile,
++  readPlaybackEvidenceFileSync,
++  resolvePlaybackEvidencePath,
++  resolvePlaybackEvidencePathSync,
++};
+diff --git a/test/admin/admin-test-run-output-asset.test.js b/test/admin/admin-test-run-output-asset.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..70add175dd9fbdfac33333a381347f39af177bf8
+--- /dev/null
++++ b/test/admin/admin-test-run-output-asset.test.js
+@@ -0,0 +1,198 @@
++/**
++ * Output-asset serving tests for AdminTestRunService: legacy plain
++ * playback evidence, compressed sibling fallback, running-run
++ * incomplete-gzip tolerance, and strict decoding for archived evidence.
++ */
++
++import {Buffer} from 'node:buffer';
++import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
++import {tmpdir} from 'node:os';
++import {join} from 'node:path';
++import {gzipSync} from 'node:zlib';
++import {test} from '../../src/test-helpers/tap.js';
++import {AdminTestRunService} from '../../src/admin/admin-test-run-service.js';
++import {
++  createPlaybackEvidenceWriter,
++} from '../../src/diagnostics/playback-evidence-file.js';
++
++const TMP_PREFIX = 'lagrange-admin-output-asset-';
++const SCENARIO_RELATIVE_DIR = '.playback/run-1/rolling-restart';
++const SNAPSHOTS_WILDCARD = `${SCENARIO_RELATIVE_DIR}/snapshots.ndjson`;
++const SNAPSHOTS_GZ_WILDCARD = `${SNAPSHOTS_WILDCARD}.gz`;
++const NDJSON_CONTENT_TYPE = 'application/x-ndjson; charset=utf-8';
++const PLAIN_EVIDENCE = '{"seq":1}\n{"seq":2}\n';
++const RUN_ID = 'run-1';
++
++async function createWorkspace() {
++  const root = await mkdtemp(join(tmpdir(), TMP_PREFIX));
++  await mkdir(
++    join(root, 'test-output', SCENARIO_RELATIVE_DIR),
++    {recursive: true},
++  );
++  return root;
++}
++
++function snapshotsAbsolutePath(root, suffix = '') {
++  return join(root, 'test-output', `${SNAPSHOTS_WILDCARD}${suffix}`);
++}
++
++async function collectBody(body) {
++  if (Buffer.isBuffer(body)) {
++    return body;
++  }
++  const chunks = [];
++  for await (const chunk of body) {
++    chunks.push(chunk);
++  }
++  return Buffer.concat(chunks);
++}
++
++async function writeActiveGzipBytes(root, records) {
++  const targetPath = snapshotsAbsolutePath(root, '.gz');
++  const writer = await createPlaybackEvidenceWriter(targetPath);
++  for (const record of records) {
++    await writer.appendRecord(record);
++  }
++  const activeBytes = await readFile(targetPath);
++  await writer.abort();
++  await writeFile(targetPath, activeBytes);
++  return activeBytes;
++}
++
++function registerRun(service, status) {
++  service.runs.set(RUN_ID, {
++    runId: RUN_ID,
++    status,
++    playbackSnapshotsPath: join('test-output', SNAPSHOTS_WILDCARD),
++  });
++}
++
++test('readOutputAsset serves legacy plain evidence unchanged', async (t) => {
++  const root = await createWorkspace();
++  t.teardown(() => rm(root, {recursive: true, force: true}));
++  await writeFile(snapshotsAbsolutePath(root), PLAIN_EVIDENCE);
++  const service = new AdminTestRunService({workspaceRoot: root});
++
++  const payload = await service.readOutputAsset(SNAPSHOTS_WILDCARD);
++  t.ok(payload, 'plain evidence should be served');
++  t.equal(payload.contentType, NDJSON_CONTENT_TYPE);
++  t.equal((await collectBody(payload.body)).toString('utf8'), PLAIN_EVIDENCE);
++});
++
++test('readOutputAsset decodes an archived gzip sibling strictly', async (t) => {
++  const root = await createWorkspace();
++  t.teardown(() => rm(root, {recursive: true, force: true}));
++  await writeFile(
++    snapshotsAbsolutePath(root, '.gz'), gzipSync(PLAIN_EVIDENCE));
++  const service = new AdminTestRunService({workspaceRoot: root});
++
++  const payload = await service.readOutputAsset(SNAPSHOTS_WILDCARD);
++  t.ok(payload, 'archived compressed evidence should be served');
++  t.equal(payload.contentType, NDJSON_CONTENT_TYPE);
++  t.equal((await collectBody(payload.body)).toString('utf8'), PLAIN_EVIDENCE);
++});
++
++test('readOutputAsset prefers the exact plain file over the gz sibling', async (t) => {
++  const root = await createWorkspace();
++  t.teardown(() => rm(root, {recursive: true, force: true}));
++  await writeFile(snapshotsAbsolutePath(root), PLAIN_EVIDENCE);
++  await writeFile(
++    snapshotsAbsolutePath(root, '.gz'), gzipSync('{"other":true}\n'));
++  const service = new AdminTestRunService({workspaceRoot: root});
++
++  const payload = await service.readOutputAsset(SNAPSHOTS_WILDCARD);
++  t.equal((await collectBody(payload.body)).toString('utf8'), PLAIN_EVIDENCE);
++});
++
++test('readOutputAsset tolerates an incomplete tail only for a running run', async (t) => {
++  const root = await createWorkspace();
++  t.teardown(() => rm(root, {recursive: true, force: true}));
++  const activeBytes = await writeActiveGzipBytes(root, [
++    {seq: 1},
++    {seq: 2, marker: 'tail'},
++  ]);
++  await writeFile(
++    snapshotsAbsolutePath(root, '.gz'),
++    activeBytes.subarray(0, activeBytes.length - 6),
++  );
++  const service = new AdminTestRunService({workspaceRoot: root});
++  registerRun(service, 'running');
++
++  const payload = await service.readOutputAsset(SNAPSHOTS_WILDCARD);
++  t.ok(payload, 'active evidence should be served');
++  const text = (await collectBody(payload.body)).toString('utf8');
++  const lines = text.split('\n').filter((line) => line.length > 0);
++  t.ok(lines.length >= 1, 'at least one complete record is visible');
++  for (const line of lines) {
++    t.doesNotThrow(() => JSON.parse(line), 'every served line is complete');
++  }
++});
++
++test('readOutputAsset decodes strictly when the run is not running', async (t) => {
++  const root = await createWorkspace();
++  t.teardown(() => rm(root, {recursive: true, force: true}));
++  const activeBytes = await writeActiveGzipBytes(root, [{seq: 1}]);
++  await writeFile(snapshotsAbsolutePath(root, '.gz'), activeBytes);
++  const service = new AdminTestRunService({workspaceRoot: root});
++  registerRun(service, 'failed');
++
++  const payload = await service.readOutputAsset(SNAPSHOTS_WILDCARD);
++  t.ok(payload, 'payload resolves before decoding begins');
++  await t.rejects(
++    collectBody(payload.body),
++    'unfinalized evidence must fail strict decoding for finished runs',
++  );
++});
++
++test('readOutputAsset decodes strictly when no run is registered', async (t) => {
++  const root = await createWorkspace();
++  t.teardown(() => rm(root, {recursive: true, force: true}));
++  const activeBytes = await writeActiveGzipBytes(root, [{seq: 1}]);
++  await writeFile(snapshotsAbsolutePath(root, '.gz'), activeBytes);
++  const service = new AdminTestRunService({workspaceRoot: root});
++
++  const payload = await service.readOutputAsset(SNAPSHOTS_WILDCARD);
++  t.ok(payload);
++  await t.rejects(
++    collectBody(payload.body),
++    'offline evidence must use strict decoding',
++  );
++});
++
++test('readOutputAsset never falls back on corrupt archives', async (t) => {
++  const root = await createWorkspace();
++  t.teardown(() => rm(root, {recursive: true, force: true}));
++  const corrupt = gzipSync(PLAIN_EVIDENCE);
++  corrupt[corrupt.length - 5] ^= 0xff;
++  await writeFile(snapshotsAbsolutePath(root, '.gz'), corrupt);
++  const service = new AdminTestRunService({workspaceRoot: root});
++  registerRun(service, 'running');
++
++  const payload = await service.readOutputAsset(SNAPSHOTS_WILDCARD);
++  t.ok(payload);
++  await t.rejects(
++    collectBody(payload.body),
++    'corruption must surface as an error, not a fallback',
++  );
++});
++
++test('readOutputAsset serves explicit gz requests as raw bytes', async (t) => {
++  const root = await createWorkspace();
++  t.teardown(() => rm(root, {recursive: true, force: true}));
++  const compressed = gzipSync(PLAIN_EVIDENCE);
++  await writeFile(snapshotsAbsolutePath(root, '.gz'), compressed);
++  const service = new AdminTestRunService({workspaceRoot: root});
++
++  const payload = await service.readOutputAsset(SNAPSHOTS_GZ_WILDCARD);
++  t.ok(payload, 'explicit gz path should be served');
++  t.ok((await collectBody(payload.body)).equals(compressed));
++});
++
++test('readOutputAsset returns null when no artifact exists', async (t) => {
++  const root = await createWorkspace();
++  t.teardown(() => rm(root, {recursive: true, force: true}));
++  const service = new AdminTestRunService({workspaceRoot: root});
++
++  t.equal(await service.readOutputAsset(SNAPSHOTS_WILDCARD), null);
++  t.equal(await service.readOutputAsset(SNAPSHOTS_GZ_WILDCARD), null);
++});
+diff --git a/test/diagnostics/playback-evidence-file.test.js b/test/diagnostics/playback-evidence-file.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..290eddb11afaf7f2f0666d98f12bc72c582cb50d
+--- /dev/null
++++ b/test/diagnostics/playback-evidence-file.test.js
+@@ -0,0 +1,268 @@
++import {describe, it, beforeEach, afterEach} from 'node:test';
++import assert from 'node:assert/strict';
++import {mkdtemp, readdir, readFile, rm, stat, writeFile} from 'node:fs/promises';
++import {createReadStream} from 'node:fs';
++import {once} from 'node:events';
++import {randomBytes} from 'node:crypto';
++import os from 'node:os';
++import path from 'node:path';
++import {gzipSync} from 'node:zlib';
++import {
++  createPlaybackEvidenceReadStream,
++  createPlaybackEvidenceWriter,
++  gzipPlaybackEvidencePath,
++  readPlaybackEvidenceFile,
++  readPlaybackEvidenceFileSync,
++  resolvePlaybackEvidencePath,
++  resolvePlaybackEvidencePathSync,
++} from '../../src/diagnostics/playback-evidence-file.js';
++
++const TMP_PREFIX = 'playback-evidence-file-';
++const LOGICAL_NAME = 'snapshots.ndjson';
++const PLAIN_CONTENT = '{"seq":1}\n{"seq":2}\n';
++const COMPRESSED_CONTENT = '{"seq":10}\n{"seq":11}\n';
++const ERROR_CODE_MISSING = 'ENOENT';
++
++async function collectStream(stream) {
++  const chunks = [];
++  for await (const chunk of stream) {
++    chunks.push(chunk);
++  }
++  return Buffer.concat(chunks).toString('utf8');
++}
++
++describe('playback evidence file owner', () => {
++  let workspace;
++  let logicalPath;
++  let compressedPath;
++
++  beforeEach(async () => {
++    workspace = await mkdtemp(path.join(os.tmpdir(), TMP_PREFIX));
++    logicalPath = path.join(workspace, LOGICAL_NAME);
++    compressedPath = gzipPlaybackEvidencePath(logicalPath);
++  });
++
++  afterEach(async () => {
++    await rm(workspace, {recursive: true, force: true});
++  });
++
++  describe('resolver precedence matrix', () => {
++    it('prefers the exact plain file even when a gz sibling exists', async () => {
++      await writeFile(logicalPath, PLAIN_CONTENT);
++      await writeFile(compressedPath, gzipSync(COMPRESSED_CONTENT));
++      assert.equal(resolvePlaybackEvidencePathSync(logicalPath), logicalPath);
++      assert.equal(await resolvePlaybackEvidencePath(logicalPath), logicalPath);
++    });
++
++    it('falls back to the gz sibling when the plain file is missing', async () => {
++      await writeFile(compressedPath, gzipSync(COMPRESSED_CONTENT));
++      assert.equal(
++        resolvePlaybackEvidencePathSync(logicalPath), compressedPath);
++      assert.equal(
++        await resolvePlaybackEvidencePath(logicalPath), compressedPath);
++    });
++
++    it('resolves explicit gz paths exact-only', async () => {
++      await writeFile(logicalPath, PLAIN_CONTENT);
++      assert.equal(resolvePlaybackEvidencePathSync(compressedPath), null);
++      assert.equal(await resolvePlaybackEvidencePath(compressedPath), null);
++      await writeFile(compressedPath, gzipSync(COMPRESSED_CONTENT));
++      assert.equal(
++        resolvePlaybackEvidencePathSync(compressedPath), compressedPath);
++      assert.equal(
++        await resolvePlaybackEvidencePath(compressedPath), compressedPath);
++    });
++
++    it('returns null when neither artifact exists', async () => {
++      assert.equal(resolvePlaybackEvidencePathSync(logicalPath), null);
++      assert.equal(await resolvePlaybackEvidencePath(logicalPath), null);
++    });
++  });
++
++  describe('sync and async read compatibility', () => {
++    it('reads legacy plain evidence identically in both modes', async () => {
++      await writeFile(logicalPath, PLAIN_CONTENT);
++      assert.equal(readPlaybackEvidenceFileSync(logicalPath), PLAIN_CONTENT);
++      assert.equal(
++        await readPlaybackEvidenceFile(logicalPath), PLAIN_CONTENT);
++    });
++
++    it('reads compressed evidence through the logical path', async () => {
++      await writeFile(compressedPath, gzipSync(COMPRESSED_CONTENT));
++      assert.equal(
++        readPlaybackEvidenceFileSync(logicalPath), COMPRESSED_CONTENT);
++      assert.equal(
++        await readPlaybackEvidenceFile(logicalPath), COMPRESSED_CONTENT);
++    });
++
++    it('reads an explicit gz path directly', async () => {
++      await writeFile(compressedPath, gzipSync(COMPRESSED_CONTENT));
++      assert.equal(
++        readPlaybackEvidenceFileSync(compressedPath), COMPRESSED_CONTENT);
++      assert.equal(
++        await readPlaybackEvidenceFile(compressedPath), COMPRESSED_CONTENT);
++    });
++
++    it('throws ENOENT for missing evidence in both modes', async () => {
++      assert.throws(
++        () => readPlaybackEvidenceFileSync(logicalPath),
++        {code: ERROR_CODE_MISSING},
++      );
++      await assert.rejects(
++        readPlaybackEvidenceFile(logicalPath),
++        {code: ERROR_CODE_MISSING},
++      );
++    });
++
++    it('surfaces corruption instead of falling back', async () => {
++      const corrupt = gzipSync(COMPRESSED_CONTENT);
++      corrupt[corrupt.length - 5] ^= 0xff;
++      await writeFile(compressedPath, corrupt);
++      await writeFile(logicalPath + '.unrelated', PLAIN_CONTENT);
++      assert.throws(() => readPlaybackEvidenceFileSync(logicalPath));
++      await assert.rejects(readPlaybackEvidenceFile(logicalPath));
++    });
++  });
++
++  describe('writer', () => {
++    it('preserves append ordering across serialized writes', async () => {
++      const writer = await createPlaybackEvidenceWriter(compressedPath);
++      const total = 50;
++      await Promise.all(
++        Array.from({length: total}, (_v, index) =>
++          writer.appendRecord({seq: index})),
++      );
++      await writer.close();
++      const lines = readPlaybackEvidenceFileSync(logicalPath)
++        .split('\n')
++        .filter((line) => line.length > 0)
++        .map((line) => JSON.parse(line).seq);
++      assert.deepEqual(lines, Array.from({length: total}, (_v, i) => i));
++    });
++
++    it('absorbs large-record backpressure without loss', async () => {
++      const writer = await createPlaybackEvidenceWriter(compressedPath);
++      const bigPayload = 'x'.repeat(1024 * 1024);
++      for (let index = 0; index < 4; index++) {
++        await writer.appendRecord({seq: index, payload: bigPayload});
++      }
++      await writer.close();
++      const records = readPlaybackEvidenceFileSync(logicalPath)
++        .split('\n')
++        .filter((line) => line.length > 0)
++        .map((line) => JSON.parse(line));
++      assert.equal(records.length, 4);
++      assert.equal(records[3].payload.length, bigPayload.length);
++    });
++
++    it('makes flushed records visible before finalization', async () => {
++      const writer = await createPlaybackEvidenceWriter(compressedPath);
++      await writer.appendRecord({seq: 1});
++      await writer.appendRecord({seq: 2});
++      const activeStream = await createPlaybackEvidenceReadStream(
++        logicalPath, {allowIncomplete: true});
++      const visible = await collectStream(activeStream);
++      assert.equal(visible, '{"seq":1}\n{"seq":2}\n');
++      await writer.close();
++    });
++
++    it('produces a strictly decodable stream after close', async () => {
++      const writer = await createPlaybackEvidenceWriter(compressedPath);
++      await writer.appendRecord({seq: 1});
++      await writer.close();
++      const strictStream =
++        await createPlaybackEvidenceReadStream(logicalPath);
++      assert.equal(await collectStream(strictStream), '{"seq":1}\n');
++    });
++
++    it('rejects appends after close', async () => {
++      const writer = await createPlaybackEvidenceWriter(compressedPath);
++      await writer.close();
++      await assert.rejects(writer.appendRecord({seq: 1}));
++    });
++
++    it('abort removes the partially written artifact', async () => {
++      const writer = await createPlaybackEvidenceWriter(compressedPath);
++      await writer.appendRecord({seq: 1});
++      await writer.abort();
++      await assert.rejects(stat(compressedPath), {code: ERROR_CODE_MISSING});
++    });
++  });
++
++  describe('read streams', () => {
++    it('strict decoding rejects an unfinalized gzip stream', async () => {
++      const writer = await createPlaybackEvidenceWriter(compressedPath);
++      await writer.appendRecord({seq: 1});
++      const activeBytes = await readFile(compressedPath);
++      await writer.abort();
++      await writeFile(compressedPath, activeBytes);
++      const strictStream =
++        await createPlaybackEvidenceReadStream(logicalPath);
++      await assert.rejects(collectStream(strictStream));
++    });
++
++    it('incomplete decoding emits only newline-complete records', async () => {
++      const writer = await createPlaybackEvidenceWriter(compressedPath);
++      await writer.appendRecord({seq: 1});
++      await writer.appendRecord({seq: 2, marker: 'tail-record'});
++      const activeBytes = await readFile(compressedPath);
++      await writer.abort();
++      // Simulate a mid-write capture: drop trailing bytes of the tail flush.
++      await writeFile(
++        compressedPath, activeBytes.subarray(0, activeBytes.length - 6));
++      const activeStream = await createPlaybackEvidenceReadStream(
++        logicalPath, {allowIncomplete: true});
++      const visible = await collectStream(activeStream);
++      const lines = visible.split('\n').filter((line) => line.length > 0);
++      assert.ok(lines.length >= 1);
++      for (const line of lines) {
++        assert.doesNotThrow(() => JSON.parse(line));
++      }
++      assert.equal(JSON.parse(lines[0]).seq, 1);
++    });
++
++    it('streams plain evidence unchanged', async () => {
++      await writeFile(logicalPath, PLAIN_CONTENT);
++      const stream = await createPlaybackEvidenceReadStream(logicalPath);
++      assert.equal(await collectStream(stream), PLAIN_CONTENT);
++      assert.ok(stream instanceof createReadStream(logicalPath).constructor);
++    });
++
++    it('destroying a decoded stream releases the file descriptor', async () => {
++      const writer = await createPlaybackEvidenceWriter(compressedPath);
++      // Incompressible payloads keep the artifact multi-chunk so the
++      // source stream cannot drain on the first read.
++      for (let index = 0; index < 8; index++) {
++        await writer.appendRecord({
++          seq: index,
++          bulk: randomBytes(256 * 1024).toString('hex'),
++        });
++      }
++      await writer.close();
++
++      const fdDir = '/proc/self/fd';
++      let baselineFdCount;
++      try {
++        baselineFdCount = (await readdir(fdDir)).length;
++      } catch {
++        return; // fd introspection unavailable on this platform
++      }
++
++      for (let index = 0; index < 10; index++) {
++        const stream = await createPlaybackEvidenceReadStream(
++          logicalPath, {allowIncomplete: index % 2 === 0});
++        await once(stream, 'data');
++        stream.destroy();
++        await once(stream, 'close');
++      }
++      await new Promise((resolve) => setTimeout(resolve, 50));
++
++      const finalFdCount = (await readdir(fdDir)).length;
++      assert.ok(
++        finalFdCount <= baselineFdCount + 1,
++        'aborted decoded streams leaked file descriptors: ' +
++          `${baselineFdCount} -> ${finalFdCount}`,
++      );
++    });
++  });
++});
+diff --git a/test/distributed/harness/__tests__/playback-evidence-consumer-parity.test.js b/test/distributed/harness/__tests__/playback-evidence-consumer-parity.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a568c1018683098894855d9c6d7cadd3d576d920
+--- /dev/null
++++ b/test/distributed/harness/__tests__/playback-evidence-consumer-parity.test.js
+@@ -0,0 +1,218 @@
++/**
++ * Compressed playback evidence consumer-parity tests.
++ *
++ * Every consumer family of `snapshots.ndjson` evidence must produce
++ * semantically identical results whether the artifact is retained as
++ * legacy plain NDJSON or captured as the compressed `.gz` sibling, and
++ * must discover compressed-only runs. Also pins the byte equality of the
++ * two playback viewer copies and their local gzip loading support.
++ */
++
++import {test} from '../../../../src/test-helpers/tap.js';
++import assert from 'node:assert/strict';
++import {execFile} from 'node:child_process';
++import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
++import {tmpdir} from 'node:os';
++import {dirname, join, resolve} from 'node:path';
++import {fileURLToPath} from 'node:url';
++import {promisify} from 'node:util';
++import {gzipSync} from 'node:zlib';
++import {
++  collectPlaybackSnapshotInsights,
++} from '../failure-bundle-playback-insights.js';
++import {
++  replayPublicationPriorityEvidenceFromReportDir,
++} from '../publication-evidence-replay.js';
++
++const arrayMap = Function.call.bind(Array.prototype.map);
++const stringIncludes = Function.call.bind(String.prototype.includes);
++const execFileAsync = promisify(execFile);
++const MODULE_DIR = dirname(fileURLToPath(import.meta.url));
++const REPO_ROOT = resolve(MODULE_DIR, '../../../..');
++const SNAPSHOTS_FILENAME = 'snapshots.ndjson';
++const SNAPSHOTS_GZ_FILENAME = 'snapshots.ndjson.gz';
++const TMP_PREFIX = 'playback-consumer-parity-';
++
++const TERMINAL_SNAPSHOT = {
++  timestamp: 100,
++  partitions: [
++    {partition_id: 'p1', leader_node: 'n1', leader_node_id: 'n1'},
++    {partition_id: 'p2', leader_node: 'n2', leader_node_id: 'n2'},
++  ],
++  replicaOperations: [
++    {partition_id: 'p1', type: 'REPLACE', workflow_step: 'PENDING'},
++  ],
++  services: [
++    {partition_id: 'p1', replica_id: 'r1', status: 'active'},
++  ],
++};
++const SNAPSHOT_NDJSON = JSON.stringify(TERMINAL_SNAPSHOT) + '\n';
++
++async function withEvidenceVariants(writeFixture, evaluate) {
++  const root = await mkdtemp(join(tmpdir(), TMP_PREFIX));
++  try {
++    await writeFixture(root, SNAPSHOTS_FILENAME, SNAPSHOT_NDJSON);
++    const plainResult = await evaluate(root);
++    await rm(root, {recursive: true, force: true});
++    await mkdir(root, {recursive: true});
++    await writeFixture(
++      root, SNAPSHOTS_GZ_FILENAME, gzipSync(SNAPSHOT_NDJSON));
++    const compressedResult = await evaluate(root);
++    return {plainResult, compressedResult};
++  } finally {
++    await rm(root, {recursive: true, force: true});
++  }
++}
++
++test('failure-bundle playback insights read compressed evidence identically', async () => {
++  const entry = {
++    details: {
++      diagnostics: {
++        controlPlaneDiagnostics: {
++          publicationConvergence: {converged: false},
++        },
++      },
++    },
++  };
++  const {plainResult, compressedResult} = await withEvidenceVariants(
++    async (root, filename, content) => {
++      await writeFile(join(root, filename), content);
++    },
++    (root) => collectPlaybackSnapshotInsights(root, entry),
++  );
++  assert.ok(plainResult, 'plain evidence should produce insights');
++  assert.deepEqual(compressedResult, plainResult);
++});
++
++test('publication evidence replay reads compressed evidence identically', async () => {
++  const {plainResult, compressedResult} = await withEvidenceVariants(
++    async (root, filename, content) => {
++      await writeFile(
++        join(root, 'failure-bundle.json'), JSON.stringify({}) + '\n');
++      await writeFile(join(root, filename), content);
++    },
++    async (root) => {
++      const replay =
++        await replayPublicationPriorityEvidenceFromReportDir(root);
++      // The report directory differs between variants by design.
++      return {...replay, reportDir: null};
++    },
++  );
++  assert.ok(plainResult, 'plain evidence should replay');
++  assert.equal(plainResult.source, 'snapshot');
++  assert.deepEqual(compressedResult, plainResult);
++});
++
++test('analyze-replace-ghost-retirements discovers and reads compressed-only runs', async () => {
++  const {plainResult, compressedResult} = await withEvidenceVariants(
++    async (root, filename, content) => {
++      await mkdir(join(root, 'scenario'), {recursive: true});
++      await writeFile(join(root, 'scenario', filename), content);
++    },
++    async (root) => {
++      const {stdout} = await execFileAsync(process.execPath, [
++        join(REPO_ROOT, 'scripts/analyze-replace-ghost-retirements.js'),
++        root,
++      ], {cwd: REPO_ROOT});
++      return JSON.parse(stdout);
++    },
++  );
++  assert.equal(plainResult.witness, 'cl-023-replace-ghost-retirements');
++  assert.deepEqual(compressedResult, plainResult);
++});
++
++test('analyze-leadership-flap discovers and reads compressed-only runs', async () => {
++  const frames = arrayMap([
++    {timestamp: 1000, partitions: [{partition_id: 'p1', leader_node: 'n1'}]},
++    {timestamp: 4000, partitions: [{partition_id: 'p1', leader_node: 'n2'}]},
++  ], (frame) => JSON.stringify(frame)).join('\n') + '\n';
++  const evaluate = async (root) => {
++    const {stdout} = await execFileAsync(process.execPath, [
++      join(REPO_ROOT, 'scripts/analyze-leadership-flap.js'),
++      '--dir', root,
++      '--out', join(root, 'verdict.json'),
++      '--json',
++    ], {cwd: REPO_ROOT});
++    return JSON.parse(stdout);
++  };
++  const writeFrames = async (root, compressed) => {
++    const runDir = join(root, 'run-a', 'rolling-restart');
++    await mkdir(runDir, {recursive: true});
++    await writeFile(join(runDir, 'events.ndjson'), '');
++    if (compressed) {
++      await writeFile(join(runDir, SNAPSHOTS_GZ_FILENAME), gzipSync(frames));
++    } else {
++      await writeFile(join(runDir, SNAPSHOTS_FILENAME), frames);
++    }
++  };
++
++  const root = await mkdtemp(join(tmpdir(), TMP_PREFIX));
++  try {
++    await writeFrames(root, false);
++    const plainResult = await evaluate(root);
++    await rm(root, {recursive: true, force: true});
++    await writeFrames(root, true);
++    const compressedResult = await evaluate(root);
++    assert.equal(plainResult.runsAnalyzed, 1);
++    assert.equal(compressedResult.runsAnalyzed, 1,
++      'compressed-only run must be discovered');
++    assert.deepEqual(compressedResult, plainResult);
++  } finally {
++    await rm(root, {recursive: true, force: true});
++  }
++});
++
++test('passfail-leadership-score reads compressed-only corpus runs', async () => {
++  const evaluate = async (root) => {
++    const {stdout} = await execFileAsync(process.execPath, [
++      join(REPO_ROOT, 'scripts/census/passfail-leadership-score.mjs'),
++    ], {cwd: root});
++    return JSON.parse(stdout);
++  };
++  const writeCorpus = async (root, compressed) => {
++    const reports = join(root, 'test-output', 'reports');
++    const runDir = join(reports, '.playback', 'run-x', 'rolling-restart');
++    await mkdir(runDir, {recursive: true});
++    await writeFile(
++      join(reports, 'passfail-census-features.json'),
++      JSON.stringify([
++        {file: 'run-x.report.json', verdict: 'PASS'},
++        {file: 'run-y.report.json', verdict: 'FAIL'},
++      ]),
++    );
++    const filename = compressed ? SNAPSHOTS_GZ_FILENAME : SNAPSHOTS_FILENAME;
++    const content = compressed ?
++      gzipSync(SNAPSHOT_NDJSON) : SNAPSHOT_NDJSON;
++    await writeFile(join(runDir, filename), content);
++  };
++
++  const root = await mkdtemp(join(tmpdir(), TMP_PREFIX));
++  try {
++    await writeCorpus(root, false);
++    const plainResult = await evaluate(root);
++    await rm(root, {recursive: true, force: true});
++    await writeCorpus(root, true);
++    const compressedResult = await evaluate(root);
++    assert.equal(plainResult.corpus.measured, 1);
++    assert.equal(compressedResult.corpus.measured, 1,
++      'compressed-only corpus run must stay observable');
++    assert.deepEqual(compressedResult, plainResult);
++  } finally {
++    await rm(root, {recursive: true, force: true});
++  }
++});
++
++test('playback viewer copies stay byte-identical and gzip-capable', async () => {
++  const adminViewer = await readFile(
++    join(REPO_ROOT, 'src/admin/static/playback-viewer.html'));
++  const harnessViewer = await readFile(
++    join(REPO_ROOT, 'test/distributed/harness/playback-viewer.html'));
++  assert.ok(adminViewer.equals(harnessViewer),
++    'admin and harness playback viewers must be byte-identical');
++  const viewerSource = adminViewer.toString('utf8');
++  assert.ok(stringIncludes(viewerSource, 'DecompressionStream(\'gzip\')'),
++    'viewer must decompress local .gz selections in the browser');
++  assert.ok(
++    stringIncludes(viewerSource, 'accept=".ndjson,.jsonl,.txt,.gz"'),
++    'snapshots file input must accept .gz selections');
++});
+diff --git a/test/distributed/harness/__tests__/playback-recorder.test.js b/test/distributed/harness/__tests__/playback-recorder.test.js
+index 2bf0a1b383b0ef4f0bf64bab05df870ce5ffa400..d9080fe6d0a4a3db296f5fe9f460c1e4b8626665 100644
+--- a/test/distributed/harness/__tests__/playback-recorder.test.js
++++ b/test/distributed/harness/__tests__/playback-recorder.test.js
+@@ -1,13 +1,17 @@
+ import {test} from '../../../../src/test-helpers/tap.js';
+ import assert from 'node:assert/strict';
+-import {mkdtemp, readFile, rm} from 'node:fs/promises';
++import {mkdir, mkdtemp, readFile, rm, stat, writeFile} from 'node:fs/promises';
+ import {tmpdir} from 'node:os';
+ import {join} from 'node:path';
+ import {
+   PlaybackRecorder,
+   diffTopologySnapshots,
+ } from '../playback-recorder.js';
++import {
++  readPlaybackEvidenceFile,
++} from '../../../../src/diagnostics/playback-evidence-file.js';
+ 
++const stringIncludes = Function.call.bind(String.prototype.includes);
+ const EVENT_TYPE_REPLICA_MOVED = 'replica.moved';
+ const EVENT_TYPE_PARTITION_SPLIT = 'partition.split';
+ const EVENT_TYPE_PARTITION_MERGE = 'partition.merge';
+@@ -209,7 +213,7 @@ test('PlaybackRecorder writes playback artifacts and manifest', async () => {
+       },
+     },
+     async query(sql) {
+-      if (sql.includes('FROM nodes')) {
++      if (stringIncludes(sql, 'FROM nodes')) {
+         return {
+           rows: [{
+             node_id: 'node-1',
+@@ -284,7 +288,7 @@ test('PlaybackRecorder writes playback artifacts and manifest', async () => {
+       manifest.files.samples,
+       'utf8',
+     );
+-    const snapshotContent = await readFile(
++    const snapshotContent = await readPlaybackEvidenceFile(
+       manifest.files.snapshots,
+       'utf8',
+     );
+@@ -397,7 +401,7 @@ test('PlaybackRecorder aggregates service rows across reachable nodes', async ()
+     const manifest = await recorder.stop({
+       reason: 'multi-node-service-snapshot',
+     });
+-    const snapshotContent = await readFile(
++    const snapshotContent = await readPlaybackEvidenceFile(
+       manifest.files.snapshots,
+       'utf8',
+     );
+@@ -1062,3 +1066,189 @@ test('PlaybackRecorder truncates scenario playback files on new run', async () =
+     await rm(outputDir, {recursive: true, force: true});
+   }
+ });
++
++function createStatsNode(id) {
++  return {
++    id,
++    containerId: `container-${id}`,
++    _dockerProvider: {
++      async getContainerStats() {
++        return {
++          cpuPercent: 5,
++          memoryUsageBytes: 512,
++          memoryLimitBytes: 2048,
++          rxBytes: 1,
++          txBytes: 2,
++        };
++      },
++    },
++    async query(sql) {
++      if (sql.includes('FROM nodes')) {
++        return {rows: [{node_id: id, status: 'active'}]};
++      }
++      return {rows: []};
++    },
++  };
++}
++
++function createStatsCluster(id = 'node-1') {
++  const node = createStatsNode(id);
++  return {
++    getNodes() {
++      return [node];
++    },
++  };
++}
++
++async function pathExists(candidate) {
++  try {
++    await stat(candidate);
++    return true;
++  } catch (_err) {
++    return false;
++  }
++}
++
++test('PlaybackRecorder captures compressed snapshots behind the logical path', async () => {
++  const outputDir = await mkdtemp(
++    join(tmpdir(), 'playback-recorder-compressed-'),
++  );
++  const recorder = new PlaybackRecorder({
++    outputDir,
++    topologyPollIntervalMs: 60000,
++    resourcePollIntervalMs: 60000,
++  });
++
++  try {
++    await recorder.start({
++      scenarioName: 'compressed-capture',
++      cluster: createStatsCluster(),
++    });
++    const scenarioDir = join(outputDir, 'compressed-capture');
++    assert.equal(
++      await pathExists(join(scenarioDir, 'playback-manifest.json')),
++      false,
++      'manifest must not exist before finalization',
++    );
++    const manifest = await recorder.stop({reason: 'test'});
++
++    assert.equal(
++      manifest.files.snapshots,
++      join(scenarioDir, 'snapshots.ndjson'),
++      'manifest should record the logical snapshots path',
++    );
++    assert.equal(
++      await pathExists(join(scenarioDir, 'snapshots.ndjson')),
++      false,
++      'no plain snapshots artifact should be written',
++    );
++    assert.ok(
++      await pathExists(join(scenarioDir, 'snapshots.ndjson.gz')),
++      'compressed snapshots artifact should exist',
++    );
++    const decoded = await readPlaybackEvidenceFile(
++      manifest.files.snapshots,
++      'utf8',
++    );
++    assert.ok(stringIncludes(decoded, 'partitions'));
++  } finally {
++    await rm(outputDir, {recursive: true, force: true});
++  }
++});
++
++test('PlaybackRecorder rerun invalidates stale plain, gzip, and manifest artifacts', async () => {
++  const outputDir = await mkdtemp(
++    join(tmpdir(), 'playback-recorder-stale-'),
++  );
++  const scenarioDir = join(outputDir, 'stale-artifacts');
++  await mkdir(scenarioDir, {recursive: true});
++  await writeFile(
++    join(scenarioDir, 'snapshots.ndjson'),
++    '{"stale":"plain"}\n',
++  );
++  await writeFile(
++    join(scenarioDir, 'snapshots.ndjson.gz'),
++    'not-a-gzip-payload',
++  );
++  await writeFile(
++    join(scenarioDir, 'playback-manifest.json'),
++    '{"stale":true}\n',
++  );
++
++  const recorder = new PlaybackRecorder({
++    outputDir,
++    topologyPollIntervalMs: 60000,
++    resourcePollIntervalMs: 60000,
++  });
++
++  try {
++    await recorder.start({
++      scenarioName: 'stale-artifacts',
++      cluster: createStatsCluster(),
++    });
++    assert.equal(
++      await pathExists(join(scenarioDir, 'snapshots.ndjson')),
++      false,
++      'stale plain snapshots must be removed at start',
++    );
++    assert.equal(
++      await pathExists(join(scenarioDir, 'playback-manifest.json')),
++      false,
++      'stale manifest must be removed at start',
++    );
++    const manifest = await recorder.stop({reason: 'rerun'});
++    const decoded = await readPlaybackEvidenceFile(
++      manifest.files.snapshots,
++      'utf8',
++    );
++    assert.ok(!stringIncludes(decoded, 'stale'));
++    assert.ok(stringIncludes(decoded, 'partitions'));
++  } finally {
++    await rm(outputDir, {recursive: true, force: true});
++  }
++});
++
++test('PlaybackRecorder latches snapshot storage failures and discards artifacts', async () => {
++  const outputDir = await mkdtemp(
++    join(tmpdir(), 'playback-recorder-storage-fail-'),
++  );
++  const recorder = new PlaybackRecorder({
++    outputDir,
++    topologyPollIntervalMs: 60000,
++    resourcePollIntervalMs: 60000,
++  });
++  const scenarioDir = join(outputDir, 'storage-failure');
++
++  try {
++    await recorder.start({
++      scenarioName: 'storage-failure',
++      cluster: createStatsCluster(),
++    });
++    recorder._snapshotWriter.appendRecord = async () => {
++      throw new Error('simulated snapshot storage failure');
++    };
++    await assert.rejects(
++      recorder.stop({reason: 'storage-failure'}),
++      /simulated snapshot storage failure/,
++      'stop must surface the latched storage failure',
++    );
++    assert.equal(recorder.getManifest(), null);
++    assert.equal(
++      await pathExists(join(scenarioDir, 'playback-manifest.json')),
++      false,
++      'no manifest may describe a failed capture',
++    );
++    assert.equal(
++      await pathExists(join(scenarioDir, 'snapshots.ndjson.gz')),
++      false,
++      'failed compressed artifact must be removed',
++    );
++    assert.equal(
++      await pathExists(join(scenarioDir, 'snapshots.ndjson')),
++      false,
++      'no plain snapshots artifact may remain',
++    );
++  } finally {
++    await rm(outputDir, {recursive: true, force: true});
++  }
++});
+diff --git a/test/distributed/harness/failure-bundle-playback-insights.js b/test/distributed/harness/failure-bundle-playback-insights.js
+index 6263380732fb1362e201e27ed8cd9c81a92cf1d9..b093ac8dfd7e7354befae0eed795bd2abd1f93c2 100644
+--- a/test/distributed/harness/failure-bundle-playback-insights.js
++++ b/test/distributed/harness/failure-bundle-playback-insights.js
+@@ -3,6 +3,9 @@ import {join} from 'node:path';
+ import {
+   OWNER_CONTRACT_STATE,
+ } from '../../../src/control-plane/owner-contract-outcome.js';
++import {
++  readPlaybackEvidenceFile,
++} from '../../../src/diagnostics/playback-evidence-file.js';
+ import {buildPriorityRecoveryDecisionSnapshots as buildSharedPriorityRecoveryDecisionSnapshots} from '../../../src/control-plane/priority-recovery-snapshot.js';
+ import {
+   PRIORITY_RECOVERY_ACTUATION_STATE,
+@@ -582,7 +585,10 @@ async function collectPlaybackSnapshotInsights(scenarioDir, entry) {
+     PLAYBACK_SNAPSHOTS_FILENAME,
+   );
+   try {
+-    const content = await readFile(playbackSnapshotsAbsolutePath, UTF8_ENCODING);
++    const content = await readPlaybackEvidenceFile(
++      playbackSnapshotsAbsolutePath,
++      UTF8_ENCODING,
++    );
+     const latestSnapshot = selectLatestPlaybackSnapshot(
+       parsePlaybackSnapshotStates(content),
+     );
+diff --git a/test/distributed/harness/playback-recorder.js b/test/distributed/harness/playback-recorder.js
+index 4485096ebe408bc6c36bb6e0ce6fd35c4343a5c8..f3560ec524360d1fc7ea02492dbcac8c7bc28c2d 100644
+--- a/test/distributed/harness/playback-recorder.js
++++ b/test/distributed/harness/playback-recorder.js
+@@ -4,7 +4,7 @@
+  */
+ 
+ import {createWriteStream} from 'node:fs';
+-import {copyFile, mkdir, writeFile} from 'node:fs/promises';
++import {copyFile, mkdir, rm, writeFile} from 'node:fs/promises';
+ import {dirname, join} from 'node:path';
+ import {fileURLToPath} from 'node:url';
+ import {
+@@ -12,6 +12,10 @@ import {
+   PLAYBACK,
+   PLAYBACK_EVENT_TYPE,
+ } from './constants.js';
++import {
++  createPlaybackEvidenceWriter,
++  gzipPlaybackEvidencePath,
++} from '../../../src/diagnostics/playback-evidence-file.js';
+ 
+ const NEWLINE = '\n';
+ const STREAM_FLAGS_TRUNCATE = 'w';
+@@ -760,7 +764,9 @@ class PlaybackRecorder {
+ 
+     this._eventsStream = null;
+     this._samplesStream = null;
+-    this._snapshotsStream = null;
++    this._snapshotsLogicalPath = null;
++    this._snapshotWriter = null;
++    this._snapshotStorageFailure = null;
+ 
+     this._eventsCount = 0;
+     this._samplesCount = 0;
+@@ -809,10 +815,13 @@ class PlaybackRecorder {
+       this._scenarioDir,
+       OUTPUT.PLAYBACK_SAMPLES_FILENAME,
+     );
+-    this._snapshotsPath = join(
++    this._snapshotsLogicalPath = join(
+       this._scenarioDir,
+       OUTPUT.PLAYBACK_SNAPSHOTS_FILENAME,
+     );
++    this._snapshotsPath = gzipPlaybackEvidencePath(
++      this._snapshotsLogicalPath,
++    );
+     this._manifestPath = join(
+       this._scenarioDir,
+       OUTPUT.PLAYBACK_MANIFEST_FILENAME,
+@@ -822,18 +831,30 @@ class PlaybackRecorder {
+       OUTPUT.PLAYBACK_VIEWER_FILENAME,
+     );
+ 
+-    this._eventsStream = createWriteStream(this._eventsPath, {
+-      flags: STREAM_FLAGS_TRUNCATE,
+-    });
+-    this._samplesStream = createWriteStream(this._samplesPath, {
+-      flags: STREAM_FLAGS_TRUNCATE,
+-    });
+-    this._snapshotsStream = createWriteStream(this._snapshotsPath, {
+-      flags: STREAM_FLAGS_TRUNCATE,
+-    });
++    await Promise.all([
++      rm(this._snapshotsLogicalPath, {force: true}),
++      rm(this._snapshotsPath, {force: true}),
++      rm(this._manifestPath, {force: true}),
++    ]);
++
++    try {
++      this._eventsStream = createWriteStream(this._eventsPath, {
++        flags: STREAM_FLAGS_TRUNCATE,
++      });
++      this._samplesStream = createWriteStream(this._samplesPath, {
++        flags: STREAM_FLAGS_TRUNCATE,
++      });
++      this._snapshotWriter = await createPlaybackEvidenceWriter(
++        this._snapshotsPath,
++      );
++    } catch (error) {
++      await this._discardFailedCapture();
++      throw error;
++    }
+ 
+     this._startedAt = Date.now();
+     this._started = true;
++    this._snapshotStorageFailure = null;
+     this._adminReadinessObserved = false;
+     this._topologySnapshotObserved = false;
+     this._clusterActiveObserved = false;
+@@ -848,12 +869,17 @@ class PlaybackRecorder {
+       },
+     });
+ 
+-    const skipInitialCapture = Boolean(context.skipInitialCapture);
+-    if (!skipInitialCapture) {
+-      await this._collectTopologySnapshot();
+-      await this._collectResourceSamples();
++    try {
++      const skipInitialCapture = Boolean(context.skipInitialCapture);
++      if (!skipInitialCapture) {
++        await this._collectTopologySnapshot();
++        await this._collectResourceSamples();
++      }
++      this._startPollers();
++    } catch (error) {
++      await this._discardFailedCapture();
++      throw error;
+     }
+-    this._startPollers();
+   }
+ 
+   async stop(summary = {}, options = {}) {
+@@ -861,81 +887,89 @@ class PlaybackRecorder {
+       return this._manifest;
+     }
+ 
+-    const skipFinalCapture = Boolean(options.skipFinalCapture);
+-    if (skipFinalCapture) {
+-      await this.beginShutdown({
+-        awaitInFlightCaptures: true,
+-      });
+-    } else {
+-      this._stopPollers();
+-      await this._awaitCapture('_topologyCapturePromise');
+-      await this._awaitCapture('_resourceCapturePromise');
+-      await this._collectTopologySnapshot();
+-      await this._collectResourceSamples();
+-    }
+-    if (this._shutdownStartedAt === null) {
+-      this._shutdownStartedAt = Date.now();
+-    }
++    try {
++      const skipFinalCapture = Boolean(options.skipFinalCapture);
++      if (skipFinalCapture) {
++        await this.beginShutdown({
++          awaitInFlightCaptures: true,
++        });
++      } else {
++        this._stopPollers();
++        await this._awaitCapture('_topologyCapturePromise');
++        await this._awaitCapture('_resourceCapturePromise');
++        await this._collectTopologySnapshot();
++        await this._collectResourceSamples();
++      }
++      if (this._snapshotStorageFailure) {
++        throw this._snapshotStorageFailure;
++      }
++      if (this._shutdownStartedAt === null) {
++        this._shutdownStartedAt = Date.now();
++      }
+ 
+-    this.recordEvent({
+-      type: PLAYBACK_EVENT_TYPE.CLUSTER_STOP,
+-      scope: SCOPE_CLUSTER,
+-      entityId: ENTITY_CLUSTER,
+-      details: summary,
+-    });
++      this.recordEvent({
++        type: PLAYBACK_EVENT_TYPE.CLUSTER_STOP,
++        scope: SCOPE_CLUSTER,
++        entityId: ENTITY_CLUSTER,
++        details: summary,
++      });
+ 
+-    this._endedAt = Date.now();
++      this._endedAt = Date.now();
+ 
+-    await Promise.all([
+-      closeStream(this._eventsStream),
+-      closeStream(this._samplesStream),
+-      closeStream(this._snapshotsStream),
+-    ]);
+-    this._started = false;
++      await Promise.all([
++        closeStream(this._eventsStream),
++        closeStream(this._samplesStream),
++        this._snapshotWriter.close(),
++      ]);
++      this._started = false;
+ 
+-    try {
+-      await copyFile(
+-        join(MODULE_DIR, OUTPUT.PLAYBACK_VIEWER_FILENAME),
+-        this._viewerPath,
+-      );
+-    } catch (_err) {
+-      this._captureWarning(
+-        'viewer-copy-failed',
+-        'Unable to copy playback viewer into scenario output',
+-      );
+-    }
++      try {
++        await copyFile(
++          join(MODULE_DIR, OUTPUT.PLAYBACK_VIEWER_FILENAME),
++          this._viewerPath,
++        );
++      } catch (_err) {
++        this._captureWarning(
++          'viewer-copy-failed',
++          'Unable to copy playback viewer into scenario output',
++        );
++      }
+ 
+-    this._manifest = {
+-      scenarioName: this._scenarioName,
+-      startedAt: this._startedAt,
+-      endedAt: this._endedAt,
+-      durationMs: this._endedAt - this._startedAt,
+-      files: {
+-        events: this._eventsPath,
+-        samples: this._samplesPath,
+-        snapshots: this._snapshotsPath,
+-        manifest: this._manifestPath,
+-        viewer: this._viewerPath,
+-      },
+-      counts: {
+-        events: this._eventsCount,
+-        samples: this._samplesCount,
+-        snapshots: this._snapshotsCount,
+-      },
+-      warnings: this._warnings,
+-    };
++      this._manifest = {
++        scenarioName: this._scenarioName,
++        startedAt: this._startedAt,
++        endedAt: this._endedAt,
++        durationMs: this._endedAt - this._startedAt,
++        files: {
++          events: this._eventsPath,
++          samples: this._samplesPath,
++          snapshots: this._snapshotsLogicalPath,
++          manifest: this._manifestPath,
++          viewer: this._viewerPath,
++        },
++        counts: {
++          events: this._eventsCount,
++          samples: this._samplesCount,
++          snapshots: this._snapshotsCount,
++        },
++        warnings: this._warnings,
++      };
+ 
+-    await writeFile(
+-      this._manifestPath,
+-      JSON.stringify(this._manifest, null, 2) + NEWLINE,
+-      'utf8',
+-    );
++      await writeFile(
++        this._manifestPath,
++        JSON.stringify(this._manifest, null, 2) + NEWLINE,
++        'utf8',
++      );
+ 
+-    this._eventsStream = null;
+-    this._samplesStream = null;
+-    this._snapshotsStream = null;
++      this._eventsStream = null;
++      this._samplesStream = null;
++      this._snapshotWriter = null;
+ 
+-    return this._manifest;
++      return this._manifest;
++    } catch (error) {
++      await this._discardFailedCapture();
++      throw error;
++    }
+   }
+ 
+   getManifest() {
+@@ -1108,7 +1142,7 @@ class PlaybackRecorder {
+         services: mergeServiceRows(perNodeServices),
+       };
+ 
+-      this._appendNdjson(this._snapshotsStream, snapshot);
++      await this._appendSnapshot(snapshot);
+       this._snapshotsCount++;
+       this._topologySnapshotObserved = true;
+ 
+@@ -1123,6 +1157,9 @@ class PlaybackRecorder {
+       }
+       this._previousSnapshot = snapshot;
+     } catch (err) {
++      if (this._snapshotStorageFailure) {
++        throw this._snapshotStorageFailure;
++      }
+       this._captureWarning(
+         WARNING_CODE_TOPOLOGY_CAPTURE_FAILED,
+         'Failed to capture topology snapshot: ' + err.message,
+@@ -1312,6 +1349,35 @@ class PlaybackRecorder {
+     stream.write(JSON.stringify(data) + NEWLINE);
+   }
+ 
++  async _appendSnapshot(snapshot) {
++    try {
++      await this._snapshotWriter.appendRecord(snapshot);
++    } catch (error) {
++      this._snapshotStorageFailure ||= error;
++      throw this._snapshotStorageFailure;
++    }
++  }
++
++  async _discardFailedCapture() {
++    this._stopPollers();
++    this._started = false;
++    await Promise.allSettled([
++      closeStream(this._eventsStream),
++      closeStream(this._samplesStream),
++      this._snapshotWriter?.abort(),
++    ]);
++    await Promise.allSettled([
++      this._manifestPath && rm(this._manifestPath, {force: true}),
++      this._snapshotsLogicalPath &&
++        rm(this._snapshotsLogicalPath, {force: true}),
++      this._snapshotsPath && rm(this._snapshotsPath, {force: true}),
++    ]);
++    this._eventsStream = null;
++    this._samplesStream = null;
++    this._snapshotWriter = null;
++    this._manifest = null;
++  }
++
+   _captureWarning(code, message, details = null) {
+     if (this._warningCodes.has(code)) {
+       return;
+diff --git a/test/distributed/harness/playback-viewer.html b/test/distributed/harness/playback-viewer.html
+index 1c3c2e0e4c92627d486fbf603c62170e0b2ba70c..5517863b60510962b134556431429680a3efafaf 100644
+--- a/test/distributed/harness/playback-viewer.html
++++ b/test/distributed/harness/playback-viewer.html
+@@ -269,7 +269,7 @@
+         <label>Manifest JSON<input id="manifestFile" type="file" accept="application/json"></label>
+         <label>Events NDJSON<input id="eventsFile" type="file" accept=".ndjson,.jsonl,.txt"></label>
+         <label>Samples NDJSON<input id="samplesFile" type="file" accept=".ndjson,.jsonl,.txt"></label>
+-        <label>Snapshots NDJSON<input id="snapshotsFile" type="file" accept=".ndjson,.jsonl,.txt"></label>
++        <label>Snapshots NDJSON<input id="snapshotsFile" type="file" accept=".ndjson,.jsonl,.txt,.gz"></label>
+       </div>
+       <div class="controls">
+         <div class="row">
+@@ -411,6 +411,11 @@
+     }
+ 
+     function readFileText(file) {
++      if (String(file?.name || '').toLowerCase().endsWith('.gz')) {
++        const decoded = file.stream()
++          .pipeThrough(new DecompressionStream('gzip'));
++        return new Response(decoded).text();
++      }
+       return new Promise((resolve, reject) => {
+         const reader = new FileReader();
+         reader.onload = () => resolve(String(reader.result || ''));
+diff --git a/test/distributed/harness/publication-evidence-replay.js b/test/distributed/harness/publication-evidence-replay.js
+index 46c8e9b6d275e89ebbc15b99a91601c14e638bd8..1b6811433f6a9d4a082d739b1894708ca7c16bde 100644
+--- a/test/distributed/harness/publication-evidence-replay.js
++++ b/test/distributed/harness/publication-evidence-replay.js
+@@ -3,6 +3,8 @@ import {join} from 'node:path';
+ import {fileURLToPath} from 'node:url';
+ import {deriveMembershipPublicationCandidate} from
+   '../../../src/control-plane/membership-publication-coordinator.js';
++import {readPlaybackEvidenceFile} from
++  '../../../src/diagnostics/playback-evidence-file.js';
+ import {
+   buildPriorityRecoveryClosureWitness,
+   PRIORITY_RECOVERY_CLOSURE_WITNESS_STATE,
+@@ -543,7 +545,10 @@ async function readJsonFile(filePath) {
+ }
+ 
+ async function readSnapshotStates(filePath) {
+-  const raw = await readFile(filePath, PUBLICATION_EVIDENCE_REPLAY_ENCODING);
++  const raw = await readPlaybackEvidenceFile(
++    filePath,
++    PUBLICATION_EVIDENCE_REPLAY_ENCODING,
++  );
+   return raw
+     .split(PUBLICATION_EVIDENCE_REPLAY_NEWLINE)
+     .map((line, index) => parseSnapshotLine(line, index))

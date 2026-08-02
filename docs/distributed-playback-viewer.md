@@ -14,9 +14,27 @@ each scenario run under:
 
 - `test-output/{scenario}/events.ndjson`
 - `test-output/{scenario}/samples.ndjson`
-- `test-output/{scenario}/snapshots.ndjson`
+- `test-output/{scenario}/snapshots.ndjson.gz`
 - `test-output/{scenario}/playback-manifest.json`
 - `test-output/{scenario}/playback-viewer.html`
+
+Topology snapshots are captured gzip-compressed. The logical artifact name
+stays `snapshots.ndjson`: manifests and admin URLs keep the plain name, and
+readers resolve the `.gz` sibling through the shared owner in
+`src/diagnostics/playback-evidence-file.js` when the plain file is absent.
+Retained plain-text `snapshots.ndjson` archives keep working unchanged — an
+existing exact-path file always wins over the compressed sibling.
+
+The admin server decodes compressed snapshots on the fly, so network fetches
+(live follow and manifest URLs) always receive plain NDJSON. Only a run the
+admin positively identifies as currently running is served with
+tolerate-incomplete gzip decoding; finalized, failed, crashed, or offline
+evidence is decoded strictly, and corrupt archives fail the request instead
+of silently falling back.
+
+When loading local files into the viewer, `.gz` snapshot files can be
+selected directly; the viewer decompresses them in the browser with
+`DecompressionStream('gzip')`.
 
 Use `src/admin/static/playback-viewer.html` to step through the run timeline.
 

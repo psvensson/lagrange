@@ -4,7 +4,7 @@
  */
 
 import {createWriteStream} from 'node:fs';
-import {copyFile, mkdir, writeFile} from 'node:fs/promises';
+import {copyFile, mkdir, rm, writeFile} from 'node:fs/promises';
 import {dirname, join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {
@@ -12,6 +12,10 @@ import {
   PLAYBACK,
   PLAYBACK_EVENT_TYPE,
 } from './constants.js';
+import {
+  createPlaybackEvidenceWriter,
+  gzipPlaybackEvidencePath,
+} from '../../../src/diagnostics/playback-evidence-file.js';
 
 const NEWLINE = '\n';
 const STREAM_FLAGS_TRUNCATE = 'w';
@@ -760,7 +764,9 @@ class PlaybackRecorder {
 
     this._eventsStream = null;
     this._samplesStream = null;
-    this._snapshotsStream = null;
+    this._snapshotsLogicalPath = null;
+    this._snapshotWriter = null;
+    this._snapshotStorageFailure = null;
 
     this._eventsCount = 0;
     this._samplesCount = 0;
@@ -809,9 +815,12 @@ class PlaybackRecorder {
       this._scenarioDir,
       OUTPUT.PLAYBACK_SAMPLES_FILENAME,
     );
-    this._snapshotsPath = join(
+    this._snapshotsLogicalPath = join(
       this._scenarioDir,
       OUTPUT.PLAYBACK_SNAPSHOTS_FILENAME,
+    );
+    this._snapshotsPath = gzipPlaybackEvidencePath(
+      this._snapshotsLogicalPath,
     );
     this._manifestPath = join(
       this._scenarioDir,
@@ -822,18 +831,30 @@ class PlaybackRecorder {
       OUTPUT.PLAYBACK_VIEWER_FILENAME,
     );
 
-    this._eventsStream = createWriteStream(this._eventsPath, {
-      flags: STREAM_FLAGS_TRUNCATE,
-    });
-    this._samplesStream = createWriteStream(this._samplesPath, {
-      flags: STREAM_FLAGS_TRUNCATE,
-    });
-    this._snapshotsStream = createWriteStream(this._snapshotsPath, {
-      flags: STREAM_FLAGS_TRUNCATE,
-    });
+    await Promise.all([
+      rm(this._snapshotsLogicalPath, {force: true}),
+      rm(this._snapshotsPath, {force: true}),
+      rm(this._manifestPath, {force: true}),
+    ]);
+
+    try {
+      this._eventsStream = createWriteStream(this._eventsPath, {
+        flags: STREAM_FLAGS_TRUNCATE,
+      });
+      this._samplesStream = createWriteStream(this._samplesPath, {
+        flags: STREAM_FLAGS_TRUNCATE,
+      });
+      this._snapshotWriter = await createPlaybackEvidenceWriter(
+        this._snapshotsPath,
+      );
+    } catch (error) {
+      await this._discardFailedCapture();
+      throw error;
+    }
 
     this._startedAt = Date.now();
     this._started = true;
+    this._snapshotStorageFailure = null;
     this._adminReadinessObserved = false;
     this._topologySnapshotObserved = false;
     this._clusterActiveObserved = false;
@@ -848,12 +869,17 @@ class PlaybackRecorder {
       },
     });
 
-    const skipInitialCapture = Boolean(context.skipInitialCapture);
-    if (!skipInitialCapture) {
-      await this._collectTopologySnapshot();
-      await this._collectResourceSamples();
+    try {
+      const skipInitialCapture = Boolean(context.skipInitialCapture);
+      if (!skipInitialCapture) {
+        await this._collectTopologySnapshot();
+        await this._collectResourceSamples();
+      }
+      this._startPollers();
+    } catch (error) {
+      await this._discardFailedCapture();
+      throw error;
     }
-    this._startPollers();
   }
 
   async stop(summary = {}, options = {}) {
@@ -861,81 +887,89 @@ class PlaybackRecorder {
       return this._manifest;
     }
 
-    const skipFinalCapture = Boolean(options.skipFinalCapture);
-    if (skipFinalCapture) {
-      await this.beginShutdown({
-        awaitInFlightCaptures: true,
-      });
-    } else {
-      this._stopPollers();
-      await this._awaitCapture('_topologyCapturePromise');
-      await this._awaitCapture('_resourceCapturePromise');
-      await this._collectTopologySnapshot();
-      await this._collectResourceSamples();
-    }
-    if (this._shutdownStartedAt === null) {
-      this._shutdownStartedAt = Date.now();
-    }
-
-    this.recordEvent({
-      type: PLAYBACK_EVENT_TYPE.CLUSTER_STOP,
-      scope: SCOPE_CLUSTER,
-      entityId: ENTITY_CLUSTER,
-      details: summary,
-    });
-
-    this._endedAt = Date.now();
-
-    await Promise.all([
-      closeStream(this._eventsStream),
-      closeStream(this._samplesStream),
-      closeStream(this._snapshotsStream),
-    ]);
-    this._started = false;
-
     try {
-      await copyFile(
-        join(MODULE_DIR, OUTPUT.PLAYBACK_VIEWER_FILENAME),
-        this._viewerPath,
+      const skipFinalCapture = Boolean(options.skipFinalCapture);
+      if (skipFinalCapture) {
+        await this.beginShutdown({
+          awaitInFlightCaptures: true,
+        });
+      } else {
+        this._stopPollers();
+        await this._awaitCapture('_topologyCapturePromise');
+        await this._awaitCapture('_resourceCapturePromise');
+        await this._collectTopologySnapshot();
+        await this._collectResourceSamples();
+      }
+      if (this._snapshotStorageFailure) {
+        throw this._snapshotStorageFailure;
+      }
+      if (this._shutdownStartedAt === null) {
+        this._shutdownStartedAt = Date.now();
+      }
+
+      this.recordEvent({
+        type: PLAYBACK_EVENT_TYPE.CLUSTER_STOP,
+        scope: SCOPE_CLUSTER,
+        entityId: ENTITY_CLUSTER,
+        details: summary,
+      });
+
+      this._endedAt = Date.now();
+
+      await Promise.all([
+        closeStream(this._eventsStream),
+        closeStream(this._samplesStream),
+        this._snapshotWriter.close(),
+      ]);
+      this._started = false;
+
+      try {
+        await copyFile(
+          join(MODULE_DIR, OUTPUT.PLAYBACK_VIEWER_FILENAME),
+          this._viewerPath,
+        );
+      } catch (_err) {
+        this._captureWarning(
+          'viewer-copy-failed',
+          'Unable to copy playback viewer into scenario output',
+        );
+      }
+
+      this._manifest = {
+        scenarioName: this._scenarioName,
+        startedAt: this._startedAt,
+        endedAt: this._endedAt,
+        durationMs: this._endedAt - this._startedAt,
+        files: {
+          events: this._eventsPath,
+          samples: this._samplesPath,
+          snapshots: this._snapshotsLogicalPath,
+          manifest: this._manifestPath,
+          viewer: this._viewerPath,
+        },
+        counts: {
+          events: this._eventsCount,
+          samples: this._samplesCount,
+          snapshots: this._snapshotsCount,
+        },
+        warnings: this._warnings,
+      };
+
+      await writeFile(
+        this._manifestPath,
+        JSON.stringify(this._manifest, null, 2) + NEWLINE,
+        'utf8',
       );
-    } catch (_err) {
-      this._captureWarning(
-        'viewer-copy-failed',
-        'Unable to copy playback viewer into scenario output',
-      );
+
+      this._eventsStream = null;
+      this._samplesStream = null;
+      this._snapshotWriter = null;
+
+      return this._manifest;
+    } catch (error) {
+      await this._discardFailedCapture();
+      throw error;
     }
-
-    this._manifest = {
-      scenarioName: this._scenarioName,
-      startedAt: this._startedAt,
-      endedAt: this._endedAt,
-      durationMs: this._endedAt - this._startedAt,
-      files: {
-        events: this._eventsPath,
-        samples: this._samplesPath,
-        snapshots: this._snapshotsPath,
-        manifest: this._manifestPath,
-        viewer: this._viewerPath,
-      },
-      counts: {
-        events: this._eventsCount,
-        samples: this._samplesCount,
-        snapshots: this._snapshotsCount,
-      },
-      warnings: this._warnings,
-    };
-
-    await writeFile(
-      this._manifestPath,
-      JSON.stringify(this._manifest, null, 2) + NEWLINE,
-      'utf8',
-    );
-
-    this._eventsStream = null;
-    this._samplesStream = null;
-    this._snapshotsStream = null;
-
-    return this._manifest;
   }
 
   getManifest() {
@@ -1108,7 +1142,7 @@ class PlaybackRecorder {
         services: mergeServiceRows(perNodeServices),
       };
 
-      this._appendNdjson(this._snapshotsStream, snapshot);
+      await this._appendSnapshot(snapshot);
       this._snapshotsCount++;
       this._topologySnapshotObserved = true;
 
@@ -1123,6 +1157,9 @@ class PlaybackRecorder {
       }
       this._previousSnapshot = snapshot;
     } catch (err) {
+      if (this._snapshotStorageFailure) {
+        throw this._snapshotStorageFailure;
+      }
       this._captureWarning(
         WARNING_CODE_TOPOLOGY_CAPTURE_FAILED,
         'Failed to capture topology snapshot: ' + err.message,
@@ -1310,6 +1347,35 @@ class PlaybackRecorder {
       return;
     }
     stream.write(JSON.stringify(data) + NEWLINE);
+  }
+
+  async _appendSnapshot(snapshot) {
+    try {
+      await this._snapshotWriter.appendRecord(snapshot);
+    } catch (error) {
+      this._snapshotStorageFailure ||= error;
+      throw this._snapshotStorageFailure;
+    }
+  }
+
+  async _discardFailedCapture() {
+    this._stopPollers();
+    this._started = false;
+    await Promise.allSettled([
+      closeStream(this._eventsStream),
+      closeStream(this._samplesStream),
+      this._snapshotWriter?.abort(),
+    ]);
+    await Promise.allSettled([
+      this._manifestPath && rm(this._manifestPath, {force: true}),
+      this._snapshotsLogicalPath &&
+        rm(this._snapshotsLogicalPath, {force: true}),
+      this._snapshotsPath && rm(this._snapshotsPath, {force: true}),
+    ]);
+    this._eventsStream = null;
+    this._samplesStream = null;
+    this._snapshotWriter = null;
+    this._manifest = null;
   }
 
   _captureWarning(code, message, details = null) {

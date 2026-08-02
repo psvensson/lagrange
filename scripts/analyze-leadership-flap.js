@@ -44,6 +44,10 @@
 
 import fs from 'node:fs';
 import path from 'node:path';
+import {
+  readPlaybackEvidenceFileSync,
+  resolvePlaybackEvidencePathSync,
+} from '../src/diagnostics/playback-evidence-file.js';
 
 const DEFAULT_PLAYBACK_ROOT = 'test-output/reports/.playback';
 const SCENARIO_DIR = 'rolling-restart';
@@ -82,8 +86,9 @@ function parseArgs(argv) {
 }
 
 function readNdjson(file) {
-  if (!fs.existsSync(file)) return [];
-  return fs.readFileSync(file, 'utf8')
+  const resolved = resolvePlaybackEvidencePathSync(file);
+  if (!resolved) return [];
+  return readPlaybackEvidenceFileSync(resolved, 'utf8')
     .split('\n')
     .filter((line) => line.trim().length > 0)
     .map((line) => {
@@ -104,7 +109,10 @@ function discoverRuns(playbackRoot, onlyRuns) {
       runKey: name,
       dir: path.join(playbackRoot, name, SCENARIO_DIR),
     }))
-    .filter(({dir}) => fs.existsSync(path.join(dir, 'snapshots.ndjson')));
+    .filter(({dir}) =>
+      resolvePlaybackEvidencePathSync(
+        path.join(dir, 'snapshots.ndjson'),
+      ) !== null);
 }
 
 // The node(s) the scenario restarted: any node with a stop AND a later start
