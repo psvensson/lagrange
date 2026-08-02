@@ -1715,10 +1715,11 @@ class ClusterLifecycleBase {
 
   async _startStoppedNodeWithObservation(id, options = {}) {
     const node = this._nodes.get(id) || null;
-    await this._chaos.startNode(id);
-    // Mark the boot boundary now (before readiness wait) so the marker lands
-    // ahead of the new incarnation's app logs in the capture.
+    // Delimit the stopped incarnation before Docker starts the next process.
+    // A marker written after start races the new boot's earliest provenance and
+    // Raft lines, making them look like output from the prior incarnation.
     await this._markNodeIncarnationBoundary(id);
+    await this._chaos.startNode(id);
     if (typeof node?.closeQueryConnection === 'function') {
       node.closeQueryConnection();
     }
@@ -1739,10 +1740,10 @@ class ClusterLifecycleBase {
       }
     }
     await this._waitForRestartShutdownBoundary(id);
-    await this._chaos.startNode(id);
-    // Mark the boot boundary now (before readiness wait) so the marker lands
-    // ahead of the new incarnation's app logs in the capture.
+    // Shutdown observation is the safe boundary: the old process cannot emit
+    // further lines, and the new process has not started emitting yet.
     await this._markNodeIncarnationBoundary(id);
+    await this._chaos.startNode(id);
     if (typeof node?.closeQueryConnection === 'function') {
       node.closeQueryConnection();
     }

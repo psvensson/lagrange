@@ -26,6 +26,7 @@ const NEWLINE = '\n';
 const UTF8 = 'utf8';
 const GZIP_SUFFIX = '.log.gz';
 const DEFAULT_REATTACH_DELAY_MS = 1000;
+const MILLISECONDS_PER_SECOND = 1000;
 // Synthetic line injected into a node's capture at each restart so post-restart
 // ("second incarnation") output is filterable. The streamer/file capture keys the
 // destination by nodeId only, so without this marker both incarnations accumulate
@@ -43,6 +44,20 @@ const STALE_CAPTURE_GAP_MS = 60000;
 // Run-scoped subtree of the output dir holding the uncurated per-node logs,
 // kept distinct from the curated {scenario}/{nodeId}.log the LogCollector writes.
 const FULL_LOGS_DIRNAME = '.full-logs';
+
+// Dockerode passes `since` through to Docker's logs API, whose contract is Unix
+// seconds (or a duration), not the RFC3339 timestamp Docker prefixes onto each
+// streamed line. Round down so the boundary second is replayed; the streamer's
+// full-precision dedup cursor then removes only lines already captured.
+function toDockerSinceSeconds(rfc3339) {
+  if (!rfc3339) {
+    return undefined;
+  }
+  const parsedMs = Date.parse(rfc3339);
+  return Number.isFinite(parsedMs) ?
+    Math.floor(parsedMs / MILLISECONDS_PER_SECOND) :
+    undefined;
+}
 
 // File-based logging (non-perturbing observability): the node writes pino output
 // to a bind-mounted FILE instead of stdout, avoiding the stdout-pipe-backpressure
@@ -156,6 +171,8 @@ function createNodeLogStreamer({
   let gzipEnded = false;
   let currentHandle = null;
   let reattachTimer = null;
+  let streamAttached = false;
+  const pendingBoundaryPayloads = [];
   // After a re-attach, Docker's `since` filter is INCLUSIVE (and historically
   // second-granular), so it re-delivers lines we already captured. Drop any line
   // whose timestamp is <= the cursor until the first genuinely-new line, which
@@ -197,11 +214,35 @@ function createNodeLogStreamer({
     gzipStream.write(payload + NEWLINE);
   };
 
-  const scheduleReattach = () => {
-    if (stopped) {
+  const writeBoundaryPayload = (payload) => {
+    if (gzipEnded) {
+      return false;
+    }
+    lineCount += 1;
+    gzipStream.write(payload + NEWLINE);
+    return true;
+  };
+
+  const handleStreamClosed = () => {
+    // Docker can deliver both error and end for one closure. Only the first
+    // signal owns the detach edge and boundary flush.
+    if (!streamAttached) {
       return;
     }
-    reattachTimer = setTimeoutFn(attach, reattachDelayMs);
+    streamAttached = false;
+    currentHandle = null;
+    while (pendingBoundaryPayloads.length > 0) {
+      writeBoundaryPayload(pendingBoundaryPayloads.shift());
+    }
+    // A Docker stream can report both error and end while closing. They describe
+    // the same detached stream and must share one pending re-attachment.
+    if (stopped || reattachTimer !== null) {
+      return;
+    }
+    reattachTimer = setTimeoutFn(() => {
+      reattachTimer = null;
+      attach();
+    }, reattachDelayMs);
     // Don't let a pending re-attach keep the process alive if teardown is skipped
     // on an error path (real timers only; injected test timers return numbers).
     if (reattachTimer && typeof reattachTimer.unref === 'function') {
@@ -215,11 +256,12 @@ function createNodeLogStreamer({
     }
     // Resume from the last captured timestamp and dedup the inclusive boundary.
     dedupUntilTs = lastDockerTs || null;
+    streamAttached = true;
     currentHandle = provider.followContainerLogStream(containerId, {
-      since: lastDockerTs || undefined,
+      since: toDockerSinceSeconds(lastDockerTs),
       onLine,
-      onEnd: scheduleReattach,
-      onError: scheduleReattach,
+      onEnd: handleStreamClosed,
+      onError: handleStreamClosed,
     });
   }
 
@@ -250,22 +292,33 @@ function createNodeLogStreamer({
     } catch {
       return false;
     }
-    lineCount += 1;
-    gzipStream.write(payload + NEWLINE);
-    return true;
+    // When the old follow socket is still draining, queue the marker behind its
+    // remaining lines. The close owner flushes it before any re-attachment, so
+    // no old line can appear in the new incarnation and no new line can precede
+    // the boundary. This is asynchronous ordering without delaying restart.
+    if (streamAttached) {
+      pendingBoundaryPayloads.push(payload);
+      return true;
+    }
+    return writeBoundaryPayload(payload);
   };
 
   return {
     markIncarnationBoundary,
     async stop() {
       stopped = true;
-      if (reattachTimer) {
+      if (reattachTimer !== null) {
         clearTimeoutFn(reattachTimer);
+        reattachTimer = null;
       }
       if (currentHandle) {
         currentHandle.stop();
       }
       await ready;
+      streamAttached = false;
+      while (pendingBoundaryPayloads.length > 0) {
+        writeBoundaryPayload(pendingBoundaryPayloads.shift());
+      }
       // Mark ended BEFORE end() so any straggler onLine drops its write instead
       // of throwing; we accept losing at most a final in-flight line over a crash.
       gzipEnded = true;

@@ -347,8 +347,15 @@ class ClusterQuiescence extends ClusterLoadOrchestration {
         effectiveInFlightCount:
           quiescenceSnapshot?.effectiveInFlightCount ?? null,
         staleInFlightCount: quiescenceSnapshot?.staleInFlightCount ?? null,
+        selectedNodeId: snapshotProbe?.nodeId ?? null,
+        selectedCapturedAtMs: snapshotProbe?.capturedAtMs ?? null,
         leaderSignature: snapshotProbe?.leaderSignature ?? null,
         leaderCount: snapshotProbe?.leaderCount ?? null,
+        leaderObservations: Object.freeze([
+          ...(Array.isArray(snapshotProbe?.leaderObservations) ?
+            snapshotProbe.leaderObservations :
+            []),
+        ]),
       }));
       if (candidateWindowResetHistory.length > QUIESCENCE_RESET_HISTORY_CAP) {
         candidateWindowResetHistory.splice(

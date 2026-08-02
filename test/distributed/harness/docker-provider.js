@@ -941,7 +941,7 @@ class DockerProvider {
    *
    * @param {string} containerId
    * @param {Object} opts
-   * @param {string} [opts.since] RFC3339/unix `since` cursor (re-attach point).
+   * @param {number|string} [opts.since] Unix-second/duration `since` cursor.
    * @param {(rfc3339: string, payload: string) => void} opts.onLine Per decoded
    *   line: the leading Docker timestamp and the remaining payload (the raw app
    *   log line, e.g. a pino JSON object).
@@ -1011,6 +1011,9 @@ class DockerProvider {
           }
         });
         stream.on(localText.ERROR, (err) => {
+          // Preserve any final partial line before the capture owner writes an
+          // incarnation boundary in response to this detach edge.
+          flushPending();
           if (!stopped && typeof opts.onError === 'function') {
             opts.onError(err);
           }

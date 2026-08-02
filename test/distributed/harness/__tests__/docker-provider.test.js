@@ -9,6 +9,7 @@
 
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert';
+import {PassThrough} from 'node:stream';
 import fc from 'fast-check';
 import {
   DOCKER_CONTAINER_WRITABLE_LAYER_STORAGE_PATH,
@@ -31,6 +32,38 @@ const RESOURCE_SNAPSHOT_INVALID_OUTPUTS = Object.freeze([
   '4096\t/other\n',
   '4096\t/data\n8192\t/other\n',
 ]);
+
+test('Unit: followed log errors flush a partial line before detach notification',
+  async () => {
+    const provider = new DockerProvider({socketPath: '/var/run/docker.sock'});
+    const source = new PassThrough();
+    provider._docker = {
+      getContainer: () => ({logs: async () => source}),
+      modem: {
+        demuxStream: (stream, stdout) => stream.pipe(stdout),
+      },
+    };
+    const events = [];
+    provider.followContainerLogStream('container-logs-follow', {
+      onLine: (timestamp, payload) => {
+        events.push({type: 'line', timestamp, payload});
+      },
+      onError: () => events.push({type: 'error'}),
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    source.write('2026-08-02T10:00:00.000Z partial-old-line');
+    source.emit('error', new Error('detached'));
+
+    assert.deepStrictEqual(events, [
+      {
+        type: 'line',
+        timestamp: '2026-08-02T10:00:00.000Z',
+        payload: 'partial-old-line',
+      },
+      {type: 'error'},
+    ]);
+  });
 
 test('Property 2: Container Environment Configuration', async (t) => {
   await t.test(

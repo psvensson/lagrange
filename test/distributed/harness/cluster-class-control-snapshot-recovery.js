@@ -1061,6 +1061,7 @@ class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
 
     let selectedSnapshot = null;
     let lastError = null;
+    const leaderObservations = [];
     for (const [index, node] of nodes.entries()) {
       const snapshotTimeoutMs = resolveQuiescenceSequentialProbeTimeoutMs(
         deadline,
@@ -1163,6 +1164,12 @@ class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
             ),
           error: null,
         };
+        leaderObservations.push(Object.freeze({
+          nodeId: candidateSnapshot.nodeId,
+          capturedAtMs: candidateSnapshot.capturedAtMs,
+          leaderSignature: candidateSnapshot.leaderSignature,
+          leaderCount: candidateSnapshot.leaderCount,
+        }));
         if (
           isBetterControlSnapshotCandidate(candidateSnapshot, selectedSnapshot)
         ) {
@@ -1174,7 +1181,10 @@ class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
     }
 
     if (selectedSnapshot) {
-      return selectedSnapshot;
+      return {
+        ...selectedSnapshot,
+        leaderObservations: Object.freeze([...leaderObservations]),
+      };
     }
     return {
       nodeId: null,
@@ -1183,6 +1193,7 @@ class ClusterControlSnapshotRecovery extends ClusterPublicationEvidence {
       partitionGroupInFlight: {},
       leaderSignature: null,
       leaderCount: ZERO,
+      leaderObservations: Object.freeze([]),
       operationTimelineSignature: null,
       error: lastError || CONTROL_SNAPSHOT_NO_CANDIDATES_ERROR,
     };

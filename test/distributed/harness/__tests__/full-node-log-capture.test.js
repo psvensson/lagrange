@@ -296,14 +296,36 @@ describe('createNodeLogStreamer', () => {
     const second = await attachAgain;
     assert.equal(
       second.since,
-      '2026-06-09T13:00:00.000Z',
-      're-attach resumes from last seen Docker timestamp',
+      1_781_010_000,
+      'Docker API re-attach resumes from the last timestamp in Unix seconds',
     );
     second.onLine('2026-06-09T13:00:05.000Z', '{"n":2}');
     const status = await streamer.stop();
     assert.equal(status.lineCount, 2);
     const text = gunzipSync(await readFile(destPath)).toString('utf8');
     assert.equal(text, '{"n":1}\n{"n":2}\n');
+  });
+
+  it('single-flights re-attachment when end and error race', async () => {
+    const provider = makeFakeProvider();
+    const destPath = path.join(workspace, 'stream-single-flight.log.gz');
+    const timers = [];
+    const streamer = createNodeLogStreamer({
+      provider,
+      containerId: 'c-race',
+      destPath,
+      setTimeoutFn: (fn) => {
+        timers.push(fn);
+        return timers.length;
+      },
+      clearTimeoutFn: () => {},
+    });
+    const first = await provider.nextAttach();
+    first.onLine('2026-06-09T13:00:00.000Z', '{"n":1}');
+    first.onEnd();
+    first.onError(new Error('socket ended after close'));
+    assert.equal(timers.length, 1, 'only one re-attach timer may be active');
+    await streamer.stop();
   });
 
   it('dedups inclusive `since` re-delivery at the restart boundary', async () => {
@@ -339,20 +361,31 @@ describe('createNodeLogStreamer', () => {
   it('injects an incarnation-boundary marker so post-restart lines are filterable', async () => {
     const provider = makeFakeProvider();
     const destPath = path.join(workspace, 'stream-incarnation.log.gz');
+    const timers = [];
     const streamer = createNodeLogStreamer({
       provider,
       containerId: 'c4',
       destPath,
       nowMs: () => 1234,
+      setTimeoutFn: (fn) => {
+        timers.push(fn);
+        return timers.length;
+      },
+      clearTimeoutFn: () => {},
     });
-    const opts = await provider.nextAttach();
-    // Incarnation 1 output, then a restart boundary, then incarnation 2 output.
-    opts.onLine('2026-06-09T13:00:00.000Z', '{"n":1}');
+    const first = await provider.nextAttach();
+    first.onLine('2026-06-09T13:00:00.000Z', '{"n":1}');
     streamer.markIncarnationBoundary(2, {nodeId: 'node-a'});
-    opts.onLine('2026-06-09T13:00:05.000Z', '{"n":2}');
+    // A buffered old-incarnation line arriving after the boundary request must
+    // still precede the marker. The close edge flushes the marker before attach.
+    first.onLine('2026-06-09T13:00:01.000Z', '{"n":"old-tail"}');
+    first.onEnd();
+    const attachAgain = provider.nextAttach();
+    timers[0]();
+    const second = await attachAgain;
+    second.onLine('2026-06-09T13:00:05.000Z', '{"n":2}');
     const status = await streamer.stop();
-    // The synthetic marker counts as a captured line.
-    assert.equal(status.lineCount, 3);
+    assert.equal(status.lineCount, 4);
     // A synthetic marker carries no Docker timestamp, so it must not move the
     // re-attach cursor.
     assert.equal(status.lastDockerTs, '2026-06-09T13:00:05.000Z');
@@ -362,9 +395,9 @@ describe('createNodeLogStreamer', () => {
       .split('\n');
     const groups = splitLinesByIncarnation(lines);
     assert.equal(groups.length, 2, 'two incarnations separated by the marker');
-    assert.deepEqual(groups[0], ['{"n":1}']);
+    assert.deepEqual(groups[0], ['{"n":1}', '{"n":"old-tail"}']);
     assert.deepEqual(groups[1], ['{"n":2}']);
-    const marker = JSON.parse(lines[1]);
+    const marker = JSON.parse(lines[2]);
     assert.equal(marker.harnessEvent, 'incarnation-boundary');
     assert.equal(marker.incarnation, 2);
     assert.equal(marker.nodeId, 'node-a');

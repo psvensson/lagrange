@@ -127,6 +127,15 @@ const PARTITION_SERVICE_ROLE = Object.freeze({
   CANDIDATE: 'candidate',
 });
 
+const PARTITION_SERVICE_RAFT_EVIDENCE = Object.freeze({
+  EVENT_ROLE_TRANSITION: 'role_transition',
+  EVENT_LEADER_OBSERVATION: 'leader_observation',
+  TRIGGER_QUORUM_ELECTED: 'quorum_elected',
+  TRIGGER_LEADER_CHANGE: 'leader_change',
+  TRIGGER_FOLLOWER_EVENT: 'raft_follower_event',
+  TRIGGER_CAMPAIGN_STARTED: 'campaign_started',
+});
+
 const PARTITION_SERVICE_EVENT = Object.freeze({
   DATA: 'data',
   INITIALIZED: 'initialized',
@@ -284,6 +293,7 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   LEARNER_PROMOTION_ALLOWED_MULTI: 'Learner promotion allowed - multiple learners will reach odd',
   CLEARED_LIFERAFT_TIMERS: 'Cleared liferaft timers for deferred election',
   BECAME_LEADER: 'Became leader (liferaft)',
+  RAFT_TRANSITION_EVIDENCE: 'Raft leadership transition evidence',
   LEADER_CHANGED: 'Leader changed',
   JOINING_PEER_ADDRESS: 'Joining peer with fully qualified address',
   PEER_ADDRESS_NOT_UNIFIED: 'Peer address must be in unified format',
@@ -581,6 +591,7 @@ export {
   PARTITION_SERVICE_LOG_MSG,
   PARTITION_SERVICE_MESSAGE_TYPE,
   PARTITION_SERVICE_OPERATION,
+  PARTITION_SERVICE_RAFT_EVIDENCE,
   PARTITION_SERVICE_REASON,
   PARTITION_SERVICE_RESPONSE,
   PARTITION_SERVICE_ROLE,
