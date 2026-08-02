@@ -20,6 +20,7 @@ const DISABLED_ENGINE_FEATURES = ['random', 'stdio', 'clocks', 'http', 'fetch-ev
 const EMIT_BUDGET = 3;
 const DENY_BUDGET_EXHAUSTED = 'budget-exhausted';
 const TOP_N_ARGUMENTS = JSON.stringify({topN: 3});
+const BEYOND_F64_ID = 9007199254740995n;
 
 function typedRow(id, score) {
   return {
@@ -81,16 +82,21 @@ test('call-cell world round-trips typed batches, budgets, and reduce',
     const exports = await buildAndInstantiate(hostState);
 
     const batch = [
-      typedRow(1, 4.5), typedRow(2, 3.0), typedRow(3, 4.9),
+      typedRow(1, 4.5), typedRow(2, 3.0), typedRow(BEYOND_F64_ID, 4.9),
       typedRow(4, 2.5), typedRow(5, 4.7),
     ];
     const runResult = JSON.parse(exports.run(batch, TOP_N_ARGUMENTS));
 
     t.same(
       runResult.kept.map((entry) => entry.id),
-      [3, 5, 1],
-      'typed rows round-trip and rank by the real-typed score column',
+      [String(BEYOND_F64_ID), '5', '1'],
+      'typed rows round-trip, rank by score, and preserve s64 identity ' +
+      'beyond f64 precision',
     );
+    assert.equal(runResult.nullLabels, batch.length,
+      'the guest observed every null-value label column');
+    assert.equal(runResult.nestedDenial, DENY_BUDGET_EXHAUSTED,
+      'call-bounded was genuinely invoked and its typed denial observed');
     assert.equal(
       hostState.emits.length,
       EMIT_BUDGET,
@@ -103,11 +109,11 @@ test('call-cell world round-trips typed batches, budgets, and reduce',
     );
 
     const reduced = JSON.parse(
-      exports.reduce(hostState.emits, TOP_N_ARGUMENTS),
+      exports.reduce([...hostState.emits].reverse(), TOP_N_ARGUMENTS),
     );
     t.same(
       reduced.map((entry) => entry.id),
-      [3, 5, 1],
-      'reduce folds the captured partials into the final ordered result',
+      [String(BEYOND_F64_ID), '5', '1'],
+      'reduce re-sorts unordered partials into the final ordered result',
     );
   });
