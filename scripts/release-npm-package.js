@@ -24,6 +24,8 @@ const COMMAND_TIMEOUT_MS = 120000;
 const COMMAND_OUTPUT_MAX_BYTES = 16 * 1024 * 1024;
 const REGISTRY_OBSERVATION_ATTEMPTS = 5;
 const REGISTRY_OBSERVATION_DELAY_MS = 2000;
+const REGISTRY_MISMATCH_MESSAGE_PREFIX =
+  'published registry state did not match the candidate: ';
 const NPM_COMMAND = process.platform === 'win32' ? 'npm.cmd' : 'npm';
 const TEXT_ENCODING = 'utf8';
 const ARGUMENT_SEPARATOR = ' ';
@@ -544,8 +546,7 @@ async function observePublishedCandidate(candidate) {
   }
   throw new NpmReleaseError(
     RELEASE_OUTCOME.PARTIAL_RELEASE_CONFLICT,
-    'published registry state did not match the candidate: ' +
-      `${lastRegistryClassification}`,
+    `${REGISTRY_MISMATCH_MESSAGE_PREFIX}${lastRegistryClassification}`,
   );
 }
 
