@@ -37,7 +37,7 @@ same chain. Request has canonical invocation routing; the other sources have
 placement and readiness without coupling deployment to their dispatch
 mechanisms.
 
-The completed deployment row remains terminal. Three follow-ons are now selected
+The completed deployment row remains terminal. Four follow-ons are now selected
 as separate roadmap scope rather than widening that row:
 
 1. keyed request assignment graduates to
@@ -45,13 +45,23 @@ as separate roadmap scope rather than widening that row:
 2. generic Cell request continuity is its live terminal and is consumed by OCI
    portability rather than re-owned there; and
 3. non-request invocation advances one source at a time through the existing
-   ingress, dispatcher, runtime, authorization, and effect owners.
+   ingress, dispatcher, runtime, authorization, and effect owners; and
+4. data-local call activation advances through
+   `solve/quests/data-local-call-partition-activation.json` after production
+   call wiring, so a selected partition can execute the pinned Component on its
+   replica node even when no ready Binding Cell was already placed there.
 
 ## Follow-on boundaries
 
 - **Transient named invocation:** map durable `call` and `pushdown`
   registrations to transient statement/query invocations through existing
   owners. No declaration-side direct execution path is allowed.
+- **Data-local call activation:** resolve the partition and replica before
+  Component execution, then make digest-verified execution capacity available
+  on that replica node through the existing Artifact, placement, and runtime
+  lifecycle owners. A missing pre-existing Cell must not force raw shard rows
+  across the network before `run`, and invocation demand must not become
+  caller-owned replica intent or a second scheduler.
 - **Actor-key stability:** rendezvous assignment supplies low-churn affinity.
   Fixed logical shards with epoch-fenced ownership remain a later contract only
   if strict single ownership becomes a correctness requirement.
@@ -69,11 +79,24 @@ as separate roadmap scope rather than widening that row:
 - Table authorization comes from direct runtime policy. Observed access is
   decaying affinity telemetry and never grants authority.
 - Placement, invocation routing, and actor-key assignment are separate axes.
+- Data-local invocation placement is an execution-time requirement distinct
+  from decaying service-data affinity; affinity may improve steady-state Cell
+  placement but cannot satisfy a selected partition's locality contract.
+- Partition-local execution remains pinned to the Binding's immutable Artifact
+  identity and must fail closed when the selected replica or activation becomes
+  stale.
 - No Cell table, scheduler, seed registry, feature flag, compatibility decoder,
   or second source of truth survives a landing.
 
 ## Decision log
 
+- 2026-08-02 — Selected data-local call activation as an explicit successor to
+  production call wiring rather than widening the current call Quest. Quest
+  [`data-local-call-partition-activation`](../quests/data-local-call-partition-activation.json)
+  owns the missing case where a selected partition replica has no pre-existing
+  Binding Cell: the pinned Component must execute on that replica node before
+  shard rows leave it, using existing Artifact, placement, and runtime lifecycle
+  owners without caller replica control or a parallel scheduler.
 - 2026-07-25 — Selected keyed invocation, generic Cell continuity, and
   non-request source invocation as separate follow-ons. Request routing work
   targets `solve/specs/request-invocation-partitioning/`; source cutovers retain
