@@ -24,6 +24,8 @@ import {CallBindingRouteResolver} from
 import {
   CALL_CELL_ROUTE_CLASSIFICATION,
   CALL_CELL_ROUTE_ERROR_CODE,
+  createCallReduceInvocationId,
+  createCallSlotInvocationId,
 } from '../../src/service/call-cell-routing-contract.js';
 
 const ARTIFACT_DIGEST = `sha256:${'c'.repeat(64)}`;
@@ -371,4 +373,47 @@ describe('CallBindingRouteResolver', () => {
       );
     },
   );
+});
+
+describe('CallBindingRouteResolver slot spread', () => {
+  test('slot-scoped wire identities spread consecutive shard runs across ' +
+    'the ready replicas while every hop agrees per identity', () => {
+    const rows = createCallDeploymentRows({statement: CALL_STATEMENT});
+    const cache = seededCache(rows);
+    const secondReplicaId = `${rows.definition.service_id}-r2`;
+    cache.set(
+      SYSTEM_TABLE_NAME.SERVICES,
+      secondReplicaId,
+      createActualRow(rows.definition, secondReplicaId, 'node-b'),
+    );
+    const resolver = new CallBindingRouteResolver({
+      systemTableCacheProvider: () => cache,
+    });
+    const baseId = 'call-invocation-spread-fixture';
+    const routeFor = (invocationId) => resolver.resolve({
+      invocationId,
+      name: CALL_BINDING_NAME,
+      securityContext: SECURITY_CONTEXT,
+    });
+    const slotReplicas = [1, 2].map((slotId) =>
+      routeFor(createCallSlotInvocationId(baseId, slotId)).replicaId);
+    assert.equal(
+      new Set(slotReplicas).size,
+      2,
+      'two consecutive slots land on the two distinct ready replicas',
+    );
+    for (const slotId of [1, 2]) {
+      const wireId = createCallSlotInvocationId(baseId, slotId);
+      assert.equal(
+        routeFor(wireId).replicaId,
+        routeFor(wireId).replicaId,
+        'selection is deterministic per wire identity',
+      );
+    }
+    assert.equal(
+      routeFor(createCallReduceInvocationId(baseId)).replicaId,
+      routeFor(baseId).replicaId,
+      'reduce routes from the invocation primary selection',
+    );
+  });
 });

@@ -650,7 +650,94 @@ const SERVICE_PARTITION_ACCESS_SCHEMA = {
   ],
 };
 
+/**
+ * Call-cell reduce coordination slots system table schema.
+ * One row per (invocation, shard slot): the guarded single-row UPDATE
+ * grammar of src/runtime/call-cell-reduce-coordinator.js acquires the
+ * slot lease, publishes the shard's emitted partial set, and gates the
+ * complete fresh disjoint set before reduce. `invocation_id` leads the
+ * column list so one invocation's slot rows co-locate on one partition
+ * (partition key is the first column), keeping every guarded UPDATE a
+ * single-partition write. Uniqueness of (invocation_id, slot_id) is
+ * enforced by the unique index — the durable per-replica DDL path drops
+ * composite PRIMARY KEY clauses, so the index is the loud-failure seam
+ * for a reused invocation identity.
+ */
+const CALL_CELL_REDUCE_SLOTS_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.CALL_CELL_REDUCE_SLOTS,
+  primaryKey: ['invocation_id', 'slot_id'],
+  columns: [
+    {name: 'invocation_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'slot_id', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {
+      name: 'replica_id',
+      type: COLUMN_TYPE.TEXT,
+      notNull: true,
+      defaultValue: '\'\'',
+    },
+    {
+      name: 'lease_expires_at',
+      type: COLUMN_TYPE.INTEGER,
+      notNull: true,
+      defaultValue: '0',
+    },
+    {
+      name: 'partial_json',
+      type: COLUMN_TYPE.TEXT,
+      notNull: true,
+      defaultValue: '\'[]\'',
+    },
+    {
+      name: 'computed_at',
+      type: COLUMN_TYPE.INTEGER,
+      notNull: true,
+      defaultValue: '0',
+    },
+  ],
+  indices: [
+    {
+      name: 'uidx_call_cell_reduce_slot',
+      columns: ['invocation_id', 'slot_id'],
+      unique: true,
+    },
+  ],
+};
+
+/**
+ * Call-cell reduce final-snapshot system table schema.
+ * One row per invocation: the atomically visible reduced result plus the
+ * partial-set witness that makes the snapshot's provenance checkable
+ * (exactly-once VISIBILITY per the sealed contract, not exactly-once
+ * reduce execution).
+ */
+const CALL_CELL_REDUCE_RESULTS_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.CALL_CELL_REDUCE_RESULTS,
+  columns: [
+    {name: 'result_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {
+      name: 'result_json',
+      type: COLUMN_TYPE.TEXT,
+      notNull: true,
+      defaultValue: '\'\'',
+    },
+    {
+      name: 'computed_at',
+      type: COLUMN_TYPE.INTEGER,
+      notNull: true,
+      defaultValue: '0',
+    },
+    {
+      name: 'source_snapshot_json',
+      type: COLUMN_TYPE.TEXT,
+      notNull: true,
+      defaultValue: '\'\'',
+    },
+  ],
+};
+
 export {
+  CALL_CELL_REDUCE_RESULTS_SCHEMA,
+  CALL_CELL_REDUCE_SLOTS_SCHEMA,
   CONTROL_PLANE_PUBLICATIONS_SCHEMA,
   REPLICA_OPERATIONS_SCHEMA,
   NODE_ENDPOINTS_SCHEMA,

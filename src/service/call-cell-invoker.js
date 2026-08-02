@@ -21,9 +21,12 @@
  */
 
 import {
+  CALL_CELL_ROUTE_CLASSIFICATION,
   CALL_CELL_ROUTE_ERROR_CODE,
   createCallInvocationIdentity,
+  createCallReduceInvocationId,
   createCallRoutingFailure,
+  createCallSlotInvocationId,
   normalizeCallComponentResult,
   normalizeEmittedPartialEntries,
 } from './call-cell-routing-contract.js';
@@ -31,6 +34,9 @@ import {
 const CALL_INVOKER_MESSAGE = Object.freeze({
   EMPTY_BATCH_SET:
     'Call Cell declared statement resolved to zero shard batches',
+  REDUCE_LEASE_HOLDER_MOVED:
+    'Call Cell reduce executed on a replica that does not hold the ' +
+    'reduce lease',
 });
 
 const CALL_INVOKER_ARGUMENT_MESSAGE = Object.freeze({
@@ -133,10 +139,19 @@ class CallCellInvoker {
 
     // Content-fresh identity: concurrent invocations of the same Binding
     // must never share coordination rows, so the id is a routing-contract
-    // UUID identity, not a timestamp.
+    // UUID identity, not a timestamp. Each shard run and the reduce get
+    // their own slot-scoped WIRE identity: the runtime durable fence
+    // journals per wire identity, and the route resolver spreads shard
+    // runs across ready replicas by the identity's slot ordinal.
     const {invocationId} = createCallInvocationIdentity();
     const slotIds = batches.map((_, index) => index + 1);
-    await this._reduceCoordinator.seedInvocation(invocationId, slotIds);
+    // The reduce lease occupies its own coordination slot above the shard
+    // slots; the completeness gate reads only the shard slots.
+    const reduceLeaseSlotId = slotIds.length + 1;
+    await this._reduceCoordinator.seedInvocation(
+      invocationId,
+      [...slotIds, reduceLeaseSlotId],
+    );
 
     for (const [slotIndex, shard] of batches.entries()) {
       const slotId = slotIds[slotIndex];
@@ -150,7 +165,7 @@ class CallCellInvoker {
         partitionId: shard.partitionId,
         exportName: RUN_EXPORT,
         slotId,
-        invocationId,
+        invocationId: createCallSlotInvocationId(invocationId, slotId),
       });
       // The published slot partial is the shard's EMITTED partial set (the
       // bounded call-context emit log), normalized fail-closed into the
@@ -181,6 +196,22 @@ class CallCellInvoker {
         this._partialLimit,
       );
 
+    // Reduce runs on a replica that HOLDS the reduce lease: resolve the
+    // reduce route first, acquire the dedicated reduce lease slot under
+    // that replica, dispatch, and refuse the snapshot if the executing
+    // replica is not the lease holder (route moved between acquire and
+    // dispatch — retryable, nothing became visible).
+    const reduceInvocationId = createCallReduceInvocationId(invocationId);
+    const reduceRoute = this._routeResolver.resolve({
+      invocationId: reduceInvocationId,
+      name,
+      securityContext,
+    });
+    await this._reduceCoordinator.acquireReduceLease(
+      invocationId,
+      reduceRoute.replicaId,
+      reduceLeaseSlotId,
+    );
     const reduceDelivery = await this._statementAdapter.invoke({
       name,
       argumentsJson,
@@ -190,8 +221,16 @@ class CallCellInvoker {
       partials: partials.map(([groupKey, aggValue]) =>
         [String(groupKey), JSON.stringify(aggValue)]),
       exportName: REDUCE_EXPORT,
-      invocationId,
+      invocationId: reduceInvocationId,
     });
+    const reducedBy = reduceDelivery.replicaId ?? reduceRoute.replicaId;
+    if (reducedBy !== reduceRoute.replicaId) {
+      throw createCallRoutingFailure(
+        CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE,
+        CALL_INVOKER_MESSAGE.REDUCE_LEASE_HOLDER_MOVED,
+        {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
+      );
+    }
     const resultJson = normalizeCallComponentResult(
       reduceDelivery.componentResult);
     await this._reduceCoordinator.publishFinalSnapshot(

@@ -26,6 +26,7 @@ import {
   CALL_CELL_ROUTE_CLASSIFICATION,
   CALL_CELL_ROUTE_ERROR_CODE,
   createCallRoutingFailure,
+  parseCallInvocationIdentity,
 } from './call-cell-routing-contract.js';
 
 const HASH_ALGORITHM = 'sha256';
@@ -75,15 +76,22 @@ function isReadyRuntimeActual(actual, serviceId) {
     runtimeServiceReplicaBelongsToEntity(actual?.service_id, serviceId);
 }
 
+// One invocation, many wire identities: the base identity hashes to the
+// invocation's primary replica; slot-scoped identities offset from that
+// primary by their slot ordinal, spreading shard runs deterministically
+// across the ready replicas — every hop parsing the same wire identity
+// (adapter selection, receiver re-assert) lands on the same replica.
 function selectActual(actuals, invocationId) {
   const ordered = actuals.slice().sort(
     (left, right) =>
       String(left.service_id).localeCompare(String(right.service_id)),
   );
+  const identity = parseCallInvocationIdentity(invocationId);
   const selectionHash = createHash(HASH_ALGORITHM)
-    .update(invocationId)
+    .update(identity.baseInvocationId)
     .digest(HASH_ENCODING);
-  const selection = Number.parseInt(selectionHash.slice(0, 12), 16);
+  const selection = Number.parseInt(selectionHash.slice(0, 12), 16) +
+    identity.slotOrdinal;
   return ordered[selection % ordered.length];
 }
 

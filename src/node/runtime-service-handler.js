@@ -44,6 +44,8 @@ import {
   assertCurrentCallCellTarget,
   handleCallCellInvocation,
 } from './runtime-service-call-cell-handler.js';
+import {CallBindingRouteResolver} from
+  '../service/call-binding-route-resolver.js';
 import {RequestBindingRouteResolver} from
   '../service/request-binding-route-resolver.js';
 import {
@@ -132,7 +134,10 @@ class RuntimeServiceHandler extends EventEmitter {
         systemTableCacheProvider: () => this.systemTableCache,
       });
     this.callBindingRouteResolver =
-      options.callBindingRouteResolver || null;
+      options.callBindingRouteResolver ||
+      new CallBindingRouteResolver({
+        systemTableCacheProvider: () => this.systemTableCache,
+      });
 
     // Executor outcome emitter — replaces direct replica_operations writes.
     this.executorOutcomeEmitter = options.executorOutcomeEmitter || null;

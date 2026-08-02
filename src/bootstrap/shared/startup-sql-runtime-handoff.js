@@ -1,3 +1,4 @@
+import {attachCallCellInvoker} from './call-cell-invocation-setup.js';
 import {CDCIntegrationSetup} from './cdc-integration-setup.js';
 import {
   bindServiceLifecycleCommandOwnerToSqlRuntime,
@@ -68,6 +69,15 @@ function attachSqlRuntimeToStartupOwner(options) {
     owner.serviceLifecycleCommandOwner || null,
     sqlQueryEngine,
   );
+  attachCallCellInvoker({
+    serviceLifecycleCommandOwner: owner.serviceLifecycleCommandOwner || null,
+    sqlQueryEngine,
+    systemTableCacheProvider: () => options.systemTableCache ||
+      owner.getSystemTableCache?.() || null,
+    messageRouterProvider: () => options.messageRouter ||
+      owner.messageRouter || null,
+    tunables: options.callCellInvocationTunables,
+  });
   attachRuntimeAccessPolicyOwner(owner, sqlQueryEngine);
   owner.sqlQueryEngine = sqlQueryEngine;
 

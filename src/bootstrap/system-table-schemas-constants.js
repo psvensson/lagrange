@@ -47,6 +47,10 @@ import {
   WASM_OPERATIONS_SCHEMA,
 } from './system-table-runtime-schema-definitions.js';
 import {
+  CALL_CELL_REDUCE_RESULTS_SCHEMA,
+  CALL_CELL_REDUCE_SLOTS_SCHEMA,
+} from './system-table-runtime-schema-definitions.js';
+import {
   DEBUG_BREAKPOINTS_SCHEMA,
   DEBUG_SESSIONS_SCHEMA,
   DEBUG_SNAPSHOTS_SCHEMA,
@@ -104,6 +108,8 @@ const SYSTEM_TABLE_SCHEMAS = [
   DEBUG_SNAPSHOTS_SCHEMA,
   STORAGE_RESERVATIONS_SCHEMA,
   SERVICE_PARTITION_ACCESS_SCHEMA,
+  CALL_CELL_REDUCE_SLOTS_SCHEMA,
+  CALL_CELL_REDUCE_RESULTS_SCHEMA,
 ];
 
 /**
@@ -158,6 +164,9 @@ const INITIAL_PARTITION_IDS = {
   [SYSTEM_TABLE_NAME.LATENCY_GROUPS]: 'latency_groups-p1',
   [SYSTEM_TABLE_NAME.INTER_GROUP_LATENCIES]: 'inter_group_latencies-p1',
   [SYSTEM_TABLE_NAME.SERVICE_PARTITION_ACCESS]: 'service_partition_access-p1',
+  [SYSTEM_TABLE_NAME.CALL_CELL_REDUCE_SLOTS]: 'call_cell_reduce_slots-p1',
+  [SYSTEM_TABLE_NAME.CALL_CELL_REDUCE_RESULTS]:
+    'call_cell_reduce_results-p1',
 };
 
 const PRIORITY_CONTROL_PLANE_PARTITION_IDS = new Set([
@@ -323,6 +332,16 @@ const INITIAL_REPLICA_IDS = {
     'service_partition_access-p1-r1',
     'service_partition_access-p1-r2',
     'service_partition_access-p1-r3',
+  ],
+  [SYSTEM_TABLE_NAME.CALL_CELL_REDUCE_SLOTS]: [
+    'call_cell_reduce_slots-p1-r1',
+    'call_cell_reduce_slots-p1-r2',
+    'call_cell_reduce_slots-p1-r3',
+  ],
+  [SYSTEM_TABLE_NAME.CALL_CELL_REDUCE_RESULTS]: [
+    'call_cell_reduce_results-p1-r1',
+    'call_cell_reduce_results-p1-r2',
+    'call_cell_reduce_results-p1-r3',
   ],
 };
 

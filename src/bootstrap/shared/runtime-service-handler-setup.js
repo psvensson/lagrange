@@ -43,6 +43,9 @@ class RuntimeServiceHandlerSetup {
    *   manager (required).
    * @param {Object} [options.serviceRuntimeLifecycle] - Runtime invocation
    *   owner.
+   * @param {Object} [options.callBindingRouteResolver] - Call Binding route
+   *   resolver shared with the call-cell ingress; the handler self-defaults
+   *   a cache-provider-backed resolver when absent.
    * @param {Object} [options.rpcClient] - Optional RPC client.
    * @param {Object} [options.executorOutcomeEmitter] - Optional executor
    *   outcome emitter shared with the rebalance coordinator.
@@ -57,6 +60,7 @@ class RuntimeServiceHandlerSetup {
       systemTableCache,
       serviceLifecycleManager,
       serviceRuntimeLifecycle,
+      callBindingRouteResolver,
       rpcClient,
       executorOutcomeEmitter,
     } = options;
@@ -105,6 +109,7 @@ class RuntimeServiceHandlerSetup {
       cdcIntegrationService,
       serviceLifecycleManager,
       serviceRuntimeLifecycle,
+      callBindingRouteResolver,
       executorOutcomeEmitter,
     });
 

@@ -16,7 +16,9 @@ import {
   CALL_CELL_PARTIAL_KEY_PREFIX,
   CALL_CELL_ROUTE_ERROR_CODE,
   CallCellRoutingError,
+  createCallReduceInvocationId,
   createCallRoutingFailure,
+  createCallSlotInvocationId,
 } from '../../src/service/call-cell-routing-contract.js';
 
 const SECURITY_CONTEXT = Object.freeze({
@@ -161,12 +163,13 @@ test('one CALL flows end to end to exactly one visible snapshot',
       'reduce export invoked exactly once over the complete set');
     t.equal(collaborators.calls.seeded.length, 1,
       'the invocation coordination rows are seeded exactly once');
-    t.same(collaborators.calls.seeded[0].slotIds, [1, 2],
-      'one seeded slot per shard batch');
+    t.same(collaborators.calls.seeded[0].slotIds, [1, 2, 3],
+      'one seeded slot per shard batch plus the dedicated reduce lease slot');
     t.same(
       collaborators.calls.leases.map((entry) => entry.slotId),
-      [1, 2],
-      'each shard slot lease is acquired before its publish',
+      [1, 2, 3],
+      'each shard slot lease is acquired before its publish, then the ' +
+        'reduce lease before the reduce dispatch',
     );
     t.equal(collaborators.calls.published.length, 2,
       'each shard partial published under the lease');
@@ -219,7 +222,52 @@ test('the invocation identity is a fresh routing-contract UUID identity',
       new Set([firstId]),
       'every coordination write shares the one invocation identity',
     );
+    t.same(
+      first.calls.runRequests.map((request) => request.invocationId),
+      [
+        createCallSlotInvocationId(firstId, 1),
+        createCallSlotInvocationId(firstId, 2),
+      ],
+      'each shard run dispatches under its slot-scoped wire identity so ' +
+        'the durable fence never replays one shard into another',
+    );
+    t.same(
+      first.calls.reduceRequests.map((request) => request.invocationId),
+      [createCallReduceInvocationId(firstId)],
+      'the reduce dispatch carries its own wire identity',
+    );
   });
+
+test('reduce is refused when the executing replica does not hold the ' +
+  'reduce lease', async (t) => {
+  const collaborators = makeCollaborators({
+    adapterInvoke: async (req) => {
+      if (req.exportName === 'reduce') {
+        return {componentResult: RESULT_JSON, replicaId: 'replica-rogue'};
+      }
+      const id = req.partitionId === 'p1' ? 'u1' : 'u2';
+      const score = req.partitionId === 'p1' ? 7 : 9;
+      return {
+        componentResult: JSON.stringify({kept: [id]}),
+        replicaId: 'replica-1',
+        partials: [emittedPartial(id, score)],
+      };
+    },
+  });
+  await makeInvoker(collaborators).invoke({
+    name: CALL_NAME,
+    argumentsJson: ARGUMENTS,
+    securityContext: SECURITY_CONTEXT,
+  }).then(
+    () => t.fail('expected the lease-holder mismatch rejection'),
+    (error) => {
+      t.equal(error.code, CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE);
+      t.match(String(error.message), /reduce lease/u);
+    },
+  );
+  t.equal(collaborators.calls.snapshot, null,
+    'no snapshot becomes visible when the lease holder moved');
+});
 
 test('the wire carries the configured call-context budgets to run and reduce',
   async (t) => {

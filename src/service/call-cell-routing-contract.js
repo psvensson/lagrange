@@ -33,6 +33,16 @@ const CALL_CELL_INVOCATION_ID_PREFIX = 'call-invocation-';
 // partial key (call-cell-driver-invoke.js); consumers strip it to recover
 // the guest's group key.
 const CALL_CELL_PARTIAL_KEY_PREFIX = 'partial:';
+// Per-dispatch invocation identity: one CALL invocation fans out into one
+// wire identity per shard run plus one for reduce. The scoped identity is
+// load-bearing twice — the runtime durable fence journals per wire
+// identity (a shared identity would replay shard 1's result into shard 2
+// and into reduce), and the route resolver reads the slot ordinal out of
+// the identity to spread shard runs deterministically across ready
+// replicas while every hop (adapter, receiver re-assert) still agrees on
+// the same selection from the same string.
+const CALL_CELL_SLOT_SUFFIX_SEPARATOR = '#slot-';
+const CALL_CELL_REDUCE_SUFFIX = '#reduce';
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
 const BYTE_ENCODING = 'utf8';
@@ -76,6 +86,43 @@ function createCallInvocationIdentity(idempotencyKey) {
     idempotencyKey :
     `${CALL_CELL_INVOCATION_ID_PREFIX}${randomUUID()}`;
   return Object.freeze({invocationId});
+}
+
+function createCallSlotInvocationId(invocationId, slotId) {
+  return `${invocationId}${CALL_CELL_SLOT_SUFFIX_SEPARATOR}${slotId}`;
+}
+
+function createCallReduceInvocationId(invocationId) {
+  return `${invocationId}${CALL_CELL_REDUCE_SUFFIX}`;
+}
+
+// Parse a wire invocation identity back into its base identity and slot
+// ordinal. The ordinal is 0 for the base identity and for reduce — both
+// route from the invocation's primary selection — and the shard slot id
+// for slot-scoped identities, giving the resolver its deterministic
+// spread offset.
+function parseCallInvocationIdentity(wireInvocationId) {
+  const value = String(wireInvocationId ?? '');
+  if (value.endsWith(CALL_CELL_REDUCE_SUFFIX)) {
+    return Object.freeze({
+      baseInvocationId:
+        value.slice(0, value.length - CALL_CELL_REDUCE_SUFFIX.length),
+      slotOrdinal: 0,
+    });
+  }
+  const separatorIndex = value.lastIndexOf(CALL_CELL_SLOT_SUFFIX_SEPARATOR);
+  if (separatorIndex < 0) {
+    return Object.freeze({baseInvocationId: value, slotOrdinal: 0});
+  }
+  const ordinal = Number(
+    value.slice(separatorIndex + CALL_CELL_SLOT_SUFFIX_SEPARATOR.length));
+  if (!Number.isInteger(ordinal) || ordinal <= 0) {
+    return Object.freeze({baseInvocationId: value, slotOrdinal: 0});
+  }
+  return Object.freeze({
+    baseInvocationId: value.slice(0, separatorIndex),
+    slotOrdinal: ordinal,
+  });
 }
 
 function createCallInvocationIntentDigest(fields) {
@@ -181,8 +228,11 @@ export {
   CallCellRoutingError,
   createCallInvocationIdentity,
   createCallInvocationIntentDigest,
+  createCallReduceInvocationId,
   createCallRoutingFailure,
+  createCallSlotInvocationId,
   normalizeCallArguments,
   normalizeCallComponentResult,
   normalizeEmittedPartialEntries,
+  parseCallInvocationIdentity,
 };

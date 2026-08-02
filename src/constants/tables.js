@@ -39,6 +39,8 @@ const TABLES = Object.freeze({
   LATENCY_GROUPS: 'latency_groups',
   INTER_GROUP_LATENCIES: 'inter_group_latencies',
   SERVICE_PARTITION_ACCESS: 'service_partition_access',
+  CALL_CELL_REDUCE_SLOTS: 'call_cell_reduce_slots',
+  CALL_CELL_REDUCE_RESULTS: 'call_cell_reduce_results',
 });
 
 export {TABLES};
