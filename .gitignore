@@ -28,6 +28,14 @@ tools/tla2tools.jar
 
 # Vendored Alloy model checker (auto-fetched by scripts/check-alloy-models.js)
 tools/alloy-*/
+
+# Local opencode tooling config (auth plugin + personal agent definitions)
+opencode.json
+.opencode/
+
+# V8/Node compile caches (local run artifacts, machine-specific)
+node-compile-cache/
+v8-compile-cache-*/
 tools/alloy-*.tar.gz
 
 # TLC liveness counterexample trace artifacts
