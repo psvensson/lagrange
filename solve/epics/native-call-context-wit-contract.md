@@ -22,69 +22,38 @@ investing in the JS envelope the retirement epic exists to delete. Invocation
 *mechanics* remain owned by the minimal-deployment-surface "Non-request
 source invocation" follow-on; this epic owns only the contract shape.
 
-## Proposed contract (validated with `wasm-tools component wit`)
+## Contract (sealed 2026-08-02; canonical text)
 
-```wit
-package lagrange:cell;
+The sealed WIT world is the ABI fixture
+[`test/wasm-service/fixtures/call-cell-world/wit/world.wit`](../../test/wasm-service/fixtures/call-cell-world/wit/world.wit)
+(`package lagrange:cell`, interface `call-context`, world `call-cell`),
+validated with `wasm-tools component wit` and exercised by
+`test/wasm-service/call-cell-world-abi.test.js`; the normative contract text
+lives in
+[`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md).
+One artifact carries both `run` and `reduce` exports: the shard function and
+the reducer are authored, tested, and versioned together, then materialized
+apart — the coherent-developer-view / distributed-execution split the native
+model promises.
 
-interface call-context {
-  variant cell-value { null-value, integer(s64), real(f64), text(string) }
-  record column { name: string, val: cell-value }
-  record row { columns: list<column> }
-  enum deny-code { undeclared-capability, budget-exhausted, invalid-argument }
-
-  /// Publish one bounded partial under a key. The runtime enforces the
-  /// Binding-declared per-invocation emit budget.
-  emit: func(key: string, partial: string) -> result<_, deny-code>;
-
-  /// Bounded nested invocation of another declared export.
-  call-bounded: func(export-name: string, argument: string)
-    -> result<string, deny-code>;
-
-  /// Existing request-context capability probe, carried over unchanged.
-  capability: func(capability: u32) -> s32;
-}
-
-world call-cell {
-  use call-context.{row};
-  import call-context;
-
-  /// Partition-local work: receives the Binding-declared statement's
-  /// grouped, bounded batch. Returns this shard's partial as JSON.
-  export run: func(batch: list<row>, arguments: string) -> string;
-
-  /// Reduction: folds the published partials into the final result.
-  export reduce: func(partials: list<tuple<string, string>>,
-    arguments: string) -> string;
-}
-```
-
-One artifact carries both exports: the shard function and the reducer are
-authored, tested, and versioned together, then materialized apart — the
-coherent-developer-view / distributed-execution split the native model
-promises.
-
-## Design decisions (proposed, to seal at spec time)
+## Design decisions (sealed)
 
 1. **Rows arrive via the Binding-declared statement, not a `query()`
-   import.** The Binding (schema v2, `on <source> run <export>`) declares
-   the partition-local SQL; the engine narrows and groups BEFORE the
-   boundary, and the component's `run` sees only the bounded batch. This
-   preserves the MovieLens transfer-shape lesson (raw rows never cross into
-   policy code; exchange bounded near `R × K`), keeps the caller's unit of
-   intent "data plus operation", and avoids reintroducing a general database
-   client with per-row canonical-ABI copy costs and an unreviewable
-   capability surface. Consequence: no table read/write imports in
-   `call-context` v1 — a call Cell computes over its batch and emits.
+   import.** The Binding declares the partition-local SQL; the engine narrows
+   and groups BEFORE the boundary, and the component's `run` sees only the
+   bounded batch. This preserves the MovieLens transfer-shape lesson (raw
+   rows never cross into policy code; exchange bounded near `R × K`), keeps
+   the caller's unit of intent "data plus operation", and avoids
+   reintroducing a general database client with per-row canonical-ABI copy
+   costs and an unreviewable capability surface. Consequence: no table
+   read/write imports in `call-context` v1.
 2. **Conservative ABI.** Plain synchronous functions, list arguments, JSON
-   strings for opaque payloads (`partial`, `arguments`, results) — matching
-   the request world's `run: func(request: string) -> string` convention.
-   No resources, no streams, no async until the component-model stream
-   surface stabilizes; typed `cell-value` covers batch columns only.
-3. **Budgets are Binding-declared, boundary-enforced.** Emit count, nested
-   call depth/fan-out, fuel, and memory are declarations on the Binding;
-   exceeding one returns `budget-exhausted` (fail-closed, typed) rather
-   than relying on cooperative supervision as the legacy JS envelope does.
+   strings for opaque payloads — matching the request world's
+   `run: func(request: string) -> string` convention. No resources, streams,
+   or async until the component-model stream surface stabilizes.
+3. **Budgets are Binding-declared, boundary-enforced.** Exceeding one
+   returns `budget-exhausted` (fail-closed, typed) rather than relying on
+   cooperative supervision as the legacy JS envelope does.
 
 ## Legacy-parity map (rung-1 "rich enough" test)
 
@@ -121,26 +90,44 @@ stay JSON strings. Replacing them with per-operation WIT records — e.g.
    Lagrange SQL, and `native_js`
    (`comparative-workload-efficiency-evidence.md`), so this evidence falls
    out of the real distributed runs, not an ad-hoc microbenchmark.
-5. **Typed capability catalog.** Replace `capability: u32 -> s32` with a
-   sealed enum derived from the `CONFIGURE SERVICE ACCESS` grammar; typed
-   deny reasons throughout.
+5. **Typed capability catalog.** Introduce a sealed capability enum derived
+   from the `CONFIGURE SERVICE ACCESS` grammar (v1 has no probe at all; the
+   request world's u32 probe is unaffected); typed deny reasons throughout.
 
 Rungs 1–2 are the real gate; 3–5 are mechanical once shapes are derivable.
 
 ## Open questions
 
-- Does `pushdown` share this world or bind the statement itself as the
-  invocation (no `arguments` channel)? Sealed at spec time with the
-  minimal-deployment-surface follow-on.
-- Where does `reduce` run — any replica under lease (MovieLens pattern:
-  `sql-query-loop-parallel-reduce.js` leases + atomic snapshot), or a
-  runtime-chosen singleton? Contract only requires: exactly-once visible
-  final snapshot.
-- Keep `capability: u32 -> s32`, or drop it until the typed enum exists?
-- Batch memory bound: max rows/bytes per `run` invocation and the typed
-  refusal when the declared statement exceeds it.
+None. The four contract questions below are sealed (see decision log,
+2026-08-02) and the sealed text now lives in
+[`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md),
+which owns the contract from this point; this epic keeps the design rationale
+and the typed-API ladder.
 
 ## Decision log
+
+- 2026-08-02 — Pushdown sealed by quest `native-call-context-contract-sealing`:
+  pushdown shares the `call-cell` world; a pushdown invocation IS the
+  Binding-declared statement, and the shared `arguments` parameter degenerates
+  to the empty JSON object (one world, no second signature).
+- 2026-08-02 — Reduce placement sealed: reduce runs on any replica of the
+  reducing service under lease, with exactly-once *visible* final snapshot
+  (atomic result-row replace over a complete, fresh, disjoint partial set, per
+  `src/runtime/sql-query-loop-parallel-reduce.js`) — not exactly-once reduce
+  execution.
+- 2026-08-02 — Capability probe sealed: dropped from `call-context` v1; the
+  request world's `lagrange:cell/context` keeps its own u32 probe, and a typed
+  enum derived from the `CONFIGURE SERVICE ACCESS` grammar replaces it when
+  the catalog exists (ladder rung 5). No production guest ever invokes the
+  u32 probe today (host stub only).
+- 2026-08-02 — Batch bound sealed: the per-invocation batch limit is
+  Binding-declared like every other budget; exceeding it fails closed with
+  typed `budget-exhausted`. The call/pushdown Binding source contract gains an
+  optional declared partition-local `statement` (create-only; legacy
+  `{kind, name}` registrations stay valid but are not invocable). The legacy
+  axis carries statements transiently at the call site
+  (`wasm-call-adapter.js`), so the declared statement is a new durable
+  declaration, not a carry-over.
 
 - 2026-08-01 — Epic created on operator direction: the rung-1 emit/reduce
   contract is WIT-first and language-neutral; JS is one producer among
