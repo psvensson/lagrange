@@ -13,6 +13,18 @@ const MAX_SAFE_INTEGER = 9_007_199_254_740_991;
 const EVENT_TYPE_ROLE_TRANSITION = 'role_transition';
 const ROLE_LEADER = 'leader';
 const SOURCE_FINGERPRINT_MATCHES_FIELD = 'srcFingerprintMatches';
+const FIELD = Object.freeze({
+  MSG: 'msg',
+  EVENT_TYPE: 'eventType',
+  PARTITION_ID: 'partitionId',
+  REPLICA_ID: 'replicaId',
+  NODE_ID: 'nodeId',
+  ROLE: 'role',
+  TERM: 'term',
+  PEER_COHORT: 'peerCohort',
+  SELECTED_NODE_ID: 'selectedNodeId',
+  HARNESS_EVENT: 'harnessEvent',
+});
 const DUPLICATE_VALIDATION_STREAM_CURSOR = 'stream_cursor_contract';
 const CLI_FLAG_REPORT = '--report';
 const CLI_FLAG_LOGS = '--logs';
@@ -225,9 +237,9 @@ function normalizePeerCohort(value) {
 
 function roleTransitionRecords(records, partitionId) {
   return (arrayIsArray(records) ? records : []).filter((record) =>
-    ownField(record, 'msg') === TRANSITION_MESSAGE &&
-    ownField(record, 'eventType') === EVENT_TYPE_ROLE_TRANSITION &&
-    ownField(record, 'partitionId') === partitionId);
+    ownField(record, FIELD.MSG) === TRANSITION_MESSAGE &&
+    ownField(record, FIELD.EVENT_TYPE) === EVENT_TYPE_ROLE_TRANSITION &&
+    ownField(record, FIELD.PARTITION_ID) === partitionId);
 }
 
 function authoritativeRoleState(records, partitionId, observedAtMs) {
@@ -235,11 +247,11 @@ function authoritativeRoleState(records, partitionId, observedAtMs) {
   const relevantRecords = roleTransitionRecords(records, partitionId);
   if (relevantRecords.some((record) =>
     recordTimeMs(record) === null ||
-    typeof ownField(record, 'replicaId') !== 'string' ||
-    typeof ownField(record, 'nodeId') !== 'string' ||
-    typeof ownField(record, 'role') !== 'string' ||
-    nonNegativeSafeInteger(ownField(record, 'term')) === null ||
-    normalizePeerCohort(ownField(record, 'peerCohort')).length === 0)) {
+    typeof ownField(record, FIELD.REPLICA_ID) !== 'string' ||
+    typeof ownField(record, FIELD.NODE_ID) !== 'string' ||
+    typeof ownField(record, FIELD.ROLE) !== 'string' ||
+    nonNegativeSafeInteger(ownField(record, FIELD.TERM)) === null ||
+    normalizePeerCohort(ownField(record, FIELD.PEER_COHORT)).length === 0)) {
     return null;
   }
   const latestByReplica = new Map();
@@ -419,11 +431,11 @@ function captureWitnessProblems(change, captureByNode) {
 }
 
 function isRoleTransition(record, change, role, nodeId) {
-  return ownField(record, 'msg') === TRANSITION_MESSAGE &&
-    ownField(record, 'eventType') === EVENT_TYPE_ROLE_TRANSITION &&
-    ownField(record, 'partitionId') === change.partitionId &&
-    ownField(record, 'role') === role &&
-    ownField(record, 'nodeId') === nodeId;
+  return ownField(record, FIELD.MSG) === TRANSITION_MESSAGE &&
+    ownField(record, FIELD.EVENT_TYPE) === EVENT_TYPE_ROLE_TRANSITION &&
+    ownField(record, FIELD.PARTITION_ID) === change.partitionId &&
+    ownField(record, FIELD.ROLE) === role &&
+    ownField(record, FIELD.NODE_ID) === nodeId;
 }
 
 function findTransitionWitnesses({change, observedAtMs, records, windowMs}) {
@@ -537,8 +549,8 @@ function classifySignatureReset({
     return {
       resetIndex,
       observedAtMs,
-      previousObserver: ownField(previous, 'selectedNodeId') || null,
-      currentObserver: ownField(current, 'selectedNodeId') || null,
+      previousObserver: ownField(previous, FIELD.SELECTED_NODE_ID) || null,
+      currentObserver: ownField(current, FIELD.SELECTED_NODE_ID) || null,
       outcome: OUTCOME.INCOMPLETE,
       partitionTransitions: [],
       missingWitnesses: [MISSING_WITNESS.LEADER_SIGNATURE],
@@ -589,8 +601,8 @@ function classifySignatureReset({
   return {
     resetIndex,
     observedAtMs,
-    previousObserver: ownField(previous, 'selectedNodeId') || null,
-    currentObserver: ownField(current, 'selectedNodeId') || null,
+    previousObserver: ownField(previous, FIELD.SELECTED_NODE_ID) || null,
+    currentObserver: ownField(current, FIELD.SELECTED_NODE_ID) || null,
     outcome,
     partitionTransitions,
     missingWitnesses: [...new Set(missingWitnesses)].sort(),
@@ -677,7 +689,7 @@ function appendCaptureRecord(capture, parsed, nodeId, evidencePath, lineNumber) 
   if (timeMs !== null) capture.previousTimeMs = timeMs;
   capture.records.push({
     ...parsed,
-    nodeId: ownField(parsed, 'nodeId') || nodeId,
+    nodeId: ownField(parsed, FIELD.NODE_ID) || nodeId,
     incarnation,
     evidencePath: `${evidencePath}:${lineNumber}`,
   });
@@ -703,7 +715,7 @@ function inspectNodeCaptureLines(nodeId, lines, evidencePath = '') {
       unparseableLineCount += 1;
       continue;
     }
-    if (ownField(parsed, 'harnessEvent') === INCARNATION_BOUNDARY_EVENT) {
+    if (ownField(parsed, FIELD.HARNESS_EVENT) === INCARNATION_BOUNDARY_EVENT) {
       boundaryCount += 1;
       capture.incarnations.push({lineCount: 0, bootProvenanceCount: 0});
       capture.previousTimeMs = null;
