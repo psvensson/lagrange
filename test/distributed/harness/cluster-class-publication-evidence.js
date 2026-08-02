@@ -122,6 +122,15 @@ function normalizeQueueDiagnosticNonNegativeInteger(value) {
   return mathFloor(value);
 }
 
+function readOwnQueueDiagnosticEntry(value, index) {
+  const descriptor = objectGetOwnPropertyDescriptor(value, String(index));
+  if (!descriptor || !objectHasOwn(descriptor, 'value')) {
+    return null;
+  }
+  const entry = descriptor.value;
+  return typeof entry === TYPEOF_STRING && entry.length > ZERO ? entry : null;
+}
+
 function normalizeQueueDiagnosticStringArray(value) {
   if (!arrayIsArray(value)) {
     return [];
@@ -140,16 +149,8 @@ function normalizeQueueDiagnosticStringArray(value) {
   const seen = objectCreate(null);
   const normalized = [];
   for (let index = ZERO; index < length; index += 1) {
-    const descriptor = objectGetOwnPropertyDescriptor(value, String(index));
-    if (!descriptor || !objectHasOwn(descriptor, 'value')) {
-      continue;
-    }
-    const entry = descriptor.value;
-    if (
-      typeof entry !== TYPEOF_STRING ||
-      entry.length === ZERO ||
-      objectHasOwn(seen, entry)
-    ) {
+    const entry = readOwnQueueDiagnosticEntry(value, index);
+    if (entry === null || objectHasOwn(seen, entry)) {
       continue;
     }
     seen[entry] = true;

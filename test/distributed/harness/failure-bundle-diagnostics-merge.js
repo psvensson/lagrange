@@ -1377,6 +1377,15 @@ function hasRestartRecoveryPrioritySpreadEvidence(publicationConvergence) {
   );
 }
 
+// Owner states the failure barrier passes through as the dominant reason.
+const RESTART_RECOVERY_PASS_THROUGH_OWNER_STATES = Object.freeze([
+  RESTART_RECOVERY_OWNER_INFRASTRUCTURE_JOIN,
+  RESTART_RECOVERY_OWNER_STARTUP_AUTHORITY,
+  RESTART_RECOVERY_OWNER_TRANSACTION_RECOVERY,
+  RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY,
+  STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED,
+]);
+
 function resolveRestartRecoveryFailureBarrierReason({
   existingFailure,
   publicationConvergence,
@@ -1385,27 +1394,9 @@ function resolveRestartRecoveryFailureBarrierReason({
   if (hasRestartRecoveryPrioritySpreadEvidence(publicationConvergence)) {
     return STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING;
   }
-  if (
-    terminalRecoveryReadiness?.ownerState ===
-      RESTART_RECOVERY_OWNER_INFRASTRUCTURE_JOIN ||
-    terminalRecoveryReadiness?.ownerState ===
-      RESTART_RECOVERY_OWNER_STARTUP_AUTHORITY ||
-    terminalRecoveryReadiness?.ownerState ===
-      RESTART_RECOVERY_OWNER_TRANSACTION_RECOVERY
-  ) {
-    return terminalRecoveryReadiness.ownerState;
-  }
-  if (
-    terminalRecoveryReadiness?.ownerState ===
-      RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY
-  ) {
-    return RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY;
-  }
-  if (
-    terminalRecoveryReadiness?.ownerState ===
-      STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED
-  ) {
-    return STABILITY_GATE_BLOCKER_ADMIN_REACHABILITY_REFUSED;
+  const ownerState = terminalRecoveryReadiness?.ownerState;
+  if (RESTART_RECOVERY_PASS_THROUGH_OWNER_STATES.includes(ownerState)) {
+    return ownerState;
   }
   if (isSupersededFailureBarrierReason(existingFailure.dominantReason)) {
     return STABILITY_GATE_BLOCKER_STARTUP_READINESS;

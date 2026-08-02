@@ -97,16 +97,15 @@ function buildRecoveredTransactionDecisionState(row, status) {
 function buildTransactionRecoveryIncompleteError({decisionDimension, row}) {
   const error = new Error(QUERY_ERROR_MSG.TRANSACTION_RECOVERY_INCOMPLETE);
   error.errorCode = QUERY_ERROR_CODE.TRANSACTION_RECOVERY_INCOMPLETE;
-  if (typeof decisionDimension === 'string' && decisionDimension.length > 0) {
-    error.decisionDimension = decisionDimension;
-  }
-  const transactionId = row?.transaction_id ?? row?.transactionId;
-  const sessionId = row?.session_id ?? row?.sessionId;
-  if (typeof transactionId === 'string' && transactionId.length > 0) {
-    error.transactionId = transactionId;
-  }
-  if (typeof sessionId === 'string' && sessionId.length > 0) {
-    error.sessionId = sessionId;
+  const evidenceFields = {
+    decisionDimension,
+    transactionId: row?.transaction_id ?? row?.transactionId,
+    sessionId: row?.session_id ?? row?.sessionId,
+  };
+  for (const [fieldName, value] of Object.entries(evidenceFields)) {
+    if (typeof value === 'string' && value.length > 0) {
+      error[fieldName] = value;
+    }
   }
   return error;
 }
