@@ -1,0 +1,15 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "ownerCheck": {
+    "passed": true,
+    "owner": "scripts/solve/scope-pressure.js"
+  },
+  "gates": {
+    "semanticOwnerPairing": true,
+    "proofTailClassification": true,
+    "guardMonotonicity": true,
+    "subagentVerification": true
+  }
+}

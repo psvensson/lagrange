@@ -225,6 +225,12 @@ tap.test('proof-checked correction restores one common base append-only', (t) =>
     ['src/a.js', 'src/b.js'],
     'scope-pressure projects the same authorized correction and path union',
   );
+  t.same(scopePressure.implementationPaths, ['src/a.js', 'src/b.js'],
+    'corrected attempts preserve the complete semantic implementation set');
+  t.same(scopePressure.proofTailPaths, [],
+    'corrected attempts do not invent proof tails');
+  t.equal(scopePressure.pathRoles.length, scopePressure.changedPaths.length,
+    'corrected attempts keep one semantic role per changed path');
   t.throws(
     () => runAttemptBaseCorrectionCommand(fx.root, {
       'id': fx.quest.id,

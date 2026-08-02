@@ -32,6 +32,82 @@ const GENERATED_PROJECTION_PATHS = new Set([
   'solve/FRONTIER.generated.md',
   'solve/OVERVIEW.generated.md',
 ]);
+const SOLVE_PROOF_TAIL_SEGMENTS = new Set([
+  'artifacts',
+  'changes',
+  'log',
+  'oracle',
+  'quests',
+  'state',
+]);
+const SOLVE_QUEST_REPORT_PATTERN = /^solve\/report\/[^/]+\.md$/u;
+// A sealed path-only registry keeps generic test folders from inventing
+// runtime owners. The regression suite checks this list against src/* dirs so
+// a new runtime boundary cannot silently lose its proof-tail pairing.
+const RUNTIME_DOMAIN_SEGMENTS = new Set([
+  'address',
+  'admin',
+  'boot',
+  'bootstrap',
+  'cache',
+  'cdc',
+  'cli',
+  'config',
+  'constants',
+  'control-plane',
+  'debug',
+  'debug-runtime',
+  'diagnostics',
+  'function',
+  'hlc',
+  'index-management',
+  'invariants',
+  'live-query',
+  'logging',
+  'message-group',
+  'migration',
+  'node',
+  'partition',
+  'policy',
+  'query',
+  'raft',
+  'random',
+  'rebalancer',
+  'runtime',
+  'sea',
+  'service',
+  'storage',
+  'test-helpers',
+  'threading',
+  'time',
+  'topology',
+  'transaction',
+  'transport',
+  'utils',
+  'wasm-service',
+  'worker',
+  'workflow',
+]);
+const SEMANTIC_ROLE_IMPLEMENTATION = 'implementation';
+const SEMANTIC_ROLE_PROOF_TAIL = 'proof-tail';
+const SEMANTIC_OWNER_WORKFLOW_SOLVER = 'workflow/solver';
+const SEMANTIC_OWNER_WORKFLOW_STEERING = 'workflow/steering';
+const PATH_SEGMENT_ARCHITECTURE = 'architecture';
+const PATH_SEGMENT_DISTRIBUTED = 'distributed';
+const PATH_SEGMENT_DOCS = 'docs';
+const PATH_SEGMENT_SCRIPTS = 'scripts';
+const PATH_SEGMENT_SOLVE = 'solve';
+const PATH_SEGMENT_SRC = 'src';
+const PATH_SEGMENT_STEERING = 'steering';
+const PATH_SEGMENT_TEST = 'test';
+const LIST_SEPARATOR = ', ';
+const EMPTY_LIST_LABEL = 'none';
+const SEMANTIC_PLAN_HEADER =
+  '- Semantic plan (proof tails stay with their owner):';
+const SEMANTIC_PLAN_REQUIRED_NOTE =
+  '- Proof-tail grouping is guidance only; every path remains required and guard-counted.';
+const CONSERVATIVE_PLAN_HEADER =
+  '- Conservative guard plan (physical owner areas):';
 
 function ownerAreaForPath(filePath) {
   const segments = String(filePath || '').split('/');
@@ -47,6 +123,75 @@ function ownerAreaForPath(filePath) {
   if (segments[0] === 'architecture') return 'architecture';
   if (segments[0] === 'solve') return 'solve';
   return segments[0] || 'unknown';
+}
+
+// Operator guidance pairs proofs with the implementation boundary they
+// validate. This is deliberately path-only and additive: the conservative
+// ownerAreaForPath projection remains the admission authority.
+export function semanticScopeForPath(filePath) {
+  const normalizedPath = String(filePath || '');
+  const segments = normalizedPath.split('/');
+  if (segments[0] === PATH_SEGMENT_SRC &&
+    RUNTIME_DOMAIN_SEGMENTS.has(segments[1])) {
+    return {
+      semanticOwner: `runtime/${segments[1]}`,
+      role: SEMANTIC_ROLE_IMPLEMENTATION,
+    };
+  }
+  if (segments[0] === PATH_SEGMENT_TEST &&
+    segments[1] === PATH_SEGMENT_SOLVE) {
+    return {
+      semanticOwner: SEMANTIC_OWNER_WORKFLOW_SOLVER,
+      role: SEMANTIC_ROLE_PROOF_TAIL,
+    };
+  }
+  if (segments[0] === PATH_SEGMENT_TEST &&
+    segments[1] === PATH_SEGMENT_DISTRIBUTED && segments[2]) {
+    return {
+      semanticOwner: `runtime/${segments[2]}`,
+      role: SEMANTIC_ROLE_PROOF_TAIL,
+    };
+  }
+  if (segments[0] === PATH_SEGMENT_TEST &&
+    RUNTIME_DOMAIN_SEGMENTS.has(segments[1])) {
+    return {
+      semanticOwner: `runtime/${segments[1]}`,
+      role: SEMANTIC_ROLE_PROOF_TAIL,
+    };
+  }
+  if (segments[0] === PATH_SEGMENT_SCRIPTS &&
+    segments[1] === PATH_SEGMENT_SOLVE) {
+    return {
+      semanticOwner: SEMANTIC_OWNER_WORKFLOW_SOLVER,
+      role: SEMANTIC_ROLE_IMPLEMENTATION,
+    };
+  }
+  if (segments[0] === PATH_SEGMENT_DOCS &&
+    segments[1] === PATH_SEGMENT_STEERING) {
+    return {
+      semanticOwner: SEMANTIC_OWNER_WORKFLOW_STEERING,
+      role: SEMANTIC_ROLE_PROOF_TAIL,
+    };
+  }
+  if (segments[0] === PATH_SEGMENT_ARCHITECTURE) {
+    return {
+      semanticOwner: SEMANTIC_OWNER_WORKFLOW_STEERING,
+      role: SEMANTIC_ROLE_PROOF_TAIL,
+    };
+  }
+  if (segments[0] === PATH_SEGMENT_SOLVE &&
+    (SOLVE_PROOF_TAIL_SEGMENTS.has(segments[1]) ||
+      GENERATED_PROJECTION_PATHS.has(normalizedPath) ||
+      SOLVE_QUEST_REPORT_PATTERN.test(normalizedPath))) {
+    return {
+      semanticOwner: SEMANTIC_OWNER_WORKFLOW_SOLVER,
+      role: SEMANTIC_ROLE_PROOF_TAIL,
+    };
+  }
+  return {
+    semanticOwner: ownerAreaForPath(normalizedPath),
+    role: SEMANTIC_ROLE_IMPLEMENTATION,
+  };
 }
 
 const SCOPE_BASELINE_RESOLUTIONS = Object.freeze([
@@ -199,6 +344,46 @@ function splitPlanFor(changedPaths) {
     a.ownerArea.localeCompare(b.ownerArea));
 }
 
+function semanticScopeFor(changedPaths) {
+  const pathRoles = changedPaths.map((filePath) => ({
+    path: filePath,
+    ...semanticScopeForPath(filePath),
+  })).sort((left, right) => left.path.localeCompare(right.path));
+  const groups = new Map();
+  for (const entry of pathRoles) {
+    const group = groups.get(entry.semanticOwner) || {
+      semanticOwner: entry.semanticOwner,
+      fileCount: 0,
+      implementationCount: 0,
+      proofTailCount: 0,
+      changedPaths: [],
+    };
+    group.fileCount += 1;
+    if (entry.role === SEMANTIC_ROLE_PROOF_TAIL) group.proofTailCount += 1;
+    else group.implementationCount += 1;
+    group.changedPaths.push(entry.path);
+    groups.set(entry.semanticOwner, group);
+  }
+  const semanticSplitPlan = [...groups.values()]
+    .map((group) => ({
+      ...group,
+      changedPaths: group.changedPaths.sort(),
+    }))
+    .sort((left, right) => right.fileCount - left.fileCount ||
+      left.semanticOwner.localeCompare(right.semanticOwner));
+  return {
+    semanticOwnerAreas: [...groups.keys()].sort(),
+    implementationPaths: pathRoles
+      .filter((entry) => entry.role === SEMANTIC_ROLE_IMPLEMENTATION)
+      .map((entry) => entry.path),
+    proofTailPaths: pathRoles
+      .filter((entry) => entry.role === SEMANTIC_ROLE_PROOF_TAIL)
+      .map((entry) => entry.path),
+    pathRoles,
+    semanticSplitPlan,
+  };
+}
+
 function recommendedActions(changedPaths, ownerAreas, categories) {
   const actions = [];
   if (changedPaths.length > LARGE_DIFF_FILE_LIMIT) {
@@ -221,6 +406,7 @@ function summarizeScopePressure(root, inspections) {
   const changedPaths = [...new Set(inspections.flatMap((entry) =>
     entry.inspection.changedPaths || []))].sort();
   const ownerAreas = [...new Set(changedPaths.map(ownerAreaForPath))].sort();
+  const semanticScope = semanticScopeFor(changedPaths);
   const categories = [...new Set(inspections.flatMap((entry) =>
     entry.inspection.categories || []))].sort();
   const signals = [];
@@ -231,6 +417,7 @@ function summarizeScopePressure(root, inspections) {
     entry.inspection.changedPaths || []))].sort();
   const admissionOwnerAreas = [...new Set(
     admissionChangedPaths.map(ownerAreaForPath))].sort();
+  const admissionSemanticScope = semanticScopeFor(admissionChangedPaths);
   const admissionChangedBytes = effectiveChangeBytes(admissionInspections);
   if (ownerAreas.length > BROAD_OWNER_AREA_LIMIT) {
     signals.push({
@@ -263,12 +450,14 @@ function summarizeScopePressure(root, inspections) {
     changedPaths,
     changedBytes,
     ownerAreas,
+    ...semanticScope,
     categories,
     attempts: summarizeAttempts(inspections),
     admission: {
       changedPaths: admissionChangedPaths,
       changedBytes: admissionChangedBytes,
       ownerAreas: admissionOwnerAreas,
+      ...admissionSemanticScope,
     },
     splitPlan: splitPlanFor(changedPaths),
     recommendedActions: recommendedActions(changedPaths, ownerAreas, categories),
@@ -304,15 +493,32 @@ export function renderScopePressure(scopePressure) {
   const lines = ['## Scope Pressure'];
   lines.push(`- Changed files: ${scopePressure.changedPaths.length}`);
   lines.push(`- Change bytes: ${scopePressure.changedBytes || 0}`);
-  lines.push(`- Owner areas: ${scopePressure.ownerAreas.join(', ') || 'none'}`);
-  lines.push(`- Categories: ${scopePressure.categories.join(', ') || 'none'}`);
+  lines.push(`- Owner areas: ${
+    scopePressure.ownerAreas.join(LIST_SEPARATOR) || EMPTY_LIST_LABEL}`);
+  lines.push(`- Semantic owners: ${
+    scopePressure.semanticOwnerAreas.join(LIST_SEPARATOR) || EMPTY_LIST_LABEL}`);
+  lines.push(`- Implementation files: ${scopePressure.implementationPaths.length}`);
+  lines.push(`- Proof-tail files: ${scopePressure.proofTailPaths.length}`);
+  lines.push(`- Categories: ${
+    scopePressure.categories.join(LIST_SEPARATOR) || EMPTY_LIST_LABEL}`);
   if (scopePressure.recommendedActions?.length > 0) {
     for (const action of scopePressure.recommendedActions) {
       lines.push(`- Action: ${action}`);
     }
   }
+  if (scopePressure.semanticSplitPlan?.length > 0) {
+    lines.push(SEMANTIC_PLAN_HEADER);
+    lines.push(SEMANTIC_PLAN_REQUIRED_NOTE);
+    for (const group of scopePressure.semanticSplitPlan) {
+      lines.push(
+        `  - ${group.semanticOwner}: ${group.fileCount} file(s) ` +
+        `(${group.implementationCount} implementation, ` +
+        `${group.proofTailCount} proof-tail)`,
+      );
+    }
+  }
   if (scopePressure.splitPlan?.length > 0) {
-    lines.push('- Split plan:');
+    lines.push(CONSERVATIVE_PLAN_HEADER);
     for (const group of scopePressure.splitPlan) {
       lines.push(
         `  - ${group.ownerArea}: ${group.fileCount} file(s)` +

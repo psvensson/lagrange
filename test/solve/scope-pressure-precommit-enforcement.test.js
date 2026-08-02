@@ -173,9 +173,13 @@ tap.test('real step rejects owner and byte overflow independently', (t) => {
 
 tap.test('generated projections stay visible without inflating authored admission', (t) => {
   const {root, quest} = setup();
+  const logPath = path.join(root, 'solve/log', `${quest.id}.ndjson`);
+  fs.mkdirSync(path.dirname(logPath), {recursive: true});
+  fs.writeFileSync(logPath, '');
   const changeRef = makeDiff(root, [
     'scripts/solve/overview.js',
     'solve/OVERVIEW.generated.md',
+    `solve/report/${quest.id}.md`,
   ], SCOPE_PRESSURE_BYTE_LIMIT + 1000);
   const inspection = inspectChangeArtifact(root, quest, changeRef);
   const pressure = analyzeScopePressureCandidate(
@@ -185,9 +189,14 @@ tap.test('generated projections stay visible without inflating authored admissio
   t.same(pressure.changedPaths, [
     'scripts/solve/overview.js',
     'solve/OVERVIEW.generated.md',
+    `solve/report/${quest.id}.md`,
   ], 'operator diagnostics retain the complete changed-path set');
   t.same(pressure.admission.changedPaths, ['scripts/solve/overview.js'],
     'the authored admission set excludes the known deterministic projection');
+  t.same(pressure.proofTailPaths, [
+    'solve/OVERVIEW.generated.md',
+    `solve/report/${quest.id}.md`,
+  ], 'generated Solver projections remain visible as required proof tails');
   t.ok(pressure.changedBytes > SCOPE_PRESSURE_BYTE_LIMIT,
     'raw scope remains observable');
   t.notOk(scopeTerminalStatus(pressure).terminal,
