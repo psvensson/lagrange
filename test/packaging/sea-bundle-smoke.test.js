@@ -55,7 +55,10 @@ function runSpawnedBundle(args, env, timeoutMs = 15000) {
 }
 
 test('SEA bundle smoke test', async (t) => {
-  const build = await runEntrypoint(buildEntrypoint, {timeoutMs: 30000});
+  // The bundle build is CPU-bound and shares the machine with parallel test
+  // jobs (and 2-vCPU CI runners): 30s flakes under contention while a real
+  // hang still fails fast enough at 120s.
+  const build = await runEntrypoint(buildEntrypoint, {timeoutMs: 120000});
   t.equal(build.exitCode, 0, 'build script exits cleanly');
   t.equal(fs.existsSync(mainBundle), true, 'main bundle exists after build');
   t.equal(fs.existsSync(cliBundle), true, 'CLI bundle exists after build');
