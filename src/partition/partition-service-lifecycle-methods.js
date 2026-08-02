@@ -160,6 +160,7 @@ class PartitionServiceLifecycleMethods {
     this.cdcReplayRetryDepth = 0;
     this.recentlyAppliedEntryKeys.clear();
     this.recentlyAppliedEntryOrder = [];
+    this.recentlyAppliedEntryWitnesses.clear();
     this.pendingCDCEventDeliveries.clear();
     this.emit(PARTITION_SERVICE_EVENT.SHUTDOWN, {
       partitionId: this.partitionId,

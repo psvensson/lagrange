@@ -19,6 +19,9 @@ import {
   scaleWorkBoundTimeout,
 } from '../harness/convergence-budget-calibration.js';
 import {
+  assertAcknowledgedWritesVisibleOnReachableNodes,
+} from '../harness/acknowledged-write-visibility.js';
+import {
   BENCHMARK_WORKLOAD_PROFILE,
   TABLE_BOOTSTRAP_VISIBILITY_STATE,
   createPartitioningBenchmarkLoadNodePlan,
@@ -27,8 +30,6 @@ import {
   resolvePartitioningLoadTableName,
 } from './table-distribution-helpers.js';
 
-const ACKNOWLEDGED_WRITE_ALIAS = 'ack_id';
-const ACKNOWLEDGED_WRITE_BATCH_SIZE = 100;
 const ACKNOWLEDGED_WRITE_VISIBILITY_TIMEOUT_MS = 30000;
 const ACKNOWLEDGED_WRITE_VISIBILITY_POLL_INTERVAL_MS = 500;
 const PRE_LOAD_READINESS_TIMEOUT_MS = 300000;
@@ -57,20 +58,6 @@ function normalizeFiniteNumber(value, fallback) {
 
 function normalizeNonEmptyString(value, fallback) {
   return typeof value === 'string' && value.length > ZERO ? value : fallback;
-}
-
-function rowsFromResult(result) {
-  if (Array.isArray(result)) {
-    return result;
-  }
-  if (Array.isArray(result?.rows)) {
-    return result.rows;
-  }
-  return [];
-}
-
-function sleep(delayMs) {
-  return new Promise((resolve) => setTimeout(resolve, delayMs));
 }
 
 function resolveClusterNodes(cluster) {
@@ -214,168 +201,6 @@ async function waitForPreBenchmarkBootstrapControlPlane(cluster, {
     requireCriticalSystemSpread:
       PRE_LOAD_CRITICAL_SYSTEM_SPREAD_REQUIRED,
   });
-}
-
-function escapeSql(value) {
-  return String(value).replace(/'/g, '\'\'');
-}
-
-async function getReachableNodes(nodes) {
-  const reachable = [];
-  for (const node of nodes) {
-    if (typeof node?.isReachable === 'function') {
-      const isReachable = await node.isReachable();
-      if (!isReachable) {
-        continue;
-      }
-    }
-    reachable.push(node);
-  }
-  return reachable;
-}
-
-function buildAcknowledgedWriteVisibilityQuery(tableName, idColumn, ids) {
-  return 'SELECT ' + idColumn + ' AS ' + ACKNOWLEDGED_WRITE_ALIAS +
-    ' FROM ' + tableName + ' WHERE ' + idColumn + ' IN (' +
-    ids.map((id) => '\'' + escapeSql(id) + '\'').join(', ') + ')';
-}
-
-async function assertAcknowledgedWritesVisibleOnReachableNodes(
-  acknowledgedWrites,
-  nodes,
-  options = {},
-) {
-  const ids = Array.isArray(acknowledgedWrites?.ids) ?
-    [...new Set(acknowledgedWrites.ids
-      .filter((id) => typeof id === 'string' && id.length > ZERO))] :
-    [];
-  const reachableNodes = await getReachableNodes(nodes);
-  if (ids.length === ZERO) {
-    return {
-      acknowledgedWriteCount: ZERO,
-      reachableNodeCount: reachableNodes.length,
-    };
-  }
-
-  assert.ok(
-    reachableNodes.length > ZERO,
-    'No reachable nodes available for acknowledged-write visibility check',
-  );
-
-  const tableName = normalizeNonEmptyString(
-    acknowledgedWrites?.tableName,
-    'logs',
-  );
-  const idColumn = normalizeNonEmptyString(
-    acknowledgedWrites?.idColumn,
-    'log_id',
-  );
-  const visibilityTimeoutMs = Math.max(
-    ZERO,
-    Math.floor(
-      normalizeFiniteNumber(
-        options.visibilityTimeoutMs,
-        ACKNOWLEDGED_WRITE_VISIBILITY_TIMEOUT_MS,
-      ),
-    ),
-  );
-  const visibilityPollIntervalMs = Math.max(
-    1,
-    Math.floor(
-      normalizeFiniteNumber(
-        options.visibilityPollIntervalMs,
-        ACKNOWLEDGED_WRITE_VISIBILITY_POLL_INTERVAL_MS,
-      ),
-    ),
-  );
-
-  for (const node of reachableNodes) {
-    let missingIds = ids;
-    let completedCleanRead = false;
-    let lastQueryError = null;
-    const deadlineMs = Date.now() + visibilityTimeoutMs;
-    for (;;) {
-      const nextMissingIds = [];
-      let roundErrored = false;
-      for (let index = ZERO; index < ids.length;
-        index += ACKNOWLEDGED_WRITE_BATCH_SIZE) {
-        const idBatch = ids.slice(
-          index,
-          index + ACKNOWLEDGED_WRITE_BATCH_SIZE,
-        );
-        const query = buildAcknowledgedWriteVisibilityQuery(
-          tableName,
-          idColumn,
-          idBatch,
-        );
-        let result;
-        try {
-          result = await node.query(query);
-        } catch (error) {
-          // A THROWN visibility query (e.g. a transient
-          // DISTRIBUTED_PARTICIPANT_FAILURE while a replica is mid-removal during
-          // the rolling-restart placement tail) means visibility is UNKNOWN this
-          // round, NOT that the acknowledged write is missing. Retry within the
-          // existing deadline that already exists for transient non-visibility; a
-          // participant that stays unqueryable for the whole window still fails
-          // below (completedCleanRead never set). The "query succeeded but rows
-          // missing" path is unchanged — a genuine stale read still fails.
-          lastQueryError = error;
-          roundErrored = true;
-          break;
-        }
-        const visibleIds = new Set(
-          rowsFromResult(result)
-            .map((row) => row?.[ACKNOWLEDGED_WRITE_ALIAS])
-            .filter((id) => typeof id === 'string' && id.length > ZERO),
-        );
-        for (const id of idBatch) {
-          if (!visibleIds.has(id)) {
-            nextMissingIds.push(id);
-          }
-        }
-      }
-      if (!roundErrored) {
-        missingIds = nextMissingIds;
-        completedCleanRead = true;
-        lastQueryError = null;
-      }
-      if ((!roundErrored && missingIds.length === ZERO) ||
-        Date.now() >= deadlineMs) {
-        break;
-      }
-      await sleep(
-        Math.min(
-          visibilityPollIntervalMs,
-          Math.max(ZERO, deadlineMs - Date.now()),
-        ),
-      );
-    }
-    assert.ok(
-      completedCleanRead,
-      'Could not complete acknowledged-write visibility query on node ' +
-      String(node?.id || 'unknown') + ' within ' + visibilityTimeoutMs +
-      'ms' +
-      (lastQueryError ?
-        ': ' + (lastQueryError?.message || String(lastQueryError)) :
-        ''),
-    );
-    assert.equal(
-      missingIds.length,
-      ZERO,
-      'Acknowledged writes missing after rolling restart on node ' +
-      String(node?.id || 'unknown') + ': ' +
-      JSON.stringify(missingIds.slice(ZERO, 10)) +
-      (missingIds.length > 10 ?
-        ' (+' + String(missingIds.length - 10) + ' more)' :
-        ''),
-    );
-  }
-
-  return {
-    acknowledgedWriteCount: ids.length,
-    reachableNodeCount: reachableNodes.length,
-  };
 }
 
 // Work-bound timeouts that scale with the machine factor: each is a "max wall time
@@ -582,6 +407,24 @@ async function waitForPostRestartRecoveryBarrier(cluster, {
       loadReadinessPhase: LOAD_READINESS_PHASE_POST_RESTART,
     });
   }
+}
+
+function assertRollingRestartSucceeded(failureMessages, partialResult) {
+  if (failureMessages.length === ZERO) {
+    return;
+  }
+  const error = new assert.AssertionError({
+    message: failureMessages.join('\n'),
+    actual: failureMessages.length,
+    expected: ZERO,
+    operator: 'strictEqual',
+  });
+  error.diagnostics = {partialResult};
+  throw error;
+}
+
+function resolveFailedAcknowledgedWriteVisibility(current, error) {
+  return error?.acknowledgedWriteVisibility || current;
 }
 
 /**
@@ -806,6 +649,10 @@ async function run(cluster, options = {}) {
           },
         );
     } catch (error) {
+      acknowledgedWriteVisibility = resolveFailedAcknowledgedWriteVisibility(
+        acknowledgedWriteVisibility,
+        error,
+      );
       failureMessages.push(error?.message || String(error));
     }
     if (restartSuccessRate < minRestartSuccessRate) {
@@ -816,15 +663,18 @@ async function run(cluster, options = {}) {
       );
     }
 
-    assert.ok(
-      failureMessages.length === ZERO,
-      failureMessages.join('\n'),
-    );
+    const restartedNodes = nonSeedNodes.map((n) => n.id);
+    assertRollingRestartSucceeded(failureMessages, {
+      loadMetrics: metrics,
+      restartSuccessRate,
+      restartedNodes,
+      acknowledgedWriteVisibility,
+    });
 
     return {
       loadMetrics: metrics,
       restartSuccessRate,
-      restartedNodes: nonSeedNodes.map((n) => n.id),
+      restartedNodes,
       acknowledgedWriteVisibility,
     };
   } finally {

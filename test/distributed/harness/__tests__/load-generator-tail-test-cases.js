@@ -1018,4 +1018,70 @@ export function registerLoadGeneratorTailTests({
       run.cancel();
     }
   });
+
+  test('acknowledged-write receipts retain accepting node, time, and durable ' +
+    'commit identity', async () => {
+    const durableCommitWitness = {
+      partitionId: 'logs-p1',
+      leaderNodeId: 'accepting-node',
+      leaderReplicaId: 'logs-p1-r1',
+      term: 3,
+      logIndex: 19,
+      entryId: 'entry-write-operation-1',
+      operationId: 'write-operation-1',
+      idempotencyKey: 'write-operation-1',
+    };
+    const nodes = [{
+      id: 'accepting-node',
+      async query() {
+        return {
+          rows: [],
+          writeReceipt: {
+            operationId: 'write-operation-1',
+            idempotencyKey: 'write-operation-1',
+            successfulParticipantCount: 1,
+            witnessedParticipantCount: 1,
+            commitWitnessComplete: true,
+            missingCommitWitnessPartitions: [],
+            durableCommitWitnesses: [durableCommitWitness],
+            participantReceipts: [{
+              partitionId: 'logs-p1',
+              acceptingNodeId: 'accepting-node',
+              acknowledgedAtMs: 1785630280000,
+              durableCommitWitness,
+              complete: true,
+            }],
+          },
+        };
+      },
+    }];
+    const gen = new LoadGenerator(nodes, {
+      opsPerSec: 50,
+      duration: 100,
+      operations: ['INSERT'],
+      trackAcknowledgedWrites: true,
+    });
+    const run = gen.start();
+    try {
+      await run.waitComplete();
+      const acknowledgedWrites = run.getAcknowledgedWrites();
+      assert.ok(acknowledgedWrites.receipts.length > ZERO);
+      for (const receipt of acknowledgedWrites.receipts) {
+        assert.equal(receipt.acceptingNodeId, 'accepting-node');
+        assert.equal(receipt.acknowledgedAtMs, 1785630280000);
+        assert.equal(receipt.gatewayNodeId, 'accepting-node');
+        assert.ok(Number.isSafeInteger(receipt.receivedAtMs));
+        assert.equal(receipt.operationId, 'write-operation-1');
+        assert.equal(receipt.idempotencyKey, 'write-operation-1');
+        assert.deepEqual(
+          receipt.durableCommitWitnesses,
+          [durableCommitWitness],
+        );
+        assert.equal(receipt.commitWitnessComplete, true);
+        assert.equal(receipt.participantReceipts.length, 1);
+      }
+    } finally {
+      run.cancel();
+    }
+  });
 }

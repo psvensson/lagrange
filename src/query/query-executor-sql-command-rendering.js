@@ -356,6 +356,9 @@ const queryExecutorSqlCommandMethods = {
           ast.values.length,
       rows: Array.isArray(result.rows) ? result.rows : [],
       partitions: [partitionId],
+      durableCommitWitness: result.durableCommitWitness,
+      acceptingNodeId: result.acceptingNodeId,
+      acknowledgedAtMs: result.acknowledgedAtMs,
     };
   },
 

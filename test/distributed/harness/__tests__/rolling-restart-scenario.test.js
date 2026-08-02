@@ -54,6 +54,61 @@ const TABLE_POLICIES_JSON = JSON.stringify({
   mergeStorageThreshold: 1,
   mergeTrafficThreshold: 1,
 });
+const arraySome = Function.call.bind(Array.prototype.some);
+const arrayMap = Function.call.bind(Array.prototype.map);
+
+function buildAcknowledgedReadResult(nodeId, acknowledgedWriteIds) {
+  return {
+    rows: arrayMap(acknowledgedWriteIds, (ackId) => ({ack_id: ackId})),
+    readAuthorityWitnesses: [{
+      state: 'observed',
+      partitionId: 'logs-p1',
+      servingNodeId: nodeId,
+      servingReplicaId: `logs-p1-${nodeId}`,
+      term: 1,
+      role: 'follower',
+      observedAtMs: Date.now(),
+    }],
+  };
+}
+
+function buildAcknowledgedWrites(ids) {
+  return {
+    tableName: 'logs',
+    idColumn: 'log_id',
+    ids,
+    receipts: arrayMap(ids, (id, index) => {
+      const operationId = `write-${index}`;
+      const durableCommitWitness = {
+        partitionId: 'logs-p1',
+        leaderNodeId: 'writer-node',
+        leaderReplicaId: 'logs-p1-writer',
+        term: 1,
+        logIndex: index + 1,
+        entryId: `entry-${index}`,
+        operationId,
+        idempotencyKey: operationId,
+      };
+      return {
+        id,
+        operationId,
+        idempotencyKey: operationId,
+        successfulParticipantCount: 1,
+        witnessedParticipantCount: 1,
+        commitWitnessComplete: true,
+        missingCommitWitnessPartitions: [],
+        durableCommitWitnesses: [durableCommitWitness],
+        participantReceipts: [{
+          partitionId: 'logs-p1',
+          acceptingNodeId: 'writer-node',
+          acknowledgedAtMs: 1,
+          durableCommitWitness,
+          complete: true,
+        }],
+      };
+    }),
+  };
+}
 
 describe('rolling-restart scenario', () => {
   it('waits for load readiness before starting sustained load',
@@ -525,11 +580,8 @@ describe('rolling-restart scenario', () => {
 
       const loadRun = {
         getMetrics: () => ({total: 10, success: 10}),
-        getAcknowledgedWrites: () => ({
-          tableName: 'logs',
-          idColumn: 'log_id',
-          ids: acknowledgedWriteIds,
-        }),
+        getAcknowledgedWrites: () =>
+          buildAcknowledgedWrites(acknowledgedWriteIds),
         cancel: () => {
           cancelCalls += 1;
           loadStopped = true;
@@ -555,9 +607,10 @@ describe('rolling-restart scenario', () => {
             role: 'seed',
             query: async (sql) => {
               if (sql.includes(ACK_QUERY_FRAGMENT)) {
-                return {
-                  rows: acknowledgedWriteIds.map((ackId) => ({ack_id: ackId})),
-                };
+                return buildAcknowledgedReadResult(
+                  'seed-1',
+                  acknowledgedWriteIds,
+                );
               }
               return {rows: []};
             },
@@ -567,9 +620,10 @@ describe('rolling-restart scenario', () => {
             role: 'joiner',
             query: async (sql) => {
               if (sql.includes(ACK_QUERY_FRAGMENT)) {
-                return {
-                  rows: acknowledgedWriteIds.map((ackId) => ({ack_id: ackId})),
-                };
+                return buildAcknowledgedReadResult(
+                  'joiner-1',
+                  acknowledgedWriteIds,
+                );
               }
               return {rows: []};
             },
@@ -579,9 +633,10 @@ describe('rolling-restart scenario', () => {
             role: 'joiner',
             query: async (sql) => {
               if (sql.includes(ACK_QUERY_FRAGMENT)) {
-                return {
-                  rows: acknowledgedWriteIds.map((ackId) => ({ack_id: ackId})),
-                };
+                return buildAcknowledgedReadResult(
+                  'joiner-2',
+                  acknowledgedWriteIds,
+                );
               }
               return {rows: []};
             },
@@ -653,10 +708,19 @@ describe('rolling-restart scenario', () => {
       assert.equal(cancelCalls, 1);
       assert.equal(result.restartSuccessRate, 0.7);
       assert.deepEqual(result.restartedNodes, ['joiner-1', 'joiner-2']);
-      assert.deepEqual(result.acknowledgedWriteVisibility, {
-        acknowledgedWriteCount: 2,
-        reachableNodeCount: 3,
-      });
+      assert.equal(
+        result.acknowledgedWriteVisibility.acknowledgedWriteCount,
+        2,
+      );
+      assert.equal(
+        result.acknowledgedWriteVisibility.reachableNodeCount,
+        3,
+      );
+      assert.equal(result.acknowledgedWriteVisibility.verified, true);
+      assert.equal(
+        result.acknowledgedWriteVisibility.nodeObservations.length,
+        3,
+      );
     });
 
   it('waits for acknowledged writes to become visible after convergence',
@@ -665,11 +729,8 @@ describe('rolling-restart scenario', () => {
       const joinerAckQueries = [];
       const loadRun = {
         getMetrics: () => ({total: 10, success: 10}),
-        getAcknowledgedWrites: () => ({
-          tableName: 'logs',
-          idColumn: 'log_id',
-          ids: acknowledgedWriteIds,
-        }),
+        getAcknowledgedWrites: () =>
+          buildAcknowledgedWrites(acknowledgedWriteIds),
         cancel: () => {},
         waitComplete: async () => ({
           total: 20,
@@ -685,9 +746,10 @@ describe('rolling-restart scenario', () => {
             role: 'seed',
             query: async (sql) => {
               if (sql.includes(ACK_QUERY_FRAGMENT)) {
-                return {
-                  rows: acknowledgedWriteIds.map((ackId) => ({ack_id: ackId})),
-                };
+                return buildAcknowledgedReadResult(
+                  'seed-1',
+                  acknowledgedWriteIds,
+                );
               }
               return {rows: []};
             },
@@ -701,11 +763,15 @@ describe('rolling-restart scenario', () => {
               }
               joinerAckQueries.push(sql);
               if (joinerAckQueries.length === 1) {
-                return {rows: [{ack_id: acknowledgedWriteIds[ZERO]}]};
+                return buildAcknowledgedReadResult(
+                  'joiner-1',
+                  [acknowledgedWriteIds[ZERO]],
+                );
               }
-              return {
-                rows: acknowledgedWriteIds.map((ackId) => ({ack_id: ackId})),
-              };
+              return buildAcknowledgedReadResult(
+                'joiner-1',
+                acknowledgedWriteIds,
+              );
             },
           },
         ],
@@ -727,10 +793,15 @@ describe('rolling-restart scenario', () => {
           ACK_VISIBILITY_RETRY_POLL_INTERVAL_MS,
       });
 
-      assert.deepEqual(result.acknowledgedWriteVisibility, {
-        acknowledgedWriteCount: acknowledgedWriteIds.length,
-        reachableNodeCount: 2,
-      });
+      assert.equal(
+        result.acknowledgedWriteVisibility.acknowledgedWriteCount,
+        acknowledgedWriteIds.length,
+      );
+      assert.equal(
+        result.acknowledgedWriteVisibility.reachableNodeCount,
+        2,
+      );
+      assert.equal(result.acknowledgedWriteVisibility.verified, true);
       assert.equal(joinerAckQueries.length, 2);
       assert.equal(joinerAckQueries[1].includes(acknowledgedWriteIds[ZERO]),
         true);
@@ -745,11 +816,8 @@ describe('rolling-restart scenario', () => {
       let joinerAckQueryCount = ZERO;
       const loadRun = {
         getMetrics: () => ({total: 10, success: 10}),
-        getAcknowledgedWrites: () => ({
-          tableName: 'logs',
-          idColumn: 'log_id',
-          ids: acknowledgedWriteIds,
-        }),
+        getAcknowledgedWrites: () =>
+          buildAcknowledgedWrites(acknowledgedWriteIds),
         cancel: () => {},
         waitComplete: async () => ({
           total: 20,
@@ -765,9 +833,10 @@ describe('rolling-restart scenario', () => {
             role: 'seed',
             query: async (sql) => {
               if (sql.includes(ACK_QUERY_FRAGMENT)) {
-                return {
-                  rows: acknowledgedWriteIds.map((ackId) => ({ack_id: ackId})),
-                };
+                return buildAcknowledgedReadResult(
+                  'seed-1',
+                  acknowledgedWriteIds,
+                );
               }
               return {rows: []};
             },
@@ -783,7 +852,7 @@ describe('rolling-restart scenario', () => {
               const ackId = joinerAckQueryCount % 2 === 1 ?
                 acknowledgedWriteIds[ZERO] :
                 acknowledgedWriteIds[1];
-              return {rows: [{ack_id: ackId}]};
+              return buildAcknowledgedReadResult('joiner-1', [ackId]);
             },
           },
         ],
@@ -805,7 +874,23 @@ describe('rolling-restart scenario', () => {
           acknowledgedWriteVisibilityPollIntervalMs:
             ACK_VISIBILITY_RETRY_POLL_INTERVAL_MS,
         }),
-        /Acknowledged writes missing after rolling restart/,
+        (error) => {
+          assert.match(
+            error.message,
+            /Acknowledged writes missing after rolling restart/,
+          );
+          const visibility =
+            error.diagnostics?.partialResult?.acknowledgedWriteVisibility;
+          assert.equal(visibility?.lossDetected, true);
+          assert.equal(visibility?.nodeObservations.length, 2);
+          assert.equal(
+            arraySome(visibility?.nodeObservations || [],
+              (observation) => observation.state === 'missing',
+            ),
+            true,
+          );
+          return true;
+        },
       );
       assert.ok(joinerAckQueryCount > 1);
     });
@@ -814,11 +899,8 @@ describe('rolling-restart scenario', () => {
     async () => {
       const loadRun = {
         getMetrics: () => ({total: 10, success: 10}),
-        getAcknowledgedWrites: () => ({
-          tableName: 'logs',
-          idColumn: 'log_id',
-          ids: ['load-ack-missing'],
-        }),
+        getAcknowledgedWrites: () =>
+          buildAcknowledgedWrites(['load-ack-missing']),
         cancel: () => {},
         waitComplete: async () => ({
           total: 20,
@@ -834,7 +916,7 @@ describe('rolling-restart scenario', () => {
             role: 'seed',
             query: async (sql) => {
               if (sql.includes(ACK_QUERY_FRAGMENT)) {
-                return {rows: []};
+                return buildAcknowledgedReadResult('seed-1', []);
               }
               return {rows: []};
             },
@@ -844,7 +926,7 @@ describe('rolling-restart scenario', () => {
             role: 'joiner',
             query: async (sql) => {
               if (sql.includes(ACK_QUERY_FRAGMENT)) {
-                return {rows: []};
+                return buildAcknowledgedReadResult('joiner-1', []);
               }
               return {rows: []};
             },

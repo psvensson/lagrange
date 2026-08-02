@@ -481,6 +481,9 @@ class QueryExecutorBase {
       rows: aggregated.rows,
       count: aggregated.rows.length,
       partitions: partitionIds,
+      readAuthorityWitnesses: results.map(
+        (result) => result.readAuthorityWitness,
+      ).filter(Boolean),
       timestamp: queryTimestamp.toString(),
       distributedMetrics: {
         fanout: fanoutMetrics,

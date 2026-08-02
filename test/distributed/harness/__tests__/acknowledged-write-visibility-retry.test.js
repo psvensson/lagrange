@@ -4,6 +4,8 @@ import {
   assertAcknowledgedWritesVisibleOnReachableNodes,
 } from '../../scenarios/rolling-restart.js';
 
+const arrayMap = Function.call.bind(Array.prototype.map);
+
 // Falsifier for the rolling-restart final acknowledged-write visibility probe.
 //
 // Gate stat-gate-20260618T165824Z run3 failed (the only non-passing run of an
@@ -22,11 +24,58 @@ import {
 //  (3) a participant unqueryable for the WHOLE window STILL fails (availability
 //      signal preserved, with a distinct "could not complete" message).
 
-const ACK = {ids: ['w1', 'w2'], tableName: 'logs', idColumn: 'log_id'};
+const ACK_IDS = ['w1', 'w2'];
+const ACK = {
+  ids: ACK_IDS,
+  tableName: 'logs',
+  idColumn: 'log_id',
+  receipts: arrayMap(ACK_IDS, (id, index) => {
+    const operationId = `operation-${id}`;
+    const idempotencyKey = `idempotency-${id}`;
+    const durableCommitWitness = {
+      partitionId: 'logs-p1',
+      leaderNodeId: 'writer-node',
+      leaderReplicaId: 'logs-p1-writer-node',
+      term: 1,
+      logIndex: index + 1,
+      entryId: `entry-${id}`,
+      operationId,
+      idempotencyKey,
+    };
+    return {
+      id,
+      operationId,
+      idempotencyKey,
+      successfulParticipantCount: 1,
+      witnessedParticipantCount: 1,
+      commitWitnessComplete: true,
+      missingCommitWitnessPartitions: [],
+      durableCommitWitnesses: [durableCommitWitness],
+      participantReceipts: [{
+        partitionId: 'logs-p1',
+        acceptingNodeId: 'writer-node',
+        acknowledgedAtMs: 1,
+        durableCommitWitness,
+        complete: true,
+      }],
+    };
+  }),
+};
 const FAST = {visibilityTimeoutMs: 800, visibilityPollIntervalMs: 5};
 
-function okResult(ids) {
-  return {rows: ids.map((id) => ({ack_id: id}))};
+function okResult(ids, nodeId) {
+  return {
+    rows: arrayMap(ids, (id) => ({ack_id: id})),
+    readAuthorityWitnesses: [{
+      state: 'observed',
+      partitionId: 'logs-p1',
+      servingNodeId: nodeId,
+      servingReplicaId: `logs-p1-${nodeId}`,
+      term: 1,
+      role: 'follower',
+      observedAtMs: Date.now(),
+    }],
+  };
 }
 
 describe('acknowledged-write visibility probe — thrown-query retry', () => {
@@ -43,7 +92,7 @@ describe('acknowledged-write visibility probe — thrown-query retry', () => {
             'Distributed operation failed due to participant failures',
           );
         }
-        return okResult(ACK.ids);
+        return okResult(ACK.ids, 'node-A');
       },
     };
     // Must not throw — the transient first failure is retried and then succeeds.
@@ -56,7 +105,7 @@ describe('acknowledged-write visibility probe — thrown-query retry', () => {
     const node = {
       id: 'node-B',
       isReachable: async () => true,
-      query: async () => okResult(['w1']), // w2 genuinely missing
+      query: async () => okResult(['w1'], 'node-B'), // w2 genuinely missing
     };
     await assert.rejects(
       () => assertAcknowledgedWritesVisibleOnReachableNodes(ACK, [node], FAST),

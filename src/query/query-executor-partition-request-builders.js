@@ -132,6 +132,10 @@ function resolvePartitionExecutionBuilders({
         success: true,
         rows: response.rows || [],
         changes: response.changes,
+        durableCommitWitness: response.durableCommitWitness,
+        acceptingNodeId: response.acceptingNodeId,
+        acknowledgedAtMs: response.acknowledgedAtMs,
+        readAuthorityWitness: response.readAuthorityWitness,
       });
   return Object.freeze({
     buildRequest,

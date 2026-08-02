@@ -10,6 +10,10 @@ const QUERY_RESULT_REQUEST_FIELD = Object.freeze({
   MAX_BYTES: 'resultMaxBytes',
   MAX_ROWS: 'resultMaxRows',
 });
+const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
+  NOT_APPLICABLE: 'not_applicable',
+  OBSERVED: 'observed',
+});
 
 const {
   ERRORS,
@@ -376,6 +380,26 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
     }
   }
   /**
+   * Describe the replica that actually served a successful read.
+   * @param {boolean} isWriteOperation
+   * @return {Object}
+   * @private
+   */
+  buildRemoteReadAuthorityWitness(isWriteOperation) {
+    if (isWriteOperation) {
+      return {state: READ_AUTHORITY_WITNESS_STATE.NOT_APPLICABLE};
+    }
+    return {
+      state: READ_AUTHORITY_WITNESS_STATE.OBSERVED,
+      partitionId: this.partitionId,
+      servingNodeId: this.nodeId,
+      servingReplicaId: this.replicaId,
+      term: this.storage.currentTerm,
+      role: this.role,
+      observedAtMs: Date.now(),
+    };
+  }
+  /**
    * Handle remote SQL query execution.
    * Enables transparent query routing - any node can execute queries on any partition.
    * For write operations on non-leaders, returns a redirect response with leader address.
@@ -479,6 +503,11 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         changes: result.changes,
         count: result.count,
         partitionId: this.partitionId,
+        durableCommitWitness: result.durableCommitWitness,
+        acceptingNodeId: result.acceptingNodeId,
+        acknowledgedAtMs: result.acknowledgedAtMs,
+        readAuthorityWitness:
+          this.buildRemoteReadAuthorityWitness(isWriteOperation),
       };
     } catch (error) {
       this.logger.error(PARTITION_SERVICE_ERROR_MSG.REMOTE_QUERY_FAILED, {

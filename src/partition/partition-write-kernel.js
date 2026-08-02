@@ -1,4 +1,5 @@
 import {randomUUID} from 'node:crypto';
+import {isValidRaftLogIndex} from '../raft/log-index.js';
 
 
 const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
@@ -10,6 +11,8 @@ const PARTITION_WRITE_COMMIT_MODE = Object.freeze({
 const PARTITION_WRITE_KERNEL_LITERAL = Object.freeze({
   EMPTY_STRING: '',
 });
+const DURABLE_COMMIT_WITNESS_ERROR =
+  'Cannot acknowledge write without durable commit identity';
 
 function normalizeInteger(value, fallback = null) {
   return Number.isFinite(value) ? Math.floor(value) : fallback;
@@ -17,6 +20,10 @@ function normalizeInteger(value, fallback = null) {
 
 function normalizeWriteParams(params) {
   return Array.isArray(params) ? params : [];
+}
+
+function normalizeCommitWitnessString(value) {
+  return typeof value === 'string' ? value.trim() : '';
 }
 
 function buildPartitionWriteEntry(operation, options = {}) {
@@ -37,6 +44,65 @@ function buildPartitionWriteEntry(operation, options = {}) {
     proposedAt:
       normalizeInteger(options.proposedAt, Date.now()),
   };
+}
+
+function normalizeCommitWitnessIdentity({
+  partitionId,
+  leaderNodeId,
+  leaderReplicaId,
+  logEntry,
+}) {
+  return {
+    partitionId: normalizeCommitWitnessString(partitionId),
+    leaderNodeId: normalizeCommitWitnessString(leaderNodeId),
+    leaderReplicaId: normalizeCommitWitnessString(leaderReplicaId),
+    term: Number(logEntry?.term),
+    logIndex: Number(logEntry?.index),
+    entryId: normalizeCommitWitnessString(logEntry?.data?.entryId),
+    operationId: normalizeCommitWitnessString(logEntry?.data?.operationId),
+    idempotencyKey:
+      normalizeCommitWitnessString(logEntry?.data?.idempotencyKey),
+  };
+}
+
+function hasCompleteCommitWitnessIdentity(identity) {
+  const strings = [
+    identity.partitionId,
+    identity.leaderNodeId,
+    identity.leaderReplicaId,
+    identity.entryId,
+  ];
+  return strings.every((value) => value.length > 0) &&
+    Number.isSafeInteger(identity.term) &&
+    identity.term >= 0 &&
+    isValidRaftLogIndex(identity.logIndex) &&
+    identity.logIndex > 0;
+}
+
+function appendOptionalCommitWitnessIdentity(witness, identity) {
+  if (identity.operationId.length > 0) {
+    witness.operationId = identity.operationId;
+  }
+  if (identity.idempotencyKey.length > 0) {
+    witness.idempotencyKey = identity.idempotencyKey;
+  }
+}
+
+function buildDurableCommitWitness(options) {
+  const identity = normalizeCommitWitnessIdentity(options);
+  if (!hasCompleteCommitWitnessIdentity(identity)) {
+    throw new Error(DURABLE_COMMIT_WITNESS_ERROR);
+  }
+  const witness = {
+    partitionId: identity.partitionId,
+    leaderNodeId: identity.leaderNodeId,
+    leaderReplicaId: identity.leaderReplicaId,
+    term: identity.term,
+    logIndex: identity.logIndex,
+    entryId: identity.entryId,
+  };
+  appendOptionalCommitWitnessIdentity(witness, identity);
+  return Object.freeze(witness);
 }
 
 function resolvePartitionWriteCommitMode(options = {}) {
@@ -113,7 +179,9 @@ function buildPartitionWriteSideEffectPlan(entry, executionResult) {
 }
 
 export {
+  DURABLE_COMMIT_WITNESS_ERROR,
   PARTITION_WRITE_COMMIT_MODE,
+  buildDurableCommitWitness,
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,

@@ -1,4 +1,5 @@
 import {ADMIN_WEBSOCKET_API_SHARED} from './admin-websocket-api-shared.js';
+import {buildAdminWriteReceipt} from './admin-write-receipt.js';
 
 const NO_HOST_CALLBACK_VALUE = null;
 const NO_CALLBACK_MODULE_REF = null;
@@ -116,6 +117,7 @@ function applyAdminWriteQueryResultMessagePayload(
     false,
   );
   applyAdminQueryResultTableScope(message, result);
+  message.writeReceipt = buildAdminWriteReceipt(result);
   if (payloadContext.hasRowPayload) {
     message.results = resolveAdminQueryResultRows(result);
     message.count = message.results.length;
@@ -127,6 +129,9 @@ function applyAdminRowsQueryResultMessagePayload(message, result) {
   message.count =
     result.count !== undefined ? result.count : message.results.length;
   applyAdminQueryResultTableScope(message, result);
+  message.readAuthorityWitnesses = Array.isArray(
+    result.readAuthorityWitnesses,
+  ) ? result.readAuthorityWitnesses : [];
 }
 
 function applyAdminDefaultWriteQueryResultMessagePayload(message, result) {

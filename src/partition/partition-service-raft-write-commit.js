@@ -15,11 +15,13 @@ async function executePartitionRaftWriteCommit(service, options) {
     logEntry,
     phaseTimings,
     applyStartMs,
+    durableCommitWitness,
   } = options;
   let commitPromise;
   try {
     commitPromise = service.waitForCommittedWrite(entry.entryId, {
       logIndex: logEntry.index,
+      result: {durableCommitWitness},
     });
   } catch (error) {
     service.recordWritePhaseDuration(
@@ -47,11 +49,19 @@ async function executePartitionRaftWriteCommit(service, options) {
   );
   try {
     const result = await commitPromise;
-    const sideEffectPlan = buildPartitionWriteSideEffectPlan(entry, result);
+    const acknowledgedResult = {
+      ...result,
+      acceptingNodeId: service.nodeId,
+      acknowledgedAtMs: Date.now(),
+    };
+    const sideEffectPlan = buildPartitionWriteSideEffectPlan(
+      entry,
+      acknowledgedResult,
+    );
     await service.applyWriteSideEffectPlan({
       entry,
       entryKey,
-      result,
+      result: acknowledgedResult,
       sideEffectPlan: {
         ...sideEffectPlan,
         emitCdcEntry: null,
@@ -63,7 +73,7 @@ async function executePartitionRaftWriteCommit(service, options) {
       WRITE_PHASE_FIELD_APPLY_WRITE_MS,
       applyStartMs,
     );
-    return result;
+    return acknowledgedResult;
   } catch (error) {
     service.recordWritePhaseDuration(
       phaseTimings,

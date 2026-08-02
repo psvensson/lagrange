@@ -724,6 +724,44 @@ const CONFIGS = [
     expectedFailurePattern:
       'Temporal property EventuallySchemaAdmitted was violated',
   },
+  {
+    id: 'acknowledged-write-durability-visibility-fixed',
+    mode: 'acknowledged-write-durability-visibility-fixed',
+    module: path.resolve(
+      'models', 'acknowledged-write-durability-visibility',
+      'AcknowledgedWriteDurabilityVisibility.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'acknowledged-write-durability-visibility',
+      'AcknowledgedWriteDurabilityVisibility_fixed.cfg',
+    ),
+    expectConverged: true,
+    report:
+      'acknowledged-write-durability-visibility-fixed.model.report.json',
+    scenario: 'rolling-restart-acknowledged-write-durability-visibility-model',
+    owner: 'partition_write_commit_and_visibility_oracle_owner',
+    boundary: 'requested_durable_acknowledged_recovered_visible',
+  },
+  {
+    id: 'acknowledged-write-ack-before-durable-mutant',
+    mode: 'acknowledged-write-ack-before-durable-mutant',
+    module: path.resolve(
+      'models', 'acknowledged-write-durability-visibility',
+      'AcknowledgedWriteDurabilityVisibility.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'acknowledged-write-durability-visibility',
+      'AcknowledgedWriteDurabilityVisibility_ack_before_durable_mutant.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'acknowledged-write-ack-before-durable-mutant.model.report.json',
+    scenario: 'rolling-restart-ack-before-durable-counterexample',
+    owner: 'partition_write_commit_and_visibility_oracle_owner',
+    boundary: 'requested_durable_acknowledged_recovered_visible',
+    expectedFailurePattern:
+      'Invariant AcknowledgedRequiresDurability is violated',
+  },
 ];
 
 export {CONFIGS};

@@ -323,6 +323,7 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
   // method so the two clears never drift apart.
   clearPostRollbackApplyState() {
     this.recentlyAppliedEntryKeys?.clear?.();
+    this.recentlyAppliedEntryWitnesses?.clear?.();
     this.logAdapter?.refreshCommittedIndexCacheFromStore?.();
   }
 

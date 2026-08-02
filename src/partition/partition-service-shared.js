@@ -24,7 +24,9 @@ import {assertCritical} from '../utils/assert.js';
 import {PendingRequestTracker} from './pending-request-tracker.js';
 import {ProposalQueue} from './proposal-queue.js';
 import {
+  DURABLE_COMMIT_WITNESS_ERROR,
   PARTITION_WRITE_COMMIT_MODE,
+  buildDurableCommitWitness,
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,
@@ -233,6 +235,7 @@ const QUERY_PAYLOAD_FIELD_IDEMPOTENCY_KEY = 'idempotencyKey';
 const PARTITION_REPLICA_COUNT_FIELD = 'replica_count';
 
 export const PARTITION_SERVICE_SHARED = {
+  DURABLE_COMMIT_WITNESS_ERROR,
   ACTIVE_VOTER_ROLES,
   ADD_LIKE_REPLICA_OPERATION_TYPES,
   AddressManager,
@@ -342,6 +345,7 @@ export const PARTITION_SERVICE_SHARED = {
   assertCritical,
   assertRaftProviderContract,
   attachTrafficReadinessListener,
+  buildDurableCommitWitness,
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,

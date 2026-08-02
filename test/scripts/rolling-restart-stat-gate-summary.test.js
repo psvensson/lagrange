@@ -192,9 +192,61 @@ test('classifyStatGateScenario exposes acknowledged-write verification', (t) => 
   t.same(result.acknowledgedWriteVisibility, {
     verified: true,
     lossDetected: false,
+    oracleBlind: false,
+    classification: null,
+    unwitnessedWriteCount: 0,
     acknowledgedWriteCount: 37,
     reachableNodeCount: 5,
   });
+  t.end();
+});
+
+test('classifyStatGateScenario fails closed on a structured unwitnessed write',
+  (t) => {
+    const result = classifyStatGateScenario(scenario({
+      details: {
+        acknowledgedWriteVisibility: {
+          verified: false,
+          lossDetected: false,
+          oracleBlind: false,
+          classification: 'durable_commit_witness_missing',
+          unwitnessedIds: ['write-1'],
+          acknowledgedWriteCount: 1,
+          reachableNodeCount: 5,
+        },
+        diagnostics: {activeGate: {}},
+      },
+    }));
+
+    t.equal(result.acknowledgedWriteVisibility.verified, false);
+    t.equal(result.acknowledgedWriteVisibility.unwitnessedWriteCount, 1);
+    t.equal(
+      result.acknowledgedWriteVisibility.classification,
+      'durable_commit_witness_missing',
+    );
+    t.end();
+  });
+
+test('classifyStatGateScenario promotes nested visibility blindness', (t) => {
+  const result = classifyStatGateScenario(scenario({
+    details: {
+      diagnostics: {
+        activeGate: {},
+        partialResult: {
+          acknowledgedWriteVisibility: {
+            verified: false,
+            oracleBlind: true,
+            classification: 'durable_read_authority_unavailable',
+            acknowledgedWriteCount: 1,
+            reachableNodeCount: 5,
+          },
+        },
+      },
+    },
+  }));
+
+  t.equal(result.class, CLASS_ORACLE_BLIND);
+  t.equal(result.acknowledgedWriteVisibility.oracleBlind, true);
   t.end();
 });
 

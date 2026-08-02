@@ -1,6 +1,8 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  DURABLE_COMMIT_WITNESS_ERROR,
   PARTITION_WRITE_COMMIT_MODE,
+  buildDurableCommitWitness,
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,
@@ -13,6 +15,19 @@ const TEST_PROPOSED_AT = 1234;
 const TEST_TIMESTAMP = '987654321';
 const TEST_PARTITION_ID = 'partition-1';
 const TEST_LOG_INDEX = 7;
+
+function buildTestCommitWitness(term, index) {
+  return buildDurableCommitWitness({
+    partitionId: TEST_PARTITION_ID,
+    leaderNodeId: 'node-1',
+    leaderReplicaId: 'replica-1',
+    logEntry: {
+      term,
+      index,
+      data: {entryId: TEST_ENTRY_ID},
+    },
+  });
+}
 
 test('partition write kernel builds canonical write entries', async (t) => {
   const entry = buildPartitionWriteEntry(
@@ -33,6 +48,20 @@ test('partition write kernel builds canonical write entries', async (t) => {
   t.equal(entry.timestamp, TEST_TIMESTAMP);
   t.equal(entry.proposedBy, 'replica-1');
   t.equal(entry.proposedAt, TEST_PROPOSED_AT);
+});
+
+test('partition write kernel rejects non-durable Raft positions', async (t) => {
+  for (const position of [
+    {term: -1, index: TEST_LOG_INDEX},
+    {term: 1, index: 0},
+    {term: 1, index: -1},
+  ]) {
+    t.throws(
+      () => buildTestCommitWitness(position.term, position.index),
+      new RegExp(DURABLE_COMMIT_WITNESS_ERROR),
+      `term ${position.term}, index ${position.index} is not durable evidence`,
+    );
+  }
 });
 
 test('partition write kernel resolves direct, raft, and rejected commit modes',

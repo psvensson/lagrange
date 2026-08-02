@@ -8,6 +8,7 @@ import {collectBoundedSqliteRows} from
 
 
 const {
+  DURABLE_COMMIT_WITNESS_ERROR,
   ERRORS,
   LifeRaft,
   METRICS_LOG_TAG,
@@ -29,6 +30,7 @@ const {
   WRITE_PHASE_FIELD_RAFT_COMMAND_DISPATCH_MS,
   WRITE_PHASE_FIELD_SQLITE_RUN_MS,
   WRITE_PHASE_FIELD_TOTAL_MS,
+  buildDurableCommitWitness,
   buildPartitionWriteEntry,
   buildPartitionWriteFailureResult,
   buildPartitionWriteSideEffectPlan,
@@ -598,6 +600,33 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
   }
 
   /**
+   * Rebuild the completed-replay response without minting a new log identity.
+   * @param {string} entryKey
+   * @return {Object}
+   * @private
+   */
+  buildAppliedEntryReplayResult(entryKey) {
+    const durableCommitWitness =
+      this.getAppliedEntryDurableCommitWitness(entryKey);
+    if (!durableCommitWitness) {
+      return {
+        success: false,
+        error: DURABLE_COMMIT_WITNESS_ERROR,
+        partitionId: this.partitionId,
+        idempotentReplay: true,
+      };
+    }
+    return {
+      success: true,
+      changes: 0,
+      partitionId: this.partitionId,
+      idempotentReplay: true,
+      durableCommitWitness,
+      acceptingNodeId: this.nodeId,
+      acknowledgedAtMs: Date.now(),
+    };
+  }
+  /**
    * Apply a write operation (leader only).
    * @param {Object} entry - Write entry.
    * @param {Object|null} phaseTimings - Optional phase timing collector.
@@ -630,12 +659,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         WRITE_PHASE_FIELD_APPLY_WRITE_MS,
         applyStartMs,
       );
-      return {
-        success: true,
-        changes: 0,
-        partitionId: this.partitionId,
-        idempotentReplay: true,
-      };
+      return this.buildAppliedEntryReplayResult(entryKey);
     }
     const commitMode = resolvePartitionWriteCommitMode({
       replicaIds: this.replicaIds,
@@ -660,6 +684,12 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     }
     const logAppendStartMs = Date.now();
     const logEntry = this.storage.appendEntry(entry);
+    const durableCommitWitness = buildDurableCommitWitness({
+      partitionId: this.partitionId,
+      leaderNodeId: this.nodeId,
+      leaderReplicaId: this.replicaId,
+      logEntry,
+    });
     this.recordWritePhaseDuration(
       phaseTimings,
       WRITE_PHASE_FIELD_LOG_APPEND_MS,
@@ -672,6 +702,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         logEntry,
         phaseTimings,
         applyStartMs,
+        durableCommitWitness,
       });
     }
     let result;
@@ -686,6 +717,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
         this.partitionId,
         logEntry.index,
       );
+      result.durableCommitWitness = durableCommitWitness;
       this.recordWritePhaseDuration(
         phaseTimings,
         WRITE_PHASE_FIELD_SQLITE_RUN_MS,
@@ -725,6 +757,8 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
       );
       return result;
     }
+    result.acceptingNodeId = this.nodeId;
+    result.acknowledgedAtMs = Date.now();
     this.recordWritePhaseDuration(
       phaseTimings,
       WRITE_PHASE_FIELD_APPLY_WRITE_MS,
@@ -739,7 +773,7 @@ class PartitionServiceWriteMetricsBase extends PartitionServiceTransactionBase {
     sideEffectPlan,
     commitPromise,
   }) {
-    this.trackAppliedEntryKey(entryKey);
+    this.trackAppliedEntryKey(entryKey, result?.durableCommitWitness);
     if (commitPromise) {
       this.setPendingCommittedWriteResult(entry.entryId, result);
     }

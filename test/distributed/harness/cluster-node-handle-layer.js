@@ -76,6 +76,7 @@ const REACHABILITY_ADMIN_PROBE_TIMEOUT_MS = FETCH_TIMEOUT_MS;
 const ADMIN_QUERY_CONNECTION_RESET_PREFIX =
   'Admin API query connection reset for node ';
 const ADMIN_QUERY_CONNECTION_RESET_LANE_TEXT = ' on lane ';
+const SUPPRESSED_BEST_EFFORT_ERROR_INCREMENT = 1;
 
 function resolveReachabilityProbeTimeoutMs(remainingBudgetMs, maxTimeoutMs) {
   const remainingMs = resolvePositiveTimeoutMs(
@@ -118,6 +119,7 @@ class NodeHandle {
     this._pendingAdminSocketByLane = new Map();
     this._pendingQueriesByLane = new Map();
     this._adminQueryTrace = [];
+    this._suppressedBestEffortErrorCount = ZERO;
     this._logStreamListeners = new Set();
     this._lastReachabilityDiagnostics = null;
     this._defaultAdminQueryTimeoutMs = resolvePositiveTimeoutMs(
@@ -131,6 +133,11 @@ class NodeHandle {
       timeoutMs,
       this._defaultAdminQueryTimeoutMs,
     );
+  }
+
+  _recordSuppressedBestEffortError() {
+    this._suppressedBestEffortErrorCount +=
+      SUPPRESSED_BEST_EFFORT_ERROR_INCREMENT;
   }
 
   /**
@@ -348,7 +355,7 @@ class NodeHandle {
         try {
           ws.close();
         } catch (_closeErr) {
-          // Best-effort cleanup
+          this._recordSuppressedBestEffortError();
         }
         rejectWithOutcome(
           new Error(
@@ -458,7 +465,7 @@ class NodeHandle {
       try {
         socket.close();
       } catch (_err) {
-        // Best-effort cleanup
+        this._recordSuppressedBestEffortError();
       }
     }
     for (const pendingSocket of this._pendingAdminSocketByLane.values()) {
@@ -613,7 +620,7 @@ class NodeHandle {
         const parsed = JSON.parse(data.toString());
         this._handleAdminSocketMessage(parsed, lane);
       } catch (_err) {
-        // Ignore malformed frames and continue.
+        this._recordSuppressedBestEffortError();
       }
     });
 
@@ -754,6 +761,8 @@ class NodeHandle {
       tableName: parsed.tableName,
       operation: parsed.operation,
       affectedRows: parsed.affectedRows,
+      writeReceipt: parsed.writeReceipt,
+      readAuthorityWitnesses: parsed.readAuthorityWitnesses,
       hostResult: parsed.hostResult,
       callbackModuleRef: parsed.callbackModuleRef,
       callbackExport: parsed.callbackExport,
@@ -837,7 +846,7 @@ class NodeHandle {
       try {
         listener(entry);
       } catch (_err) {
-        // Best-effort log streaming callback isolation.
+        this._recordSuppressedBestEffortError();
       }
     }
   }

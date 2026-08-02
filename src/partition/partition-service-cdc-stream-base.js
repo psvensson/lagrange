@@ -401,20 +401,34 @@ class PartitionServiceCdcStreamBase extends PartitionServiceWriteMetricsBase {
   /**
    * Track an applied write key with bounded history for replay dedupe.
    * @param {string|null} entryKey - Stable write key.
+   * @param {Object|null} durableCommitWitness - Commit identity retained for
+   *   an acknowledged idempotent replay.
    * @private
    */
-  trackAppliedEntryKey(entryKey) {
-    if (!entryKey || this.recentlyAppliedEntryKeys.has(entryKey)) {
+  trackAppliedEntryKey(entryKey, durableCommitWitness = null) {
+    if (!entryKey) {
       return;
     }
+    if (durableCommitWitness && typeof durableCommitWitness === 'object') {
+      this.recentlyAppliedEntryWitnesses.set(
+        entryKey,
+        Object.freeze({...durableCommitWitness}),
+      );
+    }
+    if (this.recentlyAppliedEntryKeys.has(entryKey)) return;
     this.recentlyAppliedEntryKeys.add(entryKey);
     this.recentlyAppliedEntryOrder.push(entryKey);
     if (this.recentlyAppliedEntryOrder.length > this.maxTrackedAppliedEntries) {
       const oldestKey = this.recentlyAppliedEntryOrder.shift();
       if (oldestKey) {
         this.recentlyAppliedEntryKeys.delete(oldestKey);
+        this.recentlyAppliedEntryWitnesses.delete(oldestKey);
       }
     }
+  }
+
+  getAppliedEntryDurableCommitWitness(entryKey) {
+    return this.recentlyAppliedEntryWitnesses.get(entryKey) || null;
   }
   /**
    * Extract data from INSERT SQL by querying the inserted row.

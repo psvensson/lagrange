@@ -18,9 +18,7 @@ import {
 } from './benchmark-workload-semantics.js';
 import {appendOwnArrayValue} from './benchmark-semantic-integrity.js';
 import {BENCHMARK_SEMANTIC_RESULT_ERROR_CODE} from './benchmark-workload-semantics-constants.js';
-
-const DURATION_SECONDS_SUFFIX = 's';
-const DURATION_MINUTES_SUFFIX = 'm';
+const DURATION_SECONDS_SUFFIX = 's'; const DURATION_MINUTES_SUFFIX = 'm';
 const SECONDS_PER_MINUTE = 60;
 const MS_PER_SECOND = 1000;
 const MIN_DISPATCH_DELAY_MS = 1;
@@ -312,7 +310,7 @@ class LoadRun {
         'event_id' :
         'log_id') :
       null;
-    this._acknowledgedWriteIds = this._trackAcknowledgedWrites ? [] : null;
+    this._acknowledgedWriteReceipts = this._trackAcknowledgedWrites ? [] : null;
     this._acknowledgedWriteIdSet =
       this._trackAcknowledgedWrites ? objectCreate(null) : null;
     this._maxInFlight = options.maxInFlight ||
@@ -1158,7 +1156,9 @@ class LoadRun {
         this._successCount++;
         this._recordAcknowledgedWrite(
           operationDescriptor?.acknowledgedWriteId || null,
-        );
+          {gatewayNodeId: node.id, receivedAtMs: Date.now(),
+            writeReceipt: queryResult.writeReceipt,
+          });
         return;
       } catch (err) {
         if (this._cancelled || this._completedMetrics) {

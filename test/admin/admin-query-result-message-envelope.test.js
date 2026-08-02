@@ -31,6 +31,16 @@ const TEST_RETRY_AFTER_MS = 250.9;
 const EXPECTED_RETRY_AFTER_MS = 250;
 const EXPECTED_AFFECTED_ROWS = 2;
 const EXPECTED_DEFAULT_AFFECTED_ROWS = 0;
+const TEST_DURABLE_COMMIT_WITNESS = Object.freeze({
+  partitionId: TEST_PARTITION_ID,
+  leaderNodeId: 'node-2',
+  leaderReplicaId: 'partition-a-r2',
+  term: 7,
+  logIndex: 42,
+  entryId: 'entry-write-operation-1',
+  operationId: 'write-operation-1',
+  idempotencyKey: 'write-operation-1',
+});
 
 test('admin query result envelope builds row payload messages', async (t) => {
   const row = {
@@ -65,9 +75,19 @@ test('admin query result envelope builds write payload messages', async (t) => {
   const message = createAdminQueryResultMessageEnvelope(TEST_QUERY_ID, {
     success: true,
     operation: 'INSERT',
+    operationId: 'write-operation-1',
+    idempotencyKey: 'write-operation-1',
     affectedRows: String(EXPECTED_AFFECTED_ROWS),
     partitions: [TEST_PARTITION_ID],
     tableName: TEST_TABLE_NAME,
+    participantResults: [{
+      partitionId: TEST_PARTITION_ID,
+      role: 'primary',
+      success: true,
+      durableCommitWitness: TEST_DURABLE_COMMIT_WITNESS,
+      acceptingNodeId: 'node-2',
+      acknowledgedAtMs: 1785630280000,
+    }],
   });
 
   t.equal(message.operation, 'INSERT', 'should preserve write operation');
@@ -78,7 +98,124 @@ test('admin query result envelope builds write payload messages', async (t) => {
   );
   t.same(message.partitions, [TEST_PARTITION_ID], 'should preserve partitions');
   t.equal(message.tableName, TEST_TABLE_NAME, 'should preserve table name');
+  t.same(message.writeReceipt, {
+    operationId: 'write-operation-1',
+    idempotencyKey: 'write-operation-1',
+    successfulParticipantCount: 1,
+    witnessedParticipantCount: 1,
+    commitWitnessComplete: true,
+    missingCommitWitnessPartitions: [],
+    durableCommitWitnesses: [TEST_DURABLE_COMMIT_WITNESS],
+    participantReceipts: [{
+      partitionId: TEST_PARTITION_ID,
+      acceptingNodeId: 'node-2',
+      acknowledgedAtMs: 1785630280000,
+      durableCommitWitness: TEST_DURABLE_COMMIT_WITNESS,
+      complete: true,
+    }],
+  }, 'should project a bounded write receipt for the harness ledger');
 });
+
+test('admin write receipt exposes every successful participant missing evidence',
+  async (t) => {
+    const message = createAdminQueryResultMessageEnvelope(TEST_QUERY_ID, {
+      success: true,
+      operation: 'INSERT',
+      operationId: 'write-operation-1',
+      idempotencyKey: 'write-operation-1',
+      affectedRows: 2,
+      participantResults: [{
+        partitionId: TEST_PARTITION_ID,
+        success: true,
+        durableCommitWitness: TEST_DURABLE_COMMIT_WITNESS,
+        acceptingNodeId: 'node-2',
+        acknowledgedAtMs: 1785630280000,
+      }, {
+        partitionId: 'partition-b',
+        success: true,
+      }],
+    });
+
+    t.equal(message.writeReceipt.commitWitnessComplete, false);
+    t.equal(message.writeReceipt.successfulParticipantCount, 2);
+    t.equal(message.writeReceipt.witnessedParticipantCount, 1);
+    t.same(
+      message.writeReceipt.missingCommitWitnessPartitions,
+      ['partition-b'],
+    );
+  });
+
+test('admin write receipt rejects a witness from a different accepting leader',
+  async (t) => {
+    const message = createAdminQueryResultMessageEnvelope(TEST_QUERY_ID, {
+      success: true,
+      operation: 'INSERT',
+      operationId: 'write-operation-1',
+      idempotencyKey: 'write-operation-1',
+      affectedRows: 1,
+      participantResults: [{
+        partitionId: TEST_PARTITION_ID,
+        success: true,
+        durableCommitWitness: TEST_DURABLE_COMMIT_WITNESS,
+        acceptingNodeId: 'different-node',
+        acknowledgedAtMs: 1785630280000,
+      }],
+    });
+
+    t.equal(message.writeReceipt.commitWitnessComplete, false);
+    t.equal(message.writeReceipt.witnessedParticipantCount, 0);
+    t.same(
+      message.writeReceipt.missingCommitWitnessPartitions,
+      [TEST_PARTITION_ID],
+    );
+  });
+
+test('admin write receipt rejects invalid Raft term and entry positions',
+  async (t) => {
+    for (const durableCommitWitness of [
+      {...TEST_DURABLE_COMMIT_WITNESS, term: -1},
+      {...TEST_DURABLE_COMMIT_WITNESS, logIndex: 0},
+    ]) {
+      const message = createAdminQueryResultMessageEnvelope(TEST_QUERY_ID, {
+        success: true,
+        operation: 'INSERT',
+        operationId: 'write-operation-1',
+        idempotencyKey: 'write-operation-1',
+        affectedRows: 1,
+        participantResults: [{
+          partitionId: TEST_PARTITION_ID,
+          success: true,
+          durableCommitWitness,
+          acceptingNodeId: 'node-2',
+          acknowledgedAtMs: 1785630280000,
+        }],
+      });
+      t.equal(message.writeReceipt.commitWitnessComplete, false);
+      t.equal(message.writeReceipt.witnessedParticipantCount, 0);
+    }
+  });
+
+test('admin write receipt rejects a negative acceptance timestamp',
+  async (t) => {
+    const message = createAdminQueryResultMessageEnvelope(TEST_QUERY_ID, {
+      success: true,
+      operation: 'INSERT',
+      operationId: 'write-operation-1',
+      idempotencyKey: 'write-operation-1',
+      affectedRows: 1,
+      participantResults: [{
+        partitionId: TEST_PARTITION_ID,
+        success: true,
+        durableCommitWitness: TEST_DURABLE_COMMIT_WITNESS,
+        acceptingNodeId: 'node-2',
+        acknowledgedAtMs: -1,
+      }],
+    });
+
+    t.equal(message.writeReceipt.commitWitnessComplete, false);
+    t.equal(message.writeReceipt.witnessedParticipantCount, 0);
+    t.equal(message.writeReceipt.participantReceipts[0].acknowledgedAtMs, null);
+  });
 
 test('admin query result envelope builds host callback messages', async (t) => {
   const callbackResult = {

@@ -1,3 +1,64 @@
+const ACKNOWLEDGED_WRITE_ACCEPTING_NODE_UNKNOWN = 'unknown';
+const arrayMap = Function.call.bind(Array.prototype.map);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
+function copyDurableCommitWitnesses(writeReceipt) {
+  return Array.isArray(writeReceipt?.durableCommitWitnesses) ?
+    arrayMap(
+      writeReceipt.durableCommitWitnesses,
+      (witness) => ({...witness}),
+    ) : [];
+}
+
+function copyParticipantReceipts(writeReceipt) {
+  return Array.isArray(writeReceipt?.participantReceipts) ?
+    arrayMap(writeReceipt.participantReceipts, (participant) => ({
+      ...participant,
+      durableCommitWitness: participant?.durableCommitWitness ?
+        {...participant.durableCommitWitness} : null,
+    })) : [];
+}
+
+function appendReceiptString(receipt, field, value) {
+  if (typeof value === 'string' && value.length > 0) {
+    receipt[field] = value;
+  }
+}
+
+function buildAcknowledgedWriteReceipt(id, evidence) {
+  const writeReceipt = evidence?.writeReceipt &&
+    typeof evidence.writeReceipt === 'object' ? evidence.writeReceipt : {};
+  const gatewayNodeId = String(
+    evidence?.gatewayNodeId || ACKNOWLEDGED_WRITE_ACCEPTING_NODE_UNKNOWN,
+  );
+  const normalizedGatewayNodeId = stringTrim(gatewayNodeId) ||
+    ACKNOWLEDGED_WRITE_ACCEPTING_NODE_UNKNOWN;
+  const receivedAtMs = Number.isSafeInteger(evidence?.receivedAtMs) ?
+    evidence.receivedAtMs : Date.now();
+  const receipt = {
+    id,
+    gatewayNodeId: normalizedGatewayNodeId,
+    receivedAtMs,
+    durableCommitWitnesses: copyDurableCommitWitnesses(writeReceipt),
+    participantReceipts: copyParticipantReceipts(writeReceipt),
+    successfulParticipantCount: writeReceipt.successfulParticipantCount,
+    witnessedParticipantCount: writeReceipt.witnessedParticipantCount,
+    commitWitnessComplete: writeReceipt.commitWitnessComplete === true,
+    missingCommitWitnessPartitions:
+      Array.isArray(writeReceipt.missingCommitWitnessPartitions) ?
+        [...writeReceipt.missingCommitWitnessPartitions] : [],
+  };
+  const authoritativeReceipt = receipt.participantReceipts.length === 1 ?
+    receipt.participantReceipts[0] : null;
+  if (authoritativeReceipt) {
+    receipt.acceptingNodeId = authoritativeReceipt.acceptingNodeId;
+    receipt.acknowledgedAtMs = authoritativeReceipt.acknowledgedAtMs;
+  }
+  appendReceiptString(receipt, 'operationId', writeReceipt.operationId);
+  appendReceiptString(receipt, 'idempotencyKey', writeReceipt.idempotencyKey);
+  return receipt;
+}
+
 function createLoadGeneratorRuntimeBundle(deps = {}) {
   const {
     ADMIN_LANE_LOAD,
@@ -454,7 +515,7 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
       state.openUntilMs = ZERO;
     }
 
-    _recordAcknowledgedWrite(idValue) {
+    _recordAcknowledgedWrite(idValue, evidence = {}) {
       if (this._trackAcknowledgedWrites !== true) {
         return;
       }
@@ -469,7 +530,10 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
         return;
       }
       this._acknowledgedWriteIdSet[normalizedId] = true;
-      appendOwnArrayValue(this._acknowledgedWriteIds, normalizedId);
+      appendOwnArrayValue(
+        this._acknowledgedWriteReceipts,
+        buildAcknowledgedWriteReceipt(normalizedId, evidence),
+      );
     }
 
     _recordNodeFailure(healthKey, error) {
@@ -953,20 +1017,43 @@ function createLoadGeneratorRuntimeBundle(deps = {}) {
 
     /**
      * Return acknowledged INSERT identifiers captured during this run.
-     * @returns {{tableName: string, idColumn: string, ids: string[]}|null}
+     * @returns {{tableName: string, idColumn: string, ids: string[],
+     *   receipts: Object[]}|null}
      */
     getAcknowledgedWrites() {
       if (this._trackAcknowledgedWrites !== true) {
         return null;
       }
       const ids = [];
-      for (let index = ZERO; index < this._acknowledgedWriteIds.length; index++) {
-        appendOwnArrayValue(ids, this._acknowledgedWriteIds[index]);
+      const receipts = [];
+      for (let index = ZERO;
+        index < this._acknowledgedWriteReceipts.length; index++) {
+        const receipt = this._acknowledgedWriteReceipts[index];
+        appendOwnArrayValue(ids, receipt.id);
+        appendOwnArrayValue(receipts, {
+          ...receipt,
+          durableCommitWitnesses:
+            arrayMap(
+              receipt.durableCommitWitnesses,
+              (witness) => ({...witness}),
+            ),
+          participantReceipts: arrayMap(
+            receipt.participantReceipts,
+            (participant) => ({
+              ...participant,
+              durableCommitWitness: participant.durableCommitWitness ?
+                {...participant.durableCommitWitness} : null,
+            }),
+          ),
+          missingCommitWitnessPartitions:
+            [...receipt.missingCommitWitnessPartitions],
+        });
       }
       return {
         tableName: this._tableName,
         idColumn: this._acknowledgedWriteIdColumn,
         ids,
+        receipts,
       };
     }
 

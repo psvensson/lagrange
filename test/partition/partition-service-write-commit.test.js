@@ -29,6 +29,7 @@ function createPartition(id, replicaIds) {
     tableName: 'test_table',
     replicaId: replicaIds[0],
     replicaIds,
+    nodeId: 'test-node',
     peerAddresses: replicaIds.map((replicaId) => `test-node/partition/${replicaId}`),
     schema: {
       columns: [
@@ -93,10 +94,58 @@ test('PartitionService waits for committed-entry callback before acking multi-re
     const result = await writePromise;
     t.equal(result.success, true, 'write should succeed after commit');
     t.ok(Number.isFinite(result.logIndex), 'write result should include log index');
+    t.same(
+      result.durableCommitWitness,
+      {
+        partitionId: 'commit-wait',
+        leaderNodeId: 'test-node',
+        leaderReplicaId: 'commit-wait-r1',
+        term: result.durableCommitWitness?.term,
+        logIndex: result.logIndex,
+        entryId: proposedEntry.entryId,
+      },
+      'a successful result should expose the exact durable Raft commit',
+    );
+    t.ok(
+      Number.isSafeInteger(result.durableCommitWitness?.term),
+      'the durable commit witness should include the Raft term',
+    );
+    t.equal(result.acceptingNodeId, 'test-node');
+    t.ok(Number.isSafeInteger(result.acknowledgedAtMs));
     const row = partition.db
       .prepare('SELECT value FROM test_table WHERE id = ?')
       .get('row-1');
     t.equal(row?.value, 'value-1', 'row should be persisted once the write commits');
+
+    await partition.shutdown();
+  });
+
+test('PartitionService retains the durable witness for completed idempotent replay',
+  async (t) => {
+    const partition = createPartition('commit-replay', ['commit-replay-r1']);
+    await partition.initialize();
+    partition.role = 'leader';
+    partition.isLeader = true;
+
+    const operation = {
+      type: 'INSERT',
+      entryId: 'stable-replay-entry',
+      sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)',
+      params: ['row-replay', 'value-replay'],
+    };
+    const first = await partition.proposeWrite(operation);
+    const replay = await partition.proposeWrite(operation);
+
+    t.equal(first.success, true);
+    t.equal(replay.success, true);
+    t.equal(replay.idempotentReplay, true);
+    t.same(
+      replay.durableCommitWitness,
+      first.durableCommitWitness,
+      'a replay acknowledgment must retain the original durable identity',
+    );
+    t.equal(replay.acceptingNodeId, 'test-node');
+    t.ok(Number.isSafeInteger(replay.acknowledgedAtMs));
 
     await partition.shutdown();
   });

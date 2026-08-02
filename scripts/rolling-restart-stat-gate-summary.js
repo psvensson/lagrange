@@ -28,12 +28,21 @@ function normalizePassed(scenario) {
 
 function classifyOracleBlind(scenario) {
   const diagnostics = scenario?.details?.diagnostics || {};
-  return scenario?.classification ||
-    (((diagnostics.unexpectedNodeExits || []).length > 0) ?
-      'unexpected_node_exit' :
-      null) ||
-    diagnostics.oracleBlind?.classification ||
-    '';
+  const visibility = acknowledgedWriteVisibilityDetailsOf(scenario);
+  const unexpectedNodeExit = Array.isArray(diagnostics.unexpectedNodeExits) &&
+    diagnostics.unexpectedNodeExits.length > 0 ?
+    'unexpected_node_exit' : null;
+  const visibilityBlind = visibility?.oracleBlind === true ?
+    'oracle_blind' : null;
+  const candidates = [
+    scenario?.classification,
+    unexpectedNodeExit,
+    diagnostics.oracleBlind?.classification,
+    visibilityBlind,
+  ];
+  return candidates.find(
+    (candidate) => typeof candidate === 'string' && candidate.length > 0,
+  ) || '';
 }
 
 function isTopologyBlockedScenario(scenario) {
@@ -48,8 +57,41 @@ function isTopologyBlockedScenario(scenario) {
 const ACKNOWLEDGED_WRITE_LOSS_PATTERN =
   /Acknowledged writes missing after rolling restart/iu;
 
+const ACKNOWLEDGED_WRITE_LOSS_CLASSIFICATIONS = Object.freeze(new Set([
+  'acknowledged_before_durable_commit',
+  'durable_absent_everywhere',
+  'durable_partial_visibility',
+]));
+
+function acknowledgedWriteVisibilityDetailsOf(scenario) {
+  return scenario?.details?.acknowledgedWriteVisibility ||
+    scenario?.details?.diagnostics?.partialResult?.acknowledgedWriteVisibility ||
+    null;
+}
+
+function isVisibilityCountVerified(
+  acknowledgedWriteCount,
+  reachableNodeCount,
+) {
+  return acknowledgedWriteCount !== null &&
+    acknowledgedWriteCount > 0 &&
+    reachableNodeCount !== null &&
+    reachableNodeCount > 0;
+}
+
+function isAcknowledgedWriteLoss(visibility, classification, failureText) {
+  return visibility?.lossDetected === true ||
+    ACKNOWLEDGED_WRITE_LOSS_CLASSIFICATIONS.has(classification) ||
+    ACKNOWLEDGED_WRITE_LOSS_PATTERN.test(failureText);
+}
+
+function resolveVisibilityVerified(visibility, countVerified) {
+  if (typeof visibility?.verified !== 'boolean') return countVerified;
+  return visibility.verified === true;
+}
+
 function acknowledgedWriteVisibilityOf(scenario) {
-  const visibility = scenario?.details?.acknowledgedWriteVisibility;
+  const visibility = acknowledgedWriteVisibilityDetailsOf(scenario);
   const acknowledgedWriteCount = asNumber(
     visibility?.acknowledgedWriteCount,
     null,
@@ -63,11 +105,22 @@ function acknowledgedWriteVisibilityOf(scenario) {
     scenario?.stackTrace,
     scenario?.dominantReason,
   ].filter((value) => typeof value === 'string').join('\n');
+  const countVerified = isVisibilityCountVerified(
+    acknowledgedWriteCount,
+    reachableNodeCount,
+  );
+  const classification =
+    typeof visibility?.classification === 'string' ?
+      visibility.classification : null;
+  const unwitnessedWriteCount = Array.isArray(visibility?.unwitnessedIds) ?
+    visibility.unwitnessedIds.length : 0;
   return {
-    verified:
-      acknowledgedWriteCount !== null && acknowledgedWriteCount > 0 &&
-      reachableNodeCount !== null && reachableNodeCount > 0,
-    lossDetected: ACKNOWLEDGED_WRITE_LOSS_PATTERN.test(failureText),
+    verified: resolveVisibilityVerified(visibility, countVerified),
+    lossDetected:
+      isAcknowledgedWriteLoss(visibility, classification, failureText),
+    oracleBlind: visibility?.oracleBlind === true,
+    classification,
+    unwitnessedWriteCount,
     acknowledgedWriteCount,
     reachableNodeCount,
   };
