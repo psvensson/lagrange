@@ -1,0 +1,106 @@
+{
+  "timestamp": "20260802T080037Z",
+  "config": "test/distributed/config/local.json",
+  "scenario": "rolling-restart",
+  "srcFingerprint": "40abce69f264a830",
+  "sourceCommit": "cc4c8093803786e2d9a5b8f98f5d338762bb6620",
+  "workingTreeClean": true,
+  "configFingerprint": "094f44f7c083f92c986691a2c0e6c3fa02786e035bc750c35cba31f94b166bb7",
+  "certificationMode": false,
+  "hardwareClass": "calibrated-local-container-v1",
+  "nodeCount": 5,
+  "workloadIdentity": "rolling-restart-acknowledged-write-load-v1",
+  "failureScheduleIdentity": "sequential-non-seed-rolling-restart-v1",
+  "resourceLimits": {
+    "cpusPerNode": 2
+  },
+  "calibration": {
+    "machineFactor": 1,
+    "workloadVersion": 1
+  },
+  "debugLogs": false,
+  "noProgressMaxElapsedMs": 200000,
+  "staleSourceRuns": 0,
+  "runs": 1,
+  "classTally": {
+    "TOPOLOGY_BLOCKED": 1
+  },
+  "corruptCount": 0,
+  "oracleBlindCount": 0,
+  "nodeExitCount": 0,
+  "acknowledgedWriteLossCount": 0,
+  "acknowledgedWriteUnverifiedCount": 1,
+  "topologyBlockedCount": 1,
+  "convergeRate": 1,
+  "stallRate": 0,
+  "healthyRate": 0,
+  "converged": 1,
+  "passRate": 0,
+  "missingHistogram": {
+    "0": 1
+  },
+  "dominantReasonTally": {
+    "restart_infrastructure_join": 1
+  },
+  "wallSeconds": {
+    "p50": 361,
+    "p95": 361
+  },
+  "durationP50": 314588,
+  "durationP95": 314588,
+  "contributingReports": [
+    "test-output/reports/stat-gate-20260802T080037Z-run1.report.json"
+  ],
+  "runsDetail": [
+    {
+      "passed": false,
+      "missing": 0,
+      "hardBreaches": 0,
+      "cyclesNoProgress": 0,
+      "gateState": "",
+      "oracleBlind": false,
+      "unexpectedNodeExit": false,
+      "reason": "restart_infrastructure_join",
+      "closureWitnessClass": null,
+      "duration": 314588,
+      "acknowledgedWriteVisibility": {
+        "verified": false,
+        "lossDetected": false,
+        "oracleBlind": false,
+        "classification": null,
+        "unwitnessedWriteCount": 0,
+        "acknowledgedWriteCount": null,
+        "reachableNodeCount": null
+      },
+      "class": "TOPOLOGY_BLOCKED",
+      "run": 1,
+      "wallSeconds": 361,
+      "report": "test-output/reports/stat-gate-20260802T080037Z-run1.report.json",
+      "sourceFingerprint": "40abce69f264a830",
+      "cleanStart": true
+    }
+  ],
+  "gateVerdict": {
+    "verdict": "SAFETY_VIOLATED",
+    "reason": "safety floor breached (must be 0 every run): {\"corrupt\":0,\"nodeExit\":0,\"oracleBlind\":0,\"staleSource\":0,\"acknowledgedWriteLoss\":0,\"acknowledgedWriteUnverified\":1}",
+    "passes": 0,
+    "runs": 1,
+    "wilson": {
+      "lowerBound": 5.551115123125783e-17,
+      "upperBound": 0.7934506856996815,
+      "pointEstimate": 0,
+      "confidence": 0.95
+    },
+    "safetyCounts": {
+      "corrupt": 0,
+      "nodeExit": 0,
+      "oracleBlind": 0,
+      "staleSource": 0,
+      "acknowledgedWriteLoss": 0,
+      "acknowledgedWriteUnverified": 1
+    },
+    "safetyClean": false,
+    "sealedBar": 0.357,
+    "promotionNote": "promotion verdicts require an N>=15 fixed-code window (§5); this gate has N=1"
+  }
+}

@@ -65,7 +65,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 ⚠ stale | — |
 | priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 ⚠ stale | — |
 | rolling-restart-handoff-witness-canonical-projection | product | 1 | 0 | 2026-08-01 | — |
-| rolling-restart-representative-certification | product | 1 | 0 | 2026-08-01 | — |
+| rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 ⚠ stale | — |
