@@ -1,0 +1,500 @@
+diff --git a/scripts/solve/checkpoint-preflight.js b/scripts/solve/checkpoint-preflight.js
+index b125c3e7b104af42cd4423b1845e67dbfa08d03e..0d3f66644a48278eb069307454e138a2868cde89 100644
+--- a/scripts/solve/checkpoint-preflight.js
++++ b/scripts/solve/checkpoint-preflight.js
+@@ -3,7 +3,7 @@
+ // evaluator still applies integrity, change-artifact, and exact-verification
+ // checks before `next` is allowed to spend an independent verifier turn.
+ 
+-import {checkpointGateProblemsForLog} from './audit.js';
++import {auditQuest, checkpointGateProblemsForLog} from './audit.js';
+ import {EVENT_FINDING} from './constants.js';
+ import {importClosureGaps} from './import-closure.js';
+ import {suggestVerificationTemplates} from './verification-template-suggest.js';
+@@ -15,6 +15,7 @@ import {
+   VERIFICATION_CONTRACT_VERSION,
+   VERIFICATION_SCOPE,
+   VERIFIER_APPROVAL_FINDING_KIND,
++  terminalVerificationProblems,
+   verificationState,
+ } from './verification.js';
+ import {parseCommitChangeRef} from './change-artifact.js';
+@@ -22,6 +23,8 @@ import {canonicalCommitDelta} from './content-addressed-change-artifact.js';
+ 
+ const MISSING_CHANGE_REF = '(missing changeRef)';
+ const PREFLIGHT_VERIFIER_EVIDENCE = 'subagent:checkpoint-preflight-simulation';
++const PREFLIGHT_AGGREGATE_APPROVAL_CLAIM =
++  'terminal preflight simulated aggregate approval';
+ 
+ function attemptPreflightDossier(root, attempt) {
+   const changedPaths = [...attempt.inspection.changedPaths].sort();
+@@ -101,6 +104,96 @@ function syntheticCandidateApproval(candidate) {
+   };
+ }
+ 
++function syntheticAggregateApproval(state) {
++  const latest = [...state.attempts].reverse()
++    .find((attempt) => attempt.contracted);
++  if (!latest || !state.aggregate?.ok ||
++    !validVerificationFingerprint(state.aggregate.fingerprint) ||
++    state.aggregateApproval) return null;
++  return {
++    type: EVENT_FINDING,
++    frontier: latest.event.frontier,
++    kind: VERIFIER_APPROVAL_FINDING_KIND,
++    claim: PREFLIGHT_AGGREGATE_APPROVAL_CLAIM,
++    evidence: PREFLIGHT_VERIFIER_EVIDENCE,
++    verification: {
++      schemaVersion: VERIFICATION_CONTRACT_VERSION,
++      scope: VERIFICATION_SCOPE.AGGREGATE,
++      fingerprint: state.aggregate.fingerprint,
++    },
++  };
++}
++
++function problemIdentity(item) {
++  return JSON.stringify([
++    item?.message || null,
++    item?.ts || null,
++    item?.frontier || null,
++  ]);
++}
++
++// Multiset subtraction is deliberate. Two identical audit problems are two
++// obligations; resolving one approval must not erase both. Exact tuple identity
++// also prevents an unrelated message containing the approval text from matching.
++export function subtractAuditProblemMultiset(source, removable) {
++  const counts = new Map();
++  for (const item of removable) {
++    const key = problemIdentity(item);
++    counts.set(key, (counts.get(key) || 0) + 1);
++  }
++  return source.filter((item) => {
++    const key = problemIdentity(item);
++    const count = counts.get(key) || 0;
++    if (count === 0) return true;
++    counts.set(key, count - 1);
++    return false;
++  });
++}
++
++// Terminal verifier readiness is distinct from checkpoint readiness. Determine
++// only what valid exact approvals can remove from terminal verification, then
++// subtract that exact multiset from the REAL audit. Running the full audit over
++// synthetic findings would let those findings affect unrelated theory rules.
++export function terminalAuditVerificationPreflight(
++  root,
++  quest,
++  log,
++  options = {},
++) {
++  const state = options.state || verificationState(root, quest, log, options);
++  const audit = options.audit || auditQuest(root, quest);
++  const pendingApprovals = state.pendingAttempts
++    .filter((attempt) => validVerificationFingerprint(attempt.fingerprint))
++    .map(syntheticAttemptApproval);
++  const aggregateApproval = syntheticAggregateApproval(state);
++  const syntheticLog = [
++    ...log,
++    ...pendingApprovals,
++    ...(aggregateApproval ? [aggregateApproval] : []),
++  ];
++  const before = terminalVerificationProblems(root, quest, log, options);
++  const after = terminalVerificationProblems(root, quest, syntheticLog, options);
++  const resolvedVerificationProblems = subtractAuditProblemMultiset(before, after);
++  const problems = subtractAuditProblemMultiset(
++    audit.problems,
++    resolvedVerificationProblems,
++  );
++  // Keep the residual verification obligations separate from unrelated audit
++  // defects. Callers can preserve their precise replacement guidance for the
++  // former while still refusing to delegate candidates with integrity,
++  // evidence, theory, or other terminal audit failures.
++  const nonVerificationProblems = subtractAuditProblemMultiset(problems, after);
++  return {
++    readyAfterRequiredApprovals: problems.length === 0,
++    pendingAttemptApprovalCount: pendingApprovals.length,
++    aggregateApprovalRequired: Boolean(aggregateApproval),
++    resolvedVerificationProblems,
++    verificationProblems: after,
++    nonVerificationProblems,
++    problems,
++  };
++}
++
+ function approvedUncheckpointedAttempts(state) {
+   const excludedIndexes = new Set([
+     ...state.pendingAttempts.map((attempt) => attempt.index),
+diff --git a/scripts/solve/next.js b/scripts/solve/next.js
+index 0b853f0aa3844f48a51dcb407f7c5f45e24f285f..5d076b25ee45506699a069acee36ca0144cb3bf3 100644
+--- a/scripts/solve/next.js
++++ b/scripts/solve/next.js
+@@ -17,6 +17,7 @@ import {auditQuest} from './audit.js';
+ import {
+   checkpointVerificationPreflight,
+   checkpointVerificationPreflightLines,
++  terminalAuditVerificationPreflight,
+ } from './checkpoint-preflight.js';
+ import {verificationState} from './verification.js';
+ import {
+@@ -42,6 +43,9 @@ const FILE_NOT_FOUND_CODE = 'ENOENT';
+ const UNKNOWN_METRIC = '?';
+ const LINE_SEPARATOR = '\n';
+ const NEXT_SCHEMA_VERSION = 2;
++const TERMINAL_PREFLIGHT_READY = 'verifier-ready after required approvals';
++const TERMINAL_PREFLIGHT_NOT_READY =
++  'NOT verifier-ready after required approvals';
+ 
+ // The last event, when it is a recorded non-terminal gate stop (an advisory
+ // gate-decision means the run continued, so it is not a stop). Anything after
+@@ -145,11 +149,31 @@ function unresolvedReplacementAction(questId, pendingVerification, preflight) {
+   );
+ }
+ 
+-function pendingVerifierAction(questId, state, pendingVerification, preflight) {
++function repairTerminalAuditAction(questId, terminalAuditPreflight) {
++  const first = terminalAuditPreflight.problems[0]?.message ||
++    'terminal audit is not verifier-ready';
++  return typedNextAction(
++    `resolve terminal audit failures before verification: ${first}; inspect: ` +
++      `node scripts/solve.js audit --id ${questId}`,
++    {
++      code: NEXT_ACTION_CODE.REPAIR_AUDIT,
++      payload: {questId},
++    },
++  );
++}
++
++function pendingVerifierAction(questId, state, pendingVerification, preflight,
++  terminalAuditPreflight) {
++  const terminal = TERMINAL_STATUSES.includes(state.questStatus);
++  if (terminal && terminalAuditPreflight.nonVerificationProblems.length > 0) {
++    return repairTerminalAuditAction(questId, terminalAuditPreflight);
++  }
+   if (!preflight.readyAfterRequiredApprovals) {
+     return unresolvedReplacementAction(questId, pendingVerification, preflight);
+   }
+-  const terminal = TERMINAL_STATUSES.includes(state.questStatus);
++  if (terminal && !terminalAuditPreflight.readyAfterRequiredApprovals) {
++    return repairTerminalAuditAction(questId, terminalAuditPreflight);
++  }
+   const scope = terminal && preflight.aggregate.bothEligible ?
+     LOCAL_STR_OWNED_009 : LOCAL_STR_OWNED_004;
+   return verifierAction(
+@@ -160,7 +184,12 @@ function pendingVerifierAction(questId, state, pendingVerification, preflight) {
+   );
+ }
+ 
+-function terminalQuestAction(questId, verification, audit) {
++function terminalQuestAction(
++  questId,
++  verification,
++  audit,
++  terminalAuditPreflight,
++) {
+   if (verification.attempts.some((attempt) => attempt.contracted) &&
+     !verification.aggregateApproval) {
+     // An uncomputable aggregate has no fingerprint a verifier could ever
+@@ -181,6 +210,9 @@ function terminalQuestAction(questId, verification, audit) {
+         },
+       );
+     }
++    if (!terminalAuditPreflight.readyAfterRequiredApprovals) {
++      return repairTerminalAuditAction(questId, terminalAuditPreflight);
++    }
+     const latest = [...verification.attempts].reverse()
+       .find((attempt) => attempt.contracted);
+     return verifierAction(
+@@ -207,11 +239,12 @@ function terminalQuestAction(questId, verification, audit) {
+ }
+ 
+ function nextAction({questId, state, pending, gateStop, blocker,
+-  verification, verificationPreflight, audit}) {
++  verification, verificationPreflight, terminalAuditPreflight, audit}) {
+   const pendingVerification = verification.pendingAttempts[0];
+   if (pendingVerification) {
+     return pendingVerifierAction(
+-      questId, state, pendingVerification, verificationPreflight);
++      questId, state, pendingVerification, verificationPreflight,
++      terminalAuditPreflight);
+   }
+   if (verification.unresolvedRejectedAttempts.length > 0 ||
+     verification.unresolvedCandidateRejection) {
+@@ -224,7 +257,8 @@ function nextAction({questId, state, pending, gateStop, blocker,
+     });
+   }
+   if (TERMINAL_STATUSES.includes(state.questStatus)) {
+-    return terminalQuestAction(questId, verification, audit);
++    return terminalQuestAction(
++      questId, verification, audit, terminalAuditPreflight);
+   }
+   if (verification.uncheckpointedApprovedAttempts.length > 0 &&
+     verification.attemptProblems.length === 0) {
+@@ -293,12 +327,17 @@ export function buildNextProjection(root, questId) {
+   const audit = auditQuest(root, quest);
+ 
+   const terminal = TERMINAL_STATUSES.includes(state.questStatus);
++  const terminalAuditPreflight = terminal ?
++    terminalAuditVerificationPreflight(root, quest, log, {
++      state: verification,
++      audit,
++    }) : null;
+   return {
+     schemaVersion: NEXT_SCHEMA_VERSION,
+     quest: {id: questId, status: state.questStatus},
+     action: nextAction({
+       questId, state, pending, gateStop, blocker, verification,
+-      verificationPreflight, audit,
++      verificationPreflight, terminalAuditPreflight, audit,
+     }),
+     pendingStep: pending ? {
+       frontier: pending.frontier,
+@@ -322,6 +361,7 @@ export function buildNextProjection(root, questId) {
+       candidateFingerprint: verification.candidate?.fingerprint || null,
+       candidateApproved: Boolean(verification.candidateApproval),
+       checkpointPreflight: verificationPreflight,
++      terminalAuditPreflight,
+     },
+     advisories,
+   };
+@@ -356,6 +396,15 @@ export function buildNextLines(root, questId) {
+     lines.push(...checkpointVerificationPreflightLines(
+       verification.checkpointPreflight));
+   }
++  if (verification.terminalAuditPreflight) {
++    const terminalPreflight = verification.terminalAuditPreflight;
++    lines.push(`terminal audit preflight: ${
++      terminalPreflight.readyAfterRequiredApprovals ?
++        TERMINAL_PREFLIGHT_READY : TERMINAL_PREFLIGHT_NOT_READY}`);
++    for (const item of terminalPreflight.problems) {
++      lines.push(`terminal preflight problem: ${item.message}`);
++    }
++  }
+   lines.push(...renderAdvisoryLines(advisories));
+   return lines;
+ }
+diff --git a/test/solve/operator-workflow.test.js b/test/solve/operator-workflow.test.js
+index 79f008c574e5c8089df44c326e7ffc5624604b9f..7c72041f1bfae93a5d5855dbfa044a31c54e8435 100644
+--- a/test/solve/operator-workflow.test.js
++++ b/test/solve/operator-workflow.test.js
+@@ -10,6 +10,9 @@ import {
+   startQuestWorkflow,
+ } from '../../scripts/solve/operator-workflow.js';
+ import {buildNextProjection} from '../../scripts/solve/next.js';
++import {
++  subtractAuditProblemMultiset,
++} from '../../scripts/solve/checkpoint-preflight.js';
+ import {runStep} from '../../scripts/solve/step.js';
+ import {
+   appendEvent,
+@@ -97,7 +100,7 @@ function landingFixture(changedPath = 'scripts/demo.js') {
+     changeRef: `diff:${path.relative(root, artifact)}`,
+     summary: 'change the landing fixture',
+   });
+-  return {root, id};
++  return {root, id, oracle};
+ }
+ 
+ function nonSourceLandingFixture() {
+@@ -144,6 +147,19 @@ function nonSourceLandingFixture() {
+   return {root, id};
+ }
+ 
++tap.test('terminal audit problem subtraction is exact and duplicate-aware', (t) => {
++  const exact = {message: 'requires exact approval', ts: '2026-08-02T00:00:00Z',
++    frontier: 'main'};
++  const duplicate = {...exact};
++  const substring = {...exact, message: 'collision requires exact approval'};
++  t.same(
++    subtractAuditProblemMultiset([exact, duplicate, substring], [exact]),
++    [duplicate, substring],
++    'one approval removes one exact tuple, not a duplicate or substring collision',
++  );
++  t.end();
++});
++
+ tap.test('next exposes stable action codes and continue dispatches only those codes',
+   (t) => {
+     const root = tmp();
+@@ -290,7 +306,14 @@ tap.test('land validates aggregate approval and scope-safely commits without pus
+ 
+ tap.test('land refuses residual audit failures before recording approval', (t) => {
+   const {root, id} = landingFixture('package.json');
+-  const fingerprint = buildNextProjection(root, id).verification.aggregateFingerprint;
++  const projection = buildNextProjection(root, id);
++  const fingerprint = projection.verification.aggregateFingerprint;
++  t.equal(projection.action.code, 'repair-audit',
++    'next repairs model evidence before spending a verifier turn');
++  t.notOk(projection.verification.terminalAuditPreflight
++    .readyAfterRequiredApprovals);
++  t.match(projection.verification.terminalAuditPreflight.problems
++    .map((item) => item.message).join('\n'), /model/u);
+   t.throws(() => landQuestWorkflow(root, {
+     id,
+     verifier: 'facade-reviewer',
+@@ -304,6 +327,23 @@ tap.test('land refuses residual audit failures before recording approval', (t) =
+   t.end();
+ });
+ 
++tap.test('next refuses aggregate verification while fresh probe evidence is unrecorded',
++  (t) => {
++    const {root, id, oracle} = landingFixture();
++    const prior = JSON.parse(fs.readFileSync(oracle, 'utf8'));
++    fs.writeFileSync(oracle, JSON.stringify({...prior, refreshed: true}));
++    const projection = buildNextProjection(root, id);
++    t.equal(projection.action.code, 'repair-audit');
++    t.match(projection.action.value, /fresh probe evidence is not recorded/u);
++    t.ok(projection.verification.checkpointPreflight
++      .readyAfterRequiredApprovals,
++    'the narrow checkpoint preflight remains independently green');
++    t.notOk(projection.verification.terminalAuditPreflight
++      .readyAfterRequiredApprovals);
++    fs.rmSync(root, {recursive: true, force: true});
++    t.end();
++  });
++
+ tap.test('land does not confuse an audit-message substring with the expected receipt',
+   (t) => {
+     const {root, id} = landingFixture();
+@@ -321,6 +361,11 @@ tap.test('land does not confuse an audit-message substring with the expected rec
+       frontier: `${id}-main`,
+       theory: collision,
+     });
++    const projection = buildNextProjection(root, id);
++    t.equal(projection.action.code, 'repair-audit');
++    t.match(projection.verification.terminalAuditPreflight.problems
++      .map((item) => item.message).join('\n'), /selected theory/u,
++    'an audit message containing approval prose is not subtracted');
+     t.throws(() => landQuestWorkflow(root, {
+       id,
+       verifier: 'facade-reviewer',
+diff --git a/test/solve/verification-handoff.test.js b/test/solve/verification-handoff.test.js
+index 6697932c3d7b8aee1fe43277cb8ce231387ac8cf..8d4a2103b64cff2e554d35bea9af8e331d9c9200 100644
+--- a/test/solve/verification-handoff.test.js
++++ b/test/solve/verification-handoff.test.js
+@@ -34,11 +34,15 @@ import {
+ } from '../../scripts/solve/verification.js';
+ import {
+   EVENT_GATE_DECISION,
++  EVENT_EVIDENCE_INGESTED,
+   EVENT_PARK,
++  EVENT_THEORY_OPTION_DECLARED,
++  EVENT_THEORY_SELECTED,
+   EVENT_VIOLATION,
+   INTEGRITY_RESOLUTION_FRESH_SAMPLE,
+   INTEGRITY_SCOPE_ATTEMPT,
+   OUTCOME_BLOCKED,
++  THEORY_RESULT_FALSIFIED,
+ } from '../../scripts/solve/constants.js';
+ 
+ function git(root, args, options = {}) {
+@@ -507,6 +511,14 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
+       'a terminal exact-equals-aggregate candidate can receive one both approval');
+ 
+     const projection = buildNextProjection(fx.root, fx.quest.id);
++    t.ok(projection.verification.terminalAuditPreflight
++      .readyAfterRequiredApprovals,
++    'a clean both-eligible candidate remains verifier-ready');
++    t.same(
++      projection.verification.terminalAuditPreflight.nonVerificationProblems,
++      [],
++      'the terminal preflight distinguishes audit defects from replacement work',
++    );
+     t.same(
+       projection.verification.checkpointPreflight.pendingApprovals[0].changedPaths,
+       ['src/a.js'],
+@@ -616,6 +628,49 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
+     t.end();
+   });
+ 
++  t.test('terminal integrity failure routes audit repair before replacement', (t) => {
++    const fx = fixture();
++    recordAttempt(fx, 'src/a.js', 0, 'terminal-integrity-candidate');
++    appendEvent(fx.root, fx.quest.id, {
++      type: EVENT_VIOLATION,
++      eventSchemaVersion: 2,
++      violationId: 'runtime-verify:test:attempt-integrity:terminal',
++      scope: INTEGRITY_SCOPE_ATTEMPT,
++      resolutionPolicy: INTEGRITY_RESOLUTION_FRESH_SAMPLE,
++      violations: ['synthetic unresolved terminal integrity'],
++      frontier: 'runtime-verify-main',
++      replacementProbeKey: 'oracle:runtime-verify',
++      failedEvidenceFingerprint: 'sha256:synthetic-terminal-evidence',
++    });
++    const projection = buildNextProjection(fx.root, fx.quest.id);
++    t.notOk(projection.verification.checkpointPreflight
++      .readyAfterRequiredApprovals);
++    t.notOk(projection.verification.terminalAuditPreflight
++      .readyAfterRequiredApprovals);
++    t.equal(projection.action.code, 'repair-audit');
++    t.match(projection.action.value, /unresolved integrity violation/u);
++    fs.rmSync(fx.root, {recursive: true, force: true});
++    t.end();
++  });
++
++  t.test('terminal evidence identity failure routes audit repair before verifier',
++    (t) => {
++      const fx = fixture();
++      recordAttempt(fx, 'src/a.js', 0, 'terminal-evidence-identity-candidate');
++      appendEvent(fx.root, fx.quest.id, {
++        type: EVENT_EVIDENCE_INGESTED,
++        frontier: 'runtime-verify-main',
++        evidence: 'test-output/reports/missing-identity.report.json',
++        metric: 0,
++        done: true,
++      });
++      const projection = buildNextProjection(fx.root, fx.quest.id);
++      t.equal(projection.action.code, 'repair-audit');
++      t.match(projection.action.value, /missing fingerprint identity/u);
++      fs.rmSync(fx.root, {recursive: true, force: true});
++      t.end();
++    });
++
+   t.test('a large same-base canonical replacement can checkpoint', (t) => {
+     const fx = fixture();
+     const changedPath = 'src/a.js';
+@@ -977,6 +1032,33 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
+     t.end();
+   });
+ 
++  t.test('terminal pending verification waits for non-verification audit repair',
++    (t) => {
++      const fx = fixture();
++      recordAttempt(fx, 'src/a.js', 0, 'pending-with-stale-theory');
++      appendEvent(fx.root, fx.quest.id, {
++        type: EVENT_THEORY_OPTION_DECLARED,
++        frontier: 'runtime-verify-main',
++        theory: 'theory-stale-before-verifier',
++        status: THEORY_RESULT_FALSIFIED,
++      });
++      appendEvent(fx.root, fx.quest.id, {
++        type: EVENT_THEORY_SELECTED,
++        frontier: 'runtime-verify-main',
++        theory: 'theory-stale-before-verifier',
++      });
++      const projection = buildNextProjection(fx.root, fx.quest.id);
++      t.equal(projection.verification.pendingAttemptCount, 1);
++      t.ok(projection.verification.checkpointPreflight
++        .readyAfterRequiredApprovals);
++      t.notOk(projection.verification.terminalAuditPreflight
++        .readyAfterRequiredApprovals);
++      t.equal(projection.action.code, 'repair-audit');
++      t.match(projection.action.value, /selected theory/u);
++      fs.rmSync(fx.root, {recursive: true, force: true});
++      t.end();
++    });
++
+   t.test('every source attempt is approved and a multi-attempt aggregate covers all paths', (t) => {
+     const fx = fixture();
+     recordAttempt(fx, 'src/a.js', 1, 'a');
+@@ -1027,6 +1109,10 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
+     );
+     t.not(preflight.aggregate.fingerprint, secondFingerprint);
+     t.notOk(preflight.aggregate.bothEligible);
++    const projection = buildNextProjection(fx.root, fx.quest.id);
++    t.ok(projection.verification.terminalAuditPreflight
++      .readyAfterRequiredApprovals,
++    'different pending and aggregate fingerprints are both simulated for readiness');
+     t.match(buildNextLines(fx.root, fx.quest.id)[0],
+       new RegExp(`verification-scope attempt.*${secondFingerprint}`, 'u'));
+     t.notMatch(buildNextLines(fx.root, fx.quest.id)[0], /verification-scope both/u);

@@ -34,11 +34,15 @@ import {
 } from '../../scripts/solve/verification.js';
 import {
   EVENT_GATE_DECISION,
+  EVENT_EVIDENCE_INGESTED,
   EVENT_PARK,
+  EVENT_THEORY_OPTION_DECLARED,
+  EVENT_THEORY_SELECTED,
   EVENT_VIOLATION,
   INTEGRITY_RESOLUTION_FRESH_SAMPLE,
   INTEGRITY_SCOPE_ATTEMPT,
   OUTCOME_BLOCKED,
+  THEORY_RESULT_FALSIFIED,
 } from '../../scripts/solve/constants.js';
 
 function git(root, args, options = {}) {
@@ -507,6 +511,14 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       'a terminal exact-equals-aggregate candidate can receive one both approval');
 
     const projection = buildNextProjection(fx.root, fx.quest.id);
+    t.ok(projection.verification.terminalAuditPreflight
+      .readyAfterRequiredApprovals,
+    'a clean both-eligible candidate remains verifier-ready');
+    t.same(
+      projection.verification.terminalAuditPreflight.nonVerificationProblems,
+      [],
+      'the terminal preflight distinguishes audit defects from replacement work',
+    );
     t.same(
       projection.verification.checkpointPreflight.pendingApprovals[0].changedPaths,
       ['src/a.js'],
@@ -615,6 +627,49 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     fs.rmSync(fx.root, {recursive: true, force: true});
     t.end();
   });
+
+  t.test('terminal integrity failure routes audit repair before replacement', (t) => {
+    const fx = fixture();
+    recordAttempt(fx, 'src/a.js', 0, 'terminal-integrity-candidate');
+    appendEvent(fx.root, fx.quest.id, {
+      type: EVENT_VIOLATION,
+      eventSchemaVersion: 2,
+      violationId: 'runtime-verify:test:attempt-integrity:terminal',
+      scope: INTEGRITY_SCOPE_ATTEMPT,
+      resolutionPolicy: INTEGRITY_RESOLUTION_FRESH_SAMPLE,
+      violations: ['synthetic unresolved terminal integrity'],
+      frontier: 'runtime-verify-main',
+      replacementProbeKey: 'oracle:runtime-verify',
+      failedEvidenceFingerprint: 'sha256:synthetic-terminal-evidence',
+    });
+    const projection = buildNextProjection(fx.root, fx.quest.id);
+    t.notOk(projection.verification.checkpointPreflight
+      .readyAfterRequiredApprovals);
+    t.notOk(projection.verification.terminalAuditPreflight
+      .readyAfterRequiredApprovals);
+    t.equal(projection.action.code, 'repair-audit');
+    t.match(projection.action.value, /unresolved integrity violation/u);
+    fs.rmSync(fx.root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('terminal evidence identity failure routes audit repair before verifier',
+    (t) => {
+      const fx = fixture();
+      recordAttempt(fx, 'src/a.js', 0, 'terminal-evidence-identity-candidate');
+      appendEvent(fx.root, fx.quest.id, {
+        type: EVENT_EVIDENCE_INGESTED,
+        frontier: 'runtime-verify-main',
+        evidence: 'test-output/reports/missing-identity.report.json',
+        metric: 0,
+        done: true,
+      });
+      const projection = buildNextProjection(fx.root, fx.quest.id);
+      t.equal(projection.action.code, 'repair-audit');
+      t.match(projection.action.value, /missing fingerprint identity/u);
+      fs.rmSync(fx.root, {recursive: true, force: true});
+      t.end();
+    });
 
   t.test('a large same-base canonical replacement can checkpoint', (t) => {
     const fx = fixture();
@@ -977,6 +1032,33 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     t.end();
   });
 
+  t.test('terminal pending verification waits for non-verification audit repair',
+    (t) => {
+      const fx = fixture();
+      recordAttempt(fx, 'src/a.js', 0, 'pending-with-stale-theory');
+      appendEvent(fx.root, fx.quest.id, {
+        type: EVENT_THEORY_OPTION_DECLARED,
+        frontier: 'runtime-verify-main',
+        theory: 'theory-stale-before-verifier',
+        status: THEORY_RESULT_FALSIFIED,
+      });
+      appendEvent(fx.root, fx.quest.id, {
+        type: EVENT_THEORY_SELECTED,
+        frontier: 'runtime-verify-main',
+        theory: 'theory-stale-before-verifier',
+      });
+      const projection = buildNextProjection(fx.root, fx.quest.id);
+      t.equal(projection.verification.pendingAttemptCount, 1);
+      t.ok(projection.verification.checkpointPreflight
+        .readyAfterRequiredApprovals);
+      t.notOk(projection.verification.terminalAuditPreflight
+        .readyAfterRequiredApprovals);
+      t.equal(projection.action.code, 'repair-audit');
+      t.match(projection.action.value, /selected theory/u);
+      fs.rmSync(fx.root, {recursive: true, force: true});
+      t.end();
+    });
+
   t.test('every source attempt is approved and a multi-attempt aggregate covers all paths', (t) => {
     const fx = fixture();
     recordAttempt(fx, 'src/a.js', 1, 'a');
@@ -1027,6 +1109,10 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     );
     t.not(preflight.aggregate.fingerprint, secondFingerprint);
     t.notOk(preflight.aggregate.bothEligible);
+    const projection = buildNextProjection(fx.root, fx.quest.id);
+    t.ok(projection.verification.terminalAuditPreflight
+      .readyAfterRequiredApprovals,
+    'different pending and aggregate fingerprints are both simulated for readiness');
     t.match(buildNextLines(fx.root, fx.quest.id)[0],
       new RegExp(`verification-scope attempt.*${secondFingerprint}`, 'u'));
     t.notMatch(buildNextLines(fx.root, fx.quest.id)[0], /verification-scope both/u);

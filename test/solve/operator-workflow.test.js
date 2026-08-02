@@ -10,6 +10,9 @@ import {
   startQuestWorkflow,
 } from '../../scripts/solve/operator-workflow.js';
 import {buildNextProjection} from '../../scripts/solve/next.js';
+import {
+  subtractAuditProblemMultiset,
+} from '../../scripts/solve/checkpoint-preflight.js';
 import {runStep} from '../../scripts/solve/step.js';
 import {
   appendEvent,
@@ -97,7 +100,7 @@ function landingFixture(changedPath = 'scripts/demo.js') {
     changeRef: `diff:${path.relative(root, artifact)}`,
     summary: 'change the landing fixture',
   });
-  return {root, id};
+  return {root, id, oracle};
 }
 
 function nonSourceLandingFixture() {
@@ -143,6 +146,19 @@ function nonSourceLandingFixture() {
   });
   return {root, id};
 }
+
+tap.test('terminal audit problem subtraction is exact and duplicate-aware', (t) => {
+  const exact = {message: 'requires exact approval', ts: '2026-08-02T00:00:00Z',
+    frontier: 'main'};
+  const duplicate = {...exact};
+  const substring = {...exact, message: 'collision requires exact approval'};
+  t.same(
+    subtractAuditProblemMultiset([exact, duplicate, substring], [exact]),
+    [duplicate, substring],
+    'one approval removes one exact tuple, not a duplicate or substring collision',
+  );
+  t.end();
+});
 
 tap.test('next exposes stable action codes and continue dispatches only those codes',
   (t) => {
@@ -290,7 +306,14 @@ tap.test('land validates aggregate approval and scope-safely commits without pus
 
 tap.test('land refuses residual audit failures before recording approval', (t) => {
   const {root, id} = landingFixture('package.json');
-  const fingerprint = buildNextProjection(root, id).verification.aggregateFingerprint;
+  const projection = buildNextProjection(root, id);
+  const fingerprint = projection.verification.aggregateFingerprint;
+  t.equal(projection.action.code, 'repair-audit',
+    'next repairs model evidence before spending a verifier turn');
+  t.notOk(projection.verification.terminalAuditPreflight
+    .readyAfterRequiredApprovals);
+  t.match(projection.verification.terminalAuditPreflight.problems
+    .map((item) => item.message).join('\n'), /model/u);
   t.throws(() => landQuestWorkflow(root, {
     id,
     verifier: 'facade-reviewer',
@@ -303,6 +326,23 @@ tap.test('land refuses residual audit failures before recording approval', (t) =
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });
+
+tap.test('next refuses aggregate verification while fresh probe evidence is unrecorded',
+  (t) => {
+    const {root, id, oracle} = landingFixture();
+    const prior = JSON.parse(fs.readFileSync(oracle, 'utf8'));
+    fs.writeFileSync(oracle, JSON.stringify({...prior, refreshed: true}));
+    const projection = buildNextProjection(root, id);
+    t.equal(projection.action.code, 'repair-audit');
+    t.match(projection.action.value, /fresh probe evidence is not recorded/u);
+    t.ok(projection.verification.checkpointPreflight
+      .readyAfterRequiredApprovals,
+    'the narrow checkpoint preflight remains independently green');
+    t.notOk(projection.verification.terminalAuditPreflight
+      .readyAfterRequiredApprovals);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
 
 tap.test('land does not confuse an audit-message substring with the expected receipt',
   (t) => {
@@ -321,6 +361,11 @@ tap.test('land does not confuse an audit-message substring with the expected rec
       frontier: `${id}-main`,
       theory: collision,
     });
+    const projection = buildNextProjection(root, id);
+    t.equal(projection.action.code, 'repair-audit');
+    t.match(projection.verification.terminalAuditPreflight.problems
+      .map((item) => item.message).join('\n'), /selected theory/u,
+    'an audit message containing approval prose is not subtracted');
     t.throws(() => landQuestWorkflow(root, {
       id,
       verifier: 'facade-reviewer',

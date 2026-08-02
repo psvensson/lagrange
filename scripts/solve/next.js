@@ -17,6 +17,7 @@ import {auditQuest} from './audit.js';
 import {
   checkpointVerificationPreflight,
   checkpointVerificationPreflightLines,
+  terminalAuditVerificationPreflight,
 } from './checkpoint-preflight.js';
 import {verificationState} from './verification.js';
 import {
@@ -42,6 +43,9 @@ const FILE_NOT_FOUND_CODE = 'ENOENT';
 const UNKNOWN_METRIC = '?';
 const LINE_SEPARATOR = '\n';
 const NEXT_SCHEMA_VERSION = 2;
+const TERMINAL_PREFLIGHT_READY = 'verifier-ready after required approvals';
+const TERMINAL_PREFLIGHT_NOT_READY =
+  'NOT verifier-ready after required approvals';
 
 // The last event, when it is a recorded non-terminal gate stop (an advisory
 // gate-decision means the run continued, so it is not a stop). Anything after
@@ -145,11 +149,31 @@ function unresolvedReplacementAction(questId, pendingVerification, preflight) {
   );
 }
 
-function pendingVerifierAction(questId, state, pendingVerification, preflight) {
+function repairTerminalAuditAction(questId, terminalAuditPreflight) {
+  const first = terminalAuditPreflight.problems[0]?.message ||
+    'terminal audit is not verifier-ready';
+  return typedNextAction(
+    `resolve terminal audit failures before verification: ${first}; inspect: ` +
+      `node scripts/solve.js audit --id ${questId}`,
+    {
+      code: NEXT_ACTION_CODE.REPAIR_AUDIT,
+      payload: {questId},
+    },
+  );
+}
+
+function pendingVerifierAction(questId, state, pendingVerification, preflight,
+  terminalAuditPreflight) {
+  const terminal = TERMINAL_STATUSES.includes(state.questStatus);
+  if (terminal && terminalAuditPreflight.nonVerificationProblems.length > 0) {
+    return repairTerminalAuditAction(questId, terminalAuditPreflight);
+  }
   if (!preflight.readyAfterRequiredApprovals) {
     return unresolvedReplacementAction(questId, pendingVerification, preflight);
   }
-  const terminal = TERMINAL_STATUSES.includes(state.questStatus);
+  if (terminal && !terminalAuditPreflight.readyAfterRequiredApprovals) {
+    return repairTerminalAuditAction(questId, terminalAuditPreflight);
+  }
   const scope = terminal && preflight.aggregate.bothEligible ?
     LOCAL_STR_OWNED_009 : LOCAL_STR_OWNED_004;
   return verifierAction(
@@ -160,7 +184,12 @@ function pendingVerifierAction(questId, state, pendingVerification, preflight) {
   );
 }
 
-function terminalQuestAction(questId, verification, audit) {
+function terminalQuestAction(
+  questId,
+  verification,
+  audit,
+  terminalAuditPreflight,
+) {
   if (verification.attempts.some((attempt) => attempt.contracted) &&
     !verification.aggregateApproval) {
     // An uncomputable aggregate has no fingerprint a verifier could ever
@@ -180,6 +209,9 @@ function terminalQuestAction(questId, verification, audit) {
           },
         },
       );
+    }
+    if (!terminalAuditPreflight.readyAfterRequiredApprovals) {
+      return repairTerminalAuditAction(questId, terminalAuditPreflight);
     }
     const latest = [...verification.attempts].reverse()
       .find((attempt) => attempt.contracted);
@@ -207,11 +239,12 @@ function terminalQuestAction(questId, verification, audit) {
 }
 
 function nextAction({questId, state, pending, gateStop, blocker,
-  verification, verificationPreflight, audit}) {
+  verification, verificationPreflight, terminalAuditPreflight, audit}) {
   const pendingVerification = verification.pendingAttempts[0];
   if (pendingVerification) {
     return pendingVerifierAction(
-      questId, state, pendingVerification, verificationPreflight);
+      questId, state, pendingVerification, verificationPreflight,
+      terminalAuditPreflight);
   }
   if (verification.unresolvedRejectedAttempts.length > 0 ||
     verification.unresolvedCandidateRejection) {
@@ -224,7 +257,8 @@ function nextAction({questId, state, pending, gateStop, blocker,
     });
   }
   if (TERMINAL_STATUSES.includes(state.questStatus)) {
-    return terminalQuestAction(questId, verification, audit);
+    return terminalQuestAction(
+      questId, verification, audit, terminalAuditPreflight);
   }
   if (verification.uncheckpointedApprovedAttempts.length > 0 &&
     verification.attemptProblems.length === 0) {
@@ -293,12 +327,17 @@ export function buildNextProjection(root, questId) {
   const audit = auditQuest(root, quest);
 
   const terminal = TERMINAL_STATUSES.includes(state.questStatus);
+  const terminalAuditPreflight = terminal ?
+    terminalAuditVerificationPreflight(root, quest, log, {
+      state: verification,
+      audit,
+    }) : null;
   return {
     schemaVersion: NEXT_SCHEMA_VERSION,
     quest: {id: questId, status: state.questStatus},
     action: nextAction({
       questId, state, pending, gateStop, blocker, verification,
-      verificationPreflight, audit,
+      verificationPreflight, terminalAuditPreflight, audit,
     }),
     pendingStep: pending ? {
       frontier: pending.frontier,
@@ -322,6 +361,7 @@ export function buildNextProjection(root, questId) {
       candidateFingerprint: verification.candidate?.fingerprint || null,
       candidateApproved: Boolean(verification.candidateApproval),
       checkpointPreflight: verificationPreflight,
+      terminalAuditPreflight,
     },
     advisories,
   };
@@ -355,6 +395,15 @@ export function buildNextLines(root, questId) {
   if (verification.sourceAttemptCount > 0) {
     lines.push(...checkpointVerificationPreflightLines(
       verification.checkpointPreflight));
+  }
+  if (verification.terminalAuditPreflight) {
+    const terminalPreflight = verification.terminalAuditPreflight;
+    lines.push(`terminal audit preflight: ${
+      terminalPreflight.readyAfterRequiredApprovals ?
+        TERMINAL_PREFLIGHT_READY : TERMINAL_PREFLIGHT_NOT_READY}`);
+    for (const item of terminalPreflight.problems) {
+      lines.push(`terminal preflight problem: ${item.message}`);
+    }
   }
   lines.push(...renderAdvisoryLines(advisories));
   return lines;

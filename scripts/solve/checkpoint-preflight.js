@@ -3,7 +3,7 @@
 // evaluator still applies integrity, change-artifact, and exact-verification
 // checks before `next` is allowed to spend an independent verifier turn.
 
-import {checkpointGateProblemsForLog} from './audit.js';
+import {auditQuest, checkpointGateProblemsForLog} from './audit.js';
 import {EVENT_FINDING} from './constants.js';
 import {importClosureGaps} from './import-closure.js';
 import {suggestVerificationTemplates} from './verification-template-suggest.js';
@@ -15,6 +15,7 @@ import {
   VERIFICATION_CONTRACT_VERSION,
   VERIFICATION_SCOPE,
   VERIFIER_APPROVAL_FINDING_KIND,
+  terminalVerificationProblems,
   verificationState,
 } from './verification.js';
 import {parseCommitChangeRef} from './change-artifact.js';
@@ -22,6 +23,8 @@ import {canonicalCommitDelta} from './content-addressed-change-artifact.js';
 
 const MISSING_CHANGE_REF = '(missing changeRef)';
 const PREFLIGHT_VERIFIER_EVIDENCE = 'subagent:checkpoint-preflight-simulation';
+const PREFLIGHT_AGGREGATE_APPROVAL_CLAIM =
+  'terminal preflight simulated aggregate approval';
 
 function attemptPreflightDossier(root, attempt) {
   const changedPaths = [...attempt.inspection.changedPaths].sort();
@@ -98,6 +101,96 @@ function syntheticCandidateApproval(candidate) {
       firstAttemptIndex: candidate.firstAttemptIndex,
       lastAttemptIndex: candidate.lastAttemptIndex,
     },
+  };
+}
+
+function syntheticAggregateApproval(state) {
+  const latest = [...state.attempts].reverse()
+    .find((attempt) => attempt.contracted);
+  if (!latest || !state.aggregate?.ok ||
+    !validVerificationFingerprint(state.aggregate.fingerprint) ||
+    state.aggregateApproval) return null;
+  return {
+    type: EVENT_FINDING,
+    frontier: latest.event.frontier,
+    kind: VERIFIER_APPROVAL_FINDING_KIND,
+    claim: PREFLIGHT_AGGREGATE_APPROVAL_CLAIM,
+    evidence: PREFLIGHT_VERIFIER_EVIDENCE,
+    verification: {
+      schemaVersion: VERIFICATION_CONTRACT_VERSION,
+      scope: VERIFICATION_SCOPE.AGGREGATE,
+      fingerprint: state.aggregate.fingerprint,
+    },
+  };
+}
+
+function problemIdentity(item) {
+  return JSON.stringify([
+    item?.message || null,
+    item?.ts || null,
+    item?.frontier || null,
+  ]);
+}
+
+// Multiset subtraction is deliberate. Two identical audit problems are two
+// obligations; resolving one approval must not erase both. Exact tuple identity
+// also prevents an unrelated message containing the approval text from matching.
+export function subtractAuditProblemMultiset(source, removable) {
+  const counts = new Map();
+  for (const item of removable) {
+    const key = problemIdentity(item);
+    counts.set(key, (counts.get(key) || 0) + 1);
+  }
+  return source.filter((item) => {
+    const key = problemIdentity(item);
+    const count = counts.get(key) || 0;
+    if (count === 0) return true;
+    counts.set(key, count - 1);
+    return false;
+  });
+}
+
+// Terminal verifier readiness is distinct from checkpoint readiness. Determine
+// only what valid exact approvals can remove from terminal verification, then
+// subtract that exact multiset from the REAL audit. Running the full audit over
+// synthetic findings would let those findings affect unrelated theory rules.
+export function terminalAuditVerificationPreflight(
+  root,
+  quest,
+  log,
+  options = {},
+) {
+  const state = options.state || verificationState(root, quest, log, options);
+  const audit = options.audit || auditQuest(root, quest);
+  const pendingApprovals = state.pendingAttempts
+    .filter((attempt) => validVerificationFingerprint(attempt.fingerprint))
+    .map(syntheticAttemptApproval);
+  const aggregateApproval = syntheticAggregateApproval(state);
+  const syntheticLog = [
+    ...log,
+    ...pendingApprovals,
+    ...(aggregateApproval ? [aggregateApproval] : []),
+  ];
+  const before = terminalVerificationProblems(root, quest, log, options);
+  const after = terminalVerificationProblems(root, quest, syntheticLog, options);
+  const resolvedVerificationProblems = subtractAuditProblemMultiset(before, after);
+  const problems = subtractAuditProblemMultiset(
+    audit.problems,
+    resolvedVerificationProblems,
+  );
+  // Keep the residual verification obligations separate from unrelated audit
+  // defects. Callers can preserve their precise replacement guidance for the
+  // former while still refusing to delegate candidates with integrity,
+  // evidence, theory, or other terminal audit failures.
+  const nonVerificationProblems = subtractAuditProblemMultiset(problems, after);
+  return {
+    readyAfterRequiredApprovals: problems.length === 0,
+    pendingAttemptApprovalCount: pendingApprovals.length,
+    aggregateApprovalRequired: Boolean(aggregateApproval),
+    resolvedVerificationProblems,
+    verificationProblems: after,
+    nonVerificationProblems,
+    problems,
   };
 }
 
