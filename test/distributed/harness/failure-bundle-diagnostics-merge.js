@@ -3,6 +3,7 @@ import * as priority from './failure-bundle-diagnostics-priority-recovery.js';
 
 const numberFromValue = Number;
 const numberIsSafeInteger = Number.isSafeInteger;
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
 
 const RESTART_RECOVERY_OWNER_RESTART_BOOTSTRAP_AUTHORITY =
   'restart_bootstrap_authority';
@@ -1395,7 +1396,7 @@ function resolveRestartRecoveryFailureBarrierReason({
     return STABILITY_GATE_BLOCKER_PRIORITY_SPREAD_PENDING;
   }
   const ownerState = terminalRecoveryReadiness?.ownerState;
-  if (RESTART_RECOVERY_PASS_THROUGH_OWNER_STATES.includes(ownerState)) {
+  if (arrayIncludes(RESTART_RECOVERY_PASS_THROUGH_OWNER_STATES, ownerState)) {
     return ownerState;
   }
   if (isSupersededFailureBarrierReason(existingFailure.dominantReason)) {
