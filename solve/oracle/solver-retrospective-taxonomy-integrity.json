@@ -1,0 +1,14 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "ownerCheck": {
+    "passed": true,
+    "owner": "scripts/solve/cost.js"
+  },
+  "gates": {
+    "costTests": true,
+    "solverLint": true,
+    "subagentVerification": true
+  }
+}

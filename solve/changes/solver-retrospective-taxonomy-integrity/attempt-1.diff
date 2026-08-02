@@ -1,0 +1,621 @@
+diff --git a/scripts/solve/cost.js b/scripts/solve/cost.js
+index 8834af2cbca2758d9d58c30ec08a14aa4e4cddde..4b185e4caa924ffddf20be9ebf2bc019ea831f09 100644
+--- a/scripts/solve/cost.js
++++ b/scripts/solve/cost.js
+@@ -15,7 +15,7 @@ import {
+   EVENT_VIOLATION,
+ } from './constants.js';
+ import {readFrictionWindow} from './meta-friction.js';
+-import {loadQuest} from './store.js';
++import {loadQuest, readLog} from './store.js';
+ 
+ const DEFAULT_WINDOW_DAYS = 7;
+ const TOP_ROWS = 15;
+@@ -24,27 +24,42 @@ const SECONDS_PER_MINUTE = 60;
+ const UNMEASURED_CELL = '—';
+ const NEWLINE = '\n';
+ const VERIFIER_REJECTION_FINDING_KIND = 'verifier-rejection';
+-const TABLE_HEADER =
+-  '| quest | attempts | rejections | violations | measured | duration | span | chain |';
+-const TABLE_RULE = '| --- | --- | --- | --- | --- | --- | --- | --- |';
+-// Respin-suffix heuristic ONLY — links.parentQuest is authoritative when set.
+-// Matches the successor-naming conventions observed in the log corpus; a miss
+-// renders "—", never a wrong chain.
+-const RESPIN_SUFFIX_PATTERN =
+-  /-(v\d+|final|verifier-fix|validation-fix|clean-replay)$/u;
+-
+-function chainBase(questId) {
+-  let base = questId;
+-  while (RESPIN_SUFFIX_PATTERN.test(base)) {
+-    base = base.replace(RESPIN_SUFFIX_PATTERN, '');
+-  }
+-  return base;
++const TABLE_HEADER = '| quest | fresh attempts | inherited | rejected candidates | ' +
++  'rejection events | violations | measured fresh | duration | span | lineage |';
++const TABLE_RULE = '| --- | --- | --- | --- | --- | --- | --- | --- | --- | --- |';
++const SHA256_FINGERPRINT_PATTERN = /^sha256:[0-9a-f]{64}$/u;
++// These two suffixes name a verifier-driven replacement specifically. Generic
++// successor names (`-v2`, `-final`, `-clean-replay`) do not prove duplicated
++// ceremony and therefore never classify a respin on their own.
++const REJECTION_RESPIN_SUFFIX_PATTERN =
++  /-(verifier-fix|validation-fix)(?:-v\d+)?$/u;
++const LINEAGE_PLANNED_CHILD = 'planned-child';
++const LINEAGE_REJECTION_RESPIN = 'rejection-respin';
++const ATTEMPT_PROVENANCE = Object.freeze({
++  FRESH: 'fresh',
++  INHERITED: 'inherited',
++  MALFORMED: 'malformed',
++});
++const INFERRED_LINEAGE_SUFFIX = ', inferred';
++const MALFORMED_PROVENANCE_SUMMARY =
++  'malformed inherited provenance and are excluded from fresh cost.';
++const RESPIN_LINEAGE_SUMMARY =
++  'rejection respin(s). Only the latter indicate repeated rejection ceremony.';
++
++function rejectionRespinBase(questId) {
++  return String(questId || '').replace(REJECTION_RESPIN_SUFFIX_PATTERN, '');
+ }
+ 
+ function questRow() {
+   return {
+     attempts: 0,
++    totalAttemptEvents: 0,
++    inheritedAttempts: 0,
++    inheritedMeasuredAttempts: 0,
++    inheritedDurationMs: 0,
++    malformedInheritedAttempts: 0,
+     rejections: 0,
++    rejectionEvents: 0,
+     violations: 0,
+     measuredAttempts: 0,
+     durationMs: 0,
+@@ -54,9 +69,31 @@ function questRow() {
+   };
+ }
+ 
++function inheritedAttemptKind(event) {
++  if (event?.inherited === undefined || event?.inherited === null ||
++    event?.inherited === false) return ATTEMPT_PROVENANCE.FRESH;
++  if (typeof event.inherited === 'object' &&
++    typeof event.inherited.fromQuest === 'string' &&
++    event.inherited.fromQuest.trim()) return ATTEMPT_PROVENANCE.INHERITED;
++  return ATTEMPT_PROVENANCE.MALFORMED;
++}
++
++function measuredDuration(event) {
++  const duration = event?.telemetry?.agentDurationMs;
++  return Number.isFinite(duration) && duration >= 0 ? duration : null;
++}
++
++function rejectionKey(event, ordinal) {
++  const fingerprint = event?.verification?.fingerprint;
++  return typeof fingerprint === 'string' &&
++    SHA256_FINGERPRINT_PATTERN.test(fingerprint) ? fingerprint :
++    `unfingerprinted-event:${ordinal}`;
++}
++
+ export function tallyCostEntries(entries) {
+   const byQuest = new Map();
+-  for (const {questId, event} of entries) {
++  const rejectionKeysByQuest = new Map();
++  for (const [ordinal, {questId, event}] of entries.entries()) {
+     const row = byQuest.get(questId) || questRow();
+     byQuest.set(questId, row);
+     const ts = Date.parse(event?.ts || '');
+@@ -65,16 +102,34 @@ export function tallyCostEntries(entries) {
+       row.lastTs = Math.max(row.lastTs, ts);
+     }
+     if (event.type === EVENT_ATTEMPT) {
+-      row.attempts += 1;
+-      const duration = event.telemetry?.agentDurationMs;
+-      if (Number.isFinite(duration)) {
++      row.totalAttemptEvents += 1;
++      const kind = inheritedAttemptKind(event);
++      const duration = measuredDuration(event);
++      if (kind === ATTEMPT_PROVENANCE.INHERITED) {
++        row.inheritedAttempts += 1;
++        if (duration !== null) {
++          row.inheritedMeasuredAttempts += 1;
++          row.inheritedDurationMs += duration;
++        }
++      } else if (kind === ATTEMPT_PROVENANCE.MALFORMED) {
++        // A malformed truthy provenance marker is not safe to charge as fresh
++        // work. Surface it explicitly so a journal repair can classify it.
++        row.malformedInheritedAttempts += 1;
++      } else {
++        row.attempts += 1;
++      }
++      if (kind === ATTEMPT_PROVENANCE.FRESH && duration !== null) {
+         row.measuredAttempts += 1;
+         row.durationMs += duration;
+       }
+     }
+     if (event.type === EVENT_FINDING &&
+       event.kind === VERIFIER_REJECTION_FINDING_KIND) {
+-      row.rejections += 1;
++      row.rejectionEvents += 1;
++      const keys = rejectionKeysByQuest.get(questId) || new Set();
++      keys.add(rejectionKey(event, ordinal));
++      rejectionKeysByQuest.set(questId, keys);
++      row.rejections = keys.size;
+     }
+     if (event.type === EVENT_VIOLATION) row.violations += 1;
+     if (event.type === EVENT_SOLVED) row.solved = true;
+@@ -82,23 +137,139 @@ export function tallyCostEntries(entries) {
+   return byQuest;
+ }
+ 
+-// Chain label: authoritative parent link first, then the suffix heuristic —
+-// and the heuristic only claims a chain when another window quest shares the
+-// base, so a lone "-final" name cannot invent one.
+-function chainLabel(root, questId, windowQuestIds) {
+-  let quest = null;
++function loadQuestOrNull(root, questId) {
++  if (!questId) return null;
+   try {
+-    quest = loadQuest(root, questId);
++    return loadQuest(root, questId);
+   } catch {
+-    quest = null;
++    return null;
+   }
++}
++
++// Parent links are planning lineage, not evidence of rejected work. Structured
++// relation metadata wins when present; otherwise only verifier-specific naming
++// with a resolvable parent/base can infer a rejection respin.
++export function classifyCostLineage(root, questId) {
++  const quest = loadQuestOrNull(root, questId);
+   const parent = quest?.links?.parentQuest;
+-  if (typeof parent === 'string' && parent) return parent;
+-  const base = chainBase(questId);
+-  if (base === questId) return null;
+-  const hasSibling = [...windowQuestIds].some((id) =>
+-    id !== questId && chainBase(id) === base);
+-  return hasSibling ? `${base} (heuristic)` : null;
++  const hasExplicitParent = parent !== undefined && parent !== null;
++  const validParent = typeof parent === 'string' && Boolean(parent) &&
++    parent !== questId && Boolean(loadQuestOrNull(root, parent));
++  let cursor = parent;
++  const seen = new Set([questId]);
++  let cyclic = false;
++  while (validParent && typeof cursor === 'string' && cursor) {
++    if (seen.has(cursor)) {
++      cyclic = true;
++      break;
++    }
++    seen.add(cursor);
++    cursor = loadQuestOrNull(root, cursor)?.links?.parentQuest;
++  }
++  const explicit = quest?.links?.parentRelation;
++  const parentHasVerifiedRejection = validParent && !cyclic &&
++    readLog(root, parent).some((event) =>
++      event.type === EVENT_FINDING &&
++      event.kind === VERIFIER_REJECTION_FINDING_KIND &&
++      validVerificationRejectionFingerprint(event));
++  if (parentHasVerifiedRejection && explicit === LINEAGE_REJECTION_RESPIN) {
++    return {kind: LINEAGE_REJECTION_RESPIN, parent, inferred: false};
++  }
++  if (validParent && !cyclic && explicit === LINEAGE_PLANNED_CHILD) {
++    return {kind: LINEAGE_PLANNED_CHILD, parent, inferred: false};
++  }
++  if (validParent) {
++    const strongName = !cyclic && REJECTION_RESPIN_SUFFIX_PATTERN.test(questId);
++    return {
++      kind: strongName ? LINEAGE_REJECTION_RESPIN : LINEAGE_PLANNED_CHILD,
++      parent,
++      inferred: strongName,
++    };
++  }
++  // A declared-but-invalid parent is evidence of malformed lineage, not
++  // permission to reinterpret the quest name and find a different parent.
++  if (hasExplicitParent) return null;
++  if (REJECTION_RESPIN_SUFFIX_PATTERN.test(questId)) {
++    const inferredParent = rejectionRespinBase(questId);
++    if (inferredParent !== questId && loadQuestOrNull(root, inferredParent)) {
++      return {
++        kind: LINEAGE_REJECTION_RESPIN,
++        parent: inferredParent,
++        inferred: true,
++      };
++    }
++  }
++  return null;
++}
++
++function validVerificationRejectionFingerprint(event) {
++  const fingerprint = event?.verification?.fingerprint;
++  return typeof fingerprint === 'string' &&
++    SHA256_FINGERPRINT_PATTERN.test(fingerprint);
++}
++
++function lineageLabel(root, questId) {
++  const lineage = classifyCostLineage(root, questId);
++  if (!lineage) return {label: null, kind: null, parent: null};
++  return {
++    label: `${lineage.parent} (${lineage.kind}${
++      lineage.inferred ? INFERRED_LINEAGE_SUFFIX : ''})`,
++    kind: lineage.kind,
++    parent: lineage.parent,
++  };
++}
++
++function globalRejectionTotals(entries) {
++  const keys = new Set();
++  let events = 0;
++  for (const [ordinal, {event}] of entries.entries()) {
++    if (event.type !== EVENT_FINDING ||
++      event.kind !== VERIFIER_REJECTION_FINDING_KIND) continue;
++    events += 1;
++    keys.add(rejectionKey(event, ordinal));
++  }
++  return {rejections: keys.size, rejectionEvents: events};
++}
++
++function normalizedRow(row) {
++  const attempts = Number.isFinite(row.attempts) ? row.attempts : 0;
++  const inheritedAttempts = Number.isFinite(row.inheritedAttempts) ?
++    row.inheritedAttempts : 0;
++  return {
++    ...row,
++    attempts,
++    measuredAttempts: Number.isFinite(row.measuredAttempts) ?
++      row.measuredAttempts : 0,
++    durationMs: Number.isFinite(row.durationMs) ? row.durationMs : 0,
++    inheritedAttempts,
++    totalAttemptEvents: Number.isFinite(row.totalAttemptEvents) ?
++      row.totalAttemptEvents : attempts + inheritedAttempts,
++    rejectionEvents: Number.isFinite(row.rejectionEvents) ?
++      row.rejectionEvents : (Number.isFinite(row.rejections) ? row.rejections : 0),
++    malformedInheritedAttempts: Number.isFinite(row.malformedInheritedAttempts) ?
++      row.malformedInheritedAttempts : 0,
++    rejections: Number.isFinite(row.rejections) ? row.rejections : 0,
++    violations: Number.isFinite(row.violations) ? row.violations : 0,
++    lineage: row.lineage || row.chain || null,
++  };
++}
++
++function reportTotals(report, active) {
++  const inheritedAttempts = active.reduce((sum, row) =>
++    sum + row.inheritedAttempts, 0);
++  return {
++    attempts: active.reduce((sum, row) => sum + row.attempts, 0),
++    inheritedAttempts,
++    rejections: Number.isFinite(report.totals?.rejections) ?
++      report.totals.rejections :
++      active.reduce((sum, row) => sum + (row.rejections || 0), 0),
++    rejectionEvents: Number.isFinite(report.totals?.rejectionEvents) ?
++      report.totals.rejectionEvents :
++      active.reduce((sum, row) => sum + row.rejectionEvents, 0),
++    measured: active.reduce((sum, row) => sum + row.measuredAttempts, 0),
++    malformedInheritedAttempts: active.reduce((sum, row) =>
++      sum + row.malformedInheritedAttempts, 0),
++  };
+ }
+ 
+ function formatDuration(row) {
+@@ -124,22 +295,28 @@ function measuredColumn(row) {
+ export function buildCostReport(root, {days = DEFAULT_WINDOW_DAYS, now} = {}) {
+   const entries = readFrictionWindow(root, {days, now: now ?? Date.now()});
+   const byQuest = tallyCostEntries(entries);
+-  const windowQuestIds = new Set(byQuest.keys());
+   const rows = [...byQuest.entries()]
+-    .map(([questId, row]) => ({
+-      questId,
+-      ...row,
+-      chain: chainLabel(root, questId, windowQuestIds),
+-    }))
++    .map(([questId, row]) => {
++      const lineage = lineageLabel(root, questId);
++      return {
++        questId,
++        ...row,
++        lineage: lineage.label,
++        lineageKind: lineage.kind,
++        // Preserve the old raw-parent field for programmatic callers; the new
++        // lineage fields carry the human-readable classification.
++        chain: lineage.parent,
++      };
++    })
+     .sort((a, b) => b.attempts - a.attempts ||
+       b.rejections - a.rejections || a.questId.localeCompare(b.questId));
+-  return {days, rows};
++  return {days, rows, totals: globalRejectionTotals(entries)};
+ }
+ 
+ export function renderCostReport(report) {
+-  const {days, rows} = report;
+-  const active = rows.filter((row) =>
+-    row.attempts > 0 || row.rejections > 0 || row.violations > 0);
++  const {days} = report;
++  const active = report.rows.map(normalizedRow).filter((row) =>
++    row.totalAttemptEvents > 0 || row.rejectionEvents > 0 || row.violations > 0);
+   const lines = [
+     `# Attempt cost — last ${days} day(s), ` +
+       `${active.length} quest(s) with recorded work`,
+@@ -151,27 +328,33 @@ export function renderCostReport(report) {
+   }
+   lines.push(TABLE_HEADER, TABLE_RULE);
+   for (const row of active.slice(0, TOP_ROWS)) {
+-    lines.push(`| ${row.questId} | ${row.attempts} | ${row.rejections} | ` +
+-      `${row.violations} | ${measuredColumn(row)} | ${formatDuration(row)} | ` +
+-      `${formatSpan(row)} | ${row.chain || UNMEASURED_CELL} |`);
++    lines.push(`| ${row.questId} | ${row.attempts} | ${row.inheritedAttempts} | ` +
++      `${row.rejections} | ${row.rejectionEvents} | ${row.violations} | ` +
++      `${measuredColumn(row)} | ${formatDuration(row)} | ${formatSpan(row)} | ` +
++      `${row.lineage || UNMEASURED_CELL} |`);
+   }
+   lines.push('');
+   if (active.length > TOP_ROWS) {
+     lines.push(`> ${active.length - TOP_ROWS} further quest(s) not shown ` +
+       `(showing the top ${TOP_ROWS} by attempts).`, '');
+   }
+-  const totals = active.reduce((sum, row) => ({
+-    attempts: sum.attempts + row.attempts,
+-    rejections: sum.rejections + row.rejections,
+-    measured: sum.measured + row.measuredAttempts,
+-  }), {attempts: 0, rejections: 0, measured: 0});
+-  lines.push(`> Totals: ${totals.attempts} attempt(s), ` +
+-    `${totals.rejections} verifier rejection round(s); telemetry measured on ` +
++  const totals = reportTotals(report, active);
++  lines.push(`> Totals: ${totals.attempts} fresh attempt(s), ` +
++    `${totals.inheritedAttempts} inherited attempt(s), ` +
++    `${totals.rejections} unique rejected candidate(s) across ` +
++    `${totals.rejectionEvents} rejection event(s); telemetry measured on ` +
+     `${totals.measured}/${totals.attempts} attempt(s).`, '');
+-  const chains = active.filter((row) => row.chain);
+-  if (chains.length > 0) {
+-    lines.push(`> ${chains.length} quest(s) are respin-chain members — ` +
+-      'duplicated declaration/verification ceremony; see the chain column.', '');
++  if (totals.malformedInheritedAttempts > 0) {
++    lines.push(`> ${totals.malformedInheritedAttempts} attempt event(s) carry ` +
++      MALFORMED_PROVENANCE_SUMMARY, '');
++  }
++  const planned = active.filter((row) =>
++    row.lineageKind === LINEAGE_PLANNED_CHILD).length;
++  const respins = active.filter((row) =>
++    row.lineageKind === LINEAGE_REJECTION_RESPIN).length;
++  if (planned > 0 || respins > 0) {
++    lines.push(`> Lineage: ${planned} planned child quest(s), ${respins} ` +
++      RESPIN_LINEAGE_SUMMARY, '');
+   }
+   return lines.join(NEWLINE);
+ }
+diff --git a/solve/epics/convergence-loop-and-workflow-overhead.md b/solve/epics/convergence-loop-and-workflow-overhead.md
+index 46c6759cfabf6da24925bba6845a6cf43634547a..c7dd91f81c89feec78f36b9f07e25ef3b8b263ec 100644
+--- a/solve/epics/convergence-loop-and-workflow-overhead.md
++++ b/solve/epics/convergence-loop-and-workflow-overhead.md
+@@ -316,3 +316,25 @@ only at real durability boundaries, and on-demand standard report projection.
+ Implementation is split into bounded Quests linked to this epic; the underlying
+ seal, probe, append-only log, exact content verification, final composition
+ review, audit, scope-safe commit, and no-push guarantees remain mandatory.
++
++### Owner call 2026-08-02 — measured efficiency follow-through accepted
++
++The operator accepted implementation of the independently checked 24-hour
++efficiency review. The work is split into bounded Quests under this epic:
++
++1. make retrospective accounting distinguish fresh work, inherited history,
++   unique rejected candidates, raw rejection events, planned child lineage,
++   and genuine rejection respins;
++2. make verification readiness fail closed on mechanical and audit blockers
++   before an independent verifier turn is requested;
++3. turn the existing early adversarial design-review rule into durable,
++   checkable pre-first-attempt evidence for applicable Quests;
++4. classify scope pressure by semantic owner and proof-tail role while
++   preserving the existing broad-scope guard's safety;
++5. gzip supported high-volume evidence at capture time and keep readers
++   transparent across plain and compressed shapes; and
++6. reuse the session registry to refuse a second writable Quest in one
++   worktree until the first is landed or explicitly released.
++
++These are reporting, admission, and storage-integrity improvements. They do
++not weaken candidate verification, scope guards, audit, or terminal landing.
+diff --git a/test/solve/cost.test.js b/test/solve/cost.test.js
+index 8e2429b52bd168efbdc33b439a386e040cb338da..6005d6af8f1237faab528a59b795deba2620064d 100644
+--- a/test/solve/cost.test.js
++++ b/test/solve/cost.test.js
+@@ -1,11 +1,41 @@
+ import tap from 'tap';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
+ 
+-import {tallyCostEntries, renderCostReport} from '../../scripts/solve/cost.js';
++import {
++  buildCostReport,
++  classifyCostLineage,
++  tallyCostEntries,
++  renderCostReport,
++} from '../../scripts/solve/cost.js';
+ 
+ function entry(questId, event) {
+   return {questId, event};
+ }
+ 
++function tempRoot(t) {
++  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'solve-cost-'));
++  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
++  return root;
++}
++
++function writeQuest(root, id, parentQuest = null, parentRelation = null) {
++  const dir = path.join(root, 'solve', 'quests');
++  fs.mkdirSync(dir, {recursive: true});
++  fs.writeFileSync(path.join(dir, `${id}.json`), JSON.stringify({
++    id,
++    links: {parentQuest, ...(parentRelation ? {parentRelation} : {})},
++  }));
++}
++
++function writeLog(root, questId, events) {
++  const dir = path.join(root, 'solve', 'log');
++  fs.mkdirSync(dir, {recursive: true});
++  fs.writeFileSync(path.join(dir, `${questId}.ndjson`),
++    `${events.map((event) => JSON.stringify(event)).join('\n')}\n`);
++}
++
+ tap.test('cost rollup', async (t) => {
+   t.test('tallies attempts, rejections, violations, and telemetry coverage',
+     (t) => {
+@@ -29,6 +59,47 @@ tap.test('cost rollup', async (t) => {
+       t.end();
+     });
+ 
++  t.test('fresh cost excludes inherited and malformed provenance', (t) => {
++    const byQuest = tallyCostEntries([
++      entry('q-a', {type: 'attempt', telemetry: {agentDurationMs: 1000}}),
++      entry('q-a', {type: 'attempt', inherited: {fromQuest: 'q-parent'},
++        telemetry: {agentDurationMs: 3_900_000}}),
++      entry('q-a', {type: 'attempt', inherited: true,
++        telemetry: {agentDurationMs: 8_000_000}}),
++      entry('q-a', {type: 'attempt', telemetry: {agentDurationMs: -1}}),
++    ]);
++    const row = byQuest.get('q-a');
++    t.equal(row.totalAttemptEvents, 4);
++    t.equal(row.attempts, 2, 'only unmarked events are fresh');
++    t.equal(row.inheritedAttempts, 1);
++    t.equal(row.malformedInheritedAttempts, 1);
++    t.equal(row.measuredAttempts, 1, 'negative duration is unmeasured');
++    t.equal(row.durationMs, 1000, 'copied telemetry is excluded');
++    t.equal(row.inheritedMeasuredAttempts, 1);
++    t.equal(row.inheritedDurationMs, 3_900_000);
++    t.end();
++  });
++
++  t.test('deduplicates valid rejection fingerprints but not missing ones', (t) => {
++    const fingerprint = `sha256:${'a'.repeat(64)}`;
++    const byQuest = tallyCostEntries([
++      entry('q-a', {type: 'finding', kind: 'verifier-rejection',
++        verification: {fingerprint}}),
++      entry('q-a', {type: 'finding', kind: 'verifier-rejection',
++        verification: {fingerprint}}),
++      entry('q-a', {type: 'finding', kind: 'verifier-rejection'}),
++      entry('q-a', {type: 'finding', kind: 'verifier-rejection'}),
++      entry('q-a', {type: 'finding', kind: 'verifier-rejection',
++        verification: {fingerprint: 'sha256:not-a-digest'}}),
++    ]);
++    const row = byQuest.get('q-a');
++    t.equal(row.rejections, 4);
++    t.equal(row.rejectionEvents, 5);
++    t.notOk(Object.hasOwn(row, 'rejectionKeys'),
++      'dedupe implementation details do not leak into public rows');
++    t.end();
++  });
++
+   t.test('non-rejection findings and unknown events never count', (t) => {
+     const byQuest = tallyCostEntries([
+       entry('q-a', {type: 'finding', kind: 'repro-on-head',
+@@ -50,11 +121,26 @@ tap.test('cost rollup', async (t) => {
+         lastTs: Date.parse('2026-07-26T11:00:00.000Z'),
+         solved: true, chain: null,
+       }]});
+-      t.match(rendered, /\| q-a \| 3 \| 2 \| 0 \| 1\/3 \| 2m \| 60m \| — \|/u);
++      t.match(rendered,
++        /\| q-a \| 3 \| 0 \| 2 \| 2 \| 0 \| 1\/3 \| 2m \| 60m \| — \|/u);
+       t.match(rendered, /telemetry measured on 1\/3 attempt\(s\)/u);
+       t.end();
+     });
+ 
++  t.test('an inherited-only quest remains visible without fresh cost', (t) => {
++    const rendered = renderCostReport({days: 1, rows: [{
++      questId: 'q-child', attempts: 0, totalAttemptEvents: 1,
++      inheritedAttempts: 1, rejections: 0, rejectionEvents: 0,
++      violations: 0, measuredAttempts: 0, durationMs: 0,
++      firstTs: 1, lastTs: 1, lineage: 'q-parent (planned-child)',
++      lineageKind: 'planned-child',
++    }]});
++    t.match(rendered, /\| q-child \| 0 \| 1 \|/u);
++    t.match(rendered, /0 fresh attempt\(s\), 1 inherited attempt\(s\)/u);
++    t.match(rendered, /1 planned child quest\(s\), 0 rejection respin/u);
++    t.end();
++  });
++
+   t.test('a quest with no work in the window is omitted from the table',
+     (t) => {
+       const rendered = renderCostReport({days: 2, rows: [{
+@@ -67,4 +153,84 @@ tap.test('cost rollup', async (t) => {
+       t.match(rendered, /No attempts, rejections, or violations/u);
+       t.end();
+     });
++
++  t.test('global rejection totals deduplicate across successor quests', (t) => {
++    const root = tempRoot(t);
++    const fingerprint = `sha256:${'b'.repeat(64)}`;
++    const ts = '2026-08-02T10:00:00.000Z';
++    writeQuest(root, 'q-a');
++    writeQuest(root, 'q-b', 'q-a');
++    writeLog(root, 'q-a', [
++      {type: 'finding', kind: 'verifier-rejection', ts,
++        verification: {fingerprint}},
++      {type: 'finding', kind: 'verifier-rejection', ts},
++    ]);
++    writeLog(root, 'q-b', [
++      {type: 'finding', kind: 'verifier-rejection', ts,
++        verification: {fingerprint}},
++      {type: 'finding', kind: 'verifier-rejection', ts},
++    ]);
++    const report = buildCostReport(root, {
++      days: 1,
++      now: Date.parse('2026-08-02T11:00:00.000Z'),
++    });
++    t.same(report.totals, {rejections: 3, rejectionEvents: 4},
++      'one shared fingerprint plus two distinct unfingerprinted events');
++    t.equal(report.rows.find((row) => row.questId === 'q-b').chain, 'q-a',
++      'legacy chain field remains the raw parent Quest id');
++    t.match(renderCostReport(report),
++      /3 unique rejected candidate\(s\) across 4 rejection event\(s\)/u);
++    t.end();
++  });
++
++  t.test('lineage defaults to planned children and infers only strong respins',
++    (t) => {
++      const root = tempRoot(t);
++      writeQuest(root, 'parent');
++      writeQuest(root, 'ordinary-child', 'parent');
++      writeQuest(root, 'parent-v2', 'parent');
++      writeQuest(root, 'parent-final', 'parent');
++      writeQuest(root, 'parent-clean-replay', 'parent');
++      writeQuest(root, 'parent-verifier-fix', 'parent');
++      writeQuest(root, 'parent-validation-fix-v2', 'parent');
++      writeQuest(root, 'explicit-planned-verifier-fix', 'parent', 'planned-child');
++      writeQuest(root, 'unverified-explicit-respin', 'parent', 'rejection-respin');
++      t.equal(classifyCostLineage(root, 'ordinary-child').kind, 'planned-child');
++      t.equal(classifyCostLineage(root, 'parent-v2').kind, 'planned-child');
++      t.equal(classifyCostLineage(root, 'parent-final').kind, 'planned-child');
++      t.equal(classifyCostLineage(root, 'parent-clean-replay').kind,
++        'planned-child');
++      t.equal(classifyCostLineage(root, 'parent-verifier-fix').kind,
++        'rejection-respin');
++      t.equal(classifyCostLineage(root, 'parent-validation-fix-v2').kind,
++        'rejection-respin');
++      t.equal(classifyCostLineage(root, 'explicit-planned-verifier-fix').kind,
++        'planned-child', 'structured relation wins over naming');
++      t.equal(classifyCostLineage(root, 'unverified-explicit-respin').kind,
++        'planned-child', 'a relation assertion is not rejection evidence');
++
++      writeLog(root, 'parent', [{
++        type: 'finding',
++        kind: 'verifier-rejection',
++        verification: {fingerprint: `sha256:${'c'.repeat(64)}`},
++      }]);
++      t.equal(classifyCostLineage(root, 'unverified-explicit-respin').kind,
++        'rejection-respin', 'a verified parent rejection validates the relation');
++
++      writeQuest(root, 'cycle-a', 'cycle-b');
++      writeQuest(root, 'cycle-b', 'cycle-a');
++      writeQuest(root, 'orphan-verifier-fix', 'missing-parent');
++      writeQuest(root, 'orphan');
++      writeQuest(root, 'orphan-validation-fix', 'missing-parent');
++      writeQuest(root, 'self-verifier-fix', 'self-verifier-fix');
++      t.equal(classifyCostLineage(root, 'cycle-a').kind, 'planned-child',
++        'a cycle cannot claim rejection ceremony');
++      t.equal(classifyCostLineage(root, 'orphan-verifier-fix'), null,
++        'an unresolved parent fails safely');
++      t.equal(classifyCostLineage(root, 'orphan-validation-fix'), null,
++        'an explicit missing parent never falls through to a resolvable base');
++      t.equal(classifyCostLineage(root, 'self-verifier-fix'), null,
++        'a self-parent never falls through to suffix inference');
++      t.end();
++    });
+ });

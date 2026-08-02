@@ -316,3 +316,25 @@ only at real durability boundaries, and on-demand standard report projection.
 Implementation is split into bounded Quests linked to this epic; the underlying
 seal, probe, append-only log, exact content verification, final composition
 review, audit, scope-safe commit, and no-push guarantees remain mandatory.
+
+### Owner call 2026-08-02 — measured efficiency follow-through accepted
+
+The operator accepted implementation of the independently checked 24-hour
+efficiency review. The work is split into bounded Quests under this epic:
+
+1. make retrospective accounting distinguish fresh work, inherited history,
+   unique rejected candidates, raw rejection events, planned child lineage,
+   and genuine rejection respins;
+2. make verification readiness fail closed on mechanical and audit blockers
+   before an independent verifier turn is requested;
+3. turn the existing early adversarial design-review rule into durable,
+   checkable pre-first-attempt evidence for applicable Quests;
+4. classify scope pressure by semantic owner and proof-tail role while
+   preserving the existing broad-scope guard's safety;
+5. gzip supported high-volume evidence at capture time and keep readers
+   transparent across plain and compressed shapes; and
+6. reuse the session registry to refuse a second writable Quest in one
+   worktree until the first is landed or explicitly released.
+
+These are reporting, admission, and storage-integrity improvements. They do
+not weaken candidate verification, scope guards, audit, or terminal landing.

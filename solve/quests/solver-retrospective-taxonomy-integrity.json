@@ -1,0 +1,48 @@
+{
+  "id": "solver-retrospective-taxonomy-integrity",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Retrospective cost reporting separates fresh from inherited attempts, counts verifier rejection fingerprints once while retaining event counts, and distinguishes planned child lineage from evidence-backed rejection respins.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/convergence-loop-and-workflow-overhead.md#retrospective-measurement-integrity",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/convergence-loop-and-workflow-overhead.md",
+    "draftedAtCommit": "b8fa81df0aa9aab7c9bc38806636bee82e9cd76d"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-retrospective-taxonomy-integrity.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-retrospective-taxonomy-integrity-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solver-retrospective-taxonomy-integrity.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "reporting-compatibility",
+      "statement": "Preserve the cost command and tally API while making fresh work the primary cost; inherited history and raw duplicate rejection events remain visible but never inflate fresh cost or unique rejection rounds."
+    },
+    {
+      "id": "conservative-lineage",
+      "statement": "A parent link alone is planned lineage, not proof of duplicated ceremony; rejection-respin classification requires explicit or strong verifier-fix evidence."
+    }
+  ]
+}
