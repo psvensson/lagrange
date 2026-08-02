@@ -4,6 +4,8 @@ const LOCAL_STR_OWNED_001 = 'executable-command';
 const LOCAL_STR_OWNED_002 = 'command-template';
 const LOCAL_STR_OWNED_003 = 'manual-action';
 const LOCAL_STR_OWNED_004 = 'terminal';
+const LOCAL_STR_OWNED_005 = 'declare-quest';
+const LOCAL_STR_OWNED_006 = 'record-design-review';
 
 export const NEXT_ACTION_TYPE = Object.freeze({
   EXECUTABLE_COMMAND: LOCAL_STR_OWNED_001,
@@ -13,6 +15,8 @@ export const NEXT_ACTION_TYPE = Object.freeze({
 });
 
 export const NEXT_ACTION_CODE = Object.freeze({
+  DECLARE_QUEST: LOCAL_STR_OWNED_005,
+  RECORD_DESIGN_REVIEW: LOCAL_STR_OWNED_006,
   BEGIN_STEP: 'begin-step',
   COMMIT_STEP: 'commit-step',
   REPLACE_REJECTED_ATTEMPT: 'replace-rejected-attempt',

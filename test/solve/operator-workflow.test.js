@@ -211,7 +211,7 @@ tap.test('start optionally creates and lints a draft without declaring it', (t) 
   t.equal(result.status, 0, result.stderr);
   const output = JSON.parse(result.stdout);
   t.equal(output.lint.status, 'pass');
-  t.equal(output.next.action.code, 'begin-step');
+  t.equal(output.next.action.code, 'declare-quest');
   t.equal(readLog(root, 'created-by-start').length, 0,
     'start does not declare or begin the new draft');
   fs.rmSync(root, {recursive: true, force: true});

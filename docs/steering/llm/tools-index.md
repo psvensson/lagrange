@@ -18,7 +18,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `gate` — Run the rolling-restart statistical gate (scripts/rolling-restart-stat-gate.sh).
 - `lint` — `eslint src/ test/ --ignore-pattern 'test/.gitkeep'`
 - `overview` — Top-down walk of the planning stack: roadmap -> epic -> spec -> quest -> closure ledger (solve.js overview).
-- `prepare` — `test ! -f scripts/install-git-hooks.js || node scripts/install-git-hooks.js`
+- `prepare` — `node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"`
 - `pretest` — `npm run audit:state-machine-pressure`
 - `repro` — Run a closure-ledger reproduction case (npm run repro -- CL-0NN).
 - `rule` — `node scripts/lookup-rule.js`
@@ -173,6 +173,14 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `overview:write` — Write the ignored local work-overview projection to solve/OVERVIEW.generated.md.
 
+## package
+
+- `package:npm` — `node scripts/release-npm-package.js verify`
+
+## publish
+
+- `publish:npm` — `node scripts/release-npm-package.js publish`
+
 ## quest
 
 - `quest:context` — Print Quest status, model guidance, source-change verifier rule, pending step, latest probe, findings, and dirty worktree.
@@ -302,4 +310,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-203 scripts indexed; 75 have a curated description, 128 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+205 scripts indexed; 75 have a curated description, 130 fall back to their raw command. Improve coverage in the two sources named in the header comment.

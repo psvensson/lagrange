@@ -1,0 +1,48 @@
+{
+  "id": "solver-pre-attempt-design-review",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "New authoring-contract Quests cannot begin or checkpoint their first measured attempt until a durable independent design-review finding predates that attempt, while existing Quests remain readable.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/convergence-loop-and-workflow-overhead.md#owner-call-2026-08-02--measured-efficiency-follow-through-accepted",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/convergence-loop-and-workflow-overhead.md",
+    "draftedAtCommit": "36d1c20fad7ba6a23f90cac261070f6d7050931c"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/solver-pre-attempt-design-review.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-pre-attempt-design-review-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/solver-pre-attempt-design-review.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "forward-compatible-authoring-cutover",
+      "statement": "Existing version-1 and unversioned Quests remain readable; only newly scaffolded version-2 Quests acquire the pre-first-attempt review obligation."
+    },
+    {
+      "id": "independent-review-identity",
+      "statement": "The qualifying finding must have kind design-review, a stable non-empty subagent evidence identity, and an event position before the first measured attempt."
+    }
+  ]
+}

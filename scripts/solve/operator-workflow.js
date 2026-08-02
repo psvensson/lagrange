@@ -14,6 +14,7 @@ import {lintQuestCorpus} from './quest-lint.js';
 import {buildNextProjection} from './next.js';
 import {NEXT_ACTION_CODE} from './next-action.js';
 import {runStep} from './step.js';
+import {declareQuest} from './loop.js';
 import {
   buildVerificationFinding,
   VERIFICATION_CONTRACT_VERSION,
@@ -34,6 +35,7 @@ const VERIFIER_APPROVAL = 'verifier-approval';
 const VERIFIER_REJECTION = 'verifier-rejection';
 const REJECTED_CLAIM_PREFIX = 'independent landing verification rejected';
 const REJECTION_FINDING_SEPARATOR = '; ';
+const OPERATION_DECLARE_QUEST = 'declare-quest';
 
 function requireId(args, command) {
   const id = args.id || args._?.[0];
@@ -71,6 +73,13 @@ function explicitCommitOptions(args) {
 }
 
 function executeStructuredContinuation(root, quest, action, args) {
+  if (action.code === NEXT_ACTION_CODE.DECLARE_QUEST) {
+    return {
+      executed: true,
+      operation: OPERATION_DECLARE_QUEST,
+      result: declareQuest(root, quest),
+    };
+  }
   if (action.code === NEXT_ACTION_CODE.BEGIN_STEP) {
     if (args.changeRef || args['auto-diff'] || args.summary) {
       throw new Error('continue: begin-step does not accept commit capture arguments');

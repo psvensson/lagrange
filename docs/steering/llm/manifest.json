@@ -1,13 +1,13 @@
 {
-  "generatedAt": "2026-07-30T13:50:38.634Z",
+  "generatedAt": "2026-08-02T10:11:57.261Z",
   "stats": {
-    "candidateCount": 685,
-    "dedupedRuleCount": 679,
-    "exportedRuleCount": 679,
+    "candidateCount": 686,
+    "dedupedRuleCount": 680,
+    "exportedRuleCount": 680,
     "aliasRuleCount": 4,
-    "masterRuleCount": 675,
-    "emittedMasterRuleCount": 675,
-    "estimatedAllRulesTokens": 31831
+    "masterRuleCount": 676,
+    "emittedMasterRuleCount": 676,
+    "estimatedAllRulesTokens": 31920
   },
   "sources": [
     {
@@ -216,10 +216,10 @@
       "file": "workflow-guidelines/solver-quests.md",
       "role": "packed",
       "domain": "governance",
-      "ruleCount": 122,
-      "masterRuleCount": 122,
+      "ruleCount": 123,
+      "masterRuleCount": 123,
       "aliasRuleCount": 0,
-      "emittedMasterRuleCount": 122
+      "emittedMasterRuleCount": 123
     },
     {
       "file": "findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md",
@@ -399,16 +399,16 @@
       "name": "governance",
       "title": "Governance Steering Pack",
       "description": "Load for roadmap and edition-scope checks.",
-      "ruleCount": 190,
-      "estimatedTokens": 10718,
+      "ruleCount": 191,
+      "estimatedTokens": 10808,
       "domains": [
         "governance"
       ],
       "mode": "generated",
       "completeness": "complete",
-      "masterRuleCount": 190,
+      "masterRuleCount": 191,
       "aliasRuleCount": 0,
-      "indexedRuleCount": 190,
+      "indexedRuleCount": 191,
       "sourceFiles": [
         "roadmap.md",
         "agpl-feature-map.md",

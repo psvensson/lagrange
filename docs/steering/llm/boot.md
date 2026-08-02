@@ -64,14 +64,20 @@ node scripts/solve.js start --id <id> --statement "<sealed result>" \
   --spec-ref <spec-or-plan-reference>
 ```
 
-Drive routine supervised work with one verb. It executes only structured
-`begin-step` and `commit-step` actions; judgment, verification, checkpoint, and
+Drive routine supervised work with one verb. For a new authoring-contract Quest,
+the first continuation executes only the structured declaration action. Record
+the independent approving design-review receipt named by the next projection;
+the following continuation may begin work. Routine continuation executes only
+structured declaration, `begin-step`, and `commit-step` actions; judgment,
+verification, checkpoint, and
 repair actions stop for the operator. `commit-step` records a measured attempt
 in the Solver event log; it does not create a Git commit. Recording that attempt
 requires an explicit capture choice and summary—working-tree capture is never
 implicit:
 
 ```sh
+node scripts/solve.js continue --id <id>
+# independent review, then record the exact command printed by `solve next`
 node scripts/solve.js continue --id <id>
 # make and prove the bounded change
 node scripts/solve.js continue --id <id> --auto-diff \
@@ -80,8 +86,10 @@ node scripts/solve.js continue --id <id> --auto-diff \
 
 `start` writes a versioned draft and stamps `links.draftedAtCommit` when the
 Quest is new; it does not seal the goal. The first safe continuation lints and
-appends the declaration. A lint failure appends nothing. The lower-level `new`,
-`lint`, `next`, `step`, `audit`, and `handoff` commands remain available for
+appends the declaration without beginning execution. New Quests then require a
+structured independent design-review approval bound to that declaration before
+their first attempt. A lint failure appends nothing. The lower-level `new`,
+`declare`, `lint`, `next`, `step`, `audit`, and `handoff` commands remain available for
 diagnostics and exceptional operations.
 
 `doctor` reports whether a live agent adapter is explicitly enabled and

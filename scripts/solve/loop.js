@@ -79,6 +79,11 @@ import {
   resolveWorkspaceBaseCommit,
 } from './verification.js';
 import {assertQuestReadyToSeal} from './quest-lint.js';
+import {
+  DESIGN_REVIEW_AUTHORING_CONTRACT_VERSION,
+  assertDesignReviewReady,
+  preDeclarationExecutionBoundary,
+} from './design-review.js';
 import {writeReportForQuest} from './report.js';
 import {evaluate} from './probe.js';
 import {
@@ -147,6 +152,8 @@ const LOCAL_STR_OWNED_003 = 'judgment';
 const LOCAL_STR_OWNED_004 = 'Add durable evidence or revise the approach before resuming the Quest.';
 const LOCAL_STR_OWNED_005 = 'no-progress';
 const LOCAL_STR_OWNED_006 = 'Review the supervisor budget stop and choose the next evidence-bearing move.';
+const DECLARE_SUCCESSOR_GUIDANCE =
+  'sealed declaration; author a successor Quest';
 
 function defaultFileExists(p) {
   return Boolean(p) && fs.existsSync(p);
@@ -181,9 +188,16 @@ function sealGoal(quest) {
   return sealed;
 }
 
-function ensureDeclared(root, quest) {
+export function declareQuest(root, quest, options = {}) {
   const log = readLog(root, quest.id);
   const declared = log.find((e) => e.type === EVENT_QUEST_DECLARED);
+  const priorBoundary = preDeclarationExecutionBoundary(log);
+  if (priorBoundary && options.allowLegacyHistory !== true) {
+    throw new Error(
+      `declare refused: ${priorBoundary.event.type} history predates the ` +
+      DECLARE_SUCCESSOR_GUIDANCE,
+    );
+  }
   if (declared) return declared;
   assertQuestReadyToSeal(quest);
   return appendEvent(root, quest.id, {
@@ -442,6 +456,7 @@ function currentCycleAdvisoryAuthorization(log, frontierId, rungIndex) {
 export function finalizeAttempt(root, quest, ctx, pick, before, result) {
   const rungIndex = pick.state.rungIndex;
   const log = readLog(root, quest.id);
+  assertDesignReviewReady(quest, log);
   const state = projectState(quest, log);
   const theoryRef = resolveAttemptTheoryRef(
     state,
@@ -879,7 +894,16 @@ export function makeRunContext(options = {}) {
 // Seal the goalposts on first declaration and reject any later goalpost drift. Shared
 // so manual steps are held to the same immutability guarantee as the loop.
 export function ensureSealedGoal(root, quest) {
-  const declared = ensureDeclared(root, quest);
+  const log = readLog(root, quest.id);
+  let declared = log.find((event) => event.type === EVENT_QUEST_DECLARED);
+  if (!declared && quest.authoringContractVersion ===
+    DESIGN_REVIEW_AUTHORING_CONTRACT_VERSION) {
+    throw new Error(
+      `Quest ${quest.id} must be explicitly declared before execution: ` +
+      `node scripts/solve.js declare --id ${quest.id}`,
+    );
+  }
+  declared = declared || declareQuest(root, quest, {allowLegacyHistory: true});
   const goalpostViolations = validateGoalpostsImmutable(
     quest, declared, questAmendments(readLog(root, quest.id)));
   if (goalpostViolations.length > 0) {
@@ -908,6 +932,7 @@ export function ensureSealedGoal(root, quest) {
 }
 
 export function recordQuestSolvedIfDone(root, quest, ctx, options = {}) {
+  assertDesignReviewReady(quest, readLog(root, quest.id));
   const questDone = evaluate(quest.doneWhen, ctx.probeCtx);
   if (!terminalSampleIsAccepted(questDone) || options.accepted !== true ||
     !terminalIntegrityAllowsClosure(root, quest, readLog(root, quest.id))) {
@@ -988,6 +1013,7 @@ export function runLoop(root, quest, options = {}) {
     ctx.honestyCtx.inspectChangeRef ||
     ((ref) => inspectChangeArtifact(root, quest, ref));
   ensureSealedGoal(root, quest);
+  assertDesignReviewReady(quest, readLog(root, quest.id));
 
   const unrecorded = detectUnrecordedEvidence(root, quest.id, {
     requiresMeasuredHistory: true,

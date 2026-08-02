@@ -21,6 +21,10 @@ import {
 } from './checkpoint-preflight.js';
 import {verificationState} from './verification.js';
 import {
+  DESIGN_REVIEW_STATE,
+  designReviewProjection,
+} from './design-review.js';
+import {
   EVENT_GATE_DECISION,
   OUTCOME_CONTINUE,
   RUNG_INDEX_MODEL,
@@ -46,6 +50,12 @@ const NEXT_SCHEMA_VERSION = 2;
 const TERMINAL_PREFLIGHT_READY = 'verifier-ready after required approvals';
 const TERMINAL_PREFLIGHT_NOT_READY =
   'NOT verifier-ready after required approvals';
+const DESIGN_REVIEW_FINDING_ARGS =
+  '--kind design-review --claim "independent design review passed" ';
+const DESIGN_REVIEW_APPROVAL_ARGS =
+  '--evidence subagent:<id> --design-review-verdict approve ';
+const DESIGN_REVIEW_SUCCESSOR_GUIDANCE =
+  'author a successor Quest if append-only ordering cannot be repaired';
 
 // The last event, when it is a recorded non-terminal gate stop (an advisory
 // gate-decision means the run continued, so it is not a stop). Anything after
@@ -238,8 +248,49 @@ function terminalQuestAction(
   );
 }
 
-function nextAction({questId, state, pending, gateStop, blocker,
-  verification, verificationPreflight, terminalAuditPreflight, audit}) {
+function designReviewNextAction(quest, review) {
+  if (review.ready) return null;
+  if (review.state === DESIGN_REVIEW_STATE.UNDECLARED) {
+    return typedNextAction(`node scripts/solve.js declare --id ${quest.id}`, {
+      code: NEXT_ACTION_CODE.DECLARE_QUEST,
+      payload: {questId: quest.id},
+    });
+  }
+  if ([DESIGN_REVIEW_STATE.MISSING, DESIGN_REVIEW_STATE.INVALID]
+    .includes(review.state)) {
+    const frontier = quest.frontiers[0]?.id || '<frontier>';
+    return typedNextAction(
+      `node scripts/solve.js finding --id ${quest.id} --frontier ${frontier} ` +
+      DESIGN_REVIEW_FINDING_ARGS +
+      DESIGN_REVIEW_APPROVAL_ARGS +
+      `--declaration-fingerprint ${review.declarationFingerprint}`,
+      {
+        code: NEXT_ACTION_CODE.RECORD_DESIGN_REVIEW,
+        payload: {
+          questId: quest.id,
+          frontier,
+          declarationFingerprint: review.declarationFingerprint,
+        },
+      },
+    );
+  }
+  const first = review.problems[0]?.message ||
+    'design-review ordering is irreparably invalid';
+  return typedNextAction(
+    `resolve design-review audit failure before continuing: ${first}; ` +
+      DESIGN_REVIEW_SUCCESSOR_GUIDANCE,
+    {
+      code: NEXT_ACTION_CODE.REPAIR_AUDIT,
+      payload: {questId: quest.id, designReviewState: review.state},
+    },
+  );
+}
+
+function nextAction({quest, questId, state, pending, gateStop, blocker,
+  designReview, verification, verificationPreflight, terminalAuditPreflight,
+  audit}) {
+  const reviewAction = designReviewNextAction(quest, designReview);
+  if (reviewAction) return reviewAction;
   const pendingVerification = verification.pendingAttempts[0];
   if (pendingVerification) {
     return pendingVerifierAction(
@@ -321,6 +372,7 @@ export function buildNextProjection(root, questId) {
   const advisories = buildAdvisories(quest, health, log);
   const sealFreshness = buildSealFreshnessAdvisory(quest, log, {root});
   if (sealFreshness) advisories.push(sealFreshness);
+  const designReview = designReviewProjection(quest, log);
   const verification = verificationState(root, quest, log);
   const verificationPreflight = checkpointVerificationPreflight(
     root, quest, log, {state: verification});
@@ -336,7 +388,8 @@ export function buildNextProjection(root, questId) {
     schemaVersion: NEXT_SCHEMA_VERSION,
     quest: {id: questId, status: state.questStatus},
     action: nextAction({
-      questId, state, pending, gateStop, blocker, verification,
+      quest, questId, state, pending, gateStop, blocker, designReview,
+      verification,
       verificationPreflight, terminalAuditPreflight, audit,
     }),
     pendingStep: pending ? {
@@ -353,6 +406,7 @@ export function buildNextProjection(root, questId) {
       problem: (gateStop.problems || [])[0] || null,
     } : null,
     blocker: terminal ? null : blocker,
+    designReview,
     verification: {
       sourceAttemptCount: verification.attempts.length,
       pendingAttemptCount: verification.pendingAttempts.length,
@@ -369,10 +423,19 @@ export function buildNextProjection(root, questId) {
 
 export function buildNextLines(root, questId) {
   const projection = buildNextProjection(root, questId);
-  const {action, pendingStep, lastStop, blocker, advisories, verification} = projection;
+  const {
+    action,
+    pendingStep,
+    lastStop,
+    blocker,
+    designReview,
+    advisories,
+    verification,
+  } = projection;
   const lines = [
     `Next [${action.type}]: ${action.value || 'nothing to execute'}`,
     `quest: ${projection.quest.id} (${projection.quest.status})`,
+    `design review: ${designReview.state}`,
   ];
   if (pendingStep) {
     lines.push(`pending step: ${pendingStep.frontier} pinned at metric ` +

@@ -37,6 +37,7 @@ import {appendEvent, loadQuest, readLog, projectState, rebuildState} from './sto
 import {REFLECTION_KIND_ALTITUDE} from './reflection.js';
 import {pendingFilePath} from './step.js';
 import {buildEvidenceIdentity} from './evidence-identity.js';
+import {assertDesignReviewReady} from './design-review.js';
 
 export {PARK_PROVENANCE_OPERATOR};
 
@@ -175,7 +176,9 @@ export function parkFrontier(root, args = {}) {
     throw new Error(PARK_ERROR_REASON_REQUIRED);
   }
   const quest = loadQuest(root, id);
-  const state = projectState(quest, readLog(root, id));
+  const log = readLog(root, id);
+  assertDesignReviewReady(quest, log);
+  const state = projectState(quest, log);
   const frontierId = args.frontier || defaultOpenFrontier(state);
   if (!frontierId) {
     if (state.questStatus === STATUS_OPEN &&

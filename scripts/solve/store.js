@@ -567,6 +567,7 @@ export function appendFinding(root, questId, finding) {
     verification: finding.verification || null,
     regressionClassification: finding.regressionClassification || null,
     scopePressureClassification: finding.scopePressureClassification || null,
+    designReview: finding.designReview || null,
   });
 }
 

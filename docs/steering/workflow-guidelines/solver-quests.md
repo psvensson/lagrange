@@ -38,14 +38,17 @@ important, provided it does not change an owner-boundary contract.
 A Quest must:
 
 1. declare a single sealed `doneWhen` predicate up front;
-2. define one or more independent `frontiers[]`;
-3. measure progress with lower-is-better probe metrics;
-4. record every attempt through the Solver event log;
-5. accumulate version 2 source attempts into one exact landing candidate; review
+2. for authoring-contract version 2, record a structured independent approving
+   design-review receipt bound to that declaration before the first execution,
+   non-measurement, park, or terminal event;
+3. define one or more independent `frontiers[]`;
+4. measure progress with lower-is-better probe metrics;
+5. record every attempt through the Solver event log;
+6. accumulate version 2 source attempts into one exact landing candidate; review
    it only at an explicit durability boundary, then approve the complete aggregate
    scope before terminal handoff (legacy version 1 attempts keep their old rules);
-6. close only through a Solver terminal state;
-7. after audit passes, commit every Quest-scoped change (the Solver never
+7. close only through a Solver terminal state;
+8. after audit passes, commit every Quest-scoped change (the Solver never
    pushes; see "Regular Commit (No Push)" below).
 
 Do not move goalposts in place. If the goal is wrong, record the finding and
@@ -68,8 +71,10 @@ The normal Quest workflow has three verbs:
 1. `solve start --id <id>` runs doctor, optionally creates a linked draft when
    authoring flags are present, lints it, and returns the stable structured next
    action. It is read-only for an existing Quest and never seals or begins work.
-2. `solve continue --id <id>` executes only structured `begin-step`,
-   `commit-step`, or replacement equivalents. Here `commit-step` means record
+2. `solve continue --id <id>` executes only structured declaration,
+   `begin-step`, `commit-step`, or replacement equivalents. New Quests stop
+   after declaration for a declaration-bound independent design-review verdict.
+   Here `commit-step` means record
    the measured attempt in the event log; it does not create a Git commit. An
    attempt-record action requires exactly one explicit `--changeRef` or
    `--auto-diff` plus `--summary`. It MUST NOT parse or execute the
@@ -84,7 +89,7 @@ The normal Quest workflow has three verbs:
 
 The stable `next` projection carries both the legacy display `type`/`value` and
 machine `code`/`payload`. Automation MUST dispatch only on `code` and validated
-payload. `new`, `lint`, `next`, `step`, `finding`, `audit`, `checkpoint`, and
+payload. `new`, `declare`, `lint`, `next`, `step`, `finding`, `audit`, `checkpoint`, and
 `handoff` remain component commands for diagnostics and exceptional workflows;
 their availability does not add required routine steps.
 
@@ -100,7 +105,8 @@ node scripts/solve.js lint --id <id>
 
 The file declares:
 
-- `authoringContractVersion`: absent means legacy; new drafts use version 1.
+- `authoringContractVersion`: absent means legacy; version 1 remains supported;
+  new drafts use version 2 and require declaration-bound design review.
 - `class`: `"product"` (default) or `"process"`. Product goals must be MEASURED
   against a real artifact probe; process goals are scaffolding/decision records
   and may legitimately close on an oracle. This drives report closure labeling,

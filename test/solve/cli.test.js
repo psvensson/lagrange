@@ -79,7 +79,8 @@ tap.test('solve CLI smoke (P2)', async (t) => {
     ]);
     const quest = JSON.parse(fs.readFileSync(
       path.join(root, 'solve', 'quests', 'linked.json'), 'utf8'));
-    t.equal(quest.authoringContractVersion, 1);
+    t.equal(quest.authoringContractVersion, 2);
+    t.equal(quest.constraints[0].id, 'pre-attempt-adversarial-design-review');
     t.equal(quest.links.planDoc, 'solve/specs/linked.md');
     t.equal(quest.links.specRef, 'solve/specs/linked.md#done');
     t.equal(quest.links.roadmapRow, 'ROW-1');
@@ -93,7 +94,7 @@ tap.test('solve CLI smoke (P2)', async (t) => {
   t.test('lint failure creates neither declaration nor pending state', (t) => {
     const root = tmp();
     run(root, ['new', '--id', 'invalid-product', '--statement', 'It passes.']);
-    t.throws(() => run(root, ['step', '--id', 'invalid-product']),
+    t.throws(() => run(root, ['declare', '--id', 'invalid-product']),
       /quest lint failed.*planning link/u);
     t.notOk(fs.existsSync(path.join(
       root, 'solve', 'log', 'invalid-product.ndjson')));
@@ -103,7 +104,7 @@ tap.test('solve CLI smoke (P2)', async (t) => {
     t.end();
   });
 
-  t.test('first execution seals the extended versioned declaration', (t) => {
+  t.test('explicit declaration and design review precede first execution', (t) => {
     const root = tmp();
     const oracle = path.join(root, 'oracle.json');
     fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
@@ -116,16 +117,33 @@ tap.test('solve CLI smoke (P2)', async (t) => {
     quest.doneWhen = {probe: 'oracle', args: {file: oracle}};
     quest.frontiers[0].metric = {probe: 'oracle', args: {file: oracle}};
     fs.writeFileSync(questFile, `${JSON.stringify(quest, null, 2)}\n`);
+    const declaration = JSON.parse(run(root, [
+      'declare', '--id', 'sealed', '--json',
+    ]));
+    run(root, [
+      'finding', '--id', 'sealed', '--frontier', 'sealed-main',
+      '--kind', 'design-review', '--claim', 'independent design review passed',
+      '--evidence', 'subagent:cli-design-review',
+      '--design-review-verdict', 'approve',
+      '--declaration-fingerprint', declaration.declarationFingerprint,
+    ]);
     run(root, ['step', '--id', 'sealed']);
     const declared = fs.readFileSync(
       path.join(root, 'solve', 'log', 'sealed.ndjson'), 'utf8')
       .trim().split('\n').map((line) => JSON.parse(line))
       .find((event) => event.type === 'quest-declared');
-    t.equal(declared.sealed.authoringContractVersion, 1);
+    t.equal(declared.sealed.authoringContractVersion, 2);
     t.equal(declared.sealed.statement, quest.statement);
     t.equal(declared.sealed.class, 'process');
     t.same(declared.sealed.frontierIds, ['sealed-main']);
     t.same(declared.sealed.constraints, quest.constraints);
+    const review = fs.readFileSync(
+      path.join(root, 'solve', 'log', 'sealed.ndjson'), 'utf8')
+      .trim().split('\n').map((line) => JSON.parse(line))
+      .find((event) => event.kind === 'design-review');
+    t.equal(review.designReview.declarationFingerprint,
+      declaration.declarationFingerprint);
+    t.equal(review.designReview.verdict, 'approve');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

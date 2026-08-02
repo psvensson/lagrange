@@ -75,6 +75,11 @@ tap.test('Quest authoring lint', async (t) => {
   });
 
   t.test('versioned class and constraints are validated before sealing', (t) => {
+    t.equal(lintQuest(quest({authoringContractVersion: 1})).status, 'pass',
+      'version 1 remains explicitly supported');
+    t.match(lintQuest(quest({authoringContractVersion: 3})).errors.join('\n'),
+      /unsupported authoringContractVersion/u,
+      'unknown future versions fail closed');
     const invalidClass = lintQuest(quest({class: 'meta'}));
     t.equal(invalidClass.status, 'fail');
     t.match(invalidClass.errors.join('\n'), /class must be one of product\|process/u);

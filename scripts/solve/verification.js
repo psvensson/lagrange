@@ -114,6 +114,10 @@ function baseUnreachableProblem(baseCommit) {
 const LEGACY_APPROVAL_PATTERN = /source|code|change|quest|intent|guideline|doctrine|verif/iu;
 const VERIFIER_EVIDENCE_PATTERN = /^subagent:[A-Za-z0-9][A-Za-z0-9_./-]*$/u;
 
+export function validVerifierEvidence(value) {
+  return typeof value === 'string' && VERIFIER_EVIDENCE_PATTERN.test(value);
+}
+
 function hash(bytes) {
   return crypto.createHash(HASH_ALGORITHM).update(bytes).digest(LOCAL_STR_OWNED_005);
 }

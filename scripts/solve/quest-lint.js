@@ -37,7 +37,12 @@ const LOCAL_STR_OWNED_018 = 'verificationTemplates must not contain duplicates';
 const LOCAL_STR_OWNED_019 =
   '(no docs/steering/verification-templates entry declares it)';
 
-export const QUEST_AUTHORING_CONTRACT_VERSION = 1;
+export const LEGACY_QUEST_AUTHORING_CONTRACT_VERSION = 1;
+export const QUEST_AUTHORING_CONTRACT_VERSION = 2;
+const SUPPORTED_AUTHORING_CONTRACT_VERSIONS = new Set([
+  LEGACY_QUEST_AUTHORING_CONTRACT_VERSION,
+  QUEST_AUTHORING_CONTRACT_VERSION,
+]);
 
 const LONG_STATEMENT_CHARACTER_LIMIT = 500;
 // Bound on the title alone; the commit subject adds a `<questId>: ` prefix.
@@ -132,7 +137,8 @@ function pushVerificationTemplateErrors(quest, errors, options) {
 
 function authoringErrors(quest, options) {
   const errors = [];
-  if (quest.authoringContractVersion !== QUEST_AUTHORING_CONTRACT_VERSION) {
+  if (!SUPPORTED_AUTHORING_CONTRACT_VERSIONS.has(
+    quest.authoringContractVersion)) {
     errors.push(
       `unsupported authoringContractVersion: ${quest.authoringContractVersion}`,
     );

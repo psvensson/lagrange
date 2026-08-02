@@ -38,6 +38,7 @@ import {
   resolveWorkspaceBaseCommit,
 } from './verification.js';
 import {canonicalSourceArtifactProblem} from './canonical-source-artifact.js';
+import {assertDesignReviewReady} from './design-review.js';
 
 const SCOPE_PRESSURE_BLOCKED_PREFIX =
   'scope-pressure precommit blocked: split into bounded Quest declarations ';
@@ -60,6 +61,7 @@ export function runAttemptCommand(root, args) {
   const quest = loadQuest(root, questId);
   ensureSealedGoal(root, quest);
   const log = readLog(root, questId);
+  assertDesignReviewReady(quest, log);
   const state = projectState(quest, log);
   const def = quest.frontiers.find((f) => f.id === frontierId);
   const fState = state.frontiers.find((f) => f.id === frontierId);

@@ -26,7 +26,7 @@ import {
 import {retreadCheckLines} from './solve/retread.js';
 import {makeDryExecutor} from './solve/executor.js';
 import {makeAgentExecutor} from './solve/agent-executor.js';
-import {runLoop, runSupervised} from './solve/loop.js';
+import {declareQuest, runLoop, runSupervised} from './solve/loop.js';
 import {writeReport} from './solve/report.js';
 import {runStep, stepAbort, stepPending} from './solve/step.js';
 import {runNextCommand} from './solve/next.js';
@@ -92,6 +92,11 @@ import {
   landQuestWorkflow,
   startQuestWorkflow,
 } from './solve/operator-workflow.js';
+import {
+  DESIGN_REVIEW_FINDING_KIND,
+  buildDesignReviewReceipt,
+  designReviewProjection,
+} from './solve/design-review.js';
 
 const LOCAL_STR_OWNED_001 = 'new: Quest ID has append-only history but no Quest file; restore it or author a successor';
 const LOCAL_STR_OWNED_002 = 'new: --force cannot overwrite a Quest with append-only history; author a successor';
@@ -103,6 +108,13 @@ const LOCAL_STR_OWNED_007 = 'new: --parent-quest and --inherit-rulesout-from mus
 const LOCAL_STR_OWNED_008 = 'lint: --id <questId> or --all is required';
 const LOCAL_STR_OWNED_009 = 'pass';
 const LOCAL_STR_OWNED_010 = ', ';
+const DESIGN_REVIEW_CONSTRAINT_ID =
+  'pre-attempt-adversarial-design-review';
+const DESIGN_REVIEW_CONSTRAINT_STATEMENT =
+  'After explicit declaration and before first execution, record an ' +
+  'independent approving design-review receipt bound to the sealed declaration.';
+const DECLARE_ID_REQUIRED = 'declare: --id <questId> is required';
+const DESIGN_REVIEW_NOT_REQUIRED = '(not required)';
 
 const INHERITED_RULESOUT_ABSENT_CLAIM = '(no claim)';
 const INHERITED_RULESOUT_FINDING_KIND = 'inherited-rulesout';
@@ -202,6 +214,10 @@ function questTemplate(id, statement, questClass) {
       },
     ],
     constraints: [
+      {
+        id: DESIGN_REVIEW_CONSTRAINT_ID,
+        statement: DESIGN_REVIEW_CONSTRAINT_STATEMENT,
+      },
       {
         id: 'source-change-subagent-verification',
         statement: 'If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>.',
@@ -620,6 +636,20 @@ function cmdFinding(root, args) {
       null;
   const kind = optionalStringArgument(args, 'kind');
   const evidence = optionalStringArgument(args, 'evidence');
+  const reviewProjection = designReviewProjection(
+    quest, readLog(root, id));
+  const designReview = kind === DESIGN_REVIEW_FINDING_KIND &&
+    reviewProjection.required ? buildDesignReviewReceipt(
+      quest,
+      readLog(root, id),
+      {
+        frontier: args.frontier,
+        evidence,
+        verdict: optionalStringArgument(args, 'design-review-verdict'),
+        declarationFingerprint: optionalStringArgument(
+          args, 'declaration-fingerprint'),
+      },
+    ) : null;
   // A rejection must carry its category-complete finding list durably; a
   // pointer-only claim satisfies every downstream consumer mechanically while
   // carrying zero content (measured 2026-07-27).
@@ -685,8 +715,29 @@ function cmdFinding(root, args) {
     regressionClassification,
     scopePressureClassification,
     verification,
+    designReview,
   });
   process.stdout.write(`recorded finding for ${args.frontier} @ ${stamped.ts}\n`);
+}
+
+function cmdDeclare(root, args) {
+  const id = args.id || args._[0];
+  if (!id) throw new Error(DECLARE_ID_REQUIRED);
+  const quest = loadQuest(root, id);
+  const declaration = declareQuest(root, quest);
+  const projection = designReviewProjection(quest, readLog(root, id));
+  const result = {
+    questId: id,
+    declaredAt: declaration.ts || null,
+    authoringContractVersion: declaration.sealed?.authoringContractVersion ?? null,
+    designReviewState: projection.state,
+    declarationFingerprint: projection.declarationFingerprint,
+  };
+  process.stdout.write(args.json === true ?
+    `${JSON.stringify(result, null, 2)}\n` :
+    `declared ${id} at ${result.declaredAt}; design review: ` +
+      `${result.designReviewState}; fingerprint: ` +
+      `${result.declarationFingerprint || DESIGN_REVIEW_NOT_REQUIRED}\n`);
 }
 
 function cmdLint(root, args) {
@@ -1280,6 +1331,7 @@ function cmdInvariants(root, args) {
 const COMMANDS = {
   'start': cmdStart,
   'continue': cmdContinue,
+  'declare': cmdDeclare,
   'land': cmdLand,
   'decompose-rejection': cmdDecomposeRejection,
   'new': cmdNew,

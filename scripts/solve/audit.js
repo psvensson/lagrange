@@ -49,6 +49,7 @@ import {
   terminalVerificationProblems,
   verificationState,
 } from './verification.js';
+import {designReviewProjection} from './design-review.js';
 
 const LOCAL_STR_OWNED_001 = 'product quest has no planning link (links.roadmapRow / specRef / planDoc / ';
 const LOCAL_STR_OWNED_002 = 'parentQuest / closesCL all empty); it will not appear in planning joins';
@@ -378,6 +379,7 @@ export function commitGate(root, quest) {
 export function checkpointGateProblemsForLog(root, quest, log) {
   const startIndex = strictAuditStartIndex(log);
   return [
+    ...designReviewProjection(quest, log).problems,
     ...auditIntegrityViolations(root, quest, log),
     ...auditChangeRefs(root, quest, log, startIndex),
     ...checkpointVerificationProblems(root, quest, log, {startIndex}),
@@ -408,6 +410,7 @@ export function auditQuest(root, quest) {
     terminalVerificationProblems(root, quest, log, {startIndex}) :
     auditSourceChangeVerification(root, quest, log, startIndex);
   const problems = [
+    ...designReviewProjection(quest, log).problems,
     ...auditIntegrityViolations(root, quest, log),
     ...auditChangeRefs(root, quest, log, startIndex),
     ...auditEvidenceIdentity(log, startIndex),

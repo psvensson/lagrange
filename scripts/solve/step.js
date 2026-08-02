@@ -64,6 +64,7 @@ import {
   verificationState,
 } from './verification.js';
 import {canonicalSourceArtifactProblem} from './canonical-source-artifact.js';
+import {assertDesignReviewReady} from './design-review.js';
 
 const STATIC_PROBLEM_SEPARATOR = '\n';
 const AUTO_DIFF_ARTIFACT_PREFIX = 'attempt-';
@@ -354,6 +355,7 @@ function autoIngestFrontierEvidence(root, quest, log, state) {
 function stepBegin(root, quest, options = {}) {
   const ctx = configureContext(root, quest, options);
   ensureSealedGoal(root, quest);
+  assertDesignReviewReady(quest, readLog(root, quest.id));
   if (loadPending(root, quest.id)) {
     if (options.force) {
       clearPending(root, quest.id);
@@ -431,6 +433,8 @@ function stepCommit(root, quest, options = {}) {
       'or run `solve step --id <quest>` before manual work',
     );
   }
+  ensureSealedGoal(root, quest);
+  assertDesignReviewReady(quest, readLog(root, quest.id));
   const autoDiffWrite = options.changeRef ?
     null :
     createAutoDiffChangeRef(root, quest, pending);

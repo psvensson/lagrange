@@ -1,0 +1,15 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "ownerCheck": {
+    "passed": true,
+    "owner": "scripts/solve/design-review.js"
+  },
+  "gates": {
+    "authoringCompatibility": true,
+    "preAttemptAdmission": true,
+    "auditEnforcement": true,
+    "subagentVerification": true
+  }
+}

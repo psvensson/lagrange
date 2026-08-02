@@ -5,8 +5,12 @@
     "usage": "node scripts/solve.js start --id <id> [--statement \"<sealed result>\" --class product|process --spec-ref <ref>] [--json]"
   },
   "continue": {
-    "summary": "Execute only trusted structured begin/commit action codes from the current next projection. Commit requires explicit --changeRef or explicit --auto-diff plus --summary; rendered command text and judgment/gate actions are never executed.",
+    "summary": "Execute only trusted structured declaration/begin/commit action codes from the current next projection. Commit requires explicit --changeRef or explicit --auto-diff plus --summary; rendered command text and judgment/gate actions are never executed.",
     "usage": "node scripts/solve.js continue --id <id> [--changeRef diff:<path> | --auto-diff] [--summary \"<what changed>\"] [--json]"
+  },
+  "declare": {
+    "summary": "Lint and append the immutable Quest declaration without beginning work. New authoring-contract Quests use the returned declaration fingerprint for independent pre-attempt design review.",
+    "usage": "node scripts/solve.js declare --id <id> [--json]"
   },
   "land": {
     "summary": "Validate an independent verifier verdict against the exact current terminal candidate, record its structured receipt, and on approval perform the existing audit-gated scope-safe commit. Rejection never commits, and requires the category-complete finding list via repeatable --finding \"<category>: <summary>\" flags; no path pushes.",
@@ -17,7 +21,7 @@
     "usage": "node scripts/solve.js decompose-rejection --id <id> [--from-quest <successorId>]"
   },
   "new": {
-    "summary": "Create a versioned Quest draft under solve/quests/<id>.json. Drafting is not sealing: the first execution command lints and declares it. Link flags author the planning graph without hand-editing JSON; --force is refused once append-only history exists.",
+    "summary": "Create a versioned Quest draft under solve/quests/<id>.json. Drafting is not sealing: `declare` lints and seals it before independent design review and execution. Link flags author the planning graph without hand-editing JSON; --force is refused once append-only history exists.",
     "usage": "node scripts/solve.js new --id <id> --statement \"<sealed result>\" [--class product|process] [--plan-doc <path>] [--parent-quest <id>] [--roadmap-row <id>] [--spec-ref <ref>] [--closes-cl <CL-id>] [--inherit-rulesout-from <parentQuestId>]"
   },
   "run": {
@@ -77,8 +81,8 @@
     "usage": "node scripts/solve.js probe --probe <scenario-harness|oracle|invariantHeld> [probe-specific args...]"
   },
   "finding": {
-    "summary": "Record durable knowledge in the append-only Quest log. Exact verifier approvals and rejections bind subagent evidence to a content fingerprint; recording either verdict never commits.",
-    "usage": "node scripts/solve.js finding --id <id> --frontier <f> --claim \"<learning>\" [--kind repro-on-head|verifier-approval|verifier-rejection] [--rulesOut \"<lever>\"] [--evidence <ref>] [--verification-scope attempt|aggregate|both --verification-fingerprint sha256:<64hex>]"
+    "summary": "Record durable knowledge in the append-only Quest log. Design review binds an independent verdict to the sealed declaration; exact implementation approvals and rejections bind evidence to candidate content. Recording a verdict never commits.",
+    "usage": "node scripts/solve.js finding --id <id> --frontier <f> --claim \"<learning>\" [--kind repro-on-head|design-review|verifier-approval|verifier-rejection] [--rulesOut \"<lever>\"] [--evidence <ref>] [--design-review-verdict approve|reject --declaration-fingerprint sha256:<64hex>] [--verification-scope attempt|aggregate|both --verification-fingerprint sha256:<64hex>]"
   },
   "promote-finding": {
     "summary": "Promote a recorded finding into in-repo steering as a rule (then regenerate with `npm run steering:llm:pack`).",
