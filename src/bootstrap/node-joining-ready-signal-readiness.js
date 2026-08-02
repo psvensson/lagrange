@@ -51,18 +51,21 @@ const numberIsSafeInteger = Number.isSafeInteger;
 const OWN_DATA_VALUE_FIELD = 'value';
 const INFRASTRUCTURE_JOIN_FAILURE_CODE_FIELD = 'code';
 const INFRASTRUCTURE_JOIN_FAILURE_NAME_FIELD = 'name';
+// Named absence variant: the error carries no own string value for the
+// requested field (ARCH-0013 — raw null must not encode runtime state).
+const INFRASTRUCTURE_JOIN_CODE_ABSENT = null;
 
 function readOwnInfrastructureJoinFailureCode(error, field) {
   if (!error || typeof error !== 'object' || !objectHasOwn(error, field)) {
-    return null;
+    return INFRASTRUCTURE_JOIN_CODE_ABSENT;
   }
   const descriptor = objectGetOwnPropertyDescriptor(error, field);
   if (!descriptor || !objectHasOwn(descriptor, OWN_DATA_VALUE_FIELD)) {
-    return null;
+    return INFRASTRUCTURE_JOIN_CODE_ABSENT;
   }
   return typeof descriptor.value === 'string' && descriptor.value.length > 0 ?
     descriptor.value :
-    null;
+    INFRASTRUCTURE_JOIN_CODE_ABSENT;
 }
 
 class NodeJoiningReadySignalReadiness

@@ -893,6 +893,12 @@ function buildQueueState(progress, samples, actionEvidence = {}) {
       QUEUE_SOURCE_STATE_LEGACY_AMBIGUOUS;
   const owner = buildQueueDepthState(depthRecord);
   const logging = buildQueueDepthState(loggingDepthRecord);
+  const observedOwnerPendingWrites = normalizeQueueNumber(
+    readOwnField(depthRecord, 'pendingWrites'),
+  );
+  const pendingWrites = numberIsFinite(observedOwnerPendingWrites) ?
+    observedOwnerPendingWrites :
+    firstFiniteNumber(lastSample.ownerQueueDepth);
   if (sourceState === QUEUE_SOURCE_STATE_SEPARATED) {
     const contradiction =
       actionEvidence.enabled === true &&
@@ -912,14 +918,7 @@ function buildQueueState(progress, samples, actionEvidence = {}) {
       logging,
       contradiction,
     };
-  }
-  const observedOwnerPendingWrites = normalizeQueueNumber(
-    readOwnField(depthRecord, 'pendingWrites'),
-  );
-  const pendingWrites = numberIsFinite(observedOwnerPendingWrites) ?
-    observedOwnerPendingWrites :
-    firstFiniteNumber(lastSample.ownerQueueDepth);
-  if (!numberIsFinite(pendingWrites)) {
+  } else if (!numberIsFinite(pendingWrites)) {
     return {
       state: QUEUE_STATE_ABSENT,
       evidencePath: ABSENT_VALUE,

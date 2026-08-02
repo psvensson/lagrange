@@ -531,11 +531,11 @@ function delay(milliseconds) {
 }
 
 async function observePublishedCandidate(candidate) {
-  let outcome = null;
+  let lastRegistryClassification = null;
   for (let attempt = 0; attempt < REGISTRY_OBSERVATION_ATTEMPTS; attempt += 1) {
     const metadata = await readRegistryMetadata(candidate.manifest.name);
-    outcome = classifyRegistryState(candidate, metadata);
-    if (outcome === RELEASE_OUTCOME.ALREADY_PUBLISHED_MATCH) {
+    lastRegistryClassification = classifyRegistryState(candidate, metadata);
+    if (lastRegistryClassification === RELEASE_OUTCOME.ALREADY_PUBLISHED_MATCH) {
       return RELEASE_OUTCOME.PUBLISHED_MATCH;
     }
     if (attempt < REGISTRY_OBSERVATION_ATTEMPTS - 1) {
@@ -544,7 +544,8 @@ async function observePublishedCandidate(candidate) {
   }
   throw new NpmReleaseError(
     RELEASE_OUTCOME.PARTIAL_RELEASE_CONFLICT,
-    `published registry state did not match the candidate: ${outcome}`,
+    'published registry state did not match the candidate: ' +
+      `${lastRegistryClassification}`,
   );
 }
 

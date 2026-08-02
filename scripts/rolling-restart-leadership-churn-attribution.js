@@ -43,6 +43,10 @@ const MISSING_WITNESS = Object.freeze({
   LEADER_SIGNATURE: 'valid_leader_signature_change',
   MIXED_PARTITION_OUTCOMES: 'mixed_partition_outcomes',
 });
+// Named absence variant: the authoritative role witness could not be
+// reconstructed from complete evidence (ARCH-0013 — raw null must not
+// encode runtime state for state-named outcomes).
+const UNPROVABLE_ROLE_WITNESS = null;
 const OUTCOME = Object.freeze({
   REAL: 'real_raft_transition',
   ARTIFACT: 'observation_artifact',
@@ -243,7 +247,7 @@ function roleTransitionRecords(records, partitionId) {
 }
 
 function authoritativeRoleState(records, partitionId, observedAtMs) {
-  if (observedAtMs === null) return null;
+  if (observedAtMs === null) return UNPROVABLE_ROLE_WITNESS;
   const relevantRecords = roleTransitionRecords(records, partitionId);
   if (relevantRecords.some((record) =>
     recordTimeMs(record) === null ||
@@ -252,7 +256,7 @@ function authoritativeRoleState(records, partitionId, observedAtMs) {
     typeof ownField(record, FIELD.ROLE) !== 'string' ||
     nonNegativeSafeInteger(ownField(record, FIELD.TERM)) === null ||
     normalizePeerCohort(ownField(record, FIELD.PEER_COHORT)).length === 0)) {
-    return null;
+    return UNPROVABLE_ROLE_WITNESS;
   }
   const latestByReplica = new Map();
   for (const record of relevantRecords) {
@@ -277,7 +281,7 @@ function authoritativeRoleState(records, partitionId, observedAtMs) {
   }
   const recordsByReplica = [...latestByReplica.entries()]
     .sort(([left], [right]) => left.localeCompare(right));
-  if (recordsByReplica.length === 0) return null;
+  if (recordsByReplica.length === 0) return UNPROVABLE_ROLE_WITNESS;
   const cohorts = recordsByReplica.map(([, record]) =>
     normalizePeerCohort(ownField(record, 'peerCohort')));
   const cohort = cohorts[0];
@@ -288,7 +292,7 @@ function authoritativeRoleState(records, partitionId, observedAtMs) {
       jsonStringify(candidate) !== jsonStringify(cohort)) ||
     recordsByReplica.some(([replicaId]) => !cohort.includes(replicaId))
   ) {
-    return null;
+    return UNPROVABLE_ROLE_WITNESS;
   }
   const replicas = recordsByReplica.map(([replicaId, record]) => ({
     replicaId,
@@ -298,7 +302,7 @@ function authoritativeRoleState(records, partitionId, observedAtMs) {
     evidencePath: ownField(record, 'evidencePath') || null,
   }));
   const leaders = replicas.filter(({role}) => role === ROLE_LEADER);
-  if (leaders.length !== 1) return null;
+  if (leaders.length !== 1) return UNPROVABLE_ROLE_WITNESS;
   return {cohort, replicas, leader: leaders[0]};
 }
 
