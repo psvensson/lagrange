@@ -87,6 +87,20 @@ function makeCollaborators(overrides = {}) {
       {partitionId: 'p1', batch: [typedRow('u1', 7)]},
       {partitionId: 'p2', batch: [typedRow('u2', 9)]},
     ]),
+    planShards: overrides.planShards ?? (() => ({
+      shards: [{partitionId: 'p1'}, {partitionId: 'p2'}],
+      tableName: 'ratings',
+    })),
+  };
+  const partitionTopology = overrides.partitionTopology ?? {
+    resolveShardHost: (tableName, partitionId) => Object.freeze({
+      activePartitionVersion: 1,
+      hostNodeId: `node-${partitionId}`,
+      partitionId,
+      partitionReplicaId: `${partitionId}-r1`,
+      partitionState: 'NORMAL',
+      partitionVersion: 1,
+    }),
   };
   const statementAdapter = {
     invoke: overrides.adapterInvoke ?? (async (req) => {
@@ -131,14 +145,15 @@ function makeCollaborators(overrides = {}) {
       calls.snapshot = {invocationId, resultJson, witness};
     },
   };
-  return {calls, routeResolver, batchExecutor, statementAdapter,
-    reduceCoordinator};
+  return {calls, routeResolver, batchExecutor, partitionTopology,
+    statementAdapter, reduceCoordinator};
 }
 
 function makeInvoker(collaborators) {
   return new CallCellInvoker({
     routeResolver: collaborators.routeResolver,
     batchExecutor: collaborators.batchExecutor,
+    partitionTopology: collaborators.partitionTopology,
     statementAdapter: collaborators.statementAdapter,
     reduceCoordinator: collaborators.reduceCoordinator,
     batchRowBound: BATCH_ROW_BOUND,
@@ -283,8 +298,12 @@ test('the wire carries the configured call-context budgets to run and reduce',
     ]) {
       t.same(
         request.callCell,
-        {emitBudget: EMIT_BUDGET, nestedCallBudget: NESTED_CALL_BUDGET},
-        `${request.exportName} request threads the bounded-emit budgets`,
+        {
+          batchRowBound: BATCH_ROW_BOUND,
+          emitBudget: EMIT_BUDGET,
+          nestedCallBudget: NESTED_CALL_BUDGET,
+        },
+        `${request.exportName} request threads the bounded budgets`,
       );
     }
     t.same(
@@ -321,7 +340,7 @@ test('a statement-less binding fails closed not-invocable', async (t) => {
 
 test('an empty batch set fails closed without invoking', async (t) => {
   const collaborators = makeCollaborators({
-    executeBatches: async () => [],
+    planShards: () => ({shards: [], tableName: 'ratings'}),
   });
   await makeInvoker(collaborators).invoke({
     name: CALL_NAME,

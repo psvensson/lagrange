@@ -26,12 +26,18 @@ function makeEngineStub(executed) {
       executed.push({sql, options});
       return {success: true, rows: []};
     },
+    getTableInfo: () => null,
     getTablePartitions: () => [],
+    isPartitionVisibleForRouting: () => true,
     parse: () => ({type: 'SELECT', from: {name: 'fixture'}}),
     partitionResolver: {resolvePartitions: () => []},
+    resolveActivePartitionVersion: () => 1,
     queryExecutor: {
       buildSelectSQL: () => 'SELECT 1',
       executeOnPartitions: async () => [],
+      getPartitionRecord: () => null,
+      resolvePartitionServiceCandidates: () =>
+        ({candidates: [], routingSnapshot: null}),
     },
   };
 }

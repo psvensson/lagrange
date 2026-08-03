@@ -15,6 +15,7 @@ const CALL_CELL_ROUTE_ERROR_CODE = Object.freeze({
   COMPONENT_FAILED: 'call_cell_component_failed',
   DEADLINE_EXHAUSTED: 'call_cell_deadline_exhausted',
   HANDLER_FAILED: 'call_cell_handler_failed',
+  HOST_CELL_UNAVAILABLE: 'call_cell_host_cell_unavailable',
   INVALID_ARGUMENTS: 'call_cell_invalid_arguments',
   INVALID_COMPONENT_RESULT: 'call_cell_invalid_component_result',
   NOT_INVOCABLE: 'call_cell_not_invocable',

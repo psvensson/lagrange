@@ -94,6 +94,8 @@ function buildEnvelope(fields) {
         id: fields.invocationId,
         intentDigest: fields.intentDigest,
       }),
+      partitionFence: fields.partitionFence,
+      partitionId: fields.partitionId,
       partials: fields.partials,
       route: fields.route,
       type: CALL_CELL_ROUTE_MESSAGE_TYPE,
@@ -363,6 +365,9 @@ class CallCellStatementAdapter {
     batch,
     partials,
     callCell,
+    partitionId,
+    partitionFence,
+    hostNodeId,
     exportName = CALL_CELL_INVOKE_EXPORT_DEFAULT,
     invocationId: providedInvocationId,
   }) {
@@ -394,6 +399,7 @@ class CallCellStatementAdapter {
           );
         }
         const route = this._routeResolver.resolve({
+          hostNodeId,
           invocationId,
           name,
           securityContext: frozenContext,
@@ -418,6 +424,8 @@ class CallCellStatementAdapter {
           invocationId,
           name,
           partials,
+          partitionFence,
+          partitionId,
           route,
           securityContext: frozenContext,
           traceId: invocationId,

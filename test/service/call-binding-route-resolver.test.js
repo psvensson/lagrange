@@ -417,3 +417,43 @@ describe('CallBindingRouteResolver slot spread', () => {
     );
   });
 });
+
+describe('CallBindingRouteResolver data-local host selection', () => {
+  test('a hostNodeId restricts selection to that node and refuses typed ' +
+    'when no ready Cell lives there', () => {
+    const rows = createCallDeploymentRows({statement: CALL_STATEMENT});
+    const cache = seededCache(rows);
+    const secondReplicaId = `${rows.definition.service_id}-r2`;
+    cache.set(
+      SYSTEM_TABLE_NAME.SERVICES,
+      secondReplicaId,
+      createActualRow(rows.definition, secondReplicaId, NODE_B),
+    );
+    const resolver = new CallBindingRouteResolver({
+      systemTableCacheProvider: () => cache,
+    });
+    const request = (hostNodeId) => ({
+      hostNodeId,
+      invocationId: 'call-invocation-local-fixture',
+      name: CALL_BINDING_NAME,
+      securityContext: SECURITY_CONTEXT,
+    });
+    const route = resolver.resolve(request(NODE_B));
+    assert.equal(route.nodeId, NODE_B,
+      'selection is restricted to the shard host node');
+    assert.equal(route.hostNodeId, NODE_B,
+      'the route carries the host restriction for the receiver re-assert');
+    assert.equal(
+      resolver.assertSelectedRoute(request(NODE_B), route).nodeId,
+      NODE_B,
+      'the receiver re-assert reproduces the same restricted selection',
+    );
+    assert.throws(
+      () => resolver.resolve(request('call-node-without-cell')),
+      (error) =>
+        error.code === CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE &&
+        error.classification === CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE,
+      'no ready Cell on the host node is the distinct activation trigger',
+    );
+  });
+});

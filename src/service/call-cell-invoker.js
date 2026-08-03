@@ -46,6 +46,9 @@ const CALL_INVOKER_ARGUMENT_MESSAGE = Object.freeze({
     'CallCellInvoker requires a batchExecutor with executeBatches(req)',
   STATEMENT_ADAPTER_REQUIRED:
     'CallCellInvoker requires a statementAdapter with invoke(req)',
+  PARTITION_TOPOLOGY_REQUIRED:
+    'CallCellInvoker requires a partitionTopology with ' +
+    'resolveShardHost(tableName, partitionId)',
   REDUCE_COORDINATOR_REQUIRED:
     'CallCellInvoker requires a reduceCoordinator with seedInvocation, ' +
     'acquireReduceLease, publishPartial, resolveCompletePartialSet, and ' +
@@ -60,6 +63,20 @@ const CALL_INVOKER_BUDGET_DEFAULT = Object.freeze({
   EMIT_BUDGET: 64,
   NESTED_CALL_BUDGET: 1,
 });
+// Bounded wait for a lease-driven activation to produce a ready Cell on
+// the shard host node: retry the host-restricted dispatch until the
+// planner's replica turns ready or the window lapses (then the typed
+// HOST_CELL_UNAVAILABLE refusal propagates, retryable by the caller).
+const CALL_INVOKER_ACTIVATION_DEFAULT = Object.freeze({
+  RETRY_INTERVAL_MS: 250,
+  WAIT_MS: 15000,
+});
+
+function sleep(delayMs) {
+  return new Promise((resolve) => {
+    setTimeout(resolve, delayMs);
+  });
+}
 
 const RESOLVE_PROBE_PREFIX = 'resolve-';
 const RUN_EXPORT = 'run';
@@ -94,13 +111,37 @@ class CallCellInvoker {
       throw new TypeError(
         CALL_INVOKER_ARGUMENT_MESSAGE.REDUCE_COORDINATOR_REQUIRED);
     }
+    if (typeof options.partitionTopology?.resolveShardHost !== 'function') {
+      throw new TypeError(
+        CALL_INVOKER_ARGUMENT_MESSAGE.PARTITION_TOPOLOGY_REQUIRED);
+    }
     this._routeResolver = options.routeResolver;
     this._batchExecutor = options.batchExecutor;
     this._statementAdapter = options.statementAdapter;
     this._reduceCoordinator = options.reduceCoordinator;
+    this._partitionTopology = options.partitionTopology;
+    // Optional: without an activation lease owner a shard host with no
+    // ready Cell stays the typed HOST_CELL_UNAVAILABLE refusal.
+    this._activationLeases =
+      typeof options.activationLeases?.publishActivationLease === 'function' ?
+        options.activationLeases :
+        null;
+    this._activationRetryIntervalMs = Number.isSafeInteger(
+      options.activationRetryIntervalMs) &&
+      options.activationRetryIntervalMs > 0 ?
+      options.activationRetryIntervalMs :
+      CALL_INVOKER_ACTIVATION_DEFAULT.RETRY_INTERVAL_MS;
+    this._activationWaitMs = Number.isSafeInteger(options.activationWaitMs) &&
+      options.activationWaitMs > 0 ?
+      options.activationWaitMs :
+      CALL_INVOKER_ACTIVATION_DEFAULT.WAIT_MS;
     this._batchRowBound = options.batchRowBound;
     this._partialLimit = options.partialLimit;
+    // batchRowBound rides with the bounded-emit budgets so the shard's
+    // host node applies the same row bound when it builds the batch
+    // locally.
     this._callCellBudgets = Object.freeze({
+      batchRowBound: this._batchRowBound,
       emitBudget: Number.isSafeInteger(options.emitBudget) &&
         options.emitBudget >= 0 ?
         options.emitBudget :
@@ -110,6 +151,49 @@ class CallCellInvoker {
         options.nestedCallBudget :
         CALL_INVOKER_BUDGET_DEFAULT.NESTED_CALL_BUDGET,
     });
+  }
+
+  // One shard run dispatch under host-restricted selection. When the
+  // host has no ready Cell and an activation lease owner is composed,
+  // publish the bounded demand lease and retry until the planner's
+  // activated replica turns ready or the activation window lapses — the
+  // invoker never places anything itself; it only signals and waits.
+  async _dispatchShardRun(request) {
+    const dispatch = () => this._statementAdapter.invoke({
+      name: request.name,
+      argumentsJson: request.argumentsJson,
+      securityContext: request.securityContext,
+      deadlineMs: request.deadlineMs,
+      callCell: this._callCellBudgets,
+      hostNodeId: request.shard.hostTopology?.hostNodeId,
+      partitionFence: request.shard.hostTopology,
+      partitionId: request.shard.partitionId,
+      exportName: RUN_EXPORT,
+      slotId: request.slotId,
+      invocationId: createCallSlotInvocationId(
+        request.invocationId, request.slotId),
+    });
+    const hostNodeId = request.shard.hostTopology?.hostNodeId;
+    const activationDeadline = Date.now() + this._activationWaitMs;
+    for (;;) {
+      try {
+        return await dispatch();
+      } catch (error) {
+        if (error?.code !== CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE ||
+            !this._activationLeases || !hostNodeId) {
+          throw error;
+        }
+        await this._activationLeases.publishActivationLease(
+          request.resolution.serviceId,
+          hostNodeId,
+        );
+        if (Date.now() + this._activationRetryIntervalMs >
+            activationDeadline) {
+          throw error;
+        }
+        await sleep(this._activationRetryIntervalMs);
+      }
+    }
   }
 
   /**
@@ -126,10 +210,20 @@ class CallCellInvoker {
       name,
       securityContext,
     });
-    const batches = await this._batchExecutor.executeBatches({
+    // Plan-only fan-out: the declared statement is parsed and the shard
+    // partitions resolved here, but no rows are fetched — each shard's
+    // host node builds its own typed batch so raw shard rows never leave
+    // that node before the run export executes.
+    const plan = this._batchExecutor.planShards({
       statement: resolution.statement,
-      batchRowBound: this._batchRowBound,
     });
+    const batches = plan.shards.map((shard) => ({
+      hostTopology: this._partitionTopology ?
+        this._partitionTopology.resolveShardHost(
+          plan.tableName, shard.partitionId) :
+        null,
+      partitionId: shard.partitionId,
+    }));
     if (batches.length === 0) {
       throw createCallRoutingFailure(
         CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
@@ -155,17 +249,15 @@ class CallCellInvoker {
 
     for (const [slotIndex, shard] of batches.entries()) {
       const slotId = slotIds[slotIndex];
-      const delivery = await this._statementAdapter.invoke({
-        name,
+      const delivery = await this._dispatchShardRun({
         argumentsJson,
-        securityContext,
         deadlineMs,
-        batch: shard.batch,
-        callCell: this._callCellBudgets,
-        partitionId: shard.partitionId,
-        exportName: RUN_EXPORT,
+        invocationId,
+        name,
+        resolution,
+        securityContext,
+        shard,
         slotId,
-        invocationId: createCallSlotInvocationId(invocationId, slotId),
       });
       // The published slot partial is the shard's EMITTED partial set (the
       // bounded call-context emit log), normalized fail-closed into the

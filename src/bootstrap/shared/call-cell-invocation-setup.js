@@ -34,12 +34,17 @@ import {createCallCellBatchExecutor} from
 import {CallCellInvoker} from '../../service/call-cell-invoker.js';
 import {createCallCellRoutingSurface} from
   '../../service/call-cell-routing-surface.js';
+import {createCallActivationLeaseOwner} from
+  '../../service/call-activation-lease-owner.js';
+import {createCallPartitionTopology} from
+  '../../service/call-partition-topology.js';
 import {
   createCallCellReduceCoordinator,
 } from '../../runtime/call-cell-reduce-coordinator.js';
 
 const CALL_CELL_COORDINATION_SESSION = 'call-cell-reduce-coordination';
 const CALL_CELL_INVOCATION_DEFAULT = Object.freeze({
+  ACTIVATION_LEASE_MS: 60000,
   BATCH_ROW_BOUND: 4096,
   DEADLINE_MS: 30000,
   EMIT_BUDGET: 64,
@@ -84,7 +89,9 @@ function attachCallCellInvoker(options = {}) {
       options.messageRouterProvider :
       null;
   if (!owner || !sqlQueryEngine || !systemTableCacheProvider ||
-      !messageRouterProvider) {
+      !messageRouterProvider ||
+      typeof sqlQueryEngine.queryExecutor?.resolvePartitionServiceCandidates !==
+        'function') {
     return null;
   }
   if (typeof owner.callCellInvoker?.invoke === 'function') {
@@ -127,11 +134,26 @@ function attachCallCellInvoker(options = {}) {
     slotCount: positiveIntegerOr(
       tunables.slotCount, CALL_CELL_INVOCATION_DEFAULT.SLOT_COUNT),
   });
+  const activationLeases = createCallActivationLeaseOwner({
+    executeInternal: (sql, params) => sqlQueryEngine.executeQuery(
+      sql,
+      params,
+      {sessionId: CALL_CELL_COORDINATION_SESSION},
+    ),
+    leaseMs: positiveIntegerOr(
+      tunables.activationLeaseMs,
+      CALL_CELL_INVOCATION_DEFAULT.ACTIVATION_LEASE_MS),
+    nowProvider: () => Date.now(),
+  });
   const invoker = new CallCellInvoker({
+    activationLeases,
+    activationRetryIntervalMs: tunables.activationRetryIntervalMs,
+    activationWaitMs: tunables.activationWaitMs,
     batchExecutor,
     batchRowBound: positiveIntegerOr(
       tunables.batchRowBound,
       CALL_CELL_INVOCATION_DEFAULT.BATCH_ROW_BOUND),
+    partitionTopology: createCallPartitionTopology({sqlQueryEngine}),
     emitBudget: positiveIntegerOr(
       tunables.emitBudget, CALL_CELL_INVOCATION_DEFAULT.EMIT_BUDGET),
     nestedCallBudget: positiveIntegerOr(

@@ -44,6 +44,8 @@ const ROUTE_RESOLVER_ERROR = Object.freeze({
     'No immutable call Binding matches this tenant call',
   ROUTE_UNAVAILABLE:
     'The matched call Binding has no current ready Cell',
+  HOST_CELL_UNAVAILABLE:
+    'The matched call Binding has no ready Cell on the shard host node',
   TARGET_STALE:
     'The selected call Cell actual is stale, moved, or superseded',
 });
@@ -193,10 +195,30 @@ class CallBindingRouteResolver {
       );
     }
 
-    const actual = selectActual(actuals, request.invocationId);
+    // Data-local selection: a dispatch that resolved its shard's host
+    // node restricts selection to ready Cell actuals ON that node. The
+    // distinct typed refusal (never plain ROUTE_UNAVAILABLE) is the
+    // activation trigger — a co-located Cell can be activated, whereas a
+    // Binding with no ready Cell anywhere cannot execute at all.
+    const hostNodeId = typeof request.hostNodeId === 'string' &&
+      request.hostNodeId.length > 0 ?
+      request.hostNodeId :
+      null;
+    const selectable = hostNodeId ?
+      actuals.filter((candidate) => candidate.node_id === hostNodeId) :
+      actuals;
+    if (selectable.length === 0) {
+      throw createCallRoutingFailure(
+        CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE,
+        `${ROUTE_RESOLVER_ERROR.HOST_CELL_UNAVAILABLE}: ${hostNodeId}`,
+        {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
+      );
+    }
+    const actual = selectActual(selectable, request.invocationId);
     return Object.freeze({
       bindingDigest: definition.binding_digest,
       bindingVersionId: binding.bindingVersionId,
+      hostNodeId,
       name: request.name,
       nodeId: actual.node_id,
       replicaId: actual.service_id,
@@ -214,6 +236,7 @@ class CallBindingRouteResolver {
     const fields = [
       'bindingDigest',
       'bindingVersionId',
+      'hostNodeId',
       'name',
       'nodeId',
       'replicaId',
@@ -224,7 +247,7 @@ class CallBindingRouteResolver {
       'tenantId',
     ];
     if (fields.some((field) =>
-      current[field] !== expectedRoute?.[field])) {
+      (current[field] ?? null) !== (expectedRoute?.[field] ?? null))) {
       throw createCallRoutingFailure(
         CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE,
         ROUTE_RESOLVER_ERROR.TARGET_STALE,

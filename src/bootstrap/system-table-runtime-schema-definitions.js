@@ -735,7 +735,47 @@ const CALL_CELL_REDUCE_RESULTS_SCHEMA = {
   ],
 };
 
+/**
+ * Data-local call activation lease system table schema.
+ * One row per (service, node): a bounded, CDC-propagated demand signal
+ * published by the call invocation owner when a shard's host node has no
+ * ready Binding Cell. The placement planner consumes LIVE leases as
+ * deterministic activation pins (the node joins the placement target
+ * while the lease lasts); an expired lease simply stops pinning, so the
+ * existing surplus cure reclaims the activated replica — bounded and
+ * reclaimable with no second scheduler. The row is system-policy demand
+ * derived from canonical partition topology, never caller placement.
+ */
+const CALL_ACTIVATION_LEASES_SCHEMA = {
+  tableName: SYSTEM_TABLE_NAME.CALL_ACTIVATION_LEASES,
+  columns: [
+    {name: 'lease_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
+    {name: 'service_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'node_id', type: COLUMN_TYPE.TEXT, notNull: true},
+    {
+      name: 'lease_expires_at',
+      type: COLUMN_TYPE.INTEGER,
+      notNull: true,
+      defaultValue: '0',
+    },
+    {
+      name: 'requested_at',
+      type: COLUMN_TYPE.INTEGER,
+      notNull: true,
+      defaultValue: '0',
+    },
+  ],
+  indices: [
+    {
+      name: 'uidx_call_activation_lease_target',
+      columns: ['service_id', 'node_id'],
+      unique: true,
+    },
+  ],
+};
+
 export {
+  CALL_ACTIVATION_LEASES_SCHEMA,
   CALL_CELL_REDUCE_RESULTS_SCHEMA,
   CALL_CELL_REDUCE_SLOTS_SCHEMA,
   CONTROL_PLANE_PUBLICATIONS_SCHEMA,

@@ -138,6 +138,15 @@ class RuntimeServiceHandler extends EventEmitter {
       new CallBindingRouteResolver({
         systemTableCacheProvider: () => this.systemTableCache,
       });
+    // Local partition replicas for data-local shard batch building. The
+    // self-default reuses the provider CDC already carries in production;
+    // absence degrades to a typed RETRYABLE refusal, never a crash.
+    this.partitionServicesProvider =
+      typeof options.partitionServicesProvider === 'function' ?
+        options.partitionServicesProvider :
+        () => this.cdcIntegrationService?.resolvePartitionServices?.() ||
+          this.cdcIntegrationService?.partitionServicesProvider?.() ||
+          null;
 
     // Executor outcome emitter — replaces direct replica_operations writes.
     this.executorOutcomeEmitter = options.executorOutcomeEmitter || null;

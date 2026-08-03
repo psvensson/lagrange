@@ -1,18 +1,15 @@
 /**
- * Production wiring evidence for the call-cell invocation path over TWO
- * production-composed nodes: RuntimeServiceHandlers built by the REAL
- * RuntimeServiceHandlerSetup factory (no injected resolver — the Phase-A
- * self-default over the system table cache is what routes), the invoker
- * assembled by the REAL attachCallCellInvoker bootstrap module against a
- * real SQLQueryEngine whose coordination SQL executes against the
- * REGISTERED call_cell_reduce_slots / call_cell_reduce_results system
- * tables (DDL generated from their schema objects into real per-partition
- * SQLite), and shard runs spread deterministically across replicas on
- * BOTH nodes by their slot-scoped wire identities. The evidence: each
- * shard-owning replica publishes its own emitted partials under its own
- * acquired slot lease, reduce executes exactly once on the replica
- * holding the dedicated reduce lease slot, and exactly one atomically
- * published final snapshot is visible.
+ * Missing-cell activation evidence over two production-composed nodes:
+ * a CALL shard resolves to a partition hosted on a node with NO ready
+ * Binding Cell. The invoker publishes a bounded activation lease (the
+ * CDC-propagated call_activation_leases system table, written through
+ * the real engine) and retries; the REAL placement planner consumes the
+ * live lease as a deterministic pin and targets the host node; the
+ * executor seam creates the replica there; the invoker's retry then runs
+ * the shard LOCALLY on the activated replica. Raw shard rows never cross
+ * the router, the caller never names a node, and the lease is bounded —
+ * when it lapses the pin disappears and the normal surplus cure reclaims
+ * the replica (asserted at the planner level).
  */
 
 import {readFile} from 'node:fs/promises';
@@ -33,6 +30,7 @@ import {
   generateCreateTableSQL,
 } from '../../src/bootstrap/system-table-schema-sql.js';
 import {
+  CALL_ACTIVATION_LEASES_SCHEMA,
   CALL_CELL_REDUCE_RESULTS_SCHEMA,
   CALL_CELL_REDUCE_SLOTS_SCHEMA,
 } from '../../src/bootstrap/system-table-runtime-schema-definitions.js';
@@ -56,54 +54,43 @@ import {
 } from
   '../../src/control-plane/owners/request-binding-service-definition-contract.js';
 import {SQLQueryEngine} from '../../src/query/sql-query-engine.js';
+import {MovePlanner} from '../../src/rebalancer/move-planner.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {invokeCallCell} from
   '../../src/runtime/call-cell-driver-invoke.js';
 import {HEALTH_STATUS} from '../../src/runtime/runtime-driver.js';
 import {WasiComponentCellRuntime} from
   '../../src/runtime/wasi-component-cell-runtime.js';
+import {liveActivationPinNodeIds} from
+  '../../src/service/call-activation-lease-owner.js';
 
-function digestSha256(value) {
-  return createHash('sha256').update(value).digest('hex');
-}
-
-const NODE_A = 'wiring-node-a';
-const NODE_B = 'wiring-node-b';
+const NODE_A = 'activation-node-a';
+const NODE_B = 'activation-node-b';
 const TENANT_ID = 'tenant-a';
-const PRINCIPAL = 'alice';
-const CALL_SERVICE_NAME = 'call-cell-wiring';
+const CALL_SERVICE_NAME = 'call-cell-activation';
 const WORLD_NAME = 'call-cell';
 const CALL_EXPORT = 'run';
-const CALL_INTERFACE = 'call_v1';
 const CALL_STATEMENT = 'SELECT id, score, label FROM shard_ratings';
 const DECLARED_TABLE = 'shard_ratings';
 const PARTITION_ONE = 'shard_ratings-p1';
 const PARTITION_TWO = 'shard_ratings-p2';
-const PARTITION_SERVICE_TYPE = 'partition';
-const PARTITION_RAFT_LEADER = 'leader';
-const PARTITION_SERVICE_STATUS = 'active';
 const QUERY_MESSAGE_TYPE = 'QUERY';
 const ARTIFACT_DIGEST = `sha256:${'c'.repeat(64)}`;
-const ARTIFACT_REF = 'registry.example.test/acme/call-cell-wiring:1.0.0';
 const TOP_N = 3;
-const EMIT_BUDGET = 8;
-const NESTED_CALL_BUDGET = 1;
-const BATCH_ROW_BOUND = 64;
-const PARTIAL_LIMIT = 8;
-const SLOT_COUNT = 4;
-const REDUCE_LEASE_MS = 60000;
-const REDUCE_LEASE_SLOT_ID = 3;
-const SHARD_TABLE_DDL =
-  'CREATE TABLE shard_ratings (id INTEGER PRIMARY KEY, score REAL, ' +
-  'label TEXT)';
-const SHARD_ROW_INSERT =
-  'INSERT INTO shard_ratings (id, score, label) VALUES (?, ?, ?)';
+const TUNABLES = Object.freeze({
+  activationLeaseMs: 60000,
+  activationRetryIntervalMs: 100,
+  activationWaitMs: 15000,
+  batchRowBound: 64,
+  emitBudget: 8,
+  nestedCallBudget: 1,
+  partialLimit: 8,
+  reduceLeaseMs: 60000,
+  slotCount: 4,
+});
+const EXECUTOR_POLL_MS = 100;
 const COMPONENTIZE_DISABLED_FEATURES = Object.freeze([
-  'random',
-  'stdio',
-  'clocks',
-  'http',
-  'fetch-event',
+  'random', 'stdio', 'clocks', 'http', 'fetch-event',
 ]);
 const CELL_BUDGETS = Object.freeze({
   context_bytes: 4096,
@@ -118,21 +105,18 @@ const FIXTURE_DIRECTORY = new URL(
   import.meta.url,
 );
 const SECURITY_CONTEXT = Object.freeze({
-  principal: PRINCIPAL,
+  principal: 'alice',
   roles: Object.freeze(['application']),
   tenantId: TENANT_ID,
 });
 const SEEDED_ROWS = Object.freeze({
   [PARTITION_ONE]: Object.freeze([
     Object.freeze({id: 1, score: 4.5, label: null}),
-    Object.freeze({id: 2, score: 3.5, label: null}),
     Object.freeze({id: 3, score: 4.9, label: null}),
-    Object.freeze({id: 4, score: 2.5, label: null}),
   ]),
   [PARTITION_TWO]: Object.freeze([
     Object.freeze({id: 5, score: 4.7, label: null}),
     Object.freeze({id: 6, score: 2.9, label: null}),
-    Object.freeze({id: 7, score: 4.1, label: null}),
   ]),
 });
 const EXPECTED_RESULT_JSON = JSON.stringify([
@@ -144,40 +128,33 @@ const EXPECTED_RESULT_JSON = JSON.stringify([
 const configuration = ConfigurationManager.getInstance();
 if (!configuration.isInitialized()) configuration.initialize();
 
-function createManifest() {
-  return {
+function digestSha256(value) {
+  return createHash('sha256').update(value).digest('hex');
+}
+
+function createDeploymentRows() {
+  const manifest = {
     artifact: {
       digest: ARTIFACT_DIGEST,
       media_type: 'application/wasm',
-      ref: ARTIFACT_REF,
+      ref: 'registry.example.test/acme/call-cell-activation:1.0.0',
       type: 'oci',
     },
     capabilities: [],
-    exports: [{
-      interface: CALL_INTERFACE,
-      name: CALL_EXPORT,
-    }],
+    exports: [{interface: 'call_v1', name: CALL_EXPORT}],
     name: CALL_SERVICE_NAME,
     runtime: {kind: 'wasm_component'},
     schema_version: 3,
     version: '1.0.0',
   };
-}
-
-function createArtifact() {
-  const manifest = createManifest();
-  return {
+  const artifact = {
     artifactDigest: ARTIFACT_DIGEST,
-    bytes: Buffer.from('call-cell-wiring-bytes'),
+    bytes: Buffer.from('call-cell-activation-bytes'),
     manifest,
     manifestDigest: `sha256:${digestSha256(canonicalJson(manifest))}`,
     packageId: `service-package-${'d'.repeat(64)}`,
-    payloadDigest: `sha256:${digestSha256('call-cell-wiring-bytes')}`,
+    payloadDigest: `sha256:${digestSha256('call-cell-activation-bytes')}`,
   };
-}
-
-function createDeploymentRows() {
-  const artifact = createArtifact();
   const declaration = bindDeploymentArtifact(
     normalizeDeploymentBinding({
       budgets: {
@@ -209,26 +186,29 @@ function createDeploymentRows() {
     buildRequestBindingServiceDefinition(bindingRow, artifact),
     binding,
   );
-  const serviceId = deriveRequestServiceDefinitionId(
-    binding.bindingVersionId);
-  return {artifact, binding, bindingRow, definition, serviceId};
+  return {
+    bindingRow,
+    definition,
+    serviceId: deriveRequestServiceDefinitionId(binding.bindingVersionId),
+  };
 }
 
-// Real per-partition SQLite storage: user shard partitions from hand DDL,
-// coordination partitions from the REGISTERED system table schemas — the
-// same generators the bootstrap partition DDL path consumes.
 function createPartitionStores() {
   const databases = new Map();
   for (const [partitionId, rows] of Object.entries(SEEDED_ROWS)) {
     const database = new Database(':memory:');
-    database.exec(SHARD_TABLE_DDL);
-    const insert = database.prepare(SHARD_ROW_INSERT);
+    database.exec(
+      'CREATE TABLE shard_ratings (id INTEGER PRIMARY KEY, score REAL, ' +
+      'label TEXT)');
+    const insert = database.prepare(
+      'INSERT INTO shard_ratings (id, score, label) VALUES (?, ?, ?)');
     for (const row of rows) insert.run(row.id, row.score, row.label);
     databases.set(partitionId, database);
   }
   for (const schema of [
     CALL_CELL_REDUCE_SLOTS_SCHEMA,
     CALL_CELL_REDUCE_RESULTS_SCHEMA,
+    CALL_ACTIVATION_LEASES_SCHEMA,
   ]) {
     const database = new Database(':memory:');
     database.exec(generateCreateTableSQL(schema));
@@ -245,12 +225,28 @@ function createPartitionStores() {
   };
 }
 
-// One in-process router serving both nodes: registered handler addresses
-// win (the REAL RuntimeServiceHandlerSetup registration path), partition
-// addresses execute the delivered SQL against the real SQLite stores.
-function createSharedMessageRouter(partitionStores) {
+// Shared router: registered handlers win; partition SQL executes against
+// the real SQLite stores. Lease-table writes are mirrored into the system
+// table cache — the CDC propagation seam, exactly what production CDC
+// does for a CONTROL_INTERNAL_PROPAGATION table.
+function createSharedMessageRouter(partitionStores, systemTableCache) {
   const handlers = new Map();
   const partitionQueryDeliveries = [];
+  const leasePartition = `${TABLES.CALL_ACTIVATION_LEASES}-p1`;
+
+  function mirrorLeaseRows(database) {
+    const rows = database
+      .prepare(`SELECT * FROM ${TABLES.CALL_ACTIVATION_LEASES}`)
+      .all();
+    for (const row of rows) {
+      systemTableCache.applySystemTableChange(
+        TABLES.CALL_ACTIVATION_LEASES,
+        CDC_OPERATION.UPSERT,
+        {...row},
+      );
+    }
+  }
+
   return {
     partitionQueryDeliveries,
     register(address, handler) {
@@ -272,23 +268,14 @@ function createSharedMessageRouter(partitionStores) {
         const params = message.params || message.payload?.params || [];
         if (/^\s*SELECT/iu.test(sql)) {
           const rows = database.prepare(sql).all(...params);
-          return {
-            acknowledged: true,
-            success: true,
-            rows,
-            count: rows.length,
-            partitionId,
-          };
+          return {acknowledged: true, success: true, rows,
+            count: rows.length, partitionId};
         }
         const outcome = database.prepare(sql).run(...params);
-        return {
-          acknowledged: true,
-          success: true,
-          rows: [],
-          affectedRows: outcome.changes,
-          changes: outcome.changes,
-          partitionId,
-        };
+        if (partitionId === leasePartition) mirrorLeaseRows(database);
+        return {acknowledged: true, success: true, rows: [],
+          affectedRows: outcome.changes, changes: outcome.changes,
+          partitionId};
       }
       return {acknowledged: true, success: true};
     },
@@ -296,40 +283,36 @@ function createSharedMessageRouter(partitionStores) {
   };
 }
 
-function seedTableRouting(cache, tableName, partitionIds, options = {}) {
+function seedTableRouting(cache, tableName, entries, options = {}) {
   cache.applySystemTableChange(TABLES.TABLES, CDC_OPERATION.UPSERT, {
     primary_key: options.primaryKey || 'id',
     table_id: tableName,
     table_name: tableName,
   });
-  for (const partitionId of partitionIds) {
-    const hostNodeId = options.hostByPartition?.[partitionId] || NODE_A;
+  for (const {hostNodeId, partitionId, range} of entries) {
     cache.applySystemTableChange(TABLES.PARTITIONS, CDC_OPERATION.UPSERT, {
       leader_node_id: hostNodeId,
       partition_id: partitionId,
-      partition_key_end: options.rangeByPartition?.[partitionId]?.end ?? null,
-      partition_key_start:
-        options.rangeByPartition?.[partitionId]?.start ?? null,
+      partition_key_end: range?.end ?? null,
+      partition_key_start: range?.start ?? null,
       table_name: tableName,
     });
     cache.applySystemTableChange(TABLES.SERVICES, CDC_OPERATION.UPSERT, {
       address: `${hostNodeId}/partition/${partitionId}`,
       node_id: hostNodeId,
       partition_id: partitionId,
-      raft_role: PARTITION_RAFT_LEADER,
+      raft_role: 'leader',
       service_id: partitionId,
-      service_type: PARTITION_SERVICE_TYPE,
-      status: PARTITION_SERVICE_STATUS,
+      service_type: 'partition',
+      status: 'active',
     });
   }
 }
 
 async function componentizeFixtureGuest() {
   const guestSource = await readFile(
-    new URL(
-      '../wasm-service/fixtures/call-cell-world/guest.js',
-      import.meta.url,
-    ),
+    new URL('../wasm-service/fixtures/call-cell-world/guest.js',
+      import.meta.url),
     'utf8',
   );
   const {component} = await componentize(guestSource, {
@@ -376,7 +359,6 @@ async function createNode({
   nodeId,
   componentBytes,
   serviceId,
-  replicaId,
   messageRouter,
   systemTableCache,
   localPartitionServices,
@@ -392,8 +374,6 @@ async function createNode({
     world: WORLD_NAME,
   }));
   const runtimeInvocationOwner = createRuntimeInvocationOwner(cellRuntime);
-  // The PRODUCTION factory: no callBindingRouteResolver injected — the
-  // Phase-A self-default over the system table cache is what must route.
   const {runtimeServiceHandler} = RuntimeServiceHandlerSetup.create({
     cdcIntegrationService: {sqlQueryEngine},
     messageRouter,
@@ -403,20 +383,49 @@ async function createNode({
     serviceRuntimeLifecycle: runtimeInvocationOwner.owner,
     systemTableCache,
   });
-  runtimeServiceHandler.localReplicas.set(replicaId, {
+  return {cellRuntime, runtimeInvocationOwner, runtimeServiceHandler};
+}
+
+function localPartitionServicesFor(partitionStores, partitionId) {
+  const database = partitionStores.databases.get(partitionId);
+  return new Map([[partitionId, {
+    executeQuery: async (sql, params = []) => {
+      const rows = database.prepare(sql).all(...params);
+      return {count: rows.length, partitionId, rows, success: true};
+    },
+    initialized: true,
+    partitionId,
+  }]]);
+}
+
+function activateReadyReplica({node, systemTableCache, serviceId, replicaId,
+  nodeId}) {
+  node.runtimeServiceHandler.localReplicas.set(replicaId, {
     entityId: serviceId,
     replicaHandle: {serviceId},
     status: ReplicaStatus.ACTIVE,
   });
-  return {cellRuntime, runtimeInvocationOwner, runtimeServiceHandler};
+  systemTableCache.applySystemTableChange(
+    TABLES.SERVICES,
+    CDC_OPERATION.UPSERT,
+    {
+      created_at: Date.now(),
+      node_id: nodeId,
+      service_id: replicaId,
+      service_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+      status: ReplicaStatus.ACTIVE,
+      updated_at: Date.now(),
+    },
+  );
 }
 
-describe('minimal deployment call-cell production wiring', () => {
-  it('spreads shard runs across two production-composed nodes and reduces ' +
-    'exactly once on the reduce-lease holder', async (testContext) => {
+describe('data-local call missing-cell activation', () => {
+  it('activates a Cell on the shard host through the planner pin and runs ' +
+    'the shard locally there', async (testContext) => {
     const systemTableCache = new SystemTableCache();
     const partitionStores = createPartitionStores();
-    const messageRouter = createSharedMessageRouter(partitionStores);
+    const messageRouter =
+      createSharedMessageRouter(partitionStores, systemTableCache);
     const engine = new SQLQueryEngine({
       autoStartDistributedTransactionRecovery: false,
       messageRouter,
@@ -424,86 +433,54 @@ describe('minimal deployment call-cell production wiring', () => {
       systemCache: systemTableCache,
     });
 
-    seedTableRouting(systemTableCache, DECLARED_TABLE,
-      [PARTITION_ONE, PARTITION_TWO], {
-        hostByPartition: {
-          [PARTITION_ONE]: NODE_A,
-          [PARTITION_TWO]: NODE_B,
-        },
-        rangeByPartition: {
-          [PARTITION_ONE]: {end: '5', start: null},
-          [PARTITION_TWO]: {end: null, start: '5'},
-        },
-      });
-    seedTableRouting(systemTableCache, TABLES.CALL_CELL_REDUCE_SLOTS,
-      [`${TABLES.CALL_CELL_REDUCE_SLOTS}-p1`],
-      {primaryKey: 'invocation_id'});
-    seedTableRouting(systemTableCache, TABLES.CALL_CELL_REDUCE_RESULTS,
-      [`${TABLES.CALL_CELL_REDUCE_RESULTS}-p1`],
-      {primaryKey: 'result_id'});
+    seedTableRouting(systemTableCache, DECLARED_TABLE, [
+      {hostNodeId: NODE_A, partitionId: PARTITION_ONE,
+        range: {end: '5', start: null}},
+      {hostNodeId: NODE_B, partitionId: PARTITION_TWO,
+        range: {end: null, start: '5'}},
+    ]);
+    for (const tableName of [
+      TABLES.CALL_CELL_REDUCE_SLOTS,
+      TABLES.CALL_CELL_REDUCE_RESULTS,
+      TABLES.CALL_ACTIVATION_LEASES,
+    ]) {
+      seedTableRouting(systemTableCache, tableName,
+        [{hostNodeId: NODE_A, partitionId: `${tableName}-p1`}],
+        {primaryKey: tableName === TABLES.CALL_ACTIVATION_LEASES ?
+          'lease_id' :
+          (tableName === TABLES.CALL_CELL_REDUCE_RESULTS ?
+            'result_id' : 'invocation_id')});
+    }
 
     const rows = createDeploymentRows();
     systemTableCache.applySystemTableChange(
-      TABLES.SERVICE_BINDINGS,
-      CDC_OPERATION.UPSERT,
-      rows.bindingRow,
-    );
+      TABLES.SERVICE_BINDINGS, CDC_OPERATION.UPSERT, rows.bindingRow);
     systemTableCache.applySystemTableChange(
-      TABLES.SERVICE_DEFINITIONS,
-      CDC_OPERATION.UPSERT,
-      rows.definition,
-    );
-    const replicaByNode = {
-      [NODE_A]: `${rows.serviceId}-r1`,
-      [NODE_B]: `${rows.serviceId}-r2`,
-    };
-    for (const [nodeId, replicaId] of Object.entries(replicaByNode)) {
-      systemTableCache.applySystemTableChange(
-        TABLES.SERVICES,
-        CDC_OPERATION.UPSERT,
-        {
-          created_at: Date.now(),
-          node_id: nodeId,
-          service_id: replicaId,
-          service_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
-          status: ReplicaStatus.ACTIVE,
-          updated_at: Date.now(),
-        },
-      );
-    }
+      TABLES.SERVICE_DEFINITIONS, CDC_OPERATION.UPSERT, rows.definition);
 
     const componentBytes = await componentizeFixtureGuest();
-    const shardPartitionByNode = {
-      [NODE_A]: PARTITION_ONE,
-      [NODE_B]: PARTITION_TWO,
-    };
-    const nodes = {};
-    for (const [nodeId, replicaId] of Object.entries(replicaByNode)) {
-      const shardPartitionId = shardPartitionByNode[nodeId];
-      const database = partitionStores.databases.get(shardPartitionId);
-      nodes[nodeId] = await createNode({
+    const nodes = {
+      [NODE_A]: await createNode({
         componentBytes,
-        localPartitionServices: new Map([[shardPartitionId, {
-          executeQuery: async (sql, params = []) => {
-            const rowsRead = database.prepare(sql).all(...params);
-            return {
-              count: rowsRead.length,
-              partitionId: shardPartitionId,
-              rows: rowsRead,
-              success: true,
-            };
-          },
-          initialized: true,
-          partitionId: shardPartitionId,
-        }]]),
+        localPartitionServices:
+          localPartitionServicesFor(partitionStores, PARTITION_ONE),
         messageRouter,
-        nodeId,
-        replicaId,
+        nodeId: NODE_A,
         serviceId: rows.serviceId,
         sqlQueryEngine: engine,
         systemTableCache,
-      });
-    }
+      }),
+      [NODE_B]: await createNode({
+        componentBytes,
+        localPartitionServices:
+          localPartitionServicesFor(partitionStores, PARTITION_TWO),
+        messageRouter,
+        nodeId: NODE_B,
+        serviceId: rows.serviceId,
+        sqlQueryEngine: engine,
+        systemTableCache,
+      }),
+    };
     testContext.after(async () => {
       for (const node of Object.values(nodes)) {
         await node.cellRuntime.stop(rows.serviceId);
@@ -512,104 +489,133 @@ describe('minimal deployment call-cell production wiring', () => {
       await engine.shutdown();
     });
 
-    // The PRODUCTION assembly: the bootstrap attachment composes the
-    // invoker onto the lifecycle command owner dependency slot.
+    // The MISSING-cell setup: only node A starts with a ready Cell
+    // actual. Node B hosts partition two but has no Cell there.
+    activateReadyReplica({
+      node: nodes[NODE_A],
+      nodeId: NODE_A,
+      replicaId: `${rows.serviceId}-r1`,
+      serviceId: rows.serviceId,
+      systemTableCache,
+    });
+
     const serviceLifecycleCommandOwner = {};
     const invoker = attachCallCellInvoker({
       messageRouterProvider: () => messageRouter,
       serviceLifecycleCommandOwner,
       sqlQueryEngine: engine,
       systemTableCacheProvider: () => systemTableCache,
-      tunables: {
-        batchRowBound: BATCH_ROW_BOUND,
-        emitBudget: EMIT_BUDGET,
-        nestedCallBudget: NESTED_CALL_BUDGET,
-        partialLimit: PARTIAL_LIMIT,
-        reduceLeaseMs: REDUCE_LEASE_MS,
-        slotCount: SLOT_COUNT,
+      tunables: TUNABLES,
+    });
+
+    // The activation executor seam: the REAL planner consumes the REAL
+    // live-lease pins from the cache; when it targets a node without a
+    // replica, the executor (the same seam every rebalancer workflow
+    // executes through) makes the replica ready there. The test never
+    // names the node — the pin does.
+    const activationEvents = [];
+    const planner = new MovePlanner({
+      entityId: rows.serviceId,
+      entityType: 'runtime_service',
+      moveStateProvider: {
+        getAvailableNodes: () => [NODE_A, NODE_B].map((nodeId) => ({
+          cpu_usage_percent: 0,
+          disk_usage_percent: 0,
+          memory_usage_percent: 0,
+          node_id: nodeId,
+          status: 'active',
+        })),
+        getCurrentReplicas: () => [],
+        getGlobalTopologyBlockingInFlightOperations: () => [],
+        getHealthyReplicas: (replicas) => replicas,
+        getInFlightOperations: () => [],
+        getPartitionDescriptorEpochEvidence: () => null,
+        getTerminalFailedReplaceTargetReplicaIds: () => new Set(),
+        hasPendingAddForNode: () => false,
+        hasPendingMove: () => false,
       },
     });
-    assert.equal(serviceLifecycleCommandOwner.callCellInvoker, invoker,
-      'the command owner dependency is satisfied by the attachment');
+    let executorStopped = false;
+    const executor = (async () => {
+      while (!executorStopped) {
+        const pins = liveActivationPinNodeIds({
+          nowMs: Date.now(),
+          serviceId: rows.serviceId,
+          systemTableCache,
+        });
+        if (pins.length > 0) {
+          const target = await planner.calculateTargetState([], {
+            activationPinNodeIds: pins,
+            spreadAcrossNodes: true,
+            targetReplicaCount: 1,
+          });
+          for (const nodeId of target.targetNodes) {
+            if (pins.includes(nodeId) &&
+                !nodes[nodeId].runtimeServiceHandler.localReplicas.size) {
+              activationEvents.push({nodeId, pins: [...pins]});
+              activateReadyReplica({
+                node: nodes[nodeId],
+                nodeId,
+                replicaId: `${rows.serviceId}-r2`,
+                serviceId: rows.serviceId,
+                systemTableCache,
+              });
+            }
+          }
+        }
+        if (activationEvents.length > 0) break;
+        await new Promise((resolve) => {
+          setTimeout(resolve, EXECUTOR_POLL_MS);
+        });
+      }
+    })();
 
     const resultJson = await invoker.invoke({
       name: CALL_SERVICE_NAME,
       argumentsJson: JSON.stringify({topN: TOP_N}),
       securityContext: SECURITY_CONTEXT,
     });
-    assert.equal(resultJson, EXPECTED_RESULT_JSON,
-      'the reduced top-N over both nodes matches the independently ' +
-        'computed expectation');
+    executorStopped = true;
+    await executor;
 
-    // Data-local placement: each shard run executed on the node hosting
-    // its partition replica — driven by the partition topology, never by
-    // hash luck.
+    assert.equal(resultJson, EXPECTED_RESULT_JSON,
+      'the reduced result is exact despite the missing-cell start');
+    assert.equal(activationEvents.length, 1,
+      'exactly one lease-driven activation occurred');
+    assert.equal(activationEvents[0].nodeId, NODE_B,
+      'the pin — not any caller input — selected the shard host node');
+
+    const leaseDb = partitionStores.databases.get(
+      `${TABLES.CALL_ACTIVATION_LEASES}-p1`);
+    const leaseRows = leaseDb
+      .prepare(`SELECT * FROM ${TABLES.CALL_ACTIVATION_LEASES}`).all();
+    assert.equal(leaseRows.length, 1, 'one bounded lease row exists');
+    assert.equal(leaseRows[0].service_id, rows.serviceId);
+    assert.equal(leaseRows[0].node_id, NODE_B);
+    assert.ok(leaseRows[0].lease_expires_at > Date.now() - 1000,
+      'the lease is bounded by an expiry, not open-ended');
+
+    // Locality held even through activation: one run per node, and no
+    // shard-table rows ever crossed the router.
     const runCounts = Object.fromEntries(
       Object.entries(nodes).map(([nodeId, node]) =>
         [nodeId, node.runtimeInvocationOwner.invocations.run.length]));
     assert.deepEqual(runCounts, {[NODE_A]: 1, [NODE_B]: 1},
-      'each shard run executed on its partition host node');
-
-    // The locality contract itself: no shard-table QUERY delivery ever
-    // crossed the router — the shard rows were read by each host node's
-    // own partition replica, so only INVOKE messages and coordination
-    // SQL used the wire.
+      'the activated replica ran its shard on its own node');
     const shardQueryDeliveries = messageRouter.partitionQueryDeliveries
       .filter((partitionId) => partitionId.startsWith(DECLARED_TABLE));
     assert.deepEqual(shardQueryDeliveries, [],
-      'raw shard rows never left their host node before run');
+      'raw shard rows never left their host node, even during activation');
 
-    // Reduce exactly once, on the replica holding the reduce lease slot.
-    const reduceCounts = Object.entries(nodes).map(([nodeId, node]) =>
-      [nodeId, node.runtimeInvocationOwner.invocations.reduce.length]);
-    assert.equal(
-      reduceCounts.reduce((total, [, count]) => total + count, 0),
-      1,
-      'reduce executed exactly once across the deployment',
-    );
-    const slotsDb = partitionStores.databases.get(
-      `${TABLES.CALL_CELL_REDUCE_SLOTS}-p1`);
-    const slotRows = slotsDb
-      .prepare(`SELECT * FROM ${TABLES.CALL_CELL_REDUCE_SLOTS} ` +
-        'ORDER BY slot_id')
-      .all();
-    assert.equal(slotRows.length, 3,
-      'two shard slots plus the dedicated reduce lease slot are seeded');
-    const shardSlotRows = slotRows.filter(
-      (row) => row.slot_id !== REDUCE_LEASE_SLOT_ID);
-    assert.deepEqual(
-      shardSlotRows.map((row) => row.replica_id).sort(),
-      Object.values(replicaByNode).sort(),
-      'each shard-owning replica published under its own slot lease',
-    );
-    assert.ok(
-      shardSlotRows.every((row) => row.partial_json !== '[]'),
-      'each shard slot carries its published emitted partial set',
-    );
-    const reduceLeaseRow = slotRows.find(
-      (row) => row.slot_id === REDUCE_LEASE_SLOT_ID);
-    const reducingNode = Object.entries(nodes).find(([, node]) =>
-      node.runtimeInvocationOwner.invocations.reduce.length === 1)?.[0];
-    assert.equal(
-      reduceLeaseRow.replica_id,
-      replicaByNode[reducingNode],
-      'the replica that executed reduce holds the dedicated reduce lease',
-    );
-
-    // Exactly one atomically visible snapshot with the exact result and a
-    // witness naming both shard replicas.
-    const resultsDb = partitionStores.databases.get(
-      `${TABLES.CALL_CELL_REDUCE_RESULTS}-p1`);
-    const resultRows = resultsDb
-      .prepare(`SELECT * FROM ${TABLES.CALL_CELL_REDUCE_RESULTS}`)
-      .all();
-    assert.equal(resultRows.length, 1, 'exactly one visible result row');
-    assert.equal(resultRows[0].result_json, EXPECTED_RESULT_JSON);
-    const witness = JSON.parse(resultRows[0].source_snapshot_json);
-    assert.deepEqual(
-      witness.slots.map((slot) => slot.replicaId).sort(),
-      Object.values(replicaByNode).sort(),
-      'the snapshot witness names both shard-owning replicas',
-    );
+    // Reclaim story at the planner level: once the lease lapses the pin
+    // disappears, so the node leaves the placement target and the normal
+    // surplus cure applies.
+    const lapsedPins = liveActivationPinNodeIds({
+      nowMs: Date.now() + TUNABLES.activationLeaseMs + 1000,
+      serviceId: rows.serviceId,
+      systemTableCache,
+    });
+    assert.deepEqual(lapsedPins, [],
+      'a lapsed lease stops pinning — bounded and reclaimable');
   });
 });

@@ -192,6 +192,33 @@ function createCallCellBatchExecutor({
   }
 
   /**
+   * Plan the shard fan-out WITHOUT executing anything: parse and
+   * validate the declared statement, resolve the target partitions, and
+   * return the ordered shard list. Data-local dispatch consumes this
+   * plan — the row fetch happens on each shard's own host node, so the
+   * engine-side execute half is skipped entirely and raw rows never
+   * reach the ingress node.
+   *
+   * @param {object} request
+   * @param {string} request.statement - Binding-declared SELECT.
+   * @return {object} Frozen {tableName, shards: [{partitionId}]}.
+   * @throws {CallCellRoutingError} Typed refusal; never silent-drops.
+   */
+  function planShards(request) {
+    const ast = parseDeclaredStatement(request.statement);
+    const tableName = ast.from.name;
+    const partitionIds = resolveTargetPartitions(
+      tableName,
+      ast.where || EMPTY_WHERE_CLAUSE,
+    );
+    return Object.freeze({
+      shards: Object.freeze(partitionIds.map((partitionId) =>
+        Object.freeze({partitionId}))),
+      tableName,
+    });
+  }
+
+  /**
    * Execute the Binding-declared partition-local SELECT across the
    * resolved partitions and build typed per-partition call-cell
    * batches.
@@ -259,7 +286,7 @@ function createCallCellBatchExecutor({
     ));
   }
 
-  return Object.freeze({executeBatches});
+  return Object.freeze({executeBatches, planShards});
 }
 
 export {createCallCellBatchExecutor};

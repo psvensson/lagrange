@@ -61,6 +61,7 @@ class RuntimeServiceHandlerSetup {
       serviceLifecycleManager,
       serviceRuntimeLifecycle,
       callBindingRouteResolver,
+      partitionServicesProvider,
       rpcClient,
       executorOutcomeEmitter,
     } = options;
@@ -110,6 +111,7 @@ class RuntimeServiceHandlerSetup {
       serviceLifecycleManager,
       serviceRuntimeLifecycle,
       callBindingRouteResolver,
+      partitionServicesProvider,
       executorOutcomeEmitter,
     });
 

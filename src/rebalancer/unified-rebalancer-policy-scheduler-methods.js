@@ -1,4 +1,6 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
+import {liveActivationPinNodeIds} from
+  '../service/call-activation-lease-owner.js';
 import {
   buildServiceDataAffinityWeights,
 } from './service-data-affinity-weights.js';
@@ -79,6 +81,21 @@ class UnifiedRebalancerPolicySchedulerMethods {
     );
     policy.targetReplicaCount =
       resolveRuntimeServiceTargetReplicaCount(definition);
+    // Data-local call activation pins: LIVE bounded leases published by
+    // the call invocation owner deterministically pin their nodes into
+    // the placement target while they last (distinct from the soft
+    // decaying data-affinity weights below — the locality contract is an
+    // execution-time requirement, not a steady-state preference). An
+    // expired lease stops pinning, so the surplus cure reclaims the
+    // activated replica on the next pass.
+    const activationPinNodeIds = liveActivationPinNodeIds({
+      nowMs: Date.now(),
+      serviceId: this.entityId,
+      systemTableCache: this.systemTableCache,
+    });
+    if (activationPinNodeIds.length > 0) {
+      policy.activationPinNodeIds = activationPinNodeIds;
+    }
     const {nodeWeights, groupWeights} = buildServiceDataAffinityWeights({
       systemTableCache: this.systemTableCache,
       serviceId: this.entityId,

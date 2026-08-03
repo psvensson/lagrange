@@ -76,6 +76,8 @@ import {CallBindingRouteResolver} from
 import {createCallCellBatchExecutor} from
   '../../src/service/call-cell-batch-executor.js';
 import {CallCellInvoker} from '../../src/service/call-cell-invoker.js';
+import {createCallPartitionTopology} from
+  '../../src/service/call-partition-topology.js';
 import {CALL_CELL_INVOCATION_ID_PREFIX} from
   '../../src/service/call-cell-routing-contract.js';
 import {createCallCellRoutingSurface} from
@@ -821,11 +823,24 @@ describe('minimal deployment call-cell invocation live wiring', () => {
       systemTableCacheProvider: () => systemTableCache,
     });
     const runtimeInvocationOwner = createRuntimeInvocationOwner(cellRuntime);
+    const localPartitionServices = new Map(
+      [...partitionStores.databases.entries()]
+        .filter(([partitionId]) => partitionId.startsWith(DECLARED_TABLE))
+        .map(([partitionId, database]) => [partitionId, {
+          executeQuery: async (sql, params = []) => {
+            const rows = database.prepare(sql).all(...params);
+            return {count: rows.length, partitionId, rows, success: true};
+          },
+          initialized: true,
+          partitionId,
+        }]),
+    );
     const runtimeServiceHandler = new RuntimeServiceHandler({
       callBindingRouteResolver: routeResolver,
       cdcIntegrationService,
       nodeId: NODE_ID,
       serviceLifecycleManager: {},
+      partitionServicesProvider: () => localPartitionServices,
       serviceRuntimeLifecycle: runtimeInvocationOwner.owner,
       systemTableCache,
     });
@@ -863,6 +878,7 @@ describe('minimal deployment call-cell invocation live wiring', () => {
     });
     const invoker = new CallCellInvoker({
       batchExecutor,
+      partitionTopology: createCallPartitionTopology({sqlQueryEngine: engine}),
       batchRowBound: BATCH_ROW_BOUND,
       emitBudget: EMIT_BUDGET,
       nestedCallBudget: NESTED_CALL_BUDGET,

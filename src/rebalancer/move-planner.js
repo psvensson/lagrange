@@ -715,6 +715,22 @@ class MovePlanner {
     targetNodes.push(
       ...placementOwnerDecision.intent.targetNodeIds,
     );
+    // Data-local call activation pins: LIVE lease-pinned nodes join the
+    // target deterministically while the lease lasts (dedup-guarded, and
+    // only nodes the planner already considers available — a pin can
+    // never target a dead node). Because pinned nodes are IN target,
+    // the surplus cure leaves their replicas alone until the lease
+    // lapses, at which point reclaim happens through the normal pass.
+    if (Array.isArray(policy.activationPinNodeIds)) {
+      const availableNodeIds = new Set(
+        sortedNodes.map((node) => node.nodeId ?? node.node_id ?? node));
+      for (const pinnedNodeId of policy.activationPinNodeIds) {
+        if (availableNodeIds.has(pinnedNodeId) &&
+            !targetNodes.includes(pinnedNodeId)) {
+          targetNodes.push(pinnedNodeId);
+        }
+      }
+    }
     const degradedReason = this.getDegradedReason(
       totalReadyNodes,
       sortedNodes.length,

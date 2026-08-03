@@ -1,0 +1,100 @@
+{
+  "id": "data-local-call-partition-activation-v2",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "An authenticated CALL BINDING executes each resolved shard's pinned WASM run export on a node hosting the selected active partition replica, including when no ready Binding Cell pre-existed there, and real multi-node evidence proves raw shard rows never leave that node before run while existing Artifact, Cell placement, and runtime lifecycle owners remain authoritative.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": "data-local-call-partition-activation",
+    "planDoc": "solve/epics/minimal-deployment-surface.md",
+    "draftedAtCommit": "f9332b73a7414e9560658e71895b1c2d7d1cfbd7"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "data-local-call-partition-activation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "data-local-call-partition-activation-v2-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "data-local-call-partition-run",
+          "metric": "priority"
+        }
+      }
+    },
+    {
+      "id": "missing-cell-activation",
+      "priority": 2,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "data-local-call-missing-cell-activation",
+          "metric": "priority"
+        }
+      }
+    },
+    {
+      "id": "identity-and-topology-fencing",
+      "priority": 3,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "data-local-call-identity-topology-fencing",
+          "metric": "priority"
+        }
+      }
+    },
+    {
+      "id": "owner-boundary-preservation",
+      "priority": 4,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "data-local-call-owner-boundaries",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "production-call-wiring-prerequisite",
+      "statement": "Build on the canonical CALL BINDING ingress, fan-out, dispatch, and reduce path owned by minimal-deployment-call-cell-production-wiring; do not replace or silently widen that predecessor."
+    },
+    {
+      "id": "reuse-existing-owners",
+      "statement": "Reuse the installable Artifact resolver/cache, RuntimeServiceRebalancerOwner, ServiceRuntimeLifecycle, RuntimeDriverRegistry, ServiceDispatcher, MessageRouter, and runtime invocation owner; introduce no parallel registry, scheduler, transport, or Component lifecycle."
+    },
+    {
+      "id": "system-owned-local-capacity",
+      "statement": "Any execution capacity made available on a selected partition replica node is system policy output, never Binding replica intent or caller-selected placement, and must remain bounded and reclaimable."
+    },
+    {
+      "id": "immutable-artifact-and-topology-fencing",
+      "statement": "Every local activation and invocation remains pinned to the immutable Binding Artifact identity and fails closed or retries through the canonical typed path when artifact identity, partition epoch, replica ownership, or target readiness is stale."
+    },
+    {
+      "id": "canonical-partition-topology-owner",
+      "statement": "Resolve target partitions and selected replica ownership through the existing PartitionResolver, QueryExecutor routing path, and canonical CDC-fed partition owner and epoch rows; introduce no parallel topology cache, replica selector, or locally re-derived ownership decision."
+    },
+    {
+      "id": "no-pre-run-row-movement",
+      "statement": "The selected partition's raw shard rows must not leave its replica node before the pinned Component run export executes; only bounded emitted partials may enter the reduce exchange."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
