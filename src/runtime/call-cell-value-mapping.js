@@ -3,7 +3,7 @@
  *
  * Maps one better-sqlite3 row value to the sealed
  * `lagrange:cell/call-context` `cell-value` variant
- * (test/wasm-service/fixtures/call-cell-world/wit/world.wit):
+ * (wit/world.wit, the canonical authoring WIT package):
  *   null-value | integer(s64) | real(f64) | text(string)
  *
  * Fails closed: unsafe integers, non-finite numbers, blobs, and any other

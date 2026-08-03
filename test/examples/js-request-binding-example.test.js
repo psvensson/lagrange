@@ -37,7 +37,9 @@ describe('JavaScript request Binding example contract', () => {
   it('commits JavaScript source, a WIT world, and a ComponentizeJS build',
     async () => {
       const source = await readExample('service.js');
-      const world = await readExample('wit/world.wit');
+      // The example builds against the canonical authoring WIT package at
+      // the repo root; resolve it exactly as the contract does.
+      const world = await readExample(`${BUILD.WIT_DIRECTORY}/world.wit`);
       const contract = await readExample(
         'js-request-binding-example-contract.js',
       );

@@ -66,7 +66,7 @@ const COMPONENT_PAYLOAD_DIGEST = `sha256:${createHash('sha256')
 // imports are `lagrange:cell/call-context` only — the request-cell fixture
 // above cannot instantiate there. This fixture is a minimal conforming
 // call-cell world component (wasm-tools component embed/new against
-// test/wasm-service/fixtures/call-cell-world/wit) exporting run/reduce.
+// wit/, the canonical authoring package) exporting run/reduce.
 const CALL_COMPONENT_BYTES = Buffer.from(
   'AGFzbQ0AAQAHcAFCBwFxBApudWxsLXZhbHVlAAAHaW50ZWdlcgF4AARyZWFsAXUA' +
   'BHRleHQBcwAEAApjZWxsLXZhbHVlAwAAAXICBG5hbWVzA3ZhbAEEAAZjb2x1bW4D' +

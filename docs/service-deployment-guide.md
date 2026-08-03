@@ -266,9 +266,9 @@ Rules the guest must follow:
   bounded (`maxConcurrentShardRuns`, default `8`); same-host shards
   serialize.
 
-The normative WIT world currently lives at
-`test/wasm-service/fixtures/call-cell-world/wit/world.wit`; it is not yet
-published as a standalone authoring artifact.
+The normative WIT package is the committed authoring artifact at
+[`wit/world.wit`](../wit/world.wit); examples and tests compile against
+it directly.
 
 ### Manifest
 

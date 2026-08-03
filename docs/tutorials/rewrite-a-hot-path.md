@@ -138,9 +138,8 @@ On today's surface, the split falls out of the Binding contract:
 
 One component, two exports, side by side in one source file. This code
 matches the shipped `call-cell` WIT ABI - the same world exercised by the
-repository's live call-path integration tests. (The world file currently
-lives at `test/wasm-service/fixtures/call-cell-world/wit/world.wit`;
-publishing it as an authoring artifact is an open item.)
+repository's live call-path integration tests. (The canonical world file
+is the committed authoring artifact at `wit/world.wit`.)
 
 ### Partition function
 

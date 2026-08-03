@@ -37,14 +37,14 @@ Three tools and terms, briefly:
   engine Firefox uses.
 - [**WIT**](https://component-model.bytecodealliance.org/design/wit.html) is
   the interface language in which the component's imports and exports are
-  declared. This example commits its interface as
-  [`wit/world.wit`](wit/world.wit).
+  declared. This example builds against the repository's canonical
+  authoring package, [`wit/world.wit`](../../wit/world.wit).
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
   JS["service.js<br/>(plain JavaScript)"]:::ctrl
-  WIT["wit/world.wit<br/>(declared interface)"]:::ctrl
+  WIT["wit/world.wit (canonical)<br/>(declared interface)"]:::ctrl
   CJS["ComponentizeJS<br/>+ SpiderMonkey-in-WASM"]:::move
   COMP["WASI component<br/>imports only<br/>lagrange:cell/context"]:::move
   SQL["INSTALL SERVICE<br/>CREATE BINDING<br/>CONFIGURE SERVICE ACCESS"]:::svc

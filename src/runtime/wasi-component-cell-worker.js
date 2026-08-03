@@ -44,6 +44,16 @@ const WORKER_DENY_CODE = Object.freeze({
   BUDGET_EXHAUSTED: 'budget-exhausted',
   UNDECLARED_CAPABILITY: 'undeclared-capability',
 });
+// Closed code set for the typed `binding-call-error` record of
+// `lagrange:cell/context#call-binding` (wit/world.wit). The WIT `code`
+// field is a string so this host-owned set can grow without resealing
+// the ABI; guests must treat unknown codes as non-retryable failures.
+const BINDING_CALL_ERROR_CODE = Object.freeze({
+  CALL_BRIDGE_UNAVAILABLE: 'call_bridge_unavailable',
+  NOT_AVAILABLE_IN_CALL_MODE: 'not_available_in_call_mode',
+});
+const BRIDGE_UNAVAILABLE_MESSAGE =
+  'No request-call bridge is available for this invocation';
 const EMIT_BUFFER_META_SLOTS = 2;
 const EMIT_LENGTH_INDEX = 0;
 const EMIT_ERROR_INDEX = 1;
@@ -54,6 +64,12 @@ const BYTE_ENCODING = 'utf8';
 function createWorkerDeny(code) {
   const error = new Error(code);
   error.payload = code;
+  return error;
+}
+
+function createBindingCallDeny(code, message) {
+  const error = new Error(message);
+  error.payload = {code, message, retryable: false};
   return error;
 }
 const TABLE_ACCESS = Object.freeze({
@@ -76,6 +92,7 @@ let currentEffects = null;
 let currentTableReads = null;
 let currentTables = null;
 let currentCallContext = null;
+let currentBindingCallBridge = null;
 
 function requireTable(index, access) {
   const table = currentTables.find((entry) => entry.slot === index);
@@ -137,38 +154,108 @@ function denyNestedCallWhenUndeclared() {
   throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
 }
 
-const requestHostImports = Object.freeze({
-  [CELL_IMPORT_NAMESPACE.CONTEXT]: componentContext,
+// The invoke payload carries a per-invocation request-call bridge hook
+// (installed by the parent runtime for authorized request invocations);
+// without one, `call-binding` fails closed with the typed error.
+function invokeBindingCallBridge(name, argumentsJson) {
+  if (currentBindingCallBridge === null) {
+    throw createBindingCallDeny(
+      BINDING_CALL_ERROR_CODE.CALL_BRIDGE_UNAVAILABLE,
+      BRIDGE_UNAVAILABLE_MESSAGE,
+    );
+  }
+  return currentBindingCallBridge(name, argumentsJson);
+}
+
+// Request invocation mode: the full `lagrange:cell/context` surface is
+// live; the call-context surface fails closed with the typed deny-code.
+const requestModeContextImports = Object.freeze({
+  ...componentContext,
+  callBinding(name, argumentsJson) {
+    return invokeBindingCallBridge(name, argumentsJson);
+  },
 });
-const callCellHostImports = Object.freeze({
-  [CELL_IMPORT_NAMESPACE.CALL_CONTEXT]: {
-    emit(key, partial) {
-      const context = requireCallInvocationContext(
-        'Call Cell emit host import is unavailable for this invocation',
-      );
-      if (context.emits.length >= context.emitBudget) {
-        throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
-      }
-      context.emits.push([key, partial]);
-    },
-    callBounded(_exportName, _argument) {
-      const context = requireCallInvocationContext(
-        'Call Cell call-bounded host import is unavailable ' +
-          'for this invocation',
-      );
-      context.nestedCalls += 1;
-      if (context.nestedCalls > context.nestedCallBudget) {
-        throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
-      }
-      return denyNestedCallWhenUndeclared();
-    },
+const requestModeCallContextImports = Object.freeze({
+  callBounded(_exportName, _argument) {
+    throw createWorkerDeny(WORKER_DENY_CODE.UNDECLARED_CAPABILITY);
+  },
+  emit(_key, _partial) {
+    throw createWorkerDeny(WORKER_DENY_CODE.UNDECLARED_CAPABILITY);
   },
 });
 
+// Call invocation mode: the request-context surface fails closed by
+// invocation mode — explicitly, not incidentally via missing tables.
+function denyRequestContextInCallMode(code, surface) {
+  return new ComponentPolicyError(
+    code,
+    `Request ${surface} host import is unavailable in call invocation mode`,
+  );
+}
+
+const callModeContextImports = Object.freeze({
+  callBinding(_name, _argumentsJson) {
+    throw createBindingCallDeny(
+      BINDING_CALL_ERROR_CODE.NOT_AVAILABLE_IN_CALL_MODE,
+      'call-binding host import is unavailable in call invocation mode',
+    );
+  },
+  capability(_index) {
+    throw denyRequestContextInCallMode(
+      WORKER_ERROR_CODE.CAPABILITY_DENIED,
+      'capability',
+    );
+  },
+  read(_tableIndex, _key) {
+    throw denyRequestContextInCallMode(
+      WORKER_ERROR_CODE.TABLE_READ_DENIED,
+      'table read',
+    );
+  },
+  write(_tableIndex, _key, _value) {
+    throw denyRequestContextInCallMode(
+      WORKER_ERROR_CODE.TABLE_WRITE_DENIED,
+      'table write',
+    );
+  },
+});
+const callModeCallContextImports = Object.freeze({
+  emit(key, partial) {
+    const context = requireCallInvocationContext(
+      'Call Cell emit host import is unavailable for this invocation',
+    );
+    if (context.emits.length >= context.emitBudget) {
+      throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
+    }
+    context.emits.push([key, partial]);
+  },
+  callBounded(_exportName, _argument) {
+    const context = requireCallInvocationContext(
+      'Call Cell call-bounded host import is unavailable ' +
+        'for this invocation',
+    );
+    context.nestedCalls += 1;
+    if (context.nestedCalls > context.nestedCallBudget) {
+      throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
+    }
+    return denyNestedCallWhenUndeclared();
+  },
+});
+
+// Both namespaces are always supplied so a combined service-cell
+// component instantiates; the per-Cell invocation mode (workerData.world,
+// stamped by the driver) decides which surface is live. No mode gains
+// authority merely because the component imports both interfaces.
 function resolveWorkerHostImports() {
-  return cellWorld === CELL_WORLD.CALL ?
-    callCellHostImports :
-    requestHostImports;
+  const callMode = cellWorld === CELL_WORLD.CALL;
+  return Object.freeze({
+    [CELL_IMPORT_NAMESPACE.CALL_CONTEXT]: callMode ?
+      callModeCallContextImports :
+      requestModeCallContextImports,
+    [CELL_IMPORT_NAMESPACE.CONTEXT]: callMode ?
+      callModeContextImports :
+      requestModeContextImports,
+  });
 }
 
 async function instantiateComponent() {
@@ -259,7 +346,19 @@ async function invoke(message) {
     currentTableReads = null;
     currentTables = null;
     currentCallContext = null;
+    currentBindingCallBridge = null;
   }
+}
+
+// Per-invocation request-call bridge seam: the request-call bridge quest
+// installs a synchronous hook here (built from the invoke payload's
+// bridge descriptor). Contract: bridge(name, argumentsJson) -> string;
+// typed failures throw with error.payload = {code, message, retryable}
+// where code comes from BINDING_CALL_ERROR_CODE.
+function resolveMessageBindingCallBridge(message) {
+  return typeof message.bindingCallBridge === 'function' ?
+    message.bindingCallBridge :
+    null;
 }
 
 function resolveMessageCallContext(message) {
@@ -302,6 +401,7 @@ parentPort.on(WORKER_EVENT.MESSAGE, (message) => {
     parentPort.postMessage({id: message.id, type: WORKER_MESSAGE.PONG});
   } else if (message.type === WORKER_MESSAGE.INVOKE) {
     currentCallContext = resolveMessageCallContext(message);
+    currentBindingCallBridge = resolveMessageBindingCallBridge(message);
     void invoke(message);
   }
 });

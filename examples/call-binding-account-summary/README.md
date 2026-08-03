@@ -32,7 +32,7 @@ client today.
 partition, filters to the requested account, and emits a few numeric
 partials. Plain JavaScript, compiled to a WASM component by
 [ComponentizeJS](https://github.com/bytecodealliance/ComponentizeJS)
-against the committed [`wit/world.wit`](wit/world.wit).
+against the canonical committed [`wit/world.wit`](../../wit/world.wit).
 
 ```js
 export function run(batch, argumentsJson) {

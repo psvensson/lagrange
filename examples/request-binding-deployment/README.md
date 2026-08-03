@@ -41,7 +41,7 @@ The component imports only Lagrange's public context interface -
 interface is defined in [WIT](https://component-model.bytecodealliance.org/design/wit.html),
 the component model's interface language; the
 [JavaScript variant of this example](../js-request-binding-deployment/README.md)
-commits the same world as readable `wit/world.wit`.
+builds against the same world in the repository-root canonical `wit/world.wit`.
 
 ## What happens when you run it
 

@@ -7,13 +7,12 @@
  * deny-code> imports, run/reduce exports) are implementable today.
  */
 import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import assert from 'node:assert/strict';
 import {componentize} from '@bytecodealliance/componentize-js';
 import {transpileBytes} from '@bytecodealliance/jco-transpile';
 import {test} from '../../src/test-helpers/tap.js';
 
-const FIXTURE_DIRECTORY = new URL('fixtures/call-cell-world', import.meta.url);
+const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
 const WORLD_NAME = 'call-cell';
 const COMPONENT_NAME = 'call-cell-spike';
 const DISABLED_ENGINE_FEATURES = ['random', 'stdio', 'clocks', 'http', 'fetch-event'];
@@ -39,7 +38,7 @@ async function buildAndInstantiate(hostState) {
   );
   const {component} = await componentize(guestSource, {
     disableFeatures: DISABLED_ENGINE_FEATURES,
-    witPath: path.join(FIXTURE_DIRECTORY.pathname, 'wit'),
+    witPath: CANONICAL_WIT_DIRECTORY.pathname,
     worldName: WORLD_NAME,
   });
   const transpiled = await transpileBytes(new Uint8Array(component), {

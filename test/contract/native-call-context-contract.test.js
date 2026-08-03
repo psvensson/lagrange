@@ -7,7 +7,7 @@
  *
  *   1. `lagrange:cell/call-context` is the sole public call/pushdown
  *      invocation surface (architecture/minimal-deployment-surface.md), and
- *      the fixture world still declares `package lagrange:cell` +
+ *      the canonical world (wit/world.wit) still declares `package lagrange:cell` +
  *      `interface call-context`.
  *   2. The call/pushdown Binding source gains an optional declared
  *      partition-local `statement` — in the surface doc's source table and
@@ -33,7 +33,7 @@ import {test} from '../../src/test-helpers/tap.js';
 const GUARDED_FILES = Object.freeze({
   surfaceDoc: 'architecture/minimal-deployment-surface.md',
   epic: 'solve/epics/native-call-context-wit-contract.md',
-  worldWit: 'test/wasm-service/fixtures/call-cell-world/wit/world.wit',
+  worldWit: 'wit/world.wit',
   bindingContract: 'src/control-plane/owners/deployment-binding-contract.js',
 });
 
@@ -100,7 +100,7 @@ function optionalFieldsEntry(contractSource, kindToken) {
 }
 
 test('surface doc names lagrange:cell/call-context as the sole public ' +
-  'call/pushdown invocation surface and the fixture world declares it',
+  'call/pushdown invocation surface and the canonical world declares it',
 async () => {
   const doc = readGuarded(GUARDED_FILES.surfaceDoc);
   const surfaceWindow = windowAround(doc, WIT_PACKAGE_NAME);
@@ -116,11 +116,11 @@ async () => {
   const wit = readGuarded(GUARDED_FILES.worldWit);
   assert.ok(
     wit.includes(WIT_PACKAGE_DECLARATION),
-    'fixture world no longer declares `package lagrange:cell`',
+    'canonical world no longer declares `package lagrange:cell`',
   );
   assert.ok(
     wit.includes(WIT_INTERFACE_DECLARATION),
-    'fixture world no longer declares `interface call-context`',
+    'canonical world no longer declares `interface call-context`',
   );
 });
 
@@ -151,16 +151,34 @@ test('SOURCE_OPTIONAL_FIELDS for CALL and PUSHDOWN admit the statement ' +
   }
 });
 
+// The canonical wit/world.wit also carries the request `context`
+// interface, which keeps its capability probe by sealed decision
+// (architecture/minimal-deployment-surface.md); the dropped-probe guard
+// therefore scopes to the `interface call-context { ... }` block.
+function callContextInterfaceBlock(wit) {
+  const start = wit.indexOf(WIT_INTERFACE_DECLARATION);
+  assert.ok(start >= 0, 'interface call-context not found in the world');
+  const followers = ['\ninterface ', '\nworld ']
+    .map((declaration) => wit.indexOf(declaration, start))
+    .filter((index) => index >= 0);
+  return wit.slice(
+    start,
+    followers.length > 0 ? Math.min(...followers) : wit.length,
+  );
+}
+
 test('the u32 capability probe is dropped and the typed deny-code ' +
-  'refusal stays in the fixture world', async () => {
-  const wit = readGuarded(GUARDED_FILES.worldWit);
+  'refusal stays in the call-context interface', async () => {
+  const callContext = callContextInterfaceBlock(
+    readGuarded(GUARDED_FILES.worldWit),
+  );
   assert.ok(
-    !wit.includes(WIT_DROPPED_PROBE),
+    !callContext.includes(WIT_DROPPED_PROBE),
     'the u32 capability probe must be dropped from call-context; ' +
       'capability admission is Binding-derived, not guest-probed',
   );
   assert.ok(
-    wit.includes(WIT_TYPED_REFUSAL),
+    callContext.includes(WIT_TYPED_REFUSAL),
     'the typed deny-code refusal enum must remain in call-context',
   );
 });

@@ -8,7 +8,6 @@
  * including s64 identity beyond f64 precision.
  */
 import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import assert from 'node:assert/strict';
 import {test} from 'node:test';
 
@@ -18,10 +17,7 @@ import {WasiComponentCellRuntime} from
 import {toCellBatch} from
   '../../src/runtime/call-cell-value-mapping.js';
 
-const FIXTURE_DIRECTORY = new URL(
-  '../wasm-service/fixtures/call-cell-world',
-  import.meta.url,
-);
+const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
 const WORLD_NAME = 'call-cell';
 const CELL_EXPORT_RUN = 'run';
 const CELL_EXPORT_REDUCE = 'reduce';
@@ -62,7 +58,7 @@ async function componentizeFixtureGuest() {
   );
   const {component} = await componentize(guestSource, {
     disableFeatures: DISABLED_ENGINE_FEATURES,
-    witPath: path.join(FIXTURE_DIRECTORY.pathname, 'wit'),
+    witPath: CANONICAL_WIT_DIRECTORY.pathname,
     worldName: WORLD_NAME,
   });
   return component;

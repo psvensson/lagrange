@@ -1,0 +1,1509 @@
+diff --git a/examples/call-binding-account-summary/README.md b/examples/call-binding-account-summary/README.md
+index 58a06cfcf09ec7020e69b2298700ee159ed909e7..a5e1a1a6834f90bc3742bc5f9d9424e812ed1f80 100644
+--- a/examples/call-binding-account-summary/README.md
++++ b/examples/call-binding-account-summary/README.md
+@@ -32,7 +32,7 @@ client today.
+ partition, filters to the requested account, and emits a few numeric
+ partials. Plain JavaScript, compiled to a WASM component by
+ [ComponentizeJS](https://github.com/bytecodealliance/ComponentizeJS)
+-against the committed [`wit/world.wit`](wit/world.wit).
++against the canonical committed [`wit/world.wit`](../../wit/world.wit).
+ 
+ ```js
+ export function run(batch, argumentsJson) {
+diff --git a/examples/call-binding-account-summary/call-binding-example-contract.js b/examples/call-binding-account-summary/call-binding-example-contract.js
+index 15ae78f16aca5722a5db48881cbafc9d6287a4a7..992317fa7fcd97090b2b68f5a1b3f759c222681c 100644
+--- a/examples/call-binding-account-summary/call-binding-example-contract.js
++++ b/examples/call-binding-account-summary/call-binding-example-contract.js
+@@ -29,7 +29,8 @@ const BUILD = Object.freeze({
+     Object.freeze(['random', 'stdio', 'clocks', 'http', 'fetch-event']),
+   SOURCE_ENCODING: 'utf8',
+   SOURCE_KIND: 'call',
+-  WIT_DIRECTORY: 'wit',
++  // Canonical authoring WIT package at the repo root (wit/world.wit).
++  WIT_DIRECTORY: '../../wit',
+   WIT_WORLD: 'call-cell',
+ });
+ 
+diff --git a/examples/call-binding-account-summary/wit/world.wit b/examples/call-binding-account-summary/wit/world.wit
+deleted file mode 100644
+index f4c02f7e5b3dbc59a094a94b7e27fe809922b9a6..0000000000000000000000000000000000000000
+--- a/examples/call-binding-account-summary/wit/world.wit
++++ /dev/null
+@@ -1,45 +0,0 @@
+-package lagrange:cell;
+-
+-interface call-context {
+-  /// A typed column value in a batch row.
+-  variant cell-value {
+-    null-value,
+-    integer(s64),
+-    real(f64),
+-    text(string),
+-  }
+-
+-  record column {
+-    name: string,
+-    val: cell-value,
+-  }
+-
+-  record row {
+-    columns: list<column>,
+-  }
+-
+-  enum deny-code {
+-    undeclared-capability,
+-    budget-exhausted,
+-    invalid-argument,
+-  }
+-
+-  /// Publish one bounded partial under a key. The runtime enforces the
+-  /// Binding-declared per-invocation emit budget.
+-  emit: func(key: string, partial: string) -> result<_, deny-code>;
+-
+-  /// Bounded nested invocation of another declared export.
+-  call-bounded: func(export-name: string, argument: string) -> result<string, deny-code>;
+-}
+-
+-world call-cell {
+-  use call-context.{row};
+-  import call-context;
+-
+-  /// Partition-local work: receives the Binding-declared statement's
+-  /// grouped, bounded batch. Returns this shard's partial as JSON.
+-  export run: func(batch: list<row>, arguments: string) -> string;
+-
+-  /// Reduction: folds the published partials into the final result.
+-  export reduce: func(partials: list<tuple<string, string>>, arguments: string) -> string;
+-}
+diff --git a/examples/js-request-binding-deployment/README.md b/examples/js-request-binding-deployment/README.md
+index 64f157fbdfbd229e7ab7f83b2f8ccab54a4e027f..aa6b03503106486269eb8f2affbb79abb5b83688 100644
+--- a/examples/js-request-binding-deployment/README.md
++++ b/examples/js-request-binding-deployment/README.md
+@@ -37,14 +37,14 @@ Three tools and terms, briefly:
+   engine Firefox uses.
+ - [**WIT**](https://component-model.bytecodealliance.org/design/wit.html) is
+   the interface language in which the component's imports and exports are
+-  declared. This example commits its interface as
+-  [`wit/world.wit`](wit/world.wit).
++  declared. This example builds against the repository's canonical
++  authoring package, [`wit/world.wit`](../../wit/world.wit).
+ 
+ ```mermaid
+ %%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
+ flowchart LR
+   JS["service.js<br/>(plain JavaScript)"]:::ctrl
+-  WIT["wit/world.wit<br/>(declared interface)"]:::ctrl
++  WIT["wit/world.wit (canonical)<br/>(declared interface)"]:::ctrl
+   CJS["ComponentizeJS<br/>+ SpiderMonkey-in-WASM"]:::move
+   COMP["WASI component<br/>imports only<br/>lagrange:cell/context"]:::move
+   SQL["INSTALL SERVICE<br/>CREATE BINDING<br/>CONFIGURE SERVICE ACCESS"]:::svc
+diff --git a/examples/js-request-binding-deployment/js-request-binding-example-contract.js b/examples/js-request-binding-deployment/js-request-binding-example-contract.js
+index 298a9b3067850eed8eabc3069fcdbb1bad4e5dd7..da91d33f7575358f3e4754150630dd17deafda82 100644
+--- a/examples/js-request-binding-deployment/js-request-binding-example-contract.js
++++ b/examples/js-request-binding-deployment/js-request-binding-example-contract.js
+@@ -17,7 +17,8 @@ const BUILD = Object.freeze({
+   DISABLED_ENGINE_FEATURES:
+     Object.freeze(['random', 'stdio', 'clocks', 'http', 'fetch-event']),
+   SOURCE_ENCODING: 'utf8',
+-  WIT_DIRECTORY: 'wit',
++  // Canonical authoring WIT package at the repo root (wit/world.wit).
++  WIT_DIRECTORY: '../../wit',
+   WIT_WORLD: 'request-cell',
+ });
+ const ACCESS_OPERATIONS = Object.freeze(['read', 'write']);
+diff --git a/examples/js-request-binding-deployment/wit/world.wit b/examples/js-request-binding-deployment/wit/world.wit
+deleted file mode 100644
+index e9c50608aca35e2b4fa39cbeded34ebf408b622a..0000000000000000000000000000000000000000
+--- a/examples/js-request-binding-deployment/wit/world.wit
++++ /dev/null
+@@ -1,12 +0,0 @@
+-package lagrange:cell;
+-
+-interface context {
+-  read: func(table: u32, key: u32) -> s32;
+-  write: func(table: u32, key: u32, value: s32);
+-  capability: func(capability: u32) -> s32;
+-}
+-
+-world request-cell {
+-  import context;
+-  export run: func(request: string) -> string;
+-}
+diff --git a/examples/request-binding-deployment/README.md b/examples/request-binding-deployment/README.md
+index 1ecbbef2905a501081ed67f4f8c5ad5d934ceb93..a560e7a7e9747d7944e6cab57cc35651041d54e6 100644
+--- a/examples/request-binding-deployment/README.md
++++ b/examples/request-binding-deployment/README.md
+@@ -41,7 +41,7 @@ The component imports only Lagrange's public context interface -
+ interface is defined in [WIT](https://component-model.bytecodealliance.org/design/wit.html),
+ the component model's interface language; the
+ [JavaScript variant of this example](../js-request-binding-deployment/README.md)
+-commits the same world as readable `wit/world.wit`.
++builds against the same world in the repository-root canonical `wit/world.wit`.
+ 
+ ## What happens when you run it
+ 
+diff --git a/scripts/checks/run-service-cell-combined-wit-world-scenarios.js b/scripts/checks/run-service-cell-combined-wit-world-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d714a725cc47ca2e27536764b97c28fbf288f32d
+--- /dev/null
++++ b/scripts/checks/run-service-cell-combined-wit-world-scenarios.js
+@@ -0,0 +1,22 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++// Combined service-cell WIT world guard: the canonical authoring package
++// (wit/world.wit) keeps all three worlds buildable with ComponentizeJS
++// and executable through the jco-transpile path the Cell runtime worker
++// uses; the worker's invocation-mode restriction keeps every host import
++// that is not authorized for the current mode failing closed; and the
++// pre-existing request-only and call-only consumers stay green against
++// the canonical package.
++const SCENARIOS = {
++  'service-cell-combined-wit-world': [
++    'test/wasm-service/service-cell-world-abi.test.js',
++    'test/runtime/service-cell-worker-modes.test.js',
++    'test/wasm-service/call-cell-world-abi.test.js',
++    'test/runtime/call-cell-worker.test.js',
++    'test/examples/js-request-binding-example.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/runtime/call-cell-value-mapping.js b/src/runtime/call-cell-value-mapping.js
+index 30ba72a979e726e146693d203a1b5d59ee4112f5..78246df343c43ce0d354a8cec59c3dfb7fbfadc4 100644
+--- a/src/runtime/call-cell-value-mapping.js
++++ b/src/runtime/call-cell-value-mapping.js
+@@ -3,7 +3,7 @@
+  *
+  * Maps one better-sqlite3 row value to the sealed
+  * `lagrange:cell/call-context` `cell-value` variant
+- * (test/wasm-service/fixtures/call-cell-world/wit/world.wit):
++ * (wit/world.wit, the canonical authoring WIT package):
+  *   null-value | integer(s64) | real(f64) | text(string)
+  *
+  * Fails closed: unsafe integers, non-finite numbers, blobs, and any other
+diff --git a/src/runtime/wasi-component-cell-worker.js b/src/runtime/wasi-component-cell-worker.js
+index d117524d0faf97cadf31fe572e903b2244f3d55e..49bbd6444d0b3690d6d23d017ae625da2c89b513 100644
+--- a/src/runtime/wasi-component-cell-worker.js
++++ b/src/runtime/wasi-component-cell-worker.js
+@@ -44,6 +44,16 @@ const WORKER_DENY_CODE = Object.freeze({
+   BUDGET_EXHAUSTED: 'budget-exhausted',
+   UNDECLARED_CAPABILITY: 'undeclared-capability',
+ });
++// Closed code set for the typed `binding-call-error` record of
++// `lagrange:cell/context#call-binding` (wit/world.wit). The WIT `code`
++// field is a string so this host-owned set can grow without resealing
++// the ABI; guests must treat unknown codes as non-retryable failures.
++const BINDING_CALL_ERROR_CODE = Object.freeze({
++  CALL_BRIDGE_UNAVAILABLE: 'call_bridge_unavailable',
++  NOT_AVAILABLE_IN_CALL_MODE: 'not_available_in_call_mode',
++});
++const BRIDGE_UNAVAILABLE_MESSAGE =
++  'No request-call bridge is available for this invocation';
+ const EMIT_BUFFER_META_SLOTS = 2;
+ const EMIT_LENGTH_INDEX = 0;
+ const EMIT_ERROR_INDEX = 1;
+@@ -56,6 +66,12 @@ function createWorkerDeny(code) {
+   error.payload = code;
+   return error;
+ }
++
++function createBindingCallDeny(code, message) {
++  const error = new Error(message);
++  error.payload = {code, message, retryable: false};
++  return error;
++}
+ const TABLE_ACCESS = Object.freeze({
+   READ: 'read',
+   WRITE: 'write',
+@@ -76,6 +92,7 @@ let currentEffects = null;
+ let currentTableReads = null;
+ let currentTables = null;
+ let currentCallContext = null;
++let currentBindingCallBridge = null;
+ 
+ function requireTable(index, access) {
+   const table = currentTables.find((entry) => entry.slot === index);
+@@ -137,38 +154,108 @@ function denyNestedCallWhenUndeclared() {
+   throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
+ }
+ 
+-const requestHostImports = Object.freeze({
+-  [CELL_IMPORT_NAMESPACE.CONTEXT]: componentContext,
++// The invoke payload carries a per-invocation request-call bridge hook
++// (installed by the parent runtime for authorized request invocations);
++// without one, `call-binding` fails closed with the typed error.
++function invokeBindingCallBridge(name, argumentsJson) {
++  if (currentBindingCallBridge === null) {
++    throw createBindingCallDeny(
++      BINDING_CALL_ERROR_CODE.CALL_BRIDGE_UNAVAILABLE,
++      BRIDGE_UNAVAILABLE_MESSAGE,
++    );
++  }
++  return currentBindingCallBridge(name, argumentsJson);
++}
++
++// Request invocation mode: the full `lagrange:cell/context` surface is
++// live; the call-context surface fails closed with the typed deny-code.
++const requestModeContextImports = Object.freeze({
++  ...componentContext,
++  callBinding(name, argumentsJson) {
++    return invokeBindingCallBridge(name, argumentsJson);
++  },
+ });
+-const callCellHostImports = Object.freeze({
+-  [CELL_IMPORT_NAMESPACE.CALL_CONTEXT]: {
+-    emit(key, partial) {
+-      const context = requireCallInvocationContext(
+-        'Call Cell emit host import is unavailable for this invocation',
+-      );
+-      if (context.emits.length >= context.emitBudget) {
+-        throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
+-      }
+-      context.emits.push([key, partial]);
+-    },
+-    callBounded(_exportName, _argument) {
+-      const context = requireCallInvocationContext(
+-        'Call Cell call-bounded host import is unavailable ' +
+-          'for this invocation',
+-      );
+-      context.nestedCalls += 1;
+-      if (context.nestedCalls > context.nestedCallBudget) {
+-        throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
+-      }
+-      return denyNestedCallWhenUndeclared();
+-    },
++const requestModeCallContextImports = Object.freeze({
++  callBounded(_exportName, _argument) {
++    throw createWorkerDeny(WORKER_DENY_CODE.UNDECLARED_CAPABILITY);
++  },
++  emit(_key, _partial) {
++    throw createWorkerDeny(WORKER_DENY_CODE.UNDECLARED_CAPABILITY);
++  },
++});
++
++// Call invocation mode: the request-context surface fails closed by
++// invocation mode — explicitly, not incidentally via missing tables.
++function denyRequestContextInCallMode(code, surface) {
++  return new ComponentPolicyError(
++    code,
++    `Request ${surface} host import is unavailable in call invocation mode`,
++  );
++}
++
++const callModeContextImports = Object.freeze({
++  callBinding(_name, _argumentsJson) {
++    throw createBindingCallDeny(
++      BINDING_CALL_ERROR_CODE.NOT_AVAILABLE_IN_CALL_MODE,
++      'call-binding host import is unavailable in call invocation mode',
++    );
++  },
++  capability(_index) {
++    throw denyRequestContextInCallMode(
++      WORKER_ERROR_CODE.CAPABILITY_DENIED,
++      'capability',
++    );
++  },
++  read(_tableIndex, _key) {
++    throw denyRequestContextInCallMode(
++      WORKER_ERROR_CODE.TABLE_READ_DENIED,
++      'table read',
++    );
++  },
++  write(_tableIndex, _key, _value) {
++    throw denyRequestContextInCallMode(
++      WORKER_ERROR_CODE.TABLE_WRITE_DENIED,
++      'table write',
++    );
++  },
++});
++const callModeCallContextImports = Object.freeze({
++  emit(key, partial) {
++    const context = requireCallInvocationContext(
++      'Call Cell emit host import is unavailable for this invocation',
++    );
++    if (context.emits.length >= context.emitBudget) {
++      throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
++    }
++    context.emits.push([key, partial]);
++  },
++  callBounded(_exportName, _argument) {
++    const context = requireCallInvocationContext(
++      'Call Cell call-bounded host import is unavailable ' +
++        'for this invocation',
++    );
++    context.nestedCalls += 1;
++    if (context.nestedCalls > context.nestedCallBudget) {
++      throw createWorkerDeny(WORKER_DENY_CODE.BUDGET_EXHAUSTED);
++    }
++    return denyNestedCallWhenUndeclared();
+   },
+ });
+ 
++// Both namespaces are always supplied so a combined service-cell
++// component instantiates; the per-Cell invocation mode (workerData.world,
++// stamped by the driver) decides which surface is live. No mode gains
++// authority merely because the component imports both interfaces.
+ function resolveWorkerHostImports() {
+-  return cellWorld === CELL_WORLD.CALL ?
+-    callCellHostImports :
+-    requestHostImports;
++  const callMode = cellWorld === CELL_WORLD.CALL;
++  return Object.freeze({
++    [CELL_IMPORT_NAMESPACE.CALL_CONTEXT]: callMode ?
++      callModeCallContextImports :
++      requestModeCallContextImports,
++    [CELL_IMPORT_NAMESPACE.CONTEXT]: callMode ?
++      callModeContextImports :
++      requestModeContextImports,
++  });
+ }
+ 
+ async function instantiateComponent() {
+@@ -259,9 +346,21 @@ async function invoke(message) {
+     currentTableReads = null;
+     currentTables = null;
+     currentCallContext = null;
++    currentBindingCallBridge = null;
+   }
+ }
+ 
++// Per-invocation request-call bridge seam: the request-call bridge quest
++// installs a synchronous hook here (built from the invoke payload's
++// bridge descriptor). Contract: bridge(name, argumentsJson) -> string;
++// typed failures throw with error.payload = {code, message, retryable}
++// where code comes from BINDING_CALL_ERROR_CODE.
++function resolveMessageBindingCallBridge(message) {
++  return typeof message.bindingCallBridge === 'function' ?
++    message.bindingCallBridge :
++    null;
++}
++
+ function resolveMessageCallContext(message) {
+   if (message.callContext === undefined) return null;
+   return {
+@@ -302,6 +401,7 @@ parentPort.on(WORKER_EVENT.MESSAGE, (message) => {
+     parentPort.postMessage({id: message.id, type: WORKER_MESSAGE.PONG});
+   } else if (message.type === WORKER_MESSAGE.INVOKE) {
+     currentCallContext = resolveMessageCallContext(message);
++    currentBindingCallBridge = resolveMessageBindingCallBridge(message);
+     void invoke(message);
+   }
+ });
+diff --git a/test/contract/native-call-context-contract.test.js b/test/contract/native-call-context-contract.test.js
+index dcba4749bef576795441900398de63136abe1b34..b20de13954c9981f07e2f76a34516cecd5bdd4dc 100644
+--- a/test/contract/native-call-context-contract.test.js
++++ b/test/contract/native-call-context-contract.test.js
+@@ -7,7 +7,7 @@
+  *
+  *   1. `lagrange:cell/call-context` is the sole public call/pushdown
+  *      invocation surface (architecture/minimal-deployment-surface.md), and
+- *      the fixture world still declares `package lagrange:cell` +
++ *      the canonical world (wit/world.wit) still declares `package lagrange:cell` +
+  *      `interface call-context`.
+  *   2. The call/pushdown Binding source gains an optional declared
+  *      partition-local `statement` — in the surface doc's source table and
+@@ -33,7 +33,7 @@ import {test} from '../../src/test-helpers/tap.js';
+ const GUARDED_FILES = Object.freeze({
+   surfaceDoc: 'architecture/minimal-deployment-surface.md',
+   epic: 'solve/epics/native-call-context-wit-contract.md',
+-  worldWit: 'test/wasm-service/fixtures/call-cell-world/wit/world.wit',
++  worldWit: 'wit/world.wit',
+   bindingContract: 'src/control-plane/owners/deployment-binding-contract.js',
+ });
+ 
+@@ -100,7 +100,7 @@ function optionalFieldsEntry(contractSource, kindToken) {
+ }
+ 
+ test('surface doc names lagrange:cell/call-context as the sole public ' +
+-  'call/pushdown invocation surface and the fixture world declares it',
++  'call/pushdown invocation surface and the canonical world declares it',
+ async () => {
+   const doc = readGuarded(GUARDED_FILES.surfaceDoc);
+   const surfaceWindow = windowAround(doc, WIT_PACKAGE_NAME);
+@@ -116,11 +116,11 @@ async () => {
+   const wit = readGuarded(GUARDED_FILES.worldWit);
+   assert.ok(
+     wit.includes(WIT_PACKAGE_DECLARATION),
+-    'fixture world no longer declares `package lagrange:cell`',
++    'canonical world no longer declares `package lagrange:cell`',
+   );
+   assert.ok(
+     wit.includes(WIT_INTERFACE_DECLARATION),
+-    'fixture world no longer declares `interface call-context`',
++    'canonical world no longer declares `interface call-context`',
+   );
+ });
+ 
+@@ -151,16 +151,34 @@ test('SOURCE_OPTIONAL_FIELDS for CALL and PUSHDOWN admit the statement ' +
+   }
+ });
+ 
++// The canonical wit/world.wit also carries the request `context`
++// interface, which keeps its capability probe by sealed decision
++// (architecture/minimal-deployment-surface.md); the dropped-probe guard
++// therefore scopes to the `interface call-context { ... }` block.
++function callContextInterfaceBlock(wit) {
++  const start = wit.indexOf(WIT_INTERFACE_DECLARATION);
++  assert.ok(start >= 0, 'interface call-context not found in the world');
++  const followers = ['\ninterface ', '\nworld ']
++    .map((declaration) => wit.indexOf(declaration, start))
++    .filter((index) => index >= 0);
++  return wit.slice(
++    start,
++    followers.length > 0 ? Math.min(...followers) : wit.length,
++  );
++}
++
+ test('the u32 capability probe is dropped and the typed deny-code ' +
+-  'refusal stays in the fixture world', async () => {
+-  const wit = readGuarded(GUARDED_FILES.worldWit);
++  'refusal stays in the call-context interface', async () => {
++  const callContext = callContextInterfaceBlock(
++    readGuarded(GUARDED_FILES.worldWit),
++  );
+   assert.ok(
+-    !wit.includes(WIT_DROPPED_PROBE),
++    !callContext.includes(WIT_DROPPED_PROBE),
+     'the u32 capability probe must be dropped from call-context; ' +
+       'capability admission is Binding-derived, not guest-probed',
+   );
+   assert.ok(
+-    wit.includes(WIT_TYPED_REFUSAL),
++    callContext.includes(WIT_TYPED_REFUSAL),
+     'the typed deny-code refusal enum must remain in call-context',
+   );
+ });
+diff --git a/test/examples/js-request-binding-example.test.js b/test/examples/js-request-binding-example.test.js
+index 6e2a971d716043d52fa726575105517f06c71924..56400a175491bafff6ca7253c672350f8ff788a1 100644
+--- a/test/examples/js-request-binding-example.test.js
++++ b/test/examples/js-request-binding-example.test.js
+@@ -37,7 +37,9 @@ describe('JavaScript request Binding example contract', () => {
+   it('commits JavaScript source, a WIT world, and a ComponentizeJS build',
+     async () => {
+       const source = await readExample('service.js');
+-      const world = await readExample('wit/world.wit');
++      // The example builds against the canonical authoring WIT package at
++      // the repo root; resolve it exactly as the contract does.
++      const world = await readExample(`${BUILD.WIT_DIRECTORY}/world.wit`);
+       const contract = await readExample(
+         'js-request-binding-example-contract.js',
+       );
+diff --git a/test/integration/artifact-payload-durability.integration.test.js b/test/integration/artifact-payload-durability.integration.test.js
+index db8551a12a709a13a798d8822cbb711cc9281761..1f242ad06e88ae07f6010c3d09441f1cb0c9bebf 100644
+--- a/test/integration/artifact-payload-durability.integration.test.js
++++ b/test/integration/artifact-payload-durability.integration.test.js
+@@ -133,15 +133,11 @@ const COMPONENTIZE_DISABLED_FEATURES = Object.freeze([
+   'http',
+   'fetch-event',
+ ]);
+-const FIXTURE_DIRECTORY = new URL(
+-  '../wasm-service/fixtures/call-cell-world',
+-  import.meta.url,
+-);
++const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
+ const GUEST_SOURCE_URL = new URL(
+   '../wasm-service/fixtures/call-cell-world/guest.js',
+   import.meta.url,
+ );
+-const WIT_DIR = 'wit';
+ const CELL_BUDGETS = Object.freeze({
+   context_bytes: 4096,
+   cpu_time_ms: 60000,
+@@ -207,7 +203,7 @@ function componentizeFixtureGuest() {
+     const guestSource = await readFile(GUEST_SOURCE_URL, 'utf8');
+     const {component} = await componentize(guestSource, {
+       disableFeatures: [...COMPONENTIZE_DISABLED_FEATURES],
+-      witPath: path.join(FIXTURE_DIRECTORY.pathname, WIT_DIR),
++      witPath: CANONICAL_WIT_DIRECTORY.pathname,
+       worldName: WORLD_NAME,
+     });
+     return Buffer.from(component);
+diff --git a/test/integration/data-local-call-missing-cell-activation.integration.test.js b/test/integration/data-local-call-missing-cell-activation.integration.test.js
+index c68be73c36159bf8a53fb6ce330f080ef21356d8..76616db1e837a6ed2bb2867aff03da3b4b7a17c5 100644
+--- a/test/integration/data-local-call-missing-cell-activation.integration.test.js
++++ b/test/integration/data-local-call-missing-cell-activation.integration.test.js
+@@ -13,7 +13,6 @@
+  */
+ 
+ import {readFile} from 'node:fs/promises';
+-import path from 'node:path';
+ import assert from 'node:assert/strict';
+ import {createHash} from 'node:crypto';
+ import {describe, it} from 'node:test';
+@@ -100,10 +99,7 @@ const CELL_BUDGETS = Object.freeze({
+   output_bytes: 1048576,
+   wall_time_ms: 300000,
+ });
+-const FIXTURE_DIRECTORY = new URL(
+-  '../wasm-service/fixtures/call-cell-world',
+-  import.meta.url,
+-);
++const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
+ const SECURITY_CONTEXT = Object.freeze({
+   principal: 'alice',
+   roles: Object.freeze(['application']),
+@@ -324,7 +320,7 @@ async function componentizeFixtureGuest() {
+   );
+   const {component} = await componentize(guestSource, {
+     disableFeatures: [...COMPONENTIZE_DISABLED_FEATURES],
+-    witPath: path.join(FIXTURE_DIRECTORY.pathname, 'wit'),
++    witPath: CANONICAL_WIT_DIRECTORY.pathname,
+     worldName: WORLD_NAME,
+   });
+   return component;
+diff --git a/test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js b/test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js
+index cef3d9fc8da58fc7ff7c2ec1ba5c9e439f3320e0..c43d7377e7d7ede91d4a96292125fb75aa7281d8 100644
+--- a/test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js
++++ b/test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js
+@@ -16,7 +16,6 @@
+  */
+ 
+ import {readFile} from 'node:fs/promises';
+-import path from 'node:path';
+ import assert from 'node:assert/strict';
+ import {createHash} from 'node:crypto';
+ import {describe, it} from 'node:test';
+@@ -133,10 +132,7 @@ const CELL_BUDGETS = Object.freeze({
+   output_bytes: 1048576,
+   wall_time_ms: 300000,
+ });
+-const FIXTURE_DIRECTORY = new URL(
+-  '../wasm-service/fixtures/call-cell-world',
+-  import.meta.url,
+-);
++const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
+ const silentLogger = Object.freeze({
+   debug() {},
+   error() {},
+@@ -540,7 +536,7 @@ async function componentizeFixtureGuest() {
+   );
+   const {component} = await componentize(guestSource, {
+     disableFeatures: [...COMPONENTIZE_DISABLED_FEATURES],
+-    witPath: path.join(FIXTURE_DIRECTORY.pathname, 'wit'),
++    witPath: CANONICAL_WIT_DIRECTORY.pathname,
+     worldName: WORLD_NAME,
+   });
+   return component;
+diff --git a/test/integration/minimal-deployment-call-cell-production-wiring.integration.test.js b/test/integration/minimal-deployment-call-cell-production-wiring.integration.test.js
+index 18538313c30c0b00377daf5d58293387b3d929a9..6120afe79088ee46181f7cac4322de30603b1af4 100644
+--- a/test/integration/minimal-deployment-call-cell-production-wiring.integration.test.js
++++ b/test/integration/minimal-deployment-call-cell-production-wiring.integration.test.js
+@@ -16,7 +16,6 @@
+  */
+ 
+ import {readFile} from 'node:fs/promises';
+-import path from 'node:path';
+ import assert from 'node:assert/strict';
+ import {createHash} from 'node:crypto';
+ import {describe, it} from 'node:test';
+@@ -113,10 +112,7 @@ const CELL_BUDGETS = Object.freeze({
+   output_bytes: 1048576,
+   wall_time_ms: 300000,
+ });
+-const FIXTURE_DIRECTORY = new URL(
+-  '../wasm-service/fixtures/call-cell-world',
+-  import.meta.url,
+-);
++const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
+ const SECURITY_CONTEXT = Object.freeze({
+   principal: PRINCIPAL,
+   roles: Object.freeze(['application']),
+@@ -331,7 +327,7 @@ function componentizeFixtureGuest() {
+     );
+     const {component} = await componentize(guestSource, {
+       disableFeatures: [...COMPONENTIZE_DISABLED_FEATURES],
+-      witPath: path.join(FIXTURE_DIRECTORY.pathname, 'wit'),
++      witPath: CANONICAL_WIT_DIRECTORY.pathname,
+       worldName: WORLD_NAME,
+     });
+     return component;
+diff --git a/test/runtime/call-cell-worker.test.js b/test/runtime/call-cell-worker.test.js
+index c862995e674051b9ede6059bb1ea7c041fce0b27..67a137127e7316f0a7c26ade92dc17263738868f 100644
+--- a/test/runtime/call-cell-worker.test.js
++++ b/test/runtime/call-cell-worker.test.js
+@@ -8,7 +8,6 @@
+  * including s64 identity beyond f64 precision.
+  */
+ import {readFile} from 'node:fs/promises';
+-import path from 'node:path';
+ import assert from 'node:assert/strict';
+ import {test} from 'node:test';
+ 
+@@ -18,10 +17,7 @@ import {WasiComponentCellRuntime} from
+ import {toCellBatch} from
+   '../../src/runtime/call-cell-value-mapping.js';
+ 
+-const FIXTURE_DIRECTORY = new URL(
+-  '../wasm-service/fixtures/call-cell-world',
+-  import.meta.url,
+-);
++const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
+ const WORLD_NAME = 'call-cell';
+ const CELL_EXPORT_RUN = 'run';
+ const CELL_EXPORT_REDUCE = 'reduce';
+@@ -62,7 +58,7 @@ async function componentizeFixtureGuest() {
+   );
+   const {component} = await componentize(guestSource, {
+     disableFeatures: DISABLED_ENGINE_FEATURES,
+-    witPath: path.join(FIXTURE_DIRECTORY.pathname, 'wit'),
++    witPath: CANONICAL_WIT_DIRECTORY.pathname,
+     worldName: WORLD_NAME,
+   });
+   return component;
+diff --git a/test/runtime/service-cell-worker-modes.test.js b/test/runtime/service-cell-worker-modes.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..775409f1b8535da0ea0de31f3bc078b32a46327e
+--- /dev/null
++++ b/test/runtime/service-cell-worker-modes.test.js
+@@ -0,0 +1,249 @@
++/**
++ * Combined service-cell component through the real
++ * WasiComponentCellRuntime + wasi-component-cell-worker.js: the SAME
++ * component bytes start twice — once as a request-mode Cell and once as a
++ * call-mode Cell — proving each invocation mode gets only its authorized
++ * host surface while the other surface fails closed with typed refusals.
++ *
++ * Request mode: handle-request runs with the live context surface;
++ * emit/call-bounded refuse with the typed deny-code and call-binding
++ * refuses with the typed binding-call-error 'call_bridge_unavailable'.
++ * Call mode: run emits partials through the SharedArrayBuffer path;
++ * read/write/capability refuse with explicit mode-based policy errors and
++ * call-binding refuses with 'not_available_in_call_mode'.
++ */
++import {readFile} from 'node:fs/promises';
++import assert from 'node:assert/strict';
++import {test} from 'node:test';
++
++import {componentize} from '@bytecodealliance/componentize-js';
++import {WasiComponentCellRuntime} from
++  '../../src/runtime/wasi-component-cell-runtime.js';
++import {toCellBatch} from
++  '../../src/runtime/call-cell-value-mapping.js';
++
++const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
++const GUEST_SOURCE_URL = new URL(
++  '../wasm-service/fixtures/service-cell-world/guest.js',
++  import.meta.url,
++);
++const AUTHORING_WORLD = 'service-cell';
++const CELL_WORLD = Object.freeze({
++  CALL: 'call-cell',
++  REQUEST: 'request-cell',
++});
++const CELL_EXPORT = Object.freeze({
++  HANDLE_REQUEST: 'handleRequest',
++  REDUCE: 'reduce',
++  RUN: 'run',
++});
++const DISABLED_ENGINE_FEATURES = [
++  'random',
++  'stdio',
++  'clocks',
++  'http',
++  'fetch-event',
++];
++const EMIT_BUDGET = 4;
++const BRIDGE_UNAVAILABLE_CODE = 'call_bridge_unavailable';
++const CALL_MODE_REFUSAL_CODE = 'not_available_in_call_mode';
++const DENY_UNDECLARED = 'undeclared-capability';
++const CALL_MODE_MESSAGE_PATTERN = /call invocation mode/u;
++const CELL_BUDGETS = Object.freeze({
++  context_bytes: 1024,
++  cpu_time_ms: 60000,
++  input_bytes: 1048576,
++  memory_bytes: 512 * 1024 * 1024,
++  output_bytes: 1048576,
++  wall_time_ms: 300000,
++});
++const BATCH_ROWS = Object.freeze([
++  Object.freeze({amount: 5}),
++  Object.freeze({amount: 6}),
++]);
++const CALL_MODE_CONTEXT_REFUSALS = Object.freeze([
++  Object.freeze({code: 'request_cell_table_read_denied', probe: 'read'}),
++  Object.freeze({code: 'request_cell_table_write_denied', probe: 'write'}),
++  Object.freeze({code: 'request_cell_capability_denied', probe: 'capability'}),
++]);
++
++let componentPromise = null;
++
++function componentizeCombinedGuest() {
++  componentPromise ??= readFile(GUEST_SOURCE_URL, 'utf8')
++    .then((guestSource) => componentize(guestSource, {
++      disableFeatures: DISABLED_ENGINE_FEATURES,
++      witPath: CANONICAL_WIT_DIRECTORY.pathname,
++      worldName: AUTHORING_WORLD,
++    }))
++    .then(({component}) => component);
++  return componentPromise;
++}
++
++function createCell(componentBytes, world, exportName, capabilities) {
++  return Object.freeze({
++    budgets: CELL_BUDGETS,
++    bytes: new Uint8Array(componentBytes),
++    capabilities,
++    exportName,
++    serviceId: `service-cell-modes-${world}`,
++    world,
++  });
++}
++
++function readNoContexts() {
++  return [];
++}
++
++function writeNoEffects() {}
++
++test(
++  'request-mode Cell serves handle-request while the call surface and ' +
++    'call-binding fail closed with typed refusals',
++  async () => {
++    const component = await componentizeCombinedGuest();
++    const cellRuntime = new WasiComponentCellRuntime();
++    const cell = createCell(
++      component,
++      CELL_WORLD.REQUEST,
++      CELL_EXPORT.HANDLE_REQUEST,
++      ['declared'],
++    );
++    await cellRuntime.start(cell);
++    try {
++      assert.equal(await cellRuntime.health(cell.serviceId), true);
++      const value = await cellRuntime.invoke(
++        cell.serviceId,
++        [JSON.stringify({probe: 'restricted'})],
++        readNoContexts,
++        writeNoEffects,
++        () => {},
++        {},
++      );
++      const refusals = JSON.parse(value);
++      assert.equal(
++        refusals.capability,
++        1,
++        'the declared capability probe stays live in request mode',
++      );
++      assert.equal(
++        refusals.callBinding.code,
++        BRIDGE_UNAVAILABLE_CODE,
++        'call-binding refuses with the typed call_bridge_unavailable ' +
++          'error when the invoke payload carries no bridge hook',
++      );
++      assert.equal(
++        refusals.callBinding.retryable,
++        false,
++        'the bridge-unavailable refusal is typed non-retryable',
++      );
++      assert.equal(
++        refusals.emit,
++        DENY_UNDECLARED,
++        'emit fails closed with the typed deny-code in request mode',
++      );
++      assert.equal(
++        refusals.callBounded,
++        DENY_UNDECLARED,
++        'call-bounded fails closed with the typed deny-code in ' +
++          'request mode',
++      );
++    } finally {
++      await cellRuntime.stop(cell.serviceId);
++    }
++  },
++);
++
++test(
++  'call-mode Cell emits partials while the request surface and ' +
++    'call-binding fail closed',
++  async () => {
++    const component = await componentizeCombinedGuest();
++    const cellRuntime = new WasiComponentCellRuntime();
++    const cell = createCell(component, CELL_WORLD.CALL, CELL_EXPORT.RUN, []);
++    await cellRuntime.start(cell);
++    try {
++      const batch = toCellBatch(BATCH_ROWS, BATCH_ROWS.length);
++      const runInvocation = await cellRuntime.invoke(
++        cell.serviceId,
++        [batch, '{}'],
++        readNoContexts,
++        writeNoEffects,
++        () => {},
++        {
++          callContext: {emitBudget: EMIT_BUDGET, nestedCallBudget: 0},
++          exportName: CELL_EXPORT.RUN,
++        },
++      );
++      assert.deepEqual(
++        runInvocation.partials,
++        [['total', '11']],
++        'run emitted its partial through the SharedArrayBuffer path',
++      );
++      const runResult = JSON.parse(runInvocation.value);
++      assert.equal(runResult.rows, BATCH_ROWS.length);
++      assert.equal(
++        runResult.callBindingRefusal.code,
++        CALL_MODE_REFUSAL_CODE,
++        'call-binding refuses with the typed not_available_in_call_mode ' +
++          'error in call mode',
++      );
++      assert.deepEqual(
++        runResult.denied,
++        [],
++        'emit stayed live under the declared budget in call mode',
++      );
++
++      const reduceInvocation = await cellRuntime.invoke(
++        cell.serviceId,
++        [runInvocation.partials, '{}'],
++        readNoContexts,
++        writeNoEffects,
++        () => {},
++        {
++          callContext: {emitBudget: EMIT_BUDGET, nestedCallBudget: 0},
++          exportName: CELL_EXPORT.REDUCE,
++        },
++      );
++      assert.deepEqual(
++        JSON.parse(reduceInvocation.value),
++        {partials: 1, total: 11},
++        'reduce folds the emitted partials on the same call-mode Cell',
++      );
++
++      for (const refusal of CALL_MODE_CONTEXT_REFUSALS) {
++        await assert.rejects(
++          () => cellRuntime.invoke(
++            cell.serviceId,
++            [batch, JSON.stringify({probe: refusal.probe})],
++            readNoContexts,
++            writeNoEffects,
++            () => {},
++            {
++              callContext: {emitBudget: EMIT_BUDGET, nestedCallBudget: 0},
++              exportName: CELL_EXPORT.RUN,
++            },
++          ),
++          (error) => {
++            assert.equal(
++              error.code,
++              refusal.code,
++              `${refusal.probe} must refuse with ${refusal.code}`,
++            );
++            assert.match(
++              error.message,
++              CALL_MODE_MESSAGE_PATTERN,
++              `${refusal.probe} refusal must be explicit mode-based`,
++            );
++            return true;
++          },
++        );
++        // A failed invocation stops the Cell fail-closed; restart it for
++        // the next probe on the same component bytes.
++        await cellRuntime.start(cell);
++      }
++    } finally {
++      await cellRuntime.stop(cell.serviceId);
++    }
++  },
++);
+diff --git a/test/wasm-service/binding-compilation-test-harness.js b/test/wasm-service/binding-compilation-test-harness.js
+index b18ae6a14f9d0aec864999f5e20cf8fb731f0df4..f22efc937f52b3e3dbb95050e1cd211ebddebd7f 100644
+--- a/test/wasm-service/binding-compilation-test-harness.js
++++ b/test/wasm-service/binding-compilation-test-harness.js
+@@ -66,7 +66,7 @@ const COMPONENT_PAYLOAD_DIGEST = `sha256:${createHash('sha256')
+ // imports are `lagrange:cell/call-context` only — the request-cell fixture
+ // above cannot instantiate there. This fixture is a minimal conforming
+ // call-cell world component (wasm-tools component embed/new against
+-// test/wasm-service/fixtures/call-cell-world/wit) exporting run/reduce.
++// wit/, the canonical authoring package) exporting run/reduce.
+ const CALL_COMPONENT_BYTES = Buffer.from(
+   'AGFzbQ0AAQAHcAFCBwFxBApudWxsLXZhbHVlAAAHaW50ZWdlcgF4AARyZWFsAXUA' +
+   'BHRleHQBcwAEAApjZWxsLXZhbHVlAwAAAXICBG5hbWVzA3ZhbAEEAAZjb2x1bW4D' +
+diff --git a/test/wasm-service/call-cell-world-abi.test.js b/test/wasm-service/call-cell-world-abi.test.js
+index 3524fac002d46ec591a13068e3fea416f1caa4c4..740b1213bfcd69300d2e293d6eb6dbab82b75c21 100644
+--- a/test/wasm-service/call-cell-world-abi.test.js
++++ b/test/wasm-service/call-cell-world-abi.test.js
+@@ -7,13 +7,12 @@
+  * deny-code> imports, run/reduce exports) are implementable today.
+  */
+ import {readFile} from 'node:fs/promises';
+-import path from 'node:path';
+ import assert from 'node:assert/strict';
+ import {componentize} from '@bytecodealliance/componentize-js';
+ import {transpileBytes} from '@bytecodealliance/jco-transpile';
+ import {test} from '../../src/test-helpers/tap.js';
+ 
+-const FIXTURE_DIRECTORY = new URL('fixtures/call-cell-world', import.meta.url);
++const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
+ const WORLD_NAME = 'call-cell';
+ const COMPONENT_NAME = 'call-cell-spike';
+ const DISABLED_ENGINE_FEATURES = ['random', 'stdio', 'clocks', 'http', 'fetch-event'];
+@@ -39,7 +38,7 @@ async function buildAndInstantiate(hostState) {
+   );
+   const {component} = await componentize(guestSource, {
+     disableFeatures: DISABLED_ENGINE_FEATURES,
+-    witPath: path.join(FIXTURE_DIRECTORY.pathname, 'wit'),
++    witPath: CANONICAL_WIT_DIRECTORY.pathname,
+     worldName: WORLD_NAME,
+   });
+   const transpiled = await transpileBytes(new Uint8Array(component), {
+diff --git a/test/wasm-service/fixtures/call-cell-world/wit/world.wit b/test/wasm-service/fixtures/call-cell-world/wit/world.wit
+deleted file mode 100644
+index f4c02f7e5b3dbc59a094a94b7e27fe809922b9a6..0000000000000000000000000000000000000000
+--- a/test/wasm-service/fixtures/call-cell-world/wit/world.wit
++++ /dev/null
+@@ -1,45 +0,0 @@
+-package lagrange:cell;
+-
+-interface call-context {
+-  /// A typed column value in a batch row.
+-  variant cell-value {
+-    null-value,
+-    integer(s64),
+-    real(f64),
+-    text(string),
+-  }
+-
+-  record column {
+-    name: string,
+-    val: cell-value,
+-  }
+-
+-  record row {
+-    columns: list<column>,
+-  }
+-
+-  enum deny-code {
+-    undeclared-capability,
+-    budget-exhausted,
+-    invalid-argument,
+-  }
+-
+-  /// Publish one bounded partial under a key. The runtime enforces the
+-  /// Binding-declared per-invocation emit budget.
+-  emit: func(key: string, partial: string) -> result<_, deny-code>;
+-
+-  /// Bounded nested invocation of another declared export.
+-  call-bounded: func(export-name: string, argument: string) -> result<string, deny-code>;
+-}
+-
+-world call-cell {
+-  use call-context.{row};
+-  import call-context;
+-
+-  /// Partition-local work: receives the Binding-declared statement's
+-  /// grouped, bounded batch. Returns this shard's partial as JSON.
+-  export run: func(batch: list<row>, arguments: string) -> string;
+-
+-  /// Reduction: folds the published partials into the final result.
+-  export reduce: func(partials: list<tuple<string, string>>, arguments: string) -> string;
+-}
+diff --git a/test/wasm-service/fixtures/service-cell-world/guest.js b/test/wasm-service/fixtures/service-cell-world/guest.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..8ccbf6825b7d5adcface891862080ba3c0706a07
+--- /dev/null
++++ b/test/wasm-service/fixtures/service-cell-world/guest.js
+@@ -0,0 +1,104 @@
++/**
++ * Combined service-cell world fixture guest: one JavaScript source that
++ * exports the request surface (`handle-request`), the partition surface
++ * (`run`), and the reducer (`reduce`), importing both
++ * `lagrange:cell/context` and `lagrange:cell/call-context`. ComponentizeJS
++ * compiles it against the canonical wit/world.wit world `service-cell`.
++ *
++ * Probe-driven so one guest serves both the ABI test and the runtime
++ * invocation-mode test: typed refusals are caught and returned as JSON;
++ * non-result-typed imports (read/write/capability) trap the invocation
++ * when refused, which the runtime test asserts at the invoke boundary.
++ */
++import {callBinding, capability, read, write} from 'lagrange:cell/context';
++import {callBounded, emit} from 'lagrange:cell/call-context';
++
++const LEDGER_TABLE_SLOT = 0;
++const CAPABILITY_INDEX = 0;
++
++function typedFailure(error) {
++  return error.payload ?? String(error);
++}
++
++function restrictedSurfaceProbes() {
++  const refusals = {capability: capability(CAPABILITY_INDEX)};
++  try {
++    callBinding('account-summary-inner', '{}');
++  } catch (error) {
++    refusals.callBinding = typedFailure(error);
++  }
++  try {
++    emit('key', '1');
++  } catch (error) {
++    refusals.emit = typedFailure(error);
++  }
++  try {
++    callBounded('run', '{}');
++  } catch (error) {
++    refusals.callBounded = typedFailure(error);
++  }
++  return refusals;
++}
++
++export function handleRequest(request) {
++  const parsed = JSON.parse(request);
++  if (parsed.probe === 'context-io') {
++    const total = read(LEDGER_TABLE_SLOT, parsed.key - 1) + parsed.amount;
++    write(LEDGER_TABLE_SLOT, parsed.key, total);
++    return JSON.stringify({
++      capability: capability(CAPABILITY_INDEX),
++      total,
++    });
++  }
++  if (parsed.probe === 'call-binding') {
++    try {
++      return JSON.stringify({
++        value: callBinding(parsed.name, parsed.arguments),
++      });
++    } catch (error) {
++      return JSON.stringify({callBinding: typedFailure(error)});
++    }
++  }
++  return JSON.stringify(restrictedSurfaceProbes());
++}
++
++export function run(batch, argumentsJson) {
++  const parsed = JSON.parse(argumentsJson);
++  if (parsed.probe === 'read') read(LEDGER_TABLE_SLOT, 1);
++  if (parsed.probe === 'write') write(LEDGER_TABLE_SLOT, 1, 2);
++  if (parsed.probe === 'capability') capability(CAPABILITY_INDEX);
++  let total = 0;
++  for (const row of batch) {
++    for (const column of row.columns) {
++      if (column.name === 'amount' && column.val.tag === 'integer') {
++        total += Number(column.val.val);
++      }
++    }
++  }
++  const denied = [];
++  try {
++    emit('total', JSON.stringify(total));
++  } catch (error) {
++    denied.push(typedFailure(error));
++  }
++  let callBindingRefusal = null;
++  try {
++    callBinding('account-summary-inner', argumentsJson);
++  } catch (error) {
++    callBindingRefusal = typedFailure(error);
++  }
++  return JSON.stringify({
++    callBindingRefusal,
++    denied,
++    rows: batch.length,
++    total,
++  });
++}
++
++export function reduce(partials, _argumentsJson) {
++  let total = 0;
++  for (const [, partial] of partials) {
++    total += JSON.parse(partial);
++  }
++  return JSON.stringify({partials: partials.length, total});
++}
+diff --git a/test/wasm-service/fixtures/service-cell-world/legacy-request-guest.js b/test/wasm-service/fixtures/service-cell-world/legacy-request-guest.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..1ec1af157dd82306ec06ff6b1669776f47e1cedb
+--- /dev/null
++++ b/test/wasm-service/fixtures/service-cell-world/legacy-request-guest.js
+@@ -0,0 +1,16 @@
++/**
++ * Legacy-shape request guest: compiled against
++ * legacy-request-wit/world.wit (the pre-call-binding context) to prove a
++ * component that never heard of `call-binding` still instantiates and
++ * runs against the new superset host import set.
++ */
++import {read, write} from 'lagrange:cell/context';
++
++const LEDGER_TABLE_SLOT = 0;
++
++export function run(request) {
++  const {key, amount} = JSON.parse(request);
++  const total = read(LEDGER_TABLE_SLOT, key) + amount;
++  write(LEDGER_TABLE_SLOT, key, total);
++  return JSON.stringify({total});
++}
+diff --git a/test/wasm-service/fixtures/service-cell-world/legacy-request-wit/world.wit b/test/wasm-service/fixtures/service-cell-world/legacy-request-wit/world.wit
+new file mode 100644
+index 0000000000000000000000000000000000000000..1ba576994c1d61d7c584b9a3c9c59771867e0ae9
+--- /dev/null
++++ b/test/wasm-service/fixtures/service-cell-world/legacy-request-wit/world.wit
+@@ -0,0 +1,18 @@
++/// DELIBERATELY FROZEN legacy shape — not a redundant copy of the
++/// canonical wit/world.wit. This is the pre-`call-binding` request
++/// context exactly as components were compiled before the combined
++/// service-cell world landed. The ABI compatibility test compiles a
++/// guest against THIS shape and instantiates it against the new,
++/// larger host import set to prove old components keep working.
++package lagrange:cell;
++
++interface context {
++  read: func(table: u32, key: u32) -> s32;
++  write: func(table: u32, key: u32, value: s32);
++  capability: func(capability: u32) -> s32;
++}
++
++world request-cell {
++  import context;
++  export run: func(request: string) -> string;
++}
+diff --git a/test/wasm-service/service-cell-world-abi.test.js b/test/wasm-service/service-cell-world-abi.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..638e2ec57def4610c40e39a139ec3d4ff5be72da
+--- /dev/null
++++ b/test/wasm-service/service-cell-world-abi.test.js
+@@ -0,0 +1,242 @@
++/**
++ * ABI proof for the canonical combined service-cell world (wit/world.wit):
++ * with the real toolchain — ComponentizeJS build, jco transpile, host-side
++ * instantiate, the same path src/runtime/wasi-component-cell-worker.js
++ * uses — one component exports handle-request + run + reduce and imports
++ * both `lagrange:cell/context` (including the typed call-binding surface)
++ * and `lagrange:cell/call-context`.
++ *
++ * Compatibility crux proved here: jco-generated bindings destructure only
++ * the functions the component itself imports, so a component compiled
++ * against the OLD pre-call-binding context (the frozen legacy fixture
++ * shape) and a call-cell-only component both instantiate unchanged
++ * against the new full both-namespace host import set.
++ */
++import {readFile} from 'node:fs/promises';
++import path from 'node:path';
++import assert from 'node:assert/strict';
++import {componentize} from '@bytecodealliance/componentize-js';
++import {transpileBytes} from '@bytecodealliance/jco-transpile';
++import {test} from '../../src/test-helpers/tap.js';
++
++const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
++const FIXTURE_DIRECTORY = new URL(
++  'fixtures/service-cell-world',
++  import.meta.url,
++);
++const CALL_CELL_GUEST_URL = new URL(
++  'fixtures/call-cell-world/guest.js',
++  import.meta.url,
++);
++const WORLD = Object.freeze({
++  CALL: 'call-cell',
++  REQUEST: 'request-cell',
++  SERVICE: 'service-cell',
++});
++const COMPONENT_NAME = 'service-cell-abi';
++const DISABLED_ENGINE_FEATURES =
++  ['random', 'stdio', 'clocks', 'http', 'fetch-event'];
++const BRIDGE_UNAVAILABLE_CODE = 'call_bridge_unavailable';
++const DENY_UNDECLARED = 'undeclared-capability';
++const READ_STUB_VALUE = 7;
++// tap's parseTestArgs mutates the options object, so each test gets
++// a fresh literal instead of a shared frozen constant.
++const TOOLCHAIN_TIMEOUT_MS = 120000;
++
++async function buildComponent(guestUrl, witPath, worldName) {
++  const guestSource = await readFile(guestUrl, 'utf8');
++  const {component} = await componentize(guestSource, {
++    disableFeatures: DISABLED_ENGINE_FEATURES,
++    witPath,
++    worldName,
++  });
++  return component;
++}
++
++async function instantiateWithFullImports(component, hostState) {
++  const transpiled = await transpileBytes(new Uint8Array(component), {
++    emitTypescriptDeclarations: false,
++    instantiation: 'async',
++    name: COMPONENT_NAME,
++  });
++  const moduleBytes = transpiled.files[`${COMPONENT_NAME}.js`];
++  const moduleUrl = `data:text/javascript;base64,${
++    Buffer.from(moduleBytes).toString('base64')}`;
++  const generated = await import(moduleUrl);
++  // The full both-namespace host import set — the shape the worker now
++  // always supplies regardless of the component's own import list.
++  return generated.instantiate(
++    async (file) => globalThis.WebAssembly.compile(transpiled.files[file]),
++    {
++      'lagrange:cell/call-context': {
++        callBounded() {
++          const denial = new Error(DENY_UNDECLARED);
++          denial.payload = DENY_UNDECLARED;
++          throw denial;
++        },
++        emit(key, partial) {
++          hostState.emits.push([key, partial]);
++        },
++      },
++      'lagrange:cell/context': {
++        callBinding(name, argumentsJson) {
++          if (typeof hostState.bridge === 'function') {
++            return hostState.bridge(name, argumentsJson);
++          }
++          const failure = new Error('No request-call bridge is available');
++          failure.payload = {
++            code: BRIDGE_UNAVAILABLE_CODE,
++            message: failure.message,
++            retryable: false,
++          };
++          throw failure;
++        },
++        capability() {
++          return 1;
++        },
++        read(table, key) {
++          hostState.reads.push([table, key]);
++          return READ_STUB_VALUE;
++        },
++        write(table, key, value) {
++          hostState.writes.push([table, key, value]);
++        },
++      },
++    },
++  );
++}
++
++function createHostState() {
++  return {bridge: null, emits: [], reads: [], writes: []};
++}
++
++function amountRow(amount) {
++  return {
++    columns: [
++      {name: 'amount', val: {tag: 'integer', val: BigInt(amount)}},
++      {name: 'label', val: {tag: 'null-value'}},
++    ],
++  };
++}
++
++// ComponentizeJS builds take ~25s on a loaded machine; the tap default
++// 30s per-test timeout is too tight for toolchain-bound tests.
++test('service-cell world exports handle-request/run/reduce and drives ' +
++  'both host interfaces from one component',
++{timeout: TOOLCHAIN_TIMEOUT_MS},
++async (t) => {
++  const component = await buildComponent(
++    new URL('fixtures/service-cell-world/guest.js', import.meta.url),
++    CANONICAL_WIT_DIRECTORY.pathname,
++    WORLD.SERVICE,
++  );
++  const hostState = createHostState();
++  const exports = await instantiateWithFullImports(component, hostState);
++
++  // The kebab-case WIT export `handle-request` surfaces as the camelCase
++  // JS export `handleRequest` on both the guest and the host side.
++  assert.equal(typeof exports.handleRequest, 'function',
++    'WIT handle-request maps to the camelCase handleRequest export');
++
++  const ioResult = JSON.parse(exports.handleRequest(JSON.stringify(
++    {amount: 3, key: 2, probe: 'context-io'},
++  )));
++  t.same(
++    ioResult,
++    {capability: 1, total: READ_STUB_VALUE + 3},
++    'handle-request runs with live read/write/capability context imports',
++  );
++  t.same(hostState.writes, [[0, 2, READ_STUB_VALUE + 3]],
++    'the guest write reached the host context import');
++
++  hostState.bridge = (name, argumentsJson) =>
++    JSON.stringify({echo: [name, argumentsJson]});
++  const bridged = JSON.parse(exports.handleRequest(JSON.stringify(
++    {arguments: '{"a":1}', name: 'inner', probe: 'call-binding'},
++  )));
++  t.same(
++    JSON.parse(bridged.value),
++    {echo: ['inner', '{"a":1}']},
++    'call-binding round-trips through a live host bridge',
++  );
++
++  hostState.bridge = null;
++  const refusals = JSON.parse(exports.handleRequest(JSON.stringify(
++    {probe: 'restricted'},
++  )));
++  assert.equal(refusals.callBinding.code, BRIDGE_UNAVAILABLE_CODE,
++    'call-binding surfaces the typed binding-call-error the host threw');
++  assert.equal(refusals.callBinding.retryable, false,
++    'the typed binding-call-error carries the retryable flag');
++  assert.equal(refusals.callBounded, DENY_UNDECLARED,
++    'call-bounded surfaces its typed deny-code alongside call-binding');
++
++  const runResult = JSON.parse(
++    exports.run([amountRow(5), amountRow(6)], '{}'),
++  );
++  assert.equal(runResult.total, 11,
++    'run folds the typed batch through the call-context surface');
++  t.same(hostState.emits.at(-1), ['total', '11'],
++    'run emitted its partial through the host emit import');
++
++  const reduced = JSON.parse(
++    exports.reduce([['total', '11'], ['total', '4']], '{}'),
++  );
++  t.same(reduced, {partials: 2, total: 15},
++    'reduce folds emitted partials into the final result');
++});
++
++test('a component compiled against the old pre-call-binding request ' +
++  'context instantiates and runs with the full host import set',
++{timeout: TOOLCHAIN_TIMEOUT_MS},
++async (t) => {
++  const component = await buildComponent(
++    new URL(
++      'fixtures/service-cell-world/legacy-request-guest.js',
++      import.meta.url,
++    ),
++    path.join(FIXTURE_DIRECTORY.pathname, 'legacy-request-wit'),
++    WORLD.REQUEST,
++  );
++  const hostState = createHostState();
++  const exports = await instantiateWithFullImports(component, hostState);
++  const result = JSON.parse(exports.run(JSON.stringify(
++    {amount: 4, key: 9},
++  )));
++  t.same(result, {total: READ_STUB_VALUE + 4},
++    'the legacy-shape component runs; jco lifts only the functions the ' +
++    'component imports, so the extra call-binding host import is inert');
++  t.same(hostState.writes, [[0, 9, READ_STUB_VALUE + 4]],
++    'the legacy component reached the unchanged read/write imports');
++});
++
++test('a component compiled against the canonical call-cell world ' +
++  'instantiates and runs with the full host import set',
++{timeout: TOOLCHAIN_TIMEOUT_MS},
++async (t) => {
++  const component = await buildComponent(
++    CALL_CELL_GUEST_URL,
++    CANONICAL_WIT_DIRECTORY.pathname,
++    WORLD.CALL,
++  );
++  const hostState = createHostState();
++  const exports = await instantiateWithFullImports(component, hostState);
++  const runResult = JSON.parse(exports.run(
++    [
++      {
++        columns: [
++          {name: 'id', val: {tag: 'integer', val: 1n}},
++          {name: 'score', val: {tag: 'real', val: 4.5}},
++          {name: 'label', val: {tag: 'null-value'}},
++        ],
++      },
++    ],
++    JSON.stringify({topN: 1}),
++  ));
++  t.same(runResult.kept, [{id: '1', score: 4.5}],
++    'the call-only component runs against the full host import set');
++  assert.equal(runResult.nestedDenial, DENY_UNDECLARED,
++    'the call-only component still observes its typed denial');
++  t.same(hostState.emits, [['1', '4.5']],
++    'the call-only component emitted through the shared host imports');
++});
+diff --git a/wit/world.wit b/wit/world.wit
+new file mode 100644
+index 0000000000000000000000000000000000000000..1625506e40e8880e324fdd012ff6a6d2061032f6
+--- /dev/null
++++ b/wit/world.wit
+@@ -0,0 +1,97 @@
++/// Canonical authoring WIT package for Lagrange Cell components.
++///
++/// This is the single normative source for the sealed Cell ABI: request
++/// components, call/pushdown components, and combined service components
++/// all compile against this package. Examples and tests must reference
++/// this directory instead of carrying divergent copies.
++///
++/// Sealed constraints (architecture/minimal-deployment-surface.md):
++///   - `lagrange:cell/call-context` is the sole public call/pushdown
++///     invocation surface; it carries NO capability import.
++///   - the request `context` interface keeps its capability probe, and it
++///     is the interface that carries `call-binding`.
++package lagrange:cell;
++
++interface context {
++  /// Typed failure for `call-binding`. The `code` field is a closed set
++  /// owned by the host runtime (src/runtime/wasi-component-cell-worker.js
++  /// BINDING_CALL_ERROR_CODE); it is a string rather than a WIT enum so
++  /// the host-side taxonomy can grow without resealing the ABI.
++  record binding-call-error {
++    code: string,
++    message: string,
++    retryable: bool,
++  }
++
++  read: func(table: u32, key: u32) -> s32;
++  write: func(table: u32, key: u32, value: s32);
++  capability: func(capability: u32) -> s32;
++
++  /// Invoke a named Call Binding from a request invocation. Only
++  /// authorized request invocations carry a live bridge; everywhere else
++  /// this fails closed with a typed `binding-call-error`.
++  call-binding: func(name: string, arguments: string) -> result<string, binding-call-error>;
++}
++
++interface call-context {
++  /// A typed column value in a batch row.
++  variant cell-value {
++    null-value,
++    integer(s64),
++    real(f64),
++    text(string),
++  }
++
++  record column {
++    name: string,
++    val: cell-value,
++  }
++
++  record row {
++    columns: list<column>,
++  }
++
++  enum deny-code {
++    undeclared-capability,
++    budget-exhausted,
++    invalid-argument,
++  }
++
++  /// Publish one bounded partial under a key. The runtime enforces the
++  /// Binding-declared per-invocation emit budget.
++  emit: func(key: string, partial: string) -> result<_, deny-code>;
++
++  /// Bounded nested invocation of another declared export.
++  call-bounded: func(export-name: string, argument: string) -> result<string, deny-code>;
++}
++
++world request-cell {
++  import context;
++  export run: func(request: string) -> string;
++}
++
++world call-cell {
++  use call-context.{row};
++  import call-context;
++
++  /// Partition-local work: receives the Binding-declared statement's
++  /// grouped, bounded batch. Returns this shard's partial as JSON.
++  export run: func(batch: list<row>, arguments: string) -> string;
++
++  /// Reduction: folds the published partials into the final result.
++  export reduce: func(partials: list<tuple<string, string>>, arguments: string) -> string;
++}
++
++/// Combined world: one component that serves the request surface and the
++/// call/pushdown surface. The component is bound twice (a request Binding
++/// and a call Binding), yielding two Cells; each Cell's invocation mode
++/// restricts which host imports are live — the others fail closed.
++world service-cell {
++  use call-context.{row};
++  import context;
++  import call-context;
++
++  export handle-request: func(request: string) -> string;
++  export run: func(batch: list<row>, arguments: string) -> string;
++  export reduce: func(partials: list<tuple<string, string>>, arguments: string) -> string;
++}

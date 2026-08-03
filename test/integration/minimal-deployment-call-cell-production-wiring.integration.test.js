@@ -16,7 +16,6 @@
  */
 
 import {readFile} from 'node:fs/promises';
-import path from 'node:path';
 import assert from 'node:assert/strict';
 import {createHash} from 'node:crypto';
 import {describe, it} from 'node:test';
@@ -113,10 +112,7 @@ const CELL_BUDGETS = Object.freeze({
   output_bytes: 1048576,
   wall_time_ms: 300000,
 });
-const FIXTURE_DIRECTORY = new URL(
-  '../wasm-service/fixtures/call-cell-world',
-  import.meta.url,
-);
+const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
 const SECURITY_CONTEXT = Object.freeze({
   principal: PRINCIPAL,
   roles: Object.freeze(['application']),
@@ -331,7 +327,7 @@ function componentizeFixtureGuest() {
     );
     const {component} = await componentize(guestSource, {
       disableFeatures: [...COMPONENTIZE_DISABLED_FEATURES],
-      witPath: path.join(FIXTURE_DIRECTORY.pathname, 'wit'),
+      witPath: CANONICAL_WIT_DIRECTORY.pathname,
       worldName: WORLD_NAME,
     });
     return component;

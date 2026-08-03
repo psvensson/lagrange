@@ -1,0 +1,97 @@
+/// Canonical authoring WIT package for Lagrange Cell components.
+///
+/// This is the single normative source for the sealed Cell ABI: request
+/// components, call/pushdown components, and combined service components
+/// all compile against this package. Examples and tests must reference
+/// this directory instead of carrying divergent copies.
+///
+/// Sealed constraints (architecture/minimal-deployment-surface.md):
+///   - `lagrange:cell/call-context` is the sole public call/pushdown
+///     invocation surface; it carries NO capability import.
+///   - the request `context` interface keeps its capability probe, and it
+///     is the interface that carries `call-binding`.
+package lagrange:cell;
+
+interface context {
+  /// Typed failure for `call-binding`. The `code` field is a closed set
+  /// owned by the host runtime (src/runtime/wasi-component-cell-worker.js
+  /// BINDING_CALL_ERROR_CODE); it is a string rather than a WIT enum so
+  /// the host-side taxonomy can grow without resealing the ABI.
+  record binding-call-error {
+    code: string,
+    message: string,
+    retryable: bool,
+  }
+
+  read: func(table: u32, key: u32) -> s32;
+  write: func(table: u32, key: u32, value: s32);
+  capability: func(capability: u32) -> s32;
+
+  /// Invoke a named Call Binding from a request invocation. Only
+  /// authorized request invocations carry a live bridge; everywhere else
+  /// this fails closed with a typed `binding-call-error`.
+  call-binding: func(name: string, arguments: string) -> result<string, binding-call-error>;
+}
+
+interface call-context {
+  /// A typed column value in a batch row.
+  variant cell-value {
+    null-value,
+    integer(s64),
+    real(f64),
+    text(string),
+  }
+
+  record column {
+    name: string,
+    val: cell-value,
+  }
+
+  record row {
+    columns: list<column>,
+  }
+
+  enum deny-code {
+    undeclared-capability,
+    budget-exhausted,
+    invalid-argument,
+  }
+
+  /// Publish one bounded partial under a key. The runtime enforces the
+  /// Binding-declared per-invocation emit budget.
+  emit: func(key: string, partial: string) -> result<_, deny-code>;
+
+  /// Bounded nested invocation of another declared export.
+  call-bounded: func(export-name: string, argument: string) -> result<string, deny-code>;
+}
+
+world request-cell {
+  import context;
+  export run: func(request: string) -> string;
+}
+
+world call-cell {
+  use call-context.{row};
+  import call-context;
+
+  /// Partition-local work: receives the Binding-declared statement's
+  /// grouped, bounded batch. Returns this shard's partial as JSON.
+  export run: func(batch: list<row>, arguments: string) -> string;
+
+  /// Reduction: folds the published partials into the final result.
+  export reduce: func(partials: list<tuple<string, string>>, arguments: string) -> string;
+}
+
+/// Combined world: one component that serves the request surface and the
+/// call/pushdown surface. The component is bound twice (a request Binding
+/// and a call Binding), yielding two Cells; each Cell's invocation mode
+/// restricts which host imports are live — the others fail closed.
+world service-cell {
+  use call-context.{row};
+  import context;
+  import call-context;
+
+  export handle-request: func(request: string) -> string;
+  export run: func(batch: list<row>, arguments: string) -> string;
+  export reduce: func(partials: list<tuple<string, string>>, arguments: string) -> string;
+}

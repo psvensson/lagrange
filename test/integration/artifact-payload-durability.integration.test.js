@@ -133,15 +133,11 @@ const COMPONENTIZE_DISABLED_FEATURES = Object.freeze([
   'http',
   'fetch-event',
 ]);
-const FIXTURE_DIRECTORY = new URL(
-  '../wasm-service/fixtures/call-cell-world',
-  import.meta.url,
-);
+const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
 const GUEST_SOURCE_URL = new URL(
   '../wasm-service/fixtures/call-cell-world/guest.js',
   import.meta.url,
 );
-const WIT_DIR = 'wit';
 const CELL_BUDGETS = Object.freeze({
   context_bytes: 4096,
   cpu_time_ms: 60000,
@@ -207,7 +203,7 @@ function componentizeFixtureGuest() {
     const guestSource = await readFile(GUEST_SOURCE_URL, 'utf8');
     const {component} = await componentize(guestSource, {
       disableFeatures: [...COMPONENTIZE_DISABLED_FEATURES],
-      witPath: path.join(FIXTURE_DIRECTORY.pathname, WIT_DIR),
+      witPath: CANONICAL_WIT_DIRECTORY.pathname,
       worldName: WORLD_NAME,
     });
     return Buffer.from(component);

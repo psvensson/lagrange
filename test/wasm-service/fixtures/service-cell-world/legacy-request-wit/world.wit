@@ -1,0 +1,18 @@
+/// DELIBERATELY FROZEN legacy shape — not a redundant copy of the
+/// canonical wit/world.wit. This is the pre-`call-binding` request
+/// context exactly as components were compiled before the combined
+/// service-cell world landed. The ABI compatibility test compiles a
+/// guest against THIS shape and instantiates it against the new,
+/// larger host import set to prove old components keep working.
+package lagrange:cell;
+
+interface context {
+  read: func(table: u32, key: u32) -> s32;
+  write: func(table: u32, key: u32, value: s32);
+  capability: func(capability: u32) -> s32;
+}
+
+world request-cell {
+  import context;
+  export run: func(request: string) -> string;
+}

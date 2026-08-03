@@ -29,7 +29,8 @@ const BUILD = Object.freeze({
     Object.freeze(['random', 'stdio', 'clocks', 'http', 'fetch-event']),
   SOURCE_ENCODING: 'utf8',
   SOURCE_KIND: 'call',
-  WIT_DIRECTORY: 'wit',
+  // Canonical authoring WIT package at the repo root (wit/world.wit).
+  WIT_DIRECTORY: '../../wit',
   WIT_WORLD: 'call-cell',
 });
 

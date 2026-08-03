@@ -263,10 +263,10 @@ export function run(batch, argumentsJson) {
 }
 ```
 
-The world file currently ships in-repo at
-`test/wasm-service/fixtures/call-cell-world/wit/world.wit`. Publishing it as
-a first-class authoring artifact is an open item; the ABI itself is real and
-proven through ComponentizeJS build, jco transpile, and host instantiation.
+The world file ships as the committed canonical authoring artifact at
+`wit/world.wit` (package `lagrange:cell`), which examples and tests compile
+against directly. The ABI is real and proven through ComponentizeJS build,
+jco transpile, and host instantiation.
 
 ## Reducers
 
