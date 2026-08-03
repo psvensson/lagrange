@@ -469,10 +469,13 @@ test('a concurrent sealer winning the guarded seal is benign success',
         if (sql.startsWith('UPDATE artifact_payloads')) {
           // A concurrent byte-identical publisher seals first; the
           // guarded UPDATE (state = UPLOADING) then matches zero rows.
+          // The store renders parameters into the statement as inline
+          // literals, so the digest is recovered from the SQL itself.
+          const digest = /payload_digest = '([^']+)'/.exec(sql)[1];
           database.prepare(
             'UPDATE artifact_payloads SET state = ?, sealed_at = ? ' +
             'WHERE payload_digest = ?',
-          ).run(ARTIFACT_PAYLOAD_STATE.SEALED, START_NOW + 7, params[2]);
+          ).run(ARTIFACT_PAYLOAD_STATE.SEALED, START_NOW + 7, digest);
         }
         return base(sql, params);
       },

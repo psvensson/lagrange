@@ -124,8 +124,17 @@ const SEAL_PAYLOAD_SQL =
 const SELECT_CHUNK_SQL =
   `SELECT ${CHUNK_COLUMN_LIST} FROM ${CHUNK_TABLE} ` +
   'WHERE payload_digest = $1 AND chunk_number = $2';
+// The multi-row chunk read DELIBERATELY does not project payload_digest:
+// the engine serves single-table system-table selects whose projection
+// includes the table's primary-key field from the node-local
+// authoritative view, which merges rows keyed by that single field - and
+// that would collapse every chunk row into one per payload. Omitting the
+// key (the caller already holds it) keeps this read on the normal
+// partition read path that returns every row. The reduce coordinator's
+// slot read omits invocation_id for the same reason.
 const SELECT_CHUNKS_SQL =
-  `SELECT ${CHUNK_COLUMN_LIST} FROM ${CHUNK_TABLE} ` +
+  'SELECT chunk_number, chunk_digest, chunk_size, chunk_bytes_base64 ' +
+  `FROM ${CHUNK_TABLE} ` +
   'WHERE payload_digest = $1 ORDER BY chunk_number';
 const INSERT_CHUNK_SQL =
   `INSERT INTO ${CHUNK_TABLE} (${CHUNK_COLUMN_LIST}) ` +
@@ -147,6 +156,14 @@ class ArtifactPayloadStoreError extends Error {
 
 function failTyped(code, message, details) {
   throw new ArtifactPayloadStoreError(code, message, details);
+}
+
+const ARTIFACT_PAYLOAD_SQL_QUOTE_ESCAPE = '\'\'';
+
+function sqlLiteral(value) {
+  return typeof value === 'number' && Number.isFinite(value) ?
+    String(value) :
+    `'${String(value).replace(/'/g, ARTIFACT_PAYLOAD_SQL_QUOTE_ESCAPE)}'`;
 }
 
 function sha256DigestOf(bytes) {
@@ -234,8 +251,27 @@ function createArtifactPayloadStore(options = {}) {
       ARTIFACT_PAYLOAD_DEFAULT_MAX_BYTES;
   const logger = options.logger || null;
 
+  // The engine's internal path executes inline-literal SQL on the
+  // default dialect, exactly like the sibling call-cell owners: the
+  // $n-parameterized postgresql path resolves multi-row-per-key reads
+  // through a keyed local lookup that collapses the chunk set to one
+  // row per payload_digest (observed live), while the inline path's
+  // multi-row reads are production-proven by the reduce coordinator.
+  // The $n templates above stay as templates; parameters are rendered
+  // into them as escaped literals here, at the single dispatch seam.
+  function renderParamsInline(sql, params) {
+    let rendered = sql;
+    for (let index = params.length; index >= 1; index -= 1) {
+      rendered = rendered
+        .split(`$${index}`)
+        .join(sqlLiteral(params[index - 1]));
+    }
+    return rendered;
+  }
+
   async function runQuery(sql, params) {
-    const result = await executeInternal(sql, params);
+    const result = await executeInternal(
+      renderParamsInline(sql, params), []);
     if (result?.success === false) {
       failTyped(
         ARTIFACT_PAYLOAD_ERROR_CODE.QUERY_FAILED,
@@ -373,7 +409,12 @@ function createArtifactPayloadStore(options = {}) {
     const payloadDigest = payloadRow.payload_digest;
     const expectedChunkCount = Number(payloadRow.chunk_count);
     const result = await runQuery(SELECT_CHUNKS_SQL, [payloadDigest]);
-    const chunkRows = resultRows(result);
+    // The distributed read layer's ORDER BY compares as strings (a
+    // recorded engine limitation: 10 sorts before 2), so the verified
+    // ordering the chunk contract depends on is re-established here
+    // numerically rather than trusted from the wire.
+    const chunkRows = resultRows(result).slice().sort(
+      (left, right) => Number(left.chunk_number) - Number(right.chunk_number));
     if (chunkRows.length > expectedChunkCount) {
       failTyped(
         ARTIFACT_PAYLOAD_ERROR_CODE.PAYLOAD_SIZE_MISMATCH,
