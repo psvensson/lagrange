@@ -317,25 +317,31 @@ function seedTableRouting(cache, tableName, partitionIds, options = {}) {
   }
 }
 
-async function componentizeFixtureGuest() {
-  const guestSource = await readFile(
-    new URL(
-      '../wasm-service/fixtures/call-cell-world/guest.js',
-      import.meta.url,
-    ),
-    'utf8',
-  );
-  const {component} = await componentize(guestSource, {
-    disableFeatures: [...COMPONENTIZE_DISABLED_FEATURES],
-    witPath: path.join(FIXTURE_DIRECTORY.pathname, 'wit'),
-    worldName: WORLD_NAME,
-  });
-  return component;
+// Componentization is deterministic for the fixture guest; memoize the
+// build so the second test in this file reuses the same bytes.
+let componentizePromise = null;
+function componentizeFixtureGuest() {
+  componentizePromise = componentizePromise ?? (async () => {
+    const guestSource = await readFile(
+      new URL(
+        '../wasm-service/fixtures/call-cell-world/guest.js',
+        import.meta.url,
+      ),
+      'utf8',
+    );
+    const {component} = await componentize(guestSource, {
+      disableFeatures: [...COMPONENTIZE_DISABLED_FEATURES],
+      witPath: path.join(FIXTURE_DIRECTORY.pathname, 'wit'),
+      worldName: WORLD_NAME,
+    });
+    return component;
+  })();
+  return componentizePromise;
 }
 
 function cancelNoop() {}
 
-function createRuntimeInvocationOwner(cellRuntime) {
+function createRuntimeInvocationOwner(cellRuntime, options = {}) {
   const invocations = {reduce: [], run: []};
   return {
     invocations,
@@ -347,14 +353,21 @@ function createRuntimeInvocationOwner(cellRuntime) {
         invocations[invocation.exportName]?.push({
           invocationId: invocation.invocationId,
         });
+        // Test instrumentation seam: the parallel-evidence test parks
+        // both nodes' run invocations on a cross-node barrier here, so
+        // passage proves genuinely overlapping receiver-side execution.
+        if (invocation.exportName === CALL_EXPORT &&
+            typeof options.onRunEntered === 'function') {
+          await options.onRunEntered(options.nodeId, invocation);
+        }
         return invokeCallCell(
           {
             failLifecycle: (cause) => {
               throw cause;
             },
-            invokeComponent: (serviceId, args, read, write, options) =>
+            invokeComponent: (serviceId, args, read, write, invokeOptions) =>
               cellRuntime.invoke(
-                serviceId, args, read, write, cancelNoop, options),
+                serviceId, args, read, write, cancelNoop, invokeOptions),
             stopComponent: (serviceId) => cellRuntime.stop(serviceId),
           },
           invocation,
@@ -374,6 +387,7 @@ async function createNode({
   systemTableCache,
   localPartitionServices,
   sqlQueryEngine,
+  onRunEntered,
 }) {
   const cellRuntime = new WasiComponentCellRuntime();
   await cellRuntime.start(Object.freeze({
@@ -384,7 +398,8 @@ async function createNode({
     serviceId,
     world: WORLD_NAME,
   }));
-  const runtimeInvocationOwner = createRuntimeInvocationOwner(cellRuntime);
+  const runtimeInvocationOwner = createRuntimeInvocationOwner(
+    cellRuntime, {nodeId, onRunEntered});
   // The PRODUCTION factory: no callBindingRouteResolver injected — the
   // Phase-A self-default over the system table cache is what must route.
   const {runtimeServiceHandler} = RuntimeServiceHandlerSetup.create({
@@ -404,112 +419,117 @@ async function createNode({
   return {cellRuntime, runtimeInvocationOwner, runtimeServiceHandler};
 }
 
-describe('minimal deployment call-cell production wiring', () => {
-  it('spreads shard runs across two production-composed nodes and reduces ' +
-    'exactly once on the reduce-lease holder', async (testContext) => {
-    const systemTableCache = new SystemTableCache();
-    const partitionStores = createPartitionStores();
-    const messageRouter = createSharedMessageRouter(partitionStores);
-    const engine = new SQLQueryEngine({
-      autoStartDistributedTransactionRecovery: false,
+// Full two-node production composition shared by both tests in this
+// file: routed shard table split across the nodes, registered
+// coordination system tables in real SQLite, real handler-setup
+// factories, and real WASI cell runtimes per node.
+async function composeTwoNodeDeployment(testContext, options = {}) {
+  const systemTableCache = new SystemTableCache();
+  const partitionStores = createPartitionStores();
+  const messageRouter = createSharedMessageRouter(partitionStores);
+  const engine = new SQLQueryEngine({
+    autoStartDistributedTransactionRecovery: false,
+    messageRouter,
+    nodeId: NODE_A,
+    systemCache: systemTableCache,
+  });
+
+  seedTableRouting(systemTableCache, DECLARED_TABLE,
+    [PARTITION_ONE, PARTITION_TWO], {
+      hostByPartition: {
+        [PARTITION_ONE]: NODE_A,
+        [PARTITION_TWO]: NODE_B,
+      },
+      rangeByPartition: {
+        [PARTITION_ONE]: {end: '5', start: null},
+        [PARTITION_TWO]: {end: null, start: '5'},
+      },
+    });
+  seedTableRouting(systemTableCache, TABLES.CALL_CELL_REDUCE_SLOTS,
+    [`${TABLES.CALL_CELL_REDUCE_SLOTS}-p1`],
+    {primaryKey: 'invocation_id'});
+  seedTableRouting(systemTableCache, TABLES.CALL_CELL_REDUCE_RESULTS,
+    [`${TABLES.CALL_CELL_REDUCE_RESULTS}-p1`],
+    {primaryKey: 'result_id'});
+
+  const rows = createDeploymentRows();
+  systemTableCache.applySystemTableChange(
+    TABLES.SERVICE_BINDINGS,
+    CDC_OPERATION.UPSERT,
+    rows.bindingRow,
+  );
+  systemTableCache.applySystemTableChange(
+    TABLES.SERVICE_DEFINITIONS,
+    CDC_OPERATION.UPSERT,
+    rows.definition,
+  );
+  const replicaByNode = {
+    [NODE_A]: `${rows.serviceId}-r1`,
+    [NODE_B]: `${rows.serviceId}-r2`,
+  };
+  for (const [nodeId, replicaId] of Object.entries(replicaByNode)) {
+    systemTableCache.applySystemTableChange(
+      TABLES.SERVICES,
+      CDC_OPERATION.UPSERT,
+      {
+        created_at: Date.now(),
+        node_id: nodeId,
+        service_id: replicaId,
+        service_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
+        status: ReplicaStatus.ACTIVE,
+        updated_at: Date.now(),
+      },
+    );
+  }
+
+  const componentBytes = await componentizeFixtureGuest();
+  const shardPartitionByNode = {
+    [NODE_A]: PARTITION_ONE,
+    [NODE_B]: PARTITION_TWO,
+  };
+  const nodes = {};
+  for (const [nodeId, replicaId] of Object.entries(replicaByNode)) {
+    const shardPartitionId = shardPartitionByNode[nodeId];
+    const database = partitionStores.databases.get(shardPartitionId);
+    nodes[nodeId] = await createNode({
+      componentBytes,
+      localPartitionServices: new Map([[shardPartitionId, {
+        executeQuery: async (sql, params = []) => {
+          const rowsRead = database.prepare(sql).all(...params);
+          return {
+            count: rowsRead.length,
+            partitionId: shardPartitionId,
+            rows: rowsRead,
+            success: true,
+          };
+        },
+        initialized: true,
+        partitionId: shardPartitionId,
+      }]]),
       messageRouter,
-      nodeId: NODE_A,
-      systemCache: systemTableCache,
+      nodeId,
+      onRunEntered: options.onRunEntered,
+      replicaId,
+      serviceId: rows.serviceId,
+      sqlQueryEngine: engine,
+      systemTableCache,
     });
-
-    seedTableRouting(systemTableCache, DECLARED_TABLE,
-      [PARTITION_ONE, PARTITION_TWO], {
-        hostByPartition: {
-          [PARTITION_ONE]: NODE_A,
-          [PARTITION_TWO]: NODE_B,
-        },
-        rangeByPartition: {
-          [PARTITION_ONE]: {end: '5', start: null},
-          [PARTITION_TWO]: {end: null, start: '5'},
-        },
-      });
-    seedTableRouting(systemTableCache, TABLES.CALL_CELL_REDUCE_SLOTS,
-      [`${TABLES.CALL_CELL_REDUCE_SLOTS}-p1`],
-      {primaryKey: 'invocation_id'});
-    seedTableRouting(systemTableCache, TABLES.CALL_CELL_REDUCE_RESULTS,
-      [`${TABLES.CALL_CELL_REDUCE_RESULTS}-p1`],
-      {primaryKey: 'result_id'});
-
-    const rows = createDeploymentRows();
-    systemTableCache.applySystemTableChange(
-      TABLES.SERVICE_BINDINGS,
-      CDC_OPERATION.UPSERT,
-      rows.bindingRow,
-    );
-    systemTableCache.applySystemTableChange(
-      TABLES.SERVICE_DEFINITIONS,
-      CDC_OPERATION.UPSERT,
-      rows.definition,
-    );
-    const replicaByNode = {
-      [NODE_A]: `${rows.serviceId}-r1`,
-      [NODE_B]: `${rows.serviceId}-r2`,
-    };
-    for (const [nodeId, replicaId] of Object.entries(replicaByNode)) {
-      systemTableCache.applySystemTableChange(
-        TABLES.SERVICES,
-        CDC_OPERATION.UPSERT,
-        {
-          created_at: Date.now(),
-          node_id: nodeId,
-          service_id: replicaId,
-          service_type: UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE,
-          status: ReplicaStatus.ACTIVE,
-          updated_at: Date.now(),
-        },
-      );
+  }
+  testContext.after(async () => {
+    for (const node of Object.values(nodes)) {
+      await node.cellRuntime.stop(rows.serviceId);
     }
+    partitionStores.close();
+    await engine.shutdown();
+  });
 
-    const componentBytes = await componentizeFixtureGuest();
-    const shardPartitionByNode = {
-      [NODE_A]: PARTITION_ONE,
-      [NODE_B]: PARTITION_TWO,
-    };
-    const nodes = {};
-    for (const [nodeId, replicaId] of Object.entries(replicaByNode)) {
-      const shardPartitionId = shardPartitionByNode[nodeId];
-      const database = partitionStores.databases.get(shardPartitionId);
-      nodes[nodeId] = await createNode({
-        componentBytes,
-        localPartitionServices: new Map([[shardPartitionId, {
-          executeQuery: async (sql, params = []) => {
-            const rowsRead = database.prepare(sql).all(...params);
-            return {
-              count: rowsRead.length,
-              partitionId: shardPartitionId,
-              rows: rowsRead,
-              success: true,
-            };
-          },
-          initialized: true,
-          partitionId: shardPartitionId,
-        }]]),
-        messageRouter,
-        nodeId,
-        replicaId,
-        serviceId: rows.serviceId,
-        sqlQueryEngine: engine,
-        systemTableCache,
-      });
-    }
-    testContext.after(async () => {
-      for (const node of Object.values(nodes)) {
-        await node.cellRuntime.stop(rows.serviceId);
-      }
-      partitionStores.close();
-      await engine.shutdown();
-    });
-
-    // The PRODUCTION assembly: the bootstrap attachment composes the
-    // invoker onto the lifecycle command owner dependency slot.
+  // The PRODUCTION assembly: the bootstrap attachment composes the
+  // invoker onto the lifecycle command owner dependency slot.
+  function attachInvoker(attachOptions = {}) {
     const serviceLifecycleCommandOwner = {};
     const invoker = attachCallCellInvoker({
       messageRouterProvider: () => messageRouter,
+      onInvocationTelemetry: attachOptions.onInvocationTelemetry,
       serviceLifecycleCommandOwner,
       sqlQueryEngine: engine,
       systemTableCacheProvider: () => systemTableCache,
@@ -520,8 +540,22 @@ describe('minimal deployment call-cell production wiring', () => {
         partialLimit: PARTIAL_LIMIT,
         reduceLeaseMs: REDUCE_LEASE_MS,
         slotCount: SLOT_COUNT,
+        ...attachOptions.tunables,
       },
     });
+    return {invoker, serviceLifecycleCommandOwner};
+  }
+
+  return {attachInvoker, engine, messageRouter, nodes, partitionStores,
+    replicaByNode, rows, systemTableCache};
+}
+
+describe('minimal deployment call-cell production wiring', () => {
+  it('spreads shard runs across two production-composed nodes and reduces ' +
+    'exactly once on the reduce-lease holder', async (testContext) => {
+    const {attachInvoker, messageRouter, nodes, partitionStores,
+      replicaByNode} = await composeTwoNodeDeployment(testContext);
+    const {invoker, serviceLifecycleCommandOwner} = attachInvoker();
     assert.equal(serviceLifecycleCommandOwner.callCellInvoker, invoker,
       'the command owner dependency is satisfied by the attachment');
 
@@ -603,6 +637,109 @@ describe('minimal deployment call-cell production wiring', () => {
       witness.slots.map((slot) => slot.replicaId).sort(),
       Object.values(replicaByNode).sort(),
       'the snapshot witness names both shard-owning replicas',
+    );
+  });
+
+  it('overlaps shard runs across the two nodes under the bounded limit ' +
+    'and returns the identical result serially and in parallel',
+  async (testContext) => {
+    // Cross-node rendezvous barrier: each node's run invocation parks
+    // here until BOTH nodes have entered. Serial dispatch would deadlock
+    // (the first run blocks the only in-flight slot), so completing the
+    // invocation at all proves two run executions were genuinely in
+    // flight at the same time on their partition-host nodes. The barrier
+    // is armed only for the parallel invocation.
+    const barrier = {armed: true, entered: [], releaseAll: null, waiters: []};
+    const BARRIER_TIMEOUT_MS = 15000;
+    const onRunEntered = async (nodeId) => {
+      if (!barrier.armed) return;
+      barrier.entered.push(nodeId);
+      if (barrier.entered.length >= 2) {
+        for (const release of barrier.waiters) release();
+        barrier.waiters = [];
+        return;
+      }
+      await new Promise((resolve, reject) => {
+        const timer = setTimeout(() => {
+          reject(new Error(
+            'no overlap: the second shard run never entered while the ' +
+            'first was parked — dispatch is not parallel'));
+        }, BARRIER_TIMEOUT_MS);
+        timer.unref?.();
+        barrier.waiters.push(() => {
+          clearTimeout(timer);
+          resolve();
+        });
+      });
+    };
+
+    const {attachInvoker, messageRouter, nodes, partitionStores} =
+      await composeTwoNodeDeployment(testContext, {onRunEntered});
+
+    const telemetryRecords = [];
+    const PARALLEL_LIMIT = 2;
+    const {invoker: parallelInvoker} = attachInvoker({
+      onInvocationTelemetry: (record) => telemetryRecords.push(record),
+      tunables: {maxConcurrentShardRuns: PARALLEL_LIMIT},
+    });
+    const parallelResult = await parallelInvoker.invoke({
+      argumentsJson: JSON.stringify({topN: TOP_N}),
+      name: CALL_SERVICE_NAME,
+      securityContext: SECURITY_CONTEXT,
+    });
+    assert.equal(parallelResult, EXPECTED_RESULT_JSON,
+      'the parallel invocation reduces to the expected result');
+    assert.deepEqual([...barrier.entered].sort(), [NODE_A, NODE_B].sort(),
+      'both partition-host nodes entered run while the barrier held — ' +
+        'two run executions overlapped in time');
+    assert.equal(telemetryRecords.length, 1);
+    assert.equal(telemetryRecords[0].configuredConcurrency, PARALLEL_LIMIT);
+    assert.equal(telemetryRecords[0].peakConcurrentShardRuns,
+      PARALLEL_LIMIT,
+      'peak concurrency reached, and never exceeded, the configured limit');
+    assert.equal(telemetryRecords[0].selectedPartitionCount, 2);
+
+    // Locality is preserved under parallel dispatch: one run per
+    // partition-host node and zero shard-table deliveries on the wire.
+    const runCounts = Object.fromEntries(
+      Object.entries(nodes).map(([nodeId, node]) =>
+        [nodeId, node.runtimeInvocationOwner.invocations.run.length]));
+    assert.deepEqual(runCounts, {[NODE_A]: 1, [NODE_B]: 1},
+      'each shard run executed on its partition host node');
+    assert.deepEqual(
+      messageRouter.partitionQueryDeliveries
+        .filter((partitionId) => partitionId.startsWith(DECLARED_TABLE)),
+      [],
+      'raw shard rows never left their host node before run',
+    );
+
+    // Serial/parallel identity: the same deployment invoked with the
+    // limit forced to 1 (barrier disarmed) returns the identical result.
+    barrier.armed = false;
+    const {invoker: serialInvoker} = attachInvoker({
+      tunables: {maxConcurrentShardRuns: 1},
+    });
+    const serialResult = await serialInvoker.invoke({
+      argumentsJson: JSON.stringify({topN: TOP_N}),
+      name: CALL_SERVICE_NAME,
+      securityContext: SECURITY_CONTEXT,
+    });
+    assert.equal(serialResult, parallelResult,
+      'serial and parallel dispatch return the identical result for the ' +
+        'same invocation');
+
+    // Exactly one visible snapshot per invocation, both carrying the
+    // identical reduced result.
+    const resultsDb = partitionStores.databases.get(
+      `${TABLES.CALL_CELL_REDUCE_RESULTS}-p1`);
+    const resultRows = resultsDb
+      .prepare(`SELECT * FROM ${TABLES.CALL_CELL_REDUCE_RESULTS}`)
+      .all();
+    assert.equal(resultRows.length, 2,
+      'one visible result row per completed invocation');
+    assert.ok(
+      resultRows.every((row) => row.result_json === EXPECTED_RESULT_JSON),
+      'every visible snapshot carries the identical reduced result',
     );
   });
 });

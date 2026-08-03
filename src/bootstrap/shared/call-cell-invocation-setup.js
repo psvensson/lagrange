@@ -48,6 +48,9 @@ const CALL_CELL_INVOCATION_DEFAULT = Object.freeze({
   BATCH_ROW_BOUND: 4096,
   DEADLINE_MS: 30000,
   EMIT_BUDGET: 64,
+  // Policy-owned bound for concurrent partition-local shard runs per
+  // invocation (brief §2: system policy, never caller-selected).
+  MAX_CONCURRENT_SHARD_RUNS: 8,
   NESTED_CALL_BUDGET: 1,
   PARTIAL_LIMIT: 1024,
   RECLAIM_RETENTION_MS: 600000,
@@ -172,6 +175,12 @@ function attachCallCellInvoker(options = {}) {
     nestedCallBudget: positiveIntegerOr(
       tunables.nestedCallBudget,
       CALL_CELL_INVOCATION_DEFAULT.NESTED_CALL_BUDGET),
+    maxConcurrentShardRuns: positiveIntegerOr(
+      tunables.maxConcurrentShardRuns,
+      CALL_CELL_INVOCATION_DEFAULT.MAX_CONCURRENT_SHARD_RUNS),
+    // Optional deployment observability sink: one frozen record per
+    // invocation (concurrency, locality, durations, failure code).
+    onInvocationTelemetry: options.onInvocationTelemetry,
     partialLimit: positiveIntegerOr(
       tunables.partialLimit, CALL_CELL_INVOCATION_DEFAULT.PARTIAL_LIMIT),
     reclaimRetentionMs: positiveIntegerOr(

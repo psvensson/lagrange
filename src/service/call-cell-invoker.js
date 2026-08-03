@@ -30,6 +30,10 @@ import {
   normalizeCallComponentResult,
   normalizeEmittedPartialEntries,
 } from './call-cell-routing-contract.js';
+import {
+  SHARD_TASK_STATUS,
+  runBoundedShardDispatch,
+} from './call-shard-dispatch-pool.js';
 
 const CALL_INVOKER_MESSAGE = Object.freeze({
   EMPTY_BATCH_SET:
@@ -37,6 +41,9 @@ const CALL_INVOKER_MESSAGE = Object.freeze({
   REDUCE_LEASE_HOLDER_MOVED:
     'Call Cell reduce executed on a replica that does not hold the ' +
     'reduce lease',
+  SHARD_ADMISSION_DEADLINE:
+    'Call Cell invocation deadline passed before every shard run was ' +
+    'admitted',
 });
 
 const CALL_INVOKER_ARGUMENT_MESSAGE = Object.freeze({
@@ -78,6 +85,16 @@ const CALL_INVOKER_RECLAIM_RETENTION_DEFAULT_MS = 600000;
 const CALL_INVOKER_RECLAIM_SWEEP_FAILED_LOG =
   'call-cell coordination reclaim sweep failed (hygiene only; the live ' +
   'invocation proceeds)';
+// Bounded shard-run parallelism: policy-owned, never caller-selected.
+// Independent partition-local runs proceed concurrently up to this
+// limit through the call-shard dispatch pool; admission is slot-ordered
+// and stops on the first failure or when the shared invocation deadline
+// passes (started work always settles, and the complete-set gate keeps
+// anything partial invisible).
+const CALL_INVOKER_MAX_CONCURRENT_SHARD_RUNS_DEFAULT = 8;
+const CALL_INVOKER_TELEMETRY_LOG = 'call-cell invocation telemetry';
+const CALL_INVOKER_TELEMETRY_NO_FAILURE = 'none';
+const CALL_INVOKER_TELEMETRY_UNTYPED_FAILURE = 'untyped';
 
 function sleep(delayMs) {
   return new Promise((resolve) => {
@@ -155,6 +172,15 @@ class CallCellInvoker {
       options.reclaimRetentionMs, CALL_INVOKER_RECLAIM_RETENTION_DEFAULT_MS);
     this._batchRowBound = options.batchRowBound;
     this._partialLimit = options.partialLimit;
+    this._maxConcurrentShardRuns = positiveIntegerOption(
+      options.maxConcurrentShardRuns,
+      CALL_INVOKER_MAX_CONCURRENT_SHARD_RUNS_DEFAULT);
+    // Optional invocation-level telemetry sink; the record is also logged
+    // at debug so locality and concurrency stay observable by default.
+    this._onInvocationTelemetry =
+      typeof options.onInvocationTelemetry === 'function' ?
+        options.onInvocationTelemetry :
+        null;
     // batchRowBound rides with the bounded-emit budgets so the shard's
     // host node applies the same row bound when it builds the batch
     // locally.
@@ -173,7 +199,7 @@ class CallCellInvoker {
   // publish the bounded demand lease and retry until the planner's
   // activated replica turns ready or the activation window lapses — the
   // invoker never places anything itself; it only signals and waits.
-  async _dispatchShardRun(request) {
+  async _dispatchShardRun(request, telemetry) {
     const dispatch = () => this._statementAdapter.invoke({
       name: request.name,
       argumentsJson: request.argumentsJson,
@@ -198,9 +224,14 @@ class CallCellInvoker {
         request.deadlineMs :
         Number.POSITIVE_INFINITY,
     );
+    let publishedActivationLease = false;
     for (;;) {
       try {
-        return await dispatch();
+        const delivery = await dispatch();
+        if (telemetry && !publishedActivationLease) {
+          telemetry.readyCellHits += 1;
+        }
+        return delivery;
       } catch (error) {
         if (error?.code !== CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE ||
             !this._activationLeases || !hostNodeId) {
@@ -210,6 +241,10 @@ class CallCellInvoker {
           request.resolution.serviceId,
           hostNodeId,
         );
+        publishedActivationLease = true;
+        if (telemetry) {
+          telemetry.activationLeasesPublished += 1;
+        }
         if (Date.now() + this._activationRetryIntervalMs >
             activationDeadline) {
           throw error;
@@ -217,6 +252,39 @@ class CallCellInvoker {
         await sleep(this._activationRetryIntervalMs);
       }
     }
+  }
+
+  // One complete per-slot pipeline: host-restricted dispatch (with
+  // bounded activation), fail-closed partial normalization, slot lease
+  // acquisition, and partial publication. Independent per slot and safe
+  // to run concurrently: every step is keyed by the slot's own wire
+  // identity and coordination row, and publication order never affects
+  // the complete-set gate.
+  async _runShardSlot(request, telemetry) {
+    const delivery = await this._dispatchShardRun(request, telemetry);
+    // The published slot partial is the shard's EMITTED partial set (the
+    // bounded call-context emit log), normalized fail-closed into the
+    // coordinator's {groupKey, aggValue} entries. The run export's own
+    // return value is component bookkeeping and is not coordinated.
+    const entries = normalizeEmittedPartialEntries(delivery.partials);
+    const replicaId = delivery.replicaId ?? request.resolution.replicaId;
+    const partialJson = JSON.stringify(entries);
+    if (telemetry) {
+      telemetry.bytesEmittedAsPartials += Buffer.byteLength(partialJson);
+    }
+    await this._reduceCoordinator.acquireReduceLease(
+      request.invocationId,
+      replicaId,
+      request.slotId,
+    );
+    await this._reduceCoordinator.publishPartial(
+      request.invocationId,
+      request.slotId,
+      replicaId,
+      partialJson,
+      Date.now(),
+    );
+    return request.slotId;
   }
 
   /**
@@ -227,7 +295,33 @@ class CallCellInvoker {
    * @param {number} [request.deadlineMs] absolute epoch-ms deadline
    * @return {Promise<string>} the final reduced result JSON string
    */
-  async invoke({name, argumentsJson, securityContext, deadlineMs}) {
+  async invoke(request) {
+    const telemetry = {
+      activationLeasesPublished: 0,
+      bytesEmittedAsPartials: 0,
+      configuredConcurrency: this._maxConcurrentShardRuns,
+      failureCode: CALL_INVOKER_TELEMETRY_NO_FAILURE,
+      peakConcurrentShardRuns: 0,
+      readyCellHits: 0,
+      reduceMs: 0,
+      selectedPartitionCount: 0,
+      shardDispatchMs: 0,
+    };
+    try {
+      return await this._invokeWithTelemetry(request, telemetry);
+    } catch (error) {
+      telemetry.failureCode = typeof error?.code === 'string' ?
+        error.code :
+        CALL_INVOKER_TELEMETRY_UNTYPED_FAILURE;
+      throw error;
+    } finally {
+      this._logger?.debug?.(CALL_INVOKER_TELEMETRY_LOG, telemetry);
+      this._onInvocationTelemetry?.(Object.freeze(telemetry));
+    }
+  }
+
+  async _invokeWithTelemetry(
+    {name, argumentsJson, securityContext, deadlineMs}, telemetry) {
     const resolution = this._routeResolver.resolve({
       invocationId: `${RESOLVE_PROBE_PREFIX}${name}`,
       name,
@@ -286,9 +380,26 @@ class CallCellInvoker {
       [...slotIds, reduceLeaseSlotId],
     );
 
-    for (const [slotIndex, shard] of batches.entries()) {
-      const slotId = slotIds[slotIndex];
-      const delivery = await this._dispatchShardRun({
+    // Bounded parallel shard dispatch: independent per-slot pipelines
+    // proceed concurrently up to the policy-owned limit, preferring
+    // slot order. Slot identity, wire identity, and lease identity were
+    // all fixed above, before any dispatch — completion order never
+    // affects them. Shards resolved to the same host node serialize
+    // there (the WASI cell runtime allows one active invocation per
+    // component instance); shards on distinct hosts overlap. The
+    // transport cannot cancel already-dispatched work, so on failure or
+    // deadline the pool only stops admitting new shards; started work
+    // settles, and nothing partial ever becomes visible because
+    // reduction requires the complete slot set.
+    telemetry.selectedPartitionCount = batches.length;
+    const shardPhaseStartedAt = Date.now();
+    const dispatchOutcome = await runBoundedShardDispatch({
+      admissionKeyOf: (slotRequest) =>
+        slotRequest.shard.hostTopology?.hostNodeId,
+      deadlineMs,
+      limit: this._maxConcurrentShardRuns,
+      runSlot: (slotRequest) => this._runShardSlot(slotRequest, telemetry),
+      slots: batches.map((shard, slotIndex) => ({
         argumentsJson,
         deadlineMs,
         invocationId,
@@ -296,25 +407,23 @@ class CallCellInvoker {
         resolution,
         securityContext,
         shard,
-        slotId,
-      });
-      // The published slot partial is the shard's EMITTED partial set (the
-      // bounded call-context emit log), normalized fail-closed into the
-      // coordinator's {groupKey, aggValue} entries. The run export's own
-      // return value is component bookkeeping and is not coordinated.
-      const entries = normalizeEmittedPartialEntries(delivery.partials);
-      const replicaId = delivery.replicaId ?? resolution.replicaId;
-      await this._reduceCoordinator.acquireReduceLease(
-        invocationId,
-        replicaId,
-        slotId,
-      );
-      await this._reduceCoordinator.publishPartial(
-        invocationId,
-        slotId,
-        replicaId,
-        JSON.stringify(entries),
-        Date.now(),
+        slotId: slotIds[slotIndex],
+      })),
+    });
+    telemetry.peakConcurrentShardRuns = dispatchOutcome.peakConcurrent;
+    telemetry.shardDispatchMs = Date.now() - shardPhaseStartedAt;
+    // Deterministic failure selection: settled entries are slot-ordered,
+    // so the surfaced failure is the lowest-slot cause after every
+    // started task settled — never network completion order.
+    const rejected = dispatchOutcome.settled.find(
+      (entry) => entry.status === SHARD_TASK_STATUS.REJECTED);
+    if (rejected) {
+      throw rejected.reason;
+    }
+    if (dispatchOutcome.unadmitted.length > 0) {
+      throw createCallRoutingFailure(
+        CALL_CELL_ROUTE_ERROR_CODE.DEADLINE_EXHAUSTED,
+        CALL_INVOKER_MESSAGE.SHARD_ADMISSION_DEADLINE,
       );
     }
 
@@ -332,6 +441,7 @@ class CallCellInvoker {
     // that replica, dispatch, and refuse the snapshot if the executing
     // replica is not the lease holder (route moved between acquire and
     // dispatch — retryable, nothing became visible).
+    const reduceStartedAt = Date.now();
     const reduceInvocationId = createCallReduceInvocationId(invocationId);
     const reduceRoute = this._routeResolver.resolve({
       invocationId: reduceInvocationId,
@@ -369,6 +479,7 @@ class CallCellInvoker {
       resultJson,
       witness,
     );
+    telemetry.reduceMs = Date.now() - reduceStartedAt;
     return resultJson;
   }
 }
