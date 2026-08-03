@@ -17,7 +17,7 @@ import path from 'node:path';
 import assert from 'node:assert/strict';
 import {componentize} from '@bytecodealliance/componentize-js';
 import {transpileBytes} from '@bytecodealliance/jco-transpile';
-import {test} from '../../src/test-helpers/tap.js';
+import t, {test} from '../../src/test-helpers/tap.js';
 
 const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
 const FIXTURE_DIRECTORY = new URL(
@@ -42,6 +42,10 @@ const READ_STUB_VALUE = 7;
 // tap's parseTestArgs mutates the options object, so each test gets
 // a fresh literal instead of a shared frozen constant.
 const TOOLCHAIN_TIMEOUT_MS = 120000;
+// Three ComponentizeJS builds run in this file (~20-25s each on a loaded
+// machine); tap's root 30s file watchdog is too tight for a
+// toolchain-bound suite, mirroring the ABI-spike precedent.
+t.setTimeout(TOOLCHAIN_TIMEOUT_MS * 3);
 
 async function buildComponent(guestUrl, witPath, worldName) {
   const guestSource = await readFile(guestUrl, 'utf8');

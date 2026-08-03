@@ -288,6 +288,7 @@ describe('WasmComponentDriver contract conformance', () => {
         'constructor',
         ...CONTRACT_METHODS,
         'setArtifactLoader',
+        'setRequestCallBridge',
       ]);
       for (const name of proto) {
         assert.ok(
