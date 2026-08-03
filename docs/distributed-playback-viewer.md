@@ -5,7 +5,7 @@ audience: development
 # Distributed Test Playback Viewer
 
 A browser tool for stepping through a recorded distributed test run after it
-finishes — node lifecycle events, chaos actions, topology changes, and
+finishes - node lifecycle events, chaos actions, topology changes, and
 per-node load over time. It is also linked per-run from the test-run dashboard
 ([admin-test-run-landing.md](admin-test-run-landing.md)).
 

@@ -6,7 +6,7 @@ documentClass: current
 # The Lagrange Native Programming Model
 
 Lagrange is a distributed runtime for data-intensive services. You write one
-service — endpoints, partition functions, and a reducer together — deploy it
+service - endpoints, partition functions, and a reducer together - deploy it
 as a WASM component, and existing applications call its endpoints like any
 other service. Lagrange runs each part of a request on the database nodes
 holding the relevant data and combines the results.
@@ -17,7 +17,7 @@ This document teaches the model in order: the service, its endpoints, the
 partition functions, the reducer, and the data-local execution underneath.
 Everything written in the present tense here is implemented and exercised by
 tests at the current head. Intended extensions are collected in one clearly
-labeled [Direction](#direction-not-yet-implemented) section — nowhere else.
+labeled [Direction](#direction-not-yet-implemented) section - nowhere else.
 
 For a complete before-and-after walkthrough, continue to
 [Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md).
@@ -43,8 +43,8 @@ or replica counts.
 `request`, `change`, `time`, `once`, `boot`, `call`, and `pushdown` are
 accepted source kinds. Two of them are publicly invocable today:
 
-- `request` — an HTTP endpoint on the main REST listener;
-- `call` — a data-local invocation over authenticated pgwire.
+- `request` - an HTTP endpoint on the main REST listener;
+- `call` - a data-local invocation over authenticated pgwire.
 
 The remaining kinds (`change`, `time`, `once`, `boot`, `pushdown`) can be
 declared and placed but have no public invocation adapter yet. Current status
@@ -149,7 +149,7 @@ CALL BINDING $1
 ```
 
 `schema_version` and `name` are required; `arguments` is an optional JSON
-object. Unknown fields are refused — tenant identity comes from the
+object. Unknown fields are refused - tenant identity comes from the
 authenticated session, never from the payload. The statement maps to its own
 pgwire authorization action (`pgwire.binding.call`) and fails closed for
 sessions that lack it.
@@ -219,7 +219,7 @@ interface call-context {
 }
 ```
 
-`run` receives one typed `list<row>` per partition — the Binding statement's
+`run` receives one typed `list<row>` per partition - the Binding statement's
 rows, fetched locally on the node hosting that partition. The SQL-to-WIT
 value mapping is fail-closed: unsafe integers, non-finite floats, and blobs
 have no variant and refuse rather than corrupt.
@@ -228,9 +228,9 @@ Partials leave the function through the `emit(key, partialJson)` host import,
 not through the return value (the `run` return value is component bookkeeping
 and is not coordinated). Two hard rules apply today:
 
-- the partial value must be a finite number — the coordination gate supports
+- the partial value must be a finite number - the coordination gate supports
   numeric per-group aggregation values only;
-- group keys must be shard-disjoint — two shards emitting the same key is a
+- group keys must be shard-disjoint - two shards emitting the same key is a
   typed refusal (`call_cell_reduce_incomplete`), never a silent double count.
 
 A minimal partition function, condensed from the repository's exercised
@@ -271,7 +271,7 @@ proven through ComponentizeJS build, jco transpile, and host instantiation.
 ## Reducers
 
 The reducer combines partial results into the endpoint response. It is a
-second export — `reduce` — in the same component as the partition function.
+second export - `reduce` - in the same component as the partition function.
 One source file, one artifact, one deployment:
 
 ```js
@@ -287,8 +287,8 @@ export function reduce(partials, argumentsJson) {
 
 Before `reduce` runs, the coordinator enforces a completeness gate: every
 expected shard slot present, no lease expired, no stale partial, every entry
-a bounded `{groupKey, finite number}` pair. The merged input is deterministic
-— value descending, then group key — so the reducer sees the same input for
+a bounded `{groupKey, finite number}` pair. The merged input is deterministic -
+value descending, then group key - so the reducer sees the same input for
 the same partials regardless of arrival order.
 
 The result is published as exactly one atomic snapshot per complete partial
@@ -321,7 +321,7 @@ The load-bearing properties, each with two-node integration evidence:
 
 - **Rows never leave the host node.** The shard batch is built from the
   node's own partition replica. In the two-node proof, shard-table query
-  deliveries across the wire are exactly zero — the network carries partials
+  deliveries across the wire are exactly zero - the network carries partials
   and the final result, not rows.
 - **Missing compute is activated, not errored.** If no ready Cell exists on
   a partition-host node, the invoker publishes a bounded activation lease;
@@ -330,15 +330,15 @@ The load-bearing properties, each with two-node integration evidence:
   normal surplus cure removes the replica.
 - **Movement is fenced, not raced.** Route drift, partition supersession,
   receiver ownership changes, and reduce-lease movement all surface as the
-  typed retryable `call_cell_target_stale` — never a wrong result.
+  typed retryable `call_cell_target_stale` - never a wrong result.
 - **Failures are typed.** Every failure carries a `call_cell_*` code and a
   `terminal | retryable | ambiguous` classification; retries happen only for
   retryable failures where the component was provably not invoked.
 
 Headline defaults (all per-deployment tunable): 30 s ingress deadline,
 4096 rows per shard batch, 64 `emit` calls per invocation, 1024 partial
-entries per slot. The full contract — retries, idempotency, ordering,
-budgets, movement — lives in
+entries per slot. The full contract - retries, idempotency, ordering,
+budgets, movement - lives in
 [Execution Semantics](execution-semantics.md).
 
 ## What A Hot-Path Rewrite Buys
@@ -396,7 +396,7 @@ would otherwise decay becomes continuously reconciled cluster state.
 The context is capability-controlled. The manifest and access declaration
 state which tables and modes an Artifact may use; undeclared access fails at
 the component boundary. On the call path, the security context (tenant,
-principal, roles) is server-derived from the authenticated session — a
+principal, roles) is server-derived from the authenticated session - a
 payload cannot claim an identity.
 
 Invocation identity, deadlines, typed retry classification, and a durable
@@ -470,7 +470,7 @@ a supported surface today.
 plus operation from inside application code:
 
 ```js
-// Intended API — not yet implemented. Today the data selector is the
+// Intended API - not yet implemented. Today the data selector is the
 // Binding-declared statement and the ingress is pgwire CALL BINDING $1.
 const result = await lagrange.call({
   data: {table: 'ratings', where: {movieId: {between: [first, last]}}},
@@ -480,9 +480,9 @@ const result = await lagrange.call({
 });
 ```
 
-The shape of this call exists today — the selector is the Binding
+The shape of this call exists today - the selector is the Binding
 `statement`, `function` is the `run` export, `reduce` is the `reduce`
-export, and arguments ride the `CALL BINDING` payload — but the surface is
+export, and arguments ride the `CALL BINDING` payload - but the surface is
 SQL over pgwire, not a JavaScript client, and the selector is fixed at
 Binding time rather than per call.
 
@@ -500,7 +500,7 @@ future work.
 always denies it today.
 
 **`pushdown`.** The Binding kind is accepted, compiles, and places, and the
-runtime would execute it — but no routing surface can select it. It is
+runtime would execute it - but no routing surface can select it. It is
 declared-only, reserved for query-planner-initiated invocation.
 
 **HTTP ingress for call endpoints** and a typed capability enum for the
@@ -508,16 +508,16 @@ call context are likewise open.
 
 ## Continue
 
-- [Execution Semantics](execution-semantics.md) — the contract: retries,
+- [Execution Semantics](execution-semantics.md) - the contract: retries,
   idempotency, budgets, movement, exactly-once visibility.
-- [Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md) — a
+- [Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md) - a
   best-of-breed baseline and the data-local rewrite, end to end.
-- [Service Deployment Guide](service-deployment-guide.md) — install an
+- [Service Deployment Guide](service-deployment-guide.md) - install an
   Artifact, create a Binding, declare access, invoke.
-- [Examples index](../examples/README.md) — runnable examples, including
+- [Examples index](../examples/README.md) - runnable examples, including
   the current call-path status.
 - [Minimal Deployment Surface](../architecture/minimal-deployment-surface.md)
-  — the sealed design contract behind Artifact, Binding, Cell, and the call
+  - the sealed design contract behind Artifact, Binding, Cell, and the call
   surface.
 - [Current Capabilities And Limitations](current-capabilities-and-limitations.md)
-  — the generated status authority.
+  - the generated status authority.

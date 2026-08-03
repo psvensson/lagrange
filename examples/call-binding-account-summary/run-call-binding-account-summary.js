@@ -205,7 +205,7 @@ async function waitForReadyCallCell(node) {
 }
 
 // A second authenticated pgwire session scoped to the one action the
-// caller needs: pgwire.binding.call. Password mode is required — CALL
+// caller needs: pgwire.binding.call. Password mode is required - CALL
 // BINDING is not in the trust-mode action set.
 async function createCallerAdapter(node, sessionId, allowedActions) {
   const authHandler = new PgWireAuthHandler({

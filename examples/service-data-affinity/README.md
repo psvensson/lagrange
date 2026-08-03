@@ -5,8 +5,8 @@
 Picture a familiar architecture: a database cluster holds the data, and a
 separate application service holds the business logic. Every request makes the
 service query the database, wait for results to cross the network, apply its
-logic, and respond. For data-heavy operations — rank everything, score
-everything, aggregate everything — **the network boundary between application
+logic, and respond. For data-heavy operations - rank everything, score
+everything, aggregate everything - **the network boundary between application
 and data becomes the product's bottleneck**: most of what crosses it is
 discarded moments later.
 
@@ -15,16 +15,16 @@ This is the specific problem Lagrange exists to attack (see the
 the code to the data, run it beside every shard in parallel, and exchange only
 small partial results.
 
-This example makes that concrete — and honest. It computes the same
+This example makes that concrete - and honest. It computes the same
 [MovieLens 100k](https://grouplens.org/datasets/movielens/100k/) top-ten movie
 ranking (100,000 real movie ratings, a standard public research dataset) three
 ways:
 
-1. **PostgreSQL grouped SQL** — a primary with two synchronous streaming
+1. **PostgreSQL grouped SQL** - a primary with two synchronous streaming
    replicas executes `AVG` and `COUNT` per movie.
-2. **Lagrange distributed grouped SQL** — the same grouped query runs across
+2. **Lagrange distributed grouped SQL** - the same grouped query runs across
    Lagrange partitions.
-3. **A replicated Lagrange service** — two service replicas apply a
+3. **A replicated Lagrange service** - two service replicas apply a
    confidence-adjusted Bayesian ranking on disjoint movie-id shards. Each
    publishes at most ten candidates; one replica merges at most twenty.
 
@@ -42,7 +42,7 @@ for the authoring model, read
 
 The comparison does not make the conventional service pull every raw rating
 into application memory. PostgreSQL groups first and returns one aggregate per
-movie. That is a sensible best-of-breed implementation — the strongest
+movie. That is a sensible best-of-breed implementation - the strongest
 conventional shape, not a strawman.
 
 Even so, the boundary remains: *every* movie's aggregate must cross into the
@@ -62,7 +62,7 @@ flowchart LR
   classDef ctrl fill:#fef3c7,stroke:#b45309,color:#451a03
 ```
 
-The Lagrange service changes the execution shape — the policy runs *before*
+The Lagrange service changes the execution shape - the policy runs *before*
 the exchange, beside each shard, and only bounded top-ten lists cross:
 
 ```mermaid
@@ -91,7 +91,7 @@ process now runs before the exchange, beside each shard.
 ## Why A Service, Not Just More SQL?
 
 An average and count are natural SQL. The ranking formula is application
-policy — a
+policy - a
 [Bayesian average](https://en.wikipedia.org/wiki/Bayesian_average) with a
 confidence penalty, so a movie with three perfect ratings does not outrank a
 movie with three thousand very good ones:
@@ -170,7 +170,7 @@ Then the relevant boundary shapes are approximately:
 | Strong grouped-SQL baseline | `M` aggregates |
 | Shard-local policy and bounded reduction | at most `R × K` candidates |
 
-With MovieLens 100k, `N` is 100,000 ratings and `M` is about 1,700 movies —
+With MovieLens 100k, `N` is 100,000 ratings and `M` is about 1,700 movies -
 but `R × K` stays at twenty no matter how many ratings or movies exist. The
 bound grows with shard count and requested results, not with the data.
 
@@ -267,12 +267,12 @@ node examples/service-data-affinity/download-movielens.js
 
 Check four things in order:
 
-1. **Correctness** — all paths produce the same ordered top ten.
-2. **Transfer shape** — grouped SQL emits one result per movie; the service
+1. **Correctness** - all paths produce the same ordered top ten.
+2. **Transfer shape** - grouped SQL emits one result per movie; the service
    emits bounded top-N partials.
-3. **Chronology** — partial leases and the final atomic snapshot represent one
+3. **Chronology** - partial leases and the final atomic snapshot represent one
    coherent reduce generation.
-4. **Affinity** — attributed partition access produces placement evidence and
+4. **Affinity** - attributed partition access produces placement evidence and
    the service converges toward a better weighted node set.
 
 Startup, loading, and topology differ between PostgreSQL and Lagrange. The
@@ -314,7 +314,7 @@ The public successor to this demo's internal query-loop module now
 exists: the `call` Binding kind is invocable end to end over pgwire
 (`CALL BINDING $1`), with a Binding-declared partition-local SELECT,
 shard-local `run` execution on partition-host nodes, and a coordinated
-`reduce` over numeric partials —
+`reduce` over numeric partials -
 [call-binding-account-summary](../call-binding-account-summary/README.md)
 is the runnable example. The `pushdown` Binding kind still has no public
 invocation adapter, and richer partial shapes (beyond numeric per-group

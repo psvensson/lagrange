@@ -1,7 +1,7 @@
 /**
  * Tier-3 demo of the service↔data affinity placement epic
  * (solve/epics/service-data-affinity-placement.md): CODE MOVES TO ITS
- * DATA, live — at NODE granularity, inside a single latency group.
+ * DATA, live - at NODE granularity, inside a single latency group.
  *
  * Latency groups exist for CDC fan-out efficiency; the placement thesis
  * is independent of them. Data affinity is intrinsic: the service starts
@@ -10,10 +10,10 @@
  *
  * The story:
  *   1. Coordination schemas bootstrap on the seed, then four nodes join (no
- *      zone pinning — one latency domain). Once the expanded control plane is
+ *      zone pinning - one latency domain). Once the expanded control plane is
  *      quiescent, the ratings schema is created and the dataset loads with a
  *      deliberately small split threshold that forces several partitions
- *      across the cluster — real parallelism: multiple raft groups and
+ *      across the cluster - real parallelism: multiple raft groups and
  *      multiple leaders.
  *   2. The movielens ratings are loaded and split across partitions
  *      whose replicas land on different node subsets. Distributed
@@ -95,7 +95,7 @@ const LOAD_TARGET = `${TARGET}?lane=load`;
 const CLUSTER_FORM_TIMEOUT_MS = 180000;
 const POLL_INTERVAL_MS = 2000;
 const OBSERVE_INTERVAL_MS = 10000;
-// Hard cap on the convergence watch — but staleness usually fires
+// Hard cap on the convergence watch - but staleness usually fires
 // first: if NOTHING observable changes (placement set, on-data count,
 // attribution row count) for STALL_TIMEOUT_MS, the demo aborts with a
 // STALLED diagnosis instead of burning the full budget. The stall
@@ -220,8 +220,8 @@ const MAX_JOIN_RESTARTS = 5;
 
 // Node processes are supervised like an orchestrator would: a joiner
 // that exhausts its (deliberately impatient) join retry budget and
-// exits — e.g. because the seed's leader-metadata view is briefly
-// stale after a leadership move — is simply respawned with a fresh
+// exits - e.g. because the seed's leader-metadata view is briefly
+// stale after a leadership move - is simply respawned with a fresh
 // data dir until the cluster reaches the expected size.
 async function waitForActiveNodes(expectedCount, nodes, dataRoot) {
   await waitFor(`${expectedCount} active nodes`, async () => {
@@ -573,7 +573,7 @@ const ARCHIVE_RETENTION = 3;
 const AUTO_ARCHIVE_NAME_PATTERN = /^run-\d{4}-\d{2}-\d{2}T.*\.tar\.gz$/;
 
 /**
- * Archive the previous run's cluster state (logs + SQLite) before wiping —
+ * Archive the previous run's cluster state (logs + SQLite) before wiping -
  * run-13's forensics were destroyed by the unconditional wipe and the
  * root-cause investigation had to work from a later run. Keeps the newest
  * ARCHIVE_RETENTION archives (~15-30MB each gzipped).
@@ -594,7 +594,7 @@ async function archivePreviousRun() {
     console.log(`      Archived previous run state to ${archivePath}`);
   } catch (error) {
     console.log(
-      `      (previous-run archive failed: ${error.message} — proceeding)`);
+      `      (previous-run archive failed: ${error.message} - proceeding)`);
     return;
   }
   const archiveNames = (await readdir(ARCHIVE_ROOT))

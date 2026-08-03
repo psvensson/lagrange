@@ -63,11 +63,11 @@ window.
 
 The stat gate reports one of these outcomes:
 
-- `SAFETY_VIOLATED` — at least one hard safety count is non-zero.
-- `ABOVE_BAR` — safety is clean and the Wilson lower bound meets the bar.
-- `BELOW_BAR` — safety is clean and the Wilson upper bound is below the bar.
-- `INCONCLUSIVE` — safety is clean but the interval straddles the bar.
-- `NO_SEALED_BAR` — the scenario has no configured reference.
+- `SAFETY_VIOLATED` - at least one hard safety count is non-zero.
+- `ABOVE_BAR` - safety is clean and the Wilson lower bound meets the bar.
+- `BELOW_BAR` - safety is clean and the Wilson upper bound is below the bar.
+- `INCONCLUSIVE` - safety is clean but the interval straddles the bar.
+- `NO_SEALED_BAR` - the scenario has no configured reference.
 
 An inconclusive window does not authorize a pass or fail claim. Increase the
 sample only when the statistical claim is the question being answered.
@@ -88,25 +88,25 @@ values live in
 [`convergence-sealed-bars.json`](../test/distributed/config/convergence-sealed-bars.json);
 this document and that file must change together.
 
-### 5a. Sealed `doneWhen` — `snapshot-live-rebuild` (S6)
+### 5a. Sealed `doneWhen` - `snapshot-live-rebuild` (S6)
 
 The five-node `snapshot-live-rebuild` scenario certifies a *different* axis
 from rolling-restart: **rebuild safety**, not cluster-wide priority-spread
 consistency convergence. A run passes when a wiped follower's replica rejoins
-the cluster **ACTIVE** via a snapshot install (not log replay — the leader's
+the cluster **ACTIVE** via a snapshot install (not log replay - the leader's
 committed prefix is proof-gated-compacted past the follower's boundary) **and**
 every acknowledged write is visible on every reachable node. Full cluster
 priority-spread convergence is measured best-effort and does **not** gate the
-pass — it is the rolling-restart axis and is certified there.
+pass - it is the rolling-restart axis and is certified there.
 
 First seal, from the fixed-code window `ts=20260726T192824Z`
 (`srcFingerprint=ee792fd0`), 15 runs:
 
 1. same window/safety-floor discipline as §5 (≥15 runs; `CORRUPT = NODE_EXIT =
-   ORACLE_BLIND = staleSource = 0` in every run — observed 0 across all 15);
+   ORACLE_BLIND = staleSource = 0` in every run - observed 0 across all 15);
 2. Wilson 95% lower bound of the rebuild-safety pass rate at least
    **`0.50`** (observed window: 12/15, point 0.800, Wilson-95
-   `[0.548, 0.930]`, `convergeRate = 1.0` — zero missing writes on every run);
+   `[0.548, 0.930]`, `convergeRate = 1.0` - zero missing writes on every run);
 3. the 3 non-passes were slow-rebuild liveness timeouts (`missing = 0`,
    `hardBreaches = 0`), not data-safety failures.
 

@@ -8,8 +8,8 @@ documentClass: current
 This is the contract behind a distributed call. When an application invokes a
 Lagrange service endpoint over `CALL BINDING $1`, partition functions run on
 the nodes holding the data and a reducer combines the partials. This page
-states exactly what the runtime guarantees while doing that — retries,
-idempotency, failure, timing, ordering, limits — with the real production
+states exactly what the runtime guarantees while doing that - retries,
+idempotency, failure, timing, ordering, limits - with the real production
 values. Where a semantic is not decided yet, it says so.
 
 For how to author the service, read the
@@ -44,16 +44,16 @@ one atomically published result snapshot -> caller gets the reduced JSON
 Shard dispatch is parallel and bounded: at most `maxConcurrentShardRuns`
 (default **8**, deployment-tunable, never caller-selected) partition-local
 runs proceed at once, and the next shard starts as one settles. Two shards
-resolved to the **same host node serialize** there — the WASI cell runtime
-allows one active invocation per component instance — while shards on
+resolved to the **same host node serialize** there - the WASI cell runtime
+allows one active invocation per component instance - while shards on
 distinct hosts overlap. Slot identity, wire identity, and lease identity
 are fixed before any dispatch; completion order never affects the result
 (coordination rows, not completion order, define the invocation). On the
 first shard failure, or once the shared deadline passes, no further shard
 is admitted; already-started shards settle, and the incomplete slot set
 stays invisible behind the completeness gate. When shards fail, the
-surfaced error is the **lowest-slot** cause after all started work settled
-— stable slot order, never network race order.
+surfaced error is the **lowest-slot** cause after all started work settled -
+stable slot order, never network race order.
 
 ## Timeouts And Deadlines
 
@@ -67,7 +67,7 @@ surfaced error is the **lowest-slot** cause after all started work settled
   the local read maps to `call_cell_deadline_exhausted`, row/byte exhaustion
   to `call_cell_batch_bound_exceeded`.
 - Waiting for a missing Cell to activate (below) is capped at
-  `min(now + 15 s, caller deadline)` — a short-deadline call fails typed with
+  `min(now + 15 s, caller deadline)` - a short-deadline call fails typed with
   budget left to report instead of burning it all on a capacity wait.
 
 ## Retries
@@ -77,10 +77,10 @@ hold:
 
 1. the failure is classified `retryable`, and
 2. the component was **not** invoked (`invoked !== true`), and
-3. attempts remain (`maxAttempts`, default **2** — one retry).
+3. attempts remain (`maxAttempts`, default **2** - one retry).
 
 Every failure is classified `terminal`, `retryable`, or `ambiguous`.
-`ambiguous` means the runtime cannot prove the component did not execute —
+`ambiguous` means the runtime cannot prove the component did not execute -
 an unclassifiable dispatch error (`call_cell_handler_failed`), a shutdown
 after dispatch started (`call_cell_shutting_down` with `invoked`), or a
 delivery that acknowledged without a typed outcome (`call_cell_ack_only`).
@@ -110,7 +110,7 @@ result. All codes are prefixed `call_cell_`:
 | `route_unavailable` | retryable | no ready Cell, overload, or local read failure |
 | `host_cell_unavailable` | retryable | no ready Cell on the shard's host node (activation trigger) |
 | `target_stale` | retryable | topology moved between resolve and execute |
-| `transport_failed` | retryable | reserved; currently unraised — transport failures normalize to `handler_failed` |
+| `transport_failed` | retryable | reserved; currently unraised - transport failures normalize to `handler_failed` |
 | `shutting_down` | retryable / ambiguous | node shutdown before / after dispatch started |
 | `handler_failed` | ambiguous | unclassifiable receiver failure |
 | `ack_only` | ambiguous | delivery acknowledged without a typed outcome |
@@ -132,7 +132,7 @@ Every failure also carries `invoked` (did a component run) and
 - Idempotency keys containing the reserved `#slot-` / `#reduce` grammar are
   refused typed (`call_cell_invalid_arguments`).
 - There is **no caller-supplied idempotency key on CALL today**. The identity
-  plumbing accepts one, but no ingress field feeds it — two identical
+  plumbing accepts one, but no ingress field feeds it - two identical
   `CALL BINDING` statements are two invocations. Caller idempotency keys are
   an unresolved design decision.
 
@@ -142,7 +142,7 @@ The guarantee is **exactly-once visibility, not exactly-once execution**:
 
 - `emit(key, partialJson)` is the only coordinated output channel from
   `run`. The `run` return value is component bookkeeping and is not
-  coordinated — do not put results there.
+  coordinated - do not put results there.
 - Exactly one result snapshot is atomically published per complete partial
   set. A replayed or re-leased reduce recomputes without a visible
   intermediate; callers never observe two results for one invocation.
@@ -159,7 +159,7 @@ Merged reduce input is deterministic, independent of shard arrival order:
 entries sort by aggregation value descending, ties broken by group key with
 `localeCompare(..., {numeric: true})`, then the list is sliced to
 `partialLimit` (1024). Rows inside a shard batch arrive in local SELECT
-order; do not rely on cross-shard row order — only the merged partial order
+order; do not rely on cross-shard row order - only the merged partial order
 is contractual.
 
 ## Deterministic Vs Nondeterministic Functions
@@ -168,7 +168,7 @@ Two hard correctness requirements on the guest:
 
 - **Shard-disjoint group keys are mandatory.** The same group key emitted by
   two shards is a contract violation, refused as `call_cell_reduce_incomplete`
-  (shard overlap) — never silently merged. Derive group keys from the data's
+  (shard overlap) - never silently merged. Derive group keys from the data's
   partition-local identity.
 - **Partial values are finite numbers.** Each emitted partial JSON must parse
   to a finite number; today the coordination gate supports numeric per-group
@@ -183,13 +183,13 @@ output makes replay and retry observably diverge.
 - The binding-declared selector is a **single-table SELECT**. Anything else
   is `call_cell_statement_invalid`.
 - Each shard's batch is a bounded local read of that node's own partition
-  replica (row bound + deadline), built where the data lives — raw shard
+  replica (row bound + deadline), built where the data lives - raw shard
   rows never cross the network.
 - There is **no cross-partition transaction** in a CALL. Shards are read
   independently (and possibly concurrently); the invocation does not take
   a global snapshot, so concurrent writes may land between shard reads.
   The topology fence guarantees each shard read is against a current,
-  non-superseded replica — not that all shards observe one instant.
+  non-superseded replica - not that all shards observe one instant.
 - The CALL path writes nothing to user tables.
 
 ## Cancellation
@@ -197,7 +197,7 @@ output makes replay and retry observably diverge.
 There is **no caller-initiated cancellation**. Closing the pgwire session
 does not stop a running invocation; the deadline is the only caller-side
 bound. The transport cannot cancel an already-dispatched shard run either:
-on failure or deadline the invoker only stops admitting new shards —
+on failure or deadline the invoker only stops admitting new shards -
 started work settles, and nothing partial becomes visible. Node shutdown
 aborts in-flight dispatches typed (`call_cell_shutting_down`; ambiguous if
 the component may have run). Caller cancellation is an unresolved design
@@ -219,7 +219,7 @@ Production defaults, all overridable per deployment
 | `REDUCE_LEASE_MS` | 30000 | slot/reduce lease duration |
 | `ACTIVATION_LEASE_MS` | 60000 | activation-pin lease lifetime |
 | `RECLAIM_RETENTION_MS` | 600000 | coordination-garbage retention |
-| `NESTED_CALL_BUDGET` | 1 | moot — nested `call-bounded` always denies today |
+| `NESTED_CALL_BUDGET` | 1 | moot - nested `call-bounded` always denies today |
 
 Ingress transport: `maxAttempts` 2, 128 in-flight globally, 32 per target;
 overload is a typed retryable `call_cell_route_unavailable`, never a queue.
@@ -240,9 +240,9 @@ Movement never corrupts a result; it produces typed retryable refusals:
   the receiving node's own ownership + epoch fence (it re-reads its cache and
   refuses if the leader, state, or partition versions moved, or the fence
   names another node), and a reduce that executed on a replica no longer
-  holding the reduce lease. All carry `preserveReplicaState: true` — the
+  holding the reduce lease. All carry `preserveReplicaState: true` - the
   replica is not marked failed for having moved.
-- `call_cell_host_cell_unavailable` is not an error path in production — it
+- `call_cell_host_cell_unavailable` is not an error path in production - it
   is the **activation trigger**. The invoker publishes a bounded demand lease
   (`call_activation_leases`, 60 s), the placement planner pins a replica to
   the shard's host node, and the dispatch retries every 250 ms until the Cell
@@ -259,7 +259,7 @@ Every payload is versioned: the CALL payload carries `schema_version` (2),
 bindings are `schema_version: 2`, manifests `schema_version: 3`. A binding's
 target pins the exact artifact by `manifest_digest`; the resolved route
 carries the definition's `bindingDigest`, and the receiver re-asserts the
-full route — digest included — refusing `call_cell_target_stale` if any field
+full route - digest included - refusing `call_cell_target_stale` if any field
 drifted. An upgrade mid-invocation therefore fails typed retryable rather
 than executing mixed versions.
 
@@ -269,12 +269,12 @@ Coordination garbage (lapsed slot rows, abandoned result rows) is swept
 opportunistically: one bounded sweep per new invocation, no background
 reaper, retention 600 s. Sweep failures are hygiene-only and never fail the
 live invocation. A live invocation whose seed-to-first-acquire span exceeds
-retention is treated as abandoned by design — typed retryable, never a wrong
+retention is treated as abandoned by design - typed retryable, never a wrong
 result.
 
 ## Unresolved Design Decisions
 
-Stated once, plainly — none of these are guaranteed by anything above:
+Stated once, plainly - none of these are guaranteed by anything above:
 
 - caller-initiated cancellation;
 - caller-supplied idempotency keys on CALL;

@@ -16,7 +16,7 @@ works in the current tree, including important limitations, see
 [Current Capabilities And Limitations](docs/current-capabilities-and-limitations.md).
 Released changes are recorded in [CHANGELOG.md](CHANGELOG.md).
 
-## Recently completed — 0.1 Internal Coherence
+## Recently completed - 0.1 Internal Coherence
 
 The first phase established the database foundations:
 
@@ -29,7 +29,7 @@ The first phase established the database foundations:
 These capabilities make the system substantially easier to reason about under
 failure. They are the base for the release and usability work that follows.
 
-## Now — 0.2 Stable Core
+## Now - 0.2 Stable Core
 
 Version 0.2 is intentionally narrow. Its purpose is to make the existing core
 cluster credible as a release without presenting unfinished platform features
@@ -50,7 +50,7 @@ automatic data-affinity placement, distributed-reduce certification, or OCI
 container execution unless their acceptance work finishes before the release
 cutoff.
 
-## Next — 0.5 Easy To Try
+## Next - 0.5 Easy To Try
 
 The next phase focuses on the first experience of using Lagrange:
 
@@ -65,7 +65,7 @@ The goal is for a developer to run a cluster, connect with `psql`, create
 tables, deploy a WASM service, run distributed execution, and inspect the
 result within 30 minutes.
 
-## Later — 1.0 Production Ready
+## Later - 1.0 Production Ready
 
 The 1.0 phase turns the usable system into one that teams can operate with
 clear expectations:
@@ -80,7 +80,7 @@ clear expectations:
 The emphasis is explicit guarantees backed by repeatable evidence, rather than
 adding features without an operational contract.
 
-## Future — 2.0 Deeper Distributed Execution
+## Future - 2.0 Deeper Distributed Execution
 
 The core of data-local execution is already shipped: call Bindings run
 partition functions on the partition-host nodes and reduce their partials

@@ -50,13 +50,13 @@ validity without returning parsed components.
 
 ### Constants
 
-- `PACKAGE_ID_PATTERN` — full regex
+- `PACKAGE_ID_PATTERN` - full regex
   (`src/constants/wasm-meta.js`)
-- `PACKAGE_ID_SEPARATOR` — `':'`
-- `PACKAGE_VERSION_SEPARATOR` — `'@'`
-- `PACKAGE_ID_MAX_LENGTH` — `{NAMESPACE: 128, NAME: 128,
+- `PACKAGE_ID_SEPARATOR` - `':'`
+- `PACKAGE_VERSION_SEPARATOR` - `'@'`
+- `PACKAGE_ID_MAX_LENGTH` - `{NAMESPACE: 128, NAME: 128,
   VERSION: 64}`
-- `NAMESPACE_PATTERN`, `PACKAGE_NAME_PATTERN` — segment
+- `NAMESPACE_PATTERN`, `PACKAGE_NAME_PATTERN` - segment
   regexes (`src/wasm-service/wasm-meta-models-constants.js`)
 
 ## Registry Mapping
@@ -66,11 +66,11 @@ Maps a package namespace to a registry URL. Stored in the
 
 ### Resolution Precedence
 
-1. **Per-package override** — `package_registry_overrides`
+1. **Per-package override** - `package_registry_overrides`
    table, keyed by `(namespace, name)`
-2. **Namespace mapping** — `package_registry_mappings` table,
+2. **Namespace mapping** - `package_registry_mappings` table,
    keyed by `namespace`
-3. **Default mapping** — a configured fallback registry URL
+3. **Default mapping** - a configured fallback registry URL
 
 First match wins. If nothing matches, resolution fails.
 
@@ -118,12 +118,12 @@ Every resolution result includes `auditInfo` for traceability.
 
 ### Constants
 
-- `RESOLUTION_SOURCE` — `{OVERRIDE, NAMESPACE, DEFAULT}`
+- `RESOLUTION_SOURCE` - `{OVERRIDE, NAMESPACE, DEFAULT}`
   (`src/wasm-service/registry-resolver.js`)
-- `REGISTRY_MAPPING_FIELD` / `REGISTRY_MAPPING_COL` — field
+- `REGISTRY_MAPPING_FIELD` / `REGISTRY_MAPPING_COL` - field
   and column name maps
   (`src/wasm-service/wasm-meta-models-constants.js`)
-- `REGISTRY_OVERRIDE_FIELD` / `REGISTRY_OVERRIDE_COL` —
+- `REGISTRY_OVERRIDE_FIELD` / `REGISTRY_OVERRIDE_COL` -
   override field and column name maps
 
 ## OCI Source References
@@ -159,13 +159,13 @@ references are mutable and rejected for activation.
 `src/wasm-service/oci-reference.js`:
 
 ```javascript
-// Pinned — accepted for activation
+// Pinned - accepted for activation
 validateDigestPin(
   'reg.io/acme/resize:1.0@sha256:abcd...64hex'
 )
 // { valid: true, digest: 'sha256:abcd...64hex' }
 
-// Tag-only — rejected for activation
+// Tag-only - rejected for activation
 validateDigestPin('reg.io/acme/resize:1.0')
 // {
 //   valid: false,
@@ -186,9 +186,9 @@ reconstructs the string.
 
 ### Constants
 
-- `OCI_TAG_PATTERN` — valid tag regex
-- `OCI_REFERENCE_MAX_LENGTH` — `512`
-- `OCI_REFERENCE_ERROR` — all error message constants
+- `OCI_TAG_PATTERN` - valid tag regex
+- `OCI_REFERENCE_MAX_LENGTH` - `512`
+- `OCI_REFERENCE_ERROR` - all error message constants
 - All from `src/wasm-service/oci-reference.js`
 - `DIGEST_PREFIX` (`'sha256:'`), `DIGEST_HEX_LENGTH` (`64`)
   from `src/wasm-service/module-manifest-constants.js`
@@ -243,9 +243,9 @@ with parameters for persistence via the SQL engine.
 `validateLockConsistency(currentLock, newResolvedDeps)`
 compares new resolution results against an existing lock:
 
-- **Digest changed** — a dependency's digest differs from the
+- **Digest changed** - a dependency's digest differs from the
   locked value -> `DEPENDENCY_VERSION_MUTABLE` error
-- **New dependency** — a dependency appears that was not in
+- **New dependency** - a dependency appears that was not in
   the lock -> `UNDECLARED_IMPORT` error
 
 ```javascript
@@ -272,10 +272,10 @@ cannot use it as a fallback from drift failure.
 
 ### Lock Queries
 
-- `buildSelectLockSQL(lockId)` — single lock by ID
-- `buildSelectLocksByModuleSQL(ns, name, version)` — all
+- `buildSelectLockSQL(lockId)` - single lock by ID
+- `buildSelectLocksByModuleSQL(ns, name, version)` - all
   locks for a module identity
-- `buildSelectLocksByServiceSQL(serviceId)` — all locks tied
+- `buildSelectLocksByServiceSQL(serviceId)` - all locks tied
   to a service
 
 All return `{sql, params}` for execution via the SQL engine.

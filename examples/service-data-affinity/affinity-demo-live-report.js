@@ -69,7 +69,7 @@ function buildAffinityDemoLiveReport({
 } = {}) {
   // A FAILED run the host froze past the gap budget is non-measuring, not
   // red: stamp the shared verdict reason so the Solver invalidates the sample
-  // instead of scoring it. A PASSED run is never invalidated by the budget —
+  // instead of scoring it. A PASSED run is never invalidated by the budget -
   // mirroring the thermal rule (a green run counts even when the machine ends
   // hot): converging despite adverse scheduling is stronger evidence, not
   // weaker, and the harvested numbers stay in detail for attribution.

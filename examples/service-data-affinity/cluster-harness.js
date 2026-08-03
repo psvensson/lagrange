@@ -154,7 +154,7 @@ async function startLocalCluster(nodeCount, dataRoot, target) {
 
 /**
  * Read the per-node log files a local cluster writes (plain text). One
- * unreadable log must not fail the whole harvest — the entry degrades to
+ * unreadable log must not fail the whole harvest - the entry degrades to
  * empty text with a readError the consumer can surface.
  * @param {Object[]} nodes
  * @param {string} dataRoot

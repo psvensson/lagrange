@@ -5,18 +5,18 @@
 Lagrange runs application code inside the database cluster, sandboxed as
 [WebAssembly](https://webassembly.org/) (see the
 [examples overview](../README.md) for the full introduction). But most service
-authors do not write WebAssembly — they write JavaScript, and they are used to
+authors do not write WebAssembly - they write JavaScript, and they are used to
 services that carry connection strings, host lists, and shard-routing logic.
 
 This example shows both halves of the answer:
 
 1. **You keep writing plain JavaScript.** A build step compiles
-   [`service.js`](service.js) into a genuine WebAssembly component — no
+   [`service.js`](service.js) into a genuine WebAssembly component - no
    WebAssembly knowledge required.
 2. **The service code contains no topology.** It imports exactly two host
    functions, `read` and `write`. No database endpoint, no connection pool,
    no node selection, no shard map. Where the data lives, and where the code
-   runs, is the cluster's problem — that separation is what later lets
+   runs, is the cluster's problem - that separation is what later lets
    Lagrange place code next to its data.
 
 One command builds the component, boots a local seed node, runs the
@@ -33,7 +33,7 @@ Three tools and terms, briefly:
   (a [Bytecode Alliance](https://bytecodealliance.org/) project) compiles a
   JavaScript module into such a component by embedding your source together
   with a WebAssembly build of the
-  [SpiderMonkey](https://spidermonkey.dev/) JavaScript engine — the same
+  [SpiderMonkey](https://spidermonkey.dev/) JavaScript engine - the same
   engine Firefox uses.
 - [**WIT**](https://component-model.bytecodealliance.org/design/wit.html) is
   the interface language in which the component's imports and exports are
@@ -74,12 +74,12 @@ import {read, write} from 'lagrange:cell/context';
 export function run(request) { /* ... */ }
 ```
 
-The world it targets — `lagrange:cell/context` providing `read`, `write`, and
+The world it targets - `lagrange:cell/context` providing `read`, `write`, and
 `capability`, with the component exporting
-`run: func(request: string) -> string` — is the entire surface between your
+`run: func(request: string) -> string` - is the entire surface between your
 code and the outside world. The build step calls `componentize()` with
 `random`, `stdio`, `clocks`, `http`, and `fetch-event` disabled, so the
-produced component imports **nothing except `lagrange:cell/context`** — the
+produced component imports **nothing except `lagrange:cell/context`** - the
 same import surface the Cell runtime provides to every request component. If
 the code tries anything else, there is simply no function to call: this is
 [capability-based security](https://en.wikipedia.org/wiki/Capability-based_security)
@@ -105,13 +105,13 @@ component binary or opaque image is committed or left behind.
 
 ## What to expect
 
-The service keeps a running-total ledger in an ordinary durable table — not in
+The service keeps a running-total ledger in an ordinary durable table - not in
 process memory, because Cells are replaceable and durable state belongs in
 tables ([native programming model](../../docs/native-programming-model.md)).
 Each request posts `{"key": <n>, "amount": <m>}`; the component reads the
 previous request's row, adds the new amount, and records the total under the
-request's own key. (Request Cell writes are inserts of new keys — the effect
-writer issues `INSERT` statements — so each request writes a fresh row instead
+request's own key. (Request Cell writes are inserts of new keys - the effect
+writer issues `INSERT` statements - so each request writes a fresh row instead
 of updating a prior one.)
 
 ```mermaid
@@ -132,7 +132,7 @@ sequenceDiagram
   Cell-->>C: 202 "stored 15 at key 2"
 
   C->>Cell: POST "deny"
-  Cell--xCell: read(slot 1) — undeclared, denied at boundary
+  Cell--xCell: read(slot 1) - undeclared, denied at boundary
   Cell-->>C: ledger unchanged
 ```
 
@@ -141,14 +141,14 @@ sequenceDiagram
   `stored 10 at key 1`; the write lands in
   `global.js_request_binding_ledger` as `{key: 1, value: 10}`.
 - A second request with `{"key": 2, "amount": 5}` reads the committed first
-  row through slot 0 and returns `stored 15 at key 2` — the JavaScript
+  row through slot 0 and returns `stored 15 at key 2` - the JavaScript
   observed durable state written by the previous invocation.
 - A request whose body is `"deny"` makes the component read undeclared slot 1;
   the read is denied at the component boundary and the ledger is unchanged.
 
 ## Under the hood
 
-The deployment is identical to the WAT example — the runtime does not know or
+The deployment is identical to the WAT example - the runtime does not know or
 care that the component was produced from JavaScript:
 
 ```sql
@@ -175,11 +175,11 @@ placement behavior.
 ## Continue
 
 - [call-binding-account-summary](../call-binding-account-summary/README.md)
-  — the same authoring and deployment path, but for a distributed call:
+  - the same authoring and deployment path, but for a distributed call:
   partition function plus reducer in one component, invoked with
   `CALL BINDING` and executed across a split table.
 - [The Lagrange Native Programming Model](../../docs/native-programming-model.md)
-  — what this small `read`/`write` API already enables (attribution,
+  - what this small `read`/`write` API already enables (attribution,
   placement, locality) and how the call surface builds on it.
-- [service-data-affinity](../service-data-affinity/README.md) — what
+- [service-data-affinity](../service-data-affinity/README.md) - what
   data-local execution looks like when it fans out and reduces, measured.

@@ -270,7 +270,7 @@ compact partials, so the network and the coordinating tier carry partials
 rather than rows.
 
 The most plausible infrastructure saving is usually replacing or shrinking a
-worker, aggregation, or coordination tier—not pretending that replicated
+worker, aggregation, or coordination tier - not pretending that replicated
 storage can run without resources.
 
 ## Where Savings Are Weak Or Negative

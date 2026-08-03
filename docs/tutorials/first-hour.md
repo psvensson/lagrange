@@ -6,7 +6,7 @@ documentClass: current
 # First Hour With Lagrange
 
 Lagrange is a distributed runtime for data-intensive services: you write one
-service — endpoints, partition functions, and reducers together — deploy it
+service - endpoints, partition functions, and reducers together - deploy it
 as WASM, and call it like any other service.
 
 In this first hour you start one local node, perform a SQL round trip, see
@@ -143,7 +143,7 @@ node examples/request-binding-deployment/run-request-binding-deployment.js
 If you would rather author the component in plain JavaScript instead of WAT,
 run the
 [js-request-binding-deployment example](../../examples/js-request-binding-deployment/README.md)
-afterwards — it deploys a ComponentizeJS-built component through the
+afterwards - it deploys a ComponentizeJS-built component through the
 identical lifecycle SQL and needs no `wasm-tools` binary.
 
 The runner:
@@ -173,7 +173,7 @@ over authenticated pgwire:
 CALL BINDING $1
 ```
 
-That is the data-local half of the product story — the part where a single
+That is the data-local half of the product story - the part where a single
 endpoint invocation fans out across the nodes holding the data and only
 compact partials cross the network. Check the
 [examples index](../../examples/README.md) for the current runnable
@@ -199,11 +199,11 @@ those behaviors.
 
 ## Continue
 
-- [The Lagrange Native Programming Model](../native-programming-model.md) —
+- [The Lagrange Native Programming Model](../native-programming-model.md) -
   service, endpoints, partition functions, reducers, data-local execution.
-- [Rewrite A Hot Path For Lagrange](rewrite-a-hot-path.md) — extract one
+- [Rewrite A Hot Path For Lagrange](rewrite-a-hot-path.md) - extract one
   data-intensive operation into a Lagrange service.
-- [Execution Semantics](../execution-semantics.md) — the invocation
+- [Execution Semantics](../execution-semantics.md) - the invocation
   contract: retries, idempotency, budgets, movement.
-- [Service Deployment Guide](../service-deployment-guide.md) — the lifecycle
+- [Service Deployment Guide](../service-deployment-guide.md) - the lifecycle
   SQL in operational detail.

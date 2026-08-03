@@ -15,7 +15,7 @@ const INACTIVE_SCHEMA_STABILITY_WINDOW = Object.freeze({
 
 // Observer-side failure states: the poll could not SEE the control plane
 // (admin query timeout, snapshot lane hiccup). These are evidence about the
-// observer, not the system — monotone-progress rule (the HDFS safe-mode /
+// observer, not the system - monotone-progress rule (the HDFS safe-mode /
 // ES delayed-allocation lesson): they HOLD an accumulated stability window
 // instead of resetting it, bounded below by observation-blindness tolerance.
 const SCHEMA_STABILITY_OBSERVATION_FAILURE_STATES = new Set([

@@ -6,7 +6,7 @@ documentClass: current
 # Start Here
 
 Lagrange is a distributed runtime for data-intensive services: you author one
-service — endpoint, partition functions, and reducer together — deploy it as
+service - endpoint, partition functions, and reducer together - deploy it as
 WASM, and Lagrange runs each part of a request on the nodes holding the
 relevant data. Choose the path that matches what you want to do next. None of
 these paths requires repository-development or automation documentation.
@@ -26,8 +26,8 @@ that is worth it.
 4. Read [Process: Data Affinity](../architecture/process-data-affinity.md)
    when you want the placement mechanism rather than the application model.
 
-The call path — a binding-declared data selector, partition-local `run`, and
-a coordinated `reduce` — is implemented today and invoked with
+The call path - a binding-declared data selector, partition-local `run`, and
+a coordinated `reduce` - is implemented today and invoked with
 `CALL BINDING $1` over an authenticated PostgreSQL-wire session. The richer
 selector and pushdown surface remains future work; the programming-model doc
 marks the boundary precisely.
@@ -64,7 +64,7 @@ execution time for the first pass: about one hour.
    when you need the owner and convergence model behind the lifecycle SQL.
 
 The recommended migration unit is one expensive aggregation, transaction,
-enrichment step, validation path, or state transition — not the whole
+enrichment step, validation path, or state transition - not the whole
 application.
 
 ## Operate A Cluster
@@ -106,7 +106,7 @@ Material here supports migration and implementation work; it does not define
 Lagrange's programming model.
 
 - **Drop-in SQL compatibility.** An unmodified Node.js PostgreSQL application
-  can point at Lagrange's pgwire listener — see the
+  can point at Lagrange's pgwire listener - see the
   [service-portability example](../examples/service-portability/README.md).
   PostgreSQL compatibility is bounded, not general.
 - **OCI containers.** The `oci_container` runtime kind is registered but

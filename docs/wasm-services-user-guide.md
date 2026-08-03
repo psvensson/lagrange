@@ -5,8 +5,8 @@ documentClass: compatibility
 
 # WASM Services Guide
 
-This former combined guide has been split. A Lagrange service — endpoints,
-partition functions, and reducers authored together and deployed as WASM —
+This former combined guide has been split. A Lagrange service - endpoints,
+partition functions, and reducers authored together and deployed as WASM -
 is documented across the pages below.
 
 Choose the document that matches your question:

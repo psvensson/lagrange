@@ -79,8 +79,8 @@ function nodeExceedsBudget(node) {
 
 /**
  * Harvest per-node cumulative event-loop-gap totals from the local cluster's log
- * files. A node with no gap records (or an unreadable log) contributes no evidence —
- * absence proves nothing about it — but any node over budget marks the whole run's
+ * files. A node with no gap records (or an unreadable log) contributes no evidence -
+ * absence proves nothing about it - but any node over budget marks the whole run's
  * timing conclusions untrustworthy.
  * @param {string} dataRoot
  * @param {number} nodeCount

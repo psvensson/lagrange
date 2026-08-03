@@ -1,7 +1,7 @@
 replicaCount: 2
 
 image:
-  # Placeholder — no controller image is published by the release pipeline;
+  # Placeholder - no controller image is published by the release pipeline;
   # point this at your own build (see the chart README for the entrypoint).
   repository: ghcr.io/example/lagrange-endpoint-sync-controller
   pullPolicy: IfNotPresent

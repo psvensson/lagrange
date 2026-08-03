@@ -11,10 +11,10 @@ import {queryRows, startCluster} from './cluster-harness.js';
 // Formation + schema-provisioning probe: the cheap single-axis live
 // validation for formation quests. It reuses the affinity demo's cluster
 // bring-up, issues the demo's CREATE TABLE ratings (partition provisioning
-// is where the ledger-interlock admission deferrals fire — a loader-free
+// is where the ledger-interlock admission deferrals fire - a loader-free
 // settle would measure zero signal), polls the ratings partitions to
 // readiness, and harvests the deferral counters from node logs. It
-// deliberately skips the 100k-row load and the callback example — the two
+// deliberately skips the 100k-row load and the callback example - the two
 // noisy abort axes unrelated to the measured signal.
 
 const PROBE_ID = 'movielens-formation-schema-provisioning';
@@ -43,7 +43,7 @@ const PROBE_RESULT = Object.freeze({
   CREATE_TABLE_FAILED: 'CREATE_TABLE_FAILED',
 });
 // Anchor the archive and git stamps to the repo root (two levels up from this
-// file), never the invoker's cwd — a direct invocation from elsewhere must not
+// file), never the invoker's cwd - a direct invocation from elsewhere must not
 // scatter solve/report/ dirs or stamp a foreign repo's HEAD.
 const REPO_ROOT = resolve(dirname(fileURLToPath(import.meta.url)), '../..');
 const ARCHIVE_PATH =
@@ -175,10 +175,10 @@ function countOccurrences(text, needle) {
 
 /**
  * Harvest the deferral counters from every node's logs via the cluster
- * handle (plain files in local mode, live `docker logs` in docker mode —
+ * handle (plain files in local mode, live `docker logs` in docker mode -
  * no gzipped gate-playback artifacts are involved). A mode without log
  * access (external/--no-start) or a failed log read reports
- * `available: false` — never hard zeros, which would be indistinguishable
+ * `available: false` - never hard zeros, which would be indistinguishable
  * from a genuinely clean measured run. A log read failure must also never
  * abort the probe after minutes of cluster work.
  * @param {Object} clusterHandle

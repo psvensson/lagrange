@@ -2,19 +2,19 @@
 
 ## The problem this example addresses
 
-Adopting a new database usually means rewriting application code first — new
+Adopting a new database usually means rewriting application code first - new
 client libraries, new query dialect, new authentication. Lagrange's adoption
 story deliberately starts at the other end (see the
 [examples overview](../README.md)): **an existing PostgreSQL application
 should connect to Lagrange unchanged**, because Lagrange speaks the standard
-[PostgreSQL wire protocol](https://www.postgresql.org/docs/current/protocol.html)
-— the same TCP protocol every PostgreSQL client library already implements.
+[PostgreSQL wire protocol](https://www.postgresql.org/docs/current/protocol.html) -
+the same TCP protocol every PostgreSQL client library already implements.
 
 No WebAssembly, no rewrites, no Lagrange APIs appear in this example. It is
 the compatibility path: point an existing application at Lagrange first, then
-extract data-local hot paths into a service —
-[The Lagrange Native Programming Model](../../docs/native-programming-model.md)
-— only where they pay.
+extract data-local hot paths into a service -
+[The Lagrange Native Programming Model](../../docs/native-programming-model.md) -
+only where they pay.
 
 Concretely, one ordinary Node.js HTTP application image runs, unchanged,
 against two database endpoints:
@@ -77,14 +77,14 @@ The PostgreSQL slice exercised here is intentionally explicit:
 
 This is **not** a claim of arbitrary ORM compatibility or complete PostgreSQL
 behavior, and Lagrange does not install or manage the application container
-here — the application stays wherever it already runs. (Managed OCI
+here - the application stays wherever it already runs. (Managed OCI
 execution inside Lagrange is unsupported scaffolding today; WASM is the
 service packaging format. See
 [Current Capabilities And Limitations](../../docs/current-capabilities-and-limitations.md)
 for the authoritative status.)
 
 Note that this example starts the built-in `sys-postgres-wire` runtime service
-directly — one of the axiomatic bootstrap services that exists before any
+directly - one of the axiomatic bootstrap services that exists before any
 Binding. It exercises the runtime substrate, not the user deployment surface;
 user services are deployed through `INSTALL SERVICE` and `CREATE BINDING`
 ([`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md)),
@@ -96,7 +96,7 @@ Never use them anywhere else.
 
 ## Continue
 
-- [request-binding-deployment](../request-binding-deployment/README.md) — the
+- [request-binding-deployment](../request-binding-deployment/README.md) - the
   next rung: deploying sandboxed code *into* the cluster.
-- [service-data-affinity](../service-data-affinity/README.md) — the payoff
+- [service-data-affinity](../service-data-affinity/README.md) - the payoff
   rung: what changes when a hot path becomes data-local.

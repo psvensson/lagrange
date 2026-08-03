@@ -8,8 +8,8 @@ How admin commands are structured and routed. All admin mutations are owned
 by two replicated meta-services; the WebSocket endpoint is an adapter ingress
 only, never a node-local mutation owner:
 
-- `sys-admin-meta` — cluster/node state queries, cache dumps
-- `sys-wasm-meta` — WASM module and service lifecycle
+- `sys-admin-meta` - cluster/node state queries, cache dumps
+- `sys-wasm-meta` - WASM module and service lifecycle
 
 Ingress defaults to `ws://<host>:8081/api/admin/stream` (REST port + 1) and can
 be overridden with `ADMIN_WS_PORT`. Dispatchable admin messages
@@ -74,16 +74,16 @@ WebSocket message contract, validated in both directions:
 
 **Incoming** (CLI -> server):
 
-- `query` — requires `type`, `queryId`, `sql`; optional `params`
-- `refresh` — requires `type`
+- `query` - requires `type`, `queryId`, `sql`; optional `params`
+- `refresh` - requires `type`
 
 **Outgoing** (server -> CLI):
 
-- `query_result` — requires `type`, `queryId`, `timestamp`
-- `cache_dump` — requires `type`, `timestamp`, `nodeId`, `data`
-- `cdc_event` — requires `type`, `timestamp`, `table`,
+- `query_result` - requires `type`, `queryId`, `timestamp`
+- `cache_dump` - requires `type`, `timestamp`, `nodeId`, `data`
+- `cdc_event` - requires `type`, `timestamp`, `table`,
   `operation`, `record`
-- `error` — requires `type`, `timestamp`, `error`, `errorCode`
+- `error` - requires `type`, `timestamp`, `error`, `errorCode`
 
 Use `validateIncomingMessage()` and `validateOutgoingMessage()` to verify
 messages conform to the contract. The adapter layer translates between

@@ -46,7 +46,7 @@ The current implementation boundary matters:
   relevant partition, numeric per-group partials, and one reducer;
 - on the call path today, shard dispatch is parallel and bounded (default
   8 concurrent runs; same-host shards serialize) and partials are numeric
-  aggregation values — both matter when projecting throughput;
+  aggregation values - both matter when projecting throughput;
 - the `pushdown`, `change`, `time`, `once`, and `boot` Binding kinds are
   declared-only, with no public invocation adapter;
 - `native_js` is kernel-internal; and

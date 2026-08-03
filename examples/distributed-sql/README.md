@@ -2,7 +2,7 @@
 
 > **Legacy.** This directory documents Lagrange's pre-Binding callback
 > mechanism. It is kept deliberately, as a historical artifact of how
-> partition-local execution grew up — compatibility-and-internals
+> partition-local execution grew up - compatibility-and-internals
 > reading, not an on-ramp. Nothing here is how services are authored,
 > deployed, or invoked today.
 
@@ -17,12 +17,12 @@ upload a JavaScript **callback module** and execute it through the
 on a live node.
 
 This directory demonstrates that **older callback surface**. It is worth
-studying to understand partition-local execution mechanics — how a statement
-plus a callback fan out over partition rows, batch stages, and reduce by key —
+studying to understand partition-local execution mechanics - how a statement
+plus a callback fan out over partition rows, batch stages, and reduce by key -
 but it predates Bindings. Everything this surface rehearsed now has a
 public successor: a `call` Binding declares the statement, the WASM
 component's `run` export does the partition-local work, and its `reduce`
-export folds the partials —
+export folds the partials -
 [call-binding-account-summary](../call-binding-account-summary/README.md)
 is the runnable example. The
 [request-binding examples](../request-binding-deployment/README.md) show
@@ -34,13 +34,13 @@ is the status authority.
 
 Six copyable examples, ordered from basic to advanced:
 
-1. `01-basic-iterator` — iterate partition rows in a callback.
-2. `02-stage-batching` — process rows in bounded batches.
-3. `03-plan-reduce-by-key` — a plan stage plus per-key reduction.
-4. `04-nested-bounded-call` — a callback issuing a bounded nested call.
-5. `05-guardrail-failure` — what happens when a callback exceeds its limits.
-6. `06-wasm-remote-replica` — a JavaScript-envelope **lifecycle rehearsal**
-   (see the capability notes below — this is *not* a real WebAssembly
+1. `01-basic-iterator` - iterate partition rows in a callback.
+2. `02-stage-batching` - process rows in bounded batches.
+3. `03-plan-reduce-by-key` - a plan stage plus per-key reduction.
+4. `04-nested-bounded-call` - a callback issuing a bounded nested call.
+5. `05-guardrail-failure` - what happens when a callback exceeds its limits.
+6. `06-wasm-remote-replica` - a JavaScript-envelope **lifecycle rehearsal**
+   (see the capability notes below - this is *not* a real WebAssembly
    component).
 
 Each example directory contains:
@@ -105,7 +105,7 @@ flowchart LR
   classDef move fill:#ede9fe,stroke:#6d28d9,color:#2e1065
 ```
 
-## Capability notes — read before drawing conclusions
+## Capability notes - read before drawing conclusions
 
 The authoritative status is
 [Current Capabilities And Limitations](../../docs/current-capabilities-and-limitations.md).
@@ -150,7 +150,7 @@ For `wasm_component`, the packaging step:
 
 Again: this construction does **not** compile JavaScript to WASM. A genuine
 component engine, component ABI, OCI installation path, and public invocation
-contract are separate cutovers — the real compile-JS-to-component path exists
+contract are separate cutovers - the real compile-JS-to-component path exists
 today in
 [`js-request-binding-deployment`](../js-request-binding-deployment/README.md),
 which uses

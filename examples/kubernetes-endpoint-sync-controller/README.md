@@ -7,13 +7,13 @@ service replicas near the data they use, and the cluster's canonical
 `service_endpoints` table records where every service is actually reachable
 (see the [examples overview](../README.md) for why placement is
 Lagrange-owned). [Kubernetes](https://kubernetes.io/docs/concepts/overview/),
-however, discovers endpoints its own way — by selecting Pods with labels — and
+however, discovers endpoints its own way - by selecting Pods with labels - and
 that mechanism cannot see Lagrange's placement decisions.
 
 So how does traffic from a Kubernetes cluster (an ingress, a gateway, a load
 balancer) reach the right Lagrange replicas as they move?
 
-This example bridges the two worlds with a small **controller** — a process
+This example bridges the two worlds with a small **controller** - a process
 that continuously reconciles the desired state into Kubernetes, the standard
 [controller pattern](https://kubernetes.io/docs/concepts/architecture/controller/).
 It reads Lagrange's `service_endpoints` rows and projects them into
@@ -21,7 +21,7 @@ selector-less Kubernetes
 [`Service`](https://kubernetes.io/docs/concepts/services-networking/service/) +
 [`EndpointSlice`](https://kubernetes.io/docs/concepts/services-networking/endpoint-slices/)
 objects ("selector-less" means Kubernetes does not compute the endpoints from
-Pod labels — the controller supplies them explicitly). A
+Pod labels - the controller supplies them explicitly). A
 [Helm](https://helm.sh/docs/) chart packages the deployment. Use it as a
 starting point for your own deployment.
 
@@ -84,7 +84,7 @@ deployment:
 | `sys-postgres-wire` | PostgreSQL wire ingress | Client database traffic |
 
 With default values (`sync.protocolAllowList=[postgresql]`), the main exported
-service is usually `sys-postgres-wire` — the listener that speaks the
+service is usually `sys-postgres-wire` - the listener that speaks the
 [PostgreSQL wire protocol](https://www.postgresql.org/docs/current/protocol.html),
 demonstrated in [service-portability](../service-portability/README.md).
 
@@ -107,7 +107,7 @@ The projected name comes from:
 
 ## Render the chart
 
-Rendering needs no cluster at all —
+Rendering needs no cluster at all -
 [`helm template`](https://helm.sh/docs/helm/helm_template/) just prints the
 Kubernetes manifests the chart would produce:
 

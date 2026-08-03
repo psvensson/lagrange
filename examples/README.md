@@ -41,7 +41,7 @@ cross the network only to be filtered, scored, or aggregated and mostly thrown
 away.
 
 **Lagrange is a distributed runtime for data-intensive services.** A developer
-writes one service — endpoint, partition functions, and reducer together —
+writes one service - endpoint, partition functions, and reducer together -
 deploys it as WASM, and existing applications call it like any other service.
 When an endpoint runs, Lagrange executes each partition function on the
 database nodes holding the relevant data and combines the results:
@@ -89,15 +89,15 @@ non-JavaScript code safely; the same properties make it attractive on servers:
 
 Two related terms appear throughout these examples:
 
-- [**WASI**](https://wasi.dev/) — a standard set of interfaces for running
+- [**WASI**](https://wasi.dev/) - a standard set of interfaces for running
   WASM *outside* a browser.
-- The [**Component Model**](https://component-model.bytecodealliance.org/) — a
+- The [**Component Model**](https://component-model.bytecodealliance.org/) - a
   packaging standard on top of WASM. A *component* declares typed imports
   (functions it needs from the host) and exports (functions it offers), in an
   interface language called
   [WIT](https://component-model.bytecodealliance.org/design/wit.html). This is
-  what lets Lagrange hand a service a tiny, explicit host surface — `read`,
-  `write`, `capability` for request Cells; `emit` for call Cells — and
+  what lets Lagrange hand a service a tiny, explicit host surface - `read`,
+  `write`, `capability` for request Cells; `emit` for call Cells - and
   nothing else.
 
 For Lagrange this sandbox is not a detail; it is the security model. A
@@ -133,12 +133,12 @@ and the operator flow in the
 [Service Deployment Guide](../docs/service-deployment-guide.md). Three terms
 recur everywhere:
 
-- **Artifact** — immutable, digest-pinned service code plus its manifest.
-- **Binding** — an immutable declaration connecting one Artifact export to an
+- **Artifact** - immutable, digest-pinned service code plus its manifest.
+- **Binding** - an immutable declaration connecting one Artifact export to an
   invocation source: an HTTP request route (`request`) or a callable
   distributed entry point with a declared data selector (`call`).
-- **Cell** — a ready, running, replaceable instance derived from a Binding.
-  The cluster — not the author — decides where Cells run.
+- **Cell** - a ready, running, replaceable instance derived from a Binding.
+  The cluster - not the author - decides where Cells run.
 
 ## The Examples
 
@@ -148,7 +148,7 @@ recur everywhere:
 service whose partition function and reducer are authored together,
 compiled to one WASM component, bound to a declared SELECT, and invoked
 with a single `CALL BINDING` statement. Lagrange runs the function on
-each partition of a genuinely split table — rows stay on their nodes —
+each partition of a genuinely split table - rows stay on their nodes -
 and returns one reduced account summary.
 
 Answers: **what does "build one service, run it across the data" look
@@ -180,7 +180,7 @@ introduction to authoring request-shaped endpoints.**
 The same public deployment path built from committed
 [WebAssembly text](https://developer.mozilla.org/en-US/docs/WebAssembly/Guides/Understanding_the_text_format)
 source, so you can read exactly what is deployed. Shows matched, denied, and
-unmatched HTTP requests behaving against a ready Cell — including an
+unmatched HTTP requests behaving against a ready Cell - including an
 undeclared table access denied at the component boundary.
 
 Answers: **how is a sandboxed Artifact installed and invoked, and what happens
@@ -193,9 +193,9 @@ when it oversteps its declared access?**
 
 The measured comparison study. Computes the same
 [MovieLens 100k](https://grouplens.org/datasets/movielens/100k/) top-ten
-ranking three ways — PostgreSQL grouped SQL, Lagrange distributed grouped SQL,
+ranking three ways - PostgreSQL grouped SQL, Lagrange distributed grouped SQL,
 and a replicated Lagrange service applying shard-local ranking policy with
-bounded top-N reduction — and shows placement converging toward the data.
+bounded top-N reduction - and shows placement converging toward the data.
 
 Answers: **what can disappear when a hot path is rewritten for partition-local
 work and bounded reduction?** Its honest boundary: the demo drives a
@@ -214,7 +214,7 @@ wire-protocol listener: exact result parity, password authentication, verified
 TLS, and fail-closed credential attacks.
 
 Answers: **can an existing PostgreSQL application talk to Lagrange without a
-rewrite?** This is deliberately the compatibility path — no WASM involved.
+rewrite?** This is deliberately the compatibility path - no WASM involved.
 
 - **You'll need**: Docker and Node.js 20+.
 
@@ -229,10 +229,10 @@ a Lagrange cluster to Kubernetes-native networking.
 - **You'll need**: nothing for rendering the chart (`helm template`); a
   running Lagrange node plus Kubernetes credentials for the live modes.
 
-### [distributed-sql/](distributed-sql/README.md) — legacy
+### [distributed-sql/](distributed-sql/README.md) - legacy
 
 The **legacy callback surface**, kept deliberately as a historical
-artifact (compatibility-and-internals territory — read it after the
+artifact (compatibility-and-internals territory - read it after the
 examples above, not before). Copyable `partition_callback` modules run
 against a live node by a manifest-driven runner. It predates Artifacts
 and Bindings; its partition-local mechanics are worth studying, but

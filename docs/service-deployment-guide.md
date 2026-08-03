@@ -11,8 +11,8 @@ lifecycle SQL, and run by the cluster as **Artifact / Binding / Cell**.
 
 Two invocation surfaces are public today:
 
-- **Endpoints** — `request` Bindings invoked over authenticated HTTP.
-- **Distributed calls** — `call` Bindings that run a partition function on
+- **Endpoints** - `request` Bindings invoked over authenticated HTTP.
+- **Distributed calls** - `call` Bindings that run a partition function on
   every relevant partition of a declared table, then a reducer over the
   emitted partials, invoked over authenticated pgwire with
   `CALL BINDING $1`.
@@ -51,7 +51,7 @@ digest-pinned payload.
 
 Since the cluster-owned artifact store landed, `INSTALL SERVICE`
 internalizes the verified WASM payload into replicated internal tables
-(chunked, digest-verified, sealed) **before** any catalog row is written —
+(chunked, digest-verified, sealed) **before** any catalog row is written -
 the external OCI source is an installation input, not a runtime dependency.
 A wasm_component Artifact does not become bindable until its payload is
 sealed. At activation, the node-local loader resolves the content-addressed
@@ -70,7 +70,7 @@ The catalog accepts `request`, `change`, `time`, `once`, `boot`, `call`,
 and `pushdown` sources. Two of them have public invocation adapters today:
 `request` (authenticated HTTP) and `call` (authenticated pgwire
 `CALL BINDING $1`). The `change`, `time`, `once`, `boot`, and `pushdown`
-kinds can be declared and converge to placed Cells but are declared-only —
+kinds can be declared and converge to placed Cells but are declared-only -
 they have no public invocation surface yet.
 
 ### Cell
@@ -100,7 +100,7 @@ declaration. A component must not contain a database endpoint, connection
 pool, partition map, or node-selection policy.
 
 Call-Binding components use a second world, `lagrange:cell/call-context`,
-whose central import is `emit` — the channel through which a partition
+whose central import is `emit` - the channel through which a partition
 function publishes its partial result. It is described in
 [Call Bindings](#call-bindings-partition-functions-and-reducers) below.
 
@@ -222,10 +222,10 @@ for exact assertions and expected output.
 A call Binding is how the distributed part of the service ships. One
 component carries both halves of the operation:
 
-- `run` — the **partition function**. Lagrange invokes it once per relevant
+- `run` - the **partition function**. Lagrange invokes it once per relevant
   partition, on the node hosting that partition's replica, with a typed
   batch of rows read locally from that replica.
-- `reduce` — the **reducer**. Lagrange invokes it exactly once, with the
+- `reduce` - the **reducer**. Lagrange invokes it exactly once, with the
   complete set of emitted partials, to produce the final result.
 
 Raw rows never leave the host nodes. Only the emitted partials travel to
@@ -247,7 +247,7 @@ world call-cell {
 
 Rules the guest must follow:
 
-- `run` receives one typed `list<row>` per partition — up to `4096` rows by
+- `run` receives one typed `list<row>` per partition - up to `4096` rows by
   default. Rows map SQL values to a `cell-value` variant (`null`, `s64`,
   `f64`, `text`); unsafe integers, non-finite floats, and blobs are refused
   rather than silently coerced.
@@ -259,7 +259,7 @@ Rules the guest must follow:
   arbitrary partial structs.
 - Group keys must be disjoint across partitions. A duplicate key across
   shards fails the call with a typed error instead of merging wrong data.
-- `reduce` is a second export in the same component — not a separate
+- `reduce` is a second export in the same component - not a separate
   artifact, not host-side code. Its return value is the call's result.
 - Default budgets: `64` `emit` calls per invocation, `1,024` partial
   entries, a `30 s` deadline per call. Shard dispatch is parallel and
@@ -344,7 +344,7 @@ CALL BINDING $1;
 
 - `schema_version` and `name` are required; `arguments` is optional and
   must be a JSON object (default `{}`).
-- Unknown fields are refused. There is no `tenant_id` field — tenant
+- Unknown fields are refused. There is no `tenant_id` field - tenant
   identity comes from the authenticated session only.
 - A successful call returns exactly one row with two columns: `name` (the
   called binding's name) and `result` (the final reduced JSON string from
@@ -369,7 +369,7 @@ is rejected before any dispatch.
    exactly once, under a dedicated lease, over a complete and fresh partial
    set, and one atomic result snapshot is published.
 5. Partition or replica movement mid-call surfaces as a typed retryable
-   error — never a silently wrong result.
+   error - never a silently wrong result.
 
 The full retry, idempotency, movement, and reduction contract is in
 [Execution Semantics](execution-semantics.md).
@@ -448,7 +448,7 @@ as the authoritative status page.
 - `wasm_component`: the product runtime. Externally installable; runs
   genuine WASI component Cells in both the request and call worlds.
 - `native_js`: kernel-internal, not externally installable.
-- `oci_container`: compatibility scaffold only — descriptor and in-memory
+- `oci_container`: compatibility scaffold only - descriptor and in-memory
   lifecycle, no managed container activation. It is not a peer deployment
   option; code that cannot yet run as WASM has no supported managed path
   today.

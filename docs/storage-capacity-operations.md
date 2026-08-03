@@ -22,9 +22,9 @@ the node is willing to host.
 
 Set one of the following in node configuration:
 
-- `node.storageBudgetBytes` — absolute byte budget (e.g., `107374182400`
+- `node.storageBudgetBytes` - absolute byte budget (e.g., `107374182400`
   for 100 GiB)
-- `node.storageBudgetRatio` — fraction of physical disk capacity
+- `node.storageBudgetRatio` - fraction of physical disk capacity
   (e.g., `0.8` for 80%)
 
 If both are provided, `storageBudgetBytes` takes precedence.
@@ -38,9 +38,9 @@ budget are not eligible for replica placement.
 On startup, `NodeStorageBudgetService` resolves the budget and writes
 it to the `nodes` system table:
 
-- `storage_budget_bytes` — resolved value in bytes
-- `storage_budget_source` — `absolute` or `ratio`
-- `storage_budget_updated_at` — resolution timestamp
+- `storage_budget_bytes` - resolved value in bytes
+- `storage_budget_source` - `absolute` or `ratio`
+- `storage_budget_updated_at` - resolution timestamp
 
 ## Capacity Diagnostics
 
@@ -71,23 +71,23 @@ WHERE status != 'released';
 
 `StorageCapacityMetrics` exposes per-node counters:
 
-- `storage_budget_bytes` — configured budget
-- `storage_used_bytes` — bytes consumed by active replicas
-- `storage_reserved_bytes` — bytes reserved by in-flight operations
-- `storage_available_bytes` — remaining allocatable bytes
-- `storage_pressure_state` — current pressure classification
-- `storage_admission_allowed_total` — admission allow count
-- `storage_admission_denied_total` — admission deny count
+- `storage_budget_bytes` - configured budget
+- `storage_used_bytes` - bytes consumed by active replicas
+- `storage_reserved_bytes` - bytes reserved by in-flight operations
+- `storage_available_bytes` - remaining allocatable bytes
+- `storage_pressure_state` - current pressure classification
+- `storage_admission_allowed_total` - admission allow count
+- `storage_admission_denied_total` - admission deny count
 
 ### Structured Logs
 
 Admission decisions are logged with reason codes:
 
-- `admission_allowed` — operation admitted with projected utilization
-- `admission_denied` — operation rejected with reason code and
+- `admission_allowed` - operation admitted with projected utilization
+- `admission_denied` - operation rejected with reason code and
   projected utilization
-- `reservation_created` / `reservation_released` — lifecycle events
-- `pressure_state_changed` — node pressure transition
+- `reservation_created` / `reservation_released` - lifecycle events
+- `pressure_state_changed` - node pressure transition
 
 ## Admission Mode Management
 

@@ -6,8 +6,8 @@ documentClass: current
 # Rewrite A Hot Path For Lagrange
 
 You have a service that pulls rows out of the database to compute a small
-answer. This tutorial moves that hot path into a Lagrange service — a
-partition function and a reducer authored together in one component — and
+answer. This tutorial moves that hot path into a Lagrange service - a
+partition function and a reducer authored together in one component - and
 invokes it through the CALL binding, today's public data-local invocation
 surface.
 
@@ -130,14 +130,14 @@ The output is at most ten ranked candidates.
 On today's surface, the split falls out of the Binding contract:
 
 - the **data selector** is a single-table SELECT declared once, on the
-  Binding — not per call;
+  Binding - not per call;
 - the **policy** rides in the `arguments` of each invocation;
 - the **result** is whatever the reducer returns.
 
 ## The Service You Author
 
 One component, two exports, side by side in one source file. This code
-matches the shipped `call-cell` WIT ABI — the same world exercised by the
+matches the shipped `call-cell` WIT ABI - the same world exercised by the
 repository's live call-path integration tests. (The world file currently
 lives at `test/wasm-service/fixtures/call-cell-world/wit/world.wit`;
 publishing it as an authoring artifact is an open item.)
@@ -200,7 +200,7 @@ contract rules shape the code:
 
 - **Numeric partials only.** The coordination gate accepts one finite number
   per group key. The Bayesian score is exactly that. A partial carrying
-  `{sum, count}` structs is future work — see
+  `{sum, count}` structs is future work - see
   [What Is Not Yet There](#what-is-not-yet-there).
 - **Shard-disjoint group keys.** All ratings for one movie must live on one
   shard (here: ratings partitioned by movie id). Two shards emitting the
@@ -209,8 +209,8 @@ contract rules shape the code:
 ### Reducer
 
 `reduce` is the second export in the same component. It receives every
-shard's published partials — already validated for completeness and merged
-deterministically — and picks the winners:
+shard's published partials - already validated for completeness and merged
+deterministically - and picks the winners:
 
 ```js
 export function reduce(partials, argumentsJson) {
@@ -269,8 +269,8 @@ The statement must be a single-table SELECT; a call Binding without a
 statement registers durably but refuses invocation typed
 (`call_cell_not_invocable`).
 
-The outer service — or any client on an authenticated pgwire session with
-the `pgwire.binding.call` action — then invokes it with one literal
+The outer service - or any client on an authenticated pgwire session with
+the `pgwire.binding.call` action - then invokes it with one literal
 statement and one JSON string parameter:
 
 ```sql
@@ -291,7 +291,7 @@ CALL BINDING $1
 ```
 
 The response is one row `{name, result}` where `result` is the reducer's
-JSON — the final ten. Unknown payload fields are refused; tenant identity
+JSON - the final ten. Unknown payload fields are refused; tenant identity
 comes from the session, never the payload.
 
 Two honest operational notes:
@@ -300,7 +300,7 @@ Two honest operational notes:
   rows, per-deployment tunable). A full 100k-rating scan needs raised
   tunables or narrower selection; an oversized batch refuses typed
   (`call_cell_batch_bound_exceeded`) rather than degrading.
-- **Emit budget is real.** Default 64 `emit` calls per invocation — which
+- **Emit budget is real.** Default 64 `emit` calls per invocation - which
   is why the partition function emits its top `K`, not every movie.
 
 ## Before And After
@@ -335,7 +335,7 @@ Raft and distributed routing still exist. The improvement is not magical
 local execution; it is the removal of avoidable intermediate movement and
 the application/database boundary around each shard's useful work. In the
 two-node integration proof of this path, shard-table rows crossing the wire
-measure exactly zero — the network carries partials and the result.
+measure exactly zero - the network carries partials and the result.
 
 ## What Exactly Improves
 
@@ -373,8 +373,8 @@ It can fail to help when the dataset is tiny, one indexed query already
 returns only ten rows, startup dominates, or the partition-local code
 consumes more CPU than the transfer it removes. Shard dispatch is parallel
 and bounded (default 8 concurrent runs) across distinct host nodes; shards
-on one host serialize, so the win compounds transfer shape, locality, and —
-when partitions span nodes — overlapping shard execution.
+on one host serialize, so the win compounds transfer shape, locality, and -
+when partitions span nodes - overlapping shard execution.
 
 Do not present a speedup ratio from the local demo. PostgreSQL and Lagrange
 use different startup, topology, storage, and process arrangements there.
@@ -395,7 +395,7 @@ The outer service no longer needs to know:
 The function Artifact is immutable, the Binding defines invocation intent,
 and Cells are system-policy output. When an invocation targets a partition
 whose node has no ready Cell, the invoker publishes a bounded activation
-lease and the placement planner pins compute there — activation is a
+lease and the placement planner pins compute there - activation is a
 mechanism, not an error.
 
 ### Security
@@ -415,14 +415,14 @@ A generic service process may fail after an unknown set of external side
 effects. The call path carries its contract explicitly today:
 
 - a minted invocation identity, fanned out per shard and reduce with a
-  durable idempotency fence — a replayed dispatch never re-executes;
+  durable idempotency fence - a replayed dispatch never re-executes;
 - a caller deadline enforced end to end, re-checked inside the component
   invoke barrier;
 - typed failure codes classified `terminal | retryable | ambiguous`;
   retries happen only for retryable failures where the component provably
   did not run;
 - partition and replica movement surfacing as the typed retryable
-  `call_cell_target_stale` — never a wrong result; and
+  `call_cell_target_stale` - never a wrong result; and
 - exactly-once **visibility**: one atomic result snapshot per complete
   partial set, with a witness naming the contributing replicas.
 
@@ -509,7 +509,7 @@ extractions, not an all-or-nothing application rewrite.
 
 ## What Is Not Yet There
 
-Intended API, honestly labeled — none of this is a supported surface today:
+Intended API, honestly labeled - none of this is a supported surface today:
 
 - **Per-call data selection.** The selector is fixed on the Binding. A
   caller cannot narrow it per invocation (`WHERE movie_id BETWEEN $a AND
@@ -526,12 +526,12 @@ Intended API, honestly labeled — none of this is a supported surface today:
 
 ## Continue
 
-- [Execution Semantics](../execution-semantics.md) — the invocation
+- [Execution Semantics](../execution-semantics.md) - the invocation
   contract in full: retries, idempotency, budgets, movement, visibility.
 - [The Lagrange Native Programming Model](../native-programming-model.md)
-  — the concepts behind this tutorial.
+  - the concepts behind this tutorial.
 - [Minimal Deployment Surface](../../architecture/minimal-deployment-surface.md)
-  — the sealed design contract for Artifact, Binding, Cell, and the call
+  - the sealed design contract for Artifact, Binding, Cell, and the call
   surface.
-- [Process: Data Affinity](../../architecture/process-data-affinity.md) —
+- [Process: Data Affinity](../../architecture/process-data-affinity.md) -
   how placement follows access evidence.
