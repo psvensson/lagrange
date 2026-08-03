@@ -1,3 +1,5 @@
+import {createEnvelopeDispatchGuards} from
+  './cell-ingress-transport.js';
 import {RequestBindingRouteResolver} from
   './request-binding-route-resolver.js';
 import {
@@ -23,75 +25,31 @@ const REQUEST_CELL_ROUTING_SURFACE_MESSAGE = Object.freeze({
     'Selected request Cell route does not match the Service_Message',
 });
 
-function routeFieldsMatch(envelope, route) {
-  const selected = envelope?.payload?.route;
-  if (!selected || !route) return false;
-  const fields = [
-    'bindingVersionId',
-    'replicaId',
-    'serviceId',
-    'targetNodeId',
-  ];
-  return fields.every((field) => selected[field] === route[field]) &&
-    envelope.serviceId === route.serviceId;
-}
-
-function authenticateEnvelope(envelope, context) {
-  const securityContext = context?.securityContext;
-  if (
-    !Object.isFrozen(securityContext) ||
-    !Object.isFrozen(securityContext?.roles) ||
-    envelope?.tenantId !== securityContext?.tenantId ||
-    envelope?.principal !== securityContext?.principal
-  ) {
-    throw createRoutingFailure(
-      REQUEST_CELL_ROUTE_ERROR_CODE.AUTHENTICATION_FAILED,
-      REQUEST_CELL_ROUTING_SURFACE_MESSAGE.SECURITY_CONTEXT_INVALID,
-    );
-  }
-  return securityContext;
-}
-
-function authorizeEnvelope(_envelope, context) {
-  const securityContext = context?.authn;
-  if (!securityContext?.roles?.includes(APPLICATION_ROLE)) {
-    throw createRoutingFailure(
-      REQUEST_CELL_ROUTE_ERROR_CODE.AUTHORIZATION_FAILED,
-      REQUEST_CELL_ROUTING_SURFACE_MESSAGE.NOT_AUTHORIZED,
-    );
-  }
-}
-
-function resolveSelectedTarget(envelope, context) {
-  const route = context?.selectedRoute;
-  if (!routeFieldsMatch(envelope, route)) {
-    throw createRoutingFailure(
-      REQUEST_CELL_ROUTE_ERROR_CODE.TARGET_STALE,
-      REQUEST_CELL_ROUTING_SURFACE_MESSAGE.TARGET_MISMATCH,
-    );
-  }
-  return {
-    targetAddress: route.targetAddress,
-    targetNodeId: route.targetNodeId,
-  };
-}
-
-function createLazyMessageRouter(provider) {
-  return {
-    async deliver(targetAddress, message, options) {
-      const messageRouter = provider();
-      if (!messageRouter ||
-          typeof messageRouter.deliver !== 'function') {
-        throw createRoutingFailure(
-          REQUEST_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
-          REQUEST_CELL_ROUTING_SURFACE_MESSAGE.ROUTER_UNAVAILABLE,
-          {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
-        );
-      }
-      return messageRouter.deliver(targetAddress, message, options);
-    },
-  };
-}
+const {
+  authenticateEnvelope,
+  authorizeEnvelope,
+  createLazyMessageRouter,
+  resolveSelectedTarget,
+} = createEnvelopeDispatchGuards({
+  applicationRole: APPLICATION_ROLE,
+  createAuthenticationFailure: () => createRoutingFailure(
+    REQUEST_CELL_ROUTE_ERROR_CODE.AUTHENTICATION_FAILED,
+    REQUEST_CELL_ROUTING_SURFACE_MESSAGE.SECURITY_CONTEXT_INVALID,
+  ),
+  createAuthorizationFailure: () => createRoutingFailure(
+    REQUEST_CELL_ROUTE_ERROR_CODE.AUTHORIZATION_FAILED,
+    REQUEST_CELL_ROUTING_SURFACE_MESSAGE.NOT_AUTHORIZED,
+  ),
+  createRouterUnavailableFailure: () => createRoutingFailure(
+    REQUEST_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
+    REQUEST_CELL_ROUTING_SURFACE_MESSAGE.ROUTER_UNAVAILABLE,
+    {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
+  ),
+  createTargetStaleFailure: () => createRoutingFailure(
+    REQUEST_CELL_ROUTE_ERROR_CODE.TARGET_STALE,
+    REQUEST_CELL_ROUTING_SURFACE_MESSAGE.TARGET_MISMATCH,
+  ),
+});
 
 function createRequestCellRoutingSurface(options = {}) {
   const messageRouterProvider =

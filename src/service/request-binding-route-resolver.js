@@ -3,25 +3,17 @@ import {createHash} from 'node:crypto';
 import {SYSTEM_TABLE_NAME} from
   '../bootstrap/system-table-schemas-constants.js';
 import {
-  UNIFIED_SERVICE_TYPE,
-} from '../constants/unified-service-lifecycle.js';
-import {
   DEPLOYMENT_BINDING_SOURCE_KIND,
-  canonicalJson,
   projectBinding,
 } from '../control-plane/owners/deployment-binding-contract.js';
 import {
   deriveRequestServiceDefinitionId,
-  getBindingServiceDefinitionSourceKind,
 } from
   '../control-plane/owners/request-binding-service-definition-contract.js';
 import {
-  runtimeServiceReplicaBelongsToEntity,
-} from '../rebalancer/runtime-service-replica-identity.js';
-import {ReplicaStatus} from '../rebalancer/replica-status.js';
-import {
-  WASM_SERVICE_DEFINITION_STATUS,
-} from '../wasm-service/wasm-service-constants.js';
+  isActiveDefinitionForBinding,
+  isReadyRuntimeActual,
+} from './binding-route-actuals.js';
 import {
   REQUEST_CELL_ROUTE_CLASSIFICATION,
   REQUEST_CELL_ROUTE_ERROR_CODE,
@@ -44,34 +36,6 @@ const ROUTE_RESOLVER_ERROR = Object.freeze({
   TARGET_STALE:
     'The selected request Cell actual is stale, moved, or superseded',
 });
-
-function isActiveDefinitionForBinding(definition, binding) {
-  if (
-    definition?.status !== WASM_SERVICE_DEFINITION_STATUS.ACTIVE ||
-    definition?.binding_version_id !== binding.bindingVersionId ||
-    getBindingServiceDefinitionSourceKind(definition) !==
-      DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST
-  ) {
-    return false;
-  }
-  try {
-    const projection = JSON.parse(definition.binding_projection);
-    return projection.binding_version_id === binding.bindingVersionId &&
-      projection.tenant_id === binding.tenantId &&
-      canonicalJson(projection.declaration) ===
-        canonicalJson(binding.declaration);
-  } catch {
-    return false;
-  }
-}
-
-function isReadyRuntimeActual(actual, serviceId) {
-  return actual?.service_type === UNIFIED_SERVICE_TYPE.RUNTIME_SERVICE &&
-    actual?.status === ReplicaStatus.ACTIVE &&
-    typeof actual?.node_id === 'string' &&
-    actual.node_id.length > 0 &&
-    runtimeServiceReplicaBelongsToEntity(actual?.service_id, serviceId);
-}
 
 function selectActual(actuals, invocationId) {
   const ordered = actuals.slice().sort(
@@ -169,7 +133,11 @@ class RequestBindingRouteResolver {
       (cache.getAll(SYSTEM_TABLE_NAME.SERVICES) || [])
         .filter((actual) => isReadyRuntimeActual(actual, serviceId));
     if (
-      !isActiveDefinitionForBinding(definition, binding) ||
+      !isActiveDefinitionForBinding(
+        definition,
+        binding,
+        DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
+      ) ||
       actuals.length === 0
     ) {
       throw createRoutingFailure(

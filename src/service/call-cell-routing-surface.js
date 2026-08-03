@@ -7,6 +7,8 @@ import {
 } from './call-cell-routing-contract.js';
 import {CallCellStatementAdapter} from
   './call-cell-statement-adapter.js';
+import {createEnvelopeDispatchGuards} from
+  './cell-ingress-transport.js';
 import {ServiceDispatcher} from './service-dispatcher.js';
 
 const APPLICATION_ROLE = 'application';
@@ -20,75 +22,31 @@ const CALL_CELL_ROUTING_SURFACE_MESSAGE = Object.freeze({
     'Selected call Cell route does not match the Service_Message',
 });
 
-function routeFieldsMatch(envelope, route) {
-  const selected = envelope?.payload?.route;
-  if (!selected || !route) return false;
-  const fields = [
-    'bindingVersionId',
-    'replicaId',
-    'serviceId',
-    'targetNodeId',
-  ];
-  return fields.every((field) => selected[field] === route[field]) &&
-    envelope.serviceId === route.serviceId;
-}
-
-function authenticateEnvelope(envelope, context) {
-  const securityContext = context?.securityContext;
-  if (
-    !Object.isFrozen(securityContext) ||
-    !Object.isFrozen(securityContext?.roles) ||
-    envelope?.tenantId !== securityContext?.tenantId ||
-    envelope?.principal !== securityContext?.principal
-  ) {
-    throw createCallRoutingFailure(
-      CALL_CELL_ROUTE_ERROR_CODE.AUTHENTICATION_FAILED,
-      CALL_CELL_ROUTING_SURFACE_MESSAGE.SECURITY_CONTEXT_INVALID,
-    );
-  }
-  return securityContext;
-}
-
-function authorizeEnvelope(_envelope, context) {
-  const securityContext = context?.authn;
-  if (!securityContext?.roles?.includes(APPLICATION_ROLE)) {
-    throw createCallRoutingFailure(
-      CALL_CELL_ROUTE_ERROR_CODE.AUTHORIZATION_FAILED,
-      CALL_CELL_ROUTING_SURFACE_MESSAGE.NOT_AUTHORIZED,
-    );
-  }
-}
-
-function resolveSelectedTarget(envelope, context) {
-  const route = context?.selectedRoute;
-  if (!routeFieldsMatch(envelope, route)) {
-    throw createCallRoutingFailure(
-      CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE,
-      CALL_CELL_ROUTING_SURFACE_MESSAGE.TARGET_MISMATCH,
-    );
-  }
-  return {
-    targetAddress: route.targetAddress,
-    targetNodeId: route.targetNodeId,
-  };
-}
-
-function createLazyMessageRouter(provider) {
-  return {
-    async deliver(targetAddress, message, options) {
-      const messageRouter = provider();
-      if (!messageRouter ||
-          typeof messageRouter.deliver !== 'function') {
-        throw createCallRoutingFailure(
-          CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
-          CALL_CELL_ROUTING_SURFACE_MESSAGE.ROUTER_UNAVAILABLE,
-          {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
-        );
-      }
-      return messageRouter.deliver(targetAddress, message, options);
-    },
-  };
-}
+const {
+  authenticateEnvelope,
+  authorizeEnvelope,
+  createLazyMessageRouter,
+  resolveSelectedTarget,
+} = createEnvelopeDispatchGuards({
+  applicationRole: APPLICATION_ROLE,
+  createAuthenticationFailure: () => createCallRoutingFailure(
+    CALL_CELL_ROUTE_ERROR_CODE.AUTHENTICATION_FAILED,
+    CALL_CELL_ROUTING_SURFACE_MESSAGE.SECURITY_CONTEXT_INVALID,
+  ),
+  createAuthorizationFailure: () => createCallRoutingFailure(
+    CALL_CELL_ROUTE_ERROR_CODE.AUTHORIZATION_FAILED,
+    CALL_CELL_ROUTING_SURFACE_MESSAGE.NOT_AUTHORIZED,
+  ),
+  createRouterUnavailableFailure: () => createCallRoutingFailure(
+    CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
+    CALL_CELL_ROUTING_SURFACE_MESSAGE.ROUTER_UNAVAILABLE,
+    {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
+  ),
+  createTargetStaleFailure: () => createCallRoutingFailure(
+    CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE,
+    CALL_CELL_ROUTING_SURFACE_MESSAGE.TARGET_MISMATCH,
+  ),
+});
 
 function createCallCellRoutingSurface(options = {}) {
   const messageRouterProvider =

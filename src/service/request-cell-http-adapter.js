@@ -4,7 +4,11 @@ import {
   SERVICE_MESSAGE_FIELD,
   UNIFIED_SERVICE_TYPE,
 } from '../constants/unified-service-lifecycle.js';
-import {TRANSPORT_EVENT} from '../constants/transport.js';
+import {
+  CellIngressAdapterBase,
+  createActiveRequest,
+  createRequestCancellationAwaiter,
+} from './cell-ingress-transport.js';
 import {
   REQUEST_CELL_ROUTE_CLASSIFICATION,
   REQUEST_CELL_ROUTE_ERROR_CODE,
@@ -20,10 +24,6 @@ import {
 import {ServicePolicyViolationError} from
   './service-lifecycle-errors.js';
 
-const DEFAULT_DEADLINE_MS = 5_000;
-const DEFAULT_MAX_ATTEMPTS = 2;
-const DEFAULT_MAX_IN_FLIGHT = 128;
-const DEFAULT_MAX_IN_FLIGHT_PER_TARGET = 32;
 const IDEMPOTENCY_HEADER = 'idempotency-key';
 const RESPONSE_CONTENT_TYPE = 'content-type';
 const JSON_CONTENT_TYPE = 'application/json; charset=utf-8';
@@ -63,10 +63,6 @@ const COMPONENT_FORBIDDEN_RESPONSE_HEADERS = new Set([
   'transfer-encoding',
   'upgrade',
 ]);
-
-function positiveInteger(value, fallback) {
-  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
-}
 
 function requestPath(request) {
   return new URL(request.url, REQUEST_CELL_URL_ORIGIN).pathname;
@@ -164,55 +160,8 @@ function createShutdownFailure(activeRequest = {}) {
   );
 }
 
-function createActiveRequest() {
-  let resolveSettled;
-  const settled = new Promise((resolve) => {
-    resolveSettled = resolve;
-  });
-  return {
-    abortController: new AbortController(),
-    dispatchStarted: false,
-    resolveSettled,
-    settled,
-  };
-}
-
-function awaitWithRequestCancellation(promise, activeRequest) {
-  const signal = activeRequest.abortController.signal;
-  if (signal.aborted) {
-    return Promise.reject(
-      signal.reason instanceof Error ?
-        signal.reason :
-        createShutdownFailure(activeRequest),
-    );
-  }
-  return new Promise((resolve, reject) => {
-    let settled = false;
-    const complete = (settle, value) => {
-      if (settled) return;
-      settled = true;
-      signal.removeEventListener(TRANSPORT_EVENT.ABORT, onAbort);
-      settle(value);
-    };
-    const onAbort = () => {
-      complete(
-        reject,
-        signal.reason instanceof Error ?
-          signal.reason :
-          createShutdownFailure(activeRequest),
-      );
-    };
-    signal.addEventListener(
-      TRANSPORT_EVENT.ABORT,
-      onAbort,
-      {once: true},
-    );
-    Promise.resolve(promise).then(
-      (value) => complete(resolve, value),
-      (error) => complete(reject, error),
-    );
-  });
-}
+const awaitWithRequestCancellation =
+  createRequestCancellationAwaiter(createShutdownFailure);
 
 function failureFromDelivery(delivery) {
   const outcome = delivery?.invocationOutcome;
@@ -235,33 +184,20 @@ function failureFromDelivery(delivery) {
   );
 }
 
-class RequestCellDispatchAttemptOwner {
-  constructor(maxAttempts) {
-    this._maxAttempts = maxAttempts;
-  }
+const REQUEST_CELL_INGRESS_KIT = Object.freeze({
+  buildEnvelope,
+  createOverloadFailure: () => createRoutingFailure(
+    REQUEST_CELL_ROUTE_ERROR_CODE.OVERLOADED,
+    REQUEST_CELL_ADAPTER_MESSAGE.INGRESS_OVERLOADED,
+    {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
+  ),
+  createShutdownFailure,
+  failureFromDelivery,
+  mapProcessedDelivery: (delivery) => delivery.componentResponse,
+  normalizeDispatchError,
+});
 
-  async run(executeAttempt) {
-    return this._runAttempt(executeAttempt, 1);
-  }
-
-  async _runAttempt(executeAttempt, attempt) {
-    try {
-      return await executeAttempt(attempt);
-    } catch (error) {
-      const failure = normalizeDispatchError(error);
-      if (
-        !failure.retryable ||
-        failure.invoked ||
-        attempt >= this._maxAttempts
-      ) {
-        throw failure;
-      }
-      return this._runAttempt(executeAttempt, attempt + 1);
-    }
-  }
-}
-
-class RequestCellHttpAdapter {
+class RequestCellHttpAdapter extends CellIngressAdapterBase {
   constructor(options = {}) {
     if (typeof options.authenticateRequest !== 'function') {
       throw new TypeError(
@@ -280,99 +216,8 @@ class RequestCellHttpAdapter {
         REQUEST_CELL_ADAPTER_MESSAGE.REQUIRE_DISPATCHER,
       );
     }
+    super(options, REQUEST_CELL_INGRESS_KIT);
     this._authenticateRequest = options.authenticateRequest;
-    this._routeResolver = options.routeResolver;
-    this._serviceDispatcher = options.serviceDispatcher;
-    this._deadlineMs = positiveInteger(
-      options.deadlineMs,
-      DEFAULT_DEADLINE_MS,
-    );
-    this._maxAttempts = positiveInteger(
-      options.maxAttempts,
-      DEFAULT_MAX_ATTEMPTS,
-    );
-    this._attemptOwner =
-      new RequestCellDispatchAttemptOwner(this._maxAttempts);
-    this._maxInFlight = positiveInteger(
-      options.maxInFlight,
-      DEFAULT_MAX_IN_FLIGHT,
-    );
-    this._maxInFlightPerTarget = positiveInteger(
-      options.maxInFlightPerTarget,
-      DEFAULT_MAX_IN_FLIGHT_PER_TARGET,
-    );
-    this._inFlight = 0;
-    this._inFlightByTarget = new Map();
-    this._activeRequests = new Set();
-    this._shuttingDown = false;
-    this._shutdownPromise = null;
-  }
-
-  _acquire(targetNodeId) {
-    const targetCount = this._inFlightByTarget.get(targetNodeId) || 0;
-    if (
-      this._inFlight >= this._maxInFlight ||
-      targetCount >= this._maxInFlightPerTarget
-    ) {
-      throw createRoutingFailure(
-        REQUEST_CELL_ROUTE_ERROR_CODE.OVERLOADED,
-        REQUEST_CELL_ADAPTER_MESSAGE.INGRESS_OVERLOADED,
-        {classification: REQUEST_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
-      );
-    }
-    this._inFlight += 1;
-    this._inFlightByTarget.set(targetNodeId, targetCount + 1);
-    return () => {
-      this._inFlight = Math.max(0, this._inFlight - 1);
-      const nextTargetCount =
-        (this._inFlightByTarget.get(targetNodeId) || 1) - 1;
-      if (nextTargetCount <= 0) {
-        this._inFlightByTarget.delete(targetNodeId);
-      } else {
-        this._inFlightByTarget.set(targetNodeId, nextTargetCount);
-      }
-    };
-  }
-
-  _assertOpen(activeRequest) {
-    if (
-      this._shuttingDown ||
-      activeRequest.abortController.signal.aborted
-    ) {
-      throw activeRequest.abortController.signal.reason instanceof Error ?
-        activeRequest.abortController.signal.reason :
-        createShutdownFailure(activeRequest);
-    }
-  }
-
-  async _dispatchAttempt(fields) {
-    const release = this._acquire(fields.route.targetNodeId);
-    try {
-      const envelope = buildEnvelope(fields);
-      fields.activeRequest.dispatchStarted = true;
-      const result = await awaitWithRequestCancellation(
-        this._serviceDispatcher.dispatch(envelope, {
-          deadlineMs: fields.deadlineMs,
-          nodeId: fields.ingressNodeId,
-          requireProcessedResponse: true,
-          responseContext: {
-            invocationId: fields.invocationId,
-            replicaId: fields.route.replicaId,
-          },
-          securityContext: fields.securityContext,
-          selectedRoute: fields.route,
-          signal: fields.activeRequest.abortController.signal,
-          traceId: fields.traceId,
-        }),
-        fields.activeRequest,
-      );
-      if (result.delivery?.processed === true) {
-        return result.delivery.componentResponse;
-      }
-      throw failureFromDelivery(result.delivery);
-    } finally {
-      release();
-    }
   }
 
   async invoke(request) {
@@ -463,29 +308,6 @@ class RequestCellHttpAdapter {
         invoked: failure.invoked,
       };
     }
-  }
-
-  async shutdown() {
-    if (this._shutdownPromise) return this._shutdownPromise;
-    this._shuttingDown = true;
-    const activeRequests = [...this._activeRequests];
-    for (const request of activeRequests) {
-      request.abortController.abort(createShutdownFailure(request));
-    }
-    this._shutdownPromise = Promise.allSettled(
-      activeRequests.map((request) => request.settled),
-    ).then(() => undefined);
-    return this._shutdownPromise;
-  }
-
-  getDiagnostics() {
-    return {
-      activeRequests: this._activeRequests.size,
-      inFlight: this._inFlight,
-      inFlightByTarget:
-        Object.fromEntries(this._inFlightByTarget.entries()),
-      shuttingDown: this._shuttingDown,
-    };
   }
 }
 

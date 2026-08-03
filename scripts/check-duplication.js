@@ -67,8 +67,10 @@ const RATCHET_TARGETS = [
     // baseline already exact.
     // 2026-07-30: tightened 842/32140 -> 841/32119 after removing the
     // unconsumed measured-P0 planning export surface.
-    baselineCloneGroupCount: 841,
-    baselineDuplicatedLineCount: 32119,
+    // 2026-08-03: tightened 841/32119 -> 839/32044 (measured after the
+    // call-cell gate-restoration batch; one-way-baseline rule).
+    baselineCloneGroupCount: 839,
+    baselineDuplicatedLineCount: 32044,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
