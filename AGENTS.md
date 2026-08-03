@@ -65,14 +65,19 @@ the human/development/agent documentation zones.
 
 ## Before Any `git push` (every agent, no exceptions)
 
-Run the push gate's full check corpus locally and fix everything BEFORE
-invoking `git push` — never discover the gate's checks by letting the push
-fail one check at a time:
+The pre-push hook runs the lint/static ratchet corpus automatically at
+push time (unused-files, tracked-file lint, duplication and file-size
+ratchets, unused-exports, circular-deps) — but it runs NO tests. The CI
+gate runs remotely only AFTER the push, so a push can pass the hook and
+still turn main red.
 
-1. `bash .githooks/pre-push` — manual invocation runs the exact push
-   corpus against the working tree: unused-files, tracked-file lint, the
-   duplication and file-size ratchets, unused-exports, circular-deps.
-2. `npm run test:gate:postpush` — the CI gate the push must keep green.
+1. Run `npm run test:gate:postpush` locally and fix everything before
+   pushing — nothing else runs those tests pre-push.
+2. After sweeping code changes, `bash .githooks/pre-push` (manual
+   invocation gates the working tree) gives early ratchet feedback;
+   at push time the hook gates the committed tree, so a late discovery
+   costs follow-up commits. Fix ratchet failures proactively, not by
+   letting repeated pushes reveal them one check at a time.
 
 Ratchet baselines (duplication, unused-exports, complexity) are one-way:
 fix the code (extract, de-export, simplify) rather than raising a
