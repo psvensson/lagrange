@@ -63,6 +63,21 @@ in-repo-steering vs external-memory split and
 [`docs/steering/audience-boundary.md`](docs/steering/audience-boundary.md) for
 the human/development/agent documentation zones.
 
+## Before Any `git push` (every agent, no exceptions)
+
+Run the push gate's full check corpus locally and fix everything BEFORE
+invoking `git push` — never discover the gate's checks by letting the push
+fail one check at a time:
+
+1. `bash .githooks/pre-push` — manual invocation runs the exact push
+   corpus against the working tree: unused-files, tracked-file lint, the
+   duplication and file-size ratchets, unused-exports, circular-deps.
+2. `npm run test:gate:postpush` — the CI gate the push must keep green.
+
+Ratchet baselines (duplication, unused-exports, complexity) are one-way:
+fix the code (extract, de-export, simplify) rather than raising a
+baseline, and tighten a baseline when the checker prints the hint.
+
 ## Steering Load Order
 
 1. Read this file (`AGENTS.md`).
