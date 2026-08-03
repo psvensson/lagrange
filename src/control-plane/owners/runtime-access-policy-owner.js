@@ -5,12 +5,19 @@ import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 
 const RUNTIME_ACCESS_POLICY_OWNER_NAME = 'runtime-access-policy-owner';
 const RUNTIME_ACCESS_POLICY_SCHEMA_VERSION = 1;
+const RUNTIME_ACCESS_POLICY_SCHEMA_VERSION_V2 = 2;
+const RUNTIME_ACCESS_POLICY_SCHEMA_VERSIONS = Object.freeze([
+  RUNTIME_ACCESS_POLICY_SCHEMA_VERSION,
+  RUNTIME_ACCESS_POLICY_SCHEMA_VERSION_V2,
+]);
 const RUNTIME_ACCESS_POLICY_CONFIG_KEY_PREFIX = 'runtime.access.service.';
 const RUNTIME_ACCESS_POLICY_VALUE_TYPE = 'json';
 const RUNTIME_ACCESS_POLICY_DESCRIPTION =
   'Directly managed runtime table access policy';
 const RUNTIME_ACCESS_POLICY_DEFAULT_VALUE = '{}';
 const RUNTIME_ACCESS_POLICY_MAX_TABLE_SLOTS = 1024;
+const RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS = 64;
+const RUNTIME_ACCESS_POLICY_EMPTY_CALLS = Object.freeze([]);
 const RUNTIME_ACCESS_POLICY_TABLE_PATTERN =
   /^table:global\.[a-z_][a-z0-9_]*$/u;
 const RUNTIME_ACCESS_POLICY_BINDING_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u;
@@ -49,6 +56,7 @@ const RUNTIME_ACCESS_POLICY_ERROR_CODE = Object.freeze({
 });
 const RUNTIME_ACCESS_POLICY_PATH = Object.freeze({
   BINDING_NAME: '/binding_name',
+  CALLS: '/calls',
   DEPENDENCIES: '/dependencies',
   POLICY: '/policy',
   SCHEMA_VERSION: '/schema_version',
@@ -67,13 +75,30 @@ const POLICY_INPUT_FIELDS = Object.freeze([
   'schema_version',
   'tables',
 ]);
+const POLICY_INPUT_FIELDS_V2 = Object.freeze([
+  'binding_name',
+  'calls',
+  'schema_version',
+  'tables',
+]);
 const POLICY_TABLE_FIELDS = Object.freeze([
   'operations',
   'slot',
   'table',
 ]);
+const POLICY_CALL_FIELDS = Object.freeze([
+  'binding',
+]);
 const STORED_POLICY_FIELDS = Object.freeze([
   'binding_version_id',
+  'schema_version',
+  'service_id',
+  'tables',
+  'tenant_id',
+]);
+const STORED_POLICY_FIELDS_V2 = Object.freeze([
+  'binding_version_id',
+  'calls',
   'schema_version',
   'service_id',
   'tables',
@@ -208,15 +233,52 @@ function normalizePolicyTables(tables, path = RUNTIME_ACCESS_POLICY_PATH.TABLES)
   return Object.freeze(normalized);
 }
 
+function normalizePolicyCalls(calls, bindingName,
+  path = RUNTIME_ACCESS_POLICY_PATH.CALLS) {
+  if (!Array.isArray(calls) ||
+      calls.length > RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS) {
+    fail(
+      RUNTIME_ACCESS_POLICY_ERROR_CODE.INVALID_FIELD,
+      path,
+      RUNTIME_ACCESS_POLICY_MESSAGE.INVALID_FIELD,
+    );
+  }
+  const names = new Set();
+  const targets = calls.map((entry, index) => {
+    const entryPath = `${path}/${index}`;
+    requireExactFields(entry, POLICY_CALL_FIELDS, entryPath);
+    if (typeof entry.binding !== 'string' ||
+        !RUNTIME_ACCESS_POLICY_BINDING_PATTERN.test(entry.binding) ||
+        entry.binding === bindingName ||
+        names.has(entry.binding)) {
+      fail(
+        RUNTIME_ACCESS_POLICY_ERROR_CODE.INVALID_FIELD,
+        entryPath,
+        RUNTIME_ACCESS_POLICY_MESSAGE.INVALID_FIELD,
+      );
+    }
+    names.add(entry.binding);
+    return entry.binding;
+  });
+  targets.sort();
+  return Object.freeze(targets);
+}
+
 function normalizePolicyInput(input) {
-  requireExactFields(input, POLICY_INPUT_FIELDS, RUNTIME_ACCESS_POLICY_PATH.POLICY);
-  if (input.schema_version !== RUNTIME_ACCESS_POLICY_SCHEMA_VERSION) {
+  if (!isPlainObject(input) ||
+      !RUNTIME_ACCESS_POLICY_SCHEMA_VERSIONS.includes(input.schema_version)) {
     fail(
       RUNTIME_ACCESS_POLICY_ERROR_CODE.INVALID_FIELD,
       RUNTIME_ACCESS_POLICY_PATH.SCHEMA_VERSION,
       RUNTIME_ACCESS_POLICY_MESSAGE.INVALID_FIELD,
     );
   }
+  const v2 = input.schema_version === RUNTIME_ACCESS_POLICY_SCHEMA_VERSION_V2;
+  requireExactFields(
+    input,
+    v2 ? POLICY_INPUT_FIELDS_V2 : POLICY_INPUT_FIELDS,
+    RUNTIME_ACCESS_POLICY_PATH.POLICY,
+  );
   if (typeof input.binding_name !== 'string' ||
       !RUNTIME_ACCESS_POLICY_BINDING_PATTERN.test(input.binding_name)) {
     fail(
@@ -227,6 +289,10 @@ function normalizePolicyInput(input) {
   }
   return Object.freeze({
     bindingName: input.binding_name,
+    calls: v2 ?
+      normalizePolicyCalls(input.calls, input.binding_name) :
+      RUNTIME_ACCESS_POLICY_EMPTY_CALLS,
+    schemaVersion: input.schema_version,
     tables: normalizePolicyTables(input.tables),
   });
 }
@@ -239,14 +305,26 @@ function storedPolicyTables(tables) {
   }));
 }
 
+function storedPolicyCalls(calls) {
+  return calls.map((binding) => ({binding}));
+}
+
 function normalizeStoredPolicy(value, serviceId) {
+  if (!isPlainObject(value) ||
+      !RUNTIME_ACCESS_POLICY_SCHEMA_VERSIONS.includes(value.schema_version)) {
+    fail(
+      RUNTIME_ACCESS_POLICY_ERROR_CODE.INVALID_FIELD,
+      RUNTIME_ACCESS_POLICY_PATH.POLICY,
+      RUNTIME_ACCESS_POLICY_MESSAGE.INVALID_FIELD,
+    );
+  }
+  const v2 = value.schema_version === RUNTIME_ACCESS_POLICY_SCHEMA_VERSION_V2;
   requireExactFields(
     value,
-    STORED_POLICY_FIELDS,
+    v2 ? STORED_POLICY_FIELDS_V2 : STORED_POLICY_FIELDS,
     RUNTIME_ACCESS_POLICY_PATH.POLICY,
   );
-  if (value.schema_version !== RUNTIME_ACCESS_POLICY_SCHEMA_VERSION ||
-      typeof value.binding_version_id !== 'string' ||
+  if (typeof value.binding_version_id !== 'string' ||
       value.binding_version_id.length === 0 ||
       typeof value.tenant_id !== 'string' ||
       value.tenant_id.length === 0 ||
@@ -261,6 +339,9 @@ function normalizeStoredPolicy(value, serviceId) {
   }
   return deepFreeze({
     bindingVersionId: value.binding_version_id,
+    calls: v2 ?
+      normalizePolicyCalls(value.calls) :
+      RUNTIME_ACCESS_POLICY_EMPTY_CALLS,
     schemaVersion: value.schema_version,
     serviceId: value.service_id,
     tables: normalizePolicyTables(value.tables),
@@ -432,6 +513,12 @@ function deniedDecision(reason, detail = {}) {
   });
 }
 
+function isOutboundCallAllowed(policy, targetName) {
+  return policy?.status === RUNTIME_ACCESS_POLICY_STATUS.RESOLVED &&
+    typeof targetName === 'string' &&
+    policy.calls.includes(targetName);
+}
+
 class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
   static OWNER_NAME = RUNTIME_ACCESS_POLICY_OWNER_NAME;
   static TABLE_NAME = TABLES.CONFIG;
@@ -483,11 +570,14 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
     );
     const stored = {
       binding_version_id: binding.bindingVersionId,
-      schema_version: RUNTIME_ACCESS_POLICY_SCHEMA_VERSION,
+      schema_version: normalized.schemaVersion,
       service_id: serviceId,
       tables: storedPolicyTables(normalized.tables),
       tenant_id: binding.tenantId,
     };
+    if (normalized.schemaVersion === RUNTIME_ACCESS_POLICY_SCHEMA_VERSION_V2) {
+      stored.calls = storedPolicyCalls(normalized.calls);
+    }
     const now = this.timestamp();
     const configValue = JSON.stringify(stored);
     await this.upsertRow({
@@ -539,6 +629,17 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
     }
   }
 
+  async getOutboundCallPolicy(serviceId, options = {}) {
+    const resolved = await this.getRuntimePolicy(serviceId, options);
+    if (resolved.status !== RUNTIME_ACCESS_POLICY_STATUS.RESOLVED) {
+      return deniedPolicy(resolved.reason);
+    }
+    return deepFreeze({
+      status: RUNTIME_ACCESS_POLICY_STATUS.RESOLVED,
+      calls: resolved.policy.calls,
+    });
+  }
+
   async authorizeStatement(serviceId, ast, options = {}) {
     const statement = statementAccesses(ast);
     if (!statement.allowedStatement) {
@@ -577,9 +678,11 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
 
 export {
   RUNTIME_ACCESS_POLICY_DECISION,
+  RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS,
   RUNTIME_ACCESS_POLICY_REASON,
   RUNTIME_ACCESS_POLICY_STATUS,
   RuntimeAccessPolicyError,
   RuntimeAccessPolicyOwner,
+  isOutboundCallAllowed,
   statementAccesses,
 };

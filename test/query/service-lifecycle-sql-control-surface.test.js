@@ -644,12 +644,48 @@ describe('service lifecycle SQL durable owner route', () => {
     );
     assert.equal(configured.success, true);
     assert.equal(configured.rows[0].table_slots, 2);
+    assert.equal(configured.rows[0].call_targets, 0);
     assert.equal(fixture.gateway.rowCount(TABLES.CONFIG), 1);
     const [accessRow] = fixture.gateway.rows(TABLES.CONFIG);
     assert.equal(accessRow.value_type, 'json');
     assert.equal(
       JSON.parse(accessRow.config_value).service_id,
       configured.rows[0].service_id,
+    );
+
+    const configuredV2 = await adapter.execute(
+      'session-1',
+      'CONFIGURE SERVICE ACCESS $1',
+      [JSON.stringify({
+        schema_version: 2,
+        binding_name: 'orders-api',
+        tables: [{
+          slot: 0,
+          table: 'table:global.orders',
+          operations: ['read'],
+        }],
+        calls: [{binding: 'orders-worker'}],
+      })],
+    );
+    assert.equal(configuredV2.success, true);
+    assert.equal(configuredV2.rows[0].call_targets, 1);
+    assert.equal(configuredV2.rows[0].schema_version, 2);
+    assert.equal(fixture.gateway.rowCount(TABLES.CONFIG), 1);
+
+    const junkCalls = await adapter.execute(
+      'session-1',
+      'CONFIGURE SERVICE ACCESS $1',
+      [JSON.stringify({
+        schema_version: 2,
+        binding_name: 'orders-api',
+        tables: [],
+        calls: 'every-binding',
+      })],
+    );
+    assert.equal(junkCalls.success, false);
+    assert.equal(
+      junkCalls.errorCode,
+      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ACCESS_POLICY_REJECTED,
     );
     const replay = await adapter.execute(
       'session-1', 'CREATE BINDING $1;', [payload]);

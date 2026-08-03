@@ -1,0 +1,626 @@
+diff --git a/scripts/checks/run-outbound-call-access-policy-scenarios.js b/scripts/checks/run-outbound-call-access-policy-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..863d2c11dfe1e99828fc4eac2b445f7b1bbe793e
+--- /dev/null
++++ b/scripts/checks/run-outbound-call-access-policy-scenarios.js
+@@ -0,0 +1,23 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++// doneWhen guard for the outbound-call-access-policy quest: the schema-v2
++// calls allowlist (normalization, bounds, wildcard/self-reference/duplicate
++// refusals, v1 compatibility with empty outbound calls, byte-identical
++// replay idempotency, conflicting replay fail-closed) across the policy
++// owner, the lifecycle SQL control surface, the command-owner result row,
++// the live CONFIGURE SERVICE ACCESS path, and the untouched v1 example
++// contracts.
++const SCENARIOS = {
++  'outbound-call-access-policy': [
++    'test/control-plane/runtime-access-policy-owner.test.js',
++    'test/query/service-lifecycle-sql-control-surface.test.js',
++    'test/service/service-lifecycle-command-owner.test.js',
++    'test/integration/minimal-deployment-runtime-access-policy-live-validation.integration.test.js',
++    'test/examples/js-request-binding-example.test.js',
++    'test/examples/minimal-deployment-request-binding-example.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/control-plane/owners/runtime-access-policy-owner.js b/src/control-plane/owners/runtime-access-policy-owner.js
+index 1f94d9a7045904d918bb2c0dece1feccd7621307..177da76bc126a92e3a941d1346dae92159bbd7ed 100644
+--- a/src/control-plane/owners/runtime-access-policy-owner.js
++++ b/src/control-plane/owners/runtime-access-policy-owner.js
+@@ -5,12 +5,19 @@ import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
+ 
+ const RUNTIME_ACCESS_POLICY_OWNER_NAME = 'runtime-access-policy-owner';
+ const RUNTIME_ACCESS_POLICY_SCHEMA_VERSION = 1;
++const RUNTIME_ACCESS_POLICY_SCHEMA_VERSION_V2 = 2;
++const RUNTIME_ACCESS_POLICY_SCHEMA_VERSIONS = Object.freeze([
++  RUNTIME_ACCESS_POLICY_SCHEMA_VERSION,
++  RUNTIME_ACCESS_POLICY_SCHEMA_VERSION_V2,
++]);
+ const RUNTIME_ACCESS_POLICY_CONFIG_KEY_PREFIX = 'runtime.access.service.';
+ const RUNTIME_ACCESS_POLICY_VALUE_TYPE = 'json';
+ const RUNTIME_ACCESS_POLICY_DESCRIPTION =
+   'Directly managed runtime table access policy';
+ const RUNTIME_ACCESS_POLICY_DEFAULT_VALUE = '{}';
+ const RUNTIME_ACCESS_POLICY_MAX_TABLE_SLOTS = 1024;
++const RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS = 64;
++const RUNTIME_ACCESS_POLICY_EMPTY_CALLS = Object.freeze([]);
+ const RUNTIME_ACCESS_POLICY_TABLE_PATTERN =
+   /^table:global\.[a-z_][a-z0-9_]*$/u;
+ const RUNTIME_ACCESS_POLICY_BINDING_PATTERN = /^[a-z][a-z0-9-]{0,127}$/u;
+@@ -49,6 +56,7 @@ const RUNTIME_ACCESS_POLICY_ERROR_CODE = Object.freeze({
+ });
+ const RUNTIME_ACCESS_POLICY_PATH = Object.freeze({
+   BINDING_NAME: '/binding_name',
++  CALLS: '/calls',
+   DEPENDENCIES: '/dependencies',
+   POLICY: '/policy',
+   SCHEMA_VERSION: '/schema_version',
+@@ -67,11 +75,20 @@ const POLICY_INPUT_FIELDS = Object.freeze([
+   'schema_version',
+   'tables',
+ ]);
++const POLICY_INPUT_FIELDS_V2 = Object.freeze([
++  'binding_name',
++  'calls',
++  'schema_version',
++  'tables',
++]);
+ const POLICY_TABLE_FIELDS = Object.freeze([
+   'operations',
+   'slot',
+   'table',
+ ]);
++const POLICY_CALL_FIELDS = Object.freeze([
++  'binding',
++]);
+ const STORED_POLICY_FIELDS = Object.freeze([
+   'binding_version_id',
+   'schema_version',
+@@ -79,6 +96,14 @@ const STORED_POLICY_FIELDS = Object.freeze([
+   'tables',
+   'tenant_id',
+ ]);
++const STORED_POLICY_FIELDS_V2 = Object.freeze([
++  'binding_version_id',
++  'calls',
++  'schema_version',
++  'service_id',
++  'tables',
++  'tenant_id',
++]);
+ const SQL_AST_TYPE = Object.freeze({
+   ALTER_TABLE: 'ALTER_TABLE',
+   BEGIN_TRANSACTION: 'BEGIN_TRANSACTION',
+@@ -208,15 +233,52 @@ function normalizePolicyTables(tables, path = RUNTIME_ACCESS_POLICY_PATH.TABLES)
+   return Object.freeze(normalized);
+ }
+ 
++function normalizePolicyCalls(calls, bindingName,
++  path = RUNTIME_ACCESS_POLICY_PATH.CALLS) {
++  if (!Array.isArray(calls) ||
++      calls.length > RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS) {
++    fail(
++      RUNTIME_ACCESS_POLICY_ERROR_CODE.INVALID_FIELD,
++      path,
++      RUNTIME_ACCESS_POLICY_MESSAGE.INVALID_FIELD,
++    );
++  }
++  const names = new Set();
++  const targets = calls.map((entry, index) => {
++    const entryPath = `${path}/${index}`;
++    requireExactFields(entry, POLICY_CALL_FIELDS, entryPath);
++    if (typeof entry.binding !== 'string' ||
++        !RUNTIME_ACCESS_POLICY_BINDING_PATTERN.test(entry.binding) ||
++        entry.binding === bindingName ||
++        names.has(entry.binding)) {
++      fail(
++        RUNTIME_ACCESS_POLICY_ERROR_CODE.INVALID_FIELD,
++        entryPath,
++        RUNTIME_ACCESS_POLICY_MESSAGE.INVALID_FIELD,
++      );
++    }
++    names.add(entry.binding);
++    return entry.binding;
++  });
++  targets.sort();
++  return Object.freeze(targets);
++}
++
+ function normalizePolicyInput(input) {
+-  requireExactFields(input, POLICY_INPUT_FIELDS, RUNTIME_ACCESS_POLICY_PATH.POLICY);
+-  if (input.schema_version !== RUNTIME_ACCESS_POLICY_SCHEMA_VERSION) {
++  if (!isPlainObject(input) ||
++      !RUNTIME_ACCESS_POLICY_SCHEMA_VERSIONS.includes(input.schema_version)) {
+     fail(
+       RUNTIME_ACCESS_POLICY_ERROR_CODE.INVALID_FIELD,
+       RUNTIME_ACCESS_POLICY_PATH.SCHEMA_VERSION,
+       RUNTIME_ACCESS_POLICY_MESSAGE.INVALID_FIELD,
+     );
+   }
++  const v2 = input.schema_version === RUNTIME_ACCESS_POLICY_SCHEMA_VERSION_V2;
++  requireExactFields(
++    input,
++    v2 ? POLICY_INPUT_FIELDS_V2 : POLICY_INPUT_FIELDS,
++    RUNTIME_ACCESS_POLICY_PATH.POLICY,
++  );
+   if (typeof input.binding_name !== 'string' ||
+       !RUNTIME_ACCESS_POLICY_BINDING_PATTERN.test(input.binding_name)) {
+     fail(
+@@ -227,6 +289,10 @@ function normalizePolicyInput(input) {
+   }
+   return Object.freeze({
+     bindingName: input.binding_name,
++    calls: v2 ?
++      normalizePolicyCalls(input.calls, input.binding_name) :
++      RUNTIME_ACCESS_POLICY_EMPTY_CALLS,
++    schemaVersion: input.schema_version,
+     tables: normalizePolicyTables(input.tables),
+   });
+ }
+@@ -239,14 +305,26 @@ function storedPolicyTables(tables) {
+   }));
+ }
+ 
++function storedPolicyCalls(calls) {
++  return calls.map((binding) => ({binding}));
++}
++
+ function normalizeStoredPolicy(value, serviceId) {
++  if (!isPlainObject(value) ||
++      !RUNTIME_ACCESS_POLICY_SCHEMA_VERSIONS.includes(value.schema_version)) {
++    fail(
++      RUNTIME_ACCESS_POLICY_ERROR_CODE.INVALID_FIELD,
++      RUNTIME_ACCESS_POLICY_PATH.POLICY,
++      RUNTIME_ACCESS_POLICY_MESSAGE.INVALID_FIELD,
++    );
++  }
++  const v2 = value.schema_version === RUNTIME_ACCESS_POLICY_SCHEMA_VERSION_V2;
+   requireExactFields(
+     value,
+-    STORED_POLICY_FIELDS,
++    v2 ? STORED_POLICY_FIELDS_V2 : STORED_POLICY_FIELDS,
+     RUNTIME_ACCESS_POLICY_PATH.POLICY,
+   );
+-  if (value.schema_version !== RUNTIME_ACCESS_POLICY_SCHEMA_VERSION ||
+-      typeof value.binding_version_id !== 'string' ||
++  if (typeof value.binding_version_id !== 'string' ||
+       value.binding_version_id.length === 0 ||
+       typeof value.tenant_id !== 'string' ||
+       value.tenant_id.length === 0 ||
+@@ -261,6 +339,9 @@ function normalizeStoredPolicy(value, serviceId) {
+   }
+   return deepFreeze({
+     bindingVersionId: value.binding_version_id,
++    calls: v2 ?
++      normalizePolicyCalls(value.calls) :
++      RUNTIME_ACCESS_POLICY_EMPTY_CALLS,
+     schemaVersion: value.schema_version,
+     serviceId: value.service_id,
+     tables: normalizePolicyTables(value.tables),
+@@ -432,6 +513,12 @@ function deniedDecision(reason, detail = {}) {
+   });
+ }
+ 
++function isOutboundCallAllowed(policy, targetName) {
++  return policy?.status === RUNTIME_ACCESS_POLICY_STATUS.RESOLVED &&
++    typeof targetName === 'string' &&
++    policy.calls.includes(targetName);
++}
++
+ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
+   static OWNER_NAME = RUNTIME_ACCESS_POLICY_OWNER_NAME;
+   static TABLE_NAME = TABLES.CONFIG;
+@@ -483,11 +570,14 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
+     );
+     const stored = {
+       binding_version_id: binding.bindingVersionId,
+-      schema_version: RUNTIME_ACCESS_POLICY_SCHEMA_VERSION,
++      schema_version: normalized.schemaVersion,
+       service_id: serviceId,
+       tables: storedPolicyTables(normalized.tables),
+       tenant_id: binding.tenantId,
+     };
++    if (normalized.schemaVersion === RUNTIME_ACCESS_POLICY_SCHEMA_VERSION_V2) {
++      stored.calls = storedPolicyCalls(normalized.calls);
++    }
+     const now = this.timestamp();
+     const configValue = JSON.stringify(stored);
+     await this.upsertRow({
+@@ -539,6 +629,17 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
+     }
+   }
+ 
++  async getOutboundCallPolicy(serviceId, options = {}) {
++    const resolved = await this.getRuntimePolicy(serviceId, options);
++    if (resolved.status !== RUNTIME_ACCESS_POLICY_STATUS.RESOLVED) {
++      return deniedPolicy(resolved.reason);
++    }
++    return deepFreeze({
++      status: RUNTIME_ACCESS_POLICY_STATUS.RESOLVED,
++      calls: resolved.policy.calls,
++    });
++  }
++
+   async authorizeStatement(serviceId, ast, options = {}) {
+     const statement = statementAccesses(ast);
+     if (!statement.allowedStatement) {
+@@ -577,9 +678,11 @@ class RuntimeAccessPolicyOwner extends SystemMetadataOwnerBase {
+ 
+ export {
+   RUNTIME_ACCESS_POLICY_DECISION,
++  RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS,
+   RUNTIME_ACCESS_POLICY_REASON,
+   RUNTIME_ACCESS_POLICY_STATUS,
+   RuntimeAccessPolicyError,
+   RuntimeAccessPolicyOwner,
++  isOutboundCallAllowed,
+   statementAccesses,
+ };
+diff --git a/src/query/service-lifecycle-sql-contract.js b/src/query/service-lifecycle-sql-contract.js
+index 051288f109cf55713784ebe9a1e6073200567cfd..f2f6160261a251ae160e18f4116a3b3446df00d7 100644
+--- a/src/query/service-lifecycle-sql-contract.js
++++ b/src/query/service-lifecycle-sql-contract.js
+@@ -52,7 +52,7 @@ const MUTATION_PAYLOAD_FIELDS = Object.freeze({
+     'schema_version', 'name', 'arguments',
+   ]),
+   [SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS]: Object.freeze([
+-    'schema_version', 'binding_name', 'tables',
++    'schema_version', 'binding_name', 'tables', 'calls',
+   ]),
+   [SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING]: Object.freeze([
+     'schema_version', 'name', 'target', 'source', 'budgets',
+diff --git a/src/service/service-lifecycle-command-owner.js b/src/service/service-lifecycle-command-owner.js
+index ddaf9b6c39de813d89f8c84577bf9ae6ff4f8820..996ec84fa89ef1275bde95712f62046403ca54a2 100644
+--- a/src/service/service-lifecycle-command-owner.js
++++ b/src/service/service-lifecycle-command-owner.js
+@@ -527,6 +527,7 @@ class ServiceLifecycleCommandOwner {
+     );
+     return successResult(command, [{
+       binding_version_id: policy.bindingVersionId,
++      call_targets: policy.calls.length,
+       schema_version: policy.schemaVersion,
+       service_id: policy.serviceId,
+       table_slots: policy.tables.length,
+diff --git a/test/control-plane/runtime-access-policy-owner.test.js b/test/control-plane/runtime-access-policy-owner.test.js
+index 5790cc968d52f0de188bc07e5b3ba0d807a54106..1e42050ca953699a1c3c62b4ab73962eb444c186 100644
+--- a/test/control-plane/runtime-access-policy-owner.test.js
++++ b/test/control-plane/runtime-access-policy-owner.test.js
+@@ -3,9 +3,11 @@ import {describe, test} from 'node:test';
+ 
+ import {
+   RUNTIME_ACCESS_POLICY_DECISION,
++  RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS,
+   RUNTIME_ACCESS_POLICY_REASON,
+   RUNTIME_ACCESS_POLICY_STATUS,
+   RuntimeAccessPolicyOwner,
++  isOutboundCallAllowed,
+   statementAccesses,
+ } from '../../src/control-plane/owners/runtime-access-policy-owner.js';
+ import {SQLParser} from '../../src/query/sql-parser.js';
+@@ -301,3 +303,268 @@ describe('runtime access policy owner', () => {
+       );
+     });
+ });
++
++describe('runtime access policy schema v2 outbound calls', () => {
++  const v2Tables = Object.freeze([{
++    operations: Object.freeze(['read']),
++    slot: 0,
++    table: 'table:global.orders',
++  }]);
++
++  function v2Payload(calls) {
++    return {
++      binding_name: 'orders-api',
++      calls,
++      schema_version: 2,
++      tables: structuredClone(v2Tables),
++    };
++  }
++
++  test('canonicalizes v2 call targets into a sorted frozen allowlist',
++    async () => {
++      const {gateway, owner} = createOwner();
++      const configured = await owner.configureBindingAccess(v2Payload([
++        {binding: 'zeta-worker'},
++        {binding: 'alpha-worker'},
++      ]), SECURITY_CONTEXT);
++
++      assert.equal(configured.schemaVersion, 2);
++      assert.deepEqual(configured.calls, ['alpha-worker', 'zeta-worker']);
++      assert.equal(Object.isFrozen(configured), true);
++      assert.equal(Object.isFrozen(configured.calls), true);
++      const [row] = [...gateway.rows.values()];
++      const storedValue = JSON.parse(row.config_value);
++      assert.equal(storedValue.schema_version, 2);
++      assert.deepEqual(storedValue.calls, [
++        {binding: 'alpha-worker'},
++        {binding: 'zeta-worker'},
++      ]);
++      const firstBytes = row.config_value;
++      assert.equal(
++        gateway.lastUpsertOptions.expectedCacheFields.config_value,
++        firstBytes,
++      );
++
++      const replayed = await owner.configureBindingAccess(v2Payload([
++        {binding: 'alpha-worker'},
++        {binding: 'zeta-worker'},
++      ]), SECURITY_CONTEXT);
++      const [replayRow] = [...gateway.rows.values()];
++      assert.equal(replayRow.config_value, firstBytes);
++      assert.equal(
++        gateway.lastUpsertOptions.expectedCacheFields.config_value,
++        firstBytes,
++      );
++      assert.deepEqual(replayed.calls, configured.calls);
++
++      await owner.configureBindingAccess(
++        v2Payload([{binding: 'other-worker'}]),
++        SECURITY_CONTEXT,
++      );
++      assert.notEqual(
++        gateway.lastUpsertOptions.expectedCacheFields.config_value,
++        firstBytes,
++      );
++    });
++
++  test('accepts an empty allowlist and the exact call target bound',
++    async () => {
++      const {owner} = createOwner();
++      const none = await owner.configureBindingAccess(
++        v2Payload([]),
++        SECURITY_CONTEXT,
++      );
++      assert.deepEqual(none.calls, []);
++      assert.equal(Object.isFrozen(none.calls), true);
++
++      const bounded = await owner.configureBindingAccess(v2Payload(
++        Array.from(
++          {length: RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS},
++          (_, index) => ({
++            binding: `target-${String(index).padStart(2, '0')}`,
++          }),
++        ),
++      ), SECURITY_CONTEXT);
++      assert.equal(
++        bounded.calls.length,
++        RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS,
++      );
++    });
++
++  test('fails closed on invalid v2 call allowlists', async () => {
++    const {owner} = createOwner();
++    const configure = (calls) =>
++      owner.configureBindingAccess(v2Payload(calls), SECURITY_CONTEXT);
++    const code = 'runtime_access_invalid_field';
++
++    await assert.rejects(
++      configure([{binding: 'dup-target'}, {binding: 'dup-target'}]),
++      {code, path: '/calls/1'},
++    );
++    await assert.rejects(
++      configure(Array.from(
++        {length: RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS + 1},
++        (_, index) => ({binding: `target-${String(index).padStart(2, '0')}`}),
++      )),
++      {code, path: '/calls'},
++    );
++    for (const wildcard of ['*', 'foo*', 'foo.*']) {
++      await assert.rejects(
++        configure([{binding: wildcard}]),
++        {code, path: '/calls/0'},
++      );
++    }
++    await assert.rejects(
++      configure([{binding: 'orders-api'}]),
++      {code, path: '/calls/0'},
++    );
++    await assert.rejects(configure('all-of-them'), {code, path: '/calls'});
++    await assert.rejects(
++      configure([{binding: 'inner-worker', extra: true}]),
++      {code, path: '/calls/0'},
++    );
++    await assert.rejects(configure(['inner-worker']), {code, path: '/calls/0'});
++    await assert.rejects(
++      owner.configureBindingAccess({
++        binding_name: 'orders-api',
++        schema_version: 2,
++        tables: [],
++      }, SECURITY_CONTEXT),
++      {code, path: '/policy'},
++    );
++    await assert.rejects(
++      owner.configureBindingAccess({
++        binding_name: 'orders-api',
++        calls: [],
++        schema_version: 1,
++        tables: [],
++      }, SECURITY_CONTEXT),
++      {code, path: '/policy'},
++    );
++    await assert.rejects(
++      owner.configureBindingAccess({
++        binding_name: 'orders-api',
++        calls: [],
++        schema_version: '2',
++        tables: [],
++      }, SECURITY_CONTEXT),
++      {code, path: '/schema_version'},
++    );
++    await assert.rejects(
++      owner.configureBindingAccess({
++        binding_name: 'orders-api',
++        schema_version: 3,
++        tables: [],
++      }, SECURITY_CONTEXT),
++      {code, path: '/schema_version'},
++    );
++  });
++
++  test('keeps schema v1 semantics with empty outbound calls and no upgrade',
++    async () => {
++      const {gateway, owner} = createOwner();
++      const configured = await owner.configureBindingAccess({
++        binding_name: 'orders-api',
++        schema_version: 1,
++        tables: structuredClone(v2Tables),
++      }, SECURITY_CONTEXT);
++
++      assert.equal(configured.schemaVersion, 1);
++      assert.deepEqual(configured.calls, []);
++      assert.equal(Object.isFrozen(configured.calls), true);
++      const [row] = [...gateway.rows.values()];
++      const storedValue = JSON.parse(row.config_value);
++      assert.equal(storedValue.schema_version, 1);
++      assert.equal(Object.hasOwn(storedValue, 'calls'), false);
++
++      const resolved = await owner.getRuntimePolicy(configured.serviceId);
++      assert.equal(resolved.status, RUNTIME_ACCESS_POLICY_STATUS.RESOLVED);
++      assert.equal(resolved.policy.schemaVersion, 1);
++      assert.deepEqual(resolved.policy.calls, []);
++      const outbound = await owner.getOutboundCallPolicy(configured.serviceId);
++      assert.deepEqual(outbound, {
++        calls: [],
++        status: RUNTIME_ACCESS_POLICY_STATUS.RESOLVED,
++      });
++      assert.equal(isOutboundCallAllowed(outbound, 'any-worker'), false);
++    });
++
++  test('exposes outbound call policy variants for the invocation bridge',
++    async () => {
++      const {gateway, owner} = createOwner();
++      const missing = await owner.getOutboundCallPolicy(SERVICE_ID);
++      assert.deepEqual(missing, {
++        reason: RUNTIME_ACCESS_POLICY_REASON.POLICY_NOT_FOUND,
++        status: RUNTIME_ACCESS_POLICY_STATUS.DENIED,
++      });
++      assert.equal(isOutboundCallAllowed(missing, 'alpha-worker'), false);
++
++      const policy = {
++        binding_version_id: 'binding-version-orders',
++        calls: [{binding: 'alpha-worker'}, {binding: 'beta-worker'}],
++        schema_version: 2,
++        service_id: SERVICE_ID,
++        tables: [],
++        tenant_id: SECURITY_CONTEXT.tenantId,
++      };
++      const writeStored = (value) => {
++        gateway.rows.set(owner.configKey(SERVICE_ID), {
++          config_key: owner.configKey(SERVICE_ID),
++          config_value: JSON.stringify(value),
++          value_type: 'json',
++        });
++      };
++      writeStored(policy);
++      const outbound = await owner.getOutboundCallPolicy(SERVICE_ID);
++      assert.equal(outbound.status, RUNTIME_ACCESS_POLICY_STATUS.RESOLVED);
++      assert.deepEqual(outbound.calls, ['alpha-worker', 'beta-worker']);
++      assert.equal(Object.isFrozen(outbound.calls), true);
++      assert.equal(isOutboundCallAllowed(outbound, 'alpha-worker'), true);
++      assert.equal(isOutboundCallAllowed(outbound, 'beta-worker'), true);
++      assert.equal(isOutboundCallAllowed(outbound, 'alpha'), false);
++      assert.equal(isOutboundCallAllowed(outbound, 'gamma-worker'), false);
++      assert.equal(isOutboundCallAllowed(outbound, undefined), false);
++
++      const expectInvalid = async () => {
++        const denied = await owner.getOutboundCallPolicy(SERVICE_ID);
++        assert.deepEqual(denied, {
++          reason: RUNTIME_ACCESS_POLICY_REASON.INVALID_POLICY,
++          status: RUNTIME_ACCESS_POLICY_STATUS.DENIED,
++        });
++      };
++      writeStored({
++        ...policy,
++        calls: [{binding: 'dup-worker'}, {binding: 'dup-worker'}],
++      });
++      await expectInvalid();
++      writeStored({...policy, schema_version: 1});
++      await expectInvalid();
++      const {calls: _ignored, ...v2WithoutCalls} = policy;
++      writeStored(v2WithoutCalls);
++      await expectInvalid();
++
++      gateway.failReads = true;
++      const unavailable = await owner.getOutboundCallPolicy(SERVICE_ID);
++      assert.deepEqual(unavailable, {
++        reason: RUNTIME_ACCESS_POLICY_REASON.POLICY_READ_FAILED,
++        status: RUNTIME_ACCESS_POLICY_STATUS.DENIED,
++      });
++    });
++
++  test('propagates durable write conflicts without returning a policy',
++    async () => {
++      const gateway = new PolicyGateway();
++      gateway.upsertSystemTableRow = async () => {
++        throw new Error('expected cache fields conflict');
++      };
++      const {owner} = createOwner(gateway);
++      await assert.rejects(
++        owner.configureBindingAccess(
++          v2Payload([{binding: 'inner-worker'}]),
++          SECURITY_CONTEXT,
++        ),
++        /expected cache fields conflict/u,
++      );
++      assert.equal(gateway.rows.size, 0);
++    });
++});
+diff --git a/test/query/service-lifecycle-sql-control-surface.test.js b/test/query/service-lifecycle-sql-control-surface.test.js
+index 72d3b1c704bebbf215de04a9792a0990094a4dc4..30f9bfecdb8639468b601cd30135d50390129eda 100644
+--- a/test/query/service-lifecycle-sql-control-surface.test.js
++++ b/test/query/service-lifecycle-sql-control-surface.test.js
+@@ -644,6 +644,7 @@ describe('service lifecycle SQL durable owner route', () => {
+     );
+     assert.equal(configured.success, true);
+     assert.equal(configured.rows[0].table_slots, 2);
++    assert.equal(configured.rows[0].call_targets, 0);
+     assert.equal(fixture.gateway.rowCount(TABLES.CONFIG), 1);
+     const [accessRow] = fixture.gateway.rows(TABLES.CONFIG);
+     assert.equal(accessRow.value_type, 'json');
+@@ -651,6 +652,41 @@ describe('service lifecycle SQL durable owner route', () => {
+       JSON.parse(accessRow.config_value).service_id,
+       configured.rows[0].service_id,
+     );
++
++    const configuredV2 = await adapter.execute(
++      'session-1',
++      'CONFIGURE SERVICE ACCESS $1',
++      [JSON.stringify({
++        schema_version: 2,
++        binding_name: 'orders-api',
++        tables: [{
++          slot: 0,
++          table: 'table:global.orders',
++          operations: ['read'],
++        }],
++        calls: [{binding: 'orders-worker'}],
++      })],
++    );
++    assert.equal(configuredV2.success, true);
++    assert.equal(configuredV2.rows[0].call_targets, 1);
++    assert.equal(configuredV2.rows[0].schema_version, 2);
++    assert.equal(fixture.gateway.rowCount(TABLES.CONFIG), 1);
++
++    const junkCalls = await adapter.execute(
++      'session-1',
++      'CONFIGURE SERVICE ACCESS $1',
++      [JSON.stringify({
++        schema_version: 2,
++        binding_name: 'orders-api',
++        tables: [],
++        calls: 'every-binding',
++      })],
++    );
++    assert.equal(junkCalls.success, false);
++    assert.equal(
++      junkCalls.errorCode,
++      SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ACCESS_POLICY_REJECTED,
++    );
+     const replay = await adapter.execute(
+       'session-1', 'CREATE BINDING $1;', [payload]);
+     assert.equal(replay.success, true);

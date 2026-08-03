@@ -527,6 +527,7 @@ class ServiceLifecycleCommandOwner {
     );
     return successResult(command, [{
       binding_version_id: policy.bindingVersionId,
+      call_targets: policy.calls.length,
       schema_version: policy.schemaVersion,
       service_id: policy.serviceId,
       table_slots: policy.tables.length,

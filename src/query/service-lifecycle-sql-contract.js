@@ -52,7 +52,7 @@ const MUTATION_PAYLOAD_FIELDS = Object.freeze({
     'schema_version', 'name', 'arguments',
   ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.CONFIGURE_ACCESS]: Object.freeze([
-    'schema_version', 'binding_name', 'tables',
+    'schema_version', 'binding_name', 'tables', 'calls',
   ]),
   [SERVICE_LIFECYCLE_SQL_COMMAND.CREATE_BINDING]: Object.freeze([
     'schema_version', 'name', 'target', 'source', 'budgets',

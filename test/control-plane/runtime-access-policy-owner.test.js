@@ -3,9 +3,11 @@ import {describe, test} from 'node:test';
 
 import {
   RUNTIME_ACCESS_POLICY_DECISION,
+  RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS,
   RUNTIME_ACCESS_POLICY_REASON,
   RUNTIME_ACCESS_POLICY_STATUS,
   RuntimeAccessPolicyOwner,
+  isOutboundCallAllowed,
   statementAccesses,
 } from '../../src/control-plane/owners/runtime-access-policy-owner.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
@@ -299,5 +301,270 @@ describe('runtime access policy owner', () => {
         }, SECURITY_CONTEXT),
         {code: 'runtime_access_invalid_field', path: '/tables/0'},
       );
+    });
+});
+
+describe('runtime access policy schema v2 outbound calls', () => {
+  const v2Tables = Object.freeze([{
+    operations: Object.freeze(['read']),
+    slot: 0,
+    table: 'table:global.orders',
+  }]);
+
+  function v2Payload(calls) {
+    return {
+      binding_name: 'orders-api',
+      calls,
+      schema_version: 2,
+      tables: structuredClone(v2Tables),
+    };
+  }
+
+  test('canonicalizes v2 call targets into a sorted frozen allowlist',
+    async () => {
+      const {gateway, owner} = createOwner();
+      const configured = await owner.configureBindingAccess(v2Payload([
+        {binding: 'zeta-worker'},
+        {binding: 'alpha-worker'},
+      ]), SECURITY_CONTEXT);
+
+      assert.equal(configured.schemaVersion, 2);
+      assert.deepEqual(configured.calls, ['alpha-worker', 'zeta-worker']);
+      assert.equal(Object.isFrozen(configured), true);
+      assert.equal(Object.isFrozen(configured.calls), true);
+      const [row] = [...gateway.rows.values()];
+      const storedValue = JSON.parse(row.config_value);
+      assert.equal(storedValue.schema_version, 2);
+      assert.deepEqual(storedValue.calls, [
+        {binding: 'alpha-worker'},
+        {binding: 'zeta-worker'},
+      ]);
+      const firstBytes = row.config_value;
+      assert.equal(
+        gateway.lastUpsertOptions.expectedCacheFields.config_value,
+        firstBytes,
+      );
+
+      const replayed = await owner.configureBindingAccess(v2Payload([
+        {binding: 'alpha-worker'},
+        {binding: 'zeta-worker'},
+      ]), SECURITY_CONTEXT);
+      const [replayRow] = [...gateway.rows.values()];
+      assert.equal(replayRow.config_value, firstBytes);
+      assert.equal(
+        gateway.lastUpsertOptions.expectedCacheFields.config_value,
+        firstBytes,
+      );
+      assert.deepEqual(replayed.calls, configured.calls);
+
+      await owner.configureBindingAccess(
+        v2Payload([{binding: 'other-worker'}]),
+        SECURITY_CONTEXT,
+      );
+      assert.notEqual(
+        gateway.lastUpsertOptions.expectedCacheFields.config_value,
+        firstBytes,
+      );
+    });
+
+  test('accepts an empty allowlist and the exact call target bound',
+    async () => {
+      const {owner} = createOwner();
+      const none = await owner.configureBindingAccess(
+        v2Payload([]),
+        SECURITY_CONTEXT,
+      );
+      assert.deepEqual(none.calls, []);
+      assert.equal(Object.isFrozen(none.calls), true);
+
+      const bounded = await owner.configureBindingAccess(v2Payload(
+        Array.from(
+          {length: RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS},
+          (_, index) => ({
+            binding: `target-${String(index).padStart(2, '0')}`,
+          }),
+        ),
+      ), SECURITY_CONTEXT);
+      assert.equal(
+        bounded.calls.length,
+        RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS,
+      );
+    });
+
+  test('fails closed on invalid v2 call allowlists', async () => {
+    const {owner} = createOwner();
+    const configure = (calls) =>
+      owner.configureBindingAccess(v2Payload(calls), SECURITY_CONTEXT);
+    const code = 'runtime_access_invalid_field';
+
+    await assert.rejects(
+      configure([{binding: 'dup-target'}, {binding: 'dup-target'}]),
+      {code, path: '/calls/1'},
+    );
+    await assert.rejects(
+      configure(Array.from(
+        {length: RUNTIME_ACCESS_POLICY_MAX_CALL_TARGETS + 1},
+        (_, index) => ({binding: `target-${String(index).padStart(2, '0')}`}),
+      )),
+      {code, path: '/calls'},
+    );
+    for (const wildcard of ['*', 'foo*', 'foo.*']) {
+      await assert.rejects(
+        configure([{binding: wildcard}]),
+        {code, path: '/calls/0'},
+      );
+    }
+    await assert.rejects(
+      configure([{binding: 'orders-api'}]),
+      {code, path: '/calls/0'},
+    );
+    await assert.rejects(configure('all-of-them'), {code, path: '/calls'});
+    await assert.rejects(
+      configure([{binding: 'inner-worker', extra: true}]),
+      {code, path: '/calls/0'},
+    );
+    await assert.rejects(configure(['inner-worker']), {code, path: '/calls/0'});
+    await assert.rejects(
+      owner.configureBindingAccess({
+        binding_name: 'orders-api',
+        schema_version: 2,
+        tables: [],
+      }, SECURITY_CONTEXT),
+      {code, path: '/policy'},
+    );
+    await assert.rejects(
+      owner.configureBindingAccess({
+        binding_name: 'orders-api',
+        calls: [],
+        schema_version: 1,
+        tables: [],
+      }, SECURITY_CONTEXT),
+      {code, path: '/policy'},
+    );
+    await assert.rejects(
+      owner.configureBindingAccess({
+        binding_name: 'orders-api',
+        calls: [],
+        schema_version: '2',
+        tables: [],
+      }, SECURITY_CONTEXT),
+      {code, path: '/schema_version'},
+    );
+    await assert.rejects(
+      owner.configureBindingAccess({
+        binding_name: 'orders-api',
+        schema_version: 3,
+        tables: [],
+      }, SECURITY_CONTEXT),
+      {code, path: '/schema_version'},
+    );
+  });
+
+  test('keeps schema v1 semantics with empty outbound calls and no upgrade',
+    async () => {
+      const {gateway, owner} = createOwner();
+      const configured = await owner.configureBindingAccess({
+        binding_name: 'orders-api',
+        schema_version: 1,
+        tables: structuredClone(v2Tables),
+      }, SECURITY_CONTEXT);
+
+      assert.equal(configured.schemaVersion, 1);
+      assert.deepEqual(configured.calls, []);
+      assert.equal(Object.isFrozen(configured.calls), true);
+      const [row] = [...gateway.rows.values()];
+      const storedValue = JSON.parse(row.config_value);
+      assert.equal(storedValue.schema_version, 1);
+      assert.equal(Object.hasOwn(storedValue, 'calls'), false);
+
+      const resolved = await owner.getRuntimePolicy(configured.serviceId);
+      assert.equal(resolved.status, RUNTIME_ACCESS_POLICY_STATUS.RESOLVED);
+      assert.equal(resolved.policy.schemaVersion, 1);
+      assert.deepEqual(resolved.policy.calls, []);
+      const outbound = await owner.getOutboundCallPolicy(configured.serviceId);
+      assert.deepEqual(outbound, {
+        calls: [],
+        status: RUNTIME_ACCESS_POLICY_STATUS.RESOLVED,
+      });
+      assert.equal(isOutboundCallAllowed(outbound, 'any-worker'), false);
+    });
+
+  test('exposes outbound call policy variants for the invocation bridge',
+    async () => {
+      const {gateway, owner} = createOwner();
+      const missing = await owner.getOutboundCallPolicy(SERVICE_ID);
+      assert.deepEqual(missing, {
+        reason: RUNTIME_ACCESS_POLICY_REASON.POLICY_NOT_FOUND,
+        status: RUNTIME_ACCESS_POLICY_STATUS.DENIED,
+      });
+      assert.equal(isOutboundCallAllowed(missing, 'alpha-worker'), false);
+
+      const policy = {
+        binding_version_id: 'binding-version-orders',
+        calls: [{binding: 'alpha-worker'}, {binding: 'beta-worker'}],
+        schema_version: 2,
+        service_id: SERVICE_ID,
+        tables: [],
+        tenant_id: SECURITY_CONTEXT.tenantId,
+      };
+      const writeStored = (value) => {
+        gateway.rows.set(owner.configKey(SERVICE_ID), {
+          config_key: owner.configKey(SERVICE_ID),
+          config_value: JSON.stringify(value),
+          value_type: 'json',
+        });
+      };
+      writeStored(policy);
+      const outbound = await owner.getOutboundCallPolicy(SERVICE_ID);
+      assert.equal(outbound.status, RUNTIME_ACCESS_POLICY_STATUS.RESOLVED);
+      assert.deepEqual(outbound.calls, ['alpha-worker', 'beta-worker']);
+      assert.equal(Object.isFrozen(outbound.calls), true);
+      assert.equal(isOutboundCallAllowed(outbound, 'alpha-worker'), true);
+      assert.equal(isOutboundCallAllowed(outbound, 'beta-worker'), true);
+      assert.equal(isOutboundCallAllowed(outbound, 'alpha'), false);
+      assert.equal(isOutboundCallAllowed(outbound, 'gamma-worker'), false);
+      assert.equal(isOutboundCallAllowed(outbound, undefined), false);
+
+      const expectInvalid = async () => {
+        const denied = await owner.getOutboundCallPolicy(SERVICE_ID);
+        assert.deepEqual(denied, {
+          reason: RUNTIME_ACCESS_POLICY_REASON.INVALID_POLICY,
+          status: RUNTIME_ACCESS_POLICY_STATUS.DENIED,
+        });
+      };
+      writeStored({
+        ...policy,
+        calls: [{binding: 'dup-worker'}, {binding: 'dup-worker'}],
+      });
+      await expectInvalid();
+      writeStored({...policy, schema_version: 1});
+      await expectInvalid();
+      const {calls: _ignored, ...v2WithoutCalls} = policy;
+      writeStored(v2WithoutCalls);
+      await expectInvalid();
+
+      gateway.failReads = true;
+      const unavailable = await owner.getOutboundCallPolicy(SERVICE_ID);
+      assert.deepEqual(unavailable, {
+        reason: RUNTIME_ACCESS_POLICY_REASON.POLICY_READ_FAILED,
+        status: RUNTIME_ACCESS_POLICY_STATUS.DENIED,
+      });
+    });
+
+  test('propagates durable write conflicts without returning a policy',
+    async () => {
+      const gateway = new PolicyGateway();
+      gateway.upsertSystemTableRow = async () => {
+        throw new Error('expected cache fields conflict');
+      };
+      const {owner} = createOwner(gateway);
+      await assert.rejects(
+        owner.configureBindingAccess(
+          v2Payload([{binding: 'inner-worker'}]),
+          SECURITY_CONTEXT,
+        ),
+        /expected cache fields conflict/u,
+      );
+      assert.equal(gateway.rows.size, 0);
     });
 });
