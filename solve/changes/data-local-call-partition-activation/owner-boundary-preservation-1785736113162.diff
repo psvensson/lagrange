@@ -1,0 +1,6 @@
+diff --git a/src/owner-boundary-preservation.js b/src/owner-boundary-preservation.js
+--- a/src/owner-boundary-preservation.js
++++ b/src/owner-boundary-preservation.js
+@@ -1 +1 @@
+-dry before owner-boundary-preservation
++dry observe owner-boundary-preservation

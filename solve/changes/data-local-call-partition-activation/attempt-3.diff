@@ -1,0 +1,687 @@
+diff --git a/scripts/checks/run-data-local-call-identity-topology-fencing-scenarios.js b/scripts/checks/run-data-local-call-identity-topology-fencing-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..976638f350b6af76717739e416d22cec5e00ffad
+--- /dev/null
++++ b/scripts/checks/run-data-local-call-identity-topology-fencing-scenarios.js
+@@ -0,0 +1,21 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++// Guard for the identity-and-topology fencing frontier: every data-local
++// dispatch is pinned to the immutable Binding artifact (route digest
++// re-assert) and to the partition ownership/epoch captured at dispatch
++// (CDC-visible fence tokens re-asserted receiver-side), failing closed
++// typed TARGET_STALE retryable when the selected replica, ownership, or
++// topology epoch went stale — with slot-scoped wire identities keeping
++// the durable fence per-dispatch.
++const SCENARIOS = {
++  'data-local-call-identity-topology-fencing': [
++    'test/node/call-cell-partition-fence.test.js',
++    'test/node/runtime-service-call-cell-handler.test.js',
++    'test/service/call-binding-route-resolver.test.js',
++    'test/service/call-cell-statement-adapter.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/node/runtime-service-call-cell-handler.js b/src/node/runtime-service-call-cell-handler.js
+index 3065c0ea632ee8545badd083c38ce16450357658..6929492cad021063b2833c65fc968f4558c66c6a 100644
+--- a/src/node/runtime-service-call-cell-handler.js
++++ b/src/node/runtime-service-call-cell-handler.js
+@@ -1,5 +1,17 @@
+ import {HEALTH_STATUS} from '../runtime/runtime-driver.js';
++import {SYSTEM_TABLE_NAME} from
++  '../bootstrap/system-table-schemas-constants.js';
++import {
++  isLocalPartitionServiceUsable,
++  resolveLocalPartitionServicesForPartition,
++} from '../cdc/cdc-integration-service-local-system-table-routing.js';
++import {QUERY_RESULT_BUDGET_ERROR_CODE} from
++  '../query/query-result-budget.js';
+ import {ReplicaStatus} from '../rebalancer/replica-status.js';
++import {
++  CallCellValueError,
++  toCellBatch,
++} from '../runtime/call-cell-value-mapping.js';
+ import {
+   CALL_CELL_ROUTE_CLASSIFICATION,
+   CALL_CELL_ROUTE_ERROR_CODE,
+@@ -14,6 +26,20 @@ const CALL_CELL_RUNTIME_MESSAGE = Object.freeze({
+   DEADLINE_EXPIRED:
+     'Call Cell invocation deadline expired before execution',
+   INVOCATION_FAILED: 'Call Cell invocation failed',
++  LOCAL_BATCH_BOUND_INVALID:
++    'Call Cell data-local dispatch carries no positive batch row bound',
++  LOCAL_ENGINE_UNAVAILABLE:
++    'Call Cell data-local dispatch found no local SQL engine to render ' +
++    'the declared statement',
++  LOCAL_PARTITION_UNAVAILABLE:
++    'Call Cell shard partition has no usable local replica on this node',
++  LOCAL_STATEMENT_INVALID:
++    'Call Cell declared statement is not a partition-local SELECT',
++  LOCAL_SHARD_READ_FAILED:
++    'Call Cell shard partition read failed on the local replica',
++  PARTITION_FENCE_STALE:
++    'Call Cell shard partition ownership or topology epoch moved after ' +
++    'dispatch',
+   OWNER_UNAVAILABLE:
+     'Call Cell runtime invocation owner is unavailable',
+   PAYLOAD_INVALID: 'Call Cell Service_Message payload is invalid',
+@@ -23,6 +49,8 @@ const CALL_CELL_RUNTIME_MESSAGE = Object.freeze({
+     'Call Cell Service_Message security context is invalid',
+   TARGET_MOVED: 'Call Cell actual moved to another node',
+ });
++const AST_TYPE_SELECT = 'SELECT';
++const PARTITION_STATE_NORMAL = 'NORMAL';
+ const CALL_CELL_INVOCATION_EXPORT_NAME = Object.freeze({
+   RUN: 'run',
+   REDUCE: 'reduce',
+@@ -101,7 +129,9 @@ function resolveCallCellExportName(invocation) {
+   );
+ }
+ 
+-function assertCallCellInvocationPayload(invocation, route, call, batch, partials) {
++function assertCallCellInvocationPayload(
++  invocation, route, call, batch, partials, partitionId,
++) {
+   const exportName = resolveCallCellExportName(invocation);
+   const fields = [
+     invocation?.id,
+@@ -110,9 +140,13 @@ function assertCallCellInvocationPayload(invocation, route, call, batch, partial
+     call?.arguments,
+     route?.replicaId,
+   ];
++  // A run dispatch carries EITHER a pre-built batch or a shard partition
++  // for the data-local build on this node — never neither.
+   const inputValid = exportName === CALL_CELL_INVOCATION_EXPORT_NAME.REDUCE ?
+     Array.isArray(partials) :
+-    Array.isArray(batch);
++    (Array.isArray(batch) ||
++      (typeof partitionId === 'string' && partitionId.length > 0 &&
++        batch === undefined));
+   if (fields.every((value) => typeof value === 'string') && inputValid) {
+     return;
+   }
+@@ -122,6 +156,155 @@ function assertCallCellInvocationPayload(invocation, route, call, batch, partial
+   );
+ }
+ 
++// Topology fence re-assert: the dispatch carried the CDC-visible tokens
++// the invoker resolved from the canonical routing snapshot; THIS node
++// re-reads its own cache rows and refuses typed TARGET_STALE (retryable,
++// nothing invoked) when partition ownership or the topology epoch moved
++// after dispatch — the same predicate shape the partition write guard
++// and the descriptor-epoch contract apply. Absent fence = a non-data-
++// local dispatch; nothing to re-assert.
++function assertPartitionFenceCurrent(handler, payload) {
++  const fence = payload?.partitionFence;
++  if (!fence || typeof fence !== 'object') return;
++  const cache = handler.systemTableCache;
++  const partitionRow = cache?.get?.(
++    SYSTEM_TABLE_NAME.PARTITIONS, payload.partitionId) || null;
++  const tableRow = partitionRow?.table_name ?
++    cache?.get?.(SYSTEM_TABLE_NAME.TABLES, partitionRow.table_name) ||
++      cache?.get?.(SYSTEM_TABLE_NAME.TABLES, partitionRow.table_id) :
++    null;
++  const activeVersion = Number(
++    tableRow?.active_partition_version ?? fence.activePartitionVersion ?? 1);
++  const current = {
++    activePartitionVersion: activeVersion,
++    hostNodeId: partitionRow?.leader_node_id ?? null,
++    partitionState: partitionRow?.state ?? PARTITION_STATE_NORMAL,
++    partitionVersion: Number(partitionRow?.partition_version ?? 1),
++  };
++  const stale =
++    !partitionRow ||
++    current.hostNodeId !== fence.hostNodeId ||
++    fence.hostNodeId !== handler.nodeId ||
++    current.partitionState !== PARTITION_STATE_NORMAL ||
++    current.partitionVersion !== Number(fence.partitionVersion ?? 1) ||
++    current.activePartitionVersion !==
++      Number(fence.activePartitionVersion ?? 1);
++  if (stale) {
++    throw new CallCellRoutingError(
++      CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE,
++      `${CALL_CELL_RUNTIME_MESSAGE.PARTITION_FENCE_STALE}: ` +
++        `${payload.partitionId}`,
++      {
++        classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE,
++        preserveReplicaState: true,
++      },
++    );
++  }
++}
++
++// Data-local shard batch: execute the (re-verified) Binding-declared
++// statement against THIS node's replica of the shard partition and build
++// the typed batch here — raw shard rows never cross the network. Bounded
++// by the dispatched batchRowBound through the partition read budget and
++// again through toCellBatch; every refusal is typed and invoked=false.
++async function buildLocalShardBatch(handler, payload, route, invocation) {
++  const services = handler.partitionServicesProvider?.() || null;
++  const localServices =
++    resolveLocalPartitionServicesForPartition(services, payload.partitionId);
++  const partitionService = (localServices || [])
++    .find((candidate) => isLocalPartitionServiceUsable(candidate));
++  if (!partitionService) {
++    throw new CallCellRoutingError(
++      CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
++      `${CALL_CELL_RUNTIME_MESSAGE.LOCAL_PARTITION_UNAVAILABLE}: ` +
++        `${payload.partitionId}`,
++      {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
++    );
++  }
++  const engine = handler.cdcIntegrationService?.sqlQueryEngine || null;
++  if (typeof engine?.parse !== 'function' ||
++      typeof engine?.queryExecutor?.buildSelectSQL !== 'function') {
++    throw new CallCellRoutingError(
++      CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
++      CALL_CELL_RUNTIME_MESSAGE.LOCAL_ENGINE_UNAVAILABLE,
++      {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
++    );
++  }
++  let ast = null;
++  try {
++    ast = engine.parse(route.statement);
++  } catch {
++    ast = null;
++  }
++  if (String(ast?.type || '').toUpperCase() !== AST_TYPE_SELECT ||
++      !ast?.from?.name) {
++    throw new CallCellRoutingError(
++      CALL_CELL_ROUTE_ERROR_CODE.STATEMENT_INVALID,
++      CALL_CELL_RUNTIME_MESSAGE.LOCAL_STATEMENT_INVALID,
++    );
++  }
++  const batchRowBound = invocation?.callCell?.batchRowBound;
++  if (!Number.isSafeInteger(batchRowBound) || batchRowBound <= 0) {
++    throw new CallCellRoutingError(
++      CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
++      CALL_CELL_RUNTIME_MESSAGE.LOCAL_BATCH_BOUND_INVALID,
++    );
++  }
++  const sql = engine.queryExecutor.buildSelectSQL(ast);
++  let result = null;
++  try {
++    result = await partitionService.executeQuery(sql, [], {
++      resultDeadlineMs: invocation.deadlineMs,
++      resultMaxRows: batchRowBound,
++    });
++  } catch (error) {
++    if (error?.code === QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED ||
++        error?.code === QUERY_RESULT_BUDGET_ERROR_CODE.BYTES_EXHAUSTED) {
++      throw new CallCellRoutingError(
++        CALL_CELL_ROUTE_ERROR_CODE.BATCH_BOUND_EXCEEDED,
++        error.message,
++        {cause: error},
++      );
++    }
++    if (error?.code === QUERY_RESULT_BUDGET_ERROR_CODE.WALL_TIME_EXHAUSTED) {
++      throw new CallCellRoutingError(
++        CALL_CELL_ROUTE_ERROR_CODE.DEADLINE_EXHAUSTED,
++        error.message,
++        {cause: error},
++      );
++    }
++    throw new CallCellRoutingError(
++      CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
++      `${CALL_CELL_RUNTIME_MESSAGE.LOCAL_SHARD_READ_FAILED}: ` +
++        `${error?.message}`,
++      {
++        cause: error,
++        classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE,
++      },
++    );
++  }
++  if (result?.success === false) {
++    throw new CallCellRoutingError(
++      CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
++      `${CALL_CELL_RUNTIME_MESSAGE.LOCAL_SHARD_READ_FAILED}: ` +
++        `${result?.error || payload.partitionId}`,
++      {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
++    );
++  }
++  try {
++    return toCellBatch(result?.rows || [], batchRowBound);
++  } catch (error) {
++    if (error instanceof CallCellValueError) {
++      throw new CallCellRoutingError(
++        CALL_CELL_ROUTE_ERROR_CODE.BATCH_BOUND_EXCEEDED,
++        error.message,
++        {cause: error},
++      );
++    }
++    throw error;
++  }
++}
++
+ function assertCallCellRouteTenant(route, securityContext) {
+   if (route.tenantId === securityContext.tenantId) return;
+   throw new CallCellRoutingError(
+@@ -155,6 +338,7 @@ function assertCurrentCallCellTarget(handler, call, route, invocation) {
+     );
+   }
+   const current = handler.callBindingRouteResolver.assertSelectedRoute({
++    hostNodeId: route.hostNodeId ?? null,
+     invocationId: invocation.id,
+     name: call.name,
+     securityContext: call.securityContext,
+@@ -261,12 +445,14 @@ async function handleCallCellInvocation(handler, envelope) {
+   const invocation = payload?.invocation;
+   const route = payload?.route;
+   const call = payload?.call;
+-  const batch = payload?.batch;
+   const partials = payload?.partials;
+   let invocationStarted = false;
+   try {
+     assertCallCellRuntimeOwner(handler.serviceRuntimeLifecycle);
+-    assertCallCellInvocationPayload(invocation, route, call, batch, partials);
++    assertCallCellInvocationPayload(
++      invocation, route, call, payload?.batch, partials,
++      payload?.partitionId,
++    );
+     const securityContext = resolveEnvelopeSecurityContext(envelope);
+     assertCallCellRouteTenant(route, securityContext);
+     const admittedCall = {
+@@ -289,6 +475,18 @@ async function handleCallCellInvocation(handler, envelope) {
+       route,
+       invocation,
+     );
++    assertPartitionFenceCurrent(handler, payload);
++    // Data-local branch: a run dispatch without a pre-built batch names
++    // its shard partition; this node builds the typed batch from its own
++    // partition replica AFTER route/target admission and BEFORE the
++    // component is touched (every refusal above and inside stays
++    // invoked=false).
++    const batch = payload?.batch === undefined &&
++      typeof payload?.partitionId === 'string' &&
++      resolveCallCellExportName(invocation) ===
++        CALL_CELL_INVOCATION_EXPORT_NAME.RUN ?
++      await buildLocalShardBatch(handler, payload, route, invocation) :
++      payload?.batch;
+     invocationStarted = true;
+     const result = await handler.serviceRuntimeLifecycle.invoke(
+       localReplica.replicaHandle,
+diff --git a/src/service/call-cell-invoker.js b/src/service/call-cell-invoker.js
+index 56b38cae7331742a6790cb2c9e2224d98c265775..9f085f1e61330e3cba4a784d22e420cdf0aad246 100644
+--- a/src/service/call-cell-invoker.js
++++ b/src/service/call-cell-invoker.js
+@@ -46,6 +46,9 @@ const CALL_INVOKER_ARGUMENT_MESSAGE = Object.freeze({
+     'CallCellInvoker requires a batchExecutor with executeBatches(req)',
+   STATEMENT_ADAPTER_REQUIRED:
+     'CallCellInvoker requires a statementAdapter with invoke(req)',
++  PARTITION_TOPOLOGY_REQUIRED:
++    'CallCellInvoker requires a partitionTopology with ' +
++    'resolveShardHost(tableName, partitionId)',
+   REDUCE_COORDINATOR_REQUIRED:
+     'CallCellInvoker requires a reduceCoordinator with seedInvocation, ' +
+     'acquireReduceLease, publishPartial, resolveCompletePartialSet, and ' +
+@@ -60,6 +63,20 @@ const CALL_INVOKER_BUDGET_DEFAULT = Object.freeze({
+   EMIT_BUDGET: 64,
+   NESTED_CALL_BUDGET: 1,
+ });
++// Bounded wait for a lease-driven activation to produce a ready Cell on
++// the shard host node: retry the host-restricted dispatch until the
++// planner's replica turns ready or the window lapses (then the typed
++// HOST_CELL_UNAVAILABLE refusal propagates, retryable by the caller).
++const CALL_INVOKER_ACTIVATION_DEFAULT = Object.freeze({
++  RETRY_INTERVAL_MS: 250,
++  WAIT_MS: 15000,
++});
++
++function sleep(delayMs) {
++  return new Promise((resolve) => {
++    setTimeout(resolve, delayMs);
++  });
++}
+ 
+ const RESOLVE_PROBE_PREFIX = 'resolve-';
+ const RUN_EXPORT = 'run';
+@@ -94,13 +111,37 @@ class CallCellInvoker {
+       throw new TypeError(
+         CALL_INVOKER_ARGUMENT_MESSAGE.REDUCE_COORDINATOR_REQUIRED);
+     }
++    if (typeof options.partitionTopology?.resolveShardHost !== 'function') {
++      throw new TypeError(
++        CALL_INVOKER_ARGUMENT_MESSAGE.PARTITION_TOPOLOGY_REQUIRED);
++    }
+     this._routeResolver = options.routeResolver;
+     this._batchExecutor = options.batchExecutor;
+     this._statementAdapter = options.statementAdapter;
+     this._reduceCoordinator = options.reduceCoordinator;
++    this._partitionTopology = options.partitionTopology;
++    // Optional: without an activation lease owner a shard host with no
++    // ready Cell stays the typed HOST_CELL_UNAVAILABLE refusal.
++    this._activationLeases =
++      typeof options.activationLeases?.publishActivationLease === 'function' ?
++        options.activationLeases :
++        null;
++    this._activationRetryIntervalMs = Number.isSafeInteger(
++      options.activationRetryIntervalMs) &&
++      options.activationRetryIntervalMs > 0 ?
++      options.activationRetryIntervalMs :
++      CALL_INVOKER_ACTIVATION_DEFAULT.RETRY_INTERVAL_MS;
++    this._activationWaitMs = Number.isSafeInteger(options.activationWaitMs) &&
++      options.activationWaitMs > 0 ?
++      options.activationWaitMs :
++      CALL_INVOKER_ACTIVATION_DEFAULT.WAIT_MS;
+     this._batchRowBound = options.batchRowBound;
+     this._partialLimit = options.partialLimit;
++    // batchRowBound rides with the bounded-emit budgets so the shard's
++    // host node applies the same row bound when it builds the batch
++    // locally.
+     this._callCellBudgets = Object.freeze({
++      batchRowBound: this._batchRowBound,
+       emitBudget: Number.isSafeInteger(options.emitBudget) &&
+         options.emitBudget >= 0 ?
+         options.emitBudget :
+@@ -112,6 +153,49 @@ class CallCellInvoker {
+     });
+   }
+ 
++  // One shard run dispatch under host-restricted selection. When the
++  // host has no ready Cell and an activation lease owner is composed,
++  // publish the bounded demand lease and retry until the planner's
++  // activated replica turns ready or the activation window lapses — the
++  // invoker never places anything itself; it only signals and waits.
++  async _dispatchShardRun(request) {
++    const dispatch = () => this._statementAdapter.invoke({
++      name: request.name,
++      argumentsJson: request.argumentsJson,
++      securityContext: request.securityContext,
++      deadlineMs: request.deadlineMs,
++      callCell: this._callCellBudgets,
++      hostNodeId: request.shard.hostTopology?.hostNodeId,
++      partitionFence: request.shard.hostTopology,
++      partitionId: request.shard.partitionId,
++      exportName: RUN_EXPORT,
++      slotId: request.slotId,
++      invocationId: createCallSlotInvocationId(
++        request.invocationId, request.slotId),
++    });
++    const hostNodeId = request.shard.hostTopology?.hostNodeId;
++    const activationDeadline = Date.now() + this._activationWaitMs;
++    for (;;) {
++      try {
++        return await dispatch();
++      } catch (error) {
++        if (error?.code !== CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE ||
++            !this._activationLeases || !hostNodeId) {
++          throw error;
++        }
++        await this._activationLeases.publishActivationLease(
++          request.resolution.serviceId,
++          hostNodeId,
++        );
++        if (Date.now() + this._activationRetryIntervalMs >
++            activationDeadline) {
++          throw error;
++        }
++        await sleep(this._activationRetryIntervalMs);
++      }
++    }
++  }
++
+   /**
+    * @param {object} request
+    * @param {string} request.name call Binding registration name
+@@ -126,10 +210,20 @@ class CallCellInvoker {
+       name,
+       securityContext,
+     });
+-    const batches = await this._batchExecutor.executeBatches({
++    // Plan-only fan-out: the declared statement is parsed and the shard
++    // partitions resolved here, but no rows are fetched — each shard's
++    // host node builds its own typed batch so raw shard rows never leave
++    // that node before the run export executes.
++    const plan = this._batchExecutor.planShards({
+       statement: resolution.statement,
+-      batchRowBound: this._batchRowBound,
+     });
++    const batches = plan.shards.map((shard) => ({
++      hostTopology: this._partitionTopology ?
++        this._partitionTopology.resolveShardHost(
++          plan.tableName, shard.partitionId) :
++        null,
++      partitionId: shard.partitionId,
++    }));
+     if (batches.length === 0) {
+       throw createCallRoutingFailure(
+         CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
+@@ -155,17 +249,15 @@ class CallCellInvoker {
+ 
+     for (const [slotIndex, shard] of batches.entries()) {
+       const slotId = slotIds[slotIndex];
+-      const delivery = await this._statementAdapter.invoke({
+-        name,
++      const delivery = await this._dispatchShardRun({
+         argumentsJson,
+-        securityContext,
+         deadlineMs,
+-        batch: shard.batch,
+-        callCell: this._callCellBudgets,
+-        partitionId: shard.partitionId,
+-        exportName: RUN_EXPORT,
++        invocationId,
++        name,
++        resolution,
++        securityContext,
++        shard,
+         slotId,
+-        invocationId: createCallSlotInvocationId(invocationId, slotId),
+       });
+       // The published slot partial is the shard's EMITTED partial set (the
+       // bounded call-context emit log), normalized fail-closed into the
+diff --git a/src/service/call-cell-statement-adapter.js b/src/service/call-cell-statement-adapter.js
+index 69874efc1f06783815a302170958feb77b8b974b..5f211125da706845e3e6c6c6b34e2863edf0ae40 100644
+--- a/src/service/call-cell-statement-adapter.js
++++ b/src/service/call-cell-statement-adapter.js
+@@ -94,6 +94,8 @@ function buildEnvelope(fields) {
+         id: fields.invocationId,
+         intentDigest: fields.intentDigest,
+       }),
++      partitionFence: fields.partitionFence,
++      partitionId: fields.partitionId,
+       partials: fields.partials,
+       route: fields.route,
+       type: CALL_CELL_ROUTE_MESSAGE_TYPE,
+@@ -363,6 +365,9 @@ class CallCellStatementAdapter {
+     batch,
+     partials,
+     callCell,
++    partitionId,
++    partitionFence,
++    hostNodeId,
+     exportName = CALL_CELL_INVOKE_EXPORT_DEFAULT,
+     invocationId: providedInvocationId,
+   }) {
+@@ -394,6 +399,7 @@ class CallCellStatementAdapter {
+           );
+         }
+         const route = this._routeResolver.resolve({
++          hostNodeId,
+           invocationId,
+           name,
+           securityContext: frozenContext,
+@@ -418,6 +424,8 @@ class CallCellStatementAdapter {
+           invocationId,
+           name,
+           partials,
++          partitionFence,
++          partitionId,
+           route,
+           securityContext: frozenContext,
+           traceId: invocationId,
+diff --git a/test/node/call-cell-partition-fence.test.js b/test/node/call-cell-partition-fence.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..5a5e8d404d9156b462362789b14ef27f1d20fd12
+--- /dev/null
++++ b/test/node/call-cell-partition-fence.test.js
+@@ -0,0 +1,166 @@
++/**
++ * Guard for the receiver-side partition fence: a data-local dispatch
++ * carries the CDC-visible ownership/epoch tokens resolved at dispatch
++ * time, and THIS node re-asserts them against its own cache rows before
++ * anything executes. Ownership moved, topology epoch bumped, non-NORMAL
++ * state, or a fence naming a different node all refuse typed
++ * TARGET_STALE (retryable, preserveReplicaState, invoked=false); a
++ * current fence admits the invocation; an absent fence is a
++ * non-data-local dispatch and asserts nothing.
++ */
++
++import assert from 'node:assert/strict';
++import {test} from 'node:test';
++
++import {SYSTEM_TABLE_NAME} from
++  '../../src/bootstrap/system-table-schemas-constants.js';
++import {handleCallCellInvocation} from
++  '../../src/node/runtime-service-call-cell-handler.js';
++import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
++import {
++  CALL_CELL_ROUTE_CLASSIFICATION,
++  CALL_CELL_ROUTE_ERROR_CODE,
++} from '../../src/service/call-cell-routing-contract.js';
++
++const NODE_ID = 'fence-node-a';
++const OTHER_NODE_ID = 'fence-node-b';
++const TENANT_ID = 'tenant-1';
++const SERVICE_ID = 'svc-fence';
++const REPLICA_ID = `${SERVICE_ID}-r1`;
++const PARTITION_ID = 'shard_ratings-p1';
++const TABLE_NAME = 'shard_ratings';
++const CALL_RESULT = '"fence-ok"';
++
++function currentFence() {
++  return {
++    activePartitionVersion: 1,
++    hostNodeId: NODE_ID,
++    partitionId: PARTITION_ID,
++    partitionReplicaId: PARTITION_ID,
++    partitionState: 'NORMAL',
++    partitionVersion: 1,
++  };
++}
++
++function makeHandler(partitionRowOverrides = {}) {
++  const partitionRow = {
++    leader_node_id: NODE_ID,
++    partition_id: PARTITION_ID,
++    partition_version: 1,
++    state: 'NORMAL',
++    table_id: TABLE_NAME,
++    table_name: TABLE_NAME,
++    ...partitionRowOverrides,
++  };
++  const route = {
++    bindingDigest: 'digest-1',
++    bindingVersionId: 'bv-1',
++    hostNodeId: NODE_ID,
++    name: SERVICE_ID,
++    nodeId: NODE_ID,
++    replicaId: REPLICA_ID,
++    serviceId: SERVICE_ID,
++    statement: `SELECT id FROM ${TABLE_NAME}`,
++    targetAddress: `${NODE_ID}/service/runtime-service-handler`,
++    targetNodeId: NODE_ID,
++    tenantId: TENANT_ID,
++  };
++  return {
++    route,
++    handler: {
++      callBindingRouteResolver: {
++        assertSelectedRoute: () => ({nodeId: NODE_ID}),
++      },
++      cdcIntegrationService: {},
++      localReplicas: new Map([[REPLICA_ID, {
++        entityId: SERVICE_ID,
++        replicaHandle: {serviceId: SERVICE_ID},
++        status: ReplicaStatus.ACTIVE,
++      }]]),
++      nodeId: NODE_ID,
++      partitionServicesProvider: () => null,
++      systemTableCache: {
++        get: (tableName, key) => {
++          if (tableName === SYSTEM_TABLE_NAME.PARTITIONS &&
++              key === PARTITION_ID) {
++            return partitionRow;
++          }
++          return null;
++        },
++      },
++      serviceRuntimeLifecycle: {
++        async health() {
++          return {status: 'healthy'};
++        },
++        async invoke() {
++          return {partials: [], result: CALL_RESULT};
++        },
++      },
++    },
++  };
++}
++
++function makeEnvelope(route, fence) {
++  return {
++    metadata: {roles: ['application']},
++    principal: 'alice',
++    tenantId: TENANT_ID,
++    payload: {
++      batch: [],
++      call: {arguments: '{}', name: SERVICE_ID},
++      invocation: {
++        deadlineMs: Date.now() + 60000,
++        exportName: 'run',
++        id: 'call-invocation-fence-1#slot-1',
++        intentDigest: 'intent-1',
++      },
++      partitionFence: fence,
++      partitionId: PARTITION_ID,
++      route,
++    },
++  };
++}
++
++test('a current fence admits the invocation', async () => {
++  const {handler, route} = makeHandler();
++  const response = await handleCallCellInvocation(
++    handler, makeEnvelope(route, currentFence()));
++  assert.equal(response.processed, true);
++  assert.equal(response.componentResult, CALL_RESULT);
++});
++
++test('an absent fence asserts nothing (non-data-local dispatch)',
++  async () => {
++    const {handler, route} = makeHandler();
++    const response = await handleCallCellInvocation(
++      handler, makeEnvelope(route, undefined));
++    assert.equal(response.processed, true);
++  });
++
++for (const [label, partitionRowOverrides, fenceOverrides] of [
++  ['ownership moved to another node', {leader_node_id: OTHER_NODE_ID}, {}],
++  ['topology epoch bumped by split/merge', {partition_version: 2}, {}],
++  ['partition left NORMAL state', {state: 'SPLITTING'}, {}],
++  ['the fence names a node this receiver is not',
++    {}, {hostNodeId: OTHER_NODE_ID}],
++]) {
++  test(`${label} refuses typed TARGET_STALE before anything executes`,
++    async () => {
++      const {handler, route} = makeHandler(partitionRowOverrides);
++      const response = await handleCallCellInvocation(
++        handler,
++        makeEnvelope(route, {...currentFence(), ...fenceOverrides}),
++      );
++      assert.equal(response.processed, false);
++      assert.equal(
++        response.invocationOutcome.code,
++        CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE,
++      );
++      assert.equal(
++        response.invocationOutcome.classification,
++        CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE,
++      );
++      assert.equal(response.invocationOutcome.invoked, false,
++        'nothing reached the component');
++    });
++}

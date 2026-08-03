@@ -90,6 +90,16 @@ as separate roadmap scope rather than widening that row:
 
 ## Decision log
 
+- 2026-08-03 — Data-local call activation LANDED (commit 9c60dc142, quest
+  `data-local-call-partition-activation-v2` inheriting the four-frontier
+  candidate): shard `run` executes on the partition host with the batch
+  built there (zero shard-row crossings asserted over two composed nodes),
+  a missing Cell activates through bounded CDC-propagated
+  `call_activation_leases` consumed by the placement planner as
+  deterministic pins (reclaim = lease lapse via the existing surplus
+  cure), ownership/epoch fencing rides every dispatch and is re-asserted
+  receiver-side, and owner boundaries held (no parallel topology cache,
+  no second scheduler, no caller placement).
 - 2026-08-02 — Selected data-local call activation as an explicit successor to
   production call wiring rather than widening the current call Quest. Quest
   [`data-local-call-partition-activation`](../quests/data-local-call-partition-activation.json)

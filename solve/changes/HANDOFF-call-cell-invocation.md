@@ -233,3 +233,111 @@ its **own quest**, not a bolt-on.
   data-local call activation, is owned by
   `solve/quests/data-local-call-partition-activation.json` — authored by a
   CONCURRENT session (with the matching epic-memo edit); not touched here.
+
+## DATA-LOCAL QUEST IN FLIGHT 2026-08-03 (quest: data-local-call-partition-activation)
+
+**Frontier 1 (partition-local-run) IMPLEMENTED + recorded as attempt-1**
+(6/6 harness `run-data-local-call-partition-run-scenarios.js` green, scope
+override consumed at admission). Working tree = the candidate; NOT committed.
+What landed in bytes: `call-partition-topology.js` (canonical host+fence
+resolution via routing snapshot; TARGET_STALE/ROUTE_UNAVAILABLE typed),
+resolver `hostNodeId` restriction + `HOST_CELL_UNAVAILABLE` (the activation
+trigger) + route carries hostNodeId (re-assert covers it, null-normalized
+compare), invoker planShards (no row fetch) + per-shard host dispatch +
+batchRowBound rides callCell, adapter carries partitionId/hostNodeId,
+receiver `buildLocalShardBatch` (bounded partitionService.executeQuery +
+toCellBatch; typed refusals, invoked=false) + `partitionServicesProvider`
+(self-default via CDC), two-node evidence: run-per-partition-host + ZERO
+shard-table router deliveries.
+
+**Frontier 2 design (missing-cell-activation) — decided, not built:**
+- New CDC-PROPAGATED system table `call_activation_leases`
+  (service_id, node_id leading for co-location? key = service_id+node_id via
+  unique index; lease_expires_at, requested_at). UNLIKE the reduce tables it
+  must propagate (planner runs on the service_definitions-p1 leader).
+- Invoker: on HOST_CELL_UNAVAILABLE → publish/refresh lease row (engine
+  internal SQL) → wait bounded: cdcIntegrationService.waitForCacheUpdate
+  (TABLES.SERVICES, replica, {timeoutMs}) + isReadyRuntimeActual + node match
+  → retry dispatch; deadline → typed RETRYABLE refusal.
+- Planner consumption (NO new entry point — the lease row IS the demand
+  signal; RuntimeServiceRebalancerOwner.refresh() is cache-change-triggered):
+  attach `activationPins` in getRuntimeServicePolicy
+  (unified-rebalancer-policy-scheduler-methods.js:74-101, dataAffinity attach
+  is the precedent seam), lift target count by live unsatisfied pins, force
+  pinned nodes into targetNodes at the move-planner.js:715 seam
+  (calculateTargetState → placementOwnerDecision.intent.targetNodeIds).
+  Pins are DETERMINISTIC (epic forbids satisfying locality via soft
+  dataAffinity scores). Reclaim needs NOTHING: lease lapse → surplus cure
+  NODE_NOT_IN_TARGET (move-planner-move-calculation-methods.js:432-460,
+  ~60s periodic + cache-change refresh) removes the replica = "bounded and
+  reclaimable". replica ids: let the coordinator mint (allocateCanonicalReplicaId).
+- Two-node evidence: partition on node B, cell replica only on node A →
+  CALL publishes lease → drive refresh() → CREATE_REPLICA on B (real
+  handleCreateReplica already proven in handler) → ready row → local run.
+
+**Frontier 3 (identity-and-topology-fencing):** the topology module ALREADY
+resolves the fence tokens {partitionVersion, activePartitionVersion,
+partitionLeaderNodeId=hostNodeId, partitionReplicaId, partitionState} but
+they are NOT yet on the wire. Put them in the envelope payload, receiver
+re-asserts against ITS OWN cache rows: leader match (predicate shape of
+hasKnownRemoteLeaderWitness, partition-service-write-metrics-base.js:580-600)
++ epoch/state via buildPartitionDescriptorEpochDecision
+(partition-descriptor-epoch-contract.js:195; REJECT → TARGET_STALE RETRYABLE
+preserveReplicaState). NEVER use leader_claim_* (local-only, CDC-stripped).
+
+**Frontier 4 (owner-boundary-preservation):** negative/boundary guards — no
+parallel topology cache (topology module is pass-through), no scheduler
+(invoker only publishes lease rows), activation capacity is planner output,
+artifact identity pinned (bindingDigest already in route + re-assert).
+
+**Known gaps recorded by recon (follow-ups, not this quest):**
+owner.partitionServices misses rebalancer-created replicas
+(ReplicaHandler.localServices; merged provider needed someday); production
+QUERY path serializes even same-node (message-group transport) — data-local
+bypasses it entirely; follower-read authority witness not reconstructed in
+the local path (leader-only read via isLocalPartitionServiceLeader if wanted).
+
+**Remaining quest flow:** frontiers 2→3→4 as attempts 2..N with their own
+scenario harnesses (data-local-call-missing-cell-activation,
+data-local-call-identity-topology-fencing, data-local-call-owner-boundaries),
+then a doneWhen aggregate harness script
+`run-data-local-call-partition-activation-scenarios.js` (consecutive 3),
+verify (subagent per constraint), land. Scope override per attempt as needed.
+
+## DATA-LOCAL QUEST: ALL FOUR FRONTIERS IMPLEMENTED 2026-08-03 (morning)
+
+Attempts 1-4 recorded (partition-local run; missing-cell activation via
+call_activation_leases + planner pins; wire fencing with receiver
+re-assert; owner-boundary guards). Aggregate doneWhen harness green 3x.
+Candidate: 32 paths, base f9332b73a, fingerprint sha256:932969b2… —
+verifier round in flight.
+
+**TRAP HIT — declaration-time poison:** the first `solve run --max 1`
+(declaration) let the dry executor no-op an evidence-less frontier
+(owner-boundary-preservation had no report yet) → attempt-integrity
+violation with resolutionPolicy **new-quest-only** (undischargeable).
+Exit: the proven successor route (reflect → approval → park ×4 →
+`new --from` data-local-call-partition-activation-v2 → inherit-candidate
+→ land). **Lesson: ingest one green report per frontier scenario BEFORE
+the declaring run on any multi-frontier quest.**
+
+## DATA-LOCAL QUEST LANDED 2026-08-03: commit 9c60dc142
+
+Successor `data-local-call-partition-activation-v2` inherited the
+APPROVED 32-path candidate (sha256:932969b2, verifier
+subagent:a16a6517f825e7f7f with byte-chain supersession verification)
+and landed after the proven scope-override re-admission flow. The
+poisoned parent is parked exhausted ×4 with the supersession recorded.
+
+Verifier non-blocking follow-ups (future hardening/ops quests):
+- call-partition-topology `|| candidates[0]` fallback is dead code (a
+  non-leader host always fails the receiver fence) — refuse at
+  resolution instead.
+- publishActivationLease refresh→read→insert can race concurrent
+  publishers into a duplicate-PK INSERT (self-heals on retry).
+- A short caller deadline can be consumed inside the activation wait
+  window (activationWaitMs vs deadlineMs interplay).
+- Sustained caller demand keeps re-extending the lease (pin lives while
+  demand lasts, by design) — ops note for reclaim under continuous load.
+- Live RuntimeServiceRebalancerOwner.refresh() pin consumption in a
+  running cluster is unit-guarded, not yet cluster-exercised.
