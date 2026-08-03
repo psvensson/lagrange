@@ -43,34 +43,47 @@ const TYPE_FUNCTION = 'function';
  * @return {object|null} the shared store, or null when the engine or
  *   every consuming owner is absent (existing behavior stays)
  */
+function resolveConsumingOwners(options) {
+  return [
+    options.serviceLifecycleCommandOwner,
+    options.deploymentBindingOwner,
+  ].filter(Boolean);
+}
+
+function hasInternalSqlEngine(sqlQueryEngine) {
+  return Boolean(sqlQueryEngine) &&
+    typeof sqlQueryEngine.executeQuery === TYPE_FUNCTION;
+}
+
+function existingOwnerStore(owners) {
+  const carrier = owners.find((owner) => owner.artifactPayloadStore);
+  return carrier ? carrier.artifactPayloadStore : null;
+}
+
+function buildEngineBackedStore(sqlQueryEngine, options) {
+  const tunables = options.tunables || {};
+  return createArtifactPayloadStore({
+    chunkSizeBytes: tunables.chunkSizeBytes,
+    executeInternal: (sql, params) => sqlQueryEngine.executeQuery(
+      sql,
+      params,
+      {sessionId: ARTIFACT_PAYLOAD_COORDINATION_SESSION},
+    ),
+    logger: options.logger,
+    maxPayloadBytes: tunables.maxPayloadBytes,
+    nowProvider: () => Date.now(),
+  });
+}
+
 function attachArtifactPayloadStore(options = {}) {
-  const commandOwner = options.serviceLifecycleCommandOwner || null;
-  const bindingOwner = options.deploymentBindingOwner || null;
-  const sqlQueryEngine = options.sqlQueryEngine || null;
-  if (!sqlQueryEngine ||
-      typeof sqlQueryEngine.executeQuery !== TYPE_FUNCTION ||
-      (!commandOwner && !bindingOwner)) {
+  const owners = resolveConsumingOwners(options);
+  if (!hasInternalSqlEngine(options.sqlQueryEngine) || owners.length === 0) {
     return null;
   }
-  const tunables = options.tunables || {};
-  const store = commandOwner?.artifactPayloadStore ||
-    bindingOwner?.artifactPayloadStore ||
-    createArtifactPayloadStore({
-      chunkSizeBytes: tunables.chunkSizeBytes,
-      executeInternal: (sql, params) => sqlQueryEngine.executeQuery(
-        sql,
-        params,
-        {sessionId: ARTIFACT_PAYLOAD_COORDINATION_SESSION},
-      ),
-      logger: options.logger,
-      maxPayloadBytes: tunables.maxPayloadBytes,
-      nowProvider: () => Date.now(),
-    });
-  if (commandOwner && !commandOwner.artifactPayloadStore) {
-    commandOwner.artifactPayloadStore = store;
-  }
-  if (bindingOwner && !bindingOwner.artifactPayloadStore) {
-    bindingOwner.artifactPayloadStore = store;
+  const store = existingOwnerStore(owners) ||
+    buildEngineBackedStore(options.sqlQueryEngine, options);
+  for (const owner of owners) {
+    owner.artifactPayloadStore = owner.artifactPayloadStore || store;
   }
   return store;
 }

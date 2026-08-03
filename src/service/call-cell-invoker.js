@@ -122,6 +122,20 @@ function positiveIntegerOption(value, fallback) {
   return Number.isSafeInteger(value) && value > 0 ? value : fallback;
 }
 
+// Telemetry accumulation helpers: the guards live here so the dispatch
+// loop's own decision count stays about routing, not observability.
+function countReadyCellHit(telemetry, publishedActivationLease) {
+  if (telemetry && !publishedActivationLease) {
+    telemetry.readyCellHits += 1;
+  }
+}
+
+function countActivationLeasePublished(telemetry) {
+  if (telemetry) {
+    telemetry.activationLeasesPublished += 1;
+  }
+}
+
 function nonNegativeIntegerOption(value, fallback) {
   return Number.isSafeInteger(value) && value >= 0 ? value : fallback;
 }
@@ -228,9 +242,7 @@ class CallCellInvoker {
     for (;;) {
       try {
         const delivery = await dispatch();
-        if (telemetry && !publishedActivationLease) {
-          telemetry.readyCellHits += 1;
-        }
+        countReadyCellHit(telemetry, publishedActivationLease);
         return delivery;
       } catch (error) {
         if (error?.code !== CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE ||
@@ -242,9 +254,7 @@ class CallCellInvoker {
           hostNodeId,
         );
         publishedActivationLease = true;
-        if (telemetry) {
-          telemetry.activationLeasesPublished += 1;
-        }
+        countActivationLeasePublished(telemetry);
         if (Date.now() + this._activationRetryIntervalMs >
             activationDeadline) {
           throw error;
