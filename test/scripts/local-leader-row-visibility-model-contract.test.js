@@ -31,7 +31,12 @@ const CASES = Object.freeze([
   }),
 ]);
 
-t.test('focused local leader-row TLC route and mutants meet their declared outcomes', (t) => {
+// The TLC route takes ~19s alone and 30s+ on a loaded machine; tap's
+// default 30s budget (both the root file watchdog and the per-test
+// timeout) is too tight for a model-checker-bound test. The inner
+// spawn keeps its own 60s bound.
+t.setTimeout(120000);
+t.test('focused local leader-row TLC route and mutants meet their declared outcomes', {timeout: 120000}, (t) => {
   const result = spawnSync(
     process.execPath,
     ['scripts/model-tlc.js', '--mode', 'local-leader-row-visibility-fixed'],
