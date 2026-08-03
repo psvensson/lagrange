@@ -341,3 +341,21 @@ Verifier non-blocking follow-ups (future hardening/ops quests):
   demand lasts, by design) — ops note for reclaim under continuous load.
 - Live RuntimeServiceRebalancerOwner.refresh() pin consumption in a
   running cluster is unit-guarded, not yet cluster-exercised.
+
+## HARDENING BATCH LANDED 2026-08-03: commits bf9bf34c1 + f594d5d14
+
+All single-sitting verifier follow-ups are closed: topology dead-fallback
+now refuses at resolution; lease INSERT race self-heals; activation wait
+capped by the caller deadline; receiver echoes the executing replica id;
+idempotency keys carrying the reserved #slot-N/#reduce grammar refused
+typed; driver error identity hoisted (literal checker now reports ZERO
+new violations repo-wide). All seven scenario harnesses green.
+
+**Remaining recorded follow-ups are quest-scale, not single-sitting:**
+1. Orphaned reduce seed-row cleanup — needs a DELETE/expiry grammar
+   added to the sealed coordinator (owner-contract change → own quest).
+2. Live-cluster exercise of RuntimeServiceRebalancerOwner.refresh()
+   consuming activation pins end-to-end (ops evidence; mind the
+   deterministic-first rule — design the DT harness variant first).
+3. Ops note stands: sustained caller demand keeps re-extending the
+   activation lease (pin lives while demand lasts, by design).
