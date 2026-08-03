@@ -69,12 +69,10 @@ const ARTIFACT_PAYLOADS_SCHEMA = {
       notNull: true,
       defaultValue: `'${ARTIFACT_PAYLOAD_STATE.UPLOADING}'`,
     },
-    {
-      name: 'created_at',
-      type: COLUMN_TYPE.INTEGER,
-      notNull: true,
-      defaultValue: '0',
-    },
+    // created_at follows the repo-wide timestamp convention (notNull, no
+    // schema default — prepareInsertData injects the current time when
+    // absent); the store's own INSERT always supplies it explicitly.
+    {name: 'created_at', type: COLUMN_TYPE.INTEGER, notNull: true},
     {
       name: 'sealed_at',
       type: COLUMN_TYPE.INTEGER,
