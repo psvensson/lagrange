@@ -20,10 +20,21 @@ const SUCCESS_MESSAGE = 'Public documentation is em-dash free.';
 const TEXT_ENCODING_UTF8 = 'utf8';
 const LINE_SEPARATOR = '\n';
 
+// Module-load intrinsic captures (governed-tree rule: no direct ambient
+// prototype-method calls on data in scripts/checks).
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+const stringIncludes = Function.call.bind(String.prototype.includes);
+const stringSplit = Function.call.bind(String.prototype.split);
+const stringTrim = Function.call.bind(String.prototype.trim);
+
 function isExcluded(relativePath) {
-  return EXCLUDED_DIRECTORIES.some((excluded) =>
-    relativePath === excluded ||
-    relativePath.startsWith(excluded + path.sep));
+  for (const excluded of EXCLUDED_DIRECTORIES) {
+    if (relativePath === excluded ||
+        stringStartsWith(relativePath, excluded + path.sep)) {
+      return true;
+    }
+  }
+  return false;
 }
 
 function* walkFiles(root) {
@@ -51,13 +62,14 @@ function findEmDashLines(filePath) {
   } catch {
     return [];
   }
-  if (!text.includes(EM_DASH)) return [];
+  if (!stringIncludes(text, EM_DASH)) return [];
   const hits = [];
-  text.split(LINE_SEPARATOR).forEach((line, index) => {
-    if (line.includes(EM_DASH)) {
-      hits.push(`${filePath}:${index + 1}: ${line.trim()}`);
+  const lines = stringSplit(text, LINE_SEPARATOR);
+  for (let index = 0; index < lines.length; index += 1) {
+    if (stringIncludes(lines[index], EM_DASH)) {
+      hits.push(`${filePath}:${index + 1}: ${stringTrim(lines[index])}`);
     }
-  });
+  }
   return hits;
 }
 
