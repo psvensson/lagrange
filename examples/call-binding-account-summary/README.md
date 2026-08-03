@@ -197,8 +197,9 @@ Current call-path limits (of the platform, stated plainly):
   number keyed by a string; structured partials are not accepted by the
   reduce gate yet. Group keys must be disjoint across shards — this
   example namespaces its keys by a shard-local row id.
-- **Sequential shard dispatch.** Shards run one after another today;
-  parallel fan-out is future work.
+- **Bounded parallel shard dispatch.** Up to 8 shards run concurrently
+  (deployment-tunable); shards on the same host node serialize, so this
+  single-node demo executes its two shards one after the other.
 - **Single-table SELECT.** The Binding-declared statement must be a
   SELECT over one table.
 

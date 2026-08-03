@@ -371,10 +371,10 @@ The rewrite can reduce latency when:
 
 It can fail to help when the dataset is tiny, one indexed query already
 returns only ten rows, startup dominates, or the partition-local code
-consumes more CPU than the transfer it removes. Note also that shard
-dispatch is currently sequential, not parallel — concurrency across shards
-is future work, so today's latency win comes from transfer shape and
-locality, not parallel fan-out.
+consumes more CPU than the transfer it removes. Shard dispatch is parallel
+and bounded (default 8 concurrent runs) across distinct host nodes; shards
+on one host serialize, so the win compounds transfer shape, locality, and —
+when partitions span nodes — overlapping shard execution.
 
 Do not present a speedup ratio from the local demo. PostgreSQL and Lagrange
 use different startup, topology, storage, and process arrangements there.

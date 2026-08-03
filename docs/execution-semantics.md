@@ -25,7 +25,7 @@ CALL BINDING $1  (authenticated pgwire)
   | resolve binding -> ready route (statement required)
   | plan shards from the declared SELECT (no rows fetched)
   v
-per shard, sequentially:
+per shard, concurrently (bounded pool, preferring slot order):
   dispatch run() to the partition's host node
     - host node re-checks the topology fence
     - host node reads its own replica (bounded)
@@ -41,8 +41,19 @@ reduce(partials, arguments) on the reduce-lease holder
 one atomically published result snapshot -> caller gets the reduced JSON
 ```
 
-Shard dispatch is sequential today, one shard at a time. Parallel fan-out is
-future work, not a tunable.
+Shard dispatch is parallel and bounded: at most `maxConcurrentShardRuns`
+(default **8**, deployment-tunable, never caller-selected) partition-local
+runs proceed at once, and the next shard starts as one settles. Two shards
+resolved to the **same host node serialize** there — the WASI cell runtime
+allows one active invocation per component instance — while shards on
+distinct hosts overlap. Slot identity, wire identity, and lease identity
+are fixed before any dispatch; completion order never affects the result
+(coordination rows, not completion order, define the invocation). On the
+first shard failure, or once the shared deadline passes, no further shard
+is admitted; already-started shards settle, and the incomplete slot set
+stays invisible behind the completeness gate. When shards fail, the
+surfaced error is the **lowest-slot** cause after all started work settled
+— stable slot order, never network race order.
 
 ## Timeouts And Deadlines
 
@@ -175,9 +186,9 @@ output makes replay and retry observably diverge.
   replica (row bound + deadline), built where the data lives — raw shard
   rows never cross the network.
 - There is **no cross-partition transaction** in a CALL. Shards are read
-  independently and sequentially; the invocation does not take a global
-  snapshot, so concurrent writes may land between shard reads. The
-  topology fence guarantees each shard read is against a current,
+  independently (and possibly concurrently); the invocation does not take
+  a global snapshot, so concurrent writes may land between shard reads.
+  The topology fence guarantees each shard read is against a current,
   non-superseded replica — not that all shards observe one instant.
 - The CALL path writes nothing to user tables.
 
@@ -185,9 +196,12 @@ output makes replay and retry observably diverge.
 
 There is **no caller-initiated cancellation**. Closing the pgwire session
 does not stop a running invocation; the deadline is the only caller-side
-bound. Node shutdown aborts in-flight dispatches typed
-(`call_cell_shutting_down`; ambiguous if the component may have run).
-Caller cancellation is an unresolved design decision.
+bound. The transport cannot cancel an already-dispatched shard run either:
+on failure or deadline the invoker only stops admitting new shards —
+started work settles, and nothing partial becomes visible. Node shutdown
+aborts in-flight dispatches typed (`call_cell_shutting_down`; ambiguous if
+the component may have run). Caller cancellation is an unresolved design
+decision.
 
 ## Limits
 
@@ -197,6 +211,7 @@ Production defaults, all overridable per deployment
 | Limit | Default | Meaning |
 | --- | --- | --- |
 | `DEADLINE_MS` | 30000 | ingress deadline for one CALL |
+| `MAX_CONCURRENT_SHARD_RUNS` | 8 | bounded parallel shard dispatch per invocation |
 | `BATCH_ROW_BOUND` | 4096 | max rows per shard batch handed to `run` |
 | `EMIT_BUDGET` | 64 | max `emit()` calls per invocation |
 | `PARTIAL_LIMIT` | 1024 | max partial entries per slot and merged-result cap |
@@ -264,7 +279,8 @@ Stated once, plainly — none of these are guaranteed by anything above:
 - caller-initiated cancellation;
 - caller-supplied idempotency keys on CALL;
 - structured (non-numeric) partial values;
-- parallel shard fan-out;
+- concurrent runs on one component instance (today one active invocation
+  per Cell; same-host shards serialize);
 - `pushdown` invocation (declared-only today);
 - nested `call-bounded` invocation (declared in WIT, host always denies);
 - any CALL ingress other than authenticated pgwire (no HTTP or client SDK).

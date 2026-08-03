@@ -326,7 +326,8 @@ This distinction is intentional:
   MovieLens scale, against a strong conventional baseline;
 - the call-binding example shows the same shape on the public path;
 - the remaining work is `pushdown` invocation, structured partials, and
-  parallel shard fan-out.
+  concurrent invocations on a single Cell instance (cross-node shard
+  dispatch is already bounded parallel).
 
 ## Troubleshooting
 

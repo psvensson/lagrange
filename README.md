@@ -161,7 +161,9 @@ placement pin, then runs the function locally. The reduce step refuses to
 publish unless every shard's partial set is complete, fresh, and disjoint,
 and it publishes exactly one atomic result snapshot.
 
-Shards currently dispatch sequentially; parallel fan-out is future work.
+Shard dispatch is parallel and bounded (default 8 concurrent runs,
+deployment-tunable). Shards on distinct host nodes overlap; shards on one
+host serialize, because a Cell runs one invocation at a time.
 
 ## Benefits
 
@@ -231,8 +233,9 @@ Lagrange is alpha. What works, what doesn't:
   execution; range-partitioned SQLite storage with Raft replication;
   multi-partition transactions; a bounded PostgreSQL wire slice; diagnostics,
   health probes, an admin CLI, and distributed failure testing.
-- **Sequential fan-out:** shard dispatch is a sequential loop today;
-  parallel fan-out is future work.
+- **Bounded parallel fan-out:** shard dispatch runs concurrently up to a
+  policy-owned limit (default 8); shards on the same host node serialize
+  (one active invocation per Cell instance).
 - **Numeric partials only:** each emitted partial is one finite number per
   group key. Structured partial values are not supported yet.
 - **Declared-only binding kinds:** `pushdown`, `change`, `time`, `once`, and

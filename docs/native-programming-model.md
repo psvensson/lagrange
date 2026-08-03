@@ -490,8 +490,11 @@ Binding time rather than per call.
 group key. Richer per-group structs (count + sum + max, sketches) are
 future work.
 
-**Parallel shard fan-out.** Shard dispatch is currently a sequential loop.
-Concurrent fan-out is future work.
+**Concurrent runs per Cell instance.** Shard dispatch is parallel and
+bounded (`maxConcurrentShardRuns`, default 8): shards on distinct host
+nodes overlap, but a single component instance runs one invocation at a
+time, so same-host shards serialize. Lifting that per-instance limit is
+future work.
 
 **Nested calls.** `call-bounded` is declared in the WIT world but the host
 always denies it today.

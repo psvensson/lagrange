@@ -250,8 +250,9 @@ Rules the guest must follow:
 - `reduce` is a second export in the same component — not a separate
   artifact, not host-side code. Its return value is the call's result.
 - Default budgets: `64` `emit` calls per invocation, `1,024` partial
-  entries, a `30 s` deadline per call. Shard dispatch is currently
-  sequential.
+  entries, a `30 s` deadline per call. Shard dispatch is parallel and
+  bounded (`maxConcurrentShardRuns`, default `8`); same-host shards
+  serialize.
 
 The normative WIT world currently lives at
 `test/wasm-service/fixtures/call-cell-world/wit/world.wit`; it is not yet
@@ -368,7 +369,8 @@ Stated plainly:
 - pgwire is the only ingress for `CALL BINDING`; there is no HTTP or
   client-SDK surface, and no caller-supplied idempotency key on this path.
 - Partials are numeric per-group aggregation values only.
-- Shard dispatch is sequential; fan-out concurrency is future work.
+- Shard dispatch is parallel and bounded (default 8 concurrent runs);
+  shards on one host node serialize (one active invocation per Cell).
 - The `call-bounded` nested-call import exists in the WIT world but the
   host always denies it.
 - The runnable call-path example is
@@ -421,7 +423,7 @@ Not yet public:
 - invocation adapters for `change`, `time`, `once`, `boot`, and `pushdown`
   sources (declared-only);
 - structured or non-numeric partial values;
-- parallel shard fan-out;
+- concurrent invocations on one Cell instance (same-host shards serialize);
 - nested `call-bounded` invocation; and
 - managed OCI container activation.
 

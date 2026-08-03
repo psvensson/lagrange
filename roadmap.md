@@ -88,7 +88,9 @@ under coordination leases, with placement following demand. The 2.0
 direction deepens that surface:
 
 - multi-stage distributed plans with streaming exchange and backpressure;
-- parallel shard fan-out, structured partials, and pushdown invocation;
+- structured partials, pushdown invocation, and concurrent invocations on
+  a single Cell instance (cross-node shard fan-out is already bounded
+  parallel);
 - a stable external kernel API and a published authoring WIT world;
 - an installable service ecosystem with dependency and upgrade handling; and
 - a native artifact store for large, immutable content.
