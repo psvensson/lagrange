@@ -91,6 +91,8 @@ const CALL_CELL_REDUCE_ARGUMENT_MESSAGE = Object.freeze({
     'publishFinalSnapshot requires an invocation id and result JSON',
   SEED_REQUIRES_INVOCATION:
     'seedInvocation requires a fresh invocation id',
+  RECLAIM_REQUIRES_RETENTION:
+    'reclaimExpiredCoordination requires a positive retention window',
 });
 const SEED_SLOT_EMPTY_REPLICA = '';
 const SEED_EMPTY_JSON = '';
@@ -247,24 +249,61 @@ function createCallCellReduceCoordinator(options) {
       );
     }
     const slotIds = normalizeExpectedSlotIds(expectedSlotIds, config);
+    // Seed-time (not 0) as the initial lease_expires_at: the row stays
+    // immediately claimable (seed-time <= now) while the reclaim
+    // predicate cannot touch it until the retention window has passed —
+    // a concurrent invocation's sweep can never race away just-seeded,
+    // not-yet-leased rows.
+    const seededAt = nowMs();
     for (const slotId of slotIds) {
       assertQuerySuccess(await config.executeInternal(
         `INSERT INTO ${config.coordinationTable} ` +
         SEED_SLOT_INSERT_COLUMNS +
         `(${sqlLiteral(invocationId)}, ${slotId}, ` +
-        `${sqlLiteral(SEED_SLOT_EMPTY_REPLICA)}, 0, ` +
+        `${sqlLiteral(SEED_SLOT_EMPTY_REPLICA)}, ${seededAt}, ` +
         `${sqlLiteral(EMPTY_PARTIAL_JSON)}, 0)`,
         [],
       ));
     }
+    // The seed time stamps the result row so an ABANDONED invocation
+    // (result_json never filled) is age-discriminable for reclaim; a
+    // published snapshot overwrites computed_at with the publish time.
     assertQuerySuccess(await config.executeInternal(
       `INSERT INTO ${config.resultTable} ` +
       SEED_RESULT_INSERT_COLUMNS +
-      `(${sqlLiteral(invocationId)}, ${sqlLiteral(SEED_EMPTY_JSON)}, 0, ` +
-      `${sqlLiteral(SEED_EMPTY_JSON)})`,
+      `(${sqlLiteral(invocationId)}, ${sqlLiteral(SEED_EMPTY_JSON)}, ` +
+      `${nowMs()}, ${sqlLiteral(SEED_EMPTY_JSON)})`,
       [],
     ));
     return {slotIds};
+  }
+
+  // Bounded reclaim of coordination garbage: slot rows whose lease lapsed
+  // more than the retention window ago, and result rows of ABANDONED
+  // invocations (no snapshot ever published) older than the window.
+  // Published snapshots are the durable visible result and are never
+  // touched here — their retention is a product decision, not coordinator
+  // hygiene. Callers sweep opportunistically (e.g. once per new
+  // invocation), so accumulation is bounded without a background reaper.
+  async function reclaimExpiredCoordination(retentionMs) {
+    if (!Number.isFinite(retentionMs) || retentionMs <= 0) {
+      throw new TypeError(
+        CALL_CELL_REDUCE_ARGUMENT_MESSAGE.RECLAIM_REQUIRES_RETENTION,
+      );
+    }
+    const reclaimBefore = nowMs() - retentionMs;
+    assertQuerySuccess(await config.executeInternal(
+      `DELETE FROM ${config.coordinationTable} ` +
+      `WHERE lease_expires_at <= ${reclaimBefore}`,
+      [],
+    ));
+    assertQuerySuccess(await config.executeInternal(
+      `DELETE FROM ${config.resultTable} ` +
+      `WHERE result_json = ${sqlLiteral(SEED_EMPTY_JSON)} AND ` +
+      `computed_at <= ${reclaimBefore}`,
+      [],
+    ));
+    return {reclaimBefore};
   }
 
   async function acquireReduceLease(invocationId, replicaId, slotId) {
@@ -544,6 +583,7 @@ function createCallCellReduceCoordinator(options) {
     acquireReduceLease,
     releaseReduceLease,
     publishPartial,
+    reclaimExpiredCoordination,
     resolveCompletePartialSet,
     publishFinalSnapshot,
     parseResultSnapshotWitness,

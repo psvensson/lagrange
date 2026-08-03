@@ -71,6 +71,10 @@ const CALL_INVOKER_ACTIVATION_DEFAULT = Object.freeze({
   RETRY_INTERVAL_MS: 250,
   WAIT_MS: 15000,
 });
+// Coordination-garbage retention: lapsed slot rows and abandoned result
+// rows older than this window are swept opportunistically, one bounded
+// sweep per new invocation (no background reaper).
+const CALL_INVOKER_RECLAIM_RETENTION_DEFAULT_MS = 600000;
 
 function sleep(delayMs) {
   return new Promise((resolve) => {
@@ -135,6 +139,11 @@ class CallCellInvoker {
       options.activationWaitMs > 0 ?
       options.activationWaitMs :
       CALL_INVOKER_ACTIVATION_DEFAULT.WAIT_MS;
+    this._reclaimRetentionMs =
+      Number.isSafeInteger(options.reclaimRetentionMs) &&
+      options.reclaimRetentionMs > 0 ?
+        options.reclaimRetentionMs :
+        CALL_INVOKER_RECLAIM_RETENTION_DEFAULT_MS;
     this._batchRowBound = options.batchRowBound;
     this._partialLimit = options.partialLimit;
     // batchRowBound rides with the bounded-emit budgets so the shard's
@@ -247,6 +256,18 @@ class CallCellInvoker {
     // runs across ready replicas by the identity's slot ordinal.
     const {invocationId} = createCallInvocationIdentity();
     const slotIds = batches.map((_, index) => index + 1);
+    // Amortized coordination hygiene: one bounded sweep of lapsed rows
+    // per new invocation. Best-effort — reclaim trouble must never fail
+    // a live invocation.
+    if (typeof this._reduceCoordinator.reclaimExpiredCoordination ===
+        'function') {
+      try {
+        await this._reduceCoordinator.reclaimExpiredCoordination(
+          this._reclaimRetentionMs);
+      } catch {
+        // Hygiene only; the seeded rows below are what correctness needs.
+      }
+    }
     // The reduce lease occupies its own coordination slot above the shard
     // slots; the completeness gate reads only the shard slots.
     const reduceLeaseSlotId = slotIds.length + 1;

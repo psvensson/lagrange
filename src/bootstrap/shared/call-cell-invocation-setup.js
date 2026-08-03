@@ -50,6 +50,7 @@ const CALL_CELL_INVOCATION_DEFAULT = Object.freeze({
   EMIT_BUDGET: 64,
   NESTED_CALL_BUDGET: 1,
   PARTIAL_LIMIT: 1024,
+  RECLAIM_RETENTION_MS: 600000,
   REDUCE_LEASE_MS: 30000,
   SLOT_COUNT: 64,
 });
@@ -161,6 +162,9 @@ function attachCallCellInvoker(options = {}) {
       CALL_CELL_INVOCATION_DEFAULT.NESTED_CALL_BUDGET),
     partialLimit: positiveIntegerOr(
       tunables.partialLimit, CALL_CELL_INVOCATION_DEFAULT.PARTIAL_LIMIT),
+    reclaimRetentionMs: positiveIntegerOr(
+      tunables.reclaimRetentionMs,
+      CALL_CELL_INVOCATION_DEFAULT.RECLAIM_RETENTION_MS),
     reduceCoordinator,
     routeResolver,
     statementAdapter: routingSurface.statementAdapter,

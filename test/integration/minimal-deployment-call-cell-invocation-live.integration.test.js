@@ -457,6 +457,26 @@ function createCoordinationStore() {
       }
       const inserted = applyInsert(sql);
       if (inserted) return inserted;
+      const slotReclaim =
+        /^DELETE FROM [a-z_]+ WHERE lease_expires_at <= (\d+)$/u.exec(sql);
+      if (slotReclaim && sql.includes(COORDINATION_TABLE)) {
+        const keep = slots.filter(
+          (slot) => slot.lease_expires_at > Number(slotReclaim[1]));
+        slots.length = 0;
+        slots.push(...keep);
+        return {rows: [], success: true};
+      }
+      const resultReclaim =
+        /^DELETE FROM [a-z_]+ WHERE result_json = '' AND computed_at <= (\d+)$/u
+          .exec(sql);
+      if (resultReclaim && sql.includes(RESULT_TABLE)) {
+        const keep = results.filter(
+          (row) => row.result_json !== '' ||
+            row.computed_at > Number(resultReclaim[1]));
+        results.length = 0;
+        results.push(...keep);
+        return {rows: [], success: true};
+      }
       return {
         error: `unsupported coordination SQL: ${sql}`,
         rows: [],

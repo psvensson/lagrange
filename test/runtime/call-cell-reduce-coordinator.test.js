@@ -199,6 +199,24 @@ function createSqlStore(options = {}) {
       store.results.push(insert.row);
       return {success: true};
     }
+    const slotReclaim = new RegExp(
+      `^DELETE FROM ${COORDINATION_TABLE} ` +
+      'WHERE lease_expires_at <= (\\d+)$', 'u').exec(sql);
+    if (slotReclaim) {
+      store.slots = store.slots.filter(
+        (row) => row.lease_expires_at > Number(slotReclaim[1]));
+      return {success: true};
+    }
+    const resultReclaim = new RegExp(
+      `^DELETE FROM ${RESULT_TABLE} ` +
+      'WHERE result_json = \'\' AND computed_at <= (\\d+)$', 'u')
+      .exec(sql);
+    if (resultReclaim) {
+      store.results = store.results.filter(
+        (row) => row.result_json !== '' ||
+          row.computed_at > Number(resultReclaim[1]));
+      return {success: true};
+    }
     return {success: false, error: `unexpected sql: ${sql}`};
   };
   return {store, executeInternal};
@@ -573,17 +591,18 @@ test('seedInvocation creates the rows the guarded coordination cycle ' +
       [slot.invocation_id, slot.slot_id, slot.replica_id,
         slot.lease_expires_at, slot.partial_json, slot.computed_at]),
     [
-      [invocationId, 1, '', 0, '[]', 0],
-      [invocationId, 2, '', 0, '[]', 0],
+      [invocationId, 1, '', nowRef.now, '[]', 0],
+      [invocationId, 2, '', nowRef.now, '[]', 0],
     ],
-    'each expected slot starts unowned with an expired lease and an ' +
-      'empty partial',
+    'each expected slot starts unowned, immediately claimable at its ' +
+      'seed time, and reclaim-protected for the retention window',
   );
   t.same(
     store.results.map((row) =>
       [row.result_id, row.result_json, row.computed_at]),
-    [[invocationId, '', 0]],
-    'the result row exists for the final snapshot UPDATE to fill',
+    [[invocationId, '', nowRef.now]],
+    'the result row exists (seed-time stamped) for the final snapshot ' +
+      'UPDATE to fill',
   );
 
   await coordinator.acquireReduceLease(invocationId, REPLICA_ONE, 1);
@@ -616,5 +635,61 @@ test('seedInvocation creates the rows the guarded coordination cycle ' +
     () => t.fail('expected a typed refusal for a missing invocation id'),
     (error) => t.match(String(error.message), /fresh invocation id/u),
   );
+  t.end();
+});
+
+test('reclaimExpiredCoordination sweeps lapsed slots and abandoned ' +
+  'results while published snapshots persist', async (t) => {
+  const nowRef = {now: 100_000};
+  const {store, executeInternal} = createSqlStore({empty: true});
+  const coordinator = createCoordinator(executeInternal, nowRef);
+  const RETENTION_MS = 5_000;
+
+  await coordinator.seedInvocation('call-invocation-old', [1]);
+  await coordinator.acquireReduceLease('call-invocation-old',
+    REPLICA_ONE, 1);
+  nowRef.now += LEASE_MS + RETENTION_MS + 1;
+  await coordinator.seedInvocation('call-invocation-live', [1]);
+  await coordinator.acquireReduceLease('call-invocation-live',
+    REPLICA_ONE, 1);
+  await coordinator.publishPartial('call-invocation-live', 1, REPLICA_ONE,
+    partialJson([{groupKey: 'a', aggValue: 1}]), nowRef.now);
+  const gate = await coordinator.resolveCompletePartialSet(
+    'call-invocation-live', [1], LIMIT);
+  await coordinator.publishFinalSnapshot(
+    'call-invocation-live', JSON.stringify(gate.partials), gate.witness);
+  nowRef.now += LEASE_MS + RETENTION_MS + 1;
+
+  await coordinator.reclaimExpiredCoordination(RETENTION_MS);
+  t.same(store.slots, [],
+    'every lapsed slot row is swept once past retention');
+  t.same(
+    store.results.map((row) => row.result_id),
+    ['call-invocation-live'],
+    'the abandoned result row is swept; the published snapshot persists',
+  );
+  await coordinator.reclaimExpiredCoordination(0).then(
+    () => t.fail('expected the retention refusal'),
+    (error) => t.match(String(error.message), /positive retention/u),
+  );
+  t.end();
+});
+
+test('a concurrent sweep can never reclaim another invocation\'s ' +
+  'just-seeded, not-yet-leased rows', async (t) => {
+  const nowRef = {now: 200_000};
+  const {store, executeInternal} = createSqlStore({empty: true});
+  const coordinator = createCoordinator(executeInternal, nowRef);
+  const RETENTION_MS = 5_000;
+
+  await coordinator.seedInvocation('call-invocation-fresh', [1, 2]);
+  // Another invocation sweeps immediately after the seed.
+  await coordinator.reclaimExpiredCoordination(RETENTION_MS);
+  t.equal(store.slots.length, 2,
+    'the just-seeded rows survive the concurrent sweep');
+  const acquired = await coordinator.acquireReduceLease(
+    'call-invocation-fresh', REPLICA_ONE, 1);
+  t.equal(Number(acquired.slot_id), 1,
+    'the seeded row stays immediately claimable at its seed time');
   t.end();
 });
