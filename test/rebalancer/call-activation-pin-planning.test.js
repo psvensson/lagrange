@@ -125,3 +125,49 @@ test('the planner forces live-pinned available nodes into the placement ' +
     'a pin can never target a node the planner does not consider available');
   t.end();
 });
+
+test('a REAL UnifiedRebalancer policy pass attaches live pins from the ' +
+  'cache — the loop the production refresh() drives', async (t) => {
+  const {UnifiedRebalancer} = await import(
+    '../../src/rebalancer/unified-rebalancer.js');
+
+  const cache = {
+    get: () => null,
+    getAll: (tableName) =>
+      (tableName === SYSTEM_TABLE_NAME.CALL_ACTIVATION_LEASES ?
+        [leaseRow(SERVICE_ID, PINNED_NODE, Date.now() + 30000),
+          leaseRow(SERVICE_ID, 'node-b', Date.now() - 1)] :
+        []),
+    filter: () => [],
+  };
+  const rebalancer = new UnifiedRebalancer({
+    cdcIntegrationService: {
+      insertSystemTableRow: async () => ({success: true}),
+      updateSystemTableRow: async () => ({success: true}),
+    },
+    entityId: SERVICE_ID,
+    entityType: 'runtime_service',
+    messageRouter: {
+      deliver: async () => ({success: true}),
+      register() {},
+      send: async () => ({success: true}),
+    },
+    nodeId: 'planner-node',
+    rebalanceCoordinator: {
+      createOperation: async () => ({success: true}),
+      waitForReplicaOperationCacheVisibility: async () => true,
+    },
+    systemTableCache: cache,
+    tablePolicyService: {
+      getMessageGroupPolicy: async () => ({targetReplicaCount: 3}),
+      getPolicyForPartition: () => ({targetReplicaCount: 3}),
+    },
+  });
+  const policy = await rebalancer.getPolicy();
+  t.same(policy.activationPinNodeIds, [PINNED_NODE],
+    'the real policy pass reads the live lease rows into deterministic ' +
+      'pins — the engagement witness for the production refresh loop');
+  t.equal(policy.targetReplicaCount > 0, true,
+    'the pin attach never displaces the policy replica target');
+  t.end();
+});
