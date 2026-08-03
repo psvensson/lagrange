@@ -171,30 +171,57 @@ function createRequestCellCallBridge(options = {}) {
     options.maxNestedCalls, REQUEST_CALL_BRIDGE_MAX_NESTED_CALLS_DEFAULT);
   const logger = options.logger || null;
 
-  async function invoke(bridgeCall) {
+  // Step owners keep each function inside the complexity threshold while
+  // preserving the exact refusal order: arguments, identity, policy,
+  // recursion, then delegation.
+  function requireValidatedCallShape(bridgeCall) {
     const name = bridgeCall?.name;
     if (typeof name !== 'string' ||
         !RUNTIME_ACCESS_POLICY_BINDING_PATTERN.test(name)) {
       throw bridgeFailure(HOST_CALL_ERROR_CODE.INVALID_ARGUMENTS);
     }
-    let argumentsJson;
     try {
-      argumentsJson = normalizeCallArguments(bridgeCall?.argumentsJson);
+      return {argumentsJson: normalizeCallArguments(bridgeCall?.argumentsJson),
+        name};
     } catch (_error) {
       throw bridgeFailure(HOST_CALL_ERROR_CODE.INVALID_ARGUMENTS);
     }
-    // Identity and authority come ONLY from the receiver-built
-    // invocation record the driver threads through; top-level fields on
-    // the bridge call are protocol payload, never trusted identity. An
-    // absent or non-canonical context is a composition defect — fail
-    // closed as bridge-not-composed rather than guessing identity.
+  }
+
+  // Identity and authority come ONLY from the receiver-built invocation
+  // record the driver threads through; top-level fields on the bridge
+  // call are protocol payload, never trusted identity. An absent or
+  // non-canonical context is a composition defect — fail closed as
+  // bridge-not-composed rather than guessing identity.
+  function requireCanonicalInvocation(bridgeCall) {
     const invocation = bridgeCall?.invocation;
-    const securityContext = invocation?.securityContext;
-    if (!isCanonicalSecurityContext(securityContext) ||
+    if (!isCanonicalSecurityContext(invocation?.securityContext) ||
         typeof invocation?.invocationId !== 'string' ||
         invocation.invocationId.length === 0) {
       throw bridgeFailure(HOST_CALL_ERROR_CODE.CALL_BRIDGE_UNAVAILABLE);
     }
+    return invocation;
+  }
+
+  function requireChildInvocationId(outerInvocationId) {
+    if (REQUEST_CALL_BRIDGE_CHILD_DEPTH > maxNestedCalls) {
+      throw bridgeFailure(HOST_CALL_ERROR_CODE.RECURSION_REFUSED);
+    }
+    try {
+      return createCallChildInvocationId(
+        outerInvocationId, REQUEST_CALL_BRIDGE_CHILD_ORDINAL);
+    } catch (_error) {
+      // The identity grammar refuses deriving a child of a child: an
+      // outer id already carrying the child separator means this call
+      // chain is past the depth budget.
+      throw bridgeFailure(HOST_CALL_ERROR_CODE.RECURSION_REFUSED);
+    }
+  }
+
+  async function invoke(bridgeCall) {
+    const {argumentsJson, name} = requireValidatedCallShape(bridgeCall);
+    const invocation = requireCanonicalInvocation(bridgeCall);
+    const securityContext = invocation.securityContext;
     // Declared-target authorization for the SOURCE service (the request
     // Cell's own derived service id) happens before anything is
     // dispatched; target existence/invocability surfaces afterwards
@@ -205,19 +232,8 @@ function createRequestCellCallBridge(options = {}) {
     if (!isOutboundCallAllowed(policy, name)) {
       throw bridgeFailure(HOST_CALL_ERROR_CODE.TARGET_NOT_ALLOWED);
     }
-    if (REQUEST_CALL_BRIDGE_CHILD_DEPTH > maxNestedCalls) {
-      throw bridgeFailure(HOST_CALL_ERROR_CODE.RECURSION_REFUSED);
-    }
-    let childInvocationId;
-    try {
-      childInvocationId = createCallChildInvocationId(
-        invocation.invocationId, REQUEST_CALL_BRIDGE_CHILD_ORDINAL);
-    } catch (_error) {
-      // The identity grammar refuses deriving a child of a child: an
-      // outer id already carrying the child separator means this call
-      // chain is past the depth budget.
-      throw bridgeFailure(HOST_CALL_ERROR_CODE.RECURSION_REFUSED);
-    }
+    const childInvocationId = requireChildInvocationId(
+      invocation.invocationId);
     // Logging-only chain record — system-derived, never guest-supplied
     // and never sent back to the guest.
     const callChain = Object.freeze({

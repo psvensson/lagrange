@@ -141,6 +141,16 @@ function nonNegativeIntegerOption(value, fallback) {
   return Number.isSafeInteger(value) && value >= 0 ? value : fallback;
 }
 
+// Base-identity resolution owner: a system-owned supplied base (the
+// request-call bridge's '#call-' child identity) is used verbatim after
+// the wire-grammar gate; otherwise a fresh routing-contract UUID.
+function resolveBaseInvocationId(suppliedInvocationId) {
+  return typeof suppliedInvocationId === 'string' &&
+      suppliedInvocationId.length > 0 ?
+    assertCallBaseInvocationId(suppliedInvocationId) :
+    createCallInvocationIdentity().invocationId;
+}
+
 function assertInvokerCollaborators(options) {
   if (typeof options.routeResolver?.resolve !== 'function') {
     throw new TypeError(CALL_INVOKER_ARGUMENT_MESSAGE.ROUTE_RESOLVER_REQUIRED);
@@ -372,11 +382,7 @@ class CallCellInvoker {
     // runs across ready replicas by the identity's slot ordinal. A
     // system-owned supplied base (the request-call bridge's '#call-'
     // child identity) is used verbatim after the wire-grammar gate.
-    const invocationId =
-      typeof suppliedInvocationId === 'string' &&
-        suppliedInvocationId.length > 0 ?
-        assertCallBaseInvocationId(suppliedInvocationId) :
-        createCallInvocationIdentity().invocationId;
+    const invocationId = resolveBaseInvocationId(suppliedInvocationId);
     const slotIds = batches.map((_, index) => index + 1);
     // Amortized coordination hygiene: one bounded sweep of lapsed rows
     // per new invocation. Best-effort — reclaim trouble must never fail
