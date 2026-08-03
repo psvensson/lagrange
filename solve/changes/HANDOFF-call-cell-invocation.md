@@ -359,3 +359,23 @@ new violations repo-wide). All seven scenario harnesses green.
    deterministic-first rule — design the DT harness variant first).
 3. Ops note stands: sustained caller demand keeps re-extending the
    activation lease (pin lives while demand lasts, by design).
+
+## EPIC CLOSE-OUT 2026-08-03: expiry quest landed, all follow-ups resolved
+
+- Pin-loop engagement witness: test-only commit (real UnifiedRebalancer
+  policy pass attaches pins from live lease rows) — the deterministic
+  answer to the "live loop not exercised" note.
+- `call-cell-reduce-coordination-expiry` LANDED (attempt-2 approved,
+  fingerprint sha256:48f6d374): bounded reclaim grammar; the
+  concurrent-seed race (attempt-1) was caught while authoring the
+  verifier charter and fixed before landing — seed rows carry seed time
+  as lease_expires_at (claimable AND reclaim-protected).
+- Verifier ops notes for the future: a live invocation whose
+  seed-to-first-acquire span exceeds retention (default 600s, tunable)
+  is treated as abandoned by design (typed retryable, never a wrong
+  result); reclaim failures are swallowed silently (a debug log would
+  keep hygiene observable); releaseReduceLease zeroes the lease, making
+  released rows immediately sweepable if release is ever wired in.
+- The call/pushdown invocation scope of the minimal-deployment epic is
+  COMPLETE: foundation, orchestration, production wiring, data-local
+  activation, hardening, and coordination hygiene — all landed verified.

@@ -90,6 +90,17 @@ as separate roadmap scope rather than widening that row:
 
 ## Decision log
 
+- 2026-08-03 — Call/pushdown invocation follow-ups CLOSED: the hardening
+  batch landed (bf9bf34c1 + f594d5d14: topology dead-fallback refusal,
+  lease-race self-heal, activation-wait deadline cap, receiver replica
+  echo, wire-identity grammar guard, zero new literal violations), the
+  live pin-consumption loop gained its deterministic engagement witness
+  (real UnifiedRebalancer policy pass over live lease rows), and the
+  reduce-coordination expiry grammar landed as its own quest
+  (`call-cell-reduce-coordination-expiry`) — bounded reclaim of lapsed
+  slot rows and abandoned results with published snapshots immune, the
+  concurrent-seed race caught in review and fixed before landing. The
+  non-request invocation follow-on for call/pushdown is complete.
 - 2026-08-03 — Data-local call activation LANDED (commit 9c60dc142, quest
   `data-local-call-partition-activation-v2` inheriting the four-frontier
   candidate): shard `run` executes on the partition host with the batch
