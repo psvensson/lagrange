@@ -1,0 +1,43 @@
+{
+  "id": "call-binding-caller-idempotency-key",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The CALL BINDING payload accepts an optional caller-supplied idempotency key that becomes the invocation identity through the existing createCallInvocationIdentity plumbing, with the reserved slot/reduce grammar refused typed at ingress and a repeated CALL carrying the same key within the coordination retention window producing no duplicate visible coordination output.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/services-doc-tightening.md",
+    "draftedAtCommit": "6c7849f859ebbfe2e0768cc420167f729bdf0c7d"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "call-binding-caller-idempotency-key",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "call-binding-caller-idempotency-key-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "call-binding-caller-idempotency-key",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
