@@ -30,11 +30,14 @@ function activateOwnerTrackedTransactionRecovery(owner) {
   return recovery;
 }
 
-function attachRuntimeAccessPolicyOwner(owner, sqlQueryEngine) {
-  const runtimeAccessPolicyOwner =
-    owner.systemMetadataOwners?.runtimeAccessPolicyOwner ||
+function resolveRuntimeAccessPolicyOwner(owner) {
+  return owner.systemMetadataOwners?.runtimeAccessPolicyOwner ||
     owner.serviceLifecycleCommandOwner?.runtimeAccessPolicyOwner ||
     null;
+}
+
+function attachRuntimeAccessPolicyOwner(owner, sqlQueryEngine) {
+  const runtimeAccessPolicyOwner = resolveRuntimeAccessPolicyOwner(owner);
   if (
     runtimeAccessPolicyOwner &&
     typeof sqlQueryEngine.setRuntimeAccessPolicyOwner === LOCAL_STR_FUNCTION
@@ -77,7 +80,9 @@ function attachSqlRuntimeToStartupOwner(options) {
       owner.getSystemTableCache?.() || null,
     messageRouterProvider: () => options.messageRouter ||
       owner.messageRouter || null,
+    runtimeAccessPolicyOwner: resolveRuntimeAccessPolicyOwner(owner),
     tunables: options.callCellInvocationTunables,
+    wasmComponentDriver: owner.runtimeDrivers?.wasmComponentDriver || null,
   });
   attachArtifactPayloadStore({
     serviceLifecycleCommandOwner: owner.serviceLifecycleCommandOwner || null,

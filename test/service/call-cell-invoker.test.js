@@ -254,6 +254,47 @@ test('the invocation identity is a fresh routing-contract UUID identity',
     );
   });
 
+test('a supplied system-owned invocation id is the verbatim base for ' +
+  'every wire identity', async (t) => {
+  const collaborators = makeCollaborators();
+  await makeInvoker(collaborators).invoke({
+    name: CALL_NAME,
+    argumentsJson: ARGUMENTS,
+    securityContext: SECURITY_CONTEXT,
+    invocationId: 'outer-request-1#call-1',
+  });
+  t.equal(collaborators.calls.seeded[0].invocationId,
+    'outer-request-1#call-1',
+    'the supplied base keys the coordination rows verbatim');
+  t.same(
+    collaborators.calls.runRequests.map((request) => request.invocationId),
+    ['outer-request-1#call-1#slot-1', 'outer-request-1#call-1#slot-2'],
+    'shard wire identities extend the supplied base');
+  t.same(
+    collaborators.calls.reduceRequests.map(
+      (request) => request.invocationId),
+    ['outer-request-1#call-1#reduce'],
+    'the reduce wire identity extends the supplied base');
+});
+
+test('a supplied invocation id carrying the wire grammar is refused ' +
+  'typed before anything runs', async (t) => {
+  const collaborators = makeCollaborators();
+  await makeInvoker(collaborators).invoke({
+    name: CALL_NAME,
+    argumentsJson: ARGUMENTS,
+    securityContext: SECURITY_CONTEXT,
+    invocationId: 'x#slot-3',
+  }).then(
+    () => t.fail('expected the reserved-grammar refusal'),
+    (error) => t.equal(
+      error.code, CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS),
+  );
+  t.equal(collaborators.calls.seeded.length, 0,
+    'no coordination rows seeded under a mis-splitting identity');
+  t.equal(collaborators.calls.run, 0, 'no shard invoked');
+});
+
 test('reduce is refused when the executing replica does not hold the ' +
   'reduce lease', async (t) => {
   const collaborators = makeCollaborators({

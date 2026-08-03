@@ -23,6 +23,7 @@
 import {
   CALL_CELL_ROUTE_CLASSIFICATION,
   CALL_CELL_ROUTE_ERROR_CODE,
+  assertCallBaseInvocationId,
   createCallInvocationIdentity,
   createCallReduceInvocationId,
   createCallRoutingFailure,
@@ -303,6 +304,10 @@ class CallCellInvoker {
    * @param {string} [request.argumentsJson] transient arguments JSON object
    * @param {object} request.securityContext frozen {tenantId,principal,roles}
    * @param {number} [request.deadlineMs] absolute epoch-ms deadline
+   * @param {string} [request.invocationId] system-owned base identity
+   *   (e.g. the request-call bridge's '#call-' child id) used verbatim;
+   *   the slot/reduce wire grammar is refused typed. Absent -> fresh
+   *   routing-contract UUID identity.
    * @return {Promise<string>} the final reduced result JSON string
    */
   async invoke(request) {
@@ -331,7 +336,8 @@ class CallCellInvoker {
   }
 
   async _invokeWithTelemetry(
-    {name, argumentsJson, securityContext, deadlineMs}, telemetry) {
+    {name, argumentsJson, securityContext, deadlineMs,
+      invocationId: suppliedInvocationId}, telemetry) {
     const resolution = this._routeResolver.resolve({
       invocationId: `${RESOLVE_PROBE_PREFIX}${name}`,
       name,
@@ -363,8 +369,14 @@ class CallCellInvoker {
     // UUID identity, not a timestamp. Each shard run and the reduce get
     // their own slot-scoped WIRE identity: the runtime durable fence
     // journals per wire identity, and the route resolver spreads shard
-    // runs across ready replicas by the identity's slot ordinal.
-    const {invocationId} = createCallInvocationIdentity();
+    // runs across ready replicas by the identity's slot ordinal. A
+    // system-owned supplied base (the request-call bridge's '#call-'
+    // child identity) is used verbatim after the wire-grammar gate.
+    const invocationId =
+      typeof suppliedInvocationId === 'string' &&
+        suppliedInvocationId.length > 0 ?
+        assertCallBaseInvocationId(suppliedInvocationId) :
+        createCallInvocationIdentity().invocationId;
     const slotIds = batches.map((_, index) => index + 1);
     // Amortized coordination hygiene: one bounded sweep of lapsed rows
     // per new invocation. Best-effort — reclaim trouble must never fail

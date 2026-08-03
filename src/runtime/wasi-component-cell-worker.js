@@ -10,6 +10,7 @@ import {
   requestCellTableIndexEstimatedBytes,
   requestCellTableIndexRowBound,
 } from './request-cell-table-read-index.js';
+import {createWorkerHostCallClient} from './cell-host-call-protocol.js';
 
 const WORKER_MESSAGE = Object.freeze({
   INVOKE: 'invoke',
@@ -350,15 +351,28 @@ async function invoke(message) {
   }
 }
 
-// Per-invocation request-call bridge seam: the request-call bridge quest
-// installs a synchronous hook here (built from the invoke payload's
-// bridge descriptor). Contract: bridge(name, argumentsJson) -> string;
-// typed failures throw with error.payload = {code, message, retryable}
-// where code comes from BINDING_CALL_ERROR_CODE.
+// Per-invocation request-call bridge seam: an invoke payload carrying a
+// host-call descriptor (installed by the parent runtime for authorized
+// request invocations) gets a blocking protocol client whose deadline is
+// the invocation's absolute deadline (the protocol owner applies a
+// conservative fallback wait budget when none rides the payload).
+// Contract: bridge(name, argumentsJson) -> string; typed failures throw
+// with error.payload = {code, message, retryable} where code comes from
+// BINDING_CALL_ERROR_CODE or the protocol's HOST_CALL_ERROR_CODE.
 function resolveMessageBindingCallBridge(message) {
-  return typeof message.bindingCallBridge === 'function' ?
-    message.bindingCallBridge :
-    null;
+  if (message.hostCall?.descriptor === undefined) return null;
+  try {
+    const client = createWorkerHostCallClient({
+      deadlineMs: message.deadlineMs,
+      descriptor: message.hostCall.descriptor,
+      postToParent: (request) => parentPort.postMessage(request),
+    });
+    return (name, argumentsJson) => client.call(name, argumentsJson);
+  } catch {
+    // Malformed descriptor: fall back to the typed bridge-unavailable
+    // refusal instead of failing the whole invocation.
+    return null;
+  }
 }
 
 function resolveMessageCallContext(message) {

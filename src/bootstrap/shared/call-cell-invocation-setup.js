@@ -41,6 +41,8 @@ import {createCallPartitionTopology} from
 import {
   createCallCellReduceCoordinator,
 } from '../../runtime/call-cell-reduce-coordinator.js';
+import {createRequestCellCallBridge} from
+  '../../service/request-cell-call-bridge.js';
 
 const CALL_CELL_COORDINATION_SESSION = 'call-cell-reduce-coordination';
 const CALL_CELL_INVOCATION_DEFAULT = Object.freeze({
@@ -73,6 +75,10 @@ function positiveIntegerOr(value, fallback) {
  * @param {object} options.sqlQueryEngine the final runtime SQL engine
  * @param {Function} options.systemTableCacheProvider live cache accessor
  * @param {Function} options.messageRouterProvider live router accessor
+ * @param {object} [options.wasmComponentDriver] the driver carrying the
+ *   request-call bridge seam (setRequestCallBridge)
+ * @param {object} [options.runtimeAccessPolicyOwner] outbound-call
+ *   policy read surface for the request-call bridge
  * @param {object} [options.logger]
  * @param {object} [options.tunables] deployment-configured bounds
  *   (deadlineMs, maxAttempts, maxInFlight, maxInFlightPerTarget,
@@ -102,6 +108,34 @@ function resolveAttachmentDependencies(options) {
     systemTableCacheProvider};
 }
 
+// Composition-gated request-call bridge injection: only when the wasm
+// component driver exposes the bridge seam AND the outbound-call policy
+// read surface is composed does the driver receive a live bridge. Any
+// absent piece injects nothing, so the worker's typed
+// call_bridge_unavailable refusal stands.
+function attachRequestCellCallBridge(options, invoker) {
+  const wasmComponentDriver = options.wasmComponentDriver || null;
+  const runtimeAccessPolicyOwner =
+    options.runtimeAccessPolicyOwner || null;
+  if (!invoker ||
+      typeof wasmComponentDriver?.setRequestCallBridge !== 'function' ||
+      typeof runtimeAccessPolicyOwner?.getOutboundCallPolicy !==
+        'function') {
+    return null;
+  }
+  const bridge = createRequestCellCallBridge({
+    callCellInvoker: invoker,
+    deadlineDefaultMs: positiveIntegerOr(
+      options.tunables?.deadlineMs,
+      CALL_CELL_INVOCATION_DEFAULT.DEADLINE_MS),
+    logger: options.logger,
+    runtimeAccessPolicyOwner,
+  });
+  wasmComponentDriver.setRequestCallBridge(
+    (bridgeCall) => bridge.invoke(bridgeCall));
+  return bridge;
+}
+
 function attachCallCellInvoker(options = {}) {
   const dependencies = resolveAttachmentDependencies(options);
   if (!dependencies) {
@@ -110,6 +144,7 @@ function attachCallCellInvoker(options = {}) {
   const {messageRouterProvider, owner, sqlQueryEngine,
     systemTableCacheProvider} = dependencies;
   if (typeof owner.callCellInvoker?.invoke === 'function') {
+    attachRequestCellCallBridge(options, owner.callCellInvoker);
     return owner.callCellInvoker;
   }
   const tunables = options.tunables || {};
@@ -191,6 +226,7 @@ function attachCallCellInvoker(options = {}) {
     statementAdapter: routingSurface.statementAdapter,
   });
   owner.callCellInvoker = invoker;
+  attachRequestCellCallBridge(options, invoker);
   return invoker;
 }
 

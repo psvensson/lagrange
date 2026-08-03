@@ -1,0 +1,1432 @@
+diff --git a/scripts/checks/run-request-cell-call-bridge-scenarios.js b/scripts/checks/run-request-cell-call-bridge-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a1423b9707650302266e72e1e23ea405add10616
+--- /dev/null
++++ b/scripts/checks/run-request-cell-call-bridge-scenarios.js
+@@ -0,0 +1,22 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++// Request-cell call-bridge guard: the worker-to-parent synchronous
++// host-call protocol (src/runtime/cell-host-call-protocol.js) bridges
++// the blocking `call-binding` WIT import to an async parent-side
++// delegate over a bounded SharedArrayBuffer channel — success and typed
++// failures round-trip through the REAL componentized combined guest,
++// deadline expiry poisons stale responses, bounds hold on both sides,
++// and the pre-existing invocation-mode restrictions plus the combined
++// service-cell world ABI stay green.
++const SCENARIOS = {
++  'request-cell-call-bridge': [
++    'test/runtime/cell-host-call-protocol.test.js',
++    'test/runtime/service-cell-bridge-roundtrip.test.js',
++    'test/runtime/service-cell-worker-modes.test.js',
++    'test/wasm-service/service-cell-world-abi.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/runtime/cell-host-call-protocol.js b/src/runtime/cell-host-call-protocol.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..0e68215e7303873fc25bc88dd7546f3fe1dcdf26
+--- /dev/null
++++ b/src/runtime/cell-host-call-protocol.js
+@@ -0,0 +1,513 @@
++/**
++ * Worker-to-parent synchronous host-call protocol owner for the request
++ * Cell `call-binding` host import (the "Bridge The Synchronous WASM
++ * Import To The Async Invoker" contract in
++ * docs/development/http-endpoint-distributed-call-composition-brief.md).
++ *
++ * Both sides of the protocol live here — the blocking worker-side client
++ * (`Atomics.wait` on the WORKER thread only, never the parent) and the
++ * async parent-side responder — so the shared-buffer layout, message
++ * types, bounds, and typed error taxonomy have exactly one owner.
++ *
++ * Wire shape: the worker writes the bounded request into the shared
++ * buffer, posts a named `host_call_request` message carrying only the
++ * request id, and blocks on the control word. The parent resolves the
++ * call through the injected async delegate, writes the bounded response
++ * (or typed failure) into the shared buffer, flips the control word with
++ * a compare-exchange (so a stale write can never satisfy a later call),
++ * and wakes the worker with `Atomics.notify`.
++ */
++
++const BYTE_ENCODING = 'utf8';
++
++// Named message types (worker -> parent). The parent's answer travels
++// through the SharedArrayBuffer, never through postMessage.
++const HOST_CALL_MESSAGE = Object.freeze({
++  REQUEST: 'host_call_request',
++});
++
++// Closed typed-failure code set for bridged binding calls. Extends the
++// two worker-owned refusal codes (call_bridge_unavailable /
++// not_available_in_call_mode) that fire before a bridge exists. The
++// request-call bridge owner maps invoker failures onto these codes.
++const HOST_CALL_ERROR_CODE = Object.freeze({
++  CALL_BRIDGE_UNAVAILABLE: 'call_bridge_unavailable',
++  DEADLINE_EXHAUSTED: 'deadline_exhausted',
++  INVALID_ARGUMENTS: 'invalid_arguments',
++  NOT_AVAILABLE_IN_CALL_MODE: 'not_available_in_call_mode',
++  PROTOCOL_VIOLATION: 'protocol_violation',
++  RECURSION_REFUSED: 'recursion_refused',
++  RESPONSE_TOO_LARGE: 'response_too_large',
++  TARGET_FAILED: 'target_failed',
++  TARGET_NOT_ALLOWED: 'target_not_allowed',
++  TARGET_NOT_INVOCABLE: 'target_not_invocable',
++  TARGET_UNAVAILABLE: 'target_unavailable',
++});
++
++const HOST_CALL_KNOWN_CODES =
++  Object.freeze(new Set(Object.values(HOST_CALL_ERROR_CODE)));
++
++// Canonical retryability map: only a transiently-unavailable target is
++// worth retrying; every other refusal is terminal for this invocation.
++const HOST_CALL_RETRYABLE_CODES =
++  Object.freeze(new Set([HOST_CALL_ERROR_CODE.TARGET_UNAVAILABLE]));
++
++// Control-word states for HOST_CALL_SLOT.STATE.
++const HOST_CALL_STATE = Object.freeze({
++  IDLE: 0,
++  PENDING: 1,
++  RESPONDED: 2,
++});
++
++const HOST_CALL_RESPONSE_KIND = Object.freeze({
++  NONE: 0,
++  OK: 1,
++  TYPED_FAILURE: 2,
++});
++
++// Int32 control slots at the head of the shared buffer. REQUEST_ID is
++// the live-request epoch: the client bumps it for every call AND on
++// deadline expiry (poisoning), so a late parent write for a dead request
++// fails both the pre-write id check and the PENDING compare-exchange.
++// RESPONSE_REQUEST_ID lets the woken client refuse a stale response.
++const HOST_CALL_SLOT = Object.freeze({
++  STATE: 0,
++  REQUEST_ID: 1,
++  REQUEST_LENGTH: 2,
++  RESPONSE_REQUEST_ID: 3,
++  RESPONSE_KIND: 4,
++  RESPONSE_LENGTH: 5,
++});
++const HOST_CALL_CONTROL_SLOTS = 8;
++
++const HOST_CALL_MAX_REQUEST_BYTES = 65536;
++const HOST_CALL_MAX_RESPONSE_BYTES = 262144;
++const HOST_CALL_REQUEST_OFFSET =
++  HOST_CALL_CONTROL_SLOTS * Int32Array.BYTES_PER_ELEMENT;
++const HOST_CALL_RESPONSE_OFFSET =
++  HOST_CALL_REQUEST_OFFSET + HOST_CALL_MAX_REQUEST_BYTES;
++const HOST_CALL_BUFFER_BYTES =
++  HOST_CALL_RESPONSE_OFFSET + HOST_CALL_MAX_RESPONSE_BYTES;
++
++// One outstanding host call per request Cell, and one bridged binding
++// call per invocation: a second nested call refuses recursion_refused.
++const MAX_OUTSTANDING_HOST_CALLS = 1;
++const MAX_NESTED_BINDING_CALLS = 1;
++
++const HOST_CALL_MAX_BINDING_NAME_CHARS = 256;
++const HOST_CALL_MAX_FAILURE_MESSAGE_CHARS = 1024;
++// Conservative wait bound used when an invocation carries no absolute
++// deadline, so the worker-side Atomics.wait can never hang forever.
++const HOST_CALL_DEFAULT_WAIT_BUDGET_MS = 5000;
++
++const HOST_CALL_FAILURE_MESSAGE = Object.freeze({
++  DEADLINE_EXHAUSTED:
++    'Binding call deadline exhausted before the parent responded',
++  INVALID_ARGUMENTS:
++    'Binding call name or arguments exceed the host-call protocol bounds',
++  PROTOCOL_VIOLATION:
++    'Binding call refused: host-call shared state violated the protocol',
++  RECURSION_REFUSED:
++    'Binding call refused: nested binding-call budget exhausted',
++  RESPONSE_TOO_LARGE:
++    'Binding call response exceeds the bounded host-call response size',
++  TARGET_FAILED: 'Binding call target failed',
++});
++
++const HOST_CALL_CONTRACT_MESSAGE = Object.freeze({
++  DELEGATE_REQUIRED: 'host-call responder delegate must be a function',
++  DESCRIPTOR_INVALID:
++    'host-call descriptor must carry the protocol-sized SharedArrayBuffer',
++  POST_TO_PARENT_REQUIRED:
++    'host-call client postToParent must be a function',
++});
++
++// Responder outcome statuses (observable by tests and diagnostics; the
++// blocked worker only ever sees the shared-buffer state).
++const HOST_CALL_RESPONDER_STATUS = Object.freeze({
++  DROPPED_RETIRED: 'dropped_retired',
++  DROPPED_STALE: 'dropped_stale',
++  FAILED: 'responder_failed',
++  RESPONDED: 'responded',
++});
++
++function isHostCallCodeRetryable(code) {
++  return HOST_CALL_RETRYABLE_CODES.has(code);
++}
++
++function hostCallFailureRecord(code, message) {
++  return Object.freeze({
++    code,
++    message: String(message).slice(0, HOST_CALL_MAX_FAILURE_MESSAGE_CHARS),
++    retryable: isHostCallCodeRetryable(code),
++  });
++}
++
++// Thrown-error shape matches the worker's typed binding-call denies:
++// jco lifts `error.payload` into the WIT `binding-call-error` record.
++function createHostCallFailure(record) {
++  const error = new Error(record.message);
++  error.payload = record;
++  return error;
++}
++
++function createHostCallDescriptor() {
++  return Object.freeze({
++    buffer: new SharedArrayBuffer(HOST_CALL_BUFFER_BYTES),
++  });
++}
++
++function hostCallViews(descriptor) {
++  if (!(descriptor?.buffer instanceof SharedArrayBuffer) ||
++      descriptor.buffer.byteLength !== HOST_CALL_BUFFER_BYTES) {
++    throw new TypeError(HOST_CALL_CONTRACT_MESSAGE.DESCRIPTOR_INVALID);
++  }
++  return {
++    control: new Int32Array(descriptor.buffer, 0, HOST_CALL_CONTROL_SLOTS),
++    requestBytes: new Uint8Array(
++      descriptor.buffer,
++      HOST_CALL_REQUEST_OFFSET,
++      HOST_CALL_MAX_REQUEST_BYTES,
++    ),
++    responseBytes: new Uint8Array(
++      descriptor.buffer,
++      HOST_CALL_RESPONSE_OFFSET,
++      HOST_CALL_MAX_RESPONSE_BYTES,
++    ),
++  };
++}
++
++function encodeHostCallRequest(name, argumentsJson) {
++  if (typeof name !== 'string' || name.length === 0 ||
++      name.length > HOST_CALL_MAX_BINDING_NAME_CHARS ||
++      typeof argumentsJson !== 'string') {
++    return null;
++  }
++  const encoded = Buffer.from(
++    JSON.stringify({argumentsJson, name}),
++    BYTE_ENCODING,
++  );
++  return encoded.byteLength > HOST_CALL_MAX_REQUEST_BYTES ? null : encoded;
++}
++
++function clearHostCallResponseSlots(control) {
++  Atomics.store(control, HOST_CALL_SLOT.RESPONSE_REQUEST_ID, 0);
++  Atomics.store(control, HOST_CALL_SLOT.RESPONSE_KIND,
++    HOST_CALL_RESPONSE_KIND.NONE);
++  Atomics.store(control, HOST_CALL_SLOT.RESPONSE_LENGTH, 0);
++}
++
++// Blocking wait loop (WORKER THREAD ONLY). Handles spurious wakes by
++// re-checking the control word; on deadline expiry it poisons the
++// request id so a late parent write is dropped, releases the slot, and
++// throws the typed deadline failure.
++function awaitHostCallResponse(control, deadlineMs, now) {
++  while (Atomics.load(control, HOST_CALL_SLOT.STATE) ===
++      HOST_CALL_STATE.PENDING) {
++    const remainingMs = deadlineMs - now();
++    if (remainingMs <= 0) {
++      Atomics.add(control, HOST_CALL_SLOT.REQUEST_ID, 1);
++      Atomics.store(control, HOST_CALL_SLOT.STATE, HOST_CALL_STATE.IDLE);
++      throw createHostCallFailure(hostCallFailureRecord(
++        HOST_CALL_ERROR_CODE.DEADLINE_EXHAUSTED,
++        HOST_CALL_FAILURE_MESSAGE.DEADLINE_EXHAUSTED,
++      ));
++    }
++    Atomics.wait(control, HOST_CALL_SLOT.STATE, HOST_CALL_STATE.PENDING,
++      remainingMs);
++  }
++}
++
++function decodeHostCallTypedFailure(text) {
++  let parsed = null;
++  try {
++    parsed = JSON.parse(text);
++  } catch {
++    parsed = null;
++  }
++  if (typeof parsed?.code !== 'string' ||
++      typeof parsed?.message !== 'string') {
++    return createHostCallFailure(hostCallFailureRecord(
++      HOST_CALL_ERROR_CODE.PROTOCOL_VIOLATION,
++      HOST_CALL_FAILURE_MESSAGE.PROTOCOL_VIOLATION,
++    ));
++  }
++  return createHostCallFailure(Object.freeze({
++    code: parsed.code,
++    message: parsed.message,
++    retryable: parsed.retryable === true,
++  }));
++}
++
++function readHostCallResponse(control, responseBytes, requestId) {
++  const respondedId =
++    Atomics.load(control, HOST_CALL_SLOT.RESPONSE_REQUEST_ID);
++  const kind = Atomics.load(control, HOST_CALL_SLOT.RESPONSE_KIND);
++  const length = Atomics.load(control, HOST_CALL_SLOT.RESPONSE_LENGTH);
++  clearHostCallResponseSlots(control);
++  Atomics.store(control, HOST_CALL_SLOT.REQUEST_LENGTH, 0);
++  Atomics.store(control, HOST_CALL_SLOT.STATE, HOST_CALL_STATE.IDLE);
++  const kindKnown = kind === HOST_CALL_RESPONSE_KIND.OK ||
++    kind === HOST_CALL_RESPONSE_KIND.TYPED_FAILURE;
++  if (respondedId !== requestId || !kindKnown ||
++      length < 0 || length > HOST_CALL_MAX_RESPONSE_BYTES) {
++    throw createHostCallFailure(hostCallFailureRecord(
++      HOST_CALL_ERROR_CODE.PROTOCOL_VIOLATION,
++      HOST_CALL_FAILURE_MESSAGE.PROTOCOL_VIOLATION,
++    ));
++  }
++  const text =
++    Buffer.from(responseBytes.slice(0, length)).toString(BYTE_ENCODING);
++  if (kind === HOST_CALL_RESPONSE_KIND.OK) return text;
++  throw decodeHostCallTypedFailure(text);
++}
++
++function performHostCall(views, encoded, deadlineMs, now, postToParent) {
++  const {control, requestBytes, responseBytes} = views;
++  const requestId =
++    (Atomics.add(control, HOST_CALL_SLOT.REQUEST_ID, 1) + 1) | 0;
++  clearHostCallResponseSlots(control);
++  requestBytes.set(encoded, 0);
++  Atomics.store(control, HOST_CALL_SLOT.REQUEST_LENGTH, encoded.byteLength);
++  Atomics.store(control, HOST_CALL_SLOT.STATE, HOST_CALL_STATE.PENDING);
++  postToParent({requestId, type: HOST_CALL_MESSAGE.REQUEST});
++  awaitHostCallResponse(control, deadlineMs, now);
++  return readHostCallResponse(control, responseBytes, requestId);
++}
++
++/**
++ * Worker-side blocking client. `call(name, argumentsJson)` returns the
++ * parent's result string or throws a typed failure whose `error.payload`
++ * is the WIT `binding-call-error` record. MUST only run on a worker
++ * thread: it blocks in `Atomics.wait` until the parent responds or the
++ * absolute deadline expires.
++ *
++ * @param {object} options
++ * @param {{buffer: SharedArrayBuffer}} options.descriptor
++ * @param {(message: object) => void} options.postToParent
++ * @param {number} [options.deadlineMs] absolute epoch-ms deadline;
++ *   absent -> now + HOST_CALL_DEFAULT_WAIT_BUDGET_MS
++ * @param {() => number} [options.nowProvider]
++ * @param {number} [options.maxCalls] per-invocation bridged-call budget
++ *   (defaults to MAX_NESTED_BINDING_CALLS)
++ * @return {{call: (name: string, argumentsJson: string) => string}}
++ */
++function createWorkerHostCallClient(options) {
++  const views = hostCallViews(options.descriptor);
++  const postToParent = options.postToParent;
++  if (typeof postToParent !== 'function') {
++    throw new TypeError(HOST_CALL_CONTRACT_MESSAGE.POST_TO_PARENT_REQUIRED);
++  }
++  const now = typeof options.nowProvider === 'function' ?
++    options.nowProvider :
++    Date.now;
++  const deadlineMs = Number.isFinite(options.deadlineMs) ?
++    options.deadlineMs :
++    now() + HOST_CALL_DEFAULT_WAIT_BUDGET_MS;
++  const maxCalls =
++    Number.isSafeInteger(options.maxCalls) && options.maxCalls > 0 ?
++      options.maxCalls :
++      MAX_NESTED_BINDING_CALLS;
++  let callsStarted = 0;
++  let outstanding = 0;
++  return Object.freeze({
++    call(name, argumentsJson) {
++      if (callsStarted >= maxCalls ||
++          outstanding >= MAX_OUTSTANDING_HOST_CALLS) {
++        throw createHostCallFailure(hostCallFailureRecord(
++          HOST_CALL_ERROR_CODE.RECURSION_REFUSED,
++          HOST_CALL_FAILURE_MESSAGE.RECURSION_REFUSED,
++        ));
++      }
++      callsStarted += 1;
++      const encoded = encodeHostCallRequest(name, argumentsJson);
++      if (encoded === null) {
++        throw createHostCallFailure(hostCallFailureRecord(
++          HOST_CALL_ERROR_CODE.INVALID_ARGUMENTS,
++          HOST_CALL_FAILURE_MESSAGE.INVALID_ARGUMENTS,
++        ));
++      }
++      outstanding += 1;
++      try {
++        return performHostCall(views, encoded, deadlineMs, now,
++          postToParent);
++      } finally {
++        outstanding -= 1;
++      }
++    },
++  });
++}
++
++function readHostCallRequest(control, requestBytes) {
++  const length = Atomics.load(control, HOST_CALL_SLOT.REQUEST_LENGTH);
++  if (length <= 0 || length > HOST_CALL_MAX_REQUEST_BYTES) return null;
++  let parsed = null;
++  try {
++    parsed = JSON.parse(
++      Buffer.from(requestBytes.slice(0, length)).toString(BYTE_ENCODING),
++    );
++  } catch {
++    parsed = null;
++  }
++  if (typeof parsed?.name !== 'string' ||
++      typeof parsed?.argumentsJson !== 'string') {
++    return null;
++  }
++  return parsed;
++}
++
++// Normalize the async delegate outcome to {ok} | {failure}. A throw
++// carrying a KNOWN typed code keeps its (bounded) message; any unknown
++// throw maps to the fixed target_failed record so parent-side internals
++// never leak into the guest.
++async function executeHostCallDelegate(delegate, request) {
++  let value;
++  try {
++    value = await delegate({
++      argumentsJson: request.argumentsJson,
++      name: request.name,
++    });
++  } catch (error) {
++    const thrownCode = error?.code;
++    if (typeof thrownCode === 'string' &&
++        HOST_CALL_KNOWN_CODES.has(thrownCode) &&
++        thrownCode !== HOST_CALL_ERROR_CODE.TARGET_FAILED) {
++      return {failure: hostCallFailureRecord(thrownCode, error.message)};
++    }
++    return {
++      failure: hostCallFailureRecord(
++        HOST_CALL_ERROR_CODE.TARGET_FAILED,
++        HOST_CALL_FAILURE_MESSAGE.TARGET_FAILED,
++      ),
++    };
++  }
++  if (typeof value === 'string') return {ok: value};
++  return {
++    failure: hostCallFailureRecord(
++      HOST_CALL_ERROR_CODE.TARGET_FAILED,
++      HOST_CALL_FAILURE_MESSAGE.TARGET_FAILED,
++    ),
++  };
++}
++
++function encodeHostCallOutcome(outcome) {
++  if (outcome.ok !== undefined) {
++    const bytes = Buffer.from(outcome.ok, BYTE_ENCODING);
++    if (bytes.byteLength <= HOST_CALL_MAX_RESPONSE_BYTES) {
++      return {bytes, kind: HOST_CALL_RESPONSE_KIND.OK};
++    }
++    return {
++      bytes: Buffer.from(JSON.stringify(hostCallFailureRecord(
++        HOST_CALL_ERROR_CODE.RESPONSE_TOO_LARGE,
++        HOST_CALL_FAILURE_MESSAGE.RESPONSE_TOO_LARGE,
++      )), BYTE_ENCODING),
++      kind: HOST_CALL_RESPONSE_KIND.TYPED_FAILURE,
++    };
++  }
++  return {
++    bytes: Buffer.from(JSON.stringify(outcome.failure), BYTE_ENCODING),
++    kind: HOST_CALL_RESPONSE_KIND.TYPED_FAILURE,
++  };
++}
++
++/**
++ * Parent-side async responder for one invocation's host-call channel.
++ * `handleRequest(message)` never throws; it resolves to a status from
++ * HOST_CALL_RESPONDER_STATUS. `retire()` closes the channel so any late
++ * delegate completion is dropped instead of touching the shared buffer.
++ *
++ * @param {object} options
++ * @param {{buffer: SharedArrayBuffer}} options.descriptor
++ * @param {(call: {name: string, argumentsJson: string}) =>
++ *   Promise<string>} options.delegate
++ * @param {{warn?: Function}} [options.logger]
++ * @return {{handleRequest: Function, retire: Function}}
++ */
++function createParentHostCallResponder(options) {
++  const {control, requestBytes, responseBytes} =
++    hostCallViews(options.descriptor);
++  const delegate = options.delegate;
++  if (typeof delegate !== 'function') {
++    throw new TypeError(HOST_CALL_CONTRACT_MESSAGE.DELEGATE_REQUIRED);
++  }
++  const logger = options.logger;
++  let closed = false;
++
++  function writeHostCallResponse(requestId, kind, bytes) {
++    if (closed) return {status: HOST_CALL_RESPONDER_STATUS.DROPPED_RETIRED};
++    if (Atomics.load(control, HOST_CALL_SLOT.REQUEST_ID) !== requestId) {
++      return {status: HOST_CALL_RESPONDER_STATUS.DROPPED_STALE};
++    }
++    responseBytes.set(bytes, 0);
++    Atomics.store(control, HOST_CALL_SLOT.RESPONSE_LENGTH, bytes.byteLength);
++    Atomics.store(control, HOST_CALL_SLOT.RESPONSE_KIND, kind);
++    Atomics.store(control, HOST_CALL_SLOT.RESPONSE_REQUEST_ID, requestId);
++    const previous = Atomics.compareExchange(
++      control,
++      HOST_CALL_SLOT.STATE,
++      HOST_CALL_STATE.PENDING,
++      HOST_CALL_STATE.RESPONDED,
++    );
++    if (previous !== HOST_CALL_STATE.PENDING) {
++      return {status: HOST_CALL_RESPONDER_STATUS.DROPPED_STALE};
++    }
++    Atomics.notify(control, HOST_CALL_SLOT.STATE);
++    return {status: HOST_CALL_RESPONDER_STATUS.RESPONDED};
++  }
++
++  async function respond(message) {
++    const requestId = message?.requestId;
++    if (closed) return {status: HOST_CALL_RESPONDER_STATUS.DROPPED_RETIRED};
++    if (!Number.isSafeInteger(requestId) ||
++        Atomics.load(control, HOST_CALL_SLOT.REQUEST_ID) !== requestId ||
++        Atomics.load(control, HOST_CALL_SLOT.STATE) !==
++          HOST_CALL_STATE.PENDING) {
++      return {status: HOST_CALL_RESPONDER_STATUS.DROPPED_STALE};
++    }
++    const request = readHostCallRequest(control, requestBytes);
++    const outcome = request === null ?
++      {
++        failure: hostCallFailureRecord(
++          HOST_CALL_ERROR_CODE.PROTOCOL_VIOLATION,
++          HOST_CALL_FAILURE_MESSAGE.PROTOCOL_VIOLATION,
++        ),
++      } :
++      await executeHostCallDelegate(delegate, request);
++    const {kind, bytes} = encodeHostCallOutcome(outcome);
++    return writeHostCallResponse(requestId, kind, bytes);
++  }
++
++  return Object.freeze({
++    async handleRequest(message) {
++      try {
++        return await respond(message);
++      } catch (error) {
++        logger?.warn?.(HOST_CALL_RESPONDER_STATUS.FAILED, {
++          message: error?.message,
++        });
++        return {status: HOST_CALL_RESPONDER_STATUS.FAILED};
++      }
++    },
++    retire() {
++      closed = true;
++    },
++  });
++}
++
++export {
++  HOST_CALL_BUFFER_BYTES,
++  HOST_CALL_ERROR_CODE,
++  HOST_CALL_MAX_REQUEST_BYTES,
++  HOST_CALL_MAX_RESPONSE_BYTES,
++  HOST_CALL_MESSAGE,
++  HOST_CALL_RESPONDER_STATUS,
++  HOST_CALL_RESPONSE_KIND,
++  HOST_CALL_SLOT,
++  HOST_CALL_STATE,
++  MAX_NESTED_BINDING_CALLS,
++  MAX_OUTSTANDING_HOST_CALLS,
++  createHostCallDescriptor,
++  createParentHostCallResponder,
++  createWorkerHostCallClient,
++  isHostCallCodeRetryable,
++};
+diff --git a/src/runtime/request-cell-bridge-delegate.js b/src/runtime/request-cell-bridge-delegate.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..56a150921cf60c587ba800d9f27553c551fc7b13
+--- /dev/null
++++ b/src/runtime/request-cell-bridge-delegate.js
+@@ -0,0 +1,41 @@
++/**
++ * Request-Cell call-bridge delegate seam for the WasmComponentDriver
++ * (extracted, call-cell-driver-invoke precedent, to keep the driver
++ * under the file-size cap).
++ *
++ * The driver stores one injected async bridge function (the future
++ * RequestCellCallBridge owner's invoke) and, for every NON-call-cell
++ * invocation, hands the component runtime a per-invocation delegate that
++ * carries the replica context and invocation so the bridge can derive
++ * identity, authority, and deadline parent-side.
++ *
++ * Delegate contract (what the bridge owner implements):
++ *   bridgeInvoke({name, argumentsJson, invocation, replicaContext})
++ *     -> Promise<string>            (the binding call's JSON result)
++ *   Typed refusals throw an Error whose `code` is a member of
++ *   HOST_CALL_ERROR_CODE (src/runtime/cell-host-call-protocol.js);
++ *   retryability is derived from the protocol's canonical map. Any other
++ *   throw is normalized to the fixed `target_failed` failure without
++ *   leaking parent-side internals to the guest.
++ */
++
++const REQUEST_CALL_BRIDGE_REQUIRED =
++  'request Cell call bridge must be a function';
++
++function assertRequestCallBridge(bridgeInvoke) {
++  if (typeof bridgeInvoke !== 'function') {
++    throw new TypeError(REQUEST_CALL_BRIDGE_REQUIRED);
++  }
++  return bridgeInvoke;
++}
++
++function buildRequestCellBridgeDelegate(
++  bridgeInvoke,
++  replicaContext,
++  invocation,
++) {
++  if (typeof bridgeInvoke !== 'function') return undefined;
++  return (call) => bridgeInvoke({...call, invocation, replicaContext});
++}
++
++export {assertRequestCallBridge, buildRequestCellBridgeDelegate};
+diff --git a/src/runtime/wasi-component-cell-runtime.js b/src/runtime/wasi-component-cell-runtime.js
+index 227c3cb1eff5281a51513241158ca3765dd9a366..4c469246c35da9eeeffc2caea0d49deee7ea83f9 100644
+--- a/src/runtime/wasi-component-cell-runtime.js
++++ b/src/runtime/wasi-component-cell-runtime.js
+@@ -12,6 +12,11 @@ import {
+   requestCellTableIndexEstimatedBytes,
+   requestCellTableIndexRowBound,
+ } from './request-cell-table-read-index.js';
++import {
++  HOST_CALL_MESSAGE,
++  createHostCallDescriptor,
++  createParentHostCallResponder,
++} from './cell-host-call-protocol.js';
+ 
+ const BYTE_ENCODING = 'utf8';
+ const STARTUP_TIMEOUT_MS = 10_000;
+@@ -117,6 +122,28 @@ function invocationWallBudget(state, options) {
+   });
+ }
+ 
++// Attach the per-invocation host-call channel (descriptor in the invoke
++// payload + async responder on this thread) when an authorized binding
++// call delegate is present. Mode restriction: call-mode Cells never get
++// a live bridge, even when the options carry a delegate.
++function attachInvocationHostCall(state, payload, options) {
++  if (typeof options.bindingCallDelegate !== 'function' ||
++      state.cell.world === CELL_WORLD.CALL) {
++    return null;
++  }
++  const descriptor = createHostCallDescriptor();
++  payload.hostCall = {descriptor};
++  return createParentHostCallResponder({
++    delegate: options.bindingCallDelegate,
++    descriptor,
++  });
++}
++
++function releaseInvocationHostCall(state) {
++  state.hostCallResponder?.retire();
++  state.hostCallResponder = null;
++}
++
+ function resolveCellWorkerPath() {
+   return resolvePackagedRuntimeFile({
+     bundledFileName: CELL_WORKER_BUNDLE_FILE,
+@@ -188,6 +215,7 @@ class WasiComponentCellRuntime {
+       cell,
+       componentInvocationCount: 0,
+       generation: `request-cell-generation-${this.nextGeneration}`,
++      hostCallResponder: null,
+       pending: new Map(),
+       ready: false,
+       worker,
+@@ -218,6 +246,13 @@ class WasiComponentCellRuntime {
+       state.readyResolve?.();
+       return;
+     }
++    if (message.type === HOST_CALL_MESSAGE.REQUEST) {
++      // Fire-and-forget: the responder resolves the delegate on this
++      // thread and answers through the shared buffer, never blocking the
++      // parent message loop. handleRequest never rejects.
++      void state.hostCallResponder?.handleRequest(message);
++      return;
++    }
+     if (message.type === CELL_MESSAGE.START_FAILED) {
+       state.readyReject?.(new WasiComponentCellError(
+         message.error?.code ||
+@@ -415,10 +450,17 @@ class WasiComponentCellRuntime {
+       initialCpu,
+       state.cell.budgets.cpu_time_ms,
+     );
+-    const payload = {args, tableReads, tables: options.tables || []};
++    const payload = {
++      args,
++      deadlineMs: wallBudget.deadlineMs,
++      tableReads,
++      tables: options.tables || [],
++    };
+     if (options.exportName !== undefined) {
+       payload.exportName = options.exportName;
+     }
++    state.hostCallResponder =
++      attachInvocationHostCall(state, payload, options);
+     let emitBuffer;
+     if (options.callContext !== undefined) {
+       emitBuffer = new SharedArrayBuffer(CELL_EMIT_BUFFER_BYTES);
+@@ -451,6 +493,9 @@ class WasiComponentCellRuntime {
+       ]);
+     } finally {
+       cpuMonitor.cancel();
++      // Late host-call responses after the invocation settles are
++      // dropped: retiring the responder closes the shared channel.
++      releaseInvocationHostCall(state);
+     }
+     state.componentInvocationCount += 1;
+     await this.assertCpuBudget(
+diff --git a/src/runtime/wasi-component-cell-worker.js b/src/runtime/wasi-component-cell-worker.js
+index 49bbd6444d0b3690d6d23d017ae625da2c89b513..bbee59e2ed33d5efaa756a6d0cefdd6bc1a3e3ef 100644
+--- a/src/runtime/wasi-component-cell-worker.js
++++ b/src/runtime/wasi-component-cell-worker.js
+@@ -10,6 +10,7 @@ import {
+   requestCellTableIndexEstimatedBytes,
+   requestCellTableIndexRowBound,
+ } from './request-cell-table-read-index.js';
++import {createWorkerHostCallClient} from './cell-host-call-protocol.js';
+ 
+ const WORKER_MESSAGE = Object.freeze({
+   INVOKE: 'invoke',
+@@ -350,15 +351,28 @@ async function invoke(message) {
+   }
+ }
+ 
+-// Per-invocation request-call bridge seam: the request-call bridge quest
+-// installs a synchronous hook here (built from the invoke payload's
+-// bridge descriptor). Contract: bridge(name, argumentsJson) -> string;
+-// typed failures throw with error.payload = {code, message, retryable}
+-// where code comes from BINDING_CALL_ERROR_CODE.
++// Per-invocation request-call bridge seam: an invoke payload carrying a
++// host-call descriptor (installed by the parent runtime for authorized
++// request invocations) gets a blocking protocol client whose deadline is
++// the invocation's absolute deadline (the protocol owner applies a
++// conservative fallback wait budget when none rides the payload).
++// Contract: bridge(name, argumentsJson) -> string; typed failures throw
++// with error.payload = {code, message, retryable} where code comes from
++// BINDING_CALL_ERROR_CODE or the protocol's HOST_CALL_ERROR_CODE.
+ function resolveMessageBindingCallBridge(message) {
+-  return typeof message.bindingCallBridge === 'function' ?
+-    message.bindingCallBridge :
+-    null;
++  if (message.hostCall?.descriptor === undefined) return null;
++  try {
++    const client = createWorkerHostCallClient({
++      deadlineMs: message.deadlineMs,
++      descriptor: message.hostCall.descriptor,
++      postToParent: (request) => parentPort.postMessage(request),
++    });
++    return (name, argumentsJson) => client.call(name, argumentsJson);
++  } catch {
++    // Malformed descriptor: fall back to the typed bridge-unavailable
++    // refusal instead of failing the whole invocation.
++    return null;
++  }
+ }
+ 
+ function resolveMessageCallContext(message) {
+diff --git a/src/runtime/wasm-component-driver.js b/src/runtime/wasm-component-driver.js
+index 30f9764f65fe253dc8ddb348ff25eecc943400c6..b53774305ac5bb56c8aff0801ad879f507782529 100644
+--- a/src/runtime/wasm-component-driver.js
++++ b/src/runtime/wasm-component-driver.js
+@@ -40,6 +40,10 @@ import {
+   invokeCallCell,
+   isCallCell,
+ } from './call-cell-driver-invoke.js';
++import {
++  assertRequestCallBridge,
++  buildRequestCellBridgeDelegate,
++} from './request-cell-bridge-delegate.js';
+ import {
+   readRequestCellContexts,
+   writeRequestCellEffects,
+@@ -251,6 +255,7 @@ class WasmComponentDriver extends RuntimeDriver {
+       options.componentRuntime || new WasiComponentCellRuntime();
+     this._requestCells = new Map();
+     this._replicaContexts = new Map();
++    this._requestCallBridge = null;
+   }
+ 
+   setArtifactLoader(loader) {
+@@ -260,6 +265,10 @@ class WasmComponentDriver extends RuntimeDriver {
+     this._artifactLoader = loader;
+   }
+ 
++  setRequestCallBridge(bridgeInvoke) {
++    this._requestCallBridge = assertRequestCallBridge(bridgeInvoke);
++  }
++
+   requiresRuntimeReconciliation(definition) {
+     return isRequestCellDefinition(definition);
+   }
+@@ -719,6 +728,11 @@ class WasmComponentDriver extends RuntimeDriver {
+         (reason) => cancellationToken.cancel(reason),
+         {
+           beforeComponentInvoke: invocation.assertCurrentTarget,
++          bindingCallDelegate: buildRequestCellBridgeDelegate(
++            this._requestCallBridge,
++            currentContext,
++            invocation,
++          ),
+           deadlineMs: invocation.deadlineMs,
+           tables,
+         },
+diff --git a/test/runtime/cell-host-call-protocol.test.js b/test/runtime/cell-host-call-protocol.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..6150092ddadfc9d48669abecd31da57c96dc4a78
+--- /dev/null
++++ b/test/runtime/cell-host-call-protocol.test.js
+@@ -0,0 +1,403 @@
++/**
++ * Unit proof of the worker-to-parent host-call protocol owner
++ * (src/runtime/cell-host-call-protocol.js) over a REAL SharedArrayBuffer
++ * with the blocking client running inside a REAL worker_threads Worker
++ * (Atomics.wait is forbidden on the main thread, so the client side of
++ * every test executes production-true on a worker thread via an inline
++ * eval fixture), while the async responder runs on the test main thread.
++ *
++ * Covers the brief's worker-bridge rules: success round trip, typed
++ * terminal and retryable failures, delegate-internals containment,
++ * deadline timeout with a LATE parent write dropped and a SECOND call on
++ * the same buffer left uncorrupted (request-id epoch proof), oversized
++ * response refusal, malformed shared-state refusal, the one-outstanding /
++ * nested-call budget, and worker termination while the parent is pending.
++ */
++import assert from 'node:assert/strict';
++import {test} from 'node:test';
++import {Worker} from 'node:worker_threads';
++
++import {
++  HOST_CALL_BUFFER_BYTES,
++  HOST_CALL_ERROR_CODE,
++  HOST_CALL_MAX_REQUEST_BYTES,
++  HOST_CALL_MAX_RESPONSE_BYTES,
++  HOST_CALL_MESSAGE,
++  HOST_CALL_RESPONDER_STATUS,
++  HOST_CALL_RESPONSE_KIND,
++  HOST_CALL_SLOT,
++  HOST_CALL_STATE,
++  MAX_NESTED_BINDING_CALLS,
++  MAX_OUTSTANDING_HOST_CALLS,
++  createHostCallDescriptor,
++  createParentHostCallResponder,
++  isHostCallCodeRetryable,
++} from '../../src/runtime/cell-host-call-protocol.js';
++
++const PROTOCOL_MODULE_URL =
++  new URL('../../src/runtime/cell-host-call-protocol.js', import.meta.url)
++    .href;
++
++// Inline CommonJS eval fixture: drives the production blocking client on
++// a worker thread. Instructions arrive over parentPort; each client call
++// blocks the worker (Atomics.wait) until the main-thread responder
++// answers through the shared buffer or the client deadline expires.
++const CLIENT_WORKER_SOURCE = `
++const {parentPort, workerData} = require('node:worker_threads');
++const protocolPromise = import(workerData.protocolModuleUrl);
++let client = null;
++parentPort.on('message', (instruction) => {
++  void protocolPromise.then((protocol) => {
++    if (instruction.op === 'create-client') {
++      client = protocol.createWorkerHostCallClient({
++        deadlineMs: Date.now() + instruction.waitBudgetMs,
++        descriptor: workerData.descriptor,
++        maxCalls: instruction.maxCalls,
++        postToParent: (request) => parentPort.postMessage(request),
++      });
++      parentPort.postMessage({kind: 'created'});
++      return;
++    }
++    try {
++      const ok = client.call(instruction.name, instruction.argumentsJson);
++      parentPort.postMessage({kind: 'call-result', ok});
++    } catch (error) {
++      parentPort.postMessage({
++        kind: 'call-result',
++        payload: error.payload ?? {message: error.message},
++      });
++    }
++  });
++});
++parentPort.postMessage({kind: 'online'});
++`;
++
++const GENEROUS_WAIT_BUDGET_MS = 5000;
++const SHORT_WAIT_BUDGET_MS = 250;
++const UNKNOWN_RESPONSE_KIND = 9;
++const MALFORMED_RESPONSE_LENGTH = 4;
++
++class ClientHarness {
++  constructor(onHostCallRequest) {
++    this.descriptor = createHostCallDescriptor();
++    this.received = [];
++    this.waiters = [];
++    this.worker = new Worker(CLIENT_WORKER_SOURCE, {
++      eval: true,
++      workerData: {
++        descriptor: this.descriptor,
++        protocolModuleUrl: PROTOCOL_MODULE_URL,
++      },
++    });
++    this.worker.on('message', (message) => {
++      if (message.type === HOST_CALL_MESSAGE.REQUEST) {
++        onHostCallRequest(message);
++        return;
++      }
++      const waiter = this.waiters.shift();
++      if (waiter) waiter(message);
++      else this.received.push(message);
++    });
++  }
++
++  nextMessage() {
++    if (this.received.length > 0) {
++      return Promise.resolve(this.received.shift());
++    }
++    return new Promise((resolve) => this.waiters.push(resolve));
++  }
++
++  async ready() {
++    const message = await this.nextMessage();
++    assert.equal(message.kind, 'online');
++  }
++
++  async createClient(waitBudgetMs, maxCalls) {
++    this.worker.postMessage({maxCalls, op: 'create-client', waitBudgetMs});
++    const message = await this.nextMessage();
++    assert.equal(message.kind, 'created');
++  }
++
++  async call(name, argumentsJson) {
++    this.worker.postMessage({argumentsJson, name, op: 'call'});
++    const message = await this.nextMessage();
++    assert.equal(message.kind, 'call-result');
++    return message;
++  }
++
++  async close() {
++    await this.worker.terminate();
++  }
++}
++
++function deferred() {
++  let resolve;
++  let reject;
++  const promise = new Promise((res, rej) => {
++    resolve = res;
++    reject = rej;
++  });
++  return {promise, reject, resolve};
++}
++
++test('protocol bounds and retryability map stay sealed', () => {
++  assert.equal(MAX_OUTSTANDING_HOST_CALLS, 1);
++  assert.equal(MAX_NESTED_BINDING_CALLS, 1);
++  assert.ok(HOST_CALL_BUFFER_BYTES >
++      HOST_CALL_MAX_REQUEST_BYTES + HOST_CALL_MAX_RESPONSE_BYTES);
++  assert.equal(
++    isHostCallCodeRetryable(HOST_CALL_ERROR_CODE.TARGET_UNAVAILABLE),
++    true,
++  );
++  for (const code of Object.values(HOST_CALL_ERROR_CODE)) {
++    if (code === HOST_CALL_ERROR_CODE.TARGET_UNAVAILABLE) continue;
++    assert.equal(isHostCallCodeRetryable(code), false, code);
++  }
++});
++
++test('success round trip: blocked worker client gets the delegate result',
++  async () => {
++    const seen = [];
++    let responder = null;
++    const harness = new ClientHarness(
++      (message) => void responder.handleRequest(message),
++    );
++    responder = createParentHostCallResponder({
++      delegate: async (call) => {
++        seen.push(call);
++        return JSON.stringify({echo: call.name});
++      },
++      descriptor: harness.descriptor,
++    });
++    try {
++      await harness.ready();
++      await harness.createClient(GENEROUS_WAIT_BUDGET_MS);
++      const result = await harness.call('account-summary', '{"a":1}');
++      assert.equal(result.ok, JSON.stringify({echo: 'account-summary'}));
++      assert.deepEqual(seen, [
++        {argumentsJson: '{"a":1}', name: 'account-summary'},
++      ]);
++    } finally {
++      await harness.close();
++    }
++  });
++
++test('typed terminal and retryable failures cross the buffer intact',
++  async () => {
++    let failure = null;
++    let responder = null;
++    const harness = new ClientHarness(
++      (message) => void responder.handleRequest(message),
++    );
++    responder = createParentHostCallResponder({
++      delegate: async () => {
++        throw failure;
++      },
++      descriptor: harness.descriptor,
++    });
++    try {
++      await harness.ready();
++      await harness.createClient(GENEROUS_WAIT_BUDGET_MS, 3);
++
++      failure = Object.assign(new Error('binding not allowed'), {
++        code: HOST_CALL_ERROR_CODE.TARGET_NOT_ALLOWED,
++      });
++      const terminal = await harness.call('restricted', '{}');
++      assert.deepEqual(terminal.payload, {
++        code: HOST_CALL_ERROR_CODE.TARGET_NOT_ALLOWED,
++        message: 'binding not allowed',
++        retryable: false,
++      });
++
++      failure = Object.assign(new Error('target replica warming'), {
++        code: HOST_CALL_ERROR_CODE.TARGET_UNAVAILABLE,
++      });
++      const retryable = await harness.call('warming', '{}');
++      assert.equal(retryable.payload.code,
++        HOST_CALL_ERROR_CODE.TARGET_UNAVAILABLE);
++      assert.equal(retryable.payload.retryable, true);
++
++      failure = new Error('secret parent internals');
++      const unknown = await harness.call('boom', '{}');
++      assert.equal(unknown.payload.code,
++        HOST_CALL_ERROR_CODE.TARGET_FAILED);
++      assert.equal(unknown.payload.retryable, false);
++      assert.doesNotMatch(unknown.payload.message, /secret/u);
++    } finally {
++      await harness.close();
++    }
++  });
++
++test('deadline timeout poisons the request id: the late parent write is ' +
++    'dropped and a second call on the same buffer stays uncorrupted',
++async () => {
++  const delegateGate = deferred();
++  let delegateValue = null;
++  const requestHandled = [];
++  let responder = null;
++  const harness = new ClientHarness((message) => {
++    requestHandled.push(responder.handleRequest(message));
++  });
++  responder = createParentHostCallResponder({
++    delegate: async () => {
++      if (delegateValue !== null) return delegateValue;
++      return delegateGate.promise;
++    },
++    descriptor: harness.descriptor,
++  });
++  try {
++    await harness.ready();
++    await harness.createClient(SHORT_WAIT_BUDGET_MS);
++    const timedOut = await harness.call('slow-binding', '{}');
++    assert.equal(timedOut.payload.code,
++      HOST_CALL_ERROR_CODE.DEADLINE_EXHAUSTED);
++    assert.equal(timedOut.payload.retryable, false);
++
++    // The delegate now completes LATE; the responder must drop the
++    // write because the client bumped the request-id epoch on timeout.
++    delegateGate.resolve('late-value-must-not-leak');
++    const lateOutcome = await requestHandled[0];
++    assert.equal(lateOutcome.status,
++      HOST_CALL_RESPONDER_STATUS.DROPPED_STALE);
++
++    // Second call over the SAME descriptor: fresh client, prompt
++    // delegate; it must see its own response, not the late value.
++    delegateValue = 'fresh-value';
++    await harness.createClient(GENEROUS_WAIT_BUDGET_MS);
++    const second = await harness.call('fresh-binding', '{}');
++    assert.equal(second.ok, 'fresh-value');
++  } finally {
++    await harness.close();
++  }
++});
++
++test('oversized delegate response is refused with the typed bound failure',
++  async () => {
++    let responder = null;
++    const harness = new ClientHarness(
++      (message) => void responder.handleRequest(message),
++    );
++    responder = createParentHostCallResponder({
++      delegate: async () =>
++        'x'.repeat(HOST_CALL_MAX_RESPONSE_BYTES + 1),
++      descriptor: harness.descriptor,
++    });
++    try {
++      await harness.ready();
++      await harness.createClient(GENEROUS_WAIT_BUDGET_MS);
++      const result = await harness.call('huge', '{}');
++      assert.equal(result.payload.code,
++        HOST_CALL_ERROR_CODE.RESPONSE_TOO_LARGE);
++      assert.equal(result.payload.retryable, false);
++    } finally {
++      await harness.close();
++    }
++  });
++
++test('oversized request arguments are refused client-side before posting',
++  async () => {
++    const requests = [];
++    const harness = new ClientHarness((message) => requests.push(message));
++    try {
++      await harness.ready();
++      await harness.createClient(GENEROUS_WAIT_BUDGET_MS, 2);
++      const oversized = await harness.call(
++        'binding',
++        'y'.repeat(HOST_CALL_MAX_REQUEST_BYTES + 1),
++      );
++      assert.equal(oversized.payload.code,
++        HOST_CALL_ERROR_CODE.INVALID_ARGUMENTS);
++      const unnamed = await harness.call('', '{}');
++      assert.equal(unnamed.payload.code,
++        HOST_CALL_ERROR_CODE.INVALID_ARGUMENTS);
++      assert.equal(requests.length, 0,
++        'refused calls never reach the parent');
++    } finally {
++      await harness.close();
++    }
++  });
++
++test('malformed shared state (unknown response kind) is refused typed',
++  async () => {
++    const control =
++        [];
++    const harness = new ClientHarness((message) => {
++      // Manual malformed response: correct request id, unknown kind.
++      const view = new Int32Array(harness.descriptor.buffer);
++      control.push(message.requestId);
++      Atomics.store(view, HOST_CALL_SLOT.RESPONSE_REQUEST_ID,
++        message.requestId);
++      Atomics.store(view, HOST_CALL_SLOT.RESPONSE_KIND,
++        UNKNOWN_RESPONSE_KIND);
++      Atomics.store(view, HOST_CALL_SLOT.RESPONSE_LENGTH,
++        MALFORMED_RESPONSE_LENGTH);
++      Atomics.compareExchange(view, HOST_CALL_SLOT.STATE,
++        HOST_CALL_STATE.PENDING, HOST_CALL_STATE.RESPONDED);
++      Atomics.notify(view, HOST_CALL_SLOT.STATE);
++    });
++    try {
++      await harness.ready();
++      await harness.createClient(GENEROUS_WAIT_BUDGET_MS);
++      const result = await harness.call('binding', '{}');
++      assert.equal(result.payload.code,
++        HOST_CALL_ERROR_CODE.PROTOCOL_VIOLATION);
++      assert.equal(control.length, 1);
++      assert.notEqual(HOST_CALL_RESPONSE_KIND.OK, UNKNOWN_RESPONSE_KIND);
++    } finally {
++      await harness.close();
++    }
++  });
++
++test('second nested binding call in one invocation refuses typed',
++  async () => {
++    let responder = null;
++    const harness = new ClientHarness(
++      (message) => void responder.handleRequest(message),
++    );
++    responder = createParentHostCallResponder({
++      delegate: async () => 'first-result',
++      descriptor: harness.descriptor,
++    });
++    try {
++      await harness.ready();
++      // Default budget: MAX_NESTED_BINDING_CALLS (1).
++      await harness.createClient(GENEROUS_WAIT_BUDGET_MS);
++      const first = await harness.call('binding', '{}');
++      assert.equal(first.ok, 'first-result');
++      const second = await harness.call('binding', '{}');
++      assert.equal(second.payload.code,
++        HOST_CALL_ERROR_CODE.RECURSION_REFUSED);
++      assert.equal(second.payload.retryable, false);
++    } finally {
++      await harness.close();
++    }
++  });
++
++test('worker termination while the parent is pending: the responder ' +
++    'write is dropped without throwing',
++async () => {
++  const delegateGate = deferred();
++  const requestHandled = [];
++  let responder = null;
++  const harness = new ClientHarness((message) => {
++    requestHandled.push(responder.handleRequest(message));
++  });
++  responder = createParentHostCallResponder({
++    delegate: () => delegateGate.promise,
++    descriptor: harness.descriptor,
++  });
++  await harness.ready();
++  await harness.createClient(GENEROUS_WAIT_BUDGET_MS);
++  harness.worker.postMessage({argumentsJson: '{}', name: 'hang', op: 'call'});
++  // Wait until the request reached the parent, then kill the worker
++  // (the runtime retires the responder when the invocation settles).
++  while (requestHandled.length === 0) {
++    await new Promise((resolve) => setImmediate(resolve));
++  }
++  await harness.close();
++  responder.retire();
++  delegateGate.resolve('late-after-termination');
++  const outcome = await requestHandled[0];
++  assert.equal(outcome.status,
++    HOST_CALL_RESPONDER_STATUS.DROPPED_RETIRED);
++});
+diff --git a/test/runtime/service-cell-bridge-roundtrip.test.js b/test/runtime/service-cell-bridge-roundtrip.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..21e8a9cc7bf34364d96ae501c9280ff8f5b3d626
+--- /dev/null
++++ b/test/runtime/service-cell-bridge-roundtrip.test.js
+@@ -0,0 +1,232 @@
++/**
++ * End-to-end request-call bridge round trip through the REAL
++ * WasiComponentCellRuntime + wasi-component-cell-worker.js + the
++ * componentized combined service-cell fixture guest: an authorized
++ * request invocation carrying `options.bindingCallDelegate` gets a live
++ * synchronous `call-binding` host import bridged over the shared-buffer
++ * host-call protocol to the async delegate on the parent thread.
++ *
++ * Proves: the guest receives the delegate's result string; a typed
++ * delegate refusal surfaces to the guest as the WIT binding-call-error;
++ * without a delegate the existing call_bridge_unavailable refusal
++ * stands; and a CALL-mode invocation never receives a live bridge even
++ * when the options carry a delegate (mode restriction holds).
++ */
++import {readFile} from 'node:fs/promises';
++import assert from 'node:assert/strict';
++import {test} from 'node:test';
++
++import {componentize} from '@bytecodealliance/componentize-js';
++import {WasiComponentCellRuntime} from
++  '../../src/runtime/wasi-component-cell-runtime.js';
++import {toCellBatch} from
++  '../../src/runtime/call-cell-value-mapping.js';
++import {HOST_CALL_ERROR_CODE} from
++  '../../src/runtime/cell-host-call-protocol.js';
++
++const CANONICAL_WIT_DIRECTORY = new URL('../../wit', import.meta.url);
++const GUEST_SOURCE_URL = new URL(
++  '../wasm-service/fixtures/service-cell-world/guest.js',
++  import.meta.url,
++);
++const AUTHORING_WORLD = 'service-cell';
++const CELL_WORLD = Object.freeze({
++  CALL: 'call-cell',
++  REQUEST: 'request-cell',
++});
++const CELL_EXPORT = Object.freeze({
++  HANDLE_REQUEST: 'handleRequest',
++  RUN: 'run',
++});
++const DISABLED_ENGINE_FEATURES = [
++  'random',
++  'stdio',
++  'clocks',
++  'http',
++  'fetch-event',
++];
++const EMIT_BUDGET = 4;
++const BRIDGE_UNAVAILABLE_CODE = 'call_bridge_unavailable';
++const CALL_MODE_REFUSAL_CODE = 'not_available_in_call_mode';
++const CELL_BUDGETS = Object.freeze({
++  context_bytes: 1024,
++  cpu_time_ms: 60000,
++  input_bytes: 1048576,
++  memory_bytes: 512 * 1024 * 1024,
++  output_bytes: 1048576,
++  wall_time_ms: 300000,
++});
++const BATCH_ROWS = Object.freeze([Object.freeze({amount: 5})]);
++
++let componentPromise = null;
++
++function componentizeCombinedGuest() {
++  componentPromise ??= readFile(GUEST_SOURCE_URL, 'utf8')
++    .then((guestSource) => componentize(guestSource, {
++      disableFeatures: DISABLED_ENGINE_FEATURES,
++      witPath: CANONICAL_WIT_DIRECTORY.pathname,
++      worldName: AUTHORING_WORLD,
++    }))
++    .then(({component}) => component);
++  return componentPromise;
++}
++
++function createCell(componentBytes, world, exportName) {
++  return Object.freeze({
++    budgets: CELL_BUDGETS,
++    bytes: new Uint8Array(componentBytes),
++    capabilities: ['declared'],
++    exportName,
++    serviceId: `service-cell-bridge-${world}`,
++    world,
++  });
++}
++
++function readNoContexts() {
++  return [];
++}
++
++function writeNoEffects() {}
++
++function callBindingProbe(name, argumentsJson) {
++  return [JSON.stringify({
++    arguments: argumentsJson,
++    name,
++    probe: 'call-binding',
++  })];
++}
++
++async function invokeRequestCell(cellRuntime, cell, args, options) {
++  const value = await cellRuntime.invoke(
++    cell.serviceId,
++    args,
++    readNoContexts,
++    writeNoEffects,
++    () => {},
++    options,
++  );
++  return JSON.parse(value);
++}
++
++test('request invocation with a delegate: the guest receives the ' +
++    'bridged binding-call result',
++async () => {
++  const component = await componentizeCombinedGuest();
++  const cellRuntime = new WasiComponentCellRuntime();
++  const cell = createCell(
++    component, CELL_WORLD.REQUEST, CELL_EXPORT.HANDLE_REQUEST);
++  const delegateCalls = [];
++  await cellRuntime.start(cell);
++  try {
++    const parsed = await invokeRequestCell(
++      cellRuntime,
++      cell,
++      callBindingProbe('account-summary', '{"month":"2026-07"}'),
++      {
++        bindingCallDelegate: async (call) => {
++          delegateCalls.push(call);
++          return JSON.stringify({summary: 'ok', via: call.name});
++        },
++      },
++    );
++    assert.deepEqual(
++      JSON.parse(parsed.value),
++      {summary: 'ok', via: 'account-summary'},
++      'the delegate result string reached the guest through the ' +
++          'synchronous call-binding import',
++    );
++    assert.deepEqual(delegateCalls, [{
++      argumentsJson: '{"month":"2026-07"}',
++      name: 'account-summary',
++    }]);
++  } finally {
++    await cellRuntime.stop(cell.serviceId);
++  }
++});
++
++test('request invocation with a refusing delegate: the guest sees the ' +
++    'typed binding-call-error',
++async () => {
++  const component = await componentizeCombinedGuest();
++  const cellRuntime = new WasiComponentCellRuntime();
++  const cell = createCell(
++    component, CELL_WORLD.REQUEST, CELL_EXPORT.HANDLE_REQUEST);
++  await cellRuntime.start(cell);
++  try {
++    const parsed = await invokeRequestCell(
++      cellRuntime,
++      cell,
++      callBindingProbe('forbidden-binding', '{}'),
++      {
++        bindingCallDelegate: async () => {
++          throw Object.assign(new Error('binding not authorized'), {
++            code: HOST_CALL_ERROR_CODE.TARGET_NOT_ALLOWED,
++          });
++        },
++      },
++    );
++    assert.deepEqual(parsed.callBinding, {
++      code: HOST_CALL_ERROR_CODE.TARGET_NOT_ALLOWED,
++      message: 'binding not authorized',
++      retryable: false,
++    });
++  } finally {
++    await cellRuntime.stop(cell.serviceId);
++  }
++});
++
++test('request invocation without a delegate keeps the typed ' +
++    'call_bridge_unavailable refusal',
++async () => {
++  const component = await componentizeCombinedGuest();
++  const cellRuntime = new WasiComponentCellRuntime();
++  const cell = createCell(
++    component, CELL_WORLD.REQUEST, CELL_EXPORT.HANDLE_REQUEST);
++  await cellRuntime.start(cell);
++  try {
++    const parsed = await invokeRequestCell(
++      cellRuntime,
++      cell,
++      callBindingProbe('account-summary', '{}'),
++      {},
++    );
++    assert.equal(parsed.callBinding.code, BRIDGE_UNAVAILABLE_CODE);
++    assert.equal(parsed.callBinding.retryable, false);
++  } finally {
++    await cellRuntime.stop(cell.serviceId);
++  }
++});
++
++test('call-mode invocation never receives a live bridge even when the ' +
++    'options carry a delegate',
++async () => {
++  const component = await componentizeCombinedGuest();
++  const cellRuntime = new WasiComponentCellRuntime();
++  const cell = createCell(component, CELL_WORLD.CALL, CELL_EXPORT.RUN);
++  let delegateInvocations = 0;
++  await cellRuntime.start(cell);
++  try {
++    const batch = toCellBatch(BATCH_ROWS, BATCH_ROWS.length);
++    const runInvocation = await cellRuntime.invoke(
++      cell.serviceId,
++      [batch, '{}'],
++      readNoContexts,
++      writeNoEffects,
++      () => {},
++      {
++        bindingCallDelegate: async () => {
++          delegateInvocations += 1;
++          return 'never-authorized-in-call-mode';
++        },
++        callContext: {emitBudget: EMIT_BUDGET, nestedCallBudget: 0},
++        exportName: CELL_EXPORT.RUN,
++      },
++    );
++    const runResult = JSON.parse(runInvocation.value);
++    assert.equal(runResult.callBindingRefusal.code, CALL_MODE_REFUSAL_CODE);
++    assert.equal(delegateInvocations, 0,
++      'the delegate must never be reached from call mode');
++  } finally {
++    await cellRuntime.stop(cell.serviceId);
++  }
++});

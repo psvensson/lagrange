@@ -12,6 +12,11 @@ import {
   requestCellTableIndexEstimatedBytes,
   requestCellTableIndexRowBound,
 } from './request-cell-table-read-index.js';
+import {
+  HOST_CALL_MESSAGE,
+  createHostCallDescriptor,
+  createParentHostCallResponder,
+} from './cell-host-call-protocol.js';
 
 const BYTE_ENCODING = 'utf8';
 const STARTUP_TIMEOUT_MS = 10_000;
@@ -117,6 +122,28 @@ function invocationWallBudget(state, options) {
   });
 }
 
+// Attach the per-invocation host-call channel (descriptor in the invoke
+// payload + async responder on this thread) when an authorized binding
+// call delegate is present. Mode restriction: call-mode Cells never get
+// a live bridge, even when the options carry a delegate.
+function attachInvocationHostCall(state, payload, options) {
+  if (typeof options.bindingCallDelegate !== 'function' ||
+      state.cell.world === CELL_WORLD.CALL) {
+    return null;
+  }
+  const descriptor = createHostCallDescriptor();
+  payload.hostCall = {descriptor};
+  return createParentHostCallResponder({
+    delegate: options.bindingCallDelegate,
+    descriptor,
+  });
+}
+
+function releaseInvocationHostCall(state) {
+  state.hostCallResponder?.retire();
+  state.hostCallResponder = null;
+}
+
 function resolveCellWorkerPath() {
   return resolvePackagedRuntimeFile({
     bundledFileName: CELL_WORKER_BUNDLE_FILE,
@@ -188,6 +215,7 @@ class WasiComponentCellRuntime {
       cell,
       componentInvocationCount: 0,
       generation: `request-cell-generation-${this.nextGeneration}`,
+      hostCallResponder: null,
       pending: new Map(),
       ready: false,
       worker,
@@ -216,6 +244,13 @@ class WasiComponentCellRuntime {
     if (message.type === CELL_MESSAGE.READY) {
       state.ready = true;
       state.readyResolve?.();
+      return;
+    }
+    if (message.type === HOST_CALL_MESSAGE.REQUEST) {
+      // Fire-and-forget: the responder resolves the delegate on this
+      // thread and answers through the shared buffer, never blocking the
+      // parent message loop. handleRequest never rejects.
+      void state.hostCallResponder?.handleRequest(message);
       return;
     }
     if (message.type === CELL_MESSAGE.START_FAILED) {
@@ -415,10 +450,17 @@ class WasiComponentCellRuntime {
       initialCpu,
       state.cell.budgets.cpu_time_ms,
     );
-    const payload = {args, tableReads, tables: options.tables || []};
+    const payload = {
+      args,
+      deadlineMs: wallBudget.deadlineMs,
+      tableReads,
+      tables: options.tables || [],
+    };
     if (options.exportName !== undefined) {
       payload.exportName = options.exportName;
     }
+    state.hostCallResponder =
+      attachInvocationHostCall(state, payload, options);
     let emitBuffer;
     if (options.callContext !== undefined) {
       emitBuffer = new SharedArrayBuffer(CELL_EMIT_BUFFER_BYTES);
@@ -451,6 +493,9 @@ class WasiComponentCellRuntime {
       ]);
     } finally {
       cpuMonitor.cancel();
+      // Late host-call responses after the invocation settles are
+      // dropped: retiring the responder closes the shared channel.
+      releaseInvocationHostCall(state);
     }
     state.componentInvocationCount += 1;
     await this.assertCpuBudget(

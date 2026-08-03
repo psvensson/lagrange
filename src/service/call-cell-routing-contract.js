@@ -44,6 +44,14 @@ const CALL_CELL_PARTIAL_KEY_PREFIX = 'partial:';
 // the same selection from the same string.
 const CALL_CELL_SLOT_SUFFIX_SEPARATOR = '#slot-';
 const CALL_CELL_REDUCE_SUFFIX = '#reduce';
+// Bridged child-call identity: a request Cell's bridged binding call
+// dispatches under `<outerInvocationId>#call-<ordinal>` so its durable
+// fence journal and coordination rows are keyed by a system-owned
+// identity derived from (and replay-scoped to) the outer request
+// invocation. Deriving a child of a child is refused at the grammar
+// (depth guard), and caller-supplied idempotency keys may never carry
+// the separator.
+const CALL_CELL_CHILD_CALL_SEPARATOR = '#call-';
 const HASH_ALGORITHM = 'sha256';
 const HASH_ENCODING = 'hex';
 const BYTE_ENCODING = 'utf8';
@@ -51,6 +59,12 @@ const CALL_CELL_CONTRACT_MESSAGE = Object.freeze({
   ARGUMENTS_JSON_INVALID:
     'Call Cell invocation arguments must be a JSON object string',
   ARGUMENTS_NOT_OBJECT: 'arguments must be a JSON object',
+  CHILD_CALL_DEPTH_EXCEEDED:
+    'Call child invocation identity cannot derive from an identity that ' +
+    'already carries the child-call separator',
+  CHILD_CALL_INPUT_INVALID:
+    'Call child invocation identity requires a non-empty outer ' +
+    'invocation id and a positive ordinal',
   COMPONENT_RESULT_JSON_INVALID:
     'Call Cell Component returned an invalid result JSON string',
   EMITTED_PARTIAL_INVALID:
@@ -61,6 +75,9 @@ const CALL_CELL_CONTRACT_MESSAGE = Object.freeze({
     'suffix separator',
   SECURITY_CONTEXT_INVALID:
     'Call authentication did not produce a canonical security context',
+  SUPPLIED_INVOCATION_ID_RESERVED:
+    'Call invocation id must not carry the slot/reduce wire-identity ' +
+    'suffix grammar',
 });
 
 class CallCellRoutingError extends Error {
@@ -87,10 +104,13 @@ function createCallRoutingFailure(code, message, options = {}) {
 function createCallInvocationIdentity(idempotencyKey) {
   if (typeof idempotencyKey === 'string' && idempotencyKey.length > 0) {
     // The slot/reduce suffixes are the wire-identity grammar the route
-    // spread and the durable fence parse; a caller-supplied key carrying
-    // them would mis-split into a foreign base identity. Refuse typed.
+    // spread and the durable fence parse, and the child-call separator
+    // is system-owned bridged-call identity; a caller-supplied key
+    // carrying any of them would mis-split into a foreign base identity
+    // or forge a bridged-call chain. Refuse typed.
     if (idempotencyKey.includes(CALL_CELL_SLOT_SUFFIX_SEPARATOR) ||
-        idempotencyKey.includes(CALL_CELL_REDUCE_SUFFIX)) {
+        idempotencyKey.includes(CALL_CELL_REDUCE_SUFFIX) ||
+        idempotencyKey.includes(CALL_CELL_CHILD_CALL_SEPARATOR)) {
       throw createCallRoutingFailure(
         CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
         CALL_CELL_CONTRACT_MESSAGE.IDEMPOTENCY_KEY_RESERVED_SUFFIX,
@@ -101,6 +121,45 @@ function createCallInvocationIdentity(idempotencyKey) {
   return Object.freeze({
     invocationId: `${CALL_CELL_INVOCATION_ID_PREFIX}${randomUUID()}`,
   });
+}
+
+// System-owned child identity for one bridged binding call: the request
+// Cell's outer invocation id plus the fixed child ordinal. The grammar
+// refuses deriving a child of a child, so a bridged call can never chain
+// a second bridged call under a deeper identity.
+function createCallChildInvocationId(outerInvocationId, ordinal) {
+  if (typeof outerInvocationId !== 'string' ||
+      outerInvocationId.length === 0 ||
+      !Number.isSafeInteger(ordinal) || ordinal <= 0) {
+    throw createCallRoutingFailure(
+      CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
+      CALL_CELL_CONTRACT_MESSAGE.CHILD_CALL_INPUT_INVALID,
+    );
+  }
+  if (outerInvocationId.includes(CALL_CELL_CHILD_CALL_SEPARATOR)) {
+    throw createCallRoutingFailure(
+      CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
+      CALL_CELL_CONTRACT_MESSAGE.CHILD_CALL_DEPTH_EXCEEDED,
+    );
+  }
+  return `${outerInvocationId}${CALL_CELL_CHILD_CALL_SEPARATOR}${ordinal}`;
+}
+
+// Gate for a caller-supplied base identity (the invoker's optional
+// `invocationId` request field): system-owned ids — including the
+// '#call-' child grammar — pass verbatim, while the slot/reduce wire
+// grammar is refused so a supplied base can never mis-split into a
+// foreign identity downstream.
+function assertCallBaseInvocationId(invocationId) {
+  if (typeof invocationId !== 'string' || invocationId.length === 0 ||
+      invocationId.includes(CALL_CELL_SLOT_SUFFIX_SEPARATOR) ||
+      invocationId.includes(CALL_CELL_REDUCE_SUFFIX)) {
+    throw createCallRoutingFailure(
+      CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
+      CALL_CELL_CONTRACT_MESSAGE.SUPPLIED_INVOCATION_ID_RESERVED,
+    );
+  }
+  return invocationId;
 }
 
 function createCallSlotInvocationId(invocationId, slotId) {
@@ -241,6 +300,8 @@ export {
   CALL_CELL_ROUTE_MESSAGE_TYPE,
   CALL_CELL_ROUTE_OPERATION,
   CallCellRoutingError,
+  assertCallBaseInvocationId,
+  createCallChildInvocationId,
   createCallInvocationIdentity,
   createCallInvocationIntentDigest,
   createCallReduceInvocationId,

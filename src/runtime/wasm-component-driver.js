@@ -41,6 +41,10 @@ import {
   isCallCell,
 } from './call-cell-driver-invoke.js';
 import {
+  assertRequestCallBridge,
+  buildRequestCellBridgeDelegate,
+} from './request-cell-bridge-delegate.js';
+import {
   readRequestCellContexts,
   writeRequestCellEffects,
 } from './request-cell-component-context-owner.js';
@@ -251,6 +255,7 @@ class WasmComponentDriver extends RuntimeDriver {
       options.componentRuntime || new WasiComponentCellRuntime();
     this._requestCells = new Map();
     this._replicaContexts = new Map();
+    this._requestCallBridge = null;
   }
 
   setArtifactLoader(loader) {
@@ -258,6 +263,10 @@ class WasmComponentDriver extends RuntimeDriver {
       throw new TypeError(WASM_COMPONENT_ERROR.ARTIFACT_LOADER_REQUIRED);
     }
     this._artifactLoader = loader;
+  }
+
+  setRequestCallBridge(bridgeInvoke) {
+    this._requestCallBridge = assertRequestCallBridge(bridgeInvoke);
   }
 
   requiresRuntimeReconciliation(definition) {
@@ -719,6 +728,11 @@ class WasmComponentDriver extends RuntimeDriver {
         (reason) => cancellationToken.cancel(reason),
         {
           beforeComponentInvoke: invocation.assertCurrentTarget,
+          bindingCallDelegate: buildRequestCellBridgeDelegate(
+            this._requestCallBridge,
+            currentContext,
+            invocation,
+          ),
           deadlineMs: invocation.deadlineMs,
           tables,
         },

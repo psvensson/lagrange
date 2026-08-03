@@ -190,6 +190,11 @@ function buildRequestCellInvocation(
     intentDigest: invocation.intentDigest,
     invocationId: invocation.id,
     invocationServiceId: route.serviceId,
+    // The full frozen server-derived security context rides with the
+    // invocation so the request-call bridge can authorize a bridged
+    // binding call as the same principal; tenantId stays for existing
+    // consumers.
+    securityContext,
     tenantId: securityContext.tenantId,
   };
 }
