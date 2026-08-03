@@ -71,15 +71,17 @@ async function readVerifiedSealedPayloadIfFound(store, target) {
 // a local hit. The cache is a copy of the store's truth, never an
 // alternative source for the decision above.
 async function persistVerifiedNodeCopy(componentCache, target, verified) {
-  await componentCache.persist(
-    target.artifactDigest,
-    {
-      digest: verified.payloadDigest,
-      mediaType: verified.sealed.mediaType,
-      size: verified.sealed.totalSize,
-    },
-    verified.sealed.bytes,
-  );
+  if (componentCache) {
+    await componentCache.persist(
+      target.artifactDigest,
+      {
+        digest: verified.payloadDigest,
+        mediaType: verified.sealed.mediaType,
+        size: verified.sealed.totalSize,
+      },
+      verified.sealed.bytes,
+    );
+  }
   return {
     bytes: verified.sealed.bytes,
     payloadDigest: verified.payloadDigest,
@@ -97,11 +99,27 @@ async function persistVerifiedNodeCopy(componentCache, target, verified) {
  * @return {Promise<object>} {bytes, payloadDigest} — the exact shape
  *   the resolver's loadComponentPayload returns
  */
+const TYPE_FUNCTION = 'function';
+
+// Composition gate for the node-copy surface: a resolver assembled
+// without a component cache (bare test fixtures, cacheless deployments)
+// simply has no tier-1 copy and no tier-2 populate step.
+function nodeCopySurface(resolver) {
+  const componentCache = resolver.componentCache;
+  return typeof componentCache?.load === TYPE_FUNCTION &&
+    typeof componentCache?.persist === TYPE_FUNCTION ?
+    componentCache :
+    null;
+}
+
 // Tier 1 — the disposable node-local copy. A hit is the same immutable
 // content-addressed payload (re-verified on load), never an alternative
 // truth: on a miss the chain falls through to the owning store.
-async function probeNodeCopyTier(resolver, target) {
-  const cached = await resolver.componentCache.load(target.artifactDigest);
+async function probeNodeCopyTier(componentCache, target) {
+  if (!componentCache) {
+    return {found: false};
+  }
+  const cached = await componentCache.load(target.artifactDigest);
   return cached ?
     {found: true, payload: cached} :
     {found: false};
@@ -109,7 +127,8 @@ async function probeNodeCopyTier(resolver, target) {
 
 async function loadComponentPayloadThroughStore(owner, target) {
   const resolver = owner.artifactResolver;
-  const nodeCopy = await probeNodeCopyTier(resolver, target);
+  const componentCache = nodeCopySurface(resolver);
+  const nodeCopy = await probeNodeCopyTier(componentCache, target);
   if (nodeCopy.found) {
     return nodeCopy.payload;
   }
@@ -120,8 +139,7 @@ async function loadComponentPayloadThroughStore(owner, target) {
   if (store) {
     const verified = await readVerifiedSealedPayloadIfFound(store, target);
     if (verified.found) {
-      return persistVerifiedNodeCopy(
-        resolver.componentCache, target, verified);
+      return persistVerifiedNodeCopy(componentCache, target, verified);
     }
   }
   // Tier 3 — external repair through the resolver; its typed
