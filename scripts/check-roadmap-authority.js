@@ -54,7 +54,10 @@ const FEATURE_ROW_CELL_PATTERN = /^\|\s*`?(RM-[^`|\s]+)`?\s*\|/gmu;
 const FEATURE_ROW_ID_PATTERN =
   /^RM-[0-9]+(?:\.[0-9]+[a-z]?)+-[a-z0-9]+(?:-[a-z0-9]+)*$/u;
 const FEATURE_PHASE_PATTERN = /^## Phase ([0-9]+\.[0-9]+)\b/gmu;
-const HUMAN_PHASE_PATTERN = /^## .+?— ([0-9]+\.[0-9]+)\b/gmu;
+// Public docs use spaced ASCII hyphens (audit:doc-ascii), so the phase
+// heading separator is "- "; the legacy em dash stays accepted for any
+// historical copy.
+const HUMAN_PHASE_PATTERN = /^## .+?[—-] ([0-9]+\.[0-9]+)\b/gmu;
 const EPIC_ROADMAP_ROW_PATTERN = /^roadmapRow:\s*(\S+)\s*$/mu;
 const ROOT_ROADMAP_REFERENCE_PATTERN =
   /(?:^|[^\w/])(?:\.\/)?roadmap\.md\b/u;
