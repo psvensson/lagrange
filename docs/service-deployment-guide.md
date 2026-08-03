@@ -49,6 +49,18 @@ call Binding, because then only partials cross the network.
 An **Artifact** is installed immutable code plus a schema-v3 manifest and a
 digest-pinned payload.
 
+Since the cluster-owned artifact store landed, `INSTALL SERVICE`
+internalizes the verified WASM payload into replicated internal tables
+(chunked, digest-verified, sealed) **before** any catalog row is written —
+the external OCI source is an installation input, not a runtime dependency.
+A wasm_component Artifact does not become bindable until its payload is
+sealed. At activation, the node-local loader resolves the content-addressed
+disk cache first, then reconstructs from the internal store (verifying every
+chunk and the reassembled digest, then populating the cache atomically), and
+only then falls back to the external repair source. Losing every local cache
+does not make an installed service unavailable; the filesystem holds caches,
+never canonical Artifacts.
+
 ### Binding
 
 A **Binding** is immutable desired execution intent: one Artifact export,

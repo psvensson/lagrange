@@ -236,6 +236,12 @@ Lagrange is alpha. What works, what doesn't:
 - **Bounded parallel fan-out:** shard dispatch runs concurrently up to a
   policy-owned limit (default 8); shards on the same host node serialize
   (one active invocation per Cell instance).
+- **Cluster-owned artifacts:** `INSTALL SERVICE` internalizes the verified
+  WASM payload into replicated internal tables (chunked, digest-verified,
+  sealed) before the Artifact becomes bindable; activation reconstructs the
+  component from those tables even with every node-local cache deleted and
+  the original OCI source gone. Garbage collection and migration tooling
+  for pre-store installs are follow-up work.
 - **Numeric partials only:** each emitted partial is one finite number per
   group key. Structured partial values are not supported yet.
 - **Declared-only binding kinds:** `pushdown`, `change`, `time`, `once`, and
