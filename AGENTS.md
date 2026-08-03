@@ -65,19 +65,22 @@ the human/development/agent documentation zones.
 
 ## Before Any `git push` (every agent, no exceptions)
 
-The pre-push hook runs the lint/static ratchet corpus automatically at
-push time (unused-files, tracked-file lint, duplication and file-size
-ratchets, unused-exports, circular-deps) — but it runs NO tests. The CI
-gate runs remotely only AFTER the push, so a push can pass the hook and
-still turn main red.
+The pre-push hook is fast-fail ordered: the cheap static corpus first
+(unused-files, tracked-file lint, duplication and file-size ratchets,
+circular-deps, unused-exports), then — only once those are green — the
+long-running `test:gate:postpush` corpus as its final stage. A push that
+passes the hook should not turn main red; the remote CI gate re-runs the
+tests after the push.
 
-1. Run `npm run test:gate:postpush` locally and fix everything before
-   pushing — nothing else runs those tests pre-push.
-2. After sweeping code changes, `bash .githooks/pre-push` (manual
-   invocation gates the working tree) gives early ratchet feedback;
-   at push time the hook gates the committed tree, so a late discovery
-   costs follow-up commits. Fix ratchet failures proactively, not by
-   letting repeated pushes reveal them one check at a time.
+1. After sweeping code changes, `bash .githooks/pre-push` (manual
+   invocation gates the working tree) gives early feedback; at push time
+   the hook gates the committed tree for the static corpus, so a late
+   discovery costs follow-up commits. Fix ratchet failures proactively,
+   not by letting repeated pushes reveal them one check at a time.
+2. If the exact working tree already passed `test:gate:postpush` this
+   session, `LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only the test
+   stage (the static corpus always runs). `--no-verify` skips everything
+   and remains emergencies-only.
 
 Ratchet baselines (duplication, unused-exports, complexity) are one-way:
 fix the code (extract, de-export, simplify) rather than raising a
