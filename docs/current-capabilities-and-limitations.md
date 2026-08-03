@@ -49,8 +49,8 @@ The compatibility endpoint is not a readiness or liveness oracle.
 ## Service Deployment
 
 The public model is **Artifact / Binding / Cell**.
-The `request`, `call` Binding source
-kinds are publicly invocable. The accepted
+The `request`, `call` Binding source kinds are publicly invocable.
+The accepted
 `change`, `time`, `once`, `boot`, `pushdown` source
 kinds can be declared and placed but do not yet have public invocation adapters.
 

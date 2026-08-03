@@ -43,7 +43,7 @@ const CLAIM_MARKER = Object.freeze({
   CAPABILITY_PAGE: 'Current Capabilities And Limitations',
   PUBLIC_MODEL: 'Artifact / Binding / Cell',
   JS_NOT_WASM: 'not a WebAssembly binary or component',
-  BINDING_DEPLOYMENT: 'Request Bindings are publicly invocable',
+  BINDING_DEPLOYMENT: 'Binding source kinds are publicly invocable',
   OCI_EXECUTION_UNAVAILABLE: 'Managed OCI container activation is unsupported',
   OCI_CALLBACK_UNSUPPORTED: 'OCI callback invocation remains unsupported',
 });
