@@ -174,7 +174,15 @@ class CallCellInvoker {
         request.invocationId, request.slotId),
     });
     const hostNodeId = request.shard.hostTopology?.hostNodeId;
-    const activationDeadline = Date.now() + this._activationWaitMs;
+    // The activation window never outlives the caller's own deadline: a
+    // short-deadline call must fail typed with budget left to report,
+    // not burn its whole budget waiting for capacity.
+    const activationDeadline = Math.min(
+      Date.now() + this._activationWaitMs,
+      Number.isFinite(request.deadlineMs) ?
+        request.deadlineMs :
+        Number.POSITIVE_INFINITY,
+    );
     for (;;) {
       try {
         return await dispatch();

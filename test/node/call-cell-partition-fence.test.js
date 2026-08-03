@@ -127,6 +127,8 @@ test('a current fence admits the invocation', async () => {
     handler, makeEnvelope(route, currentFence()));
   assert.equal(response.processed, true);
   assert.equal(response.componentResult, CALL_RESULT);
+  assert.equal(response.replicaId, REPLICA_ID,
+    'the receiver echoes the executing replica id');
 });
 
 test('an absent fence asserts nothing (non-data-local dispatch)',

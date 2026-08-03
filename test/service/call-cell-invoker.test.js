@@ -16,6 +16,7 @@ import {
   CALL_CELL_PARTIAL_KEY_PREFIX,
   CALL_CELL_ROUTE_ERROR_CODE,
   CallCellRoutingError,
+  createCallInvocationIdentity,
   createCallReduceInvocationId,
   createCallRoutingFailure,
   createCallSlotInvocationId,
@@ -421,4 +422,68 @@ test('a coordinator without the seeding/lease surface is refused at ' +
     }),
     /seedInvocation/u,
   );
+});
+
+test('a caller-supplied idempotency key never carries the reserved ' +
+  'wire-identity grammar', (t) => {
+  t.equal(
+    createCallInvocationIdentity('caller-key-1').invocationId,
+    'caller-key-1',
+    'a plain idempotency key passes through',
+  );
+  for (const reserved of ['key#slot-2', 'key#reduce', 'a#slot-1#reduce']) {
+    let refusal = null;
+    try {
+      createCallInvocationIdentity(reserved);
+    } catch (error) {
+      refusal = error;
+    }
+    t.equal(
+      refusal?.code,
+      CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
+      `${reserved} is refused typed`,
+    );
+  }
+  t.end();
+});
+
+test('the activation wait never outlives the caller deadline', async (t) => {
+  const collaborators = makeCollaborators({
+    adapterInvoke: async (req) => {
+      if (req.exportName === 'reduce') {
+        return {componentResult: RESULT_JSON, replicaId: 'replica-1'};
+      }
+      throw createCallRoutingFailure(
+        CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE,
+        'no cell on host',
+        {classification: 'retryable'},
+      );
+    },
+  });
+  const invoker = new CallCellInvoker({
+    activationLeases: {publishActivationLease: async () => ({})},
+    activationRetryIntervalMs: 25,
+    activationWaitMs: 60000,
+    routeResolver: collaborators.routeResolver,
+    batchExecutor: collaborators.batchExecutor,
+    partitionTopology: collaborators.partitionTopology,
+    statementAdapter: collaborators.statementAdapter,
+    reduceCoordinator: collaborators.reduceCoordinator,
+    batchRowBound: BATCH_ROW_BOUND,
+    partialLimit: PARTIAL_LIMIT,
+  });
+  const startedAt = Date.now();
+  await invoker.invoke({
+    name: CALL_NAME,
+    argumentsJson: ARGUMENTS,
+    securityContext: SECURITY_CONTEXT,
+    deadlineMs: Date.now() + 300,
+  }).then(
+    () => t.fail('expected the host refusal to propagate'),
+    (error) => t.equal(
+      error.code, CALL_CELL_ROUTE_ERROR_CODE.HOST_CELL_UNAVAILABLE),
+  );
+  t.ok(Date.now() - startedAt < 5000,
+    'the wait gave up near the caller deadline, not the full window');
+  t.end();
 });

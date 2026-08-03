@@ -56,6 +56,9 @@ const CALL_CELL_CONTRACT_MESSAGE = Object.freeze({
   EMITTED_PARTIAL_INVALID:
     'Call Cell emitted partial is not a {key, partial} entry carrying a ' +
     'finite numeric aggregation value JSON',
+  IDEMPOTENCY_KEY_RESERVED_SUFFIX:
+    'Call invocation idempotency key contains a reserved wire-identity ' +
+    'suffix separator',
   SECURITY_CONTEXT_INVALID:
     'Call authentication did not produce a canonical security context',
 });
@@ -82,11 +85,22 @@ function createCallRoutingFailure(code, message, options = {}) {
 }
 
 function createCallInvocationIdentity(idempotencyKey) {
-  const invocationId = typeof idempotencyKey === 'string' &&
-    idempotencyKey.length > 0 ?
-    idempotencyKey :
-    `${CALL_CELL_INVOCATION_ID_PREFIX}${randomUUID()}`;
-  return Object.freeze({invocationId});
+  if (typeof idempotencyKey === 'string' && idempotencyKey.length > 0) {
+    // The slot/reduce suffixes are the wire-identity grammar the route
+    // spread and the durable fence parse; a caller-supplied key carrying
+    // them would mis-split into a foreign base identity. Refuse typed.
+    if (idempotencyKey.includes(CALL_CELL_SLOT_SUFFIX_SEPARATOR) ||
+        idempotencyKey.includes(CALL_CELL_REDUCE_SUFFIX)) {
+      throw createCallRoutingFailure(
+        CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
+        CALL_CELL_CONTRACT_MESSAGE.IDEMPOTENCY_KEY_RESERVED_SUFFIX,
+      );
+    }
+    return Object.freeze({invocationId: idempotencyKey});
+  }
+  return Object.freeze({
+    invocationId: `${CALL_CELL_INVOCATION_ID_PREFIX}${randomUUID()}`,
+  });
 }
 
 function createCallSlotInvocationId(invocationId, slotId) {

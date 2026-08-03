@@ -398,7 +398,7 @@ function buildCallCellInvocation(
   };
 }
 
-function buildSuccessfulInvocationResponse(result) {
+function buildSuccessfulInvocationResponse(result, route) {
   const value = result?.journaled === true ? result.value : result;
   const componentResult =
     value && typeof value === 'object' && 'result' in value ?
@@ -415,6 +415,10 @@ function buildSuccessfulInvocationResponse(result) {
     },
     partials: componentResult.partials,
     processed: true,
+    // Receiver truth for lease bookkeeping: the replica that actually
+    // executed, echoed so the dispatcher never has to fall back to its
+    // own (possibly drifted) route resolution.
+    replicaId: route?.replicaId ?? null,
   };
 }
 
@@ -500,7 +504,7 @@ async function handleCallCellInvocation(handler, envelope) {
         securityContext,
       ),
     );
-    return buildSuccessfulInvocationResponse(result);
+    return buildSuccessfulInvocationResponse(result, route);
   } catch (error) {
     return buildInvocationFailure(error, {
       invoked: resolveInvocationFailureStarted(

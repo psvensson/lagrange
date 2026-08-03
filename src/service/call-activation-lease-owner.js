@@ -112,13 +112,23 @@ function createCallActivationLeaseOwner(options = {}) {
       [],
     );
     if (!(await readLease(leaseId))) {
-      await executeInternal(
-        `INSERT INTO ${table} ` +
-        ACTIVATION_LEASE_INSERT_COLUMNS +
-        `(${sqlLiteral(leaseId)}, ${sqlLiteral(serviceId)}, ` +
-        `${sqlLiteral(nodeId)}, ${leaseExpiresAt}, ${requestedAt})`,
-        [],
-      );
+      try {
+        await executeInternal(
+          `INSERT INTO ${table} ` +
+          ACTIVATION_LEASE_INSERT_COLUMNS +
+          `(${sqlLiteral(leaseId)}, ${sqlLiteral(serviceId)}, ` +
+          `${sqlLiteral(nodeId)}, ${leaseExpiresAt}, ${requestedAt})`,
+          [],
+        );
+      } catch (insertError) {
+        // Two concurrent publishers can race this INSERT; the loser's
+        // duplicate-key failure is benign exactly when the row now
+        // exists (the winner's lease covers the same demand). Anything
+        // else is a real failure and propagates.
+        if (!(await readLease(leaseId))) {
+          throw insertError;
+        }
+      }
     }
     return Object.freeze({leaseExpiresAt, leaseId});
   }

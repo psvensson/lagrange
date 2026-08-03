@@ -79,10 +79,13 @@ function createCallPartitionTopology(options = {}) {
         READ_DIMENSION,
         {},
       );
+    // The host is the canonical leader's candidate ONLY: a non-leader
+    // fallback could never pass the receiver's ownership fence, so a
+    // leader missing from the candidate set is refused here as the real
+    // signal it is — never masked by dispatching somewhere doomed.
     const hostNodeId = routingSnapshot?.canonicalLeaderNodeId || null;
     const hostCandidate = (candidates || []).find(
-      (candidate) => candidate.nodeId === hostNodeId) ||
-      (candidates || [])[0] || null;
+      (candidate) => candidate.nodeId === hostNodeId) || null;
     if (!hostNodeId || !hostCandidate) {
       throw createCallRoutingFailure(
         CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,

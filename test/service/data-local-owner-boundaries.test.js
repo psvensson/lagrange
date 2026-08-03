@@ -107,3 +107,58 @@ test('the lease owner writes exactly the activation lease system table, ' +
     'every published lease carries its expiry bound');
   t.end();
 });
+
+test('a canonical leader missing from the candidate set refuses at ' +
+  'resolution instead of dispatching somewhere doomed', (t) => {
+  const engine = {
+    getTableInfo: () => ({table_name: TABLE_NAME}),
+    isPartitionVisibleForRouting: () => true,
+    resolveActivePartitionVersion: () => 1,
+    queryExecutor: {
+      getPartitionRecord: () => ({
+        partition_id: PARTITION_ID,
+        partition_version: 1,
+        state: 'NORMAL',
+        table_name: TABLE_NAME,
+      }),
+      resolvePartitionServiceCandidates: () => ({
+        candidates: [{address: 'other/partition/x', nodeId: 'other-node',
+          replicaId: 'x'}],
+        routingSnapshot: {canonicalLeaderNodeId: NODE_ID},
+      }),
+    },
+  };
+  const topology = createCallPartitionTopology({sqlQueryEngine: engine});
+  t.throws(
+    () => topology.resolveShardHost(TABLE_NAME, PARTITION_ID),
+    /no canonical leader host/u,
+    'a non-leader candidate is never selected as the host',
+  );
+  t.end();
+});
+
+test('a lost lease-INSERT race self-heals when the winning row exists',
+  async (t) => {
+    let inserts = 0;
+    const rowsAfterUpdate = [];
+    const owner = createCallActivationLeaseOwner({
+      executeInternal: async (sql) => {
+        if (sql.startsWith('INSERT')) {
+          inserts += 1;
+          rowsAfterUpdate.push({lease_id: 'raced'});
+          throw new Error('UNIQUE constraint failed');
+        }
+        if (sql.startsWith('SELECT')) {
+          return {rows: [...rowsAfterUpdate], success: true};
+        }
+        return {rows: [], success: true};
+      },
+      leaseMs: 60000,
+      nowProvider: () => 1_700_000_000_000,
+    });
+    const lease = await owner.publishActivationLease(SERVICE_ID, NODE_ID);
+    t.equal(inserts, 1, 'the losing INSERT happened once');
+    t.ok(lease.leaseExpiresAt > 0,
+      'the publish succeeds because the winner covers the same demand');
+    t.end();
+  });
