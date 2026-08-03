@@ -25,6 +25,10 @@ import {
   ARTIFACT_SIGNATURE_POLICY_MODE,
 } from './installable-service-artifact-resolver.js';
 import {normalizeExternalServiceManifest} from './external-service-manifest.js';
+import {ArtifactPayloadStoreError} from './artifact-payload-store.js';
+import {internalizeInstallPayload} from
+  './artifact-payload-internalization.js';
+import {loadComponentPayloadThroughStore} from './artifact-payload-loader.js';
 
 const SERVICE_LIFECYCLE_COMMAND_ERROR_CODE = Object.freeze({
   ACCESS_POLICY_REJECTED: 'service_lifecycle_access_policy_rejected',
@@ -403,6 +407,10 @@ function classifyDelegatedFailure(error) {
       known: true,
     };
   }
+  if (error instanceof ArtifactPayloadStoreError) {
+    return {code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.ARTIFACT_REJECTED,
+      known: true, stage: SERVICE_LIFECYCLE_COMMAND_STAGE.ARTIFACT};
+  }
   return {
     code: SERVICE_LIFECYCLE_COMMAND_ERROR_CODE.CATALOG_REJECTED,
     stage: SERVICE_LIFECYCLE_COMMAND_STAGE.CATALOG,
@@ -601,10 +609,8 @@ class ServiceLifecycleCommandOwner {
         SERVICE_LIFECYCLE_COMMAND_MESSAGE.ARTIFACT_REJECTED,
       );
     }
-    const payload = await this.artifactResolver.loadComponentPayload({
-      artifactDigest: target.artifactDigest,
-      manifest: artifact.manifest,
-    });
+    const payload = await loadComponentPayloadThroughStore(this,
+      {artifactDigest: target.artifactDigest, manifest: artifact.manifest});
     return {
       ...artifact,
       bytes: payload.bytes,
@@ -641,6 +647,7 @@ class ServiceLifecycleCommandOwner {
     const resolvedArtifact = await this.resolveArtifact(
       manifest, payload.artifact_source,
     );
+    await internalizeInstallPayload(this, resolvedArtifact);
     await this.catalogOwner.recordPackage({
       packageId: identity.packageId,
       manifest,

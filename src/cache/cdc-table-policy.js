@@ -416,6 +416,32 @@ const SYSTEM_TABLE_CDC_POLICIES = Object.freeze({
       externalCdcAllowed: false,
     },
   ),
+  // Payload bytes must never enter the system-table cache or the CDC
+  // propagation path (cluster-owned-artifacts brief, permanent
+  // invariant) — both artifact payload tables are authoritative-read
+  // only, no hydration, no fanout.
+  [TABLES.ARTIFACT_PAYLOADS]: createTablePolicy(
+    TABLES.ARTIFACT_PAYLOADS,
+    {
+      policyClass: CDC_POLICY_CLASS.CONTROL_NO_INTERNAL_PROPAGATION,
+      authorityClass: CDC_AUTHORITY_CLASS.CONTROL,
+      internalCachePropagation: false,
+      readinessRelevant: false,
+      bootstrapHydrationMode: CDC_BOOTSTRAP_HYDRATION_MODE.NONE,
+      externalCdcAllowed: false,
+    },
+  ),
+  [TABLES.ARTIFACT_PAYLOAD_CHUNKS]: createTablePolicy(
+    TABLES.ARTIFACT_PAYLOAD_CHUNKS,
+    {
+      policyClass: CDC_POLICY_CLASS.CONTROL_NO_INTERNAL_PROPAGATION,
+      authorityClass: CDC_AUTHORITY_CLASS.CONTROL,
+      internalCachePropagation: false,
+      readinessRelevant: false,
+      bootstrapHydrationMode: CDC_BOOTSTRAP_HYDRATION_MODE.NONE,
+      externalCdcAllowed: false,
+    },
+  ),
   [TABLES.DEBUG_BREAKPOINTS]: createTablePolicy(TABLES.DEBUG_BREAKPOINTS, {
     policyClass: CDC_POLICY_CLASS.CONTROL_NO_INTERNAL_PROPAGATION,
     authorityClass: CDC_AUTHORITY_CLASS.CONTROL,

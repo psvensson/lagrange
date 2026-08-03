@@ -1,4 +1,5 @@
 import {TABLES} from '../../constants/index.js';
+import {RUNTIME_KIND} from '../../constants/runtime.js';
 import {
   DEPLOYMENT_BINDING_ERROR_CODE,
   DEPLOYMENT_BINDING_MESSAGE,
@@ -19,6 +20,18 @@ import {SystemMetadataOwnerBase} from './system-metadata-owner-base.js';
 
 const DEPLOYMENT_BINDING_OWNER_NAME = 'deployment-binding-owner';
 
+// Payload-seal bindable gate (brief
+// docs/development/cluster-owned-artifacts-parallel-dispatch-brief.md §1
+// "Installation State Machine"): with the cluster payload store
+// attached, a wasm_component artifact is bindable only once a SEALED
+// internal payload exists for its artifact digest. Pre-store
+// installations must run the explicit migration/import path first.
+const ARTIFACT_PAYLOAD_NOT_INTERNALIZED = Object.freeze({
+  CODE: 'binding_artifact_payload_not_internalized',
+  MESSAGE: 'artifact payload is not internalized in the cluster payload ' +
+    'store; migrate or import the artifact payload before binding',
+});
+
 class DeploymentBindingOwner extends SystemMetadataOwnerBase {
   static OWNER_NAME = DEPLOYMENT_BINDING_OWNER_NAME;
   static TABLE_NAME = TABLES.SERVICE_BINDINGS;
@@ -33,6 +46,7 @@ class DeploymentBindingOwner extends SystemMetadataOwnerBase {
       );
     }
     this.catalogOwner = options.catalogOwner;
+    this.artifactPayloadStore = options.artifactPayloadStore || null;
     this.now = typeof options.now === 'function' ? options.now : () => Date.now();
     this.serialGates = new Map();
   }
@@ -84,7 +98,26 @@ class DeploymentBindingOwner extends SystemMetadataOwnerBase {
         DEPLOYMENT_BINDING_MESSAGE.ARTIFACT_MISSING,
       );
     }
+    await this.assertPayloadInternalized(artifact);
     return artifact;
+  }
+
+  // Composition-gated: no attached store keeps the pre-store behavior;
+  // non-WASM artifacts stay out of scope (brief §1 "OCI Containers").
+  async assertPayloadInternalized(artifact) {
+    if (!this.artifactPayloadStore ||
+        artifact.manifest?.runtime?.kind !== RUNTIME_KIND.WASM_COMPONENT) {
+      return;
+    }
+    const sealed = await this.artifactPayloadStore
+      .findSealedPayloadByArtifactDigest(artifact.artifactDigest);
+    if (sealed.found !== true) {
+      throw new DeploymentBindingError(
+        ARTIFACT_PAYLOAD_NOT_INTERNALIZED.CODE,
+        DEPLOYMENT_BINDING_PATH.TARGET,
+        ARTIFACT_PAYLOAD_NOT_INTERNALIZED.MESSAGE,
+      );
+    }
   }
 
   assertReplay(existing, requested) {
@@ -150,4 +183,4 @@ class DeploymentBindingOwner extends SystemMetadataOwnerBase {
   }
 }
 
-export {DeploymentBindingOwner};
+export {ARTIFACT_PAYLOAD_NOT_INTERNALIZED, DeploymentBindingOwner};

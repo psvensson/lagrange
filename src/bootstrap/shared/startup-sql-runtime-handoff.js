@@ -1,3 +1,4 @@
+import {attachArtifactPayloadStore} from './artifact-payload-store-setup.js';
 import {attachCallCellInvoker} from './call-cell-invocation-setup.js';
 import {CDCIntegrationSetup} from './cdc-integration-setup.js';
 import {
@@ -77,6 +78,13 @@ function attachSqlRuntimeToStartupOwner(options) {
     messageRouterProvider: () => options.messageRouter ||
       owner.messageRouter || null,
     tunables: options.callCellInvocationTunables,
+  });
+  attachArtifactPayloadStore({
+    serviceLifecycleCommandOwner: owner.serviceLifecycleCommandOwner || null,
+    deploymentBindingOwner:
+      owner.systemMetadataOwners?.deploymentBindingOwner ||
+      owner.serviceLifecycleCommandOwner?.bindingOwner || null,
+    sqlQueryEngine,
   });
   attachRuntimeAccessPolicyOwner(owner, sqlQueryEngine);
   owner.sqlQueryEngine = sqlQueryEngine;

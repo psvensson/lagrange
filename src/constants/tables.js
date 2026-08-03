@@ -42,6 +42,8 @@ const TABLES = Object.freeze({
   CALL_CELL_REDUCE_SLOTS: 'call_cell_reduce_slots',
   CALL_CELL_REDUCE_RESULTS: 'call_cell_reduce_results',
   CALL_ACTIVATION_LEASES: 'call_activation_leases',
+  ARTIFACT_PAYLOADS: 'artifact_payloads',
+  ARTIFACT_PAYLOAD_CHUNKS: 'artifact_payload_chunks',
 });
 
 export {TABLES};

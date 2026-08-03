@@ -52,6 +52,10 @@ import {
   CALL_CELL_REDUCE_SLOTS_SCHEMA,
 } from './system-table-runtime-schema-definitions.js';
 import {
+  ARTIFACT_PAYLOAD_CHUNKS_SCHEMA,
+  ARTIFACT_PAYLOADS_SCHEMA,
+} from './system-table-artifact-schema-definitions.js';
+import {
   DEBUG_BREAKPOINTS_SCHEMA,
   DEBUG_SESSIONS_SCHEMA,
   DEBUG_SNAPSHOTS_SCHEMA,
@@ -112,6 +116,8 @@ const SYSTEM_TABLE_SCHEMAS = [
   CALL_CELL_REDUCE_SLOTS_SCHEMA,
   CALL_CELL_REDUCE_RESULTS_SCHEMA,
   CALL_ACTIVATION_LEASES_SCHEMA,
+  ARTIFACT_PAYLOADS_SCHEMA,
+  ARTIFACT_PAYLOAD_CHUNKS_SCHEMA,
 ];
 
 /**
@@ -170,6 +176,8 @@ const INITIAL_PARTITION_IDS = {
   [SYSTEM_TABLE_NAME.CALL_CELL_REDUCE_RESULTS]:
     'call_cell_reduce_results-p1',
   [SYSTEM_TABLE_NAME.CALL_ACTIVATION_LEASES]: 'call_activation_leases-p1',
+  [SYSTEM_TABLE_NAME.ARTIFACT_PAYLOADS]: 'artifact_payloads-p1',
+  [SYSTEM_TABLE_NAME.ARTIFACT_PAYLOAD_CHUNKS]: 'artifact_payload_chunks-p1',
 };
 
 const PRIORITY_CONTROL_PLANE_PARTITION_IDS = new Set([
@@ -350,6 +358,16 @@ const INITIAL_REPLICA_IDS = {
     'call_activation_leases-p1-r1',
     'call_activation_leases-p1-r2',
     'call_activation_leases-p1-r3',
+  ],
+  [SYSTEM_TABLE_NAME.ARTIFACT_PAYLOADS]: [
+    'artifact_payloads-p1-r1',
+    'artifact_payloads-p1-r2',
+    'artifact_payloads-p1-r3',
+  ],
+  [SYSTEM_TABLE_NAME.ARTIFACT_PAYLOAD_CHUNKS]: [
+    'artifact_payload_chunks-p1-r1',
+    'artifact_payload_chunks-p1-r2',
+    'artifact_payload_chunks-p1-r3',
   ],
 };
 
