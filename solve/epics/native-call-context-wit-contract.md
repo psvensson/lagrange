@@ -24,8 +24,9 @@ source invocation" follow-on; this epic owns only the contract shape.
 
 ## Contract (sealed 2026-08-02; canonical text)
 
-The sealed WIT world is the ABI fixture
-[`test/wasm-service/fixtures/call-cell-world/wit/world.wit`](../../test/wasm-service/fixtures/call-cell-world/wit/world.wit)
+The sealed WIT world now ships as the canonical authoring artifact
+[`wit/world.wit`](../../wit/world.wit) (originally landed as the ABI
+fixture `test/wasm-service/fixtures/call-cell-world/wit/world.wit`)
 (`package lagrange:cell`, interface `call-context`, world `call-cell`),
 validated with `wasm-tools component wit` and exercised by
 `test/wasm-service/call-cell-world-abi.test.js`; the normative contract text
