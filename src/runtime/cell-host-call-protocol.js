@@ -390,24 +390,29 @@ async function executeHostCallDelegate(delegate, request) {
   };
 }
 
-function encodeHostCallOutcome(outcome) {
-  if (outcome.ok !== undefined) {
-    const bytes = Buffer.from(outcome.ok, BYTE_ENCODING);
-    if (bytes.byteLength <= HOST_CALL_MAX_RESPONSE_BYTES) {
-      return {bytes, kind: HOST_CALL_RESPONSE_KIND.OK};
-    }
-    return {
-      bytes: Buffer.from(JSON.stringify(hostCallFailureRecord(
-        HOST_CALL_ERROR_CODE.RESPONSE_TOO_LARGE,
-        HOST_CALL_FAILURE_MESSAGE.RESPONSE_TOO_LARGE,
-      )), BYTE_ENCODING),
-      kind: HOST_CALL_RESPONSE_KIND.TYPED_FAILURE,
-    };
-  }
+function encodeTypedFailure(failureRecord) {
   return {
-    bytes: Buffer.from(JSON.stringify(outcome.failure), BYTE_ENCODING),
+    bytes: Buffer.from(JSON.stringify(failureRecord), BYTE_ENCODING),
     kind: HOST_CALL_RESPONSE_KIND.TYPED_FAILURE,
   };
+}
+
+function encodeOkOutcome(okValue) {
+  const bytes = Buffer.from(okValue, BYTE_ENCODING);
+  return bytes.byteLength <= HOST_CALL_MAX_RESPONSE_BYTES ?
+    {bytes, kind: HOST_CALL_RESPONSE_KIND.OK} :
+    encodeTypedFailure(hostCallFailureRecord(
+      HOST_CALL_ERROR_CODE.RESPONSE_TOO_LARGE,
+      HOST_CALL_FAILURE_MESSAGE.RESPONSE_TOO_LARGE,
+    ));
+}
+
+// Single classification path: one branch decides ok-vs-failure, each
+// encoder owns exactly one outcome shape.
+function encodeHostCallOutcome(outcome) {
+  return outcome.ok !== undefined ?
+    encodeOkOutcome(outcome.ok) :
+    encodeTypedFailure(outcome.failure);
 }
 
 /**

@@ -14,6 +14,7 @@ import {
 } from './request-cell-table-read-index.js';
 import {
   HOST_CALL_MESSAGE,
+  HOST_CALL_RESPONDER_STATUS,
   createHostCallDescriptor,
   createParentHostCallResponder,
 } from './cell-host-call-protocol.js';
@@ -139,9 +140,19 @@ function attachInvocationHostCall(state, payload, options) {
   });
 }
 
+// Null-object retired responder: released channels keep a callable,
+// inert responder so the state field always carries an explicit variant
+// (never a raw null standing in for "no channel").
+const HOST_CALL_RESPONDER_RETIRED = Object.freeze({
+  async handleRequest() {
+    return HOST_CALL_RESPONDER_STATUS.DROPPED_RETIRED;
+  },
+  retire() {},
+});
+
 function releaseInvocationHostCall(state) {
   state.hostCallResponder?.retire();
-  state.hostCallResponder = null;
+  state.hostCallResponder = HOST_CALL_RESPONDER_RETIRED;
 }
 
 function resolveCellWorkerPath() {
@@ -215,7 +226,7 @@ class WasiComponentCellRuntime {
       cell,
       componentInvocationCount: 0,
       generation: `request-cell-generation-${this.nextGeneration}`,
-      hostCallResponder: null,
+      hostCallResponder: HOST_CALL_RESPONDER_RETIRED,
       pending: new Map(),
       ready: false,
       worker,
