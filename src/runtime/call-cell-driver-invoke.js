@@ -24,12 +24,14 @@ const CALL_CELL_DRIVER_MESSAGE = Object.freeze({
   PARTIALS_INVALID:
     'Call Cell component returned partials outside the emit tuple contract',
 });
+const CALL_CELL_DRIVER_ERROR_NAME = 'CallCellDriverError';
+const CALL_CELL_DRIVER_ERROR_CODE = 'call_cell_driver_invoke_failed';
 
 class CallCellDriverError extends Error {
   constructor(message, options = {}) {
     super(message, {cause: options.cause});
-    this.name = 'CallCellDriverError';
-    this.code = 'call_cell_driver_invoke_failed';
+    this.name = CALL_CELL_DRIVER_ERROR_NAME;
+    this.code = CALL_CELL_DRIVER_ERROR_CODE;
   }
 }
 
