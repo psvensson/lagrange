@@ -57,4 +57,4 @@ function createCallContextHost(options) {
   };
 }
 
-export {DENY_CODE, createCallContextHost};
+export {createCallContextHost};

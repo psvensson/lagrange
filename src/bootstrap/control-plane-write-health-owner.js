@@ -225,9 +225,6 @@ function createControlPlaneWriteHealthProvider(owner, options = {}) {
 }
 
 export {
-  CONTROL_PLANE_WRITE_HEALTH_DEFAULT,
-  CONTROL_PLANE_WRITE_HEALTH_RESOURCE_KEYS,
-  CONTROL_PLANE_WRITE_HEALTH_SOURCE,
   CONTROL_PLANE_WRITE_HEALTH_STATE,
   createControlPlaneWriteHealthProvider,
 };

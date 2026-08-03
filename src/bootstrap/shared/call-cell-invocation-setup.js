@@ -187,6 +187,5 @@ function attachCallCellInvoker(options = {}) {
 
 export {
   CALL_CELL_COORDINATION_SESSION,
-  CALL_CELL_INVOCATION_DEFAULT,
   attachCallCellInvoker,
 };

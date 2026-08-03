@@ -80,6 +80,4 @@ export {
   CELL_VALUE_TAG,
   CallCellValueError,
   toCellBatch,
-  toCellRow,
-  toCellValue,
 };

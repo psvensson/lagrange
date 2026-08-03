@@ -614,7 +614,5 @@ function createCallCellReduceCoordinator(options) {
 export {
   CALL_CELL_REDUCE_INCOMPLETE_REASON,
   CALL_CELL_REDUCE_SNAPSHOT_STATE,
-  RESULT_SNAPSHOT_SCHEMA_VERSION,
-  RESULT_SNAPSHOT_WITNESS_COLUMN,
   createCallCellReduceCoordinator,
 };

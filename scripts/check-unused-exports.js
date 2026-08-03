@@ -15,7 +15,9 @@ import {createOptions} from 'knip/session';
 
 import {printRatchetTighteningHint} from './metric-check-helpers.js';
 
-const BASELINE_UNUSED_EXPORT_COUNT = 1448;
+// 2026-08-03: tightened 1448 -> 1445 (un-exported the internal-only
+// call-cell and write-health surfaces; one-way-baseline rule).
+const BASELINE_UNUSED_EXPORT_COUNT = 1445;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';
