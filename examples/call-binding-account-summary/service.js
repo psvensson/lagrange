@@ -1,12 +1,12 @@
 // One Lagrange service, three pieces in one file: the partition function
-// (`run`), the reducer (`reduce`), and the endpoint declaration lives in
+// (`run`), the reducer (`reduce`), and the call declaration lives in
 // the call Binding next to this file (see the runner). ComponentizeJS
 // compiles this source against wit/world.wit into a WASM component.
 //
 // `run` executes once per relevant data partition, on the node that holds
 // that partition's replica. It scans the shard's local batch, keeps only
 // the requested account's rows, and emits a few numeric partials. Only
-// those numbers leave the node — the transaction rows never do.
+// those numbers leave the node - the transaction rows never do.
 //
 // `reduce` executes once, on a lease-holding replica, over the complete
 // partial set from every shard, and returns the final JSON result.

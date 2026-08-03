@@ -11,8 +11,8 @@ most of the bytes away.
 This example does it the Lagrange way, on the real public call path:
 
 1. The application makes **one call** and gets **one small JSON result**.
-2. The service is **authored as one unit** — partition function, reducer,
-   and the endpoint declaration live together and deploy together.
+2. The service is **authored as one unit** - partition function, reducer,
+   and the call declaration live together and deploy together.
 3. Lagrange runs the partition function **on each relevant partition**,
    next to that partition's replica. The rows never leave their node;
    only a handful of numeric partials do.
@@ -27,7 +27,7 @@ client today.
 
 ## The service: three pieces, authored together
 
-**Piece 1 — the partition function** (`run` in
+**Piece 1 - the partition function** (`run` in
 [`service.js`](service.js)): receives one typed batch of rows from one
 partition, filters to the requested account, and emits a few numeric
 partials. Plain JavaScript, compiled to a WASM component by
@@ -44,7 +44,7 @@ export function run(batch, argumentsJson) {
 }
 ```
 
-**Piece 2 — the reducer** (`reduce`, same file): folds every shard's
+**Piece 2 - the reducer** (`reduce`, same file): folds every shard's
 partials into the final summary.
 
 ```js
@@ -54,7 +54,7 @@ export function reduce(partials, argumentsJson) {
 }
 ```
 
-**Piece 3 — the endpoint declaration** (the call Binding, built in
+**Piece 3 - the call declaration** (the call Binding, built in
 [`call-binding-example-contract.js`](call-binding-example-contract.js)):
 names the callable entry point and declares which data it runs over:
 
@@ -68,7 +68,7 @@ source: {
 
 The statement is the data selector. Lagrange parses it, resolves which
 partitions hold matching rows, and dispatches `run` to each partition's
-host node — where the node executes the statement against its **own**
+host node - where the node executes the statement against its **own**
 replica and feeds the rows straight into the component. No fan-out code,
 no shard map, no connection strings anywhere in the service.
 
@@ -112,7 +112,7 @@ and receives one row back:
 }
 ```
 
-No partitions, replicas, or placement appear in the caller's view — and a
+No partitions, replicas, or placement appear in the caller's view - and a
 session without the `pgwire.binding.call` action is refused before any
 dispatch (the runner proves this too).
 
@@ -121,9 +121,9 @@ dispatch (the runner proves this too).
 ```text
 CALL BINDING "account-summary" {accountId: 202}
   │
-  ├─ run() on partition …_left    ids 1..75 — scanned in place
+  ├─ run() on partition …_left    ids 1..75 - scanned in place
   │     └─ emits count:1, total:1, largest:1, flagged:1   (4 numbers)
-  ├─ run() on partition …_right   ids 76..150 — scanned in place
+  ├─ run() on partition …_right   ids 76..150 - scanned in place
   │     └─ emits count:77, total:77, largest:77, flagged:77
   └─ reduce() on a lease-holding replica
         └─ one JSON summary → the caller
@@ -150,14 +150,14 @@ replica (`run` receives the batch built locally there), each shard
 publishes its emitted partials under a coordination lease, and `reduce`
 executes exactly once over the complete, disjoint partial set. The
 two-node integration tests in `test/integration/` prove the raw rows
-never cross the network on this path — the wire carries the partials.
+never cross the network on this path - the wire carries the partials.
 
 ## Why move the function, not the data
 
 The mechanics, not a slogan: here every shard reduces its share of the
 table to four numbers, so the network carries eight numbers plus one
-result row instead of 150 rows. Scale the same shape up — millions of
-rows per partition, a summary of a few hundred bytes — and the ratio
+result row instead of 150 rows. Scale the same shape up - millions of
+rows per partition, a summary of a few hundred bytes - and the ratio
 
 ```text
 data scanned ≫ result returned
@@ -180,7 +180,7 @@ CALL BINDING $1;      -- the invocation (separate session, binding.call)
 
 The manifest exports `run` under the `call_v1` interface with
 `runtime.kind = wasm_component`. The `reduce` export is the second export
-of the same component — one artifact carries both halves of the service.
+of the same component - one artifact carries both halves of the service.
 The invocation, coordination (reduce slots, leases, atomic snapshot),
 and typed failure surface are specified in
 [`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md).
@@ -195,7 +195,7 @@ Current call-path limits (of the platform, stated plainly):
   action is not in the trust-mode set).
 - **Numeric partials only.** Each emitted partial must be a finite
   number keyed by a string; structured partials are not accepted by the
-  reduce gate yet. Group keys must be disjoint across shards — this
+  reduce gate yet. Group keys must be disjoint across shards - this
   example namespaces its keys by a shard-local row id.
 - **Bounded parallel shard dispatch.** Up to 8 shards run concurrently
   (deployment-tunable); shards on the same host node serialize, so this
@@ -209,15 +209,15 @@ Demo scaffolding in the runner (not the call path):
   partition split, because a single-node demo cannot satisfy the
   replicated split quorum a real cluster uses. Production tables split
   by policy (`split_storage_threshold`) as they grow.
-- Everything from `CALL BINDING` inward — routing, per-shard batch
-  build, WASM execution, reduce coordination — is the production path,
+- Everything from `CALL BINDING` inward - routing, per-shard batch
+  build, WASM execution, reduce coordination - is the production path,
   the same one exercised by the live integration tests.
 
 ## Continue
 
 - [The Lagrange Native Programming Model](../../docs/native-programming-model.md)
-  — the authoring model this example instantiates.
+  - the authoring model this example instantiates.
 - [js-request-binding-deployment](../js-request-binding-deployment/README.md)
-  — the request-shaped front door (HTTP endpoint → one Cell).
-- [service-data-affinity](../service-data-affinity/README.md) — measured
+  - the request-shaped front door (HTTP endpoint → one Cell).
+- [service-data-affinity](../service-data-affinity/README.md) - measured
   comparison study of the same execution shape at MovieLens scale.
