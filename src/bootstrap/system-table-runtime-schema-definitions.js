@@ -712,26 +712,14 @@ const CALL_CELL_REDUCE_SLOTS_SCHEMA = {
  */
 const CALL_CELL_REDUCE_RESULTS_SCHEMA = {
   tableName: SYSTEM_TABLE_NAME.CALL_CELL_REDUCE_RESULTS,
+  // No column defaults: the reduce coordinator is the sole writer and its
+  // INSERT grammar always supplies every column (the '' result_json seed
+  // is an explicit abandoned-invocation sentinel, not a schema default).
   columns: [
     {name: 'result_id', type: COLUMN_TYPE.TEXT, primaryKey: true},
-    {
-      name: 'result_json',
-      type: COLUMN_TYPE.TEXT,
-      notNull: true,
-      defaultValue: '\'\'',
-    },
-    {
-      name: 'computed_at',
-      type: COLUMN_TYPE.INTEGER,
-      notNull: true,
-      defaultValue: '0',
-    },
-    {
-      name: 'source_snapshot_json',
-      type: COLUMN_TYPE.TEXT,
-      notNull: true,
-      defaultValue: '\'\'',
-    },
+    {name: 'result_json', type: COLUMN_TYPE.TEXT, notNull: true},
+    {name: 'computed_at', type: COLUMN_TYPE.INTEGER, notNull: true},
+    {name: 'source_snapshot_json', type: COLUMN_TYPE.TEXT, notNull: true},
   ],
 };
 

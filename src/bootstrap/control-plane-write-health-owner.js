@@ -115,14 +115,18 @@ function hasContainedBackgroundBacklog(routerStats = {}) {
   });
 }
 
+function resolveWriteHealthDiagnostics(publicationStory, heartbeatService) {
+  return publicationStory?.nodeStatePublication &&
+    typeof publicationStory.nodeStatePublication === 'object' ?
+    publicationStory.nodeStatePublication :
+    getHeartbeatPublicationDiagnostics(heartbeatService);
+}
+
 function buildControlPlaneWriteHealthSnapshot(owner, failureThreshold) {
   const heartbeatService = owner?.heartbeatService || null;
   const publicationStory = getControlPlanePublicationStory(owner);
   const diagnostics =
-    publicationStory?.nodeStatePublication &&
-      typeof publicationStory.nodeStatePublication === 'object' ?
-      publicationStory.nodeStatePublication :
-      getHeartbeatPublicationDiagnostics(heartbeatService);
+    resolveWriteHealthDiagnostics(publicationStory, heartbeatService);
   const routerStats = getRouterStats(owner);
   return Object.freeze({
     source: CONTROL_PLANE_WRITE_HEALTH_SOURCE.HEARTBEAT_SERVICE,

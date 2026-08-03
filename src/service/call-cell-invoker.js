@@ -75,6 +75,9 @@ const CALL_INVOKER_ACTIVATION_DEFAULT = Object.freeze({
 // rows older than this window are swept opportunistically, one bounded
 // sweep per new invocation (no background reaper).
 const CALL_INVOKER_RECLAIM_RETENTION_DEFAULT_MS = 600000;
+const CALL_INVOKER_RECLAIM_SWEEP_FAILED_LOG =
+  'call-cell coordination reclaim sweep failed (hygiene only; the live ' +
+  'invocation proceeds)';
 
 function sleep(delayMs) {
   return new Promise((resolve) => {
@@ -98,27 +101,40 @@ function requiredCoordinatorMethods(reduceCoordinator) {
     (method) => typeof reduceCoordinator?.[method] === 'function');
 }
 
+function positiveIntegerOption(value, fallback) {
+  return Number.isSafeInteger(value) && value > 0 ? value : fallback;
+}
+
+function nonNegativeIntegerOption(value, fallback) {
+  return Number.isSafeInteger(value) && value >= 0 ? value : fallback;
+}
+
+function assertInvokerCollaborators(options) {
+  if (typeof options.routeResolver?.resolve !== 'function') {
+    throw new TypeError(CALL_INVOKER_ARGUMENT_MESSAGE.ROUTE_RESOLVER_REQUIRED);
+  }
+  if (typeof options.batchExecutor?.executeBatches !== 'function') {
+    throw new TypeError(
+      CALL_INVOKER_ARGUMENT_MESSAGE.BATCH_EXECUTOR_REQUIRED);
+  }
+  if (typeof options.statementAdapter?.invoke !== 'function') {
+    throw new TypeError(
+      CALL_INVOKER_ARGUMENT_MESSAGE.STATEMENT_ADAPTER_REQUIRED);
+  }
+  if (!requiredCoordinatorMethods(options.reduceCoordinator)) {
+    throw new TypeError(
+      CALL_INVOKER_ARGUMENT_MESSAGE.REDUCE_COORDINATOR_REQUIRED);
+  }
+  if (typeof options.partitionTopology?.resolveShardHost !== 'function') {
+    throw new TypeError(
+      CALL_INVOKER_ARGUMENT_MESSAGE.PARTITION_TOPOLOGY_REQUIRED);
+  }
+}
+
 class CallCellInvoker {
   constructor(options = {}) {
-    if (typeof options.routeResolver?.resolve !== 'function') {
-      throw new TypeError(CALL_INVOKER_ARGUMENT_MESSAGE.ROUTE_RESOLVER_REQUIRED);
-    }
-    if (typeof options.batchExecutor?.executeBatches !== 'function') {
-      throw new TypeError(
-        CALL_INVOKER_ARGUMENT_MESSAGE.BATCH_EXECUTOR_REQUIRED);
-    }
-    if (typeof options.statementAdapter?.invoke !== 'function') {
-      throw new TypeError(
-        CALL_INVOKER_ARGUMENT_MESSAGE.STATEMENT_ADAPTER_REQUIRED);
-    }
-    if (!requiredCoordinatorMethods(options.reduceCoordinator)) {
-      throw new TypeError(
-        CALL_INVOKER_ARGUMENT_MESSAGE.REDUCE_COORDINATOR_REQUIRED);
-    }
-    if (typeof options.partitionTopology?.resolveShardHost !== 'function') {
-      throw new TypeError(
-        CALL_INVOKER_ARGUMENT_MESSAGE.PARTITION_TOPOLOGY_REQUIRED);
-    }
+    assertInvokerCollaborators(options);
+    this._logger = options.logger || null;
     this._routeResolver = options.routeResolver;
     this._batchExecutor = options.batchExecutor;
     this._statementAdapter = options.statementAdapter;
@@ -130,20 +146,13 @@ class CallCellInvoker {
       typeof options.activationLeases?.publishActivationLease === 'function' ?
         options.activationLeases :
         null;
-    this._activationRetryIntervalMs = Number.isSafeInteger(
-      options.activationRetryIntervalMs) &&
-      options.activationRetryIntervalMs > 0 ?
-      options.activationRetryIntervalMs :
-      CALL_INVOKER_ACTIVATION_DEFAULT.RETRY_INTERVAL_MS;
-    this._activationWaitMs = Number.isSafeInteger(options.activationWaitMs) &&
-      options.activationWaitMs > 0 ?
-      options.activationWaitMs :
-      CALL_INVOKER_ACTIVATION_DEFAULT.WAIT_MS;
-    this._reclaimRetentionMs =
-      Number.isSafeInteger(options.reclaimRetentionMs) &&
-      options.reclaimRetentionMs > 0 ?
-        options.reclaimRetentionMs :
-        CALL_INVOKER_RECLAIM_RETENTION_DEFAULT_MS;
+    this._activationRetryIntervalMs = positiveIntegerOption(
+      options.activationRetryIntervalMs,
+      CALL_INVOKER_ACTIVATION_DEFAULT.RETRY_INTERVAL_MS);
+    this._activationWaitMs = positiveIntegerOption(
+      options.activationWaitMs, CALL_INVOKER_ACTIVATION_DEFAULT.WAIT_MS);
+    this._reclaimRetentionMs = positiveIntegerOption(
+      options.reclaimRetentionMs, CALL_INVOKER_RECLAIM_RETENTION_DEFAULT_MS);
     this._batchRowBound = options.batchRowBound;
     this._partialLimit = options.partialLimit;
     // batchRowBound rides with the bounded-emit budgets so the shard's
@@ -151,14 +160,11 @@ class CallCellInvoker {
     // locally.
     this._callCellBudgets = Object.freeze({
       batchRowBound: this._batchRowBound,
-      emitBudget: Number.isSafeInteger(options.emitBudget) &&
-        options.emitBudget >= 0 ?
-        options.emitBudget :
-        CALL_INVOKER_BUDGET_DEFAULT.EMIT_BUDGET,
-      nestedCallBudget: Number.isSafeInteger(options.nestedCallBudget) &&
-        options.nestedCallBudget >= 0 ?
-        options.nestedCallBudget :
-        CALL_INVOKER_BUDGET_DEFAULT.NESTED_CALL_BUDGET,
+      emitBudget: nonNegativeIntegerOption(
+        options.emitBudget, CALL_INVOKER_BUDGET_DEFAULT.EMIT_BUDGET),
+      nestedCallBudget: nonNegativeIntegerOption(
+        options.nestedCallBudget,
+        CALL_INVOKER_BUDGET_DEFAULT.NESTED_CALL_BUDGET),
     });
   }
 
@@ -264,8 +270,12 @@ class CallCellInvoker {
       try {
         await this._reduceCoordinator.reclaimExpiredCoordination(
           this._reclaimRetentionMs);
-      } catch {
-        // Hygiene only; the seeded rows below are what correctness needs.
+      } catch (reclaimError) {
+        // Hygiene only; the seeded rows below are what correctness
+        // needs — but repeated sweep failures must stay observable.
+        this._logger?.debug?.(CALL_INVOKER_RECLAIM_SWEEP_FAILED_LOG, {
+          message: reclaimError?.message,
+        });
       }
     }
     // The reduce lease occupies its own coordination slot above the shard

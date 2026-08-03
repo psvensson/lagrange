@@ -62,6 +62,36 @@ const COMPONENT_BYTES = Buffer.from(
 const COMPONENT_PAYLOAD_DIGEST = `sha256:${createHash('sha256')
   .update(COMPONENT_BYTES)
   .digest('hex')}`;
+// call/pushdown Bindings start in the sealed call-cell world, whose host
+// imports are `lagrange:cell/call-context` only — the request-cell fixture
+// above cannot instantiate there. This fixture is a minimal conforming
+// call-cell world component (wasm-tools component embed/new against
+// test/wasm-service/fixtures/call-cell-world/wit) exporting run/reduce.
+const CALL_COMPONENT_BYTES = Buffer.from(
+  'AGFzbQ0AAQAHcAFCBwFxBApudWxsLXZhbHVlAAAHaW50ZWdlcgF4AARyZWFsAXUA' +
+  'BHRleHQBcwAEAApjZWxsLXZhbHVlAwAAAXICBG5hbWVzA3ZhbAEEAAZjb2x1bW4D' +
+  'AAIBcAMBcgEHY29sdW1ucwQEAANyb3cDAAUKHwEAGmxhZ3JhbmdlOmNlbGwvY2Fs' +
+  'bC1jb250ZXh0BQAGCAEDAAADcm93CgkBAANyb3cDAAEBiwEAYXNtAQAAAAEJAWAE' +
+  'f39/fwF/AwQDAAAABQMBAAEHKAQGbWVtb3J5AgAMY2FiaV9yZWFsbG9jAAADcnVu' +
+  'AAEGcmVkdWNlAAIKEAMEAEEICwQAQQALBABBAAsALwlwcm9kdWNlcnMBDHByb2Nl' +
+  'c3NlZC1ieQENd2l0LWNvbXBvbmVudAcwLjIzNi4wAgQBAAAABgwBAAIBAAZtZW1v' +
+  'cnkHGQJwAkACBWJhdGNoAwlhcmd1bWVudHNzAHMGGgIAAAEAA3J1bgAAAQAMY2Fi' +
+  'aV9yZWFsbG9jCAsBAAAAAwMABAEABAsJAQADcnVuAQAAByADbwJzc3AFQAIIcGFy' +
+  'dGlhbHMGCWFyZ3VtZW50c3MAcwYMAQAAAQAGcmVkdWNlCAsBAAACAwMABAEABwsM' +
+  'AQAGcmVkdWNlAQIAAC8JcHJvZHVjZXJzAQxwcm9jZXNzZWQtYnkBDXdpdC1jb21w' +
+  'b25lbnQHMC4yMzYuMA==',
+  'base64',
+);
+const CALL_COMPONENT_PAYLOAD_DIGEST = `sha256:${createHash('sha256')
+  .update(CALL_COMPONENT_BYTES)
+  .digest('hex')}`;
+const CALL_WORLD_SOURCE_KINDS = new Set(['call', 'pushdown']);
+
+function componentFixtureForSourceKind(sourceKind) {
+  return CALL_WORLD_SOURCE_KINDS.has(sourceKind) ?
+    {bytes: CALL_COMPONENT_BYTES, payloadDigest: CALL_COMPONENT_PAYLOAD_DIGEST} :
+    {bytes: COMPONENT_BYTES, payloadDigest: COMPONENT_PAYLOAD_DIGEST};
+}
 
 function clone(value) {
   return value === undefined ? undefined : JSON.parse(JSON.stringify(value));
@@ -279,14 +309,15 @@ function createBindingCompilationKit(config) {
   }
 
   async function assertComponentReadiness(definition, bindingRow, sourceKind) {
+    const fixture = componentFixtureForSourceKind(sourceKind);
     const driver = new WasmComponentDriver({
       artifactLoader: async () => ({
         artifactDigest: config.artifactDigest,
-        bytes: COMPONENT_BYTES,
+        bytes: fixture.bytes,
         manifest: config.buildManifest(sourceKind),
         manifestDigest: bindingRow.manifest_digest,
         packageId: bindingRow.package_id,
-        payloadDigest: COMPONENT_PAYLOAD_DIGEST,
+        payloadDigest: fixture.payloadDigest,
       }),
       componentRuntime: new WasiComponentCellRuntime(),
     });

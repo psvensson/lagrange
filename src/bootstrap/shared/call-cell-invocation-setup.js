@@ -10,7 +10,7 @@
  *     → createCallCellRoutingSurface (real ServiceDispatcher +
  *       CallCellStatementAdapter over the node's MessageRouter)
  *     → createCallCellBatchExecutor (engine parser, partition resolver,
- *       query executor — the PartitionCallbackDispatcher shapes)
+ *       query executor — the engine's established consumer shapes)
  *     → createCallCellReduceCoordinator (guarded UPDATE grammar over the
  *       call_cell_reduce_slots / call_cell_reduce_results system tables
  *       through the engine's internal SQL path)
@@ -78,7 +78,7 @@ function positiveIntegerOr(value, fallback) {
  * @return {object|null} the attached invoker, or null when a dependency
  *   is absent (the owner keeps its typed fail-closed refusal)
  */
-function attachCallCellInvoker(options = {}) {
+function resolveAttachmentDependencies(options) {
   const owner = options.serviceLifecycleCommandOwner || null;
   const sqlQueryEngine = options.sqlQueryEngine || null;
   const systemTableCacheProvider =
@@ -95,6 +95,17 @@ function attachCallCellInvoker(options = {}) {
         'function') {
     return null;
   }
+  return {messageRouterProvider, owner, sqlQueryEngine,
+    systemTableCacheProvider};
+}
+
+function attachCallCellInvoker(options = {}) {
+  const dependencies = resolveAttachmentDependencies(options);
+  if (!dependencies) {
+    return null;
+  }
+  const {messageRouterProvider, owner, sqlQueryEngine,
+    systemTableCacheProvider} = dependencies;
   if (typeof owner.callCellInvoker?.invoke === 'function') {
     return owner.callCellInvoker;
   }
@@ -148,6 +159,7 @@ function attachCallCellInvoker(options = {}) {
   });
   const invoker = new CallCellInvoker({
     activationLeases,
+    logger: options.logger,
     activationRetryIntervalMs: tunables.activationRetryIntervalMs,
     activationWaitMs: tunables.activationWaitMs,
     batchExecutor,

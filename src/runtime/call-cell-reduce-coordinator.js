@@ -150,12 +150,20 @@ function createReduceIncompleteFailure(reason, invocationId) {
   );
 }
 
+function hasValidConfigTables(config) {
+  return isValidIdentifier(config?.coordinationTable) &&
+    isValidIdentifier(config?.resultTable);
+}
+
+function hasValidConfigBounds(config) {
+  return Number.isFinite(config?.leaseMs) && config.leaseMs > 0 &&
+    Number.isInteger(config?.slotCount) && config.slotCount > 0;
+}
+
 function assertValidConfig(config) {
   const valid = typeof config?.executeInternal === 'function' &&
-    isValidIdentifier(config?.coordinationTable) &&
-    isValidIdentifier(config?.resultTable) &&
-    Number.isFinite(config?.leaseMs) && config.leaseMs > 0 &&
-    Number.isInteger(config?.slotCount) && config.slotCount > 0 &&
+    hasValidConfigTables(config) &&
+    hasValidConfigBounds(config) &&
     typeof config?.nowProvider === 'function';
   if (!valid) {
     throw new TypeError(
@@ -180,6 +188,36 @@ function normalizeExpectedSlotIds(expectedSlotIds, config) {
     );
   }
   return [...slotIds].sort((left, right) => left - right);
+}
+
+function witnessSlotEntryValid(slot, expectedSlotId, replicaIds, limit) {
+  const candidateCount = Number(slot?.candidateCount);
+  const computedAt = Number(slot?.computedAt);
+  return Number(slot?.slotId) === expectedSlotId &&
+    isNonEmptyString(slot?.replicaId) &&
+    !replicaIds.has(slot.replicaId) &&
+    Number.isFinite(computedAt) && computedAt > 0 &&
+    Number.isInteger(candidateCount) && candidateCount >= 0 &&
+    candidateCount <= limit;
+}
+
+function parseWitnessSlotEntries(parsedSlots, slotIds, limit) {
+  const replicaIds = new Set();
+  const slots = [];
+  for (let index = 0; index < slotIds.length; index += 1) {
+    const slot = parsedSlots[index];
+    if (!witnessSlotEntryValid(slot, slotIds[index], replicaIds, limit)) {
+      return null;
+    }
+    replicaIds.add(slot.replicaId);
+    slots.push({
+      slotId: slotIds[index],
+      replicaId: slot.replicaId,
+      computedAt: Number(slot.computedAt),
+      candidateCount: Number(slot.candidateCount),
+    });
+  }
+  return slots;
 }
 
 function createCallCellReduceCoordinator(options) {
@@ -542,8 +580,6 @@ function createCallCellReduceCoordinator(options) {
     if (!parsed || typeof parsed !== 'object') {
       return {state: CALL_CELL_REDUCE_SNAPSHOT_STATE.INVALID};
     }
-    const replicaIds = new Set();
-    const slots = [];
     const headerValid =
       parsed.schemaVersion === RESULT_SNAPSHOT_SCHEMA_VERSION &&
       Array.isArray(parsed.slots) &&
@@ -551,26 +587,9 @@ function createCallCellReduceCoordinator(options) {
     if (!headerValid) {
       return {state: CALL_CELL_REDUCE_SNAPSHOT_STATE.INVALID};
     }
-    for (let index = 0; index < slotIds.length; index += 1) {
-      const slot = parsed.slots[index];
-      const candidateCount = Number(slot?.candidateCount);
-      const computedAt = Number(slot?.computedAt);
-      const slotValid = Number(slot?.slotId) === slotIds[index] &&
-        isNonEmptyString(slot?.replicaId) &&
-        !replicaIds.has(slot.replicaId) &&
-        Number.isFinite(computedAt) && computedAt > 0 &&
-        Number.isInteger(candidateCount) && candidateCount >= 0 &&
-        candidateCount <= limit;
-      if (!slotValid) {
-        return {state: CALL_CELL_REDUCE_SNAPSHOT_STATE.INVALID};
-      }
-      replicaIds.add(slot.replicaId);
-      slots.push({
-        slotId: slotIds[index],
-        replicaId: slot.replicaId,
-        computedAt,
-        candidateCount,
-      });
+    const slots = parseWitnessSlotEntries(parsed.slots, slotIds, limit);
+    if (!slots) {
+      return {state: CALL_CELL_REDUCE_SNAPSHOT_STATE.INVALID};
     }
     return {
       state: CALL_CELL_REDUCE_SNAPSHOT_STATE.AVAILABLE,

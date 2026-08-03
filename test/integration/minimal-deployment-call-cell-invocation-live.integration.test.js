@@ -516,12 +516,18 @@ function createAuthenticatedAdapter(engine, sessionId, allowedActions) {
   }).then(() => adapter);
 }
 
+const CONTROL_PLANE_STOPS = Object.freeze([
+  ['membershipPublicationService', 'stopOwnerMembershipDriver'],
+  ['leaseService', 'stop'],
+  ['heartbeatService', 'stop'],
+  ['endpointService', 'stop'],
+  ['dispatchService', 'stop'],
+]);
+
 function stopControlPlane(setup) {
-  setup?.membershipPublicationService?.stopOwnerMembershipDriver?.();
-  setup?.leaseService?.stop?.();
-  setup?.heartbeatService?.stop?.();
-  setup?.endpointService?.stop?.();
-  setup?.dispatchService?.stop?.();
+  for (const [serviceName, stopMethod] of CONTROL_PLANE_STOPS) {
+    setup?.[serviceName]?.[stopMethod]?.();
+  }
 }
 
 async function componentizeFixtureGuest() {
@@ -576,6 +582,30 @@ function createPartitionStores() {
 // deliveries execute against the real SQLite stores, and addressed
 // handler deliveries reach whatever registered via the REAL
 // RuntimeServiceHandler.registerWithRouter path.
+function isPartitionQueryMessage(message) {
+  return message?.type === QUERY_MESSAGE_TYPE ||
+    message?.payload?.type === QUERY_MESSAGE_TYPE;
+}
+
+function executePartitionQuery(partitionStores, address, message) {
+  const partitionId = address.split('/')[2];
+  const database = partitionStores.databases.get(partitionId);
+  if (!database) {
+    return {acknowledged: true, success: false,
+      error: `unknown partition: ${partitionId}`};
+  }
+  const sql = message.sql || message.payload?.sql;
+  const params = message.params || message.payload?.params || [];
+  const rows = database.prepare(sql).all(...params);
+  return {
+    acknowledged: true,
+    success: true,
+    rows,
+    count: rows.length,
+    partitionId,
+  };
+}
+
 function createLiveMessageRouter(partitionStores) {
   const handlers = new Map();
   return {
@@ -587,24 +617,8 @@ function createLiveMessageRouter(partitionStores) {
       if (handler) {
         return handler(message);
       }
-      if (message?.type === QUERY_MESSAGE_TYPE ||
-          message?.payload?.type === QUERY_MESSAGE_TYPE) {
-        const partitionId = address.split('/')[2];
-        const database = partitionStores.databases.get(partitionId);
-        if (!database) {
-          return {acknowledged: true, success: false,
-            error: `unknown partition: ${partitionId}`};
-        }
-        const sql = message.sql || message.payload?.sql;
-        const params = message.params || message.payload?.params || [];
-        const rows = database.prepare(sql).all(...params);
-        return {
-          acknowledged: true,
-          success: true,
-          rows,
-          count: rows.length,
-          partitionId,
-        };
+      if (isPartitionQueryMessage(message)) {
+        return executePartitionQuery(partitionStores, address, message);
       }
       return {acknowledged: true, success: true};
     },

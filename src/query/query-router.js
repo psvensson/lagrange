@@ -319,8 +319,13 @@ class QueryRouter {
     if (preferLeader) {
       if (typeof canonicalLeaderNodeId === 'string' &&
         canonicalLeaderNodeId.length > 0) {
+        // A follower replica can share the leader's node; the raft leader
+        // must still outrank it, so order by role within the leader node.
         orderedServices
           .filter((service) => service?.node_id === canonicalLeaderNodeId)
+          .sort((a, b) =>
+            (b?.raft_role === RAFT_ROLE.LEADER ? 1 : 0) -
+            (a?.raft_role === RAFT_ROLE.LEADER ? 1 : 0))
           .forEach(addService);
       }
     }

@@ -2,6 +2,10 @@ import fs from 'node:fs';
 import {spawnSync} from 'node:child_process';
 import t from 'tap';
 
+// The spawned TLC run is bounded at 60s below; under full-suite load the
+// file can exceed tap's 30s default without anything being wrong.
+t.setTimeout(120000);
+
 const REPORT_DIR = 'test-output/reports';
 const CASES = Object.freeze([
   Object.freeze({

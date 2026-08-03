@@ -163,33 +163,48 @@ function assertCallCellInvocationPayload(
 // after dispatch — the same predicate shape the partition write guard
 // and the descriptor-epoch contract apply. Absent fence = a non-data-
 // local dispatch; nothing to re-assert.
-function assertPartitionFenceCurrent(handler, payload) {
-  const fence = payload?.partitionFence;
-  if (!fence || typeof fence !== 'object') return;
-  const cache = handler.systemTableCache;
-  const partitionRow = cache?.get?.(
-    SYSTEM_TABLE_NAME.PARTITIONS, payload.partitionId) || null;
-  const tableRow = partitionRow?.table_name ?
-    cache?.get?.(SYSTEM_TABLE_NAME.TABLES, partitionRow.table_name) ||
-      cache?.get?.(SYSTEM_TABLE_NAME.TABLES, partitionRow.table_id) :
+function readFenceTableRow(cache, partitionRow) {
+  if (!partitionRow?.table_name) return null;
+  return cache?.get?.(SYSTEM_TABLE_NAME.TABLES, partitionRow.table_name) ||
+    cache?.get?.(SYSTEM_TABLE_NAME.TABLES, partitionRow.table_id) ||
     null;
-  const activeVersion = Number(
-    tableRow?.active_partition_version ?? fence.activePartitionVersion ?? 1);
-  const current = {
-    activePartitionVersion: activeVersion,
+}
+
+function currentFenceShape(partitionRow, tableRow, fence) {
+  return {
+    activePartitionVersion: Number(
+      tableRow?.active_partition_version ??
+        fence.activePartitionVersion ?? 1),
     hostNodeId: partitionRow?.leader_node_id ?? null,
+    partitionRow,
     partitionState: partitionRow?.state ?? PARTITION_STATE_NORMAL,
     partitionVersion: Number(partitionRow?.partition_version ?? 1),
   };
-  const stale =
-    !partitionRow ||
+}
+
+function readCurrentPartitionFence(handler, payload, fence) {
+  const cache = handler.systemTableCache;
+  const partitionRow = cache?.get?.(
+    SYSTEM_TABLE_NAME.PARTITIONS, payload.partitionId) || null;
+  return currentFenceShape(
+    partitionRow, readFenceTableRow(cache, partitionRow), fence);
+}
+
+function partitionFenceIsStale(handler, fence, current) {
+  return !current.partitionRow ||
     current.hostNodeId !== fence.hostNodeId ||
     fence.hostNodeId !== handler.nodeId ||
     current.partitionState !== PARTITION_STATE_NORMAL ||
     current.partitionVersion !== Number(fence.partitionVersion ?? 1) ||
     current.activePartitionVersion !==
       Number(fence.activePartitionVersion ?? 1);
-  if (stale) {
+}
+
+function assertPartitionFenceCurrent(handler, payload) {
+  const fence = payload?.partitionFence;
+  if (!fence || typeof fence !== 'object') return;
+  const current = readCurrentPartitionFence(handler, payload, fence);
+  if (partitionFenceIsStale(handler, fence, current)) {
     throw new CallCellRoutingError(
       CALL_CELL_ROUTE_ERROR_CODE.TARGET_STALE,
       `${CALL_CELL_RUNTIME_MESSAGE.PARTITION_FENCE_STALE}: ` +
@@ -207,20 +222,24 @@ function assertPartitionFenceCurrent(handler, payload) {
 // the typed batch here — raw shard rows never cross the network. Bounded
 // by the dispatched batchRowBound through the partition read budget and
 // again through toCellBatch; every refusal is typed and invoked=false.
-async function buildLocalShardBatch(handler, payload, route, invocation) {
+function resolveUsableLocalPartitionService(handler, partitionId) {
   const services = handler.partitionServicesProvider?.() || null;
   const localServices =
-    resolveLocalPartitionServicesForPartition(services, payload.partitionId);
+    resolveLocalPartitionServicesForPartition(services, partitionId);
   const partitionService = (localServices || [])
     .find((candidate) => isLocalPartitionServiceUsable(candidate));
   if (!partitionService) {
     throw new CallCellRoutingError(
       CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
       `${CALL_CELL_RUNTIME_MESSAGE.LOCAL_PARTITION_UNAVAILABLE}: ` +
-        `${payload.partitionId}`,
+        `${partitionId}`,
       {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
     );
   }
+  return partitionService;
+}
+
+function resolveLocalRenderEngine(handler) {
   const engine = handler.cdcIntegrationService?.sqlQueryEngine || null;
   if (typeof engine?.parse !== 'function' ||
       typeof engine?.queryExecutor?.buildSelectSQL !== 'function') {
@@ -230,9 +249,13 @@ async function buildLocalShardBatch(handler, payload, route, invocation) {
       {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
     );
   }
+  return engine;
+}
+
+function parseLocalShardStatement(engine, statement) {
   let ast = null;
   try {
-    ast = engine.parse(route.statement);
+    ast = engine.parse(statement);
   } catch {
     ast = null;
   }
@@ -243,14 +266,45 @@ async function buildLocalShardBatch(handler, payload, route, invocation) {
       CALL_CELL_RUNTIME_MESSAGE.LOCAL_STATEMENT_INVALID,
     );
   }
-  const batchRowBound = invocation?.callCell?.batchRowBound;
-  if (!Number.isSafeInteger(batchRowBound) || batchRowBound <= 0) {
-    throw new CallCellRoutingError(
-      CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
-      CALL_CELL_RUNTIME_MESSAGE.LOCAL_BATCH_BOUND_INVALID,
+  return ast;
+}
+
+function renderLocalShardSql(handler, route) {
+  const engine = resolveLocalRenderEngine(handler);
+  const ast = parseLocalShardStatement(engine, route.statement);
+  return engine.queryExecutor.buildSelectSQL(ast);
+}
+
+function localShardReadFailure(error) {
+  if (error?.code === QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED ||
+      error?.code === QUERY_RESULT_BUDGET_ERROR_CODE.BYTES_EXHAUSTED) {
+    return new CallCellRoutingError(
+      CALL_CELL_ROUTE_ERROR_CODE.BATCH_BOUND_EXCEEDED,
+      error.message,
+      {cause: error},
     );
   }
-  const sql = engine.queryExecutor.buildSelectSQL(ast);
+  if (error?.code === QUERY_RESULT_BUDGET_ERROR_CODE.WALL_TIME_EXHAUSTED) {
+    return new CallCellRoutingError(
+      CALL_CELL_ROUTE_ERROR_CODE.DEADLINE_EXHAUSTED,
+      error.message,
+      {cause: error},
+    );
+  }
+  return new CallCellRoutingError(
+    CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
+    `${CALL_CELL_RUNTIME_MESSAGE.LOCAL_SHARD_READ_FAILED}: ` +
+      `${error?.message}`,
+    {
+      cause: error,
+      classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE,
+    },
+  );
+}
+
+async function executeBoundedShardRead(
+  partitionService, sql, invocation, batchRowBound, partitionId,
+) {
   let result = null;
   try {
     result = await partitionService.executeQuery(sql, [], {
@@ -258,41 +312,34 @@ async function buildLocalShardBatch(handler, payload, route, invocation) {
       resultMaxRows: batchRowBound,
     });
   } catch (error) {
-    if (error?.code === QUERY_RESULT_BUDGET_ERROR_CODE.ROWS_EXHAUSTED ||
-        error?.code === QUERY_RESULT_BUDGET_ERROR_CODE.BYTES_EXHAUSTED) {
-      throw new CallCellRoutingError(
-        CALL_CELL_ROUTE_ERROR_CODE.BATCH_BOUND_EXCEEDED,
-        error.message,
-        {cause: error},
-      );
-    }
-    if (error?.code === QUERY_RESULT_BUDGET_ERROR_CODE.WALL_TIME_EXHAUSTED) {
-      throw new CallCellRoutingError(
-        CALL_CELL_ROUTE_ERROR_CODE.DEADLINE_EXHAUSTED,
-        error.message,
-        {cause: error},
-      );
-    }
-    throw new CallCellRoutingError(
-      CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
-      `${CALL_CELL_RUNTIME_MESSAGE.LOCAL_SHARD_READ_FAILED}: ` +
-        `${error?.message}`,
-      {
-        cause: error,
-        classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE,
-      },
-    );
+    throw localShardReadFailure(error);
   }
   if (result?.success === false) {
     throw new CallCellRoutingError(
       CALL_CELL_ROUTE_ERROR_CODE.ROUTE_UNAVAILABLE,
       `${CALL_CELL_RUNTIME_MESSAGE.LOCAL_SHARD_READ_FAILED}: ` +
-        `${result?.error || payload.partitionId}`,
+        `${result?.error || partitionId}`,
       {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
     );
   }
+  return result?.rows || [];
+}
+
+async function buildLocalShardBatch(handler, payload, route, invocation) {
+  const partitionService =
+    resolveUsableLocalPartitionService(handler, payload.partitionId);
+  const sql = renderLocalShardSql(handler, route);
+  const batchRowBound = invocation?.callCell?.batchRowBound;
+  if (!Number.isSafeInteger(batchRowBound) || batchRowBound <= 0) {
+    throw new CallCellRoutingError(
+      CALL_CELL_ROUTE_ERROR_CODE.INVALID_ARGUMENTS,
+      CALL_CELL_RUNTIME_MESSAGE.LOCAL_BATCH_BOUND_INVALID,
+    );
+  }
+  const rows = await executeBoundedShardRead(
+    partitionService, sql, invocation, batchRowBound, payload.partitionId);
   try {
-    return toCellBatch(result?.rows || [], batchRowBound);
+    return toCellBatch(rows, batchRowBound);
   } catch (error) {
     if (error instanceof CallCellValueError) {
       throw new CallCellRoutingError(
@@ -444,6 +491,20 @@ function resolveEnvelopeSecurityContext(envelope) {
   });
 }
 
+// Data-local branch: a run dispatch without a pre-built batch names its
+// shard partition; this node builds the typed batch from its own
+// partition replica AFTER route/target admission and BEFORE the
+// component is touched (every refusal inside stays invoked=false).
+async function resolveRunInputBatch(handler, payload, route, invocation) {
+  const dataLocal = payload?.batch === undefined &&
+    typeof payload?.partitionId === 'string' &&
+    resolveCallCellExportName(invocation) ===
+      CALL_CELL_INVOCATION_EXPORT_NAME.RUN;
+  return dataLocal ?
+    buildLocalShardBatch(handler, payload, route, invocation) :
+    payload?.batch;
+}
+
 async function handleCallCellInvocation(handler, envelope) {
   const payload = envelope?.payload;
   const invocation = payload?.invocation;
@@ -480,17 +541,8 @@ async function handleCallCellInvocation(handler, envelope) {
       invocation,
     );
     assertPartitionFenceCurrent(handler, payload);
-    // Data-local branch: a run dispatch without a pre-built batch names
-    // its shard partition; this node builds the typed batch from its own
-    // partition replica AFTER route/target admission and BEFORE the
-    // component is touched (every refusal above and inside stays
-    // invoked=false).
-    const batch = payload?.batch === undefined &&
-      typeof payload?.partitionId === 'string' &&
-      resolveCallCellExportName(invocation) ===
-        CALL_CELL_INVOCATION_EXPORT_NAME.RUN ?
-      await buildLocalShardBatch(handler, payload, route, invocation) :
-      payload?.batch;
+    const batch = await resolveRunInputBatch(
+      handler, payload, route, invocation);
     invocationStarted = true;
     const result = await handler.serviceRuntimeLifecycle.invoke(
       localReplica.replicaHandle,

@@ -46,22 +46,13 @@ as separate roadmap scope rather than widening that row:
    portability rather than re-owned there; and
 3. non-request invocation advances one source at a time through the existing
    ingress, dispatcher, runtime, authorization, and effect owners; and
-4. data-local call activation advances through
-   `solve/quests/data-local-call-partition-activation.json` after production
-   call wiring, so a selected partition can execute the pinned Component on its
-   replica node even when no ready Binding Cell was already placed there.
+4. data-local call activation is landed (see the decision log).
 
 ## Follow-on boundaries
 
 - **Transient named invocation:** map durable `call` and `pushdown`
   registrations to transient statement/query invocations through existing
   owners. No declaration-side direct execution path is allowed.
-- **Data-local call activation:** resolve the partition and replica before
-  Component execution, then make digest-verified execution capacity available
-  on that replica node through the existing Artifact, placement, and runtime
-  lifecycle owners. A missing pre-existing Cell must not force raw shard rows
-  across the network before `run`, and invocation demand must not become
-  caller-owned replica intent or a second scheduler.
 - **Actor-key stability:** rendezvous assignment supplies low-churn affinity.
   Fixed logical shards with epoch-fenced ownership remain a later contract only
   if strict single ownership becomes a correctness requirement.
@@ -90,27 +81,12 @@ as separate roadmap scope rather than widening that row:
 
 ## Decision log
 
-- 2026-08-03 — Call/pushdown invocation follow-ups CLOSED: the hardening
-  batch landed (bf9bf34c1 + f594d5d14: topology dead-fallback refusal,
-  lease-race self-heal, activation-wait deadline cap, receiver replica
-  echo, wire-identity grammar guard, zero new literal violations), the
-  live pin-consumption loop gained its deterministic engagement witness
-  (real UnifiedRebalancer policy pass over live lease rows), and the
-  reduce-coordination expiry grammar landed as its own quest
-  (`call-cell-reduce-coordination-expiry`) — bounded reclaim of lapsed
-  slot rows and abandoned results with published snapshots immune, the
-  concurrent-seed race caught in review and fixed before landing. The
-  non-request invocation follow-on for call/pushdown is complete.
-- 2026-08-03 — Data-local call activation LANDED (commit 9c60dc142, quest
-  `data-local-call-partition-activation-v2` inheriting the four-frontier
-  candidate): shard `run` executes on the partition host with the batch
-  built there (zero shard-row crossings asserted over two composed nodes),
-  a missing Cell activates through bounded CDC-propagated
-  `call_activation_leases` consumed by the placement planner as
-  deterministic pins (reclaim = lease lapse via the existing surplus
-  cure), ownership/epoch fencing rides every dispatch and is re-asserted
-  receiver-side, and owner boundaries held (no parallel topology cache,
-  no second scheduler, no caller placement).
+- 2026-08-03 — Call/pushdown invocation COMPLETE: data-local activation
+  landed (9c60dc142, quest `data-local-call-partition-activation-v2`),
+  followed by the hardening batch, the pin-loop engagement witness, and
+  the reduce-coordination expiry quest
+  (`call-cell-reduce-coordination-expiry`). Detail lives in the quest
+  logs and `solve/changes/HANDOFF-call-cell-invocation.md`.
 - 2026-08-02 — Selected data-local call activation as an explicit successor to
   production call wiring rather than widening the current call Quest. Quest
   [`data-local-call-partition-activation`](../quests/data-local-call-partition-activation.json)

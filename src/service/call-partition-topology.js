@@ -54,12 +54,12 @@ function createCallPartitionTopology(options = {}) {
    * @throws {CallCellRoutingError} typed RETRYABLE refusal when the
    *   partition is superseded, stateless, or currently hostless
    */
-  function resolveShardHost(tableName, partitionId) {
-    const queryExecutor = sqlQueryEngine.queryExecutor;
+  function resolveRoutablePartitionRow(tableName, partitionId) {
     const tableInfo = sqlQueryEngine.getTableInfo(tableName);
     const activePartitionVersion =
       sqlQueryEngine.resolveActivePartitionVersion(tableInfo);
-    const partitionRow = queryExecutor.getPartitionRecord(partitionId);
+    const partitionRow =
+      sqlQueryEngine.queryExecutor.getPartitionRecord(partitionId);
     if (!partitionRow ||
         !sqlQueryEngine.isPartitionVisibleForRouting(
           partitionRow, activePartitionVersion)) {
@@ -70,6 +70,13 @@ function createCallPartitionTopology(options = {}) {
         {classification: CALL_CELL_ROUTE_CLASSIFICATION.RETRYABLE},
       );
     }
+    return {activePartitionVersion, partitionRow};
+  }
+
+  function resolveShardHost(tableName, partitionId) {
+    const queryExecutor = sqlQueryEngine.queryExecutor;
+    const {activePartitionVersion, partitionRow} =
+      resolveRoutablePartitionRow(tableName, partitionId);
     const {candidates, routingSnapshot} =
       queryExecutor.resolvePartitionServiceCandidates(
         partitionId,

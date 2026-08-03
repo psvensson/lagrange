@@ -5,6 +5,7 @@ test/integration/control-plane-rebalance.integration.test.js
 test/integration/create-table-partition-provisioning.integration.test.js
 test/integration/cross-worker-cdc.integration.test.js
 test/integration/leader-metadata-validation.integration.test.js
+test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js
 test/integration/move-replica-handoff.integration.test.js
 test/integration/multi-node-cluster.integration.test.js
 test/integration/node-joining-rebalance.integration.test.js
