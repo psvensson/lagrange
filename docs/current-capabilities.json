@@ -121,7 +121,7 @@
     {
       "id": "binding-invocation",
       "area": "Service deployment",
-      "summary": "Request and call Bindings have public invocation adapters (HTTP, and authenticated pgwire CALL BINDING $1 with data-local shard runs and reduce coordination); the change, time, once, boot, and pushdown source kinds can be declared and placed but are not publicly invocable."
+      "summary": "Request and call Bindings have public invocation adapters (HTTP, and authenticated pgwire CALL BINDING $1 with data-local shard runs and reduce coordination), and a request handler can invoke a declared call Binding through the service context (one policy-authorized nested call per request); the change, time, once, boot, and pushdown source kinds can be declared and placed but are not publicly invocable."
     },
     {
       "id": "oci-runtime",

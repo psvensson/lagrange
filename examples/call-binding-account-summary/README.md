@@ -1,4 +1,4 @@
-# Account summary across partitions (call Binding)
+# Account summary: one HTTP endpoint, distributed across partitions
 
 ## The problem this example addresses
 
@@ -8,69 +8,90 @@ across partitions. The conventional answer pulls every candidate row
 across the network into an application tier, filters, sums, and throws
 most of the bytes away.
 
-This example does it the Lagrange way, on the real public call path:
+This example does it the Lagrange way, on the real public surfaces:
 
-1. The application makes **one call** and gets **one small JSON result**.
-2. The service is **authored as one unit** - partition function, reducer,
-   and the call declaration live together and deploy together.
-3. Lagrange runs the partition function **on each relevant partition**,
-   next to that partition's replica. The rows never leave their node;
-   only a handful of numeric partials do.
+1. The application makes **one authenticated HTTP POST** and gets **one
+   small JSON result**.
+2. The service is **authored as one unit** - HTTP handler, partition
+   function, reducer - one JavaScript file, compiled into one WASM
+   component, installed as one immutable Artifact.
+3. Lagrange exposes the endpoint, and the handler asks the host for the
+   named distributed operation. The partition function runs **on each
+   relevant partition**, next to that partition's replica. The rows
+   never leave their node; only a handful of numeric partials do.
 
 > Logically one ordinary service. Physically distributed across the data.
 
-This is the successor to the internal query-loop mechanics that the
-[service-data-affinity](../service-data-affinity/README.md) study proves
-out: the same shard-local-work-plus-bounded-reduction shape, but on the
-public Artifact / Binding / Cell surface, invocable by any authenticated
-client today.
+## The service: one file, two Bindings
 
-## The service: three pieces, authored together
-
-**Piece 1 - the partition function** (`run` in
-[`service.js`](service.js)): receives one typed batch of rows from one
-partition, filters to the requested account, and emits a few numeric
-partials. Plain JavaScript, compiled to a WASM component by
-[ComponentizeJS](https://github.com/bytecodealliance/ComponentizeJS)
-against the canonical committed [`wit/world.wit`](../../wit/world.wit).
+**Piece 1 - the HTTP handler** (`handleRequest` in
+[`service.js`](service.js)): parses the request, invokes the inner
+distributed operation by Binding name, and owns its endpoint's HTTP
+mapping - including honest statuses for typed failures:
 
 ```js
-export function run(batch, argumentsJson) {
-  const {accountId} = JSON.parse(argumentsJson);
-  // scan this shard's local rows, keep the account's rows ...
-  emit(`count:${shardKey}`, JSON.stringify(matched));
-  emit(`total:${shardKey}`, JSON.stringify(totalCents));
-  // ...
+import {callBinding} from 'lagrange:cell/context';
+
+export function handleRequest(requestJson) {
+  const request = JSON.parse(requestJson);
+  const result = callBinding(
+    'account-summary-inner',
+    JSON.stringify({accountId: request.body.accountId}),
+  );
+  return JSON.stringify({
+    status: 200,
+    headers: [['content-type', 'application/json']],
+    body: result,
+  });
 }
 ```
 
-**Piece 2 - the reducer** (`reduce`, same file): folds every shard's
+The handler never names a node, partition, replica, package, digest, or
+SQL statement. It names one **declared, authorized Binding** and passes
+bounded JSON arguments.
+
+**Piece 2 - the partition function** (`run`, same file): receives one
+typed batch of rows from one partition, filters to the requested
+account, and emits a few numeric partials.
+
+**Piece 3 - the reducer** (`reduce`, same file): folds every shard's
 partials into the final summary.
 
-```js
-export function reduce(partials, argumentsJson) {
-  // sum counts and totals, max the largest, derive the mean ...
-  return JSON.stringify({transactions, totalCents, largestCents, ...});
-}
-```
+All three compile together against the canonical committed
+[`wit/world.wit`](../../wit/world.wit) world `service-cell` by
+[ComponentizeJS](https://github.com/bytecodealliance/ComponentizeJS).
 
-**Piece 3 - the call declaration** (the call Binding, built in
+**The deployment declarations** (built in
 [`call-binding-example-contract.js`](call-binding-example-contract.js)):
-names the callable entry point and declares which data it runs over:
+ONE manifest declares both exports of the one Artifact:
 
 ```js
-source: {
-  kind: 'call',
-  name: 'account-summary',
-  statement: 'SELECT id, account_id, amount_cents, flagged FROM account_activity',
+exports: [
+  {name: 'handle-request', interface: 'request_v1'},
+  {name: 'run', interface: 'call_v1'},
+]
+```
+
+and TWO Bindings target the same package and manifest digest:
+
+- the **request Binding** `account-summary-http`
+  (`POST /accounts/summary` -> export `handle-request`);
+- the **call Binding** `account-summary-inner` (the data selector
+  `SELECT ... FROM account_activity` -> export `run`).
+
+Finally, one **service access policy** (schema v2) durably authorizes
+the HTTP Binding's only outbound call:
+
+```js
+{
+  schema_version: 2,
+  binding_name: 'account-summary-http',
+  tables: [],
+  calls: [{binding: 'account-summary-inner'}],
 }
 ```
 
-The statement is the data selector. Lagrange parses it, resolves which
-partitions hold matching rows, and dispatches `run` to each partition's
-host node - where the node executes the statement against its **own**
-replica and feeds the rows straight into the component. No fan-out code,
-no shard map, no connection strings anywhere in the service.
+Absent policy or an undeclared target fails closed, before dispatch.
 
 ## Run it
 
@@ -83,22 +104,25 @@ node examples/call-binding-account-summary/run-call-binding-account-summary.js
 
 One command: builds the component, boots a disposable local node, seeds
 150 transaction rows for three accounts, splits the table so the data
-genuinely spans two partitions, deploys the service over SQL, invokes it
-twice, checks the denied-session path, prints a JSON report, and cleans
-up. A full run typically takes under a minute; progress lines go to
-stderr.
+genuinely spans two partitions, deploys the service over SQL (INSTALL,
+both CREATE BINDINGs, CONFIGURE SERVICE ACCESS), invokes the HTTP
+endpoint and the direct CALL BINDING surface, proves the refusal and
+replay paths, prints a JSON report, and cleans up. A full run typically
+takes under a minute; progress lines go to stderr.
 
 ## What the application sees
 
-The caller opens one authenticated session and sends one statement:
+One authenticated HTTP request:
 
-```sql
-CALL BINDING $1
--- $1 = {"schema_version": 2, "name": "account-summary",
---       "arguments": {"accountId": 202}}
+```text
+POST /accounts/summary
+Authorization: Basic ...
+Content-Type: application/json
+
+{"accountId": 202}
 ```
 
-and receives one row back:
+and one JSON response:
 
 ```json
 {
@@ -112,33 +136,44 @@ and receives one row back:
 }
 ```
 
-No partitions, replicas, or placement appear in the caller's view - and a
-session without the `pgwire.binding.call` action is refused before any
-dispatch (the runner proves this too).
+The direct SQL surface stays covered too - the runner still invokes
+`CALL BINDING "account-summary-inner"` over an authenticated pgwire
+session holding `pgwire.binding.call` and checks the identical summary,
+and proves a session without that action is refused before any
+dispatch.
 
 ## What runs where
 
 ```text
-CALL BINDING "account-summary" {accountId: 202}
-  │
+POST /accounts/summary {accountId: 202}
+  │  (request Binding, authenticated ingress)
+  ▼
+handleRequest() in the request Cell
+  │  callBinding("account-summary-inner", {accountId})
+  │  (host-validated against the durable outbound-call policy)
+  ▼
+the one CallCellInvoker
   ├─ run() on partition …_left    ids 1..75 - scanned in place
   │     └─ emits count:1, total:1, largest:1, flagged:1   (4 numbers)
   ├─ run() on partition …_right   ids 76..150 - scanned in place
   │     └─ emits count:77, total:77, largest:77, flagged:77
   └─ reduce() on a lease-holding replica
-        └─ one JSON summary → the caller
+        └─ one JSON summary → handleRequest → one HTTP response
 ```
 
 ```mermaid
 %%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
-  APP["Existing application<br/>CALL BINDING"]:::ctrl
+  APP["Existing application<br/>POST /accounts/summary"]:::ctrl
+  REQ["request Cell<br/>handleRequest(): callBinding(...)"]:::svc
   P1["partition _left<br/>run(): scan + filter locally"]:::data
   P2["partition _right<br/>run(): scan + filter locally"]:::data
   RED["reduce()<br/>fold numeric partials"]:::svc
-  APP --> P1 & P2
+  APP --> REQ
+  REQ --> P1 & P2
   P1 & P2 -- "a few numbers each" --> RED
-  RED -- "one JSON row" --> APP
+  RED -- "one JSON row" --> REQ
+  REQ -- "one HTTP response" --> APP
 
   classDef data fill:#dbeafe,stroke:#1e40af,color:#0b2545
   classDef svc fill:#dcfce7,stroke:#166534,color:#052e16
@@ -150,7 +185,26 @@ replica (`run` receives the batch built locally there), each shard
 publishes its emitted partials under a coordination lease, and `reduce`
 executes exactly once over the complete, disjoint partial set. The
 two-node integration tests in `test/integration/` prove the raw rows
-never cross the network on this path - the wire carries the partials.
+never cross the network on this path - the wire carries the partials -
+and that shard runs genuinely overlap when partitions live on separate
+nodes.
+
+## The refusal probe and the replay proof
+
+The runner proves two guarantees on the live endpoint:
+
+- **Undeclared target -> 403 before dispatch.** The example guest
+  accepts an optional `body.target` override so the runner can request
+  a Binding name the access policy never declared. This is a demo
+  probe, not an escape hatch: the HOST validates every target against
+  the durable outbound-call policy before anything is dispatched, and
+  the guest merely maps the typed `target_not_allowed` refusal to 403.
+- **Replay executes the inner call once.** The runner sends the same
+  POST twice with the same `Idempotency-Key`. The second response is
+  byte-identical (served from the durable invocation journal), and the
+  coordination table holds exactly ONE result row for the system-owned
+  child identity `<outer invocation id>#call-1` - the distributed call
+  never re-ran.
 
 ## Why move the function, not the data
 
@@ -173,26 +227,31 @@ Deployment is the same lifecycle SQL as the request-binding examples,
 over one authenticated pgwire session:
 
 ```sql
-INSTALL SERVICE $1;   -- immutable, digest-pinned artifact + manifest
-CREATE BINDING $1;    -- kind 'call', name, and the declared statement
-CALL BINDING $1;      -- the invocation (separate session, binding.call)
+INSTALL SERVICE $1;           -- immutable, digest-pinned artifact + manifest
+CREATE BINDING $1;            -- kind 'call': the data selector -> run
+CREATE BINDING $1;            -- kind 'request': POST /accounts/summary -> handle-request
+CONFIGURE SERVICE ACCESS $1;  -- v2: calls allowlist for the request Binding
 ```
 
-The manifest exports `run` under the `call_v1` interface with
-`runtime.kind = wasm_component`. The `reduce` export is the second export
-of the same component - one artifact carries both halves of the service.
-The invocation, coordination (reduce slots, leases, atomic snapshot),
-and typed failure surface are specified in
+The two Bindings compile into two Cells of the same immutable Artifact.
+Each Cell's invocation mode restricts which host imports are live: the
+request invocation gets `callBinding` (bridged to the one
+`CallCellInvoker` over a worker-to-parent protocol that never blocks
+the parent thread), the call invocation gets `emit` - the other
+surface fails closed with a typed error in each mode. The nested call
+runs under the caller's own frozen security context and the tighter of
+the outer and inner deadlines. The invocation, coordination (reduce
+slots, leases, atomic snapshot), and typed failure surface are
+specified in
 [`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md).
 
 ## Honest limits and demo scaffolding
 
 Current call-path limits (of the platform, stated plainly):
 
-- **pgwire-only ingress.** `CALL BINDING` is the invocation surface;
-  there is no HTTP route or JS client for call Bindings yet. It requires
-  a password-authenticated session holding `pgwire.binding.call` (the
-  action is not in the trust-mode set).
+- **One nested call per request.** A request invocation may invoke at
+  most one Call Binding (`<outer>#call-1`); deeper chains
+  (HTTP -> call -> call) are refused by the identity grammar.
 - **Numeric partials only.** Each emitted partial must be a finite
   number keyed by a string; structured partials are not accepted by the
   reduce gate yet. Group keys must be disjoint across shards - this
@@ -203,21 +262,24 @@ Current call-path limits (of the platform, stated plainly):
 - **Single-table SELECT.** The Binding-declared statement must be a
   SELECT over one table.
 
-Demo scaffolding in the runner (not the call path):
+Demo scaffolding in the runner (not the composed path):
 
 - It sets the table's replica count to 1 and forces one managed
   partition split, because a single-node demo cannot satisfy the
   replicated split quorum a real cluster uses. Production tables split
   by policy (`split_storage_threshold`) as they grow.
-- Everything from `CALL BINDING` inward - routing, per-shard batch
-  build, WASM execution, reduce coordination - is the production path,
-  the same one exercised by the live integration tests.
+- It raises the HTTP ingress deadline to 30s so the composed
+  distributed call fits comfortably inside the outer request budget.
+- Everything from the HTTP POST inward - authentication, request
+  routing, the bridged `callBinding`, per-shard batch build, WASM
+  execution, reduce coordination - is the production path, the same
+  one exercised by the live integration tests.
 
 ## Continue
 
 - [The Lagrange Native Programming Model](../../docs/native-programming-model.md)
   - the authoring model this example instantiates.
 - [js-request-binding-deployment](../js-request-binding-deployment/README.md)
-  - the request-shaped front door (HTTP endpoint → one Cell).
+  - the request-shaped front door on its own (HTTP endpoint → one Cell).
 - [service-data-affinity](../service-data-affinity/README.md) - measured
   comparison study of the same execution shape at MovieLens scale.

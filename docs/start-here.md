@@ -27,10 +27,11 @@ that is worth it.
    when you want the placement mechanism rather than the application model.
 
 The call path - a binding-declared data selector, partition-local `run`, and
-a coordinated `reduce` - is implemented today and invoked with
-`CALL BINDING $1` over an authenticated PostgreSQL-wire session. The richer
-selector and pushdown surface remains future work; the programming-model doc
-marks the boundary precisely.
+a coordinated `reduce` - is implemented today, invoked directly with
+`CALL BINDING $1` over an authenticated PostgreSQL-wire session or from a
+deployed HTTP handler through the bridged `callBinding` host import. The
+richer selector and pushdown surface remains future work; the
+programming-model doc marks the boundary precisely.
 
 ## Build A Service
 
@@ -50,11 +51,13 @@ execution time for the first pass: about one hour.
    [js-request-binding-deployment example](../examples/js-request-binding-deployment/README.md)
    to author a component in plain JavaScript and invoke it, or the
    [request-binding-deployment example](../examples/request-binding-deployment/README.md)
-   for the same flow against a committed component. For the call path, run
-   the
+   for the same flow against a committed component. For the composed
+   service, run the
    [call-binding-account-summary example](../examples/call-binding-account-summary/README.md):
-   a partition function and reducer authored together, invoked with
-   `CALL BINDING $1`, computing an account summary across partitions. The
+   an HTTP handler, partition function, and reducer authored together in
+   one Artifact - `POST /accounts/summary` computes an account summary
+   across partitions, and the direct `CALL BINDING $1` surface stays
+   covered too. The
    [examples index](../examples/README.md) tracks what exists.
 6. Read [Execution Semantics](execution-semantics.md) for the contract your
    service runs under: retries, idempotency, partial failure, budgets, and

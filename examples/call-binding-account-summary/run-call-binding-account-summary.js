@@ -21,18 +21,24 @@ import {
 import {CallBindingRouteResolver} from
   '../../src/service/call-binding-route-resolver.js';
 import {
+  createInvocationIdentity,
+} from '../../src/service/request-cell-routing-contract.js';
+import {
   bootExampleNode,
   EXAMPLE_NODE,
 } from '../request-binding-deployment/request-binding-example-node.js';
 import {
   executeSql,
+  waitForReadyCell,
 } from '../request-binding-deployment/run-request-binding-deployment.js';
 import {
   CALL_EXAMPLE,
+  buildAccessPayload,
   buildCallBindingPayload,
   buildCallComponent,
   buildCallInstallPayload,
   buildCallManifest,
+  buildRequestBindingPayload,
 } from './call-binding-example-contract.js';
 
 const EXAMPLE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
@@ -54,6 +60,18 @@ const AMOUNT_FLOOR_CENTS = 250;
 const FLAGGED_THRESHOLD_CENTS = 17_000;
 const SUMMARY_ACCOUNT_ID = 202;
 const SECOND_ACCOUNT_ID = 303;
+const HTTP_STATUS_OK = 200;
+const HTTP_STATUS_FORBIDDEN = 403;
+const CONTENT_TYPE_HEADER = 'content-type';
+const JSON_CONTENT_TYPE = 'application/json';
+const REQUEST_CELL_DEADLINE_MS = 30_000;
+const UNDECLARED_TARGET = 'not-declared';
+const TARGET_NOT_ALLOWED_CODE = 'target_not_allowed';
+const REPLAY_IDEMPOTENCY_KEY = 'account-summary-replay-1';
+const CHILD_CALL_SUFFIX = '#call-1';
+const REPLAY_OBSERVABILITY_SESSION = 'account-summary-replay-observation';
+const REDUCE_RESULTS_SELECT =
+  'SELECT result_id FROM call_cell_reduce_results';
 const TABLE_DDL =
   'CREATE TABLE account_activity (id INTEGER PRIMARY KEY, ' +
   'account_id INTEGER, amount_cents INTEGER, flagged INTEGER)';
@@ -150,6 +168,9 @@ async function splitLedgerPartition(node, sourcePartitionId) {
   );
 }
 
+// One INSTALL, two CREATE BINDINGs against the same package and manifest
+// digest, one CONFIGURE SERVICE ACCESS declaring the HTTP Binding's
+// outbound-call allowlist.
 async function deploy(node, receipt) {
   const manifest = buildCallManifest(receipt);
   const installed = await executeSql(
@@ -165,12 +186,71 @@ async function deploy(node, receipt) {
     'CREATE BINDING $1',
     [JSON.stringify(binding)],
   );
+  const requestBinding = buildRequestBindingPayload(packageId, manifest);
+  const requestCreated = await executeSql(
+    node,
+    'CREATE BINDING $1',
+    [JSON.stringify(requestBinding)],
+  );
+  const access = await executeSql(
+    node,
+    'CONFIGURE SERVICE ACCESS $1',
+    [JSON.stringify(buildAccessPayload())],
+  );
   return {
+    access: access.rows[0],
     binding,
     bindingReceipt: created.rows[0],
     installReceipt: installed.rows[0],
     manifest,
+    requestBinding,
+    requestBindingReceipt: requestCreated.rows[0],
   };
+}
+
+// Authenticated HTTP invocation of the deployed endpoint through the
+// node's REST listener, preserving the raw response text so the replay
+// check can assert byte-identical responses.
+async function postAccountsSummary(node, body, options = {}) {
+  const headers = {
+    'accept': '*/*',
+    'authorization': `Basic ${Buffer.from(
+      `${EXAMPLE_NODE.USER}:${EXAMPLE_NODE.PASSWORD}`,
+    ).toString('base64')}`,
+    'content-type': JSON_CONTENT_TYPE,
+  };
+  if (typeof options.idempotencyKey === LOCAL_STR_STRING) {
+    headers['idempotency-key'] = options.idempotencyKey;
+  }
+  const response = await fetch(
+    `${node.baseUrl}${CALL_EXAMPLE.HTTP_PATH}`,
+    {
+      body: JSON.stringify(body),
+      headers,
+      method: CALL_EXAMPLE.HTTP_METHOD,
+    },
+  );
+  return {
+    contentType: response.headers.get(CONTENT_TYPE_HEADER) || '',
+    status: response.status,
+    text: await response.text(),
+  };
+}
+
+// Replay observability: the coordination system table holds exactly one
+// atomically published result row per completed inner invocation, keyed
+// by the system-owned child identity `<outer invocation id>#call-1`. The
+// node is in-process, so the runner queries the engine directly.
+async function countChildResultRows(node, childInvocationId) {
+  const result = await node.sqlAdapter.sqlCore.executeQuery(
+    REDUCE_RESULTS_SELECT,
+    [],
+    {sessionId: REPLAY_OBSERVABILITY_SESSION},
+  );
+  assert.equal(result?.success, true, JSON.stringify(result));
+  return (result.rows || []).filter(
+    (row) => row.result_id === childInvocationId,
+  ).length;
 }
 
 function exampleSecurityContext() {
@@ -246,8 +326,91 @@ async function summarizeAccount(callerAdapter, accountId) {
   return JSON.parse(result.rows[0].result);
 }
 
+// The composed HTTP surface: POST -> handle-request -> callBinding ->
+// distributed run/reduce -> one HTTP JSON response, plus the refusal
+// probe and the idempotent-replay proof.
+async function exerciseHttpSurface(node, rows, partitions) {
+  const oracle = expectedSummary(rows, SUMMARY_ACCOUNT_ID, partitions.length);
+
+  logPhase('HTTP POST /accounts/summary through the composed path');
+  const composed = await postAccountsSummary(node, {
+    accountId: SUMMARY_ACCOUNT_ID,
+  });
+  assert.equal(composed.status, HTTP_STATUS_OK, JSON.stringify(composed));
+  assert.ok(composed.contentType.includes(JSON_CONTENT_TYPE));
+  assert.deepEqual(JSON.parse(composed.text), oracle);
+
+  // Refusal probe: an undeclared target name is refused by the host's
+  // durable outbound-call policy BEFORE dispatch; the component maps the
+  // typed target_not_allowed failure to an honest 403.
+  logPhase('refusal probe: undeclared target -> 403 before dispatch');
+  const refused = await postAccountsSummary(node, {
+    accountId: SUMMARY_ACCOUNT_ID,
+    target: UNDECLARED_TARGET,
+  });
+  assert.equal(refused.status, HTTP_STATUS_FORBIDDEN,
+    JSON.stringify(refused));
+  const refusedBody = JSON.parse(refused.text);
+  assert.equal(refusedBody.code, TARGET_NOT_ALLOWED_CODE);
+  assert.equal(refusedBody.retryable, false);
+
+  // Replay proof: the same Idempotency-Key returns the journaled outer
+  // response byte for byte, and the inner distributed call has exactly
+  // one published result row under its system-owned child identity -
+  // it never re-ran.
+  logPhase('replay proof: idempotent POST twice, inner call runs once');
+  const childInvocationId = createInvocationIdentity(
+    EXAMPLE_NODE.DATABASE,
+    REPLAY_IDEMPOTENCY_KEY,
+  ) + CHILD_CALL_SUFFIX;
+  const first = await postAccountsSummary(
+    node,
+    {accountId: SUMMARY_ACCOUNT_ID},
+    {idempotencyKey: REPLAY_IDEMPOTENCY_KEY},
+  );
+  assert.equal(first.status, HTTP_STATUS_OK, JSON.stringify(first));
+  assert.deepEqual(JSON.parse(first.text), oracle);
+  const rowsAfterFirst = await countChildResultRows(node, childInvocationId);
+  assert.equal(rowsAfterFirst, 1,
+    'exactly one inner result row after the first idempotent POST');
+  const replayed = await postAccountsSummary(
+    node,
+    {accountId: SUMMARY_ACCOUNT_ID},
+    {idempotencyKey: REPLAY_IDEMPOTENCY_KEY},
+  );
+  assert.equal(replayed.status, first.status);
+  assert.equal(replayed.text, first.text,
+    'the replayed response is byte-identical to the journaled response');
+  const rowsAfterReplay = await countChildResultRows(node, childInvocationId);
+  assert.equal(rowsAfterReplay, 1,
+    'the replayed POST did not execute the inner call again');
+
+  return {
+    composed: {
+      body: JSON.parse(composed.text),
+      status: composed.status,
+    },
+    refused: {
+      body: refusedBody,
+      status: refused.status,
+    },
+    replay: {
+      byteIdentical: replayed.text === first.text,
+      childInvocationId,
+      innerResultRows: rowsAfterReplay,
+    },
+  };
+}
+
 async function exerciseDeployment(node, rows, partitions) {
   await waitForReadyCallCell(node);
+  await waitForReadyCell(node, {
+    METHOD: CALL_EXAMPLE.HTTP_METHOD,
+    PATH: CALL_EXAMPLE.HTTP_PATH,
+  });
+  const http = await exerciseHttpSurface(node, rows, partitions);
+
+  logPhase('direct CALL BINDING against account-summary-inner');
   const callerAdapter = await createCallerAdapter(
     node,
     CALL_SESSION,
@@ -288,6 +451,7 @@ async function exerciseDeployment(node, rows, partitions) {
 
   return {
     denied: {message: String(denied.message), rejected: true},
+    http,
     secondSummary,
     summary,
   };
@@ -305,21 +469,24 @@ async function runCallBindingAccountSummaryExample(options = {}) {
       ),
       ociOutputRoot: path.join(temporaryRoot, 'oci-layouts'),
     };
-    logPhase('componentizing service.js against the call-cell world');
+    logPhase('componentizing service.js against the service-cell world');
     const receipt = await buildCallComponent(paths);
     logPhase('booting the disposable local node');
     node = await bootExampleNode(
       path.join(temporaryRoot, NODE_DATA_DIRECTORY),
-      {wsPort: options.wsPort ?? EXAMPLE_WS_PORT},
+      {
+        requestCellDeadlineMs: REQUEST_CELL_DEADLINE_MS,
+        wsPort: options.wsPort ?? EXAMPLE_WS_PORT,
+      },
     );
     const rows = generateLedgerRows();
     logPhase(`seeding ${rows.length} ledger rows`);
     const created = await seedLedger(node, rows);
     logPhase('splitting the ledger partition on its id median');
     const partitions = await splitLedgerPartition(node, created.partitionId);
-    logPhase('INSTALL SERVICE + CREATE BINDING');
+    logPhase('INSTALL SERVICE + both CREATE BINDINGs + SERVICE ACCESS');
     const deployment = await deploy(node, receipt);
-    logPhase('waiting for the call Cell, then invoking CALL BINDING');
+    logPhase('waiting for the request Cell and the call Cell');
     const observations = await exerciseDeployment(node, rows, partitions);
     logPhase('all checks passed; shutting down');
     const report = {
@@ -330,10 +497,18 @@ async function runCallBindingAccountSummaryExample(options = {}) {
         ociManifestDigest: receipt.topManifestDescriptor.digest,
         packageId: deployment.binding.target.package_id,
       },
-      binding: {
-        exportName: deployment.binding.target.export_name,
-        name: deployment.binding.name,
-        statement: deployment.binding.source.statement,
+      bindings: {
+        call: {
+          exportName: deployment.binding.target.export_name,
+          name: deployment.binding.name,
+          statement: deployment.binding.source.statement,
+        },
+        request: {
+          exportName: deployment.requestBinding.target.export_name,
+          method: deployment.requestBinding.source.method,
+          name: deployment.requestBinding.name,
+          path: deployment.requestBinding.source.path,
+        },
       },
       ledger: {
         partitions: partitions.map((partition) =>

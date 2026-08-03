@@ -6,7 +6,9 @@ documentClass: current
 # Execution Semantics
 
 This is the contract behind a distributed call. When an application invokes a
-Lagrange service endpoint over `CALL BINDING $1`, partition functions run on
+Lagrange call endpoint - directly over `CALL BINDING $1`, or through a
+deployed request handler's bridged `callBinding` host import - partition
+functions run on
 the nodes holding the data and a reducer combines the partials. This page
 states exactly what the runtime guarantees while doing that - retries,
 idempotency, failure, timing, ordering, limits - with the real production
@@ -131,10 +133,35 @@ Every failure also carries `invoked` (did a component run) and
   receiver reports `invoked: false` for replays.
 - Idempotency keys containing the reserved `#slot-` / `#reduce` grammar are
   refused typed (`call_cell_invalid_arguments`).
-- There is **no caller-supplied idempotency key on CALL today**. The identity
-  plumbing accepts one, but no ingress field feeds it - two identical
-  `CALL BINDING` statements are two invocations. Caller idempotency keys are
-  an unresolved design decision.
+- There is **no caller-supplied idempotency key on a direct pgwire CALL
+  today**. The identity plumbing accepts one, but no `CALL BINDING` ingress
+  field feeds it - two identical `CALL BINDING` statements are two
+  invocations. Caller idempotency keys on the direct pgwire path are an
+  unresolved design decision. (The composed HTTP path behaves differently:
+  a replayed outer request with the same `Idempotency-Key` returns the
+  journaled response without re-running the nested call; see below.)
+
+## Nested Calls From Request Handlers
+
+A deployed request component can initiate the same distributed call through
+its host context: `callBinding(name, argumentsJson)` crosses a
+worker-to-parent bridge into the one canonical `CallCellInvoker` - there is
+no second execution path. The composed semantics, tersely:
+
+- the target must appear in the request Binding's durable service access
+  policy (schema v2 `calls` allowlist); absent policy or an undeclared
+  target is refused before any dispatch;
+- one nested call per request invocation, under the system-owned child
+  identity `<outer invocation>#call-1` - guest code never supplies or
+  edits identities, and deeper chains are refused by the identity grammar;
+- the effective deadline is `min(outer request deadline, call Binding
+  deadline)` - the nested call never starts a fresh timeout;
+- failures surface to the guest as a typed `binding-call-error`
+  (`target_not_allowed`, `invalid_arguments`, `deadline_exhausted`,
+  `target_unavailable`, ...) with a terminal/retryable classification; the
+  component owns the mapping to its HTTP response;
+- a replayed outer HTTP request (same `Idempotency-Key`) returns the
+  journaled outer response without re-executing the nested call.
 
 ## Side Effects
 
@@ -219,7 +246,7 @@ Production defaults, all overridable per deployment
 | `REDUCE_LEASE_MS` | 30000 | slot/reduce lease duration |
 | `ACTIVATION_LEASE_MS` | 60000 | activation-pin lease lifetime |
 | `RECLAIM_RETENTION_MS` | 600000 | coordination-garbage retention |
-| `NESTED_CALL_BUDGET` | 1 | moot - nested `call-bounded` always denies today |
+| `NESTED_CALL_BUDGET` | 1 | max bridged binding calls per request invocation (the call-world `call-bounded` import still always denies) |
 
 Ingress transport: `maxAttempts` 2, 128 in-flight globally, 32 per target;
 overload is a typed retryable `call_cell_route_unavailable`, never a queue.
@@ -277,13 +304,15 @@ result.
 Stated once, plainly - none of these are guaranteed by anything above:
 
 - caller-initiated cancellation;
-- caller-supplied idempotency keys on CALL;
+- caller-supplied idempotency keys on direct pgwire CALL;
 - structured (non-numeric) partial values;
 - concurrent runs on one component instance (today one active invocation
   per Cell; same-host shards serialize);
 - `pushdown` invocation (declared-only today);
 - nested `call-bounded` invocation (declared in WIT, host always denies);
-- any CALL ingress other than authenticated pgwire (no HTTP or client SDK).
+- a client SDK for direct CALL (direct ingress is authenticated pgwire;
+  HTTP reaches a call Binding through the composed request-handler path
+  above, not through a direct CALL route).
 
 ## Deeper
 

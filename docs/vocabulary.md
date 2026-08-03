@@ -41,7 +41,7 @@ Artifact (immutable installed code)
 | Artifact | Validated, digest-pinned package | Yes | User installs it |
 | Binding | Artifact export plus invocation source and budgets | Yes | User declares it |
 | Cell | Ready running actual derived from a Binding | No; replaceable | System places and repairs it |
-| Access policy | Tables and modes the Binding may use | Yes | User declares it |
+| Access policy | Tables, modes, and outbound call Bindings the Binding may use | Yes | User declares it |
 
 A Cell does not have a per-service Raft log. If service code needs durable
 state, it reads and writes ordinary tables.

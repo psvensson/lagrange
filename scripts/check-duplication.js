@@ -71,8 +71,11 @@ const RATCHET_TARGETS = [
     // call-cell gate-restoration batch; one-way-baseline rule).
     // 2026-08-03: tightened 839/32044 -> 838/31997 (measured after the
     // bounded-parallel-shard-dispatch landing; one-way-baseline rule).
-    baselineCloneGroupCount: 838,
-    baselineDuplicatedLineCount: 31997,
+    // 2026-08-03: tightened 838/31997 -> 836/31886 (measured after
+    // extracting the shared two-node call-cell deployment fixture for
+    // the HTTP-to-call composition proof; one-way-baseline rule).
+    baselineCloneGroupCount: 836,
+    baselineDuplicatedLineCount: 31886,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

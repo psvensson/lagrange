@@ -84,14 +84,17 @@ adding features without an operational contract.
 
 The core of data-local execution is already shipped: call Bindings run
 partition functions on the partition-host nodes and reduce their partials
-under coordination leases, with placement following demand. The 2.0
-direction deepens that surface:
+under coordination leases, with placement following demand, and an HTTP
+request handler can invoke an authorized call Binding from the same
+Artifact. The 2.0 direction deepens that surface:
 
 - multi-stage distributed plans with streaming exchange and backpressure;
+- deeper call composition (today one nested call per request);
 - structured partials, pushdown invocation, and concurrent invocations on
   a single Cell instance (cross-node shard fan-out is already bounded
   parallel);
-- a stable external kernel API and a published authoring WIT world;
+- a stable external kernel API and a registry-published authoring WIT
+  package (the canonical world ships in-repo at `wit/world.wit` today);
 - an installable service ecosystem with dependency and upgrade handling; and
 - a native artifact store for large, immutable content.
 

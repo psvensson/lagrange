@@ -29,7 +29,8 @@ The deployment model is Artifact / Binding / Cell. Request Bindings run
 genuine WASI components behind authenticated HTTP endpoints. Call Bindings
 run a partition function on the partitions of a declared table and a
 reducer over the partial results, invoked over authenticated pgwire with
-`CALL BINDING $1`.
+`CALL BINDING $1` - or from a request handler in the same Artifact through
+the policy-authorized `callBinding` host import.
 
 The legacy `js_wasm_component_v1` callback envelope is JavaScript, not a
 WebAssembly component. The accepted `pushdown`, `change`, `time`, `once`,

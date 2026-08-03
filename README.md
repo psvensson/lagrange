@@ -1,20 +1,26 @@
 # Lagrange
 
-Lagrange is a distributed runtime for data-intensive services. Write the
-data-intensive operation as one WASM component - partition-local functions
-and reduction code together - and call it from an existing service through a
-named Binding. Lagrange runs each part on the database nodes holding the
-relevant data.
+Lagrange is a distributed runtime for data-intensive services. Write an HTTP
+handler, partition-local functions, and reducers together. Deploy them as
+one WASM Artifact. Lagrange exposes the endpoint and runs the data-heavy
+parts beside the partitions holding the rows.
 
 ```text
-Existing service
+Existing application
       |
-      | CALL BINDING "account-summary"
+      | POST /accounts/summary
+      v
+handleRequest()  in a request Cell
+      |
+      | callBinding("account-summary-inner", arguments)
       v
 Lagrange
   |- run()    on partition host A     raw rows stay local
   |- run()    on partition host B     raw rows stay local
   `- reduce() -> one JSON result      only bounded partials move
+      |
+      v
+one HTTP response
 ```
 
 > Logically one ordinary service. Physically distributed across the data.
@@ -23,20 +29,21 @@ Lagrange
 
 ```text
 Artifact - immutable WASM component plus its service manifest
-Binding  - named invocation: data selector, target export, budgets
+Binding  - named invocation of one export: request (an HTTP endpoint) or
+           call (a data selector and its distributed operation), plus budgets
 Cell     - a running instance, placed by Lagrange
 ```
 
-## One Service Component, One Deployment Definition
+## One Service, One Deployment Definition
 
-The partition function and reducer are ordinary code authored side by side.
-A small service manifest defines what the component exports, and a call
-Binding defines how it is invoked and which data it runs over. Everything in
-this section is the real, runnable
+The HTTP handler, partition function, and reducer are ordinary code authored
+side by side in one source file, compiled into one WASM component, and
+installed as one immutable Artifact. Two Bindings expose it, and one access
+policy authorizes the handler's outbound call. Everything in this section is
+the real, runnable
 [account-summary example](examples/call-binding-account-summary/README.md).
 
-**A. The service manifest** - artifact identity, runtime, and the exported
-interface:
+**1. The service manifest** - one Artifact, both entry points declared:
 
 ```json
 {
@@ -44,30 +51,67 @@ interface:
   "name": "account-summary",
   "version": "1.0.0",
   "runtime": {"kind": "wasm_component"},
-  "exports": [{"name": "run", "interface": "call_v1"}],
+  "exports": [
+    {"name": "handle-request", "interface": "request_v1"},
+    {"name": "run", "interface": "call_v1"}
+  ],
   "artifact": {"...": "immutable digest-pinned component"},
   "capabilities": []
 }
 ```
 
-**B. The component code** - the partition function and reducer live together
-in one component. `run` receives the node's local rows and emits a few
-numeric partials via the host `emit` import; `reduce` merges every
-partition's partials into the final result:
+**2. The component code** - the HTTP handler, the partition function, and
+the reducer live together in one file, compiled against the canonical
+committed [`wit/world.wit`](wit/world.wit) world `service-cell`.
+`handleRequest` parses the request, asks the host for the named distributed
+operation, and owns its endpoint's HTTP mapping - honest statuses for typed
+failures included. It never names a node, partition, replica, package,
+digest, or SQL statement:
 
 ```js
-// service.js - partition function and reducer, side by side
+// service.js - HTTP handler, partition function, and reducer, side by side
+import {callBinding} from 'lagrange:cell/context';
 import {emit} from 'lagrange:cell/call-context';
 
+// Each typed binding-call-error maps to an honest HTTP status; the
+// component owns its endpoint responses, Lagrange does not hardcode them.
+const HTTP_STATUS_BY_CALL_ERROR_CODE = {
+  deadline_exhausted: 504,
+  invalid_arguments: 400,
+  target_not_allowed: 403,
+  target_unavailable: 503,
+};
+
+// Runs in the request Cell for each POST /accounts/summary.
+export function handleRequest(requestJson) {
+  const request = JSON.parse(requestJson);
+  try {
+    const result = callBinding(
+      'account-summary-inner',
+      JSON.stringify({accountId: request.body.accountId}),
+    );
+    return JSON.stringify({
+      status: 200,
+      headers: [['content-type', 'application/json']],
+      body: result,
+    });
+  } catch (error) {
+    const failure = error?.payload ?? {};
+    return JSON.stringify({
+      status: HTTP_STATUS_BY_CALL_ERROR_CODE[failure.code] ?? 500,
+      headers: [['content-type', 'application/json']],
+      body: JSON.stringify({code: failure.code ?? 'target_failed'}),
+    });
+  }
+}
+
 // Runs once per relevant partition, on the node holding that partition's
-// replica. Scans the local batch; only four numbers per shard leave the
+// replica. Scans the local batch; only a few numbers per shard leave the
 // node - the transaction rows never do.
 export function run(batch, argumentsJson) {
   const {accountId} = JSON.parse(argumentsJson);
   let matched = 0;
   let totalCents = 0;
-  let largestCents = 0;
-  let flagged = 0;
   let shardKey = null;
   for (const row of batch) {
     if (integerColumn(row, 'account_id') !== accountId) continue;
@@ -77,14 +121,10 @@ export function run(batch, argumentsJson) {
     if (shardKey === null || id < shardKey) shardKey = id;
     matched += 1;
     totalCents += amountCents;
-    if (amountCents > largestCents) largestCents = amountCents;
-    if (integerColumn(row, 'flagged') === 1) flagged += 1;
   }
   if (matched > 0) {
     emit(`count:${shardKey}`, JSON.stringify(matched));
     emit(`total:${shardKey}`, JSON.stringify(totalCents));
-    emit(`largest:${shardKey}`, JSON.stringify(largestCents));
-    emit(`flagged:${shardKey}`, JSON.stringify(flagged));
   }
   return JSON.stringify({matched, scanned: batch.length});
 }
@@ -94,49 +134,52 @@ export function reduce(partials, argumentsJson) {
   const {accountId} = JSON.parse(argumentsJson);
   let transactions = 0;
   let totalCents = 0;
-  let largestCents = 0;
-  let flagged = 0;
-  const shards = new Set();
   for (const [key, partialJson] of partials) {
-    const [metric, shardKey] = key.split(':');
     const value = JSON.parse(partialJson);
-    shards.add(shardKey);
-    if (metric === 'count') transactions += value;
-    else if (metric === 'total') totalCents += value;
-    else if (metric === 'largest') largestCents = Math.max(largestCents, value);
-    else if (metric === 'flagged') flagged += value;
+    if (key.startsWith('count:')) transactions += value;
+    if (key.startsWith('total:')) totalCents += value;
   }
-  return JSON.stringify({
-    accountId,
-    transactions,
-    totalCents,
-    largestCents,
-    meanCents: transactions === 0 ? 0 : Math.round(totalCents / transactions),
-    flagged,
-    contributingShards: shards.size,
-  });
+  return JSON.stringify({accountId, transactions, totalCents});
 }
 
-// (integerColumn helper elided; complete tested source:
-//  examples/call-binding-account-summary/service.js)
+// (The largest/flagged metrics and the integerColumn helper are elided;
+//  complete tested source: examples/call-binding-account-summary/service.js)
 ```
 
-**C. The call Binding** - the call declaration: which data the function runs
-over (a single-table SELECT that Lagrange plans per partition without
-fetching rows), which export it targets, and its execution budgets:
+**3. The request Binding** - the public front door: an exact method and
+path, targeting the component's `handle-request` export:
 
 ```json
 {
   "schema_version": 2,
-  "name": "account-summary",
-  "source": {
-    "kind": "call",
-    "name": "account-summary",
-    "statement": "SELECT id, account_id, amount_cents, flagged FROM account_activity"
-  },
+  "name": "account-summary-http",
+  "source": {"kind": "request", "method": "POST", "path": "/accounts/summary"},
   "target": {
     "package_id": "<from the INSTALL SERVICE receipt>",
     "manifest_digest": "sha256:<canonical manifest digest>",
+    "export_name": "handle-request"
+  },
+  "budgets": {"...": "request budgets, including wall_time_ms 30000"}
+}
+```
+
+**4. The call Binding** - the inner distributed operation, against the same
+package and manifest digest: which data the function runs over (a
+single-table SELECT that Lagrange plans per partition without fetching
+rows), which export it targets, and its execution budgets:
+
+```json
+{
+  "schema_version": 2,
+  "name": "account-summary-inner",
+  "source": {
+    "kind": "call",
+    "name": "account-summary-inner",
+    "statement": "SELECT id, account_id, amount_cents, flagged FROM account_activity"
+  },
+  "target": {
+    "package_id": "<same package>",
+    "manifest_digest": "<same manifest digest>",
     "export_name": "run"
   },
   "budgets": {
@@ -150,16 +193,31 @@ fetching rows), which export it targets, and its execution budgets:
 }
 ```
 
-**D. The invocation** - one statement over an authenticated PostgreSQL-wire
-session:
+**5. The service access policy** - durable outbound-call authorization,
+applied with `CONFIGURE SERVICE ACCESS`: the request Binding may invoke
+exactly the call Bindings it declares. Absent policy or an undeclared
+target fails closed, before any dispatch:
 
-```sql
-CALL BINDING $1
--- $1 = '{"schema_version": 2, "name": "account-summary",
---        "arguments": {"accountId": 202}}'
+```json
+{
+  "schema_version": 2,
+  "binding_name": "account-summary-http",
+  "tables": [],
+  "calls": [{"binding": "account-summary-inner"}]
+}
 ```
 
-and one row back, whose `result` is the reducer's final JSON:
+**6. The invocation** - one authenticated HTTP request:
+
+```text
+POST /accounts/summary
+Authorization: Basic ...
+Content-Type: application/json
+
+{"accountId": 202}
+```
+
+and one JSON response, the reducer's final result:
 
 ```json
 {
@@ -173,10 +231,35 @@ and one row back, whose `result` is the reducer's final JSON:
 }
 ```
 
-No partitions, replicas, or placement appear in the caller's view, and a
-session without the `pgwire.binding.call` action is refused before any
-dispatch. A direct language-level call API is planned; today applications
-invoke named Bindings over pgwire.
+Replaying the POST with the same `Idempotency-Key` returns the journaled
+response byte-identical, without running the inner distributed call again.
+
+The direct SQL surface stays covered too: `CALL BINDING $1` over an
+authenticated pgwire session (holding `pgwire.binding.call`) invokes the
+same call Binding directly and returns the identical summary.
+
+**7. What runs where**:
+
+```text
+POST /accounts/summary {accountId: 202}
+  |  (request Binding, authenticated ingress)
+  v
+handleRequest() in the request Cell
+  |  callBinding("account-summary-inner", {accountId})
+  |  (host-validated against the durable outbound-call policy)
+  v
+the one CallCellInvoker
+  |- run()    on partition host A     raw rows stay local
+  |- run()    on partition host B     raw rows stay local
+  `- reduce() -> one JSON result      only bounded partials move
+  |
+  v
+one HTTP response
+```
+
+No partitions, replicas, or placement appear anywhere in the service. The
+handler names one declared, authorized Binding and passes bounded JSON
+arguments; Lagrange owns everything below that line.
 
 ## Run It
 
@@ -187,18 +270,30 @@ npm run demo:account-summary
 
 The demo builds the component from plain JavaScript, installs it into a
 disposable local node, splits the ledger table across two partitions,
-invokes the Binding, verifies the summaries against an independent oracle,
-and proves the unauthorized-session refusal. Details:
+deploys both Bindings and the access policy over SQL, invokes the HTTP
+endpoint and the direct `CALL BINDING` surface, verifies the summaries
+against an independent oracle, and proves the undeclared-target refusal and
+the idempotent replay. Details:
 [the example's README](examples/call-binding-account-summary/README.md).
 
 ## What Happens At Runtime
 
-One `CALL` becomes a distributed operation. Lagrange plans the Binding's
+One POST becomes a distributed operation. The request Binding routes the
+request to a ready request Cell, where `handleRequest` runs. Its
+`callBinding` import crosses a worker-to-parent bridge (the parent thread is
+never blocked) into the one canonical `CallCellInvoker`, which validates the
+target against the durable outbound-call policy, plans the call Binding's
 SELECT into per-partition shards, dispatches `run` to each partition's host
 node - where the rows are read locally from that node's own replica - and
 dispatches `reduce` once, on the holder of a dedicated reduce lease. Only
 the emitted partials cross the network; in the two-node integration proof
 the shard tables see zero remote query deliveries.
+
+The nested call runs under the caller's own frozen security context and a
+system-owned child identity (`<outer invocation>#call-1`). Its effective
+deadline is the tighter of the outer request deadline and the call
+Binding's own deadline - never a fresh timeout - and a request invocation
+may make one nested call today.
 
 If the required service instance is missing on a host, Lagrange makes it
 exist - including the code itself:
@@ -250,11 +345,12 @@ For worked equations and honest claim boundaries, see
 and
 [infrastructure cost estimation](docs/infrastructure-cost-estimation.md).
 
-The service model itself carries the rest of the weight: the partition
-function, reducer, manifest, and Binding are written, reviewed, tested,
-versioned, and deployed together. No hand-built fan-out layer, no shard
-maps in application code, no redeploy when a partition splits. Components
-receive declared capabilities rather than broad database credentials.
+The service model itself carries the rest of the weight: the HTTP handler,
+partition function, reducer, manifest, Bindings, and access policy are
+written, reviewed, tested, versioned, and deployed together. No hand-built
+fan-out layer, no shard maps in application code, no redeploy when a
+partition splits. Components receive declared capabilities rather than
+broad database credentials.
 
 Raft remains underneath. Writes still reach a leader and quorum; Lagrange
 removes avoidable data movement around the durability work, it does not
@@ -287,16 +383,17 @@ Lagrange is alpha, with no backward-compatibility guarantee on `0.x`.
 Works today:
 
 - WASM installation and cluster-owned artifact storage
-- request and call Bindings
+- request and call Bindings, including HTTP-to-call composition: a request
+  handler invoking a declared call Binding through the service context
 - data-local partition execution and bounded parallel fan-out
 - leased reduction with one atomic result
 - Raft-replicated partitioned storage
 
 Not yet:
 
-- JavaScript or HTTP client for call Bindings (pgwire is the CALL ingress)
+- JavaScript client SDK for direct calls (direct invocation is pgwire
+  `CALL BINDING`)
 - structured partials (numeric per-group values only)
-- published call-authoring WIT package (the world lives in test fixtures)
 - general PostgreSQL compatibility (a bounded, measured slice)
 - managed OCI activation (compatibility scaffold only)
 

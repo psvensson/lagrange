@@ -17,6 +17,11 @@ Two invocation surfaces are public today:
   emitted partials, invoked over authenticated pgwire with
   `CALL BINDING $1`.
 
+The two surfaces compose: a request handler can invoke a declared call
+Binding through its host context (`callBinding`), so one HTTP endpoint can
+front a distributed call from the same immutable Artifact. The outbound
+call must be authorized durably through the service access policy (below).
+
 Packaging existing code as a WASI component gives you lifecycle, isolation,
 restart, declared capabilities, and policy-controlled placement. The larger
 data-local wins appear when the service uses the Lagrange context instead
@@ -92,12 +97,17 @@ interface context {
   read: func(table: u32, key: u32) -> s32;
   write: func(table: u32, key: u32, value: s32);
   capability: func(capability: u32) -> s32;
+  call-binding: func(name: string, arguments: string)
+    -> result<string, binding-call-error>;
 }
 ```
 
 Table numbers are capability slots resolved through the service-access
-declaration. A component must not contain a database endpoint, connection
-pool, partition map, or node-selection policy.
+declaration. `call-binding` invokes a declared call Binding by name from a
+request invocation; it is live only when the durable access policy
+authorizes the target, and fails closed with a typed error everywhere
+else. A component must not contain a database endpoint, connection pool,
+partition map, or node-selection policy.
 
 Call-Binding components use a second world, `lagrange:cell/call-context`,
 whose central import is `emit` - the channel through which a partition
@@ -150,7 +160,7 @@ external lifecycle control.
    `manifest_digest` yourself (sha256 of the canonical manifest JSON).
 5. Use `CREATE BINDING` to pin an export and source to that Artifact.
 6. Use `CONFIGURE SERVICE ACCESS` to grant the minimum table slots and
-   modes.
+   modes - and, for a composed service, the outbound-call allowlist.
 7. Observe desired state in `service_definitions`.
 8. Wait until a matching actual row is ready and running; that actual is a
    Cell.
@@ -163,6 +173,42 @@ The manifest format is documented in
 [Lagrange Service Manifest](../architecture/lagrange-service-manifest.md).
 The owner and convergence model is
 [Minimal Deployment Surface](../architecture/minimal-deployment-surface.md).
+
+## Configure Service Access
+
+`CONFIGURE SERVICE ACCESS $1` is the durable authorization surface for a
+Binding's runtime authority. A schema-v1 payload grants table slots:
+
+```json
+{
+  "schema_version": 1,
+  "binding_name": "js-request-binding-example",
+  "tables": [
+    {"slot": 0, "table": "table:global.js_request_binding_ledger",
+     "operations": ["read", "write"]}
+  ]
+}
+```
+
+A schema-v2 payload additionally declares the request Binding's
+outbound-call allowlist - the call Bindings its `callBinding` host import
+may invoke:
+
+```json
+{
+  "schema_version": 2,
+  "binding_name": "account-summary-http",
+  "tables": [],
+  "calls": [{"binding": "account-summary-inner"}]
+}
+```
+
+The `calls` semantics are fail-closed at every edge: an absent policy means
+no outbound calls, an empty list means no outbound calls, and a target not
+on the list is refused with a typed `target_not_allowed` before route
+resolution or dispatch. Targets are tenant-local Binding names - sorted,
+unique, bounded in count, with no wildcards. Observed calls never grant
+authority; only the declared policy does.
 
 ## Endpoint Example: A JavaScript Request Component
 
@@ -282,6 +328,10 @@ The manifest declares the `run` export under the `call_v1` interface:
 }
 ```
 
+A composed service declares its HTTP entry point in the same manifest as a
+second export (`{"interface": "request_v1", "name": "handle-request"}`) -
+one Artifact, two Bindings; see the flagship example below.
+
 (Plus the usual `artifact` block with `ref`, `digest`, and
 `media_type: "application/wasm"`.) Only the Binding's target export name is
 validated against the component's real exports; the `reduce` export is not
@@ -378,18 +428,24 @@ The full retry, idempotency, movement, and reduction contract is in
 
 Stated plainly:
 
-- pgwire is the only ingress for `CALL BINDING`; there is no HTTP or
-  client-SDK surface, and no caller-supplied idempotency key on this path.
+- pgwire is the direct ingress for `CALL BINDING`; there is no
+  client-SDK surface, and no caller-supplied idempotency key on the direct
+  pgwire path. HTTP reaches a call Binding through composition: a request
+  handler invokes a policy-declared target via `callBinding` (at most one
+  nested call per request, child identity `<outer>#call-1`, effective
+  deadline `min(outer request deadline, call Binding deadline)`).
 - Partials are numeric per-group aggregation values only.
 - Shard dispatch is parallel and bounded (default 8 concurrent runs);
   shards on one host node serialize (one active invocation per Cell).
-- The `call-bounded` nested-call import exists in the WIT world but the
-  host always denies it.
+- The call-world `call-bounded` nested-call import exists in the WIT world
+  but the host always denies it; request-side composition uses the
+  separate `callBinding` context import.
 - The runnable call-path example is
   [`examples/call-binding-account-summary`](../examples/call-binding-account-summary/README.md):
-  a partition function and reducer in one file, installed and bound over
-  pgwire, invoked with `CALL BINDING $1` across two partitions. The live
-  invocation shape is also exercised in
+  an HTTP handler, partition function, and reducer in one file, deployed
+  as one Artifact behind a request Binding and a call Binding, invoked
+  over HTTP and directly with `CALL BINDING $1` across two partitions. The
+  live invocation shape is also exercised in
   `test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js`.
 
 ## From Deployment To A Partition-Function Rewrite
@@ -424,8 +480,10 @@ Current public support:
 - call Bindings invoked through authenticated pgwire `CALL BINDING $1`,
   with data-local partition functions, numeric per-group partials, and a
   single reducer;
-- `read`, `write`, and `capability` context imports in the request world;
-  `emit` in the call world;
+- HTTP-to-call composition: a request handler invoking a declared call
+  Binding through `callBinding`, authorized by the v2 access policy;
+- `read`, `write`, `capability`, and `call-binding` context imports in the
+  request world; `emit` in the call world;
 - declared table-slot access and capability denial;
 - service identity attribution and data-affinity placement; and
 - Artifact / Binding / Cell lifecycle through authenticated SQL.
@@ -436,7 +494,8 @@ Not yet public:
   sources (declared-only);
 - structured or non-numeric partial values;
 - concurrent invocations on one Cell instance (same-host shards serialize);
-- nested `call-bounded` invocation; and
+- nested `call-bounded` invocation in the call world, and call chains
+  deeper than one bridged call per request; and
 - managed OCI container activation.
 
 Use

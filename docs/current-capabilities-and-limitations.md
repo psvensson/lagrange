@@ -105,7 +105,7 @@ container activation is unsupported. OCI callback invocation remains unsupported
 | Indexes | There is no secondary index support: CREATE INDEX is rejected as unsupported, and even a wired-in local index would not narrow the partition set. |
 | Replication | SQLite partition logs are bounded by the production snapshot protocol, but in-memory message-group logs still grow without bound and catch up by full replay. |
 | Replication | Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress. |
-| Service deployment | Request and call Bindings have public invocation adapters (HTTP, and authenticated pgwire CALL BINDING $1 with data-local shard runs and reduce coordination); the change, time, once, boot, and pushdown source kinds can be declared and placed but are not publicly invocable. |
+| Service deployment | Request and call Bindings have public invocation adapters (HTTP, and authenticated pgwire CALL BINDING $1 with data-local shard runs and reduce coordination), and a request handler can invoke a declared call Binding through the service context (one policy-authorized nested call per request); the change, time, once, boot, and pushdown source kinds can be declared and placed but are not publicly invocable. |
 | Service portability | Managed OCI container activation is unsupported. |
 | PostgreSQL compatibility | Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL/ORM compatibility are not claimed. |
 

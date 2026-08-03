@@ -515,12 +515,17 @@ Intended API, honestly labeled - none of this is a supported surface today:
   $b`); today you vary `arguments`, not the SQL.
 - **Structured partials.** One finite number per group key. Emitting
   `{sum, count}` and computing the average in the reducer is future work.
-- **Parallel shard fan-out.** Dispatch is a sequential loop today.
+- **Concurrent runs per Cell.** Shard dispatch is parallel and bounded
+  (default 8 concurrent runs), but shards on one host node serialize - a
+  Cell runs one invocation at a time.
 - **A `ctx.call()`-style client.** The intended in-process sugar
   (`lagrange.call({data, function, reduce, arguments})`) does not exist;
-  the surface is `CALL BINDING $1` over pgwire.
-- **Nested calls.** `call-bounded` is declared in the WIT world but always
-  denied by the host.
+  the external surface is `CALL BINDING $1` over pgwire, and deployed
+  request handlers invoke declared call Bindings through the
+  `callBinding` host import.
+- **Deeper nested calls.** A request handler can make one authorized
+  nested call; the call-world `call-bounded` import is declared in the
+  WIT world but always denied by the host.
 - **`pushdown`.** Declared-only; no routing surface can select it.
 
 ## Continue

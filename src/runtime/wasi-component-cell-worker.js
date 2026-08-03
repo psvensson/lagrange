@@ -11,6 +11,7 @@ import {
   requestCellTableIndexRowBound,
 } from './request-cell-table-read-index.js';
 import {createWorkerHostCallClient} from './cell-host-call-protocol.js';
+import {resolveComponentExport} from './component-export-resolution.js';
 
 const WORKER_MESSAGE = Object.freeze({
   INVOKE: 'invoke',
@@ -282,7 +283,10 @@ async function instantiateComponent() {
     ),
     resolveWorkerHostImports(),
   );
-  selectedExport = componentExports[workerData.exportName];
+  selectedExport = resolveComponentExport(
+    componentExports,
+    workerData.exportName,
+  );
   if (typeof selectedExport !== 'function') {
     throw new ComponentPolicyError(
       WORKER_ERROR_CODE.EXPORT_MISSING,
@@ -293,7 +297,10 @@ async function instantiateComponent() {
 
 function requireInvocationExport(message) {
   if (message.exportName === undefined) return selectedExport;
-  const exported = componentExports[message.exportName];
+  const exported = resolveComponentExport(
+    componentExports,
+    message.exportName,
+  );
   if (typeof exported !== 'function') {
     throw new ComponentPolicyError(
       WORKER_ERROR_CODE.EXPORT_MISSING,

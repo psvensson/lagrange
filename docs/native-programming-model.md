@@ -89,9 +89,17 @@ intentionally small:
 package lagrange:cell;
 
 interface context {
+  record binding-call-error {
+    code: string,
+    message: string,
+    retryable: bool,
+  }
+
   read: func(table: u32, key: u32) -> s32;
   write: func(table: u32, key: u32, value: s32);
   capability: func(capability: u32) -> s32;
+  call-binding: func(name: string, arguments: string)
+    -> result<string, binding-call-error>;
 }
 
 world request-cell {
@@ -99,6 +107,11 @@ world request-cell {
   export run: func(request: string) -> string;
 }
 ```
+
+`call-binding` is how a request handler initiates a distributed call: it
+names one declared, policy-authorized call Binding and passes bounded JSON
+arguments. Only authorized request invocations carry a live bridge;
+everywhere else the import fails closed with a typed error.
 
 A JavaScript component imports the host functions directly:
 
@@ -157,8 +170,16 @@ sessions that lack it.
 The result is one row: `{name, result}` where `result` is the final reduced
 JSON produced by the service's reducer.
 
-pgwire is the only ingress for call endpoints today. There is no HTTP route
-and no JavaScript client SDK for them.
+pgwire is the direct ingress for call endpoints. HTTP reaches them through
+composition instead of a direct route: a request handler invokes a declared
+call Binding via the `callBinding` host import, so one HTTP endpoint fronts
+the distributed operation. The composed shape - one component exporting
+`handle-request`, `run`, and `reduce` (the `service-cell` world in
+[`wit/world.wit`](../wit/world.wit)), one request Binding, one call
+Binding, and a v2 access policy authorizing the outbound call - is the
+runnable flagship,
+[`examples/call-binding-account-summary`](../examples/call-binding-account-summary/README.md).
+There is no JavaScript client SDK for direct calls.
 
 ## Partition Functions
 
@@ -471,7 +492,8 @@ plus operation from inside application code:
 
 ```js
 // Intended API - not yet implemented. Today the data selector is the
-// Binding-declared statement and the ingress is pgwire CALL BINDING $1.
+// Binding-declared statement; external callers use pgwire CALL BINDING $1
+// and deployed request handlers use the callBinding host import.
 const result = await lagrange.call({
   data: {table: 'ratings', where: {movieId: {between: [first, last]}}},
   function: 'rank-movies',
@@ -482,9 +504,10 @@ const result = await lagrange.call({
 
 The shape of this call exists today - the selector is the Binding
 `statement`, `function` is the `run` export, `reduce` is the `reduce`
-export, and arguments ride the `CALL BINDING` payload - but the surface is
-SQL over pgwire, not a JavaScript client, and the selector is fixed at
-Binding time rather than per call.
+export, and arguments ride the `CALL BINDING` payload or the `callBinding`
+host import - but the external surface is SQL over pgwire, not a
+JavaScript client SDK, and the selector is fixed at Binding time rather
+than per call.
 
 **Structured partials.** The coordination gate accepts finite numbers per
 group key. Richer per-group structs (count + sum + max, sketches) are
@@ -496,15 +519,16 @@ nodes overlap, but a single component instance runs one invocation at a
 time, so same-host shards serialize. Lifting that per-instance limit is
 future work.
 
-**Nested calls.** `call-bounded` is declared in the WIT world but the host
-always denies it today.
+**Deeper nested calls.** A request handler can make one authorized nested
+call today (`callBinding`, child identity `<outer>#call-1`). Deeper chains
+(HTTP -> call -> call) are refused, and the call-world `call-bounded`
+import is declared in the WIT world but the host always denies it.
 
 **`pushdown`.** The Binding kind is accepted, compiles, and places, and the
 runtime would execute it - but no routing surface can select it. It is
 declared-only, reserved for query-planner-initiated invocation.
 
-**HTTP ingress for call endpoints** and a typed capability enum for the
-call context are likewise open.
+**A typed capability enum for the call context** is likewise open.
 
 ## Continue
 

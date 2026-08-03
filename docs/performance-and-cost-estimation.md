@@ -41,9 +41,11 @@ The current implementation boundary matters:
 
 - services deploy as genuine WASI components; request endpoints are invoked
   over authenticated HTTP;
-- call Bindings are invocable over authenticated pgwire (`CALL BINDING $1`):
-  a binding-declared single-table `SELECT`, a partition function per
-  relevant partition, numeric per-group partials, and one reducer;
+- call Bindings are invocable over authenticated pgwire (`CALL BINDING $1`)
+  or from a request handler through the policy-authorized `callBinding`
+  host import: a binding-declared single-table `SELECT`, a partition
+  function per relevant partition, numeric per-group partials, and one
+  reducer;
 - on the call path today, shard dispatch is parallel and bounded (default
   8 concurrent runs; same-host shards serialize) and partials are numeric
   aggregation values - both matter when projecting throughput;

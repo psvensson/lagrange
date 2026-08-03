@@ -111,7 +111,7 @@ not declare, the call fails at the component boundary.
 %%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart TD
   Q1{"What do you want<br/>to understand?"}:::ctrl
-  Q1 -- "The product story:<br/>one call, distributed run" --> CB["call-binding-account-summary<br/><i>partition functions + reducer</i>"]:::move
+  Q1 -- "The product story:<br/>one endpoint, distributed run" --> CB["call-binding-account-summary<br/><i>HTTP handler + partition functions + reducer</i>"]:::move
   Q1 -- "How do I expose an<br/>HTTP endpoint?" --> JS["js-request-binding-deployment<br/><i>plain JavaScript service</i>"]:::move
   JS --> RB["request-binding-deployment<br/><i>same path, from WAT</i>"]:::move
   Q1 -- "What does data-local<br/>execution measurably buy?" --> DA["service-data-affinity<br/><i>MovieLens three-way comparison</i>"]:::data
@@ -144,12 +144,15 @@ recur everywhere:
 
 ### [call-binding-account-summary/](call-binding-account-summary/README.md)
 
-**Start here.** The full story on the real call path: a plain-JavaScript
-service whose partition function and reducer are authored together,
-compiled to one WASM component, bound to a declared SELECT, and invoked
-with a single `CALL BINDING` statement. Lagrange runs the function on
-each partition of a genuinely split table - rows stay on their nodes -
-and returns one reduced account summary.
+**Start here.** The full story on the composed service: a
+plain-JavaScript service whose HTTP handler, partition function, and
+reducer are authored together, compiled to one WASM component, deployed
+behind a request Binding and a call Binding, and invoked with one
+authenticated `POST /accounts/summary` (the direct `CALL BINDING`
+surface stays covered too). Lagrange exposes the endpoint and runs the
+function on each partition of a genuinely split table - rows stay on
+their nodes - and returns one reduced account summary as the HTTP
+response.
 
 Answers: **what does "build one service, run it across the data" look
 like end to end, today?**
