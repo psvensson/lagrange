@@ -5,35 +5,42 @@ documentClass: current
 
 # Service Deployment Guide
 
-This guide describes the supported external service-deployment model:
-**Artifact / Binding / Cell**.
+This guide deploys a Lagrange service: the endpoints, partition functions,
+and reducers you author together, packaged as WASM, installed through
+lifecycle SQL, and run by the cluster as **Artifact / Binding / Cell**.
 
-Deployment is only one part of the Lagrange model. Packaging existing code as a
-WASI component gives you lifecycle, isolation, restart, declared capabilities,
-and policy-controlled placement. The larger data-local wins appear when the
-service uses the Lagrange context instead of direct database endpoints and,
-as the public API matures, when a hot path is invoked against a data selector
-with partition-local work and reduction.
+Two invocation surfaces are public today:
 
-Read [The Lagrange Native Programming Model](native-programming-model.md) before
-choosing an application boundary. It explains what is public today, what is
-product direction, and what a rewrite can save.
+- **Endpoints** — `request` Bindings invoked over authenticated HTTP.
+- **Distributed calls** — `call` Bindings that run a partition function on
+  every relevant partition of a declared table, then a reducer over the
+  emitted partials, invoked over authenticated pgwire with
+  `CALL BINDING $1`.
 
-This guide does not use the older uploaded JavaScript callback rehearsal.
+Packaging existing code as a WASI component gives you lifecycle, isolation,
+restart, declared capabilities, and policy-controlled placement. The larger
+data-local wins appear when the service uses the Lagrange context instead
+of direct database endpoints, and when a data-intensive hot path becomes a
+call Binding: a partition function plus a reducer against a declared data
+selector.
+
+Read [The Lagrange Native Programming Model](native-programming-model.md)
+before choosing an application boundary. This guide does not use the older
+uploaded JavaScript callback rehearsal.
 
 ## Decide What You Are Deploying
 
-There are three distinct cases:
-
-| Case | Appropriate first step |
+| Part of the service | Deployment surface |
 | --- | --- |
-| Existing portable service | Package it as a WASI component and create a request Binding |
-| Service that should follow the data it reads | Use the injected context and declare the minimum table access so reads and writes are attributable |
-| Data-intensive hot path | Design the function and reduction contract first; use the current request surface where it fits and track `call` / `pushdown` invocation as a current limitation |
+| An externally callable endpoint | `request` Binding invoked over authenticated HTTP |
+| A data-intensive operation over one table | `call` Binding: partition function + reducer + declared `SELECT` statement |
+| Existing portable code, unchanged | Package it as a WASI component behind a request Binding first |
 
-Do not assume that moving an unchanged service into the cluster changes its data
-movement. If it still retrieves the same rows or aggregates into the same
-service process, the algorithm and boundary remain the same.
+Do not assume that moving an unchanged service into the cluster changes its
+data movement. If it still retrieves the same rows or aggregates into the
+same service process, the algorithm and boundary remain the same. The data
+movement changes when the scan-and-reduce part of the request becomes a
+call Binding, because then only partials cross the network.
 
 ## The Four Objects At The Boundary
 
@@ -44,27 +51,29 @@ digest-pinned payload.
 
 ### Binding
 
-A **Binding** is immutable desired execution intent: one Artifact export, one
-source kind, budgets, and no caller-selected replica count.
+A **Binding** is immutable desired execution intent: one Artifact export,
+one source kind, budgets, and no caller-selected replica count.
 
-The catalog accepts `request`, `change`, `time`, `once`, `boot`, `call`, and
-`pushdown` sources. Only `request` currently has a public invocation adapter.
-The others can converge to placed Cells but are not yet a public application
-surface.
+The catalog accepts `request`, `change`, `time`, `once`, `boot`, `call`,
+and `pushdown` sources. Two of them have public invocation adapters today:
+`request` (authenticated HTTP) and `call` (authenticated pgwire
+`CALL BINDING $1`). The `change`, `time`, `once`, `boot`, and `pushdown`
+kinds can be declared and converge to placed Cells but are declared-only —
+they have no public invocation surface yet.
 
 ### Cell
 
-A **Cell** is a ready running actual derived from a Binding. The cluster chooses
-capacity and placement. Cells are disposable compute; durable service state
-belongs in ordinary partitioned and replicated tables.
+A **Cell** is a ready running actual derived from a Binding. The cluster
+chooses capacity and placement. Cells are disposable compute; durable
+service state belongs in ordinary partitioned and replicated tables.
 
 ### Context
 
-The **context** is the capability-controlled host interface available to the
-component. It is the application/kernel boundary and the source of attributed
-service data access.
+The **context** is the capability-controlled host interface available to
+the component. It is the application/kernel boundary and the source of
+attributed service data access.
 
-The current request-component context is:
+The current request-component context (`lagrange:cell/context`) is:
 
 ```wit
 interface context {
@@ -75,25 +84,30 @@ interface context {
 ```
 
 Table numbers are capability slots resolved through the service-access
-declaration. A component must not contain a database endpoint, connection pool,
-partition map, or node-selection policy.
+declaration. A component must not contain a database endpoint, connection
+pool, partition map, or node-selection policy.
+
+Call-Binding components use a second world, `lagrange:cell/call-context`,
+whose central import is `emit` — the channel through which a partition
+function publishes its partial result. It is described in
+[Call Bindings](#call-bindings-partition-functions-and-reducers) below.
 
 ## What Lagrange Can Learn From Context Access
 
-Successful statements issued with the service identity are attributed to the
-partitions they actually execute against. That evidence can influence:
+Successful statements issued with the service identity are attributed to
+the partitions they actually execute against. That evidence can influence:
 
 - slow topology-time placement of runtime-service Cells;
 - node and latency-group affinity weights;
 - local or same-latency-group read candidate ordering; and
 - diagnostics explaining why a Cell was placed where it was.
 
-This is why using the context is not merely syntactic. Direct external database
-connections lose the execution identity and partition-access evidence that
-makes automatic data affinity possible.
+This is why using the context is not merely syntactic. Direct external
+database connections lose the execution identity and partition-access
+evidence that makes automatic data affinity possible.
 
-See [Process: Data Affinity](../architecture/process-data-affinity.md) for the
-full mechanism.
+See [Process: Data Affinity](../architecture/process-data-affinity.md) for
+the full mechanism.
 
 ## Lifecycle SQL
 
@@ -108,34 +122,40 @@ SHOW SERVICE $1;
 SHOW SERVICES;
 CONFIGURE SERVICE ACCESS $1;
 CREATE BINDING $1;
+CALL BINDING $1;
 ```
 
-External lifecycle control uses authenticated PostgreSQL wire ingress. Trust
-mode is loopback-only development policy and is not accepted for external
-lifecycle control.
+External lifecycle control uses authenticated PostgreSQL wire ingress.
+Trust mode is loopback-only development policy and is not accepted for
+external lifecycle control.
 
 ## Deployment Sequence
 
 1. Identify the smallest service or hot-path boundary you want to deploy.
 2. Package a component and schema-v3 manifest.
 3. Use `INSTALL SERVICE` with an artifact source and idempotency key.
-4. Record the returned immutable `package_id` and `manifest_digest`.
+4. Record the returned immutable `package_id`; compute the
+   `manifest_digest` yourself (sha256 of the canonical manifest JSON).
 5. Use `CREATE BINDING` to pin an export and source to that Artifact.
-6. Use `CONFIGURE SERVICE ACCESS` to grant the minimum table slots and modes.
+6. Use `CONFIGURE SERVICE ACCESS` to grant the minimum table slots and
+   modes.
 7. Observe desired state in `service_definitions`.
-8. Wait until a matching actual row is ready and running; that actual is a Cell.
-9. Invoke the request route with an authenticated HTTP request.
-10. Verify allowed access, denied access, durable effects, and placement evidence.
+8. Wait until a matching actual row is ready and running; that actual is a
+   Cell.
+9. Invoke: an authenticated HTTP request for a request route, or
+   `CALL BINDING $1` over authenticated pgwire for a call Binding.
+10. Verify allowed access, denied access, durable effects, and placement
+    evidence.
 
 The manifest format is documented in
-[Lagrange Service Manifest](../architecture/lagrange-service-manifest.md). The
-owner and convergence model is
+[Lagrange Service Manifest](../architecture/lagrange-service-manifest.md).
+The owner and convergence model is
 [Minimal Deployment Surface](../architecture/minimal-deployment-surface.md).
 
-## JavaScript Component Example
+## Endpoint Example: A JavaScript Request Component
 
-Services can be authored in any language with a WASI-component toolchain. For
-JavaScript, ComponentizeJS compiles a plain module into a genuine WASI
+Services can be authored in any language with a WASI-component toolchain.
+For JavaScript, ComponentizeJS compiles a plain module into a genuine WASI
 component.
 
 ```js
@@ -158,10 +178,10 @@ export function run(requestJson) {
 }
 ```
 
-The build disables random, stdio, clocks, HTTP, and fetch-event imports, so the
-component imports only `lagrange:cell/context`. The access declaration maps
-slot `0` to the ledger table with read/write permission. An attempt to use an
-undeclared slot is denied at the component boundary.
+The build disables random, stdio, clocks, HTTP, and fetch-event imports, so
+the component imports only `lagrange:cell/context`. The access declaration
+maps slot `0` to the ledger table with read/write permission. An attempt to
+use an undeclared slot is denied at the component boundary.
 
 Run the complete example:
 
@@ -171,31 +191,197 @@ node examples/js-request-binding-deployment/run-js-request-binding-deployment.js
 
 The
 [JavaScript request-binding README](../examples/js-request-binding-deployment/README.md)
-explains the source, WIT world, lifecycle SQL, expected output, and denial case.
+explains the source, WIT world, lifecycle SQL, expected output, and denial
+case.
 
-## Source-Built WAT Example
-
-To build a component from the committed WAT source instead:
+To build a component from committed WAT source instead:
 
 ```sh
 node examples/request-binding-deployment/run-request-binding-deployment.js
 ```
 
 Prerequisites are Node.js 22.12+, installed repository dependencies, and
-`wasm-tools` on `PATH`.
-
-The example builds a genuine component, boots a disposable node, performs
-lifecycle SQL, waits for a ready Cell, invokes it over HTTP, verifies declared
-table access, and cleans up.
-
-See the
+`wasm-tools` on `PATH`. See the
 [request-binding-deployment README](../examples/request-binding-deployment/README.md)
 for exact assertions and expected output.
 
-## From Deployment To A Native Rewrite
+## Call Bindings: Partition Functions And Reducers
 
-After the first component works, inspect the operation rather than immediately
-moving more services.
+A call Binding is how the distributed part of the service ships. One
+component carries both halves of the operation:
+
+- `run` — the **partition function**. Lagrange invokes it once per relevant
+  partition, on the node hosting that partition's replica, with a typed
+  batch of rows read locally from that replica.
+- `reduce` — the **reducer**. Lagrange invokes it exactly once, with the
+  complete set of emitted partials, to produce the final result.
+
+Raw rows never leave the host nodes. Only the emitted partials travel to
+the reducer, and only the reduced result returns to the caller.
+
+### The Guest Contract
+
+The call-cell WIT world:
+
+```wit
+world call-cell {
+  use call-context.{row};
+  import call-context;
+  export run:    func(batch: list<row>, arguments: string) -> string;
+  export reduce: func(partials: list<tuple<string, string>>,
+                      arguments: string) -> string;
+}
+```
+
+Rules the guest must follow:
+
+- `run` receives one typed `list<row>` per partition — up to `4096` rows by
+  default. Rows map SQL values to a `cell-value` variant (`null`, `s64`,
+  `f64`, `text`); unsafe integers, non-finite floats, and blobs are refused
+  rather than silently coerced.
+- Partials leave `run` through the host import `emit(key, partial)`, not
+  through the return value. The `run` return value is component bookkeeping
+  and is not coordinated.
+- Each emitted partial must be a JSON finite number. Today the reduce
+  coordination gate supports numeric per-group aggregation values only, not
+  arbitrary partial structs.
+- Group keys must be disjoint across partitions. A duplicate key across
+  shards fails the call with a typed error instead of merging wrong data.
+- `reduce` is a second export in the same component — not a separate
+  artifact, not host-side code. Its return value is the call's result.
+- Default budgets: `64` `emit` calls per invocation, `1,024` partial
+  entries, a `30 s` deadline per call. Shard dispatch is currently
+  sequential.
+
+The normative WIT world currently lives at
+`test/wasm-service/fixtures/call-cell-world/wit/world.wit`; it is not yet
+published as a standalone authoring artifact.
+
+### Manifest
+
+The manifest declares the `run` export under the `call_v1` interface:
+
+```json
+{
+  "schema_version": 3,
+  "runtime": {"kind": "wasm_component"},
+  "exports": [{"interface": "call_v1", "name": "run"}]
+}
+```
+
+(Plus the usual `artifact` block with `ref`, `digest`, and
+`media_type: "application/wasm"`.) Only the Binding's target export name is
+validated against the component's real exports; the `reduce` export is not
+declared in the manifest but must exist in the component.
+
+### Binding
+
+The call Binding names the export and declares the data selector:
+
+```json
+{
+  "schema_version": 2,
+  "name": "shard-ratings-top",
+  "target": {
+    "package_id": "<from the INSTALL SERVICE receipt>",
+    "manifest_digest": "<sha256 of the canonical manifest JSON, computed client-side>",
+    "export_name": "run"
+  },
+  "source": {
+    "kind": "call",
+    "name": "shard-ratings-top",
+    "statement": "SELECT id, score, label FROM shard_ratings"
+  },
+  "budgets": {"...": "closed budget set, see below"}
+}
+```
+
+- The `statement` must be a single-table `SELECT`. Anything else is
+  rejected with `call_cell_statement_invalid`.
+- The `statement` is optional in the schema, but it is what makes a call
+  Binding invocable. A statement-less call Binding is a valid durable
+  registration that fails closed with `call_cell_not_invocable` when
+  called.
+- Budgets are a closed set with hard ranges:
+
+| Budget | Range |
+| --- | --- |
+| CPU time | 1–60,000 ms |
+| Wall time | 1–300,000 ms |
+| Memory | 1 B – 1 GiB |
+| Input / output size | 0 – 16 MiB |
+| Context size | 0 – 64 MiB |
+
+The sealed field-level contract is
+[Minimal Deployment Surface](../architecture/minimal-deployment-surface.md).
+
+### Invoking With CALL BINDING
+
+The client sends the literal statement with exactly one bind parameter:
+
+```sql
+CALL BINDING $1;
+```
+
+`$1` is a single JSON string, at most 1 MiB:
+
+```json
+{"schema_version": 2, "name": "shard-ratings-top", "arguments": {"topN": 3}}
+```
+
+- `schema_version` and `name` are required; `arguments` is optional and
+  must be a JSON object (default `{}`).
+- Unknown fields are refused. There is no `tenant_id` field — tenant
+  identity comes from the authenticated session only.
+- A successful call returns exactly one row with two columns: `name` (the
+  called binding's name) and `result` (the final reduced JSON string from
+  the guest `reduce` export). `changes` is `0`.
+
+Authentication is fail-closed. `CALL BINDING` maps to the distinct pgwire
+authorization action `pgwire.binding.call`, which is in the password-mode
+default action set and **not** in trust mode. A session lacking the action
+is rejected before any dispatch.
+
+### What Happens At Runtime
+
+1. Planning parses the declared statement and resolves the relevant
+   partitions without fetching a single row.
+2. Each partition's run is dispatched to the node hosting that partition's
+   leader replica; the receiver builds the row batch from its own local
+   replica.
+3. If no Cell is running on a required host node, a bounded activation
+   lease pins one there and the call retries until it is ready or the
+   deadline lapses.
+4. Emitted partials are coordinated per invocation; the reducer runs
+   exactly once, under a dedicated lease, over a complete and fresh partial
+   set, and one atomic result snapshot is published.
+5. Partition or replica movement mid-call surfaces as a typed retryable
+   error — never a silently wrong result.
+
+The full retry, idempotency, movement, and reduction contract is in
+[Execution Semantics](execution-semantics.md).
+
+### Current Call-Path Boundaries
+
+Stated plainly:
+
+- pgwire is the only ingress for `CALL BINDING`; there is no HTTP or
+  client-SDK surface, and no caller-supplied idempotency key on this path.
+- Partials are numeric per-group aggregation values only.
+- Shard dispatch is sequential; fan-out concurrency is future work.
+- The `call-bounded` nested-call import exists in the WIT world but the
+  host always denies it.
+- The runnable call-path example is
+  [`examples/call-binding-account-summary`](../examples/call-binding-account-summary/README.md):
+  a partition function and reducer in one file, installed and bound over
+  pgwire, invoked with `CALL BINDING $1` across two partitions. The live
+  invocation shape is also exercised in
+  `test/integration/minimal-deployment-call-cell-invocation-live.integration.test.js`.
+
+## From Deployment To A Partition-Function Rewrite
+
+After the first component works, inspect the operation rather than
+immediately moving more services.
 
 Ask:
 
@@ -206,14 +392,14 @@ Ask:
 - Which code is application policy that should remain versioned code?
 - Which external calls must stay outside the data-local function?
 
-A good extraction keeps authentication and third-party I/O in the outer service
-and moves only the data-intensive operation.
+A good extraction keeps authentication and third-party I/O in the outer
+service and moves only the data-intensive operation into the partition
+function.
 
 The detailed MovieLens walkthrough in
-[Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md) compares a
-strong grouped-SQL baseline with shard-local scoring and bounded top-N
-reduction. It also states exactly which parts are runnable today and which API
-calls are directional pseudocode.
+[Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md) compares
+a strong grouped-SQL baseline with shard-local scoring and bounded top-N
+reduction, and states exactly which parts are runnable today.
 
 ## Current Invocation Boundary
 
@@ -221,26 +407,34 @@ Current public support:
 
 - externally installed genuine WASI components;
 - request Bindings invoked through authenticated HTTP;
-- `read`, `write`, and `capability` context imports;
+- call Bindings invoked through authenticated pgwire `CALL BINDING $1`,
+  with data-local partition functions, numeric per-group partials, and a
+  single reducer;
+- `read`, `write`, and `capability` context imports in the request world;
+  `emit` in the call world;
 - declared table-slot access and capability denial;
 - service identity attribution and data-affinity placement; and
 - Artifact / Binding / Cell lifecycle through authenticated SQL.
 
 Not yet public:
 
-- invocation adapters for `change`, `time`, `once`, `boot`, `call`, and
-  `pushdown` sources;
-- a richer external selector and partition-local SQL context;
-- a public fan-out and reduction API; and
+- invocation adapters for `change`, `time`, `once`, `boot`, and `pushdown`
+  sources (declared-only);
+- structured or non-numeric partial values;
+- parallel shard fan-out;
+- nested `call-bounded` invocation; and
 - managed OCI container activation.
 
-Use [Current Capabilities And Limitations](current-capabilities-and-limitations.md)
+Use
+[Current Capabilities And Limitations](current-capabilities-and-limitations.md)
 as the authoritative status page.
 
 ## Runtime Status
 
-- `wasm_component`: externally installable and runs genuine WASI component
-  Cells.
+- `wasm_component`: the product runtime. Externally installable; runs
+  genuine WASI component Cells in both the request and call worlds.
 - `native_js`: kernel-internal, not externally installable.
-- `oci_container`: descriptor and in-memory lifecycle scaffold only; managed
-  container activation is unsupported.
+- `oci_container`: compatibility scaffold only — descriptor and in-memory
+  lifecycle, no managed container activation. It is not a peer deployment
+  option; code that cannot yet run as WASM has no supported managed path
+  today.

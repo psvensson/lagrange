@@ -19,9 +19,12 @@ audience: human
 
 # Lagrange
 
-Distributed SQL database and compute-near-data runtime: a cluster of equal
-nodes that stores partitioned, Raft-replicated SQL tables and places replicated
-runtime services near the data they read.
+Lagrange is a distributed runtime for data-intensive services. A cluster of
+equal nodes stores partitioned, Raft-replicated SQL tables; services deploy
+as WASM, and Lagrange runs each part of a request on the nodes holding the
+relevant data, so only reduced results cross the network.
+
+> Logically one ordinary service. Physically distributed across the data.
 
 > The authoritative current support matrix is
 > [Current Capabilities And Limitations](https://github.com/psvensson/lagrange/blob/main/docs/current-capabilities-and-limitations.md).

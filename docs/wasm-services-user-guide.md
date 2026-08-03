@@ -5,30 +5,34 @@ documentClass: compatibility
 
 # WASM Services Guide
 
-This former combined guide has been split so supported external deployment is
-not mixed with the older callback rehearsal or with future native invocation
-APIs.
+This former combined guide has been split. A Lagrange service — endpoints,
+partition functions, and reducers authored together and deployed as WASM —
+is documented across the pages below.
 
 Choose the document that matches your question:
 
-- [The Lagrange Native Programming Model](native-programming-model.md) explains
-  why deploying a portable artifact and rewriting a hot path are different,
-  introduces the current context API, and marks the selector/call direction as
-  not yet public.
-- [Service Deployment Guide](service-deployment-guide.md) installs an Artifact,
-  creates a request Binding, declares table access, waits for a Cell, and
-  invokes it.
-- [Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md) compares a
-  strong grouped-SQL baseline with partition-local application policy and
-  bounded reduction.
+- [The Lagrange Native Programming Model](native-programming-model.md)
+  explains the service programming model: endpoints, partition functions,
+  reducers, and the context API.
+- [Service Deployment Guide](service-deployment-guide.md) packages a
+  service, installs the Artifact, creates request and call Bindings,
+  declares table access, waits for a Cell, and invokes it.
+- [Execution Semantics](execution-semantics.md) states the retry,
+  idempotency, movement, and reduction contract a caller can rely on.
+- [Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md)
+  compares a strong grouped-SQL baseline with partition-local application
+  policy and bounded reduction.
 - [Current Capabilities And Limitations](current-capabilities-and-limitations.md)
   is the authoritative runtime and API status page.
 
-The supported deployment model is Artifact / Binding / Cell. Request Bindings
-run genuine WASI components. The current public component context provides
-`read`, `write`, and `capability` imports.
+The deployment model is Artifact / Binding / Cell. Request Bindings run
+genuine WASI components behind authenticated HTTP endpoints. Call Bindings
+run a partition function on the partitions of a declared table and a
+reducer over the partial results, invoked over authenticated pgwire with
+`CALL BINDING $1`.
 
-The legacy `js_wasm_component_v1` callback envelope is JavaScript and is not a
-WebAssembly binary or component. Accepted `call` and `pushdown` Binding source
-kinds do not yet have public invocation adapters, and managed OCI container
-activation is unsupported.
+The legacy `js_wasm_component_v1` callback envelope is JavaScript, not a
+WebAssembly component. The accepted `pushdown`, `change`, `time`, `once`,
+and `boot` Binding source kinds are declared-only today. Managed OCI
+container activation is unsupported; OCI exists as a compatibility
+scaffold, not a peer of the WASM path.

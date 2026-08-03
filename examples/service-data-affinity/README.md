@@ -33,8 +33,9 @@ ten.
 
 For a line-by-line before-and-after application walkthrough, read
 [Rewrite A Hot Path For Lagrange](../../docs/tutorials/rewrite-a-hot-path.md).
-For the current public component API and the future selector/call direction,
-read
+For the runnable public call path this demo's shape graduated into, see
+[call-binding-account-summary](../call-binding-account-summary/README.md);
+for the authoring model, read
 [The Lagrange Native Programming Model](../../docs/native-programming-model.md).
 
 ## Why This Is A Fair Baseline
@@ -307,16 +308,25 @@ not how externally authored services are deployed.
 Public deployment uses Artifact / Binding / Cell. Genuine
 [WASI](https://wasi.dev/) request components are externally installable today
 (see [js-request-binding-deployment](../js-request-binding-deployment/README.md)),
-and the current public context provides `read`, `write`, and `capability`. The
-accepted `call` and `pushdown` Binding source kinds do not yet have public
-invocation adapters, and the richer partition-local SQL and reducer context
-remains product direction.
+and the request context provides `read`, `write`, and `capability`.
+
+The public successor to this demo's internal query-loop module now
+exists: the `call` Binding kind is invocable end to end over pgwire
+(`CALL BINDING $1`), with a Binding-declared partition-local SELECT,
+shard-local `run` execution on partition-host nodes, and a coordinated
+`reduce` over numeric partials —
+[call-binding-account-summary](../call-binding-account-summary/README.md)
+is the runnable example. The `pushdown` Binding kind still has no public
+invocation adapter, and richer partial shapes (beyond numeric per-group
+values) remain product direction.
 
 This distinction is intentional:
 
-- the demo shows that the execution and placement substrate exists;
-- the request-binding examples show the supported external component boundary;
-- the missing work is the public native invocation and richer context surface.
+- this demo shows what the execution and placement substrate buys, at
+  MovieLens scale, against a strong conventional baseline;
+- the call-binding example shows the same shape on the public path;
+- the remaining work is `pushdown` invocation, structured partials, and
+  parallel shard fan-out.
 
 ## Troubleshooting
 

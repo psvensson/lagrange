@@ -142,5 +142,8 @@ placement behavior.
 
 - [js-request-binding-deployment](../js-request-binding-deployment/README.md)
   — the same path written in plain JavaScript instead of WAT.
+- [call-binding-account-summary](../call-binding-account-summary/README.md)
+  — the distributed call: the same deployment surface driving partition
+  functions and a reducer across a split table.
 - [The Lagrange Native Programming Model](../../docs/native-programming-model.md)
   — why deployment is the entry path, not the end state.

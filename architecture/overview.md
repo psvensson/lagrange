@@ -133,8 +133,12 @@ To prevent overlap and contradictory runtime behavior:
     Service-owned handlers (`sys-admin-meta` and `sys-wasm-meta`) are the
     mutation/control owners.
 12. **Programmatic Runtime API Ownership:** `runtime.run` + `ctx.call` is the
-    single user-facing execution surface for programmatic distributed SQL
-    workflows. No parallel runtime API may bypass this path.
+    single execution surface for the internal/legacy distributed-query
+    callback path. The public invocation surface for partition functions and
+    reducers is the call Binding (`CALL BINDING $1`); see
+    [query-runtime.md](query-runtime.md) and
+    [minimal-deployment-surface.md](minimal-deployment-surface.md). No
+    parallel runtime API may bypass either path.
 13. **Execution Mode Dispatch Ownership:** `SqlCore.executeRequest(SqlRequest)`
     is the owner for execution-mode dispatch (`sql_statement`,
     `partition_callback`, and plan-object execution). Each mode has a dedicated

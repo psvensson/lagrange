@@ -174,8 +174,12 @@ placement behavior.
 
 ## Continue
 
+- [call-binding-account-summary](../call-binding-account-summary/README.md)
+  — the same authoring and deployment path, but for a distributed call:
+  partition function plus reducer in one component, invoked with
+  `CALL BINDING` and executed across a split table.
 - [The Lagrange Native Programming Model](../../docs/native-programming-model.md)
   — what this small `read`/`write` API already enables (attribution,
-  placement, locality) and where the richer native `call` surface is headed.
+  placement, locality) and how the call surface builds on it.
 - [service-data-affinity](../service-data-affinity/README.md) — what
-  data-local execution looks like when it fans out and reduces.
+  data-local execution looks like when it fans out and reduces, measured.

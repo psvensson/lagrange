@@ -3,7 +3,12 @@
 This document owns the selected architecture for collapsing Lagrange's
 mechanism-first deployment surfaces into three nouns: **Artifact**, **Binding**,
 and **Cell**. It describes the implemented public deployment contract rather
-than the development history that produced it.
+than the development history that produced it. It is the sealed contract for
+the call surface — the `run`/`reduce`/`emit` WIT interface, the reduce-lease
+coordination model, and the binding-declared statement selector — that the
+service execution model in [`architecture.md`](../architecture.md) and the
+developer-facing [execution semantics](../docs/execution-semantics.md) build
+on.
 
 ## Scope and edition boundary
 

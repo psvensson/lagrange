@@ -5,9 +5,11 @@ documentClass: planning
 
 # Lagrange Roadmap
 
-Lagrange is growing from a distributed-systems research project into a
-database that people can evaluate, operate, and extend without first learning
-its internals.
+Lagrange is a distributed runtime for data-intensive services. It is growing
+from a distributed-systems research project into one product that people can
+evaluate, operate, and extend without first learning its internals: services
+whose partition functions and reducers run on the nodes holding the data,
+backed by a replicated SQL storage core.
 
 This roadmap describes product direction rather than promising dates. For what
 works in the current tree, including important limitations, see
@@ -78,16 +80,19 @@ clear expectations:
 The emphasis is explicit guarantees backed by repeatable evidence, rather than
 adding features without an operational contract.
 
-## Future — 2.0 Distributed Execution Platform
+## Future — 2.0 Deeper Distributed Execution
 
-Beyond the database core, Lagrange develops into a data-local execution
-platform:
+The core of data-local execution is already shipped: call Bindings run
+partition functions on the partition-host nodes and reduce their partials
+under coordination leases, with placement following demand. The 2.0
+direction deepens that surface:
 
 - multi-stage distributed plans with streaming exchange and backpressure;
-- placement-aware services that move computation close to data;
-- a stable external kernel API for portable services;
+- parallel shard fan-out, structured partials, and pushdown invocation;
+- a stable external kernel API and a published authoring WIT world;
 - an installable service ecosystem with dependency and upgrade handling; and
 - a native artifact store for large, immutable content.
 
-These directions build on the database rather than replacing it: distributed
-execution remains grounded in strong storage, ownership, and failure semantics.
+These directions build on the storage core rather than replacing it:
+distributed execution remains grounded in strong storage, ownership, and
+failure semantics.

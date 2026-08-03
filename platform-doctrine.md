@@ -25,7 +25,12 @@ the detailed current system model starts at
 
 ## Purpose
 
-Lagrange is a distributed data and execution platform designed around a small number of durable primitives. The system manages physical distribution, replication, and placement automatically while exposing a simple and stable conceptual model to users.
+Lagrange is a distributed runtime for data-intensive services, built around
+a small number of durable primitives. A developer authors one service —
+endpoints, partition functions, and reducers together — and existing
+applications call its endpoints like any other service. The system manages
+physical distribution, replication, and placement automatically while
+exposing that small, stable conceptual model to users.
 
 The guiding principle is:
 
@@ -71,6 +76,11 @@ declaration that connects one Artifact export to an invocation source. A
 
 The Artifact and Binding are durable. A Cell is replaceable compute; its durable
 application state belongs in tables.
+
+Together they carry one **Lagrange service**: the logical unit a developer
+authors, versions, and deploys, and the unit existing applications call.
+Partitions, replicas, Raft groups, and execution placement stay behind that
+surface.
 
 Properties:
 
@@ -211,7 +221,10 @@ This guarantees predictable behavior and maintainable evolution.
 
 Data locality is a first-class property.
 
-Computation should move toward the data rather than the reverse.
+Computation should move toward the data rather than the reverse. This is
+the service execution model's central move: a single endpoint invocation
+distributes its partition functions to the partitions owning the data, and
+only emitted partials and the reduced result cross the network.
 
 This principle enables:
 
@@ -234,7 +247,11 @@ Examples include:
 - reduce
 - out
 
-These primitives enable distributed computation while preserving control over:
+These primitives sit beneath the surface a service author sees: a partition
+function executing against local rows, `emit` publishing bounded partial
+results, and a reducer combining them into the endpoint response.
+
+They enable distributed computation while preserving control over:
 
 - resource budgets
 - retry semantics

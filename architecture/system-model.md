@@ -14,9 +14,10 @@ process document for the mechanism you need:
 
 ## One sentence
 
-Lagrange is a distributed SQL database whose tables are split into
-Raft-replicated partitions and whose disposable service Cells are continuously
-placed near the data they use.
+Lagrange is a distributed runtime for data-intensive services: tables are
+split into Raft-replicated partitions, and the disposable service Cells that
+run a service's partition functions are continuously placed on the nodes
+holding the data those functions read.
 
 ## The system in one picture
 

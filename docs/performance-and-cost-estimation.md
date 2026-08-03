@@ -5,37 +5,51 @@ documentClass: current
 
 # Estimating Performance, Throughput, And Network Cost
 
-Lagrange can improve several different things, but not every adoption path
-improves them for the same reason.
+Lagrange runs the data-intensive parts of a service on the nodes holding the
+data. The wins this can produce come from three separable mechanisms, and an
+honest estimate treats them separately.
 
-Packaging an application as OCI or WASM does not automatically make its code
-faster. The larger gains appear when execution is placed near the replicas it
-uses, repeated database round trips collapse into one operation, or filtering
-and reduction happen before data crosses the application/database boundary.
+Packaging a service as WASM does not automatically make its code faster. The
+gains appear when execution is placed near the replicas it uses, repeated
+database round trips collapse into one invocation, or partition functions
+filter and reduce data before it crosses the application/database boundary.
+The benefits are strongest when
+
+```text
+data scanned or transformed ≫ result returned
+```
+
+because then the network carries a small result instead of the rows that
+produced it.
 
 This document provides conservative calculation methods and illustrative
 ranges. They are not benchmark results or promises about every workload.
 Measure the existing path before using any estimate commercially.
 
-## The Three Kinds Of Win
+## The Three Mechanisms Of Win
 
-| Adoption path | Primary win | Reasonable target for a suitable workload |
+| Mechanism | Primary win | Reasonable target for a suitable workload |
 | --- | --- | --- |
-| Existing workload in OCI | Migration ease, lifecycle, and coarse locality | `0–20%` lower latency when placement removes a meaningful remote database hop; otherwise approximately unchanged |
-| Existing logic as WASM | Portability, capability isolation, lifecycle, and locality | Similar locality opportunity to OCI; no automatic CPU-speed claim |
-| Lagrange context and native operation | Fewer round trips, exact data targeting, local policy, and bounded reduction | `15–50%` lower latency for qualifying multi-step paths; `2–10×` end-to-end speedup and `10–1,000×` less transferred data for qualifying data-heavy operations |
+| Placement of an unchanged service | Lifecycle, capability isolation, and coarse locality | `0–20%` lower latency when placement removes a meaningful remote database hop; otherwise approximately unchanged. No automatic CPU-speed claim from packaging |
+| Round-trip collapse through the Lagrange context | Fewer sequential crossings and exact data targeting | `15–50%` lower latency for qualifying multi-step paths |
+| Partition functions and bounded reduction | Local policy; only partials cross the network | `2–10×` end-to-end speedup and `10–1,000×` less transferred data for qualifying data-heavy operations |
 
-The ranges intentionally become wider as the application gives Lagrange more
+The ranges intentionally become wider as the service gives Lagrange more
 information. They also become more workload-dependent.
 
 The current implementation boundary matters:
 
-- genuine WASI request Cells are externally installable;
-- the public component context is currently `read`, `write`, and `capability`;
-- `native_js` is kernel-internal;
-- public invocation adapters for `call` and `pushdown` Bindings are not yet
-  implemented; and
-- managed OCI container activation is unsupported.
+- services deploy as genuine WASI components; request endpoints are invoked
+  over authenticated HTTP;
+- call Bindings are invocable over authenticated pgwire (`CALL BINDING $1`):
+  a binding-declared single-table `SELECT`, a partition function per
+  relevant partition, numeric per-group partials, and one reducer;
+- on the call path today, shard dispatch is sequential and partials are
+  numeric aggregation values — both matter when projecting throughput;
+- the `pushdown`, `change`, `time`, `once`, and `boot` Binding kinds are
+  declared-only, with no public invocation adapter;
+- `native_js` is kernel-internal; and
+- managed OCI container activation is unsupported (compatibility scaffold).
 
 See [Current Capabilities And Limitations](current-capabilities-and-limitations.md)
 for the authoritative status.
@@ -63,9 +77,9 @@ The avoidable terms are repeated application/database crossings, unnecessary
 movement of rows or intermediate aggregates, and topology mistakes that place
 execution far from the replicas it uses.
 
-## OCI: Primarily An Adoption And Placement Win
+## Placement Alone: Moving An Unchanged Service
 
-An unchanged OCI workload may still:
+An unchanged service may still:
 
 1. receive a request;
 2. issue SQL;
@@ -88,12 +102,13 @@ A conservative interpretation is:
 - potentially much more when a region boundary is removed, but that should be
   treated as a specific topology result rather than a general product claim.
 
-OCI remains valuable even at `0%` performance improvement if it simplifies
-migration, lifecycle, failure recovery, and later hot-path extraction.
+Moving unchanged code remains valuable even at `0%` performance improvement
+if it simplifies migration, lifecycle, failure recovery, and later hot-path
+extraction. The supported package format for this step is a WASI component;
+OCI is a compatibility scaffold, and managed OCI activation is not
+supported today.
 
-Managed OCI activation is planned rather than supported today.
-
-## WASM As-Is: Do Not Claim That The Format Is Faster
+## WASM Packaging: Do Not Claim That The Format Is Faster
 
 WASM is useful for:
 
@@ -104,19 +119,19 @@ WASM is useful for:
 - attributing successful data access to the issuing service.
 
 Those properties can enable locality and operational improvements. They do not
-prove that the component executes application instructions faster than native
-code in an OCI container.
+prove that the component executes application instructions faster than the
+same code running natively.
 
 The current JavaScript authoring path embeds a WebAssembly build of
 SpiderMonkey. It is a portability path, not evidence that a JavaScript
 component will consume less memory or CPU than every containerized equivalent.
 
-Use the same `0–20%` coarse-locality range as OCI until the workload uses the
-Lagrange context in a way that collapses calls or reduces transferred data.
-Measure startup, memory, and steady-state CPU separately for each source
-language and toolchain.
+Use the same `0–20%` coarse-locality range as any unchanged placement until
+the workload uses the Lagrange context in a way that collapses calls or
+reduces transferred data. Measure startup, memory, and steady-state CPU
+separately for each source language and toolchain.
 
-## Native Context: Calculating Round-Trip Savings
+## Round-Trip Collapse: Calculating The Savings
 
 Consider a transaction-like request that performs:
 
@@ -187,10 +202,12 @@ A cautious target for multi-step transactional paths is `1.2–2×` throughput
 when network waiting is a major bottleneck. If storage or consensus already
 dominates, expect less.
 
-## Pushdown And Reduction: Calculate Bytes Before Speed
+## Partition Functions And Reduction: Calculate Bytes Before Speed
 
 The most defensible large number is often the reduction in transferred data,
-not the end-to-end speedup.
+not the end-to-end speedup. This is where `data scanned ≫ result returned`
+pays: the partition functions reduce large local inputs to compact partials,
+and the network carries the partials, not the rows.
 
 Consider a ranking operation across `16` partitions. A strong SQL baseline
 returns `100,000` grouped records to an application service, at `64 bytes` per
@@ -200,8 +217,8 @@ record:
 100,000 × 64 bytes = 6.4 MB
 ```
 
-A Lagrange-native operation applies policy locally and returns only the best
-`20` candidates from each partition, at `128 bytes` per candidate:
+A partition function applies policy locally and returns only the best `20`
+candidates from each partition, at `128 bytes` per candidate:
 
 ```text
 16 × 20 × 128 bytes = 40,960 bytes ≈ 40 KB
@@ -235,6 +252,15 @@ transfer reduction factor
 `10–1,000×` less transferred data is plausible when many rows or groups collapse
 into a small bounded answer. It is impossible when the caller genuinely needs
 all the rows.
+
+This mechanism is what the call-Binding path implements today: the partition
+function runs beside each relevant partition replica, raw rows never leave
+the host node, and only emitted partials travel to the reducer. One current
+boundary matters for the calculation above: the public reduce gate
+coordinates numeric per-group aggregation values (default limit `1,024`
+partial entries per call), so a per-candidate record payload like the `128`
+bytes-per-candidate example must be encoded into that shape or wait for a
+richer partial surface.
 
 ## Estimating Network Bills
 
@@ -340,8 +366,8 @@ see which part of their own workload has the same shape.
 
 ## Continue
 
-- [The Lagrange Native Programming Model](native-programming-model.md) explains
-  the adoption levels and API boundary.
+- [Service Deployment Guide](service-deployment-guide.md) deploys the
+  service and documents the call-Binding authoring and invocation flow.
 - [Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md) provides a
   detailed grouped-SQL baseline, partition-local policy, and bounded reducer.
 - [MovieLens: Distributed SQL And Data-Affine Services](../examples/service-data-affinity/README.md)

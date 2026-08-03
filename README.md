@@ -1,200 +1,256 @@
 # Lagrange
 
-### Distributed SQL that moves application functions toward the data they use
-
-Lagrange is an experimental distributed database and execution platform. It
-partitions and replicates tables, runs portable service code, and places that
-code near the replicas it actually accesses.
-
-The compatibility path is to deploy an existing workload with little change.
-The larger architectural win comes from extracting data-intensive hot paths so
-filtering, policy, transactions, and reduction happen before rows cross into a
-separate application tier.
-
-> **Current status:** Lagrange contains working distributed storage,
-> transactions, SQL routing, genuine WASI service execution, automatic
-> data-affinity placement, diagnostics, and distributed failure testing. The
-> public component API is still narrow, managed OCI execution is unsupported,
-> and public `call` and `pushdown` invocation adapters are not implemented.
-> Lagrange is not yet a production-ready drop-in database.
-
-Start with:
-
-- [Why the programming model is different](docs/native-programming-model.md)
-- [Conservative performance and network estimates](docs/performance-and-cost-estimation.md)
-- [Conservative infrastructure-cost estimates](docs/infrastructure-cost-estimation.md)
-- [A thorough hot-path rewrite example](docs/tutorials/rewrite-a-hot-path.md)
-- [Current capabilities and limitations](docs/current-capabilities-and-limitations.md)
-
----
-
-## Why Lagrange
-
-A conventional service frequently pulls data away from the machines that own
-it:
+Lagrange is a distributed runtime for data-intensive services. Write an
+ordinary service — endpoint, partition functions, and reducer together —
+deploy it as WASM, and Lagrange runs each part of a request on the database
+nodes holding the relevant data.
 
 ```text
-client → arbitrary service replica → database partitions
-       ← rows and intermediate results ←
-       → writes and final decisions →
+Existing application
+        |
+        | normal endpoint call
+        v
+Lagrange service
+        |
+        | distributed call
+        v
+Functions run on relevant data partitions
+        |
+        | reduced result
+        v
+Endpoint response
 ```
 
-A Lagrange-native operation moves the function instead:
+> Logically one ordinary service. Physically distributed across the data.
 
-```text
-client or outer service
-  → data selector + function
-  → partition-local work in parallel
-  → compact partial results
-  → reducer
-  → response
-```
+## Why
 
-The caller names the data and operation rather than a machine, shard endpoint,
-or service replica. Lagrange owns routing and placement as partitions split,
-replicas move, leaders change, and latency topology evolves.
+The database is already distributed. The application work usually is not.
 
-## Three Ways To Adopt It
+A conventional service pulls rows out of the partitions that own them, ships
+them through the network into a central compute tier, filters and aggregates
+them there, and throws most of the bytes away. When the work spans shards,
+developers hand-build the fan-out, retries, routing, and merge logic — in a
+repository far from the data it depends on.
 
-| Path | Application change | Primary win | Conservative target for a suitable workload* |
-| --- | --- | --- | --- |
-| Existing workload in OCI | Very low; managed OCI is planned | Migration, lifecycle, and coarse locality | `0–20%` lower latency when placement removes a meaningful remote hop; otherwise approximately unchanged |
-| Existing logic as WASM | Low | Portability, capability isolation, lifecycle, and locality | Similar locality opportunity; do not assume WASM executes the code faster |
-| Native Lagrange operation | Targeted hot-path rewrite | Fewer round trips, exact data targeting, and bounded reduction | `15–50%` lower latency for qualifying multi-step paths; `2–10×` end-to-end speedup and `10–1,000×` less transferred data for qualifying data-heavy operations |
+Lagrange distributes parts of the service invocation itself. The heavy work —
+filtering, scoring, aggregation — runs on the nodes that already hold the
+rows. Only compact partial results cross the network. Placement, routing,
+retries, and the merge belong to the runtime, not to your code.
 
-*These are calculation-based target ranges, not measured product-wide benchmark
-claims. The result depends on round trips, selectivity, bytes moved, partition
-count, topology, and the actual bottleneck. See
-[Estimating Performance, Throughput, And Network Cost](docs/performance-and-cost-estimation.md)
-for equations, examples, and claim boundaries.
+## How It Feels To Use
 
-Infrastructure consolidation must be calculated separately. The remaining
-Lagrange nodes are usually larger and still require replication and failure
-headroom. Suitable native workloads may justify screening for `10–35%` fewer
-instances and `5–20%` lower compute cost, while small, CPU-bound, or already
-consolidated systems may save nothing or cost more. See
-[Estimating Infrastructure Consolidation](docs/infrastructure-cost-estimation.md).
+One service, one file: the partition function and the reducer are authored
+together, built into one WASM component. This is the real ABI — `run` receives
+the local rows, emits one numeric partial per group key via the host `emit`
+import, and `reduce` merges every partition's partials.
 
-A migration does not require rewriting an application. Keep authentication,
-HTTP handling, presentation, and external integrations in the existing service.
-Extract one expensive transaction, aggregation, enrichment step, validation
-path, or state transition.
+```js
+// service.js — partition function and reducer, side by side
+import {emit} from 'lagrange:cell/call-context';
 
-## What The Native Path Buys
+// Partition function: runs on each node holding relevant rows.
+// `batch` is that node's local slice of the binding's SELECT.
+export function run(batch, argumentsJson) {
+  const {topN} = JSON.parse(argumentsJson);
+  const scored = [];
+  for (const row of batch) {
+    const id = column(row, 'id');
+    const score = column(row, 'score');
+    if (id.tag !== 'integer' || score.tag !== 'real') continue;
+    scored.push({id: String(id.val), score: score.val});
+  }
+  scored.sort((a, b) => b.score - a.score);
+  for (const candidate of scored.slice(0, topN)) {
+    emit(candidate.id, JSON.stringify(candidate.score));
+  }
+  return JSON.stringify({emitted: Math.min(topN, scored.length)});
+}
 
-- **Less data movement.** Each partition can filter, score, aggregate, or
-  transform locally and return only a compact partial result.
-- **Fewer round trips.** A read, related read, validation, write, and audit
-  sequence can become one routed partition-local operation.
-- **Placement that follows access.** Successful service-issued reads and writes
-  become fresh placement evidence, so Cells drift toward the replicas they use.
-- **Less topology code.** Application code does not discover nodes, cache shard
-  maps, select leaders, or redeploy after a partition split.
-- **A stronger capability boundary.** Components receive declared host
-  capabilities rather than broad database credentials and arbitrary network
-  access.
+// Reducer: runs once, over the partials from every partition.
+export function reduce(partials, argumentsJson) {
+  const {topN} = JSON.parse(argumentsJson);
+  const merged = partials.map(([key, partial]) => ({
+    key,
+    score: JSON.parse(partial),
+  }));
+  merged.sort((a, b) => b.score - a.score);
+  return JSON.stringify(merged.slice(0, topN));
+}
 
-Raft remains. Writes still reach a leader and quorum. Lagrange removes avoidable
-application/data movement around the durability work; it does not weaken the
-durability model.
-
-## The Programming Model
-
-Four concepts connect deployed code to distributed data:
-
-- **Artifact:** immutable, digest-pinned service code and manifest
-- **Binding:** immutable execution intent connecting an Artifact export to an
-  invocation source
-- **Cell:** a ready, replaceable instance derived from a Binding and placed by
-  the cluster
-- **Context:** the capability-controlled bridge from service code to durable
-  data and kernel services
-
-Durable service state belongs in ordinary partitioned and replicated tables,
-not in Cell-local memory or disk.
-
-### API available today
-
-The current public request-component context is intentionally small:
-
-```wit
-interface context {
-  read: func(table: u32, key: u32) -> s32;
-  write: func(table: u32, key: u32, value: s32);
-  capability: func(capability: u32) -> s32;
+function column(row, name) {
+  return row.columns.find((c) => c.name === name)?.val ?? {tag: 'null-value'};
 }
 ```
 
-A service uses declared table slots rather than connection strings, pools, node
-addresses, or leader lookup. Undeclared access is denied at the component
-boundary. The runnable JavaScript path is documented in the
-[request-binding example](examples/js-request-binding-deployment/README.md).
+The data selector lives in the call binding. Its `statement` is a
+single-table SELECT; Lagrange plans which partitions hold matching rows
+without fetching any of them:
 
-### Native call direction
+```json
+{
+  "schema_version": 2,
+  "name": "top-ratings",
+  "source": {
+    "kind": "call",
+    "name": "top-ratings",
+    "statement": "SELECT id, score, label FROM shard_ratings"
+  },
+  "target": {
+    "package_id": "<package id>",
+    "manifest_digest": "sha256:<manifest digest>",
+    "export_name": "run"
+  },
+  "budgets": {
+    "cpu_time_ms": 1000,
+    "wall_time_ms": 10000,
+    "memory_bytes": 67108864,
+    "input_bytes": 65536,
+    "output_bytes": 65536,
+    "context_bytes": 4096
+  }
+}
+```
 
-The intended richer model makes the data target part of invocation:
+Invocation is one statement over an authenticated PostgreSQL-wire session:
+
+```sql
+CALL BINDING $1
+-- $1 = '{"schema_version": 2, "name": "top-ratings",
+--        "arguments": {"topN": 3}}'
+```
+
+The result is one row `{name, result}` where `result` is the reducer's final
+JSON. The session's server-derived identity carries authorization: the call
+is rejected before dispatch unless the session holds the `pgwire.binding.call`
+action.
+
+An intended `ctx.call()`-style sugar exists as a design direction:
 
 ```js
-await lagrange.call({
-  data: ratings.where({movieId: range}),
-  function: 'rank-movies',
-  reduce: 'merge-top-movies',
+// Intended API — not implemented. Today the data selector lives in the
+// binding statement and invocation is `CALL BINDING $1` over pgwire.
+const top = await ctx.call({
+  query: 'SELECT id, score, label FROM shard_ratings',
+  run: 'run',
+  reduce: 'reduce',
+  arguments: {topN: 3},
 });
 ```
 
-This syntax is directional pseudocode, not a supported public client today.
-Only request Bindings currently have a public invocation adapter. The exact
-current-versus-directional boundary is in
-[The Lagrange Native Programming Model](docs/native-programming-model.md).
+## What Happens At Runtime
 
-## A Concrete Example
+One `CALL` becomes a distributed operation. Lagrange plans the binding's
+SELECT into per-partition shards, dispatches `run` to each partition's host
+node — where the rows are read locally from that node's own replica — and
+dispatches `reduce` once, on the holder of a dedicated reduce lease:
 
-The MovieLens example computes the same top-ten ranking through PostgreSQL
-grouped SQL, Lagrange distributed grouped SQL, and a replicated Lagrange
-service.
+```text
+CALL BINDING "top-ratings"
+  ├─ run()    on node A — partition 1 rows, read locally
+  ├─ run()    on node B — partition 2 rows, read locally
+  ├─ run()    on node B — partition 3 rows, read locally
+  └─ reduce() on the reduce-lease holder → one JSON result
+```
 
-The strong SQL baseline returns one aggregate per movie and applies ranking
-policy in the application. The data-local service applies that policy on
-disjoint shards. Each of two service replicas emits at most ten candidates, so
-the final merge sees at most twenty rather than every movie aggregate.
+Only the emitted partials cross the network. In the two-node integration
+proof, the shard tables see zero remote query deliveries: raw rows never
+leave the node that owns them. If no runnable service instance exists on a
+required node, Lagrange activates one there via a bounded lease and a
+placement pin, then runs the function locally. The reduce step refuses to
+publish unless every shard's partial set is complete, fresh, and disjoint,
+and it publishes exactly one atomic result snapshot.
+
+Shards currently dispatch sequentially; parallel fan-out is future work.
+
+## Benefits
+
+The mechanism is bounded reduction: each partition function reduces its local
+slice — gigabytes of rows, potentially — to a few small partials. The network
+carries the partials, not the rows. The reducer merges compact summaries
+instead of loading every matching row into a central service.
+
+The win scales with the ratio
+
+```text
+data scanned or transformed ≫ result returned
+```
+
+For qualifying workloads the conservative, calculation-based targets are
+`15–50%` lower latency for multi-step paths, `2–10×` end-to-end speedup, and
+`10–1,000×` less transferred data for data-heavy operations. These are not
+product-wide benchmark claims; the outcome depends on round trips,
+selectivity, bytes moved, partition count, and the actual bottleneck. See
+[Estimating Performance, Throughput, And Network Cost](docs/performance-and-cost-estimation.md)
+for the equations and claim boundaries.
+
+Infrastructure consolidation must be calculated separately. Suitable
+workloads may justify screening for `10–35%` fewer instances and `5–20%`
+lower compute cost; small, CPU-bound, or already consolidated systems may
+save nothing. See
+[Estimating Infrastructure Consolidation](docs/infrastructure-cost-estimation.md).
+
+Beyond cost, the service model itself carries weight: the endpoint, partition
+function, and reducer are written, reviewed, tested, versioned, and deployed
+together. No hand-built fan-out layer, no shard maps in application code, no
+redeploy when a partition splits. Components receive declared capabilities
+rather than broad database credentials.
+
+Raft remains underneath. Writes still reach a leader and quorum; Lagrange
+removes avoidable data movement around the durability work, it does not
+weaken it.
+
+## A Concrete Comparison
+
+The MovieLens demo computes the same top-ten ranking three ways: PostgreSQL
+grouped SQL, Lagrange distributed grouped SQL, and a replicated data-local
+service where each replica emits at most ten candidates so the final merge
+sees at most twenty rows instead of every movie aggregate.
 
 ```sh
 npm install
 npm run demo:movielens
 ```
 
-The demo proves correctness, bounded exchange, and placement learned from real
-access. It deliberately does not claim a PostgreSQL-versus-Lagrange speedup
-ratio, and its service path currently uses an internal runtime module.
+The demo proves correctness, bounded exchange, and placement learned from
+real access. It deliberately does not claim a PostgreSQL-versus-Lagrange
+speedup ratio, and its service path currently uses an internal runtime
+module rather than the public call path.
 
-Read [Rewrite A Hot Path For Lagrange](docs/tutorials/rewrite-a-hot-path.md) for
-the baseline code, partition function, reducer, transfer arithmetic, failure
-implications, and migration checklist.
+## Current State
 
-## What Exists Today
+Lagrange is alpha. What works, what doesn't:
 
-- range-partitioned SQLite storage with Raft replication;
-- multi-partition transactions with recovery and timeout handling;
-- one SQL execution engine shared by clients, services, and internal queries;
-- PostgreSQL wire support for a bounded measured SQL slice;
-- genuine WASI component execution through Artifact / Binding / Cell;
-- declared read, write, and capability access for request components;
-- observed data-affinity placement and read-locality routing;
-- distributed grouped SQL and an internal bounded-reduce demo;
-- diagnostics, health probes, an admin CLI, and distributed failure testing.
+- **Implemented and production-wired:** authenticated `CALL BINDING $1` over
+  the PostgreSQL wire protocol, with typed failure codes; binding-declared
+  partition-local SELECT planned into per-shard batches; data-local shard
+  execution on the partition-host node (rows never leave it — proven in
+  two-node integration); reduce under a dedicated lease with exactly one
+  atomic result snapshot; missing-instance activation via bounded leases and
+  placement pins; request bindings over HTTP; genuine WASI component
+  execution; range-partitioned SQLite storage with Raft replication;
+  multi-partition transactions; a bounded PostgreSQL wire slice; diagnostics,
+  health probes, an admin CLI, and distributed failure testing.
+- **Sequential fan-out:** shard dispatch is a sequential loop today;
+  parallel fan-out is future work.
+- **Numeric partials only:** each emitted partial is one finite number per
+  group key. Structured partial values are not supported yet.
+- **Declared-only binding kinds:** `pushdown`, `change`, `time`, `once`, and
+  `boot` bindings are accepted and placed but have no invocation adapter.
+- **No JS client SDK:** pgwire is the only CALL ingress; there is no HTTP or
+  JavaScript client surface for it yet.
+- **The call WIT world is not yet published** as an authoring artifact; it
+  lives in the repository's test fixtures.
+- **Managed OCI activation is unsupported** (compatibility scaffold only).
+- **Not production-ready.** Bounded rather than general PostgreSQL
+  compatibility; no backward-compatibility guarantee on `0.x`.
 
-Important limits include the narrow external context, request-only public
-Binding invocation, unsupported managed OCI activation, and bounded rather than
-general PostgreSQL compatibility. Read
-[Current Capabilities And Limitations](docs/current-capabilities-and-limitations.md)
-before evaluating a real workload.
+The authoritative status page is
+[Current Capabilities And Limitations](docs/current-capabilities-and-limitations.md).
 
 ## Try Lagrange
 
 Requirements: Node.js 22.12 or newer and npm.
-
-Install the published server package globally to use its two command-line
-programs:
 
 ```bash
 npm install --global lagrange-server
@@ -202,7 +258,8 @@ lagrange --dry-run
 lagrange-admin --help
 ```
 
-Applications can install it locally and import the side-effect-free public API:
+Applications can install it locally and import the side-effect-free public
+API:
 
 ```bash
 npm install lagrange-server
@@ -213,11 +270,7 @@ import {VERSION} from 'lagrange-server';
 ```
 
 The npm package is named `lagrange-server`; the product and executable remain
-named `lagrange`. The distributed test-run dashboard can display packaged
-static resources, but starting repository-owned distributed scenarios still
-requires a source checkout.
-
-To run from a source checkout instead:
+named `lagrange`. To run from a source checkout instead:
 
 ```bash
 npm install
@@ -231,40 +284,71 @@ Open the administration client in another terminal:
 npm run cli -- localhost:8081
 ```
 
-Continue with the [first-hour tutorial](docs/tutorials/first-hour.md) or the
-[service deployment guide](docs/service-deployment-guide.md).
+To see the call path run, execute the flagship example — it builds a WASM
+component from plain JavaScript, installs it, splits a ledger table across
+two partitions, and invokes `CALL BINDING $1` end to end:
+
+```bash
+node examples/call-binding-account-summary/run-call-binding-account-summary.js
+```
+
+Continue with the [first-hour tutorial](docs/tutorials/first-hour.md), the
+[service deployment guide](docs/service-deployment-guide.md), or the
+[example's README](examples/call-binding-account-summary/README.md).
 
 ## Good Fit
 
-Lagrange is most interesting when:
+Lagrange is most interesting when services retrieve substantial data only to
+filter, score, aggregate, validate, or transform it; when cross-partition
+work can return bounded partial results; or when service/database round trips
+or cross-zone traffic are material.
 
-- services retrieve substantial data only to filter, score, aggregate,
-  validate, or transform it;
-- several sequential statements touch the same partition key;
-- cross-partition work can return bounded partial results;
-- service/database round trips or cross-zone traffic are material; or
-- application placement must follow changing sharded data ownership.
+It is a poor fit today when you need a mature drop-in database, complete
+PostgreSQL compatibility, or when one cheap indexed query already returns the
+final small result.
 
-It is a poor fit today when you need a mature drop-in database, unmodified OCI
-execution, complete PostgreSQL compatibility, or when one cheap indexed query
-already returns the final small result.
+## Compatibility Paths
+
+You do not have to rewrite anything to start. An unmodified Node.js
+PostgreSQL application can point at Lagrange's pgwire listener
+([service-portability example](examples/service-portability/README.md)), and
+existing HTTP workloads can run as WASM request bindings
+([js-request-binding example](examples/js-request-binding-deployment/README.md)).
+OCI containers, the legacy callback surface, and experimental runtimes are
+compatibility and internals material — see
+[Compatibility and internals](docs/start-here.md#compatibility-and-internals).
 
 ## Documentation
 
-- [Start here](docs/start-here.md) — paths for evaluators, service authors,
-  operators, and architecture readers
-- [Native programming model](docs/native-programming-model.md) — adoption
-  levels, API boundary, placement, and reduction
-- [Performance and cost estimation](docs/performance-and-cost-estimation.md) —
-  latency, throughput, transfer, and network-bill calculations
-- [Infrastructure cost estimation](docs/infrastructure-cost-estimation.md) —
-  capacity consolidation, VM-count, and compute-cost calculations
-- [Hot-path rewrite tutorial](docs/tutorials/rewrite-a-hot-path.md) — detailed
-  before-and-after example
-- [Architecture index](architecture/INDEX.md) — system and process references
+What it is:
+
+- [Start here](docs/start-here.md) — reading paths from model to operations
+
+How to build one:
+
+- [Native programming model](docs/native-programming-model.md) — the service
+  model, API boundary, placement, and reduction
+- [WASM services user guide](docs/wasm-services-user-guide.md) — authoring
+  and packaging components
+- [Service deployment guide](docs/service-deployment-guide.md) — lifecycle
+  SQL: install, bind, configure access, call
+- [Execution semantics](docs/execution-semantics.md) — retries, idempotency,
+  partial failure, limits, movement
+- [First-hour tutorial](docs/tutorials/first-hour.md) and
+  [hot-path rewrite tutorial](docs/tutorials/rewrite-a-hot-path.md)
+- [Examples](examples/README.md)
+
+How it works:
+
+- [Architecture overview](architecture.md) and the
+  [architecture index](architecture/INDEX.md)
+- [Performance and cost estimation](docs/performance-and-cost-estimation.md)
+  and [infrastructure cost estimation](docs/infrastructure-cost-estimation.md)
+
+Status and direction:
+
 - [Current capabilities and limitations](docs/current-capabilities-and-limitations.md)
-  — authoritative implementation status
-- [Roadmap](roadmap.md) — product direction
+- [Roadmap](roadmap.md)
 
 Working on the codebase with an AI agent, including Codex? Start at
 [AGENTS.md](AGENTS.md). Test and release workflows begin at

@@ -1,9 +1,18 @@
 # Lagrange Architecture
 
 This is the canonical human entry point for the implemented Lagrange
-architecture. Start here for the map, continue to
-[The Lagrange System Model](system-model.md) for the vocabulary, and then choose
-the process document for the mechanism you need.
+architecture — the "how it works" layer. Lagrange is a distributed runtime
+for data-intensive services: one logical service, authored and deployed as
+a unit, physically distributed across the database partitions holding its
+data. These documents explain the machinery that makes that true.
+
+Start here for the map, continue to
+[The Lagrange System Model](system-model.md) for the vocabulary, and then
+choose the process document for the mechanism you need. The conceptual
+hierarchy — customer-facing service → endpoint invocation → distributed
+execution plan → partition-local function calls → database partitions and
+replicas — and the subsystem that owns each transition are laid out in the
+root [architecture map](../architecture.md).
 
 For an exact statement of what is implemented, partial, or unsupported, use
 [current capabilities and limitations](../docs/current-capabilities-and-limitations.md).
@@ -12,9 +21,10 @@ capability document defines what the checked-in implementation supports today.
 
 ## The idea in one picture
 
-Lagrange combines partitioned, replicated SQL storage with placed service
-execution. Durable state remains in tables. Disposable service Cells are placed
-near the partitions they use, and both data and compute are continuously
+A Lagrange service is one deployable; the cluster runs each part of a
+request on the nodes holding the relevant data. Durable state remains in
+partitioned, replicated tables. Disposable service Cells are placed near
+the partitions they use, and both data and compute are continuously
 reconciled as the cluster changes.
 
 ```mermaid
@@ -55,61 +65,96 @@ and cross-partition operations still communicate. The architectural advantage
 is narrower: locality becomes something the cluster can create and maintain
 instead of something application teams arrange manually.
 
-## Five anchors
+## Six anchors
 
-Keep these five statements in mind while reading the deeper documents:
+Keep these six statements in mind while reading the deeper documents:
 
-1. **Tables hold durable state.** User data, service state, and cluster metadata
-   all live in ordinary partitioned tables.
-2. **Partitions are the unit of distribution.** A partition owns a primary-key
-   range and is the unit of routing, replication, split, merge, and placement.
-3. **Replicas provide durability; Cells provide compute.** Partition replicas
-   are Raft members. Runtime-service Cells are disposable and have no
-   per-service Raft log.
-4. **Requests use shared routing and execution surfaces.** Protocol adapters and
-   service calls converge on the same SQL engine, metadata model, and message
-   router rather than creating independent execution paths.
-5. **Nothing is placed once and forgotten.** Replica movement, Cell placement,
-   partition changes, node changes, and observed access all feed continuous
-   reconciliation.
+1. **The service is the logical unit.** Endpoints, partition functions, and
+   reducers are authored, versioned, and deployed together. An endpoint
+   invocation becomes a distributed operation the cluster owns end to end.
+2. **Tables hold durable state.** User data, service state, and cluster
+   metadata all live in ordinary partitioned tables.
+3. **Partitions are the unit of distribution.** A partition owns a
+   primary-key range and is the unit of routing, replication, split, merge,
+   and placement.
+4. **Replicas provide durability; Cells provide compute.** Partition
+   replicas are Raft members. Runtime-service Cells are disposable and have
+   no per-service Raft log.
+5. **Requests use shared routing and execution surfaces.** Protocol
+   adapters and service calls converge on the same SQL engine, metadata
+   model, and message router rather than creating independent execution
+   paths.
+6. **Nothing is placed once and forgotten.** Replica movement, Cell
+   placement, partition changes, node changes, and observed access all feed
+   continuous reconciliation.
 
 ## The four flows to understand
 
-### 1. A request finds the relevant data
+### 1. An endpoint invocation becomes distributed execution
 
-Ingress is normalised, predicates narrow the partition set where possible, and
-routing chooses eligible replicas. Writes target the canonical partition
-leader; reads can prefer nearby replicas.
+One invocation of a service Binding is planned into per-partition function
+runs plus one reduction. Each function executes against the local partition
+replica on the node that owns the data; only emitted partial results and
+the final reduced result cross the network. The developer wrote one
+service; the fan-out, retries, and reduction belong to Lagrange.
+
+Read: [Minimal Deployment Surface](minimal-deployment-surface.md) — the
+sealed call-surface contract — and
+[Query Runtime Architecture](query-runtime.md)
+
+### 2. A request finds the relevant data
+
+Ingress is normalised, predicates narrow the partition set where possible,
+and routing chooses eligible replicas. Writes target the canonical
+partition leader; reads can prefer nearby replicas.
 
 Read: [Process: Request Routing](process-request-routing.md)
 
-### 2. A write becomes durable
+### 3. A write becomes durable
 
-The leader appends the proposal, replicates it through Raft, applies it after a
-majority commit, and emits CDC from the apply path. Service placement can
-shorten the application path, but it does not weaken consensus.
+The leader appends the proposal, replicates it through Raft, applies it
+after a majority commit, and emits CDC from the apply path. Service
+placement can shorten the application path, but it does not weaken
+consensus.
 
 Read: [Process: Replication](process-replication.md)
 
-### 3. Work fans out instead of pulling all rows inward
-
-A multi-partition operation routes work to the partitions, performs local work,
-and merges compact partial results. The network is still involved, but raw and
-intermediate data need not all move to a separately placed application tier.
-
-Read: [Process: Request Routing](process-request-routing.md) and
-[Query Runtime Architecture](query-runtime.md)
-
 ### 4. Locality follows changing usage
 
-Real service-to-partition access becomes affinity evidence. Placement uses that
-evidence alongside capacity, spread, failure, and policy constraints. If data
-moves or partitions change, Cells can be replaced near the new layout.
+Real service-to-partition access becomes affinity evidence. Placement uses
+that evidence alongside capacity, spread, failure, and policy constraints.
+If data moves or partitions change, Cells can be replaced near the new
+layout.
 
 Read: [Process: Data Affinity](process-data-affinity.md) and
 [Process: Rebalancing](process-rebalancing.md)
 
-## Choose a reading path
+## The service execution model
+
+Start with these when your question is how one service becomes distributed
+execution:
+
+- [Minimal Deployment Surface](minimal-deployment-surface.md) — the sealed
+  Artifact / Binding / Cell call-surface contract and owner map. This is
+  the design source of truth for the call surface: Binding shapes, budgets,
+  and the reduce and witness contract.
+- [Process: Request Routing](process-request-routing.md) — how SQL and
+  service requests reach their target replica or Cell.
+- [Query Runtime Architecture](query-runtime.md) — programmatic runtime,
+  execution-mode dispatch, and the movement primitives beneath distributed
+  plans.
+- [Service Control Transport](service-control-transport.md) — the
+  authenticated lifecycle SQL ingress (`INSTALL SERVICE`,
+  `CREATE BINDING`, `CALL BINDING`) and its security boundary.
+- [Lagrange Service Manifest](lagrange-service-manifest.md) — service
+  manifest format and activation model.
+- [Lagrange Service Registry](lagrange-service-registry.md) — service
+  registry architecture.
+
+## Storage, consensus, and placement machinery
+
+The layers beneath the execution model. Ordinary callers never see them;
+the service contract depends on them.
 
 | Question | Start here |
 | --- | --- |
@@ -124,16 +169,26 @@ Read: [Process: Data Affinity](process-data-affinity.md) and
 | Which component owns a specific runtime concern? | [Runtime Components](runtime-components.md) |
 | Which claims are true in the current build? | [Current capabilities and limitations](../docs/current-capabilities-and-limitations.md) |
 
+Reference material for the same layer:
+
+- [Peer Address Resolution And Restart-With-New-IP Recovery](peer-address-resolution.md)
+  — logical node identity, address resolution, and restart recovery.
+- [Readiness Gating And Owner-Contract Kernels](readiness-and-owner-contracts.md)
+  — readiness dimensions, membership guards, and shared owner contracts.
+
 ## Current boundaries
 
 The architecture is easiest to understand when its boundaries are explicit:
 
 - Lagrange is a substantial experimental system, not yet a mature drop-in
   production database.
-- Request Bindings are the publicly invocable external service path today;
-  other accepted Binding source kinds do not all have public adapters.
-- Managed OCI container execution is not active; externally installed services
-  currently run as genuine WASI components.
+- Request Bindings (HTTP) and call Bindings (`CALL BINDING` over the
+  PostgreSQL wire protocol) are the publicly invocable external service
+  paths today; the other accepted Binding source kinds (`pushdown`,
+  `change`, `time`, `once`, `boot`) are declared-only.
+- Managed OCI container execution is not active; it is an internal
+  compatibility scaffold. Externally installed services run as genuine
+  WASI components.
 - PostgreSQL wire compatibility is a bounded measured slice, not a claim of
   arbitrary PostgreSQL or ORM compatibility.
 - Query narrowing, indexes, snapshots, and learner promotion have important
@@ -166,19 +221,25 @@ files below are the complete human architecture tree.
 - [Operational Architecture Appendices](operational-appendices.md) - Error handling, testing, endpoint sync, and discovery architecture.
 <!-- architecture-domain-files:end -->
 
-## Supporting documents
+## Compatibility and internals
 
-### Reference
+Level-4 material: compatibility paths, legacy surfaces, and experimental
+runtimes. Read it after the service execution model, not before. None of
+it defines the public programming model, which is WASM service components.
 
-- [Peer Address Resolution And Restart-With-New-IP Recovery](peer-address-resolution.md) — logical node identity, address resolution, and restart recovery.
-- [Readiness Gating And Owner-Contract Kernels](readiness-and-owner-contracts.md) — readiness dimensions, membership guards, and shared owner contracts.
-
-### Service platform
-
-- [Minimal Deployment Surface](minimal-deployment-surface.md) — current Artifact / Binding / Cell contract and owner map.
-- [Service Control Transport](service-control-transport.md) — authenticated lifecycle SQL ingress and security boundary.
-- [Lagrange Service Manifest](lagrange-service-manifest.md) — service manifest format and activation model.
-- [Lagrange Service Registry](lagrange-service-registry.md) — service registry architecture.
+- OCI runtime host contract (`oci-runtime-host-contract.md`,
+  development-audience) — the OCI container runtime is an internal
+  compatibility scaffold. Descriptor validation and an in-memory lifecycle
+  exist; managed container activation is unsupported.
+- Legacy partition-callback surface — the pre-Binding uploaded-callback
+  mechanism, retained as a deliberate historical artifact in
+  [`examples/distributed-sql`](../examples/distributed-sql/README.md) and
+  covered by the callback-execution sections of
+  [Query Runtime Architecture](query-runtime.md).
+- Experimental and internal runtime kinds — `native_js` is the
+  kernel-internal substrate (the SQL engine itself runs on it);
+  `oci_container` is scaffold-only. Externally installed services run as
+  WASI components.
 
 Contributor-only owner ledgers, executable model records, workflow contracts,
 and planning material are deliberately absent from this human index. This tree

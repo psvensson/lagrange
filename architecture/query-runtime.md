@@ -12,10 +12,14 @@ are catalogued in [runtime-components.md](runtime-components.md).
 
 The `runtime.run`, `ctx.call`, `WasmCallAdapter`, and `partition_callback`
 sections below describe the active **legacy distributed-query callback
-surface**. They are not the supported Artifact / Binding / Cell installation
-path. Current externally installed WASI components use Binding-derived
-runtime-service Cells; see
-[Service Deployment Guide](../docs/service-deployment-guide.md).
+surface** — a pre-Binding mechanism retained for internal use and study. They
+are not the supported Artifact / Binding / Cell installation path. Current
+externally installed WASI components use Binding-derived runtime-service
+Cells, and the public successor to partition-local callback execution is the
+call Binding path (`CALL BINDING $1` → per-partition `run` on the
+partition-host nodes → coordinated `reduce`); see
+[Service Deployment Guide](../docs/service-deployment-guide.md) and
+[Minimal Deployment Surface](minimal-deployment-surface.md).
 
 ### Distributed Movement Primitives (Legacy Callback)
 Cross-partition data movement is restricted to three explicit primitives,

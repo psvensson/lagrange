@@ -195,6 +195,23 @@ flowchart LR
   classDef ext fill:#f1f5f9,stroke:#475569,color:#0f172a
 ```
 
+### Call Bindings: partition-host routing
+
+The call path (`CALL BINDING $1` over authenticated pgwire) uses the same
+cache-driven resolution with one extra constraint: each shard of the
+invocation must run on the node hosting the partition it reads. The
+statement is planned into per-partition shards without fetching rows;
+`call-partition-topology` resolves each partition's canonical leader as the
+required host, and `CallBindingRouteResolver` restricts Cell selection to
+that node. A missing Cell on the host is not a routing failure — it raises
+`HOST_CELL_UNAVAILABLE`, which publishes a bounded activation lease that the
+rebalancer consumes as a placement pin. The receiving node re-asserts
+leadership, partition epoch, and binding digest against its own cache before
+executing, and refuses `TARGET_STALE` if the topology moved. Reduction runs
+once, on the replica holding a dedicated reduce lease. The full contract is
+[Minimal Deployment Surface](minimal-deployment-surface.md); developer-facing
+semantics are in [execution semantics](../docs/execution-semantics.md).
+
 ### Service-to-table access
 
 Service code does not get its own query path. `ServiceRuntimeLifecycle` injects

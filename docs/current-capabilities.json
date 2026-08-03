@@ -60,17 +60,18 @@
       "SHOW SERVICE $1",
       "SHOW SERVICES",
       "CONFIGURE SERVICE ACCESS $1",
-      "CREATE BINDING $1"
+      "CREATE BINDING $1",
+      "CALL BINDING $1"
     ],
     "publicInvocation": [
-      "request"
+      "request",
+      "call"
     ],
     "acceptedButNotPubliclyInvocable": [
       "change",
       "time",
       "once",
       "boot",
-      "call",
       "pushdown"
     ],
     "servicePortabilityContract": "docs/service-portability-capabilities.json"
@@ -120,7 +121,7 @@
     {
       "id": "binding-invocation",
       "area": "Service deployment",
-      "summary": "Only request Bindings have a public invocation adapter; other source kinds can be declared and placed but are not publicly invocable."
+      "summary": "Request and call Bindings have public invocation adapters (HTTP, and authenticated pgwire CALL BINDING $1 with data-local shard runs and reduce coordination); the change, time, once, boot, and pushdown source kinds can be declared and placed but are not publicly invocable."
     },
     {
       "id": "oci-runtime",

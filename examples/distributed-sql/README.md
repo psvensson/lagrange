@@ -1,4 +1,10 @@
-# Distributed SQL Callback Examples
+# Distributed SQL Callback Examples (legacy surface)
+
+> **Legacy.** This directory documents Lagrange's pre-Binding callback
+> mechanism. It is kept deliberately, as a historical artifact of how
+> partition-local execution grew up — compatibility-and-internals
+> reading, not an on-ramp. Nothing here is how services are authored,
+> deployed, or invoked today.
 
 ## The problem this example addresses
 
@@ -13,9 +19,14 @@ on a live node.
 This directory demonstrates that **older callback surface**. It is worth
 studying to understand partition-local execution mechanics — how a statement
 plus a callback fan out over partition rows, batch stages, and reduce by key —
-but it predates Bindings and is not how services are deployed today. The
-runnable [request-binding examples](../request-binding-deployment/README.md)
-show the current deployment surface with genuine WASI components, and
+but it predates Bindings. Everything this surface rehearsed now has a
+public successor: a `call` Binding declares the statement, the WASM
+component's `run` export does the partition-local work, and its `reduce`
+export folds the partials —
+[call-binding-account-summary](../call-binding-account-summary/README.md)
+is the runnable example. The
+[request-binding examples](../request-binding-deployment/README.md) show
+the same deployment surface for HTTP endpoints, and
 [Current Capabilities And Limitations](../../docs/current-capabilities-and-limitations.md)
 is the status authority.
 
@@ -104,7 +115,9 @@ A few notes:
   surface. Service deployment is declared through `INSTALL SERVICE` and
   `CREATE BINDING` (see
   [`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md));
-  the callback path here predates it.
+  the callback path here predates it. Partition-local execution with
+  reduction is publicly invocable today via `CALL BINDING` (see
+  [call-binding-account-summary](../call-binding-account-summary/README.md)).
 - Managed [OCI](https://opencontainers.org/) container execution is not
   implemented yet. `native_js` is kernel-internal, and OCI callback invocation
   remains unsupported.

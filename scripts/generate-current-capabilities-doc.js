@@ -115,7 +115,8 @@ The compatibility endpoint is not a readiness or liveness oracle.
 ## Service Deployment
 
 The public model is **${capabilities.deployment.publicModel.join(' / ')}**.
-Request Bindings are publicly invocable. The accepted
+The ${renderList(capabilities.deployment.publicInvocation)} Binding source
+kinds are publicly invocable. The accepted
 ${renderList(capabilities.deployment.acceptedButNotPubliclyInvocable)} source
 kinds can be declared and placed but do not yet have public invocation adapters.
 

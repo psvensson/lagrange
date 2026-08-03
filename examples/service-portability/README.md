@@ -11,9 +11,10 @@ should connect to Lagrange unchanged**, because Lagrange speaks the standard
 — the same TCP protocol every PostgreSQL client library already implements.
 
 No WebAssembly, no rewrites, no Lagrange APIs appear in this example. It is
-the compatibility rung of the adoption ladder described in
-[The Lagrange Native Programming Model](../../docs/native-programming-model.md):
-deploy first, extract data-local hot paths later, only where they pay.
+the compatibility path: point an existing application at Lagrange first, then
+extract data-local hot paths into a service —
+[The Lagrange Native Programming Model](../../docs/native-programming-model.md)
+— only where they pay.
 
 Concretely, one ordinary Node.js HTTP application image runs, unchanged,
 against two database endpoints:
@@ -76,10 +77,11 @@ The PostgreSQL slice exercised here is intentionally explicit:
 
 This is **not** a claim of arbitrary ORM compatibility or complete PostgreSQL
 behavior, and Lagrange does not install or manage the application container
-here. Managed OCI execution is a later stage of the service-portability
-ladder; see
+here — the application stays wherever it already runs. (Managed OCI
+execution inside Lagrange is unsupported scaffolding today; WASM is the
+service packaging format. See
 [Current Capabilities And Limitations](../../docs/current-capabilities-and-limitations.md)
-for the authoritative status.
+for the authoritative status.)
 
 Note that this example starts the built-in `sys-postgres-wire` runtime service
 directly — one of the axiomatic bootstrap services that exists before any

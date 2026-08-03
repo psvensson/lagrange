@@ -6,10 +6,11 @@ documentClass: current
 # Estimating Infrastructure Consolidation
 
 Lagrange may reduce infrastructure cost by combining work that normally lives
-in separate database, application, and worker fleets. The saving is not that
-application CPU or replicated storage disappears. It comes from removing
-avoidable coordination, intermediate data movement, duplicated headroom, and
-separately provisioned tiers.
+in separate database, application, and worker fleets: a Lagrange service's
+partition functions and reducers run on the same fleet that owns the data.
+The saving is not that application CPU or replicated storage disappears. It
+comes from removing avoidable coordination, intermediate data movement,
+duplicated headroom, and separately provisioned tiers.
 
 This document provides conservative screening calculations. They are not
 benchmark results or product-wide savings claims. A real estimate must use the
@@ -67,9 +68,10 @@ technical minimum for a basic replicated shape, not necessarily a sensible
 production fleet. Larger deployments may need additional nodes for capacity,
 maintenance, fault-domain spread, and recovery margin.
 
-Managed OCI container execution is not supported today. OCI estimates describe
-the intended compatibility path rather than a currently available managed
-runtime.
+Managed OCI container execution is not supported today; OCI is a
+compatibility scaffold, not a deployment model. Estimates for moving
+unchanged workloads apply to services packaged as WASI components and
+deployed without a rewrite.
 
 ## Use Capacity, Not VM Count, As The Primary Model
 
@@ -112,12 +114,12 @@ needed for actual business logic.
 The following ranges are deliberately cautious. They are suitable only for
 initial screening before measurement.
 
-| Adoption path | Possible instance-count change | Possible compute-infrastructure bill change |
+| Degree of extraction | Possible instance-count change | Possible compute-infrastructure bill change |
 | --- | ---: | ---: |
-| Existing workload moved with minimal change | `0–15%` fewer instances | roughly `-5%` to `+5%`; the first deployment may cost slightly more |
-| WASM service using the current context and learned locality | `0–20%` fewer instances | `0–10%` lower where separate service headroom can be consolidated |
-| Targeted native hot-path rewrites | `10–35%` fewer instances | `5–20%` lower for qualifying data-intensive systems |
-| Native execution also replaces a distinct worker or aggregation tier | `20–45%` fewer instances | `10–30%` lower when that tier mainly coordinates or reduces database data |
+| Existing service moved with minimal change | `0–15%` fewer instances | roughly `-5%` to `+5%`; the first deployment may cost slightly more |
+| Service using the Lagrange context and learned locality | `0–20%` fewer instances | `0–10%` lower where separate service headroom can be consolidated |
+| Targeted partition-function rewrites of data-intensive hot paths | `10–35%` fewer instances | `5–20%` lower for qualifying data-intensive systems |
+| Partition functions and reducers replace a distinct worker or aggregation tier | `20–45%` fewer instances | `10–30%` lower when that tier mainly coordinates or reduces database data |
 
 These are not additive. Do not combine a `20%` service saving and a `30%`
 worker saving into a `50%` total claim.
@@ -181,8 +183,8 @@ calls, moving intermediate results, and coordinating partitioned work.
 
 ### Minimal-change path
 
-If OCI or WASM workloads are mostly moved rather than rewritten, the same CPU
-still exists and only part of the duplicated headroom can be consolidated. A
+If services are mostly moved rather than rewritten, the same CPU still
+exists and only part of the duplicated headroom can be consolidated. A
 screening estimate might be:
 
 ```text
@@ -192,7 +194,7 @@ screening estimate might be:
 That is `6–22%` fewer instances. Because the combined nodes are larger, the bill
 may remain roughly unchanged or fall by only `0–10%`.
 
-### Native hot-path path
+### Partition-function path
 
 If selected transactions and reductions become partition-local, the system can
 also remove some coordinator CPU, serialization, transfer, and worker waiting.
@@ -262,6 +264,11 @@ Good candidates include systems where:
 - application and database tiers each reserve independent burst headroom; or
 - cross-zone placement forces both larger pools and additional traffic.
 
+All of these candidates share one shape: `data scanned or transformed ≫
+result returned`. The partition functions reduce large local inputs to
+compact partials, so the network and the coordinating tier carry partials
+rather than rows.
+
 The most plausible infrastructure saving is usually replacing or shrinking a
 worker, aggregation, or coordination tier—not pretending that replicated
 storage can run without resources.
@@ -328,18 +335,19 @@ Avoid:
 
 A cautious general statement is:
 
-> On suitable data-intensive systems, targeted Lagrange-native rewrites may
-> justify screening for `10–35%` fewer instances and `5–20%` lower compute
-> infrastructure cost. Larger consolidation is possible when a separate worker
-> or aggregation tier mainly exists to move and reduce database data. Small,
-> CPU-bound, or already consolidated systems may save nothing or cost more.
+> On suitable data-intensive systems, targeted partition-function rewrites
+> may justify screening for `10–35%` fewer instances and `5–20%` lower
+> compute infrastructure cost. Larger consolidation is possible when a
+> separate worker or aggregation tier mainly exists to move and reduce
+> database data. Small, CPU-bound, or already consolidated systems may save
+> nothing or cost more.
 
 ## Continue
 
 - [Estimating Performance, Throughput, And Network Cost](performance-and-cost-estimation.md)
   covers latency, throughput, transfer, and network billing.
 - [The Lagrange Native Programming Model](native-programming-model.md) explains
-  the adoption levels and current API boundary.
+  the service programming model and the current API boundary.
 - [Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md) provides a
   detailed baseline, local function, and reducer example.
 - [Current Capabilities And Limitations](current-capabilities-and-limitations.md)

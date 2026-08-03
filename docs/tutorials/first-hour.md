@@ -5,9 +5,14 @@ documentClass: current
 
 # First Hour With Lagrange
 
-This tutorial starts one local node, performs a SQL round trip, shows how the
-row maps to a partition, and runs the supported genuine-WASI request Binding
-example.
+Lagrange is a distributed runtime for data-intensive services: you write one
+service — endpoints, partition functions, and reducers together — deploy it
+as WASM, and call it like any other service.
+
+In this first hour you start one local node, perform a SQL round trip, see
+how a row maps to a partition, and deploy and invoke a genuine WASI service
+through a request Binding. That is the deployment half of the story; the
+final section points at the data-local call path that builds on it.
 
 ## Prerequisites
 
@@ -25,9 +30,9 @@ npm install
 cp .env.example .env
 ```
 
-For a first local node, leave `NODE_ID` and `SEED_NODE_ADDRESS` unset. The node
-mints and persists its identity; no seed address means this node creates the
-cluster.
+For a first local node, leave `NODE_ID` and `SEED_NODE_ADDRESS` unset. The
+node mints and persists its identity; no seed address means this node creates
+the cluster.
 
 ## 2. Start One Node
 
@@ -81,8 +86,8 @@ WHERE id = '__readiness__';
 
 If that check returns a pending or deferred envelope, wait its `retryAfterMs`
 value (or one second when no delay is supplied) and run the same check again.
-Continue only after it returns a normal successful row set; an empty row set is
-expected.
+Continue only after it returns a normal successful row set; an empty row set
+is expected.
 
 ```sql
 INSERT INTO users (id, name)
@@ -104,9 +109,9 @@ FROM users
 WHERE id = 'alice';
 ```
 
-The `id` predicate can narrow to the owning partition. Compare it with a query
-on `name`: a predicate the partition resolver cannot use may fan out instead of
-failing.
+The `id` predicate can narrow to the owning partition. Compare it with a
+query on `name`: a predicate the partition resolver cannot use may fan out
+instead of failing.
 
 ## 4. Inspect The Physical Model
 
@@ -117,15 +122,19 @@ In the same CLI:
 3. Open its Partitions view.
 4. Inspect the partition id, key range, replica count, and leader.
 
-A new table begins with one unbounded partition. In this single-node tutorial,
-writes can use direct mode because no remote leader exists. The configured
-multi-node replica policy does not mean this one-node exercise has already
-demonstrated quorum replication.
+A new table begins with one unbounded partition. In this single-node
+tutorial, writes can use direct mode because no remote leader exists. The
+configured multi-node replica policy does not mean this one-node exercise has
+already demonstrated quorum replication.
 
-## 5. Run A Genuine WASI Request Binding
+Partitions matter beyond storage: they are where Lagrange runs your service's
+partition functions. The routing you just inspected is the same machinery
+that decides where data-local service code executes.
 
-Stop the manually started node before running this self-contained example; the
-example starts and stops its own disposable local node.
+## 5. Deploy And Invoke A Service
+
+Stop the manually started node before running this self-contained example;
+the example starts and stops its own disposable local node.
 
 ```sh
 node examples/request-binding-deployment/run-request-binding-deployment.js
@@ -134,8 +143,8 @@ node examples/request-binding-deployment/run-request-binding-deployment.js
 If you would rather author the component in plain JavaScript instead of WAT,
 run the
 [js-request-binding-deployment example](../../examples/js-request-binding-deployment/README.md)
-afterwards — it deploys a ComponentizeJS-built component through the identical
-lifecycle SQL and needs no `wasm-tools` binary.
+afterwards — it deploys a ComponentizeJS-built component through the
+identical lifecycle SQL and needs no `wasm-tools` binary.
 
 The runner:
 
@@ -147,21 +156,54 @@ The runner:
 6. invokes the Cell over HTTP; and
 7. proves matched, denied, and unmatched request behavior.
 
-Expect a JSON report showing a `202` response for the matching request and the
-body `component wrote audit key 7`. The example exits non-zero if any assertion
-fails.
+Expect a JSON report showing a `202` response for the matching request and
+the body `component wrote audit key 7`. The example exits non-zero if any
+assertion fails.
 
-## 6. What You Have And Have Not Proven
+## 6. Where The Call Path Fits
+
+The request Binding you just invoked is one of two live endpoint kinds. The
+second is the **call endpoint**: a Binding that declares a single-table
+SELECT as its data selector, a partition function (`run`) that executes
+beside each relevant partition, and a reducer (`reduce`) that folds the
+bounded partials into one result. A client invokes it with one statement
+over authenticated pgwire:
+
+```sql
+CALL BINDING $1
+```
+
+That is the data-local half of the product story — the part where a single
+endpoint invocation fans out across the nodes holding the data and only
+compact partials cross the network. Check the
+[examples index](../../examples/README.md) for the current runnable
+call-path example, and read
+[Rewrite A Hot Path For Lagrange](rewrite-a-hot-path.md) for the full
+walkthrough.
+
+## 7. What You Have And Have Not Proven
 
 You have exercised:
 
 - node startup and readiness;
 - SQL table creation, writes, reads, and routing diagnostics;
 - the Table → Partition relationship; and
-- genuine Artifact → Binding → Cell deployment.
+- genuine Artifact → Binding → Cell deployment with an HTTP endpoint.
 
 You have not exercised leader failover, quorum loss, learner catch-up,
-multi-node rebalancing, or cross-node Cell placement. Continue with the
+multi-node rebalancing, cross-node Cell placement, or a multi-node
+data-local call. Continue with the
 [distributed-systems primer](../distributed-systems-primer.md) and the
 [examples index](../../examples/README.md) before drawing conclusions about
 those behaviors.
+
+## Continue
+
+- [The Lagrange Native Programming Model](../native-programming-model.md) —
+  service, endpoints, partition functions, reducers, data-local execution.
+- [Rewrite A Hot Path For Lagrange](rewrite-a-hot-path.md) — extract one
+  data-intensive operation into a Lagrange service.
+- [Execution Semantics](../execution-semantics.md) — the invocation
+  contract: retries, idempotency, budgets, movement.
+- [Service Deployment Guide](../service-deployment-guide.md) — the lifecycle
+  SQL in operational detail.

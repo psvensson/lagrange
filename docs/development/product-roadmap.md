@@ -291,9 +291,10 @@ Enterprise
 
 ---
 
-## Phase 2.0 — Distributed Execution Platform
+## Phase 2.0 — Deeper Distributed Execution
 
-*"The long-term vision: database + compute + service platform."*
+*"One product: services whose functions run across the data. This phase
+deepens the shipped call surface rather than adding a separate platform."*
 
 ### 1. Multi-Stage Distributed Plans — 🟢 Community
 

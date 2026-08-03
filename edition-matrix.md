@@ -1,5 +1,10 @@
 # Edition Matrix
 
+Lagrange is one product — a distributed runtime for data-intensive
+services. Editions slice that one product's feature areas by edition and
+implementation home; they are not separate product lines or alternate
+evolutionary paths.
+
 This document is the canonical mapping from feature area to edition and
 implementation home.
 
