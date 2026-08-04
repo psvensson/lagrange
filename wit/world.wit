@@ -95,3 +95,29 @@ world service-cell {
   export run: func(batch: list<row>, arguments: string) -> string;
   export reduce: func(partials: list<tuple<string, string>>, arguments: string) -> string;
 }
+
+/// Generic-dispatch world (additive v2): the export surface stays fixed
+/// while handler and operation identity travel as explicit arguments, so
+/// one component serves any number of request handlers and distributed
+/// operations. Dispatch tables live in the generated component entry;
+/// the runtime maps a Binding's declared interface (request_v2/call_v2)
+/// plus handler_id onto these fixed exports
+/// (src/runtime/component-export-resolution.js stays the single mapping
+/// owner). An unknown handler or operation id is refused by the
+/// generated entry with a typed error — never silently routed.
+world service-cell-v2 {
+  use call-context.{row};
+  import context;
+  import call-context;
+
+  /// `handler` is the generated handler id (the explicit descriptor key);
+  /// `request` is the serialized request envelope as in service-cell.
+  export handle-request: func(handler: string, request: string) -> string;
+
+  /// `operation` is the generated operation id (the explicit descriptor
+  /// key); batch and arguments are as in service-cell.
+  export run: func(operation: string, batch: list<row>, arguments: string) -> string;
+
+  /// Reduction for the named operation over the published partials.
+  export reduce: func(operation: string, partials: list<tuple<string, string>>, arguments: string) -> string;
+}
