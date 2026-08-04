@@ -1,27 +1,42 @@
 # Lagrange
 
-Lagrange is a distributed runtime for data-intensive services. Write an HTTP
-handler, partition-local functions, and reducers together. Deploy them as
-one WASM Artifact. Lagrange exposes the endpoint and runs the data-heavy
-parts beside the partitions holding the rows.
+Lagrange runs the data-heavy parts of a service on the database nodes that
+already hold the relevant rows.
+
+Write an HTTP handler, a partition function, and a reducer in ordinary
+JavaScript. Compile them into one WASM component. A Request Binding maps an
+HTTP route to the handler. A Call Binding maps a named distributed operation
+to its partition-local SELECT, its `run` export, and its budgets.
+
+When the handler invokes that operation, Lagrange runs `run` beside each
+matching partition, moves only the emitted partial results, calls `reduce`
+once, and returns the result through the HTTP handler.
+
+`INSTALL SERVICE` stores the verified WASM bytes in replicated Lagrange
+tables, so starting the service does not depend on the original OCI
+registry or on a particular node's filesystem cache.
 
 ```text
-Existing application
-      |
-      | POST /accounts/summary
-      v
-handleRequest()  in a request Cell
-      |
-      | callBinding("account-summary-inner", arguments)
-      v
-Lagrange
-  |- run()    on partition host A     raw rows stay local
-  |- run()    on partition host B     raw rows stay local
-  `- reduce() -> one JSON result      only bounded partials move
-      |
-      v
-one HTTP response
+POST /accounts/summary
+        |
+        v
+handleRequest()
+        |
+        | summarizeAccountActivity(accountId)
+        |   -> Call Binding "summarize-account-activity"
+        v
+run() on matching partition hosts
+        |
+        | emitted counts and totals only
+        v
+reduce()
+        |
+        v
+HTTP JSON response
 ```
+
+Each partition sends only the numbers emitted by `run`; the selected table
+rows remain on the partition host.
 
 > Logically one ordinary service. Physically distributed across the data.
 
@@ -34,16 +49,166 @@ Binding  - named invocation of one export: request (an HTTP endpoint) or
 Cell     - a running instance, placed by Lagrange
 ```
 
-## One Service, One Deployment Definition
+## One WASM Component, Two Bindings
 
-The HTTP handler, partition function, and reducer are ordinary code authored
-side by side in one source file, compiled into one WASM component, and
-installed as one immutable Artifact. Two Bindings expose it, and one access
-policy authorizes the handler's outbound call. Everything in this section is
-the real, runnable
+The example below deploys five records together, each with a distinct job:
+one manifest, one WASM component, one Request Binding, one Call Binding,
+and one access policy. All of it is the real, runnable
 [account-summary example](examples/call-binding-account-summary/README.md).
 
-**1. The service manifest** - one Artifact, both entry points declared:
+The wiring, before any code:
+
+```text
+HTTP route
+  POST /accounts/summary
+
+Request Binding
+  account-summary-http
+  -> calls handleRequest()
+
+Distributed operation
+  summarize-account-activity
+  -> SELECT rows from account_activity
+  -> calls run() once per relevant partition
+  -> calls reduce() once with the emitted partials
+```
+
+And the names, since several look alike:
+
+| Name | Kind | Meaning |
+| --- | --- | --- |
+| `account-summary` | Artifact/service name | The installed WASM component and manifest |
+| `handle-request` | WIT export | HTTP request entry point |
+| `handleRequest` | JavaScript export | JS spelling generated from `handle-request` |
+| `account-summary-http` | Request Binding name | Connects `POST /accounts/summary` to `handle-request` |
+| `summarize-account-activity` | Call Binding name | Connects the selector and budgets to `run`/`reduce` |
+| `run` | Call export | Runs once per selected partition |
+| `reduce` | Paired call export | Combines all emitted partials |
+
+The Call Binding targets `run`; the `call_v1` interface includes the paired
+`reduce` export from the same component, so `reduce` needs no name of its
+own in the manifest or Binding.
+
+### The Idea In One Minute
+
+The distributed operation is declared first, as a Call Binding. This is
+the seven-line heart of it:
+
+```json
+{
+  "name": "summarize-account-activity",
+  "source": {
+    "kind": "call",
+    "statement": "SELECT id, account_id, amount_cents, flagged FROM account_activity"
+  },
+  "target": {"export_name": "run"}
+}
+```
+
+`summarize-account-activity` is the name of a deployed Call Binding, not a
+JavaScript export. The Binding connects that name to the `run` export, the
+partition-local SELECT, the execution budgets, and the paired `reduce`
+step.
+
+A function reference identifies code. A Call Binding identifies:
+
+- the code to execute;
+- the rows it applies to;
+- its resource budgets;
+- whether the caller may invoke it;
+- and how Lagrange should fan out and reduce the work.
+
+The component invokes the operation through an ordinary-looking domain
+function; the wrapper is where the unavoidable deployment name lives:
+
+```js
+// service.js - HTTP handler, partition function, and reducer, side by side
+import {callBinding} from 'lagrange:cell/context';
+import {emit} from 'lagrange:cell/call-context';
+
+const DISTRIBUTED_OPERATIONS = Object.freeze({
+  summarizeAccountActivity: 'summarize-account-activity',
+});
+
+function summarizeAccountActivity(accountId) {
+  return callBinding(
+    DISTRIBUTED_OPERATIONS.summarizeAccountActivity,
+    JSON.stringify({accountId}),
+  );
+}
+
+// Runs in the request Cell for each POST /accounts/summary. It maps
+// typed call failures to HTTP status codes; the component owns its
+// endpoint responses.
+export function handleRequest(requestJson) {
+  const request = JSON.parse(requestJson);
+  const result = summarizeAccountActivity(request.body.accountId);
+  return JSON.stringify({
+    status: 200,
+    headers: [['content-type', 'application/json']],
+    body: result,
+  });
+}
+
+// Runs once per relevant partition, on the node holding that partition's
+// replica. Scans the local batch; only a few numbers per shard leave the
+// node.
+export function run(batch, argumentsJson) {
+  const {accountId} = JSON.parse(argumentsJson);
+  let matched = 0;
+  let totalCents = 0;
+  let shardKey = null;
+  for (const row of batch) {
+    if (integerColumn(row, 'account_id') !== accountId) continue;
+    shardKey = shardKey === null ? integerColumn(row, 'id') :
+      Math.min(shardKey, integerColumn(row, 'id'));
+    matched += 1;
+    totalCents += integerColumn(row, 'amount_cents');
+  }
+  if (matched > 0) {
+    emit(`count:${shardKey}`, JSON.stringify(matched));
+    emit(`total:${shardKey}`, JSON.stringify(totalCents));
+  }
+  return JSON.stringify({matched});
+}
+
+// Runs once, over the complete partial set from every shard.
+export function reduce(partials, argumentsJson) {
+  const {accountId} = JSON.parse(argumentsJson);
+  let transactions = 0;
+  let totalCents = 0;
+  for (const [key, partialJson] of partials) {
+    if (key.startsWith('count:')) transactions += JSON.parse(partialJson);
+    if (key.startsWith('total:')) totalCents += JSON.parse(partialJson);
+  }
+  return JSON.stringify({accountId, transactions, totalCents});
+}
+
+// (Error-to-HTTP mapping, extra metrics, the demo's refusal-probe
+//  parameter, and the integerColumn helper are elided; complete tested
+//  source: examples/call-binding-account-summary/service.js)
+```
+
+Run it:
+
+```bash
+npm install
+npm run demo:account-summary
+```
+
+The demo builds the component from plain JavaScript, installs it into a
+disposable local node, splits the ledger table across two partitions,
+deploys both Bindings and the access policy over SQL, invokes the HTTP
+endpoint and the direct `CALL BINDING` surface, verifies the summaries
+against an independent oracle, and proves the undeclared-target refusal
+and the idempotent replay.
+
+<details>
+<summary><strong>Complete deployment</strong> - the full manifest, both
+Bindings, the access policy, and the HTTP exchange</summary>
+
+**The service manifest** - one component, compiled into one WASM component
+and installed with a digest-pinned manifest, both entry points declared:
 
 ```json
 {
@@ -60,94 +225,8 @@ the real, runnable
 }
 ```
 
-**2. The component code** - the HTTP handler, the partition function, and
-the reducer live together in one file, compiled against the canonical
-committed [`wit/world.wit`](wit/world.wit) world `service-cell`.
-`handleRequest` parses the request, asks the host for the named distributed
-operation, and owns its endpoint's HTTP mapping - honest statuses for typed
-failures included. It never names a node, partition, replica, package,
-digest, or SQL statement:
-
-```js
-// service.js - HTTP handler, partition function, and reducer, side by side
-import {callBinding} from 'lagrange:cell/context';
-import {emit} from 'lagrange:cell/call-context';
-
-// Each typed binding-call-error maps to an honest HTTP status; the
-// component owns its endpoint responses, Lagrange does not hardcode them.
-const HTTP_STATUS_BY_CALL_ERROR_CODE = {
-  deadline_exhausted: 504,
-  invalid_arguments: 400,
-  target_not_allowed: 403,
-  target_unavailable: 503,
-};
-
-// Runs in the request Cell for each POST /accounts/summary.
-export function handleRequest(requestJson) {
-  const request = JSON.parse(requestJson);
-  try {
-    const result = callBinding(
-      'account-summary-inner',
-      JSON.stringify({accountId: request.body.accountId}),
-    );
-    return JSON.stringify({
-      status: 200,
-      headers: [['content-type', 'application/json']],
-      body: result,
-    });
-  } catch (error) {
-    const failure = error?.payload ?? {};
-    return JSON.stringify({
-      status: HTTP_STATUS_BY_CALL_ERROR_CODE[failure.code] ?? 500,
-      headers: [['content-type', 'application/json']],
-      body: JSON.stringify({code: failure.code ?? 'target_failed'}),
-    });
-  }
-}
-
-// Runs once per relevant partition, on the node holding that partition's
-// replica. Scans the local batch; only a few numbers per shard leave the
-// node - the transaction rows never do.
-export function run(batch, argumentsJson) {
-  const {accountId} = JSON.parse(argumentsJson);
-  let matched = 0;
-  let totalCents = 0;
-  let shardKey = null;
-  for (const row of batch) {
-    if (integerColumn(row, 'account_id') !== accountId) continue;
-    const id = integerColumn(row, 'id');
-    const amountCents = integerColumn(row, 'amount_cents');
-    if (id === null || amountCents === null) continue;
-    if (shardKey === null || id < shardKey) shardKey = id;
-    matched += 1;
-    totalCents += amountCents;
-  }
-  if (matched > 0) {
-    emit(`count:${shardKey}`, JSON.stringify(matched));
-    emit(`total:${shardKey}`, JSON.stringify(totalCents));
-  }
-  return JSON.stringify({matched, scanned: batch.length});
-}
-
-// Runs once, over the complete partial set from every shard.
-export function reduce(partials, argumentsJson) {
-  const {accountId} = JSON.parse(argumentsJson);
-  let transactions = 0;
-  let totalCents = 0;
-  for (const [key, partialJson] of partials) {
-    const value = JSON.parse(partialJson);
-    if (key.startsWith('count:')) transactions += value;
-    if (key.startsWith('total:')) totalCents += value;
-  }
-  return JSON.stringify({accountId, transactions, totalCents});
-}
-
-// (The largest/flagged metrics and the integerColumn helper are elided;
-//  complete tested source: examples/call-binding-account-summary/service.js)
-```
-
-**3. The request Binding** - the public front door: an exact method and
-path, targeting the component's `handle-request` export:
+**The Request Binding** - the public front door: an exact method and path,
+targeting the component's `handle-request` export:
 
 ```json
 {
@@ -163,18 +242,16 @@ path, targeting the component's `handle-request` export:
 }
 ```
 
-**4. The call Binding** - the inner distributed operation, against the same
-package and manifest digest: which data the function runs over (a
-single-table SELECT that Lagrange plans per partition without fetching
-rows), which export it targets, and its execution budgets:
+**The Call Binding** - the complete declaration of the distributed
+operation, against the same package and manifest digest:
 
 ```json
 {
   "schema_version": 2,
-  "name": "account-summary-inner",
+  "name": "summarize-account-activity",
   "source": {
     "kind": "call",
-    "name": "account-summary-inner",
+    "name": "summarize-account-activity",
     "statement": "SELECT id, account_id, amount_cents, flagged FROM account_activity"
   },
   "target": {
@@ -193,21 +270,22 @@ rows), which export it targets, and its execution budgets:
 }
 ```
 
-**5. The service access policy** - durable outbound-call authorization,
-applied with `CONFIGURE SERVICE ACCESS`: the request Binding may invoke
-exactly the call Bindings it declares. Absent policy or an undeclared
-target fails closed, before any dispatch:
+**The access policy** - an allowlist stored for the Request Binding
+(formally: the durable outbound-call authorization), applied with
+`CONFIGURE SERVICE ACCESS`. The request Binding may invoke exactly the
+Call Bindings it declares; absent policy or an undeclared target fails
+closed, before any dispatch:
 
 ```json
 {
   "schema_version": 2,
   "binding_name": "account-summary-http",
   "tables": [],
-  "calls": [{"binding": "account-summary-inner"}]
+  "calls": [{"binding": "summarize-account-activity"}]
 }
 ```
 
-**6. The invocation** - one authenticated HTTP request:
+**The HTTP exchange** - one authenticated request:
 
 ```text
 POST /accounts/summary
@@ -232,93 +310,62 @@ and one JSON response, the reducer's final result:
 ```
 
 Replaying the POST with the same `Idempotency-Key` returns the journaled
-response byte-identical, without running the inner distributed call again.
+response byte-identical, without running the distributed operation again.
 
 The direct SQL surface stays covered too: `CALL BINDING $1` over an
 authenticated pgwire session (holding `pgwire.binding.call`) invokes the
-same call Binding directly and returns the identical summary.
+same Call Binding directly and returns the identical summary.
 
-**7. What runs where**:
+The full `handleRequest` also maps typed call failures to HTTP status
+codes (403 for a target the policy does not allow, 400 for invalid
+arguments, 504 for an exhausted deadline, 503 for a temporarily
+unavailable target, 500 otherwise) - see the example source.
 
-```text
-POST /accounts/summary {accountId: 202}
-  |  (request Binding, authenticated ingress)
-  v
-handleRequest() in the request Cell
-  |  callBinding("account-summary-inner", {accountId})
-  |  (host-validated against the durable outbound-call policy)
-  v
-the one CallCellInvoker
-  |- run()    on partition host A     raw rows stay local
-  |- run()    on partition host B     raw rows stay local
-  `- reduce() -> one JSON result      only bounded partials move
-  |
-  v
-one HTTP response
-```
-
-No partitions, replicas, or placement appear anywhere in the service. The
-handler names one declared, authorized Binding and passes bounded JSON
-arguments; Lagrange owns everything below that line.
-
-## Run It
-
-```bash
-npm install
-npm run demo:account-summary
-```
-
-The demo builds the component from plain JavaScript, installs it into a
-disposable local node, splits the ledger table across two partitions,
-deploys both Bindings and the access policy over SQL, invokes the HTTP
-endpoint and the direct `CALL BINDING` surface, verifies the summaries
-against an independent oracle, and proves the undeclared-target refusal and
-the idempotent replay. Details:
-[the example's README](examples/call-binding-account-summary/README.md).
+</details>
 
 ## What Happens At Runtime
 
-One POST becomes a distributed operation. The request Binding routes the
-request to a ready request Cell, where `handleRequest` runs. Its
-`callBinding` import crosses a worker-to-parent bridge (the parent thread is
-never blocked) into the one canonical `CallCellInvoker`, which validates the
-target against the durable outbound-call policy, plans the call Binding's
-SELECT into per-partition shards, dispatches `run` to each partition's host
-node - where the rows are read locally from that node's own replica - and
-dispatches `reduce` once, on the holder of a dedicated reduce lease. Only
-the emitted partials cross the network; in the two-node integration proof
-the shard tables see zero remote query deliveries.
+The handler supplies only the Call Binding name and JSON arguments. The
+distributed call runtime then:
 
-The nested call runs under the caller's own frozen security context and a
-system-owned child identity (`<outer invocation>#call-1`). Its effective
-deadline is the tighter of the outer request deadline and the call
-Binding's own deadline - never a fresh timeout - and a request invocation
-may make one nested call today.
+1. looks up that Binding for the authenticated tenant;
+2. checks that the request service's access policy allows it;
+3. parses the Binding's SELECT and resolves the relevant partitions;
+4. ensures a ready Cell exists on each selected partition host;
+5. executes `run` against rows read locally on each host;
+6. sends only the emitted partials to `reduce`;
+7. returns the reduced JSON to `handleRequest`.
 
-If the required service instance is missing on a host, Lagrange makes it
-exist - including the code itself:
+The nested call runs under the same authenticated identity and cannot
+outlive the HTTP request's deadline; a request invocation may make one
+nested call today.
 
-```text
-Cell already on the partition host?
-  yes - run immediately
-  no  - place a Cell there via a bounded lease and a placement pin,
-        reconstruct the component from Lagrange's replicated artifact
-        tables (chunked, digest-verified, sealed at install time),
-        then run locally
-```
+If the partition host has no ready Cell, the call runtime writes a
+time-limited activation lease for that service and node. The normal
+rebalancer treats the lease as a placement pin, starts a Cell there, and
+the WASM driver loads the component from its local cache or from the
+artifact payload tables.
 
-Installed WASM bytes are cluster-owned: losing every node-local cache, or
-the original OCI source, does not make an installed service unavailable.
+Those tables are where installed code lives: `INSTALL SERVICE` verifies
+the WASM component, splits its payload into chunks, and writes the
+metadata and bytes to the internal `artifact_payloads` and
+`artifact_payload_chunks` tables. These tables use Lagrange's normal
+partition, Raft, and SQLite storage path. A node starting a Cell reads and
+verifies those chunks, writes a disposable local cache copy, and starts
+the component. The original OCI registry is no longer required after
+installation - the landed tests prove reconstruction after every cache and
+the original OCI source have been removed.
 
 Shard dispatch is parallel and bounded (default 8 concurrent runs,
 deployment-tunable). Shards on distinct host nodes overlap; shards on one
 host serialize, because a Cell runs one invocation at a time. The current
-implementation targets each partition's canonical leader as the shard host;
-broader replica selection is future work.
+implementation targets each partition's canonical leader as the shard
+host; broader replica selection is future work.
 
 The reduce step refuses to publish unless every shard's partial set is
 complete, fresh, and disjoint, and it publishes exactly one atomic result
-snapshot.
+snapshot. In the two-node integration proof the shard tables see zero
+remote query deliveries: the selected rows never leave their hosts.
 
 ## Why It Helps
 
@@ -382,9 +429,10 @@ Lagrange is alpha, with no backward-compatibility guarantee on `0.x`.
 
 Works today:
 
-- WASM installation and cluster-owned artifact storage
+- WASM installation with verified payloads stored in the replicated
+  `artifact_payloads` / `artifact_payload_chunks` tables
 - request and call Bindings, including HTTP-to-call composition: a request
-  handler invoking a declared call Binding through the service context
+  handler invoking a declared Call Binding through the service context
 - data-local partition execution and bounded parallel fan-out
 - leased reduction with one atomic result
 - Raft-replicated partitioned storage
@@ -392,7 +440,8 @@ Works today:
 Not yet:
 
 - JavaScript client SDK for direct calls (direct invocation is pgwire
-  `CALL BINDING`)
+  `CALL BINDING`); generated operation handles for `callBinding` are a
+  likely future authoring surface
 - structured partials (numeric per-group values only)
 - general PostgreSQL compatibility (a bounded, measured slice)
 - managed OCI activation (compatibility scaffold only)

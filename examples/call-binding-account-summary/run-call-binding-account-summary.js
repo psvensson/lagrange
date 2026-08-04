@@ -410,7 +410,7 @@ async function exerciseDeployment(node, rows, partitions) {
   });
   const http = await exerciseHttpSurface(node, rows, partitions);
 
-  logPhase('direct CALL BINDING against account-summary-inner');
+  logPhase('direct CALL BINDING against summarize-account-activity');
   const callerAdapter = await createCallerAdapter(
     node,
     CALL_SESSION,

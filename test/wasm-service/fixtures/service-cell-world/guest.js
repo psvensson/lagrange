@@ -23,7 +23,7 @@ function typedFailure(error) {
 function restrictedSurfaceProbes() {
   const refusals = {capability: capability(CAPABILITY_INDEX)};
   try {
-    callBinding('account-summary-inner', '{}');
+    callBinding('summarize-account-activity', '{}');
   } catch (error) {
     refusals.callBinding = typedFailure(error);
   }
@@ -83,7 +83,7 @@ export function run(batch, argumentsJson) {
   }
   let callBindingRefusal = null;
   try {
-    callBinding('account-summary-inner', argumentsJson);
+    callBinding('summarize-account-activity', argumentsJson);
   } catch (error) {
     callBindingRefusal = typedFailure(error);
   }

@@ -29,15 +29,23 @@ This example does it the Lagrange way, on the real public surfaces:
 distributed operation by Binding name, and owns its endpoint's HTTP
 mapping - including honest statuses for typed failures:
 
+`summarize-account-activity` is the name of a deployed Call Binding, not
+a JavaScript export; the handler reaches it through an ordinary-looking
+domain function that owns the deployment name:
+
 ```js
 import {callBinding} from 'lagrange:cell/context';
 
+function summarizeAccountActivity(accountId) {
+  return callBinding(
+    'summarize-account-activity',
+    JSON.stringify({accountId}),
+  );
+}
+
 export function handleRequest(requestJson) {
   const request = JSON.parse(requestJson);
-  const result = callBinding(
-    'account-summary-inner',
-    JSON.stringify({accountId: request.body.accountId}),
-  );
+  const result = summarizeAccountActivity(request.body.accountId);
   return JSON.stringify({
     status: 200,
     headers: [['content-type', 'application/json']],
@@ -76,7 +84,7 @@ and TWO Bindings target the same package and manifest digest:
 
 - the **request Binding** `account-summary-http`
   (`POST /accounts/summary` -> export `handle-request`);
-- the **call Binding** `account-summary-inner` (the data selector
+- the **call Binding** `summarize-account-activity` (the data selector
   `SELECT ... FROM account_activity` -> export `run`).
 
 Finally, one **service access policy** (schema v2) durably authorizes
@@ -87,7 +95,7 @@ the HTTP Binding's only outbound call:
   schema_version: 2,
   binding_name: 'account-summary-http',
   tables: [],
-  calls: [{binding: 'account-summary-inner'}],
+  calls: [{binding: 'summarize-account-activity'}],
 }
 ```
 
@@ -137,7 +145,7 @@ and one JSON response:
 ```
 
 The direct SQL surface stays covered too - the runner still invokes
-`CALL BINDING "account-summary-inner"` over an authenticated pgwire
+`CALL BINDING "summarize-account-activity"` over an authenticated pgwire
 session holding `pgwire.binding.call` and checks the identical summary,
 and proves a session without that action is refused before any
 dispatch.
@@ -149,10 +157,10 @@ POST /accounts/summary {accountId: 202}
   │  (request Binding, authenticated ingress)
   ▼
 handleRequest() in the request Cell
-  │  callBinding("account-summary-inner", {accountId})
+  │  callBinding("summarize-account-activity", {accountId})
   │  (host-validated against the durable outbound-call policy)
   ▼
-the one CallCellInvoker
+the distributed call runtime
   ├─ run() on partition …_left    ids 1..75 - scanned in place
   │     └─ emits count:1, total:1, largest:1, flagged:1   (4 numbers)
   ├─ run() on partition …_right   ids 76..150 - scanned in place

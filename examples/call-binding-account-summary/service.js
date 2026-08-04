@@ -19,7 +19,14 @@
 import {emit} from 'lagrange:cell/call-context';
 import {callBinding} from 'lagrange:cell/context';
 
-const INNER_CALL_BINDING = 'account-summary-inner';
+// Deployed distributed operations this service invokes by durable
+// Binding name. `summarize-account-activity` is the name of a deployed
+// Call Binding, not a JavaScript export: the Binding connects that name
+// to the `run` export, the partition-local SELECT, the execution
+// budgets, and the paired `reduce` step.
+const DISTRIBUTED_OPERATIONS = Object.freeze({
+  summarizeAccountActivity: 'summarize-account-activity',
+});
 const HTTP_STATUS_OK = 200;
 const HTTP_STATUS_TARGET_FAILED = 500;
 const JSON_HEADERS = [['content-type', 'application/json']];
@@ -33,6 +40,12 @@ const HTTP_STATUS_BY_CALL_ERROR_CODE = {
   target_unavailable: 503,
 };
 
+// The domain wrapper: the HTTP handler calls what looks and feels like
+// an ordinary local function; the unavoidable deployment name lives here.
+function summarizeAccountActivity(accountId, operationName) {
+  return callBinding(operationName, JSON.stringify({accountId}));
+}
+
 export function handleRequest(requestJson) {
   const request = JSON.parse(requestJson);
   const accountId = request.body?.accountId ?? null;
@@ -42,9 +55,9 @@ export function handleRequest(requestJson) {
   // this cannot escape policy - it exists to prove the 403 path.
   const target = typeof request.body?.target === 'string' ?
     request.body.target :
-    INNER_CALL_BINDING;
+    DISTRIBUTED_OPERATIONS.summarizeAccountActivity;
   try {
-    const result = callBinding(target, JSON.stringify({accountId}));
+    const result = summarizeAccountActivity(accountId, target);
     return JSON.stringify({
       body: result,
       headers: JSON_HEADERS,

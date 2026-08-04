@@ -199,7 +199,7 @@ may invoke:
   "schema_version": 2,
   "binding_name": "account-summary-http",
   "tables": [],
-  "calls": [{"binding": "account-summary-inner"}]
+  "calls": [{"binding": "summarize-account-activity"}]
 }
 ```
 

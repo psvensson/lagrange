@@ -39,7 +39,7 @@ const BUILD = Object.freeze({
 const CALL_EXAMPLE = Object.freeze({
   // The inner distributed operation the HTTP handler is authorized to
   // invoke, and the direct CALL BINDING surface.
-  BINDING_NAME: 'account-summary-inner',
+  BINDING_NAME: 'summarize-account-activity',
   COMPONENT_EXPORT: 'run',
   COMPONENT_FILE: 'component.wasm',
   COMPONENT_SOURCE_FILE: 'service.js',
