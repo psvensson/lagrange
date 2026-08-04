@@ -32,7 +32,7 @@
     "cli": "node src/cli/bin/lagrange-admin.js",
     "demo:formation-probe": "node examples/service-data-affinity/run-formation-probe.js",
     "demo:account-summary": "node examples/call-binding-account-summary/run-call-binding-account-summary.js",
-    "demo:movielens": "node examples/service-data-affinity/run-comparison.js",
+    "demo:movielens": "node scripts/checks/wait-for-thermal-headroom.js && node examples/service-data-affinity/run-comparison.js",
     "model:active-gate": "node scripts/model-active-gate.js",
     "model:tlc": "node scripts/model-tlc.js",
     "model:check": "npm run model:active-gate && npm run model:tlc",

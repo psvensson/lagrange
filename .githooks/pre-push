@@ -117,6 +117,11 @@ node scripts/check-unused-exports.js
 if [ -n "${LAGRANGE_PUSH_SKIP_TESTS:-}" ]; then
   echo "pre-push: LAGRANGE_PUSH_SKIP_TESTS set — skipping test:gate:postpush (static checks all green)"
 else
+  # Thermal staging: back-to-back gate runs must not start the heavy
+  # corpus on an already-hot machine (session thermal policy: hold at
+  # CPU >=75C / NVMe Sensor 2 >=78C). Waits up to 10 minutes, then
+  # aborts; fail-open where lm-sensors is absent (CI runners).
+  node scripts/checks/wait-for-thermal-headroom.js
   echo "pre-push: static checks green — running the post-push test corpus (long)"
   npm run -s test:gate:postpush
 fi

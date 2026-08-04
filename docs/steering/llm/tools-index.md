@@ -111,7 +111,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `demo:account-summary` — `node examples/call-binding-account-summary/run-call-binding-account-summary.js`
 - `demo:formation-probe` — `node examples/service-data-affinity/run-formation-probe.js`
-- `demo:movielens` — `node examples/service-data-affinity/run-comparison.js`
+- `demo:movielens` — `node scripts/checks/wait-for-thermal-headroom.js && node examples/service-data-affinity/run-comparison.js`
 
 ## distributed
 
