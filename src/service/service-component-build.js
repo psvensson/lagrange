@@ -30,11 +30,14 @@ import {fileURLToPath} from 'node:url';
 // the executable instead.
 const STAGED_WIT_DIRECTORY = 'wit';
 
+const SEA_BUILD_FLAG = 'true';
+const WIT_RELATIVE_URL = '../../wit';
+
 function canonicalWitDirectory() {
-  if (process.env.SEA_BUILD === 'true') {
+  if (process.env.SEA_BUILD === SEA_BUILD_FLAG) {
     return path.join(path.dirname(process.argv[1]), STAGED_WIT_DIRECTORY);
   }
-  return fileURLToPath(new URL('../../wit', import.meta.url));
+  return fileURLToPath(new URL(WIT_RELATIVE_URL, import.meta.url));
 }
 const SERVICE_CELL_WORLD = 'service-cell';
 // Build-time-only devDependency; the specifier lives in a named const so

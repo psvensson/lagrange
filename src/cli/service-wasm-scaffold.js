@@ -94,12 +94,15 @@ const AUTHORING_MODULE_FILES = Object.freeze([
 // sources are staged beside the bundle by build-sea.js instead.
 const STAGED_AUTHORING_DIRECTORY = 'authoring';
 
+const SEA_BUILD_FLAG = 'true';
+const AUTHORING_RELATIVE_URL = '../authoring/';
+
 function authoringSourceDirectory() {
-  if (process.env.SEA_BUILD === 'true') {
+  if (process.env.SEA_BUILD === SEA_BUILD_FLAG) {
     return path.join(
       path.dirname(process.argv[1]), STAGED_AUTHORING_DIRECTORY);
   }
-  return fileURLToPath(new URL('../authoring/', import.meta.url));
+  return fileURLToPath(new URL(AUTHORING_RELATIVE_URL, import.meta.url));
 }
 
 const WASM_PROJECT_FILE = Object.freeze({
