@@ -3,6 +3,7 @@ import {createHash} from 'node:crypto';
 import {SYSTEM_TABLE_NAME} from
   '../bootstrap/system-table-schemas-constants.js';
 import {
+  DEPLOYMENT_BINDING_SCHEMA_VERSION_V3,
   DEPLOYMENT_BINDING_SOURCE_KIND,
   projectBinding,
 } from '../control-plane/owners/deployment-binding-contract.js';
@@ -186,6 +187,11 @@ class CallBindingRouteResolver {
     return Object.freeze({
       bindingDigest: definition.binding_digest,
       bindingVersionId: binding.bindingVersionId,
+      handlerId:
+        binding.declaration.schema_version ===
+          DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 ?
+          binding.declaration.target.handler_id :
+          null,
       hostNodeId,
       name: request.name,
       nodeId: actual.node_id,
@@ -204,6 +210,7 @@ class CallBindingRouteResolver {
     const fields = [
       'bindingDigest',
       'bindingVersionId',
+      'handlerId',
       'hostNodeId',
       'name',
       'nodeId',

@@ -177,8 +177,16 @@ function buildRequestCellInvocation(
   invocation,
   securityContext,
 ) {
+  // v3 handler-aware invocation: the fixed handle-request export takes
+  // the bound handler id as its first argument (the sealed v2 ABI's
+  // `handler` parameter); v1-interface bindings keep the request-only
+  // argument shape. Operation identity never travels inside the
+  // request JSON — it is the ABI argument.
+  const args = typeof route.handlerId === 'string' ?
+    [route.handlerId, canonicalJson(request)] :
+    [canonicalJson(request)];
   return {
-    args: [canonicalJson(request)],
+    args,
     assertCurrentTarget: () =>
       assertCurrentRequestCellTarget(
         handler,

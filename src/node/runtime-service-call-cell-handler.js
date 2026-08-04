@@ -431,8 +431,17 @@ function buildCallCellInvocation(
   const input = exportName === CALL_CELL_INVOCATION_EXPORT_NAME.REDUCE ?
     partials :
     batch;
+  // v3 handler-aware invocation: the fixed run/reduce exports take the
+  // resolved operation id (the Binding's handler_id) as their first
+  // argument — operation identity travels as the ABI's operation
+  // argument, never encoded inside the arguments JSON (epic sealed
+  // decision / quest no-hidden-operation-tag). v1-interface bindings
+  // keep the two-argument shape.
+  const args = typeof route.handlerId === 'string' ?
+    [route.handlerId, input, call.arguments] :
+    [input, call.arguments];
   return {
-    args: [input, call.arguments],
+    args,
     assertCurrentTarget: () =>
       assertCurrentCallCellTarget(handler, call, route, invocation),
     callCell: invocation.callCell,

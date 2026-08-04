@@ -38,6 +38,7 @@ import {
   EXTERNAL_SERVICE_MEDIA_TYPE,
   validateExternalServiceManifest,
 } from './external-service-manifest.js';
+import {IR_TARGET} from './service-source-contract.js';
 
 const DEPLOYMENT_RECORD_STATUS = Object.freeze({
   ACCEPTED: 'accepted',
@@ -62,6 +63,19 @@ const GENERATED_EXPORT_NAME = Object.freeze({
   [DEPLOYMENT_BINDING_SOURCE_KIND.CALL]: 'run',
   [DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST]: 'handle-request',
 });
+
+// v2-target (service-cell-v2 generic dispatch) output stamps: the
+// manifest declares the *_v2 interfaces on the same fixed exports and
+// the bindings ride schema v3 (interface + handler_id, no export_name).
+// The interface/handler values are validated by the owning contracts
+// like everything else.
+const GENERATED_EXPORT_INTERFACE_V2 = Object.freeze({
+  [DEPLOYMENT_BINDING_SOURCE_KIND.CALL]:
+    EXTERNAL_SERVICE_EXPORT_INTERFACE.CALL_V2,
+  [DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST]:
+    EXTERNAL_SERVICE_EXPORT_INTERFACE.REQUEST_V2,
+});
+const GENERATED_BINDING_SCHEMA_VERSION_V3 = 3;
 
 // Input stamps validated by the owning contracts: a wrong value here is
 // rejected by normalizeDeploymentBinding / normalizePolicyInput /
@@ -159,16 +173,21 @@ function manifestDigestOf(manifest) {
 }
 
 function buildManifestInput(ir, artifact) {
+  const isV2Target = ir.target === IR_TARGET.SERVICE_CELL_V2;
   const exportDeclarations = [];
   if (ir.handlers.length > 0) {
     exportDeclarations.push({
-      interface: EXTERNAL_SERVICE_EXPORT_INTERFACE.REQUEST,
+      interface: isV2Target ?
+        GENERATED_EXPORT_INTERFACE_V2[DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST] :
+        EXTERNAL_SERVICE_EXPORT_INTERFACE.REQUEST,
       name: GENERATED_EXPORT_NAME[DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST],
     });
   }
   if (ir.operations.length > 0) {
     exportDeclarations.push({
-      interface: EXTERNAL_SERVICE_EXPORT_INTERFACE.CALL,
+      interface: isV2Target ?
+        GENERATED_EXPORT_INTERFACE_V2[DEPLOYMENT_BINDING_SOURCE_KIND.CALL] :
+        EXTERNAL_SERVICE_EXPORT_INTERFACE.CALL,
       name: GENERATED_EXPORT_NAME[DEPLOYMENT_BINDING_SOURCE_KIND.CALL],
     });
   }
@@ -188,7 +207,15 @@ function buildManifestInput(ir, artifact) {
   };
 }
 
-function bindingTarget(sourceKind, manifestDigest) {
+function bindingTarget(sourceKind, manifestDigest, logicalId, isV2Target) {
+  if (isV2Target) {
+    return {
+      handler_id: logicalId,
+      interface: GENERATED_EXPORT_INTERFACE_V2[sourceKind],
+      manifest_digest: manifestDigest,
+      package_id: SERVICE_PACKAGE_ID_PLACEHOLDER,
+    };
+  }
   return {
     export_name: GENERATED_EXPORT_NAME[sourceKind],
     manifest_digest: manifestDigest,
@@ -197,20 +224,25 @@ function bindingTarget(sourceKind, manifestDigest) {
 }
 
 function buildBindingDeclarations(ir, manifestDigest) {
+  const isV2Target = ir.target === IR_TARGET.SERVICE_CELL_V2;
+  const schemaVersion = isV2Target ?
+    GENERATED_BINDING_SCHEMA_VERSION_V3 :
+    GENERATED_BINDING_SCHEMA_VERSION;
   const declarations = [];
   for (const handler of ir.handlers) {
     declarations.push({
       budgets: {...REQUEST_BINDING_BUDGET_DEFAULTS},
       name: generatedBindingName(
         ir.name, DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST, handler.id),
-      schema_version: GENERATED_BINDING_SCHEMA_VERSION,
+      schema_version: schemaVersion,
       source: {
         kind: DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST,
         method: handler.method,
         path: handler.path,
       },
       target: bindingTarget(
-        DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST, manifestDigest),
+        DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST, manifestDigest,
+        handler.id, isV2Target),
     });
   }
   for (const operation of ir.operations) {
@@ -219,14 +251,15 @@ function buildBindingDeclarations(ir, manifestDigest) {
     declarations.push({
       budgets: {...CALL_BINDING_BUDGET_DEFAULTS},
       name: callBindingName,
-      schema_version: GENERATED_BINDING_SCHEMA_VERSION,
+      schema_version: schemaVersion,
       source: {
         kind: DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
         name: callBindingName,
         statement: operation.statement.text,
       },
       target: bindingTarget(
-        DEPLOYMENT_BINDING_SOURCE_KIND.CALL, manifestDigest),
+        DEPLOYMENT_BINDING_SOURCE_KIND.CALL, manifestDigest,
+        operation.id, isV2Target),
     });
   }
   return declarations;

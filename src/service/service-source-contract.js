@@ -87,6 +87,13 @@ const SERVICE_SOURCE_STATUS = Object.freeze({
 const ABSOLUTE_URL_PATTERN = /^[A-Za-z][A-Za-z0-9+.-]*:/;
 const IDENTIFIER_PATTERN = /^[a-zA-Z][a-zA-Z0-9]*$/;
 const IR_HANDLER_KIND = 'request';
+// The IR's dispatch target: the pre-v2 combined world (method+path
+// dispatch, exactly one distributed operation) or the v2
+// generic-dispatch world (id-keyed dispatch, multiple operations).
+const IR_TARGET = Object.freeze({
+  SERVICE_CELL: 'service-cell',
+  SERVICE_CELL_V2: 'service-cell-v2',
+});
 const MODULE_NOT_FOUND_ERROR_CODES = Object.freeze([
   'ERR_MODULE_NOT_FOUND',
   'MODULE_NOT_FOUND',
@@ -165,8 +172,11 @@ function sqlStatementText(statement) {
 
 // Reads every operation property exactly once into locals; the returned
 // entries are what the IR is built from, so a getter cannot show the
-// validator one value and the IR another.
-function collectOperations(operations, errors) {
+// validator one value and the IR another. The pre-v2 single-operation
+// restriction lifts only for an explicit v2 target: the generic-dispatch
+// ABI routes every operation by id, so multiple operations are legal
+// there (and still fail closed everywhere else).
+function collectOperations(operations, errors, options) {
   const collected = {idByDescriptor: new Map(), operations: []};
   if (!isPlainObject(operations)) {
     errors.push(serviceSourceError(
@@ -174,7 +184,7 @@ function collectOperations(operations, errors) {
     return collected;
   }
   const ids = Object.keys(operations);
-  if (ids.length > 1) {
+  if (ids.length > 1 && options.multiOperationTarget !== true) {
     errors.push(serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.SINGLE_OPERATION_RESTRICTION,
       SERVICE_SOURCE_PATH.OPERATIONS));
@@ -299,7 +309,7 @@ function collectHandlers(handlers, idByDescriptor, errors) {
   return collected;
 }
 
-function normalizeDefinition(definition) {
+function normalizeDefinition(definition, options = {}) {
   if (!isPlainObject(definition)) {
     return rejectedResult([serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.NOT_SERVICE_DEFINITION, SERVICE_SOURCE_PATH.ROOT)]);
@@ -318,7 +328,7 @@ function normalizeDefinition(definition) {
     errors.push(serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.INVALID_FIELD, SERVICE_SOURCE_PATH.VERSION));
   }
-  const collectedOperations = collectOperations(operations, errors);
+  const collectedOperations = collectOperations(operations, errors, options);
   const collectedHandlers =
     collectHandlers(handlers, collectedOperations.idByDescriptor, errors);
   if (errors.length > 0) return rejectedResult(errors);
@@ -328,14 +338,17 @@ function normalizeDefinition(definition) {
       handlers: collectedHandlers,
       name,
       operations: collectedOperations.operations,
+      target: options.multiOperationTarget === true ?
+        IR_TARGET.SERVICE_CELL_V2 :
+        IR_TARGET.SERVICE_CELL,
       version,
     },
   });
 }
 
-function normalizeServiceDefinition(definition) {
+function normalizeServiceDefinition(definition, options) {
   try {
-    return normalizeDefinition(definition);
+    return normalizeDefinition(definition, options);
   } catch (_error) {
     return rejectedResult([serviceSourceError(
       SERVICE_SOURCE_ERROR_CODE.DEFINITION_ACCESS_THREW,
@@ -350,7 +363,7 @@ function toModuleUrl(moduleUrlOrPath) {
 }
 
 async function normalizeServiceSource(
-  moduleUrlOrPath, {load = (url) => import(url)} = {}) {
+  moduleUrlOrPath, {load = (url) => import(url), ...options} = {}) {
   let module;
   try {
     module = await load(toModuleUrl(moduleUrlOrPath));
@@ -377,10 +390,11 @@ async function normalizeServiceSource(
       SERVICE_SOURCE_ERROR_CODE.DEFAULT_EXPORT_NOT_PLAIN_OBJECT,
       SERVICE_SOURCE_PATH.ROOT)]);
   }
-  return normalizeServiceDefinition(defaultExport);
+  return normalizeServiceDefinition(defaultExport, options);
 }
 
 export {
+  IR_TARGET,
   SERVICE_SOURCE_ERROR_CODE,
   SERVICE_SOURCE_MESSAGE,
   SERVICE_SOURCE_PATH,
