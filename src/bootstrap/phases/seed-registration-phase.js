@@ -321,13 +321,19 @@ class SeedRegistrationPhase {
     if (!systemTableCache) {
       return;
     }
-    const applyBootstrapCacheHydration =
-      createBootstrapCacheHydrationApplier(systemTableCache);
-    applyBootstrapCacheHydration(
-      tableName,
-      LOCAL_STR_INSERT,
-      row,
-    );
+    const logger = this.delegates.getLogger?.();
+    try {
+      createBootstrapCacheHydrationApplier(systemTableCache)(
+        tableName,
+        LOCAL_STR_INSERT,
+        row,
+      );
+    } catch (error) {
+      logger?.warn?.(BOOTSTRAP_LOG_MSG.CACHE_PROJECTION_FAILED, {
+        tableName,
+        error: error?.message,
+      });
+    }
   }
 
   /**

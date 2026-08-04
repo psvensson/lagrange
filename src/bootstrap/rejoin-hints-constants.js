@@ -26,13 +26,36 @@ const MEMBERSHIP_OWNER_REASON = Object.freeze({
   JOIN_RECOVERED_PEER: 'join_recovered_peer',
   PEER_REQUIRED_BUT_MISSING: 'peer_required_but_missing',
   STARTUP_MODE_COMPAT: 'startup_mode_compat',
+  UNREADABLE_DURABLE_EVIDENCE: 'unreadable_durable_evidence',
 });
 const MEMBERSHIP_OWNER_EVIDENCE_SOURCE = Object.freeze({
   EXPLICIT: 'explicit',
   STARTUP_MODE: 'startup_mode',
 });
 
+/**
+ * Typed read outcome for one durable evidence source (rejoin hints file or
+ * one nodes-table replica DB). Absence must be positively proven; a source
+ * that was discovered but could not be read is UNREADABLE, never absent, so
+ * the fresh-seed path stays fail-closed over damaged durable state.
+ */
+const DURABLE_EVIDENCE_STATE = Object.freeze({
+  MISSING: 'missing',
+  READABLE: 'readable',
+  UNREADABLE: 'unreadable',
+});
+
+/**
+ * Explicit operator escape hatch: setting this environment variable to the
+ * literal '1' authorizes one fresh-cluster bootstrap over unreadable durable
+ * evidence. Honored only by the startup entrypoint, never inside the
+ * evidence readers themselves.
+ */
+const FORCE_NEW_CLUSTER_ENV = 'LAGRANGE_FORCE_NEW_CLUSTER';
+
 export {
+  DURABLE_EVIDENCE_STATE,
+  FORCE_NEW_CLUSTER_ENV,
   MEMBERSHIP_OWNER_EVIDENCE_SOURCE,
   MEMBERSHIP_OWNER_OUTCOME_TYPE,
   MEMBERSHIP_OWNER_REASON,

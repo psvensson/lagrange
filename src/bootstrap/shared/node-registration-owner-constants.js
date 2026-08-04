@@ -16,6 +16,8 @@ const LOCAL_STR_1S6CG = 'node_state_reporter';
 const LOCAL_STR_V0KZD = 'retryable join admission write failure';
 const LOCAL_STR_UPSERT = 'UPSERT';
 
+const LOG_CLUSTER_INCARNATION_FENCE_UNAVAILABLE =
+  'Cluster incarnation fence unavailable; durable rejoin stays blocked';
 const LOG_META_ENDPOINT_REGISTER_FAILED =
   'Failed to register built-in meta service endpoints';
 const LOG_NODE_REGISTER_ERROR_PREFIX =
@@ -74,6 +76,7 @@ export {
   LOCAL_STR_UPSERT,
   LOCAL_STR_V0KZD,
   LOCAL_STR_VWYJO,
+  LOG_CLUSTER_INCARNATION_FENCE_UNAVAILABLE,
   LOG_JOIN_ADMISSION_WRITE_RETRY,
   LOG_META_ENDPOINT_REGISTER_FAILED,
   LOG_NODE_REGISTER_ERROR_PREFIX,

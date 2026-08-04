@@ -266,6 +266,8 @@ const BOOTSTRAP_LOG_MSG = Object.freeze({
   CDC_EVENT_RECEIVED: 'CDC event received by bootstrap handler',
   CDC_SUBSCRIPTION_REGISTERED: 'CDC subscription registered on replica',
   REBALANCE_TRIGGER: 'Triggering rebalancing on all partitions',
+  CACHE_PROJECTION_FAILED:
+    'Failed to project bootstrap row into local cache',
   BOOTSTRAP_MODE_ENABLED: 'Bootstrap mode enabled for direct partition writes',
   BOOTSTRAP_MODE_DISABLED: 'Bootstrap mode disabled, routing through SQL engine',
   SERVICE_REGISTRATION_COMPLETE: 'Service registration complete',

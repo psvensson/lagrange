@@ -39,6 +39,31 @@ const TEST_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
   durableMembershipState: 'present',
   peerProofState: 'recovered',
 });
+const TEST_CLUSTER_INCARNATION_FENCE_ALLOWED = Object.freeze({
+  state: 'current',
+  allowed: true,
+  reasonCodes: Object.freeze([]),
+  localIdentityState: 'matched',
+  durableMembershipState: 'present',
+  peerProofState: 'not_required',
+});
+
+function buildPublicationOwnerRecorder(publicationCalls) {
+  return {
+    upsertJoinNode: async (row, options) => {
+      publicationCalls.push({kind: 'node', row, options});
+      return {success: true};
+    },
+    upsertJoinNodeEndpoint: async (row, options) => {
+      publicationCalls.push({kind: 'node_endpoint', row, options});
+      return {success: true};
+    },
+    upsertJoinServiceEndpoint: async (row, options) => {
+      publicationCalls.push({kind: 'service_endpoint', row, options});
+      return {success: true};
+    },
+  };
+}
 
 function buildBudgetResolution(nodeRow) {
   return {
@@ -176,7 +201,11 @@ test(
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
       membershipPublicationRuntimeOwner,
-      delegates: createDelegates(),
+      delegates: {
+        ...createDelegates(),
+        getClusterIncarnationFence: () =>
+          TEST_CLUSTER_INCARNATION_FENCE_ALLOWED,
+      },
     });
     owner.seedJoinTimeCacheRow = () => {};
     owner.readAuthoritativeDurableRejoinNodeRow = async () => ({
@@ -231,20 +260,9 @@ test(
   'cluster-incarnation fence blocks durable rejoin reuse',
   async (t) => {
     const publicationCalls = [];
-    const membershipPublicationRuntimeOwner = {
-      upsertJoinNode: async (row, options) => {
-        publicationCalls.push({kind: 'node', row, options});
-        return {success: true};
-      },
-      upsertJoinNodeEndpoint: async (row, options) => {
-        publicationCalls.push({kind: 'node_endpoint', row, options});
-        return {success: true};
-      },
-      upsertJoinServiceEndpoint: async (row, options) => {
-        publicationCalls.push({kind: 'service_endpoint', row, options});
-        return {success: true};
-      },
-    };
+    const membershipPublicationRuntimeOwner = buildPublicationOwnerRecorder(
+      publicationCalls,
+    );
     const owner = new NodeRegistrationOwner({
       nodeId: TEST_NODE_ID,
       nodeAddress: TEST_NODE_ADDRESS,
@@ -295,6 +313,113 @@ test(
       result?.resolution?.source,
       'durable_rejoin_existing_membership',
       'blocked incarnation fence must not report durable rejoin membership reuse',
+    );
+  },
+);
+
+test(
+  'NodeRegistrationOwner blocks durable rejoin reuse when the ' +
+  'cluster-incarnation fence is unavailable',
+  async (t) => {
+    const publicationCalls = [];
+    const warnings = [];
+    const membershipPublicationRuntimeOwner = buildPublicationOwnerRecorder(
+      publicationCalls,
+    );
+    const owner = new NodeRegistrationOwner({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      membershipPublicationRuntimeOwner,
+      delegates: {
+        ...createDelegates(),
+        getLogger: () => ({
+          ...TEST_LOGGER,
+          warn: (message, metadata) => warnings.push({message, metadata}),
+        }),
+        getJoinLifecycleIntentType: () =>
+          MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY,
+        getClusterIncarnationFence: () => null,
+      },
+    });
+    owner.seedJoinTimeCacheRow = () => {};
+    owner.readAuthoritativeDurableRejoinNodeRow = async () => ({
+      [COLUMN.NODE_ID]: TEST_NODE_ID,
+      [COLUMN.NODE_ADDRESS]: TEST_NODE_ADDRESS,
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.STATUS]: NODE_STATE.ACTIVE,
+      [COLUMN.CREATED_AT]: TEST_NOW_MS,
+      [COLUMN.LAST_HEARTBEAT]: TEST_NOW_MS,
+    });
+    owner.readAuthoritativeNodeEndpointRow = async () => null;
+    owner.readAuthoritativeMetaEndpointRows = async () => [];
+
+    const result = await owner.registerNodeInCluster();
+
+    const nodeCalls = publicationCalls.filter((call) => call.kind === 'node');
+    t.equal(
+      nodeCalls.length,
+      1,
+      'an unavailable fence must fail closed into fresh join admission',
+    );
+    t.notOk(
+      result?.reusedExistingMembership,
+      'an unavailable fence must not reuse durable membership',
+    );
+    t.equal(
+      warnings.length,
+      2,
+      'each gated reuse path should emit a fail-closed diagnostic',
+    );
+  },
+);
+
+test(
+  'NodeRegistrationOwner refuses join admission progress reuse for a ' +
+  'terminal durable node status',
+  async (t) => {
+    const publicationCalls = [];
+    const membershipPublicationRuntimeOwner = buildPublicationOwnerRecorder(
+      publicationCalls,
+    );
+    const owner = new NodeRegistrationOwner({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      membershipPublicationRuntimeOwner,
+      delegates: {
+        ...createDelegates(),
+        getClusterIncarnationFence: () =>
+          TEST_CLUSTER_INCARNATION_FENCE_ALLOWED,
+      },
+    });
+    owner.seedJoinTimeCacheRow = () => {};
+    owner.readAuthoritativeDurableRejoinNodeRow = async () => ({
+      [COLUMN.NODE_ID]: TEST_NODE_ID,
+      [COLUMN.NODE_ADDRESS]: TEST_NODE_ADDRESS,
+      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+      [COLUMN.STATUS]: NODE_STATE.STOPPED,
+      [COLUMN.CREATED_AT]: TEST_NOW_MS,
+      [COLUMN.LAST_HEARTBEAT]: TEST_NOW_MS,
+    });
+    owner.readAuthoritativeNodeEndpointRow = async () => null;
+    owner.readAuthoritativeMetaEndpointRows = async () => [];
+
+    const result = await owner.registerNodeInCluster();
+
+    const nodeCalls = publicationCalls.filter((call) => call.kind === 'node');
+    t.equal(
+      nodeCalls.length,
+      1,
+      'a terminal durable status must not be reused as join progress',
+    );
+    t.equal(
+      nodeCalls[0].row[COLUMN.STATUS],
+      NODE_STATE.JOINING,
+      'fresh admission must publish JOINING over a terminal durable status',
+    );
+    t.not(
+      result?.resolution?.source,
+      'existing_join_admission_progress',
+      'a terminal durable status must not report progress reuse',
     );
   },
 );

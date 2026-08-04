@@ -22,6 +22,15 @@ import {
 import {META_SERVICE_ID} from '../../src/constants/wasm-meta.js';
 import {NodeService} from '../../src/node/node-service.js';
 
+const TEST_CLUSTER_INCARNATION_FENCE_ALLOWED = Object.freeze({
+  state: 'current',
+  allowed: true,
+  reasonCodes: Object.freeze([]),
+  localIdentityState: 'matched',
+  durableMembershipState: 'present',
+  peerProofState: 'not_required',
+});
+
 test('registerNodeInCluster() - should create the canonical nodes row and upsert endpoints',
   async (t) => {
     const upsertCalls = [];
@@ -685,6 +694,7 @@ test('registerNodeInCluster() - should reuse canonical membership during durable
       seedNodeAddress: 'ws://seed:8000',
       wsPort: 8082,
       startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      clusterIncarnationFence: TEST_CLUSTER_INCARNATION_FENCE_ALLOWED,
     });
     service.cdcIntegrationService = {
       sqlQueryEngine: {},

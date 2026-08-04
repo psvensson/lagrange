@@ -1,9 +1,9 @@
-import Database from 'better-sqlite3';
-import {readdir, readFile, rename, stat, writeFile} from 'node:fs/promises';
+import {rename, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
-import {COLUMN, TABLES} from '../constants/index.js';
+import {TABLES} from '../constants/index.js';
 import {buildClusterIncarnationFence} from './cluster-incarnation-fence.js';
 import {
+  DURABLE_EVIDENCE_STATE,
   MEMBERSHIP_OWNER_OUTCOME_TYPE,
   MEMBERSHIP_OWNER_REASON,
   REJOIN_HINTS_FILENAME,
@@ -12,6 +12,11 @@ import {
   STARTUP_JOIN_MODE,
   TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
 } from './rejoin-hints-constants.js';
+import {
+  readDurableNodesTableSnapshot,
+  readRejoinHints,
+  readRejoinHintsOutcome,
+} from './rejoin-hints-durable-evidence.js';
 import {
   deriveRequiresPeerRejoin,
   extractPeerAddresses,
@@ -23,15 +28,10 @@ import {
   prioritizePeerAddress,
 } from './rejoin-hints-addresses.js';
 
-const PARTITIONS_DIRNAME = 'partitions';
-const SQLITE_DB_SUFFIX = '.db';
-const NODES_PARTITION_PREFIX = `${TABLES.NODES}-p`;
 const REJOIN_ROLE_SEED = 'seed';
 const STARTUP_MODE_JOIN = 'join';
 const STARTUP_MODE_SEED = 'seed';
 const STARTUP_MODE_FAIL = 'fail';
-const SQLITE_TABLE_TYPE = 'table';
-const EMPTY_STRING = '';
 const RECOVERED_CLUSTER_NODE_COUNT_WITH_PEER = 2;
 const UTF8_ENCODING = 'utf8';
 const JSON_INDENT_SPACES = 2;
@@ -52,12 +52,17 @@ const AUTO_REJOIN_DECISION_STATE = Object.freeze({
   JOIN_PROBED_PEER: 'join_probed_peer',
   JOIN_RECOVERED_PEER: 'join_recovered_peer',
   PEER_REQUIRED_BUT_MISSING: 'peer_required_but_missing',
+  UNREADABLE_DURABLE_EVIDENCE: 'unreadable_durable_evidence',
   FRESH_SEED: 'fresh_seed',
 });
 const AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE = Object.freeze({
   [AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH]: Object.freeze({
     outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
     reasonCode: MEMBERSHIP_OWNER_REASON.IDENTITY_MISMATCH,
+  }),
+  [AUTO_REJOIN_DECISION_STATE.UNREADABLE_DURABLE_EVIDENCE]: Object.freeze({
+    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+    reasonCode: MEMBERSHIP_OWNER_REASON.UNREADABLE_DURABLE_EVIDENCE,
   }),
   [AUTO_REJOIN_DECISION_STATE.DURABLE_SEED]: Object.freeze({
     outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BOOTSTRAP_SEED,
@@ -87,17 +92,17 @@ const DURABLE_STATE_REJOIN_REQUIRED_ERROR_MESSAGE =
   'Persistent multi-node cluster state was detected but no rejoin peer ' +
   'address could be recovered; refusing to bootstrap a fresh seed over ' +
   'existing durable state';
+const UNREADABLE_DURABLE_EVIDENCE_ERROR_MESSAGE =
+  'Durable cluster state was discovered but could not be read; refusing ' +
+  'to bootstrap a fresh seed over unreadable durable state. After ' +
+  'verifying no cluster member still owns this data, set ' +
+  'LAGRANGE_FORCE_NEW_CLUSTER=1 to authorize a fresh cluster bootstrap';
 const REJOIN_HINTS_PERSIST_FAILED_LOG_MESSAGE =
   'Failed to persist cluster rejoin hints';
 const UNKNOWN_AUTO_REJOIN_DECISION_STATE_ERROR_PREFIX =
   'Unknown auto-rejoin startup decision state: ';
 const UNKNOWN_AUTO_REJOIN_MEMBERSHIP_OUTCOME_STATE_ERROR_PREFIX =
   'Unknown auto-rejoin membership outcome state: ';
-const SQL_TABLE_EXISTS =
-  'SELECT 1 AS present FROM sqlite_master WHERE type = ? AND name = ? LIMIT 1';
-const SQL_SELECT_NODES =
-  `SELECT ${COLUMN.NODE_ID} AS node_id, ` +
-  `${COLUMN.NODE_ADDRESS} AS node_address FROM ${TABLES.NODES}`;
 let rejoinHintsTempSequence = 0;
 
 function buildRejoinHintsSnapshot(options = {}) {
@@ -195,21 +200,6 @@ async function persistBootstrapRejoinHints(options = {}) {
   return persistRejoinHintsSnapshot(options.dataDir, snapshot);
 }
 
-async function readRejoinHints(dataDir) {
-  const hintsPath = resolveRejoinHintsPath(dataDir);
-  if (!hintsPath) {
-    return null;
-  }
-
-  try {
-    const raw = await readFile(hintsPath, UTF8_ENCODING);
-    const parsed = JSON.parse(raw);
-    return parsed && typeof parsed === 'object' ? parsed : null;
-  } catch (_error) {
-    return null;
-  }
-}
-
 /**
  * Read the node identity persisted with the rejoin hints, for reuse on
  * restart. A node that boots over an existing data directory with a freshly
@@ -243,133 +233,6 @@ function hintsMatchLocalIdentity(hints, nodeId, nodeAddress) {
     return normalizedNodeAddress === hintedNodeAddress;
   }
   return !hintedNodeId && !hintedNodeAddress;
-}
-
-async function listNodesReplicaDbPaths(dataDir) {
-  const hintsPath = resolveRejoinHintsPath(dataDir);
-  if (!hintsPath) {
-    return [];
-  }
-
-  const partitionsDir = join(dataDir, PARTITIONS_DIRNAME);
-  let partitionEntries = [];
-  try {
-    partitionEntries = await readdir(partitionsDir, {withFileTypes: true});
-  } catch (_error) {
-    return [];
-  }
-
-  const dbPaths = [];
-  for (const entry of partitionEntries) {
-    if (!entry?.isDirectory?.() ||
-        !String(entry.name || EMPTY_STRING).startsWith(NODES_PARTITION_PREFIX)) {
-      continue;
-    }
-    const partitionDir = join(partitionsDir, entry.name);
-    let replicaEntries = [];
-    try {
-      replicaEntries = await readdir(partitionDir, {withFileTypes: true});
-    } catch (_error) {
-      continue;
-    }
-    for (const replicaEntry of replicaEntries) {
-      if (!replicaEntry?.isFile?.() ||
-          !String(replicaEntry.name || EMPTY_STRING).endsWith(SQLITE_DB_SUFFIX)) {
-        continue;
-      }
-      const dbPath = join(partitionDir, replicaEntry.name);
-      try {
-        const metadata = await stat(dbPath);
-        dbPaths.push({
-          dbPath,
-          modifiedAt: Number(metadata?.mtimeMs) || 0,
-        });
-      } catch (_error) {
-        continue;
-      }
-    }
-  }
-
-  dbPaths.sort((left, right) => right.modifiedAt - left.modifiedAt);
-  return dbPaths.map((entry) => entry.dbPath);
-}
-
-function readNodesRowsFromReplicaDb(dbPath) {
-  let database = null;
-  try {
-    database = new Database(dbPath, {readonly: true, fileMustExist: true});
-    const tableExists = database
-      .prepare(SQL_TABLE_EXISTS)
-      .get(SQLITE_TABLE_TYPE, TABLES.NODES);
-    if (!tableExists) {
-      return [];
-    }
-    return database.prepare(SQL_SELECT_NODES).all();
-  } catch (_error) {
-    return [];
-  } finally {
-    database?.close();
-  }
-}
-
-async function readDurableNodesTableSnapshot(options = {}) {
-  const normalizedNodeId = normalizeAddress(options.nodeId);
-  const normalizedNodeAddress = normalizeAddress(options.nodeAddress);
-  const dbPaths = await listNodesReplicaDbPaths(options.dataDir);
-  const peerAddresses = new Set();
-  let clusterNodeCount = 0;
-  let hasAnyDurableNodesTable = false;
-  let matchedLocalIdentity = false;
-
-  for (const dbPath of dbPaths) {
-    const rows = readNodesRowsFromReplicaDb(dbPath);
-    if (!Array.isArray(rows) || rows.length === 0) {
-      continue;
-    }
-    hasAnyDurableNodesTable = true;
-    clusterNodeCount = Math.max(clusterNodeCount, rows.length);
-
-    let sawMatchingNodeId = false;
-    let sawMatchingNodeAddress = false;
-    for (const row of rows) {
-      const rowNodeId = normalizeAddress(
-        row?.[COLUMN.NODE_ID] ?? row?.node_id ?? null,
-      );
-      const rowNodeAddress = normalizeAddress(
-        row?.[COLUMN.NODE_ADDRESS] ?? row?.node_address ?? null,
-      );
-      if (normalizedNodeId && rowNodeId === normalizedNodeId) {
-        sawMatchingNodeId = true;
-      }
-      if (normalizedNodeAddress && rowNodeAddress === normalizedNodeAddress) {
-        sawMatchingNodeAddress = true;
-      }
-    }
-
-    const identityMatched = normalizedNodeId ?
-      sawMatchingNodeId :
-      sawMatchingNodeAddress;
-    if (!identityMatched) {
-      continue;
-    }
-
-    matchedLocalIdentity = true;
-    for (const peerAddress of extractPeerAddresses(
-      rows,
-      normalizedNodeId,
-      normalizedNodeAddress,
-    )) {
-      peerAddresses.add(peerAddress);
-    }
-  }
-
-  return {
-    clusterNodeCount,
-    peerAddresses: Array.from(peerAddresses),
-    hasDurableNodesTable: hasAnyDurableNodesTable,
-    matchedLocalIdentity,
-    identityMismatch: hasAnyDurableNodesTable && !matchedLocalIdentity,
-  };
 }
 
 function choosePreferredPeerAddress(peerAddresses, preferredPeerAddresses) {
@@ -413,7 +276,12 @@ function resolveDurableJoinSource(context = {}) {
 }
 
 async function collectAutoRejoinDecisionContext(options = {}) {
-  const hints = await readRejoinHints(options.dataDir);
+  const rejoinHintsRead = await readRejoinHintsOutcome(options.dataDir);
+  const hints = rejoinHintsRead.state === DURABLE_EVIDENCE_STATE.READABLE ?
+    rejoinHintsRead.hints :
+    null;
+  const durableEvidenceUnreadable =
+    rejoinHintsRead.state === DURABLE_EVIDENCE_STATE.UNREADABLE;
   const hintsIdentityMatched = hintsMatchLocalIdentity(
     hints,
     options.nodeId,
@@ -452,9 +320,12 @@ async function collectAutoRejoinDecisionContext(options = {}) {
     peerAddresses,
     hintPeerAddresses,
   );
+  const durableEvidenceBlocked = durableEvidenceUnreadable ||
+    durableSnapshot.durableEvidenceUnreadable === true;
   const durableStateDetected = hintsIdentityMatched ||
     durableSnapshot.hasDurableNodesTable ||
-    clusterNodeCount > 0;
+    clusterNodeCount > 0 ||
+    durableEvidenceBlocked;
   const clusterIncarnationFence = buildClusterIncarnationFence({
     durableStateDetected,
     localIdentityMatched:
@@ -478,6 +349,8 @@ async function collectAutoRejoinDecisionContext(options = {}) {
     selectedPeerAddress,
     preferredPeerAddress,
     durableStateDetected,
+    durableEvidenceBlocked,
+    forceNewCluster: options.forceNewCluster === true,
     clusterIncarnationFence,
     requiresPeerRejoin: deriveRequiresPeerRejoin({
       nodeRole: localNodeRole,
@@ -490,6 +363,10 @@ async function collectAutoRejoinDecisionContext(options = {}) {
 function resolveAutoRejoinDecisionState(context = {}) {
   if (context.durableSnapshot.identityMismatch) {
     return AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH;
+  }
+  if (context.durableEvidenceBlocked === true &&
+    context.forceNewCluster !== true) {
+    return AUTO_REJOIN_DECISION_STATE.UNREADABLE_DURABLE_EVIDENCE;
   }
   if (context.localNodeRole === REJOIN_ROLE_SEED) {
     return AUTO_REJOIN_DECISION_STATE.DURABLE_SEED;
@@ -617,6 +494,20 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
       error: DURABLE_STATE_REJOIN_REQUIRED_ERROR_MESSAGE,
+    }, state);
+  case AUTO_REJOIN_DECISION_STATE.UNREADABLE_DURABLE_EVIDENCE:
+    return attachMembershipOwnerOutcome({
+      state,
+      mode: STARTUP_MODE_FAIL,
+      peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+      peerAddress: null,
+      peerAddresses: [],
+      source: REJOIN_SOURCE.NONE,
+      startupMode: STARTUP_JOIN_MODE.SEED,
+      durableStateDetected: true,
+      identityMismatch: false,
+      clusterIncarnationFence: context.clusterIncarnationFence,
+      error: UNREADABLE_DURABLE_EVIDENCE_ERROR_MESSAGE,
     }, state);
   case AUTO_REJOIN_DECISION_STATE.FRESH_SEED:
     return attachMembershipOwnerOutcome({

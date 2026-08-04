@@ -1,5 +1,5 @@
 import Database from 'better-sqlite3';
-import {mkdir, mkdtemp, readFile, rm} from 'node:fs/promises';
+import {mkdir, mkdtemp, readFile, rm, writeFile} from 'node:fs/promises';
 import {join} from 'node:path';
 import {tmpdir} from 'node:os';
 import {test} from '../../src/test-helpers/tap.js';
@@ -583,6 +583,126 @@ test('RejoinHintsPersistenceService serializes overlapping writes without warnin
     );
   });
 
+test('resolveAutoRejoinStartupDecision blocks fresh seed over corrupt rejoin hints',
+  async (t) => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'rejoin-hints-'));
+    t.after(() => rm(dataDir, {recursive: true, force: true}));
+
+    await writeFile(
+      join(dataDir, REJOIN_HINTS_FILENAME),
+      'not-json',
+      'utf8',
+    );
+
+    const decision = await resolveAutoRejoinStartupDecision({
+      dataDir,
+      nodeId: LOCAL_NODE_ID,
+      nodeAddress: LOCAL_NODE_ADDRESS,
+      probePeerAddress: async () => false,
+    });
+
+    t.equal(decision.state, 'unreadable_durable_evidence');
+    t.equal(decision.mode, 'fail');
+    t.equal(
+      decision.startupMode,
+      STARTUP_JOIN_MODE.SEED,
+      'unreadable evidence must not be laundered into a durable-rejoin mode',
+    );
+    t.match(
+      decision.error,
+      /could not be read/,
+    );
+    t.match(decision.membershipOwnerOutcome, {
+      outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+      reasonCode: 'unreadable_durable_evidence',
+      durableStateDetected: true,
+      identityMismatch: false,
+    });
+  });
+
+test('resolveAutoRejoinStartupDecision fails closed over a corrupt replica DB',
+  async (t) => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'rejoin-hints-'));
+    t.after(() => rm(dataDir, {recursive: true, force: true}));
+
+    const partitionDir = join(dataDir, 'partitions', 'nodes-p1');
+    await mkdir(partitionDir, {recursive: true});
+    await writeFile(
+      join(partitionDir, 'nodes-p1-r1.db'),
+      'not-a-sqlite-database',
+      'utf8',
+    );
+
+    const decision = await resolveAutoRejoinStartupDecision({
+      dataDir,
+      nodeId: LOCAL_NODE_ID,
+      nodeAddress: LOCAL_NODE_ADDRESS,
+      probePeerAddress: async () => false,
+    });
+
+    t.equal(
+      decision.mode,
+      'fail',
+      'a corrupt replica DB must never resolve to a fresh seed',
+    );
+    t.equal(
+      decision.durableStateDetected,
+      true,
+      'a discovered-but-unreadable replica DB is durable evidence',
+    );
+  });
+
+test('resolveAutoRejoinStartupDecision treats a zero-row readable replica DB as absence',
+  async (t) => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'rejoin-hints-'));
+    t.after(() => rm(dataDir, {recursive: true, force: true}));
+
+    await writeDurableNodesTableSnapshot(dataDir, []);
+
+    const decision = await resolveAutoRejoinStartupDecision({
+      dataDir,
+      nodeId: LOCAL_NODE_ID,
+      nodeAddress: LOCAL_NODE_ADDRESS,
+      probePeerAddress: async () => false,
+    });
+
+    t.equal(
+      decision.state,
+      'fresh_seed',
+      'a readable replica DB with zero rows proves durable absence',
+    );
+    t.equal(decision.mode, 'seed');
+    t.equal(decision.durableStateDetected, false);
+  });
+
+test('resolveAutoRejoinStartupDecision honors the explicit force-new-cluster escape',
+  async (t) => {
+    const dataDir = await mkdtemp(join(tmpdir(), 'rejoin-hints-'));
+    t.after(() => rm(dataDir, {recursive: true, force: true}));
+
+    await writeFile(
+      join(dataDir, REJOIN_HINTS_FILENAME),
+      'not-json',
+      'utf8',
+    );
+
+    const decision = await resolveAutoRejoinStartupDecision({
+      dataDir,
+      nodeId: LOCAL_NODE_ID,
+      nodeAddress: LOCAL_NODE_ADDRESS,
+      probePeerAddress: async () => false,
+      forceNewCluster: true,
+    });
+
+    t.equal(
+      decision.state,
+      'fresh_seed',
+      'the explicit operator escape authorizes fresh bootstrap over unreadable evidence',
+    );
+    t.equal(decision.mode, 'seed');
+    t.equal(decision.durableStateDetected, false);
+  });
+
 test('readPersistedLocalNodeId restores the durable identity for restart reuse',
   async (t) => {
     const dataDir = await mkdtemp(join(tmpdir(), 'rejoin-hints-'));
@@ -619,7 +739,6 @@ test('readPersistedLocalNodeId returns null without usable hints', async (t) => 
     'a blank data directory cannot resolve a hints path',
   );
 
-  const {writeFile} = await import('node:fs/promises');
   await writeFile(join(dataDir, REJOIN_HINTS_FILENAME), 'not-json', 'utf8');
   t.equal(
     await readPersistedLocalNodeId(dataDir),

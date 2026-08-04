@@ -8,7 +8,7 @@ import {AuthoritativeControlPlaneView} from
 import {
   COLUMN,
   ENDPOINT_STATUS,
-  SERVICE_STATUS,
+  NODE_STATE,
   STATE,
   TABLES,
   TRANSPORT_TYPE,
@@ -21,10 +21,41 @@ import {
   JOIN_ADMISSION_PUBLICATION,
   JOIN_ADMISSION_RESOLUTION_SOURCE,
   LOCAL_STR_1YR7Z,
+  LOG_CLUSTER_INCARNATION_FENCE_UNAVAILABLE,
   REUSABLE_JOIN_ADMISSION_CONNECTION_STATES,
   hasFunction,
   normalizeString,
 } from './node-registration-owner-constants.js';
+
+const NON_REUSABLE_NODE_STATUSES = Object.freeze([
+  NODE_STATE.FAILED,
+  NODE_STATE.SHUTTING_DOWN,
+  NODE_STATE.STOPPED,
+]);
+
+/**
+ * A reused durable membership row must never re-publish a terminal status
+ * or a stale lease/heartbeat from the previous incarnation. Reentry
+ * normalizes the row to JOINING with a fresh heartbeat and a cleared lease;
+ * the canonical ready transition promotes it from there.
+ * @param {Object} nodeRow - Authoritative durable node row.
+ * @param {number} now - Current timestamp.
+ * @return {Object} Reentry-normalized node row.
+ */
+function buildReentryNormalizedNodeRow(nodeRow, now) {
+  const persistedStatus = normalizeString(nodeRow?.[COLUMN.STATUS]);
+  const reusableStatus =
+    NON_REUSABLE_NODE_STATUSES.includes(persistedStatus) ?
+      null :
+      persistedStatus;
+  return {
+    ...nodeRow,
+    [COLUMN.STATUS]: reusableStatus || NODE_STATE.JOINING,
+    [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
+    [COLUMN.LAST_HEARTBEAT]: now,
+    [COLUMN.READY_LEASE_EXPIRES_AT]: null,
+  };
+}
 
 class NodeRegistrationOwnerDurableRejoinMethods {
   async resolveExistingDurableRejoinMembership(now) {
@@ -66,14 +97,10 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       return null;
     }
 
-    const reusedNodeRow = {
-      ...authoritativeNodeRow,
-      [COLUMN.STATUS]:
-        authoritativeNodeRow[COLUMN.STATUS] || SERVICE_STATUS.ACTIVE,
-      [COLUMN.CONNECTION_STATE]: STATE.CONNECTED,
-      [COLUMN.LAST_HEARTBEAT]: now,
-      [COLUMN.READY_LEASE_EXPIRES_AT]: null,
-    };
+    const reusedNodeRow = buildReentryNormalizedNodeRow(
+      authoritativeNodeRow,
+      now,
+    );
     return {
       nodeRow: reusedNodeRow,
       endpointRow: authoritativeEndpointRow,
@@ -113,6 +140,12 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       return false;
     }
 
+    if (NON_REUSABLE_NODE_STATUSES.includes(
+      normalizeString(nodeRow[COLUMN.STATUS]),
+    )) {
+      return false;
+    }
+
     return this.hasReusableJoinAdmissionConnectionState(
       nodeRow[COLUMN.CONNECTION_STATE],
     );
@@ -134,7 +167,10 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     const metaEndpointRows =
       await this.readAuthoritativeMetaEndpointRows();
     return {
-      nodeRow: authoritativeNodeRow,
+      nodeRow: buildReentryNormalizedNodeRow(
+        authoritativeNodeRow,
+        this.delegates.getNow()(),
+      ),
       endpointRow: authoritativeEndpointRow,
       metaEndpointRows,
       resolution: {
@@ -143,10 +179,21 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     };
   }
 
+  /**
+   * The durable-rejoin fast path may only run behind an affirmative fence
+   * verdict. A missing or malformed fence blocks rejoin (fail-closed): the
+   * join then proceeds down the normal admission path rather than reusing
+   * durable membership on an unevaluated incarnation gate.
+   * @return {Promise<boolean>} True when durable rejoin must not proceed.
+   */
   async durableRejoinBlockedByClusterIncarnationFence() {
     const fence = await this.resolveClusterIncarnationFence();
     if (!fence || typeof fence !== 'object') {
-      return false;
+      this.delegates.getLogger?.().warn?.(
+        LOG_CLUSTER_INCARNATION_FENCE_UNAVAILABLE,
+        {nodeId: this.nodeId},
+      );
+      return true;
     }
     return fence.allowed !== true;
   }

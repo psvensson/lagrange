@@ -277,10 +277,10 @@ class NodeRegistrationOwnerPublicationMethods {
       return null;
     }
 
-    const cdcIntegrationService =
-      joinAdmissionSqlQueryEngine ?
-        null :
-        this.delegates.getCdcIntegrationService?.() || null;
+    // Contract: when a join-admission SQL query engine exists (guaranteed
+    // above), the gateway drives CDC through that engine; a direct
+    // cdcIntegrationService delegate is never wired on this path.
+    const cdcIntegrationService = null;
     const systemTableCache =
       this.delegates.getSystemTableCache?.() ||
       NodeService.getInstance().getSystemTableCache() ||
@@ -602,7 +602,7 @@ class NodeRegistrationOwnerPublicationMethods {
       return;
     }
 
-    void createBootstrapCacheHydrationApplier(systemTableCache)(
+    createBootstrapCacheHydrationApplier(systemTableCache)(
       tableName,
       LOCAL_STR_UPSERT,
       rowData,

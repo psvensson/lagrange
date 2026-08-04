@@ -6,6 +6,7 @@ import {
   resolveAutoRejoinStartupDecision,
 } from './bootstrap/rejoin-hints.js';
 import {
+  FORCE_NEW_CLUSTER_ENV,
   MEMBERSHIP_OWNER_EVIDENCE_SOURCE,
   MEMBERSHIP_OWNER_REASON,
   STARTUP_JOIN_MODE,
@@ -39,6 +40,13 @@ const EXPLICIT_SEED_DECISION_STATE = Object.freeze({
   DURABLE_EXPLICIT_SEED: 'durable_explicit_seed',
   FRESH_EXPLICIT_SEED: 'fresh_explicit_seed',
 });
+
+const FORCE_NEW_CLUSTER_ENABLED_VALUE = '1';
+
+function normalizeForceNewClusterEnv(value) {
+  return typeof value === 'string' &&
+    value.trim() === FORCE_NEW_CLUSTER_ENABLED_VALUE;
+}
 
 const EXPLICIT_SEED_DECISION_TABLE = Object.freeze([
   Object.freeze({
@@ -366,6 +374,8 @@ async function resolveStartupJoinDecision(options) {
     nodeId,
     nodeAddress: nodeHttpAddress,
     probePeerAddress,
+    forceNewCluster:
+      normalizeForceNewClusterEnv(options.env[FORCE_NEW_CLUSTER_ENV]),
   });
   options.logger.info(ENTRYPOINT_LOG_MSG.AUTO_REJOIN_DECISION, {
     nodeId,
