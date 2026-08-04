@@ -112,3 +112,7 @@ export {
   buildDeploymentRecords,
   writeDeploymentTree,
 } from './service-deployment-record-generator.js';
+
+export {
+  componentizeService,
+} from './service-component-build.js';

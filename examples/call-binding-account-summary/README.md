@@ -12,94 +12,100 @@ This example does it the Lagrange way, on the real public surfaces:
 
 1. The application makes **one authenticated HTTP POST** and gets **one
    small JSON result**.
-2. The service is **authored as one unit** - HTTP handler, partition
-   function, reducer - one JavaScript file, compiled into one WASM
-   component, installed as one immutable Artifact.
-3. Lagrange exposes the endpoint, and the handler asks the host for the
-   named distributed operation. The partition function runs **on each
-   relevant partition**, next to that partition's replica. The rows
-   never leave their node; only a handful of numeric partials do.
+2. The service is **authored as one code-first unit** -
+   [`lagrange.service.js`](lagrange.service.js) - declaring one
+   distributed operation and two HTTP routes with the guest-safe
+   authoring library. The compiler derives everything else.
+3. Lagrange exposes the endpoints, and a handler invokes the declared
+   distributed operation. The partition function runs **on each relevant
+   partition**, next to that partition's replica. The rows never leave
+   their node; only a handful of numeric partials do.
 
 > Logically one ordinary service. Physically distributed across the data.
 
-## The service: one file, two Bindings
+## Code-first: one authored file, everything else generated
 
-**Piece 1 - the HTTP handler** (`handleRequest` in
-[`service.js`](service.js)): parses the request, invokes the inner
-distributed operation by Binding name, and owns its endpoint's HTTP
-mapping - including honest statuses for typed failures:
-
-`summarize-account-activity` is the name of a deployed Call Binding, not
-a JavaScript export; the handler reaches it through an ordinary-looking
-domain function that owns the deployment name:
+The developer writes exactly one file,
+[`lagrange.service.js`](lagrange.service.js), with the guest-safe
+authoring library ([`src/authoring/`](../../src/authoring)). It declares
+data and behavior, **never deployment wiring** - there is no Binding-name
+string, package id, digest, or manifest anywhere in it:
 
 ```js
-import {callBinding} from 'lagrange:cell/context';
+import {defineService} from '../../src/authoring/define-service.js';
+import {distributed} from '../../src/authoring/distributed-operation.js';
+import {http} from '../../src/authoring/request-handler.js';
+import {sql} from '../../src/authoring/sql-template.js';
 
-function summarizeAccountActivity(accountId) {
-  return callBinding(
-    'summarize-account-activity',
-    JSON.stringify({accountId}),
-  );
-}
+const summarizeAccountActivity = distributed({
+  statement: sql`SELECT id, account_id, amount_cents, flagged FROM account_activity`,
+  run: summarizeRun,     // partition-local scan -> numeric partials
+  reduce: summarizeReduce, // fold every shard's partials into one summary
+});
 
-export function handleRequest(requestJson) {
-  const request = JSON.parse(requestJson);
-  const result = summarizeAccountActivity(request.body.accountId);
-  return JSON.stringify({
-    status: 200,
-    headers: [['content-type', 'application/json']],
-    body: result,
-  });
-}
+export default defineService({
+  name: 'account-summary',
+  version: '1.0.0',
+  operations: {summarizeAccountActivity},
+  handlers: {
+    accountSummary: http.post('/accounts/summary', {
+      calls: [summarizeAccountActivity], // referenced by descriptor, not name
+      handle: handleAccountSummary,
+    }),
+    accountHealth: http.get('/accounts/health', {handle: handleAccountHealth}),
+  },
+});
 ```
 
-The handler never names a node, partition, replica, package, digest, or
-SQL statement. It names one **declared, authorized Binding** and passes
-bounded JSON arguments.
+An HTTP handler invokes the operation through the per-handler context's
+`call(descriptor, args)` - by **descriptor identity**, never by a durable
+name. The operation's identity is its explicit object key
+(`summarizeAccountActivity`); the compiler mints the durable Binding
+names from those keys.
 
-**Piece 2 - the partition function** (`run`, same file): receives one
-typed batch of rows from one partition, filters to the requested
-account, and emits a few numeric partials.
+**The generated entry** ([`generated-entry.js`](generated-entry.js)) is
+compiler output, not a hand-authored surface. It statically imports the
+developer module and adapts the sealed `service-cell` world's fixed
+exports (`handle-request`, `run`, `reduce`) onto the descriptor tables:
+`handle-request` dispatches by method+path, and `call(descriptor)` routes
+to the canonical `lagrange:cell/context` call-binding host import under
+the deterministically generated name.
 
-**Piece 3 - the reducer** (`reduce`, same file): folds every shard's
-partials into the final summary.
+**The deployment records** come from
+[`buildDeploymentRecords`](../../src/service/service-deployment-record-generator.js),
+which derives - and validates through the real deployment-contract owners
+- one manifest (both exports of the one Artifact), one call Binding, one
+request Binding per route, and one outbound-call access policy per handler
+that declares calls. The durable names follow a fixed grammar:
 
-All three compile together against the canonical committed
-[`wit/world.wit`](../../wit/world.wit) world `service-cell` by
-[ComponentizeJS](https://github.com/bytecodealliance/ComponentizeJS).
+- the **request Bindings** `account-summary--request--account-summary`
+  (`POST /accounts/summary` -> `handle-request`) and
+  `account-summary--request--account-health`
+  (`GET /accounts/health` -> `handle-request`);
+- the **call Binding** `account-summary--call--summarize-account-activity`
+  (the data selector `SELECT ... FROM account_activity` -> `run`).
 
-**The deployment declarations** (built in
-[`call-binding-example-contract.js`](call-binding-example-contract.js)):
-ONE manifest declares both exports of the one Artifact:
-
-```js
-exports: [
-  {name: 'handle-request', interface: 'request_v1'},
-  {name: 'run', interface: 'call_v1'},
-]
-```
-
-and TWO Bindings target the same package and manifest digest:
-
-- the **request Binding** `account-summary-http`
-  (`POST /accounts/summary` -> export `handle-request`);
-- the **call Binding** `summarize-account-activity` (the data selector
-  `SELECT ... FROM account_activity` -> export `run`).
-
-Finally, one **service access policy** (schema v2) durably authorizes
-the HTTP Binding's only outbound call:
+The generated access policy (schema v2) durably authorizes the summary
+request Binding's one outbound call:
 
 ```js
 {
   schema_version: 2,
-  binding_name: 'account-summary-http',
+  binding_name: 'account-summary--request--account-summary',
   tables: [],
-  calls: [{binding: 'summarize-account-activity'}],
+  calls: [{binding: 'account-summary--call--summarize-account-activity'}],
 }
 ```
 
-Absent policy or an undeclared target fails closed, before dispatch.
+The health route declares no calls, so the compiler emits **no policy**
+for it. Absent policy or an undeclared target fails closed, before
+dispatch.
+
+All of this compiles together against the canonical committed
+[`wit/world.wit`](../../wit/world.wit) world `service-cell` through the
+single shared componentize owner
+([`src/service/service-component-build.js`](../../src/service/service-component-build.js))
+by [ComponentizeJS](https://github.com/bytecodealliance/ComponentizeJS).
 
 ## Run it
 
@@ -110,13 +116,15 @@ repository dependency; no extra tools needed).
 node examples/call-binding-account-summary/run-call-binding-account-summary.js
 ```
 
-One command: builds the component, boots a disposable local node, seeds
+One command: componentizes the generated entry, generates the deployment
+records from `lagrange.service.js`, boots a disposable local node, seeds
 150 transaction rows for three accounts, splits the table so the data
-genuinely spans two partitions, deploys the service over SQL (INSTALL,
-both CREATE BINDINGs, CONFIGURE SERVICE ACCESS), invokes the HTTP
-endpoint and the direct CALL BINDING surface, proves the refusal and
-replay paths, prints a JSON report, and cleans up. A full run typically
-takes under a minute; progress lines go to stderr.
+genuinely spans two partitions, deploys the **generated** records over SQL
+(INSTALL, one CREATE BINDING per generated binding, CONFIGURE SERVICE
+ACCESS per generated policy), invokes both HTTP routes and the direct CALL
+BINDING surface, proves the refusal and replay paths, prints a JSON
+report, and cleans up. A full run typically takes under a minute; progress
+lines go to stderr.
 
 ## What the application sees
 
@@ -144,11 +152,15 @@ and one JSON response:
 }
 ```
 
-The direct SQL surface stays covered too - the runner still invokes
-`CALL BINDING "summarize-account-activity"` over an authenticated pgwire
-session holding `pgwire.binding.call` and checks the identical summary,
-and proves a session without that action is refused before any
-dispatch.
+The second route, `GET /accounts/health`, is served by the **same**
+component via method+path dispatch and returns a static
+`{"service":"account-summary","status":"ok"}` - it declares no outbound
+call, so no access policy gates it.
+
+The direct SQL surface stays covered too - the runner still invokes the
+generated call Binding over an authenticated pgwire session holding
+`pgwire.binding.call`, checks the identical summary, and proves a session
+without that action is refused before any dispatch.
 
 ## What runs where
 
@@ -157,14 +169,14 @@ POST /accounts/summary {accountId: 202}
   │  (request Binding, authenticated ingress)
   ▼
 handleRequest() in the request Cell
-  │  callBinding("summarize-account-activity", {accountId})
+  │  call(summarizeAccountActivity, {accountId})
   │  (host-validated against the durable outbound-call policy)
   ▼
 the distributed call runtime
   ├─ run() on partition …_left    ids 1..75 - scanned in place
-  │     └─ emits count:1, total:1, largest:1, flagged:1   (4 numbers)
+  │     └─ emits count, total, largest, flagged   (4 numbers)
   ├─ run() on partition …_right   ids 76..150 - scanned in place
-  │     └─ emits count:77, total:77, largest:77, flagged:77
+  │     └─ emits count, total, largest, flagged
   └─ reduce() on a lease-holding replica
         └─ one JSON summary → handleRequest → one HTTP response
 ```
@@ -173,7 +185,7 @@ the distributed call runtime
 %%{init: {'theme':'base','themeVariables':{'background':'#ffffff','lineColor':'#334155','textColor':'#0f172a'}}}%%
 flowchart LR
   APP["Existing application<br/>POST /accounts/summary"]:::ctrl
-  REQ["request Cell<br/>handleRequest(): callBinding(...)"]:::svc
+  REQ["request Cell<br/>handleRequest(): call(...)"]:::svc
   P1["partition _left<br/>run(): scan + filter locally"]:::data
   P2["partition _right<br/>run(): scan + filter locally"]:::data
   RED["reduce()<br/>fold numeric partials"]:::svc
@@ -201,14 +213,14 @@ nodes.
 
 The runner proves two guarantees on the live endpoint:
 
-- **Undeclared target -> 403 before dispatch.** The example guest
-  accepts an optional `body.target` override so the runner can request
-  a Binding name the access policy never declared. This is a demo
-  probe, not an escape hatch: the HOST validates every target against
-  the durable outbound-call policy before anything is dispatched, and
-  the guest merely maps the typed `target_not_allowed` refusal to 403.
-- **Replay executes the inner call once.** The runner sends the same
-  POST twice with the same `Idempotency-Key`. The second response is
+- **Undeclared target -> 403 before dispatch.** The authored handler
+  accepts an optional `body.target` override so the runner can request a
+  Binding name the generated access policy never declared. This is a demo
+  probe, not an escape hatch: the HOST validates every target against the
+  durable outbound-call policy before anything is dispatched, and the
+  handler merely maps the typed `target_not_allowed` refusal to 403.
+- **Replay executes the inner call once.** The runner sends the same POST
+  twice with the same `Idempotency-Key`. The second response is
   byte-identical (served from the durable invocation journal), and the
   coordination table holds exactly ONE result row for the system-owned
   child identity `<outer invocation id>#call-1` - the distributed call
@@ -232,25 +244,26 @@ without that ratio gain little; see
 ## Under the hood
 
 Deployment is the same lifecycle SQL as the request-binding examples,
-over one authenticated pgwire session:
+over one authenticated pgwire session - the runner replays the
+**generated** records, one statement each:
 
 ```sql
 INSTALL SERVICE $1;           -- immutable, digest-pinned artifact + manifest
 CREATE BINDING $1;            -- kind 'call': the data selector -> run
 CREATE BINDING $1;            -- kind 'request': POST /accounts/summary -> handle-request
-CONFIGURE SERVICE ACCESS $1;  -- v2: calls allowlist for the request Binding
+CREATE BINDING $1;            -- kind 'request': GET /accounts/health -> handle-request
+CONFIGURE SERVICE ACCESS $1;  -- v2: calls allowlist for the summary request Binding
 ```
 
-The two Bindings compile into two Cells of the same immutable Artifact.
-Each Cell's invocation mode restricts which host imports are live: the
-request invocation gets `callBinding` (bridged to the one
-`CallCellInvoker` over a worker-to-parent protocol that never blocks
-the parent thread), the call invocation gets `emit` - the other
-surface fails closed with a typed error in each mode. The nested call
-runs under the caller's own frozen security context and the tighter of
-the outer and inner deadlines. The invocation, coordination (reduce
-slots, leases, atomic snapshot), and typed failure surface are
-specified in
+The Bindings compile into Cells of the same immutable Artifact. Each
+Cell's invocation mode restricts which host imports are live: the request
+invocation gets `callBinding` (bridged to the one `CallCellInvoker` over a
+worker-to-parent protocol that never blocks the parent thread), the call
+invocation gets `emit` - the other surface fails closed with a typed error
+in each mode. The nested call runs under the caller's own frozen security
+context and the tighter of the outer and inner deadlines. The invocation,
+coordination (reduce slots, leases, atomic snapshot), and typed failure
+surface are specified in
 [`architecture/minimal-deployment-surface.md`](../../architecture/minimal-deployment-surface.md).
 
 ## Honest limits and demo scaffolding
@@ -269,6 +282,8 @@ Current call-path limits (of the platform, stated plainly):
   single-node demo executes its two shards one after the other.
 - **Single-table SELECT.** The Binding-declared statement must be a
   SELECT over one table.
+- **One distributed operation per service.** The pre-v2 bridge compiles
+  exactly one distributed operation per component.
 
 Demo scaffolding in the runner (not the composed path):
 

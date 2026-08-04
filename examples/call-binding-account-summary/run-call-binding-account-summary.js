@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 
 import assert from 'node:assert/strict';
-import {mkdtemp, rm} from 'node:fs/promises';
+import {mkdtemp, rm, writeFile} from 'node:fs/promises';
 import {tmpdir} from 'node:os';
 import path from 'node:path';
 import {fileURLToPath, pathToFileURL} from 'node:url';
 
+import {RUNTIME_KIND} from '../../src/constants/index.js';
 import {
   PostgresWireAdapter,
 } from '../../src/query/pg/postgres-wire-adapter.js';
@@ -21,8 +22,16 @@ import {
 import {CallBindingRouteResolver} from
   '../../src/service/call-binding-route-resolver.js';
 import {
+  buildDeploymentRecords,
+  componentizeService,
+  normalizeServiceSource,
+} from '../../src/service/index.js';
+import {
   createInvocationIdentity,
 } from '../../src/service/request-cell-routing-contract.js';
+import {
+  ServiceLocalOciLayoutBuilder,
+} from '../../src/service/service-local-oci-layout-builder.js';
 import {
   bootExampleNode,
   EXAMPLE_NODE,
@@ -31,17 +40,31 @@ import {
   executeSql,
   waitForReadyCell,
 } from '../request-binding-deployment/run-request-binding-deployment.js';
-import {
-  CALL_EXAMPLE,
-  buildAccessPayload,
-  buildCallBindingPayload,
-  buildCallComponent,
-  buildCallInstallPayload,
-  buildCallManifest,
-  buildRequestBindingPayload,
-} from './call-binding-example-contract.js';
 
+// The whole deployment surface is now COMPILED from lagrange.service.js:
+// the generated entry statically imports that developer module, the
+// shared componentize owner builds it, and buildDeploymentRecords derives
+// the manifest, both request Bindings, the one call Binding, and the
+// outbound-call policy. No hand-authored deployment builder and no raw
+// Binding-name literal survive - the compiler owns the durable names.
 const EXAMPLE_DIRECTORY = path.dirname(fileURLToPath(import.meta.url));
+const GENERATED_ENTRY_PATH = path.join(EXAMPLE_DIRECTORY, 'generated-entry.js');
+const SERVICE_MODULE_URL =
+  pathToFileURL(path.join(EXAMPLE_DIRECTORY, 'lagrange.service.js')).href;
+
+const SERVICE = Object.freeze({
+  COMPONENT_FILE: 'component.wasm',
+  HTTP_METHOD: 'POST',
+  HTTP_PATH: '/accounts/summary',
+  HEALTH_METHOD: 'GET',
+  HEALTH_PATH: '/accounts/health',
+  IDEMPOTENCY_KEY: 'install-call-binding-account-summary-v2',
+  PLATFORM: 'linux/amd64',
+  REF: 'registry.example.test/examples/account-summary:1.0.0',
+  SOURCE_DATE_EPOCH: 1_700_000_000,
+  TABLE: 'account_activity',
+});
+
 const TEMPORARY_PREFIX = 'lagrange-call-binding-account-summary-';
 const NODE_DATA_DIRECTORY = 'node-data';
 const EXAMPLE_WS_PORT = 18_782;
@@ -78,6 +101,8 @@ const TABLE_DDL =
 const ROW_INSERT =
   'INSERT INTO account_activity (id, account_id, amount_cents, flagged) ' +
   'VALUES ($1, $2, $3, $4)';
+const SOURCE_KIND_CALL = 'call';
+const SOURCE_KIND_REQUEST = 'request';
 
 // Deterministic synthetic ledger: ids interleave the three accounts so
 // every partition ends up holding rows for every account, and the split
@@ -129,6 +154,41 @@ async function waitFor(conditionFn, timeoutMs, pollMs, failureMessage) {
   }
 }
 
+// Compile lagrange.service.js into one immutable component through the
+// shared componentize owner, then publish it as a verified OCI layout.
+async function buildServiceComponent(paths) {
+  const {component} = await componentizeService({
+    sourcePath: GENERATED_ENTRY_PATH,
+  });
+  await writeFile(paths.componentPath, component);
+  return new ServiceLocalOciLayoutBuilder().build({
+    outputRoot: paths.ociOutputRoot,
+    platform: SERVICE.PLATFORM,
+    runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
+    sourceDateEpoch: SERVICE.SOURCE_DATE_EPOCH,
+    wasm: {payloadPath: paths.componentPath},
+  });
+}
+
+// Derive the deployment records from the developer module and the build
+// receipt's artifact descriptor. These records - not any hand-built
+// payload - are what gets installed and bound.
+async function buildRecords(receipt) {
+  const normalized = await normalizeServiceSource(SERVICE_MODULE_URL);
+  assert.equal(normalized.status, 'accepted',
+    JSON.stringify(normalized.errors));
+  const result = buildDeploymentRecords({
+    artifact: {
+      digest: receipt.topManifestDescriptor.digest,
+      ref: SERVICE.REF,
+      sizeBytes: receipt.topManifestDescriptor.sizeBytes,
+    },
+    ir: normalized.ir,
+  });
+  assert.equal(result.status, 'accepted', JSON.stringify(result.errors));
+  return result.records;
+}
+
 async function seedLedger(node, rows) {
   // Single-node demo scaffolding: one replica per partition so the managed
   // split's admission quorum is satisfiable on one node. A real cluster
@@ -141,7 +201,7 @@ async function seedLedger(node, rows) {
     ]);
   }
   const engine = node.sqlAdapter.sqlCore;
-  const partitions = engine.getTablePartitions(CALL_EXAMPLE.TABLE) || [];
+  const partitions = engine.getTablePartitions(SERVICE.TABLE) || [];
   assert.equal(partitions.length, 1, JSON.stringify(partitions));
   const partitionId = partitions[0].partition_id || partitions[0].partitionId;
   assert.equal(typeof partitionId, LOCAL_STR_STRING, 'partition id');
@@ -149,15 +209,13 @@ async function seedLedger(node, rows) {
 }
 
 // Splits the table's single initial partition on its id median so the
-// ledger genuinely spans two partitions. Production splits by table
-// policy (split_storage_threshold) as data grows; the example forces one
-// split so a laptop-sized dataset exercises the same fan-out.
+// ledger genuinely spans two partitions.
 async function splitLedgerPartition(node, sourcePartitionId) {
   const engine = node.sqlAdapter.sqlCore;
   await engine.executeManagedSplit(sourcePartitionId);
   return waitFor(
     () => {
-      const partitions = engine.getTablePartitions(CALL_EXAMPLE.TABLE) || [];
+      const partitions = engine.getTablePartitions(SERVICE.TABLE) || [];
       return partitions.length >= EXPECTED_PARTITION_COUNT ?
         partitions :
         null;
@@ -168,44 +226,78 @@ async function splitLedgerPartition(node, sourcePartitionId) {
   );
 }
 
-// One INSTALL, two CREATE BINDINGs against the same package and manifest
-// digest, one CONFIGURE SERVICE ACCESS declaring the HTTP Binding's
-// outbound-call allowlist.
-async function deploy(node, receipt) {
-  const manifest = buildCallManifest(receipt);
+// Substitute the real INSTALL-returned package id into a generated
+// binding's placeholder target, keeping the rest of the normalized record
+// verbatim (re-normalization by the SQL grammar is idempotent).
+function withPackageId(binding, packageId) {
+  return {
+    budgets: {...binding.budgets},
+    name: binding.name,
+    schema_version: binding.schema_version,
+    source: {...binding.source},
+    target: {...binding.target, package_id: packageId},
+  };
+}
+
+// One INSTALL of the generated manifest, one CREATE BINDING per generated
+// binding (both request routes and the call), and one CONFIGURE SERVICE
+// ACCESS per generated access policy. The example does not re-implement
+// any deployment contract - it replays the compiler's records.
+async function deploy(node, receipt, records) {
   const installed = await executeSql(
     node,
     'INSTALL SERVICE $1',
-    [JSON.stringify(buildCallInstallPayload(manifest, receipt))],
+    [JSON.stringify({
+      artifact_source: {kind: 'local_oci_layout', location: receipt.layoutPath},
+      config: {},
+      idempotency_key: SERVICE.IDEMPOTENCY_KEY,
+      manifest: records.manifest,
+    })],
   );
   const packageId = installed.rows?.[0]?.package_id;
   assert.equal(typeof packageId, LOCAL_STR_STRING);
-  const binding = buildCallBindingPayload(packageId, manifest);
-  const created = await executeSql(
-    node,
-    'CREATE BINDING $1',
-    [JSON.stringify(binding)],
-  );
-  const requestBinding = buildRequestBindingPayload(packageId, manifest);
-  const requestCreated = await executeSql(
-    node,
-    'CREATE BINDING $1',
-    [JSON.stringify(requestBinding)],
-  );
-  const access = await executeSql(
-    node,
-    'CONFIGURE SERVICE ACCESS $1',
-    [JSON.stringify(buildAccessPayload())],
-  );
+  const bindingsByKind = {call: [], request: []};
+  for (const binding of records.bindings) {
+    const payload = withPackageId(binding, packageId);
+    const created = await executeSql(
+      node, 'CREATE BINDING $1', [JSON.stringify(payload)]);
+    bindingsByKind[binding.source.kind].push({payload, receipt: created.rows[0]});
+  }
+  for (const policy of records.accessPolicies) {
+    await executeSql(
+      node, 'CONFIGURE SERVICE ACCESS $1', [JSON.stringify(policy)]);
+  }
+  // Every request Binding needs a runtime access policy for its request
+  // Cell to be admitted (fail-closed: policy_not_found is a denial). The
+  // compiler emits one only where there are outbound calls to authorize,
+  // so deployment completes the coverage with an empty (no-calls,
+  // no-tables) policy for any request Binding the records left uncovered -
+  // through the same CONFIGURE SERVICE ACCESS grammar, no owner bypass.
+  const policiedBindings = new Set(
+    records.accessPolicies.map((policy) => policy.binding_name));
+  for (const {payload} of bindingsByKind[SOURCE_KIND_REQUEST]) {
+    if (policiedBindings.has(payload.name)) continue;
+    await executeSql(node, 'CONFIGURE SERVICE ACCESS $1', [JSON.stringify({
+      binding_name: payload.name,
+      calls: [],
+      schema_version: 2,
+      tables: [],
+    })]);
+  }
+  const callBinding = bindingsByKind[SOURCE_KIND_CALL][0].payload;
   return {
-    access: access.rows[0],
-    binding,
-    bindingReceipt: created.rows[0],
+    callBindingName: callBinding.name,
     installReceipt: installed.rows[0],
-    manifest,
-    requestBinding,
-    requestBindingReceipt: requestCreated.rows[0],
+    manifestDigest: callBinding.target.manifest_digest,
+    packageId,
+    requestBindings: bindingsByKind[SOURCE_KIND_REQUEST].map((b) => b.payload),
   };
+}
+
+function basicAuthorization() {
+  return `Basic ${Buffer.from(
+    `${EXAMPLE_NODE.USER}:${EXAMPLE_NODE.PASSWORD}`,
+  ).toString('base64')}`;
 }
 
 // Authenticated HTTP invocation of the deployed endpoint through the
@@ -214,20 +306,31 @@ async function deploy(node, receipt) {
 async function postAccountsSummary(node, body, options = {}) {
   const headers = {
     'accept': '*/*',
-    'authorization': `Basic ${Buffer.from(
-      `${EXAMPLE_NODE.USER}:${EXAMPLE_NODE.PASSWORD}`,
-    ).toString('base64')}`,
+    'authorization': basicAuthorization(),
     'content-type': JSON_CONTENT_TYPE,
   };
   if (typeof options.idempotencyKey === LOCAL_STR_STRING) {
     headers['idempotency-key'] = options.idempotencyKey;
   }
   const response = await fetch(
-    `${node.baseUrl}${CALL_EXAMPLE.HTTP_PATH}`,
+    `${node.baseUrl}${SERVICE.HTTP_PATH}`,
+    {body: JSON.stringify(body), headers, method: SERVICE.HTTP_METHOD},
+  );
+  return {
+    contentType: response.headers.get(CONTENT_TYPE_HEADER) || '',
+    status: response.status,
+    text: await response.text(),
+  };
+}
+
+// The second route on the SAME component: a GET served by method+path
+// dispatch with no outbound call and no access policy.
+async function getAccountsHealth(node) {
+  const response = await fetch(
+    `${node.baseUrl}${SERVICE.HEALTH_PATH}`,
     {
-      body: JSON.stringify(body),
-      headers,
-      method: CALL_EXAMPLE.HTTP_METHOD,
+      headers: {'accept': '*/*', 'authorization': basicAuthorization()},
+      method: SERVICE.HEALTH_METHOD,
     },
   );
   return {
@@ -239,8 +342,7 @@ async function postAccountsSummary(node, body, options = {}) {
 
 // Replay observability: the coordination system table holds exactly one
 // atomically published result row per completed inner invocation, keyed
-// by the system-owned child identity `<outer invocation id>#call-1`. The
-// node is in-process, so the runner queries the engine directly.
+// by the system-owned child identity `<outer invocation id>#call-1`.
 async function countChildResultRows(node, childInvocationId) {
   const result = await node.sqlAdapter.sqlCore.executeQuery(
     REDUCE_RESULTS_SELECT,
@@ -261,7 +363,7 @@ function exampleSecurityContext() {
   });
 }
 
-async function waitForReadyCallCell(node) {
+async function waitForReadyCallCell(node, callBindingName) {
   const routeResolver = new CallBindingRouteResolver({
     systemTableCacheProvider: () => node.bootstrapService.systemTableCache,
   });
@@ -271,7 +373,7 @@ async function waitForReadyCallCell(node) {
       try {
         return routeResolver.resolve({
           invocationId: 'account-summary-readiness',
-          name: CALL_EXAMPLE.BINDING_NAME,
+          name: callBindingName,
           securityContext,
         });
       } catch {
@@ -311,13 +413,13 @@ async function createCallerAdapter(node, sessionId, allowedActions) {
   return adapter;
 }
 
-async function summarizeAccount(callerAdapter, accountId) {
+async function summarizeAccount(callerAdapter, callBindingName, accountId) {
   const result = await callerAdapter.execute(
     CALL_SESSION,
     'CALL BINDING $1',
     [JSON.stringify({
       arguments: {accountId},
-      name: CALL_EXAMPLE.BINDING_NAME,
+      name: callBindingName,
       schema_version: 2,
     })],
   );
@@ -340,6 +442,14 @@ async function exerciseHttpSurface(node, rows, partitions) {
   assert.ok(composed.contentType.includes(JSON_CONTENT_TYPE));
   assert.deepEqual(JSON.parse(composed.text), oracle);
 
+  logPhase('GET /accounts/health through the second route on the same component');
+  const health = await getAccountsHealth(node);
+  assert.equal(health.status, HTTP_STATUS_OK, JSON.stringify(health));
+  assert.deepEqual(JSON.parse(health.text), {
+    service: 'account-summary',
+    status: 'ok',
+  });
+
   // Refusal probe: an undeclared target name is refused by the host's
   // durable outbound-call policy BEFORE dispatch; the component maps the
   // typed target_not_allowed failure to an honest 403.
@@ -356,8 +466,7 @@ async function exerciseHttpSurface(node, rows, partitions) {
 
   // Replay proof: the same Idempotency-Key returns the journaled outer
   // response byte for byte, and the inner distributed call has exactly
-  // one published result row under its system-owned child identity -
-  // it never re-ran.
+  // one published result row under its system-owned child identity.
   logPhase('replay proof: idempotent POST twice, inner call runs once');
   const childInvocationId = createInvocationIdentity(
     EXAMPLE_NODE.DATABASE,
@@ -386,14 +495,9 @@ async function exerciseHttpSurface(node, rows, partitions) {
     'the replayed POST did not execute the inner call again');
 
   return {
-    composed: {
-      body: JSON.parse(composed.text),
-      status: composed.status,
-    },
-    refused: {
-      body: refusedBody,
-      status: refused.status,
-    },
+    composed: {body: JSON.parse(composed.text), status: composed.status},
+    health: {body: JSON.parse(health.text), status: health.status},
+    refused: {body: refusedBody, status: refused.status},
     replay: {
       byteIdentical: replayed.text === first.text,
       childInvocationId,
@@ -402,30 +506,33 @@ async function exerciseHttpSurface(node, rows, partitions) {
   };
 }
 
-async function exerciseDeployment(node, rows, partitions) {
-  await waitForReadyCallCell(node);
+async function exerciseDeployment(node, rows, partitions, deployment) {
+  await waitForReadyCallCell(node, deployment.callBindingName);
   await waitForReadyCell(node, {
-    METHOD: CALL_EXAMPLE.HTTP_METHOD,
-    PATH: CALL_EXAMPLE.HTTP_PATH,
+    METHOD: SERVICE.HTTP_METHOD,
+    PATH: SERVICE.HTTP_PATH,
+  });
+  await waitForReadyCell(node, {
+    METHOD: SERVICE.HEALTH_METHOD,
+    PATH: SERVICE.HEALTH_PATH,
   });
   const http = await exerciseHttpSurface(node, rows, partitions);
 
-  logPhase('direct CALL BINDING against summarize-account-activity');
+  logPhase('direct CALL BINDING against the generated call Binding');
   const callerAdapter = await createCallerAdapter(
     node,
     CALL_SESSION,
     [PGWIRE_AUTH_ACTION.BINDING_CALL],
   );
 
-  const summary = await summarizeAccount(callerAdapter, SUMMARY_ACCOUNT_ID);
+  const summary = await summarizeAccount(
+    callerAdapter, deployment.callBindingName, SUMMARY_ACCOUNT_ID);
   assert.deepEqual(
     summary,
     expectedSummary(rows, SUMMARY_ACCOUNT_ID, partitions.length),
   );
   const secondSummary = await summarizeAccount(
-    callerAdapter,
-    SECOND_ACCOUNT_ID,
-  );
+    callerAdapter, deployment.callBindingName, SECOND_ACCOUNT_ID);
   assert.deepEqual(
     secondSummary,
     expectedSummary(rows, SECOND_ACCOUNT_ID, partitions.length),
@@ -442,7 +549,7 @@ async function exerciseDeployment(node, rows, partitions) {
     DENIED_SESSION,
     'CALL BINDING $1',
     [JSON.stringify({
-      name: CALL_EXAMPLE.BINDING_NAME,
+      name: deployment.callBindingName,
       schema_version: 2,
     })],
   ).then(() => null, (error) => error);
@@ -462,15 +569,13 @@ async function runCallBindingAccountSummaryExample(options = {}) {
   let node = null;
   try {
     const paths = {
-      componentPath: path.join(temporaryRoot, CALL_EXAMPLE.COMPONENT_FILE),
-      componentSourcePath: path.join(
-        EXAMPLE_DIRECTORY,
-        CALL_EXAMPLE.COMPONENT_SOURCE_FILE,
-      ),
+      componentPath: path.join(temporaryRoot, SERVICE.COMPONENT_FILE),
       ociOutputRoot: path.join(temporaryRoot, 'oci-layouts'),
     };
-    logPhase('componentizing service.js against the service-cell world');
-    const receipt = await buildCallComponent(paths);
+    logPhase('componentizing the generated entry against the service-cell world');
+    const receipt = await buildServiceComponent(paths);
+    logPhase('generating deployment records from lagrange.service.js');
+    const records = await buildRecords(receipt);
     logPhase('booting the disposable local node');
     node = await bootExampleNode(
       path.join(temporaryRoot, NODE_DATA_DIRECTORY),
@@ -484,31 +589,26 @@ async function runCallBindingAccountSummaryExample(options = {}) {
     const created = await seedLedger(node, rows);
     logPhase('splitting the ledger partition on its id median');
     const partitions = await splitLedgerPartition(node, created.partitionId);
-    logPhase('INSTALL SERVICE + both CREATE BINDINGs + SERVICE ACCESS');
-    const deployment = await deploy(node, receipt);
-    logPhase('waiting for the request Cell and the call Cell');
-    const observations = await exerciseDeployment(node, rows, partitions);
+    logPhase('INSTALL SERVICE + generated CREATE BINDINGs + SERVICE ACCESS');
+    const deployment = await deploy(node, receipt, records);
+    logPhase('waiting for both request Cells and the call Cell');
+    const observations =
+      await exerciseDeployment(node, rows, partitions, deployment);
     logPhase('all checks passed; shutting down');
     const report = {
       artifact: {
         buildInputFingerprint: receipt.buildInputFingerprint,
-        componentSource: path.relative(process.cwd(), paths.componentSourcePath),
-        manifestDigest: deployment.binding.target.manifest_digest,
+        manifestDigest: deployment.manifestDigest,
         ociManifestDigest: receipt.topManifestDescriptor.digest,
-        packageId: deployment.binding.target.package_id,
+        packageId: deployment.packageId,
       },
       bindings: {
-        call: {
-          exportName: deployment.binding.target.export_name,
-          name: deployment.binding.name,
-          statement: deployment.binding.source.statement,
-        },
-        request: {
-          exportName: deployment.requestBinding.target.export_name,
-          method: deployment.requestBinding.source.method,
-          name: deployment.requestBinding.name,
-          path: deployment.requestBinding.source.path,
-        },
+        call: deployment.callBindingName,
+        request: deployment.requestBindings.map((binding) => ({
+          method: binding.source.method,
+          name: binding.name,
+          path: binding.source.path,
+        })),
       },
       ledger: {
         partitions: partitions.map((partition) =>
