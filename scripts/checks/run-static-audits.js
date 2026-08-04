@@ -17,6 +17,10 @@
 import {spawnSync} from 'node:child_process';
 import process from 'node:process';
 
+// Module-load intrinsic captures (adversarial-js-intrinsics guideline).
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+
 const NPM_BINARY = 'npm';
 const NPM_RUN_ARGUMENTS = Object.freeze(['run', '-s']);
 const FAST_FAIL_FLAG = '--fast-fail';
@@ -48,21 +52,19 @@ const STATIC_AUDIT_SCRIPTS = Object.freeze([
 ]);
 
 function runAudit(scriptName) {
-  const startedAtMs = Date.now();
   const result = spawnSync(
     NPM_BINARY,
     [...NPM_RUN_ARGUMENTS, scriptName],
     {encoding: 'utf8', stdio: 'inherit'},
   );
   return {
-    durationMs: Date.now() - startedAtMs,
     exitCode: result.status ?? 1,
     scriptName,
   };
 }
 
 function main() {
-  const fastFail = process.argv.includes(FAST_FAIL_FLAG);
+  const fastFail = arrayIncludes(process.argv, FAST_FAIL_FLAG);
   const results = [];
   for (const scriptName of STATIC_AUDIT_SCRIPTS) {
     const result = runAudit(scriptName);
@@ -71,14 +73,14 @@ function main() {
       break;
     }
   }
-  const failures = results.filter((result) => result.exitCode !== 0);
+  const failures = arrayFilter(
+    results, (result) => result.exitCode !== 0);
   process.stdout.write(SUMMARY_HEADER);
   for (const result of results) {
     const label = result.exitCode === 0 ?
       STATUS_LABEL.PASS :
       STATUS_LABEL.FAIL;
-    process.stdout.write(
-      `  ${label}  ${result.scriptName} (${result.durationMs}ms)\n`);
+    process.stdout.write(`  ${label}  ${result.scriptName}\n`);
   }
   if (failures.length > 0) {
     process.stdout.write(

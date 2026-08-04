@@ -291,7 +291,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:sharded:serial` — `npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2`
 - `test:smoke` — Run the versioned short developer proof through the fail-closed acceptance executor.
 - `test:static` — Run unused, dependency, complexity, metadata, and runtime grammar checks.
-- `test:static:postpush` — `npm run test:unused:prod && npm run test:deps && npm run test:complexity && npm run test:complexity:cognitive && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:roadmap-authority && npm run steering:check`
+- `test:static:postpush` — `node scripts/checks/run-static-audits.js`
 - `test:task27:ci` — `npm run test:task27:invariant-suite && npm run test:task27:distributed-stall-gate`
 - `test:task27:distributed-stall-gate` — Run the Task 27 distributed stall gate.
 - `test:task27:invariant-suite` — `bash scripts/run-task27-deterministic-invariant-suite.sh`
