@@ -76,6 +76,9 @@ Low-level compatibility:
                                    (low-level; prefer init + generate + build + deploy)
 `;
 
+const SERVICE_PIPELINE_OWNER_EXPORT = 'runServicePipelineCommand';
+const SERVICE_LIFECYCLE_OWNER_EXPORT = 'runServiceLifecycleCommand';
+
 const SERVICE_LIFECYCLE_COMMANDS = Object.freeze(new Set([
   SERVICE_COMMAND.DEV_INSTALL,
   SERVICE_COMMAND.INSTALL,
@@ -195,7 +198,7 @@ function runServiceCommand(args) {
   }
   if (SERVICE_PIPELINE_COMMANDS.has(args[0])) {
     return dispatchToOwner(
-      loadServicePipelineCommand, 'runServicePipelineCommand', args);
+      loadServicePipelineCommand, SERVICE_PIPELINE_OWNER_EXPORT, args);
   }
   if (!SERVICE_LIFECYCLE_COMMANDS.has(args[0])) {
     return usageError(
@@ -204,7 +207,7 @@ function runServiceCommand(args) {
     );
   }
   return dispatchToOwner(
-    loadServiceLifecycleCommand, 'runServiceLifecycleCommand', args);
+    loadServiceLifecycleCommand, SERVICE_LIFECYCLE_OWNER_EXPORT, args);
 }
 
 export {runServiceCommand};

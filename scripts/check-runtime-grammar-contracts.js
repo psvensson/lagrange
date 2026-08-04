@@ -99,7 +99,17 @@ const RUNTIME_GRAMMAR_HOTSPOT_CONTRACTS = Object.freeze({
     ]),
     functionContracts: Object.freeze([
       Object.freeze({
+        // The public name is a thin sync-section wrapper (quest
+        // publication-recovery-snapshot-starvation-relief); the contract
+        // chain is wrapper -> Untracked body -> grammar helpers, so the
+        // wrapper must delegate and the body carries the helper fragments.
         functionName: 'buildPublicationRecoveryGateSnapshot',
+        requiredFragments: Object.freeze([
+          'buildPublicationRecoveryGateSnapshotUntracked',
+        ]),
+      }),
+      Object.freeze({
+        functionName: 'buildPublicationRecoveryGateSnapshotUntracked',
         requiredFragments: Object.freeze([
           'buildPrioritySpreadDecision',
           'filterProvidedPriorityRecoveryReasonCodes',

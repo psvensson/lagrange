@@ -27,6 +27,10 @@ const NUM = Object.freeze({ZERO: 0, ONE: 1});
  * @param {number} [options.windowMs] - Minimum ms between admitted emits per key.
  * @param {Function} [options.now] - Clock returning ms; defaults to Date.now.
  */
+// Suppression is a NAMED outcome (guidelines 4.5: raw null must not encode
+// runtime state); callers compare against admit()'s documented null contract.
+const LOG_EMIT_SUPPRESSED = null;
+
 class LogThrottle {
   constructor(options = {}) {
     this._windowMs = Number.isFinite(options.windowMs) &&
@@ -57,7 +61,7 @@ class LogThrottle {
       return suppressed;
     }
     entry.suppressed += NUM.ONE;
-    return null;
+    return LOG_EMIT_SUPPRESSED;
   }
 }
 

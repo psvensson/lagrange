@@ -1,6 +1,6 @@
 ---
 id: control-plane-truth-local-converged-read
-roadmapRow: RM-0.2-movielens-live-lane
+roadmapRow: RM-0.2-five-node-convergence
 status: sharpening
 graduatesTo: movielens-nodes-priority-recovery-escape
 ---

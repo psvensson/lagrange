@@ -263,7 +263,7 @@ async function deployQueryLoopService() {
   // runtime.access.service.<id> policy row grants its table accesses.
   // Production services get that row from the Bindings deployment surface;
   // this demo scaffolds service_definitions directly, so it must scaffold the
-  // matching policy row the same way — without it the query loop's attributed
+  // matching policy row the same way - without it the query loop's attributed
   // shard SELECT is silently denied and the learned-affinity lane stalls
   // (attributionRows=0, partial snapshots never computed).
   const accessPolicy = JSON.stringify({

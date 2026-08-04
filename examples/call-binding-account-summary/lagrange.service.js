@@ -5,7 +5,7 @@
  *
  * The developer declares data, not deployment wiring: one distributed
  * operation and two HTTP routes. There is NO Binding-name literal
- * anywhere here — the durable `<service>--call--<kebab(op id)>` and
+ * anywhere here - the durable `<service>--call--<kebab(op id)>` and
  * `<service>--request--<kebab(handler id)>` names are the compiler's to
  * mint from these explicit object keys (the generated entry mirrors the
  * exact same derivation, and the deployment records own the authoritative

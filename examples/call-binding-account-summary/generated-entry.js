@@ -5,15 +5,15 @@
  * exists so the sealed service-cell world's fixed exports
  * (handle-request, run, reduce) can be adapted onto the developer's
  * unmodified `lagrange.service.js` descriptor tables. It statically
- * imports that module graph as ordinary ES modules — no Function
- * serialization, no bundling — so ComponentizeJS resolves the developer's
+ * imports that module graph as ordinary ES modules - no Function
+ * serialization, no bundling - so ComponentizeJS resolves the developer's
  * imports itself.
  *
  *   - handle-request: method+path dispatch over the http handlers, each
  *     with a per-handler context whose `call()` routes a declared
  *     operation descriptor to the canonical `lagrange:cell/context`
  *     call-binding host import under the deterministically generated
- *     Binding name `<service>--call--<kebab(operation id)>` — the exact
+ *     Binding name `<service>--call--<kebab(operation id)>` - the exact
  *     name the deployment records own. A raw string target (the demo's
  *     refusal probe) is forwarded verbatim so the host's durable
  *     outbound-call policy is the sole gate.

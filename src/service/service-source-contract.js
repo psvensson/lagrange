@@ -160,12 +160,16 @@ function ownRecord(value) {
   return record;
 }
 
+// Not-a-SQL-statement is a NAMED outcome (guidelines 4.5: raw null must not
+// encode runtime state on a semantic decision boundary).
+const NOT_SQL_STATEMENT_TEXT = null;
+
 function sqlStatementText(statement) {
-  if (!isPlainObject(statement)) return null;
+  if (!isPlainObject(statement)) return NOT_SQL_STATEMENT_TEXT;
   const {kind, text} = ownRecord(statement);
   if (kind !== AUTHORING_DESCRIPTOR_KIND.SQL_STATEMENT ||
       typeof text !== 'string' || text.length === 0) {
-    return null;
+    return NOT_SQL_STATEMENT_TEXT;
   }
   return text;
 }
