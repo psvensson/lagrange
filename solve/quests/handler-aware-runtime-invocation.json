@@ -1,0 +1,56 @@
+{
+  "id": "handler-aware-runtime-invocation",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "One deployed service-cell-v2 artifact serves multiple HTTP routes and multiple distributed operations: request dispatch passes the bound handler_id, CallCellInvoker passes the resolved operation id to the fixed run and reduce exports through the interface mapping, per-binding policy and budgets are enforced per operation, the single-distributed-operation IR restriction lifts for v2 targets, and v1-interface bindings on the same node keep their existing invocation behavior.",
+  "priority": 1,
+  "class": "product",
+  "verificationTemplates": [
+    "admission-gating",
+    "transport-delivery",
+    "concurrency-serialization"
+  ],
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "binding-schema-v3-handler-interfaces",
+    "planDoc": "solve/epics/code-first-service-compiler.md",
+    "draftedAtCommit": "c0a75f260ef13e890b13e283a681bc5b8cfbb36b"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "handler-aware-runtime-invocation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "handler-aware-runtime-invocation-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "handler-aware-runtime-invocation",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "existing-owner-reuse",
+      "statement": "CallCellInvoker's five-step orchestration, the batch executor, and the reduce coordinator remain the owners; no parallel invoker."
+    },
+    {
+      "id": "no-hidden-operation-tag",
+      "statement": "Operation identity travels as the ABI's operation argument; encoding an operation tag inside the arguments JSON is a defect."
+    }
+  ]
+}

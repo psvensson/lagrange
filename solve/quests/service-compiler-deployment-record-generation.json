@@ -1,0 +1,55 @@
+{
+  "id": "service-compiler-deployment-record-generation",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "From a fixed IR the generator reproduces a byte-identical .lagrange tree whose manifest, bindings, access policy, and deployment plan are produced through the existing manifest validator, binding contract, and access-policy normalizer as final authority; each handler calls entry yields exactly one policy allowlist binding and one logical-id-to-generated-binding-name mapping in deployment-plan.json, and no deployment contract rule is re-implemented in the generator.",
+  "priority": 1,
+  "class": "product",
+  "verificationTemplates": [
+    "admission-gating",
+    "harness-fidelity"
+  ],
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "service-compiler-source-contract-ir",
+    "planDoc": "solve/epics/code-first-service-compiler.md",
+    "draftedAtCommit": "c0a75f260ef13e890b13e283a681bc5b8cfbb36b"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-compiler-deployment-record-generation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "service-compiler-deployment-record-generation-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "service-compiler-deployment-record-generation",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "existing-owner-reuse",
+      "statement": "Records are emitted only by calling validateExternalServiceManifest, the deployment-binding contract normalization, and the runtime-access-policy normalizer; a schema literal duplicated into the generator is a defect."
+    },
+    {
+      "id": "generated-name-opacity",
+      "statement": "Generated binding names appear only in .lagrange output; no developer-facing surface documents or accepts them as input."
+    }
+  ]
+}

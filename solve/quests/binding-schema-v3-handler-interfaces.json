@@ -1,0 +1,54 @@
+{
+  "id": "binding-schema-v3-handler-interfaces",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Binding schema_version 3 records whose target declares interface request_v2 or call_v2 plus handler_id and omits export_name validate, normalize, and reach Cell readiness through the existing binding contract, manifest, and access-policy owners, with interface-to-fixed-export mapping owned solely by component-export-resolution; schema_version 2 bindings and *_v1 interfaces normalize and activate byte-for-byte as before.",
+  "priority": 1,
+  "class": "product",
+  "verificationTemplates": [
+    "admission-gating"
+  ],
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "service-cell-v2-generic-dispatch-world",
+    "planDoc": "solve/epics/code-first-service-compiler.md",
+    "draftedAtCommit": "c0a75f260ef13e890b13e283a681bc5b8cfbb36b"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "binding-schema-v3-handler-interfaces",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "binding-schema-v3-handler-interfaces-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "binding-schema-v3-handler-interfaces",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "existing-owner-reuse",
+      "statement": "Schema v3 lands inside the existing binding contract, manifest, and access-policy owners; no parallel validator or new ingress path."
+    },
+    {
+      "id": "backward-compat-fixture",
+      "statement": "A corpus of existing schema_version 2 binding fixtures must normalize to identical output before and after the change."
+    }
+  ]
+}

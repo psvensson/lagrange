@@ -275,15 +275,15 @@ Fast iteration for service authors. The goal is that the path from "I
 changed a line" to "I can test it in the cluster" stays under a few
 seconds for WASM services and under a minute for OCI containers.
 
-| Item | Roadmap state | Scope notes |
-|------|--------|-------|
-| `lagrange service dev-install` zero-ceremony path | 🔲 | Point at local dir, CLI wraps in OCI layout, installs without registry push or full manifest |
-| `lagrange service init` scaffold | 🔲 | Generate minimal manifest + project structure for new services |
-| WASM hot reload in dev mode | 🔲 | File watcher detects changes, rebuilds module, swaps in running cluster without full install cycle |
-| Dev-mode manifest defaults | 🔲 | Minimal required fields for local development; full manifest only required for registry publish |
-| In-process WASM debugging preserved | ✅ | DAP, breakpoints, DWARF, snapshots, replay all work because `wasm_component` loads in-process regardless of OCI packaging |
-| OCI container dev logging | 🔲 | Structured log tailing for container-runtime services during development |
-| Service dev example walkthrough | 🔲 | End-to-end example: create, dev-install, iterate, debug, publish |
+| Id | Item | Roadmap state | Scope notes |
+|----|------|--------|-------|
+| — | `lagrange service dev-install` zero-ceremony path | 🔲 | Point at local dir, CLI wraps in OCI layout, installs without registry push or full manifest |
+| `RM-0.5-il-service-init-scaffold` | `lagrange service init` scaffold | 🔲 | Generate minimal manifest + project structure for new services |
+| — | WASM hot reload in dev mode | 🔲 | File watcher detects changes, rebuilds module, swaps in running cluster without full install cycle |
+| — | Dev-mode manifest defaults | 🔲 | Minimal required fields for local development; full manifest only required for registry publish |
+| — | In-process WASM debugging preserved | ✅ | DAP, breakpoints, DWARF, snapshots, replay all work because `wasm_component` loads in-process regardless of OCI packaging |
+| — | OCI container dev logging | 🔲 | Structured log tailing for container-runtime services during development |
+| — | Service dev example walkthrough | 🔲 | End-to-end example: create, dev-install, iterate, debug, publish |
 
 ### 4. Debugging Tools
 

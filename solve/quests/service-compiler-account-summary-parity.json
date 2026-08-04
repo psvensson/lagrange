@@ -1,0 +1,59 @@
+{
+  "id": "service-compiler-account-summary-parity",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "examples/call-binding-account-summary deploys and passes its existing scenarios built solely from lagrange.service.js through the compiler — generated component entry under the current service-cell world, generated deployment records, and one shared componentize owner — with the hand-authored call-binding-example-contract.js deployment builder and every raw 'summarize-account-activity' binding literal deleted, and a second HTTP route served by the same component via method+path dispatch.",
+  "priority": 1,
+  "class": "product",
+  "verificationTemplates": [
+    "admission-gating",
+    "harness-fidelity"
+  ],
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "service-compiler-deployment-record-generation",
+    "planDoc": "solve/epics/code-first-service-compiler.md",
+    "draftedAtCommit": "c0a75f260ef13e890b13e283a681bc5b8cfbb36b"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-compiler-account-summary-parity",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "service-compiler-account-summary-parity-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "service-compiler-account-summary-parity",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "existing-owner-reuse",
+      "statement": "Deployment flows through the service-lifecycle SQL grammar and the request-cell-call-bridge policy checks unchanged; no bypass of the existing owners."
+    },
+    {
+      "id": "single-componentize-owner",
+      "statement": "Introduce one componentize wrapper module consumed by the generator; migrating the pre-existing inline test and example componentize call sites is optional mechanical follow-up, not scope."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Scenarios fail if the deleted hand-built deployment builder is restored or a raw binding-name literal reappears in example source."
+    }
+  ]
+}
