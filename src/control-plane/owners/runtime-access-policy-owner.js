@@ -685,5 +685,6 @@ export {
   RuntimeAccessPolicyError,
   RuntimeAccessPolicyOwner,
   isOutboundCallAllowed,
+  normalizePolicyInput,
   statementAccesses,
 };

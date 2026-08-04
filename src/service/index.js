@@ -105,3 +105,10 @@ export {
   normalizeServiceDefinition,
   normalizeServiceSource,
 } from './service-source-contract.js';
+
+export {
+  DEPLOYMENT_RECORD_ERROR_CODE,
+  DEPLOYMENT_RECORD_STATUS,
+  buildDeploymentRecords,
+  writeDeploymentTree,
+} from './service-deployment-record-generator.js';
