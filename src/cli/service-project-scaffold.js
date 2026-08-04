@@ -1,4 +1,3 @@
-import fs from 'node:fs';
 import path from 'node:path';
 
 import {
@@ -7,6 +6,7 @@ import {
   EXTERNAL_SERVICE_MEDIA_TYPE,
   validateExternalServiceManifest,
 } from '../service/external-service-manifest.js';
+import {createScaffoldProject} from './service-scaffold-writer.js';
 
 const SERVICE_VERSION = '0.1.0';
 const SERVICE_PORT = 3000;
@@ -14,8 +14,6 @@ const SERVICE_RUNTIME_KIND = 'oci_container';
 const NODE_IMAGE =
   'node@sha256:f598378b5240225e6beab68fa9f356db1fb8efe55173e6d4d8153113bb8f333c';
 const DIGEST_PATH = '/artifact/digest';
-const FILE_MODE = 0o644;
-const DIRECTORY_MODE = 0o755;
 const SERVICE_PROJECT_ERROR_NAME = 'ServiceProjectScaffoldError';
 const SERVICE_ARTIFACT_TYPE = 'oci';
 const SERVICE_EXPORT_NAME = 'serve';
@@ -40,8 +38,6 @@ const SERVICE_PROJECT_PATH = Object.freeze({
 const SERVICE_PROJECT_FILE = Object.freeze({
   DOCKERIGNORE_CONTENT:
     '.git\nnode_modules\ntest\nREADME.md\nlagrange-service.template.json\n',
-  ENCODING: 'utf8',
-  EXCLUSIVE_WRITE_FLAG: 'wx',
 });
 
 const FILE_SYSTEM_ERROR_CODE = Object.freeze({
@@ -253,58 +249,20 @@ function classifyFileSystemError(error, targetDirectory) {
   );
 }
 
-function writeProjectFiles(targetDirectory, files) {
-  fs.mkdirSync(
-    path.join(targetDirectory, SERVICE_PROJECT_PATH.SOURCE_DIRECTORY),
-    {mode: DIRECTORY_MODE},
-  );
-  fs.chmodSync(
-    path.join(targetDirectory, SERVICE_PROJECT_PATH.SOURCE_DIRECTORY),
-    DIRECTORY_MODE,
-  );
-  fs.mkdirSync(
-    path.join(targetDirectory, SERVICE_PROJECT_PATH.TEST_DIRECTORY),
-    {mode: DIRECTORY_MODE},
-  );
-  fs.chmodSync(
-    path.join(targetDirectory, SERVICE_PROJECT_PATH.TEST_DIRECTORY),
-    DIRECTORY_MODE,
-  );
-  for (const [relativePath, content] of files) {
-    const filePath = path.join(targetDirectory, relativePath);
-    fs.writeFileSync(filePath, content, {
-      encoding: SERVICE_PROJECT_FILE.ENCODING,
-      flag: SERVICE_PROJECT_FILE.EXCLUSIVE_WRITE_FLAG,
-      mode: FILE_MODE,
-    });
-    fs.chmodSync(filePath, FILE_MODE);
-  }
-}
-
 function createServiceProject(targetArgument) {
   const targetDirectory = path.resolve(targetArgument);
   const serviceName = path.basename(targetDirectory);
   const manifest = createManifestTemplate(serviceName);
   validateTemplateName(manifest);
   const files = projectFiles(serviceName);
-  let targetCreated = false;
-
-  try {
-    fs.mkdirSync(targetDirectory, {mode: DIRECTORY_MODE});
-    targetCreated = true;
-    fs.chmodSync(targetDirectory, DIRECTORY_MODE);
-    writeProjectFiles(targetDirectory, files);
-  } catch (error) {
-    if (targetCreated) {
-      fs.rmSync(targetDirectory, {recursive: true, force: true});
-    }
-    throw classifyFileSystemError(error, targetDirectory);
-  }
-
-  return Object.freeze({
-    name: serviceName,
-    targetDirectory,
-    files: Object.freeze(files.map(([relativePath]) => relativePath)),
+  return createScaffoldProject({
+    targetArgument,
+    subdirectories: [
+      SERVICE_PROJECT_PATH.SOURCE_DIRECTORY,
+      SERVICE_PROJECT_PATH.TEST_DIRECTORY,
+    ],
+    files,
+    classifyError: classifyFileSystemError,
   });
 }
 

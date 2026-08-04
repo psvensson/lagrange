@@ -96,6 +96,32 @@ function parseFlagValue(command, args, flag, startIndex) {
   return value;
 }
 
+function parseDeployFlags(command, args, parsed) {
+  for (let index = 1; index < args.length; index += 1) {
+    const token = args[index];
+    if (token === PIPELINE_FLAG.LAYOUT) {
+      parsed.layoutPath = parseFlagValue(command, args, token, index);
+      index += 1;
+    } else if (token === PIPELINE_FLAG.IDEMPOTENCY_KEY) {
+      parsed.idempotencyKey = parseFlagValue(command, args, token, index);
+      index += 1;
+    } else {
+      throw new ServicePipelineUsageError(
+        `${PIPELINE_USAGE_MESSAGE.UNKNOWN_OPTION}: ${token}`);
+    }
+  }
+  if (typeof parsed.layoutPath !== 'string') {
+    throw new ServicePipelineUsageError(
+      PIPELINE_USAGE_MESSAGE.DEPLOY_LAYOUT_REQUIRED);
+  }
+  if (typeof parsed.idempotencyKey !== 'string' ||
+      parsed.idempotencyKey.trim().length === 0 ||
+      parsed.idempotencyKey.length > MAXIMUM_IDEMPOTENCY_KEY_LENGTH) {
+    throw new ServicePipelineUsageError(
+      PIPELINE_USAGE_MESSAGE.IDEMPOTENCY_KEY_REQUIRED);
+  }
+}
+
 function parsePipelineCommand(argv) {
   const [command, ...args] = argv;
   if (args.length === 0 ||
@@ -106,29 +132,7 @@ function parsePipelineCommand(argv) {
   const projectDirectory = args[0];
   const parsed = {command, projectDirectory};
   if (command === PIPELINE_COMMAND.DEPLOY) {
-    for (let index = 1; index < args.length; index += 1) {
-      const token = args[index];
-      if (token === PIPELINE_FLAG.LAYOUT) {
-        parsed.layoutPath = parseFlagValue(command, args, token, index);
-        index += 1;
-      } else if (token === PIPELINE_FLAG.IDEMPOTENCY_KEY) {
-        parsed.idempotencyKey = parseFlagValue(command, args, token, index);
-        index += 1;
-      } else {
-        throw new ServicePipelineUsageError(
-          `${PIPELINE_USAGE_MESSAGE.UNKNOWN_OPTION}: ${token}`);
-      }
-    }
-    if (typeof parsed.layoutPath !== 'string') {
-      throw new ServicePipelineUsageError(
-        PIPELINE_USAGE_MESSAGE.DEPLOY_LAYOUT_REQUIRED);
-    }
-    if (typeof parsed.idempotencyKey !== 'string' ||
-        parsed.idempotencyKey.trim().length === 0 ||
-        parsed.idempotencyKey.length > MAXIMUM_IDEMPOTENCY_KEY_LENGTH) {
-      throw new ServicePipelineUsageError(
-        PIPELINE_USAGE_MESSAGE.IDEMPOTENCY_KEY_REQUIRED);
-    }
+    parseDeployFlags(command, args, parsed);
     return parsed;
   }
   if (args.length !== 1) {

@@ -62,6 +62,16 @@ function selectActual(actuals, invocationId) {
   return ordered[selection % ordered.length];
 }
 
+// The resolved route carries the bound operation id for v3 bindings
+// (the generic-dispatch ABI's first argument); schema v2 keeps the
+// pre-v3 invocation shape with no operation tag.
+function resolvedHandlerId(binding) {
+  return binding.declaration.schema_version ===
+    DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 ?
+    binding.declaration.target.handler_id :
+    null;
+}
+
 class CallBindingRouteResolver {
   constructor(options = {}) {
     this._systemTableCacheProvider =
@@ -187,11 +197,7 @@ class CallBindingRouteResolver {
     return Object.freeze({
       bindingDigest: definition.binding_digest,
       bindingVersionId: binding.bindingVersionId,
-      handlerId:
-        binding.declaration.schema_version ===
-          DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 ?
-          binding.declaration.target.handler_id :
-          null,
+      handlerId: resolvedHandlerId(binding),
       hostNodeId,
       name: request.name,
       nodeId: actual.node_id,

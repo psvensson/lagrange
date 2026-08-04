@@ -154,6 +154,26 @@ function runInitCommand(args) {
   }
 }
 
+// The pipeline and lifecycle owners load behind a dynamic import (the
+// local-only import boundary the CLI tests pin); both share one dispatch
+// shape — resolve the runner export, forward the args, and map any
+// rejection to a generic failure line.
+function dispatchToOwner(load, runnerExport, args) {
+  return load()
+    .then((module) => module[runnerExport](args))
+    .catch((error) => {
+      process.stderr.write(`lagrange service failed: ${error.message}\n`);
+      return SERVICE_COMMAND_EXIT_CODE.FAILURE;
+    });
+}
+
+function isHelpRequestFor(command, args) {
+  return args.length === 2 && SERVICE_HELP_FLAGS.has(args[1]) &&
+    (command === SERVICE_COMMAND.INIT ||
+      SERVICE_LIFECYCLE_COMMANDS.has(command) ||
+      SERVICE_PIPELINE_COMMANDS.has(command));
+}
+
 function runServiceCommand(args) {
   if (args.length === 0 ||
       (args.length === 1 && SERVICE_HELP_FLAGS.has(args[0]))) {
@@ -166,10 +186,7 @@ function runServiceCommand(args) {
       `unknown option: ${args[0]}`,
     );
   }
-  if (args.length === 2 && SERVICE_HELP_FLAGS.has(args[1]) &&
-      (args[0] === SERVICE_COMMAND.INIT ||
-        SERVICE_LIFECYCLE_COMMANDS.has(args[0]) ||
-        SERVICE_PIPELINE_COMMANDS.has(args[0]))) {
+  if (isHelpRequestFor(args[0], args)) {
     printHelp();
     return SERVICE_COMMAND_EXIT_CODE.SUCCESS;
   }
@@ -177,12 +194,8 @@ function runServiceCommand(args) {
     return runInitCommand(args.slice(1));
   }
   if (SERVICE_PIPELINE_COMMANDS.has(args[0])) {
-    return loadServicePipelineCommand()
-      .then(({runServicePipelineCommand}) => runServicePipelineCommand(args))
-      .catch((error) => {
-        process.stderr.write(`lagrange service failed: ${error.message}\n`);
-        return SERVICE_COMMAND_EXIT_CODE.FAILURE;
-      });
+    return dispatchToOwner(
+      loadServicePipelineCommand, 'runServicePipelineCommand', args);
   }
   if (!SERVICE_LIFECYCLE_COMMANDS.has(args[0])) {
     return usageError(
@@ -190,12 +203,8 @@ function runServiceCommand(args) {
       `unknown command: ${args[0]}`,
     );
   }
-  return loadServiceLifecycleCommand()
-    .then(({runServiceLifecycleCommand}) => runServiceLifecycleCommand(args))
-    .catch((error) => {
-      process.stderr.write(`lagrange service failed: ${error.message}\n`);
-      return SERVICE_COMMAND_EXIT_CODE.FAILURE;
-    });
+  return dispatchToOwner(
+    loadServiceLifecycleCommand, 'runServiceLifecycleCommand', args);
 }
 
 export {runServiceCommand};

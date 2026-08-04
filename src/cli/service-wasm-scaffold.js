@@ -26,9 +26,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {createScaffoldProject} from './service-scaffold-writer.js';
+
 const SERVICE_VERSION = '0.1.0';
-const FILE_MODE = 0o644;
-const DIRECTORY_MODE = 0o755;
 const SERVICE_PACKAGE_TYPE = 'module';
 const SERVICE_TEST_SCRIPT = 'node --test';
 const SERVICE_NODE_ENGINE = '>=22.0.0';
@@ -61,7 +61,6 @@ const AUTHORING_SOURCE_DIRECTORY =
 
 const WASM_PROJECT_FILE = Object.freeze({
   ENCODING: 'utf8',
-  EXCLUSIVE_WRITE_FLAG: 'wx',
 });
 
 const FILE_SYSTEM_ERROR_CODE = Object.freeze({
@@ -324,50 +323,20 @@ function classifyFileSystemError(error, targetDirectory) {
   );
 }
 
-function writeProjectFiles(targetDirectory, files) {
-  for (const directory of [
-    WASM_PROJECT_PATH.AUTHORING_DIRECTORY,
-    WASM_PROJECT_PATH.SOURCE_DIRECTORY,
-    WASM_PROJECT_PATH.TEST_DIRECTORY,
-  ]) {
-    const directoryPath = path.join(targetDirectory, directory);
-    fs.mkdirSync(directoryPath, {mode: DIRECTORY_MODE});
-    fs.chmodSync(directoryPath, DIRECTORY_MODE);
-  }
-  for (const [relativePath, content] of files) {
-    const filePath = path.join(targetDirectory, relativePath);
-    fs.writeFileSync(filePath, content, {
-      encoding: WASM_PROJECT_FILE.ENCODING,
-      flag: WASM_PROJECT_FILE.EXCLUSIVE_WRITE_FLAG,
-      mode: FILE_MODE,
-    });
-    fs.chmodSync(filePath, FILE_MODE);
-  }
-}
-
 function createWasmServiceProject(targetArgument) {
   const targetDirectory = path.resolve(targetArgument);
   const serviceName = path.basename(targetDirectory);
   validateServiceName(serviceName, targetDirectory);
   const files = projectFiles(serviceName);
-  let targetCreated = false;
-
-  try {
-    fs.mkdirSync(targetDirectory, {mode: DIRECTORY_MODE});
-    targetCreated = true;
-    fs.chmodSync(targetDirectory, DIRECTORY_MODE);
-    writeProjectFiles(targetDirectory, files);
-  } catch (error) {
-    if (targetCreated) {
-      fs.rmSync(targetDirectory, {recursive: true, force: true});
-    }
-    throw classifyFileSystemError(error, targetDirectory);
-  }
-
-  return Object.freeze({
-    name: serviceName,
-    targetDirectory,
-    files: Object.freeze(files.map(([relativePath]) => relativePath)),
+  return createScaffoldProject({
+    targetArgument,
+    subdirectories: [
+      WASM_PROJECT_PATH.AUTHORING_DIRECTORY,
+      WASM_PROJECT_PATH.SOURCE_DIRECTORY,
+      WASM_PROJECT_PATH.TEST_DIRECTORY,
+    ],
+    files,
+    classifyError: classifyFileSystemError,
   });
 }
 

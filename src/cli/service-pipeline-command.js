@@ -35,6 +35,9 @@ import {
   emitServiceEntry,
 } from '../service/service-entry-generator.js';
 import {
+  emitServiceTypings,
+} from '../service/service-typings-generator.js';
+import {
   buildDeploymentRecords,
   writeDeploymentTree,
 } from '../service/service-deployment-record-generator.js';
@@ -56,6 +59,7 @@ const SERVICE_PIPELINE_STAGE = Object.freeze({
 });
 const SERVICE_MODULE_FILE = 'lagrange.service.js';
 const GENERATED_ENTRY_FILE = 'generated-entry.js';
+const GENERATED_TYPINGS_FILE = 'runtime-types.d.ts';
 const GENERATED_ENTRY_MODULE_SPECIFIER = `./${SERVICE_MODULE_FILE}`;
 const LAGRANGE_DIRECTORY = '.lagrange';
 const COMPONENT_FILE = 'component.wasm';
@@ -179,13 +183,22 @@ async function runGenerate({projectDirectory, writeOutput}) {
   }
   const written = await writeDeploymentTree(
     result.records, projectDirectory);
+  const typings = await emitServiceTypings({
+    ir,
+    outputPath: path.join(projectDirectory, GENERATED_TYPINGS_FILE),
+  }).catch((error) => {
+    throw pipelineFailure(
+      SERVICE_PIPELINE_STAGE.GENERATE,
+      `typings emission failed: ${error.message}`, error);
+  });
   await writeOutput(JSON.stringify({
     bindings: result.records.bindings.map((binding) => binding.name),
     entry: entry.outputPath,
     handlers: ir.handlers.map((handler) => handler.id),
     operations: ir.operations.map((operation) => operation.id),
     service: ir.name,
-    written: [entry.outputPath, ...written],
+    typings: typings.outputPath,
+    written: [entry.outputPath, typings.outputPath, ...written],
   }));
   return {ir, records: result.records};
 }
@@ -339,6 +352,21 @@ async function runDeploy({
       stage);
     created.push(binding.name);
   }
+  const configured = await configureAccessPolicies(
+    execute, bindings, accessPolicies, stage);
+  await writeOutput(JSON.stringify({
+    bindings: created,
+    packageId,
+    policies: configured,
+    service: manifest.name,
+  }));
+  return {bindings: created, packageId, policies: configured};
+}
+
+// The access-policy phase: replay every record's policy, then complete
+// coverage for any request Binding the records left without one.
+async function configureAccessPolicies(
+  execute, bindings, accessPolicies, stage) {
   const configured = [];
   for (const policy of accessPolicies) {
     await executeDeployStatement(
@@ -365,13 +393,7 @@ async function runDeploy({
     }, stage);
     configured.push(binding.name);
   }
-  await writeOutput(JSON.stringify({
-    bindings: created,
-    packageId,
-    policies: configured,
-    service: manifest.name,
-  }));
-  return {bindings: created, packageId, policies: configured};
+  return configured;
 }
 
 export {

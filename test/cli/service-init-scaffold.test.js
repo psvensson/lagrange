@@ -48,7 +48,7 @@ const SERVICE_OWNER_IMPORTS = Object.freeze({
   ],
   'src/cli/service-project-scaffold.js': [
     '../service/external-service-manifest.js',
-    'node:fs',
+    './service-scaffold-writer.js',
     'node:path',
   ],
   'src/sea-entry.js': [
