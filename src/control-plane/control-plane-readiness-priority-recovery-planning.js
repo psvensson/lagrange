@@ -1,5 +1,9 @@
 import {ControlPlaneReadinessEvidenceReasons} from './control-plane-readiness-evidence-reasons.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
+import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+
+const PRIORITY_RECOVERY_PLANNING_PROJECTION_BUILD_SECTION =
+  'priority_recovery_planning_projection_build';
 
 const {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
@@ -460,6 +464,19 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
   }
 
   buildPriorityRecoveryPlanningProjection(planningSnapshot = null) {
+    // Sync-section attribution (instrumentation-only, quest
+    // publication-recovery-snapshot-starvation-relief): profiled as part of
+    // the dominant seed event-loop cost; the count measures how often the
+    // projection is actually rebuilt (CL-033/CL-034 memo misses included).
+    return trackSyncSection(
+      PRIORITY_RECOVERY_PLANNING_PROJECTION_BUILD_SECTION,
+      () => this.buildPriorityRecoveryPlanningProjectionUntracked(
+        planningSnapshot,
+      ),
+    );
+  }
+
+  buildPriorityRecoveryPlanningProjectionUntracked(planningSnapshot = null) {
     if (!planningSnapshot || typeof planningSnapshot !== 'object') {
       return null;
     }

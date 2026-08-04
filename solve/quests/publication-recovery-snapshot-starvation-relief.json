@@ -1,0 +1,55 @@
+{
+  "id": "publication-recovery-snapshot-starvation-relief",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "node-0's continuous event-loop starvation in the MovieLens live lane is relieved at its profiled source: the control-plane publication-recovery/priority-recovery readiness snapshot construction path (the normalization cluster around normalizeDistinctStringArray/normalizePriorityRecoveryStringList/buildPublicationRecoveryGateSnapshot, its synchronous better-sqlite3 statement executions, and the allocation pressure they generate - measured as the dominant frames across 12 profiled gap windows on run 2026-08-04T11-25-03) no longer starves the seed's event loop: the live lane's host-scheduling budget holds on node-0 (blocked <=20% of log span, no single gap >10s, total gaps <=60s) with readiness/publication-recovery semantics unchanged (same decisions from the same evidence), via measured-cadence reduction, per-version snapshot reuse, or batching that yields the loop - the lever chosen from measurement, not guess.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/changes/AGENT-HANDOFF-2026-08-04.md",
+    "closesCL": [],
+    "parentQuest": "raft-churn-sync-section-attribution",
+    "planDoc": "solve/epics/control-plane-truth-local-converged-read.md",
+    "draftedAtCommit": "351ab312a830cdeea2a9bc140492f5417cd11dfd"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "publication-recovery-snapshot-starvation-relief-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "readiness-semantics-unchanged",
+      "statement": "Readiness, publication-recovery, and priority-recovery DECISIONS must be unchanged: the same evidence yields the same gate states, blockers, and reason codes. Only when/how often the snapshots are constructed, how their inputs are read, and how intermediate values are allocated/reused may change. No budget, threshold, or workload change in the live lane."
+    },
+    {
+      "id": "measure-before-lever",
+      "statement": "Before implementing a lever, establish the rebuild cadence and per-call cost of the targeted snapshot path with deterministic evidence (test or instrumented run) so the lever targets the measured dominant term (cadence x per-call cost x allocation), not a guessed one. Inherited rulesOut stand: reconcile/heal sweeps are non-dominant and are not this quest's target."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Before any live run, prove the lever deterministically: a test that pins the changed construction path (cache hit/reuse or deferred batch) produces byte-identical snapshot decisions versus the unchanged path on the same evidence, and red-on-revert for the mechanism. Live runs are serial and respect the thermal policy (hold if CPU package >=75C or NVMe Sensor 2 >=78C)."
+    }
+  ]
+}

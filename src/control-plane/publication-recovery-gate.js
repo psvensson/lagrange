@@ -35,6 +35,10 @@ import {
   buildPrioritySpreadDecision,
   filterProvidedPriorityRecoveryReasonCodes,
 } from './publication-recovery-priority-spread.js';
+import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+
+const PUBLICATION_RECOVERY_GATE_SNAPSHOT_BUILD_SECTION =
+  'publication_recovery_gate_snapshot_build';
 
 const PUBLICATION_RECOVERY_GATE_STATE = Object.freeze({
   UNPUBLISHED_OBSERVATION: 'unpublished_observation',
@@ -147,6 +151,17 @@ function resolvePublicationRecoveryGateState(context = {}) {
 }
 
 function buildPublicationRecoveryGateSnapshot(options = {}) {
+  // Sync-section attribution (instrumentation-only, quest
+  // publication-recovery-snapshot-starvation-relief): profiled as part of the
+  // dominant seed event-loop cost; the count measures how often the gate
+  // snapshot is actually rebuilt (memo misses included) per live run.
+  return trackSyncSection(
+    PUBLICATION_RECOVERY_GATE_SNAPSHOT_BUILD_SECTION,
+    () => buildPublicationRecoveryGateSnapshotUntracked(options),
+  );
+}
+
+function buildPublicationRecoveryGateSnapshotUntracked(options = {}) {
   const providedPublicationOwnerStream = normalizeProvidedPublicationOwnerStream(
     options.publicationOwnerStream,
   );
