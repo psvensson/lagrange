@@ -195,6 +195,22 @@ function prepareTestRun(file, options) {
     TAP_FAIL_TODO: '1',
     _TAPJS_PROCESSINFO_COVERAGE_: '0',
   };
+  // Honor per-test {timeout: N} options written in the file: this tap
+  // version silently CAPS every test at the 30s default - neither the
+  // test option nor t.setTimeout() can extend past it (verified
+  // empirically 2026-08-04; ten test files carried inert 45s-360s
+  // options and passed only while faster than 30s, then flaked on the
+  // slower CI runner). Only the TAP_TIMEOUT env genuinely extends the
+  // cap, so lift it to the LARGEST option declared in the file. An
+  // explicit caller TAP_TIMEOUT (e.g. test:aggregate-sensitive-pregate)
+  // still wins; the per-file kill (--timeout-ms, default 600s) still
+  // bounds the whole process.
+  if (env.TAP_TIMEOUT === undefined) {
+    const declaredTimeoutSeconds = largestDeclaredTimeoutSeconds(absoluteFile);
+    if (declaredTimeoutSeconds !== null) {
+      env.TAP_TIMEOUT = String(declaredTimeoutSeconds);
+    }
+  }
   return {
     absoluteFile,
     cwd,
@@ -206,6 +222,28 @@ function prepareTestRun(file, options) {
     stderrFile,
     stdoutFd,
   };
+}
+
+const TIMEOUT_OPTION_PATTERN = /\{[^{}]*\btimeout:\s*(\d{4,})/gu;
+const MILLISECONDS_PER_SECOND = 1000;
+const TAP_DEFAULT_TIMEOUT_SECONDS = 30;
+
+function largestDeclaredTimeoutSeconds(absoluteFile) {
+  let source;
+  try {
+    source = readFileSync(absoluteFile, TEXT_ENCODING);
+  } catch {
+    return null;
+  }
+  let largestMs = 0;
+  for (const match of source.matchAll(TIMEOUT_OPTION_PATTERN)) {
+    const value = Number(match[1]);
+    if (Number.isFinite(value) && value > largestMs) {
+      largestMs = value;
+    }
+  }
+  const seconds = Math.ceil(largestMs / MILLISECONDS_PER_SECOND);
+  return seconds > TAP_DEFAULT_TIMEOUT_SECONDS ? seconds : null;
 }
 
 function finalizeTestRun(run, processResult, elapsedMs) {
