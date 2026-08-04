@@ -1,6 +1,9 @@
 import {ControlPlaneReadinessEvidenceReasons} from './control-plane-readiness-evidence-reasons.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
 import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+import {
+  PRIORITY_RECOVERY_PLANNING_PROJECTION,
+} from './control-plane-readiness-constants.js';
 
 const PRIORITY_RECOVERY_PLANNING_PROJECTION_BUILD_SECTION =
   'priority_recovery_planning_projection_build';
@@ -625,7 +628,7 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
         typeof planningSnapshot.clusterIncarnationFence === 'object' ?
         planningSnapshot.clusterIncarnationFence :
         localPlanningAdmission?.clusterIncarnationFence || null;
-    return Object.freeze({
+    const projection = {
       ...planningSnapshot,
       publicationEpoch,
       publicationRecoveryGate,
@@ -656,7 +659,13 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
       ...(admissionState !== null ? {admissionState} : {}),
       ...(admissionReasonCodes !== null ? {admissionReasonCodes} : {}),
       ...(clusterIncarnationFence ? {clusterIncarnationFence} : {}),
-    });
+    };
+    Object.defineProperty(
+      projection,
+      PRIORITY_RECOVERY_PLANNING_PROJECTION,
+      {value: true},
+    );
+    return Object.freeze(projection);
   }
 }
 

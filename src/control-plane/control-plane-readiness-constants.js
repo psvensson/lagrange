@@ -142,6 +142,21 @@ const CONTROL_PLANE_READINESS_DEFAULT = Object.freeze({
  * alongside admission, dispatch, and progression decisions.
  * @enum {string}
  */
+// Brand carried (non-enumerably, so spreads and hand-merges DROP it) by every
+// object assembled by buildPriorityRecoveryPlanningProjection. Downstream
+// re-derivation sites whose answer is a matrix-proven pure function of the
+// projection object itself (isPriorityControlPlaneRecoveryActive,
+// hasMembershipPublicationRecoveryGateEvidence) read the branded fields
+// directly instead of rebuilding a gate/projection per call - the measured
+// dominant share of the seed's snapshot-build storm (quest
+// publication-recovery-snapshot-starvation-relief). Re-projection is NOT
+// idempotent (epoch/status normalization and live admission evidence), so the
+// brand must never short-circuit buildPriorityRecoveryPlanningProjection
+// itself.
+const PRIORITY_RECOVERY_PLANNING_PROJECTION = Symbol(
+  'priorityRecoveryPlanningProjection',
+);
+
 const READINESS_SNAPSHOT_KEY = Object.freeze({
   NODE_ID: 'nodeId',
   DIMENSIONS: 'dimensions',
@@ -165,6 +180,7 @@ export {
   CONTROL_PLANE_READINESS_OWNER,
   CONTROL_PLANE_READINESS_REASON,
   CONTROL_PLANE_READINESS_SUBSYSTEM,
+  PRIORITY_RECOVERY_PLANNING_PROJECTION,
   PROJECTION_READINESS_CONTRACT_STATE,
   PROVISIONING_ELIGIBILITY_STATE,
   READINESS_SNAPSHOT_KEY,

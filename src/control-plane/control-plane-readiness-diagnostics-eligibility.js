@@ -1,6 +1,9 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {ControlPlaneReadinessParticipationBase} from './control-plane-readiness-participation-base.js';
 import {installControlPlaneReadinessSnapshotStoreMethods} from './control-plane-readiness-snapshot-store.js';
+import {
+  PRIORITY_RECOVERY_PLANNING_PROJECTION,
+} from './control-plane-readiness-constants.js';
 
 const LOCAL_STR_NODE_STATE_REPORTER = 'node_state_reporter';
 const LOCAL_STR_ATTEMPT_TIMEOUT = 'attempt_timeout';
@@ -479,6 +482,20 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
       typeof membershipPublicationPlanningSnapshot !== 'object'
     ) {
       return false;
+    }
+    // A branded (unmodified builder-output) projection already derived
+    // priorityRecoveryActive from exactly this merge — matrix-proven
+    // equivalent — so skip rebuilding a full gate snapshot per call (the
+    // measured 10x-per-readiness-build share of the seed's snapshot storm).
+    // Hand-merged/retained snapshots lose the non-enumerable brand via
+    // spread and keep the re-derive below.
+    if (
+      membershipPublicationPlanningSnapshot[
+        PRIORITY_RECOVERY_PLANNING_PROJECTION
+      ] === true
+    ) {
+      return membershipPublicationPlanningSnapshot
+        .priorityRecoveryActive === true;
     }
     const providedPublicationRecoveryGate =
       membershipPublicationPlanningSnapshot.publicationRecoveryGate &&

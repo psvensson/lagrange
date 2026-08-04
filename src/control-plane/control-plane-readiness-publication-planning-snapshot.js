@@ -1,5 +1,8 @@
 import {ControlPlaneReadinessPriorityRecoveryPlanning} from './control-plane-readiness-priority-recovery-planning.js';
 import {CONTROL_PLANE_READINESS_PLANNING_SHARED as SHARED} from './control-plane-readiness-planning-shared.js';
+import {
+  PRIORITY_RECOVERY_PLANNING_PROJECTION,
+} from './control-plane-readiness-constants.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -11,8 +14,14 @@ const {
 class ControlPlaneReadinessPublicationPlanningSnapshot extends
   ControlPlaneReadinessPriorityRecoveryPlanning {
   hasMembershipPublicationRecoveryGateEvidence(planningSnapshot = null) {
+    // A branded (unmodified builder-output) projection already carries every
+    // field this predicate reads - matrix-proven equivalent to re-projecting
+    // it - so skip the per-call rebuild. Hand-merged snapshots lose the
+    // non-enumerable brand via spread and keep the re-projection.
     const priorityRecoveryProjection =
-      this.buildPriorityRecoveryPlanningProjection(planningSnapshot);
+      planningSnapshot?.[PRIORITY_RECOVERY_PLANNING_PROJECTION] === true ?
+        planningSnapshot :
+        this.buildPriorityRecoveryPlanningProjection(planningSnapshot);
     if (!priorityRecoveryProjection) {
       return false;
     }
