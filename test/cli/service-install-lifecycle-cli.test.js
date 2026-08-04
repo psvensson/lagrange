@@ -236,6 +236,7 @@ describe('service lifecycle CLI contract', () => {
 
     assert.deepEqual(imports.static.sort(), [
       './service-project-scaffold.js',
+      './service-wasm-scaffold.js',
     ]);
     assert.deepEqual(imports.dynamic.sort(), [
       LIFECYCLE_OWNER_SPECIFIER,

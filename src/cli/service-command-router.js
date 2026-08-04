@@ -3,6 +3,11 @@ import {
   ServiceProjectScaffoldError,
   createServiceProject,
 } from './service-project-scaffold.js';
+import {
+  ServiceWasmScaffoldError,
+  WASM_PROJECT_ERROR_CODE,
+  createWasmServiceProject,
+} from './service-wasm-scaffold.js';
 
 const SERVICE_COMMAND_EXIT_CODE = Object.freeze({
   SUCCESS: 0,
@@ -25,6 +30,7 @@ const SERVICE_COMMAND = Object.freeze({
 const SERVICE_COMMAND_FLAG = Object.freeze({
   HELP_LONG: '--help',
   HELP_SHORT: '-h',
+  OCI: '--oci',
   OPTION_PREFIX: '-',
 });
 
@@ -45,26 +51,29 @@ const SERVICE_HELP_FLAGS = Object.freeze(new Set([
 ]));
 
 const SERVICE_HELP = `Usage:
-  lagrange service init <directory>
+  lagrange service init <directory> [--oci]
   lagrange service generate <project-directory>
   lagrange service build <project-directory>
   lagrange service deploy <project-directory> --layout <oci-layout-path> --idempotency-key <key>
   lagrange service install <manifest-file> --idempotency-key <key> [--config <json-file>]
-  lagrange service dev-install <project-directory> --idempotency-key <key> --platform <platform> --source-date-epoch <epoch> [--output-root <directory>]
   lagrange service list
   lagrange service status <service-name>
   lagrange service remove <service-name> --idempotency-key <key>
 
 Commands:
-  init <directory>                 Create an OCI-container Node service source project
+  init <directory>                 Create a code-first WASM service project (lagrange.service.js);
+                                   pass --oci for the legacy OCI-container Node scaffold
   generate <project-directory>     Compile lagrange.service.js into the generated entry and .lagrange deployment records
   build <project-directory>        Componentize the generated entry into .lagrange/component.wasm and its OCI layout
   deploy <project-directory>       Replay the generated records over the service-lifecycle SQL grammar
   install <manifest-file>          Submit a pinned remote OCI service manifest
-  dev-install <project-directory>  Build local OCI layout and submit its pinned manifest
   list                             List installed service catalog rows
   status <service-name>            Show one service catalog row
   remove <service-name>            Record idempotent service removal intent
+
+Low-level compatibility:
+  dev-install <project-directory>  Build local OCI layout and submit its pinned manifest
+                                   (low-level; prefer init + generate + build + deploy)
 `;
 
 const SERVICE_LIFECYCLE_COMMANDS = Object.freeze(new Set([
@@ -95,15 +104,21 @@ function usageError(code, message) {
 }
 
 function initializationError(error) {
-  const code = error instanceof ServiceProjectScaffoldError ?
+  const isInvalidName =
+    error instanceof ServiceProjectScaffoldError &&
+      error.code === SERVICE_PROJECT_SCAFFOLD_ERROR_CODE.INVALID_NAME ||
+    error instanceof ServiceWasmScaffoldError &&
+      error.code === WASM_PROJECT_ERROR_CODE.INVALID_NAME;
+  const code = error instanceof ServiceProjectScaffoldError ||
+    error instanceof ServiceWasmScaffoldError ?
     error.code : SERVICE_PROJECT_SCAFFOLD_ERROR_CODE.WRITE_FAILED;
   process.stderr.write(`lagrange service init failed [${code}]: ${error.message}\n`);
-  return code === SERVICE_PROJECT_SCAFFOLD_ERROR_CODE.INVALID_NAME ?
+  return isInvalidName ?
     SERVICE_COMMAND_EXIT_CODE.USAGE : SERVICE_COMMAND_EXIT_CODE.FAILURE;
 }
 
 function runInitCommand(args) {
-  if (args.length !== 1) {
+  if (args.length < 1 || args.length > 2) {
     return usageError(
       SERVICE_COMMAND_ERROR_CODE.USAGE,
       SERVICE_COMMAND_MESSAGE.INIT_DIRECTORY_REQUIRED,
@@ -116,9 +131,23 @@ function runInitCommand(args) {
       `unknown option: ${targetArgument}`,
     );
   }
+  const flags = args.slice(1);
+  for (const flag of flags) {
+    if (flag !== SERVICE_COMMAND_FLAG.OCI) {
+      return usageError(
+        SERVICE_COMMAND_ERROR_CODE.UNKNOWN_OPTION,
+        `unknown option: ${flag}`,
+      );
+    }
+  }
+  const oci = flags.includes(SERVICE_COMMAND_FLAG.OCI);
   try {
-    const result = createServiceProject(targetArgument);
-    process.stdout.write(`Created OCI-container service project at ${result.targetDirectory}\n`);
+    const result = oci ?
+      createServiceProject(targetArgument) :
+      createWasmServiceProject(targetArgument);
+    const kind = oci ? 'OCI-container' : 'WASM';
+    process.stdout.write(
+      `Created ${kind} service project at ${result.targetDirectory}\n`);
     return SERVICE_COMMAND_EXIT_CODE.SUCCESS;
   } catch (error) {
     return initializationError(error);
