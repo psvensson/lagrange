@@ -1,4 +1,7 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {
+  trackStorageReservationReconcile,
+} from '../diagnostics/raft-churn-sync-sections.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 
@@ -423,6 +426,19 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    * @return {Promise<Object>} Reconciliation result counts.
    */
   async reconcileReservations() {
+    // Sync-section attribution (instrumentation-only): this periodic sweep is
+    // the dominant continuous churn candidate on the seed; tag it for the gap
+    // watchdog. See raft-churn-sync-sections.js.
+    return trackStorageReservationReconcile(
+      () => this.runReservationReconcileSweep(),
+    );
+  }
+
+  /**
+   * @return {Promise<Object>} Reconciliation result counts.
+   * @private
+   */
+  async runReservationReconcileSweep() {
     this.logger.info(REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_RECONCILE_START);
 
     const now = Date.now();

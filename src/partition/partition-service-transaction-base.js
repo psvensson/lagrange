@@ -1,5 +1,8 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceEntryApplyBase} from './partition-service-entry-apply-base.js';
+import {
+  trackStuckTransactionHeal,
+} from '../diagnostics/raft-churn-sync-sections.js';
 
 
 const {
@@ -328,6 +331,20 @@ class PartitionServiceTransactionBase extends PartitionServiceEntryApplyBase {
   }
 
   enforcePreparedStateHoldTimeouts(nowMs = Date.now()) {
+    // Sync-section attribution (instrumentation-only): this synchronous sweep
+    // (and its heal-deferred warn path) runs continuously on the seed; tag it
+    // for the gap watchdog. See raft-churn-sync-sections.js.
+    return trackStuckTransactionHeal(
+      () => this.runPreparedStateHoldTimeoutSweep(nowMs),
+    );
+  }
+
+  /**
+   * @param {number} nowMs
+   * @return {number} Number of released stuck transactions.
+   * @private
+   */
+  runPreparedStateHoldTimeoutSweep(nowMs) {
     const expiredPreparedSessions = this.collectExpiredPreparedSessions(nowMs);
     const expiredActiveSessions = this.collectExpiredActiveSessions(nowMs);
     if (

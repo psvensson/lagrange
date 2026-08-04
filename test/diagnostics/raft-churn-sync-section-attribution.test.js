@@ -192,3 +192,174 @@ test('wrapped functions propagate thrown errors unchanged', async (t) => {
   t.equal(thrown?.message, 'rebind-boom', 'exception propagated unchanged');
   t.end();
 });
+
+test('storage_reservation_reconcile section is recorded around the ' +
+  'reservation reconcile sweep and the sweep behavior is unchanged',
+async (t) => {
+  const {applyRebalanceCoordinatorReservationLifecycleMethods} = await import(
+    '../../src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js'
+  );
+  class TestCoordinator {
+    constructor() {
+      this.logger = {
+        info: () => {},
+        warn: () => {},
+        error: () => {},
+        debug: () => {},
+      };
+      // First authoritative read (expired-active) returns one stale row; the
+      // second (all-active) returns none, so the sweep expires exactly one.
+      const reads = [
+        {success: true, rows: [{reservation_id: 'res-1', operation_id: 'op-1'}]},
+        {success: true, rows: []},
+      ];
+      this.controlPlaneSystemTableGateway = {
+        readAuthoritativeRows: async () => reads.shift(),
+      };
+      this.stats = {reservationsReconciled: 0};
+      this.events = [];
+      this.transitions = [];
+    }
+    emit(eventName, payload) {
+      this.events.push([eventName, payload]);
+    }
+  }
+  applyRebalanceCoordinatorReservationLifecycleMethods(TestCoordinator);
+  const coordinator = new TestCoordinator();
+  coordinator.transitionActiveReservationById =
+    async (reservationId, status) => {
+      coordinator.transitions.push([reservationId, status]);
+      return {success: true, changed: true};
+    };
+
+  const site = RAFT_CHURN_SYNC_SECTION.STORAGE_RESERVATION_RECONCILE;
+  const before = siteSnapshot(site)?.count || 0;
+  const result = await coordinator.reconcileReservations();
+  const after = siteSnapshot(site)?.count || 0;
+
+  t.equal(after, before + 1, 'the reconcile sweep entered its sync section');
+  t.same(
+    result,
+    {expired: 1, orphansReleased: 0},
+    'reconcile result counts unchanged (one stale reservation expired)',
+  );
+  t.same(
+    coordinator.transitions,
+    [['res-1', 'expired']],
+    'the stale reservation transitioned exactly as before',
+  );
+  t.equal(
+    coordinator.stats.reservationsReconciled,
+    1,
+    'stats accumulation unchanged',
+  );
+  t.equal(
+    coordinator.events.length,
+    1,
+    'reservationReconciled event still emitted',
+  );
+  t.end();
+});
+
+test('storage_reservation_reconcile async wrapper records the section only ' +
+  'after settle and propagates rejections unchanged', async (t) => {
+  const {trackStorageReservationReconcile} = await import(
+    '../../src/diagnostics/raft-churn-sync-sections.js'
+  );
+  const site = RAFT_CHURN_SYNC_SECTION.STORAGE_RESERVATION_RECONCILE;
+
+  const before = siteSnapshot(site)?.count || 0;
+  let observedMidSpan = null;
+  const value = await trackStorageReservationReconcile(async () => {
+    await Promise.resolve();
+    observedMidSpan = (siteSnapshot(site)?.count || 0) === before;
+    return 'reconcile-value';
+  });
+  t.equal(value, 'reconcile-value', 'resolved value propagated unchanged');
+  t.ok(
+    observedMidSpan,
+    'section is still open across the await (span, not first-segment only)',
+  );
+  t.equal(
+    siteSnapshot(site)?.count || 0,
+    before + 1,
+    'section recorded once after the async sweep settled',
+  );
+
+  let rejected = null;
+  try {
+    await trackStorageReservationReconcile(async () => {
+      throw new Error('reconcile-boom');
+    });
+  } catch (error) {
+    rejected = error;
+  }
+  t.equal(rejected?.message, 'reconcile-boom', 'rejection propagated unchanged');
+  t.equal(
+    siteSnapshot(site)?.count || 0,
+    before + 2,
+    'section exits on rejection too (finally path)',
+  );
+  t.end();
+});
+
+test('stuck_transaction_heal section is recorded around the hold-timeout ' +
+  'sweep and the heal-deferred behavior is unchanged', async (t) => {
+  const {PartitionServiceTransactionBase} = await import(
+    '../../src/partition/partition-service-transaction-base.js'
+  );
+  const {PARTITION_SERVICE_SHARED} = await import(
+    '../../src/partition/partition-service-shared.js'
+  );
+  const {RaftRole} = PARTITION_SERVICE_SHARED;
+  const warns = [];
+  const service = Object.assign(
+    Object.create(PartitionServiceTransactionBase.prototype),
+    {
+      partitionId: 'p-1',
+      role: RaftRole.LEADER,
+      preparedStateHoldTimeoutMs: 1000,
+      preparedTransactions: new Map([
+        ['session-1', {preparedAt: 0}],
+      ]),
+      activeTransactions: new Map(),
+      isSoloReplicaGroup: () => false,
+      logger: {
+        info: () => {},
+        warn: (message, context) => warns.push([message, context]),
+        error: () => {},
+        debug: () => {},
+      },
+    },
+  );
+
+  const site = RAFT_CHURN_SYNC_SECTION.STUCK_TRANSACTION_HEAL;
+  const before = siteSnapshot(site)?.count || 0;
+  // preparedAt=0 with now=5000 exceeds the 1000ms hold; leader role defers.
+  const released = service.enforcePreparedStateHoldTimeouts(5000);
+  const after = siteSnapshot(site)?.count || 0;
+
+  t.equal(after, before + 1, 'the heal sweep entered its sync section');
+  t.equal(released, 0, 'leader-role heal still deferred (returns 0)');
+  t.equal(warns.length, 1, 'heal-deferred warn still emitted once');
+  t.equal(
+    warns[0][1]?.expiredPreparedSessionCount,
+    1,
+    'deferred warn context unchanged',
+  );
+  t.ok(
+    service.preparedTransactions.has('session-1'),
+    'deferred heal leaves the stuck session in place (no behavior change)',
+  );
+
+  // The cheap early-return path (nothing expired) is also inside the section.
+  service.preparedTransactions.clear();
+  const releasedEmpty = service.enforcePreparedStateHoldTimeouts(5000);
+  t.equal(releasedEmpty, 0, 'empty sweep still returns 0');
+  t.equal(
+    siteSnapshot(site)?.count || 0,
+    before + 2,
+    'empty sweep is also recorded (the continuous cadence is measurable)',
+  );
+  t.end();
+});

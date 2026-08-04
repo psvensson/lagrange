@@ -11,7 +11,11 @@
  * propagates its return value / thrown error unchanged.
  */
 
-import {trackSyncSection} from './event-loop-gap-watchdog.js';
+import {
+  enterSyncSection,
+  exitSyncSection,
+  trackSyncSection,
+} from './event-loop-gap-watchdog.js';
 
 const RAFT_CHURN_SYNC_SECTION = Object.freeze({
   // StartupRuntimeSurfaceOwner.bindControlPlaneServices sweep (rebind all
@@ -25,6 +29,13 @@ const RAFT_CHURN_SYNC_SECTION = Object.freeze({
   // PartitionService.scheduleLeaderOwnedActivation activate callback (the
   // leader-path leaf; includes reconstructPreparedState).
   LEADER_ACTIVATION: 'leader_activation',
+  // RebalanceCoordinator.reconcileReservations periodic sweep (expire stale
+  // + release orphan storage reservations; the continuous post-formation
+  // churn site measured at 30-41 runs/min on the seed).
+  STORAGE_RESERVATION_RECONCILE: 'storage_reservation_reconcile',
+  // PartitionServiceTransactionBase.enforcePreparedStateHoldTimeouts sweep
+  // (stuck-transaction heal / heal-deferred path; continuous on the seed).
+  STUCK_TRANSACTION_HEAL: 'stuck_transaction_heal',
 });
 
 function trackControlPlaneRebindSweep(fn) {
@@ -52,10 +63,40 @@ function trackLeaderActivation(fn) {
   return trackSyncSection(RAFT_CHURN_SYNC_SECTION.LEADER_ACTIVATION, fn);
 }
 
+/**
+ * Span variant of trackSyncSection for the reservation-reconcile sweep, whose
+ * body is an async chain of authoritative control-plane reads. On the seed
+ * those reads resolve in-process, so the await chain drains in microtasks and
+ * the span approximates one synchronous block; an await that genuinely yields
+ * over-attributes (never hides) reconcile time. Instrumentation only - the
+ * wrapped call's resolution/rejection is propagated unchanged.
+ * @param {Function} fn - Async sweep to measure.
+ * @return {Promise<*>}
+ */
+async function trackStorageReservationReconcile(fn) {
+  const token = enterSyncSection(
+    RAFT_CHURN_SYNC_SECTION.STORAGE_RESERVATION_RECONCILE,
+  );
+  try {
+    return await fn();
+  } finally {
+    exitSyncSection(
+      RAFT_CHURN_SYNC_SECTION.STORAGE_RESERVATION_RECONCILE,
+      token,
+    );
+  }
+}
+
+function trackStuckTransactionHeal(fn) {
+  return trackSyncSection(RAFT_CHURN_SYNC_SECTION.STUCK_TRANSACTION_HEAL, fn);
+}
+
 export {
   RAFT_CHURN_SYNC_SECTION,
   trackControlPlaneRebindSweep,
   trackRaftTimingApplySweep,
   trackReplicaRegistrationSweep,
   trackLeaderActivation,
+  trackStorageReservationReconcile,
+  trackStuckTransactionHeal,
 };
