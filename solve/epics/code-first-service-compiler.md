@@ -112,6 +112,25 @@ ABI); 9–10 are product surface over a proven core.
 
 ## Decision log
 
+- 2026-08-04 (rung 10 / ladder complete) — `service-compiler-editor-typings`
+  SOLVED and landed (2873c2bcd): the generator emits ServiceRequest (the
+  full normalized envelope), per-operation Row/Operation interfaces,
+  OperationHandles, HandlerContext, and per-handler HandlerContexts
+  narrowed to each handler's IR `allowedOperations`; the WASM scaffold
+  projects a checkJs jsconfig, JSDoc-typed templates, a @ts-nocheck
+  vendored authoring lib, and an initial runtime-types.d.ts computed by
+  the real generator from a drift-pinned template IR — fresh and
+  post-generate scaffolds both type-check clean under `tsc -p`
+  (test-pinned). Taken over mid-flight after the authoring session was
+  stopped; hardened through three adversarial verification rounds
+  (round-1 REJECT on statement coverage, round-3 APPROVE with
+  settled-tree hash attestation, round-4 byte-level CONFIRM of the
+  landing fingerprint). The single-contract owner guard was re-pinned to
+  the landed v3 binding shape (exactly two version constants, one
+  normalizeTargetV3 fork, legacy-split patterns and V4+ still banned) —
+  consistent with sealed decisions 3/5/7. With rungs 1–9 previously
+  landed, the ten-rung ladder is COMPLETE.
+
 - 2026-08-04 — Epic authored from Peter's service-compiler proposal after an
   independent verification pass confirmed its code claims (world exports at
   `wit/world.wit:89-97`, hardcoded run/reduce names in `call-cell-invoker.js`,
