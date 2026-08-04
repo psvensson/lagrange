@@ -21,9 +21,39 @@ const LOCAL_STR_MERGE_EXECUTION_FAILURE = 'merge_execution_failure';
 const LOCAL_STR_MERGE_EXECUTION_DEFERRED = 'merge_execution_deferred';
 const LOCAL_STR_PARTITION_ID = 'partition_id';
 const LOCAL_STR_TABLE_ID = 'table_id';
+const LOCAL_STR_EPOCH_EFFECT_DETAIL =
+  ': expected exactly 1 row update for workflow ';
 const POST_ADMISSION_EXECUTION_FAILURE_OUTCOME = Object.freeze({
   NOT_RETRYABLE: Symbol('post_admission_execution_failure_not_retryable'),
 });
+
+/**
+ * Assert an epoch-changing mutation landed exactly one row. A zero-row
+ * "success" (duplicate/coalesced delivery, stale where-clause) means the
+ * durable row did NOT change; advancing in-memory status on that outcome
+ * silently applies an epoch flip the durable state never saw.
+ * @param {Object} mutationResult - Gateway mutation result.
+ * @param {Object} workflow - Workflow state (workflowId used in message).
+ * @return {void}
+ */
+function assertManagedMergeEpochMutationEffect(mutationResult, workflow) {
+  if (mutationResult?.success === false) {
+    throw new Error(
+      mutationResult.error || MANAGED_MERGE_ERROR_MSG.EPOCH_PERSIST_EFFECT_FAILED,
+    );
+  }
+  const affectedRows = Number(
+    mutationResult?.partitionResult?.affectedRows ??
+      mutationResult?.affectedRows,
+  );
+  if (!Number.isFinite(affectedRows) || affectedRows !== 1) {
+    throw new Error(
+      MANAGED_MERGE_ERROR_MSG.EPOCH_PERSIST_EFFECT_FAILED +
+      LOCAL_STR_EPOCH_EFFECT_DETAIL +
+      `${workflow?.workflowId}, observed ${affectedRows}`,
+    );
+  }
+}
 
 /**
  * Durable persistence methods for ManagedMergeWorkflow.
@@ -163,7 +193,9 @@ class ManagedMergeWorkflowPersistenceMethods {
     if (!cdcIntegrationService ||
         typeof cdcIntegrationService.updateSystemTableRow !==
           LOCAL_STR_FUNCTION) {
-      return;
+      throw new Error(
+        MANAGED_MERGE_ERROR_MSG.TRANSITION_PERSIST_UNAVAILABLE,
+      );
     }
 
     const pendingPartitionVersion = Number(
@@ -189,20 +221,27 @@ class ManagedMergeWorkflowPersistenceMethods {
       pendingPartitionVersion,
     );
 
-    await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-      tableName: TABLES.TABLES,
-      whereClause: {[LOCAL_STR_TABLE_ID]: workflow.tableId},
-      data: updatePayload,
-    }, this.buildManagedMergeMutationOptions({
-      allowPendingVisibility: true,
-      expectedCacheFields: {
-        pending_partition_version:
-          updatePayload.pending_partition_version,
-        partition_transition_state: workflow.status,
-        partition_transition_metadata: serializedMetadata,
-      },
-    }));
+    const isEpochTransition = workflow.status ===
+        PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE ||
+      workflow.status === PARTITION_TRANSITION_STATE.FAILED;
+    const mutationResult = await this.getControlPlaneSystemTableGateway()
+      .submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.TABLES,
+        whereClause: {[LOCAL_STR_TABLE_ID]: workflow.tableId},
+        data: updatePayload,
+      }, this.buildManagedMergeMutationOptions({
+        allowPendingVisibility: !isEpochTransition,
+        expectedCacheFields: {
+          pending_partition_version:
+            updatePayload.pending_partition_version,
+          partition_transition_state: workflow.status,
+          partition_transition_metadata: serializedMetadata,
+        },
+      }));
+    if (isEpochTransition) {
+      assertManagedMergeEpochMutationEffect(mutationResult, workflow);
+    }
   }
 
   /**
@@ -310,15 +349,19 @@ class ManagedMergeWorkflowPersistenceMethods {
    * @private
    */
   async promoteSiblingPartitionVersion(partitionId, targetVersion) {
-    await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-      tableName: TABLES.PARTITIONS,
-      whereClause: {[LOCAL_STR_PARTITION_ID]: partitionId},
-      data: {
-        partition_version: targetVersion,
-        updated_at: this.now(),
-      },
-    }, this.buildManagedMergeMutationOptions({skipCacheWait: true}));
+    const mutationResult = await this.getControlPlaneSystemTableGateway()
+      .submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.PARTITIONS,
+        whereClause: {[LOCAL_STR_PARTITION_ID]: partitionId},
+        data: {
+          partition_version: targetVersion,
+          updated_at: this.now(),
+        },
+      }, this.buildManagedMergeMutationOptions({skipCacheWait: true}));
+    assertManagedMergeEpochMutationEffect(mutationResult, {
+      workflowId: `sibling:${partitionId}`,
+    });
     this.logger.info(MANAGED_MERGE_LOG_MSG.SIBLING_CARRIED_FORWARD, {
       partitionId,
       targetVersion,
@@ -335,23 +378,25 @@ class ManagedMergeWorkflowPersistenceMethods {
    * @private
    */
   async persistTerminalTransitionClear(workflow) {
-    await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-      tableName: TABLES.TABLES,
-      whereClause: {[LOCAL_STR_TABLE_ID]: workflow.tableId},
-      data: {
-        partition_transition_state: null,
-        partition_transition_metadata: null,
-        pending_partition_version: null,
-        updated_at: this.now(),
-      },
-    }, this.buildManagedMergeMutationOptions({
-      allowPendingVisibility: true,
-      expectedCacheFields: {
-        partition_transition_state: null,
-        partition_transition_metadata: null,
-      },
-    }));
+    const mutationResult = await this.getControlPlaneSystemTableGateway()
+      .submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.TABLES,
+        whereClause: {[LOCAL_STR_TABLE_ID]: workflow.tableId},
+        data: {
+          partition_transition_state: null,
+          partition_transition_metadata: null,
+          pending_partition_version: null,
+          updated_at: this.now(),
+        },
+      }, this.buildManagedMergeMutationOptions({
+        allowPendingVisibility: false,
+        expectedCacheFields: {
+          partition_transition_state: null,
+          partition_transition_metadata: null,
+        },
+      }));
+    assertManagedMergeEpochMutationEffect(mutationResult, workflow);
     this.logger.info(MANAGED_MERGE_LOG_MSG.TERMINAL_TRANSITION_CLEARED, {
       workflowId: workflow.workflowId,
       tableId: workflow.tableId,

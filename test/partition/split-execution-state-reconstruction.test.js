@@ -102,8 +102,8 @@ test('reconstructSplitExecutionState rebuilds transient execution ' +
     'reconstructed handle must start with empty pending entries',
   );
   t.equal(
-    result.flushInFlight,
-    false,
+    result.flushPromise,
+    null,
     'reconstructed handle must start with no flush in flight',
   );
   t.equal(
@@ -276,6 +276,10 @@ test('handleSplitReplicationAfterWrite routes writes correctly ' +
       PartitionService.prototype.normalizeSplitTransitionMetadata,
     cloneSplitEntry:
       PartitionService.prototype.cloneSplitEntry,
+    mirrorCutoverActiveSplitWrite:
+      PartitionService.prototype.mirrorCutoverActiveSplitWrite,
+    drainSplitReplicationQueueQuietly:
+      PartitionService.prototype.drainSplitReplicationQueueQuietly,
     async replaySplitEntry(entry, _metadata) {
       queuedEntries.push(entry.sql);
     },

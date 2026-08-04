@@ -232,7 +232,7 @@ test('runSplitReplicationWorkflow emits snapshot_started, ' +
       metadata,
       phase: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
       pendingEntries: [],
-      flushInFlight: false,
+      flushPromise: null,
       startedAt: Date.now(),
       lastError: null,
     },

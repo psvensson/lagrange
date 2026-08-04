@@ -134,7 +134,7 @@ function reconstructSplitExecutionStateForService(service, durableState) {
     metadata,
     phase,
     pendingEntries: [],
-    flushInFlight: false,
+    flushPromise: null,
     startedAt: Date.now(),
     lastError: null,
   };

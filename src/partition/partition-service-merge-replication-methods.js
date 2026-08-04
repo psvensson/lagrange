@@ -13,6 +13,9 @@ import {
   resolveMergeDescriptorEpochEvidenceForService,
 } from './partition-service-merge-replication-state.js';
 import {
+  extractSplitMirrorIdentity,
+} from './partition-split-routing.js';
+import {
   PARTITION_SERVICE_DEFAULT,
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LOG_MSG,
@@ -128,7 +131,7 @@ class PartitionServiceMergeReplicationMethods {
       metadata,
       phase: PARTITION_TRANSITION_STATE.MERGE_BACKFILLING,
       pendingEntries: [],
-      flushInFlight: false,
+      flushPromise: null,
       startedAt: Date.now(),
       lastError: null,
     };
@@ -431,14 +434,16 @@ class PartitionServiceMergeReplicationMethods {
    * @param {Object} metadata - Merge metadata.
    * @param {string} sql - SQL statement.
    * @param {Array} params - Statement parameters.
+   * @param {Object} [options] - Mirrored write identity/routing options.
    * @return {Promise<void>}
    * @private
    */
-  async routeMergeMirroredWrite(metadata, sql, params) {
+  async routeMergeMirroredWrite(metadata, sql, params, options = {}) {
     return this.routeSplitMirroredWrite(
       metadata.targetPartitionId,
       sql,
       params,
+      options,
     );
   }
 
@@ -507,7 +512,7 @@ class PartitionServiceMergeReplicationMethods {
    */
   async mirrorCutoverActiveMergeWrite(entry, mergeReplication) {
     if (mergeReplication.pendingEntries.length > 0 ||
-        mergeReplication.flushInFlight) {
+        mergeReplication.flushPromise !== null) {
       mergeReplication.pendingEntries.push(this.cloneSplitEntry(entry));
       await this.drainMergeReplicationQueueQuietly(mergeReplication);
       return;
@@ -545,28 +550,47 @@ class PartitionServiceMergeReplicationMethods {
   }
 
   /**
-   * Flush queued post-snapshot merge deltas in source order.
+   * Flush queued post-snapshot merge deltas in source order. The
+   * in-flight flush is exposed as a joinable promise so concurrent
+   * callers await the SAME drain instead of returning while entries
+   * remain queued.
    * @return {Promise<void>}
    * @private
    */
-  async flushMergeReplicationQueue() {
+  flushMergeReplicationQueue() {
     const mergeReplication = this.mergeReplication;
-    if (!mergeReplication || mergeReplication.flushInFlight) {
-      return;
+    if (!mergeReplication) {
+      return Promise.resolve();
     }
-    mergeReplication.flushInFlight = true;
-    try {
-      while (mergeReplication.pendingEntries.length > 0) {
-        const entry = mergeReplication.pendingEntries.shift();
-        try {
-          await this.replayMergeEntry(entry, mergeReplication.metadata);
-        } catch (error) {
-          mergeReplication.pendingEntries.unshift(entry);
-          throw error;
+    if (mergeReplication.flushPromise !== null) {
+      return mergeReplication.flushPromise;
+    }
+    const flushPromise = this.drainMergeReplicationQueue(mergeReplication)
+      .finally(() => {
+        if (mergeReplication.flushPromise === flushPromise) {
+          mergeReplication.flushPromise = null;
         }
+      });
+    mergeReplication.flushPromise = flushPromise;
+    return flushPromise;
+  }
+
+  /**
+   * Drain queued merge entries in source order, re-queueing the head
+   * entry on failure so ordering is preserved for the next flush.
+   * @param {Object} mergeReplication - Active merge replication handle.
+   * @return {Promise<void>}
+   * @private
+   */
+  async drainMergeReplicationQueue(mergeReplication) {
+    while (mergeReplication.pendingEntries.length > 0) {
+      const entry = mergeReplication.pendingEntries.shift();
+      try {
+        await this.replayMergeEntry(entry, mergeReplication.metadata);
+      } catch (error) {
+        mergeReplication.pendingEntries.unshift(entry);
+        throw error;
       }
-    } finally {
-      mergeReplication.flushInFlight = false;
     }
   }
 
@@ -585,6 +609,7 @@ class PartitionServiceMergeReplicationMethods {
       metadata,
       entry.sql,
       entry.params || [],
+      extractSplitMirrorIdentity(entry),
     );
   }
 

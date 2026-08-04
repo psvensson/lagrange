@@ -10,13 +10,11 @@
     "parentQuest": "durable-cluster-identity"
   },
   "doneWhen": {
-    "probe": "test-files",
+    "probe": "scenario-harness",
     "args": {
-      "files": [
-        "test/control-plane/replica-dispatch-state-publication.test.js",
-        "test/bootstrap/node-joining-control-plane-heartbeat.test.js"
-      ],
-      "consecutive": 3
+      "scenario": "node-incarnation-fencing",
+      "consecutive": 3,
+      "metric": "priority"
     }
   },
   "frontiers": [
@@ -24,9 +22,10 @@
       "id": "incarnation-mint-and-propagate",
       "priority": 1,
       "metric": {
-        "probe": "test-files",
+        "probe": "scenario-harness",
         "args": {
-          "files": ["test/bootstrap/node-joining-control-plane-heartbeat.test.js"]
+          "scenario": "node-incarnation-fencing",
+          "metric": "priority"
         }
       }
     },
@@ -34,9 +33,10 @@
       "id": "incarnation-fence-receivers",
       "priority": 1,
       "metric": {
-        "probe": "test-files",
+        "probe": "scenario-harness",
         "args": {
-          "files": ["test/control-plane/replica-dispatch-state-publication.test.js"]
+          "scenario": "node-incarnation-fencing",
+          "metric": "priority"
         }
       }
     }

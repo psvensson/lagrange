@@ -3,13 +3,15 @@ import {
   WORKFLOW_TRANSITION_FIELD,
   PARTICIPANT_ACK_RESULT,
   PARTICIPANT_ACK_FIELD,
-  ACK_REJECTION_DIAGNOSTIC_FIELD,
   buildTransitionIdempotencyKey,
 } from './workflow-constants.js';
 import {
   claimDurableWorkflow,
   transitionDurableWorkflow,
 } from './durable-workflow-storage-ownership.js';
+import {
+  emitWorkflowAckRejectionDiagnostic,
+} from './workflow-ack-rejection-diagnostics.js';
 
 const LOCAL_STR_UPDATEDAT = 'updatedAt';
 const LOCAL_STR_FUNCTION = 'function';
@@ -63,20 +65,50 @@ class DurableWorkflowCoordinator {
 
   /**
    * Update and persist one workflow state record.
+   *
+   * The candidate is persisted BEFORE the in-memory record advances, and
+   * a persistence rejection restores the previous state — the in-memory
+   * registry must never run ahead of the durable row (registerWorkflow
+   * already rolls back this way).
    * @param {string} workflowId - Workflow ID.
    * @param {Object} updates - Workflow field updates.
    * @return {Promise<Object>} Updated workflow state.
    */
   async updateWorkflow(workflowId, updates = {}) {
     const workflow = this.requireWorkflow(workflowId);
-    Object.assign(workflow, updates);
-    if (updates.participants instanceof Map) {
-      workflow.participants = new Map(updates.participants.entries());
+    const previousState = {...workflow};
+    const candidate = {
+      ...workflow,
+      ...updates,
+      participants: updates.participants instanceof Map ?
+        new Map(updates.participants.entries()) :
+        workflow.participants,
+      updatedAt: Object.prototype.hasOwnProperty.call(
+        updates,
+        LOCAL_STR_UPDATEDAT,
+      ) ?
+        updates.updatedAt :
+        this.now(),
+    };
+    try {
+      await this.persistWorkflow(candidate);
+    } catch (error) {
+      for (const key of Object.keys(workflow)) {
+        if (!Object.prototype.hasOwnProperty.call(previousState, key)) {
+          delete workflow[key];
+        }
+      }
+      Object.assign(workflow, previousState);
+      workflow.participants = previousState.participants;
+      throw error;
     }
-    if (!Object.prototype.hasOwnProperty.call(updates, LOCAL_STR_UPDATEDAT)) {
-      workflow.updatedAt = this.now();
+    for (const key of Object.keys(workflow)) {
+      if (!Object.prototype.hasOwnProperty.call(candidate, key)) {
+        delete workflow[key];
+      }
     }
-    await this.persistWorkflow(workflow);
+    Object.assign(workflow, candidate);
+    workflow.participants = candidate.participants;
     return workflow;
   }
 
@@ -719,11 +751,6 @@ class DurableWorkflowCoordinator {
 
   /**
    * Emit a typed diagnostic record for a rejected acknowledgement.
-   *
-   * Invokes the onAckRejection callback (if wired) with a frozen
-   * diagnostic record containing workflow identity, participant key,
-   * rejection result, reason, and fence/status context.
-   *
    * @param {string} workflowId - Workflow ID.
    * @param {string} participantKey - Participant key.
    * @param {Object} context - Rejection context fields.
@@ -731,28 +758,12 @@ class DurableWorkflowCoordinator {
    * @private
    */
   emitAckRejectionDiagnostic(workflowId, participantKey, context = {}) {
-    if (typeof this.onAckRejection !== LOCAL_STR_FUNCTION) {
-      return null;
-    }
-    const record = Object.freeze({
-      [ACK_REJECTION_DIAGNOSTIC_FIELD.WORKFLOW_ID]: workflowId,
-      [ACK_REJECTION_DIAGNOSTIC_FIELD.PARTICIPANT_KEY]: participantKey,
-      [ACK_REJECTION_DIAGNOSTIC_FIELD.REJECTION_RESULT]:
-        context.rejectionResult || null,
-      [ACK_REJECTION_DIAGNOSTIC_FIELD.REASON]:
-        context.reason || null,
-      [ACK_REJECTION_DIAGNOSTIC_FIELD.RECEIVED_STATUS]:
-        context.receivedStatus || null,
-      [ACK_REJECTION_DIAGNOSTIC_FIELD.CURRENT_STATUS]:
-        context.currentStatus || null,
-      [ACK_REJECTION_DIAGNOSTIC_FIELD.RECEIVED_FENCE_TOKEN]:
-        context.receivedFenceToken ?? null,
-      [ACK_REJECTION_DIAGNOSTIC_FIELD.CURRENT_FENCE_TOKEN]:
-        context.currentFenceToken ?? null,
-      [ACK_REJECTION_DIAGNOSTIC_FIELD.TIMESTAMP]: this.now(),
-    });
-    this.onAckRejection(record);
-    return record;
+    return emitWorkflowAckRejectionDiagnostic(
+      this,
+      workflowId,
+      participantKey,
+      context,
+    );
   }
 
   /**

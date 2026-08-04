@@ -9,13 +9,11 @@
     "specRef": "join-path-audit-finding-3-no-cluster-identity"
   },
   "doneWhen": {
-    "probe": "test-files",
+    "probe": "scenario-harness",
     "args": {
-      "files": [
-        "test/bootstrap/rejoin-hints.test.js",
-        "test/bootstrap/bootstrap-api-rejoin.test.js"
-      ],
-      "consecutive": 3
+      "scenario": "durable-cluster-identity",
+      "consecutive": 3,
+      "metric": "priority"
     }
   },
   "frontiers": [
@@ -23,9 +21,10 @@
       "id": "cluster-identity-mint-and-persist",
       "priority": 1,
       "metric": {
-        "probe": "test-files",
+        "probe": "scenario-harness",
         "args": {
-          "files": ["test/bootstrap/rejoin-hints.test.js"]
+          "scenario": "durable-cluster-identity",
+          "metric": "priority"
         }
       }
     },
@@ -33,9 +32,10 @@
       "id": "cluster-identity-join-gate",
       "priority": 1,
       "metric": {
-        "probe": "test-files",
+        "probe": "scenario-harness",
         "args": {
-          "files": ["test/bootstrap/bootstrap-api-rejoin.test.js"]
+          "scenario": "durable-cluster-identity",
+          "metric": "priority"
         }
       }
     }

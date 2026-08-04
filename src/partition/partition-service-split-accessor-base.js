@@ -191,8 +191,12 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     try {
       await this.backfillSplitSnapshot(snapshot, metadata);
       splitReplication.phase = PARTITION_TRANSITION_STATE.SPLIT_CATCHUP;
-      await this.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.CATCHUP_READY);
+      // Drain every queued live write BEFORE acknowledging catch-up
+      // readiness: the owner may apply the durable cutover on this ack,
+      // and it must never fire while this source holds a known
+      // undelivered delta (merge already enforces this ordering).
       await this.flushSplitReplicationQueue();
+      await this.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.CATCHUP_READY);
       await this.markSplitCutoverActive(metadata);
       splitReplication.phase = PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
       await this.flushSplitReplicationQueue();
@@ -442,48 +446,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
     ) {
       return;
     }
-    try {
-      await this.replaySplitEntry(entry, splitReplication.metadata);
-    } catch (error) {
-      splitReplication.pendingEntries.push(this.cloneSplitEntry(entry));
-      splitReplication.lastError = error.message;
-      this.logger.warn(
-        PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_MIRROR_FAILED,
-        {partitionId: this.partitionId, error: error.message},
-      );
-      this.flushSplitReplicationQueue().catch((flushError) => {
-        splitReplication.lastError = flushError.message;
-        this.logger.warn(
-          PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_MIRROR_FAILED,
-          {partitionId: this.partitionId, error: flushError.message},
-        );
-      });
-    }
-  }
-  /**
-   * Flush queued post-snapshot deltas in source order.
-   * @return {Promise<void>}
-   * @private
-   */
-  async flushSplitReplicationQueue() {
-    const splitReplication = this.splitReplication;
-    if (!splitReplication || splitReplication.flushInFlight) {
-      return;
-    }
-    splitReplication.flushInFlight = true;
-    try {
-      while (splitReplication.pendingEntries.length > 0) {
-        const entry = splitReplication.pendingEntries.shift();
-        try {
-          await this.replaySplitEntry(entry, splitReplication.metadata);
-        } catch (error) {
-          splitReplication.pendingEntries.unshift(entry);
-          throw error;
-        }
-      }
-    } finally {
-      splitReplication.flushInFlight = false;
-    }
+    await this.mirrorCutoverActiveSplitWrite(entry, splitReplication);
   }
   /**
    * Clone a write entry before placing it in the split catch-up queue.
@@ -514,12 +477,14 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
    * @param {string} partitionId - Child partition ID.
    * @param {string} sql - SQL statement.
    * @param {Array} params - Statement parameters.
+   * @param {Object} [options] - Mirrored write identity/routing options.
    * @return {Promise<void>}
    * @private
    */
-  async routeSplitMirroredWrite(partitionId, sql, params) {
+  async routeSplitMirroredWrite(partitionId, sql, params, options = {}) {
     return routePartitionSplitMirroredWrite(partitionId, sql, params, {
       queryExecutor: this.sqlQueryEngine?.queryExecutor || null,
+      ...options,
     });
   }
   /**

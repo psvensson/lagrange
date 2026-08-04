@@ -458,6 +458,12 @@ const MANAGED_MERGE_ERROR_MSG = Object.freeze({
   TARGET_PROVISIONING_NOT_VIABLE:
     'Managed merge target provisioning precheck could not satisfy the ' +
     'minimum routable cohort',
+  TRANSITION_PERSIST_UNAVAILABLE:
+    'Merge transition persistence unavailable: durable control-plane ' +
+    'write path not ready',
+  EPOCH_PERSIST_EFFECT_FAILED:
+    'Merge epoch-changing tables update did not take effect: durable ' +
+    'control-plane write path not ready',
 });
 
 const MANAGED_MERGE_LOG_MSG = Object.freeze({

@@ -74,8 +74,10 @@ const RATCHET_TARGETS = [
     // 2026-08-03: tightened 838/31997 -> 836/31886 (measured after
     // extracting the shared two-node call-cell deployment fixture for
     // the HTTP-to-call composition proof; one-way-baseline rule).
-    baselineCloneGroupCount: 836,
-    baselineDuplicatedLineCount: 31886,
+    // 2026-08-04: tightened 836/31886 -> 834/31824 (measured after the
+    // split/merge mirror-hardening batch; one-way-baseline rule).
+    baselineCloneGroupCount: 834,
+    baselineDuplicatedLineCount: 31824,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

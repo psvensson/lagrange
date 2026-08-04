@@ -12,14 +12,14 @@ import {
   DISTRIBUTED_PLAN_FIELD as PLAN_FIELD,
   DISTRIBUTED_PLANNER_DEFAULT,
   DISTRIBUTED_PREDICATE_SHAPE,
+  DISTRIBUTED_QUERY_ERROR_MSG,
   DISTRIBUTED_ROLE_HINT,
   DISTRIBUTED_STATEMENT_TYPE,
 } from './distributed-query-plan-constants.js';
 import {renderSqliteIdentifier} from '../sqlite-identifier.js';
-
-const LOCAL_STR_NULL = 'NULL';
-const LOCAL_STR_SQUOTE_SQUOTE = '\'\'';
-const LOCAL_STR_QUESTION = '?';
+import {
+  renderPlannerExpression,
+} from './distributed-query-planner-expression-renderer.js';
 
 const PLAN_HASH = Object.freeze({
   SHA1: 'sha1',
@@ -160,6 +160,7 @@ class DistributedQueryPlanner {
    */
   planUpdate(ast, params = [], _options = {}) {
     const tableAlias = ast.table;
+    this.assertUpdateDoesNotMutatePartitionKey(ast);
     const tableGraph = [{
       tableName: ast.table,
       tableAlias,
@@ -193,6 +194,40 @@ class DistributedQueryPlanner {
         {},
       ),
     };
+  }
+
+  /**
+   * Reject an UPDATE that assigns the table's partition key column.
+   *
+   * A key-changing UPDATE re-homes the row: extraction from the OLD key
+   * (mirror routing) drops the write from every child when the new key
+   * falls on the other side of an in-flight split, while extraction from
+   * the NEW key skips the old home's DELETE — no execution order is
+   * correct, and outside a split the row is silently stranded in the
+   * old partition. Reject at plan time (fail closed) instead.
+   * @param {Object} ast - UPDATE AST.
+   * @return {void}
+   */
+  assertUpdateDoesNotMutatePartitionKey(ast) {
+    const tableInfo = this.getTableInfo(ast?.table);
+    const partitionKey = tableInfo?.partition_key ?? tableInfo?.partitionKey;
+    if (typeof partitionKey !== 'string' || partitionKey.length === 0) {
+      return;
+    }
+    const assignments = Array.isArray(ast?.assignments) ?
+      ast.assignments :
+      [];
+    const mutatesPartitionKey = assignments.some(
+      (assignment) => typeof assignment?.column === 'string' &&
+        assignment.column.toLowerCase() === partitionKey.toLowerCase(),
+    );
+    if (mutatesPartitionKey) {
+      throw new Error(
+        DISTRIBUTED_QUERY_ERROR_MSG.PARTITION_KEY_UPDATE_REJECTED_PREFIX +
+        `'${partitionKey}'` +
+        DISTRIBUTED_QUERY_ERROR_MSG.PARTITION_KEY_UPDATE_REJECTED_SUFFIX,
+      );
+    }
   }
 
   /**
@@ -725,60 +760,7 @@ class DistributedQueryPlanner {
    * @private
    */
   renderExpression(expr) {
-    if (!expr || typeof expr !== 'object') {
-      return '';
-    }
-
-    if (expr.type === QUERY_AST_NODE.LITERAL) {
-      if (expr.value === null) {
-        return LOCAL_STR_NULL;
-      }
-      if (typeof expr.value === 'string') {
-        return `'${expr.value.replace(/'/g, LOCAL_STR_SQUOTE_SQUOTE)}'`;
-      }
-      return String(expr.value);
-    }
-
-    if (expr.type === QUERY_AST_NODE.PARAMETER) {
-      return LOCAL_STR_QUESTION;
-    }
-
-    if (expr.type === QUERY_AST_NODE.COLUMN_REF) {
-      if (expr.table) {
-        return `${expr.table}.${expr.column}`;
-      }
-      return expr.column;
-    }
-
-    if (expr.type === QUERY_AST_NODE.UNARY) {
-      return `${expr.operator} ${this.renderExpression(expr.operand)}`;
-    }
-
-    if (expr.type === QUERY_AST_NODE.BINARY) {
-      return `${this.renderExpression(expr.left)} ` +
-        `${expr.operator} ` +
-        `${this.renderExpression(expr.right)}`;
-    }
-
-    if (expr.type === QUERY_AST_NODE.IN) {
-      const values = (expr.values || [])
-        .map((valueExpr) => this.renderExpression(valueExpr))
-        .join(', ');
-      return `${this.renderExpression(expr.expression)} IN (${values})`;
-    }
-
-    if (expr.type === QUERY_AST_NODE.BETWEEN) {
-      return `${this.renderExpression(expr.expression)} BETWEEN ` +
-        `${this.renderExpression(expr.low)} AND ` +
-        `${this.renderExpression(expr.high)}`;
-    }
-
-    if (expr.type === QUERY_AST_NODE.LIKE) {
-      return `${this.renderExpression(expr.expression)} LIKE ` +
-        `${this.renderExpression(expr.pattern)}`;
-    }
-
-    return '';
+    return renderPlannerExpression(expr);
   }
 }
 

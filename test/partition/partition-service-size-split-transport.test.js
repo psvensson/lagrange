@@ -439,7 +439,7 @@ test('PartitionService - queues source writes during split backfill and suppress
       },
       phase: PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
       pendingEntries: [],
-      flushInFlight: false,
+      flushPromise: null,
       startedAt: Date.now(),
       lastError: null,
     };

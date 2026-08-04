@@ -187,6 +187,12 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Invalid split phase transition: phase not in owner-managed set',
   TABLE_SPLIT_WORKFLOW_NOT_FOUND:
     'Split workflow not found for phase advancement',
+  TABLE_SPLIT_TRANSITION_PERSIST_UNAVAILABLE:
+    'Split transition persistence unavailable: durable control-plane ' +
+    'write path not ready',
+  TABLE_SPLIT_EPOCH_PERSIST_EFFECT_FAILED:
+    'Split epoch-changing tables update did not take effect: durable ' +
+    'control-plane write path not ready',
 });
 
 const QUERY_ROUTER_ERROR_MSG = Object.freeze({

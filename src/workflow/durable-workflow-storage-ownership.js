@@ -161,6 +161,16 @@ function buildTransitionCandidate(coordinator, workflow, transition, updates) {
   };
 }
 
+function restoreWorkflowState(workflow, previousState) {
+  for (const key of Object.keys(workflow)) {
+    if (!Object.prototype.hasOwnProperty.call(previousState, key)) {
+      delete workflow[key];
+    }
+  }
+  Object.assign(workflow, previousState);
+  workflow.participants = previousState.participants;
+}
+
 async function transitionDurableWorkflow(
   coordinator,
   workflow,
@@ -174,8 +184,17 @@ async function transitionDurableWorkflow(
     updates,
   );
   if (!coordinator.persistWorkflowTransition) {
-    Object.assign(workflow, candidate);
-    await coordinator.persistWorkflow(workflow);
+    // Durable-first ordering: persist the candidate BEFORE the in-memory
+    // record advances, and roll the record back on rejection — the
+    // in-memory registry must never run ahead of the durable row.
+    const previousState = {...workflow};
+    try {
+      await coordinator.persistWorkflow(candidate);
+    } catch (error) {
+      restoreWorkflowState(workflow, previousState);
+      throw error;
+    }
+    restoreWorkflowState(workflow, candidate);
     return workflow;
   }
   const persistence = await coordinator.persistWorkflowTransition(candidate, {
@@ -186,7 +205,7 @@ async function transitionDurableWorkflow(
   if (persistence === false || persistence?.accepted === false) {
     throw new Error(WORKFLOW_ERROR_MSG.STALE_FENCE_TOKEN);
   }
-  Object.assign(workflow, persistence?.workflow ?? candidate);
+  restoreWorkflowState(workflow, persistence?.workflow ?? candidate);
   return workflow;
 }
 

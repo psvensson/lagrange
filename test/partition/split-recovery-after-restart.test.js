@@ -253,8 +253,8 @@ test('end-to-end recovery from backfilling phase: coordinator ' +
     'reconstructed handle must start with empty pending entries',
   );
   t.equal(
-    handle.flushInFlight,
-    false,
+    handle.flushPromise,
+    null,
     'reconstructed handle must start with no flush in flight',
   );
   t.equal(
@@ -399,6 +399,10 @@ test('end-to-end recovery from cutover_active phase: writes route ' +
       PartitionService.prototype.normalizeSplitTransitionMetadata,
     cloneSplitEntry:
       PartitionService.prototype.cloneSplitEntry,
+    mirrorCutoverActiveSplitWrite:
+      PartitionService.prototype.mirrorCutoverActiveSplitWrite,
+    drainSplitReplicationQueueQuietly:
+      PartitionService.prototype.drainSplitReplicationQueueQuietly,
     async replaySplitEntry(entry, _metadata) {
       replayedEntries.push(entry.sql);
     },

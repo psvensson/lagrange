@@ -49,6 +49,11 @@ const DISTRIBUTED_QUERY_ERROR_CODE = Object.freeze({
 const DISTRIBUTED_QUERY_ERROR_MSG = Object.freeze({
   DISTRIBUTED_PLAN_INVALID: 'Distributed query plan is invalid',
   DISTRIBUTED_TABLE_PLAN_MISSING: 'Table access plan missing from distributed plan',
+  PARTITION_KEY_UPDATE_REJECTED_PREFIX:
+    'UPDATE must not modify partition key column ',
+  PARTITION_KEY_UPDATE_REJECTED_SUFFIX:
+    ': a key-changing UPDATE re-homes the row, which no distributed ' +
+    'execution order can perform atomically; DELETE and re-INSERT instead',
 });
 
 const DISTRIBUTED_PLANNER_DEFAULT = Object.freeze({

@@ -23,8 +23,48 @@ import {
 
 const SPLIT_ROUTING_LITERAL = Object.freeze({
   OBJECT: 'object',
+  STRING: 'string',
+});
+const SPLIT_MIRROR_IDENTITY_FIELD = Object.freeze({
+  ENTRY_ID: 'entryId',
+  OPERATION_ID: 'operationId',
+  IDEMPOTENCY_KEY: 'idempotencyKey',
 });
 const SPLIT_SNAPSHOT_MAX_BIND_VARIABLES = 32_766;
+
+function copyNonEmptyStringField(target, field, value) {
+  if (typeof value === SPLIT_ROUTING_LITERAL.STRING && value.length > 0) {
+    target[field] = value;
+  }
+}
+
+/**
+ * Preserve the source write's idempotency identity through the mirror:
+ * the child partition's replay registry keys on entryId, so an ambiguous
+ * executor retry of a mirrored write must arrive with the SAME identity
+ * or it applies twice.
+ * @param {Object} entry - Applied source write entry.
+ * @return {Object} Identity fields for executeOnPartition executionOptions.
+ */
+export function extractSplitMirrorIdentity(entry) {
+  const identity = {};
+  copyNonEmptyStringField(
+    identity,
+    SPLIT_MIRROR_IDENTITY_FIELD.ENTRY_ID,
+    entry?.entryId,
+  );
+  copyNonEmptyStringField(
+    identity,
+    SPLIT_MIRROR_IDENTITY_FIELD.OPERATION_ID,
+    entry?.operationId,
+  );
+  copyNonEmptyStringField(
+    identity,
+    SPLIT_MIRROR_IDENTITY_FIELD.IDEMPOTENCY_KEY,
+    entry?.idempotencyKey,
+  );
+  return identity;
+}
 
 function hasOwnedProperty(record, propertyName) {
   if (!record || typeof record !== SPLIT_ROUTING_LITERAL.OBJECT) {
@@ -115,7 +155,10 @@ export async function replaySplitEntry(entry, metadata, options = {}) {
     targetPartitionId,
     entry.sql,
     entry.params || [],
-    options,
+    {
+      ...extractSplitMirrorIdentity(entry),
+      ...options,
+    },
   );
 }
 
@@ -149,6 +192,25 @@ export async function routeSplitMirroredWrite(
     throw new Error(PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_ROUTING_FAILED);
   }
 
+  const executionOptions = {
+    splitMirrorOrigin:
+      options.splitMirrorOrigin || PARTITION_SPLIT_MIRROR_ORIGIN.SOURCE,
+  };
+  copyNonEmptyStringField(
+    executionOptions,
+    SPLIT_MIRROR_IDENTITY_FIELD.ENTRY_ID,
+    options.entryId,
+  );
+  copyNonEmptyStringField(
+    executionOptions,
+    SPLIT_MIRROR_IDENTITY_FIELD.OPERATION_ID,
+    options.operationId,
+  );
+  copyNonEmptyStringField(
+    executionOptions,
+    SPLIT_MIRROR_IDENTITY_FIELD.IDEMPOTENCY_KEY,
+    options.idempotencyKey,
+  );
   const result = await queryExecutor.executeOnPartition(
     partitionId,
     sql,
@@ -156,10 +218,7 @@ export async function routeSplitMirroredWrite(
     false,
     true,
     false,
-    {
-      splitMirrorOrigin:
-        options.splitMirrorOrigin || PARTITION_SPLIT_MIRROR_ORIGIN.SOURCE,
-    },
+    executionOptions,
   );
   if (!result?.success) {
     throw new Error(

@@ -22,14 +22,14 @@ const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_SPLIT_EXECUTION_FAILURE = 'split_execution_failure';
 const LOCAL_STR_FAILED_TO_PERSIST_MANAGED_SPLIT_WORKFLOW = 'Failed to persist managed split workflow failure';
-const LOCAL_STR_MANAGED_SPLIT_CHILD_PARTITION_METADATA_I = 'Managed split child partition metadata is inconsistent: exactly one ';
-const LOCAL_STR_CHILD_ROW_EXISTS = 'child row exists';
 const LOCAL_STR_PARTITION_ID = 'partition_id';
 const LOCAL_STR_TABLE_ID = 'table_id';
 const LOCAL_STR_TABLE_NAME = 'table_name';
 const LOCAL_STR_PARTITION_KEY_START = 'partition_key_start';
 const LOCAL_STR_PARTITION_KEY_END = 'partition_key_end';
 const LOCAL_STR_PARTITION_VERSION = 'partition_version';
+const LOCAL_STR_EPOCH_EFFECT_DETAIL =
+  ': expected exactly 1 tables row update for workflow ';
 const LOCAL_STR_MANAGED_SPLIT_CHILD_PARTITION_METADATA_M = 'Managed split child partition metadata mismatch for ';
 
 class ManagedSplitWorkflowPersistenceMethods {
@@ -74,6 +74,12 @@ class ManagedSplitWorkflowPersistenceMethods {
 
   /**
    * Persist workflow state through the canonical tables transition row.
+   *
+   * Fail-closed: a missing CDC bridge THROWS (the caller must never
+   * advance in-memory status without a durable row), the epoch-flip
+   * mutation must land exactly one row, and pending visibility is not
+   * accepted for the cutover — an unconverged epoch flip is a failed
+   * epoch flip.
    * @param {Object} workflow - Workflow state.
    * @return {Promise<void>}
    * @private
@@ -82,7 +88,9 @@ class ManagedSplitWorkflowPersistenceMethods {
     const cdcIntegrationService = this.getCDCIntegrationService();
     if (!cdcIntegrationService ||
         typeof cdcIntegrationService.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
-      return;
+      throw new Error(
+        QUERY_ERROR_MSG.TABLE_SPLIT_TRANSITION_PERSIST_UNAVAILABLE,
+      );
     }
 
     const pendingPartitionVersion = Number(
@@ -121,20 +129,82 @@ class ManagedSplitWorkflowPersistenceMethods {
       }
     }
 
-    await this.getControlPlaneSystemTableGateway().submitMutation({
-      operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-      tableName: TABLES.TABLES,
-      whereClause: {table_id: workflow.tableId},
-      data: updatePayload,
-    }, this.buildManagedSplitMutationOptions({
-      allowPendingVisibility: true,
+    const isCutoverTransition = workflow.status ===
+      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
+    const mutationOptions = this.buildSplitTransitionMutationOptions(
+      workflow,
+      updatePayload,
+      serializedMetadata,
+      isCutoverTransition,
+    );
+    const mutationResult = await this.getControlPlaneSystemTableGateway()
+      .submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.TABLES,
+        whereClause: {table_id: workflow.tableId},
+        data: updatePayload,
+      }, mutationOptions);
+    if (isCutoverTransition) {
+      this.assertSplitEpochMutationEffect(mutationResult, workflow);
+    }
+  }
+
+  /**
+   * Build the mutation options for one split transition row write.
+   * Routine transitions tolerate pending cache visibility; the epoch
+   * flip does not — an unconverged cutover is a failed cutover.
+   * @param {Object} workflow - Workflow state.
+   * @param {Object} updatePayload - Mutation data payload.
+   * @param {string} serializedMetadata - Durable transition metadata.
+   * @param {boolean} isCutoverTransition - Epoch-flip transition.
+   * @return {Object} Gateway mutation options.
+   * @private
+   */
+  buildSplitTransitionMutationOptions(
+    workflow,
+    updatePayload,
+    serializedMetadata,
+    isCutoverTransition,
+  ) {
+    return this.buildManagedSplitMutationOptions({
+      allowPendingVisibility: !isCutoverTransition,
       expectedCacheFields: {
         pending_partition_version:
           updatePayload.pending_partition_version,
         partition_transition_state: workflow.status,
         partition_transition_metadata: serializedMetadata,
       },
-    }));
+    });
+  }
+
+  /**
+   * Assert the cutover epoch flip landed exactly one row. A zero-row
+   * "success" (duplicate/coalesced delivery, stale where-clause) means
+   * the tables row did NOT change; advancing in-memory status on that
+   * outcome silently activates a cutover the durable state never saw.
+   * @param {Object} mutationResult - Gateway mutation result.
+   * @param {Object} workflow - Workflow state.
+   * @return {void}
+   * @private
+   */
+  assertSplitEpochMutationEffect(mutationResult, workflow) {
+    if (mutationResult?.success === false) {
+      throw new Error(
+        mutationResult.error ||
+          QUERY_ERROR_MSG.TABLE_SPLIT_EPOCH_PERSIST_EFFECT_FAILED,
+      );
+    }
+    const affectedRows = Number(
+      mutationResult?.partitionResult?.affectedRows ??
+        mutationResult?.affectedRows,
+    );
+    if (!Number.isFinite(affectedRows) || affectedRows !== 1) {
+      throw new Error(
+        QUERY_ERROR_MSG.TABLE_SPLIT_EPOCH_PERSIST_EFFECT_FAILED +
+        LOCAL_STR_EPOCH_EFFECT_DETAIL +
+        `${workflow.workflowId}, observed ${affectedRows}`,
+      );
+    }
   }
 
   /**
@@ -243,10 +313,19 @@ class ManagedSplitWorkflowPersistenceMethods {
     }
 
     if (leftExists !== rightExists) {
-      throw new Error(
-        LOCAL_STR_MANAGED_SPLIT_CHILD_PARTITION_METADATA_I +
-        LOCAL_STR_CHILD_ROW_EXISTS,
+      // A prior attempt crashed between the two child inserts. The
+      // survivor is unroutable (the epoch never promoted) and carries no
+      // data, so remove it and let this attempt re-insert both rows —
+      // wedging the split forever on a phantom child is worse.
+      const orphanPartitionId = leftExists ?
+        leftPartitionId :
+        rightPartitionId;
+      await this.deletePartitionMetadata(orphanPartitionId);
+      await this.insertPartitionMetadataAtomically(
+        leftPartitionMetadata,
+        rightPartitionMetadata,
       );
+      return;
     }
 
     this.assertExistingChildPartitionMetadataMatches(
@@ -366,6 +445,25 @@ class ManagedSplitWorkflowPersistenceMethods {
       operation: CONTROL_PLANE_MUTATION_OPERATION.INSERT,
       tableName: TABLES.PARTITIONS,
       row: partitionMetadata,
+    }, this.buildManagedSplitMutationOptions({skipCacheWait: true}));
+  }
+
+  /**
+   * Delete one partition metadata row (orphan-child cleanup before a
+   * split retry re-inserts both children).
+   * @param {string} partitionId - Partition row identity.
+   * @return {Promise<void>}
+   * @private
+   */
+  async deletePartitionMetadata(partitionId) {
+    const cdcIntegrationService = this.getCDCIntegrationService();
+    if (!cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
+      return;
+    }
+    await this.getControlPlaneSystemTableGateway().submitMutation({
+      operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
+      tableName: TABLES.PARTITIONS,
+      whereClause: {partition_id: partitionId},
     }, this.buildManagedSplitMutationOptions({skipCacheWait: true}));
   }
 
