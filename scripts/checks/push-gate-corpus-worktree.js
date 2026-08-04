@@ -41,6 +41,8 @@ const GIT_WORKING_TREE_FLAG = '-C';
 const GIT_ROOT_ARGUMENTS = Object.freeze(['rev-parse', '--show-toplevel']);
 const GIT_RESET_ARGUMENTS = Object.freeze(
   ['reset', '--hard', '--quiet']);
+const GIT_CLEAN_ARGUMENTS = Object.freeze(
+  ['clean', '-fdq', '-e', 'node_modules']);
 const LOCAL_TEXT = Object.freeze({
   ARGUMENT_SEPARATOR: ' ',
   CORPUS_PASSED:
@@ -88,6 +90,15 @@ function materializeTreeUnderTest(root, ref) {
     execFileSync(
       GIT_BINARY,
       [GIT_WORKING_TREE_FLAG, snapshot, ...GIT_RESET_ARGUMENTS, ref],
+      {encoding: TEXT_ENCODING});
+    // reset --hard restores tracked files to the ref but leaves the
+    // untracked files createSnapshotWorktree copied from the live session -
+    // exactly the concurrent-session in-flight files this --ref mode exists
+    // to exclude ("must neither dilute nor false-fail this push"). Clean
+    // them, keeping the shared node_modules symlink the runners need.
+    execFileSync(
+      GIT_BINARY,
+      [GIT_WORKING_TREE_FLAG, snapshot, ...GIT_CLEAN_ARGUMENTS],
       {encoding: TEXT_ENCODING});
   } catch (error) {
     removeWorktree(root, snapshot);

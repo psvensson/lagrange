@@ -12,6 +12,9 @@ import {QueryExecutor} from '../../src/query/query-executor.js';
 import {SQLParser} from '../../src/query/sql-parser.js';
 import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
+import {
+  createDeliveryTrackingMessageRouter,
+} from './cache-based-routing-test-support.js';
 
 /**
  * Create a mock system cache with partition and service data.
@@ -59,35 +62,9 @@ function createMockSystemCache(partitionIds) {
   };
 }
 
-/**
- * Create a mock message router that tracks deliveries.
- * @return {Object} Mock message router with tracking.
- */
-function createMockMessageRouter() {
-  const deliveries = [];
-
-  return {
-    deliver: async function(address, message) {
-      deliveries.push({address, message});
-      return {
-        acknowledged: true,
-        success: true,
-        rows: [],
-        changes: 0,
-      };
-    },
-    getDeliveries: function() {
-      return deliveries;
-    },
-    clearDeliveries: function() {
-      deliveries.length = 0;
-    },
-  };
-}
-
 test('SELECT query uses cache to find partition leader', async (_t) => {
   const systemCache = createMockSystemCache(['p1']);
-  const messageRouter = createMockMessageRouter();
+  const messageRouter = createDeliveryTrackingMessageRouter();
 
   const executor = new QueryExecutor({
     systemCache,
@@ -109,7 +86,7 @@ test('SELECT query uses cache to find partition leader', async (_t) => {
 
 test('INSERT query uses cache to find partition leader', async (_t) => {
   const systemCache = createMockSystemCache(['p1']);
-  const messageRouter = createMockMessageRouter();
+  const messageRouter = createDeliveryTrackingMessageRouter();
 
   const executor = new QueryExecutor({
     systemCache,
@@ -131,7 +108,7 @@ test('INSERT query uses cache to find partition leader', async (_t) => {
 
 test('UPDATE query uses cache to find partition leader', async (_t) => {
   const systemCache = createMockSystemCache(['p1']);
-  const messageRouter = createMockMessageRouter();
+  const messageRouter = createDeliveryTrackingMessageRouter();
 
   const executor = new QueryExecutor({
     systemCache,
@@ -153,7 +130,7 @@ test('UPDATE query uses cache to find partition leader', async (_t) => {
 
 test('DELETE query uses cache to find partition leader', async (_t) => {
   const systemCache = createMockSystemCache(['p1']);
-  const messageRouter = createMockMessageRouter();
+  const messageRouter = createDeliveryTrackingMessageRouter();
 
   const executor = new QueryExecutor({
     systemCache,
@@ -175,7 +152,7 @@ test('DELETE query uses cache to find partition leader', async (_t) => {
 
 test('All queries route through message router', async (_t) => {
   const systemCache = createMockSystemCache(['p1', 'p2']);
-  const messageRouter = createMockMessageRouter();
+  const messageRouter = createDeliveryTrackingMessageRouter();
 
   const executor = new QueryExecutor({
     systemCache,
@@ -234,7 +211,7 @@ test('Query returns empty when cache missing partition info', async (_t) => {
     },
   };
 
-  const messageRouter = createMockMessageRouter();
+  const messageRouter = createDeliveryTrackingMessageRouter();
 
   const executor = new QueryExecutor({
     systemCache,
@@ -252,7 +229,7 @@ test('Query returns empty when cache missing partition info', async (_t) => {
 
 test('SQLQueryEngine uses cache for partition lookup', async (_t) => {
   const systemCache = createMockSystemCache(['p1']);
-  const messageRouter = createMockMessageRouter();
+  const messageRouter = createDeliveryTrackingMessageRouter();
 
   const engine = new SQLQueryEngine({
     systemCache,
@@ -274,7 +251,7 @@ test('SQLQueryEngine uses cache for partition lookup', async (_t) => {
 });
 
 test('SQLQueryEngine fails when cache not available', async (_t) => {
-  const messageRouter = createMockMessageRouter();
+  const messageRouter = createDeliveryTrackingMessageRouter();
 
   const engine = new SQLQueryEngine({
     systemCache: null,

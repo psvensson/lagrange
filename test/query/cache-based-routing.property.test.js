@@ -23,6 +23,10 @@ import {SQLParser} from '../../src/query/sql-parser.js';
 import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {SQL_RESERVED} from './sql-reserved-words.js';
+import {
+  buildSingleLeaderRoutingRows,
+  createDeliveryTrackingMessageRouter,
+} from './cache-based-routing-test-support.js';
 
 /**
  * Generator for valid table names. Reserved words are excluded: the
@@ -94,32 +98,6 @@ function createMockSystemCache(tableName, partitions, services) {
   };
 }
 
-/**
- * Create a mock message router that tracks deliveries.
- * @return {Object} Mock message router with tracking.
- */
-function createMockMessageRouter() {
-  const deliveries = [];
-
-  return {
-    deliver: async function(address, message) {
-      deliveries.push({address, message});
-      return {
-        acknowledged: true,
-        success: true,
-        rows: [],
-        changes: 0,
-      };
-    },
-    getDeliveries: function() {
-      return deliveries;
-    },
-    clearDeliveries: function() {
-      deliveries.length = 0;
-    },
-  };
-}
-
 test('Property: SQL Engine Cache-Based Routing', async (t) => {
   /**
    * Property 1: All queries route through message router.
@@ -135,29 +113,18 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
         partitionIdArb,
         nodeAddressArb,
         (tableName, partitionId, nodeAddress) => {
-          const partitions = [{
-            partition_id: partitionId,
-            table_name: tableName,
-            start_key: '',
-            end_key: '',
-          }];
-
-          const services = [{
-            partition_id: partitionId,
-            service_type: SERVICE_TYPE.PARTITION,
-            raft_role: RAFT_ROLE.LEADER,
-            status: SERVICE_STATUS.ACTIVE,
-            address: `${nodeAddress}/partition/${partitionId}`,
-            node_id: nodeAddress,
-            service_id: partitionId,
-          }];
+          const {partitions, services} = buildSingleLeaderRoutingRows(
+            tableName,
+            partitionId,
+            nodeAddress,
+          );
 
           const systemCache = createMockSystemCache(
             tableName,
             partitions,
             services,
           );
-          const messageRouter = createMockMessageRouter();
+          const messageRouter = createDeliveryTrackingMessageRouter();
 
           const executor = new QueryExecutor({
             systemCache,
@@ -222,7 +189,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
             partitions,
             services,
           );
-          const messageRouter = createMockMessageRouter();
+          const messageRouter = createDeliveryTrackingMessageRouter();
 
           const executor = new QueryExecutor({
             systemCache,
@@ -305,7 +272,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
             partitions,
             services,
           );
-          const messageRouter = createMockMessageRouter();
+          const messageRouter = createDeliveryTrackingMessageRouter();
 
           const executor = new QueryExecutor({
             systemCache,
@@ -370,7 +337,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
             partitions,
             services,
           );
-          const messageRouter = createMockMessageRouter();
+          const messageRouter = createDeliveryTrackingMessageRouter();
 
           const executor = new QueryExecutor({
             systemCache,
@@ -422,7 +389,7 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
             },
           };
 
-          const messageRouter = createMockMessageRouter();
+          const messageRouter = createDeliveryTrackingMessageRouter();
 
           const executor = new QueryExecutor({
             systemCache,
@@ -460,29 +427,18 @@ test('Property: SQL Engine Cache-Based Routing', async (t) => {
         partitionIdArb,
         nodeAddressArb,
         async (tableName, partitionId, nodeAddress) => {
-          const partitions = [{
-            partition_id: partitionId,
-            table_name: tableName,
-            start_key: '',
-            end_key: '',
-          }];
-
-          const services = [{
-            partition_id: partitionId,
-            service_type: SERVICE_TYPE.PARTITION,
-            raft_role: RAFT_ROLE.LEADER,
-            status: SERVICE_STATUS.ACTIVE,
-            address: `${nodeAddress}/partition/${partitionId}`,
-            node_id: nodeAddress,
-            service_id: partitionId,
-          }];
+          const {partitions, services} = buildSingleLeaderRoutingRows(
+            tableName,
+            partitionId,
+            nodeAddress,
+          );
 
           const systemCache = createMockSystemCache(
             tableName,
             partitions,
             services,
           );
-          const messageRouter = createMockMessageRouter();
+          const messageRouter = createDeliveryTrackingMessageRouter();
 
           const engine = new SQLQueryEngine({
             systemCache,
