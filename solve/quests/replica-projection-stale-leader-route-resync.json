@@ -1,0 +1,55 @@
+{
+  "id": "replica-projection-stale-leader-route-resync",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The runtime-replica-state-projection owner's system-table mutations no longer wedge forever behind stale canonical leader metadata: when a sql-routed projection write (e.g. the services-row DELETE for a removed replica) repeatedly fails with participant/no-leader errors while the target partition's raft group has a live leader (the run 2026-08-04T11-59-24 class: node-1 lost raft_role=leader visibility for services-p1 at 11:51:10, never healed, and retried the same doomed local route every ~37s for 5+ minutes leaving a phantom ACTIVE services row that pinned the MovieLens learned-affinity convergence at 3/2 placements), the owner detects the staleness (bounded failure count or age), triggers a canonical leader metadata re-sync/re-route for the target partition, and the projection write eventually lands - fencing the reader and re-syncing per epic control-plane-truth-local-converged-read Cut 2, instead of silent unbounded retry on stale truth. Live outcome: the MovieLens lane's learned-affinity phase converges (placements==pinned replica count, slot identities current) instead of timing out on phantom placements.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/control-plane-truth-local-converged-read.md",
+    "closesCL": [],
+    "parentQuest": "movielens-nodes-priority-recovery-escape",
+    "planDoc": null,
+    "draftedAtCommit": "d6239c470672400e54e97a1c479c0f46900e4878"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "replica-projection-stale-leader-route-resync-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "leadership-safety-untouched",
+      "statement": "Do not change raft election, demotion, leadership publication, or the control-plane write funnel. Change only how the projection owner's failed mutations detect stale routing and trigger canonical leader metadata re-sync/re-route for the target partition. Fail-closed behavior for genuinely leaderless partitions must be preserved (re-sync must not invent a leader)."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Before any live run, reproduce the wedge deterministically: a projection-owner mutation failing against stale canonical leader metadata while the partition has a live leader, retried without progress on current code (red), converging after the fix (green); dt-prove red-on-revert. Live runs serial, thermal policy (hold if CPU package >=75C or NVMe Sensor 2 >=78C)."
+    },
+    {
+      "id": "root-mechanism-first",
+      "statement": "Before choosing the re-sync trigger, pin WHY node-1/node-4 lost raft_role=leader visibility for services-p1 during the 11:49-11:54 churn window and never repaired (the diagnosis's open ambiguity) - the fix must address or consciously bypass that repair gap, with evidence, not assume it."
+    }
+  ]
+}
