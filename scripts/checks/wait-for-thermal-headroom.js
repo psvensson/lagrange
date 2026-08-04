@@ -21,6 +21,10 @@ import {spawnSync} from 'node:child_process';
 import process from 'node:process';
 import {setTimeout as sleep} from 'node:timers/promises';
 
+// Module-load intrinsic captures (adversarial-js-intrinsics guideline).
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+
 const SENSORS_BINARY = 'sensors';
 const SENSORS_JSON_FLAG = '-j';
 const CPU_HOLD_CELSIUS = 75;
@@ -63,7 +67,8 @@ function* sensorReadings(parsed) {
         continue;
       }
       for (const [key, value] of Object.entries(values)) {
-        if (key.endsWith(INPUT_KEY_SUFFIX) && typeof value === 'number') {
+        if (stringEndsWith(key, INPUT_KEY_SUFFIX) &&
+            typeof value === 'number') {
           yield {chipName, label, value};
         }
       }
@@ -83,10 +88,10 @@ function readTemperatures() {
   let cpuCelsius = null;
   let nvmeCelsius = null;
   for (const reading of sensorReadings(parsed)) {
-    if (reading.label.startsWith(CPU_LABEL_FRAGMENT)) {
+    if (stringStartsWith(reading.label, CPU_LABEL_FRAGMENT)) {
       cpuCelsius = maxCelsius(cpuCelsius, reading.value);
     }
-    if (reading.chipName.startsWith(NVME_CHIP_FRAGMENT) &&
+    if (stringStartsWith(reading.chipName, NVME_CHIP_FRAGMENT) &&
         reading.label === NVME_LABEL_FRAGMENT) {
       nvmeCelsius = maxCelsius(nvmeCelsius, reading.value);
     }
