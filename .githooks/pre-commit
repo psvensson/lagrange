@@ -1,18 +1,122 @@
 #!/usr/bin/env bash
-# Fast structural guards (<2s). Bypass for a single commit with
-# git commit --no-verify (emergencies only).
+# Staged-file pre-commit gate: the cheap per-file checks the push gate
+# would otherwise discover one 15-minute cycle at a time (2026-08-04
+# retrospective: nine push-gate failures, six of them commit-time
+# catchable). Scoped to STAGED files only, so it stays in single-digit
+# seconds; whole-corpus ratchets (duplication, file-size, cycles,
+# unused-exports) remain push-time concerns.
+#
+# Also regenerates the checked-in deterministic inventories whenever
+# staged work touches their source surface - their freshness guards
+# re-stale on EVERY src commit by construction, so freshness is
+# automated here instead of failed later.
+#
+# Extends the original fast structural guards (file-size,
+# hot-path-diagnostics, staged constant names, cached staged eslint)
+# with the staged guideline checks and inventory freshness.
+#
+# Skip (emergencies / WIP commits): LAGRANGE_SKIP_PRECOMMIT=1 git commit
+# (git commit --no-verify also bypasses, as before)
 set -euo pipefail
-npm run -s audit:file-size
-npm run -s audit:guideline:hot-path-diagnostics
-node scripts/check-staged-constant-names.js
-# Lint only the staged JS files (--cache keeps repeat runs inside the hook
-# budget); the whole-repo lint gate lives in test:static. The cache lives in
-# this worktree's private git dir, NOT node_modules/.cache: node_modules is
-# commonly symlinked into agent worktrees, so a cache there is shared and
-# thrashed by concurrent sessions.
-ESLINT_CACHE_DIR="$(git rev-parse --git-path eslint-cache)/"
-STAGED_JS="$(git diff --cached --name-only --diff-filter=ACMR -- 'src/*.js' 'test/*.js' 'scripts/*.js' || true)"
-if [ -n "${STAGED_JS}" ]; then
-  # shellcheck disable=SC2086
-  npx eslint --cache --cache-location "${ESLINT_CACHE_DIR}" ${STAGED_JS}
+
+if [ -n "${LAGRANGE_SKIP_PRECOMMIT:-}" ]; then
+  echo "pre-commit: LAGRANGE_SKIP_PRECOMMIT set - skipping staged checks"
+  exit 0
+fi
+
+# Staged (added/copied/modified/renamed) paths only; deletions need no scan.
+mapfile -t STAGED < <(git diff --cached --name-only --diff-filter=ACMR)
+if [ "${#STAGED[@]}" -eq 0 ]; then
+  exit 0
+fi
+
+JS_FILES=()
+CODE_JS_FILES=()
+DOC_FILES=()
+REGEN_INVENTORIES=0
+for f in "${STAGED[@]}"; do
+  [ -f "$f" ] || continue
+  case "$f" in
+    *.js|*.mjs|*.cjs)
+      JS_FILES+=("$f")
+      case "$f" in
+        src/*|scripts/*) CODE_JS_FILES+=("$f") ;;
+      esac
+      ;;
+  esac
+  case "$f" in
+    docs/*.md|examples/*) DOC_FILES+=("$f") ;;
+  esac
+  case "$f" in
+    src/*|scripts/*|test/*) REGEN_INVENTORIES=1 ;;
+  esac
+done
+
+FAILURES=0
+run_check() {
+  local label="$1"; shift
+  if ! "$@"; then
+    echo "pre-commit: FAIL - ${label}"
+    FAILURES=$((FAILURES + 1))
+  fi
+}
+
+# Fast structural guards inherited from the original hook (<2s).
+run_check "file-size ratchet" npm run -s audit:file-size
+run_check "hot-path diagnostics guideline" \
+  npm run -s audit:guideline:hot-path-diagnostics
+run_check "staged constant names" \
+  node scripts/check-staged-constant-names.js
+
+if [ "${#JS_FILES[@]}" -gt 0 ]; then
+  # --cache keeps repeat runs inside the hook budget; the cache lives in
+  # this worktree's private git dir, NOT node_modules/.cache (node_modules
+  # is commonly symlinked into agent worktrees, so a cache there is shared
+  # and thrashed by concurrent sessions).
+  ESLINT_CACHE_DIR="$(git rev-parse --git-path eslint-cache)/"
+  run_check "eslint (staged files)" \
+    npx eslint --cache --cache-location "${ESLINT_CACHE_DIR}" \
+      --no-warn-ignored "${JS_FILES[@]}"
+  run_check "literal guideline (staged files)" \
+    node scripts/check-guideline-literals.js "${JS_FILES[@]}"
+  run_check "decision boundaries (staged files)" \
+    node scripts/check-guideline-decision-boundaries.js "${JS_FILES[@]}"
+fi
+if [ "${#CODE_JS_FILES[@]}" -gt 0 ]; then
+  # Report-only: scoped mode lists violations in the staged files (exit 0
+  # even for pre-existing ones, so an edit to an already-over-threshold
+  # file is not blocked); the aggregate ratchet still gates at push time.
+  node scripts/check-complexity.js --scoped "${CODE_JS_FILES[@]}" || true
+fi
+if [ "${#DOC_FILES[@]}" -gt 0 ]; then
+  run_check "doc ascii hyphens (staged docs/examples)" \
+    node scripts/checks/check-doc-ascii-hyphens.js "${DOC_FILES[@]}"
+fi
+
+# Derived-state freshness: regenerate and stage the deterministic
+# inventories so their push-gate freshness guards can never stale-fail
+# (they re-stale on every js commit by construction - the import graph
+# is digest-pinned over all js sources). The fast path needs a current
+# import-graph report; when stale, fall back to the ~2-minute --refresh
+# rather than deferring the failure to a ~15-minute gate cycle. Skip for
+# rapid WIP loops: LAGRANGE_SKIP_INVENTORY_REGEN=1 (the push gate's
+# freshness guard then catches it).
+if [ "$REGEN_INVENTORIES" = "1" ] \
+  && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
+  if ! node scripts/generate-global-owner-debt-inventory.js \
+    > /dev/null 2>&1; then
+    echo "pre-commit: import graph stale - refreshing inventories" \
+      "(~2 min; skip with LAGRANGE_SKIP_INVENTORY_REGEN=1)"
+    node scripts/generate-global-owner-debt-inventory.js --refresh \
+      > /dev/null
+  fi
+  node scripts/generate-priority-recovery-owner-inventory.js > /dev/null
+  git add solve/changes/global-owner-debt-inventory/inventory.json \
+    solve/changes/priority-recovery-owner-inventory/inventory.json
+fi
+
+if [ "$FAILURES" -gt 0 ]; then
+  echo "pre-commit: ${FAILURES} staged check(s) failed - fix and re-commit"
+  echo "pre-commit: (bypass for WIP: LAGRANGE_SKIP_PRECOMMIT=1 git commit)"
+  exit 1
 fi
