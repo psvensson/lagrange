@@ -15,10 +15,12 @@ const EXTERNAL_SERVICE_MANIFEST_SCHEMA_VERSION = 3;
 const EXTERNAL_SERVICE_EXPORT_INTERFACE = Object.freeze({
   BOOT: 'boot_v1',
   CALL: 'call_v1',
+  CALL_V2: 'call_v2',
   CHANGE: 'change_v1',
   ONCE: 'once_v1',
   PUSHDOWN: 'pushdown_v1',
   REQUEST: 'request_v1',
+  REQUEST_V2: 'request_v2',
   TIME: 'time_v1',
 });
 

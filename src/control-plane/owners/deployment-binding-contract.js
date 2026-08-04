@@ -10,6 +10,7 @@ import {
 import {COLUMN} from '../../constants/columns.js';
 
 const DEPLOYMENT_BINDING_SCHEMA_VERSION = 2;
+const DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 = 3;
 const DEPLOYMENT_BINDING_GENERATION = 1;
 const NORMALIZED_MANIFEST_ACCEPTED_STATUS = 'accepted';
 
@@ -32,6 +33,46 @@ const DEPLOYMENT_BINDING_SOURCE_INTERFACE = Object.freeze({
   [DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST]: 'request_v1',
   [DEPLOYMENT_BINDING_SOURCE_KIND.TIME]: 'time_v1',
 });
+
+// Binding schema v3 handler interfaces (code-first service compiler,
+// epic sealed decision 5): a v3 target declares the generic-dispatch
+// interface plus handler_id and drops the developer-supplied
+// export_name; the interface maps to the fixed export through
+// src/runtime/component-export-resolution.js (the single mapping
+// owner). Only the two cell kinds the compiler emits carry a v2
+// interface.
+const DEPLOYMENT_BINDING_V3_INTERFACE = Object.freeze({
+  [DEPLOYMENT_BINDING_SOURCE_KIND.CALL]: 'call_v2',
+  [DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST]: 'request_v2',
+});
+const DEPLOYMENT_BINDING_V3_INTERFACE_VALUES = new Set(
+  Object.values(DEPLOYMENT_BINDING_V3_INTERFACE));
+
+// Interface -> fixed export, mirroring the sealed v2 world's export
+// surface (wit/world.wit service-cell-v2). The runtime-side resolution
+// owner (src/runtime/component-export-resolution.js) maps the same
+// fixed kebab names onto the instantiated component; this constant is
+// the deployment-side anchor of that one mapping, not a second
+// convention.
+const DEPLOYMENT_BINDING_V3_FIXED_EXPORT = Object.freeze({
+  [DEPLOYMENT_BINDING_V3_INTERFACE[DEPLOYMENT_BINDING_SOURCE_KIND.CALL]]:
+    'run',
+  [DEPLOYMENT_BINDING_V3_INTERFACE[DEPLOYMENT_BINDING_SOURCE_KIND.REQUEST]]:
+    'handle-request',
+});
+
+function fixedExportForV3Interface(interfaceName) {
+  return DEPLOYMENT_BINDING_V3_FIXED_EXPORT[interfaceName];
+}
+
+// The interface a source kind expects on its selected manifest export,
+// by binding schema version. v1-interface bindings (schema v2) keep
+// their existing behavior byte-for-byte.
+function expectedSourceInterface(sourceKind, schemaVersion) {
+  return schemaVersion === DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 ?
+    DEPLOYMENT_BINDING_V3_INTERFACE[sourceKind] :
+    DEPLOYMENT_BINDING_SOURCE_INTERFACE[sourceKind];
+}
 const DEPLOYMENT_BINDING_CELL_SOURCE_KINDS = new Set([
   DEPLOYMENT_BINDING_SOURCE_KIND.BOOT,
   DEPLOYMENT_BINDING_SOURCE_KIND.CALL,
@@ -108,6 +149,13 @@ const ROOT_FIELDS = Object.freeze([
 const TARGET_FIELDS = Object.freeze([
   'package_id', 'manifest_digest', 'export_name',
 ]);
+// v3 targets: interface + handler_id replace the developer-supplied
+// export_name (the fixed export is derived through the interface mapping
+// owner, never authored).
+const TARGET_FIELDS_V3 = Object.freeze([
+  'package_id', 'manifest_digest', 'interface', 'handler_id',
+]);
+const HANDLER_ID_PATTERN = /^[a-zA-Z][a-zA-Z0-9]{0,127}$/u;
 const CHANGE_OPERATIONS = Object.freeze(['delete', 'insert', 'update']);
 const REQUEST_METHODS = Object.freeze([
   'DELETE', 'GET', 'PATCH', 'POST', 'PUT',
@@ -237,8 +285,7 @@ function requireUniqueSortedStrings(values, options) {
   return normalized.sort();
 }
 
-function normalizeTarget(target) {
-  requireExactFields(target, TARGET_FIELDS, DEPLOYMENT_BINDING_PATH.TARGET);
+function requireTargetIdentity(target) {
   if (typeof target.package_id !== 'string' ||
       !PACKAGE_ID_PATTERN.test(target.package_id) ||
       typeof target.manifest_digest !== 'string' ||
@@ -247,9 +294,41 @@ function normalizeTarget(target) {
       DEPLOYMENT_BINDING_PATH.TARGET,
       DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
   }
+}
+
+function normalizeTarget(target) {
+  requireExactFields(target, TARGET_FIELDS, DEPLOYMENT_BINDING_PATH.TARGET);
+  requireTargetIdentity(target);
   return {
     export_name: requireName(
       target.export_name, `${DEPLOYMENT_BINDING_PATH.TARGET}/export_name`),
+    manifest_digest: target.manifest_digest,
+    package_id: target.package_id,
+  };
+}
+
+// v3 target: interface must be the source kind's generic-dispatch v2
+// interface and handler_id the explicit descriptor key the generated
+// dispatch table routes by. export_name is forbidden (omitted, never
+// authored); the fixed export is derived at bind time through the
+// interface mapping.
+function normalizeTargetV3(target, sourceKind) {
+  requireExactFields(target, TARGET_FIELDS_V3, DEPLOYMENT_BINDING_PATH.TARGET);
+  requireTargetIdentity(target);
+  if (target.interface !== DEPLOYMENT_BINDING_V3_INTERFACE[sourceKind]) {
+    fail(DEPLOYMENT_BINDING_ERROR_CODE.INTERFACE_MISMATCH,
+      `${DEPLOYMENT_BINDING_PATH.TARGET}/interface`,
+      DEPLOYMENT_BINDING_MESSAGE.INTERFACE_MISMATCH);
+  }
+  if (typeof target.handler_id !== 'string' ||
+      !HANDLER_ID_PATTERN.test(target.handler_id)) {
+    fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
+      `${DEPLOYMENT_BINDING_PATH.TARGET}/handler_id`,
+      DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
+  }
+  return {
+    handler_id: target.handler_id,
+    interface: target.interface,
     manifest_digest: target.manifest_digest,
     package_id: target.package_id,
   };
@@ -359,17 +438,29 @@ function normalizeBudgets(budgets) {
 
 function normalizeDeploymentBinding(input) {
   requireExactFields(input, ROOT_FIELDS, DEPLOYMENT_BINDING_PATH.BINDING);
-  if (input.schema_version !== DEPLOYMENT_BINDING_SCHEMA_VERSION) {
+  if (input.schema_version !== DEPLOYMENT_BINDING_SCHEMA_VERSION &&
+      input.schema_version !== DEPLOYMENT_BINDING_SCHEMA_VERSION_V3) {
     fail(DEPLOYMENT_BINDING_ERROR_CODE.INVALID_FIELD,
       DEPLOYMENT_BINDING_PATH.SCHEMA_VERSION,
       DEPLOYMENT_BINDING_MESSAGE.INVALID_FIELD);
   }
+  const source = normalizeSource(input.source);
+  if (input.schema_version === DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 &&
+      !DEPLOYMENT_BINDING_V3_INTERFACE_VALUES.has(
+        DEPLOYMENT_BINDING_V3_INTERFACE[source.kind])) {
+    fail(DEPLOYMENT_BINDING_ERROR_CODE.INTERFACE_MISMATCH,
+      DEPLOYMENT_BINDING_PATH.SOURCE,
+      DEPLOYMENT_BINDING_MESSAGE.INTERFACE_MISMATCH);
+  }
+  const isV3 = input.schema_version === DEPLOYMENT_BINDING_SCHEMA_VERSION_V3;
   const normalized = canonicalize({
     budgets: normalizeBudgets(input.budgets),
     name: requireName(input.name, DEPLOYMENT_BINDING_PATH.NAME),
-    schema_version: DEPLOYMENT_BINDING_SCHEMA_VERSION,
-    source: normalizeSource(input.source),
-    target: normalizeTarget(input.target),
+    schema_version: input.schema_version,
+    source,
+    target: isV3 ?
+      normalizeTargetV3(input.target, source.kind) :
+      normalizeTarget(input.target),
   });
   return deepFreeze(normalized);
 }
@@ -400,16 +491,25 @@ function bindDeploymentArtifact(declaration, artifact) {
       DEPLOYMENT_BINDING_PATH.ARTIFACT,
       DEPLOYMENT_BINDING_MESSAGE.ARTIFACT_MISSING);
   }
+  const isV3 = declaration.schema_version ===
+    DEPLOYMENT_BINDING_SCHEMA_VERSION_V3;
+  // v3 targets derive the fixed export through the interface mapping
+  // (the single owner: the v2 generic-dispatch world exports
+  // handle-request/run/reduce; the interface selects which one). v2
+  // targets keep their authored export_name.
+  const expectedInterface = expectedSourceInterface(
+    declaration.source.kind, declaration.schema_version);
   const exportDeclaration = normalizedManifest.manifest.exports.find(
-    (entry) => entry.name === declaration.target.export_name,
+    (entry) => isV3 ?
+      entry.interface === expectedInterface &&
+        entry.name === fixedExportForV3Interface(expectedInterface) :
+      entry.name === declaration.target.export_name,
   );
   if (!exportDeclaration) {
     fail(DEPLOYMENT_BINDING_ERROR_CODE.ARTIFACT_NOT_FOUND,
       `${DEPLOYMENT_BINDING_PATH.TARGET}/export_name`,
       DEPLOYMENT_BINDING_MESSAGE.ARTIFACT_MISSING);
   }
-  const expectedInterface =
-    DEPLOYMENT_BINDING_SOURCE_INTERFACE[declaration.source.kind];
   if (exportDeclaration.interface !== expectedInterface) {
     fail(DEPLOYMENT_BINDING_ERROR_CODE.INTERFACE_MISMATCH,
       DEPLOYMENT_BINDING_PATH.SOURCE,
@@ -450,6 +550,15 @@ function deriveBindingVersionId(bindingId) {
   })}`;
 }
 
+// The row's export_name is the fixed export the invocation path
+// resolves: authored for v2 targets, derived through the interface
+// mapping for v3 targets (whose declarations carry no export_name).
+function declarationExportName(declaration) {
+  return declaration.schema_version === DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 ?
+    fixedExportForV3Interface(declaration.target.interface) :
+    declaration.target.export_name;
+}
+
 function buildBindingRow(declaration, securityContext, createdAt) {
   const context = validateSecurityContext(securityContext);
   if (!Number.isSafeInteger(createdAt) || createdAt < 0) {
@@ -470,7 +579,7 @@ function buildBindingRow(declaration, securityContext, createdAt) {
       .digest(HASH_ENCODING)}`,
     package_id: declaration.target.package_id,
     manifest_digest: declaration.target.manifest_digest,
-    export_name: declaration.target.export_name,
+    export_name: declarationExportName(declaration),
     source_kind: declaration.source.kind,
     normalized_binding: normalizedBinding,
     created_by: context.principal,
@@ -537,7 +646,7 @@ function bindingRowMatchesDeclaration(row, declaration) {
     [row.binding_digest, expectedDigest],
     [row.package_id, declaration.target.package_id],
     [row.manifest_digest, declaration.target.manifest_digest],
-    [row.export_name, declaration.target.export_name],
+    [row.export_name, declarationExportName(declaration)],
     [row.source_kind, declaration.source.kind],
     [row.normalized_binding, canonicalJson(declaration)],
   ];
@@ -596,15 +705,20 @@ export {
   DEPLOYMENT_BINDING_ERROR_CODE,
   DEPLOYMENT_BINDING_MESSAGE,
   DEPLOYMENT_BINDING_PATH,
+  DEPLOYMENT_BINDING_SCHEMA_VERSION_V3,
   DEPLOYMENT_BINDING_SOURCE_INTERFACE,
   DEPLOYMENT_BINDING_SOURCE_KIND,
+  DEPLOYMENT_BINDING_V3_FIXED_EXPORT,
+  DEPLOYMENT_BINDING_V3_INTERFACE,
   DeploymentBindingError,
   bindDeploymentArtifact,
   bindingRowsMatch,
   buildBindingRow,
   canonicalJson,
+  declarationExportName,
   deriveBindingId,
   deriveBindingVersionId,
+  expectedSourceInterface,
   isDeploymentBindingCellSourceKind,
   normalizeDeploymentBinding,
   normalizeStoredDeploymentBinding,

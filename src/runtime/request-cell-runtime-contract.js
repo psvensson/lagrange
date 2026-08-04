@@ -5,7 +5,9 @@ import {
   DEPLOYMENT_BINDING_BUDGET_LIMITS,
 } from '../constants/deployment-binding.js';
 import {
-  DEPLOYMENT_BINDING_SOURCE_INTERFACE,
+  DEPLOYMENT_BINDING_SCHEMA_VERSION_V3,
+  declarationExportName,
+  expectedSourceInterface,
   isDeploymentBindingCellSourceKind,
   normalizeDeploymentBinding,
 } from '../control-plane/owners/deployment-binding-contract.js';
@@ -229,7 +231,19 @@ function projectRequestCellRuntime(definition) {
     REQUEST_CELL_RUNTIME_ERROR_CODE.BINDING_INVALID,
     REQUEST_CELL_CONTRACT_FIELD.RUNTIME_CONFIG,
   );
-  if (runtimeConfig.export_name !== target.export_name) {
+  // The declaration's effective export: authored for v2 targets,
+  // derived through the interface mapping for v3 (whose target carries
+  // interface + handler_id). The runtime config must pin exactly that
+  // export, and for v3 the handler id the fixed export dispatches on.
+  const effectiveExportName = declarationExportName(declaration);
+  if (runtimeConfig.export_name !== effectiveExportName) {
+    fail(
+      REQUEST_CELL_RUNTIME_ERROR_CODE.EXPORT_MISMATCH,
+      REQUEST_CELL_CONTRACT_MESSAGE.EXPORT_MISMATCH,
+    );
+  }
+  const isV3 = declaration.schema_version === DEPLOYMENT_BINDING_SCHEMA_VERSION_V3;
+  if (isV3 && runtimeConfig.handler_id !== target.handler_id) {
     fail(
       REQUEST_CELL_RUNTIME_ERROR_CODE.EXPORT_MISMATCH,
       REQUEST_CELL_CONTRACT_MESSAGE.EXPORT_MISMATCH,
@@ -256,10 +270,15 @@ function projectRequestCellRuntime(definition) {
       REQUEST_CELL_CONTRACT_FIELD.BINDING_CAPABILITIES,
     ),
     exportName: requireString(
-      target.export_name,
+      effectiveExportName,
       REQUEST_CELL_RUNTIME_ERROR_CODE.BINDING_INVALID,
       REQUEST_CELL_CONTRACT_FIELD.EXPORT_NAME,
     ),
+    handlerId: isV3 ? requireString(
+      target.handler_id,
+      REQUEST_CELL_RUNTIME_ERROR_CODE.BINDING_INVALID,
+      REQUEST_CELL_CONTRACT_FIELD.EXPORT_NAME,
+    ) : null,
     manifestDigest: target.manifest_digest,
     packageId: requireString(
       target.package_id,
@@ -271,6 +290,7 @@ function projectRequestCellRuntime(definition) {
       REQUEST_CELL_RUNTIME_ERROR_CODE.BINDING_INVALID,
       REQUEST_CELL_CONTRACT_FIELD.SERVICE_ID,
     ),
+    schemaVersion: declaration.schema_version,
     sourceKind: declaration.source.kind,
   });
 }
@@ -333,8 +353,8 @@ function requireSelectedExport(runtime, manifest) {
     (entry) => entry.name === runtime.exportName,
   );
   if (!selectedExport ||
-      selectedExport.interface !==
-        DEPLOYMENT_BINDING_SOURCE_INTERFACE[runtime.sourceKind]) {
+      selectedExport.interface !== expectedSourceInterface(
+        runtime.sourceKind, runtime.schemaVersion)) {
     fail(
       REQUEST_CELL_RUNTIME_ERROR_CODE.EXPORT_MISMATCH,
       REQUEST_CELL_CONTRACT_MESSAGE.SELECTED_EXPORT_MISSING,

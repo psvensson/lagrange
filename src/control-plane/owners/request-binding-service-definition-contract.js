@@ -22,8 +22,10 @@ import {
   parseOciReference,
 } from '../../wasm-service/oci-reference.js';
 import {
-  DEPLOYMENT_BINDING_SOURCE_INTERFACE,
+  DEPLOYMENT_BINDING_SCHEMA_VERSION_V3,
   DEPLOYMENT_BINDING_SOURCE_KIND,
+  declarationExportName,
+  expectedSourceInterface,
   canonicalJson,
   isDeploymentBindingCellSourceKind,
   normalizeStoredDeploymentBinding,
@@ -168,12 +170,15 @@ function assertArtifactMatchesBinding(binding, artifact) {
       REQUEST_BINDING_SERVICE_DEFINITION_MESSAGE.ARTIFACT_MISMATCH,
     );
   }
+  // The export the runtime pins is the declaration's effective export:
+  // authored for v2 targets, derived through the interface mapping for
+  // v3 (whose target carries interface + handler_id, never export_name).
+  const effectiveExportName = declarationExportName(binding.declaration);
   const selectedExport = artifact.manifest.exports?.find(
-    (entry) => entry.name === target.export_name,
+    (entry) => entry.name === effectiveExportName,
   );
-  const expectedInterface = DEPLOYMENT_BINDING_SOURCE_INTERFACE[
-    binding.declaration.source.kind
-  ];
+  const expectedInterface = expectedSourceInterface(
+    binding.declaration.source.kind, binding.declaration.schema_version);
   if (!selectedExport || selectedExport.interface !== expectedInterface) {
     fail(
       REQUEST_BINDING_SERVICE_DEFINITION_ERROR_CODE.ARTIFACT_MISMATCH,
@@ -210,7 +215,13 @@ function buildPinnedRuntimeRef(artifact) {
 }
 
 function buildRuntimeConfig(binding, artifact) {
-  const config = {export_name: binding.declaration.target.export_name};
+  const declaration = binding.declaration;
+  const config = {export_name: declarationExportName(declaration)};
+  if (declaration.schema_version === DEPLOYMENT_BINDING_SCHEMA_VERSION_V3) {
+    // v3 handler-aware runtime config: the handler id the fixed export
+    // dispatches on travels alongside the derived fixed export.
+    config.handler_id = declaration.target.handler_id;
+  }
   if (artifact.manifest.runtime.entrypoint !== undefined) {
     config.entrypoint = artifact.manifest.runtime.entrypoint;
   }
