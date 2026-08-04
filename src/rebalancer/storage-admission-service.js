@@ -18,6 +18,7 @@ import {
   evaluateEligibilityDecision,
 } from '../control-plane/eligibility-snapshot.js';
 import {LoggingService} from '../logging/logging-service.js';
+import {LogThrottle} from '../logging/log-throttle.js';
 import {assertCritical} from '../utils/assert.js';
 import {NUM} from '../constants/index.js';
 import {buildStorageAdmissionResult} from './storage-admission-result.js';
@@ -79,6 +80,10 @@ class StorageAdmissionService {
     this.logger = loggingService.isInitialized() ?
       loggingService.forSubsystem(STORAGE_CAPACITY_SUBSYSTEM) :
       console;
+    // Hot-path log throttle: the per-node admission-allow diagnostic fired
+    // 2200 times in one live run and backed up the node's stdout pipe (the
+    // event-loop starvation observer effect). Throttle per (decision,node).
+    this._logThrottle = new LogThrottle({now: () => this.now()});
     this.refreshConfig();
   }
   /**
@@ -757,6 +762,10 @@ class StorageAdmissionService {
    * @private
    */
   logAllow(targetNodeId, reason, projected) {
+    const suppressed = this._logThrottle.admit(
+      `${ADMISSION_DECISION.ALLOW}:${targetNodeId ?? ''}`,
+    );
+    if (suppressed === null) return;
     this.logger.info(STORAGE_CAPACITY_LOG_MSG.ADMISSION_ALLOWED, {
       targetNodeId,
       decision: ADMISSION_DECISION.ALLOW,
@@ -764,6 +773,7 @@ class StorageAdmissionService {
       estimatedBytes: projected.estimatedBytes,
       projectedUtilizationPercent: projected.projectedUtilizationPercent,
       projectedAvailableBytes: projected.projectedAvailableBytes,
+      suppressedSinceLastEmit: suppressed,
     });
   }
 

@@ -5,6 +5,7 @@
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
 import {extractConjunctiveWhereColumns} from './partition-sql-parser.js';
+import {admitCdcRowFetchLog} from './partition-cdc-log-throttle.js';
 import {
   PARTITION_SERVICE_ERROR_MSG,
   PARTITION_SERVICE_LOG_MSG,
@@ -243,14 +244,20 @@ export function fetchInsertRow({
     });
     if (row) {
       if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
-        logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
-          tableName,
-          rowKeys: Object.keys(row),
-          // CL-017: which replica's db answered — required to attribute
-          // post-churn row divergence between co-located replicas.
-          cdcPartitionId: partitionId,
-          cdcReplicaId: replicaId,
-        });
+        const suppressed = admitCdcRowFetchLog(
+          `${PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW}:${tableName}:${replicaId ?? ''}`,
+        );
+        if (suppressed !== null) {
+          logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
+            tableName,
+            rowKeys: Object.keys(row),
+            // CL-017: which replica's db answered — required to attribute
+            // post-churn row divergence between co-located replicas.
+            cdcPartitionId: partitionId,
+            cdcReplicaId: replicaId,
+            suppressedSinceLastEmit: suppressed,
+          });
+        }
       }
       return row;
     }
@@ -299,13 +306,19 @@ export function fetchUpdatedRow({
 
   if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
     const [keyColumn, keyValue] = entries[0];
-    logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
-      tableName,
-      keyColumn,
-      keyValue,
-      cdcPartitionId: partitionId,
-      cdcReplicaId: replicaId,
-    });
+    const suppressed = admitCdcRowFetchLog(
+      `${PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW}:${tableName}:${replicaId ?? ''}`,
+    );
+    if (suppressed !== null) {
+      logger.info(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
+        tableName,
+        keyColumn,
+        keyValue,
+        cdcPartitionId: partitionId,
+        cdcReplicaId: replicaId,
+        suppressedSinceLastEmit: suppressed,
+      });
+    }
   }
 
   const whereSql = entries
@@ -322,12 +335,18 @@ export function fetchUpdatedRow({
     });
     if (row) {
       if (tableName !== SYSTEM_TABLE_NAME.LOGS) {
-        logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
-          tableName,
-          rowKeys: Object.keys(row),
-          cdcPartitionId: partitionId,
-          cdcReplicaId: replicaId,
-        });
+        const suppressed = admitCdcRowFetchLog(
+          `${PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW}:${tableName}:${replicaId ?? ''}`,
+        );
+        if (suppressed !== null) {
+          logger.info(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
+            tableName,
+            rowKeys: Object.keys(row),
+            cdcPartitionId: partitionId,
+            cdcReplicaId: replicaId,
+            suppressedSinceLastEmit: suppressed,
+          });
+        }
       }
       return row;
     }

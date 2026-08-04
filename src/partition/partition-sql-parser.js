@@ -13,6 +13,7 @@ import {
   PARTITION_SERVICE_VALUE,
 } from './partition-service-constants.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {admitCdcRowFetchLog} from './partition-cdc-log-throttle.js';
 
 const CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES = new Set([
   SYSTEM_TABLE_NAME.LOGS,
@@ -48,6 +49,15 @@ export function extractConjunctiveWhereColumns(whereContent) {
  */
 function shouldEmitCdcRowFetchInfoLog(tableName) {
   return !CDC_ROW_FETCH_LOG_SUPPRESSED_TABLES.has(tableName);
+}
+
+// Route the CDC row-fetch info diagnostics through the shared throttle so a
+// high-volume mutation stream cannot flood stdout (live run-2026-08-04-full:
+// 3300+ such lines on one node backed up its stdout pipe).
+function admitCdcFetch(message, tableName) {
+  return shouldEmitCdcRowFetchInfoLog(tableName) ?
+    admitCdcRowFetchLog(`${message}:${tableName}`) :
+    null;
 }
 
 /**
@@ -180,10 +190,13 @@ export function extractInsertDataFromSQL(sql, tableName, db, logger) {
       );
       const row = stmt.get(pkValue);
       if (row) {
-        if (shouldEmitCdcRowFetchInfoLog(tableName)) {
+        const suppressed =
+          admitCdcFetch(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, tableName);
+        if (suppressed !== null) {
           logger?.info?.(PARTITION_SERVICE_LOG_MSG.FETCHED_INSERT_ROW, {
             tableName,
             rowKeys: Object.keys(row),
+            suppressedSinceLastEmit: suppressed,
           });
         }
         return row;
@@ -214,12 +227,17 @@ export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
   if (whereMatch) {
     const keyColumn = whereMatch[1];
     const keyValue = whereMatch[2];
-    if (shouldEmitCdcRowFetchInfoLog(tableName)) {
-      logger?.info?.(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
-        tableName,
-        keyColumn,
-        keyValue,
-      });
+    {
+      const suppressed =
+        admitCdcFetch(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, tableName);
+      if (suppressed !== null) {
+        logger?.info?.(PARTITION_SERVICE_LOG_MSG.FETCHING_UPDATE_ROW, {
+          tableName,
+          keyColumn,
+          keyValue,
+          suppressedSinceLastEmit: suppressed,
+        });
+      }
     }
     if (!db) {
       return {[keyColumn]: keyValue};
@@ -232,10 +250,13 @@ export function extractUpdateDataFromSQL(sql, tableName, db, logger) {
       );
       const row = stmt.get(keyValue);
       if (row) {
-        if (shouldEmitCdcRowFetchInfoLog(tableName)) {
+        const suppressed =
+          admitCdcFetch(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, tableName);
+        if (suppressed !== null) {
           logger?.info?.(PARTITION_SERVICE_LOG_MSG.FETCHED_UPDATE_ROW, {
             tableName,
             rowKeys: Object.keys(row),
+            suppressedSinceLastEmit: suppressed,
           });
         }
         return row;
