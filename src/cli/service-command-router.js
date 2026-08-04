@@ -11,7 +11,10 @@ const SERVICE_COMMAND_EXIT_CODE = Object.freeze({
 });
 
 const SERVICE_COMMAND = Object.freeze({
+  BUILD: 'build',
+  DEPLOY: 'deploy',
   DEV_INSTALL: 'dev-install',
+  GENERATE: 'generate',
   INIT: 'init',
   INSTALL: 'install',
   LIST: 'list',
@@ -33,6 +36,7 @@ const SERVICE_COMMAND_ERROR_CODE = Object.freeze({
 
 const SERVICE_COMMAND_MESSAGE = Object.freeze({
   INIT_DIRECTORY_REQUIRED: 'init requires exactly one directory',
+  PIPELINE_DIRECTORY_REQUIRED: 'requires exactly one project directory',
 });
 
 const SERVICE_HELP_FLAGS = Object.freeze(new Set([
@@ -42,6 +46,9 @@ const SERVICE_HELP_FLAGS = Object.freeze(new Set([
 
 const SERVICE_HELP = `Usage:
   lagrange service init <directory>
+  lagrange service generate <project-directory>
+  lagrange service build <project-directory>
+  lagrange service deploy <project-directory> --layout <oci-layout-path> --idempotency-key <key>
   lagrange service install <manifest-file> --idempotency-key <key> [--config <json-file>]
   lagrange service dev-install <project-directory> --idempotency-key <key> --platform <platform> --source-date-epoch <epoch> [--output-root <directory>]
   lagrange service list
@@ -50,6 +57,9 @@ const SERVICE_HELP = `Usage:
 
 Commands:
   init <directory>                 Create an OCI-container Node service source project
+  generate <project-directory>     Compile lagrange.service.js into the generated entry and .lagrange deployment records
+  build <project-directory>        Componentize the generated entry into .lagrange/component.wasm and its OCI layout
+  deploy <project-directory>       Replay the generated records over the service-lifecycle SQL grammar
   install <manifest-file>          Submit a pinned remote OCI service manifest
   dev-install <project-directory>  Build local OCI layout and submit its pinned manifest
   list                             List installed service catalog rows
@@ -64,8 +74,15 @@ const SERVICE_LIFECYCLE_COMMANDS = Object.freeze(new Set([
   SERVICE_COMMAND.REMOVE,
   SERVICE_COMMAND.STATUS,
 ]));
+const SERVICE_PIPELINE_COMMANDS = Object.freeze(new Set([
+  SERVICE_COMMAND.BUILD,
+  SERVICE_COMMAND.DEPLOY,
+  SERVICE_COMMAND.GENERATE,
+]));
 const loadServiceLifecycleCommand = () =>
   import('./service-lifecycle-command.js');
+const loadServicePipelineCommand = () =>
+  import('./service-pipeline-router.js');
 
 function printHelp() {
   process.stdout.write(SERVICE_HELP);
@@ -122,12 +139,21 @@ function runServiceCommand(args) {
   }
   if (args.length === 2 && SERVICE_HELP_FLAGS.has(args[1]) &&
       (args[0] === SERVICE_COMMAND.INIT ||
-        SERVICE_LIFECYCLE_COMMANDS.has(args[0]))) {
+        SERVICE_LIFECYCLE_COMMANDS.has(args[0]) ||
+        SERVICE_PIPELINE_COMMANDS.has(args[0]))) {
     printHelp();
     return SERVICE_COMMAND_EXIT_CODE.SUCCESS;
   }
   if (args[0] === SERVICE_COMMAND.INIT) {
     return runInitCommand(args.slice(1));
+  }
+  if (SERVICE_PIPELINE_COMMANDS.has(args[0])) {
+    return loadServicePipelineCommand()
+      .then(({runServicePipelineCommand}) => runServicePipelineCommand(args))
+      .catch((error) => {
+        process.stderr.write(`lagrange service failed: ${error.message}\n`);
+        return SERVICE_COMMAND_EXIT_CODE.FAILURE;
+      });
   }
   if (!SERVICE_LIFECYCLE_COMMANDS.has(args[0])) {
     return usageError(

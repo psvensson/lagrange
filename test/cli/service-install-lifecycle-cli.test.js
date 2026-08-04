@@ -58,6 +58,8 @@ const PROJECT_INPUT_PATH = path.join(
 );
 const LIFECYCLE_OWNER_SPECIFIER = './service-lifecycle-command.js';
 const LIFECYCLE_OWNER_LOADER = 'loadServiceLifecycleCommand';
+const PIPELINE_OWNER_SPECIFIER = './service-pipeline-router.js';
+const PIPELINE_OWNER_LOADER = 'loadServicePipelineCommand';
 const PLATFORM = 'linux/amd64';
 const SOURCE_DATE_EPOCH = 1_700_000_000;
 const IDEMPOTENCY_KEY = 'dev-install-weather-service';
@@ -235,10 +237,16 @@ describe('service lifecycle CLI contract', () => {
     assert.deepEqual(imports.static.sort(), [
       './service-project-scaffold.js',
     ]);
-    assert.deepEqual(imports.dynamic, [LIFECYCLE_OWNER_SPECIFIER]);
+    assert.deepEqual(imports.dynamic.sort(), [
+      LIFECYCLE_OWNER_SPECIFIER,
+      PIPELINE_OWNER_SPECIFIER,
+    ]);
     assert.deepEqual(imports.ownedDynamic, [{
       name: LIFECYCLE_OWNER_LOADER,
       specifier: LIFECYCLE_OWNER_SPECIFIER,
+    }, {
+      name: PIPELINE_OWNER_LOADER,
+      specifier: PIPELINE_OWNER_SPECIFIER,
     }]);
     assert.doesNotMatch(
       source,

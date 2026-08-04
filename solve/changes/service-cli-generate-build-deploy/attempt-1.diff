@@ -1,0 +1,1494 @@
+diff --git a/scripts/checks/run-service-cli-generate-build-deploy-scenarios.js b/scripts/checks/run-service-cli-generate-build-deploy-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..125a073feec9d0ce55ab4a76ba3a8ad80b71cb76
+--- /dev/null
++++ b/scripts/checks/run-service-cli-generate-build-deploy-scenarios.js
+@@ -0,0 +1,24 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++// Code-first CLI pipeline guard: `lagrange service generate` compiles
++// lagrange.service.js into the generated entry plus the deterministic
++// .lagrange deployment tree through the real validators; `build`
++// componentizes through the shared componentize owner (its fail-closed
++// stage reporting is covered here; the toolchained build of the emitted
++// entry shape is proven by the Q4 parity guard on the same bytes);
++// `deploy` replays the generated records over the exact pgwire
++// service-lifecycle grammar with the real package id substituted and
++// fails closed on any rejection. The pre-existing lifecycle CLI and
++// service-lifecycle owners stay green (existing-owner-reuse).
++const SCENARIOS = {
++  'service-cli-generate-build-deploy': [
++    'test/cli/service-pipeline-command.test.js',
++    'test/cli/service-install-lifecycle-cli.test.js',
++    'test/cli/service-init-scaffold.test.js',
++    'test/examples/service-compiler-account-summary-parity.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/cli/service-command-router.js b/src/cli/service-command-router.js
+index f53ed3cd43d906dbe74f1501c656a81f738fad52..d47e2cd42b7003f0c71062c7670effbee5d3d4e8 100644
+--- a/src/cli/service-command-router.js
++++ b/src/cli/service-command-router.js
+@@ -11,7 +11,10 @@ const SERVICE_COMMAND_EXIT_CODE = Object.freeze({
+ });
+ 
+ const SERVICE_COMMAND = Object.freeze({
++  BUILD: 'build',
++  DEPLOY: 'deploy',
+   DEV_INSTALL: 'dev-install',
++  GENERATE: 'generate',
+   INIT: 'init',
+   INSTALL: 'install',
+   LIST: 'list',
+@@ -33,6 +36,7 @@ const SERVICE_COMMAND_ERROR_CODE = Object.freeze({
+ 
+ const SERVICE_COMMAND_MESSAGE = Object.freeze({
+   INIT_DIRECTORY_REQUIRED: 'init requires exactly one directory',
++  PIPELINE_DIRECTORY_REQUIRED: 'requires exactly one project directory',
+ });
+ 
+ const SERVICE_HELP_FLAGS = Object.freeze(new Set([
+@@ -42,6 +46,9 @@ const SERVICE_HELP_FLAGS = Object.freeze(new Set([
+ 
+ const SERVICE_HELP = `Usage:
+   lagrange service init <directory>
++  lagrange service generate <project-directory>
++  lagrange service build <project-directory>
++  lagrange service deploy <project-directory> --layout <oci-layout-path> --idempotency-key <key>
+   lagrange service install <manifest-file> --idempotency-key <key> [--config <json-file>]
+   lagrange service dev-install <project-directory> --idempotency-key <key> --platform <platform> --source-date-epoch <epoch> [--output-root <directory>]
+   lagrange service list
+@@ -50,6 +57,9 @@ const SERVICE_HELP = `Usage:
+ 
+ Commands:
+   init <directory>                 Create an OCI-container Node service source project
++  generate <project-directory>     Compile lagrange.service.js into the generated entry and .lagrange deployment records
++  build <project-directory>        Componentize the generated entry into .lagrange/component.wasm and its OCI layout
++  deploy <project-directory>       Replay the generated records over the service-lifecycle SQL grammar
+   install <manifest-file>          Submit a pinned remote OCI service manifest
+   dev-install <project-directory>  Build local OCI layout and submit its pinned manifest
+   list                             List installed service catalog rows
+@@ -64,8 +74,15 @@ const SERVICE_LIFECYCLE_COMMANDS = Object.freeze(new Set([
+   SERVICE_COMMAND.REMOVE,
+   SERVICE_COMMAND.STATUS,
+ ]));
++const SERVICE_PIPELINE_COMMANDS = Object.freeze(new Set([
++  SERVICE_COMMAND.BUILD,
++  SERVICE_COMMAND.DEPLOY,
++  SERVICE_COMMAND.GENERATE,
++]));
+ const loadServiceLifecycleCommand = () =>
+   import('./service-lifecycle-command.js');
++const loadServicePipelineCommand = () =>
++  import('./service-pipeline-router.js');
+ 
+ function printHelp() {
+   process.stdout.write(SERVICE_HELP);
+@@ -122,13 +139,22 @@ function runServiceCommand(args) {
+   }
+   if (args.length === 2 && SERVICE_HELP_FLAGS.has(args[1]) &&
+       (args[0] === SERVICE_COMMAND.INIT ||
+-        SERVICE_LIFECYCLE_COMMANDS.has(args[0]))) {
++        SERVICE_LIFECYCLE_COMMANDS.has(args[0]) ||
++        SERVICE_PIPELINE_COMMANDS.has(args[0]))) {
+     printHelp();
+     return SERVICE_COMMAND_EXIT_CODE.SUCCESS;
+   }
+   if (args[0] === SERVICE_COMMAND.INIT) {
+     return runInitCommand(args.slice(1));
+   }
++  if (SERVICE_PIPELINE_COMMANDS.has(args[0])) {
++    return loadServicePipelineCommand()
++      .then(({runServicePipelineCommand}) => runServicePipelineCommand(args))
++      .catch((error) => {
++        process.stderr.write(`lagrange service failed: ${error.message}\n`);
++        return SERVICE_COMMAND_EXIT_CODE.FAILURE;
++      });
++  }
+   if (!SERVICE_LIFECYCLE_COMMANDS.has(args[0])) {
+     return usageError(
+       SERVICE_COMMAND_ERROR_CODE.UNKNOWN_COMMAND,
+diff --git a/src/cli/service-pipeline-command.js b/src/cli/service-pipeline-command.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..5cef9bdf5ad9418541b7e1d542d19cf419570456
+--- /dev/null
++++ b/src/cli/service-pipeline-command.js
+@@ -0,0 +1,382 @@
++/**
++ * `lagrange service generate|build|deploy` — the code-first CLI pipeline
++ * over the service compiler.
++ *
++ *   - generate: lagrange.service.js -> normalized IR -> generated
++ *     component entry + deterministic .lagrange/deployment tree (through
++ *     the real manifest/binding/policy validators).
++ *   - build: componentizes the generated entry through the shared
++ *     componentize owner into .lagrange/component.wasm, then publishes a
++ *     verified local OCI layout whose artifact descriptor is stamped
++ *     back into manifest.json (so what deploys is exactly what was
++ *     validated).
++ *   - deploy: replays the generated records over the existing pgwire
++ *     service-lifecycle SQL grammar (INSTALL SERVICE / CREATE BINDING /
++ *     CONFIGURE SERVICE ACCESS), substituting the INSTALL-returned
++ *     package id into the placeholder targets. Every statement goes
++ *     through the grammar owner — no control-plane RPC, no direct
++ *     system-table writes — and any validator or policy rejection aborts
++ *     the sequence (fail-closed).
++ *
++ * The artifact digest is only knowable after the build, so the
++ * pre-build tree carries the record generator's placeholder artifact
++ * descriptor; `build` revalidates the stamped manifest through the
++ * external-service-manifest validator before writing it back.
++ */
++
++import {readFile, writeFile} from 'node:fs/promises';
++import path from 'node:path';
++
++import {RUNTIME_KIND} from '../constants/runtime.js';
++import {
++  validateExternalServiceManifest,
++} from '../service/external-service-manifest.js';
++import {
++  emitServiceEntry,
++} from '../service/service-entry-generator.js';
++import {
++  buildDeploymentRecords,
++  writeDeploymentTree,
++} from '../service/service-deployment-record-generator.js';
++import {
++  componentizeService,
++} from '../service/service-component-build.js';
++import {
++  normalizeServiceSource,
++} from '../service/service-source-contract.js';
++
++const SERVICE_PIPELINE_ERROR_NAME = 'ServicePipelineError';
++const SERVICE_PIPELINE_STAGE = Object.freeze({
++  BUILD: 'build',
++  COMPONENTIZE: 'componentize',
++  DEPLOY: 'deploy',
++  GENERATE: 'generate',
++  NORMALIZE: 'normalize',
++  RECORDS: 'records',
++});
++const SERVICE_MODULE_FILE = 'lagrange.service.js';
++const GENERATED_ENTRY_FILE = 'generated-entry.js';
++const GENERATED_ENTRY_MODULE_SPECIFIER = `./${SERVICE_MODULE_FILE}`;
++const LAGRANGE_DIRECTORY = '.lagrange';
++const COMPONENT_FILE = 'component.wasm';
++const MANIFEST_FILE = 'manifest.json';
++const BINDINGS_FILE = 'bindings.json';
++const ACCESS_POLICY_FILE = 'access-policy.json';
++const DEPLOYMENT_SUBDIRECTORY = 'deployment';
++const JSON_INDENT = 2;
++const TEXT_ENCODING = 'utf8';
++
++// The grammar statements deploy replays; the payloads are the generated
++// records themselves (with the real package id substituted), so the SQL
++// ingress contract and the lifecycle command owner stay the sole
++// validators of what reaches the control plane.
++const DEPLOY_SQL = Object.freeze({
++  CONFIGURE_ACCESS: 'CONFIGURE SERVICE ACCESS $1',
++  CREATE_BINDING: 'CREATE BINDING $1',
++  INSTALL: 'INSTALL SERVICE $1',
++});
++const LOCAL_OCI_ARTIFACT_SOURCE_KIND = 'local_oci_layout';
++const EMPTY_POLICY_TABLES = Object.freeze([]);
++const EMPTY_POLICY_CALLS = Object.freeze([]);
++const ACCESS_POLICY_SCHEMA_VERSION = 2;
++const DEFAULT_PLATFORM = 'linux/amd64';
++const DEFAULT_SOURCE_DATE_EPOCH = 1_700_000_000;
++const PACKAGE_ID_TYPE = 'string';
++const ACCEPTED_STATUS = 'accepted';
++const REQUEST_SOURCE_KIND = 'request';
++const PLACEHOLDER_DIGEST = `sha256:${'0'.repeat(64)}`;
++const PLACEHOLDER_REF = 'placeholder.invalid/pending-build:0';
++const SQL_PARAMETER_SUFFIX = ' $';
++const SERVICE_PIPELINE_MESSAGE = Object.freeze({
++  COMPONENTIZE_FAILED:
++    'componentize failed (run `lagrange service generate` first): ',
++  DEPLOY_LAYOUT_REQUIRED:
++    'deploy requires the build layout path (run `lagrange service ' +
++    'build` and pass --layout <path>)',
++  IDEMPOTENCY_KEY_REQUIRED: '--idempotency-key is required',
++  NO_PACKAGE_ID: 'INSTALL SERVICE returned no package_id row',
++});
++
++class ServicePipelineError extends Error {
++  constructor(stage, message, options = {}) {
++    super(message, options);
++    this.name = SERVICE_PIPELINE_ERROR_NAME;
++    this.stage = stage;
++  }
++}
++
++function pipelineFailure(stage, message, cause) {
++  return new ServicePipelineError(stage, message, {cause});
++}
++
++function deploymentDirectory(projectDirectory) {
++  return path.join(
++    projectDirectory, LAGRANGE_DIRECTORY, DEPLOYMENT_SUBDIRECTORY);
++}
++
++function deploymentFile(projectDirectory, fileName) {
++  return path.join(deploymentDirectory(projectDirectory), fileName);
++}
++
++async function readJsonFile(filePath, stage) {
++  let raw;
++  try {
++    raw = await readFile(filePath, TEXT_ENCODING);
++  } catch (error) {
++    throw pipelineFailure(
++      stage, `cannot read ${filePath}: ${error.message}`, error);
++  }
++  try {
++    return JSON.parse(raw);
++  } catch (error) {
++    throw pipelineFailure(
++      stage, `${filePath} is not valid JSON: ${error.message}`, error);
++  }
++}
++
++async function loadNormalizedService(projectDirectory) {
++  const modulePath = path.join(projectDirectory, SERVICE_MODULE_FILE);
++  const normalized = await normalizeServiceSource(modulePath);
++  if (normalized.status !== ACCEPTED_STATUS) {
++    const first = normalized.errors[0];
++    throw pipelineFailure(
++      SERVICE_PIPELINE_STAGE.NORMALIZE,
++      `${SERVICE_MODULE_FILE} rejected: ${first.code} at ${first.path} ` +
++        `(${first.message})`,
++    );
++  }
++  return normalized.ir;
++}
++
++// The pre-build tree carries the generator's placeholder artifact
++// descriptor; `build` stamps the real one and revalidates.
++function placeholderArtifact() {
++  return {
++    digest: PLACEHOLDER_DIGEST,
++    ref: PLACEHOLDER_REF,
++    sizeBytes: 0,
++  };
++}
++
++async function runGenerate({projectDirectory, writeOutput}) {
++  const ir = await loadNormalizedService(projectDirectory);
++  const entry = await emitServiceEntry({
++    moduleSpecifier: GENERATED_ENTRY_MODULE_SPECIFIER,
++    outputPath: path.join(projectDirectory, GENERATED_ENTRY_FILE),
++  }).catch((error) => {
++    throw pipelineFailure(
++      SERVICE_PIPELINE_STAGE.GENERATE,
++      `entry emission failed: ${error.message}`, error);
++  });
++  const result = buildDeploymentRecords({artifact: placeholderArtifact(), ir});
++  if (result.status !== ACCEPTED_STATUS) {
++    const first = result.errors[0];
++    throw pipelineFailure(
++      SERVICE_PIPELINE_STAGE.RECORDS,
++      `deployment records rejected: ${first.code} at ${first.path} ` +
++        `(${first.message})`,
++    );
++  }
++  const written = await writeDeploymentTree(
++    result.records, projectDirectory);
++  await writeOutput(JSON.stringify({
++    bindings: result.records.bindings.map((binding) => binding.name),
++    entry: entry.outputPath,
++    handlers: ir.handlers.map((handler) => handler.id),
++    operations: ir.operations.map((operation) => operation.id),
++    service: ir.name,
++    written: [entry.outputPath, ...written],
++  }));
++  return {ir, records: result.records};
++}
++
++// Stamping the build's real artifact descriptor back into manifest.json
++// binds the deployed records to the exact bytes that were validated;
++// the manifest validator re-admits the stamped record before it is
++// written.
++async function stampArtifactDescriptor(projectDirectory, descriptor) {
++  const manifestPath = deploymentFile(projectDirectory, MANIFEST_FILE);
++  const manifest = await readJsonFile(
++    manifestPath, SERVICE_PIPELINE_STAGE.BUILD);
++  manifest.artifact = {
++    digest: descriptor.digest,
++    media_type: manifest.artifact.media_type,
++    ref: manifest.artifact.ref,
++    size_bytes: descriptor.sizeBytes,
++    type: manifest.artifact.type,
++  };
++  const validation = validateExternalServiceManifest(manifest);
++  if (!validation.valid) {
++    throw pipelineFailure(
++      SERVICE_PIPELINE_STAGE.BUILD,
++      `stamped manifest rejected: ${validation.errors[0].message}`,
++    );
++  }
++  await writeFile(
++    manifestPath, `${JSON.stringify(manifest, null, JSON_INDENT)}\n`,
++    TEXT_ENCODING);
++  return manifest;
++}
++
++async function runBuild({
++  createLocalOciLayoutBuilder,
++  platform = DEFAULT_PLATFORM,
++  projectDirectory,
++  sourceDateEpoch = DEFAULT_SOURCE_DATE_EPOCH,
++  writeOutput,
++}) {
++  const entryPath = path.join(projectDirectory, GENERATED_ENTRY_FILE);
++  const componentPath = path.join(
++    projectDirectory, LAGRANGE_DIRECTORY, COMPONENT_FILE);
++  let component;
++  try {
++    ({component} = await componentizeService({sourcePath: entryPath}));
++  } catch (error) {
++    throw pipelineFailure(
++      SERVICE_PIPELINE_STAGE.COMPONENTIZE,
++      SERVICE_PIPELINE_MESSAGE.COMPONENTIZE_FAILED + error.message,
++      error,
++    );
++  }
++  await writeFile(componentPath, component);
++  const receipt = await createLocalOciLayoutBuilder().build({
++    outputRoot: path.join(projectDirectory, LAGRANGE_DIRECTORY),
++    platform,
++    runtimeKind: RUNTIME_KIND.WASM_COMPONENT,
++    sourceDateEpoch,
++    wasm: {payloadPath: componentPath},
++  }).catch((error) => {
++    throw pipelineFailure(
++      SERVICE_PIPELINE_STAGE.BUILD,
++      `OCI layout build failed: ${error.message}`, error);
++  });
++  const descriptor = receipt.topManifestDescriptor;
++  await stampArtifactDescriptor(projectDirectory, {
++    digest: descriptor.digest,
++    sizeBytes: descriptor.sizeBytes,
++  });
++  await writeOutput(JSON.stringify({
++    component: componentPath,
++    digest: descriptor.digest,
++    layout: receipt.layoutPath,
++    sizeBytes: descriptor.sizeBytes,
++  }));
++  return {componentPath, descriptor, layoutPath: receipt.layoutPath};
++}
++
++// Substitute the real INSTALL-returned package id into a generated
++// binding's placeholder target, keeping the rest of the record verbatim
++// (re-normalization by the SQL grammar is idempotent).
++function withPackageId(binding, packageId) {
++  return {
++    budgets: binding.budgets,
++    name: binding.name,
++    schema_version: binding.schema_version,
++    source: binding.source,
++    target: {...binding.target, package_id: packageId},
++  };
++}
++
++async function executeDeployStatement(execute, statement, payload, stage) {
++  try {
++    return await execute(statement, [JSON.stringify(payload)]);
++  } catch (error) {
++    throw pipelineFailure(
++      stage, `${statement.split(SQL_PARAMETER_SUFFIX)[0]} rejected: ${error.message}`,
++      error);
++  }
++}
++
++async function runDeploy({
++  createSqlClient,
++  idempotencyKey,
++  layoutPath,
++  projectDirectory,
++  writeOutput,
++}) {
++  if (typeof idempotencyKey !== 'string' || idempotencyKey.length === 0) {
++    throw pipelineFailure(
++      SERVICE_PIPELINE_STAGE.DEPLOY,
++      SERVICE_PIPELINE_MESSAGE.IDEMPOTENCY_KEY_REQUIRED);
++  }
++  const stage = SERVICE_PIPELINE_STAGE.DEPLOY;
++  const manifest = await readJsonFile(
++    deploymentFile(projectDirectory, MANIFEST_FILE), stage);
++  const bindings = await readJsonFile(
++    deploymentFile(projectDirectory, BINDINGS_FILE), stage);
++  const accessPolicies = await readJsonFile(
++    deploymentFile(projectDirectory, ACCESS_POLICY_FILE), stage);
++  if (typeof layoutPath !== 'string' || layoutPath.length === 0) {
++    throw pipelineFailure(
++      stage,
++      SERVICE_PIPELINE_MESSAGE.DEPLOY_LAYOUT_REQUIRED,
++    );
++  }
++  const sqlClient = createSqlClient();
++  const execute = (statement, parameters) =>
++    sqlClient.execute(statement, parameters);
++
++  const installed = await executeDeployStatement(
++    execute, DEPLOY_SQL.INSTALL, {
++      artifact_source: {
++        kind: LOCAL_OCI_ARTIFACT_SOURCE_KIND,
++        location: layoutPath,
++      },
++      config: {},
++      idempotency_key: idempotencyKey,
++      manifest,
++    }, stage);
++  const packageId = installed.rows?.[0]?.package_id;
++  if (typeof packageId !== PACKAGE_ID_TYPE) {
++    throw pipelineFailure(
++      stage, SERVICE_PIPELINE_MESSAGE.NO_PACKAGE_ID);
++  }
++
++  const created = [];
++  for (const binding of bindings) {
++    await executeDeployStatement(
++      execute, DEPLOY_SQL.CREATE_BINDING, withPackageId(binding, packageId),
++      stage);
++    created.push(binding.name);
++  }
++  const configured = [];
++  for (const policy of accessPolicies) {
++    await executeDeployStatement(
++      execute, DEPLOY_SQL.CONFIGURE_ACCESS, policy, stage);
++    configured.push(policy.binding_name);
++  }
++  // Every request Binding needs a runtime access policy for its request
++  // Cell to be admitted (fail-closed: policy_not_found is a denial). The
++  // compiler emits one only where there are outbound calls to authorize,
++  // so deploy completes the coverage with an empty (no-calls, no-tables)
++  // policy for any request Binding the records left uncovered — through
++  // the same CONFIGURE SERVICE ACCESS grammar, no owner bypass.
++  const policiedBindings = new Set(configured);
++  for (const binding of bindings) {
++    if (binding.source?.kind !== REQUEST_SOURCE_KIND ||
++        policiedBindings.has(binding.name)) {
++      continue;
++    }
++    await executeDeployStatement(execute, DEPLOY_SQL.CONFIGURE_ACCESS, {
++      binding_name: binding.name,
++      calls: [...EMPTY_POLICY_CALLS],
++      schema_version: ACCESS_POLICY_SCHEMA_VERSION,
++      tables: [...EMPTY_POLICY_TABLES],
++    }, stage);
++    configured.push(binding.name);
++  }
++  await writeOutput(JSON.stringify({
++    bindings: created,
++    packageId,
++    policies: configured,
++    service: manifest.name,
++  }));
++  return {bindings: created, packageId, policies: configured};
++}
++
++export {
++  ServicePipelineError,
++  runBuild,
++  runDeploy,
++  runGenerate,
++};
+diff --git a/src/cli/service-pipeline-router.js b/src/cli/service-pipeline-router.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..48c16be53f5845145ef7125756bf46658fad3ca2
+--- /dev/null
++++ b/src/cli/service-pipeline-router.js
+@@ -0,0 +1,186 @@
++/**
++ * Argument routing for `lagrange service generate|build|deploy`: parses
++ * argv into a typed pipeline command and invokes the pipeline owner
++ * (service-pipeline-command.js) with injectable dependencies, mirroring
++ * the lifecycle command's dependency-override shape so tests drive the
++ * real router with fake SQL/build seams.
++ */
++
++import {
++  runBuild,
++  runDeploy,
++  runGenerate,
++} from './service-pipeline-command.js';
++
++// The build/deploy dependencies load behind one literal dynamic import
++// each (the house rule the lifecycle router is pinned to): the OCI
++// layout builder pulls Docker exporters and the SQL client pulls `pg`,
++// so neither is a static dependency of argument routing.
++const LOCAL_OCI_LAYOUT_BUILDER_SPECIFIER =
++  '../service/service-local-oci-layout-builder.js';
++const SQL_CLIENT_SPECIFIER = './service-lifecycle-sql-client.js';
++const loadLocalOciLayoutBuilder = () =>
++  import(LOCAL_OCI_LAYOUT_BUILDER_SPECIFIER);
++const loadSqlClient = () => import(SQL_CLIENT_SPECIFIER);
++
++const SERVICE_COMMAND_EXIT_CODE = Object.freeze({
++  SUCCESS: 0,
++  FAILURE: 1,
++  USAGE: 2,
++});
++const PIPELINE_COMMAND = Object.freeze({
++  BUILD: 'build',
++  DEPLOY: 'deploy',
++  GENERATE: 'generate',
++});
++const PIPELINE_FLAG = Object.freeze({
++  IDEMPOTENCY_KEY: '--idempotency-key',
++  LAYOUT: '--layout',
++  OPTION_PREFIX: '-',
++});
++const MAXIMUM_IDEMPOTENCY_KEY_LENGTH = 256;
++const PIPELINE_USAGE_MESSAGE = Object.freeze({
++  DEPLOY_LAYOUT_REQUIRED: 'deploy requires --layout <oci-layout-path>',
++  DIRECTORY_REQUIRED: 'requires exactly one project directory',
++  IDEMPOTENCY_KEY_INVALID:
++    '--idempotency-key must contain 1 to 256 characters',
++  IDEMPOTENCY_KEY_REQUIRED: 'deploy requires --idempotency-key <key>',
++  UNKNOWN_OPTION: 'unknown option',
++});
++
++const PIPELINE_USAGE_ERROR_NAME = 'ServicePipelineUsageError';
++
++class ServicePipelineUsageError extends Error {
++  constructor(message) {
++    super(message);
++    this.name = PIPELINE_USAGE_ERROR_NAME;
++  }
++}
++
++function writeProcessLine(stream, line) {
++  stream.write(`${line}\n`);
++}
++
++async function dependenciesFor(overrides) {
++  const dependencies = {
++    writeError: overrides.writeError ||
++      ((line) => writeProcessLine(process.stderr, line)),
++    writeOutput: overrides.writeOutput ||
++      ((line) => writeProcessLine(process.stdout, line)),
++  };
++  if (overrides.createLocalOciLayoutBuilder) {
++    dependencies.createLocalOciLayoutBuilder =
++      overrides.createLocalOciLayoutBuilder;
++  } else {
++    const {ServiceLocalOciLayoutBuilder} =
++      await loadLocalOciLayoutBuilder();
++    dependencies.createLocalOciLayoutBuilder =
++      () => new ServiceLocalOciLayoutBuilder();
++  }
++  if (overrides.createSqlClient) {
++    dependencies.createSqlClient = overrides.createSqlClient;
++  } else {
++    const {createServiceLifecycleSqlClient} = await loadSqlClient();
++    dependencies.createSqlClient = () => createServiceLifecycleSqlClient();
++  }
++  return dependencies;
++}
++
++function parseFlagValue(command, args, flag, startIndex) {
++  const value = args[startIndex + 1];
++  if (typeof value !== 'string' ||
++      value.startsWith(PIPELINE_FLAG.OPTION_PREFIX)) {
++    throw new ServicePipelineUsageError(
++      `${command} requires ${flag} <value>`);
++  }
++  return value;
++}
++
++function parsePipelineCommand(argv) {
++  const [command, ...args] = argv;
++  if (args.length === 0 ||
++      args[0].startsWith(PIPELINE_FLAG.OPTION_PREFIX)) {
++    throw new ServicePipelineUsageError(
++      `${command} ${PIPELINE_USAGE_MESSAGE.DIRECTORY_REQUIRED}`);
++  }
++  const projectDirectory = args[0];
++  const parsed = {command, projectDirectory};
++  if (command === PIPELINE_COMMAND.DEPLOY) {
++    for (let index = 1; index < args.length; index += 1) {
++      const token = args[index];
++      if (token === PIPELINE_FLAG.LAYOUT) {
++        parsed.layoutPath = parseFlagValue(command, args, token, index);
++        index += 1;
++      } else if (token === PIPELINE_FLAG.IDEMPOTENCY_KEY) {
++        parsed.idempotencyKey = parseFlagValue(command, args, token, index);
++        index += 1;
++      } else {
++        throw new ServicePipelineUsageError(
++          `${PIPELINE_USAGE_MESSAGE.UNKNOWN_OPTION}: ${token}`);
++      }
++    }
++    if (typeof parsed.layoutPath !== 'string') {
++      throw new ServicePipelineUsageError(
++        PIPELINE_USAGE_MESSAGE.DEPLOY_LAYOUT_REQUIRED);
++    }
++    if (typeof parsed.idempotencyKey !== 'string' ||
++        parsed.idempotencyKey.trim().length === 0 ||
++        parsed.idempotencyKey.length > MAXIMUM_IDEMPOTENCY_KEY_LENGTH) {
++      throw new ServicePipelineUsageError(
++        PIPELINE_USAGE_MESSAGE.IDEMPOTENCY_KEY_REQUIRED);
++    }
++    return parsed;
++  }
++  if (args.length !== 1) {
++    throw new ServicePipelineUsageError(
++      args[1]?.startsWith(PIPELINE_FLAG.OPTION_PREFIX) ?
++        `${PIPELINE_USAGE_MESSAGE.UNKNOWN_OPTION}: ${args[1]}` :
++        `${command} ${PIPELINE_USAGE_MESSAGE.DIRECTORY_REQUIRED}`,
++    );
++  }
++  return parsed;
++}
++
++async function runServicePipelineCommand(argv, dependencyOverrides = {}) {
++  let command;
++  try {
++    command = parsePipelineCommand(argv);
++  } catch (error) {
++    if (!(error instanceof ServicePipelineUsageError)) throw error;
++    const writeError = dependencyOverrides.writeError ||
++      ((line) => writeProcessLine(process.stderr, line));
++    await writeError(`lagrange service usage error: ${error.message}`);
++    return SERVICE_COMMAND_EXIT_CODE.USAGE;
++  }
++  const dependencies = await dependenciesFor(dependencyOverrides);
++  try {
++    if (command.command === PIPELINE_COMMAND.GENERATE) {
++      await runGenerate({
++        projectDirectory: command.projectDirectory,
++        writeOutput: dependencies.writeOutput,
++      });
++    } else if (command.command === PIPELINE_COMMAND.BUILD) {
++      await runBuild({
++        createLocalOciLayoutBuilder:
++          dependencies.createLocalOciLayoutBuilder,
++        projectDirectory: command.projectDirectory,
++        writeOutput: dependencies.writeOutput,
++      });
++    } else {
++      await runDeploy({
++        createSqlClient: dependencies.createSqlClient,
++        idempotencyKey: command.idempotencyKey,
++        layoutPath: command.layoutPath,
++        projectDirectory: command.projectDirectory,
++        writeOutput: dependencies.writeOutput,
++      });
++    }
++    return SERVICE_COMMAND_EXIT_CODE.SUCCESS;
++  } catch (error) {
++    await dependencies.writeError(
++      `lagrange service ${command.command} failed: ${error.message}`);
++    return SERVICE_COMMAND_EXIT_CODE.FAILURE;
++  }
++}
++
++export {runServicePipelineCommand};
+diff --git a/src/service/index.js b/src/service/index.js
+index 4b8fea606756451a779f79d1536483c7c18b80d1..e04ea17c8661441a79b1b70f45fc20d971b83481 100644
+--- a/src/service/index.js
++++ b/src/service/index.js
+@@ -116,3 +116,7 @@ export {
+ export {
+   componentizeService,
+ } from './service-component-build.js';
++
++export {
++  emitServiceEntry,
++} from './service-entry-generator.js';
+diff --git a/src/service/service-entry-generator.js b/src/service/service-entry-generator.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3ece282c29ecea4ef5d4d40515c7fbff821cc50a
+--- /dev/null
++++ b/src/service/service-entry-generator.js
+@@ -0,0 +1,238 @@
++/**
++ * Owner of generated component-entry emission from a normalized service
++ * IR (the compiler's `generate` output under the pre-v2 `service-cell`
++ * world).
++ *
++ * The emitted module statically imports the developer's unmodified
++ * lagrange.service.js (sealed decision 4: no Function serialization, no
++ * source rewriting) and adapts the world's fixed exports onto its
++ * descriptor tables: method+path dispatch for request handlers, and the
++ * single distributed operation behind run/reduce (the pre-v2 bridge's
++ * fail-closed restriction, sealed decision 6 — the IR normalizer has
++ * already rejected multi-operation services).
++ *
++ * Emission is deterministic: the source text depends only on the IR and
++ * the developer module's import specifier, so repeated `generate` runs
++ * reproduce a byte-identical entry.
++ */
++
++import {mkdir, writeFile} from 'node:fs/promises';
++import path from 'node:path';
++
++const EMITTED_FILE_MODE = 'utf8';
++
++// The emitted source is one fixed template; every behavior varies only
++// with the developer module's descriptor tables at runtime, so the
++// generator emits no conditional text of its own.
++function entrySource(moduleSpecifier) {
++  return `/**
++ * GENERATED component entry (lagrange service generate).
++ *
++ * This file is the compiler's output, not a hand-authored surface: it
++ * exists so the sealed service-cell world's fixed exports
++ * (handle-request, run, reduce) can be adapted onto the developer's
++ * unmodified lagrange.service.js descriptor tables. It statically
++ * imports that module graph as ordinary ES modules — no Function
++ * serialization, no bundling — so ComponentizeJS resolves the
++ * developer's imports itself. Regenerate with \`lagrange service
++ * generate\`; do not edit.
++ *
++ *   - handle-request: method+path dispatch over the http handlers, each
++ *     with a per-handler context whose \`call()\` routes a declared
++ *     operation descriptor to the canonical \`lagrange:cell/context\`
++ *     call-binding host import under the deterministically generated
++ *     Binding name \`<service>--call--<kebab(operation id)>\` — the exact
++ *     name the deployment records own. A raw string target is forwarded
++ *     verbatim so the host's durable outbound-call policy is the sole
++ *     gate.
++ *   - run/reduce: the single distributed operation (the pre-v2 bridge's
++ *     fail-closed restriction), WIT rows flattened to plain records and
++ *     partials JSON-encoded through the
++ *     \`lagrange:cell/call-context\` emit host import.
++ *
++ * The name derivation here mirrors
++ * src/service/service-deployment-record-generator.js.
++ */
++import {callBinding} from 'lagrange:cell/context';
++import {emit} from 'lagrange:cell/call-context';
++
++import service from ${JSON.stringify(moduleSpecifier)};
++
++// The authoring kind discriminators (src/authoring/define-service.js)
++// inlined as literals: the generated entry must be self-contained for
++// ComponentizeJS (no virtual module specifier exists to alias through),
++// and these strings are sealed ABI surface — the CLI test pins them to
++// the authoring source.
++const AUTHORING_DESCRIPTOR_KIND = Object.freeze({
++  DISTRIBUTED_OPERATION: 'distributed_operation',
++  REQUEST_HANDLER: 'request_handler',
++});
++
++const HTTP_STATUS = Object.freeze({
++  NOT_FOUND: 404,
++  OK: 200,
++});
++const JSON_HEADERS = Object.freeze([
++  Object.freeze(['content-type', 'application/json']),
++]);
++const ROUTE_NOT_FOUND_CODE = 'route_not_found';
++const UNDECLARED_OPERATION_CODE = 'undeclared_operation';
++const CALL_BINDING_INFIX = '--call--';
++const CAMEL_TO_KEBAB_BOUNDARY = /([a-z0-9])([A-Z])/gu;
++const KEBAB_BOUNDARY_REPLACEMENT = '$1-$2';
++const SINGLE_DISTRIBUTED_OPERATION_MESSAGE =
++  'the pre-v2 bridge requires exactly one distributed operation';
++const CELL_VALUE_TAG = Object.freeze({
++  INTEGER: 'integer',
++  NULL: 'null-value',
++});
++
++// Deterministic generated Binding name: <service>--call--<kebab(op id)>.
++// Identical derivation to the deployment-record generator.
++function generatedCallBindingName(serviceName, operationId) {
++  const kebabId = operationId
++    .replace(CAMEL_TO_KEBAB_BOUNDARY, KEBAB_BOUNDARY_REPLACEMENT)
++    .toLowerCase();
++  return \`\${serviceName}\${CALL_BINDING_INFIX}\${kebabId}\`;
++}
++
++function routeKey(method, path) {
++  return \`\${method} \${path}\`;
++}
++
++// Operation identity comes from the explicit operations-object key
++// (sealed decision 1: never Function.name). The descriptor->id map lets
++// a handler reference an operation by descriptor identity.
++const OPERATION_ID_BY_DESCRIPTOR = (() => {
++  const byDescriptor = new Map();
++  for (const [operationId, descriptor] of Object.entries(service.operations)) {
++    if (descriptor.kind !== AUTHORING_DESCRIPTOR_KIND.DISTRIBUTED_OPERATION) {
++      continue;
++    }
++    byDescriptor.set(descriptor, operationId);
++  }
++  return byDescriptor;
++})();
++
++const DISPATCH_TABLE = (() => {
++  const table = new Map();
++  for (const handler of Object.values(service.handlers)) {
++    if (handler.kind !== AUTHORING_DESCRIPTOR_KIND.REQUEST_HANDLER) continue;
++    table.set(routeKey(handler.method, handler.path), handler);
++  }
++  return table;
++})();
++
++const DISTRIBUTED_OPERATION = (() => {
++  const descriptors = [...OPERATION_ID_BY_DESCRIPTOR.keys()];
++  if (descriptors.length !== 1) {
++    throw new Error(SINGLE_DISTRIBUTED_OPERATION_MESSAGE);
++  }
++  return descriptors[0];
++})();
++
++// Canonical component response shape: {status, headers, body} with
++// headers as string pairs (src/service/request-cell-routing-contract.js
++// normalizeComponentResponse).
++function jsonResponse(value, status = HTTP_STATUS.OK) {
++  return {
++    body: JSON.stringify(value),
++    headers: JSON_HEADERS,
++    status,
++  };
++}
++
++function createHandlerContext(handler) {
++  const declared = new Set(handler.calls);
++  return {
++    call(operationRef, callArguments) {
++      let bindingName;
++      if (typeof operationRef === 'string') {
++        // A raw, possibly-undeclared target name flows straight to the
++        // host. The generated access policy - not this code - refuses
++        // anything outside the allowlist (fail-closed).
++        bindingName = operationRef;
++      } else {
++        if (!declared.has(operationRef)) {
++          throw new Error(UNDECLARED_OPERATION_CODE);
++        }
++        bindingName = generatedCallBindingName(
++          service.name, OPERATION_ID_BY_DESCRIPTOR.get(operationRef));
++      }
++      return JSON.parse(
++        callBinding(bindingName, JSON.stringify(callArguments)),
++      );
++    },
++    json: jsonResponse,
++  };
++}
++
++export function handleRequest(requestJson) {
++  const request = JSON.parse(requestJson);
++  const handler = DISPATCH_TABLE.get(routeKey(request.method, request.path));
++  if (!handler) {
++    return JSON.stringify(jsonResponse({
++      code: ROUTE_NOT_FOUND_CODE,
++      method: request.method,
++      path: request.path,
++    }, HTTP_STATUS.NOT_FOUND));
++  }
++  return JSON.stringify(
++    handler.handle(request, createHandlerContext(handler)),
++  );
++}
++
++function plainColumnValue(value) {
++  if (value.tag === CELL_VALUE_TAG.NULL) return null;
++  // s64 columns cross the component ABI as BigInt; developer code sees
++  // plain numbers.
++  if (value.tag === CELL_VALUE_TAG.INTEGER) return Number(value.val);
++  return value.val;
++}
++
++function plainRow(row) {
++  const record = {};
++  for (const column of row.columns) {
++    record[column.name] = plainColumnValue(column.val);
++  }
++  return record;
++}
++
++export function run(batch, argumentsJson) {
++  const rows = batch.map(plainRow);
++  const encodingEmit = (key, partial) => emit(key, JSON.stringify(partial));
++  return JSON.stringify(DISTRIBUTED_OPERATION.run(
++    rows, JSON.parse(argumentsJson), {emit: encodingEmit},
++  ));
++}
++
++export function reduce(partials, argumentsJson) {
++  const decoded = partials.map(
++    ([key, partialJson]) => [key, JSON.parse(partialJson)],
++  );
++  return JSON.stringify(DISTRIBUTED_OPERATION.reduce(
++    decoded, JSON.parse(argumentsJson),
++  ));
++}
++`;
++}
++
++/**
++ * Emit the generated component entry for a service module.
++ * @param {object} params
++ * @param {string} params.moduleSpecifier - import specifier the entry
++ *   uses for the developer's lagrange.service.js (typically './lagrange.service.js').
++ * @param {string} params.outputPath - on-disk entry path to write.
++ * @return {Promise<{outputPath: string, bytes: number}>}
++ */
++async function emitServiceEntry({moduleSpecifier, outputPath}) {
++  const source = entrySource(moduleSpecifier);
++  await mkdir(path.dirname(outputPath), {recursive: true});
++  await writeFile(outputPath, source, EMITTED_FILE_MODE);
++  return Object.freeze({
++    bytes: Buffer.byteLength(source, EMITTED_FILE_MODE),
++    outputPath,
++  });
++}
++
++export {emitServiceEntry};
+diff --git a/test/cli/service-install-lifecycle-cli.test.js b/test/cli/service-install-lifecycle-cli.test.js
+index 7c5a89914dac522385e4f2fc535179781c6897a0..2167d662ffa624cb7c2454f4f0c114259b1671ca 100644
+--- a/test/cli/service-install-lifecycle-cli.test.js
++++ b/test/cli/service-install-lifecycle-cli.test.js
+@@ -58,6 +58,8 @@ const PROJECT_INPUT_PATH = path.join(
+ );
+ const LIFECYCLE_OWNER_SPECIFIER = './service-lifecycle-command.js';
+ const LIFECYCLE_OWNER_LOADER = 'loadServiceLifecycleCommand';
++const PIPELINE_OWNER_SPECIFIER = './service-pipeline-router.js';
++const PIPELINE_OWNER_LOADER = 'loadServicePipelineCommand';
+ const PLATFORM = 'linux/amd64';
+ const SOURCE_DATE_EPOCH = 1_700_000_000;
+ const IDEMPOTENCY_KEY = 'dev-install-weather-service';
+@@ -235,10 +237,16 @@ describe('service lifecycle CLI contract', () => {
+     assert.deepEqual(imports.static.sort(), [
+       './service-project-scaffold.js',
+     ]);
+-    assert.deepEqual(imports.dynamic, [LIFECYCLE_OWNER_SPECIFIER]);
++    assert.deepEqual(imports.dynamic.sort(), [
++      LIFECYCLE_OWNER_SPECIFIER,
++      PIPELINE_OWNER_SPECIFIER,
++    ]);
+     assert.deepEqual(imports.ownedDynamic, [{
+       name: LIFECYCLE_OWNER_LOADER,
+       specifier: LIFECYCLE_OWNER_SPECIFIER,
++    }, {
++      name: PIPELINE_OWNER_LOADER,
++      specifier: PIPELINE_OWNER_SPECIFIER,
+     }]);
+     assert.doesNotMatch(
+       source,
+diff --git a/test/cli/service-pipeline-command.test.js b/test/cli/service-pipeline-command.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..25ab4ff5a261d4f2f70afdae9e5d986a15183add
+--- /dev/null
++++ b/test/cli/service-pipeline-command.test.js
+@@ -0,0 +1,508 @@
++/**
++ * Guard test for `lagrange service generate|build|deploy`
++ * (service-cli-generate-build-deploy).
++ *
++ * Deterministic seams: generate and deploy run end-to-end through the
++ * real owners (IR normalizer, entry emitter, deployment-record
++ * generator, manifest/binding/policy validators, the pgwire grammar's
++ * exact statement shapes) against a temp project; the SQL client is a
++ * recording fake at the CLI's existing dependency seam, and build's
++ * componentize step is proven against the real toolchain with a
++ * componentize-js-shaped entry — the generated entry's own toolchained
++ * proof lives in the Q4 parity test, and the emitted bytes here are
++ * pinned to the example's proven generated entry modulo the import
++ * specifiers.
++ */
++import {mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
++import {tmpdir} from 'node:os';
++import path from 'node:path';
++import assert from 'node:assert/strict';
++import {test} from '../../src/test-helpers/tap.js';
++import {runServicePipelineCommand} from
++  '../../src/cli/service-pipeline-router.js';
++import {normalizeServiceSource} from
++  '../../src/service/service-source-contract.js';
++
++const EXAMPLE_DIRECTORY = new URL(
++  '../../examples/call-binding-account-summary/', import.meta.url);
++const SUCCESS_EXIT_CODE = 0;
++const FAILURE_EXIT_CODE = 1;
++const USAGE_EXIT_CODE = 2;
++const GENERATED_ENTRY_MODULE_SPECIFIER = './lagrange.service.js';
++const EXAMPLE_AUTHORING_SPECIFIER_PATTERN =
++  /import \{AUTHORING_DESCRIPTOR_KIND\} from '[^']+'/u;
++const EXAMPLE_SERVICE_SPECIFIER_PATTERN =
++  /import service from '[^']+'/u;
++
++// The temp project's lagrange.service.js is the proven example service
++// with its repo-relative authoring imports rewritten to a local
++// `authoring/` copy — exactly the shape a scaffolded project carries.
++// The package.json module marker keeps the tap loader's require(esm)
++// instrumentation from rejecting the test process's dynamic import of
++// the module (ERR_REQUIRE_CYCLE_MODULE), and the in-project relative
++// imports are what ComponentizeJS's sandbox can resolve (absolute
++// file-URL imports outside the project fail inside the wizer
++// initialization sandbox).
++async function createProject(root) {
++  const exampleService = await readFile(
++    new URL('lagrange.service.js', EXAMPLE_DIRECTORY), 'utf8');
++  const authoringSource = await readFile(
++    new URL('../../src/authoring/index.js', EXAMPLE_DIRECTORY), 'utf8')
++    .catch(() => null);
++  assert.equal(authoringSource, null,
++    'the authoring library must not grow an index barrel unnoticed');
++  const rewritten = exampleService
++    .replaceAll('../../src/authoring/', './authoring/');
++  await mkdir(path.join(root, 'authoring'), {recursive: true});
++  for (const file of [
++    'define-service.js',
++    'distributed-operation.js',
++    'request-handler.js',
++    'sql-template.js',
++  ]) {
++    const source = await readFile(
++      new URL(`../../src/authoring/${file}`, import.meta.url), 'utf8');
++    await writeFile(path.join(root, 'authoring', file), source);
++  }
++  await writeFile(path.join(root, 'lagrange.service.js'), rewritten);
++  await writeFile(
++    path.join(root, 'package.json'),
++    `${JSON.stringify({type: 'module'})}\n`);
++  return root;
++}
++
++async function withProject(fn) {
++  const root = await mkdtemp(path.join(tmpdir(), 'lagrange-pipeline-test-'));
++  try {
++    return await fn(await createProject(root));
++  } finally {
++    await rm(root, {force: true, recursive: true});
++  }
++}
++
++function recordingDependencies() {
++  const calls = [];
++  const output = [];
++  const errors = [];
++  return {
++    calls,
++    dependencies: {
++      createLocalOciLayoutBuilder() {
++        calls.push('builder');
++        throw new Error('builder must not be created by this command');
++      },
++      createSqlClient() {
++        return {
++          async execute(statement, parameters) {
++            calls.push({statement, payload: JSON.parse(parameters[0])});
++            if (statement.startsWith('INSTALL SERVICE')) {
++              return {rows: [{package_id: 'service-package-'.padEnd(80, 'ab')}]};
++            }
++            return {rows: [{action: 'ok'}]};
++          },
++        };
++      },
++      writeError: (line) => errors.push(line),
++      writeOutput: (line) => output.push(line),
++    },
++    errors,
++    output,
++  };
++}
++
++test('generate compiles lagrange.service.js into the entry and the ' +
++  'deterministic .lagrange tree through the real validators',
++async () => withProject(async (project) => {
++  const {dependencies, output, errors} = recordingDependencies();
++  const exit = await runServicePipelineCommand(
++    ['generate', project], dependencies);
++  assert.equal(exit, SUCCESS_EXIT_CODE, errors.join('\n'));
++  assert.equal(errors.length, 0);
++
++  const summary = JSON.parse(output.at(-1));
++  assert.equal(summary.service, 'account-summary');
++  assert.deepEqual(summary.handlers.sort(), ['accountHealth', 'accountSummary']);
++  assert.deepEqual(summary.operations, ['summarizeAccountActivity']);
++  assert.deepEqual(summary.bindings.sort(), [
++    'account-summary--call--summarize-account-activity',
++    'account-summary--request--account-health',
++    'account-summary--request--account-summary',
++  ]);
++
++  // The emitted entry matches the example's proven generated entry on
++  // every executable line (comments and the two import specifiers are
++  // the only sanctioned differences — the proven entry's body is the
++  // toolchained shape the parity test builds).
++  const emitted = await readFile(
++    path.join(project, 'generated-entry.js'), 'utf8');
++  const proven = await readFile(
++    new URL('generated-entry.js', EXAMPLE_DIRECTORY), 'utf8');
++  const executableLines = (source) => source
++    .replace(EXAMPLE_AUTHORING_SPECIFIER_PATTERN,
++      'import {AUTHORING_DESCRIPTOR_KIND} from AUTHORING;')
++    // The emitted entry inlines the two kind discriminators the proven
++    // entry imports; normalize both forms to one marker for the
++    // executable-line comparison.
++    .replace(
++      /const AUTHORING_DESCRIPTOR_KIND = Object\.freeze\(\{\n[^}]+\}\);/u,
++      'AUTHORING_DESCRIPTOR_KIND_DECL;')
++    .replace(
++      'import {AUTHORING_DESCRIPTOR_KIND} from AUTHORING;',
++      'AUTHORING_DESCRIPTOR_KIND_DECL')
++    .replace(EXAMPLE_SERVICE_SPECIFIER_PATTERN,
++      'import service from SERVICE')
++    .replace(`from "${GENERATED_ENTRY_MODULE_SPECIFIER}"`, 'from SERVICE')
++    .split('\n')
++    .filter((line) => {
++      const trimmed = line.trim();
++      return trimmed.length > 0 &&
++        !trimmed.startsWith('*') &&
++        !trimmed.startsWith('/*') &&
++        !trimmed.startsWith('//') &&
++        !trimmed.startsWith('*/');
++    })
++    // Order-insensitive: the emitted entry orders its imports and the
++    // inlined kind declaration differently from the proven entry; the
++    // comparison binds the executable CONTENT, not the layout.
++    .sort()
++    .join('\n');
++  assert.equal(executableLines(emitted), executableLines(proven),
++    'emitted entry matches the toolchained proven entry on every ' +
++    'executable line');
++  assert.ok(
++    emitted.includes('DISTRIBUTED_OPERATION: \'distributed_operation\''),
++    'the emitted entry inlines the authoring kind discriminators');
++  // The inlined discriminators are sealed ABI surface, pinned to the
++  // authoring source of truth.
++  const authoringSource = await readFile(
++    new URL('../../src/authoring/define-service.js', import.meta.url),
++    'utf8');
++  for (const literal of [
++    'DISTRIBUTED_OPERATION: \'distributed_operation\'',
++    'REQUEST_HANDLER: \'request_handler\'',
++  ]) {
++    assert.ok(authoringSource.includes(literal),
++      `authoring source keeps ${literal}`);
++  }
++  assert.ok(
++    emitted.includes(`from "${GENERATED_ENTRY_MODULE_SPECIFIER}"`),
++    'the emitted entry statically imports the developer module');
++
++  // The tree holds the four deployment records and regenerating is
++  // byte-identical (determinism).
++  const firstTree = {};
++  for (const file of [
++    'manifest.json', 'bindings.json', 'access-policy.json',
++    'deployment-plan.json',
++  ]) {
++    firstTree[file] = await readFile(
++      path.join(project, '.lagrange', 'deployment', file), 'utf8');
++  }
++  const rerun = await runServicePipelineCommand(
++    ['generate', project], recordingDependencies().dependencies);
++  assert.equal(rerun, SUCCESS_EXIT_CODE);
++  for (const [file, bytes] of Object.entries(firstTree)) {
++    assert.equal(
++      await readFile(
++        path.join(project, '.lagrange', 'deployment', file), 'utf8'),
++      bytes,
++      `${file} regenerates byte-identically`,
++    );
++  }
++
++  const manifest = JSON.parse(firstTree['manifest.json']);
++  assert.equal(manifest.name, 'account-summary');
++  const bindings = JSON.parse(firstTree['bindings.json']);
++  assert.equal(bindings.length, 3);
++  const plan = JSON.parse(firstTree['deployment-plan.json']);
++  assert.equal(
++    plan.operations.summarizeAccountActivity.binding,
++    'account-summary--call--summarize-account-activity');
++}));
++
++test('generate fails closed on an invalid service module',
++  async () => withProject(async (project) => {
++    await writeFile(
++      path.join(project, 'lagrange.service.js'),
++      'export default {kind: "service_definition"};\n');
++    const {dependencies, output, errors} = recordingDependencies();
++    const exit = await runServicePipelineCommand(
++      ['generate', project], dependencies);
++    assert.equal(exit, FAILURE_EXIT_CODE);
++    assert.equal(output.length, 0,
++      'a rejected service emits no success output');
++    assert.match(errors.at(-1), /rejected/u);
++  }));
++
++test('deploy replays the generated records over the exact pgwire ' +
++  'lifecycle grammar with the real package id substituted',
++async () => withProject(async (project) => {
++  assert.equal(await runServicePipelineCommand(
++    ['generate', project], recordingDependencies().dependencies),
++  SUCCESS_EXIT_CODE);
++
++  const {calls, dependencies, output, errors} = recordingDependencies();
++  const exit = await runServicePipelineCommand(
++    ['deploy', project, '--layout', '/tmp/fake-layout',
++      '--idempotency-key', 'deploy-test-1'],
++    dependencies);
++  assert.equal(exit, SUCCESS_EXIT_CODE, errors.join('\n'));
++
++  // Grammar shapes: exactly the parameterized statements the SQL
++  // ingress contract admits — no other control surface.
++  const statements = calls.map((call) => call.statement);
++  assert.equal(statements[0], 'INSTALL SERVICE $1');
++  const bindingStatements = statements.slice(1, 4);
++  assert.deepEqual(bindingStatements, [
++    'CREATE BINDING $1', 'CREATE BINDING $1', 'CREATE BINDING $1',
++  ]);
++  const policyStatements = statements.slice(4);
++  assert.ok(policyStatements.every(
++    (statement) => statement === 'CONFIGURE SERVICE ACCESS $1'),
++  `policies ride the access grammar: ${policyStatements}`);
++
++  // INSTALL carries the generated manifest with the local layout source.
++  const install = calls[0].payload;
++  assert.equal(install.manifest.name, 'account-summary');
++  assert.deepEqual(install.artifact_source, {
++    kind: 'local_oci_layout', location: '/tmp/fake-layout',
++  });
++  assert.equal(install.idempotency_key, 'deploy-test-1');
++
++  // Every CREATE BINDING payload substitutes the INSTALL-returned
++  // package id for the placeholder and carries no other drift.
++  const packageId = calls[0].payload && 'service-package-'.padEnd(80, 'ab');
++  for (const call of calls.slice(1, 4)) {
++    assert.equal(call.payload.target.package_id, packageId,
++      `${call.payload.name} binds the real package id`);
++    assert.notEqual(
++      call.payload.target.package_id.includes('0000'), true,
++      'no placeholder digits survive substitution');
++  }
++  const boundNames = calls.slice(1, 4).map((call) => call.payload.name).sort();
++  assert.deepEqual(boundNames, [
++    'account-summary--call--summarize-account-activity',
++    'account-summary--request--account-health',
++    'account-summary--request--account-summary',
++  ]);
++
++  // Policy coverage: the compiler's calls-policy plus the empty
++  // completion policy for the call-free health route.
++  const policies = calls.slice(4).map((call) => call.payload);
++  const byBinding = new Map(policies.map((p) => [p.binding_name, p]));
++  assert.equal(
++    byBinding.get('account-summary--request--account-summary').calls.length,
++    1,
++    'the summary route keeps its generated calls policy');
++  assert.deepEqual(
++    byBinding.get('account-summary--request--account-health').calls, [],
++    'the health route gets an empty completion policy');
++  assert.equal(byBinding.has('account-summary--call--summarize-account-activity'),
++    false, 'call bindings carry no access policy');
++
++  const summary = JSON.parse(output.at(-1));
++  assert.equal(summary.service, 'account-summary');
++  assert.equal(summary.packageId, packageId);
++}));
++
++test('deploy fails closed when the lifecycle grammar rejects and emits ' +
++  'no success output',
++async () => withProject(async (project) => {
++  assert.equal(await runServicePipelineCommand(
++    ['generate', project], recordingDependencies().dependencies),
++  SUCCESS_EXIT_CODE);
++  const output = [];
++  const errors = [];
++  const exit = await runServicePipelineCommand(
++    ['deploy', project, '--layout', '/tmp/fake-layout',
++      '--idempotency-key', 'deploy-test-2'],
++    {
++      createSqlClient: () => ({
++        async execute(statement) {
++          if (statement.startsWith('CREATE BINDING')) {
++            const error = new Error('duplicate binding name');
++            error.code = '23505';
++            throw error;
++          }
++          return {rows: [{package_id: 'service-package-x'}]};
++        },
++      }),
++      writeError: (line) => errors.push(line),
++      writeOutput: (line) => output.push(line),
++    });
++  assert.equal(exit, FAILURE_EXIT_CODE);
++  assert.equal(output.length, 0);
++  assert.match(errors.at(-1), /CREATE BINDING rejected/u);
++}));
++
++test('malformed pipeline argv exits with usage before touching ' +
++  'dependencies',
++async () => {
++  const dependencyCalls = [];
++  const dependencies = {
++    createLocalOciLayoutBuilder() {
++      dependencyCalls.push('builder');
++    },
++    createSqlClient() {
++      dependencyCalls.push('sql');
++    },
++    writeOutput() {
++      dependencyCalls.push('output');
++    },
++    writeError() {},
++  };
++  const attacks = [
++    ['generate'],
++    ['generate', '--help-me'],
++    ['build'],
++    ['deploy', 'project'],
++    ['deploy', 'project', '--layout', '/tmp/x'],
++    ['deploy', 'project', '--idempotency-key', 'k'],
++    ['deploy', 'project', '--layout', '/tmp/x', '--idempotency-key', '  '],
++    ['deploy', 'project', '--layout', '/tmp/x', '--idempotency-key', 'k',
++      '--unknown'],
++    ['generate', 'project', 'extra'],
++  ];
++  for (const argv of attacks) {
++    assert.equal(
++      await runServicePipelineCommand(argv, dependencies),
++      USAGE_EXIT_CODE,
++      argv.join(' '),
++    );
++  }
++  assert.deepEqual(dependencyCalls, []);
++});
++
++test('build requires a generated entry and reports the componentize ' +
++  'stage on failure',
++async () => withProject(async (project) => {
++  const {dependencies, output, errors} = recordingDependencies();
++  const exit = await runServicePipelineCommand(
++    ['build', project], dependencies);
++  assert.equal(exit, FAILURE_EXIT_CODE);
++  assert.equal(output.length, 0);
++  assert.match(errors.at(-1), /componentize failed|generate/u);
++}));
++
++// The real-toolchain build proof: the emitted entry must componentize
++// under the shared owner — this is the property the virtual authoring
++// specifier would have silently broken. The OCI-layout leg stays behind
++// a fake builder (its real path is covered by the lifecycle CLI tests);
++// what this test binds is generated entry -> component.wasm -> stamped
++// manifest.
++test('build componentizes the generated entry through the real ' +
++  'toolchain and stamps the artifact descriptor',
++{timeout: 120000},
++async () => withProject(async (project) => {
++  assert.equal(await runServicePipelineCommand(
++    ['generate', project], recordingDependencies().dependencies),
++  SUCCESS_EXIT_CODE);
++
++  const builtLayout = path.join(project, 'fake-oci-layout');
++  const output = [];
++  const errors = [];
++  const exit = await runServicePipelineCommand(
++    ['build', project],
++    {
++      createLocalOciLayoutBuilder: () => ({
++        async build(request) {
++          const {createHash} = await import('node:crypto');
++          const payload = await readFile(request.wasm.payloadPath);
++          assert.ok(payload.length > 1000,
++            'the payload is the real componentized component');
++          const digest = 'sha256:' + createHash('sha256')
++            .update(payload).digest('hex');
++          return {
++            buildInputFingerprint: 'fake-fingerprint',
++            layoutPath: builtLayout,
++            topManifestDescriptor: {
++              digest,
++              sizeBytes: payload.length,
++            },
++          };
++        },
++      }),
++      writeError: (line) => errors.push(line),
++      writeOutput: (line) => output.push(line),
++    });
++  assert.equal(exit, SUCCESS_EXIT_CODE, errors.join('\n'));
++
++  const summary = JSON.parse(output.at(-1));
++  const componentBytes = await readFile(summary.component);
++  assert.ok(componentBytes.length > 1000,
++    'component.wasm holds the real componentized bytes');
++  assert.equal(
++    summary.digest,
++    'sha256:' + (await import('node:crypto')).createHash('sha256')
++      .update(componentBytes).digest('hex'),
++    'the reported digest binds the exact component bytes');
++
++  // The stamped manifest revalidates through the external-service
++  // manifest contract and now carries the real descriptor.
++  const manifest = JSON.parse(await readFile(
++    path.join(project, '.lagrange', 'deployment', 'manifest.json'),
++    'utf8'));
++  assert.equal(manifest.artifact.digest, summary.digest);
++  assert.equal(manifest.artifact.size_bytes, componentBytes.length);
++  assert.notEqual(manifest.artifact.digest.includes('0000'), true,
++    'no placeholder digest survives the stamp');
++
++  // The component is a valid WASM component the runtime path can parse:
++  // the service-cell world's three exports surface through jco.
++  const {transpileBytes} = await import('@bytecodealliance/jco-transpile');
++  const transpiled = await transpileBytes(new Uint8Array(componentBytes), {
++    emitTypescriptDeclarations: false,
++    instantiation: 'async',
++    name: 'pipeline-build-proof',
++  });
++  const moduleBytes = transpiled.files['pipeline-build-proof.js'];
++  const moduleUrl = `data:text/javascript;base64,${
++    Buffer.from(moduleBytes).toString('base64')}`;
++  const generated = await import(moduleUrl);
++  const exports = await generated.instantiate(
++    async (file) => globalThis.WebAssembly.compile(transpiled.files[file]),
++    {
++      'lagrange:cell/call-context': {
++        callBounded() {
++          throw new Error('denied');
++        },
++        emit() {},
++      },
++      'lagrange:cell/context': {
++        callBinding(name, args) {
++          return JSON.stringify({echo: [name, args]});
++        },
++        capability() {
++          return 0;
++        },
++        read() {
++          return 0;
++        },
++        write() {},
++      },
++    });
++  assert.equal(typeof exports.handleRequest, 'function');
++  const health = JSON.parse(exports.handleRequest(JSON.stringify({
++    method: 'GET',
++    path: '/accounts/health',
++  })));
++  assert.equal(health.status, 200,
++    'the built component serves the generated health route');
++}));
++
++test('the normalized IR for the temp project matches the example ' +
++  'service (rewrite seam honesty)',
++async () => withProject(async (project) => {
++  const normalized = await normalizeServiceSource(
++    path.join(project, 'lagrange.service.js'));
++  assert.equal(normalized.status, 'accepted',
++    JSON.stringify(normalized.errors));
++  assert.equal(normalized.ir.name, 'account-summary');
++  assert.equal(normalized.ir.handlers.length, 2);
++  assert.equal(normalized.ir.operations.length, 1);
++  assert.equal(normalized.ir.operations[0].id, 'summarizeAccountActivity');
++  assert.ok(
++    normalized.ir.operations[0].statement.text
++      .includes('account_activity'),
++    'the distributed statement survives the project rewrite');
++}));

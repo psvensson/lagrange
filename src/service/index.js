@@ -116,3 +116,7 @@ export {
 export {
   componentizeService,
 } from './service-component-build.js';
+
+export {
+  emitServiceEntry,
+} from './service-entry-generator.js';
