@@ -123,9 +123,14 @@ test('SEA bundle smoke test', async (t) => {
   });
   t.equal(bundleServiceInit.exitCode, 0, 'bundle service init exits cleanly');
   t.equal(
-    fs.existsSync(join(serviceTarget, 'lagrange-service.template.json')),
+    fs.existsSync(join(serviceTarget, 'lagrange.service.js')),
     true,
-    'bundle service init creates the manifest template',
+    'bundle service init creates the WASM-first service source',
+  );
+  t.equal(
+    fs.existsSync(join(serviceTarget, 'authoring', 'define-service.js')),
+    true,
+    'bundle service init vendors the staged authoring library',
   );
 
   const bundleSecret = 'BUNDLE_SECRET_MUST_NOT_LEAK';

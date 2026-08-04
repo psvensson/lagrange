@@ -18,12 +18,24 @@
  * (no inlined/bundled source string), which is the property the parity
  * test asserts.
  */
+import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 // The canonical authoring WIT package at the repo root (wit/world.wit),
 // carrying the combined service-cell world (handle-request, run, reduce).
-const CANONICAL_WIT_DIRECTORY =
-  fileURLToPath(new URL('../../wit', import.meta.url));
+// Resolved lazily and SEA-aware: in the single-executable bundle esbuild
+// rewrites import.meta.url to undefined (a top-level `new URL` here
+// crashed the whole bundled entrypoint at module load); component builds
+// are a dev/CLI concern, so the bundle resolves the staged path beside
+// the executable instead.
+const STAGED_WIT_DIRECTORY = 'wit';
+
+function canonicalWitDirectory() {
+  if (process.env.SEA_BUILD === 'true') {
+    return path.join(path.dirname(process.argv[1]), STAGED_WIT_DIRECTORY);
+  }
+  return fileURLToPath(new URL('../../wit', import.meta.url));
+}
 const SERVICE_CELL_WORLD = 'service-cell';
 // Build-time-only devDependency; the specifier lives in a named const so
 // the dynamic import carries no bare module literal.
@@ -49,13 +61,13 @@ const DISABLED_ENGINE_FEATURES = Object.freeze([
 async function componentizeService({
   sourcePath,
   worldName = SERVICE_CELL_WORLD,
-  witPath = CANONICAL_WIT_DIRECTORY,
+  witPath = undefined,
 }) {
   const {componentize} = await import(COMPONENTIZE_MODULE);
   const options = {
     disableFeatures: [...DISABLED_ENGINE_FEATURES],
     sourcePath,
-    witPath,
+    witPath: witPath ?? canonicalWitDirectory(),
     worldName,
   };
   const {component} = await componentize(options);

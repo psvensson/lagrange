@@ -149,6 +149,15 @@ function stageRuntimePackages() {
     cpSync(sourceDir, targetDir, {recursive: true});
     console.log(`  ✓ staged runtime package ${packageName}`);
   }
+
+  // The WASM-first `service init` scaffold vendors the guest-safe
+  // authoring library from a directory beside the executable in SEA
+  // builds (service-wasm-scaffold.js authoringSourceDirectory).
+  const authoringTarget = join(projectRoot, 'dist', 'authoring');
+  rmSync(authoringTarget, {recursive: true, force: true});
+  cpSync(join(projectRoot, 'src', 'authoring'), authoringTarget,
+    {recursive: true});
+  console.log('  ✓ staged authoring library for service init');
 }
 
 /**

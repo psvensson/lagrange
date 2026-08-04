@@ -88,8 +88,19 @@ const AUTHORING_MODULE_FILES = Object.freeze([
   'request-handler.js',
   'sql-template.js',
 ]);
-const AUTHORING_SOURCE_DIRECTORY =
-  fileURLToPath(new URL('../authoring/', import.meta.url));
+// Resolved lazily and SEA-aware: in the single-executable bundle esbuild
+// rewrites import.meta.url to undefined (a top-level `new URL` here made
+// EVERY bundled service command crash at module load), and the authoring
+// sources are staged beside the bundle by build-sea.js instead.
+const STAGED_AUTHORING_DIRECTORY = 'authoring';
+
+function authoringSourceDirectory() {
+  if (process.env.SEA_BUILD === 'true') {
+    return path.join(
+      path.dirname(process.argv[1]), STAGED_AUTHORING_DIRECTORY);
+  }
+  return fileURLToPath(new URL('../authoring/', import.meta.url));
+}
 
 const WASM_PROJECT_FILE = Object.freeze({
   ENCODING: 'utf8',
@@ -339,7 +350,7 @@ function vendoredAuthoringFiles() {
   return AUTHORING_MODULE_FILES.map((file) => [
     path.join(WASM_PROJECT_PATH.AUTHORING_DIRECTORY, file),
     VENDORED_TS_NOCHECK_HEADER + fs.readFileSync(
-      path.join(AUTHORING_SOURCE_DIRECTORY, file), {
+      path.join(authoringSourceDirectory(), file), {
         encoding: WASM_PROJECT_FILE.ENCODING,
       }),
   ]);

@@ -169,8 +169,10 @@ describe('external service manifest contract', () => {
         {name: 'serve', interface: 'request_v1'},
         {name: 'serve', interface: 'call_v1'},
       ]}),
+      // request_v2/call_v2 are VALID since binding-schema-v3-handler-
+      // interfaces landed; an unknown future version must still reject.
       makeManifest({exports: [{
-        name: 'serve', interface: 'request_v2',
+        name: 'serve', interface: 'request_v3',
       }]}),
       makeManifest({exports: [{
         name: 'Serve', interface: 'request_v1',
