@@ -8,6 +8,7 @@
 import {describe, it} from 'node:test';
 import assert from 'node:assert/strict';
 import fc from 'fast-check';
+import {SQL_RESERVED} from './sql-reserved-words.js';
 import {SQLParser, EXPR_TYPE} from '../../src/query/sql-parser.js';
 import {PARSER_DIALECT, PG_EXPR_TYPE} from '../../src/query/pg/pg-compat-constants.js';
 import {PG_TYPE_AFFINITY_MAP} from '../../src/query/pg/pg-type-affinity.js';
@@ -21,26 +22,6 @@ config.initialize();
  * Generator for valid SQL identifier names.
  * Produces lowercase alpha identifiers that avoid SQL reserved words.
  */
-const SQL_RESERVED = new Set([
-  'select', 'from', 'where', 'insert', 'update', 'delete',
-  'into', 'values', 'set', 'create', 'drop', 'table', 'index',
-  'and', 'or', 'not', 'null', 'true', 'false', 'as', 'on',
-  'join', 'left', 'right', 'inner', 'outer', 'order', 'by',
-  'group', 'having', 'limit', 'offset', 'union', 'all', 'in',
-  'between', 'like', 'is', 'case', 'when', 'then', 'else',
-  'end', 'cast', 'exists', 'with', 'recursive', 'distinct',
-  'asc', 'desc', 'begin', 'commit', 'rollback', 'int',
-  'integer', 'text', 'real', 'blob', 'boolean', 'varchar',
-  'char', 'float', 'numeric', 'decimal', 'primary', 'key',
-  'if', 'do', 'for', 'to',
-  // node-sql-parser reserves CALL as a statement keyword (procedure
-  // calls): bare `call` fails to parse exactly like bare `select`,
-  // while quoted "call" is fine. Found by this suite as a shrunk
-  // counterexample (seed 1605617986) once the random seed happened to
-  // generate it.
-  'call',
-]);
-
 const identArb = fc.stringMatching(/^[a-z][a-z]{2,8}$/)
   .filter((s) => !SQL_RESERVED.has(s));
 
