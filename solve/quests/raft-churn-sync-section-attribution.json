@@ -1,0 +1,59 @@
+{
+  "id": "raft-churn-sync-section-attribution",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The event-loop gap watchdog attributes the synchronous work behind node-0's raft-formation churn bursts (the 27.6% blocked / 14.6s-max-gap phase of the MovieLens live run) to named sync sections: the three formation sweep loops (control-plane rebind, raft-timing apply, replica registration) and the leader-activation path are wrapped with trackSyncSection so a fresh live run reports per-site totalMs/maxMs for these scopes, replacing the current 'unexplainedMs ~ gapMs' with an honest attribution - with zero behavior change (no timing, ordering, batching, or logic change), so the subsequent defer/batch cut targets the measured dominant burst rather than a guessed one.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/control-plane-truth-local-converged-read.md",
+    "closesCL": [],
+    "parentQuest": "movielens-nodes-priority-recovery-escape",
+    "planDoc": "solve/epics/control-plane-truth-local-converged-read.md",
+    "draftedAtCommit": "dabf54f5d"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "movielens-lagrange-service-affinity-live",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "raft-churn-sync-section-attribution-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "movielens-lagrange-service-affinity-live",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "instrumentation-only-no-behavior-change",
+      "statement": "Add only trackSyncSection/enterSyncSection/exitSyncSection wrappers and the site-name constants. Do not change timing, ordering, batching, deferral, election logic, rebind logic, registration logic, or any control flow. The wrapped functions must return/throw identically; no throttle, no flag, no new dependency beyond the existing event-loop-gap-watchdog."
+    },
+    {
+      "id": "deterministic-first",
+      "statement": "Before any live run, prove with a deterministic test that each new sync section is entered and exited around its sweep (the registry records the site, totalMs accumulates, exclusive nesting with an inner site does not double-count), and that a wrapped function's return value and thrown error are unchanged. Red-on-revert for at least one scope."
+    },
+    {
+      "id": "no-watchdog-contract-change",
+      "statement": "Do not change the event-loop-gap-watchdog's budget thresholds, gap detection, sampling profiler enablement, or the existing cdc_update_row_fetch/cdc_insert_row_fetch sites. New site names follow the snake_case convention and lazily register."
+    },
+    {
+      "id": "unchanged-live-contract",
+      "statement": "Do not change the MovieLens 180000ms schema budget, 60000ms stability window, workload, joins, preload size, ratings-only split policy, report conversion, or live scenario semantics."
+    }
+  ]
+}
