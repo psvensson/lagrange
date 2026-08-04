@@ -27,8 +27,12 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {createScaffoldProject} from './service-scaffold-writer.js';
+import {typingsSource} from '../service/service-typings-generator.js';
 
 const SERVICE_VERSION = '0.1.0';
+// The template's statement text is shared by the authored source and the
+// scaffold-time typings projection so the two can never drift.
+const TEMPLATE_STATEMENT_TEXT = 'SELECT amount_cents FROM account_activity';
 const SERVICE_PACKAGE_TYPE = 'module';
 const SERVICE_TEST_SCRIPT = 'node --test';
 const SERVICE_NODE_ENGINE = '>=22.0.0';
@@ -40,12 +44,40 @@ const WASM_PROJECT_PATH = Object.freeze({
   AUTHORING_DIRECTORY: 'authoring',
   HANDLER_SOURCE: 'src/handler.js',
   HANDLER_TEST: 'test/handler.test.js',
+  JSCONFIG: 'jsconfig.json',
+  RUNTIME_TYPES: 'runtime-types.d.ts',
   PACKAGE: 'package.json',
   README: 'README.md',
   SERVICE_SOURCE: 'lagrange.service.js',
   SOURCE_DIRECTORY: 'src',
   TEST_DIRECTORY: 'test',
 });
+
+// checkJs wiring so the generated runtime-types.d.ts is CONSUMED by the
+// scaffold (service-compiler-editor-typings): editors and `tsc --noEmit`
+// type-check the authored modules against the compiler's typings.
+const JSCONFIG_MODULE_SYSTEM = 'nodenext';
+const JSCONFIG_TARGET = 'es2022';
+const JSCONFIG_INDENT = 2;
+const JSCONFIG_INCLUDE = Object.freeze([
+  WASM_PROJECT_PATH.SERVICE_SOURCE,
+  WASM_PROJECT_PATH.SOURCE_DIRECTORY,
+  WASM_PROJECT_PATH.RUNTIME_TYPES,
+]);
+
+function jsconfigJson() {
+  return `${JSON.stringify({
+    compilerOptions: {
+      checkJs: true,
+      module: JSCONFIG_MODULE_SYSTEM,
+      moduleResolution: JSCONFIG_MODULE_SYSTEM,
+      noEmit: true,
+      strict: true,
+      target: JSCONFIG_TARGET,
+    },
+    include: [...JSCONFIG_INCLUDE],
+  }, null, JSCONFIG_INDENT)}\n`;
+}
 
 // The four guest-safe authoring modules, vendored verbatim. Their only
 // cross-import is `./define-service.js`, which the in-directory copy
@@ -111,10 +143,19 @@ import {http} from './authoring/request-handler.js';
 import {sql} from './authoring/sql-template.js';
 import {handleAmountSummary} from './src/handler.js';
 
+/** @typedef {import('./runtime-types.d.ts').ServiceRequest} ServiceRequest */
+/** @typedef {import('./runtime-types.d.ts').SummarizeAmountsRow} SummarizeAmountsRow */
+/** @typedef {import('./runtime-types.d.ts').HandlerContexts} HandlerContexts */
+
 const SERVICE_NAME = '${serviceName}';
 const VERSION = '${SERVICE_VERSION}';
 const PARTIAL_KEY = 'total';
 
+/**
+ * @param {readonly SummarizeAmountsRow[]} rows
+ * @param {Record<string, unknown>} _runArguments
+ * @param {{emit(key: string, partial: unknown): void}} context
+ */
 function summarizeRun(rows, _runArguments, {emit}) {
   let totalCents = 0;
   for (const row of rows) {
@@ -124,6 +165,7 @@ function summarizeRun(rows, _runArguments, {emit}) {
   return {scanned: rows.length};
 }
 
+/** @param {readonly (readonly [string, unknown])[]} partials */
 function summarizeReduce(partials) {
   let totalCents = 0;
   for (const [_key, value] of partials) {
@@ -138,15 +180,17 @@ function summarizeReduce(partials) {
 const summarizeAmounts = distributed({
   reduce: summarizeReduce,
   run: summarizeRun,
-  statement: sql\`SELECT amount_cents FROM account_activity\`,
+  statement: sql\`${TEMPLATE_STATEMENT_TEXT}\`,
 });
 
 export default defineService({
   handlers: {
     amountSummary: http.post('/amounts/summary', {
       calls: [summarizeAmounts],
-      handle: (request, context) =>
-        handleAmountSummary(request, context, summarizeAmounts),
+      handle: (
+        /** @type {ServiceRequest} */ request,
+        /** @type {HandlerContexts['amountSummary']} */ context,
+      ) => handleAmountSummary(request, context, summarizeAmounts),
     }),
   },
   name: SERVICE_NAME,
@@ -172,8 +216,15 @@ function handlerSource() {
 
 const HTTP_STATUS_OK = 200;
 
+/**
+ * @param {import('../runtime-types.d.ts').ServiceRequest} request
+ * @param {import('../runtime-types.d.ts').HandlerContexts['amountSummary']} context
+ * @param {import('../runtime-types.d.ts').OperationHandles['summarizeAmounts']} operation
+ */
 export function handleAmountSummary(request, {call, json}, operation) {
-  const body = JSON.parse(request.body || '{}');
+  const rawBody = typeof request.body === 'string' && request.body ?
+    request.body : '{}';
+  const body = JSON.parse(rawBody);
   const summary = call(operation, {accountId: body.accountId ?? null});
   return json(summary, HTTP_STATUS_OK);
 }
@@ -278,13 +329,40 @@ function validateServiceName(serviceName, targetDirectory) {
   }
 }
 
+// The vendored authoring library is projected infrastructure, not the
+// developer's authored code: exempt it from the scaffold's checkJs pass
+// so a fresh project type-checks clean while lagrange.service.js and
+// src/ stay fully checked against runtime-types.d.ts.
+const VENDORED_TS_NOCHECK_HEADER = '// @ts-nocheck\n';
+
 function vendoredAuthoringFiles() {
   return AUTHORING_MODULE_FILES.map((file) => [
     path.join(WASM_PROJECT_PATH.AUTHORING_DIRECTORY, file),
-    fs.readFileSync(path.join(AUTHORING_SOURCE_DIRECTORY, file), {
-      encoding: WASM_PROJECT_FILE.ENCODING,
-    }),
+    VENDORED_TS_NOCHECK_HEADER + fs.readFileSync(
+      path.join(AUTHORING_SOURCE_DIRECTORY, file), {
+        encoding: WASM_PROJECT_FILE.ENCODING,
+      }),
   ]);
+}
+
+// The scaffold ships an INITIAL runtime-types.d.ts computed by the real
+// generator from the template's IR, so a fresh project type-checks clean
+// before the first \`lagrange service generate\` - which then overwrites
+// it byte-identically (pinned by the editor-typings guard test).
+const TEMPLATE_OPERATION_ID = 'summarizeAmounts';
+const TEMPLATE_HANDLER_ID = 'amountSummary';
+
+function templateIr(serviceName) {
+  return {
+    handlers: [
+      {allowedOperations: [TEMPLATE_OPERATION_ID], id: TEMPLATE_HANDLER_ID},
+    ],
+    name: serviceName,
+    operations: [
+      {id: TEMPLATE_OPERATION_ID, statement: {text: TEMPLATE_STATEMENT_TEXT}},
+    ],
+    version: SERVICE_VERSION,
+  };
 }
 
 function projectFiles(serviceName) {
@@ -293,6 +371,8 @@ function projectFiles(serviceName) {
     [WASM_PROJECT_PATH.SERVICE_SOURCE, lagrangeServiceSource(serviceName)],
     [WASM_PROJECT_PATH.HANDLER_SOURCE, handlerSource()],
     [WASM_PROJECT_PATH.HANDLER_TEST, handlerTestSource()],
+    [WASM_PROJECT_PATH.JSCONFIG, jsconfigJson()],
+    [WASM_PROJECT_PATH.RUNTIME_TYPES, typingsSource(templateIr(serviceName))],
     [WASM_PROJECT_PATH.PACKAGE, packageJson(serviceName)],
     [WASM_PROJECT_PATH.README, readme(serviceName)],
   ]);

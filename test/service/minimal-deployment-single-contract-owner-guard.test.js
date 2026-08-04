@@ -51,13 +51,32 @@ test('Artifact has one schema and one validator', () => {
 });
 
 test('Binding ingress and replay share one schema and one normalizer', () => {
+  // The code-first-service-compiler epic (sealed decisions 5 and 7) added
+  // schema v3 THROUGH this owner: exactly two accepted versions (2 and 3),
+  // one deliberate v3 target fork inside the single normalizer, and no
+  // legacy-split normalization paths. The guard pins that exact shape so
+  // any further version or fork drift returns to the epic first.
   assert.match(
     SOURCE.binding,
     /const DEPLOYMENT_BINDING_SCHEMA_VERSION = 2;/u,
   );
+  assert.match(
+    SOURCE.binding,
+    /const DEPLOYMENT_BINDING_SCHEMA_VERSION_V3 = 3;/u,
+  );
+  assert.equal(
+    SOURCE.binding.match(
+      /const DEPLOYMENT_BINDING_SCHEMA_VERSION\w* = \d+;/gu,
+    )?.length,
+    2,
+  );
   assert.doesNotMatch(
     SOURCE.binding,
-    /SCHEMA_VERSION_V\d+|normalizeLegacy|LEGACY_|elasticity|contexts/u,
+    /SCHEMA_VERSION_V(?!3\b)\d+|normalizeLegacy|LEGACY_|elasticity|contexts/u,
+  );
+  assert.equal(
+    SOURCE.binding.match(/function normalizeTargetV\d+/gu)?.length,
+    1,
   );
   assert.match(
     SOURCE.binding,

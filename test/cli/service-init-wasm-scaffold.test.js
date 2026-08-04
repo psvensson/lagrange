@@ -88,7 +88,9 @@ test('the WASM scaffold vendors the authoring library and authors a ' +
     assert.ok(files.includes(expected), `missing ${expected}`);
   }
 
-  // The vendored authoring library is byte-identical to the repo source.
+  // The vendored authoring library is byte-identical to the repo source
+  // apart from the scaffold's @ts-nocheck exemption header (vendored
+  // infrastructure is not the developer's checkJs surface).
   for (const module of [
     'define-service.js',
     'distributed-operation.js',
@@ -99,7 +101,8 @@ test('the WASM scaffold vendors the authoring library and authors a ' +
       path.join(target, 'authoring', module), 'utf8');
     const source = await readFile(
       new URL(`../../src/authoring/${module}`, import.meta.url), 'utf8');
-    assert.equal(vendored, source, `authoring/${module} drifted`);
+    assert.equal(vendored, `// @ts-nocheck\n${source}`,
+      `authoring/${module} drifted`);
   }
 
   // The service module declares exactly one route and one operation via
