@@ -50,8 +50,9 @@ function readyReadinessByNodeId() {
 }
 
 // A physically-healthy, fully-converged snapshot: every priority partition
-// has a fresh leader_node_id and three ACTIVE voter rows with raft_role and
-// address present. This is the ground-truth the funnel FAILS to deliver.
+// has a fresh leader_node_id and three ACTIVE voter rows, with the elected
+// leader carrying raft_role 'leader' (the physical truth) and the rest
+// 'follower'. This is the ground-truth the funnel FAILS to deliver.
 function buildConvergedSnapshot() {
   const partitionRows = PRIORITY_PARTITION_IDS.map((partitionId, index) => ({
     partition_id: partitionId,
@@ -60,7 +61,8 @@ function buildConvergedSnapshot() {
     replica_count: 3,
   }));
   const serviceRows = [];
-  for (const partitionId of PRIORITY_PARTITION_IDS) {
+  for (const [index, partitionId] of PRIORITY_PARTITION_IDS.entries()) {
+    const leaderNodeId = NODE_IDS[index % NODE_IDS.length];
     for (const nodeId of NODE_IDS) {
       serviceRows.push({
         service_type: 'partition',
@@ -68,7 +70,7 @@ function buildConvergedSnapshot() {
         node_id: nodeId,
         address: `tcp://127.0.0.1:${4000 + NODE_IDS.indexOf(nodeId)}`,
         status: 'ACTIVE',
-        raft_role: 'follower',
+        raft_role: nodeId === leaderNodeId ? 'leader' : 'follower',
       });
     }
   }
@@ -77,9 +79,10 @@ function buildConvergedSnapshot() {
 
 // Phantom (iii) shape: the priority partition rows are physically spread 3/3
 // with a live leader, but the leader-funneled partitions row is stale - the
-// partitions.leader_node_id was never re-published (or the role-row persist
-// failed, "Cache update not observed for services:... within 1000ms"), so the
-// snapshot reads leader_node_id as absent even though raft elected one.
+// partitions.leader_node_id was never re-published ("Cache update not observed
+// ... within 1000ms"), so the funneled snapshot reads leader_node_id as absent
+// even though raft elected one (the 'leader' role is still visible in the
+// group's own service rows - the physical truth).
 function buildStaleLeaderRowSnapshot() {
   const {partitionRows, serviceRows} = buildConvergedSnapshot();
   return {
@@ -87,7 +90,19 @@ function buildStaleLeaderRowSnapshot() {
       ...row,
       leader_node_id: null, // stale funnel: leadership elected, row never updated
     })),
-    serviceRows,
+    serviceRows, // raft DID elect a leader; the role survives in the group rows
+  };
+}
+
+// Fail-closed control: NO leader is elected (every row is a follower) AND the
+// funneled leader row is absent. The fence must still report
+// missingActiveLeader here - the corrected read must not weaken the
+// genuinely-missing-leader safety case.
+function buildGenuinelyLeaderlessSnapshot() {
+  const {partitionRows, serviceRows} = buildStaleLeaderRowSnapshot();
+  return {
+    partitionRows,
+    serviceRows: serviceRows.map((row) => ({...row, raft_role: 'follower'})),
   };
 }
 
@@ -127,8 +142,8 @@ function activeNodeViews() {
 // stale/absent -> the fence reports a missing active leader.
 // ---------------------------------------------------------------------------
 
-test('phantom spread fence: canonicalLeaderReplica is false when the ' +
-  'funneled partitions.leader_node_id is stale against a healthy group',
+test('FIXED: the spread fence does not report missingActiveLeader when the ' +
+  'funneled leader_node_id is stale but raft elected a leader (Cut 2)',
 async (t) => {
   const {partitionRows, serviceRows} = buildStaleLeaderRowSnapshot();
   const observation = buildCurrentPriorityPlacementObservation({
@@ -140,18 +155,43 @@ async (t) => {
 
   t.equal(
     observation.leaderCoverage.satisfied,
+    true,
+    'leader coverage is satisfied from proven-local leadership even though ' +
+      'the funneled leader_node_id row is stale',
+  );
+  t.equal(
+    observation.leaderCoverage.missingLeaderPartitionCount,
+    0,
+    'no partition is reported as missing an active leader',
+  );
+  t.end();
+});
+
+test('FAIL-CLOSED: the fence still reports missingActiveLeader when no ' +
+  'leader is actually elected (no role, no funneled leader)',
+async (t) => {
+  const {partitionRows, serviceRows} = buildGenuinelyLeaderlessSnapshot();
+  const observation = buildCurrentPriorityPlacementObservation({
+    partitionRows,
+    serviceRows,
+    readinessByNodeId: readyReadinessByNodeId(),
+    activeNodeViews: activeNodeViews(),
+  });
+
+  t.equal(
+    observation.leaderCoverage.satisfied,
     false,
-    'leader coverage reports unsatisfied (fence holds) on the stale read',
+    'leader coverage reports unsatisfied when no leader is actually elected',
   );
   t.ok(
     observation.leaderCoverage.missingLeaderPartitionIds.length > 0,
-    'partitions are reported as missing an active leader',
+    'genuinely-leaderless partitions are reported as missing an active leader',
   );
   t.equal(
     observation.satisfied,
     false,
-    'overall placement observation is unsatisfied -> the spread fence ' +
-      'emits missingActiveLeader:true',
+    'the fence still emits missingActiveLeader:true for the leaderless case ' +
+      '(fail-closed preserved)',
   );
   t.end();
 });

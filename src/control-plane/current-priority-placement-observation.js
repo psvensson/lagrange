@@ -79,11 +79,24 @@ function buildCurrentPriorityLeaderCoverage({
       }),
     ]),
   );
+  // Cut 2 (control-plane-truth-local-converged-read): read the partition's
+  // proven-local leadership (leaderKnown = canonical leader_node_id OR an
+  // elected Raft leader role visible in the group's service rows), not the
+  // leader-funneled canonicalLeaderReplica alone. A physically-healthy group
+  // whose funneled partitions.leader_node_id row is stale/congested must not
+  // be reported as missing an active leader: raft elected one, and that truth
+  // is present locally. Genuinely-leaderless partitions (no elected role, no
+  // funneled leader) still report missingActiveLeader - leaderKnown stays
+  // false there, so the fail-closed safety case is preserved.
   const missingLeaderPartitionIds = priorityPartitionIds.filter(
     (partitionId) =>
-      topologyByPartition.get(partitionId).canonicalLeaderReplica !== true,
+      topologyByPartition.get(partitionId).leaderKnown !== true,
   );
   const missingLeaderPartitionIdSet = new Set(missingLeaderPartitionIds);
+  const resolveReportedLeaderNodeId = (partitionId) => {
+    const topology = topologyByPartition.get(partitionId);
+    return topology.leaderNodeId || topology.leaderRoleNodeIds[0] || null;
+  };
   return Object.freeze({
     satisfied: missingLeaderPartitionIds.length === 0,
     requiredPartitionCount: priorityPartitionIds.length,
@@ -99,7 +112,7 @@ function buildCurrentPriorityLeaderCoverage({
             normalizeNodeIdList(
               missingLeaderPartitionIdSet.has(partitionId) ?
                 [] :
-                [topologyByPartition.get(partitionId).leaderNodeId],
+                [resolveReportedLeaderNodeId(partitionId)],
             ),
           ),
         ]),
