@@ -333,7 +333,14 @@ class MembershipPublicationCoordinatorReads {
     }
     // Full-normalize ONLY the winner to reuse exact inclusion + status semantics.
     const normalizedWinner = normalizeControlPlanePublicationRow(winningRow);
-    if (!publicationRowIncludesNode(normalizedWinner, nodeId)) {
+    // requireNodeInclusion=false serves the readiness-memo staleness probe: it
+    // compares the WINNER row's epoch/status against a cached projection that
+    // stored the cluster winner's epoch regardless of inclusion, so filtering
+    // by inclusion here would null the probe for excluded (joining/recovering)
+    // nodes and mis-read as permanently stale. Inclusion-list changes are
+    // covered by the planning source-revision bump, not this probe.
+    if (options.requireNodeInclusion !== false &&
+        !publicationRowIncludesNode(normalizedWinner, nodeId)) {
       return null;
     }
     return {

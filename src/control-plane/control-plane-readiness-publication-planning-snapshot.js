@@ -235,8 +235,17 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       typeof service.getLatestMembershipPublicationEpochStatusForNodeSync ===
       'function'
     ) {
+      // Scope-consistent probe: the cached projection stores the CLUSTER
+      // winner's epoch/status, so the comparison must read the winner row
+      // without the node-inclusion filter — the inclusion-filtered form
+      // returns null for excluded (joining/recovering) nodes and made this
+      // guard read permanently stale, silently disabling the CL-033/CL-034
+      // memos exactly during churn (same family as the NaN observedAt
+      // regression above). Inclusion-list changes invalidate via the
+      // planning source-revision bump, not this probe.
       latestPub = service.getLatestMembershipPublicationEpochStatusForNodeSync(
         nodeId,
+        {requireNodeInclusion: false},
       );
     } else if (
       typeof service.getLatestPublicationForNodeSync === 'function'
