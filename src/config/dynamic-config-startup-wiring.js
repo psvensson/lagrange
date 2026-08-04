@@ -13,6 +13,9 @@ import {
   CONFIG_SUBSYSTEM,
 } from './config-constants.js';
 import {DynamicConfigService} from './dynamic-config-service.js';
+import {
+  trackRaftTimingApplySweep,
+} from '../diagnostics/raft-churn-sync-sections.js';
 import {RaftAdaptiveTimingController} from
   './raft-adaptive-timing-controller.js';
 
@@ -279,36 +282,40 @@ async function createDynamicConfigStartupWiring(options = {}) {
     }
 
     writeRaftTimingConfig(configManager, nextRaftTimingConfig);
-    let runtimeAppliedCount = 0;
-    let deferredCount = 0;
-    for (const service of raftServices) {
-      if (!service ||
-        typeof service.applyRaftTimingConfig !== 'function') {
-        deferredCount += 1;
-        continue;
-      }
-      try {
-        const runtimeApplied = service.applyRaftTimingConfig(
-          {...nextRaftTimingConfig},
-        );
-        if (runtimeApplied) {
-          runtimeAppliedCount += 1;
-        } else {
+    // Sync-section attribution (instrumentation-only): tag the per-service
+    // raft-timing sweep for the gap watchdog. See raft-churn-sync-sections.js.
+    return trackRaftTimingApplySweep(() => {
+      let runtimeAppliedCount = 0;
+      let deferredCount = 0;
+      for (const service of raftServices) {
+        if (!service ||
+          typeof service.applyRaftTimingConfig !== 'function') {
           deferredCount += 1;
+          continue;
         }
-      } catch (error) {
-        deferredCount += 1;
-        logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.RAFT_TIMING_APPLY_FAILED, {
-          error: error.message,
-        });
+        try {
+          const runtimeApplied = service.applyRaftTimingConfig(
+            {...nextRaftTimingConfig},
+          );
+          if (runtimeApplied) {
+            runtimeAppliedCount += 1;
+          } else {
+            deferredCount += 1;
+          }
+        } catch (error) {
+          deferredCount += 1;
+          logger.warn(DYNAMIC_CONFIG_STARTUP_LOG_MSG.RAFT_TIMING_APPLY_FAILED, {
+            error: error.message,
+          });
+        }
       }
-    }
 
-    return {
-      applied: true,
-      runtimeAppliedCount,
-      deferredCount,
-    };
+      return {
+        applied: true,
+        runtimeAppliedCount,
+        deferredCount,
+      };
+    });
   };
 
   const loggingDynamicAppliers = [

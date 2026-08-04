@@ -1,3 +1,7 @@
+import {
+  trackControlPlaneRebindSweep,
+} from '../../diagnostics/raft-churn-sync-sections.js';
+
 const LOCAL_STR_FUNCTION = 'function';
 
 class StartupRuntimeSurfaceOwner {
@@ -6,33 +10,43 @@ class StartupRuntimeSurfaceOwner {
   }
 
   bindControlPlaneServices() {
-    const tablePolicyService = this.delegates.getTablePolicyService?.() || null;
-    const rebalanceCoordinator =
-      this.delegates.getRebalanceCoordinator?.() || null;
+    // Sync-section attribution (instrumentation-only): this synchronous sweep
+    // rebinds every coordinator during formation churn; tag it for the gap
+    // watchdog. See raft-churn-sync-sections.js.
+    return trackControlPlaneRebindSweep(() => {
+      const tablePolicyService =
+        this.delegates.getTablePolicyService?.() || null;
+      const rebalanceCoordinator =
+        this.delegates.getRebalanceCoordinator?.() || null;
 
-    for (const messageGroupService of
-      this.delegates.getMessageGroupServices?.()?.values?.() || []) {
-      if (tablePolicyService &&
-          typeof messageGroupService?.setTablePolicyService === LOCAL_STR_FUNCTION) {
-        messageGroupService.setTablePolicyService(tablePolicyService);
+      for (const messageGroupService of
+        this.delegates.getMessageGroupServices?.()?.values?.() || []) {
+        if (tablePolicyService &&
+            typeof messageGroupService?.setTablePolicyService ===
+              LOCAL_STR_FUNCTION) {
+          messageGroupService.setTablePolicyService(tablePolicyService);
+        }
+        if (rebalanceCoordinator &&
+            typeof messageGroupService?.setRebalanceCoordinator ===
+              LOCAL_STR_FUNCTION) {
+          messageGroupService.setRebalanceCoordinator(rebalanceCoordinator);
+        }
       }
-      if (rebalanceCoordinator &&
-          typeof messageGroupService?.setRebalanceCoordinator === LOCAL_STR_FUNCTION) {
-        messageGroupService.setRebalanceCoordinator(rebalanceCoordinator);
-      }
-    }
 
-    for (const partitionService of
-      this.delegates.getPartitionServices?.()?.values?.() || []) {
-      if (tablePolicyService &&
-          typeof partitionService?.setTablePolicyService === LOCAL_STR_FUNCTION) {
-        partitionService.setTablePolicyService(tablePolicyService);
+      for (const partitionService of
+        this.delegates.getPartitionServices?.()?.values?.() || []) {
+        if (tablePolicyService &&
+            typeof partitionService?.setTablePolicyService ===
+              LOCAL_STR_FUNCTION) {
+          partitionService.setTablePolicyService(tablePolicyService);
+        }
+        if (rebalanceCoordinator &&
+            typeof partitionService?.setRebalanceCoordinator ===
+              LOCAL_STR_FUNCTION) {
+          partitionService.setRebalanceCoordinator(rebalanceCoordinator);
+        }
       }
-      if (rebalanceCoordinator &&
-          typeof partitionService?.setRebalanceCoordinator === LOCAL_STR_FUNCTION) {
-        partitionService.setRebalanceCoordinator(rebalanceCoordinator);
-      }
-    }
+    });
   }
 
   async notifyLocalAdminRuntimeReady() {

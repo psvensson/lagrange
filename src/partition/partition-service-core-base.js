@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {trackLeaderActivation} from '../diagnostics/raft-churn-sync-sections.js';
 import {
   createLeaderNodeMutationHelper,
   createRoleMutationHelper,
@@ -530,7 +531,8 @@ class PartitionServiceCoreBase extends EventEmitter {
   scheduleLeaderOwnedActivation(term) {
     this.leaderActivationGate.schedule(
       term,
-      () => {
+      // Sync-section attribution only (see raft-churn-sync-sections.js).
+      () => trackLeaderActivation(() => {
         if (this.isShutdown || !this.isLeader) {
           return;
         }
@@ -562,7 +564,7 @@ class PartitionServiceCoreBase extends EventEmitter {
           term,
           partitionId: this.partitionId,
         });
-      },
+      }),
       {
         immediate: this.replicaIds.length === 1,
         shouldActivate: () => !this.isShutdown && this.isLeader,

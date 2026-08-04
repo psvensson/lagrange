@@ -714,11 +714,24 @@ class EventLoopGapWatchdog {
   }
 }
 
+/**
+ * Read-only accessor for the shared sync-section registry that the
+ * process-wide watchdog and trackSyncSection write to. Lets diagnostics and
+ * tests assert per-site attribution without threading a registry reference
+ * through unrelated constructors (the production watchdog composes the shared
+ * default at src/index.js).
+ * @return {SyncSectionRegistry}
+ */
+function getSharedSyncSectionRegistry() {
+  return sharedSyncSectionRegistry;
+}
+
 export {
   EventLoopGapWatchdog,
   GapSamplingProfiler,
   SyncSectionRegistry,
   enterSyncSection,
   exitSyncSection,
+  getSharedSyncSectionRegistry,
   trackSyncSection,
 };

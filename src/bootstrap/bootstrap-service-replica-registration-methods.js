@@ -15,6 +15,7 @@ import {
   buildPartitionCdcPropagationSubscriber,
 } from './shared/partition-cdc-propagation-subscriber.js';
 import {assertCritical} from '../utils/assert.js';
+import {trackReplicaRegistrationSweep} from '../diagnostics/raft-churn-sync-sections.js';
 import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {
   NUM,
@@ -345,6 +346,12 @@ function createBootstrapServiceReplicaHandlerRuntimeMethods() {
      * @return {Object} Registration summary.
      */
     registerPartitionsWithReplicaHandler(replicaHandler, partitions) {
+      // Sync-section attribution only (see raft-churn-sync-sections.js).
+      return trackReplicaRegistrationSweep(() =>
+        this.registerPartitionsWithReplicaHandlerInternal(replicaHandler, partitions));
+    },
+
+    registerPartitionsWithReplicaHandlerInternal(replicaHandler, partitions) {
       if (!replicaHandler) {
         this.logger.warn(BootstrapLog.REPLICA_HANDLER_MISSING);
         return {
