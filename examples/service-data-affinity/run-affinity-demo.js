@@ -258,6 +258,48 @@ function sqlQuote(value) {
 
 async function deployQueryLoopService() {
   const now = Date.now();
+  // The runtime access policy gate is fail-closed (authority cutover
+  // 1ea2eab98): every statement carrying issuingServiceId is DENIED unless a
+  // runtime.access.service.<id> policy row grants its table accesses.
+  // Production services get that row from the Bindings deployment surface;
+  // this demo scaffolds service_definitions directly, so it must scaffold the
+  // matching policy row the same way — without it the query loop's attributed
+  // shard SELECT is silently denied and the learned-affinity lane stalls
+  // (attributionRows=0, partial snapshots never computed).
+  const accessPolicy = JSON.stringify({
+    binding_version_id: 'demo-scaffold-movielens-topn',
+    schema_version: 1,
+    service_id: SERVICE_ID,
+    tables: [
+      {operations: ['read'], slot: 0, table: 'table:global.ratings'},
+      {
+        operations: ['read', 'write'],
+        slot: 1,
+        table: `table:global.${RESULT_TABLE}`,
+      },
+      {
+        operations: ['read', 'write'],
+        slot: 2,
+        table: `table:global.${COORDINATION_TABLE}`,
+      },
+    ],
+    tenant_id: 'demo',
+  });
+  await queryRows(
+    'INSERT INTO config (config_key, config_value, value_type, ' +
+    'requires_restart, description, default_value, updated_by, ' +
+    'updated_at, created_at) VALUES (' + [
+      sqlQuote(`runtime.access.service.${SERVICE_ID}`),
+      sqlQuote(accessPolicy),
+      sqlQuote('json'),
+      '0',
+      sqlQuote('Runtime service data access policy'),
+      sqlQuote('{}'),
+      sqlQuote('affinity-demo'),
+      String(now),
+      String(now),
+    ].join(', ') + ')',
+  );
   const runtimeConfig = JSON.stringify({
     sql: SCAN_SQL,
     intervalMs: QUERY_INTERVAL_MS,
