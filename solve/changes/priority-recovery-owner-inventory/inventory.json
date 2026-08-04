@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "2db968ca4152de083b4b01eb406b73b81a39ddfb06caf10e7a99e76b3ee6122c"
+    "sourceSha256": "05686249088d20017de73fa4cf502c0e3a617bf4f9c4d0c1e9c4aa6766b0356f"
   },
   "layerDirection": [
     "raw_observation",
@@ -19,7 +19,7 @@
   "metrics": {
     "moduleCount": 65,
     "publicExportCount": 740,
-    "importEdgeCount": 298,
+    "importEdgeCount": 301,
     "crossLayerEdgeCount": 92,
     "layerDirectionViolationCount": 44,
     "largestStronglyConnectedComponent": 1,
@@ -1986,6 +1986,26 @@
     }
   ],
   "edges": [
+    {
+      "from": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "specifier": "../diagnostics/event-loop-gap-watchdog.js",
+      "to": "src/diagnostics/event-loop-gap-watchdog.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
+      "specifier": "./control-plane-readiness-constants.js",
+      "to": "src/control-plane/control-plane-readiness-constants.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
     {
       "from": "src/control-plane/control-plane-readiness-priority-recovery-planning.js",
       "specifier": "./control-plane-readiness-evidence-reasons.js",
@@ -4190,6 +4210,16 @@
       "from": "src/control-plane/publication-recovery-gate-constants.js",
       "specifier": "./publication-owner-constants.js",
       "to": "src/control-plane/publication-owner-constants.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/publication-recovery-gate.js",
+      "specifier": "../diagnostics/event-loop-gap-watchdog.js",
+      "to": "src/diagnostics/event-loop-gap-watchdog.js",
       "targetModule": false,
       "sourceLayer": "owner_decision",
       "targetLayer": null,
