@@ -96,3 +96,12 @@ export {
   ServiceLifecycleCommandError,
   ServiceLifecycleCommandOwner,
 } from './service-lifecycle-command-owner.js';
+
+export {
+  SERVICE_SOURCE_ERROR_CODE,
+  SERVICE_SOURCE_MESSAGE,
+  SERVICE_SOURCE_PATH,
+  SERVICE_SOURCE_STATUS,
+  normalizeServiceDefinition,
+  normalizeServiceSource,
+} from './service-source-contract.js';
