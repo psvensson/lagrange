@@ -1,0 +1,21 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "changeref-own-quest-evidence-bookkeeping",
+  "detail": {
+    "owner": "solver-change-artifact-scope",
+    "scopeFiles": [
+      "scripts/solve/change-artifact.js",
+      "test/solve/commit-changeref.test.js"
+    ],
+    "focusedTestsPassed": true,
+    "focusedAssertions": 43,
+    "redOnRevertVerified": [
+      "diff-path own-quest exclusion reverted -> 2 assertions red",
+      "'evidence' subtree removed from SOLVE_BOOKKEEPING_SUBTREES -> 2 assertions red"
+    ],
+    "foreignWorkflowStillRefused": true,
+    "proofCommand": "npm run test:file -- test/solve/commit-changeref.test.js"
+  }
+}

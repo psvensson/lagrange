@@ -195,3 +195,83 @@ tap.test('admission tolerates dirty own-quest solve/log but not dirty source', (
   t.match(blocked.problem, /uncommitted changes/);
   t.end();
 });
+
+// The same own-quest exclusion applies to a working-tree (diff:) artifact: a
+// runtime quest whose sealed evidence lives under solve/evidence/<id>/ (the
+// test-receipt probe pattern) has its quest file and receipt swept into the
+// --auto-diff snapshot, and that Solver-owned bookkeeping must not classify
+// the artifact as foreign workflow scope. Foreign workflow paths in the same
+// diff are STILL refused.
+function diffArtifactFixture(extraFile) {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'diff-changeref-bk-'));
+  git(root, ['init']);
+  git(root, ['config', 'user.email', 'solver@example.com']);
+  git(root, ['config', 'user.name', 'Solver']);
+  git(root, ['config', 'commit.gpgsign', 'false']);
+  fs.mkdirSync(path.join(root, 'solve/changes/q'), {recursive: true});
+  fs.writeFileSync(path.join(root, 'src-dummy'), '');
+  const diffBody = [
+    'diff --git a/src/a.js b/src/a.js',
+    'index 0000000..1111111 100644',
+    '--- a/src/a.js',
+    '+++ b/src/a.js',
+    '@@ -1 +1 @@',
+    '-export const a = 1;',
+    '+export const a = 2;',
+    'diff --git a/solve/quests/q.json b/solve/quests/q.json',
+    'index 0000000..1111111 100644',
+    '--- a/solve/quests/q.json',
+    '+++ b/solve/quests/q.json',
+    '@@ -1 +1 @@',
+    '-{}',
+    '+{"id":"q"}',
+    'diff --git a/solve/evidence/q.receipt.json b/solve/evidence/q.receipt.json',
+    'index 0000000..1111111 100644',
+    '--- a/solve/evidence/q.receipt.json',
+    '+++ b/solve/evidence/q.receipt.json',
+    '@@ -1 +1 @@',
+    '-{}',
+    '+{"status":"pass"}',
+    ...(extraFile ? extraFile() : []),
+    '',
+  ].join('\n');
+  const artifact = path.join(root, 'solve/changes/q/attempt-1.diff');
+  fs.writeFileSync(artifact, diffBody);
+  const quest = {
+    id: 'q', class: 'process', statement: 'runtime source work',
+  };
+  return {
+    root,
+    quest,
+    ref: 'diff:solve/changes/q/attempt-1.diff',
+  };
+}
+
+tap.test('diff artifact excludes own-quest solve/ bookkeeping from scope', (t) => {
+  const fx = diffArtifactFixture();
+  const inspection = inspectChangeArtifact(fx.root, fx.quest, fx.ref);
+  t.equal(
+    inspection.valid, true,
+    'own-quest solve/quests + solve/evidence must not scope-refuse: ' +
+      `${inspection.problems}`);
+  t.equal(
+    inspection.categories.includes('workflow'), false,
+    'no workflow category survives the exclusion');
+  t.end();
+});
+
+tap.test('diff artifact still refuses foreign workflow paths', (t) => {
+  const fx = diffArtifactFixture(() => [
+    'diff --git a/solve/quests/other.json b/solve/quests/other.json',
+    'index 0000000..1111111 100644',
+    '--- a/solve/quests/other.json',
+    '+++ b/solve/quests/other.json',
+    '@@ -1 +1 @@',
+    '-{}',
+    '+{"id":"other"}',
+  ]);
+  const inspection = inspectChangeArtifact(fx.root, fx.quest, fx.ref);
+  t.equal(inspection.valid, false, 'foreign workflow path must still refuse');
+  t.match(inspection.problems.join('; '), /workflow/);
+  t.end();
+});

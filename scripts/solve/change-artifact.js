@@ -133,6 +133,7 @@ const QUEST_SCOPE_WORKFLOW = 'workflow';
 const SOLVE_BOOKKEEPING_SUBTREES = Object.freeze([
   'artifacts',
   'changes',
+  'evidence',
   'log',
   'oracle',
   'quests',
@@ -535,7 +536,14 @@ export function inspectChangeArtifact(root, quest, changeRef) {
 
   const content = artifact.payload ? artifact.payload.toString('utf8') : '';
   const changedPaths = changedPathsFromDiffContent(content);
-  const categories = [...new Set(changedPaths.map(classifyPath))].sort();
+  // A quest's OWN solve/ bookkeeping (its quest file, event log, attempt
+  // diffs, oracle/evidence receipts) legitimately rides inside the working-
+  // tree diff that --auto-diff snapshots; it is Solver-owned bookkeeping,
+  // not foreign workflow scope, so the scope classification must exclude it
+  // exactly as the commit-range classification above does.
+  const scopeChangedPaths = changedPaths
+    .filter((filePath) => !isOwnQuestSolveBookkeeping(filePath, quest?.id));
+  const categories = [...new Set(scopeChangedPaths.map(classifyPath))].sort();
   const questScope = classifyQuestScope(quest);
   if (changedPaths.length === 0) {
     problems.push('changeRef artifact must contain file paths from a patch');
