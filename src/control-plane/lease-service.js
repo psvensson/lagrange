@@ -9,6 +9,7 @@ import {LoggingService} from '../logging/logging-service.js';
 import {ConfigurationManager} from '../config/configuration-manager.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {
+  ENDPOINT_STATUS,
   STATE,
   TABLES,
 } from '../constants/index.js';
@@ -26,6 +27,7 @@ import {
 } from './live-transport-evidence.js';
 import {
   LEASE_CONFIG_KEY,
+  LEASE_REAPER,
   LEASE_DEFAULT_OPTIONS,
   LEASE_EMPTY_QUERY_PARAMS,
   LEASE_DEFAULT,
@@ -38,6 +40,7 @@ import {
 } from './lease-service-constants.js';
 
 const LOCAL_STR_LEASESERVICE_REQUIRES_CONTROLPLANESYSTEM = 'LeaseService requires controlPlaneSystemTableGateway';
+const LOCAL_STR_UNHEALTHY = 'unhealthy';
 
 const createDefaultMessageGroupServices = () => new Set();
 
@@ -255,8 +258,11 @@ class LeaseService extends EventEmitter {
       });
     }
 
+    const reapedIds = await this.reapStrandedJoiningRows(nodes, now);
+
     this.emit(LEASE_EVENT.SWEEP_COMPLETE, {
       expired: expiredIds.length,
+      staleRowsReaped: reapedIds.length,
     });
 
     return expiredIds;
@@ -282,6 +288,106 @@ class LeaseService extends EventEmitter {
     return hasLiveTransportEvidence(nodeId, {
       messageRouter: this.messageRouter,
     });
+  }
+
+  /**
+   * Reap one stranded failed-join row's endpoint rows (node_endpoints and
+   * service_endpoints) so no routing target survives the membership row's
+   * terminal transition. Endpoint failures are warn-only and never block the
+   * membership reap: an orphaned endpoint row is diagnosis noise, a stranded
+   * membership row is a correctness hazard.
+   * @param {string} nodeId - Node whose endpoint rows are reaped.
+   * @param {number} now - Current timestamp.
+   * @return {Promise<void>}
+   * @private
+   */
+  async reapStaleRowEndpoints(nodeId, now) {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    const endpointReaps = [
+      {
+        tableName: TABLES.NODE_ENDPOINTS,
+        data: {status: ENDPOINT_STATUS.INACTIVE, updated_at: now},
+      },
+      {
+        tableName: TABLES.SERVICE_ENDPOINTS,
+        data: {health_status: LOCAL_STR_UNHEALTHY, updated_at: now},
+      },
+    ];
+    for (const reap of endpointReaps) {
+      try {
+        await gateway.updateSystemTableRow(
+          reap.tableName,
+          {node_id: nodeId},
+          reap.data,
+        );
+      } catch (error) {
+        this.logger.warn(LEASE_LOG_MSG.REAPER_ROW_STOP_FAILED, {
+          nodeId,
+          tableName: reap.tableName,
+          error: error.message,
+        });
+      }
+    }
+  }
+
+  /**
+   * Reap stranded failed-join rows: nodes rows left in `joining` with no
+   * live ready lease and no live transport. The failed-join withdrawal
+   * drives these to STOPPED on the happy path; when it is deferred, its
+   * in-memory reconcile queue is destroyed by teardown, or the process dies
+   * first, no live writer ever drives the row terminal. This reaper owns
+   * that terminal transition (status -> stopped) and reaps the row's
+   * endpoint rows, complementing (not replacing) the lease sweep's
+   * connection_state write and the active-node projection's stale-lease
+   * trim. A row holding a live lease or live transport is never reaped —
+   * the same guard the lease sweep applies, so the reaper cannot strand a
+   * genuinely-joining node.
+   * @param {Object[]} nodes - Authoritative nodes rows (already read).
+   * @param {number} now - Current timestamp.
+   * @return {Promise<string[]>} Node IDs driven to STOPPED.
+   * @private
+   */
+  async reapStrandedJoiningRows(nodes, now) {
+    const stranded = nodes.filter((node) => {
+      if (node.status !== LEASE_REAPER.STRANDED_STATUS) return false;
+      const leaseExpiry = Number(node.ready_lease_expires_at);
+      const leaseLive = Number.isFinite(leaseExpiry) && leaseExpiry > now;
+      return !leaseLive;
+    });
+
+    const reapedIds = [];
+    for (const node of stranded) {
+      if (this.isNodeTransportConnected(node.node_id)) {
+        this.logger.info(LEASE_LOG_MSG.REAPER_SKIPPED_TRANSPORT_CONNECTED,
+          {nodeId: node.node_id});
+        continue;
+      }
+      try {
+        await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
+          TABLES.NODES,
+          {node_id: node.node_id, status: LEASE_REAPER.STRANDED_STATUS},
+          {status: LEASE_REAPER.TARGET_STATUS, updated_at: now},
+        );
+      } catch (error) {
+        this.logger.warn(LEASE_LOG_MSG.REAPER_ROW_STOP_FAILED, {
+          nodeId: node.node_id,
+          error: error.message,
+        });
+        continue;
+      }
+      await this.reapStaleRowEndpoints(node.node_id, now);
+      this.logger.warn(LEASE_LOG_MSG.REAPER_ROW_STOPPED,
+        {nodeId: node.node_id});
+      this.emit(LEASE_EVENT.STALE_ROW_REAPED, {nodeId: node.node_id});
+      reapedIds.push(node.node_id);
+    }
+    if (reapedIds.length > 0) {
+      this.logger.warn(LEASE_LOG_MSG.SWEEP_STALE_ROWS_REAPED, {
+        count: reapedIds.length,
+        nodeIds: reapedIds,
+      });
+    }
+    return reapedIds;
   }
 
   /**

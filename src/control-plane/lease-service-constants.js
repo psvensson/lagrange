@@ -35,6 +35,13 @@ const LEASE_LOG_MSG = Object.freeze({
   SWEEP_EXPIRED: 'Swept expired leases',
   SWEEP_SKIPPED_TRANSPORT_CONNECTED:
     'Skipped lease disconnect for transport-connected node',
+  REAPER_SKIPPED_TRANSPORT_CONNECTED:
+    'Skipped stale-row reap for transport-connected node',
+  REAPER_ROW_STOPPED:
+    'Reaped stale failed-join node row: status driven to STOPPED',
+  REAPER_ROW_STOP_FAILED:
+    'Failed to drive stale failed-join node row to STOPPED',
+  SWEEP_STALE_ROWS_REAPED: 'Reaped stale failed-join rows',
 });
 
 const LEASE_ERROR_MSG = Object.freeze({
@@ -49,10 +56,26 @@ const LEASE_EVENT = Object.freeze({
   LEASE_EXPIRED: 'leaseExpired',
   SWEEP_COMPLETE: 'sweepComplete',
   SWEEP_ERROR: 'sweepError',
+  STALE_ROW_REAPED: 'staleRowReaped',
 });
 
 const LEASE_SQL = Object.freeze({
   SELECT_ALL_NODES: `SELECT * FROM ${TABLES.NODES}`,
+});
+
+// The failed-join withdrawal (node-registration-owner-publication-methods)
+// drives a leftover joining row to STOPPED on the happy path; when it is
+// deferred, its in-memory reconcile queue is destroyed by teardown, or the
+// process dies first, the row is stranded in `joining`. No live writer ever
+// drives it terminal. The lease sweep intentionally only writes
+// connection_state (a lease is not a membership terminal), so a separate
+// reaper owns the stranded-joining-row terminal: status -> stopped once the
+// row has no live ready lease and no live transport. The reaper complements
+// the sweep; it never reaps a row that still holds a live lease or is
+// transport-connected (the same guard the sweep applies).
+const LEASE_REAPER = Object.freeze({
+  STRANDED_STATUS: 'joining',
+  TARGET_STATUS: 'stopped',
 });
 
 export {
@@ -67,4 +90,5 @@ export {
   LEASE_ERROR_MSG,
   LEASE_EVENT,
   LEASE_SQL,
+  LEASE_REAPER,
 };

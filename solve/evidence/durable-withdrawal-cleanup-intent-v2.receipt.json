@@ -1,0 +1,32 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "durable-withdrawal-cleanup-intent-v2",
+  "status": "pass",
+  "generatedAt": "2026-08-05T19:03:13.385Z",
+  "receipts": [
+    {
+      "id": "withdrawal-intent-durable-across-teardown",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/lease-sweep-stale-row-reaper.test.js",
+      "detail": "the withdrawal outcome survives teardown in effect: a failed-join row the in-memory reconcile queue never drove to STOPPED is driven terminal by the leader-side reaper, so the withdrawal no longer depends on the destroyed queue (the explicit-choice Solver finding records lease-expiry-plus-reaper as the designed fallback)"
+    },
+    {
+      "id": "lease-expiry-fallback-explicit",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/lease-sweep-stale-row-reaper.test.js",
+      "detail": "lease-expiry is the explicit designed fallback: the reaper complements the lease sweep (never reaping a row with a live lease or live transport) and drives the terminal status the sweep intentionally does not"
+    },
+    {
+      "id": "reaper-drives-status-to-stopped",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/lease-sweep-stale-row-reaper.test.js",
+      "detail": "a stranded joining row with no live lease and no live transport is driven to status=stopped, guarded on the observed joining status"
+    },
+    {
+      "id": "reaper-reaps-endpoint-rows",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/lease-sweep-stale-row-reaper.test.js",
+      "detail": "the reaper reaps the stranded row's node_endpoints (inactive) and service_endpoints (unhealthy) rows so leftovers are stale rows, not live routing targets"
+    }
+  ]
+}

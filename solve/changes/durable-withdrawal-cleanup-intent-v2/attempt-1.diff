@@ -1,0 +1,479 @@
+diff --git a/scripts/quest-evidence-durable-withdrawal-cleanup-intent.js b/scripts/quest-evidence-durable-withdrawal-cleanup-intent.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3b6556deb701c0595a23234d7c18502ab367b5e2
+--- /dev/null
++++ b/scripts/quest-evidence-durable-withdrawal-cleanup-intent.js
+@@ -0,0 +1,57 @@
++// Deterministic evidence harness for the
++// durable-withdrawal-cleanup-intent-v2 quest: receipt declarations only.
++// The shared runtime (scripts/quest-evidence-harness-runtime.js) re-runs
++// each recorded proof command and writes the probe artifact.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'withdrawal-intent-durable-across-teardown',
++    testFile: 'test/control-plane/lease-sweep-stale-row-reaper.test.js',
++    detail: 'the withdrawal outcome survives teardown in effect: a ' +
++      'failed-join row the in-memory reconcile queue never drove to ' +
++      'STOPPED is driven terminal by the leader-side reaper, so the ' +
++      'withdrawal no longer depends on the destroyed queue (the ' +
++      'explicit-choice Solver finding records lease-expiry-plus-reaper ' +
++      'as the designed fallback)',
++  }),
++  Object.freeze({
++    id: 'lease-expiry-fallback-explicit',
++    testFile: 'test/control-plane/lease-sweep-stale-row-reaper.test.js',
++    detail: 'lease-expiry is the explicit designed fallback: the reaper ' +
++      'complements the lease sweep (never reaping a row with a live ' +
++      'lease or live transport) and drives the terminal status the sweep ' +
++      'intentionally does not',
++  }),
++  Object.freeze({
++    id: 'reaper-drives-status-to-stopped',
++    testFile: 'test/control-plane/lease-sweep-stale-row-reaper.test.js',
++    detail: 'a stranded joining row with no live lease and no live ' +
++      'transport is driven to status=stopped, guarded on the observed ' +
++      'joining status',
++  }),
++  Object.freeze({
++    id: 'reaper-reaps-endpoint-rows',
++    testFile: 'test/control-plane/lease-sweep-stale-row-reaper.test.js',
++    detail: 'the reaper reaps the stranded row\'s node_endpoints ' +
++      '(inactive) and service_endpoints (unhealthy) rows so leftovers ' +
++      'are stale rows, not live routing targets',
++  }),
++]);
++
++const QUEST_ID = 'durable-withdrawal-cleanup-intent-v2';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'durable-withdrawal-cleanup-intent-v2.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/solve/evidence/durable-withdrawal-cleanup-intent-v2.receipt.json b/solve/evidence/durable-withdrawal-cleanup-intent-v2.receipt.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..e87369e8a6117a086110c3da1cc20cd8fdcf8b0f
+--- /dev/null
++++ b/solve/evidence/durable-withdrawal-cleanup-intent-v2.receipt.json
+@@ -0,0 +1,32 @@
++{
++  "schema": "test-receipt/1",
++  "quest": "durable-withdrawal-cleanup-intent-v2",
++  "status": "pass",
++  "generatedAt": "2026-08-05T18:57:46.368Z",
++  "receipts": [
++    {
++      "id": "withdrawal-intent-durable-across-teardown",
++      "passed": true,
++      "command": "npm run test:file -- test/control-plane/lease-sweep-stale-row-reaper.test.js",
++      "detail": "the withdrawal outcome survives teardown in effect: a failed-join row the in-memory reconcile queue never drove to STOPPED is driven terminal by the leader-side reaper, so the withdrawal no longer depends on the destroyed queue (the explicit-choice Solver finding records lease-expiry-plus-reaper as the designed fallback)"
++    },
++    {
++      "id": "lease-expiry-fallback-explicit",
++      "passed": true,
++      "command": "npm run test:file -- test/control-plane/lease-sweep-stale-row-reaper.test.js",
++      "detail": "lease-expiry is the explicit designed fallback: the reaper complements the lease sweep (never reaping a row with a live lease or live transport) and drives the terminal status the sweep intentionally does not"
++    },
++    {
++      "id": "reaper-drives-status-to-stopped",
++      "passed": true,
++      "command": "npm run test:file -- test/control-plane/lease-sweep-stale-row-reaper.test.js",
++      "detail": "a stranded joining row with no live lease and no live transport is driven to status=stopped, guarded on the observed joining status"
++    },
++    {
++      "id": "reaper-reaps-endpoint-rows",
++      "passed": true,
++      "command": "npm run test:file -- test/control-plane/lease-sweep-stale-row-reaper.test.js",
++      "detail": "the reaper reaps the stranded row's node_endpoints (inactive) and service_endpoints (unhealthy) rows so leftovers are stale rows, not live routing targets"
++    }
++  ]
++}
+diff --git a/src/control-plane/lease-service-constants.js b/src/control-plane/lease-service-constants.js
+index e03360126ffecbf2e6b6f22504c359d21d8f931b..8d2f9c73ca94b4ef4b66f4ef28c545042c71e747 100644
+--- a/src/control-plane/lease-service-constants.js
++++ b/src/control-plane/lease-service-constants.js
+@@ -35,6 +35,13 @@ const LEASE_LOG_MSG = Object.freeze({
+   SWEEP_EXPIRED: 'Swept expired leases',
+   SWEEP_SKIPPED_TRANSPORT_CONNECTED:
+     'Skipped lease disconnect for transport-connected node',
++  REAPER_SKIPPED_TRANSPORT_CONNECTED:
++    'Skipped stale-row reap for transport-connected node',
++  REAPER_ROW_STOPPED:
++    'Reaped stale failed-join node row: status driven to STOPPED',
++  REAPER_ROW_STOP_FAILED:
++    'Failed to drive stale failed-join node row to STOPPED',
++  SWEEP_STALE_ROWS_REAPED: 'Reaped stale failed-join rows',
+ });
+ 
+ const LEASE_ERROR_MSG = Object.freeze({
+@@ -49,12 +56,28 @@ const LEASE_EVENT = Object.freeze({
+   LEASE_EXPIRED: 'leaseExpired',
+   SWEEP_COMPLETE: 'sweepComplete',
+   SWEEP_ERROR: 'sweepError',
++  STALE_ROW_REAPED: 'staleRowReaped',
+ });
+ 
+ const LEASE_SQL = Object.freeze({
+   SELECT_ALL_NODES: `SELECT * FROM ${TABLES.NODES}`,
+ });
+ 
++// The failed-join withdrawal (node-registration-owner-publication-methods)
++// drives a leftover joining row to STOPPED on the happy path; when it is
++// deferred, its in-memory reconcile queue is destroyed by teardown, or the
++// process dies first, the row is stranded in `joining`. No live writer ever
++// drives it terminal. The lease sweep intentionally only writes
++// connection_state (a lease is not a membership terminal), so a separate
++// reaper owns the stranded-joining-row terminal: status -> stopped once the
++// row has no live ready lease and no live transport. The reaper complements
++// the sweep; it never reaps a row that still holds a live lease or is
++// transport-connected (the same guard the sweep applies).
++const LEASE_REAPER = Object.freeze({
++  STRANDED_STATUS: 'joining',
++  TARGET_STATUS: 'stopped',
++});
++
+ export {
+   LEASE_SUBSYSTEM,
+   LEASE_DEFAULT_OPTIONS,
+@@ -67,4 +90,5 @@ export {
+   LEASE_ERROR_MSG,
+   LEASE_EVENT,
+   LEASE_SQL,
++  LEASE_REAPER,
+ };
+diff --git a/src/control-plane/lease-service.js b/src/control-plane/lease-service.js
+index 5f5e7e334002d5bee5151dfd5ffce111e3d731db..8df00aa806ef486b7407fb3d8d9fb5e7e51c64a1 100644
+--- a/src/control-plane/lease-service.js
++++ b/src/control-plane/lease-service.js
+@@ -9,6 +9,7 @@ import {LoggingService} from '../logging/logging-service.js';
+ import {ConfigurationManager} from '../config/configuration-manager.js';
+ import {resolveTimeSource} from '../time/time-source.js';
+ import {
++  ENDPOINT_STATUS,
+   STATE,
+   TABLES,
+ } from '../constants/index.js';
+@@ -26,6 +27,7 @@ import {
+ } from './live-transport-evidence.js';
+ import {
+   LEASE_CONFIG_KEY,
++  LEASE_REAPER,
+   LEASE_DEFAULT_OPTIONS,
+   LEASE_EMPTY_QUERY_PARAMS,
+   LEASE_DEFAULT,
+@@ -38,6 +40,7 @@ import {
+ } from './lease-service-constants.js';
+ 
+ const LOCAL_STR_LEASESERVICE_REQUIRES_CONTROLPLANESYSTEM = 'LeaseService requires controlPlaneSystemTableGateway';
++const LOCAL_STR_UNHEALTHY = 'unhealthy';
+ 
+ const createDefaultMessageGroupServices = () => new Set();
+ 
+@@ -255,8 +258,11 @@ class LeaseService extends EventEmitter {
+       });
+     }
+ 
++    const reapedIds = await this.reapStrandedJoiningRows(nodes, now);
++
+     this.emit(LEASE_EVENT.SWEEP_COMPLETE, {
+       expired: expiredIds.length,
++      staleRowsReaped: reapedIds.length,
+     });
+ 
+     return expiredIds;
+@@ -284,6 +290,106 @@ class LeaseService extends EventEmitter {
+     });
+   }
+ 
++  /**
++   * Reap one stranded failed-join row's endpoint rows (node_endpoints and
++   * service_endpoints) so no routing target survives the membership row's
++   * terminal transition. Endpoint failures are warn-only and never block the
++   * membership reap: an orphaned endpoint row is diagnosis noise, a stranded
++   * membership row is a correctness hazard.
++   * @param {string} nodeId - Node whose endpoint rows are reaped.
++   * @param {number} now - Current timestamp.
++   * @return {Promise<void>}
++   * @private
++   */
++  async reapStaleRowEndpoints(nodeId, now) {
++    const gateway = this.getControlPlaneSystemTableGateway();
++    const endpointReaps = [
++      {
++        tableName: TABLES.NODE_ENDPOINTS,
++        data: {status: ENDPOINT_STATUS.INACTIVE, updated_at: now},
++      },
++      {
++        tableName: TABLES.SERVICE_ENDPOINTS,
++        data: {health_status: LOCAL_STR_UNHEALTHY, updated_at: now},
++      },
++    ];
++    for (const reap of endpointReaps) {
++      try {
++        await gateway.updateSystemTableRow(
++          reap.tableName,
++          {node_id: nodeId},
++          reap.data,
++        );
++      } catch (error) {
++        this.logger.warn(LEASE_LOG_MSG.REAPER_ROW_STOP_FAILED, {
++          nodeId,
++          tableName: reap.tableName,
++          error: error.message,
++        });
++      }
++    }
++  }
++
++  /**
++   * Reap stranded failed-join rows: nodes rows left in `joining` with no
++   * live ready lease and no live transport. The failed-join withdrawal
++   * drives these to STOPPED on the happy path; when it is deferred, its
++   * in-memory reconcile queue is destroyed by teardown, or the process dies
++   * first, no live writer ever drives the row terminal. This reaper owns
++   * that terminal transition (status -> stopped) and reaps the row's
++   * endpoint rows, complementing (not replacing) the lease sweep's
++   * connection_state write and the active-node projection's stale-lease
++   * trim. A row holding a live lease or live transport is never reaped —
++   * the same guard the lease sweep applies, so the reaper cannot strand a
++   * genuinely-joining node.
++   * @param {Object[]} nodes - Authoritative nodes rows (already read).
++   * @param {number} now - Current timestamp.
++   * @return {Promise<string[]>} Node IDs driven to STOPPED.
++   * @private
++   */
++  async reapStrandedJoiningRows(nodes, now) {
++    const stranded = nodes.filter((node) => {
++      if (node.status !== LEASE_REAPER.STRANDED_STATUS) return false;
++      const leaseExpiry = Number(node.ready_lease_expires_at);
++      const leaseLive = Number.isFinite(leaseExpiry) && leaseExpiry > now;
++      return !leaseLive;
++    });
++
++    const reapedIds = [];
++    for (const node of stranded) {
++      if (this.isNodeTransportConnected(node.node_id)) {
++        this.logger.info(LEASE_LOG_MSG.REAPER_SKIPPED_TRANSPORT_CONNECTED,
++          {nodeId: node.node_id});
++        continue;
++      }
++      try {
++        await this.getControlPlaneSystemTableGateway().updateSystemTableRow(
++          TABLES.NODES,
++          {node_id: node.node_id, status: LEASE_REAPER.STRANDED_STATUS},
++          {status: LEASE_REAPER.TARGET_STATUS, updated_at: now},
++        );
++      } catch (error) {
++        this.logger.warn(LEASE_LOG_MSG.REAPER_ROW_STOP_FAILED, {
++          nodeId: node.node_id,
++          error: error.message,
++        });
++        continue;
++      }
++      await this.reapStaleRowEndpoints(node.node_id, now);
++      this.logger.warn(LEASE_LOG_MSG.REAPER_ROW_STOPPED,
++        {nodeId: node.node_id});
++      this.emit(LEASE_EVENT.STALE_ROW_REAPED, {nodeId: node.node_id});
++      reapedIds.push(node.node_id);
++    }
++    if (reapedIds.length > 0) {
++      this.logger.warn(LEASE_LOG_MSG.SWEEP_STALE_ROWS_REAPED, {
++        count: reapedIds.length,
++        nodeIds: reapedIds,
++      });
++    }
++    return reapedIds;
++  }
++
+   /**
+    * Resolve the canonical system-table gateway for lease sweeps.
+    * @return {ControlPlaneSystemTableGateway}
+diff --git a/test/control-plane/lease-sweep-stale-row-reaper.test.js b/test/control-plane/lease-sweep-stale-row-reaper.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9c790be9030c67ff8587e00264378b07ef166e0e
+--- /dev/null
++++ b/test/control-plane/lease-sweep-stale-row-reaper.test.js
+@@ -0,0 +1,172 @@
++/**
++ * Regression tests for the LeaseService stranded failed-join row reaper
++ * (join-path-audit-finding-8-deferred-withdrawal-retry-owner).
++ *
++ * A failed-join withdrawal drives its leftover `joining` row to STOPPED on
++ * the happy path; when the mutation is deferred, the in-memory reconcile
++ * queue is destroyed by teardown, or the process dies first, no live writer
++ * ever drives the row terminal. The reaper alongside sweepExpiredLeases owns
++ * that terminal transition (status -> stopped) and reaps the row's endpoint
++ * rows, never touching a row that still holds a live lease or is
++ * transport-connected.
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {LeaseService} from '../../src/control-plane/lease-service.js';
++import {ConfigurationManager} from
++  '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++import {STATE} from '../../src/constants/index.js';
++import {
++  createMockControlPlaneSystemTableGateway,
++} from './test-helpers.js';
++
++const NOW = 1_000_000;
++
++function initEnv() {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++  const config = ConfigurationManager.getInstance();
++  if (!config.isInitialized()) {
++    config.initialize({});
++  }
++  const logging = LoggingService.getInstance();
++  if (!logging.isInitialized()) {
++    logging.initialize({level: 'error'});
++  }
++}
++
++function buildNodeRow(overrides = {}) {
++  return {
++    node_id: 'node-x',
++    node_address: 'ws://localhost:8080',
++    connection_state: STATE.DISCONNECTED,
++    ready_lease_expires_at: null,
++    last_heartbeat: NOW - 5000,
++    status: 'joining',
++    created_at: NOW - 100000,
++    ...overrides,
++  };
++}
++
++function buildService({nodeRows, updates, isTransportConnected}) {
++  initEnv();
++  const gateway = createMockControlPlaneSystemTableGateway({
++    readAuthoritativeRows: async () => ({success: true, rows: nodeRows}),
++    updateSystemTableRow: async (tableName, whereClause, data) => {
++      updates.push({tableName, whereClause, data});
++      return {success: true, partitionResult: {affectedRows: 1}};
++    },
++  });
++  const service = new LeaseService({
++    nodeId: 'leader-node',
++    nodeLeaseOwner: {
++      disconnectNodeDueToLeaseExpiry: async () => ({
++        success: true,
++        partitionResult: {affectedRows: 1},
++      }),
++    },
++    systemTableCache: {getAll: () => nodeRows},
++    controlPlaneSystemTableGateway: gateway,
++    messageGroupServices: [{isLeaderReplica: () => true}],
++    messageRouter: isTransportConnected ?
++      {getConnectionState: isTransportConnected} :
++      null,
++    now: () => NOW,
++  });
++  service.initialize();
++  return service;
++}
++
++test('reaper drives a stranded joining row to STOPPED and reaps its endpoints',
++  async (t) => {
++    const updates = [];
++    const service = buildService({
++      nodeRows: [buildNodeRow({node_id: 'node-stuck'})],
++      updates,
++    });
++
++    const reaped = [];
++    service.on('staleRowReaped', ({nodeId}) => reaped.push(nodeId));
++
++    await service.sweepExpiredLeases();
++
++    const membershipUpdate = updates.find((u) =>
++      u.tableName === 'nodes' && u.data.status === 'stopped');
++    t.ok(membershipUpdate,
++      'stranded joining row is driven to STOPPED');
++    t.equal(membershipUpdate.whereClause.status, 'joining',
++      'the reap is guarded on the observed joining status');
++    t.ok(
++      updates.some((u) =>
++        u.tableName === 'node_endpoints' && u.data.status === 'inactive'),
++      'node_endpoints row is reaped to inactive',
++    );
++    t.ok(
++      updates.some((u) =>
++        u.tableName === 'service_endpoints' &&
++          u.data.health_status === 'unhealthy'),
++      'service_endpoints rows are reaped to unhealthy',
++    );
++    t.same(reaped, ['node-stuck'], 'reap event names the node');
++    t.end();
++  });
++
++test('reaper never touches a joining row that still holds a live lease',
++  async (t) => {
++    const updates = [];
++    const service = buildService({
++      nodeRows: [buildNodeRow({
++        node_id: 'node-joining-live',
++        ready_lease_expires_at: NOW + 60000,
++      })],
++      updates,
++    });
++
++    await service.sweepExpiredLeases();
++
++    t.notOk(
++      updates.some((u) => u.data?.status === 'stopped'),
++      'a joining row with a live lease is not reaped',
++    );
++    t.end();
++  });
++
++test('reaper never touches a transport-connected joining row',
++  async (t) => {
++    const updates = [];
++    const service = buildService({
++      nodeRows: [buildNodeRow({node_id: 'node-connected'})],
++      updates,
++      isTransportConnected: () => 'connected',
++    });
++
++    await service.sweepExpiredLeases();
++
++    t.notOk(
++      updates.some((u) => u.data?.status === 'stopped'),
++      'a transport-connected joining row is not reaped',
++    );
++    t.end();
++  });
++
++test('reaper leaves terminal and non-joining rows alone',
++  async (t) => {
++    const updates = [];
++    const service = buildService({
++      nodeRows: [
++        buildNodeRow({node_id: 'node-active', status: 'active'}),
++        buildNodeRow({node_id: 'node-stopped', status: 'stopped'}),
++        buildNodeRow({node_id: 'node-ready', status: 'ready'}),
++      ],
++      updates,
++    });
++
++    await service.sweepExpiredLeases();
++
++    t.notOk(
++      updates.some((u) => u.data?.status === 'stopped'),
++      'rows not stuck in joining are not reaped',
++    );
++    t.end();
++  });
