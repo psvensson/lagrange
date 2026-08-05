@@ -1,0 +1,48 @@
+{
+  "id": "startup-evidence-single-identity-decision-v2-integrity-migration",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The append-only history and exact attempt artifacts for startup-evidence-single-identity-decision-v2 are retained with content hashes, its source result is attributed to reachable commits c24211b08 and 78b1f7b62 and independently approved aggregate sha256:ca7e30511e6346ce39604444dc8a70855b5244aa137f5fc6736ce21cbc2e8372, the parent remains visibly audit-red solely for its mixed recorded Git bases, and the migration changes no runtime, test, harness, or Solver source.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "specRef": "docs/steering/workflow-guidelines/solver-quests.md",
+    "closesCL": [],
+    "parentQuest": "startup-evidence-single-identity-decision-v2",
+    "planDoc": "solve/epics/cluster-identity-and-join-fencing.md",
+    "draftedAtCommit": "78b1f7b62f2b80d3cef25cea345cb0db31d7c5a8"
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/startup-evidence-single-identity-decision-v2-integrity-migration.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "startup-evidence-single-identity-decision-v2-integrity-migration-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/startup-evidence-single-identity-decision-v2-integrity-migration.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "historical-retention-only",
+      "statement": "The migration may add only Solver history, content-addressed artifacts, and its own Quest/oracle/manifest bookkeeping; it must not change runtime, test, harness, or Solver source."
+    },
+    {
+      "id": "parent-remains-visible",
+      "statement": "The parent audit must retain exactly the recorded common-Git-base problem; this migration records disposition and never rewrites, waives, or reports the parent as landed."
+    }
+  ]
+}
