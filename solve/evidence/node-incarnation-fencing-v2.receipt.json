@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "node-incarnation-fencing-v2",
   "status": "pass",
-  "generatedAt": "2026-08-05T09:35:42.764Z",
+  "generatedAt": "2026-08-05T09:52:24.901Z",
   "receipts": [
     {
       "id": "incarnation-persisted-in-rejoin-hints",

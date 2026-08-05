@@ -14,6 +14,7 @@ import {BootstrapAPI} from './bootstrap/bootstrap-api.js';
 import {createControlPlaneWriteHealthProvider} from
   './bootstrap/control-plane-write-health-owner.js';
 import {
+  mintBootIncarnation,
   readPersistedLocalClusterId,
   readPersistedLocalNodeId,
 } from './bootstrap/rejoin-hints.js';
@@ -100,12 +101,19 @@ async function startJoinNode(options) {
   const persistedClusterId = await readPersistedLocalClusterId(
     dataDirectoryManager.getDataDir(),
   );
+  // Mint this boot's incarnation before any hints write: the counter is
+  // node-local and monotonic, so a zombie from an earlier boot provably
+  // carries a smaller incarnation than the current data-dir owner.
+  const bootIncarnation = await mintBootIncarnation(
+    dataDirectoryManager.getDataDir(),
+  );
   await persistJoinSeedRejoinHints({
     dataDir: dataDirectoryManager.getDataDir(),
     nodeId,
     nodeAddress: joiningNodeAddress,
     peerAddresses: seedNodeAddresses,
     clusterId: persistedClusterId,
+    bootIncarnation,
     logger: mainLogger,
   });
   const clusterIncarnationFence = await resolveLocalClusterIncarnationFence({
@@ -164,6 +172,7 @@ async function startJoinNode(options) {
     startupMode,
     membershipOwnerOutcome: options.membershipOwnerOutcome,
     expectedClusterId: persistedClusterId,
+    bootIncarnation,
     clusterIncarnationFence,
     membershipLifecycleController,
     previousLifecycleStateMachine:
@@ -271,6 +280,7 @@ async function startJoinNode(options) {
     nodeAddress: joiningNodeAddress,
     peerAddresses: seedNodeAddresses,
     clusterId: joinedClusterId,
+    bootIncarnation,
     logger: mainLogger,
   });
 
@@ -354,6 +364,7 @@ async function startJoinNode(options) {
     nodeId,
     nodeAddress: joiningNodeAddress,
     nodeRole: 'joiner',
+    bootIncarnation,
     getSystemTableCache: () => systemTableCache,
     logger: mainLogger,
   });
@@ -416,6 +427,9 @@ async function startSeedNode(options) {
   } = resolveRuntimeAddresses(config);
 
   mainLogger.info(ENTRYPOINT_LOG_MSG.STARTING_SEED);
+  const bootIncarnation = await mintBootIncarnation(
+    dataDirectoryManager.getDataDir(),
+  );
   const clusterIncarnationFence = await resolveLocalClusterIncarnationFence({
     dataDir: dataDirectoryManager.getDataDir(),
     nodeId,
@@ -558,6 +572,7 @@ async function startSeedNode(options) {
     nodeId,
     nodeAddress: seedNodeHttpAddress,
     nodeRole: 'seed',
+    bootIncarnation,
     getSystemTableCache: () => systemTableCache,
     logger: mainLogger,
   });

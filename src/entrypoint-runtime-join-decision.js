@@ -457,6 +457,7 @@ function startRejoinHintsPersistence(options) {
     nodeId: options.nodeId,
     nodeAddress: options.nodeAddress,
     nodeRole: options.nodeRole,
+    bootIncarnation: options.bootIncarnation,
     getSystemTableCache: options.getSystemTableCache,
     logger: options.logger,
   });
