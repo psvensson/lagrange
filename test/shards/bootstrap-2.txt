@@ -1,4 +1,5 @@
 test/bootstrap/_min-test.test.js
+test/bootstrap/address-takeover-workflow.test.js
 test/bootstrap/bootstrap-api-admission-snapshots.test.js
 test/bootstrap/bootstrap-api-readiness-gating.test.js
 test/bootstrap/bootstrap-api-readiness-publication.test.js
@@ -21,12 +22,13 @@ test/bootstrap/cache-hydration-correctness.property.test.js
 test/bootstrap/cache-hydration-strictness.test.js
 test/bootstrap/cdc-initial-subscription-leader-fallback.test.js
 test/bootstrap/cleanup-ownership-order-characterization.test.js
-test/bootstrap/cold-node-authority-reacquisition-pressure.test.js
+test/bootstrap/cluster-identity-join-gate.test.js
+test/bootstrap/cluster-identity.test.js
 test/bootstrap/connect-websocket-phase.test.js
 test/bootstrap/control-plane-rollout-controls.test.js
 test/bootstrap/control-plane-write-health-owner.test.js
 test/bootstrap/debug-meta-table-schemas.test.js
-test/bootstrap/fresh-join-via-non-seed-node.integration.test.js
+test/bootstrap/fresh-join-multi-peer-contact.test.js
 test/bootstrap/hydrate-system-cache-from-bootstrap.test.js
 test/bootstrap/join-cleanup.property.test.js
 test/bootstrap/join-delegate-bundles.test.js
@@ -34,6 +36,7 @@ test/bootstrap/join-message-group-phase.test.js
 test/bootstrap/join-readiness-non-participating-exclusion.repro.test.js
 test/bootstrap/join-readiness-self-targeted-exclusion.property.test.js
 test/bootstrap/join-readiness-warming-node-exclusion.property.test.js
+test/bootstrap/join-retry-patience-selectable.test.js
 test/bootstrap/join-session-store.test.js
 test/bootstrap/latency-topology-owner-delegation.test.js
 test/bootstrap/latency-topology-table-schemas.test.js
@@ -66,6 +69,7 @@ test/bootstrap/rejoin-hints.test.js
 test/bootstrap/required-dependency-validation.property.test.js
 test/bootstrap/restart-cdc-recovery-diagnostics.test.js
 test/bootstrap/runtime-service-rebalancer-owner.test.js
+test/bootstrap/schema-operations-table-schema.test.js
 test/bootstrap/seed-delegate-bundles.test.js
 test/bootstrap/seed-infrastructure-phase.test.js
 test/bootstrap/seed-startup-session-store.test.js

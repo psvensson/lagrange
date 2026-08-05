@@ -8,8 +8,8 @@
  * inside the ready-lease window.
  *
  * Measured outcomes per run:
- *   - terminalClassifications: conflicts the joiner would turn into
- *     process.exit(1) (the availability defect)
+ *   - terminalClassifications: conflicts the joiner would turn into a
+ *     hard-exit (the availability defect)
  *   - retryableClassifications: conflicts classified retryable-with-backoff
  *   - admissionsAfterLeaseExpiry: restarts admitted once the lease expired
  *
@@ -199,7 +199,7 @@ test('live A/B: the fixed classification never turns an in-lease-window ' +
 });
 
 test('live A/B: the retryable classification is status-driven, not ' +
-  'message-driven (message drift cannot re-terminalize)', async (t) => {
+  'message-driven (message drift cannot make it terminal again)', async (t) => {
   initializeTestEnvironment();
   const joinerPhase = new ContactSeedPhase({
     nodeId: 'joiner',

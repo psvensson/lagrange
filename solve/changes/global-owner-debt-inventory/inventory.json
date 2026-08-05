@@ -21,7 +21,7 @@
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 1565808,
-        "sha256": "43beb50301cea3605d581e58be6bb98e07095466dffc5cebf699f774460b831b"
+        "sha256": "988d6f216c3374ecc916a536f7b8d5811cf1fa4e779e10a9fc5eaaba3afafe54"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "264a555299bc932013060cd357c9621217e4dde80830a3f1cd0ab8d1b3e25ffb"
+    "inputDigest": "480b2596706f9ebf0eead5d139c7540ceee959fb81efa8835ac5f1e8121f24bf"
   },
   "reconciliation": {
     "complexity": {
@@ -99,8 +99,8 @@
         "source": 28,
         "test": 21
       },
-      "observedCount": 49,
-      "assignedCount": 49
+      "observedCount": 51,
+      "assignedCount": 51
     },
     "duplication": [
       {
@@ -167,34 +167,34 @@
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
         "bytes": 1565808,
-        "sha256": "43beb50301cea3605d581e58be6bb98e07095466dffc5cebf699f774460b831b"
+        "sha256": "988d6f216c3374ecc916a536f7b8d5811cf1fa4e779e10a9fc5eaaba3afafe54"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "ad6ee154c628abcc7fa4b41e2441ce2d979c8896410806789a6311781f4e95a3",
+      "sourceDigest": "8a28e4aa4096d3b7891ea1c66b36c5787d3d988673d4ba5335310df82d791d2a",
       "moduleCount": 4620,
       "edgeCount": 19809,
       "unresolvedCount": 32
     }
   },
   "assignment": {
-    "sourceSignalCount": 2703,
-    "assignedSignalCount": 2703,
-    "uniqueAssignmentCount": 2703,
-    "digest": "5af499b39cd3598cddf17ed2fc5c869060fa9e9757b282c7e923bc1f4e6cb6e9"
+    "sourceSignalCount": 2705,
+    "assignedSignalCount": 2705,
+    "uniqueAssignmentCount": 2705,
+    "digest": "4bcea2f51ff9a414207e1db40623342725fa1ae6a203407179c8eb6f8920c929"
   },
   "signalCounts": {
     "cognitive": 178,
     "complexity": 1842,
     "duplication": 596,
-    "fileSize": 49,
+    "fileSize": 51,
     "lintExclusion": 38
   },
   "summary": {
-    "filesWithDebt": 1369,
+    "filesWithDebt": 1370,
     "rankedBoundaryCount": 123,
     "semanticBoundaryCount": 21,
     "fallbackBoundaryCount": 102,
@@ -1266,6 +1266,34 @@
       ]
     },
     {
+      "key": "area:src/runtime",
+      "owner": null,
+      "boundary": "src/runtime",
+      "classification": "owner-area-fallback",
+      "ownerAreas": [
+        "src/runtime"
+      ],
+      "fileCount": 11,
+      "signalCount": 14,
+      "complexity": 12,
+      "cognitive": 0,
+      "oversizedFiles": 2,
+      "duplicatedLines": 0,
+      "cloneTouches": 0,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 61,
+      "importOut": 60,
+      "score": 72,
+      "topPaths": [
+        "src/runtime/service-runtime-lifecycle.js",
+        "src/runtime/service-runtime-lifecycle-operation-methods.js",
+        "src/runtime/wasm-component-driver.js",
+        "src/runtime/endpoint-sync-config.js",
+        "src/runtime/endpoint-sync-controller.js"
+      ]
+    },
+    {
       "key": "semantic:membership_publication_owner/membership_publication_coordination",
       "owner": "membership_publication_owner",
       "boundary": "membership_publication_coordination",
@@ -1484,34 +1512,6 @@
         "test/runtime/native-js-driver.test.js",
         "test/runtime/oci-container-driver.test.js",
         "test/runtime/movielens-three-way-affinity-demo.test.js"
-      ]
-    },
-    {
-      "key": "area:src/runtime",
-      "owner": null,
-      "boundary": "src/runtime",
-      "classification": "owner-area-fallback",
-      "ownerAreas": [
-        "src/runtime"
-      ],
-      "fileCount": 10,
-      "signalCount": 12,
-      "complexity": 12,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 0,
-      "cloneTouches": 0,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 47,
-      "importOut": 51,
-      "score": 48,
-      "topPaths": [
-        "src/runtime/service-runtime-lifecycle-operation-methods.js",
-        "src/runtime/endpoint-sync-config.js",
-        "src/runtime/endpoint-sync-controller.js",
-        "src/runtime/endpoint-sync-k8s-client.js",
-        "src/runtime/endpoint-sync-source-query.js"
       ]
     },
     {
