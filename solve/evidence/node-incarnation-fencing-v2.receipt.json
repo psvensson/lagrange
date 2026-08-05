@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "node-incarnation-fencing-v2",
   "status": "pass",
-  "generatedAt": "2026-08-05T09:52:24.901Z",
+  "generatedAt": "2026-08-05T10:11:10.608Z",
   "receipts": [
     {
       "id": "incarnation-persisted-in-rejoin-hints",
@@ -27,6 +27,36 @@
       "passed": true,
       "command": "npm run test:file -- test/bootstrap/node-incarnation.test.js",
       "detail": "the incarnation flows through the durable nodes row (boot_incarnation column) and the heartbeat publication path"
+    },
+    {
+      "id": "watermark-fence-rejects-stale-incarnation",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/node-incarnation-fence.test.js",
+      "detail": "handleNodeStateUpdate fences a stale-incarnation writer BEFORE the Math.max heartbeat clamp lifts it to receiver-time"
+    },
+    {
+      "id": "missing-row-upsert-fences-stale-incarnation",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/node-incarnation-fence.test.js",
+      "detail": "tryBootstrapMissingNodeStateUpdateRow refuses a stale-incarnation upsert against the retained high-water map"
+    },
+    {
+      "id": "websocket-identification-slot-fences-stale-incarnation",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/node-incarnation-fence.test.js",
+      "detail": "a stale-incarnation IDENTIFY never steals the WebSocket slot (existing socket kept, incoming terminated)"
+    },
+    {
+      "id": "stale-incarnation-typed-terminal-refusal",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/node-incarnation-fence.test.js",
+      "detail": "STALE_NODE_INCARNATION is classified terminal (shouldDeferNodeStateUpdateRetry returns false), so the publisher retry loop stops"
+    },
+    {
+      "id": "heartbeat-clamp-after-incarnation-check",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/node-incarnation-fence.test.js",
+      "detail": "the heartbeat clamp runs only after the incarnation fence accepts the writer"
     }
   ]
 }

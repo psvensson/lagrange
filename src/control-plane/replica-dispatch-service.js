@@ -60,6 +60,7 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
     this.directDispatchWakeupsInFlight.clear();
     this.retryInFlightNodes.clear();
     this.nodeStateUpdateWatermarks.clear();
+    this.nodeBootIncarnationWatermarks.clear();
     this.nodeReadyRetryWatermarks.clear();
     for (const operationId of this.operationDispatchDeferredRetries.keys()) {
       this.clearDeferredOperationDispatchRetry(operationId);

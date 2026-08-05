@@ -23,6 +23,7 @@ const {
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   REPLICA_OPERATION_DISPATCH_TIMEOUT_MS,
+  STALE_NODE_INCARNATION_CODE,
   getControlPlaneErrorCode,
   getControlPlaneErrorMessage,
   getControlPlaneNodeStatePublicationProfile,
@@ -496,6 +497,12 @@ class ReplicaDispatchRetryScheduling extends ReplicaDispatchReplayHealthReadines
    */
   shouldDeferNodeStateUpdateRetry(error, payload = null) {
     if (!error) {
+      return false;
+    }
+    // Terminal refusal: a stale-incarnation writer can never become fresh by
+    // retrying, so the reconcile callback must rethrow instead of parking the
+    // payload on the deferred-retry loop forever.
+    if (error.code === STALE_NODE_INCARNATION_CODE) {
       return false;
     }
     const nextState = payload?.[ControlPlaneField.STATE];

@@ -45,6 +45,7 @@ const COLUMN = Object.freeze({
   CONNECTION_STATE: 'connection_state',
   CAPABILITIES: 'capabilities',
   LAST_HEARTBEAT: 'last_heartbeat',
+  BOOT_INCARNATION: 'boot_incarnation',
   READY_LEASE_EXPIRES_AT: 'ready_lease_expires_at',
   STORAGE_BUDGET_BYTES: 'storage_budget_bytes',
   STORAGE_BUDGET_SOURCE: 'storage_budget_source',

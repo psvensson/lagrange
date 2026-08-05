@@ -9,11 +9,14 @@ const {
   RECONCILE_REASON,
   REPLICA_DISPATCH_SERVICE_LITERAL,
   SERVICE_STATUS,
+  STALE_NODE_INCARNATION_CODE,
   STATE,
   STRING,
   SYSTEM_TABLE_NAME,
+  buildStaleNodeIncarnationError,
   getNodeHeartbeatWatermark,
   isRetryableControlPlaneError,
+  normalizeKnownNodeBootIncarnation,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
@@ -85,6 +88,31 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
     }
 
     const existing = await this.getNodeRow(nodeId);
+    // Incarnation fence: a writer whose boot incarnation is LOWER than the
+    // receiver's best-known incarnation for this nodeId is a zombie. Refuse
+    // it terminally BEFORE the heartbeat clamp below can lift the stale
+    // writer's heartbeat to receiver time. UNKNOWN incarnation on either
+    // side (0 / pre-incarnation) never fences (clusterId UNKNOWN policy).
+    const payloadBootIncarnation = normalizeKnownNodeBootIncarnation(
+      payload[ControlPlaneField.BOOT_INCARNATION],
+    );
+    const existingBootIncarnation = Math.max(
+      normalizeKnownNodeBootIncarnation(existing?.[COLUMN.BOOT_INCARNATION]),
+      normalizeKnownNodeBootIncarnation(
+        this.nodeBootIncarnationWatermarks.get(nodeId),
+      ),
+    );
+    if (
+      payloadBootIncarnation > 0 &&
+      existingBootIncarnation > 0 &&
+      payloadBootIncarnation < existingBootIncarnation
+    ) {
+      throw buildStaleNodeIncarnationError({
+        nodeId,
+        receivedIncarnation: payloadBootIncarnation,
+        knownIncarnation: existingBootIncarnation,
+      });
+    }
     const payloadWatermark = this.getNodeStateUpdateWatermark(payload);
     const now = Date.now();
     const existingConnectionState = String(
@@ -215,6 +243,15 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
       if (!bootstrapped) {
         throw await this.resolveMissingNodeRowUpdateError(nodeId, existing);
       }
+    }
+
+    // Accepted update: retain the freshest known boot incarnation so the
+    // fence above keeps working while the durable row is not yet visible.
+    if (payloadBootIncarnation > 0) {
+      this.nodeBootIncarnationWatermarks.set(
+        nodeId,
+        Math.max(payloadBootIncarnation, existingBootIncarnation),
+      );
     }
 
     if (nextState === STATE.READY && !isHeartbeatOnly) {
@@ -402,6 +439,27 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
     if (nextState !== STATE.CONNECTED && nextState !== STATE.READY) {
       return false;
     }
+    // Incarnation fence on the missing-row path: the durable row (and its
+    // boot_incarnation column) is not visible here, so compare against the
+    // retained per-node high-water map instead. A stale-incarnation writer
+    // must not resurrect itself through an upsert.
+    const payloadBootIncarnation = normalizeKnownNodeBootIncarnation(
+      payload?.[ControlPlaneField.BOOT_INCARNATION],
+    );
+    const retainedBootIncarnation = normalizeKnownNodeBootIncarnation(
+      this.nodeBootIncarnationWatermarks.get(nodeId),
+    );
+    if (
+      payloadBootIncarnation > 0 &&
+      retainedBootIncarnation > 0 &&
+      payloadBootIncarnation < retainedBootIncarnation
+    ) {
+      throw buildStaleNodeIncarnationError({
+        nodeId,
+        receivedIncarnation: payloadBootIncarnation,
+        knownIncarnation: retainedBootIncarnation,
+      });
+    }
     const nodeAddress = String(baseRow?.[COLUMN.NODE_ADDRESS] || '').trim();
     if (nodeAddress.length === 0 || nodeAddress === STRING.UNKNOWN) {
       return false;
@@ -445,8 +503,19 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
         nodeId,
         state: nextState,
       });
+      if (payloadBootIncarnation > 0) {
+        this.nodeBootIncarnationWatermarks.set(
+          nodeId,
+          Math.max(payloadBootIncarnation, retainedBootIncarnation),
+        );
+      }
       return true;
     } catch (error) {
+      if (error?.code === STALE_NODE_INCARNATION_CODE) {
+        // Terminal refusal: a stale-incarnation writer can never become
+        // fresh by retrying, so it must never gain deferred-retry marking.
+        throw error;
+      }
       if (error?.deferRetry === true || isRetryableControlPlaneError(error)) {
         error.deferRetry = true;
         error.retryAfterMs = Number.isFinite(error?.retryAfterMs) ?

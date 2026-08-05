@@ -16,10 +16,13 @@ import {
 import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
 import {ControlPlaneReadinessService} from './control-plane-readiness-service.js';
 import {
+  STALE_NODE_INCARNATION_CODE,
+  buildStaleNodeIncarnationError,
   getControlPlaneErrorCode,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
+  normalizeKnownNodeBootIncarnation,
 } from './control-plane-error-classification.js';
 import {createControlPlaneRuntimeBundle} from './control-plane-runtime-bundle.js';
 import {
@@ -250,12 +253,14 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
   ReplicaOperationField,
   SERVICE_STATUS,
   SERVICE_TYPE,
+  STALE_NODE_INCARNATION_CODE,
   STATE,
   STRING,
   SYSTEM_TABLE_NAME,
   TYPEOF,
   WORKFLOW_STEP,
   assertCritical,
+  buildStaleNodeIncarnationError,
   classifySystemPartition,
   compareNodeHeartbeatWatermarks,
   createControlPlaneRuntimeBundle,
@@ -274,6 +279,7 @@ export const REPLICA_DISPATCH_SERVICE_SHARED = {
   isHeartbeatEscalatedControlPlaneNodeStatePublicationMode,
   isRetryableControlPlaneError,
   isTerminalMembershipPublicationStatus,
+  normalizeKnownNodeBootIncarnation,
   resolveControlPlaneNodeStatePublicationMode,
   resolveReadyNodePublicationAdvancementState,
   resolveReplayControlPlaneNodeStatePublicationMode,

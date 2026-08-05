@@ -89,6 +89,10 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     this.priorityDispatchInFlight = new Set();
     this.retryInFlightNodes = new Set();
     this.nodeStateUpdateWatermarks = new Map();
+    // Retained per-node high-water boot incarnation: lets the missing-row
+    // upsert path fence a stale-incarnation writer even when the durable row
+    // (and its boot_incarnation column) is not yet visible to this receiver.
+    this.nodeBootIncarnationWatermarks = new Map();
     this.nodeReadyRetryWatermarks = new Map();
     this.dispatchFailureSignaturesByOperationId = new Map();
     this.operationDispatchDeferredRetries = new Map();

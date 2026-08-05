@@ -80,6 +80,49 @@ const CONTROL_PLANE_FAILURE_ERROR_CODE = Object.freeze({
     PRESSURE_GOVERNOR_ERROR_CODE.CONTROL_PLANE_PRESSURE_DEGRADED,
 });
 
+const STALE_NODE_INCARNATION_CODE = 'STALE_NODE_INCARNATION';
+
+const STALE_NODE_INCARNATION_ERROR_MESSAGE =
+  'Refusing node state update from a stale boot incarnation';
+
+/**
+ * Build the typed terminal refusal a receiver raises when a writer stamps a
+ * boot incarnation LOWER than the receiver's best-known incarnation for that
+ * nodeId. The error is terminal (never retried): a zombie writer can never
+ * become fresh by retrying.
+ * @param {Object} [options={}] - Fence context.
+ * @param {string} [options.nodeId] - The fenced node id.
+ * @param {number} [options.receivedIncarnation] - Incarnation on the write.
+ * @param {number} [options.knownIncarnation] - Receiver high-water incarnation.
+ * @return {Error} Typed error with code STALE_NODE_INCARNATION.
+ */
+function buildStaleNodeIncarnationError(options = {}) {
+  const error = new Error(STALE_NODE_INCARNATION_ERROR_MESSAGE);
+  error.code = STALE_NODE_INCARNATION_CODE;
+  error.nodeId = options.nodeId || null;
+  error.receivedIncarnation = Number.isSafeInteger(
+    options.receivedIncarnation,
+  ) ?
+    options.receivedIncarnation :
+    null;
+  error.knownIncarnation = Number.isSafeInteger(options.knownIncarnation) ?
+    options.knownIncarnation :
+    null;
+  return error;
+}
+
+/**
+ * Normalize one boot-incarnation candidate: a positive safe integer is KNOWN,
+ * anything else (0, absent, non-numeric — the pre-incarnation compat shape)
+ * is UNKNOWN and never fences.
+ * @param {*} value - Candidate incarnation.
+ * @return {number} The known incarnation, or 0 when unknown.
+ */
+function normalizeKnownNodeBootIncarnation(value) {
+  const numeric = Number(value);
+  return Number.isSafeInteger(numeric) && numeric > 0 ? numeric : 0;
+}
+
 const MAX_LINKED_CONTROL_PLANE_FAILURES = NUM.EIGHT;
 
 function getDirectControlPlaneErrorMessage(value) {
@@ -282,10 +325,13 @@ export {
   CONTROL_PLANE_CONVERGENCE_CLASS,
   CONTROL_PLANE_CONVERGENCE_PRESSURE_OUTCOME,
   CONTROL_PLANE_FAILURE_REASON,
+  STALE_NODE_INCARNATION_CODE,
+  buildStaleNodeIncarnationError,
   getControlPlaneErrorCode,
   getControlPlaneFailureSummary,
   getControlPlaneErrorMessage,
   getControlPlaneRetryAfterMs,
   isRetryableControlPlaneError,
+  normalizeKnownNodeBootIncarnation,
   RETRYABLE_CONTROL_PLANE_ERROR_FRAGMENTS,
 };
