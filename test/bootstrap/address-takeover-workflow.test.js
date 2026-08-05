@@ -16,7 +16,7 @@ import {
   ContactSeedPhase,
 } from '../../src/bootstrap/phases/contact-seed-phase.js';
 import {
-  normalizeRetryableSeedContactEvidence,
+  isRetainedSeedContactEvidence,
   isRetryableSeedContactCode,
 } from '../../src/bootstrap/phases/contact-seed-failure-signals.js';
 import {
@@ -114,18 +114,20 @@ test('the typed lease-window code is whitelisted retryable on the joiner',
       ),
       'the lease-window code is a retryable seed-contact code',
     );
-    const evidence = normalizeRetryableSeedContactEvidence({
+    const evidence = {
       error: 'Node rejoin conflicts with a live ready lease; retry after ' +
         'lease expiry',
       code: BOOTSTRAP_PIPELINE_ERROR_CODE.NODE_REJOIN_LEASE_WINDOW,
       statusCode: HTTP_STATUS.CONFLICT,
       retryAfterMs: 45000,
-    });
-    t.ok(evidence !== null,
+    };
+    t.ok(
+      isRetainedSeedContactEvidence(evidence),
       'a 409 carrying the lease-window code is retained as retryable ' +
-      'evidence, not discarded');
+      'evidence, not discarded',
+    );
     t.equal(evidence.retryAfterMs, 45000,
-      'the retryAfterMs hint survives evidence normalization');
+      'the retryAfterMs hint is carried on the retained evidence');
     t.end();
   });
 

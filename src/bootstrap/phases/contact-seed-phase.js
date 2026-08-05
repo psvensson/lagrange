@@ -23,17 +23,15 @@ import {
   JOINING_SEED_CONTACT_OUTCOME,
 } from '../node-joining-constants.js';
 import {
-  HTTP_STATUS,
   NUM,
 } from '../../constants/index.js';
 import {
   MAX_RETRYABLE_SEED_CONTACT_EVIDENCE_RETRIES,
   RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE,
   RETRYABLE_SEED_CONTACT_FAILURE_ACTION,
+  deriveSeedContactFailureFields,
   formatLeaderMetadataDetails,
-  isRetryableSeedContactCode,
-  isRetryableSeedContactTransportFailure,
-  normalizeRetryableSeedContactEvidence,
+  isRetainedSeedContactEvidence,
   parseBootstrapError,
   resolveBootstrapNotReadySeedContactFailureKind,
   resolveSeedContactRequestTimeoutMs,
@@ -154,10 +152,12 @@ class ContactSeedPhase {
   createSeedContactContext(options) {
     const retryPolicy = this.resolveJoinRetryPolicy();
     const now = this.delegates.getNow();
+    const retainedEvidence =
+      this.delegates.getLastRetryableSeedContactEvidence?.();
     const lastBootstrapError =
-      normalizeRetryableSeedContactEvidence(
-        this.delegates.getLastRetryableSeedContactEvidence?.(),
-      );
+      isRetainedSeedContactEvidence(retainedEvidence) ?
+        retainedEvidence :
+        null;
     const config = this.delegates.getConfig();
     return {
       ...options,
@@ -346,9 +346,15 @@ class ContactSeedPhase {
   }
 
   recordRetryableSeedContactEvidence(context, parsedError) {
-    const evidence = normalizeRetryableSeedContactEvidence(parsedError);
-    if (!evidence) {
+    if (!isRetainedSeedContactEvidence(parsedError)) {
       return;
+    }
+    const evidence = {...parsedError};
+    if (Number.isFinite(evidence.statusCode)) {
+      evidence.statusCode = Math.floor(evidence.statusCode);
+    }
+    if (Number.isFinite(evidence.retryAfterMs)) {
+      evidence.retryAfterMs = Math.floor(evidence.retryAfterMs);
     }
     context.lastBootstrapError = evidence;
     context.lastBootstrapErrorSource =
@@ -545,53 +551,10 @@ class ContactSeedPhase {
    * @return {Object}
    */
   classifySeedContactFailure(error, retryableTimeoutErrorMessage) {
-    const parsedError = error.bootstrapResponse ||
-      parseBootstrapError(error);
-    const statusCode = Number.isFinite(error?.statusCode) ?
-      Math.floor(error.statusCode) :
-      (Number.isFinite(parsedError?.statusCode) ?
-        Math.floor(parsedError.statusCode) :
-        null);
-    const code = typeof parsedError?.code === 'string' ?
-      parsedError.code :
-      null;
-    const retryableCode = isRetryableSeedContactCode(code);
-    const retryableTimeout =
-      error?.message === retryableTimeoutErrorMessage;
-    const retryableStatus =
-      statusCode === HTTP_STATUS.SERVICE_UNAVAILABLE;
-    const retryableTransportFailure =
-      isRetryableSeedContactTransportFailure(error, {
-        parsedError,
-        statusCode,
-      });
-    // A 409 carrying a whitelisted retryable code (e.g. the lease-window
-    // changed-address conflict) is retryable-with-backoff, not terminal: the
-    // seed explicitly classified it as a wait. Only an untyped/unwhitelisted
-    // 409 stays on the terminal path.
-    const terminalValidationOrConflict =
-      !retryableCode &&
-      (statusCode === HTTP_STATUS.BAD_REQUEST ||
-        statusCode === HTTP_STATUS.CONFLICT);
-
-    return {
-      parsedError,
-      statusCode,
-      code,
-      retryAfterMs: resolveSeedContactRetryAfterMs(
-        error,
-        parsedError,
-      ),
-      retryableCode,
-      retryableTimeout,
-      retryableStatus,
-      retryableTransportFailure,
-      retryable: retryableCode ||
-        retryableTimeout ||
-        retryableStatus ||
-        retryableTransportFailure,
-      terminalValidationOrConflict,
-    };
+    return deriveSeedContactFailureFields(
+      error,
+      retryableTimeoutErrorMessage,
+    );
   }
 
   /**
@@ -696,7 +659,7 @@ class ContactSeedPhase {
 
 export {
   ContactSeedPhase,
-  parseBootstrapError,
   formatLeaderMetadataDetails,
+  parseBootstrapError,
   resolveSeedContactRetryAfterMs,
 };

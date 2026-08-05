@@ -20,6 +20,45 @@ const {
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
 
+// The boot-incarnation fence, resolved against the receiver's best-known
+// incarnation for one nodeId (the durable row's boot_incarnation column when
+// visible, and always the retained per-node high-water map). A writer whose
+// incarnation is LOWER is a zombie and the fence throws the terminal stale
+// error before any heartbeat clamp can lift it. UNKNOWN on either side
+// (0 / pre-incarnation) never fences, matching the clusterId UNKNOWN policy.
+function resolveNodeBootIncarnationFence(nodeId, payload, watermarks, existingRow) {
+  const payloadBootIncarnation = normalizeKnownNodeBootIncarnation(
+    payload?.[ControlPlaneField.BOOT_INCARNATION],
+  );
+  const knownBootIncarnation = Math.max(
+    normalizeKnownNodeBootIncarnation(existingRow?.[COLUMN.BOOT_INCARNATION]),
+    normalizeKnownNodeBootIncarnation(watermarks.get(nodeId)),
+  );
+  if (
+    payloadBootIncarnation > 0 &&
+    knownBootIncarnation > 0 &&
+    payloadBootIncarnation < knownBootIncarnation
+  ) {
+    throw buildStaleNodeIncarnationError({
+      nodeId,
+      receivedIncarnation: payloadBootIncarnation,
+      knownIncarnation: knownBootIncarnation,
+    });
+  }
+  return {payloadBootIncarnation, knownBootIncarnation};
+}
+
+// Accepted update: retain the freshest known boot incarnation so the fence
+// keeps working while the durable row is not yet visible.
+function retainNodeBootIncarnationWatermark(watermarks, nodeId, fence) {
+  if (fence.payloadBootIncarnation > 0) {
+    watermarks.set(
+      nodeId,
+      Math.max(fence.payloadBootIncarnation, fence.knownBootIncarnation),
+    );
+  }
+}
+
 const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
   enqueueNodeStateUpdate(payload) {
     const nodeId = payload?.[ControlPlaneField.NODE_ID];
@@ -88,31 +127,12 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
     }
 
     const existing = await this.getNodeRow(nodeId);
-    // Incarnation fence: a writer whose boot incarnation is LOWER than the
-    // receiver's best-known incarnation for this nodeId is a zombie. Refuse
-    // it terminally BEFORE the heartbeat clamp below can lift the stale
-    // writer's heartbeat to receiver time. UNKNOWN incarnation on either
-    // side (0 / pre-incarnation) never fences (clusterId UNKNOWN policy).
-    const payloadBootIncarnation = normalizeKnownNodeBootIncarnation(
-      payload[ControlPlaneField.BOOT_INCARNATION],
+    const incarnationFence = resolveNodeBootIncarnationFence(
+      nodeId,
+      payload,
+      this.nodeBootIncarnationWatermarks,
+      existing,
     );
-    const existingBootIncarnation = Math.max(
-      normalizeKnownNodeBootIncarnation(existing?.[COLUMN.BOOT_INCARNATION]),
-      normalizeKnownNodeBootIncarnation(
-        this.nodeBootIncarnationWatermarks.get(nodeId),
-      ),
-    );
-    if (
-      payloadBootIncarnation > 0 &&
-      existingBootIncarnation > 0 &&
-      payloadBootIncarnation < existingBootIncarnation
-    ) {
-      throw buildStaleNodeIncarnationError({
-        nodeId,
-        receivedIncarnation: payloadBootIncarnation,
-        knownIncarnation: existingBootIncarnation,
-      });
-    }
     const payloadWatermark = this.getNodeStateUpdateWatermark(payload);
     const now = Date.now();
     const existingConnectionState = String(
@@ -245,14 +265,11 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
       }
     }
 
-    // Accepted update: retain the freshest known boot incarnation so the
-    // fence above keeps working while the durable row is not yet visible.
-    if (payloadBootIncarnation > 0) {
-      this.nodeBootIncarnationWatermarks.set(
-        nodeId,
-        Math.max(payloadBootIncarnation, existingBootIncarnation),
-      );
-    }
+    retainNodeBootIncarnationWatermark(
+      this.nodeBootIncarnationWatermarks,
+      nodeId,
+      incarnationFence,
+    );
 
     if (nextState === STATE.READY && !isHeartbeatOnly) {
       const publicationNodeRow = {
@@ -440,26 +457,14 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
       return false;
     }
     // Incarnation fence on the missing-row path: the durable row (and its
-    // boot_incarnation column) is not visible here, so compare against the
-    // retained per-node high-water map instead. A stale-incarnation writer
-    // must not resurrect itself through an upsert.
-    const payloadBootIncarnation = normalizeKnownNodeBootIncarnation(
-      payload?.[ControlPlaneField.BOOT_INCARNATION],
+    // boot_incarnation column) is not visible here, so the fence resolves
+    // against the retained per-node high-water map alone (existingRow null).
+    const incarnationFence = resolveNodeBootIncarnationFence(
+      nodeId,
+      payload,
+      this.nodeBootIncarnationWatermarks,
+      null,
     );
-    const retainedBootIncarnation = normalizeKnownNodeBootIncarnation(
-      this.nodeBootIncarnationWatermarks.get(nodeId),
-    );
-    if (
-      payloadBootIncarnation > 0 &&
-      retainedBootIncarnation > 0 &&
-      payloadBootIncarnation < retainedBootIncarnation
-    ) {
-      throw buildStaleNodeIncarnationError({
-        nodeId,
-        receivedIncarnation: payloadBootIncarnation,
-        knownIncarnation: retainedBootIncarnation,
-      });
-    }
     const nodeAddress = String(baseRow?.[COLUMN.NODE_ADDRESS] || '').trim();
     if (nodeAddress.length === 0 || nodeAddress === STRING.UNKNOWN) {
       return false;
@@ -503,12 +508,11 @@ const REPLICA_DISPATCH_STATE_PUBLICATION_METHODS = Object.freeze({
         nodeId,
         state: nextState,
       });
-      if (payloadBootIncarnation > 0) {
-        this.nodeBootIncarnationWatermarks.set(
-          nodeId,
-          Math.max(payloadBootIncarnation, retainedBootIncarnation),
-        );
-      }
+      retainNodeBootIncarnationWatermark(
+        this.nodeBootIncarnationWatermarks,
+        nodeId,
+        incarnationFence,
+      );
       return true;
     } catch (error) {
       if (error?.code === STALE_NODE_INCARNATION_CODE) {

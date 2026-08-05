@@ -114,36 +114,87 @@ function isRetryableSeedContactTransportFailure(error, options = {}) {
   );
 }
 
-function normalizeRetryableSeedContactEvidence(value) {
-  if (!value || typeof value !== 'object') {
-    return null;
-  }
-  const code = typeof value.code === 'string' ?
-    value.code :
+// The seed-contact failure classification aggregates four independent
+// retryable signals: a typed retryable code, a retryable timeout message, a
+// 503 status, and a transport-level failure. Any one makes the failure
+// retryable.
+function isRetryableSeedContactFailure(fields) {
+  return fields.retryableCode ||
+    fields.retryableTimeout ||
+    fields.retryableStatus ||
+    fields.retryableTransportFailure;
+}
+
+// A 400/409 carrying a whitelisted retryable code (e.g. the lease-window
+// changed-address conflict) is retryable-with-backoff, not terminal: the seed
+// explicitly classified it as a wait. Only an untyped/unwhitelisted one stays
+// on the terminal path.
+function isTerminalSeedContactValidationOrConflict(fields) {
+  return !fields.retryableCode &&
+    (fields.statusCode === HTTP_STATUS.BAD_REQUEST ||
+      fields.statusCode === HTTP_STATUS.CONFLICT);
+}
+
+// Derive the classification fields from one seed-contact error: parsed
+// bootstrap response, HTTP status, typed code, and the per-signal retryable
+// flags. Kept as one field-derivation helper so the classifier method itself
+// stays a thin composition and the lease-window 409 policy lives in exactly
+// one place.
+function deriveSeedContactFailureFields(error, retryableTimeoutErrorMessage) {
+  const parsedError = error.bootstrapResponse ||
+    parseBootstrapError(error);
+  const statusCode = Number.isFinite(error?.statusCode) ?
+    Math.floor(error.statusCode) :
+    (Number.isFinite(parsedError?.statusCode) ?
+      Math.floor(parsedError.statusCode) :
+      null);
+  const code = typeof parsedError?.code === 'string' ?
+    parsedError.code :
     null;
-  const statusCode = Number.isFinite(value.statusCode) ?
-    Math.floor(value.statusCode) :
-    null;
-  const retryableLeaseWindowConflict =
-    isRetryableSeedContactCode(code) === true &&
-    (statusCode === HTTP_STATUS.CONFLICT ||
-      statusCode === HTTP_STATUS.SERVICE_UNAVAILABLE ||
-      statusCode === null);
-  if (isRetryableSeedContactCode(code) !== true &&
-      statusCode !== HTTP_STATUS.SERVICE_UNAVAILABLE &&
-      retryableLeaseWindowConflict !== true) {
-    return null;
-  }
-  const normalized = {
-    ...value,
+  const retryableCode = isRetryableSeedContactCode(code);
+  const retryableTimeout =
+    error?.message === retryableTimeoutErrorMessage;
+  const retryableStatus =
+    statusCode === HTTP_STATUS.SERVICE_UNAVAILABLE;
+  const retryableTransportFailure =
+    isRetryableSeedContactTransportFailure(error, {
+      parsedError,
+      statusCode,
+    });
+  const fields = {
+    retryableCode,
+    retryableTimeout,
+    retryableStatus,
+    retryableTransportFailure,
+    statusCode,
   };
-  if (statusCode !== null) {
-    normalized.statusCode = statusCode;
+  const terminalValidationOrConflict =
+    isTerminalSeedContactValidationOrConflict(fields);
+  return {
+    parsedError,
+    statusCode,
+    code,
+    retryAfterMs: resolveSeedContactRetryAfterMs(error, parsedError),
+    retryableCode,
+    retryableTimeout,
+    retryableStatus,
+    retryableTransportFailure,
+    retryable: isRetryableSeedContactFailure(fields),
+    terminalValidationOrConflict,
+  };
+}
+
+// Whether a parsed failure is worth retaining as retryable evidence: a typed
+// retryable code (any status, so the lease-window 409 is kept), or an untyped
+// 503. The retained evidence lets the joiner survive the retry budget window
+// instead of giving up on a wait the seed explicitly typed.
+function isRetainedSeedContactEvidence(value) {
+  if (!value || typeof value !== 'object') {
+    return false;
   }
-  if (Number.isFinite(value.retryAfterMs)) {
-    normalized.retryAfterMs = Math.floor(value.retryAfterMs);
-  }
-  return normalized;
+  const code = typeof value.code === 'string' ? value.code : null;
+  return isRetryableSeedContactCode(code) === true ||
+    value.statusCode === HTTP_STATUS.SERVICE_UNAVAILABLE;
 }
 
 function isBootstrapNotReadySeedContactEvidence(value) {
@@ -369,10 +420,10 @@ export {
   RETRYABLE_SEED_CONTACT_EVIDENCE_SOURCE,
   RETRYABLE_SEED_CONTACT_FAILURE_ACTION,
   SEED_READINESS_TIMEOUT_MSG,
+  deriveSeedContactFailureFields,
   formatLeaderMetadataDetails,
+  isRetainedSeedContactEvidence,
   isRetryableSeedContactCode,
-  isRetryableSeedContactTransportFailure,
-  normalizeRetryableSeedContactEvidence,
   parseBootstrapError,
   resolveBootstrapNotReadySeedContactFailureKind,
   isSeedContactPressureEvidence,

@@ -23,6 +23,52 @@ import {
   LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP,
 } from './node-registration-owner-constants.js';
 
+// The error code a registration failure surfaces: the direct `code` when
+// present, else the alternate `errorCode` carrier, else nothing.
+function resolveNodeRegistrationErrorCode(error) {
+  if (typeof error?.code === 'string' && error.code.length > 0) {
+    return error.code;
+  }
+  if (typeof error?.errorCode === 'string' && error.errorCode.length > 0) {
+    return error.errorCode;
+  }
+  return undefined;
+}
+
+// Carry the retry hints and diagnostics the joiner needs to classify the
+// failure (retryable, deferred, or terminal) onto the wrapped error.
+function carryNodeRegistrationErrorHints(wrappedError, error) {
+  if (Number.isFinite(error?.retryAfterMs)) {
+    wrappedError.retryAfterMs = Math.floor(error.retryAfterMs);
+  }
+  if (error?.deferRetry === true) {
+    wrappedError.deferRetry = true;
+  }
+  if (error?.retryable === false) {
+    wrappedError.retryable = false;
+  }
+  if (error?.publicationDiagnostics &&
+    typeof error.publicationDiagnostics === 'object') {
+    wrappedError.publicationDiagnostics =
+      error.publicationDiagnostics;
+  }
+}
+
+// Wrap one registration failure, preserving the code, retry hints, and
+// diagnostics the joiner needs to classify it.
+function wrapNodeRegistrationError(error) {
+  const wrappedError = new Error(
+    `${LOG_NODE_REGISTER_ERROR_PREFIX}${error.message}`,
+  );
+  wrappedError.cause = error;
+  const code = resolveNodeRegistrationErrorCode(error);
+  if (code !== undefined) {
+    wrappedError.code = code;
+  }
+  carryNodeRegistrationErrorHints(wrappedError, error);
+  return wrappedError;
+}
+
 class NodeRegistrationOwner {
   constructor(options = {}) {
     this.nodeId = options.nodeId;
@@ -151,31 +197,7 @@ class NodeRegistrationOwner {
         resolution,
       };
     } catch (error) {
-      const wrappedError = new Error(
-        `${LOG_NODE_REGISTER_ERROR_PREFIX}${error.message}`,
-      );
-      wrappedError.cause = error;
-      if (typeof error?.code === 'string' &&
-        error.code.length > 0) {
-        wrappedError.code = error.code;
-      } else if (typeof error?.errorCode === 'string' &&
-        error.errorCode.length > 0) {
-        wrappedError.code = error.errorCode;
-      }
-      if (Number.isFinite(error?.retryAfterMs)) {
-        wrappedError.retryAfterMs = Math.floor(error.retryAfterMs);
-      }
-      if (error?.deferRetry === true) {
-        wrappedError.deferRetry = true;
-      }
-      if (error?.retryable === false) {
-        wrappedError.retryable = false;
-      }
-      if (error?.publicationDiagnostics &&
-        typeof error.publicationDiagnostics === 'object') {
-        wrappedError.publicationDiagnostics =
-          error.publicationDiagnostics;
-      }
+      const wrappedError = wrapNodeRegistrationError(error);
       logger.error(LOCAL_STR_VWYJO, {
         nodeId: this.nodeId,
         error: wrappedError.message,

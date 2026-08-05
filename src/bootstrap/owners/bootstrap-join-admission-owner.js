@@ -245,10 +245,9 @@ class BootstrapJoinAdmissionOwner {
   }
 
   // The one canonical takeover decision: every address-drift policy composes
-  // here, in order, so the branches cannot drift into independent slow-path
-  // readmissions — same-address admit, changed-address (lease-window typed
-  // retryable wait / genuinely-live terminal 409 / dead-row stale admit),
-  // address-claim terminal 409, otherwise fresh-join admit.
+  // here, in order — existing-row resolution, then the address-claim sweep,
+  // otherwise fresh-join admit — so the branches cannot drift into
+  // independent slow-path readmissions.
   async resolveTakeoverDecision({
     nodeId,
     nodeAddress,
@@ -259,75 +258,85 @@ class BootstrapJoinAdmissionOwner {
   }) {
     const existingNode = systemTableCache.get(TABLES.NODES, nodeId);
     if (existingNode) {
-      if (this.isDurableRejoinSameAddressEvidence(
-        existingNode,
-        nodeAddress,
-        options,
-      )) {
-        this.getLogger().info(
-          BOOTSTRAP_API_LOG_MSG.IDEMPOTENT_NODE_REJOIN_ALLOWED,
-          {
-            nodeId,
-            nodeAddress,
-            authoritativeOverride:
-              REJOIN_AUTHORITY_SOURCE.LOCAL_CACHE_RESTART_REENTRY,
-          },
-        );
-        return TAKEOVER_DECISION_ADMIT;
-      }
-      const authoritativeExistingNode =
-        await this.readAuthoritativeNodeRow(nodeId);
-      const effectiveExistingNode =
-        authoritativeExistingNode.available ?
-          authoritativeExistingNode.row :
-          existingNode;
-      const existingNodeAddress =
-        this.getNodeAddressFromRecord(effectiveExistingNode);
-      if (existingNodeAddress === nodeAddress) {
-        this.getLogger().info(
-          BOOTSTRAP_API_LOG_MSG.IDEMPOTENT_NODE_REJOIN_ALLOWED,
-          {
-            nodeId,
-            nodeAddress,
-            authoritativeOverride:
-              authoritativeExistingNode.available === true,
-          },
-        );
-        return TAKEOVER_DECISION_ADMIT;
-      }
-      if (effectiveExistingNode && !this.isNodeDead(effectiveExistingNode)) {
-        // A changed-address rejoin against a row live ONLY because its ready
-        // lease is still ticking is a lease-window wait, not a conflict: the
-        // typed retryable conflict (code + retryAfterMs from the lease) lets
-        // the joiner retry until the STALE_NODE_REJOIN_ALLOWED fall-through
-        // readmits it after expiry, instead of terminal-409 -> process.exit(1).
-        // A row live for any OTHER reason (live status, no lease) stays terminal.
-        const leaseWindowConflict =
-          this.buildLeaseWindowRejoinConflict(effectiveExistingNode, nodeId);
-        if (leaseWindowConflict) {
-          this.getLogger().info(
-            BOOTSTRAP_API_LOG_MSG.LEASE_WINDOW_REJOIN_DEFERRED,
-            {
-              nodeId,
-              nodeAddress,
-              retryAfterMs: leaseWindowConflict.retryAfterMs,
-            },
-          );
-          return leaseWindowConflict;
-        }
-        return nodeIdAlreadyRegistered(nodeId);
-      }
-      this.getLogger().info(BOOTSTRAP_API_LOG_MSG.STALE_NODE_REJOIN_ALLOWED, {
-        nodeId,
-        existingStatus:
-          effectiveExistingNode?.[COLUMN.STATUS] ?? null,
-        existingLease:
-          effectiveExistingNode?.[COLUMN.READY_LEASE_EXPIRES_AT] ?? null,
-        authoritativeOverride:
-          authoritativeExistingNode.available === true,
+      const rowDecision = await this.resolveExistingRowTakeoverDecision({
+        nodeId, nodeAddress, options, existingNode, nodeIdAlreadyRegistered,
       });
+      if (rowDecision !== TAKEOVER_DECISION_ADMIT) {
+        return rowDecision;
+      }
     }
+    return this.resolveAddressClaimTakeoverDecision({
+      nodeId, nodeAddress, systemTableCache, nodeAddressInUse,
+    });
+  }
 
+  // The existing-row stage: same-address admits idempotently (durable rejoin
+  // evidence or an address-equal row), a changed address against a live row
+  // is a lease-window wait or a terminal conflict, a dead row falls through.
+  async resolveExistingRowTakeoverDecision({
+    nodeId,
+    nodeAddress,
+    options,
+    existingNode,
+    nodeIdAlreadyRegistered,
+  }) {
+    if (this.isDurableRejoinSameAddressEvidence(
+      existingNode,
+      nodeAddress,
+      options,
+    )) {
+      this.logIdempotentNodeRejoin(nodeId, nodeAddress,
+        REJOIN_AUTHORITY_SOURCE.LOCAL_CACHE_RESTART_REENTRY);
+      return TAKEOVER_DECISION_ADMIT;
+    }
+    const authoritativeExistingNode =
+      await this.readAuthoritativeNodeRow(nodeId);
+    const effectiveExistingNode =
+      authoritativeExistingNode.available ?
+        authoritativeExistingNode.row :
+        existingNode;
+    if (this.getNodeAddressFromRecord(effectiveExistingNode) === nodeAddress) {
+      this.logIdempotentNodeRejoin(nodeId, nodeAddress,
+        authoritativeExistingNode.available === true);
+      return TAKEOVER_DECISION_ADMIT;
+    }
+    if (effectiveExistingNode && !this.isNodeDead(effectiveExistingNode)) {
+      // A changed-address rejoin against a row live ONLY because its ready
+      // lease is still ticking is a lease-window wait, not a conflict: the
+      // typed retryable conflict (code + retryAfterMs from the lease) lets
+      // the joiner retry until the STALE_NODE_REJOIN_ALLOWED fall-through
+      // readmits it after expiry, instead of terminal-409 -> process.exit(1).
+      // A row live for any OTHER reason (live status, no lease) stays terminal.
+      const leaseWindowConflict =
+        this.buildLeaseWindowRejoinConflict(effectiveExistingNode, nodeId);
+      if (leaseWindowConflict) {
+        this.getLogger().info(BOOTSTRAP_API_LOG_MSG.LEASE_WINDOW_REJOIN_DEFERRED, {
+          nodeId, nodeAddress, retryAfterMs: leaseWindowConflict.retryAfterMs,
+        });
+        return leaseWindowConflict;
+      }
+      return nodeIdAlreadyRegistered(nodeId);
+    }
+    this.getLogger().info(BOOTSTRAP_API_LOG_MSG.STALE_NODE_REJOIN_ALLOWED, {
+      nodeId,
+      existingStatus: effectiveExistingNode?.[COLUMN.STATUS] ?? null,
+      existingLease:
+        effectiveExistingNode?.[COLUMN.READY_LEASE_EXPIRES_AT] ?? null,
+      authoritativeOverride: authoritativeExistingNode.available === true,
+    });
+    return TAKEOVER_DECISION_ADMIT;
+  }
+
+  logIdempotentNodeRejoin(nodeId, nodeAddress, authoritativeOverride) {
+    this.getLogger().info(BOOTSTRAP_API_LOG_MSG.IDEMPOTENT_NODE_REJOIN_ALLOWED, {
+      nodeId, nodeAddress, authoritativeOverride,
+    });
+  }
+
+  // The address-claim sweep: a live row owned by a DIFFERENT node already
+  // holding this address is a terminal conflict; anything else admits.
+  resolveAddressClaimTakeoverDecision({nodeId, nodeAddress, systemTableCache,
+    nodeAddressInUse}) {
     const allNodes = systemTableCache.getAll(TABLES.NODES) || [];
     for (const node of allNodes) {
       if (this.getNodeAddressFromRecord(node) === nodeAddress &&
@@ -336,7 +345,6 @@ class BootstrapJoinAdmissionOwner {
         return nodeAddressInUse(nodeAddress);
       }
     }
-
     return TAKEOVER_DECISION_ADMIT;
   }
 
