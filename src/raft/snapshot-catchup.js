@@ -21,6 +21,9 @@ import {CONFIG_KEY} from '../config/config-key-constants.js';
 import {ENTITY_TYPE} from '../constants/addresses.js';
 import {TABLES} from '../constants/tables.js';
 import {
+  CLUSTER_ID_CONFIG_KEY,
+} from '../bootstrap/cluster-identity-constants.js';
+import {
   selectLatestPublishedMembershipEpoch,
 } from '../control-plane/membership-epoch-contract.js';
 
@@ -87,17 +90,21 @@ function orchestrationResult(outcome, extra = {}) {
 }
 
 /**
- * Compose the checkpoint identity this deployment pins snapshots to
- * (S1-S3 recorded deferral, resolved by S4): clusterId from deployment
- * configuration (CONFIG_KEY.RAFT_SNAPSHOT_CLUSTER_ID, defaulted),
- * raftGroupId = partitionId, entity from the owning partition service, and
- * membershipEpoch from the latest PUBLISHED membership publication epoch in
- * the cached control_plane_publications rows (0 at bootstrap).
+ * Compose the checkpoint identity this deployment pins snapshots to:
+ * clusterId from the durable cluster identity (the replicated CONFIG-row
+ * singleton, threaded in as options.clusterId by the cache-backed builder),
+ * falling back to deployment configuration
+ * (CONFIG_KEY.RAFT_SNAPSHOT_CLUSTER_ID, defaulted) only while the durable
+ * identity is not yet visible; raftGroupId = partitionId, entity from the
+ * owning partition service, and membershipEpoch from the latest PUBLISHED
+ * membership publication epoch in the cached control_plane_publications rows
+ * (0 at bootstrap).
  * @param {Object} options identity facts
  * @param {string} options.partitionId owning partition (raft group) id
  * @param {string} options.tableName partition entity (state table) name
  * @param {Array<Object>} [options.publicationRows] cached
  *   control_plane_publications rows
+ * @param {string} [options.clusterId] durable cluster identity (CONFIG row)
  * @return {Object} frozen identity
  *   ({clusterId, raftGroupId, entity, membershipEpoch})
  */
@@ -105,7 +112,8 @@ function buildSnapshotCatchupIdentity(options) {
   const configuredClusterId = ConfigurationManager.getInstance()
     .get(CONFIG_KEY.RAFT_SNAPSHOT_CLUSTER_ID);
   return Object.freeze({
-    clusterId: configuredClusterId || RAFT_SNAPSHOT_DEFAULT_CLUSTER_ID,
+    clusterId: options.clusterId || configuredClusterId ||
+      RAFT_SNAPSHOT_DEFAULT_CLUSTER_ID,
     raftGroupId: options.partitionId,
     entity: Object.freeze({
       kind: ENTITY_TYPE.PARTITION,
@@ -129,6 +137,21 @@ function readCachedPublicationRows(systemTableCache) {
   return [];
 }
 
+// Durable cluster identity from the replicated CONFIG-row singleton, read
+// through the same cache the publication rows come from. Absent row
+// (pre-identity cluster or pre-hydration cache) reads as null, leaving the
+// configured/default fallback in buildSnapshotCatchupIdentity untouched.
+function readCachedClusterId(systemTableCache) {
+  if (typeof systemTableCache?.get !== CATCHUP_TYPEOF.FUNCTION) {
+    return null;
+  }
+  const row = systemTableCache.get(TABLES.CONFIG, CLUSTER_ID_CONFIG_KEY);
+  const clusterId = row?.config_value;
+  return typeof clusterId === 'string' && clusterId.length > 0 ?
+    clusterId :
+    null;
+}
+
 /**
  * Build the snapshot catch-up identity for one partition service straight
  * from the cached control-plane publication rows (the S6 production wiring
@@ -145,6 +168,7 @@ function buildSnapshotCatchupIdentityFromCache(options) {
     partitionId: options.partitionId,
     tableName: options.tableName,
     publicationRows: readCachedPublicationRows(options.systemTableCache),
+    clusterId: readCachedClusterId(options.systemTableCache),
   });
 }
 

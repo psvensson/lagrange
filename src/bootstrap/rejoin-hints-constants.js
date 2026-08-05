@@ -17,6 +17,7 @@ const MEMBERSHIP_OWNER_OUTCOME_TYPE = Object.freeze({
   BLOCKED_STARTUP: 'blocked_startup',
 });
 const MEMBERSHIP_OWNER_REASON = Object.freeze({
+  CLUSTER_ID_MISMATCH: 'cluster_id_mismatch',
   DURABLE_SEED: 'durable_seed',
   EXPLICIT_SEED: 'explicit_seed',
   FRESH_SEED: 'fresh_seed',

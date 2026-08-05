@@ -3,6 +3,11 @@ import {join} from 'node:path';
 import {TABLES} from '../constants/index.js';
 import {buildClusterIncarnationFence} from './cluster-incarnation-fence.js';
 import {
+  CLUSTER_ID_CONFIG_KEY,
+  CLUSTER_ID_MATCH_STATE,
+  classifyClusterIdMatch,
+} from './cluster-identity-constants.js';
+import {
   DURABLE_EVIDENCE_STATE,
   MEMBERSHIP_OWNER_OUTCOME_TYPE,
   MEMBERSHIP_OWNER_REASON,
@@ -48,6 +53,7 @@ const PEER_ADDRESS_STATE = Object.freeze({
 });
 const AUTO_REJOIN_DECISION_STATE = Object.freeze({
   IDENTITY_MISMATCH: 'identity_mismatch',
+  CLUSTER_ID_MISMATCH: 'cluster_id_mismatch',
   DURABLE_SEED: 'durable_seed',
   JOIN_PROBED_PEER: 'join_probed_peer',
   JOIN_RECOVERED_PEER: 'join_recovered_peer',
@@ -59,6 +65,10 @@ const AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE = Object.freeze({
   [AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH]: Object.freeze({
     outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
     reasonCode: MEMBERSHIP_OWNER_REASON.IDENTITY_MISMATCH,
+  }),
+  [AUTO_REJOIN_DECISION_STATE.CLUSTER_ID_MISMATCH]: Object.freeze({
+    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+    reasonCode: MEMBERSHIP_OWNER_REASON.CLUSTER_ID_MISMATCH,
   }),
   [AUTO_REJOIN_DECISION_STATE.UNREADABLE_DURABLE_EVIDENCE]: Object.freeze({
     outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
@@ -88,6 +98,9 @@ const AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE = Object.freeze({
 const IDENTITY_MISMATCH_ERROR_MESSAGE =
   'Persistent cluster state belongs to a different node identity; ' +
   'refusing to start with mismatched data directory';
+const CLUSTER_ID_MISMATCH_ERROR_MESSAGE =
+  'Persistent cluster state belongs to a different cluster identity; ' +
+  'refusing to start with a data directory from another cluster';
 const DURABLE_STATE_REJOIN_REQUIRED_ERROR_MESSAGE =
   'Persistent multi-node cluster state was detected but no rejoin peer ' +
   'address could be recovered; refusing to bootstrap a fresh seed over ' +
@@ -105,6 +118,32 @@ const UNKNOWN_AUTO_REJOIN_MEMBERSHIP_OUTCOME_STATE_ERROR_PREFIX =
   'Unknown auto-rejoin membership outcome state: ';
 let rejoinHintsTempSequence = 0;
 
+// Attach the cluster identity to one hints snapshot only when one exists:
+// an absent identity leaves the field OFF the object entirely so a
+// pre-identity hints file and a post-identity "identity not yet visible"
+// write are byte-identical, and the read-back compatibility policy
+// (classifyClusterIdMatch) treats the missing field as UNKNOWN.
+function withClusterId(snapshot, clusterId) {
+  return typeof clusterId === 'string' && clusterId.length > 0 ?
+    {...snapshot, clusterId} :
+    snapshot;
+}
+
+// Read the durable cluster identity from the replicated CONFIG row through
+// the same system table cache the snapshot builder already touches. Absent
+// row (pre-identity cluster or pre-hydration cache) reads as null — the
+// hints file then simply carries no identity for that write, and a later
+// cadence tick rewrites it once the row is visible.
+function readCachedClusterId(systemTableCache) {
+  const row = typeof systemTableCache?.get === 'function' ?
+    systemTableCache.get(TABLES.CONFIG, CLUSTER_ID_CONFIG_KEY) :
+    null;
+  const clusterId = row?.config_value;
+  return typeof clusterId === 'string' && clusterId.length > 0 ?
+    clusterId :
+    null;
+}
+
 function buildRejoinHintsSnapshot(options = {}) {
   const systemTableCache = options.systemTableCache || null;
   const nodeRows = typeof systemTableCache?.getAll === 'function' ?
@@ -120,7 +159,7 @@ function buildRejoinHintsSnapshot(options = {}) {
     localNodeAddress,
   );
 
-  return {
+  return withClusterId({
     localNodeId,
     localNodeAddress,
     localNodeRole,
@@ -134,7 +173,7 @@ function buildRejoinHintsSnapshot(options = {}) {
     updatedAt: typeof options.now === 'function' ?
       options.now() :
       Date.now(),
-  };
+  }, readCachedClusterId(systemTableCache));
 }
 
 function buildBootstrapRejoinHintsSnapshot(options = {}) {
@@ -153,7 +192,12 @@ function buildBootstrapRejoinHintsSnapshot(options = {}) {
       0,
   );
 
-  return {
+  const clusterId = typeof options.clusterId === 'string' &&
+    options.clusterId.length > 0 ?
+    options.clusterId :
+    null;
+
+  return withClusterId({
     localNodeId,
     localNodeAddress,
     localNodeRole,
@@ -167,7 +211,7 @@ function buildBootstrapRejoinHintsSnapshot(options = {}) {
     updatedAt: typeof options.now === 'function' ?
       options.now() :
       Date.now(),
-  };
+  }, clusterId);
 }
 
 function resolveRejoinHintsPath(dataDir) {
@@ -214,6 +258,24 @@ async function readPersistedLocalNodeId(dataDir) {
   const hints = await readRejoinHints(dataDir);
   const localNodeId = normalizeAddress(hints?.localNodeId);
   return localNodeId || null;
+}
+
+/**
+ * Read the cluster identity persisted with the rejoin hints. A node that has
+ * joined a cluster carries its id node-locally from that moment on, so the
+ * next boot can both gate its own auto-rejoin decision (fail closed on a
+ * data directory from another cluster) and send expectedClusterId with every
+ * bootstrap request.
+ * @param {string} dataDir - Data directory holding the rejoin hints file.
+ * @return {Promise<string|null>} The persisted cluster id, or null when
+ *   absent (fresh node or pre-identity hints file).
+ */
+async function readPersistedLocalClusterId(dataDir) {
+  const hints = await readRejoinHints(dataDir);
+  const clusterId = hints?.clusterId;
+  return typeof clusterId === 'string' && clusterId.length > 0 ?
+    clusterId :
+    null;
 }
 
 function hintsMatchLocalIdentity(hints, nodeId, nodeAddress) {
@@ -287,6 +349,10 @@ async function collectAutoRejoinDecisionContext(options = {}) {
     options.nodeId,
     options.nodeAddress,
   );
+  const clusterIdMatch = classifyClusterIdMatch(
+    options.expectedClusterId,
+    hints?.clusterId,
+  );
   const durableSnapshot = await readDurableNodesTableSnapshot(options);
   const hintPeerAddresses = hintsIdentityMatched ?
     normalizePeerAddresses(
@@ -342,6 +408,7 @@ async function collectAutoRejoinDecisionContext(options = {}) {
   return {
     durableSnapshot,
     hintsIdentityMatched,
+    clusterIdMismatch: clusterIdMatch === CLUSTER_ID_MATCH_STATE.MISMATCH,
     hintPeerAddresses,
     peerAddresses,
     clusterNodeCount,
@@ -363,6 +430,9 @@ async function collectAutoRejoinDecisionContext(options = {}) {
 function resolveAutoRejoinDecisionState(context = {}) {
   if (context.durableSnapshot.identityMismatch) {
     return AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH;
+  }
+  if (context.clusterIdMismatch === true) {
+    return AUTO_REJOIN_DECISION_STATE.CLUSTER_ID_MISMATCH;
   }
   if (context.durableEvidenceBlocked === true &&
     context.forceNewCluster !== true) {
@@ -431,6 +501,20 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       identityMismatch: true,
       clusterIncarnationFence: context.clusterIncarnationFence,
       error: IDENTITY_MISMATCH_ERROR_MESSAGE,
+    }, state);
+  case AUTO_REJOIN_DECISION_STATE.CLUSTER_ID_MISMATCH:
+    return attachMembershipOwnerOutcome({
+      state,
+      mode: STARTUP_MODE_FAIL,
+      peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+      peerAddress: null,
+      peerAddresses: [],
+      source: REJOIN_SOURCE.REJOIN_HINTS,
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      durableStateDetected: true,
+      identityMismatch: true,
+      clusterIncarnationFence: context.clusterIncarnationFence,
+      error: CLUSTER_ID_MISMATCH_ERROR_MESSAGE,
     }, state);
   case AUTO_REJOIN_DECISION_STATE.DURABLE_SEED:
     return attachMembershipOwnerOutcome({
@@ -639,6 +723,7 @@ export {
   buildRejoinHintsSnapshot,
   persistBootstrapRejoinHints,
   probeRecoverablePeerAddress,
+  readPersistedLocalClusterId,
   readPersistedLocalNodeId,
   readRejoinHints,
   RejoinHintsPersistenceService,

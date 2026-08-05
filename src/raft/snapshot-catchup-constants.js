@@ -43,10 +43,12 @@ const RAFT_SNAPSHOT_CATCHUP_INSTALL_OUTCOME = Object.freeze({
   REGISTER_FAILED: 'register_failed',
 });
 
-// Deployment-default cluster identity (S4 identity pinning): no durable
-// cluster identity exists anywhere, so the checkpoint clusterId is pinned to
-// deployment configuration (CONFIG_KEY.RAFT_SNAPSHOT_CLUSTER_ID) with this
-// default. Real cross-cluster isolation is parity-bound to the
+// Deployment-default cluster identity (S4 identity pinning, superseded by
+// the durable cluster identity quest): the checkpoint clusterId now reads
+// the replicated CONFIG-row singleton `cluster_id` (minted once at first
+// seed bootstrap) via buildSnapshotCatchupIdentityFromCache; this default
+// remains only as the pre-identity fallback while no durable identity is
+// visible. Real cross-cluster isolation is parity-bound to the
 // unauthenticated transport and stays with future authenticated-transport
 // work (recorded, not silently widened).
 const RAFT_SNAPSHOT_DEFAULT_CLUSTER_ID = 'lagrange-default-cluster';
