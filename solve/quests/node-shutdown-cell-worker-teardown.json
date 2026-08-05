@@ -1,0 +1,68 @@
+{
+  "id": "node-shutdown-cell-worker-teardown",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Whole-node teardown terminates every request/call cell worker: a stop-all chain (bootstrap seed/join cleanup -> ServiceRuntimeLifecycle.shutdown -> WasmComponentDriver.shutdown -> WasiComponentCellRuntime.shutdown -> worker.terminate) replaces the absent per-replica stop path at shutdown, so the call-binding-account-summary example runner exits naturally with zero live handles and its bounded-exit workaround (the SHUTDOWN_BOUND_MS Promise.race and the explicit process.exit) is deleted. Successor of the exhausted managed-split-shutdown-timer-leak quest: its measured matrix proved the runner hang is caused by untorn-down cell Workers (3 MessagePorts, reproducible with NO split), not by split timers. doneWhen: the test-receipt probe reads solve/evidence/node-shutdown-cell-worker-teardown.receipt.json with outstanding 0 — cell-runtime-stop-all, driver-stop-all, lifecycle-dispatch, seed-cleanup-wiring, join-cleanup-wiring, and runner-natural-exit receipts all passing.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "managed-split-shutdown-timer-leak",
+    "planDoc": "solve/epics/split-merge-transition-integrity.md",
+    "draftedAtCommit": null
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/node-shutdown-cell-worker-teardown.receipt.json",
+      "requiredReceipts": [
+        "cell-runtime-stop-all-terminates-workers",
+        "wasm-driver-stop-all-clears-bookkeeping",
+        "lifecycle-shutdown-dispatches-exhaustively",
+        "seed-cleanup-wires-driver-teardown",
+        "join-cleanup-wires-driver-teardown",
+        "account-summary-runner-exits-naturally"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "node-shutdown-cell-worker-teardown-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/node-shutdown-cell-worker-teardown.receipt.json",
+          "requiredReceipts": [
+            "cell-runtime-stop-all-terminates-workers",
+            "wasm-driver-stop-all-clears-bookkeeping",
+            "lifecycle-shutdown-dispatches-exhaustively",
+            "seed-cleanup-wires-driver-teardown",
+            "join-cleanup-wires-driver-teardown",
+            "account-summary-runner-exits-naturally"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "owner-decides-stop-all",
+      "statement": "The stop-all lives at the runtime owner boundary (WasiComponentCellRuntime owns its cells map; WasmComponentDriver owns its bookkeeping; ServiceRuntimeLifecycle dispatches to drivers by capability, never by runtime-kind branch). Bootstrap cleanup handlers only INVOKE the chain; they do not enumerate cells or workers themselves."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the corresponding stop-all/dispatch/wiring link is reverted while the rest of the change remains."
+    },
+    {
+      "id": "deterministic-evidence",
+      "statement": "The oracle evidence files must be written by a deterministic evidence harness that re-runs the recorded proof commands (focused test files, red-on-revert checks) at quest terminal; no hand-authored metric values."
+    }
+  ]
+}

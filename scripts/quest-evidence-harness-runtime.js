@@ -20,6 +20,9 @@ const STATUS_PASS = 'pass';
 const STATUS_FAIL = 'fail';
 const EXIT_OK = 0;
 const EXIT_FAILED = 1;
+const SHELL_EXECUTABLE = '/bin/sh';
+const SHELL_COMMAND_FLAG = '-c';
+const DEFAULT_SHELL_TIMEOUT_MS = 600_000;
 
 function runReceipt(receipt) {
   const command = `${NPM_EXECUTABLE} ${TEST_RUNNER.join(' ')} ` +
@@ -41,6 +44,34 @@ function runReceipt(receipt) {
   }
 }
 
+// A shell receipt re-runs one recorded proof command verbatim (used when
+// the proof is not a focused test file — e.g. an example runner that must
+// exit naturally). A hang is a failure: the timeout kills the child and
+// execFileSync throws, flipping the receipt to failed.
+function runShellReceipt(receipt) {
+  try {
+    execFileSync(
+      SHELL_EXECUTABLE,
+      [SHELL_COMMAND_FLAG, receipt.command],
+      {
+        stdio: CHILD_STDIO_PIPE,
+        encoding: UTF8_ENCODING,
+        timeout: receipt.timeoutMs || DEFAULT_SHELL_TIMEOUT_MS,
+      },
+    );
+    return {id: receipt.id, passed: true, command: receipt.command,
+      detail: receipt.detail};
+  } catch (error) {
+    return {
+      id: receipt.id,
+      passed: false,
+      command: receipt.command,
+      detail: receipt.detail,
+      failure: String(error?.stderr || error?.message || error),
+    };
+  }
+}
+
 /**
  * Run every declared receipt's proof command and write the test-receipt
  * probe artifact for one quest.
@@ -48,11 +79,16 @@ function runReceipt(receipt) {
  * @param {string} options.questId the quest the receipt file belongs to
  * @param {string} options.outputFile solve/evidence/<quest>.receipt.json
  * @param {Array<Object>} options.receipts frozen receipt declarations
- *   ({id, testFile, detail})
+ *   ({id, testFile, detail}); a receipt with a verbatim `command`
+ *   string instead of `testFile` re-runs that shell command (with a
+ *   timeout, so a hang is a failure) instead of a focused test file
  * @return {void} exits non-zero when any receipt command fails
  */
 function runQuestEvidenceHarness(options) {
-  const receipts = options.receipts.map(runReceipt);
+  const receipts = options.receipts.map((receipt) =>
+    typeof receipt.command === 'string' ?
+      runShellReceipt(receipt) :
+      runReceipt(receipt));
   const status = receipts.every((r) => r.passed) ?
     STATUS_PASS :
     STATUS_FAIL;

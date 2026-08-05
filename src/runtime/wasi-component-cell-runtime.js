@@ -697,6 +697,20 @@ class WasiComponentCellRuntime {
     );
   }
 
+  /**
+   * Stop every live cell worker. Node teardown owns this call: no
+   * per-replica stop path runs at shutdown, so without a stop-all the
+   * per-cell Workers (and their message ports) keep the event loop
+   * alive after the rest of the node is down. Per-service stop is
+   * already idempotent and serialized through scheduleOperation, so a
+   * stop racing teardown simply resolves as a no-op.
+   * @return {Promise<void>}
+   */
+  async shutdown() {
+    const serviceIds = [...this.cells.keys()];
+    await Promise.all(serviceIds.map((serviceId) => this.stop(serviceId)));
+  }
+
   async _stop(serviceId) {
     const state = this.cells.get(serviceId);
     if (!state) return;

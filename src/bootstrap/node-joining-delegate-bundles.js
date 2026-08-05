@@ -459,6 +459,7 @@ function assignNodeJoiningDelegateBundleMethods(ServiceClass) {
         setReplicaHandler: (v) => {
           self.replicaHandler = v;
         },
+        getServiceRuntimeLifecycle: () => self.serviceRuntimeLifecycle,
         sendControlPlaneNodeStateUpdate: (options) =>
           self.sendControlPlaneNodeStateUpdate(options),
         withdrawFailedJoinAdmission: (options) => {

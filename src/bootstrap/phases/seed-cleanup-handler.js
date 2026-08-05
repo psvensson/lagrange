@@ -615,6 +615,18 @@ class SeedCleanupHandler {
   }
 
   async shutdownSharedRuntimeDependencies(d) {
+    // Stop all runtime drivers (request/call cell workers) BEFORE the
+    // runtime service handler clears its replica bookkeeping: the
+    // per-replica REMOVE_REPLICA stop path never runs at whole-node
+    // teardown, so without this sweep the cell Workers keep the event
+    // loop alive after the rest of the node is down.
+    const serviceRuntimeLifecycle =
+      d.getServiceRuntimeLifecycle?.() || null;
+    if (
+      typeof serviceRuntimeLifecycle?.shutdown === LOCAL_STR_FUNCTION
+    ) {
+      await serviceRuntimeLifecycle.shutdown({logger: d.getLogger()});
+    }
     await d.clearRuntimeServiceHandler();
     d.stopAndClearControlPlaneServices();
     await d.clearRpcClient();

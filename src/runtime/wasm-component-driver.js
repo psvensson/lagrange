@@ -50,6 +50,9 @@ import {
 } from './request-cell-component-context-owner.js';
 import {WasiComponentCellRuntime} from
   './wasi-component-cell-runtime.js';
+import {
+  createWasmComponentDriverShutdownMethods,
+} from './wasm-component-driver-shutdown-methods.js';
 
 // --- Driver-specific constants ---
 
@@ -778,5 +781,10 @@ function requestCellWitness(driver, replicaContext) {
   const serviceId = resolveDriverServiceId(replicaContext);
   return driver._componentRuntime.witness(serviceId);
 }
+
+Object.assign(
+  WasmComponentDriver.prototype,
+  createWasmComponentDriverShutdownMethods(),
+);
 
 export {WasmComponentDriver, WASM_COMPONENT_ERROR, requestCellWitness};

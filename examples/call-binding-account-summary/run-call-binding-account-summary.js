@@ -74,7 +74,6 @@ const LOCAL_STR_STRING = 'string';
 const READY_TIMEOUT_MS = 60_000;
 const READY_POLL_MS = 200;
 const SPLIT_TIMEOUT_MS = 60_000;
-const SHUTDOWN_BOUND_MS = 20_000;
 const EXPECTED_PARTITION_COUNT = 2;
 const ACCOUNT_IDS = Object.freeze([101, 202, 303]);
 const ROW_COUNT = 150;
@@ -623,13 +622,9 @@ async function runCallBindingAccountSummaryExample(options = {}) {
     }
     return report;
   } finally {
-    // The forced partition split leaves background retry/cleanup timers
-    // on the demo node, so graceful shutdown is raced against a bound and
-    // the direct-run entrypoint exits explicitly below.
-    await Promise.race([
-      Promise.resolve(node?.shutdown?.()).catch(() => undefined),
-      new Promise((resolve) => setTimeout(resolve, SHUTDOWN_BOUND_MS)),
-    ]);
+    // Node teardown stops every runtime driver (including request/call
+    // cell workers), so a graceful shutdown leaves no live handles.
+    await node?.shutdown?.();
     await rm(temporaryRoot, {force: true, recursive: true});
   }
 }
@@ -639,13 +634,10 @@ const isDirectRun =
   pathToFileURL(path.resolve(process.argv[1])).href === import.meta.url;
 
 if (isDirectRun) {
-  try {
-    await runCallBindingAccountSummaryExample();
-    process.exit(0);
-  } catch (error) {
+  runCallBindingAccountSummaryExample().catch((error) => {
     console.error(error);
-    process.exit(1);
-  }
+    process.exitCode = 1;
+  });
 }
 
 export {

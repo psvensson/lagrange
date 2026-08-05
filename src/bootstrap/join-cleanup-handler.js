@@ -623,6 +623,17 @@ class JoinCleanupHandler {
     }
 
     this.clearReplicaStateMachine();
+    // Stop all runtime drivers (request/call cell workers) before the
+    // service maps come down: the per-replica REMOVE_REPLICA stop path
+    // never runs at whole-node teardown, so without this sweep the
+    // cell Workers keep the event loop alive after teardown.
+    const serviceRuntimeLifecycle =
+      this.delegates.getServiceRuntimeLifecycle?.() || null;
+    if (
+      typeof serviceRuntimeLifecycle?.shutdown === LOCAL_STR_FUNCTION
+    ) {
+      await serviceRuntimeLifecycle.shutdown({logger});
+    }
     await this.shutdownRpcClient();
     await this.shutdownCdcSqlQueryEngine();
     this.stopControlPlaneServices();

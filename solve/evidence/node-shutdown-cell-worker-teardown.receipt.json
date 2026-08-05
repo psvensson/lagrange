@@ -1,0 +1,44 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "node-shutdown-cell-worker-teardown",
+  "status": "pass",
+  "generatedAt": "2026-08-05T20:43:38.224Z",
+  "receipts": [
+    {
+      "id": "cell-runtime-stop-all-terminates-workers",
+      "passed": true,
+      "command": "npm run test:file -- test/runtime/node-shutdown-cell-worker-teardown.test.js",
+      "detail": "WasiComponentCellRuntime.shutdown terminates every live cell worker (red-on-revert: the subtests fail without the stop-all)"
+    },
+    {
+      "id": "wasm-driver-stop-all-clears-bookkeeping",
+      "passed": true,
+      "command": "npm run test:file -- test/runtime/node-shutdown-cell-worker-teardown.test.js",
+      "detail": "WasmComponentDriver.shutdown stops the runtime and clears running/request-cell/replica-context bookkeeping"
+    },
+    {
+      "id": "lifecycle-shutdown-dispatches-exhaustively",
+      "passed": true,
+      "command": "npm run test:file -- test/runtime/node-shutdown-cell-worker-teardown.test.js",
+      "detail": "ServiceRuntimeLifecycle.shutdown dispatches to drivers by capability and one failing driver does not block the rest"
+    },
+    {
+      "id": "seed-cleanup-wires-driver-teardown",
+      "passed": true,
+      "command": "npm run test:file -- test/runtime/node-shutdown-cell-worker-teardown.test.js",
+      "detail": "seed cleanup shuts runtime drivers down before clearing the runtime service handler and tolerates a missing lifecycle"
+    },
+    {
+      "id": "join-cleanup-wires-driver-teardown",
+      "passed": true,
+      "command": "npm run test:file -- test/runtime/node-shutdown-cell-worker-teardown.test.js",
+      "detail": "join cleanup shuts runtime drivers down ahead of the rpc and service-map teardown"
+    },
+    {
+      "id": "account-summary-runner-exits-naturally",
+      "passed": true,
+      "command": "node examples/call-binding-account-summary/run-call-binding-account-summary.js",
+      "detail": "the account-summary example runner (forced managed split plus deployed request/call cells) exits naturally after graceful shutdown with the SHUTDOWN_BOUND_MS race and the explicit process.exit deleted"
+    }
+  ]
+}

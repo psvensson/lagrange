@@ -9,6 +9,9 @@ const RUNTIME_DRIVER_PREPARE_FAILED = 'runtime driver prepare failed';
 const RUNTIME_DRIVER_INVOKE_UNSUPPORTED =
   'runtime driver does not support invocation';
 const RUNTIME_INVOKE_OPERATION = 'invoke';
+const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_DRIVER_SHUTDOWN_FAILED =
+  'Service runtime driver shutdown failed during node teardown';
 
 function createServiceRuntimeLifecycleOperationMethods(deps) {
   const {
@@ -83,6 +86,40 @@ function createServiceRuntimeLifecycleOperationMethods(deps) {
 
   class ServiceRuntimeLifecycleOperationMethods {
   /**
+   * Shut down every registered driver that owns teardown.
+   *
+   * Node teardown calls this exactly once. The per-replica stop path
+   * (journaled, REMOVE_REPLICA-driven) never runs at whole-node
+   * shutdown, so each driver that holds live runtime resources gets
+   * one best-effort stop-all. Drivers without a shutdown method own
+   * no teardown resources (in-process runtimes die with the process)
+   * and are skipped by capability check, not by runtime-kind branch.
+   * A failing driver is logged and does not block the remaining
+   * drivers: teardown must be exhaustive, not fail-fast.
+   *
+   * @param {Object} [options] - Optional shutdown context.
+   * @param {Object} [options.logger] - Logger for driver failures.
+   * @return {Promise<void>}
+   */
+    async shutdown(options = {}) {
+      const logger = options.logger || null;
+      for (const kind of this._registry.registeredKinds) {
+        const driver = this._registry.getDriver(kind);
+        if (typeof driver.shutdown !== LOCAL_STR_FUNCTION) {
+          continue;
+        }
+        try {
+          await driver.shutdown();
+        } catch (error) {
+          logger?.warn?.(LOCAL_STR_DRIVER_SHUTDOWN_FAILED, {
+            runtimeKind: kind,
+            error: error?.message || String(error),
+          });
+        }
+      }
+    }
+
+    /**
    * Prepare runtime artifacts for a service definition.
    *
    * @param {Object} definition - The service definition.
