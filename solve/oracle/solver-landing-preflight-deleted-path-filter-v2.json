@@ -1,0 +1,13 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "verification": {
+    "suite": "test/solve/operator-workflow.test.js",
+    "assertions": 101,
+    "passing": true,
+    "verifiedAt": "2026-08-05T18:09:03.152377+00:00",
+    "verifiedAgainst": "60450cd6e695455669b6fe8381364190835761d0",
+    "redOnRevert": "fix reverted -> 2 assertions fail in 'land preflight skips deleted paths in the silent-catch stage'"
+  }
+}

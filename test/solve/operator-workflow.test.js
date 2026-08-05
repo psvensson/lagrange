@@ -498,6 +498,45 @@ tap.test('land refuses silent catches before minting a review id', (t) => {
   t.end();
 });
 
+tap.test('land preflight skips deleted paths in the silent-catch stage', (t) => {
+  const {root} = landingFixture();
+  // A dead-code-removal candidate legitimately deletes a source file; the
+  // silent-catch checker stats every path it is handed, so the preflight
+  // must filter absent paths instead of crashing on ENOENT. Simulate by
+  // handing the preflight a manifest whose aggregate names a path that no
+  // longer exists in the worktree, with a checker that fails closed when it
+  // is handed a path it cannot stat (mirroring collectJavaScriptFiles).
+  const checker = path.join(root, 'scripts',
+    'check-guideline-silent-catch.js');
+  fs.writeFileSync(checker, [
+    'const fs = require(\'node:fs\');',
+    'for (const arg of process.argv.slice(2)) {',
+    '  if (!arg.endsWith(\'.js\')) continue;',
+    '  try { fs.statSync(arg); }',
+    '  catch { process.stderr.write(`ENOENT ${arg}\\n`); ' +
+      'process.exitCode = 1; }',
+    '}',
+    '',
+  ].join('\n'));
+  const deletedRelative = 'scripts/deleted-by-candidate.js';
+  const manifest = {
+    candidate: {files: []},
+    aggregate: {
+      fingerprint: `sha256:${'c'.repeat(64)}`,
+      sourcePaths: ['scripts/demo.js', deletedRelative],
+    },
+  };
+  let result;
+  t.doesNotThrow(() => {
+    result = landingReviewPreflight(root, manifest);
+  }, 'a deleted candidate path must not crash the silent-catch stage');
+  t.equal(result.status, 'pass');
+  t.ok(result.paths.includes(deletedRelative),
+    'the deleted path stays in the manifest path list');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('land refuses import gaps before minting a review id', (t) => {
   const {root, id} = landingFixture();
   const importer = path.join(root, 'scripts', 'demo.js');

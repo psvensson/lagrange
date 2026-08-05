@@ -84,7 +84,13 @@ function silentCatchProblems(root, paths) {
   const checker = path.join(root, SILENT_CATCH_CHECKER);
   if (!fs.existsSync(checker)) return [];
   const args = [checker];
-  arrayForEach(paths, (filePath) => arrayPush(args, filePath));
+  // A candidate may legitimately DELETE a file (dead-code removal); the
+  // checker stats every path it is handed, so a deleted path would crash the
+  // preflight on ENOENT instead of being skipped. Filter absent paths exactly
+  // as staticQualityProblems does.
+  arrayForEach(paths, (filePath) => {
+    if (fs.existsSync(path.join(root, filePath))) arrayPush(args, filePath);
+  });
   const result = spawnSync(process.execPath, args, {
     cwd: root,
     encoding: TEXT_ENCODING,
