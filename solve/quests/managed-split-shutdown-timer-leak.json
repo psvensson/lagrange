@@ -10,7 +10,7 @@
     "specRef": null,
     "closesCL": [],
     "parentQuest": null,
-    "planDoc": "solve/epics/services-doc-tightening.md",
+    "planDoc": "solve/epics/split-merge-transition-integrity.md",
     "draftedAtCommit": "6c7849f859ebbfe2e0768cc420167f729bdf0c7d"
   },
   "doneWhen": {
