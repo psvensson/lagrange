@@ -19,6 +19,15 @@
 # (git commit --no-verify also bypasses, as before)
 set -euo pipefail
 
+COMMIT_AUTHORIZATION="$({ node scripts/solve/commit-authorization.js check; } 2>&1)" || {
+  echo "${COMMIT_AUTHORIZATION}"
+  exit 1
+}
+SOLVER_AUTHORIZED=0
+if [ "${COMMIT_AUTHORIZATION}" = "solver-authorized" ]; then
+  SOLVER_AUTHORIZED=1
+fi
+
 if [ -n "${LAGRANGE_SKIP_PRECOMMIT:-}" ]; then
   echo "pre-commit: LAGRANGE_SKIP_PRECOMMIT set - skipping staged checks"
   exit 0
@@ -106,6 +115,7 @@ fi
 # rapid WIP loops: LAGRANGE_SKIP_INVENTORY_REGEN=1 (the push gate's
 # freshness guard then catches it).
 if [ "$REGEN_INVENTORIES" = "1" ] \
+  && [ "$SOLVER_AUTHORIZED" = "0" ] \
   && [ -z "${LAGRANGE_SKIP_INVENTORY_REGEN:-}" ]; then
   if ! node scripts/generate-global-owner-debt-inventory.js \
     > /dev/null 2>&1; then

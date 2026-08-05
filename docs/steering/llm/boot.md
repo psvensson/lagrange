@@ -64,25 +64,24 @@ node scripts/solve.js start --id <id> --statement "<sealed result>" \
   --spec-ref <spec-or-plan-reference>
 ```
 
-Drive routine supervised work with one verb. It executes only structured
-`begin-step` and `commit-step` actions; judgment, verification, checkpoint, and
-repair actions stop for the operator. `commit-step` records a measured attempt
+Drive routine supervised work with one verb. It executes structured
+`begin-step`, `commit-step`, replacement, and ready-checkpoint actions;
+judgment, verification, and repair actions stop for the operator. `commit-step` records a measured attempt
 in the Solver event log; it does not create a Git commit. Recording that attempt
-requires an explicit capture choice and summary—working-tree capture is never
-implicit:
+requires a summary. When no exceptional `--changeRef` is supplied, the Solver
+captures the working-tree delta automatically against the active source epoch:
 
 ```sh
 node scripts/solve.js continue --id <id>
 # make and prove the bounded change
-node scripts/solve.js continue --id <id> --auto-diff \
-  --summary "<what changed>"
+node scripts/solve.js continue --id <id> --summary "<what changed>"
 ```
 
 `start` writes a versioned draft and stamps `links.draftedAtCommit` when the
 Quest is new; it does not seal the goal. The first safe continuation lints and
 appends the declaration. A lint failure appends nothing. The lower-level `new`,
-`lint`, `next`, `step`, `audit`, and `handoff` commands remain available for
-diagnostics and exceptional operations.
+`lint`, `next`, `step`, `audit`, `checkpoint`, and `handoff` commands remain
+available for diagnostics and exceptional operations.
 
 `doctor` reports whether a live agent adapter is explicitly enabled and
 executable. Supervised mode uses `continue`; a configured autonomous adapter may
@@ -97,15 +96,18 @@ node scripts/solve.js checkpoint --id <id> --dry-run \
   --reason <handoff|risky-tree|long-running|milestone>
 ```
 
-At a terminal, `start`/`continue` returns `request-verification` with the exact
-fingerprint. After independent review, one command validates the verdict against
-current bytes, records the structured receipt, runs the full audit, and on
-approval commits only Quest scope. Rejection records the fail-closed verdict and
-never commits. No Solver command pushes.
+At a terminal, run `land` once to freeze the exact review manifest and issue its
+immutable review id. Give that id to the independent verifier. Then run `land`
+again with the id and verdict; the Solver rejects any byte drift, constructs the
+receipt itself, runs the full audit, and on approval commits only Quest scope.
+Rejection records the fail-closed verdict and never commits. No Solver command
+pushes.
 
 ```sh
-node scripts/solve.js land --id <id> --verifier <stable-id> \
-  --verdict approve --fingerprint sha256:<64hex> --receipt <ref>
+node scripts/solve.js land --id <id>
+# verifier reviews the issued review-<hex> manifest
+node scripts/solve.js land --id <id> --review review-<hex> \
+  --verifier <stable-id> --verdict approve --receipt <ref>
 ```
 
 ## Before Verification Or Checkpoint

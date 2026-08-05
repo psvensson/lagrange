@@ -416,11 +416,11 @@ tap.test('unreachable-base attempts resolve by coverage, never by waiver or sile
     const projection = buildNextProjection(fx.root, fx.quest.id);
     t.notMatch(projection.action.value, /<unavailable>/u,
       'the terminal action never asks for verification of an unavailable fingerprint');
-    t.match(projection.action.value,
-      /terminal aggregate has no reachable recorded base/u,
-      'it surfaces the typed actionable repair instead');
-    t.match(projection.action.value, new RegExp(`step --id ${fx.quest.id}`, 'u'),
-      'and names the executable first step');
+    t.equal(projection.action.value,
+      `node scripts/solve.js land --id ${fx.quest.id}`,
+      'the normal action remains on the three-verb facade');
+    t.equal(projection.action.payload.problemCode, 'base_unreachable',
+      'the typed payload preserves the actionable repair diagnosis');
 
     cleanup(fx);
     t.end();
@@ -434,10 +434,10 @@ tap.test('unreachable-base attempts resolve by coverage, never by waiver or sile
 
     const projection = buildNextProjection(fx.root, fx.quest.id);
     if (projection.action.code === 'replace-rejected-attempt') {
-      t.notMatch(projection.action.value, new RegExp(`at base ${DEAD_BASE}`, 'u'),
-        'the instruction never names the unresolvable base as the target');
-      t.match(projection.action.value, /at a reachable base/u,
-        'it directs the operator to a reachable base instead');
+      t.equal(projection.action.payload.baseUnreachable, true,
+        'the structured action directs replacement to a reachable base');
+      t.notOk(projection.action.payload.bases.includes(DEAD_BASE),
+        'the unresolvable base is never a recordable target');
     } else {
       // The projection may route to a different action first; the binding
       // requirement is only that no action ever names the dead base as a

@@ -10,12 +10,15 @@ import {
   startQuestWorkflow,
 } from '../../scripts/solve/operator-workflow.js';
 import {buildNextProjection} from '../../scripts/solve/next.js';
+import {assertReviewCurrent} from '../../scripts/solve/review-request.js';
 import {runStep} from '../../scripts/solve/step.js';
 import {
   appendEvent,
+  loadQuest,
   readLog,
   saveQuest,
 } from '../../scripts/solve/store.js';
+import {verificationState} from '../../scripts/solve/verification.js';
 import {
   EVENT_GATE_DECISION,
   EVENT_THEORY_OPTION_DECLARED,
@@ -52,7 +55,7 @@ function git(root, args) {
   }).trim();
 }
 
-function landingFixture(changedPath = 'scripts/demo.js') {
+function landingFixture(changedPath = 'scripts/demo.js', finalMetric = 0) {
   const root = tmp();
   git(root, ['init']);
   git(root, ['config', 'user.email', 'solver@example.com']);
@@ -85,7 +88,7 @@ function landingFixture(changedPath = 'scripts/demo.js') {
   runStep(root, quest);
   fs.writeFileSync(changedFile, changedPath === 'package.json' ?
     '{"version":2}\n' : 'export const value = 2;\n');
-  fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+  fs.writeFileSync(oracle, JSON.stringify({metric: finalMetric, target: 0}));
   const content = git(root, [
     'diff', '--binary', '--full-index', '--no-ext-diff', 'HEAD', '--',
     changedPath,
@@ -167,7 +170,7 @@ tap.test('next exposes stable action codes and continue dispatches only those co
     t.equal(begun.operation, 'begin-step');
     t.equal(begun.next.action.code, 'commit-step');
     t.throws(() => continueQuestWorkflow(root, {id: quest.id}),
-      /requires explicit --changeRef/iu);
+      /requires --summary/iu);
     const committed = continueQuestWorkflow(root, {
       id: quest.id,
       changeRef: simpleDiff(root, quest.id),
@@ -178,6 +181,67 @@ tap.test('next exposes stable action codes and continue dispatches only those co
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+
+tap.test('continue treats a commit summary as implicit auto-diff capture', (t) => {
+  const root = tmp();
+  git(root, ['init']);
+  git(root, ['config', 'user.email', 'solver@example.com']);
+  git(root, ['config', 'user.name', 'Solver']);
+  git(root, ['config', 'commit.gpgsign', 'false']);
+  const {quest, oracle} = makeOracleQuest(root);
+  fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+  fs.writeFileSync(path.join(root, 'src', 'demo.js'), 'before\n');
+  git(root, ['add', '-A']);
+  git(root, ['commit', '-m', 'base']);
+
+  continueQuestWorkflow(root, {id: quest.id});
+  fs.writeFileSync(path.join(root, 'src', 'demo.js'), 'after\n');
+  fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+  const committed = continueQuestWorkflow(root, {
+    id: quest.id,
+    summary: 'capture the changed source automatically',
+  });
+
+  t.equal(committed.operation, 'commit-step');
+  t.match(committed.result.changeRef,
+    /^diff:solve\/changes\/demo\/attempt-1\.diff(?:\.json)?$/u);
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('continue executes a ready source checkpoint through the facade', (t) => {
+  const {root, id} = landingFixture('scripts/demo.js', 1);
+  const dossier = buildNextProjection(root, id)
+    .verification.checkpointPreflight.candidate.dossier;
+  appendEvent(root, id, {
+    type: 'finding',
+    frontier: `${id}-main`,
+    kind: 'verifier-approval',
+    claim: 'independent checkpoint verification passed',
+    evidence: 'subagent:facade-checkpoint',
+    verification: {
+      schemaVersion: 2,
+      scope: 'candidate',
+      fingerprint: dossier.fingerprint,
+      baseCommit: dossier.baseCommit,
+      paths: dossier.paths,
+      sourcePaths: dossier.sourcePaths,
+      firstAttemptIndex: dossier.firstAttemptIndex,
+      lastAttemptIndex: dossier.lastAttemptIndex,
+    },
+  });
+  t.equal(buildNextProjection(root, id).action.code, 'checkpoint');
+  const beforeHead = git(root, ['rev-parse', 'HEAD']);
+
+  const result = continueQuestWorkflow(root, {id});
+
+  t.equal(result.executed, true);
+  t.equal(result.operation, 'checkpoint');
+  t.match(result.result, /checkpointed/u);
+  t.not(git(root, ['rev-parse', 'HEAD']), beforeHead);
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
 
 tap.test('start optionally creates and lints a draft without declaring it', (t) => {
   const root = tmp();
@@ -284,6 +348,78 @@ tap.test('land validates aggregate approval and scope-safely commits without pus
   t.equal(landed.commit.pushed, false);
   t.equal(landed.next.action.code, 'land');
   t.equal(git(root, ['status', '--porcelain', '-uall']), '');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('land issues an immutable review id and accepts a verdict by id', (t) => {
+  const {root, id} = landingFixture();
+  const requested = landQuestWorkflow(root, {id});
+  t.equal(requested.verdict, 'needs-review');
+  t.match(requested.review.id, /^review-[0-9a-f]{24}$/u);
+  t.equal(requested.committed, false);
+  t.equal(fs.existsSync(path.join(
+    root,
+    'solve/state/reviews',
+    `${requested.review.id}.json`,
+  )), true);
+
+  const landed = landQuestWorkflow(root, {
+    id,
+    review: requested.review.id,
+    verifier: 'review-id-verifier',
+    verdict: 'approve',
+    receipt: 'review:immutable-id',
+  });
+  t.equal(landed.committed, true);
+  t.equal(landed.fingerprint, requested.review.manifest.aggregate.fingerprint);
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('land refuses a review id after source bytes drift', (t) => {
+  const {root, id} = landingFixture();
+  const requested = landQuestWorkflow(root, {id});
+  fs.appendFileSync(path.join(root, 'scripts/demo.js'), '// drift\n');
+  t.throws(() => landQuestWorkflow(root, {
+    id,
+    review: requested.review.id,
+    verifier: 'review-id-verifier',
+    verdict: 'approve',
+    receipt: 'review:stale-id',
+  }), /review .* no longer matches current candidate bytes/iu);
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('review drift checks use the pristine JSON serializer', (t) => {
+  const {root, id} = landingFixture();
+  const requested = landQuestWorkflow(root, {id});
+  const nativeStringify = JSON.stringify;
+  const frozenManifest = nativeStringify(requested.review.manifest);
+  fs.appendFileSync(path.join(root, 'scripts/demo.js'), '// drift\n');
+  const quest = loadQuest(root, id);
+  const state = verificationState(root, quest, readLog(root, id));
+  let caught = null;
+  try {
+    Reflect.defineProperty(JSON, 'stringify', {
+      value: () => frozenManifest,
+      configurable: true,
+      writable: true,
+    });
+    try {
+      assertReviewCurrent(root, quest, state, requested.review.id);
+    } catch (error) {
+      caught = error;
+    }
+  } finally {
+    Reflect.defineProperty(JSON, 'stringify', {
+      value: nativeStringify,
+      configurable: true,
+      writable: true,
+    });
+  }
+  t.match(caught?.message, /no longer matches current candidate bytes/iu);
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });

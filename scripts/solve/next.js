@@ -10,7 +10,7 @@ import {loadQuest, readLog, projectState} from './store.js';
 import {stepPending} from './step.js';
 import {buildCurrentBlocker, blockerLabel} from './current-blocker.js';
 import {analyzeQuestHealth} from './health.js';
-import {buildAdvisories, renderAdvisoryLines} from './advisories.js';
+import {buildAdvisories} from './advisories.js';
 import {buildSealFreshnessAdvisory} from './seal-freshness.js';
 import {NEXT_ACTION_CODE, typedNextAction} from './next-action.js';
 import {auditQuest} from './audit.js';
@@ -28,8 +28,6 @@ import {
 } from './constants.js';
 
 const LOCAL_STR_OWNED_001 = '--summary "<what changed>"';
-const LOCAL_STR_OWNED_002 = '--kind verifier-approval --claim "independent verification passed" ';
-const LOCAL_STR_OWNED_003 = '--evidence subagent:<id> ';
 const LOCAL_STR_OWNED_004 = 'attempt';
 const LOCAL_STR_OWNED_005 = 'sha256:<missing>';
 const LOCAL_STR_OWNED_006 = 'aggregate';
@@ -42,6 +40,15 @@ const FILE_NOT_FOUND_CODE = 'ENOENT';
 const UNKNOWN_METRIC = '?';
 const LINE_SEPARATOR = '\n';
 const NEXT_SCHEMA_VERSION = 2;
+const ADVISORIES_HEADING = '## Advisories';
+
+function continueCommand(questId, suffix = '') {
+  return `node scripts/solve.js continue --id ${questId}${suffix}`;
+}
+
+function landCommand(questId) {
+  return `node scripts/solve.js land --id ${questId}`;
+}
 
 // The last event, when it is a recorded non-terminal gate stop (an advisory
 // gate-decision means the run continued, so it is not a stop). Anything after
@@ -66,17 +73,12 @@ function pendingCommitCommand(questId, pending) {
   const modelSuffix = pendingModelEvidenceRequired(pending) ?
     ' --modelRef <model:ref> (or --modelNotApplicable "<why the model does not apply>")' :
     '';
-  return `node scripts/solve.js step --id ${questId} --commit --auto-diff ` +
-    LOCAL_STR_OWNED_001 + modelSuffix;
+  return continueCommand(questId, ` ${LOCAL_STR_OWNED_001}${modelSuffix}`);
 }
 
-function verifierAction(questId, frontier, scope, fingerprint) {
+function verifierAction(questId, frontier, scope, fingerprint, terminal) {
   return typedNextAction(
-    `spawn an independent verifier for ${scope} ${fingerprint}, then record: ` +
-    `node scripts/solve.js finding --id ${questId} --frontier ${frontier} ` +
-    LOCAL_STR_OWNED_002 +
-    LOCAL_STR_OWNED_003 +
-    `--verification-scope ${scope} --verification-fingerprint ${fingerprint}`,
+    terminal ? landCommand(questId) : continueCommand(questId),
     {
       code: NEXT_ACTION_CODE.REQUEST_VERIFICATION,
       payload: {questId, frontier, scope, fingerprint},
@@ -97,10 +99,7 @@ function unresolvedReplacementAction(questId, pendingVerification, preflight) {
     const coveragePaths = [...new Set(
       deadGroups.flatMap((group) => group.requiredPaths))].sort();
     return typedNextAction(
-      `record a canonical same-frontier replacement attempt for ${questId} ` +
-      'at a reachable base (the step pin resolves to current HEAD) covering ' +
-      `${coveragePaths.join(', ') || '(no paths)'}, then obtain its own exact ` +
-      `approval; then rerun node scripts/solve.js checkpoint --id ${questId} --dry-run`,
+      continueCommand(questId),
       {
         code: NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT,
         payload: {questId, phase: 'begin', bases: [],
@@ -114,9 +113,7 @@ function unresolvedReplacementAction(questId, pendingVerification, preflight) {
     pendingVerification.inspection.changedPaths))].sort();
   if (bases.length > 1) {
     return typedNextAction(
-      'record separate canonical same-frontier replacement attempts for each ' +
-      `unresolved base in the ${questId} verification dossier; then rerun ` +
-      `node scripts/solve.js checkpoint --id ${questId} --dry-run`,
+      continueCommand(questId),
       {
         code: NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT,
         payload: {questId, phase: 'begin', bases, requiredPaths: paths},
@@ -125,22 +122,20 @@ function unresolvedReplacementAction(questId, pendingVerification, preflight) {
   }
   const base = bases.length === 1 ? bases[0] :
     pendingVerification.event.workspaceBaseCommit || '<missing>';
-  // The fallback base comes from the pending attempt itself; when its dossier
-  // classified that base as unresolvable, an "at base <sha>" instruction would
-  // demand an attempt that can never be recorded.
   const pendingDossier = (preflight.pendingApprovals || []).find(
     (dossier) => dossier.fingerprint === pendingVerification.fingerprint);
-  const baseInstruction = pendingDossier?.problemCode ?
-    `at a reachable base (${pendingDossier.problemCode} recorded base; the ` +
-      'step pin resolves to current HEAD)' :
-    `at base ${base}`;
+  const baseUnreachable = Boolean(pendingDossier?.problemCode);
   return typedNextAction(
-    `record a canonical same-frontier replacement attempt for ${questId} ` +
-    `${baseInstruction} covering ${paths.join(', ') || '(no paths)'}; then rerun ` +
-    `node scripts/solve.js checkpoint --id ${questId} --dry-run`,
+    continueCommand(questId),
     {
       code: NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT,
-      payload: {questId, phase: 'begin', bases: [base], requiredPaths: paths},
+      payload: {
+        questId,
+        phase: 'begin',
+        bases: baseUnreachable ? [] : [base],
+        baseUnreachable,
+        requiredPaths: paths,
+      },
     },
   );
 }
@@ -157,6 +152,7 @@ function pendingVerifierAction(questId, state, pendingVerification, preflight) {
     pendingVerification.event.frontier,
     scope,
     pendingVerification.fingerprint || LOCAL_STR_OWNED_005,
+    terminal,
   );
 }
 
@@ -169,8 +165,7 @@ function terminalQuestAction(questId, verification, audit) {
     // actionable problem instead, which names the repair.
     if (!verification.aggregate.ok && verification.aggregate.problem) {
       return typedNextAction(
-        `${verification.aggregate.problem}; begin with: ` +
-        `node scripts/solve.js step --id ${questId}`,
+        landCommand(questId),
         {
           code: NEXT_ACTION_CODE.REPAIR_AUDIT,
           payload: {
@@ -181,24 +176,27 @@ function terminalQuestAction(questId, verification, audit) {
         },
       );
     }
-    const latest = [...verification.attempts].reverse()
-      .find((attempt) => attempt.contracted);
-    return verifierAction(
-      questId,
-      latest.event.frontier,
-      LOCAL_STR_OWNED_006,
-      verification.aggregate.fingerprint || LOCAL_STR_OWNED_007,
+    return typedNextAction(
+      landCommand(questId),
+      {
+        code: NEXT_ACTION_CODE.REQUEST_VERIFICATION,
+        payload: {
+          questId,
+          scope: LOCAL_STR_OWNED_006,
+          fingerprint: verification.aggregate.fingerprint || LOCAL_STR_OWNED_007,
+        },
+      },
     );
   }
   if (audit.status === LOCAL_STR_OWNED_008) {
     return typedNextAction(
-      `node scripts/solve.js handoff --id ${questId} --commit`, {
+      landCommand(questId), {
         code: NEXT_ACTION_CODE.LAND,
         payload: {questId},
       });
   }
   return typedNextAction(
-    `resolve terminal audit failures: node scripts/solve.js audit --id ${questId}`,
+    landCommand(questId),
     {
       code: NEXT_ACTION_CODE.REPAIR_AUDIT,
       payload: {questId},
@@ -218,7 +216,7 @@ function nextAction({questId, state, pending, gateStop, blocker,
     const phase = pending ? 'commit' : 'begin';
     return typedNextAction(pending ?
       pendingCommitCommand(questId, pending) :
-      `node scripts/solve.js step --id ${questId}`, {
+      continueCommand(questId), {
       code: NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT,
       payload: {questId, phase},
     });
@@ -226,9 +224,10 @@ function nextAction({questId, state, pending, gateStop, blocker,
   if (TERMINAL_STATUSES.includes(state.questStatus)) {
     return terminalQuestAction(questId, verification, audit);
   }
-  if (verification.uncheckpointedApprovedAttempts.length > 0 &&
+  if ((verification.uncheckpointedApprovedAttempts.length > 0 ||
+    verification.candidateApproval) &&
     verification.attemptProblems.length === 0) {
-    return typedNextAction(`node scripts/solve.js checkpoint --id ${questId}`, {
+    return typedNextAction(continueCommand(questId), {
       code: NEXT_ACTION_CODE.CHECKPOINT,
       payload: {questId},
     });
@@ -241,7 +240,7 @@ function nextAction({questId, state, pending, gateStop, blocker,
   }
   if (gateStop) {
     if (gateStop.nextCommand) {
-      return typedNextAction(gateStop.nextCommand, {
+      return typedNextAction(continueCommand(questId), {
         code: NEXT_ACTION_CODE.OPERATOR_ACTION,
         payload: {
           questId,
@@ -251,18 +250,18 @@ function nextAction({questId, state, pending, gateStop, blocker,
       });
     }
     const problem = (gateStop.problems || [])[0] || 'operator judgment required';
-    return typedNextAction(`resolve ${gateStop.code || gateStop.outcome}: ${problem}`, {
+    return typedNextAction(continueCommand(questId), {
       code: NEXT_ACTION_CODE.OPERATOR_ACTION,
       payload: {questId, stopCode: gateStop.code || gateStop.outcome, problem},
     });
   }
   if (blocker.nextAction === `continue supervised step for ${blocker.frontier}`) {
-    return typedNextAction(`node scripts/solve.js step --id ${questId}`, {
+    return typedNextAction(continueCommand(questId), {
       code: NEXT_ACTION_CODE.BEGIN_STEP,
       payload: {questId, frontier: blocker.frontier},
     });
   }
-  return typedNextAction(blocker.nextAction, {
+  return typedNextAction(continueCommand(questId), {
     code: NEXT_ACTION_CODE.OPERATOR_ACTION,
     payload: {questId, frontier: blocker.frontier},
   });
@@ -305,7 +304,7 @@ export function buildNextProjection(root, questId) {
       rungIndex: pending.rungIndex ?? null,
       modelEvidenceRequiredAtCommit: pendingModelEvidenceRequired(pending),
       beforeMetric: pending.before?.metric ?? null,
-      abortCommand: `node scripts/solve.js step --id ${questId} --abort`,
+      advancedAbortAvailable: true,
     } : null,
     lastStop: gateStop ? {
       code: gateStop.code || gateStop.outcome,
@@ -323,7 +322,8 @@ export function buildNextProjection(root, questId) {
       candidateApproved: Boolean(verification.candidateApproval),
       checkpointPreflight: verificationPreflight,
     },
-    advisories,
+    advisories: advisories.map(({command: _advancedCommand, ...advisory}) =>
+      advisory),
   };
 }
 
@@ -336,8 +336,8 @@ export function buildNextLines(root, questId) {
   ];
   if (pendingStep) {
     lines.push(`pending step: ${pendingStep.frontier} pinned at metric ` +
-      `${pendingStep.beforeMetric ?? UNKNOWN_METRIC} — commit it, or abort with ` +
-      pendingStep.abortCommand);
+      `${pendingStep.beforeMetric ?? UNKNOWN_METRIC} — commit with continue and ` +
+      `${LOCAL_STR_OWNED_001}, or use advanced diagnostics to abort`);
     if (pendingStep.modelEvidenceRequiredAtCommit) {
       lines.push('model rung: commit requires --modelRef <model:ref> or ' +
         '--modelNotApplicable "<why the architecture model does not apply>"');
@@ -356,7 +356,12 @@ export function buildNextLines(root, questId) {
     lines.push(...checkpointVerificationPreflightLines(
       verification.checkpointPreflight));
   }
-  lines.push(...renderAdvisoryLines(advisories));
+  if (advisories.length > 0) {
+    lines.push(ADVISORIES_HEADING);
+    for (const advisory of advisories) {
+      lines.push(`- ${advisory.kind}: ${advisory.message}`);
+    }
+  }
   return lines;
 }
 

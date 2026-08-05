@@ -25,8 +25,12 @@ import {
   rejectionFindingBarProblem,
   REJECTION_FINDING_USAGE,
 } from './rejection-findings.js';
-import {autoCommitQuest} from './handoff.js';
+import {autoCommitQuest, runCheckpointCommand} from './handoff.js';
 import {auditQuest} from './audit.js';
+import {
+  assertReviewCurrent,
+  createReviewRequest,
+} from './review-request.js';
 
 const VERDICT_APPROVE = 'approve';
 const VERDICT_REJECT = 'reject';
@@ -34,6 +38,13 @@ const VERIFIER_APPROVAL = 'verifier-approval';
 const VERIFIER_REJECTION = 'verifier-rejection';
 const REJECTED_CLAIM_PREFIX = 'independent landing verification rejected';
 const REJECTION_FINDING_SEPARATOR = '; ';
+const VERDICT_NEEDS_REVIEW = 'needs-review';
+const REVIEW_FINGERPRINT_CONFLICT =
+  'land: --review supplies the fingerprint; omit --fingerprint';
+const INVALID_VERDICT_PROBLEM = 'land: --verdict must be approve|reject';
+const RECORDED_AGGREGATE_RECEIPT = 'recorded-aggregate-approval';
+const AUTOMATIC_CHECKPOINT_REASON = 'milestone';
+const CHECKPOINT_OPERATION = 'checkpoint';
 
 function requireId(args, command) {
   const id = args.id || args._?.[0];
@@ -52,21 +63,19 @@ function assertStructuredAction(action, questId) {
 
 function explicitCommitOptions(args) {
   const changeRef = typeof args.changeRef === 'string' ? args.changeRef : null;
-  const autoDiff = args['auto-diff'] === true;
   const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
+  const autoDiff = args['auto-diff'] === true || (!changeRef && summary.length > 0);
   if (changeRef && autoDiff) {
     throw new Error('continue: pass exactly one of --changeRef or --auto-diff');
-  }
-  if (!changeRef && !autoDiff) {
-    throw new Error(
-      'continue: commit requires explicit --changeRef diff:<path> or --auto-diff',
-    );
   }
   if (!summary) throw new Error('continue: commit requires --summary "<what changed>"');
   return {
     changeRef: changeRef || undefined,
     autoDiff,
     summary,
+    modelRef: typeof args.modelRef === 'string' ? args.modelRef : undefined,
+    modelNotApplicable: typeof args.modelNotApplicable === 'string' ?
+      args.modelNotApplicable : undefined,
   };
 }
 
@@ -101,6 +110,16 @@ function executeStructuredContinuation(root, quest, action, args) {
       };
     }
     throw new Error('continue: replacement action has an invalid phase');
+  }
+  if (action.code === NEXT_ACTION_CODE.CHECKPOINT) {
+    return {
+      executed: true,
+      operation: CHECKPOINT_OPERATION,
+      result: runCheckpointCommand(root, {
+        id: quest.id,
+        reason: AUTOMATIC_CHECKPOINT_REASON,
+      }),
+    };
   }
   return {executed: false, operation: null, result: null};
 }
@@ -215,7 +234,8 @@ export function landQuestWorkflow(root, args = {}) {
   }
   const state = verificationState(root, quest, log);
   if (state.attempts.length === 0) {
-    if (args.verifier || args.verdict || args.fingerprint || args.receipt) {
+    if (args.verifier || args.verdict || args.fingerprint || args.receipt ||
+      args.review) {
       throw new Error('land: this candidate has no source changes and needs no verifier');
     }
     const commit = autoCommitQuest(root, id);
@@ -230,11 +250,62 @@ export function landQuestWorkflow(root, args = {}) {
       next: buildNextProjection(root, id),
     };
   }
+  const reviewId = typeof args.review === 'string' ? args.review.trim() : '';
+  const hasVerdictInput = Boolean(
+    args.verifier || args.verdict || args.fingerprint || args.receipt ||
+    args.finding || reviewId,
+  );
+  if (!hasVerdictInput) {
+    assertApprovalCanCompleteAudit(root, quest, state);
+    if (state.aggregateApproval) {
+      const commit = autoCommitQuest(root, id);
+      return {
+        schemaVersion: 1,
+        questId: id,
+        verdict: VERDICT_APPROVE,
+        fingerprint: state.aggregate.fingerprint,
+        receiptRef: RECORDED_AGGREGATE_RECEIPT,
+        committed: commit.committed,
+        commit,
+        next: buildNextProjection(root, id),
+      };
+    }
+    const review = createReviewRequest(root, quest, state);
+    return {
+      schemaVersion: 1,
+      questId: id,
+      verdict: VERDICT_NEEDS_REVIEW,
+      review,
+      fingerprint: null,
+      receiptRef: null,
+      committed: false,
+      next: buildNextProjection(root, id),
+    };
+  }
   const verdict = typeof args.verdict === 'string' ? args.verdict.trim() : '';
-  const fingerprint = typeof args.fingerprint === 'string' ?
+  let fingerprint = typeof args.fingerprint === 'string' ?
     args.fingerprint.trim() : '';
   const evidence = verifierEvidence(args.verifier);
-  const {scope, receipt} = receiptForVerdict(state, verdict, fingerprint);
+  let scope;
+  let receipt;
+  if (reviewId) {
+    if (fingerprint) {
+      throw new Error(REVIEW_FINGERPRINT_CONFLICT);
+    }
+    const request = assertReviewCurrent(root, quest, state, reviewId);
+    if (verdict === VERDICT_APPROVE) {
+      scope = VERIFICATION_SCOPE.AGGREGATE;
+      receipt = request.manifest.aggregate;
+    } else if (verdict === VERDICT_REJECT) {
+      scope = VERIFICATION_SCOPE.CANDIDATE;
+      receipt = request.manifest.candidate;
+    } else {
+      throw new Error(INVALID_VERDICT_PROBLEM);
+    }
+    fingerprint = receipt.fingerprint;
+  } else {
+    ({scope, receipt} = receiptForVerdict(state, verdict, fingerprint));
+  }
   const kind = verdict === VERDICT_APPROVE ? VERIFIER_APPROVAL : VERIFIER_REJECTION;
   const latest = receipt.attempts?.at(-1) || state.attempts.at(-1);
   const frontier = latest?.event?.frontier || quest.frontiers?.[0]?.id;

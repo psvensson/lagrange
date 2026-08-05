@@ -311,7 +311,7 @@
     "aliasRuleCount": 4,
     "masterRuleCount": 675,
     "emittedMasterRuleCount": 675,
-    "estimatedAllRulesTokens": 31831
+    "estimatedAllRulesTokens": 31873
   },
   "rules": [
     {
@@ -6444,7 +6444,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1205,
+          "line": 1224,
           "section": "Quest Workflow > Keep-Alive Supervisor",
           "role": "packed"
         }
@@ -7603,7 +7603,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 119,
+          "line": 138,
           "section": "Quest Workflow > Quest Anatomy",
           "role": "packed"
         }
@@ -7619,7 +7619,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 122,
+          "line": 141,
           "section": "Quest Workflow > Quest Anatomy",
           "role": "packed"
         }
@@ -7637,7 +7637,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 165,
+          "line": 184,
           "section": "Quest Workflow > Quest Anatomy > Successor Quests (park-and-pivot lineage)",
           "role": "packed"
         }
@@ -7653,7 +7653,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 168,
+          "line": 187,
           "section": "Quest Workflow > Quest Anatomy > Successor Quests (park-and-pivot lineage)",
           "role": "packed"
         }
@@ -7669,7 +7669,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 171,
+          "line": 190,
           "section": "Quest Workflow > Quest Anatomy > Successor Quests (park-and-pivot lineage)",
           "role": "packed"
         }
@@ -7685,7 +7685,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 193,
+          "line": 212,
           "section": "Quest Workflow > Closure Of Cutover Vs Building-Block Quests",
           "role": "packed"
         }
@@ -7701,7 +7701,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 217,
+          "line": 236,
           "section": "Quest Workflow > Metric Validity And Invalid Samples",
           "role": "packed"
         }
@@ -7719,7 +7719,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 224,
+          "line": 243,
           "section": "Quest Workflow > Metric Validity And Invalid Samples",
           "role": "packed"
         }
@@ -7735,7 +7735,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 228,
+          "line": 247,
           "section": "Quest Workflow > Metric Validity And Invalid Samples",
           "role": "packed"
         }
@@ -7751,7 +7751,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 230,
+          "line": 249,
           "section": "Quest Workflow > Metric Validity And Invalid Samples",
           "role": "packed"
         }
@@ -7759,54 +7759,6 @@
     },
     {
       "id": "GOV-0039",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "An exhausted park had at least one honestly-measured sample but the metric never moved — no honest move remains.",
-      "score": 206,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 240,
-          "section": "Quest Workflow > Metric Validity And Invalid Samples",
-          "role": "packed"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0040",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "A cannot_measure park had only non-measuring samples — the harness itself never produced a valid measurement, so the fix is the measurement infrastructure, not the solution space.",
-      "score": 206,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 241,
-          "section": "Quest Workflow > Metric Validity And Invalid Samples",
-          "role": "packed"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0041",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "Fix the harness (or change the attempt evidence) before reopening again, so reopen and park can never oscillate forever.",
-      "score": 206,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 247,
-          "section": "Quest Workflow > Metric Validity And Invalid Samples",
-          "role": "packed"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0042",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -7859,6 +7811,54 @@
       ]
     },
     {
+      "id": "GOV-0040",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "An exhausted park had at least one honestly-measured sample but the metric never moved — no honest move remains.",
+      "score": 205,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 259,
+          "section": "Quest Workflow > Metric Validity And Invalid Samples",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0041",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "A cannot_measure park had only non-measuring samples — the harness itself never produced a valid measurement, so the fix is the measurement infrastructure, not the solution space.",
+      "score": 205,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 260,
+          "section": "Quest Workflow > Metric Validity And Invalid Samples",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "GOV-0042",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "Fix the harness (or change the attempt evidence) before reopening again, so reopen and park can never oscillate forever.",
+      "score": 205,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 266,
+          "section": "Quest Workflow > Metric Validity And Invalid Samples",
+          "role": "packed"
+        }
+      ]
+    },
+    {
       "id": "GOV-0043",
       "domain": "governance",
       "strength": "must_not",
@@ -7870,7 +7870,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 267,
+          "line": 286,
           "section": "Quest Workflow > Scenario Runner Location",
           "role": "packed"
         }
@@ -7886,7 +7886,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 269,
+          "line": 288,
           "section": "Quest Workflow > Scenario Runner Location",
           "role": "packed"
         }
@@ -7904,7 +7904,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 326,
+          "line": 345,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement",
           "role": "packed"
         }
@@ -7922,7 +7922,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 338,
+          "line": 357,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement",
           "role": "packed"
         }
@@ -7938,7 +7938,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 365,
+          "line": 384,
           "section": "Quest Workflow > Regular Commit (No Push)",
           "role": "packed"
         }
@@ -7954,7 +7954,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 384,
+          "line": 403,
           "section": "Quest Workflow > Convergence Guards",
           "role": "packed"
         }
@@ -8004,7 +8004,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 548,
+          "line": 567,
           "section": "Quest Workflow > Two-Layer Theory",
           "role": "packed"
         }
@@ -8020,7 +8020,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 614,
+          "line": 633,
           "section": "Quest Workflow > Parallel-First Execution",
           "role": "packed"
         }
@@ -8036,7 +8036,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 659,
+          "line": 678,
           "section": "Quest Workflow > Evidence And Change References",
           "role": "packed"
         }
@@ -8052,7 +8052,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 755,
+          "line": 774,
           "section": "Quest Workflow > Source Change Verification",
           "role": "packed"
         }
@@ -8068,7 +8068,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 775,
+          "line": 794,
           "section": "Quest Workflow > Source Change Verification",
           "role": "packed"
         }
@@ -8086,7 +8086,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 799,
+          "line": 818,
           "section": "Quest Workflow > Source Change Verification",
           "role": "packed"
         }
@@ -8102,7 +8102,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 829,
+          "line": 848,
           "section": "Quest Workflow > Git Handoff",
           "role": "packed"
         }
@@ -8118,7 +8118,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 831,
+          "line": 850,
           "section": "Quest Workflow > Git Handoff",
           "role": "packed"
         }
@@ -8137,7 +8137,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 836,
+          "line": 855,
           "section": "Quest Workflow > Git Handoff",
           "role": "packed"
         }
@@ -8155,7 +8155,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 839,
+          "line": 858,
           "section": "Quest Workflow > Git Handoff",
           "role": "packed"
         }
@@ -8173,7 +8173,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 893,
+          "line": 912,
           "section": "Quest Workflow > Strategy Ladder > Falsification As Progress",
           "role": "packed"
         }
@@ -8189,7 +8189,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 895,
+          "line": 914,
           "section": "Quest Workflow > Strategy Ladder > Falsification As Progress",
           "role": "packed"
         }
@@ -8351,7 +8351,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1092,
+          "line": 1111,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch",
           "role": "packed"
         }
@@ -8367,7 +8367,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1149,
+          "line": 1168,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn",
           "role": "packed"
         }
@@ -8383,24 +8383,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1187,
+          "line": 1206,
           "section": "Quest Workflow > Workflow Advisories For Supervised Drivers",
-          "role": "packed"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0070",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "The presence, mtime, or bytes of ignored projections MUST NOT gate next, audit, checkpoint, or terminal handoff.",
-      "score": 202,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 1238,
-          "section": "Quest Workflow > Tracked Versus Regenerable",
           "role": "packed"
         }
       ]
@@ -8440,6 +8424,22 @@
       ]
     },
     {
+      "id": "GOV-0070",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "The presence, mtime, or bytes of ignored projections MUST NOT gate next, audit, checkpoint, or terminal handoff.",
+      "score": 201,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 1257,
+          "section": "Quest Workflow > Tracked Versus Regenerable",
+          "role": "packed"
+        }
+      ]
+    },
+    {
       "id": "GOV-0071",
       "domain": "governance",
       "strength": "must_not",
@@ -8449,7 +8449,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1258,
+          "line": 1277,
           "section": "Quest Workflow > Ledger Consistency",
           "role": "packed"
         }
@@ -8465,7 +8465,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1282,
+          "line": 1301,
           "section": "Quest Workflow > Ledger Consistency",
           "role": "packed"
         }
@@ -8481,7 +8481,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1283,
+          "line": 1302,
           "section": "Quest Workflow > Ledger Consistency",
           "role": "packed"
         }
@@ -8807,7 +8807,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 111,
+          "line": 130,
           "section": "Quest Workflow > Quest Anatomy",
           "role": "packed"
         }
@@ -8841,7 +8841,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 558,
+          "line": 577,
           "section": "Quest Workflow > Two-Layer Theory",
           "role": "packed"
         }
@@ -8857,7 +8857,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 559,
+          "line": 578,
           "section": "Quest Workflow > Two-Layer Theory",
           "role": "packed"
         }
@@ -8875,7 +8875,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 561,
+          "line": 580,
           "section": "Quest Workflow > Two-Layer Theory",
           "role": "packed"
         }
@@ -8929,7 +8929,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 958,
+          "line": 977,
           "section": "Quest Workflow > Terminal And Blocking Conditions",
           "role": "packed"
         }
@@ -9481,7 +9481,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 68,
+          "line": 69,
           "section": "Quest Workflow > Operating Contract > Primary operator surface",
           "role": "packed"
         }
@@ -9491,13 +9491,15 @@
       "id": "GOV-0091",
       "domain": "governance",
       "strength": "must_not",
-      "tags": [],
-      "rule": "solve continue --id <id> executes only structured begin-step, commit-step, or replacement equivalents. Here commit-step means record the measured attempt in the event log; it does not create a Git commit. An attempt-record action requires exactly one explicit --changeRef or --auto-diff plus --summary. It MUST NOT parse or execute the human-rendered action value, and it stops on every judgment, verification, checkpoint, audit-repair, or terminal action.",
+      "tags": [
+        "readiness"
+      ],
+      "rule": "solve continue --id <id> executes only structured begin-step, commit-step, replacement, or ready-checkpoint equivalents. Here commit-step means record the measured attempt in the event log; it does not create a Git commit. An attempt-record action requires --summary; absent an exceptional explicit --changeRef, it captures the canonical working-tree delta automatically. It MUST NOT parse or execute the human-rendered action value, and it stops on every judgment, verification, audit-repair, or terminal action.",
       "score": 192,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 71,
+          "line": 72,
           "section": "Quest Workflow > Operating Contract > Primary operator surface",
           "role": "packed"
         }
@@ -9510,12 +9512,12 @@
       "tags": [
         "governance"
       ],
-      "rule": "solve land --id <id> --verifier <id> --verdict approve|reject --fingerprint <sha256> validates the verdict against current terminal bytes and constructs the receipt server-side. Rejection records the fail-closed candidate verdict and never commits. Approval records the aggregate receipt, applies the full audit and scope-safe handoff, commits when eligible, and never pushes.",
+      "rule": "solve land --id <id> freezes the exact terminal candidate and aggregate manifest and returns an immutable review id. A second land --review <id> --verifier <id> --verdict approve|reject --receipt <ref> rechecks that manifest against current bytes and constructs the receipt server-side. Rejection records the fail-closed candidate verdict and never commits. Approval records the aggregate receipt, applies the full audit and scope-safe handoff, commits when eligible, and never pushes.",
       "score": 192,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 78,
+          "line": 81,
           "section": "Quest Workflow > Operating Contract > Primary operator surface",
           "role": "packed"
         }
@@ -9531,7 +9533,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 140,
+          "line": 159,
           "section": "Quest Workflow > Quest Anatomy > Successor Quests (park-and-pivot lineage)",
           "role": "packed"
         }
@@ -9547,7 +9549,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 141,
+          "line": 160,
           "section": "Quest Workflow > Quest Anatomy > Successor Quests (park-and-pivot lineage)",
           "role": "packed"
         }
@@ -9563,7 +9565,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 146,
+          "line": 165,
           "section": "Quest Workflow > Quest Anatomy > Successor Quests (park-and-pivot lineage)",
           "role": "packed"
         }
@@ -9579,7 +9581,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 148,
+          "line": 167,
           "section": "Quest Workflow > Quest Anatomy > Successor Quests (park-and-pivot lineage)",
           "role": "packed"
         }
@@ -9595,7 +9597,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 201,
+          "line": 220,
           "section": "Quest Workflow > Closure Of Cutover Vs Building-Block Quests",
           "role": "packed"
         }
@@ -9611,7 +9613,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 387,
+          "line": 406,
           "section": "Quest Workflow > Convergence Guards",
           "role": "packed"
         }
@@ -9627,7 +9629,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 401,
+          "line": 420,
           "section": "Quest Workflow > Convergence Guards",
           "role": "packed"
         }
@@ -9643,7 +9645,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 450,
+          "line": 469,
           "section": "Quest Workflow > Convergence Guards",
           "role": "packed"
         }
@@ -9661,7 +9663,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 457,
+          "line": 476,
           "section": "Quest Workflow > Convergence Guards",
           "role": "packed"
         }
@@ -9677,7 +9679,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 592,
+          "line": 611,
           "section": "Quest Workflow > Attempt Flow",
           "role": "packed"
         }
@@ -9729,7 +9731,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 946,
+          "line": 965,
           "section": "Quest Workflow > Terminal And Blocking Conditions",
           "role": "packed"
         }
@@ -9745,7 +9747,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 961,
+          "line": 980,
           "section": "Quest Workflow > Terminal And Blocking Conditions",
           "role": "packed"
         }
@@ -9777,7 +9779,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1005,
+          "line": 1024,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response",
           "role": "packed"
         }
@@ -9793,7 +9795,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1006,
+          "line": 1025,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response",
           "role": "packed"
         }
@@ -9811,7 +9813,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1008,
+          "line": 1027,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response",
           "role": "packed"
         }
@@ -9829,7 +9831,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1012,
+          "line": 1031,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response",
           "role": "packed"
         }
@@ -9845,7 +9847,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1016,
+          "line": 1035,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Graded Guard Response",
           "role": "packed"
         }
@@ -9861,7 +9863,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1083,
+          "line": 1102,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch",
           "role": "packed"
         }
@@ -9912,7 +9914,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 86,
+          "line": 91,
           "section": "Quest Workflow > Operating Contract > Primary operator surface",
           "role": "packed"
         }
@@ -9930,7 +9932,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 87,
+          "line": 92,
           "section": "Quest Workflow > Operating Contract > Primary operator surface",
           "role": "packed"
         }
@@ -9946,7 +9948,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 129,
+          "line": 148,
           "section": "Quest Workflow > Quest Anatomy",
           "role": "packed"
         }
@@ -9962,7 +9964,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 612,
+          "line": 631,
           "section": "Quest Workflow > Parallel-First Execution",
           "role": "packed"
         }
@@ -9978,7 +9980,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 638,
+          "line": 657,
           "section": "Quest Workflow > Evidence And Change References",
           "role": "packed"
         }
@@ -10096,7 +10098,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 936,
+          "line": 955,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers",
           "role": "packed"
         }
@@ -10296,24 +10298,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1133,
+          "line": 1152,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn",
-          "role": "packed"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0120",
-      "domain": "governance",
-      "strength": "must",
-      "tags": [],
-      "rule": "A projection-retention migration MUST classify exact paths before removal, record base commit, byte count, and SHA-256 for removed and retained files, and preserve every unmatched or nested report artifact.",
-      "score": 184,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 1242,
-          "section": "Quest Workflow > Tracked Versus Regenerable",
           "role": "packed"
         }
       ]
@@ -10356,6 +10342,22 @@
       ]
     },
     {
+      "id": "GOV-0120",
+      "domain": "governance",
+      "strength": "must",
+      "tags": [],
+      "rule": "A projection-retention migration MUST classify exact paths before removal, record base commit, byte count, and SHA-256 for removed and retained files, and preserve every unmatched or nested report artifact.",
+      "score": 183,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 1261,
+          "section": "Quest Workflow > Tracked Versus Regenerable",
+          "role": "packed"
+        }
+      ]
+    },
+    {
       "id": "GOV-0121",
       "domain": "governance",
       "strength": "must_not",
@@ -10365,7 +10367,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 219,
+          "line": 238,
           "section": "Quest Workflow > Metric Validity And Invalid Samples",
           "role": "packed"
         }
@@ -10373,22 +10375,6 @@
     },
     {
       "id": "GOV-0122",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "The reopen is evidence-gated: it is refused unless at least one contributing attempt re-classifies as a non-measuring sample (so an honest park is never reopened), it leaves doneWhen and the frontier metric untouched (no goalpost movement), keeps the park event in the append-only log, preserves parkedCount so the scheduler still de-prioritizes a chronic parker, and returns the frontier to the first rung for fresh, honestly-measured attempts.",
-      "score": 182,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 232,
-          "section": "Quest Workflow > Metric Validity And Invalid Samples",
-          "role": "packed"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0123",
       "domain": "governance",
       "strength": "must",
       "tags": [],
@@ -10423,6 +10409,22 @@
       ]
     },
     {
+      "id": "GOV-0123",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "The reopen is evidence-gated: it is refused unless at least one contributing attempt re-classifies as a non-measuring sample (so an honest park is never reopened), it leaves doneWhen and the frontier metric untouched (no goalpost movement), keeps the park event in the append-only log, preserves parkedCount so the scheduler still de-prioritizes a chronic parker, and returns the frontier to the first rung for fresh, honestly-measured attempts.",
+      "score": 181,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 251,
+          "section": "Quest Workflow > Metric Validity And Invalid Samples",
+          "role": "packed"
+        }
+      ]
+    },
+    {
       "id": "GOV-0124",
       "domain": "governance",
       "strength": "must_not",
@@ -10432,7 +10434,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 257,
+          "line": 276,
           "section": "Quest Workflow > Metric Validity And Invalid Samples",
           "role": "packed"
         }
@@ -10448,7 +10450,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 366,
+          "line": 385,
           "section": "Quest Workflow > Regular Commit (No Push)",
           "role": "packed"
         }
@@ -10464,24 +10466,8 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 381,
+          "line": 400,
           "section": "Quest Workflow > Convergence Guards",
-          "role": "packed"
-        }
-      ]
-    },
-    {
-      "id": "GOV-0127",
-      "domain": "governance",
-      "strength": "must_not",
-      "tags": [],
-      "rule": "When the quest declaration seals a verificationTemplates array, those categories are the rejection bar: a category outside the bar is accepted once as out-of-bar:<slug> (a real defect is never waived), and repeating it requires widening the sealed bar first with solve amend --kind verification-bar-expansion --template <slug> --evidence <verifier reference>.",
-      "score": 180,
-      "sources": [
-        {
-          "file": "workflow-guidelines/solver-quests.md",
-          "line": 744,
-          "section": "Quest Workflow > Source Change Verification",
           "role": "packed"
         }
       ]
@@ -10506,6 +10492,22 @@
       ]
     },
     {
+      "id": "GOV-0127",
+      "domain": "governance",
+      "strength": "must_not",
+      "tags": [],
+      "rule": "When the quest declaration seals a verificationTemplates array, those categories are the rejection bar: a category outside the bar is accepted once as out-of-bar:<slug> (a real defect is never waived), and repeating it requires widening the sealed bar first with solve amend --kind verification-bar-expansion --template <slug> --evidence <verifier reference>.",
+      "score": 179,
+      "sources": [
+        {
+          "file": "workflow-guidelines/solver-quests.md",
+          "line": 763,
+          "section": "Quest Workflow > Source Change Verification",
+          "role": "packed"
+        }
+      ]
+    },
+    {
       "id": "GOV-0128",
       "domain": "governance",
       "strength": "must_not",
@@ -10515,7 +10517,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 806,
+          "line": 825,
           "section": "Quest Workflow > Source Change Verification",
           "role": "packed"
         }
@@ -10531,7 +10533,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 910,
+          "line": 929,
           "section": "Quest Workflow > Findings Log",
           "role": "packed"
         }
@@ -10543,11 +10545,11 @@
       "strength": "must_not",
       "tags": [],
       "rule": "Provenance honesty (mirroring CLOSURE_MEASURED vs CLOSURE_DECISION): a ladder park is a MEASURED verdict and carries no provenance field; an operator park is a recorded DECISION and carries provenance: 'operator' plus a pointer to the sanctioning altitude reflection, so a reader can never mistake one for the other.",
-      "score": 179,
+      "score": 178,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 986,
+          "line": 1005,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Operator park (decision terminal)",
           "role": "packed"
         }
@@ -10565,7 +10567,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1140,
+          "line": 1159,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn",
           "role": "packed"
         }
@@ -10581,7 +10583,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1157,
+          "line": 1176,
           "section": "Quest Workflow > Workflow Advisories For Supervised Drivers",
           "role": "packed"
         }
@@ -10779,7 +10781,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 104,
+          "line": 123,
           "section": "Quest Workflow > Quest Anatomy",
           "role": "packed"
         }
@@ -10797,7 +10799,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 437,
+          "line": 456,
           "section": "Quest Workflow > Convergence Guards",
           "role": "packed"
         }
@@ -11110,7 +11112,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 176,
+          "line": 195,
           "section": "Quest Workflow > Quest Anatomy > Closure Fidelity (live-visible classes)",
           "role": "packed"
         }
@@ -11126,7 +11128,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 502,
+          "line": 521,
           "section": "Quest Workflow > Two-Layer Theory",
           "role": "packed"
         }
@@ -11144,7 +11146,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 292,
+          "line": 311,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement",
           "role": "packed"
         }
@@ -11160,7 +11162,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 905,
+          "line": 924,
           "section": "Quest Workflow > Findings Log",
           "role": "packed"
         }
@@ -11178,7 +11180,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 654,
+          "line": 673,
           "section": "Quest Workflow > Evidence And Change References",
           "role": "packed"
         }
@@ -11194,7 +11196,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 681,
+          "line": 700,
           "section": "Quest Workflow > Source Change Verification",
           "role": "packed"
         }
@@ -11210,7 +11212,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 802,
+          "line": 821,
           "section": "Quest Workflow > Source Change Verification",
           "role": "packed"
         }
@@ -11226,7 +11228,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 925,
+          "line": 944,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers",
           "role": "packed"
         }
@@ -11244,7 +11246,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 931,
+          "line": 950,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers",
           "role": "packed"
         }
@@ -11260,7 +11262,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 978,
+          "line": 997,
           "section": "Quest Workflow > Terminal And Blocking Conditions > Operator park (decision terminal)",
           "role": "packed"
         }
@@ -11396,7 +11398,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 301,
+          "line": 320,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement",
           "role": "packed"
         }
@@ -11414,7 +11416,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 341,
+          "line": 360,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement",
           "role": "packed"
         }
@@ -11542,7 +11544,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 607,
+          "line": 626,
           "section": "Quest Workflow > Parallel-First Execution",
           "role": "packed"
         }
@@ -11558,7 +11560,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 609,
+          "line": 628,
           "section": "Quest Workflow > Parallel-First Execution",
           "role": "packed"
         }
@@ -11574,7 +11576,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 928,
+          "line": 947,
           "section": "Quest Workflow > Autonomy Default And Stop Triggers",
           "role": "packed"
         }
@@ -11674,7 +11676,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 256,
+          "line": 275,
           "section": "Quest Workflow > Metric Validity And Invalid Samples",
           "role": "packed"
         }
@@ -11692,7 +11694,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 320,
+          "line": 339,
           "section": "Quest Workflow > Current Blocker And Diagnostic Movement",
           "role": "packed"
         }
@@ -11708,7 +11710,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1125,
+          "line": 1144,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn",
           "role": "packed"
         }
@@ -11724,7 +11726,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1128,
+          "line": 1147,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn",
           "role": "packed"
         }
@@ -11740,7 +11742,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1130,
+          "line": 1149,
           "section": "Quest Workflow > Mandatory Step-Back Reflection Turn",
           "role": "packed"
         }
@@ -11774,7 +11776,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 548,
+          "line": 567,
           "section": "Quest Workflow > Two-Layer Theory",
           "role": "packed"
         }
@@ -11790,7 +11792,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 566,
+          "line": 585,
           "section": "Quest Workflow > Attempt Flow",
           "role": "packed"
         }
@@ -11808,7 +11810,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 685,
+          "line": 704,
           "section": "Quest Workflow > Source Change Verification",
           "role": "packed"
         }
@@ -11893,11 +11895,11 @@
         "cache"
       ],
       "rule": "Projected state under solve/state/ is local cache and may be rebuilt from the Quest plus append-only log.",
-      "score": 136,
+      "score": 135,
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1235,
+          "line": 1254,
           "section": "Quest Workflow > Tracked Versus Regenerable",
           "role": "packed"
         }
@@ -11933,7 +11935,7 @@
       "sources": [
         {
           "file": "workflow-guidelines/solver-quests.md",
-          "line": 1079,
+          "line": 1098,
           "section": "Quest Workflow > Recorded-Reason Override Escape Hatch",
           "role": "packed"
         }
@@ -11956,5 +11958,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-07-30T14:07:37.578Z"
+  "generatedAt": "2026-08-05T14:20:13.734Z"
 }

@@ -21,19 +21,22 @@ node scripts/solve.js start --id my-quest \
   --statement "The named scenario passes three consecutive fresh runs." \
   --spec-ref solve/specs/my-feature/requirements.md#acceptance
 
-# Begin, then explicitly capture one proved change.
+# Begin, then summarize one proved change; capture is automatic.
 node scripts/solve.js continue --id my-quest
-node scripts/solve.js continue --id my-quest --auto-diff \
+node scripts/solve.js continue --id my-quest \
   --summary "route the decision through its owner"
 
-# At terminal, use the exact fingerprint returned by start/continue.
-node scripts/solve.js land --id my-quest --verifier <stable-id> \
-  --verdict approve --fingerprint sha256:<64hex> --receipt <ref>
+# At terminal, issue an immutable review id, then record its verdict.
+node scripts/solve.js land --id my-quest
+node scripts/solve.js land --id my-quest --review review-<hex> \
+  --verifier <stable-id> --verdict approve --receipt <ref>
 ```
 
-`continue` executes only trusted structured begin/commit codes. It never runs
-the rendered command text, never implicitly captures the worktree, and stops on
-verification, checkpoint, repair, or judgment actions. `land` validates current
+`continue` executes only trusted structured begin/commit, replacement, and
+ready-checkpoint codes. It never runs
+the rendered command text, captures against the active source epoch only when a
+commit summary is supplied, and stops on verification, repair, or judgment
+actions. `land` validates current
 bytes before recording the verdict; rejection never commits, approval uses the
 existing full audit and scope-safe commit, and neither path pushes.
 

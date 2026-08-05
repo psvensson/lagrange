@@ -5,6 +5,7 @@ import {
 import {
   changedPathsFromDiffContent,
   inspectChangeArtifact,
+  isVerificationBookkeeping,
   requiresSourceVerification,
 } from './change-artifact.js';
 import {isRegenerableQuestReport} from './report-retention.js';
@@ -88,7 +89,12 @@ function attemptInspections(root, quest, log, options = {}) {
       event.changeRef &&
       index > baselineIndex)
     .map(({event, index}) => {
-      const inspection = inspectChangeArtifact(root, quest, event.changeRef);
+      const rawInspection = inspectChangeArtifact(root, quest, event.changeRef);
+      const inspection = {
+        ...rawInspection,
+        changedPaths: rawInspection.changedPaths.filter((filePath) =>
+          !isVerificationBookkeeping(filePath, quest.id)),
+      };
       return {
         index,
         event,
@@ -295,7 +301,11 @@ export function analyzeScopePressureCandidate(
   );
   inspections.push({
     event: {workspaceBaseCommit: options.workspaceBaseCommit || null},
-    inspection,
+    inspection: {
+      ...inspection,
+      changedPaths: (inspection.changedPaths || []).filter((filePath) =>
+        !isVerificationBookkeeping(filePath, quest.id)),
+    },
   });
   return summarizeScopePressure(root, inspections);
 }

@@ -2,7 +2,7 @@ import tap from 'tap';
 import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
-import {execFileSync} from 'node:child_process';
+import {execFileSync, spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 const CLI = path.resolve(
@@ -36,6 +36,17 @@ function writeOracleGoal(root, id, oracleFile) {
 }
 
 tap.test('solve CLI smoke (P2)', async (t) => {
+  t.test('default help exposes only start, continue, and land', (t) => {
+    const result = spawnSync('node', [CLI], {encoding: 'utf8'});
+    t.equal(result.status, 0);
+    t.match(result.stderr, /solve <start\|continue\|land>/u);
+    t.notMatch(result.stderr, /checkpoint|handoff|attempt/u);
+    const advanced = spawnSync('node', [CLI, '--advanced'], {encoding: 'utf8'});
+    t.equal(advanced.status, 0);
+    t.match(advanced.stderr, /checkpoint/u);
+    t.end();
+  });
+
   t.test('new scaffolds a quest file', (t) => {
     const root = tmp();
     const out = run(root, ['new', '--id', 'demo', '--statement', 'hello']);

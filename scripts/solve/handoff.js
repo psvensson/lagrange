@@ -51,10 +51,24 @@ import {
   refreshSpecLadderForCommit,
   specLadderPathFromRef,
 } from './spec-ladder-flip.js';
+import {
+  clearCommitAuthorization,
+  issueCommitAuthorization,
+} from './commit-authorization.js';
 
 const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
 const ORACLE_ARTIFACT_DIRECTORY = 'oracle';
+const DERIVED_INVENTORY_PATHS = Object.freeze([
+  'solve/changes/global-owner-debt-inventory/inventory.json',
+  'solve/changes/priority-recovery-owner-inventory/inventory.json',
+]);
 const GIT_COMMAND = 'git';
+const COMMIT_MODE = Object.freeze({CHECKPOINT: 'checkpoint', LAND: 'land'});
+const CHILD_STDIO_IGNORE = 'ignore';
+const CHILD_STDIO_INHERIT = 'inherit';
+const INVENTORY_REFRESH_ARGUMENT = '--refresh';
+const INVENTORY_REFRESH_NOTICE =
+  'Solver is refreshing the source-derived owner inventories (~2 min)\n';
 const CHECKPOINT_ID_REQUIRED_PROBLEM =
   'checkpoint: --id <questId> is required';
 const DRY_RUN_ARGUMENT = 'dry-run';
@@ -120,6 +134,7 @@ function questArtifactPaths(root, questId) {
       stateFilePath(root, questId),
       questOracleFilePath(root, questId),
       frontierFilePath(root),
+      ...DERIVED_INVENTORY_PATHS.map((filePath) => path.resolve(root, filePath)),
     ].map((absolute) => toRootRelative(root, absolute)),
     changeDirPrefix: `${toRootRelative(root, expectedChangeDir(root, questId))}/`,
   };
@@ -376,8 +391,27 @@ export function renderHandoff(handoff) {
 }
 
 function executeCommit(root, handoff) {
-  for (const command of gitCommands(handoff)) {
-    execFileSync(command[0], command.slice(1), {cwd: root, stdio: 'inherit'});
+  const commands = gitCommands(handoff);
+  for (const command of commands.slice(0, 2)) {
+    execFileSync(command[0], command.slice(1), {
+      cwd: root,
+      stdio: CHILD_STDIO_INHERIT,
+    });
+  }
+  if (commands.length === 0) return;
+  issueCommitAuthorization(root, {
+    questId: handoff.questId,
+    mode: handoff.checkpoint ? COMMIT_MODE.CHECKPOINT : COMMIT_MODE.LAND,
+    paths: handoff.inScope,
+  });
+  try {
+    const command = commands.at(-1);
+    execFileSync(command[0], command.slice(1), {
+      cwd: root,
+      stdio: CHILD_STDIO_INHERIT,
+    });
+  } finally {
+    clearCommitAuthorization(root);
   }
 }
 
@@ -459,6 +493,31 @@ function refreshFrontierBoardForCommit(root) {
   }
 }
 
+function refreshDerivedInventoriesForCommit(root, quest, log) {
+  if (verificationState(root, quest, log).attempts.length === 0) return;
+  const globalGenerator = path.join(
+    root, 'scripts', 'generate-global-owner-debt-inventory.js');
+  const priorityGenerator = path.join(
+    root, 'scripts', 'generate-priority-recovery-owner-inventory.js');
+  if (!fs.existsSync(globalGenerator) || !fs.existsSync(priorityGenerator)) return;
+  try {
+    execFileSync(process.execPath, [globalGenerator], {
+      cwd: root,
+      stdio: CHILD_STDIO_IGNORE,
+    });
+  } catch {
+    process.stderr.write(INVENTORY_REFRESH_NOTICE);
+    execFileSync(process.execPath, [globalGenerator, INVENTORY_REFRESH_ARGUMENT], {
+      cwd: root,
+      stdio: CHILD_STDIO_INHERIT,
+    });
+  }
+  execFileSync(process.execPath, [priorityGenerator], {
+    cwd: root,
+    stdio: CHILD_STDIO_INHERIT,
+  });
+}
+
 // Auto commit a Quest's in-scope work once it finishes, so the Solver persists its
 // own scope-clean changes instead of accumulating an unrecoverable dirty tree. The
 // commit gate is minimal — the quest must have FINISHED without errors (a SOLVED
@@ -474,13 +533,15 @@ export function autoCommitQuest(root, questId, options = {}) {
   }
   const checkpoint = options.checkpoint === true;
   const quest = loadQuest(root, questId);
+  const log = readLog(root, questId);
+  refreshDerivedInventoriesForCommit(root, quest, log);
   refreshFrontierBoardForCommit(root);
   // Only a landing of a projected-SOLVED quest flips its spec-ladder row: a
   // checkpoint is a mid-quest save, and a refused terminal (commit gate not
   // met) must not stamp SOLVED onto the ladder. The flip runs before
   // buildHandoff for the same dirty-scope reason as the frontier board.
   if (!checkpoint &&
-    projectState(quest, readLog(root, questId)).questStatus === STATUS_SOLVED) {
+    projectState(quest, log).questStatus === STATUS_SOLVED) {
     refreshSpecLadderForCommit(root, quest);
   }
   const handoff = buildHandoff(root, quest, {
@@ -517,9 +578,18 @@ export function autoCommitQuest(root, questId, options = {}) {
       GIT_ARGUMENT.PATHS,
       ...handoff.inScope,
     ]);
-    runGitCommand(root, ['commit', '--only', '-m', commitMessage(handoff),
-      GIT_ARGUMENT.PATHS,
-      ...handoff.inScope]);
+    issueCommitAuthorization(root, {
+      questId,
+      mode: checkpoint ? COMMIT_MODE.CHECKPOINT : COMMIT_MODE.LAND,
+      paths: handoff.inScope,
+    });
+    try {
+      runGitCommand(root, ['commit', '--only', '-m', commitMessage(handoff),
+        GIT_ARGUMENT.PATHS,
+        ...handoff.inScope]);
+    } finally {
+      clearCommitAuthorization(root);
+    }
   } catch (error) {
     if (isIndexLockContention(error)) {
       return {committed: false, skipped: SKIP_GIT_BUSY, questId};

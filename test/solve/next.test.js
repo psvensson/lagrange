@@ -39,8 +39,8 @@ tap.test('solve next', async (t) => {
     runStep(root, quest);
 
     const out = runNextCommand(root, 'demo');
-    t.match(out, /^Next \[command-template\]: node scripts\/solve\.js step --id demo --commit/u);
-    t.match(out, /--abort/u);
+    t.match(out, /^Next \[command-template\]: node scripts\/solve\.js continue --id demo --summary/u);
+    t.match(out, /advanced diagnostics to abort/u);
     t.match(out, /pending step: demo-main pinned at metric 3/u);
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
@@ -60,7 +60,8 @@ tap.test('solve next', async (t) => {
     });
 
     const lines = buildNextLines(root, 'demo');
-    t.match(lines[0], /^Next \[command-template\]: node scripts\/solve\.js override --id demo/u);
+    t.equal(lines[0],
+      'Next [executable-command]: node scripts/solve.js continue --id demo');
     t.match(lines.join('\n'), /last stop: blocked-scope \(reroute\)/u);
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
@@ -76,8 +77,8 @@ tap.test('solve next', async (t) => {
     });
 
     const lines = buildNextLines(root, 'demo');
-    t.match(lines[0], /^Next \[manual-action\]: resolve terminal audit failures/u);
-    t.match(lines[0], /audit --id demo/u);
+    t.equal(lines[0],
+      'Next [executable-command]: node scripts/solve.js land --id demo');
     t.notOk(lines.some((line) => line.startsWith('blocker:')),
       'a terminal quest prints no (contradictory) blocker line');
     fs.rmSync(root, {recursive: true, force: true});
@@ -91,7 +92,7 @@ tap.test('solve next', async (t) => {
     t.equal(projection.schemaVersion, 2);
     t.same(projection.action, {
       type: 'executable-command',
-      value: 'node scripts/solve.js step --id demo',
+      value: 'node scripts/solve.js continue --id demo',
       code: 'begin-step',
       payload: {questId: 'demo', frontier: 'demo-main'},
     });

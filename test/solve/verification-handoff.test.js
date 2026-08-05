@@ -229,7 +229,7 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
 
     t.equal(
       buildNextLines(fx.root, fx.quest.id)[0],
-      'Next [executable-command]: node scripts/solve.js step --id runtime-verify',
+      'Next [executable-command]: node scripts/solve.js continue --id runtime-verify',
       'terminal aggregate approval never outranks exact rejection replacement',
     );
     const replacement = runStep(fx.root, fx.quest);
@@ -262,14 +262,14 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     t.equal(state.frontiers[0].parkKind, null);
     t.equal(
       buildNextLines(fx.root, fx.quest.id)[0],
-      'Next [executable-command]: node scripts/solve.js step --id runtime-verify',
+      'Next [executable-command]: node scripts/solve.js continue --id runtime-verify',
     );
     t.equal(runStep(fx.root, fx.quest).terminal, null);
     fs.rmSync(fx.root, {recursive: true, force: true});
     t.end();
   });
 
-  t.test('a post-checkpoint replacement step retains the rejected attempt base', (t) => {
+  t.test('a raw source commit cannot split a rejected attempt source epoch', (t) => {
     const fx = fixture();
     const rejectedBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
     recordAttempt(fx, 'src/a.js', 1, 'checkpointed-rejected-a');
@@ -282,34 +282,10 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       `sha256:${rejectedAttempt.changeRefIdentity.sha256}`,
     );
 
-    const replacement = runStep(fx.root, fx.quest);
-    const pending = JSON.parse(fs.readFileSync(replacement.pendingFile, 'utf8'));
-    t.equal(pending.headCommit, rejectedBase);
-
-    fs.writeFileSync(path.join(fx.root, 'src', 'a.js'), 'export const a = 4;\n');
-    const changeRef = canonicalDiff(
-      fx.root,
-      fx.quest,
-      rejectedBase,
-      'src/a.js',
-      'post-checkpoint-replacement-a',
-    );
-    runStep(fx.root, fx.quest, {
-      changeRef,
-      summary: 'post-checkpoint same-base replacement',
-    });
-    const replacementAttempt = latestAttempt(fx.root, fx.quest);
-    approve(
-      fx.root,
-      fx.quest,
-      'attempt',
-      `sha256:${replacementAttempt.changeRefIdentity.sha256}`,
-    );
-    t.equal(
-      checkpointGate(fx.root, fx.quest).status,
-      'pass',
-      'the approved old-base replacement remains checkpoint-eligible',
-    );
+    t.throws(() => runStep(fx.root, fx.quest),
+      /source epoch changed reviewed path.*src\/a\.js/iu,
+      'the mismatch is refused before replacement history can be appended');
+    t.not(git(fx.root, ['rev-parse', 'HEAD']).trim(), rejectedBase);
     fs.rmSync(fx.root, {recursive: true, force: true});
     t.end();
   });
@@ -387,7 +363,7 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       'the Solver never asks for approval of the rejected fingerprint');
     t.equal(
       buildNextLines(fx.root, fx.quest.id)[0],
-      'Next [executable-command]: node scripts/solve.js step --id runtime-verify',
+      'Next [executable-command]: node scripts/solve.js continue --id runtime-verify',
       'next advances to a replacement step instead of approving rejected bytes',
     );
     t.equal(checkpointGate(fx.root, fx.quest).status, 'fail');
@@ -402,8 +378,8 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       [replacementFingerprint],
       'next verification work is the replacement, never the rejected attempt',
     );
-    t.match(buildNextLines(fx.root, fx.quest.id)[0],
-      new RegExp(replacementFingerprint, 'u'));
+    const replacementAction = buildNextProjection(fx.root, fx.quest.id).action;
+    t.equal(replacementAction.payload.fingerprint, replacementFingerprint);
     t.match(
       state.attemptProblems.map((item) => item.message).join('\n'),
       /explicitly rejected|requires a later exact approval/u,
@@ -429,50 +405,21 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     t.end();
   });
 
-  t.test('preflight blocks a different-base rejection replacement before delegation', (t) => {
+  t.test('source epoch blocks a different-base replacement before preflight', (t) => {
     const fx = fixture();
-    const rejectedBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
     recordAttempt(fx, 'src/a.js', 1, 'different-base-rejected');
     const rejectedAttempt = latestAttempt(fx.root, fx.quest);
     git(fx.root, ['add', '-A']);
     git(fx.root, ['commit', '-m', 'advance head after rejected attempt']);
-    const differentBase = git(fx.root, ['rev-parse', 'HEAD']).trim();
     reject(
       fx.root,
       fx.quest,
       `sha256:${rejectedAttempt.changeRefIdentity.sha256}`,
     );
 
-    const pending = runStep(fx.root, fx.quest);
-    const pendingState = JSON.parse(fs.readFileSync(pending.pendingFile, 'utf8'));
-    pendingState.headCommit = differentBase;
-    fs.writeFileSync(pending.pendingFile, JSON.stringify(pendingState, null, 2));
-    fs.writeFileSync(path.join(fx.root, 'src', 'a.js'), 'export const a = 4;\n');
-    fs.writeFileSync(fx.oracle, JSON.stringify({metric: 0, target: 0}));
-    runStep(fx.root, fx.quest, {
-      changeRef: canonicalDiff(
-        fx.root,
-        fx.quest,
-        differentBase,
-        'src/a.js',
-        'different-base-candidate',
-      ),
-      summary: 'candidate captured from the wrong base',
-    });
-
-    const preflight = checkpointVerificationPreflight(
-      fx.root,
-      fx.quest,
-      readLog(fx.root, fx.quest.id),
-    );
-    t.notOk(preflight.readyAfterRequiredApprovals);
-    t.equal(preflight.replacementGroups[0].baseCommit, rejectedBase);
-    t.same(preflight.replacementGroups[0].requiredPaths, ['src/a.js']);
-    t.notOk(preflight.replacementGroups[0].satisfiedAfterRequiredApprovals);
-    t.notMatch(buildNextLines(fx.root, fx.quest.id)[0], /spawn an independent verifier/u,
-      'an unlandable candidate never consumes a verifier turn');
-    t.match(buildNextLines(fx.root, fx.quest.id)[0],
-      new RegExp(`same-frontier replacement attempt.*${rejectedBase}`, 'u'));
+    t.throws(() => runStep(fx.root, fx.quest),
+      /source epoch changed reviewed path.*src\/a\.js/iu,
+      'the invalid base is stopped before a candidate or verifier preflight exists');
     fs.rmSync(fx.root, {recursive: true, force: true});
     t.end();
   });
@@ -502,9 +449,10 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     t.same(preflight.applicableTemplates.map((entry) => entry.template),
       ['docs/steering/verification-templates/retry-loops.md'],
       'the first-pass dossier includes every template matching the exact diff');
-    t.match(buildNextLines(fx.root, fx.quest.id)[0],
-      new RegExp(`verification-scope both.*${candidateFingerprint}`, 'u'),
+    const reviewAction = buildNextProjection(fx.root, fx.quest.id).action;
+    t.equal(reviewAction.payload.scope, 'both',
       'a terminal exact-equals-aggregate candidate can receive one both approval');
+    t.equal(reviewAction.payload.fingerprint, candidateFingerprint);
 
     const projection = buildNextProjection(fx.root, fx.quest.id);
     t.same(
@@ -896,7 +844,7 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       beforeApproval, 'recording a finding has no commit side effect');
     t.match(
       buildNextLines(fx.root, fx.quest.id)[0],
-      /checkpoint --id runtime-verify/u,
+      /continue --id runtime-verify/u,
       'a new exact-approved attempt requires its explicit checkpoint',
     );
 
@@ -906,13 +854,13 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       beforeApproval + 1, 'the explicit checkpoint makes one commit');
     t.equal(
       buildNextLines(fx.root, fx.quest.id)[0],
-      'Next [executable-command]: node scripts/solve.js step --id runtime-verify',
+      'Next [executable-command]: node scripts/solve.js continue --id runtime-verify',
       'an explicit checkpoint advances the open Quest to its real next action',
     );
     runStep(fx.root, fx.quest);
     t.match(
       buildNextLines(fx.root, fx.quest.id)[0],
-      /step --id runtime-verify --commit/u,
+      /continue --id runtime-verify --summary/u,
       'a pending step still outranks checkpoint history',
     );
     fs.rmSync(fx.root, {recursive: true, force: true});
@@ -939,7 +887,7 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
 
     t.match(
       buildNextLines(fx.root, fx.quest.id)[0],
-      /override --id runtime-verify/u,
+      /continue --id runtime-verify/u,
       'dirty Quest memory does not force an empty repeat checkpoint',
     );
     fs.rmSync(fx.root, {recursive: true, force: true});
@@ -958,11 +906,12 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       'one canonical source attempt deduplicates attempt and aggregate approval');
 
     approve(fx.root, fx.quest, 'attempt', attemptFingerprint);
-    t.match(
-      buildNextLines(fx.root, fx.quest.id)[0],
-      new RegExp(`verification-scope aggregate.*${aggregate.fingerprint}`, 'u'),
-      'terminal aggregate verification outranks checkpoint selection',
-    );
+    const reviewAction = buildNextProjection(fx.root, fx.quest.id).action;
+    t.equal(reviewAction.value,
+      'node scripts/solve.js land --id runtime-verify',
+      'terminal aggregate verification routes through the land review id');
+    t.equal(reviewAction.payload.fingerprint, aggregate.fingerprint,
+      'the structured action retains the exact aggregate identity');
     approve(fx.root, fx.quest, 'aggregate', aggregate.fingerprint);
     const handoff = buildHandoff(fx.root, fx.quest);
     t.equal(auditQuest(fx.root, fx.quest).status, 'pass');
@@ -970,7 +919,7 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       'full audit plus exact aggregate approval unlocks handoff without report refresh');
     t.equal(
       buildNextLines(fx.root, fx.quest.id)[0],
-      'Next [executable-command]: node scripts/solve.js handoff --id runtime-verify --commit',
+      'Next [executable-command]: node scripts/solve.js land --id runtime-verify',
       'terminal handoff remains the final typed action',
     );
     fs.rmSync(fx.root, {recursive: true, force: true});
@@ -1027,9 +976,9 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
     );
     t.not(preflight.aggregate.fingerprint, secondFingerprint);
     t.notOk(preflight.aggregate.bothEligible);
-    t.match(buildNextLines(fx.root, fx.quest.id)[0],
-      new RegExp(`verification-scope attempt.*${secondFingerprint}`, 'u'));
-    t.notMatch(buildNextLines(fx.root, fx.quest.id)[0], /verification-scope both/u);
+    const action = buildNextProjection(fx.root, fx.quest.id).action;
+    t.equal(action.payload.scope, 'attempt');
+    t.equal(action.payload.fingerprint, secondFingerprint);
     fs.rmSync(fx.root, {recursive: true, force: true});
     t.end();
   });

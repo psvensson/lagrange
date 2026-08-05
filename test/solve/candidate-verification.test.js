@@ -107,7 +107,7 @@ tap.test('version 2 attempts form one landing candidate', (t) => {
   t.same(state.attemptProblems, []);
   t.same(state.candidate.paths, ['src/a.js', 'src/b.js'],
     'candidate uses the sorted union and current bytes');
-  t.match(buildNextLines(fx.root, fx.quest.id)[0], /step --id candidate-v2$/u,
+  t.match(buildNextLines(fx.root, fx.quest.id)[0], /continue --id candidate-v2$/u,
     'next continues work instead of prescribing verification or checkpoint');
   t.equal(checkpointGate(fx.root, fx.quest).status, 'fail');
 
@@ -127,6 +127,39 @@ tap.test('version 2 attempts form one landing candidate', (t) => {
   t.match(git(fx.root, ['log', '-1', '--format=%b']),
     /durability-boundary: milestone/u,
     'checkpoint persists the exceptional boundary reason');
+  t.end();
+});
+
+tap.test('candidate review excludes Solver bookkeeping and derived inventories', (t) => {
+  const fx = fixture();
+  t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
+  record(fx, {
+    'src/a.js': 'export const a = 2;\n',
+    'solve/quests/candidate-v2.json': `${JSON.stringify(fx.quest, null, 2)}\n`,
+    'solve/changes/global-owner-debt-inventory/inventory.json':
+      '{"derived":true}\n',
+  }, 1, 'bookkeeping');
+
+  const state = verificationState(
+    fx.root,
+    fx.quest,
+    readLog(fx.root, fx.quest.id),
+  );
+  t.same(state.candidate.paths, ['src/a.js']);
+  t.same(state.aggregate.paths, ['src/a.js']);
+  t.equal(state.attempts[0].event.sourceVerificationFingerprint,
+    state.candidate.fingerprint,
+    'the recorded source fingerprint is independent of bookkeeping bytes');
+  fs.appendFileSync(
+    path.join(fx.root, 'solve/quests/candidate-v2.json'),
+    ' \n',
+  );
+  const afterBookkeepingDrift = verificationState(
+    fx.root,
+    fx.quest,
+    readLog(fx.root, fx.quest.id),
+  );
+  t.equal(afterBookkeepingDrift.candidate.fingerprint, state.candidate.fingerprint);
   t.end();
 });
 
@@ -152,7 +185,7 @@ tap.test('candidate drift and rejection replacement fail closed', (t) => {
   t.end();
 });
 
-tap.test('invalid mixed-base replacement cannot erase a candidate rejection', (t) => {
+tap.test('source epoch prevents a later HEAD from creating a mixed-base candidate', (t) => {
   const fx = fixture();
   t.teardown(() => fs.rmSync(fx.root, {recursive: true, force: true}));
   record(fx, {'src/a.js': 'export const a = 2;\n'}, 1, 'first');
@@ -179,33 +212,14 @@ tap.test('invalid mixed-base replacement cannot erase a candidate rejection', (t
     changeRef: `diff:${relativeArtifact}`,
     summary: 'wrong-base-replacement',
   });
-  let log = readLog(fx.root, fx.quest.id);
+  const log = readLog(fx.root, fx.quest.id);
   const state = verificationState(fx.root, fx.quest, log);
-  t.notOk(state.candidate.ok);
-  t.equal(state.candidate.fingerprint, null);
-  t.match(state.attemptProblems.map((item) => item.message).join('\n'),
-    /one recorded common Git base/u);
-
-  appendFinding(fx.root, fx.quest.id, {
-    frontier: 'candidate-v2-main',
-    kind: 'verifier-approval',
-    claim: 'aggregate composition passed',
-    evidence: 'subagent:aggregate',
-    verification: {
-      schemaVersion: 2,
-      scope: 'aggregate',
-      fingerprint: state.aggregate.fingerprint,
-      baseCommit: state.aggregate.baseCommit,
-      paths: state.aggregate.paths,
-      sourcePaths: state.aggregate.paths,
-      firstAttemptIndex: state.attempts[0].index,
-      lastAttemptIndex: state.attempts.at(-1).index,
-    },
-  });
-  log = readLog(fx.root, fx.quest.id);
-  t.match(terminalVerificationProblems(fx.root, fx.quest, log)
-    .map((item) => item.message).join('\n'), /one recorded common Git base/u,
-  'aggregate approval cannot bypass the invalid candidate');
+  t.ok(state.candidate.ok);
+  t.equal(state.candidate.baseCommit,
+    state.attempts[0].event.workspaceBaseCommit);
+  t.same(state.attempts.map((attempt) => attempt.event.workspaceBaseCommit),
+    [state.candidate.baseCommit, state.candidate.baseCommit],
+    'the separately tracked source base, not the moved HEAD pin, owns both attempts');
   t.equal(checkpointGate(fx.root, fx.quest).status, 'fail');
   t.end();
 });

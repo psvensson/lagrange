@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 
-const COMMAND_GROUPS = Object.freeze([
+const ADVANCED_COMMAND_GROUPS = Object.freeze([
   Object.freeze({
     title: 'Orientation',
     commands: Object.freeze([
@@ -21,8 +21,8 @@ const COMMAND_GROUPS = Object.freeze([
         description: 'Execute the Quest’s next safe begin-step or attempt-record action.',
       }),
       Object.freeze({
-        command: 'npm run solve:land -- --id <quest> --verifier <id> --verdict <approve|reject> --fingerprint sha256:<hex> --receipt <ref>',
-        description: 'Validate an independent terminal verdict, audit, and commit eligible Quest scope; never push.',
+        command: 'npm run solve:land -- --id <quest> [--review <id> --verifier <id> --verdict <approve|reject> --receipt <ref>]',
+        description: 'Issue an immutable review id, then validate its independent verdict and commit eligible Quest scope; never push.',
       }),
       Object.freeze({
         command: 'npm run solve:next -- --id <quest> [--json]',
@@ -285,6 +285,26 @@ const COMMAND_GROUPS = Object.freeze([
   }),
 ]);
 
+const COMMAND_GROUPS = Object.freeze([
+  Object.freeze({
+    title: 'Quest Workflow',
+    commands: Object.freeze([
+      Object.freeze({
+        command: 'npm run solve:start -- --id <quest>',
+        description: 'Create or resume a Quest and show its next safe action.',
+      }),
+      Object.freeze({
+        command: 'npm run solve:continue -- --id <quest>',
+        description: 'Begin the next attempt; on capture, add only --summary "<what changed>".',
+      }),
+      Object.freeze({
+        command: 'npm run solve:land -- --id <quest>',
+        description: 'Land a no-source Quest or issue the immutable review id for source work.',
+      }),
+    ]),
+  }),
+]);
+
 const NEWLINE = '\n';
 const EMPTY_TEXT = '';
 const SECTION_PREFIX = '## ';
@@ -310,7 +330,9 @@ function renderCommandList(groups = COMMAND_GROUPS) {
 }
 
 function main() {
-  process.stdout.write(renderCommandList());
+  const groups = process.argv.includes('--advanced') ?
+    ADVANCED_COMMAND_GROUPS : COMMAND_GROUPS;
+  process.stdout.write(renderCommandList(groups));
 }
 
 if (
@@ -321,6 +343,7 @@ if (
 }
 
 export {
+  ADVANCED_COMMAND_GROUPS,
   COMMAND_GROUPS,
   renderCommandList,
 };

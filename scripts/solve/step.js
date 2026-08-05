@@ -35,6 +35,7 @@ import {
   expectedChangeDir,
   inspectChangeArtifact,
   inspectCommitChangeRefAdmission,
+  requiresSourceVerification,
 } from './change-artifact.js';
 import {
   cleanupWrittenChangeArtifact,
@@ -60,7 +61,10 @@ import {
 } from './continuation.js';
 import {
   baseRecordedButUnreachable,
+  activeSourceEpoch,
   resolveWorkspaceBaseCommit,
+  sourceEpochDriftProblem,
+  sourceEpochCommittedDriftPaths,
   verificationState,
 } from './verification.js';
 import {canonicalSourceArtifactProblem} from './canonical-source-artifact.js';
@@ -74,6 +78,10 @@ const UNKNOWN_GIT_ERROR = 'unknown error';
 const AUTO_DIFF_EMPTY_ERROR =
   'auto-diff: git diff is empty — nothing changed since the step began; ' +
   'make the change first (or pass an explicit --changeRef diff:<path>)';
+const AUTO_DIFF_PATH_DISCOVERY_ERROR =
+  'auto-diff: working-tree path discovery failed: ';
+const AUTO_DIFF_REPORT_DELETION_DISCOVERY_ERROR =
+  'auto-diff: report deletion path discovery failed: ';
 const SCOPE_PRESSURE_BLOCKED_PREFIX =
   'scope-pressure precommit blocked: split into bounded Quest declarations ';
 
@@ -132,7 +140,16 @@ export function resolveStepBaseCommit(root, quest, log, frontierId) {
   if (rejectedBase && baseRecordedButUnreachable(root, rejectedBase)) {
     return resolveHeadPin(root);
   }
-  return rejectedBase || resolveHeadPin(root);
+  const epoch = activeSourceEpoch(root, quest, log);
+  return rejectedBase || epoch?.baseCommit || resolveHeadPin(root);
+}
+
+function assertSourceEpochIntact(root, quest, log, extraPaths = []) {
+  const epoch = activeSourceEpoch(root, quest, log);
+  const drift = sourceEpochCommittedDriftPaths(root, epoch, extraPaths);
+  if (drift.length > 0) {
+    throw new Error(sourceEpochDriftProblem(drift));
+  }
 }
 
 function nextAutoDiffArtifactPath(root, questId) {
@@ -152,7 +169,7 @@ function nextAutoDiffArtifactPath(root, questId) {
 // resulting artifact goes through the same inspectChangeArtifact honesty gate as an
 // operator-provided diff. An empty diff is an operator error, not a silent no-op.
 function createAutoDiffChangeRef(root, quest, pending) {
-  const pin = pending.headCommit || 'HEAD';
+  const pin = pending.sourceBaseCommit || pending.headCommit || 'HEAD';
   const untracked = spawnSync('git', [
     'ls-files', '--others', '--exclude-standard', '--',
     ...AUTO_DIFF_UNTRACKED_GUARD_PATHSPECS,
@@ -174,8 +191,13 @@ function createAutoDiffChangeRef(root, quest, pending) {
       'committing the step',
     );
   }
+  // Discover only current index/worktree changes. The source epoch pin can be
+  // older than HEAD after an unrelated commit; discovering paths from that pin
+  // would silently sweep the intervening commit into this Quest. Once the
+  // authored path set is known, the canonical payload is still rendered from
+  // the epoch pin so every attempt retains the one common review base.
   const authored = spawnSync('git', [
-    'diff', '--binary', '--full-index', '--no-ext-diff', pin, '--', '.',
+    'diff', '--binary', '--full-index', '--no-ext-diff', 'HEAD', '--', '.',
     ...AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS,
   ], {
     cwd: root,
@@ -184,7 +206,7 @@ function createAutoDiffChangeRef(root, quest, pending) {
   });
   if (authored.status !== 0 || typeof authored.stdout !== 'string') {
     throw new Error(
-      `auto-diff: git diff ${pin} failed: ` +
+      AUTO_DIFF_PATH_DISCOVERY_ERROR +
       `${(authored.stderr || UNKNOWN_GIT_ERROR).trim()}`,
     );
   }
@@ -194,7 +216,7 @@ function createAutoDiffChangeRef(root, quest, pending) {
   // ignored reports stay outside the attempt artifact.
   const removedReports = spawnSync('git', [
     'diff', '--binary', '--full-index', '--no-ext-diff', '--diff-filter=D',
-    pin, '--', REPORT_PROJECTION_PATHSPEC,
+    'HEAD', '--', REPORT_PROJECTION_PATHSPEC,
   ], {
     cwd: root,
     encoding: 'utf8',
@@ -202,7 +224,7 @@ function createAutoDiffChangeRef(root, quest, pending) {
   });
   if (removedReports.status !== 0 || typeof removedReports.stdout !== 'string') {
     throw new Error(
-      `auto-diff: report deletion diff ${pin} failed: ` +
+      AUTO_DIFF_REPORT_DELETION_DISCOVERY_ERROR +
       `${(removedReports.stderr || UNKNOWN_GIT_ERROR).trim()}`,
     );
   }
@@ -395,11 +417,14 @@ function stepBegin(root, quest, options = {}) {
   }
 
   const before = evaluate(pick.def.metric, ctx.probeCtx);
+  assertSourceEpochIntact(root, quest, log);
+  const headCommit = resolveHeadPin(root);
   const pending = {
     frontier: pick.def.id,
     rungIndex: pick.state.rungIndex,
     beganAt: new Date().toISOString(),
-    headCommit: resolveStepBaseCommit(root, quest, log, pick.def.id),
+    headCommit,
+    sourceBaseCommit: resolveStepBaseCommit(root, quest, log, pick.def.id),
     // The persisted before-sample must carry invalidSample. Dropping it made
     // stepCommit reconstruct `metricBefore: null` with `invalidSample: false`,
     // which is exactly the state checkMetricEvidence rejects — so an honest first
@@ -480,9 +505,19 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     );
   }
 
+  const log = readLog(root, quest.id);
+  assertSourceEpochIntact(
+    root,
+    quest,
+    log,
+    changeInspection.changedPaths.filter(requiresSourceVerification),
+  );
+
+  const sourceBaseCommit = pending.sourceBaseCommit || pending.headCommit;
+
   const canonicalProblem = canonicalSourceArtifactProblem(
     root,
-    pending.headCommit,
+    sourceBaseCommit,
     changeInspection,
   );
   if (canonicalProblem) throw new Error(canonicalProblem);
@@ -491,10 +526,9 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     root, changeRef, changeInspection, {questId: quest.id});
   if (!admission.ok) throw new Error(admission.problem);
 
-  const log = readLog(root, quest.id);
   const scopeAdmission = scopeTerminalStatus(
     analyzeScopePressureCandidate(root, quest, log, changeInspection, {
-      workspaceBaseCommit: pending.headCommit || null,
+      workspaceBaseCommit: sourceBaseCommit || null,
     }),
   );
   if (scopeAdmission.terminal) {
@@ -592,7 +626,7 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     modelRef: options.modelRef || null,
     modelNotApplicable: options.modelNotApplicable || null,
     discrimination: options.discrimination || null,
-    workspaceBaseCommit: pending.headCommit || null,
+    workspaceBaseCommit: sourceBaseCommit || null,
     telemetry: stepTelemetry(pending, changeInspection),
   });
   const questOutcome = recordQuestSolvedIfDone(root, quest, ctx, {

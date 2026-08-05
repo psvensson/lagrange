@@ -2,6 +2,7 @@ import fs from 'node:fs';
 
 import {test} from '../../src/test-helpers/tap.js';
 import {
+  ADVANCED_COMMAND_GROUPS,
   COMMAND_GROUPS,
   renderCommandList,
 } from '../../scripts/list-commands.js';
@@ -19,9 +20,10 @@ const GUIDELINE_GUARDRAILS_GROUP_TITLE = 'Guideline Guardrails';
 const COMMANDS_COMMAND = 'npm run commands';
 const SOLVE_START_COMMAND = 'npm run solve:start -- --id <quest>';
 const SOLVE_CONTINUE_COMMAND = 'npm run solve:continue -- --id <quest>';
-const SOLVE_LAND_COMMAND =
-  'npm run solve:land -- --id <quest> --verifier <id> ' +
-  '--verdict <approve|reject> --fingerprint sha256:<hex> --receipt <ref>';
+const SOLVE_LAND_COMMAND = 'npm run solve:land -- --id <quest>';
+const ADVANCED_SOLVE_LAND_COMMAND =
+  'npm run solve:land -- --id <quest> [--review <id> --verifier <id> ' +
+  '--verdict <approve|reject> --receipt <ref>]';
 const QUEST_CONTEXT_COMMAND = 'npm run quest:context -- --id <quest>';
 const SOLVE_STATUS_COMMAND = 'npm run solve:status -- --id <quest>';
 const SOLVE_STEP_COMMAND = 'npm run solve:step -- --id <quest>';
@@ -131,7 +133,7 @@ const RUNTIME_GRAMMAR_CHECK_COMMAND =
 const STATE_MACHINE_PRESSURE_COMMAND = 'npm run audit:state-machine-pressure';
 
 function findCommandEntry(command) {
-  for (const group of COMMAND_GROUPS) {
+  for (const group of ADVANCED_COMMAND_GROUPS) {
     const entry = group.commands.find((candidate) =>
       candidate.command === command);
     if (entry) {
@@ -148,14 +150,30 @@ function readPackageScripts() {
   return packageJson.scripts;
 }
 
-test('command list is Quest-first and keeps deterministic guardrails', (t) => {
+test('default command help exposes only the three Quest verbs', (t) => {
   const rendered = renderCommandList();
+  const commands = COMMAND_GROUPS.flatMap((group) => group.commands)
+    .map((entry) => entry.command);
+  t.same(commands, [
+    SOLVE_START_COMMAND,
+    SOLVE_CONTINUE_COMMAND,
+    SOLVE_LAND_COMMAND,
+  ]);
+  t.match(rendered, SOLVE_START_COMMAND);
+  t.match(rendered, SOLVE_CONTINUE_COMMAND);
+  t.match(rendered, SOLVE_LAND_COMMAND);
+  t.notMatch(rendered, SOLVE_STEP_COMMAND);
+  t.end();
+});
+
+test('command list is Quest-first and keeps deterministic guardrails', (t) => {
+  const rendered = renderCommandList(ADVANCED_COMMAND_GROUPS);
 
   for (const command of [
     COMMANDS_COMMAND,
     SOLVE_START_COMMAND,
     SOLVE_CONTINUE_COMMAND,
-    SOLVE_LAND_COMMAND,
+    ADVANCED_SOLVE_LAND_COMMAND,
     QUEST_CONTEXT_COMMAND,
     SOLVE_STATUS_COMMAND,
     SOLVE_STEP_COMMAND,
@@ -188,11 +206,11 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
   }
 
   t.notMatch(rendered, RUNTIME_GRAMMAR_BROAD_COMMAND);
-  const orientation = COMMAND_GROUPS.find((group) =>
+  const orientation = ADVANCED_COMMAND_GROUPS.find((group) =>
     group.title === ORIENTATION_GROUP_TITLE);
   t.same(
     orientation.commands.slice(2, 5).map((entry) => entry.command),
-    [SOLVE_START_COMMAND, SOLVE_CONTINUE_COMMAND, SOLVE_LAND_COMMAND],
+    [SOLVE_START_COMMAND, SOLVE_CONTINUE_COMMAND, ADVANCED_SOLVE_LAND_COMMAND],
     'the primary start/continue/land workflow leads component commands',
   );
   t.equal(findCommandEntry(QUEST_CONTEXT_COMMAND).group.title, ORIENTATION_GROUP_TITLE);
@@ -224,7 +242,7 @@ test('command list is Quest-first and keeps deterministic guardrails', (t) => {
 });
 
 test('command list includes report and triage discovery commands', (t) => {
-  const rendered = renderCommandList();
+  const rendered = renderCommandList(ADVANCED_COMMAND_GROUPS);
 
   for (const command of [
     DISTRIBUTED_FAILURE_COMMAND,
@@ -243,7 +261,7 @@ test('command list includes report and triage discovery commands', (t) => {
 });
 
 test('command discovery entries are unique', (t) => {
-  const commands = COMMAND_GROUPS.flatMap((group) =>
+  const commands = ADVANCED_COMMAND_GROUPS.flatMap((group) =>
     group.commands.map((entry) => entry.command));
   const uniqueCommands = new Set(commands);
 

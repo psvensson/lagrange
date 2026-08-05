@@ -9,6 +9,7 @@ import {stepTheoryGateProblems} from './theory.js';
 import {
   inspectChangeArtifact,
   inspectCommitChangeRefAdmission,
+  requiresSourceVerification,
 } from './change-artifact.js';
 import {
   analyzeScopePressure,
@@ -35,7 +36,10 @@ import {
   REJECTION_ESCALATION_LIMIT,
 } from './constants.js';
 import {
+  activeSourceEpoch,
   resolveWorkspaceBaseCommit,
+  sourceEpochDriftProblem,
+  sourceEpochCommittedDriftPaths,
 } from './verification.js';
 import {canonicalSourceArtifactProblem} from './canonical-source-artifact.js';
 
@@ -157,7 +161,17 @@ export function runAttemptCommand(root, args) {
       `invalid changeRef: ${changeInspection.problems.join('; ')}`,
     );
   }
-  const workspaceBaseCommit = resolveWorkspaceBaseCommit(root);
+  const epoch = activeSourceEpoch(root, quest, log);
+  const epochDrift = sourceEpochCommittedDriftPaths(
+    root,
+    epoch,
+    changeInspection.changedPaths.filter(requiresSourceVerification),
+  );
+  if (epochDrift.length > 0) {
+    throw new Error(sourceEpochDriftProblem(epochDrift));
+  }
+  const workspaceBaseCommit = epoch?.baseCommit ||
+    resolveWorkspaceBaseCommit(root);
   const canonicalProblem = canonicalSourceArtifactProblem(
     root,
     workspaceBaseCommit,

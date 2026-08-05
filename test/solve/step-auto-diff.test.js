@@ -73,6 +73,114 @@ tap.test('step --commit --auto-diff', async (t) => {
     t.end();
   });
 
+  t.test('keeps later attempts on the first source epoch base', (t) => {
+    const root = gitRoot();
+    const {quest, oracle} = makeOracleQuest(root);
+    const epochBase = git(root, ['rev-parse', 'HEAD']).trim();
+    runStep(root, quest);
+    fs.writeFileSync(path.join(root, 'src', 'demo.js'), 'attempt one\n');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+    runStep(root, quest, {autoDiff: true, summary: 'first source attempt'});
+
+    fs.mkdirSync(path.join(root, 'docs'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'docs', 'unrelated.md'), 'unrelated\n');
+    git(root, ['add', 'docs/unrelated.md']);
+    git(root, ['commit', '--quiet', '-m', 'unrelated advance']);
+
+    runStep(root, quest);
+    t.equal(stepPending(root, quest.id).sourceBaseCommit, epochBase,
+      'an unrelated HEAD advance does not split the source epoch');
+    fs.writeFileSync(path.join(root, 'src', 'demo.js'), 'attempt two\n');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+    runStep(root, quest, {autoDiff: true, summary: 'second source attempt'});
+
+    const attempts = fs.readFileSync(
+      path.join(root, 'solve', 'log', `${quest.id}.ndjson`), 'utf8')
+      .trim().split('\n').map((line) => JSON.parse(line))
+      .filter((event) => event.type === 'attempt');
+    t.same(attempts.map((event) => event.workspaceBaseCommit),
+      [epochBase, epochBase]);
+    const secondInspection = inspectChangeArtifact(
+      root, quest, attempts[1].changeRef);
+    t.same(secondInspection.changedPaths, ['src/demo.js'],
+      'later capture excludes paths owned only by an unrelated HEAD advance');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('refuses an intervening commit that changes an epoch-owned path', (t) => {
+    const root = gitRoot();
+    const {quest, oracle} = makeOracleQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(path.join(root, 'src', 'demo.js'), 'attempt one\n');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+    runStep(root, quest, {autoDiff: true, summary: 'first source attempt'});
+
+    git(root, ['add', 'src/demo.js']);
+    git(root, ['commit', '--quiet', '-m', 'raw source commit']);
+    t.throws(() => runStep(root, quest),
+      /source epoch.*src\/demo\.js.*checkpoint or land/iu);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('epoch drift remains fail-closed with replaced array flattening', (t) => {
+    const root = gitRoot();
+    const {quest, oracle} = makeOracleQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(path.join(root, 'src', 'demo.js'), 'attempt one\n');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+    runStep(root, quest, {autoDiff: true, summary: 'first source attempt'});
+
+    git(root, ['add', 'src/demo.js']);
+    git(root, ['commit', '--quiet', '-m', 'raw source commit']);
+    const nativeFlatMap = Array.prototype.flatMap;
+    let problem = null;
+    try {
+      Reflect.defineProperty(Array.prototype, 'flatMap', {
+        value: () => [],
+        configurable: true,
+        writable: true,
+      });
+      try {
+        runStep(root, quest);
+      } catch (error) {
+        problem = error;
+      }
+    } finally {
+      Reflect.defineProperty(Array.prototype, 'flatMap', {
+        value: nativeFlatMap,
+        configurable: true,
+        writable: true,
+      });
+    }
+    t.match(problem?.message,
+      /source epoch.*src\/demo\.js.*checkpoint or land/iu);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('refuses intervening commits to reviewed non-source paths', (t) => {
+    const root = gitRoot();
+    fs.mkdirSync(path.join(root, 'docs'), {recursive: true});
+    fs.writeFileSync(path.join(root, 'docs', 'reviewed.md'), 'before\n');
+    git(root, ['add', 'docs/reviewed.md']);
+    git(root, ['commit', '--quiet', '-m', 'track reviewed docs']);
+    const {quest, oracle} = makeOracleQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(path.join(root, 'src', 'demo.js'), 'attempt one\n');
+    fs.writeFileSync(path.join(root, 'docs', 'reviewed.md'), 'attempt one\n');
+    fs.writeFileSync(oracle, JSON.stringify({metric: 2, target: 0}));
+    runStep(root, quest, {autoDiff: true, summary: 'review source and docs'});
+
+    git(root, ['add', 'docs/reviewed.md']);
+    git(root, ['commit', '--quiet', '-m', 'raw reviewed-doc commit']);
+    t.throws(() => runStep(root, quest),
+      /source epoch.*docs\/reviewed\.md.*checkpoint or land/iu);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
   t.test('large snapshots use verified descriptors that handoff can inspect', (t) => {
     const root = gitRoot();
     const {quest, oracle} = makeOracleQuest(root);

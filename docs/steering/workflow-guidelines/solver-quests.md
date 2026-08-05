@@ -58,8 +58,9 @@ owner, sealed — are defined in core.md's canonical "Vocabulary" glossary and i
 the "User-Facing Vocabulary" section at the end of this file. For the full command
 surface beyond the primary workflow commands shown here — including `frontier`,
 `trace`, `promote-finding`, `ingest-evidence`, and the supervised `step` /
-`step --commit` / `step --abort` phases — run `npm run commands` or invoke
-`node scripts/solve.js` with no arguments to list the subcommands.
+`step --commit` / `step --abort` phases — run `npm run commands -- --advanced` or invoke
+`node scripts/solve.js --advanced` to list the subcommands. The default command
+help shows only `start`, `continue`, and `land`.
 
 ### Primary operator surface
 
@@ -69,24 +70,42 @@ The normal Quest workflow has three verbs:
    authoring flags are present, lints it, and returns the stable structured next
    action. It is read-only for an existing Quest and never seals or begins work.
 2. `solve continue --id <id>` executes only structured `begin-step`,
-   `commit-step`, or replacement equivalents. Here `commit-step` means record
+   `commit-step`, replacement, or ready-checkpoint equivalents. Here
+   `commit-step` means record
    the measured attempt in the event log; it does not create a Git commit. An
-   attempt-record action requires exactly one explicit `--changeRef` or
-   `--auto-diff` plus `--summary`. It MUST NOT parse or execute the
+   attempt-record action requires `--summary`; absent an exceptional explicit
+   `--changeRef`, it captures the canonical working-tree delta automatically.
+   It MUST NOT parse or execute the
    human-rendered action value, and it stops on every judgment, verification,
-   checkpoint, audit-repair, or terminal action.
-3. `solve land --id <id> --verifier <id> --verdict approve|reject
-   --fingerprint <sha256>` validates the verdict against current terminal bytes
-   and constructs the receipt server-side. Rejection records the fail-closed
-   candidate verdict and never commits. Approval records the aggregate receipt,
-   applies the full audit and scope-safe handoff, commits when eligible, and
-   never pushes.
+   audit-repair, or terminal action.
+3. `solve land --id <id>` freezes the exact terminal candidate and aggregate
+   manifest and returns an immutable review id. A second `land --review <id>
+   --verifier <id> --verdict approve|reject --receipt <ref>` rechecks that
+   manifest against current bytes and constructs the receipt server-side.
+   Rejection records the fail-closed candidate verdict and never commits.
+   Approval records the aggregate receipt, applies the full audit and scope-safe
+   handoff, commits when eligible, and never pushes.
 
-The stable `next` projection carries both the legacy display `type`/`value` and
-machine `code`/`payload`. Automation MUST dispatch only on `code` and validated
+The stable `next` projection carries both the display `type`/`value` and machine
+`code`/`payload`; normal display values name only `continue` or `land`.
+Automation MUST dispatch only on `code` and validated
 payload. `new`, `lint`, `next`, `step`, `finding`, `audit`, `checkpoint`, and
 `handoff` remain component commands for diagnostics and exceptional workflows;
 their availability does not add required routine steps.
+
+The first source-changing attempt after a Solver checkpoint owns one source
+epoch base. Every later attempt retains that base even when unrelated commits
+advance `HEAD`. Before another attempt is appended, the Solver refuses if an
+intervening commit changed any reviewed path. While a worktree holds an
+active Quest lease, the pre-commit gate likewise requires a short-lived,
+index-bound authorization issued only by Solver checkpoint or land. This makes
+the one-common-base landing rule true during construction instead of discovering
+a mixed-base candidate at the end.
+
+Quest-owned logs, receipts, artifacts, and the deterministic owner inventories
+remain durable commit scope, but they are bookkeeping rather than review input.
+They are excluded from source ownership and verifier fingerprints, so a
+timestamped receipt or regenerated inventory cannot drift approved source bytes.
 
 ## Quest Anatomy
 

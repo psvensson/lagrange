@@ -5,12 +5,12 @@
     "usage": "node scripts/solve.js start --id <id> [--statement \"<sealed result>\" --class product|process --spec-ref <ref>] [--json]"
   },
   "continue": {
-    "summary": "Execute only trusted structured begin/commit action codes from the current next projection. Commit requires explicit --changeRef or explicit --auto-diff plus --summary; rendered command text and judgment/gate actions are never executed.",
-    "usage": "node scripts/solve.js continue --id <id> [--changeRef diff:<path> | --auto-diff] [--summary \"<what changed>\"] [--json]"
+    "summary": "Execute only trusted structured begin/commit action codes from the current next projection. A commit summary automatically captures the canonical working-tree delta against the active source epoch; explicit --changeRef remains an exceptional compatibility path. Rendered command text and judgment/gate actions are never executed.",
+    "usage": "node scripts/solve.js continue --id <id> [--summary \"<what changed>\"] [--changeRef diff:<path>] [--json]"
   },
   "land": {
-    "summary": "Validate an independent verifier verdict against the exact current terminal candidate, record its structured receipt, and on approval perform the existing audit-gated scope-safe commit. Rejection never commits, and requires the category-complete finding list via repeatable --finding \"<category>: <summary>\" flags; no path pushes.",
-    "usage": "node scripts/solve.js land --id <id> --verifier <stable-id> --verdict approve|reject --fingerprint sha256:<64hex> --receipt <ref> [--finding \"<category>: <summary>\" ...] [--json] (omit verifier flags when the candidate has no source changes)"
+    "summary": "For source work, freeze the exact terminal candidate and aggregate into an immutable review id; a later verdict by that id is drift-checked, recorded as a structured receipt, and on approval passed through the audit-gated scope-safe commit. Rejection never commits and requires category-complete findings; no path pushes.",
+    "usage": "node scripts/solve.js land --id <id> [--review review-<hex> --verifier <stable-id> --verdict approve|reject --receipt <ref> [--finding \"<category>: <summary>\" ...]] [--json]"
   },
   "decompose-rejection": {
     "summary": "Discharge a slice of a standing candidate rejection with fresh independently approved coverage: the current quest's exactly approved candidate, or a successor quest's candidate receipt that still matches current bytes at an acceptable base. Records an append-only rejection-decomposition event; the standing obligation shrinks to the uncovered remainder, so split scope stays dischargeable.",

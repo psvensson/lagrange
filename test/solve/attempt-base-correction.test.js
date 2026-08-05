@@ -69,7 +69,7 @@ function commitAttempt(fx, edits, metric, name, forcedBase = null) {
   runStep(fx.root, fx.quest);
   if (forcedBase) {
     const pending = stepPending(fx.root, fx.quest.id);
-    pending.headCommit = forcedBase;
+    pending.sourceBaseCommit = forcedBase;
     const pendingPath = path.join(
       fx.root,
       'solve/state',
@@ -149,7 +149,7 @@ function mixedBaseFixture(t) {
 
   runStep(fx.root, fx.quest);
   t.equal(
-    stepPending(fx.root, fx.quest.id).headCommit,
+    stepPending(fx.root, fx.quest.id).sourceBaseCommit,
     rejectedBase,
     'candidate-scoped rejection pins the replacement step to its base',
   );

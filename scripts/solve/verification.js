@@ -15,6 +15,7 @@ import {
   changeArtifactIdentity,
   changeArtifactIdentityMatches,
   inspectChangeArtifact,
+  isVerificationBookkeeping,
   requiresSourceVerification,
   parseCommitChangeRef,
 } from './change-artifact.js';
@@ -91,6 +92,40 @@ export const BASE_UNREACHABLE_CODE = 'base_unreachable';
 // Bound on the reproducibility diagnostic scan. It is a diagnostic, never a
 // gate, so it is capped rather than allowed to walk unbounded history.
 const REPRODUCIBILITY_SCAN_LIMIT = 4000;
+const SOURCE_EPOCH_PATH_SEPARATOR = ', ';
+const SOURCE_EPOCH_DRIFT_PREFIX =
+  'source epoch changed reviewed path(s) in an intervening commit: ';
+const SOURCE_EPOCH_DRIFT_ACTION =
+  '; checkpoint or land before committing reviewed source';
+const SOURCE_EPOCH_INSPECTION_PROBLEM =
+  'source epoch could not verify committed path drift; checkpoint or land ' +
+  'the active Quest before changing repository history';
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayPush = Function.call.bind(Array.prototype.push);
+const arraySort = Function.call.bind(Array.prototype.sort);
+const objectCreate = Object.create;
+const objectHasOwn = Function.call.bind(Object.prototype.hasOwnProperty);
+const stringSplit = Function.call.bind(String.prototype.split);
+
+function uniqueSortedPathGroups(pathGroups) {
+  const seen = objectCreate(null);
+  const paths = [];
+  for (let groupIndex = 0; groupIndex < pathGroups.length; groupIndex += 1) {
+    const group = pathGroups[groupIndex] || [];
+    for (let pathIndex = 0; pathIndex < group.length; pathIndex += 1) {
+      const filePath = group[pathIndex];
+      if (objectHasOwn(seen, filePath)) continue;
+      seen[filePath] = true;
+      arrayPush(paths, filePath);
+    }
+  }
+  return arraySort(paths);
+}
+
+function uniqueSortedPathUnion(left, right) {
+  return uniqueSortedPathGroups([left, right]);
+}
 
 export function baseCommitReachable(root, baseCommit) {
   if (!COMMIT_PATTERN.test(String(baseCommit || ''))) return false;
@@ -128,7 +163,8 @@ export function validVerificationFingerprint(value) {
 }
 
 export function attemptFingerprint(event) {
-  return formatVerificationFingerprint(event?.changeRefIdentity?.sha256);
+  return event?.sourceVerificationFingerprint ||
+    formatVerificationFingerprint(event?.changeRefIdentity?.sha256);
 }
 
 export function resolveWorkspaceBaseCommit(root) {
@@ -141,25 +177,50 @@ export function resolveWorkspaceBaseCommit(root) {
   return /^[0-9a-f]{40}$/u.test(sha) ? sha : null;
 }
 
+function reviewedChangePaths(inspection, questId) {
+  return arrayFilter(
+    inspection?.changedPaths || [],
+    (filePath) => !isVerificationBookkeeping(filePath, questId),
+  );
+}
+
+export function sourceVerificationFingerprint(root, quest, event) {
+  const inspection = inspectChangeArtifact(root, quest, event.changeRef);
+  const reviewPaths = reviewedChangePaths(inspection, quest.id);
+  if (parseCommitChangeRef(event.changeRef)) {
+    return formatVerificationFingerprint(event?.changeRefIdentity?.sha256);
+  }
+  const live = canonicalSourceDelta(
+    root,
+    event.workspaceBaseCommit,
+    reviewPaths,
+  );
+  return live.ok ? live.fingerprint :
+    formatVerificationFingerprint(event?.changeRefIdentity?.sha256);
+}
+
 function rawSourceChangingAttempts(root, quest, log, options = {}) {
   const startIndex = options.startIndex || 0;
   const attempts = [];
-  for (const [index, event] of log.entries()) {
+  for (let index = 0; index < log.length; index += 1) {
+    const event = log[index];
     if (index < startIndex || event.type !== EVENT_ATTEMPT) continue;
     const inspection = inspectChangeArtifact(root, quest, event.changeRef);
-    const sourcePaths = inspection.changedPaths.filter(requiresSourceVerification);
+    const reviewPaths = reviewedChangePaths(inspection, quest.id);
+    const sourcePaths = arrayFilter(reviewPaths, requiresSourceVerification);
     if (sourcePaths.length === 0) continue;
-    attempts.push({
+    arrayPush(attempts, {
       index,
       event,
       inspection,
+      reviewPaths,
       sourcePaths,
       fingerprint: attemptFingerprint(event),
       verificationVersion: event.verificationContractVersion || null,
-      contracted: [
-        LEGACY_VERIFICATION_CONTRACT_VERSION,
-        VERIFICATION_CONTRACT_VERSION,
-      ].includes(event.verificationContractVersion),
+      contracted: arrayIncludes(
+        [LEGACY_VERIFICATION_CONTRACT_VERSION, VERIFICATION_CONTRACT_VERSION],
+        event.verificationContractVersion,
+      ),
       candidateContract: event.verificationContractVersion ===
         VERIFICATION_CONTRACT_VERSION,
     });
@@ -273,8 +334,8 @@ function sourcePathSuperset(candidate, rejected) {
 }
 
 function checkpointPathSuperset(candidate, superseded) {
-  const candidatePaths = new Set(candidate.inspection.changedPaths);
-  return superseded.inspection.changedPaths.every(
+  const candidatePaths = new Set(candidate.reviewPaths);
+  return superseded.reviewPaths.every(
     (filePath) => candidatePaths.has(filePath),
   );
 }
@@ -469,7 +530,7 @@ export function aggregateSourceFingerprint(root, attempts) {
   if (commitRange) {
     const commitPaths = contracted.flatMap((attempt) =>
       attempt.candidateContract ?
-        attempt.inspection.changedPaths : attempt.sourcePaths);
+        attempt.reviewPaths : attempt.sourcePaths);
     return {
       ...canonicalCommitDelta(
         root, commitRange.base, commitRange.head, commitPaths),
@@ -483,7 +544,7 @@ export function aggregateSourceFingerprint(root, attempts) {
   // permanently unsatisfiable; anchoring later loses nothing because the union
   // keeps every recorded path in the reviewed delta.
   const paths = contracted.flatMap((attempt) => attempt.candidateContract ?
-    attempt.inspection.changedPaths : attempt.sourcePaths);
+    attempt.reviewPaths : attempt.sourcePaths);
   const anchor = contracted.find((attempt) =>
     baseCommitReachable(root, attempt.event.workspaceBaseCommit));
   if (!anchor) {
@@ -614,7 +675,7 @@ function buildLandingCandidate(root, quest, attempts) {
       firstAttemptIndex: null, lastAttemptIndex: null};
   }
   const paths = [...new Set(selected.flatMap((attempt) =>
-    attempt.inspection.changedPaths))].sort();
+    attempt.reviewPaths))].sort();
   const sourcePaths = [...new Set(selected.flatMap((attempt) =>
     attempt.sourcePaths))].sort();
   const shared = {
@@ -661,6 +722,58 @@ function buildLandingCandidate(root, quest, attempts) {
     ...shared,
     baseCommit: reachableBases[0],
   };
+}
+
+// A source epoch begins with the first uncheckpointed v2 source attempt and
+// ends only when Solver creates a checkpoint or terminal landing commit. All
+// later attempts in that epoch must retain its base, even if unrelated commits
+// advance HEAD. This makes the candidate's one-base invariant constructive
+// instead of a terminal surprise.
+export function activeSourceEpoch(root, quest, log) {
+  const attempts = sourceChangingAttempts(root, quest, log);
+  const checkpointCommit = latestCheckpointCommit(root, quest.id);
+  const selected = [];
+  for (let index = 0; index < attempts.length; index += 1) {
+    if (attemptIsAfterCheckpoint(root, attempts[index], checkpointCommit)) {
+      arrayPush(selected, attempts[index]);
+    }
+  }
+  if (selected.length === 0) return null;
+  const reviewedPaths = [];
+  for (let index = 0; index < selected.length; index += 1) {
+    arrayPush(reviewedPaths, selected[index].reviewPaths);
+  }
+  return {
+    baseCommit: selected[0].event.workspaceBaseCommit,
+    paths: uniqueSortedPathGroups(reviewedPaths),
+    firstAttemptIndex: selected[0].index,
+  };
+}
+
+export function sourceEpochCommittedDriftPaths(root, epoch, extraPaths = []) {
+  if (!epoch?.baseCommit) return [];
+  const paths = uniqueSortedPathUnion(epoch.paths || [], extraPaths);
+  if (paths.length === 0) return [];
+  const gitArguments = [
+    'diff', '--name-only', '-z', `${epoch.baseCommit}..HEAD`, '--',
+  ];
+  for (let index = 0; index < paths.length; index += 1) {
+    arrayPush(gitArguments, paths[index]);
+  }
+  const result = spawnSync('git', gitArguments,
+    {cwd: root, encoding: 'utf8'});
+  if (result.status !== 0) {
+    throw new Error(SOURCE_EPOCH_INSPECTION_PROBLEM);
+  }
+  return arrayFilter(
+    stringSplit(String(result.stdout || ''), LOCAL_STR_OWNED_014),
+    (filePath) => filePath !== '',
+  );
+}
+
+export function sourceEpochDriftProblem(driftPaths) {
+  return SOURCE_EPOCH_DRIFT_PREFIX +
+    driftPaths.join(SOURCE_EPOCH_PATH_SEPARATOR) + SOURCE_EPOCH_DRIFT_ACTION;
 }
 
 function receiptMatchesProjection(receipt, projection) {
@@ -947,7 +1060,7 @@ function isCommitAttempt(attempt) {
 function checkpointCoveredPaths(state) {
   const uncheckpointed = state.uncheckpointedApprovedAttempts;
   const coveredPaths = new Set(uncheckpointed.flatMap(
-    (attempt) => attempt.inspection.changedPaths));
+    (attempt) => attempt.reviewPaths));
   if (state.candidateApproval) {
     for (const filePath of state.candidate.paths) coveredPaths.add(filePath);
   }
@@ -962,7 +1075,7 @@ function dirtyCheckpointPathProblems(root, contracted, coveredPaths) {
   // not apply. Cleanliness for commit refs is enforced at record time (the
   // claimed paths must be clean and head an ancestor of HEAD when sealed).
   const allAttemptPaths = contracted.flatMap((attempt) =>
-    isCommitAttempt(attempt) ? [] : attempt.inspection.changedPaths);
+    isCommitAttempt(attempt) ? [] : attempt.reviewPaths);
   const dirtyPaths = dirtyPathsSinceHead(root, allAttemptPaths);
   const anchor = [...contracted].reverse()[0];
   if (dirtyPaths === null && anchor && allAttemptPaths.length > 0) {
@@ -987,7 +1100,7 @@ function dirtyCommitClaimProblems(root, contracted) {
   // handoff scope classifier catches source paths; this catches the rest).
   for (const attempt of contracted) {
     if (!isCommitAttempt(attempt)) continue;
-    const claimed = attempt.inspection.changedPaths || [];
+    const claimed = attempt.reviewPaths || [];
     if (claimed.length === 0) continue;
     const status = spawnSync('git', ['status', '--porcelain', '--', ...claimed],
       {cwd: root, encoding: 'utf8'});
@@ -1009,7 +1122,7 @@ function liveAttemptReceiptProblems(root, uncheckpointed) {
     // that same complete path set here: sourcePaths is intentionally narrower and
     // belongs only to the terminal aggregate-verification scope.
     const live = canonicalSourceDelta(
-      root, attempt.event.workspaceBaseCommit, attempt.inspection.changedPaths);
+      root, attempt.event.workspaceBaseCommit, attempt.reviewPaths);
     if (!live.ok) {
       problems.push(attemptProblem(attempt, live.problem));
     } else if (live.fingerprint !== attempt.fingerprint) {

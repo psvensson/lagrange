@@ -186,7 +186,7 @@ tap.test('park (operator-decision frontier terminal)', async (t) => {
       t.equal(audit.state.questStatus, 'exhausted');
       const next = buildNextProjection(root, quest.id);
       t.equal(next.quest.status, 'exhausted');
-      t.match(next.action.value, /handoff --id park-oracle-demo --commit/u,
+      t.match(next.action.value, /land --id park-oracle-demo/u,
         'next remains on terminal handoff instead of evidence ingestion');
       fs.rmSync(root, {recursive: true, force: true});
       t.end();

@@ -130,6 +130,7 @@ const LEASE_OVERLAP_WARNING_PREFIX =
 const LANDING_VERDICT_REJECT = 'reject';
 const COMMAND_SEPARATOR = '|';
 const USAGE_ARGUMENTS = '[--id <questId>] [...]\n';
+const PRIMARY_COMMANDS = Object.freeze(['start', 'continue', 'land']);
 
 function parseArgs(argv) {
   const args = {_: []};
@@ -343,6 +344,8 @@ function renderFacadeResult(command, result) {
     lines.push(`committed: ${result.committed ? 'yes' :
       `no (${result.commit?.skipped || 'unknown'})`}`);
   }
+  if (result.review?.id) lines.push(`review: ${result.review.id}`);
+  if (result.review?.file) lines.push(`review-manifest: ${result.review.file}`);
   if (result.lint?.status) lines.push(`lint: ${result.lint.status}`);
   if (next) {
     lines.push(`next [${next.code || 'unstructured'}]: ${next.value || '(none)'}`);
@@ -406,11 +409,14 @@ function cmdContinue(root, args) {
 }
 
 function cmdLand(root, args) {
+  const id = args.id || args._[0];
+  if (id) enforceQuestLease(root, id);
   const result = landQuestWorkflow(root, args);
   // A landed (non-rejected) quest frees its lease; a rejection keeps it —
   // the replacement work continues in this worktree. Registry trouble
   // never blocks a landing.
-  if (result.verdict && result.verdict !== LANDING_VERDICT_REJECT) {
+  if (result.committed === true &&
+    result.verdict && result.verdict !== LANDING_VERDICT_REJECT) {
     try {
       releaseSession(root, {questOnly: true});
     } catch (error) {
@@ -1323,10 +1329,12 @@ function main() {
   const [, , command, ...rest] = process.argv;
   const handler = COMMANDS[command];
   if (!handler) {
+    const advancedHelp = command === '--advanced';
+    const visibleCommands = advancedHelp ? Object.keys(COMMANDS) : PRIMARY_COMMANDS;
     process.stderr.write(
-      `usage: solve <${Object.keys(COMMANDS).join(COMMAND_SEPARATOR)}> ` +
+      `usage: solve <${visibleCommands.join(COMMAND_SEPARATOR)}> ` +
       USAGE_ARGUMENTS);
-    process.exit(command ? 1 : 0);
+    process.exit(command && !advancedHelp ? 1 : 0);
     return;
   }
   let args;

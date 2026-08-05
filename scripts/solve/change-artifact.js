@@ -63,7 +63,7 @@ export function inspectCommitChangeRefAdmission(
   const questId = options.questId ?? inspection?.quest?.id ??
     inspection?.questId ?? null;
   const paths = (inspection?.changedPaths || [])
-    .filter((filePath) => !isOwnQuestSolveBookkeeping(filePath, questId));
+    .filter((filePath) => !isVerificationBookkeeping(filePath, questId));
   if (paths.length > 0) {
     const status = spawnSync('git', ['status', '--porcelain', '--', ...paths],
       {cwd: root, encoding: 'utf8'});
@@ -139,6 +139,10 @@ const SOLVE_BOOKKEEPING_SUBTREES = Object.freeze([
   'quests',
   'report',
   'state',
+]);
+const DERIVED_SOLVER_BOOKKEEPING_PATHS = new Set([
+  'solve/changes/global-owner-debt-inventory/inventory.json',
+  'solve/changes/priority-recovery-owner-inventory/inventory.json',
 ]);
 const SCOPE_CITATION_FILE_TOKEN =
   /[A-Za-z0-9_./*-]*[A-Za-z0-9_*-]+\.(?:js|mjs|cjs|json|md|diff|sh|yaml|yml)\b/gu;
@@ -367,6 +371,15 @@ export function isOwnQuestSolveBookkeeping(filePath, questId) {
     normalized.startsWith(`${SOLVE_DATA_DIR}/${subtree}/${id}`));
 }
 
+function isDerivedSolverBookkeeping(filePath) {
+  return DERIVED_SOLVER_BOOKKEEPING_PATHS.has(normalizeSlash(filePath));
+}
+
+export function isVerificationBookkeeping(filePath, questId) {
+  return isOwnQuestSolveBookkeeping(filePath, questId) ||
+    isDerivedSolverBookkeeping(filePath);
+}
+
 export function classifyPath(filePath) {
   const normalized = normalizeSlash(filePath);
   if (WORKFLOW_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
@@ -482,7 +495,7 @@ function inspectCommitChangeArtifact(root, quest, changeRef, commitRef) {
   const scopeCategories = [
     ...new Set(
       changedPaths
-        .filter((filePath) => !isOwnQuestSolveBookkeeping(filePath, quest?.id))
+        .filter((filePath) => !isVerificationBookkeeping(filePath, quest?.id))
         .map(classifyPath)),
   ].sort();
   const questScope = classifyQuestScope(quest);
@@ -542,7 +555,7 @@ export function inspectChangeArtifact(root, quest, changeRef) {
   // not foreign workflow scope, so the scope classification must exclude it
   // exactly as the commit-range classification above does.
   const scopeChangedPaths = changedPaths
-    .filter((filePath) => !isOwnQuestSolveBookkeeping(filePath, quest?.id));
+    .filter((filePath) => !isVerificationBookkeeping(filePath, quest?.id));
   const categories = [...new Set(scopeChangedPaths.map(classifyPath))].sort();
   const questScope = classifyQuestScope(quest);
   if (changedPaths.length === 0) {

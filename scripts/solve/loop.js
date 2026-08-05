@@ -19,6 +19,8 @@ const CHANGE_IDENTITY_UNSEALABLE =
   'changeRef artifact is missing a sealable content identity';
 const INTEGRITY_SCOPE_REGRESSION = 'regression';
 const INTEGRITY_SCOPE_THEORY_GATE = 'theory-gate';
+const CLOSURE_INVARIANT_WARNING_PREFIX =
+  'WARN Solver closure invariant trigger failed: ';
 
 import {
   EVENT_QUEST_DECLARED,
@@ -77,6 +79,7 @@ import {autoCommitQuest} from './handoff.js';
 import {
   LEGACY_VERIFICATION_CONTRACT_VERSION,
   resolveWorkspaceBaseCommit,
+  sourceVerificationFingerprint,
 } from './verification.js';
 import {assertQuestReadyToSeal} from './quest-lint.js';
 import {writeReportForQuest} from './report.js';
@@ -518,6 +521,11 @@ export function finalizeAttempt(root, quest, ctx, pick, before, result) {
   event.verificationContractVersion = quest.verificationContractVersion ||
     LEGACY_VERIFICATION_CONTRACT_VERSION;
   event.workspaceBaseCommit = result.workspaceBaseCommit || null;
+  event.sourceVerificationFingerprint = sourceVerificationFingerprint(
+    root,
+    quest,
+    event,
+  );
   if (!event.invalidSample &&
     !changeArtifactIdentityIsSealed(event.changeRefIdentity)) {
     honestyViolations.push(
@@ -930,8 +938,10 @@ export function recordQuestSolvedIfDone(root, quest, ctx, options = {}) {
     // evaluation can never fail a quest closure.
     try {
       triggerOnQuestClosure(root, {scopes: questScopes(quest)});
-    } catch {
-      // invariant verification must never break the Solver loop
+    } catch (error) {
+      process.stderr.write(
+        `${CLOSURE_INVARIANT_WARNING_PREFIX}${error.message}\n`,
+      );
     }
   }
   rebuildState(root, quest);

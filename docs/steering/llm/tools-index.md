@@ -13,7 +13,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## top-level
 
 - `cli` — `node src/cli/bin/lagrange-admin.js`
-- `commands` — Print the Quest-first command index with diagnostic, triage, and validation entrypoints.
+- `commands` — Print the curated Quest-first command quickstart.
 - `frontier` — Print the Solver frontier board.
 - `gate` — Run the rolling-restart statistical gate (scripts/rolling-restart-stat-gate.sh).
 - `lint` — `eslint src/ test/ --ignore-pattern 'test/.gitkeep'`
@@ -33,24 +33,24 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `analyze:causal-model` — Print stop-condition and critical-path evidence from a scenario artifact.
 - `analyze:cl039-link-rate` — `node scripts/analyze-cl039-link-rate.js`
-- `analyze:distributed-failure` — Print consolidated distributed report and triage diagnostics.
+- `analyze:distributed-failure` — Summarize a distributed failure report or bundle; the first analyzer to reach for over raw-log grep.
 - `analyze:fix-engagement` — Report whether candidate fixes actually engaged in a run.
-- `analyze:latent-blockers` — Census the masked blocker distribution the serial gate hides: peel-order + emerging/masked candidates + grounding pack across the whole report corpus (Phase 0/L5 of the latent-blocker census).
+- `analyze:latent-blockers` — `node scripts/analyze-latent-blockers.js`
 - `analyze:leadership-flap` — `node scripts/analyze-leadership-flap.js`
 - `analyze:monotone-drain` — `node scripts/analyze-monotone-drain.js`
-- `analyze:owner-decisions` — Print the topology owner decision table/state-machine index.
-- `analyze:owner-explain` — Explain topology evidence snapshot to owner decision outcome.
-- `analyze:owner-files` — Find files most associated with an owner and optional boundary.
-- `analyze:owner-glossary` — Print canonical topology owner, boundary, reason, and semantic-state glossary.
+- `analyze:owner-decisions` — `node scripts/analyze-topology-convergence.js --decision-table`
+- `analyze:owner-explain` — `node scripts/analyze-topology-convergence.js --explain`
+- `analyze:owner-files` — Find likely owner files for an owner/boundary before broad source searches.
+- `analyze:owner-glossary` — `node scripts/analyze-topology-convergence.js --glossary`
 - `analyze:pg-baseline` — Analyze a Postgres baseline report.
 - `analyze:precondition-recurrence` — Analyze recurrence of stop-condition preconditions across runs.
-- `analyze:priority-recovery-residuals` — Extract priority-recovery residual witnesses grouped by owner and boundary.
+- `analyze:priority-recovery-residuals` — Split priority-recovery residuals from an artifact before ad-hoc extraction.
 - `analyze:redecision-storm` — `node scripts/analyze-redecision-storm.js`
 - `analyze:replace-ghost-retirements` — `node scripts/analyze-replace-ghost-retirements.js`
 - `analyze:replace-safety-blocks` — `node scripts/analyze-replace-safety-blocks.js`
 - `analyze:rolling-restart-liveness` — Classify rolling-restart failed samples with deterministic liveness progress-witness discipline.
 - `analyze:soft-warning-strikes` — `node scripts/analyze-soft-warning-strikes.js`
-- `analyze:topology-convergence` — Render topology convergence evidence from report or playback artifacts.
+- `analyze:topology-convergence` — Explain topology-convergence edges from a scenario artifact (add --explain <edge>).
 
 ## audit
 
@@ -63,26 +63,26 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:doc-ascii` — `node scripts/checks/check-doc-ascii-hyphens.js`
 - `audit:doc-audience` — `node scripts/check-doc-audience.js`
 - `audit:documentation-current` — `node scripts/check-documentation-current-state.js`
-- `audit:file-size` — Report oversized production and test files.
+- `audit:file-size` — `node scripts/check-file-size-thresholds.js`
 - `audit:file-size:strict` — `node scripts/check-file-size-thresholds.js --strict`
 - `audit:guideline:ambient-intrinsics` — `node scripts/check-guideline-ambient-intrinsics.js`
-- `audit:guideline:boundary-mode-contracts` — Check boundary-mode contracts for combinable policy options.
-- `audit:guideline:decision-boundaries` — Check semantic decision boundaries for independent branch piles.
+- `audit:guideline:boundary-mode-contracts` — `node scripts/check-guideline-boundary-mode-contracts.js`
+- `audit:guideline:decision-boundaries` — `node scripts/check-guideline-decision-boundaries.js`
 - `audit:guideline:deferred-outcomes` — `node scripts/check-guideline-deferred-outcomes.js`
 - `audit:guideline:hot-path-diagnostics` — `node scripts/check-guideline-hot-path-diagnostics.js`
-- `audit:guideline:literals` — Check write-scope files for new unowned runtime literals.
+- `audit:guideline:literals` — `node scripts/check-guideline-literals.js`
 - `audit:guideline:silent-catch` — `node scripts/check-guideline-silent-catch.js`
 - `audit:guidelines` — `npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary`
 - `audit:hold-engagement-owner` — `node scripts/check-hold-engagement-owner.js`
 - `audit:no-kiro` — `node scripts/check-no-kiro-refs.js`
 - `audit:no-legacy-naming` — `node scripts/check-no-legacy-naming.js`
 - `audit:no-ordinal-files` — `node scripts/check-no-ordinal-files.js`
-- `audit:operation-progress-authority` — Block retired operation-progress source vocabulary and new rebalancer ordinal files outside the owner-map ledger.
-- `audit:owner-boundary-segments` — Print extraction guidance for oversized owner-boundary segment files.
+- `audit:operation-progress-authority` — `node scripts/check-operation-progress-authority.js`
+- `audit:owner-boundary-segments` — `node scripts/check-file-size-thresholds.js --owner-boundary-guidance`
 - `audit:partition-class-owner` — `node scripts/check-partition-class-owner.js`
 - `audit:roadmap-authority` — `node scripts/check-roadmap-authority.js`
 - `audit:runtime-grammar` — Check runtime grammar contracts plus state-machine pressure preflight.
-- `audit:runtime-grammar:file` — Check runtime owner-contract and grammar drift.
+- `audit:runtime-grammar:file` — `node scripts/check-runtime-grammar-contracts.js`
 - `audit:service-portability-claims` — `node scripts/check-service-portability-claims.js`
 - `audit:shards` — `node scripts/generate-test-shards.js --check`
 - `audit:state-machine-pressure` — `node scripts/check-state-machine-pressure-preflight.js`
@@ -115,7 +115,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## distributed
 
-- `distributed:all` — Run distributed scenarios with verbose output.
+- `distributed:all` — Run all distributed scenarios with verbose output.
 - `distributed:rerun-failed` — Re-run only the distributed scenarios that failed in the last run.
 - `distributed:stop-containers` — Stop local Docker containers and Node processes created by the distributed harness.
 
@@ -137,7 +137,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## guard
 
-- `guard:guideline:constant-names:file` — Reject opaque generated constant names in clean explicit files.
+- `guard:guideline:constant-names:file` — `node scripts/check-guideline-constant-names.js`
 - `guard:scenario-policy:file` — `node scripts/check-scenario-policy-sql.js`
 - `guard:staged:constant-names` — `node scripts/check-staged-constant-names.js`
 
@@ -161,14 +161,14 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## model
 
 - `model:active-gate` — `node scripts/model-active-gate.js`
-- `model:alloy` — Validate architecture-owned Alloy models and their declared assertions, check commands, and run commands.
+- `model:alloy` — `node scripts/check-alloy-models.js`
 - `model:check` — `npm run model:active-gate && npm run model:tlc`
-- `model:contract-records` — Validate System Contract Records and their runtime, model, Quest, archived trace, and theory-ledger bindings.
-- `model:contracts` — Run contract records, decision tables, statecharts, Alloy, and protocol model checks as one model-contract gate.
-- `model:decision-tables` — Validate executable decision-table specs and prove every input combination has exactly one canonical outcome.
-- `model:invariants` — Validate the machine-readable invariant registry: unique ids, valid kinds, symmetric coupling, existing modelRef/contractRef.
-- `model:owner-traces` — Validate owner trace suites so valid traces satisfy invariants and forbidden traces violate declared invariants.
-- `model:statecharts` — Validate lifecycle and owner-state statecharts for reachability, terminal states, evidence, and forbidden transitions.
+- `model:contract-records` — `node scripts/check-system-contracts.js`
+- `model:contracts` — `npm run model:contract-records && npm run model:invariants && npm run model:decision-tables && npm run model:statecharts && npm run model:owner-traces && npm run model:alloy && npm run model:check`
+- `model:decision-tables` — `node scripts/check-decision-tables.js`
+- `model:invariants` — `node scripts/check-invariants.js`
+- `model:owner-traces` — `node scripts/check-owner-traces.js`
+- `model:statecharts` — `node scripts/check-statecharts.js`
 - `model:tlc` — `node scripts/model-tlc.js`
 
 ## overview
@@ -185,7 +185,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## quest
 
-- `quest:context` — Print Quest status, model guidance, source-change verifier rule, pending step, latest probe, findings, and dirty worktree.
+- `quest:context` — Print full Quest context: status, model guidance, pending step, latest probe, findings, dirty worktree.
 
 ## release
 
@@ -197,28 +197,28 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## solve
 
-- `solve:attempt` — Run a command through the Solver-owned measured-attempt path.
-- `solve:audit` — Validate Quest workflow integrity, source-change verifier evidence, and git handoff readiness.
-- `solve:checkpoint` — Explicitly commit one unchanged, fingerprint-approved source attempt; never pushes.
+- `solve:attempt` — `node scripts/solve.js attempt`
+- `solve:audit` — `node scripts/solve.js audit`
+- `solve:checkpoint` — `node scripts/solve.js checkpoint`
 - `solve:consistency` — `node scripts/solve/ledger-consistency.js`
-- `solve:continue` — Execute the Quest’s next safe begin-step or attempt-record action.
-- `solve:doctor` — Inspect Git, local adapter, execution mode, and attribution capabilities without mutation.
-- `solve:finding` — Record durable Quest memory for a frontier.
-- `solve:health` — Report Quest loop-health, theory gates, divergence signals, and the next legal action.
-- `solve:ingest-evidence` — Record fresh probe evidence with a content fingerprint before the next attempt.
-- `solve:land` — Validate an independent terminal verdict, audit, and commit eligible Quest scope; never push.
-- `solve:lint` — Validate the versioned Quest authoring contract or report the read-only legacy census.
-- `solve:new` — Create an authored Quest file under solve/quests.
-- `solve:next` — Print the typed next action for an existing Quest.
-- `solve:probe` — Measure a scenario metric directly without recording an attempt.
-- `solve:report` — Print the Quest report projection.
+- `solve:continue` — Begin the next attempt; on capture, add only --summary "<what changed>".
+- `solve:doctor` — `node scripts/solve.js doctor`
+- `solve:finding` — `node scripts/solve.js finding`
+- `solve:health` — `node scripts/solve.js health`
+- `solve:ingest-evidence` — `node scripts/solve.js ingest-evidence`
+- `solve:land` — Land a no-source Quest or issue the immutable review id for source work.
+- `solve:lint` — `node scripts/solve.js lint`
+- `solve:new` — `node scripts/solve.js new`
+- `solve:next` — `node scripts/solve.js next`
+- `solve:probe` — `node scripts/solve.js probe`
+- `solve:report` — `node scripts/solve.js report`
 - `solve:run` — `node scripts/solve.js run`
-- `solve:start` — Preflight and start or resume a Quest without beginning an attempt.
-- `solve:status` — Print the Solver projection for a Quest.
-- `solve:step` — Begin a supervised attempt and pin the before metric.
-- `solve:step-pending` — Inspect the pinned supervised-step baseline without changing Quest memory.
-- `solve:theory` — List Quest-native system theories, frontier theories, selections, and outcomes.
-- `solve:upgrade` — Establish a strict-audit baseline for an existing pre-hardening Quest.
+- `solve:start` — Create or resume a Quest and show its next safe action.
+- `solve:status` — `node scripts/solve.js status`
+- `solve:step` — `node scripts/solve.js step`
+- `solve:step-pending` — `node scripts/solve.js step-pending`
+- `solve:theory` — `node scripts/solve.js theory`
+- `solve:upgrade` — `node scripts/solve.js upgrade`
 
 ## spike
 
@@ -233,11 +233,11 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `steering:check` — `npm run steering:llm:pack && git diff --quiet -- docs/steering/llm && node scripts/check-steering-freshness.js`
 - `steering:freshness` — `node scripts/check-steering-freshness.js`
-- `steering:llm:pack` — Regenerate compact steering packs for prompt loading.
+- `steering:llm:pack` — `node scripts/generate-steering-llm-pack.js && node scripts/lookup-rule.js --write-index && node scripts/gen-tools-index.js && node scripts/gen-solve-commands-index.js`
 
 ## summarize
 
-- `summarize:harness` — List latest harness reports by scenario and status.
+- `summarize:harness` — Summarize distributed harness runs across reports.
 
 ## test
 
@@ -266,8 +266,8 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:documentation-onboarding` — `node scripts/run-documentation-audience-safe-onboarding-scenario.js documentation-audience-safe-onboarding`
 - `test:duplication` — `node scripts/check-duplication.js`
 - `test:duplication:strict` — `node scripts/check-duplication.js --strict`
-- `test:fast` — Run non-bootstrap, non-integration TAP tests.
-- `test:file` — Run one focused TAP test file via the fail-closed runner (npm test ignores file arguments and runs the full sharded suite).
+- `test:fast` — `find test -type f -name '*.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' ! -path 'test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js' -print0 | sort -z | xargs -0 -n 100 node scripts/run-test-files.js --jobs=4`
+- `test:file` — `node scripts/run-test-files.js`
 - `test:gate` — `node scripts/run-project-hardening-acceptance.js`
 - `test:gate:postpush` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/project-hardening-proof-postpush-manifest.json`
 - `test:integration:1` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-1.txt)`
@@ -276,7 +276,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:llm-steering-usability` — `node scripts/run-llm-steering-usability-scenarios.js`
 - `test:metadata-gateway:audit` — `node scripts/check-unified-system-metadata-gateway.js`
 - `test:metrics` — `npm run test:complexity:cognitive && npm run test:cycles && npm run test:duplication`
-- `test:metrics:scoped` — Run scoped cyclomatic and cognitive complexity ratchets.
+- `test:metrics:scoped` — `node scripts/check-scoped-ratchets.js`
 - `test:metrics:scoped:strict` — `node scripts/check-scoped-ratchets.js --strict`
 - `test:mutation` — `stryker run`
 - `test:owner-debt:prepare` — `node scripts/generate-global-owner-debt-inventory.js --refresh --output test-output/analysis/global-owner-debt-inventory.json`
@@ -289,13 +289,13 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:safety-pregate` — `node scripts/run-test-files.js $(cat test/shards/safety-pregate.txt)`
 - `test:sharded:all` — `npm run test:fast && bash scripts/run-sharded-lanes-concurrent.sh`
 - `test:sharded:serial` — `npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2`
-- `test:smoke` — Run the versioned short developer proof through the fail-closed acceptance executor.
-- `test:static` — Run unused, dependency, complexity, metadata, and runtime grammar checks.
+- `test:smoke` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/developer-smoke-proof-manifest.json --receipt-dir test-output/acceptance/developer-smoke`
+- `test:static` — `npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint`
 - `test:static:postpush` — `node scripts/checks/run-static-audits.js`
 - `test:task27:ci` — `npm run test:task27:invariant-suite && npm run test:task27:distributed-stall-gate`
 - `test:task27:distributed-stall-gate` — Run the Task 27 distributed stall gate.
 - `test:task27:invariant-suite` — `bash scripts/run-task27-deterministic-invariant-suite.sh`
-- `test:topology-failure-gates` — Run topology failure gates against operation, publication, and coverage invariants.
+- `test:topology-failure-gates` — Run the topology failure gates.
 - `test:unit` — `find test -type f -name '*.test.js' ! -name '*.integration.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -n 100 node scripts/run-test-files.js`
 - `test:unused` — `knip --exclude exports,duplicates`
 - `test:unused:exports` — `knip --include exports`
@@ -305,8 +305,8 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## test-output
 
-- `test-output:prune` — Delete old test-harness artifacts; keeps pinned names, recent items, and a few per category.
-- `test-output:prune:dry` — Preview which old test-harness artifacts would be pruned, without deleting.
+- `test-output:prune` — Delete old test-harness artifacts (reports, playbacks, run dirs); keeps pinned names, today's items, and the most recent few per category.
+- `test-output:prune:dry` — Preview what test-output:prune would delete without removing anything.
 
 ## trends
 
@@ -314,4 +314,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-209 scripts indexed; 75 have a curated description, 134 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+209 scripts indexed; 33 have a curated description, 176 fall back to their raw command. Improve coverage in the two sources named in the header comment.
