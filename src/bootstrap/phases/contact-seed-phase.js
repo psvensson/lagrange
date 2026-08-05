@@ -235,6 +235,12 @@ class ContactSeedPhase {
       [BOOTSTRAP_API_REQUEST_FIELD.CLIENT_ATTEMPT_DEADLINE_MS]:
         attempt.startedAtMs + attempt.requestTimeoutMs,
     };
+    const expectedClusterId =
+      this.delegates.getExpectedClusterId?.();
+    if (typeof expectedClusterId === 'string' &&
+        expectedClusterId.length > 0) {
+      bootstrapRequest.expectedClusterId = expectedClusterId;
+    }
     if (typeof context.startupMode === 'string' &&
         context.startupMode.length > 0) {
       bootstrapRequest.startupMode = context.startupMode;

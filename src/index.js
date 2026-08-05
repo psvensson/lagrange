@@ -14,6 +14,7 @@ import {BootstrapAPI} from './bootstrap/bootstrap-api.js';
 import {createControlPlaneWriteHealthProvider} from
   './bootstrap/control-plane-write-health-owner.js';
 import {
+  readPersistedLocalClusterId,
   readPersistedLocalNodeId,
 } from './bootstrap/rejoin-hints.js';
 import {
@@ -96,11 +97,15 @@ async function startJoinNode(options) {
     advertisedNodeWsAddress,
   } = resolveRuntimeAddresses(config);
 
+  const persistedClusterId = await readPersistedLocalClusterId(
+    dataDirectoryManager.getDataDir(),
+  );
   await persistJoinSeedRejoinHints({
     dataDir: dataDirectoryManager.getDataDir(),
     nodeId,
     nodeAddress: joiningNodeAddress,
     peerAddresses: seedNodeAddresses,
+    clusterId: persistedClusterId,
     logger: mainLogger,
   });
   const clusterIncarnationFence = await resolveLocalClusterIncarnationFence({
@@ -158,6 +163,7 @@ async function startJoinNode(options) {
     readinessState: joinReadinessState,
     startupMode,
     membershipOwnerOutcome: options.membershipOwnerOutcome,
+    expectedClusterId: persistedClusterId,
     clusterIncarnationFence,
     membershipLifecycleController,
     previousLifecycleStateMachine:
@@ -248,6 +254,24 @@ async function startJoinNode(options) {
   mainLogger.info(ENTRYPOINT_LOG_MSG.JOINED_CLUSTER, {
     messageGroupCount: joinResult.messageGroupServices.size,
     duration: joinResult.duration,
+  });
+
+  // Stamp the node-local hints with the durable cluster identity the seed
+  // stamped this joiner with (pre-identity joiners learn it here; identity-
+  // carrying joiners re-write the same value). From this boot onward the
+  // hints file gates every restart decision and bootstrap request.
+  const joinedClusterId =
+    typeof nodeJoiningService.bootstrapResponse?.clusterId === 'string' &&
+    nodeJoiningService.bootstrapResponse.clusterId.length > 0 ?
+      nodeJoiningService.bootstrapResponse.clusterId :
+      persistedClusterId;
+  await persistJoinSeedRejoinHints({
+    dataDir: dataDirectoryManager.getDataDir(),
+    nodeId,
+    nodeAddress: joiningNodeAddress,
+    peerAddresses: seedNodeAddresses,
+    clusterId: joinedClusterId,
+    logger: mainLogger,
   });
 
   const joinCacheHandles = resolveSystemCacheHandles(

@@ -1,6 +1,7 @@
 import {
   HTTP_STATUS,
   NUM,
+  TABLES,
 } from '../constants/index.js';
 import {
   BOOTSTRAP_PIPELINE_ERROR_CODE,
@@ -10,6 +11,9 @@ import {
   BOOTSTRAP_API_LOG_MSG,
   BOOTSTRAP_API_SUBSYSTEM,
 } from './bootstrap-api-constants.js';
+import {
+  CLUSTER_ID_CONFIG_KEY,
+} from './cluster-identity-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../control-plane/control-plane-readiness-constants.js';
@@ -123,6 +127,25 @@ const bootstrapApiControlPlaneMethods = {
       this.runtimeOwner?.systemTableCache ||
       this.bootstrapStartupAdapter?.getSystemTableCache?.() ||
       this.bootstrapStartupAdapter?.systemTableCache ||
+      null;
+  },
+
+  /**
+   * Read the durable cluster identity (replicated CONFIG-row singleton)
+   * through the live system-table cache. Absent row — pre-identity cluster
+   * or pre-hydration cache — reads as null, which the bootstrap response and
+   * the join-gate compatibility policy treat as UNKNOWN, never as a match.
+   * @return {string|null}
+   * @private
+   */
+  getClusterId() {
+    const cache = this.getSystemTableCache();
+    const row = typeof cache?.get === 'function' ?
+      cache.get(TABLES.CONFIG, CLUSTER_ID_CONFIG_KEY) :
+      null;
+    const clusterId = row?.config_value;
+    return typeof clusterId === 'string' && clusterId.length > 0 ?
+      clusterId :
       null;
   },
 

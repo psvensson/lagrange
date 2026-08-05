@@ -222,6 +222,9 @@ const bootstrapRequestOwnerHandlerMethods = {
       {
         startupMode: requestStartupMode,
         membershipOwnerOutcome,
+        expectedClusterId: typeof requestBody.expectedClusterId === 'string' ?
+          requestBody.expectedClusterId :
+          null,
       },
     );
     if (conflictError) {
@@ -531,6 +534,7 @@ const bootstrapRequestOwnerHandlerMethods = {
       const response = {
         success: true,
         seedNodeId: this.getSeedNodeId(),
+        clusterId: this.getClusterId?.() || null,
         seedNodeAddress: this.getSeedNodeAddress(),
         seedNodeWsAddress,
         messageGroupAssignment: assignment,

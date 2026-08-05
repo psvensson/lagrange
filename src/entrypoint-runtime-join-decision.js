@@ -3,6 +3,7 @@ import {
   RejoinHintsPersistenceService,
   persistBootstrapRejoinHints,
   probeRecoverablePeerAddress,
+  readPersistedLocalClusterId,
   resolveAutoRejoinStartupDecision,
 } from './bootstrap/rejoin-hints.js';
 import {
@@ -169,6 +170,7 @@ async function persistJoinSeedRejoinHints(options) {
       nodeAddress: options.nodeAddress,
       nodeRole: ENTRYPOINT_RUNTIME_VALUE.JOINER,
       peerAddresses: options.peerAddresses,
+      clusterId: options.clusterId || null,
       clusterNodeCount: ENTRYPOINT_DEFAULT.JOIN_HINT_CLUSTER_NODE_COUNT,
     });
   } catch (error) {
@@ -369,11 +371,15 @@ async function resolveStartupJoinDecision(options) {
       probeAutoRejoinPeerAddress;
   const nodeId = options.config.get(CONFIG_KEY.NODE_ID);
   const {nodeHttpAddress} = resolveRuntimeAddresses(options.config);
+  const expectedClusterId = await readPersistedLocalClusterId(
+    options.dataDirectoryManager.getDataDir(),
+  );
   const autoRejoinDecision = await resolveAutoRejoinStartupDecision({
     dataDir: options.dataDirectoryManager.getDataDir(),
     nodeId,
     nodeAddress: nodeHttpAddress,
     probePeerAddress,
+    expectedClusterId,
     forceNewCluster:
       normalizeForceNewClusterEnv(options.env[FORCE_NEW_CLUSTER_ENV]),
   });

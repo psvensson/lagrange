@@ -28,6 +28,10 @@ import {
   BOOTSTRAP_API_PROBE_REASON,
   BOOTSTRAP_API_SUBSYSTEM,
 } from '../bootstrap-api-constants.js';
+import {
+  CLUSTER_ID_MATCH_STATE,
+  classifyClusterIdMatch,
+} from '../cluster-identity-constants.js';
 import {getRemainingBudgetMs} from '../../control-plane/timeout-budget.js';
 
 const BootstrapStrategy = BOOTSTRAP_ASSIGNMENT_STRATEGY;
@@ -56,6 +60,10 @@ class BootstrapJoinAdmissionOwner {
 
   getSeedNodeId() {
     return this.delegates.getSeedNodeId?.() || null;
+  }
+
+  getClusterId() {
+    return this.delegates.getClusterId?.() || null;
   }
 
   getSeedNodeAddress() {
@@ -201,6 +209,24 @@ class BootstrapJoinAdmissionOwner {
 
     if (nodeAddress === this.getSeedNodeAddress()) {
       return BOOTSTRAP_API_ERROR.SEED_NODE_ADDRESS_CONFLICT;
+    }
+
+    // Cluster-identity fence: a request that positively names a DIFFERENT
+    // cluster is refused with the typed 409 terminal rejection. A request
+    // without expectedClusterId (pre-identity joiner) is accepted by the
+    // explicit compatibility policy — the bootstrap response stamps it with
+    // this cluster's id — and never silently "matches".
+    const clusterIdMatch = classifyClusterIdMatch(
+      this.getClusterId(),
+      options.expectedClusterId,
+    );
+    if (clusterIdMatch === CLUSTER_ID_MATCH_STATE.MISMATCH) {
+      this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.CONFLICT_DETECTED, {
+        nodeId,
+        nodeAddress,
+        error: BOOTSTRAP_API_ERROR.CLUSTER_ID_MISMATCH,
+      });
+      return BOOTSTRAP_API_ERROR.CLUSTER_ID_MISMATCH;
     }
 
     const existingNode = systemTableCache.get(TABLES.NODES, nodeId);
