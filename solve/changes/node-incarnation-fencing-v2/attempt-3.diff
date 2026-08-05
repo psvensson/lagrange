@@ -1,0 +1,13 @@
+diff --git a/solve/evidence/node-incarnation-fencing-v2.receipt.json b/solve/evidence/node-incarnation-fencing-v2.receipt.json
+index d1d4965a99fb79d46b71514f689ef8287f7efcf4..5d2e189848f097133f98a327c407659941d176aa 100644
+--- a/solve/evidence/node-incarnation-fencing-v2.receipt.json
++++ b/solve/evidence/node-incarnation-fencing-v2.receipt.json
+@@ -2,7 +2,7 @@
+   "schema": "test-receipt/1",
+   "quest": "node-incarnation-fencing-v2",
+   "status": "pass",
+-  "generatedAt": "2026-08-05T10:14:21.822Z",
++  "generatedAt": "2026-08-05T10:23:30.591Z",
+   "receipts": [
+     {
+       "id": "incarnation-persisted-in-rejoin-hints",
