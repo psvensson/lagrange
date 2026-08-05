@@ -120,6 +120,9 @@ class HeartbeatServicePublicationMethods {
         JSON.stringify(capabilities) :
         existing?.capabilities || STRING.EMPTY_JSON_ARRAY,
       last_heartbeat: now,
+      boot_incarnation: this.bootIncarnation > 0 ?
+        this.bootIncarnation :
+        (existing?.boot_incarnation || 0),
       ready_lease_expires_at: withholdReadyPromotion ?
         existing?.ready_lease_expires_at ?? null :
         now + this.readyLeaseMs,

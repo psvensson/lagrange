@@ -170,6 +170,7 @@ const PARTITION_SERVICE_DB = Object.freeze({
 });
 
 const PARTITION_SERVICE_COLUMN = Object.freeze({
+  BOOT_INCARNATION: 'boot_incarnation',
   CONNECTION_STATE: 'connection_state',
   LEGACY_WS_CONNECTION_STATE: 'ws_connection_state',
   CAPABILITIES: 'capabilities',
@@ -190,6 +191,8 @@ const PARTITION_SERVICE_COLUMN = Object.freeze({
 });
 
 const PARTITION_SERVICE_COLUMN_SQL = Object.freeze({
+  ADD_BOOT_INCARNATION:
+    'ADD COLUMN boot_incarnation INTEGER NOT NULL DEFAULT 0',
   ADD_CONNECTION_STATE:
     'ADD COLUMN connection_state TEXT DEFAULT \'disconnected\'',
   ADD_CAPABILITIES:
@@ -313,6 +316,7 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   MIGRATED_CONNECTION_STATE_FROM_LEGACY_WS:
     'Migrated connection_state values from legacy ws_connection_state column',
   ADDED_CAPABILITIES: 'Added capabilities column to nodes table',
+  ADDED_BOOT_INCARNATION: 'Added boot_incarnation column to nodes table',
   ADDED_READY_LEASE: 'Added ready_lease_expires_at column to nodes table',
   ADDED_SQL_TRANSACTIONS_TRANSACTION_EPOCH:
     'Added transaction_epoch column to sql_transactions table',

@@ -135,6 +135,10 @@ const NODES_SCHEMA = {
     },
     {name: 'capabilities', type: COLUMN_TYPE.TEXT, defaultValue: '\'[]\''},
     {name: 'last_heartbeat', type: COLUMN_TYPE.INTEGER, notNull: true},
+    // Locally minted monotonic boot incarnation of the row's writer
+    // (node-incarnation-fencing): receivers refuse a stale-incarnation
+    // writer before the heartbeat watermark comparison. 0 = pre-incarnation.
+    {name: 'boot_incarnation', type: COLUMN_TYPE.INTEGER, notNull: true, defaultValue: 0},
     {name: 'ready_lease_expires_at', type: COLUMN_TYPE.INTEGER},
     {name: 'storage_budget_bytes', type: COLUMN_TYPE.INTEGER},
     {name: 'storage_budget_source', type: COLUMN_TYPE.TEXT},

@@ -1,0 +1,32 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "node-incarnation-fencing-v2",
+  "status": "pass",
+  "generatedAt": "2026-08-05T09:35:42.764Z",
+  "receipts": [
+    {
+      "id": "incarnation-persisted-in-rejoin-hints",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/node-incarnation.test.js",
+      "detail": "both hints builders carry the boot incarnation and the persisted value is readable pre-hydration on restart"
+    },
+    {
+      "id": "incarnation-incremented-per-boot",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/node-incarnation.test.js",
+      "detail": "mintBootIncarnation returns previous+1 once per boot while the 1s persistence cadence rewrites the same value"
+    },
+    {
+      "id": "incarnation-carried-in-node-state-updates",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/node-incarnation.test.js",
+      "detail": "the publication owner stamps the boot incarnation onto every node state update message via ControlPlaneField.BOOT_INCARNATION"
+    },
+    {
+      "id": "incarnation-propagated-through-publication-path",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/node-incarnation.test.js",
+      "detail": "the incarnation flows through the durable nodes row (boot_incarnation column) and the heartbeat publication path"
+    }
+  ]
+}

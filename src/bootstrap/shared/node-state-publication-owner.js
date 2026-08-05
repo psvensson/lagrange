@@ -59,6 +59,14 @@ class NodeStatePublicationOwner {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
+    // This boot's locally minted incarnation (rejoin-hints counter): every
+    // state update the publisher emits carries it, so receivers can fence a
+    // stale-incarnation writer (a zombie from a previous boot) before its
+    // heartbeat ever reaches the watermark comparison.
+    this.bootIncarnation = Number.isSafeInteger(options.bootIncarnation) &&
+      options.bootIncarnation > 0 ?
+      options.bootIncarnation :
+      0;
     this.config = options.config || Object.freeze({});
     this.delegates = options.delegates || Object.freeze({});
     this.controlPlaneTargetAddress = null;
@@ -347,6 +355,9 @@ class NodeStatePublicationOwner {
       [ControlPlaneField.NODE_STATE_PUBLICATION_MODE]: publicationMode,
     };
 
+    if (this.bootIncarnation > 0) {
+      message[ControlPlaneField.BOOT_INCARNATION] = this.bootIncarnation;
+    }
     if (options.heartbeatOnly === true) {
       message[ControlPlaneField.HEARTBEAT_ONLY] = true;
     }

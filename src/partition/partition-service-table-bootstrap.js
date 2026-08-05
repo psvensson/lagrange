@@ -50,6 +50,19 @@ function ensureNodesTableColumns(service) {
   const hasReadyLease = columns.some(
     (col) => col.name === PARTITION_SERVICE_COLUMN.READY_LEASE_EXPIRES_AT,
   );
+  const hasBootIncarnation = columns.some(
+    (col) => col.name === PARTITION_SERVICE_COLUMN.BOOT_INCARNATION,
+  );
+  if (!hasBootIncarnation) {
+    service.db.exec(
+      `ALTER TABLE ${service.tableName} ` +
+        PARTITION_SERVICE_COLUMN_SQL.ADD_BOOT_INCARNATION,
+    );
+    service.logger.info(PARTITION_SERVICE_LOG_MSG.ADDED_BOOT_INCARNATION, {
+      tableName: service.tableName,
+      partitionId: service.partitionId,
+    });
+  }
   let connectionStateAdded = false;
   if (!hasConnectionState) {
     service.db.exec(

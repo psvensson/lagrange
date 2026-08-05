@@ -4,6 +4,7 @@ import {
   defineNodeJoiningRuntimeDependencyProperties,
   assignNodeJoiningDelegateBundleMethods,
   installNodeJoiningStatePublicationOwner,
+  normalizeBootIncarnationOption,
   normalizeSeedNodeAddresses,
 } from './node-joining-delegate-bundles.js';
 
@@ -79,14 +80,17 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       normalizeSeedNodeAddresses(options.seedNodeAddresses);
     this.seedNodeWsAddress = options.seedNodeWsAddress || null;
     this.seedNodeId = null; // Allow explicit 0 to mean "do not start a WebSocket server" (useful in tests/sandboxes).
-    // Durable cluster identity this node already belongs to (persisted in its
-    // rejoin hints by a prior join). Sent as expectedClusterId with every
-    // bootstrap request; null on a fresh node, which the seed-side
-    // compatibility policy treats as UNKNOWN (stamped via the response).
+    // Durable cluster identity this node already belongs to (persisted in
+    // its rejoin hints by a prior join). Sent as expectedClusterId with
+    // every bootstrap request; null on a fresh node (seed treats as UNKNOWN).
     this.expectedClusterId = typeof options.expectedClusterId === 'string' &&
       options.expectedClusterId.length > 0 ?
       options.expectedClusterId :
       null;
+    // This boot's locally minted incarnation (rejoin-hints counter): every
+    // node state update the publisher emits carries it so receivers fence
+    // stale-incarnation (zombie) writers. Normalized in delegate-bundles.
+    this.bootIncarnation = normalizeBootIncarnationOption(options);
     this.wsPort = options.wsPort ?? null;
     this.dataDir = options.dataDir || STORAGE_DEFAULT.DATA_DIR;
     this.config = {...JOINING_DEFAULT, ...options.config};

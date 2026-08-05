@@ -40,6 +40,13 @@ class HeartbeatService extends EventEmitter {
     this.nodeId = options.nodeId || null;
     this.nodeAddress = options.nodeAddress || null;
     this.advertisedNodeWsAddress = options.advertisedNodeWsAddress || null;
+    // This boot's locally minted incarnation: the durable nodes row carries
+    // it so receivers fence stale-incarnation (zombie) writers before the
+    // heartbeat watermark comparison.
+    this.bootIncarnation = Number.isSafeInteger(options.bootIncarnation) &&
+      options.bootIncarnation > 0 ?
+      options.bootIncarnation :
+      0;
     this.cdcIntegrationService = options.cdcIntegrationService || null;
     this.systemTableCache = options.systemTableCache || null;
     this.quietMode = options.quietMode || null;

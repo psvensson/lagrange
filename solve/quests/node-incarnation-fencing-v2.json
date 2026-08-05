@@ -1,0 +1,97 @@
+{
+  "id": "node-incarnation-fencing-v2",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Node state updates carry a locally persisted monotonic boot incarnation through the schema, control-plane field, and publication path, with receiver-side fencing at the watermark check, missing-row upsert, and WebSocket identification slot, so stale-incarnation writers are refused with a typed terminal STALE_NODE_INCARNATION outcome. doneWhen: the test-receipt probe reads solve/evidence/node-incarnation-fencing-v2.receipt.json with outstanding 0 \u2014 mint/persist/propagate and all receiver-side fence receipts passing (deterministic red-on-revert evidence harness).",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "planDoc": "solve/epics/cluster-identity-and-join-fencing.md",
+    "specRef": "join-path-audit-finding-1-zombie-processes",
+    "parentQuest": "node-incarnation-fencing",
+    "replaces": "node-incarnation-fencing"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/node-incarnation-fencing-v2.receipt.json",
+      "requiredReceipts": [
+        "incarnation-persisted-in-rejoin-hints",
+        "incarnation-incremented-per-boot",
+        "incarnation-carried-in-node-state-updates",
+        "incarnation-propagated-through-publication-path",
+        "watermark-fence-rejects-stale-incarnation",
+        "missing-row-upsert-fences-stale-incarnation",
+        "websocket-identification-slot-fences-stale-incarnation",
+        "stale-incarnation-typed-terminal-refusal",
+        "heartbeat-clamp-after-incarnation-check"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "incarnation-mint-and-propagate",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/node-incarnation-fencing-v2.receipt.json",
+          "requiredReceipts": [
+            "incarnation-persisted-in-rejoin-hints",
+            "incarnation-incremented-per-boot",
+            "incarnation-carried-in-node-state-updates",
+            "incarnation-propagated-through-publication-path"
+          ]
+        }
+      }
+    },
+    {
+      "id": "incarnation-fence-receivers",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/node-incarnation-fencing-v2.receipt.json",
+          "requiredReceipts": [
+            "watermark-fence-rejects-stale-incarnation",
+            "missing-row-upsert-fences-stale-incarnation",
+            "websocket-identification-slot-fences-stale-incarnation",
+            "stale-incarnation-typed-terminal-refusal",
+            "heartbeat-clamp-after-incarnation-check"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "locally-persisted-counter",
+      "statement": "The incarnation must be minted from a locally persisted monotonic boot counter in the rejoin hints, not only from the bootstrap response, because idempotent same-address rejoin bypasses fresh admission."
+    },
+    {
+      "id": "receiver-side-fence",
+      "statement": "The fence must be enforced at the receiver: the update predicate and watermark comparison in replica-dispatch-state-publication.js, the tryBootstrapMissingNodeStateUpdateRow upsert path, and the WebSocket transport handleIdentification slot; the existing boot-time self-applied clusterIncarnationFence remains but is not the mechanism under test."
+    },
+    {
+      "id": "typed-terminal-refusal",
+      "statement": "A stale incarnation must produce a typed STALE_NODE_INCARNATION refusal classified as terminal, because the publisher retries generic errors forever."
+    },
+    {
+      "id": "heartbeat-clamp",
+      "statement": "The Math.max(requestedHeartbeatAt, now) clamp at replica-dispatch-state-publication.js must not lift a stale-incarnation writer's heartbeat to receiver-time; the incarnation comparison happens before the watermark comparison."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the corresponding incarnation check is reverted while the rest of the change remains."
+    },
+    {
+      "id": "deterministic-evidence",
+      "statement": "The oracle evidence files must be written by a deterministic evidence harness that re-runs the recorded proof commands (focused test files, red-on-revert checks) at quest terminal; no hand-authored metric values."
+    }
+  ]
+}

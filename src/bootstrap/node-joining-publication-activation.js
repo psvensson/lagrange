@@ -403,6 +403,7 @@ class NodeJoiningPublicationActivation extends NodeJoiningCdcSubscriptionAndBack
       dataDir: this.dataDir,
       nodeId: this.nodeId,
       nodeAddress: this.nodeAddress,
+      bootIncarnation: this.bootIncarnation,
       advertisedNodeWsAddress: this.advertisedNodeWsAddress,
       messageRouter: this.messageRouter,
       cdcIntegrationService,
