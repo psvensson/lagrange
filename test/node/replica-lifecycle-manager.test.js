@@ -531,6 +531,88 @@ test('ReplicaLifecycleManager', async (t) => {
       manager.shutdown();
     });
 
+  t.test('node recovery - quarantines on-disk replica DB with no services row',
+    async (t) => {
+      const mockCache = createMockCache({
+        services: [
+          {
+            service_id: 'nodes-p1-r1',
+            partition_id: 'nodes-p1',
+            replica_id: 'nodes-p1-r1',
+            node_id: 'test-node',
+            service_type: 'partition',
+            status: ReplicaStatus.ACTIVE,
+          },
+        ],
+      });
+      // On disk: one assigned replica file and one orphaned file (its
+      // services row was moved away / deleted before the file was unlinked).
+      const assignedDir = path.join(tempDir, 'partitions', 'nodes-p1');
+      const orphanedDir = path.join(tempDir, 'partitions', 'nodes-p2');
+      fs.mkdirSync(assignedDir, {recursive: true});
+      fs.mkdirSync(orphanedDir, {recursive: true});
+      const assignedDb = path.join(assignedDir, 'nodes-p1-r1.db');
+      const orphanedDb = path.join(orphanedDir, 'nodes-p2-r7.db');
+      fs.writeFileSync(assignedDb, 'assigned');
+      fs.writeFileSync(orphanedDb, 'orphaned');
+
+      const manager = new ReplicaLifecycleManager({
+        nodeId: 'test-node',
+        systemTableCache: mockCache,
+        cdcIntegrationService: createMockCDCService(),
+        createPartitionService: createMockPartitionServiceFactory(),
+        dataDir: tempDir,
+      });
+      manager.initialize();
+
+      let recoveryComplete = null;
+      manager.on('recoveryComplete', (payload) => {
+        recoveryComplete = payload;
+      });
+
+      await manager.handleNodeRecovery();
+
+      t.ok(fs.existsSync(assignedDb),
+        'assigned replica file must be untouched');
+      t.notOk(fs.existsSync(orphanedDb),
+        'orphaned replica file must no longer sit at its readable path');
+      t.ok(fs.existsSync(`${orphanedDb}.quarantined`),
+        'orphaned replica file must be quarantined, not deleted');
+      t.equal(recoveryComplete?.quarantinedOrphanedFiles, 1,
+        'recovery payload reports the quarantined orphan');
+      t.equal(recoveryComplete?.reconciliationSweepCompleted, true,
+        'recovery payload reports the sweep completed');
+
+      manager.shutdown();
+    });
+
+  t.test('node recovery - sweep leaves files when partitions dir is missing',
+    async (t) => {
+      const manager = new ReplicaLifecycleManager({
+        nodeId: 'test-node',
+        systemTableCache: createMockCache(),
+        cdcIntegrationService: createMockCDCService(),
+        createPartitionService: createMockPartitionServiceFactory(),
+        dataDir: tempDir,
+      });
+      manager.initialize();
+
+      let recoveryComplete = null;
+      manager.on('recoveryComplete', (payload) => {
+        recoveryComplete = payload;
+      });
+
+      await manager.handleNodeRecovery();
+
+      t.equal(recoveryComplete?.quarantinedOrphanedFiles, 0,
+        'no partitions dir means no orphaned files to quarantine');
+      t.equal(recoveryComplete?.reconciliationSweepCompleted, false,
+        'an unreadable partitions dir fails closed: the sweep does not ' +
+        'report completion over ambiguous evidence');
+
+      manager.shutdown();
+    });
+
   t.test('getStats returns correct statistics', async (t) => {
     const mockCDC = createMockCDCService();
 

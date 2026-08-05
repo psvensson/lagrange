@@ -92,6 +92,14 @@ const REPLICA_LIFECYCLE_LOG_MSG = Object.freeze({
   RECOVERY_MARKED_FAILED: 'Marked orphaned replica as failed',
   RECOVERY_COMPLETED_REMOVAL: 'Completed removal of stopping replica',
   RECOVERY_FAILED: 'Failed to clean up orphaned replica',
+  ORPHANED_REPLICA_QUARANTINED:
+    'Quarantined on-disk replica DB with no services-row assignment',
+  ORPHANED_REPLICA_QUARANTINE_FAILED:
+    'Failed to quarantine orphaned on-disk replica DB',
+  RECONCILIATION_SWEEP_SKIPPED:
+    'Replica-file reconciliation sweep skipped: partitions dir unreadable',
+  RECONCILIATION_SWEEP_RESULT:
+    'Replica-file reconciliation sweep quarantined orphaned replica DBs',
   EXPIRED_OPERATIONS_CLEANED: 'Cleaned up expired pending operations',
   ALREADY_REGISTERED: 'Replica already registered',
   REGISTERED_REPLICA: 'Registered existing replica',

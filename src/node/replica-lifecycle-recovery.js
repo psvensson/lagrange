@@ -1,9 +1,13 @@
+import fs from 'node:fs';
+import path from 'node:path';
+
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
-import {SERVICE_TYPE} from '../constants/index.js';
+import {SERVICE_TYPE, TABLES} from '../constants/index.js';
+import {STORAGE_DEFAULT} from '../storage/storage-constants.js';
 import {assertCritical} from '../utils/assert.js';
 import {
   REPLICA_LIFECYCLE_ERROR_MSG,
@@ -174,6 +178,138 @@ async function recoverReplicaService(manager, service) {
   }
 }
 
+// --- Startup replica-file reconciliation sweep --------------------------
+//
+// The transitional-state recovery above only sees replicas that still HAVE a
+// services row. Two failure shapes leave a nodes-p* replica .db with NO row:
+// a replica reassigned to another node while this node was down (the row was
+// moved away), and a crash between the services-row DELETE and the file
+// unlink in cleanupReplicaResources. Without a sweep those orphaned files sit
+// on disk indistinguishable from assigned replica state. Post-hydration the
+// canonical assignment is the services table (systemTableCache), so the
+// sweep compares on-disk files against services rows for this node and
+// QUARANTINES (renames aside) any file with no matching row — quarantine,
+// not deletion, so a mis-read assignment can never destroy the only local
+// copy of cluster data silently; the quarantined file is inert (nothing
+// reads a .quarantined path as a replica DB) yet remains for diagnosis.
+
+const REPLICA_DB_QUARANTINE_SUFFIX = '.quarantined';
+const NODES_TABLE_PARTITION_PREFIX = `${TABLES.NODES}-p`;
+
+function findAssignedReplicaRows(manager) {
+  return manager.systemTableCache.filter(
+    SYSTEM_TABLE_NAME.SERVICES,
+    (service) =>
+      service.node_id === manager.nodeId &&
+      typeof service.partition_id === 'string' &&
+      service.partition_id.length > REPLICA_LIFECYCLE_NUM.ZERO &&
+      typeof service.replica_id === 'string' &&
+      service.replica_id.length > REPLICA_LIFECYCLE_NUM.ZERO,
+  );
+}
+
+function replicaRowFileKey(row) {
+  return `${row.partition_id}/${row.replica_id}${STORAGE_DEFAULT.DB_EXT}`;
+}
+
+function assignedReplicaFileKeys(manager) {
+  const keys = new Set();
+  for (const row of findAssignedReplicaRows(manager)) {
+    keys.add(replicaRowFileKey(row));
+  }
+  return keys;
+}
+
+function listOnDiskReplicaDbFiles(partitionsDir) {
+  const files = [];
+  let partitionDirs;
+  try {
+    partitionDirs = fs.readdirSync(partitionsDir, {withFileTypes: true});
+  } catch (_error) {
+    // A missing partitions dir means no on-disk replica state at all;
+    // an unreadable one must not silently read as "no orphans".
+    return {files, partitionsDirReadable: false};
+  }
+  for (const partitionEntry of partitionDirs) {
+    if (!partitionEntry.isDirectory() ||
+      !partitionEntry.name.startsWith(NODES_TABLE_PARTITION_PREFIX)) {
+      continue;
+    }
+    const partitionDir = path.join(partitionsDir, partitionEntry.name);
+    let replicaEntries;
+    try {
+      replicaEntries = fs.readdirSync(partitionDir, {withFileTypes: true});
+    } catch (_error) {
+      return {files, partitionsDirReadable: false};
+    }
+    for (const replicaEntry of replicaEntries) {
+      if (replicaEntry.isFile() &&
+        replicaEntry.name.endsWith(STORAGE_DEFAULT.DB_EXT)) {
+        files.push(`${partitionEntry.name}/${replicaEntry.name}`);
+      }
+    }
+  }
+  return {files, partitionsDirReadable: true};
+}
+
+function quarantineReplicaDbFile(partitionsDir, relativeKey, logger, nodeId) {
+  const dbPath = path.join(partitionsDir, relativeKey);
+  const quarantinedPath = `${dbPath}${REPLICA_DB_QUARANTINE_SUFFIX}`;
+  try {
+    fs.renameSync(dbPath, quarantinedPath);
+    logger.warn(REPLICA_LIFECYCLE_LOG_MSG.ORPHANED_REPLICA_QUARANTINED, {
+      dbPath,
+      quarantinedPath,
+      nodeId,
+    });
+    return true;
+  } catch (error) {
+    logger.warn(REPLICA_LIFECYCLE_LOG_MSG.ORPHANED_REPLICA_QUARANTINE_FAILED, {
+      dbPath,
+      error: error.message,
+      nodeId,
+    });
+    return false;
+  }
+}
+
+async function reconcileOnDiskReplicaFiles(manager) {
+  const partitionsDir = path.join(
+    manager.dataDir,
+    STORAGE_DEFAULT.PARTITIONS_DIRNAME,
+  );
+  const onDisk = listOnDiskReplicaDbFiles(partitionsDir);
+  if (!onDisk.partitionsDirReadable) {
+    // Fail closed: an unreadable partitions dir is ambiguous evidence, so
+    // the sweep must not treat it as "no orphans"; it leaves every file in
+    // place (the sweep itself must never become a reader of ambiguous
+    // state) and surfaces the condition.
+    manager.logger.warn(REPLICA_LIFECYCLE_LOG_MSG.RECONCILIATION_SWEEP_SKIPPED, {
+      partitionsDir,
+      nodeId: manager.nodeId,
+    });
+    return {quarantined: 0, sweepCompleted: false};
+  }
+  const assigned = assignedReplicaFileKeys(manager);
+  const orphaned = onDisk.files.filter((key) => !assigned.has(key));
+  let quarantined = 0;
+  for (const key of orphaned) {
+    if (quarantineReplicaDbFile(partitionsDir, key, manager.logger,
+      manager.nodeId)) {
+      quarantined += 1;
+    }
+  }
+  if (orphaned.length > 0) {
+    manager.logger.warn(REPLICA_LIFECYCLE_LOG_MSG.RECONCILIATION_SWEEP_RESULT, {
+      orphanedCount: orphaned.length,
+      quarantinedCount: quarantined,
+      assignedCount: assigned.size,
+      nodeId: manager.nodeId,
+    });
+  }
+  return {quarantined, sweepCompleted: true};
+}
+
 async function runReplicaLifecycleRecovery(manager) {
   manager.logger.info(REPLICA_LIFECYCLE_LOG_MSG.RECOVERY_START, {
     nodeId: manager.nodeId,
@@ -195,9 +331,13 @@ async function runReplicaLifecycleRecovery(manager) {
     await recoverReplicaService(manager, service);
   }
 
+  const sweep = await reconcileOnDiskReplicaFiles(manager);
+
   manager.emit(REPLICA_LIFECYCLE_EVENT.RECOVERY_COMPLETE, {
     nodeId: manager.nodeId,
     orphanedCount: services.length,
+    quarantinedOrphanedFiles: sweep.quarantined,
+    reconciliationSweepCompleted: sweep.sweepCompleted,
   });
 }
 

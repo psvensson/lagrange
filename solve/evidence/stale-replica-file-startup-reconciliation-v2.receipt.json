@@ -1,0 +1,26 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "stale-replica-file-startup-reconciliation-v2",
+  "status": "pass",
+  "generatedAt": "2026-08-05T18:48:52.513Z",
+  "receipts": [
+    {
+      "id": "orphaned-replica-file-quarantined-before-evidence-read",
+      "passed": true,
+      "command": "npm run test:file -- test/node/replica-lifecycle-manager.test.js",
+      "detail": "a nodes-p* replica .db with no services-row assignment is quarantined (renamed aside, not deleted) at startup recovery, so it can no longer sit at its readable path as if it were current durable evidence"
+    },
+    {
+      "id": "sweep-keys-on-authoritative-assignment",
+      "passed": true,
+      "command": "npm run test:file -- test/node/replica-lifecycle-manager.test.js",
+      "detail": "the sweep compares on-disk files against services-table rows for this node (the canonical assignment), never against the raw file union it replaces"
+    },
+    {
+      "id": "assigned-replica-files-untouched",
+      "passed": true,
+      "command": "npm run test:file -- test/node/replica-lifecycle-manager.test.js",
+      "detail": "a replica file whose services row exists is left in place, and an unreadable partitions dir fails closed (sweep reports not-completed rather than claiming no orphans over ambiguous state)"
+    }
+  ]
+}
