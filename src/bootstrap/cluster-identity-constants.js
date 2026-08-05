@@ -18,18 +18,6 @@
 // authoritative cluster-wide copy of the identity.
 const CLUSTER_ID_CONFIG_KEY = 'cluster_id';
 
-// The JSON field name the node-local rejoin hints file
-// (cluster-rejoin-hints.json) carries the identity under.
-const CLUSTER_ID_HINTS_FIELD = 'clusterId';
-
-// Typed refusal for a bootstrap request whose expectedClusterId does not
-// match the seed's durable cluster identity. Returned as HTTP 409 by the
-// join admission owner; a 409 is already classified terminal on the joiner
-// (contact-seed-phase.js classifySeedContactFailure), so a mismatched joiner
-// stops permanently instead of retrying forever.
-const CLUSTER_ID_MISMATCH_ERROR =
-  'Bootstrap request cluster identity does not match this cluster';
-
 // The compatibility policy for a request or durable source that carries no
 // cluster identity (a pre-identity joiner or a hints file written before the
 // identity existed). Explicit variants, never null/undefined semantics:
@@ -69,8 +57,6 @@ function classifyClusterIdMatch(expected, actual) {
 
 export {
   CLUSTER_ID_CONFIG_KEY,
-  CLUSTER_ID_HINTS_FIELD,
   CLUSTER_ID_MATCH_STATE,
-  CLUSTER_ID_MISMATCH_ERROR,
   classifyClusterIdMatch,
 };
