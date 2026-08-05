@@ -8,9 +8,9 @@ import {
   classifyClusterIdMatch,
 } from './cluster-identity-constants.js';
 import {
+  AUTO_REJOIN_DECISION_STATE,
+  AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE,
   DURABLE_EVIDENCE_STATE,
-  MEMBERSHIP_OWNER_OUTCOME_TYPE,
-  MEMBERSHIP_OWNER_REASON,
   REJOIN_HINTS_FILENAME,
   REJOIN_HINTS_TEMP_SUFFIX,
   REJOIN_HINTS_WRITE_INTERVAL_MS,
@@ -22,6 +22,11 @@ import {
   readRejoinHints,
   readRejoinHintsOutcome,
 } from './rejoin-hints-durable-evidence.js';
+import {
+  buildSeedServingStartupDecision,
+  resolveSeedRecoveryProofSatisfied,
+  resolveSeedServingDecisionState,
+} from './seed-recovery-proof.js';
 import {
   deriveRequiresPeerRejoin,
   extractPeerAddresses,
@@ -50,50 +55,6 @@ const REJOIN_SOURCE = Object.freeze({
 const PEER_ADDRESS_STATE = Object.freeze({
   SELECTED: 'selected',
   UNAVAILABLE: 'unavailable',
-});
-const AUTO_REJOIN_DECISION_STATE = Object.freeze({
-  IDENTITY_MISMATCH: 'identity_mismatch',
-  CLUSTER_ID_MISMATCH: 'cluster_id_mismatch',
-  DURABLE_SEED: 'durable_seed',
-  JOIN_PROBED_PEER: 'join_probed_peer',
-  JOIN_RECOVERED_PEER: 'join_recovered_peer',
-  PEER_REQUIRED_BUT_MISSING: 'peer_required_but_missing',
-  UNREADABLE_DURABLE_EVIDENCE: 'unreadable_durable_evidence',
-  FRESH_SEED: 'fresh_seed',
-});
-const AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE = Object.freeze({
-  [AUTO_REJOIN_DECISION_STATE.IDENTITY_MISMATCH]: Object.freeze({
-    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
-    reasonCode: MEMBERSHIP_OWNER_REASON.IDENTITY_MISMATCH,
-  }),
-  [AUTO_REJOIN_DECISION_STATE.CLUSTER_ID_MISMATCH]: Object.freeze({
-    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
-    reasonCode: MEMBERSHIP_OWNER_REASON.CLUSTER_ID_MISMATCH,
-  }),
-  [AUTO_REJOIN_DECISION_STATE.UNREADABLE_DURABLE_EVIDENCE]: Object.freeze({
-    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
-    reasonCode: MEMBERSHIP_OWNER_REASON.UNREADABLE_DURABLE_EVIDENCE,
-  }),
-  [AUTO_REJOIN_DECISION_STATE.DURABLE_SEED]: Object.freeze({
-    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BOOTSTRAP_SEED,
-    reasonCode: MEMBERSHIP_OWNER_REASON.DURABLE_SEED,
-  }),
-  [AUTO_REJOIN_DECISION_STATE.JOIN_PROBED_PEER]: Object.freeze({
-    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
-    reasonCode: MEMBERSHIP_OWNER_REASON.JOIN_PROBED_PEER,
-  }),
-  [AUTO_REJOIN_DECISION_STATE.JOIN_RECOVERED_PEER]: Object.freeze({
-    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.RESTART_REENTRY,
-    reasonCode: MEMBERSHIP_OWNER_REASON.JOIN_RECOVERED_PEER,
-  }),
-  [AUTO_REJOIN_DECISION_STATE.PEER_REQUIRED_BUT_MISSING]: Object.freeze({
-    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
-    reasonCode: MEMBERSHIP_OWNER_REASON.PEER_REQUIRED_BUT_MISSING,
-  }),
-  [AUTO_REJOIN_DECISION_STATE.FRESH_SEED]: Object.freeze({
-    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BOOTSTRAP_SEED,
-    reasonCode: MEMBERSHIP_OWNER_REASON.FRESH_SEED,
-  }),
 });
 const IDENTITY_MISMATCH_ERROR_MESSAGE =
   'Persistent cluster state belongs to a different node identity; ' +
@@ -431,6 +392,15 @@ async function collectAutoRejoinDecisionContext(options = {}) {
     peerAddresses,
     options.probePeerAddress,
   );
+  // A persisted seed role is not proof of cluster membership: the recovery
+  // gate (seed-recovery-proof.js) requires cluster-id match plus live peer
+  // contact or durable quorum evidence before the seed may serve.
+  const seedRecoveryProofSatisfied = resolveSeedRecoveryProofSatisfied({
+    clusterIdMatch,
+    selectedPeerAddress,
+    clusterNodeCount,
+    peerAddresses,
+  });
   const preferredPeerAddress = choosePreferredPeerAddress(
     peerAddresses,
     hintPeerAddresses,
@@ -468,6 +438,7 @@ async function collectAutoRejoinDecisionContext(options = {}) {
     durableEvidenceBlocked,
     forceNewCluster: options.forceNewCluster === true,
     clusterIncarnationFence,
+    seedRecoveryProofSatisfied,
     requiresPeerRejoin: deriveRequiresPeerRejoin({
       nodeRole: localNodeRole,
       clusterNodeCount,
@@ -488,7 +459,7 @@ function resolveAutoRejoinDecisionState(context = {}) {
     return AUTO_REJOIN_DECISION_STATE.UNREADABLE_DURABLE_EVIDENCE;
   }
   if (context.localNodeRole === REJOIN_ROLE_SEED) {
-    return AUTO_REJOIN_DECISION_STATE.DURABLE_SEED;
+    return resolveSeedServingDecisionState(context, AUTO_REJOIN_DECISION_STATE);
   }
   if (context.selectedPeerAddress) {
     return AUTO_REJOIN_DECISION_STATE.JOIN_PROBED_PEER;
@@ -566,18 +537,18 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       error: CLUSTER_ID_MISMATCH_ERROR_MESSAGE,
     }, state);
   case AUTO_REJOIN_DECISION_STATE.DURABLE_SEED:
-    return attachMembershipOwnerOutcome({
+  case AUTO_REJOIN_DECISION_STATE.SEED_RECOVERY_PROOF_MISSING:
+    return attachMembershipOwnerOutcome(
+      buildSeedServingStartupDecision(context, state, {
+        DECISION_STATE: AUTO_REJOIN_DECISION_STATE,
+        STARTUP_MODE_SEED,
+        STARTUP_MODE_FAIL,
+        STARTUP_JOIN_MODE_SEED: STARTUP_JOIN_MODE.SEED,
+        PEER_ADDRESS_STATE_UNAVAILABLE: PEER_ADDRESS_STATE.UNAVAILABLE,
+        resolveDurableStartupSource,
+      }),
       state,
-      mode: STARTUP_MODE_SEED,
-      peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
-      peerAddress: null,
-      peerAddresses: [],
-      source: resolveDurableStartupSource(context),
-      startupMode: STARTUP_JOIN_MODE.SEED,
-      durableStateDetected: context.durableStateDetected,
-      identityMismatch: false,
-      clusterIncarnationFence: context.clusterIncarnationFence,
-    }, state);
+    );
   case AUTO_REJOIN_DECISION_STATE.JOIN_PROBED_PEER:
     return attachMembershipOwnerOutcome({
       state,

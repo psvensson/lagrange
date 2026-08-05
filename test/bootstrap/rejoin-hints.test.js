@@ -20,12 +20,16 @@ import {
   TOPOLOGY_MEMBERSHIP_OWNER_CONTRACT,
 } from '../../src/bootstrap/rejoin-hints-constants.js';
 import {COLUMN, TABLES} from '../../src/constants/index.js';
+import {
+  CLUSTER_ID_CONFIG_KEY,
+} from '../../src/bootstrap/cluster-identity-constants.js';
 
 const LOCAL_NODE_ID = 'node-local';
 const LOCAL_NODE_ADDRESS = 'seed-node:8080';
 const DRIFTED_LOCAL_NODE_ADDRESS = 'seed-node-restarted:8080';
 const PEER_NODE_ADDRESS_A = 'peer-a:8080';
 const PEER_NODE_ADDRESS_B = 'peer-b:8080';
+const CLUSTER_ID_A = '11111111-1111-4111-8111-111111111111';
 const CLUSTER_INCARNATION_FENCE_STATE_CURRENT = 'current';
 const CLUSTER_INCARNATION_FENCE_STATE_IDENTITY_MISMATCH =
   'identity_mismatch';
@@ -35,13 +39,21 @@ const CLUSTER_INCARNATION_DURABLE_MEMBERSHIP_PRESENT = 'present';
 const CLUSTER_INCARNATION_PEER_PROOF_RECOVERED = 'recovered';
 const CLUSTER_INCARNATION_PEER_PROOF_NOT_REQUIRED = 'not_required';
 
-function createSystemTableCache(nodeRows = []) {
+function createSystemTableCache(nodeRows = [], clusterId = null) {
   return {
     getAll(tableName) {
       if (tableName !== TABLES.NODES) {
         return [];
       }
       return nodeRows;
+    },
+    get(tableName, key) {
+      if (tableName !== TABLES.CONFIG || key !== CLUSTER_ID_CONFIG_KEY) {
+        return undefined;
+      }
+      return clusterId === null ?
+        undefined :
+        {[COLUMN.CONFIG_VALUE]: clusterId};
     },
   };
 }
@@ -333,6 +345,10 @@ test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
     const dataDir = await mkdtemp(join(tmpdir(), 'rejoin-hints-'));
     t.after(() => rm(dataDir, {recursive: true, force: true}));
 
+    // Identity-era seed: the hints carry the durable cluster identity and
+    // the node passes it back as its startup expectation, so the cluster-id
+    // match is confirmed; live peer contact (probe true) supplies the
+    // recovery proof. A persisted seed role ALONE is no longer sufficient.
     const persistence = new RejoinHintsPersistenceService({
       dataDir,
       nodeId: LOCAL_NODE_ID,
@@ -347,7 +363,7 @@ test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
           [COLUMN.NODE_ID]: 'node-peer-a',
           [COLUMN.NODE_ADDRESS]: PEER_NODE_ADDRESS_A,
         },
-      ]),
+      ], CLUSTER_ID_A),
       logger: {warn() {}, debug() {}},
     });
 
@@ -357,6 +373,7 @@ test('resolveAutoRejoinStartupDecision keeps persisted seed role in seed mode',
       dataDir,
       nodeId: LOCAL_NODE_ID,
       nodeAddress: LOCAL_NODE_ADDRESS,
+      expectedClusterId: CLUSTER_ID_A,
       probePeerAddress: async () => true,
     });
 

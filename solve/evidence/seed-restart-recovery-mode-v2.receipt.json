@@ -1,0 +1,32 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "seed-restart-recovery-mode-v2",
+  "status": "pass",
+  "generatedAt": "2026-08-05T11:24:31.818Z",
+  "receipts": [
+    {
+      "id": "seed-serving-requires-cluster-id-match",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-restart-recovery-gate.test.js",
+      "detail": "a durable seed without a confirmed cluster-id match refuses to serve even with quorum evidence and a reachable peer"
+    },
+    {
+      "id": "seed-serving-requires-quorum-or-peer-proof",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-restart-recovery-gate.test.js",
+      "detail": "a durable seed serves only with cluster-id match plus live peer contact OR durable quorum evidence"
+    },
+    {
+      "id": "isolated-stale-seed-refuses-to-serve",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-restart-recovery-gate.test.js",
+      "detail": "an isolated stale seed with no reachable current member and no durable quorum evidence fails closed SEED_RECOVERY_PROOF_MISSING"
+    },
+    {
+      "id": "persisted-role-alone-insufficient",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/seed-restart-recovery-gate.test.js",
+      "detail": "a pre-identity persisted seed role (cluster-id UNKNOWN) is not proof; the seed refuses to serve purely on that role"
+    }
+  ]
+}
