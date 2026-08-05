@@ -17,10 +17,16 @@ import {resolveAdvertisedWebSocketAddress} from
   '../../transport/node-address-resolution.js';
 import {resolveAutoRejoinStartupDecision} from '../rejoin-hints.js';
 import {
+  AUTHORITATIVE_ROW_READ_STATE,
+} from '../rejoin-hints-constants.js';
+import {
+  AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE,
+  AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS,
   DURABLE_REJOIN_REQUIRED_SERVICE_IDS,
   JOIN_ADMISSION_PUBLICATION,
   JOIN_ADMISSION_RESOLUTION_SOURCE,
   LOCAL_STR_1YR7Z,
+  LOG_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
   LOG_CLUSTER_INCARNATION_FENCE_UNAVAILABLE,
   REUSABLE_JOIN_ADMISSION_CONNECTION_STATES,
   hasFunction,
@@ -57,7 +63,42 @@ function buildReentryNormalizedNodeRow(nodeRow, now) {
   };
 }
 
+/**
+ * Build the typed deferred error for an UNAVAILABLE authoritative row
+ * source. Transient unavailability must never fall through to the fresh
+ * upsert (which could clobber a row the authority actually holds); the
+ * error is tagged retryable (deferRetry + retryAfterMs) so the join
+ * registration retry loop re-enters instead of proceeding fresh.
+ * @param {string} tableName - Authoritative table whose read was unavailable.
+ * @return {Error} Tagged retryable deferred error.
+ */
+function buildAuthoritativeRowSourceUnavailableError(tableName) {
+  const error = new Error(AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE);
+  error.deferRetry = true;
+  error.retryAfterMs = AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS;
+  error.authoritativeRowReadState = AUTHORITATIVE_ROW_READ_STATE.UNAVAILABLE;
+  error.tableName = tableName;
+  return error;
+}
+
 class NodeRegistrationOwnerDurableRejoinMethods {
+  /**
+   * Throw the typed deferred error when an authoritative row read was
+   * UNAVAILABLE. Callers must run this check before treating a null row or
+   * an empty row list as genuine absence.
+   * @param {Object} outcome - Typed {state, rows} authoritative read outcome.
+   */
+  throwIfAuthoritativeRowsUnavailable(outcome) {
+    if (outcome?.state !== AUTHORITATIVE_ROW_READ_STATE.UNAVAILABLE) {
+      return;
+    }
+    this.delegates.getLogger?.().warn?.(
+      LOG_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
+      {nodeId: this.nodeId, tableName: outcome?.tableName || null},
+    );
+    throw buildAuthoritativeRowSourceUnavailableError(outcome?.tableName);
+  }
+
   async resolveExistingDurableRejoinMembership(now) {
     if (this.getJoinLifecycleIntentType() !==
       MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY) {
@@ -84,14 +125,18 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       return null;
     }
 
-    const authoritativeEndpointRow =
-      await this.readAuthoritativeNodeEndpointRow();
+    const authoritativeEndpointOutcome =
+      await this.readAuthoritativeNodeEndpointRowOutcome();
+    this.throwIfAuthoritativeRowsUnavailable(authoritativeEndpointOutcome);
+    const authoritativeEndpointRow = authoritativeEndpointOutcome.row;
     if (!authoritativeEndpointRow) {
       return null;
     }
 
-    const metaEndpointRows =
-      await this.readAuthoritativeMetaEndpointRows();
+    const metaEndpointOutcome =
+      await this.readAuthoritativeMetaEndpointRowsOutcome();
+    this.throwIfAuthoritativeRowsUnavailable(metaEndpointOutcome);
+    const metaEndpointRows = metaEndpointOutcome.rows;
     if (metaEndpointRows.length !==
       DURABLE_REJOIN_REQUIRED_SERVICE_IDS.length) {
       return null;
@@ -162,17 +207,19 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       return null;
     }
 
-    const authoritativeEndpointRow =
-      await this.readAuthoritativeNodeEndpointRow();
-    const metaEndpointRows =
-      await this.readAuthoritativeMetaEndpointRows();
+    const authoritativeEndpointOutcome =
+      await this.readAuthoritativeNodeEndpointRowOutcome();
+    this.throwIfAuthoritativeRowsUnavailable(authoritativeEndpointOutcome);
+    const metaEndpointOutcome =
+      await this.readAuthoritativeMetaEndpointRowsOutcome();
+    this.throwIfAuthoritativeRowsUnavailable(metaEndpointOutcome);
     return {
       nodeRow: buildReentryNormalizedNodeRow(
         authoritativeNodeRow,
         this.delegates.getNow()(),
       ),
-      endpointRow: authoritativeEndpointRow,
-      metaEndpointRows,
+      endpointRow: authoritativeEndpointOutcome.row,
+      metaEndpointRows: metaEndpointOutcome.rows,
       resolution: {
         source: JOIN_ADMISSION_RESOLUTION_SOURCE.EXISTING_PROGRESS,
       },
@@ -303,64 +350,109 @@ class NodeRegistrationOwnerDurableRejoinMethods {
     return this.authoritativeControlPlaneView;
   }
 
+  /**
+   * Read authoritative rows as a typed {state, rows} outcome (mirrors the
+   * DURABLE_EVIDENCE_STATE missing/readable/unreadable pattern): READABLE
+   * when the authority answered the read (rows may be empty, which is
+   * genuine absence), UNAVAILABLE when the view cannot read or the read
+   * failed. UNAVAILABLE must never be collapsed to absence — the join
+   * resolve paths defer (typed retryable error) rather than fresh-upserting
+   * over rows the authority actually holds.
+   * @param {string} tableName - Authoritative table to read.
+   * @param {string} sql - Read query.
+   * @param {Array<*>} [params=[]] - Query parameters.
+   * @return {Promise<Object>} Typed {state, rows, tableName} outcome.
+   */
   async readAuthoritativeRows(tableName, sql, params = []) {
     const view = this.getAuthoritativeControlPlaneView();
-    if (!view?.canRead()) {
-      return [];
+    let rows = null;
+    if (view?.canRead()) {
+      try {
+        const result = await view.readRows(tableName, sql, params);
+        rows = result?.success === true && Array.isArray(result.rows) ?
+          result.rows :
+          null;
+      } catch (_error) {
+        rows = null;
+      }
     }
-    try {
-      const result = await view.readRows(tableName, sql, params);
-      return result?.success === true && Array.isArray(result.rows) ?
-        result.rows :
-        [];
-    } catch (_error) {
-      return [];
-    }
+    // One canonical outcome: a resolved row list is READABLE (empty rows are
+    // genuine absence); anything else means the authority did not answer
+    // and is UNAVAILABLE (never collapsed to absence).
+    const readable = rows !== null;
+    return {
+      state: readable ?
+        AUTHORITATIVE_ROW_READ_STATE.READABLE :
+        AUTHORITATIVE_ROW_READ_STATE.UNAVAILABLE,
+      rows: readable ? rows : [],
+      tableName,
+    };
   }
 
-  async readAuthoritativeDurableRejoinNodeRow() {
-    const rows = await this.readAuthoritativeRows(
+  async readAuthoritativeDurableRejoinNodeRowOutcome() {
+    const outcome = await this.readAuthoritativeRows(
       TABLES.NODES,
       `SELECT * FROM ${TABLES.NODES} WHERE ${COLUMN.NODE_ID} = ?`,
       [this.nodeId],
     );
-    return rows.find((row) =>
-      normalizeString(row?.[COLUMN.NODE_ID]) === this.nodeId,
-    ) || null;
+    return {
+      ...outcome,
+      row: outcome.rows.find((row) =>
+        normalizeString(row?.[COLUMN.NODE_ID]) === this.nodeId,
+      ) || null,
+    };
   }
 
-  async readAuthoritativeNodeEndpointRow() {
+  async readAuthoritativeDurableRejoinNodeRow() {
+    const outcome = await this.readAuthoritativeDurableRejoinNodeRowOutcome();
+    this.throwIfAuthoritativeRowsUnavailable(outcome);
+    return outcome.row;
+  }
+
+  async readAuthoritativeNodeEndpointRowOutcome() {
     const expectedWsAddress = normalizeString(
       this.resolveCanonicalWsAddress(),
     );
-    const rows = await this.readAuthoritativeRows(
+    const outcome = await this.readAuthoritativeRows(
       TABLES.NODE_ENDPOINTS,
       `SELECT * FROM ${TABLES.NODE_ENDPOINTS} WHERE ${COLUMN.NODE_ID} = ?`,
       [this.nodeId],
     );
-    return rows.find((row) => {
-      const nodeId = normalizeString(row?.[COLUMN.NODE_ID]);
-      const transportType = normalizeString(
-        row?.[COLUMN.TRANSPORT_TYPE],
-      ).toLowerCase();
-      const status = normalizeString(
-        row?.[COLUMN.STATUS],
-      ).toLowerCase();
-      const address = normalizeString(row?.[COLUMN.ADDRESS]);
-      return nodeId === this.nodeId &&
-        transportType ===
-          String(TRANSPORT_TYPE.WEBSOCKET).toLowerCase() &&
-        status === String(ENDPOINT_STATUS.ACTIVE).toLowerCase() &&
-        address === expectedWsAddress;
-    }) || null;
+    return {
+      ...outcome,
+      row: outcome.rows.find((row) => {
+        const nodeId = normalizeString(row?.[COLUMN.NODE_ID]);
+        const transportType = normalizeString(
+          row?.[COLUMN.TRANSPORT_TYPE],
+        ).toLowerCase();
+        const status = normalizeString(
+          row?.[COLUMN.STATUS],
+        ).toLowerCase();
+        const address = normalizeString(row?.[COLUMN.ADDRESS]);
+        return nodeId === this.nodeId &&
+          transportType ===
+            String(TRANSPORT_TYPE.WEBSOCKET).toLowerCase() &&
+          status === String(ENDPOINT_STATUS.ACTIVE).toLowerCase() &&
+          address === expectedWsAddress;
+      }) || null,
+    };
   }
 
-  async readAuthoritativeMetaEndpointRows() {
-    const rows = await this.readAuthoritativeRows(
+  async readAuthoritativeNodeEndpointRow() {
+    const outcome = await this.readAuthoritativeNodeEndpointRowOutcome();
+    this.throwIfAuthoritativeRowsUnavailable(outcome);
+    return outcome.row;
+  }
+
+  async readAuthoritativeMetaEndpointRowsOutcome() {
+    const outcome = await this.readAuthoritativeRows(
       TABLES.SERVICE_ENDPOINTS,
       `SELECT * FROM ${TABLES.SERVICE_ENDPOINTS} WHERE ${COLUMN.NODE_ID} = ?`,
       [this.nodeId],
     );
+    const rows = outcome.state === AUTHORITATIVE_ROW_READ_STATE.READABLE ?
+      outcome.rows :
+      [];
     const rowsByServiceId = new Map();
     for (const row of rows) {
       const nodeId = normalizeString(row?.[COLUMN.NODE_ID]);
@@ -373,9 +465,18 @@ class NodeRegistrationOwnerDurableRejoinMethods {
       rowsByServiceId.set(serviceId, row);
     }
 
-    return DURABLE_REJOIN_REQUIRED_SERVICE_IDS
-      .map((serviceId) => rowsByServiceId.get(serviceId) || null)
-      .filter(Boolean);
+    return {
+      ...outcome,
+      rows: DURABLE_REJOIN_REQUIRED_SERVICE_IDS
+        .map((serviceId) => rowsByServiceId.get(serviceId) || null)
+        .filter(Boolean),
+    };
+  }
+
+  async readAuthoritativeMetaEndpointRows() {
+    const outcome = await this.readAuthoritativeMetaEndpointRowsOutcome();
+    this.throwIfAuthoritativeRowsUnavailable(outcome);
+    return outcome.rows;
   }
 
   resolveCanonicalWsAddress() {

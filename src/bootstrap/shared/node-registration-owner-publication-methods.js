@@ -486,7 +486,13 @@ class NodeRegistrationOwnerPublicationMethods {
       });
     }
 
-    const metaEndpointRows = await this.readAuthoritativeMetaEndpointRows();
+    // Withdrawal is best-effort: an UNAVAILABLE authoritative read yields
+    // zero meta endpoint rows (same as the pre-typed-outcome bare-array
+    // collapse) instead of throwing, so the withdrawal still reports.
+    const metaEndpointRows =
+      await this.readAuthoritativeMetaEndpointRowsOutcome()
+        .then((outcome) => outcome.rows)
+        .catch(() => []);
     for (const metaEndpointRow of metaEndpointRows) {
       const endpointId = normalizeString(
         metaEndpointRow?.[COLUMN.ENDPOINT_ID],

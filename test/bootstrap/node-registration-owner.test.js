@@ -19,6 +19,9 @@ import {
 import {
   MEMBERSHIP_LIFECYCLE_INTENT,
 } from '../../src/control-plane/membership-lifecycle-controller.js';
+import {
+  AUTHORITATIVE_ROW_READ_STATE,
+} from '../../src/bootstrap/rejoin-hints-constants.js';
 
 const TEST_NODE_ID = 'test-node-registration-owner';
 const TEST_NODE_ADDRESS = 'joiner-host:8080';
@@ -31,6 +34,29 @@ const TEST_LOGGER = {
 };
 const TEST_SERVICE_ENDPOINT_UNHEALTHY = 'unhealthy';
 const TEST_NODE_CAPABILITIES = Object.freeze([]);
+const TEST_UNAVAILABLE_READ_ROWS = async () => ({
+  success: false,
+  error: 'authoritative_row_source_unavailable',
+});
+const TEST_READABLE_EMPTY_READ_ROWS = async () => ({
+  success: true,
+  rows: [],
+});
+
+/**
+ * Point the owner's authoritative control-plane view at an injected read
+ * stub. readAuthoritativeRows stays the real implementation so the test
+ * fails red if the typed {state, rows} outcome is reverted to the
+ * bare-array collapse.
+ * @param {Object} owner - NodeRegistrationOwner under test.
+ * @param {Function} readRows - Injected authoritative readRows stub.
+ */
+function stubAuthoritativeViewReads(owner, readRows) {
+  owner.getAuthoritativeControlPlaneView = () => ({
+    canRead: () => true,
+    readRows,
+  });
+}
 const TEST_CLUSTER_INCARNATION_FENCE_BLOCKED = Object.freeze({
   state: 'identity_mismatch',
   allowed: false,
@@ -216,8 +242,17 @@ test(
       [COLUMN.CREATED_AT]: TEST_NOW_MS,
       [COLUMN.LAST_HEARTBEAT]: TEST_NOW_MS,
     });
-    owner.readAuthoritativeNodeEndpointRow = async () => null;
-    owner.readAuthoritativeMetaEndpointRows = async () => [];
+    owner.readAuthoritativeNodeEndpointRowOutcome = async () => ({
+      state: AUTHORITATIVE_ROW_READ_STATE.READABLE,
+      rows: [],
+      tableName: TABLES.NODE_ENDPOINTS,
+      row: null,
+    });
+    owner.readAuthoritativeMetaEndpointRowsOutcome = async () => ({
+      state: AUTHORITATIVE_ROW_READ_STATE.READABLE,
+      rows: [],
+      tableName: TABLES.SERVICE_ENDPOINTS,
+    });
 
     const result = await owner.registerNodeInCluster();
 
@@ -440,10 +475,14 @@ test(
         return {partitionResult: {affectedRows: 1}};
       },
     });
-    owner.readAuthoritativeMetaEndpointRows = async () => ([{
-      [COLUMN.ENDPOINT_ID]: 'meta-endpoint-1',
-      [COLUMN.NODE_ID]: TEST_NODE_ID,
-    }]);
+    owner.readAuthoritativeMetaEndpointRowsOutcome = async () => ({
+      state: AUTHORITATIVE_ROW_READ_STATE.READABLE,
+      tableName: TABLES.SERVICE_ENDPOINTS,
+      rows: [{
+        [COLUMN.ENDPOINT_ID]: 'meta-endpoint-1',
+        [COLUMN.NODE_ID]: TEST_NODE_ID,
+      }],
+    });
 
     const result = await owner.withdrawFailedJoinAdmission({
       registeredNodeId: TEST_NODE_ID,
@@ -528,5 +567,214 @@ test(
     t.equal(result.retryAfterMs, TIME_MS.SECOND);
     t.equal(updateCalls.length, 2,
       'best-effort endpoint withdrawal can still run after deferred node write');
+  },
+);
+
+test(
+  'NodeRegistrationOwner returns a typed {state, rows} authoritative read ' +
+  'outcome (unavailable on failure or unreadable source)',
+  async (t) => {
+    const owner = new NodeRegistrationOwner({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      delegates: createDelegates(),
+    });
+
+    const noViewOutcome = await owner.readAuthoritativeRows(
+      TABLES.NODES,
+      'SELECT * FROM nodes',
+      [],
+    );
+    t.equal(
+      noViewOutcome.state,
+      AUTHORITATIVE_ROW_READ_STATE.UNAVAILABLE,
+      'a missing authoritative view must be UNAVAILABLE, not absence',
+    );
+    t.same(noViewOutcome.rows, [], 'an unavailable read carries no rows');
+
+    const failingView = {
+      canRead: () => true,
+      readRows: async () => ({
+        success: false,
+        error: 'authoritative_row_source_unavailable',
+      }),
+    };
+    const failedOutcome = await owner.readAuthoritativeRows.call(
+      {getAuthoritativeControlPlaneView: () => failingView},
+      TABLES.NODES,
+      'SELECT * FROM nodes',
+      [],
+    );
+    t.equal(
+      failedOutcome.state,
+      AUTHORITATIVE_ROW_READ_STATE.UNAVAILABLE,
+      'a failed authoritative read must be UNAVAILABLE, not absence',
+    );
+
+    const emptyView = {
+      canRead: () => true,
+      readRows: async () => ({success: true, rows: []}),
+    };
+    const readableOutcome = await owner.readAuthoritativeRows.call(
+      {getAuthoritativeControlPlaneView: () => emptyView},
+      TABLES.NODES,
+      'SELECT * FROM nodes',
+      [],
+    );
+    t.equal(
+      readableOutcome.state,
+      AUTHORITATIVE_ROW_READ_STATE.READABLE,
+      'a successful empty read is READABLE (genuine absence)',
+    );
+    t.same(
+      readableOutcome.rows,
+      [],
+      'a READABLE empty outcome is proven absence, not unavailability',
+    );
+  },
+);
+
+test(
+  'NodeRegistrationOwner defers restart rejoin with a typed retryable ' +
+  'outcome when the authoritative row source is unavailable',
+  async (t) => {
+    const publicationCalls = [];
+    const membershipPublicationRuntimeOwner = buildPublicationOwnerRecorder(
+      publicationCalls,
+    );
+    const owner = new NodeRegistrationOwner({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      membershipPublicationRuntimeOwner,
+      delegates: {
+        ...createDelegates(),
+        getJoinLifecycleIntentType: () =>
+          MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY,
+        getClusterIncarnationFence: () =>
+          TEST_CLUSTER_INCARNATION_FENCE_ALLOWED,
+      },
+    });
+    owner.seedJoinTimeCacheRow = () => {};
+    stubAuthoritativeViewReads(owner, TEST_UNAVAILABLE_READ_ROWS);
+
+    let caughtError = null;
+    try {
+      await owner.registerNodeInCluster();
+    } catch (error) {
+      caughtError = error;
+    }
+
+    t.ok(caughtError, 'an unavailable authority must fail registration');
+    t.match(
+      caughtError.message,
+      /Authoritative control-plane row source unavailable/u,
+      'the deferred error must name the unavailable authoritative source',
+    );
+    t.equal(
+      caughtError.deferRetry,
+      true,
+      'the deferred outcome must stay retryable through the wrapped carrier',
+    );
+    t.equal(
+      caughtError.retryAfterMs,
+      TIME_MS.SECOND,
+      'the deferred outcome must carry a retryAfterMs hint',
+    );
+    t.equal(
+      caughtError.cause?.authoritativeRowReadState,
+      AUTHORITATIVE_ROW_READ_STATE.UNAVAILABLE,
+      'the deferred outcome must surface the typed authoritative read state',
+    );
+    t.equal(
+      publicationCalls.length,
+      0,
+      'an unavailable authority must not fall through to any fresh upsert',
+    );
+  },
+);
+
+test(
+  'NodeRegistrationOwner defers join admission progress resolution when ' +
+  'the authoritative row source is unavailable',
+  async (t) => {
+    const publicationCalls = [];
+    const membershipPublicationRuntimeOwner = buildPublicationOwnerRecorder(
+      publicationCalls,
+    );
+    const owner = new NodeRegistrationOwner({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      membershipPublicationRuntimeOwner,
+      delegates: {
+        ...createDelegates(),
+        getClusterIncarnationFence: () =>
+          TEST_CLUSTER_INCARNATION_FENCE_ALLOWED,
+      },
+    });
+    owner.seedJoinTimeCacheRow = () => {};
+    stubAuthoritativeViewReads(owner, TEST_UNAVAILABLE_READ_ROWS);
+
+    let caughtError = null;
+    try {
+      await owner.registerNodeInCluster();
+    } catch (error) {
+      caughtError = error;
+    }
+
+    t.ok(caughtError, 'an unavailable authority must fail registration');
+    t.equal(
+      caughtError.deferRetry,
+      true,
+      'join admission progress resolution must defer retryable',
+    );
+    t.equal(
+      caughtError.retryAfterMs,
+      TIME_MS.SECOND,
+      'join admission progress resolution must carry retryAfterMs',
+    );
+    t.equal(
+      publicationCalls.filter((call) => call.kind === 'node').length,
+      0,
+      'an unavailable authority must not trigger a fresh nodes upsert',
+    );
+  },
+);
+
+test(
+  'NodeRegistrationOwner fresh-upserts when the authoritative row source ' +
+  'is readable but empty (genuine absence)',
+  async (t) => {
+    const publicationCalls = [];
+    const membershipPublicationRuntimeOwner = buildPublicationOwnerRecorder(
+      publicationCalls,
+    );
+    const owner = new NodeRegistrationOwner({
+      nodeId: TEST_NODE_ID,
+      nodeAddress: TEST_NODE_ADDRESS,
+      membershipPublicationRuntimeOwner,
+      delegates: {
+        ...createDelegates(),
+        getJoinLifecycleIntentType: () =>
+          MEMBERSHIP_LIFECYCLE_INTENT.RESTART_REENTRY,
+        getClusterIncarnationFence: () =>
+          TEST_CLUSTER_INCARNATION_FENCE_ALLOWED,
+      },
+    });
+    owner.seedJoinTimeCacheRow = () => {};
+    stubAuthoritativeViewReads(owner, TEST_READABLE_EMPTY_READ_ROWS);
+
+    const result = await owner.registerNodeInCluster();
+
+    t.ok(result, 'a readable-empty authority allows fresh registration');
+    t.equal(
+      publicationCalls.filter((call) => call.kind === 'node').length,
+      1,
+      'genuine absence must proceed down the fresh upsert path',
+    );
+    t.equal(
+      result.nodeRow[COLUMN.NODE_ID],
+      TEST_NODE_ID,
+      'fresh admission over proven absence registers the joining node',
+    );
   },
 );

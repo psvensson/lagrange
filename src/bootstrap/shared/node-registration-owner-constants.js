@@ -28,6 +28,12 @@ const LOG_REUSING_DURABLE_REJOIN_MEMBERSHIP =
   'Reusing existing canonical membership for durable rejoin';
 const LOG_RESUMING_JOIN_ADMISSION_PROGRESS =
   'Resuming join admission from canonical membership progress';
+const LOG_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE =
+  'Authoritative row source unavailable; join admission defers for retry';
+const AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE =
+  'Authoritative control-plane row source unavailable; join admission ' +
+  'defers until the authority can answer reads';
+const AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS = TIME_MS.SECOND;
 const JOIN_ADMISSION_DELIVERY_PRIORITY = 'critical';
 const JOIN_ADMISSION_WRITE_RETRY_TIMEOUT_MS = TIME_MS.SECOND * NUM.THIRTY;
 const JOIN_ADMISSION_PUBLICATION = Object.freeze({
@@ -63,6 +69,8 @@ const normalizeString = (value) =>
   typeof value === 'string' ? value.trim() : '';
 
 export {
+  AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE_MESSAGE,
+  AUTHORITATIVE_ROW_UNAVAILABLE_RETRY_AFTER_MS,
   DURABLE_REJOIN_REQUIRED_SERVICE_IDS,
   JOIN_ADMISSION_DELIVERY_PRIORITY,
   JOIN_ADMISSION_PHASE_SCOPE,
@@ -76,6 +84,7 @@ export {
   LOCAL_STR_UPSERT,
   LOCAL_STR_V0KZD,
   LOCAL_STR_VWYJO,
+  LOG_AUTHORITATIVE_ROW_SOURCE_UNAVAILABLE,
   LOG_CLUSTER_INCARNATION_FENCE_UNAVAILABLE,
   LOG_JOIN_ADMISSION_WRITE_RETRY,
   LOG_META_ENDPOINT_REGISTER_FAILED,

@@ -1,0 +1,20 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "startup-evidence-single-identity-decision-v2",
+  "status": "pass",
+  "generatedAt": "2026-08-05T11:55:38.691Z",
+  "receipts": [
+    {
+      "id": "readauthoritativerows-typed-outcome",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/node-registration-owner.test.js",
+      "detail": "readAuthoritativeRows returns a typed {state, rows} outcome distinguishing READABLE from UNAVAILABLE (never a bare-array collapse of missing/unavailable/failed to [])"
+    },
+    {
+      "id": "unavailable-authority-defers-typed",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/node-registration-owner.test.js",
+      "detail": "an unavailable authority throws a typed deferred retryable error (deferRetry + retryAfterMs) so the join retries; zero upsertJoinNode calls (no fresh clobber over an authority that might hold the row)"
+    }
+  ]
+}

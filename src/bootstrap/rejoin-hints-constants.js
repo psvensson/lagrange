@@ -108,6 +108,18 @@ const DURABLE_EVIDENCE_STATE = Object.freeze({
 });
 
 /**
+ * Typed read outcome for one authoritative control-plane table read. Mirrors
+ * DURABLE_EVIDENCE_STATE: absence (READABLE with zero rows) must be
+ * positively proven; a source that could not answer the read is UNAVAILABLE,
+ * never absent, so join admission defers (retryable) instead of silently
+ * falling through to a fresh upsert over rows the authority actually holds.
+ */
+const AUTHORITATIVE_ROW_READ_STATE = Object.freeze({
+  READABLE: 'readable',
+  UNAVAILABLE: 'unavailable',
+});
+
+/**
  * Explicit operator escape hatch: setting this environment variable to the
  * literal '1' authorizes one fresh-cluster bootstrap over unreadable durable
  * evidence. Honored only by the startup entrypoint, never inside the
@@ -116,6 +128,7 @@ const DURABLE_EVIDENCE_STATE = Object.freeze({
 const FORCE_NEW_CLUSTER_ENV = 'LAGRANGE_FORCE_NEW_CLUSTER';
 
 export {
+  AUTHORITATIVE_ROW_READ_STATE,
   AUTO_REJOIN_DECISION_STATE,
   AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE,
   DURABLE_EVIDENCE_STATE,

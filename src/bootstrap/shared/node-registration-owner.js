@@ -165,6 +165,9 @@ class NodeRegistrationOwner {
       if (Number.isFinite(error?.retryAfterMs)) {
         wrappedError.retryAfterMs = Math.floor(error.retryAfterMs);
       }
+      if (error?.deferRetry === true) {
+        wrappedError.deferRetry = true;
+      }
       if (error?.retryable === false) {
         wrappedError.retryable = false;
       }
