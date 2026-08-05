@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "cluster-identity-persistence-seam",
   "status": "pass",
-  "generatedAt": "2026-08-05T08:04:18.596Z",
+  "generatedAt": "2026-08-05T08:52:53.099Z",
   "receipts": [
     {
       "id": "cluster-identity-minted-once-at-first-seed-bootstrap",

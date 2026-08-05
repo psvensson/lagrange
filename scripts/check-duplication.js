@@ -45,8 +45,10 @@ const RATCHET_TARGETS = [
     // 2026-07-25: tightened 73/2239 -> 66/2095 (measured; one-way-baseline rule).
     // 2026-07-28: tightened 66/2095 -> 66/2088 (complexity-checker violation
     // mapping hoisted into metric-check-helpers; measured in a clean worktree).
-    baselineCloneGroupCount: 66,
-    baselineDuplicatedLineCount: 2088,
+    // 2026-08-05: tightened 66/2088 -> 65/2063 (quest evidence-harness receipt
+    // loop extracted into quest-evidence-harness-runtime.js; measured).
+    baselineCloneGroupCount: 65,
+    baselineDuplicatedLineCount: 2063,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },

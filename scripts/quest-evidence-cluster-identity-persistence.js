@@ -1,23 +1,13 @@
 // Deterministic evidence harness for the cluster-identity-persistence-seam
-// quest. Runs the focused red-on-revert regression suites for each sealed
-// receipt and writes the test-receipt probe artifact
-// (solve/evidence/cluster-identity-persistence-seam.receipt.json). Every
-// receipt names the command that produced it and this harness re-runs those
-// commands — a receipt whose command fails flips the file to status "fail"
-// and the quest's doneWhen cannot close on it.
+// quest: receipt declarations only. The shared runtime
+// (scripts/quest-evidence-harness-runtime.js) re-runs each recorded proof
+// command and writes the probe artifact.
 
-import {execFileSync} from 'node:child_process';
-import fs from 'node:fs';
 import path from 'node:path';
 
-const RECEIPT_SCHEMA = 'test-receipt/1';
-const QUEST_ID = 'cluster-identity-persistence-seam';
-const OUTPUT_FILE = path.join(
-  'solve', 'evidence', 'cluster-identity-persistence-seam.receipt.json');
-const TEST_RUNNER = ['run', 'test:file', '--'];
-const NPM_EXECUTABLE = 'npm';
-const CHILD_STDIO_PIPE = 'pipe';
-const UTF8_ENCODING = 'utf8';
+import {
+  runQuestEvidenceHarness,
+} from './quest-evidence-harness-runtime.js';
 
 const RECEIPTS = Object.freeze([
   Object.freeze({
@@ -53,46 +43,14 @@ const RECEIPTS = Object.freeze([
   }),
 ]);
 
-function runReceipt(receipt) {
-  const command = `npm ${TEST_RUNNER.join(' ')} ${receipt.testFile}`;
-  try {
-    execFileSync(NPM_EXECUTABLE, [...TEST_RUNNER, receipt.testFile], {
-      stdio: CHILD_STDIO_PIPE,
-      encoding: UTF8_ENCODING,
-    });
-    return {id: receipt.id, passed: true, command, detail: receipt.detail};
-  } catch (error) {
-    return {
-      id: receipt.id,
-      passed: false,
-      command,
-      detail: receipt.detail,
-      failure: String(error?.stderr || error?.message || error),
-    };
-  }
-}
+const QUEST_ID = 'cluster-identity-persistence-seam';
+const SOLVE_DIR = 'solve';
+const EVIDENCE_DIR = 'evidence';
+const RECEIPT_FILENAME =
+  'cluster-identity-persistence-seam.receipt.json';
 
-function main() {
-  const receipts = RECEIPTS.map(runReceipt);
-  const status = receipts.every((r) => r.passed) ? 'pass' : 'fail';
-  const payload = {
-    schema: RECEIPT_SCHEMA,
-    quest: QUEST_ID,
-    status,
-    generatedAt: new Date().toISOString(),
-    receipts,
-  };
-  fs.mkdirSync(path.dirname(OUTPUT_FILE), {recursive: true});
-  fs.writeFileSync(OUTPUT_FILE, `${JSON.stringify(payload, null, 2)}\n`);
-  const failed = receipts.filter((r) => !r.passed);
-  for (const receipt of failed) {
-    process.stderr.write(
-      `FAIL ${receipt.id} (${receipt.command})\n${receipt.failure}\n`);
-  }
-  process.stdout.write(
-    `${OUTPUT_FILE}: ${status} (${receipts.length - failed.length}/` +
-    `${receipts.length} receipts passing)\n`);
-  process.exit(failed.length === 0 ? 0 : 1);
-}
-
-main();
+runQuestEvidenceHarness({
+  questId: QUEST_ID,
+  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
+  receipts: RECEIPTS,
+});
