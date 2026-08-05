@@ -1,0 +1,19 @@
+{
+  "metric": 0,
+  "target": 0,
+  "done": true,
+  "classification": "test-receipt-probe-tooling",
+  "detail": {
+    "owner": "solver-probe-registry",
+    "scopeFiles": [
+      "scripts/solve/probes/test-receipt.js",
+      "scripts/solve/probe.js",
+      "test/solve/test-receipt-probe.test.js"
+    ],
+    "focusedTestsPassed": true,
+    "focusedAssertions": 19,
+    "probeRegistered": true,
+    "questLintPassed": true,
+    "proofCommand": "npm run test:file -- test/solve/test-receipt-probe.test.js"
+  }
+}

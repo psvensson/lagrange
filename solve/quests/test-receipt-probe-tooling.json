@@ -1,0 +1,43 @@
+{
+  "id": "test-receipt-probe-tooling",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The Solver gains a test-receipt probe (scripts/solve/probes/test-receipt.js, registered in scripts/solve/probe.js) that reads a deterministic evidence receipt file produced by a focused test-run harness: metric = count of required receipt ids missing or not passing, done = 0 outstanding with overall status pass, and a receipt file that is absent, malformed, carries no receipts, or lacks producing commands is a fail-closed non-measuring sample. doneWhen: solve/oracle/test-receipt-probe-tooling.json is done only when the probe's own focused test suite passes (measuring, non-measuring, and outstanding-count cases) and the probe is registered and lint-clean.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "planDoc": "solve/epics/cluster-identity-and-join-fencing.md",
+    "specRef": "durable-cluster-identity-v2-measurement-apparatus",
+    "closesCL": [],
+    "parentQuest": null
+  },
+  "doneWhen": {
+    "probe": "oracle",
+    "args": {
+      "file": "solve/oracle/test-receipt-probe-tooling.json"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "test-receipt-probe-tooling-main",
+      "priority": 1,
+      "metric": {
+        "probe": "oracle",
+        "args": {
+          "file": "solve/oracle/test-receipt-probe-tooling.json"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "probe-purity",
+      "statement": "The probe is a pure reader over a real artifact: it must never execute the receipt commands, write the receipt file, or trust a receipt whose producing command is absent."
+    }
+  ]
+}
