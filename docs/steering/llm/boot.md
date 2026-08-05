@@ -77,6 +77,11 @@ node scripts/solve.js continue --id <id>
 node scripts/solve.js continue --id <id> --summary "<what changed>"
 ```
 
+After `land` records a categorized verifier rejection, make the bounded repair
+and run only the summarized form: it both begins and captures the replacement.
+The rejection itself reopens the Quest, and unchanged or narrower previously
+authorized scope is reauthorized automatically.
+
 `start` writes a versioned draft and stamps `links.draftedAtCommit` when the
 Quest is new; it does not seal the goal. The first safe continuation lints and
 appends the declaration. A lint failure appends nothing. The lower-level `new`,
@@ -96,8 +101,9 @@ node scripts/solve.js checkpoint --id <id> --dry-run \
   --reason <handoff|risky-tree|long-running|milestone>
 ```
 
-At a terminal, run `land` once to freeze the exact review manifest and issue its
-immutable review id. Give that id to the independent verifier. Then run `land`
+At a terminal, run `land` once. It runs the cheap changed-path preflight, caches
+the passing result by exact source digest, then freezes the review manifest and
+issues its immutable review id. Give that id to the independent verifier. Then run `land`
 again with the id and verdict; the Solver rejects any byte drift, constructs the
 receipt itself, runs the full audit, and on approval commits only Quest scope.
 Rejection records the fail-closed verdict and never commits. No Solver command
@@ -108,23 +114,25 @@ node scripts/solve.js land --id <id>
 # verifier reviews the issued review-<hex> manifest
 node scripts/solve.js land --id <id> --review review-<hex> \
   --verifier <stable-id> --verdict approve --receipt <ref>
+# on rejection, add repeatable: --finding "<category>: <summary>"
+# repair and capture in one call:
+node scripts/solve.js continue --id <id> --summary "<what changed>"
 ```
 
 ## Before Verification Or Checkpoint
 
-Before asking an independent verifier to inspect source bytes, run the cheap
-mechanical checks and inspect the current typed dossier:
+For terminal review, `land` owns the cheap mechanical preflight and refuses to
+mint a review id when it fails. The returned immutable manifest is the typed
+dossier; no separate preflight or `next` command is required.
+For exceptional diagnosis, `node scripts/solve.js next --id <id> --json`
+projects the same typed state without changing it.
+
+Only for an actual mid-Quest durability boundary, run the broader attempt
+preflight and explicit checkpoint simulation. Routine and terminal work does
+not add a checkpoint step.
 
 ```sh
 npm run audit:attempt-preflight
-node scripts/solve.js next --id <id> --json
-```
-
-Only for an actual mid-Quest durability boundary, also run the explicit
-checkpoint simulation with its reason. Routine and terminal work does not add a
-checkpoint step.
-
-```sh
 node scripts/solve.js checkpoint --id <id> --dry-run \
   --reason <handoff|risky-tree|long-running|milestone>
 ```

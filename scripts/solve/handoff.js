@@ -18,6 +18,7 @@
 //     out-of-scope dirty files so they are visibly excluded, never silently.
 
 import {execFileSync} from 'node:child_process';
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -55,6 +56,10 @@ import {
   clearCommitAuthorization,
   issueCommitAuthorization,
 } from './commit-authorization.js';
+import {
+  OWNER_DEBT_JAVASCRIPT_EXTENSIONS,
+  OWNER_DEBT_SOURCE_DIRECTORIES,
+} from '../global-owner-debt-inventory/constants.js';
 
 const CONTENT_DESCRIPTOR_EXTENSION = '.diff.json';
 const ORACLE_ARTIFACT_DIRECTORY = 'oracle';
@@ -62,6 +67,46 @@ const DERIVED_INVENTORY_PATHS = Object.freeze([
   'solve/changes/global-owner-debt-inventory/inventory.json',
   'solve/changes/priority-recovery-owner-inventory/inventory.json',
 ]);
+const INVENTORY_GENERATOR_PATHS = Object.freeze([
+  'scripts/generate-global-owner-debt-inventory.js',
+  'scripts/generate-priority-recovery-owner-inventory.js',
+]);
+const INVENTORY_CACHE_DIRECTORY = 'solve/state/inventory-refresh';
+const INVENTORY_CACHE_SCHEMA_VERSION = 1;
+const INVENTORY_LOCK_DIRECTORY = 'refresh.lock';
+const INVENTORY_LOCK_OWNER_FILE = 'owner.json';
+const INVENTORY_LOCK_OWNER_TEMP_PREFIX = 'refresh-owner-';
+const INVENTORY_LOCK_OWNER_TEMP_SUFFIX = '.json';
+const INVENTORY_LOCK_STEAL_GUARD_SUFFIX = '.steal-guard';
+const INVENTORY_LOCK_POLL_MS = 100;
+const INVENTORY_LOCK_WAIT_LIMIT = 3_600;
+const INVENTORY_LOCK_OWNERLESS_GRACE_MS = 250;
+const INVENTORY_LOCK_STEAL_GUARD_STALE_MS = 2_000;
+const INVENTORY_LOCK_TOKEN_BYTES = 16;
+const INVENTORY_SOURCE_STABILITY_ATTEMPTS = 3;
+const GIT_MAX_BUFFER_BYTES = 64 * 1024 * 1024;
+const HASH_ALGORITHM = 'sha256';
+const HASH_ENCODING = 'hex';
+const HASH_FIELD_SEPARATOR = '\0';
+const TEXT_ENCODING = 'utf8';
+const DIRECTORY_EXISTS_ERROR = 'EEXIST';
+const MISSING_PATH_ERROR = 'ENOENT';
+const PERMISSION_ERROR = 'EPERM';
+const INVENTORY_LOCK_TIMEOUT_PROBLEM =
+  'inventory refresh lock remained busy past its bounded wait';
+const INVENTORY_SOURCE_STABILITY_PROBLEM =
+  'repository source changed during every bounded inventory refresh attempt';
+const SKIP_CHECKPOINT_GATE = 'checkpoint-gate';
+const SKIP_COMMIT_GATE = 'commit-gate';
+const SKIP_NOTHING_IN_SCOPE = 'nothing-in-scope';
+const arrayEvery = Function.call.bind(Array.prototype.every);
+const arrayPush = Function.call.bind(Array.prototype.push);
+const arraySort = Function.call.bind(Array.prototype.sort);
+const arrayMap = Function.call.bind(Array.prototype.map);
+const jsonParse = JSON.parse;
+const jsonStringify = JSON.stringify;
+const numberIsInteger = Number.isInteger;
+const setHas = Function.call.bind(Set.prototype.has);
 const GIT_COMMAND = 'git';
 const COMMIT_MODE = Object.freeze({CHECKPOINT: 'checkpoint', LAND: 'land'});
 const CHILD_STDIO_IGNORE = 'ignore';
@@ -458,7 +503,11 @@ function isIndexLockContention(error) {
 function runGitCommand(root, args) {
   for (let attempt = 0; ; attempt += 1) {
     try {
-      return execFileSync(GIT_COMMAND, args, {cwd: root, stdio: GIT_STDIO});
+      return execFileSync(GIT_COMMAND, args, {
+        cwd: root,
+        stdio: GIT_STDIO,
+        maxBuffer: GIT_MAX_BUFFER_BYTES,
+      });
     } catch (error) {
       if (!isIndexLockContention(error) ||
         attempt >= GIT_LOCK_RETRY_ATTEMPTS - 1) {
@@ -493,13 +542,208 @@ function refreshFrontierBoardForCommit(root) {
   }
 }
 
-function refreshDerivedInventoriesForCommit(root, quest, log) {
-  if (verificationState(root, quest, log).attempts.length === 0) return;
-  const globalGenerator = path.join(
-    root, 'scripts', 'generate-global-owner-debt-inventory.js');
-  const priorityGenerator = path.join(
-    root, 'scripts', 'generate-priority-recovery-owner-inventory.js');
-  if (!fs.existsSync(globalGenerator) || !fs.existsSync(priorityGenerator)) return;
+function contentIdentity(file) {
+  if (!fs.existsSync(file)) return null;
+  return crypto.createHash(HASH_ALGORITHM)
+    .update(fs.readFileSync(file)).digest(HASH_ENCODING);
+}
+
+function repositoryJavaScriptFiles(root) {
+  const files = [];
+  const visit = (directory) => {
+    const entries = fs.readdirSync(directory, {withFileTypes: true});
+    arraySort(entries, (left, right) => left.name < right.name ? -1 :
+      left.name > right.name ? 1 : 0);
+    for (let index = 0; index < entries.length; index += 1) {
+      const entry = entries[index];
+      const absolute = path.join(directory, entry.name);
+      if (entry.isDirectory()) visit(absolute);
+      if (entry.isFile() &&
+        setHas(OWNER_DEBT_JAVASCRIPT_EXTENSIONS, path.extname(entry.name))) {
+        arrayPush(files, path.relative(root, absolute));
+      }
+    }
+  };
+  for (let index = 0; index < OWNER_DEBT_SOURCE_DIRECTORIES.length; index += 1) {
+    const directory = path.join(root, OWNER_DEBT_SOURCE_DIRECTORIES[index]);
+    if (fs.existsSync(directory)) visit(directory);
+  }
+  return files;
+}
+
+function repositoryJavaScriptSourceDigest(root) {
+  const hash = crypto.createHash(HASH_ALGORITHM);
+  const files = repositoryJavaScriptFiles(root);
+  for (let index = 0; index < files.length; index += 1) {
+    const filePath = files[index];
+    hash.update(filePath).update(HASH_FIELD_SEPARATOR)
+      .update(fs.readFileSync(path.join(root, filePath)));
+  }
+  return hash.digest(HASH_ENCODING);
+}
+
+function inventoryRefreshIdentity(root, sourceDigest) {
+  return {
+    schemaVersion: INVENTORY_CACHE_SCHEMA_VERSION,
+    sourceDigest,
+    repositorySourceDigest: repositoryJavaScriptSourceDigest(root),
+    generators: arrayMap(INVENTORY_GENERATOR_PATHS, (filePath) => ({
+      filePath,
+      sha256: contentIdentity(path.join(root, filePath)),
+    })),
+  };
+}
+
+function inventoryOutputIdentities(root) {
+  return arrayMap(DERIVED_INVENTORY_PATHS, (filePath) => ({
+    filePath,
+    sha256: contentIdentity(path.join(root, filePath)),
+  }));
+}
+
+function inventoryRefreshCacheFile(root, identity) {
+  const digest = crypto.createHash(HASH_ALGORITHM)
+    .update(jsonStringify(identity)).digest(HASH_ENCODING);
+  return path.join(root, INVENTORY_CACHE_DIRECTORY, `${digest}.json`);
+}
+
+function cachedInventoryRefresh(file, identity, outputs) {
+  try {
+    const cached = jsonParse(fs.readFileSync(file, TEXT_ENCODING));
+    return jsonStringify(cached.identity) === jsonStringify(identity) &&
+      jsonStringify(cached.outputs) === jsonStringify(outputs) &&
+      arrayEvery(outputs, (output) => output.sha256 !== null);
+  } catch {
+    return false;
+  }
+}
+
+function inventoryLockOwnerFile(lockDirectory) {
+  try {
+    return fs.lstatSync(lockDirectory).isDirectory() ?
+      path.join(lockDirectory, INVENTORY_LOCK_OWNER_FILE) : lockDirectory;
+  } catch {
+    return lockDirectory;
+  }
+}
+
+function readInventoryLockOwner(lockDirectory) {
+  try {
+    return jsonParse(fs.readFileSync(
+      inventoryLockOwnerFile(lockDirectory), TEXT_ENCODING));
+  } catch {
+    return null;
+  }
+}
+
+function inventoryLockPidAlive(pid) {
+  if (!numberIsInteger(pid) || pid <= 0) return false;
+  try {
+    process.kill(pid, 0);
+    return true;
+  } catch (error) {
+    return error?.code === PERMISSION_ERROR;
+  }
+}
+
+function inventoryLockIsStale(lockDirectory) {
+  const owner = readInventoryLockOwner(lockDirectory);
+  if (owner) return !inventoryLockPidAlive(owner.pid);
+  try {
+    return Date.now() - fs.statSync(lockDirectory).mtimeMs >=
+      INVENTORY_LOCK_OWNERLESS_GRACE_MS;
+  } catch {
+    return false;
+  }
+}
+
+function removeInventoryStealGuardIfStale(guardDirectory) {
+  try {
+    if (Date.now() - fs.statSync(guardDirectory).mtimeMs >=
+      INVENTORY_LOCK_STEAL_GUARD_STALE_MS) {
+      fs.rmSync(guardDirectory, {recursive: true, force: true});
+    }
+  } catch (error) {
+    if (error?.code !== MISSING_PATH_ERROR) throw error;
+  }
+}
+
+function tryStealInventoryRefreshLock(lockDirectory) {
+  const guardDirectory =
+    `${lockDirectory}${INVENTORY_LOCK_STEAL_GUARD_SUFFIX}`;
+  try {
+    fs.mkdirSync(guardDirectory);
+  } catch (error) {
+    if (error?.code !== DIRECTORY_EXISTS_ERROR) throw error;
+    removeInventoryStealGuardIfStale(guardDirectory);
+    return;
+  }
+  try {
+    if (fs.existsSync(lockDirectory) && inventoryLockIsStale(lockDirectory)) {
+      fs.rmSync(lockDirectory, {recursive: true, force: true});
+    }
+  } finally {
+    fs.rmSync(guardDirectory, {recursive: true, force: true});
+  }
+}
+
+function tryAcquireInventoryRefreshLock(lockDirectory) {
+  const owner = {
+    pid: process.pid,
+    token: crypto.randomBytes(INVENTORY_LOCK_TOKEN_BYTES).toString(HASH_ENCODING),
+    acquiredAt: new Date().toISOString(),
+  };
+  const ownerTempFile = path.join(
+    path.dirname(lockDirectory),
+    `${INVENTORY_LOCK_OWNER_TEMP_PREFIX}${owner.token}` +
+      INVENTORY_LOCK_OWNER_TEMP_SUFFIX,
+  );
+  try {
+    // The complete owner record exists before the fixed lock name does. A hard
+    // link publishes those exact bytes atomically, so there is no mkdir-to-owner
+    // formation window in which a live owner can look abandoned.
+    fs.writeFileSync(ownerTempFile, `${jsonStringify(owner)}\n`);
+    fs.linkSync(ownerTempFile, lockDirectory);
+  } catch (error) {
+    if (error?.code === DIRECTORY_EXISTS_ERROR) {
+      if (inventoryLockIsStale(lockDirectory)) {
+        tryStealInventoryRefreshLock(lockDirectory);
+      }
+      return null;
+    }
+    throw error;
+  } finally {
+    fs.rmSync(ownerTempFile, {force: true});
+  }
+  return owner;
+}
+
+function releaseInventoryRefreshLock(lockDirectory, owner) {
+  const current = readInventoryLockOwner(lockDirectory);
+  if (current?.token !== owner.token) return;
+  fs.rmSync(lockDirectory, {recursive: true, force: true});
+}
+
+function withInventoryRefreshLock(root, action) {
+  const cacheDirectory = path.join(root, INVENTORY_CACHE_DIRECTORY);
+  const lockDirectory = path.join(cacheDirectory, INVENTORY_LOCK_DIRECTORY);
+  fs.mkdirSync(cacheDirectory, {recursive: true});
+  for (let attempt = 0; attempt < INVENTORY_LOCK_WAIT_LIMIT; attempt += 1) {
+    const owner = tryAcquireInventoryRefreshLock(lockDirectory);
+    if (!owner) {
+      sleepSync(INVENTORY_LOCK_POLL_MS);
+      continue;
+    }
+    try {
+      return action();
+    } finally {
+      releaseInventoryRefreshLock(lockDirectory, owner);
+    }
+  }
+  throw new Error(INVENTORY_LOCK_TIMEOUT_PROBLEM);
+}
+
+function runInventoryGenerators(root, globalGenerator, priorityGenerator) {
   try {
     execFileSync(process.execPath, [globalGenerator], {
       cwd: root,
@@ -518,52 +762,87 @@ function refreshDerivedInventoriesForCommit(root, quest, log) {
   });
 }
 
-// Auto commit a Quest's in-scope work once it finishes, so the Solver persists its
-// own scope-clean changes instead of accumulating an unrecoverable dirty tree. The
-// commit gate is minimal — the quest must have FINISHED without errors (a SOLVED
-// terminal) and any source change must be VERIFIED — and nothing else. It:
-//   - never runs outside a git work tree (returns {skipped:'not-a-git-work-tree'});
-//   - refuses until the commit gate is met (returns {skipped:'commit-gate'});
-//   - commits only the Quest's in-scope pathspec, never the dirty-tree shape;
-//   - skips cleanly when there is nothing in scope to commit;
-//   - commits, nothing else — it never pushes.
-export function autoCommitQuest(root, questId, options = {}) {
-  if (!insideWorkTree(root)) {
-    return {committed: false, skipped: 'not-a-git-work-tree'};
+function sameInventoryIdentity(left, right) {
+  return jsonStringify(left) === jsonStringify(right);
+}
+
+function writeInventoryRefreshCache(cacheFile, identity, outputs) {
+  fs.writeFileSync(cacheFile, `${jsonStringify({
+    schemaVersion: INVENTORY_CACHE_SCHEMA_VERSION,
+    identity,
+    outputs,
+  }, null, 2)}\n`);
+}
+
+function refreshDerivedInventoriesLocked(root, sourceDigest) {
+  const [globalPath, priorityPath] = INVENTORY_GENERATOR_PATHS;
+  const globalGenerator = path.join(root, globalPath);
+  const priorityGenerator = path.join(root, priorityPath);
+  if (!fs.existsSync(globalGenerator) || !fs.existsSync(priorityGenerator)) return;
+  for (let attempt = 0;
+    attempt < INVENTORY_SOURCE_STABILITY_ATTEMPTS;
+    attempt += 1) {
+    const identity = inventoryRefreshIdentity(root, sourceDigest);
+    const cacheFile = inventoryRefreshCacheFile(root, identity);
+    const outputsBeforeRefresh = inventoryOutputIdentities(root);
+    if (cachedInventoryRefresh(cacheFile, identity, outputsBeforeRefresh)) {
+      const currentIdentity = inventoryRefreshIdentity(root, sourceDigest);
+      if (sameInventoryIdentity(identity, currentIdentity)) {
+        return {refreshed: false, cached: true, sourceDigest};
+      }
+      continue;
+    }
+    runInventoryGenerators(root, globalGenerator, priorityGenerator);
+    const currentIdentity = inventoryRefreshIdentity(root, sourceDigest);
+    if (!sameInventoryIdentity(identity, currentIdentity)) continue;
+    const outputs = inventoryOutputIdentities(root);
+    writeInventoryRefreshCache(cacheFile, identity, outputs);
+    return {refreshed: true, cached: false, sourceDigest};
   }
-  const checkpoint = options.checkpoint === true;
-  const quest = loadQuest(root, questId);
-  const log = readLog(root, questId);
-  refreshDerivedInventoriesForCommit(root, quest, log);
+  throw new Error(INVENTORY_SOURCE_STABILITY_PROBLEM);
+}
+
+export function refreshDerivedInventoriesForCommit(root, sourceDigest) {
+  return withInventoryRefreshLock(root, () =>
+    refreshDerivedInventoriesLocked(root, sourceDigest));
+}
+
+function landingSourceDigest(root, quest, log) {
+  const state = verificationState(root, quest, log);
+  if (state.attempts.length === 0) return null;
+  if (state.aggregate?.fingerprint) return state.aggregate.fingerprint;
+  return `sha256:${crypto.createHash(HASH_ALGORITHM).update(jsonStringify(
+    arrayMap(state.attempts, (attempt) => attempt.fingerprint || null),
+  )).digest(HASH_ENCODING)}`;
+}
+
+function commitFinalHandoff(
+  root,
+  questId,
+  quest,
+  log,
+  checkpoint,
+  checkpointReason,
+  sourceDigest,
+) {
+  const inventoryRefresh = sourceDigest ?
+    refreshDerivedInventoriesLocked(root, sourceDigest) : null;
   refreshFrontierBoardForCommit(root);
-  // Only a landing of a projected-SOLVED quest flips its spec-ladder row: a
-  // checkpoint is a mid-quest save, and a refused terminal (commit gate not
-  // met) must not stamp SOLVED onto the ladder. The flip runs before
-  // buildHandoff for the same dirty-scope reason as the frontier board.
   if (!checkpoint &&
     projectState(quest, log).questStatus === STATUS_SOLVED) {
     refreshSpecLadderForCommit(root, quest);
   }
-  const handoff = buildHandoff(root, quest, {
-    checkpoint,
-    checkpointReason: options.checkpointReason,
-  });
+  const handoff = buildHandoff(root, quest, {checkpoint, checkpointReason});
   if (!handoff.ok) {
     return {
       committed: false,
-      skipped: checkpoint ? 'checkpoint-gate' : 'commit-gate',
+      skipped: checkpoint ? SKIP_CHECKPOINT_GATE : SKIP_COMMIT_GATE,
       gate: handoff.gate,
     };
   }
   if (handoff.inScope.length === 0) {
-    return {committed: false, skipped: 'nothing-in-scope'};
+    return {committed: false, skipped: SKIP_NOTHING_IN_SCOPE};
   }
-  // A landing that loses the index-lock race must report a typed, retryable skip
-  // rather than throw. The throw would escape the workflow AFTER the terminal event
-  // is already appended, leaving the Quest recorded as solved with its work
-  // uncommitted and a dirty tree — the worst possible state to hand an unattended
-  // supervisor. `git-busy` is recoverable: re-running land (or `solve handoff`)
-  // commits the same scope.
   try {
     runGitCommand(root, [
       GIT_ARGUMENT.RESET,
@@ -602,7 +881,44 @@ export function autoCommitQuest(root, questId, options = {}) {
     paths: handoff.inScope,
     pushed: false,
     questId,
+    inventoryRefresh,
   };
+}
+
+// Auto commit a Quest's in-scope work once it finishes, so the Solver persists its
+// own scope-clean changes instead of accumulating an unrecoverable dirty tree. The
+// commit gate is minimal — the quest must have FINISHED without errors (a SOLVED
+// terminal) and any source change must be VERIFIED — and nothing else. It:
+//   - never runs outside a git work tree (returns {skipped:'not-a-git-work-tree'});
+//   - refuses until the commit gate is met (returns {skipped:'commit-gate'});
+//   - commits only the Quest's in-scope pathspec, never the dirty-tree shape;
+//   - skips cleanly when there is nothing in scope to commit;
+//   - commits, nothing else — it never pushes.
+export function autoCommitQuest(root, questId, options = {}) {
+  if (!insideWorkTree(root)) {
+    return {committed: false, skipped: 'not-a-git-work-tree'};
+  }
+  const checkpoint = options.checkpoint === true;
+  const quest = loadQuest(root, questId);
+  const log = readLog(root, questId);
+  const preliminary = buildHandoff(root, quest, {
+    checkpoint,
+    checkpointReason: options.checkpointReason,
+  });
+  if (!preliminary.ok) {
+    return {
+      committed: false,
+      skipped: checkpoint ? SKIP_CHECKPOINT_GATE : SKIP_COMMIT_GATE,
+      gate: preliminary.gate,
+    };
+  }
+  if (preliminary.inScope.length === 0) {
+    return {committed: false, skipped: SKIP_NOTHING_IN_SCOPE};
+  }
+  const sourceDigest = checkpoint ? null : landingSourceDigest(root, quest, log);
+  const finalize = () => commitFinalHandoff(
+    root, questId, quest, log, checkpoint, options.checkpointReason, sourceDigest);
+  return sourceDigest ? withInventoryRefreshLock(root, finalize) : finalize();
 }
 
 export function runHandoffCommand(root, args) {

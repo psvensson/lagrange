@@ -7,6 +7,8 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import {landingReviewPreflight} from './landing-preflight.js';
+
 const REVIEW_DIRECTORY = 'solve/state/reviews';
 const REVIEW_ID_PATTERN = /^review-[0-9a-f]{24}$/u;
 const SCHEMA_VERSION = 1;
@@ -98,6 +100,7 @@ function reviewFile(root, reviewId) {
 
 export function createReviewRequest(root, quest, state) {
   const manifest = currentReviewManifest(quest, state);
+  const preflight = landingReviewPreflight(root, manifest);
   const id = reviewIdFor(manifest);
   const file = reviewFile(root, id);
   fs.mkdirSync(path.dirname(file), {recursive: true});
@@ -108,7 +111,7 @@ export function createReviewRequest(root, quest, state) {
       manifest,
     }, null, 2)}\n`);
   }
-  return {id, manifest, file: path.relative(root, file)};
+  return {id, manifest, file: path.relative(root, file), preflight};
 }
 
 export function loadReviewRequest(root, reviewId) {
@@ -142,5 +145,5 @@ export function assertReviewCurrent(root, quest, state, reviewId) {
       FRESH_REVIEW_ACTION,
     );
   }
-  return request;
+  return {...request, preflight: landingReviewPreflight(root, current)};
 }

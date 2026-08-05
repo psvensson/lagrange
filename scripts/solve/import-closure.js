@@ -11,12 +11,27 @@
 import fs from 'node:fs';
 import path from 'node:path';
 import {execFileSync} from 'node:child_process';
+import {
+  initSync as initializeModuleLexer,
+  parse as parseModuleImports,
+} from 'es-module-lexer';
 
-import {parseSourceFile, walkAst} from '../guideline-check-shared.js';
 import {requiresSourceVerification} from './change-artifact.js';
 
-const IMPORT_DECLARATION = 'ImportDeclaration';
 const JS_EXTENSION = '.js';
+const LINE_SEPARATOR = '\n';
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayIsArray = Array.isArray;
+const arrayPush = Function.call.bind(Array.prototype.push);
+const arraySlice = Function.call.bind(Array.prototype.slice);
+const arraySort = Function.call.bind(Array.prototype.sort);
+const setAdd = Function.call.bind(Set.prototype.add);
+const setHas = Function.call.bind(Set.prototype.has);
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
+const stringSplit = Function.call.bind(String.prototype.split);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+
+initializeModuleLexer();
 
 function gitLines(root, args) {
   // stderr is piped, not inherited: an unreadable base is an expected degrade
@@ -26,7 +41,7 @@ function gitLines(root, args) {
     encoding: 'utf8',
     stdio: ['ignore', 'pipe', 'pipe'],
   });
-  return out.split('\n').filter(Boolean);
+  return arrayFilter(stringSplit(out, LINE_SEPARATOR), Boolean);
 }
 
 // Every tracked path changed between baseCommit and the working tree, plus
@@ -36,9 +51,25 @@ export function changedSourcePathsSinceBase(root, baseCommit) {
   const changed = gitLines(root, ['diff', '--name-only', baseCommit]);
   const untracked = gitLines(root,
     ['ls-files', '--others', '--exclude-standard']);
-  return [...new Set([...changed, ...untracked])]
-    .filter(requiresSourceVerification)
-    .sort();
+  const unique = [];
+  const seen = new Set();
+  for (let index = 0; index < changed.length; index += 1) {
+    const filePath = changed[index];
+    if (!setHas(seen, filePath)) {
+      setAdd(seen, filePath);
+      arrayPush(unique, filePath);
+    }
+  }
+  for (let index = 0; index < untracked.length; index += 1) {
+    const filePath = untracked[index];
+    if (!setHas(seen, filePath)) {
+      setAdd(seen, filePath);
+      arrayPush(unique, filePath);
+    }
+  }
+  const sourcePaths = arrayFilter(unique, requiresSourceVerification);
+  arraySort(sourcePaths);
+  return sourcePaths;
 }
 
 function relativeImportSpecifiers(root, importer) {
@@ -49,27 +80,30 @@ function relativeImportSpecifiers(root, importer) {
   } catch {
     return [];
   }
-  let ast;
+  let parsed;
   try {
-    ast = parseSourceFile(source);
+    parsed = parseModuleImports(source);
   } catch {
     return [];
   }
   const specifiers = [];
-  walkAst(ast, (node) => {
-    if (node.type !== IMPORT_DECLARATION) return;
-    const specifier = node.source?.value;
-    if (typeof specifier === 'string' && specifier.startsWith('.')) {
-      specifiers.push(specifier);
+  const imports = arrayIsArray(parsed?.[0]) ? parsed[0] : [];
+  for (let index = 0; index < imports.length; index += 1) {
+    const entry = imports[index];
+    if (entry.d !== -1) continue;
+    const specifier = entry.n;
+    if (typeof specifier === 'string' && stringStartsWith(specifier, '.')) {
+      arrayPush(specifiers, specifier);
     }
-  });
+  }
   return specifiers;
 }
 
 function resolveRepoRelative(importer, specifier) {
   const resolved = path.posix.normalize(
     path.posix.join(path.posix.dirname(importer), specifier));
-  return resolved.endsWith(JS_EXTENSION) ? resolved : `${resolved}${JS_EXTENSION}`;
+  return stringEndsWith(resolved, JS_EXTENSION) ?
+    resolved : `${resolved}${JS_EXTENSION}`;
 }
 
 // Compute the candidate's closure gaps. `candidate` needs `baseCommit` and
@@ -78,34 +112,57 @@ function resolveRepoRelative(importer, specifier) {
 // already ran git).
 export function importClosureGaps(root, candidate, options = {}) {
   const empty = {omittedChangedPaths: [], importGaps: []};
-  const candidatePaths = [...(candidate?.paths || [])];
+  const candidatePaths = arraySlice(candidate?.paths || []);
   if (!candidate?.baseCommit || candidatePaths.length === 0) return empty;
   let changed;
   try {
-    changed = options.changedPaths ||
-      changedSourcePathsSinceBase(root, candidate.baseCommit);
+    changed = arraySlice(options.changedPaths ||
+      changedSourcePathsSinceBase(root, candidate.baseCommit));
   } catch {
     // An unreadable base (e.g. shallow history) yields no projection rather
     // than a false gap; the exact-fingerprint gate still guards correctness.
     return empty;
   }
-  const candidateSet = new Set(candidatePaths);
-  const omitted = changed.filter((filePath) => !candidateSet.has(filePath));
+  const candidateSet = new Set();
+  for (let index = 0; index < candidatePaths.length; index += 1) {
+    setAdd(candidateSet, candidatePaths[index]);
+  }
+  const omitted = arrayFilter(changed,
+    (filePath) => !setHas(candidateSet, filePath));
   if (omitted.length === 0) return empty;
-  const omittedSet = new Set(omitted);
-  const gaps = new Map();
-  for (const importer of candidatePaths) {
-    if (!importer.endsWith(JS_EXTENSION)) continue;
-    for (const specifier of relativeImportSpecifiers(root, importer)) {
+  const omittedSet = new Set();
+  for (let index = 0; index < omitted.length; index += 1) {
+    setAdd(omittedSet, omitted[index]);
+  }
+  const gapKeys = new Set();
+  const gaps = [];
+  for (let importerIndex = 0;
+    importerIndex < candidatePaths.length;
+    importerIndex += 1) {
+    const importer = candidatePaths[importerIndex];
+    if (!stringEndsWith(importer, JS_EXTENSION)) continue;
+    const specifiers = relativeImportSpecifiers(root, importer);
+    for (let specifierIndex = 0;
+      specifierIndex < specifiers.length;
+      specifierIndex += 1) {
+      const specifier = specifiers[specifierIndex];
       const imported = resolveRepoRelative(importer, specifier);
-      if (!omittedSet.has(imported)) continue;
-      gaps.set(`${importer}\0${imported}`, {importer, imported});
+      if (!setHas(omittedSet, imported)) continue;
+      const gapKey = `${importer}\0${imported}`;
+      if (setHas(gapKeys, gapKey)) continue;
+      setAdd(gapKeys, gapKey);
+      arrayPush(gaps, {importer, imported});
     }
   }
+  arraySort(gaps, (left, right) => {
+    const leftKey = `${left.importer}\0${left.imported}`;
+    const rightKey = `${right.importer}\0${right.imported}`;
+    if (leftKey < rightKey) return -1;
+    if (leftKey > rightKey) return 1;
+    return 0;
+  });
   return {
     omittedChangedPaths: omitted,
-    importGaps: [...gaps.values()].sort((left, right) =>
-      `${left.importer}\0${left.imported}`.localeCompare(
-        `${right.importer}\0${right.imported}`)),
+    importGaps: gaps,
   };
 }

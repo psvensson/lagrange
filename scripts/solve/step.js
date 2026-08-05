@@ -16,7 +16,13 @@ import {
   finalizeAttempt,
   recordQuestSolvedIfDone,
 } from './loop.js';
-import {readLog, projectState, assertSafeQuestId} from './store.js';
+import {
+  appendGuardOverride,
+  assertSafeQuestId,
+  projectState,
+  readLog,
+  scopeSignatureNeedsReauthorization,
+} from './store.js';
 import {evaluate} from './probe.js';
 import {pickFrontier} from './scheduler.js';
 import {resolveAttemptTheoryRef, stepTheoryGateProblems} from './theory.js';
@@ -84,21 +90,28 @@ const AUTO_DIFF_REPORT_DELETION_DISCOVERY_ERROR =
   'auto-diff: report deletion path discovery failed: ';
 const SCOPE_PRESSURE_BLOCKED_PREFIX =
   'scope-pressure precommit blocked: split into bounded Quest declarations ';
+const AUTOMATIC_SCOPE_REAUTHORIZATION_REASON =
+  'automatic reauthorization of previously covered scope';
 
 // Solver-owned GENERATED bookkeeping the step/loop machinery itself writes
 // between step begin and commit: the pending file (solve/state, stepBegin),
 // event-log appends (solve/log — gate decisions fire at begin time), the
-// regenerated report (solve/report), and the frontier board refresh
-// (solve/FRONTIER.generated.md). Sweeping these into an --auto-diff artifact
+// content-addressed attempt objects (solve/artifacts), regenerated reports
+// (solve/report), the frontier board refresh
+// (solve/FRONTIER.generated.md), and the owner inventories refreshed only by
+// final landing. Sweeping these into an --auto-diff artifact
 // self-poisons a product quest: the change-artifact honesty gate classifies
 // solve/ paths as workflow changes and rejects the attempt. Only these
 // generated paths are excluded — the operator's INTENTIONAL edits under
 // solve/ (quest JSON, epics, specs) are still captured.
 const AUTO_DIFF_EXCLUDED_BOOKKEEPING_PATHSPECS = Object.freeze([
   'solve/FRONTIER.generated.md',
+  'solve/artifacts',
   'solve/state',
   'solve/log',
   'solve/report',
+  'solve/changes/global-owner-debt-inventory/inventory.json',
+  'solve/changes/priority-recovery-owner-inventory/inventory.json',
 ].map((bookkeepingPath) => `:(exclude)${bookkeepingPath}`));
 const REPORT_PROJECTION_PATHSPEC = 'solve/report';
 // git diff never sees untracked files, so a brand-new test or script created
@@ -495,6 +508,52 @@ function stepTelemetry(pending, changeInspection) {
   };
 }
 
+function assertScopeAdmission(
+  root,
+  quest,
+  log,
+  pending,
+  changeInspection,
+  sourceBaseCommit,
+) {
+  const scopePressure = analyzeScopePressureCandidate(
+    root, quest, log, changeInspection, {
+      workspaceBaseCommit: sourceBaseCommit || null,
+    });
+  const scopeAdmission = scopeTerminalStatus(scopePressure);
+  if (!scopeAdmission.terminal) return;
+  const scopeProblem = SCOPE_PRESSURE_BLOCKED_PREFIX +
+    `(files=${scopeAdmission.fileCount}, owners=${scopeAdmission.ownerCount}, ` +
+    `bytes=${scopeAdmission.changeBytes})`;
+  const admittedScopePaths = scopePressure.admission?.changedPaths ||
+    scopePressure.changedPaths;
+  if (scopeSignatureNeedsReauthorization(
+    log,
+    pending.frontier,
+    CONTINUATION_BLOCKED_SCOPE,
+    admittedScopePaths,
+    scopeProblem,
+  )) {
+    log.push(appendGuardOverride(root, quest.id, {
+      frontier: pending.frontier,
+      code: CONTINUATION_BLOCKED_SCOPE,
+      problem: scopeProblem,
+      reason: AUTOMATIC_SCOPE_REAUTHORIZATION_REASON,
+      scopeSignature: admittedScopePaths,
+    }));
+  }
+  const decision = resolveGateDecision(root, quest, {
+    status: CONTINUATION_BLOCKED_SCOPE,
+    code: CONTINUATION_BLOCKED_SCOPE,
+    problems: [scopeProblem],
+  }, {
+    log,
+    frontier: pending.frontier,
+    rungIndex: pending.rungIndex,
+  });
+  if (!decisionContinues(decision)) throw new Error(scopeProblem);
+}
+
 function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
   const ctx = configureContext(root, quest, options);
   ensureSealedGoal(root, quest);
@@ -526,26 +585,8 @@ function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {
     root, changeRef, changeInspection, {questId: quest.id});
   if (!admission.ok) throw new Error(admission.problem);
 
-  const scopeAdmission = scopeTerminalStatus(
-    analyzeScopePressureCandidate(root, quest, log, changeInspection, {
-      workspaceBaseCommit: sourceBaseCommit || null,
-    }),
-  );
-  if (scopeAdmission.terminal) {
-    const scopeProblem = SCOPE_PRESSURE_BLOCKED_PREFIX +
-      `(files=${scopeAdmission.fileCount}, owners=${scopeAdmission.ownerCount}, ` +
-      `bytes=${scopeAdmission.changeBytes})`;
-    const decision = resolveGateDecision(root, quest, {
-      status: CONTINUATION_BLOCKED_SCOPE,
-      code: CONTINUATION_BLOCKED_SCOPE,
-      problems: [scopeProblem],
-    }, {
-      log,
-      frontier: pending.frontier,
-      rungIndex: pending.rungIndex,
-    });
-    if (!decisionContinues(decision)) throw new Error(scopeProblem);
-  }
+  assertScopeAdmission(
+    root, quest, log, pending, changeInspection, sourceBaseCommit);
   // Same admission pair as the attempt wrapper (see attempt.js): repeated
   // failed rejection rounds gate toward reframing, and machine-checkable
   // lint/guideline findings never earn a verifier round. Both are

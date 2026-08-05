@@ -75,11 +75,17 @@ The normal Quest workflow has three verbs:
    the measured attempt in the event log; it does not create a Git commit. An
    attempt-record action requires `--summary`; absent an exceptional explicit
    `--changeRef`, it captures the canonical working-tree delta automatically.
+   After a verifier rejection, the same summarized call both begins and
+   captures the replacement; no oracle edit, evidence-ingestion command, or
+   separate begin call is part of the routine correction loop. A previously
+   authorized scope is reauthorized automatically while unchanged or narrower;
+   any new path still stops at the scope gate.
    It MUST NOT parse or execute the
    human-rendered action value, and it stops on every judgment, verification,
    audit-repair, or terminal action.
 3. `solve land --id <id>` freezes the exact terminal candidate and aggregate
-   manifest and returns an immutable review id. A second `land --review <id>
+   manifest only after a cheap changed-path preflight passes, caches that pass
+   by exact source digest, and returns an immutable review id. A second `land --review <id>
    --verifier <id> --verdict approve|reject --receipt <ref>` rechecks that
    manifest against current bytes and constructs the receipt server-side.
    Rejection records the fail-closed candidate verdict and never commits.
@@ -106,6 +112,10 @@ Quest-owned logs, receipts, artifacts, and the deterministic owner inventories
 remain durable commit scope, but they are bookkeeping rather than review input.
 They are excluded from source ownership and verifier fingerprints, so a
 timestamped receipt or regenerated inventory cannot drift approved source bytes.
+Terminal landing prechecks the full gate before refreshing those inventories,
+serializes the shared refresh, reuses an unchanged content-checked result, and
+refreshes at most once immediately before the final commit. Checkpoints and
+refused landings do not refresh them.
 
 ## Quest Anatomy
 
@@ -380,6 +390,11 @@ candidate approval, then records the durability reason in the commit body and
 commits only Quest scope. Terminal handoff separately requires full aggregate
 composition approval and audit. Version 1 receipts retain their historical
 per-attempt checkpoint behavior.
+
+Terminal landings run the commit/audit precheck before mutating generated
+bookkeeping. Only a passing final landing refreshes the shared deterministic
+owner inventories; the refresh is serialized, content-checked, and cached by
+the exact source digest so a retry after Git lock contention does not repeat it.
 
 The Solver NEVER pushes: no subcommand, loop, or handoff runs `git push`
 (`autoCommitQuest` and `handoff` are commit-only). Pushing is a separate,
@@ -688,7 +703,7 @@ no individual approval. Their current bytes accumulate into one landing
 candidate. Existing version 1 Quests and receipts preserve their original
 per-attempt behavior.
 
-Before review at an explicit durability boundary, run:
+Before review at an explicit mid-Quest durability boundary, run:
 
 ```sh
 npm run audit:attempt-preflight
@@ -696,7 +711,10 @@ node scripts/solve.js checkpoint --id <quest> --dry-run \
   --reason <handoff|risky-tree|long-running|milestone>
 ```
 
-The attempt preflight covers file-size thresholds, STYLE-0012 vocabulary, the
+Terminal `land` runs its cheap changed-path static preflight itself before it
+mints a review id, and reuses a passing result while the exact source digest and
+checker inputs stay unchanged. The explicit checkpoint preflight above covers
+file-size thresholds, STYLE-0012 vocabulary, the
 step-coverage owner census, and the whole-repo test-duplication ratchet. The
 first two checks and the duplication ratchet are ratcheted and must be green
 (the duplication scan is whole-tree, so an unrelated in-flight file can inflate
@@ -743,24 +761,20 @@ attack checklist under
 [`docs/steering/verification-templates/`](../verification-templates/INDEX.md);
 include every applicable suggested template in the verifier's initial prompt.
 
-When the independent verifier rejects a version 2 candidate, record that verdict
-instead of fabricating an approval — and record it with its category-complete
-finding list. A pointer-only claim (`rejected (subagent:<id>)`) satisfies every
-downstream consumer mechanically while carrying zero durable content; the
-recording commands refuse it:
+When the independent verifier rejects a version 2 candidate, pass that verdict
+back to `land` with its category-complete finding list. A pointer-only claim
+(`rejected (subagent:<id>)`) satisfies every downstream consumer mechanically
+while carrying zero durable content, so `land` refuses it:
 
 ```sh
-node scripts/solve.js finding --id <quest> --frontier <frontier> \
-  --kind verifier-rejection \
-  --claim "Independent verification rejected this exact candidate" \
+node scripts/solve.js land --id <quest> --review <review-id> \
+  --verifier <stable-id> --verdict reject --receipt <ref> \
   --finding "adversarial-js-intrinsics: inherited toJSON changed the canonical digest" \
-  --finding "correctness: paired result values were never compared" \
-  --evidence subagent:<id> \
-  --verification-scope candidate \
-  --verification-fingerprint sha256:<candidate-fingerprint>
+  --finding "correctness: paired result values were never compared"
+# fix and prove the bounded replacement
+node scripts/solve.js continue --id <quest> --summary "<what changed>"
 ```
 
-(`solve land --verdict reject` takes the same repeatable `--finding` flag.)
 Each entry is `<category>: <summary>`; categories are kebab-case slugs,
 normally verification-template categories. When the quest declaration seals a
 `verificationTemplates` array, those categories are the rejection bar: a
@@ -782,10 +796,10 @@ current bytes at an acceptable base) covers a subset of the rejected paths.
 The standing obligation shrinks to the uncovered remainder, so splitting an
 oversized rejected candidate into bounded quests no longer makes its rejection
 impossible to discharge (the collision that previously forced scope-gate
-overrides). Recording a
-structured rejection reopens a terminal Quest and its solved frontier so the
-replacement step rendered by `next` is executable. Until replacement or full
-recorded coverage,
+overrides). Recording a structured rejection reopens a terminal Quest and its
+solved frontier. If the operator has already made the correction, the next
+`continue --summary` atomically begins and captures that replacement. Until
+replacement or full recorded coverage,
 checkpoint and terminal handoff remain blocked; `next` asks for the replacement
 attempt or its fingerprint, never for dishonest approval of the rejected one.
 Aggregate verification still covers the final source delta across the complete

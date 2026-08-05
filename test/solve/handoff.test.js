@@ -11,14 +11,28 @@ import {
   classifyDirtyPaths,
   renderHandoff,
   autoCommitQuest,
+  refreshDerivedInventoriesForCommit,
 } from '../../scripts/solve/handoff.js';
 import {runFrontierCommand} from '../../scripts/solve/frontier.js';
 import {execFileSync, spawn} from 'node:child_process';
+import {pathToFileURL} from 'node:url';
 
 const FRONTIER_BOARD_PATH = 'solve/FRONTIER.generated.md';
+const MARKER_WAIT_TIMEOUT_MS = 5_000;
+const MARKER_WAIT_POLL_MS = 10;
 
 function tmp() {
   return fs.mkdtempSync(path.join(os.tmpdir(), 'handoff-'));
+}
+
+async function waitForFile(file) {
+  const deadline = Date.now() + MARKER_WAIT_TIMEOUT_MS;
+  while (!fs.existsSync(file)) {
+    if (Date.now() >= deadline) {
+      throw new Error(`timed out waiting for fixture marker ${file}`);
+    }
+    await new Promise((resolve) => setTimeout(resolve, MARKER_WAIT_POLL_MS));
+  }
 }
 
 function makeQuest(root, id = 'demo', oracle = path.join(root, 'oracle.json')) {
@@ -256,6 +270,342 @@ function committedFiles(root) {
 }
 
 tap.test('auto commit (never pushes) (R1)', async (t) => {
+  t.test('source-digest inventory refresh is reusable and content-checked', (t) => {
+    const root = tmp();
+    const counter = path.join(root, 'refresh-count.txt');
+    const sourceFile = path.join(root, 'src', 'input.js');
+    const globalOutput = path.join(root,
+      'solve/changes/global-owner-debt-inventory/inventory.json');
+    const priorityOutput = path.join(root,
+      'solve/changes/priority-recovery-owner-inventory/inventory.json');
+    const generators = [
+      ['generate-global-owner-debt-inventory.js', globalOutput, 'global'],
+      ['generate-priority-recovery-owner-inventory.js', priorityOutput, 'priority'],
+    ];
+    fs.mkdirSync(path.join(root, 'scripts'), {recursive: true});
+    fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+    fs.mkdirSync(path.join(root, 'test'), {recursive: true});
+    fs.writeFileSync(sourceFile, 'version-one\n');
+    for (const [name, output, label] of generators) {
+      fs.writeFileSync(path.join(root, 'scripts', name), [
+        'const fs = require(\'node:fs\');',
+        'const path = require(\'node:path\');',
+        `fs.appendFileSync(${JSON.stringify(counter)}, ${JSON.stringify(label)} + '\\n');`,
+        `fs.mkdirSync(path.dirname(${JSON.stringify(output)}), {recursive: true});`,
+        `fs.writeFileSync(${JSON.stringify(output)}, ` +
+          `${JSON.stringify(label)} + ':' + ` +
+          `fs.readFileSync(${JSON.stringify(sourceFile)}, 'utf8'));`,
+        '',
+      ].join('\n'));
+    }
+
+    const first = refreshDerivedInventoriesForCommit(root, 'sha256:first');
+    const second = refreshDerivedInventoriesForCommit(root, 'sha256:first');
+    t.equal(first.refreshed, true);
+    t.equal(first.cached, false);
+    t.equal(second.refreshed, false);
+    t.equal(second.cached, true,
+      'retrying the same final source digest runs neither generator again');
+    t.equal(fs.readFileSync(counter, 'utf8').trim().split('\n').length, 2,
+      'each inventory refreshed exactly once');
+
+    fs.writeFileSync(sourceFile, 'version-two\n');
+    const sourceChanged = refreshDerivedInventoriesForCommit(root, 'sha256:first');
+    t.equal(sourceChanged.refreshed, true,
+      'repository-wide source drift invalidates the Quest-digest cache entry');
+    t.match(fs.readFileSync(globalOutput, 'utf8'), /version-two/u);
+    t.match(fs.readFileSync(priorityOutput, 'utf8'), /version-two/u);
+
+    const sortDescriptor = Object.getOwnPropertyDescriptor(
+      Array.prototype, 'sort');
+    const setHasDescriptor = Object.getOwnPropertyDescriptor(
+      Set.prototype, 'has');
+    try {
+      Reflect.defineProperty(Array.prototype, 'sort', {
+        ...sortDescriptor,
+        value: function hostileSort() {
+          this.length = 0;
+          return this;
+        },
+      });
+      Reflect.defineProperty(Set.prototype, 'has', {
+        ...setHasDescriptor,
+        value: () => false,
+      });
+      fs.writeFileSync(sourceFile, 'version-three\n');
+      const hostileChanged = refreshDerivedInventoriesForCommit(
+        root, 'sha256:first');
+      t.equal(hostileChanged.refreshed, true,
+        'ambient collection changes cannot empty repository enumeration');
+      t.match(fs.readFileSync(globalOutput, 'utf8'), /version-three/u);
+      t.match(fs.readFileSync(priorityOutput, 'utf8'), /version-three/u);
+    } finally {
+      Reflect.defineProperty(Array.prototype, 'sort', sortDescriptor);
+      Reflect.defineProperty(Set.prototype, 'has', setHasDescriptor);
+    }
+
+    fs.writeFileSync(globalOutput, 'tampered\n');
+    const repaired = refreshDerivedInventoriesForCommit(root, 'sha256:first');
+    t.equal(repaired.refreshed, true,
+      'cached metadata never hides drift in a derived inventory');
+    t.equal(fs.readFileSync(counter, 'utf8').trim().split('\n').length, 8);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('source mutation during generation retries one coherent epoch', (t) => {
+    const root = tmp();
+    const sourceFile = path.join(root, 'src', 'input.js');
+    const counter = path.join(root, 'refresh-count.txt');
+    const outputs = [
+      path.join(root,
+        'solve/changes/global-owner-debt-inventory/inventory.json'),
+      path.join(root,
+        'solve/changes/priority-recovery-owner-inventory/inventory.json'),
+    ];
+    fs.mkdirSync(path.join(root, 'scripts'), {recursive: true});
+    fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+    fs.mkdirSync(path.join(root, 'test'), {recursive: true});
+    fs.writeFileSync(sourceFile, 'version-one\n');
+    for (const [index, name] of [
+      'generate-global-owner-debt-inventory.js',
+      'generate-priority-recovery-owner-inventory.js',
+    ].entries()) {
+      fs.writeFileSync(path.join(root, 'scripts', name), [
+        'const fs = require(\'node:fs\');',
+        'const path = require(\'node:path\');',
+        `const value = fs.readFileSync(${JSON.stringify(sourceFile)}, 'utf8');`,
+        ...(index === 0 ? [
+          'if (value.includes(\'version-one\')) ' +
+            `fs.writeFileSync(${JSON.stringify(sourceFile)}, 'version-two\\n');`,
+        ] : []),
+        `fs.appendFileSync(${JSON.stringify(counter)}, 'run\\n');`,
+        `fs.mkdirSync(path.dirname(${JSON.stringify(outputs[index])}), ` +
+          '{recursive: true});',
+        `fs.writeFileSync(${JSON.stringify(outputs[index])}, value);`,
+        '',
+      ].join('\n'));
+    }
+    const result = refreshDerivedInventoriesForCommit(root, 'sha256:stable');
+    t.equal(result.refreshed, true);
+    t.match(fs.readFileSync(outputs[0], 'utf8'), /version-two/u,
+      'global inventory was retried after publishing the old epoch');
+    t.match(fs.readFileSync(outputs[1], 'utf8'), /version-two/u,
+      'priority inventory and global inventory share the stable epoch');
+    t.equal(fs.readFileSync(counter, 'utf8').trim().split('\n').length, 4,
+      'both generators reran after the source epoch changed');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('an abandoned ownerless inventory lock is recovered', (t) => {
+    const root = tmp();
+    const outputs = [
+      path.join(root,
+        'solve/changes/global-owner-debt-inventory/inventory.json'),
+      path.join(root,
+        'solve/changes/priority-recovery-owner-inventory/inventory.json'),
+    ];
+    fs.mkdirSync(path.join(root, 'scripts'), {recursive: true});
+    fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+    fs.mkdirSync(path.join(root, 'test'), {recursive: true});
+    for (const [index, name] of [
+      'generate-global-owner-debt-inventory.js',
+      'generate-priority-recovery-owner-inventory.js',
+    ].entries()) {
+      fs.writeFileSync(path.join(root, 'scripts', name), [
+        'const fs = require(\'node:fs\');',
+        'const path = require(\'node:path\');',
+        `fs.mkdirSync(path.dirname(${JSON.stringify(outputs[index])}), ` +
+          '{recursive: true});',
+        `fs.writeFileSync(${JSON.stringify(outputs[index])}, 'fresh\\n');`,
+        '',
+      ].join('\n'));
+    }
+    const lockDirectory = path.join(
+      root, 'solve/state/inventory-refresh/refresh.lock');
+    fs.mkdirSync(lockDirectory, {recursive: true});
+    const startedAt = Date.now();
+    const result = refreshDerivedInventoriesForCommit(root, 'sha256:recovery');
+    const elapsedMs = Date.now() - startedAt;
+    t.equal(result.refreshed, true);
+    t.ok(elapsedMs < 2_000,
+      `ownerless lock recovered in a bounded interval (${elapsedMs}ms)`);
+    t.equal(fs.existsSync(lockDirectory), false,
+      'the recovered lock is released after refresh');
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('owner publication is atomic before refresh serialization', async (t) => {
+    const root = tmp();
+    const formationMarker = path.join(root, 'owner-publication-waiting');
+    const releaseMarker = path.join(root, 'release-owner-publication');
+    const timeline = path.join(root, 'refresh-timeline.txt');
+    const generatorMarkerPrefix = path.join(root, 'generator-');
+    const outputs = [
+      path.join(root,
+        'solve/changes/global-owner-debt-inventory/inventory.json'),
+      path.join(root,
+        'solve/changes/priority-recovery-owner-inventory/inventory.json'),
+    ];
+    fs.mkdirSync(path.join(root, 'scripts'), {recursive: true});
+    fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+    fs.mkdirSync(path.join(root, 'test'), {recursive: true});
+    for (const [index, name] of [
+      'generate-global-owner-debt-inventory.js',
+      'generate-priority-recovery-owner-inventory.js',
+    ].entries()) {
+      fs.writeFileSync(path.join(root, 'scripts', name), [
+        'const fs = require(\'node:fs\');',
+        'const path = require(\'node:path\');',
+        'const caller = process.env.REFRESH_CALLER;',
+        ...(index === 0 ? [
+          `fs.appendFileSync(${JSON.stringify(timeline)}, ` +
+            '`${caller}:start:${Date.now()}\\n`);',
+          `fs.writeFileSync(${JSON.stringify(generatorMarkerPrefix)} + caller, ` +
+            '\'started\\n\');',
+          'const until = Date.now() + 500;',
+          'while (Date.now() < until) {}',
+          `fs.appendFileSync(${JSON.stringify(timeline)}, ` +
+            '`${caller}:end:${Date.now()}\\n`);',
+        ] : []),
+        `fs.mkdirSync(path.dirname(${JSON.stringify(outputs[index])}), ` +
+          '{recursive: true});',
+        `fs.writeFileSync(${JSON.stringify(outputs[index])}, caller);`,
+        '',
+      ].join('\n'));
+    }
+    const moduleUrl = pathToFileURL(path.resolve(
+      'scripts/solve/handoff.js')).href;
+    const sourceFor = (digest, delayPublication) => [
+      'import fs from \'node:fs\';',
+      ...(delayPublication ? [
+        'const originalWrite = fs.writeFileSync.bind(fs);',
+        'let delayed = false;',
+        'fs.writeFileSync = (file, ...args) => {',
+        '  const ownerWrite = String(file).includes(\'refresh-owner-\') || ' +
+          'String(file).endsWith(\'/owner.json\');',
+        '  if (ownerWrite && !delayed) {',
+        '    delayed = true;',
+        `    originalWrite(${JSON.stringify(formationMarker)}, 'waiting\\n');`,
+        `    while (!fs.existsSync(${JSON.stringify(releaseMarker)})) {`,
+        '      Atomics.wait(new Int32Array(new SharedArrayBuffer(4)), 0, 0, 10);',
+        '    }',
+        '  }',
+        '  return originalWrite(file, ...args);',
+        '};',
+      ] : []),
+      'const {refreshDerivedInventoriesForCommit: refresh} = ' +
+        `await import(${JSON.stringify(moduleUrl)});`,
+      `refresh(${JSON.stringify(root)}, ${JSON.stringify(digest)});`,
+    ].join('\n');
+    const runChild = (caller, digest, delayPublication = false) =>
+      spawn(process.execPath,
+        ['--input-type=module', '--eval', sourceFor(digest, delayPublication)],
+        {env: {...process.env, REFRESH_CALLER: caller},
+          stdio: ['ignore', 'ignore', 'pipe']});
+    const outcome = (child) => new Promise((resolve) => {
+      let stderr = '';
+      child.stderr.on('data', (chunk) => {
+        stderr += chunk;
+      });
+      child.on('close', (code) => resolve({code, stderr}));
+    });
+
+    const first = runChild('a', 'sha256:formation-a', true);
+    await waitForFile(formationMarker);
+    const second = runChild('b', 'sha256:formation-b');
+    await waitForFile(`${generatorMarkerPrefix}b`);
+    fs.writeFileSync(releaseMarker, 'release\n');
+    const results = await Promise.all([outcome(first), outcome(second)]);
+    t.same(results.map((result) => result.code), [0, 0],
+      results.map((result) => result.stderr).join('\n'));
+    const intervals = {};
+    for (const line of fs.readFileSync(timeline, 'utf8').trim().split('\n')) {
+      const [caller, edge, value] = line.split(':');
+      intervals[caller] ||= {};
+      intervals[caller][edge] = Number(value);
+    }
+    t.ok(intervals.a.start >= intervals.b.end,
+      'a paused owner cannot overlap the owner that claimed the atomic lock');
+    fs.rmSync(root, {recursive: true, force: true});
+  });
+
+  t.test('concurrent refreshes serialize on the inventory output resource',
+    async (t) => {
+      const root = tmp();
+      const counter = path.join(root, 'refresh-count.txt');
+      const version = path.join(root, 'refresh-version.txt');
+      const started = path.join(root, 'refresh-started.txt');
+      const outputs = [
+        path.join(root,
+          'solve/changes/global-owner-debt-inventory/inventory.json'),
+        path.join(root,
+          'solve/changes/priority-recovery-owner-inventory/inventory.json'),
+      ];
+      fs.mkdirSync(path.join(root, 'scripts'), {recursive: true});
+      fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+      fs.mkdirSync(path.join(root, 'test'), {recursive: true});
+      fs.writeFileSync(version, 'one\n');
+      for (const [index, name] of [
+        'generate-global-owner-debt-inventory.js',
+        'generate-priority-recovery-owner-inventory.js',
+      ].entries()) {
+        fs.writeFileSync(path.join(root, 'scripts', name), [
+          'const fs = require(\'node:fs\');',
+          'const path = require(\'node:path\');',
+          ...(index === 0 ? [
+            `fs.writeFileSync(${JSON.stringify(started)}, 'started\\n');`,
+          ] : []),
+          `const until = Date.now() + ${index === 0 ? 300 : 0};`,
+          'while (Date.now() < until) {}',
+          `fs.appendFileSync(${JSON.stringify(counter)}, 'run\\n');`,
+          `fs.mkdirSync(path.dirname(${JSON.stringify(outputs[index])}), ` +
+            '{recursive: true});',
+          `fs.writeFileSync(${JSON.stringify(outputs[index])}, ` +
+            `fs.readFileSync(${JSON.stringify(version)}, 'utf8'));`,
+          '',
+        ].join('\n'));
+      }
+      const moduleUrl = pathToFileURL(path.resolve(
+        'scripts/solve/handoff.js')).href;
+      const sourceFor = (digest) => [
+        'import {refreshDerivedInventoriesForCommit as refresh} from ' +
+          `${JSON.stringify(moduleUrl)};`,
+        `refresh(${JSON.stringify(root)}, ${JSON.stringify(digest)});`,
+      ].join('\n');
+      refreshDerivedInventoriesForCommit(root, 'sha256:old');
+      fs.writeFileSync(version, 'two\n');
+      fs.rmSync(started, {force: true});
+      fs.writeFileSync(counter, '');
+      const runChild = (digest) => spawn(process.execPath,
+        ['--input-type=module', '--eval', sourceFor(digest)],
+        {stdio: ['ignore', 'ignore', 'pipe']});
+      const newDigest = runChild('sha256:new');
+      await waitForFile(started);
+      const oldDigest = runChild('sha256:old');
+      const closeOrder = [];
+      const outcomes = await Promise.all([newDigest, oldDigest].map((child, index) =>
+        new Promise((resolve) => {
+          let stderr = '';
+          child.stderr.on('data', (chunk) => {
+            stderr += chunk;
+          });
+          child.on('close', (code) => {
+            closeOrder.push(index);
+            resolve({code, stderr});
+          });
+        })));
+      t.same(outcomes.map((outcome) => outcome.code), [0, 0],
+        outcomes.map((outcome) => outcome.stderr).join('\n'));
+      t.same(closeOrder, [0, 1],
+        'a cached old digest cannot return while new outputs are being written');
+      t.equal(fs.readFileSync(counter, 'utf8').trim().split('\n').length, 4,
+        'the old digest rechecks output identity after the new writer releases');
+      fs.rmSync(root, {recursive: true, force: true});
+    });
+
   t.test('skips cleanly outside a git work tree', (t) => {
     const root = tmp();
     makeQuest(root);
@@ -421,6 +771,33 @@ tap.test('auto commit (never pushes) (R1)', async (t) => {
     t.ok(autoCommitQuest(root, quest.id).committed,
       're-running after the lock clears commits the same scope');
 
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('verbose successful hooks cannot exhaust the Git stderr buffer', (t) => {
+    const root = tmp();
+    initGit(root);
+    const hooks = path.join(root, 'test-hooks');
+    const hook = path.join(hooks, 'pre-commit');
+    fs.mkdirSync(hooks, {recursive: true});
+    fs.writeFileSync(hook, [
+      '#!/usr/bin/env node',
+      'process.stderr.write(\'x\'.repeat(2 * 1024 * 1024));',
+      '',
+    ].join('\n'));
+    fs.chmodSync(hook, 0o755);
+    execFileSync('git', ['config', 'core.hooksPath', hooks], {cwd: root});
+    const {quest, oracle} = makeQuest(root);
+    runStep(root, quest);
+    fs.writeFileSync(oracle, JSON.stringify({metric: 0, target: 0}));
+    runStep(root, quest, {
+      changeRef: makeDiff(root, quest.id, 'fix', 'docs/demo.md'),
+      summary: 'scoped doc fix',
+    });
+
+    t.ok(autoCommitQuest(root, quest.id).committed,
+      'a successful hook may report more than the Node default buffer');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });

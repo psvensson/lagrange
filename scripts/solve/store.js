@@ -27,6 +27,7 @@ import {
   EVENT_THEORY_SYSTEM_DECLARED,
   EVENT_EVIDENCE_INGESTED,
   EVENT_GUARD_OVERRIDE,
+  EVENT_GATE_DECISION,
   EVENT_REFLECTION,
   SAME_GUARD_OVERRIDE_LIMIT,
   STATUS_OPEN,
@@ -54,6 +55,15 @@ const VERIFICATION_VERDICT_REJECTED = 'rejected';
 const VERIFICATION_FINGERPRINT_PATTERN = /^sha256:[0-9a-f]{64}$/u;
 const VERIFIER_EVIDENCE_PATTERN =
   /^subagent:[A-Za-z0-9][A-Za-z0-9_./-]*$/u;
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arrayFindLastIndex = Function.call.bind(Array.prototype.findLastIndex);
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayIsArray = Array.isArray;
+const arrayPush = Function.call.bind(Array.prototype.push);
+const arraySlice = Function.call.bind(Array.prototype.slice);
+const arraySome = Function.call.bind(Array.prototype.some);
+const arraySort = Function.call.bind(Array.prototype.sort);
+const stringIncludes = Function.call.bind(String.prototype.includes);
 
 function isStructuredVerifierRejection(event) {
   const versionOneAttempt = event.verification?.schemaVersion === 1 &&
@@ -605,16 +615,75 @@ export function readRulesOutFindings(root, questId) {
 // Re-authorizing a signature already covered by an earlier override on the same guard
 // is a REPETITION, not scope GROWTH, and must not spend lifetime budget.
 export function scopeSignatureOf(changedPaths) {
-  if (!Array.isArray(changedPaths) || changedPaths.length === 0) return null;
-  const unique = [...new Set(changedPaths.filter(
-    (item) => typeof item === 'string' && item.length > 0))].sort();
+  if (!arrayIsArray(changedPaths) || changedPaths.length === 0) return null;
+  const unique = [];
+  for (let index = 0; index < changedPaths.length; index += 1) {
+    const item = changedPaths[index];
+    if (typeof item === 'string' && item.length > 0 &&
+      !arrayIncludes(unique, item)) arrayPush(unique, item);
+  }
+  arraySort(unique);
   return unique.length > 0 ? unique : null;
 }
 
 function signatureIsCoveredBy(candidate, authorized) {
-  if (!candidate || !authorized) return false;
-  const covered = new Set(authorized);
-  return candidate.every((item) => covered.has(item));
+  if (!arrayIsArray(candidate) || !arrayIsArray(authorized)) return false;
+  for (let index = 0; index < candidate.length; index += 1) {
+    if (!arrayIncludes(authorized, candidate[index])) return false;
+  }
+  return true;
+}
+
+export function scopeSignatureHasAuthorization(
+  log,
+  frontier,
+  code,
+  changedPaths,
+) {
+  const candidate = scopeSignatureOf(changedPaths);
+  if (!candidate) return false;
+  return arraySome(log, (event) =>
+    event.type === EVENT_GUARD_OVERRIDE &&
+    (event.frontier || null) === (frontier || null) &&
+    event.code === code &&
+    signatureIsCoveredBy(candidate, event.scopeSignature));
+}
+
+function scopeAuthorizationWindow(log) {
+  const index = arrayFindLastIndex(log, (event) =>
+    event.type === EVENT_ATTEMPT && event.progressed === true);
+  return arraySlice(log, index + 1);
+}
+
+function matchingScopeOverride(event, frontier, code, candidate, problem) {
+  return event.type === EVENT_GUARD_OVERRIDE &&
+    (event.frontier || null) === (frontier || null) &&
+    event.code === code &&
+    signatureIsCoveredBy(candidate, event.scopeSignature) &&
+    (!event.problem || stringIncludes(String(problem), event.problem));
+}
+
+function consumedScopeOverride(event, frontier, code) {
+  return event.type === EVENT_GATE_DECISION && event.override &&
+    (event.frontier || null) === (frontier || null) && event.code === code;
+}
+
+export function scopeSignatureNeedsReauthorization(
+  log,
+  frontier,
+  code,
+  changedPaths,
+  problem,
+) {
+  if (!scopeSignatureHasAuthorization(
+    log, frontier, code, changedPaths)) return false;
+  const candidate = scopeSignatureOf(changedPaths);
+  const window = scopeAuthorizationWindow(log);
+  const matchingOverrides = arrayFilter(window, (event) =>
+    matchingScopeOverride(event, frontier, code, candidate, problem)).length;
+  const consumed = arrayFilter(window, (event) =>
+    consumedScopeOverride(event, frontier, code)).length;
+  return matchingOverrides <= consumed;
 }
 
 // Record a recorded-reason override of an overridable soft guard. The reason is mandatory
@@ -641,13 +710,13 @@ export function appendGuardOverride(root, questId, override) {
   }
   const frontier = override.frontier || null;
   const scopeSignature = scopeSignatureOf(override.scopeSignature);
-  const sameGuard = readLog(root, questId).filter((event) =>
+  const sameGuard = arrayFilter(readLog(root, questId), (event) =>
     event.type === EVENT_GUARD_OVERRIDE &&
     (event.frontier || null) === frontier &&
     event.code === override.code);
-  const reauthorizes = scopeSignature !== null && sameGuard.some((event) =>
+  const reauthorizes = scopeSignature !== null && arraySome(sameGuard, (event) =>
     signatureIsCoveredBy(scopeSignature, event.scopeSignature));
-  const priorSameGuard = sameGuard.filter(
+  const priorSameGuard = arrayFilter(sameGuard,
     (event) => event.scopeReauthorization !== true).length;
   if (!reauthorizes && priorSameGuard >= SAME_GUARD_OVERRIDE_LIMIT) {
     throw new Error(

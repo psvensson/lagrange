@@ -45,6 +45,8 @@ const INVALID_VERDICT_PROBLEM = 'land: --verdict must be approve|reject';
 const RECORDED_AGGREGATE_RECEIPT = 'recorded-aggregate-approval';
 const AUTOMATIC_CHECKPOINT_REASON = 'milestone';
 const CHECKPOINT_OPERATION = 'checkpoint';
+const AUTO_DIFF_ARGUMENT = 'auto-diff';
+const REPLACE_REJECTED_OPERATION = 'replace-rejected-attempt';
 
 function requireId(args, command) {
   const id = args.id || args._?.[0];
@@ -64,7 +66,8 @@ function assertStructuredAction(action, questId) {
 function explicitCommitOptions(args) {
   const changeRef = typeof args.changeRef === 'string' ? args.changeRef : null;
   const summary = typeof args.summary === 'string' ? args.summary.trim() : '';
-  const autoDiff = args['auto-diff'] === true || (!changeRef && summary.length > 0);
+  const autoDiff = args[AUTO_DIFF_ARGUMENT] === true ||
+    (!changeRef && summary.length > 0);
   if (changeRef && autoDiff) {
     throw new Error('continue: pass exactly one of --changeRef or --auto-diff');
   }
@@ -81,7 +84,7 @@ function explicitCommitOptions(args) {
 
 function executeStructuredContinuation(root, quest, action, args) {
   if (action.code === NEXT_ACTION_CODE.BEGIN_STEP) {
-    if (args.changeRef || args['auto-diff'] || args.summary) {
+    if (args.changeRef || args[AUTO_DIFF_ARGUMENT] || args.summary) {
       throw new Error('continue: begin-step does not accept commit capture arguments');
     }
     return {executed: true, operation: 'begin-step', result: runStep(root, quest)};
@@ -96,6 +99,15 @@ function executeStructuredContinuation(root, quest, action, args) {
   if (action.code === NEXT_ACTION_CODE.REPLACE_REJECTED_ATTEMPT) {
     const phase = action.payload.phase;
     if (phase === 'begin') {
+      if (args.changeRef || args[AUTO_DIFF_ARGUMENT] || args.summary) {
+        const begin = runStep(root, quest);
+        return {
+          executed: true,
+          operation: REPLACE_REJECTED_OPERATION,
+          begin,
+          result: runStep(root, quest, explicitCommitOptions(args)),
+        };
+      }
       return {
         executed: true,
         operation: 'replace-rejected-attempt:begin',

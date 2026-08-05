@@ -11,6 +11,8 @@ import {
 } from '../../scripts/solve/operator-workflow.js';
 import {buildNextProjection} from '../../scripts/solve/next.js';
 import {assertReviewCurrent} from '../../scripts/solve/review-request.js';
+import {landingReviewPreflight} from '../../scripts/solve/landing-preflight.js';
+import {inspectChangeArtifact} from '../../scripts/solve/change-artifact.js';
 import {runStep} from '../../scripts/solve/step.js';
 import {
   appendEvent,
@@ -209,6 +211,53 @@ tap.test('continue treats a commit summary as implicit auto-diff capture', (t) =
   t.end();
 });
 
+tap.test('continue excludes inventories left dirty by a failed final commit', (t) => {
+  const root = tmp();
+  git(root, ['init']);
+  git(root, ['config', 'user.email', 'solver@example.com']);
+  git(root, ['config', 'user.name', 'Solver']);
+  git(root, ['config', 'commit.gpgsign', 'false']);
+  const {quest, oracle} = makeOracleQuest(root);
+  const source = path.join(root, 'src', 'demo.js');
+  const inventory = path.join(root,
+    'solve/changes/global-owner-debt-inventory/inventory.json');
+  const priorAttemptObject = path.join(root,
+    'solve/artifacts/sha256/aa/prior.diff.gz');
+  fs.mkdirSync(path.dirname(source), {recursive: true});
+  fs.mkdirSync(path.dirname(inventory), {recursive: true});
+  fs.writeFileSync(source, 'before\n');
+  fs.writeFileSync(inventory, '{"epoch":"before"}\n');
+  git(root, ['add', '-A']);
+  git(root, ['commit', '-m', 'base']);
+
+  continueQuestWorkflow(root, {id: quest.id});
+  fs.writeFileSync(source, 'after\n');
+  fs.writeFileSync(inventory, '{"epoch":"refreshed"}\n');
+  fs.mkdirSync(path.dirname(priorAttemptObject), {recursive: true});
+  fs.writeFileSync(priorAttemptObject, 'prior immutable object\n');
+  git(root, ['add', priorAttemptObject]);
+  fs.writeFileSync(oracle, JSON.stringify({metric: 1, target: 0}));
+  const committed = continueQuestWorkflow(root, {
+    id: quest.id,
+    summary: 'capture only authored source after a failed landing',
+  });
+  const inspection = inspectChangeArtifact(
+    root, quest, committed.result.changeRef);
+
+  t.ok(inspection.changedPaths.includes('src/demo.js'),
+    'the authored replacement remains in the attempt');
+  t.notOk(inspection.changedPaths.includes(
+    'solve/changes/global-owner-debt-inventory/inventory.json'),
+  'final-commit projections never inflate a replacement attempt');
+  t.notOk(inspection.changedPaths.includes(
+    'solve/artifacts/sha256/aa/prior.diff.gz'),
+  'prior attempt objects never inflate their replacement attempt');
+  t.match(fs.readFileSync(inventory, 'utf8'), /refreshed/u,
+    'the generated output remains dirty for the next final commit');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('continue executes a ready source checkpoint through the facade', (t) => {
   const {root, id} = landingFixture('scripts/demo.js', 1);
   const dossier = buildNextProjection(root, id)
@@ -321,7 +370,41 @@ tap.test('land rejects drift and records rejection without committing', (t) => {
   t.ok(readLog(root, id).some((event) =>
     event.kind === 'verifier-rejection' &&
     event.verification?.fingerprint === fingerprint));
+  t.equal(rejected.next.quest.status, 'open',
+    'the categorized rejection itself reopens the Quest');
   t.equal(rejected.next.action.code, 'replace-rejected-attempt');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('one continue summary begins and captures a rejected replacement', (t) => {
+  const {root, id} = landingFixture();
+  const before = buildNextProjection(root, id);
+  const rejectedFingerprint = before.verification.candidateFingerprint;
+  landQuestWorkflow(root, {
+    id,
+    verifier: 'facade-reviewer',
+    verdict: 'reject',
+    fingerprint: rejectedFingerprint,
+    receipt: 'review:facade-rejection',
+    finding: 'correctness: the candidate omitted the replacement behavior',
+  });
+
+  fs.writeFileSync(path.join(root, 'scripts', 'demo.js'),
+    'export const value = 3;\n');
+  const replaced = continueQuestWorkflow(root, {
+    id,
+    summary: 'capture the verifier-required replacement',
+  });
+
+  t.equal(replaced.operation, 'replace-rejected-attempt');
+  t.equal(replaced.begin.terminal, null,
+    'the same call begins against the automatically reopened projection');
+  t.match(replaced.result.changeRef,
+    /^diff:solve\/changes\/facade-land\/attempt-1\.diff(?:\.json)?$/u);
+  t.equal(readLog(root, id).filter((event) => event.type === 'attempt').length, 2);
+  t.not(buildNextProjection(root, id).verification.candidateFingerprint,
+    rejectedFingerprint, 'the one-call replacement has new exact bytes');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });
@@ -356,6 +439,8 @@ tap.test('land issues an immutable review id and accepts a verdict by id', (t) =
   const {root, id} = landingFixture();
   const requested = landQuestWorkflow(root, {id});
   t.equal(requested.verdict, 'needs-review');
+  t.equal(requested.review.preflight.cached, false,
+    'the review is minted only after a fresh changed-path preflight');
   t.match(requested.review.id, /^review-[0-9a-f]{24}$/u);
   t.equal(requested.committed, false);
   t.equal(fs.existsSync(path.join(
@@ -363,6 +448,12 @@ tap.test('land issues an immutable review id and accepts a verdict by id', (t) =
     'solve/state/reviews',
     `${requested.review.id}.json`,
   )), true);
+
+  const repeated = landQuestWorkflow(root, {id});
+  t.equal(repeated.review.id, requested.review.id,
+    'unchanged bytes retain the immutable review identity');
+  t.equal(repeated.review.preflight.cached, true,
+    'the source-digest result is reused instead of rerunning checkers');
 
   const landed = landQuestWorkflow(root, {
     id,
@@ -373,6 +464,145 @@ tap.test('land issues an immutable review id and accepts a verdict by id', (t) =
   });
   t.equal(landed.committed, true);
   t.equal(landed.fingerprint, requested.review.manifest.aggregate.fingerprint);
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('land refuses static preflight before minting a review id', (t) => {
+  const {root, id} = landingFixture();
+  const eslint = path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js');
+  fs.mkdirSync(path.dirname(eslint), {recursive: true});
+  fs.writeFileSync(eslint, 'process.stderr.write("fixture lint failure\\n");\n' +
+    'process.exitCode = 1;\n');
+
+  t.throws(() => landQuestWorkflow(root, {id}),
+    /changed-path preflight failed.*eslint/isu);
+  t.equal(fs.existsSync(path.join(root, 'solve', 'state', 'reviews')), false,
+    'a failing cheap preflight creates no immutable review artifact');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('land refuses silent catches before minting a review id', (t) => {
+  const {root, id} = landingFixture();
+  const checker = path.join(root, 'scripts',
+    'check-guideline-silent-catch.js');
+  fs.writeFileSync(checker,
+    'process.stderr.write("fixture silent catch\\n");\nprocess.exitCode = 1;\n');
+
+  t.throws(() => landQuestWorkflow(root, {id}),
+    /changed-path preflight failed.*silent-catch/isu);
+  t.equal(fs.existsSync(path.join(root, 'solve', 'state', 'reviews')), false,
+    'silent-catch failure creates no immutable review artifact');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('land refuses import gaps before minting a review id', (t) => {
+  const {root, id} = landingFixture();
+  const importer = path.join(root, 'scripts', 'demo.js');
+  const imported = path.join(root, 'scripts', 'helper.js');
+  fs.writeFileSync(importer,
+    'import \'./helper.js\';\nexport const value = 2;\n');
+  fs.writeFileSync(imported, 'export const helper = true;\n');
+  git(root, ['add', '-N', '--', 'scripts/helper.js']);
+
+  t.throws(() => landQuestWorkflow(root, {id}),
+    /review preflight found import-closure gaps.*helper\.js/isu);
+  t.equal(fs.existsSync(path.join(root, 'solve', 'state', 'reviews')), false,
+    'an incomplete import boundary creates no immutable review artifact');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('landing preflight cache follows baseline and intrinsic inputs', (t) => {
+  const {root, id} = landingFixture();
+  const baseline = path.join(root,
+    'scripts', 'check-guideline-literals-baseline.json');
+  const checker = path.join(root, 'scripts', 'check-guideline-literals.js');
+  fs.writeFileSync(baseline, '["allow"]\n');
+  fs.writeFileSync(checker, [
+    'const fs = require(\'node:fs\');',
+    `const baseline = fs.readFileSync(${JSON.stringify(baseline)}, 'utf8');`,
+    'if (baseline.trim() === \'[]\') process.exitCode = 1;',
+    '',
+  ].join('\n'));
+  const requested = landQuestWorkflow(root, {id});
+  t.equal(requested.review.preflight.cached, false);
+  fs.writeFileSync(baseline, '[]\n');
+  t.throws(() => landQuestWorkflow(root, {id}),
+    /changed-path preflight failed.*literal-guideline/isu,
+    'a real checker baseline change invalidates a cached pass');
+
+  fs.writeFileSync(baseline, '["allow"]\n');
+  const target = path.join(root, 'scripts', 'hostile.js');
+  const eslint = path.join(root, 'node_modules', 'eslint', 'bin', 'eslint.js');
+  fs.mkdirSync(path.dirname(eslint), {recursive: true});
+  fs.writeFileSync(target, 'good\n');
+  fs.writeFileSync(eslint, [
+    'const fs = require(\'node:fs\');',
+    `if (fs.readFileSync(${JSON.stringify(target)}, 'utf8').includes('bad')) ` +
+      'process.exitCode = 1;',
+    '',
+  ].join('\n'));
+  const manifest = (fingerprint) => ({
+    aggregate: {fingerprint, sourcePaths: ['scripts/hostile.js']},
+  });
+  const pristineStringify = JSON.stringify;
+  try {
+    JSON.stringify = (...args) => args.length === 1 ?
+      'hostile-cache-collision' : pristineStringify(...args);
+    landingReviewPreflight(root, manifest(`sha256:${'a'.repeat(64)}`));
+    fs.writeFileSync(target, 'bad\n');
+    t.throws(() => landingReviewPreflight(
+      root, manifest(`sha256:${'b'.repeat(64)}`)),
+    /changed-path preflight failed.*eslint/isu,
+    'ambient JSON replacement cannot collide distinct source digests');
+  } finally {
+    JSON.stringify = pristineStringify;
+  }
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('inventory output lock is held through the final Git commit', (t) => {
+  const {root, id} = landingFixture();
+  fs.mkdirSync(path.join(root, 'src'), {recursive: true});
+  fs.mkdirSync(path.join(root, 'test'), {recursive: true});
+  const outputs = [
+    path.join(root,
+      'solve/changes/global-owner-debt-inventory/inventory.json'),
+    path.join(root,
+      'solve/changes/priority-recovery-owner-inventory/inventory.json'),
+  ];
+  for (const [index, name] of [
+    'generate-global-owner-debt-inventory.js',
+    'generate-priority-recovery-owner-inventory.js',
+  ].entries()) {
+    fs.writeFileSync(path.join(root, 'scripts', name), [
+      'const fs = require(\'node:fs\');',
+      'const path = require(\'node:path\');',
+      `fs.mkdirSync(path.dirname(${JSON.stringify(outputs[index])}), ` +
+        '{recursive: true});',
+      `fs.writeFileSync(${JSON.stringify(outputs[index])}, 'fresh\\n');`,
+      '',
+    ].join('\n'));
+  }
+  const hook = path.join(root, '.git', 'hooks', 'pre-commit');
+  fs.writeFileSync(hook, '#!/bin/sh\n' +
+    'test -e solve/state/inventory-refresh/refresh.lock\n');
+  fs.chmodSync(hook, 0o755);
+  const fingerprint = buildNextProjection(root, id)
+    .verification.aggregateFingerprint;
+  const landed = landQuestWorkflow(root, {
+    id,
+    verifier: 'lock-scope-reviewer',
+    verdict: 'approve',
+    fingerprint,
+    receipt: 'review:lock-through-consumption',
+  });
+  t.equal(landed.committed, true,
+    'the pre-commit consumer still observes the shared-output lock');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });

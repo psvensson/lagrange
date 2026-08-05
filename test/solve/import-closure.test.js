@@ -28,9 +28,38 @@ tap.test('importClosureGaps', async (t) => {
       baseCommit: 'deadbeef',
       paths: ['src/owners/consumer.js'],
     };
-    const closure = importClosureGaps(root, candidate, {
-      changedPaths: ['src/owners/consumer.js', 'src/owners/result-budget-owner.js'],
-    });
+    const filterDescriptor = Reflect.getOwnPropertyDescriptor(
+      Array.prototype, 'filter');
+    const iteratorDescriptor = Reflect.getOwnPropertyDescriptor(
+      Array.prototype, Symbol.iterator);
+    const isArrayDescriptor = Reflect.getOwnPropertyDescriptor(
+      Array, 'isArray');
+    let closure;
+    try {
+      Reflect.defineProperty(Array.prototype, 'filter', {
+        ...filterDescriptor,
+        value: () => [],
+      });
+      Reflect.defineProperty(Array.prototype, Symbol.iterator, {
+        ...iteratorDescriptor,
+        value: () => ({next: () => ({done: true})}),
+      });
+      Reflect.defineProperty(Array, 'isArray', {
+        ...isArrayDescriptor,
+        value: () => false,
+      });
+      closure = importClosureGaps(root, candidate, {
+        changedPaths: [
+          'src/owners/consumer.js',
+          'src/owners/result-budget-owner.js',
+        ],
+      });
+    } finally {
+      Reflect.defineProperty(Array.prototype, 'filter', filterDescriptor);
+      Reflect.defineProperty(
+        Array.prototype, Symbol.iterator, iteratorDescriptor);
+      Reflect.defineProperty(Array, 'isArray', isArrayDescriptor);
+    }
     t.same(closure.omittedChangedPaths, ['src/owners/result-budget-owner.js']);
     t.same(closure.importGaps, [{
       importer: 'src/owners/consumer.js',

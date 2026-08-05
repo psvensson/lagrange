@@ -127,6 +127,69 @@ tap.test('one recorded scope override authorizes one over-bound step', (t) => {
   t.end();
 });
 
+tap.test('covered scope is reauthorized automatically on replacement', (t) => {
+  const {root, quest} = setup();
+  const paths = Array.from({length: SCOPE_PRESSURE_FILE_LIMIT + 1}, (_, index) =>
+    `scripts/solve/case-${index}.js`);
+  const changedPaths = [...paths, 'solve/OVERVIEW.generated.md'];
+  appendGuardOverride(root, quest.id, {
+    frontier: quest.frontiers[0].id,
+    code: 'blocked-scope',
+    reason: 'the initial atomic migration scope was reviewed explicitly',
+    scopeSignature: paths,
+  });
+  commit(root, quest, makeDiff(root, changedPaths, 0, 'first'));
+
+  runStep(root, quest);
+  t.doesNotThrow(() =>
+    commit(root, quest, makeDiff(root, changedPaths, 0, 'replacement')),
+  'a same admitted scope needs no override when raw projections are present');
+  const log = readLog(root, quest.id);
+  const automatic = log.filter((event) =>
+    event.type === 'guard-override' && event.scopeReauthorization === true);
+  t.equal(automatic.length, 1);
+  t.match(automatic[0].reason, /automatic.*covered scope/iu);
+  t.equal(log.filter((event) => event.type === EVENT_ATTEMPT).length, 2);
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('ambient collection changes cannot authorize grown scope', (t) => {
+  const {root, quest} = setup();
+  const authorized = Array.from(
+    {length: SCOPE_PRESSURE_FILE_LIMIT + 1},
+    (_, index) => `scripts/solve/case-${index}.js`,
+  );
+  const grown = [...authorized, 'scripts/solve/unreviewed-growth.js'];
+  appendGuardOverride(root, quest.id, {
+    frontier: quest.frontiers[0].id,
+    code: 'blocked-scope',
+    reason: 'the initial atomic migration scope was reviewed explicitly',
+    scopeSignature: authorized,
+  });
+  commit(root, quest, makeDiff(root, authorized, 0, 'first'));
+  runStep(root, quest);
+  const grownRef = makeDiff(root, grown, 0, 'grown');
+  const everyDescriptor = Object.getOwnPropertyDescriptor(
+    Array.prototype, 'every');
+  try {
+    Reflect.defineProperty(Array.prototype, 'every', {
+      ...everyDescriptor,
+      value: () => true,
+    });
+    t.throws(() => commit(root, quest, grownRef),
+      /scope-pressure precommit blocked.*files=27/iu,
+      'hostile ambient every cannot make a new path look authorized');
+  } finally {
+    Reflect.defineProperty(Array.prototype, 'every', everyDescriptor);
+  }
+  const attempts = readLog(root, quest.id).filter((event) =>
+    event.type === EVENT_ATTEMPT);
+  t.equal(attempts.length, 1, 'the grown candidate was not recorded');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('real step rejects owner and byte overflow independently', (t) => {
   {
     const {root, quest} = setup();
@@ -194,6 +257,29 @@ tap.test('generated projections stay visible without inflating authored admissio
     'large deterministic output does not force a fake Quest split');
   t.same(commit(root, quest, changeRef).violations, [],
     'the real precommit owner applies the same admission projection');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('content-addressed storage bytes do not inflate authored admission', (t) => {
+  const {root, quest} = setup();
+  const changeRef = makeDiff(root, [
+    'scripts/solve/overview.js',
+    'solve/artifacts/sha256/aa/prior.diff.gz',
+  ], SCOPE_PRESSURE_BYTE_LIMIT + 1000);
+  const inspection = inspectChangeArtifact(root, quest, changeRef);
+  const pressure = analyzeScopePressureCandidate(
+    root, quest, readLog(root, quest.id), inspection,
+  );
+
+  t.same(pressure.changedPaths, ['scripts/solve/overview.js'],
+    'immutable Solver storage is bookkeeping, not authored scope');
+  t.ok(pressure.changedBytes > SCOPE_PRESSURE_BYTE_LIMIT,
+    'the complete payload remains visible diagnostically');
+  t.ok(pressure.admission.changedBytes < SCOPE_PRESSURE_BYTE_LIMIT,
+    'bookkeeping bytes are removed from the admission projection');
+  t.notOk(scopeTerminalStatus(pressure).terminal,
+    'stored attempt objects cannot force a fake Quest split');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });

@@ -73,7 +73,7 @@ function record(fx, edits, metric, name) {
   });
 }
 
-function candidateFinding(fx, kind) {
+function candidateFinding(fx, kind, extraPaths = []) {
   const state = verificationState(fx.root, fx.quest, readLog(fx.root, fx.quest.id));
   const candidate = state.candidate;
   appendFinding(fx.root, fx.quest.id, {
@@ -86,7 +86,7 @@ function candidateFinding(fx, kind) {
       scope: 'candidate',
       fingerprint: candidate.fingerprint,
       baseCommit: candidate.baseCommit,
-      paths: candidate.paths,
+      paths: [...candidate.paths, ...extraPaths].sort(),
       sourcePaths: candidate.sourcePaths,
       firstAttemptIndex: candidate.firstAttemptIndex,
       lastAttemptIndex: candidate.lastAttemptIndex,
@@ -138,6 +138,7 @@ tap.test('candidate review excludes Solver bookkeeping and derived inventories',
     'solve/quests/candidate-v2.json': `${JSON.stringify(fx.quest, null, 2)}\n`,
     'solve/changes/global-owner-debt-inventory/inventory.json':
       '{"derived":true}\n',
+    'solve/artifacts/sha256/aa/prior.diff.gz': 'immutable storage object\n',
   }, 1, 'bookkeeping');
 
   const state = verificationState(
@@ -173,7 +174,9 @@ tap.test('candidate drift and rejection replacement fail closed', (t) => {
     'post-approval byte drift invalidates the receipt');
 
   fs.writeFileSync(path.join(fx.root, 'src/a.js'), 'export const a = 2;\n');
-  const rejected = candidateFinding(fx, 'verifier-rejection');
+  const rejected = candidateFinding(fx, 'verifier-rejection', [
+    'solve/artifacts/sha256/aa/prior.diff.gz',
+  ]);
   let state = verificationState(fx.root, fx.quest, readLog(fx.root, fx.quest.id));
   t.ok(state.unresolvedCandidateRejection);
   record(fx, {'src/b.js': 'export const b = 3;\n'}, 1, 'replacement');

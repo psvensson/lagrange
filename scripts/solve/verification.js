@@ -103,6 +103,7 @@ const SOURCE_EPOCH_INSPECTION_PROBLEM =
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayPush = Function.call.bind(Array.prototype.push);
+const setHas = Function.call.bind(Set.prototype.has);
 const arraySort = Function.call.bind(Array.prototype.sort);
 const objectCreate = Object.create;
 const objectHasOwn = Function.call.bind(Object.prototype.hasOwnProperty);
@@ -876,19 +877,28 @@ export function rejectionDecompositionCoverage(root, log, rejection) {
 // resolved.
 function candidateRejectionProblem(root, candidate, rejection, log = []) {
   const covered = rejectionDecompositionCoverage(root, log, rejection);
-  const remainingPaths = rejection.receipt.paths.filter(
-    (filePath) => !covered.has(filePath));
+  const remainingPaths = arrayFilter(rejection.receipt.paths,
+    (filePath) => !isVerificationBookkeeping(filePath, null) &&
+      !setHas(covered, filePath));
   if (remainingPaths.length === 0) return null;
-  const replacementPaths = new Set(candidate.paths || []);
+  const replacementPaths = new Set(arrayFilter(candidate.paths || [],
+    (filePath) => !isVerificationBookkeeping(filePath, null)));
   const rejectedBaseDead = baseRecordedButUnreachable(
     root, rejection.receipt.baseCommit);
   const baseAcceptable = rejectedBaseDead ?
     baseCommitReachable(root, candidate.baseCommit) :
     candidate.baseCommit === rejection.receipt.baseCommit;
+  let coversRemainingPaths = true;
+  for (const filePath of remainingPaths) {
+    if (!setHas(replacementPaths, filePath)) {
+      coversRemainingPaths = false;
+      break;
+    }
+  }
   const replaced = baseAcceptable &&
     candidate.fingerprint !== rejection.receipt.fingerprint &&
     candidate.lastAttemptIndex > rejection.receipt.lastAttemptIndex &&
-    remainingPaths.every((filePath) => replacementPaths.has(filePath));
+    coversRemainingPaths;
   if (replaced) return null;
   const remainingDetail = covered.size > 0 ?
     ` covering the remaining rejected paths: ${remainingPaths.join(', ')}` :

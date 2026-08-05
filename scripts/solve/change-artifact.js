@@ -372,7 +372,9 @@ export function isOwnQuestSolveBookkeeping(filePath, questId) {
 }
 
 function isDerivedSolverBookkeeping(filePath) {
-  return DERIVED_SOLVER_BOOKKEEPING_PATHS.has(normalizeSlash(filePath));
+  const normalized = normalizeSlash(filePath);
+  return DERIVED_SOLVER_BOOKKEEPING_PATHS.has(normalized) ||
+    normalized.startsWith(`${SOLVE_DATA_DIR}/artifacts/`);
 }
 
 export function isVerificationBookkeeping(filePath, questId) {

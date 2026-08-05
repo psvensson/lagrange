@@ -146,6 +146,7 @@ function effectiveChangeBytes(inspections) {
 
 function isGeneratedProjection(root, filePath) {
   return GENERATED_PROJECTION_PATHS.has(filePath) ||
+    isVerificationBookkeeping(filePath, null) ||
     isRegenerableQuestReport(root, filePath);
 }
 
