@@ -219,6 +219,30 @@ function absorbReplicaNodesRows(snapshot, rows, nodeId, nodeAddress) {
   }
 }
 
+// Fold one replica DB's rows into the per-node_id address map and flag a
+// CONFLICT when two readable replica DBs carry the SAME node_id with a
+// DIFFERENT node_address. Contradictory replica DBs are evidence of a
+// divergent/corrupt durable state and must fail closed, never be unioned.
+function foldReplicaRowsIntoAddressMap(rowsByNodeId, rows, snapshot) {
+  for (const row of rows) {
+    const nodeId = normalizeAddress(row?.[COLUMN.NODE_ID] ?? row?.node_id);
+    const nodeAddress = normalizeAddress(
+      row?.[COLUMN.NODE_ADDRESS] ?? row?.node_address,
+    );
+    if (!nodeId || !nodeAddress) {
+      continue;
+    }
+    const existing = rowsByNodeId.get(nodeId);
+    if (existing === undefined) {
+      rowsByNodeId.set(nodeId, nodeAddress);
+      continue;
+    }
+    if (existing !== nodeAddress) {
+      snapshot.conflictingReplicaEvidence = true;
+    }
+  }
+}
+
 async function readDurableNodesTableSnapshot(options = {}) {
   const normalizedNodeId = normalizeAddress(options.nodeId);
   const normalizedNodeAddress = normalizeAddress(options.nodeAddress);
@@ -228,7 +252,9 @@ async function readDurableNodesTableSnapshot(options = {}) {
     peerAddresses: new Set(),
     hasDurableNodesTable: false,
     matchedLocalIdentity: false,
+    conflictingReplicaEvidence: false,
   };
+  const rowsByNodeId = new Map();
 
   for (const dbPath of replicaDbPaths.dbPaths) {
     const replicaRead = readNodesRowsFromReplicaDbOutcome(dbPath);
@@ -236,6 +262,7 @@ async function readDurableNodesTableSnapshot(options = {}) {
       snapshot.hasDurableNodesTable = true;
       continue;
     }
+    foldReplicaRowsIntoAddressMap(rowsByNodeId, replicaRead.rows, snapshot);
     absorbReplicaNodesRows(
       snapshot,
       replicaRead.rows,
@@ -251,6 +278,7 @@ async function readDurableNodesTableSnapshot(options = {}) {
     matchedLocalIdentity: snapshot.matchedLocalIdentity,
     identityMismatch:
       snapshot.hasDurableNodesTable && !snapshot.matchedLocalIdentity,
+    conflictingReplicaEvidence: snapshot.conflictingReplicaEvidence,
     durableEvidenceUnreadable:
       replicaDbPaths.state === DURABLE_EVIDENCE_STATE.UNREADABLE,
   };

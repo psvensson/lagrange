@@ -25,6 +25,20 @@ const RECEIPTS = Object.freeze([
       'upsertJoinNode calls (no fresh clobber over an authority that ' +
       'might hold the row)',
   }),
+  Object.freeze({
+    id: 'contradictory-replica-dbs-detected-conflicting',
+    testFile: 'test/bootstrap/replica-evidence-conflict.test.js',
+    detail: 'replica DBs carrying the same node_id with divergent ' +
+      'node_address fail closed CONFLICTING_DURABLE_EVIDENCE, never ' +
+      'silently unioned; agreeing replicas are not flagged',
+  }),
+  Object.freeze({
+    id: 'no-cross-node-clobber-on-conflict',
+    testFile: 'test/bootstrap/replica-evidence-conflict.test.js',
+    detail: 'the conflict refusal is terminal (mode fail, BLOCKED_STARTUP) ' +
+      'with the force-new-cluster escape as the only override — the ' +
+      'existing self-keyed retry-wrapped upsert is not bypassed',
+  }),
 ]);
 
 const QUEST_ID = 'startup-evidence-single-identity-decision-v2';

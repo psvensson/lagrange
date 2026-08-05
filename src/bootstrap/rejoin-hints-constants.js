@@ -23,6 +23,7 @@ const MEMBERSHIP_OWNER_REASON = Object.freeze({
   FRESH_SEED: 'fresh_seed',
   IDENTITY_MISMATCH: 'identity_mismatch',
   INVALID_STARTUP_MODE: 'invalid_startup_mode',
+  CONFLICTING_DURABLE_EVIDENCE: 'conflicting_durable_evidence',
   JOIN_PROBED_PEER: 'join_probed_peer',
   JOIN_RECOVERED_PEER: 'join_recovered_peer',
   PEER_REQUIRED_BUT_MISSING: 'peer_required_but_missing',
@@ -38,6 +39,7 @@ const MEMBERSHIP_OWNER_REASON = Object.freeze({
 const AUTO_REJOIN_DECISION_STATE = Object.freeze({
   IDENTITY_MISMATCH: 'identity_mismatch',
   CLUSTER_ID_MISMATCH: 'cluster_id_mismatch',
+  CONFLICTING_DURABLE_EVIDENCE: 'conflicting_durable_evidence',
   DURABLE_SEED: 'durable_seed',
   SEED_RECOVERY_PROOF_MISSING: 'seed_recovery_proof_missing',
   JOIN_PROBED_PEER: 'join_probed_peer',
@@ -60,6 +62,10 @@ const AUTO_REJOIN_MEMBERSHIP_OUTCOME_BY_STATE = Object.freeze({
   [AUTO_REJOIN_DECISION_STATE.CLUSTER_ID_MISMATCH]: Object.freeze({
     outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
     reasonCode: MEMBERSHIP_OWNER_REASON.CLUSTER_ID_MISMATCH,
+  }),
+  [AUTO_REJOIN_DECISION_STATE.CONFLICTING_DURABLE_EVIDENCE]: Object.freeze({
+    outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,
+    reasonCode: MEMBERSHIP_OWNER_REASON.CONFLICTING_DURABLE_EVIDENCE,
   }),
   [AUTO_REJOIN_DECISION_STATE.UNREADABLE_DURABLE_EVIDENCE]: Object.freeze({
     outcomeType: MEMBERSHIP_OWNER_OUTCOME_TYPE.BLOCKED_STARTUP,

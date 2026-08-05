@@ -71,6 +71,13 @@ const UNREADABLE_DURABLE_EVIDENCE_ERROR_MESSAGE =
   'to bootstrap a fresh seed over unreadable durable state. After ' +
   'verifying no cluster member still owns this data, set ' +
   'LAGRANGE_FORCE_NEW_CLUSTER=1 to authorize a fresh cluster bootstrap';
+const CONFLICTING_DURABLE_EVIDENCE_ERROR_MESSAGE =
+  'Durable node evidence is contradictory: two replica files carry the ' +
+  'same node identity with divergent state, so they cannot be unioned ' +
+  'into a trustworthy membership. Refusing to start over conflicting ' +
+  'durable state. After verifying no cluster member still owns this ' +
+  'data, set LAGRANGE_FORCE_NEW_CLUSTER=1 to authorize a fresh ' +
+  'cluster bootstrap';
 const REJOIN_HINTS_PERSIST_FAILED_LOG_MESSAGE =
   'Failed to persist cluster rejoin hints';
 const BOOT_INCARNATION_INCREMENT = 1;
@@ -454,6 +461,13 @@ function resolveAutoRejoinDecisionState(context = {}) {
   if (context.clusterIdMismatch === true) {
     return AUTO_REJOIN_DECISION_STATE.CLUSTER_ID_MISMATCH;
   }
+  // Contradictory replica DBs (same node_id, divergent decisive fields)
+  // are conflicting durable evidence, never a unionable set: fail closed
+  // instead of treating them as current membership.
+  if (context.durableSnapshot.conflictingReplicaEvidence === true &&
+    context.forceNewCluster !== true) {
+    return AUTO_REJOIN_DECISION_STATE.CONFLICTING_DURABLE_EVIDENCE;
+  }
   if (context.durableEvidenceBlocked === true &&
     context.forceNewCluster !== true) {
     return AUTO_REJOIN_DECISION_STATE.UNREADABLE_DURABLE_EVIDENCE;
@@ -612,6 +626,20 @@ function buildAutoRejoinStartupDecision(context = {}, state) {
       identityMismatch: false,
       clusterIncarnationFence: context.clusterIncarnationFence,
       error: UNREADABLE_DURABLE_EVIDENCE_ERROR_MESSAGE,
+    }, state);
+  case AUTO_REJOIN_DECISION_STATE.CONFLICTING_DURABLE_EVIDENCE:
+    return attachMembershipOwnerOutcome({
+      state,
+      mode: STARTUP_MODE_FAIL,
+      peerAddressState: PEER_ADDRESS_STATE.UNAVAILABLE,
+      peerAddress: null,
+      peerAddresses: [],
+      source: REJOIN_SOURCE.DURABLE_NODES_TABLE,
+      startupMode: STARTUP_JOIN_MODE.DURABLE_REJOIN,
+      durableStateDetected: true,
+      identityMismatch: false,
+      clusterIncarnationFence: context.clusterIncarnationFence,
+      error: CONFLICTING_DURABLE_EVIDENCE_ERROR_MESSAGE,
     }, state);
   case AUTO_REJOIN_DECISION_STATE.FRESH_SEED:
     return attachMembershipOwnerOutcome({

@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "startup-evidence-single-identity-decision-v2",
   "status": "pass",
-  "generatedAt": "2026-08-05T11:55:38.691Z",
+  "generatedAt": "2026-08-05T12:21:11.786Z",
   "receipts": [
     {
       "id": "readauthoritativerows-typed-outcome",
@@ -15,6 +15,18 @@
       "passed": true,
       "command": "npm run test:file -- test/bootstrap/node-registration-owner.test.js",
       "detail": "an unavailable authority throws a typed deferred retryable error (deferRetry + retryAfterMs) so the join retries; zero upsertJoinNode calls (no fresh clobber over an authority that might hold the row)"
+    },
+    {
+      "id": "contradictory-replica-dbs-detected-conflicting",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/replica-evidence-conflict.test.js",
+      "detail": "replica DBs carrying the same node_id with divergent node_address fail closed CONFLICTING_DURABLE_EVIDENCE, never silently unioned; agreeing replicas are not flagged"
+    },
+    {
+      "id": "no-cross-node-clobber-on-conflict",
+      "passed": true,
+      "command": "npm run test:file -- test/bootstrap/replica-evidence-conflict.test.js",
+      "detail": "the conflict refusal is terminal (mode fail, BLOCKED_STARTUP) with the force-new-cluster escape as the only override — the existing self-keyed retry-wrapped upsert is not bypassed"
     }
   ]
 }
