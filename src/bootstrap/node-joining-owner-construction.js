@@ -88,8 +88,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       options.expectedClusterId :
       null;
     // This boot's locally minted incarnation (rejoin-hints counter): every
-    // node state update the publisher emits carries it so receivers fence
-    // stale-incarnation (zombie) writers. Normalized in delegate-bundles.
+    // node state update carries it so receivers fence stale writers.
     this.bootIncarnation = normalizeBootIncarnationOption(options);
     this.wsPort = options.wsPort ?? null;
     this.dataDir = options.dataDir || STORAGE_DEFAULT.DATA_DIR;
@@ -444,6 +443,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getLogger: () => this.logger,
         getConfig: () => this.config,
         getIdentifyPayload: () => this.getIdentifyBootstrapPayload(),
+        getBootIncarnation: () => this.bootIncarnation,
         getNow: () => this.now,
         getSleep: () => this.sleep,
         resolveJoinRetryPolicy: () => this.resolveJoinRetryPolicy(),

@@ -112,6 +112,7 @@ class MessageRouterSetup {
     wsPort,
     identifyPayload,
     externalAdmissionEnabled,
+    bootIncarnation,
   }) {
     // Validate required dependencies
     if (!nodeId) {
@@ -136,6 +137,7 @@ class MessageRouterSetup {
       wsPort,
       identifyPayload,
       externalAdmissionEnabled,
+      bootIncarnation,
       outboundQueueReadinessReserve:
         TRANSPORT_DEFAULT.PRODUCTION_OUTBOUND_QUEUE_READINESS_RESERVE,
       outboundQueueReadinessInflightReserve:

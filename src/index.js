@@ -450,6 +450,7 @@ async function startSeedNode(options) {
     rolloutControls,
     clusterIncarnationFence,
     readinessState,
+    bootIncarnation,
   });
 
   const bootstrapAPI = new BootstrapAPI({

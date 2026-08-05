@@ -270,6 +270,8 @@ const ROUTER_LOG_MSG = Object.freeze({
   FAILED_TERMINATE_EXISTING: 'Failed to terminate existing connection',
   REKEYED_CONNECTION: 'Re-keyed incoming connection to node ID',
   KEEP_ORIGINAL_CONNECTION: 'Keeping incoming connection under original ID',
+  IDENTIFICATION_STALE_BOOT_INCARNATION:
+    'Refusing identification from stale boot incarnation',
   SELF_CONNECTION_ALREADY_REGISTERED: 'self-connection already registered',
   SERVICE_MESSAGE_HANDLING: 'Handling service message',
   SERVICE_RESPONSE_RECEIVED: 'Received service response',

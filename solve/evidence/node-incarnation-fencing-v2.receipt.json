@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "node-incarnation-fencing-v2",
   "status": "pass",
-  "generatedAt": "2026-08-05T10:11:10.608Z",
+  "generatedAt": "2026-08-05T10:14:21.822Z",
   "receipts": [
     {
       "id": "incarnation-persisted-in-rejoin-hints",
@@ -43,7 +43,7 @@
     {
       "id": "websocket-identification-slot-fences-stale-incarnation",
       "passed": true,
-      "command": "npm run test:file -- test/control-plane/node-incarnation-fence.test.js",
+      "command": "npm run test:file -- test/transport/node-incarnation-websocket-fence.test.js",
       "detail": "a stale-incarnation IDENTIFY never steals the WebSocket slot (existing socket kept, incoming terminated)"
     },
     {

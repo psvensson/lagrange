@@ -191,6 +191,13 @@ class BootstrapService extends EventEmitter {
         typeof options.clusterIncarnationFence === LOCAL_STR_OBJECT ?
         options.clusterIncarnationFence :
         null;
+    // This boot's locally minted incarnation (rejoin-hints counter), threaded
+    // into the IDENTIFY frame and node-state publications so receivers fence
+    // stale-incarnation (zombie) writers; 0 means pre-incarnation.
+    this.bootIncarnation = Number.isSafeInteger(options.bootIncarnation) &&
+      options.bootIncarnation > 0 ?
+      Math.floor(options.bootIncarnation) :
+      0;
     this.dataDirectoryManager = options.dataDirectoryManager || null;
     this.workClassScheduler = options.workClassScheduler ||
       new WorkClassScheduler({

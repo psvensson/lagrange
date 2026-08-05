@@ -72,6 +72,7 @@ function buildPhaseExecutionDelegates(service) {
     getNodeAddress: () => self.nodeAddress,
     getAdvertisedNodeWsAddress: () =>
       self.advertisedNodeWsAddress,
+    getBootIncarnation: () => self.bootIncarnation,
     getWsPort: () => self.wsPort,
     getConfig: () => self.config,
     getLogger: () => self.logger,

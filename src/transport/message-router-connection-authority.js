@@ -50,9 +50,62 @@ const WEBSOCKET_CONNECTION_TIMEOUT_MESSAGE =
 const WEBSOCKET_CLOSED_BEFORE_CONNECTION_ESTABLISHED_MESSAGE =
   'WebSocket was closed before the connection was established';
 
+/**
+ * Normalize one boot-incarnation candidate: a positive safe integer is KNOWN,
+ * anything else (0, absent, non-numeric — the pre-incarnation compat shape)
+ * is UNKNOWN and never fences.
+ * @param {*} value - Candidate incarnation.
+ * @return {number} The known incarnation, or 0 when unknown.
+ */
+function normalizeKnownBootIncarnation(value) {
+  const numeric = Number(value);
+  return Number.isSafeInteger(numeric) && numeric > TRANSPORT_NUM.ZERO ?
+    numeric :
+    TRANSPORT_NUM.ZERO;
+}
+
 class RouterConnectionAuthorityOwner {
   constructor(router) {
     this.router = router;
+  }
+  /**
+   * Incarnation fence for the identification slot: refuse an IDENTIFY whose
+   * boot incarnation is KNOWN and LOWER than the retained per-node high-water
+   * (a zombie from an earlier boot). UNKNOWN on either side never fences —
+   * the same compat policy as the clusterId UNKNOWN gate.
+   * @param {string} nodeId - Identified peer node id.
+   * @param {*} bootIncarnation - Incarnation stamped on the IDENTIFY frame.
+   * @return {boolean} True when the incoming identification must be refused.
+   */
+  shouldRefuseStaleBootIncarnationIdentification(nodeId, bootIncarnation) {
+    const incomingIncarnation = normalizeKnownBootIncarnation(bootIncarnation);
+    const knownIncarnation = normalizeKnownBootIncarnation(
+      this.router.nodeBootIncarnationWatermarks.get(nodeId),
+    );
+    return incomingIncarnation > TRANSPORT_NUM.ZERO &&
+      knownIncarnation > TRANSPORT_NUM.ZERO &&
+      incomingIncarnation < knownIncarnation;
+  }
+  /**
+   * Record the freshest accepted boot incarnation for one peer so a later
+   * stale-incarnation IDENTIFY is fenced by
+   * shouldRefuseStaleBootIncarnationIdentification.
+   * @param {string} nodeId - Identified peer node id.
+   * @param {*} bootIncarnation - Incarnation stamped on the IDENTIFY frame.
+   * @return {void}
+   */
+  recordAcceptedBootIncarnation(nodeId, bootIncarnation) {
+    const incomingIncarnation = normalizeKnownBootIncarnation(bootIncarnation);
+    if (incomingIncarnation <= TRANSPORT_NUM.ZERO) {
+      return;
+    }
+    const knownIncarnation = normalizeKnownBootIncarnation(
+      this.router.nodeBootIncarnationWatermarks.get(nodeId),
+    );
+    this.router.nodeBootIncarnationWatermarks.set(
+      nodeId,
+      Math.max(incomingIncarnation, knownIncarnation),
+    );
   }
   buildObservedReconnectAddress(ws, candidateAddress = null) {
     const observedHost = ws?._socket?.remoteAddress;
@@ -460,4 +513,5 @@ const MESSAGE_ROUTER_SHARED = {
 export {
   MESSAGE_ROUTER_SHARED,
   RouterConnectionAuthorityOwner,
+  normalizeKnownBootIncarnation,
 };

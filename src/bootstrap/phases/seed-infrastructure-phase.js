@@ -165,6 +165,7 @@ class SeedInfrastructurePhase {
         advertisedNodeWsAddress: d.getAdvertisedNodeWsAddress?.() || null,
         wsPort: wsPort,
         externalAdmissionEnabled: false,
+        bootIncarnation: d.getBootIncarnation?.() || 0,
       });
     } catch (error) {
       logger.error(BOOTSTRAP_LOG_MSG.ROUTER_INIT_FAILED, {

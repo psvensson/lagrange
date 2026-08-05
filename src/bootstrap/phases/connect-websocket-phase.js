@@ -225,6 +225,7 @@ class ConnectWebSocketPhase {
         wsPort: wsPort,
         identifyPayload,
         externalAdmissionEnabled: false,
+        bootIncarnation: this.delegates.getBootIncarnation?.() || 0,
       });
     } catch (error) {
       logger.error(JOINING_LOG_MSG.ROUTER_INIT_FAILED, {

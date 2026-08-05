@@ -48,7 +48,7 @@ const RECEIPTS = Object.freeze([
   }),
   Object.freeze({
     id: 'websocket-identification-slot-fences-stale-incarnation',
-    testFile: 'test/control-plane/node-incarnation-fence.test.js',
+    testFile: 'test/transport/node-incarnation-websocket-fence.test.js',
     detail: 'a stale-incarnation IDENTIFY never steals the WebSocket ' +
       'slot (existing socket kept, incoming terminated)',
   }),

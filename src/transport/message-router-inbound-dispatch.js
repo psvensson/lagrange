@@ -161,6 +161,35 @@ class MessageRouterInboundDispatch {
         this.adoptBulkChannelSocket(connectionId, ws, nodeId);
         return;
       }
+      // Incarnation fence: a stale-incarnation (zombie) IDENTIFY must never
+      // rekey the peer slot. Refuse the adoption BEFORE the adoption decision
+      // and BEFORE any record mutation: terminate the incoming socket, keep
+      // the existing connection. UNKNOWN incarnation never fences.
+      if (
+        this.connectionAuthorityOwner.shouldRefuseStaleBootIncarnationIdentification(
+          nodeId,
+          message.bootIncarnation,
+        )
+      ) {
+        this.logger.info(ROUTER_LOG_MSG.IDENTIFICATION_STALE_BOOT_INCARNATION, {
+          connectionId,
+          remoteNodeId: nodeId,
+          localNodeId: this.nodeId,
+          bootIncarnation: message.bootIncarnation,
+        });
+        this.retireConnection(connection);
+        this.nodeConnections.delete(connectionId);
+        this.nodeInboundActivityAt.delete(connectionId);
+        try {
+          ws.terminate();
+        } catch (error) {
+          this.logger.warn(ROUTER_LOG_MSG.FAILED_TERMINATE_EXISTING, {
+            nodeId,
+            error: error.message,
+          });
+        }
+        return;
+      }
       const normalizedAddress =
         normalizeToWebSocketAddress(nodeAddress) || nodeAddress;
       connection.nodeId = nodeId;
@@ -174,6 +203,10 @@ class MessageRouterInboundDispatch {
         adoptionDecision.state ===
         INCOMING_CONNECTION_ADOPTION.KEEP_SELF_CONNECTION
       ) {
+        this.connectionAuthorityOwner.recordAcceptedBootIncarnation(
+          nodeId,
+          message.bootIncarnation,
+        );
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
           nodeId,
@@ -212,6 +245,10 @@ class MessageRouterInboundDispatch {
           );
         }
         this.nodeConnections.set(nodeId, connection);
+        this.connectionAuthorityOwner.recordAcceptedBootIncarnation(
+          nodeId,
+          message.bootIncarnation,
+        );
         this.logger.info(ROUTER_LOG_MSG.REKEYED_CONNECTION, {
           oldKey: connectionId,
           newKey: nodeId,
@@ -225,6 +262,10 @@ class MessageRouterInboundDispatch {
         // pong-timeout sever drives handleConnectionClose -> scheduleReconnect.
         this.startPingInterval(connection);
       } else {
+        this.connectionAuthorityOwner.recordAcceptedBootIncarnation(
+          nodeId,
+          message.bootIncarnation,
+        );
         this.logger.debug(ROUTER_LOG_MSG.KEEP_ORIGINAL_CONNECTION, {
           connectionId,
           nodeId,

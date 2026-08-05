@@ -56,6 +56,18 @@ class MessageRouter extends EventEmitter {
     this.wsPort = options.wsPort || null;
     this.routerId = uuidv4();
     this.identifyPayload = options.identifyPayload || null;
+    // This boot's locally minted incarnation (rejoin-hints counter). Stamped
+    // on every IDENTIFY frame so receivers fence stale-incarnation (zombie)
+    // identifications; 0 means pre-incarnation and never fences.
+    this.bootIncarnation =
+      Number.isSafeInteger(options.bootIncarnation) &&
+      options.bootIncarnation > TRANSPORT_NUM.ZERO ?
+        Math.floor(options.bootIncarnation) :
+        TRANSPORT_NUM.ZERO;
+    // Per-node high-water boot incarnation recorded from accepted IDENTIFY
+    // frames: a later IDENTIFY from a LOWER incarnation is a zombie and must
+    // never rekey the peer slot.
+    this.nodeBootIncarnationWatermarks = new Map();
     this.handlers = /* @__PURE__ */ new Map();
     this.inProcess = options.inProcess === true;
     this.nodeConnections = /* @__PURE__ */ new Map();

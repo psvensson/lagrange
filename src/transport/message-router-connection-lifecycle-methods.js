@@ -498,6 +498,12 @@ class MessageRouterConnectionLifecycleMethods {
       address: this.advertisedAddress,
       timestamp: Date.now(),
     };
+    // Stamp this boot's incarnation so receivers fence stale-incarnation
+    // (zombie) identifications. 0 (pre-incarnation) leaves the field OFF the
+    // frame — the UNKNOWN compat policy.
+    if (this.bootIncarnation > TRANSPORT_NUM.ZERO) {
+      message.bootIncarnation = this.bootIncarnation;
+    }
     if (this.identifyPayload && !connectionInfo.isSelfConnection) {
       message.bootstrap = this.identifyPayload;
     }
