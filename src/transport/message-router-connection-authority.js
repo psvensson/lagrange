@@ -513,5 +513,4 @@ const MESSAGE_ROUTER_SHARED = {
 export {
   MESSAGE_ROUTER_SHARED,
   RouterConnectionAuthorityOwner,
-  normalizeKnownBootIncarnation,
 };
