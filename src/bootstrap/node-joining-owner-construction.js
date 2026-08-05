@@ -4,6 +4,7 @@ import {
   defineNodeJoiningRuntimeDependencyProperties,
   assignNodeJoiningDelegateBundleMethods,
   installNodeJoiningStatePublicationOwner,
+  normalizeSeedNodeAddresses,
 } from './node-joining-delegate-bundles.js';
 
 const {
@@ -58,20 +59,6 @@ const {
   uuidv4,
 } = NODE_JOINING_SERVICE_SHARED;
 
-/**
- * Normalize the optional seed contact candidate list.
- * @param {*} seedNodeAddresses
- * @return {string[]}
- */
-function normalizeSeedNodeAddresses(seedNodeAddresses) {
-  if (!Array.isArray(seedNodeAddresses)) {
-    return [];
-  }
-  return seedNodeAddresses.filter((seedAddress) =>
-    typeof seedAddress === 'string' && seedAddress.length > 0,
-  );
-}
-
 class NodeJoiningOwnerConstruction extends EventEmitter {
   constructor(options = {}) {
     super();
@@ -92,6 +79,14 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
       normalizeSeedNodeAddresses(options.seedNodeAddresses);
     this.seedNodeWsAddress = options.seedNodeWsAddress || null;
     this.seedNodeId = null; // Allow explicit 0 to mean "do not start a WebSocket server" (useful in tests/sandboxes).
+    // Durable cluster identity this node already belongs to (persisted in its
+    // rejoin hints by a prior join). Sent as expectedClusterId with every
+    // bootstrap request; null on a fresh node, which the seed-side
+    // compatibility policy treats as UNKNOWN (stamped via the response).
+    this.expectedClusterId = typeof options.expectedClusterId === 'string' &&
+      options.expectedClusterId.length > 0 ?
+      options.expectedClusterId :
+      null;
     this.wsPort = options.wsPort ?? null;
     this.dataDir = options.dataDir || STORAGE_DEFAULT.DATA_DIR;
     this.config = {...JOINING_DEFAULT, ...options.config};
@@ -404,6 +399,7 @@ class NodeJoiningOwnerConstruction extends EventEmitter {
         getNodeAddress: () => this.nodeAddress,
         getJoinStartupMode: () => this.startupMode,
         getMembershipOwnerOutcome: () => this.membershipOwnerOutcome,
+        getExpectedClusterId: () => this.expectedClusterId || null,
         getLogger: () => this.logger,
         getConfig: () => this.config,
         getNow: () => this.now,

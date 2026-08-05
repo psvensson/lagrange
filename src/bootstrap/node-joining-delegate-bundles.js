@@ -459,9 +459,24 @@ function assignNodeJoiningDelegateBundleMethods(ServiceClass) {
   });
 }
 
+/**
+ * Normalize the optional seed contact candidate list.
+ * @param {*} seedNodeAddresses
+ * @return {string[]}
+ */
+function normalizeSeedNodeAddresses(seedNodeAddresses) {
+  if (!Array.isArray(seedNodeAddresses)) {
+    return [];
+  }
+  return seedNodeAddresses.filter((seedAddress) =>
+    typeof seedAddress === 'string' && seedAddress.length > 0,
+  );
+}
+
 export {
   createNodeJoiningRuntimeDependencyOwner,
   defineNodeJoiningRuntimeDependencyProperties,
   assignNodeJoiningDelegateBundleMethods,
   installNodeJoiningStatePublicationOwner,
+  normalizeSeedNodeAddresses,
 };
