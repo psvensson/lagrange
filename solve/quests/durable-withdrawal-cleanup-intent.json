@@ -1,0 +1,63 @@
+{
+  "id": "durable-withdrawal-cleanup-intent",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A failed-join withdrawal no longer relies on a pure in-memory reconcile queue that teardown destroys: either a withdrawal intent is persisted before teardown so a later run completes it, or lease-expiry is explicitly documented as the designed fallback, and a status-column and endpoint-row reaper alongside the existing lease sweep removes the residual stale rows that today no writer ever drives to STOPPED.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "planDoc": "solve/epics/cluster-identity-and-join-fencing.md",
+    "specRef": "join-path-audit-finding-8-deferred-withdrawal-retry-owner"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "durable-withdrawal-cleanup-intent",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "withdrawal-intent-durability",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "durable-withdrawal-cleanup-intent",
+          "metric": "priority"
+        }
+      }
+    },
+    {
+      "id": "stale-row-reaper",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "durable-withdrawal-cleanup-intent",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "explicit-choice",
+      "statement": "Choose one and record it in a finding: persist a withdrawal intent before teardown (durable retry owner), OR explicitly document lease-expiry as the designed fallback. Do not leave DEFERRED silently meaning 'not applied' with no owner."
+    },
+    {
+      "id": "reaper-scope",
+      "statement": "Any reaper must drive the status column to STOPPED and reap endpoint rows, complementing (not replacing) the leader's lease sweep and the active-node projection's stale-lease trim; leftovers must be stale rows, not live routing targets."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the durable-intent or reaper mechanism is reverted while the rest of the change remains."
+    }
+  ]
+}

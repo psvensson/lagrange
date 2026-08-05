@@ -6,6 +6,8 @@
   "priority": 1,
   "class": "product",
   "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "planDoc": "solve/epics/cluster-identity-and-join-fencing.md",
     "specRef": "join-path-audit-finding-1-zombie-processes",
     "parentQuest": "durable-cluster-identity"
   },
