@@ -565,9 +565,14 @@ class ContactSeedPhase {
         parsedError,
         statusCode,
       });
+    // A 409 carrying a whitelisted retryable code (e.g. the lease-window
+    // changed-address conflict) is retryable-with-backoff, not terminal: the
+    // seed explicitly classified it as a wait. Only an untyped/unwhitelisted
+    // 409 stays on the terminal path.
     const terminalValidationOrConflict =
-      statusCode === HTTP_STATUS.BAD_REQUEST ||
-      statusCode === HTTP_STATUS.CONFLICT;
+      !retryableCode &&
+      (statusCode === HTTP_STATUS.BAD_REQUEST ||
+        statusCode === HTTP_STATUS.CONFLICT);
 
     return {
       parsedError,

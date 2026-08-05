@@ -228,12 +228,30 @@ const bootstrapRequestOwnerHandlerMethods = {
       },
     );
     if (conflictError) {
+      // A typed lease-window conflict is an object carrying code +
+      // retryAfterMs; every other conflict is a plain error string. The
+      // typed shape lets the joiner classify this one 409 as
+      // retryable-with-backoff instead of terminal.
+      const isTypedConflict =
+        conflictError && typeof conflictError === 'object';
+      const errorMessage = isTypedConflict ?
+        conflictError.error :
+        conflictError;
       this.getLogger().warn(BOOTSTRAP_API_LOG_MSG.CONFLICT_DETECTED, {
         nodeId,
         nodeAddress,
-        error: conflictError,
+        error: errorMessage,
       });
       reply.code(HTTP_STATUS.CONFLICT);
+      if (isTypedConflict) {
+        return {
+          error: errorMessage,
+          code: conflictError.code,
+          retryAfterMs: Number.isFinite(conflictError.retryAfterMs) ?
+            Math.max(0, Math.floor(conflictError.retryAfterMs)) :
+            0,
+        };
+      }
       return {error: conflictError};
     }
 

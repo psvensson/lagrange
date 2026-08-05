@@ -83,6 +83,7 @@ function isRetryableSeedContactCode(code) {
     code === BOOTSTRAP_PIPELINE_ERROR_CODE.BOOTSTRAP_NOT_READY ||
     code === BOOTSTRAP_PIPELINE_ERROR_CODE
       .SERVICE_REGISTRATION_CACHE_VISIBILITY_TIMEOUT ||
+    code === BOOTSTRAP_PIPELINE_ERROR_CODE.NODE_REJOIN_LEASE_WINDOW ||
     code === BOOTSTRAP_API_REGISTER_SERVICE_ERROR_CODE
       .ASSIGNMENT_TOKEN_UNKNOWN;
 }
@@ -123,8 +124,14 @@ function normalizeRetryableSeedContactEvidence(value) {
   const statusCode = Number.isFinite(value.statusCode) ?
     Math.floor(value.statusCode) :
     null;
+  const retryableLeaseWindowConflict =
+    isRetryableSeedContactCode(code) === true &&
+    (statusCode === HTTP_STATUS.CONFLICT ||
+      statusCode === HTTP_STATUS.SERVICE_UNAVAILABLE ||
+      statusCode === null);
   if (isRetryableSeedContactCode(code) !== true &&
-      statusCode !== HTTP_STATUS.SERVICE_UNAVAILABLE) {
+      statusCode !== HTTP_STATUS.SERVICE_UNAVAILABLE &&
+      retryableLeaseWindowConflict !== true) {
     return null;
   }
   const normalized = {

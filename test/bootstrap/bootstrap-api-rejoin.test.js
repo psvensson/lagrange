@@ -205,9 +205,47 @@ test('checkForConflicts rejects re-registration when ' +
     result !== null,
     'should reject re-registration when node is alive',
   );
+  // The lease-window case is a typed retryable conflict, not the terminal
+  // string: the joiner retries until the lease expires, then readmits.
+  t.equal(
+    result.code,
+    'NODE_REJOIN_LEASE_WINDOW',
+    'lease-window conflict carries the typed retryable code',
+  );
   t.ok(
-    result.includes('already registered'),
-    'error should mention already registered',
+    Number.isFinite(result.retryAfterMs) && result.retryAfterMs > 0,
+    'lease-window conflict carries a positive retryAfterMs',
+  );
+});
+
+test('checkForConflicts rejects re-registration as a terminal conflict ' +
+  'when the existing node is live with no lease', async (t) => {
+  initializeTestEnvironment();
+
+  const liveNode = {
+    [COLUMN.NODE_ID]: REJOIN_NODE_ID,
+    [COLUMN.NODE_ADDRESS]: REJOIN_NODE_ADDRESS,
+    [COLUMN.STATUS]: SERVICE_STATUS.ACTIVE,
+    // No ready_lease_expires_at field at all: the row is live on its status
+    // alone (an absent lease reads as non-finite, not expired), so the
+    // changed-address conflict is genuinely terminal, not a lease-window
+    // wait.
+  };
+
+  const cache = createCacheWithExistingNode(liveNode);
+  const api = new BootstrapAPI({
+    seedNodeId: SEED_NODE_ID,
+    seedNodeAddress: SEED_NODE_ADDRESS,
+    systemTableCache: cache,
+  });
+
+  const result = await api.checkForConflicts(
+    REJOIN_NODE_ID,
+    'ws://localhost:9091',
+  );
+  t.ok(
+    typeof result === 'string' && result.includes('already registered'),
+    'a live row with no lease field stays a terminal conflict',
   );
 });
 

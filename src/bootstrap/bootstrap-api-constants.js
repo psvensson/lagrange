@@ -116,6 +116,8 @@ const BOOTSTRAP_API_LOG_MSG = Object.freeze({
     'Allowing idempotent re-registration of node with unchanged address',
   STALE_NODE_REJOIN_ALLOWED:
     'Allowing re-registration of dead node',
+  LEASE_WINDOW_REJOIN_DEFERRED:
+    'Deferring changed-address rejoin until the conflicting ready lease expires',
   BOOTSTRAP_ADMISSION_EXPIRED:
     'Expired stale bootstrap admission lease',
   BOOTSTRAP_ADMISSION_DEFERRED:
@@ -136,6 +138,8 @@ const BOOTSTRAP_API_ERROR = Object.freeze({
   SEED_NODE_ADDRESS_CONFLICT: 'Cannot use seed node address',
   NODE_ID_ALREADY_REGISTERED: (nodeId) => `Node ID ${nodeId} is already registered`,
   NODE_ADDRESS_IN_USE: (nodeAddress) => `Node address ${nodeAddress} is already in use`,
+  NODE_REJOIN_LEASE_WINDOW:
+    'Node rejoin conflicts with a live ready lease; retry after lease expiry',
   INTERNAL_BOOTSTRAP_ERROR: 'Internal server error during bootstrap',
   BOOTSTRAP_NOT_READY: 'Bootstrap not ready',
   RAFT_LEADERS_NOT_READY:

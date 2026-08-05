@@ -44,6 +44,11 @@ const REJOIN_TERMINAL_STATES = Object.freeze(new Set([
 const NODE_ROW_FIELD = Object.freeze({
   NODE_ADDRESS: 'node_address',
 });
+// The takeover decision's ADMIT outcome: `null` is the long-standing
+// "no conflict" signal at the checkForConflicts call site; naming it here
+// keeps the no-raw-null semantic-decision guideline honest without
+// changing the external contract.
+const TAKEOVER_DECISION_ADMIT = null;
 const REJOIN_AUTHORITY_SOURCE = Object.freeze({
   LOCAL_CACHE_RESTART_REENTRY: 'local_cache_restart_reentry',
 });
@@ -229,6 +234,29 @@ class BootstrapJoinAdmissionOwner {
       return BOOTSTRAP_API_ERROR.CLUSTER_ID_MISMATCH;
     }
 
+    return this.resolveTakeoverDecision({
+      nodeId,
+      nodeAddress,
+      options,
+      systemTableCache,
+      nodeIdAlreadyRegistered,
+      nodeAddressInUse,
+    });
+  }
+
+  // The one canonical takeover decision: every address-drift policy composes
+  // here, in order, so the branches cannot drift into independent slow-path
+  // readmissions — same-address admit, changed-address (lease-window typed
+  // retryable wait / genuinely-live terminal 409 / dead-row stale admit),
+  // address-claim terminal 409, otherwise fresh-join admit.
+  async resolveTakeoverDecision({
+    nodeId,
+    nodeAddress,
+    options,
+    systemTableCache,
+    nodeIdAlreadyRegistered,
+    nodeAddressInUse,
+  }) {
     const existingNode = systemTableCache.get(TABLES.NODES, nodeId);
     if (existingNode) {
       if (this.isDurableRejoinSameAddressEvidence(
@@ -245,7 +273,7 @@ class BootstrapJoinAdmissionOwner {
               REJOIN_AUTHORITY_SOURCE.LOCAL_CACHE_RESTART_REENTRY,
           },
         );
-        return null;
+        return TAKEOVER_DECISION_ADMIT;
       }
       const authoritativeExistingNode =
         await this.readAuthoritativeNodeRow(nodeId);
@@ -265,9 +293,28 @@ class BootstrapJoinAdmissionOwner {
               authoritativeExistingNode.available === true,
           },
         );
-        return null;
+        return TAKEOVER_DECISION_ADMIT;
       }
       if (effectiveExistingNode && !this.isNodeDead(effectiveExistingNode)) {
+        // A changed-address rejoin against a row live ONLY because its ready
+        // lease is still ticking is a lease-window wait, not a conflict: the
+        // typed retryable conflict (code + retryAfterMs from the lease) lets
+        // the joiner retry until the STALE_NODE_REJOIN_ALLOWED fall-through
+        // readmits it after expiry, instead of terminal-409 -> process.exit(1).
+        // A row live for any OTHER reason (live status, no lease) stays terminal.
+        const leaseWindowConflict =
+          this.buildLeaseWindowRejoinConflict(effectiveExistingNode, nodeId);
+        if (leaseWindowConflict) {
+          this.getLogger().info(
+            BOOTSTRAP_API_LOG_MSG.LEASE_WINDOW_REJOIN_DEFERRED,
+            {
+              nodeId,
+              nodeAddress,
+              retryAfterMs: leaseWindowConflict.retryAfterMs,
+            },
+          );
+          return leaseWindowConflict;
+        }
         return nodeIdAlreadyRegistered(nodeId);
       }
       this.getLogger().info(BOOTSTRAP_API_LOG_MSG.STALE_NODE_REJOIN_ALLOWED, {
@@ -290,7 +337,7 @@ class BootstrapJoinAdmissionOwner {
       }
     }
 
-    return null;
+    return TAKEOVER_DECISION_ADMIT;
   }
 
   isDurableRejoinSameAddressEvidence(existingNode, nodeAddress, options = {}) {
@@ -323,6 +370,28 @@ class BootstrapJoinAdmissionOwner {
       return true;
     }
     return false;
+  }
+
+  // Lease-window-live means the ONLY thing keeping the row out of the dead
+  // set is an unexpired ready lease; in that window a changed-address rejoin
+  // is a wait, not a conflict.
+  buildLeaseWindowRejoinConflict(nodeRecord, nodeId) {
+    const leaseExpiry = Number(
+      nodeRecord?.[COLUMN.READY_LEASE_EXPIRES_AT],
+    );
+    if (!Number.isFinite(leaseExpiry)) {
+      return null;
+    }
+    const retryAfterMs = leaseExpiry - Date.now();
+    if (retryAfterMs <= 0) {
+      return null;
+    }
+    return {
+      error: BOOTSTRAP_API_ERROR.NODE_REJOIN_LEASE_WINDOW,
+      code: BOOTSTRAP_PIPELINE_ERROR_CODE.NODE_REJOIN_LEASE_WINDOW,
+      retryAfterMs: Math.ceil(retryAfterMs),
+      nodeId,
+    };
   }
 
   async readAuthoritativeNodeRow(nodeId) {
