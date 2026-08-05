@@ -1,0 +1,43 @@
+{
+  "id": "solver-landing-preflight-deleted-path-filter",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The landing preflight silent-catch runner no longer crashes on changed paths that no longer exist in the worktree: silentCatchProblems in scripts/solve/landing-preflight.js filters deleted/absent files exactly as staticQualityProblems already does, so a Quest whose candidate includes a file deletion can mint a review manifest instead of dying on fs.stat ENOENT. doneWhen: solve/oracle/solver-landing-preflight-deleted-path-filter.json is done only when a focused test proves a manifest containing a deleted path passes the preflight silent-catch stage while existing violating paths still fail closed.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": "RM-0.1-fs-rolling-restart",
+    "specRef": "docs/steering/workflow-guidelines/solver-quests.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "60450cd6e695455669b6fe8381364190835761d0"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "solver-landing-preflight-deleted-path-filter",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "solver-landing-preflight-deleted-path-filter-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "solver-landing-preflight-deleted-path-filter",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

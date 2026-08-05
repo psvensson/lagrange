@@ -78,3 +78,20 @@ _(none open — both resolved; see decision log)_
   (Finding 9), `durable-withdrawal-cleanup-intent-v2`,
   `stale-replica-file-startup-reconciliation-v2`,
   `lifecycle-controller-live-delegates-only-v2` (Finding 13).
+- 2026-08-05 — **Epic complete.** All four v2 successors landed SOLVED
+  (MEASURED): `lifecycle-controller-live-delegates-only-v2` (484f7e8b5;
+  shadow state machine removed, live delegates preserved, reintroduction
+  guard), `stale-replica-file-startup-reconciliation-v2` (497dd6e8c;
+  post-hydration startup sweep quarantines orphaned nodes-p* replica files
+  against the canonical services assignment), `durable-withdrawal-cleanup-intent-v2`
+  (e6364323c; leader-side stranded-joining-row reaper alongside the lease
+  sweep; explicit-choice finding records lease-expiry-plus-reaper as the
+  designed fallback), `address-takeover-workflow-v2` (e201d1598; the three
+  address-drift policies unified into one canonical resolveTakeoverDecision,
+  the in-lease-window 409 reclassified retryable-with-backoff via a typed
+  lease-window conflict, controlled live A/B per TEST-0022). A tooling
+  prerequisite also landed: `solver-landing-preflight-deleted-path-filter-v2`
+  (c7ad7d91d) — the landing preflight no longer crashes on candidates that
+  delete a file. Every join-path-audit finding the epic carried (1, 3, 4, 5,
+  7, 8, 9, 13) now has a landed, verifier-approved, red-on-revert-proven
+  fix.
