@@ -71,128 +71,128 @@ test('both hints builders carry the boot incarnation when known', async (t) => {
 
 test('an absent incarnation leaves the field off (pre-incarnation ' +
   'compatibility)', async (t) => {
-    const snapshot = buildRejoinHintsSnapshot({
-      systemTableCache: createSystemTableCache(),
-      nodeId: LOCAL_NODE_ID,
-      nodeAddress: LOCAL_NODE_ADDRESS,
-      nodeRole: 'seed',
-      now: () => 1234,
-    });
-    t.equal(
-      Object.prototype.hasOwnProperty.call(snapshot, 'bootIncarnation'),
-      false,
-      'a pre-incarnation write has no bootIncarnation field',
-    );
-    const zero = buildRejoinHintsSnapshot({
-      systemTableCache: createSystemTableCache(),
-      nodeId: LOCAL_NODE_ID,
-      nodeAddress: LOCAL_NODE_ADDRESS,
-      nodeRole: 'seed',
-      bootIncarnation: 0,
-      now: () => 1234,
-    });
-    t.equal(
-      Object.prototype.hasOwnProperty.call(zero, 'bootIncarnation'),
-      false,
-      'incarnation 0 (pre-incarnation) is never written',
-    );
+  const snapshot = buildRejoinHintsSnapshot({
+    systemTableCache: createSystemTableCache(),
+    nodeId: LOCAL_NODE_ID,
+    nodeAddress: LOCAL_NODE_ADDRESS,
+    nodeRole: 'seed',
+    now: () => 1234,
   });
+  t.equal(
+    Object.prototype.hasOwnProperty.call(snapshot, 'bootIncarnation'),
+    false,
+    'a pre-incarnation write has no bootIncarnation field',
+  );
+  const zero = buildRejoinHintsSnapshot({
+    systemTableCache: createSystemTableCache(),
+    nodeId: LOCAL_NODE_ID,
+    nodeAddress: LOCAL_NODE_ADDRESS,
+    nodeRole: 'seed',
+    bootIncarnation: 0,
+    now: () => 1234,
+  });
+  t.equal(
+    Object.prototype.hasOwnProperty.call(zero, 'bootIncarnation'),
+    false,
+    'incarnation 0 (pre-incarnation) is never written',
+  );
+});
 
 test('mintBootIncarnation increments the persisted counter exactly once ' +
   'per boot', async (t) => {
-    const dataDir = await mkdtemp(join(tmpdir(), 'boot-incarnation-'));
-    try {
-      t.equal(
-        await readPersistedBootIncarnation(dataDir),
-        0,
-        'a fresh data directory starts at incarnation 0',
-      );
-      const first = await mintBootIncarnation(dataDir);
-      t.equal(first, 1, 'the first boot mints incarnation 1');
-      await persistBootstrapRejoinHints({
-        dataDir,
-        nodeId: LOCAL_NODE_ID,
-        nodeAddress: LOCAL_NODE_ADDRESS,
-        nodeRole: 'joiner',
-        peerAddresses: [PEER_NODE_ADDRESS],
-        bootIncarnation: first,
-      });
-      t.equal(
-        await readPersistedBootIncarnation(dataDir),
-        1,
-        'the minted incarnation is persisted with the hints',
-      );
-      const second = await mintBootIncarnation(dataDir);
-      t.equal(
-        second,
-        2,
-        'the next boot mints the next monotonic value',
-      );
-    } finally {
-      await rm(dataDir, {recursive: true, force: true});
-    }
-  });
+  const dataDir = await mkdtemp(join(tmpdir(), 'boot-incarnation-'));
+  try {
+    t.equal(
+      await readPersistedBootIncarnation(dataDir),
+      0,
+      'a fresh data directory starts at incarnation 0',
+    );
+    const first = await mintBootIncarnation(dataDir);
+    t.equal(first, 1, 'the first boot mints incarnation 1');
+    await persistBootstrapRejoinHints({
+      dataDir,
+      nodeId: LOCAL_NODE_ID,
+      nodeAddress: LOCAL_NODE_ADDRESS,
+      nodeRole: 'joiner',
+      peerAddresses: [PEER_NODE_ADDRESS],
+      bootIncarnation: first,
+    });
+    t.equal(
+      await readPersistedBootIncarnation(dataDir),
+      1,
+      'the minted incarnation is persisted with the hints',
+    );
+    const second = await mintBootIncarnation(dataDir);
+    t.equal(
+      second,
+      2,
+      'the next boot mints the next monotonic value',
+    );
+  } finally {
+    await rm(dataDir, {recursive: true, force: true});
+  }
+});
 
 test('the persistence cadence rewrites the hints with the SAME ' +
   'incarnation', async (t) => {
-    const dataDir = await mkdtemp(join(tmpdir(), 'boot-incarnation-'));
-    try {
-      const service = new RejoinHintsPersistenceService({
-        dataDir,
-        nodeId: LOCAL_NODE_ID,
-        nodeAddress: LOCAL_NODE_ADDRESS,
-        nodeRole: 'seed',
-        bootIncarnation: 5,
-        getSystemTableCache: () => createSystemTableCache(),
-        writeIntervalMs: 10,
-      });
-      await service.persistNow();
-      await service.persistNow();
-      await service.persistNow();
-      t.equal(
-        await readPersistedBootIncarnation(dataDir),
-        5,
-        'repeated cadence writes never advance the counter',
-      );
-      await service.stop();
-    } finally {
-      await rm(dataDir, {recursive: true, force: true});
-    }
-  });
+  const dataDir = await mkdtemp(join(tmpdir(), 'boot-incarnation-'));
+  try {
+    const service = new RejoinHintsPersistenceService({
+      dataDir,
+      nodeId: LOCAL_NODE_ID,
+      nodeAddress: LOCAL_NODE_ADDRESS,
+      nodeRole: 'seed',
+      bootIncarnation: 5,
+      getSystemTableCache: () => createSystemTableCache(),
+      writeIntervalMs: 10,
+    });
+    await service.persistNow();
+    await service.persistNow();
+    await service.persistNow();
+    t.equal(
+      await readPersistedBootIncarnation(dataDir),
+      5,
+      'repeated cadence writes never advance the counter',
+    );
+    await service.stop();
+  } finally {
+    await rm(dataDir, {recursive: true, force: true});
+  }
+});
 
 test('the publication owner stamps the boot incarnation onto every node ' +
   'state update', async (t) => {
-    // Capture the built message at the kernel-ingress seam: the incarnation
-    // field is attached synchronously during message construction, before
-    // any dispatch/target decision, so a reachable kernel proves the field.
-    let captured = null;
-    const owner = new NodeStatePublicationOwner({
-      nodeId: LOCAL_NODE_ID,
-      nodeAddress: LOCAL_NODE_ADDRESS,
-      bootIncarnation: 9,
-      delegates: {
-        getNodeCapabilities: () => [],
-        resolveLegacyTargetCandidates: () => ['control-plane:9000'],
-        getMessageRouter: () => ({
-          async deliver(_target, msg) {
-            captured = msg;
-            return {acknowledged: true};
-          },
-        }),
-        getControlPlaneKernelIngress: () => null,
-      },
-    });
-    await owner.sendControlPlaneNodeStateUpdate({
-      state: 'ready',
-      heartbeatOnly: true,
-    });
-    t.ok(captured, 'the kernel ingress received the built message');
-    t.equal(
-      captured[ControlPlaneField.BOOT_INCARNATION],
-      9,
-      'the emitted state update carries the boot incarnation',
-    );
+  // Capture the built message at the kernel-ingress seam: the incarnation
+  // field is attached synchronously during message construction, before
+  // any dispatch/target decision, so a reachable kernel proves the field.
+  let captured = null;
+  const owner = new NodeStatePublicationOwner({
+    nodeId: LOCAL_NODE_ID,
+    nodeAddress: LOCAL_NODE_ADDRESS,
+    bootIncarnation: 9,
+    delegates: {
+      getNodeCapabilities: () => [],
+      resolveLegacyTargetCandidates: () => ['control-plane:9000'],
+      getMessageRouter: () => ({
+        async deliver(_target, msg) {
+          captured = msg;
+          return {acknowledged: true};
+        },
+      }),
+      getControlPlaneKernelIngress: () => null,
+    },
   });
+  await owner.sendControlPlaneNodeStateUpdate({
+    state: 'ready',
+    heartbeatOnly: true,
+  });
+  t.ok(captured, 'the kernel ingress received the built message');
+  t.equal(
+    captured[ControlPlaneField.BOOT_INCARNATION],
+    9,
+    'the emitted state update carries the boot incarnation',
+  );
+});
 
 test('a publication owner without an incarnation stamps no field',
   async (t) => {
