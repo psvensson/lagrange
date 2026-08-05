@@ -113,7 +113,7 @@ test('MembershipLifecycleController delegates join intent with normalized lifecy
   });
 });
 
-test('MembershipLifecycleController delegates drain and removal intent through one owner path', async (t) => {
+test('MembershipLifecycleController delegates drain intent through one owner path', async (t) => {
   const submissions = [];
   const controller = new MembershipLifecycleController({
     nodeId: 'node-2',
@@ -123,10 +123,6 @@ test('MembershipLifecycleController delegates drain and removal intent through o
         submissions.push(intent);
         return {phase: 'draining', reasons: [intent.reasonCode]};
       },
-      onRemovalIntent: ({intent}) => {
-        submissions.push(intent);
-        return {removed: true, intent};
-      },
     },
   });
 
@@ -135,32 +131,14 @@ test('MembershipLifecycleController delegates drain and removal intent through o
     reasonCode: 'operator_shutdown',
     signal: 'SIGTERM',
   });
-  const removalResult = await controller.submitRemovalIntent({
-    reasonCode: 'cluster_membership_cleanup',
-  });
 
   t.match(drainResult, {
     phase: 'draining',
     reasons: ['operator_shutdown'],
   });
-  t.match(removalResult, {
-    removed: true,
-    intent: {
-      intentType: MEMBERSHIP_LIFECYCLE_INTENT.REMOVAL,
-      membershipLifecycleSummary: {
-        lifecycleState: 'removed',
-        memberStatesByNodeId: {
-          'node-2': 'retired',
-        },
-      },
-    },
-  });
   t.same(
     submissions.map((intent) => intent.intentType),
-    [
-      MEMBERSHIP_LIFECYCLE_INTENT.DRAIN,
-      MEMBERSHIP_LIFECYCLE_INTENT.REMOVAL,
-    ],
+    [MEMBERSHIP_LIFECYCLE_INTENT.DRAIN],
   );
 });
 

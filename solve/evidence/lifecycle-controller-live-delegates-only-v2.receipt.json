@@ -1,0 +1,26 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "lifecycle-controller-live-delegates-only-v2",
+  "status": "pass",
+  "generatedAt": "2026-08-05T18:19:25.176Z",
+  "receipts": [
+    {
+      "id": "intent-drain-delegates-preserved",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/membership-lifecycle-controller.test.js",
+      "detail": "the live join/drain intent delegates (submitJoinIntent, submitDrainIntent) are preserved with their normalized lifecycle summaries and delegate dispatch"
+    },
+    {
+      "id": "shadow-state-machine-removed",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/membership-lifecycle-controller-live-delegates-only.test.js",
+      "detail": "the unconsumed per-member state machine, transition history, intent history, and the unreachable removal path are gone from the controller surface"
+    },
+    {
+      "id": "reintroduction-guard-fails",
+      "passed": true,
+      "command": "npm run test:file -- test/control-plane/membership-lifecycle-controller-live-delegates-only.test.js",
+      "detail": "the guard fails when the shadow state machine, transition history, or removal path is reintroduced without a consumer"
+    }
+  ]
+}
