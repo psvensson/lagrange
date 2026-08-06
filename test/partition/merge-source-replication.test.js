@@ -139,7 +139,7 @@ async function buildSourceContext(options = {}) {
     'assertMergeRoutingDescriptorEpoch',
     'resolveSplitDescriptorEpochEvidence',
     'backfillMergeSnapshot',
-    'applyMergeSnapshotRow',
+    'applyMergeSnapshotBatch',
     'routeMergeMirroredWrite',
     'handleMergeReplicationAfterWrite',
     'flushMergeReplicationQueue',

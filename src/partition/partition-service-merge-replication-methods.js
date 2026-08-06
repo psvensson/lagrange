@@ -2,6 +2,7 @@ import {ERRORS, SQL} from '../constants/index.js';
 import {RAFT_ROLE} from '../raft/constants.js';
 import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
 import {
+  PARTITION_SPLIT_MIRROR_ORIGIN,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
 import {
@@ -14,6 +15,7 @@ import {
 } from './partition-service-merge-replication-state.js';
 import {
   extractSplitMirrorIdentity,
+  resolveSplitSnapshotBatchRowLimit,
 } from './partition-split-routing.js';
 import {
   PARTITION_SERVICE_DEFAULT,
@@ -422,28 +424,37 @@ class PartitionServiceMergeReplicationMethods {
           PARTITION_SERVICE_TYPE.FUNCTION ?
           statement.all() :
           []);
-    let processedRowCount = 0;
+    const batchSize = resolveSplitSnapshotBatchRowLimit(
+      columns,
+      this.splitSnapshotBackfillYieldEveryRows,
+    );
+    let batch = [];
     for (const row of rows) {
-      await this.applyMergeSnapshotRow(row, columns, metadata);
-      processedRowCount += 1;
-      if (
-        this.splitSnapshotBackfillYieldEveryRows > 0 &&
-        processedRowCount % this.splitSnapshotBackfillYieldEveryRows === 0
-      ) {
+      batch.push(row);
+      if (batch.length === batchSize) {
+        await this.applyMergeSnapshotBatch(batch, columns, metadata);
+        batch = [];
+      }
+      if (batch.length === 0 && this.splitSnapshotBackfillYieldEveryRows > 0) {
         await this.yieldSplitBackfillTurn();
       }
+    }
+    if (batch.length > 0) {
+      await this.applyMergeSnapshotBatch(batch, columns, metadata);
     }
   }
 
   /**
-   * Apply one snapshot row to the merged target partition.
-   * @param {Object} row - Source row.
+   * Apply one bounded snapshot batch to the merged target partition as a
+   * single multi-row INSERT OR REPLACE, asserting the descriptor epoch
+   * once per batch (mirrors the split snapshot batch path).
+   * @param {Array<Object>} rows - Source rows in primary-key order.
    * @param {Array<string>} columns - Column list.
    * @param {Object} metadata - Merge metadata.
    * @return {Promise<void>}
    * @private
    */
-  async applyMergeSnapshotRow(row, columns, metadata) {
+  async applyMergeSnapshotBatch(rows, columns, metadata) {
     this.assertMergeRoutingDescriptorEpoch(metadata);
     const joinedColumns = columns.join(
       PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE,
@@ -451,11 +462,18 @@ class PartitionServiceMergeReplicationMethods {
     const placeholders = columns
       .map(() => PARTITION_SERVICE_SQL_FRAGMENT.QUESTION_MARK)
       .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
+    const values = rows
+      .map(() => `(${placeholders})`)
+      .join(PARTITION_SERVICE_SQL_FRAGMENT.COMMA_SPACE);
     const sql =
       `${SQL.INSERT_OR_REPLACE_INTO} ${this.tableName} (${joinedColumns}) ` +
-      `${SQL.VALUES} (${placeholders})`;
-    const params = columns.map((column) => row[column]);
-    await this.routeMergeMirroredWrite(metadata, sql, params);
+      `${SQL.VALUES} ${values}`;
+    const params = rows.flatMap(
+      (row) => columns.map((column) => row[column]),
+    );
+    await this.routeMergeMirroredWrite(metadata, sql, params, {
+      splitMirrorOrigin: PARTITION_SPLIT_MIRROR_ORIGIN.SNAPSHOT,
+    });
   }
 
   /**
