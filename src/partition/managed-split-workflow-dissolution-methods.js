@@ -93,26 +93,24 @@ class ManagedSplitWorkflowDissolutionMethods {
         options.targetPartitionIds :
         []),
     ]);
-    const siblingPartitionIds = [];
-    for (const partitionRow of this.listTablePartitionRows(options.tableId)) {
-      const partitionId = String(
-        partitionRow?.partition_id ?? partitionRow?.partitionId ?? '',
-      );
-      const partitionVersion = Number(
-        partitionRow?.partition_version ?? partitionRow?.partitionVersion,
-      );
-      const rowState = String(
-        partitionRow?.state ?? LOCAL_STR_NORMAL_PARTITION_STATE,
-      );
-      if (!partitionId ||
-          excludedPartitionIds.has(partitionId) ||
-          partitionVersion !== activeVersion ||
-          rowState !== LOCAL_STR_NORMAL_PARTITION_STATE) {
-        continue;
-      }
-      siblingPartitionIds.push(partitionId);
-    }
-    return siblingPartitionIds;
+    return this.listTablePartitionRows(options.tableId)
+      .map((partitionRow) => ({
+        partitionId: String(
+          partitionRow?.partition_id ?? partitionRow?.partitionId ?? '',
+        ),
+        partitionVersion: Number(
+          partitionRow?.partition_version ?? partitionRow?.partitionVersion,
+        ),
+        rowState: String(
+          partitionRow?.state ?? LOCAL_STR_NORMAL_PARTITION_STATE,
+        ),
+      }))
+      .filter((row) =>
+        row.partitionId.length > 0 &&
+        !excludedPartitionIds.has(row.partitionId) &&
+        row.partitionVersion === activeVersion &&
+        row.rowState === LOCAL_STR_NORMAL_PARTITION_STATE)
+      .map((row) => row.partitionId);
   }
 
   /**
