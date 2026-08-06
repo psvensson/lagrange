@@ -103,3 +103,16 @@ dead `setThresholds`) are sequenced after the ladder.
   check), and `dead-setthresholds-removal` (F24: the caller-less
   setThresholds mutator is deleted or wired into the configuration
   authority — exactly one threshold owner).
+- 2026-08-06 — All six Tier-3 leftovers landed, each with an
+  independent subagent terminal review and red-on-revert proof:
+  `split-key-comparator-typing` (F12, `b3359f785`),
+  `dead-setthresholds-removal` (F24, `cf6886624`),
+  `merge-backfill-batching` (F22, `d27d77774`),
+  `split-merge-overlap-guard` (F23, `833c2f33d`),
+  `split-dissolution-durable-proof` (F14, `8bb94bd64`),
+  `split-abort-fence-parity` (F18, `a712af2de`). F23 required two
+  ratchet repairs en route (complexity extraction into the guard
+  module, file-size rebalancing across the workflow mixins) — the
+  landed shape keeps every ratchet at baseline (28/28 oversized
+  source files, scoped complexity strictly improved). The epic's
+  entire remaining ladder is now closed.
