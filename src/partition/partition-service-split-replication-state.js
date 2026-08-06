@@ -1,5 +1,9 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
+  loadDurableDeltasBehindWatermark,
+  normalizeReplayCursor,
+} from './partition-mirror-replay-cursor.js';
+import {
   assertSplitRoutingDescriptorEpoch as assertPartitionSplitRoutingDescriptorEpoch,
 } from './partition-split-routing.js';
 
@@ -9,6 +13,7 @@ const {
   PARTITION_SERVICE_TYPE,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
+  SPLIT_ACK_CHECKPOINT_FIELD,
   TABLES,
 } = PARTITION_SERVICE_SHARED;
 
@@ -70,6 +75,15 @@ function normalizeSplitTransitionMetadataForService(service, rawMetadata) {
   }
   const fenceToken =
     metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN];
+  // The cursor is read from the durable source checkpoint on raw
+  // transition metadata, but normalization must also be IDEMPOTENT:
+  // re-normalizing an already-normalized payload (reconstruction reads
+  // the durable row through the same normalizer) keeps the cursor.
+  const replayCursor = normalizeReplayCursor(
+    metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_CHECKPOINT] ||
+      metadata,
+    SPLIT_ACK_CHECKPOINT_FIELD,
+  );
   return {
     primaryKeyColumn:
       metadata[PARTITION_TRANSITION_METADATA_FIELD.PRIMARY_KEY_COLUMN],
@@ -88,6 +102,12 @@ function normalizeSplitTransitionMetadataForService(service, rawMetadata) {
     // source acknowledgement is stamped with it so the owner rejects
     // acks from a superseded owner epoch as STALE_FENCE.
     workflowFenceToken: Number.isInteger(fenceToken) ? fenceToken : null,
+    // The durable replay cursor persisted with the transition (null
+    // when the pre-restart source never recorded one): a resumed worker
+    // replays deltas from the Raft log behind the watermark instead of
+    // the volatile pendingEntries array.
+    snapshotBarrierIndex: replayCursor.snapshotBarrierIndex,
+    replayWatermarkIndex: replayCursor.replayWatermarkIndex,
   };
 }
 
@@ -162,13 +182,23 @@ function reconstructSplitExecutionStateForService(service, durableState) {
   if (!metadata) {
     return null;
   }
+  // Seed the catch-up queue from the DURABLE Raft log behind the
+  // persisted replay watermark — never from the pre-restart volatile
+  // array (which died with the process). Writes that arrive after this
+  // reconstruction queue live via handleSplitReplicationAfterWrite.
+  const replayedDeltas = loadDurableDeltasBehindWatermark(
+    service,
+    metadata.replayWatermarkIndex,
+  );
   service.splitReplication = {
     metadata,
     phase,
-    pendingEntries: [],
+    pendingEntries: replayedDeltas,
     flushPromise: null,
     startedAt: Date.now(),
     lastError: null,
+    snapshotBarrierIndex: metadata.snapshotBarrierIndex,
+    replayWatermarkIndex: metadata.replayWatermarkIndex,
   };
   service.logger.info(
     PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_RECONSTRUCTED,

@@ -4,6 +4,12 @@ import {
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
 import {
+  MERGE_ACK_CHECKPOINT_FIELD,
+} from './merge-ack-constants.js';
+import {
+  normalizeReplayCursor,
+} from './partition-mirror-replay-cursor.js';
+import {
   buildPartitionDescriptorEpochDecision,
   isPartitionDescriptorEpochAccepted,
 } from './partition-descriptor-epoch-contract.js';
@@ -79,6 +85,14 @@ function normalizeMergeTransitionMetadataForService(service, rawMetadata) {
   if (!metadata || !isValidMergeMetadataShape(service, metadata)) {
     return null;
   }
+  // Read from the durable source checkpoint on raw metadata, falling
+  // back to the top-level fields on an already-normalized payload so
+  // re-normalization is idempotent (mirrors the split normalizer).
+  const replayCursor = normalizeReplayCursor(
+    metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_CHECKPOINT] ||
+      metadata,
+    MERGE_ACK_CHECKPOINT_FIELD,
+  );
   return {
     primaryKeyColumn:
       metadata[PARTITION_TRANSITION_METADATA_FIELD.PRIMARY_KEY_COLUMN],
@@ -101,6 +115,11 @@ function normalizeMergeTransitionMetadataForService(service, rawMetadata) {
     ) ?
       metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN] :
       null,
+    // The durable replay cursor persisted with the transition (mirrors
+    // the split source): a resumed worker replays deltas from the Raft
+    // log behind the watermark instead of the volatile queue.
+    snapshotBarrierIndex: replayCursor.snapshotBarrierIndex,
+    replayWatermarkIndex: replayCursor.replayWatermarkIndex,
   };
 }
 

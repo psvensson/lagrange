@@ -276,6 +276,8 @@ test('handleSplitReplicationAfterWrite routes writes correctly ' +
       PartitionService.prototype.normalizeSplitTransitionMetadata,
     cloneSplitEntry:
       PartitionService.prototype.cloneSplitEntry,
+    enqueueSplitDeltaBounded:
+      PartitionService.prototype.enqueueSplitDeltaBounded,
     mirrorCutoverActiveSplitWrite:
       PartitionService.prototype.mirrorCutoverActiveSplitWrite,
     drainSplitReplicationQueueQuietly:
@@ -329,6 +331,8 @@ test('handleSplitReplicationAfterWrite queues writes during ' +
       PartitionService.prototype.normalizeSplitTransitionMetadata,
     cloneSplitEntry:
       PartitionService.prototype.cloneSplitEntry,
+    enqueueSplitDeltaBounded:
+      PartitionService.prototype.enqueueSplitDeltaBounded,
   };
 
   // Reconstruct from durable backfilling state

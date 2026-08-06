@@ -28,6 +28,10 @@ import {
   MERGE_ACK_STATUS,
   buildMergeSourceParticipantKey,
 } from './merge-ack-constants.js';
+import {
+  buildReplayCursorCheckpoint,
+  resolveSnapshotBarrierIndex,
+} from './partition-mirror-replay-cursor.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -257,6 +261,13 @@ class PartitionServiceMergeReplicationMethods {
       targetPartitionVersion: metadata.targetPartitionVersion,
     });
     await this.emitMergeSourceAck(metadata, MERGE_ACK_STATUS.SNAPSHOT_STARTED);
+    // The snapshot barrier: every Raft log entry up to and including
+    // this index is covered by the backfill, so the replay watermark
+    // starts here and a restarted source replays from the durable log.
+    mergeReplication.snapshotBarrierIndex =
+      resolveSnapshotBarrierIndex(this);
+    mergeReplication.replayWatermarkIndex =
+      mergeReplication.snapshotBarrierIndex;
     const snapshot = this.openSplitSnapshotDatabase();
     try {
       await this.backfillMergeSnapshot(snapshot, metadata);
@@ -269,6 +280,11 @@ class PartitionServiceMergeReplicationMethods {
       const catchupAck = await this.emitMergeSourceAck(
         metadata,
         MERGE_ACK_STATUS.CATCHUP_READY,
+        buildReplayCursorCheckpoint(
+          MERGE_ACK_CHECKPOINT_FIELD,
+          mergeReplication.snapshotBarrierIndex,
+          mergeReplication.replayWatermarkIndex,
+        ),
       );
       if (catchupAck?.mergeCutoverApplied !== true) {
         await this.waitForMergeCutoverActivation(metadata);
@@ -285,7 +301,14 @@ class PartitionServiceMergeReplicationMethods {
       await this.emitMergeSourceAck(
         metadata,
         MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
-        {[MERGE_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: true},
+        {
+          [MERGE_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: true,
+          ...buildReplayCursorCheckpoint(
+            MERGE_ACK_CHECKPOINT_FIELD,
+            mergeReplication.snapshotBarrierIndex,
+            mergeReplication.replayWatermarkIndex,
+          ),
+        },
       );
       this.logger.info(
         PARTITION_SERVICE_LOG_MSG.MERGE_REPLICATION_COMPLETED,
@@ -454,6 +477,26 @@ class PartitionServiceMergeReplicationMethods {
   }
 
   /**
+   * Enqueue one merge delta under the queue bound: the durable replay
+   * source is the Raft log, so the in-memory array only holds
+   * post-snapshot live writes; at capacity the write path applies
+   * backpressure.
+   * @param {Object} mergeReplication - Active merge replication handle.
+   * @param {Object} entry - Applied source write entry.
+   * @return {void}
+   * @private
+   */
+  enqueueMergeDeltaBounded(mergeReplication, entry) {
+    if (mergeReplication.pendingEntries.length >=
+        PARTITION_SERVICE_DEFAULT.MIRROR_DELTA_QUEUE_CAPACITY) {
+      throw new Error(
+        PARTITION_SERVICE_ERROR_MSG.MIRROR_DELTA_QUEUE_AT_CAPACITY,
+      );
+    }
+    mergeReplication.pendingEntries.push(this.cloneSplitEntry(entry));
+  }
+
+  /**
    * Handle source-partition writes while a merge is in progress.
    * Backfilling/catch-up queues ordered deltas; cutover-active mirrors
    * immediately. Mirror-origin-tagged entries are skipped to prevent loops.
@@ -478,14 +521,14 @@ class PartitionServiceMergeReplicationMethods {
         PARTITION_TRANSITION_STATE.MERGE_BACKFILLING ||
       mergeReplication.phase === PARTITION_TRANSITION_STATE.MERGE_CATCHUP
     ) {
-      mergeReplication.pendingEntries.push(this.cloneSplitEntry(entry));
+      this.enqueueMergeDeltaBounded(mergeReplication, entry);
       return;
     }
     if (mergeReplication.phase === PARTITION_TRANSITION_STATE.FAILED) {
       // Fail closed, loudly: an acknowledged write is never silently
       // dropped from mirroring after a run failure — it is retained in the
       // queue for the aborted-merge diagnosis trail.
-      mergeReplication.pendingEntries.push(this.cloneSplitEntry(entry));
+      this.enqueueMergeDeltaBounded(mergeReplication, entry);
       this.logger.warn(
         PARTITION_SERVICE_LOG_MSG
           .MERGE_REPLICATION_WRITE_RETAINED_AFTER_FAILURE,
@@ -519,14 +562,14 @@ class PartitionServiceMergeReplicationMethods {
   async mirrorCutoverActiveMergeWrite(entry, mergeReplication) {
     if (mergeReplication.pendingEntries.length > 0 ||
         mergeReplication.flushPromise !== null) {
-      mergeReplication.pendingEntries.push(this.cloneSplitEntry(entry));
+      this.enqueueMergeDeltaBounded(mergeReplication, entry);
       await this.drainMergeReplicationQueueQuietly(mergeReplication);
       return;
     }
     try {
       await this.replayMergeEntry(entry, mergeReplication.metadata);
     } catch (error) {
-      mergeReplication.pendingEntries.push(this.cloneSplitEntry(entry));
+      this.enqueueMergeDeltaBounded(mergeReplication, entry);
       mergeReplication.lastError = error.message;
       this.logger.warn(
         PARTITION_SERVICE_LOG_MSG.MERGE_REPLICATION_MIRROR_FAILED,
@@ -596,6 +639,14 @@ class PartitionServiceMergeReplicationMethods {
       } catch (error) {
         mergeReplication.pendingEntries.unshift(entry);
         throw error;
+      }
+      // Advance the durable replay watermark behind each delivered
+      // delta (mirrors the split drain).
+      if (Number.isSafeInteger(entry.logIndex) && entry.logIndex > 0) {
+        mergeReplication.replayWatermarkIndex = Math.max(
+          Number(mergeReplication.replayWatermarkIndex) || 0,
+          entry.logIndex,
+        );
       }
     }
   }

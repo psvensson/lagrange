@@ -114,6 +114,14 @@ const SPLIT_ACK_FAILURE_STATUSES = Object.freeze(new Set([
 const SPLIT_ACK_CHECKPOINT_FIELD = Object.freeze({
   SNAPSHOT_REVISION: 'snapshotRevision',
   LAST_APPLIED_DELTA: 'lastAppliedDelta',
+  // Durable replay cursor: the Raft log index the snapshot barrier was
+  // taken at (every log entry up to and including it is covered by the
+  // backfill), and the watermark up to which deltas have been mirrored.
+  // Both ride the source ack checkpoint into the persisted transition
+  // metadata so a restarted source replays from the Raft log instead of
+  // the volatile pendingEntries array.
+  SNAPSHOT_BARRIER_INDEX: 'snapshotBarrierIndex',
+  REPLAY_WATERMARK_INDEX: 'replayWatermarkIndex',
   BACKFILL_ROWS_COPIED: 'backfillRowsCopied',
   BACKFILL_TOTAL_ROWS: 'backfillTotalRows',
   SOURCE_MIRROR_REMOVED: 'sourceMirrorRemoved',

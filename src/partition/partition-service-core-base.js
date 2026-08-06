@@ -8,7 +8,6 @@ import {
   retireRaftPeerFromAuthoritativeServiceChange,
   resolveLiveRaftLeaderAddressForPeer,
 } from './partition-service-raft-peer-cache-reconciliation.js';
-
 const {
   AddressManager,
   CDCEventBuffer,
@@ -48,7 +47,6 @@ const {
   isMetadataPublicationLifecycleReady,
   normalizePublishedRaftRole,
 } = PARTITION_SERVICE_SHARED;
-
 class PartitionServiceCoreBase extends EventEmitter {
   constructor(options = {}) {
     super();
@@ -558,6 +556,8 @@ class PartitionServiceCoreBase extends EventEmitter {
               prepareLostCount: reconstruction.prepareLostCount,
             },
           );
+          // Reconstruction without resumption is NOT recovery.
+          this.resumeDurableMirrorReplicationWorkers();
         }
         this.emit(PARTITION_SERVICE_EVENT.LEADER_ELECTED, {
           leaderId: this.replicaId,

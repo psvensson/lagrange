@@ -309,6 +309,10 @@ test('runSplitReplicationWorkflow emits snapshot_started, ' +
     },
     async backfillSplitSnapshot() {},
     async flushSplitReplicationQueue() {},
+    seedSplitReplayCursorFromDurableLog(splitReplication) {
+      splitReplication.snapshotBarrierIndex = null;
+      splitReplication.replayWatermarkIndex = null;
+    },
     async markSplitCutoverActive(meta) {
       const splitWorkflow =
         this.sqlQueryEngine?.managedSplitWorkflow;

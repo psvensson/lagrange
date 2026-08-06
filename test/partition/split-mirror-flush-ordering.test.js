@@ -108,6 +108,10 @@ test('runSplitReplicationWorkflow drains queued deltas BEFORE emitting ' +
     openSplitSnapshotDatabase() {
       return {prepare: () => ({all: () => []}), close() {}};
     },
+    seedSplitReplayCursorFromDurableLog(splitReplication) {
+      splitReplication.snapshotBarrierIndex = null;
+      splitReplication.replayWatermarkIndex = null;
+    },
     async backfillSplitSnapshot() {
       callOrder.push('backfill');
     },

@@ -399,6 +399,8 @@ test('end-to-end recovery from cutover_active phase: writes route ' +
       PartitionService.prototype.normalizeSplitTransitionMetadata,
     cloneSplitEntry:
       PartitionService.prototype.cloneSplitEntry,
+    enqueueSplitDeltaBounded:
+      PartitionService.prototype.enqueueSplitDeltaBounded,
     mirrorCutoverActiveSplitWrite:
       PartitionService.prototype.mirrorCutoverActiveSplitWrite,
     drainSplitReplicationQueueQuietly:
@@ -468,6 +470,8 @@ test('recovery from backfilling phase queues writes in ' +
       PartitionService.prototype.normalizeSplitTransitionMetadata,
     cloneSplitEntry:
       PartitionService.prototype.cloneSplitEntry,
+    enqueueSplitDeltaBounded:
+      PartitionService.prototype.enqueueSplitDeltaBounded,
   };
 
   reconstructFn.call(context, {

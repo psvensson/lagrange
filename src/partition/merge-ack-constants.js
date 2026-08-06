@@ -94,6 +94,11 @@ const MERGE_ACK_MIRROR_REMOVED_SATISFIED_STATUSES = Object.freeze(new Set([
  */
 const MERGE_ACK_CHECKPOINT_FIELD = Object.freeze({
   SNAPSHOT_REVISION: 'snapshotRevision',
+  // Durable replay cursor (mirrors SPLIT_ACK_CHECKPOINT_FIELD): the
+  // Raft log index the snapshot barrier was taken at, and the watermark
+  // up to which deltas have been mirrored.
+  SNAPSHOT_BARRIER_INDEX: 'snapshotBarrierIndex',
+  REPLAY_WATERMARK_INDEX: 'replayWatermarkIndex',
   BACKFILL_ROWS_COPIED: 'backfillRowsCopied',
   SOURCE_MIRROR_REMOVED: 'sourceMirrorRemoved',
   DISSOLVED_REPLICA_IDS: 'dissolvedReplicaIds',

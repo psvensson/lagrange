@@ -169,6 +169,16 @@ function buildPartitionWriteSideEffectPlan(entry, executionResult) {
     ...entry,
     changes: executionResult.changes,
   };
+  // The durable Raft log index this write committed at: the split/merge
+  // mirror replay cursor advances its persisted watermark from this, so
+  // a restarted source replays deltas from the log rather than the
+  // volatile in-memory queue.
+  const committedLogIndex = Number(
+    executionResult?.durableCommitWitness?.logIndex,
+  );
+  if (Number.isSafeInteger(committedLogIndex) && committedLogIndex > 0) {
+    executedEntry.logIndex = committedLogIndex;
+  }
 
   return Object.freeze({
     emitCdcEntry: executedEntry,

@@ -110,6 +110,7 @@ async function buildSourceContext(options = {}) {
     'resolveInFlightMergeReplicationResponse',
     'handleMergeReplicationRunFailure',
     'resolveMergeFailureAckStatus',
+    'enqueueMergeDeltaBounded',
     'mirrorCutoverActiveMergeWrite',
     'drainMergeReplicationQueueQuietly',
     'runMergeReplicationWorkflow',

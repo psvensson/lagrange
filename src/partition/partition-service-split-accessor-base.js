@@ -1,6 +1,9 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {PartitionServiceCdcStreamBase} from './partition-service-cdc-stream-base.js';
 import {
+  buildReplayCursorCheckpoint,
+} from './partition-mirror-replay-cursor.js';
+import {
   assertSplitRoutingDescriptorEpochForService,
   isSameSplitReplicationMetadata,
   normalizeSplitTransitionMetadataForService,
@@ -198,6 +201,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       targetPartitionVersion: metadata.targetPartitionVersion,
     });
     await this.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.SNAPSHOT_STARTED);
+    this.seedSplitReplayCursorFromDurableLog(splitReplication);
     const snapshot = this.openSplitSnapshotDatabase();
     try {
       await this.backfillSplitSnapshot(snapshot, metadata);
@@ -214,6 +218,11 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       const catchupAck = await this.emitSplitSourceAck(
         metadata,
         SPLIT_ACK_STATUS.CATCHUP_READY,
+        buildReplayCursorCheckpoint(
+          SPLIT_ACK_CHECKPOINT_FIELD,
+          splitReplication.snapshotBarrierIndex,
+          splitReplication.replayWatermarkIndex,
+        ),
       );
       if (catchupAck?.splitCutoverApplied !== true) {
         throw new Error(
@@ -225,7 +234,14 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       await this.emitSplitSourceAck(
         metadata,
         SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
-        {[SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: false},
+        {
+          [SPLIT_ACK_CHECKPOINT_FIELD.SOURCE_MIRROR_REMOVED]: false,
+          ...buildReplayCursorCheckpoint(
+            SPLIT_ACK_CHECKPOINT_FIELD,
+            splitReplication.snapshotBarrierIndex,
+            splitReplication.replayWatermarkIndex,
+          ),
+        },
       );
       this.logger.info(PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_COMPLETED, {
         partitionId: this.partitionId,
@@ -465,7 +481,7 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       splitReplication.phase === PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING ||
       splitReplication.phase === PARTITION_TRANSITION_STATE.SPLIT_CATCHUP
     ) {
-      splitReplication.pendingEntries.push(this.cloneSplitEntry(entry));
+      this.enqueueSplitDeltaBounded(splitReplication, entry);
       return;
     }
     if (

@@ -17,6 +17,11 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   SIZE_PERSIST_RETRY_BASE_DELAY_MS: 50,
   SIZE_PERSIST_RETRY_MAX_DELAY_MS: 250,
   PENDING_REQUEST_TIMEOUT_MS: TIME_MS.SECOND * 30,
+  // Interim split/merge mirror delta queue bound: the durable replay
+  // source is the Raft log, so the in-memory queue only ever holds
+  // post-snapshot live writes; at capacity the write path applies
+  // backpressure rather than growing RAM unboundedly.
+  MIRROR_DELTA_QUEUE_CAPACITY: 10000,
   KEY_RANGE_START: null,
   KEY_RANGE_END: null,
   CDC_BUFFER_REPLAY_INITIAL_DELAY_MS: 50,
@@ -354,6 +359,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   SPLIT_REPLICATION_STARTED: 'Partition split replication started',
   SPLIT_REPLICATION_COMPLETED: 'Partition split replication completed',
   SPLIT_REPLICATION_FAILED: 'Partition split replication failed',
+  MIRROR_REPLICATION_RESUME_FAILED:
+    'Durable mirror replication worker resumption failed',
   SPLIT_REPLICATION_MIRROR_FAILED: 'Partition split mirror delivery failed',
   SPLIT_REPLICATION_CUTOVER_UPDATED:
     'Partition split cutover metadata updated',
@@ -370,6 +377,8 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   MERGE_REPLICATION_STARTED: 'Partition merge replication started',
   MERGE_REPLICATION_COMPLETED: 'Partition merge replication completed',
   MERGE_REPLICATION_FAILED: 'Partition merge replication failed',
+  MERGE_REPLICATION_RECONSTRUCTED:
+    'Partition merge execution state reconstructed from durable workflow',
   MERGE_REPLICATION_MIRROR_FAILED: 'Partition merge mirror delivery failed',
   MERGE_REPLICATION_ACK_EMITTED:
     'Partition merge source acknowledgement emitted',
@@ -510,6 +519,8 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
     'Failed to route mirrored partition split write',
   SPLIT_REPLICATION_STATE_REQUIRED:
     'Partition split transition metadata is required',
+  MIRROR_DELTA_QUEUE_AT_CAPACITY:
+    'Mirror delta queue at capacity — backpressure applied',
   MERGE_REPLICATION_ROUTING_FAILED:
     'Failed to route mirrored partition merge write',
   MERGE_REPLICATION_STATE_REQUIRED:
