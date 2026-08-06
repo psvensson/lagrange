@@ -521,6 +521,10 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   PARTITION_SIZE_UPDATE_FAILED: 'Failed to update partition size',
   SPLIT_REPLICATION_ROUTING_FAILED:
     'Failed to route mirrored partition split write',
+  splitKeyTypeMismatch: (valueType, splitKeyType) =>
+    `Split key type mismatch: cannot compare key of type ${valueType} ` +
+    `against split key of type ${splitKeyType}; mixed-type key spaces are ` +
+    'rejected, never coerced',
   SPLIT_REPLICATION_STATE_REQUIRED:
     'Partition split transition metadata is required',
   MIRROR_DELTA_QUEUE_AT_CAPACITY:

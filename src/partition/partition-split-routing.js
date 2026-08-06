@@ -14,6 +14,9 @@ import {
   PARTITION_SERVICE_TYPE,
 } from './partition-service-constants.js';
 import {
+  resolveSplitTargetPartitionId,
+} from './split-key-comparator.js';
+import {
   extractDataFromParameterizedSQL,
   extractDeleteDataFromSQL,
   extractInsertDataFromSQL,
@@ -311,17 +314,15 @@ export function resolveSplitSnapshotBatchRowLimit(columns, requestedRows) {
   return Math.min(configuredRows, bindLimitedRows);
 }
 
-export function resolveSplitTargetPartitionId(value, metadata = {}) {
-  const [leftPartitionId, rightPartitionId] = Array.isArray(
-    metadata?.targetPartitionIds,
-  ) ?
-    metadata.targetPartitionIds :
-    [];
-  if (value === null || value === void 0) {
-    return rightPartitionId;
-  }
-  return value < metadata.splitKey ? leftPartitionId : rightPartitionId;
-}
+// Split-key comparison is owned by split-key-comparator.js (F12): every
+// split routing decision (mirror replay, snapshot batching, service
+// wrappers) shares exactly one comparator. Never reintroduce a raw
+// relational comparison at a call site — mixed-type key spaces must
+// reject, never coerce.
+export {
+  compareSplitKey,
+  resolveSplitTargetPartitionId,
+} from './split-key-comparator.js';
 
 export function extractSplitRoutingKey(
   entry,
