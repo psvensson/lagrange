@@ -1,0 +1,46 @@
+{
+  "id": "runtime-memory-admission-reservation",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Declared Cell memory is admission-reserved the way storage already is: the placement admission ledger tracks per-node reservedBytes for declared Cell memory, mirroring the existing storage-admission reservedBytes pattern, so the planner cannot admit Cells whose summed declared memory exceeds node capacity, and the runtime-memory-admission-reservation scenario is green.",
+  "priority": 2,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/minimal-deployment-surface.md"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "runtime-memory-admission-reservation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "runtime-memory-admission-reservation-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "runtime-memory-admission-reservation",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "mirror-storage-pattern",
+      "statement": "The memory reservation ledger mirrors the existing storage-admission reservedBytes owner and accounting shape; no second ledger design or parallel admission authority is introduced."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

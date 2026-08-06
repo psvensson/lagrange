@@ -1,0 +1,50 @@
+{
+  "id": "invocation-journal-owner-recovery",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Every wasm_operations journal row carries an owner node identity, boot incarnation, fence, lease, and stage: a crash inside the IN_PROGRESS window leaves the idempotency identity recoverable through safe fenced takeover of stale CLAIMED rows by a live owner — building on the landed node-incarnation fencing plumbing — instead of permanently poisoning that invocation identity, and the invocation-journal-owner-recovery scenario is green.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": "call-binding-caller-idempotency-key",
+    "planDoc": "solve/epics/minimal-deployment-surface.md"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "invocation-journal-owner-recovery",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "invocation-journal-owner-recovery-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "invocation-journal-owner-recovery",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "reuse-incarnation-fencing",
+      "statement": "Owner fencing reuses the landed node-incarnation plumbing (nodes table incarnation, heartbeat fencing); no second incarnation domain or fencing mechanism is introduced."
+    },
+    {
+      "id": "takeover-fail-closed",
+      "statement": "Stale-row takeover is fenced and incarnation-checked; a live original owner must never lose its row to a racing taker."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

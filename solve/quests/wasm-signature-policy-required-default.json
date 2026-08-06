@@ -1,0 +1,50 @@
+{
+  "id": "wasm-signature-policy-required-default",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "WASM component signature verification is REQUIRED by default in production assembly, with an explicit, loudly-marked development opt-out: an unsigned or unverifiable component is refused typed at install time unless the deployment deliberately opts out, so no production node silently executes unsigned artifacts, and the wasm-signature-policy-required-default scenario is green.",
+  "priority": 3,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/minimal-deployment-surface.md"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "wasm-signature-policy-required-default",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "wasm-signature-policy-required-default-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "wasm-signature-policy-required-default",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "explicit-dev-opt-out",
+      "statement": "The development opt-out is an explicit, discoverable policy declaration, not an ambient default; production assembly fails closed without it."
+    },
+    {
+      "id": "typed-refusal",
+      "statement": "Refusal of unsigned or unverifiable artifacts is a typed install-time error through the canonical Artifact path, never a runtime surprise."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

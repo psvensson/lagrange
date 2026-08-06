@@ -150,6 +150,16 @@ existing degenerate form of this alternative).
 
 ## Decision log
 
+- 2026-08-06 — The verified 2026-08-06 adversarial audit independently
+  rediscovered the open observer-intent parity defect (audit Finding 11 =
+  quest `runtime-service-affinity-observer-intent-parity`, live incident
+  2026-07-21) — the documented reason to reseal that stale quest rather than
+  park it. Evidence-quality follow-ups were authored as
+  `affinity-evidence-normalization` (rate-normalized, incarnation-fenced
+  evidence; includes the windowStartedAtMs reset bug) and
+  `affinity-leader-crediting-parity` (source-kind-aware crediting for the
+  leader-only Call path), sequenced so evidence is repaired before the
+  trigger is re-attacked.
 - 2026-07-26 — **Comparative evidence consumes affinity; it does not redefine
   it:** `solve/specs/comparative-workload-efficiency-evidence/` owns workload
   equivalence, paired alternative runs, topology cost accounting, and relative

@@ -1,0 +1,50 @@
+{
+  "id": "affinity-evidence-normalization",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Service-partition access evidence feeding data-affinity placement is rate-normalized and incarnation-fenced: each attribution window row is comparable across windows of different lengths, a failed publish never resets windowStartedAtMs so the next row cannot understate its true span, and evidence from a prior node incarnation is fenced out — so affinity weights reflect real access rates rather than window-length artifacts, and the affinity-evidence-normalization scenario is green.",
+  "priority": 2,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/service-data-affinity-placement.md",
+    "closesCL": [],
+    "parentQuest": "runtime-service-affinity-observer-intent-parity",
+    "planDoc": "solve/epics/service-data-affinity-placement.md"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "affinity-evidence-normalization",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "affinity-evidence-normalization-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "affinity-evidence-normalization",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "fix-evidence-before-trigger",
+      "statement": "This Quest repairs the evidence surface only; observer/intent trigger semantics stay with runtime-service-affinity-observer-intent-parity so fixing evidence first does not churn the trigger fix."
+    },
+    {
+      "id": "single-attribution-owner",
+      "statement": "The engine statement-layer attribution seam and the service_partition_access publication path remain the single evidence owners; no parallel counters or side-channel telemetry are introduced."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

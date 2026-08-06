@@ -1,0 +1,50 @@
+{
+  "id": "call-cell-reduce-coordination-integrity",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Call-cell reduce coordination honors its own module-header contract end to end: slot seeding is transactional or repairably staged so a crash mid-seed leaves no half-seeded invocation, the final publish is a lease-fenced compare-and-swap with winner readback so a stale coordinator can never overwrite a newer publication, and reduce witnesses carry unique slot identities rather than replica identities — with the existing wasm_operations journal on the reducer identity remaining the divergence backstop — and the call-cell-reduce-coordination-integrity scenario is green.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": "call-cell-reduce-coordination-expiry",
+    "planDoc": "solve/epics/minimal-deployment-surface.md"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "call-cell-reduce-coordination-integrity",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "call-cell-reduce-coordination-integrity-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "call-cell-reduce-coordination-integrity",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "contract-integrity-not-rewrite",
+      "statement": "This is a contract-integrity repair of the existing reduce coordinator, not a redesign: the current slot/lease/snapshot grammar and the wasm_operations journal backstop stay authoritative; no parallel coordination owner is introduced."
+    },
+    {
+      "id": "fail-closed-publish",
+      "statement": "A fenced publish that loses the race must fail typed or no-op with readback of the winner, never overwrite; there is no unfenced final UPDATE path."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

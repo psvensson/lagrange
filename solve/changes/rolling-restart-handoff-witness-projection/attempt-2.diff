@@ -1,0 +1,458 @@
+diff --git a/scripts/run-rolling-restart-handoff-witness-projection-scenarios.js b/scripts/run-rolling-restart-handoff-witness-projection-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..bca382dd7fd2e0638c147beabe2d6fee52e6d7da
+--- /dev/null
++++ b/scripts/run-rolling-restart-handoff-witness-projection-scenarios.js
+@@ -0,0 +1,15 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from
++  './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = Object.freeze({
++  'rolling-restart-handoff-witness-projection': Object.freeze([
++    'test/distributed/harness/__tests__/' +
++      'startup-runtime-handoff-readiness-projection.test.js',
++    'test/distributed/harness/__tests__/' +
++      'cluster-restart-recovery-held.test.js',
++  ]),
++});
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/test/distributed/harness/__tests__/startup-runtime-handoff-readiness-projection.test.js b/test/distributed/harness/__tests__/startup-runtime-handoff-readiness-projection.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..124a8fa97fd546b9fbbca5d631109b609e3488ff
+--- /dev/null
++++ b/test/distributed/harness/__tests__/startup-runtime-handoff-readiness-projection.test.js
+@@ -0,0 +1,314 @@
++import {test} from '../../../../src/test-helpers/tap.js';
++import {CLUSTER_ACTIVE_WAIT_FORMATTING_LAYER} from
++  '../cluster-active-wait-formatting-layer.js';
++
++const {normalizeReadinessProbeResult} =
++  CLUSTER_ACTIVE_WAIT_FORMATTING_LAYER;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const reflectDefineProperty = Reflect.defineProperty;
++const reflectDeleteProperty = Reflect.deleteProperty;
++
++function polluteEnumerablePrototypeProperty(prototype, field, value) {
++  const original = objectGetOwnPropertyDescriptor(prototype, field);
++  reflectDefineProperty(prototype, field, {
++    configurable: true,
++    enumerable: true,
++    value,
++    writable: true,
++  });
++  return () => original ?
++    reflectDefineProperty(prototype, field, original) :
++    reflectDeleteProperty(prototype, field);
++}
++
++function normalize(startupRuntimeHandoff) {
++  return normalizeReadinessProbeResult({
++    status: 503,
++    body: {startupRuntimeHandoff},
++  });
++}
++
++test('readiness normalization preserves an isolated runtime handoff witness',
++  (t) => {
++    const handoff = {
++      infrastructureJoinComplete: true,
++      canonicalAuthorityConsumed: true,
++      transactionRecoveryReady: true,
++      transactionRecoveryState: 'completed',
++      transactionRecoveryOutcome: {
++        kind: 'completed',
++      },
++    };
++
++    const normalized = normalize(handoff);
++
++    t.equal(normalized.status, 503, 'the readiness status remains unchanged');
++    t.same(
++      normalized.startupRuntimeHandoff,
++      handoff,
++      'the complete typed witness survives the generic readiness seam',
++    );
++    t.not(
++      normalized.startupRuntimeHandoff,
++      handoff,
++      'the normalized witness does not alias the response object',
++    );
++    t.not(
++      normalized.startupRuntimeHandoff.transactionRecoveryOutcome,
++      handoff.transactionRecoveryOutcome,
++      'nested witness state is also isolated',
++    );
++
++    handoff.transactionRecoveryReady = false;
++    handoff.transactionRecoveryOutcome.kind = 'failed';
++    t.equal(
++      normalized.startupRuntimeHandoff.transactionRecoveryReady,
++      true,
++      'later response mutation cannot rewrite normalized readiness',
++    );
++    t.equal(
++      normalized.startupRuntimeHandoff.transactionRecoveryOutcome.kind,
++      'completed',
++      'later nested mutation cannot rewrite normalized readiness',
++    );
++    t.end();
++  });
++
++test('readiness normalization rejects non-data runtime handoff evidence',
++  (t) => {
++    const inheritedBody = Object.create({
++      startupRuntimeHandoff: {transactionRecoveryReady: true},
++    });
++    const inherited = normalizeReadinessProbeResult({
++      status: 503,
++      body: inheritedBody,
++    });
++    t.equal(
++      inherited.startupRuntimeHandoff,
++      null,
++      'an inherited witness is not evidence',
++    );
++
++    let accessorReadCount = 0;
++    const accessorBody = {};
++    Object.defineProperty(accessorBody, 'startupRuntimeHandoff', {
++      get() {
++        accessorReadCount += 1;
++        return {transactionRecoveryReady: true};
++      },
++    });
++    const accessor = normalizeReadinessProbeResult({
++      status: 503,
++      body: accessorBody,
++    });
++    t.equal(
++      accessor.startupRuntimeHandoff,
++      null,
++      'an accessor-backed witness is not evidence',
++    );
++    t.equal(accessorReadCount, 0, 'normalization never executes the accessor');
++    t.end();
++  });
++
++test('readiness normalization rejects malformed runtime handoff evidence',
++  (t) => {
++    for (const value of [
++      undefined,
++      null,
++      false,
++      1,
++      'ready',
++      [],
++      new Map(),
++      new Set(),
++      Object(Symbol('boxed')),
++      {[Symbol('only-symbol')]: true},
++    ]) {
++      t.equal(
++        normalize(value).startupRuntimeHandoff,
++        null,
++        'a non-plain-record witness remains fail-closed',
++      );
++    }
++
++    const circular = {};
++    circular.self = circular;
++    t.equal(
++      normalize(circular).startupRuntimeHandoff,
++      null,
++      'an unserializable witness remains fail-closed',
++    );
++
++    t.equal(
++      normalize({transactionRecoveryReady: Object(true)})
++        .startupRuntimeHandoff,
++      null,
++      'a boxed nested primitive remains fail-closed',
++    );
++    t.equal(
++      normalize({retryAfterMs: Number.POSITIVE_INFINITY})
++        .startupRuntimeHandoff,
++      null,
++      'a non-finite nested number remains fail-closed',
++    );
++    t.equal(
++      normalize({retryAfterMs: -0}).startupRuntimeHandoff,
++      null,
++      'negative zero remains fail-closed',
++    );
++    t.equal(
++      normalize({retryAfterMs: Number.MAX_SAFE_INTEGER + 1})
++        .startupRuntimeHandoff,
++      null,
++      'an unsafe integer remains fail-closed',
++    );
++    t.end();
++  });
++
++test('readiness normalization never executes nested witness accessors',
++  (t) => {
++    let nestedReadCount = 0;
++    const outcome = {};
++    Object.defineProperty(outcome, 'kind', {
++      enumerable: true,
++      get() {
++        nestedReadCount += 1;
++        return 'completed';
++      },
++    });
++
++    t.equal(
++      normalize({transactionRecoveryOutcome: outcome})
++        .startupRuntimeHandoff,
++      null,
++      'a nested accessor invalidates the complete witness',
++    );
++    t.equal(nestedReadCount, 0, 'the nested accessor is never executed');
++    t.end();
++  });
++
++test('readiness normalization resists toJSON and prototype fabrication',
++  (t) => {
++    const restoreToJson = polluteEnumerablePrototypeProperty(
++      Object.prototype,
++      'toJSON',
++      () => {
++        return {
++          infrastructureJoinComplete: true,
++          canonicalAuthorityConsumed: true,
++          transactionRecoveryReady: true,
++        };
++      },
++    );
++    const restoreTransactionRecoveryReady =
++      polluteEnumerablePrototypeProperty(
++        Object.prototype,
++        'transactionRecoveryReady',
++        true,
++      );
++    try {
++      const normalized = normalize({
++        infrastructureJoinComplete: false,
++        canonicalAuthorityConsumed: false,
++        transactionRecoveryReady: false,
++      }).startupRuntimeHandoff;
++      t.equal(
++        normalized.infrastructureJoinComplete,
++        false,
++        'prototype hooks cannot fabricate infrastructure completion',
++      );
++      t.equal(
++        normalized.canonicalAuthorityConsumed,
++        false,
++        'prototype hooks cannot fabricate authority consumption',
++      );
++      t.equal(
++        normalized.transactionRecoveryReady,
++        false,
++        'prototype hooks cannot fabricate transaction recovery',
++      );
++      t.equal(
++        Object.getPrototypeOf(normalized),
++        null,
++        'the normalized witness has no polluted prototype',
++      );
++    } finally {
++      restoreTransactionRecoveryReady();
++      restoreToJson();
++    }
++
++    t.equal(
++      normalize({
++        infrastructureJoinComplete: false,
++        canonicalAuthorityConsumed: false,
++        transactionRecoveryReady: false,
++        toJSON() {
++          return {
++            infrastructureJoinComplete: true,
++            canonicalAuthorityConsumed: true,
++            transactionRecoveryReady: true,
++          };
++        },
++      }).startupRuntimeHandoff,
++      null,
++      'an own toJSON hook invalidates the witness instead of executing',
++    );
++    t.end();
++  });
++
++test('readiness normalization uses captured validation intrinsics',
++  (t) => {
++    const originalArrayIsArray = Array.isArray;
++    const originalJsonStringify = JSON.stringify;
++    const originalGetOwnPropertyDescriptor =
++      Object.getOwnPropertyDescriptor;
++    const originalReflectOwnKeys = Reflect.ownKeys;
++    Array.isArray = () => false;
++    JSON.stringify = () => JSON.parse(
++      '{"infrastructureJoinComplete":true,' +
++      '"canonicalAuthorityConsumed":true,' +
++      '"transactionRecoveryReady":true}',
++    );
++    Object.getOwnPropertyDescriptor = () => ({
++      configurable: true,
++      enumerable: true,
++      value: {
++        infrastructureJoinComplete: true,
++        canonicalAuthorityConsumed: true,
++        transactionRecoveryReady: true,
++      },
++      writable: true,
++    });
++    Reflect.ownKeys = () => [
++      'infrastructureJoinComplete',
++      'canonicalAuthorityConsumed',
++      'transactionRecoveryReady',
++    ];
++    try {
++      t.equal(
++        normalize([]).startupRuntimeHandoff,
++        null,
++        'replacing Array.isArray cannot admit an array witness',
++      );
++      const normalized = normalize({
++        infrastructureJoinComplete: false,
++        canonicalAuthorityConsumed: false,
++        transactionRecoveryReady: false,
++      }).startupRuntimeHandoff;
++      t.same(
++        normalized,
++        {
++          infrastructureJoinComplete: false,
++          canonicalAuthorityConsumed: false,
++          transactionRecoveryReady: false,
++        },
++        'replaced reflection and JSON intrinsics cannot fabricate readiness',
++      );
++    } finally {
++      Array.isArray = originalArrayIsArray;
++      JSON.stringify = originalJsonStringify;
++      Object.getOwnPropertyDescriptor = originalGetOwnPropertyDescriptor;
++      Reflect.ownKeys = originalReflectOwnKeys;
++    }
++    t.end();
++  });
+diff --git a/test/distributed/harness/cluster-active-wait-formatting-layer.js b/test/distributed/harness/cluster-active-wait-formatting-layer.js
+index f107ba672000afa682a2686be84f445666c715d5..fdd75bc976bbbc64de8d810727f24f78e9c198e6 100644
+--- a/test/distributed/harness/cluster-active-wait-formatting-layer.js
++++ b/test/distributed/harness/cluster-active-wait-formatting-layer.js
+@@ -1,4 +1,6 @@
+ import {CLUSTER_ACTIVE_WAIT_PROGRESS_LAYER} from './cluster-active-wait-progress-layer.js';
++import {isRecord as isCanonicalJsonRecord} from
++  '../../../src/utils/canonical-json-data.js';
+ const {
+   ACTIVE_WAIT_BLOCKER_HISTORY_MAX_ENTRIES,
+   ACTIVE_WAIT_BLOCKER_NONE,
+@@ -29,6 +31,17 @@ const {
+ 
+ const BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD =
+   'bootstrapJoinProjection';
++const STARTUP_RUNTIME_HANDOFF_READINESS_FIELD = 'startupRuntimeHandoff';
++const numberIsFinite = Number.isFinite;
++const numberIsInteger = Number.isInteger;
++const numberIsSafeInteger = Number.isSafeInteger;
++const objectCreate = Object.create;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const objectIs = Object.is;
++const reflectOwnKeys = Reflect.ownKeys;
++const INVALID_PLAIN_DATA = objectCreate(null);
++const NEGATIVE_ZERO = -0;
+ const ACTIVE_WAIT_PROGRESS_OBSERVATION_SEPARATOR = '/';
+ const ACTIVE_WAIT_PROGRESS_REASON_SEPARATOR = '|';
+ const ACTIVE_WAIT_PROGRESS_VALUE_NONE = 'none';
+@@ -924,6 +937,68 @@ function resolveReadinessPhaseRank(phase) {
+   return READINESS_PHASE_RANK[normalizedPhase] || ZERO;
+ }
+ 
++function plainDataAncestorContains(ancestor, value) {
++  let cursor = ancestor;
++  while (cursor) {
++    if (cursor.value === value) return true;
++    cursor = cursor.parent;
++  }
++  return false;
++}
++
++function plainDataRecordSupported(value) {
++  return isCanonicalJsonRecord(value);
++}
++
++function clonePlainData(value, ancestor = null) {
++  if (value === null || typeof value === 'string' ||
++      typeof value === 'boolean') {
++    return value;
++  }
++  if (typeof value === 'number') {
++    const unsafeInteger = numberIsInteger(value) &&
++      !numberIsSafeInteger(value);
++    return numberIsFinite(value) && !objectIs(value, NEGATIVE_ZERO) &&
++      !unsafeInteger ?
++      value :
++      INVALID_PLAIN_DATA;
++  }
++  if (!plainDataRecordSupported(value) ||
++      plainDataAncestorContains(ancestor, value)) {
++    return INVALID_PLAIN_DATA;
++  }
++
++  const nextAncestor = objectCreate(null);
++  nextAncestor.value = value;
++  nextAncestor.parent = ancestor;
++  const clone = objectCreate(null);
++  for (const key of reflectOwnKeys(value)) {
++    if (typeof key !== 'string') return INVALID_PLAIN_DATA;
++    const descriptor = objectGetOwnPropertyDescriptor(value, key);
++    if (!descriptor || descriptor.enumerable !== true ||
++        !objectHasOwn(descriptor, 'value')) {
++      return INVALID_PLAIN_DATA;
++    }
++    const clonedValue = clonePlainData(descriptor.value, nextAncestor);
++    if (clonedValue === INVALID_PLAIN_DATA) return INVALID_PLAIN_DATA;
++    clone[key] = clonedValue;
++  }
++  return clone;
++}
++
++function cloneOwnDataRecord(record, field) {
++  try {
++    const descriptor = objectGetOwnPropertyDescriptor(record, field);
++    if (!descriptor || !objectHasOwn(descriptor, 'value')) return null;
++    const clone = clonePlainData(descriptor.value);
++    return clone !== INVALID_PLAIN_DATA && plainDataRecordSupported(clone) ?
++      clone :
++      null;
++  } catch {
++    return null;
++  }
++}
++
+ function normalizeReadinessProbeResult(probeResponse) {
+   const normalized = {
+     status: HTTP_ERROR_STATUS,
+@@ -946,6 +1021,7 @@ function normalizeReadinessProbeResult(probeResponse) {
+     recoveryStage: null,
+     recoveryStageRank: null,
+     publishedControlPlaneEpoch: null,
++    [STARTUP_RUNTIME_HANDOFF_READINESS_FIELD]: null,
+     [BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD]: null,
+   };
+ 
+@@ -1024,6 +1100,10 @@ function normalizeReadinessProbeResult(probeResponse) {
+   ) ?
+     Math.max(ZERO, Math.floor(body.publishedControlPlaneEpoch)) :
+     null;
++  normalized[STARTUP_RUNTIME_HANDOFF_READINESS_FIELD] = cloneOwnDataRecord(
++    body,
++    STARTUP_RUNTIME_HANDOFF_READINESS_FIELD,
++  );
+   normalized[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD] =
+     body[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD] &&
+     typeof body[BOOTSTRAP_JOIN_PROJECTION_READINESS_FIELD] === 'object' ?

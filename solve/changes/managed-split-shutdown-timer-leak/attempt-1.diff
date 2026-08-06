@@ -1,0 +1,121 @@
+diff --git a/test/bootstrap/address-takeover-live-ab.test.js b/test/bootstrap/address-takeover-live-ab.test.js
+index 4e19caa5c94e97fc2095de40821fc8a57ed949ca..36cff515b7245f55bc3294b146a75702f3cb36ac 100644
+--- a/test/bootstrap/address-takeover-live-ab.test.js
++++ b/test/bootstrap/address-takeover-live-ab.test.js
+@@ -8,8 +8,8 @@
+  * inside the ready-lease window.
+  *
+  * Measured outcomes per run:
+- *   - terminalClassifications: conflicts the joiner would turn into
+- *     process.exit(1) (the availability defect)
++ *   - terminalClassifications: conflicts the joiner would turn into a
++ *     hard-exit (the availability defect)
+  *   - retryableClassifications: conflicts classified retryable-with-backoff
+  *   - admissionsAfterLeaseExpiry: restarts admitted once the lease expired
+  *
+@@ -199,7 +199,7 @@ test('live A/B: the fixed classification never turns an in-lease-window ' +
+ });
+ 
+ test('live A/B: the retryable classification is status-driven, not ' +
+-  'message-driven (message drift cannot re-terminalize)', async (t) => {
++  'message-driven (message drift cannot make it terminal again)', async (t) => {
+   initializeTestEnvironment();
+   const joinerPhase = new ContactSeedPhase({
+     nodeId: 'joiner',
+diff --git a/test/shards/bootstrap-1.txt b/test/shards/bootstrap-1.txt
+index 7492ccf949c27a06197ef26d53c996bcda0d1dcb..54d61fdfe7cdf7c085e67ed0d9f150ec3bb5e5ee 100644
+--- a/test/shards/bootstrap-1.txt
++++ b/test/shards/bootstrap-1.txt
+@@ -1,3 +1,4 @@
++test/bootstrap/address-takeover-live-ab.test.js
+ test/bootstrap/artifact-payload-table-schemas.test.js
+ test/bootstrap/bootstrap-api-replica-owner-conflict.test.js
+ test/bootstrap/bootstrap-api.test.js
+@@ -21,13 +22,15 @@ test/bootstrap/call-cell-invocation-setup.test.js
+ test/bootstrap/cdc-leader-only-replication.test.js
+ test/bootstrap/cdc-propagation-message-group-selection.test.js
+ test/bootstrap/cdc-subscription-consistency.property.test.js
++test/bootstrap/cluster-identity-mint.test.js
+ test/bootstrap/cluster-mesh-connectivity.property.test.js
++test/bootstrap/cold-node-authority-reacquisition-pressure.test.js
+ test/bootstrap/create-message-group-phase.test.js
+ test/bootstrap/create-self-hosted-registration.test.js
+ test/bootstrap/duplicate-replica-assignment.test.js
+ test/bootstrap/durable-rejoin-partition-restore-planner.test.js
+ test/bootstrap/dynamic-partition-cdc-subscription.test.js
+-test/bootstrap/fresh-join-multi-peer-contact.test.js
++test/bootstrap/fresh-join-via-non-seed-node.integration.test.js
+ test/bootstrap/join-checkpoint-progression-characterization.test.js
+ test/bootstrap/join-coordinator.test.js
+ test/bootstrap/join-lifecycle-sub-phase-parity-characterization.test.js
+@@ -35,7 +38,6 @@ test/bootstrap/join-readiness-evaluator.test.js
+ test/bootstrap/join-readiness-non-self-targeted-preservation.property.test.js
+ test/bootstrap/join-readiness-startup-authority.test.js
+ test/bootstrap/join-readiness-warming-node-preservation.property.test.js
+-test/bootstrap/join-retry-patience-selectable.test.js
+ test/bootstrap/join-startup-owner-routing.test.js
+ test/bootstrap/joining-cdc-gate.test.js
+ test/bootstrap/lifecycle-controller.test.js
+@@ -48,6 +50,7 @@ test/bootstrap/message-group-single-owner-invariant.test.js
+ test/bootstrap/meta-service-endpoint-registration.test.js
+ test/bootstrap/node-bootstrap-consistency.property.test.js
+ test/bootstrap/node-connection-state.test.js
++test/bootstrap/node-incarnation.test.js
+ test/bootstrap/node-joining-cdc-catchup-wiring.test.js
+ test/bootstrap/node-joining-cdc-readiness-gate-signal.test.js
+ test/bootstrap/node-joining-cdc-readiness-gate.test.js
+@@ -66,10 +69,11 @@ test/bootstrap/phase-event-ordering-characterization.test.js
+ test/bootstrap/phase-failure-handling.property.test.js
+ test/bootstrap/pipeline/join-startup-plan-segment-contract.test.js
+ test/bootstrap/query-state-single-owner.test.js
++test/bootstrap/replica-evidence-conflict.test.js
+ test/bootstrap/restart-cdc-subscription-hardening.test.js
+ test/bootstrap/return-value-completeness.property.test.js
+-test/bootstrap/schema-operations-table-schema.test.js
+ test/bootstrap/seed-registration-phase.test.js
++test/bootstrap/seed-restart-recovery-gate.test.js
+ test/bootstrap/shared/cdc-integration-setup.test.js
+ test/bootstrap/shared/message-router-setup.test.js
+ test/bootstrap/shared/replica-handler-setup.test.js
+diff --git a/test/shards/bootstrap-2.txt b/test/shards/bootstrap-2.txt
+index 6b283d15d25b24e973b23683efc3b7f8f8a93a0b..3b78b297741ffd7a3816348c48b8aaa9a38a44ed 100644
+--- a/test/shards/bootstrap-2.txt
++++ b/test/shards/bootstrap-2.txt
+@@ -1,4 +1,5 @@
+ test/bootstrap/_min-test.test.js
++test/bootstrap/address-takeover-workflow.test.js
+ test/bootstrap/bootstrap-api-admission-snapshots.test.js
+ test/bootstrap/bootstrap-api-readiness-gating.test.js
+ test/bootstrap/bootstrap-api-readiness-publication.test.js
+@@ -21,12 +22,13 @@ test/bootstrap/cache-hydration-correctness.property.test.js
+ test/bootstrap/cache-hydration-strictness.test.js
+ test/bootstrap/cdc-initial-subscription-leader-fallback.test.js
+ test/bootstrap/cleanup-ownership-order-characterization.test.js
+-test/bootstrap/cold-node-authority-reacquisition-pressure.test.js
++test/bootstrap/cluster-identity-join-gate.test.js
++test/bootstrap/cluster-identity.test.js
+ test/bootstrap/connect-websocket-phase.test.js
+ test/bootstrap/control-plane-rollout-controls.test.js
+ test/bootstrap/control-plane-write-health-owner.test.js
+ test/bootstrap/debug-meta-table-schemas.test.js
+-test/bootstrap/fresh-join-via-non-seed-node.integration.test.js
++test/bootstrap/fresh-join-multi-peer-contact.test.js
+ test/bootstrap/hydrate-system-cache-from-bootstrap.test.js
+ test/bootstrap/join-cleanup.property.test.js
+ test/bootstrap/join-delegate-bundles.test.js
+@@ -34,6 +36,7 @@ test/bootstrap/join-message-group-phase.test.js
+ test/bootstrap/join-readiness-non-participating-exclusion.repro.test.js
+ test/bootstrap/join-readiness-self-targeted-exclusion.property.test.js
+ test/bootstrap/join-readiness-warming-node-exclusion.property.test.js
++test/bootstrap/join-retry-patience-selectable.test.js
+ test/bootstrap/join-session-store.test.js
+ test/bootstrap/latency-topology-owner-delegation.test.js
+ test/bootstrap/latency-topology-table-schemas.test.js
+@@ -66,6 +69,7 @@ test/bootstrap/rejoin-hints.test.js
+ test/bootstrap/required-dependency-validation.property.test.js
+ test/bootstrap/restart-cdc-recovery-diagnostics.test.js
+ test/bootstrap/runtime-service-rebalancer-owner.test.js
++test/bootstrap/schema-operations-table-schema.test.js
+ test/bootstrap/seed-delegate-bundles.test.js
+ test/bootstrap/seed-infrastructure-phase.test.js
+ test/bootstrap/seed-startup-session-store.test.js

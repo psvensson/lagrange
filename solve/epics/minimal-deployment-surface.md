@@ -81,6 +81,20 @@ as separate roadmap scope rather than widening that row:
 
 ## Decision log
 
+- 2026-08-06 — The verified 2026-08-06 adversarial audit opened a hardening
+  batch against the landed call/reduce surface: `cell-invocation-backpressure`
+  (contention must never destroy healthy Cells), `call-partial-overflow-fail-closed`
+  (no silent partial truncation), `call-cell-reduce-coordination-integrity` and
+  `call-partial-validity-slot-generations` (coordination contract integrity and
+  accepted-partial validity), `invocation-journal-owner-recovery`,
+  `call-coordination-linear-cost`, `invocation-result-retention-owner`, and
+  `runtime-memory-admission-reservation`. The activation dead-end (Finding 1)
+  went to `data-local-call-partition-activation-v3` under the new cross-Quest
+  memo `solve/epics/cell-execution-ownership-vs-replica-topology.md`, which
+  decides whether the Option-B interim repair is final or a stopgap before
+  splitting ephemeral slot ownership from durable replica topology. Audit
+  product-scope limitations (rolling cutover, narrow reduce algebra) remain
+  roadmap items for the AGPL feature map, not code quests.
 - 2026-08-03 — Call/pushdown invocation COMPLETE: data-local activation
   landed (9c60dc142, quest `data-local-call-partition-activation-v2`),
   followed by the hardening batch, the pin-loop engagement witness, and

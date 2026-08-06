@@ -1,0 +1,65 @@
+{
+  "id": "cell-invocation-backpressure",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Concurrent invocation of one call Cell actual never destroys healthy capacity: admission is bounded by a per-actual queue, overload is refused with a typed retryable backpressure result carrying preserveReplicaState so the lifecycle never projects the replica FAILED for contention, and cell health reflects parent-owned invocation state rather than a PING that a busy worker cannot answer — so two ordinary requests hashing to the same actual under normal load both complete without stopping the shared worker, and the cell-invocation-backpressure scenario is green.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/minimal-deployment-surface.md"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "cell-invocation-backpressure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "cell-invocation-backpressure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "cell-invocation-backpressure",
+          "metric": "priority"
+        }
+      }
+    },
+    {
+      "id": "health-under-load",
+      "priority": 2,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "cell-invocation-health-under-load",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "contention-never-failed",
+      "statement": "Concurrent invocation contention must never cause the service runtime lifecycle to project a replica FAILED; CONCURRENT_INVOCATION-class outcomes carry a preserveReplicaState marker through the driver stop path."
+    },
+    {
+      "id": "reuse-existing-owners",
+      "statement": "Reuse the existing WasmComponentDriver, ServiceRuntimeLifecycle, RuntimeDriverRegistry, and invocation routing owners; introduce no parallel worker pool, health monitor, or scheduler."
+    },
+    {
+      "id": "typed-backpressure",
+      "statement": "Overload is surfaced as a typed, retryable backpressure result through the canonical typed path, never as a generic failure or a silent drop."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

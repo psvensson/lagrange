@@ -1,0 +1,50 @@
+{
+  "id": "invocation-result-retention-owner",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Invocation result retention is a decided, owned policy rather than unbounded growth: a named owner enforces a replay-window SLA over terminal wasm_operations rows and published reduce results with fenced garbage collection and idempotency tombstones — discharging the retention decision the reclaimer's own comment deferred — so terminal coordination state is bounded and the invocation-result-retention-owner scenario is green.",
+  "priority": 2,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "architecture/minimal-deployment-surface.md",
+    "closesCL": [],
+    "parentQuest": "invocation-journal-owner-recovery",
+    "planDoc": "solve/epics/minimal-deployment-surface.md"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "invocation-result-retention-owner",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "invocation-result-retention-owner-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "invocation-result-retention-owner",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "replay-safety",
+      "statement": "Garbage collection is fenced and tombstoned: idempotent replay within the declared window must still resolve correctly, and GC never deletes a row a live invocation can still reference."
+    },
+    {
+      "id": "explicit-policy-decision",
+      "statement": "The replay-window SLA and its deployment tunability are recorded as an explicit decision (quest finding plus owner documentation), closing the deferred product decision in the reclaimer comment."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
