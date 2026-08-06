@@ -20,8 +20,8 @@ Rules:
 - Do not embed Quest, Solver, pack-generation, or agent-load-order commands.
 - State the product fact, liMit, or test evidence without exposing the workflow that
   produced it.
-- Keep externally visible claims in [Current Capabilities](read as
-  `../current-capabilities-and-limitations.md` from this directory) and link into the
+- Keep externally visible claims in
+  [Current Capabilities](../current-capabilities-and-limitations.md) and link into the
   mechanism rather than copying multiple contradictory status sentences.
 
 ## Repository development

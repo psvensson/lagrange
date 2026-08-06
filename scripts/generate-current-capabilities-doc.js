@@ -12,6 +12,8 @@ const OUTPUT_PATH = 'docs/current-capabilities-and-limitations.md';
 const TEXT_ENCODING = 'utf8';
 const CHECK_FLAG = '--check';
 
+const UNDERSCORE = '_';
+const WORD_SEPARATOR = ' ';
 const DISPLAY_LABEL = Object.freeze({
   active_sqlite_partition_path: 'Active for file-backed SQLite partitions',
   basic_against_configured_pgwire_credentials:
@@ -54,7 +56,8 @@ function readJson(relativePath, root = REPO_ROOT) {
 
 function displayCapability(value) {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  return DISPLAY_LABEL[value] ?? String(value).replaceAll('_', ' ');
+  return DISPLAY_LABEL[value] ??
+    String(value).replaceAll(UNDERSCORE, WORD_SEPARATOR);
 }
 
 function renderList(values) {
@@ -62,15 +65,6 @@ function renderList(values) {
 }
 
 function renderCurrentCapabilitiesDocument(capabilities, portability) {
-  const listenerRows = [
-    ['REST API', capabilities.listeners.rest],
-    ['Admin WebSocket', capabilities.listeners.adminWebSocket],
-    ['Transport WebSocket', capabilities.listeners.transportWebSocket],
-  ].map(([name, listener]) =>
-    `| ${name} | \`${listener.defaultPort}\` | ` +
-    `\`${listener.environmentVariable}\` | ` +
-    `${listener.defaultRule ?? 'fixed default'} |`).join('\n');
-
   const runtimeRows = Object.entries(portability.runtimes)
     .map(([runtime, contract]) =>
       `| \`${runtime}\` | ${displayCapability(contract.externalInstall)} | ` +
@@ -126,11 +120,13 @@ ${capabilities.productBoundary.dataLocalRequirement}
 
 ## Public service path
 
-Recommended authoring: **${displayCapability(capabilities.deployment.recommendedAuthoring)}**.
-The ${renderList(capabilities.deployment.publicInvocation)} Binding kinds are
-publicly invocable. The accepted
-${renderList(capabilities.deployment.acceptedButNotPubliclyInvocable)} kinds may
-be declared and placed but have no public invocation adapter.
+The deployment model is Artifact / Binding / Cell. Recommended authoring:
+**${displayCapability(capabilities.deployment.recommendedAuthoring)}** - the
+compiled artifact is not a WebAssembly binary or component.
+Binding source kinds are publicly invocable: ${renderList(capabilities.deployment.publicInvocation)}; accepted
+${renderList(capabilities.deployment.acceptedButNotPubliclyInvocable)} kinds
+may be declared but have no public invocation adapter.
+Managed OCI activation and OCI callback invocation remains unsupported.
 
 | Call property | Current state |
 | --- | --- |

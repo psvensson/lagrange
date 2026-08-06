@@ -351,10 +351,9 @@ class ManagedMergeWorkflowPersistenceMethods {
    * @private
    */
   async persistMergeWorkflowClaim(workflow, context = {}) {
-    const cdcIntegrationService = this.getCDCIntegrationService();
-    if (!cdcIntegrationService ||
-        typeof cdcIntegrationService.updateSystemTableRow !==
-          LOCAL_STR_FUNCTION) {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (!gateway ||
+        typeof gateway.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
       return {accepted: false, workflow};
     }
     const previousWorkflow = context.previousWorkflow || {};
@@ -364,7 +363,7 @@ class ManagedMergeWorkflowPersistenceMethods {
     const serializedMetadata = JSON.stringify(
       this.buildPersistedTransitionMetadata(workflow),
     );
-    const mutationResult = await cdcIntegrationService.updateSystemTableRow(
+    const mutationResult = await gateway.updateSystemTableRow(
       TABLES.TABLES,
       {
         [LOCAL_STR_TABLE_ID]: workflow.tableId,
@@ -404,10 +403,9 @@ class ManagedMergeWorkflowPersistenceMethods {
    * @private
    */
   async persistMergeWorkflowTransitionFence(workflow, context = {}) {
-    const cdcIntegrationService = this.getCDCIntegrationService();
-    if (!cdcIntegrationService ||
-        typeof cdcIntegrationService.updateSystemTableRow !==
-          LOCAL_STR_FUNCTION) {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (!gateway ||
+        typeof gateway.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
       return {accepted: false, workflow};
     }
     const previousWorkflow = context.previousWorkflow || {};
@@ -419,7 +417,7 @@ class ManagedMergeWorkflowPersistenceMethods {
       serializedMetadata,
       isEpochTransition,
     } = this.buildMergeTransitionUpdatePayload(workflow);
-    const mutationResult = await cdcIntegrationService.updateSystemTableRow(
+    const mutationResult = await gateway.updateSystemTableRow(
       TABLES.TABLES,
       {
         [LOCAL_STR_TABLE_ID]: workflow.tableId,

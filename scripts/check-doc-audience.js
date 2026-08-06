@@ -14,6 +14,7 @@ const REPO_ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
 const NEWLINE = '\n';
+const TEXT_ENCODING = 'utf8';
 const MARKDOWN_EXTENSION = '.md';
 const PASS_MESSAGE = 'Documentation path boundary holds.';
 const RULES_MESSAGE = 'Rules: docs/steering/audience-boundary.md.';
@@ -98,7 +99,7 @@ function listMarkdown(relativeDir, {recursive, root = REPO_ROOT}) {
 }
 
 function readRepoFile(relativePath, root = REPO_ROOT) {
-  return fs.readFileSync(path.join(root, relativePath), 'utf8');
+  return fs.readFileSync(path.join(root, relativePath), TEXT_ENCODING);
 }
 
 function isPublicPath(relativePath) {

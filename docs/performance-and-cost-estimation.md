@@ -125,10 +125,10 @@ Example worksheet:
 | Measure | Baseline | Lagrange |
 | --- | ---: | ---: |
 | Matching rows or groups | 100,000 | local only |
-| Serialized bytes per baseline result | 64 | — |
-| Participating shards | — | 16 |
-| Emitted partials per shard | — | 10 |
-| Bytes per partial | — | 128 |
+| Serialized bytes per baseline result | 64 | - |
+| Participating shards | - | 16 |
+| Emitted partials per shard | - | 10 |
+| Bytes per partial | - | 128 |
 | Calculated boundary transfer | 6.4 MB | about 20 KB |
 
 The arithmetic ratio is a screening signal. It is not a speedup ratio. Both paths

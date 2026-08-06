@@ -196,9 +196,9 @@ class ManagedSplitWorkflowOwnershipMethods {
    * @private
    */
   async persistSplitWorkflowClaim(workflow, context = {}) {
-    const cdcIntegrationService = this.getCDCIntegrationService();
-    if (!cdcIntegrationService ||
-        typeof cdcIntegrationService.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (!gateway ||
+        typeof gateway.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
       return {accepted: false, workflow};
     }
     const previousWorkflow = context.previousWorkflow || {};
@@ -208,7 +208,7 @@ class ManagedSplitWorkflowOwnershipMethods {
     const serializedMetadata = JSON.stringify(
       this.buildPersistedTransitionMetadata(workflow),
     );
-    const mutationResult = await cdcIntegrationService.updateSystemTableRow(
+    const mutationResult = await gateway.updateSystemTableRow(
       TABLES.TABLES,
       {
         table_id: workflow.tableId,
@@ -254,9 +254,9 @@ class ManagedSplitWorkflowOwnershipMethods {
    * @private
    */
   async persistSplitWorkflowTransitionFence(workflow, context = {}) {
-    const cdcIntegrationService = this.getCDCIntegrationService();
-    if (!cdcIntegrationService ||
-        typeof cdcIntegrationService.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
+    const gateway = this.getControlPlaneSystemTableGateway();
+    if (!gateway ||
+        typeof gateway.updateSystemTableRow !== LOCAL_STR_FUNCTION) {
       return {accepted: false, workflow};
     }
     const previousWorkflow = context.previousWorkflow || {};
@@ -307,7 +307,7 @@ class ManagedSplitWorkflowOwnershipMethods {
     const isEpochTransition =
       workflow.status === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE ||
       workflow.status === PARTITION_TRANSITION_STATE.FAILED;
-    const mutationResult = await cdcIntegrationService.updateSystemTableRow(
+    const mutationResult = await gateway.updateSystemTableRow(
       TABLES.TABLES,
       {
         table_id: workflow.tableId,

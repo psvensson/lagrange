@@ -32,11 +32,13 @@ The rows used by a data-local operation must live in Lagrange partitions.
 
 ## Public service path
 
-Recommended authoring: **Code-first JavaScript service compiler**.
-The `request`, `call` Binding kinds are
-publicly invocable. The accepted
-`change`, `time`, `once`, `boot`, `pushdown` kinds may
-be declared and placed but have no public invocation adapter.
+The deployment model is Artifact / Binding / Cell. Recommended authoring:
+**Code-first JavaScript service compiler** - the
+compiled artifact is not a WebAssembly binary or component.
+Binding source kinds are publicly invocable: `request`, `call`; accepted
+`change`, `time`, `once`, `boot`, `pushdown` kinds
+may be declared but have no public invocation adapter.
+Managed OCI activation and OCI callback invocation remains unsupported.
 
 | Call property | Current state |
 | --- | --- |

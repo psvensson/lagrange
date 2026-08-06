@@ -1,4 +1,5 @@
 ---
+audience: human
 documentClass: planning
 ---
 
@@ -11,7 +12,16 @@ This page describes direction, not current support. The checked-in status
 authority is [Current Capabilities And Limitations](docs/current-capabilities-and-limitations.md).
 Released changes belong in [CHANGELOG.md](CHANGELOG.md).
 
-## Now - make the existing public path credible
+## Recently completed - 0.1 Internal Coherence
+
+The first phase established the database foundations and the split/merge
+transition-integrity ladder: distributed transactions with snapshot isolation
+and recovery; schema migrations with backfill, cutover, rollback, and restart
+recovery; typed split-key comparison; durable dissolution witnesses; fenced
+abort parity; batched merge backfill; the durable split/merge overlap guard;
+and one configuration authority for split/merge thresholds.
+
+## Now - 0.2 Stable Core: make the existing public path credible
 
 The service compiler and public HTTP-to-distributed-call path exist. The next
 work is to make their useful envelope larger and their evidence easier to trust:
@@ -26,7 +36,7 @@ work is to make their useful envelope larger and their evidence easier to trust:
   component limit; and
 - bind every externally visible performance claim to reproducible evidence.
 
-## Next - pilot-ready operations
+## Next - 0.5 Easy To Try: pilot-ready operations
 
 A serious pilot needs a complete operational boundary, not just successful
 queries:
@@ -44,7 +54,7 @@ Backup/restore/PITR, enterprise identity controls, secrets/KMS integration, and
 cross-region durability are separate product areas and must follow their edition
 and implementation-home decisions.
 
-## Later - production support
+## Later - 1.0 Production Ready: production support
 
 A production-supported release requires explicit, evidence-backed guarantees:
 
@@ -57,7 +67,7 @@ A production-supported release requires explicit, evidence-backed guarantees:
 - support boundaries that distinguish implemented, tested, certified, and
   commercially supported behavior.
 
-## Deeper distributed execution
+## Future - 2.0 Deeper Distributed Execution
 
 Once the bounded call path and its operating contract are stable, deeper
 execution can add:
