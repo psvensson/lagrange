@@ -67,3 +67,24 @@ dead `setThresholds`) are sequenced after the ladder.
   `worker.terminate`) replaces the absent per-replica stop path at node
   teardown, and the runner's bounded-exit workaround is deleted — the runner
   exits naturally in ~24s after a forced managed split plus deployed cells.
+- 2026-08-06 — Ladder COMPLETE: all four rungs landed with subagent-verified
+  approvals and deterministic receipts. Rung 1 `split-terminal-lifecycle`
+  (`9f9beecd7`): SPLIT_SOURCE_DISSOLVING dissolution + sibling carry-forward
+  inside the serialized owner lane + terminal SPLIT_COMPLETED emission. Rung 2
+  `workflow-fencing-wiring` (`9fe64a795`): both coordinators claim durable
+  ownership through the existing claimDurableWorkflow/assertTransitionFence
+  machinery (CAS claim triple in transition metadata), fenced source acks
+  with typed STALE_FENCE rejection, explicit participant transition graphs,
+  R1 abort/cutover race closed by same-owner same-fence resync-from-durable.
+  Rung 3 `durable-replay-cursor` (`1792f8867`): snapshot barrier + replay
+  watermark persisted via the source ack checkpoint seam, catch-up replay
+  from the durable Raft log behind the watermark (never the volatile
+  pendingEntries array), bounded mirror delta queues with typed
+  backpressure, and leader-activation worker start-or-resume (reconstruction
+  without resumption is not recovery). Rung 4 `write-path-epoch-fencing`
+  (`f854dd1a5`): QUERY payload carries expectedPartitionVersion,
+  handleRemoteQuery rejects stale epochs with a typed STALE_PARTITION_EPOCH
+  outcome, and descriptor-epoch evidence gaps defer pre-cutover / fail
+  closed post-cutover — fail-open on missing evidence is gone. Tier 3
+  leftovers (F12, F14, F18, F22, F23, F24) remain sequenced after the
+  ladder as their own quests.
