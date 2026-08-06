@@ -33,6 +33,20 @@ const EXPECTED_SCHEMA_VERSION = 1;
 const CHART_VALUES_PATH = 'charts/lagrange-node/values.yaml';
 const PARTITIONING_ARCHITECTURE_PATH = 'architecture/process-partitioning.md';
 const REPLICATION_ARCHITECTURE_PATH = 'architecture/process-replication.md';
+const TRANSPORT_SERVER_PATH = 'src/transport/router-server-manager.js';
+const HTTP_AUTHENTICATOR_PATH =
+  'src/service/request-cell-http-authenticator.js';
+
+const EXPECTED_STATUS = Object.freeze({
+  SECONDARY_INDEXES: 'unsupported',
+  SQLITE_SNAPSHOT: 'active_sqlite_partition_path',
+  MESSAGE_GROUP_COMPACTION: 'unsupported',
+  LEARNER_PROMOTION: 'time_based_not_progress_based',
+  NODE_TRANSPORT: 'plain_websocket_trusted_network_only',
+  HTTP_AUTHENTICATION: 'basic_against_configured_pgwire_credentials',
+  BACKUP_RESTORE_PITR: 'unsupported',
+  ROLLING_UPGRADE: 'unsupported_on_0x',
+});
 
 function readText(relativePath, root = REPO_ROOT) {
   return fs.readFileSync(path.join(root, relativePath), TEXT_ENCODING);
@@ -49,6 +63,11 @@ function sameValues(actual, expected) {
 
 function addProblem(problems, condition, message) {
   if (!condition) problems.push(message);
+}
+
+function limitationById(capabilities, id) {
+  return capabilities.limitations.find((limitation) => limitation.id === id) ||
+    null;
 }
 
 function checkCurrentCapabilities(root = REPO_ROOT) {
@@ -128,13 +147,58 @@ function checkCurrentCapabilities(root = REPO_ROOT) {
     partitioning.includes('column named `id`') &&
       partitioning.includes('no secondary index support'),
     'partition-routing limitations lost their current architecture evidence');
+  addProblem(problems,
+    capabilities.dataAndQueries.secondaryIndexes ===
+      EXPECTED_STATUS.SECONDARY_INDEXES &&
+      limitationById(capabilities, 'secondary-indexes') !== null,
+    'secondary-index capability contradicts the active architecture');
 
   const replication = readText(REPLICATION_ARCHITECTURE_PATH, root);
   addProblem(problems,
-    replication.includes('bounded by production snapshotting') &&
-      replication.includes('grow without bound') &&
+    replication.includes('SQLite partition logs are bounded') &&
+      replication.includes('message-group logs still grow without bound') &&
       replication.includes('time-based, not progress-based'),
     'replication limitations lost their current architecture evidence');
+  addProblem(problems,
+    capabilities.replication.snapshotCheckpointCreation ===
+      EXPECTED_STATUS.SQLITE_SNAPSHOT &&
+      capabilities.replication.snapshotTransferInstall ===
+        EXPECTED_STATUS.SQLITE_SNAPSHOT &&
+      capabilities.replication.physicalLogCompaction ===
+        EXPECTED_STATUS.SQLITE_SNAPSHOT &&
+      capabilities.replication.messageGroupLogCompaction ===
+        EXPECTED_STATUS.MESSAGE_GROUP_COMPACTION &&
+      capabilities.replication.learnerPromotion ===
+        EXPECTED_STATUS.LEARNER_PROMOTION,
+    'replication capability fields contradict the active snapshot path');
+
+  const transportServer = readText(TRANSPORT_SERVER_PATH, root);
+  addProblem(problems,
+    transportServer.includes('new WebSocketServer(serverOptions)') &&
+      !transportServer.includes('https.createServer') &&
+      capabilities.security.nodeTransport === EXPECTED_STATUS.NODE_TRANSPORT,
+    'node transport security status no longer matches the server composition');
+
+  const httpAuthenticator = readText(HTTP_AUTHENTICATOR_PATH, root);
+  addProblem(problems,
+    httpAuthenticator.includes("const BASIC_PREFIX = 'Basic '") &&
+      capabilities.security.requestHttpAuthentication ===
+        EXPECTED_STATUS.HTTP_AUTHENTICATION,
+    'request HTTP authentication status no longer matches its owner');
+
+  addProblem(problems,
+    capabilities.operations.backupRestorePitr ===
+      EXPECTED_STATUS.BACKUP_RESTORE_PITR &&
+      capabilities.operations.rollingUpgradeContract ===
+        EXPECTED_STATUS.ROLLING_UPGRADE,
+    'operations status must not imply backup or upgrade guarantees');
+
+  addProblem(problems,
+    capabilities.callExecution.defaultShardRowBound > 0 &&
+      capabilities.callExecution.defaultEmitBound > 0 &&
+      capabilities.callExecution.defaultPartialEntryBound > 0 &&
+      capabilities.callExecution.defaultConcurrentShardRuns > 0,
+    'call execution bounds must be positive');
 
   const expectedDocument = generate(root);
   const currentDocument = readText(OUTPUT_PATH, root);

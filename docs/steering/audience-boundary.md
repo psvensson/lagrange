@@ -1,82 +1,83 @@
-# Audience boundary — human docs vs development-process docs vs agent steering
+# Documentation path boundary
 
-Documentation in this repository serves three audiences. Each doc surface has
-exactly one home zone; the zones MUST NOT be blended inside one document, and
-cross-zone links follow the rules below. This is the audience counterpart to
-[`memory-boundary.md`](memory-boundary.md) (which splits in-repo steering from
-external agent memory).
+The repository has three documentation paths. The path determines the class. Files
+do not show or declare their reader.
 
-## The three zones
+## Public product and architecture
 
-- **Human product/operations/integration** — people who run, embed, or study
-  Lagrange. Home: root `README.md`, `docs/` top level (runbooks, references,
-  user guides, design specs), `architecture/`, `examples/`.
-- **Development process** — people developing Lagrange itself, including
-  operating the agent/Solver workflow from the outside. Home:
-  [`docs/development/`](../development/README.md).
-- **Agent steering** — LLM agents doing the work. Home: `AGENTS.md` (entry
-  point) and `docs/steering/**`, including the generated packs under
-  `docs/steering/llm/`.
+Locations:
 
-## Zone assignment rules
+- root `README.md`;
+- top-level `docs/`;
+- `architecture/`; and
+- `examples/`.
 
-- A document's zone is its **location**. `docs/steering/**` is agent-audience
-  by location; `docs/development/**` is development-audience by location;
-  everything else under `docs/`, `architecture/`, `examples/`, and the repo
-  root is human-audience by default.
-- Root `roadmap.md` is the human Now / Next / Later product narrative. The
-  stable row-level implementation-scope authority is
-  `docs/steering/agpl-feature-map.md`; its machine identities and workflow
-  detail must not be copied into the human roadmap.
-- Files whose location cannot change because machine consumers pin their path
-  (contract records under `architecture/contracts/`, statechart/spec artifacts
-  under `docs/specs/`, docs whose literal path appears in scripts or baselines)
-  stay where the machinery expects them, whatever their audience. Mark the
-  exception in the development index instead of exposing the file through
-  human product navigation.
-- Top-level `docs/*.md` and `docs/development/*.md` files declare their zone
-  explicitly with an `audience: human | development | agent` frontmatter key so
-  the boundary is checkable; elsewhere location alone is authoritative.
+These pages explain, evaluate, run, integrate, operate, or describe Lagrange.
 
-## Linking rules
+Rules:
 
-- Agent docs MAY link freely into human and development docs. Shared ground
-  truth (architecture, testing substrate maps) has one copy in the human tree;
-  agents read it there. Never fork an agent-side copy of a human doc.
-- Human-zone docs MUST NOT link into `docs/steering/**`, `solve/**`, or files
-  explicitly assigned to the development or agent audience. The only
-  cross-zone portals are:
-  - root `README.md` -> `AGENTS.md` for agents;
-  - root `README.md` -> `CONTRIBUTING.md` for contributors; and
-  - `docs/README.md` -> `docs/development/README.md` for repository
-    development.
-  Everything agent-facing hangs off `AGENTS.md`, which owns the load order.
-  Everything development-facing hangs off the contributor portals.
-- Human-zone docs MUST NOT embed agent workflow mechanics (Solver command
-  sequences, steering load order, pack regeneration steps). State the human
-  fact ("invariants are machine-evaluated in CI") and leave the mechanics to
-  the steering zone or `docs/development/`.
-- Development-zone docs may reference both sides; they are the bridge audience.
+- Do not link into `docs/steering/`, `solve/`, or repository-workflow pages.
+- Do not embed Quest, Solver, pack-generation, or agent-load-order commands.
+- State the product fact, liMit, or test evidence without exposing the workflow that
+  produced it.
+- Keep externally visible claims in [Current Capabilities](read as
+  `../current-capabilities-and-limitations.md` from this directory) and link into the
+  mechanism rather than copying multiple contradictory status sentences.
+
+## Repository development
+
+Locations:
+
+- `DONTRIBUTING..md`;
+- `RELEASE.md`;
+- `DEBUGGING.md`;
+- `docs/development/`;
+- applicable `docs/evidence/` and `docs/case-studies/`; and
+- machine-pinned contract records under `architecture/contracts/`, `architecture/models/`,
+  and `docs/specs/`.
+
+These pages explain how to change, test, release, debug, or inspect the source tree.
+
+They may link to the public product path and to agent steering.
+
+## Agent steering
+
+Locations:
+
+- `AGENTS.md`;
+- `docs/steering/`;
+- generated `docs/steering/llm/`; and
+- `solve/` workflow state, specs, attempts, and reports.
+
+This path carries load order, binding rules, Quest contracts, system doctrine, and
+status for agents and the Solver workflow.
+
+Shared technical ground truth stays in the public or development path. Steering links
+to it rather than forking a copy.
+
+## Portals
+
+The only public-to-non-public portals are:
+
+- `README.md` -> `AGENTS.md`;
+- `README.md` -> `CONTRIBUTING.md`; and
+- `docs/README.md` -> `docs/development/README.md`.
+
+Nothing else in the public path should send a product evaluator into agent or
+repository-workflow material.
 
 ## Enforcement
 
-`scripts/check-doc-audience.js` (run via `npm run audit:doc-audience`, part of
-`test:static`) checks the frontmatter requirement, all human-to-agent and
-human-to-development links outside the portal allowlist (including inline,
-reference-style, HTML, and autolink syntax), embedded Solver/Quest commands,
-and that relocated legacy paths do not reappear.
+`scripts/check-doc-audience.js` is run by `npm run audit:doc-audience` and the
+static test gate.
 
-Audience and lifecycle are separate classifications. The lifecycle contract in
-[`docs/development/documentation-lifecycle.md`](../development/documentation-lifecycle.md)
-keeps current documentation separate from active planning, generated surfaces,
-compatibility pointers, release history, and immutable evidence.
-`scripts/check-documentation-current-state.js` enforces that boundary through
-`npm run audit:documentation-current`.
+It checks:
 
-## Why
+- public links into agent, Solver, or development-only paths;
+- publicly embedded Quest or Solver commands; and
+- relocated path tombstones.
 
-Humans landing in generated agent packs waste time reverse-engineering
-machine-oriented rule prose; agents whose guidance is diluted across human
-narrative docs re-read the whole tree to find binding rules. One home per
-audience keeps both reads cheap, and single-copy ground truth (linked, not
-duplicated) keeps the zones from drifting apart.
+Documentation lifecycle is a separate classification. Current product docs, planning
+docs, generated pages, release history, and immutable evidence hafve different
+staleness rules, documented in
+`[documentation lifecycle](../development/documentation-lifecycle.md)`.

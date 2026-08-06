@@ -1,65 +1,77 @@
----
-audience: human
----
+# Documentation
 
-# Documentation Index
+Use the shortest path that answers the question in front of you.
 
-This is the human documentation index for people evaluating, running,
-integrating, or studying Lagrange. It contains product concepts, tutorials,
-operator guidance, and architecture. Development workflow is deliberately kept
-in the separate [contributor documentation](development/README.md).
+## Decide whether to evaluate it
 
-## Start Here
+- [Evaluating Lagrange](evaluate.md) - what it is, what changes in an existing
+  system, current evidence, hard limits, and the pilot decision gate
+- [Current capabilities and limitations](current-capabilities-and-limitations.md)
+  - generated status authority for the checked-in implementation
+- [Migration and adoption](migration.md) - SQL portability, WASM deployment,
+  hot-path extraction, data loading, cutover, rollback, and exit planning
+- [Security](security.md) - current controls and trusted-network assumptions
+- [Operations readiness](operations-readiness.md) - topology, recovery,
+  upgrades, backups, observability, and pilot drills
 
-- [Start Here](start-here.md) - choose a first-hour, service-development, or
-  architecture-learning path
-- [Current Capabilities And Limitations](current-capabilities-and-limitations.md)
-  - the authoritative human-readable implementation status
-- [Distributed-Systems Primer](distributed-systems-primer.md) - the concepts
-  Lagrange assumes, explained using Lagrange examples
-- [Vocabulary](vocabulary.md) - exact relationships between tables,
-  partitions, replicas, Artifacts, Bindings, Cells, and metadata
-- [First Hour With Lagrange](tutorials/first-hour.md) - start a node, query it,
-  inspect placement, and invoke a genuine WASI request Binding
+## Run the current service path
 
-## Build And Integrate
+- [First hour](tutorials/first-hour.md) - run the code-first account-summary
+  proof and scaffold a service
+- [Account-summary example](../examples/call-binding-account-summary/README.md)
+  - one HTTP endpoint, one distributed operation, two partitions, authorization,
+  and replay
+- [Examples](../examples/README.md) - public service examples, compatibility
+  examples, comparison studies, and legacy internals
 
-- [Service Deployment Guide](service-deployment-guide.md) - the supported
-  Artifact / Binding / Cell path, including authoring the component in
-  JavaScript with ComponentizeJS
-- [component-distribution.md](component-distribution.md) - how components are
-  distributed across nodes
-- [PostgreSQL Wire And SQL Compatibility](../architecture/postgres-wire.md) -
-  connection security and the measured compatibility slice
-- [Runnable Examples](../examples/README.md) - examples labelled by whether
-  they use the public deployment path, built-ins, or legacy substrate
+## Build a service
 
-## Operate Lagrange
+- [Programming model](native-programming-model.md) - `defineService`, handlers,
+  distributed operations, reducers, generated deployment records, and current
+  limits
+- [Execution semantics](execution-semantics.md) - retries, idempotency,
+  consistency, partial failure, movement, and budgets
+- [Building and deploying a service](service-deployment-guide.md) - scaffold,
+  generate, build, deploy, and the advanced runtime contract
+- [Vocabulary](vocabulary.md) - exact relationships between services, Artifacts,
+  Bindings, Cells, tables, partitions, and replicas
 
-- [admin-api-reference.md](admin-api-reference.md) - admin API actions,
-  diagnostics endpoints, and CLI message contract
-- [bootstrap-readiness-probes.md](bootstrap-readiness-probes.md) - readiness
-  probes during cluster bootstrap
-- [listener-port-model.md](listener-port-model.md) - REST, admin, and transport
-  listener configuration and validation
-- [storage-capacity-operations.md](storage-capacity-operations.md) - storage
-  capacity operations
-- [latency-topology-operations.md](latency-topology-operations.md) - latency
-  and topology operations
-- [runtime-resource-diagnostics.md](runtime-resource-diagnostics.md) - runtime
-  resource diagnostics
-- [adaptive-timing-resource-diagnostics-runbook.md](adaptive-timing-resource-diagnostics-runbook.md)
-  - operator runbook for adaptive timing diagnostics
-## Understand The Architecture
+## Measure a workload
 
-- [Architecture Index](../architecture/INDEX.md) - canonical current-system
-  entry point
-- [The Lagrange System Model](../architecture/system-model.md) - the shortest
-  conceptual explanation
-- [Process Walkthroughs](../architecture/INDEX.md#start-here) - partitioning,
-  replication, rebalancing, request routing, and data affinity
+- [Performance and network-cost measurement](performance-and-cost-estimation.md)
+  - formulas and a measurement worksheet without product-wide speedup claims
+- [Infrastructure capacity measurement](infrastructure-cost-estimation.md) -
+  compare separate and combined fleets without equating VM count with savings
+- [Rewrite a hot path](tutorials/rewrite-a-hot-path.md) - a strong grouped-SQL
+  baseline and the partition-function shape
+- [MovieLens comparison](../examples/service-data-affinity/README.md) -
+  correctness, transfer shape, and placement evidence; the service phase uses
+  an internal runtime path and is not a public-path benchmark
 
-For installation from the repository root, see [README.md](../README.md).
-People changing Lagrange itself should use
-[docs/development/README.md](development/README.md); none of that process
-material is required to use the product.
+## Operate a cluster
+
+- [Bootstrap and readiness probes](bootstrap-readiness-probes.md)
+- [Listener port model](listener-port-model.md)
+- [Storage capacity operations](storage-capacity-operations.md)
+- [Runtime resource diagnostics](runtime-resource-diagnostics.md)
+- [Latency and topology operations](latency-topology-operations.md)
+- [Admin API reference](admin-api-reference.md)
+
+The operational references describe mechanisms. Use
+[Operations readiness](operations-readiness.md) for the product-level gaps and
+pilot gates.
+
+## Understand the architecture
+
+- [Architecture index](../architecture/INDEX.md) - question-based map
+- [System model](../architecture/system-model.md) - durable objects, node
+  anatomy, request paths, and placement
+- [Partitioning](../architecture/process-partitioning.md)
+- [Replication and recovery](../architecture/process-replication.md)
+- [Request routing](../architecture/process-request-routing.md)
+- [Data affinity](../architecture/process-data-affinity.md)
+- [Rebalancing](../architecture/process-rebalancing.md)
+
+Repository-development material lives behind
+[CONTRIBUTING.md](../CONTRIBUTING.md). It is not part of the product
+evaluation path.

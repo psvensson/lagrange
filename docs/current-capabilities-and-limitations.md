@@ -1,5 +1,4 @@
 ---
-audience: human
 documentClass: current
 generated: true
 ---
@@ -8,13 +7,19 @@ generated: true
 
 # Current Capabilities And Limitations
 
-This page is the authoritative human-readable statement of what the checked-in
-Lagrange implementation supports now. It describes current behavior, not future
-plans or development workflow.
+This is the implementation-status authority for the checked-in tree. It says
+what is active, what evidence exists, and what remains outside the current
+product promise. Roadmaps and architecture direction do not override it.
 
-**Maturity:** Substantial experimental system; not a polished production database.
+**Maturity:** Experimental alpha; substantial implementation, but no general production-support or backward-compatibility guarantee on 0.x.
 
-## Data And Query Model
+## Product boundary
+
+A self-managed distributed runtime with an integrated, partitioned SQL storage layer; not a plug-in for an existing PostgreSQL cluster.
+
+The rows used by a data-local operation must live in Lagrange partitions.
+
+## Data and query model
 
 | Capability | Current state |
 | --- | --- |
@@ -22,37 +27,32 @@ plans or development workflow.
 | Default replica count | 3 |
 | Partition consensus | raft |
 | Runtime-service Cell consensus | none; durable state uses ordinary replicated tables |
-| Secondary indexes | Local SQLite indexes on every partition |
+| Secondary indexes | Unsupported |
 | Global secondary indexes | No |
 
-## Listeners And Probes
+## Public service path
 
-| Listener | Default | Environment override | Default rule |
-| --- | --- | --- | --- |
-| REST API | `8080` | `REST_API_PORT` | fixed default |
-| Admin WebSocket | `8081` | `ADMIN_WS_PORT` | REST + 1 |
-| Transport WebSocket | `8082` | `TRANSPORT_WS_PORT` | REST + 2 |
+Recommended authoring: **Code-first JavaScript service compiler**.
+The `request`, `call` Binding kinds are
+publicly invocable. The accepted
+`change`, `time`, `once`, `boot`, `pushdown` kinds may
+be declared and placed but have no public invocation adapter.
 
-Changing the REST port moves both WebSocket defaults. The admin and transport
-ports can also be overridden independently; all three resolved ports must be
-distinct.
-
-| Probe purpose | Endpoint |
+| Call property | Current state |
 | --- | --- |
-| Process liveness | `/livez` |
-| Startup handoff | `/startupz` |
-| Traffic readiness | `/readyz` |
-| Compatibility only | `/health` |
-
-The compatibility endpoint is not a readiness or liveness oracle.
-
-## Service Deployment
-
-The public model is **Artifact / Binding / Cell**.
-The `request`, `call` Binding source kinds are publicly invocable.
-The accepted
-`change`, `time`, `once`, `boot`, `pushdown` source
-kinds can be declared and placed but do not yet have public invocation adapters.
+| Selector | Literal single-table SELECT fixed at deployment |
+| Selector interpolation | No |
+| Default rows per shard | 4096 |
+| Default emits per shard run | 64 |
+| Default coordinated partial entries | 1024 |
+| Default concurrent shard runs | 8 |
+| Same-host shard runs | Serialized per component instance |
+| Partial values | Finite numbers |
+| Partial keys | Must be disjoint across shards |
+| Nested calls per HTTP request | 1 |
+| Global cross-partition snapshot | No |
+| Caller cancellation | No |
+| Direct-call caller idempotency key | No |
 
 Supported lifecycle SQL:
 
@@ -71,45 +71,80 @@ Supported lifecycle SQL:
 | `wasm_component` | External install through lifecycle SQL | Genuine WASI component Cell | Legacy JavaScript-envelope rehearsal |
 | `oci_container` | Unsupported | Descriptor and in-memory lifecycle scaffold only | Unsupported |
 
-The callback column is a separate legacy/internal execution axis; it is not an
-alternative spelling of Artifact / Binding / Cell deployment. The legacy
-JavaScript envelope is not a WebAssembly binary or component. Managed OCI
-container activation is unsupported. OCI callback invocation remains unsupported.
+The callback column is a legacy/internal execution axis, not an alternative
+public service model. Managed OCI activation remains unsupported.
 
-## PostgreSQL Wire
+## Replication and recovery
+
+| Capability | Current state |
+| --- | --- |
+| SQLite partition checkpoint creation | Active for file-backed SQLite partitions |
+| SQLite partition snapshot transfer/install | Active for file-backed SQLite partitions |
+| SQLite partition proof-gated log compaction | Active for file-backed SQLite partitions |
+| In-memory message-group log compaction | Unsupported |
+| Learner promotion | time based not progress based |
+
+Snapshot recovery is replica repair, not a user backup or PITR product.
+
+## PostgreSQL wire
 
 - Authentication modes: `trust`, `password`
 - TLS modes: `disable`, `prefer`, `require`
 - SCRAM: No
-- Compatibility claim: bounded measured SQL slice, not complete PostgreSQL compatibility
+- Compatibility claim: bounded measured SQL slice, not complete PostgreSQL or ORM compatibility
+
+## Security boundary
+
+| Surface | Current state |
+| --- | --- |
+| HTTP request authentication | HTTP Basic against the configured PostgreSQL-wire credential verifier |
+| Node transport | Plain WebSocket; trusted private network required |
+| Admin WebSocket | Unauthenticated; loopback by default |
+| External admin bind | Explicit insecure opt-in; authenticated ingress required |
+| Service isolation | WASI component with declared host capabilities |
+| OIDC / SSO | No |
+| Cryptographic node identity / mTLS | No |
 
 ## Operations
 
-- Storage admission defaults to
-  `enforce`.
-- Snapshot checkpoint creation is
-  `implemented_not_production_invoked`.
-- Snapshot transfer/install is
-  `unsupported`.
-- Physical Raft log compaction is
-  `unsupported`.
-- Learner promotion is
-  `time_based_not_progress_based`.
+| Capability | Current state |
+| --- | --- |
+| Storage admission default | `enforce` |
+| Backup / restore / PITR | Unsupported |
+| Rolling-upgrade contract | Unsupported on 0.x |
+| Cross-region replication | Unsupported |
+| General production support | Unsupported |
 
-## Important Limitations
+## Evidence level
+
+| Evidence | Current state |
+| --- | --- |
+| Code-first public service demo | Single-node, two-partition functional proof |
+| Multi-node data-local comparison | Internal native_js service path |
+| SQLite snapshot live rebuild | Five-node certification window |
+| Public-path scale benchmark | Not available |
+
+Functional tests, a demo, and a certification scenario are not the same as a
+supported deployment envelope. Read the [evaluation brief](evaluate.md) before
+turning evidence into a product claim.
+
+## Important limitations
 
 | Area | Limitation |
 | --- | --- |
 | Query routing | Production partition narrowing effectively requires a key column named id; other predicates may scatter to every partition. |
 | Query routing | Partition range comparison is string-based, so numeric strings sort lexicographically. |
-| Indexes | There is no secondary index support: CREATE INDEX is rejected as unsupported, and even a wired-in local index would not narrow the partition set. |
-| Replication | SQLite partition logs are bounded by the production snapshot protocol, but in-memory message-group logs still grow without bound and catch up by full replay. |
+| Indexes | CREATE INDEX is unsupported and no secondary-index runtime path is active. |
+| Replication | SQLite partition logs use the active snapshot and proof-gated compaction path; in-memory message-group logs still grow without bound and recover by full replay. |
 | Replication | Learner promotion waits for a time threshold and safety arithmetic; it does not compare follower and leader progress. |
-| Service deployment | Request and call Bindings have public invocation adapters (HTTP, and authenticated pgwire CALL BINDING $1 with data-local shard runs and reduce coordination), and a request handler can invoke a declared call Binding through the service context (one policy-authorized nested call per request); the change, time, once, boot, and pushdown source kinds can be declared and placed but are not publicly invocable. |
-| Service portability | Managed OCI container activation is unsupported. |
-| PostgreSQL compatibility | Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL/ORM compatibility are not claimed. |
+| Service execution | Request and call Bindings are publicly invocable. Change, time, once, boot, and pushdown Bindings may be declared but have no public invocation adapter. |
+| Service execution | A call selects one bounded shard batch; the public path does not stream or page an unbounded partition scan. |
+| Service execution | Coordinated partial values are finite numbers and their keys must be disjoint across shards. |
+| Service portability | Managed OCI container activation is unsupported; the recommended service path is a WASI component. |
+| PostgreSQL compatibility | Password authentication and TLS are implemed, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed. |
+| Security | Node-to-node transport is plain WebSocket without cryptographic peer authentication; deploy it only on a trusted private network. |
+| Operations | Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x. |
 
-For the conceptual model, continue to the
-[distributed-systems primer](distributed-systems-primer.md) and
-[architecture index](../architecture/INDEX.md). For a runnable path, use the
-[first-hour tutorial](tutorials/first-hour.md).
+Continue with [security](security.md), [operations readiness](operations-readiness.md),
+[execution semantics](execution-semantics.md), and the
+[architecture index](../architecture/INDEX.md).
