@@ -201,6 +201,32 @@ const MERGE_OWNER_MANAGED_PHASES = Object.freeze(new Set([
   PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
 ]));
 
+/**
+ * Workflow states from which the durable cutover may still be applied —
+ * and, conversely, in which a source failure ack aborts the merge
+ * fail-safe (post-cutover failures cannot un-promote the epoch).
+ * @type {ReadonlySet<string>}
+ */
+const PRE_CUTOVER_MERGE_STATES = Object.freeze(new Set([
+  PARTITION_TRANSITION_STATE.ADMISSION_PENDING,
+  PARTITION_TRANSITION_STATE.MERGE_PREPARING,
+  PARTITION_TRANSITION_STATE.MERGE_BACKFILLING,
+  PARTITION_TRANSITION_STATE.MERGE_CATCHUP,
+]));
+
+/**
+ * Outcome variants of one lane-serialized merge abort step.
+ * @enum {string}
+ */
+const MERGE_ABORT_OUTCOME = Object.freeze({
+  ABORTED: 'aborted',
+  ALREADY_ABORTED: 'already_aborted',
+  REFUSED_POST_CUTOVER: 'refused_post_cutover',
+  // The outcome slot before the lane step or fallback has produced a
+  // decision: raw null must never encode this runtime state.
+  UNRESOLVED: 'unresolved',
+});
+
 const RETRYABLE_PARTITION_TRANSITION_STATES = Object.freeze(new Set([
   PARTITION_TRANSITION_STATE.BLOCKED,
   PARTITION_TRANSITION_STATE.DEFERRED,
@@ -257,6 +283,13 @@ const PARTITION_TRANSITION_METADATA_FIELD = Object.freeze({
   CUTOVER_APPLIED_AT: 'cutoverAppliedAt',
   PARTICIPANTS: 'participants',
   SOURCE_CHECKPOINT: 'sourceCheckpoint',
+  // Durable ownership claim triple (embedded in the transition metadata
+  // so the tables row carries the fencing state without a schema
+  // change): the workflow fence token (monotonic epoch), the claiming
+  // owner identity, and its lease expiry.
+  WORKFLOW_FENCE_TOKEN: 'workflowFenceToken',
+  WORKFLOW_OWNER_ID: 'workflowOwnerId',
+  WORKFLOW_LEASE_EXPIRES_AT: 'workflowLeaseExpiresAt',
 });
 
 const PARTITION_SPLIT_MIRROR_ORIGIN = Object.freeze({
@@ -475,6 +508,9 @@ const MANAGED_MERGE_ERROR_MSG = Object.freeze({
   EPOCH_PERSIST_EFFECT_FAILED:
     'Merge epoch-changing tables update did not take effect: durable ' +
     'control-plane write path not ready',
+  OWNED_TRANSITION_PERSIST_REJECTED:
+    'Owned merge transition CAS rejected and the durable row was not ' +
+    're-syncable for this owner',
 });
 
 const MANAGED_MERGE_LOG_MSG = Object.freeze({
@@ -512,6 +548,11 @@ const MANAGED_MERGE_LOG_MSG = Object.freeze({
     'Managed merge aborted-target teardown failed',
   TERMINAL_TRANSITION_CLEARED:
     'Managed merge terminal transition cleared after dissolution',
+  OWNERSHIP_CLAIMED: 'Managed merge workflow ownership claimed',
+  OWNERSHIP_CLAIM_REFUSED:
+    'Managed merge workflow ownership claim refused',
+  OWNERSHIP_LOST: 'Managed merge workflow ownership lost',
+  ACK_REJECTED: 'Managed merge source acknowledgement rejected',
 });
 
 /**
@@ -545,6 +586,11 @@ const MANAGED_SPLIT_LOG_MSG = Object.freeze({
     'reverted',
   TERMINAL_TRANSITION_CLEARED:
     'Managed split terminal transition cleared after dissolution',
+  OWNERSHIP_CLAIMED: 'Managed split workflow ownership claimed',
+  OWNERSHIP_CLAIM_REFUSED:
+    'Managed split workflow ownership claim refused',
+  OWNERSHIP_LOST: 'Managed split workflow ownership lost',
+  ACK_REJECTED: 'Managed split source acknowledgement rejected',
 });
 
 const SPLIT_MERGE_DEFAULT = Object.freeze({
@@ -625,6 +671,8 @@ export {
   PARTITION_DESCRIPTOR_EPOCH_STATE,
   SPLIT_OWNER_MANAGED_PHASES,
   MERGE_OWNER_MANAGED_PHASES,
+  PRE_CUTOVER_MERGE_STATES,
+  MERGE_ABORT_OUTCOME,
   buildPartitionTransitionProjection,
   isDeferredPartitionTransitionOutcome,
   isRetryablePartitionTransitionState,

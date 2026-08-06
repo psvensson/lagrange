@@ -25,6 +25,7 @@ const PARTICIPANT_ACK_RESULT = Object.freeze({
   STALE_FENCE: 'stale_fence',
   DUPLICATE: 'duplicate',
   PARTICIPANT_NOT_FOUND: 'participant_not_found',
+  INVALID_TRANSITION: 'invalid_transition',
 });
 
 const WORKFLOW_CLAIM_RESULT = Object.freeze({
@@ -33,7 +34,24 @@ const WORKFLOW_CLAIM_RESULT = Object.freeze({
   STALE_FENCE: 'stale_fence',
   STORAGE_REJECTED: 'storage_rejected',
   TERMINAL: 'terminal',
+  UNKNOWN: 'unknown',
 });
+
+/**
+ * Fallback owner identity prefix when a managed workflow coordinator is
+ * constructed without an explicit `nodeId` (tests and single-node harnesses).
+ *
+ * @type {string}
+ */
+const WORKFLOW_DEFAULT_NODE_ID = 'node';
+
+/**
+ * The prototype property skipped when mixin method descriptors are copied
+ * onto a class prototype.
+ *
+ * @type {string}
+ */
+const PROTOTYPE_CONSTRUCTOR_METHOD = 'constructor';
 
 /**
  * Canonical field names for participant acknowledgement payloads.
@@ -77,6 +95,9 @@ const WORKFLOW_ERROR_MSG = Object.freeze({
     'Participant acknowledgement requires participantKey',
   ACK_STATUS_REQUIRED:
     'Participant acknowledgement requires status',
+  PARTICIPANT_INVALID_TRANSITION:
+    'Participant acknowledgement rejected: transition not in the ' +
+    'participant graph',
   workflowNotFound: (workflowId) => `Workflow ${workflowId} not found`,
   participantNotFound: (participantKey) =>
     `Workflow participant ${participantKey} not found`,
@@ -119,6 +140,8 @@ export {
   WORKFLOW_ERROR_MSG,
   PARTICIPANT_ACK_RESULT,
   WORKFLOW_CLAIM_RESULT,
+  WORKFLOW_DEFAULT_NODE_ID,
+  PROTOTYPE_CONSTRUCTOR_METHOD,
   PARTICIPANT_ACK_FIELD,
   ACK_REJECTION_DIAGNOSTIC_FIELD,
   buildTransitionIdempotencyKey,

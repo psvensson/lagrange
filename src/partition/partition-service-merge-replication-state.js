@@ -93,6 +93,14 @@ function normalizeMergeTransitionMetadataForService(service, rawMetadata) {
     ),
     workflowId:
       metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || null,
+    // The workflow fence epoch this source was started under (mirrors
+    // the split source): every source acknowledgement is stamped with
+    // it so the owner rejects acks from a superseded owner epoch.
+    workflowFenceToken: Number.isInteger(
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN],
+    ) ?
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN] :
+      null,
   };
 }
 

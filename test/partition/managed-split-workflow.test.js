@@ -152,10 +152,19 @@ test('ManagedSplitWorkflow persists admission_pending before planning and ' +
 
 test('ManagedSplitWorkflow lowers source quorum to one for critical system ' +
   'partition split recovery', async (t) => {
+  const publicationsTableRow = {
+    table_id: 'tbl-control-plane-publications',
+    table_name: 'control_plane_publications',
+    partition_key: 'publication_id',
+    active_partition_version: 1,
+    partition_transition_state: null,
+    partition_transition_metadata: null,
+  };
   const {
     workflow,
     admissionCalls,
   } = buildWorkflow({
+    durableTableRows: [publicationsTableRow],
     getPartitionInfo: () => ({
       partition_id: 'control_plane_publications-p1',
       table_id: 'tbl-control-plane-publications',
@@ -165,14 +174,6 @@ test('ManagedSplitWorkflow lowers source quorum to one for critical system ' +
       replica_count: 5,
       leader_node_id: 'node-a',
       size_bytes: 128,
-    }),
-    getTableInfo: () => ({
-      table_id: 'tbl-control-plane-publications',
-      table_name: 'control_plane_publications',
-      partition_key: 'publication_id',
-      active_partition_version: 1,
-      partition_transition_state: null,
-      partition_transition_metadata: null,
     }),
     calculateQuorumReplicaCount: () => 3,
     getRoutablePartitionServiceNodeIds: () => ['node-a'],

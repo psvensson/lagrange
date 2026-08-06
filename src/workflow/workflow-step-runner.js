@@ -115,6 +115,7 @@ class WorkflowStepRunner {
           reason: stepResult.reason,
           metadata: stepResult.transitionMetadata,
           fenceToken: stepResult.fenceToken,
+          ownerId: stepResult.ownerId,
         },
         stepResult.updates || {},
       );

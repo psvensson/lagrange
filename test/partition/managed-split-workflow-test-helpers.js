@@ -36,13 +36,27 @@ function createTransactionCoordinator(now = () => 1000) {
 
 function buildWorkflow(options = {}) {
   const updateCalls = options.updateCalls || [];
+  // One shared durable tables row per built workflow so the ownership
+  // CAS (conditional on the previous partition_transition_metadata
+  // payload) observes its own prior writes: the default mock applies
+  // updates to this row, and the row is threaded into getTableInfo /
+  // listTableInfos / durableTableRows below unless the caller supplies
+  // its own.
+  const sharedTableRow = {
+    table_id: 'tbl-users',
+    table_name: 'users',
+    partition_key: 'id',
+    active_partition_version: 1,
+    partition_transition_state: null,
+    partition_transition_metadata: null,
+  };
   const insertCalls = options.insertCalls || [];
   const admissionCalls = options.admissionCalls || [];
   const probeProvisioningCalls = options.probeProvisioningCalls || [];
   const provisionCalls = options.provisionCalls || [];
   const durableTableRows = Array.isArray(options.durableTableRows) ?
     options.durableTableRows :
-    null;
+    [sharedTableRow];
   const defaultTableInfo = {
     table_id: 'tbl-users',
     table_name: 'users',
@@ -63,12 +77,33 @@ function buildWorkflow(options = {}) {
     cdcIntegrationService: options.cdcIntegrationService || {
       async updateSystemTableRow(tableName, whereClause, data, updateOptions) {
         updateCalls.push({tableName, whereClause, data, options: updateOptions});
+        // Model the real CDC seam: every where-clause column is an
+        // exact-match predicate. The ownership CAS guards on the full
+        // previous partition_transition_metadata payload — a mock that
+        // applies data without honouring that predicate would let a
+        // stale claim/transition "land" in tests while the real
+        // conditional update would match zero rows.
+        const matchesWhere = (row) => Object.entries(whereClause || {})
+          .every(([column, expected]) => {
+            const actual = row?.[column];
+            if (expected === null || expected === undefined) {
+              return actual === null || actual === undefined;
+            }
+            return String(actual ?? '') === String(expected);
+          });
+        let affectedRows = 0;
         if (tableName === TABLES.TABLES &&
             durableTableRows &&
             durableTableRows.length > 0) {
-          Object.assign(durableTableRows[0], data);
+          if (matchesWhere(durableTableRows[0])) {
+            Object.assign(durableTableRows[0], data);
+            affectedRows = 1;
+          }
+        } else {
+          // No durable row to match: the default single-row world.
+          affectedRows = 1;
         }
-        return {success: true, affectedRows: 1};
+        return {success: true, affectedRows};
       },
       async insertSystemTableRow(tableName, row, options) {
         insertCalls.push({tableName, row, options});
@@ -85,7 +120,8 @@ function buildWorkflow(options = {}) {
       leader_node_id: 'node-a',
       size_bytes: 128,
     })),
-    getTableInfo: options.getTableInfo || (() => resolvedTableInfo),
+    getTableInfo: options.getTableInfo ||
+      (() => durableTableRows ? durableTableRows[0] : resolvedTableInfo),
     listTableInfos: options.listTableInfos ||
       (() => durableTableRows ? durableTableRows : [resolvedTableInfo]),
     parsePartitionTransition: options.parsePartitionTransition || (() => null),
@@ -160,10 +196,14 @@ function buildWorkflow(options = {}) {
     deliverReplicaRemoval:
       options.deliverReplicaRemoval || (async () => null),
     splitCompletionListener: options.splitCompletionListener || null,
-    logger: options.logger || {info() {}, error() {}},
+    logger: options.logger || {info() {}, error() {}, warn() {}},
     now: options.now || (() => 1000),
     transactionCoordinator,
   });
+
+  // Expose the durable row so tests can drive the ownership claim
+  // through the real method and inspect the CAS witness chain.
+  const durableRow = durableTableRows ? durableTableRows[0] : null;
 
   return {
     workflow,
@@ -172,6 +212,7 @@ function buildWorkflow(options = {}) {
     admissionCalls,
     probeProvisioningCalls,
     provisionCalls,
+    durableRow,
   };
 }
 

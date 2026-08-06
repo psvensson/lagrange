@@ -12,50 +12,82 @@ const {
   TABLES,
 } = PARTITION_SERVICE_SHARED;
 
-function normalizeSplitTransitionMetadataForService(service, rawMetadata) {
+/**
+ * Parse raw transition metadata into a plain object: accepts an already
+ * parsed object or a JSON string, returning null for anything else.
+ * @param {*} rawMetadata
+ * @return {Object|null}
+ */
+function parseSplitTransitionMetadataObject(rawMetadata) {
   if (!rawMetadata) {
     return null;
   }
-  let metadata = rawMetadata;
   if (typeof rawMetadata === 'string') {
     try {
-      metadata = JSON.parse(rawMetadata);
+      const parsed = JSON.parse(rawMetadata);
+      return parsed && typeof parsed === PARTITION_SERVICE_LITERAL.OBJECT ?
+        parsed :
+        null;
     } catch {
       return null;
     }
   }
-  if (!metadata || typeof metadata !== PARTITION_SERVICE_LITERAL.OBJECT) {
-    return null;
-  }
+  return typeof rawMetadata === PARTITION_SERVICE_LITERAL.OBJECT ?
+    rawMetadata :
+    null;
+}
+
+/**
+ * Validate the structural contract of parsed split transition metadata
+ * against this service's partition identity.
+ * @param {Object} service
+ * @param {Object} metadata
+ * @return {boolean}
+ */
+function isSplitTransitionMetadataValidForService(service, metadata) {
   const targetPartitionIds =
     metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS];
-  const targetPartitionVersion = Number(
-    metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION],
-  );
-  const primaryKeyColumn =
-    metadata[PARTITION_TRANSITION_METADATA_FIELD.PRIMARY_KEY_COLUMN];
   const sourcePartitionId =
     metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID];
-  if (
-    !primaryKeyColumn ||
-    !sourcePartitionId ||
-    sourcePartitionId !== service.partitionId ||
-    !Array.isArray(targetPartitionIds) ||
-    targetPartitionIds.length !== 2 ||
-    !targetPartitionIds[0] ||
-    !targetPartitionIds[1] ||
-    !Number.isInteger(targetPartitionVersion)
-  ) {
+  return Boolean(
+    metadata[PARTITION_TRANSITION_METADATA_FIELD.PRIMARY_KEY_COLUMN] &&
+    sourcePartitionId &&
+    sourcePartitionId === service.partitionId &&
+    Array.isArray(targetPartitionIds) &&
+    targetPartitionIds.length === 2 &&
+    targetPartitionIds[0] &&
+    targetPartitionIds[1] &&
+    Number.isInteger(Number(
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION],
+    )),
+  );
+}
+
+function normalizeSplitTransitionMetadataForService(service, rawMetadata) {
+  const metadata = parseSplitTransitionMetadataObject(rawMetadata);
+  if (!metadata || !isSplitTransitionMetadataValidForService(service, metadata)) {
     return null;
   }
+  const fenceToken =
+    metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN];
   return {
-    primaryKeyColumn,
-    sourcePartitionId,
+    primaryKeyColumn:
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.PRIMARY_KEY_COLUMN],
+    sourcePartitionId:
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID],
     splitKey: metadata[PARTITION_TRANSITION_METADATA_FIELD.SPLIT_KEY],
-    targetPartitionIds: [...targetPartitionIds],
-    targetPartitionVersion,
+    targetPartitionIds: [
+      ...metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS],
+    ],
+    targetPartitionVersion: Number(
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION],
+    ),
     workflowId:
       metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID] || null,
+    // The workflow fence epoch this source was started under: every
+    // source acknowledgement is stamped with it so the owner rejects
+    // acks from a superseded owner epoch as STALE_FENCE.
+    workflowFenceToken: Number.isInteger(fenceToken) ? fenceToken : null,
   };
 }
 

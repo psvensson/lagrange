@@ -6,7 +6,10 @@ import {DurableWorkflowCoordinator} from '../workflow/durable-workflow-coordinat
 import {OperationLane} from '../workflow/operation-lane.js';
 import {TimeoutPolicy} from '../workflow/timeout-policy.js';
 import {WorkflowStepRunner} from '../workflow/workflow-step-runner.js';
-import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
+import {
+  PARTICIPANT_ACK_FIELD,
+} from '../workflow/workflow-constants.js';
+
 import {
   MANAGED_MERGE_ERROR_MSG,
   MANAGED_MERGE_LOG_MSG,
@@ -24,6 +27,7 @@ import {
   ManagedSplitWorkflowProvisioningMethods,
 } from './managed-split-workflow-provisioning-methods.js';
 import {
+  buildMergeWorkflowOwnerId,
   ManagedMergeWorkflowStateMethods,
 } from './managed-merge-workflow-state-methods.js';
 import {
@@ -49,6 +53,10 @@ const ACTIVE_PARTITION_STATE = 'NORMAL';
 const DEFAULT_QUORUM_REPLICA_COUNT = 1;
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
+// Durable ownership lease for merge workflow claims (same rationale as
+// the split owner: covers an idle ack gap during backfill, stolen
+// promptly after lease expiry, renewed on every owner-lane step).
+const DEFAULT_WORKFLOW_LEASE_MS = 60000;
 const MERGE_BOOTSTRAP_ROUTING_READINESS_DIMENSION =
   CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
 
@@ -195,12 +203,25 @@ class ManagedMergeWorkflow {
    * @private
    */
   initializeMergeCollaborators(options) {
+    // Durable ownership identity (nodeId + boot nonce; see
+    // buildMergeWorkflowOwnerId).
+    this.workflowOwnerId = buildMergeWorkflowOwnerId(options, this.nodeId);
+    this.workflowLeaseMs = Number.isFinite(options.workflowLeaseMs) &&
+      options.workflowLeaseMs > 0 ?
+      Math.floor(options.workflowLeaseMs) :
+      DEFAULT_WORKFLOW_LEASE_MS;
     this.workflowCoordinator = options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
         persistWorkflow: async (workflow) =>
           this.persistWorkflowTransition(workflow),
+        persistWorkflowClaim: async (workflow, context) =>
+          this.persistMergeWorkflowClaim(workflow, context),
+        persistWorkflowTransition: async (workflow, context) =>
+          this.persistMergeWorkflowTransitionFence(workflow, context),
         persistParticipant: async (participant) =>
           this.persistWorkflowParticipantState(participant),
+        isParticipantTransitionAllowed: (participantKey, from, to) =>
+          this.isMergeParticipantTransitionAllowed(participantKey, from, to),
         now: this.now,
       });
     this.executionTimeoutPolicy = options.executionTimeoutPolicy ||
@@ -441,6 +462,17 @@ class ManagedMergeWorkflow {
       createdAt: input.now,
       updatedAt: input.now,
     });
+
+    // Durable ownership claim (new fence epoch, mirrors the split
+    // owner): exactly one node holds the live lease for this workflow;
+    // a refused claim is a typed outcome.
+    const ownershipRefusal = await this.claimMergeWorkflowAtStart(
+      workflowId,
+      sourcePartitionIds,
+    );
+    if (ownershipRefusal) {
+      return ownershipRefusal;
+    }
 
     try {
       return await this.runAdmittedMergeExecution({

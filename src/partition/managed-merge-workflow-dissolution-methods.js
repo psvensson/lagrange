@@ -9,6 +9,10 @@ import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
 import {
   MANAGED_MERGE_ERROR_MSG,
   MANAGED_MERGE_LOG_MSG,
+  MERGE_ABORT_OUTCOME,
+  PARTITION_TRANSITION_METADATA_FIELD,
+  PARTITION_TRANSITION_STATE,
+  PRE_CUTOVER_MERGE_STATES,
 } from './partition-constants.js';
 import {
   MERGE_ACK_CHECKPOINT_FIELD,
@@ -18,6 +22,8 @@ import {
 } from './merge-ack-constants.js';
 
 const LOCAL_STR_MERGE_SOURCE_DISSOLUTION = 'merge_source_dissolution';
+const LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE =
+  'merge_source_execution_failure';
 const LOCAL_STR_DISSOLVE_SEGMENT = ':dissolve:';
 const LOCAL_STR_REPLICA_ID_SNAKE = 'replica_id';
 const LOCAL_STR_REPLICA_ID_CAMEL = 'replicaId';
@@ -169,6 +175,103 @@ class ManagedMergeWorkflowDissolutionMethods {
         [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
       });
     }
+  }
+
+  /**
+   * Execute the serialized abort step: re-validate the CURRENT status
+   * inside the lane, persist FAILED (withdrawing the pending epoch), then
+   * tear down the never-authoritative target and restore any promoted
+   * sibling descriptors.
+   *
+   * The abort is fail-safe: when the fenced transition is CAS-rejected by
+   * the same-owner durable-write race even after the durable-row re-sync,
+   * the FAILED mutation is retried with a CAS witness taken from the
+   * durable row itself (still gated on this owner's persisted ownerId at
+   * the same fence — a foreign claim is never retried). A merge that
+   * received a source failure must never be left running pre-cutover
+   * because its own ack flush raced its own in-flight write.
+   * @param {string} workflowId
+   * @param {string} ownerKey
+   * @param {string} ackStatus - The failure MERGE_ACK_STATUS received.
+   * @param {string} ownerStepLaneSuffix - Owner-lane step key suffix.
+   * @return {Promise<boolean>} True when the merge is (now) aborted.
+   * @private
+   */
+  async runMergeAbortStep(workflowId, ownerKey, ackStatus, ownerStepLaneSuffix) {
+    let abortOutcome = MERGE_ABORT_OUTCOME.UNRESOLVED;
+    try {
+      abortOutcome = await this.runMergeOwnerLaneStepWithSameOwnerResync({
+        workflowId,
+        ownerKey: ownerKey + ownerStepLaneSuffix,
+        stepName: PARTITION_TRANSITION_STATE.FAILED,
+        execute: async ({workflow: currentWorkflow}) =>
+          this.buildMergeAbortStepResult(
+            workflowId,
+            ackStatus,
+            currentWorkflow,
+          ),
+      });
+    } catch (error) {
+      if (!this.isMergeStaleFenceTransitionError(error)) {
+        throw error;
+      }
+      abortOutcome = await this.persistOwnedMergeAbortFallback(
+        workflowId,
+        ackStatus,
+        MERGE_ABORT_OUTCOME,
+        PRE_CUTOVER_MERGE_STATES,
+      );
+    }
+
+    if (abortOutcome !== MERGE_ABORT_OUTCOME.ABORTED) {
+      return abortOutcome === MERGE_ABORT_OUTCOME.ALREADY_ABORTED;
+    }
+    const abortedWorkflow = this.resolveWorkflowState(workflowId);
+    if (!this.isMergeWorkflowStateUnavailable(abortedWorkflow)) {
+      await this.teardownAbortedMergeTarget(workflowId, abortedWorkflow);
+      await this.restoreAbortedMergeSiblings(abortedWorkflow);
+    }
+    this.logger.error(MANAGED_MERGE_LOG_MSG.MERGE_ABORTED_ON_SOURCE_FAILURE, {
+      workflowId,
+      ackStatus,
+    });
+    return true;
+  }
+
+  /**
+   * Build the abort step result from the workflow's CURRENT status.
+   * @param {string} workflowId
+   * @param {string} ackStatus
+   * @param {Object} currentWorkflow
+   * @return {Object} Step result carrying a MERGE_ABORT_OUTCOME.
+   * @private
+   */
+  buildMergeAbortStepResult(workflowId, ackStatus, currentWorkflow) {
+    if (currentWorkflow.status === PARTITION_TRANSITION_STATE.FAILED) {
+      return {result: MERGE_ABORT_OUTCOME.ALREADY_ABORTED};
+    }
+    if (!PRE_CUTOVER_MERGE_STATES.has(currentWorkflow.status)) {
+      this.logger.error(
+        MANAGED_MERGE_LOG_MSG.POST_CUTOVER_SOURCE_FAILURE_RECORDED,
+        {workflowId, status: currentWorkflow.status, ackStatus},
+      );
+      return {result: MERGE_ABORT_OUTCOME.REFUSED_POST_CUTOVER};
+    }
+    return {
+      updates: {
+        status: PARTITION_TRANSITION_STATE.FAILED,
+        metadata: {
+          ...(currentWorkflow.metadata || {}),
+          [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
+            classification: LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE,
+            message: ackStatus,
+            failedAt: new Date(this.now()).toISOString(),
+            retryable: true,
+          },
+        },
+      },
+      result: MERGE_ABORT_OUTCOME.ABORTED,
+    };
   }
 
   /**

@@ -26,6 +26,10 @@ import {
 import {
   ManagedSplitWorkflowDissolutionMethods,
 } from './managed-split-workflow-dissolution-methods.js';
+import {
+  buildSplitWorkflowOwnerId,
+  ManagedSplitWorkflowOwnershipMethods,
+} from './managed-split-workflow-ownership-methods.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_GETCDCINTEGRATIONSERVICE = 'getCDCIntegrationService';
@@ -59,6 +63,11 @@ const ACTIVE_PARTITION_STATE = 'NORMAL';
 const DEFAULT_QUORUM_REPLICA_COUNT = 1;
 const DEFAULT_RETRY_BASE_DELAY_MS = 5000;
 const DEFAULT_RETRY_MAX_DELAY_MS = 60000;
+// Durable ownership lease for split workflow claims: long enough to
+// cover an idle ack gap during backfill, short enough that a dead owner
+// is stolen promptly after lease expiry. Renewal happens on every
+// owner-lane step.
+const DEFAULT_WORKFLOW_LEASE_MS = 60000;
 const SPLIT_BOOTSTRAP_ROUTING_READINESS_DIMENSION =
   CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE;
 function bindTopologyMethod(topologyAdapter, methodName) {
@@ -205,12 +214,25 @@ class ManagedSplitWorkflow {
       options.transactionCoordinator ||
       this.topologyAdapter?.transactionCoordinator ||
       null;
+    // Durable ownership identity (nodeId + boot nonce; see
+    // buildSplitWorkflowOwnerId).
+    this.workflowOwnerId = buildSplitWorkflowOwnerId(options, this.nodeId);
+    this.workflowLeaseMs = Number.isFinite(options.workflowLeaseMs) &&
+      options.workflowLeaseMs > 0 ?
+      Math.floor(options.workflowLeaseMs) :
+      DEFAULT_WORKFLOW_LEASE_MS;
     this.workflowCoordinator = options.workflowCoordinator ||
       new DurableWorkflowCoordinator({
         persistWorkflow: async (workflow) =>
           this.persistWorkflowTransition(workflow),
+        persistWorkflowClaim: async (workflow, context) =>
+          this.persistSplitWorkflowClaim(workflow, context),
+        persistWorkflowTransition: async (workflow, context) =>
+          this.persistSplitWorkflowTransitionFence(workflow, context),
         persistParticipant: async (participant) =>
           this.persistWorkflowParticipantState(participant),
+        isParticipantTransitionAllowed: (participantKey, from, to) =>
+          this.isSplitParticipantTransitionAllowed(participantKey, from, to),
         now: this.now,
       });
     this.executionTimeoutPolicy = options.executionTimeoutPolicy ||
@@ -434,6 +456,17 @@ class ManagedSplitWorkflow {
       createdAt: now,
       updatedAt: now,
     });
+
+    // Durable ownership claim (new fence epoch): exactly one node holds
+    // the live lease for this workflow. A refused claim is a typed
+    // outcome — this node must not drive the workflow.
+    const ownershipRefusal = await this.claimSplitWorkflowAtStart(
+      workflowId,
+      partitionId,
+    );
+    if (ownershipRefusal) {
+      return ownershipRefusal;
+    }
 
     try {
       const admissionResult = await this.evaluateSplitAdmission({
@@ -752,6 +785,10 @@ assignManagedSplitWorkflowMethods(
 assignManagedSplitWorkflowMethods(
   ManagedSplitWorkflow.prototype,
   ManagedSplitWorkflowDissolutionMethods.prototype,
+);
+assignManagedSplitWorkflowMethods(
+  ManagedSplitWorkflow.prototype,
+  ManagedSplitWorkflowOwnershipMethods.prototype,
 );
 
 export {

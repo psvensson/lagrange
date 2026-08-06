@@ -69,42 +69,53 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       return;
     }
     try {
-      const gateway =
-        this.rebalancer?.controlPlaneSystemTableGateway ||
-        this.controlPlaneSystemTableGateway;
-      const result = await runRetryableControlPlaneWrite(
-        () =>
-          gateway.submitMutation(
-            {
-              operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
-              tableName: TABLES.PARTITIONS,
-              whereClause: {partition_id: this.partitionId},
-              data: {size_bytes: sizeBytes, updated_at: Date.now()},
-            },
-            {
-              workClass: PRESSURE_WORK_CLASS.BACKGROUND,
-              deliveryPriority: 'background',
-              coalescingKey: `partitions:size:${this.partitionId}`,
-            },
-          ),
-        {
-          timeoutMs: PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_TIMEOUT_MS,
-          baseDelayMs:
-            PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_BASE_DELAY_MS,
-          maxDelayMs: PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_MAX_DELAY_MS,
-        },
-      );
-      if (result?.success === false) {
-        throw new Error(
-          result.error ||
-            result.message ||
-            PARTITION_SERVICE_LITERAL.SIZE_PERSISTENCE_FAILED,
-        );
-      }
+      await this.submitPartitionSizeMutation(sizeBytes);
     } catch (error) {
       this.logger.warn(
         PARTITION_SERVICE_LOG_MSG.SPLIT_REPLICATION_SIZE_PERSIST_FAILED,
         {partitionId: this.partitionId, sizeBytes, error: error.message},
+      );
+    }
+  }
+
+  /**
+   * Submit the retryable size_bytes mutation through the control-plane
+   * gateway, throwing when the gateway reports failure.
+   * @param {number} sizeBytes - Latest measured size.
+   * @return {Promise<void>}
+   * @private
+   */
+  async submitPartitionSizeMutation(sizeBytes) {
+    const gateway =
+      this.rebalancer?.controlPlaneSystemTableGateway ||
+      this.controlPlaneSystemTableGateway;
+    const result = await runRetryableControlPlaneWrite(
+      () =>
+        gateway.submitMutation(
+          {
+            operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+            tableName: TABLES.PARTITIONS,
+            whereClause: {partition_id: this.partitionId},
+            data: {size_bytes: sizeBytes, updated_at: Date.now()},
+          },
+          {
+            workClass: PRESSURE_WORK_CLASS.BACKGROUND,
+            deliveryPriority: 'background',
+            coalescingKey: `partitions:size:${this.partitionId}`,
+          },
+        ),
+      {
+        timeoutMs: PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_TIMEOUT_MS,
+        baseDelayMs:
+          PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_BASE_DELAY_MS,
+        maxDelayMs: PARTITION_SERVICE_DEFAULT.SIZE_PERSIST_RETRY_MAX_DELAY_MS,
+      },
+    );
+    if (result?.success === false) {
+      throw new Error(
+        result.error ||
+          result.message ||
+          PARTITION_SERVICE_LITERAL.SIZE_PERSISTENCE_FAILED,
       );
     }
   }
@@ -261,6 +272,11 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       [PARTICIPANT_ACK_FIELD.STATUS]: ackStatus,
       [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: Date.now(),
     };
+    // Every source ack carries the workflow fence epoch it was started
+    // under; the owner rejects a superseded epoch as STALE_FENCE.
+    if (Number.isInteger(metadata.workflowFenceToken)) {
+      ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN] = metadata.workflowFenceToken;
+    }
     if (checkpoint) {
       ack[PARTICIPANT_ACK_FIELD.CHECKPOINT] = checkpoint;
     }

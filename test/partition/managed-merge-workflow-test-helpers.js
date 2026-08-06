@@ -112,6 +112,23 @@ function createRecordingCdcIntegrationService(recorders) {
     async updateSystemTableRow(tableName, whereClause, data, updateOptions) {
       updateCalls.push({tableName, whereClause, data, options: updateOptions});
       if (tableName === TABLES.TABLES) {
+        // Model the real CDC seam: every where-clause column is an
+        // exact-match predicate. The ownership CAS guards on the full
+        // previous partition_transition_metadata payload — a mock that
+        // applies data without honouring that predicate would let a
+        // stale claim/transition "land" in tests while the real
+        // conditional update would match zero rows.
+        const matchesWhere = Object.entries(whereClause || {})
+          .every(([column, expected]) => {
+            const actual = durableTableRow?.[column];
+            if (expected === null || expected === undefined) {
+              return actual === null || actual === undefined;
+            }
+            return String(actual ?? '') === String(expected);
+          });
+        if (!matchesWhere) {
+          return {success: true, affectedRows: 0};
+        }
         Object.assign(durableTableRow, data);
       }
       // Apply PARTITIONS mutations to the fixture rows so routing/epoch

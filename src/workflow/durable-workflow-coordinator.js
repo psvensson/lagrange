@@ -1,8 +1,7 @@
 import {
+  PROTOTYPE_CONSTRUCTOR_METHOD,
   WORKFLOW_ERROR_MSG,
   WORKFLOW_TRANSITION_FIELD,
-  PARTICIPANT_ACK_RESULT,
-  PARTICIPANT_ACK_FIELD,
   buildTransitionIdempotencyKey,
 } from './workflow-constants.js';
 import {
@@ -12,6 +11,9 @@ import {
 import {
   emitWorkflowAckRejectionDiagnostic,
 } from './workflow-ack-rejection-diagnostics.js';
+import {
+  WorkflowParticipantAckMethods,
+} from './workflow-participant-ack-methods.js';
 
 const LOCAL_STR_UPDATEDAT = 'updatedAt';
 const LOCAL_STR_FUNCTION = 'function';
@@ -37,6 +39,13 @@ class DurableWorkflowCoordinator {
     this.persistParticipant = options.persistParticipant || (async () => {});
     this.isTerminalWorkflow = options.isTerminalWorkflow || (() => false);
     this.onAckRejection = options.onAckRejection || null;
+    // Optional explicit participant transition graph validator:
+    // (participantKey, fromStatus, toStatus) => boolean. When wired, an
+    // acknowledgement whose (from, to) edge is absent from the graph is
+    // rejected with a typed INVALID_TRANSITION outcome before any state
+    // is applied.
+    this.isParticipantTransitionAllowed =
+      options.isParticipantTransitionAllowed || null;
     this.now = options.now || (() => Date.now());
     this.workflowsById = new Map();
     this.workflowsByOwnerKey = new Map();
@@ -285,114 +294,6 @@ class DurableWorkflowCoordinator {
   }
 
   /**
-   * Process a typed participant acknowledgement with fence validation.
-   *
-   * Validates workflow identity, participant identity, and fence token
-   * before persisting the acknowledgement. Returns a typed result so the
-   * caller can distinguish accepted, stale, duplicate, and not-found
-   * outcomes without catching exceptions.
-   *
-   * @param {string} workflowId - Workflow ID.
-   * @param {Object} ack - Acknowledgement payload.
-   * @param {string} ack.participantKey - Participant key.
-   * @param {string} ack.status - New participant status.
-   * @param {number} [ack.fenceToken] - Epoch or lease token.
-   * @param {Object} [ack.checkpoint] - Resumable checkpoint data.
-   * @return {Promise<Object>} Typed acknowledgement result with
-   *   `result` (PARTICIPANT_ACK_RESULT), `participantKey`, and
-   *   optional `reason`.
-   */
-  async acknowledgeParticipant(workflowId, ack) {
-    const participantKey =
-      ack?.[PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY] || '';
-    if (!participantKey) {
-      throw new Error(WORKFLOW_ERROR_MSG.PARTICIPANT_KEY_REQUIRED);
-    }
-    const ackStatus = ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '';
-    if (!ackStatus) {
-      throw new Error(WORKFLOW_ERROR_MSG.ACK_STATUS_REQUIRED);
-    }
-
-    const workflow = this.requireWorkflow(workflowId);
-    const participant = workflow.participants.get(participantKey);
-    if (!participant) {
-      const notFoundResult = {
-        result: PARTICIPANT_ACK_RESULT.PARTICIPANT_NOT_FOUND,
-        participantKey,
-        reason: WORKFLOW_ERROR_MSG.participantNotFound(participantKey),
-      };
-      this.emitAckRejectionDiagnostic(workflowId, participantKey, {
-        rejectionResult: PARTICIPANT_ACK_RESULT.PARTICIPANT_NOT_FOUND,
-        reason: notFoundResult.reason,
-        receivedStatus: ackStatus,
-      });
-      return notFoundResult;
-    }
-
-    // Fence token validation: reject stale acknowledgements.
-    const ackFence = ack?.[PARTICIPANT_ACK_FIELD.FENCE_TOKEN];
-    if (ackFence !== undefined && ackFence !== null) {
-      const currentFence = participant.fenceToken;
-      if (currentFence !== undefined && currentFence !== null &&
-          ackFence < currentFence) {
-        const staleResult = {
-          result: PARTICIPANT_ACK_RESULT.STALE_FENCE,
-          participantKey,
-          reason: WORKFLOW_ERROR_MSG.STALE_FENCE_TOKEN,
-          currentFenceToken: currentFence,
-          receivedFenceToken: ackFence,
-        };
-        this.emitAckRejectionDiagnostic(workflowId, participantKey, {
-          rejectionResult: PARTICIPANT_ACK_RESULT.STALE_FENCE,
-          reason: WORKFLOW_ERROR_MSG.STALE_FENCE_TOKEN,
-          receivedStatus: ackStatus,
-          currentFenceToken: currentFence,
-          receivedFenceToken: ackFence,
-        });
-        return staleResult;
-      }
-      participant.fenceToken = ackFence;
-    }
-
-    // Duplicate detection: same status already acknowledged.
-    if (participant.status === ackStatus &&
-        participant.acknowledgedAt !== undefined) {
-      const duplicateResult = {
-        result: PARTICIPANT_ACK_RESULT.DUPLICATE,
-        participantKey,
-        reason: WORKFLOW_ERROR_MSG.DUPLICATE_TRANSITION,
-      };
-      this.emitAckRejectionDiagnostic(workflowId, participantKey, {
-        rejectionResult: PARTICIPANT_ACK_RESULT.DUPLICATE,
-        reason: WORKFLOW_ERROR_MSG.DUPLICATE_TRANSITION,
-        receivedStatus: ackStatus,
-        currentStatus: participant.status,
-      });
-      return duplicateResult;
-    }
-
-    // Apply acknowledgement.
-    const now = this.now();
-    participant.status = ackStatus;
-    participant.acknowledgedAt = now;
-    participant.updatedAt = now;
-
-    // Persist checkpoint data alongside participant state.
-    const checkpoint = ack?.[PARTICIPANT_ACK_FIELD.CHECKPOINT];
-    if (checkpoint !== undefined && checkpoint !== null) {
-      participant.checkpoint = checkpoint;
-    }
-
-    await this.persistParticipant(participant);
-
-    return {
-      result: PARTICIPANT_ACK_RESULT.ACCEPTED,
-      participantKey,
-      acknowledgedAt: now,
-    };
-  }
-
-  /**
    * Persist the current participant state.
    * @param {string} workflowId - Workflow ID.
    * @param {string} participantKey - Participant key.
@@ -532,30 +433,41 @@ class DurableWorkflowCoordinator {
     }
 
     for (const row of participantRows) {
-      const participantRecord = typeof loadParticipant === 'function' ?
-        loadParticipant(row) :
-        row;
-      if (!participantRecord) {
-        continue;
-      }
-      const workflowId = String(participantRecord.workflowId || '');
-      if (!workflowId) {
-        continue;
-      }
-      const workflow = this.getWorkflowById(workflowId);
-      if (!workflow) {
-        continue;
-      }
-      // An in-memory participant is fresher than its cache row; only fill
-      // registry gaps (restart restore), never overwrite live statuses.
-      const participantKey = this.resolveParticipantKey(participantRecord);
-      if (participantKey && workflow.participants.has(participantKey)) {
-        continue;
-      }
-      const participant = this.createParticipantRecord(workflowId, participantRecord);
-      workflow.participants.set(participant.participantKey, participant);
+      this.restoreRecoveredParticipantRow(row, loadParticipant);
     }
     return {restoredWorkflowIds};
+  }
+
+  /**
+   * Restore one participant cache row into its workflow registry, filling
+   * gaps only — an in-memory participant is fresher than its cache row,
+   * so a live status is never overwritten by a recovered row.
+   * @param {Object} row - Raw participant cache row.
+   * @param {Function} [loadParticipant] - Participant row loader.
+   * @return {void}
+   * @private
+   */
+  restoreRecoveredParticipantRow(row, loadParticipant) {
+    const participantRecord = typeof loadParticipant === 'function' ?
+      loadParticipant(row) :
+      row;
+    if (!participantRecord) {
+      return;
+    }
+    const workflowId = String(participantRecord.workflowId || '');
+    if (!workflowId) {
+      return;
+    }
+    const workflow = this.getWorkflowById(workflowId);
+    if (!workflow) {
+      return;
+    }
+    const participantKey = this.resolveParticipantKey(participantRecord);
+    if (participantKey && workflow.participants.has(participantKey)) {
+      return;
+    }
+    const participant = this.createParticipantRecord(workflowId, participantRecord);
+    workflow.participants.set(participant.participantKey, participant);
   }
 
   /**
@@ -643,9 +555,9 @@ class DurableWorkflowCoordinator {
     const participantKey = this.resolveParticipantKey(record) ||
       existing?.participantKey ||
       participantId;
-    const createdAt = Number.isFinite(record.createdAt) ?
-      record.createdAt :
-      existing?.createdAt || this.now();
+    const createdAt = this.resolveParticipantTimestamp(
+      record.createdAt, existing?.createdAt,
+    );
     const updatedAt = Number.isFinite(record.updatedAt) ?
       record.updatedAt :
       this.now();
@@ -658,6 +570,24 @@ class DurableWorkflowCoordinator {
       createdAt,
       updatedAt,
     };
+  }
+
+  /**
+   * Resolve one participant timestamp: prefer the raw record, fall back
+   * to the existing participant, then to the coordinator clock.
+   * @param {*} recordValue - Timestamp on the raw record.
+   * @param {*} existingValue - Timestamp on the existing participant.
+   * @return {number}
+   * @private
+   */
+  resolveParticipantTimestamp(recordValue, existingValue) {
+    if (Number.isFinite(recordValue)) {
+      return recordValue;
+    }
+    if (Number.isFinite(existingValue)) {
+      return existingValue;
+    }
+    return this.now();
   }
 
   /**
@@ -779,6 +709,22 @@ class DurableWorkflowCoordinator {
     }
     return workflow;
   }
+}
+
+for (const methodName of Object.getOwnPropertyNames(
+  WorkflowParticipantAckMethods.prototype,
+)) {
+  if (methodName === PROTOTYPE_CONSTRUCTOR_METHOD) {
+    continue;
+  }
+  Object.defineProperty(
+    DurableWorkflowCoordinator.prototype,
+    methodName,
+    Object.getOwnPropertyDescriptor(
+      WorkflowParticipantAckMethods.prototype,
+      methodName,
+    ),
+  );
 }
 
 export {

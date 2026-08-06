@@ -37,11 +37,13 @@ test('merge transition persistence fails closed when no CDC bridge is ' +
   await workflow.workflowCoordinator.registerWorkflow(record);
   workflow.getCDCIntegrationService = () => null;
 
+  // The unfenced persist contract throws TRANSITION_PERSIST_UNAVAILABLE
+  // (mirrors the split no-CDC test).
   await t.rejects(
-    workflow.advanceMergePhase(
-      record.workflowId,
-      PARTITION_TRANSITION_STATE.MERGE_CATCHUP,
-    ),
+    workflow.persistWorkflowTransition({
+      ...record,
+      status: PARTITION_TRANSITION_STATE.MERGE_CATCHUP,
+    }),
     {message: MANAGED_MERGE_ERROR_MSG.TRANSITION_PERSIST_UNAVAILABLE},
   );
   const current = workflow.workflowCoordinator.getWorkflowById(

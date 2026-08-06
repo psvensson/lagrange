@@ -1,0 +1,32 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "workflow-fencing-wiring",
+  "status": "pass",
+  "generatedAt": "2026-08-06T06:57:46.508Z",
+  "receipts": [
+    {
+      "id": "coordinator-claim-wiring",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/workflow-fencing-wiring.test.js",
+      "detail": "the split coordinator claims durable ownership through the existing claimDurableWorkflow machinery: claimWorkflow mints a fence epoch + owner identity, and the claim triple (fence, owner, lease expiry) is persisted into the tables transition row metadata so a recovering node observes who owns the workflow (no longer process-local)"
+    },
+    {
+      "id": "fenced-source-ack",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/split-source-participant-ack.test.js",
+      "detail": "PartitionService.emitSplitSourceAck stamps every source acknowledgement with the workflow fence token read from the normalized transition metadata; the owner advances the participant record to the acknowledged fence epoch"
+    },
+    {
+      "id": "stale-fence-ack-rejected",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/workflow-fencing-wiring.test.js",
+      "detail": "a source ack stamped with a superseded owner epoch is rejected with the typed STALE_FENCE outcome and never drives a cutover/abort reaction (fence validation is no longer opt-in)"
+    },
+    {
+      "id": "participant-transition-graph",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/workflow-fencing-wiring.test.js",
+      "detail": "an out-of-graph source ack transition is rejected with the typed INVALID_TRANSITION outcome and never mutates the participant status; the explicit graph is enforced by the coordinator via isParticipantTransitionAllowed"
+    }
+  ]
+}

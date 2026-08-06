@@ -3,18 +3,26 @@ import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
-import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
+import {
+  PARTICIPANT_ACK_FIELD,
+  PARTICIPANT_ACK_RESULT,
+  WORKFLOW_CLAIM_RESULT,
+} from '../workflow/workflow-constants.js';
 import {
   MANAGED_MERGE_ERROR_MSG,
   MANAGED_MERGE_LOG_MSG,
   MERGE_OWNER_MANAGED_PHASES,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
+  PRE_CUTOVER_MERGE_STATES,
 } from './partition-constants.js';
 import {
   MERGE_ACK_CATCHUP_SATISFIED_STATUSES,
   MERGE_ACK_FAILURE_STATUSES,
   MERGE_ACK_STATUS,
+  MERGE_PARTICIPANT_KEY_SEPARATOR,
+  MERGE_PARTICIPANT_PREFIX,
+  isMergeSourceAckTransitionAllowed,
 } from './merge-ack-constants.js';
 
 const LOCAL_STR_PARTITION_MERGE_WORKFLOW = 'partition:merge:workflow';
@@ -27,22 +35,6 @@ const MANAGED_MERGE_MUTATION_OPTIONS = Object.freeze({
   workClass: PRESSURE_WORK_CLASS.CRITICAL,
 });
 /**
- * Workflow states from which the durable cutover may still be applied —
- * and, conversely, in which a source failure ack aborts the merge
- * fail-safe (post-cutover failures cannot un-promote the epoch).
- * @type {ReadonlySet<string>}
- */
-const PRE_CUTOVER_MERGE_STATES = Object.freeze(new Set([
-  PARTITION_TRANSITION_STATE.ADMISSION_PENDING,
-  PARTITION_TRANSITION_STATE.MERGE_PREPARING,
-  PARTITION_TRANSITION_STATE.MERGE_BACKFILLING,
-  PARTITION_TRANSITION_STATE.MERGE_CATCHUP,
-]));
-
-const LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE =
-  'merge_source_execution_failure';
-
-/**
  * Lane-key suffix for runStep calls made INSIDE a FIFO owner-lane slot.
  * The canonical lane's runExclusive() COALESCES concurrent callers on the
  * same key: a slot firing while an execute() holds the base owner key
@@ -54,15 +46,6 @@ const LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE =
  */
 const MERGE_OWNER_STEP_LANE_SUFFIX = ':owner-step';
 
-/**
- * Outcome variants of one lane-serialized merge abort step.
- * @enum {string}
- */
-const MERGE_ABORT_OUTCOME = Object.freeze({
-  ABORTED: 'aborted',
-  ALREADY_ABORTED: 'already_aborted',
-  REFUSED_POST_CUTOVER: 'refused_post_cutover',
-});
 const MERGE_EXECUTION_GATE_STATE = Object.freeze({
   SCHEDULED_RETRY: 'scheduled_retry',
   PRESSURE_DEFERRED: 'pressure_deferred',
@@ -272,7 +255,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
     }
 
     return this.runSerializedOwnerStep(workflow.ownerKey, () =>
-      this.workflowStepRunner.runStep({
+      this.runMergeOwnerLaneStepWithSameOwnerResync({
         workflowId,
         ownerKey: workflow.ownerKey + MERGE_OWNER_STEP_LANE_SUFFIX,
         stepName: nextPhase,
@@ -283,6 +266,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
             phaseMetadata,
             expectedPredecessorStates,
             currentWorkflow,
+            ownership: await this.renewMergeWorkflowOwnership(workflowId),
           }),
       }),
     );
@@ -308,6 +292,11 @@ class ManagedMergeWorkflowExecutionGateMethods {
     return {
       nextStep: input.nextPhase,
       reason: input.nextPhase,
+      // The renewed ownership fence + owner identity ride the
+      // transition so the storage-backed assertTransitionFence engages
+      // (mirrors the split owner).
+      fenceToken: input.ownership?.fenceToken,
+      ownerId: input.ownership?.ownerId,
       updates: {
         status: input.nextPhase,
         metadata: {
@@ -316,6 +305,116 @@ class ManagedMergeWorkflowExecutionGateMethods {
         },
       },
       result: true,
+    };
+  }
+
+  /**
+   * Explicit participant transition graph validator (mirrors the split
+   * owner): merge source participants (keyed source-partition:<id>)
+   * follow the declared graph; the owner-recorded merged-target
+   * provisioning outcome is admitted unconditionally.
+   * @param {string} participantKey
+   * @param {string|null} fromStatus
+   * @param {string} toStatus
+   * @return {boolean}
+   * @private
+   */
+  isMergeParticipantTransitionAllowed(participantKey, fromStatus, toStatus) {
+    if (String(participantKey || '').startsWith(
+      MERGE_PARTICIPANT_PREFIX.SOURCE_PARTITION +
+        MERGE_PARTICIPANT_KEY_SEPARATOR,
+    )) {
+      return isMergeSourceAckTransitionAllowed(fromStatus, toStatus);
+    }
+    return true;
+  }
+
+  /**
+   * Claim durable ownership of one merge workflow for this owner (new
+   * epoch), or renew an existing claim (same fence, extended lease).
+   * Never throws on contention (mirrors the schema-provisioning owner).
+   * @param {string} workflowId
+   * @param {Object} [options]
+   * @param {boolean} [options.renew] - Renew at the current fence.
+   * @return {Promise<Object>} Claim result ({accepted, result, workflow}).
+   * @private
+   */
+  async claimMergeWorkflowOwnership(workflowId, options = {}) {
+    const workflow = this.workflowCoordinator.getWorkflowById(workflowId);
+    if (!workflow) {
+      return {accepted: false, result: WORKFLOW_CLAIM_RESULT.TERMINAL};
+    }
+    const currentFence = Number.isInteger(workflow.fenceToken) ?
+      workflow.fenceToken :
+      0;
+    const fenceToken = options.renew === true ?
+      currentFence :
+      currentFence + 1;
+    return this.workflowCoordinator.claimWorkflow(workflowId, {
+      ownerId: this.workflowOwnerId,
+      fenceToken,
+      leaseExpiresAt: this.now() + this.workflowLeaseMs,
+    });
+  }
+
+  /**
+   * Renew the ownership lease inside a serialized owner-lane step and
+   * return the fence/owner identity the step's transition must carry.
+   * Claim loss throws — the step must not proceed without ownership.
+   * @param {string} workflowId
+   * @return {Promise<Object>} {fenceToken, ownerId}.
+   * @private
+   */
+  /**
+   * Claim durable ownership at merge start (new fence epoch, mirrors
+   * the split owner) and return the refusal outcome when another owner
+   * holds the live lease. Exactly one node holds the lease; a refused
+   * claim is a typed outcome — this node must not drive the workflow.
+   * @param {string} workflowId
+   * @param {string[]} sourcePartitionIds - Merge sources (log context).
+   * @return {Promise<Object|null>} Refusal result, or null when claimed.
+   * @private
+   */
+  async claimMergeWorkflowAtStart(workflowId, sourcePartitionIds) {
+    const ownershipClaim = await this.claimMergeWorkflowOwnership(
+      workflowId,
+    );
+    if (ownershipClaim.accepted !== true) {
+      this.logger.info(MANAGED_MERGE_LOG_MSG.OWNERSHIP_CLAIM_REFUSED, {
+        workflowId,
+        sourcePartitionIds,
+        result: ownershipClaim.result,
+      });
+      return {
+        success: false,
+        sourcePartitionIds,
+        workflowId,
+        ownership: ownershipClaim.result,
+      };
+    }
+    this.logger.info(MANAGED_MERGE_LOG_MSG.OWNERSHIP_CLAIMED, {
+      workflowId,
+      fenceToken: ownershipClaim.workflow.fenceToken,
+      ownerId: this.workflowOwnerId,
+    });
+    return null;
+  }
+
+  async renewMergeWorkflowOwnership(workflowId) {
+    const claim = await this.claimMergeWorkflowOwnership(workflowId, {
+      renew: true,
+    });
+    if (claim.accepted !== true) {
+      throw new Error(
+        MANAGED_MERGE_LOG_MSG.OWNERSHIP_LOST +
+        ` (${workflowId}: ${String(
+          claim.result || WORKFLOW_CLAIM_RESULT.UNKNOWN,
+        )})`,
+      );
+    }
+    return {
+      fenceToken: claim.workflow.fenceToken,
+      ownerId: claim.workflow.workflowOwnerId,
     };
   }
 
@@ -347,6 +446,24 @@ class ManagedMergeWorkflowExecutionGateMethods {
       workflowId,
       ack,
     );
+
+    // A rejected acknowledgement (stale fence, out-of-graph transition,
+    // duplicate, unknown participant) is a typed outcome, never silently
+    // applied (mirrors the split owner): short-circuit every owner
+    // reaction.
+    if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
+      this.logger.warn(MANAGED_MERGE_LOG_MSG.ACK_REJECTED, {
+        workflowId,
+        result: ackResult?.result,
+        currentFenceToken: ackResult?.currentFenceToken,
+        receivedFenceToken: ackResult?.receivedFenceToken,
+        currentStatus: ackResult?.currentStatus,
+      });
+      return {
+        ...ackResult,
+        mergeCutoverApplied: false,
+      };
+    }
 
     const ackStatus = String(ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '');
     let mergeCutoverApplied =
@@ -413,82 +530,12 @@ class ManagedMergeWorkflowExecutionGateMethods {
     // lane slot: nothing can interleave a cutover between them, and any
     // cutover step enqueued later re-validates against the FAILED status.
     return this.runSerializedOwnerStep(workflow.ownerKey, () =>
-      this.runMergeAbortStep(workflowId, workflow.ownerKey, ackStatus));
-  }
-
-  /**
-   * Execute the serialized abort step: re-validate the CURRENT status
-   * inside the lane, persist FAILED (withdrawing the pending epoch), then
-   * tear down the never-authoritative target and restore any promoted
-   * sibling descriptors.
-   * @param {string} workflowId
-   * @param {string} ownerKey
-   * @param {string} ackStatus - The failure MERGE_ACK_STATUS received.
-   * @return {Promise<boolean>} True when the merge is (now) aborted.
-   * @private
-   */
-  async runMergeAbortStep(workflowId, ownerKey, ackStatus) {
-    const abortOutcome = await this.workflowStepRunner.runStep({
-      workflowId,
-      ownerKey: ownerKey + MERGE_OWNER_STEP_LANE_SUFFIX,
-      stepName: PARTITION_TRANSITION_STATE.FAILED,
-      execute: async ({workflow: currentWorkflow}) =>
-        this.buildMergeAbortStepResult(
-          workflowId,
-          ackStatus,
-          currentWorkflow,
-        ),
-    });
-
-    if (abortOutcome !== MERGE_ABORT_OUTCOME.ABORTED) {
-      return abortOutcome === MERGE_ABORT_OUTCOME.ALREADY_ABORTED;
-    }
-    const abortedWorkflow = this.resolveWorkflowState(workflowId);
-    if (!this.isMergeWorkflowStateUnavailable(abortedWorkflow)) {
-      await this.teardownAbortedMergeTarget(workflowId, abortedWorkflow);
-      await this.restoreAbortedMergeSiblings(abortedWorkflow);
-    }
-    this.logger.error(MANAGED_MERGE_LOG_MSG.MERGE_ABORTED_ON_SOURCE_FAILURE, {
-      workflowId,
-      ackStatus,
-    });
-    return true;
-  }
-
-  /**
-   * Build the abort step result from the workflow's CURRENT status.
-   * @param {string} workflowId
-   * @param {string} ackStatus
-   * @param {Object} currentWorkflow
-   * @return {Object} Step result carrying a MERGE_ABORT_OUTCOME.
-   * @private
-   */
-  buildMergeAbortStepResult(workflowId, ackStatus, currentWorkflow) {
-    if (currentWorkflow.status === PARTITION_TRANSITION_STATE.FAILED) {
-      return {result: MERGE_ABORT_OUTCOME.ALREADY_ABORTED};
-    }
-    if (!PRE_CUTOVER_MERGE_STATES.has(currentWorkflow.status)) {
-      this.logger.error(
-        MANAGED_MERGE_LOG_MSG.POST_CUTOVER_SOURCE_FAILURE_RECORDED,
-        {workflowId, status: currentWorkflow.status, ackStatus},
-      );
-      return {result: MERGE_ABORT_OUTCOME.REFUSED_POST_CUTOVER};
-    }
-    return {
-      updates: {
-        status: PARTITION_TRANSITION_STATE.FAILED,
-        metadata: {
-          ...(currentWorkflow.metadata || {}),
-          [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
-            classification: LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE,
-            message: ackStatus,
-            failedAt: new Date(this.now()).toISOString(),
-            retryable: true,
-          },
-        },
-      },
-      result: MERGE_ABORT_OUTCOME.ABORTED,
-    };
+      this.runMergeAbortStep(
+        workflowId,
+        workflow.ownerKey,
+        ackStatus,
+        MERGE_OWNER_STEP_LANE_SUFFIX,
+      ));
   }
 
   /**
@@ -567,7 +614,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
    */
   async applyMergeCutoverStep(workflowId, ownerKey) {
     return this.runSerializedOwnerStep(ownerKey, () =>
-      this.workflowStepRunner.runStep({
+      this.runMergeOwnerLaneStepWithSameOwnerResync({
         workflowId,
         ownerKey: ownerKey + MERGE_OWNER_STEP_LANE_SUFFIX,
         stepName: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
@@ -597,9 +644,16 @@ class ManagedMergeWorkflowExecutionGateMethods {
               targetVersion,
             );
           }
+          // Renew the lease inside the same lane slot so the epoch-flip
+          // transition carries a live fence (mirrors the split owner).
+          const ownership = await this.renewMergeWorkflowOwnership(
+            workflowId,
+          );
           return {
             nextStep: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
             reason: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
+            fenceToken: ownership.fenceToken,
+            ownerId: ownership.ownerId,
             updates: {
               status: PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE,
               metadata: {

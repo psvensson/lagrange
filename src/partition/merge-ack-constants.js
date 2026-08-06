@@ -128,6 +128,96 @@ function buildMergeSourceParticipantKey(partitionId) {
     String(partitionId || '');
 }
 
+/**
+ * Explicit participant transition graph for one merge source partition:
+ * the set of statuses a source acknowledgement may move to FROM each
+ * current status. An ack whose (from, to) edge is absent is rejected
+ * with a typed invalid-transition outcome — the owner never silently
+ * applies an out-of-graph transition. `null` models the not-yet-acked
+ * initial state; failure edges are allowed from every non-terminal
+ * state; terminal states admit no further transitions (self-repeats are
+ * handled as duplicates before graph validation).
+ *
+ * @type {Readonly<Object<string|null, ReadonlySet<string>>>}
+ */
+const MERGE_SOURCE_ACK_TRANSITION_GRAPH = Object.freeze({
+  [String(null)]: new Set([
+    MERGE_ACK_STATUS.SNAPSHOT_STARTED,
+    MERGE_ACK_STATUS.SNAPSHOT_FAILED,
+  ]),
+  [MERGE_ACK_STATUS.SNAPSHOT_STARTED]: new Set([
+    MERGE_ACK_STATUS.BACKFILL_PROGRESS,
+    MERGE_ACK_STATUS.CATCHUP_READY,
+    MERGE_ACK_STATUS.SNAPSHOT_FAILED,
+    MERGE_ACK_STATUS.BACKFILL_FAILED,
+  ]),
+  [MERGE_ACK_STATUS.BACKFILL_PROGRESS]: new Set([
+    MERGE_ACK_STATUS.BACKFILL_PROGRESS,
+    MERGE_ACK_STATUS.CATCHUP_READY,
+    MERGE_ACK_STATUS.BACKFILL_FAILED,
+  ]),
+  [MERGE_ACK_STATUS.CATCHUP_READY]: new Set([
+    MERGE_ACK_STATUS.CUTOVER_APPLIED,
+    MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
+    MERGE_ACK_STATUS.CUTOVER_FAILED,
+  ]),
+  [MERGE_ACK_STATUS.CUTOVER_APPLIED]: new Set([
+    MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
+  ]),
+  [MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED]: new Set([
+    MERGE_ACK_STATUS.SOURCE_DISSOLVED,
+    MERGE_ACK_STATUS.DISSOLUTION_FAILED,
+  ]),
+  [MERGE_ACK_STATUS.DISSOLUTION_FAILED]: new Set([
+    // A failed dissolution is re-attemptable: the hosting node recovers
+    // and the source re-delivers mirror-removed so the owner retries.
+    MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
+    MERGE_ACK_STATUS.SOURCE_DISSOLVED,
+  ]),
+  [MERGE_ACK_STATUS.SOURCE_DISSOLVED]: new Set([]),
+  [MERGE_ACK_STATUS.SNAPSHOT_FAILED]: new Set([]),
+  [MERGE_ACK_STATUS.BACKFILL_FAILED]: new Set([]),
+  [MERGE_ACK_STATUS.CUTOVER_FAILED]: new Set([]),
+});
+
+/**
+ * Resolve whether one merge source-participant transition is allowed by
+ * the explicit graph.
+ * @param {string|null} fromStatus - Current participant status.
+ * @param {string} toStatus - Acknowledged status.
+ * @return {boolean}
+ */
+/**
+ * Source states from which NO failure acknowledgement may advance the
+ * participant: dissolved sources and already-recorded failures are
+ * terminal for the failure path.
+ * @type {ReadonlySet<string>}
+ */
+const MERGE_ACK_TERMINAL_FOR_FAILURE_SET = Object.freeze(new Set([
+  MERGE_ACK_STATUS.SOURCE_DISSOLVED,
+  MERGE_ACK_STATUS.SNAPSHOT_FAILED,
+  MERGE_ACK_STATUS.BACKFILL_FAILED,
+  MERGE_ACK_STATUS.CUTOVER_FAILED,
+  MERGE_ACK_STATUS.DISSOLUTION_FAILED,
+]));
+
+function isMergeSourceAckTransitionAllowed(fromStatus, toStatus) {
+  const fromKey = fromStatus ? String(fromStatus) : String(null);
+  const allowed = MERGE_SOURCE_ACK_TRANSITION_GRAPH[fromKey];
+  if (allowed instanceof Set && allowed.has(toStatus)) {
+    return true;
+  }
+  // A failure acknowledgement is admissible from every non-terminal
+  // state: a source can fail at any point before it dissolves, and the
+  // owner must be able to record that failure (driving the fail-safe
+  // abort) regardless of which progress edge it was on.
+  if (MERGE_ACK_FAILURE_STATUSES.has(toStatus)) {
+    return allowed instanceof Set &&
+      !MERGE_ACK_TERMINAL_FOR_FAILURE_SET.has(fromKey);
+  }
+  return false;
+}
+
 export {
   MERGE_ACK_STATUS,
   MERGE_ACK_FAILURE_STATUSES,
@@ -135,5 +225,7 @@ export {
   MERGE_ACK_MIRROR_REMOVED_SATISFIED_STATUSES,
   MERGE_ACK_CHECKPOINT_FIELD,
   MERGE_PARTICIPANT_PREFIX,
+  MERGE_PARTICIPANT_KEY_SEPARATOR,
   buildMergeSourceParticipantKey,
+  isMergeSourceAckTransitionAllowed,
 };

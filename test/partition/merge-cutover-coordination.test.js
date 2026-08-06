@@ -77,13 +77,47 @@ afterEach(() => {
   LoggingService.resetInstance();
 });
 
-function buildSourceAck(partitionId, status) {
-  return {
+function buildSourceAck(partitionId, status, fenceToken) {
+  const ack = {
     [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
       buildMergeSourceParticipantKey(partitionId),
     [PARTICIPANT_ACK_FIELD.STATUS]: status,
     [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: 2000,
   };
+  if (Number.isInteger(fenceToken)) {
+    ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN] = fenceToken;
+  }
+  return ack;
+}
+
+// Drive one source through the graph-valid ack chain (snapshot_started
+// then the requested status) at the workflow's claim fence epoch.
+async function ackSourceThroughGraph(
+  workflow,
+  workflowId,
+  partitionId,
+  status,
+  fenceToken,
+) {
+  // Failure acks follow the graph too: a source starts (snapshot_started
+  // or snapshot_failed from null) before any later status. Drive the
+  // start edge for every non-start status.
+  const isStartStatus = status === MERGE_ACK_STATUS.SNAPSHOT_STARTED ||
+    status === MERGE_ACK_STATUS.SNAPSHOT_FAILED;
+  if (!isStartStatus) {
+    await workflow.acknowledgeMergeSourceParticipant(
+      workflowId,
+      buildSourceAck(
+        partitionId,
+        MERGE_ACK_STATUS.SNAPSHOT_STARTED,
+        fenceToken,
+      ),
+    );
+  }
+  return workflow.acknowledgeMergeSourceParticipant(
+    workflowId,
+    buildSourceAck(partitionId, status, fenceToken),
+  );
 }
 
 async function startMergedFixture(t, options = {}) {
@@ -93,20 +127,24 @@ async function startMergedFixture(t, options = {}) {
     rightPartitionId: FIXTURE_RIGHT_PARTITION_ID,
   });
   t.equal(result.success, true);
-  return {...fixture, result};
+  // The workflow's claim fence epoch: every source ack is stamped with
+  // it (PartitionService reads it from normalized metadata in
+  // production).
+  const fenceToken = fixture.workflow.workflowCoordinator
+    .getWorkflowById(result.workflowId)?.fenceToken;
+  return {...fixture, result, fenceToken};
 }
 
 test('merge cutover - first catch-up ack alone does not cut over',
   async (t) => {
     const fixture = await startMergedFixture(t);
-    const ackResult = await fixture.workflow
-      .acknowledgeMergeSourceParticipant(
-        fixture.result.workflowId,
-        buildSourceAck(
-          FIXTURE_LEFT_PARTITION_ID,
-          MERGE_ACK_STATUS.CATCHUP_READY,
-        ),
-      );
+    const ackResult = await ackSourceThroughGraph(
+      fixture.workflow,
+      fixture.result.workflowId,
+      FIXTURE_LEFT_PARTITION_ID,
+      MERGE_ACK_STATUS.CATCHUP_READY,
+      fixture.fenceToken,
+    );
 
     t.equal(ackResult.mergeCutoverApplied, false);
     t.equal(
@@ -119,21 +157,20 @@ test('merge cutover - first catch-up ack alone does not cut over',
 test('merge cutover - second catch-up ack applies the durable epoch ' +
     'cutover through MERGE_CATCHUP', async (t) => {
   const fixture = await startMergedFixture(t);
-  await fixture.workflow.acknowledgeMergeSourceParticipant(
+  await ackSourceThroughGraph(
+    fixture.workflow,
     fixture.result.workflowId,
-    buildSourceAck(
-      FIXTURE_LEFT_PARTITION_ID,
-      MERGE_ACK_STATUS.CATCHUP_READY,
-    ),
+    FIXTURE_LEFT_PARTITION_ID,
+    MERGE_ACK_STATUS.CATCHUP_READY,
+    fixture.fenceToken,
   );
-  const secondAckResult = await fixture.workflow
-    .acknowledgeMergeSourceParticipant(
-      fixture.result.workflowId,
-      buildSourceAck(
-        FIXTURE_RIGHT_PARTITION_ID,
-        MERGE_ACK_STATUS.CATCHUP_READY,
-      ),
-    );
+  const secondAckResult = await ackSourceThroughGraph(
+    fixture.workflow,
+    fixture.result.workflowId,
+    FIXTURE_RIGHT_PARTITION_ID,
+    MERGE_ACK_STATUS.CATCHUP_READY,
+    fixture.fenceToken,
+  );
 
   t.equal(secondAckResult.mergeCutoverApplied, true);
 
@@ -178,9 +215,12 @@ test('merge cutover - post-merge routing accepts only the merged ' +
     FIXTURE_LEFT_PARTITION_ID,
     FIXTURE_RIGHT_PARTITION_ID,
   ]) {
-    await fixture.workflow.acknowledgeMergeSourceParticipant(
+    await ackSourceThroughGraph(
+      fixture.workflow,
       fixture.result.workflowId,
-      buildSourceAck(partitionId, MERGE_ACK_STATUS.CATCHUP_READY),
+      partitionId,
+      MERGE_ACK_STATUS.CATCHUP_READY,
+      fixture.fenceToken,
     );
   }
   t.equal(fixture.durableTableRow.active_partition_version, 2);
@@ -223,28 +263,31 @@ test('merge dissolution - waits for both mirrors, then dispatches the ' +
     FIXTURE_LEFT_PARTITION_ID,
     FIXTURE_RIGHT_PARTITION_ID,
   ]) {
-    await fixture.workflow.acknowledgeMergeSourceParticipant(
+    await ackSourceThroughGraph(
+      fixture.workflow,
       fixture.result.workflowId,
-      buildSourceAck(partitionId, MERGE_ACK_STATUS.CATCHUP_READY),
+      partitionId,
+      MERGE_ACK_STATUS.CATCHUP_READY,
+      fixture.fenceToken,
     );
   }
 
-  await fixture.workflow.acknowledgeMergeSourceParticipant(
+  await ackSourceThroughGraph(
+    fixture.workflow,
     fixture.result.workflowId,
-    buildSourceAck(
-      FIXTURE_LEFT_PARTITION_ID,
-      MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
-    ),
+    FIXTURE_LEFT_PARTITION_ID,
+    MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
+    fixture.fenceToken,
   );
   t.equal(fixture.replicaRemovalCalls.length, 0);
   t.equal(fixture.deleteCalls.length, 0);
 
-  await fixture.workflow.acknowledgeMergeSourceParticipant(
+  await ackSourceThroughGraph(
+    fixture.workflow,
     fixture.result.workflowId,
-    buildSourceAck(
-      FIXTURE_RIGHT_PARTITION_ID,
-      MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
-    ),
+    FIXTURE_RIGHT_PARTITION_ID,
+    MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
+    fixture.fenceToken,
   );
 
   // One REMOVE_REPLICA dispatch per authoritative source replica row.
@@ -312,13 +355,19 @@ test('merge dissolution - failed replica removal records a dissolution ' +
     FIXTURE_LEFT_PARTITION_ID,
     FIXTURE_RIGHT_PARTITION_ID,
   ]) {
-    await fixture.workflow.acknowledgeMergeSourceParticipant(
+    await ackSourceThroughGraph(
+      fixture.workflow,
       fixture.result.workflowId,
-      buildSourceAck(partitionId, MERGE_ACK_STATUS.CATCHUP_READY),
+      partitionId,
+      MERGE_ACK_STATUS.CATCHUP_READY,
+      fixture.fenceToken,
     );
-    await fixture.workflow.acknowledgeMergeSourceParticipant(
+    await ackSourceThroughGraph(
+      fixture.workflow,
       fixture.result.workflowId,
-      buildSourceAck(partitionId, MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED),
+      partitionId,
+      MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
+      fixture.fenceToken,
     );
   }
 
@@ -353,14 +402,13 @@ test('merge cutover - acks recover the workflow from the durable ' +
     persistedMetadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_ID],
     fixture.result.workflowId,
   );
-  const ackResult = await fixture.workflow
-    .acknowledgeMergeSourceParticipant(
-      fixture.result.workflowId,
-      buildSourceAck(
-        FIXTURE_LEFT_PARTITION_ID,
-        MERGE_ACK_STATUS.SNAPSHOT_STARTED,
-      ),
-    );
+  const ackResult = await ackSourceThroughGraph(
+    fixture.workflow,
+    fixture.result.workflowId,
+    FIXTURE_LEFT_PARTITION_ID,
+    MERGE_ACK_STATUS.SNAPSHOT_STARTED,
+    fixture.fenceToken,
+  );
   t.ok(ackResult);
   t.equal(ackResult.mergeCutoverApplied, false);
 });
@@ -375,9 +423,12 @@ async (t) => {
     FIXTURE_LEFT_PARTITION_ID,
     FIXTURE_RIGHT_PARTITION_ID,
   ]) {
-    await fixture.workflow.acknowledgeMergeSourceParticipant(
+    await ackSourceThroughGraph(
+      fixture.workflow,
       fixture.result.workflowId,
-      buildSourceAck(partitionId, MERGE_ACK_STATUS.CATCHUP_READY),
+      partitionId,
+      MERGE_ACK_STATUS.CATCHUP_READY,
+      fixture.fenceToken,
     );
   }
 
@@ -446,12 +497,12 @@ test('merge abort - a pre-cutover source failure ack aborts fail-safe: ' +
   // Source p1 reports a mirror failure BEFORE any cutover. The abort is
   // fire-and-forget on the FIFO owner lane; settle the lane before
   // asserting its durable effects.
-  await fixture.workflow.acknowledgeMergeSourceParticipant(
+  await ackSourceThroughGraph(
+    fixture.workflow,
     fixture.result.workflowId,
-    buildSourceAck(
-      FIXTURE_LEFT_PARTITION_ID,
-      MERGE_ACK_STATUS.BACKFILL_FAILED,
-    ),
+    FIXTURE_LEFT_PARTITION_ID,
+    MERGE_ACK_STATUS.BACKFILL_FAILED,
+    fixture.fenceToken,
   );
   await fixture.workflow.settleMergeOwnerLaneForWorkflow(
     fixture.result.workflowId,
@@ -489,14 +540,13 @@ test('merge abort - a pre-cutover source failure ack aborts fail-safe: ' +
 
   // A late (stale) CATCHUP_READY from the healthy source must NOT cut
   // over the aborted merge.
-  const lateAckResult = await fixture.workflow
-    .acknowledgeMergeSourceParticipant(
-      fixture.result.workflowId,
-      buildSourceAck(
-        FIXTURE_RIGHT_PARTITION_ID,
-        MERGE_ACK_STATUS.CATCHUP_READY,
-      ),
-    );
+  const lateAckResult = await ackSourceThroughGraph(
+    fixture.workflow,
+    fixture.result.workflowId,
+    FIXTURE_RIGHT_PARTITION_ID,
+    MERGE_ACK_STATUS.CATCHUP_READY,
+    fixture.fenceToken,
+  );
   t.equal(lateAckResult.mergeCutoverApplied, false);
   t.equal(fixture.durableTableRow.active_partition_version, 1);
   t.equal(
@@ -525,9 +575,12 @@ test('merge terminal - after full completion the transition clears and a ' +
       FIXTURE_LEFT_PARTITION_ID,
       FIXTURE_RIGHT_PARTITION_ID,
     ]) {
-      await fixture.workflow.acknowledgeMergeSourceParticipant(
+      await ackSourceThroughGraph(
+        fixture.workflow,
         fixture.result.workflowId,
-        buildSourceAck(partitionId, status),
+        partitionId,
+        status,
+        fixture.fenceToken,
       );
     }
   }
@@ -628,18 +681,24 @@ async (t) => {
   });
   t.equal(result.success, true);
 
+  const r1FenceToken = fixture.workflow.workflowCoordinator
+    .getWorkflowById(result.workflowId)?.fenceToken;
   // A catches up cleanly; B's catch-up ack begins the cutover, whose
   // MERGE_CATCHUP durable write is held in flight.
-  await fixture.workflow.acknowledgeMergeSourceParticipant(
+  await ackSourceThroughGraph(
+    fixture.workflow,
     result.workflowId,
-    buildSourceAck(FIXTURE_LEFT_PARTITION_ID, MERGE_ACK_STATUS.CATCHUP_READY),
+    FIXTURE_LEFT_PARTITION_ID,
+    MERGE_ACK_STATUS.CATCHUP_READY,
+    r1FenceToken,
   );
   holdCatchupWrite = true;
-  const cutoverAckPromise = fixture.workflow.acknowledgeMergeSourceParticipant(
+  const cutoverAckPromise = ackSourceThroughGraph(
+    fixture.workflow,
     result.workflowId,
-    buildSourceAck(
-      FIXTURE_RIGHT_PARTITION_ID, MERGE_ACK_STATUS.CATCHUP_READY,
-    ),
+    FIXTURE_RIGHT_PARTITION_ID,
+    MERGE_ACK_STATUS.CATCHUP_READY,
+    r1FenceToken,
   );
   while (!releaseHeldWrite) {
     await new Promise((resolve) => setImmediate(resolve));
@@ -651,7 +710,9 @@ async (t) => {
   await fixture.workflow.acknowledgeMergeSourceParticipant(
     result.workflowId,
     buildSourceAck(
-      FIXTURE_LEFT_PARTITION_ID, MERGE_ACK_STATUS.BACKFILL_FAILED,
+      FIXTURE_LEFT_PARTITION_ID,
+      MERGE_ACK_STATUS.BACKFILL_FAILED,
+      r1FenceToken,
     ),
   );
 
@@ -720,9 +781,12 @@ test('merge dissolution - a failed dissolution is re-attemptable: a ' +
       FIXTURE_LEFT_PARTITION_ID,
       FIXTURE_RIGHT_PARTITION_ID,
     ]) {
-      await fixture.workflow.acknowledgeMergeSourceParticipant(
+      await ackSourceThroughGraph(
+        fixture.workflow,
         fixture.result.workflowId,
-        buildSourceAck(partitionId, status),
+        partitionId,
+        status,
+        fixture.fenceToken,
       );
     }
   }
@@ -737,12 +801,12 @@ test('merge dissolution - a failed dissolution is re-attemptable: a ' +
   // The hosting nodes recover; ONE re-delivered mirror-removed ack
   // re-attempts dissolution for the still-undissolved sources.
   failRemovals = false;
-  await fixture.workflow.acknowledgeMergeSourceParticipant(
+  await ackSourceThroughGraph(
+    fixture.workflow,
     fixture.result.workflowId,
-    buildSourceAck(
-      FIXTURE_LEFT_PARTITION_ID,
-      MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
-    ),
+    FIXTURE_LEFT_PARTITION_ID,
+    MERGE_ACK_STATUS.SOURCE_MIRROR_REMOVED,
+    fixture.fenceToken,
   );
 
   t.equal(replicaRemovalCalls.length, 2);
@@ -764,12 +828,12 @@ test('merge abort - an abort racing a retry execute() still lands: the ' +
   const fixture = await startMergedFixture(t);
 
   // Source failure: the abort is fire-and-forget on the FIFO owner lane.
-  await fixture.workflow.acknowledgeMergeSourceParticipant(
+  await ackSourceThroughGraph(
+    fixture.workflow,
     fixture.result.workflowId,
-    buildSourceAck(
-      FIXTURE_LEFT_PARTITION_ID,
-      MERGE_ACK_STATUS.BACKFILL_FAILED,
-    ),
+    FIXTURE_LEFT_PARTITION_ID,
+    MERGE_ACK_STATUS.BACKFILL_FAILED,
+    fixture.fenceToken,
   );
 
   // Immediate retry while the abort is in flight: the still-running
@@ -819,17 +883,19 @@ test('merge abort - concurrent failure acks from BOTH sources abort ' +
   });
 
   await Promise.all([
-    fixture.workflow.acknowledgeMergeSourceParticipant(
+    ackSourceThroughGraph(
+      fixture.workflow,
       fixture.result.workflowId,
-      buildSourceAck(
-        FIXTURE_LEFT_PARTITION_ID, MERGE_ACK_STATUS.BACKFILL_FAILED,
-      ),
+      FIXTURE_LEFT_PARTITION_ID,
+      MERGE_ACK_STATUS.BACKFILL_FAILED,
+      fixture.fenceToken,
     ),
-    fixture.workflow.acknowledgeMergeSourceParticipant(
+    ackSourceThroughGraph(
+      fixture.workflow,
       fixture.result.workflowId,
-      buildSourceAck(
-        FIXTURE_RIGHT_PARTITION_ID, MERGE_ACK_STATUS.BACKFILL_FAILED,
-      ),
+      FIXTURE_RIGHT_PARTITION_ID,
+      MERGE_ACK_STATUS.BACKFILL_FAILED,
+      fixture.fenceToken,
     ),
   ]);
   await fixture.workflow.settleMergeOwnerLaneForWorkflow(

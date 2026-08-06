@@ -319,6 +319,34 @@ class ManagedSplitWorkflowPersistenceMethods {
       delete metadata[PARTITION_TRANSITION_METADATA_FIELD.SOURCE_CHECKPOINT];
     }
 
+    // Durable ownership claim triple: the tables transition row carries
+    // the fencing state so a recovering node observes who owns the
+    // workflow, at which fence epoch, and until when — no schema change
+    // required (embedded in the serialized metadata).
+    if (Number.isInteger(workflow.fenceToken)) {
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN] =
+        workflow.fenceToken;
+    } else {
+      delete metadata[
+        PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN
+      ];
+    }
+    if (workflow.workflowOwnerId) {
+      metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID] =
+        workflow.workflowOwnerId;
+    } else {
+      delete metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID];
+    }
+    if (Number.isFinite(workflow.leaseExpiresAt)) {
+      metadata[
+        PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT
+      ] = workflow.leaseExpiresAt;
+    } else {
+      delete metadata[
+        PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT
+      ];
+    }
+
     return metadata;
   }
 

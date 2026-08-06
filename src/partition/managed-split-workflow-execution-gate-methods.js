@@ -6,7 +6,10 @@ import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
-import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
+import {
+  PARTICIPANT_ACK_FIELD,
+  PARTICIPANT_ACK_RESULT,
+} from '../workflow/workflow-constants.js';
 import {
   MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
@@ -249,6 +252,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
             phaseMetadata,
             expectedPredecessorStates,
             currentWorkflow,
+            ownership: await this.renewSplitWorkflowOwnership(workflowId),
           }),
       }),
     );
@@ -274,6 +278,12 @@ class ManagedSplitWorkflowExecutionGateMethods {
     return {
       nextStep: input.nextPhase,
       reason: input.nextPhase,
+      // The renewed ownership fence + owner identity ride the
+      // transition so the storage-backed assertTransitionFence engages:
+      // a stale owner's phase advance fails the exact-fence / owner
+      // check instead of landing.
+      fenceToken: input.ownership?.fenceToken,
+      ownerId: input.ownership?.ownerId,
       updates: {
         status: input.nextPhase,
         metadata: {
@@ -321,6 +331,24 @@ class ManagedSplitWorkflowExecutionGateMethods {
       workflowId,
       ack,
     );
+
+    // A rejected acknowledgement (stale fence, out-of-graph transition,
+    // duplicate, unknown participant) is a typed outcome, never silently
+    // applied: short-circuit every owner reaction so a stale or
+    // malformed ack can never drive a cutover, abort, or dissolution.
+    if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
+      this.logger.warn(MANAGED_SPLIT_LOG_MSG.ACK_REJECTED, {
+        workflowId,
+        result: ackResult?.result,
+        currentFenceToken: ackResult?.currentFenceToken,
+        receivedFenceToken: ackResult?.receivedFenceToken,
+        currentStatus: ackResult?.currentStatus,
+      });
+      return {
+        ...ackResult,
+        splitCutoverApplied: false,
+      };
+    }
 
     const ackStatus = String(ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '');
     let splitCutoverApplied =
@@ -454,9 +482,17 @@ class ManagedSplitWorkflowExecutionGateMethods {
               targetVersion,
             );
           }
+          // Renew the lease inside the same lane slot so the epoch-flip
+          // transition carries a live fence; claim loss throws before
+          // the epoch write.
+          const ownership = await this.renewSplitWorkflowOwnership(
+            workflowId,
+          );
           return {
             nextStep: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
             reason: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+            fenceToken: ownership.fenceToken,
+            ownerId: ownership.ownerId,
             updates: {
               status: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
               metadata: {

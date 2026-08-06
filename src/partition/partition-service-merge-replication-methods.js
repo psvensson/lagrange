@@ -331,6 +331,12 @@ class PartitionServiceMergeReplicationMethods {
       [PARTICIPANT_ACK_FIELD.STATUS]: ackStatus,
       [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: Date.now(),
     };
+    // Every source ack carries the workflow fence epoch it was started
+    // under (mirrors the split source); the owner rejects a superseded
+    // epoch as STALE_FENCE.
+    if (Number.isInteger(metadata.workflowFenceToken)) {
+      ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN] = metadata.workflowFenceToken;
+    }
     if (checkpoint) {
       ack[PARTICIPANT_ACK_FIELD.CHECKPOINT] = checkpoint;
     }

@@ -281,6 +281,12 @@ class ManagedSplitWorkflowStateMethods {
         participantKey: participantSpec.participantKey,
         partitionId: participantSpec.partitionId,
         status: null,
+        // Seed the participant fence from the workflow claim epoch so a
+        // source ack stamped with an older fence is rejected as
+        // STALE_FENCE (fence validation is no longer opt-in for split).
+        fenceToken: Number.isInteger(workflow.fenceToken) ?
+          workflow.fenceToken :
+          null,
         createdAt,
         updatedAt,
       });

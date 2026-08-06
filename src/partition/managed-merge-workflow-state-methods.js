@@ -1,8 +1,13 @@
+import {randomUUID} from 'node:crypto';
+
 import {
   MANAGED_MERGE_ADMISSION_OPERATION_TYPE,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
+import {
+  WORKFLOW_DEFAULT_NODE_ID,
+} from '../workflow/workflow-constants.js';
 import {
   isRetryableManagedSplitTransition,
 } from './managed-split-retry-policy.js';
@@ -10,6 +15,21 @@ import {
   MERGE_PARTICIPANT_PREFIX,
   buildMergeSourceParticipantKey,
 } from './merge-ack-constants.js';
+
+/**
+ * Build the durable ownership identity for a merge coordinator process:
+ * nodeId + a per-process boot nonce so a restarted same-node process
+ * can never tie on ownerId; the fence token carries the epoch (mirrors
+ * the schema-provisioning owner).
+ * @param {Object} options - Constructor options.
+ * @param {string|undefined} nodeId - Local node identity.
+ * @return {string}
+ */
+function buildMergeWorkflowOwnerId(options, nodeId) {
+  return options.workflowOwnerId ||
+    String(nodeId || WORKFLOW_DEFAULT_NODE_ID) +
+      `-merge-${randomUUID()}`;
+}
 
 const MERGE_SOURCE_PARTITION_COUNT = 2;
 const MERGE_OWNER_KEY_SEPARATOR = '+';
@@ -162,6 +182,50 @@ class ManagedMergeWorkflowStateMethods {
   }
 
   /**
+   * Re-sync the LIVE in-memory workflow from the durable transition row
+   * after a same-owner fenced transition is CAS-rejected. A participant
+   * acknowledgement flush can rewrite the row while an earlier durable
+   * write is still in flight (the R1 held-cutover shape); the in-flight
+   * write then lands on a stale witness, and the durable row — not the
+   * in-memory record — is the post-race truth every later CAS witnesses
+   * against. Only a durable row still owned by THIS owner at the same
+   * fence is synced; a foreign claim is real contention, never a race,
+   * and stays a hard stale fence.
+   * @param {string} workflowId
+   * @return {Object|null} The synced in-memory workflow, or null when the
+   *   durable row is unavailable or belongs to another owner.
+   * @private
+   */
+  syncLiveMergeWorkflowFromDurable(workflowId) {
+    const existingWorkflow = this.workflowCoordinator.getWorkflowById(
+      workflowId,
+    );
+    if (!existingWorkflow) {
+      return null;
+    }
+    const durableTransition = this.findDurableMergeTransition(workflowId);
+    if (!durableTransition) {
+      return null;
+    }
+    const durableMetadata = durableTransition.transition.metadata;
+    if (String(
+      durableMetadata?.[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID] ||
+      '',
+    ) !== this.workflowOwnerId) {
+      return null;
+    }
+    const rebuiltWorkflow = this.rebuildWorkflowFromDurableTransition(
+      workflowId,
+      durableTransition,
+    );
+    if (this.isMergeWorkflowStateUnavailable(rebuiltWorkflow) ||
+        rebuiltWorkflow.fenceToken !== existingWorkflow.fenceToken) {
+      return null;
+    }
+    return rebuiltWorkflow;
+  }
+
+  /**
    * Locate the durable tables transition row carrying one workflow id.
    * @param {string} workflowId
    * @return {{tableInfo: Object, transition: Object}|null}
@@ -201,6 +265,7 @@ class ManagedMergeWorkflowStateMethods {
       return MANAGED_MERGE_WORKFLOW_STATE.UNAVAILABLE;
     }
 
+    const durableMetadata = transition.metadata || {};
     const workflow = this.workflowCoordinator.createWorkflowRecord({
       workflowId,
       ownerKey: this.buildMergeOwnerKey(sourcePartitionIds),
@@ -218,6 +283,27 @@ class ManagedMergeWorkflowStateMethods {
         workflowId,
         transition.metadata,
       ),
+      // Restore the durable ownership claim triple: the fenced-transition
+      // CAS witnesses against it, and a recovered/resynced record that
+      // dropped it would diverge from the durable row on the next renew.
+      fenceToken: Number.isInteger(
+        durableMetadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN],
+      ) ?
+        durableMetadata[
+          PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN
+        ] :
+        undefined,
+      workflowOwnerId:
+        durableMetadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID],
+      leaseExpiresAt: Number.isFinite(
+        durableMetadata[
+          PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT
+        ],
+      ) ?
+        Number(durableMetadata[
+          PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT
+        ]) :
+        undefined,
       createdAt: Number(resolveFirstDefinedValue(
         tableInfo, DURABLE_ROW_CREATED_AT_KEYS, this.now(),
       )),
@@ -300,6 +386,12 @@ class ManagedMergeWorkflowStateMethods {
         participantKey: participantSpec.participantKey,
         partitionId: participantSpec.partitionId,
         status: null,
+        // Seed the participant fence from the workflow claim epoch so a
+        // source ack stamped with an older fence is rejected as
+        // STALE_FENCE (mirrors the split owner).
+        fenceToken: Number.isInteger(workflow.fenceToken) ?
+          workflow.fenceToken :
+          null,
         createdAt,
         updatedAt,
       });
@@ -361,4 +453,4 @@ class ManagedMergeWorkflowStateMethods {
   }
 }
 
-export {ManagedMergeWorkflowStateMethods};
+export {buildMergeWorkflowOwnerId, ManagedMergeWorkflowStateMethods};

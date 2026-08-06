@@ -112,6 +112,39 @@ test('emitSplitSourceAck builds a canonical PARTICIPANT_ACK_FIELD ' +
   );
 });
 
+test('emitSplitSourceAck stamps every ack with the workflow fence ' +
+  'token from the normalized metadata (fenced-source-ack)',
+async (t) => {
+  const emitSplitSourceAck = await loadEmitSplitSourceAck();
+  const ackCalls = [];
+
+  const context = {
+    partitionId: FIXTURE_PARTITION_ID,
+    sqlQueryEngine: {
+      managedSplitWorkflow: {
+        async acknowledgeSourceParticipant(workflowId, ack) {
+          ackCalls.push({workflowId, ack});
+          return {result: PARTICIPANT_ACK_RESULT.ACCEPTED};
+        },
+      },
+    },
+    logger: {info() {}},
+  };
+
+  await emitSplitSourceAck.call(
+    context,
+    {...buildMetadata(), workflowFenceToken: 7},
+    SPLIT_ACK_STATUS.CATCHUP_READY,
+  );
+
+  t.equal(
+    ackCalls[0].ack[PARTICIPANT_ACK_FIELD.FENCE_TOKEN],
+    7,
+    'the source must stamp the workflow fence epoch it was started ' +
+    'under so the owner can reject a superseded epoch as STALE_FENCE',
+  );
+});
+
 test('emitSplitSourceAck includes checkpoint data when provided ' +
   '(uses ManagedSplitWorkflow as canonical split owner)', async (t) => {
   const emitSplitSourceAck = await loadEmitSplitSourceAck();

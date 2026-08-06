@@ -83,16 +83,33 @@ async (t) => {
     participants: new Map(),
   };
   await workflow.workflowCoordinator.registerWorkflow(record);
+  const ownershipClaim = await workflow.claimSplitWorkflowOwnership(
+    workflowId,
+  );
   workflow.ensureCanonicalSplitParticipants(workflowId, record.metadata);
+  const fenceToken = ownershipClaim.workflow.fenceToken;
+  const sourceAck = (status, extra = {}) => ({
+    [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
+      SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
+    [PARTICIPANT_ACK_FIELD.STATUS]: status,
+    [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
+    ...extra,
+  });
 
   // No terminal signal before the workflow actually lands: SPLIT_COMPLETED
   // must not fire at plan time, cutover, or any pre-terminal phase.
-  await workflow.acknowledgeSourceParticipant(workflowId, {
-    [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
-      SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
-    [PARTICIPANT_ACK_FIELD.STATUS]: SPLIT_ACK_STATUS.CATCHUP_READY,
-    [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: 1000,
-  });
+  await workflow.acknowledgeSourceParticipant(
+    workflowId,
+    sourceAck(SPLIT_ACK_STATUS.SNAPSHOT_STARTED, {
+      [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: 999,
+    }),
+  );
+  await workflow.acknowledgeSourceParticipant(
+    workflowId,
+    sourceAck(SPLIT_ACK_STATUS.CATCHUP_READY, {
+      [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: 1000,
+    }),
+  );
   t.equal(
     completionPayloads.length,
     0,
@@ -119,13 +136,13 @@ async (t) => {
 
   // Terminal step: the source mirror-removed ack dissolves the source,
   // clears the tables transition row, and emits SPLIT_COMPLETED.
-  await workflow.acknowledgeSourceParticipant(workflowId, {
-    [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
-      SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
-    [PARTICIPANT_ACK_FIELD.STATUS]: SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
-    [PARTICIPANT_ACK_FIELD.CHECKPOINT]: {sourceMirrorRemoved: true},
-    [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: 1001,
-  });
+  await workflow.acknowledgeSourceParticipant(
+    workflowId,
+    sourceAck(SPLIT_ACK_STATUS.CLEANUP_COMPLETED, {
+      [PARTICIPANT_ACK_FIELD.CHECKPOINT]: {sourceMirrorRemoved: true},
+      [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: 1001,
+    }),
+  );
 
   t.equal(
     removedReplicas.length,
