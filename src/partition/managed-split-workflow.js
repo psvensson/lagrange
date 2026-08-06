@@ -23,6 +23,9 @@ import {
 import {
   ManagedSplitWorkflowExecutionGateMethods,
 } from './managed-split-workflow-execution-gate-methods.js';
+import {
+  ManagedSplitWorkflowDissolutionMethods,
+} from './managed-split-workflow-dissolution-methods.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_GETCDCINTEGRATIONSERVICE = 'getCDCIntegrationService';
@@ -44,6 +47,9 @@ const LOCAL_STR_WAITFORTABLEPARTITIONMETADATA = 'waitForTablePartitionMetadata';
 const LOCAL_STR_PROBEINITIALTABLEPARTITIONPROVISIONING = 'probeInitialTablePartitionProvisioning';
 const LOCAL_STR_PROVISIONINITIALTABLEPARTITION = 'provisionInitialTablePartition';
 const LOCAL_STR_STARTSPLITREPLICATIONONSOURCEPARTITION = 'startSplitReplicationOnSourcePartition';
+const LOCAL_STR_LISTTABLEPARTITIONROWS = 'listTablePartitionRows';
+const LOCAL_STR_LISTPARTITIONSERVICEROWS = 'listPartitionServiceRows';
+const LOCAL_STR_DELIVERREPLICAREMOVAL = 'deliverReplicaRemoval';
 const LOCAL_STR_MANAGED_SPLIT = 'managed_split';
 const LOCAL_STR_MANAGED_SPLIT_WORKFLOW = 'managed-split-workflow';
 const LOCAL_STR_COMMA = ',';
@@ -160,6 +166,29 @@ class ManagedSplitWorkflow {
         LOCAL_STR_STARTSPLITREPLICATIONONSOURCEPARTITION,
       ) ||
       options.startSplitReplicationOnSourcePartition || (async () => {});
+    this.listTablePartitionRows =
+      bindTopologyMethod(
+        this.topologyAdapter,
+        LOCAL_STR_LISTTABLEPARTITIONROWS,
+      ) ||
+      options.listTablePartitionRows || (() => []);
+    this.listPartitionServiceRows =
+      bindTopologyMethod(
+        this.topologyAdapter,
+        LOCAL_STR_LISTPARTITIONSERVICEROWS,
+      ) ||
+      options.listPartitionServiceRows || (() => []);
+    this.deliverReplicaRemoval =
+      bindTopologyMethod(
+        this.topologyAdapter,
+        LOCAL_STR_DELIVERREPLICAREMOVAL,
+      ) ||
+      options.deliverReplicaRemoval || (async () => null);
+    this.splitCompletionListener =
+      typeof options.splitCompletionListener === LOCAL_STR_FUNCTION ?
+        options.splitCompletionListener :
+        null;
+    this.splitOwnerLaneTailByOwnerKey = new Map();
     this.logger = options.logger || this.topologyAdapter?.logger || console;
     this.now = options.now || (() => Date.now());
     this.retryBaseDelayMs =
@@ -372,6 +401,14 @@ class ManagedSplitWorkflow {
       candidateTargetNodeIds: snapshotCandidateTargetNodeIds,
       sourceRoutableNodeIds: snapshotSourceRoutableNodeIds,
     };
+    // The plan-time sibling set: every same-table partition at the
+    // active epoch outside this split. Carried forward into the target
+    // epoch at cutover so their key ranges never blackhole (F1).
+    const siblingPartitionIds = this.resolveSplitSiblingPartitionIds({
+      tableId,
+      tableInfo,
+      sourcePartitionId: partitionId,
+    });
     const workflow = await this.workflowCoordinator.registerWorkflow({
       workflowId,
       ownerKey: partitionId,
@@ -392,6 +429,7 @@ class ManagedSplitWorkflow {
         topologySnapshot: persistedTopologySnapshot,
         retryMetadata,
         estimatedBytes,
+        siblingPartitionIds,
       }),
       createdAt: now,
       updatedAt: now,
@@ -710,6 +748,10 @@ assignManagedSplitWorkflowMethods(
 assignManagedSplitWorkflowMethods(
   ManagedSplitWorkflow.prototype,
   ManagedSplitWorkflowProvisioningMethods.prototype,
+);
+assignManagedSplitWorkflowMethods(
+  ManagedSplitWorkflow.prototype,
+  ManagedSplitWorkflowDissolutionMethods.prototype,
 );
 
 export {

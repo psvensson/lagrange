@@ -6,11 +6,18 @@ import {
   PRESSURE_WORK_CLASS,
   PressureGovernor,
 } from '../control-plane/pressure-governor.js';
+import {PARTICIPANT_ACK_FIELD} from '../workflow/workflow-constants.js';
 import {
+  MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
   SPLIT_OWNER_MANAGED_PHASES,
 } from './partition-constants.js';
+import {
+  SPLIT_ACK_CATCHUP_SATISFIED_STATUSES,
+  SPLIT_ACK_FAILURE_STATUSES,
+  SPLIT_ACK_STATUS,
+} from './split-ack-constants.js';
 
 const LOCAL_STR_PARTITION_SPLIT_WORKFLOW = 'partition:split:workflow';
 const LOCAL_STR_CONTROL_PLANE_WRITE = 'control-plane:write';
@@ -22,7 +29,92 @@ const MANAGED_SPLIT_MUTATION_OPTIONS = Object.freeze({
   workClass: PRESSURE_WORK_CLASS.CRITICAL,
 });
 
+/**
+ * Workflow states from which the durable cutover may still be applied —
+ * and, conversely, in which a source failure ack aborts the split
+ * fail-safe (post-cutover failures cannot un-promote the epoch).
+ * @type {ReadonlySet<string>}
+ */
+const PRE_CUTOVER_SPLIT_STATES = Object.freeze(new Set([
+  PARTITION_TRANSITION_STATE.ADMISSION_PENDING,
+  PARTITION_TRANSITION_STATE.SPLIT_PREPARING,
+  PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
+  PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
+]));
+
+/**
+ * Lane-key suffix for runStep calls made INSIDE a FIFO owner-lane slot
+ * (mirrors MERGE_OWNER_STEP_LANE_SUFFIX: the canonical lane coalesces
+ * concurrent callers on one key, so owner steps use a suffixed key that
+ * by construction has at most one user at a time).
+ * @type {string}
+ */
+const SPLIT_OWNER_STEP_LANE_SUFFIX = ':owner-step';
+
+const LOCAL_STR_SPLIT_SOURCE_EXECUTION_FAILURE =
+  'split_source_execution_failure';
+
+/**
+ * Outcome variants of one lane-serialized split abort step.
+ * @enum {string}
+ */
+const SPLIT_ABORT_OUTCOME = Object.freeze({
+  ABORTED: 'aborted',
+  ALREADY_ABORTED: 'already_aborted',
+  REFUSED_POST_CUTOVER: 'refused_post_cutover',
+});
+
 class ManagedSplitWorkflowExecutionGateMethods {
+  /**
+   * Run one owner-scoped step strictly AFTER every previously enqueued
+   * step for the same owner key (FIFO).
+   *
+   * This exists because the canonical lane's runExclusive() COALESCES
+   * concurrent callers — a second caller receives the in-flight
+   * execution's promise instead of being queued — so cross-
+   * acknowledgement mutations (a cutover step racing a fail-safe
+   * abort) would otherwise interleave or be silently swallowed. Every
+   * owner-side durable phase mutation (phase advances, the cutover
+   * step, the abort step) routes through this FIFO; the step runner's
+   * lane remains the execution substrate inside each slot.
+   *
+   * @param {string} ownerKey - Split owner key.
+   * @param {Function} stepFactory - Async step to run.
+   * @return {Promise<*>} The step's own settlement.
+   */
+  runSerializedOwnerStep(ownerKey, stepFactory) {
+    const previousTail =
+      this.splitOwnerLaneTailByOwnerKey.get(ownerKey) || Promise.resolve();
+    const execution = previousTail
+      .catch(() => {})
+      .then(() => stepFactory());
+    const tail = execution
+      .catch(() => {})
+      .finally(() => {
+        if (this.splitOwnerLaneTailByOwnerKey.get(ownerKey) === tail) {
+          this.splitOwnerLaneTailByOwnerKey.delete(ownerKey);
+        }
+      });
+    this.splitOwnerLaneTailByOwnerKey.set(ownerKey, tail);
+    return execution;
+  }
+
+  /**
+   * Resolve when every currently enqueued owner-lane step for one
+   * workflow has settled (fire-and-forget aborts included).
+   * Observability surface for guards and diagnostics.
+   * @param {string} workflowId
+   * @return {Promise<void>}
+   */
+  async settleSplitOwnerLaneForWorkflow(workflowId) {
+    const workflow = this.resolveWorkflowState(workflowId);
+    const ownerKey = this.isSplitWorkflowStateUnavailable(workflow) ?
+      '' :
+      String(workflow.ownerKey || '');
+    await (this.splitOwnerLaneTailByOwnerKey.get(ownerKey) ||
+      Promise.resolve());
+  }
+
   /**
    * Resolve the shared pressure governor for this node.
    * @return {PressureGovernor}
@@ -125,7 +217,12 @@ class ManagedSplitWorkflowExecutionGateMethods {
    *   partition_count for cutover).
    * @return {Promise<void>}
    */
-  async advanceSplitPhase(workflowId, nextPhase, phaseMetadata = {}) {
+  async advanceSplitPhase(
+    workflowId,
+    nextPhase,
+    phaseMetadata = {},
+    expectedPredecessorStates = PRE_CUTOVER_SPLIT_STATES,
+  ) {
     if (!SPLIT_OWNER_MANAGED_PHASES.has(nextPhase)) {
       throw new Error(
         QUERY_ERROR_MSG.TABLE_SPLIT_INVALID_PHASE_TRANSITION,
@@ -134,38 +231,65 @@ class ManagedSplitWorkflowExecutionGateMethods {
 
     const workflow =
       this.resolveWorkflowState(workflowId);
-    if (!workflow) {
+    if (this.isSplitWorkflowStateUnavailable(workflow)) {
       throw new Error(
         QUERY_ERROR_MSG.TABLE_SPLIT_WORKFLOW_NOT_FOUND,
       );
     }
 
-    const updatedMetadata = {
-      ...(workflow.metadata || {}),
-      ...phaseMetadata,
-    };
-
-    await this.workflowStepRunner.runStep({
-      workflowId,
-      ownerKey: workflow.ownerKey,
-      stepName: nextPhase,
-      execute: async () => {
-        return {
-          nextStep: nextPhase,
-          reason: nextPhase,
-          updates: {
-            status: nextPhase,
-            metadata: updatedMetadata,
-          },
-          result: null,
-        };
-      },
-    });
+    return this.runSerializedOwnerStep(workflow.ownerKey, () =>
+      this.workflowStepRunner.runStep({
+        workflowId,
+        ownerKey: workflow.ownerKey + SPLIT_OWNER_STEP_LANE_SUFFIX,
+        stepName: nextPhase,
+        execute: async ({workflow: currentWorkflow}) =>
+          this.buildSplitPhaseAdvanceStepResult({
+            workflowId,
+            nextPhase,
+            phaseMetadata,
+            expectedPredecessorStates,
+            currentWorkflow,
+          }),
+      }),
+    );
   }
 
   /**
-   * Accept a typed source-side participant acknowledgement and persist
-   * it through the canonical DurableWorkflowCoordinator path.
+   * Build one phase-advance step result after re-validating the
+   * workflow's current status inside the serialized step.
+   * @param {Object} input
+   * @return {Object} Step result ({result: false} = refused, nothing
+   *   persisted).
+   * @private
+   */
+  buildSplitPhaseAdvanceStepResult(input) {
+    if (!input.expectedPredecessorStates.has(input.currentWorkflow.status)) {
+      this.logger.warn(MANAGED_SPLIT_LOG_MSG.PHASE_ADVANCE_REFUSED, {
+        workflowId: input.workflowId,
+        nextPhase: input.nextPhase,
+        status: input.currentWorkflow.status,
+      });
+      return {result: false};
+    }
+    return {
+      nextStep: input.nextPhase,
+      reason: input.nextPhase,
+      updates: {
+        status: input.nextPhase,
+        metadata: {
+          ...(input.currentWorkflow.metadata || {}),
+          ...input.phaseMetadata,
+        },
+      },
+      result: true,
+    };
+  }
+
+  /**
+   * Accept a typed source-side participant acknowledgement, persist it
+   * through the canonical DurableWorkflowCoordinator path, and react on
+   * the two owner-decided boundaries: cutover (source caught up) and
+   * dissolution (source mirror removed).
    *
    * PartitionService calls this at each execution boundary instead of
    * owning split phase transitions directly.
@@ -174,7 +298,8 @@ class ManagedSplitWorkflowExecutionGateMethods {
    * @param {Object} ack - Acknowledgement payload using
    *   PARTICIPANT_ACK_FIELD keys (participantKey, status, fenceToken,
    *   checkpoint, acknowledgedAt).
-   * @return {Promise<Object>} acknowledgeParticipant result.
+   * @return {Promise<Object>} acknowledgeParticipant result extended
+   *   with {splitCutoverApplied: boolean}.
    */
   async acknowledgeSourceParticipant(workflowId, ack) {
     if (!workflowId) {
@@ -183,7 +308,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
       );
     }
     const workflow = this.resolveWorkflowState(workflowId);
-    if (!workflow) {
+    if (this.isSplitWorkflowStateUnavailable(workflow)) {
       throw new Error(
         QUERY_ERROR_MSG.TABLE_SPLIT_WORKFLOW_NOT_FOUND,
       );
@@ -192,10 +317,272 @@ class ManagedSplitWorkflowExecutionGateMethods {
       workflow.workflowId,
       workflow.metadata,
     );
-    return this.workflowCoordinator.acknowledgeParticipant(
+    const ackResult = await this.workflowCoordinator.acknowledgeParticipant(
       workflowId,
       ack,
     );
+
+    const ackStatus = String(ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '');
+    let splitCutoverApplied =
+      workflow.status === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
+    if (SPLIT_ACK_FAILURE_STATUSES.has(ackStatus)) {
+      // Deliberately NOT awaited: the abort is FIFO-serialized on the
+      // owner lane and may queue behind an in-flight cutover step; the
+      // failing source's acknowledgement must not block on that lane.
+      // FIFO enqueue order still guarantees the abort lands before any
+      // cutover step enqueued after it.
+      this.abortSplitOnSourceFailure(workflowId, ackStatus)
+        .catch((error) => {
+          this.logger.error(MANAGED_SPLIT_LOG_MSG.ABORT_DISPATCH_FAILED, {
+            workflowId,
+            ackStatus,
+            error: error?.message || error,
+          });
+        });
+      splitCutoverApplied = false;
+    }
+    if (ackStatus === SPLIT_ACK_STATUS.CATCHUP_READY) {
+      splitCutoverApplied = await this.applySplitCutoverIfReady(workflowId);
+    }
+    if (ackStatus === SPLIT_ACK_STATUS.CLEANUP_COMPLETED) {
+      await this.finalizeSplitDissolutionIfReady(workflowId);
+    }
+
+    return {
+      ...ackResult,
+      splitCutoverApplied,
+    };
+  }
+
+  /**
+   * Apply the durable split cutover once the source participant has
+   * reported catch-up readiness. Single-path decision: evidence is the
+   * persisted participant status; the outcome is either "applied" or
+   * "awaiting source".
+   * @param {string} workflowId
+   * @return {Promise<boolean>} True when the durable cutover is active.
+   * @private
+   */
+  async applySplitCutoverIfReady(workflowId) {
+    const workflow = this.resolveWorkflowState(workflowId);
+    if (this.isSplitWorkflowStateUnavailable(workflow)) {
+      return false;
+    }
+    if (workflow.status ===
+        PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE) {
+      return true;
+    }
+    if (!PRE_CUTOVER_SPLIT_STATES.has(workflow.status)) {
+      // Aborted (FAILED) or otherwise non-running workflows must never
+      // be promoted by a late or stale CATCHUP_READY acknowledgement.
+      this.logger.warn(MANAGED_SPLIT_LOG_MSG.PHASE_ADVANCE_REFUSED, {
+        workflowId,
+        nextPhase: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+        status: workflow.status,
+      });
+      return false;
+    }
+    if (!SPLIT_ACK_CATCHUP_SATISFIED_STATUSES.has(
+      this.resolveSplitSourceParticipantStatus(workflow),
+    )) {
+      return false;
+    }
+
+    const catchupAdvanced = await this.advanceSplitPhase(
+      workflowId,
+      PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
+    );
+    if (catchupAdvanced !== true) {
+      return false;
+    }
+    const cutoverApplied = await this.applySplitCutoverStep(
+      workflowId,
+      workflow.ownerKey,
+    );
+    if (cutoverApplied !== true) {
+      return false;
+    }
+    this.logger.info(MANAGED_SPLIT_LOG_MSG.CUTOVER_APPLIED, {
+      workflowId,
+      tableId: workflow.tableId,
+    });
+    return true;
+  }
+
+  /**
+   * The cutover step itself, FIFO-serialized on the owner lane: after
+   * re-validating the CURRENT status, carry every non-participating
+   * sibling descriptor forward into the target epoch (re-validated
+   * against the authoritative partitions rows, not just the plan-time
+   * snapshot), then persist the SPLIT_CUTOVER_ACTIVE transition whose
+   * durable mutation promotes the epoch. Sibling promotion happens
+   * inside the same lane slot so an abort can never land between the
+   * promotion and the epoch write.
+   * @param {string} workflowId
+   * @param {string} ownerKey
+   * @return {Promise<boolean>} True when the durable cutover applied.
+   * @private
+   */
+  async applySplitCutoverStep(workflowId, ownerKey) {
+    return this.runSerializedOwnerStep(ownerKey, () =>
+      this.workflowStepRunner.runStep({
+        workflowId,
+        ownerKey: ownerKey + SPLIT_OWNER_STEP_LANE_SUFFIX,
+        stepName: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+        execute: async ({workflow: currentWorkflow}) => {
+          if (!PRE_CUTOVER_SPLIT_STATES.has(currentWorkflow.status) ||
+              !SPLIT_ACK_CATCHUP_SATISFIED_STATUSES.has(
+                this.resolveSplitSourceParticipantStatus(currentWorkflow),
+              )) {
+            this.logger.warn(MANAGED_SPLIT_LOG_MSG.PHASE_ADVANCE_REFUSED, {
+              workflowId,
+              nextPhase: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+              status: currentWorkflow.status,
+            });
+            return {result: false};
+          }
+          const siblingPartitionIds =
+            this.resolveCutoverSiblingPartitionIds(currentWorkflow);
+          const targetVersion = Number(
+            currentWorkflow.metadata?.[
+              PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION
+            ],
+          );
+          for (const siblingPartitionId of siblingPartitionIds) {
+            await this.promoteSiblingPartitionVersion(
+              siblingPartitionId,
+              targetVersion,
+            );
+          }
+          return {
+            nextStep: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+            reason: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+            updates: {
+              status: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+              metadata: {
+                ...(currentWorkflow.metadata || {}),
+                [PARTITION_TRANSITION_METADATA_FIELD.CUTOVER_APPLIED_AT]:
+                  this.now(),
+                [PARTITION_TRANSITION_METADATA_FIELD.SIBLING_PARTITION_IDS]:
+                  siblingPartitionIds,
+              },
+            },
+            result: true,
+          };
+        },
+      }),
+    );
+  }
+
+  /**
+   * Abort the split fail-safe on a pre-cutover source failure
+   * acknowledgement: persist a FAILED transition (whose durable
+   * mutation withdraws pending_partition_version, leaving the source
+   * partition authoritative) and tear down the provisioned-but-never-
+   * authoritative children. Post-cutover failures are recorded but
+   * cannot un-promote the epoch.
+   * @param {string} workflowId
+   * @param {string} ackStatus - The failure SPLIT_ACK_STATUS received.
+   * @return {Promise<boolean>} True when the split is (now) aborted.
+   * @private
+   */
+  async abortSplitOnSourceFailure(workflowId, ackStatus) {
+    const workflow = this.resolveWorkflowState(workflowId);
+    if (this.isSplitWorkflowStateUnavailable(workflow)) {
+      return false;
+    }
+    if (workflow.status === PARTITION_TRANSITION_STATE.FAILED) {
+      return true;
+    }
+    if (!PRE_CUTOVER_SPLIT_STATES.has(workflow.status)) {
+      this.logger.error(
+        MANAGED_SPLIT_LOG_MSG.POST_CUTOVER_SOURCE_FAILURE_RECORDED,
+        {workflowId, status: workflow.status, ackStatus},
+      );
+      return false;
+    }
+
+    // The FAILED persist AND the child teardown run in one FIFO owner-
+    // lane slot: nothing can interleave a cutover between them, and any
+    // cutover step enqueued later re-validates against the FAILED
+    // status.
+    return this.runSerializedOwnerStep(workflow.ownerKey, () =>
+      this.runSplitAbortStep(workflowId, workflow.ownerKey, ackStatus));
+  }
+
+  /**
+   * Execute the serialized abort step: re-validate the CURRENT status
+   * inside the lane, persist FAILED (withdrawing the pending epoch),
+   * then tear down the never-authoritative children and restore any
+   * promoted sibling descriptors.
+   * @param {string} workflowId
+   * @param {string} ownerKey
+   * @param {string} ackStatus - The failure SPLIT_ACK_STATUS received.
+   * @return {Promise<boolean>} True when the split is (now) aborted.
+   * @private
+   */
+  async runSplitAbortStep(workflowId, ownerKey, ackStatus) {
+    const abortOutcome = await this.workflowStepRunner.runStep({
+      workflowId,
+      ownerKey: ownerKey + SPLIT_OWNER_STEP_LANE_SUFFIX,
+      stepName: PARTITION_TRANSITION_STATE.FAILED,
+      execute: async ({workflow: currentWorkflow}) =>
+        this.buildSplitAbortStepResult(
+          workflowId,
+          ackStatus,
+          currentWorkflow,
+        ),
+    });
+
+    if (abortOutcome !== SPLIT_ABORT_OUTCOME.ABORTED) {
+      return abortOutcome === SPLIT_ABORT_OUTCOME.ALREADY_ABORTED;
+    }
+    const abortedWorkflow = this.resolveWorkflowState(workflowId);
+    if (!this.isSplitWorkflowStateUnavailable(abortedWorkflow)) {
+      await this.teardownAbortedSplitChildren(workflowId, abortedWorkflow);
+      await this.restoreAbortedSplitSiblings(abortedWorkflow);
+    }
+    this.logger.error(
+      MANAGED_SPLIT_LOG_MSG.SPLIT_ABORTED_ON_SOURCE_FAILURE,
+      {workflowId, ackStatus},
+    );
+    return true;
+  }
+
+  /**
+   * Build the abort step result from the workflow's CURRENT status.
+   * @param {string} workflowId
+   * @param {string} ackStatus
+   * @param {Object} currentWorkflow
+   * @return {Object} Step result carrying a SPLIT_ABORT_OUTCOME.
+   * @private
+   */
+  buildSplitAbortStepResult(workflowId, ackStatus, currentWorkflow) {
+    if (currentWorkflow.status === PARTITION_TRANSITION_STATE.FAILED) {
+      return {result: SPLIT_ABORT_OUTCOME.ALREADY_ABORTED};
+    }
+    if (!PRE_CUTOVER_SPLIT_STATES.has(currentWorkflow.status)) {
+      this.logger.error(
+        MANAGED_SPLIT_LOG_MSG.POST_CUTOVER_SOURCE_FAILURE_RECORDED,
+        {workflowId, status: currentWorkflow.status, ackStatus},
+      );
+      return {result: SPLIT_ABORT_OUTCOME.REFUSED_POST_CUTOVER};
+    }
+    return {
+      updates: {
+        status: PARTITION_TRANSITION_STATE.FAILED,
+        metadata: {
+          ...(currentWorkflow.metadata || {}),
+          [PARTITION_TRANSITION_METADATA_FIELD.FAILURE]: {
+            classification: LOCAL_STR_SPLIT_SOURCE_EXECUTION_FAILURE,
+            message: ackStatus,
+            failedAt: new Date(this.now()).toISOString(),
+            retryable: true,
+          },
+        },
+      },
+      result: SPLIT_ABORT_OUTCOME.ABORTED,
+    };
   }
 
   /**

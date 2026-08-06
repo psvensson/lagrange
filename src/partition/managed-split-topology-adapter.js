@@ -7,6 +7,7 @@ import {
 } from '../control-plane/control-plane-readiness-constants.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_REPLICA_HANDLER_ADDRESS_SUFFIX = '/service/replica-handler';
 
 function getRuntimeView(runtime) {
   return runtime?.systemCache;
@@ -124,6 +125,57 @@ class ManagedSplitTopologyAdapter {
       tableId,
       tableName,
       transitionMetadata,
+    );
+  }
+
+  /**
+   * List authoritative partitions rows belonging to one table. Used by
+   * the split workflow to compute the non-participating sibling set
+   * that must be carried forward into the target epoch at cutover.
+   * @param {string} tableId - Table ID.
+   * @return {Array<Object>} Partitions rows.
+   */
+  listTablePartitionRows(tableId) {
+    const rows =
+      getRuntimeView(this.sqlQueryEngine)?.getAll(TABLES.PARTITIONS) || [];
+    return rows.filter((row) => {
+      const rowTableId = row?.table_id ?? row?.tableId;
+      return String(rowTableId || '') === String(tableId || '');
+    });
+  }
+
+  /**
+   * List authoritative services rows hosting replicas of one partition.
+   * Used by the split workflow to enumerate the retired source raft
+   * group (and the aborted children) at dissolution/teardown.
+   * @param {string} partitionId - Partition ID.
+   * @return {Array<Object>} Services rows.
+   */
+  listPartitionServiceRows(partitionId) {
+    const rows =
+      getRuntimeView(this.sqlQueryEngine)?.getAll(TABLES.SERVICES) || [];
+    return rows.filter((row) => {
+      const rowPartitionId = row?.partition_id ?? row?.partitionId;
+      return String(rowPartitionId || '') === String(partitionId || '');
+    });
+  }
+
+  /**
+   * Deliver one replica-removal request to the node hosting a retired
+   * replica. Reuses the existing rebalancer REMOVE_REPLICA node
+   * handler (ReplicaHandler.handleRemoveReplica).
+   * @param {Object} request - Replica removal request.
+   * @param {string} request.nodeId - Hosting node ID.
+   * @return {Promise<Object>} Handler response.
+   */
+  deliverReplicaRemoval(request) {
+    const nodeId = String(request?.nodeId || '');
+    if (!nodeId || !this.messageRouter) {
+      return Promise.resolve(null);
+    }
+    return this.messageRouter.deliver(
+      nodeId + LOCAL_STR_REPLICA_HANDLER_ADDRESS_SUFFIX,
+      request.message,
     );
   }
 

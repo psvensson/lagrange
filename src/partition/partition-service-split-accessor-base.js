@@ -196,8 +196,19 @@ class PartitionServiceSplitAccessorBase extends PartitionServiceCdcStreamBase {
       // and it must never fire while this source holds a known
       // undelivered delta (merge already enforces this ordering).
       await this.flushSplitReplicationQueue();
-      await this.emitSplitSourceAck(metadata, SPLIT_ACK_STATUS.CATCHUP_READY);
-      await this.markSplitCutoverActive(metadata);
+      // The workflow OWNER applies the durable cutover on this
+      // acknowledgement (sibling carry-forward + epoch flip inside its
+      // serialized lane); the source observes the outcome instead of
+      // advancing the phase itself (merge already works this way).
+      const catchupAck = await this.emitSplitSourceAck(
+        metadata,
+        SPLIT_ACK_STATUS.CATCHUP_READY,
+      );
+      if (catchupAck?.splitCutoverApplied !== true) {
+        throw new Error(
+          PARTITION_SERVICE_ERROR_MSG.SPLIT_REPLICATION_STATE_REQUIRED,
+        );
+      }
       splitReplication.phase = PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
       await this.flushSplitReplicationQueue();
       await this.emitSplitSourceAck(

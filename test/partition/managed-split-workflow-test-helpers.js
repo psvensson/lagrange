@@ -153,6 +153,13 @@ function buildWorkflow(options = {}) {
       }),
     startSplitReplicationOnSourcePartition:
       options.startSplitReplicationOnSourcePartition || (async () => {}),
+    listTablePartitionRows:
+      options.listTablePartitionRows || (() => []),
+    listPartitionServiceRows:
+      options.listPartitionServiceRows || (() => []),
+    deliverReplicaRemoval:
+      options.deliverReplicaRemoval || (async () => null),
+    splitCompletionListener: options.splitCompletionListener || null,
     logger: options.logger || {info() {}, error() {}},
     now: options.now || (() => 1000),
     transactionCoordinator,

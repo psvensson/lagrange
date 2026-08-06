@@ -415,7 +415,7 @@ test('PartitionSplitMergeManager - emits events during split', async (t) => {
   manager.on('splitStarted', (data) => events.push({type: 'started', data}));
   manager.on('splitCompleted', (data) => events.push({type: 'completed', data}));
 
-  await manager.splitPartition({
+  const planResult = await manager.splitPartition({
     partitionId: 'partition-1',
     partitionService: mockPartitionService,
     tableName: 'test_table',
@@ -423,11 +423,12 @@ test('PartitionSplitMergeManager - emits events during split', async (t) => {
     primaryKeyColumn: 'id',
   });
 
-  t.equal(events.length, 2);
+  // SPLIT_COMPLETED is a terminal signal, emitted by the workflow owner
+  // after the durable transition clears — never at plan time.
+  t.equal(events.length, 1);
   t.equal(events[0].type, 'started');
   t.equal(events[0].data.partitionId, 'partition-1');
-  t.equal(events[1].type, 'completed');
-  t.equal(events[1].data.success, true);
+  t.equal(planResult.success, true);
 
   manager.shutdown();
 });

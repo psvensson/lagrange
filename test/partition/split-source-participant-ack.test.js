@@ -240,7 +240,23 @@ test('runSplitReplicationWorkflow emits snapshot_started, ' +
       managedSplitWorkflow: {
         async acknowledgeSourceParticipant(workflowId, ack) {
           ackStatuses.push(ack[PARTICIPANT_ACK_FIELD.STATUS]);
-          return {result: PARTICIPANT_ACK_RESULT.ACCEPTED};
+          const cutoverApplied =
+            ack[PARTICIPANT_ACK_FIELD.STATUS] ===
+              SPLIT_ACK_STATUS.CATCHUP_READY;
+          if (cutoverApplied) {
+            advanceCalls.push({
+              workflowId,
+              nextPhase: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+              phaseMetadata: {
+                [PARTITION_TRANSITION_METADATA_FIELD.CUTOVER_APPLIED_AT]:
+                  Date.now(),
+              },
+            });
+          }
+          return {
+            result: PARTICIPANT_ACK_RESULT.ACCEPTED,
+            splitCutoverApplied: cutoverApplied,
+          };
         },
         async advanceSplitPhase(workflowId, nextPhase, phaseMetadata) {
           advanceCalls.push({workflowId, nextPhase, phaseMetadata});

@@ -25,6 +25,7 @@ const PARTITION_TRANSITION_STATE = Object.freeze({
   SPLIT_BACKFILLING: 'split_backfilling',
   SPLIT_CATCHUP: 'split_catchup',
   SPLIT_CUTOVER_ACTIVE: 'split_cutover_active',
+  SPLIT_SOURCE_DISSOLVING: 'split_source_dissolving',
   MERGE_PREPARING: 'merge_preparing',
   MERGE_BACKFILLING: 'merge_backfilling',
   MERGE_CATCHUP: 'merge_catchup',
@@ -39,6 +40,7 @@ const PARTITION_TRANSITION_PHASE = Object.freeze({
   SPLIT_BACKFILLING: 'split_backfilling',
   SPLIT_CATCHUP: 'split_catchup',
   SPLIT_CUTOVER: 'split_cutover',
+  SPLIT_SOURCE_DISSOLVING: 'split_source_dissolving',
   MERGE_PREPARING: 'merge_preparing',
   MERGE_BACKFILLING: 'merge_backfilling',
   MERGE_CATCHUP: 'merge_catchup',
@@ -75,6 +77,10 @@ const PARTITION_TRANSITION_PHASE_BY_STATE = Object.freeze(
     [
       PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
       PARTITION_TRANSITION_PHASE.SPLIT_CUTOVER,
+    ],
+    [
+      PARTITION_TRANSITION_STATE.SPLIT_SOURCE_DISSOLVING,
+      PARTITION_TRANSITION_PHASE.SPLIT_SOURCE_DISSOLVING,
     ],
     [
       PARTITION_TRANSITION_STATE.MERGE_PREPARING,
@@ -130,6 +136,10 @@ const PARTITION_TRANSITION_OUTCOME_BY_STATE = Object.freeze(
       PARTITION_TRANSITION_OUTCOME.RUNNING,
     ],
     [
+      PARTITION_TRANSITION_STATE.SPLIT_SOURCE_DISSOLVING,
+      PARTITION_TRANSITION_OUTCOME.RUNNING,
+    ],
+    [
       PARTITION_TRANSITION_STATE.MERGE_PREPARING,
       PARTITION_TRANSITION_OUTCOME.RUNNING,
     ],
@@ -167,6 +177,7 @@ const SPLIT_OWNER_MANAGED_PHASES = Object.freeze(new Set([
   PARTITION_TRANSITION_STATE.SPLIT_BACKFILLING,
   PARTITION_TRANSITION_STATE.SPLIT_CATCHUP,
   PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+  PARTITION_TRANSITION_STATE.SPLIT_SOURCE_DISSOLVING,
 ]));
 
 /**
@@ -512,6 +523,30 @@ const MANAGED_MERGE_LOG_MSG = Object.freeze({
  */
 const MANAGED_MERGE_ADMISSION_OPERATION_TYPE = 'partition_merge';
 
+const MANAGED_SPLIT_LOG_MSG = Object.freeze({
+  CUTOVER_APPLIED: 'Managed split cutover applied',
+  PHASE_ADVANCE_REFUSED:
+    'Managed split phase advance refused: the workflow left the expected ' +
+    'predecessor state while the step was queued',
+  ABORT_DISPATCH_FAILED: 'Managed split abort step failed to apply',
+  SIBLING_CARRIED_FORWARD:
+    'Managed split carried sibling partition forward to the target epoch',
+  SIBLINGS_RESTORED_AFTER_ABORT:
+    'Managed split abort restored carried-forward sibling descriptors to ' +
+    'the active epoch',
+  DISSOLUTION_DISPATCHED: 'Managed split source dissolution dispatched',
+  DISSOLUTION_FAILED: 'Managed split source dissolution failed',
+  CHILD_TEARDOWN_FAILED: 'Managed split aborted-child teardown failed',
+  SPLIT_ABORTED_ON_SOURCE_FAILURE:
+    'Managed split aborted fail-safe on source failure acknowledgement; ' +
+    'the source remains authoritative',
+  POST_CUTOVER_SOURCE_FAILURE_RECORDED:
+    'Managed split source failure acknowledged after cutover; epoch not ' +
+    'reverted',
+  TERMINAL_TRANSITION_CLEARED:
+    'Managed split terminal transition cleared after dissolution',
+});
+
 const SPLIT_MERGE_DEFAULT = Object.freeze({
   SPLIT_STORAGE_THRESHOLD_BYTES: 10 * 1024 * 1024 * 1024,
   SPLIT_TRAFFIC_THRESHOLD_QPM: 1000,
@@ -557,6 +592,7 @@ export {
   MANAGED_MERGE_ADMISSION_OPERATION_TYPE,
   MANAGED_MERGE_ERROR_MSG,
   MANAGED_MERGE_LOG_MSG,
+  MANAGED_SPLIT_LOG_MSG,
   PARTITION_ENTITY_TYPE,
   PARTITION_RAFT_ROLE,
   PARTITION_REQUEST_TYPE,

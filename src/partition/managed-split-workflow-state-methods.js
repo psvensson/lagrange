@@ -39,6 +39,10 @@ class ManagedSplitWorkflowStateMethods {
         JSON.parse(JSON.stringify(options.topologySnapshot)),
       [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]:
         options.targetVersion,
+      [PARTITION_TRANSITION_METADATA_FIELD.SIBLING_PARTITION_IDS]:
+        Array.isArray(options.siblingPartitionIds) ?
+          [...options.siblingPartitionIds] :
+          [],
       [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]: {
         state: PARTITION_TRANSITION_STATE.ADMISSION_PENDING,
         operationType: STORAGE_ADMISSION_OPERATION_TYPE.PARTITION_SPLIT,

@@ -33,6 +33,11 @@ const SPLIT_ACK_STATUS = Object.freeze({
   CHILD_PROVISIONED: 'child_provisioned',
   CHILD_PROVISION_FAILED: 'child_provision_failed',
 
+  // Owner-recorded dissolution outcomes (mirrors MERGE_ACK_STATUS:
+  // the owner, not the source, records these after replica removal).
+  SOURCE_DISSOLVED: 'source_dissolved',
+  DISSOLUTION_FAILED: 'dissolution_failed',
+
   // Failure acknowledgements
   SNAPSHOT_FAILED: 'snapshot_failed',
   BACKFILL_FAILED: 'backfill_failed',
@@ -50,12 +55,40 @@ const SPLIT_ACK_STATUS = Object.freeze({
 const SPLIT_ACK_TERMINAL_STATUSES = Object.freeze(new Set([
   SPLIT_ACK_STATUS.CUTOVER_APPLIED,
   SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
+  SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
   SPLIT_ACK_STATUS.CHILD_PROVISIONED,
   SPLIT_ACK_STATUS.CHILD_PROVISION_FAILED,
   SPLIT_ACK_STATUS.SNAPSHOT_FAILED,
   SPLIT_ACK_STATUS.BACKFILL_FAILED,
   SPLIT_ACK_STATUS.CUTOVER_FAILED,
   SPLIT_ACK_STATUS.CLEANUP_FAILED,
+]));
+
+/**
+ * Source-participant statuses that satisfy the "mirror removed"
+ * dissolution gate (mirrors MERGE_ACK_MIRROR_REMOVED_SATISFIED_STATUSES:
+ * DISSOLUTION_FAILED qualifies so a re-delivered CLEANUP_COMPLETED ack
+ * re-attempts a failed dissolution).
+ *
+ * @type {ReadonlySet<string>}
+ */
+const SPLIT_ACK_MIRROR_REMOVED_SATISFIED_STATUSES = Object.freeze(new Set([
+  SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
+  SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
+  SPLIT_ACK_STATUS.DISSOLUTION_FAILED,
+]));
+
+/**
+ * Source-participant statuses that satisfy the cutover gate: the source
+ * reported catch-up readiness and has not failed since.
+ *
+ * @type {ReadonlySet<string>}
+ */
+const SPLIT_ACK_CATCHUP_SATISFIED_STATUSES = Object.freeze(new Set([
+  SPLIT_ACK_STATUS.CATCHUP_READY,
+  SPLIT_ACK_STATUS.CUTOVER_APPLIED,
+  SPLIT_ACK_STATUS.CLEANUP_COMPLETED,
+  SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
 ]));
 
 /**
@@ -84,6 +117,7 @@ const SPLIT_ACK_CHECKPOINT_FIELD = Object.freeze({
   BACKFILL_ROWS_COPIED: 'backfillRowsCopied',
   BACKFILL_TOTAL_ROWS: 'backfillTotalRows',
   SOURCE_MIRROR_REMOVED: 'sourceMirrorRemoved',
+  DISSOLVED_REPLICA_IDS: 'dissolvedReplicaIds',
 });
 
 /**
@@ -117,6 +151,8 @@ export {
   SPLIT_ACK_STATUS,
   SPLIT_ACK_TERMINAL_STATUSES,
   SPLIT_ACK_FAILURE_STATUSES,
+  SPLIT_ACK_CATCHUP_SATISFIED_STATUSES,
+  SPLIT_ACK_MIRROR_REMOVED_SATISFIED_STATUSES,
   SPLIT_ACK_CHECKPOINT_FIELD,
   SPLIT_PARTICIPANT_PREFIX,
   SPLIT_ACK_LOG_MSG,

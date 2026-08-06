@@ -496,7 +496,9 @@ class PartitionSplitMergeManagerTransitionMethods {
         phase: LOCAL_STR_SPLIT_PLAN,
       });
 
-      this.emit(SPLIT_MERGE_EVENT.SPLIT_COMPLETED, result);
+      // SPLIT_COMPLETED is a TERMINAL signal, emitted by the workflow
+      // owner after the durable transition clears — never at plan time
+      // (a plan says nothing about whether the split lands).
       return result;
     } catch (error) {
       this.logger.error(SPLIT_MERGE_LOG_MSG.SPLIT_PLAN_FAILED, {

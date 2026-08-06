@@ -1,0 +1,38 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "split-terminal-lifecycle",
+  "status": "pass",
+  "generatedAt": "2026-08-06T04:44:34.128Z",
+  "receipts": [
+    {
+      "id": "split-terminal-clear-allows-second-split",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/managed-split-workflow-terminal-lifecycle.test.js",
+      "detail": "terminal dissolution clears the tables transition row (state + metadata + pending epoch all null), releases the in-memory workflow, and leaves the durable row admissible for a second split — the F9 wedge is gone"
+    },
+    {
+      "id": "split-sibling-carry-forward",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/managed-split-epoch-persistence-effects.test.js",
+      "detail": "non-participating sibling descriptors are promoted into the split target epoch at cutover (fail-closed on a zero-row update); abort restores them — sibling key ranges never strand"
+    },
+    {
+      "id": "split-cutover-partition-count",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/managed-split-epoch-persistence-effects.test.js",
+      "detail": "the durable cutover writes partition_count = targetIds + carried-forward siblings = oldCount + 1, promotes the pending epoch to active, and clears the pending column"
+    },
+    {
+      "id": "split-failed-withdraws-pending-version",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/managed-split-epoch-persistence-effects.test.js",
+      "detail": "a FAILED split transition withdraws pending_partition_version in the same mutation (no pending visibility), leaving the source authoritative at the active epoch"
+    },
+    {
+      "id": "split-completed-emitted-at-terminal",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/managed-split-workflow-terminal-lifecycle.test.js",
+      "detail": "SPLIT_COMPLETED fires exactly once at terminal (after the transition row clears), never at plan time or cutover, with the planner-result payload shape the stabilization-reset listener consumes"
+    }
+  ]
+}

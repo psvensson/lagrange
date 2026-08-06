@@ -41,6 +41,12 @@ import {
   PARTITION_TRANSITION_STATE,
 } from '../../src/partition/partition-constants.js';
 import {
+  SPLIT_ACK_STATUS,
+} from '../../src/partition/split-ack-constants.js';
+import {
+  PARTICIPANT_ACK_FIELD,
+} from '../../src/workflow/workflow-constants.js';
+import {
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
 } from '../../src/control-plane/pressure-governor.js';
@@ -483,8 +489,18 @@ test('PartitionService - starts split replication workflow and marks cutover act
 
     partition.sqlQueryEngine = {
       managedSplitWorkflow: {
-        async acknowledgeSourceParticipant(_workflowId, _ack) {
-          return {result: 'accepted'};
+        async acknowledgeSourceParticipant(_workflowId, ack) {
+          const cutoverApplied =
+            ack[PARTICIPANT_ACK_FIELD.STATUS] ===
+              SPLIT_ACK_STATUS.CATCHUP_READY;
+          if (cutoverApplied) {
+            advanceCalls.push({
+              workflowId: _workflowId,
+              nextPhase: PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+              phaseMetadata: {},
+            });
+          }
+          return {result: 'accepted', splitCutoverApplied: cutoverApplied};
         },
         async advanceSplitPhase(workflowId, nextPhase, phaseMetadata) {
           advanceCalls.push({workflowId, nextPhase, phaseMetadata});

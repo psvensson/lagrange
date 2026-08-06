@@ -8,6 +8,7 @@ import {
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {
+  MANAGED_SPLIT_LOG_MSG,
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
@@ -119,23 +120,39 @@ class ManagedSplitWorkflowPersistenceMethods {
       const targetIds = workflow.metadata?.[
         PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS
       ];
+      const siblingIds = workflow.metadata?.[
+        PARTITION_TRANSITION_METADATA_FIELD.SIBLING_PARTITION_IDS
+      ];
       if (Number.isInteger(pendingPartitionVersion)) {
         updatePayload.active_partition_version =
           pendingPartitionVersion;
         updatePayload.pending_partition_version = null;
       }
       if (Array.isArray(targetIds) && targetIds.length > 0) {
-        updatePayload.partition_count = targetIds.length;
+        // oldCount + 1: the two children replace the source, and every
+        // non-participating sibling is carried forward into the new
+        // epoch by the cutover step before this mutation lands.
+        updatePayload.partition_count = targetIds.length +
+          (Array.isArray(siblingIds) ? siblingIds.length : 0);
       }
     }
 
-    const isCutoverTransition = workflow.status ===
-      PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE;
+    // A FAILED split withdraws the pending epoch in the same mutation
+    // (mirrors the merge abort contract): the source partition stays
+    // authoritative at the active epoch and no pending split target may
+    // remain accepted by the descriptor-epoch contract.
+    if (workflow.status === PARTITION_TRANSITION_STATE.FAILED) {
+      updatePayload.pending_partition_version = null;
+    }
+
+    const isEpochTransition =
+      workflow.status === PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE ||
+      workflow.status === PARTITION_TRANSITION_STATE.FAILED;
     const mutationOptions = this.buildSplitTransitionMutationOptions(
       workflow,
       updatePayload,
       serializedMetadata,
-      isCutoverTransition,
+      isEpochTransition,
     );
     const mutationResult = await this.getControlPlaneSystemTableGateway()
       .submitMutation({
@@ -144,7 +161,7 @@ class ManagedSplitWorkflowPersistenceMethods {
         whereClause: {table_id: workflow.tableId},
         data: updatePayload,
       }, mutationOptions);
-    if (isCutoverTransition) {
+    if (isEpochTransition) {
       this.assertSplitEpochMutationEffect(mutationResult, workflow);
     }
   }
@@ -152,11 +169,12 @@ class ManagedSplitWorkflowPersistenceMethods {
   /**
    * Build the mutation options for one split transition row write.
    * Routine transitions tolerate pending cache visibility; the epoch
-   * flip does not — an unconverged cutover is a failed cutover.
+   * transitions (cutover promotion, FAILED pending withdrawal) do not —
+   * an unconverged epoch mutation is a failed epoch mutation.
    * @param {Object} workflow - Workflow state.
    * @param {Object} updatePayload - Mutation data payload.
    * @param {string} serializedMetadata - Durable transition metadata.
-   * @param {boolean} isCutoverTransition - Epoch-flip transition.
+   * @param {boolean} isEpochTransition - Epoch-changing transition.
    * @return {Object} Gateway mutation options.
    * @private
    */
@@ -164,10 +182,10 @@ class ManagedSplitWorkflowPersistenceMethods {
     workflow,
     updatePayload,
     serializedMetadata,
-    isCutoverTransition,
+    isEpochTransition,
   ) {
     return this.buildManagedSplitMutationOptions({
-      allowPendingVisibility: !isCutoverTransition,
+      allowPendingVisibility: !isEpochTransition,
       expectedCacheFields: {
         pending_partition_version:
           updatePayload.pending_partition_version,
@@ -205,6 +223,74 @@ class ManagedSplitWorkflowPersistenceMethods {
         `${workflow.workflowId}, observed ${affectedRows}`,
       );
     }
+  }
+
+  /**
+   * Carry one non-participating sibling partition descriptor forward
+   * into the split target epoch. Without this, the routing predicate
+   * (partition_version must equal active_partition_version exactly)
+   * would blackhole the sibling's key range the moment the cutover
+   * promotes the epoch (merge already enforces this carry-forward).
+   * Fail-closed: a zero-row update throws.
+   * @param {string} partitionId - Sibling partition ID.
+   * @param {number} targetVersion - Split target epoch.
+   * @return {Promise<void>}
+   * @private
+   */
+  async promoteSiblingPartitionVersion(partitionId, targetVersion) {
+    const mutationResult = await this.getControlPlaneSystemTableGateway()
+      .submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.PARTITIONS,
+        whereClause: {[LOCAL_STR_PARTITION_ID]: partitionId},
+        data: {
+          partition_version: targetVersion,
+          updated_at: this.now(),
+        },
+      }, this.buildManagedSplitMutationOptions({skipCacheWait: true}));
+    this.assertSplitEpochMutationEffect(mutationResult, {
+      workflowId: `sibling:${partitionId}`,
+    });
+    this.logger.info(MANAGED_SPLIT_LOG_MSG.SIBLING_CARRIED_FORWARD, {
+      partitionId,
+      targetVersion,
+    });
+  }
+
+  /**
+   * Clear the durable transition columns after dissolution completes.
+   * Without this terminal clear the tables row would keep
+   * split_cutover_active forever and every later split/merge on the
+   * table would be refused as already-in-progress (merge already
+   * enforces this terminal clear).
+   * @param {Object} workflow - Workflow snapshot.
+   * @return {Promise<void>}
+   * @private
+   */
+  async persistTerminalTransitionClear(workflow) {
+    const mutationResult = await this.getControlPlaneSystemTableGateway()
+      .submitMutation({
+        operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
+        tableName: TABLES.TABLES,
+        whereClause: {[LOCAL_STR_TABLE_ID]: workflow.tableId},
+        data: {
+          partition_transition_state: null,
+          partition_transition_metadata: null,
+          pending_partition_version: null,
+          updated_at: this.now(),
+        },
+      }, this.buildManagedSplitMutationOptions({
+        allowPendingVisibility: false,
+        expectedCacheFields: {
+          partition_transition_state: null,
+          partition_transition_metadata: null,
+        },
+      }));
+    this.assertSplitEpochMutationEffect(mutationResult, workflow);
+    this.logger.info(MANAGED_SPLIT_LOG_MSG.TERMINAL_TRANSITION_CLEARED, {
+      workflowId: workflow.workflowId,
+      tableId: workflow.tableId,
+    });
   }
 
   /**

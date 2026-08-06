@@ -119,6 +119,10 @@ test('runSplitReplicationWorkflow drains queued deltas BEFORE emitting ' +
     },
     async emitSplitSourceAck(_metadata, ackStatus) {
       callOrder.push(`ack:${ackStatus}`);
+      if (ackStatus === SPLIT_ACK_STATUS.CATCHUP_READY) {
+        callOrder.push('cutover');
+        return {result: 'accepted', splitCutoverApplied: true};
+      }
       return {result: 'accepted'};
     },
   };

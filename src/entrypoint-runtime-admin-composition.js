@@ -396,6 +396,19 @@ async function createSqlRuntimeComposition(options) {
       null,
   });
   sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
+  // SPLIT_COMPLETED is a terminal signal: the workflow owner emits it
+  // after the durable transition clears, and the manager re-emits it so
+  // the stabilization reset (and any other listener) observes exactly
+  // one completion per landed split.
+  if (sqlQueryEngine.managedSplitWorkflow) {
+    sqlQueryEngine.managedSplitWorkflow.splitCompletionListener =
+      (result) => {
+        partitionSplitMergeManager.emit(
+          SPLIT_MERGE_EVENT.SPLIT_COMPLETED,
+          result,
+        );
+      };
+  }
   wireSplitCompletionStabilizationReset({
     partitionSplitMergeManager,
     partitionServices: options.partitionServices,
