@@ -9,6 +9,10 @@ import {
   SPLIT_MERGE_ID,
 } from './partition-constants.js';
 import {
+  assertMergeRegistrationOverlapGuardClear,
+  findPersistedTransitionOverlap,
+} from './partition-transition-overlap-guard.js';
+import {
   buildPartitionDescriptorEpochDecision,
   isPartitionDescriptorEpochAccepted,
 } from './partition-descriptor-epoch-contract.js';
@@ -108,6 +112,11 @@ class ManagedMergeWorkflowPlanMethods {
 
   /**
    * Resolve the shared table context for one validated merge pair.
+   *
+   * F23 overlap qualification: when the candidate merge's source key
+   * ranges overlap a persisted in-flight transition's ranges, the
+   * refusal carries the overlap suffix; a non-overlapping in-flight
+   * transition keeps the plain already-in-progress refusal.
    * @param {Object} pairContext - validateMergeSourcePair output.
    * @return {Object} {tableInfo, tableName, primaryKeyColumn,
    *   existingTransition}
@@ -123,7 +132,18 @@ class ManagedMergeWorkflowPlanMethods {
     const existingTransition = this.parsePartitionTransition(tableInfo);
     if (existingTransition &&
         !this.isRetryableAdmissionState(existingTransition)) {
-      throw new Error(MANAGED_MERGE_ERROR_MSG.ALREADY_IN_PROGRESS);
+      const overlap = findPersistedTransitionOverlap({
+        candidateRanges: [pairContext.leftRange, pairContext.rightRange],
+        tableId: pairContext.tableId,
+        workflowId: null,
+        listTableInfos: this.listTableInfos,
+        parsePartitionTransition: this.parsePartitionTransition,
+        getPartitionInfo: this.getPartitionInfo,
+      });
+      throw new Error(
+        MANAGED_MERGE_ERROR_MSG.ALREADY_IN_PROGRESS +
+        (overlap ? MANAGED_MERGE_ERROR_MSG.OVERLAPPING_TRANSITION_SUFFIX : ''),
+      );
     }
     const primaryKeyColumn = String(
       tableInfo.partition_key || tableInfo.partitionKey || '',
@@ -336,6 +356,37 @@ class ManagedMergeWorkflowPlanMethods {
       `merge-${tableId}-` +
       `${sourcePartitionIds.join(MERGE_WORKFLOW_ID_SEPARATOR)}` +
       `-v${targetVersion}`;
+  }
+
+  /**
+   * Resolve the durable-registration identities for one merge
+   * execution: the merged child id, the workflow id, and the F23
+   * overlap-guard clearance (refuses when either source range overlaps
+   * a persisted in-flight transition's ranges).
+   * @param {Object} options - {tableId, sourcePartitionIds,
+   *   targetVersion, existingTransition, leftRange, rightRange}.
+   * @return {Object} {mergedPartitionId, workflowId}.
+   * @private
+   */
+  resolveMergeRegistrationIdentities(options) {
+    const mergedPartitionId = this.resolveMergedPartitionId(
+      options.tableId,
+      options.existingTransition,
+    );
+    const workflowId = this.resolveWorkflowId(
+      options.tableId,
+      options.sourcePartitionIds,
+      options.targetVersion,
+      options.existingTransition,
+    );
+    assertMergeRegistrationOverlapGuardClear(this, {
+      sourcePartitionIds: options.sourcePartitionIds,
+      tableId: options.tableId,
+      workflowId,
+      leftRange: options.leftRange,
+      rightRange: options.rightRange,
+    });
+    return {mergedPartitionId, workflowId};
   }
 }
 

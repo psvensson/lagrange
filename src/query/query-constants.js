@@ -175,6 +175,8 @@ const QUERY_ERROR_MSG = Object.freeze({
     'Missing canonical join partition plan',
   TABLE_SPLIT_ALREADY_IN_PROGRESS:
     'Table already has a partition split transition in progress',
+  TABLE_SPLIT_OVERLAPPING_TRANSITION_SUFFIX:
+    ': key range overlaps a persisted in-flight transition',
   TABLE_SPLIT_PRIMARY_KEY_REQUIRED:
     'Partition split orchestration requires a single-column partition key',
   TABLE_SPLIT_PARTITION_NOT_FOUND:

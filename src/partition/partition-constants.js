@@ -487,6 +487,8 @@ const MANAGED_MERGE_ERROR_MSG = Object.freeze({
     'Managed merge requires local leadership of the left source partition',
   ALREADY_IN_PROGRESS:
     'Managed merge refused: partition transition already in progress',
+  OVERLAPPING_TRANSITION_SUFFIX:
+    ': key range overlaps a persisted in-flight transition',
   CRITICAL_PARTITION:
     'Managed merge refused for critical system partition',
   OVER_THRESHOLD:
@@ -515,6 +517,9 @@ const MANAGED_MERGE_ERROR_MSG = Object.freeze({
 });
 
 const MANAGED_MERGE_LOG_MSG = Object.freeze({
+  OVERLAP_REFUSED:
+    'Managed merge refused: key range overlaps a persisted in-flight ' +
+    'transition',
   MERGE_START: 'Managed merge started',
   MERGE_PREPARED: 'Managed merge prepared and backfilling',
   CUTOVER_APPLIED: 'Managed merge cutover applied',
@@ -566,6 +571,9 @@ const MANAGED_MERGE_LOG_MSG = Object.freeze({
 const MANAGED_MERGE_ADMISSION_OPERATION_TYPE = 'partition_merge';
 
 const MANAGED_SPLIT_LOG_MSG = Object.freeze({
+  OVERLAP_REFUSED:
+    'Managed split refused: key range overlaps a persisted in-flight ' +
+    'transition',
   CUTOVER_APPLIED: 'Managed split cutover applied',
   PHASE_ADVANCE_REFUSED:
     'Managed split phase advance refused: the workflow left the expected ' +

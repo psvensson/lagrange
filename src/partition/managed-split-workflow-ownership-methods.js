@@ -41,6 +41,22 @@ function buildSplitWorkflowOwnerId(options, nodeId) {
  */
 class ManagedSplitWorkflowOwnershipMethods {
   /**
+   * Resolve when every currently enqueued owner-lane step for one
+   * workflow has settled (fire-and-forget aborts included).
+   * Observability surface for guards and diagnostics.
+   * @param {string} workflowId
+   * @return {Promise<void>}
+   */
+  async settleSplitOwnerLaneForWorkflow(workflowId) {
+    const workflow = this.resolveWorkflowState(workflowId);
+    const ownerKey = this.isSplitWorkflowStateUnavailable(workflow) ?
+      '' :
+      String(workflow.ownerKey || '');
+    await (this.splitOwnerLaneTailByOwnerKey.get(ownerKey) ||
+      Promise.resolve());
+  }
+
+  /**
    * Explicit participant transition graph validator, wired into the
    * coordinator as isParticipantTransitionAllowed: only the split
    * source participant has a declared graph (owner-recorded child

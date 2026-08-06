@@ -325,16 +325,15 @@ class ManagedMergeWorkflow {
       tableInfo,
       existingTransition,
     );
-    const mergedPartitionId = this.resolveMergedPartitionId(
-      tableId,
-      existingTransition,
-    );
-    const workflowId = this.resolveWorkflowId(
-      tableId,
-      sourcePartitionIds,
-      targetVersion,
-      existingTransition,
-    );
+    const {mergedPartitionId, workflowId} =
+      this.resolveMergeRegistrationIdentities({
+        tableId,
+        sourcePartitionIds,
+        targetVersion,
+        existingTransition,
+        leftRange,
+        rightRange,
+      });
     const siblingPartitionIds = this.resolveMergeSiblingPartitionIds({
       tableId,
       tableInfo,
@@ -456,6 +455,8 @@ class ManagedMergeWorkflow {
         candidateTargetNodeIds: input.candidateTargetNodeIds,
         sourceRoutableNodeIds: input.sourceRoutableNodeIds,
         topologySnapshot: input.topologySnapshot,
+        leftRange: input.leftRange,
+        rightRange: input.rightRange,
         retryMetadata: input.retryMetadata,
         estimatedBytes: input.estimatedBytes,
       }),

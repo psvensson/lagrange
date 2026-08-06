@@ -94,7 +94,20 @@ class ManagedMergeWorkflowStateMethods {
       [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_IDS]:
         [options.targetPartitionId],
       [PARTITION_TRANSITION_METADATA_FIELD.TOPOLOGY_SNAPSHOT]:
-        JSON.parse(JSON.stringify(options.topologySnapshot)),
+        JSON.parse(JSON.stringify({
+          ...options.topologySnapshot,
+          // The source partitions' key ranges at registration, persisted
+          // so the durable transition row alone proves which key ranges
+          // this in-flight merge covers (F23 overlap guard).
+          ...(options.leftRange && options.rightRange ?
+            {
+              sourcePartitionKeyRanges: {
+                [options.sourcePartitionIds[0]]: {...options.leftRange},
+                [options.sourcePartitionIds[1]]: {...options.rightRange},
+              },
+            } :
+            {}),
+        })),
       [PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION]:
         options.targetVersion,
       [PARTITION_TRANSITION_METADATA_FIELD.ADMISSION]: {

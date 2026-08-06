@@ -14,6 +14,7 @@ import {
   PARTITION_TRANSITION_METADATA_FIELD,
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
+import {resolvePartitionRowKeyRange} from './partition-transition-overlap-guard.js';
 import {
   ManagedSplitWorkflowStateMethods,
 } from './managed-split-workflow-state-methods.js';
@@ -295,17 +296,11 @@ class ManagedSplitWorkflow {
       throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_LEADER_REQUIRED);
     }
 
-    const tableName = partitionInfo.table_name || partitionInfo.tableName;
-    const tableId = partitionInfo.table_id || partitionInfo.tableId;
-    const tableInfo = this.getTableInfo(tableName || tableId);
-    if (!tableInfo) {
-      throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_TABLE_NOT_FOUND);
-    }
-    const existingTransition = this.parsePartitionTransition(tableInfo);
-    if (existingTransition &&
-        !this.isRetryableAdmissionState(existingTransition)) {
-      throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_ALREADY_IN_PROGRESS);
-    }
+    const {tableName, tableId, tableInfo, existingTransition} =
+      this.resolveSplitAdmissionTableContext(partitionInfo);
+    this.assertSplitTransitionAdmission(
+      partitionInfo, tableId, existingTransition,
+    );
 
     const primaryKeyColumn = String(
       tableInfo.partition_key || tableInfo.partitionKey || '',
@@ -343,6 +338,8 @@ class ManagedSplitWorkflow {
       targetVersion,
       existingTransition,
     );
+    this.assertSplitRegistrationOverlapClear(
+      {partitionInfo, partitionId, tableId, workflowId});
     const retryMetadata = this.resolvePendingRetryMetadata(
       existingTransition,
     );
@@ -422,6 +419,12 @@ class ManagedSplitWorkflow {
       discoveredTargetNodeIds: snapshotDiscoveredTargetNodeIds,
       candidateTargetNodeIds: snapshotCandidateTargetNodeIds,
       sourceRoutableNodeIds: snapshotSourceRoutableNodeIds,
+      // The source partition's key range at registration, persisted so
+      // the durable transition row alone proves which key range this
+      // in-flight split covers (F23 overlap guard).
+      sourcePartitionKeyRanges: {
+        [partitionId]: resolvePartitionRowKeyRange(partitionInfo),
+      },
     };
     // The plan-time sibling set: every same-table partition at the
     // active epoch outside this split. Carried forward into the target

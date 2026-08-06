@@ -21,6 +21,10 @@ import {
   SPLIT_ACK_FAILURE_STATUSES,
   SPLIT_ACK_STATUS,
 } from './split-ack-constants.js';
+import {
+  assertSplitRegistrationOverlapGuardClear,
+  assertSplitTransitionAdmissionClear,
+} from './partition-transition-overlap-guard.js';
 
 const LOCAL_STR_PARTITION_SPLIT_WORKFLOW = 'partition:split:workflow';
 const LOCAL_STR_CONTROL_PLANE_WRITE = 'control-plane:write';
@@ -69,6 +73,62 @@ const SPLIT_ABORT_OUTCOME = Object.freeze({
 
 class ManagedSplitWorkflowExecutionGateMethods {
   /**
+   * Resolve the source table's identity/info/transition triple for one
+   * split execution, or throw the typed not-found outcome.
+   * @param {Object} partitionInfo - Source partition row.
+   * @return {Object} {tableName, tableId, tableInfo, existingTransition}.
+   * @private
+   */
+  resolveSplitAdmissionTableContext(partitionInfo) {
+    const tableName = partitionInfo.table_name || partitionInfo.tableName;
+    const tableId = partitionInfo.table_id || partitionInfo.tableId;
+    const tableInfo = this.getTableInfo(tableName || tableId);
+    if (!tableInfo) {
+      throw new Error(QUERY_ERROR_MSG.TABLE_SPLIT_TABLE_NOT_FOUND);
+    }
+    return {
+      tableName,
+      tableId,
+      tableInfo,
+      existingTransition: this.parsePartitionTransition(tableInfo),
+    };
+  }
+
+  /**
+   * Assert no non-retryable in-flight transition blocks this split
+   * (F23 overlap-qualified refusal, owned by the overlap guard module).
+   * @param {Object} partitionInfo - Source partition row.
+   * @param {string} tableId - Source table id.
+   * @param {Object|null} existingTransition - Parsed table transition.
+   * @return {void}
+   * @private
+   */
+  assertSplitTransitionAdmission(partitionInfo, tableId, existingTransition) {
+    assertSplitTransitionAdmissionClear(this, {
+      partitionInfo,
+      tableId,
+      existingTransition,
+    });
+  }
+
+  /**
+   * Durable overlap guard (F23): refuse before registration when the
+   * source key range overlaps an already-persisted in-flight
+   * transition's ranges — consulted through the durable tables
+   * transition rows, surviving restarts and cross-node ownership.
+   * @param {Object} options
+   * @param {Object} options.partitionInfo - Source partition row.
+   * @param {string} options.partitionId - Source partition id.
+   * @param {string} options.tableId - Source table id.
+   * @param {string} options.workflowId - Registering workflow id.
+   * @return {void}
+   * @private
+   */
+  assertSplitRegistrationOverlapClear(options) {
+    assertSplitRegistrationOverlapGuardClear(this, options);
+  }
+
+  /**
    * Run one owner-scoped step strictly AFTER every previously enqueued
    * step for the same owner key (FIFO).
    *
@@ -100,22 +160,6 @@ class ManagedSplitWorkflowExecutionGateMethods {
       });
     this.splitOwnerLaneTailByOwnerKey.set(ownerKey, tail);
     return execution;
-  }
-
-  /**
-   * Resolve when every currently enqueued owner-lane step for one
-   * workflow has settled (fire-and-forget aborts included).
-   * Observability surface for guards and diagnostics.
-   * @param {string} workflowId
-   * @return {Promise<void>}
-   */
-  async settleSplitOwnerLaneForWorkflow(workflowId) {
-    const workflow = this.resolveWorkflowState(workflowId);
-    const ownerKey = this.isSplitWorkflowStateUnavailable(workflow) ?
-      '' :
-      String(workflow.ownerKey || '');
-    await (this.splitOwnerLaneTailByOwnerKey.get(ownerKey) ||
-      Promise.resolve());
   }
 
   /**
