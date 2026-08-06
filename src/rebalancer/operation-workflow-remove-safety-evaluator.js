@@ -1,4 +1,10 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
+import {
+  evaluateProjectedPeersContactable,
+  evaluateReplaceReplacementVoterReady,
+  evaluateUniversalPartitionRemoveSafety,
+  isRemoveSafetyGuardPassed,
+} from './operation-workflow-remove-safety-universal-tier.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -423,11 +429,15 @@ async function evaluateRemoveSafety(context, operation) {
     return context.buildSafeRemoveSafetyEvaluation();
   }
 
-  if (
-    !classifySystemPartition({partitionId: operation.partitionId}).systemTable
-  ) {
-    return context.buildSafeRemoveSafetyEvaluation();
-  }
+  // Audit finding 1: the execution-time safety floor is UNIVERSAL. The
+  // concurrent-operation serialization lock, the post-removal voter-ready /
+  // min-replica floor, the distinct-node spread, and the peer-ping checks run
+  // for EVERY replicated entity — an ordinary user-partition REMOVE gets no
+  // exemption. Only the deeper published-membership / leader-tenure /
+  // priority-control-plane checks below stay scoped to system entities.
+  const partitionClassification = classifySystemPartition({
+    partitionId: operation.partitionId,
+  });
 
   // Concurrent partition operation check
   const allOps = await context.repository.getOperationsByEntity(
@@ -547,46 +557,55 @@ async function evaluateRemoveSafety(context, operation) {
   const requiresSourceLeaderHandoff =
     operation.type === OperationType.REPLACE &&
     context.isReplaceSourceLeaderHandoffRequiredPartition(operation.partitionId);
+
+  if (!removingVoterReady && !requiresSourceLeaderHandoff) {
+    // The removed replica is not a voter-ready routable row and no source
+    // leader handoff is required: its removal cannot drop the post-removal
+    // voter-ready count, spread, or quorum. The universal floor needs no
+    // further projection for this operation.
+    return context.buildSafeRemoveSafetyEvaluation();
+  }
+
+  if (!partitionClassification.systemTable) {
+    return evaluateUniversalPartitionRemoveSafety(context, operation, {
+      isReplaceRemoveInitialDispatch,
+      removeSafetyReadiness,
+      currentVoterReadyRows,
+      projectedVoterReadyRows:
+        currentVoterReadyRows.filter(
+          (row) =>
+            !context.isOperationReplicaRow(row, {
+              ...operation,
+              replicaId: operationReplicaId,
+            }),
+        ),
+      operationReplicaId,
+      replacementReplicaId,
+      replacementReplicaRow,
+      projectQuorumAfterRemoval,
+      QUORUM_PROJECTION_SCOPE,
+    });
+  }
+
   const priorityRecoveryCompletionEvaluation =
     await context.evaluatePriorityRecoveryCompletionRemoveSafety(operation);
   const priorityRecoveryCompletionSafe =
     priorityRecoveryCompletionEvaluation?.classification ===
     REMOVE_SAFETY_EVALUATION_CLASSIFICATION.SAFE;
 
-  if (!removingVoterReady && !requiresSourceLeaderHandoff) {
-    return context.buildSafeRemoveSafetyEvaluation();
-  }
-
   if (isReplaceRemoveInitialDispatch) {
-    if (!replacementReplicaId) {
-      return context.buildDeferredRemoveSafetyEvaluationForOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
-          operation.partitionId +
-          OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_REPLICA +
-          OPERATION_WORKFLOW_OWNER_LITERAL.IS_UNAVAILABLE,
-      );
-    }
-    const replacementReplicaVoterReady =
-      priorityRecoveryCompletionSafe === true ?
-        context.isVoterReadyReplicaTopology(replacementReplicaRow) :
-        context.isVoterReadyRoutableReplica(
-          replacementReplicaRow,
-          removeSafetyReadiness,
-        ) ||
-          context.isPriorityActiveReplaceTopologyVoterEvidenceSufficient(
-            operation,
-            replacementReplicaRow,
-          );
-    if (!replacementReplicaVoterReady) {
-      return context.buildDeferredRemoveSafetyEvaluationForOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL.CRITICAL_PARTITION +
-          operation.partitionId +
-          OPERATION_WORKFLOW_OWNER_LITERAL.REPLACEMENT_REPLICA_2 +
-          replacementReplicaId +
-          OPERATION_WORKFLOW_OWNER_LITERAL.IS_NOT_VOTER_DASH_READY,
-      );
+    const replacementGuard = evaluateReplaceReplacementVoterReady(
+      context,
+      operation,
+      {
+        replacementReplicaId,
+        replacementReplicaRow,
+        removeSafetyReadiness,
+        priorityRecoveryCompletionSafe,
+      },
+    );
+    if (!isRemoveSafetyGuardPassed(replacementGuard)) {
+      return replacementGuard;
     }
   }
 
@@ -690,34 +709,13 @@ async function evaluateRemoveSafety(context, operation) {
     return priorityPublicationLeaderRemoveSafetyEvaluation;
   }
 
-  if (context.messageRouter) {
-    const router = context.messageRouter;
-    for (const row of projectedVoterReadyRows) {
-      const nodeId = row.nodeId || row.node_id;
-      if (nodeId && nodeId !== context.nodeId) {
-        let isConnected = true;
-        if (typeof router.getConnectionState === 'function') {
-          if (router.getConnectionState(nodeId) === 'disconnected') {
-            isConnected = false;
-          }
-        }
-        if (isConnected && typeof router.pingNode === 'function') {
-          const pingResult = await router.pingNode(nodeId).catch(() => false);
-          if (!pingResult) {
-            isConnected = false;
-          }
-        }
-        if (!isConnected) {
-          console.warn(
-            `Quorum check failed: peer node ${nodeId} is uncontactable or disconnected`,
-          );
-          return context.buildDeferredRemoveSafetyEvaluationForOperation(
-            operation,
-            `Quorum check failed: peer node ${nodeId} is uncontactable`,
-          );
-        }
-      }
-    }
+  const peerPingGuard = await evaluateProjectedPeersContactable(
+    context,
+    operation,
+    projectedVoterReadyRows,
+  );
+  if (peerPingGuard) {
+    return peerPingGuard;
   }
 
   if (priorityPublicationLeaderRemoveSafetyEvaluation) {
@@ -731,6 +729,7 @@ export {
   evaluatePriorityRecoveryCompletionRemoveSafety,
   evaluatePriorityPublishedMembershipRemoveSafety,
   evaluateRemoveSafety,
+  evaluateUniversalPartitionRemoveSafety,
   projectQuorumAfterRemoval,
   QUORUM_PROJECTION_SCOPE,
 };

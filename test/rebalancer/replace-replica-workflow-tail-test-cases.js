@@ -231,6 +231,28 @@ export async function registerReplaceReplicaWorkflowTailTests({
           replicaId: removeReplicaId,
         });
 
+        // The universal remove-safety floor (audit finding 1, strict plain
+        // REMOVE) defers a removal that would drop the post-removal
+        // voter-ready count below minReplicaCount (default 3) and fails
+        // closed on an empty replica-row read. Seed three other voter-ready
+        // replicas so removing this fourth replica stays above the floor.
+        for (const [peerReplicaId, peerNodeId] of [
+          ['widgets-p1-r1', 'node-1'],
+          ['widgets-p1-r2', 'node-2'],
+          ['widgets-p1-r3', 'node-3'],
+        ]) {
+          coordinator.systemTableCache.upsert('services', {
+            service_id: peerReplicaId,
+            replica_id: peerReplicaId,
+            partition_id: removePartitionId,
+            node_id: peerNodeId,
+            service_type: 'partition',
+            status: 'active',
+            raft_role: peerReplicaId === 'widgets-p1-r1' ? 'leader' : 'follower',
+            address: `${peerNodeId}/partition/${peerReplicaId}`,
+          });
+        }
+
         const firstAttempt = await coordinator.executeOperation(operation);
 
         t.equal(
@@ -328,6 +350,22 @@ export async function registerReplaceReplicaWorkflowTailTests({
         operation.replicaId = 'users-p1-r2';
         operation.workflowStep = WORKFLOW_STEP.SYNCING;
         operation.status = ReplicaStatus.SYNCING;
+
+        // The universal remove-safety floor (audit finding 1, lenient
+        // REPLACE) evaluates the REPLACE source-removal against the
+        // replacement replica holding quorum. Seed the target replica as
+        // voter-ready so the lenient branch sees it; otherwise the floor
+        // fails closed on an empty replica-row read.
+        coordinator.systemTableCache.upsert('services', {
+          service_id: operation.replicaId,
+          replica_id: operation.replicaId,
+          partition_id: 'users-p1',
+          node_id: 'node-2',
+          service_type: 'partition',
+          status: 'active',
+          raft_role: 'leader',
+          address: `node-2/partition/${operation.replicaId}`,
+        });
 
         const progressed =
           await coordinator.operationWorkflowRunExclusive(
@@ -463,6 +501,22 @@ export async function registerReplaceReplicaWorkflowTailTests({
             operation.operationId,
             WORKFLOW_STEP.ACTIVE,
           );
+
+        // The universal remove-safety floor (audit finding 1, lenient
+        // REPLACE) evaluates the REPLACE source-removal against the
+        // replacement replica holding quorum. Seed the target replica as
+        // voter-ready so the lenient branch sees it; otherwise the floor
+        // fails closed on an empty replica-row read.
+        coordinator.systemTableCache.upsert('services', {
+          service_id: operation.replicaId,
+          replica_id: operation.replicaId,
+          partition_id: 'users-p1',
+          node_id: 'node-2',
+          service_type: 'partition',
+          status: 'active',
+          raft_role: 'leader',
+          address: `node-2/partition/${operation.replicaId}`,
+        });
 
         const authoritativeActiveOperation = {
           ...operation,
@@ -707,6 +761,22 @@ export async function registerReplaceReplicaWorkflowTailTests({
         operation.replicaId = 'users-p1-r2';
         operation.workflowStep = WORKFLOW_STEP.SYNCING;
         operation.status = ReplicaStatus.SYNCING;
+
+        // The universal remove-safety floor (audit finding 1, lenient
+        // REPLACE) evaluates the REPLACE source-removal against the
+        // replacement replica holding quorum. Seed the target replica as
+        // voter-ready so the lenient branch sees it; otherwise the floor
+        // fails closed on an empty replica-row read.
+        coordinator.systemTableCache.upsert('services', {
+          service_id: operation.replicaId,
+          replica_id: operation.replicaId,
+          partition_id: 'users-p1',
+          node_id: 'node-2',
+          service_type: 'partition',
+          status: 'active',
+          raft_role: 'leader',
+          address: `node-2/partition/${operation.replicaId}`,
+        });
 
         await coordinator.reconcileSyncingOperation(operation);
 

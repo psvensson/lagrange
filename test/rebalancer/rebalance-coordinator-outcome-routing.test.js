@@ -171,6 +171,33 @@ function createTestCoordinator(options = {}) {
       operation.replicaId = params?.[6];
       return persistResults;
     }
+    // The remove-safety floor reads the partition's services rows. Surface the
+    // operation's source/target replicas as voter-ready rows so a REPLACE
+    // source-removal is evaluated against the replacement holding quorum
+    // (lenient REPLACE) instead of failing closed on an empty read.
+    if (
+      sql.includes('FROM services') &&
+      sql.includes('partition_id') &&
+      operation
+    ) {
+      const partitionId = params?.[1];
+      if (partitionId === (operation.partitionId || operation.entityId)) {
+        const replicaIds = [
+          operation.sourceReplicaId,
+          operation.replicaId,
+        ].filter((id) => typeof id === 'string' && id.length > 0);
+        const rows = [...new Set(replicaIds)].map((replicaId, index) => ({
+          service_id: replicaId,
+          replica_id: replicaId,
+          partition_id: partitionId,
+          node_id: operation.targetNodeId || TEST_NODE_ID,
+          service_type: 'partition',
+          status: 'active',
+          raft_role: index === 0 ? 'leader' : 'follower',
+        }));
+        return {success: true, rows};
+      }
+    }
     return {success: true, rows: []};
   };
 

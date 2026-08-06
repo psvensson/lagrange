@@ -730,6 +730,22 @@ test('RebalanceCoordinator keeps REPLACE STOPPING in progress when source ' +
       replicaId: 'mg-1-r1',
     });
 
+    // The universal remove-safety floor (audit finding 1, lenient REPLACE)
+    // evaluates the REPLACE source-removal against the replacement replica
+    // holding quorum. Seed the minted target replica as voter-ready so the
+    // lenient branch sees it; otherwise the floor fails closed on an empty
+    // replica-row read.
+    coordinator.systemTableCache.upsert('services', {
+      service_id: operation.replicaId,
+      replica_id: operation.replicaId,
+      partition_id: 'mg-1',
+      node_id: 'node-3',
+      service_type: 'partition',
+      status: 'active',
+      raft_role: 'leader',
+      address: `node-3/partition/${operation.replicaId}`,
+    });
+
     await coordinator.executeOperation(operation);
     await coordinator.updateStep(operation, WORKFLOW_STEP.ACTIVE);
     await coordinator.executeOperation(operation);

@@ -349,6 +349,26 @@ test('RebalanceCoordinator - normalizes object error payloads for safety-blocked
           createReadyNode('node-b'),
           createReadyNode('node-c'),
         ],
+        services: [
+          createCriticalPartitionServiceRow({
+            partitionId: 'custom-p1',
+            replicaId: 'custom-p1-r1',
+            nodeId: 'node-a',
+            raftRole: 'leader',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'custom-p1',
+            replicaId: 'custom-p1-r2',
+            nodeId: 'node-b',
+            raftRole: 'follower',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'custom-p1',
+            replicaId: 'custom-p1-r3',
+            nodeId: 'node-c',
+            raftRole: 'follower',
+          }),
+        ],
       },
     });
 
@@ -417,6 +437,26 @@ test('RebalanceCoordinator - normalizes errorMessage payloads for safety-blocked
           createReadyNode('node-a'),
           createReadyNode('node-b'),
           createReadyNode('node-c'),
+        ],
+        services: [
+          createCriticalPartitionServiceRow({
+            partitionId: 'custom-p1',
+            replicaId: 'custom-p1-r1',
+            nodeId: 'node-a',
+            raftRole: 'leader',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'custom-p1',
+            replicaId: 'custom-p1-r2',
+            nodeId: 'node-b',
+            raftRole: 'follower',
+          }),
+          createCriticalPartitionServiceRow({
+            partitionId: 'custom-p1',
+            replicaId: 'custom-p1-r3',
+            nodeId: 'node-c',
+            raftRole: 'follower',
+          }),
         ],
       },
     });

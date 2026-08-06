@@ -67,28 +67,41 @@ function buildOperationRow({
   };
 }
 
-function buildActiveServiceRow(replicaId = REPLICA_ID) {
+function buildActiveServiceRow(replicaId = REPLICA_ID, nodeId = TARGET_NODE_ID) {
   return {
     service_id: replicaId,
     replica_id: replicaId,
     partition_id: PARTITION_ID,
-    node_id: TARGET_NODE_ID,
+    node_id: nodeId,
     service_type: SERVICE_TYPE.PARTITION,
     status: ReplicaStatus.ACTIVE,
     raft_role: 'follower',
-    address: `${TARGET_NODE_ID}/partition/${replicaId}`,
+    address: `${nodeId}/partition/${replicaId}`,
   };
 }
 
+// The universal remove-safety floor (audit finding 1) blocks a removal that
+// drops the post-removal voter-ready count below the min-replica floor. These
+// fixtures exercise the dispatch / re-drive machinery, not the floor, so they
+// seed a safe quorum: the removed replica plus two stable voter-ready peers on
+// distinct nodes, and a min-replica policy of 2 (removing one leaves 2 >= 2).
+const STABLE_SERVICE_ROWS = [
+  buildActiveServiceRow(`${PARTITION_ID}-r2`, 'stable-node-a'),
+  buildActiveServiceRow(`${PARTITION_ID}-r3`, 'stable-node-b'),
+];
+
 function createRemoveCoordinator({
   operationRow,
-  serviceRows = [buildActiveServiceRow()],
+  serviceRows = [buildActiveServiceRow(), ...STABLE_SERVICE_ROWS],
   removeResponseStatus = ReplicaOperationResponseStatus.INITIATED,
 }) {
   const deliveries = [];
   const coordinator = createTestCoordinator({
     nodeId: OWNER_NODE_ID,
     enableTimeouts: false,
+    tablePolicyService: {
+      getPolicyForPartition: () => ({minReplicaCount: 2}),
+    },
     cacheData: {
       services: serviceRows,
       replicaOperations: [operationRow],

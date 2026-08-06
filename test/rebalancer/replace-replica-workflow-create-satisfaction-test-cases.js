@@ -208,6 +208,21 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
           replicaId: 'users-p1-r1',
         });
 
+        // The universal remove-safety floor (audit finding 1, lenient REPLACE)
+        // evaluates a REPLACE source-removal against the replacement replica
+        // holding quorum. Seed the minted target replica as voter-ready so the
+        // lenient branch sees it; otherwise the floor fails closed on an empty
+        // replica-row read.
+        coordinator.systemTableCache.upsert('services', {
+          service_id: operation.replicaId,
+          replica_id: operation.replicaId,
+          partition_id: 'users-p1',
+          node_id: 'node-2',
+          service_type: 'partition',
+          status: 'active',
+          raft_role: 'leader',
+        });
+
         coordinator.operationWorkflowCoordinator
           .markTransitionCommitted(
             operation.operationId,

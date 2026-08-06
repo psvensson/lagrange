@@ -448,6 +448,21 @@ test('createOperation defers retryable participant-pressure failures and ' +
     return {success: true, rows: [], affectedRows: 0};
   };
 
+  // The universal remove-safety floor (audit finding 1) fails closed on an
+  // empty replica-row read ("safety check unavailable"). This fixture tests
+  // owner-lane retry priming, not the floor — seed one voter-ready peer row
+  // (with the floor already lowered via tablePolicyService below) so the
+  // plain REMOVE dispatch can proceed once the deferred retry resumes.
+  const seededSafetyPeerRow = {
+    service_id: 'partition-pressure-retry-test-r2',
+    replica_id: 'partition-pressure-retry-test-r2',
+    service_type: 'partition',
+    partition_id: 'partition-pressure-retry-test',
+    node_id: 'node-peer',
+    status: 'active',
+    raft_role: 'follower',
+    address: 'node-peer/partition/partition-pressure-retry-test-r2',
+  };
   const coordinator = new RebalanceCoordinator({
     nodeId: 'node-local',
     systemTableCache: {
@@ -457,8 +472,11 @@ test('createOperation defers retryable participant-pressure failures and ' +
       getAll() {
         return [];
       },
-      filter() {
-        return [];
+      filter(tableName, predicate) {
+        if (tableName !== 'services' || typeof predicate !== 'function') {
+          return [];
+        }
+        return [seededSafetyPeerRow].filter(predicate);
       },
     },
     cdcIntegrationService: {
