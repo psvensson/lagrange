@@ -435,7 +435,6 @@ const SPLIT_MERGE_LOG_MSG = Object.freeze({
   STOPPED_PERIODIC_EVAL: 'Stopped periodic split/merge evaluation',
   SKIPPING_EVAL_BUSY: 'Skipping evaluation: manager is busy',
   PARTITION_EVAL_COMPLETED: 'Partition evaluation completed',
-  THRESHOLDS_UPDATED: 'Thresholds updated',
   MANAGER_SHUTDOWN: 'PartitionSplitMergeManager shutdown',
   SPLIT_CAPACITY_PREFLIGHT: 'Split capacity preflight check',
   SPLIT_DEFERRED_CAPACITY: 'Split deferred due to insufficient capacity',

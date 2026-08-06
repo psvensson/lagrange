@@ -316,21 +316,45 @@ test('PartitionSplitMergeManager - mergePartitions rejects non-adjacent partitio
   manager.shutdown();
 });
 
-test('PartitionSplitMergeManager - setThresholds updates thresholds', async (t) => {
+test('PartitionSplitMergeManager - thresholds have a single owner and no mutator', async (t) => {
   const manager = new PartitionSplitMergeManager();
 
-  manager.setThresholds({
-    splitStorageThreshold: 5 * 1024 * 1024 * 1024,
-    splitTrafficThreshold: 500,
-    mergeStorageThreshold: 1 * 1024 * 1024 * 1024,
-    mergeTrafficThreshold: 100,
-  });
+  // Threshold state is owned by construction-time configuration
+  // (ConfigurationManager / SPLIT_MERGE_DEFAULT); the manager exposes no
+  // threshold mutator that could bypass that authority (F24).
+  t.equal(
+    typeof manager.setThresholds,
+    'undefined',
+    'manager exposes no setThresholds mutator',
+  );
+  t.equal(
+    typeof PartitionSplitMergeManager.prototype.setThresholds,
+    'undefined',
+    'prototype exposes no setThresholds mutator',
+  );
+
+  // Scan the full public surface: no function whose name mutates threshold
+  // state may exist under any name.
+  const thresholdMutators = [
+    ...Object.getOwnPropertyNames(PartitionSplitMergeManager.prototype),
+    ...Object.keys(manager),
+  ].filter(
+    (name) =>
+      /threshold/i.test(name) &&
+      !/^get/i.test(name) &&
+      typeof manager[name] === 'function',
+  );
+  t.same(
+    thresholdMutators,
+    [],
+    'public surface carries no threshold mutator of any name',
+  );
 
   const thresholds = manager.getThresholds();
-  t.equal(thresholds.splitStorageThreshold, 5 * 1024 * 1024 * 1024);
-  t.equal(thresholds.splitTrafficThreshold, 500);
-  t.equal(thresholds.mergeStorageThreshold, 1 * 1024 * 1024 * 1024);
-  t.equal(thresholds.mergeTrafficThreshold, 100);
+  t.equal(thresholds.splitStorageThreshold, DEFAULT_SPLIT_STORAGE_THRESHOLD);
+  t.equal(thresholds.splitTrafficThreshold, DEFAULT_SPLIT_TRAFFIC_THRESHOLD);
+  t.equal(thresholds.mergeStorageThreshold, DEFAULT_MERGE_STORAGE_THRESHOLD);
+  t.equal(thresholds.mergeTrafficThreshold, DEFAULT_MERGE_TRAFFIC_THRESHOLD);
 
   manager.shutdown();
 });

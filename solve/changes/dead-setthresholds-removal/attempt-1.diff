@@ -1,0 +1,205 @@
+diff --git a/scripts/quest-evidence-dead-setthresholds-removal.js b/scripts/quest-evidence-dead-setthresholds-removal.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..deac6013684e5bf7e25fdf02d73672c08f05af4a
+--- /dev/null
++++ b/scripts/quest-evidence-dead-setthresholds-removal.js
+@@ -0,0 +1,48 @@
++// Deterministic evidence harness for the dead-setthresholds-removal quest:
++// receipt declarations only. The shared runtime
++// (scripts/quest-evidence-harness-runtime.js) re-runs each recorded proof
++// command and writes the probe artifact.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'single-threshold-owner',
++    testFile: 'test/partition/partition-split-merge-manager.test.js',
++    detail: 'threshold state has exactly one owner — construction-time ' +
++      'configuration (ConfigurationManager / SPLIT_MERGE_DEFAULT in the ' +
++      'PartitionSplitMergeManager constructor); getThresholds returns the ' +
++      'configured defaults and no post-construction mutation path exists ' +
++      '(F24)',
++  }),
++  Object.freeze({
++    id: 'no-dead-mutator',
++    testFile: 'test/partition/partition-split-merge-manager.test.js',
++    detail: 'the split/merge manager public surface — instance and ' +
++      'prototype — carries no setThresholds mutator and no threshold-' +
++      'mutating method of any name; a regression test scans the public ' +
++      'API surface so re-adding a dead mutator fails the suite',
++  }),
++  Object.freeze({
++    id: 'legacy-split-merge-suite-green',
++    testFile: 'test/partition/merge-auto-execution.test.js',
++    detail: 'pre-existing merge auto-execution regression suite ' +
++      '(backpressure deferral, execution caps via getThresholds) passes ' +
++      'unchanged with the dead setThresholds surface removed',
++  }),
++]);
++
++const QUEST_ID = 'dead-setthresholds-removal';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME = 'dead-setthresholds-removal.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/solve/evidence/dead-setthresholds-removal.receipt.json b/solve/evidence/dead-setthresholds-removal.receipt.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..fd59bbedab7ac0f3cbabe30c4076457b584633b9
+--- /dev/null
++++ b/solve/evidence/dead-setthresholds-removal.receipt.json
+@@ -0,0 +1,26 @@
++{
++  "schema": "test-receipt/1",
++  "quest": "dead-setthresholds-removal",
++  "status": "pass",
++  "generatedAt": "2026-08-06T10:25:21.502Z",
++  "receipts": [
++    {
++      "id": "single-threshold-owner",
++      "passed": true,
++      "command": "npm run test:file -- test/partition/partition-split-merge-manager.test.js",
++      "detail": "threshold state has exactly one owner — construction-time configuration (ConfigurationManager / SPLIT_MERGE_DEFAULT in the PartitionSplitMergeManager constructor); getThresholds returns the configured defaults and no post-construction mutation path exists (F24)"
++    },
++    {
++      "id": "no-dead-mutator",
++      "passed": true,
++      "command": "npm run test:file -- test/partition/partition-split-merge-manager.test.js",
++      "detail": "the split/merge manager public surface — instance and prototype — carries no setThresholds mutator and no threshold-mutating method of any name; a regression test scans the public API surface so re-adding a dead mutator fails the suite"
++    },
++    {
++      "id": "legacy-split-merge-suite-green",
++      "passed": true,
++      "command": "npm run test:file -- test/partition/merge-auto-execution.test.js",
++      "detail": "pre-existing merge auto-execution regression suite (backpressure deferral, execution caps via getThresholds) passes unchanged with the dead setThresholds surface removed"
++    }
++  ]
++}
+diff --git a/src/partition/partition-constants.js b/src/partition/partition-constants.js
+index c3fb8d2477803e5f48453501b32a805b0192be84..b5e6141862a8d258ff371a0d43375d1f7bda1011 100644
+--- a/src/partition/partition-constants.js
++++ b/src/partition/partition-constants.js
+@@ -435,7 +435,6 @@ const SPLIT_MERGE_LOG_MSG = Object.freeze({
+   STOPPED_PERIODIC_EVAL: 'Stopped periodic split/merge evaluation',
+   SKIPPING_EVAL_BUSY: 'Skipping evaluation: manager is busy',
+   PARTITION_EVAL_COMPLETED: 'Partition evaluation completed',
+-  THRESHOLDS_UPDATED: 'Thresholds updated',
+   MANAGER_SHUTDOWN: 'PartitionSplitMergeManager shutdown',
+   SPLIT_CAPACITY_PREFLIGHT: 'Split capacity preflight check',
+   SPLIT_DEFERRED_CAPACITY: 'Split deferred due to insufficient capacity',
+diff --git a/src/partition/partition-split-merge-manager-evaluation-methods.js b/src/partition/partition-split-merge-manager-evaluation-methods.js
+index 17e8682dcbba9af4567642ba46dfd3aeb6e04a70..d350efdb22015caf83e4c99b470c0a7e204125dc 100644
+--- a/src/partition/partition-split-merge-manager-evaluation-methods.js
++++ b/src/partition/partition-split-merge-manager-evaluation-methods.js
+@@ -661,41 +661,6 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
+       };
+     },
+ 
+-    /**
+-     * Update thresholds dynamically.
+-     * @param {Object} thresholds
+-     */
+-    setThresholds(thresholds) {
+-      if (thresholds.splitStorageThreshold !== undefined) {
+-        this.splitStorageThreshold = thresholds.splitStorageThreshold;
+-      }
+-      if (thresholds.splitTrafficThreshold !== undefined) {
+-        this.splitTrafficThreshold = thresholds.splitTrafficThreshold;
+-      }
+-      if (thresholds.mergeStorageThreshold !== undefined) {
+-        this.mergeStorageThreshold = thresholds.mergeStorageThreshold;
+-      }
+-      if (thresholds.mergeTrafficThreshold !== undefined) {
+-        this.mergeTrafficThreshold = thresholds.mergeTrafficThreshold;
+-      }
+-      if (thresholds.evaluationIntervalMs !== undefined) {
+-        this.evaluationIntervalMs = thresholds.evaluationIntervalMs;
+-      }
+-      if (thresholds.maxAutoExecuteSplitsPerEvaluation !== undefined) {
+-        this.maxAutoExecuteSplitsPerEvaluation =
+-          thresholds.maxAutoExecuteSplitsPerEvaluation;
+-      }
+-      if (thresholds.maxAutoExecuteMergesPerEvaluation !== undefined) {
+-        this.maxAutoExecuteMergesPerEvaluation =
+-          thresholds.maxAutoExecuteMergesPerEvaluation;
+-      }
+-
+-      this.logger.info(
+-        SPLIT_MERGE_LOG_MSG.THRESHOLDS_UPDATED,
+-        this.getThresholds(),
+-      );
+-    },
+-
+     /**
+      * Shutdown the manager.
+      */
+diff --git a/test/partition/partition-split-merge-manager.test.js b/test/partition/partition-split-merge-manager.test.js
+index 2ddc46a64cd2a0b9326b51cc664aaa54757755ab..0b641662b29c2c35c8b339169f5f0c655bbeed80 100644
+--- a/test/partition/partition-split-merge-manager.test.js
++++ b/test/partition/partition-split-merge-manager.test.js
+@@ -316,21 +316,45 @@ test('PartitionSplitMergeManager - mergePartitions rejects non-adjacent partitio
+   manager.shutdown();
+ });
+ 
+-test('PartitionSplitMergeManager - setThresholds updates thresholds', async (t) => {
++test('PartitionSplitMergeManager - thresholds have a single owner and no mutator', async (t) => {
+   const manager = new PartitionSplitMergeManager();
+ 
+-  manager.setThresholds({
+-    splitStorageThreshold: 5 * 1024 * 1024 * 1024,
+-    splitTrafficThreshold: 500,
+-    mergeStorageThreshold: 1 * 1024 * 1024 * 1024,
+-    mergeTrafficThreshold: 100,
+-  });
++  // Threshold state is owned by construction-time configuration
++  // (ConfigurationManager / SPLIT_MERGE_DEFAULT); the manager exposes no
++  // threshold mutator that could bypass that authority (F24).
++  t.equal(
++    typeof manager.setThresholds,
++    'undefined',
++    'manager exposes no setThresholds mutator',
++  );
++  t.equal(
++    typeof PartitionSplitMergeManager.prototype.setThresholds,
++    'undefined',
++    'prototype exposes no setThresholds mutator',
++  );
++
++  // Scan the full public surface: no function whose name mutates threshold
++  // state may exist under any name.
++  const thresholdMutators = [
++    ...Object.getOwnPropertyNames(PartitionSplitMergeManager.prototype),
++    ...Object.keys(manager),
++  ].filter(
++    (name) =>
++      /threshold/i.test(name) &&
++      !/^get/i.test(name) &&
++      typeof manager[name] === 'function',
++  );
++  t.same(
++    thresholdMutators,
++    [],
++    'public surface carries no threshold mutator of any name',
++  );
+ 
+   const thresholds = manager.getThresholds();
+-  t.equal(thresholds.splitStorageThreshold, 5 * 1024 * 1024 * 1024);
+-  t.equal(thresholds.splitTrafficThreshold, 500);
+-  t.equal(thresholds.mergeStorageThreshold, 1 * 1024 * 1024 * 1024);
+-  t.equal(thresholds.mergeTrafficThreshold, 100);
++  t.equal(thresholds.splitStorageThreshold, DEFAULT_SPLIT_STORAGE_THRESHOLD);
++  t.equal(thresholds.splitTrafficThreshold, DEFAULT_SPLIT_TRAFFIC_THRESHOLD);
++  t.equal(thresholds.mergeStorageThreshold, DEFAULT_MERGE_STORAGE_THRESHOLD);
++  t.equal(thresholds.mergeTrafficThreshold, DEFAULT_MERGE_TRAFFIC_THRESHOLD);
+ 
+   manager.shutdown();
+ });

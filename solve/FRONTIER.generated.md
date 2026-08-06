@@ -48,7 +48,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 18
+## Open quests — 17
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -65,11 +65,10 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 ⚠ stale | — |
 | publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 | — |
 | rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 | — |
-| runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 ⚠ stale | — |
+| runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 ⚠ stale | — |
 | solver-low-ceremony-correction-loop | process | 8 | 0 | 2026-08-05 | — |
-| split-key-comparator-typing | product | 0 | 0 | 2026-08-06 | — |
 
-> 13 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
+> 12 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 

@@ -662,41 +662,6 @@ function createPartitionSplitMergeManagerEvaluationMethods(options = {}) {
     },
 
     /**
-     * Update thresholds dynamically.
-     * @param {Object} thresholds
-     */
-    setThresholds(thresholds) {
-      if (thresholds.splitStorageThreshold !== undefined) {
-        this.splitStorageThreshold = thresholds.splitStorageThreshold;
-      }
-      if (thresholds.splitTrafficThreshold !== undefined) {
-        this.splitTrafficThreshold = thresholds.splitTrafficThreshold;
-      }
-      if (thresholds.mergeStorageThreshold !== undefined) {
-        this.mergeStorageThreshold = thresholds.mergeStorageThreshold;
-      }
-      if (thresholds.mergeTrafficThreshold !== undefined) {
-        this.mergeTrafficThreshold = thresholds.mergeTrafficThreshold;
-      }
-      if (thresholds.evaluationIntervalMs !== undefined) {
-        this.evaluationIntervalMs = thresholds.evaluationIntervalMs;
-      }
-      if (thresholds.maxAutoExecuteSplitsPerEvaluation !== undefined) {
-        this.maxAutoExecuteSplitsPerEvaluation =
-          thresholds.maxAutoExecuteSplitsPerEvaluation;
-      }
-      if (thresholds.maxAutoExecuteMergesPerEvaluation !== undefined) {
-        this.maxAutoExecuteMergesPerEvaluation =
-          thresholds.maxAutoExecuteMergesPerEvaluation;
-      }
-
-      this.logger.info(
-        SPLIT_MERGE_LOG_MSG.THRESHOLDS_UPDATED,
-        this.getThresholds(),
-      );
-    },
-
-    /**
      * Shutdown the manager.
      */
     shutdown() {
