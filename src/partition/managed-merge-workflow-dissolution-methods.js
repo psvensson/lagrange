@@ -22,6 +22,7 @@ import {
 } from './merge-ack-constants.js';
 
 const LOCAL_STR_MERGE_SOURCE_DISSOLUTION = 'merge_source_dissolution';
+const LOCAL_NUM_DISSOLUTION_WITNESS_AFFECTED_ROWS = 1;
 const LOCAL_STR_MERGE_SOURCE_EXECUTION_FAILURE =
   'merge_source_execution_failure';
 const LOCAL_STR_DISSOLVE_SEGMENT = ':dissolve:';
@@ -132,24 +133,56 @@ class ManagedMergeWorkflowDissolutionMethods {
   }
 
   /**
+   * Resolve the durable witness for one partitions-row removal: exactly
+   * one affected row means the descriptor is durably gone (F14 parity
+   * with the split dissolution).
+   * @param {Object|null} mutationResult - Gateway mutation result.
+   * @return {boolean}
+   * @private
+   */
+  isDissolutionWitnessPersisted(mutationResult) {
+    const affectedRows = Number(
+      mutationResult?.partitionResult?.affectedRows ??
+      mutationResult?.affectedRows ??
+      0,
+    );
+    return mutationResult?.success !== false &&
+      affectedRows === LOCAL_NUM_DISSOLUTION_WITNESS_AFFECTED_ROWS;
+  }
+
+  /**
    * Dissolve one retired source partition: replica teardown dispatch plus
    * descriptor deletion, acknowledged as SOURCE_DISSOLVED (or
-   * DISSOLUTION_FAILED — never a fake success).
+   * DISSOLUTION_FAILED — never a fake success). The SOURCE_DISSOLVED ack
+   * is recorded ONLY against the persisted partitions-row witness
+   * (affectedRows === 1) and both owner-recorded acks carry the
+   * workflow's claim fence token, so dissolution passes the same
+   * participant-fence validation as every other ack and can never lead
+   * the durable removal.
    * @param {string} workflowId
    * @param {string} sourcePartitionId
    * @return {Promise<void>}
    * @private
    */
   async dissolveMergeSourcePartition(workflowId, sourcePartitionId) {
+    const workflow = this.resolveWorkflowState(workflowId);
+    const fenceToken = Number.isInteger(workflow?.fenceToken) ?
+      workflow.fenceToken :
+      null;
     try {
       const dissolvedReplicaIds = await this.dispatchSourceReplicaRemovals(
         workflowId,
         sourcePartitionId,
       );
-      await this.deleteSourcePartitionMetadata(sourcePartitionId);
+      const deleteWitness =
+        await this.deleteSourcePartitionMetadata(sourcePartitionId);
+      if (!this.isDissolutionWitnessPersisted(deleteWitness)) {
+        throw new Error(MANAGED_MERGE_LOG_MSG.DISSOLUTION_WITNESS_MISSING);
+      }
       await this.workflowCoordinator.acknowledgeParticipant(workflowId, {
         [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
           buildMergeSourceParticipantKey(sourcePartitionId),
+        [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
         [PARTICIPANT_ACK_FIELD.STATUS]: MERGE_ACK_STATUS.SOURCE_DISSOLVED,
         [PARTICIPANT_ACK_FIELD.CHECKPOINT]: {
           [MERGE_ACK_CHECKPOINT_FIELD.DISSOLVED_REPLICA_IDS]:
@@ -171,6 +204,7 @@ class ManagedMergeWorkflowDissolutionMethods {
       await this.workflowCoordinator.acknowledgeParticipant(workflowId, {
         [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
           buildMergeSourceParticipantKey(sourcePartitionId),
+        [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
         [PARTICIPANT_ACK_FIELD.STATUS]: MERGE_ACK_STATUS.DISSOLUTION_FAILED,
         [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
       });

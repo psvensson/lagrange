@@ -596,7 +596,7 @@ class ManagedMergeWorkflowPersistenceMethods {
    * @private
    */
   async deleteSourcePartitionMetadata(partitionId) {
-    await this.getControlPlaneSystemTableGateway().submitMutation({
+    return this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
       tableName: TABLES.PARTITIONS,
       whereClause: {[LOCAL_STR_PARTITION_ID]: partitionId},

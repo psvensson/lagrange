@@ -559,6 +559,9 @@ const MANAGED_MERGE_LOG_MSG = Object.freeze({
     'Managed merge workflow ownership claim refused',
   OWNERSHIP_LOST: 'Managed merge workflow ownership lost',
   ACK_REJECTED: 'Managed merge source acknowledgement rejected',
+  DISSOLUTION_WITNESS_MISSING:
+    'Managed merge source dissolution refused: the partitions-row removal ' +
+    'returned no durable witness',
 });
 
 /**
@@ -586,6 +589,9 @@ const MANAGED_SPLIT_LOG_MSG = Object.freeze({
     'the active epoch',
   DISSOLUTION_DISPATCHED: 'Managed split source dissolution dispatched',
   DISSOLUTION_FAILED: 'Managed split source dissolution failed',
+  DISSOLUTION_WITNESS_MISSING:
+    'Managed split source dissolution refused: the partitions-row removal ' +
+    'returned no durable witness',
   CHILD_TEARDOWN_FAILED: 'Managed split aborted-child teardown failed',
   SPLIT_ABORTED_ON_SOURCE_FAILURE:
     'Managed split aborted fail-safe on source failure acknowledgement; ' +

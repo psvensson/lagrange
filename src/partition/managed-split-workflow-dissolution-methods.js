@@ -19,6 +19,7 @@ import {
 } from './split-ack-constants.js';
 
 const LOCAL_STR_SPLIT_SOURCE_DISSOLUTION = 'split_source_dissolution';
+const LOCAL_NUM_DISSOLUTION_WITNESS_AFFECTED_ROWS = 1;
 const LOCAL_STR_SPLIT_ABORTED_CHILD_TEARDOWN = 'split_aborted_child_teardown';
 const LOCAL_STR_DISSOLVE_SEGMENT = ':dissolve:';
 const LOCAL_STR_REPLICA_ID_SNAKE = 'replica_id';
@@ -242,9 +243,34 @@ class ManagedSplitWorkflowDissolutionMethods {
   }
 
   /**
+   * Resolve the durable witness for one partitions-row removal: exactly
+   * one affected row means the descriptor is durably gone. Anything else
+   * (no mutation result, zero rows, or more than one) is NOT a witness —
+   * recording dissolution against it would let a crashed owner believe a
+   * source is dissolved while its durable row survives (F14).
+   * @param {Object|null} mutationResult - Gateway mutation result.
+   * @return {boolean}
+   * @private
+   */
+  isDissolutionWitnessPersisted(mutationResult) {
+    const affectedRows = Number(
+      mutationResult?.partitionResult?.affectedRows ??
+      mutationResult?.affectedRows ??
+      0,
+    );
+    return mutationResult?.success !== false &&
+      affectedRows === LOCAL_NUM_DISSOLUTION_WITNESS_AFFECTED_ROWS;
+  }
+
+  /**
    * Dissolve the retired source partition: replica teardown dispatch
    * plus descriptor deletion, acknowledged as SOURCE_DISSOLVED (or
-   * DISSOLUTION_FAILED — never a fake success).
+   * DISSOLUTION_FAILED — never a fake success). The SOURCE_DISSOLVED ack
+   * is recorded ONLY against the persisted partitions-row witness
+   * (affectedRows === 1) and both owner-recorded acks carry the
+   * workflow's claim fence token, so dissolution passes the same
+   * participant-fence validation as every other ack and can never lead
+   * the durable removal.
    * @param {string} workflowId
    * @return {Promise<void>}
    * @private
@@ -256,16 +282,24 @@ class ManagedSplitWorkflowDissolutionMethods {
         PARTITION_TRANSITION_METADATA_FIELD.SOURCE_PARTITION_ID
       ] || workflow?.partitionId || '',
     );
+    const fenceToken = Number.isInteger(workflow?.fenceToken) ?
+      workflow.fenceToken :
+      null;
     try {
       const dissolvedReplicaIds = await this.dispatchSplitReplicaRemovals(
         workflowId,
         sourcePartitionId,
         LOCAL_STR_SPLIT_SOURCE_DISSOLUTION,
       );
-      await this.deletePartitionMetadata(sourcePartitionId);
+      const deleteWitness =
+        await this.deletePartitionMetadata(sourcePartitionId);
+      if (!this.isDissolutionWitnessPersisted(deleteWitness)) {
+        throw new Error(MANAGED_SPLIT_LOG_MSG.DISSOLUTION_WITNESS_MISSING);
+      }
       await this.workflowCoordinator.acknowledgeParticipant(workflowId, {
         [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
           SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
+        [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
         [PARTICIPANT_ACK_FIELD.STATUS]: SPLIT_ACK_STATUS.SOURCE_DISSOLVED,
         [PARTICIPANT_ACK_FIELD.CHECKPOINT]: {
           [SPLIT_ACK_CHECKPOINT_FIELD.DISSOLVED_REPLICA_IDS]:
@@ -287,6 +321,7 @@ class ManagedSplitWorkflowDissolutionMethods {
       await this.workflowCoordinator.acknowledgeParticipant(workflowId, {
         [PARTICIPANT_ACK_FIELD.PARTICIPANT_KEY]:
           SPLIT_PARTICIPANT_PREFIX.SOURCE_PARTITION,
+        [PARTICIPANT_ACK_FIELD.FENCE_TOKEN]: fenceToken,
         [PARTICIPANT_ACK_FIELD.STATUS]: SPLIT_ACK_STATUS.DISSOLUTION_FAILED,
         [PARTICIPANT_ACK_FIELD.ACKNOWLEDGED_AT]: this.now(),
       });

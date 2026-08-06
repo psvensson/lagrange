@@ -566,15 +566,16 @@ class ManagedSplitWorkflowPersistenceMethods {
    * Delete one partition metadata row (orphan-child cleanup before a
    * split retry re-inserts both children).
    * @param {string} partitionId - Partition row identity.
-   * @return {Promise<void>}
+   * @return {Promise<Object|null>} The gateway mutation result, or null
+   *   when no mutation path is wired.
    * @private
    */
   async deletePartitionMetadata(partitionId) {
     const cdcIntegrationService = this.getCDCIntegrationService();
     if (!cdcIntegrationService && !this.controlPlaneSystemTableGateway) {
-      return;
+      return null;
     }
-    await this.getControlPlaneSystemTableGateway().submitMutation({
+    return this.getControlPlaneSystemTableGateway().submitMutation({
       operation: CONTROL_PLANE_MUTATION_OPERATION.DELETE,
       tableName: TABLES.PARTITIONS,
       whereClause: {partition_id: partitionId},

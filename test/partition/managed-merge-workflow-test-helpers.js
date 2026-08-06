@@ -152,8 +152,12 @@ function createRecordingCdcIntegrationService(recorders) {
       if (tableName === TABLES.PARTITIONS &&
           partitionInfos?.[whereClause?.partition_id]) {
         delete partitionInfos[whereClause.partition_id];
+        // Model the durable witness honestly: a row existed and was
+        // removed, so the removal reports exactly one affected row (the
+        // dissolution-durable-proof contract reads this witness).
+        return {success: true, affectedRows: 1};
       }
-      return {success: true};
+      return {success: true, affectedRows: 0};
     },
   };
 }
