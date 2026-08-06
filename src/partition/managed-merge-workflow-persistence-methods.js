@@ -14,6 +14,9 @@ import {
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
 import {
+  stampOwnershipClaimMetadata,
+} from './managed-workflow-ownership-core.js';
+import {
   isRetryableManagedSplitExecutionFailure,
   resolveRetryableManagedSplitExecutionDecisionType,
 } from './managed-split-retry-policy.js';
@@ -193,16 +196,16 @@ class ManagedMergeWorkflowPersistenceMethods {
    * @return {Promise<void>}
    * @private
    */
-  async persistWorkflowTransition(workflow) {
-    const cdcIntegrationService = this.getCDCIntegrationService();
-    if (!cdcIntegrationService ||
-        typeof cdcIntegrationService.updateSystemTableRow !==
-          LOCAL_STR_FUNCTION) {
-      throw new Error(
-        MANAGED_MERGE_ERROR_MSG.TRANSITION_PERSIST_UNAVAILABLE,
-      );
-    }
-
+  /**
+   * Build the full tables-row transition mutation payload for one
+   * workflow: serialized transition metadata, the pending epoch field,
+   * and the status-dependent epoch effects applied in place.
+   * @param {Object} workflow - Workflow state.
+   * @return {Object} {updatePayload, serializedMetadata,
+   *   pendingPartitionVersion, isEpochTransition}.
+   * @private
+   */
+  buildMergeTransitionUpdatePayload(workflow) {
     const pendingPartitionVersion = Number(
       workflow.metadata?.[
         PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION
@@ -219,16 +222,37 @@ class ManagedMergeWorkflowPersistenceMethods {
       partition_transition_metadata: serializedMetadata,
       updated_at: workflow.updatedAt,
     };
-
     this.applyMergeTransitionEpochFields(
       updatePayload,
       workflow,
       pendingPartitionVersion,
     );
-
     const isEpochTransition = workflow.status ===
         PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE ||
       workflow.status === PARTITION_TRANSITION_STATE.FAILED;
+    return {
+      updatePayload,
+      serializedMetadata,
+      pendingPartitionVersion,
+      isEpochTransition,
+    };
+  }
+
+  async persistWorkflowTransition(workflow) {
+    const cdcIntegrationService = this.getCDCIntegrationService();
+    if (!cdcIntegrationService ||
+        typeof cdcIntegrationService.updateSystemTableRow !==
+          LOCAL_STR_FUNCTION) {
+      throw new Error(
+        MANAGED_MERGE_ERROR_MSG.TRANSITION_PERSIST_UNAVAILABLE,
+      );
+    }
+
+    const {
+      updatePayload,
+      serializedMetadata,
+      isEpochTransition,
+    } = this.buildMergeTransitionUpdatePayload(workflow);
     const mutationResult = await this.getControlPlaneSystemTableGateway()
       .submitMutation({
         operation: CONTROL_PLANE_MUTATION_OPERATION.UPDATE,
@@ -313,30 +337,7 @@ class ManagedMergeWorkflowPersistenceMethods {
     // Durable ownership claim triple (mirrors the split owner): the
     // tables transition row carries the fencing state without a schema
     // change.
-    if (Number.isInteger(workflow.fenceToken)) {
-      metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN] =
-        workflow.fenceToken;
-    } else {
-      delete metadata[
-        PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN
-      ];
-    }
-    if (workflow.workflowOwnerId) {
-      metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID] =
-        workflow.workflowOwnerId;
-    } else {
-      delete metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID];
-    }
-    if (Number.isFinite(workflow.leaseExpiresAt)) {
-      metadata[
-        PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT
-      ] = workflow.leaseExpiresAt;
-    } else {
-      delete metadata[
-        PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT
-      ];
-    }
-    return metadata;
+    return stampOwnershipClaimMetadata(metadata, workflow);
   }
 
   /**
@@ -413,30 +414,11 @@ class ManagedMergeWorkflowPersistenceMethods {
     const expectedSerializedMetadata = JSON.stringify(
       this.buildPersistedTransitionMetadata(previousWorkflow),
     );
-    const pendingPartitionVersion = Number(
-      workflow.metadata?.[
-        PARTITION_TRANSITION_METADATA_FIELD.TARGET_PARTITION_VERSION
-      ],
-    );
-    const serializedMetadata = JSON.stringify(
-      this.buildPersistedTransitionMetadata(workflow),
-    );
-    const updatePayload = {
-      pending_partition_version: Number.isInteger(pendingPartitionVersion) ?
-        pendingPartitionVersion :
-        null,
-      partition_transition_state: workflow.status,
-      partition_transition_metadata: serializedMetadata,
-      updated_at: workflow.updatedAt,
-    };
-    this.applyMergeTransitionEpochFields(
+    const {
       updatePayload,
-      workflow,
-      pendingPartitionVersion,
-    );
-    const isEpochTransition = workflow.status ===
-        PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE ||
-      workflow.status === PARTITION_TRANSITION_STATE.FAILED;
+      serializedMetadata,
+      isEpochTransition,
+    } = this.buildMergeTransitionUpdatePayload(workflow);
     const mutationResult = await cdcIntegrationService.updateSystemTableRow(
       TABLES.TABLES,
       {

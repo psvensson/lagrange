@@ -6,8 +6,11 @@ import {
 import {
   PARTICIPANT_ACK_FIELD,
   PARTICIPANT_ACK_RESULT,
-  WORKFLOW_CLAIM_RESULT,
 } from '../workflow/workflow-constants.js';
+import {
+  claimWorkflowOwnershipCore,
+  renewWorkflowOwnershipCore,
+} from './managed-workflow-ownership-core.js';
 import {
   MANAGED_MERGE_ERROR_MSG,
   MANAGED_MERGE_LOG_MSG,
@@ -340,21 +343,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
    * @private
    */
   async claimMergeWorkflowOwnership(workflowId, options = {}) {
-    const workflow = this.workflowCoordinator.getWorkflowById(workflowId);
-    if (!workflow) {
-      return {accepted: false, result: WORKFLOW_CLAIM_RESULT.TERMINAL};
-    }
-    const currentFence = Number.isInteger(workflow.fenceToken) ?
-      workflow.fenceToken :
-      0;
-    const fenceToken = options.renew === true ?
-      currentFence :
-      currentFence + 1;
-    return this.workflowCoordinator.claimWorkflow(workflowId, {
-      ownerId: this.workflowOwnerId,
-      fenceToken,
-      leaseExpiresAt: this.now() + this.workflowLeaseMs,
-    });
+    return claimWorkflowOwnershipCore(this, workflowId, options);
   }
 
   /**
@@ -401,21 +390,11 @@ class ManagedMergeWorkflowExecutionGateMethods {
   }
 
   async renewMergeWorkflowOwnership(workflowId) {
-    const claim = await this.claimMergeWorkflowOwnership(workflowId, {
-      renew: true,
-    });
-    if (claim.accepted !== true) {
-      throw new Error(
-        MANAGED_MERGE_LOG_MSG.OWNERSHIP_LOST +
-        ` (${workflowId}: ${String(
-          claim.result || WORKFLOW_CLAIM_RESULT.UNKNOWN,
-        )})`,
-      );
-    }
-    return {
-      fenceToken: claim.workflow.fenceToken,
-      ownerId: claim.workflow.workflowOwnerId,
-    };
+    return renewWorkflowOwnershipCore(
+      this,
+      workflowId,
+      MANAGED_MERGE_LOG_MSG.OWNERSHIP_LOST,
+    );
   }
 
   /**

@@ -9,9 +9,12 @@ import {
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
 import {
-  WORKFLOW_CLAIM_RESULT,
   WORKFLOW_DEFAULT_NODE_ID,
 } from '../workflow/workflow-constants.js';
+import {
+  claimWorkflowOwnershipCore,
+  renewWorkflowOwnershipCore,
+} from './managed-workflow-ownership-core.js';
 import {
   SPLIT_PARTICIPANT_PREFIX,
   isSplitSourceAckTransitionAllowed,
@@ -122,21 +125,7 @@ class ManagedSplitWorkflowOwnershipMethods {
    * @private
    */
   async claimSplitWorkflowOwnership(workflowId, options = {}) {
-    const workflow = this.workflowCoordinator.getWorkflowById(workflowId);
-    if (!workflow) {
-      return {accepted: false, result: WORKFLOW_CLAIM_RESULT.TERMINAL};
-    }
-    const currentFence = Number.isInteger(workflow.fenceToken) ?
-      workflow.fenceToken :
-      0;
-    const fenceToken = options.renew === true ?
-      currentFence :
-      currentFence + 1;
-    return this.workflowCoordinator.claimWorkflow(workflowId, {
-      ownerId: this.workflowOwnerId,
-      fenceToken,
-      leaseExpiresAt: this.now() + this.workflowLeaseMs,
-    });
+    return claimWorkflowOwnershipCore(this, workflowId, options);
   }
 
   /**
@@ -148,21 +137,11 @@ class ManagedSplitWorkflowOwnershipMethods {
    * @private
    */
   async renewSplitWorkflowOwnership(workflowId) {
-    const claim = await this.claimSplitWorkflowOwnership(workflowId, {
-      renew: true,
-    });
-    if (claim.accepted !== true) {
-      throw new Error(
-        MANAGED_SPLIT_LOG_MSG.OWNERSHIP_LOST +
-        ` (${workflowId}: ${String(
-          claim.result || WORKFLOW_CLAIM_RESULT.UNKNOWN,
-        )})`,
-      );
-    }
-    return {
-      fenceToken: claim.workflow.fenceToken,
-      ownerId: claim.workflow.workflowOwnerId,
-    };
+    return renewWorkflowOwnershipCore(
+      this,
+      workflowId,
+      MANAGED_SPLIT_LOG_MSG.OWNERSHIP_LOST,
+    );
   }
 
   /**

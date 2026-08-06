@@ -13,6 +13,9 @@ import {
   PARTITION_TRANSITION_STATE,
 } from './partition-constants.js';
 import {
+  stampOwnershipClaimMetadata,
+} from './managed-workflow-ownership-core.js';
+import {
   buildPartitionDescriptorEpochDecision,
   isPartitionDescriptorEpochAccepted,
 } from './partition-descriptor-epoch-contract.js';
@@ -323,31 +326,7 @@ class ManagedSplitWorkflowPersistenceMethods {
     // the fencing state so a recovering node observes who owns the
     // workflow, at which fence epoch, and until when — no schema change
     // required (embedded in the serialized metadata).
-    if (Number.isInteger(workflow.fenceToken)) {
-      metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN] =
-        workflow.fenceToken;
-    } else {
-      delete metadata[
-        PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_FENCE_TOKEN
-      ];
-    }
-    if (workflow.workflowOwnerId) {
-      metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID] =
-        workflow.workflowOwnerId;
-    } else {
-      delete metadata[PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_OWNER_ID];
-    }
-    if (Number.isFinite(workflow.leaseExpiresAt)) {
-      metadata[
-        PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT
-      ] = workflow.leaseExpiresAt;
-    } else {
-      delete metadata[
-        PARTITION_TRANSITION_METADATA_FIELD.WORKFLOW_LEASE_EXPIRES_AT
-      ];
-    }
-
-    return metadata;
+    return stampOwnershipClaimMetadata(metadata, workflow);
   }
 
   /**

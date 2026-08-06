@@ -23,6 +23,48 @@ const WRITE_TRANSACTION_OWNERSHIP = Object.freeze({
 const STATEMENT_AUTOCOMMIT_SESSION_PREFIX = 'statement-autocommit';
 
 class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMethods {
+  /**
+   * Write-path epoch fencing: resolve the epoch a write is planned
+   * against; the partition boundary rejects a stale epoch.
+   * @param {Object} tableInfo - Table row.
+   * @return {*} Active partition version.
+   * @private
+   */
+  resolveWriteFencePartitionVersion(tableInfo) {
+    return this.resolveActivePartitionVersion(tableInfo);
+  }
+
+  /**
+   * Build the routed write-execution options for one planned write:
+   * delivery priority, timeout/budget, cancellation, routing-readiness
+   * dimension, and the epoch fence the partition boundary validates.
+   * @param {string} tableName - Target table.
+   * @param {Object} tableInfo - Table row.
+   * @param {string} sessionId - Owning session.
+   * @param {Object} queryOptions - Caller query options.
+   * @return {Object} Write-execution options.
+   * @private
+   */
+  buildRoutedWriteExecutionOptions(tableName, tableInfo, sessionId, queryOptions) {
+    const deliveryPriority = this.resolveRoutedDeliveryPriority(
+      tableName,
+      queryOptions.deliveryPriority,
+    );
+    return this.applyWriteExecutionDeliverySource({
+      sessionId,
+      deliveryPriority,
+      timeoutMs: queryOptions.timeoutMs,
+      timeoutBudget: queryOptions.timeoutBudget || null,
+      cancellationToken: queryOptions.cancellationToken || null,
+      routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
+        tableName,
+        queryOptions.routingReadinessDimension,
+      ),
+      expectedPartitionVersion:
+        this.resolveWriteFencePartitionVersion(tableInfo),
+    }, queryOptions);
+  }
+
   resolveWriteTransactionOwnership(sessionId, writePlan) {
     if (this.transactionCoordinator.getTransaction(sessionId)) {
       return WRITE_TRANSACTION_OWNERSHIP.EXPLICIT;
@@ -161,25 +203,12 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
         sessionId,
       });
 
-      const deliveryPriority = this.resolveRoutedDeliveryPriority(
+      const writeExecutionOptions = this.buildRoutedWriteExecutionOptions(
         tableName,
-        queryOptions.deliveryPriority,
-      );
-      const writeExecutionOptions = this.applyWriteExecutionDeliverySource({
+        tableInfo,
         sessionId,
-        deliveryPriority,
-        timeoutMs: queryOptions.timeoutMs,
-        timeoutBudget: queryOptions.timeoutBudget || null,
-        cancellationToken: queryOptions.cancellationToken || null,
-        routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
-          tableName,
-          queryOptions.routingReadinessDimension,
-        ),
-        // Write-path epoch fencing: the epoch this write was planned
-        // against; the partition boundary rejects a stale epoch.
-        expectedPartitionVersion:
-          this.resolveActivePartitionVersion(tableInfo),
-      }, queryOptions);
+        queryOptions,
+      );
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
         writeExecutionOptions.migrationId =
@@ -343,25 +372,12 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
         sessionId,
       });
 
-      const deliveryPriority = this.resolveRoutedDeliveryPriority(
+      const writeExecutionOptions = this.buildRoutedWriteExecutionOptions(
         tableName,
-        queryOptions.deliveryPriority,
-      );
-      const writeExecutionOptions = this.applyWriteExecutionDeliverySource({
+        tableInfo,
         sessionId,
-        deliveryPriority,
-        timeoutMs: queryOptions.timeoutMs,
-        timeoutBudget: queryOptions.timeoutBudget || null,
-        cancellationToken: queryOptions.cancellationToken || null,
-        routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
-          tableName,
-          queryOptions.routingReadinessDimension,
-        ),
-        // Write-path epoch fencing: the epoch this write was planned
-        // against; the partition boundary rejects a stale epoch.
-        expectedPartitionVersion:
-          this.resolveActivePartitionVersion(tableInfo),
-      }, queryOptions);
+        queryOptions,
+      );
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
         writeExecutionOptions.migrationId =
@@ -524,25 +540,12 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
         sessionId,
       });
 
-      const deliveryPriority = this.resolveRoutedDeliveryPriority(
+      const writeExecutionOptions = this.buildRoutedWriteExecutionOptions(
         tableName,
-        queryOptions.deliveryPriority,
-      );
-      const writeExecutionOptions = this.applyWriteExecutionDeliverySource({
+        tableInfo,
         sessionId,
-        deliveryPriority,
-        timeoutMs: queryOptions.timeoutMs,
-        timeoutBudget: queryOptions.timeoutBudget || null,
-        cancellationToken: queryOptions.cancellationToken || null,
-        routingReadinessDimension: this.resolveTableRoutingReadinessDimension(
-          tableName,
-          queryOptions.routingReadinessDimension,
-        ),
-        // Write-path epoch fencing: the epoch this write was planned
-        // against; the partition boundary rejects a stale epoch.
-        expectedPartitionVersion:
-          this.resolveActivePartitionVersion(tableInfo),
-      }, queryOptions);
+        queryOptions,
+      );
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
         writeExecutionOptions.migrationId =
