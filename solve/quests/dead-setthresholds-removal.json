@@ -1,0 +1,60 @@
+{
+  "id": "dead-setthresholds-removal",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The dead setThresholds API on the split/merge manager is removed or wired: setThresholds (partition-split-merge-manager-evaluation-methods.js) has zero production callers \u2014 either delete it (and its test-only surface) so threshold drift has exactly one owner, or wire it into the configuration authority with a durable effect; a half-wired mutator that silently drifts evaluation behavior must not survive. doneWhen: the test-receipt probe reads solve/evidence/dead-setthresholds-removal.receipt.json with outstanding 0 \u2014 single-threshold-owner and no-dead-mutator receipts all passing.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/split-merge-transition-integrity.md",
+    "draftedAtCommit": "34328f2bcb609297823f25e3d38fb20f46086af8"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/dead-setthresholds-removal.receipt.json",
+      "requiredReceipts": [
+        "single-threshold-owner",
+        "no-dead-mutator"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "dead-setthresholds-removal-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/dead-setthresholds-removal.receipt.json",
+          "requiredReceipts": [
+            "single-threshold-owner",
+            "no-dead-mutator"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the corresponding mechanism is reverted while the rest of the change remains."
+    },
+    {
+      "id": "deterministic-evidence",
+      "statement": "The oracle evidence files must be written by a deterministic evidence harness that re-runs the recorded proof commands (focused test files, red-on-revert probes) and writes the receipt artifact."
+    },
+    {
+      "id": "one-owner-per-scalar",
+      "statement": "Threshold state must have exactly one mutation owner (F24): a dead mutator that bypasses the configuration authority is deleted, not kept for hypothetical callers."
+    }
+  ]
+}

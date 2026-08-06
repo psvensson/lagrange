@@ -88,3 +88,18 @@ dead `setThresholds`) are sequenced after the ladder.
   closed post-cutover — fail-open on missing evidence is gone. Tier 3
   leftovers (F12, F14, F18, F22, F23, F24) remain sequenced after the
   ladder as their own quests.
+- 2026-08-06 — Tier 3 leftovers authored as six quests:
+  `split-key-comparator-typing` (F12: typed comparator owns split-key
+  comparison; mixed-type key spaces rejected, never coerced),
+  `split-dissolution-durable-proof` (F14: dissolution recorded only
+  against a persisted partitions-row witness; owner-recorded dissolution
+  acks fence-stamped), `split-abort-fence-parity` (F18 residual: the
+  split abort transition persists through the fenced write path — the
+  last unfenced owner-lane write),
+  `merge-backfill-batching` (F22: merge snapshot backfill batches rows
+  like routeSplitSnapshotBatch instead of per-row routed writes),
+  `split-merge-overlap-guard` (F23: overlapping in-flight transitions
+  refused durably at registration, not by the process-local handle
+  check), and `dead-setthresholds-removal` (F24: the caller-less
+  setThresholds mutator is deleted or wired into the configuration
+  authority — exactly one threshold owner).
