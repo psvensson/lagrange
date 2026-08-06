@@ -55,3 +55,15 @@ dead `setThresholds`) are sequenced after the ladder.
   mirroring, typed failure acks with fail-safe abort, target teardown on
   source failure, terminal transition clearing. Tier 2 quests port, not
   invent.
+- 2026-08-05 — `managed-split-shutdown-timer-leak` (F17) EXHAUSTED on a
+  refuted frame: its measured matrix proved the account-summary runner hang
+  is caused by untorn-down request/call cell Workers (3 MessagePorts,
+  reproducible with NO split; split-without-deploy exits cleanly), not by
+  split timers — every split-merge timer is unref'd and none survive
+  shutdown. The F17 shutdown-ownership goal landed through the successor
+  quest `node-shutdown-cell-worker-teardown` (`bc975b558`): a stop-all chain
+  (bootstrap seed/join cleanup → `ServiceRuntimeLifecycle.shutdown` →
+  `WasmComponentDriver.shutdown` → `WasiComponentCellRuntime.shutdown` →
+  `worker.terminate`) replaces the absent per-replica stop path at node
+  teardown, and the runner's bounded-exit workaround is deleted — the runner
+  exits naturally in ~24s after a forced managed split plus deployed cells.
