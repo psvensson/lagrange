@@ -138,6 +138,11 @@ const QUERY_MESSAGE_FIELD_SESSION_ID = 'sessionId';
 const QUERY_MESSAGE_FIELD_ENTRY_ID = 'entryId';
 const QUERY_MESSAGE_FIELD_OPERATION_ID = 'operationId';
 const QUERY_MESSAGE_FIELD_IDEMPOTENCY_KEY = 'idempotencyKey';
+// Write-path epoch fencing: the partition epoch the routed write was
+// planned against; handleRemoteQuery rejects a mismatch with the
+// locally authoritative epoch as a typed stale-epoch outcome.
+const QUERY_MESSAGE_FIELD_EXPECTED_PARTITION_VERSION =
+  'expectedPartitionVersion';
 const LEADER_GAP_REASON_OWNER_MISSING = 'owner_missing';
 const LEADER_GAP_REASON_SERVICE_MISSING = 'service_missing';
 const SYSTEM_TABLE_NAMES = new Set(Object.values(TABLES));
@@ -287,6 +292,7 @@ export const QUERY_EXECUTOR_SHARED = {
   QUERY_JOIN_TYPE,
   QUERY_LOG_MSG,
   QUERY_MESSAGE_FIELD_ENTRY_ID,
+  QUERY_MESSAGE_FIELD_EXPECTED_PARTITION_VERSION,
   QUERY_MESSAGE_FIELD_IDEMPOTENCY_KEY,
   QUERY_MESSAGE_FIELD_MIGRATION_ID,
   QUERY_MESSAGE_FIELD_MIGRATION_OPERATION,

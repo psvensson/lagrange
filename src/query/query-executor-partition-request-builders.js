@@ -4,6 +4,7 @@ const {
   MIGRATION_PARTITION_OPERATION,
   QUERY_EXECUTOR_LITERAL,
   QUERY_MESSAGE_FIELD_ENTRY_ID,
+  QUERY_MESSAGE_FIELD_EXPECTED_PARTITION_VERSION,
   QUERY_MESSAGE_FIELD_IDEMPOTENCY_KEY,
   QUERY_MESSAGE_FIELD_MIGRATION_ID,
   QUERY_MESSAGE_FIELD_MIGRATION_OPERATION,
@@ -98,6 +99,14 @@ function createDefaultPartitionRequestBuilder({
           executionOptions.migrationId;
       }
     }
+    // Write-path epoch fencing: carry the partition epoch the write was
+    // planned against so the partition boundary can reject stale-epoch
+    // writes with a typed outcome.
+    if (Number.isSafeInteger(executionOptions.expectedPartitionVersion) &&
+        executionOptions.expectedPartitionVersion > 0) {
+      request[QUERY_MESSAGE_FIELD_EXPECTED_PARTITION_VERSION] =
+        executionOptions.expectedPartitionVersion;
+    }
     copyQueryResultLimits(request, executionOptions);
     return request;
   };
@@ -144,4 +153,4 @@ function resolvePartitionExecutionBuilders({
   });
 }
 
-export {resolvePartitionExecutionBuilders};
+export {createDefaultPartitionRequestBuilder, resolvePartitionExecutionBuilders};

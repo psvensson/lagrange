@@ -361,6 +361,10 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   SPLIT_REPLICATION_FAILED: 'Partition split replication failed',
   MIRROR_REPLICATION_RESUME_FAILED:
     'Durable mirror replication worker resumption failed',
+  STALE_PARTITION_EPOCH_REJECTED:
+    'Stale partition epoch write rejected at the partition boundary',
+  PARTITION_EPOCH_EVIDENCE_DEFERRED:
+    'Write deferred pending descriptor-epoch evidence hydration',
   SPLIT_REPLICATION_MIRROR_FAILED: 'Partition split mirror delivery failed',
   SPLIT_REPLICATION_CUTOVER_UPDATED:
     'Partition split cutover metadata updated',
@@ -521,6 +525,11 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
     'Partition split transition metadata is required',
   MIRROR_DELTA_QUEUE_AT_CAPACITY:
     'Mirror delta queue at capacity — backpressure applied',
+  STALE_PARTITION_EPOCH_WRITE:
+    'Write rejected: routed partition epoch is stale against the ' +
+    'locally authoritative epoch',
+  PARTITION_EPOCH_EVIDENCE_MISSING:
+    'Descriptor-epoch evidence missing for an in-flight transition',
   MERGE_REPLICATION_ROUTING_FAILED:
     'Failed to route mirrored partition merge write',
   MERGE_REPLICATION_STATE_REQUIRED:

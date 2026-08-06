@@ -165,6 +165,22 @@ export async function replaySplitEntry(entry, metadata, options = {}) {
 export function assertSplitRoutingDescriptorEpoch(metadata, options = {}) {
   const descriptorEpochEvidence = options.descriptorEpochEvidence || null;
   if (!descriptorEpochEvidence) {
+    // Epoch evidence must never fail OPEN on an in-flight mirror: a
+    // cold-cache gap fails closed post-cutover and defers pre-cutover,
+    // never silently skipping validation. Callers without transition
+    // context (no mirror in flight) keep the legacy skip-validation
+    // behavior — there is nothing to fence.
+
+    if (options.evidenceGapFailsClosed === true) {
+      throw new Error(PARTITION_DESCRIPTOR_EPOCH_ERROR_MSG.MISSING_EVIDENCE);
+    }
+    if (options.evidenceGapDefers === true) {
+      const deferError = new Error(
+        PARTITION_DESCRIPTOR_EPOCH_ERROR_MSG.MISSING_EVIDENCE,
+      );
+      deferError.deferRetry = true;
+      throw deferError;
+    }
     return null;
   }
   const decision = buildPartitionDescriptorEpochDecision({

@@ -327,6 +327,8 @@ const PARTITION_DESCRIPTOR_EPOCH_REASON = Object.freeze({
 
 const PARTITION_DESCRIPTOR_EPOCH_ERROR_MSG = Object.freeze({
   STALE_ROUTE: 'Partition descriptor epoch rejected stale route',
+  MISSING_EVIDENCE:
+    'Partition descriptor epoch evidence missing: failing closed',
 });
 
 const PARTITION_RAFT_ROLE = RAFT_ROLE;

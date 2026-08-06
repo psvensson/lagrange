@@ -73,6 +73,14 @@ const QUERY_ERROR_CODE = Object.freeze({
   SYNTAX_ERROR: 'SYNTAX_ERROR',
   TIMEOUT: 'TIMEOUT',
   INTERNAL_ERROR: 'INTERNAL_ERROR',
+  // Write-path epoch fencing: the routed write carried an
+  // expectedPartitionVersion that mismatches the locally authoritative
+  // partition epoch (a withdrawn/superseded epoch must never accept
+  // writes).
+  STALE_PARTITION_EPOCH: 'STALE_PARTITION_EPOCH',
+  // Pre-cutover descriptor-epoch evidence gap: the write defers until
+  // the evidence hydrates instead of failing open.
+  PARTITION_EPOCH_EVIDENCE_DEFERRED: 'PARTITION_EPOCH_EVIDENCE_DEFERRED',
 });
 
 const QUERY_ERROR_MSG = Object.freeze({

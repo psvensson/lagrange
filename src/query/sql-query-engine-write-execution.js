@@ -175,6 +175,10 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
           tableName,
           queryOptions.routingReadinessDimension,
         ),
+        // Write-path epoch fencing: the epoch this write was planned
+        // against; the partition boundary rejects a stale epoch.
+        expectedPartitionVersion:
+          this.resolveActivePartitionVersion(tableInfo),
       }, queryOptions);
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
@@ -353,6 +357,10 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
           tableName,
           queryOptions.routingReadinessDimension,
         ),
+        // Write-path epoch fencing: the epoch this write was planned
+        // against; the partition boundary rejects a stale epoch.
+        expectedPartitionVersion:
+          this.resolveActivePartitionVersion(tableInfo),
       }, queryOptions);
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;
@@ -530,6 +538,10 @@ class SQLQueryEngineWriteExecution extends SQLQueryEngineTransactionRecoveryMeth
           tableName,
           queryOptions.routingReadinessDimension,
         ),
+        // Write-path epoch fencing: the epoch this write was planned
+        // against; the partition boundary rejects a stale epoch.
+        expectedPartitionVersion:
+          this.resolveActivePartitionVersion(tableInfo),
       }, queryOptions);
       if (dualWriteMigration) {
         writeExecutionOptions.dualWriteMode = true;

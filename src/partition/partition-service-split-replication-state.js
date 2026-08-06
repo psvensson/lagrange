@@ -142,6 +142,13 @@ function assertSplitRoutingDescriptorEpochForService(service, metadata) {
   return assertPartitionSplitRoutingDescriptorEpoch(metadata, {
     descriptorEpochEvidence:
       service.resolveSplitDescriptorEpochEvidence(metadata),
+    // Epoch evidence never fails open on the mirror path: an active
+    // split mirror with a cold-cache evidence gap fails closed
+    // post-cutover and defers (throws defer-tagged) pre-cutover.
+    evidenceGapFailsClosed:
+      service.splitReplication?.phase ===
+        PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE,
+    evidenceGapDefers: Boolean(service.splitReplication),
   });
 }
 

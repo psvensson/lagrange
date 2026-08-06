@@ -81,7 +81,27 @@ async function buildSourceContext(options = {}) {
       },
     },
     logger: {info() {}, warn() {}, error() {}},
-    systemTableCache: options.systemTableCache || null,
+    // Descriptor-epoch evidence is never absent on an in-flight mirror
+    // (fail-open is gone): the fixture models the hydrated cache the
+    // real service sees, unless a test opts into the cold-cache gap.
+    systemTableCache: options.systemTableCache === undefined ?
+      {
+        get(table, key) {
+          if (table === 'tables') {
+            return {
+              table_id: 'tbl-users',
+              active_partition_version: 1,
+              pending_partition_version: 2,
+            };
+          }
+          if (table === 'partitions' &&
+              key === FIXTURE_TARGET_PARTITION_ID) {
+            return {partition_id: key, partition_version: 2};
+          }
+          return null;
+        },
+      } :
+      options.systemTableCache,
     sqlQueryEngine: {
       managedMergeWorkflow: {
         async acknowledgeMergeSourceParticipant(workflowId, ack) {

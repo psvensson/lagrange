@@ -158,6 +158,22 @@ function assertMergeRoutingDescriptorEpochForService(service, metadata) {
   const descriptorEpochEvidence =
     resolveMergeDescriptorEpochEvidenceForService(service, metadata);
   if (!descriptorEpochEvidence) {
+    // Epoch evidence never fails open on the mirror path (mirrors the
+    // split assert): an active merge mirror with a cold-cache gap fails
+    // closed post-cutover and defers pre-cutover.
+    if (service.mergeReplication?.phase ===
+        PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE) {
+      throw new Error(
+        PARTITION_SERVICE_ERROR_MSG.MERGE_REPLICATION_ROUTING_FAILED,
+      );
+    }
+    if (service.mergeReplication) {
+      const deferError = new Error(
+        PARTITION_SERVICE_ERROR_MSG.PARTITION_EPOCH_EVIDENCE_MISSING,
+      );
+      deferError.deferRetry = true;
+      throw deferError;
+    }
     return null;
   }
   const decision = buildPartitionDescriptorEpochDecision({

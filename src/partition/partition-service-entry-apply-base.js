@@ -1,4 +1,5 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {QUERY_ERROR_CODE} from '../query/query-constants.js';
 import {HLCTimestamp} from '../hlc/hlc-timestamp.js';
 import {PartitionServiceSchemaMigrationBase} from './partition-service-schema-migration-base.js';
 import {
@@ -29,7 +30,9 @@ const {
   PARTITION_SERVICE_RESPONSE,
   PARTITION_SERVICE_VALUE,
   PARTITION_TRANSITION_STATE,
+  TABLES,
   QUERY_PAYLOAD_FIELD_ENTRY_ID,
+  QUERY_PAYLOAD_FIELD_EXPECTED_PARTITION_VERSION,
   QUERY_PAYLOAD_FIELD_IDEMPOTENCY_KEY,
   QUERY_PAYLOAD_FIELD_MIGRATION_ID,
   QUERY_PAYLOAD_FIELD_MIGRATION_OPERATION,
@@ -409,6 +412,106 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
    * @return {Promise<Object>} Query result or redirect response.
    * @private
    */
+  /**
+   * Write-path epoch fencing at the partition boundary: reject a write
+   * whose expectedPartitionVersion mismatches the locally authoritative
+   * partition epoch with a typed stale-epoch outcome. Epoch evidence
+   * never fails OPEN: when the local tables row is unavailable (cold
+   * cache after restart) but the payload carries an expectation, the
+   * write defers pre-cutover / fails closed post-cutover instead of
+   * silently skipping validation. Returns the rejection envelope or
+   * null when the write may proceed.
+   * @param {*} expectedVersion - Payload epoch expectation.
+   * @return {Object|null}
+   * @private
+   */
+  rejectStalePartitionEpochWrite(expectedVersion) {
+    if (!Number.isSafeInteger(expectedVersion) || expectedVersion <= 0) {
+      return null;
+    }
+    const localVersion = this.resolveLocalActivePartitionVersion();
+    if (localVersion === null) {
+      return this.resolveEpochEvidenceGapOutcome(expectedVersion);
+    }
+    if (localVersion !== expectedVersion) {
+      this.logger.warn(
+        PARTITION_SERVICE_LOG_MSG.STALE_PARTITION_EPOCH_REJECTED,
+        {
+          partitionId: this.partitionId,
+          expectedVersion,
+          localVersion,
+        },
+      );
+      return {
+        acknowledged: true,
+        success: false,
+        error: PARTITION_SERVICE_ERROR_MSG.STALE_PARTITION_EPOCH_WRITE,
+        errorCode: QUERY_ERROR_CODE.STALE_PARTITION_EPOCH,
+        partitionId: this.partitionId,
+      };
+    }
+    return null;
+  }
+
+  /**
+   * Resolve the locally authoritative active partition version from the
+   * cached tables row; null when the row is unavailable.
+   * @return {number|null}
+   * @private
+   */
+  resolveLocalActivePartitionVersion() {
+    const row =
+      this.systemTableCache?.get?.(TABLES.TABLES, this.tableId) ||
+      this.systemTableCache?.get?.(TABLES.TABLES, this.tableName) ||
+      null;
+    const version = Number(
+      row?.active_partition_version ?? row?.activePartitionVersion,
+    );
+    return Number.isSafeInteger(version) && version > 0 ? version : null;
+  }
+
+  /**
+   * Epoch evidence gap (cold cache): a write carrying an epoch
+   * expectation must never fail open. Pre-cutover it defers (the
+   * evidence will hydrate and the retry re-validates); post-cutover it
+   * fails closed (a withdrawn epoch must never accept writes).
+   * @param {number} expectedVersion - Payload epoch expectation.
+   * @return {Object} Rejection/defer envelope.
+   * @private
+   */
+  resolveEpochEvidenceGapOutcome(expectedVersion) {
+    const cutoverActive =
+      this.splitReplication?.phase ===
+        PARTITION_TRANSITION_STATE.SPLIT_CUTOVER_ACTIVE ||
+      this.mergeReplication?.phase ===
+        PARTITION_TRANSITION_STATE.MERGE_CUTOVER_ACTIVE;
+    if (cutoverActive) {
+      this.logger.warn(
+        PARTITION_SERVICE_LOG_MSG.STALE_PARTITION_EPOCH_REJECTED,
+        {partitionId: this.partitionId, expectedVersion, evidenceGap: true},
+      );
+      return {
+        acknowledged: true,
+        success: false,
+        error: PARTITION_SERVICE_ERROR_MSG.STALE_PARTITION_EPOCH_WRITE,
+        errorCode: QUERY_ERROR_CODE.STALE_PARTITION_EPOCH,
+        partitionId: this.partitionId,
+      };
+    }
+    this.logger.info(
+      PARTITION_SERVICE_LOG_MSG.PARTITION_EPOCH_EVIDENCE_DEFERRED,
+      {partitionId: this.partitionId, expectedVersion},
+    );
+    return {
+      acknowledged: true,
+      success: false,
+      error: PARTITION_SERVICE_ERROR_MSG.PARTITION_EPOCH_EVIDENCE_MISSING,
+      errorCode: QUERY_ERROR_CODE.PARTITION_EPOCH_EVIDENCE_DEFERRED,
+      deferRetry: true,
+      partitionId: this.partitionId,
+    };
+  }
+
   async handleRemoteQuery(payload) {
     const {
       sql,
@@ -431,6 +534,14 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
       };
     }
     const isWriteOperation = this.isWriteQuery(sql);
+    if (isWriteOperation) {
+      const epochRejection = this.rejectStalePartitionEpochWrite(
+        payload[QUERY_PAYLOAD_FIELD_EXPECTED_PARTITION_VERSION],
+      );
+      if (epochRejection) {
+        return epochRejection;
+      }
+    }
     if (isWriteOperation && this.role !== RaftRole.LEADER) {
       const leaderAddress = this.resolveLeaderAddress();
       if (leaderAddress) {
