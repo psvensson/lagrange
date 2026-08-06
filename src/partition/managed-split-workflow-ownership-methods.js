@@ -41,6 +41,40 @@ function buildSplitWorkflowOwnerId(options, nodeId) {
  */
 class ManagedSplitWorkflowOwnershipMethods {
   /**
+   * Run one owner-scoped step strictly AFTER every previously enqueued
+   * step for the same owner key (FIFO).
+   *
+   * This exists because the canonical lane's runExclusive() COALESCES
+   * concurrent callers — a second caller receives the in-flight
+   * execution's promise instead of being queued — so cross-
+   * acknowledgement mutations (a cutover step racing a fail-safe
+   * abort) would otherwise interleave or be silently swallowed. Every
+   * owner-side durable phase mutation (phase advances, the cutover
+   * step, the abort step) routes through this FIFO; the step runner's
+   * lane remains the execution substrate inside each slot.
+   *
+   * @param {string} ownerKey - Split owner key.
+   * @param {Function} stepFactory - Async step to run.
+   * @return {Promise<*>} The step's own settlement.
+   */
+  runSerializedOwnerStep(ownerKey, stepFactory) {
+    const previousTail =
+      this.splitOwnerLaneTailByOwnerKey.get(ownerKey) || Promise.resolve();
+    const execution = previousTail
+      .catch(() => {})
+      .then(() => stepFactory());
+    const tail = execution
+      .catch(() => {})
+      .finally(() => {
+        if (this.splitOwnerLaneTailByOwnerKey.get(ownerKey) === tail) {
+          this.splitOwnerLaneTailByOwnerKey.delete(ownerKey);
+        }
+      });
+    this.splitOwnerLaneTailByOwnerKey.set(ownerKey, tail);
+    return execution;
+  }
+
+  /**
    * Resolve when every currently enqueued owner-lane step for one
    * workflow has settled (fire-and-forget aborts included).
    * Observability surface for guards and diagnostics.

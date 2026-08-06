@@ -129,40 +129,6 @@ class ManagedSplitWorkflowExecutionGateMethods {
   }
 
   /**
-   * Run one owner-scoped step strictly AFTER every previously enqueued
-   * step for the same owner key (FIFO).
-   *
-   * This exists because the canonical lane's runExclusive() COALESCES
-   * concurrent callers — a second caller receives the in-flight
-   * execution's promise instead of being queued — so cross-
-   * acknowledgement mutations (a cutover step racing a fail-safe
-   * abort) would otherwise interleave or be silently swallowed. Every
-   * owner-side durable phase mutation (phase advances, the cutover
-   * step, the abort step) routes through this FIFO; the step runner's
-   * lane remains the execution substrate inside each slot.
-   *
-   * @param {string} ownerKey - Split owner key.
-   * @param {Function} stepFactory - Async step to run.
-   * @return {Promise<*>} The step's own settlement.
-   */
-  runSerializedOwnerStep(ownerKey, stepFactory) {
-    const previousTail =
-      this.splitOwnerLaneTailByOwnerKey.get(ownerKey) || Promise.resolve();
-    const execution = previousTail
-      .catch(() => {})
-      .then(() => stepFactory());
-    const tail = execution
-      .catch(() => {})
-      .finally(() => {
-        if (this.splitOwnerLaneTailByOwnerKey.get(ownerKey) === tail) {
-          this.splitOwnerLaneTailByOwnerKey.delete(ownerKey);
-        }
-      });
-    this.splitOwnerLaneTailByOwnerKey.set(ownerKey, tail);
-    return execution;
-  }
-
-  /**
    * Resolve the shared pressure governor for this node.
    * @return {PressureGovernor}
    * @private
@@ -592,9 +558,13 @@ class ManagedSplitWorkflowExecutionGateMethods {
 
   /**
    * Execute the serialized abort step: re-validate the CURRENT status
-   * inside the lane, persist FAILED (withdrawing the pending epoch),
-   * then tear down the never-authoritative children and restore any
-   * promoted sibling descriptors.
+   * inside the lane, persist FAILED (withdrawing the pending epoch)
+   * through the FENCED transition path, then tear down the never-
+   * authoritative children and restore any promoted sibling descriptors.
+   * F18 residual: the split abort was the last unfenced owner-lane
+   * transition write; the step result now carries the renewed ownership
+   * fenceToken/ownerId exactly like the phase-advance path, engaging
+   * the storage-backed assertTransitionFence.
    * @param {string} workflowId
    * @param {string} ownerKey
    * @param {string} ackStatus - The failure SPLIT_ACK_STATUS received.
@@ -607,11 +577,9 @@ class ManagedSplitWorkflowExecutionGateMethods {
       ownerKey: ownerKey + SPLIT_OWNER_STEP_LANE_SUFFIX,
       stepName: PARTITION_TRANSITION_STATE.FAILED,
       execute: async ({workflow: currentWorkflow}) =>
-        this.buildSplitAbortStepResult(
-          workflowId,
-          ackStatus,
-          currentWorkflow,
-        ),
+        this.buildSplitAbortStepResult(workflowId, ackStatus, currentWorkflow, {
+          ownership: await this.renewSplitWorkflowOwnership(workflowId),
+        }),
     });
 
     if (abortOutcome !== SPLIT_ABORT_OUTCOME.ABORTED) {
@@ -634,10 +602,18 @@ class ManagedSplitWorkflowExecutionGateMethods {
    * @param {string} workflowId
    * @param {string} ackStatus
    * @param {Object} currentWorkflow
+   * @param {Object} [options]
+   * @param {Object} [options.ownership] - Renewed ownership claim
+   *   ({fenceToken, ownerId}) stamped on the abort transition (F18).
    * @return {Object} Step result carrying a SPLIT_ABORT_OUTCOME.
    * @private
    */
-  buildSplitAbortStepResult(workflowId, ackStatus, currentWorkflow) {
+  buildSplitAbortStepResult(
+    workflowId,
+    ackStatus,
+    currentWorkflow,
+    options = {},
+  ) {
     if (currentWorkflow.status === PARTITION_TRANSITION_STATE.FAILED) {
       return {result: SPLIT_ABORT_OUTCOME.ALREADY_ABORTED};
     }
@@ -649,6 +625,10 @@ class ManagedSplitWorkflowExecutionGateMethods {
       return {result: SPLIT_ABORT_OUTCOME.REFUSED_POST_CUTOVER};
     }
     return {
+      nextStep: PARTITION_TRANSITION_STATE.FAILED,
+      reason: PARTITION_TRANSITION_STATE.FAILED,
+      fenceToken: options.ownership?.fenceToken,
+      ownerId: options.ownership?.ownerId,
       updates: {
         status: PARTITION_TRANSITION_STATE.FAILED,
         metadata: {
