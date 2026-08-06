@@ -1,8 +1,12 @@
 {
   "schemaVersion": 1,
   "productMaturity": {
-    "state": "experimental",
-    "summary": "Substantial experimental system; not a polished production database."
+    "state": "experimental_alpha",
+    "summary": "Experimental alpha; substantial implementation, but no general production-support or backward-compatibility guarantee on 0.x."
+  },
+  "productBoundary": {
+    "summary": "A self-managed distributed runtime with an integrated, partitioned SQL storage layer; not a plug-in for an existing PostgreSQL cluster.",
+    "dataLocalRequirement": "The rows used by a data-local operation must live in Lagrange partitions."
   },
   "listeners": {
     "rest": {
@@ -35,16 +39,17 @@
       "admin WebSocket",
       "PostgreSQL wire"
     ],
-    "secondaryIndexes": "local_per_partition_only",
+    "secondaryIndexes": "unsupported",
     "globalSecondaryIndexes": false
   },
   "replication": {
     "partitionConsensus": "raft",
     "runtimeCellConsensus": "none",
     "runtimeCellDurableState": "ordinary replicated tables",
-    "snapshotCheckpointCreation": "implemented_not_production_invoked",
-    "snapshotTransferInstall": "unsupported",
-    "physicalLogCompaction": "unsupported",
+    "snapshotCheckpointCreation": "active_sqlite_partition_path",
+    "snapshotTransferInstall": "active_sqlite_partition_path",
+    "physicalLogCompaction": "active_sqlite_partition_path",
+    "messageGroupLogCompaction": "unsupported",
     "learnerPromotion": "time_based_not_progress_based"
   },
   "deployment": {
@@ -53,6 +58,7 @@
       "Binding",
       "Cell"
     ],
+    "recommendedAuthoring": "code_first_javascript_service",
     "lifecycleSql": [
       "INSTALL SERVICE $1",
       "UPGRADE SERVICE $1",
@@ -76,6 +82,21 @@
     ],
     "servicePortabilityContract": "docs/service-portability-capabilities.json"
   },
+  "callExecution": {
+    "selector": "literal_single_table_select_fixed_at_deployment",
+    "selectorInterpolation": false,
+    "defaultShardRowBound": 4096,
+    "defaultEmitBound": 64,
+    "defaultPartialEntryBound": 1024,
+    "defaultConcurrentShardRuns": 8,
+    "sameHostShardConcurrency": "serialized_per_component_instance",
+    "partialValues": "finite_numbers",
+    "partialKeys": "must_be_disjoint_across_shards",
+    "nestedCallsPerRequest": 1,
+    "globalCrossPartitionSnapshot": false,
+    "callerCancellation": false,
+    "directCallCallerIdempotencyKey": false
+  },
   "postgresWire": {
     "authenticationModes": [
       "trust",
@@ -87,10 +108,30 @@
       "prefer",
       "require"
     ],
-    "compatibilityClaim": "bounded measured SQL slice, not complete PostgreSQL compatibility"
+    "compatibilityClaim": "bounded measured SQL slice, not complete PostgreSQL or ORM compatibility"
+  },
+  "security": {
+    "requestHttpAuthentication": "basic_against_configured_pgwire_credentials",
+    "nodeTransport": "plain_websocket_trusted_network_only",
+    "adminWebSocket": "unauthenticated_loopback_by_default",
+    "externalAdminBind": "explicit_insecure_opt_in_requires_authenticated_ingress",
+    "serviceIsolation": "wasi_component_with_declared_host_capabilities",
+    "scram": false,
+    "oidcOrSso": false,
+    "mtlsNodeIdentity": false
   },
   "operations": {
-    "storageAdmissionDefault": "enforce"
+    "storageAdmissionDefault": "enforce",
+    "backupRestorePitr": "unsupported",
+    "rollingUpgradeContract": "unsupported_on_0x",
+    "crossRegionReplication": "unsupported",
+    "generalProductionSupport": "unsupported"
+  },
+  "evidence": {
+    "publicCodeFirstDemo": "single_node_two_partition_functional_proof",
+    "multiNodeDataLocalComparison": "internal_native_js_service_path",
+    "sqliteSnapshotLiveRebuild": "five_node_certification_window",
+    "publicPathScaleBenchmark": "not_available"
   },
   "limitations": [
     {
@@ -104,14 +145,14 @@
       "summary": "Partition range comparison is string-based, so numeric strings sort lexicographically."
     },
     {
-      "id": "global-secondary-index",
+      "id": "secondary-indexes",
       "area": "Indexes",
-      "summary": "There is no secondary index support: CREATE INDEX is rejected as unsupported, and even a wired-in local index would not narrow the partition set."
+      "summary": "CREATE INDEX is unsupported and no secondary-index runtime path is active."
     },
     {
-      "id": "raft-log-lifecycle",
+      "id": "message-group-log-lifecycle",
       "area": "Replication",
-      "summary": "SQLite partition logs are bounded by the production snapshot protocol, but in-memory message-group logs still grow without bound and catch up by full replay."
+      "summary": "SQLite partition logs use the active snapshot and proof-gated compaction path; in-memory message-group logs still grow without bound and recover by full replay."
     },
     {
       "id": "learner-promotion",
@@ -120,18 +161,38 @@
     },
     {
       "id": "binding-invocation",
-      "area": "Service deployment",
-      "summary": "Request and call Bindings have public invocation adapters (HTTP, and authenticated pgwire CALL BINDING $1 with data-local shard runs and reduce coordination), and a request handler can invoke a declared call Binding through the service context (one policy-authorized nested call per request); the change, time, once, boot, and pushdown source kinds can be declared and placed but are not publicly invocable."
+      "area": "Service execution",
+      "summary": "Request and call Bindings are publicly invocable. Change, time, once, boot, and pushdown Bindings may be declared but have no public invocation adapter."
+    },
+    {
+      "id": "bounded-call-input",
+      "area": "Service execution",
+      "summary": "A call selects one bounded shard batch; the public path does not stream or page an unbounded partition scan."
+    },
+    {
+      "id": "numeric-partials",
+      "area": "Service execution",
+      "summary": "Coordinated partial values are finite numbers and their keys must be disjoint across shards."
     },
     {
       "id": "oci-runtime",
       "area": "Service portability",
-      "summary": "Managed OCI container activation is unsupported."
+      "summary": "Managed OCI container activation is unsupported; the recommended service path is a WASI component."
     },
     {
       "id": "postgres-compatibility",
       "area": "PostgreSQL compatibility",
-      "summary": "Password authentication and TLS are implemented, but SCRAM and arbitrary PostgreSQL/ORM compatibility are not claimed."
+      "summary": "Password authentication and TLS are implemed, but SCRAM and arbitrary PostgreSQL or ORM compatibility are not claimed."
+    },
+    {
+      "id": "node-transport-security",
+      "area": "Security",
+      "summary": "Node-to-node transport is plain WebSocket without cryptographic peer authentication; deploy it only on a trusted private network."
+    },
+    {
+      "id": "backup-and-upgrades",
+      "area": "Operations",
+      "summary": "Backup/restore/PITR and a supported rolling-upgrade contract are not available on 0.x."
     }
   ]
 }

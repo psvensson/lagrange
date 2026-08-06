@@ -1,323 +1,236 @@
----
-audience: human
-documentClass: current
----
-
 # Execution Semantics
 
-This is the contract behind a distributed call. When an application invokes a
-Lagrange call endpoint - directly over `CALL BINDING $1`, or through a
-deployed request handler's bridged `callBinding` host import - partition
-functions run on
-the nodes holding the data and a reducer combines the partials. This page
-states exactly what the runtime guarantees while doing that - retries,
-idempotency, failure, timing, ordering, limits - with the real production
-values. Where a semantic is not decided yet, it says so.
+This is the contract behind one distributed operation invoked directly over
+`CALL BINDING $1` or from an HTTP handler through `call(descriptor, arguments)`.
 
-For how to author the service, read the
-[programming model](native-programming-model.md) first. The sealed design
-contract behind this page is
-[architecture/minimal-deployment-surface.md](../architecture/minimal-deployment-surface.md).
+## At a glance
 
-## One Invocation, End To End
+| Question | Current contract |
+| --- | --- |
+| Where does `run()` execute? | On the node hosting the selected partition's leader replica |
+| Do raw selected rows cross shard hosts? | No; the row batch is built from the receiver's local replica |
+| What crosses the reduce boundary? | Bounded finite numeric partials |
+| Are partial results returned after a shard failure? | No; one failed shard fails the invocation |
+| Is result publication exactly once? | One atomic visible result per complete invocation |
+| Is function execution exactly once? | No; retries or ambiguous outcomes can re-execute non-coordinated effects |
+| Is there one cross-partition snapshot? | No; shards read independently |
+| Are writes allowed in a call operation? | The current call path does not write user tables |
+| Can the caller cancel? | No; the deadline is the caller-side bound |
+| Does movement return stale data? | No; topology drift is fenced and returned as a typed retryable failure |
+| Can an HTTP handler call several operations? | One nested distributed call per request today |
+| Can one component contain several operations? | The current pre-v2 code-first compiler allows one distributed operation |
+
+## End-to-end flow
 
 ```text
-CALL BINDING $1  (authenticated pgwire)
-  |
-  | resolve binding -> ready route (statement required)
-  | plan shards from the declared SELECT (no rows fetched)
-  v
-per shard, concurrently (bounded pool, preferring slot order):
-  dispatch run() to the partition's host node
-    - host node re-checks the topology fence
-    - host node reads its own replica (bounded)
-    - run(batch, arguments) executes in the WASM worker
-    - emit(key, partial) collects coordinated partials
-  publish the shard's partials under a leased slot
-  |
-  | completeness gate: every slot present, fresh, bounded, disjoint
-  v
-reduce(partials, arguments) on the reduce-lease holder
-  |
-  v
-one atomically published result snapshot -> caller gets the reduced JSON
+request or CALL BINDING
+  -> authenticate and authorize
+  -> resolve immutable Binding and component version
+  -> parse fixed single-table selector
+  -> resolve selected partitions without fetching rows
+  -> for each shard, through a bounded concurrent pool:
+       resolve partition-host Cell
+       activate one if needed
+       re-check topology and deadline on the host
+       read a bounded local batch
+       invoke run(rows, arguments)
+       collect emit(key, numericPartial)
+       publish the complete shard slot under a lease
+  -> require every expected slot, fresh and disjoint
+  -> invoke reduce(partials, arguments) on the reduce-lease holder
+  -> publish one atomic result snapshot
+  -> return the reduced JSON
 ```
 
-Shard dispatch is parallel and bounded: at most `maxConcurrentShardRuns`
-(default **8**, deployment-tunable, never caller-selected) partition-local
-runs proceed at once, and the next shard starts as one settles. Two shards
-resolved to the **same host node serialize** there - the WASI cell runtime
-allows one active invocation per component instance - while shards on
-distinct hosts overlap. Slot identity, wire identity, and lease identity
-are fixed before any dispatch; completion order never affects the result
-(coordination rows, not completion order, define the invocation). On the
-first shard failure, or once the shared deadline passes, no further shard
-is admitted; already-started shards settle, and the incomplete slot set
-stays invisible behind the completeness gate. When shards fail, the
-surfaced error is the **lowest-slot** cause after all started work settled -
-stable slot order, never network race order.
+The default shard pool admits eight runs at once. Work on distinct hosts can
+overlap. One component instance accepts one invocation at a time, so same-host
+shards serialize.
 
-## Timeouts And Deadlines
+## Deadlines
 
-- One CALL gets a **30 s** ingress deadline by default (`DEADLINE_MS` 30000,
-  deployment-tunable). It is an absolute deadline threaded through every hop,
-  not a per-hop timer.
-- The receiving node re-checks the deadline **inside** the component-invoke
-  barrier, immediately before the WASM export runs. An expired deadline is
-  refused as `call_cell_deadline_exhausted` without invoking the component.
-- The bounded shard read honors the same deadline; wall-time exhaustion during
-  the local read maps to `call_cell_deadline_exhausted`, row/byte exhaustion
-  to `call_cell_batch_bound_exceeded`.
-- Waiting for a missing Cell to activate (below) is capped at
-  `min(now + 15 s, caller deadline)` - a short-deadline call fails typed with
-  budget left to report instead of burning it all on a capacity wait.
+A call has one absolute deadline, 30 seconds by default. The same deadline is
+threaded through planning, activation wait, local read, dispatch, WASM
+execution, and reduction.
+
+The receiver checks the deadline immediately before invoking the component. An
+expired request is refused without running guest code.
+
+Waiting for a missing Cell is bounded by the earlier of the caller deadline and
+a 15-second activation window.
+
+There is no caller-initiated cancellation. Closing the HTTP or PostgreSQL-wire
+connection does not stop already dispatched work. Once the deadline or a shard
+failure prevents progress, the coordinator stops admitting new shards; started
+work settles and incomplete results remain invisible.
 
 ## Retries
 
-Automatic retry happens at the ingress transport, and only when all three
-hold:
+Automatic retry occurs only when all three conditions hold:
 
-1. the failure is classified `retryable`, and
-2. the component was **not** invoked (`invoked !== true`), and
-3. attempts remain (`maxAttempts`, default **2** - one retry).
+1. the failure is classified retryable;
+2. the runtime can prove the component did not execute; and
+3. the attempt budget remains.
 
-Every failure is classified `terminal`, `retryable`, or `ambiguous`.
-`ambiguous` means the runtime cannot prove the component did not execute -
-an unclassifiable dispatch error (`call_cell_handler_failed`), a shutdown
-after dispatch started (`call_cell_shutting_down` with `invoked`), or a
-delivery that acknowledged without a typed outcome (`call_cell_ack_only`).
-**Ambiguous failures are never retried automatically.** Callers that retry
-them accept possible re-execution (visibility stays exactly-once; see side
-effects below).
+The default maximum is two attempts: the first attempt plus one retry.
 
-## Partial Failure And The Typed Error Vocabulary
+Failures are classified as:
 
-There are no silent partial results. A failed shard fails the whole
-invocation with one typed error; failed partitions are never dropped from the
-result. All codes are prefixed `call_cell_`:
+- **terminal** - retrying the same request cannot fix it;
+- **retryable** - the target or topology can be resolved again and guest code
+  did not run; or
+- **ambiguous** - the runtime cannot prove whether guest code ran.
 
-| Code | Classification | Meaning |
+Ambiguous failures are never retried automatically. A caller that retries an
+ambiguous outcome accepts possible re-execution of guest side effects.
+
+When several started shards fail, the surfaced cause is selected by stable
+shard-slot order rather than network arrival order.
+
+## Partial failure
+
+There are no silent partial answers. Every expected shard must publish a valid
+slot before reduction.
+
+The invocation fails when a slot is:
+
+- missing;
+- expired or stale;
+- larger than its limit;
+- malformed;
+- non-numeric;
+- duplicated by another shard key; or
+- produced against stale topology.
+
+A failed shard is not dropped from the answer.
+
+## Idempotency and identity
+
+Every distributed call receives a unique base identity. The runtime derives one
+wire identity per shard and one for reduction. Component outcomes are journaled
+by tenant and wire identity.
+
+A redelivery of the same wire identity replays the journaled result rather than
+re-executing the component.
+
+For an HTTP request, a repeated outer request with the same `Idempotency-Key`
+returns the journaled outer response and does not re-run its nested call.
+
+Direct `CALL BINDING` does not currently accept a caller idempotency key. Two
+identical direct calls are two invocations.
+
+## Result and side-effect semantics
+
+`emit(key, partial)` is the coordinated output channel from `run()`. The
+`run()` return value is bookkeeping and is not part of reduction.
+
+The coordinator publishes one result snapshot only after the complete partial
+set exists. Re-leasing or replay may recompute internally without exposing an
+intermediate result.
+
+This is exactly-once visibility, not exactly-once execution. Logging, external
+I/O, or any other effect performed by guest code is outside the coordinated
+result. Make those effects idempotent or avoid them in `run()` and `reduce()`.
+
+## Ordering and determinism
+
+Cross-shard row order is not defined. Partial arrival order is not defined.
+
+The coordinator presents a deterministic merged partial list for the same
+complete set. Guest functions should nevertheless be deterministic pure
+functions of their explicit inputs.
+
+Partial keys must be shard-disjoint. A constant key emitted by several shards
+is a contract violation, not a sum operation. Namespace keys with a
+partition-local identity.
+
+## Reads and transactions
+
+The selector is one literal single-table `SELECT` fixed in the operation
+declaration. A missing or invalid selector makes the operation non-invocable.
+
+Each shard reads its local partition independently. The invocation does not
+establish one global snapshot, so concurrent writes may occur between shard
+reads.
+
+Topology fencing guarantees that each shard executes against a current,
+non-superseded partition replica. It does not make all shards observe one
+instant.
+
+The current distributed call path reads user tables and coordinates a result;
+it does not write user tables. A request handler can separately use declared
+write capabilities, with its own side-effect and idempotency responsibilities.
+
+## Movement
+
+Partition split, replica movement, Binding replacement, and Cell replacement
+can race with planning. The runtime checks immutable digests, partition epochs,
+leader ownership, route identity, and reduce-lease ownership at several points.
+
+A moved target is returned as a typed retryable stale-target failure. It is not
+served from a retired partition and it is not marked as replica corruption.
+
+If a selected host lacks a ready Cell, that is an activation trigger. A
+short-lived demand lease pins compute to the host until the call completes or
+the lease expires.
+
+## Version compatibility
+
+Manifests, Bindings, and invocation payloads are versioned. A Binding pins an
+exact package, manifest digest, and handler or export identity. A deployment
+change during an invocation produces a stale-target refusal rather than mixing
+component versions.
+
+`0.x` product releases do not promise backward compatibility. Wire-level
+version fencing protects one invocation; it does not constitute a supported
+rolling-upgrade contract.
+
+## Default limits
+
+| Limit | Default |
+| --- | ---: |
+| Call deadline | 30,000 ms |
+| Concurrent shard runs | 8 |
+| Rows per shard batch | 4,096 |
+| `emit()` calls per shard invocation | 64 |
+| Partial entries per slot and merged cap | 1,024 |
+| Coordination slots | 64 |
+| Reduce lease | 30,000 ms |
+| Activation lease | 60,000 ms |
+| Coordination retention | 600,000 ms |
+| Nested distributed calls per HTTP request | 1 |
+| Direct-call payload | 1 MiB |
+
+Binding budgets permit bounded CPU, wall time, memory, input, output, and
+context sizes. Query execution has a separate ambient budget.
+
+## Common failure categories
+
+| Category | Typical cause | Retry guidance |
 | --- | --- | --- |
-| `statement_invalid` | terminal | declared statement is not a single-table SELECT |
-| `not_invocable` | terminal | call binding declares no statement |
-| `route_not_found` | terminal | no binding matches tenant + name |
-| `route_ambiguous` | terminal | more than one binding matches |
-| `invalid_arguments` | terminal | arguments not a JSON object / bad identity |
-| `invalid_component_result` | terminal | non-JSON result or malformed partial |
-| `batch_bound_exceeded` | terminal | shard rows exceed the batch bound, or unmappable values |
-| `deadline_exhausted` | terminal | absolute deadline passed |
-| `authentication_failed` / `authorization_failed` | terminal | security context / access refusal |
-| `component_failed` | terminal | the guest export itself failed |
-| `reduce_incomplete` | terminal | partial set incomplete, stale, unbounded, or overlapping |
-| `route_unavailable` | retryable | no ready Cell, overload, or local read failure |
-| `host_cell_unavailable` | retryable | no ready Cell on the shard's host node (activation trigger) |
-| `target_stale` | retryable | topology moved between resolve and execute |
-| `transport_failed` | retryable | reserved; currently unraised - transport failures normalize to `handler_failed` |
-| `shutting_down` | retryable / ambiguous | node shutdown before / after dispatch started |
-| `handler_failed` | ambiguous | unclassifiable receiver failure |
-| `ack_only` | ambiguous | delivery acknowledged without a typed outcome |
+| Invalid statement or arguments | Bad declaration or caller payload | Terminal |
+| Authentication or authorization | Missing credentials, action, table, or call permission | Terminal |
+| Batch or partial bound | Too many rows, bytes, emits, or malformed partials | Terminal until the design or budget changes |
+| Guest failure | Exception or invalid component result | Terminal for the same input unless application policy says otherwise |
+| Deadline | Absolute deadline passed | Terminal for that invocation; measure before raising limits |
+| Host Cell unavailable | Activation or temporary capacity gap | Retryable before guest execution |
+| Target stale | Partition, Cell, or version moved | Retryable after re-resolution |
+| Unclassified transport outcome | Delivery may have reached guest code | Ambiguous; no automatic retry |
 
-Every failure also carries `invoked` (did a component run) and
-`preserveReplicaState` (movement refusals never mark the replica failed).
+The exact typed codes remain part of the lower-level call contract in
+[`architecture/minimal-deployment-surface.md`](../architecture/minimal-deployment-surface.md).
 
-## Idempotency And Invocation Identity
+## Current unresolved product requirements
 
-- Each CALL mints a fresh base identity `call-invocation-<uuidv4>`.
-- One invocation fans out into N+1 **wire identities**: `<base>#slot-<N>` per
-  shard and `<base>#reduce`. The suffix grammar is load-bearing: the durable
-  fence journals per wire identity, and the route resolver reads the slot
-  ordinal to spread shard runs deterministically across ready replicas.
-- The runtime journals every component invocation through a durable fence
-  keyed on tenant + wire identity (`wasm_operations`). A redelivered wire
-  identity **replays** the journaled result instead of re-executing; the
-  receiver reports `invoked: false` for replays.
-- Idempotency keys containing the reserved `#slot-` / `#reduce` grammar are
-  refused typed (`call_cell_invalid_arguments`).
-- There is **no caller-supplied idempotency key on a direct pgwire CALL
-  today**. The identity plumbing accepts one, but no `CALL BINDING` ingress
-  field feeds it - two identical `CALL BINDING` statements are two
-  invocations. Caller idempotency keys on the direct pgwire path are an
-  unresolved design decision. (The composed HTTP path behaves differently:
-  a replayed outer request with the same `Idempotency-Key` returns the
-  journaled response without re-running the nested call; see below.)
+The public surface does not yet provide:
 
-## Nested Calls From Request Handlers
+- caller cancellation;
+- direct-call idempotency keys;
+- structured partial values;
+- streaming or paged shard input;
+- concurrent invocations on one component instance;
+- deeper nested calls;
+- a parameterized per-call selector;
+- a global snapshot for one distributed call; or
+- a JavaScript client SDK for direct external calls.
 
-A deployed request component can initiate the same distributed call through
-its host context: `callBinding(name, argumentsJson)` crosses a
-worker-to-parent bridge into the one canonical `CallCellInvoker` - there is
-no second execution path. The composed semantics, tersely:
-
-- the target must appear in the request Binding's durable service access
-  policy (schema v2 `calls` allowlist); absent policy or an undeclared
-  target is refused before any dispatch;
-- one nested call per request invocation, under the system-owned child
-  identity `<outer invocation>#call-1` - guest code never supplies or
-  edits identities, and deeper chains are refused by the identity grammar;
-- the effective deadline is `min(outer request deadline, call Binding
-  deadline)` - the nested call never starts a fresh timeout;
-- failures surface to the guest as a typed `binding-call-error`
-  (`target_not_allowed`, `invalid_arguments`, `deadline_exhausted`,
-  `target_unavailable`, ...) with a terminal/retryable classification; the
-  component owns the mapping to its HTTP response;
-- a replayed outer HTTP request (same `Idempotency-Key`) returns the
-  journaled outer response without re-executing the nested call.
-
-## Side Effects
-
-The guarantee is **exactly-once visibility, not exactly-once execution**:
-
-- `emit(key, partialJson)` is the only coordinated output channel from
-  `run`. The `run` return value is component bookkeeping and is not
-  coordinated - do not put results there.
-- Exactly one result snapshot is atomically published per complete partial
-  set. A replayed or re-leased reduce recomputes without a visible
-  intermediate; callers never observe two results for one invocation.
-- The snapshot carries a witness: `{schemaVersion: 1, slots: [{slotId,
-  replicaId, computedAt, candidateCount}]}` naming exactly which replica
-  computed each shard's partial.
-- Anything else a component does (its own state, logging) is its own
-  problem: a retry after an ambiguous failure may execute it again. Write
-  handlers so re-execution under the same wire identity is safe.
-
-## Ordering
-
-Merged reduce input is deterministic, independent of shard arrival order:
-entries sort by aggregation value descending, ties broken by group key with
-`localeCompare(..., {numeric: true})`, then the list is sliced to
-`partialLimit` (1024). Rows inside a shard batch arrive in local SELECT
-order; do not rely on cross-shard row order - only the merged partial order
-is contractual.
-
-## Deterministic Vs Nondeterministic Functions
-
-Two hard correctness requirements on the guest:
-
-- **Shard-disjoint group keys are mandatory.** The same group key emitted by
-  two shards is a contract violation, refused as `call_cell_reduce_incomplete`
-  (shard overlap) - never silently merged. Derive group keys from the data's
-  partition-local identity.
-- **Partial values are finite numbers.** Each emitted partial JSON must parse
-  to a finite number; today the coordination gate supports numeric per-group
-  aggregation only. Structured partials are an unresolved design decision.
-
-`run` should be a pure function of `(batch, arguments)`. The runtime replays
-journaled results and re-runs after movement refusals; nondeterministic
-output makes replay and retry observably diverge.
-
-## Transactions And Reads
-
-- The binding-declared selector is a **single-table SELECT**. Anything else
-  is `call_cell_statement_invalid`.
-- Each shard's batch is a bounded local read of that node's own partition
-  replica (row bound + deadline), built where the data lives - raw shard
-  rows never cross the network.
-- There is **no cross-partition transaction** in a CALL. Shards are read
-  independently (and possibly concurrently); the invocation does not take
-  a global snapshot, so concurrent writes may land between shard reads.
-  The topology fence guarantees each shard read is against a current,
-  non-superseded replica - not that all shards observe one instant.
-- The CALL path writes nothing to user tables.
-
-## Cancellation
-
-There is **no caller-initiated cancellation**. Closing the pgwire session
-does not stop a running invocation; the deadline is the only caller-side
-bound. The transport cannot cancel an already-dispatched shard run either:
-on failure or deadline the invoker only stops admitting new shards -
-started work settles, and nothing partial becomes visible. Node shutdown
-aborts in-flight dispatches typed (`call_cell_shutting_down`; ambiguous if
-the component may have run). Caller cancellation is an unresolved design
-decision.
-
-## Limits
-
-Production defaults, all overridable per deployment
-(`callCellInvocationTunables`):
-
-| Limit | Default | Meaning |
-| --- | --- | --- |
-| `DEADLINE_MS` | 30000 | ingress deadline for one CALL |
-| `MAX_CONCURRENT_SHARD_RUNS` | 8 | bounded parallel shard dispatch per invocation |
-| `BATCH_ROW_BOUND` | 4096 | max rows per shard batch handed to `run` |
-| `EMIT_BUDGET` | 64 | max `emit()` calls per invocation |
-| `PARTIAL_LIMIT` | 1024 | max partial entries per slot and merged-result cap |
-| `SLOT_COUNT` | 64 | coordination slot capacity |
-| `REDUCE_LEASE_MS` | 30000 | slot/reduce lease duration |
-| `ACTIVATION_LEASE_MS` | 60000 | activation-pin lease lifetime |
-| `RECLAIM_RETENTION_MS` | 600000 | coordination-garbage retention |
-| `NESTED_CALL_BUDGET` | 1 | max bridged binding calls per request invocation (the call-world `call-bounded` import still always denies) |
-
-Ingress transport: `maxAttempts` 2, 128 in-flight globally, 32 per target;
-overload is a typed retryable `call_cell_route_unavailable`, never a queue.
-The `CALL BINDING` payload (`schema_version`, `name`, optional `arguments`
-JSON object) is one string parameter, max 1 MiB.
-
-Binding budgets are a closed set: CPU 1..60000 ms, wall 1..300000 ms, memory
-1..1 GiB, input/output 0..16 MiB each, context 0..64 MiB. A separate ambient
-query-budget axis bounds SQL work (5 s CPU, 64 MiB memory, 30 s wall,
-100k rows / 8 MiB per query result).
-
-## Replica And Partition Movement
-
-Movement never corrupts a result; it produces typed retryable refusals:
-
-- `call_cell_target_stale` is raised at four independent points: route drift
-  between resolve and dispatch, a partition no longer routable or superseded,
-  the receiving node's own ownership + epoch fence (it re-reads its cache and
-  refuses if the leader, state, or partition versions moved, or the fence
-  names another node), and a reduce that executed on a replica no longer
-  holding the reduce lease. All carry `preserveReplicaState: true` - the
-  replica is not marked failed for having moved.
-- `call_cell_host_cell_unavailable` is not an error path in production - it
-  is the **activation trigger**. The invoker publishes a bounded demand lease
-  (`call_activation_leases`, 60 s), the placement planner pins a replica to
-  the shard's host node, and the dispatch retries every 250 ms until the Cell
-  is ready or the window lapses. Reclaim needs no mechanism of its own: a
-  lapsed lease simply stops pinning, and the ordinary surplus cure removes
-  the replica.
-- Reduce runs only on the lease holder: the reduce route is resolved, the
-  dedicated lease slot (`slotIds.length + 1`) is acquired under that replica,
-  and the snapshot is refused `target_stale` if a different replica executed.
-
-## Version Compatibility
-
-Every payload is versioned: the CALL payload carries `schema_version` (2),
-bindings are `schema_version: 2`, manifests `schema_version: 3`. A binding's
-target pins the exact artifact by `manifest_digest`; the resolved route
-carries the definition's `bindingDigest`, and the receiver re-asserts the
-full route - digest included - refusing `call_cell_target_stale` if any field
-drifted. An upgrade mid-invocation therefore fails typed retryable rather
-than executing mixed versions.
-
-## Coordination Hygiene
-
-Coordination garbage (lapsed slot rows, abandoned result rows) is swept
-opportunistically: one bounded sweep per new invocation, no background
-reaper, retention 600 s. Sweep failures are hygiene-only and never fail the
-live invocation. A live invocation whose seed-to-first-acquire span exceeds
-retention is treated as abandoned by design - typed retryable, never a wrong
-result.
-
-## Unresolved Design Decisions
-
-Stated once, plainly - none of these are guaranteed by anything above:
-
-- caller-initiated cancellation;
-- caller-supplied idempotency keys on direct pgwire CALL;
-- structured (non-numeric) partial values;
-- concurrent runs on one component instance (today one active invocation
-  per Cell; same-host shards serialize);
-- `pushdown` invocation (declared-only today);
-- nested `call-bounded` invocation (declared in WIT, host always denies);
-- a client SDK for direct CALL (direct ingress is authenticated pgwire;
-  HTTP reaches a call Binding through the composed request-handler path
-  above, not through a direct CALL route).
-
-## Deeper
-
-Down one level:
-[architecture/minimal-deployment-surface.md](../architecture/minimal-deployment-surface.md)
-is the sealed contract this page projects, including the
-`lagrange:cell/call-context` WIT surface and budget grammar. Current status of
-every capability: [current-capabilities-and-limitations.md](current-capabilities-and-limitations.md).
+These are not implied by the mechanics above.

@@ -1,379 +1,245 @@
----
-audience: human
-documentClass: current
----
+# Measuring Performance And Network Cost
 
-# Estimating Performance, Throughput, And Network Cost
+Lagrange can remove avoidable data movement and service/to-database round
+trips. It does not make WASM instructions automatically faster, remove Raft
+consensus, or make every workfload cheaper.
 
-Lagrange runs the data-intensive parts of a service on the nodes holding the
-data. The wins this can produce come from three separable mechanisms, and an
-honest estimate treats them separately.
-
-Packaging a service as WASM does not automatically make its code faster. The
-gains appear when execution is placed near the replicas it uses, repeated
-database round trips collapse into one invocation, or partition functions
-filter and reduce data before it crosses the application/database boundary.
-The benefits are strongest when
+The strongest workload shape is:
 
 ```text
-data scanned or transformed ≫ result returned
+data scanned or transformed >> result returned
 ```
 
-because then the network carries a small result instead of the rows that
-produced it.
+The most defensible early claims are mechanical and measured:
 
-This document provides conservative calculation methods and illustrative
-ranges. They are not benchmark results or promises about every workload.
-Measure the existing path before using any estimate commercially.
+- sequential round trips removed;
+- rows or groups no longer crossing the application/database boundary;
+- bounded partials replacing an unbounded intermediate result;
+- coordinator CPU and memory removed; and
+- billed cross-zone or cross-region bytes removed.
 
-## The Three Mechanisms Of Win
+This page gives a workload screening model and a measurement procedure. It
+does not project a product-wide speedup or cost reduction.
 
-| Mechanism | Primary win | Reasonable target for a suitable workload |
-| --- | --- | --- |
-| Placement of an unchanged service | Lifecycle, capability isolation, and coarse locality | `0–20%` lower latency when placement removes a meaningful remote database hop; otherwise approximately unchanged. No automatic CPU-speed claim from packaging |
-| Round-trip collapse through the Lagrange context | Fewer sequential crossings and exact data targeting | `15–50%` lower latency for qualifying multi-step paths |
-| Partition functions and bounded reduction | Local policy; only partials cross the network | `2–10×` end-to-end speedup and `10–1,000×` less transferred data for qualifying data-heavy operations |
+## Current public path
 
-The ranges intentionally become wider as the service gives Lagrange more
-information. They also become more workload-dependent.
+Add current bounds to any estimate:
 
-The current implementation boundary matters:
+- a distributed operation has one literal single-table selector fixed at
+  deployment;
+- the public path does not stream or page an oversized shard batch;
+- the default shard row bound is 4,096, with additional byte and deadline
+  bounds;
+- partials are finite numers with shard-disjoint keys;
+- the default emit budget is 64 and the merged partial cap is 1,024;
+- shard dispatch allows up to eight concurrent runs, but shards routed to
+  the same component instance serialize; and
+- shard reads do not form one global snapshot.
 
-- services deploy as genuine WASI components; request endpoints are invoked
-  over authenticated HTTP;
-- call Bindings are invocable over authenticated pgwire (`CALL BINDING $1`)
-  or from a request handler through the policy-authorized `callBinding`
-  host import: a binding-declared single-table `SELECT`, a partition
-  function per relevant partition, numeric per-group partials, and one
-  reducer;
-- on the call path today, shard dispatch is parallel and bounded (default
-  8 concurrent runs; same-host shards serialize) and partials are numeric
-  aggregation values - both matter when projecting throughput;
-- the `pushdown`, `change`, `time`, `once`, and `boot` Binding kinds are
-  declared-only, with no public invocation adapter;
-- `native_js` is kernel-internal; and
-- managed OCI container activation is unsupported (compatibility scaffold).
+An estimate that assumes unbounded input, structured partials, or per-call selector
+narrowing is not an estimate for the current product.
 
-See [Current Capabilities And Limitations](current-capabilities-and-limitations.md)
-for the authoritative status.
+## Measure the existing path first
 
-## Start With A Simple Latency Model
+For one candidate operation, record:
 
-A useful first approximation is:
+- requests per second;
+- statements per request;
+- sequential statements per request;
+- p50, p95, and p99 service/to-database round-trip time;
+- rows and bytes returned by each statement;
+- partitions or shards touched;
+- service-tier CPU, memory, and connection-pool wait;
+- database CPU, scan bytes, and storage wait;
+- cross-host, zone, and region traffic; and
+- retries, timeouts, and failure amplification.
+
+Keep the raw
+measurement period and the load-generation procedure with the pilot report.
+
+## Separate the mechanisms
+
+### Placement
+
+Moving an unchanged service may remove one remote database hop when a replica
+already exists on or near the selected node. It does not change the application
+algorithm or the result volume.
+
+The claim for this step is:
 
 ```text
-request latency
-  = application and database work
-  + sequential network round trips × round-trip time
-  + transferred bytes ÷ effective bandwidth
-  + queueing and contention
+hops and latency groups before
+versus
+hops and latency groups after
 ```
 
-Lagrange does not make every term disappear:
+Do not assume a latency percentage. Measure it.
 
-- database scans, indexes, locks, and storage work remain;
-- writes still reach the partition leader and a Raft quorum;
-- CPU consumed by the application function remains; and
-- cross-partition operations still exchange partial results.
+### Round-trip collapse
 
-The avoidable terms are repeated application/database crossings, unnecessary
-movement of rows or intermediate aggregates, and topology mistakes that place
-execution far from the replicas it uses.
+Consider a request that performs three sequential database crossings and 6
+ms of CPU plus storage work.
 
-## Placement Alone: Moving An Unchanged Service
-
-An unchanged service may still:
-
-1. receive a request;
-2. issue SQL;
-3. receive rows;
-4. apply application logic; and
-5. issue writes.
-
-Changing the package format does not remove those steps. Assume unchanged CPU
-performance unless measurements prove otherwise.
-
-The performance opportunity comes from placement. If the workload repeatedly
-uses the same partitions, putting it on a node or latency group containing a
-suitable replica may remove a remote hop.
-
-A conservative interpretation is:
-
-- `0–5%` when database latency is already negligible;
-- `5–20%` when one or two remote database calls are a meaningful part of the
-  request; and
-- potentially much more when a region boundary is removed, but that should be
-  treated as a specific topology result rather than a general product claim.
-
-Moving unchanged code remains valuable even at `0%` performance improvement
-if it simplifies migration, lifecycle, failure recovery, and later hot-path
-extraction. The supported package format for this step is a WASI component;
-OCI is a compatibility scaffold, and managed OCI activation is not
-supported today.
-
-## WASM Packaging: Do Not Claim That The Format Is Faster
-
-WASM is useful for:
-
-- immutable portable artifacts;
-- capability-controlled host access;
-- limiting arbitrary network and storage access;
-- safe placement and replacement of Cells; and
-- attributing successful data access to the issuing service.
-
-Those properties can enable locality and operational improvements. They do not
-prove that the component executes application instructions faster than the
-same code running natively.
-
-The current JavaScript authoring path embeds a WebAssembly build of
-SpiderMonkey. It is a portability path, not evidence that a JavaScript
-component will consume less memory or CPU than every containerized equivalent.
-
-Use the same `0–20%` coarse-locality range as any unchanged placement until
-the workload uses the Lagrange context in a way that collapses calls or
-reduces transferred data. Measure startup, memory, and steady-state CPU
-separately for each source language and toolchain.
-
-## Round-Trip Collapse: Calculating The Savings
-
-Consider a transaction-like request that performs:
-
-```text
-read account
-→ read policy state
-→ validate
-→ update account
-→ insert audit row
-```
-
-A conventional service might perform three sequential database round trips.
-A partition-local operation can perform the reads, policy, state transition,
-and audit beside the owning partition after one routed invocation.
-
-Assume application and database work takes `6 ms` in either design:
-
-| Service/database RTT | Three-round-trip path | One-round-trip path | Approximate improvement |
+| Service/database RTT | Three crossings | One crossing | Latency removed by the model |
 | ---: | ---: | ---: | ---: |
-| `0.2 ms` | `6.6 ms` | `6.2 ms` | `6%` |
-| `1 ms` | `9 ms` | `7 ms` | `22%` |
-| `3 ms` | `15 ms` | `9 ms` | `40%` |
-| `10 ms` | `36 ms` | `16 ms` | `56%` |
+| 0.2 ms | 6.6 ms | 6.2 ms | 0.4 ms |
+| 1 ms | 9 ms | 7 ms | 2 ms |
+| 3 ms | 15 ms | 9 ms | 6 ms |
+| 10 ms | 36 ms | 16 ms | 20 ms |
 
-This is why `15–50%` is a reasonable target band for a suitable multi-step hot
-path. It is not reasonable for one cheap indexed query that already returns the
-final small result.
-
-The general calculation is:
+The general estimate is:
 
 ```text
-latency removed
-  ≈ eliminated sequential round trips × measured RTT
+sequential latency removed
+  = eliminated sequential crossings ∙ measured RTT
 ```
 
-Use measured p50, p95, and p99 RTT rather than a cloud-region marketing number.
-Queueing, connection-pool waits, and serialization may increase the observed
-saving beyond the wire RTT alone, while added function overhead may reduce it.
+This is a latency component, not a prediction of final p50 or p99. Add WASM
+entry, planning, local read, queuing, reduction, and coordination overhead.
 
-## Throughput: Derive It From The Actual Bottleneck
+### Data reduction
 
-When requests mostly wait for sequential network calls and worker concurrency
-stays fixed, a useful ceiling estimate is:
+Compare abytes at the service/storage boundary.
 
-```text
-throughput ratio
-  ≈ old request latency ÷ new request latency
-```
-
-For the `15 ms` to `9 ms` example:
-
-```text
-15 ÷ 9 ≈ 1.67×
-```
-
-That does not mean the system will sustain exactly `1.67×` more traffic.
-Throughput may instead be limited by:
-
-- storage IOPS or scan bandwidth;
-- CPU in the function or SQL engine;
-- Raft leader or quorum capacity;
-- lock contention;
-- partition skew;
-- reducer capacity; or
-- admission and resource limits.
-
-A cautious target for multi-step transactional paths is `1.2–2×` throughput
-when network waiting is a major bottleneck. If storage or consensus already
-dominates, expect less.
-
-## Partition Functions And Reduction: Calculate Bytes Before Speed
-
-The most defensible large number is often the reduction in transferred data,
-not the end-to-end speedup. This is where `data scanned ≫ result returned`
-pays: the partition functions reduce large local inputs to compact partials,
-and the network carries the partials, not the rows.
-
-Consider a ranking operation across `16` partitions. A strong SQL baseline
-returns `100,000` grouped records to an application service, at `64 bytes` per
-record:
-
-```text
-100,000 × 64 bytes = 6.4 MB
-```
-
-A partition function applies policy locally and returns only the best `20`
-candidates from each partition, at `128 bytes` per candidate:
-
-```text
-16 × 20 × 128 bytes = 40,960 bytes ≈ 40 KB
-```
-
-The transfer reduction is:
-
-```text
-6.4 MB ÷ 40 KB ≈ 156×
-```
-
-The operation will not become `156×` faster. Every partition still scans and
-groups its local data, the policy function still runs, and the partials still
-merge. Depending on how important transfer and central sorting were, an
-end-to-end improvement of roughly `1.5–5×` might be a reasonable target for
-this particular shape.
-
-The more general formulas are:
+Baseline:
 
 ```text
 baseline transfer
-  = groups or rows crossing the boundary × bytes per result
-
-bounded-reduction transfer
-  = participating partitions × candidates per partition × bytes per candidate
-
-transfer reduction factor
-  = baseline transfer ÷ bounded-reduction transfer
+  = rows or groups returned to the service
+  × average serialized bytes per result
 ```
 
-`10–1,000×` less transferred data is plausible when many rows or groups collapse
-into a small bounded answer. It is impossible when the caller genuinely needs
-all the rows.
+Lagrange call:
 
-This mechanism is what the call-Binding path implements today: the partition
-function runs beside each relevant partition replica, raw rows never leave
-the host node, and only emitted partials travel to the reducer. One current
-boundary matters for the calculation above: the public reduce gate
-coordinates numeric per-group aggregation values (default limit `1,024`
-partial entries per call), so a per-candidate record payload like the `128`
-bytes-per-candidate example must be encoded into that shape or wait for a
-richer partial surface.
+```text
+approximate partial transfer
+  = participating shards
+  × emitted partials per shard
+  × average serialized bytes per partial
+```
 
-## Estimating Network Bills
+Add the reduced result and coordination overhead to the latter.
 
-Use billed application/data traffic, not total cluster traffic. Lagrange still
-replicates data through Raft; durability traffic does not disappear.
+Example worksheet:
 
-A monthly traffic estimate is:
+| Measure | Baseline | Lagrange |
+| --- | ---: | ---: |
+| Matching rows or groups | 100,000 | local only |
+| Serialized bytes per baseline result | 64 | — |
+| Participating shards | — | 16 |
+| Emitted partials per shard | — | 10 |
+| Bytes per partial | — | 128 |
+| Calculated boundary transfer | 6.4 MB | about 20 KB |
+
+The arithmetic ratio is a screening signal. It is not a speedup ratio. Both paths
+still read, compute, queue, and merge.
+
+The current public partial contract accepts finite numbers per key. A candidate
+like the candidate-record worksheet above must fit that contract. It cannot
+assume arbitrary 128-byte structured partials.
+
+## Calculate an end-to-end result
+
+After the mechanical design looks promising, implement both paths in the same
+environment and measure steady state.
+
+Record at least:
+
+- warm-up procedure and duration;
+- load shape and concurrency;
+- p50, p95, and p99 latency;
+- requests completed per second;
+- baseline and Lagrange boundary bytes;
+- local, cross-host, cross-zone, and cross-region bytes;
+- coordinator, service, and storage CPU;
+- memory, allocation, and garbage collection;
+- queue length and connection-pool wait;
+- shard batch sizes, partial counts, and partitions touched;
+- retries by typed classification; and
+- error rate.
+
+Run at least one node-loss or partition-movement window. The test should prove
+that fencing and retry do not turn stale work into success.
+
+## Throughput
+
+Do not derive throughput from latency alone. Throughput can be limited by:
+
+- SQLite scan bandwidth;
+- partition leader CPU;
+- Raft quorum writes;
+- WASM execution and per-instance serialization;
+- distributed-shard pool width;
+- reducer CPU;
+- lock or transaction contention;
+- partition skew; and
+- node resource admission.
+
+A useful report shows the bottleneck reached at each load level, not just the
+maximum successful request rate.
+
+## Network billing
+
+Calculate billed application/storage traffic, not all traffic in the cluster.
+Raft replication, snapshot transfer, heartbeats, metadata CDC, and service control
+traffic still exist.
 
 ```text
 monthly GB
   = requests per second
-  × application/database bytes per request
-  × 2,592,000 seconds
-  ÷ 1,000,000,000
+  × application/storage bytes per request
+  × 2592000 seconds
+  ÷ 1000000000
 ```
 
-For `10,000` requests per second and `4 KB` crossing the service/database
-boundary per request:
-
-```text
-10,000 × 4,000 × 2,592,000 ÷ 1,000,000,000
-  = 103,680 GB
-  = 103.68 TB per 30-day month
-```
-
-At an illustrative network price of `$0.01/GB`, that is approximately:
-
-```text
-103,680 × $0.01 = $1,036.80 per month
-```
-
-If locality and native execution remove `80%` of that billed traffic:
-
-```text
-$1,036.80 × 0.80 = $829.44 saved per month
-```
-
-At an illustrative `$0.05/GB`, the same traffic costs `$5,184` per month and an
-`80%` reduction saves about `$4,147`.
-
-These are examples, not provider price claims. Insert the actual price for the
-specific cloud, direction, zone or region boundary, service, commitment, and
-billing date. Some paths bill one direction, some both directions, and some
-local traffic is free.
-
-The complete cost formula is:
+Then:
 
 ```text
 monthly network cost
   = monthly GB
   × billed directions
-  × price per GB
+  × actual price per GB
 ```
 
-## What To Measure Before A Rewrite
+Use the exact provider, region, zone, direction, service, commitment, and billing
+date. Do not use an example price as a customer claim.
 
-Collect at least:
+## Reporting the result
 
-- requests per second;
-- sequential statements per operation;
-- p50, p95, and p99 service/database RTT;
-- rows and bytes returned by each statement;
-- partitions touched;
-- service-tier and storage-tier CPU;
-- connection-pool wait time;
-- retries and failure amplification;
-- cross-zone and cross-region traffic; and
-- actual network billing classification and rate.
+State the mechanism, the measurement, and the environment.
 
-Then estimate three separate effects:
+Good:
 
-1. **Placement:** which calls become local or remain within one latency group?
-2. **Round-trip collapse:** how many sequential crossings become one invocation?
-3. **Reduction:** how many bytes can be filtered, scored, or aggregated before
-   exchange?
+> Partition-local filtering reduced the application/storage boundary from 6.4 MB
+> to 41 KB per request and reduced p95 from 48 ms to 21 ms on the described
+> five-node, single-region deployment.
 
-Do not combine these into one assumed multiplier. Calculate each one, then run
-a representative steady-state test.
+Bad:
 
-## How To Phrase Results Honestly
+> Lagrange is 156x faster.
 
-Prefer:
+A transfer ratio is not a latency ratio. A single workload result is not a
+product-wide promise.
 
-> This workload moved `156×` fewer bytes across the application/database
-> boundary and completed `2.3×` faster at p95 in the measured deployment.
+## Evidence status
 
-Avoid:
+The current repository contains:
 
-> Lagrange is `156×` faster.
+- a single-node, two-partition code-first WASM functional proof;
+- multi-node integration tests for host-local row reads and bounded shard
+  dispatch; and
+- a multi-process MovieLens comparison whose service phase uses an internal
+  `native_js` query-loop runtime.
 
-Prefer:
-
-> Extracting this five-statement partition-local transaction removed two
-> sequential network round trips and reduced p95 latency from `15 ms` to
-> `9 ms`.
-
-Avoid:
-
-> Native functions make transactions `40%` faster.
-
-The narrow, measured statement is usually more convincing because readers can
-see which part of their own workload has the same shape.
+It does not yet contain a multi-node, public code-first WASM benchmark
+compared against a controlled conventional deployment. Treat performance
+numbers outside these repository fixtures as workload hypotheses until that
+exists.
 
 ## Continue
 
-- [Service Deployment Guide](service-deployment-guide.md) deploys the
-  service and documents the call-Binding authoring and invocation flow.
-- [Rewrite A Hot Path For Lagrange](tutorials/rewrite-a-hot-path.md) provides a
-  detailed grouped-SQL baseline, partition-local policy, and bounded reducer.
-- [MovieLens: Distributed SQL And Data-Affine Services](../examples/service-data-affinity/README.md)
-  runs the current execution and placement proof.
-- [Current Capabilities And Limitations](current-capabilities-and-limitations.md)
-  is the implementation-status authority.
+- [Technical evaluation](evaluate.md)
+- [Migration and adoption](migration.md)
+- [Infrastructure capacity measurement](infrastructure-cost-estimation.md)
+- [Rewrite a hot path](tutorials/rewrite-a-hot-path.md)
+- [Current capabilities](current-capabilities-and-limitations.md)

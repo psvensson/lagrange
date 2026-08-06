@@ -12,16 +12,37 @@ const OUTPUT_PATH = 'docs/current-capabilities-and-limitations.md';
 const TEXT_ENCODING = 'utf8';
 const CHECK_FLAG = '--check';
 
-const PORTABILITY_LABEL = Object.freeze({
-  unsupported: 'Unsupported',
-  local_per_partition_only: 'Local SQLite indexes on every partition',
-  kernel_internal: 'Kernel-internal only',
-  internal_supported: 'Internal supported path',
-  sql_install_service: 'External install through lifecycle SQL',
-  genuine_wasi_component_cell: 'Genuine WASI component Cell',
-  javascript_envelope_rehearsal: 'Legacy JavaScript-envelope rehearsal',
+const DISPLAY_LABEL = Object.freeze({
+  active_sqlite_partition_path: 'Active for file-backed SQLite partitions',
+  basic_against_configured_pgwire_credentials:
+    'HTTP Basic against the configured PostgreSQL-wire credential verifier',
+  code_first_javascript_service: 'Code-first JavaScript service compiler',
   descriptor_and_in_memory_lifecycle_scaffold:
     'Descriptor and in-memory lifecycle scaffold only',
+  finite_numbers: 'Finite numbers',
+  genuine_wasi_component_cell: 'Genuine WASI component Cell',
+  internal_supported: 'Internal supported path',
+  javascript_envelope_rehearsal: 'Legacy JavaScript-envelope rehearsal',
+  kernel_internal: 'Kernel-internal only',
+  literal_single_table_select_fixed_at_deployment:
+    'Literal single-table SELECT fixed at deployment',
+  plain_websocket_trusted_network_only:
+    'Plain WebSocket; trusted private network required',
+  serialized_per_component_instance: 'Serialized per component instance',
+  sql_install_service: 'External install through lifecycle SQL',
+  unauthenticated_loopback_by_default: 'Unauthenticated; loopback by default',
+  explicit_insecure_opt_in_requires_authenticated_ingress:
+    'Explicit insecure opt-in; authenticated ingress required',
+  wasi_component_with_declared_host_capabilities:
+    'WASI component with declared host capabilities',
+  must_be_disjoint_across_shards: 'Must be disjoint across shards',
+  single_node_two_partition_functional_proof:
+    'Single-node, two-partition functional proof',
+  internal_native_js_service_path: 'Internal native_js service path',
+  five_node_certification_window: 'Five-node certification window',
+  not_available: 'Not available',
+  unsupported: 'Unsupported',
+  unsupported_on_0x: 'Unsupported on 0.x',
 });
 
 function readJson(relativePath, root = REPO_ROOT) {
@@ -33,7 +54,7 @@ function readJson(relativePath, root = REPO_ROOT) {
 
 function displayCapability(value) {
   if (typeof value === 'boolean') return value ? 'Yes' : 'No';
-  return PORTABILITY_LABEL[value] ?? String(value);
+  return DISPLAY_LABEL[value] ?? String(value).replaceAll('_', ' ');
 }
 
 function renderList(values) {
@@ -66,8 +87,12 @@ function renderCurrentCapabilitiesDocument(capabilities, portability) {
       `| ${limitation.area} | ${limitation.summary} |`)
     .join('\n');
 
+  const call = capabilities.callExecution;
+  const security = capabilities.security;
+  const operations = capabilities.operations;
+  const evidence = capabilities.evidence;
+
   return `---
-audience: human
 documentClass: current
 generated: true
 ---
@@ -76,13 +101,19 @@ generated: true
 
 # Current Capabilities And Limitations
 
-This page is the authoritative human-readable statement of what the checked-in
-Lagrange implementation supports now. It describes current behavior, not future
-plans or development workflow.
+This is the implementation-status authority for the checked-in tree. It says
+what is active, what evidence exists, and what remains outside the current
+product promise. Roadmaps and architecture direction do not override it.
 
 **Maturity:** ${capabilities.productMaturity.summary}
 
-## Data And Query Model
+## Product boundary
+
+${capabilities.productBoundary.summary}
+
+${capabilities.productBoundary.dataLocalRequirement}
+
+## Data and query model
 
 | Capability | Current state |
 | --- | --- |
@@ -93,32 +124,29 @@ plans or development workflow.
 | Secondary indexes | ${displayCapability(capabilities.dataAndQueries.secondaryIndexes)} |
 | Global secondary indexes | ${displayCapability(capabilities.dataAndQueries.globalSecondaryIndexes)} |
 
-## Listeners And Probes
+## Public service path
 
-| Listener | Default | Environment override | Default rule |
-| --- | --- | --- | --- |
-${listenerRows}
+Recommended authoring: **${displayCapability(capabilities.deployment.recommendedAuthoring)}**.
+The ${renderList(capabilities.deployment.publicInvocation)} Binding kinds are
+publicly invocable. The accepted
+${renderList(capabilities.deployment.acceptedButNotPubliclyInvocable)} kinds may
+be declared and placed but have no public invocation adapter.
 
-Changing the REST port moves both WebSocket defaults. The admin and transport
-ports can also be overridden independently; all three resolved ports must be
-distinct.
-
-| Probe purpose | Endpoint |
+| Call property | Current state |
 | --- | --- |
-| Process liveness | \`${capabilities.probes.liveness}\` |
-| Startup handoff | \`${capabilities.probes.startup}\` |
-| Traffic readiness | \`${capabilities.probes.readiness}\` |
-| Compatibility only | \`${capabilities.probes.compatibility}\` |
-
-The compatibility endpoint is not a readiness or liveness oracle.
-
-## Service Deployment
-
-The public model is **${capabilities.deployment.publicModel.join(' / ')}**.
-The ${renderList(capabilities.deployment.publicInvocation)} Binding source kinds are publicly invocable.
-The accepted
-${renderList(capabilities.deployment.acceptedButNotPubliclyInvocable)} source
-kinds can be declared and placed but do not yet have public invocation adapters.
+| Selector | ${displayCapability(call.selector)} |
+| Selector interpolation | ${displayCapability(call.selectorInterpolation)} |
+| Default rows per shard | ${call.defaultShardRowBound} |
+| Default emits per shard run | ${call.defaultEmitBound} |
+| Default coordinated partial entries | ${call.defaultPartialEntryBound} |
+| Default concurrent shard runs | ${call.defaultConcurrentShardRuns} |
+| Same-host shard runs | ${displayCapability(call.sameHostShardConcurrency)} |
+| Partial values | ${displayCapability(call.partialValues)} |
+| Partial keys | ${displayCapability(call.partialKeys)} |
+| Nested calls per HTTP request | ${call.nestedCallsPerRequest} |
+| Global cross-partition snapshot | ${displayCapability(call.globalCrossPartitionSnapshot)} |
+| Caller cancellation | ${displayCapability(call.callerCancellation)} |
+| Direct-call caller idempotency key | ${displayCapability(call.directCallCallerIdempotencyKey)} |
 
 Supported lifecycle SQL:
 
@@ -128,41 +156,72 @@ ${lifecycleRows}
 | --- | --- | --- | --- |
 ${runtimeRows}
 
-The callback column is a separate legacy/internal execution axis; it is not an
-alternative spelling of Artifact / Binding / Cell deployment. The legacy
-JavaScript envelope is not a WebAssembly binary or component. Managed OCI
-container activation is unsupported. OCI callback invocation remains unsupported.
+The callback column is a legacy/internal execution axis, not an alternative
+public service model. Managed OCI activation remains unsupported.
 
-## PostgreSQL Wire
+## Replication and recovery
+
+| Capability | Current state |
+| --- | --- |
+| SQLite partition checkpoint creation | ${displayCapability(capabilities.replication.snapshotCheckpointCreation)} |
+| SQLite partition snapshot transfer/install | ${displayCapability(capabilities.replication.snapshotTransferInstall)} |
+| SQLite partition proof-gated log compaction | ${displayCapability(capabilities.replication.physicalLogCompaction)} |
+| In-memory message-group log compaction | ${displayCapability(capabilities.replication.messageGroupLogCompaction)} |
+| Learner promotion | ${displayCapability(capabilities.replication.learnerPromotion)} |
+
+Snapshot recovery is replica repair, not a user backup or PITR product.
+
+## PostgreSQL wire
 
 - Authentication modes: ${renderList(capabilities.postgresWire.authenticationModes)}
 - TLS modes: ${renderList(capabilities.postgresWire.tlsModes)}
 - SCRAM: ${displayCapability(capabilities.postgresWire.scramSupported)}
 - Compatibility claim: ${capabilities.postgresWire.compatibilityClaim}
 
+## Security boundary
+
+| Surface | Current state |
+| --- | --- |
+| HTTP request authentication | ${displayCapability(security.requestHttpAuthentication)} |
+| Node transport | ${displayCapability(security.nodeTransport)} |
+| Admin WebSocket | ${displayCapability(security.adminWebSocket)} |
+| External admin bind | ${displayCapability(security.externalAdminBind)} |
+| Service isolation | ${displayCapability(security.serviceIsolation)} |
+| OIDC / SSO | ${displayCapability(security.oidcOrSso)} |
+| Cryptographic node identity / mTLS | ${displayCapability(security.mtlsNodeIdentity)} |
+
 ## Operations
 
-- Storage admission defaults to
-  \`${capabilities.operations.storageAdmissionDefault}\`.
-- Snapshot checkpoint creation is
-  \`${capabilities.replication.snapshotCheckpointCreation}\`.
-- Snapshot transfer/install is
-  \`${capabilities.replication.snapshotTransferInstall}\`.
-- Physical Raft log compaction is
-  \`${capabilities.replication.physicalLogCompaction}\`.
-- Learner promotion is
-  \`${capabilities.replication.learnerPromotion}\`.
+| Capability | Current state |
+| --- | --- |
+| Storage admission default | \`${operations.storageAdmissionDefault}\` |
+| Backup / restore / PITR | ${displayCapability(operations.backupRestorePitr)} |
+| Rolling-upgrade contract | ${displayCapability(operations.rollingUpgradeContract)} |
+| Cross-region replication | ${displayCapability(operations.crossRegionReplication)} |
+| General production support | ${displayCapability(operations.generalProductionSupport)} |
 
-## Important Limitations
+## Evidence level
+
+| Evidence | Current state |
+| --- | --- |
+| Code-first public service demo | ${displayCapability(evidence.publicCodeFirstDemo)} |
+| Multi-node data-local comparison | ${displayCapability(evidence.multiNodeDataLocalComparison)} |
+| SQLite snapshot live rebuild | ${displayCapability(evidence.sqliteSnapshotLiveRebuild)} |
+| Public-path scale benchmark | ${displayCapability(evidence.publicPathScaleBenchmark)} |
+
+Functional tests, a demo, and a certification scenario are not the same as a
+supported deployment envelope. Read the [evaluation brief](evaluate.md) before
+turning evidence into a product claim.
+
+## Important limitations
 
 | Area | Limitation |
 | --- | --- |
 ${limitationRows}
 
-For the conceptual model, continue to the
-[distributed-systems primer](distributed-systems-primer.md) and
-[architecture index](../architecture/INDEX.md). For a runnable path, use the
-[first-hour tutorial](tutorials/first-hour.md).
+Continue with [security](security.md), [operations readiness](operations-readiness.md),
+[execution semantics](execution-semantics.md), and the
+[architecture index](../architecture/INDEX.md).
 `;
 }
 

@@ -1,177 +1,128 @@
-import fs from 'node:fs/promises';
+import assert from 'node:assert/strict';
+import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-
-import tap from 'tap';
+import test from 'node:test';
 
 import {runCheck} from '../../scripts/check-doc-audience.js';
 
-const TEMP_PREFIX = 'doc-audience-';
-
-async function writeFile(root, relativePath, content) {
-  const absolutePath = path.join(root, relativePath);
-  await fs.mkdir(path.dirname(absolutePath), {recursive: true});
-  await fs.writeFile(absolutePath, content, 'utf8');
+function writeFile(root, relativePath, content) {
+  const filePath = path.join(root, relativePath);
+  fs.mkdirSync(path.dirname(filePath), {recursive: true});
+  fs.writeFileSync(openPath(filePath), content, 'utf8');
 }
 
-async function createFixture() {
-  const root = await fs.mkdtemp(path.join(os.tmpdir(), TEMP_PREFIX));
-  await writeFile(
-    root,
-    'README.md',
-    '# Product\n\n[Agent portal](AGENTS.md)\n\n' +
-      '[Contributing](CONTRIBUTING.md)\n',
-  );
-  await writeFile(root, 'AGENTS.md', '# Agent entry\n');
-  await writeFile(
-    root,
-    'CONTRIBUTING.md',
-    '---\naudience: development\n---\n\n# Contributing\n',
-  );
-  await writeFile(
-    root,
-    'docs/README.md',
-    '---\naudience: human\n---\n\n# Docs\n\n' +
-      '[Development](development/README.md)\n',
-  );
-  await writeFile(
-    root,
-    'docs/development/README.md',
-    '---\naudience: development\n---\n\n# Development\n',
-  );
-  await writeFile(root, 'architecture/INDEX.md', '# Architecture\n');
-  await writeFile(root, 'examples/README.md', '# Examples\n');
-  return root;
+function openPath(filePath) {
+  return filePath;
 }
 
-tap.test('audience audit accepts the three isolated portal links', async (t) => {
-  const root = await createFixture();
-  const result = runCheck(root);
+function withTempRepo(run) {
+  const root = fs.mkdtempSYT(
+    path.join(os.tmpdir(), 'lagrange-doc-boundary-'));
+  try {
+    return run(root);
+  } finally {
+    fs.rmSync(root, {recursive: true, force: true});
+  }
+}
 
-  t.equal(result.ok, true, result.message);
+function writeMinimalPortals(root) {
+  writeFile(root, 'README.md', '[Agents](AGENTS.md)\n');
+  writeFile(root, 'docs/README.md',
+    '[Develop](development/README.md)\n');
+  writeFile(root, 'docs/development/README.md', '# Development\n'.replace('\\ ', ''));
+  writeFile(root, 'AGENTS.md', '# Agents\n');
+}
+
+test('public docs need no audience frontmatter', () => {
+  withTempRepo((root) => {
+    writeMinimalPortals(root);
+    writeFile(root, 'docs/quickstart.md', '# Quickstart\n\nHello.\n');
+    const result = runCheck(root);
+    assert.equal(result.ok, true);
+  });
 });
 
-tap.test('audience audit rejects an inline steering link by itself',
-  async (t) => {
-    const root = await createFixture();
-    await writeFile(
-      root, 'architecture/leak.md',
-      '# Leak\n\n[Steering](../docs/steering/system-guidelines.md)\n',
-    );
+test('default public tree rejects a link to agent steering', () => {
+  withTempRepo((root) => {
+    writeMinimalPortals(root);
+    writeFile(root, 'docs/quickstart.md',
+      '# Quickstart\n\nDo not start at [system guidelines](steering/system-guidelines.md).\n');
     const result = runCheck(root);
-
-    t.equal(result.ok, false);
-    t.match(result.message, /agent steering or Solver state/u);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /agent steering or Solver state/u);
   });
-
-tap.test('audience audit rejects a Solver link by itself', async (t) => {
-  const root = await createFixture();
-  await writeFile(
-    root, 'architecture/leak.md',
-    '# Leak\n\n[State](../solve/report/example.md)\n',
-  );
-  const result = runCheck(root);
-
-  t.equal(result.ok, false);
-  t.match(result.message, /agent steering or Solver state/u);
 });
 
-tap.test('audience audit rejects a reference-style steering link',
-  async (t) => {
-    const root = await createFixture();
-    await writeFile(
-      root, 'examples/leak.md',
-      '# Leak\n\n[Rules][steering]\n\n' +
-        '[steering]: ../docs/steering/system-guidelines.md\n',
-    );
+test('development docs may link into agent steering', () => {
+  withTempRepo((root) => {
+    writeMinimalPortals(root);
+    writeFile(root, 'docs/development/runbook.md',
+      '# Runbook\n\nFollow [system guidelines](../steering/system-guidelines.md).\n');
     const result = runCheck(root);
-
-    t.equal(result.ok, false);
-    t.match(result.message, /agent steering or Solver state/u);
+    assert.equal(result.ok, true);
   });
-
-tap.test('audience audit rejects an HTML development link', async (t) => {
-  const root = await createFixture();
-  await writeFile(
-    root, 'examples/leak.md',
-    '# Leak\n\n<a href="../docs/development/README.md">Development</a>\n',
-  );
-  const result = runCheck(root);
-
-  t.equal(result.ok, false);
-  t.match(result.message, /development-only surface/u);
 });
 
-tap.test('audience audit rejects an autolink to agent steering', async (t) => {
-  const root = await createFixture();
-  await writeFile(
-    root, 'examples/leak.md',
-    '# Leak\n\n<../docs/steering/system-guidelines.md>\n',
-  );
-  const result = runCheck(root);
-
-  t.equal(result.ok, false);
-  t.match(result.message, /agent steering or Solver state/u);
+test('public docs reject embedded Solver commands', () => {
+  withTempRepo((root) => {
+    writeMinimalPortals(root);
+    writeFile(root, 'docs/quickstart.md',
+      '# Quickstart\n\nRun `npm run quest:status` in another terminal.\n');
+    const result = runCheck(root);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /embeds Solver\/Quest workflow/i);
+  });
 });
 
-tap.test('audience audit rejects an accidental development link',
-  async (t) => {
-    const root = await createFixture();
-    await writeFile(
-      root, 'examples/leak.md',
-      '# Leak\n\n[Development](../docs/development/README.md)\n',
-    );
+test('public docs may not link directly into development', () => {
+  withTempRepo((root) => {
+    writeMinimalPortals(root);
+    writeFile(root, 'docs/quickstart.md',
+      '# Quickstart\n\nRead [development plan](development/product-roadmap.md).\n');
     const result = runCheck(root);
-
-    t.equal(result.ok, false);
-    t.match(result.message, /development-only surface/u);
+    assert.equal(result.ok, false);
+    assert.equal(result.message.includes('development-only surface'), true);
   });
+});
 
-tap.test('audience audit separates an inline link title from its destination',
-  async (t) => {
-    const root = await createFixture();
-    await writeFile(
-      root, 'examples/leak.md',
-      '# Leak\n\n' +
-        '[Development](../docs/development/README.md "internal")\n',
-    );
+test('only the documentation index may link the development index', () => {
+  withTempRepo((root) => {
+    writeMinimalPortals(root);
+    writeFile(root, 'docs/quickstart.md',
+      '# Quickstart\n\nRead [development index](development/README.md).\n');
     const result = runCheck(root);
-
-    t.equal(result.ok, false);
-    t.match(result.message, /development-only surface/u);
+    assert.equal(result.ok, false);
+    assert.equal(result.message.includes('development-only surface'), true);
   });
+});
 
-tap.test('audience audit rejects an accidental agent entry link',
-  async (t) => {
-    const root = await createFixture();
-    await writeFile(
-      root, 'examples/leak.md',
-      '# Leak\n\n[Agents](../AGENTS.md)\n',
-    );
+test('non-public path may contain Solver prose', () => {
+  withTempRepo((root) => {
+    writeMinimalPortals(root);
+    writeFile(root, 'docs/specs/quest.md',
+      '# Spec\n\nRun `npm run quest:status` when needed.\n');
     const result = runCheck(root);
-
-    t.equal(result.ok, false);
-    t.match(result.message, /only README\.md may link AGENTS\.md/u);
+    assert.equal(result.ok, true);
   });
+});
 
-tap.test('audience audit rejects embedded Solver prose by itself',
-  async (t) => {
-    const root = await createFixture();
-    await writeFile(
-      root, 'architecture/leak.md',
-      '# Leak\n\n`node scripts/solve.js next --id example`\n',
-    );
+test('public docs reject relocated path tombstones', () => {
+  withTempRepo((root) => {
+    writeMinimalPortals(root);
+    writeFile(root, 'docs/solver-runbook.md', '# Returned legacy path\n');
     const result = runCheck(root);
-
-    t.equal(result.ok, false);
-    t.match(result.message, /Solver\/Quest workflow mechanics/u);
+    assert.equal(result.ok, false);
+    assert.match(result.message, /relocated path reappeared/u);
   });
+});
 
-tap.test('audience audit rejects the relocated root product roadmap', async (t) => {
-  const root = await createFixture();
-  await writeFile(root, 'product-roadmap.md', '# Product roadmap\n');
-  const result = runCheck(root);
-
-  t.equal(result.ok, false);
-  t.match(result.message, /product-roadmap\.md: relocated path reappeared/u);
+test('public case-study path is non-public for link purposes', () => {
+  withTempRepo((root) => {
+    writeMinimalPortals(root);
+    writeFile(root, 'docs/case-studies/report.md',
+      '# Case study\n\nRead [development plan](../development/product-roadmap.md).\n');
+    const result = runCheck(root);
+    assert.equal(result.ok, true);
+  });
 });

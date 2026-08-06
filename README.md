@@ -1,535 +1,270 @@
 # Lagrange
 
-Lagrange runs the data-heavy parts of a service on the database nodes that
-already hold the relevant rows.
+**Build one service. Run its data-heavy functions where the data lives.**
 
-Write an HTTP handler, a partition function, and a reducer in ordinary
-JavaScript. Compile them into one WASM component. A Request Binding maps an
-HTTP route to the handler. A Call Binding maps a named distributed operation
-to its partition-local SELECT, its `run` export, and its budgets.
+Lagrange is a distributed runtime for data-intensive services with an
+integrated, partitioned SQL storage layer. Existing applications call ordinary
+HTTP endpoints. Lagrange runs the service's partition functions on the nodes
+holding the relevant rows, combines their partial results, and returns one
+compact response.
 
-When the handler invokes that operation, Lagrange runs `run` beside each
-matching partition, moves only the emitted partial results, calls `reduce`
-once, and returns the result through the HTTP handler.
-
-`INSTALL SERVICE` stores the verified WASM bytes in replicated Lagrange
-tables, so starting the service does not depend on the original OCI
-registry or on a particular node's filesystem cache.
+Lagrange is not a plug-in for an existing PostgreSQL cluster. It speaks a
+bounded slice of the PostgreSQL wire protocol to reduce application migration
+work, but data-local execution requires the relevant data to live in Lagrange.
 
 ```text
-POST /accounts/summary
+existing application
         |
+        | POST /accounts/summary
         v
-handleRequest()
+Lagrange service handler
         |
-        | summarizeAccountActivity(accountId)
-        |   -> Call Binding "summarize-account-activity"
+        | call(distributedOperation, arguments)
         v
-run() on matching partition hosts
+run() beside each relevant partition replica
         |
-        | emitted counts and totals only
+        | bounded partials only
         v
-reduce()
-        |
-        v
-HTTP JSON response
+reduce() -> HTTP response
 ```
-
-Each partition sends only the numbers emitted by `run`; the selected table
-rows remain on the partition host.
 
 > Logically one ordinary service. Physically distributed across the data.
 
-## Three Terms
+## Why
 
-```text
-Artifact - immutable WASM component plus its service manifest
-Binding  - named invocation of one export: request (an HTTP endpoint) or
-           call (a data selector and its distributed operation), plus budgets
-Cell     - a running instance, placed by Lagrange
-```
+The database is already distributed. The application work usually is not.
 
-## One WASM Component, Two Bindings
+A conventional service often asks several shards for rows or aggregates,
+moves the results into a central application tier, applies policy there, and
+throws most of the transferred data away. The application also owns shard
+routing, fan-out, retries, placement, and merge logic.
 
-The example below deploys five records together, each with a distinct job:
-one manifest, one WASM component, one Request Binding, one Call Binding,
-and one access policy. All of it is the real, runnable
-[account-summary example](examples/call-binding-account-summary/README.md).
-
-The wiring, before any code:
-
-```text
-HTTP route
-  POST /accounts/summary
-
-Request Binding
-  account-summary-http
-  -> calls handleRequest()
-
-Distributed operation
-  summarize-account-activity
-  -> SELECT rows from account_activity
-  -> calls run() once per relevant partition
-  -> calls reduce() once with the emitted partials
-```
-
-And the names, since several look alike:
-
-| Name | Kind | Meaning |
-| --- | --- | --- |
-| `account-summary` | Artifact/service name | The installed WASM component and manifest |
-| `handle-request` | WIT export | HTTP request entry point |
-| `handleRequest` | JavaScript export | JS spelling generated from `handle-request` |
-| `account-summary-http` | Request Binding name | Connects `POST /accounts/summary` to `handle-request` |
-| `summarize-account-activity` | Call Binding name | Connects the selector and budgets to `run`/`reduce` |
-| `run` | Call export | Runs once per selected partition |
-| `reduce` | Paired call export | Combines all emitted partials |
-
-The Call Binding targets `run`; the `call_v1` interface includes the paired
-`reduce` export from the same component, so `reduce` needs no name of its
-own in the manifest or Binding.
-
-### The Idea In One Minute
-
-The distributed operation is declared first, as a Call Binding. This is
-the seven-line heart of it:
-
-```json
-{
-  "name": "summarize-account-activity",
-  "source": {
-    "kind": "call",
-    "statement": "SELECT id, account_id, amount_cents, flagged FROM account_activity"
-  },
-  "target": {"export_name": "run"}
-}
-```
-
-`summarize-account-activity` is the name of a deployed Call Binding, not a
-JavaScript export. The Binding connects that name to the `run` export, the
-partition-local SELECT, the execution budgets, and the paired `reduce`
-step.
-
-A function reference identifies code. A Call Binding identifies:
-
-- the code to execute;
-- the rows it applies to;
-- its resource budgets;
-- whether the caller may invoke it;
-- and how Lagrange should fan out and reduce the work.
-
-The component invokes the operation through an ordinary-looking domain
-function; the wrapper is where the unavoidable deployment name lives:
-
-```js
-// service.js - HTTP handler, partition function, and reducer, side by side
-import {callBinding} from 'lagrange:cell/context';
-import {emit} from 'lagrange:cell/call-context';
-
-const DISTRIBUTED_OPERATIONS = Object.freeze({
-  summarizeAccountActivity: 'summarize-account-activity',
-});
-
-function summarizeAccountActivity(accountId) {
-  return callBinding(
-    DISTRIBUTED_OPERATIONS.summarizeAccountActivity,
-    JSON.stringify({accountId}),
-  );
-}
-
-// Runs in the request Cell for each POST /accounts/summary. It maps
-// typed call failures to HTTP status codes; the component owns its
-// endpoint responses.
-export function handleRequest(requestJson) {
-  const request = JSON.parse(requestJson);
-  const result = summarizeAccountActivity(request.body.accountId);
-  return JSON.stringify({
-    status: 200,
-    headers: [['content-type', 'application/json']],
-    body: result,
-  });
-}
-
-// Runs once per relevant partition, on the node holding that partition's
-// replica. Scans the local batch; only a few numbers per shard leave the
-// node.
-export function run(batch, argumentsJson) {
-  const {accountId} = JSON.parse(argumentsJson);
-  let matched = 0;
-  let totalCents = 0;
-  let shardKey = null;
-  for (const row of batch) {
-    if (integerColumn(row, 'account_id') !== accountId) continue;
-    shardKey = shardKey === null ? integerColumn(row, 'id') :
-      Math.min(shardKey, integerColumn(row, 'id'));
-    matched += 1;
-    totalCents += integerColumn(row, 'amount_cents');
-  }
-  if (matched > 0) {
-    emit(`count:${shardKey}`, JSON.stringify(matched));
-    emit(`total:${shardKey}`, JSON.stringify(totalCents));
-  }
-  return JSON.stringify({matched});
-}
-
-// Runs once, over the complete partial set from every shard.
-export function reduce(partials, argumentsJson) {
-  const {accountId} = JSON.parse(argumentsJson);
-  let transactions = 0;
-  let totalCents = 0;
-  for (const [key, partialJson] of partials) {
-    if (key.startsWith('count:')) transactions += JSON.parse(partialJson);
-    if (key.startsWith('total:')) totalCents += JSON.parse(partialJson);
-  }
-  return JSON.stringify({accountId, transactions, totalCents});
-}
-
-// (Error-to-HTTP mapping, extra metrics, the demo's refusal-probe
-//  parameter, and the integerColumn helper are elided; complete tested
-//  source: examples/call-binding-account-summary/service.js)
-```
-
-Run it:
-
-```bash
-npm install
-npm run demo:account-summary
-```
-
-The demo builds the component from plain JavaScript, installs it into a
-disposable local node, splits the ledger table across two partitions,
-deploys both Bindings and the access policy over SQL, invokes the HTTP
-endpoint and the direct `CALL BINDING` surface, verifies the summaries
-against an independent oracle, and proves the undeclared-target refusal
-and the idempotent replay.
-
-<details>
-<summary><strong>Complete deployment</strong> - the full manifest, both
-Bindings, the access policy, and the HTTP exchange</summary>
-
-**The service manifest** - one component, compiled into one WASM component
-and installed with a digest-pinned manifest, both entry points declared:
-
-```json
-{
-  "schema_version": 3,
-  "name": "account-summary",
-  "version": "1.0.0",
-  "runtime": {"kind": "wasm_component"},
-  "exports": [
-    {"name": "handle-request", "interface": "request_v1"},
-    {"name": "run", "interface": "call_v1"}
-  ],
-  "artifact": {"...": "immutable digest-pinned component"},
-  "capabilities": []
-}
-```
-
-**The Request Binding** - the public front door: an exact method and path,
-targeting the component's `handle-request` export:
-
-```json
-{
-  "schema_version": 2,
-  "name": "account-summary-http",
-  "source": {"kind": "request", "method": "POST", "path": "/accounts/summary"},
-  "target": {
-    "package_id": "<from the INSTALL SERVICE receipt>",
-    "manifest_digest": "sha256:<canonical manifest digest>",
-    "export_name": "handle-request"
-  },
-  "budgets": {"...": "request budgets, including wall_time_ms 30000"}
-}
-```
-
-**The Call Binding** - the complete declaration of the distributed
-operation, against the same package and manifest digest:
-
-```json
-{
-  "schema_version": 2,
-  "name": "summarize-account-activity",
-  "source": {
-    "kind": "call",
-    "name": "summarize-account-activity",
-    "statement": "SELECT id, account_id, amount_cents, flagged FROM account_activity"
-  },
-  "target": {
-    "package_id": "<same package>",
-    "manifest_digest": "<same manifest digest>",
-    "export_name": "run"
-  },
-  "budgets": {
-    "cpu_time_ms": 2000,
-    "wall_time_ms": 30000,
-    "memory_bytes": 134217728,
-    "input_bytes": 1048576,
-    "output_bytes": 65536,
-    "context_bytes": 8192
-  }
-}
-```
-
-**The access policy** - an allowlist stored for the Request Binding
-(formally: the durable outbound-call authorization), applied with
-`CONFIGURE SERVICE ACCESS`. The request Binding may invoke exactly the
-Call Bindings it declares; absent policy or an undeclared target fails
-closed, before any dispatch:
-
-```json
-{
-  "schema_version": 2,
-  "binding_name": "account-summary-http",
-  "tables": [],
-  "calls": [{"binding": "summarize-account-activity"}]
-}
-```
-
-**The HTTP exchange** - one authenticated request:
-
-```text
-POST /accounts/summary
-Authorization: Basic ...
-Content-Type: application/json
-
-{"accountId": 202}
-```
-
-and one JSON response, the reducer's final result:
-
-```json
-{
-  "accountId": 202,
-  "transactions": 50,
-  "totalCents": 535775,
-  "largestCents": 17991,
-  "meanCents": 10716,
-  "flagged": 12,
-  "contributingShards": 2
-}
-```
-
-Replaying the POST with the same `Idempotency-Key` returns the journaled
-response byte-identical, without running the distributed operation again.
-
-The direct SQL surface stays covered too: `CALL BINDING $1` over an
-authenticated pgwire session (holding `pgwire.binding.call`) invokes the
-same Call Binding directly and returns the identical summary.
-
-The full `handleRequest` also maps typed call failures to HTTP status
-codes (403 for a target the policy does not allow, 400 for invalid
-arguments, 504 for an exhausted deadline, 503 for a temporarily
-unavailable target, 500 otherwise) - see the example source.
-
-</details>
-
-## What Happens At Runtime
-
-The handler supplies only the Call Binding name and JSON arguments. The
-distributed call runtime then:
-
-1. looks up that Binding for the authenticated tenant;
-2. checks that the request service's access policy allows it;
-3. parses the Binding's SELECT and resolves the relevant partitions;
-4. ensures a ready Cell exists on each selected partition host;
-5. executes `run` against rows read locally on each host;
-6. sends only the emitted partials to `reduce`;
-7. returns the reduced JSON to `handleRequest`.
-
-The nested call runs under the same authenticated identity and cannot
-outlive the HTTP request's deadline; a request invocation may make one
-nested call today.
-
-If the partition host has no ready Cell, the call runtime writes a
-time-limited activation lease for that service and node. The normal
-rebalancer treats the lease as a placement pin, starts a Cell there, and
-the WASM driver loads the component from its local cache or from the
-artifact payload tables.
-
-Those tables are where installed code lives: `INSTALL SERVICE` verifies
-the WASM component, splits its payload into chunks, and writes the
-metadata and bytes to the internal `artifact_payloads` and
-`artifact_payload_chunks` tables. These tables use Lagrange's normal
-partition, Raft, and SQLite storage path. A node starting a Cell reads and
-verifies those chunks, writes a disposable local cache copy, and starts
-the component. The original OCI registry is no longer required after
-installation - the landed tests prove reconstruction after every cache and
-the original OCI source have been removed.
-
-Shard dispatch is parallel and bounded (default 8 concurrent runs,
-deployment-tunable). Shards on distinct host nodes overlap; shards on one
-host serialize, because a Cell runs one invocation at a time. The current
-implementation targets each partition's canonical leader as the shard
-host; broader replica selection is future work.
-
-The reduce step refuses to publish unless every shard's partial set is
-complete, fresh, and disjoint, and it publishes exactly one atomic result
-snapshot. In the two-node integration proof the shard tables see zero
-remote query deliveries: the selected rows never leave their hosts.
-
-## Why It Helps
-
-The database is already distributed. The application work usually is not. A
-conventional service pulls rows out of the partitions that own them, ships
-them through the network into a central compute tier, filters and
-aggregates them there, and throws most of the bytes away. When the work
-spans shards, developers hand-build the fan-out, retries, routing, and
-merge logic in a repository far from the data it depends on.
-
-Lagrange distributes parts of the service invocation itself, and the win
-scales with the ratio
+Lagrange moves the function instead. Each partition does useful work locally;
+the network carries partial results and the final answer rather than the rows
+that produced them. The strongest fit is:
 
 ```text
 data scanned or transformed >> result returned
 ```
 
-In the flagship example each shard reduces its slice of the ledger to four
-numbers. The network carries eight partials and one small JSON summary -
-the same bytes whether the table holds 150 rows or 150 million. Central
-coordinators merge compact summaries instead of loading every matching row.
-For worked equations and honest claim boundaries, see
-[performance and cost estimation](docs/performance-and-cost-estimation.md)
-and
-[infrastructure cost estimation](docs/infrastructure-cost-estimation.md).
+That shape can reduce application/database round trips, intermediate transfer,
+central coordinator work, and cross-zone traffic. It does not make every query
+faster, and WASM packaging by itself is not a speedup.
 
-The service model itself carries the rest of the weight: the HTTP handler,
-partition function, reducer, manifest, Bindings, and access policy are
-written, reviewed, tested, versioned, and deployed together. No hand-built
-fan-out layer, no shard maps in application code, no redeploy when a
-partition splits. Components receive declared capabilities rather than
-broad database credentials.
+## The service you write
 
-Raft remains underneath. Writes still reach a leader and quorum; Lagrange
-removes avoidable data movement around the durability work, it does not
-weaken it.
+`lagrange service init` creates a code-first WASM project. The authored source
+contains the endpoint, distributed operation, and reducer together. Durable
+Binding names, manifests, access policies, component entry code, and deployment
+records are compiler output.
 
-## Good Fit
+```js
+import {defineService} from './authoring/define-service.js';
+import {distributed} from './authoring/distributed-operation.js';
+import {http} from './authoring/request-handler.js';
+import {sql} from './authoring/sql-template.js';
 
-Lagrange is most interesting when services retrieve substantial data only
-to filter, score, aggregate, validate, or transform it; when
-cross-partition work can return bounded partial results; or when
-service/database round trips or cross-zone traffic are material.
+function summarizeRun(rows, {accountId}, {emit}) {
+  let count = 0;
+  let totalCents = 0;
+  let shardKey = null;
 
-It is a poor fit today when you need a mature drop-in database, complete
-PostgreSQL compatibility, or when one cheap indexed query already returns
-the final small result.
+  for (const row of rows) {
+    if (row.account_id !== accountId) continue;
+    count += 1;
+    totalCents += row.amount_cents;
+    shardKey = shardKey === null ? row.id : Math.min(shardKey, row.id);
+  }
 
-You do not have to rewrite anything to start. An unmodified Node.js
-PostgreSQL application can point at Lagrange's pgwire listener
-([service-portability example](examples/service-portability/README.md)),
-and existing HTTP workloads can run as WASM request bindings
-([js-request-binding example](examples/js-request-binding-deployment/README.md)).
-OCI containers and the legacy callback surface are
-[compatibility and internals](docs/start-here.md#compatibility-and-internals)
-material.
+  if (shardKey !== null) {
+    emit(`count:${shardKey}`, count);
+    emit(`total:${shardKey}`, totalCents);
+  }
+  return {matched: count};
+}
 
-## Current State
+function summarizeReduce(partials, {accountId}) {
+  let transactions = 0;
+  let totalCents = 0;
+  for (const [key, value] of partials) {
+    if (key.startsWith('count:')) transactions += value;
+    if (key.startsWith('total:')) totalCents += value;
+  }
+  return {accountId, transactions, totalCents};
+}
 
-Lagrange is alpha, with no backward-compatibility guarantee on `0.x`.
+const summarizeAccountActivity = distributed({
+  statement: sql`SELECT id, account_id, amount_cents FROM account_activity`,
+  run: summarizeRun,
+  reduce: summarizeReduce,
+});
 
-Works today:
+function handleAccountSummary(request, {call, json}) {
+  const accountId = request.body?.accountId ?? null;
+  return json(call(summarizeAccountActivity, {accountId}));
+}
 
-- WASM installation with verified payloads stored in the replicated
-  `artifact_payloads` / `artifact_payload_chunks` tables
-- request and call Bindings, including HTTP-to-call composition: a request
-  handler invoking a declared Call Binding through the service context
-- data-local partition execution and bounded parallel fan-out
-- leased reduction with one atomic result
-- Raft-replicated partitioned storage
+export default defineService({
+  name: 'account-summary',
+  version: '1.0.0',
+  operations: {summarizeAccountActivity},
+  handlers: {
+    accountSummary: http.post('/accounts/summary', {
+      calls: [summarizeAccountActivity],
+      handle: handleAccountSummary,
+    }),
+  },
+});
+```
 
-Not yet:
+The complete exercised version is
+[`examples/call-binding-account-summary/lagrange.service.js`](examples/call-binding-account-summary/lagrange.service.js).
 
-- JavaScript client SDK for direct calls (direct invocation is pgwire
-  `CALL BINDING`); generated operation handles for `callBinding` are a
-  likely future authoring surface
-- structured partials (numeric per-group values only)
-- general PostgreSQL compatibility (a bounded, measured slice)
-- managed OCI activation (compatibility scaffold only)
+## What happens at runtime
 
-The authoritative status page is
-[Current Capabilities And Limitations](docs/current-capabilities-and-limitations.md).
+For one endpoint invocation, Lagrange:
 
-## Try Lagrange
+1. authenticates the request and selects the request handler;
+2. validates that the handler may call the declared distributed operation;
+3. resolves the operation's fixed single-table `SELECT` to partitions;
+4. activates a service Cell on each required partition host when needed;
+5. reads each bounded shard batch from that host's local replica;
+6. runs the authored `run()` function in the WASM component;
+7. coordinates a complete, disjoint set of numeric partials;
+8. runs `reduce()` once under a lease; and
+9. returns one atomically published result to the handler.
+
+Raw selected rows do not cross between shard hosts on this call path. Writes
+still reach a partition leader and Raft quorum. Lagrange removes avoidable
+movement around the durability work; it does not weaken consensus.
+
+## Where it fits
+
+Good first candidates:
+
+- a service fetches substantial data only to filter, score, aggregate,
+  validate, or transform it;
+- one request performs several sequential database operations against the same
+  partition key;
+- workers mainly fan out over database shards and merge compact answers;
+- service placement and database placement have to be tuned together; or
+- cross-zone application/database traffic is material.
+
+Poor candidates today:
+
+- one indexed query already returns the final small answer;
+- most work is external API or network I/O;
+- the operation needs an unbounded shard scan, streaming exchange, arbitrary
+  structured partials, or a global cross-partition snapshot;
+- the application needs broad PostgreSQL or ORM compatibility; or
+- the deployment needs production guarantees not listed in the current
+  capability page.
+
+## Adoption path
+
+Lagrange does not require an all-at-once rewrite.
+
+1. **Test SQL portability.** Point a representative PostgreSQL client at
+   Lagrange and measure the exact SQL slice that works. This proves connection
+   compatibility, not data-local execution.
+2. **Deploy one WASM endpoint.** Package selected service code behind a request
+   handler. This proves lifecycle, isolation, and declared capabilities.
+3. **Extract one hot path.** Turn the data-heavy part into a distributed
+   operation with `run()` and `reduce()`. This is where rows can stay on their
+   partition hosts.
+
+The relevant data must be loaded into Lagrange. There is not yet a supported
+PostgreSQL-to-Lagrange migration, CDC, backup, or point-in-time recovery product
+surface. Keep the existing system of record until a pilot has proven parity,
+cutover, rollback, and recovery for the chosen workload.
+
+Read the [migration and adoption guide](docs/migration.md) before planning a
+pilot.
+
+## Try the current public path
 
 Requirements: Node.js 22.12 or newer and npm.
 
 ```bash
-npm install --global lagrange-server
-lagrange --dry-run
-lagrange-admin --help
-```
-
-Applications can install it locally and import the side-effect-free public
-API:
-
-```bash
-npm install lagrange-server
-```
-
-```js
-import {VERSION} from 'lagrange-server';
-```
-
-The npm package is named `lagrange-server`; the product and executable
-remain named `lagrange`. To run from a source checkout instead:
-
-```bash
+git clone https://github.com/psvensson/lagrange
+cd lagrange
 npm install
-cp .env.example .env
-npm start
+npm run demo:account-summary
 ```
 
-Open the administration client in another terminal:
+The command builds the code-first service into a genuine WASI component,
+starts a disposable node, splits a table into two partitions, deploys the
+generated records, invokes the HTTP endpoint and direct call surface, and
+checks authorization and idempotent replay.
+
+It is a functional proof, not a scale benchmark: both partitions run on one
+node, the table is small, and the current call surface refuses shard batches
+that exceed its configured row and byte bounds.
+
+To scaffold a service with the installed CLI:
 
 ```bash
-npm run cli -- localhost:8081
+npm install --global lagrange-server
+lagrange service init my-service
+cd my-service
+npm test
+lagrange service generate .
+lagrange service build .
 ```
 
-Continue with the [first-hour tutorial](docs/tutorials/first-hour.md) or
-the [service deployment guide](docs/service-deployment-guide.md).
+Deployment needs a running cluster and authenticated PostgreSQL-wire lifecycle
+configuration. The generated project README contains the exact `deploy`
+command.
+
+## Current envelope
+
+Lagrange is experimental alpha software. The current public data-local path has
+important boundaries:
+
+- one literal single-table selector per distributed operation;
+- no SQL template interpolation or per-call selector parameters;
+- 4,096 rows per shard batch by default;
+- finite numeric partials with shard-disjoint keys;
+- 64 emits and 1,024 partial entries by default;
+- eight concurrent shard runs per invocation by default, while same-host runs
+  serialize;
+- one nested distributed call per HTTP request;
+- no global snapshot across independently read partitions;
+- no caller cancellation for a running distributed call;
+- no caller idempotency key on direct PostgreSQL-wire calls;
+- bounded PostgreSQL compatibility, without SCRAM or arbitrary ORM support;
+- plain trusted-network node transport, without mTLS; and
+- no supported backup/restore/PITR or rolling-upgrade contract for `0.x`.
+
+The generated [current capabilities and limitations](docs/current-capabilities-and-limitations.md)
+page is the status authority. The
+[technical evaluation brief](docs/evaluate.md) separates what is implemented,
+what has test evidence, and what is not yet a product guarantee.
 
 ## Documentation
 
-What it is:
+- [Evaluate Lagrange](docs/evaluate.md) - product boundary, fit, evidence,
+  risks, and a pilot decision checklist
+- [First hour](docs/tutorials/first-hour.md) - run the public code-first proof
+  and scaffold a service
+- [Programming model](docs/native-programming-model.md) - handlers,
+  distributed operations, reducers, and generated deployment records
+- [Execution semantics](docs/execution-semantics.md) - retries, idempotency,
+  consistency, movement, and hard limits
+- [Migration and adoption](docs/migration.md) - staged adoption, data cutover,
+  rollback, and exit planning
+- [Security](docs/security.md) - current controls, trusted-network assumptions,
+  and missing controls
+- [Operations readiness](docs/operations-readiness.md) - topology, recovery,
+  upgrades, backups, and pilot gates
+- [Architecture](architecture/INDEX.md) - conceptual model and subsystem paths
+- [Documentation index](docs/README.md) - the complete task-based map
 
-- [Start here](docs/start-here.md) - reading paths from model to operations
+## License and contributions
 
-How to build one:
+Lagrange is licensed under AGPL-3.0-only. See [LICENSE](LICENSE).
 
-- [Native programming model](docs/native-programming-model.md) - the
-  service model, API boundary, placement, and reduction
-- [WASM services user guide](docs/wasm-services-user-guide.md) - authoring
-  and packaging components
-- [Service deployment guide](docs/service-deployment-guide.md) - lifecycle
-  SQL: install, bind, configure access, call
-- [Execution semantics](docs/execution-semantics.md) - retries,
-  idempotency, partial failure, limits, movement
-- [First-hour tutorial](docs/tutorials/first-hour.md) and
-  [hot-path rewrite tutorial](docs/tutorials/rewrite-a-hot-path.md)
-- [Examples](examples/README.md), including the MovieLens
-  placement-and-reduction comparison (`npm run demo:movielens`)
+The source is public but the repository is closed to outside pull requests.
+Bug reports are welcome. See [CONTRIBUTING.md](CONTRIBUTING.md).
 
-How it works:
-
-- [Architecture overview](architecture.md) and the
-  [architecture index](architecture/INDEX.md)
-- [Performance and cost estimation](docs/performance-and-cost-estimation.md)
-  and
-  [infrastructure cost estimation](docs/infrastructure-cost-estimation.md)
-
-Status and direction:
-
-- [Current capabilities and limitations](docs/current-capabilities-and-limitations.md)
-- [Roadmap](roadmap.md)
-
-Working on the codebase with an AI agent, including Codex? Start at
-[AGENTS.md](AGENTS.md). Test and release workflows begin at
-[CONTRIBUTING.md](CONTRIBUTING.md).
-
-## License
-
-AGPL-3.0. See [LICENSE](LICENSE).
-
-This project is open source but **closed to outside contributions**
-("open-source, not open-contribution", like SQLite). Bug reports are
-welcome; pull requests are disabled. See [CONTRIBUTING.md](CONTRIBUTING.md).
+Agents working on the repository start at [AGENTS.md](AGENTS.md).
