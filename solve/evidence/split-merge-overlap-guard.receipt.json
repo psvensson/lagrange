@@ -1,0 +1,44 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "split-merge-overlap-guard",
+  "status": "pass",
+  "generatedAt": "2026-08-06T11:46:45.559Z",
+  "receipts": [
+    {
+      "id": "overlap-refused-at-registration",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/split-merge-overlap-guard.test.js",
+      "detail": "registering a split whose source key range overlaps an already-persisted in-flight transition (split or merge) is refused at registration with the typed already-in-progress outcome qualified by the overlap suffix; a disjoint candidate range registers cleanly (F23)"
+    },
+    {
+      "id": "durable-overlap-validation",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/split-merge-overlap-guard.test.js",
+      "detail": "the refusal is driven by the durable tables transition rows (listTableInfos + parsePartitionTransition) and the authoritative partitions rows — no process-local splitReplication/mergeReplication handle ever sees the foreign transition, and clearing the durable row admits the same registration"
+    },
+    {
+      "id": "restart-surviving-guard",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/split-merge-overlap-guard.test.js",
+      "detail": "a fresh ManagedSplitWorkflow / ManagedMergeWorkflow instance over the same durable store still refuses the overlapping registration — the guard survives a simulated restart because it consults durable transition rows, not process-local state"
+    },
+    {
+      "id": "managed-split-workflow-suite",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/managed-split-workflow.test.js",
+      "detail": "pre-existing managed split admission/lifecycle suite passes unchanged with the durable overlap guard wired into registration"
+    },
+    {
+      "id": "managed-merge-workflow-suite",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/managed-merge-workflow.test.js",
+      "detail": "pre-existing managed merge admission/lifecycle suite passes unchanged with the durable overlap guard wired into registration"
+    },
+    {
+      "id": "split-merge-manager-suite",
+      "passed": true,
+      "command": "npm run test:file -- test/partition/partition-split-merge-manager.test.js",
+      "detail": "pre-existing partition split/merge manager suite passes unchanged with the durable overlap guard in place"
+    }
+  ]
+}
