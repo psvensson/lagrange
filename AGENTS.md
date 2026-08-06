@@ -81,6 +81,11 @@ tests after the push.
    session, `LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only the test
    stage (the static corpus always runs). `--no-verify` skips everything
    and remains emergencies-only.
+3. The push-triggered `ci / gate` job runs on the maintainer's
+   self-hosted box by default. Put `[ci:github]` in the head commit
+   message to route that push to ephemeral GitHub-hosted runners instead
+   (`[ci:self-hosted]` pins the default). Pull requests always run
+   GitHub-hosted; the flag never routes fork code to self-hosted.
 
 Ratchet baselines (duplication, unused-exports, complexity) are one-way:
 fix the code (extract, de-export, simplify) rather than raising a
