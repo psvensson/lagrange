@@ -154,6 +154,35 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           },
         );
       }
+      // Cross-check partition identity before any status write or shutdown:
+      // a mismatched request must never shut down the wrong replica, corrupt
+      // local metadata, or silently no-op the partition-scoped row delete.
+      if (
+        typeof replica.partitionId === 'string' &&
+        replica.partitionId !== partitionId
+      ) {
+        this.logger.warn(REPLICA_HANDLER_LOG_MSG.REMOVE_PARTITION_MISMATCH, {
+          operationId,
+          replicaId,
+          localPartitionId: replica.partitionId,
+          requestPartitionId: partitionId,
+          nodeId: this.nodeId,
+        });
+        const partitionMismatch = REPLICA_HANDLER_ERROR_MSG
+          .REMOVE_PARTITION_MISMATCH;
+        return this.buildReplicaOperationResponse(
+          ReplicaOperationResponseStatus.ERROR,
+          {
+            error: partitionMismatch(
+              replicaId,
+              replica.partitionId,
+              partitionId,
+            ),
+            replicaId,
+            nodeId: this.nodeId,
+          },
+        );
+      }
       // Check idempotency - already removing
       if (replica.status === ReplicaStatus.REMOVING) {
         if (!this.hasInProgressReplicaRemoval(replicaId)) {
@@ -172,8 +201,15 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           },
         );
       }
-      // Check idempotency - already removed
-      if (replica.status === ReplicaStatus.REMOVED) {
+      // Check idempotency - already removed. Cleanup reconcile is only safe
+      // when the request targets the replica's recorded partition; a
+      // mismatched partitionId would no-op the partition-scoped row delete
+      // and could drive filesystem cleanup against the wrong identity.
+      if (
+        replica.status === ReplicaStatus.REMOVED &&
+        (typeof replica.partitionId !== 'string' ||
+          replica.partitionId === partitionId)
+      ) {
         try {
           await this.reconcileRemovedReplicaCleanup(replicaId, partitionId);
         } catch (error) {

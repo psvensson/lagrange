@@ -53,6 +53,7 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REMOVE_REQUEST: 'Handling REMOVE_REPLICA request',
   REMOVE_MISSING_FIELDS: 'REMOVE_REPLICA missing required fields',
   REMOVE_NOT_FOUND: 'Replica not found for removal',
+  REMOVE_PARTITION_MISMATCH: 'Replica partition identity mismatch on removal',
   REMOVE_IN_PROGRESS: 'Replica removal already in progress',
   REMOVE_ALREADY_REMOVED: 'Replica already removed',
   STEP_DOWN_REQUEST: 'Handling STEP_DOWN_REPLICA request',
@@ -105,6 +106,9 @@ const REPLICA_HANDLER_ERROR_MSG = Object.freeze({
   CACHE_MISSING_FILTER: 'System table cache missing filter',
   PARTITION_METADATA_MISSING: (partitionId) =>
     `Partition metadata not found for ${partitionId}`,
+  REMOVE_PARTITION_MISMATCH: (replicaId, localPartitionId, requestPartitionId) =>
+    `Replica ${replicaId} belongs to partition ${localPartitionId}, ` +
+    `not requested partition ${requestPartitionId}`,
   TABLE_METADATA_MISSING: (tableId) =>
     `Table metadata not found for ${tableId}`,
   SCHEMA_PARSE_FAILED: (message) =>

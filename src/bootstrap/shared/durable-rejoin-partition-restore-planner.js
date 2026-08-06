@@ -249,8 +249,8 @@ function buildDurableRejoinPartitionRestoreOptions({
     tableName,
     schema,
     keyRange: {
-      start: partitionRow.partition_key_start || null,
-      end: partitionRow.partition_key_end || null,
+      start: partitionRow.partition_key_start ?? null,
+      end: partitionRow.partition_key_end ?? null,
     },
     replicaId,
     replicaIds: topology?.replicaIds || [],

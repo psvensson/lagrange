@@ -479,6 +479,72 @@ export async function registerReplicaHandlerTailTests({
       handler.shutdown();
     });
 
+  t.test(
+    'handleRemoveReplica - rejects partition identity mismatch without ' +
+    'touching local state',
+    async (t) => {
+      const cache = createSeededCache();
+      seedReplicaOperation(cache, 'op-mismatch', {type: 'REMOVE'});
+      const mockCDC = createMockCDCService(cache);
+
+      const handler = new ReplicaHandler({
+        nodeId: 'test-node',
+        cdcIntegrationService: mockCDC,
+        systemTableCache: cache,
+        dataDir: tempDir,
+        createPartitionService: createMockPartitionServiceFactory(),
+      });
+
+      handler.initialize();
+
+      // Pre-populate a local replica whose recorded partition differs from
+      // the removal request's partitionId.
+      handler.localReplicas.set('replica-1', {
+        replicaId: 'replica-1',
+        partitionId: 'partition-1',
+        status: ReplicaStatus.ACTIVE,
+        service: {
+          async shutdown() {},
+        },
+      });
+
+      const response = await handler.handleRemoveReplica({
+        operationId: 'op-mismatch',
+        partitionId: 'partition-other',
+        replicaId: 'replica-1',
+        reason: 'rebalancing',
+      });
+
+      t.equal(response.status, ReplicaOperationResponseStatus.ERROR,
+        'mismatched partitionId is rejected');
+      t.ok(
+        typeof response.error === 'string' &&
+        response.error.includes('partition-1') &&
+        response.error.includes('partition-other'),
+        'error names both the local and requested partition',
+      );
+
+      const localReplica = handler.getLocalReplica('replica-1');
+      t.equal(localReplica.status, ReplicaStatus.ACTIVE,
+        'local replica status is untouched');
+      t.equal(localReplica.partitionId, 'partition-1',
+        'local replica metadata is untouched');
+      t.notOk(
+        mockCDC.operations.some((op) =>
+          op.type === 'delete' &&
+          op.tableName === SYSTEM_TABLE_NAME.SERVICES,
+        ),
+        'no services-row delete was attempted',
+      );
+      t.notOk(
+        handler.inProgressOperations.has('op-mismatch'),
+        'no removal operation was tracked',
+      );
+
+      handler.shutdown();
+    },
+  );
+
   t.test('handleRemoveReplica - returns initiated for existing replica',
     async (t) => {
       const cache = createSeededCache();

@@ -162,8 +162,8 @@ function assignReplicaHandlerRuntimeMetadataMethods(
         throw new Error(schemaParseFailed(error.message));
       }
       const keyRange = {
-        start: partition.partition_key_start || null,
-        end: partition.partition_key_end || null,
+        start: partition.partition_key_start ?? null,
+        end: partition.partition_key_end ?? null,
       };
       const cachedServices = this.systemTableCache.filter(
         SYSTEM_TABLE_NAME.SERVICES,
