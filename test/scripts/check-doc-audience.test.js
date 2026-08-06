@@ -9,15 +9,11 @@ import {runCheck} from '../../scripts/check-doc-audience.js';
 function writeFile(root, relativePath, content) {
   const filePath = path.join(root, relativePath);
   fs.mkdirSync(path.dirname(filePath), {recursive: true});
-  fs.writeFileSync(openPath(filePath), content, 'utf8');
-}
-
-function openPath(filePath) {
-  return filePath;
+  fs.writeFileSync(filePath, content, 'utf8');
 }
 
 function withTempRepo(run) {
-  const root = fs.mkdtempSYT(
+  const root = fs.mkdtempSync(
     path.join(os.tmpdir(), 'lagrange-doc-boundary-'));
   try {
     return run(root);

@@ -289,6 +289,9 @@ describe('WasmComponentDriver contract conformance', () => {
         ...CONTRACT_METHODS,
         'setArtifactLoader',
         'setRequestCallBridge',
+        // Whole-node teardown chain (node-shutdown-cell-worker-teardown):
+        // the driver terminates every live cell worker at node shutdown.
+        'shutdown',
       ]);
       for (const name of proto) {
         assert.ok(
