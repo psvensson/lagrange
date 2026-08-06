@@ -1,0 +1,57 @@
+{
+  "id": "reservation-fail-closed-dispatch-gate",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Storage-reservation failure can no longer strand an under-reserved operation: createReservationForOperation failure fails operation creation (or marks the op non-dispatchable), the two comments falsely claiming atomicity are corrected, and a dispatch-time gate verifies an ACTIVE reservation exists — reusing ensureReservationForOperation, cheap because the reservation ID is deterministic (res-${operationId}); terminal persistence returns a typed result and the reservation is released only on committed / already-same-terminal / lost-to-other-terminal, never on the unresolved-divergence arm. Verified-audit findings 3 and 11. doneWhen: the test-receipt probe reads solve/evidence/reservation-fail-closed-dispatch-gate.receipt.json with outstanding 0 — reservation-failure-blocks-dispatch, dispatch-gate-repairs-via-ensure, and divergence-arm-keeps-reservation receipts passing (deterministic red-on-revert evidence harness).",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "rebalancer-safety-audit-finding-3-fail-closed-reservations",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/rebalancer-operation-safety-audit-remediation.md"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/reservation-fail-closed-dispatch-gate.receipt.json",
+      "requiredReceipts": [
+        "reservation-failure-blocks-dispatch",
+        "dispatch-gate-repairs-via-ensure",
+        "divergence-arm-keeps-reservation"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "reservation-fail-closed-dispatch-gate-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/reservation-fail-closed-dispatch-gate.receipt.json",
+          "requiredReceipts": [
+            "reservation-failure-blocks-dispatch",
+            "dispatch-gate-repairs-via-ensure",
+            "divergence-arm-keeps-reservation"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the dispatch gate or the typed-release gating is reverted while the rest of the change remains."
+    },
+    {
+      "id": "repair-helper-reuse",
+      "statement": "Reuse ensureReservationForOperation and the deterministic res-${operationId} ID for the dispatch-time gate; do not introduce a second reservation-identity scheme."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

@@ -1,0 +1,55 @@
+{
+  "id": "remove-safety-universal-floor",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The operation-workflow remove-safety evaluator applies its universal execution-time tier to EVERY replicated entity, not only system tables: the early return at src/rebalancer/operation-workflow-remove-safety-evaluator.js:426-430 is restructured so post-removal voter-ready counting, the min-replica floor, distinct-node spread, and the concurrent-operation lock all run for ordinary user partitions, while the deeper published-membership / leader-tenure / priority-control-plane checks stay scoped to system entities as today. Verified-audit finding 1: ordinary REMOVE currently bypasses all execution-time safety with no compensating guard. doneWhen: the test-receipt probe reads solve/evidence/remove-safety-universal-floor.receipt.json with outstanding 0 — universal-tier-applies-to-user-partition and system-tier-scope-preserved receipts passing (deterministic red-on-revert evidence harness).",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "rebalancer-safety-audit-finding-1-universal-remove-safety-floor",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/rebalancer-operation-safety-audit-remediation.md"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/remove-safety-universal-floor.receipt.json",
+      "requiredReceipts": [
+        "universal-tier-applies-to-user-partition",
+        "system-tier-scope-preserved"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "remove-safety-universal-floor-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/remove-safety-universal-floor.receipt.json",
+          "requiredReceipts": [
+            "universal-tier-applies-to-user-partition",
+            "system-tier-scope-preserved"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the universal-tier gating is reverted to the systemTable early return while the rest of the change remains."
+    },
+    {
+      "id": "system-tier-scope-preserved",
+      "statement": "The published-membership / leader-tenure / priority-control-plane checks remain scoped to system entities exactly as today; this Quest only promotes the universal tier, it does not widen the system-only tier."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

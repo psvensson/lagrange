@@ -1,0 +1,55 @@
+{
+  "id": "operation-progress-store-persistence",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The rebalancer's DurableWorkflowCoordinator stops running bare with a no-op persist callback: either real persistence is wired into its operation progress store (four other subsystems already wire DurableWorkflowCoordinator properly and show how — today the in-memory Map is the production store and owner ports hard-code lease/fence freshness as CURRENT), or the store is honestly renamed as a projection with the durability claims removed from its naming. Verified-audit findings 15 and 18 (the misnomer is in the rebalancer's usage, not the class). doneWhen: the test-receipt probe reads solve/evidence/operation-progress-store-persistence.receipt.json with outstanding 0 — progress-survives-restart (or projection-rename-complete, per the recorded choice) and lease-fence-freshness-not-hardcoded receipts passing (deterministic red-on-revert evidence harness).",
+  "priority": 2,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "rebalancer-safety-audit-findings-15-18-progress-store",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/rebalancer-operation-safety-audit-remediation.md"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/operation-progress-store-persistence.receipt.json",
+      "requiredReceipts": [
+        "progress-store-durable-or-honestly-renamed",
+        "lease-fence-freshness-not-hardcoded"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "operation-progress-store-persistence-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/operation-progress-store-persistence.receipt.json",
+          "requiredReceipts": [
+            "progress-store-durable-or-honestly-renamed",
+            "lease-fence-freshness-not-hardcoded"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "explicit-choice",
+      "statement": "Choose and record in a finding: wire real persistence (preferred, following the four properly-wired subsystems) or rename to an honest projection. Do not leave 'durable' naming over a no-op persist callback."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "If persistence is wired, the regression test must fail when the persist callback is reverted to a no-op while the rest of the change remains."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

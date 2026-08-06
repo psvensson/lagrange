@@ -1,0 +1,55 @@
+{
+  "id": "existing-group-add-topology-guard",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "An ADD into an existing replication group can no longer slip past the topology guard during fresh-bootstrap or cache lag: the REPLACE self-only-topology guard is extended to cover ADD on non-fresh partitions (the existing transient-error classification routes it into the authoritative hydration retry loop), and cohort stamping reads authoritative rows like the admission guard does instead of cache-only, closing the standard-path gap where an unstamped op persists under cache lag. The no-viable-leader -> 0 branch stays intentional (dead-leader re-formation); only the self-only-cohort ADD hazard is closed. Verified-audit finding 8. doneWhen: the test-receipt probe reads solve/evidence/existing-group-add-topology-guard.receipt.json with outstanding 0 — self-only-cohort-add-deferred and cohort-stamp-authoritative-read receipts passing (deterministic red-on-revert evidence harness).",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "rebalancer-safety-audit-finding-8-existing-group-add-guard",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/rebalancer-operation-safety-audit-remediation.md"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/existing-group-add-topology-guard.receipt.json",
+      "requiredReceipts": [
+        "self-only-cohort-add-deferred",
+        "cohort-stamp-authoritative-read"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "existing-group-add-topology-guard-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/existing-group-add-topology-guard.receipt.json",
+          "requiredReceipts": [
+            "self-only-cohort-add-deferred",
+            "cohort-stamp-authoritative-read"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the ADD coverage or the authoritative-read cohort stamping is reverted while the rest of the change remains."
+    },
+    {
+      "id": "dead-leader-branch-preserved",
+      "statement": "Keep the no-viable-leader -> 0 branch for dead-leader re-formation; only the self-only-cohort ADD hazard is in scope."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

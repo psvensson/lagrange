@@ -1,0 +1,57 @@
+{
+  "id": "assignment-epoch-fencing",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The assignment epoch actually fences stale work instead of being checked once and forgotten: the creation-time assert stops failing open (no epoch on the move, or current epoch unreadable, now defers the operation into an existing retry path instead of silently passing), the epoch is carried in the executor request so ADD/REPLACE execution can reject staleness, and the step-history epoch — which has zero readers in src/ or test/ today — either gains a real reader or is deleted. Verified-audit finding 7 (confirmed worse than the audit claimed). doneWhen: the test-receipt probe reads solve/evidence/assignment-epoch-fencing.receipt.json with outstanding 0 — unreadable-epoch-defers, executor-rejects-stale-epoch, and step-history-epoch-live-or-deleted receipts passing (deterministic red-on-revert evidence harness).",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "rebalancer-safety-audit-finding-7-epoch-fencing",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/rebalancer-operation-safety-audit-remediation.md"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/assignment-epoch-fencing.receipt.json",
+      "requiredReceipts": [
+        "unreadable-epoch-defers",
+        "executor-rejects-stale-epoch",
+        "step-history-epoch-live-or-deleted"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "assignment-epoch-fencing-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/assignment-epoch-fencing.receipt.json",
+          "requiredReceipts": [
+            "unreadable-epoch-defers",
+            "executor-rejects-stale-epoch",
+            "step-history-epoch-live-or-deleted"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "red-on-revert",
+      "statement": "Each new regression test must fail when the fail-closed assert or the executor staleness check is reverted while the rest of the change remains."
+    },
+    {
+      "id": "fail-closed-on-unreadable-epoch",
+      "statement": "An unreadable current epoch defers the operation; it must never silently pass. Deferral must route into an existing retry path rather than dropping the operation."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
