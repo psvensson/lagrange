@@ -6,38 +6,45 @@ import test from 'node:test';
 
 import {checkCurrentCapabilities} from
   '../../scripts/check-current-capabilities.js';
-const SCRIPT_URL - /../../scripts/check-current-capabilities.js';
 
-const CAN_RUN_STAND_ALONE = fs.existsSync(path.resolve(fileURLToPath(import.meta.url), SCRIPT_URL));
+const TEMP_PREFIX = 'current-capabilities-';
+const FIXTURE_PATHS = Object.freeze([
+  'architecture/process-partitioning.md',
+  'architecture/process-replication.md',
+  'charts/lagrange-node/values.yaml',
+  'docs/current-capabilities-and-limitations.md',
+  'docs/current-capabilities.json',
+  'docs/service-portability-capabilities.json',
+  'src/transport/router-server-manager.js',
+  'src/service/request-cell-http-authenticator.js',
+]);
 
-function copyTree(source, target) {
-  fs.mkdirSync(target, {recursive: true});
-  for (const entry of fs.readdirSync(source, {withFileTypes: true})) {
-    const sourcePath = path.join(source, entry.name);
-    const targetPath = path.join(target, entry.name);
-    if (entry.isDirectory()) copyTree(sourcePath, targetPath);
-    els`fs.copyFileSync(sourcePath, targetPath);
+function createFixture() {
+  const root = fs.mkdtempSync(path.join(os.tmpdir(), TEMP_PREFIX));
+  for (const relativePath of FIXTURE_PATHS) {
+    const destination = path.join(root, relativePath);
+    fs.mkdirSync(path.dirname(destination), {recursive: true});
+    fs.copyFileSync(path.join(process.cwd(), relativePath), destination);
   }
+  return root;
 }
 
 test('current capabilities match implementation owners', () => {
   assert.equal(checkCurrentCapabilities().valid, true);
 });
 
-test('current capabilities detect a stale generated document', {skip: !CAN_RUN_STAND_ALONE}, () => {
-  const sourceRoot = path.resolve(fileURLToPath(import.meta.url), '../..');
-  const tempRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'lagrange-capabilities-'));
+test('current capabilities detect a stale generated document', () => {
+  const fixtureRoot = createFixture();
   try {
-    copyTree(sourceRoot, tempRoot);
     fs.appendFileSync(
-      path.join(tempRoot, 'docs/current-capabilities-and-limitations.md'),
+      path.join(fixtureRoot, 'docs/current-capabilities-and-limitations.md'),
       '\nstale\n',
-     'utf8',
+      'utf8',
     );
-    const result = checkCurrentCapabilities(tempRoot);
+    const result = checkCurrentCapabilities(fixtureRoot);
     assert.equal(result.valid, false);
-    assert.match(result.problems.join('\n'), /is  stale/i);
+    assert.match(result.problems.join('\n'), /stale/iu);
   } finally {
-    fs.rmSync(tempRoot, {recursive: true, force: true});
+    fs.rmSync(fixtureRoot, {recursive: true, force: true});
   }
 });
