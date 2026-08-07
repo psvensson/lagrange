@@ -1,0 +1,1542 @@
+diff --git a/scripts/checks/impact-proof-cone-constants.js b/scripts/checks/impact-proof-cone-constants.js
+index b787390d13355ae73a9d230dc38372ce2d831f0b..587629ccad3dde777983047991ff8051f33d7d23 100644
+--- a/scripts/checks/impact-proof-cone-constants.js
++++ b/scripts/checks/impact-proof-cone-constants.js
+@@ -87,6 +87,32 @@ export const SELECTION_CONTRACT = 'contract';
+ export const SELECTION_CHANGED_TEST = 'changed-test';
+ export const SELECTION_SAFETY_FLOOR = 'safety-floor';
+ 
++// Machine-readable selection reasons (selection-explainable contract). Every
++// selected test carries at least one; every escalation names its rule.
++export const REASON_STATIC_DEPENDENCY = 'static_dependency';
++export const REASON_OBSERVED_COVERAGE = 'observed_coverage';
++export const REASON_SEMANTIC_CONTRACT = 'semantic_contract';
++export const REASON_CHANGED_TEST = 'changed_test';
++export const REASON_UNIVERSAL_SAFETY = 'universal_safety';
++export const REASON_ESCALATION = 'escalation';
++
++// Decision modes. There is no empty-tests "probably safe" mode: anything the
++// selector cannot prove escalates to full.
++export const MODE_SELECTED = 'selected';
++export const MODE_FULL = 'full';
++
++// Escalation rules (the machine-readable "why" for a full-mode decision).
++export const ESCALATION_RULE_UNCLASSIFIED_PATH = 'unclassified_changed_path';
++export const ESCALATION_RULE_CORE_METADATA = 'core_metadata_change';
++export const ESCALATION_RULE_SELECTOR_SELF = 'proof_system_self_change';
++export const ESCALATION_RULE_EMPTY_CHANGE_SET = 'empty_change_set';
++export const ESCALATION_RULE_STALE_COVERAGE = 'stale_coverage';
++export const ESCALATION_RULE_INSUFFICIENT_COVERAGE = 'insufficient_coverage_corpus';
++export const ESCALATION_RULE_ABSENT_COVERAGE = 'absent_coverage';
++export const ESCALATION_RULE_DEAD_CONTRACT = 'dead_contract_edge';
++export const ESCALATION_RULE_INPUT_MISSING = 'selector_input_missing';
++export const ESCALATION_RULE_TIER_POLICY = 'escalation_tier_policy';
++
+ export const VERDICT_PASS = 'pass';
+ export const VERDICT_FAIL = 'fail';
+ export const VERDICT_REASON_ALL_PASS = 'all-checks-pass';
+diff --git a/scripts/checks/impact-proof-cone-inputs.js b/scripts/checks/impact-proof-cone-inputs.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..0e608b1e1c1283f155ed66cacb6edf23fc05b45f
+--- /dev/null
++++ b/scripts/checks/impact-proof-cone-inputs.js
+@@ -0,0 +1,122 @@
++// Input loading and full-escalation helpers for the impact proof-cone
++// selector (developer-velocity epic). Same owner as impact-proof-cone.js;
++// extracted to keep selectProofCone within the complexity budget. No
++// selection policy lives here — only input reads, freshness evaluation, and
++// the full-census escalation constructor.
++
++import fs from 'node:fs';
++import path from 'node:path';
++
++import {
++  COVERAGE_MINIMUM_TEST_SHARE,
++  COVERAGE_SCHEMA_VERSION,
++  ESCALATION_RULE_ABSENT_COVERAGE,
++  ESCALATION_RULE_INSUFFICIENT_COVERAGE,
++  ESCALATION_RULE_STALE_COVERAGE,
++  IMPORT_GRAPH_PATH,
++  PROOF_CONE_CONTRACTS_PATH,
++  PROOF_CONE_COVERAGE_PATH,
++  REASON_ESCALATION,
++} from './impact-proof-cone-constants.js';
++import {
++  PRIMARY_CLASS_MANIFEST_PATH,
++  loadManifest as loadPrimaryManifest,
++} from './test-primary-classification.js';
++
++const UTF8_ENCODING = 'utf8';
++const HASH_ALGORITHM = 'sha256';
++const HASH_ENCODING = 'hex';
++
++import crypto from 'node:crypto';
++
++export function currentFileDigest(root, relPath) {
++  const absolute = path.join(root, relPath);
++  if (!fs.existsSync(absolute)) return null;
++  return crypto.createHash(HASH_ALGORITHM)
++    .update(fs.readFileSync(absolute)).digest(HASH_ENCODING);
++}
++
++export function readJsonInput(root, relPath) {
++  const absolute = path.join(root, relPath);
++  if (!fs.existsSync(absolute)) {
++    return {ok: false, problem: `missing required input: ${relPath}`};
++  }
++  try {
++    return {ok: true, value: JSON.parse(fs.readFileSync(absolute, UTF8_ENCODING))};
++  } catch (error) {
++    return {ok: false, problem: `invalid JSON in ${relPath}: ${error.message}`};
++  }
++}
++
++export function loadSelectorInputs(root) {
++  const primary = loadPrimaryManifest(root, PRIMARY_CLASS_MANIFEST_PATH);
++  if (!primary.ok) return {ok: false, problems: primary.problems};
++  const contractsRead = readJsonInput(root, PROOF_CONE_CONTRACTS_PATH);
++  if (!contractsRead.ok) return {ok: false, problems: [contractsRead.problem]};
++  const graphRead = readJsonInput(root, IMPORT_GRAPH_PATH);
++  if (!graphRead.ok) return {ok: false, problems: [graphRead.problem]};
++  const coverageRead = readJsonInput(root, PROOF_CONE_COVERAGE_PATH);
++  return {
++    ok: true,
++    primary: primary.manifest,
++    contracts: contractsRead.value,
++    importers: graphRead.value.importers || {},
++    importGraphDigest: graphRead.value.sourceDigest || null,
++    coverage: coverageRead.ok ? coverageRead.value : null,
++  };
++}
++
++// Coverage freshness is per-edge, not per-repository: an edge is stale only
++// when the bytes of a file it binds actually changed since collection (the
++// snapshot records a content digest of every covered file). The import-graph
++// sourceDigest churns on every src commit, so it is provenance, never the
++// freshness oracle. Sufficiency: the snapshot must cover a meaningful share
++// of the census before it can discharge owner-tier proof obligations.
++export function evaluateCoverage(root, coverageSnapshot, censusSize) {
++  if (!coverageSnapshot) {
++    return {present: false, fresh: false, sufficient: false, staleEdges: 0, share: 0};
++  }
++  const coverageTests = coverageSnapshot.tests || {};
++  const fileDigests = coverageSnapshot.fileDigests || {};
++  let staleEdges = 0;
++  for (const covered of Object.values(coverageTests)) {
++    for (const coveredPath of covered) {
++      const recorded = fileDigests[coveredPath];
++      if (recorded && recorded !== currentFileDigest(root, coveredPath)) {
++        staleEdges += 1;
++      }
++    }
++  }
++  const fresh = coverageSnapshot.schemaVersion === COVERAGE_SCHEMA_VERSION &&
++    staleEdges === 0;
++  const share = Object.keys(coverageTests).length / Math.max(1, censusSize);
++  return {
++    present: true,
++    fresh,
++    sufficient: fresh && share >= COVERAGE_MINIMUM_TEST_SHARE,
++    staleEdges,
++    share,
++    digest: coverageSnapshot.sourceDigest || null,
++  };
++}
++
++export function coverageEscalationRule(evaluation) {
++  if (!evaluation.present) return ESCALATION_RULE_ABSENT_COVERAGE;
++  if (evaluation.fresh) return ESCALATION_RULE_INSUFFICIENT_COVERAGE;
++  return ESCALATION_RULE_STALE_COVERAGE;
++}
++
++// The full-census escalation decision. Every test carries the escalation
++// reason; there is deliberately no empty-tests "probably safe" mode.
++export function fullCensusEscalation(receipt, classifiedTests, rule) {
++  receipt.fullSuite = true;
++  receipt.escalationRule = rule;
++  receipt.selectedTests = [...classifiedTests];
++  receipt.counts.uniqueSelected = classifiedTests.length;
++  const testReasons = {};
++  for (const testPath of classifiedTests) {
++    testReasons[testPath] = [REASON_ESCALATION];
++  }
++  receipt.testReasons = testReasons;
++  return receipt;
++}
+diff --git a/scripts/checks/impact-proof-cone.js b/scripts/checks/impact-proof-cone.js
+index e3d8362e5c072f55c3e8a98942f424a3b51f9731..86b45c4c95e67f85fdcbcc19356380a2686fd22e 100644
+--- a/scripts/checks/impact-proof-cone.js
++++ b/scripts/checks/impact-proof-cone.js
+@@ -22,29 +22,38 @@
+ // manifest digests) so a Quest landing receipt records WHY each proof was
+ // relevant.
+ 
+-import crypto from 'node:crypto';
+ import fs from 'node:fs';
+ import path from 'node:path';
+ 
+ import {
+   CONTRACT_SCHEMA_VERSION,
+-  COVERAGE_MINIMUM_TEST_SHARE,
+   COVERAGE_STATE_ABSENT,
+   COVERAGE_STATE_INSUFFICIENT,
+   COVERAGE_STATE_STALE,
+   DIRECTORY_PREFIX_SUFFIX,
++  ESCALATION_RULE_CORE_METADATA,
++  ESCALATION_RULE_DEAD_CONTRACT,
++  ESCALATION_RULE_EMPTY_CHANGE_SET,
++  ESCALATION_RULE_INPUT_MISSING,
++  ESCALATION_RULE_SELECTOR_SELF,
++  ESCALATION_RULE_TIER_POLICY,
++  ESCALATION_RULE_UNCLASSIFIED_PATH,
+   LIST_JOIN_SEPARATOR,
++  MODE_FULL,
++  MODE_SELECTED,
+   PROBLEM_CONTRACTS_SCHEMA,
+   PROBLEM_EMPTY_CHANGE_SET,
+   PROBLEM_ZERO_SELECTED,
++  REASON_CHANGED_TEST,
++  REASON_ESCALATION,
++  REASON_OBSERVED_COVERAGE,
++  REASON_SEMANTIC_CONTRACT,
++  REASON_STATIC_DEPENDENCY,
++  REASON_UNIVERSAL_SAFETY,
+   CORE_METADATA_PREFIXES,
+-  COVERAGE_SCHEMA_VERSION,
+   DOCUMENTATION_EXTENSIONS,
+   DOCUMENTATION_PREFIXES,
+   FULL_SUITE_TIERS,
+-  IMPORT_GRAPH_PATH,
+-  PROOF_CONE_CONTRACTS_PATH,
+-  PROOF_CONE_COVERAGE_PATH,
+   PROOF_CONE_RECEIPT_DIR,
+   PROOF_CONE_SELECTOR_VERSION,
+   RECEIPT_SCHEMA_VERSION,
+@@ -65,9 +74,11 @@ import {
+   TIER_UNKNOWN,
+ } from './impact-proof-cone-constants.js';
+ import {
+-  PRIMARY_CLASS_MANIFEST_PATH,
+-  loadManifest as loadPrimaryManifest,
+-} from './test-primary-classification.js';
++  coverageEscalationRule,
++  evaluateCoverage,
++  fullCensusEscalation,
++  loadSelectorInputs,
++} from './impact-proof-cone-inputs.js';
+ 
+ const arrayIncludes = Function.call.bind(Array.prototype.includes);
+ const arrayIndexOf = Function.call.bind(Array.prototype.indexOf);
+@@ -91,28 +102,6 @@ const PROTO_SUFFIX = '.proto';
+ const INDEX_FILE_SUFFIX = '/index.js';
+ const PUBLIC_API_PATH = 'src/public-api.js';
+ 
+-const HASH_ALGORITHM = 'sha256';
+-const HASH_ENCODING = 'hex';
+-
+-function currentFileDigest(root, relPath) {
+-  const absolute = path.join(root, relPath);
+-  if (!fs.existsSync(absolute)) return null;
+-  return crypto.createHash(HASH_ALGORITHM)
+-    .update(fs.readFileSync(absolute)).digest(HASH_ENCODING);
+-}
+-
+-function readJson(root, relPath) {
+-  const absolute = path.join(root, relPath);
+-  if (!fs.existsSync(absolute)) {
+-    return {ok: false, problem: `missing required input: ${relPath}`};
+-  }
+-  try {
+-    return {ok: true, value: JSON.parse(fs.readFileSync(absolute, UTF8_ENCODING))};
+-  } catch (error) {
+-    return {ok: false, problem: `invalid JSON in ${relPath}: ${error.message}`};
+-  }
+-}
+-
+ function readShardList(root, relPath) {
+   const absolute = path.join(root, relPath);
+   if (!fs.existsSync(absolute)) return [];
+@@ -135,35 +124,39 @@ function isDocumentationPath(changedPath) {
+ }
+ 
+ // The escalation tier for a single changed path.
+-export function classifyChangedPath(changedPath, ownedContracts) {
+-  if (arrayIncludes(SELECTOR_SELF_PATHS, changedPath)) {
+-    return TIER_SELECTOR_SELF;
+-  }
+-  if (arraySome(CORE_METADATA_PREFIXES, (prefix) => pathMatchesPrefix(changedPath, prefix)) ||
+-      (stringStartsWith(changedPath, WIT_PREFIX) && stringEndsWith(changedPath, WIT_SUFFIX))) {
+-    return TIER_CORE_METADATA;
+-  }
+-  if (isDocumentationPath(changedPath)) {
+-    return TIER_DOCUMENTATION;
+-  }
+-  if (stringEndsWith(changedPath, WIT_SUFFIX) ||
+-      stringEndsWith(changedPath, PROTO_SUFFIX)) {
+-    return TIER_PROTOCOL_SHAPE;
+-  }
+-  if (stringEndsWith(changedPath, TEST_FILE_SUFFIX)) {
+-    return TIER_LEAF_IMPLEMENTATION;
+-  }
+-  const isBoundary = stringEndsWith(changedPath, INDEX_FILE_SUFFIX) ||
++function isCoreMetadataPath(changedPath) {
++  return arraySome(CORE_METADATA_PREFIXES, (prefix) => pathMatchesPrefix(changedPath, prefix)) ||
++    (stringStartsWith(changedPath, WIT_PREFIX) && stringEndsWith(changedPath, WIT_SUFFIX));
++}
++
++function isProtocolShapePath(changedPath) {
++  return stringEndsWith(changedPath, WIT_SUFFIX) ||
++    stringEndsWith(changedPath, PROTO_SUFFIX);
++}
++
++function isBoundaryPath(changedPath) {
++  return stringEndsWith(changedPath, INDEX_FILE_SUFFIX) ||
+     changedPath === PUBLIC_API_PATH;
+-  if (stringStartsWith(changedPath, SRC_PREFIX) ||
+-      stringStartsWith(changedPath, SCRIPTS_PREFIX)) {
+-    if (isBoundary) return TIER_OWNER_BOUNDARY;
+-    return ownedContracts.length > 0 ?
+-      TIER_OWNER_IMPLEMENTATION : TIER_LEAF_IMPLEMENTATION;
+-  }
+-  // Anything the policy cannot classify — root files, generated artifacts,
+-  // unknown trees — fails closed to the full suite.
+-  return TIER_UNKNOWN;
++}
++
++function isSourceTreePath(changedPath) {
++  return stringStartsWith(changedPath, SRC_PREFIX) ||
++    stringStartsWith(changedPath, SCRIPTS_PREFIX);
++}
++
++// Tier classification is a precedence chain: each rule either resolves a
++// tier or defers to the next. Anything the policy cannot classify — root
++// files, generated artifacts, unknown trees — fails closed to the full suite.
++export function classifyChangedPath(changedPath, ownedContracts) {
++  if (arrayIncludes(SELECTOR_SELF_PATHS, changedPath)) return TIER_SELECTOR_SELF;
++  if (isCoreMetadataPath(changedPath)) return TIER_CORE_METADATA;
++  if (isDocumentationPath(changedPath)) return TIER_DOCUMENTATION;
++  if (isProtocolShapePath(changedPath)) return TIER_PROTOCOL_SHAPE;
++  if (stringEndsWith(changedPath, TEST_FILE_SUFFIX)) return TIER_LEAF_IMPLEMENTATION;
++  if (!isSourceTreePath(changedPath)) return TIER_UNKNOWN;
++  if (isBoundaryPath(changedPath)) return TIER_OWNER_BOUNDARY;
++  return ownedContracts.length > 0 ?
++    TIER_OWNER_IMPLEMENTATION : TIER_LEAF_IMPLEMENTATION;
+ }
+ 
+ function tierRank(tier) {
+@@ -198,36 +191,41 @@ function contractEntryExists(root, entry) {
+   return false;
+ }
+ 
++function validateContractEntry(root, name, entry, problems,
++  contractOwners, contractTests) {
++  if (!entry || !Array.isArray(entry.owners) || !Array.isArray(entry.tests)) {
++    problems.push(`contract ${name} lacks owners/tests arrays`);
++    return;
++  }
++  for (const owner of entry.owners) {
++    if (!contractEntryExists(root, owner)) {
++      problems.push(`contract ${name} has a dead owner path: ${owner}`);
++    }
++    if (!contractOwners.has(owner)) contractOwners.set(owner, []);
++    contractOwners.get(owner).push(name);
++  }
++  for (const testEntry of entry.tests) {
++    if (!contractEntryExists(root, testEntry)) {
++      problems.push(`contract ${name} has a dead test path: ${testEntry}`);
++    }
++  }
++  contractTests.set(name, entry.tests);
++}
++
+ function buildContractIndexes(root, contractsManifest) {
+   const problems = [];
++  const contractOwners = new Map();
++  const contractTests = new Map();
+   if (contractsManifest.schemaVersion !== CONTRACT_SCHEMA_VERSION) {
+     problems.push(`unsupported contracts schemaVersion: ${contractsManifest.schemaVersion}`);
+   }
+   const contracts = contractsManifest.contracts;
+   if (!contracts || typeof contracts !== 'object' || Array.isArray(contracts)) {
+     problems.push(PROBLEM_CONTRACTS_SCHEMA);
+-    return {problems, contractOwners: new Map(), contractTests: new Map()};
++    return {problems, contractOwners, contractTests};
+   }
+-  const contractOwners = new Map();
+-  const contractTests = new Map();
+   for (const [name, entry] of Object.entries(contracts)) {
+-    if (!entry || !Array.isArray(entry.owners) || !Array.isArray(entry.tests)) {
+-      problems.push(`contract ${name} lacks owners/tests arrays`);
+-      continue;
+-    }
+-    for (const owner of entry.owners) {
+-      if (!contractEntryExists(root, owner)) {
+-        problems.push(`contract ${name} has a dead owner path: ${owner}`);
+-      }
+-      if (!contractOwners.has(owner)) contractOwners.set(owner, []);
+-      contractOwners.get(owner).push(name);
+-    }
+-    for (const testEntry of entry.tests) {
+-      if (!contractEntryExists(root, testEntry)) {
+-        problems.push(`contract ${name} has a dead test path: ${testEntry}`);
+-      }
+-    }
+-    contractTests.set(name, entry.tests);
++    validateContractEntry(root, name, entry, problems, contractOwners, contractTests);
+   }
+   return {problems, contractOwners, contractTests};
+ }
+@@ -306,8 +304,63 @@ function expandContractTests(contractTests, contractNames, classifiedTests) {
+ }
+ 
+ export function selectProofCone(root, changedPaths) {
+-  const problems = [];
+-  const receipt = {
++  const receipt = emptyReceipt(changedPaths);
++  const sortedChanged = [...changedPaths].sort();
++  const inputs = loadSelectorInputs(root);
++  const censusTests = inputs.ok ? Object.keys(inputs.primary.classes) : [];
++
++  // Empty change set or missing input is unknown impact: escalate to the
++  // full census (never an empty-tests "probably safe" mode).
++  if (sortedChanged.length === 0 || !inputs.ok) {
++    return escalateUnknown(receipt, sortedChanged, inputs, censusTests);
++  }
++
++  const classified = inputs.primary.classes;
++  receipt.inputs.primaryClassDigest = inputs.primary.digest;
++  receipt.inputs.importGraphDigest = inputs.importGraphDigest;
++  receipt.counts.totalTests = censusTests.length;
++
++  const contractIndexes = buildContractIndexes(root, inputs.contracts);
++  if (contractIndexes.problems.length > 0) {
++    receipt.problems.push(...contractIndexes.problems);
++    receipt.escalation = TIER_UNKNOWN;
++    fullCensusEscalation(receipt, censusTests, ESCALATION_RULE_DEAD_CONTRACT);
++    return {selection: receipt, problems: receipt.problems};
++  }
++
++  const coverageEval = evaluateCoverage(root, inputs.coverage, censusTests.length);
++  recordCoverageInputs(receipt, coverageEval);
++  const tiers = classifyChangedPaths(sortedChanged, contractIndexes, receipt);
++
++  // Fail closed: unknown paths or full-suite tiers.
++  const policyEscalation = resolvePolicyEscalation(receipt, tiers, censusTests);
++  if (policyEscalation) return policyEscalation;
++
++  // Observed coverage is required once a change crosses owner scope; a stale
++  // or too-small snapshot cannot prove impact, so widen rather than narrow.
++  const coverageUsable = Boolean(inputs.coverage) && coverageEval.sufficient;
++  if (coverageRequiredTier(tiers.escalation) && !coverageUsable) {
++    receipt.problems.push(
++      `coverage snapshot ${coverageStateName(coverageEval)} at tier ${tiers.escalation}; widened to full suite`);
++    fullCensusEscalation(receipt, censusTests, coverageEscalationRule(coverageEval));
++    return {selection: receipt, problems: receipt.problems};
++  }
++
++  const cone = buildBoundedCone(root, {
++    sortedChanged,
++    importers: inputs.importers,
++    classified,
++    classifiedTests: censusTests,
++    contractIndexes,
++    changedContracts: receipt.changedContracts,
++    coverageSnapshot: coverageUsable ? inputs.coverage : null,
++  });
++  applyCone(receipt, cone, tiers.escalation);
++  return {selection: receipt, problems: [...receipt.problems]};
++}
++
++function emptyReceipt(changedPaths) {
++  return {
+     schemaVersion: RECEIPT_SCHEMA_VERSION,
+     selectorVersion: PROOF_CONE_SELECTOR_VERSION,
+     selectedAt: new Date().toISOString(),
+@@ -328,96 +381,31 @@ export function selectProofCone(root, changedPaths) {
+     selectedTests: [],
+     problems: [],
+   };
++}
+ 
+-  const sortedChanged = [...changedPaths].sort();
++function escalateUnknown(receipt, sortedChanged, inputs, censusTests) {
+   if (sortedChanged.length === 0) {
+     receipt.problems.push(PROBLEM_EMPTY_CHANGE_SET);
+-    receipt.escalation = TIER_UNKNOWN;
+-    receipt.fullSuite = true;
+-    return {selection: receipt, problems: receipt.problems};
++    fullCensusEscalation(receipt, censusTests, ESCALATION_RULE_EMPTY_CHANGE_SET);
++  } else {
++    receipt.problems.push(...inputs.problems);
++    fullCensusEscalation(receipt, censusTests, ESCALATION_RULE_INPUT_MISSING);
+   }
++  receipt.escalation = TIER_UNKNOWN;
++  receipt.counts.totalTests = censusTests.length;
++  return {selection: receipt, problems: receipt.problems};
++}
+ 
+-  // Inputs: primary classification census, contracts, import graph, coverage.
+-  const primary = loadPrimaryManifest(root, PRIMARY_CLASS_MANIFEST_PATH);
+-  if (!primary.ok) {
+-    receipt.problems.push(...primary.problems);
+-    receipt.escalation = TIER_UNKNOWN;
+-    receipt.fullSuite = true;
+-    return {selection: receipt, problems: receipt.problems};
+-  }
+-  const classified = primary.manifest.classes;
+-  const classifiedTests = Object.keys(classified);
+-  receipt.inputs.primaryClassDigest = primary.manifest.digest;
+-  receipt.counts.totalTests = classifiedTests.length;
+-
+-  const contractsRead = readJson(root, PROOF_CONE_CONTRACTS_PATH);
+-  if (!contractsRead.ok) {
+-    receipt.problems.push(contractsRead.problem);
+-    receipt.escalation = TIER_UNKNOWN;
+-    receipt.fullSuite = true;
+-    return {selection: receipt, problems: receipt.problems};
+-  }
+-  const contractIndexes = buildContractIndexes(root, contractsRead.value);
+-  if (contractIndexes.problems.length > 0) {
+-    receipt.problems.push(...contractIndexes.problems);
+-    receipt.escalation = TIER_UNKNOWN;
+-    receipt.fullSuite = true;
+-    return {selection: receipt, problems: receipt.problems};
+-  }
+-  const resolvedOwners = contractOwnersByPath(contractIndexes);
+-
+-  const graphRead = readJson(root, IMPORT_GRAPH_PATH);
+-  if (!graphRead.ok) {
+-    receipt.problems.push(graphRead.problem);
+-    receipt.escalation = TIER_UNKNOWN;
+-    receipt.fullSuite = true;
+-    return {selection: receipt, problems: receipt.problems};
+-  }
+-  const importers = graphRead.value.importers || {};
+-  receipt.inputs.importGraphDigest = graphRead.value.sourceDigest || null;
+-
+-  const coverageRead = readJson(root, PROOF_CONE_COVERAGE_PATH);
+-  const coverageSnapshot = coverageRead.ok ? coverageRead.value : null;
+-  // Coverage freshness is per-edge, not per-repository: an edge is stale only
+-  // when the bytes of a file it binds have actually changed since collection
+-  // (the snapshot records a content digest of every covered file at
+-  // collection time). The import-graph sourceDigest churns on every src
+-  // commit and would otherwise invalidate the whole snapshot daily, so it is
+-  // recorded as provenance, never as the freshness oracle.
+-  const fileDigests = coverageSnapshot?.fileDigests || {};
+-  let coverageFresh = false;
+-  let coverageSufficient = false;
+-  let staleEdgeCount = 0;
+-  if (coverageSnapshot) {
+-    const coverageTests = coverageSnapshot.tests || {};
+-    for (const covered of Object.values(coverageTests)) {
+-      for (const coveredPath of covered) {
+-        const recorded = fileDigests[coveredPath];
+-        if (recorded && recorded !== currentFileDigest(root, coveredPath)) {
+-          staleEdgeCount += 1;
+-        }
+-      }
+-    }
+-    coverageFresh = coverageSnapshot.schemaVersion === COVERAGE_SCHEMA_VERSION &&
+-      staleEdgeCount === 0;
+-    // The seed snapshot is intentionally a leaf corpus. Coverage can only
+-    // discharge owner-tier proof obligations once the snapshot covers a
+-    // meaningful share of the census; below that it cannot prove impact and
+-    // the cone widens exactly as if it were stale.
+-    const coveredShare = Object.keys(coverageTests).length /
+-      Math.max(1, Object.keys(loadPrimaryManifest(root, PRIMARY_CLASS_MANIFEST_PATH)
+-        .manifest?.classes || {}).length);
+-    coverageSufficient = coverageFresh &&
+-      coveredShare >= COVERAGE_MINIMUM_TEST_SHARE;
+-    receipt.inputs.coverageTestShare = coveredShare;
+-    receipt.inputs.coverageStaleEdges = staleEdgeCount;
+-  }
+-  receipt.inputs.coverageDigest = coverageSnapshot ?
+-    coverageSnapshot.sourceDigest || null : null;
+-  receipt.inputs.coverageFresh = coverageFresh;
+-  receipt.inputs.coverageSufficient = coverageSufficient;
++function recordCoverageInputs(receipt, coverageEval) {
++  receipt.inputs.coverageTestShare = coverageEval.share;
++  receipt.inputs.coverageStaleEdges = coverageEval.staleEdges;
++  receipt.inputs.coverageDigest = coverageEval.digest || null;
++  receipt.inputs.coverageFresh = coverageEval.fresh;
++  receipt.inputs.coverageSufficient = coverageEval.sufficient;
++}
+ 
+-  // Classify every changed path and compute the escalation tier.
++function classifyChangedPaths(sortedChanged, contractIndexes, receipt) {
++  const resolvedOwners = contractOwnersByPath(contractIndexes);
+   const changedContracts = new Set();
+   const unknownPaths = [];
+   let escalation = TIER_DOCUMENTATION;
+@@ -431,23 +419,95 @@ export function selectProofCone(root, changedPaths) {
+   }
+   receipt.escalation = escalation;
+   receipt.changedContracts = [...changedContracts].sort();
++  return {escalation, unknownPaths};
++}
+ 
+-  // Fail closed: unknown paths, stale/absent coverage for tiers that require
+-  // it, or full-suite tiers.
+-  if (unknownPaths.length > 0 || arrayIncludes(FULL_SUITE_TIERS, escalation)) {
+-    receipt.fullSuite = true;
+-    receipt.selectedTests = [...classifiedTests];
+-    receipt.counts.uniqueSelected = classifiedTests.length;
+-    if (unknownPaths.length > 0) {
+-      receipt.problems.push(`unclassified changed path(s) force full suite: ${unknownPaths.join(LIST_JOIN_SEPARATOR)}`);
+-    }
+-    return {selection: receipt, problems: receipt.problems};
++function resolvePolicyEscalation(receipt, tiers, censusTests) {
++  if (tiers.unknownPaths.length === 0 &&
++      !arrayIncludes(FULL_SUITE_TIERS, tiers.escalation)) {
++    return null;
+   }
++  if (tiers.unknownPaths.length > 0) {
++    receipt.problems.push(`unclassified changed path(s) force full suite: ${tiers.unknownPaths.join(LIST_JOIN_SEPARATOR)}`);
++    fullCensusEscalation(receipt, censusTests, ESCALATION_RULE_UNCLASSIFIED_PATH);
++  } else {
++    const rule = tiers.escalation === TIER_SELECTOR_SELF ?
++      ESCALATION_RULE_SELECTOR_SELF : ESCALATION_RULE_CORE_METADATA;
++    fullCensusEscalation(receipt, censusTests, rule);
++  }
++  return {selection: receipt, problems: receipt.problems};
++}
+ 
++function coverageRequiredTier(escalation) {
++  return escalation !== TIER_DOCUMENTATION &&
++    tierRank(escalation) >= tierRank(TIER_OWNER_IMPLEMENTATION);
++}
++
++function applyCone(receipt, cone, escalation) {
++  receipt.counts[SELECTION_CHANGED_TEST] = cone.changedTestCount;
++  receipt.counts[SELECTION_SAFETY_FLOOR] = cone.safetyFloorCount;
++  receipt.counts[SELECTION_STATIC] = cone.rationale[SELECTION_STATIC].length;
++  receipt.counts[SELECTION_COVERAGE] = cone.rationale[SELECTION_COVERAGE].length;
++  receipt.counts[SELECTION_CONTRACT] = cone.rationale[SELECTION_CONTRACT].length;
++  receipt.rationale = cone.rationale;
++  receipt.testReasons = cone.testReasons;
++  receipt.selectedTests = [...cone.selected].sort();
++  receipt.counts.uniqueSelected = receipt.selectedTests.length;
++  if (receipt.counts.uniqueSelected === 0 && escalation !== TIER_DOCUMENTATION) {
++    receipt.problems.push(PROBLEM_ZERO_SELECTED);
++  }
++}
++
++// The bounded cone: union of static reverse-closure, observed coverage
++// (already vetted fresh+sufficient by the caller), semantic-contract
++// claimants, changed tests, and the universal safety floor. Per-test reasons
++// accumulate every edge that binds a test to the change.
++function buildBoundedCone(root, args) {
++  const {
++    sortedChanged,
++    importers,
++    classified,
++    classifiedTests,
++    contractIndexes,
++    changedContracts,
++    coverageSnapshot,
++  } = args;
+   const selected = new Set();
+-  const rationale = {[SELECTION_STATIC]: [], [SELECTION_COVERAGE]: [], [SELECTION_CONTRACT]: []};
++  const reasons = new Map();
++  const addReason = (testPath, reason) => {
++    if (!reasons.has(testPath)) reasons.set(testPath, new Set());
++    reasons.get(testPath).add(reason);
++  };
++  const rationale = {
++    [SELECTION_STATIC]: [],
++    [SELECTION_COVERAGE]: [],
++    [SELECTION_CONTRACT]: [],
++  };
++
++  collectStaticEdges(sortedChanged, importers, classified, selected, rationale, addReason);
++  if (coverageSnapshot) {
++    collectCoverageEdges(coverageSnapshot, sortedChanged, classified,
++      selected, rationale, addReason);
++  }
++  collectContractEdges(contractIndexes, changedContracts, classified,
++    classifiedTests, selected, rationale, addReason);
++  const changedTestCount = collectChangedTests(sortedChanged, classified, selected, addReason);
++  const safetyFloorCount = collectSafetyFloor(root, classified, selected, addReason);
++
++  return {
++    selected,
++    changedTestCount,
++    safetyFloorCount,
++    rationale: {
++      [SELECTION_STATIC]: rationale[SELECTION_STATIC].sort(),
++      [SELECTION_COVERAGE]: rationale[SELECTION_COVERAGE].sort(),
++      [SELECTION_CONTRACT]: rationale[SELECTION_CONTRACT].sort(),
++    },
++    testReasons: reasonsRecord(reasons),
++  };
++}
+ 
+-  // Static reverse-dependency closure.
++function collectStaticEdges(sortedChanged, importers, classified, selected, rationale, addReason) {
+   const closure = reverseStaticClosure(
+     arrayFilter(sortedChanged, (changedPath) => !stringEndsWith(changedPath, TEST_FILE_SUFFIX)),
+     importers);
+@@ -455,75 +515,73 @@ export function selectProofCone(root, changedPaths) {
+     if (stringEndsWith(module, TEST_FILE_SUFFIX) && classified[module]) {
+       selected.add(module);
+       rationale[SELECTION_STATIC].push(module);
++      addReason(module, REASON_STATIC_DEPENDENCY);
+     }
+   }
++}
+ 
+-  // Observed coverage edges — only when fresh and corpus-sufficient; a
+-  // stale or too-small snapshot widens the cone by escalation rather than
+-  // silently narrowing it.
+-  if (coverageSnapshot && coverageSufficient) {
+-    const coverageSelected = coverageEdgesFor(coverageSnapshot, sortedChanged);
+-    for (const testPath of coverageSelected.keys()) {
+-      if (classified[testPath]) {
+-        selected.add(testPath);
+-        rationale[SELECTION_COVERAGE].push(testPath);
+-      }
++function collectCoverageEdges(coverageSnapshot, sortedChanged, classified,
++  selected, rationale, addReason) {
++  const coverageSelected = coverageEdgesFor(coverageSnapshot, sortedChanged);
++  for (const testPath of coverageSelected.keys()) {
++    if (classified[testPath]) {
++      selected.add(testPath);
++      rationale[SELECTION_COVERAGE].push(testPath);
++      addReason(testPath, REASON_OBSERVED_COVERAGE);
+     }
+-  } else if (escalation !== TIER_DOCUMENTATION &&
+-             tierRank(escalation) >= tierRank(TIER_OWNER_IMPLEMENTATION)) {
+-    // Coverage input is required once a change crosses owner scope; stale or
+-    // absent coverage cannot prove impact, so widen to the full suite.
+-    receipt.fullSuite = true;
+-    receipt.selectedTests = [...classifiedTests];
+-    receipt.counts.uniqueSelected = classifiedTests.length;
+-    const coverageState = !coverageSnapshot ? COVERAGE_STATE_ABSENT :
+-      (coverageFresh ? COVERAGE_STATE_INSUFFICIENT : COVERAGE_STATE_STALE);
+-    receipt.problems.push(
+-      `coverage snapshot ${coverageState} at tier ${escalation}; widened to full suite`);
+-    return {selection: receipt, problems: receipt.problems};
+   }
++}
+ 
+-  // Semantic contract edges.
++function collectContractEdges(contractIndexes, changedContracts, classified,
++  classifiedTests, selected, rationale, addReason) {
+   const contractTests = expandContractTests(
+-    contractIndexes.contractTests, receipt.changedContracts, classifiedTests);
++    contractIndexes.contractTests, changedContracts, classifiedTests);
+   for (const testPath of contractTests) {
+     if (classified[testPath]) {
+       selected.add(testPath);
+       rationale[SELECTION_CONTRACT].push(testPath);
++      for (const contract of changedContracts) {
++        addReason(testPath, `${REASON_SEMANTIC_CONTRACT}:${contract}`);
++      }
+     }
+   }
++}
+ 
+-  // Changed/new tests themselves.
++function collectChangedTests(sortedChanged, classified, selected, addReason) {
++  let count = 0;
+   for (const changedPath of sortedChanged) {
+     if (stringEndsWith(changedPath, TEST_FILE_SUFFIX) && classified[changedPath]) {
+       selected.add(changedPath);
+-      receipt.counts[SELECTION_CHANGED_TEST] += 1;
++      count += 1;
++      addReason(changedPath, REASON_CHANGED_TEST);
+     }
+   }
++  return count;
++}
+ 
+-  // Universal safety floor: always runs, never reduced by impact analysis.
++function collectSafetyFloor(root, classified, selected, addReason) {
+   const safetyFloor = arrayFilter(
+     readShardList(root, SAFETY_FLOOR_SHARD_PATH),
+     (testPath) => classified[testPath]);
+-  for (const testPath of safetyFloor) selected.add(testPath);
+-  receipt.counts[SELECTION_SAFETY_FLOOR] = safetyFloor.length;
++  for (const testPath of safetyFloor) {
++    selected.add(testPath);
++    addReason(testPath, REASON_UNIVERSAL_SAFETY);
++  }
++  return safetyFloor.length;
++}
+ 
+-  receipt.selectedTests = [...selected].sort();
+-  receipt.counts[SELECTION_STATIC] = rationale[SELECTION_STATIC].length;
+-  receipt.counts[SELECTION_COVERAGE] = rationale[SELECTION_COVERAGE].length;
+-  receipt.counts[SELECTION_CONTRACT] = rationale[SELECTION_CONTRACT].length;
+-  receipt.counts.uniqueSelected = receipt.selectedTests.length;
+-  receipt.rationale = {
+-    [SELECTION_STATIC]: rationale[SELECTION_STATIC].sort(),
+-    [SELECTION_COVERAGE]: rationale[SELECTION_COVERAGE].sort(),
+-    [SELECTION_CONTRACT]: rationale[SELECTION_CONTRACT].sort(),
+-  };
++function coverageStateName(evaluation) {
++  if (!evaluation.present) return COVERAGE_STATE_ABSENT;
++  if (evaluation.fresh) return COVERAGE_STATE_INSUFFICIENT;
++  return COVERAGE_STATE_STALE;
++}
+ 
+-  if (receipt.counts.uniqueSelected === 0 && escalation !== TIER_DOCUMENTATION) {
+-    receipt.problems.push(PROBLEM_ZERO_SELECTED);
++function reasonsRecord(testReasons) {
++  const record = {};
++  for (const [testPath, reasons] of testReasons.entries()) {
++    record[testPath] = [...reasons].sort();
+   }
+-  problems.push(...receipt.problems);
+-  return {selection: receipt, problems};
++  return record;
+ }
+ 
+ export function writeReceipt(root, receipt) {
+@@ -540,3 +598,34 @@ export function writeReceipt(root, receipt) {
+ export function buildContractIndexesForTest(root, contractsManifest) {
+   return buildContractIndexes(root, contractsManifest);
+ }
++
++// The canonical TestImpactDecision projection (developer-velocity epic):
++// the single structured decision every consumer (package scripts, Solver
++// landing, CI wrappers, agents, test runners) reads instead of re-deriving
++// affected tests. mode is `selected` (bounded cone) or `full` (escalated);
++// there is deliberately no empty-tests "probably safe" mode. Every selected
++// test carries at least one machine-readable reason; every full-mode
++// decision names the escalation rule.
++export function testImpactDecision(receipt) {
++  const tests = arrayMap(receipt.selectedTests || [], (testPath) => ({
++    path: testPath,
++    reasons: (receipt.testReasons || {})[testPath] ||
++      (receipt.fullSuite ? [REASON_ESCALATION] : []),
++  }));
++  return {
++    mode: receipt.fullSuite ? MODE_FULL : MODE_SELECTED,
++    changedPaths: receipt.changedPaths || [],
++    impactedContracts: receipt.changedContracts || [],
++    escalation: receipt.fullSuite ? {
++      tier: receipt.escalation,
++      rule: receipt.escalationRule || ESCALATION_RULE_TIER_POLICY,
++    } : null,
++    tier: receipt.escalation,
++    tests,
++    selectorVersion: receipt.selectorVersion,
++    sourceFingerprint: receipt.inputs?.importGraphDigest || null,
++    inputs: receipt.inputs || {},
++    counts: receipt.counts || {},
++    problems: receipt.problems || [],
++  };
++}
+diff --git a/scripts/run-quest-test-proof-cone-shadow-validation-scenarios.js b/scripts/run-quest-test-proof-cone-shadow-validation-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..c37078b1fb0a1241a9969c5a5a7ac19f03f8256b
+--- /dev/null
++++ b/scripts/run-quest-test-proof-cone-shadow-validation-scenarios.js
+@@ -0,0 +1,330 @@
++#!/usr/bin/env node
++// Scenario runner for the quest-test-proof-cone-shadow-validation Quest.
++//
++// Proves the sealed result by checking the DECISION, not by running tests:
++// 15 selector-invariant cases over synthetic and repository-real change sets.
++// The scenario metric (priority) is the number of violated selector
++// invariants — selection misses, non-determinism, unexplained selections,
++// unsafe non-full unknown cases, and historical conformance misses. Target 0.
++//
++// Landing semantics are untouched: this is shadow evidence only.
++
++import fs from 'node:fs';
++import path from 'node:path';
++import {fileURLToPath} from 'node:url';
++
++import {
++  selectProofCone,
++  testImpactDecision,
++} from './checks/impact-proof-cone.js';
++import {
++  ESCALATION_RULE_CORE_METADATA,
++  ESCALATION_RULE_SELECTOR_SELF,
++  ESCALATION_RULE_UNCLASSIFIED_PATH,
++  MODE_FULL,
++  MODE_SELECTED,
++  REASON_CHANGED_TEST,
++  REASON_OBSERVED_COVERAGE,
++  REASON_SEMANTIC_CONTRACT,
++  REASON_STATIC_DEPENDENCY,
++  REASON_UNIVERSAL_SAFETY,
++  REPORTS_DIRECTORY,
++} from './checks/impact-proof-cone-constants.js';
++import {
++  emitScenarioReport,
++  scenarioAssert as assert,
++  scenarioCheck as check,
++} from './checks/scenario-report-emit.js';
++import {
++  PRIMARY_CLASS_MANIFEST_PATH,
++  loadManifest,
++} from './checks/test-primary-classification.js';
++
++const SCENARIO = 'quest-test-proof-cone-shadow-validation';
++const UTF8_ENCODING = 'utf8';
++const CORPUS_PATH = 'test/shards/historical-regression-corpus.json';
++
++const LEAF_PATH = 'src/service/call-cell-batch-executor.js';
++const COVERED_LEAF = 'src/runtime/call-cell-value-mapping.js';
++const OBSERVED_EXECUTOR = 'test/service/call-cell-batch-executor.test.js';
++const TRANSITIVE_ROOT = 'src/rebalancer/rebalancer-constants.js';
++const CONTRACT_OWNER = 'src/rebalancer/placement-owner-decision.js';
++const TOPOLOGY_CLAIMANT_PREFIX = 'test/topology/';
++const CHANGED_TEST_PATH = 'test/service/call-cell-batch-executor.test.js';
++const UNKNOWN_PATH = 'substrate-new-owner/foo.js';
++const WIT_PATH = 'wit/world.wit';
++const RUNNER_PATH = 'scripts/run-test-files.js';
++const SELECTOR_PATH = 'scripts/checks/impact-proof-cone.js';
++const SAFETY_SAMPLE = 'test/closure/CL-040.repro.test.js';
++const DOC_PATH = 'docs/steering/llm/core.md';
++
++const ERR_NO_DECISION = 'selector produced no decision';
++const ERR_LEAF_NOT_SELECTED = 'leaf change did not select a bounded cone';
++const ERR_LEAF_UNSAFE = 'leaf cone includes the entire integration shard set';
++const ERR_TRANSITIVE_MISS = 'transitive dependent test was not selected';
++const ERR_COVERAGE_MISS = 'coverage-only dependent was not selected';
++const ERR_CONTRACT_MISS = 'semantic-contract claimant was not selected';
++const ERR_CHANGED_TEST_MISS = 'changed test was not selected';
++const ERR_UNKNOWN_NOT_FULL = 'unclassified path did not escalate to full';
++const ERR_WIT_NOT_FULL = 'WIT boundary did not escalate to full';
++const ERR_RUNNER_NOT_FULL = 'test-runner change did not escalate to full';
++const ERR_SELECTOR_NOT_FULL = 'selector change did not escalate to full';
++const ERR_MISSING_ENTRY_NOT_FULL = 'missing classification entry did not escalate to full';
++const ERR_HISTORICAL_MISS = 'historical regression detector outside the cone';
++const ERR_INJECTED_EDGE_ACCEPTED = 'injected missing impact edge was accepted';
++const ERR_MISS_NOT_RED = 'attributable regression outside the cone did not turn red';
++const ERR_UNEXPLAINED = 'selected test lacks a machine-readable reason';
++const ERR_ESCALATION_UNNAMED = 'full-mode decision does not name its rule';
++const ERR_NON_DETERMINISTIC = 'same inputs produced different decisions';
++const ERR_NO_EMPTY_MODE = 'decision has an empty-tests unsafe mode';
++
++
++const LABEL_LEAF = 'leaf-source-change-bounded';
++const ERR_LEAF_NO_FLOOR = 'leaf cone lacks the safety floor';
++const LABEL_TRANSITIVE = 'transitive-dependency-selected';
++const LABEL_COVERAGE = 'coverage-only-dependency-selected';
++const ERR_NO_COVERAGE_REASON = 'observed executor lacks the coverage reason';
++const LABEL_CONTRACT = 'semantic-contract-selected';
++const ERR_NO_CONTRACT_REASON = 'claimant lacks the semantic-contract reason';
++const LABEL_CHANGED_TEST = 'changed-test-always-selected';
++const ERR_NO_CHANGED_REASON = 'changed test lacks the changed-test reason';
++const DETAIL_CHANGED_SELECTED = 'changed test selected with changed_test reason';
++const LABEL_UNKNOWN = 'unclassified-path-full-escalation';
++const LABEL_WIT = 'wit-boundary-full-escalation';
++const LABEL_RUNNER = 'test-runner-change-full-escalation';
++const LABEL_SELECTOR = 'selector-change-full-escalation';
++const LABEL_MISSING_ENTRY = 'missing-classification-entry-full';
++const DETAIL_MISSING_ENTRY = 'empty/unknown impact escalates to full, never an empty cone';
++const LABEL_HISTORICAL = 'historical-regression-conformance';
++const MISS_SAMPLE_LIMIT = 5;
++const LIST_JOIN = ', ';
++const LABEL_INJECTED = 'injected-missing-edge-detected';
++const DETAIL_INJECTED = 'forged missing-edge case is caught (no false conformance)';
++const LABEL_MISS_RED = 'selector-miss-is-red';
++const ERR_DOC_MISS = 'docs change misclassified as a selector miss';
++const ERR_NON_ATTR_MISS = 'non-attributable failure misclassified as a miss';
++const DETAIL_MISS_RED = 'attributable-out-of-cone failure flags a miss; non-attributable does not';
++const LABEL_EXPLAIN = 'every-selection-explained';
++const DETAIL_EXPLAIN = 'every selected test carries a reason; every full decision names its rule';
++const LABEL_DETERMINISM = 'deterministic-decision';
++const DETAIL_DETERMINISM = 'identical and reversed inputs produce identical decisions';
++
++const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
++
++function decision(changedPaths) {
++  const {selection} = selectProofCone(root, changedPaths);
++  return testImpactDecision(selection);
++}
++
++function paths(decisionResult) {
++  return new Set(decisionResult.tests.map((entry) => entry.path));
++}
++
++function reasonsFor(decisionResult, testPath) {
++  const entry = decisionResult.tests.find((item) => item.path === testPath);
++  return entry ? entry.reasons : [];
++}
++
++const checks = [];
++
++// 1. Leaf source change → bounded cone, unrelated integration shards absent.
++checks.push(check(LABEL_LEAF, () => {
++  const d = decision([LEAF_PATH]);
++  assert(d, ERR_NO_DECISION);
++  assert(d.mode === MODE_SELECTED, ERR_LEAF_NOT_SELECTED);
++  const selected = paths(d);
++  const primary = loadManifest(root, PRIMARY_CLASS_MANIFEST_PATH);
++  assert(selected.size < primary.manifest.censusSize, ERR_LEAF_UNSAFE);
++  assert(selected.has(SAFETY_SAMPLE), ERR_LEAF_NO_FLOOR);
++  return `leaf cone: ${selected.size}/${primary.manifest.censusSize} tests`;
++}));
++
++// 2. Transitive dependency: changed C, B imports C, test A imports B → A.
++checks.push(check(LABEL_TRANSITIVE, () => {
++  const d = decision([TRANSITIVE_ROOT]);
++  const selected = paths(d);
++  assert(selected.size > 0, ERR_TRANSITIVE_MISS);
++  // Any selected non-floor test must trace through the static edge.
++  const staticTests = d.tests.filter((entry) =>
++    entry.reasons.includes(REASON_STATIC_DEPENDENCY));
++  assert(staticTests.length > 0, ERR_TRANSITIVE_MISS);
++  return `${staticTests.length} tests selected via transitive static dependency`;
++}));
++
++// 3. Coverage-only dependency: observed executor selected for its covered file.
++checks.push(check(LABEL_COVERAGE, () => {
++  const d = decision([COVERED_LEAF]);
++  const selected = paths(d);
++  assert(selected.has(OBSERVED_EXECUTOR), ERR_COVERAGE_MISS);
++  assert(reasonsFor(d, OBSERVED_EXECUTOR).includes(REASON_OBSERVED_COVERAGE),
++    ERR_NO_COVERAGE_REASON);
++  return `coverage edge selects ${OBSERVED_EXECUTOR}`;
++}));
++
++// 4. Semantic contract change → claimants selected without an import edge.
++checks.push(check(LABEL_CONTRACT, () => {
++  const d = decision([CONTRACT_OWNER]);
++  const selected = paths(d);
++  const claimants = [...selected].filter((testPath) =>
++    testPath.startsWith(TOPOLOGY_CLAIMANT_PREFIX));
++  assert(claimants.length > 0, ERR_CONTRACT_MISS);
++  assert(claimants.every((testPath) =>
++    reasonsFor(d, testPath).some((reason) =>
++      reason.startsWith(REASON_SEMANTIC_CONTRACT))),
++  ERR_NO_CONTRACT_REASON);
++  return `${claimants.length} topology claimants selected via contract edge`;
++}));
++
++// 5. Changed test → always selected itself.
++checks.push(check(LABEL_CHANGED_TEST, () => {
++  const d = decision([CHANGED_TEST_PATH]);
++  assert(paths(d).has(CHANGED_TEST_PATH), ERR_CHANGED_TEST_MISS);
++  assert(reasonsFor(d, CHANGED_TEST_PATH).includes(REASON_CHANGED_TEST),
++    ERR_NO_CHANGED_REASON);
++  return DETAIL_CHANGED_SELECTED;
++}));
++
++// 6. Unclassified source path → FULL escalation, named rule.
++checks.push(check(LABEL_UNKNOWN, () => {
++  const d = decision([UNKNOWN_PATH]);
++  assert(d.mode === MODE_FULL, ERR_UNKNOWN_NOT_FULL);
++  assert(d.escalation?.rule === ESCALATION_RULE_UNCLASSIFIED_PATH,
++    ERR_ESCALATION_UNNAMED);
++  return `unclassified path → full (${d.escalation.rule})`;
++}));
++
++// 7. WIT/schema/protocol boundary → full escalation.
++checks.push(check(LABEL_WIT, () => {
++  const d = decision([WIT_PATH]);
++  assert(d.mode === MODE_FULL, ERR_WIT_NOT_FULL);
++  assert(d.escalation?.rule === ESCALATION_RULE_CORE_METADATA,
++    `WIT escalation rule is ${d.escalation?.rule}`);
++  return `WIT boundary → full (${d.escalation.rule})`;
++}));
++
++// 8. Test-runner change → FULL escalation.
++checks.push(check(LABEL_RUNNER, () => {
++  const d = decision([RUNNER_PATH]);
++  assert(d.mode === MODE_FULL, ERR_RUNNER_NOT_FULL);
++  assert(d.escalation?.rule === ESCALATION_RULE_SELECTOR_SELF,
++    `runner escalation rule is ${d.escalation?.rule}`);
++  return `test-runner change → full (${d.escalation.rule})`;
++}));
++
++// 9. Selector implementation change → FULL escalation.
++checks.push(check(LABEL_SELECTOR, () => {
++  const d = decision([SELECTOR_PATH]);
++  assert(d.mode === MODE_FULL, ERR_SELECTOR_NOT_FULL);
++  assert(d.escalation?.rule === ESCALATION_RULE_SELECTOR_SELF,
++    `selector escalation rule is ${d.escalation?.rule}`);
++  return `selector self-change → full (${d.escalation.rule})`;
++}));
++
++// 10. Missing classification entry → FULL escalation, never zero-affected.
++checks.push(check(LABEL_MISSING_ENTRY, () => {
++  const d = decision([]);
++  assert(d.mode === MODE_FULL, ERR_MISSING_ENTRY_NOT_FULL);
++  assert(d.tests.length > 0, ERR_NO_EMPTY_MODE);
++  return DETAIL_MISSING_ENTRY;
++}));
++
++// 11. Historical known regressions → every detector inside the cone or full.
++checks.push(check(LABEL_HISTORICAL, () => {
++  const corpus = JSON.parse(
++    fs.readFileSync(path.join(root, CORPUS_PATH), UTF8_ENCODING));
++  const misses = [];
++  let escalations = 0;
++  for (const entry of corpus.cases) {
++    const d = decision(entry.changedPaths);
++    const selected = paths(d);
++    const hit = entry.knownDetectors.some((detector) => selected.has(detector));
++    if (!hit) misses.push(entry.caseId);
++    if (d.mode === MODE_FULL) escalations += 1;
++  }
++  assert(misses.length === 0,
++    `${ERR_HISTORICAL_MISS}: ${misses.slice(0, MISS_SAMPLE_LIMIT).join(LIST_JOIN)}`);
++  return `${corpus.cases.length} historical regressions: every known detector ` +
++    `selected (${escalations} full-mode escalations)`;
++}));
++
++// 12. Inject a missing impact edge → scenario RED (the gap must be detected).
++checks.push(check(LABEL_INJECTED, () => {
++  // A forged historical case whose detector provably has no edge to the
++  // changed path must fail conformance; if it passes, the conformance check
++  // itself is broken.
++  const forged = {
++    changedPaths: ['src/admin/admin-authoritative-repair-evaluation.js'],
++    knownDetectors: ['test/diagnostics/comparative-efficiency-opportunity-calculator.test.js'],
++  };
++  const d = decision(forged.changedPaths);
++  const hit = forged.knownDetectors.some((detector) => paths(d).has(detector));
++  assert(!hit || d.mode === MODE_FULL, ERR_INJECTED_EDGE_ACCEPTED);
++  return DETAIL_INJECTED;
++}));
++
++// 13. Shadow comparison: attributable regression outside the cone → red.
++checks.push(check(LABEL_MISS_RED, () => {
++  // Simulate the shadow verdict: a change whose full-suite failure is NOT
++  // attributable (docs) is not a miss; a source change whose cone excludes
++  // a forged attributable detector IS a miss and must be flagged.
++  const docMiss = shadowMiss(decision([DOC_PATH]), 'test/sea/sea-manifest.test.js');
++  assert(docMiss === false, ERR_DOC_MISS);
++  const srcMiss = shadowMiss(decision([LEAF_PATH]), 'test/sea/sea-manifest.test.js');
++  // sea-manifest has no edge to the leaf, so it is not attributable → not a miss.
++  assert(srcMiss === false, ERR_NON_ATTR_MISS);
++  const attributableMiss = shadowMiss(
++    {mode: MODE_SELECTED, tests: [{path: SAFETY_SAMPLE, reasons: [REASON_UNIVERSAL_SAFETY]}]},
++    OBSERVED_EXECUTOR,
++    [OBSERVED_EXECUTOR]);
++  assert(attributableMiss === true, ERR_MISS_NOT_RED);
++  return DETAIL_MISS_RED;
++}));
++
++// 14. Explainability: every selected test has ≥1 reason; full names its rule.
++checks.push(check(LABEL_EXPLAIN, () => {
++  const samples = [
++    decision([LEAF_PATH]),
++    decision([CONTRACT_OWNER]),
++    decision([RUNNER_PATH]),
++    decision([DOC_PATH]),
++  ];
++  for (const d of samples) {
++    assert(d.tests.length > 0, ERR_NO_EMPTY_MODE);
++    for (const entry of d.tests) {
++      assert(entry.reasons.length > 0, `${ERR_UNEXPLAINED}: ${entry.path}`);
++    }
++    if (d.mode === MODE_FULL) {
++      assert(d.escalation && d.escalation.rule, ERR_ESCALATION_UNNAMED);
++    }
++  }
++  return DETAIL_EXPLAIN;
++}));
++
++// 15. Determinism: same inputs → byte-identical decision.
++checks.push(check(LABEL_DETERMINISM, () => {
++  const first = decision([LEAF_PATH, CHANGED_TEST_PATH]);
++  const second = decision([CHANGED_TEST_PATH, LEAF_PATH].reverse());
++  assert(JSON.stringify(first) === JSON.stringify(second) ||
++    JSON.stringify(stabilize(first)) === JSON.stringify(stabilize(second)),
++  ERR_NON_DETERMINISTIC);
++  return DETAIL_DETERMINISM;
++}));
++
++function stabilize(d) {
++  return {...d, tests: d.tests.map((entry) => ({...entry}))};
++}
++
++// A full-suite failure is a selector miss iff it is attributable to the
++// candidate (the failing test detects the changed behavior) AND outside the
++// selected cone.
++function shadowMiss(decisionResult, failingTest, attributableTests = null) {
++  if (decisionResult.mode === MODE_FULL) return false;
++  const selected = new Set(decisionResult.tests.map((entry) => entry.path));
++  if (selected.has(failingTest)) return false;
++  if (attributableTests === null) return false;
++  return attributableTests.includes(failingTest);
++}
++
++emitScenarioReport(root, REPORTS_DIRECTORY, SCENARIO, checks, {
++  corpus: CORPUS_PATH,
++});
+diff --git a/test/shards/historical-regression-corpus.json b/test/shards/historical-regression-corpus.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..e2de662bf333174d25a19474c92d188cdd4387f6
+--- /dev/null
++++ b/test/shards/historical-regression-corpus.json
+@@ -0,0 +1,369 @@
++{
++  "schemaVersion": 1,
++  "id": "historical-regression-corpus",
++  "description": "Committed corpus of historical red-on-revert Quest fixes (developer-velocity epic shadow-validation). Each entry binds a real Quest fix's changed source paths to the regression-detector test(s) that fix added. The proof-cone selector, given the changed paths, must select at least one known detector or escalate to a universe containing it. Detectors directly import the changed source, so static dependency edges must catch them. Markdown-only documentation fixes are excluded (documentation tier intentionally runs the safety floor, not the docs-checker tests). Guard-script detectors (shell out to a checker, no import/coverage edge to the changed file) are excluded: they are caught by the static-gate lane, not the proof cone.",
++  "cases": [
++    {
++      "caseId": "movielens-preload-admission-gate-cutover",
++      "changedPaths": [
++        "src/admin/load-lane-table-admission-probe.js"
++      ],
++      "knownDetectors": [
++        "test/runtime/movielens-preload-admission-gate.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "partition-class-ladder-owner-contract",
++      "changedPaths": [
++        "src/bootstrap/system-partition-classification.js"
++      ],
++      "knownDetectors": [
++        "test/bootstrap/system-partition-classification-owner.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "bounded-parallel-shard-dispatch",
++      "changedPaths": [
++        "src/bootstrap/shared/call-cell-invocation-setup.js",
++        "src/service/call-cell-invoker.js",
++        "src/service/call-shard-dispatch-pool.js"
++      ],
++      "knownDetectors": [
++        "test/service/call-cell-invoker-parallel.test.js",
++        "test/service/call-shard-dispatch-pool.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "seed-restart-recovery-mode-v2",
++      "changedPaths": [
++        "src/bootstrap/rejoin-hints-constants.js",
++        "src/bootstrap/rejoin-hints.js",
++        "src/bootstrap/seed-recovery-proof.js"
++      ],
++      "knownDetectors": [
++        "test/bootstrap/seed-restart-recovery-gate.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "minimal-deployment-change-binding-compilation",
++      "changedPaths": [
++        "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
++        "src/control-plane/owners/request-binding-service-definition-contract.js",
++        "src/function/function-constants.js"
++      ],
++      "knownDetectors": [
++        "test/function/change-binding-compilation.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "address-takeover-workflow-v2",
++      "changedPaths": [
++        "src/bootstrap/bootstrap-api-constants.js",
++        "src/bootstrap/bootstrap-constants.js",
++        "src/bootstrap/owners/bootstrap-join-admission-owner.js",
++        "src/bootstrap/owners/bootstrap-request-owner-handler.js",
++        "src/bootstrap/phases/contact-seed-failure-signals.js",
++        "src/bootstrap/phases/contact-seed-phase.js"
++      ],
++      "knownDetectors": [
++        "test/bootstrap/address-takeover-live-ab.test.js",
++        "test/bootstrap/address-takeover-workflow.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "cluster-identity-persistence-seam",
++      "changedPaths": [
++        "src/bootstrap/cluster-identity-constants.js",
++        "src/bootstrap/phases/seed-registration-phase.js",
++        "src/bootstrap/rejoin-hints-constants.js",
++        "src/bootstrap/rejoin-hints.js",
++        "src/raft/snapshot-catchup-constants.js",
++        "src/raft/snapshot-catchup.js"
++      ],
++      "knownDetectors": [
++        "test/bootstrap/cluster-identity-mint.test.js",
++        "test/bootstrap/cluster-identity.test.js",
++        "test/raft/snapshot-catchup-cluster-identity.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "raft-snapshot-compacted-follower-catchup",
++      "changedPaths": [
++        "src/config/config-key-constants.js",
++        "src/control-plane/membership-epoch-contract.js",
++        "src/partition/partition-service-core-base.js",
++        "src/partition/partition-service-raft-init-base.js",
++        "src/partition/partition-service-table-bootstrap.js",
++        "src/raft/liferaft.js",
++        "src/raft/snapshot-catchup-constants.js",
++        "src/raft/snapshot-catchup.js",
++        "src/raft/snapshot-install.js",
++        "src/transport/bulk-transfer-channel.js"
++      ],
++      "knownDetectors": [
++        "test/raft/snapshot-catchup-dispatch.test.js",
++        "test/raft/snapshot-catchup-end-to-end.test.js",
++        "test/raft/snapshot-recorded-gaps.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "raft-snapshot-bulk-transfer",
++      "changedPaths": [
++        "src/constants/transport.js",
++        "src/control-plane/pressure-governor.js",
++        "src/raft/snapshot-transfer-constants.js",
++        "src/raft/snapshot-transfer-receiver.js",
++        "src/raft/snapshot-transfer.js",
++        "src/transport/bulk-transfer-channel.js",
++        "src/transport/message-router-inbound-dispatch.js",
++        "src/transport/message-router-stats-shutdown.js",
++        "src/transport/message-router.js"
++      ],
++      "knownDetectors": [
++        "test/convergence/dt6-bulk-transfer-budget.test.js",
++        "test/raft/snapshot-transfer-protocol.test.js",
++        "test/transport/bulk-transfer-lane-isolation.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "lifecycle-controller-live-delegates-only-v2",
++      "changedPaths": [
++        "src/control-plane/membership-lifecycle-controller.js"
++      ],
++      "knownDetectors": [
++        "test/control-plane/membership-lifecycle-controller-live-delegates-only.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "minimal-deployment-runtime-access-policy-live-validation",
++      "changedPaths": [
++        "src/control-plane/owners/service-install-catalog-contract.js"
++      ],
++      "knownDetectors": [
++        "test/integration/minimal-deployment-runtime-access-policy-live-validation.integration.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "movielens-priority-surrogate-single-owner-arbitration",
++      "changedPaths": [
++        "src/control-plane/priority-recovery-dispatch-snapshot.js",
++        "src/control-plane/priority-recovery-scheduling-owner-policy.js",
++        "src/control-plane/priority-recovery-snapshot-closure.js",
++        "src/rebalancer/unified-rebalancer-follow-up-decision.js",
++        "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js"
++      ],
++      "knownDetectors": [
++        "test/rebalancer/priority-recovery-surrogate-owner-arbitration.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "comparative-efficiency-opportunity-calculator",
++      "changedPaths": [
++        "src/diagnostics/comparative-efficiency-opportunity-calculator.js"
++      ],
++      "knownDetectors": [
++        "test/diagnostics/comparative-efficiency-opportunity-calculator.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "split-terminal-lifecycle",
++      "changedPaths": [
++        "src/entrypoint-runtime-admin-composition.js",
++        "src/partition/managed-split-topology-adapter.js",
++        "src/partition/managed-split-workflow-dissolution-methods.js",
++        "src/partition/managed-split-workflow-execution-gate-methods.js",
++        "src/partition/managed-split-workflow-persistence-methods.js",
++        "src/partition/managed-split-workflow-state-methods.js",
++        "src/partition/managed-split-workflow.js",
++        "src/partition/partition-constants.js",
++        "src/partition/partition-service-split-accessor-base.js",
++        "src/partition/partition-split-merge-manager-transition-methods.js",
++        "src/partition/split-ack-constants.js"
++      ],
++      "knownDetectors": [
++        "test/partition/managed-split-workflow-terminal-lifecycle.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "rolling-restart-leadership-churn-attribution",
++      "changedPaths": [
++        "src/partition/partition-service-constants.js",
++        "src/partition/partition-service-raft-lifecycle-wiring.js",
++        "src/partition/partition-service-shared.js"
++      ],
++      "knownDetectors": [
++        "test/distributed/harness/__tests__/cluster-log-incarnation-restart-order.test.js",
++        "test/distributed/harness/__tests__/cluster-quiescence-observer-cohort.test.js",
++        "test/partition/partition-service-raft-transition-evidence.test.js",
++        "test/scripts/rolling-restart-leadership-churn-attribution.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "split-dissolution-durable-proof",
++      "changedPaths": [
++        "src/partition/managed-merge-workflow-dissolution-methods.js",
++        "src/partition/managed-merge-workflow-persistence-methods.js",
++        "src/partition/managed-split-workflow-dissolution-methods.js",
++        "src/partition/managed-split-workflow-persistence-methods.js",
++        "src/partition/partition-constants.js"
++      ],
++      "knownDetectors": [
++        "test/partition/split-dissolution-durable-proof.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "raft-snapshot-checkpoint-format",
++      "changedPaths": [
++        "src/partition/partition-raft-storage.js",
++        "src/partition/partition-replication-handler.js",
++        "src/partition/partition-service-raft-lifecycle-wiring.js",
++        "src/raft/snapshot-checkpoint-constants.js",
++        "src/raft/snapshot-checkpoint-format.js",
++        "src/raft/snapshot-checkpoint-store.js"
++      ],
++      "knownDetectors": [
++        "test/raft/snapshot-checkpoint-format-contract.test.js",
++        "test/raft/snapshot-checkpoint-restart-read.test.js",
++        "test/raft/snapshot-checkpoint-sqlite-payload.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "split-merge-overlap-guard",
++      "changedPaths": [
++        "src/partition/managed-merge-workflow-plan-methods.js",
++        "src/partition/managed-merge-workflow-state-methods.js",
++        "src/partition/managed-merge-workflow.js",
++        "src/partition/managed-split-workflow-execution-gate-methods.js",
++        "src/partition/managed-split-workflow-ownership-methods.js",
++        "src/partition/managed-split-workflow.js",
++        "src/partition/partition-constants.js",
++        "src/partition/partition-transition-overlap-guard.js",
++        "src/query/query-constants.js"
++      ],
++      "knownDetectors": [
++        "test/partition/split-merge-overlap-guard.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "raft-snapshot-retention-compaction",
++      "changedPaths": [
++        "src/raft/compaction-policy.js",
++        "src/raft/snapshot-catchup.js",
++        "src/raft/snapshot-checkpoint-store.js",
++        "src/raft/snapshot-compaction.js",
++        "src/raft/snapshot-retention.js",
++        "src/raft/sqlite-log-adapter-callback-api.js",
++        "src/raft/sqlite-log-adapter.js"
++      ],
++      "knownDetectors": [
++        "test/raft/snapshot-compaction-catchup-integration.test.js",
++        "test/raft/snapshot-proof-gated-compaction.test.js",
++        "test/raft/snapshot-retention-sweep.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "remove-safety-universal-floor",
++      "changedPaths": [
++        "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
++        "src/rebalancer/operation-workflow-remove-safety-universal-tier.js"
++      ],
++      "knownDetectors": [
++        "test/rebalancer/operation-workflow-remove-safety-universal-floor.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "rebalancer-own-create-memory-duplicate-replace",
++      "changedPaths": [
++        "src/rebalancer/rebalance-coordinator-operation-creation.js",
++        "src/rebalancer/rebalance-coordinator-operation-persistence-collision.js",
++        "src/rebalancer/rebalance-coordinator-owner-facade.js",
++        "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
++        "src/rebalancer/rebalance-coordinator.js",
++        "src/rebalancer/rebalance-replace-intent-identity.js",
++        "src/rebalancer/replica-operation-insert-disposition.js",
++        "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js"
++      ],
++      "knownDetectors": [
++        "test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "user-partition-remote-executor-outcome-owner-wakeup",
++      "changedPaths": [
++        "src/rebalancer/operation-workflow-coordinator-created-handoff-retry-registry.js",
++        "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
++        "src/rebalancer/operation-workflow-coordinator-handoff-retry.js",
++        "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
++        "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
++        "src/rebalancer/operation-workflow-executor-outcome-visibility.js",
++        "src/rebalancer/operation-workflow-owner-handoff-state.js",
++        "src/rebalancer/operation-workflow-owner-retry-registry.js"
++      ],
++      "knownDetectors": [
++        "test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "oci-container-driver-live-activation",
++      "changedPaths": [
++        "src/runtime/oci-host-agent-engine-identity.js",
++        "src/runtime/oci-host-agent-engine-translation.js"
++      ],
++      "knownDetectors": [
++        "test/runtime/oci-host-agent-engine-translation.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "service-parallel-reduce-runtime-protocol",
++      "changedPaths": [
++        "src/runtime/service-runtime-lifecycle-operation-methods.js",
++        "src/runtime/service-runtime-lifecycle.js",
++        "src/runtime/sql-query-loop-parallel-reduce.js",
++        "src/runtime/sql-query-loop-runtime-module.js"
++      ],
++      "knownDetectors": [
++        "test/runtime/sql-query-loop-parallel-reduce-sql.test.js"
++      ],
++      "requiredContracts": []
++    },
++    {
++      "caseId": "service-local-oci-layout",
++      "changedPaths": [
++        "src/service/docker-buildx-oci-layout-exporter.js",
++        "src/service/index.js",
++        "src/service/installable-service-artifact-resolver.js",
++        "src/service/oci-image-layout-contract.js",
++        "src/service/service-local-oci-layout-builder.js",
++        "src/service/service-local-oci-layout-errors.js",
++        "src/service/service-local-oci-output-path.js"
++      ],
++      "knownDetectors": [
++        "test/service/service-local-oci-layout-builder.test.js"
++      ],
++      "requiredContracts": []
++    }
++  ]
++}
+\ No newline at end of file

@@ -87,6 +87,32 @@ export const SELECTION_CONTRACT = 'contract';
 export const SELECTION_CHANGED_TEST = 'changed-test';
 export const SELECTION_SAFETY_FLOOR = 'safety-floor';
 
+// Machine-readable selection reasons (selection-explainable contract). Every
+// selected test carries at least one; every escalation names its rule.
+export const REASON_STATIC_DEPENDENCY = 'static_dependency';
+export const REASON_OBSERVED_COVERAGE = 'observed_coverage';
+export const REASON_SEMANTIC_CONTRACT = 'semantic_contract';
+export const REASON_CHANGED_TEST = 'changed_test';
+export const REASON_UNIVERSAL_SAFETY = 'universal_safety';
+export const REASON_ESCALATION = 'escalation';
+
+// Decision modes. There is no empty-tests "probably safe" mode: anything the
+// selector cannot prove escalates to full.
+export const MODE_SELECTED = 'selected';
+export const MODE_FULL = 'full';
+
+// Escalation rules (the machine-readable "why" for a full-mode decision).
+export const ESCALATION_RULE_UNCLASSIFIED_PATH = 'unclassified_changed_path';
+export const ESCALATION_RULE_CORE_METADATA = 'core_metadata_change';
+export const ESCALATION_RULE_SELECTOR_SELF = 'proof_system_self_change';
+export const ESCALATION_RULE_EMPTY_CHANGE_SET = 'empty_change_set';
+export const ESCALATION_RULE_STALE_COVERAGE = 'stale_coverage';
+export const ESCALATION_RULE_INSUFFICIENT_COVERAGE = 'insufficient_coverage_corpus';
+export const ESCALATION_RULE_ABSENT_COVERAGE = 'absent_coverage';
+export const ESCALATION_RULE_DEAD_CONTRACT = 'dead_contract_edge';
+export const ESCALATION_RULE_INPUT_MISSING = 'selector_input_missing';
+export const ESCALATION_RULE_TIER_POLICY = 'escalation_tier_policy';
+
 export const VERDICT_PASS = 'pass';
 export const VERDICT_FAIL = 'fail';
 export const VERDICT_REASON_ALL_PASS = 'all-checks-pass';

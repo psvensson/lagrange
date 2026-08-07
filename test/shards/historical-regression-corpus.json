@@ -1,0 +1,369 @@
+{
+  "schemaVersion": 1,
+  "id": "historical-regression-corpus",
+  "description": "Committed corpus of historical red-on-revert Quest fixes (developer-velocity epic shadow-validation). Each entry binds a real Quest fix's changed source paths to the regression-detector test(s) that fix added. The proof-cone selector, given the changed paths, must select at least one known detector or escalate to a universe containing it. Detectors directly import the changed source, so static dependency edges must catch them. Markdown-only documentation fixes are excluded (documentation tier intentionally runs the safety floor, not the docs-checker tests). Guard-script detectors (shell out to a checker, no import/coverage edge to the changed file) are excluded: they are caught by the static-gate lane, not the proof cone.",
+  "cases": [
+    {
+      "caseId": "movielens-preload-admission-gate-cutover",
+      "changedPaths": [
+        "src/admin/load-lane-table-admission-probe.js"
+      ],
+      "knownDetectors": [
+        "test/runtime/movielens-preload-admission-gate.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "partition-class-ladder-owner-contract",
+      "changedPaths": [
+        "src/bootstrap/system-partition-classification.js"
+      ],
+      "knownDetectors": [
+        "test/bootstrap/system-partition-classification-owner.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "bounded-parallel-shard-dispatch",
+      "changedPaths": [
+        "src/bootstrap/shared/call-cell-invocation-setup.js",
+        "src/service/call-cell-invoker.js",
+        "src/service/call-shard-dispatch-pool.js"
+      ],
+      "knownDetectors": [
+        "test/service/call-cell-invoker-parallel.test.js",
+        "test/service/call-shard-dispatch-pool.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "seed-restart-recovery-mode-v2",
+      "changedPaths": [
+        "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/rejoin-hints.js",
+        "src/bootstrap/seed-recovery-proof.js"
+      ],
+      "knownDetectors": [
+        "test/bootstrap/seed-restart-recovery-gate.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "minimal-deployment-change-binding-compilation",
+      "changedPaths": [
+        "src/bootstrap/shared/runtime-service-rebalancer-setup.js",
+        "src/control-plane/owners/request-binding-service-definition-contract.js",
+        "src/function/function-constants.js"
+      ],
+      "knownDetectors": [
+        "test/function/change-binding-compilation.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "address-takeover-workflow-v2",
+      "changedPaths": [
+        "src/bootstrap/bootstrap-api-constants.js",
+        "src/bootstrap/bootstrap-constants.js",
+        "src/bootstrap/owners/bootstrap-join-admission-owner.js",
+        "src/bootstrap/owners/bootstrap-request-owner-handler.js",
+        "src/bootstrap/phases/contact-seed-failure-signals.js",
+        "src/bootstrap/phases/contact-seed-phase.js"
+      ],
+      "knownDetectors": [
+        "test/bootstrap/address-takeover-live-ab.test.js",
+        "test/bootstrap/address-takeover-workflow.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "cluster-identity-persistence-seam",
+      "changedPaths": [
+        "src/bootstrap/cluster-identity-constants.js",
+        "src/bootstrap/phases/seed-registration-phase.js",
+        "src/bootstrap/rejoin-hints-constants.js",
+        "src/bootstrap/rejoin-hints.js",
+        "src/raft/snapshot-catchup-constants.js",
+        "src/raft/snapshot-catchup.js"
+      ],
+      "knownDetectors": [
+        "test/bootstrap/cluster-identity-mint.test.js",
+        "test/bootstrap/cluster-identity.test.js",
+        "test/raft/snapshot-catchup-cluster-identity.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "raft-snapshot-compacted-follower-catchup",
+      "changedPaths": [
+        "src/config/config-key-constants.js",
+        "src/control-plane/membership-epoch-contract.js",
+        "src/partition/partition-service-core-base.js",
+        "src/partition/partition-service-raft-init-base.js",
+        "src/partition/partition-service-table-bootstrap.js",
+        "src/raft/liferaft.js",
+        "src/raft/snapshot-catchup-constants.js",
+        "src/raft/snapshot-catchup.js",
+        "src/raft/snapshot-install.js",
+        "src/transport/bulk-transfer-channel.js"
+      ],
+      "knownDetectors": [
+        "test/raft/snapshot-catchup-dispatch.test.js",
+        "test/raft/snapshot-catchup-end-to-end.test.js",
+        "test/raft/snapshot-recorded-gaps.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "raft-snapshot-bulk-transfer",
+      "changedPaths": [
+        "src/constants/transport.js",
+        "src/control-plane/pressure-governor.js",
+        "src/raft/snapshot-transfer-constants.js",
+        "src/raft/snapshot-transfer-receiver.js",
+        "src/raft/snapshot-transfer.js",
+        "src/transport/bulk-transfer-channel.js",
+        "src/transport/message-router-inbound-dispatch.js",
+        "src/transport/message-router-stats-shutdown.js",
+        "src/transport/message-router.js"
+      ],
+      "knownDetectors": [
+        "test/convergence/dt6-bulk-transfer-budget.test.js",
+        "test/raft/snapshot-transfer-protocol.test.js",
+        "test/transport/bulk-transfer-lane-isolation.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "lifecycle-controller-live-delegates-only-v2",
+      "changedPaths": [
+        "src/control-plane/membership-lifecycle-controller.js"
+      ],
+      "knownDetectors": [
+        "test/control-plane/membership-lifecycle-controller-live-delegates-only.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "minimal-deployment-runtime-access-policy-live-validation",
+      "changedPaths": [
+        "src/control-plane/owners/service-install-catalog-contract.js"
+      ],
+      "knownDetectors": [
+        "test/integration/minimal-deployment-runtime-access-policy-live-validation.integration.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "movielens-priority-surrogate-single-owner-arbitration",
+      "changedPaths": [
+        "src/control-plane/priority-recovery-dispatch-snapshot.js",
+        "src/control-plane/priority-recovery-scheduling-owner-policy.js",
+        "src/control-plane/priority-recovery-snapshot-closure.js",
+        "src/rebalancer/unified-rebalancer-follow-up-decision.js",
+        "src/rebalancer/unified-rebalancer-priority-recovery-follow-up-decisions.js"
+      ],
+      "knownDetectors": [
+        "test/rebalancer/priority-recovery-surrogate-owner-arbitration.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "comparative-efficiency-opportunity-calculator",
+      "changedPaths": [
+        "src/diagnostics/comparative-efficiency-opportunity-calculator.js"
+      ],
+      "knownDetectors": [
+        "test/diagnostics/comparative-efficiency-opportunity-calculator.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "split-terminal-lifecycle",
+      "changedPaths": [
+        "src/entrypoint-runtime-admin-composition.js",
+        "src/partition/managed-split-topology-adapter.js",
+        "src/partition/managed-split-workflow-dissolution-methods.js",
+        "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-persistence-methods.js",
+        "src/partition/managed-split-workflow-state-methods.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/partition-constants.js",
+        "src/partition/partition-service-split-accessor-base.js",
+        "src/partition/partition-split-merge-manager-transition-methods.js",
+        "src/partition/split-ack-constants.js"
+      ],
+      "knownDetectors": [
+        "test/partition/managed-split-workflow-terminal-lifecycle.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "rolling-restart-leadership-churn-attribution",
+      "changedPaths": [
+        "src/partition/partition-service-constants.js",
+        "src/partition/partition-service-raft-lifecycle-wiring.js",
+        "src/partition/partition-service-shared.js"
+      ],
+      "knownDetectors": [
+        "test/distributed/harness/__tests__/cluster-log-incarnation-restart-order.test.js",
+        "test/distributed/harness/__tests__/cluster-quiescence-observer-cohort.test.js",
+        "test/partition/partition-service-raft-transition-evidence.test.js",
+        "test/scripts/rolling-restart-leadership-churn-attribution.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "split-dissolution-durable-proof",
+      "changedPaths": [
+        "src/partition/managed-merge-workflow-dissolution-methods.js",
+        "src/partition/managed-merge-workflow-persistence-methods.js",
+        "src/partition/managed-split-workflow-dissolution-methods.js",
+        "src/partition/managed-split-workflow-persistence-methods.js",
+        "src/partition/partition-constants.js"
+      ],
+      "knownDetectors": [
+        "test/partition/split-dissolution-durable-proof.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "raft-snapshot-checkpoint-format",
+      "changedPaths": [
+        "src/partition/partition-raft-storage.js",
+        "src/partition/partition-replication-handler.js",
+        "src/partition/partition-service-raft-lifecycle-wiring.js",
+        "src/raft/snapshot-checkpoint-constants.js",
+        "src/raft/snapshot-checkpoint-format.js",
+        "src/raft/snapshot-checkpoint-store.js"
+      ],
+      "knownDetectors": [
+        "test/raft/snapshot-checkpoint-format-contract.test.js",
+        "test/raft/snapshot-checkpoint-restart-read.test.js",
+        "test/raft/snapshot-checkpoint-sqlite-payload.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "split-merge-overlap-guard",
+      "changedPaths": [
+        "src/partition/managed-merge-workflow-plan-methods.js",
+        "src/partition/managed-merge-workflow-state-methods.js",
+        "src/partition/managed-merge-workflow.js",
+        "src/partition/managed-split-workflow-execution-gate-methods.js",
+        "src/partition/managed-split-workflow-ownership-methods.js",
+        "src/partition/managed-split-workflow.js",
+        "src/partition/partition-constants.js",
+        "src/partition/partition-transition-overlap-guard.js",
+        "src/query/query-constants.js"
+      ],
+      "knownDetectors": [
+        "test/partition/split-merge-overlap-guard.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "raft-snapshot-retention-compaction",
+      "changedPaths": [
+        "src/raft/compaction-policy.js",
+        "src/raft/snapshot-catchup.js",
+        "src/raft/snapshot-checkpoint-store.js",
+        "src/raft/snapshot-compaction.js",
+        "src/raft/snapshot-retention.js",
+        "src/raft/sqlite-log-adapter-callback-api.js",
+        "src/raft/sqlite-log-adapter.js"
+      ],
+      "knownDetectors": [
+        "test/raft/snapshot-compaction-catchup-integration.test.js",
+        "test/raft/snapshot-proof-gated-compaction.test.js",
+        "test/raft/snapshot-retention-sweep.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "remove-safety-universal-floor",
+      "changedPaths": [
+        "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
+        "src/rebalancer/operation-workflow-remove-safety-universal-tier.js"
+      ],
+      "knownDetectors": [
+        "test/rebalancer/operation-workflow-remove-safety-universal-floor.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "rebalancer-own-create-memory-duplicate-replace",
+      "changedPaths": [
+        "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "src/rebalancer/rebalance-coordinator-operation-persistence-collision.js",
+        "src/rebalancer/rebalance-coordinator-owner-facade.js",
+        "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
+        "src/rebalancer/rebalance-coordinator.js",
+        "src/rebalancer/rebalance-replace-intent-identity.js",
+        "src/rebalancer/replica-operation-insert-disposition.js",
+        "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js"
+      ],
+      "knownDetectors": [
+        "test/rebalancer/rebalancer-own-create-memory-duplicate-replace.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "user-partition-remote-executor-outcome-owner-wakeup",
+      "changedPaths": [
+        "src/rebalancer/operation-workflow-coordinator-created-handoff-retry-registry.js",
+        "src/rebalancer/operation-workflow-coordinator-created-handoff-scheduling.js",
+        "src/rebalancer/operation-workflow-coordinator-handoff-retry.js",
+        "src/rebalancer/operation-workflow-dispatch-rearm-evidence.js",
+        "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
+        "src/rebalancer/operation-workflow-executor-outcome-visibility.js",
+        "src/rebalancer/operation-workflow-owner-handoff-state.js",
+        "src/rebalancer/operation-workflow-owner-retry-registry.js"
+      ],
+      "knownDetectors": [
+        "test/rebalancer/coordinator-created-user-partition-remote-outcome.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "oci-container-driver-live-activation",
+      "changedPaths": [
+        "src/runtime/oci-host-agent-engine-identity.js",
+        "src/runtime/oci-host-agent-engine-translation.js"
+      ],
+      "knownDetectors": [
+        "test/runtime/oci-host-agent-engine-translation.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "service-parallel-reduce-runtime-protocol",
+      "changedPaths": [
+        "src/runtime/service-runtime-lifecycle-operation-methods.js",
+        "src/runtime/service-runtime-lifecycle.js",
+        "src/runtime/sql-query-loop-parallel-reduce.js",
+        "src/runtime/sql-query-loop-runtime-module.js"
+      ],
+      "knownDetectors": [
+        "test/runtime/sql-query-loop-parallel-reduce-sql.test.js"
+      ],
+      "requiredContracts": []
+    },
+    {
+      "caseId": "service-local-oci-layout",
+      "changedPaths": [
+        "src/service/docker-buildx-oci-layout-exporter.js",
+        "src/service/index.js",
+        "src/service/installable-service-artifact-resolver.js",
+        "src/service/oci-image-layout-contract.js",
+        "src/service/service-local-oci-layout-builder.js",
+        "src/service/service-local-oci-layout-errors.js",
+        "src/service/service-local-oci-output-path.js"
+      ],
+      "knownDetectors": [
+        "test/service/service-local-oci-layout-builder.test.js"
+      ],
+      "requiredContracts": []
+    }
+  ]
+}
