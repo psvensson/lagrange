@@ -7,24 +7,20 @@
 // runner.
 
 import {spawnSync} from 'node:child_process';
-import fs from 'node:fs';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {
-  OUTCOME_FAIL,
-  OUTCOME_PASS,
   PROBLEM_JOIN_SEPARATOR,
   REPORTS_DIRECTORY,
   SELECTION_SAFETY_FLOOR,
-  TAP_NOT_OK,
-  TAP_OK,
-  VERDICT_FAIL,
-  VERDICT_PASS,
-  VERDICT_REASON_ALL_PASS,
-  VERDICT_REASON_CHECK_FAILED,
 } from './checks/impact-proof-cone-constants.js';
 import {landingReviewPreflight} from './solve/landing-preflight.js';
+import {
+  emitScenarioReport,
+  scenarioAssert as assert,
+  scenarioCheck as check,
+} from './checks/scenario-report-emit.js';
 import {
   PRIMARY_CLASS_MANIFEST_PATH,
   loadManifest,
@@ -70,20 +66,6 @@ const ERR_NO_GRAPH_DIGEST = 'receipt lacks the import-graph digest';
 const ERR_NO_FRESHNESS = 'receipt lacks the coverage freshness marker';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
-const reportDir = path.join(root, REPORTS_DIRECTORY);
-
-function check(label, fn) {
-  try {
-    const detail = fn();
-    return {label, passed: true, detail};
-  } catch (error) {
-    return {label, passed: false, detail: error.message};
-  }
-}
-
-function assert(condition, message) {
-  if (!condition) throw new Error(message);
-}
 
 function manifestFor(changedPaths) {
   return {
@@ -167,35 +149,4 @@ checks.push(check(LABEL_RECEIPT_AUDITABLE, () => {
   return `receipt records why each proof is relevant: ${rationale}`;
 }));
 
-const failed = checks.filter((entry) => !entry.passed).length;
-const passed = failed === 0;
-const report = {
-  timestamp: new Date().toISOString(),
-  scenario: SCENARIO,
-  summary: {total: checks.length, passed: checks.length - failed, failed},
-  optimizationSummary: {totalPriorityItems: failed},
-  standardSummary: {
-    scenarios: [{
-      scenario: SCENARIO,
-      passed,
-      current: {
-        passed,
-        verdict: passed ? VERDICT_PASS : VERDICT_FAIL,
-        verdictReason: passed ? VERDICT_REASON_ALL_PASS : VERDICT_REASON_CHECK_FAILED,
-      },
-      detail: {checks},
-    }],
-  },
-};
-
-fs.mkdirSync(reportDir, {recursive: true});
-const reportPath = path.join(
-  reportDir, `${SCENARIO}-${report.timestamp.replace(/[:.]/g, '-')}.report.json`);
-fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
-console.log(`${passed ? OUTCOME_PASS : OUTCOME_FAIL} ${SCENARIO}: ` +
-  `${checks.length - failed}/${checks.length} checks`);
-for (const entry of checks) {
-  console.log(`  ${entry.passed ? TAP_OK : TAP_NOT_OK} ${entry.label} - ${entry.detail}`);
-}
-console.log(`report: ${path.relative(root, reportPath)}`);
-process.exitCode = passed ? 0 : 1;
+emitScenarioReport(root, REPORTS_DIRECTORY, SCENARIO, checks);

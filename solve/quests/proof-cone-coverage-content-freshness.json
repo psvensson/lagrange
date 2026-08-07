@@ -1,0 +1,43 @@
+{
+  "id": "proof-cone-coverage-content-freshness",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Coverage-edge freshness is content-based: the proof-cone selector treats an observed-coverage edge as stale only when the bytes of a file it binds actually changed (per-file sha256 recorded at collection), never when the import-graph source digest churns on an unrelated commit; a forged covered-file digest widens the cone fail-closed; unrelated commits leave the snapshot fresh.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/developer-velocity-maintainability-and-product-readiness.md#v4a--impact-graph--proof-cone-owner",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/developer-velocity-maintainability-and-product-readiness.md",
+    "draftedAtCommit": "9bd2cffbbca5605711a6dae6459c597b6dc1cef2"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "proof-cone-coverage-content-freshness",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "proof-cone-coverage-content-freshness-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "proof-cone-coverage-content-freshness",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

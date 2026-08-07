@@ -14,6 +14,7 @@
 // Full-universe collection is intentionally a periodic (nightly/release)
 // operation, never a per-Quest cost.
 
+import crypto from 'node:crypto';
 import {spawnSync} from 'node:child_process';
 import fs from 'node:fs';
 import path from 'node:path';
@@ -45,6 +46,8 @@ const TEST_FILE_SUFFIX = '.test.js';
 const OUT_FLAG = '--out';
 const NEWLINE = '\n';
 const SHARD_FLAG = '--shard';
+const HASH_ALGORITHM = 'sha256';
+const HASH_ENCODING = 'hex';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..', '..');
 
@@ -109,6 +112,20 @@ function sourceDigest(rootDir) {
   return graph.sourceDigest || null;
 }
 
+function collectFileDigests(tests) {
+  const digests = {};
+  for (const covered of Object.values(tests)) {
+    for (const relPath of covered) {
+      if (digests[relPath]) continue;
+      const absolute = path.join(root, relPath);
+      if (!fs.existsSync(absolute)) continue;
+      digests[relPath] = crypto.createHash(HASH_ALGORITHM)
+        .update(fs.readFileSync(absolute)).digest(HASH_ENCODING);
+    }
+  }
+  return digests;
+}
+
 function main() {
   const args = process.argv.slice(2);
   let outPath = PROOF_CONE_COVERAGE_PATH;
@@ -144,6 +161,10 @@ function main() {
     schemaVersion: COVERAGE_SCHEMA_VERSION,
     sourceDigest: sourceDigest(root),
     collectedAt: new Date().toISOString(),
+    // Per-file content digests at collection time: the selector treats an
+    // edge as stale only when the bytes of a file it binds actually change,
+    // so unrelated commits never invalidate the snapshot.
+    fileDigests: collectFileDigests(tests),
     tests,
   };
   const target = path.join(root, outPath);

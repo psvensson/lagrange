@@ -22,6 +22,7 @@
 // manifest digests) so a Quest landing receipt records WHY each proof was
 // relevant.
 
+import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
@@ -89,6 +90,16 @@ const WIT_SUFFIX = '.wit';
 const PROTO_SUFFIX = '.proto';
 const INDEX_FILE_SUFFIX = '/index.js';
 const PUBLIC_API_PATH = 'src/public-api.js';
+
+const HASH_ALGORITHM = 'sha256';
+const HASH_ENCODING = 'hex';
+
+function currentFileDigest(root, relPath) {
+  const absolute = path.join(root, relPath);
+  if (!fs.existsSync(absolute)) return null;
+  return crypto.createHash(HASH_ALGORITHM)
+    .update(fs.readFileSync(absolute)).digest(HASH_ENCODING);
+}
 
 function readJson(root, relPath) {
   const absolute = path.join(root, relPath);
@@ -367,21 +378,39 @@ export function selectProofCone(root, changedPaths) {
 
   const coverageRead = readJson(root, PROOF_CONE_COVERAGE_PATH);
   const coverageSnapshot = coverageRead.ok ? coverageRead.value : null;
+  // Coverage freshness is per-edge, not per-repository: an edge is stale only
+  // when the bytes of a file it binds have actually changed since collection
+  // (the snapshot records a content digest of every covered file at
+  // collection time). The import-graph sourceDigest churns on every src
+  // commit and would otherwise invalidate the whole snapshot daily, so it is
+  // recorded as provenance, never as the freshness oracle.
+  const fileDigests = coverageSnapshot?.fileDigests || {};
   let coverageFresh = false;
   let coverageSufficient = false;
+  let staleEdgeCount = 0;
   if (coverageSnapshot) {
+    const coverageTests = coverageSnapshot.tests || {};
+    for (const covered of Object.values(coverageTests)) {
+      for (const coveredPath of covered) {
+        const recorded = fileDigests[coveredPath];
+        if (recorded && recorded !== currentFileDigest(root, coveredPath)) {
+          staleEdgeCount += 1;
+        }
+      }
+    }
     coverageFresh = coverageSnapshot.schemaVersion === COVERAGE_SCHEMA_VERSION &&
-      coverageSnapshot.sourceDigest === graphRead.value.sourceDigest;
+      staleEdgeCount === 0;
     // The seed snapshot is intentionally a leaf corpus. Coverage can only
     // discharge owner-tier proof obligations once the snapshot covers a
     // meaningful share of the census; below that it cannot prove impact and
     // the cone widens exactly as if it were stale.
-    const coveredShare = Object.keys(coverageSnapshot.tests || {}).length /
+    const coveredShare = Object.keys(coverageTests).length /
       Math.max(1, Object.keys(loadPrimaryManifest(root, PRIMARY_CLASS_MANIFEST_PATH)
         .manifest?.classes || {}).length);
     coverageSufficient = coverageFresh &&
       coveredShare >= COVERAGE_MINIMUM_TEST_SHARE;
     receipt.inputs.coverageTestShare = coveredShare;
+    receipt.inputs.coverageStaleEdges = staleEdgeCount;
   }
   receipt.inputs.coverageDigest = coverageSnapshot ?
     coverageSnapshot.sourceDigest || null : null;

@@ -105,6 +105,7 @@ const GHOST_OWNER_PATH = 'src/ghost-nowhere/';
 const ERR_DEAD_NOT_FULL = 'dead contract edge did not force full suite';
 const ERR_DEAD_UNNAMED = 'dead contract edge was not named in the problems';
 const DETAIL_DEAD_FAILS = 'dead contract owner path widened to the full suite';
+const ERR_NO_FILE_DIGESTS = 'coverage snapshot lacks per-file digests';
 
 function check(label, fn) {
   try {
@@ -211,7 +212,11 @@ checks.push(check(LABEL_UNKNOWN_FULL, () => {
 checks.push(check(LABEL_STALE_COVERAGE_WIDENS, () => {
   const snapshot = JSON.parse(
     fs.readFileSync(path.join(root, PROOF_CONE_COVERAGE_PATH), 'utf8'));
-  snapshot.sourceDigest = STALE_DIGEST_FORGE;
+  // Forge a covered file's content digest: the edge binding that file is now
+  // stale, and an owner-tier change must widen rather than trust it.
+  const digestKeys = Object.keys(snapshot.fileDigests || {});
+  assert(digestKeys.length > 0, ERR_NO_FILE_DIGESTS);
+  snapshot.fileDigests[digestKeys[0]] = STALE_DIGEST_FORGE;
   const tempPath = path.join(root, PROOF_CONE_COVERAGE_PATH);
   const original = fs.readFileSync(tempPath, 'utf8');
   fs.writeFileSync(tempPath, JSON.stringify(snapshot));
