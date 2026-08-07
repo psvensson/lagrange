@@ -10,6 +10,7 @@ import path from 'node:path';
 
 import {importClosureGaps} from './import-closure.js';
 import {staticQualityProblems} from './static-gate.js';
+import {selectProofCone} from '../checks/impact-proof-cone.js';
 
 const CACHE_DIRECTORY = 'solve/state/landing-preflight';
 const CACHE_SCHEMA_VERSION = 1;
@@ -123,9 +124,10 @@ export function landingReviewPreflight(root, manifest) {
   const sourceDigest = manifest.aggregate.fingerprint;
   const key = preflightKey(root, manifest, paths);
   const file = path.join(root, CACHE_DIRECTORY, `${key}.json`);
+  const proofCone = landingProofCone(root, paths, sourceDigest);
   if (readPassingCache(file, key)) {
     return {schemaVersion: CACHE_SCHEMA_VERSION, sourceDigest, paths,
-      status: PREFLIGHT_PASS, cached: true};
+      status: PREFLIGHT_PASS, cached: true, proofCone};
   }
   const problems = staticQualityProblems(root, paths);
   arrayForEach(silentCatchProblems(root, paths), (problem) =>
@@ -144,5 +146,30 @@ export function landingReviewPreflight(root, manifest) {
     status: PREFLIGHT_PASS,
   }, null, 2)}\n`);
   return {schemaVersion: CACHE_SCHEMA_VERSION, sourceDigest, paths,
-    status: PREFLIGHT_PASS, cached: false};
+    status: PREFLIGHT_PASS, cached: false, proofCone};
+}
+
+// The proof cone for the exact aggregate changed paths, derived at review
+// minting and re-derived at verdict recording (assertReviewCurrent re-runs
+// this preflight): the receipt records WHY each selected proof was relevant
+// (escalation tier, per-edge-kind counts, selector version, input digests).
+// Full-suite tiers keep the whole census; the receipt is what makes "we ran
+// the cone" auditable. The selector fails closed, so a selection problem
+// widens to the full census instead of ever narrowing silently. The cone is
+// a pure function of the hashed manifest sourcePaths plus digest-pinned
+// selector inputs, so it is attached to the preflight result rather than
+// hashed into the manifest itself.
+function landingProofCone(root, paths, sourceDigest) {
+  const {selection} = selectProofCone(root, paths);
+  return {
+    selectorVersion: selection.selectorVersion,
+    sourceDigest,
+    escalation: selection.escalation,
+    fullSuite: selection.fullSuite,
+    changedContracts: selection.changedContracts || [],
+    counts: selection.counts,
+    inputs: selection.inputs,
+    selectedTests: selection.selectedTests,
+    problems: selection.problems,
+  };
 }
