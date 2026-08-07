@@ -2,6 +2,9 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {
   OperationWorkflowTransitionOrchestration,
 } from './operation-workflow-transition-orchestration.js';
+import {
+  shouldReleaseReservationForTerminalOutcome,
+} from './operation-workflow-terminal-reservation-release.js';
 
 const {
   ControlPlaneReadinessService,
@@ -212,17 +215,26 @@ class OperationWorkflowTransitionPersistence
   }
 
   /**
-   * Complete an operation successfully.
-   * @param {Object} operation
-   * @return {Promise<void>}
+   * Clear every owner-local retry lane for one terminalizing operation.
+   * @param {Object|null} operation
+   * @private
    */
-  async completeOperation(operation) {
+  clearTerminalOperationRetryState(operation) {
     this.clearDispatchRetry(operation?.operationId);
     this.clearObservedProgressRetry(operation?.operationId, {
       includeDeliveredCreateProgress: true,
     });
     this.clearPriorityActiveReplaceRetry(operation?.operationId || null);
     this.clearExecutorOutcomeRetry(operation?.operationId);
+  }
+
+  /**
+   * Complete an operation successfully.
+   * @param {Object} operation
+   * @return {Promise<void>}
+   */
+  async completeOperation(operation) {
+    this.clearTerminalOperationRetryState(operation);
     const now = Date.now();
     const finalStep =
       operation.type === OperationType.ADD ?
@@ -236,30 +248,13 @@ class OperationWorkflowTransitionPersistence
       return;
     }
     const previousStep = operation.workflowStep;
-    const readinessDecisionDimension =
-      this.resolveOperationReadinessDecisionDimension(operation);
-
-    const targetNodeId = operation.targetNodeId;
-    const targetReadiness = targetNodeId ?
-      this.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
-        decisionDimension: readinessDecisionDimension,
-      }) :
-      null;
-    const readinessSnapshot =
-      ControlPlaneReadinessService.compactSnapshotSummary(
-        targetReadiness,
-        readinessDecisionDimension,
-      );
-    const stepEntry = {
-      step: finalStep,
-      timestamp: now,
+    const stepEntry = this.buildOperationTransitionStepEntry(
+      operation,
+      finalStep,
+      OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
       previousStep,
-      reason: OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
-      ownerKey: operation.operationId,
-    };
-    if (readinessSnapshot) {
-      stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] = readinessSnapshot;
-    }
+      now,
+    );
     const projectedOperation = {
       ...operation,
       workflowStep: finalStep,
@@ -296,7 +291,7 @@ class OperationWorkflowTransitionPersistence
         },
       );
     };
-    const transitionCommitted = await this.executeAtomicTransition(
+    const transitionOutcome = await this.executeAtomicTransition(
       operation,
       finalStep,
       OPERATION_TRANSITION_REASON.OPERATION_COMPLETED,
@@ -312,9 +307,16 @@ class OperationWorkflowTransitionPersistence
       },
     );
 
-    if (!transitionCommitted) {
+    if (!transitionOutcome?.committed) {
       this.clearTransitionRetry(operation.operationId);
-      await this.releaseReservationForOperation(operation);
+      // Release only on a proven terminal: lost-to-other-terminal
+      // (TERMINAL_ADOPTED) or already-same-terminal (IDEMPOTENT_REPLAY).
+      // Unresolved divergence (REFUSED/REINSERTED) keeps the reservation
+      // ACTIVE — the operation is still live and re-driveable (audit
+      // findings 3+11).
+      if (shouldReleaseReservationForTerminalOutcome(transitionOutcome)) {
+        await this.releaseReservationForOperation(operation);
+      }
       this.clearDeferredSafetyBlockState(operation.operationId);
       return;
     }
@@ -362,12 +364,7 @@ class OperationWorkflowTransitionPersistence
    * @return {Promise<void>}
    */
   async failOperation(operation, errorMessage, options = {}) {
-    this.clearDispatchRetry(operation?.operationId);
-    this.clearObservedProgressRetry(operation?.operationId, {
-      includeDeliveredCreateProgress: true,
-    });
-    this.clearPriorityActiveReplaceRetry(operation?.operationId || null);
-    this.clearExecutorOutcomeRetry(operation?.operationId);
+    this.clearTerminalOperationRetryState(operation);
     const now = Date.now();
     if (
       operation.workflowStep === WORKFLOW_STEP.FAILED &&
@@ -393,36 +390,18 @@ class OperationWorkflowTransitionPersistence
     const transitionReason = isSafetyBlocked ?
       OPERATION_TRANSITION_REASON.SAFETY_POLICY_BLOCKED :
       OPERATION_TRANSITION_REASON.OPERATION_FAILED;
-    const readinessDecisionDimension =
-      this.resolveOperationReadinessDecisionDimension(operation);
-
-    const targetNodeId = operation.targetNodeId;
-    const targetReadiness = targetNodeId ?
-      this.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
-        decisionDimension: readinessDecisionDimension,
-      }) :
-      null;
-    const readinessSnapshot =
-      ControlPlaneReadinessService.compactSnapshotSummary(
-        targetReadiness,
-        readinessDecisionDimension,
-      );
-    const failedStepEntry = {
-      step: WORKFLOW_STEP.FAILED,
-      timestamp: now,
+    const failedStepEntry = this.buildOperationTransitionStepEntry(
+      operation,
+      WORKFLOW_STEP.FAILED,
+      transitionReason,
       previousStep,
-      reason: transitionReason,
-      ownerKey: operation.operationId,
-    };
+      now,
+    );
     if (
       options.stepMetadata &&
       typeof options.stepMetadata === OPERATION_WORKFLOW_OWNER_LITERAL.OBJECT
     ) {
       Object.assign(failedStepEntry, options.stepMetadata);
-    }
-    if (readinessSnapshot) {
-      failedStepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] =
-        readinessSnapshot;
     }
     const projectedOperation = {
       ...operation,
@@ -462,7 +441,7 @@ class OperationWorkflowTransitionPersistence
         },
       );
     };
-    const transitionCommitted = await this.executeAtomicTransition(
+    const transitionOutcome = await this.executeAtomicTransition(
       operation,
       WORKFLOW_STEP.FAILED,
       transitionReason,
@@ -478,9 +457,13 @@ class OperationWorkflowTransitionPersistence
       },
     );
 
-    if (!transitionCommitted) {
+    if (!transitionOutcome?.committed) {
       this.clearTransitionRetry(operation.operationId);
-      await this.releaseReservationForOperation(operation);
+      // Same fail-closed release gate as completeOperation: never release
+      // on the unresolved-divergence arm (audit findings 3+11).
+      if (shouldReleaseReservationForTerminalOutcome(transitionOutcome)) {
+        await this.releaseReservationForOperation(operation);
+      }
       this.clearDeferredSafetyBlockState(operation.operationId);
       return;
     }

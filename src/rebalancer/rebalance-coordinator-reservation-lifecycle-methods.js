@@ -1,5 +1,8 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
+  OPERATION_RESERVATION_ATTEMPT_OUTCOME,
+} from './operation-reservation-attempt-outcome.js';
+import {
   trackStorageReservationReconcile,
 } from '../diagnostics/raft-churn-sync-sections.js';
 
@@ -62,7 +65,6 @@ const RESERVATION_ORPHAN_RECONCILE_ACTION_BY_STATE = Object.freeze(
 const {
   DEFAULT_AMPLIFICATION_FACTOR,
   OperationType,
-  resolveEntitySizeBytes,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -90,6 +92,24 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     return (
       operationType === OperationType.ADD ||
       operationType === OperationType.REPLACE
+    );
+  }
+
+  /**
+   * Whether this coordinator can establish storage reservations at all: the
+   * accounting dependency is required to size a reservation insert. Reduced
+   * harnesses constructed without the reservation subsystem report false so
+   * the dispatch-time gate stays disengaged there; a production coordinator
+   * always has the service (creation asserts it for storage-increasing
+   * operations).
+   * @return {boolean}
+   * @private
+   */
+  hasStorageReservationSupport() {
+    return (
+      this.storageAccountingService &&
+      typeof this.storageAccountingService.estimateReplicaBytes ===
+        LOCAL_STR_FUNCTION
     );
   }
 
@@ -155,7 +175,12 @@ class RebalanceCoordinatorReservationLifecycleMethods {
   }
 
   /**
-   * Create a storage reservation atomically with operation creation.
+   * Create the storage reservation backing an operation. The reservation is
+   * written immediately AFTER operation persistence — not atomically with
+   * it — so this method returns a typed disposition instead of silently
+   * swallowing insert failures (audit finding 3): operation creation treats
+   * a failure as fatal and the dispatch-time gate re-attempts through
+   * ensureReservationForOperation before any storage-increasing dispatch.
    * Delegates size estimation to the accounting service, sizing on the
    * partition's REAL size_bytes: the caller that already resolved the
    * size at operation-creation time passes it via
@@ -167,12 +192,15 @@ class RebalanceCoordinatorReservationLifecycleMethods {
    * @param {Object} [options]
    * @param {number} [options.resolvedEntitySizeBytes] - Real size_bytes
    *   resolved before operation creation.
-   * @return {Promise<void>}
+   * @return {Promise<Object>} {outcome, reservationId?, error?} — outcome is
+   *   one of OPERATION_RESERVATION_ATTEMPT_OUTCOME; error is set on FAILED.
    * @private
    */
   async createReservationForOperation(operation, options = {}) {
     if (!this.isStorageIncreasingOperation(operation.type)) {
-      return;
+      return Object.freeze({
+        outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.NOT_REQUIRED,
+      });
     }
     assertCritical(
       this.storageAccountingService &&
@@ -183,19 +211,12 @@ class RebalanceCoordinatorReservationLifecycleMethods {
 
     const entityType = operation.entityType || SERVICE_TYPE.PARTITION;
     const entityId = operation.entityId || operation.partitionId;
-    const sizeBytes = Number.isFinite(
-      Number(options.resolvedEntitySizeBytes),
-    ) ?
-      Number(options.resolvedEntitySizeBytes) :
-      resolveEntitySizeBytes({
-        entityType,
-        entityId,
-        systemTableCache: this.systemTableCache,
-      });
-
-    const estimatedBytes = this.storageAccountingService.estimateReplicaBytes({
+    // Sizing (cache read) is isolated in the entity-size helper; this
+    // method makes only the durable reservation SQL write decision.
+    const estimatedBytes = this.estimateEntityAdmissionBytes({
       entityType,
-      sizeBytes,
+      entityId,
+      resolvedEntitySizeBytes: options.resolvedEntitySizeBytes,
     });
 
     const now = Date.now();
@@ -234,7 +255,11 @@ class RebalanceCoordinatorReservationLifecycleMethods {
           error: result.error,
         },
       );
-      return;
+      return Object.freeze({
+        outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+        reservationId,
+        error: result.error || null,
+      });
     }
 
     this.stats.reservationsCreated++;
@@ -253,20 +278,34 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       targetNodeId: operation.targetNodeId,
       estimatedBytes,
     });
+
+    return Object.freeze({
+      outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.CREATED,
+      reservationId,
+    });
   }
 
   /**
    * Repair the post-persist reservation side effect when a deterministic
    * operation collision reveals that the first creator did not finish its
-   * local handoff. The reservation primary key remains operation-derived, so
-   * concurrent repair attempts converge on the same row.
+   * local handoff, and gate storage-increasing dispatch on an ACTIVE
+   * reservation (audit findings 3+11). The reservation primary key remains
+   * operation-derived, so concurrent repair attempts converge on the same
+   * row.
    * @param {Object} operation - Reused non-terminal operation.
-   * @return {Promise<void>}
+   * @return {Promise<Object>} {outcome, reservationId?, error?} — CREATED
+   *   when the deterministic insert landed, ALREADY_ACTIVE when an ACTIVE
+   *   row already exists, NOT_REQUIRED for non-storage-increasing types,
+   *   FAILED when no ACTIVE reservation could be established (or the
+   *   authoritative read failed — absence of proof is not proof of
+   *   presence).
    * @private
    */
   async ensureReservationForOperation(operation) {
     if (!this.isStorageIncreasingOperation(operation?.type)) {
-      return;
+      return Object.freeze({
+        outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.NOT_REQUIRED,
+      });
     }
     const activeResult = await readAuthoritativeControlPlaneRows(
       this.controlPlaneSystemTableGateway,
@@ -276,9 +315,27 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       STORAGE_RESERVATION_READ_QUERY_OPTIONS,
     );
     if (activeResult.success && activeResult.rows?.length > 0) {
-      return;
+      return Object.freeze({
+        outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.ALREADY_ACTIVE,
+        reservationId: `res-${operation.operationId}`,
+      });
     }
-    await this.createReservationForOperation(operation);
+    if (!activeResult.success) {
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG.RESERVATION_CREATE_FAILED,
+        {
+          operationId: operation.operationId,
+          reservationId: `res-${operation.operationId}`,
+          error: activeResult.error,
+        },
+      );
+      return Object.freeze({
+        outcome: OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED,
+        reservationId: `res-${operation.operationId}`,
+        error: activeResult.error || null,
+      });
+    }
+    return this.createReservationForOperation(operation);
   }
 
   /**

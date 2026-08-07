@@ -51,6 +51,10 @@ class OperationWorkflowOwnerRetryRegistry extends
     this._isInitialized = options.isInitialized;
     this.releaseReservationForOperation =
       options.releaseReservationForOperation;
+    this.ensureReservationForOperation =
+      options.ensureReservationForOperation;
+    this.hasStorageReservationSupport =
+      options.hasStorageReservationSupport;
     this.reconcileReservations = options.reconcileReservations;
     this.allocateCanonicalReplicaId = options.allocateCanonicalReplicaId;
     this.getActualReplicaStatus = options.getActualReplicaStatus;

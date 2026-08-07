@@ -1,5 +1,8 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {
+  OPERATION_RESERVATION_ATTEMPT_OUTCOME,
+} from './operation-reservation-attempt-outcome.js';
+import {
   applyReplaceIntentIdentity,
   buildCoordinatorReplaceIntentIdentity,
   normalizeOperationPersistResult,
@@ -17,6 +20,9 @@ import {UNIFIED_SERVICE_TYPE} from
 const LOCAL_STR_REBALANCECOORDINATOR_IS_SHUTTING_DOWN = 'RebalanceCoordinator is shutting down';
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_FAILED_TO_PRIME_COORDINATOR_CREATED_OPER = 'Failed to prime coordinator-created operation progress';
+const RESERVATION_CREATE_FAILED_FOR_OPERATION_PREFIX =
+  'Storage reservation creation failed for operation ';
+const RESERVATION_INSERT_REJECTED_FALLBACK = 'reservation insert rejected';
 const RUNTIME_TARGET_CLAIM_RETRY_LIMIT = 8;
 const INVALID_RUNTIME_SERVICE_TARGET_IDENTITY =
   'INVALID_RUNTIME_SERVICE_TARGET_IDENTITY';
@@ -825,11 +831,27 @@ class RebalanceCoordinatorOperationCreation {
       operation,
     );
 
-    // Create storage reservation atomically (Req 4.1) reusing the SAME
-    // resolved estimate that admission evaluation saw.
-    await this.createReservationForOperation(operation, {
-      resolvedEntitySizeBytes,
-    });
+    // Create the storage reservation right after operation persistence
+    // (Req 4.1) reusing the SAME resolved estimate that admission
+    // evaluation saw. The write is NOT atomic with the operation insert, so
+    // a reservation failure is fail-closed (audit finding 3): creation
+    // rejects here, and the dispatch-time gate re-attempts the deterministic
+    // insert through ensureReservationForOperation for any row that
+    // predates this guard.
+    const reservationAttempt = await this.createReservationForOperation(
+      operation,
+      {resolvedEntitySizeBytes},
+    );
+    if (
+      reservationAttempt?.outcome ===
+      OPERATION_RESERVATION_ATTEMPT_OUTCOME.FAILED
+    ) {
+      throw new Error(
+        RESERVATION_CREATE_FAILED_FOR_OPERATION_PREFIX +
+          `${operation.operationId}: ` +
+          (reservationAttempt.error || RESERVATION_INSERT_REJECTED_FALLBACK),
+      );
+    }
 
     if (shouldEmitOperationCreated) {
       this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});

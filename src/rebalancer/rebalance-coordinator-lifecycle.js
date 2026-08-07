@@ -307,6 +307,10 @@ class RebalanceCoordinatorLifecycle {
         isInitialized: () => this.initialized,
         releaseReservationForOperation: (op) =>
           this.releaseReservationForOperation(op),
+        ensureReservationForOperation: (op) =>
+          this.ensureReservationForOperation(op),
+        hasStorageReservationSupport: () =>
+          this.hasStorageReservationSupport(),
         reconcileReservations: () => this.reconcileReservations(),
         allocateCanonicalReplicaId: (params) =>
           this.allocateCanonicalReplicaId(params),

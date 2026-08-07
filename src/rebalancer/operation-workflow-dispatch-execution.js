@@ -6,6 +6,9 @@ import * as DISPATCH_WAKE_PREEMPTION
 import * as DISPATCH_RESPONSE_RECONCILE
   from './operation-workflow-dispatch-response-reconcile.js';
 import {
+  ensureDispatchReservationOrSkip,
+} from './operation-workflow-dispatch-reservation-gate.js';
+import {
   OPERATION_OWNER_TURN_POLICY,
 } from './operation-owner-turn-policy.js';
 
@@ -240,6 +243,128 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
   }
 
   /**
+   * Claim one PENDING dispatch candidate into the SENDING lane.
+   * @param {string|Object} operationInput
+   * @param {Object} operation
+   * @return {Promise<Object>} Claimed operation or a typed skip result.
+   * @private
+   */
+  async claimPendingDispatchCandidate(operationInput, operation) {
+    const claimedOperation =
+      await this.claimPendingDispatchOperation(operation, {
+        preserveTransitionRetrySnapshot:
+          this.shouldPreserveDispatchInputForTransitionRetry(operationInput),
+      });
+    if (claimedOperation) {
+      return claimedOperation;
+    }
+    if (this.isOperationDeferredRetryActive(operation.operationId)) {
+      return this.buildSkippedOperationResult(
+        REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+        operation.operationId,
+        {
+          error:
+            OPERATION_WORKFLOW_OWNER_LITERAL
+              .CONTROL_PLANE_PRESSURE_DEGRADED_WHILE_CLAIMING_PRIORITY +
+            OPERATION_WORKFLOW_OWNER_LITERAL
+              .DISPATCH_TRANSITION,
+        },
+      );
+    }
+    return this.buildSkippedOperationResult(
+      OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
+      operation.operationId,
+    );
+  }
+
+  /**
+   * Advance the dispatch candidate's step machine after the reservation
+   * gate cleared it.
+   * @param {string|Object} operationInput
+   * @param {Object} operation
+   * @param {Object} [options]
+   * @return {Promise<Object>}
+   * @private
+   */
+  async advanceDispatchCandidateStep(operationInput, operation, options = {}) {
+    const createRearmDispatchPhase = this.isCreateRearmDispatchPhase(operation);
+    if (
+      this.shouldPreemptCreateRearmWithObservedProgress(
+        operationInput,
+        operation,
+        createRearmDispatchPhase,
+        options,
+      ) &&
+      await this.reconcileDispatchWakeOperationProgress(operation)
+    ) {
+      return this.buildSuccessfulOperationResult(operation.operationId);
+    }
+
+    // Fail-closed reservation gate (audit findings 3+11): after the
+    // progress-preemption lanes (an operation already observed terminal or
+    // claimed elsewhere no longer needs its reservation) and before any
+    // claim/dispatch below — no storage-increasing dispatch proceeds
+    // without an ACTIVE reservation.
+    const reservationGateSkip = await ensureDispatchReservationOrSkip(
+      this,
+      operation,
+    );
+    if (reservationGateSkip) {
+      return reservationGateSkip;
+    }
+    return this.advanceReservationClearedDispatch(operationInput, operation);
+  }
+
+  /**
+   * Route one reservation-cleared dispatch candidate through the
+   * phase/step dispatch machine.
+   * @param {string|Object} operationInput
+   * @param {Object} operation
+   * @return {Promise<Object>}
+   * @private
+   */
+  async advanceReservationClearedDispatch(operationInput, operation) {
+    const replaceRemoveDispatchPhase =
+      this.repository.isReplaceRemoveDispatchPhase(operation);
+    const dispatchableWorkflowStep = operation.workflowStep;
+    const createRearmDispatchPhase = this.isCreateRearmDispatchPhase(operation);
+    if (replaceRemoveDispatchPhase) {
+      if (
+        !REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS.has(dispatchableWorkflowStep)
+      ) {
+        return this.buildSkippedOperationResult(
+          OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
+          operation.operationId,
+        );
+      }
+      return this.executeOperationInternal(operation);
+    }
+    if (dispatchableWorkflowStep === WORKFLOW_STEP.PENDING) {
+      const claimOutcome = await this.claimPendingDispatchCandidate(
+        operationInput,
+        operation,
+      );
+      if (claimOutcome?.skipped === true) {
+        return claimOutcome;
+      }
+      return this.executeOperationInternal(claimOutcome);
+    }
+    if (
+      dispatchableWorkflowStep !== WORKFLOW_STEP.SENDING &&
+      !createRearmDispatchPhase
+    ) {
+      if (await this.reconcileDispatchWakeOperationProgress(operation)) {
+        return this.buildSuccessfulOperationResult(operation.operationId);
+      }
+      return this.buildSkippedOperationResult(
+        OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
+        operation.operationId,
+      );
+    }
+    return this.executeOperationInternal(operation);
+  }
+
+  /**
    * Execute one dispatch attempt after ownership serialization.
    * @param {string|Object} operationInput
    * @return {Promise<Object>}
@@ -262,73 +387,7 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       );
     }
 
-    let dispatchOperation = operation;
-    const replaceRemoveDispatchPhase =
-      this.repository.isReplaceRemoveDispatchPhase(operation);
-    const dispatchableWorkflowStep = operation.workflowStep;
-    const createRearmDispatchPhase = this.isCreateRearmDispatchPhase(operation);
-    if (
-      this.shouldPreemptCreateRearmWithObservedProgress(
-        operationInput,
-        operation,
-        createRearmDispatchPhase,
-        options,
-      ) &&
-      await this.reconcileDispatchWakeOperationProgress(operation)
-    ) {
-      return this.buildSuccessfulOperationResult(operation.operationId);
-    }
-    if (replaceRemoveDispatchPhase) {
-      if (
-        !REMOVE_PHASE_DISPATCH_WORKFLOW_STEPS.has(dispatchableWorkflowStep)
-      ) {
-        return this.buildSkippedOperationResult(
-          OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
-          operation.operationId,
-        );
-      }
-    } else if (dispatchableWorkflowStep === WORKFLOW_STEP.PENDING) {
-      const claimedOperation =
-        await this.claimPendingDispatchOperation(operation, {
-          preserveTransitionRetrySnapshot:
-            this.shouldPreserveDispatchInputForTransitionRetry(operationInput),
-        });
-      if (!claimedOperation) {
-        if (this.isOperationDeferredRetryActive(operation.operationId)) {
-          return this.buildSkippedOperationResult(
-            REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
-            operation.operationId,
-            {
-              error:
-                OPERATION_WORKFLOW_OWNER_LITERAL
-                  .CONTROL_PLANE_PRESSURE_DEGRADED_WHILE_CLAIMING_PRIORITY +
-                OPERATION_WORKFLOW_OWNER_LITERAL
-                  .DISPATCH_TRANSITION,
-            },
-          );
-        }
-        return this.buildSkippedOperationResult(
-          OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
-          operation.operationId,
-        );
-      }
-      dispatchOperation = claimedOperation;
-    } else if (
-      dispatchableWorkflowStep !== WORKFLOW_STEP.SENDING &&
-      !createRearmDispatchPhase
-    ) {
-      if (await this.reconcileDispatchWakeOperationProgress(operation)) {
-        return this.buildSuccessfulOperationResult(operation.operationId);
-      }
-      return {
-        success: false,
-        skipped: true,
-        reason: OPERATION_WORKFLOW_OWNER_REASON.OPERATION_NOT_DISPATCHABLE,
-        operationId: operation.operationId,
-      };
-    }
-
-    return this.executeOperationInternal(dispatchOperation);
+    return this.advanceDispatchCandidateStep(operationInput, operation, options);
   }
 
   /**

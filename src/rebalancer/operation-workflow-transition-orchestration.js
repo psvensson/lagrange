@@ -69,7 +69,13 @@ class OperationWorkflowTransitionOrchestration
    * @param {Object} [options]
    * @param {Function} [options.onIdempotentTransition]
    * @param {Function} [options.afterCommit]
-   * @return {Promise<boolean>} True when this call committed the transition.
+   * @return {Promise<Object>} Typed transition outcome {committed,
+   *   disposition}: committed is true when this call committed the
+   *   transition; disposition is the persist layer's typed update
+   *   disposition when persistFn returned one, null otherwise (idempotent
+   *   local replay or a boolean-shaped persist result). The disposition
+   *   lets terminal callers tell a lost-to-other-terminal outcome apart
+   *   from unresolved divergence (audit findings 3+11).
    */
   async executeAtomicTransition(
     operation,
@@ -79,85 +85,143 @@ class OperationWorkflowTransitionOrchestration
     options = {},
   ) {
     return this.repository.runReplicaOperationTransitionExclusive(
-      async () => {
-        this.ensureOperationWorkflow(operation);
-
-        if (
-          this.operationWorkflowCoordinator.isTransitionIdempotent(
-            operation.operationId,
-            step,
-          )
-        ) {
-          if (typeof options.onIdempotentTransition === 'function') {
-            options.onIdempotentTransition();
-          }
-          return false;
-        }
-
-        const afterCommit =
-          typeof options.afterCommit === 'function' ?
-            options.afterCommit :
-            null;
-        await this.operationWorkflowCoordinator.transitionStep(
-          operation.operationId,
-          {nextStep: step, reason},
-          {},
-          TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
-        );
-        const persistResult = await persistFn();
-        if (
-          persistResult === false ||
-          persistResult?.persisted === false
-        ) {
-          // A lost terminal CAS surfaces the winning terminal row through the
-          // typed disposition (the repository already adopted it into the
-          // projected operation): mirror the winner into the live operation
-          // and clear any armed repair — the loser must never re-assert its
-          // own terminal state (audit finding 6).
-          if (
-            persistResult?.disposition ===
-            REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED &&
-            persistResult?.operation
-          ) {
-            this.adoptWinningTerminalOperationOutcome(
-              operation,
-              persistResult.operation,
-            );
-            clearTerminalTransitionRepair(this, operation.operationId);
-          }
-          return false;
-        }
-        this.operationWorkflowCoordinator.markTransitionCommitted(
-          operation.operationId,
+      async () =>
+        this.runAtomicTransitionUnderLane(
+          operation,
           step,
-        );
-        if (afterCommit) {
-          await afterCommit();
-        }
-        return true;
-      },
+          reason,
+          persistFn,
+          options,
+        ),
       {operation},
     );
   }
 
   /**
-   * Update operation workflow step.
+   * The transition-exclusive body of executeAtomicTransition.
    * @param {Object} operation
    * @param {string} step
-   * @param {string} [reason]
-   * @return {Promise<void>}
+   * @param {string} reason
+   * @param {Function} persistFn
+   * @param {Object} options
+   * @return {Promise<Object>} Typed transition outcome.
+   * @private
    */
-  async updateStep(operation, step, reason) {
-    const previousStep = operation.workflowStep;
-    if (previousStep === step) {
-      return false;
+  async runAtomicTransitionUnderLane(
+    operation,
+    step,
+    reason,
+    persistFn,
+    options,
+  ) {
+    this.ensureOperationWorkflow(operation);
+
+    if (
+      this.operationWorkflowCoordinator.isTransitionIdempotent(
+        operation.operationId,
+        step,
+      )
+    ) {
+      if (typeof options.onIdempotentTransition === 'function') {
+        options.onIdempotentTransition();
+      }
+      return Object.freeze({committed: false, disposition: null});
     }
-    const transitionReason =
-      reason || this.resolveTransitionReason(previousStep, step);
-    const now = Date.now();
+
+    await this.operationWorkflowCoordinator.transitionStep(
+      operation.operationId,
+      {nextStep: step, reason},
+      {},
+      TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
+    );
+    const persistResult = await persistFn();
+    if (
+      persistResult === false ||
+      persistResult?.persisted === false
+    ) {
+      return this.resolveRejectedTransitionPersistOutcome(
+        operation,
+        persistResult,
+      );
+    }
+    this.operationWorkflowCoordinator.markTransitionCommitted(
+      operation.operationId,
+      step,
+    );
+    if (typeof options.afterCommit === 'function') {
+      await options.afterCommit();
+    }
+    return Object.freeze({
+      committed: true,
+      disposition: this.extractPersistOutcomeDisposition(persistResult),
+    });
+  }
+
+  /**
+   * @param {Object|null|boolean} persistResult
+   * @return {string|null}
+   * @private
+   */
+  extractPersistOutcomeDisposition(persistResult) {
+    return typeof persistResult?.disposition === 'string' ?
+      persistResult.disposition :
+      null;
+  }
+
+  /**
+   * A rejected persist either lost the terminal CAS to a DIFFERENT durable
+   * terminal (adopt the winner; never re-assert the losing terminal) or
+   * diverged unresolved. Both arms report the typed disposition so terminal
+   * callers can gate reservation release on the outcome (audit findings
+   * 3+11, 6).
+   * @param {Object} operation
+   * @param {Object|null|boolean} persistResult
+   * @return {Object} Typed transition outcome.
+   * @private
+   */
+  resolveRejectedTransitionPersistOutcome(operation, persistResult) {
+    // A lost terminal CAS surfaces the winning terminal row through the
+    // typed disposition (the repository already adopted it into the
+    // projected operation): mirror the winner into the live operation
+    // and clear any armed repair — the loser must never re-assert its
+    // own terminal state (audit finding 6).
+    if (
+      persistResult?.disposition ===
+      REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED &&
+      persistResult?.operation
+    ) {
+      this.adoptWinningTerminalOperationOutcome(
+        operation,
+        persistResult.operation,
+      );
+      clearTerminalTransitionRepair(this, operation.operationId);
+    }
+    return Object.freeze({
+      committed: false,
+      disposition: this.extractPersistOutcomeDisposition(persistResult),
+    });
+  }
+
+  /**
+   * Build the steps-history entry for one transition, stamping the target
+   * readiness snapshot when available.
+   * @param {Object} operation
+   * @param {string} step
+   * @param {string} transitionReason
+   * @param {string} previousStep
+   * @param {number} now
+   * @return {Object}
+   * @private
+   */
+  buildOperationTransitionStepEntry(
+    operation,
+    step,
+    transitionReason,
+    previousStep,
+    now,
+  ) {
     const readinessDecisionDimension =
       this.resolveOperationReadinessDecisionDimension(operation);
-
     const targetNodeId = operation.targetNodeId;
     const targetReadiness = targetNodeId ?
       this.controlPlaneReadinessService.getNodeReadinessSync(targetNodeId, {
@@ -169,7 +233,6 @@ class OperationWorkflowTransitionOrchestration
         targetReadiness,
         readinessDecisionDimension,
       );
-    const persistedStatus = WORKFLOW_STEP_TO_STATUS[step] || operation.status;
     const stepEntry = {
       step,
       timestamp: now,
@@ -180,6 +243,117 @@ class OperationWorkflowTransitionOrchestration
     if (readinessSnapshot) {
       stepEntry[OPERATION_METADATA_KEY.READINESS_SNAPSHOT] = readinessSnapshot;
     }
+    return stepEntry;
+  }
+
+  /**
+   * Persist one projected step transition, applying the priority dispatch
+   * mutation budget when the partition qualifies and resolving the
+   * expected-step CAS anchor.
+   * @param {Object} operation
+   * @param {Object} projectedOperation
+   * @param {string} previousStep
+   * @param {string} step
+   * @param {number} now
+   * @return {Promise<Object|boolean>}
+   * @private
+   */
+  async persistProjectedStepTransition(
+    operation,
+    projectedOperation,
+    previousStep,
+    step,
+    now,
+  ) {
+    const persistOptions = this.buildOperationTransitionPersistOptions();
+    const budgetedPersistOptions =
+      this.shouldUsePriorityDispatchTransitionMutationBudget(
+        operation,
+        step,
+      ) ?
+        {
+          ...persistOptions,
+          timeoutBudget:
+            this.buildPriorityDispatchTransitionMutationBudget(
+              operation,
+              now,
+            ),
+        } :
+        persistOptions;
+    const expectedWorkflowStep =
+      this.resolveOperationTransitionExpectedWorkflowStep(
+        operation,
+        previousStep,
+        step,
+      );
+    return this.repository.persistOperationUpdate(
+      projectedOperation,
+      {...budgetedPersistOptions, expectedWorkflowStep},
+    );
+  }
+
+  /**
+   * Project one idempotent (locally already-committed) step transition onto
+   * the live operation object.
+   * @param {Object} operation
+   * @param {string} step
+   * @param {string} persistedStatus
+   * @param {Array} currentStepsHistory
+   * @param {number} now
+   * @private
+   */
+  projectIdempotentStepTransition(
+    operation,
+    step,
+    persistedStatus,
+    currentStepsHistory,
+    now,
+  ) {
+    operation.workflowStep = step;
+    operation.status = persistedStatus;
+    const previousUpdatedAt = Number(operation.updatedAt);
+    operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
+      Math.max(previousUpdatedAt, now) :
+      now;
+    operation.stepsHistory = currentStepsHistory;
+    if (step === WORKFLOW_STEP.CREATING) {
+      delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
+    }
+  }
+
+  /**
+   * Update operation workflow step.
+   * @param {Object} operation
+   * @param {string} step
+   * @param {string} [reason]
+   * @return {Promise<void>}
+   */
+  /**
+   * Build the projected operation row for one step transition.
+   * @param {Object} operation
+   * @param {string} step
+   * @param {string} transitionReason
+   * @param {string} previousStep
+   * @param {number} now
+   * @param {string} persistedStatus
+   * @return {Object} {projectedOperation, currentStepsHistory}
+   * @private
+   */
+  buildProjectedStepTransitionOperation(
+    operation,
+    step,
+    transitionReason,
+    previousStep,
+    now,
+    persistedStatus,
+  ) {
+    const stepEntry = this.buildOperationTransitionStepEntry(
+      operation,
+      step,
+      transitionReason,
+      previousStep,
+      now,
+    );
     const currentStepsHistory =
       normalizeOperationWorkflowTransitionStepsHistory(operation);
     const projectedOperation = {
@@ -192,56 +366,52 @@ class OperationWorkflowTransitionOrchestration
         stepEntry,
       ],
     };
-    const projectIdempotentTransition = () => {
-      operation.workflowStep = step;
-      operation.status = persistedStatus;
-      const previousUpdatedAt = Number(operation.updatedAt);
-      operation.updatedAt = Number.isFinite(previousUpdatedAt) ?
-        Math.max(previousUpdatedAt, now) :
-        now;
-      operation.stepsHistory = currentStepsHistory;
-      if (step === WORKFLOW_STEP.CREATING) {
-        delete operation[PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD];
-      }
-    };
+    return {projectedOperation, currentStepsHistory};
+  }
 
-    const usePriorityDispatchTransitionBudget =
-      this.shouldUsePriorityDispatchTransitionMutationBudget(operation, step);
-
-    const persistFn = async () => {
-      const persistOptions = this.buildOperationTransitionPersistOptions();
-      const budgetedPersistOptions =
-        usePriorityDispatchTransitionBudget ?
-          {
-            ...persistOptions,
-            timeoutBudget:
-              this.buildPriorityDispatchTransitionMutationBudget(
-                operation,
-                now,
-              ),
-          } :
-          persistOptions;
-      const expectedWorkflowStep =
-        this.resolveOperationTransitionExpectedWorkflowStep(
-          operation,
-          previousStep,
-          step,
-        );
-      return this.repository.persistOperationUpdate(
-        projectedOperation,
-        {...budgetedPersistOptions, expectedWorkflowStep},
+  async updateStep(operation, step, reason) {
+    const previousStep = operation.workflowStep;
+    if (previousStep === step) {
+      return false;
+    }
+    const transitionReason =
+      reason || this.resolveTransitionReason(previousStep, step);
+    const now = Date.now();
+    const persistedStatus = WORKFLOW_STEP_TO_STATUS[step] || operation.status;
+    const {projectedOperation, currentStepsHistory} =
+      this.buildProjectedStepTransitionOperation(
+        operation,
+        step,
+        transitionReason,
+        previousStep,
+        now,
+        persistedStatus,
       );
-    };
+    const persistFn = async () =>
+      this.persistProjectedStepTransition(
+        operation,
+        projectedOperation,
+        previousStep,
+        step,
+        now,
+      );
 
-    let transitionCommitted;
+    let transitionOutcome;
     try {
-      transitionCommitted = await this.executeAtomicTransition(
+      transitionOutcome = await this.executeAtomicTransition(
         operation,
         step,
         transitionReason,
         persistFn,
         {
-          onIdempotentTransition: projectIdempotentTransition,
+          onIdempotentTransition: () =>
+            this.projectIdempotentStepTransition(
+              operation,
+              step,
+              persistedStatus,
+              currentStepsHistory,
+              now,
+            ),
           afterCommit: async () => {
             await this.confirmCommittedTransitionPersistence(projectedOperation);
           },
@@ -266,13 +436,48 @@ class OperationWorkflowTransitionOrchestration
       return true;
     }
 
-    if (!transitionCommitted) {
+    if (!transitionOutcome?.committed) {
       if (step !== WORKFLOW_STEP.ACTIVE) {
         this.clearPriorityActiveReplaceRetry(operation?.operationId || null);
       }
       return false;
     }
 
+    this.commitProjectedStepTransition(
+      operation,
+      projectedOperation,
+      step,
+      persistedStatus,
+      transitionReason,
+      previousStep,
+      now,
+    );
+
+    return true;
+  }
+
+  /**
+   * Commit one persisted step transition onto the live operation object:
+   * clear the retry lanes, project the durable fields, and emit the
+   * STEP_CHANGED log/event pair.
+   * @param {Object} operation
+   * @param {Object} projectedOperation
+   * @param {string} step
+   * @param {string} persistedStatus
+   * @param {string} transitionReason
+   * @param {string} previousStep
+   * @param {number} now
+   * @private
+   */
+  commitProjectedStepTransition(
+    operation,
+    projectedOperation,
+    step,
+    persistedStatus,
+    transitionReason,
+    previousStep,
+    now,
+  ) {
     this.clearTransitionRetry(operation.operationId);
     if (step !== WORKFLOW_STEP.ACTIVE) {
       this.clearPriorityActiveReplaceRetry(operation.operationId);
@@ -300,8 +505,6 @@ class OperationWorkflowTransitionOrchestration
       newStep: step,
       reason: transitionReason,
     });
-
-    return true;
   }
 
   /**

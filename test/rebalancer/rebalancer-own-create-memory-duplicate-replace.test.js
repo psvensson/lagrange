@@ -91,13 +91,14 @@ function configureCoordinator(coordinator, options = {}) {
   coordinator.buildOperationBootstrapTopology = () => null;
   coordinator.createReservationForOperation = async (operation) => {
     if (options.gateway.reservations.has(operation.operationId)) {
-      return;
+      return {outcome: 'already_active'};
     }
     options.gateway.reservations.set(operation.operationId, {
       operation_id: operation.operationId,
       status: 'active',
     });
     counters.reservations++;
+    return {outcome: 'created'};
   };
   coordinator.queryShutdownIncompleteOperations = async () => [];
   return counters;
