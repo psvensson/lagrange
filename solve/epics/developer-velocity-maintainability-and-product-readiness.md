@@ -142,10 +142,23 @@ now runs on the derived proof cone: a leaf diff lands on its bounded cone
 (`npm run test:quest-proof -- --changed <file>`), and selector/core/unknown
 changes force the full suite. Every landing review manifest carries the
 selection receipt (tier, per-edge-kind counts, selector version, input
-digests). Remaining velocity work: V2b/V2c consumer cutover + duration
-enforcement, V3 fast-lane budget, and periodic coverage-corpus growth
-(the committed snapshot covers 107 leaf tests; the corpus-sufficiency gate
-widens honestly below 5% census share).
+digests). The building-block Quest
+`quest-test-proof-cone-shadow-validation` (274d26912) then hardened the
+selector into the canonical `TestImpactDecision` (mode `selected`|`full`,
+never an empty-tests "probably safe" mode), gave every selected test a
+machine-readable reason (`static_dependency`/`observed_coverage`/
+`semantic_contract:<name>`/`changed_test`/`universal_safety`/`escalation`),
+named every escalation rule, and proved conformance against a committed
+25-case historical red-on-revert corpus (zero detector misses, 11 honest
+full-mode escalations) — all as shadow evidence with the full audit and
+landing eligibility untouched. Its selector is decomposed
+(`impact-proof-cone-inputs.js`) so the scoped complexity ratchet is 0/3.
+Remaining velocity work: the separate cutover Quest
+(`proof-cone-landing-cutover`) that may let landing use the cone only after
+accumulated shadow evidence (selector misses: 0, owner classes seen, full-suite
+samples), plus V2b/V2c consumer cutover + duration enforcement, V3 fast-lane
+budget, and periodic coverage-corpus growth (the committed snapshot covers 107
+leaf tests; the corpus-sufficiency gate widens honestly below 5% census share).
 
 ```text
 Velocity lane
