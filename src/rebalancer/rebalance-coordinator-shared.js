@@ -142,10 +142,17 @@ const SQL = Object.freeze({
     status, workflow_step, created_at, updated_at, completed_at, error_message, steps_history,
     entity_type, entity_id
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  UPDATE_OPERATION: `UPDATE replica_operations SET 
-    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?, 
+  UPDATE_OPERATION: `UPDATE replica_operations SET
+    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
     WHERE operation_id = ?`,
+  // Terminal-transition guard: no expected-step CAS (terminal must overwrite
+  // lagging non-terminal steps) but completed_at IS NULL so a different
+  // durable terminal is never clobbered (first-terminal-wins; finding 6).
+  UPDATE_OPERATION_TERMINAL: `UPDATE replica_operations SET
+    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
+    error_message = ?, steps_history = ?, replica_id = ?
+    WHERE operation_id = ? AND completed_at IS NULL`,
   SELECT_REPLICA_STATUS: 'SELECT status FROM services WHERE service_id = ?',
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT status FROM services 
     WHERE partition_id = ? AND node_id = ?`,

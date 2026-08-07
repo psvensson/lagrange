@@ -306,12 +306,23 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
     if (whereEntries.length === 0) {
       throw new Error(GATEWAY_ERROR_MSG.MUTATION_WHERE_REQUIRED);
     }
-    const whereClause = whereEntries.map(([key]) => `${key} = ?`).join(' AND ');
+    // Null-sentinel convention: a null where-value is a nullness predicate
+    // (`key IS NULL`, no bound parameter), not an equality. The
+    // replica_operations terminal-transition CAS uses it to guard on
+    // `completed_at IS NULL` so a losing terminal write changes zero rows
+    // instead of clobbering the winning terminal.
+    const whereClause = whereEntries
+      .map(([key, value]) => (value === null ? `${key} IS NULL` : `${key} = ?`))
+      .join(' AND ');
+
+    const whereParams = whereEntries
+      .filter(([_key, value]) => value !== null)
+      .map(([_key, value]) => value);
 
     if (operation === CONTROL_PLANE_MUTATION_OPERATION.DELETE) {
       return {
         sql: `${SQL.DELETE_FROM} ${tableName} ${SQL.WHERE} ${whereClause}`,
-        params: whereEntries.map(([_key, value]) => value),
+        params: whereParams,
       };
     }
 
@@ -330,7 +341,7 @@ const controlPlaneSystemTableGatewayQueryExecutionMethods = {
       sql: `${SQL.UPDATE} ${tableName} ${SQL.SET} ${setClause} ${SQL.WHERE} ${whereClause}`,
       params: [
         ...updateEntries.map(([_key, value]) => value),
-        ...whereEntries.map(([_key, value]) => value),
+        ...whereParams,
       ],
     };
   },

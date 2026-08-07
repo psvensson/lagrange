@@ -47,6 +47,7 @@ function assignReplicaOperationRepositoryMutationRowMethods(
     buildReplicaOperationUpdateWhereClause(
       operation,
       expectedWorkflowStep = null,
+      options = {},
     ) {
       const whereClause = {operation_id: operation.operationId};
       if (
@@ -54,6 +55,15 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         expectedWorkflowStep.length > 0
       ) {
         whereClause.workflow_step = expectedWorkflowStep;
+      }
+      // Terminal-transition guard (audit finding 6): a terminal write must
+      // overwrite any lagging NON-terminal step (deliberately no
+      // expected-step CAS) but must never clobber a DIFFERENT durable
+      // terminal that already won. The null where-value renders as
+      // "completed_at IS NULL" in the gateway SQL plan, turning the
+      // last-writer-wins overwrite into a first-terminal-wins CAS.
+      if (options?.terminalTransition === true) {
+        whereClause.completed_at = null;
       }
       return whereClause;
     }

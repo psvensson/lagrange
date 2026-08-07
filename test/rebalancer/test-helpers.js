@@ -597,6 +597,24 @@ function createTestCoordinator(options = {}) {
       const whereClause = mutation.whereClause || mutation.where || {};
       const operationId = whereClause.operation_id ?? whereClause.operationId ??
           mutation.data?.operation_id ?? mutation.data?.operationId ?? null;
+      // Gateway whereClause null-sentinel: `{completed_at: null}` is the
+      // terminal-transition CAS (`completed_at IS NULL`). A terminal winner
+      // already in the tracked store makes the guarded write a zero-change
+      // loss (first-terminal-wins; audit finding 6).
+      if (
+        Object.hasOwn(whereClause, 'completed_at') &&
+        whereClause.completed_at === null &&
+        operationId
+      ) {
+        const existingRow = trackedOperations.get(operationId);
+        if (
+          existingRow &&
+          existingRow.completed_at !== null &&
+          existingRow.completed_at !== undefined
+        ) {
+          return {success: true, partitionResult: {affectedRows: 0}};
+        }
+      }
       const result = typeof mockCdcService.updateSystemTableRow === 'function' ?
         await mockCdcService.updateSystemTableRow(
           mutation.tableName,
@@ -662,12 +680,27 @@ function createTestCoordinator(options = {}) {
         return {success: true};
       }
 
-      // Handle UPDATE operations
+      // Handle UPDATE operations. The terminal-transition statement guards on
+      // `completed_at IS NULL` (first-terminal-wins; audit finding 6): when
+      // the tracked row is already terminal, the write changes zero rows
+      // instead of clobbering the winning terminal — honestly reported as
+      // affectedRows: 0 so the loser-adopts-winner path is exercisable.
       if (sql.includes('UPDATE replica_operations')) {
         const [
           status, workflowStep, updatedAt, completedAt, errorMessage,
           stepsHistory, replicaId, operationId,
         ] = params;
+
+        if (sql.includes('completed_at IS NULL')) {
+          const existingRow = trackedOperations.get(operationId);
+          if (
+            existingRow &&
+            existingRow.completed_at !== null &&
+            existingRow.completed_at !== undefined
+          ) {
+            return {success: true, affectedRows: 0, changes: 0};
+          }
+        }
 
         mergeReplicaOperationRow(operationId, {
           status,

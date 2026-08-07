@@ -292,6 +292,7 @@ class OperationWorkflowTransitionPersistence
         {
           ...this.buildOperationTransitionPersistOptions(),
           terminalTransition: true,
+          returnDisposition: true,
         },
       );
     };
@@ -457,6 +458,7 @@ class OperationWorkflowTransitionPersistence
         {
           ...this.buildOperationTransitionPersistOptions(),
           terminalTransition: true,
+          returnDisposition: true,
         },
       );
     };

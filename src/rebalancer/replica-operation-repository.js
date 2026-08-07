@@ -107,6 +107,9 @@ import {
   assignReplicaOperationRepositoryMutationMethods,
 } from './replica-operation-repository-mutation-methods.js';
 import {
+  assignReplicaOperationRepositoryMutationUpdateMethods,
+} from './replica-operation-repository-mutation-update-methods.js';
+import {
   assignReplicaOperationRepositoryObservationMethods,
 } from './replica-operation-repository-observation-methods.js';
 import {
@@ -187,6 +190,14 @@ const SQL = Object.freeze({
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
     WHERE operation_id = ? AND workflow_step = ?`,
+  // Terminal-transition writes deliberately carry NO expected-step CAS (a
+  // lagging non-terminal durable step must still be overwritten) but guard on
+  // completed_at IS NULL so a DIFFERENT durable terminal that already won is
+  // never clobbered (first-terminal-wins; audit finding 6).
+  UPDATE_OPERATION_TERMINAL: `UPDATE replica_operations SET
+    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
+    error_message = ?, steps_history = ?, replica_id = ?
+    WHERE operation_id = ? AND completed_at IS NULL`,
   SELECT_REPLICA_STATUS: `SELECT service_id, replica_id, partition_id, node_id,
       service_type, status, raft_role, address
     FROM services WHERE service_id = ?`,
@@ -733,6 +744,18 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   ROUTER_ERROR_MSG,
   TRANSPORT_ERROR_MSG,
   uuidv4,
+});
+
+assignReplicaOperationRepositoryMutationUpdateMethods(ReplicaOperationRepository, {
+  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
+  CONTROL_PLANE_MUTATION_MERGE_POLICY,
+  CONTROL_PLANE_MUTATION_OPERATION,
+  REBALANCE_COORDINATOR_LOG_MSG,
+  REPLICA_OPERATION_OWNER_NAME,
+  REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE,
+  SQL,
+  SYSTEM_TABLE_NAME,
+  buildControlPlaneFailurePayload,
 });
 
 assignReplicaOperationRepositoryObservationMethods(ReplicaOperationRepository, {

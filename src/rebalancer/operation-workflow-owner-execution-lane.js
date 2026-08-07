@@ -609,6 +609,25 @@ class OperationWorkflowOwnerExecutionLane
       TERMINAL_TRANSITION_REPAIR_CAUSE.CONFIRMATION_DEFERRED,
     );
   }
+
+  /**
+   * Mirror a winning durable terminal outcome into the owner's live operation
+   * object after this owner lost the terminal CAS (audit finding 6): the
+   * loser must converge on the winner's terminal state, never re-assert its
+   * own.
+   * @param {Object} operation - The owner's live (losing) operation object.
+   * @param {Object} winningOperation - The authoritative winning terminal row.
+   * @return {void}
+   */
+  adoptWinningTerminalOperationOutcome(operation, winningOperation) {
+    if (!operation || !winningOperation) {
+      return;
+    }
+    operation.status = winningOperation.status;
+    operation.workflowStep = winningOperation.workflowStep;
+    operation.completedAt = winningOperation.completedAt;
+    operation.errorMessage = winningOperation.errorMessage;
+  }
 }
 
 export {OperationWorkflowOwnerExecutionLane};

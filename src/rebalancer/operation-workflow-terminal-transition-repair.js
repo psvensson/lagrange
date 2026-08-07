@@ -3,6 +3,9 @@ import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared
 import {
   REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE,
 } from './replica-operation-repository.js';
+import {
+  REPLICA_OPERATION_UPDATE_DISPOSITION,
+} from './replica-operation-update-disposition.js';
 
 const {
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -44,6 +47,55 @@ function isTerminalTransitionRepairConfirmed(visibility) {
       REPLICA_OPERATION_VISIBILITY_CONFIRMATION_STATE.CONFIRMED &&
       visibility?.operation,
   );
+}
+
+// The visibility confirmation compares the writer's OWN step/status/
+// completedAt, so a different durable terminal never satisfies it — but a
+// confirmation that lands on a different terminal row is still a confirmed
+// terminal: this repair lost and must adopt the winner, not re-arm.
+function resolveConfirmedVisibilityDifferentTerminal(owner, visibility) {
+  const confirmedOperation = visibility?.operation;
+  if (
+    !confirmedOperation ||
+    !owner.repository.isAuthoritativeOperationTerminal(confirmedOperation)
+  ) {
+    return false;
+  }
+  const state =
+    owner.terminalTransitionRepairStateByOperationId.get(
+      confirmedOperation.operationId,
+    );
+  if (!state?.projectedOperation) {
+    return false;
+  }
+  return !owner.repository.isReplicaOperationVisibilitySatisfied(
+    state.projectedOperation,
+    confirmedOperation,
+  );
+}
+
+function adoptConfirmedWinningTerminalIntoRepair(
+  owner,
+  operationId,
+  heldState,
+  winningOperation,
+) {
+  Object.assign(heldState.projectedOperation, {
+    status: winningOperation.status,
+    workflowStep: winningOperation.workflowStep,
+    completedAt: winningOperation.completedAt,
+    errorMessage: winningOperation.errorMessage,
+  });
+  owner.logger.error(
+    REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ABANDONED,
+    {
+      operationId,
+      workflowStep: winningOperation?.workflowStep || null,
+      partitionId: winningOperation?.partitionId || null,
+      attempt: heldState.attempt,
+    },
+  );
+  clearTerminalTransitionRepair(owner, operationId);
 }
 
 /**
@@ -171,15 +223,47 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
       if (!heldState || owner.isShuttingDown) {
         return;
       }
-      const persisted = await owner.repository.persistOperationUpdate(
+      const persistResult = await owner.repository.persistOperationUpdate(
         heldState.projectedOperation,
         {
           terminalTransition: true,
           confirmPersistence: false,
           disableSystemWriteSession: true,
+          returnDisposition: true,
         },
       );
-      if (persisted === false) {
+      // Lost the terminal CAS: a DIFFERENT durable terminal already won.
+      // Adopt the winner into the retained projection and stand the repair
+      // down — re-arming here would oscillate two owners' terminal states
+      // forever (audit finding 6).
+      if (
+        persistResult?.disposition ===
+        REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED
+      ) {
+        if (persistResult.operation) {
+          Object.assign(heldState.projectedOperation, {
+            status: persistResult.operation.status,
+            workflowStep: persistResult.operation.workflowStep,
+            completedAt: persistResult.operation.completedAt,
+            errorMessage: persistResult.operation.errorMessage,
+          });
+        }
+        owner.logger.error(
+          REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ABANDONED,
+          {
+            operationId,
+            workflowStep: heldState.projectedOperation?.workflowStep || null,
+            partitionId: heldState.projectedOperation?.partitionId || null,
+            attempt: heldState.attempt,
+          },
+        );
+        clearTerminalTransitionRepair(owner, operationId);
+        return;
+      }
+      if (
+        persistResult === false ||
+        persistResult?.persisted === false
+      ) {
         await resolveRefusedTerminalTransitionRepairPersist(
           owner,
           operationId,
@@ -192,6 +276,20 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
           heldState.projectedOperation,
         );
       if (isTerminalTransitionRepairConfirmed(visibility)) {
+        if (
+          resolveConfirmedVisibilityDifferentTerminal(owner, visibility)
+        ) {
+          // The confirmed row is a DIFFERENT terminal than the retained
+          // projection (never satisfies the visibility comparison): this
+          // repair lost — adopt the winner and stand down.
+          adoptConfirmedWinningTerminalIntoRepair(
+            owner,
+            operationId,
+            heldState,
+            visibility.operation,
+          );
+          return;
+        }
         owner.logger.info(
           REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_SUCCEEDED,
           {
@@ -215,7 +313,9 @@ async function runTerminalTransitionRepairAttempt(owner, operationId) {
  * NON-terminal row (the CL-017 read/apply divergence family). Abandon only
  * when the authoritative row is durably terminal (any terminal state frees
  * the budget and admission lanes); otherwise the ghost still exists and the
- * repair must keep trying.
+ * repair must keep trying. (The TERMINAL_ADOPTED disposition handles the
+ * lost-CAS case before this arm runs; this arm discriminates the residual
+ * refused persists.)
  * @param {Object} owner
  * @param {string} operationId
  * @param {Object} heldState
@@ -234,11 +334,19 @@ async function resolveRefusedTerminalTransitionRepairPersist(
     authoritativeOperation &&
     owner.repository.isAuthoritativeOperationTerminal(authoritativeOperation)
   ) {
+    // A different durable terminal won: adopt the winner into the retained
+    // projection and stand the repair down (never re-assert the loser).
+    Object.assign(heldState.projectedOperation, {
+      status: authoritativeOperation.status,
+      workflowStep: authoritativeOperation.workflowStep,
+      completedAt: authoritativeOperation.completedAt,
+      errorMessage: authoritativeOperation.errorMessage,
+    });
     owner.logger.error(
       REBALANCE_COORDINATOR_LOG_MSG.TERMINAL_TRANSITION_REPAIR_ABANDONED,
       {
         operationId,
-        workflowStep: heldState.projectedOperation?.workflowStep || null,
+        workflowStep: authoritativeOperation.workflowStep || null,
         partitionId: heldState.projectedOperation?.partitionId || null,
         attempt: heldState.attempt,
       },

@@ -1,6 +1,12 @@
 import {OPERATION_WORKFLOW_OWNER_SHARED} from './operation-workflow-owner-shared.js';
 import {OperationWorkflowOwnerExecutionLane} from './operation-workflow-owner-execution-lane.js';
 import {
+  clearTerminalTransitionRepair,
+} from './operation-workflow-terminal-transition-repair.js';
+import {
+  REPLICA_OPERATION_UPDATE_DISPOSITION,
+} from './replica-operation-update-disposition.js';
+import {
   PRIORITY_DISPATCH_TRANSITION_MUTATION_STEPS,
   isPriorityOutcomeDeferredLocalProgressCovered,
 } from './replica-operation-step-policy.js';
@@ -99,7 +105,26 @@ class OperationWorkflowTransitionOrchestration
           TRANSITION_STEP_OPTIONS.DEFER_COMMITTED_MARK,
         );
         const persistResult = await persistFn();
-        if (persistResult === false) {
+        if (
+          persistResult === false ||
+          persistResult?.persisted === false
+        ) {
+          // A lost terminal CAS surfaces the winning terminal row through the
+          // typed disposition (the repository already adopted it into the
+          // projected operation): mirror the winner into the live operation
+          // and clear any armed repair — the loser must never re-assert its
+          // own terminal state (audit finding 6).
+          if (
+            persistResult?.disposition ===
+            REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED &&
+            persistResult?.operation
+          ) {
+            this.adoptWinningTerminalOperationOutcome(
+              operation,
+              persistResult.operation,
+            );
+            clearTerminalTransitionRepair(this, operation.operationId);
+          }
           return false;
         }
         this.operationWorkflowCoordinator.markTransitionCommitted(
