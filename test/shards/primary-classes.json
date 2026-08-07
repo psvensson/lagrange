@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1743,
+    "unit": 1744,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 1994,
-  "digest": "fnv1a32-2a23dad4",
+  "censusSize": 1995,
+  "digest": "fnv1a32-8c0438da",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -1676,6 +1676,7 @@
     "test/scripts/examples-build-upload-run.test.js": "unit",
     "test/scripts/gen-solve-commands-index.test.js": "unit",
     "test/scripts/generate-steering-llm-pack.test.js": "unit",
+    "test/scripts/impact-proof-cone.test.js": "unit",
     "test/scripts/inventory-ordinal-segments.test.js": "unit",
     "test/scripts/list-commands.test.js": "unit",
     "test/scripts/local-leader-row-visibility-model-contract.test.js": "unit",

@@ -1,0 +1,98 @@
+{
+  "schemaVersion": 1,
+  "id": "impact-contracts",
+  "description": "Semantic contract edges for the impact proof-cone selector (developer-velocity epic V4a). Production paths declare the contracts they own; tests declare the contracts they exercise. Changing a contract-owning path selects every test claiming that contract. Unknown or undeclared contracts fail closed. This manifest is EXPLICIT and hand-curated; static dependency and coverage relationships are generated and live elsewhere. Every owner/test path must exist in the tree (directory prefix or file); dead edges are a contract defect.",
+  "contracts": {
+    "wit-world-interface": {
+      "description": "The WIT world/component interface shape; every WASM service consumer depends on it.",
+      "owners": [
+        "wit/"
+      ],
+      "tests": [
+        "test/wasm-service/",
+        "test/integration/lagrange-server-npm-package.integration.test.js"
+      ]
+    },
+    "message-envelope": {
+      "description": "Inter-node message envelope/codec and transport contract.",
+      "owners": [
+        "src/transport/"
+      ],
+      "tests": [
+        "test/transport/",
+        "test/message-group/"
+      ]
+    },
+    "partition-topology": {
+      "description": "Partition topology, split/merge, and placement contracts.",
+      "owners": [
+        "src/topology/",
+        "src/rebalancer/placement-owner-decision.js",
+        "src/rebalancer/placement-owner-constants.js",
+        "src/rebalancer/placement-owner-evidence.js"
+      ],
+      "tests": [
+        "test/topology/",
+        "test/diagnostics/topology-convergence-graph.test.js"
+      ]
+    },
+    "replica-operation-state": {
+      "description": "Replica-operation state machine and terminal-CAS contract.",
+      "owners": [
+        "src/rebalancer/replica-operation-",
+        "src/rebalancer/operation-workflow"
+      ],
+      "tests": [
+        "test/rebalancer/"
+      ]
+    },
+    "sql-grammar": {
+      "description": "SQL grammar and statement parser contract.",
+      "owners": [
+        "src/query/sql-parser"
+      ],
+      "tests": [
+        "test/query/",
+        "test/cli/sql/"
+      ]
+    },
+    "call-cell-routing": {
+      "description": "Call-cell routing and value-mapping contract.",
+      "owners": [
+        "src/service/call-cell-",
+        "src/runtime/call-cell-value-mapping.js"
+      ],
+      "tests": [
+        "test/service/"
+      ]
+    },
+    "bootstrap-contract": {
+      "description": "Cluster bootstrap/join lifecycle contract.",
+      "owners": [
+        "src/bootstrap/"
+      ],
+      "tests": [
+        "test/bootstrap/"
+      ]
+    },
+    "runtime-service-placement": {
+      "description": "Runtime-service placement and data-affinity contract.",
+      "owners": [
+        "src/rebalancer/service-data-affinity-",
+        "src/runtime/"
+      ],
+      "tests": [
+        "test/runtime/"
+      ]
+    },
+    "quest-solver-ledger": {
+      "description": "Solver event log, Quest store, and landing/verification contract.",
+      "owners": [
+        "scripts/solve/"
+      ],
+      "tests": [
+        "test/solve/"
+      ]
+    }
+  }
+}
