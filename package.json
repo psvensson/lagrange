@@ -94,7 +94,7 @@
     "audit:current-capabilities": "node scripts/check-current-capabilities.js",
     "audit:cli-docs": "node scripts/check-cli-docs.js",
     "docs:capabilities:generate": "node scripts/generate-current-capabilities-doc.js",
-    "audit:shards": "node scripts/generate-test-shards.js --check",
+    "audit:shards": "node scripts/generate-test-shards.js --check && node scripts/generate-test-primary-classes.js --check",
     "shards:generate": "node scripts/generate-test-shards.js",
     "audit:architecture-slices": "node scripts/check-architecture-slices.js",
     "test:metadata-gateway:audit": "node scripts/check-unified-system-metadata-gateway.js",
