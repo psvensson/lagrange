@@ -335,6 +335,8 @@ class RebalanceCoordinatorLifecycle {
           getStorageAccountingService: () => this.storageAccountingService,
           classifySystemPartition,
           normalizeMoveType: (moveType) => this.normalizeMoveType(moveType),
+          resolveEntitySizeBytes: (sizeContext) =>
+            this.resolveEntitySizeBytes(sizeContext),
         },
       });
 

@@ -920,3 +920,85 @@ test('reservation ID is derived from operation ID', async (t) => {
   t.equal(res.operation_id, op.operationId);
   t.end();
 });
+
+// --- Real size_bytes admission witness (audit findings 2+16) ---
+
+function createSizedPartitionCoordinator(options = {}) {
+  const admissionCalls = [];
+  const sizedPartitionId = 'p-sized';
+  const storageAdmissionService = options.storageAdmissionService || {
+    async checkAdd(context) {
+      admissionCalls.push(context);
+      return {allowed: true, decisionType: 'admitted'};
+    },
+    async checkReplace(context) {
+      admissionCalls.push(context);
+      return {allowed: true, decisionType: 'admitted'};
+    },
+  };
+  const {coordinator, sqlEngine} = createCoordinatorWithStorage({
+    systemTableCache: createMockCache({
+      partitions: [
+        {
+          partition_id: sizedPartitionId,
+          size_bytes: options.partitionSizeBytes,
+        },
+      ],
+    }),
+    storageAdmissionService,
+  });
+  return {coordinator, sqlEngine, admissionCalls, sizedPartitionId};
+}
+
+function createSizedPartitionAdd(coordinator, partitionId) {
+  return coordinator.createOperation({
+    type: OperationType.ADD,
+    partitionId,
+    nodeId: 'target-node',
+    entityType: SERVICE_TYPE.PARTITION,
+    entityId: partitionId,
+  });
+}
+
+test('createOperation - reservation witness carries the real partition ' +
+  'size_bytes estimate', async (t) => {
+  initializeConfig();
+  const partitionSizeBytes = NUM.BYTES_PER_MIB * 50;
+  const {coordinator, sqlEngine, sizedPartitionId} =
+    createSizedPartitionCoordinator({partitionSizeBytes});
+
+  await createSizedPartitionAdd(coordinator, sizedPartitionId);
+
+  t.equal(sqlEngine.reservations.size, 1);
+  const res = Array.from(sqlEngine.reservations.values())[0];
+  const expectedEstimate = Math.ceil(
+    Math.max(partitionSizeBytes, NUM.TEN) + NUM.FIVE,
+  );
+  t.equal(
+    res.estimated_bytes,
+    expectedEstimate,
+    'estimated_bytes must reflect the real size_bytes, not the zero ' +
+      'placeholder floor',
+  );
+  t.end();
+});
+
+test('createOperation - reservation estimate equals the admission-time ' +
+  'estimate', async (t) => {
+  initializeConfig();
+  const {coordinator, sqlEngine, admissionCalls, sizedPartitionId} =
+    createSizedPartitionCoordinator({
+      partitionSizeBytes: NUM.BYTES_PER_MIB * 25,
+    });
+
+  await createSizedPartitionAdd(coordinator, sizedPartitionId);
+
+  t.equal(admissionCalls.length, 1, 'admission evaluated at creation');
+  const res = Array.from(sqlEngine.reservations.values())[0];
+  t.equal(
+    res.estimated_bytes,
+    admissionCalls[0].estimatedBytes,
+    'the durable reservation witness equals the admission-time estimate',
+  );
+  t.end();
+});

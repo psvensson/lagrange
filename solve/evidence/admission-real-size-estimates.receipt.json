@@ -1,0 +1,26 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "admission-real-size-estimates",
+  "status": "pass",
+  "generatedAt": "2026-08-07T04:46:27.445Z",
+  "receipts": [
+    {
+      "id": "all-call-sites-real-size",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/admission-real-size-estimates.test.js",
+      "detail": "all three estimateReplicaBytes call sites size on the partition's REAL size_bytes instead of the sizeBytes: 0 placeholder: MovePlanner capacity filtering (via the injected sizeBytesResolver), provisioning admission evaluation (via the resolvedEntitySizeBytes threaded from operation creation), and reservation creation (same resolved estimate). Red-on-revert: reverting any one call site to sizeBytes: 0 fails this suite (verified per site during the attempt)"
+    },
+    {
+      "id": "admission-reservation-single-estimate",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/admission-real-size-estimates.test.js",
+      "detail": "the persisted storage_reservations.estimated_bytes equals the admission-time estimatedBytes exactly: operation creation resolves the real partition size_bytes ONCE and threads the same resolved estimate into ensureProvisioningAdmissionAllowed and createReservationForOperation, so the reservation row is the single durable admission witness (no witness table; amplification_factor column semantics unchanged)"
+    },
+    {
+      "id": "suites-green",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/coordinator-reservation-lifecycle.test.js",
+      "detail": "the pre-existing reservation lifecycle suite stays green with real-size estimates threaded (extended with two real-size witness assertions); provisioning-admission-policy and rebalance-coordinator-facade-compatibility suites updated for the estimateProvisioningAdmissionBytes signature gain"
+    }
+  ]
+}

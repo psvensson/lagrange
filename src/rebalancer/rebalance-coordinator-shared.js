@@ -100,6 +100,10 @@ import {
 } from './storage-capacity-constants.js';
 import {STORAGE_ADMISSION_DECISION_TYPE} from './storage-admission-constants.js';
 import {
+  normalizeEntitySizeBytes,
+  resolveEntitySizeBytes,
+} from './entity-size-resolution.js';
+import {
   ExecutorOutcomeEmitter,
   OUTCOME_EVENT_NAME,
 } from './executor-outcome-emitter.js';
@@ -317,7 +321,9 @@ export const REBALANCE_COORDINATOR_SHARED = {
   isPriorityRecoveryEmergencyPartition,
   isOperationLedgerPartitionTable,
   isRetryableControlPlaneError,
+  normalizeEntitySizeBytes,
   readAuthoritativeControlPlaneRows,
+  resolveEntitySizeBytes,
   resolvePriorityRecoveryActiveNodeCohort,
   resolveTrackedPriorityRecoveryAdmissionPlan,
   shouldPriorityRecoveryOperationBlockPlanning,

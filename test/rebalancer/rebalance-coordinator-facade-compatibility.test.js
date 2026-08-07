@@ -114,8 +114,12 @@ function createFacadeCoordinator(overrides = {}) {
       calls.policy.push(['evaluateProvisioningAdmission', context]);
       return {admissionResult: null, estimatedBytes: 0, moveType: null};
     },
-    estimateProvisioningAdmissionBytes(entityType) {
-      calls.policy.push(['estimateProvisioningAdmissionBytes', entityType]);
+    estimateProvisioningAdmissionBytes(entityType, options = {}) {
+      calls.policy.push([
+        'estimateProvisioningAdmissionBytes',
+        entityType,
+        options,
+      ]);
       return 64;
     },
     assertProvisioningAdmissionDependencies(moveType) {
@@ -321,7 +325,10 @@ test('RebalanceCoordinator facade delegates provisioning policy methods',
     });
     t.equal(admissionEvaluation.estimatedBytes, 0);
 
-    const estimatedBytes = coordinator.estimateProvisioningAdmissionBytes('partition');
+    const estimatedBytes = coordinator.estimateProvisioningAdmissionBytes(
+      'partition',
+      {resolvedEntitySizeBytes: 128},
+    );
     t.equal(estimatedBytes, 64);
 
     coordinator.assertProvisioningAdmissionDependencies('ADD');

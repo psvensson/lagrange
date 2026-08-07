@@ -98,6 +98,22 @@ class ProvisioningAdmissionPolicy {
   }
 
   /**
+   * Resolve the entity's real size_bytes through the coordinator
+   * delegate (reads the partitions system-table row); null when the
+   * delegate is not wired so estimates fall back to the floor.
+   * @param {Object} options
+   * @return {number|null}
+   * @private
+   */
+  resolveAdmissionEntitySizeBytes(options = {}) {
+    if (typeof this.delegates.resolveEntitySizeBytes === LOCAL_STR_FUNCTION) {
+      const resolved = Number(this.delegates.resolveEntitySizeBytes(options));
+      return Number.isFinite(resolved) ? resolved : null;
+    }
+    return null;
+  }
+
+  /**
    * @param {Object} options
    * @return {Object|null}
    * @private
@@ -274,6 +290,10 @@ class ProvisioningAdmissionPolicy {
         entityId,
         partitionId,
         sourceNodeId,
+        resolvedEntitySizeBytes: this.resolveAdmissionEntitySizeBytes({
+          entityType,
+          entityId,
+        }),
       });
       return {
         allowed: true,
@@ -423,7 +443,9 @@ class ProvisioningAdmissionPolicy {
       estimatedBytes: state ===
           PROVISIONING_ADMISSION_EVALUATION_STATE.NO_ADMISSION_REQUIRED ?
         0 :
-        this.estimateProvisioningAdmissionBytes(context?.entityType),
+        this.estimateProvisioningAdmissionBytes(context?.entityType, {
+          resolvedEntitySizeBytes: context?.resolvedEntitySizeBytes,
+        }),
       isCritical: this.resolveAdmissionCriticality(context),
     });
   }
@@ -473,19 +495,30 @@ class ProvisioningAdmissionPolicy {
   }
 
   /**
-   * Estimate replica bytes for admission decisions.
+   * Estimate replica bytes for admission decisions. When the caller has
+   * already resolved the entity's real size_bytes at operation-creation
+   * time (options.resolvedEntitySizeBytes), the estimate uses it so the
+   * admission decision and the durable reservation witness share ONE
+   * resolved estimate; otherwise the minimum-replica floor applies.
    * @param {string} entityType
+   * @param {Object} [options]
+   * @param {number} [options.resolvedEntitySizeBytes]
    * @return {number}
    */
-  estimateProvisioningAdmissionBytes(entityType) {
+  estimateProvisioningAdmissionBytes(entityType, options = {}) {
     const storageAccountingService = this.getStorageAccountingService();
     if (!storageAccountingService ||
         typeof storageAccountingService.estimateReplicaBytes !== LOCAL_STR_FUNCTION) {
       return 0;
     }
+    const resolvedSizeBytes = Number(options.resolvedEntitySizeBytes);
+    const sizeBytes =
+      Number.isFinite(resolvedSizeBytes) && resolvedSizeBytes > 0 ?
+        resolvedSizeBytes :
+        0;
     return storageAccountingService.estimateReplicaBytes({
       entityType: entityType || SERVICE_TYPE.PARTITION,
-      sizeBytes: 0,
+      sizeBytes,
     });
   }
 

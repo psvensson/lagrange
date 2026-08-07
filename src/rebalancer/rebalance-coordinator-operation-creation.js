@@ -627,6 +627,15 @@ class RebalanceCoordinatorOperationCreation {
         null;
     let operationReplicaId = move.replicaId || null;
 
+    // Resolve the real partition size ONCE before operation creation so
+    // admission evaluation and reservation creation share the same
+    // resolved estimate (audit findings 2+16). Resolved ahead of the
+    // skip-recheck branch so the reservation estimate is always real.
+    const resolvedEntitySizeBytes = this.resolveEntitySizeBytes({
+      entityType,
+      entityId,
+    });
+
     if (move?.skipProvisioningAdmissionRecheck !== true) {
       await this.ensureProvisioningAdmissionAllowed({
         move: normalizedMove,
@@ -634,6 +643,7 @@ class RebalanceCoordinatorOperationCreation {
         entityId,
         partitionId,
         sourceNodeId,
+        resolvedEntitySizeBytes,
       });
     }
 
@@ -815,8 +825,11 @@ class RebalanceCoordinatorOperationCreation {
       operation,
     );
 
-    // Create storage reservation atomically (Req 4.1)
-    await this.createReservationForOperation(operation);
+    // Create storage reservation atomically (Req 4.1) reusing the SAME
+    // resolved estimate that admission evaluation saw.
+    await this.createReservationForOperation(operation, {
+      resolvedEntitySizeBytes,
+    });
 
     if (shouldEmitOperationCreated) {
       this.emit(REBALANCE_COORDINATOR_EVENT.OPERATION_CREATED, {operation});

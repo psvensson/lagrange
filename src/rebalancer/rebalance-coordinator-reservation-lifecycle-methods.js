@@ -62,6 +62,7 @@ const RESERVATION_ORPHAN_RECONCILE_ACTION_BY_STATE = Object.freeze(
 const {
   DEFAULT_AMPLIFICATION_FACTOR,
   OperationType,
+  resolveEntitySizeBytes,
   REBALANCE_COORDINATOR_ERROR_MSG,
   REBALANCE_COORDINATOR_EVENT,
   REBALANCE_COORDINATOR_LOG_MSG,
@@ -155,10 +156,17 @@ class RebalanceCoordinatorReservationLifecycleMethods {
 
   /**
    * Create a storage reservation atomically with operation creation.
-   * Delegates size estimation to the accounting service.
+   * Delegates size estimation to the accounting service, sizing on the
+   * partition's REAL size_bytes: the caller that already resolved the
+   * size at operation-creation time passes it via
+   * options.resolvedEntitySizeBytes so the persisted reservation is the
+   * same admission witness; repair paths resolve it from the cache.
    * Requirements: 4.1
    *
    * @param {Object} operation - The persisted operation record.
+   * @param {Object} [options]
+   * @param {number} [options.resolvedEntitySizeBytes] - Real size_bytes
+   *   resolved before operation creation.
    * @return {Promise<void>}
    * @private
    */
@@ -173,9 +181,21 @@ class RebalanceCoordinatorReservationLifecycleMethods {
       REBALANCE_COORDINATOR_ERROR_MSG.STORAGE_ACCOUNTING_REQUIRED,
     );
 
+    const entityType = operation.entityType || SERVICE_TYPE.PARTITION;
+    const entityId = operation.entityId || operation.partitionId;
+    const sizeBytes = Number.isFinite(
+      Number(options.resolvedEntitySizeBytes),
+    ) ?
+      Number(options.resolvedEntitySizeBytes) :
+      resolveEntitySizeBytes({
+        entityType,
+        entityId,
+        systemTableCache: this.systemTableCache,
+      });
+
     const estimatedBytes = this.storageAccountingService.estimateReplicaBytes({
-      entityType: operation.entityType || SERVICE_TYPE.PARTITION,
-      sizeBytes: 0,
+      entityType,
+      sizeBytes,
     });
 
     const now = Date.now();

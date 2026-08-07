@@ -33,12 +33,15 @@ class RebalanceCoordinatorOwnerFacade {
   /**
    * Estimate replica bytes for admission decisions.
    * @param {string} entityType
+   * @param {Object} [options]
+   * @param {number} [options.resolvedEntitySizeBytes]
    * @return {number}
    * @private
    */
-  estimateProvisioningAdmissionBytes(entityType) {
+  estimateProvisioningAdmissionBytes(entityType, options = {}) {
     return this.provisioningAdmissionPolicy.estimateProvisioningAdmissionBytes(
       entityType,
+      options,
     );
   }
 

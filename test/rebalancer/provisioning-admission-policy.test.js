@@ -415,3 +415,98 @@ test('assertLocalControlPlaneMutationReady still defers non-priority ' +
       'bypass is for priority control-plane recovery actuation only',
   );
 });
+
+test('estimateProvisioningAdmissionBytes passes the resolved real ' +
+  'size_bytes through to estimateReplicaBytes', (t) => {
+  const estimateCalls = [];
+  const {policy} = createPolicy({
+    storageAccountingService: {
+      estimateReplicaBytes(options = {}) {
+        estimateCalls.push(options);
+        return 64;
+      },
+    },
+  });
+
+  policy.estimateProvisioningAdmissionBytes('partition', {
+    resolvedEntitySizeBytes: 12345,
+  });
+
+  t.equal(estimateCalls.length, 1);
+  t.equal(
+    estimateCalls[0].sizeBytes,
+    12345,
+    'real size_bytes must flow into the admission estimate',
+  );
+  t.end();
+});
+
+test('estimateProvisioningAdmissionBytes keeps the zero floor without ' +
+  'a resolved size', (t) => {
+  const estimateCalls = [];
+  const {policy} = createPolicy({
+    storageAccountingService: {
+      estimateReplicaBytes(options = {}) {
+        estimateCalls.push(options);
+        return 64;
+      },
+    },
+  });
+
+  policy.estimateProvisioningAdmissionBytes('partition');
+
+  t.equal(estimateCalls[0].sizeBytes, 0,
+    'no resolved size keeps the minimum-replica floor behavior');
+  t.end();
+});
+
+test('checkProvisioningAdmission resolves the entity size through the ' +
+  'coordinator delegate', async (t) => {
+  const estimateCalls = [];
+  const policy = new ProvisioningAdmissionPolicy({
+    nodeId: 'node-local',
+    logger: {warn: () => {}},
+    delegates: {
+      getNodeId: () => 'node-local',
+      getStorageAdmissionService: () => ({
+        async checkAdd() {
+          return {
+            allowed: true,
+            decisionType: STORAGE_ADMISSION_DECISION_TYPE.ADMITTED,
+          };
+        },
+        async checkReplace() {
+          return {
+            allowed: true,
+            decisionType: STORAGE_ADMISSION_DECISION_TYPE.ADMITTED,
+          };
+        },
+      }),
+      getStorageAccountingService: () => ({
+        estimateReplicaBytes(options = {}) {
+          estimateCalls.push(options);
+          return 64;
+        },
+      }),
+      classifySystemPartition: () => ({systemTable: false}),
+      normalizeMoveType: (moveType) => moveType,
+      resolveEntitySizeBytes: ({entityId}) =>
+        entityId === 'partition-sized' ? 777 : 0,
+    },
+  });
+
+  const probe = await policy.checkProvisioningAdmission({
+    type: 'ADD',
+    partitionId: 'partition-sized',
+    nodeId: 'node-remote',
+  });
+
+  t.equal(probe.allowed, true);
+  t.equal(estimateCalls.length, 1);
+  t.equal(
+    estimateCalls[0].sizeBytes,
+    777,
+    'probe admission must size on the delegate-resolved real size_bytes',
+  );
+  t.end();
+});

@@ -62,6 +62,7 @@ import {
   buildReplicaInventorySnapshot,
   isReplicaInventoryAddTransitionalOperation,
 } from './replica-inventory.js';
+import {resolvePlannerSizeBytes} from './move-planner-size-resolution.js';
 const MOVE_PLANNER_LITERAL = Object.freeze({
   MOVEPLANNER_REQUIRES_ENTITYID: 'MovePlanner requires entityId',
   MOVEPLANNER_REQUIRES_ENTITYTYPE: 'MovePlanner requires entityType',
@@ -236,6 +237,10 @@ class MovePlanner {
     this.moveStateProvider = options.moveStateProvider;
     this.storageAdmissionService = options.storageAdmissionService || null;
     this.accountingService = options.accountingService || null;
+    this.sizeBytesResolver =
+      typeof options.sizeBytesResolver === MOVE_PLANNER_LITERAL.FUNCTION ?
+        options.sizeBytesResolver :
+        null;
     this.storagePressureBehavior = options.storagePressureBehavior || null;
     this.strictOwnerDependencies = options.strictOwnerDependencies === true;
     this.replicaInventoryBuilder =
@@ -336,7 +341,10 @@ class MovePlanner {
 
   /**
    * Estimate bytes needed for a replica of this entity type.
-   * Delegates to accountingService when available.
+   * Delegates to accountingService when available, sizing on the
+   * entity's REAL size_bytes when an owner wired a sizeBytesResolver
+   * (partitions: the leader-maintained size_bytes row); otherwise the
+   * minimum-replica floor applies.
    * @return {number} estimated bytes or 0 when unavailable
    * @private
    */
@@ -357,7 +365,11 @@ class MovePlanner {
     }
     return this.accountingService.estimateReplicaBytes({
       entityType: this.entityType,
-      sizeBytes: 0,
+      sizeBytes: resolvePlannerSizeBytes(
+        this.sizeBytesResolver,
+        this.entityType,
+        this.entityId,
+      ),
     });
   }
 

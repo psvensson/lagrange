@@ -14,6 +14,7 @@ import {
   isBackgroundPrioritySpreadReleaseOwner,
   transferBackgroundPrioritySpreadReleaseOwnership,
 } from './background-priority-spread-release-tracker.js';
+import {resolveEntitySizeBytes} from './entity-size-resolution.js';
 
 const {
   CLUSTER_READINESS_TIMEOUT_MS,
@@ -266,7 +267,9 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
     this.messageGroupServices = options.messageGroupServices || null;
     this.requirePropagationLeader = options.requirePropagationLeader !== false;
 
-    // Planning is delegated to MovePlanner (single-path planning).
+    // Planning is delegated to MovePlanner (single-path planning). The
+    // size resolver reads the entity's REAL size_bytes (partitions row)
+    // so capacity filtering plans against real admission sizes.
     this.movePlanner = new MovePlanner({
       entityId: this.entityId,
       entityType: this.entityType,
@@ -276,6 +279,10 @@ class UnifiedRebalancerLifecycleBase extends EventEmitter {
       storagePressureBehavior: this.storagePressureBehavior,
       strictOwnerDependencies: true,
       replicaInventoryBuilder: this.replicaInventoryBuilder,
+      sizeBytesResolver: (sizeContext) => resolveEntitySizeBytes({
+        ...sizeContext,
+        systemTableCache: this.systemTableCache,
+      }),
     });
     this.syncOwnerDependenciesFromCoordinator(this.rebalanceCoordinator);
 
