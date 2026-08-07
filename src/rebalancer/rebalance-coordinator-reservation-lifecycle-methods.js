@@ -494,6 +494,29 @@ class RebalanceCoordinatorReservationLifecycleMethods {
   }
 
   /**
+   * Decide whether a TTL-expired reservation may actually transition to
+   * EXPIRED. Mirrors the orphan arm's operation-state consult (audit
+   * finding 4): a non-terminal or not-authoritatively-absent operation
+   * keeps its reservation ACTIVE even past expires_at, because nothing
+   * ever renews expires_at and expiring a live operation's witness would
+   * silently reopen its admitted capacity. RELEASE_ACTIVE only when the
+   * operation is visible-and-terminal or confirmed-absent.
+   * @param {string|null} operationId
+   * @return {Promise<Object>} {action} — RELEASE_ACTIVE or KEEP_ACTIVE.
+   * @private
+   */
+  async buildReservationExpirySnapshot(operationId) {
+    const visibilityObservation =
+      await this.getReservationOperationVisibilityObservation(operationId);
+    const reconcileSnapshot =
+      this.buildReservationOrphanReconcileSnapshot(visibilityObservation);
+    return Object.freeze({
+      action: reconcileSnapshot.action,
+      state: reconcileSnapshot.state,
+    });
+  }
+
+  /**
    * Reconcile stale and orphan reservations.
    * - Expire active reservations past their TTL.
    * - Release active reservations whose operations are terminal.
@@ -531,6 +554,22 @@ class RebalanceCoordinatorReservationLifecycleMethods {
     );
     if (staleResult.success && Array.isArray(staleResult.rows)) {
       for (const row of staleResult.rows) {
+        // A TTL-expired reservation must not be expired out from under a
+        // LIVE operation (audit finding 4): nothing ever renews expires_at,
+        // so a long-running non-terminal operation would otherwise lose its
+        // admission witness mid-flight. Consult operation state the same way
+        // the orphan arm does — KEEP_ACTIVE unless the operation is visible
+        // and terminal — so only a truly finished operation's reservation
+        // expires.
+        const expirySnapshot = await this.buildReservationExpirySnapshot(
+          row.operation_id,
+        );
+        if (
+          expirySnapshot.action !==
+          RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE
+        ) {
+          continue;
+        }
         const transition = await this.transitionActiveReservationById(
           row.reservation_id,
           RESERVATION_STATUS.EXPIRED,

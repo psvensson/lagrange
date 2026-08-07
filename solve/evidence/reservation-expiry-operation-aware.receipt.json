@@ -1,0 +1,20 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "reservation-expiry-operation-aware",
+  "status": "pass",
+  "generatedAt": "2026-08-07T12:09:02.056Z",
+  "receipts": [
+    {
+      "id": "ttl-sweep-keeps-active-for-nonterminal",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/reservation-expiry-operation-aware.test.js",
+      "detail": "the TTL-expiry sweep consults operation state the way the orphan-release arm already does: a TTL-expired reservation for a LIVE (non-terminal) operation is kept ACTIVE, while a terminal operation lets its expired reservation transition to EXPIRED (audit finding 4; red-on-revert: removing the expiry snapshot consult from runReservationReconcileSweep flips the live arm red)"
+    },
+    {
+      "id": "capacity-accounting-respects-live-operation",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/reservation-expiry-operation-aware.test.js",
+      "detail": "capacity accounting stops treating expires_at <= now as already-released: a reservation backing a live (non-terminal) operation keeps its reserved bytes counted past expiry, and only a terminal operation lets its expired reservation stop counting (audit finding 4; red-on-revert: restoring the unconditional pre-expiry skip in calculateReservedBytes flips the live arm red)"
+    }
+  ]
+}

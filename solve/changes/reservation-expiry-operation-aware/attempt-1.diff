@@ -1,0 +1,651 @@
+diff --git a/scripts/quest-evidence-reservation-expiry-operation-aware.js b/scripts/quest-evidence-reservation-expiry-operation-aware.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..612e0163b81cae18238cdfbdb1a7101373f0c927
+--- /dev/null
++++ b/scripts/quest-evidence-reservation-expiry-operation-aware.js
+@@ -0,0 +1,44 @@
++// Deterministic evidence harness for the
++// reservation-expiry-operation-aware quest: receipt declarations only.
++// The shared runtime (scripts/quest-evidence-harness-runtime.js) re-runs
++// each recorded proof command and writes the probe artifact.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'ttl-sweep-keeps-active-for-nonterminal',
++    testFile: 'test/rebalancer/reservation-expiry-operation-aware.test.js',
++    detail: 'the TTL-expiry sweep consults operation state the way the ' +
++      'orphan-release arm already does: a TTL-expired reservation for a ' +
++      'LIVE (non-terminal) operation is kept ACTIVE, while a terminal ' +
++      'operation lets its expired reservation transition to EXPIRED ' +
++      '(audit finding 4; red-on-revert: removing the expiry snapshot ' +
++      'consult from runReservationReconcileSweep flips the live arm red)',
++  }),
++  Object.freeze({
++    id: 'capacity-accounting-respects-live-operation',
++    testFile: 'test/rebalancer/reservation-expiry-operation-aware.test.js',
++    detail: 'capacity accounting stops treating expires_at <= now as ' +
++      'already-released: a reservation backing a live (non-terminal) ' +
++      'operation keeps its reserved bytes counted past expiry, and only a ' +
++      'terminal operation lets its expired reservation stop counting ' +
++      '(audit finding 4; red-on-revert: restoring the unconditional ' +
++      'pre-expiry skip in calculateReservedBytes flips the live arm red)',
++  }),
++]);
++
++const QUEST_ID = 'reservation-expiry-operation-aware';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME = 'reservation-expiry-operation-aware.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/solve/evidence/reservation-expiry-operation-aware.receipt.json b/solve/evidence/reservation-expiry-operation-aware.receipt.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..041a6dfb879bb4926b8ad855685a7cb4cd1b4b4e
+--- /dev/null
++++ b/solve/evidence/reservation-expiry-operation-aware.receipt.json
+@@ -0,0 +1,20 @@
++{
++  "schema": "test-receipt/1",
++  "quest": "reservation-expiry-operation-aware",
++  "status": "pass",
++  "generatedAt": "2026-08-07T12:09:02.056Z",
++  "receipts": [
++    {
++      "id": "ttl-sweep-keeps-active-for-nonterminal",
++      "passed": true,
++      "command": "npm run test:file -- test/rebalancer/reservation-expiry-operation-aware.test.js",
++      "detail": "the TTL-expiry sweep consults operation state the way the orphan-release arm already does: a TTL-expired reservation for a LIVE (non-terminal) operation is kept ACTIVE, while a terminal operation lets its expired reservation transition to EXPIRED (audit finding 4; red-on-revert: removing the expiry snapshot consult from runReservationReconcileSweep flips the live arm red)"
++    },
++    {
++      "id": "capacity-accounting-respects-live-operation",
++      "passed": true,
++      "command": "npm run test:file -- test/rebalancer/reservation-expiry-operation-aware.test.js",
++      "detail": "capacity accounting stops treating expires_at <= now as already-released: a reservation backing a live (non-terminal) operation keeps its reserved bytes counted past expiry, and only a terminal operation lets its expired reservation stop counting (audit finding 4; red-on-revert: restoring the unconditional pre-expiry skip in calculateReservedBytes flips the live arm red)"
++    }
++  ]
++}
+diff --git a/src/rebalancer/rebalance-coordinator-entity-size-methods.js b/src/rebalancer/rebalance-coordinator-entity-size-methods.js
+index 20d505559cb9fbb0117365dcf0398ecd480cc34d..ac468390863279e1364f464b0a26d8de6539e3ed 100644
+--- a/src/rebalancer/rebalance-coordinator-entity-size-methods.js
++++ b/src/rebalancer/rebalance-coordinator-entity-size-methods.js
+@@ -13,6 +13,8 @@
+ 
+ import {resolveEntitySizeBytes} from './entity-size-resolution.js';
+ 
++const CONSTRUCTOR_METHOD_NAME = 'constructor';
++
+ class RebalanceCoordinatorEntitySizeMethods {
+   /**
+    * Resolve the real size_bytes for one entity from the system table
+@@ -31,12 +33,42 @@ class RebalanceCoordinatorEntitySizeMethods {
+       systemTableCache: this.systemTableCache,
+     });
+   }
++
++  /**
++   * Estimate the reserved bytes for one entity: resolve the real
++   * size_bytes from the system table cache (unless the caller already
++   * threaded a resolved size through `resolvedEntitySizeBytes`) and feed
++   * it to the storage accounting estimate. Isolated here so the cache
++   * read (sizing truth) and the reservation SQL write (durable witness)
++   * never share one decision branch — the reservation lifecycle calls
++   * this once and makes only the SQL write decision (one path per
++   * semantic decision).
++   * @param {Object} options
++   * @param {string} options.entityType
++   * @param {string} options.entityId
++   * @param {*} [options.resolvedEntitySizeBytes] - Already-resolved size.
++   * @return {number}
++   * @private
++   */
++  estimateEntityAdmissionBytes(options = {}) {
++    const resolved = Number(options.resolvedEntitySizeBytes);
++    const sizeBytes = Number.isFinite(resolved) ?
++      resolved :
++      this.resolveEntitySizeBytes({
++        entityType: options.entityType,
++        entityId: options.entityId,
++      });
++    return this.storageAccountingService.estimateReplicaBytes({
++      entityType: options.entityType,
++      sizeBytes,
++    });
++  }
+ }
+ 
+ function applyRebalanceCoordinatorEntitySizeMethods(targetClass) {
+   const sourcePrototype = RebalanceCoordinatorEntitySizeMethods.prototype;
+   for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {
+-    if (methodName === 'constructor') {
++    if (methodName === CONSTRUCTOR_METHOD_NAME) {
+       continue;
+     }
+     const descriptor = Object.getOwnPropertyDescriptor(
+diff --git a/src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js b/src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js
+index 84abd07ef00d7e0d462a543112385d31eb4611df..94fa07945f934b0a39c68f614c4b34e458afc19b 100644
+--- a/src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js
++++ b/src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js
+@@ -493,6 +493,29 @@ class RebalanceCoordinatorReservationLifecycleMethods {
+     });
+   }
+ 
++  /**
++   * Decide whether a TTL-expired reservation may actually transition to
++   * EXPIRED. Mirrors the orphan arm's operation-state consult (audit
++   * finding 4): a non-terminal or not-authoritatively-absent operation
++   * keeps its reservation ACTIVE even past expires_at, because nothing
++   * ever renews expires_at and expiring a live operation's witness would
++   * silently reopen its admitted capacity. RELEASE_ACTIVE only when the
++   * operation is visible-and-terminal or confirmed-absent.
++   * @param {string|null} operationId
++   * @return {Promise<Object>} {action} — RELEASE_ACTIVE or KEEP_ACTIVE.
++   * @private
++   */
++  async buildReservationExpirySnapshot(operationId) {
++    const visibilityObservation =
++      await this.getReservationOperationVisibilityObservation(operationId);
++    const reconcileSnapshot =
++      this.buildReservationOrphanReconcileSnapshot(visibilityObservation);
++    return Object.freeze({
++      action: reconcileSnapshot.action,
++      state: reconcileSnapshot.state,
++    });
++  }
++
+   /**
+    * Reconcile stale and orphan reservations.
+    * - Expire active reservations past their TTL.
+@@ -531,6 +554,22 @@ class RebalanceCoordinatorReservationLifecycleMethods {
+     );
+     if (staleResult.success && Array.isArray(staleResult.rows)) {
+       for (const row of staleResult.rows) {
++        // A TTL-expired reservation must not be expired out from under a
++        // LIVE operation (audit finding 4): nothing ever renews expires_at,
++        // so a long-running non-terminal operation would otherwise lose its
++        // admission witness mid-flight. Consult operation state the same way
++        // the orphan arm does — KEEP_ACTIVE unless the operation is visible
++        // and terminal — so only a truly finished operation's reservation
++        // expires.
++        const expirySnapshot = await this.buildReservationExpirySnapshot(
++          row.operation_id,
++        );
++        if (
++          expirySnapshot.action !==
++          RESERVATION_ORPHAN_RECONCILE_ACTION.RELEASE_ACTIVE
++        ) {
++          continue;
++        }
+         const transition = await this.transitionActiveReservationById(
+           row.reservation_id,
+           RESERVATION_STATUS.EXPIRED,
+diff --git a/src/rebalancer/storage-capacity-accounting-service.js b/src/rebalancer/storage-capacity-accounting-service.js
+index 46cf1e69232a3cc458ec935207f00ec43c388902..2d63dbd8a892ca6243841884396c0cf83a7e5e57 100644
+--- a/src/rebalancer/storage-capacity-accounting-service.js
++++ b/src/rebalancer/storage-capacity-accounting-service.js
+@@ -16,6 +16,9 @@ import {
+   TABLES,
+ } from '../constants/index.js';
+ import {ReplicaStatus} from './replica-status.js';
++import {
++  isTerminalReplicaOperationRecord,
++} from './replica-operation-progress.js';
+ import {
+   PRESSURE_STATE,
+   RESERVATION_STATUS,
+@@ -30,6 +33,7 @@ const STORAGE_ACCOUNTING_SQL = Object.freeze({
+   [TABLES.PARTITIONS]: 'SELECT * FROM partitions',
+   [TABLES.SERVICES]: 'SELECT * FROM services',
+   [TABLES.STORAGE_RESERVATIONS]: 'SELECT * FROM storage_reservations',
++  [TABLES.REPLICA_OPERATIONS]: 'SELECT * FROM replica_operations',
+ });
+ 
+ class StorageCapacityAccountingService {
+@@ -220,10 +224,15 @@ class StorageCapacityAccountingService {
+     const partitions = await this.getSystemTableRows(TABLES.PARTITIONS);
+     const services = await this.getSystemTableRows(TABLES.SERVICES);
+     const reservations = await this.getSystemTableRows(TABLES.STORAGE_RESERVATIONS);
++    const operations = await this.getSystemTableRows(TABLES.REPLICA_OPERATIONS);
+ 
+     const partitionSizes = this.buildPartitionSizeMap(partitions);
+     const usedBytesByNode = this.calculateUsedBytes(services, partitionSizes);
+-    const reservedBytesByNode = this.calculateReservedBytes(reservations);
++    const liveOperationIds = this.buildLiveOperationIds(operations);
++    const reservedBytesByNode = this.calculateReservedBytes(
++      reservations,
++      liveOperationIds,
++    );
+ 
+     return nodes.map((node) => {
+       const nodeId = node?.[COLUMN.NODE_ID];
+@@ -252,10 +261,15 @@ class StorageCapacityAccountingService {
+     const partitions = await this.getSystemTableRows(TABLES.PARTITIONS);
+     const services = await this.getSystemTableRows(TABLES.SERVICES);
+     const reservations = await this.getSystemTableRows(TABLES.STORAGE_RESERVATIONS);
++    const operations = await this.getSystemTableRows(TABLES.REPLICA_OPERATIONS);
+ 
+     const partitionSizes = this.buildPartitionSizeMap(partitions);
+     const usedBytesByNode = this.calculateUsedBytes(services, partitionSizes);
+-    const reservedBytesByNode = this.calculateReservedBytes(reservations);
++    const liveOperationIds = this.buildLiveOperationIds(operations);
++    const reservedBytesByNode = this.calculateReservedBytes(
++      reservations,
++      liveOperationIds,
++    );
+     const usedBytes = usedBytesByNode.get(nodeId) || 0;
+     const reservedBytes = reservedBytesByNode.get(nodeId) || 0;
+ 
+@@ -276,10 +290,15 @@ class StorageCapacityAccountingService {
+     const partitions = this.getSystemTableRowsSync(TABLES.PARTITIONS);
+     const services = this.getSystemTableRowsSync(TABLES.SERVICES);
+     const reservations = this.getSystemTableRowsSync(TABLES.STORAGE_RESERVATIONS);
++    const operations = this.getSystemTableRowsSync(TABLES.REPLICA_OPERATIONS);
+ 
+     const partitionSizes = this.buildPartitionSizeMap(partitions);
+     const usedBytesByNode = this.calculateUsedBytes(services, partitionSizes);
+-    const reservedBytesByNode = this.calculateReservedBytes(reservations);
++    const liveOperationIds = this.buildLiveOperationIds(operations);
++    const reservedBytesByNode = this.calculateReservedBytes(
++      reservations,
++      liveOperationIds,
++    );
+     const usedBytes = usedBytesByNode.get(nodeId) || 0;
+     const reservedBytes = reservedBytesByNode.get(nodeId) || 0;
+ 
+@@ -341,13 +360,39 @@ class StorageCapacityAccountingService {
+     return usedBytesByNode;
+   }
+ 
++  /**
++   * Build the set of operation IDs whose operations are still live
++   * (non-terminal). A reservation backing a live operation keeps its
++   * admitted capacity even past expires_at (audit finding 4): nothing
++   * renews expires_at, so treating expiry as already-released would
++   * silently reopen capacity the sweep has not actually reclaimed.
++   * @param {Object[]} operations - Raw replica_operations rows.
++   * @return {Set<string>}
++   * @private
++   */
++  buildLiveOperationIds(operations) {
++    const liveOperationIds = new Set();
++    for (const operation of operations || []) {
++      if (isTerminalReplicaOperationRecord(operation)) {
++        continue;
++      }
++      const operationId = operation?.[COLUMN.OPERATION_ID];
++      if (operationId) {
++        liveOperationIds.add(operationId);
++      }
++    }
++    return liveOperationIds;
++  }
++
+   /**
+    * Calculate reserved bytes per node from reservation metadata.
+    * @param {Object[]} reservations
++   * @param {Set<string>} [liveOperationIds] - Non-terminal operation IDs;
++   *   a reservation for one of these is counted even when past expires_at.
+    * @return {Map<string, number>}
+    * @private
+    */
+-  calculateReservedBytes(reservations) {
++  calculateReservedBytes(reservations, liveOperationIds) {
+     const reservedByNode = new Map();
+     const now = Date.now();
+ 
+@@ -358,7 +403,13 @@ class StorageCapacityAccountingService {
+       }
+ 
+       const expiresAt = Number(reservation?.[COLUMN.EXPIRES_AT]);
+-      if (Number.isFinite(expiresAt) && expiresAt <= now) {
++      const operationId = reservation?.[COLUMN.OPERATION_ID];
++      const operationLive = Boolean(
++        operationId && liveOperationIds && liveOperationIds.has(operationId),
++      );
++      if (
++        Number.isFinite(expiresAt) && expiresAt <= now && !operationLive
++      ) {
+         continue;
+       }
+ 
+diff --git a/test/rebalancer/reservation-expiry-operation-aware.test.js b/test/rebalancer/reservation-expiry-operation-aware.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e952fcda6802adf6b584f874866071645a0de9c2
+--- /dev/null
++++ b/test/rebalancer/reservation-expiry-operation-aware.test.js
+@@ -0,0 +1,312 @@
++/**
++ * Reservation expiry must be operation-aware (audit finding 4). Nothing ever
++ * renews expires_at after insert, so:
++ *
++ *  1. The TTL-expiry sweep must consult operation state the way the
++ *     orphan-release arm already does — KEEP_ACTIVE for a non-terminal
++ *     operation, EXPIRED only once the operation is visible-and-terminal (or
++ *     confirmed absent). A live operation must never lose its admission
++ *     witness mid-flight.
++ *  2. Capacity accounting must stop treating expires_at <= now as
++ *     already-released before the sweep has actually reclaimed it — a
++ *     reservation backing a live (non-terminal) operation keeps its admitted
++ *     capacity counted even past expiry; only an expired reservation with a
++ *     terminal or absent operation is excluded.
++ *
++ * Red-on-revert: each test fails if the operation-state consult is reverted
++ * in either the TTL sweep or capacity accounting while the rest remains.
++ *
++ * Quest: reservation-expiry-operation-aware
++ * Epic: solve/epics/rebalancer-operation-safety-audit-remediation.md
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {SystemTableCache} from '../../src/cache/system-table-cache.js';
++import {CDC_OPERATION} from '../../src/constants/cdc.js';
++import {COLUMN, NUM, TABLES, WORKFLOW_STEP} from
++  '../../src/constants/index.js';
++import {SERVICE_TYPE} from '../../src/constants/service.js';
++import {
++  RESERVATION_REASON,
++  RESERVATION_STATUS,
++  STORAGE_CAPACITY_DEFAULT,
++} from '../../src/rebalancer/storage-capacity-constants.js';
++import {OperationType, ReplicaStatus} from
++  '../../src/rebalancer/replica-status.js';
++import {
++  StorageCapacityAccountingService,
++} from '../../src/rebalancer/storage-capacity-accounting-service.js';
++import {RebalanceCoordinator} from
++  '../../src/rebalancer/rebalance-coordinator.js';
++import {
++  createMockCache,
++  createMockCdcService,
++  createMockPolicyService,
++  createMockMessageRouter,
++  createMockControlPlaneReadinessService,
++  createMockTransactionCoordinator,
++} from './test-helpers.js';
++
++const TEST_NODE_ID = 'expiry-node-1';
++const TEST_TARGET_NODE_ID = 'node-target-1';
++const TEST_PARTITION_ID = 'p-expiry-1';
++
++const LIVE_OPERATION_ID = 'op-live-add';
++const LIVE_RESERVATION_ID = `res-${LIVE_OPERATION_ID}`;
++const TERMINAL_OPERATION_ID = 'op-terminal-add';
++const TERMINAL_RESERVATION_ID = `res-${TERMINAL_OPERATION_ID}`;
++
++function initializeConfig() {
++  ConfigurationManager.resetInstance();
++  const config = ConfigurationManager.getInstance();
++  config.initialize({
++    rebalancer: {
++      minimumReplicaBytes: NUM.TEN,
++      partitionReplicaOverheadBytes: NUM.FIVE,
++      storageReservationTtlMs: STORAGE_CAPACITY_DEFAULT.RESERVATION_TTL_MS,
++    },
++  });
++}
++
++function insertRow(cache, tableName, row) {
++  cache.applySystemTableChange(tableName, CDC_OPERATION.INSERT, row);
++}
++
++/**
++ * Minimal store answering the reconcile SELECT/UPDATE shapes plus the
++ * replica_operations by-id reads the operation-state consult issues.
++ */
++function createExpiryStore() {
++  const reservations = new Map();
++  const operations = new Map();
++
++  const executeQuery = async (sql, params = []) => {
++    if (sql.includes('UPDATE storage_reservations')) {
++      const [newStatus, updated, released, reservationId, activeStatus] =
++        params;
++      let changes = 0;
++      for (const [key, row] of reservations) {
++        if (row.reservation_id === reservationId &&
++            row.status === activeStatus) {
++          reservations.set(key, {
++            ...row,
++            status: newStatus,
++            updated_at: updated,
++            released_at: released,
++          });
++          changes++;
++        }
++      }
++      return {success: true, changes};
++    }
++    if (sql.includes('FROM storage_reservations') &&
++        sql.includes('expires_at <= ?')) {
++      const [status, expiryThreshold] = params;
++      const rows = Array.from(reservations.values()).filter((row) =>
++        row.status === status && row.expires_at <= expiryThreshold);
++      return {success: true, rows};
++    }
++    if (sql.includes('FROM storage_reservations')) {
++      const [status] = params;
++      const rows = Array.from(reservations.values())
++        .filter((row) => row.status === status);
++      return {success: true, rows};
++    }
++    if (sql.includes('FROM replica_operations') &&
++        sql.includes('operation_id = ?')) {
++      const [operationId] = params;
++      const row = operations.get(operationId);
++      return {success: true, rows: row ? [row] : []};
++    }
++    return {success: true, rows: []};
++  };
++
++  return {reservations, operations, executeQuery};
++}
++
++function createCoordinatorWithStore(store) {
++  const cache = createMockCache();
++  const accounting = new StorageCapacityAccountingService({
++    systemTableCache: cache,
++  });
++  accounting.initialize({systemTableCache: cache});
++
++  const coordinator = new RebalanceCoordinator({
++    nodeId: TEST_NODE_ID,
++    systemTableCache: cache,
++    cdcIntegrationService: createMockCdcService(),
++    controlPlaneSystemTableGateway: {
++      readAuthoritativeRows: (tableName, sql, params) =>
++        store.executeQuery(sql, params),
++      readRows: (tableName, sql, params) => store.executeQuery(sql, params),
++      executeQuery: (sql, params) => store.executeQuery(sql, params),
++    },
++    tablePolicyService: createMockPolicyService(),
++    messageRouter: createMockMessageRouter(),
++    sqlQueryEngine: {executeQuery: store.executeQuery},
++    transactionCoordinator: createMockTransactionCoordinator(),
++    controlPlaneReadinessService: createMockControlPlaneReadinessService({
++      systemTableCache: cache,
++    }),
++    enableTimeouts: false,
++    storageAccountingService: accounting,
++  });
++  coordinator.initialize();
++  return coordinator;
++}
++
++function seedExpiredReservation(store, reservationId, operationId) {
++  const now = Date.now();
++  store.reservations.set(reservationId, {
++    reservation_id: reservationId,
++    operation_id: operationId,
++    entity_type: SERVICE_TYPE.PARTITION,
++    entity_id: TEST_PARTITION_ID,
++    partition_id: TEST_PARTITION_ID,
++    target_node_id: TEST_TARGET_NODE_ID,
++    estimated_bytes: NUM.HUNDRED,
++    amplification_factor: 1,
++    status: RESERVATION_STATUS.ACTIVE,
++    reason_code: RESERVATION_REASON.ADD_REPLICA,
++    created_at: now - NUM.THIRTY_THOUSAND,
++    updated_at: now - NUM.THIRTY_THOUSAND,
++    // Already past TTL — the sweep's expiry arm selects this row.
++    expires_at: now - NUM.THOUSAND,
++    released_at: null,
++  });
++}
++
++function seedOperation(store, operationId, status, workflowStep) {
++  store.operations.set(operationId, {
++    operation_id: operationId,
++    type: OperationType.ADD,
++    partition_id: TEST_PARTITION_ID,
++    target_node_id: TEST_TARGET_NODE_ID,
++    status,
++    workflow_step: workflowStep,
++    completed_at: null,
++  });
++}
++
++// --- TTL sweep is operation-aware ---
++
++test('reconcileReservations - a TTL-expired reservation for a LIVE ' +
++  '(non-terminal) operation is kept ACTIVE, not expired', async (t) => {
++  initializeConfig();
++  const store = createExpiryStore();
++  const coordinator = createCoordinatorWithStore(store);
++  seedExpiredReservation(store, LIVE_RESERVATION_ID, LIVE_OPERATION_ID);
++  // In-flight ADD: syncing is non-terminal for ADD (terminal = active/failed).
++  seedOperation(store, LIVE_OPERATION_ID, 'syncing', WORKFLOW_STEP.SYNCING);
++
++  const result = await coordinator.reconcileReservations();
++
++  t.equal(result.expired, 0,
++    'no expiry while the backing operation is still live');
++  t.equal(
++    store.reservations.get(LIVE_RESERVATION_ID).status,
++    RESERVATION_STATUS.ACTIVE,
++    'live operation keeps its reservation active past expires_at',
++  );
++  t.end();
++});
++
++test('reconcileReservations - a TTL-expired reservation for a TERMINAL ' +
++  'operation is expired', async (t) => {
++  initializeConfig();
++  const store = createExpiryStore();
++  const coordinator = createCoordinatorWithStore(store);
++  seedExpiredReservation(store, TERMINAL_RESERVATION_ID, TERMINAL_OPERATION_ID);
++  // active is the terminal success status for ADD.
++  seedOperation(
++    store,
++    TERMINAL_OPERATION_ID,
++    ReplicaStatus.ACTIVE,
++    WORKFLOW_STEP.ACTIVE,
++  );
++
++  const result = await coordinator.reconcileReservations();
++
++  t.equal(result.expired, 1,
++    'terminal operation lets its expired reservation expire');
++  t.equal(
++    store.reservations.get(TERMINAL_RESERVATION_ID).status,
++    RESERVATION_STATUS.EXPIRED,
++    'reservation transitions to EXPIRED once the operation is terminal',
++  );
++  t.end();
++});
++
++// --- Capacity accounting respects a live operation ---
++
++test('getCapacitySnapshots - an expired reservation for a LIVE operation ' +
++  'keeps its reserved bytes counted', async (t) => {
++  initializeConfig();
++  const cache = new SystemTableCache();
++  const service = new StorageCapacityAccountingService({
++    systemTableCache: cache,
++  });
++  service.initialize({systemTableCache: cache});
++
++  insertRow(cache, TABLES.NODES, {
++    [COLUMN.NODE_ID]: TEST_TARGET_NODE_ID,
++    [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
++  });
++  insertRow(cache, TABLES.STORAGE_RESERVATIONS, {
++    [COLUMN.RESERVATION_ID]: LIVE_RESERVATION_ID,
++    [COLUMN.OPERATION_ID]: LIVE_OPERATION_ID,
++    [COLUMN.TARGET_NODE_ID]: TEST_TARGET_NODE_ID,
++    [COLUMN.ESTIMATED_BYTES]: NUM.HUNDRED,
++    [COLUMN.AMPLIFICATION_FACTOR]: 1,
++    [COLUMN.STATUS]: RESERVATION_STATUS.ACTIVE,
++    // Past expiry, but the backing operation is still live.
++    [COLUMN.EXPIRES_AT]: Date.now() - NUM.THOUSAND,
++  });
++  insertRow(cache, TABLES.REPLICA_OPERATIONS, {
++    [COLUMN.OPERATION_ID]: LIVE_OPERATION_ID,
++    operation_type: OperationType.ADD,
++    [COLUMN.STATUS]: 'syncing',
++    workflow_step: WORKFLOW_STEP.SYNCING,
++  });
++
++  const snapshots = await service.getCapacitySnapshots();
++  t.equal(snapshots[0].reservedBytes, NUM.HUNDRED,
++    'live operation keeps its expired reservation counted');
++  t.end();
++});
++
++test('getCapacitySnapshots - an expired reservation for a TERMINAL ' +
++  'operation is excluded from reserved bytes', async (t) => {
++  initializeConfig();
++  const cache = new SystemTableCache();
++  const service = new StorageCapacityAccountingService({
++    systemTableCache: cache,
++  });
++  service.initialize({systemTableCache: cache});
++
++  insertRow(cache, TABLES.NODES, {
++    [COLUMN.NODE_ID]: TEST_TARGET_NODE_ID,
++    [COLUMN.STORAGE_BUDGET_BYTES]: NUM.THOUSAND,
++  });
++  insertRow(cache, TABLES.STORAGE_RESERVATIONS, {
++    [COLUMN.RESERVATION_ID]: TERMINAL_RESERVATION_ID,
++    [COLUMN.OPERATION_ID]: TERMINAL_OPERATION_ID,
++    [COLUMN.TARGET_NODE_ID]: TEST_TARGET_NODE_ID,
++    [COLUMN.ESTIMATED_BYTES]: NUM.HUNDRED,
++    [COLUMN.AMPLIFICATION_FACTOR]: 1,
++    [COLUMN.STATUS]: RESERVATION_STATUS.ACTIVE,
++    [COLUMN.EXPIRES_AT]: Date.now() - NUM.THOUSAND,
++  });
++  insertRow(cache, TABLES.REPLICA_OPERATIONS, {
++    [COLUMN.OPERATION_ID]: TERMINAL_OPERATION_ID,
++    operation_type: OperationType.ADD,
++    [COLUMN.STATUS]: ReplicaStatus.ACTIVE,
++    workflow_step: WORKFLOW_STEP.ACTIVE,
++  });
++
++  const snapshots = await service.getCapacitySnapshots();
++  t.equal(snapshots[0].reservedBytes, 0,
++    'terminal operation lets its expired reservation stop counting');
++  t.end();
++});
+diff --git a/test/rebalancer/storage-capacity-accounting-service.test.js b/test/rebalancer/storage-capacity-accounting-service.test.js
+index d79d70ab582f34fac445aa5e52ae96f6b4f0cd3d..544701123307c000afad127a8d501f33abf65091 100644
+--- a/test/rebalancer/storage-capacity-accounting-service.test.js
++++ b/test/rebalancer/storage-capacity-accounting-service.test.js
+@@ -695,6 +695,9 @@ test('getCapacitySnapshots - SQL fallback uses injected control-plane ' +
+       TABLES.PARTITIONS,
+       TABLES.SERVICES,
+       TABLES.STORAGE_RESERVATIONS,
++      // Live-operation consult (finding 4): expiry-aware accounting reads
++      // replica_operations to keep a live operation's reservation counted.
++      TABLES.REPLICA_OPERATIONS,
+     ],
+     'gateway should own fallback reads for storage accounting',
+   );

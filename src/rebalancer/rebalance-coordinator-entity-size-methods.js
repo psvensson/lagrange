@@ -13,6 +13,8 @@
 
 import {resolveEntitySizeBytes} from './entity-size-resolution.js';
 
+const CONSTRUCTOR_METHOD_NAME = 'constructor';
+
 class RebalanceCoordinatorEntitySizeMethods {
   /**
    * Resolve the real size_bytes for one entity from the system table
@@ -31,12 +33,42 @@ class RebalanceCoordinatorEntitySizeMethods {
       systemTableCache: this.systemTableCache,
     });
   }
+
+  /**
+   * Estimate the reserved bytes for one entity: resolve the real
+   * size_bytes from the system table cache (unless the caller already
+   * threaded a resolved size through `resolvedEntitySizeBytes`) and feed
+   * it to the storage accounting estimate. Isolated here so the cache
+   * read (sizing truth) and the reservation SQL write (durable witness)
+   * never share one decision branch — the reservation lifecycle calls
+   * this once and makes only the SQL write decision (one path per
+   * semantic decision).
+   * @param {Object} options
+   * @param {string} options.entityType
+   * @param {string} options.entityId
+   * @param {*} [options.resolvedEntitySizeBytes] - Already-resolved size.
+   * @return {number}
+   * @private
+   */
+  estimateEntityAdmissionBytes(options = {}) {
+    const resolved = Number(options.resolvedEntitySizeBytes);
+    const sizeBytes = Number.isFinite(resolved) ?
+      resolved :
+      this.resolveEntitySizeBytes({
+        entityType: options.entityType,
+        entityId: options.entityId,
+      });
+    return this.storageAccountingService.estimateReplicaBytes({
+      entityType: options.entityType,
+      sizeBytes,
+    });
+  }
 }
 
 function applyRebalanceCoordinatorEntitySizeMethods(targetClass) {
   const sourcePrototype = RebalanceCoordinatorEntitySizeMethods.prototype;
   for (const methodName of Object.getOwnPropertyNames(sourcePrototype)) {
-    if (methodName === 'constructor') {
+    if (methodName === CONSTRUCTOR_METHOD_NAME) {
       continue;
     }
     const descriptor = Object.getOwnPropertyDescriptor(

@@ -17,6 +17,9 @@ import {
 } from '../constants/index.js';
 import {ReplicaStatus} from './replica-status.js';
 import {
+  isTerminalReplicaOperationRecord,
+} from './replica-operation-progress.js';
+import {
   PRESSURE_STATE,
   RESERVATION_STATUS,
   STORAGE_CAPACITY_CONFIG_KEY,
@@ -30,6 +33,7 @@ const STORAGE_ACCOUNTING_SQL = Object.freeze({
   [TABLES.PARTITIONS]: 'SELECT * FROM partitions',
   [TABLES.SERVICES]: 'SELECT * FROM services',
   [TABLES.STORAGE_RESERVATIONS]: 'SELECT * FROM storage_reservations',
+  [TABLES.REPLICA_OPERATIONS]: 'SELECT * FROM replica_operations',
 });
 
 class StorageCapacityAccountingService {
@@ -220,10 +224,15 @@ class StorageCapacityAccountingService {
     const partitions = await this.getSystemTableRows(TABLES.PARTITIONS);
     const services = await this.getSystemTableRows(TABLES.SERVICES);
     const reservations = await this.getSystemTableRows(TABLES.STORAGE_RESERVATIONS);
+    const operations = await this.getSystemTableRows(TABLES.REPLICA_OPERATIONS);
 
     const partitionSizes = this.buildPartitionSizeMap(partitions);
     const usedBytesByNode = this.calculateUsedBytes(services, partitionSizes);
-    const reservedBytesByNode = this.calculateReservedBytes(reservations);
+    const liveOperationIds = this.buildLiveOperationIds(operations);
+    const reservedBytesByNode = this.calculateReservedBytes(
+      reservations,
+      liveOperationIds,
+    );
 
     return nodes.map((node) => {
       const nodeId = node?.[COLUMN.NODE_ID];
@@ -252,10 +261,15 @@ class StorageCapacityAccountingService {
     const partitions = await this.getSystemTableRows(TABLES.PARTITIONS);
     const services = await this.getSystemTableRows(TABLES.SERVICES);
     const reservations = await this.getSystemTableRows(TABLES.STORAGE_RESERVATIONS);
+    const operations = await this.getSystemTableRows(TABLES.REPLICA_OPERATIONS);
 
     const partitionSizes = this.buildPartitionSizeMap(partitions);
     const usedBytesByNode = this.calculateUsedBytes(services, partitionSizes);
-    const reservedBytesByNode = this.calculateReservedBytes(reservations);
+    const liveOperationIds = this.buildLiveOperationIds(operations);
+    const reservedBytesByNode = this.calculateReservedBytes(
+      reservations,
+      liveOperationIds,
+    );
     const usedBytes = usedBytesByNode.get(nodeId) || 0;
     const reservedBytes = reservedBytesByNode.get(nodeId) || 0;
 
@@ -276,10 +290,15 @@ class StorageCapacityAccountingService {
     const partitions = this.getSystemTableRowsSync(TABLES.PARTITIONS);
     const services = this.getSystemTableRowsSync(TABLES.SERVICES);
     const reservations = this.getSystemTableRowsSync(TABLES.STORAGE_RESERVATIONS);
+    const operations = this.getSystemTableRowsSync(TABLES.REPLICA_OPERATIONS);
 
     const partitionSizes = this.buildPartitionSizeMap(partitions);
     const usedBytesByNode = this.calculateUsedBytes(services, partitionSizes);
-    const reservedBytesByNode = this.calculateReservedBytes(reservations);
+    const liveOperationIds = this.buildLiveOperationIds(operations);
+    const reservedBytesByNode = this.calculateReservedBytes(
+      reservations,
+      liveOperationIds,
+    );
     const usedBytes = usedBytesByNode.get(nodeId) || 0;
     const reservedBytes = reservedBytesByNode.get(nodeId) || 0;
 
@@ -342,12 +361,38 @@ class StorageCapacityAccountingService {
   }
 
   /**
+   * Build the set of operation IDs whose operations are still live
+   * (non-terminal). A reservation backing a live operation keeps its
+   * admitted capacity even past expires_at (audit finding 4): nothing
+   * renews expires_at, so treating expiry as already-released would
+   * silently reopen capacity the sweep has not actually reclaimed.
+   * @param {Object[]} operations - Raw replica_operations rows.
+   * @return {Set<string>}
+   * @private
+   */
+  buildLiveOperationIds(operations) {
+    const liveOperationIds = new Set();
+    for (const operation of operations || []) {
+      if (isTerminalReplicaOperationRecord(operation)) {
+        continue;
+      }
+      const operationId = operation?.[COLUMN.OPERATION_ID];
+      if (operationId) {
+        liveOperationIds.add(operationId);
+      }
+    }
+    return liveOperationIds;
+  }
+
+  /**
    * Calculate reserved bytes per node from reservation metadata.
    * @param {Object[]} reservations
+   * @param {Set<string>} [liveOperationIds] - Non-terminal operation IDs;
+   *   a reservation for one of these is counted even when past expires_at.
    * @return {Map<string, number>}
    * @private
    */
-  calculateReservedBytes(reservations) {
+  calculateReservedBytes(reservations, liveOperationIds) {
     const reservedByNode = new Map();
     const now = Date.now();
 
@@ -358,7 +403,13 @@ class StorageCapacityAccountingService {
       }
 
       const expiresAt = Number(reservation?.[COLUMN.EXPIRES_AT]);
-      if (Number.isFinite(expiresAt) && expiresAt <= now) {
+      const operationId = reservation?.[COLUMN.OPERATION_ID];
+      const operationLive = Boolean(
+        operationId && liveOperationIds && liveOperationIds.has(operationId),
+      );
+      if (
+        Number.isFinite(expiresAt) && expiresAt <= now && !operationLive
+      ) {
         continue;
       }
 

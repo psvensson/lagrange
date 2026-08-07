@@ -695,6 +695,9 @@ test('getCapacitySnapshots - SQL fallback uses injected control-plane ' +
       TABLES.PARTITIONS,
       TABLES.SERVICES,
       TABLES.STORAGE_RESERVATIONS,
+      // Live-operation consult (finding 4): expiry-aware accounting reads
+      // replica_operations to keep a live operation's reservation counted.
+      TABLES.REPLICA_OPERATIONS,
     ],
     'gateway should own fallback reads for storage accounting',
   );
