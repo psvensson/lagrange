@@ -32,6 +32,17 @@ function assignReplicaHandlerLifecycleMethods(ReplicaHandler) {
         dataDir: this.dataDir,
       });
       this.initialized = true;
+      // Removal-cleanup debt owner (audit finding 12): a failed/stranded
+      // replica-removal cleanup must not orphan DB/WAL files indefinitely,
+      // so every startup reconciles the partitions directory against
+      // authoritative rows via the idempotent reconcile cleanup path.
+      this.removedReplicaCleanupDebtSweepTask =
+        this.sweepRemovedReplicaCleanupDebt().catch((error) => {
+          this.logger.warn(
+            REPLICA_HANDLER_LOG_MSG.REMOVED_CLEANUP_SWEEP_FAILED,
+            {nodeId: this.nodeId, error: error.message},
+          );
+        });
     }
     /**
      * Handle incoming message (called by message router).

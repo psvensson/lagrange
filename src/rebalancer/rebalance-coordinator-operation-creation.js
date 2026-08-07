@@ -109,27 +109,6 @@ class RebalanceCoordinatorOperationCreation {
     );
   }
 
-  assertMembershipPublicationEpoch(move) {
-    const requestedEpoch = Number(move?.membershipPublicationEpoch);
-    if (!Number.isInteger(requestedEpoch) || requestedEpoch < 0) {
-      return;
-    }
-
-    const currentEpoch = this.getCurrentPublishedMembershipEpoch();
-    if (!Number.isInteger(currentEpoch) || currentEpoch === requestedEpoch) {
-      return;
-    }
-
-    const error = new Error(
-      `Stale placement plan for published membership epoch ${requestedEpoch}; ` +
-        `current epoch is ${currentEpoch}`,
-    );
-    error.rebalanceSkipReason = REBALANCER_SKIP_REASON.MEMBERSHIP_EPOCH_CHANGED;
-    error.requestedMembershipPublicationEpoch = requestedEpoch;
-    error.currentMembershipPublicationEpoch = currentEpoch;
-    throw error;
-  }
-
   /**
    * Create an operation record (persisted via SQL engine).
    * Includes deduplication check to prevent duplicate operations.
@@ -475,12 +454,18 @@ class RebalanceCoordinatorOperationCreation {
    * Message-group operations fail closed when canonical topology is missing.
    * Partition operations derive topology when visible, but tolerate cache lag
    * so explicit bootstrap hints or local restore paths can still proceed.
+   * The stamped cohort merges the cache view with the same authoritative
+   * services-owner rows the create-time topology guard already reads (audit
+   * finding 8): under cache lag the cache-only path could persist an
+   * unstamped/self-only cohort even though the guard merged authoritative
+   * rows for the admission decision, so stamping must not see less than the
+   * guard did.
    *
    * @param {Object} context
-   * @return {{replicaIds: string[], peerAddresses: string[]}|null}
+   * @return {Promise<{replicaIds: string[], peerAddresses: string[]}|null>}
    * @private
    */
-  buildOperationBootstrapTopology(context) {
+  async buildOperationBootstrapTopology(context) {
     const {
       normalizedMoveType,
       entityType,
@@ -500,11 +485,33 @@ class RebalanceCoordinatorOperationCreation {
       return null;
     }
 
-    const serviceRows = this.repository.getEntityServiceRows({
+    const cacheServiceRows = this.repository.getEntityServiceRows({
       partitionId,
       entityType,
       entityId,
     });
+    let authoritativeObservation = null;
+    try {
+      authoritativeObservation =
+        await this.getAuthoritativeEntityServiceRowsObservation({
+          partitionId,
+          entityType,
+          entityId,
+        });
+    } catch (_error) {
+      // An owner read error is indistinguishable from an unavailable owner
+      // here: fall back to the cache view, exactly like an unavailable
+      // observation.
+      authoritativeObservation = null;
+    }
+    const serviceRows =
+      authoritativeObservation?.available === true &&
+        authoritativeObservation.rows.length > 0 ?
+        this.mergeEntityServiceRows(
+          cacheServiceRows,
+          authoritativeObservation.rows,
+        ) :
+        cacheServiceRows;
     if (!Array.isArray(serviceRows) || serviceRows.length === 0) {
       if (entityType === SERVICE_TYPE.PARTITION) {
         // CL-013: a silently-unstamped operation forces the target replica
@@ -724,7 +731,7 @@ class RebalanceCoordinatorOperationCreation {
         OPERATION_METADATA_KEY.BOOTSTRAP_TOPOLOGY_DISPATCH_DEFERRED
       ] = true;
     }
-    const bootstrapTopology = this.buildOperationBootstrapTopology({
+    const bootstrapTopology = await this.buildOperationBootstrapTopology({
       normalizedMoveType,
       entityType,
       entityId,

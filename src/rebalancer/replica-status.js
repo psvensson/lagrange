@@ -116,13 +116,7 @@ function createOperation(params) {
     initialHistory[OPERATION_METADATA_KEY.SOURCE_REPLICA_ID] =
       params.sourceReplicaId;
   }
-  if (Number.isInteger(params.membershipPublicationEpoch) &&
-      params.membershipPublicationEpoch >= 0) {
-    initialHistory[OPERATION_METADATA_KEY.MEMBERSHIP_PUBLICATION_EPOCH] =
-      params.membershipPublicationEpoch;
-  }
-
-  return {
+  const operation = {
     operationId: params.operationId,
     type: params.type,
     partitionId: params.partitionId,
@@ -137,6 +131,14 @@ function createOperation(params) {
     errorMessage: null,
     stepsHistory: [initialHistory],
   };
+  // The planning membership epoch rides the operation record top-level so
+  // the dispatch-time epoch gate can fence stale ADD/REPLACE execution
+  // (audit finding 7); it is no longer duplicated into stepsHistory.
+  if (Number.isInteger(params.membershipPublicationEpoch) &&
+      params.membershipPublicationEpoch >= 0) {
+    operation.membershipPublicationEpoch = params.membershipPublicationEpoch;
+  }
+  return operation;
 }
 
 /**

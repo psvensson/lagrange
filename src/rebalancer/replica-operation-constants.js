@@ -18,6 +18,7 @@ const ReplicaOperationReason = Object.freeze({
 
 const ReplicaOperationField = Object.freeze({
   TYPE: FIELD.TYPE,
+  MEMBERSHIP_PUBLICATION_EPOCH: 'membershipPublicationEpoch',
   OPERATION_ID: FIELD.OPERATION_ID,
   OPERATION_TYPE: FIELD.OPERATION_TYPE,
   PARTITION_ID: FIELD.PARTITION_ID,

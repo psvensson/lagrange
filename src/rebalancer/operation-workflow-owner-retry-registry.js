@@ -55,6 +55,8 @@ class OperationWorkflowOwnerRetryRegistry extends
       options.ensureReservationForOperation;
     this.hasStorageReservationSupport =
       options.hasStorageReservationSupport;
+    this.getCurrentPublishedMembershipEpoch =
+      options.getCurrentPublishedMembershipEpoch;
     this.reconcileReservations = options.reconcileReservations;
     this.allocateCanonicalReplicaId = options.allocateCanonicalReplicaId;
     this.getActualReplicaStatus = options.getActualReplicaStatus;

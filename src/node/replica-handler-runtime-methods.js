@@ -1,6 +1,9 @@
 import {
   assignReplicaHandlerRuntimeMetadataMethods,
 } from './replica-handler-runtime-metadata-methods.js';
+import {
+  sweepRemovedReplicaCleanupDebt,
+} from './replica-handler-removed-cleanup-sweep.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -23,6 +26,28 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
     path,
   } = options;
   class ReplicaHandlerRuntimeMethods {
+    /**
+     * Clean up local resources for a replica.
+     * @param {string} partitionId - Partition ID.
+     * @param {string} replicaId - Replica ID.
+     * @return {Promise<void>}
+     * @private
+     */
+    /**
+     * Durable owner for removal-cleanup debt (audit finding 12): sweep the
+     * partitions directory at startup for replica files whose cleanup was
+     * stranded (failed cleanup before terminalization, or a crash between
+     * the services-row DELETE and the file unlink) and delete them via the
+     * canonical reconcile cleanup path. Runs once at startup; a failed
+     * deletion stays on disk and is retried on the next startup, so orphan
+     * files are eventually deletable and reconcileRemovedReplicaCleanup
+     * stays reachable.
+     * @return {Promise<Object>} Sweep report.
+     * @private
+     */
+    async sweepRemovedReplicaCleanupDebt() {
+      return sweepRemovedReplicaCleanupDebt(this, options);
+    }
     /**
      * Clean up local resources for a replica.
      * @param {string} partitionId - Partition ID.

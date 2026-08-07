@@ -2,6 +2,9 @@ const LOCAL_STR_CONSTRUCTOR = 'constructor';
 // CL-013: explicit REPLACE joins categorically target an EXISTING raft
 // group; they must never fall back to solo bootstrap.
 const EXPLICIT_REPLACE_OPERATION_TYPE = 'REPLACE';
+// Audit finding 8: an explicit ADD join on a non-fresh partition targets an
+// existing group too; the self-only topology guard covers both.
+const EXPLICIT_ADD_OPERATION_TYPE = 'ADD';
 const REPLICA_JOIN_TOPOLOGY_MISSING_PREFIX =
   'Replica join topology unavailable for partition ';
 
@@ -203,6 +206,11 @@ function assignReplicaHandlerRuntimeMetadataMethods(
           REPLICA_HANDLER_TYPEOF.STRING &&
         options.explicitOperationType.trim().toUpperCase() ===
           EXPLICIT_REPLACE_OPERATION_TYPE;
+      const isExplicitAddJoin =
+        typeof options.explicitOperationType ===
+          REPLICA_HANDLER_TYPEOF.STRING &&
+        options.explicitOperationType.trim().toUpperCase() ===
+          EXPLICIT_ADD_OPERATION_TYPE;
       // A REPLACE operation's dispatched cohort is the placement owner's
       // closed-world membership decision. Local and hydrated service rows are
       // still useful for leader/voter readiness, but they cannot add a voter
@@ -354,13 +362,20 @@ function assignReplicaHandlerRuntimeMetadataMethods(
       // CL-013: an explicit REPLACE join targets an EXISTING group by
       // definition — it must never proceed with a SELF-ONLY topology, which
       // fresh-bootstraps an isolated single-node raft group that elects
-      // itself and pollutes the canonical leader row. When neither the
-      // dispatched hints nor the local cache yield any sibling peer, the
-      // context is stale: throw retryably so the caller's hydration loop
-      // re-reads authoritative rows instead of proceeding. (Join MODE is
-      // unchanged: with peers present but no viable leader, voter-mode
-      // re-formation remains the designed dead-leader recovery behavior.)
-      if (isExplicitReplaceJoin) {
+      // itself and pollutes the canonical leader row. Audit finding 8
+      // extends the same guard to an explicit ADD join on a non-fresh
+      // partition: the group already exists outside the fresh-bootstrap
+      // window, so a self-only resolved cohort is stale evidence, never a
+      // new group. When neither the dispatched hints nor the local cache
+      // yield any sibling peer, the context is stale: throw retryably so
+      // the caller's hydration loop re-reads authoritative rows instead of
+      // proceeding. (Join MODE is unchanged: with peers present but no
+      // viable leader, voter-mode re-formation remains the designed
+      // dead-leader recovery behavior.)
+      const isExistingGroupJoin =
+        isExplicitReplaceJoin ||
+        (isExplicitAddJoin && !isFreshBootstrapPartition);
+      if (isExistingGroupJoin) {
         const siblingPeerCount = replicaIds.filter(
           (candidateReplicaId) => candidateReplicaId !== replicaId,
         ).length;

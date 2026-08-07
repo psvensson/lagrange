@@ -88,6 +88,15 @@ const REPLICA_HANDLER_LOG_MSG = Object.freeze({
   REGISTERED_ROUTER: 'Registered ReplicaHandler with message router',
   UNREGISTERED_ROUTER: 'Unregistered ReplicaHandler from message router',
   SHUTTING_DOWN: 'Shutting down ReplicaHandler',
+  REMOVED_CLEANUP_SWEEP_DELETED:
+    'Startup sweep deleted removed-replica cleanup-debt files',
+  REMOVED_CLEANUP_SWEEP_FAILED:
+    'Startup sweep failed to delete removed-replica cleanup-debt files',
+  REMOVED_CLEANUP_SWEEP_SKIPPED:
+    'Startup removed-replica cleanup-debt sweep skipped: ' +
+    'partitions directory unreadable',
+  REMOVED_CLEANUP_SWEEP_RESULT:
+    'Startup removed-replica cleanup-debt sweep result',
 });
 
 const REPLICA_HANDLER_ERROR_MSG = Object.freeze({

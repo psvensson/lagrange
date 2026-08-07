@@ -1,0 +1,20 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "existing-group-add-topology-guard",
+  "status": "pass",
+  "generatedAt": "2026-08-07T13:59:44.391Z",
+  "receipts": [
+    {
+      "id": "self-only-cohort-add-deferred",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/existing-group-add-topology-guard.test.js",
+      "detail": "an explicit ADD join into a NON-fresh partition that resolves to a self-only cohort (no dispatched hints, cache lag) throws the retryable join-topology-missing class — the existing transient-error classification routes it into the authoritative hydration retry loop exactly like the CL-013 REPLACE guard — instead of solo-bootstrapping an isolated raft group; the fresh-bootstrap window stays exempt for first-cohort formation (audit finding 8; red-on-revert: reverting the ADD arm of isExistingGroupJoin flips this test red)"
+    },
+    {
+      "id": "cohort-stamp-authoritative-read",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/existing-group-add-topology-guard.test.js",
+      "detail": "coordinator cohort stamping (buildOperationBootstrapTopology) merges the same authoritative services-owner rows the create-time admission guard reads, so a standard-path ADD allocates the next canonical replica id and persists the full cohort even while the local cache lags the owner; the dead-leader branch (sibling peers, no viable leader -> existingReplicaCount 0) stays preserved for REPLACE and ADD (audit finding 8; red-on-revert: restoring the cache-only service-row read flips this test red)"
+    }
+  ]
+}

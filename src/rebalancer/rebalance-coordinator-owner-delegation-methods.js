@@ -1,3 +1,5 @@
+import {REBALANCER_SKIP_REASON} from './rebalancer-constants.js';
+
 const LOCAL_STR_FUNCTION = 'function';
 
 class RebalanceCoordinatorOwnerDelegationMethods {
@@ -159,6 +161,53 @@ class RebalanceCoordinatorOwnerDelegationMethods {
       this.nodeId,
       Date.now(),
     );
+  }
+
+  /**
+   * Creation-time membership epoch fence (audit finding 7). The rebalance
+   * loop stamps every planned move with the current published membership
+   * epoch; this assert stops failing open for such an epoch-bound move: an
+   * unreadable current epoch previously passed silently, it now throws a
+   * typed MEMBERSHIP_EPOCH_UNAVAILABLE skip so the rebalance loop defers
+   * the operation into its existing retry-next-cycle path instead of
+   * persisting unfenced work. A readable-but-different epoch keeps the
+   * pre-existing MEMBERSHIP_EPOCH_CHANGED stale-plan rejection. Direct
+   * callers that never carried an epoch (provisioning, legacy cleanup,
+   * REMOVE) are not epoch plans and bypass the fence exactly as before.
+   * @param {Object} move - Move specification.
+   * @return {void}
+   * @private
+   */
+  assertMembershipPublicationEpoch(move) {
+    const requestedEpoch = Number(move?.membershipPublicationEpoch);
+    if (!Number.isInteger(requestedEpoch) || requestedEpoch < 0) {
+      return;
+    }
+
+    const currentEpoch = this.getCurrentPublishedMembershipEpoch();
+    if (!Number.isInteger(currentEpoch)) {
+      const error = new Error(
+        'Current published membership epoch is unreadable; deferring ' +
+          `epoch-bound placement planned for epoch ${requestedEpoch}`,
+      );
+      error.rebalanceSkipReason =
+        REBALANCER_SKIP_REASON.MEMBERSHIP_EPOCH_UNAVAILABLE;
+      error.requestedMembershipPublicationEpoch = requestedEpoch;
+      // currentMembershipPublicationEpoch intentionally absent: unreadable.
+      throw error;
+    }
+    if (currentEpoch === requestedEpoch) {
+      return;
+    }
+
+    const error = new Error(
+      `Stale placement plan for published membership epoch ${requestedEpoch}; ` +
+        `current epoch is ${currentEpoch}`,
+    );
+    error.rebalanceSkipReason = REBALANCER_SKIP_REASON.MEMBERSHIP_EPOCH_CHANGED;
+    error.requestedMembershipPublicationEpoch = requestedEpoch;
+    error.currentMembershipPublicationEpoch = currentEpoch;
+    throw error;
   }
 }
 

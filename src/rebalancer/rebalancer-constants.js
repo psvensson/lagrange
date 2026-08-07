@@ -446,6 +446,7 @@ const REBALANCER_SKIP_REASON = Object.freeze({
   BUDGET_QUERY_FAILED: 'budget_query_failed',
   CONFLICTING_OPERATION_IN_FLIGHT: 'conflicting_operation_in_flight',
   MEMBERSHIP_EPOCH_CHANGED: 'membership_epoch_changed',
+  MEMBERSHIP_EPOCH_UNAVAILABLE: 'membership_epoch_unavailable',
   NOT_LEADER: 'not_leader',
   STABILIZING: 'stabilizing',
   NO_NODES: 'no_nodes',

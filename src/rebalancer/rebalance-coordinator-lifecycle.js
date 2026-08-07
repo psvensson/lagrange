@@ -311,6 +311,8 @@ class RebalanceCoordinatorLifecycle {
           this.ensureReservationForOperation(op),
         hasStorageReservationSupport: () =>
           this.hasStorageReservationSupport(),
+        getCurrentPublishedMembershipEpoch: () =>
+          this.getCurrentPublishedMembershipEpoch(),
         reconcileReservations: () => this.reconcileReservations(),
         allocateCanonicalReplicaId: (params) =>
           this.allocateCanonicalReplicaId(params),

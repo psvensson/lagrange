@@ -398,6 +398,17 @@ const DISPATCH_RESPONSE_RECONCILE_METHODS = {
       [ReplicaOperationField.ENTITY_TYPE]: entityType,
       [ReplicaOperationField.ENTITY_ID]: entityId,
     };
+    // Carry the planning epoch into the executor request (audit finding 7)
+    // so ADD/REPLACE execution can reject staleness against it.
+    if (
+      Number.isInteger(
+        operation[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH],
+      ) &&
+      operation[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH] >= 0
+    ) {
+      request[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH] =
+        operation[ReplicaOperationField.MEMBERSHIP_PUBLICATION_EPOCH];
+    }
     if (requestReason) {
       request[ReplicaOperationField.REASON] = requestReason;
     }

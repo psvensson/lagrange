@@ -6,6 +6,9 @@ import * as DISPATCH_WAKE_PREEMPTION
 import * as DISPATCH_RESPONSE_RECONCILE
   from './operation-workflow-dispatch-response-reconcile.js';
 import {
+  ensureDispatchMembershipEpochOrSkip,
+} from './operation-workflow-dispatch-epoch-gate.js';
+import {
   ensureDispatchReservationOrSkip,
 } from './operation-workflow-dispatch-reservation-gate.js';
 import {
@@ -311,6 +314,18 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
     );
     if (reservationGateSkip) {
       return reservationGateSkip;
+    }
+
+    // Fail-closed membership epoch fence (audit finding 7): after the
+    // reservation gate (the operation is still worth fencing once it is
+    // provably reservable) and before any claim/dispatch below — no
+    // ADD/REPLACE dispatch proceeds on a plan whose published membership
+    // epoch has advanced past it; an unreadable epoch defers instead of
+    // dispatching unfenced.
+    const epochGateSkip =
+      await ensureDispatchMembershipEpochOrSkip(this, operation);
+    if (epochGateSkip) {
+      return epochGateSkip;
     }
     return this.advanceReservationClearedDispatch(operationInput, operation);
   }

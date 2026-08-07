@@ -107,7 +107,13 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
     /**
      * Reconcile durable cleanup for replicas already marked REMOVED locally.
      * This keeps idempotent REMOVE retries from leaving stale service rows
-     * routable after the local replica is already gone.
+     * routable after the local replica is already gone — and it is the
+     * canonical retry the startup cleanup-debt sweep drives against
+     * orphaned files (audit finding 12), so it must delete the replica's
+     * DB/WAL/SHM files even when no live service is tracked: a removal
+     * that crashed between the services-row DELETE and the file unlink
+     * leaves exactly that shape (no row, no tracked service, files on
+     * disk), and skipping file deletion here is what stranded the orphan.
      * @param {string} replicaId
      * @param {string} partitionId
      * @return {Promise<boolean>} True when stale cleanup work ran.
@@ -120,35 +126,11 @@ function assignReplicaHandlerRemoveExecutionMethods(ReplicaHandler) {
         replicaId,
         nodeId: this.nodeId,
       });
-      if (trackedService) {
-        await this.cleanupRemovedReplicaLocalRuntime(
-          replicaId,
-          partitionId,
-          trackedService,
-        );
-      }
-      if (!trackedService) {
-        this.localServices.delete(replicaId);
-        this.setLocalReplica(replicaId, {
-          replicaId,
-          partitionId,
-          status: ReplicaStatus.REMOVED,
-          service: null,
-        });
-        if (
-          typeof this.replicaStateMachine?.completeDurableRemoval ===
-          REPLICA_HANDLER_TYPEOF.FUNCTION
-        ) {
-          this.replicaStateMachine.completeDurableRemoval(replicaId, {
-            partitionId,
-            nodeId: this.nodeId,
-            reason:
-              REPLICA_REMOVE_EXECUTION_REASON.DURABLE_REMOVE_CLEANUP_COMPLETE,
-            serviceId: replicaId,
-          });
-        }
-        return false;
-      }
+      await this.cleanupRemovedReplicaLocalRuntime(
+        replicaId,
+        partitionId,
+        trackedService,
+      );
       this.localServices.delete(replicaId);
       this.setLocalReplica(replicaId, {
         replicaId,

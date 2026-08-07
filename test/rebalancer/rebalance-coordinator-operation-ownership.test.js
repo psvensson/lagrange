@@ -944,9 +944,16 @@ test('RebalanceCoordinator createOperation persists membership publication epoch
       });
 
       t.equal(
-        operation.stepsHistory[0]?.membershipPublicationEpoch,
+        operation.membershipPublicationEpoch,
         7,
-        'epoch-bound operation should persist its planning publication epoch',
+        'epoch-bound operation should persist its planning publication epoch ' +
+          'on the operation record',
+      );
+      t.equal(
+        operation.stepsHistory[0]?.membershipPublicationEpoch,
+        undefined,
+        'the planning epoch no longer duplicates into stepsHistory ' +
+          '(audit finding 7)',
       );
       t.equal(
         operation.operationId,
