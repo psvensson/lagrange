@@ -27,7 +27,9 @@ import path from 'node:path';
 
 import {
   CONTRACT_SCHEMA_VERSION,
+  COVERAGE_MINIMUM_TEST_SHARE,
   COVERAGE_STATE_ABSENT,
+  COVERAGE_STATE_INSUFFICIENT,
   COVERAGE_STATE_STALE,
   DIRECTORY_PREFIX_SUFFIX,
   LIST_JOIN_SEPARATOR,
@@ -366,14 +368,25 @@ export function selectProofCone(root, changedPaths) {
   const coverageRead = readJson(root, PROOF_CONE_COVERAGE_PATH);
   const coverageSnapshot = coverageRead.ok ? coverageRead.value : null;
   let coverageFresh = false;
+  let coverageSufficient = false;
   if (coverageSnapshot) {
     coverageFresh = coverageSnapshot.schemaVersion === COVERAGE_SCHEMA_VERSION &&
       coverageSnapshot.sourceDigest === graphRead.value.sourceDigest;
-    receipt.inputs.coverageDigest = coverageSnapshot.sourceDigest || null;
-    receipt.inputs.coverageFresh = coverageFresh;
-  } else {
-    receipt.inputs.coverageFresh = false;
+    // The seed snapshot is intentionally a leaf corpus. Coverage can only
+    // discharge owner-tier proof obligations once the snapshot covers a
+    // meaningful share of the census; below that it cannot prove impact and
+    // the cone widens exactly as if it were stale.
+    const coveredShare = Object.keys(coverageSnapshot.tests || {}).length /
+      Math.max(1, Object.keys(loadPrimaryManifest(root, PRIMARY_CLASS_MANIFEST_PATH)
+        .manifest?.classes || {}).length);
+    coverageSufficient = coverageFresh &&
+      coveredShare >= COVERAGE_MINIMUM_TEST_SHARE;
+    receipt.inputs.coverageTestShare = coveredShare;
   }
+  receipt.inputs.coverageDigest = coverageSnapshot ?
+    coverageSnapshot.sourceDigest || null : null;
+  receipt.inputs.coverageFresh = coverageFresh;
+  receipt.inputs.coverageSufficient = coverageSufficient;
 
   // Classify every changed path and compute the escalation tier.
   const changedContracts = new Set();
@@ -416,9 +429,10 @@ export function selectProofCone(root, changedPaths) {
     }
   }
 
-  // Observed coverage edges — only when fresh; a stale snapshot widens the
-  // cone by escalation rather than silently narrowing it.
-  if (coverageSnapshot && coverageFresh) {
+  // Observed coverage edges — only when fresh and corpus-sufficient; a
+  // stale or too-small snapshot widens the cone by escalation rather than
+  // silently narrowing it.
+  if (coverageSnapshot && coverageSufficient) {
     const coverageSelected = coverageEdgesFor(coverageSnapshot, sortedChanged);
     for (const testPath of coverageSelected.keys()) {
       if (classified[testPath]) {
@@ -433,8 +447,10 @@ export function selectProofCone(root, changedPaths) {
     receipt.fullSuite = true;
     receipt.selectedTests = [...classifiedTests];
     receipt.counts.uniqueSelected = classifiedTests.length;
+    const coverageState = !coverageSnapshot ? COVERAGE_STATE_ABSENT :
+      (coverageFresh ? COVERAGE_STATE_INSUFFICIENT : COVERAGE_STATE_STALE);
     receipt.problems.push(
-      `coverage snapshot ${coverageSnapshot ? COVERAGE_STATE_STALE : COVERAGE_STATE_ABSENT} at tier ${escalation}; widened to full suite`);
+      `coverage snapshot ${coverageState} at tier ${escalation}; widened to full suite`);
     return {selection: receipt, problems: receipt.problems};
   }
 
@@ -488,4 +504,10 @@ export function writeReceipt(root, receipt) {
   const target = path.join(dir, `proof-cone-${stamp}.receipt.json`);
   fs.writeFileSync(target, JSON.stringify(receipt, null, 2));
   return target;
+}
+
+// Test-only export: the shadow validator replays contract indexes without
+// going through a full selection.
+export function buildContractIndexesForTest(root, contractsManifest) {
+  return buildContractIndexes(root, contractsManifest);
 }

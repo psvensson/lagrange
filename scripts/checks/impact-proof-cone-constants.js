@@ -76,6 +76,8 @@ export const COVERAGE_SCHEMA_VERSION = 1;
 // changes (by committed source fingerprint) or flagged stale by the caller
 // widens the cone rather than silently narrowing it.
 export const COVERAGE_FRESHNESS_SOURCE_DIGEST = 'sourceDigest';
+export const COVERAGE_MINIMUM_TEST_SHARE = 0.05;
+export const COVERAGE_STATE_INSUFFICIENT = 'insufficient-corpus';
 
 export const RECEIPT_SCHEMA_VERSION = 1;
 

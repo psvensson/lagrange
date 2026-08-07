@@ -40,6 +40,8 @@ const DIRECTORY_SEPARATOR = '/';
 const FILE_URL_PREFIX = 'file://';
 const SRC_PREFIX = 'src/';
 const SCRIPTS_PREFIX = 'scripts/';
+const TEST_PREFIX = 'test/';
+const TEST_FILE_SUFFIX = '.test.js';
 const OUT_FLAG = '--out';
 const NEWLINE = '\n';
 const SHARD_FLAG = '--shard';
@@ -50,7 +52,10 @@ function productionPathFromUrl(url) {
   if (!stringStartsWith(url, FILE_URL_PREFIX)) return null;
   const absolute = url.slice(FILE_URL_PREFIX.length);
   const relative = stringSplit(path.relative(root, absolute), path.sep).join(DIRECTORY_SEPARATOR);
-  if (stringStartsWith(relative, SRC_PREFIX) || stringStartsWith(relative, SCRIPTS_PREFIX)) {
+  if (stringStartsWith(relative, SRC_PREFIX) ||
+      stringStartsWith(relative, SCRIPTS_PREFIX) ||
+      (stringStartsWith(relative, TEST_PREFIX) &&
+       stringEndsWith(relative, TEST_FILE_SUFFIX))) {
     return relative;
   }
   return null;
