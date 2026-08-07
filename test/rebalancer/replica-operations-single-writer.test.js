@@ -150,6 +150,16 @@ function createTestCoordinator(options = {}) {
       }
     }
     if (sql.includes('UPDATE')) {
+      // Owner-lease heartbeat touch (findings 5+14): a lease-only UPDATE
+      // carries [leaseExpiresAt, operationId] — distinct from the canonical
+      // transition shape — and mutates only the lease column.
+      if (sql.includes('lease_expires_at = ?')) {
+        if (operation) {
+          operation.ownerLeaseExpiresAt = params?.[0] ?? null;
+        }
+        persisted.push({sql, params, queryOptions});
+        return persistResults;
+      }
       if (operation) {
         operation.status = params?.[0] ?? operation.status;
         operation.workflowStep = params?.[1] ?? operation.workflowStep;

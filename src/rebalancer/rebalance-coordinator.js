@@ -204,13 +204,35 @@ class RebalanceCoordinator extends EventEmitter {
       inFlightOperations: inFlightOperationCount,
     });
 
+    // Shutdown JOINS in-flight work (audit finding 14): bump the ownership
+    // fence FIRST so every lane continuation past an await observes a stale
+    // generation and stands down, then boundedly await the in-flight owner
+    // lanes BEFORE releasing the retry registries — replacing flag-set +
+    // map-clear while continuations proceed unguarded.
+    let shutdownJoinResult = null;
+    if (
+      typeof this.workflowOwner?.bumpOperationOwnershipFenceEpoch ===
+        LOCAL_STR_FUNCTION
+    ) {
+      this.workflowOwner.bumpOperationOwnershipFenceEpoch();
+    }
+    if (
+      typeof this.workflowOwner?.joinInFlightOwnerLanes === LOCAL_STR_FUNCTION
+    ) {
+      shutdownJoinResult = await this.workflowOwner.joinInFlightOwnerLanes({
+        timeoutMs: this.shutdownJoinTimeoutMs,
+      });
+    }
+
     this.operationsInCreation.clear();
     this.recentOperationIntents.clear();
     if (typeof this.workflowOwner?.shutdown === LOCAL_STR_FUNCTION) {
       this.workflowOwner.shutdown();
     }
 
-    this.emit(REBALANCE_COORDINATOR_EVENT.SHUTDOWN);
+    this.emit(REBALANCE_COORDINATOR_EVENT.SHUTDOWN, {
+      shutdownJoin: shutdownJoinResult,
+    });
   }
 }
 

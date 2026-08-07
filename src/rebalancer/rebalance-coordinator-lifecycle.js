@@ -2,6 +2,9 @@ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
 import {resolveTimeSource} from '../time/time-source.js';
 import {buildReplicaInventorySnapshot} from './replica-inventory.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
+import {
+  OPERATION_SHUTDOWN_JOIN_DEFAULT_TIMEOUT_MS,
+} from './operation-owner-shutdown-join.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_SYSTEMTABLECACHE = 'systemTableCache';
@@ -199,6 +202,15 @@ class RebalanceCoordinatorLifecycle {
     this.lastEmptyIncompleteOperationQueryAtMs = 0;
     this.incompleteOperationQueryEmptyBackoffMs =
       INCOMPLETE_OPERATION_EMPTY_QUERY_BACKOFF_MS;
+    // Bounded shutdown join of in-flight owner lanes (audit finding 14):
+    // shutdown awaits the lane registry for at most this budget before the
+    // ownership fence (already bumped) becomes the sole guard for
+    // stragglers.
+    this.shutdownJoinTimeoutMs =
+      Number.isFinite(options.shutdownJoinTimeoutMs) &&
+      options.shutdownJoinTimeoutMs > 0 ?
+        Math.floor(options.shutdownJoinTimeoutMs) :
+        OPERATION_SHUTDOWN_JOIN_DEFAULT_TIMEOUT_MS;
 
     // Logging
     const loggingService = LoggingService.getInstance();

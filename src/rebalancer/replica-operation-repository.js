@@ -182,8 +182,8 @@ const SQL = Object.freeze({
     completed_at, error_message, steps_history,
     entity_type, entity_id
   ) VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
-  UPDATE_OPERATION: `UPDATE replica_operations SET 
-    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?, 
+  UPDATE_OPERATION: `UPDATE replica_operations SET
+    status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
     WHERE operation_id = ?`,
   UPDATE_OPERATION_EXPECTING_STEP: `UPDATE replica_operations SET
@@ -197,6 +197,13 @@ const SQL = Object.freeze({
   UPDATE_OPERATION_TERMINAL: `UPDATE replica_operations SET
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
+    WHERE operation_id = ? AND completed_at IS NULL`,
+  // Owner-lease heartbeat touch (audit findings 5+14): re-stamps only the
+  // lease column on a live (non-terminal) row owned by this node's write
+  // path. Carries no status/step payload, so it is issued AFTER the
+  // canonical write and never gates it.
+  UPDATE_OPERATION_OWNER_LEASE: `UPDATE replica_operations SET
+    lease_expires_at = ?
     WHERE operation_id = ? AND completed_at IS NULL`,
   SELECT_REPLICA_STATUS: `SELECT service_id, replica_id, partition_id, node_id,
       service_type, status, raft_role, address

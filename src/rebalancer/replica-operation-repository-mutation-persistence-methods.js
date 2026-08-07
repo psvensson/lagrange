@@ -193,6 +193,10 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
         return resolveNewOperationInsertCollision(this, operation, options);
       }
       const visibility = await this.confirmPersistenceThroughWitness(operation);
+      // Stamp the durable owner lease on the fresh row (audit findings 5+14)
+      // — fail-soft and never on the insert's own write shape; the lease
+      // heartbeat rides the dedicated touch statement after the insert lands.
+      await this.touchOperationOwnerLease(operation);
       return buildNewOperationPersistResult(
         options,
         changeCount === null ?

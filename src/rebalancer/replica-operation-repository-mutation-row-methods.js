@@ -1,9 +1,26 @@
+import {
+  resolveOperationOwnerLeaseExpiryForPersist,
+} from './replica-operation-owner-lease.js';
+
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
 function assignReplicaOperationRepositoryMutationRowMethods(
   ReplicaOperationRepository,
 ) {
   class ReplicaOperationRepositoryMutationRowMethods {
+    // The persisted owner lease is re-stamped at every write boundary (audit
+    // findings 5+14): a renewed lease is the owner's durable heartbeat; the
+    // schema's lease_expires_at column carries it. The lease lives ONLY in
+    // the write payload — the live operation object is never mutated, so the
+    // owner-persisted-transition visibility comparison keeps matching the
+    // pre-stamp durable row.
+    resolveOperationOwnerLeasePersistExpiry(operation) {
+      return resolveOperationOwnerLeaseExpiryForPersist(
+        operation,
+        this.nodeId,
+      );
+    }
+
     buildReplicaOperationRow(operation) {
       return {
         operation_id: operation.operationId,
@@ -18,6 +35,8 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         created_at: operation.createdAt,
         updated_at: operation.updatedAt,
         completed_at: operation.completedAt,
+        lease_expires_at:
+          this.resolveOperationOwnerLeasePersistExpiry(operation),
         error_message: operation.errorMessage,
         steps_history: JSON.stringify(operation.stepsHistory),
         entity_type: operation.entityType,
@@ -37,6 +56,8 @@ function assignReplicaOperationRepositoryMutationRowMethods(
         workflow_step: operation.workflowStep,
         updated_at: operation.updatedAt,
         completed_at: operation.completedAt,
+        lease_expires_at:
+          this.resolveOperationOwnerLeasePersistExpiry(operation),
         error_message: operation.errorMessage,
         steps_history: JSON.stringify(operation.stepsHistory),
         replica_id: operation.replicaId,

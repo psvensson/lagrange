@@ -1,0 +1,26 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "operation-ownership-lease-fencing",
+  "status": "pass",
+  "generatedAt": "2026-08-07T16:29:25.776Z",
+  "receipts": [
+    {
+      "id": "durable-owner-lease-enforced",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/operation-ownership-lease-fencing.test.js",
+      "detail": "the schema vestigial lease_expires_at column becomes the durable owner lease: the insert-row and update-data payloads carry a re-stamped lease heartbeat anchored to the operation updatedAt, the dedicated UPDATE_OPERATION_OWNER_LEASE touch persists lease_expires_at on live rows (terminal rows skipped via completed_at IS NULL), and a LIVE lease held by the recorded remote owner FENCES priority-control-plane drain remote settlement even when the unfenced routing-readiness heuristic reports the owner unready (expired leases defer back to the heuristic) — red-on-revert: removing the lease stamp/touch or the lease-first fence in resolveOperationDrainOwnerAvailability fails the lease and fence tests"
+    },
+    {
+      "id": "orphan-op-adopted-by-fenced-successor",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/operation-ownership-lease-fencing.test.js",
+      "detail": "an incomplete ordinary-partition operation whose recorded owner is remote joins the level-triggered recovery sweep once its durable lease is expired (or legacy-absent) and is re-driven through the gated single-flight lifecycle reconcile — a live remote lease keeps it fenced out of the sweep (red-on-revert: removing the adoption arm in reconcileOrphanedOperations or the lease fence in queryOrphanAdoptableOperations fails the adoption tests)"
+    },
+    {
+      "id": "shutdown-joins-in-flight",
+      "passed": true,
+      "command": "npm run test:file -- test/rebalancer/operation-ownership-lease-fencing.test.js",
+      "detail": "shutdown bumps the ownership fence epoch FIRST, then BOUNDEDLY awaits the in-flight owner lanes (joinInFlightOwnerLanes) before releasing the retry registries — a wedged lane hits the bounded timeout instead of pinning shutdown, and a lane continuation past the fence bump stands down with shutdown_in_progress instead of running unguarded (red-on-revert: removing the fence bump, the lane fence check in runRetainedOperationOwnerAction, or the bounded join in RebalanceCoordinator.shutdown fails the join tests)"
+    }
+  ]
+}

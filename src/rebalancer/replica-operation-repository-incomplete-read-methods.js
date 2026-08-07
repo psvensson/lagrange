@@ -3,6 +3,10 @@ import {
   PRIORITY_RECOVERY_INCOMPLETE_OPERATION_VISIBILITY_STEPS,
   isIncompleteOperationRowStep,
 } from './replica-operation-step-policy.js';
+import {
+  REPLICA_OPERATION_OWNER_LEASE_ADOPTION,
+  resolveOperationOwnerLeaseAdoption,
+} from './replica-operation-owner-lease.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 
@@ -195,6 +199,34 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         operation.type === OperationType.REMOVE &&
         operation.workflowStep === WORKFLOW_STEP.STOPPING
       );
+    }
+
+    /**
+   * Fenced orphan-adoption read (audit findings 5+14): the recovery sweep
+   * surface. Returns incomplete ordinary-partition operations this node may
+   * adopt as the fenced successor — legacy unfenced rows OR rows whose
+   * durable lease expired by `nowMs`. A live remote lease is never returned.
+   * @param {number} [nowMs]
+   * @return {Object[]}
+   */
+    queryOrphanAdoptableOperations(nowMs) {
+      return this.queryCachedIncompleteOperations().filter((operation) => {
+        const partitionClassification = classifySystemPartition({
+          partitionId: operation?.partitionId,
+        });
+        if (
+          partitionClassification.priorityControlPlane ||
+          partitionClassification.systemTable ||
+          this.isOperationLocallyOwned(operation)
+        ) {
+          return false;
+        }
+        return (
+          resolveOperationOwnerLeaseAdoption(operation, this.nodeId, nowMs)
+            .adoption ===
+          REPLICA_OPERATION_OWNER_LEASE_ADOPTION.ADOPT_AS_FENCED_SUCCESSOR
+        );
+      });
     }
 
     /**

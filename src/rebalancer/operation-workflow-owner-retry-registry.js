@@ -8,6 +8,9 @@ import {
 } from './operation-workflow-observed-progress-retention.js';
 import * as DISPATCH_REARM_EVIDENCE
   from './operation-workflow-dispatch-rearm-evidence.js';
+import {
+  joinInFlightOperationOwnerLanes,
+} from './operation-owner-shutdown-join.js';
 
 const {
   OPERATION_WORKFLOW_OWNER_LITERAL,
@@ -112,6 +115,11 @@ class OperationWorkflowOwnerRetryRegistry extends
     // with backoff until authoritatively visible (run-21 ghost-row class).
     this.terminalTransitionRepairTimerByOperationId = new Map();
     this.terminalTransitionRepairStateByOperationId = new Map();
+    // Ownership fence epoch (audit finding 14): bumped at the START of
+    // shutdown so every lane continuation that wakes after the flag observes
+    // a stale generation and stands down; lane runners capture the epoch
+    // before awaiting and refuse to begin a new turn once it advanced.
+    this.operationOwnershipFenceEpoch = 0;
 
     if (
       typeof this.getActualReplicaStatus !==
@@ -131,6 +139,46 @@ class OperationWorkflowOwnerRetryRegistry extends
   /** @return {boolean} */
   get isInitialized() {
     return this._isInitialized();
+  }
+
+  /**
+   * Current ownership fence epoch. Monotonic; advanced only by shutdown.
+   * @return {number}
+   */
+  getOperationOwnershipFenceEpoch() {
+    return this.operationOwnershipFenceEpoch;
+  }
+
+  /**
+   * Bump the ownership fence epoch so in-flight lane continuations that wake
+   * after shutdown observe a stale generation and stand down (audit finding
+   * 14).
+   * @return {number} The new fence epoch.
+   */
+  bumpOperationOwnershipFenceEpoch() {
+    this.operationOwnershipFenceEpoch += 1;
+    return this.operationOwnershipFenceEpoch;
+  }
+
+  /**
+   * Bounded join of the currently in-flight operation-owner lanes (audit
+   * finding 14). Shutdown awaits this BEFORE releasing the retry registries
+   * so no lane continuation past an await proceeds unguarded; the fence bump
+   * above has already fenced any straggler that outlives the bounded wait.
+   * @param {Object} [options={}]
+   * @param {number} [options.timeoutMs] - Bounded join budget.
+   * @return {Promise<Object>} Frozen typed join result.
+   */
+  joinInFlightOwnerLanes(options = {}) {
+    return joinInFlightOperationOwnerLanes({
+      inFlightExecutionsByOwnerKey:
+        this.operationWorkflowCoordinator?.inFlightExecutionsByOwnerKey,
+      timeoutMs: options.timeoutMs,
+      nowFn:
+        this.timeSource && typeof this.timeSource.now === 'function' ?
+          () => this.timeSource.now() :
+          undefined,
+    });
   }
 
   /**

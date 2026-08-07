@@ -294,7 +294,22 @@ class OperationWorkflowOwnerExecutionLane
    */
   async runRetainedOperationOwnerAction(operationId, invokeAction) {
     const ownerKey = this.getOperationOwnerSingleFlightKey(operationId);
+    // Capture the ownership fence epoch BEFORE the first lane turn (audit
+    // finding 14): a continuation that wakes past an await after shutdown
+    // bumped the fence must refuse to start a new turn instead of proceeding
+    // unguarded against the released registries.
+    const fenceEpochAtEntry =
+      typeof this.getOperationOwnershipFenceEpoch === 'function' ?
+        this.getOperationOwnershipFenceEpoch() :
+        null;
     while (!this.isShuttingDown) {
+      if (
+        fenceEpochAtEntry !== null &&
+        typeof this.getOperationOwnershipFenceEpoch === 'function' &&
+        this.getOperationOwnershipFenceEpoch() !== fenceEpochAtEntry
+      ) {
+        break;
+      }
       let actionFactoryRan = false;
       try {
         const result = await this.operationWorkflowRunExclusive(
@@ -530,6 +545,25 @@ class OperationWorkflowOwnerExecutionLane
       confirmPersistence: false,
       disableSystemWriteSession: true,
     };
+  }
+
+  /**
+   * Renew the durable owner lease after one committed non-terminal
+   * transition (audit findings 5+14): the lease heartbeat rides a separate
+   * post-commit touch — never the transition write itself — so transition
+   * write shapes stay byte-identical for every caller. Fail-soft.
+   * @param {Object} operation
+   * @return {Promise<boolean>}
+   * @private
+   */
+  async renewOperationOwnerLeaseAfterCommittedTransition(operation) {
+    if (
+      this.isShuttingDown ||
+      typeof this.repository?.touchOperationOwnerLease !== 'function'
+    ) {
+      return false;
+    }
+    return this.repository.touchOperationOwnerLease(operation);
   }
 
   /**

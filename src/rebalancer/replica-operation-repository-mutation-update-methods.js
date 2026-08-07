@@ -1,9 +1,13 @@
 import {
   REPLICA_OPERATION_UPDATE_DISPOSITION,
 } from './replica-operation-update-disposition.js';
+import {
+  resolveOperationOwnerLeaseExpiryForPersist,
+} from './replica-operation-owner-lease.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const PERSIST_PHASE_DIVERGENCE_REINSERT = 'divergence_reinsert';
+const OWNER_LEASE_TOUCH_LOG_CONTEXT = 'owner_lease_touch';
 
 function buildOperationUpdatePersistResult(options, persisted, disposition, operation) {
   if (options?.returnDisposition !== true) {
@@ -188,6 +192,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
       if (options.confirmPersistence === false) {
         this.recordOwnerPersistedTransitionVisibilityWitness(operation);
         this.syncIncompleteOperationObservation(operation);
+        await this.touchOperationOwnerLeaseWhenRequested(operation, options);
         return buildOperationUpdatePersistResult(
           options,
           true,
@@ -196,12 +201,60 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         );
       }
       await this.confirmPersistenceThroughWitness(operation);
+      await this.touchOperationOwnerLeaseWhenRequested(operation, options);
       return buildOperationUpdatePersistResult(
         options,
         true,
         REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
         operation,
       );
+    }
+
+    // The owner-lease touch is opt-in per write (renewOwnerLease: true): only
+    // the canonical owner transition-persistence boundary requests it, so
+    // reduced direct-repository callers keep byte-identical write shapes. It
+    // never fires for a terminal projection — terminal state needs no live
+    // owner lease, and skipping the touch keeps terminal-write shapes
+    // byte-identical for the CAS suites.
+    async touchOperationOwnerLeaseWhenRequested(operation, options = {}) {
+      if (
+        options?.renewOwnerLease !== true ||
+        options?.terminalTransition === true
+      ) {
+        return false;
+      }
+      return this.touchOperationOwnerLease(operation);
+    }
+
+    // Durable owner-lease heartbeat (audit findings 5+14): after the
+    // canonical write succeeds, re-stamp ONLY the lease column so the row's
+    // lease_expires_at tracks the owning writer. The touch is fail-soft — a
+    // lease-write failure must never fail the transition that just landed —
+    // and carries no status/step payload, so it cannot reorder the workflow
+    // projection. A terminal row is untouched (completed_at IS NULL guard):
+    // terminal state no longer needs a live owner lease.
+    async touchOperationOwnerLease(operation) {
+      const leaseExpiresAt = resolveOperationOwnerLeaseExpiryForPersist(
+        operation,
+        this.nodeId,
+      );
+      if (!operation?.operationId || !Number.isFinite(leaseExpiresAt)) {
+        return false;
+      }
+      try {
+        const result = await this.executeOperationMutationWithRetry(
+          SQL.UPDATE_OPERATION_OWNER_LEASE,
+          [leaseExpiresAt, operation.operationId],
+        );
+        return result?.success === true;
+      } catch (error) {
+        this.logger.warn(REBALANCE_COORDINATOR_LOG_MSG.PERSIST_FAILED, {
+          operationId: operation.operationId,
+          phase: OWNER_LEASE_TOUCH_LOG_CONTEXT,
+          error: error?.message || String(error),
+        });
+        return false;
+      }
     }
 
     // A failed gateway mutation either recovers through the already-applied

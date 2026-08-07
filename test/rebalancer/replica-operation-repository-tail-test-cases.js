@@ -1,4 +1,7 @@
 import {registerReplicaOperationRepositoryTailMoreTests} from './replica-operation-repository-tail-more-test-cases.js';
+import {
+  REPLICA_OPERATION_OWNER_LEASE_TTL_MS,
+} from '../../src/rebalancer/replica-operation-owner-lease.js';
 
 const OWNER_PERSISTED_TRANSITION_VISIBILITY_RETRYABLE_FAILURE_SOURCE =
   'owner_persisted_transition_authoritative_operation_visibility_retryable_failure';
@@ -109,6 +112,10 @@ export function registerReplicaOperationRepositoryTailTests({
         workflow_step: WORKFLOW_STEP.CREATING,
         updated_at: 2000,
         completed_at: null,
+        // Durable owner lease (findings 5+14): the update payload carries the
+        // re-stamped lease heartbeat anchored to the row's updatedAt.
+        lease_expires_at:
+          2000 + REPLICA_OPERATION_OWNER_LEASE_TTL_MS,
         error_message: null,
         steps_history: JSON.stringify([
           {

@@ -9,6 +9,41 @@ import {
   isActiveReplaceSourceRemovalPhase,
 } from './replica-operation-step-policy.js';
 import {resolveOperationCurrentStepEntry} from './operation-step-age.js';
+import {
+  resolveOperationDrainOwnerAvailability,
+} from './operation-owner-availability-policy.js';
+
+// Fenced orphan adoption (audit findings 5+14): incomplete operations on
+// ORDINARY partitions whose recorded owner is remote join the sweep when
+// the durable lease is absent (legacy unfenced row) or expired at `now` — a
+// live remote lease stays fenced out. The repository's adoption read is the
+// fence owner; adoption reuses the same gated lifecycle reconcile
+// (single-flight + staleness/prompt gate) as locally-owned orphans, so an
+// adopted op is re-driven, never blindly double-dispatched. The adopting
+// successor stamps its OWN lease before reconciling (fail-soft).
+function extendOrphanSweepWithFencedAdoptions({
+  repository,
+  ownedOps,
+  now,
+  touchOwnerLease,
+}) {
+  const adoptableOps =
+    typeof repository.queryOrphanAdoptableOperations === 'function' ?
+      repository.queryOrphanAdoptableOperations(now).filter((op) =>
+        op && !repository.isOperationTerminal(op),
+      ) :
+      [];
+  const sweepOps = [...ownedOps];
+  const sweptOperationIds = new Set(ownedOps.map((op) => op.operationId));
+  for (const op of adoptableOps) {
+    if (!sweptOperationIds.has(op.operationId)) {
+      sweptOperationIds.add(op.operationId);
+      sweepOps.push(op);
+      void touchOwnerLease(op);
+    }
+  }
+  return sweepOps;
+}
 
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
@@ -360,11 +395,23 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
       !this.repository.isOperationTerminal(op) &&
       this.repository.isOperationLocallyOwned(op),
     );
-    if (ownedOps.length === 0) {
+    // Fenced orphan adoption (audit findings 5+14): the fenced sweep
+    // extension is owned by a module-level helper to keep this class inside
+    // the 800-line budget.
+    const sweepOps = extendOrphanSweepWithFencedAdoptions({
+      repository: this.repository,
+      ownedOps,
+      now,
+      touchOwnerLease: (op) =>
+        typeof this.repository.touchOperationOwnerLease === 'function' ?
+          this.repository.touchOperationOwnerLease(op) :
+          false,
+    });
+    if (sweepOps.length === 0) {
       return;
     }
     await Promise.all(
-      ownedOps.map(async (op) => {
+      sweepOps.map(async (op) => {
         if (!(await this.shouldReconcileOrphanedOperation(op, now))) {
           return;
         }
@@ -738,22 +785,23 @@ class OperationWorkflowRecoveryTimeout extends OperationWorkflowRecoveryStatusRe
   }
 
   isPriorityRecoveryDrainOwnerUnavailable(ownerNodeId, operation) {
-    if (
-      typeof ownerNodeId !== 'string' ||
-      ownerNodeId.length === 0 ||
-      ownerNodeId === this.nodeId
-    ) {
-      return false;
-    }
-    try {
-      return !this.isNodeReadyForRouting(ownerNodeId, {
-        partitionId: operation?.partitionId || null,
-        decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
-        participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
-      });
-    } catch {
-      return false;
-    }
+    // Fenced replacement for the unfenced routing-readiness heuristic (audit
+    // findings 5+14): a LIVE durable owner lease held by the recorded owner
+    // fences priority-control-plane drain remote settlement even when the
+    // routing-readiness heuristic reports the owner unready. An absent
+    // (legacy) or expired lease defers to the legacy heuristic.
+    return resolveOperationDrainOwnerAvailability({
+      ownerNodeId,
+      nodeId: this.nodeId,
+      operation,
+      nowMs: this.resolveTimeoutCheckNowMs(),
+      isOwnerRoutingReady: () =>
+        this.isNodeReadyForRouting(ownerNodeId, {
+          partitionId: operation?.partitionId || null,
+          decisionDimension: REMOVE_SAFETY_READINESS_DIMENSION,
+          participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
+        }),
+    }).unavailable;
   }
 
   isPriorityRecoveryOperationDrainReleaseEligibleReplace(operation) {

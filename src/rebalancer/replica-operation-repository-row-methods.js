@@ -74,6 +74,13 @@ function assignReplicaOperationRepositoryRowMethods(
         errorMessage: row.error_message,
         stepsHistory,
       };
+      // Durable owner lease (audit findings 5+14): the row's lease_expires_at
+      // is the persisted owner heartbeat; resolveOperationOwnerNodeId stays
+      // the structural owner for legacy/unfenced rows.
+      const leaseExpiresAt = Number(row.lease_expires_at);
+      if (Number.isFinite(leaseExpiresAt) && leaseExpiresAt > 0) {
+        operation.ownerLeaseExpiresAt = leaseExpiresAt;
+      }
       operation.semanticPhase = resolveReplicaOperationSemanticPhase(
         operation.type,
         operation.workflowStep,

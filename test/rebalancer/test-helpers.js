@@ -66,6 +66,8 @@ function normalizeReplicaOperationRow(row = {}) {
   const createdAt = row.created_at ?? row.createdAt ?? null;
   const updatedAt = row.updated_at ?? row.updatedAt ?? createdAt;
   const completedAt = row.completed_at ?? row.completedAt ?? null;
+  const leaseExpiresAt =
+    row.lease_expires_at ?? row.leaseExpiresAt ?? null;
   const errorMessage = row.error_message ?? row.errorMessage ?? null;
   const rawStepsHistory =
     row.steps_history ?? row.stepsHistory ?? [];
@@ -99,6 +101,8 @@ function normalizeReplicaOperationRow(row = {}) {
   normalized.updatedAt = updatedAt;
   normalized.completed_at = completedAt;
   normalized.completedAt = completedAt;
+  normalized.lease_expires_at = leaseExpiresAt;
+  normalized.leaseExpiresAt = leaseExpiresAt;
   normalized.error_message = errorMessage;
   normalized.errorMessage = errorMessage;
   normalized.steps_history = serializedStepsHistory;

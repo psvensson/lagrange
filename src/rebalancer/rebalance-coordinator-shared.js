@@ -157,6 +157,9 @@ const SQL = Object.freeze({
     status = ?, workflow_step = ?, updated_at = ?, completed_at = ?,
     error_message = ?, steps_history = ?, replica_id = ?
     WHERE operation_id = ? AND completed_at IS NULL`,
+  UPDATE_OPERATION_OWNER_LEASE: `UPDATE replica_operations SET
+    lease_expires_at = ?
+    WHERE operation_id = ? AND completed_at IS NULL`,
   SELECT_REPLICA_STATUS: 'SELECT status FROM services WHERE service_id = ?',
   SELECT_REPLICA_BY_PARTITION_NODE: `SELECT status FROM services 
     WHERE partition_id = ? AND node_id = ?`,
