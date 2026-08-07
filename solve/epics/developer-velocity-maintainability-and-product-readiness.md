@@ -133,11 +133,19 @@ these numbers establish direction, not a movable closure predicate.
 ## Dependency Order
 
 Status 2026-08-07: V1a/V1b (pre-existing), **V2a, V4a, V4b, V4c are LANDED**
-(commits 381193728, 4a68d3432, 5f15e3a5f, 2359c7317). Quest work now runs on
-the derived proof cone: a leaf diff lands on its bounded cone, a docs diff on
-the 6-test safety floor, and selector/core/unknown changes force the full
-suite. Remaining velocity work: V2b/V2c consumer cutover + duration
-enforcement, V3 fast-lane budget.
+(commits 381193728, 4a68d3432, 5f15e3a5f, 2359c7317), plus the
+content-freshness hardening Quest `proof-cone-coverage-content-freshness`
+(c7d57c48d): coverage edges go stale only when a bound file's bytes change
+(per-file sha256), never on unrelated-commit graph-digest churn. Quest work
+now runs on the derived proof cone: a leaf diff lands on its bounded cone
+(254 tests for a call-cell leaf), a docs diff on the 6-test safety floor
+(`npm run test:quest-proof -- --changed <file>`), and selector/core/unknown
+changes force the full suite. Every landing review manifest carries the
+selection receipt (tier, per-edge-kind counts, selector version, input
+digests). Remaining velocity work: V2b/V2c consumer cutover + duration
+enforcement, V3 fast-lane budget, and periodic coverage-corpus growth
+(the committed snapshot covers 107 leaf tests; the corpus-sufficiency gate
+widens honestly below 5% census share).
 
 ```text
 Velocity lane
