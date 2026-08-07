@@ -79,6 +79,9 @@ these numbers establish direction, not a movable closure predicate.
    security, recovery, and SLO evidence exist.
 8. Each source-changing Quest requires independent final-diff verification and
    a Solver finding with `subagent:<id>` evidence before audit and handoff.
+9. Test selection is derived by the repository, never chosen by the agent. The
+   proof-cone selector fails closed: any unclassified path, unknown owner, or
+   stale impact input widens the cone to a broader lane or the full suite.
 
 ## REUSED vs EXTENDED vs NEW
 
@@ -103,6 +106,14 @@ these numbers establish direction, not a movable closure predicate.
 - The test-classification/shard owner gains an explicit primary-class manifest
   and executable duration-budget validation. The acceptance-manifest owner
   gains the developer-smoke manifest instance.
+- The classification owner later gains an impact-graph / proof-cone capability
+  (V4): static dependency edges (generated), observed coverage edges
+  (generated from periodic full runs), and semantic contract edges (explicit
+  declarations on both tests and production contract owners). It selects
+  tests; it never owns their primary class or their duration policy. No
+  hand-maintained source-file-to-test-file table is introduced: primary class
+  and contract identity stay explicit, dependency and coverage relationships
+  stay generated, and timings stay measured.
 - Existing owner maps and metric reports gain a program-level burndown view;
   runtime decision ownership does not move.
 - The proof-artifact migration owner gains a historical migration mode and
@@ -129,6 +140,9 @@ Velocity lane
       -> V2b classifier consumer cutover
         -> V2c duration enforcement/remediation batches
       -> V3 fast-lane budget cutover
+      -> V4a impact-graph/proof-cone owner + universal safety floor
+        -> V4b shadow-mode validation against the full suite
+        -> V4c selective Quest-landing cutover (escalation tiers)
 
 Maintainability lane
   M1 global owner-debt inventory
@@ -154,6 +168,7 @@ Product lane
 Quality lane
   V2c -> Q1 scoped coverage + critical-owner mutation schedule
   V1 -> Q2 dependency and release-supply-chain gate
+  Q1a -> V4a scoped owner coverage feeds proof-cone validity
 ```
 
 V1, M1, A1, and Q2 are independent and may proceed in parallel. R1, R2, and R3
@@ -189,6 +204,9 @@ constraint. The declared pathscope excludes the pre-existing untracked
 | V2b | `test-classification-consumer-cutover` / process | `node scripts/run-test-classification-consumer-cutover-scenarios.js` | `package.json`; test runner; shard generator/files; classification tests; docs; Quest evidence | unit/fast/shard commands consume the manifest; restoring any retired shell discovery path fails the guard |
 | V2c | `test-duration-contract-enforcement` / process | `node scripts/run-test-duration-contract-enforcement-scenarios.js` | runner duration policy; duration fixtures/tests; Quest evidence | exact below/equal/above literal 2s and 30s body-time cases; missing timing, invalid class, and timeout fail closed |
 | V3 | `fast-test-lane-budget-cutover` / process | `node scripts/run-fast-test-lane-budget-cutover-scenarios.js` | classification manifest; timing snapshot; CI/release lane declarations; docs; Quest evidence | three timed runs meet the sealed budget; union census proves every displaced test remains assigned |
+| V4a | `impact-graph-proof-cone-owner` / process | `node scripts/run-impact-graph-proof-cone-owner-scenarios.js` | classification owner impact extension; contract-declaration schema; static-edge and coverage-edge generators; escalation-tier policy; selection-rationale receipt; generator/classifier tests; Quest evidence | three edge kinds select independently; unclassified path, unknown contract, and stale coverage snapshot widen to the tier-mandated lane; hand-maintained source→test map is absent |
+| V4b | `proof-cone-shadow-validation` / process | `node scripts/run-proof-cone-shadow-validation-scenarios.js` | read-only shadow runner; replay corpus; selection-miss report; Quest evidence | for every replayed historical diff with a full-suite failure, at least one regression-detecting test was inside the selected cone; any selection miss fails the Quest |
+| V4c | `selective-quest-landing-cutover` / process | `node scripts/run-selective-quest-landing-cutover-scenarios.js` | Solver landing evidence command; escalation-tier wiring; selector/version pin; landing-receipt extension; docs; Quest evidence | a leaf-owner diff lands on its selected cone; selector/test-runner self-change and unknown-path diffs force the full suite; receipt records counts per edge kind, selector version, and escalation |
 | M1 | `global-owner-debt-inventory` / process | `node scripts/run-global-owner-debt-inventory-scenarios.js` | new read-only inventory/analyzer and tests; generated inventory artifact; Quest evidence | independent counts match all existing checkers; deleting or double-assigning one violation fails |
 | M2/M3 child | `owner-complexity-<owner>-<boundary>` / product | generated by M1 as `node scripts/run-owner-complexity-<owner>-<boundary>-scenarios.js` | one owner directory/boundary, adjacent focused tests, one generated scenario runner, Quest evidence; maximum 25 paths/256KiB/six owner areas | focused behavior/decision trace parity plus scoped strict metrics; revert restores at least one measured violation |
 | M4a | `ordinal-test-lint-visibility-cutover` / process | `node scripts/run-ordinal-test-lint-visibility-cutover-scenarios.js` | ESLint config; explicit debt ledger; lint tests; Quest evidence | new ordinal files cannot hide; removing a ledger entry for still-red debt fails; blanket patterns are absent |
@@ -204,7 +222,7 @@ constraint. The declared pathscope excludes the pre-existing untracked
 | R2a | `pgwire-authentication-cutover` / product | `node scripts/run-pgwire-authentication-cutover-scenarios.js` | PG auth descriptor/session owner and client compatibility tests; Quest evidence | external listener rejects trust/anonymous sessions; loopback trust remains explicit; real credential success/failure |
 | R2b | `pgwire-tls-policy-cutover` / product | `node scripts/run-pgwire-tls-policy-cutover-scenarios.js` | PG wire TLS ingress/descriptor/config and real-client tests; Quest evidence | require/prefer/disable modes have one policy owner; downgrade and invalid certificate attacks fail closed |
 | R3 | `cluster-restore-drill` / product | `node scripts/run-cluster-restore-drill-scenario.js` | snapshot/restore adapter, live drill, oracle, docs; Quest evidence | clean-cluster restore proves schema/data/ownership/service metadata; stale/incomplete snapshot fails |
-| Q1a | `scoped-owner-coverage-cutover` / process | `node scripts/run-scoped-owner-coverage-cutover-scenarios.js` | coverage collector/threshold map/tests/package scripts; Quest evidence | changed owner code without exercised lines fails; unrelated global coverage cannot mask it |
+| Q1a | `scoped-owner-coverage-cutover` / process | `node scripts/run-scoped-owner-coverage-cutover-scenarios.js` | coverage collector/threshold map/tests/package scripts; Quest evidence | changed owner code without exercised lines fails; unrelated global coverage cannot mask it; per-test execution map is reusable as V4a coverage-edge input |
 | Q1b | `critical-owner-mutation-schedule` / process | `node scripts/run-critical-owner-mutation-schedule-scenarios.js` | Stryker config; critical reducer manifest; workflow/tests/docs; Quest evidence | seeded surviving mutant fails the lane; push gate remains unchanged and scheduled lane is bounded |
 | Q2 | `dependency-release-supply-chain-gate` / process | `node scripts/run-dependency-release-supply-chain-gate-scenarios.js` | audit policy, workflow/release scripts, SBOM/attestation config/tests/docs; Quest evidence | production advisory, unpinned download, missing SBOM, and checksum-only fixture fail |
 
@@ -287,6 +305,94 @@ correct convergence lane with an existence/completeness guard.
 
 Proof: before/after lane manifest and timing receipt; no test disappears from
 the union of blocking and declared statistical lanes; three timed runs.
+
+### V4a — Impact Graph / Proof-Cone Owner
+
+Sealed result: the classification owner gains impact edges of exactly three
+kinds, with generated edges supplementing but never replacing explicit
+declarations:
+
+1. **Static dependency edges (generated).** Reverse module-import closure
+   from the dependency graph already maintained for dependency-cruiser. A
+   test is affected by every production module reachable through its import
+   closure.
+2. **Observed coverage edges (generated).** From periodic full-suite runs,
+   record which production files each test file executes. This catches
+   dynamic registration, dependency injection, factories, plugin lookup,
+   message handlers, and late-bound runtime owners that static imports
+   cannot see. The snapshot carries a freshness bound; a stale snapshot
+   widens selection rather than silently narrowing it.
+3. **Semantic contract edges (explicit).** Tests declare the contracts they
+   exercise (`call-cell-routing`, `partition-topology`,
+   `runtime-service-placement`, WIT interface, message envelope, system-table
+   schema, replica-operation state, SQL grammar, routing/owner decision
+   tables, bootstrap contract, ...); production files declare the contracts
+   they own. Changing a contract selects every test claiming it. Unknown or
+   undeclared contracts fail closed.
+
+The selection algorithm is deterministic: aggregate Quest diff → changed
+owners/contracts → reverse dependency closure → union of static-dependent,
+coverage-dependent, and contract-dependent tests → plus changed/new tests
+themselves, relevant architecture/owner guards, and the universal safety
+floor. Q1a scoped owner coverage is a validity input: if the selected set
+executes no changed owner code, the proof cone itself is invalid. The agent
+never chooses the tests; the repository derives them. Every selection stores
+its rationale in a versioned landing-receipt extension (changed files,
+affected owners, per-edge-kind counts, unique-selected/total, escalation,
+selector version SHA, source fingerprint).
+
+The universal safety floor runs on every Quest landing regardless of impact
+analysis: the curated `test:safety-pregate`, classification integrity,
+owner-boundary structural checks, changed-path lint/static checks, and the
+Quest's own `doneWhen` proof. The floor targets well under a minute.
+
+Escalation tiers are policy owned by the selector, not per-Quest judgement:
+
+| Change class | Required proof |
+| --- | --- |
+| Documentation only | documentation/static audits |
+| Leaf implementation | dependent unit tests + owner tests + safety floor |
+| Owner implementation | owner unit + owner integration + reverse dependents |
+| Owner boundary / public contract | whole architecture slice + dependent integrations |
+| WIT/protocol/schema/system-table shape | every consumer slice |
+| Raft/common routing/bootstrap/core metadata | broad safety lanes, possibly full |
+| Test runner/classifier/selector itself | full suite mandatory |
+| Unknown/unclassified file | full suite mandatory |
+
+### V4b — Proof-Cone Shadow Validation
+
+Sealed result: the selector runs in shadow mode against a substantial corpus
+of actual historical Quest diffs — including existing red-on-revert proofs —
+before any landing behavior changes. For each replayed diff it derives the
+selected cone, and the decisive metric is **selection recall**: whenever the
+full suite found (or would find, for reverted known fixes) a regression, at
+least one regression-detecting test must be inside the selected cone. The
+target is zero selection misses; a single miss is a selector defect that
+blocks cutover, not merely a test failure. Post-cutover, any push/nightly
+full-suite failure is fed back through the same question and treated as a
+selector bug when the answer is no.
+
+Proof: replay report binding diff SHAs to selection receipts and outcomes;
+synthetic mutation/revert cases where a selected test turns red; stale-input
+and unknown-path widening cases.
+
+### V4c — Selective Quest-Landing Cutover
+
+Sealed result: Solver terminal landing and approval consume the proof cone
+plus the universal safety floor instead of the whole sharded test universe
+for eligible change classes, while the full suite changes role rather than
+disappearing: push/main runs it sharded, nightly adds the distributed
+expensive gates, release runs everything, and during initial confidence
+building every Nth Quest landing additionally runs the full suite. Tier
+self-protection holds: any change to the test runner, classifier, or selector
+itself, and any unknown or unclassified path, forces the full suite. The
+landing receipt records the full selection rationale, making Quest proof
+*more* auditable than "we ran everything" because it states why each selected
+proof was relevant.
+
+Proof: three consecutive landed Quests with tier-correct selections and full
+receipts; forced-full-suite cases for selector self-change and unknown paths;
+Nth-landing full-suite sampler receipt.
 
 ### M1 — Global Owner-Debt Inventory
 
@@ -405,6 +511,9 @@ or attestations in addition to checksums.
 The overview report must track:
 
 - smoke and fast lane p50/p95/max wall time and classified test counts;
+- proof-cone selected/total test counts by change class, selection recall
+  (full-suite failures whose regression-detecting tests were inside the
+  selected cone — target zero misses), and selector-input freshness;
 - duration-policy violations and unclassified tests;
 - cognitive violations by owner, oversized source/test counts, duplicate lines,
   and lint-excluded lines;
