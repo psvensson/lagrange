@@ -48,7 +48,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 19
+## Open quests — 18
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -65,7 +65,6 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 ⚠ stale | — |
 | priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 ⚠ stale | — |
 | publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 | — |
-| removed-replica-cleanup-debt-owner | product | 0 | 0 | 2026-08-07 | — |
 | rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 ⚠ stale | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
