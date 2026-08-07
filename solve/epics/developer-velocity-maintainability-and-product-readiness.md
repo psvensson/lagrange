@@ -132,17 +132,24 @@ these numbers establish direction, not a movable closure predicate.
 
 ## Dependency Order
 
+Status 2026-08-07: V1a/V1b (pre-existing), **V2a, V4a, V4b, V4c are LANDED**
+(commits 381193728, 4a68d3432, 5f15e3a5f, 2359c7317). Quest work now runs on
+the derived proof cone: a leaf diff lands on its bounded cone, a docs diff on
+the 6-test safety floor, and selector/core/unknown changes force the full
+suite. Remaining velocity work: V2b/V2c consumer cutover + duration
+enforcement, V3 fast-lane budget.
+
 ```text
 Velocity lane
-  V1a developer smoke command surface
-    -> V1b developer smoke proof
-    -> V2a primary test-classification manifest
+  V1a developer smoke command surface  [LANDED]
+    -> V1b developer smoke proof  [LANDED]
+    -> V2a primary test-classification manifest  [LANDED 381193728]
       -> V2b classifier consumer cutover
         -> V2c duration enforcement/remediation batches
       -> V3 fast-lane budget cutover
-      -> V4a impact-graph/proof-cone owner + universal safety floor
-        -> V4b shadow-mode validation against the full suite
-        -> V4c selective Quest-landing cutover (escalation tiers)
+      -> V4a impact-graph/proof-cone owner + universal safety floor  [LANDED 4a68d3432]
+        -> V4b shadow-mode validation against the full suite  [LANDED 5f15e3a5f]
+        -> V4c selective Quest-landing cutover (escalation tiers)  [LANDED 2359c7317]
 
 Maintainability lane
   M1 global owner-debt inventory
