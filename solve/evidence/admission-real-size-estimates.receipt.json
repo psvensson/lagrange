@@ -2,7 +2,7 @@
   "schema": "test-receipt/1",
   "quest": "admission-real-size-estimates",
   "status": "pass",
-  "generatedAt": "2026-08-07T04:46:27.445Z",
+  "generatedAt": "2026-08-07T08:55:20.342Z",
   "receipts": [
     {
       "id": "all-call-sites-real-size",
