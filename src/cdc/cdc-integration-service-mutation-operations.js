@@ -378,6 +378,20 @@ class CDCIntegrationServiceMutationOperations {
     const updateData = this.filterDataForTable(tableName, {
       ...data,
     });
+    // The distributed planner fail-closes any UPDATE that assigns the
+    // partition key column, even to its current value
+    // (assertUpdateDoesNotMutatePartitionKey). The whereClause already pins
+    // row identity, so a same-value key in data is stripped from SET; a
+    // differing value is a re-home and keeps the planner's refusal semantics.
+    if (Object.hasOwn(updateData, idField)) {
+      if (updateData[idField] !== id) {
+        throw new Error(
+          `${CDC_ERROR_MSG.UPDATE_PRIMARY_KEY_REHOME_PREFIX}${idField}` +
+            `${CDC_ERROR_MSG.UPDATE_PRIMARY_KEY_REHOME_SUFFIX}`,
+        );
+      }
+      delete updateData[idField];
+    }
     if (Object.keys(updateData).length === 0) {
       throw new Error(
         `${CDC_ERROR_MSG.UPDATE_VALID_COLUMNS_PREFIX}${tableName}`,

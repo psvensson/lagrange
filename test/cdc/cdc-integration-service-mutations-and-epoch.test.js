@@ -90,6 +90,64 @@ test('CDCIntegrationService - updateSystemTableRow forwards query timeout to SQL
   },
 );
 
+test('CDCIntegrationService - updateSystemTableRow strips a same-value primary key from SET',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    await service.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      {node_id: 'node-1'},
+      {node_id: 'node-1', status: 'active'},
+      {skipCacheWait: true},
+    );
+
+    t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
+    const sql = mockSqlEngine.executedQueries[0].sql;
+    const setClause = sql.split('WHERE')[0];
+    t.notOk(
+      setClause.includes('node_id'),
+      'SET clause must not assign the partition key column ' +
+        '(the distributed planner fail-closes key-assigning UPDATEs)',
+    );
+    t.ok(
+      sql.split('WHERE')[1].includes('node_id'),
+      'WHERE clause still pins row identity by primary key',
+    );
+  },
+);
+
+test('CDCIntegrationService - updateSystemTableRow rejects a primary-key re-home',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    await t.rejects(
+      service.updateSystemTableRow(
+        SYSTEM_TABLE_NAME.NODES,
+        {node_id: 'node-1'},
+        {node_id: 'node-2', status: 'active'},
+        {skipCacheWait: true},
+      ),
+      /must not re-home primary key/,
+      'differing primary-key value in data fails closed',
+    );
+    t.equal(
+      mockSqlEngine.executedQueries.length,
+      0,
+      'no SQL executes for a rejected re-home',
+    );
+  },
+);
+
 test('CDCIntegrationService - routed system-table write timeout budget bounds transient retries',
   async (t) => {
     const executedQueries = [];

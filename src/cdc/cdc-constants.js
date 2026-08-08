@@ -143,6 +143,10 @@ const CDC_ERROR_MSG = Object.freeze({
   UPDATE_VALID_COLUMNS_PREFIX: 'UPDATE requires data with valid columns for ',
   UPDATE_PRIMARY_KEY_PREFIX: 'UPDATE requires primary key (',
   UPDATE_PRIMARY_KEY_SUFFIX: ') in whereClause',
+  UPDATE_PRIMARY_KEY_REHOME_PREFIX: 'UPDATE data must not re-home primary key (',
+  UPDATE_PRIMARY_KEY_REHOME_SUFFIX:
+    '): a key-changing system-table UPDATE cannot route; DELETE and ' +
+    're-INSERT instead',
   DELETE_PRIMARY_KEY_PREFIX: 'DELETE requires primary key (',
   DELETE_PRIMARY_KEY_SUFFIX: ') in whereClause',
   UPSERT_PRIMARY_KEY_PREFIX: 'UPSERT requires primary key (',
