@@ -44,17 +44,30 @@ function gitLines(root, args) {
   return arrayFilter(stringSplit(out, LINE_SEPARATOR), Boolean);
 }
 
-// Every tracked path changed between baseCommit and the working tree, plus
-// untracked (not ignored) files — i.e. everything the candidate's byte
-// comparison surface could differ on — filtered to source-verification scope.
+// Every tracked path with UNCOMMITTED changes relative to the working tree
+// (the candidate's actual byte-comparison surface), plus untracked (not
+// ignored) files — filtered to source-verification scope.
+//
+// The base→tree `git diff` alone over-reports: a path that changed between
+// baseCommit and HEAD but is now COMMITTED AND CLEAN is a landed dependency
+// (e.g. a sibling Quest that landed mid-attempt), not an in-flight omission a
+// reviewer could reject. Such a path is byte-identical at HEAD and in the
+// working tree, so it cannot be a candidate's unreviewed change; only paths
+// with uncommitted modifications (or untracked files) are genuine candidate
+// surface. Subtracting the committed-and-clean set keeps the gap projection
+// honest about what is actually in flight.
 export function changedSourcePathsSinceBase(root, baseCommit) {
-  const changed = gitLines(root, ['diff', '--name-only', baseCommit]);
+  const changedSinceBase = gitLines(root, ['diff', '--name-only', baseCommit]);
+  const uncommitted = new Set(
+    gitLines(root, ['diff', '--name-only', 'HEAD']));
   const untracked = gitLines(root,
     ['ls-files', '--others', '--exclude-standard']);
   const unique = [];
   const seen = new Set();
-  for (let index = 0; index < changed.length; index += 1) {
-    const filePath = changed[index];
+  for (let index = 0; index < changedSinceBase.length; index += 1) {
+    const filePath = changedSinceBase[index];
+    // Committed-and-clean since HEAD: a landed dependency, not in flight.
+    if (!setHas(uncommitted, filePath)) continue;
     if (!setHas(seen, filePath)) {
       setAdd(seen, filePath);
       arrayPush(unique, filePath);
