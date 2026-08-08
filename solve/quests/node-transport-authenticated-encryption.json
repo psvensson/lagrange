@@ -1,0 +1,68 @@
+{
+  "id": "node-transport-authenticated-encryption",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Node transport uses one canonical TLS server/client composition with cryptographic peer authentication bound to cluster identity and logical node identity; unknown, expired, wrong-cluster, wrong-node, or untrusted certificates fail before MessageRouter adoption; certificate rotation does not create a parallel transport path; and all join, reconnect, bulk snapshot, and ordinary message channels use the same trust owner. Verified at HEAD 761dc17c7: the message router is a plain ws WebSocketServer (message-router-server-lifecycle.js), the IDENTIFY handshake accepts self-declared node identity guarded only by admission toggles and a boot-incarnation fence, TLS exists only for pgwire, and the gap is explicitly admitted in snapshot-catchup-constants.js.",
+  "priority": 1,
+  "class": "product",
+  "verificationTemplates": [
+    "admission-gating",
+    "transport-delivery",
+    "harness-fidelity"
+  ],
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/pilot-readiness-and-public-proof/node-transport-security.md",
+    "closesCL": [],
+    "parentQuest": "public-path-multinode-baseline",
+    "planDoc": "solve/epics/pilot-readiness-and-public-proof.md",
+    "draftedAtCommit": "761dc17c7facd847843f7e68c39d253bca256a62"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "node-transport-authenticated-encryption",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "node-transport-authenticated-encryption-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "node-transport-authenticated-encryption",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn an independent verifier before audit and handoff and record its stable evidence id."
+    },
+    {
+      "id": "existing-owner-reuse",
+      "statement": "The message-router server/connection authority and the bulk-transfer channel remain the transport owners; TLS configuration is shared with snapshot bulk channels through one trust owner. No parallel transport stack or per-channel trust model."
+    },
+    {
+      "id": "identity-binding",
+      "statement": "Choose and record the cluster CA, per-node certificate, and rotation model; bind certificate identity to the node-admission record and boot incarnation; define bootstrap and first-node trust establishment; preserve address changes without accepting identity changes; expose expiry and trust diagnostics without logging secrets."
+    },
+    {
+      "id": "insecure-mode-containment",
+      "statement": "Insecure transport becomes test-only or an explicit local-development mode that cannot bind externally by accident; the default production composition refuses plaintext."
+    },
+    {
+      "id": "edition-boundary",
+      "statement": "This is core cluster safety and belongs in the AGPL runtime. OIDC, customer RBAC, policy-provider, KMS, and hostile multi-tenant work do not land here; they remain external per edition-matrix.md."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Multi-node scenarios must pass under mTLS and fail for wrong CA, wrong-cluster certificate, stolen certificate with mismatched node identity, expired certificate, plaintext downgrade, and rotation during load."
+    }
+  ]
+}

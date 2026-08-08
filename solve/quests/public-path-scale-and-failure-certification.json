@@ -1,0 +1,68 @@
+{
+  "id": "public-path-scale-and-failure-certification",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "On named hardware and a sealed multi-node topology, one code-first public WASM service processes a representative data-intensive workload against a strong conventional PostgreSQL/application baseline, with result parity and declared bars for p95/p99 latency, transferred bytes, CPU, memory, throughput, retry rate, node-loss behavior, and recovery; the report records neutral or negative outcomes as faithfully as wins and is impossible to satisfy through internal runtime substitution or synthetic metrics. Verified at HEAD 761dc17c7: the large-scale-data-plane-certification epic owns internal data-plane scale and comparative-workload-efficiency-evidence owns cost-efficiency comparison; neither certifies the public service path, and this Quest consumes the Q1 report schema rather than duplicating those epics' ladders.",
+  "priority": 1,
+  "class": "product",
+  "verificationTemplates": [
+    "admission-gating",
+    "harness-fidelity",
+    "recovery-replay"
+  ],
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/pilot-readiness-and-public-proof/scale-failure-certification.md",
+    "closesCL": [],
+    "parentQuest": "node-transport-authenticated-encryption",
+    "planDoc": "solve/epics/pilot-readiness-and-public-proof.md",
+    "draftedAtCommit": "761dc17c7facd847843f7e68c39d253bca256a62"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "public-path-scale-and-failure-certification",
+      "consecutive": 3,
+      "metric": "sealed-bar"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "public-path-scale-and-failure-certification-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "public-path-scale-and-failure-certification",
+          "metric": "sealed-bar"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn an independent verifier before audit and handoff and record its stable evidence id."
+    },
+    {
+      "id": "existing-owner-reuse",
+      "statement": "The scenario harness, sealed-bar certification machinery, and the Q1 report schema remain the evidence owners; scale-axis cardinality claims link to the large-scale-data-plane-certification epic rather than duplicating it. No benchmark-only fast path or internal runtime substitution."
+    },
+    {
+      "id": "workload-representativeness",
+      "statement": "The chosen workload (pilot-relevant event, observability, fraud, IoT, or account-summary) must exercise typed selector narrowing, input above one old batch, structured partials, more than one service operation, multiple partition hosts, and the public HTTP path."
+    },
+    {
+      "id": "sealed-method",
+      "statement": "Seal dataset and workload generator digest; use repeated warm steady-state windows; name machine, storage, network, release, and topology; capture baseline and Lagrange under comparable durability; report p50/p95/p99, throughput, bytes by channel, CPU, memory, retries, and errors; stop a non-seed data host during load; verify acknowledged-result parity against an independent oracle; publish Wilson or other predeclared statistical bars where variance matters."
+    },
+    {
+      "id": "outcome-neutrality",
+      "statement": "Neutral or negative outcomes are recorded as faithfully as wins; the certification report cannot omit a measured dimension to reach a passing verdict."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Any missing public-path proof, local-read proof, independent oracle, or failure drill must make the verdict non-terminal."
+    }
+  ]
+}

@@ -1,0 +1,64 @@
+{
+  "id": "resumable-bulk-data-load",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A bulk-load command imports a declared table from a versioned input stream through bounded batches with durable checkpoint identity, source offset, schema digest, row counts, checksums, idempotent replay, and restart recovery; it routes writes through canonical SQL/transaction owners, reports rejected rows explicitly, and can prove source-to-target completeness without trusting its own success counter. Verified at HEAD 761dc17c7: no bulk-load or import command exists; docs/migration.md states there is no supported PostgreSQL-to-Lagrange migration or CDC surface, and 'bulk' in src/ is only the internal raft snapshot channel.",
+  "priority": 1,
+  "class": "product",
+  "verificationTemplates": [
+    "admission-gating",
+    "recovery-replay",
+    "retry-loops"
+  ],
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/pilot-readiness-and-public-proof/bulk-load.md",
+    "closesCL": [],
+    "parentQuest": "public-path-multinode-baseline",
+    "planDoc": "solve/epics/pilot-readiness-and-public-proof.md",
+    "draftedAtCommit": "761dc17c7facd847843f7e68c39d253bca256a62"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "resumable-bulk-data-load",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "resumable-bulk-data-load-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "resumable-bulk-data-load",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn an independent verifier before audit and handoff and record its stable evidence id."
+    },
+    {
+      "id": "existing-owner-reuse",
+      "statement": "Writes route through the canonical SQL/transaction owners; the loader owns checkpoint identity and replay. No bypass write path, no second transaction coordinator."
+    },
+    {
+      "id": "narrow-source-format",
+      "statement": "Start with one narrow source format (newline-delimited canonical JSON or CSV with an explicit schema); do not combine PostgreSQL CDC into this Quest."
+    },
+    {
+      "id": "independent-completeness-proof",
+      "statement": "Completeness is proven against an independent source checksum and key-range sample, not the loader's own success counter; rejected rows are reported explicitly with reasons."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Kill and restart the loader and one cluster node during import; resume must produce no duplicates and no gaps. Removing checkpoint identity or idempotent replay must fail reconciliation deterministically."
+    }
+  ]
+}

@@ -1,0 +1,63 @@
+{
+  "id": "service-cell-v2-default-multi-operation",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The default code-first generate/build/deploy pipeline emits the current handler-aware service-cell and Binding contract, supports at least two distributed operations and multiple HTTP handlers in one component, routes each call by immutable operation identity, generates per-handler least-authority policies, and keeps v1 artifacts invocable without a second runtime path. Verified at HEAD 761dc17c7: the v2 mechanism is landed (binding-schema-v3-handler-interfaces, handler-aware-runtime-invocation, service-cell-v2-generic-dispatch-world all SOLVED), but the CLI pipeline never passes multiOperationTarget (service-pipeline-command.js) so the default still emits the single-operation v1 world and no multi-operation example exists; this Quest is the default cutover plus legacy compatibility, not new mechanism work.",
+  "priority": 1,
+  "class": "product",
+  "verificationTemplates": [
+    "admission-gating",
+    "concurrency-serialization"
+  ],
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/pilot-readiness-and-public-proof/requirements.md#service-cell-v2-default",
+    "closesCL": [],
+    "parentQuest": "public-path-multinode-baseline",
+    "planDoc": "solve/epics/pilot-readiness-and-public-proof.md",
+    "draftedAtCommit": "761dc17c7facd847843f7e68c39d253bca256a62"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "service-cell-v2-default-multi-operation",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "service-cell-v2-default-multi-operation-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "service-cell-v2-default-multi-operation",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn an independent verifier before audit and handoff and record its stable evidence id."
+    },
+    {
+      "id": "existing-owner-reuse",
+      "statement": "The service-source contract, entry generator, deployment-record generator, and CallCellInvoker remain the owners; this Quest flips the default target through them. No parallel compiler pipeline or second runtime invocation path."
+    },
+    {
+      "id": "no-dormant-cutover",
+      "statement": "The v2 path must be the live default of the public generate/build/deploy CLI, evidenced by a fresh code-first multi-operation service building and invoking through the default commands; a flag that leaves v1 as the live default is an unfinished cutover and cannot outlive the session."
+    },
+    {
+      "id": "v1-interoperability",
+      "statement": "Previously deployed v1 artifacts remain invocable with their existing invocation behavior on the same node; the cutover adds no second runtime path for them."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Cross-operation confusion, stale handler or operation IDs, and per-handler policy escalation must all fail closed; a service exposing two routes that call different operations plus a route authorized for only one is the passing shape."
+    }
+  ]
+}

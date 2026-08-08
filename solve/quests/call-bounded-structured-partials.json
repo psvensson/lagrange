@@ -1,0 +1,63 @@
+{
+  "id": "call-bounded-structured-partials",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The call coordination contract accepts a versioned canonical structured partial value with a closed type grammar and explicit byte/count budgets; guests and hosts agree on one encoding, malformed or oversized values fail closed, replay is byte-stable, reducer input is deterministic, and duplicate cross-shard key semantics are explicit rather than silently merged. Verified at HEAD 761dc17c7: partials must parse to finite numbers, enforced at two fail-closed gates (call-cell-routing-contract.js normalizeEmittedPartialEntries and call-cell-reduce-coordinator.js), with cross-shard group keys required disjoint (SHARD_OVERLAP refusal).",
+  "priority": 1,
+  "class": "product",
+  "verificationTemplates": [
+    "admission-gating",
+    "adversarial-js-intrinsics"
+  ],
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/pilot-readiness-and-public-proof/structured-partials.md",
+    "closesCL": [],
+    "parentQuest": "call-selector-typed-parameter-narrowing",
+    "planDoc": "solve/epics/pilot-readiness-and-public-proof.md",
+    "draftedAtCommit": "761dc17c7facd847843f7e68c39d253bca256a62"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "call-bounded-structured-partials",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "call-bounded-structured-partials-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "call-bounded-structured-partials",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn an independent verifier before audit and handoff and record its stable evidence id."
+    },
+    {
+      "id": "existing-owner-reuse",
+      "statement": "The routing contract and reduce coordinator remain the owners of partial validation and merge; one canonical encoding owner exists. No second partial codec."
+    },
+    {
+      "id": "closed-canonical-grammar",
+      "statement": "First scope: null, boolean, safe integer, finite float, string, bounded list, bounded record with lexical field order; no arbitrary object prototype or executable data; one canonical binary or canonical JSON encoding owner; retain disjoint keys for the first release unless an algebraic merge contract is separately specified; expose generated editor types from the code-first compiler."
+    },
+    {
+      "id": "backward-compatibility",
+      "statement": "Existing numeric partials remain compatible: the account summary example moves to one structured record per shard while previously valid numeric-key partials continue to validate and reduce unchanged."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "Malformed, oversized, prototype-polluting, or non-canonical values must fail closed; silently merging duplicate cross-shard keys (double-counting) must fail deterministically."
+    }
+  ]
+}

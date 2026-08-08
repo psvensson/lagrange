@@ -1,0 +1,63 @@
+{
+  "id": "public-path-multinode-baseline",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A code-first JavaScript service is compiled into a genuine WASI component, deployed only through generated lifecycle records to a cluster with data partitions on at least two nodes, invoked through authenticated HTTP, and produces result parity while the harness records per-host local row reads, partial bytes, final bytes, latency distributions, CPU, memory, retries, and topology; no internal native_js service path can satisfy the scenario. Verified at HEAD 761dc17c7: the scenario-harness probe and registry are landed and examples-catalog runs the examples on a live 7-node cluster, but no named public-path multi-node baseline scenario with local-read proof, parity oracle, and resource telemetry exists; this Quest builds that evidence substrate before any runtime change.",
+  "priority": 1,
+  "class": "product",
+  "verificationTemplates": [
+    "admission-gating",
+    "harness-fidelity"
+  ],
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/pilot-readiness-and-public-proof/requirements.md#public-path-baseline",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/pilot-readiness-and-public-proof.md",
+    "draftedAtCommit": "761dc17c7facd847843f7e68c39d253bca256a62"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "public-path-multinode-baseline",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "public-path-multinode-baseline-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "public-path-multinode-baseline",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn an independent verifier before audit and handoff and record its stable evidence id."
+    },
+    {
+      "id": "existing-owner-reuse",
+      "statement": "Route the change through the current canonical owners (scenario registry, harness runner, service pipeline); no alternate execution, transport, state, or completion path may satisfy doneWhen."
+    },
+    {
+      "id": "public-path-fidelity",
+      "statement": "Evidence must use code-first generated records and genuine WASI Cells; native_js or legacy callback substitution is a failing result, and shard rows must be proven read locally on at least two partition-host nodes with no raw shard-table query delivery across the message router."
+    },
+    {
+      "id": "red-on-revert",
+      "statement": "The scenario must fail if the public WASM path is replaced by native_js, if both partitions land on one host, if metrics are synthetic, or if result parity is inferred from the service under test instead of an independent oracle."
+    },
+    {
+      "id": "report-schema-forward-compat",
+      "statement": "The emitted report schema (digests, topology, local-read proof, p50/p95/p99, bytes by channel, CPU, peak memory, retries, fidelity 'live') must be stable enough for public-path-scale-and-failure-certification to consume unchanged."
+    }
+  ]
+}
