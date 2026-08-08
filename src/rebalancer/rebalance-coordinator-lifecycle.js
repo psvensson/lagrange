@@ -5,6 +5,10 @@ import {classifySystemPartition} from '../bootstrap/system-partition-classificat
 import {
   OPERATION_SHUTDOWN_JOIN_DEFAULT_TIMEOUT_MS,
 } from './operation-owner-shutdown-join.js';
+import {
+  isOperationWorkflowTerminalForPersistence,
+  persistOperationWorkflowTransitionToDurableRow,
+} from './operation-workflow-persistence.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_SYSTEMTABLECACHE = 'systemTableCache';
@@ -229,8 +233,22 @@ class RebalanceCoordinatorLifecycle {
       reservationsReconciled: 0,
     };
 
+    // Real persistence (audit findings 15+18): the coordinator is never
+    // constructed bare — the persist callback mirrors each transition
+    // candidate onto the durable replica_operations row (steps_history is
+    // the canonical durable transition mirror) and throws when the mirror
+    // cannot advance, so the in-memory registry can never run ahead of
+    // the durable row. The four-subsystem template (managed-merge,
+    // managed-split, control-plane readiness, schema provisioning) wires
+    // DurableWorkflowCoordinator the same way. Recovery from durable rows
+    // happens in ensureOperationWorkflow (operation-workflow-owner-
+    // execution-lane.js) via recoverOperationWorkflowsFromDurableRows.
     this.operationWorkflowCoordinator = assertCritical(
-      options.operationWorkflowCoordinator || new DurableWorkflowCoordinator(),
+      options.operationWorkflowCoordinator ||
+        new DurableWorkflowCoordinator({
+          persistWorkflow: persistOperationWorkflowTransitionToDurableRow,
+          isTerminalWorkflow: isOperationWorkflowTerminalForPersistence,
+        }),
       REBALANCE_COORDINATOR_ERROR_MSG.WORKFLOW_COORDINATOR_REQUIRED,
     );
     this.operationLane =

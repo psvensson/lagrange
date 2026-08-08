@@ -20,9 +20,7 @@ import {
   OPERATION_WORKFLOW_DURABLE_OPERATION_STATE,
   OPERATION_WORKFLOW_HISTORY_FRESHNESS_STATE,
   OPERATION_WORKFLOW_IDENTIFIER_VARIANTS,
-  OPERATION_WORKFLOW_LEASE_FRESHNESS_STATE,
   OPERATION_WORKFLOW_OWNER_AUTHORITY_STATE,
-  OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE,
   OPERATION_WORKFLOW_RETRY_BUDGET_STATE,
   OPERATION_WORKFLOW_RETRY_DEADLINE_STATE,
   OPERATION_WORKFLOW_REVISION_VARIANTS,
@@ -40,6 +38,10 @@ import {
 import {
   OPERATION_WORKFLOW_OWNER_PORT_RECONCILE_DISPATCH_PENDING_STEPS,
 } from './replica-operation-step-policy.js';
+import {
+  resolveOperationWorkflowOwnerLeaseFreshnessState,
+  resolveOperationWorkflowPublicationFenceState,
+} from './operation-workflow-port-freshness.js';
 
 const OPERATION_WORKFLOW_OWNER_PORT_EMPTY_TEXT = '';
 const OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD = null;
@@ -377,7 +379,15 @@ function buildOperationWorkflowOwnerPortOwnerLease(owner, operation) {
       owner,
       operation,
     ),
-    freshnessState: OPERATION_WORKFLOW_LEASE_FRESHNESS_STATE.CURRENT,
+    // Derived from the durable row lease (lease_expires_at; audit finding
+    // 18) — never a hard-coded CURRENT. An expired lease reads STALE; a
+    // legacy row with no lease stamp reads UNAVAILABLE.
+    freshnessState: resolveOperationWorkflowOwnerLeaseFreshnessState(
+      operation,
+      typeof owner.nowFn === OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE ?
+        owner.nowFn() :
+        undefined,
+    ),
     ownerNodeKey: normalizeOperationWorkflowOwnerPortText(
       ownerNodeId,
       OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OWNER_NODE_KEY_UNAVAILABLE,
@@ -446,13 +456,51 @@ function buildOperationWorkflowOwnerPortRetryBudget(owner, operation) {
   });
 }
 
-function buildOperationWorkflowOwnerPortPublicationFence() {
+function buildOperationWorkflowOwnerPortPublicationFence(owner, operation) {
+  const operationId = getOperationWorkflowOwnerPortOperationId(
+    owner,
+    operation,
+  );
+  let workflow =
+    owner.operationWorkflowCoordinator &&
+      typeof owner.operationWorkflowCoordinator.getWorkflowById ===
+        OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE ?
+      owner.operationWorkflowCoordinator.getWorkflowById(operationId) :
+      OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD;
+  if (
+    !workflow &&
+    isOperationWorkflowOwnerPortRecord(operation) &&
+    operationId !==
+      OPERATION_WORKFLOW_IDENTIFIER_VARIANTS.OPERATION_KEY_UNAVAILABLE &&
+    typeof owner.ensureOperationWorkflow ===
+      OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE
+  ) {
+    // First observation after a restart: hydrate the witness from the
+    // durable row mirror before judging the fence — never report a bare
+    // INCOMPLETE against evidence the store simply has not loaded yet.
+    owner.ensureOperationWorkflow(operation);
+    workflow = owner.operationWorkflowCoordinator &&
+        typeof owner.operationWorkflowCoordinator.getWorkflowById ===
+          OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE ?
+      owner.operationWorkflowCoordinator.getWorkflowById(operationId) :
+      OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD;
+  }
+  // Derived from the persisted transition-history witness against the
+  // durable row mirror (audit findings 15+18) — never a hard-coded
+  // CURRENT. A divergent or rewound witness reads STALE; no persisted
+  // witness against a row that already carries history reads INCOMPLETE.
   return Object.freeze({
-    fenceState: OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE.CURRENT,
+    fenceState: resolveOperationWorkflowPublicationFenceState(
+      operation,
+      workflow,
+    ),
     requiredRevision:
+      operation?.updatedAt ||
+      operation?.createdAt ||
       OPERATION_WORKFLOW_REVISION_VARIANTS
         .REQUIRED_PUBLICATION_REVISION_UNAVAILABLE,
     observedRevision:
+      workflow?.updatedAt ||
       OPERATION_WORKFLOW_REVISION_VARIANTS
         .OBSERVED_PUBLICATION_REVISION_UNAVAILABLE,
     sourceRevision:
@@ -811,8 +859,11 @@ function createOperationWorkflowOwnerPorts(owner) {
     readTimeoutBudget(context) {
       return buildOperationWorkflowOwnerPortTimeoutBudget(context);
     },
-    readPublicationFence() {
-      return buildOperationWorkflowOwnerPortPublicationFence();
+    readPublicationFence(operation) {
+      return buildOperationWorkflowOwnerPortPublicationFence(
+        owner,
+        operation,
+      );
     },
     readDispatchObservation(operation, context) {
       return buildOperationWorkflowOwnerPortDispatchObservation(

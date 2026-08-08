@@ -13,6 +13,9 @@ import {
 import {
   OPERATION_OWNER_TURN_POLICY,
 } from './operation-owner-turn-policy.js';
+import {
+  recoverOperationWorkflowsFromDurableRows,
+} from './operation-workflow-persistence.js';
 
 const {
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -504,7 +507,12 @@ class OperationWorkflowOwnerExecutionLane
   // --- Workflow step advancement ---
 
   /**
-   * Register an operation as a workflow if not already tracked.
+   * Register an operation as a workflow if not already tracked, hydrating
+   * the transition witness from the operation's durable row mirror first
+   * (audit findings 15+18): after a restart the in-memory store is empty,
+   * so the registry is recovered from the replica_operations row (its
+   * steps_history is the durable transition history) instead of being
+   * silently restarted from zero.
    * @param {Object} operation - Operation record.
    */
   ensureOperationWorkflow(operation) {
@@ -512,11 +520,23 @@ class OperationWorkflowOwnerExecutionLane
     if (this.operationWorkflowCoordinator.getWorkflowById(workflowId)) {
       return;
     }
+    const {restoredWorkflowIds} = recoverOperationWorkflowsFromDurableRows(
+      this.operationWorkflowCoordinator,
+      [operation],
+    );
+    if (restoredWorkflowIds.has(workflowId)) {
+      return;
+    }
     const record = {
       workflowId,
       ownerKey: workflowId,
       step: operation.workflowStep || null,
       transitionHistory: [],
+      // Never recovered from a durable row: the persist callback treats
+      // the first in-memory transition as the basis and still rejects
+      // empty/rewound candidates.
+      durableBasisStepCount: 0,
+      durableOperation: operation,
     };
     const workflow =
       this.operationWorkflowCoordinator.createWorkflowRecord(record);
