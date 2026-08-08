@@ -1,4 +1,9 @@
 import {registerQuorumConditionedRemoveSafetyTailElectionRetargeting} from './quorum-conditioned-remove-safety-tail-election-retargeting.js';
+import {
+  createPublishedPlanningReadinessService,
+  createRecordingReplicaMessageRouter,
+  createReplaceScenarioServiceRows,
+} from './quorum-conditioned-remove-safety-tail-fixture-builders.js';
 
 export function registerQuorumConditionedRemoveSafetyTailReplacementElection(context) {
   const {
@@ -40,83 +45,28 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
       const testSourceReplicaId = 'sql_transactions-p1-r1';
       const testReplacementReplicaId = 'sql_transactions-p1-r4';
       const deliveries = [];
+      const buildScenarioServiceRows = () => createReplaceScenarioServiceRows({
+        createCriticalPartitionServiceRow,
+        partitionId: testPartitionId,
+        placements: [
+          {replicaId: testSourceReplicaId, nodeId: testSourceNodeId},
+          {replicaId: 'sql_transactions-p1-r2', nodeId: 'node-b'},
+          {replicaId: 'sql_transactions-p1-r3', nodeId: 'node-c'},
+          {replicaId: testReplacementReplicaId, nodeId: testReplacementNodeId},
+        ],
+      });
       const coordinator = createTestCoordinator({
         nodeId: testReplacementNodeId,
         enableTimeouts: false,
-        messageRouter: {
-          deliver: async (target, payload, options) => {
-            deliveries.push({target, payload, options});
-            return {acknowledged: true, status: 'initiated'};
-          },
-          getConnectionState: () => 'connected',
-          pingNode: async () => true,
-          isOutboundQueueAvailable: () => true,
-        },
-        controlPlaneReadinessService: {
-          getNodeReadinessSync(nodeId) {
-            return {
-              nodeId,
-              dimensions: {
-                controlPlaneRecoveryEligible: true,
-                repairEligible: true,
-                serveEligible: true,
-              },
-            };
-          },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
-            return {
-              publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
-              publishedActiveNodeIdsPresent: true,
-              publishedActiveNodeIds: Object.freeze(['node-a', 'node-b', 'node-c', 'node-d']),
-              recoveryActiveNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              projectedServingNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              publishedMembershipIncludesTargetNode: nodeId === testReplacementNodeId,
-              priorityPartitionSummary: Object.freeze({
-                satisfied: true,
-                requiredDistinctNodeCount: 2,
-                missingPartitionIds: [],
-              }),
-            };
-          },
-          async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return this.getMembershipPublicationPlanningSnapshotBestEffort(nodeId);
-          },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
-            return {
-              publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
-              publishedActiveNodeIdsPresent: true,
-              publishedActiveNodeIds: Object.freeze(['node-a', 'node-b', 'node-c', 'node-d']),
-              recoveryActiveNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              projectedServingNodeIds: Object.freeze([
-                'node-a',
-                'node-b',
-                'node-c',
-                'node-d',
-              ]),
-              publishedMembershipIncludesTargetNode: nodeId === testReplacementNodeId,
-              priorityPartitionSummary: Object.freeze({
-                satisfied: true,
-                requiredDistinctNodeCount: 2,
-                missingPartitionIds: [],
-              }),
-            };
-          },
-        },
+        messageRouter: createRecordingReplicaMessageRouter({
+          deliveries,
+          respond: () => ({acknowledged: true, status: 'initiated'}),
+        }),
+        controlPlaneReadinessService: createPublishedPlanningReadinessService({
+          publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+          activeNodeIds: Object.freeze(['node-a', 'node-b', 'node-c', 'node-d']),
+          membershipTargetNodeId: testReplacementNodeId,
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({minReplicaCount: 3}),
         },
@@ -127,66 +77,13 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
             createReadyNode('node-c'),
             createReadyNode('node-d'),
           ],
-          services: [
-            createCriticalPartitionServiceRow({
-              partitionId: testPartitionId,
-              replicaId: testSourceReplicaId,
-              nodeId: testSourceNodeId,
-              raftRole: 'follower',
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: testPartitionId,
-              replicaId: 'sql_transactions-p1-r2',
-              nodeId: 'node-b',
-              raftRole: 'follower',
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: testPartitionId,
-              replicaId: 'sql_transactions-p1-r3',
-              nodeId: 'node-c',
-              raftRole: 'follower',
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: testPartitionId,
-              replicaId: testReplacementReplicaId,
-              nodeId: testReplacementNodeId,
-              raftRole: 'follower',
-            }),
-          ],
+          services: buildScenarioServiceRows(),
         },
       });
 
       coordinator.initialize();
       try {
-        installAuthoritativeServicesRead(
-          coordinator,
-          () => [
-            createCriticalPartitionServiceRow({
-              partitionId: testPartitionId,
-              replicaId: testSourceReplicaId,
-              nodeId: testSourceNodeId,
-              raftRole: 'follower',
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: testPartitionId,
-              replicaId: 'sql_transactions-p1-r2',
-              nodeId: 'node-b',
-              raftRole: 'follower',
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: testPartitionId,
-              replicaId: 'sql_transactions-p1-r3',
-              nodeId: 'node-c',
-              raftRole: 'follower',
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: testPartitionId,
-              replicaId: testReplacementReplicaId,
-              nodeId: testReplacementNodeId,
-              raftRole: 'follower',
-            }),
-          ],
-        );
+        installAuthoritativeServicesRead(coordinator, buildScenarioServiceRows);
 
         coordinator.systemTableCache.merge(
           TEST_PARTITIONS_TABLE_NAME,
@@ -303,93 +200,44 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
         testFollowerNodeIdC,
         testReplacementNodeId,
       ]);
-      const buildPlanningSnapshot = (nodeId) => ({
-        publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
-        publishedActiveNodeIdsPresent: true,
-        publishedActiveNodeIds: testPublishedNodeIds,
-        recoveryActiveNodeIds: testPublishedNodeIds,
-        projectedServingNodeIds: testPublishedNodeIds,
-        publishedMembershipIncludesTargetNode:
-          nodeId === testReplacementNodeId,
-        priorityPartitionSummary: Object.freeze({
-          satisfied: true,
-          requiredDistinctNodeCount: 2,
-          missingPartitionIds: [],
-        }),
-      });
       const deliveries = [];
       const coordinator = createTestCoordinator({
         nodeId: testReplacementNodeId,
         enableTimeouts: false,
-        messageRouter: {
-          deliver: async (target, payload, options) => {
-            deliveries.push({target, payload, options});
-            return {
-              acknowledged: true,
-              status: ReplicaOperationResponseStatus.INITIATED,
-            };
-          },
-          getConnectionState: () => 'connected',
-          pingNode: async () => true,
-          isOutboundQueueAvailable: () => true,
-        },
-        controlPlaneReadinessService: {
-          getNodeReadinessSync(nodeId) {
-            return {
-              nodeId,
-              dimensions: {
-                controlPlaneRecoveryEligible: true,
-                repairEligible: true,
-                serveEligible: true,
-              },
-            };
-          },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
-            return buildPlanningSnapshot(nodeId);
-          },
-          async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return buildPlanningSnapshot(nodeId);
-          },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
-            return buildPlanningSnapshot(nodeId);
-          },
-        },
+        messageRouter: createRecordingReplicaMessageRouter({
+          deliveries,
+          respond: () => ({
+            acknowledged: true,
+            status: ReplicaOperationResponseStatus.INITIATED,
+          }),
+        }),
+        controlPlaneReadinessService: createPublishedPlanningReadinessService({
+          publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+          activeNodeIds: testPublishedNodeIds,
+          membershipTargetNodeId: testReplacementNodeId,
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({minReplicaCount: 3}),
         },
         cacheData: {
-          nodes: [
-            createReadyNode(testSourceNodeId),
-            createReadyNode(testFollowerNodeIdB),
-            createReadyNode(testFollowerNodeIdC),
-            createReadyNode(testReplacementNodeId),
-          ],
-          services: [
-            createCriticalPartitionServiceRow({
-              partitionId: testPartitionId,
-              replicaId: testSourceReplicaId,
-              nodeId: testSourceNodeId,
-              raftRole: null,
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: testPartitionId,
-              replicaId: testFollowerReplicaIdB,
-              nodeId: testFollowerNodeIdB,
-              raftRole: 'follower',
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: testPartitionId,
-              replicaId: testFollowerReplicaIdC,
-              nodeId: testFollowerNodeIdC,
-              raftRole: 'follower',
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: testPartitionId,
-              replicaId: testReplacementReplicaId,
-              nodeId: testReplacementNodeId,
-              raftRole: 'follower',
-            }),
-          ],
+          nodes: testPublishedNodeIds.map((nodeId) => createReadyNode(nodeId)),
+          services: createReplaceScenarioServiceRows({
+            createCriticalPartitionServiceRow,
+            partitionId: testPartitionId,
+            placements: [
+              {
+                replicaId: testSourceReplicaId,
+                nodeId: testSourceNodeId,
+                raftRole: null,
+              },
+              {replicaId: testFollowerReplicaIdB, nodeId: testFollowerNodeIdB},
+              {replicaId: testFollowerReplicaIdC, nodeId: testFollowerNodeIdC},
+              {
+                replicaId: testReplacementReplicaId,
+                nodeId: testReplacementNodeId,
+              },
+            ],
+          }),
         },
       });
 
@@ -483,71 +331,32 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
       const TEST_FOLLOWER_REPLICA_C_ID = 'replica_operations-p1-r3';
       const TEST_REPLACEMENT_REPLICA_ID = 'replica_operations-p1-r4';
       const TEST_ACTIVE_STATUS = 'active';
-      const TEST_FOLLOWER_ROLE = 'follower';
       const TEST_MIN_REPLICA_COUNT = 3;
-      const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
       const TEST_READY_NODE_IDS = Object.freeze([
         TEST_SOURCE_NODE_ID,
         TEST_FOLLOWER_NODE_B_ID,
         TEST_FOLLOWER_NODE_C_ID,
         TEST_REPLACEMENT_NODE_ID,
       ]);
-      const TEST_EMPTY_PARTITION_IDS = Object.freeze([]);
-      const TEST_READY_DIMENSIONS = Object.freeze({
-        controlPlaneRecoveryEligible: true,
-        repairEligible: true,
-        serveEligible: true,
-      });
       const deliveries = [];
-      const buildPlanningSnapshot = (nodeId) => ({
-        publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
-        publishedActiveNodeIdsPresent: true,
-        publishedActiveNodeIds: TEST_READY_NODE_IDS,
-        recoveryActiveNodeIds: TEST_READY_NODE_IDS,
-        projectedServingNodeIds: TEST_READY_NODE_IDS,
-        publishedMembershipIncludesTargetNode:
-          nodeId === TEST_REPLACEMENT_NODE_ID,
-        priorityPartitionSummary: Object.freeze({
-          satisfied: true,
-          requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
-          missingPartitionIds: TEST_EMPTY_PARTITION_IDS,
-        }),
-      });
       const coordinator = createTestCoordinator({
         nodeId: TEST_REPLACEMENT_NODE_ID,
         enableTimeouts: false,
-        messageRouter: {
-          deliver: async (target, payload, options) => {
-            deliveries.push({target, payload, options});
-            return {
-              acknowledged: true,
-              status: payload.type ===
-                  ReplicaOperationMessageType.STEP_DOWN_REPLICA ?
-                ReplicaOperationResponseStatus.COMPLETED :
-                ReplicaOperationResponseStatus.INITIATED,
-            };
-          },
-          getConnectionState: () => 'connected',
-          pingNode: async () => true,
-          isOutboundQueueAvailable: () => true,
-        },
-        controlPlaneReadinessService: {
-          getNodeReadinessSync(nodeId) {
-            return {
-              nodeId,
-              dimensions: TEST_READY_DIMENSIONS,
-            };
-          },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
-            return buildPlanningSnapshot(nodeId);
-          },
-          async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return buildPlanningSnapshot(nodeId);
-          },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
-            return buildPlanningSnapshot(nodeId);
-          },
-        },
+        messageRouter: createRecordingReplicaMessageRouter({
+          deliveries,
+          respond: (payload) => ({
+            acknowledged: true,
+            status: payload.type ===
+                ReplicaOperationMessageType.STEP_DOWN_REPLICA ?
+              ReplicaOperationResponseStatus.COMPLETED :
+              ReplicaOperationResponseStatus.INITIATED,
+          }),
+        }),
+        controlPlaneReadinessService: createPublishedPlanningReadinessService({
+          publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+          activeNodeIds: TEST_READY_NODE_IDS,
+          membershipTargetNodeId: TEST_REPLACEMENT_NODE_ID,
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({
             minReplicaCount: TEST_MIN_REPLICA_COUNT,
@@ -555,32 +364,25 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
         },
         cacheData: {
           nodes: TEST_READY_NODE_IDS.map((nodeId) => createReadyNode(nodeId)),
-          services: [
-            createCriticalPartitionServiceRow({
-              partitionId: TEST_PARTITION_ID,
-              replicaId: TEST_SOURCE_REPLICA_ID,
-              nodeId: TEST_SOURCE_NODE_ID,
-              raftRole: TEST_FOLLOWER_ROLE,
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: TEST_PARTITION_ID,
-              replicaId: TEST_FOLLOWER_REPLICA_B_ID,
-              nodeId: TEST_FOLLOWER_NODE_B_ID,
-              raftRole: TEST_FOLLOWER_ROLE,
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: TEST_PARTITION_ID,
-              replicaId: TEST_FOLLOWER_REPLICA_C_ID,
-              nodeId: TEST_FOLLOWER_NODE_C_ID,
-              raftRole: TEST_FOLLOWER_ROLE,
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: TEST_PARTITION_ID,
-              replicaId: TEST_REPLACEMENT_REPLICA_ID,
-              nodeId: TEST_REPLACEMENT_NODE_ID,
-              raftRole: TEST_FOLLOWER_ROLE,
-            }),
-          ],
+          services: createReplaceScenarioServiceRows({
+            createCriticalPartitionServiceRow,
+            partitionId: TEST_PARTITION_ID,
+            placements: [
+              {replicaId: TEST_SOURCE_REPLICA_ID, nodeId: TEST_SOURCE_NODE_ID},
+              {
+                replicaId: TEST_FOLLOWER_REPLICA_B_ID,
+                nodeId: TEST_FOLLOWER_NODE_B_ID,
+              },
+              {
+                replicaId: TEST_FOLLOWER_REPLICA_C_ID,
+                nodeId: TEST_FOLLOWER_NODE_C_ID,
+              },
+              {
+                replicaId: TEST_REPLACEMENT_REPLICA_ID,
+                nodeId: TEST_REPLACEMENT_NODE_ID,
+              },
+            ],
+          }),
         },
       });
 
@@ -668,68 +470,30 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
       const TEST_SOURCE_FOLLOWER_REPLICA_C_ID = 'replica_operations-p1-r3';
       const TEST_REPLACEMENT_REPLICA_ID = 'replica_operations-p1-r4';
       const TEST_ACTIVE_STATUS = 'active';
-      const TEST_FOLLOWER_ROLE = 'follower';
       const TEST_MIN_REPLICA_COUNT = 3;
-      const TEST_REQUIRED_DISTINCT_NODE_COUNT = 2;
       const TEST_READY_NODE_IDS = Object.freeze([
         TEST_SOURCE_NODE_ID,
         TEST_REPLACEMENT_NODE_ID,
       ]);
-      const TEST_EMPTY_PARTITION_IDS = Object.freeze([]);
       const deliveries = [];
-      const buildPlanningSnapshot = (nodeId) => ({
-        publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
-        publishedActiveNodeIdsPresent: true,
-        publishedActiveNodeIds: TEST_READY_NODE_IDS,
-        recoveryActiveNodeIds: TEST_READY_NODE_IDS,
-        projectedServingNodeIds: TEST_READY_NODE_IDS,
-        publishedMembershipIncludesTargetNode:
-          nodeId === TEST_REPLACEMENT_NODE_ID,
-        priorityPartitionSummary: Object.freeze({
-          satisfied: true,
-          requiredDistinctNodeCount: TEST_REQUIRED_DISTINCT_NODE_COUNT,
-          missingPartitionIds: TEST_EMPTY_PARTITION_IDS,
-        }),
-      });
       const coordinator = createTestCoordinator({
         nodeId: TEST_REPLACEMENT_NODE_ID,
         enableTimeouts: false,
-        messageRouter: {
-          deliver: async (target, payload, options) => {
-            deliveries.push({target, payload, options});
-            return {
-              acknowledged: true,
-              status: payload.type ===
-                  ReplicaOperationMessageType.STEP_DOWN_REPLICA ?
-                ReplicaOperationResponseStatus.COMPLETED :
-                ReplicaOperationResponseStatus.INITIATED,
-            };
-          },
-          getConnectionState: () => 'connected',
-          pingNode: async () => true,
-          isOutboundQueueAvailable: () => true,
-        },
-        controlPlaneReadinessService: {
-          getNodeReadinessSync(nodeId) {
-            return {
-              nodeId,
-              dimensions: {
-                controlPlaneRecoveryEligible: true,
-                repairEligible: true,
-                serveEligible: true,
-              },
-            };
-          },
-          async getMembershipPublicationPlanningSnapshotBestEffort(nodeId) {
-            return buildPlanningSnapshot(nodeId);
-          },
-          async getMembershipPublicationPlanningSnapshot(nodeId) {
-            return buildPlanningSnapshot(nodeId);
-          },
-          getMembershipPublicationPlanningSnapshotSync(nodeId) {
-            return buildPlanningSnapshot(nodeId);
-          },
-        },
+        messageRouter: createRecordingReplicaMessageRouter({
+          deliveries,
+          respond: (payload) => ({
+            acknowledged: true,
+            status: payload.type ===
+                ReplicaOperationMessageType.STEP_DOWN_REPLICA ?
+              ReplicaOperationResponseStatus.COMPLETED :
+              ReplicaOperationResponseStatus.INITIATED,
+          }),
+        }),
+        controlPlaneReadinessService: createPublishedPlanningReadinessService({
+          publicationStatus: TEST_PUBLICATION_STATUS_PUBLISHED,
+          activeNodeIds: TEST_READY_NODE_IDS,
+          membershipTargetNodeId: TEST_REPLACEMENT_NODE_ID,
+        }),
         tablePolicyService: {
           getPolicyForPartition: () => ({
             minReplicaCount: TEST_MIN_REPLICA_COUNT,
@@ -737,32 +501,25 @@ export function registerQuorumConditionedRemoveSafetyTailReplacementElection(con
         },
         cacheData: {
           nodes: TEST_READY_NODE_IDS.map((nodeId) => createReadyNode(nodeId)),
-          services: [
-            createCriticalPartitionServiceRow({
-              partitionId: TEST_PARTITION_ID,
-              replicaId: TEST_SOURCE_REPLICA_ID,
-              nodeId: TEST_SOURCE_NODE_ID,
-              raftRole: TEST_FOLLOWER_ROLE,
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: TEST_PARTITION_ID,
-              replicaId: TEST_SOURCE_FOLLOWER_REPLICA_B_ID,
-              nodeId: TEST_SOURCE_NODE_ID,
-              raftRole: TEST_FOLLOWER_ROLE,
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: TEST_PARTITION_ID,
-              replicaId: TEST_SOURCE_FOLLOWER_REPLICA_C_ID,
-              nodeId: TEST_SOURCE_NODE_ID,
-              raftRole: TEST_FOLLOWER_ROLE,
-            }),
-            createCriticalPartitionServiceRow({
-              partitionId: TEST_PARTITION_ID,
-              replicaId: TEST_REPLACEMENT_REPLICA_ID,
-              nodeId: TEST_REPLACEMENT_NODE_ID,
-              raftRole: TEST_FOLLOWER_ROLE,
-            }),
-          ],
+          services: createReplaceScenarioServiceRows({
+            createCriticalPartitionServiceRow,
+            partitionId: TEST_PARTITION_ID,
+            placements: [
+              {replicaId: TEST_SOURCE_REPLICA_ID, nodeId: TEST_SOURCE_NODE_ID},
+              {
+                replicaId: TEST_SOURCE_FOLLOWER_REPLICA_B_ID,
+                nodeId: TEST_SOURCE_NODE_ID,
+              },
+              {
+                replicaId: TEST_SOURCE_FOLLOWER_REPLICA_C_ID,
+                nodeId: TEST_SOURCE_NODE_ID,
+              },
+              {
+                replicaId: TEST_REPLACEMENT_REPLICA_ID,
+                nodeId: TEST_REPLACEMENT_NODE_ID,
+              },
+            ],
+          }),
         },
       });
 
