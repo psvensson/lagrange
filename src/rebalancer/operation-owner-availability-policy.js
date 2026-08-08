@@ -32,12 +32,6 @@ const OPERATION_DRAIN_OWNER_AVAILABILITY = Object.freeze({
   HEURISTIC_AVAILABLE: 'heuristic_available',
 });
 
-const OPERATION_DRAIN_OWNER_AVAILABILITY_UNAVAILABLE_STATES =
-  Object.freeze(new Set([
-    OPERATION_DRAIN_OWNER_AVAILABILITY.FENCED_BY_LIVE_LEASE,
-    OPERATION_DRAIN_OWNER_AVAILABILITY.HEURISTIC_UNAVAILABLE,
-  ]));
-
 /**
  * Resolve the drain-owner availability verdict for one incomplete operation.
  * @param {Object} options
@@ -107,6 +101,5 @@ function resolveOperationDrainOwnerAvailability(options = {}) {
 
 export {
   OPERATION_DRAIN_OWNER_AVAILABILITY,
-  OPERATION_DRAIN_OWNER_AVAILABILITY_UNAVAILABLE_STATES,
   resolveOperationDrainOwnerAvailability,
 };

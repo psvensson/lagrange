@@ -197,7 +197,6 @@ function recoverOperationWorkflowsFromDurableRows(
 }
 
 export {
-  buildOperationWorkflowRowLoader,
   isOperationWorkflowTerminalForPersistence,
   persistOperationWorkflowTransitionToDurableRow,
   readOperationWorkflowDurableStepsHistory,
