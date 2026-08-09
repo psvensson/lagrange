@@ -15,6 +15,7 @@ import {
   resolvePendingSnapshotInstall,
   resolveReplicaCheckpointsRoot,
 } from '../raft/snapshot-install.js';
+import {RAFT_EVENT} from '../raft/constants.js';
 import {RAFT_SNAPSHOT_INSTALL_OUTCOME} from '../raft/snapshot-install-constants.js';
 import {
   cleanupStaleTransferStaging,
@@ -454,6 +455,19 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         this.storage.currentTerm > 0) {
       this.raft.term = this.storage.currentTerm;
     }
+    // Committed-prefix divergence witness (quest raft-committed-prefix-
+    // conflict-livelock): the follower-side liferaft surfaces a poisoned
+    // committed prefix exactly once per conflict identity instead of
+    // retrying an impossible truncation every heartbeat. Log it as the
+    // durable operator-visible signal; repair itself rides the existing
+    // typed append-fail -> leader catch-up/install route.
+    this.raft.on(RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE, (observation) => {
+      this.logger.error(PARTITION_SERVICE_LOG_MSG.COMMITTED_PREFIX_DIVERGENCE, {
+        replicaId: this.replicaId,
+        partitionId: this.partitionId,
+        ...observation,
+      });
+    });
     if (this.deferElection && this.raft) {
       this.raftProvider.clearTimers(
         this.raft,

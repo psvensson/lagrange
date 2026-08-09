@@ -3,6 +3,10 @@ import {
   guardCommittedEntryWrite,
   isRaftCommittedEntryConflict,
 } from './committed-entry-guard.js';
+import {
+  resolveDurableCommittedIndex,
+  surfaceCommittedPrefixDivergence,
+} from './committed-prefix-divergence.js';
 import {RAFT_PACKET_TYPE} from './constants.js';
 import {
   RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME,
@@ -143,6 +147,31 @@ function applyIncomingAppendPreamble(raft, packet) {
   }
 }
 
+// Typed no-conflict variant for findSameIndexTermConflict (no null/undefined
+// state encoding).
+const NO_SAME_INDEX_TERM_CONFLICT = Object.freeze({found: false});
+
+async function findSameIndexTermConflict(raft, packet) {
+  if (!raft.log ||
+      typeof raft.log.get !== LOCAL_STR_FUNCTION ||
+      typeof raft.log.removeEntriesAfter !== LOCAL_STR_FUNCTION) {
+    return NO_SAME_INDEX_TERM_CONFLICT;
+  }
+  const lastIndex = packet?.last?.index;
+  const lastTerm = packet?.last?.term;
+  if (!hasFiniteNumber(lastIndex) || lastIndex <= NUMERIC_ZERO ||
+      !hasFiniteNumber(lastTerm)) {
+    return NO_SAME_INDEX_TERM_CONFLICT;
+  }
+  const localEntry = await raft.log.get(lastIndex);
+  if (!localEntry ||
+      !hasFiniteNumber(localEntry.term) ||
+      localEntry.term === lastTerm) {
+    return NO_SAME_INDEX_TERM_CONFLICT;
+  }
+  return {found: true, lastIndex, lastTerm, localEntry};
+}
+
 // Raft §5.3 (Log Matching / State-Machine Safety): an inbound append references the leader's log
 // at `packet.last` (the leader's last entry on a heartbeat, or prevLog on an entry-append). If we
 // hold our OWN, UNCOMMITTED entry at that index with a DIFFERENT term, that is a conflicting entry
@@ -151,26 +180,44 @@ function applyIncomingAppendPreamble(raft, packet) {
 // localLastIndex`), so a same-index/different-term conflict otherwise survives and the base
 // commit-index catch-up then commits our STALE same-index entry — two nodes committing different
 // commands at one index (CL-040). This is INERT on the normal path: it fires only when a local
-// uncommitted entry actually conflicts in term; a matching term, a missing entry, or an
-// already-committed prefix entry are all left untouched.
+// entry actually conflicts in term; a matching term or a missing entry is left untouched.
+//
+// Committed-prefix divergence branch (quest raft-committed-prefix-conflict-
+// livelock): when the conflict sits AT OR BELOW the durable committed index,
+// the truncation is impossible by design — the adapter refuses committed-
+// entry loss — so requesting it every heartbeat livelocked formation (46-363
+// identical 'Refused raft log truncation into the committed prefix' retries
+// in red runs). The old code trusted the per-entry committed FLAG, which the
+// CL-040 hazard leaves stale after base commit-index catch-up advances the
+// watermark over the entry. Never silently skip: throw the shared typed
+// conflict so the caller's rejection funnel surfaces the divergence once and
+// routes the typed append-fail to the leader's catch-up/install path.
 async function truncateConflictingSameIndexTail(raft, packet) {
-  if (!raft.log ||
-      typeof raft.log.get !== LOCAL_STR_FUNCTION ||
-      typeof raft.log.removeEntriesAfter !== LOCAL_STR_FUNCTION) {
+  const conflict = await findSameIndexTermConflict(raft, packet);
+  if (conflict.found !== true) {
     return;
   }
-  const lastIndex = packet?.last?.index;
-  const lastTerm = packet?.last?.term;
-  if (!hasFiniteNumber(lastIndex) || lastIndex <= NUMERIC_ZERO ||
-      !hasFiniteNumber(lastTerm)) {
+  const committedIndex = resolveDurableCommittedIndex(raft.log);
+  if (conflict.lastIndex <= committedIndex) {
+    // Always throws here: the entry exists, its term differs, and its index
+    // is inside the committed prefix — the guard owns the typed conflict
+    // decision (no locally reproduced owner logic). The zero boundary is
+    // sound because the guard's compacted-row branch needs a MISSING entry
+    // and findSameIndexTermConflict guarantees localEntry is present.
+    guardCommittedEntryWrite(
+      conflict.localEntry,
+      {
+        index: conflict.lastIndex,
+        term: conflict.lastTerm,
+        command: conflict.localEntry.command,
+      },
+      committedIndex,
+      NUMERIC_ZERO,
+    );
     return;
   }
-  const localEntry = await raft.log.get(lastIndex);
-  if (localEntry &&
-      localEntry.committed !== true &&
-      hasFiniteNumber(localEntry.term) &&
-      localEntry.term !== lastTerm) {
-    await raft.log.removeEntriesAfter(lastIndex - NUMERIC_ONE);
+  if (conflict.localEntry.committed !== true) {
+    await raft.log.removeEntriesAfter(conflict.lastIndex - NUMERIC_ONE);
   }
 }
 
@@ -272,6 +319,7 @@ function patchIncomingDataListener(raft) {
   const inflightBatchByAddress = new Map();
 
   const rejectCommittedEntryConflict = async (error, write) => {
+    surfaceCommittedPrefixDivergence(raft, error);
     raft.message(
       BaseLifeRaft.LEADER,
       await raft.packet(RAFT_PACKET_TYPE.APPEND_FAIL, {

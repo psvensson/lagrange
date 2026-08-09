@@ -1,0 +1,605 @@
+diff --git a/scripts/quest-evidence-raft-committed-prefix-conflict-livelock.js b/scripts/quest-evidence-raft-committed-prefix-conflict-livelock.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b4ed59613b9d30990974f6864108946beb48cd19
+--- /dev/null
++++ b/scripts/quest-evidence-raft-committed-prefix-conflict-livelock.js
+@@ -0,0 +1,52 @@
++// Deterministic evidence harness for the raft-committed-prefix-conflict-
++// livelock quest: receipt declarations only. The shared runtime
++// (scripts/quest-evidence-harness-runtime.js) re-runs each recorded proof
++// command and writes the probe artifact.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'committed-prefix-conflict-routes-to-repair-once',
++    testFile:
++      'test/raft/liferaft-committed-prefix-conflict-livelock.test.js',
++    detail: 'a follower with a same-index term conflict at or below its ' +
++      'DURABLE committed index (per-entry committed flag and cached ' +
++      'committedIndex both lagging — the CL-040 hazard shape) requests ' +
++      'ZERO truncations across repeated leader heartbeats (the adapter ' +
++      'refusal witness stays at 0), surfaces the poisoned committed prefix ' +
++      'exactly once per conflict identity as the typed ' +
++      'committed-prefix-divergence event, and rejects every heartbeat with ' +
++      'the typed committed-conflict append-fail that feeds the existing ' +
++      'leader catch-up/install repair route; the uncommitted-conflict ' +
++      'truncation path is proven unchanged (red-on-revert: restoring the ' +
++      'flag-gated truncation makes every delivered heartbeat re-request ' +
++      'the refused truncation and surface nothing, failing the ' +
++      'zero-truncation, zero-refusal, and exactly-once assertions)',
++  }),
++  Object.freeze({
++    id: 'adapter-committed-refusal-preserved',
++    testFile:
++      'test/raft/sqlite-log-adapter-committed-truncation-guard.test.js',
++    detail: 'the log adapter\'s committed-entry-loss refusal is untouched: ' +
++      'removeEntriesAfter still refuses any truncation intruding into the ' +
++      'committed prefix (recording the blocked request) and still ' +
++      'truncates a legitimate uncommitted suffix — the pre-existing guard ' +
++      'suite passes without modification',
++  }),
++]);
++
++const QUEST_ID = 'raft-committed-prefix-conflict-livelock';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME = 'raft-committed-prefix-conflict-livelock.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/src/partition/partition-service-constants.js b/src/partition/partition-service-constants.js
+index 2e2a6d5f8c33d2137147d5a21ada960b7c349c4c..9ffeda984eaed7d2df8d7c021ecde367f01961a2 100644
+--- a/src/partition/partition-service-constants.js
++++ b/src/partition/partition-service-constants.js
+@@ -300,6 +300,10 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
+     'Replica local durability recovered; leadership fitness restored',
+   LEARNER_PROMOTION_ALLOWED_MULTI: 'Learner promotion allowed - multiple learners will reach odd',
+   CLEARED_LIFERAFT_TIMERS: 'Cleared liferaft timers for deferred election',
++  COMMITTED_PREFIX_DIVERGENCE:
++    'Raft committed-prefix term divergence detected: local committed entry ' +
++    'conflicts with the leader and truncation is impossible by design; ' +
++    'routed to the leader catch-up/repair path (surfaced once per conflict)',
+   BECAME_LEADER: 'Became leader (liferaft)',
+   RAFT_TRANSITION_EVIDENCE: 'Raft leadership transition evidence',
+   LEADER_CHANGED: 'Leader changed',
+diff --git a/src/partition/partition-service-raft-init-base.js b/src/partition/partition-service-raft-init-base.js
+index 3bb2beb367ba507eb04cce29c68480e1a1e6df10..5e576da9276ed8e45244143590578c38501719fc 100644
+--- a/src/partition/partition-service-raft-init-base.js
++++ b/src/partition/partition-service-raft-init-base.js
+@@ -15,6 +15,7 @@ import {
+   resolvePendingSnapshotInstall,
+   resolveReplicaCheckpointsRoot,
+ } from '../raft/snapshot-install.js';
++import {RAFT_EVENT} from '../raft/constants.js';
+ import {RAFT_SNAPSHOT_INSTALL_OUTCOME} from '../raft/snapshot-install-constants.js';
+ import {
+   cleanupStaleTransferStaging,
+@@ -454,6 +455,19 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
+         this.storage.currentTerm > 0) {
+       this.raft.term = this.storage.currentTerm;
+     }
++    // Committed-prefix divergence witness (quest raft-committed-prefix-
++    // conflict-livelock): the follower-side liferaft surfaces a poisoned
++    // committed prefix exactly once per conflict identity instead of
++    // retrying an impossible truncation every heartbeat. Log it as the
++    // durable operator-visible signal; repair itself rides the existing
++    // typed append-fail -> leader catch-up/install route.
++    this.raft.on(RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE, (observation) => {
++      this.logger.error(PARTITION_SERVICE_LOG_MSG.COMMITTED_PREFIX_DIVERGENCE, {
++        replicaId: this.replicaId,
++        partitionId: this.partitionId,
++        ...observation,
++      });
++    });
+     if (this.deferElection && this.raft) {
+       this.raftProvider.clearTimers(
+         this.raft,
+diff --git a/src/raft/committed-prefix-divergence.js b/src/raft/committed-prefix-divergence.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..29560ad6bd8633ea054bbe393e2fd802a7f217f3
+--- /dev/null
++++ b/src/raft/committed-prefix-divergence.js
+@@ -0,0 +1,70 @@
++// Committed-prefix divergence surfacing (quest raft-committed-prefix-
++// conflict-livelock): a same-index term conflict at or below the committed
++// index is committed-state divergence, not a repairable suffix conflict —
++// the truncation the base protocol would use is impossible by design (the
++// log adapter refuses committed-entry loss). This module owns the two
++// follower-side pieces of that discipline: reading DURABLE committed truth
++// before the truncate-vs-diverge safety decision, and surfacing the poisoned
++// prefix EXACTLY ONCE per conflict identity as a typed event. The per-packet
++// repair route stays the existing typed append-fail sent by the liferaft
++// rejection funnel, which feeds the leader's catch-up/install (S4 snapshot)
++// machinery.
++
++import {RAFT_EVENT} from './constants.js';
++
++const TYPE_FUNCTION = 'function';
++const EMPTY_COMMITTED_INDEX = 0;
++
++// The truncate-vs-diverge decision is a raft-safety decision and must read
++// DURABLE committed truth: the livelock window (quest
++// raft-committed-prefix-conflict-livelock) is exactly a liferaft-visible
++// committedIndex cache lagging the store while the adapter refuses the
++// truncation by a FRESH read (sqlite-log-adapter
++// safeExclusiveTruncationIndex). Mirror the adapter's own mutation-path
++// discipline — refresh from durable state before a safety decision; an
++// adapter without a durable store behind the cache (in-memory) answers from
++// its live committedIndex property.
++function resolveDurableCommittedIndex(raftLog) {
++  if (typeof raftLog.refreshCommittedIndexCacheFromStore === TYPE_FUNCTION) {
++    return raftLog.refreshCommittedIndexCacheFromStore();
++  }
++  return Number.isFinite(raftLog.committedIndex) ?
++    raftLog.committedIndex :
++    EMPTY_COMMITTED_INDEX;
++}
++
++// Surface a committed-prefix divergence EXACTLY ONCE per conflict identity
++// (index, localTerm, leaderTerm). The identity set is per-instance and
++// bounded: a genuinely diverged replica is repaired by snapshot install,
++// which recreates the service and its raft node. The error is the shared
++// RaftCommittedEntryConflictError raised by the committed-entry guard.
++function surfaceCommittedPrefixDivergence(raft, error) {
++  if (!(raft._committedPrefixDivergenceKeys instanceof Set)) {
++    raft._committedPrefixDivergenceKeys = new Set();
++  }
++  const identityKey =
++    `${error.index}:${error.existingTerm}:${error.incomingTerm}`;
++  if (raft._committedPrefixDivergenceKeys.has(identityKey)) {
++    return;
++  }
++  raft._committedPrefixDivergenceKeys.add(identityKey);
++  const observation = Object.freeze({
++    index: error.index,
++    localTerm: error.existingTerm,
++    leaderTerm: error.incomingTerm,
++    committedIndex: error.committedIndex,
++  });
++  raft._lastCommittedPrefixDivergence = observation;
++  try {
++    raft.emit(RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE, observation);
++  } catch (listenerError) {
++    // Listener failures must never disturb the append-fail rejection path;
++    // the recorded observation stays observable either way.
++    raft._lastCommittedPrefixDivergenceError = listenerError;
++  }
++}
++
++export {
++  resolveDurableCommittedIndex,
++  surfaceCommittedPrefixDivergence,
++};
+diff --git a/src/raft/constants.js b/src/raft/constants.js
+index 092e3f0dbb96fe91830efdb4df141015fe63b167..5bb2da37995205ffe495cd356b90bf161c57cb02 100644
+--- a/src/raft/constants.js
++++ b/src/raft/constants.js
+@@ -44,6 +44,14 @@ const RAFT_EVENT = Object.freeze({
+   LEADER_CHANGE: 'leader change',
+   COMMIT: 'commit',
+   TERM_CHANGE: 'term change',
++  // Typed committed-state divergence witness (quest raft-committed-prefix-
++  // conflict-livelock): a follower detected a same-index term conflict at or
++  // below its committed index — a poisoned committed prefix that truncation
++  // can never repair (the log adapter refuses committed-entry loss by
++  // design). Emitted by LifeRaft EXACTLY ONCE per conflict identity
++  // (index, localTerm, leaderTerm); repair rides the existing typed
++  // append-fail -> leader catch-up/install route.
++  COMMITTED_PREFIX_DIVERGENCE: 'committed prefix divergence',
+ });
+ 
+ const RAFT_ERROR_NAME = Object.freeze({
+diff --git a/src/raft/liferaft.js b/src/raft/liferaft.js
+index 0109c94c354508f15cdc7aa7050605ee9d8fc298..3069449af18797f82cdd8ac07a513764bd68e7e5 100644
+--- a/src/raft/liferaft.js
++++ b/src/raft/liferaft.js
+@@ -3,6 +3,10 @@ import {
+   guardCommittedEntryWrite,
+   isRaftCommittedEntryConflict,
+ } from './committed-entry-guard.js';
++import {
++  resolveDurableCommittedIndex,
++  surfaceCommittedPrefixDivergence,
++} from './committed-prefix-divergence.js';
+ import {RAFT_PACKET_TYPE} from './constants.js';
+ import {
+   RAFT_SNAPSHOT_CATCHUP_DECISION_OUTCOME,
+@@ -143,6 +147,31 @@ function applyIncomingAppendPreamble(raft, packet) {
+   }
+ }
+ 
++// Typed no-conflict variant for findSameIndexTermConflict (no null/undefined
++// state encoding).
++const NO_SAME_INDEX_TERM_CONFLICT = Object.freeze({found: false});
++
++async function findSameIndexTermConflict(raft, packet) {
++  if (!raft.log ||
++      typeof raft.log.get !== LOCAL_STR_FUNCTION ||
++      typeof raft.log.removeEntriesAfter !== LOCAL_STR_FUNCTION) {
++    return NO_SAME_INDEX_TERM_CONFLICT;
++  }
++  const lastIndex = packet?.last?.index;
++  const lastTerm = packet?.last?.term;
++  if (!hasFiniteNumber(lastIndex) || lastIndex <= NUMERIC_ZERO ||
++      !hasFiniteNumber(lastTerm)) {
++    return NO_SAME_INDEX_TERM_CONFLICT;
++  }
++  const localEntry = await raft.log.get(lastIndex);
++  if (!localEntry ||
++      !hasFiniteNumber(localEntry.term) ||
++      localEntry.term === lastTerm) {
++    return NO_SAME_INDEX_TERM_CONFLICT;
++  }
++  return {found: true, lastIndex, lastTerm, localEntry};
++}
++
+ // Raft §5.3 (Log Matching / State-Machine Safety): an inbound append references the leader's log
+ // at `packet.last` (the leader's last entry on a heartbeat, or prevLog on an entry-append). If we
+ // hold our OWN, UNCOMMITTED entry at that index with a DIFFERENT term, that is a conflicting entry
+@@ -151,26 +180,44 @@ function applyIncomingAppendPreamble(raft, packet) {
+ // localLastIndex`), so a same-index/different-term conflict otherwise survives and the base
+ // commit-index catch-up then commits our STALE same-index entry — two nodes committing different
+ // commands at one index (CL-040). This is INERT on the normal path: it fires only when a local
+-// uncommitted entry actually conflicts in term; a matching term, a missing entry, or an
+-// already-committed prefix entry are all left untouched.
++// entry actually conflicts in term; a matching term or a missing entry is left untouched.
++//
++// Committed-prefix divergence branch (quest raft-committed-prefix-conflict-
++// livelock): when the conflict sits AT OR BELOW the durable committed index,
++// the truncation is impossible by design — the adapter refuses committed-
++// entry loss — so requesting it every heartbeat livelocked formation (46-363
++// identical 'Refused raft log truncation into the committed prefix' retries
++// in red runs). The old code trusted the per-entry committed FLAG, which the
++// CL-040 hazard leaves stale after base commit-index catch-up advances the
++// watermark over the entry. Never silently skip: throw the shared typed
++// conflict so the caller's rejection funnel surfaces the divergence once and
++// routes the typed append-fail to the leader's catch-up/install path.
+ async function truncateConflictingSameIndexTail(raft, packet) {
+-  if (!raft.log ||
+-      typeof raft.log.get !== LOCAL_STR_FUNCTION ||
+-      typeof raft.log.removeEntriesAfter !== LOCAL_STR_FUNCTION) {
++  const conflict = await findSameIndexTermConflict(raft, packet);
++  if (conflict.found !== true) {
+     return;
+   }
+-  const lastIndex = packet?.last?.index;
+-  const lastTerm = packet?.last?.term;
+-  if (!hasFiniteNumber(lastIndex) || lastIndex <= NUMERIC_ZERO ||
+-      !hasFiniteNumber(lastTerm)) {
++  const committedIndex = resolveDurableCommittedIndex(raft.log);
++  if (conflict.lastIndex <= committedIndex) {
++    // Always throws here: the entry exists, its term differs, and its index
++    // is inside the committed prefix — the guard owns the typed conflict
++    // decision (no locally reproduced owner logic). The zero boundary is
++    // sound because the guard's compacted-row branch needs a MISSING entry
++    // and findSameIndexTermConflict guarantees localEntry is present.
++    guardCommittedEntryWrite(
++      conflict.localEntry,
++      {
++        index: conflict.lastIndex,
++        term: conflict.lastTerm,
++        command: conflict.localEntry.command,
++      },
++      committedIndex,
++      NUMERIC_ZERO,
++    );
+     return;
+   }
+-  const localEntry = await raft.log.get(lastIndex);
+-  if (localEntry &&
+-      localEntry.committed !== true &&
+-      hasFiniteNumber(localEntry.term) &&
+-      localEntry.term !== lastTerm) {
+-    await raft.log.removeEntriesAfter(lastIndex - NUMERIC_ONE);
++  if (conflict.localEntry.committed !== true) {
++    await raft.log.removeEntriesAfter(conflict.lastIndex - NUMERIC_ONE);
+   }
+ }
+ 
+@@ -272,6 +319,7 @@ function patchIncomingDataListener(raft) {
+   const inflightBatchByAddress = new Map();
+ 
+   const rejectCommittedEntryConflict = async (error, write) => {
++    surfaceCommittedPrefixDivergence(raft, error);
+     raft.message(
+       BaseLifeRaft.LEADER,
+       await raft.packet(RAFT_PACKET_TYPE.APPEND_FAIL, {
+diff --git a/test/raft/liferaft-committed-prefix-conflict-livelock.test.js b/test/raft/liferaft-committed-prefix-conflict-livelock.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ad47668ae693d073c79514224950cf6dbfd6a91a
+--- /dev/null
++++ b/test/raft/liferaft-committed-prefix-conflict-livelock.test.js
+@@ -0,0 +1,284 @@
++/**
++ * Committed-prefix same-index term-conflict livelock (quest
++ * raft-committed-prefix-conflict-livelock).
++ *
++ * The hazard (CL-040 class): base commit-index catch-up advances the DURABLE
++ * committed watermark over a stale same-index entry whose per-entry committed
++ * FLAG lags (and, on the sqlite adapter, whose liferaft-visible committedIndex
++ * CACHE lags the durable _raft_state row — more than one facade can hold an
++ * adapter over the same database). truncateConflictingSameIndexTail used to
++ * trust the FLAG while sqlite-log-adapter.removeEntriesAfter refuses by a
++ * FRESH committed-INDEX read, so every leader heartbeat re-requested a
++ * truncation the adapter must refuse — the unbounded livelock that starved
++ * formation (46-363 identical 'Refused raft log truncation into the committed
++ * prefix' retries in red runs).
++ *
++ * Red-on-revert: restoring the flag-gated truncation makes every delivered
++ * heartbeat below call removeEntriesAfter(conflictIndex - 1) and increment the
++ * adapter's committedTruncationBlockedCount witness — the zero-truncation and
++ * zero-refusal assertions here go red, and no divergence event is surfaced.
++ */
++
++import Database from 'better-sqlite3';
++import {test} from '../../src/test-helpers/tap.js';
++
++import {
++  RAFT_COMMITTED_ENTRY_CONFLICT_CODE,
++} from '../../src/raft/committed-entry-guard.js';
++import {RAFT_EVENT, RAFT_PACKET_TYPE} from '../../src/raft/constants.js';
++import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
++import LifeRaft from '../../src/raft/liferaft.js';
++import {LiferaftProvider} from '../../src/raft/liferaft-provider.js';
++import {SQLiteLogAdapter} from '../../src/raft/sqlite-log-adapter.js';
++
++const HEARTBEAT = '10s';
++const ELECTION_MIN = '20s';
++const ELECTION_MAX = '30s';
++
++const LEADER_ADDRESS = 'leader-node';
++const FOLLOWER_ADDRESS = 'conflict-follower';
++const CONFLICT_INDEX = 2;
++const LOCAL_TERM = 1;
++const LEADER_CONFLICT_TERM = 9;
++const SECOND_LEADER_CONFLICT_TERM = 11;
++const STALE_CACHED_COMMITTED_INDEX = 1;
++const SQLITE_COMMITTED_INDEX_UPSERT =
++  'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)';
++const SQLITE_COMMITTED_INDEX_KEY = 'committedIndex';
++
++function command(value) {
++  return {type: 'committed-prefix-conflict', value};
++}
++
++function createProviderNode(address, Log) {
++  const provider = new LiferaftProvider();
++  const RaftNode = provider.createNodeClass({
++    resolvePeerAddress: (peerAddress) => peerAddress,
++    deliverPacket: async () => null,
++  });
++  return new RaftNode(address, {
++    'heartbeat': HEARTBEAT,
++    'election min': ELECTION_MIN,
++    'election max': ELECTION_MAX,
++    'Log': Log,
++  });
++}
++
++function createSQLiteRaft() {
++  const db = new Database(':memory:');
++  const adapter = new SQLiteLogAdapter(db, {address: FOLLOWER_ADDRESS, term: 1});
++  function SQLiteLogFactory() {
++    return adapter;
++  }
++  const raft = createProviderNode(FOLLOWER_ADDRESS, SQLiteLogFactory);
++  return {
++    raft,
++    db,
++    close() {
++      raft.end();
++      db.close();
++    },
++  };
++}
++
++function createInMemoryRaft() {
++  const raft = createProviderNode(FOLLOWER_ADDRESS, InMemoryLogAdapter);
++  return {raft, close: () => raft.end()};
++}
++
++function conflictingHeartbeat(leaderTerm, packetCommittedIndex) {
++  return {
++    type: RAFT_PACKET_TYPE.APPEND,
++    term: leaderTerm,
++    state: LifeRaft.LEADER,
++    address: LEADER_ADDRESS,
++    leader: LEADER_ADDRESS,
++    last: {
++      index: CONFLICT_INDEX,
++      term: leaderTerm,
++      committedIndex: packetCommittedIndex,
++    },
++  };
++}
++
++function instrument(raft) {
++  const outgoing = [];
++  raft.message = (who, packet) => {
++    outgoing.push({who, packet});
++    return raft;
++  };
++  const truncationRequests = [];
++  const originalRemove = raft.log.removeEntriesAfter.bind(raft.log);
++  raft.log.removeEntriesAfter = (index) => {
++    truncationRequests.push(index);
++    return originalRemove(index);
++  };
++  const divergenceEvents = [];
++  raft.on(RAFT_EVENT.COMMITTED_PREFIX_DIVERGENCE, (observation) => {
++    divergenceEvents.push(observation);
++  });
++  return {outgoing, truncationRequests, divergenceEvents};
++}
++
++function typedAppendFails(outgoing) {
++  return outgoing.filter(({packet}) =>
++    packet.type === RAFT_PACKET_TYPE.APPEND_FAIL &&
++    packet.data?.code === RAFT_COMMITTED_ENTRY_CONFLICT_CODE);
++}
++
++test('sqlite follower with a lagging committed-index cache stops the ' +
++  'truncation livelock and surfaces divergence once', async (t) => {
++  const fixture = createSQLiteRaft();
++  const {raft, db} = fixture;
++  try {
++    await raft.log.saveCommand(command('committed-1'), LOCAL_TERM, 1);
++    await raft.log.saveCommand(command('stale-2'), LOCAL_TERM, CONFLICT_INDEX);
++    await raft.log.commit(1);
++    // Base commit-index catch-up on ANOTHER facade over the same database
++    // advances the DURABLE watermark past the stale entry (the CL-040
++    // hazard shape): entry 2's committed flag and this adapter's cached
++    // committedIndex both still lag durable truth.
++    db.prepare(SQLITE_COMMITTED_INDEX_UPSERT).run(
++      SQLITE_COMMITTED_INDEX_KEY,
++      String(CONFLICT_INDEX),
++    );
++    t.equal(raft.log.committedIndex, STALE_CACHED_COMMITTED_INDEX,
++      'precondition: liferaft-visible committedIndex cache lags the store');
++    const staleEntry = await raft.log.get(CONFLICT_INDEX);
++    t.equal(staleEntry.committed, false,
++      'precondition: the stale committed-prefix entry keeps a false flag');
++
++    const {outgoing, truncationRequests, divergenceEvents} = instrument(raft);
++    const incoming = raft.listeners('data')[0];
++    const heartbeatDeliveries = 3;
++    for (let delivery = 0; delivery < heartbeatDeliveries; delivery += 1) {
++      // Each live heartbeat arrived while the cached view lagged durable
++      // truth (base catch-up keeps running on the other facade); re-stale
++      // the cache the same way. Inert under the fix — the truncate helper
++      // re-reads durable truth before deciding — but under the reverted
++      // flag-gated code every delivery re-requests the refused truncation.
++      raft.log._committedIndexCache = STALE_CACHED_COMMITTED_INDEX;
++      await incoming(conflictingHeartbeat(LEADER_CONFLICT_TERM, CONFLICT_INDEX),
++        () => {});
++    }
++
++    t.same(truncationRequests, [],
++      'no truncation is ever requested for a committed-prefix conflict');
++    t.equal(raft.log.committedTruncationBlockedCount, 0,
++      'the adapter refusal witness stays silent (livelock signature gone)');
++    t.equal(divergenceEvents.length, 1,
++      'the poisoned committed prefix is surfaced exactly once');
++    t.same(divergenceEvents[0], {
++      index: CONFLICT_INDEX,
++      localTerm: LOCAL_TERM,
++      leaderTerm: LEADER_CONFLICT_TERM,
++      committedIndex: CONFLICT_INDEX,
++    }, 'the divergence observation carries the full conflict identity');
++    t.same(raft._lastCommittedPrefixDivergence, divergenceEvents[0],
++      'the last observation is recorded on the instance');
++    t.equal(typedAppendFails(outgoing).length, heartbeatDeliveries,
++      'every heartbeat is rejected to the leader with the typed ' +
++      'committed-conflict append-fail (the existing repair route)');
++
++    const survivingEntry = await raft.log.get(CONFLICT_INDEX);
++    t.equal(survivingEntry.term, LOCAL_TERM,
++      'the committed-prefix entry is never deleted or replaced');
++    t.equal(raft.log.getLastInfo().index, CONFLICT_INDEX,
++      'the log head is intact (no committed-entry loss)');
++
++    // A DISTINCT conflict identity (new leader term) surfaces separately:
++    // the dedup is per identity, not a one-shot latch.
++    await incoming(
++      conflictingHeartbeat(SECOND_LEADER_CONFLICT_TERM, CONFLICT_INDEX),
++      () => {});
++    t.equal(divergenceEvents.length, 2,
++      'a new conflict identity is surfaced once more');
++    t.equal(divergenceEvents[1].leaderTerm, SECOND_LEADER_CONFLICT_TERM,
++      'the second observation carries the new leader term');
++    t.same(truncationRequests, [],
++      'still no truncation requests after the second identity');
++  } finally {
++    fixture.close();
++  }
++});
++
++test('in-memory follower whose watermark advanced over a stale flag ' +
++  'surfaces divergence once and never truncates', async (t) => {
++  const fixture = createInMemoryRaft();
++  const {raft} = fixture;
++  try {
++    await raft.log.saveCommand(command('committed-1'), LOCAL_TERM, 1);
++    await raft.log.saveCommand(command('stale-2'), LOCAL_TERM, CONFLICT_INDEX);
++    // Watermark advanced over the stale entry; its committed flag lags
++    // (same CL-040 shape, plain-property adapter).
++    raft.log.committedIndex = CONFLICT_INDEX;
++
++    const {outgoing, truncationRequests, divergenceEvents} = instrument(raft);
++    const incoming = raft.listeners('data')[0];
++    await incoming(conflictingHeartbeat(LEADER_CONFLICT_TERM, CONFLICT_INDEX),
++      () => {});
++    await incoming(conflictingHeartbeat(LEADER_CONFLICT_TERM, CONFLICT_INDEX),
++      () => {});
++
++    t.same(truncationRequests, [], 'no truncation is requested');
++    t.equal(divergenceEvents.length, 1, 'divergence is surfaced exactly once');
++    t.same(divergenceEvents[0], {
++      index: CONFLICT_INDEX,
++      localTerm: LOCAL_TERM,
++      leaderTerm: LEADER_CONFLICT_TERM,
++      committedIndex: CONFLICT_INDEX,
++    }, 'the observation carries the full conflict identity');
++    t.equal(typedAppendFails(outgoing).length, 2,
++      'each heartbeat is rejected with the typed append-fail');
++    const survivingEntry = await raft.log.get(CONFLICT_INDEX);
++    t.equal(survivingEntry.term, LOCAL_TERM, 'the entry survives untouched');
++  } finally {
++    fixture.close();
++  }
++});
++
++test('an UNCOMMITTED same-index term conflict keeps its truncation ' +
++  'behavior exactly (no divergence surfacing)', async (t) => {
++  const fixture = createSQLiteRaft();
++  const {raft} = fixture;
++  try {
++    await raft.log.saveCommand(command('committed-1'), LOCAL_TERM, 1);
++    await raft.log.saveCommand(command('stale-2'), LOCAL_TERM, CONFLICT_INDEX);
++    await raft.log.saveCommand(command('stale-3'), LOCAL_TERM, 3);
++    await raft.log.commit(1);
++    t.equal(raft.log.committedIndex, 1,
++      'precondition: the conflict sits above the committed index');
++
++    const {outgoing, truncationRequests, divergenceEvents} = instrument(raft);
++    const incoming = raft.listeners('data')[0];
++    await incoming(conflictingHeartbeat(LEADER_CONFLICT_TERM, 1), () => {});
++
++    t.same(truncationRequests, [CONFLICT_INDEX - 1],
++      'the uncommitted conflicting suffix is truncated exactly as before');
++    t.equal(raft.log.committedTruncationBlockedCount, 0,
++      'the truncation is legitimate: the adapter records no refusal');
++    t.equal(await raft.log.get(CONFLICT_INDEX), null,
++      'the conflicting uncommitted entry is removed');
++    t.equal(await raft.log.get(3), null,
++      'the uncommitted suffix after it is removed');
++    t.ok(await raft.log.get(1), 'the committed prefix survives');
++    t.same(divergenceEvents, [],
++      'no divergence is surfaced for a repairable uncommitted conflict');
++    t.equal(outgoing.some(({packet}) =>
++      packet.type === RAFT_PACKET_TYPE.APPEND_FAIL), true,
++    'the base append-fail catch-up path takes over after truncation');
++
++    // A matching-term committed replay right after stays silent: no event,
++    // no truncation (the divergence witness only fires on genuine
++    // conflicts).
++    await incoming({
++      ...conflictingHeartbeat(LEADER_CONFLICT_TERM, 1),
++      last: {index: 1, term: LOCAL_TERM, committedIndex: 1},
++    }, () => {});
++    t.same(divergenceEvents, [], 'a matching-term replay surfaces nothing');
++    t.same(truncationRequests, [CONFLICT_INDEX - 1],
++      'a matching-term replay truncates nothing further');
++  } finally {
++    fixture.close();
++  }
++});

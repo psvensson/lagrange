@@ -300,6 +300,10 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
     'Replica local durability recovered; leadership fitness restored',
   LEARNER_PROMOTION_ALLOWED_MULTI: 'Learner promotion allowed - multiple learners will reach odd',
   CLEARED_LIFERAFT_TIMERS: 'Cleared liferaft timers for deferred election',
+  COMMITTED_PREFIX_DIVERGENCE:
+    'Raft committed-prefix term divergence detected: local committed entry ' +
+    'conflicts with the leader and truncation is impossible by design; ' +
+    'routed to the leader catch-up/repair path (surfaced once per conflict)',
   BECAME_LEADER: 'Became leader (liferaft)',
   RAFT_TRANSITION_EVIDENCE: 'Raft leadership transition evidence',
   LEADER_CHANGED: 'Leader changed',

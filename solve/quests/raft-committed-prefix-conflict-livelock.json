@@ -1,0 +1,52 @@
+{
+  "id": "raft-committed-prefix-conflict-livelock",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A raft follower that detects a same-index term conflict at or below its committed index stops retrying an impossible truncation and instead surfaces the poisoned committed prefix to the existing snapshot/forced-repair path exactly once: truncateConflictingSameIndexTail (src/raft/liferaft.js) currently trusts the per-entry committed flag while sqlite-log-adapter.removeEntriesAfter refuses by committed index, so when base commit-index catch-up has already advanced over a stale same-index entry (the CL-040 hazard) every subsequent leader heartbeat re-requests a truncation the adapter must refuse — an unbounded livelock that starves formation. Verified at HEAD 08acaf0d8 across 19 archived 3-node runs: every heavy-refusal run (46-363 'Refused raft log truncation into the committed prefix' retries) failed formation with joiners stuck in joining:readiness-convergence, while green runs show 0-6 transient refusals; the wedge is the dominant face of the current ~50% boot flake (5 of ~8 genuine reds). The fix must be fail-closed: a committed-prefix term conflict is committed-state divergence and must trigger typed divergence surfacing plus the existing repair/catch-up route, never a silent skip that leaves divergent committed state, and never a weakening of the committed-entry-loss refusal in the log adapter.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/latent-convergence-blocker-census.md",
+    "draftedAtCommit": "08acaf0d8b122702aa7332eb07006e2200056e5e"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/raft-committed-prefix-conflict-livelock.receipt.json",
+      "requiredReceipts": [
+        "committed-prefix-conflict-routes-to-repair-once",
+        "adapter-committed-refusal-preserved"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "raft-committed-prefix-conflict-livelock-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/raft-committed-prefix-conflict-livelock.receipt.json",
+          "requiredReceipts": [
+            "committed-prefix-conflict-routes-to-repair-once",
+            "adapter-committed-refusal-preserved"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "verificationTemplates": [
+    "recovery-replay",
+    "concurrency-serialization"
+  ]
+}

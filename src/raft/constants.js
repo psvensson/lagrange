@@ -44,6 +44,14 @@ const RAFT_EVENT = Object.freeze({
   LEADER_CHANGE: 'leader change',
   COMMIT: 'commit',
   TERM_CHANGE: 'term change',
+  // Typed committed-state divergence witness (quest raft-committed-prefix-
+  // conflict-livelock): a follower detected a same-index term conflict at or
+  // below its committed index — a poisoned committed prefix that truncation
+  // can never repair (the log adapter refuses committed-entry loss by
+  // design). Emitted by LifeRaft EXACTLY ONCE per conflict identity
+  // (index, localTerm, leaderTerm); repair rides the existing typed
+  // append-fail -> leader catch-up/install route.
+  COMMITTED_PREFIX_DIVERGENCE: 'committed prefix divergence',
 });
 
 const RAFT_ERROR_NAME = Object.freeze({
