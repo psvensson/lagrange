@@ -21,6 +21,7 @@ import {
 } from '../bootstrap/system-table-schemas-constants.js';
 import {
   classifySystemPartition,
+  isOperationLedgerPartition,
 } from '../bootstrap/system-partition-classification.js';
 import {
   CONTROL_PLANE_PARTICIPATION_KIND,
@@ -746,6 +747,7 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
   getControlPlaneRetryAfterMs,
   getRemainingBudgetMs,
   hasControlPlaneMutationRoutingGapFailureSignature,
+  isOperationLedgerPartition,
   isRetryableControlPlaneError,
   isRetryableWorkflowParticipantLookupErrorMessage,
   ROUTER_ERROR_MSG,
@@ -763,6 +765,7 @@ assignReplicaOperationRepositoryMutationUpdateMethods(ReplicaOperationRepository
   SQL,
   SYSTEM_TABLE_NAME,
   buildControlPlaneFailurePayload,
+  isOperationLedgerPartition,
 });
 
 assignReplicaOperationRepositoryObservationMethods(ReplicaOperationRepository, {

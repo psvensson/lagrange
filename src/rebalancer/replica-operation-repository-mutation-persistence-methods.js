@@ -31,7 +31,24 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
     SYSTEM_TABLE_NAME,
     buildControlPlaneFailurePayload,
     buildDivergenceEvent,
+    isOperationLedgerPartition,
   } = options;
+
+  // Formation-time relief (quest formation-barrier-spread-release-oscillation):
+  // an operation that manages an operation-ledger partition persists its OWN
+  // admission row into that ledger. Binding that insert to a system write
+  // session couples it to the seed-led, unspread write-session bookkeeping
+  // tables — the circular dependency that starves ledger spread exactly while
+  // the ledger is concentrated. Ledger self-coupled inserts therefore use the
+  // same independent session-less persistence intent every step-transition
+  // write already uses (operation-workflow-owner-execution-lane
+  // buildOperationTransitionPersistOptions); the insert stays OR-IGNORE
+  // idempotent with authoritative-read outcome confirmation.
+  function isLedgerSelfCoupledOperationInsert(operation) {
+    return isOperationLedgerPartition({
+      partitionId: operation?.partitionId,
+    }) === true;
+  }
 
   async function resolveNewOperationInsertCollision(
     repository,
@@ -131,6 +148,8 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
               {
                 ownerId: this.resolveReplicaOperationMutationOwnerId(operation),
                 ignoreExisting: true,
+                disableSystemWriteSession:
+                  isLedgerSelfCoupledOperationInsert(operation),
                 onRetryableFailure: (errorResult) =>
                   this.recoverPersistedReplicaOperationMutation(
                     operation,

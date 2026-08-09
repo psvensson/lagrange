@@ -43,6 +43,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
     SQL,
     SYSTEM_TABLE_NAME,
     buildControlPlaneFailurePayload,
+    isOperationLedgerPartition,
   } = options;
 
   class ReplicaOperationRepositoryMutationUpdateMethods {
@@ -245,6 +246,18 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         const result = await this.executeOperationMutationWithRetry(
           SQL.UPDATE_OPERATION_OWNER_LEASE,
           [leaseExpiresAt, operation.operationId],
+          {
+            // Formation-time relief (quest formation-barrier-spread-release-
+            // oscillation): a ledger self-coupled operation's lease touch
+            // must not bind to the seed-led write-session tables either —
+            // the same session-less intent as its admission INSERT and every
+            // transition write. Non-ledger lease touches keep their prior
+            // write shape byte-identical.
+            disableSystemWriteSession:
+              isOperationLedgerPartition({
+                partitionId: operation?.partitionId,
+              }) === true,
+          },
         );
         return result?.success === true;
       } catch (error) {

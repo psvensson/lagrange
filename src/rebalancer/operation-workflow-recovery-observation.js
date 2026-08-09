@@ -1,5 +1,10 @@
 import {PriorityRecoverySupersededTarget} from './priority-recovery-superseded-target.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
+import {
+  clearStoppingObservationDeferrals,
+  handleUnavailableStoppingObservation,
+  shouldClearStoppingObservationDeferrals,
+} from './operation-workflow-stopping-starvation.js';
 
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
@@ -550,6 +555,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
         observation?.state || STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
       return Object.freeze({
         state: observationState,
+        source: observation?.source || null,
         lifecycleStatus:
           observationState === STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED ?
             observation.lifecycleStatus :
@@ -566,6 +572,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
         actualStatus === null ?
           STOPPING_REPLICA_OBSERVATION_STATE.ABSENT :
           STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED,
+      source: null,
       lifecycleStatus: actualStatus,
     });
   }
@@ -629,6 +636,14 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       removingNodeId,
     );
     const actualStatus = stoppingReplicaObservation.lifecycleStatus;
+    if (
+      shouldClearStoppingObservationDeferrals(
+        stoppingReplicaObservation,
+        STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
+      )
+    ) {
+      clearStoppingObservationDeferrals(this, operation.operationId);
+    }
 
     if (
       stoppingReplicaObservation.state ===
@@ -651,7 +666,13 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
       stoppingReplicaObservation.state ===
       STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE
     ) {
-      return this.deferStoppingObservationRetry(operation);
+      return handleUnavailableStoppingObservation(
+        this,
+        operation,
+        (candidate) =>
+          classifySystemPartition({partitionId: candidate.partitionId})
+            .systemTable,
+      );
     }
 
     if (actualStatus === ReplicaStatus.FAILED) {

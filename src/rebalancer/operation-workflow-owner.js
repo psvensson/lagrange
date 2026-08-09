@@ -435,6 +435,11 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
     this.timeSource = options?.timeSource || null;
     this.operationWorkflowOwnerAdapterOperationSnapshotByOperationId =
       new Map();
+    // Consecutive UNAVAILABLE stopping-observation deferrals per operation;
+    // consumed by the bounded starvation escalation in
+    // reconcileStoppingOperationProgress and cleared on any non-UNAVAILABLE
+    // observation (only real observation evidence resets the bound).
+    this.stoppingObservationDeferralsByOperationId = new Map();
     this.operationWorkflowOwnerPorts =
       createOperationWorkflowOwnerPorts(this);
     this.operationProgressStore =

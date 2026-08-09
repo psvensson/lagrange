@@ -1,0 +1,52 @@
+{
+  "id": "formation-barrier-spread-release-oscillation",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "An engaged operation-ledger formation barrier releases within its budget when ledger spread is achievable: the joiner's awaitOperationLedgerFormationBarrier (src/bootstrap/node-joining-operation-ledger-formation-readiness.js) stops oscillating and reaches SATISFIED once replica_operations-p1 genuinely reaches 3 voters on 3 distinct nodes, and the spread operations' execution edge gains formation-time relief so their own progress cannot starve forever against the concentrated seed-led ledger they exist to spread. Verified at HEAD 788682214 (live 3-node runs + code trace): greens are exactly the runs where the barrier never engages (guard returns; engaged release is arithmetically >=500ms, observed green joins are 4-8ms); when engaged, red-run barrier logs oscillate between waiting_for_ledger_spread and waiting_for_ledger_observation with observedVoterCount=3 via owner_rpc_lane but spreadProofComplete flapping true/false and inFlightOperationCount null, never satisfying all release legs in one iteration across the full 120s budget; spread REPLACE/ADD ops defer retryable-forever (DISTRIBUTED_PARTICIPANT_FAILURE progress writes routed through the concentrated ledger + seed-led write-session tables; STOPPING observation control_plane_pressure_degraded deferRetry with no escalation), and the admission hold policy simultaneously judges the same concentrated ledger not actionable (feasibility scan counts only connection_state=ready while placement eligibility accepts JOINING) — two owners disagreeing about actionability. The July interlock fixes (self-move ghost re-verify; drainPhaseReplacementCredit) are wired but cover different shapes. Fail-closed cases (two-node bypass, sequential growth, durable rejoin) must stay fail-closed.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "raft-committed-prefix-conflict-livelock",
+    "planDoc": "solve/epics/latent-convergence-blocker-census.md",
+    "draftedAtCommit": "788682214ebcecad2934d88714cb19936bec12f2"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/formation-barrier-spread-release-oscillation.receipt.json",
+      "requiredReceipts": [
+        "engaged-barrier-releases-under-execution-faults",
+        "fail-closed-formation-cases-preserved"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-barrier-spread-release-oscillation-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/formation-barrier-spread-release-oscillation.receipt.json",
+          "requiredReceipts": [
+            "engaged-barrier-releases-under-execution-faults",
+            "fail-closed-formation-cases-preserved"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "verificationTemplates": [
+    "formation-circularity",
+    "retry-loops"
+  ]
+}

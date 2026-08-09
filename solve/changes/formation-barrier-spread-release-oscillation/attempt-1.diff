@@ -1,0 +1,1648 @@
+diff --git a/scripts/quest-evidence-formation-barrier-spread-release-oscillation.js b/scripts/quest-evidence-formation-barrier-spread-release-oscillation.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..30160b679e97418c499f5efb52b1e12b1d52866b
+--- /dev/null
++++ b/scripts/quest-evidence-formation-barrier-spread-release-oscillation.js
+@@ -0,0 +1,65 @@
++// Deterministic evidence harness for the formation-barrier-spread-release-
++// oscillation quest: receipt declarations only. The shared runtime
++// (scripts/quest-evidence-harness-runtime.js) re-runs each recorded proof
++// command and writes the probe artifact.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'engaged-barrier-releases-under-execution-faults',
++    testFile:
++      'test/convergence/dt-formation-barrier-spread-release-oscillation.test.js',
++    detail: 'a seed + two pre-ready joiners cohort with every ' +
++      'replica_operations-p1 voter on the seed engages the REAL join ' +
++      'formation barrier on a virtual clock while the seed executes real ' +
++      'MovePlanner spread cures through production-shaped formation faults ' +
++      '(session-carrying ledger mutations fail DISTRIBUTED_PARTICIPANT_' +
++      'FAILURE while the ledger is concentrated; the authoritative ' +
++      'stopping-observation status lane is shed all window; the ' +
++      'partition-scoped owner-RPC placement lane answers only ' +
++      'intermittently, reproducing the field spread<->observation state ' +
++      'flap): the barrier reaches a genuine SATISFIED inside its budget ' +
++      'with three distinct voter nodes, zero starved non-terminal ops, no ' +
++      'session-carried formation-window ledger mutation (link A: the ' +
++      'ledger self-coupled admission INSERT rides the session-less ' +
++      'transition lane), a starved STOPPING observation escalated to a ' +
++      'typed visible failure after the bounded deferral limit (link B), a ' +
++      'later cure completing cleanly, and a sub-limit observation blip ' +
++      'completing without any visible failure (red-on-revert: restoring ' +
++      'either the session-carried INSERT or the unbounded defer loop ' +
++      'times the barrier out at 2/3 distinct nodes — with participant-' +
++      'failure admission rejections or a REPLACE pinned at STOPPING ' +
++      'respectively)',
++  }),
++  Object.freeze({
++    id: 'fail-closed-formation-cases-preserved',
++    testFile:
++      'test/convergence/dt-formation-priority-placement-before-active.test.js',
++    detail: 'every pre-existing fail-closed formation case is untouched: ' +
++      'the two-node cohort bypass, sequential third-node growth bypass, ' +
++      'durable-rejoin bypass with fresh-join/unknown modes staying ' +
++      'fail-closed on incomplete snapshots, the feasible cohort failing ' +
++      'closed and resumable on incomplete voter observation, the ' +
++      'authoritative-placement matrix (partial/concentrated/non-owner-' +
++      'lane evidence never releases), and the real REPLACE->ADD->REMOVE ' +
++      'formation flow releasing only after genuine one-voter-per-node ' +
++      'spread with zero in-flight ledger operations',
++  }),
++]);
++
++const QUEST_ID = 'formation-barrier-spread-release-oscillation';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'formation-barrier-spread-release-oscillation.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/src/rebalancer/operation-workflow-owner.js b/src/rebalancer/operation-workflow-owner.js
+index 5307ca5a34c9759f8d1a964ca8616179f6fc3018..2f4646e934875d72b8545d2af035173bf1642934 100644
+--- a/src/rebalancer/operation-workflow-owner.js
++++ b/src/rebalancer/operation-workflow-owner.js
+@@ -435,6 +435,11 @@ class OperationWorkflowOwner extends OperationWorkflowRecoveryReconcile {
+     this.timeSource = options?.timeSource || null;
+     this.operationWorkflowOwnerAdapterOperationSnapshotByOperationId =
+       new Map();
++    // Consecutive UNAVAILABLE stopping-observation deferrals per operation;
++    // consumed by the bounded starvation escalation in
++    // reconcileStoppingOperationProgress and cleared on any non-UNAVAILABLE
++    // observation (only real observation evidence resets the bound).
++    this.stoppingObservationDeferralsByOperationId = new Map();
+     this.operationWorkflowOwnerPorts =
+       createOperationWorkflowOwnerPorts(this);
+     this.operationProgressStore =
+diff --git a/src/rebalancer/operation-workflow-recovery-observation.js b/src/rebalancer/operation-workflow-recovery-observation.js
+index 4a0860e9189694cd7817fc55f0b1b33479a9920b..1eef8724c135eb6ae4896e5674fc0097ee638c62 100644
+--- a/src/rebalancer/operation-workflow-recovery-observation.js
++++ b/src/rebalancer/operation-workflow-recovery-observation.js
+@@ -1,5 +1,10 @@
+ import {PriorityRecoverySupersededTarget} from './priority-recovery-superseded-target.js';
+ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
++import {
++  clearStoppingObservationDeferrals,
++  handleUnavailableStoppingObservation,
++  shouldClearStoppingObservationDeferrals,
++} from './operation-workflow-stopping-starvation.js';
+ 
+ const {
+   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
+@@ -550,6 +555,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
+         observation?.state || STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE;
+       return Object.freeze({
+         state: observationState,
++        source: observation?.source || null,
+         lifecycleStatus:
+           observationState === STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED ?
+             observation.lifecycleStatus :
+@@ -566,6 +572,7 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
+         actualStatus === null ?
+           STOPPING_REPLICA_OBSERVATION_STATE.ABSENT :
+           STOPPING_REPLICA_OBSERVATION_STATE.OBSERVED,
++      source: null,
+       lifecycleStatus: actualStatus,
+     });
+   }
+@@ -629,6 +636,14 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
+       removingNodeId,
+     );
+     const actualStatus = stoppingReplicaObservation.lifecycleStatus;
++    if (
++      shouldClearStoppingObservationDeferrals(
++        stoppingReplicaObservation,
++        STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE,
++      )
++    ) {
++      clearStoppingObservationDeferrals(this, operation.operationId);
++    }
+ 
+     if (
+       stoppingReplicaObservation.state ===
+@@ -651,7 +666,13 @@ class OperationWorkflowRecoveryObservation extends PriorityRecoverySupersededTar
+       stoppingReplicaObservation.state ===
+       STOPPING_REPLICA_OBSERVATION_STATE.UNAVAILABLE
+     ) {
+-      return this.deferStoppingObservationRetry(operation);
++      return handleUnavailableStoppingObservation(
++        this,
++        operation,
++        (candidate) =>
++          classifySystemPartition({partitionId: candidate.partitionId})
++            .systemTable,
++      );
+     }
+ 
+     if (actualStatus === ReplicaStatus.FAILED) {
+diff --git a/src/rebalancer/operation-workflow-stopping-starvation.js b/src/rebalancer/operation-workflow-stopping-starvation.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f1fb05750bf2c7edf93c895bf1f9a6144c51ceea
+--- /dev/null
++++ b/src/rebalancer/operation-workflow-stopping-starvation.js
+@@ -0,0 +1,164 @@
++// Bounded STOPPING-observation starvation escalation (quest
++// formation-barrier-spread-release-oscillation): an UNAVAILABLE
++// stopping-replica observation used to defer retryable-forever, so a shed
++// authoritative services lane (formation pressure) pinned the operation at
++// STOPPING — a REMOVING ledger voter that keeps the quorum concentrated,
++// which keeps the pressure on. This module owns the deferral accounting and
++// the loud, typed visible-failure escalation consumed by
++// reconcileStoppingOperationProgress; the owner carries the per-operation
++// record in stoppingObservationDeferralsByOperationId. Only a genuinely
++// authoritative (or genuinely absent) observation clears the record — a
++// transport ack never resets the bound, and a CACHE-FALLBACK observation
++// (authoritative lane failed, arbitrarily stale cached row) freezes the
++// count instead of resetting it.
++
++// Consecutive UNAVAILABLE observations tolerated before the operation is
++// failed visibly, AND the minimum wall-clock the starvation must have
++// lasted (anchored on the owner's timeout-check clock at the first
++// deferral). The count alone is call-rate coupled — level-triggered
++// re-drives could burn deferrals quickly — so both bounds must be
++// exhausted. At the 250ms TRANSITION_RETRY_DELAY_MS defer cadence the
++// count bound is ~10s of continuous authoritative-lane unavailability —
++// far above transient blips, far below the joiner's 120s
++// formation-barrier budget.
++const STOPPING_OBSERVATION_STARVATION_DEFERRAL_LIMIT = 40;
++const STOPPING_OBSERVATION_STARVATION_MIN_ELAPSED_MS = 10_000;
++const STOPPING_OBSERVATION_STARVATION_LOG_MESSAGE =
++  'Stopping-replica observation starved; failing operation visibly';
++const STOPPING_OBSERVATION_STARVATION_FAILURE_MESSAGE =
++  'stopping-observation starvation: authoritative replica observation ' +
++  'stayed unavailable past the bounded deferral limit';
++// Mirrors REPLICA_OPERATION_REPOSITORY_LITERAL
++// .CACHE_FALLBACK_AFTER_AUTHORITATIVE_FAILURE (replica-operation-repository
++// .js, module-local there): an OBSERVED whose evidence is a cached row read
++// AFTER the authoritative lane failed is not fresh enough to reset the
++// starvation record.
++const STOPPING_OBSERVATION_CACHE_FALLBACK_SOURCE =
++  'cache_fallback_after_authoritative_failure';
++
++/**
++ * Record one UNAVAILABLE stopping-observation deferral and report whether
++ * both starvation bounds (count and elapsed time) are exhausted.
++ * @param {Object} owner - Workflow owner carrying the deferral map and the
++ *   timeout-check clock.
++ * @param {Object} operation
++ * @return {boolean} True when the starvation bounds are exhausted.
++ */
++function recordStoppingObservationDeferralExhaustion(owner, operation) {
++  if (!operation?.operationId) {
++    return false;
++  }
++  const nowMs = owner.resolveTimeoutCheckNowMs();
++  const record =
++    owner.stoppingObservationDeferralsByOperationId.get(
++      operation.operationId,
++    ) || {deferralCount: 0, firstDeferredAtMs: nowMs};
++  if (
++    record.deferralCount >= STOPPING_OBSERVATION_STARVATION_DEFERRAL_LIMIT &&
++    nowMs - record.firstDeferredAtMs >=
++      STOPPING_OBSERVATION_STARVATION_MIN_ELAPSED_MS
++  ) {
++    return true;
++  }
++  owner.stoppingObservationDeferralsByOperationId.set(
++    operation.operationId,
++    {
++      deferralCount: record.deferralCount + 1,
++      firstDeferredAtMs: record.firstDeferredAtMs,
++    },
++  );
++  return false;
++}
++
++/**
++ * Whether an observation outcome is fresh enough to clear the starvation
++ * record: any non-UNAVAILABLE state EXCEPT a cache-fallback OBSERVED (the
++ * authoritative lane failed; the cached row may be arbitrarily stale, so it
++ * must not keep resetting the bound while the lane starves).
++ * @param {Object} observation - Frozen stopping-replica observation
++ *   ({state, source, lifecycleStatus}).
++ * @param {string} unavailableState - The UNAVAILABLE state literal.
++ * @return {boolean}
++ */
++function shouldClearStoppingObservationDeferrals(
++  observation,
++  unavailableState,
++) {
++  return (
++    observation.state !== unavailableState &&
++    observation.source !== STOPPING_OBSERVATION_CACHE_FALLBACK_SOURCE
++  );
++}
++
++/**
++ * Clear the deferral record once a genuinely fresh observation (or the
++ * escalation itself) lands.
++ * @param {Object} owner - Workflow owner carrying the deferral map.
++ * @param {string|null|undefined} operationId
++ * @return {void}
++ */
++function clearStoppingObservationDeferrals(owner, operationId) {
++  if (operationId) {
++    owner.stoppingObservationDeferralsByOperationId.delete(operationId);
++  }
++}
++
++/**
++ * Fail a starvation-exhausted STOPPING operation visibly. Loud, typed
++ * terminal exit (never a silent self-cancel): the terminal write itself is
++ * session-less so it can land during the degraded window, and the aftermath
++ * (re-planning from actuals, failed-removal cleanup) is owned by the
++ * existing level-triggered machinery. This never fabricates completion
++ * evidence, so the fail-closed formation barrier semantics are preserved.
++ * @param {Object} owner - Workflow owner (logger + failOperation).
++ * @param {Object} operation
++ * @return {Promise<boolean>}
++ */
++async function escalateStarvedStoppingObservation(owner, operation) {
++  owner.logger.error(
++    STOPPING_OBSERVATION_STARVATION_LOG_MESSAGE,
++    {
++      operationId: operation.operationId,
++      partitionId: operation.partitionId || null,
++      workflowStep: operation.workflowStep || null,
++      deferralLimit: STOPPING_OBSERVATION_STARVATION_DEFERRAL_LIMIT,
++      minElapsedMs: STOPPING_OBSERVATION_STARVATION_MIN_ELAPSED_MS,
++    },
++  );
++  clearStoppingObservationDeferrals(owner, operation.operationId);
++  await owner.failOperation(
++    operation,
++    STOPPING_OBSERVATION_STARVATION_FAILURE_MESSAGE,
++  );
++  return true;
++}
++
++/**
++ * Handle one UNAVAILABLE stopping observation: escalate visibly once the
++ * starvation bounds are exhausted for a system-table operation, defer
++ * otherwise (the pre-existing retryable path, byte-identical for
++ * non-system rows).
++ * @param {Object} owner - Workflow owner.
++ * @param {Object} operation
++ * @param {Function} isSystemTableOperation - Typed partition classifier.
++ * @return {Promise<boolean>|boolean}
++ */
++function handleUnavailableStoppingObservation(
++  owner,
++  operation,
++  isSystemTableOperation,
++) {
++  if (
++    isSystemTableOperation(operation) &&
++    recordStoppingObservationDeferralExhaustion(owner, operation)
++  ) {
++    return escalateStarvedStoppingObservation(owner, operation);
++  }
++  return owner.deferStoppingObservationRetry(operation);
++}
++
++export {
++  clearStoppingObservationDeferrals,
++  handleUnavailableStoppingObservation,
++  shouldClearStoppingObservationDeferrals,
++};
+diff --git a/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js b/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
+index 63e3ca36927a67f1478b7d637dfc6f6fa19bfc6c..204316c78c013b72f1b650f9f2df73a6afd22aad 100644
+--- a/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
++++ b/src/rebalancer/replica-operation-repository-mutation-persistence-methods.js
+@@ -31,8 +31,25 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
+     SYSTEM_TABLE_NAME,
+     buildControlPlaneFailurePayload,
+     buildDivergenceEvent,
++    isOperationLedgerPartition,
+   } = options;
+ 
++  // Formation-time relief (quest formation-barrier-spread-release-oscillation):
++  // an operation that manages an operation-ledger partition persists its OWN
++  // admission row into that ledger. Binding that insert to a system write
++  // session couples it to the seed-led, unspread write-session bookkeeping
++  // tables — the circular dependency that starves ledger spread exactly while
++  // the ledger is concentrated. Ledger self-coupled inserts therefore use the
++  // same independent session-less persistence intent every step-transition
++  // write already uses (operation-workflow-owner-execution-lane
++  // buildOperationTransitionPersistOptions); the insert stays OR-IGNORE
++  // idempotent with authoritative-read outcome confirmation.
++  function isLedgerSelfCoupledOperationInsert(operation) {
++    return isOperationLedgerPartition({
++      partitionId: operation?.partitionId,
++    }) === true;
++  }
++
+   async function resolveNewOperationInsertCollision(
+     repository,
+     operation,
+@@ -131,6 +148,8 @@ function assignReplicaOperationRepositoryMutationPersistenceMethods(
+               {
+                 ownerId: this.resolveReplicaOperationMutationOwnerId(operation),
+                 ignoreExisting: true,
++                disableSystemWriteSession:
++                  isLedgerSelfCoupledOperationInsert(operation),
+                 onRetryableFailure: (errorResult) =>
+                   this.recoverPersistedReplicaOperationMutation(
+                     operation,
+diff --git a/src/rebalancer/replica-operation-repository-mutation-update-methods.js b/src/rebalancer/replica-operation-repository-mutation-update-methods.js
+index f3ca3792139cf08af75e47b20d81b01efc05b2d8..873caf977d4b490d028938bf93c12744be9980d1 100644
+--- a/src/rebalancer/replica-operation-repository-mutation-update-methods.js
++++ b/src/rebalancer/replica-operation-repository-mutation-update-methods.js
+@@ -43,6 +43,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
+     SQL,
+     SYSTEM_TABLE_NAME,
+     buildControlPlaneFailurePayload,
++    isOperationLedgerPartition,
+   } = options;
+ 
+   class ReplicaOperationRepositoryMutationUpdateMethods {
+@@ -245,6 +246,18 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
+         const result = await this.executeOperationMutationWithRetry(
+           SQL.UPDATE_OPERATION_OWNER_LEASE,
+           [leaseExpiresAt, operation.operationId],
++          {
++            // Formation-time relief (quest formation-barrier-spread-release-
++            // oscillation): a ledger self-coupled operation's lease touch
++            // must not bind to the seed-led write-session tables either —
++            // the same session-less intent as its admission INSERT and every
++            // transition write. Non-ledger lease touches keep their prior
++            // write shape byte-identical.
++            disableSystemWriteSession:
++              isOperationLedgerPartition({
++                partitionId: operation?.partitionId,
++              }) === true,
++          },
+         );
+         return result?.success === true;
+       } catch (error) {
+diff --git a/src/rebalancer/replica-operation-repository.js b/src/rebalancer/replica-operation-repository.js
+index bcdb76b727b6d5f5c5f9b4e2ce127e889a6cd9d4..1274f2b67a47d6a7bf339db42a42607a2d620bc9 100644
+--- a/src/rebalancer/replica-operation-repository.js
++++ b/src/rebalancer/replica-operation-repository.js
+@@ -21,6 +21,7 @@ import {
+ } from '../bootstrap/system-table-schemas-constants.js';
+ import {
+   classifySystemPartition,
++  isOperationLedgerPartition,
+ } from '../bootstrap/system-partition-classification.js';
+ import {
+   CONTROL_PLANE_PARTICIPATION_KIND,
+@@ -746,6 +747,7 @@ assignReplicaOperationRepositoryMutationMethods(ReplicaOperationRepository, {
+   getControlPlaneRetryAfterMs,
+   getRemainingBudgetMs,
+   hasControlPlaneMutationRoutingGapFailureSignature,
++  isOperationLedgerPartition,
+   isRetryableControlPlaneError,
+   isRetryableWorkflowParticipantLookupErrorMessage,
+   ROUTER_ERROR_MSG,
+@@ -763,6 +765,7 @@ assignReplicaOperationRepositoryMutationUpdateMethods(ReplicaOperationRepository
+   SQL,
+   SYSTEM_TABLE_NAME,
+   buildControlPlaneFailurePayload,
++  isOperationLedgerPartition,
+ });
+ 
+ assignReplicaOperationRepositoryObservationMethods(ReplicaOperationRepository, {
+diff --git a/test/convergence/dt-formation-barrier-spread-release-oscillation.test.js b/test/convergence/dt-formation-barrier-spread-release-oscillation.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..bdd11ea4e2d117a095a6e1747b8b77a41fcc5147
+--- /dev/null
++++ b/test/convergence/dt-formation-barrier-spread-release-oscillation.test.js
+@@ -0,0 +1,571 @@
++import t from 'tap';
++import {
++  REBALANCER_ENTITY_TYPE,
++  REBALANCER_MOVE_TYPE,
++} from '../../src/rebalancer/rebalancer-constants.js';
++import {
++  OperationType,
++  ReplicaStatus,
++} from '../../src/rebalancer/replica-status.js';
++import {
++  getNextWorkflowStep,
++  isTerminalStep,
++} from '../../src/rebalancer/replica-operation-progress.js';
++import {WORKFLOW_STEP} from '../../src/constants/workflow.js';
++import {
++  createTimeoutTestCoordinator,
++} from '../rebalancer/timeout-test-coordinator.js';
++import {
++  isLedgerQuorumConcentratedPartition,
++} from '../../src/rebalancer/operation-ledger-hold-policy.js';
++import {
++  QUERY_ERROR_CODE,
++  QUERY_ERROR_MSG,
++} from '../../src/query/query-constants.js';
++import {
++  LEDGER_PARTITION_ID,
++  JOINER_1_NODE_ID,
++  JOINER_2_NODE_ID,
++  applyRow,
++  buildFormationBarrierOwner,
++  buildFormationCache,
++  buildRealLedgerPlanner,
++  currentLedgerReplicas,
++  initializeEnvironment,
++  resetEnvironment,
++} from './formation-barrier-test-fixture.js';
++
++// Quest formation-barrier-spread-release-oscillation — deterministic
++// reproduction of the abfix red-run wedge (live 3-node docker joins,
++// ec-abfix-20260809T174802Z lineage):
++//
++//   The seed's ledger spread ops must execute THROUGH the concentrated
++//   formation window they exist to cure. Two production-shaped execution
++//   faults close the circle:
++//   - Link A: an operation-row INSERT that carries a system write session
++//     rides the seed-led, unspread write-session tables and fails
++//     DISTRIBUTED_PARTICIPANT_FAILURE retryable-forever while formation
++//     pressure lasts (every step-transition write already bypasses the
++//     session — the admission INSERT was the remaining session-coupled
++//     write).
++//   - Link B: a spread op that reached STOPPING defers
++//     control_plane_pressure_degraded forever when the authoritative
++//     services observation lane is shed, pinning a REMOVING voter on the
++//     seed so the ledger never unconcentrates.
++//   Pressure persists exactly while the ledger is concentrated, so each
++//   link keeps the other failing and the joiner's engaged formation
++//   barrier oscillates (waiting_for_ledger_spread <->
++//   waiting_for_ledger_observation) until its fail-closed 120s timeout.
++//
++// HONEST SCOPE (dt6-formation-ledger-* idiom):
++//   - REAL: the joiner's barrier loop (snapshot legs, engagement latch,
++//     release states) on a virtual clock; the MovePlanner spread cures over
++//     live cache rows; the RebalanceCoordinator admission chain +
++//     createOperation INSERT write shapes; every workflow step-transition
++//     persist; reconcileStoppingOperationProgress with the repository's
++//     real authoritative-read + cache-fallback observation; terminal
++//     transitions.
++//   - MODELED (deterministic drive at the invariant layer): the tick driver
++//     folds one workflow action per barrier poll and applies the physical
++//     placement effects of executed steps to the shared cache rows
++//     (production: target-node execution + CDC). The fault model keys on
++//     the REAL queryOptions/read lanes the owners emit: session-carrying
++//     ledger mutations and authoritative services reads fail while the
++//     formation storm (= concentrated ledger after the join wave arrives)
++//     is active; session-less single-statement ledger writes led by the
++//     live seed succeed.
++
++const BARRIER_START_MS = 1000;
++// Production-faithful virtual cadence: one execution action per 250ms poll
++// (the TRANSITION_RETRY_DELAY_MS defer cadence) against the real 120s
++// barrier budget, so the bounded starvation escalation's count AND
++// elapsed-time bounds are both exercised at their production magnitudes.
++const BARRIER_POLL_MS = 250;
++const BARRIER_TIMEOUT_MS = 120000;
++const STORM_START_OFFSET_MS = 2;
++const CASE2_SERVICES_READ_FAIL_BUDGET = 6;
++const STOPPING_STARVATION_MESSAGE_FRAGMENT = 'stopping-observation starvation';
++const BARRIER_STATE = Object.freeze({
++  SATISFIED: 'ledger_spread_satisfied',
++  WAITING_OBSERVATION: 'waiting_for_ledger_observation',
++  WAITING_SPREAD: 'waiting_for_ledger_spread',
++});
++const PRESSURE_READ_FAILURE = Object.freeze({
++  success: false,
++  deferRetry: true,
++  errorCode: 'CONTROL_PLANE_PRESSURE_DEGRADED',
++  error: 'authoritative services lane shed under control-plane pressure',
++});
++
++function buildParticipantWriteFailure() {
++  const participant = {
++    tableName: 'sql_transaction_participants',
++    deferRetry: true,
++  };
++  return {
++    success: false,
++    error: QUERY_ERROR_MSG.DISTRIBUTED_PARTICIPANT_FAILURE,
++    errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
++    deferRetry: true,
++    retryAfterMs: 1,
++    participantFailures: [participant],
++    firstFailedParticipant: participant,
++  };
++}
++
++function serveServicesReadFromCache(cache, sql, params) {
++  const rows = currentLedgerReplicas(cache);
++  let matched = rows;
++  if (sql.includes('service_type = ?') && sql.includes('partition_id = ?')) {
++    matched = rows.filter(
++      (row) => row.service_type === params[0] && row.partition_id === params[1],
++    );
++  } else if (sql.includes('service_id = ?')) {
++    matched = rows.filter(
++      (row) =>
++        row.service_id === params[0] || row.replica_id === params[0],
++    );
++  } else if (sql.includes('partition_id = ?') && sql.includes('node_id = ?')) {
++    matched = rows.filter(
++      (row) => row.partition_id === params[0] && row.node_id === params[1],
++    );
++  } else if (sql.includes('partition_id = ?')) {
++    matched = rows.filter((row) => row.partition_id === params[0]);
++  }
++  return {
++    success: true,
++    source: 'owner_rpc_lane',
++    rows: matched.map((row) => ({...row})),
++  };
++}
++
++function isSessionCarryingLedgerMutation(sql, options) {
++  if (typeof sql !== 'string') {
++    return false;
++  }
++  const ledgerWrite =
++    (sql.includes('INSERT INTO replica_operations') ||
++      sql.includes('UPDATE replica_operations')) &&
++    !sql.includes('lease_expires_at');
++  return (
++    ledgerWrite &&
++    options?.disableSystemWriteSession !== true &&
++    typeof options?.sessionId === 'string' &&
++    options.sessionId.length > 0
++  );
++}
++
++function distinctVoterNodeCount(cache) {
++  return new Set(
++    currentLedgerReplicas(cache)
++      .filter((row) =>
++        [ReplicaStatus.ACTIVE, ReplicaStatus.REMOVING].includes(row.status))
++      .map((row) => row.node_id),
++  ).size;
++}
++
++function buildScenario(options = {}) {
++  initializeEnvironment();
++  const cache = buildFormationCache({
++    joinerNodeIds: [JOINER_1_NODE_ID, JOINER_2_NODE_ID],
++  });
++  const clockAtBuild = {now: BARRIER_START_MS};
++  const fixture = createTimeoutTestCoordinator({
++    timeSource: {now: () => clockAtBuild.now},
++  });
++  const {coordinator, trackedOperations} = fixture;
++  coordinator.systemTableCache = cache;
++  coordinator.repository.systemTableCache = cache;
++  const clock = clockAtBuild;
++  const stormStartAt = BARRIER_START_MS + STORM_START_OFFSET_MS;
++  const witnesses = {
++    sessionWritesFailedDuringStorm: 0,
++    sessionlessLedgerInsertsDuringStorm: 0,
++    createRejections: [],
++    barrierStates: [],
++    servicesReadFailures: 0,
++  };
++
++  const concentrated = () =>
++    isLedgerQuorumConcentratedPartition(cache, LEDGER_PARTITION_ID);
++  const defaultStormActive = () =>
++    concentrated() && clock.now >= stormStartAt;
++  const stormActive = options.stormActive || defaultStormActive;
++  const writeFaultActive = options.writeFaultActive || stormActive;
++
++  // Authoritative services reads, shed per the FIELD-observed shapes: the
++  // replica STATUS probes (service_id-scoped — the STOPPING observation
++  // lane) stayed control_plane_pressure_degraded across whole red windows,
++  // while partition-scoped placement reads (the barrier lane and the
++  // destructive REMOVE fence) answered intermittently — red-run barrier
++  // logs carry owner_rpc_lane observations DURING the storm. Model the
++  // status probes as fully shed while the storm lasts and the placement
++  // reads as alternating.
++  let partitionScopedReadCalls = 0;
++  const serveShedAwareServicesRead = (sql, params) => {
++    const statusProbe = String(sql).includes('service_id = ?');
++    if (stormActive()) {
++      if (statusProbe) {
++        witnesses.servicesReadFailures++;
++        return {...PRESSURE_READ_FAILURE};
++      }
++      partitionScopedReadCalls++;
++      if (partitionScopedReadCalls % 2 === 1) {
++        witnesses.servicesReadFailures++;
++        return {...PRESSURE_READ_FAILURE};
++      }
++    }
++    return serveServicesReadFromCache(cache, String(sql), params || []);
++  };
++  const gateway = coordinator.controlPlaneSystemTableGateway;
++  const baseReadAuthoritativeRows =
++    gateway.readAuthoritativeRows.bind(gateway);
++  gateway.readAuthoritativeRows = async (tableName, sql, params, opts) => {
++    if (tableName === 'services' || /FROM services/.test(String(sql))) {
++      return serveShedAwareServicesRead(sql, params);
++    }
++    return baseReadAuthoritativeRows(tableName, sql, params, opts);
++  };
++
++  // The joiner barrier's strict owner-RPC placement lane: alternates
++  // shed/answer under the storm so BOTH release-evidence lanes are
++  // exercised (the field flap: owner answers "3 voters on 2 nodes", the
++  // next poll is shed and falls back to concentrated cache evidence).
++  let placementLaneCalls = 0;
++  coordinator.controlPlaneReadinessService.getAuthoritativeControlPlaneView =
++    () => ({
++      canRead: () => true,
++      readRows: async (tableName, sql, params) => {
++        placementLaneCalls++;
++        if (stormActive() && placementLaneCalls % 2 === 1) {
++          return {...PRESSURE_READ_FAILURE};
++        }
++        return serveServicesReadFromCache(cache, String(sql), params || []);
++      },
++    });
++
++  // Ledger mutations: a session-carrying write's bookkeeping rides the
++  // seed-led, unspread write-session tables and fails as a participant
++  // failure while the storm lasts; session-less single-statement writes
++  // into the live seed-led ledger succeed. The fail-soft owner-lease touch
++  // is excluded (never load-bearing for workflow progress).
++  const baseExecuteQuery = gateway.executeQuery.bind(gateway);
++  gateway.executeQuery = async (sql, params, queryOptions) => {
++    if (writeFaultActive() && isSessionCarryingLedgerMutation(sql, queryOptions)) {
++      witnesses.sessionWritesFailedDuringStorm++;
++      return buildParticipantWriteFailure();
++    }
++    if (
++      writeFaultActive() &&
++      String(sql).includes('INSERT INTO replica_operations') &&
++      queryOptions?.disableSystemWriteSession === true
++    ) {
++      witnesses.sessionlessLedgerInsertsDuringStorm++;
++    }
++    return baseExecuteQuery(sql, params, queryOptions);
++  };
++
++  // Authoritative cache-row refresh used by the REPLACE terminal handoff
++  // confirm: same lane, same shedding.
++  coordinator.repository.cdcIntegrationService.refreshAuthoritativeCacheRow =
++    async (tableName, replicaId, refreshOptions) => {
++      if (stormActive()) {
++        return false;
++      }
++      const row = currentLedgerReplicas(cache).find(
++        (candidate) =>
++          candidate.service_id === replicaId ||
++          candidate.replica_id === replicaId,
++      );
++      const expected = refreshOptions?.expectedFields || {};
++      return Boolean(
++        row &&
++        row.status === expected.status &&
++        row.node_id === expected.node_id,
++      );
++    };
++
++  const planner = buildRealLedgerPlanner(cache, trackedOperations);
++  const executionState = {pending: null, addAllocationCount: 0};
++
++  // Physical placement effect of an accepted step (production: remote
++  // target/source node execution + CDC into the services rows). The driver
++  // owns ONLY these physical effects; the durable workflow row and every
++  // ledger write shape stay with the real owners.
++  const applyPhysicalStepEffect = (operation, step) => {
++    const isReplace = operation.type === OperationType.REPLACE;
++    if (
++      step === WORKFLOW_STEP.ACTIVE &&
++      (isReplace || operation.type === OperationType.ADD)
++    ) {
++      applyRow(cache, 'services', {
++        service_id: operation.replicaId,
++        replica_id: operation.replicaId,
++        partition_id: LEDGER_PARTITION_ID,
++        node_id: operation.targetNodeId,
++        service_type: REBALANCER_ENTITY_TYPE.PARTITION,
++        status: ReplicaStatus.ACTIVE,
++        raft_role: 'follower',
++      });
++    }
++    if (step === WORKFLOW_STEP.STOPPING) {
++      const removingReplicaId = isReplace ?
++        coordinator.repository.getReplaceSourceReplicaId(operation) :
++        operation.replicaId;
++      if (removingReplicaId) {
++        cache.applySystemTableChange('services', 'DELETE', {
++          service_id: removingReplicaId,
++        });
++      }
++    }
++  };
++
++  // Advance the pending op one action; true = this tick is consumed.
++  const advancePendingOperation = async () => {
++    const {operation} = executionState.pending;
++    if (isTerminalStep(operation.type, operation.workflowStep)) {
++      executionState.pending = null;
++      return false;
++    }
++    if (operation.workflowStep === WORKFLOW_STEP.STOPPING) {
++      await coordinator.workflowOwner.reconcileStoppingOperationProgress(
++        operation,
++      );
++      return true;
++    }
++    const nextStep = getNextWorkflowStep(
++      operation.type,
++      operation.workflowStep,
++    );
++    if (!nextStep) {
++      executionState.pending = null;
++      return true;
++    }
++    if (
++      isTerminalStep(operation.type, nextStep) &&
++      nextStep !== WORKFLOW_STEP.STOPPING
++    ) {
++      applyPhysicalStepEffect(operation, WORKFLOW_STEP.ACTIVE);
++      await coordinator.completeOperation(operation);
++      executionState.pending = null;
++      return true;
++    }
++    await coordinator.workflowOwner.updateStep(operation, nextStep);
++    applyPhysicalStepEffect(operation, nextStep);
++    return true;
++  };
++
++  const planAndCreateNextMove = async () => {
++    const replicas = currentLedgerReplicas(cache);
++    const targetState = await planner.calculateTargetState(replicas, {
++      targetReplicaCount: 3,
++      placementConstraints: {
++        spreadAcrossNodes: true,
++      },
++    });
++    const moves = planner.calculateMoves(replicas, targetState);
++    const move = moves[0] || null;
++    if (!move) {
++      return;
++    }
++    try {
++      const operation = await coordinator.createOperation({
++        type: move.type,
++        partitionId: LEDGER_PARTITION_ID,
++        entityType: REBALANCER_ENTITY_TYPE.PARTITION,
++        entityId: LEDGER_PARTITION_ID,
++        nodeId: move.nodeId,
++        replicaId:
++          move.type === REBALANCER_MOVE_TYPE.ADD ?
++            `${LEDGER_PARTITION_ID}-r${4 + executionState.addAllocationCount++}` :
++            move.replicaId,
++        sourceNodeId: move.sourceNodeId,
++      });
++      coordinator.workflowOwner.ensureOperationWorkflow(operation);
++      executionState.pending = {move, operation};
++    } catch (error) {
++      witnesses.createRejections.push({
++        message: error?.message || String(error),
++        code: error?.code || error?.errorCode || null,
++      });
++    }
++  };
++
++  const driveExecutionTick = async () => {
++    if (executionState.pending && await advancePendingOperation()) {
++      return;
++    }
++    await planAndCreateNextMove();
++  };
++
++  const owner = buildFormationBarrierOwner({
++    cache,
++    coordinator,
++    joinerNodeIds: [JOINER_1_NODE_ID, JOINER_2_NODE_ID],
++    now: () => clock.now,
++    sleep: async (delayMs) => {
++      await driveExecutionTick();
++      clock.now += delayMs;
++    },
++  });
++  owner.config.priorityPlacementFormationPollMs = BARRIER_POLL_MS;
++  owner.config.priorityPlacementFormationTimeoutMs = BARRIER_TIMEOUT_MS;
++  owner.logger = {
++    info: (message, payload) => {
++      if (payload && typeof payload.state === 'string') {
++        witnesses.barrierStates.push(payload.state);
++      }
++    },
++    warn: () => {},
++    error: () => {},
++  };
++
++  return {
++    cache,
++    clock,
++    coordinator: fixture.coordinator,
++    owner,
++    trackedOperations,
++    witnesses,
++  };
++}
++
++function nonTerminalTrackedOperations(trackedOperations) {
++  return [...trackedOperations.values()].filter(
++    (operation) => !isTerminalStep(operation.type, operation.workflow_step),
++  );
++}
++
++t.test(
++  'an engaged formation barrier releases within budget when spread-op ' +
++    'execution faults are formation-shaped (link A: session-carried ' +
++    'admission writes; link B: shed stopping observation)',
++  async (t) => {
++    const scenario = buildScenario();
++    const {cache, coordinator, owner, trackedOperations, witnesses} = scenario;
++
++    try {
++      const barrierError = await owner
++        .awaitOperationLedgerFormationBarrier()
++        .then(() => null, (error) => error);
++
++      const stuckOperations = nonTerminalTrackedOperations(trackedOperations);
++      t.equal(
++        barrierError,
++        null,
++        'the engaged barrier releases inside its budget ' +
++          `(got ${barrierError?.code || 'release'}, ` +
++          `distinctVoterNodes=${distinctVoterNodeCount(cache)}/3, ` +
++          `stuck=${JSON.stringify(stuckOperations.map((operation) => ({
++            type: operation.type,
++            step: operation.workflow_step,
++          })))}, ` +
++          `createRejections=${JSON.stringify(witnesses.createRejections.slice(0, 2))})`,
++      );
++      t.equal(
++        witnesses.barrierStates[witnesses.barrierStates.length - 1],
++        BARRIER_STATE.SATISFIED,
++        'the release is a genuine SATISFIED, not a bypass',
++      );
++      t.equal(
++        distinctVoterNodeCount(cache),
++        3,
++        'the ledger genuinely reaches one voter per node',
++      );
++      t.equal(
++        isLedgerQuorumConcentratedPartition(cache, LEDGER_PARTITION_ID),
++        false,
++        'ledger quorum concentration is cured, lifting formation pressure',
++      );
++      t.equal(
++        stuckOperations.length,
++        0,
++        'no spread operation is starved non-terminal at release',
++      );
++      t.ok(
++        witnesses.barrierStates.includes(BARRIER_STATE.WAITING_SPREAD) &&
++          witnesses.barrierStates.includes(BARRIER_STATE.WAITING_OBSERVATION),
++        'the cross-lane evidence flap (spread <-> observation) occurred and ' +
++          'did not prevent release',
++      );
++      t.equal(
++        witnesses.sessionWritesFailedDuringStorm,
++        0,
++        'no formation-window ledger mutation depended on the seed-led ' +
++          'write-session tables',
++      );
++      t.ok(
++        witnesses.sessionlessLedgerInsertsDuringStorm >= 1,
++        'at least one spread-op admission INSERT executed session-less ' +
++          'through the concentrated window (link A relief engaged)',
++      );
++      const failedOperations = [...trackedOperations.values()].filter(
++        (operation) => operation.workflow_step === WORKFLOW_STEP.FAILED,
++      );
++      t.ok(
++        failedOperations.length >= 1 &&
++          failedOperations.every((operation) =>
++            String(operation.error_message || '').includes(
++              STOPPING_STARVATION_MESSAGE_FRAGMENT,
++            )),
++        'starved STOPPING observation escalates to a VISIBLE typed failure ' +
++          'instead of deferring forever (link B relief engaged)',
++      );
++      t.ok(
++        [...trackedOperations.values()].some(
++          (operation) => operation.workflow_step === WORKFLOW_STEP.REMOVED,
++        ),
++        'a later spread cure completes cleanly once concentration is cured',
++      );
++    } finally {
++      await coordinator.shutdown();
++      resetEnvironment();
++    }
++  },
++);
++
++t.test(
++  'a sub-limit authoritative-observation outage completes the spread op ' +
++    'without a visible failure (escalation is bounded, not eager)',
++  async (t) => {
++    let servicesReadFailBudget = CASE2_SERVICES_READ_FAIL_BUDGET;
++    const scenario = buildScenario({
++      stormActive: () => {
++        if (servicesReadFailBudget > 0) {
++          servicesReadFailBudget--;
++          return true;
++        }
++        return false;
++      },
++      writeFaultActive: () => false,
++    });
++    const {coordinator, owner, trackedOperations, witnesses} = scenario;
++
++    try {
++      const barrierError = await owner
++        .awaitOperationLedgerFormationBarrier()
++        .then(() => null, (error) => error);
++
++      t.equal(
++        barrierError,
++        null,
++        'a transient observation blip does not prevent release',
++      );
++      t.equal(
++        [...trackedOperations.values()].filter(
++          (operation) => operation.workflow_step === WORKFLOW_STEP.FAILED,
++        ).length,
++        0,
++        'no operation is visibly failed for a sub-limit outage',
++      );
++      t.equal(
++        witnesses.sessionWritesFailedDuringStorm,
++        0,
++        'the blip case exercises the observation lane only',
++      );
++    } finally {
++      await coordinator.shutdown();
++      resetEnvironment();
++    }
++  },
++);
+diff --git a/test/convergence/dt-formation-priority-placement-before-active.test.js b/test/convergence/dt-formation-priority-placement-before-active.test.js
+index bf41282465c3636134924f2d4a98c25173aef0d5..75f290d3a53fa627e2dfebe86f120a760512f5cf 100644
+--- a/test/convergence/dt-formation-priority-placement-before-active.test.js
++++ b/test/convergence/dt-formation-priority-placement-before-active.test.js
+@@ -2,11 +2,6 @@ import t from 'tap';
+ import {
+   NodeJoiningReadySignalReadiness,
+ } from '../../src/bootstrap/node-joining-ready-signal-readiness.js';
+-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
+-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+-import {LoggingService} from '../../src/logging/logging-service.js';
+-import {NodeService} from '../../src/node/node-service.js';
+-import {MovePlanner} from '../../src/rebalancer/move-planner.js';
+ import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
+ import {
+   REBALANCER_ENTITY_TYPE,
+@@ -43,6 +38,23 @@ import {
+ import {
+   STARTUP_JOIN_MODE,
+ } from '../../src/bootstrap/rejoin-hints-constants.js';
++import {
++  LEDGER_PARTITION_ID,
++  SEED_NODE_ID,
++  JOINER_1_NODE_ID,
++  JOINER_2_NODE_ID,
++  JOINER_3_NODE_ID,
++  JOINER_4_NODE_ID,
++  JOINER_NODE_IDS,
++  applyRow,
++  buildFormationBarrierOwner,
++  buildFormationCache,
++  buildOwnerDerivedStartupAuthoritySnapshot,
++  buildRealLedgerPlanner,
++  currentLedgerReplicas,
++  initializeEnvironment,
++  resetEnvironment,
++} from './formation-barrier-test-fixture.js';
+ 
+ function deferred() {
+   let resolve;
+@@ -83,214 +95,6 @@ function createReadySignalOwner({formationBarrier, heartbeatCalls}) {
+   return owner;
+ }
+ 
+-const LEDGER_PARTITION_ID = 'replica_operations-p1';
+-const SEED_NODE_ID = 'seed-node';
+-const JOINER_1_NODE_ID = 'joining-node';
+-const JOINER_2_NODE_ID = 'joining-node-2';
+-const JOINER_3_NODE_ID = 'joining-node-3';
+-const JOINER_4_NODE_ID = 'joining-node-4';
+-const JOINER_NODE_IDS = Object.freeze([
+-  JOINER_1_NODE_ID,
+-  JOINER_2_NODE_ID,
+-  JOINER_3_NODE_ID,
+-  JOINER_4_NODE_ID,
+-]);
+-
+-function initializeEnvironment() {
+-  ConfigurationManager.resetInstance();
+-  LoggingService.resetInstance();
+-  NodeService.resetInstance();
+-  ConfigurationManager.getInstance().initialize({});
+-  LoggingService.getInstance().initialize({level: 'error'});
+-}
+-
+-function applyRow(cache, tableName, record) {
+-  cache.applySystemTableChange(tableName, 'INSERT', record);
+-}
+-
+-function buildFormationCache() {
+-  const cache = new SystemTableCache();
+-  const now = Date.now();
+-  for (const [nodeId, connectionState] of [
+-    [SEED_NODE_ID, 'ready'],
+-    [JOINER_1_NODE_ID, 'connected'],
+-    [JOINER_2_NODE_ID, 'connected'],
+-    [JOINER_3_NODE_ID, 'connected'],
+-    [JOINER_4_NODE_ID, 'connected'],
+-  ]) {
+-    applyRow(cache, 'nodes', {
+-      node_id: nodeId,
+-      status: ReplicaStatus.ACTIVE,
+-      connection_state: connectionState,
+-      last_heartbeat: now,
+-      ready_lease_expires_at:
+-        nodeId === SEED_NODE_ID ? now + 60000 : null,
+-    });
+-  }
+-  applyRow(cache, 'partitions', {
+-    partition_id: LEDGER_PARTITION_ID,
+-    table_id: 'replica_operations',
+-    replica_count: 3,
+-  });
+-  for (const [index, raftRole] of [
+-    [1, 'leader'],
+-    [2, 'follower'],
+-    [3, 'follower'],
+-  ]) {
+-    applyRow(cache, 'services', {
+-      service_id: `${LEDGER_PARTITION_ID}-r${index}`,
+-      replica_id: `${LEDGER_PARTITION_ID}-r${index}`,
+-      partition_id: LEDGER_PARTITION_ID,
+-      node_id: SEED_NODE_ID,
+-      service_type: REBALANCER_ENTITY_TYPE.PARTITION,
+-      status: ReplicaStatus.ACTIVE,
+-      raft_role: raftRole,
+-    });
+-  }
+-  return cache;
+-}
+-
+-function buildOwnerDerivedStartupAuthoritySnapshot() {
+-  const now = 1000;
+-  const planningAnswer = deriveMembershipPublicationCandidate({
+-    publisherNodeId: SEED_NODE_ID,
+-    sourceTopologyEpoch: 1,
+-    sourceSnapshotVersion: 1,
+-    nowMs: now,
+-    latestPublicationRow: {
+-      publication_epoch: 1,
+-      status: 'PUBLISHED',
+-      published_active_node_ids: [SEED_NODE_ID],
+-      required_ack_node_ids: [SEED_NODE_ID],
+-      acknowledged_node_ids: [SEED_NODE_ID],
+-      priority_partition_summary: {
+-        satisfied: false,
+-        missingPartitionIds: [LEDGER_PARTITION_ID],
+-      },
+-    },
+-    nodeRows: [
+-      {
+-        node_id: SEED_NODE_ID,
+-        status: ReplicaStatus.ACTIVE,
+-        connection_state: 'ready',
+-        last_heartbeat: now,
+-        ready_lease_expires_at: now + 60000,
+-      },
+-      {
+-        node_id: JOINER_1_NODE_ID,
+-        status: ReplicaStatus.ACTIVE,
+-        connection_state: 'connected',
+-        last_heartbeat: now,
+-        ready_lease_expires_at: null,
+-      },
+-      {
+-        node_id: JOINER_2_NODE_ID,
+-        status: ReplicaStatus.ACTIVE,
+-        connection_state: 'connected',
+-        last_heartbeat: now,
+-        ready_lease_expires_at: null,
+-      },
+-      {
+-        node_id: JOINER_3_NODE_ID,
+-        status: ReplicaStatus.ACTIVE,
+-        connection_state: 'connected',
+-        last_heartbeat: now,
+-        ready_lease_expires_at: null,
+-      },
+-      {
+-        node_id: JOINER_4_NODE_ID,
+-        status: ReplicaStatus.ACTIVE,
+-        connection_state: 'connected',
+-        last_heartbeat: now,
+-        ready_lease_expires_at: null,
+-      },
+-    ],
+-    readinessEntries: [],
+-    connectedNodeIds: JOINER_NODE_IDS,
+-  });
+-  return {
+-    planningAnswer,
+-    startupAuthority:
+-      buildStartupAuthoritySnapshotFromPlanningAnswer(planningAnswer),
+-  };
+-}
+-
+-function buildFormationBarrierOwner({
+-  cache,
+-  coordinator = null,
+-  sleep,
+-  now,
+-  startupMode = STARTUP_JOIN_MODE.FRESH_JOIN,
+-  startupAuthority: providedStartupAuthority = null,
+-}) {
+-  NodeService.getInstance().setSystemCacheProxy(cache);
+-  const owner = Object.create(NodeJoiningReadySignalReadiness.prototype);
+-  owner.nodeId = JOINER_1_NODE_ID;
+-  owner.startupMode = startupMode;
+-  owner.config = {
+-    priorityPlacementFormationDiscoveryMs: 0,
+-    priorityPlacementFormationPollMs: 1,
+-    priorityPlacementFormationTimeoutMs: 100,
+-    heartbeatIntervalMs: 10,
+-  };
+-  owner.now = now;
+-  owner.sleep = sleep;
+-  owner.logger = {
+-    info: () => {},
+-    warn: () => {},
+-    error: () => {},
+-  };
+-  owner.messageRouter = {
+-    getConnectionState: () => 'connected',
+-  };
+-  const {startupAuthority: defaultStartupAuthority} =
+-    buildOwnerDerivedStartupAuthoritySnapshot();
+-  const startupAuthority =
+-    providedStartupAuthority || defaultStartupAuthority;
+-  const readinessService =
+-    coordinator?.controlPlaneReadinessService || {};
+-  readinessService.getStartupAuthoritySnapshotSync = () => startupAuthority;
+-  owner.rebalanceCoordinator = coordinator || {
+-    controlPlaneReadinessService: readinessService,
+-  };
+-  owner.getNodeCapabilities = () => ['partition_replica'];
+-  owner.sendControlPlaneNodeStateUpdate = async () => {};
+-  return owner;
+-}
+-
+-function currentLedgerReplicas(cache) {
+-  return cache.filter(
+-    'services',
+-    (row) => row.partition_id === LEDGER_PARTITION_ID,
+-  );
+-}
+-
+-function buildRealLedgerPlanner(cache, trackedOperations) {
+-  const provider = {
+-    systemTableCache: cache,
+-    getAvailableNodes: () => cache.getAll('nodes'),
+-    getCurrentReplicas: () => currentLedgerReplicas(cache),
+-    getHealthyReplicas: (replicas) =>
+-      replicas.filter((replica) => replica.status === ReplicaStatus.ACTIVE),
+-    getInFlightOperations: () =>
+-      [...trackedOperations.values()].filter(
+-        (operation) =>
+-          !isTerminalStep(operation.type, operation.workflow_step),
+-      ),
+-    getTopologyBlockingInFlightOperations: () => [],
+-    getGlobalTopologyBlockingInFlightOperations: () => [],
+-    getTerminalFailedReplaceTargetReplicaIds: () => new Set(),
+-    getPartitionDescriptorEpochEvidence: () => null,
+-    hasPendingMove: () => false,
+-    hasPendingAddForNode: () => false,
+-  };
+-  return new MovePlanner({
+-    entityId: LEDGER_PARTITION_ID,
+-    entityType: REBALANCER_ENTITY_TYPE.PARTITION,
+-    moveStateProvider: provider,
+-  });
+-}
+-
+ async function executeLedgerFormationTick({
+   cache,
+   coordinator,
+@@ -524,9 +328,7 @@ t.test(
+         'a later remote ledger owner retains the refreshed pre-ready joiner in its canonical recovery cohort',
+       );
+     } finally {
+-      NodeService.resetInstance();
+-      ConfigurationManager.resetInstance();
+-      LoggingService.resetInstance();
++      resetEnvironment();
+     }
+   },
+ );
+@@ -670,9 +472,7 @@ t.test(
+       );
+     } finally {
+       await fixture.coordinator.shutdown();
+-      NodeService.resetInstance();
+-      ConfigurationManager.resetInstance();
+-      LoggingService.resetInstance();
++      resetEnvironment();
+     }
+   },
+ );
+@@ -705,9 +505,7 @@ t.test(
+         'discovery expiry bypasses immediately when fewer than three live startup-authority nodes exist',
+       );
+     } finally {
+-      NodeService.resetInstance();
+-      ConfigurationManager.resetInstance();
+-      LoggingService.resetInstance();
++      resetEnvironment();
+     }
+   },
+ );
+@@ -742,9 +540,7 @@ t.test(
+         'one pre-ready joiner retains the ordinary ready-then-rebalance growth path',
+       );
+     } finally {
+-      NodeService.resetInstance();
+-      ConfigurationManager.resetInstance();
+-      LoggingService.resetInstance();
++      resetEnvironment();
+     }
+   },
+ );
+@@ -839,9 +635,7 @@ t.test(
+         );
+       }
+     } finally {
+-      NodeService.resetInstance();
+-      ConfigurationManager.resetInstance();
+-      LoggingService.resetInstance();
++      resetEnvironment();
+     }
+   },
+ );
+@@ -884,9 +678,7 @@ t.test(
+         'the join resume owner preserves the cold-formation cohort after a transient timeout',
+       );
+     } finally {
+-      NodeService.resetInstance();
+-      ConfigurationManager.resetInstance();
+-      LoggingService.resetInstance();
++      resetEnvironment();
+     }
+   },
+ );
+@@ -1092,9 +884,7 @@ for (const authoritativePlacementCase of [
+           );
+         }
+       } finally {
+-        NodeService.resetInstance();
+-        ConfigurationManager.resetInstance();
+-        LoggingService.resetInstance();
++        resetEnvironment();
+       }
+     },
+   );
+diff --git a/test/convergence/formation-barrier-test-fixture.js b/test/convergence/formation-barrier-test-fixture.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..6891ff31a7b5a9af08e8fa82ed5f3b0a9d72d0dd
+--- /dev/null
++++ b/test/convergence/formation-barrier-test-fixture.js
+@@ -0,0 +1,245 @@
++// Shared deterministic fixture for the operation-ledger formation barrier DTs
++// (dt-formation-priority-placement-before-active.test.js and
++// dt-formation-barrier-spread-release-oscillation.test.js): a SystemTableCache
++// formation shape (all ledger voters concentrated on the seed), the
++// owner-derived startup-authority snapshot for the join cohort, a real
++// MovePlanner over the live cache rows, and a reduced
++// NodeJoiningReadySignalReadiness owner driving the REAL barrier loop on a
++// virtual clock. Extracted so sibling cases can vary the joiner cohort
++// without duplicating the fixture.
++
++import {
++  NodeJoiningReadySignalReadiness,
++} from '../../src/bootstrap/node-joining-ready-signal-readiness.js';
++import {SystemTableCache} from '../../src/cache/system-table-cache.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++import {NodeService} from '../../src/node/node-service.js';
++import {MovePlanner} from '../../src/rebalancer/move-planner.js';
++import {
++  REBALANCER_ENTITY_TYPE,
++} from '../../src/rebalancer/rebalancer-constants.js';
++import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
++import {
++  isTerminalStep,
++} from '../../src/rebalancer/replica-operation-progress.js';
++import {
++  deriveMembershipPublicationCandidate,
++} from '../../src/control-plane/membership-publication-coordinator.js';
++import {
++  buildStartupAuthoritySnapshotFromPlanningAnswer,
++} from '../../src/control-plane/startup-authority-snapshot-owner.js';
++import {
++  STARTUP_JOIN_MODE,
++} from '../../src/bootstrap/rejoin-hints-constants.js';
++
++const LEDGER_PARTITION_ID = 'replica_operations-p1';
++const SEED_NODE_ID = 'seed-node';
++const JOINER_1_NODE_ID = 'joining-node';
++const JOINER_2_NODE_ID = 'joining-node-2';
++const JOINER_3_NODE_ID = 'joining-node-3';
++const JOINER_4_NODE_ID = 'joining-node-4';
++const JOINER_NODE_IDS = Object.freeze([
++  JOINER_1_NODE_ID,
++  JOINER_2_NODE_ID,
++  JOINER_3_NODE_ID,
++  JOINER_4_NODE_ID,
++]);
++
++function initializeEnvironment() {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++  NodeService.resetInstance();
++  ConfigurationManager.getInstance().initialize({});
++  LoggingService.getInstance().initialize({level: 'error'});
++}
++
++function resetEnvironment() {
++  NodeService.resetInstance();
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++}
++
++function applyRow(cache, tableName, record) {
++  cache.applySystemTableChange(tableName, 'INSERT', record);
++}
++
++function buildFormationCache(options = {}) {
++  const joinerNodeIds = options.joinerNodeIds || JOINER_NODE_IDS;
++  const cache = new SystemTableCache();
++  const now = Date.now();
++  for (const [nodeId, connectionState] of [
++    [SEED_NODE_ID, 'ready'],
++    ...joinerNodeIds.map((joinerNodeId) => [joinerNodeId, 'connected']),
++  ]) {
++    applyRow(cache, 'nodes', {
++      node_id: nodeId,
++      status: ReplicaStatus.ACTIVE,
++      connection_state: connectionState,
++      last_heartbeat: now,
++      ready_lease_expires_at:
++        nodeId === SEED_NODE_ID ? now + 60000 : null,
++    });
++  }
++  applyRow(cache, 'partitions', {
++    partition_id: LEDGER_PARTITION_ID,
++    table_id: 'replica_operations',
++    replica_count: 3,
++  });
++  for (const [index, raftRole] of [
++    [1, 'leader'],
++    [2, 'follower'],
++    [3, 'follower'],
++  ]) {
++    applyRow(cache, 'services', {
++      service_id: `${LEDGER_PARTITION_ID}-r${index}`,
++      replica_id: `${LEDGER_PARTITION_ID}-r${index}`,
++      partition_id: LEDGER_PARTITION_ID,
++      node_id: SEED_NODE_ID,
++      service_type: REBALANCER_ENTITY_TYPE.PARTITION,
++      status: ReplicaStatus.ACTIVE,
++      raft_role: raftRole,
++    });
++  }
++  return cache;
++}
++
++function buildOwnerDerivedStartupAuthoritySnapshot(options = {}) {
++  const joinerNodeIds = options.joinerNodeIds || JOINER_NODE_IDS;
++  const now = 1000;
++  const planningAnswer = deriveMembershipPublicationCandidate({
++    publisherNodeId: SEED_NODE_ID,
++    sourceTopologyEpoch: 1,
++    sourceSnapshotVersion: 1,
++    nowMs: now,
++    latestPublicationRow: {
++      publication_epoch: 1,
++      status: 'PUBLISHED',
++      published_active_node_ids: [SEED_NODE_ID],
++      required_ack_node_ids: [SEED_NODE_ID],
++      acknowledged_node_ids: [SEED_NODE_ID],
++      priority_partition_summary: {
++        satisfied: false,
++        missingPartitionIds: [LEDGER_PARTITION_ID],
++      },
++    },
++    nodeRows: [
++      {
++        node_id: SEED_NODE_ID,
++        status: ReplicaStatus.ACTIVE,
++        connection_state: 'ready',
++        last_heartbeat: now,
++        ready_lease_expires_at: now + 60000,
++      },
++      ...joinerNodeIds.map((joinerNodeId) => ({
++        node_id: joinerNodeId,
++        status: ReplicaStatus.ACTIVE,
++        connection_state: 'connected',
++        last_heartbeat: now,
++        ready_lease_expires_at: null,
++      })),
++    ],
++    readinessEntries: [],
++    connectedNodeIds: joinerNodeIds,
++  });
++  return {
++    planningAnswer,
++    startupAuthority:
++      buildStartupAuthoritySnapshotFromPlanningAnswer(planningAnswer),
++  };
++}
++
++function buildFormationBarrierOwner({
++  cache,
++  coordinator = null,
++  sleep,
++  now,
++  startupMode = STARTUP_JOIN_MODE.FRESH_JOIN,
++  startupAuthority: providedStartupAuthority = null,
++  joinerNodeIds = JOINER_NODE_IDS,
++}) {
++  NodeService.getInstance().setSystemCacheProxy(cache);
++  const owner = Object.create(NodeJoiningReadySignalReadiness.prototype);
++  owner.nodeId = JOINER_1_NODE_ID;
++  owner.startupMode = startupMode;
++  owner.config = {
++    priorityPlacementFormationDiscoveryMs: 0,
++    priorityPlacementFormationPollMs: 1,
++    priorityPlacementFormationTimeoutMs: 100,
++    heartbeatIntervalMs: 10,
++  };
++  owner.now = now;
++  owner.sleep = sleep;
++  owner.logger = {
++    info: () => {},
++    warn: () => {},
++    error: () => {},
++  };
++  owner.messageRouter = {
++    getConnectionState: () => 'connected',
++  };
++  const {startupAuthority: defaultStartupAuthority} =
++    buildOwnerDerivedStartupAuthoritySnapshot({joinerNodeIds});
++  const startupAuthority =
++    providedStartupAuthority || defaultStartupAuthority;
++  const readinessService =
++    coordinator?.controlPlaneReadinessService || {};
++  readinessService.getStartupAuthoritySnapshotSync = () => startupAuthority;
++  owner.rebalanceCoordinator = coordinator || {
++    controlPlaneReadinessService: readinessService,
++  };
++  owner.getNodeCapabilities = () => ['partition_replica'];
++  owner.sendControlPlaneNodeStateUpdate = async () => {};
++  return owner;
++}
++
++function currentLedgerReplicas(cache) {
++  return cache.filter(
++    'services',
++    (row) => row.partition_id === LEDGER_PARTITION_ID,
++  );
++}
++
++function buildRealLedgerPlanner(cache, trackedOperations) {
++  const provider = {
++    systemTableCache: cache,
++    getAvailableNodes: () => cache.getAll('nodes'),
++    getCurrentReplicas: () => currentLedgerReplicas(cache),
++    getHealthyReplicas: (replicas) =>
++      replicas.filter((replica) => replica.status === ReplicaStatus.ACTIVE),
++    getInFlightOperations: () =>
++      [...trackedOperations.values()].filter(
++        (operation) =>
++          !isTerminalStep(operation.type, operation.workflow_step),
++      ),
++    getTopologyBlockingInFlightOperations: () => [],
++    getGlobalTopologyBlockingInFlightOperations: () => [],
++    getTerminalFailedReplaceTargetReplicaIds: () => new Set(),
++    getPartitionDescriptorEpochEvidence: () => null,
++    hasPendingMove: () => false,
++    hasPendingAddForNode: () => false,
++  };
++  return new MovePlanner({
++    entityId: LEDGER_PARTITION_ID,
++    entityType: REBALANCER_ENTITY_TYPE.PARTITION,
++    moveStateProvider: provider,
++  });
++}
++
++export {
++  LEDGER_PARTITION_ID,
++  SEED_NODE_ID,
++  JOINER_1_NODE_ID,
++  JOINER_2_NODE_ID,
++  JOINER_3_NODE_ID,
++  JOINER_4_NODE_ID,
++  JOINER_NODE_IDS,
++  applyRow,
++  buildFormationBarrierOwner,
++  buildFormationCache,
++  buildOwnerDerivedStartupAuthoritySnapshot,
++  buildRealLedgerPlanner,
++  currentLedgerReplicas,
++  initializeEnvironment,
++  resetEnvironment,
++};
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 2c74140d9ecd564e59bff311d07cf548c3933809..1d0fffce0c2ab26b21bab2fbd2a73627a848e93d 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 1744,
++    "unit": 1752,
+     "integration": 73,
+     "bootstrap": 171,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 1995,
+-  "digest": "fnv1a32-8c0438da",
++  "censusSize": 2003,
++  "digest": "fnv1a32-f16d1458",
+   "classes": {
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+     "test/address/address-manager.test.js": "unit",
+@@ -778,6 +778,7 @@
+     "test/distributed/harness/__tests__/postgres-baseline-diagnostics.test.js": "unit",
+     "test/distributed/harness/__tests__/priority-recovery-summary-normalization.test.js": "unit",
+     "test/distributed/harness/__tests__/progress-wait.test.js": "unit",
++    "test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js": "unit",
+     "test/distributed/harness/__tests__/publication-evidence-open-membership.test.js": "unit",
+     "test/distributed/harness/__tests__/publication-evidence-replay.test.js": "unit",
+     "test/distributed/harness/__tests__/report-writer-serialization-degrade.test.js": "unit",
+@@ -1334,6 +1335,7 @@
+     "test/random/random-source.test.js": "unit",
+     "test/rebalancer/add-workflow-step-progression.property.test.js": "unit",
+     "test/rebalancer/admission-real-size-estimates.test.js": "unit",
++    "test/rebalancer/assignment-epoch-fencing.test.js": "unit",
+     "test/rebalancer/assignment-epoch-manager.test.js": "unit",
+     "test/rebalancer/assignment-epoch.test.js": "unit",
+     "test/rebalancer/batching-concurrency.property.test.js": "unit",
+@@ -1371,6 +1373,7 @@
+     "test/rebalancer/executor-bypasses-workflow-owner.test.js": "unit",
+     "test/rebalancer/executor-outcome-emitter.test.js": "unit",
+     "test/rebalancer/executor-outcome-redrive-untouched-payload-retry-owner.test.js": "unit",
++    "test/rebalancer/existing-group-add-topology-guard.test.js": "unit",
+     "test/rebalancer/formation-liveness-dependency-serial-planner.test.js": "unit",
+     "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js": "unit",
+     "test/rebalancer/in-flight-aware-drain-phase-replace-credit.test.js": "unit",
+@@ -1395,6 +1398,8 @@
+     "test/rebalancer/operation-lifecycle-fold.property.test.js": "unit",
+     "test/rebalancer/operation-lifecycle.test.js": "unit",
+     "test/rebalancer/operation-log-persistence.property.test.js": "unit",
++    "test/rebalancer/operation-ownership-lease-fencing.test.js": "unit",
++    "test/rebalancer/operation-progress-store-persistence.test.js": "unit",
+     "test/rebalancer/operation-progress-store.test.js": "unit",
+     "test/rebalancer/operation-record-completeness.property.test.js": "unit",
+     "test/rebalancer/operation-step-staleness-anchor.test.js": "unit",
+@@ -1466,6 +1471,7 @@
+     "test/rebalancer/recovery-handles-incomplete-operations.property.test.js": "unit",
+     "test/rebalancer/remove-active-dispatch-redrive.test.js": "unit",
+     "test/rebalancer/remove-workflow-step-progression.property.test.js": "unit",
++    "test/rebalancer/removed-replica-cleanup-debt-owner.test.js": "unit",
+     "test/rebalancer/replace-replica-workflow.test.js": "unit",
+     "test/rebalancer/replica-inventory.test.js": "unit",
+     "test/rebalancer/replica-operation-confirmation-authority-read.test.js": "unit",
+@@ -1480,6 +1486,8 @@
+     "test/rebalancer/replica-placement-cure-policy.test.js": "unit",
+     "test/rebalancer/replica-placement-policy.property.test.js": "unit",
+     "test/rebalancer/replica-status-completeness.property.test.js": "unit",
++    "test/rebalancer/reservation-expiry-operation-aware.test.js": "unit",
++    "test/rebalancer/reservation-fail-closed-dispatch-gate.test.js": "unit",
+     "test/rebalancer/reservation-reconcile-premature-orphan-release.test.js": "unit",
+     "test/rebalancer/runtime-service-affinity-policy-lift.test.js": "unit",
+     "test/rebalancer/runtime-service-affinity-suboptimality-observer.test.js": "unit",

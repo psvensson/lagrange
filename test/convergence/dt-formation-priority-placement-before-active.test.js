@@ -2,11 +2,6 @@ import t from 'tap';
 import {
   NodeJoiningReadySignalReadiness,
 } from '../../src/bootstrap/node-joining-ready-signal-readiness.js';
-import {SystemTableCache} from '../../src/cache/system-table-cache.js';
-import {ConfigurationManager} from '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
-import {NodeService} from '../../src/node/node-service.js';
-import {MovePlanner} from '../../src/rebalancer/move-planner.js';
 import {UnifiedRebalancer} from '../../src/rebalancer/unified-rebalancer.js';
 import {
   REBALANCER_ENTITY_TYPE,
@@ -43,6 +38,23 @@ import {
 import {
   STARTUP_JOIN_MODE,
 } from '../../src/bootstrap/rejoin-hints-constants.js';
+import {
+  LEDGER_PARTITION_ID,
+  SEED_NODE_ID,
+  JOINER_1_NODE_ID,
+  JOINER_2_NODE_ID,
+  JOINER_3_NODE_ID,
+  JOINER_4_NODE_ID,
+  JOINER_NODE_IDS,
+  applyRow,
+  buildFormationBarrierOwner,
+  buildFormationCache,
+  buildOwnerDerivedStartupAuthoritySnapshot,
+  buildRealLedgerPlanner,
+  currentLedgerReplicas,
+  initializeEnvironment,
+  resetEnvironment,
+} from './formation-barrier-test-fixture.js';
 
 function deferred() {
   let resolve;
@@ -81,214 +93,6 @@ function createReadySignalOwner({formationBarrier, heartbeatCalls}) {
     },
   };
   return owner;
-}
-
-const LEDGER_PARTITION_ID = 'replica_operations-p1';
-const SEED_NODE_ID = 'seed-node';
-const JOINER_1_NODE_ID = 'joining-node';
-const JOINER_2_NODE_ID = 'joining-node-2';
-const JOINER_3_NODE_ID = 'joining-node-3';
-const JOINER_4_NODE_ID = 'joining-node-4';
-const JOINER_NODE_IDS = Object.freeze([
-  JOINER_1_NODE_ID,
-  JOINER_2_NODE_ID,
-  JOINER_3_NODE_ID,
-  JOINER_4_NODE_ID,
-]);
-
-function initializeEnvironment() {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  NodeService.resetInstance();
-  ConfigurationManager.getInstance().initialize({});
-  LoggingService.getInstance().initialize({level: 'error'});
-}
-
-function applyRow(cache, tableName, record) {
-  cache.applySystemTableChange(tableName, 'INSERT', record);
-}
-
-function buildFormationCache() {
-  const cache = new SystemTableCache();
-  const now = Date.now();
-  for (const [nodeId, connectionState] of [
-    [SEED_NODE_ID, 'ready'],
-    [JOINER_1_NODE_ID, 'connected'],
-    [JOINER_2_NODE_ID, 'connected'],
-    [JOINER_3_NODE_ID, 'connected'],
-    [JOINER_4_NODE_ID, 'connected'],
-  ]) {
-    applyRow(cache, 'nodes', {
-      node_id: nodeId,
-      status: ReplicaStatus.ACTIVE,
-      connection_state: connectionState,
-      last_heartbeat: now,
-      ready_lease_expires_at:
-        nodeId === SEED_NODE_ID ? now + 60000 : null,
-    });
-  }
-  applyRow(cache, 'partitions', {
-    partition_id: LEDGER_PARTITION_ID,
-    table_id: 'replica_operations',
-    replica_count: 3,
-  });
-  for (const [index, raftRole] of [
-    [1, 'leader'],
-    [2, 'follower'],
-    [3, 'follower'],
-  ]) {
-    applyRow(cache, 'services', {
-      service_id: `${LEDGER_PARTITION_ID}-r${index}`,
-      replica_id: `${LEDGER_PARTITION_ID}-r${index}`,
-      partition_id: LEDGER_PARTITION_ID,
-      node_id: SEED_NODE_ID,
-      service_type: REBALANCER_ENTITY_TYPE.PARTITION,
-      status: ReplicaStatus.ACTIVE,
-      raft_role: raftRole,
-    });
-  }
-  return cache;
-}
-
-function buildOwnerDerivedStartupAuthoritySnapshot() {
-  const now = 1000;
-  const planningAnswer = deriveMembershipPublicationCandidate({
-    publisherNodeId: SEED_NODE_ID,
-    sourceTopologyEpoch: 1,
-    sourceSnapshotVersion: 1,
-    nowMs: now,
-    latestPublicationRow: {
-      publication_epoch: 1,
-      status: 'PUBLISHED',
-      published_active_node_ids: [SEED_NODE_ID],
-      required_ack_node_ids: [SEED_NODE_ID],
-      acknowledged_node_ids: [SEED_NODE_ID],
-      priority_partition_summary: {
-        satisfied: false,
-        missingPartitionIds: [LEDGER_PARTITION_ID],
-      },
-    },
-    nodeRows: [
-      {
-        node_id: SEED_NODE_ID,
-        status: ReplicaStatus.ACTIVE,
-        connection_state: 'ready',
-        last_heartbeat: now,
-        ready_lease_expires_at: now + 60000,
-      },
-      {
-        node_id: JOINER_1_NODE_ID,
-        status: ReplicaStatus.ACTIVE,
-        connection_state: 'connected',
-        last_heartbeat: now,
-        ready_lease_expires_at: null,
-      },
-      {
-        node_id: JOINER_2_NODE_ID,
-        status: ReplicaStatus.ACTIVE,
-        connection_state: 'connected',
-        last_heartbeat: now,
-        ready_lease_expires_at: null,
-      },
-      {
-        node_id: JOINER_3_NODE_ID,
-        status: ReplicaStatus.ACTIVE,
-        connection_state: 'connected',
-        last_heartbeat: now,
-        ready_lease_expires_at: null,
-      },
-      {
-        node_id: JOINER_4_NODE_ID,
-        status: ReplicaStatus.ACTIVE,
-        connection_state: 'connected',
-        last_heartbeat: now,
-        ready_lease_expires_at: null,
-      },
-    ],
-    readinessEntries: [],
-    connectedNodeIds: JOINER_NODE_IDS,
-  });
-  return {
-    planningAnswer,
-    startupAuthority:
-      buildStartupAuthoritySnapshotFromPlanningAnswer(planningAnswer),
-  };
-}
-
-function buildFormationBarrierOwner({
-  cache,
-  coordinator = null,
-  sleep,
-  now,
-  startupMode = STARTUP_JOIN_MODE.FRESH_JOIN,
-  startupAuthority: providedStartupAuthority = null,
-}) {
-  NodeService.getInstance().setSystemCacheProxy(cache);
-  const owner = Object.create(NodeJoiningReadySignalReadiness.prototype);
-  owner.nodeId = JOINER_1_NODE_ID;
-  owner.startupMode = startupMode;
-  owner.config = {
-    priorityPlacementFormationDiscoveryMs: 0,
-    priorityPlacementFormationPollMs: 1,
-    priorityPlacementFormationTimeoutMs: 100,
-    heartbeatIntervalMs: 10,
-  };
-  owner.now = now;
-  owner.sleep = sleep;
-  owner.logger = {
-    info: () => {},
-    warn: () => {},
-    error: () => {},
-  };
-  owner.messageRouter = {
-    getConnectionState: () => 'connected',
-  };
-  const {startupAuthority: defaultStartupAuthority} =
-    buildOwnerDerivedStartupAuthoritySnapshot();
-  const startupAuthority =
-    providedStartupAuthority || defaultStartupAuthority;
-  const readinessService =
-    coordinator?.controlPlaneReadinessService || {};
-  readinessService.getStartupAuthoritySnapshotSync = () => startupAuthority;
-  owner.rebalanceCoordinator = coordinator || {
-    controlPlaneReadinessService: readinessService,
-  };
-  owner.getNodeCapabilities = () => ['partition_replica'];
-  owner.sendControlPlaneNodeStateUpdate = async () => {};
-  return owner;
-}
-
-function currentLedgerReplicas(cache) {
-  return cache.filter(
-    'services',
-    (row) => row.partition_id === LEDGER_PARTITION_ID,
-  );
-}
-
-function buildRealLedgerPlanner(cache, trackedOperations) {
-  const provider = {
-    systemTableCache: cache,
-    getAvailableNodes: () => cache.getAll('nodes'),
-    getCurrentReplicas: () => currentLedgerReplicas(cache),
-    getHealthyReplicas: (replicas) =>
-      replicas.filter((replica) => replica.status === ReplicaStatus.ACTIVE),
-    getInFlightOperations: () =>
-      [...trackedOperations.values()].filter(
-        (operation) =>
-          !isTerminalStep(operation.type, operation.workflow_step),
-      ),
-    getTopologyBlockingInFlightOperations: () => [],
-    getGlobalTopologyBlockingInFlightOperations: () => [],
-    getTerminalFailedReplaceTargetReplicaIds: () => new Set(),
-    getPartitionDescriptorEpochEvidence: () => null,
-    hasPendingMove: () => false,
-    hasPendingAddForNode: () => false,
-  };
-  return new MovePlanner({
-    entityId: LEDGER_PARTITION_ID,
-    entityType: REBALANCER_ENTITY_TYPE.PARTITION,
-    moveStateProvider: provider,
-  });
 }
 
 async function executeLedgerFormationTick({
@@ -524,9 +328,7 @@ t.test(
         'a later remote ledger owner retains the refreshed pre-ready joiner in its canonical recovery cohort',
       );
     } finally {
-      NodeService.resetInstance();
-      ConfigurationManager.resetInstance();
-      LoggingService.resetInstance();
+      resetEnvironment();
     }
   },
 );
@@ -670,9 +472,7 @@ t.test(
       );
     } finally {
       await fixture.coordinator.shutdown();
-      NodeService.resetInstance();
-      ConfigurationManager.resetInstance();
-      LoggingService.resetInstance();
+      resetEnvironment();
     }
   },
 );
@@ -705,9 +505,7 @@ t.test(
         'discovery expiry bypasses immediately when fewer than three live startup-authority nodes exist',
       );
     } finally {
-      NodeService.resetInstance();
-      ConfigurationManager.resetInstance();
-      LoggingService.resetInstance();
+      resetEnvironment();
     }
   },
 );
@@ -742,9 +540,7 @@ t.test(
         'one pre-ready joiner retains the ordinary ready-then-rebalance growth path',
       );
     } finally {
-      NodeService.resetInstance();
-      ConfigurationManager.resetInstance();
-      LoggingService.resetInstance();
+      resetEnvironment();
     }
   },
 );
@@ -839,9 +635,7 @@ t.test(
         );
       }
     } finally {
-      NodeService.resetInstance();
-      ConfigurationManager.resetInstance();
-      LoggingService.resetInstance();
+      resetEnvironment();
     }
   },
 );
@@ -884,9 +678,7 @@ t.test(
         'the join resume owner preserves the cold-formation cohort after a transient timeout',
       );
     } finally {
-      NodeService.resetInstance();
-      ConfigurationManager.resetInstance();
-      LoggingService.resetInstance();
+      resetEnvironment();
     }
   },
 );
@@ -1092,9 +884,7 @@ for (const authoritativePlacementCase of [
           );
         }
       } finally {
-        NodeService.resetInstance();
-        ConfigurationManager.resetInstance();
-        LoggingService.resetInstance();
+        resetEnvironment();
       }
     },
   );
