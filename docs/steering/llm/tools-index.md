@@ -84,7 +84,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:runtime-grammar` — Check runtime grammar contracts plus state-machine pressure preflight.
 - `audit:runtime-grammar:file` — `node scripts/check-runtime-grammar-contracts.js`
 - `audit:service-portability-claims` — `node scripts/check-service-portability-claims.js`
-- `audit:shards` — `node scripts/generate-test-shards.js --check`
+- `audit:shards` — `node scripts/generate-test-shards.js --check && node scripts/generate-test-primary-classes.js --check`
 - `audit:state-machine-pressure` — `node scripts/check-state-machine-pressure-preflight.js`
 - `audit:static-gate` — `node scripts/solve/static-gate.js`
 - `audit:step-coverage-owner` — `node scripts/check-step-coverage-owner.js`
@@ -285,6 +285,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:pgwire:unit` — `node scripts/run-test-files.js $(cat test/shards/pgwire-unit.txt)`
 - `test:project-hardening` — `node scripts/run-project-hardening-acceptance.js`
 - `test:quality` — `npm run test:static && npm run test:mutation`
+- `test:quest-proof` — `node scripts/run-quest-proof.js`
 - `test:roadmap-authority` — `node scripts/run-documentation-current-state-scenario.js roadmap-audience-authority-cutover`
 - `test:safety-pregate` — `node scripts/run-test-files.js $(cat test/shards/safety-pregate.txt)`
 - `test:sharded:all` — `npm run test:fast && bash scripts/run-sharded-lanes-concurrent.sh`
@@ -314,4 +315,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-209 scripts indexed; 33 have a curated description, 176 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+210 scripts indexed; 33 have a curated description, 177 fall back to their raw command. Improve coverage in the two sources named in the header comment.
