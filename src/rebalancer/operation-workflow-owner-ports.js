@@ -456,17 +456,25 @@ function buildOperationWorkflowOwnerPortRetryBudget(owner, operation) {
   });
 }
 
+// Coordinator witness lookup shared by the publication-fence reads: a
+// coordinator without the typed lookup surface reads as "no record".
+function getOperationWorkflowOwnerPortWorkflowRecord(owner, operationId) {
+  return owner.operationWorkflowCoordinator &&
+      typeof owner.operationWorkflowCoordinator.getWorkflowById ===
+        OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE ?
+    owner.operationWorkflowCoordinator.getWorkflowById(operationId) :
+    OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD;
+}
+
 function buildOperationWorkflowOwnerPortPublicationFence(owner, operation) {
   const operationId = getOperationWorkflowOwnerPortOperationId(
     owner,
     operation,
   );
-  let workflow =
-    owner.operationWorkflowCoordinator &&
-      typeof owner.operationWorkflowCoordinator.getWorkflowById ===
-        OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE ?
-      owner.operationWorkflowCoordinator.getWorkflowById(operationId) :
-      OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD;
+  let workflow = getOperationWorkflowOwnerPortWorkflowRecord(
+    owner,
+    operationId,
+  );
   if (
     !workflow &&
     isOperationWorkflowOwnerPortRecord(operation) &&
@@ -479,11 +487,10 @@ function buildOperationWorkflowOwnerPortPublicationFence(owner, operation) {
     // durable row mirror before judging the fence — never report a bare
     // INCOMPLETE against evidence the store simply has not loaded yet.
     owner.ensureOperationWorkflow(operation);
-    workflow = owner.operationWorkflowCoordinator &&
-        typeof owner.operationWorkflowCoordinator.getWorkflowById ===
-          OPERATION_WORKFLOW_OWNER_PORT_FUNCTION_TYPE ?
-      owner.operationWorkflowCoordinator.getWorkflowById(operationId) :
-      OPERATION_WORKFLOW_OWNER_PORT_NO_RECORD;
+    workflow = getOperationWorkflowOwnerPortWorkflowRecord(
+      owner,
+      operationId,
+    );
   }
   // Derived from the persisted transition-history witness against the
   // durable row mirror (audit findings 15+18) — never a hard-coded

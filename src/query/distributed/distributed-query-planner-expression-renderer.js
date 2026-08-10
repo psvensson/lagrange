@@ -7,6 +7,45 @@ const LOCAL_STR_SQUOTE_SQUOTE = '\'\'';
 const LOCAL_STR_QUESTION = '?';
 
 /**
+ * Render a literal expression node to SQL.
+ * @param {Object} expr - LITERAL expression AST node.
+ * @return {string} SQL literal.
+ */
+function renderPlannerLiteral(expr) {
+  if (expr.value === null) {
+    return LOCAL_STR_NULL;
+  }
+  if (typeof expr.value === 'string') {
+    return `'${expr.value.replace(/'/g, LOCAL_STR_SQUOTE_SQUOTE)}'`;
+  }
+  return String(expr.value);
+}
+
+/**
+ * Render a column reference expression node to SQL.
+ * @param {Object} expr - COLUMN_REF expression AST node.
+ * @return {string} SQL column reference.
+ */
+function renderPlannerColumnRef(expr) {
+  if (expr.table) {
+    return `${expr.table}.${expr.column}`;
+  }
+  return expr.column;
+}
+
+/**
+ * Render an IN expression node to SQL.
+ * @param {Object} expr - IN expression AST node.
+ * @return {string} SQL IN clause.
+ */
+function renderPlannerInClause(expr) {
+  const values = (expr.values || [])
+    .map((valueExpr) => renderPlannerExpression(valueExpr))
+    .join(', ');
+  return `${renderPlannerExpression(expr.expression)} IN (${values})`;
+}
+
+/**
  * Render a planner expression to SQL for fragment diagnostics.
  * @param {Object} expr - Expression AST.
  * @return {string} SQL expression.
@@ -17,13 +56,7 @@ function renderPlannerExpression(expr) {
   }
 
   if (expr.type === QUERY_AST_NODE.LITERAL) {
-    if (expr.value === null) {
-      return LOCAL_STR_NULL;
-    }
-    if (typeof expr.value === 'string') {
-      return `'${expr.value.replace(/'/g, LOCAL_STR_SQUOTE_SQUOTE)}'`;
-    }
-    return String(expr.value);
+    return renderPlannerLiteral(expr);
   }
 
   if (expr.type === QUERY_AST_NODE.PARAMETER) {
@@ -31,10 +64,7 @@ function renderPlannerExpression(expr) {
   }
 
   if (expr.type === QUERY_AST_NODE.COLUMN_REF) {
-    if (expr.table) {
-      return `${expr.table}.${expr.column}`;
-    }
-    return expr.column;
+    return renderPlannerColumnRef(expr);
   }
 
   if (expr.type === QUERY_AST_NODE.UNARY) {
@@ -48,10 +78,7 @@ function renderPlannerExpression(expr) {
   }
 
   if (expr.type === QUERY_AST_NODE.IN) {
-    const values = (expr.values || [])
-      .map((valueExpr) => renderPlannerExpression(valueExpr))
-      .join(', ');
-    return `${renderPlannerExpression(expr.expression)} IN (${values})`;
+    return renderPlannerInClause(expr);
   }
 
   if (expr.type === QUERY_AST_NODE.BETWEEN) {

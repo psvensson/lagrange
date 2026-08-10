@@ -431,17 +431,7 @@ class ManagedMergeWorkflowExecutionGateMethods {
     // applied (mirrors the split owner): short-circuit every owner
     // reaction.
     if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
-      this.logger.warn(MANAGED_MERGE_LOG_MSG.ACK_REJECTED, {
-        workflowId,
-        result: ackResult?.result,
-        currentFenceToken: ackResult?.currentFenceToken,
-        receivedFenceToken: ackResult?.receivedFenceToken,
-        currentStatus: ackResult?.currentStatus,
-      });
-      return {
-        ...ackResult,
-        mergeCutoverApplied: false,
-      };
+      return this.buildRejectedMergeAckOutcome(workflowId, ackResult);
     }
 
     const ackStatus = String(ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '');
@@ -473,6 +463,30 @@ class ManagedMergeWorkflowExecutionGateMethods {
     return {
       ...ackResult,
       mergeCutoverApplied,
+    };
+  }
+
+  /**
+   * Log and shape the typed outcome for a rejected source-side
+   * acknowledgement: the rejection is surfaced to the caller with the
+   * cutover explicitly not applied.
+   *
+   * @param {string} workflowId
+   * @param {Object} ackResult - Rejected acknowledgeParticipant result.
+   * @return {Object} ackResult extended with {mergeCutoverApplied: false}.
+   * @private
+   */
+  buildRejectedMergeAckOutcome(workflowId, ackResult) {
+    this.logger.warn(MANAGED_MERGE_LOG_MSG.ACK_REJECTED, {
+      workflowId,
+      result: ackResult?.result,
+      currentFenceToken: ackResult?.currentFenceToken,
+      receivedFenceToken: ackResult?.receivedFenceToken,
+      currentStatus: ackResult?.currentStatus,
+    });
+    return {
+      ...ackResult,
+      mergeCutoverApplied: false,
     };
   }
 

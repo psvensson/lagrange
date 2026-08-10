@@ -347,17 +347,7 @@ class ManagedSplitWorkflowExecutionGateMethods {
     // applied: short-circuit every owner reaction so a stale or
     // malformed ack can never drive a cutover, abort, or dissolution.
     if (ackResult?.result !== PARTICIPANT_ACK_RESULT.ACCEPTED) {
-      this.logger.warn(MANAGED_SPLIT_LOG_MSG.ACK_REJECTED, {
-        workflowId,
-        result: ackResult?.result,
-        currentFenceToken: ackResult?.currentFenceToken,
-        receivedFenceToken: ackResult?.receivedFenceToken,
-        currentStatus: ackResult?.currentStatus,
-      });
-      return {
-        ...ackResult,
-        splitCutoverApplied: false,
-      };
+      return this.buildRejectedSplitAckOutcome(workflowId, ackResult);
     }
 
     const ackStatus = String(ack?.[PARTICIPANT_ACK_FIELD.STATUS] || '');
@@ -389,6 +379,30 @@ class ManagedSplitWorkflowExecutionGateMethods {
     return {
       ...ackResult,
       splitCutoverApplied,
+    };
+  }
+
+  /**
+   * Log and shape the typed outcome for a rejected source-side
+   * acknowledgement: the rejection is surfaced to the caller with the
+   * cutover explicitly not applied.
+   *
+   * @param {string} workflowId
+   * @param {Object} ackResult - Rejected acknowledgeParticipant result.
+   * @return {Object} ackResult extended with {splitCutoverApplied: false}.
+   * @private
+   */
+  buildRejectedSplitAckOutcome(workflowId, ackResult) {
+    this.logger.warn(MANAGED_SPLIT_LOG_MSG.ACK_REJECTED, {
+      workflowId,
+      result: ackResult?.result,
+      currentFenceToken: ackResult?.currentFenceToken,
+      receivedFenceToken: ackResult?.receivedFenceToken,
+      currentStatus: ackResult?.currentStatus,
+    });
+    return {
+      ...ackResult,
+      splitCutoverApplied: false,
     };
   }
 

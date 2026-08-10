@@ -157,34 +157,7 @@ class SeedInfrastructurePhase {
     const wsPort = d.getWsPort() || config.wsPort;
 
     // Route message-router setup through the shared owner.
-    let messageRouter;
-    try {
-      messageRouter = await MessageRouterSetup.create({
-        nodeId: d.getNodeId(),
-        nodeAddress: d.getNodeAddress(),
-        advertisedNodeWsAddress: d.getAdvertisedNodeWsAddress?.() || null,
-        wsPort: wsPort,
-        externalAdmissionEnabled: false,
-        bootIncarnation: d.getBootIncarnation?.() || 0,
-      });
-    } catch (error) {
-      logger.error(BOOTSTRAP_LOG_MSG.ROUTER_INIT_FAILED, {
-        nodeId: d.getNodeId(),
-        wsPort: wsPort,
-        error: error.message,
-        stack: error.stack,
-      });
-      throw new Error(BOOTSTRAP_ERROR.routerInitFailed(error.message));
-    }
-
-    if (typeof messageRouter.setQueryMessageGroupServiceResolver ===
-        'function') {
-      messageRouter.setQueryMessageGroupServiceResolver(() =>
-        resolveQueryTransportSelection(
-          () => d.resolveQueryTransportMessageGroupSelection(),
-        ),
-      );
-    }
+    const messageRouter = await this.createSeedMessageRouter(wsPort);
     d.setMessageRouter(messageRouter);
     d.setTransport(messageRouter);
 
@@ -202,6 +175,45 @@ class SeedInfrastructurePhase {
     await this.triggerBootstrapReconciler(
       BOOTSTRAP_UNIFIED_RECONCILE.INFRA_READY_REASON,
     );
+  }
+
+  /**
+   * Create the seed message router through the shared setup owner and
+   * wire the query message-group service resolver when supported.
+   * @param {number|undefined} wsPort
+   * @return {Promise<Object>}
+   */
+  async createSeedMessageRouter(wsPort) {
+    const d = this.delegates;
+    let messageRouter;
+    try {
+      messageRouter = await MessageRouterSetup.create({
+        nodeId: d.getNodeId(),
+        nodeAddress: d.getNodeAddress(),
+        advertisedNodeWsAddress: d.getAdvertisedNodeWsAddress?.() || null,
+        wsPort: wsPort,
+        externalAdmissionEnabled: false,
+        bootIncarnation: d.getBootIncarnation?.() || 0,
+      });
+    } catch (error) {
+      d.getLogger().error(BOOTSTRAP_LOG_MSG.ROUTER_INIT_FAILED, {
+        nodeId: d.getNodeId(),
+        wsPort: wsPort,
+        error: error.message,
+        stack: error.stack,
+      });
+      throw new Error(BOOTSTRAP_ERROR.routerInitFailed(error.message));
+    }
+
+    if (typeof messageRouter.setQueryMessageGroupServiceResolver ===
+        'function') {
+      messageRouter.setQueryMessageGroupServiceResolver(() =>
+        resolveQueryTransportSelection(
+          () => d.resolveQueryTransportMessageGroupSelection(),
+        ),
+      );
+    }
+    return messageRouter;
   }
 
   /**

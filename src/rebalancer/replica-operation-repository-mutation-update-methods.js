@@ -143,11 +143,10 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
             ),
         },
         {
-          sql: expectedWorkflowStep ?
-            SQL.UPDATE_OPERATION_EXPECTING_STEP :
-            terminalTransition ?
-              SQL.UPDATE_OPERATION_TERMINAL :
-              SQL.UPDATE_OPERATION,
+          sql: this.resolveOperationUpdateSql(
+            expectedWorkflowStep,
+            terminalTransition,
+          ),
           params: this.buildReplicaOperationUpdateParams(
             operation,
             expectedWorkflowStep,
@@ -187,6 +186,18 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
         );
       }
       return this.confirmPersistedOperationUpdate(operation, options);
+    }
+
+    // An expected-step CAS write pins the step in the WHERE clause; a
+    // terminal write guards on completed_at IS NULL instead; the plain
+    // update carries neither guard.
+    resolveOperationUpdateSql(expectedWorkflowStep, terminalTransition) {
+      if (expectedWorkflowStep) {
+        return SQL.UPDATE_OPERATION_EXPECTING_STEP;
+      }
+      return terminalTransition ?
+        SQL.UPDATE_OPERATION_TERMINAL :
+        SQL.UPDATE_OPERATION;
     }
 
     async confirmPersistedOperationUpdate(operation, options) {
