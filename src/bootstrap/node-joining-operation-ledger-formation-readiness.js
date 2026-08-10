@@ -26,6 +26,9 @@ import {
 import {
   isReplicaOperationInFlight,
 } from '../rebalancer/replica-operation-liveness.js';
+import {
+  ReplicaStatus,
+} from '../rebalancer/replica-operation-progress.js';
 
 const {
   JOINING_DEFAULT,
@@ -56,6 +59,70 @@ const OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT_CODE =
 function resolveFormationBarrierDuration(value, fallback, minimum) {
   return Number.isFinite(value) ? Math.max(minimum, value) : fallback;
 }
+
+function isSettledActiveVoterRow(row) {
+  return (
+    String(row?.status || '').trim().toLowerCase() === ReplicaStatus.ACTIVE
+  );
+}
+
+/**
+ * Bind one owner answer to BOTH placement projections of the same rows:
+ * raw (ACTIVE + REMOVING voters — completeness and the conservative quorum
+ * math) and settled (ACTIVE voters only — the release-spread verdict). A
+ * REMOVING row is a real quorum voter only while its removal operation is
+ * in flight; once that self-operation is terminal the row is bookkeeping
+ * debt (live runs show the services-row DELETE lagging its operation's
+ * completion for over a minute), so the settled projection carries the
+ * spread verdict and the drain leg proves the self-operations terminal.
+ * Both projections come from ONE row set read at ONE instant, which is the
+ * point: the barrier's decision-table inputs (placement evidence, settled
+ * spread, drain evidence) are evaluated per-iteration as one unit — the
+ * ledger-hold policy's declared-evidence-table idiom
+ * (OPERATION_LEDGER_SELF_MOVE_HOLD_ACTION_BY_LIFECYCLE_EVIDENCE).
+ *
+ * @param {Object} params
+ * @return {Object}
+ */
+function buildOperationLedgerFormationPlacementEvidence({
+  available,
+  rows,
+  source,
+  partitionId,
+  targetReplicaCount,
+  snapshotVersion = null,
+}) {
+  const normalizedRows = Array.isArray(rows) ? rows : [];
+  const raw = getAuthoritativeOperationLedgerPlacementObservation({
+    available,
+    rows: normalizedRows,
+    source,
+    partitionId,
+    targetReplicaCount,
+    snapshotVersion,
+  });
+  const settled = getAuthoritativeOperationLedgerPlacementObservation({
+    available,
+    rows: normalizedRows.filter(isSettledActiveVoterRow),
+    source,
+    partitionId,
+    targetReplicaCount,
+    snapshotVersion,
+  });
+  return Object.freeze({
+    ...raw,
+    settledObservedVoterCount: settled.observedVoterCount,
+    settledDistinctNodeCount: settled.distinctNodeCount,
+    settledConcentrated: settled.concentrated,
+    settledSpreadComplete: settled.spreadComplete === true,
+  });
+}
+
+const UNAVAILABLE_FORMATION_PLACEMENT_EVIDENCE_INPUT = Object.freeze({
+  available: false,
+  rows: Object.freeze([]),
+  source: null,
+});
 
 function resolveOperationLedgerFormationBarrierState({
   barrierEngaged,
@@ -103,13 +170,10 @@ class NodeJoiningOperationLedgerFormationReadiness
       authoritativeView.canRead() !== true ||
       typeof authoritativeView.readRows !== 'function'
     ) {
-      return Object.freeze({
-        complete: false,
-        concentrated: null,
-        distinctNodeCount: 0,
-        observedVoterCount: 0,
-        source: null,
-        spreadComplete: false,
+      return buildOperationLedgerFormationPlacementEvidence({
+        ...UNAVAILABLE_FORMATION_PLACEMENT_EVIDENCE_INPUT,
+        partitionId,
+        targetReplicaCount,
       });
     }
     try {
@@ -125,7 +189,7 @@ class NodeJoiningOperationLedgerFormationReadiness
           preferOwnerRpcReadLeader: true,
         },
       );
-      return getAuthoritativeOperationLedgerPlacementObservation({
+      return buildOperationLedgerFormationPlacementEvidence({
         available: result?.success === true,
         rows: result?.rows,
         source: result?.source,
@@ -134,10 +198,8 @@ class NodeJoiningOperationLedgerFormationReadiness
         snapshotVersion: result?.snapshotVersion ?? null,
       });
     } catch {
-      return getAuthoritativeOperationLedgerPlacementObservation({
-        available: false,
-        rows: [],
-        source: null,
+      return buildOperationLedgerFormationPlacementEvidence({
+        ...UNAVAILABLE_FORMATION_PLACEMENT_EVIDENCE_INPUT,
         partitionId,
         targetReplicaCount,
       });
@@ -147,6 +209,9 @@ class NodeJoiningOperationLedgerFormationReadiness
    * Read the authoritative operation owner after physical spread becomes
    * visible. Service-row deletion precedes terminal REMOVED persistence in the
    * production executor, so concentration alone is not a release witness.
+   * The read is strictly self-scoped (SELECT_OPERATIONS_BY_ENTITY for this
+   * ledger partition): rebalancer churn on OTHER partitions never appears
+   * in this observation and cannot defer release through it.
    *
    * @param {string} partitionId
    * @param {number} now
@@ -197,10 +262,18 @@ class NodeJoiningOperationLedgerFormationReadiness
     }
   }
   /**
-   * Snapshot the join-time operation-ledger placement barrier.
+   * Snapshot the join-time operation-ledger placement barrier as ONE
+   * coherent evidence unit per iteration.
    *
-   * Completeness and concentration come from the canonical ledger predicate,
-   * so a partial cache cannot be mistaken for successful spread.
+   * Engaged iterations evaluate every release leg from evidence gathered in
+   * the same pass: the owner-RPC placement rows carry BOTH the conservative
+   * completeness projection and the settled (ACTIVE-only) spread verdict,
+   * and the self-operation drain observation is read in the same pass once
+   * that verdict passes. An unavailable leg makes the iteration a typed
+   * defer — the verdict is never substituted from the joiner's stale local
+   * cache, and no mix of legs read at different instants can decide an
+   * iteration. The local cache still feeds cohort discovery and
+   * diagnostics only.
    *
    * @param {Object} [options]
    * @return {Promise<Object>}
@@ -240,30 +313,24 @@ class NodeJoiningOperationLedgerFormationReadiness
         now,
       );
     const authoritativePlacement =
-      options.observeOperationDrain === true &&
-      (!observation.complete || concentrated) ?
+      options.observeOperationDrain === true ?
         await this.getOperationLedgerFormationPlacementObservation(
           partitionId,
           observation.targetReplicaCount,
         ) :
-        {
-          complete: false,
-          concentrated: null,
-          distinctNodeCount: 0,
-          observedVoterCount: 0,
-          source: null,
-          spreadComplete: false,
-        };
-    const spreadProofComplete = authoritativePlacement.complete ?
-      authoritativePlacement.spreadComplete :
-      observation.complete;
-    const spreadConcentrated = authoritativePlacement.complete ?
-      authoritativePlacement.concentrated :
-      concentrated;
+        buildOperationLedgerFormationPlacementEvidence({
+          ...UNAVAILABLE_FORMATION_PLACEMENT_EVIDENCE_INPUT,
+          partitionId,
+          targetReplicaCount: observation.targetReplicaCount,
+        });
+    const spreadProofComplete = authoritativePlacement.complete === true;
+    const spreadConcentrated = spreadProofComplete ?
+      authoritativePlacement.settledSpreadComplete !== true :
+      null;
     const operationDrainObservation =
       options.observeOperationDrain === true &&
       spreadProofComplete &&
-      !spreadConcentrated ?
+      spreadConcentrated === false ?
         await this.getOperationLedgerFormationDrainObservation(
           partitionId,
           now,
@@ -290,6 +357,13 @@ class NodeJoiningOperationLedgerFormationReadiness
       authoritativePlacementObservedVoterCount:
         authoritativePlacement.observedVoterCount,
       authoritativePlacementSource: authoritativePlacement.source,
+      settledObservedVoterCount:
+        authoritativePlacement.settledObservedVoterCount,
+      settledDistinctNodeCount:
+        authoritativePlacement.settledDistinctNodeCount,
+      settledConcentrated: authoritativePlacement.settledConcentrated,
+      settledSpreadComplete:
+        authoritativePlacement.settledSpreadComplete,
       operationObservationComplete: operationDrainObservation.complete,
       operationObservationState: operationDrainObservation.state,
       inFlightOperationCount:
@@ -391,6 +465,10 @@ class NodeJoiningOperationLedgerFormationReadiness
         snapshot.authoritativePlacementObservedVoterCount,
       authoritativePlacementSource:
         snapshot.authoritativePlacementSource,
+      settledObservedVoterCount: snapshot.settledObservedVoterCount,
+      settledDistinctNodeCount: snapshot.settledDistinctNodeCount,
+      settledConcentrated: snapshot.settledConcentrated,
+      settledSpreadComplete: snapshot.settledSpreadComplete,
       operationObservationComplete: snapshot.operationObservationComplete,
       operationObservationState: snapshot.operationObservationState,
       inFlightOperationCount: snapshot.inFlightOperationCount,

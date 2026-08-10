@@ -1,0 +1,52 @@
+{
+  "id": "formation-barrier-release-snapshot-coherence",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "An engaged operation-ledger formation barrier evaluates all of its release legs against one coherent observation snapshot per iteration and releases when the ledger partition is genuinely spread and its own self-operations are terminal: the joiner's awaitOperationLedgerFormationBarrier (src/bootstrap/node-joining-operation-ledger-formation-readiness.js) stops requiring independently-fetched legs (owner-RPC spread proof, concentration, in-flight-op drain) to happen to align across separate reads while an actively-working rebalancer churns — a healthy busy cluster must converge the barrier, not starve it. Verified at HEAD a754867c0 (runs public-path-multinode-baseline-20260810T154716Z/155045Z): with every lower face fixed (0 terminal refusals, 16+ operations completing, 25 CREATE_REPLICA per run), the barrier still oscillated waiting_for_ledger_spread (14) <-> waiting_for_ledger_observation (13) for the full 135s with spreadProofComplete flapping true/false at steady observedVoterCount=3 via owner_rpc_lane and inFlightOperationCount null — the per-leg observations are fetched at different instants and evaluated cross-iteration (the D1 recorded decision left the barrier untouched while its slow legs were being fixed; the legs are now fast and the coherence gap is the binding face). Q1's heavier bootstrap (more partition services, more formation moves) makes leg misalignment more likely, so the epic's gate quest cannot reach its consecutive-pass streak without this. Fail-closed floor: the 120s timeout still throws (never silently degrades an engaged barrier); the engagement latch, BYPASSED_INSUFFICIENT_COHORT, durable-rejoin and snapshot-absent guards, and the sequential-growth/two-node fail-closed cases keep their exact semantics (guard cases at test/convergence/dt-formation-priority-placement-before-active.test.js:680,715,752 stay green).",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "formation-barrier-spread-release-oscillation",
+    "planDoc": "solve/epics/latent-convergence-blocker-census.md",
+    "draftedAtCommit": "a754867c0306b90b716e90298657d534d1814ecf"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/formation-barrier-release-snapshot-coherence.receipt.json",
+      "requiredReceipts": [
+        "engaged-barrier-releases-from-one-coherent-snapshot",
+        "fail-closed-guards-and-timeout-preserved"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-barrier-release-snapshot-coherence-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/formation-barrier-release-snapshot-coherence.receipt.json",
+          "requiredReceipts": [
+            "engaged-barrier-releases-from-one-coherent-snapshot",
+            "fail-closed-guards-and-timeout-preserved"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "verificationTemplates": [
+    "formation-circularity",
+    "sweep-timer"
+  ]
+}

@@ -17,7 +17,9 @@ import {printRatchetTighteningHint} from './metric-check-helpers.js';
 
 // 2026-08-03: tightened 1448 -> 1445 (un-exported the internal-only
 // call-cell and write-health surfaces; one-way-baseline rule).
-const BASELINE_UNUSED_EXPORT_COUNT = 1445;
+// 2026-08-10: tightened 1445 -> 1444 per checker hint (tree count
+// dropped to 1444; one-way-baseline rule).
+const BASELINE_UNUSED_EXPORT_COUNT = 1444;
 const EXIT_FAILURE = 1;
 const TOP_OFFENDER_COUNT = 10;
 const SELF_REFERENCE = 'scripts/check-unused-exports.js';

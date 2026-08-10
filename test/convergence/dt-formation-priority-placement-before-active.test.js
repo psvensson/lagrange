@@ -392,6 +392,18 @@ t.test(
       }
       return baseReadAuthoritativeRows(tableName, sql, params, options);
     };
+    // The coherent barrier releases only on owner-lane placement evidence
+    // (a cache-side verdict can no longer stand in), so the joiner's
+    // authoritative view answers from the same live formation rows.
+    fixture.coordinator.controlPlaneReadinessService
+      .getAuthoritativeControlPlaneView = () => ({
+        canRead: () => true,
+        readRows: async () => ({
+          success: true,
+          source: 'owner_rpc_lane',
+          rows: currentLedgerReplicas(cache).map((row) => ({...row})),
+        }),
+      });
     const planner = buildRealLedgerPlanner(
       cache,
       fixture.trackedOperations,
