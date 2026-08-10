@@ -5,6 +5,13 @@ import {
 import {
   shouldReleaseReservationForTerminalOutcome,
 } from './operation-workflow-terminal-reservation-release.js';
+import {
+  TERMINAL_TRANSITION_REPAIR_CAUSE,
+  armTerminalTransitionRepair,
+} from './operation-workflow-terminal-transition-repair.js';
+import {
+  REPLICA_OPERATION_UPDATE_DISPOSITION,
+} from './replica-operation-update-disposition.js';
 
 const {
   ControlPlaneReadinessService,
@@ -25,6 +32,18 @@ const {
 
 const PRIORITY_DEFERRED_CLAIM_EXPECTED_STEP_FIELD =
   'priorityDeferredClaimExpectedStep';
+
+// completeOperation/failOperation report their typed transition outcome
+// ({committed, disposition}) so level-triggered callers (the recovery
+// drain) stop believing unconditional progress. The early already-terminal
+// return is the local idempotent-replay arm: the live operation object only
+// carries finalStep + completedAt after a PROVEN terminal (a committed
+// write, a locally replayed committed transition, or an adopted durable
+// winner), so it reports the release-gated replay outcome.
+const ALREADY_TERMINAL_TRANSITION_OUTCOME = Object.freeze({
+  committed: false,
+  disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+});
 
 class OperationWorkflowTransitionPersistence
   extends OperationWorkflowTransitionOrchestration {
@@ -215,7 +234,14 @@ class OperationWorkflowTransitionPersistence
   }
 
   /**
-   * Clear every owner-local retry lane for one terminalizing operation.
+   * Clear every owner-local retry lane for one operation whose terminal
+   * state is PROVEN durable. Clearing is a consequence of a proven
+   * terminal (this writer committed, a winning durable terminal was
+   * adopted, or the row already held the same terminal) — never a
+   * precondition of attempting one: erasing the armed retry owners at
+   * entry silenced the executor-outcome visibility loop mid-backoff while
+   * the terminal write itself was refused (quest
+   * terminal-write-refusal-retry-ownership).
    * @param {Object|null} operation
    * @private
    */
@@ -229,12 +255,65 @@ class OperationWorkflowTransitionPersistence
   }
 
   /**
+   * Resolve one not-committed terminal transition. The release-gated
+   * dispositions (TERMINAL_ADOPTED, IDEMPOTENT_REPLAY) prove a durable
+   * terminal through another writer or an identical replay: the retry
+   * lanes clear and the reservation releases exactly as before. Every
+   * other outcome (REFUSED / REINSERTED / null disposition) is unresolved
+   * divergence: the retry lanes stay armed, ONE typed warn names the
+   * refusal, and the EXISTING terminal-transition repair is armed with the
+   * retained terminal projection — a refused terminal write is a strictly
+   * worse state than committed-but-invisible and must keep a retry owner
+   * (quest terminal-write-refusal-retry-ownership).
+   * @param {Object} operation
+   * @param {Object} projectedOperation - Retained terminal projection.
+   * @param {Object} transitionOutcome - Typed {committed, disposition}.
+   * @param {string} step - The terminal workflow step this writer asserted.
+   * @return {Promise<void>}
+   * @private
+   */
+  async resolveNotCommittedTerminalTransition(
+    operation,
+    projectedOperation,
+    transitionOutcome,
+    step,
+  ) {
+    this.clearTransitionRetry(operation.operationId);
+    // Release only on a proven terminal: lost-to-other-terminal
+    // (TERMINAL_ADOPTED) or already-same-terminal (IDEMPOTENT_REPLAY).
+    // Unresolved divergence (REFUSED/REINSERTED) keeps the reservation
+    // ACTIVE — the operation is still live and re-driveable (audit
+    // findings 3+11).
+    if (shouldReleaseReservationForTerminalOutcome(transitionOutcome)) {
+      this.clearTerminalOperationRetryState(operation);
+      await this.releaseReservationForOperation(operation);
+    } else {
+      this.logger.warn(
+        REBALANCE_COORDINATOR_LOG_MSG
+          .TERMINAL_TRANSITION_PERSIST_NOT_COMMITTED,
+        {
+          operationId: operation.operationId,
+          disposition: transitionOutcome?.disposition || null,
+          step,
+          partitionId: operation.partitionId,
+        },
+      );
+      armTerminalTransitionRepair(
+        this,
+        projectedOperation,
+        TERMINAL_TRANSITION_REPAIR_CAUSE.PERSIST_NOT_COMMITTED,
+      );
+    }
+    this.clearDeferredSafetyBlockState(operation.operationId);
+  }
+
+  /**
    * Complete an operation successfully.
    * @param {Object} operation
-   * @return {Promise<void>}
+   * @return {Promise<Object>} Typed transition outcome
+   *   ({committed, disposition}) of the terminal persist.
    */
   async completeOperation(operation) {
-    this.clearTerminalOperationRetryState(operation);
     const now = Date.now();
     const finalStep =
       operation.type === OperationType.ADD ?
@@ -245,7 +324,7 @@ class OperationWorkflowTransitionPersistence
       operation.completedAt !== null &&
       operation.completedAt !== undefined
     ) {
-      return;
+      return ALREADY_TERMINAL_TRANSITION_OUTCOME;
     }
     const previousStep = operation.workflowStep;
     const stepEntry = this.buildOperationTransitionStepEntry(
@@ -308,19 +387,16 @@ class OperationWorkflowTransitionPersistence
     );
 
     if (!transitionOutcome?.committed) {
-      this.clearTransitionRetry(operation.operationId);
-      // Release only on a proven terminal: lost-to-other-terminal
-      // (TERMINAL_ADOPTED) or already-same-terminal (IDEMPOTENT_REPLAY).
-      // Unresolved divergence (REFUSED/REINSERTED) keeps the reservation
-      // ACTIVE — the operation is still live and re-driveable (audit
-      // findings 3+11).
-      if (shouldReleaseReservationForTerminalOutcome(transitionOutcome)) {
-        await this.releaseReservationForOperation(operation);
-      }
-      this.clearDeferredSafetyBlockState(operation.operationId);
-      return;
+      await this.resolveNotCommittedTerminalTransition(
+        operation,
+        projectedOperation,
+        transitionOutcome,
+        finalStep,
+      );
+      return transitionOutcome;
     }
 
+    this.clearTerminalOperationRetryState(operation);
     this.clearTransitionRetry(operation.operationId);
     operation.workflowStep = finalStep;
     operation.status = WORKFLOW_STEP_TO_STATUS[finalStep];
@@ -354,6 +430,7 @@ class OperationWorkflowTransitionPersistence
     } catch (_metricsErr) {
       // Metrics logging failures must not propagate to callers
     }
+    return transitionOutcome;
   }
 
   /**
@@ -361,17 +438,17 @@ class OperationWorkflowTransitionPersistence
    * @param {Object} operation
    * @param {string} errorMessage
    * @param {Object} [options]
-   * @return {Promise<void>}
+   * @return {Promise<Object>} Typed transition outcome
+   *   ({committed, disposition}) of the terminal persist.
    */
   async failOperation(operation, errorMessage, options = {}) {
-    this.clearTerminalOperationRetryState(operation);
     const now = Date.now();
     if (
       operation.workflowStep === WORKFLOW_STEP.FAILED &&
       operation.completedAt !== null &&
       operation.completedAt !== undefined
     ) {
-      return;
+      return ALREADY_TERMINAL_TRANSITION_OUTCOME;
     }
     const normalizedError = this.normalizeErrorMessage(
       errorMessage,
@@ -458,16 +535,18 @@ class OperationWorkflowTransitionPersistence
     );
 
     if (!transitionOutcome?.committed) {
-      this.clearTransitionRetry(operation.operationId);
       // Same fail-closed release gate as completeOperation: never release
       // on the unresolved-divergence arm (audit findings 3+11).
-      if (shouldReleaseReservationForTerminalOutcome(transitionOutcome)) {
-        await this.releaseReservationForOperation(operation);
-      }
-      this.clearDeferredSafetyBlockState(operation.operationId);
-      return;
+      await this.resolveNotCommittedTerminalTransition(
+        operation,
+        projectedOperation,
+        transitionOutcome,
+        WORKFLOW_STEP.FAILED,
+      );
+      return transitionOutcome;
     }
 
+    this.clearTerminalOperationRetryState(operation);
     this.clearTransitionRetry(operation.operationId);
     operation.workflowStep = WORKFLOW_STEP.FAILED;
     operation.status = ReplicaStatus.FAILED;
@@ -512,6 +591,7 @@ class OperationWorkflowTransitionPersistence
     } catch (_metricsErr) {
       // Metrics logging failures must not propagate to callers
     }
+    return transitionOutcome;
   }
 }
 

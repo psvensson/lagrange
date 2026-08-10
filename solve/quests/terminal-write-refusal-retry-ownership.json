@@ -1,0 +1,52 @@
+{
+  "id": "terminal-write-refusal-retry-ownership",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A refused terminal transition keeps a retry owner and becomes loud: OperationWorkflowTransitionPersistence.completeOperation/failOperation stop clearing terminal retry state at entry (clearing becomes a consequence of a proven committed terminal, never a precondition of attempting one), the committed:false REFUSED/REINSERTED/null dispositions arm the EXISTING operation-workflow-terminal-transition-repair (today reachable only from the afterCommit confirm path, leaving 'refused' — a strictly worse state than 'committed but invisible' — uncovered) with one typed warn, and completeOperation/failOperation return their typed transitionOutcome so the recovery drain stops reporting progressed:true unconditionally — giving the existing bounded-escalation family its missing terminalization-refused counter. Verified at HEAD d75b01706 across four red formation runs (ec-q6-20260810T09*): the coordinator decides to terminalize 175-249 times per run with ZERO 'Operation completed' lines and zero logging — completeOperation's first statement clearTerminalOperationRetryState kills the armed executor-outcome retry timer (silencing the visibility-deferral loop mid-backoff, timestamped to the ms), the terminal UPDATE returns disposition REFUSED silently via resolveZeroChangeOperationUpdate, and the drain returns true unconditionally after a void completeOperation so level-triggered machinery believes progress. Fail-closed floor: release-gated dispositions (TERMINAL_ADOPTED, IDEMPOTENT_REPLAY) keep today's behavior; no new timers (the repair's 0.5s-30s backoff exists); the raft-level root (stale-log leader election on replica_operations-p1) is explicitly OUT of this quest's scope and routed separately.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "blocked-spread-evaluation-event-wake",
+    "planDoc": "solve/epics/latent-convergence-blocker-census.md",
+    "draftedAtCommit": "d75b01706a1f1cd6307bd4de9bfb2686dbf45a8c"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/terminal-write-refusal-retry-ownership.receipt.json",
+      "requiredReceipts": [
+        "refused-terminal-keeps-retry-owner-and-arms-repair",
+        "drain-reports-truthful-progress"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "terminal-write-refusal-retry-ownership-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/terminal-write-refusal-retry-ownership.receipt.json",
+          "requiredReceipts": [
+            "refused-terminal-keeps-retry-owner-and-arms-repair",
+            "drain-reports-truthful-progress"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "verificationTemplates": [
+    "retry-loops",
+    "recovery-replay"
+  ]
+}

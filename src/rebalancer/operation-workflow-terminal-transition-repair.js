@@ -29,6 +29,7 @@ const TERMINAL_TRANSITION_REPAIR_CAUSE = Object.freeze({
   CONFIRMATION_FAILED: 'confirmation_failed',
   CONFIRMATION_DEFERRED: 'confirmation_deferred',
   REPAIR_UNCONFIRMED: 'repair_unconfirmed',
+  PERSIST_NOT_COMMITTED: 'persist_not_committed',
 });
 
 function resolveTerminalTransitionRepairDelayMs(attempt) {

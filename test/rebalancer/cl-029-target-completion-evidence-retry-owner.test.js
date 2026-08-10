@@ -110,6 +110,8 @@ import {
 import {WORKFLOW_STEP} from '../../src/constants/index.js';
 import {OperationType, ReplicaStatus} from
   '../../src/rebalancer/replica-status.js';
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
 import {DurableWorkflowCoordinator} from
   '../../src/workflow/durable-workflow-coordinator.js';
 import {createMockControlPlaneSystemTableGateway} from './test-helpers.js';
@@ -1598,6 +1600,136 @@ test(
             harness.logs.errors.length,
             0,
             'the not-local path logs no errors',
+          );
+        } finally {
+          await harness.coordinator.shutdown();
+        }
+      },
+    );
+
+    await t.test(
+      'POST-ACTION TWIN (quest terminal-write-refusal-retry-ownership): ' +
+      'a completeOperation whose terminal persist is REFUSED must NOT ' +
+      'have erased the armed executor-outcome retry timer/payload (red ' +
+      'on revert: the pre-write clearTerminalOperationRetryState kills ' +
+      'the armed visibility retry mid-backoff, then the refusal leaves ' +
+      'the operation with no owner at all)',
+      async (t) => {
+        const operation = buildReplaceOperation();
+        // The drain/reaper-side shape: the REPLACE is at REMOVING when a
+        // level-triggered path decides to terminalize it while the
+        // executor-outcome visibility retry is still armed and backing
+        // off.
+        operation.workflowStep = WORKFLOW_STEP.REMOVING;
+        operation.stepsHistory.push({
+          step: WORKFLOW_STEP.REMOVING,
+          timestamp: operation.createdAt,
+          sourceReplicaId: TEST_SOURCE_REPLICA_ID,
+        });
+        const store = createCasBackedReplicaOperationStore(operation);
+        const harness = createHarness(store);
+        const {owner} = harness;
+
+        // The armed retry owner: retained ACTIVE evidence plus its timed
+        // retry, exactly what the visibility-deferral loop holds
+        // mid-backoff.
+        const retainedPayload = buildTargetOutcome(
+          EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+          WORKFLOW_STEP.ACTIVE,
+        );
+        owner.executorOutcomeRetryPayloadByOperationId.set(
+          TEST_OPERATION_ID,
+          retainedPayload,
+        );
+        const armedTimerHandle = {callback: async () => {}, delayMs: 500};
+        owner.executorOutcomeRetryTimerByOperationId.set(
+          TEST_OPERATION_ID,
+          armedTimerHandle,
+        );
+
+        // Refuse ONLY the terminal write, through the repository's typed
+        // disposition contract (the repository-level REFUSED reality is
+        // proven in replica-operation-terminal-cas.test.js).
+        const refusedTerminalWrites = [];
+        const originalPersist =
+          owner.repository.persistOperationUpdate.bind(owner.repository);
+        owner.repository.persistOperationUpdate = async (
+          projection,
+          options = {},
+        ) => {
+          if (options.terminalTransition === true) {
+            refusedTerminalWrites.push(projection.operationId);
+            return {
+              persisted: false,
+              disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+              operation: null,
+            };
+          }
+          return originalPersist(projection, options);
+        };
+
+        try {
+          const transitionOutcome = await owner.completeOperation(operation);
+
+          t.same(
+            {
+              committed: transitionOutcome?.committed,
+              disposition: transitionOutcome?.disposition,
+              refusedTerminalWrites,
+            },
+            {
+              committed: false,
+              disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+              refusedTerminalWrites: [TEST_OPERATION_ID],
+            },
+            'the terminal persist was refused and the typed outcome ' +
+            'reports it',
+          );
+          t.equal(
+            owner.executorOutcomeRetryPayloadByOperationId.get(
+              TEST_OPERATION_ID,
+            ),
+            retainedPayload,
+            'the retained executor-outcome payload SURVIVED the refused ' +
+            'terminalization',
+          );
+          t.equal(
+            owner.executorOutcomeRetryTimerByOperationId.get(
+              TEST_OPERATION_ID,
+            ),
+            armedTimerHandle,
+            'the armed executor-outcome retry timer SURVIVED the refused ' +
+            'terminalization',
+          );
+          t.equal(
+            harness.clearedRetainedPayloads.some(
+              (record) => record.operationId === TEST_OPERATION_ID,
+            ),
+            false,
+            'clearExecutorOutcomeRetry never fired for the refused ' +
+            'terminal (clearing is a consequence of a proven terminal)',
+          );
+          t.equal(
+            owner.terminalTransitionRepairStateByOperationId.has(
+              TEST_OPERATION_ID,
+            ),
+            true,
+            'the EXISTING terminal-transition repair was armed for the ' +
+            'refusal',
+          );
+          t.equal(
+            warnsMatching(
+              harness.logs,
+              REBALANCE_COORDINATOR_LOG_MSG
+                .TERMINAL_TRANSITION_PERSIST_NOT_COMMITTED,
+            ).length,
+            1,
+            'exactly one typed warn names the refused terminal persist',
+          );
+          t.equal(
+            store.state.authoritative.workflowStep,
+            WORKFLOW_STEP.REMOVING,
+            'the durable row is still non-terminal (the refusal was real)',
           );
         } finally {
           await harness.coordinator.shutdown();

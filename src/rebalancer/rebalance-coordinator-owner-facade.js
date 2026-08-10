@@ -274,7 +274,8 @@ class RebalanceCoordinatorOwnerFacade {
    * Complete an operation successfully.
    * Delegates to workflow owner (D7.1).
    * @param {Object} operation
-   * @return {Promise<void>}
+   * @return {Promise<Object>} Typed transition outcome
+   *   ({committed, disposition}).
    */
   async completeOperation(operation) {
     return this.workflowOwner.completeOperation(operation);
@@ -387,7 +388,8 @@ class RebalanceCoordinatorOwnerFacade {
    * @param {string} [options.logLevel] - Log level for failure event.
    * @param {string} [options.logMessage] - Log message override.
    * @param {Object} [options.stepMetadata] - FAILED step metadata.
-   * @return {Promise<void>}
+   * @return {Promise<Object>} Typed transition outcome
+   *   ({committed, disposition}).
    */
   async failOperation(operation, errorMessage, options = {}) {
     return this.workflowOwner.failOperation(operation, errorMessage, options);

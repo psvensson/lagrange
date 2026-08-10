@@ -1,5 +1,8 @@
 import {OperationWorkflowRecoveryTimeout} from './operation-workflow-recovery-timeout.js';
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from './operation-workflow-recovery-reconcile-shared.js';
+import {
+  isTerminalTransitionOutcomeSettled,
+} from './operation-workflow-terminal-reservation-release.js';
 
 const {
   EXACT_TARGET_REPLICA_OBSERVATION_OPTIONS,
@@ -595,12 +598,17 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         operation,
         resolvedDrainSnapshot,
       );
-      await this.failOperation(
-        operation,
-        resolvedDrainSnapshot.supersededTargetError,
-        {logLevel: FAILURE_LOG_LEVEL.WARN},
+      // Truthful progress (quest terminal-write-refusal-retry-ownership):
+      // a terminalization whose durable write was refused did NOT drain —
+      // reporting it progressed would let level-triggered machinery
+      // believe a settle that never landed.
+      return isTerminalTransitionOutcomeSettled(
+        await this.failOperation(
+          operation,
+          resolvedDrainSnapshot.supersededTargetError,
+          {logLevel: FAILURE_LOG_LEVEL.WARN},
+        ),
       );
-      return true;
     }
     if (
       resolvedDrainSnapshot.action ===
@@ -616,13 +624,14 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         operation,
         resolvedDrainSnapshot,
       );
-      await this.failOperation(
-        operation,
-        OPERATION_WORKFLOW_OWNER_LITERAL
-          .PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE,
-        {logLevel: FAILURE_LOG_LEVEL.WARN},
+      return isTerminalTransitionOutcomeSettled(
+        await this.failOperation(
+          operation,
+          OPERATION_WORKFLOW_OWNER_LITERAL
+            .PRIORITY_RECOVERY_DRAIN_STALE_WITHOUT_RETIREMENT_EVIDENCE,
+          {logLevel: FAILURE_LOG_LEVEL.WARN},
+        ),
       );
-      return true;
     }
     if (
       resolvedDrainSnapshot.action !==
@@ -634,8 +643,9 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
       operation,
       resolvedDrainSnapshot,
     );
-    await this.completeOperation(operation);
-    return true;
+    return isTerminalTransitionOutcomeSettled(
+      await this.completeOperation(operation),
+    );
   }
 
   async reconcileRecoveryOperation(op) {

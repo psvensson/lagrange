@@ -42,6 +42,45 @@ const RETIRED_CALLER_LOCAL_NAMES = Object.freeze(new Set([
 const REQUIRED_TERMINAL_CLEAR_FUNCTIONS = Object.freeze(
   new Set(['completeOperation', 'failOperation']),
 );
+// The terminal retention clear may be owned by this shared helper: each
+// required terminal function must call it (or clear directly), and the
+// helper itself must perform the strong delivered-create cleanup. The
+// indirection exists because quest terminal-write-refusal-retry-ownership
+// moved the clear from function entry to the proven-terminal arms —
+// clearing retry ownership is a consequence of a proven terminal, never a
+// precondition of attempting one.
+const TERMINAL_CLEAR_HELPER_FUNCTION = 'clearTerminalOperationRetryState';
+const STRONG_TERMINAL_CLEAR_CALL = 'clearObservedProgressRetry';
+
+/**
+ * Record one terminal-retention cleanup census site.
+ * @param {Object} site - {filePath, callName, enclosingFunction, node}
+ * @param {Object} terminalCleanup - Mutable census accumulator.
+ * @return {void}
+ */
+function recordTerminalRetentionCleanupSite(site, terminalCleanup) {
+  const {filePath, callName, enclosingFunction, node} = site;
+  if (filePath !== TRANSITION_PERSISTENCE_PATH) {
+    return;
+  }
+  if (
+    callName === STRONG_TERMINAL_CLEAR_CALL &&
+    hasStrongDeliveredCreateCleanupOption(node)
+  ) {
+    if (REQUIRED_TERMINAL_CLEAR_FUNCTIONS.has(enclosingFunction)) {
+      terminalCleanup.directClears.add(enclosingFunction);
+    } else if (enclosingFunction === TERMINAL_CLEAR_HELPER_FUNCTION) {
+      terminalCleanup.helperHasStrongCleanup = true;
+    }
+    return;
+  }
+  if (
+    callName === TERMINAL_CLEAR_HELPER_FUNCTION &&
+    REQUIRED_TERMINAL_CLEAR_FUNCTIONS.has(enclosingFunction)
+  ) {
+    terminalCleanup.helperCallers.add(enclosingFunction);
+  }
+}
 
 function normalizePath(filePath) {
   return path.relative(REPO_ROOT, filePath).split(path.sep).join('/');
@@ -133,7 +172,11 @@ function collectSites(sourceByPath) {
   const calls = [];
   const retiredNames = [];
   const responseStatuses = new Set();
-  const terminalClears = new Set();
+  const terminalCleanup = {
+    directClears: new Set(),
+    helperCallers: new Set(),
+    helperHasStrongCleanup: false,
+  };
   let ownerShutdownClearsRegistry = false;
   let ownerShutdownClearsTimer = false;
   let replaceTargetActiveClearsRetention = false;
@@ -167,14 +210,10 @@ function collectSites(sourceByPath) {
       ) {
         responseStatuses.add(getMemberName(node));
       }
-      if (
-        filePath === TRANSITION_PERSISTENCE_PATH &&
-        callName === 'clearObservedProgressRetry' &&
-        REQUIRED_TERMINAL_CLEAR_FUNCTIONS.has(enclosingFunction) &&
-        hasStrongDeliveredCreateCleanupOption(node)
-      ) {
-        terminalClears.add(enclosingFunction);
-      }
+      recordTerminalRetentionCleanupSite(
+        {filePath, callName, enclosingFunction, node},
+        terminalCleanup,
+      );
       if (
         filePath === RECOVERY_STATUS_RECONCILE_PATH &&
         enclosingFunction === 'reconcileActiveReplicaStatus' &&
@@ -218,7 +257,7 @@ function collectSites(sourceByPath) {
     responseStatuses,
     replaceTargetActiveClearsRetention,
     retiredNames,
-    terminalClears,
+    terminalCleanup,
   };
 }
 
@@ -292,7 +331,12 @@ function collectOperationDispatchCompletionViolations(sourceByPath) {
     });
   }
   for (const functionName of REQUIRED_TERMINAL_CLEAR_FUNCTIONS) {
-    if (!sites.terminalClears.has(functionName)) {
+    const clearsDirectly =
+      sites.terminalCleanup.directClears.has(functionName);
+    const clearsViaHelper =
+      sites.terminalCleanup.helperHasStrongCleanup &&
+      sites.terminalCleanup.helperCallers.has(functionName);
+    if (!clearsDirectly && !clearsViaHelper) {
       violations.push({
         kind: 'terminal_retention_cleanup',
         detail: functionName,

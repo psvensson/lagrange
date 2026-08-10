@@ -35,6 +35,10 @@ import {
   armTerminalTransitionRepair,
   runTerminalTransitionRepairAttempt,
 } from '../../src/rebalancer/operation-workflow-terminal-transition-repair.js';
+import {
+  isTerminalTransitionOutcomeSettled,
+  shouldReleaseReservationForTerminalOutcome,
+} from '../../src/rebalancer/operation-workflow-terminal-reservation-release.js';
 import {createTestCoordinator} from './test-helpers.js';
 
 const TEST_NODE_ID = 'node-a';
@@ -616,5 +620,93 @@ test(
     } finally {
       await coordinator.shutdown();
     }
+  },
+);
+
+// Quest terminal-write-refusal-retry-ownership: the residual zero-change
+// arm — a visible-but-unsatisfied NON-terminal authority row — REFUSES the
+// terminal write, and the caller-side gates must treat that refusal as
+// "still live, still owned": no reservation release, no drain progress.
+test(
+  'a refused terminal write (zero changes against a visible non-terminal ' +
+    'authority row) reports the typed REFUSED disposition and the ' +
+    'caller-side gates keep the operation owned',
+  async (t) => {
+    const nonTerminalRow = makeRow({
+      status: ReplicaStatus.SYNCING,
+      workflow_step: WORKFLOW_STEP.SYNCING,
+      completed_at: null,
+      updated_at: TEST_CREATED_AT_MS,
+      steps_history: JSON.stringify([
+        {step: WORKFLOW_STEP.SYNCING, timestamp: TEST_CREATED_AT_MS},
+      ]),
+    });
+    const {repository, mutations} = createTerminalCasHarness({
+      authorityRows: [nonTerminalRow],
+      mutationChanges: 0,
+    });
+    const losingProjection = makeLosingProjection(repository);
+
+    const result = await repository.persistOperationUpdate(
+      losingProjection,
+      {terminalTransition: true, returnDisposition: true},
+    );
+
+    t.same(
+      {persisted: result?.persisted, disposition: result?.disposition},
+      {
+        persisted: false,
+        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+      },
+      'the zero-change terminal write against a live non-terminal row is ' +
+        'the typed REFUSED disposition',
+    );
+    t.equal(mutations.length, 1, 'exactly one guarded mutation was issued');
+
+    // Caller-side consequence: REFUSED is unresolved divergence.
+    const refusedOutcome = {
+      committed: false,
+      disposition: result?.disposition,
+    };
+    t.equal(
+      shouldReleaseReservationForTerminalOutcome(refusedOutcome),
+      false,
+      'REFUSED never releases the storage reservation',
+    );
+    t.equal(
+      isTerminalTransitionOutcomeSettled(refusedOutcome),
+      false,
+      'REFUSED is not drain progress — the terminalization did not settle',
+    );
+
+    // Release-gated floor (fail-closed): the proven-terminal outcomes
+    // keep today's behavior exactly.
+    t.same(
+      [
+        REPLICA_OPERATION_UPDATE_DISPOSITION.TERMINAL_ADOPTED,
+        REPLICA_OPERATION_UPDATE_DISPOSITION.IDEMPOTENT_REPLAY,
+      ].map((disposition) =>
+        isTerminalTransitionOutcomeSettled({committed: false, disposition}),
+      ),
+      [true, true],
+      'TERMINAL_ADOPTED and IDEMPOTENT_REPLAY settle (a durable terminal ' +
+        'is proven)',
+    );
+    t.equal(
+      isTerminalTransitionOutcomeSettled({
+        committed: true,
+        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
+      }),
+      true,
+      'a committed terminal settles',
+    );
+    t.equal(
+      isTerminalTransitionOutcomeSettled({
+        committed: false,
+        disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REINSERTED,
+      }),
+      false,
+      'REINSERTED is unresolved divergence, not settled progress',
+    );
   },
 );

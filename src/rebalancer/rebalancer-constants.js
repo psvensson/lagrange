@@ -307,6 +307,9 @@ const REBALANCE_COORDINATOR_LOG_MSG = Object.freeze({
   TERMINAL_TRANSITION_REPAIR_ARMED:
     'Committed terminal transition not authoritatively visible; ' +
     'repair scheduled',
+  TERMINAL_TRANSITION_PERSIST_NOT_COMMITTED:
+    'Terminal transition persist not committed; retry ownership kept ' +
+    'and repair armed',
   TERMINAL_TRANSITION_REPAIR_SUCCEEDED:
     'Terminal transition repair confirmed authoritative visibility',
   TERMINAL_TRANSITION_REPAIR_UNCONFIRMED:

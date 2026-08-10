@@ -33,8 +33,34 @@ import {
   OperationType,
   ReplicaStatus,
 } from '../../src/rebalancer/replica-status.js';
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
+import {OPERATION_WORKFLOW_OWNER_SHARED} from
+  '../../src/rebalancer/operation-workflow-owner-shared.js';
+import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
+  '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
 import {createMockCache} from './test-helpers.js';
 
+// completeOperation/failOperation report a typed transition outcome
+// ({committed, disposition}); the terminalization stubs return the
+// committed shape so the drain's truthful-progress propagation sees a
+// settled terminal (quest terminal-write-refusal-retry-ownership).
+const TEST_COMMITTED_TRANSITION_OUTCOME = Object.freeze({
+  committed: true,
+  disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
+});
+// The refused shape: the terminal write changed zero rows against a live
+// non-terminal authority row — the terminalization did NOT settle.
+const TEST_REFUSED_TRANSITION_OUTCOME = Object.freeze({
+  committed: false,
+  disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
+});
+const {OPERATION_LIFECYCLE_ACTION: TEST_OPERATION_LIFECYCLE_ACTION} =
+  OPERATION_WORKFLOW_OWNER_SHARED;
+const {
+  PRIORITY_RECOVERY_OPERATION_DRAIN_OWNER_ACTION:
+    TEST_PRIORITY_DRAIN_OWNER_ACTION,
+} = OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED;
 const TEST_PARTITION_ID = 'sql_transactions-p1';
 const TEST_SQL_WRITE_PARTITION_ID = 'sql_write_operations-p1';
 const TEST_CONTROL_PLANE_PUBLICATION_PARTITION_ID =
@@ -918,7 +944,7 @@ test(TEST_PUBLICATION_BACKPRESSURE_REENTRY_TEST_NAME, async (t) => {
     coordinator.initialize();
     coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
-      return true;
+      return TEST_COMMITTED_TRANSITION_OUTCOME;
     };
     coordinator.workflowOwner.repository
       .getOperationsByEntityAuthoritativeObservation = async () => {
@@ -1343,11 +1369,11 @@ test(TEST_SPREAD_SATISFIED_WAIT_PROGRESS_REENTRY_TEST_NAME, async (t) => {
     coordinator.initialize();
     coordinator.workflowOwner.completeOperation = async (completedOperation) => {
       completedOperationIds.push(completedOperation.operationId);
-      return true;
+      return TEST_COMMITTED_TRANSITION_OUTCOME;
     };
     coordinator.workflowOwner.failOperation = async (failedOperation) => {
       failedOperationIds.push(failedOperation.operationId);
-      return true;
+      return TEST_COMMITTED_TRANSITION_OUTCOME;
     };
     coordinator.workflowOwner.isPriorityRecoveryDrainOwnerUnavailable =
       () => true;
@@ -1453,12 +1479,12 @@ test(TEST_SPREAD_SATISFIED_REENTRY_TEST_NAME, async (t) => {
         coordinator.workflowOwner.completeOperation =
           async (completedOperation) => {
             completedOperationIds.push(completedOperation.operationId);
-            return true;
+            return TEST_COMMITTED_TRANSITION_OUTCOME;
           };
         coordinator.workflowOwner.failOperation =
           async (failedOperation) => {
             failedOperationIds.push(failedOperation.operationId);
-            return true;
+            return TEST_COMMITTED_TRANSITION_OUTCOME;
           };
         coordinator.workflowOwner.isPriorityRecoveryDrainOwnerUnavailable =
           () => true;
@@ -1578,12 +1604,12 @@ test(TEST_SPREAD_SATISFIED_ADD_TARGET_DRAIN_TEST_NAME, async (t) => {
     coordinator.workflowOwner.completeOperation =
       async (completedOperation) => {
         completedOperationIds.push(completedOperation.operationId);
-        return true;
+        return TEST_COMMITTED_TRANSITION_OUTCOME;
       };
     coordinator.workflowOwner.failOperation =
       async (failedOperation) => {
         failedOperationIds.push(failedOperation.operationId);
-        return true;
+        return TEST_COMMITTED_TRANSITION_OUTCOME;
       };
     coordinator.workflowOwner.buildPriorityRecoveryCompletionForOperation =
       () => completion;
@@ -2518,3 +2544,78 @@ test('event-driven rebalancer handoff waits resolve retry contract fields', asyn
     await coordinator.shutdown();
   }
 });
+
+test(
+  'priority recovery drain reports truthful progress from the typed ' +
+    'terminalization outcome (quest terminal-write-refusal-retry-ownership)',
+  async (t) => {
+    const deliveries = [];
+    const deferredTimers = [];
+    const operation = buildEventDrivenOperation();
+    const operationRow = buildEventDrivenOperationRow();
+    const coordinator = createEventDrivenCoordinator(
+      deliveries,
+      deferredTimers,
+      operationRow,
+    );
+    try {
+      coordinator.initialize();
+      const owner = coordinator.workflowOwner;
+      let terminalizationOutcome = TEST_REFUSED_TRANSITION_OUTCOME;
+      owner.completeOperation = async () => terminalizationOutcome;
+      owner.failOperation = async () => terminalizationOutcome;
+
+      const settleSnapshots = [
+        {
+          action:
+            TEST_OPERATION_LIFECYCLE_ACTION.COMPLETE_PRIORITY_RECOVERY_DRAIN,
+        },
+        {
+          action: TEST_OPERATION_LIFECYCLE_ACTION
+            .FAIL_PRIORITY_RECOVERY_SUPERSEDED_TARGET,
+          supersededTargetError: 'superseded target probe',
+        },
+        {
+          action: TEST_OPERATION_LIFECYCLE_ACTION
+            .FAIL_PRIORITY_RECOVERY_DRAIN_STALE,
+          ownerAction: TEST_PRIORITY_DRAIN_OWNER_ACTION.ALLOW_RECONCILE,
+        },
+      ];
+
+      const refusedProgress = [];
+      for (const drainSnapshot of settleSnapshots) {
+        refusedProgress.push(
+          await owner.reconcilePriorityRecoveryOperationDrain(
+            operation,
+            drainSnapshot,
+          ),
+        );
+      }
+      t.same(
+        refusedProgress,
+        [false, false, false],
+        'a REFUSED terminalization is NOT drain progress in any settle ' +
+          'arm — level-triggered machinery must not believe a settle ' +
+          'that never landed',
+      );
+
+      terminalizationOutcome = TEST_COMMITTED_TRANSITION_OUTCOME;
+      const committedProgress = [];
+      for (const drainSnapshot of settleSnapshots) {
+        committedProgress.push(
+          await owner.reconcilePriorityRecoveryOperationDrain(
+            operation,
+            drainSnapshot,
+          ),
+        );
+      }
+      t.same(
+        committedProgress,
+        [true, true, true],
+        'a committed terminalization IS drain progress in every settle arm',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);

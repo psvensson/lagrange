@@ -50,4 +50,25 @@ function shouldReleaseReservationForTerminalOutcome(transitionOutcome) {
   return RELEASE_ON_DISPOSITIONS.has(transitionOutcome.disposition);
 }
 
-export {shouldReleaseReservationForTerminalOutcome};
+/**
+ * Whether one terminal persistence attempt left the operation durably
+ * terminal: this writer committed, a different durable terminal won
+ * (TERMINAL_ADOPTED), or the durable row already held the same terminal
+ * (IDEMPOTENT_REPLAY). This is the truthful "progressed" signal for
+ * level-triggered callers (the recovery drain): a refused or diverged
+ * terminal write did NOT settle and must not report progress.
+ * @param {Object|null|boolean} transitionOutcome - Typed outcome returned
+ *   by completeOperation/failOperation ({committed, disposition}).
+ * @return {boolean}
+ */
+function isTerminalTransitionOutcomeSettled(transitionOutcome) {
+  return (
+    transitionOutcome?.committed === true ||
+    shouldReleaseReservationForTerminalOutcome(transitionOutcome)
+  );
+}
+
+export {
+  isTerminalTransitionOutcomeSettled,
+  shouldReleaseReservationForTerminalOutcome,
+};

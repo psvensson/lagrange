@@ -699,6 +699,133 @@ t.test(
 );
 
 t.test(
+  'family T sibling (quest terminal-write-refusal-retry-ownership): a ' +
+    'committed:false/REFUSED terminal persist keeps a retry owner — ' +
+    'failOperation arms the SAME terminal-transition repair, and the ' +
+    'repair lands the held terminal once the write path heals',
+  async (t) => {
+    const now = Date.now();
+    const refusedRow = {
+      operation_id: 'op-terminal-refused-1',
+      type: OperationType.REPLACE,
+      partition_id: 'latency_groups-p1',
+      entity_type: 'partition',
+      entity_id: 'latency_groups-p1',
+      replica_id: 'replica-refused-1',
+      source_replica_id: 'replica-refused-0',
+      source_node_id: 'test-node-1',
+      target_node_id: 'test-node-1',
+      status: ReplicaStatus.SYNCING,
+      workflow_step: 'SYNCING',
+      created_at: now,
+      updated_at: now,
+      completed_at: null,
+      error_message: null,
+      steps_history: JSON.stringify([{step: 'SYNCING', timestamp: now}]),
+    };
+    const {coordinator, getOp} = buildSweepCoordinator({
+      operationRows: [refusedRow],
+      serviceRows: [],
+    });
+    coordinator.initialize();
+    const owner = coordinator.workflowOwner;
+    const scheduledRepairs = [];
+    owner.setTimeoutFn = (callback) => {
+      scheduledRepairs.push(callback);
+      return {captured: true};
+    };
+    owner.repository.replicaOperationAuthoritativeVisibilityTimeoutMs = 5;
+    // Refuse the guarded terminal UPDATE (zero rows changed, row left
+    // untouched) while reads keep serving the live SYNCING row — the
+    // resolveZeroChangeOperationUpdate REFUSED shape from the live runs.
+    const gateway = owner.repository.controlPlaneSystemTableGateway;
+    const originalExecuteQuery = gateway.executeQuery.bind(gateway);
+    let refuseTerminalWrites = true;
+    gateway.executeQuery = async (sql, params, queryOptions) => {
+      if (
+        refuseTerminalWrites &&
+        typeof sql === 'string' &&
+        sql.includes('UPDATE replica_operations') &&
+        sql.includes('completed_at IS NULL')
+      ) {
+        return {success: true, changes: 0};
+      }
+      return originalExecuteQuery(sql, params, queryOptions);
+    };
+    try {
+      const durable = await coordinator.queryOperationById(
+        'op-terminal-refused-1',
+      );
+
+      const transitionOutcome = await owner.failOperation(
+        durable,
+        'refused-write arm probe',
+      );
+
+      t.same(
+        {
+          committed: transitionOutcome?.committed,
+          disposition: transitionOutcome?.disposition,
+        },
+        {committed: false, disposition: 'refused'},
+        'the refused terminal persist reports its typed outcome',
+      );
+      t.equal(
+        owner.terminalTransitionRepairStateByOperationId.has(
+          'op-terminal-refused-1',
+        ),
+        true,
+        'the REFUSED arm arms the SAME terminal-transition repair the ' +
+          'committed-but-invisible arm uses',
+      );
+      t.equal(
+        scheduledRepairs.length,
+        1,
+        'exactly one repair attempt is scheduled for the refusal',
+      );
+      t.equal(
+        getOp('op-terminal-refused-1').status,
+        ReplicaStatus.SYNCING,
+        'the durable row is untouched — the refusal was a real zero-change',
+      );
+      t.equal(
+        inFlightWith(getOp('op-terminal-refused-1'), []),
+        true,
+        'the ledger row stays in-flight while the terminal is unresolved',
+      );
+
+      // The write path heals; the held repair re-asserts the retained
+      // FAILED projection and confirms it.
+      refuseTerminalWrites = false;
+      owner.terminalTransitionRepairTimerByOperationId.delete(
+        'op-terminal-refused-1',
+      );
+      await scheduledRepairs[0]();
+
+      t.equal(
+        getOp('op-terminal-refused-1').status,
+        ReplicaStatus.FAILED,
+        'the repair landed the exact refused terminal projection',
+      );
+      t.equal(
+        owner.terminalTransitionRepairStateByOperationId.has(
+          'op-terminal-refused-1',
+        ),
+        false,
+        'the confirmed repair stands down',
+      );
+      t.equal(
+        inFlightWith(getOp('op-terminal-refused-1'), []),
+        false,
+        'the durably failed row releases in-flight',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);
+
+t.test(
   'negative matrix: failed authoritative terminal persistence cannot ' +
     'release the serialized ledger hold',
   async (t) => {

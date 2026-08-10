@@ -265,3 +265,132 @@ t.test(
     }
   },
 );
+
+t.test(
+  'refused-write arm (quest terminal-write-refusal-retry-ownership): the ' +
+    'reaper decides terminal, the persist is REFUSED, the repair is armed ' +
+    'and keeps ownership, and the hold releases only when the repair lands',
+  async (t) => {
+    const timeSource = new VirtualTimeSource({startMs: START_MS});
+    const fixture = createTimeoutTestCoordinator({
+      timeSource,
+      nodeId: SOURCE_NODE_ID,
+      pendingTimeoutMs: STEP_TIMEOUT_MS,
+    });
+    const {coordinator, trackedOperations, setOperationUpdatedAt} = fixture;
+    const owner = coordinator.workflowOwner;
+    // Deterministic scheduler seam (documented in
+    // operation-workflow-terminal-transition-repair.js): capture timer
+    // callbacks so the repair attempt runs when the test says so.
+    owner.setTimeoutFn = (callback, delayMs) => ({callback, delayMs});
+    owner.clearTimeoutFn = () => {};
+    // Bound the visibility-confirmation poll for the healed repair attempt.
+    owner.repository.replicaOperationAuthoritativeVisibilityTimeoutMs = 5;
+    try {
+      const selfMove = await coordinator.createOperation(
+        buildReplace(LEDGER_PARTITION_ID),
+      );
+      setOperationUpdatedAt(selfMove.operationId, START_MS);
+
+      // Refuse the guarded terminal UPDATE (zero rows changed, row left
+      // untouched) while every read keeps serving the live non-terminal
+      // row — the resolveZeroChangeOperationUpdate REFUSED shape.
+      const gateway = coordinator.repository.controlPlaneSystemTableGateway;
+      const originalExecuteQuery = gateway.executeQuery.bind(gateway);
+      let refuseTerminalWrites = true;
+      gateway.executeQuery = async (sql, params, queryOptions) => {
+        if (
+          refuseTerminalWrites &&
+          typeof sql === 'string' &&
+          sql.includes('UPDATE replica_operations') &&
+          sql.includes('completed_at IS NULL')
+        ) {
+          return {success: true, changes: 0};
+        }
+        return originalExecuteQuery(sql, params, queryOptions);
+      };
+
+      // The reaper decides to terminalize past the step timeout — and the
+      // terminal write is refused. reconcileTimeoutOperation is the
+      // checkTimeouts per-operation body (the real timeout-reaper
+      // decision); driving it directly keeps the priority-ledger
+      // visibility sweep out of the arrangement.
+      timeSource.advance(STEP_TIMEOUT_MS * 10);
+      const staleOperation = await coordinator.queryOperationById(
+        selfMove.operationId,
+      );
+      await owner.reconcileTimeoutOperation(staleOperation, timeSource.now());
+
+      const rowAfterRefusal = trackedOperations.get(selfMove.operationId);
+      t.not(
+        rowAfterRefusal.workflow_step,
+        WORKFLOW_STEP.FAILED,
+        'the durable row is still non-terminal — the refusal was real',
+      );
+      t.equal(
+        owner.terminalTransitionRepairStateByOperationId.has(
+          selfMove.operationId,
+        ),
+        true,
+        'the refused terminal persist armed the terminal-transition repair',
+      );
+      const repairTimerHandle =
+        owner.terminalTransitionRepairTimerByOperationId.get(
+          selfMove.operationId,
+        );
+      t.ok(
+        repairTimerHandle?.callback,
+        'the repair retry timer is scheduled (the refusal keeps an owner)',
+      );
+
+      const whileRefused = await attemptCreate(
+        coordinator,
+        buildReplace(DEPENDENT_PARTITION_ID),
+      );
+      t.equal(
+        whileRefused.admitted,
+        false,
+        'the ledger hold is NOT released by a refused (unproven) terminal',
+      );
+      t.equal(
+        whileRefused.reason,
+        HOLD_REASON,
+        'the dependent stays deferred on the live self-move',
+      );
+
+      // The write path heals; the armed repair re-asserts the retained
+      // terminal projection and confirms it.
+      refuseTerminalWrites = false;
+      owner.terminalTransitionRepairTimerByOperationId.delete(
+        selfMove.operationId,
+      );
+      await repairTimerHandle.callback();
+
+      const rowAfterRepair = trackedOperations.get(selfMove.operationId);
+      t.equal(
+        rowAfterRepair.workflow_step,
+        WORKFLOW_STEP.FAILED,
+        'the repair landed the exact refused terminal projection',
+      );
+      t.equal(
+        owner.terminalTransitionRepairStateByOperationId.has(
+          selfMove.operationId,
+        ),
+        false,
+        'the confirmed repair stands down',
+      );
+
+      const afterRepair = await attemptCreate(
+        coordinator,
+        buildReplace(DEPENDENT_PARTITION_ID),
+      );
+      t.ok(
+        afterRepair.admitted,
+        'authoritative terminal evidence (landed by the repair) releases ' +
+          'the hold',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  },
+);

@@ -1,3 +1,15 @@
+import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
+  '../../src/rebalancer/replica-operation-update-disposition.js';
+
+// completeOperation/failOperation report a typed transition outcome
+// ({committed, disposition}); terminalization stubs return the committed
+// shape so the drain's truthful-progress propagation sees a settled
+// terminal (quest terminal-write-refusal-retry-ownership).
+const TEST_COMMITTED_TRANSITION_OUTCOME = Object.freeze({
+  committed: true,
+  disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
+});
+
 export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests({
   test,
   CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
@@ -1277,11 +1289,11 @@ export function registerRebalanceCoordinatorTimeoutCacheVisibilityTailFinalTests
           };
         workflowOwner.completeOperation = async (operation) => {
           completedOperationIds.push(operation.operationId);
-          return true;
+          return TEST_COMMITTED_TRANSITION_OUTCOME;
         };
         workflowOwner.failOperation = async (operation) => {
           failedOperationIds.push(operation.operationId);
-          return true;
+          return TEST_COMMITTED_TRANSITION_OUTCOME;
         };
         workflowOwner.isPriorityRecoveryDrainOwnerUnavailable = () => true;
 
