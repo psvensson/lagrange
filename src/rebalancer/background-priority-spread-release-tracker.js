@@ -2,6 +2,8 @@ const BACKGROUND_PRIORITY_SPREAD_RELEASE_STATE = Object.freeze({
   STABILIZING: 'stabilizing',
 });
 
+const EMPTY_WAKE_KEY_LENGTH = 0;
+
 const releaseScopeByReadinessOwner = new WeakMap();
 
 function isBackgroundPrioritySpreadReleaseOwner(value) {
@@ -37,9 +39,50 @@ function getReleaseScope(readinessOwner, options = {}) {
   if (existingScope || options.create !== true) {
     return resolveCanonicalReleaseScope(existingScope);
   }
-  const scope = {parent: null, tracker: null};
+  const scope = {parent: null, tracker: null, wakeCallbacksByKey: new Map()};
   releaseScopeByReadinessOwner.set(readinessOwner, scope);
   return scope;
+}
+
+function getReleaseScopeWakeRegistry(scope) {
+  if (!scope.wakeCallbacksByKey) {
+    scope.wakeCallbacksByKey = new Map();
+  }
+  return scope.wakeCallbacksByKey;
+}
+
+function mergeReleaseScopeWakeRegistries(survivingScope, absorbedScope) {
+  const absorbedRegistry = absorbedScope.wakeCallbacksByKey;
+  if (!absorbedRegistry || absorbedRegistry.size === 0) {
+    return;
+  }
+  const survivingRegistry = getReleaseScopeWakeRegistry(survivingScope);
+  for (const [wakeKey, onStableRelease] of absorbedRegistry) {
+    survivingRegistry.set(wakeKey, onStableRelease);
+  }
+  absorbedRegistry.clear();
+}
+
+function notifyBackgroundPrioritySpreadStableRelease(scope) {
+  const registry = scope.wakeCallbacksByKey;
+  if (!registry || registry.size === 0) {
+    return;
+  }
+  const wakeCallbacks = [...registry.values()];
+  registry.clear();
+  for (const onStableRelease of wakeCallbacks) {
+    try {
+      onStableRelease();
+    } catch (wakeListenerError) {
+      // One failing wake listener must not strand the remaining parked
+      // entities; every registrant keeps its scheduled fallback timer, so
+      // a failed wake degrades to the pre-wake timer cadence. The failure
+      // is recorded on the scope for diagnostics (same idiom as the raft
+      // committed-prefix divergence listener capture) — never swallowed
+      // invisibly.
+      scope.lastWakeListenerError = wakeListenerError;
+    }
+  }
 }
 
 function mergeReleaseTrackers(left, right) {
@@ -86,7 +129,37 @@ function transferBackgroundPrioritySpreadReleaseOwnership(
   );
   previousScope.tracker = sharedTracker;
   nextScope.tracker = null;
+  mergeReleaseScopeWakeRegistries(previousScope, nextScope);
   nextScope.parent = previousScope;
+}
+
+/**
+ * Register one parked entity's event-driven wake with the shared release
+ * tracker. The callback fires exactly once, when the tracker declares the
+ * stable release (active -> false); registration never replaces the
+ * registrant's scheduled fallback timer. Re-registration under the same
+ * wakeKey replaces the previous callback, so an entity that re-parks keeps
+ * one pending wake.
+ * @param {Object} options
+ * @param {Object} options.readinessOwner shared readiness-owner scope key
+ * @param {string} options.wakeKey stable per-entity key (the entityId)
+ * @param {Function} options.onStableRelease wake callback
+ * @return {boolean} whether the wake was registered on an active tracker
+ */
+function registerBackgroundPrioritySpreadReleaseWake(options = {}) {
+  const scope = getReleaseScope(options.readinessOwner);
+  const wakeKey =
+    typeof options.wakeKey === 'string' ? options.wakeKey.trim() : '';
+  if (
+    !scope ||
+    scope.tracker?.active !== true ||
+    wakeKey.length === EMPTY_WAKE_KEY_LENGTH ||
+    typeof options.onStableRelease !== 'function'
+  ) {
+    return false;
+  }
+  getReleaseScopeWakeRegistry(scope).set(wakeKey, options.onStableRelease);
+  return true;
 }
 
 function observeBackgroundPrioritySpreadBlocked(options = {}) {
@@ -167,6 +240,7 @@ function resolveBackgroundPrioritySpreadStableRelease(options = {}) {
   );
   if (stableElapsedMs >= requiredStableMs) {
     tracker.active = false;
+    notifyBackgroundPrioritySpreadStableRelease(scope);
     return null;
   }
   return Object.freeze({
@@ -186,6 +260,7 @@ export {
   observeActiveBackgroundPrioritySpreadReleaseBlocked,
   observeActiveBackgroundPrioritySpreadOperationDrain,
   observeBackgroundPrioritySpreadBlocked,
+  registerBackgroundPrioritySpreadReleaseWake,
   resolveBackgroundPrioritySpreadStableRelease,
   transferBackgroundPrioritySpreadReleaseOwnership,
 };

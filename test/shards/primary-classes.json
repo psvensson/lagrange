@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1756,
+    "unit": 1757,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2007,
-  "digest": "fnv1a32-4d38ed5c",
+  "censusSize": 2008,
+  "digest": "fnv1a32-bc189c12",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -1343,6 +1343,7 @@
     "test/rebalancer/assignment-epoch-manager.test.js": "unit",
     "test/rebalancer/assignment-epoch.test.js": "unit",
     "test/rebalancer/batching-concurrency.property.test.js": "unit",
+    "test/rebalancer/blocked-spread-release-event-wake.test.js": "unit",
     "test/rebalancer/call-activation-pin-planning.test.js": "unit",
     "test/rebalancer/canonical-replica-inventory-cutover-guard.test.js": "unit",
     "test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js": "unit",
