@@ -1,0 +1,176 @@
+diff --git a/scripts/quest-evidence-cdc-null-sentinel-where-rendering.js b/scripts/quest-evidence-cdc-null-sentinel-where-rendering.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..05bff46ce6fff17ab5c6e3283d65f126a1113261
+--- /dev/null
++++ b/scripts/quest-evidence-cdc-null-sentinel-where-rendering.js
+@@ -0,0 +1,51 @@
++// Deterministic evidence harness for the cdc-null-sentinel-where-rendering
++// quest: receipt declarations only. The shared runtime
++// (scripts/quest-evidence-harness-runtime.js) re-runs each recorded proof
++// command and writes the probe artifact.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'null-sentinel-renders-is-null-in-live-ingress',
++    testFile:
++      'test/cdc/cdc-integration-service-mutations-and-epoch.test.js',
++    detail: 'a null whereClause value passed to the live CDC mutation ' +
++      'ingress (updateSystemTableRow) renders as an IS NULL predicate ' +
++      'with no bound parameter, while non-null where-values keep the ' +
++      'bound equality exactly as before — a bound "= NULL" equality is ' +
++      'never true in SQL, so the pre-fix rendering silently matched ' +
++      'zero rows and every replica-operation terminal CAS ' +
++      '(completed_at: null) refused forever (974-992 typed refusals ' +
++      'per formation run; red-on-revert: with the HEAD helper the new ' +
++      'assertions fail on "= ?" rendering with a bound null)',
++  }),
++  Object.freeze({
++    id: 'builders-agree-on-one-convention',
++    testFile:
++      'test/cdc/cdc-integration-service-mutations-and-epoch.test.js',
++    detail: 'buildSystemTableMutationSqlParts (the ingress builder that ' +
++      'production takes) renders the null sentinel byte-identically to ' +
++      'the documented buildSqlMutationPlan convention in ' +
++      'control-plane-system-table-gateway-query-execution.js — ' +
++      '"operation_id = ? AND completed_at IS NULL" binding only the ' +
++      'non-null values — so the two SQL builders share one convention ' +
++      'and the delete lane is repaired together with the update lane',
++  }),
++]);
++
++const QUEST_ID = 'cdc-null-sentinel-where-rendering';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'cdc-null-sentinel-where-rendering.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/src/cdc/cdc-constants.js b/src/cdc/cdc-constants.js
+index e23ef667d6fdf6587db2a2c7ca5384a6b80f0857..c7ddbb0931e24d2dc44a4d41190e9591d8228a1e 100644
+--- a/src/cdc/cdc-constants.js
++++ b/src/cdc/cdc-constants.js
+@@ -56,6 +56,7 @@ const CDC_SQL = Object.freeze({
+   COMMA_SPACE: ', ',
+   WHERE_AND: ' AND ',
+   ASSIGNMENT_PLACEHOLDER: ' = ?',
++  IS_NULL_PREDICATE: ' IS NULL',
+ });
+ 
+ const CDC_SESSION = Object.freeze({
+diff --git a/src/cdc/cdc-system-table-mutation-sql-helpers.js b/src/cdc/cdc-system-table-mutation-sql-helpers.js
+index 55b900beb1afdfc6828e2af344453e358ae5ab4d..0fea06f4599380dac4e93693fd03bbbc7dbd7002 100644
+--- a/src/cdc/cdc-system-table-mutation-sql-helpers.js
++++ b/src/cdc/cdc-system-table-mutation-sql-helpers.js
+@@ -38,23 +38,27 @@ export function buildSystemTableMutationSqlParts(mode, values) {
+     };
+   }
+ 
+-  if (mode === CDC_OPERATION.DELETE) {
+-    const conditions = Object.keys(map);
+-    const whereStr = conditions
+-      .map((columnName) => `${columnName}${CDC_SQL.ASSIGNMENT_PLACEHOLDER}`)
+-      .join(CDC_SQL.WHERE_AND);
+-    return {
+-      whereStr,
+-      values: conditions.map((columnName) => map[columnName]),
+-    };
+-  }
++  return buildWhereParts(map);
++}
+ 
++// The null-sentinel where-value convention: a null whereClause value is an
++// IS NULL predicate with NO bound parameter — `column = ?` binding null is
++// never true in SQL, so rendering it as an equality silently matches zero
++// rows (the replica-operation terminal CAS guards on `completed_at: null`
++// and refused forever). Mirrors buildSqlMutationPlan in
++// control-plane-system-table-gateway-query-execution.js verbatim so the two
++// builders share one convention.
++function buildWhereParts(map) {
+   const conditions = Object.keys(map);
+   const whereStr = conditions
+-    .map((columnName) => `${columnName}${CDC_SQL.ASSIGNMENT_PLACEHOLDER}`)
++    .map((columnName) => (map[columnName] === null ?
++      `${columnName}${CDC_SQL.IS_NULL_PREDICATE}` :
++      `${columnName}${CDC_SQL.ASSIGNMENT_PLACEHOLDER}`))
+     .join(CDC_SQL.WHERE_AND);
+   return {
+     whereStr,
+-    values: conditions.map((columnName) => map[columnName]),
++    values: conditions
++      .filter((columnName) => map[columnName] !== null)
++      .map((columnName) => map[columnName]),
+   };
+ }
+diff --git a/test/cdc/cdc-integration-service-mutations-and-epoch.test.js b/test/cdc/cdc-integration-service-mutations-and-epoch.test.js
+index b3bc4f7d96da3e105eb2cd5bc9d377ab59fe8158..cd0dd2289629886a54d32e0719f8f39be744c219 100644
+--- a/test/cdc/cdc-integration-service-mutations-and-epoch.test.js
++++ b/test/cdc/cdc-integration-service-mutations-and-epoch.test.js
+@@ -1422,3 +1422,58 @@ test('CDCIntegrationService - handleEpochChangeCDC with invalid epoch data', asy
+   t.ok(result.error.includes('Failed to create epoch'), 'should have create error');
+   t.end();
+ });
++
++test('CDCIntegrationService - null where-values render as IS NULL in the live ingress',
++  async (t) => {
++    const mockSqlEngine = createMockSqlQueryEngine();
++    const service = new CDCIntegrationService({
++      nodeId: 'test-node',
++      sqlQueryEngine: mockSqlEngine,
++    });
++    service.initialize();
++
++    await service.updateSystemTableRow(
++      SYSTEM_TABLE_NAME.NODES,
++      {node_id: 'node-1', last_heartbeat: null},
++      {status: 'active'},
++      {skipCacheWait: true},
++    );
++
++    t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
++    const {sql, params} = mockSqlEngine.executedQueries[0];
++    t.ok(
++      sql.includes('last_heartbeat IS NULL'),
++      'null where-value renders as an IS NULL predicate ' +
++        '(a bound "= NULL" equality is never true in SQL and silently ' +
++        'matches zero rows — the replica-operation terminal CAS class)',
++    );
++    t.notOk(
++      params.includes(null),
++      'no null parameter is bound for the IS NULL predicate',
++    );
++    t.ok(
++      sql.includes('node_id = ?') && params.includes('node-1'),
++      'non-null where-values keep the bound equality exactly as before',
++    );
++  },
++);
++
++test('CDCIntegrationService - both mutation builders share the null-sentinel convention',
++  async (t) => {
++    const {buildSystemTableMutationSqlParts} =
++      await import('../../src/cdc/cdc-system-table-mutation-sql-helpers.js');
++    const where = {operation_id: 'op-1', completed_at: null};
++    const ingress = buildSystemTableMutationSqlParts('delete', where);
++    t.equal(
++      ingress.whereStr,
++      'operation_id = ? AND completed_at IS NULL',
++      'ingress builder renders the null sentinel exactly as ' +
++        'buildSqlMutationPlan (control-plane gateway fallback) does',
++    );
++    t.same(
++      ingress.values,
++      ['op-1'],
++      'the null sentinel binds no parameter',
++    );
++  },
++);

@@ -56,6 +56,7 @@ const CDC_SQL = Object.freeze({
   COMMA_SPACE: ', ',
   WHERE_AND: ' AND ',
   ASSIGNMENT_PLACEHOLDER: ' = ?',
+  IS_NULL_PREDICATE: ' IS NULL',
 });
 
 const CDC_SESSION = Object.freeze({

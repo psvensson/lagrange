@@ -38,23 +38,27 @@ export function buildSystemTableMutationSqlParts(mode, values) {
     };
   }
 
-  if (mode === CDC_OPERATION.DELETE) {
-    const conditions = Object.keys(map);
-    const whereStr = conditions
-      .map((columnName) => `${columnName}${CDC_SQL.ASSIGNMENT_PLACEHOLDER}`)
-      .join(CDC_SQL.WHERE_AND);
-    return {
-      whereStr,
-      values: conditions.map((columnName) => map[columnName]),
-    };
-  }
+  return buildWhereParts(map);
+}
 
+// The null-sentinel where-value convention: a null whereClause value is an
+// IS NULL predicate with NO bound parameter — `column = ?` binding null is
+// never true in SQL, so rendering it as an equality silently matches zero
+// rows (the replica-operation terminal CAS guards on `completed_at: null`
+// and refused forever). Mirrors buildSqlMutationPlan in
+// control-plane-system-table-gateway-query-execution.js verbatim so the two
+// builders share one convention.
+function buildWhereParts(map) {
   const conditions = Object.keys(map);
   const whereStr = conditions
-    .map((columnName) => `${columnName}${CDC_SQL.ASSIGNMENT_PLACEHOLDER}`)
+    .map((columnName) => (map[columnName] === null ?
+      `${columnName}${CDC_SQL.IS_NULL_PREDICATE}` :
+      `${columnName}${CDC_SQL.ASSIGNMENT_PLACEHOLDER}`))
     .join(CDC_SQL.WHERE_AND);
   return {
     whereStr,
-    values: conditions.map((columnName) => map[columnName]),
+    values: conditions
+      .filter((columnName) => map[columnName] !== null)
+      .map((columnName) => map[columnName]),
   };
 }

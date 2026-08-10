@@ -1422,3 +1422,58 @@ test('CDCIntegrationService - handleEpochChangeCDC with invalid epoch data', asy
   t.ok(result.error.includes('Failed to create epoch'), 'should have create error');
   t.end();
 });
+
+test('CDCIntegrationService - null where-values render as IS NULL in the live ingress',
+  async (t) => {
+    const mockSqlEngine = createMockSqlQueryEngine();
+    const service = new CDCIntegrationService({
+      nodeId: 'test-node',
+      sqlQueryEngine: mockSqlEngine,
+    });
+    service.initialize();
+
+    await service.updateSystemTableRow(
+      SYSTEM_TABLE_NAME.NODES,
+      {node_id: 'node-1', last_heartbeat: null},
+      {status: 'active'},
+      {skipCacheWait: true},
+    );
+
+    t.equal(mockSqlEngine.executedQueries.length, 1, 'should execute one query');
+    const {sql, params} = mockSqlEngine.executedQueries[0];
+    t.ok(
+      sql.includes('last_heartbeat IS NULL'),
+      'null where-value renders as an IS NULL predicate ' +
+        '(a bound "= NULL" equality is never true in SQL and silently ' +
+        'matches zero rows — the replica-operation terminal CAS class)',
+    );
+    t.notOk(
+      params.includes(null),
+      'no null parameter is bound for the IS NULL predicate',
+    );
+    t.ok(
+      sql.includes('node_id = ?') && params.includes('node-1'),
+      'non-null where-values keep the bound equality exactly as before',
+    );
+  },
+);
+
+test('CDCIntegrationService - both mutation builders share the null-sentinel convention',
+  async (t) => {
+    const {buildSystemTableMutationSqlParts} =
+      await import('../../src/cdc/cdc-system-table-mutation-sql-helpers.js');
+    const where = {operation_id: 'op-1', completed_at: null};
+    const ingress = buildSystemTableMutationSqlParts('delete', where);
+    t.equal(
+      ingress.whereStr,
+      'operation_id = ? AND completed_at IS NULL',
+      'ingress builder renders the null sentinel exactly as ' +
+        'buildSqlMutationPlan (control-plane gateway fallback) does',
+    );
+    t.same(
+      ingress.values,
+      ['op-1'],
+      'the null sentinel binds no parameter',
+    );
+  },
+);
