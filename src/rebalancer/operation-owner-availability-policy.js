@@ -43,17 +43,20 @@ const OPERATION_DRAIN_OWNER_AVAILABILITY = Object.freeze({
  * @param {number} [options.nowMs]
  * @return {Object} Frozen typed verdict — never a raw null/empty outcome.
  */
-function resolveOperationDrainOwnerAvailability(options = {}) {
-  const ownerNodeId =
-    typeof options.ownerNodeId === 'string' && options.ownerNodeId.length > 0 ?
-      options.ownerNodeId :
-      null;
-  if (ownerNodeId === null || ownerNodeId === options.nodeId) {
-    return Object.freeze({
-      state: OPERATION_DRAIN_OWNER_AVAILABILITY.LOCAL_OR_UNKNOWN_OWNER,
-      unavailable: false,
-    });
-  }
+function normalizeOwnerNodeId(options) {
+  return typeof options.ownerNodeId === 'string' &&
+    options.ownerNodeId.length > 0 ?
+    options.ownerNodeId :
+    null;
+}
+
+function resolveNowMs(options) {
+  return Number.isFinite(Number(options.nowMs)) ?
+    Math.floor(Number(options.nowMs)) :
+    Date.now();
+}
+
+function readLiveLeaseExpiryMs(options, nowMs) {
   // The replica_operations row has no owner column: the lease expiry is the
   // durable heartbeat and the RECORDED owner (source/target resolution
   // upstream) is its attribution. A live lease expiry on a remotely-owned
@@ -63,33 +66,57 @@ function resolveOperationDrainOwnerAvailability(options = {}) {
     options.operation?.ownerLeaseExpiresAt ??
       options.operation?.lease_expires_at,
   );
-  const nowMs = Number.isFinite(Number(options.nowMs)) ?
-    Math.floor(Number(options.nowMs)) :
-    Date.now();
-  if (Number.isFinite(leaseExpiresAtMs) && leaseExpiresAtMs > nowMs) {
-    return Object.freeze({
-      state: OPERATION_DRAIN_OWNER_AVAILABILITY.FENCED_BY_LIVE_LEASE,
-      unavailable: true,
-      lease: Object.freeze({
-        state: REPLICA_OPERATION_OWNER_LEASE_STATE.ACTIVE,
-        ownerNodeId,
-        leaseExpiresAtMs: Math.floor(leaseExpiresAtMs),
-      }),
-    });
+  return Number.isFinite(leaseExpiresAtMs) && leaseExpiresAtMs > nowMs ?
+    Math.floor(leaseExpiresAtMs) :
+    null;
+}
+
+function resolveHeuristicReady(isOwnerRoutingReady) {
+  try {
+    return typeof isOwnerRoutingReady === 'function' ?
+      isOwnerRoutingReady() === true :
+      true;
+  } catch {
+    return true;
+  }
+}
+
+function buildLocalOrUnknownVerdict() {
+  return Object.freeze({
+    state: OPERATION_DRAIN_OWNER_AVAILABILITY.LOCAL_OR_UNKNOWN_OWNER,
+    unavailable: false,
+  });
+}
+
+function buildLiveLeaseVerdict(ownerNodeId, leaseExpiresAtMs) {
+  return Object.freeze({
+    state: OPERATION_DRAIN_OWNER_AVAILABILITY.FENCED_BY_LIVE_LEASE,
+    unavailable: true,
+    lease: Object.freeze({
+      state: REPLICA_OPERATION_OWNER_LEASE_STATE.ACTIVE,
+      ownerNodeId,
+      leaseExpiresAtMs,
+    }),
+  });
+}
+
+function resolveOperationDrainOwnerAvailability(options = {}) {
+  const ownerNodeId = normalizeOwnerNodeId(options);
+  if (ownerNodeId === null || ownerNodeId === options.nodeId) {
+    return buildLocalOrUnknownVerdict();
+  }
+  const liveLeaseExpiryMs = readLiveLeaseExpiryMs(
+    options,
+    resolveNowMs(options),
+  );
+  if (liveLeaseExpiryMs !== null) {
+    return buildLiveLeaseVerdict(ownerNodeId, liveLeaseExpiryMs);
   }
   const lease = resolveOperationOwnerLeaseState(
     options.operation,
     options.nowMs,
   );
-  let heuristicReady = true;
-  try {
-    heuristicReady =
-      typeof options.isOwnerRoutingReady === 'function' ?
-        options.isOwnerRoutingReady() === true :
-        true;
-  } catch {
-    heuristicReady = true;
-  }
+  const heuristicReady = resolveHeuristicReady(options.isOwnerRoutingReady);
   return Object.freeze({
     state: heuristicReady ?
       OPERATION_DRAIN_OWNER_AVAILABILITY.HEURISTIC_AVAILABLE :

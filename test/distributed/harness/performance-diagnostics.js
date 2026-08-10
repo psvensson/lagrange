@@ -354,4 +354,4 @@ function buildPerformanceDiagnostics(logEntries) {
   };
 }
 
-export {buildPerformanceDiagnostics};
+export {buildPerformanceDiagnostics, computePercentile};

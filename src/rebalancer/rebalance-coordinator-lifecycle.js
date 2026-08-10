@@ -23,6 +23,26 @@ const LOCAL_STR_BOOTSTRAPREADINESSSTATE = 'bootstrapReadinessState';
 const LOCAL_STR_STARTUPRECOVERYCOORDINATOR = 'startupRecoveryCoordinator';
 const LOCAL_STR_CONTROLPLANEREADINESSSERVICE = 'controlPlaneReadinessService';
 
+// Option keys whose sync is a plain same-named property assignment, split
+// around the bootstrapReadinessState branch to preserve assignment order:
+// a call updating both bootstrapReadinessState and startupRecoveryCoordinator
+// must sync the readiness state into the PREVIOUS coordinator, exactly as the
+// original explicit branches did.
+const SYNCABLE_OWNER_DEPENDENCY_KEYS_BEFORE_READINESS = Object.freeze([
+  LOCAL_STR_SYSTEMTABLECACHE,
+  LOCAL_STR_CDCINTEGRATIONSERVICE,
+  LOCAL_STR_MESSAGEROUTER,
+  LOCAL_STR_TABLEPOLICYSERVICE,
+  LOCAL_STR_SQLQUERYENGINE,
+  LOCAL_STR_STORAGEACCOUNTINGSERVICE,
+  LOCAL_STR_STORAGEADMISSIONSERVICE,
+  LOCAL_STR_CDCGROUPPROPAGATIONSERVICE,
+]);
+const SYNCABLE_OWNER_DEPENDENCY_KEYS_AFTER_READINESS = Object.freeze([
+  LOCAL_STR_STARTUPRECOVERYCOORDINATOR,
+  LOCAL_STR_CONTROLPLANEREADINESSSERVICE,
+]);
+
 const {
   ConfigurationManager,
   ControlPlaneReadinessService,
@@ -387,30 +407,10 @@ class RebalanceCoordinatorLifecycle {
   syncOwnerDependencies(options = {}) {
     const previousSystemTableCache = this.systemTableCache;
 
-    if (Object.hasOwn(options, LOCAL_STR_SYSTEMTABLECACHE)) {
-      this.systemTableCache = options.systemTableCache || null;
-    }
-    if (Object.hasOwn(options, LOCAL_STR_CDCINTEGRATIONSERVICE)) {
-      this.cdcIntegrationService = options.cdcIntegrationService || null;
-    }
-    if (Object.hasOwn(options, LOCAL_STR_MESSAGEROUTER)) {
-      this.messageRouter = options.messageRouter || null;
-    }
-    if (Object.hasOwn(options, LOCAL_STR_TABLEPOLICYSERVICE)) {
-      this.tablePolicyService = options.tablePolicyService || null;
-    }
-    if (Object.hasOwn(options, LOCAL_STR_SQLQUERYENGINE)) {
-      this.sqlQueryEngine = options.sqlQueryEngine || null;
-    }
-    if (Object.hasOwn(options, LOCAL_STR_STORAGEACCOUNTINGSERVICE)) {
-      this.storageAccountingService = options.storageAccountingService || null;
-    }
-    if (Object.hasOwn(options, LOCAL_STR_STORAGEADMISSIONSERVICE)) {
-      this.storageAdmissionService = options.storageAdmissionService || null;
-    }
-    if (Object.hasOwn(options, LOCAL_STR_CDCGROUPPROPAGATIONSERVICE)) {
-      this.cdcGroupPropagationService =
-        options.cdcGroupPropagationService || null;
+    for (const optionKey of SYNCABLE_OWNER_DEPENDENCY_KEYS_BEFORE_READINESS) {
+      if (Object.hasOwn(options, optionKey)) {
+        this[optionKey] = options[optionKey] || null;
+      }
     }
     if (Object.hasOwn(options, LOCAL_STR_BOOTSTRAPREADINESSSTATE)) {
       this.bootstrapReadinessState = options.bootstrapReadinessState || null;
@@ -424,13 +424,10 @@ class RebalanceCoordinatorLifecycle {
         });
       }
     }
-    if (Object.hasOwn(options, LOCAL_STR_STARTUPRECOVERYCOORDINATOR)) {
-      this.startupRecoveryCoordinator =
-        options.startupRecoveryCoordinator || null;
-    }
-    if (Object.hasOwn(options, LOCAL_STR_CONTROLPLANEREADINESSSERVICE)) {
-      this.controlPlaneReadinessService =
-        options.controlPlaneReadinessService || null;
+    for (const optionKey of SYNCABLE_OWNER_DEPENDENCY_KEYS_AFTER_READINESS) {
+      if (Object.hasOwn(options, optionKey)) {
+        this[optionKey] = options[optionKey] || null;
+      }
     }
     if (
       this.repository &&

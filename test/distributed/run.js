@@ -58,6 +58,7 @@ import {
   BENCHMARK_GATE_DEFAULTS,
   RAFT_PROVIDER_DEFAULTS,
   DETERMINISTIC_DEBUG_DEFAULTS,
+  SCENARIO_ARTIFACTS,
 } from './harness/constants.js';
 
 const LIVE_LOG_PREFIX = '[live-log] ';
@@ -445,6 +446,35 @@ function buildFastLocalSourceBind(cwd = process.cwd()) {
     FAST_LOCAL_BIND_READ_ONLY_SUFFIX;
 }
 
+// Scenario-artifact exchange: bind a host directory read-write into every
+// node container of a local docker run so scenarios can hand host-built
+// artifacts (e.g. local OCI layouts for INSTALL SERVICE) to in-container
+// resolvers. Same local-only scoping as fast-local source binds — remote
+// daemons cannot see the host path. Inert for scenarios not using it.
+async function applyScenarioArtifactBind(config, cwd = process.cwd()) {
+  const hostArtifactsPath = resolve(
+    cwd, SCENARIO_ARTIFACTS.HOST_RELATIVE_PATH);
+  await mkdir(hostArtifactsPath, {recursive: true});
+  const artifactBind =
+    hostArtifactsPath + ':' + SCENARIO_ARTIFACTS.CONTAINER_PATH;
+  const dockerConfig = (config && typeof config.docker === 'object') ?
+    config.docker :
+    {};
+  const existingBinds = Array.isArray(dockerConfig.binds) ?
+    dockerConfig.binds.filter((entry) => typeof entry === 'string' &&
+      entry.length > 0) :
+    [];
+  return {
+    ...config,
+    docker: {
+      ...dockerConfig,
+      binds: existingBinds.includes(artifactBind) ?
+        existingBinds :
+        [...existingBinds, artifactBind],
+    },
+  };
+}
+
 async function applyFastLocalConfig(config, cwd = process.cwd()) {
   const dockerConfig = (config && typeof config.docker === 'object') ?
     config.docker :
@@ -692,6 +722,23 @@ function parseTimestampMs(value) {
  * @param {string} reportOutputPath
  * @return {Promise<Array<Object>>}
  */
+// Loud-by-construction: best-effort runner failures are counted per
+// context (never silently swallowed).
+const SUPPRESSED_RUNNER_ERROR_CONTEXT = Object.freeze({
+  REPORT_HISTORY_READ: 'report_history_read',
+  REPORT_HISTORY_SCAN: 'report_history_scan',
+  RUNNER_STATUS_UPDATE: 'runner_status_update',
+});
+const suppressedRunnerErrors = new Map();
+
+function recordSuppressedRunnerError(context, error) {
+  const entry = suppressedRunnerErrors.get(context) ||
+    {count: 0, lastMessage: null};
+  entry.count += 1;
+  entry.lastMessage = error?.message || String(error);
+  suppressedRunnerErrors.set(context, entry);
+}
+
 async function loadHistoricalReports(reportOutputPath) {
   const resolvedOutputPath = resolve(
     String(reportOutputPath || CLI.DEFAULT_OUTPUT),
@@ -710,8 +757,10 @@ async function loadHistoricalReports(reportOutputPath) {
       }
       candidatePaths.add(resolve(join(reportDir, entry.name)));
     }
-  } catch (_scanErr) {
+  } catch (scanErr) {
     // Best-effort history loading.
+    recordSuppressedRunnerError(
+      SUPPRESSED_RUNNER_ERROR_CONTEXT.REPORT_HISTORY_SCAN, scanErr);
   }
 
   const historicalReports = [];
@@ -739,8 +788,10 @@ async function loadHistoricalReports(reportOutputPath) {
             null,
         scenarios: parsed.scenarios,
       });
-    } catch (_readErr) {
-      // Ignore unreadable or invalid report files.
+    } catch (readErr) {
+      // Unreadable or invalid report files are skipped.
+      recordSuppressedRunnerError(
+        SUPPRESSED_RUNNER_ERROR_CONTEXT.REPORT_HISTORY_READ, readErr);
     }
   }
 
@@ -1094,6 +1145,9 @@ async function main() {
       ...config,
       outputDir,
     };
+    if (isLocalDockerConfig(runConfig)) {
+      runConfig = await applyScenarioArtifactBind(runConfig);
+    }
     if (resolveFastLocalMode(args, runConfig)) {
       runConfig = await applyFastLocalConfig(runConfig);
       if (args.verbose) {
@@ -1376,8 +1430,9 @@ async function main() {
           error: err.message,
           stackTrace: err.stack || null,
         });
-      } catch (_statusErr) {
-        // Best-effort runner status update
+      } catch (statusErr) {
+        recordSuppressedRunnerError(
+          SUPPRESSED_RUNNER_ERROR_CONTEXT.RUNNER_STATUS_UPDATE, statusErr);
       }
     }
     throw err;

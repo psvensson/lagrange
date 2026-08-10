@@ -23,7 +23,10 @@ const TARGET_THRESHOLD = 12;
 // the release-gate one-way-baseline rule).
 // 2026-08-10: tightened 1842 -> 1841 (six new-debt functions refactored
 // below the threshold; measured with the checker's tightening hint).
-const BASELINE_COUNT = 1841;
+// 2026-08-10: tightened 1841 -> 1839 (checkRebalance tail scheduling and
+// the topology-settling gate log-context extracted while landing
+// user-table-leader-placement-spread; one-way-baseline rule).
+const BASELINE_COUNT = 1839;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

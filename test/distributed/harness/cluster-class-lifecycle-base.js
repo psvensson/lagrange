@@ -41,6 +41,12 @@ const HOST_NETWORK_TRANSPORT_MESSAGE_TIMEOUT_MS = 30000;
 const HOST_NETWORK_PORT_BLOCK = 10;
 const ADMIN_ALLOW_INSECURE_EXTERNAL_BIND_ENV_KEY =
   'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND';
+// PG wire credential env triple (src/runtime/pgwire-credential-verifier.js
+// PGWIRE_CREDENTIAL_ENV); named locally so the harness does not import the
+// runtime module just for three key strings.
+const PGWIRE_AUTH_USER_ENV_KEY = 'PGWIRE_AUTH_USER';
+const PGWIRE_AUTH_PASSWORD_ENV_KEY = 'PGWIRE_AUTH_PASSWORD';
+const PGWIRE_AUTH_DATABASE_ENV_KEY = 'PGWIRE_AUTH_DATABASE';
 const DOCKER_BIND_SEPARATOR = ':';
 const LEGACY_REUSE_SHELL_ENTRYPOINTS = Object.freeze(['sh', 'bash']);
 const LEGACY_REUSE_SHELL_ARG = '-lc';
@@ -171,6 +177,7 @@ const {
   PlaybackRecorder,
   RAFT_PROVIDER_DEFAULTS,
   RAFT_PROVIDER_ENV_KEY,
+  REQUEST_CELL_AUTH,
   REUSE_CONTAINER_NAME_PREFIX,
   REUSE_DATA_DIRNAME,
   REUSE_LEASE_DIRNAME,
@@ -212,6 +219,19 @@ const TEARDOWN_WARNING_STOP_CONTAINER_PREFIX =
 const TEARDOWN_WARNING_RECORD_STOPPED_PREFIX =
   'Failed to record stopped container for ';
 const TEARDOWN_WARNING_SEPARATOR = ': ';
+// Loud-by-construction: best-effort teardown/capture failures are counted
+// per context (never silently swallowed) so a log-driven debug session can
+// see that suppression happened and where.
+const SUPPRESSED_BEST_EFFORT_CONTEXT = Object.freeze({
+  BOOT_PROVENANCE_SCAN: 'boot_provenance_scan',
+  FINAL_SNAPSHOT: 'final_snapshot',
+  INCARNATION_BOUNDARY: 'incarnation_boundary',
+  LOAD_RUN_CANCEL: 'load_run_cancel',
+  LOAD_RUN_COMPLETION_WAIT: 'load_run_completion_wait',
+  LOG_STREAM_START: 'log_stream_start',
+  LOG_SUBSCRIPTION_STOP: 'log_subscription_stop',
+  QUERY_CONNECTION_CLOSE: 'query_connection_close',
+});
 
 class ClusterLifecycleBase {
   constructor(config, providers, hostAssignment) {
@@ -457,6 +477,13 @@ class ClusterLifecycleBase {
     // explicitly so readiness and query probes exercise the real Admin boundary.
     env[ADMIN_WS_HOST_ENV_KEY] = WS_BIND_ALL_HOST;
     env[ADMIN_ALLOW_INSECURE_EXTERNAL_BIND_ENV_KEY] = 'true';
+    // Request-cell HTTP auth fixtures: without the PGWIRE_AUTH_* triple
+    // the node's Basic authenticator is fail-closed (every request-cell
+    // HTTP call answers 503), so authenticated-HTTP scenarios could
+    // never run. Harness-internal fixture credentials, not secrets.
+    env[PGWIRE_AUTH_USER_ENV_KEY] = REQUEST_CELL_AUTH.USER;
+    env[PGWIRE_AUTH_PASSWORD_ENV_KEY] = REQUEST_CELL_AUTH.PASSWORD;
+    env[PGWIRE_AUTH_DATABASE_ENV_KEY] = REQUEST_CELL_AUTH.DATABASE;
     this._applySourceFingerprintEnv(env);
     if (this._isFileLoggingEnabled()) {
       // Route node logs to a bind-mounted file instead of stdout — see
@@ -1005,14 +1032,16 @@ class ClusterLifecycleBase {
         if (seedNode) {
           await this._logCollector.collectFinalSnapshot(seedNode);
         }
-      } catch (_err) {
-        // Best-effort log collection
+      } catch (err) {
+        this._recordSuppressedBestEffortError(
+          SUPPRESSED_BEST_EFFORT_CONTEXT.FINAL_SNAPSHOT, err);
       }
 
       try {
         await this._logCollector.stopSubscription();
-      } catch (_err) {
-        // Best-effort cleanup
+      } catch (err) {
+        this._recordSuppressedBestEffortError(
+          SUPPRESSED_BEST_EFFORT_CONTEXT.LOG_SUBSCRIPTION_STOP, err);
       }
 
       if (this._traceRecorder) {
@@ -1120,12 +1149,25 @@ class ClusterLifecycleBase {
     }
   }
 
+  _recordSuppressedBestEffortError(context, error) {
+    if (!this._suppressedBestEffortErrorsByContext) {
+      this._suppressedBestEffortErrorsByContext = new Map();
+    }
+    const entry =
+      this._suppressedBestEffortErrorsByContext.get(context) ||
+      {count: 0, lastMessage: null};
+    entry.count += 1;
+    entry.lastMessage = error?.message || String(error);
+    this._suppressedBestEffortErrorsByContext.set(context, entry);
+  }
+
   _closeNodeQueryConnectionsForTeardown(nodes) {
     for (const [, node] of nodes) {
       try {
         node.closeQueryConnection();
-      } catch (_err) {
-        // Best-effort stop
+      } catch (err) {
+        this._recordSuppressedBestEffortError(
+          SUPPRESSED_BEST_EFFORT_CONTEXT.QUERY_CONNECTION_CLOSE, err);
       }
     }
   }
@@ -1172,8 +1214,10 @@ class ClusterLifecycleBase {
         destPath: fullLogDestPath(outputDir, this._scenarioName, nodeId),
       });
       this._nodeLogStreamers.set(nodeId, streamer);
-    } catch (_err) {
-      // Best-effort: capture must never break the run.
+    } catch (err) {
+      // Capture must never break the run.
+      this._recordSuppressedBestEffortError(
+        SUPPRESSED_BEST_EFFORT_CONTEXT.LOG_STREAM_START, err);
     }
   }
 
@@ -1205,8 +1249,10 @@ class ClusterLifecycleBase {
       }
       const streamer = this._nodeLogStreamers.get(nodeId);
       streamer?.markIncarnationBoundary?.(incarnation, {nodeId});
-    } catch (_err) {
-      // Best-effort: capture instrumentation must never break the run.
+    } catch (err) {
+      // Capture instrumentation must never break the run.
+      this._recordSuppressedBestEffortError(
+        SUPPRESSED_BEST_EFFORT_CONTEXT.INCARNATION_BOUNDARY, err);
     }
   }
 
@@ -1337,8 +1383,10 @@ class ClusterLifecycleBase {
           };
         }
       }
-    } catch {
+    } catch (err) {
       // Partial/corrupt gz (e.g. an incomplete capture) — return what we found.
+      this._recordSuppressedBestEffortError(
+        SUPPRESSED_BEST_EFFORT_CONTEXT.BOOT_PROVENANCE_SCAN, err);
     } finally {
       rl.close();
       source.destroy();
@@ -1451,8 +1499,9 @@ class ClusterLifecycleBase {
       }
       try {
         run.cancel();
-      } catch (_err) {
-        // Best-effort cancellation
+      } catch (err) {
+        this._recordSuppressedBestEffortError(
+          SUPPRESSED_BEST_EFFORT_CONTEXT.LOAD_RUN_CANCEL, err);
       }
     }
 
@@ -1463,8 +1512,9 @@ class ClusterLifecycleBase {
         }
         try {
           await run.waitComplete();
-        } catch (_err) {
-          // Best-effort completion wait
+        } catch (err) {
+          this._recordSuppressedBestEffortError(
+            SUPPRESSED_BEST_EFFORT_CONTEXT.LOAD_RUN_COMPLETION_WAIT, err);
         }
       }),
     );

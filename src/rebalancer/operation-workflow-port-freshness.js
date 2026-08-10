@@ -69,6 +69,58 @@ function resolveTransitionStep(entry) {
   return entry?.[WORKFLOW_TRANSITION_FIELD.NEXT_STEP] ?? null;
 }
 
+function normalizeDurableBasisStepCount(workflow) {
+  return Number.isFinite(workflow?.durableBasisStepCount) ?
+    Math.max(
+      OPERATION_WORKFLOW_PORT_FRESHNESS_EMPTY_HISTORY_LENGTH,
+      Math.floor(workflow.durableBasisStepCount),
+    ) :
+    OPERATION_WORKFLOW_PORT_FRESHNESS_EMPTY_HISTORY_LENGTH;
+}
+
+/**
+ * Whether the mirrored basis prefix diverges: any step the durable row
+ * already mirrors (within the witness's basis) disagreeing with the
+ * witness's own persisted history.
+ * @return {boolean}
+ */
+function basisPrefixDiverges(persistedHistory, durableHistory, basisCount) {
+  const comparedPrefixLength = Math.min(
+    durableHistory.length,
+    basisCount,
+    persistedHistory.length,
+  );
+  for (
+    let index = OPERATION_WORKFLOW_PORT_FRESHNESS_EMPTY_HISTORY_LENGTH;
+    index < comparedPrefixLength;
+    index += 1
+  ) {
+    if (resolveTransitionStep(persistedHistory[index]) !==
+        (durableHistory[index]?.step ?? null)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Whether the durable row mirrors steps the witness never persisted AND
+ * the witness's own basis confirms those steps were never recovered —
+ * the row and the witness disagree about history the witness basis never
+ * covered. (A row merely mirroring the in-memory operation's newer steps
+ * is the durable store running AHEAD of the witness, which the CURRENT
+ * leg tolerates: the witness basis is satisfied.)
+ * @return {boolean}
+ */
+function durableRowDisagreesBeyondBasis(
+  persistedStepCount,
+  durableStepCount,
+  durableBasisStepCount,
+) {
+  return durableStepCount > persistedStepCount &&
+    durableBasisStepCount > persistedStepCount;
+}
+
 /**
  * Resolve the publication-fence state by comparing the coordinator's
  * persisted transition-history witness against the durable row's
@@ -102,14 +154,7 @@ function resolveOperationWorkflowPublicationFenceState(
   const durableHistory = readOperationWorkflowDurableStepsHistory(operation);
   const persistedStepCount = persistedHistory.length;
   const durableStepCount = durableHistory.length;
-  const durableBasisStepCount = Number.isFinite(
-    workflow?.durableBasisStepCount,
-  ) ?
-    Math.max(
-      OPERATION_WORKFLOW_PORT_FRESHNESS_EMPTY_HISTORY_LENGTH,
-      Math.floor(workflow.durableBasisStepCount),
-    ) :
-    OPERATION_WORKFLOW_PORT_FRESHNESS_EMPTY_HISTORY_LENGTH;
+  const durableBasisStepCount = normalizeDurableBasisStepCount(workflow);
   if (
     persistedStepCount ===
     OPERATION_WORKFLOW_PORT_FRESHNESS_EMPTY_HISTORY_LENGTH
@@ -124,31 +169,22 @@ function resolveOperationWorkflowPublicationFenceState(
     // shape that is always a stale witness.
     return OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE.STALE;
   }
-  const comparedPrefixLength = Math.min(
-    durableStepCount,
-    durableBasisStepCount,
-    persistedStepCount,
-  );
-  for (
-    let index = OPERATION_WORKFLOW_PORT_FRESHNESS_EMPTY_HISTORY_LENGTH;
-    index < comparedPrefixLength;
-    index += 1
+  if (
+    basisPrefixDiverges(
+      persistedHistory,
+      durableHistory,
+      durableBasisStepCount,
+    )
   ) {
-    if (resolveTransitionStep(persistedHistory[index]) !==
-        (durableHistory[index]?.step ?? null)) {
-      return OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE.STALE;
-    }
+    return OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE.STALE;
   }
   if (
-    durableStepCount > persistedStepCount &&
-    durableBasisStepCount > persistedStepCount
+    durableRowDisagreesBeyondBasis(
+      persistedStepCount,
+      durableStepCount,
+      durableBasisStepCount,
+    )
   ) {
-    // The durable row mirrors steps the witness never persisted AND the
-    // witness's own basis confirms those steps were never recovered —
-    // the row and the witness disagree about history the witness basis
-    // never covered. (A row merely mirroring the in-memory operation's
-    // newer steps is the durable store running AHEAD of the witness,
-    // which the CURRENT leg tolerates: the witness basis is satisfied.)
     return OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE.STALE;
   }
   return OPERATION_WORKFLOW_PUBLICATION_FENCE_STATE.CURRENT;

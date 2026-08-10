@@ -30,11 +30,19 @@ const CANONICAL_SCENARIO_MATRIX = Object.freeze([
   }),
   Object.freeze({
     config: 'local-three-node.json',
+    name: 'public-path-multinode-baseline',
+  }),
+  Object.freeze({
+    config: 'local-three-node.json',
     name: 'rolling-restart',
   }),
   Object.freeze({
     config: 'local-three-node.json',
     name: 'three-node-seed-rebalance',
+  }),
+  Object.freeze({
+    config: 'local-three-node.json',
+    name: 'user-table-leader-placement-spread',
   }),
   Object.freeze({
     config: 'local-three-node.json',

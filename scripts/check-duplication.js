@@ -87,8 +87,12 @@ const RATCHET_TARGETS = [
     // extracting the shared stall-repro stack builder in the
     // over-target-cap-spread-cure-wipe test additions; one-way-baseline
     // rule).
-    baselineCloneGroupCount: 832,
-    baselineDuplicatedLineCount: 31718,
+    // 2026-08-10: tightened 832/31718 -> 828/31601 (measured after
+    // extracting the shared user-table topology helpers from the
+    // public-path baseline scenario for user-table-leader-placement-
+    // spread; one-way-baseline rule).
+    baselineCloneGroupCount: 828,
+    baselineDuplicatedLineCount: 31601,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

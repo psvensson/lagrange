@@ -268,10 +268,12 @@ Use these values with `--scenario`:
 2. `examples-catalog`
 3. `network-partition-split-brain`
 4. `node-failure-rebalance`
-5. `rolling-restart`
-6. `three-node-seed-rebalance`
-7. `wasm-service-failover`
-8. `write-ack-visibility`
+5. `public-path-multinode-baseline`
+6. `rolling-restart`
+7. `three-node-seed-rebalance`
+8. `user-table-leader-placement-spread`
+9. `wasm-service-failover`
+10. `write-ack-visibility`
 
 ### Canonical 5-node matrix
 

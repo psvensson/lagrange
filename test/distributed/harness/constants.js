@@ -25,6 +25,28 @@ const PORTS = Object.freeze({
   WS_TRANSPORT: WS_TRANSPORT_PORT,
 });
 
+// --- Request-Cell HTTP Auth Fixtures ---
+// Harness-internal credentials injected as PGWIRE_AUTH_* env on every
+// node container (see cluster-class-lifecycle-base.js _buildNodeEnv).
+// Without them every request-cell HTTP call is a hard 503
+// (src/service/request-cell-http-authenticator.js fail-closed posture);
+// with them scenarios exercise the real authenticated HTTP boundary.
+const REQUEST_CELL_AUTH = Object.freeze({
+  DATABASE: 'lagrange_harness',
+  PASSWORD: 'lagrange-harness-password',
+  USER: 'lagrange-harness-user',
+});
+
+// --- Scenario Artifact Exchange ---
+// Host directory bind-mounted read-write into every node container of a
+// local docker run (see run.js applyScenarioArtifactBind), so scenarios
+// can hand host-built artifacts (e.g. local OCI layouts for INSTALL
+// SERVICE) to in-container resolvers. Inert for scenarios not using it.
+const SCENARIO_ARTIFACTS = Object.freeze({
+  CONTAINER_PATH: '/scenario-artifacts',
+  HOST_RELATIVE_PATH: 'test-output/scenario-artifacts',
+});
+
 // --- Timeout Constants (milliseconds) ---
 const NODE_STARTUP_TIMEOUT_MS = 30000;
 const CONVERGENCE_TIMEOUT_MS = 30000;
@@ -794,6 +816,8 @@ const EXIT_CODES = Object.freeze({
 
 export {
   PORTS,
+  REQUEST_CELL_AUTH,
+  SCENARIO_ARTIFACTS,
   TIMEOUTS,
   LABELS,
   CONVERGENCE_DEFAULTS,

@@ -131,49 +131,79 @@ async function persistOperationWorkflowTransitionToDurableRow(workflow) {
 }
 
 /**
+ * Map one durable steps_history entry into the coordinator transition
+ * shape (owner key stamped by the caller).
+ * @param {Object} entry
+ * @param {string} workflowId
+ * @return {Object}
+ */
+function toWorkflowTransitionEntry(entry, workflowId) {
+  return {
+    [WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP]: entry?.previousStep ?? null,
+    [WORKFLOW_TRANSITION_FIELD.NEXT_STEP]: entry?.step ?? null,
+    [WORKFLOW_TRANSITION_FIELD.REASON]: entry?.reason ?? null,
+    [WORKFLOW_TRANSITION_FIELD.TIMESTAMP]: entry?.timestamp ?? null,
+    [WORKFLOW_TRANSITION_FIELD.OWNER_KEY]: workflowId,
+  };
+}
+
+/**
+ * Whether the durable operation row is terminal (any of the durable
+ * terminal markers: the translated flag, or a non-null completed stamp
+ * in either naming).
+ * @param {Object} operation
+ * @return {boolean}
+ */
+function isDurableOperationTerminal(operation) {
+  return Boolean(operation?.terminal) ||
+    (operation?.completedAt !== null &&
+      operation?.completedAt !== undefined) ||
+    (operation?.completed_at !== null &&
+      operation?.completed_at !== undefined);
+}
+
+/**
+ * Map one replica_operations row (or an already-translated operation)
+ * into the coordinator workflow record the in-memory store recovers
+ * from; null when the row carries no usable workflow id.
+ * @param {Object} operation
+ * @return {Object|null}
+ */
+function operationToRecoveredWorkflow(operation) {
+  const workflowId = normalizeOperationWorkflowStep(
+    operation?.operationId || operation?.operation_id,
+  );
+  if (!workflowId) {
+    return null;
+  }
+  const durableStepsHistory =
+    readOperationWorkflowDurableStepsHistory(operation);
+  return {
+    workflowId,
+    ownerKey: workflowId,
+    step:
+      normalizeOperationWorkflowStep(
+        operation?.workflowStep || operation?.workflow_step,
+      ) || null,
+    transitionHistory: durableStepsHistory.map((entry) =>
+      toWorkflowTransitionEntry(entry, workflowId)),
+    // The durable basis the persist callback checks every candidate
+    // against: exactly the history the durable row carried when this
+    // record was recovered.
+    durableBasisStepCount: durableStepsHistory.length,
+    terminal: isDurableOperationTerminal(operation),
+    durableOperation: operation,
+  };
+}
+
+/**
  * Build the durable loader that maps one replica_operations row (or an
  * already-translated operation) into the coordinator workflow record the
  * in-memory store recovers from.
  * @return {Function}
  */
 function buildOperationWorkflowRowLoader() {
-  return (operation) => {
-    const workflowId = normalizeOperationWorkflowStep(
-      operation?.operationId || operation?.operation_id,
-    );
-    if (!workflowId) {
-      return null;
-    }
-    const durableStepsHistory =
-      readOperationWorkflowDurableStepsHistory(operation);
-    return {
-      workflowId,
-      ownerKey: workflowId,
-      step:
-        normalizeOperationWorkflowStep(
-          operation?.workflowStep || operation?.workflow_step,
-        ) || null,
-      transitionHistory: durableStepsHistory.map((entry) => ({
-        [WORKFLOW_TRANSITION_FIELD.PREVIOUS_STEP]:
-          entry?.previousStep ?? null,
-        [WORKFLOW_TRANSITION_FIELD.NEXT_STEP]: entry?.step ?? null,
-        [WORKFLOW_TRANSITION_FIELD.REASON]: entry?.reason ?? null,
-        [WORKFLOW_TRANSITION_FIELD.TIMESTAMP]: entry?.timestamp ?? null,
-        [WORKFLOW_TRANSITION_FIELD.OWNER_KEY]: workflowId,
-      })),
-      // The durable basis the persist callback checks every candidate
-      // against: exactly the history the durable row carried when this
-      // record was recovered.
-      durableBasisStepCount: durableStepsHistory.length,
-      terminal:
-        Boolean(operation?.terminal) ||
-        (operation?.completedAt !== null &&
-          operation?.completedAt !== undefined) ||
-        (operation?.completed_at !== null &&
-          operation?.completed_at !== undefined),
-      durableOperation: operation,
-    };
-  };
+  return operationToRecoveredWorkflow;
 }
 
 /**

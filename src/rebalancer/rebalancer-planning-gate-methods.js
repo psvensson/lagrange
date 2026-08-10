@@ -1,7 +1,14 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {
+  applyUserTableLeaderPlacementCure,
+  evaluateLeaderPlacementCureBehindPrioritySpreadGate,
+} from './user-table-leader-placement-cure.js';
+import {
   REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS,
 } from './rebalancer-priority-recovery-planning-gate-methods.js';
+import {
+  buildTopologySettlingGateLogContext,
+} from './rebalancer-planning-gate-log-context.js';
 import {
   LOCAL_MUTATION_READINESS_OPERATION_CREATION_FIELD,
   LOCAL_MUTATION_READINESS_PLANNING_ACTION,
@@ -418,51 +425,12 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       gate: REBALANCE_PLANNING_GATE.TOPOLOGY_SETTLING,
       blocker: topologySettlingBlocker,
       logMessage: REBALANCER_LOG_MSG.WAIT_TOPOLOGY_SETTLING,
-      logContext: {
-        entityType: this.entityType,
+      logContext: buildTopologySettlingGateLogContext(
+        topologySettlingBlocker,
+        gateSnapshot,
         delayMs,
-        planningState: gateSnapshot.planningState,
-        priorityRecoveryOperationCreationRequired:
-          gateSnapshot.priorityRecoveryOperationCreationRequired,
-        topologySettlingBlockedByOperationCreationTarget:
-          gateSnapshot.evidence.topologySettlingBlockedByOperationCreationTarget,
-        blockerReason: topologySettlingBlocker.reason || null,
-        connectedNodeId:
-          typeof topologySettlingBlocker.connectedNodeId === 'string' &&
-          topologySettlingBlocker.connectedNodeId.length > 0 ?
-            topologySettlingBlocker.connectedNodeId :
-            null,
-        unreadyNodeIds: Array.isArray(topologySettlingBlocker.unreadyNodeIds) ?
-          [...topologySettlingBlocker.unreadyNodeIds] :
-          [],
-        missingNodeEndpointNodeIds: Array.isArray(
-          topologySettlingBlocker.missingNodeEndpointNodeIds,
-        ) ?
-          [...topologySettlingBlocker.missingNodeEndpointNodeIds] :
-          [],
-        missingPostgresWireNodeIds: Array.isArray(
-          topologySettlingBlocker.missingPostgresWireNodeIds,
-        ) ?
-          [...topologySettlingBlocker.missingPostgresWireNodeIds] :
-          [],
-        endpointReadyNodeCount: Number.isFinite(
-          topologySettlingBlocker.endpointReadyNodeCount,
-        ) ?
-          topologySettlingBlocker.endpointReadyNodeCount :
-          null,
-        requiredReadyNodeCount: Number.isFinite(
-          topologySettlingBlocker.requiredReadyNodeCount,
-        ) ?
-          topologySettlingBlocker.requiredReadyNodeCount :
-          null,
-        inFlightReplicaOperations: Number.isFinite(
-          topologySettlingBlocker.inFlightReplicaOperations,
-        ) ?
-          topologySettlingBlocker.inFlightReplicaOperations :
-          null,
-        inFlightReplicaOperationsSource:
-          topologySettlingBlocker.inFlightReplicaOperationsSource || null,
-      },
+        this.entityType,
+      ),
       scheduleMode: REBALANCE_PLANNING_GATE_SCHEDULE_MODE.PRIORITY_AWARE,
       scheduleDelayMs,
     });
@@ -708,6 +676,12 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       return forcePriorityRetry;
     }
 
+    // Quiescent pass: replica-shape evaluation found nothing to do, the
+    // planning gates (stabilization, start delay) already passed, so the
+    // recorded anti-churn levers are structurally upstream — the one
+    // place the user-table leader-placement cure may act.
+    await applyUserTableLeaderPlacementCure(this);
+
     if (this.isControlPlanePriorityPartition()) {
       this.currentInterval = this.getPriorityRetryDelayMs();
     } else {
@@ -750,6 +724,10 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       );
       if (blocker) {
         blocker.apply();
+        await evaluateLeaderPlacementCureBehindPrioritySpreadGate(
+          this,
+          blocker,
+        );
         return;
       }
 
@@ -773,14 +751,18 @@ const REBALANCER_PLANNING_GATE_METHODS = {
       throw error;
     }
 
-    // Schedule next check
-    if (!this.isShuttingDown) {
-      if (forcePriorityRetry) {
-        this.scheduleNextCheck(this.getPriorityRetryDelayMs());
-      } else {
-        this.scheduleNextCheck();
-      }
+    this.scheduleNextCheckAfterCadence(forcePriorityRetry);
+  },
+
+  scheduleNextCheckAfterCadence(forcePriorityRetry) {
+    if (this.isShuttingDown) {
+      return;
     }
+    if (forcePriorityRetry) {
+      this.scheduleNextCheck(this.getPriorityRetryDelayMs());
+      return;
+    }
+    this.scheduleNextCheck();
   },
 };
 

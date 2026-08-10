@@ -14,9 +14,15 @@ const LOCAL_STR_SCENARIO_POLICY_SQL_GUARD_CRASHED = 'Scenario policy SQL guard c
 const SCENARIOS_DIR = resolve('test/distributed/scenarios');
 const UTF8_ENCODING = 'utf8';
 const POLICY_SQL_PATTERN = /UPDATE\s+tables\s+SET\s+table_policies/ig;
+// Allowlist tracks the OWNER files that may build raw table_policies
+// mutation SQL. Both original owners were split; the SQL constants and
+// builder followed the split (table-distribution-helpers.js ->
+// -control-query.js, postgres-baseline-comparison.js ->
+// -constants-and-imports.js), so the allowlist names the split
+// descendants that actually hold the statements today.
 const ALLOWED_POLICY_SQL_OWNERS = new Set([
-  'test/distributed/scenarios/table-distribution-helpers.js',
-  'test/distributed/scenarios/postgres-baseline-comparison.js',
+  'test/distributed/scenarios/table-distribution-helpers-control-query.js',
+  'test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js',
 ]);
 
 async function listScenarioFiles(dir) {
