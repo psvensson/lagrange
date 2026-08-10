@@ -1,0 +1,1199 @@
+diff --git a/scripts/quest-evidence-partition-callback-read-failure-typed-outcome.js b/scripts/quest-evidence-partition-callback-read-failure-typed-outcome.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..14280fda32c7db1d7ff1092653f68d6a090e8b1e
+--- /dev/null
++++ b/scripts/quest-evidence-partition-callback-read-failure-typed-outcome.js
+@@ -0,0 +1,56 @@
++// Deterministic evidence harness for the
++// partition-callback-read-failure-typed-outcome quest: receipt
++// declarations only. The shared runtime
++// (scripts/quest-evidence-harness-runtime.js) re-runs each recorded proof
++// command and writes the probe artifact.
++
++import path from 'node:path';
++
++import {
++  runQuestEvidenceHarness,
++} from './quest-evidence-harness-runtime.js';
++
++const RECEIPTS = Object.freeze([
++  Object.freeze({
++    id: 'failed-partition-reads-surface-typed-outcomes',
++    testFile:
++      'test/query/partition-callback-integration.test.js',
++    detail: 'a partition_callback whose every partition read fails ' +
++      'returns a non-success typed owner outcome (error + errorCode + ' +
++      'typed failedPartitions entries carrying partitionId/error/' +
++      'errorCode/participantNodeId/retryAfterMs/backpressured) with ' +
++      'hostResult recording "3 partitions, 3 failed" instead of the ' +
++      'pre-fix success:true/batches:[]/totalPartitions 0; a partial ' +
++      'read failure stays a typed partial outcome (successful batches ' +
++      'plus failedPartitions folded into hostResult counts and ' +
++      'failedPartitionReads), so empty-because-failed is ' +
++      'distinguishable from succeeded-with-zero-rows (ARCH-0139; ' +
++      'red-on-revert: the pre-fix dispatcher filter converts total ' +
++      'read failure to success:true and the assertions fail on ' +
++      'success/totalPartitions)',
++  }),
++  Object.freeze({
++    id: 'callback-reads-ride-routed-delivery-priority',
++    testFile:
++      'test/query/partition-callback-dispatcher.test.js',
++    detail: 'PartitionCallbackDispatcher passes executionOptions ' +
++      '{tableName, deliveryPriority: resolveRoutedDeliveryPriority(' +
++      'tableName)} to executeOnPartition, so callback reads of system ' +
++      'tables ride the same critical delivery lane and carry the same ' +
++      'failedTable attribution as executeSelect (red-on-revert: the ' +
++      'pre-fix call passes no executionOptions and the ' +
++      'tableName/deliveryPriority assertions fail on undefined)',
++  }),
++]);
++
++const QUEST_ID = 'partition-callback-read-failure-typed-outcome';
++const SOLVE_DIR = 'solve';
++const EVIDENCE_DIR = 'evidence';
++const RECEIPT_FILENAME =
++  'partition-callback-read-failure-typed-outcome.receipt.json';
++
++runQuestEvidenceHarness({
++  questId: QUEST_ID,
++  outputFile: path.join(SOLVE_DIR, EVIDENCE_DIR, RECEIPT_FILENAME),
++  receipts: RECEIPTS,
++});
+diff --git a/solve/changes/partition-callback-read-failure-typed-outcome/DECISIONS.md b/solve/changes/partition-callback-read-failure-typed-outcome/DECISIONS.md
+new file mode 100644
+index 0000000000000000000000000000000000000000..b8471e583d1d4e0125fa5437436a491bd85e0784
+--- /dev/null
++++ b/solve/changes/partition-callback-read-failure-typed-outcome/DECISIONS.md
+@@ -0,0 +1,117 @@
++# Design decisions: partition-callback-read-failure-typed-outcome
++
++Status: working notes during implementation (2026-08-10, base 5da367c47
++lineage, implemented on current main).
++
++Prior art: the silent-continue closure-ledger class (CL-029, CL-030,
++CL-013, CL-008 — components that swallowed a failed sub-step and
++continued as if it succeeded), and the sibling `executeSelect` path,
++which already propagates partition read failure as a typed outcome
++(`buildDistributedFailureSummary` / `firstFailedParticipant`,
++src/query/sql-query-engine-select-execution.js:587-593 single-partition
++precedent: `!first.success` becomes `{success:false, error, errorCode}`).
++ARCH-0139 (docs/steering/system-guidelines.md §6): missing rows must
++surface as typed owner outcomes or diagnostics.
++
++## D1 — Dispatcher partitions results; the typed entry reuses the
++
++existing participant-failure owner
++
++`PartitionCallbackDispatcher.dispatch` no longer filters
++per-partition results to the successful subset. It partitions them:
++successes become batches, failures become typed entries built by
++`buildParticipantFailureEntry` (src/query/query-execution-budget.js) —
++the SAME builder the executeSelect distributed-failure summary uses, so
++partitionId/error/errorCode/participantNodeId/retryAfterMs/deferRetry/
++backpressured/failedTable have one owner and one shape. No new
++failure-entry grammar was invented.
++
++- All-reads-failed (`batches.length === 0 && failedPartitions.length >
++  0`): non-success typed outcome `{success:false, error:
++  ADAPTER_ERROR_MSG.PARTITION_CALLBACK_ALL_READS_FAILED, errorCode:
++  QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE, failedPartitions,
++  deferRetry?, retryAfterMs?}`. `DISTRIBUTED_PARTICIPANT_FAILURE` is the
++  errorCode the write path already uses for participant failure — reused,
++  not minted.
++- Partial failure: `{success:true, batches, failedPartitions}` — the
++  fail-closed floor from the sealed statement: partial success stays a
++  typed partial outcome, never all-or-nothing data loss.
++- Retry semantics (deferRetry/retryAfterMs) are lifted from the FIRST
++  typed entry, following the `firstFailedParticipant` precedent in
++  `buildDistributedFailureSummary`.
++
++## D2 — hostResult carries the read failures; empty-because-failed is
++
++distinguishable from succeeded-with-zero-rows
++
++`executePartitionCallback` folds `dispatchResult.failedPartitions` into
++the host aggregate via `mergePartitionReadFailuresIntoHostResult`:
++`totalPartitions`/`failedPartitions` count every RESOLVED partition (not
++only partitions that produced a batch), `state` flips to `failed`, and
++the typed entries ride `hostResult.failedPartitionReads`. On total read
++failure the host is never invoked (no batch exists; the callback must
++not run) and `buildPartitionReadFailureHostResult` synthesizes the
++aggregate so artifacts record "N partitions, N failed" instead of the
++pre-fix `totalPartitions 0`. The two zero-row shapes now differ:
++
++- succeeded-with-zero-rows: `state completed, failedPartitions 0`, no
++  `failedPartitionReads`.
++- empty-because-failed: `success false` at the request level, `state
++  failed, failedPartitions N, failedPartitionReads` populated.
++
++The helpers live in partition-callback-dispatcher.js (read-failure
++ownership stays with the component that observed the failures); the
++CallbackExecutionHost contract (callback INVOCATION results) is
++untouched.
++
++## D3 — Delivery-lane parity with executeSelect
++
++The dispatcher's `executeOnPartition` call previously passed NO
++executionOptions, so callback reads of system tables rode the default
++lane with no `failedTable` attribution. It now passes `{tableName,
++deliveryPriority: resolveRoutedDeliveryPriority(tableName)}` — the same
++resolver `executeSelect` uses (system tables → critical lane,
++transaction-bookkeeping tables → background). The resolver is injected
++at engine construction (sql-query-engine-instance-initializer.js) like
++the existing `isSystemTable`/`getTablePartitions` deps; the dispatcher
++does not re-derive routing policy (owner decides, caller observes).
++`preferSameLatencyGroup` stays effectively false — no locality change
++was smuggled in.
++
++## D4 — Where the failover throw lives (caller survey)
++
++Consumers of the dispatch result / hostResult shape:
++
++- `executePartitionCallback` (engine): handles non-success dispatch,
++  returns the typed failure result (D2). Its `failedPartitions` field is
++  the typed entries array (the sealed statement's shape); note
++  `hostResult.failedPartitions` remains a COUNT — pre-existing host
++  naming kept to avoid breaking `partition-callback-integration.test.js`
++  and admin consumers.
++- Admin envelope (admin-query-result-message-envelope.js):
++  `success:false` already routes to the ERROR envelope kind and copies
++  `error/errorCode/deferRetry/retryAfterMs` — no change needed; the new
++  outcome flows through as a typed error frame.
++- Harness node handle (cluster-node-handle-layer.js
++  `_resolvePendingQuery`): rejects the `partitionCallback` promise on an
++  error frame with `code/deferRetry/retryAfterMs` attached — so the
++  examples-catalog scenario's `partitionCallbackAcrossNodes` failover
++  engages on the thrown rejection WITHOUT any consumer weakening the
++  typed outcome (no `success` sniffing added).
++- Examples runner (scripts/examples: admin-ws-client.js rejects on
++  `message.error`; validate-output.js / run-examples-catalog.js read
++  `hostResult.partitionResults` — tolerant of the added fields).
++- No other `dispatch(`/`hostResult` consumers exist in src/ or scripts/
++  (grep survey recorded in the quest log).
++
++## D5 — Harness anti-affinity inversion
++
++`buildCandidateNodeOrder` special-cased "preferred node is the seed" by
++iterating `preferredReadNodes` (non-seed-first), demoting the RESOLVED
++replica host to last exactly when all of a table's replicas live on the
++seed. Fix: the resolved host is unconditionally the first candidate;
++remaining nodes stay failover candidates. The kept test "prefers
++non-seed callback routes when the seed is degraded" encodes the real
++fallback contract (replica resolution finds nothing → non-seed-first
++preference) and still passes; the new test "routes to the seed when the
++seed is the only replica host" locks the inversion fix.
+diff --git a/src/query/callback/partition-callback-dispatcher.js b/src/query/callback/partition-callback-dispatcher.js
+index 92168ccff57b66365c7be2eca9c9e24b286fe616..6680ee508d18a2ce4cee36277c740032f20c7d66 100644
+--- a/src/query/callback/partition-callback-dispatcher.js
++++ b/src/query/callback/partition-callback-dispatcher.js
+@@ -17,11 +17,71 @@ import {
+   ADAPTER_ERROR_MSG,
+   ADAPTER_LOG_MSG,
+ } from '../sql-adapter-constants.js';
+-import {QUERY_AST_TYPE} from '../query-constants.js';
++import {QUERY_AST_TYPE, QUERY_ERROR_CODE} from '../query-constants.js';
++import {buildParticipantFailureEntry} from '../query-execution-budget.js';
++import {STAGE_STATE} from './callback-stage-constants.js';
+ 
+ 
+ const SUBSYSTEM = 'partition-callback-dispatcher';
+ 
++/**
++ * Build the synthesized host-result shape for a partition_callback whose
++ * every partition read failed before any callback batch existed. Keeps
++ * artifacts recording "N partitions, N failed" instead of totalPartitions 0
++ * (ARCH-0139: missing rows surface as typed owner outcomes).
++ *
++ * @param {Array<object>} failedPartitionReads - Typed participant failure
++ *   entries from the dispatcher.
++ * @return {object} Host-result shaped aggregate with failed read counts.
++ */
++function buildPartitionReadFailureHostResult(failedPartitionReads) {
++  return {
++    partitionResults: [],
++    state: STAGE_STATE.FAILED,
++    totalPartitions: failedPartitionReads.length,
++    processedPartitions: 0,
++    failedPartitions: failedPartitionReads.length,
++    failedPartitionReads,
++    totalRows: 0,
++    totalBytes: 0,
++    totalDurationMs: 0,
++  };
++}
++
++/**
++ * Merge partition-read failures into a callback host result so the
++ * aggregate counts cover every resolved partition, not only the
++ * partitions whose reads produced a batch. An empty-because-failed
++ * result stays distinguishable from succeeded-with-zero-rows: read
++ * failures raise totalPartitions/failedPartitions and carry the typed
++ * failedPartitionReads entries.
++ *
++ * @param {object} hostResult - Aggregate result from CallbackExecutionHost.
++ * @param {Array<object>} failedPartitionReads - Typed participant failure
++ *   entries from the dispatcher (empty when every read succeeded).
++ * @return {object} Host result with read failures folded into the counts.
++ */
++function mergePartitionReadFailuresIntoHostResult(
++  hostResult,
++  failedPartitionReads,
++) {
++  if (!Array.isArray(failedPartitionReads) ||
++      failedPartitionReads.length === 0) {
++    return hostResult;
++  }
++  return {
++    ...hostResult,
++    state: hostResult.state === STAGE_STATE.COMPLETED ?
++      STAGE_STATE.FAILED :
++      hostResult.state,
++    totalPartitions:
++      hostResult.totalPartitions + failedPartitionReads.length,
++    failedPartitions:
++      hostResult.failedPartitions + failedPartitionReads.length,
++    failedPartitionReads,
++  };
++}
++
+ /**
+  * Dispatches a partition_callback SqlRequest by resolving target
+  * partitions from the select statement and executing per-partition
+@@ -35,6 +95,9 @@ class PartitionCallbackDispatcher {
+    * @param {object} deps.queryExecutor - QueryExecutor instance
+    * @param {Function} deps.getTablePartitions - fn(tableName) => []
+    * @param {Function} deps.isSystemTable - fn(tableName) => boolean
++   * @param {Function} deps.resolveRoutedDeliveryPriority -
++   *   fn(tableName) => routed delivery priority for the table (system
++   *   tables ride the same critical/background lanes as executeSelect).
+    */
+   constructor(deps) {
+     this.sqlParser = deps.sqlParser;
+@@ -42,6 +105,7 @@ class PartitionCallbackDispatcher {
+     this.queryExecutor = deps.queryExecutor;
+     this.getTablePartitions = deps.getTablePartitions;
+     this.isSystemTable = deps.isSystemTable;
++    this.resolveRoutedDeliveryPriority = deps.resolveRoutedDeliveryPriority;
+     this.logger = this.initLogger();
+   }
+ 
+@@ -68,9 +132,15 @@ class PartitionCallbackDispatcher {
+    *
+    * @param {object} sqlRequest - Canonical SqlRequest with
+    *   executionMode = partition_callback
+-   * @returns {Promise<object>} Result with per-partition batches:
++   * @returns {Promise<object>} Typed dispatch outcome:
+    *   { success, batches: [{partitionId, rows}, ...],
+-   *     callbackModuleRef, callbackExport, executionMode }
++   *     failedPartitions: [typed participant failure entries],
++   *     callbackModuleRef, callbackExport }.
++   *   When every resolved partition read fails the outcome is
++   *   non-success (error/errorCode/retry semantics populated) —
++   *   a total read failure never surfaces as a clean empty result.
++   *   A partial read failure keeps the successful batches and
++   *   carries the failed partitions as typed entries.
+    */
+   async dispatch(sqlRequest) {
+     const {
+@@ -120,9 +190,16 @@ class PartitionCallbackDispatcher {
+       callbackModuleRef,
+     });
+ 
+-    // 4. Build SQL from AST and execute per-partition via QueryExecutor
++    // 4. Build SQL from AST and execute per-partition via QueryExecutor.
++    // Callback reads carry table attribution and ride the same routed
++    // delivery lane as executeSelect (system tables -> critical lane).
+     const preferLeader = this.isSystemTable(tableName);
+     const sql = this.queryExecutor.buildSelectSQL(ast);
++    const executionOptions = {tableName};
++    const deliveryPriority = this.resolveRoutedDeliveryPriority(tableName);
++    if (deliveryPriority) {
++      executionOptions.deliveryPriority = deliveryPriority;
++    }
+ 
+     const perPartitionResults = await Promise.all(
+       partitionIds.map((partitionId) =>
+@@ -132,24 +209,34 @@ class PartitionCallbackDispatcher {
+           parameters,
+           true, // forRead
+           preferLeader,
++          false, // preferSameLatencyGroup
++          executionOptions,
+         ),
+       ),
+     );
+ 
+-    // 5. Construct per-partition batches (only successful partitions)
+-    const batches = [];
+-    for (const result of perPartitionResults) {
+-      if (result.success) {
+-        batches.push({
+-          partitionId: result.partitionId,
+-          rows: result.rows,
+-        });
+-      }
++    // 5. Partition the per-partition results: successful reads become
++    // batches, failed reads become typed participant failure entries.
++    // A failed read is never silently dropped (ARCH-0139).
++    const {batches, failedPartitions} = this.partitionReadResults({
++      perPartitionResults,
++      tableName,
++      partitionIds,
++      callbackModuleRef,
++    });
++
++    if (batches.length === 0 && failedPartitions.length > 0) {
++      return this.buildAllReadsFailedOutcome({
++        failedPartitions,
++        callbackModuleRef,
++        callbackExport,
++      });
+     }
+ 
+     this.logger.debug(ADAPTER_LOG_MSG.PARTITION_CALLBACK_BATCHED, {
+       totalBatches: batches.length,
+       totalRows: batches.reduce((sum, b) => sum + b.rows.length, 0),
++      failedPartitionCount: failedPartitions.length,
+       callbackModuleRef,
+       callbackExport,
+     });
+@@ -157,10 +244,97 @@ class PartitionCallbackDispatcher {
+     return {
+       success: true,
+       batches,
++      failedPartitions,
+       callbackModuleRef,
+       callbackExport,
+     };
+   }
++
++  /**
++   * Partition per-partition read results into successful batches and
++   * typed participant failure entries, logging any failed reads.
++   *
++   * @param {object} context
++   * @param {Array<object>} context.perPartitionResults
++   * @param {string} context.tableName
++   * @param {Array<string>} context.partitionIds
++   * @param {string} context.callbackModuleRef
++   * @return {{batches: Array<object>, failedPartitions: Array<object>}}
++   * @private
++   */
++  partitionReadResults({
++    perPartitionResults,
++    tableName,
++    partitionIds,
++    callbackModuleRef,
++  }) {
++    const batches = [];
++    const failedPartitions = [];
++    for (const result of perPartitionResults) {
++      if (result.success) {
++        batches.push({
++          partitionId: result.partitionId,
++          rows: result.rows,
++        });
++      } else {
++        failedPartitions.push(buildParticipantFailureEntry(result));
++      }
++    }
++
++    if (failedPartitions.length > 0) {
++      this.logger.warn(ADAPTER_LOG_MSG.PARTITION_CALLBACK_READS_FAILED, {
++        tableName,
++        targetPartitions: partitionIds.length,
++        failedPartitionCount: failedPartitions.length,
++        failedPartitionIds: failedPartitions.map((e) => e.partitionId),
++        firstError: failedPartitions[0].error,
++        callbackModuleRef,
++      });
++    }
++
++    return {batches, failedPartitions};
++  }
++
++  /**
++   * Build the typed non-success outcome for a dispatch whose every
++   * resolved partition read failed. Retry semantics are taken from the
++   * first typed failure entry so admin consumers keep
++   * deferRetry/retryAfterMs classification.
++   *
++   * @param {object} context
++   * @param {Array<object>} context.failedPartitions - Typed entries.
++   * @param {string} context.callbackModuleRef
++   * @param {string} context.callbackExport
++   * @return {object} Non-success dispatch outcome.
++   * @private
++   */
++  buildAllReadsFailedOutcome({
++    failedPartitions,
++    callbackModuleRef,
++    callbackExport,
++  }) {
++    const firstFailure = failedPartitions[0];
++    const outcome = {
++      success: false,
++      error: ADAPTER_ERROR_MSG.PARTITION_CALLBACK_ALL_READS_FAILED,
++      errorCode: QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
++      batches: [],
++      failedPartitions,
++      callbackModuleRef,
++      callbackExport,
++    };
++    if (firstFailure.deferRetry === true || firstFailure.backpressured) {
++      outcome.deferRetry = true;
++    }
++    if (Number.isFinite(firstFailure.retryAfterMs)) {
++      outcome.retryAfterMs = firstFailure.retryAfterMs;
++    }
++    return outcome;
++  }
+ }
+ 
+-export {PartitionCallbackDispatcher};
++export {
++  PartitionCallbackDispatcher,
++  buildPartitionReadFailureHostResult,
++  mergePartitionReadFailuresIntoHostResult,
++};
+diff --git a/src/query/sql-adapter-constants.js b/src/query/sql-adapter-constants.js
+index 5bae72313096e86c1217878217a88d89448e654e..6fb708c09a53e8a91c3db94b0c2d0dc90cdf148d 100644
+--- a/src/query/sql-adapter-constants.js
++++ b/src/query/sql-adapter-constants.js
+@@ -107,6 +107,8 @@ const ADAPTER_ERROR_MSG = Object.freeze({
+     'partition_callback could not resolve table from statement',
+   PARTITION_CALLBACK_NO_PARTITIONS:
+     'No partitions found for callback target table',
++  PARTITION_CALLBACK_ALL_READS_FAILED:
++    'partition_callback failed: every target partition read failed',
+   CALLBACK_HOST_DESCRIPTOR_REQUIRED:
+     'Callback descriptor is required',
+   CALLBACK_HOST_MODULE_REF_REQUIRED:
+@@ -173,6 +175,8 @@ const ADAPTER_LOG_MSG = Object.freeze({
+     'Resolved partitions for partition_callback',
+   PARTITION_CALLBACK_BATCHED:
+     'Constructed per-partition batches for callback',
++  PARTITION_CALLBACK_READS_FAILED:
++    'Partition reads failed for partition_callback',
+   CALLBACK_HOST_EXECUTING:
+     'Callback_Execution_Host executing batches',
+   CALLBACK_HOST_BATCH_COMPLETE:
+diff --git a/src/query/sql-query-engine-instance-initializer.js b/src/query/sql-query-engine-instance-initializer.js
+index 6cb8e676034471bd0b9ed9f742315e59cfbc6c27..5965f2a4fe8026ac37fb56b2c738051614f928d9 100644
+--- a/src/query/sql-query-engine-instance-initializer.js
++++ b/src/query/sql-query-engine-instance-initializer.js
+@@ -264,6 +264,8 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
+     queryExecutor: engine.queryExecutor,
+     getTablePartitions: (name) => engine.getTablePartitions(name),
+     isSystemTable: (name) => engine.isSystemTable(name),
++    resolveRoutedDeliveryPriority: (name) =>
++      engine.resolveRoutedDeliveryPriority(name),
+   });
+ 
+   engine.parseCache = new SqlParseCache(SQL_PARSE_CACHE.DEFAULT_MAX_SIZE);
+diff --git a/src/query/sql-query-engine-lifecycle-and-callback-dispatch.js b/src/query/sql-query-engine-lifecycle-and-callback-dispatch.js
+index 728739b4f8a584f3a65f1108d82d9669e0e0f0fd..d7222694716944ba9b42c7f60de0fb12f7f00095 100644
+--- a/src/query/sql-query-engine-lifecycle-and-callback-dispatch.js
++++ b/src/query/sql-query-engine-lifecycle-and-callback-dispatch.js
+@@ -4,6 +4,10 @@ import {
+ } from './runtime-replica-state-projection.js';
+ import {initializeSqlQueryEngineInstance} from
+   './sql-query-engine-instance-initializer.js';
++import {
++  buildPartitionReadFailureHostResult,
++  mergePartitionReadFailuresIntoHostResult,
++} from './callback/partition-callback-dispatcher.js';
+ 
+ const LOCAL_STR_FUNCTION = 'function';
+ const RUNTIME_ACCESS_POLICY_DENIED_STATUS = 'denied';
+@@ -40,6 +44,72 @@ const {
+   createCallbackDriverRegistry,
+ } = SQL_QUERY_ENGINE_SHARED;
+ 
++/**
++ * Build the typed engine-level failure result for a partition_callback
++ * whose every partition read failed at dispatch time. The read failure
++ * surfaces as a non-success owner outcome carrying the typed
++ * failedPartitions entries and a host-result shaped aggregate whose
++ * counts record "N partitions, N failed" — never totalPartitions 0
++ * (ARCH-0139).
++ *
++ * @param {object} dispatchResult - Non-success dispatcher outcome.
++ * @return {object} Engine-level partition_callback failure result.
++ */
++function buildPartitionCallbackReadFailureResult(dispatchResult) {
++  const result = {
++    success: false,
++    error: dispatchResult.error,
++    errorCode: dispatchResult.errorCode,
++    batches: [],
++    failedPartitions: dispatchResult.failedPartitions,
++    callbackModuleRef: dispatchResult.callbackModuleRef,
++    callbackExport: dispatchResult.callbackExport,
++    executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
++    hostResult: buildPartitionReadFailureHostResult(
++      dispatchResult.failedPartitions,
++    ),
++  };
++  if (dispatchResult.deferRetry === true) {
++    result.deferRetry = true;
++  }
++  if (Number.isFinite(dispatchResult.retryAfterMs)) {
++    result.retryAfterMs = dispatchResult.retryAfterMs;
++  }
++  return result;
++}
++
++/**
++ * Resolve the callback runtime driver registry for a partition_callback
++ * request as a strict adapter over unified runtime selection ownership.
++ *
++ * @param {Object} engine - SQLQueryEngine instance.
++ * @param {Readonly<Object>} sqlRequest - Frozen SqlRequest object.
++ * @param {Object|null} wasmExecutor - Wasm executor when configured.
++ * @return {Object} Callback runtime driver registry.
++ */
++function resolveCallbackRuntimeRegistry(engine, sqlRequest, wasmExecutor) {
++  const unifiedRuntimeRegistry =
++    sqlRequest.runtimeDriverRegistry || engine.runtimeDriverRegistry || null;
++  if (!sqlRequest.callbackRuntimeDriverRegistry && !unifiedRuntimeRegistry) {
++    throw new Error(ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED);
++  }
++  const callbackRuntimeRegistry =
++    sqlRequest.callbackRuntimeDriverRegistry ||
++    createCallbackDriverRegistry({
++      runtimeDriverRegistry: unifiedRuntimeRegistry,
++      wasmExecutor,
++      ociFeatureGateEnabled: Boolean(sqlRequest.ociFeatureGateEnabled),
++    });
++  if (
++    typeof callbackRuntimeRegistry.hasRuntimeDriverRegistry !==
++      LOCAL_STR_FUNCTION ||
++    !callbackRuntimeRegistry.hasRuntimeDriverRegistry()
++  ) {
++    throw new Error(ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED);
++  }
++  return callbackRuntimeRegistry;
++}
++
+ function resumeDurableProvisioningWork(engine) {
+   void engine.tableCreationService.resumeDurableProvisioningJobs?.()
+     .catch((error) => engine.logger.warn(
+@@ -445,9 +515,21 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
+     });
+ 
+     // 1. Resolve target partitions and construct per-partition
+-    // batches via the single planner path.
++    // batches via the single planner path. A dispatch whose every
++    // partition read failed is a typed non-success owner outcome —
++    // never a clean empty batch list (ARCH-0139).
+     const dispatchResult =
+       await this.partitionCallbackDispatcher.dispatch(sqlRequest);
++    if (dispatchResult.success === false) {
++      this.logger.warn(ADAPTER_LOG_MSG.PARTITION_CALLBACK_READS_FAILED, {
++        error: dispatchResult.error,
++        errorCode: dispatchResult.errorCode,
++        failedPartitionCount: dispatchResult.failedPartitions.length,
++        callbackModuleRef,
++        callbackExport,
++      });
++      return buildPartitionCallbackReadFailureResult(dispatchResult);
++    }
+ 
+     // 2. Route batches through the single
+     // Callback_Execution_Host contract. No parallel
+@@ -473,24 +555,11 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
+ 
+     // 3. Create callback runtime selector as a strict
+     // adapter over unified runtime selection ownership.
+-    const unifiedRuntimeRegistry =
+-      sqlRequest.runtimeDriverRegistry || this.runtimeDriverRegistry || null;
+-    if (!sqlRequest.callbackRuntimeDriverRegistry && !unifiedRuntimeRegistry) {
+-      throw new Error(ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED);
+-    }
+-    const callbackRuntimeRegistry =
+-      sqlRequest.callbackRuntimeDriverRegistry ||
+-      createCallbackDriverRegistry({
+-        runtimeDriverRegistry: unifiedRuntimeRegistry,
+-        wasmExecutor,
+-        ociFeatureGateEnabled: Boolean(sqlRequest.ociFeatureGateEnabled),
+-      });
+-    if (
+-      typeof callbackRuntimeRegistry.hasRuntimeDriverRegistry !== LOCAL_STR_FUNCTION ||
+-      !callbackRuntimeRegistry.hasRuntimeDriverRegistry()
+-    ) {
+-      throw new Error(ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED);
+-    }
++    const callbackRuntimeRegistry = resolveCallbackRuntimeRegistry(
++      this,
++      sqlRequest,
++      wasmExecutor,
++    );
+ 
+     const host = new CallbackExecutionHost({
+       budgetEnforcer: sqlRequest.budgetEnforcer || null,
+@@ -510,18 +579,29 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
+       replicaId: sqlRequest.replicaId || null,
+     });
+ 
+-    const hostResult = await host.execute(dispatchResult.batches, descriptor, {
+-      handler,
+-      serviceDefinitionId:
+-        sqlRequest.serviceDefinitionId || callbackModuleRef || null,
+-      nodeId: sqlRequest.nodeId || this.nodeId || null,
+-      replicaId: sqlRequest.replicaId || null,
+-    });
++    const invocationHostResult =
++      await host.execute(dispatchResult.batches, descriptor, {
++        handler,
++        serviceDefinitionId:
++          sqlRequest.serviceDefinitionId || callbackModuleRef || null,
++        nodeId: sqlRequest.nodeId || this.nodeId || null,
++        replicaId: sqlRequest.replicaId || null,
++      });
++
++    // Fold partial read failures into the aggregate so the host result
++    // counts every resolved partition and carries the typed
++    // failedPartitionReads entries (empty-because-failed stays
++    // distinguishable from succeeded-with-zero-rows).
++    const hostResult = mergePartitionReadFailuresIntoHostResult(
++      invocationHostResult,
++      dispatchResult.failedPartitions,
++    );
+ 
+     this.logger.debug(ADAPTER_LOG_MSG.PARTITION_CALLBACK_COMPLETE, {
+       success: hostResult.state === LOCAL_STR_COMPLETED,
+       batchCount: dispatchResult.batches.length,
+       processedPartitions: hostResult.processedPartitions,
++      failedPartitions: hostResult.failedPartitions,
+       callbackModuleRef,
+       callbackExport,
+     });
+@@ -530,6 +610,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
+       success:
+         hostResult.state === LOCAL_STR_COMPLETED || hostResult.state === LOCAL_STR_FAILED,
+       batches: dispatchResult.batches,
++      failedPartitions: dispatchResult.failedPartitions,
+       callbackModuleRef,
+       callbackExport,
+       executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
+diff --git a/test/distributed/harness/__tests__/examples-catalog-scenario.test.js b/test/distributed/harness/__tests__/examples-catalog-scenario.test.js
+index f89420d5da545f4c9ca541e132ea44a018c74e83..a0b93ac3978e486355cffaf4ea695cbeada04c79 100644
+--- a/test/distributed/harness/__tests__/examples-catalog-scenario.test.js
++++ b/test/distributed/harness/__tests__/examples-catalog-scenario.test.js
+@@ -87,6 +87,75 @@ describe('examples-catalog scenario', () => {
+     );
+   });
+ 
++  it('routes to the seed when the seed is the only replica host', async () => {
++    const outputDir = await mkdtemp(join(tmpdir(), OUTPUT_PREFIX));
++    let seedPartitionCalls = 0;
++    let joinerPartitionCalls = 0;
++
++    const partitionsByTableSql = /FROM partitions WHERE table_name/;
++    const servicesSql = /FROM services/;
++
++    try {
++      // Every table's only replica host is the seed: partition p0 is
++      // served by seed-node. The resolved replica host must be the
++      // FIRST candidate even though it is the seed — the pre-fix
++      // inversion demoted it behind every non-seed node.
++      const seedNode = {
++        id: 'seed-node',
++        query: async (sql) => {
++          if (partitionsByTableSql.test(String(sql))) {
++            return {rows: [{partition_id: 'p0'}]};
++          }
++          if (servicesSql.test(String(sql))) {
++            return {rows: [{
++              partition_id: 'p0',
++              node_id: 'seed-node',
++              status: 'active',
++            }]};
++          }
++          return {rows: []};
++        },
++        partitionCallback: async (payload) => {
++          seedPartitionCalls += 1;
++          return {
++            hostResult: {
++              partitionResults: [{
++                rows: buildCallbackRows(payload.callbackModuleRef),
++              }],
++            },
++          };
++        },
++      };
++      const joinerNode = {
++        id: 'joiner-node',
++        query: async () => ({rows: []}),
++        partitionCallback: async () => {
++          joinerPartitionCalls += 1;
++          throw new Error('joiner does not host the replica');
++        },
++      };
++      const cluster = {
++        _config: {outputDir},
++        _scenarioOverrides: {
++          examplesCatalog: {
++            expectedNodeCount: 2,
++            localReplicaRouting: true,
++          },
++        },
++        getNodes: () => [seedNode, joinerNode],
++      };
++
++      const result = await run(cluster);
++      assert.equal(result.exampleResults.requiredFailed, 0);
++      assert.ok(seedPartitionCalls > 0,
++        'resolved replica host (the seed) serves the callbacks');
++      assert.equal(joinerPartitionCalls, 0,
++        'non-replica nodes are not tried before the resolved host');
++    } finally {
++      await rm(outputDir, {recursive: true, force: true});
++    }
++  });
++
+   it('prefers non-seed callback routes when the seed is degraded', async () => {
+     const outputDir = await mkdtemp(join(tmpdir(), OUTPUT_PREFIX));
+     let seedPartitionCalls = 0;
+diff --git a/test/distributed/scenarios/examples-catalog.js b/test/distributed/scenarios/examples-catalog.js
+index 44c1b46f970bbcd74438c1f51126cd3a8d7a5326..ee40ecaaac818f70afb2ec219cccf709eeb9a171 100644
+--- a/test/distributed/scenarios/examples-catalog.js
++++ b/test/distributed/scenarios/examples-catalog.js
+@@ -141,6 +141,13 @@ function createClusterClient(nodes, seedNode, options = {}) {
+     ...nodes.filter((node) => node?.id === seedNode?.id),
+   ];
+ 
++  // The resolved replica host is ALWAYS the first candidate — even when
++  // it is the seed. Demoting the seed here discarded the only replica
++  // host when a table's replicas all lived on the seed, sending the
++  // callback to nodes that could only reach the data over a degraded
++  // transport hop. Remaining nodes stay as failover candidates; a typed
++  // non-success callback outcome rejects the client promise and engages
++  // that failover.
+   const buildCandidateNodeOrder = (preferredNode) => {
+     const ordered = [];
+     const pushNode = (node) => {
+@@ -154,13 +161,6 @@ function createClusterClient(nodes, seedNode, options = {}) {
+       ordered.push(node);
+     };
+ 
+-    if (preferredNode?.id === seedNode?.id) {
+-      for (const node of preferredReadNodes) {
+-        pushNode(node);
+-      }
+-      return ordered;
+-    }
+-
+     pushNode(preferredNode);
+     for (const node of preferredReadNodes) {
+       pushNode(node);
+diff --git a/test/query/callback-execution-host.test.js b/test/query/callback-execution-host.test.js
+index 18742c2c41cd2f312e6658cae8fab7e44d86ae50..dac665fa34a1e85d218f8bd27a59bc5e64707a0b 100644
+--- a/test/query/callback-execution-host.test.js
++++ b/test/query/callback-execution-host.test.js
+@@ -15,6 +15,10 @@ import {
+   CallbackExecutionHost,
+   validateDescriptor,
+ } from '../../src/query/callback/callback-execution-host.js';
++import {
++  buildPartitionReadFailureHostResult,
++  mergePartitionReadFailuresIntoHostResult,
++} from '../../src/query/callback/partition-callback-dispatcher.js';
+ import {ADAPTER_ERROR_MSG, CALLBACK_RUNTIME_KIND} from
+   '../../src/query/sql-adapter-constants.js';
+ import {STAGE_STATE} from
+@@ -244,6 +248,96 @@ test('execute - handles empty batches array', async (t) => {
+   t.equal(result.processedPartitions, 0);
+ });
+ 
++// --- Read-failure host result semantics (ARCH-0139) ---
++
++test('host result - empty-because-failed is distinguishable from ' +
++  'succeeded-with-zero-rows', async (t) => {
++  const host = new CallbackExecutionHost({
++    runtimeDriverRegistry: makeRegistry(),
++  });
++
++  // Succeeded with zero rows: every partition read produced a batch,
++  // the callback ran, and there were simply no rows.
++  const zeroRowBatches = [
++    {partitionId: 'p0', rows: []},
++  ];
++  const zeroRowResult = await host.execute(
++    zeroRowBatches, makeDescriptor(), {handler: () => []},
++  );
++  t.equal(zeroRowResult.state, STAGE_STATE.COMPLETED);
++  t.equal(zeroRowResult.totalPartitions, 1);
++  t.equal(zeroRowResult.failedPartitions, 0);
++  t.equal(zeroRowResult.totalRows, 0);
++  t.equal(zeroRowResult.failedPartitionReads, undefined);
++
++  // Empty because failed: the partition read never produced a batch.
++  // The merged aggregate records the partition as failed and carries
++  // the typed read-failure entry — a different observable outcome.
++  const readFailure = {
++    partitionId: 'p0',
++    error: 'partition read failed: ack timeout',
++    errorCode: 'TIMEOUT',
++    participantNodeId: 'node-9',
++    retryAfterMs: 25,
++    backpressured: true,
++  };
++  const emptyHostResult = await host.execute(
++    [], makeDescriptor(), {handler: () => []},
++  );
++  const failedResult = mergePartitionReadFailuresIntoHostResult(
++    emptyHostResult,
++    [readFailure],
++  );
++  t.equal(failedResult.state, STAGE_STATE.FAILED);
++  t.equal(failedResult.totalPartitions, 1);
++  t.equal(failedResult.failedPartitions, 1);
++  t.same(failedResult.failedPartitionReads, [readFailure]);
++});
++
++test('host result - merge keeps invocation counts and adds read ' +
++  'failures on partial outcomes', async (t) => {
++  const host = new CallbackExecutionHost({
++    runtimeDriverRegistry: makeRegistry(),
++  });
++  const result = await host.execute(
++    makeBatches(2), makeDescriptor(), {handler: (batch) => batch.rows},
++  );
++  const readFailure = {
++    partitionId: 'p9',
++    error: 'partition read failed: ack timeout',
++  };
++  const merged = mergePartitionReadFailuresIntoHostResult(
++    result,
++    [readFailure],
++  );
++
++  t.equal(merged.state, STAGE_STATE.FAILED);
++  t.equal(merged.totalPartitions, 3);
++  t.equal(merged.processedPartitions, 2);
++  t.equal(merged.failedPartitions, 1);
++  t.same(merged.failedPartitionReads, [readFailure]);
++
++  // No read failures: the host result passes through untouched.
++  const untouched = mergePartitionReadFailuresIntoHostResult(result, []);
++  t.equal(untouched, result);
++});
++
++test('host result - all-reads-failed synthesized aggregate records ' +
++  'every partition as failed', async (t) => {
++  const readFailures = [
++    {partitionId: 'p0', error: 'partition read failed: ack timeout'},
++    {partitionId: 'p1', error: 'partition read failed: ack timeout'},
++  ];
++  const synthesized = buildPartitionReadFailureHostResult(readFailures);
++
++  t.equal(synthesized.state, STAGE_STATE.FAILED);
++  t.equal(synthesized.totalPartitions, 2);
++  t.equal(synthesized.processedPartitions, 0);
++  t.equal(synthesized.failedPartitions, 2);
++  t.same(synthesized.failedPartitionReads, readFailures);
++  t.equal(synthesized.totalRows, 0);
++});
++
+ // --- Failure handling ---
+ 
+ test('execute - marks batch as failed on handler error',
+diff --git a/test/query/partition-callback-dispatcher.test.js b/test/query/partition-callback-dispatcher.test.js
+index da4f448d664cca0c896149a13a230c9dbd5aa31d..3b649380433f58d25b505abbe0efc04dca99243d 100644
+--- a/test/query/partition-callback-dispatcher.test.js
++++ b/test/query/partition-callback-dispatcher.test.js
+@@ -13,6 +13,8 @@ import {PartitionCallbackDispatcher} from
+   '../../src/query/callback/partition-callback-dispatcher.js';
+ import {ADAPTER_ERROR_MSG} from
+   '../../src/query/sql-adapter-constants.js';
++import {QUERY_ERROR_CODE} from
++  '../../src/query/query-constants.js';
+ 
+ // --- Helpers ---
+ 
+@@ -39,9 +41,20 @@ function makePartitions(count) {
+   return partitions;
+ }
+ 
++// Typed read-failure fixture matching the shape produced by
++// buildPartitionExecutionFailureResult on the live executor path.
++const READ_FAILURE = Object.freeze({
++  error: 'partition read failed: ack timeout',
++  errorCode: 'TIMEOUT',
++  participantNodeId: 'node-9',
++  retryAfterMs: 25,
++  backpressured: true,
++});
++
+ function makeDispatcher(opts = {}) {
+   const partitions = opts.partitions || makePartitions(1);
+   const partitionRows = opts.partitionRows || {};
++  const executeCalls = opts.executeCalls || [];
+ 
+   const sqlParser = {
+     parse: (_sql) => opts.ast || {
+@@ -61,9 +74,27 @@ function makeDispatcher(opts = {}) {
+ 
+   const queryExecutor = {
+     buildSelectSQL: (_ast) => 'SELECT * FROM users',
+-    executeOnPartition: async (partitionId, _sql, _params, _read, _pref) => {
++    executeOnPartition: async (
++      partitionId,
++      _sql,
++      _params,
++      _read,
++      _pref,
++      _preferSameLatencyGroup,
++      executionOptions,
++    ) => {
++      executeCalls.push({partitionId, executionOptions});
+       if (opts.failPartitions && opts.failPartitions.includes(partitionId)) {
+-        return {partitionId, success: false, error: 'fail', rows: []};
++        return {
++          partitionId,
++          success: false,
++          error: READ_FAILURE.error,
++          errorCode: READ_FAILURE.errorCode,
++          participantNodeId: READ_FAILURE.participantNodeId,
++          retryAfterMs: READ_FAILURE.retryAfterMs,
++          backpressured: READ_FAILURE.backpressured,
++          rows: [],
++        };
+       }
+       const rows = partitionRows[partitionId] || [{id: 1}];
+       return {partitionId, success: true, rows};
+@@ -72,6 +103,8 @@ function makeDispatcher(opts = {}) {
+ 
+   const getTablePartitions = (_name) => partitions;
+   const isSystemTable = (_name) => opts.isSystem || false;
++  const resolveRoutedDeliveryPriority =
++    opts.resolveRoutedDeliveryPriority || (() => opts.deliveryPriority);
+ 
+   return new PartitionCallbackDispatcher({
+     sqlParser,
+@@ -79,6 +112,7 @@ function makeDispatcher(opts = {}) {
+     queryExecutor,
+     getTablePartitions,
+     isSystemTable,
++    resolveRoutedDeliveryPriority,
+   });
+ }
+ 
+@@ -119,25 +153,112 @@ test('dispatcher - returns per-partition batches for multiple partitions',
+     t.equal(result.batches[1].rows.length, 2);
+   });
+ 
+-test('dispatcher - only includes successful partition results',
++test('dispatcher - partial read failure returns typed partial outcome ' +
++  'with batches and failedPartitions', async (t) => {
++  const dispatcher = makeDispatcher({
++    partitions: makePartitions(3),
++    failPartitions: ['p1'],
++    partitionRows: {
++      p0: [{id: 1}],
++      p2: [{id: 3}],
++    },
++  });
++  const result = await dispatcher.dispatch(makeSqlRequest());
++
++  t.equal(result.success, true);
++  t.equal(result.batches.length, 2);
++  const ids = result.batches.map((b) => b.partitionId);
++  t.ok(ids.includes('p0'));
++  t.ok(ids.includes('p2'));
++  t.ok(!ids.includes('p1'));
++
++  // The failed read is never silently dropped: it surfaces as a
++  // typed participant failure entry (ARCH-0139).
++  t.equal(result.failedPartitions.length, 1);
++  const entry = result.failedPartitions[0];
++  t.equal(entry.partitionId, 'p1');
++  t.equal(entry.error, READ_FAILURE.error);
++  t.equal(entry.errorCode, READ_FAILURE.errorCode);
++  t.equal(entry.participantNodeId, READ_FAILURE.participantNodeId);
++  t.equal(entry.retryAfterMs, READ_FAILURE.retryAfterMs);
++  t.equal(entry.backpressured, READ_FAILURE.backpressured);
++});
++
++test('dispatcher - all-failed partition reads return non-success ' +
++  'typed outcome, never a clean empty batch list', async (t) => {
++  const dispatcher = makeDispatcher({
++    partitions: makePartitions(3),
++    failPartitions: ['p0', 'p1', 'p2'],
++  });
++  const result = await dispatcher.dispatch(makeSqlRequest());
++
++  t.equal(result.success, false);
++  t.equal(
++    result.error,
++    ADAPTER_ERROR_MSG.PARTITION_CALLBACK_ALL_READS_FAILED,
++  );
++  t.equal(
++    result.errorCode,
++    QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
++  );
++  t.same(result.batches, []);
++  t.equal(result.failedPartitions.length, 3);
++  t.same(
++    result.failedPartitions.map((e) => e.partitionId).sort(),
++    ['p0', 'p1', 'p2'],
++  );
++  // Retry semantics from the typed entries reach the outcome.
++  t.equal(result.deferRetry, true);
++  t.equal(result.retryAfterMs, READ_FAILURE.retryAfterMs);
++});
++
++test('dispatcher - all reads succeeding returns empty failedPartitions',
+   async (t) => {
+     const dispatcher = makeDispatcher({
+-      partitions: makePartitions(3),
+-      failPartitions: ['p1'],
+-      partitionRows: {
+-        p0: [{id: 1}],
+-        p2: [{id: 3}],
+-      },
++      partitions: makePartitions(2),
++      partitionRows: {p0: [{id: 1}], p1: [{id: 2}]},
+     });
+     const result = await dispatcher.dispatch(makeSqlRequest());
+ 
+     t.equal(result.success, true);
+-    t.equal(result.batches.length, 2);
+-    const ids = result.batches.map((b) => b.partitionId);
+-    t.ok(ids.includes('p0'));
+-    t.ok(ids.includes('p2'));
+-    t.ok(!ids.includes('p1'));
++    t.same(result.failedPartitions, []);
++  });
++
++test('dispatcher - passes executionOptions with tableName and routed ' +
++  'delivery priority to executeOnPartition', async (t) => {
++  const executeCalls = [];
++  const resolverCalls = [];
++  const dispatcher = makeDispatcher({
++    partitions: makePartitions(2),
++    executeCalls,
++    isSystem: true,
++    resolveRoutedDeliveryPriority: (tableName) => {
++      resolverCalls.push(tableName);
++      return 'critical';
++    },
+   });
++  await dispatcher.dispatch(makeSqlRequest());
++
++  t.same(resolverCalls, ['users']);
++  t.equal(executeCalls.length, 2);
++  for (const call of executeCalls) {
++    t.equal(call.executionOptions.tableName, 'users');
++    t.equal(call.executionOptions.deliveryPriority, 'critical');
++  }
++});
++
++test('dispatcher - omits deliveryPriority when the routed resolver ' +
++  'returns none', async (t) => {
++  const executeCalls = [];
++  const dispatcher = makeDispatcher({
++    executeCalls,
++  });
++  await dispatcher.dispatch(makeSqlRequest());
++
++  t.equal(executeCalls.length, 1);
++  t.equal(executeCalls[0].executionOptions.tableName, 'users');
++  t.equal(executeCalls[0].executionOptions.deliveryPriority, undefined);
++});
+ 
+ test('dispatcher - respects partition resolver subset',
+   async (t) => {
+diff --git a/test/query/partition-callback-integration.test.js b/test/query/partition-callback-integration.test.js
+index 181c5bcaf729cd0ca818df514de3c33500397cd0..ca32b5ed18b89c9f4eb6687dcf83e5630e4c1e16 100644
+--- a/test/query/partition-callback-integration.test.js
++++ b/test/query/partition-callback-integration.test.js
+@@ -317,6 +317,84 @@ test('integration - handler error on one partition yields ' +
+   t.equal(completed.length, PARTITION_COUNT - 1);
+ });
+ 
++test('integration - partition read failure on one partition yields ' +
++  'typed partial outcome with failed read counts', async (t) => {
++  const partitionRows = makePartitionRows(PARTITION_COUNT);
++  const engine = createEngine(PARTITION_COUNT, partitionRows, {
++    failPartitions: ['p1'],
++  });
++  const runtimeRegistry = createRuntimeDriverRegistry();
++
++  const processed = [];
++  const handler = (batch) => {
++    processed.push(batch.partitionId);
++    return batch.rows;
++  };
++
++  const req = createCallbackRequest();
++  const result = await engine.executePartitionCallback({
++    ...req,
++    handler,
++    runtimeDriverRegistry: runtimeRegistry,
++  });
++
++  // The read-side twin of the handler-error partial contract: the
++  // failed partition READ surfaces in the host result counts instead
++  // of being silently dropped from the batch list (ARCH-0139).
++  t.equal(result.hostResult.state, STAGE_STATE.FAILED);
++  t.equal(result.hostResult.totalPartitions, PARTITION_COUNT);
++  t.equal(result.hostResult.failedPartitions, 1);
++  t.equal(
++    result.hostResult.processedPartitions, PARTITION_COUNT - 1,
++  );
++  t.equal(result.hostResult.failedPartitionReads.length, 1);
++  t.equal(result.hostResult.failedPartitionReads[0].partitionId, 'p1');
++  t.ok(result.hostResult.failedPartitionReads[0].error);
++  t.equal(result.failedPartitions.length, 1);
++  t.same(processed.sort(), ['p0', 'p2']);
++});
++
++test('integration - all partition reads failing yields non-success ' +
++  'typed outcome instead of totalPartitions 0', async (t) => {
++  const partitionRows = makePartitionRows(PARTITION_COUNT);
++  const engine = createEngine(PARTITION_COUNT, partitionRows, {
++    failPartitions: ['p0', 'p1', 'p2'],
++  });
++  const runtimeRegistry = createRuntimeDriverRegistry();
++
++  let handlerCalled = false;
++  const req = createCallbackRequest();
++  const result = await engine.executePartitionCallback({
++    ...req,
++    handler: () => {
++      handlerCalled = true;
++      return [];
++    },
++    runtimeDriverRegistry: runtimeRegistry,
++  });
++
++  t.equal(result.success, false,
++    'total read failure is a non-success typed outcome, ' +
++    'never a clean empty result');
++  t.ok(result.error, 'typed outcome carries an error message');
++  t.ok(result.errorCode, 'typed outcome carries an errorCode');
++  t.equal(handlerCalled, false,
++    'callback never invoked when no batch exists');
++
++  // Artifacts record "3 partitions, 3 failed" — not totalPartitions 0.
++  t.equal(result.hostResult.state, STAGE_STATE.FAILED);
++  t.equal(result.hostResult.totalPartitions, PARTITION_COUNT);
++  t.equal(result.hostResult.failedPartitions, PARTITION_COUNT);
++  t.equal(result.hostResult.processedPartitions, 0);
++  t.equal(
++    result.hostResult.failedPartitionReads.length, PARTITION_COUNT,
++  );
++  for (const entry of result.hostResult.failedPartitionReads) {
++    t.ok(entry.partitionId, 'entry names its partition');
++    t.ok(entry.error, 'entry carries the read error');
++  }
++});
++
+ test('integration - budget exceeded mid-execution propagates ' +
+   'budget error', async (t) => {
+   const partitionRows = makePartitionRows(PARTITION_COUNT);

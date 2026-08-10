@@ -264,6 +264,8 @@ function initializeSqlQueryEngineInstance(engine, options = {}) {
     queryExecutor: engine.queryExecutor,
     getTablePartitions: (name) => engine.getTablePartitions(name),
     isSystemTable: (name) => engine.isSystemTable(name),
+    resolveRoutedDeliveryPriority: (name) =>
+      engine.resolveRoutedDeliveryPriority(name),
   });
 
   engine.parseCache = new SqlParseCache(SQL_PARSE_CACHE.DEFAULT_MAX_SIZE);

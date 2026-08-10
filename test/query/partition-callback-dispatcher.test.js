@@ -13,6 +13,8 @@ import {PartitionCallbackDispatcher} from
   '../../src/query/callback/partition-callback-dispatcher.js';
 import {ADAPTER_ERROR_MSG} from
   '../../src/query/sql-adapter-constants.js';
+import {QUERY_ERROR_CODE} from
+  '../../src/query/query-constants.js';
 
 // --- Helpers ---
 
@@ -39,9 +41,20 @@ function makePartitions(count) {
   return partitions;
 }
 
+// Typed read-failure fixture matching the shape produced by
+// buildPartitionExecutionFailureResult on the live executor path.
+const READ_FAILURE = Object.freeze({
+  error: 'partition read failed: ack timeout',
+  errorCode: 'TIMEOUT',
+  participantNodeId: 'node-9',
+  retryAfterMs: 25,
+  backpressured: true,
+});
+
 function makeDispatcher(opts = {}) {
   const partitions = opts.partitions || makePartitions(1);
   const partitionRows = opts.partitionRows || {};
+  const executeCalls = opts.executeCalls || [];
 
   const sqlParser = {
     parse: (_sql) => opts.ast || {
@@ -61,9 +74,27 @@ function makeDispatcher(opts = {}) {
 
   const queryExecutor = {
     buildSelectSQL: (_ast) => 'SELECT * FROM users',
-    executeOnPartition: async (partitionId, _sql, _params, _read, _pref) => {
+    executeOnPartition: async (
+      partitionId,
+      _sql,
+      _params,
+      _read,
+      _pref,
+      _preferSameLatencyGroup,
+      executionOptions,
+    ) => {
+      executeCalls.push({partitionId, executionOptions});
       if (opts.failPartitions && opts.failPartitions.includes(partitionId)) {
-        return {partitionId, success: false, error: 'fail', rows: []};
+        return {
+          partitionId,
+          success: false,
+          error: READ_FAILURE.error,
+          errorCode: READ_FAILURE.errorCode,
+          participantNodeId: READ_FAILURE.participantNodeId,
+          retryAfterMs: READ_FAILURE.retryAfterMs,
+          backpressured: READ_FAILURE.backpressured,
+          rows: [],
+        };
       }
       const rows = partitionRows[partitionId] || [{id: 1}];
       return {partitionId, success: true, rows};
@@ -72,6 +103,8 @@ function makeDispatcher(opts = {}) {
 
   const getTablePartitions = (_name) => partitions;
   const isSystemTable = (_name) => opts.isSystem || false;
+  const resolveRoutedDeliveryPriority =
+    opts.resolveRoutedDeliveryPriority || (() => opts.deliveryPriority);
 
   return new PartitionCallbackDispatcher({
     sqlParser,
@@ -79,6 +112,7 @@ function makeDispatcher(opts = {}) {
     queryExecutor,
     getTablePartitions,
     isSystemTable,
+    resolveRoutedDeliveryPriority,
   });
 }
 
@@ -119,25 +153,112 @@ test('dispatcher - returns per-partition batches for multiple partitions',
     t.equal(result.batches[1].rows.length, 2);
   });
 
-test('dispatcher - only includes successful partition results',
+test('dispatcher - partial read failure returns typed partial outcome ' +
+  'with batches and failedPartitions', async (t) => {
+  const dispatcher = makeDispatcher({
+    partitions: makePartitions(3),
+    failPartitions: ['p1'],
+    partitionRows: {
+      p0: [{id: 1}],
+      p2: [{id: 3}],
+    },
+  });
+  const result = await dispatcher.dispatch(makeSqlRequest());
+
+  t.equal(result.success, true);
+  t.equal(result.batches.length, 2);
+  const ids = result.batches.map((b) => b.partitionId);
+  t.ok(ids.includes('p0'));
+  t.ok(ids.includes('p2'));
+  t.ok(!ids.includes('p1'));
+
+  // The failed read is never silently dropped: it surfaces as a
+  // typed participant failure entry (ARCH-0139).
+  t.equal(result.failedPartitions.length, 1);
+  const entry = result.failedPartitions[0];
+  t.equal(entry.partitionId, 'p1');
+  t.equal(entry.error, READ_FAILURE.error);
+  t.equal(entry.errorCode, READ_FAILURE.errorCode);
+  t.equal(entry.participantNodeId, READ_FAILURE.participantNodeId);
+  t.equal(entry.retryAfterMs, READ_FAILURE.retryAfterMs);
+  t.equal(entry.backpressured, READ_FAILURE.backpressured);
+});
+
+test('dispatcher - all-failed partition reads return non-success ' +
+  'typed outcome, never a clean empty batch list', async (t) => {
+  const dispatcher = makeDispatcher({
+    partitions: makePartitions(3),
+    failPartitions: ['p0', 'p1', 'p2'],
+  });
+  const result = await dispatcher.dispatch(makeSqlRequest());
+
+  t.equal(result.success, false);
+  t.equal(
+    result.error,
+    ADAPTER_ERROR_MSG.PARTITION_CALLBACK_ALL_READS_FAILED,
+  );
+  t.equal(
+    result.errorCode,
+    QUERY_ERROR_CODE.DISTRIBUTED_PARTICIPANT_FAILURE,
+  );
+  t.same(result.batches, []);
+  t.equal(result.failedPartitions.length, 3);
+  t.same(
+    result.failedPartitions.map((e) => e.partitionId).sort(),
+    ['p0', 'p1', 'p2'],
+  );
+  // Retry semantics from the typed entries reach the outcome.
+  t.equal(result.deferRetry, true);
+  t.equal(result.retryAfterMs, READ_FAILURE.retryAfterMs);
+});
+
+test('dispatcher - all reads succeeding returns empty failedPartitions',
   async (t) => {
     const dispatcher = makeDispatcher({
-      partitions: makePartitions(3),
-      failPartitions: ['p1'],
-      partitionRows: {
-        p0: [{id: 1}],
-        p2: [{id: 3}],
-      },
+      partitions: makePartitions(2),
+      partitionRows: {p0: [{id: 1}], p1: [{id: 2}]},
     });
     const result = await dispatcher.dispatch(makeSqlRequest());
 
     t.equal(result.success, true);
-    t.equal(result.batches.length, 2);
-    const ids = result.batches.map((b) => b.partitionId);
-    t.ok(ids.includes('p0'));
-    t.ok(ids.includes('p2'));
-    t.ok(!ids.includes('p1'));
+    t.same(result.failedPartitions, []);
   });
+
+test('dispatcher - passes executionOptions with tableName and routed ' +
+  'delivery priority to executeOnPartition', async (t) => {
+  const executeCalls = [];
+  const resolverCalls = [];
+  const dispatcher = makeDispatcher({
+    partitions: makePartitions(2),
+    executeCalls,
+    isSystem: true,
+    resolveRoutedDeliveryPriority: (tableName) => {
+      resolverCalls.push(tableName);
+      return 'critical';
+    },
+  });
+  await dispatcher.dispatch(makeSqlRequest());
+
+  t.same(resolverCalls, ['users']);
+  t.equal(executeCalls.length, 2);
+  for (const call of executeCalls) {
+    t.equal(call.executionOptions.tableName, 'users');
+    t.equal(call.executionOptions.deliveryPriority, 'critical');
+  }
+});
+
+test('dispatcher - omits deliveryPriority when the routed resolver ' +
+  'returns none', async (t) => {
+  const executeCalls = [];
+  const dispatcher = makeDispatcher({
+    executeCalls,
+  });
+  await dispatcher.dispatch(makeSqlRequest());
+
+  t.equal(executeCalls.length, 1);
+  t.equal(executeCalls[0].executionOptions.tableName, 'users');
+  t.equal(executeCalls[0].executionOptions.deliveryPriority, undefined);
+});
 
 test('dispatcher - respects partition resolver subset',
   async (t) => {

@@ -4,6 +4,10 @@ import {
 } from './runtime-replica-state-projection.js';
 import {initializeSqlQueryEngineInstance} from
   './sql-query-engine-instance-initializer.js';
+import {
+  buildPartitionReadFailureHostResult,
+  mergePartitionReadFailuresIntoHostResult,
+} from './callback/partition-callback-dispatcher.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const RUNTIME_ACCESS_POLICY_DENIED_STATUS = 'denied';
@@ -39,6 +43,72 @@ const {
   ZERO_SHA256_DIGEST,
   createCallbackDriverRegistry,
 } = SQL_QUERY_ENGINE_SHARED;
+
+/**
+ * Build the typed engine-level failure result for a partition_callback
+ * whose every partition read failed at dispatch time. The read failure
+ * surfaces as a non-success owner outcome carrying the typed
+ * failedPartitions entries and a host-result shaped aggregate whose
+ * counts record "N partitions, N failed" — never totalPartitions 0
+ * (ARCH-0139).
+ *
+ * @param {object} dispatchResult - Non-success dispatcher outcome.
+ * @return {object} Engine-level partition_callback failure result.
+ */
+function buildPartitionCallbackReadFailureResult(dispatchResult) {
+  const result = {
+    success: false,
+    error: dispatchResult.error,
+    errorCode: dispatchResult.errorCode,
+    batches: [],
+    failedPartitions: dispatchResult.failedPartitions,
+    callbackModuleRef: dispatchResult.callbackModuleRef,
+    callbackExport: dispatchResult.callbackExport,
+    executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
+    hostResult: buildPartitionReadFailureHostResult(
+      dispatchResult.failedPartitions,
+    ),
+  };
+  if (dispatchResult.deferRetry === true) {
+    result.deferRetry = true;
+  }
+  if (Number.isFinite(dispatchResult.retryAfterMs)) {
+    result.retryAfterMs = dispatchResult.retryAfterMs;
+  }
+  return result;
+}
+
+/**
+ * Resolve the callback runtime driver registry for a partition_callback
+ * request as a strict adapter over unified runtime selection ownership.
+ *
+ * @param {Object} engine - SQLQueryEngine instance.
+ * @param {Readonly<Object>} sqlRequest - Frozen SqlRequest object.
+ * @param {Object|null} wasmExecutor - Wasm executor when configured.
+ * @return {Object} Callback runtime driver registry.
+ */
+function resolveCallbackRuntimeRegistry(engine, sqlRequest, wasmExecutor) {
+  const unifiedRuntimeRegistry =
+    sqlRequest.runtimeDriverRegistry || engine.runtimeDriverRegistry || null;
+  if (!sqlRequest.callbackRuntimeDriverRegistry && !unifiedRuntimeRegistry) {
+    throw new Error(ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED);
+  }
+  const callbackRuntimeRegistry =
+    sqlRequest.callbackRuntimeDriverRegistry ||
+    createCallbackDriverRegistry({
+      runtimeDriverRegistry: unifiedRuntimeRegistry,
+      wasmExecutor,
+      ociFeatureGateEnabled: Boolean(sqlRequest.ociFeatureGateEnabled),
+    });
+  if (
+    typeof callbackRuntimeRegistry.hasRuntimeDriverRegistry !==
+      LOCAL_STR_FUNCTION ||
+    !callbackRuntimeRegistry.hasRuntimeDriverRegistry()
+  ) {
+    throw new Error(ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED);
+  }
+  return callbackRuntimeRegistry;
+}
 
 function resumeDurableProvisioningWork(engine) {
   void engine.tableCreationService.resumeDurableProvisioningJobs?.()
@@ -445,9 +515,21 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
     });
 
     // 1. Resolve target partitions and construct per-partition
-    // batches via the single planner path.
+    // batches via the single planner path. A dispatch whose every
+    // partition read failed is a typed non-success owner outcome —
+    // never a clean empty batch list (ARCH-0139).
     const dispatchResult =
       await this.partitionCallbackDispatcher.dispatch(sqlRequest);
+    if (dispatchResult.success === false) {
+      this.logger.warn(ADAPTER_LOG_MSG.PARTITION_CALLBACK_READS_FAILED, {
+        error: dispatchResult.error,
+        errorCode: dispatchResult.errorCode,
+        failedPartitionCount: dispatchResult.failedPartitions.length,
+        callbackModuleRef,
+        callbackExport,
+      });
+      return buildPartitionCallbackReadFailureResult(dispatchResult);
+    }
 
     // 2. Route batches through the single
     // Callback_Execution_Host contract. No parallel
@@ -473,24 +555,11 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
 
     // 3. Create callback runtime selector as a strict
     // adapter over unified runtime selection ownership.
-    const unifiedRuntimeRegistry =
-      sqlRequest.runtimeDriverRegistry || this.runtimeDriverRegistry || null;
-    if (!sqlRequest.callbackRuntimeDriverRegistry && !unifiedRuntimeRegistry) {
-      throw new Error(ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED);
-    }
-    const callbackRuntimeRegistry =
-      sqlRequest.callbackRuntimeDriverRegistry ||
-      createCallbackDriverRegistry({
-        runtimeDriverRegistry: unifiedRuntimeRegistry,
-        wasmExecutor,
-        ociFeatureGateEnabled: Boolean(sqlRequest.ociFeatureGateEnabled),
-      });
-    if (
-      typeof callbackRuntimeRegistry.hasRuntimeDriverRegistry !== LOCAL_STR_FUNCTION ||
-      !callbackRuntimeRegistry.hasRuntimeDriverRegistry()
-    ) {
-      throw new Error(ADAPTER_ERROR_MSG.CALLBACK_RUNTIME_REGISTRY_REQUIRED);
-    }
+    const callbackRuntimeRegistry = resolveCallbackRuntimeRegistry(
+      this,
+      sqlRequest,
+      wasmExecutor,
+    );
 
     const host = new CallbackExecutionHost({
       budgetEnforcer: sqlRequest.budgetEnforcer || null,
@@ -510,18 +579,29 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
       replicaId: sqlRequest.replicaId || null,
     });
 
-    const hostResult = await host.execute(dispatchResult.batches, descriptor, {
-      handler,
-      serviceDefinitionId:
-        sqlRequest.serviceDefinitionId || callbackModuleRef || null,
-      nodeId: sqlRequest.nodeId || this.nodeId || null,
-      replicaId: sqlRequest.replicaId || null,
-    });
+    const invocationHostResult =
+      await host.execute(dispatchResult.batches, descriptor, {
+        handler,
+        serviceDefinitionId:
+          sqlRequest.serviceDefinitionId || callbackModuleRef || null,
+        nodeId: sqlRequest.nodeId || this.nodeId || null,
+        replicaId: sqlRequest.replicaId || null,
+      });
+
+    // Fold partial read failures into the aggregate so the host result
+    // counts every resolved partition and carries the typed
+    // failedPartitionReads entries (empty-because-failed stays
+    // distinguishable from succeeded-with-zero-rows).
+    const hostResult = mergePartitionReadFailuresIntoHostResult(
+      invocationHostResult,
+      dispatchResult.failedPartitions,
+    );
 
     this.logger.debug(ADAPTER_LOG_MSG.PARTITION_CALLBACK_COMPLETE, {
       success: hostResult.state === LOCAL_STR_COMPLETED,
       batchCount: dispatchResult.batches.length,
       processedPartitions: hostResult.processedPartitions,
+      failedPartitions: hostResult.failedPartitions,
       callbackModuleRef,
       callbackExport,
     });
@@ -530,6 +610,7 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
       success:
         hostResult.state === LOCAL_STR_COMPLETED || hostResult.state === LOCAL_STR_FAILED,
       batches: dispatchResult.batches,
+      failedPartitions: dispatchResult.failedPartitions,
       callbackModuleRef,
       callbackExport,
       executionMode: EXECUTION_MODE.PARTITION_CALLBACK,
@@ -721,25 +802,49 @@ class SQLQueryEngineLifecycleAndCallbackDispatch {
    * @private
    */
   buildWasmCallbackManifest(manifestRow, runExport, callbackModuleRef) {
-    const declaredExports = this.parseJsonArrayField(manifestRow?.exports, [
+    return {
+      ...this.buildWasmCallbackManifestIdentity(manifestRow, callbackModuleRef),
       runExport,
-    ]);
-    const exportsWithRun = declaredExports.includes(runExport) ?
-      declaredExports :
-      [...declaredExports, runExport];
+      exports: this.buildWasmCallbackManifestExports(manifestRow, runExport),
+      dependencies: this.parseJsonArrayField(manifestRow?.dependencies, []),
+      capabilities: this.parseJsonArrayField(manifestRow?.capabilities, []),
+    };
+  }
 
+  /**
+   * Defaulted identity fields of the wasm callback manifest.
+   *
+   * @param {Object|null} manifestRow
+   * @param {string} callbackModuleRef
+   * @return {Object}
+   * @private
+   */
+  buildWasmCallbackManifestIdentity(manifestRow, callbackModuleRef) {
     return {
       namespace: manifestRow?.namespace || LOCAL_STR_EXAMPLES,
       name: manifestRow?.name || callbackModuleRef,
       version: String(manifestRow?.version || LOCAL_STR_1_0_0),
       digest: manifestRow?.digest || ZERO_SHA256_DIGEST,
-      runExport,
-      exports: exportsWithRun,
-      dependencies: this.parseJsonArrayField(manifestRow?.dependencies, []),
-      capabilities: this.parseJsonArrayField(manifestRow?.capabilities, []),
       sourceReference: manifestRow?.source_reference || null,
       artifactPointer: manifestRow?.artifact_pointer || callbackModuleRef,
     };
+  }
+
+  /**
+   * Declared exports with the run export guaranteed present.
+   *
+   * @param {Object|null} manifestRow
+   * @param {string} runExport
+   * @return {string[]}
+   * @private
+   */
+  buildWasmCallbackManifestExports(manifestRow, runExport) {
+    const declaredExports = this.parseJsonArrayField(manifestRow?.exports, [
+      runExport,
+    ]);
+    return declaredExports.includes(runExport) ?
+      declaredExports :
+      [...declaredExports, runExport];
   }
 
   /**

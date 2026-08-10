@@ -87,6 +87,75 @@ describe('examples-catalog scenario', () => {
     );
   });
 
+  it('routes to the seed when the seed is the only replica host', async () => {
+    const outputDir = await mkdtemp(join(tmpdir(), OUTPUT_PREFIX));
+    let seedPartitionCalls = 0;
+    let joinerPartitionCalls = 0;
+
+    const partitionsByTableSql = /FROM partitions WHERE table_name/;
+    const servicesSql = /FROM services/;
+
+    try {
+      // Every table's only replica host is the seed: partition p0 is
+      // served by seed-node. The resolved replica host must be the
+      // FIRST candidate even though it is the seed — the pre-fix
+      // inversion demoted it behind every non-seed node.
+      const seedNode = {
+        id: 'seed-node',
+        query: async (sql) => {
+          if (partitionsByTableSql.test(String(sql))) {
+            return {rows: [{partition_id: 'p0'}]};
+          }
+          if (servicesSql.test(String(sql))) {
+            return {rows: [{
+              partition_id: 'p0',
+              node_id: 'seed-node',
+              status: 'active',
+            }]};
+          }
+          return {rows: []};
+        },
+        partitionCallback: async (payload) => {
+          seedPartitionCalls += 1;
+          return {
+            hostResult: {
+              partitionResults: [{
+                rows: buildCallbackRows(payload.callbackModuleRef),
+              }],
+            },
+          };
+        },
+      };
+      const joinerNode = {
+        id: 'joiner-node',
+        query: async () => ({rows: []}),
+        partitionCallback: async () => {
+          joinerPartitionCalls += 1;
+          throw new Error('joiner does not host the replica');
+        },
+      };
+      const cluster = {
+        _config: {outputDir},
+        _scenarioOverrides: {
+          examplesCatalog: {
+            expectedNodeCount: 2,
+            localReplicaRouting: true,
+          },
+        },
+        getNodes: () => [seedNode, joinerNode],
+      };
+
+      const result = await run(cluster);
+      assert.equal(result.exampleResults.requiredFailed, 0);
+      assert.ok(seedPartitionCalls > 0,
+        'resolved replica host (the seed) serves the callbacks');
+      assert.equal(joinerPartitionCalls, 0,
+        'non-replica nodes are not tried before the resolved host');
+    } finally {
+      await rm(outputDir, {recursive: true, force: true});
+    }
+  });
+
   it('prefers non-seed callback routes when the seed is degraded', async () => {
     const outputDir = await mkdtemp(join(tmpdir(), OUTPUT_PREFIX));
     let seedPartitionCalls = 0;

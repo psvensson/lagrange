@@ -64,6 +64,7 @@ function parseTableName(statement) {
 
 async function queryActivePartitionServicesAcrossNodes(nodes) {
   const mergedRows = [];
+  const mergeErrors = [];
   for (const node of nodes) {
     if (!node || typeof node.query !== 'function') {
       continue;
@@ -71,9 +72,14 @@ async function queryActivePartitionServicesAcrossNodes(nodes) {
     try {
       const result = await node.query(SQL_SELECT_ACTIVE_PARTITION_SERVICES);
       mergedRows.push(...rowsFromResult(result));
-    } catch (_error) {
-      // Best-effort: fall back to whatever we can collect.
+    } catch (mergeError) {
+      // Best-effort merge across nodes: one unreachable node must not sink
+      // the whole services view, but the miss stays visible for triage.
+      mergeErrors.push({nodeId: node.id, error: mergeError?.message});
     }
+  }
+  if (mergeErrors.length > 0) {
+    console.warn('examples-catalog services merge misses:', mergeErrors);
   }
   return mergedRows;
 }
@@ -141,6 +147,13 @@ function createClusterClient(nodes, seedNode, options = {}) {
     ...nodes.filter((node) => node?.id === seedNode?.id),
   ];
 
+  // The resolved replica host is ALWAYS the first candidate — even when
+  // it is the seed. Demoting the seed here discarded the only replica
+  // host when a table's replicas all lived on the seed, sending the
+  // callback to nodes that could only reach the data over a degraded
+  // transport hop. Remaining nodes stay as failover candidates; a typed
+  // non-success callback outcome rejects the client promise and engages
+  // that failover.
   const buildCandidateNodeOrder = (preferredNode) => {
     const ordered = [];
     const pushNode = (node) => {
@@ -153,13 +166,6 @@ function createClusterClient(nodes, seedNode, options = {}) {
       }
       ordered.push(node);
     };
-
-    if (preferredNode?.id === seedNode?.id) {
-      for (const node of preferredReadNodes) {
-        pushNode(node);
-      }
-      return ordered;
-    }
 
     pushNode(preferredNode);
     for (const node of preferredReadNodes) {

@@ -15,6 +15,10 @@ import {
   CallbackExecutionHost,
   validateDescriptor,
 } from '../../src/query/callback/callback-execution-host.js';
+import {
+  buildPartitionReadFailureHostResult,
+  mergePartitionReadFailuresIntoHostResult,
+} from '../../src/query/callback/partition-callback-dispatcher.js';
 import {ADAPTER_ERROR_MSG, CALLBACK_RUNTIME_KIND} from
   '../../src/query/sql-adapter-constants.js';
 import {STAGE_STATE} from
@@ -242,6 +246,96 @@ test('execute - handles empty batches array', async (t) => {
   t.equal(result.state, STAGE_STATE.COMPLETED);
   t.equal(result.totalPartitions, 0);
   t.equal(result.processedPartitions, 0);
+});
+
+// --- Read-failure host result semantics (ARCH-0139) ---
+
+test('host result - empty-because-failed is distinguishable from ' +
+  'succeeded-with-zero-rows', async (t) => {
+  const host = new CallbackExecutionHost({
+    runtimeDriverRegistry: makeRegistry(),
+  });
+
+  // Succeeded with zero rows: every partition read produced a batch,
+  // the callback ran, and there were simply no rows.
+  const zeroRowBatches = [
+    {partitionId: 'p0', rows: []},
+  ];
+  const zeroRowResult = await host.execute(
+    zeroRowBatches, makeDescriptor(), {handler: () => []},
+  );
+  t.equal(zeroRowResult.state, STAGE_STATE.COMPLETED);
+  t.equal(zeroRowResult.totalPartitions, 1);
+  t.equal(zeroRowResult.failedPartitions, 0);
+  t.equal(zeroRowResult.totalRows, 0);
+  t.equal(zeroRowResult.failedPartitionReads, undefined);
+
+  // Empty because failed: the partition read never produced a batch.
+  // The merged aggregate records the partition as failed and carries
+  // the typed read-failure entry — a different observable outcome.
+  const readFailure = {
+    partitionId: 'p0',
+    error: 'partition read failed: ack timeout',
+    errorCode: 'TIMEOUT',
+    participantNodeId: 'node-9',
+    retryAfterMs: 25,
+    backpressured: true,
+  };
+  const emptyHostResult = await host.execute(
+    [], makeDescriptor(), {handler: () => []},
+  );
+  const failedResult = mergePartitionReadFailuresIntoHostResult(
+    emptyHostResult,
+    [readFailure],
+  );
+  t.equal(failedResult.state, STAGE_STATE.FAILED);
+  t.equal(failedResult.totalPartitions, 1);
+  t.equal(failedResult.failedPartitions, 1);
+  t.same(failedResult.failedPartitionReads, [readFailure]);
+});
+
+test('host result - merge keeps invocation counts and adds read ' +
+  'failures on partial outcomes', async (t) => {
+  const host = new CallbackExecutionHost({
+    runtimeDriverRegistry: makeRegistry(),
+  });
+  const result = await host.execute(
+    makeBatches(2), makeDescriptor(), {handler: (batch) => batch.rows},
+  );
+  const readFailure = {
+    partitionId: 'p9',
+    error: 'partition read failed: ack timeout',
+  };
+  const merged = mergePartitionReadFailuresIntoHostResult(
+    result,
+    [readFailure],
+  );
+
+  t.equal(merged.state, STAGE_STATE.FAILED);
+  t.equal(merged.totalPartitions, 3);
+  t.equal(merged.processedPartitions, 2);
+  t.equal(merged.failedPartitions, 1);
+  t.same(merged.failedPartitionReads, [readFailure]);
+
+  // No read failures: the host result passes through untouched.
+  const untouched = mergePartitionReadFailuresIntoHostResult(result, []);
+  t.equal(untouched, result);
+});
+
+test('host result - all-reads-failed synthesized aggregate records ' +
+  'every partition as failed', async (t) => {
+  const readFailures = [
+    {partitionId: 'p0', error: 'partition read failed: ack timeout'},
+    {partitionId: 'p1', error: 'partition read failed: ack timeout'},
+  ];
+  const synthesized = buildPartitionReadFailureHostResult(readFailures);
+
+  t.equal(synthesized.state, STAGE_STATE.FAILED);
+  t.equal(synthesized.totalPartitions, 2);
+  t.equal(synthesized.processedPartitions, 0);
+  t.equal(synthesized.failedPartitions, 2);
+  t.same(synthesized.failedPartitionReads, readFailures);
+  t.equal(synthesized.totalRows, 0);
 });
 
 // --- Failure handling ---

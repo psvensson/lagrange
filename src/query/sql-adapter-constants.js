@@ -107,6 +107,8 @@ const ADAPTER_ERROR_MSG = Object.freeze({
     'partition_callback could not resolve table from statement',
   PARTITION_CALLBACK_NO_PARTITIONS:
     'No partitions found for callback target table',
+  PARTITION_CALLBACK_ALL_READS_FAILED:
+    'partition_callback failed: every target partition read failed',
   CALLBACK_HOST_DESCRIPTOR_REQUIRED:
     'Callback descriptor is required',
   CALLBACK_HOST_MODULE_REF_REQUIRED:
@@ -173,6 +175,8 @@ const ADAPTER_LOG_MSG = Object.freeze({
     'Resolved partitions for partition_callback',
   PARTITION_CALLBACK_BATCHED:
     'Constructed per-partition batches for callback',
+  PARTITION_CALLBACK_READS_FAILED:
+    'Partition reads failed for partition_callback',
   CALLBACK_HOST_EXECUTING:
     'Callback_Execution_Host executing batches',
   CALLBACK_HOST_BATCH_COMPLETE:

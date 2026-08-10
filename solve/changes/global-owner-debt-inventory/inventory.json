@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 434474,
-        "sha256": "02bef5344b09a32e75581618054c848dac1e8f0626f44d1cf153f0ea5cefc4b6"
+        "bytes": 434482,
+        "sha256": "421698d9a5eadbeec039b3b2fc26d3ab912ecf4f8b7fca67103923ea5ad15ea6"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 1605168,
-        "sha256": "2f72dcab6fc54a6b7e561e47f0957e0ca29db90d3b540f6a0cd661ca4250b0ef"
+        "bytes": 1605675,
+        "sha256": "c3b6940b0a94898b8057e121047efdcf018b2ce323134706a0af62def9c06abf"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "622eec6ca7d21bd8967ab1d890b4c59e9835f7d2a8ac4faf7fd1a07aaaf53e53"
+        "sha256": "46a689b334bf7d3899b5e146e63545d907668c489c769b2f3053d08d1949d617"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "6b31ea2728f028d3c8218ba202e443d613dc0aad7654f6858da9e0af0613c423"
+        "sha256": "1bb737f0d53c82b9dcf9d40f25adf1b26a657de0eea77f4c008aec7264b54d3a"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,14 +62,14 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "a52a30b1e9ea407e500c13a15ad7d7c2fd45fcc406efdffea5c87caf8e1b91ba"
+    "inputDigest": "1bdfe9020f2f2ad898e52721e17e578f59f3e81447f1089bf4c1c6bdd960ff83"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 434474,
-        "sha256": "02bef5344b09a32e75581618054c848dac1e8f0626f44d1cf153f0ea5cefc4b6"
+        "bytes": 434482,
+        "sha256": "421698d9a5eadbeec039b3b2fc26d3ab912ecf4f8b7fca67103923ea5ad15ea6"
       },
       "declaredCount": 1841,
       "observedCount": 1841,
@@ -99,8 +99,8 @@
         "source": 28,
         "test": 21
       },
-      "observedCount": 48,
-      "assignedCount": 48
+      "observedCount": 49,
+      "assignedCount": 49
     },
     "duplication": [
       {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "622eec6ca7d21bd8967ab1d890b4c59e9835f7d2a8ac4faf7fd1a07aaaf53e53"
+          "sha256": "46a689b334bf7d3899b5e146e63545d907668c489c769b2f3053d08d1949d617"
         },
         "cloneGroups": 63,
         "duplicatedLines": 2003,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "6b31ea2728f028d3c8218ba202e443d613dc0aad7654f6858da9e0af0613c423"
+          "sha256": "1bb737f0d53c82b9dcf9d40f25adf1b26a657de0eea77f4c008aec7264b54d3a"
         },
         "cloneGroups": 828,
         "duplicatedLines": 31601,
@@ -166,31 +166,31 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 1605168,
-        "sha256": "2f72dcab6fc54a6b7e561e47f0957e0ca29db90d3b540f6a0cd661ca4250b0ef"
+        "bytes": 1605675,
+        "sha256": "c3b6940b0a94898b8057e121047efdcf018b2ce323134706a0af62def9c06abf"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "b874dd73f081304aaac557070cf5b89d8fcf75d4e05431e28acc08ea94c52cb5",
-      "moduleCount": 4727,
-      "edgeCount": 20316,
+      "sourceDigest": "889f42e111ab204b1e4cf9f41f054b61f7948a9e2eb62224ecd3965a80da0e8b",
+      "moduleCount": 4728,
+      "edgeCount": 20323,
       "unresolvedCount": 32
     }
   },
   "assignment": {
-    "sourceSignalCount": 2705,
-    "assignedSignalCount": 2705,
-    "uniqueAssignmentCount": 2705,
-    "digest": "53bf3a46995582877e28ac4655f2f8ed5eb6093e405edf7e0995506b7b4c0cd7"
+    "sourceSignalCount": 2706,
+    "assignedSignalCount": 2706,
+    "uniqueAssignmentCount": 2706,
+    "digest": "a9701a431341385611b155d55b6d1981497845a89e6fe7f3c671e38a234f7bd8"
   },
   "signalCounts": {
     "cognitive": 179,
     "complexity": 1841,
     "duplication": 598,
-    "fileSize": 48,
+    "fileSize": 49,
     "lintExclusion": 39
   },
   "summary": {
@@ -566,6 +566,34 @@
       ]
     },
     {
+      "key": "semantic:sql_query_engine_owner/sql_query_planning_execution",
+      "owner": "sql_query_engine_owner",
+      "boundary": "sql_query_planning_execution",
+      "classification": "declared-owner-rule",
+      "ownerAreas": [
+        "src/query"
+      ],
+      "fileCount": 15,
+      "signalCount": 57,
+      "complexity": 46,
+      "cognitive": 6,
+      "oversizedFiles": 2,
+      "duplicatedLines": 142,
+      "cloneTouches": 4,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 101,
+      "importOut": 47,
+      "score": 270.2,
+      "topPaths": [
+        "src/query/sql-query-engine-provisioning-admission-methods.js",
+        "src/query/sql-query-engine-initial-partition-provisioning.js",
+        "src/query/sql-query-engine-statement-execution.js",
+        "src/query/sql-query-engine-bootstrap-routing-overlay.js",
+        "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js"
+      ]
+    },
+    {
       "key": "area:test/admin",
       "owner": null,
       "boundary": "test/admin",
@@ -591,34 +619,6 @@
         "test/admin/admin-control-snapshot-tail-test-cases.js",
         "test/admin/admin-websocket-api-table-discovery-readiness.test.js",
         "test/admin/admin-control-snapshot-publication-convergence-recovery-readiness-test-cases.js"
-      ]
-    },
-    {
-      "key": "semantic:sql_query_engine_owner/sql_query_planning_execution",
-      "owner": "sql_query_engine_owner",
-      "boundary": "sql_query_planning_execution",
-      "classification": "declared-owner-rule",
-      "ownerAreas": [
-        "src/query"
-      ],
-      "fileCount": 15,
-      "signalCount": 56,
-      "complexity": 46,
-      "cognitive": 6,
-      "oversizedFiles": 1,
-      "duplicatedLines": 142,
-      "cloneTouches": 4,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 101,
-      "importOut": 46,
-      "score": 258.2,
-      "topPaths": [
-        "src/query/sql-query-engine-provisioning-admission-methods.js",
-        "src/query/sql-query-engine-initial-partition-provisioning.js",
-        "src/query/sql-query-engine-statement-execution.js",
-        "src/query/sql-query-engine-bootstrap-routing-overlay.js",
-        "src/query/sql-query-engine-routing-metadata-methods.js"
       ]
     },
     {
@@ -722,7 +722,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 99,
+      "importIn": 100,
       "importOut": 79,
       "score": 193,
       "topPaths": [
@@ -3700,28 +3700,30 @@
           "solve/quests/owner-complexity-sql-query-engine-owner-sql-query-planning-execution.json",
           "src/query/sql-query-engine-bootstrap-routing-overlay.js",
           "src/query/sql-query-engine-initial-partition-provisioning.js",
+          "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js",
           "src/query/sql-query-engine-provisioning-admission-methods.js",
-          "src/query/sql-query-engine-routing-metadata-methods.js",
-          "src/query/sql-query-engine-statement-execution.js"
+          "src/query/sql-query-engine-statement-execution.js",
+          "test/runtime/movielens-affinity-demo-wiring.test.js"
         ],
         "ownerAreas": [
           "scripts/run-owner-complexity-sql-query-engine-owner-sql-query-planning-execution-scenarios.js",
           "solve/quests",
-          "src/query"
+          "src/query",
+          "test/runtime"
         ],
         "engagementPaths": [
           "src/query/sql-query-engine-provisioning-admission-methods.js",
           "src/query/sql-query-engine-initial-partition-provisioning.js",
           "src/query/sql-query-engine-statement-execution.js",
           "src/query/sql-query-engine-bootstrap-routing-overlay.js",
-          "src/query/sql-query-engine-routing-metadata-methods.js"
+          "src/query/sql-query-engine-lifecycle-and-callback-dispatch.js"
         ],
         "engagementTargets": [],
         "baseline": {
-          "score": 258.2,
+          "score": 270.2,
           "complexity": 46,
           "cognitive": 6,
-          "oversizedFiles": 1,
+          "oversizedFiles": 2,
           "duplicatedLines": 142,
           "lintExclusions": 0
         },

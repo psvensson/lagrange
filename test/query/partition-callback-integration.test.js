@@ -317,6 +317,84 @@ test('integration - handler error on one partition yields ' +
   t.equal(completed.length, PARTITION_COUNT - 1);
 });
 
+test('integration - partition read failure on one partition yields ' +
+  'typed partial outcome with failed read counts', async (t) => {
+  const partitionRows = makePartitionRows(PARTITION_COUNT);
+  const engine = createEngine(PARTITION_COUNT, partitionRows, {
+    failPartitions: ['p1'],
+  });
+  const runtimeRegistry = createRuntimeDriverRegistry();
+
+  const processed = [];
+  const handler = (batch) => {
+    processed.push(batch.partitionId);
+    return batch.rows;
+  };
+
+  const req = createCallbackRequest();
+  const result = await engine.executePartitionCallback({
+    ...req,
+    handler,
+    runtimeDriverRegistry: runtimeRegistry,
+  });
+
+  // The read-side twin of the handler-error partial contract: the
+  // failed partition READ surfaces in the host result counts instead
+  // of being silently dropped from the batch list (ARCH-0139).
+  t.equal(result.hostResult.state, STAGE_STATE.FAILED);
+  t.equal(result.hostResult.totalPartitions, PARTITION_COUNT);
+  t.equal(result.hostResult.failedPartitions, 1);
+  t.equal(
+    result.hostResult.processedPartitions, PARTITION_COUNT - 1,
+  );
+  t.equal(result.hostResult.failedPartitionReads.length, 1);
+  t.equal(result.hostResult.failedPartitionReads[0].partitionId, 'p1');
+  t.ok(result.hostResult.failedPartitionReads[0].error);
+  t.equal(result.failedPartitions.length, 1);
+  t.same(processed.sort(), ['p0', 'p2']);
+});
+
+test('integration - all partition reads failing yields non-success ' +
+  'typed outcome instead of totalPartitions 0', async (t) => {
+  const partitionRows = makePartitionRows(PARTITION_COUNT);
+  const engine = createEngine(PARTITION_COUNT, partitionRows, {
+    failPartitions: ['p0', 'p1', 'p2'],
+  });
+  const runtimeRegistry = createRuntimeDriverRegistry();
+
+  let handlerCalled = false;
+  const req = createCallbackRequest();
+  const result = await engine.executePartitionCallback({
+    ...req,
+    handler: () => {
+      handlerCalled = true;
+      return [];
+    },
+    runtimeDriverRegistry: runtimeRegistry,
+  });
+
+  t.equal(result.success, false,
+    'total read failure is a non-success typed outcome, ' +
+    'never a clean empty result');
+  t.ok(result.error, 'typed outcome carries an error message');
+  t.ok(result.errorCode, 'typed outcome carries an errorCode');
+  t.equal(handlerCalled, false,
+    'callback never invoked when no batch exists');
+
+  // Artifacts record "3 partitions, 3 failed" — not totalPartitions 0.
+  t.equal(result.hostResult.state, STAGE_STATE.FAILED);
+  t.equal(result.hostResult.totalPartitions, PARTITION_COUNT);
+  t.equal(result.hostResult.failedPartitions, PARTITION_COUNT);
+  t.equal(result.hostResult.processedPartitions, 0);
+  t.equal(
+    result.hostResult.failedPartitionReads.length, PARTITION_COUNT,
+  );
+  for (const entry of result.hostResult.failedPartitionReads) {
+    t.ok(entry.partitionId, 'entry names its partition');
+    t.ok(entry.error, 'entry carries the read error');
+  }
+});
+
 test('integration - budget exceeded mid-execution propagates ' +
   'budget error', async (t) => {
   const partitionRows = makePartitionRows(PARTITION_COUNT);
