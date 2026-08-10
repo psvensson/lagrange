@@ -78,6 +78,14 @@ const PLACEMENT_CURE_CONDITION = Object.freeze({
   // spread ADD. Drain one redundant source only when doing so preserves the
   // current distinct-node count.
   PRIORITY_DRAIN_SPREAD_SURPLUS: 'priority_drain_spread_surplus',
+  // A non-ledger priority partition stuck OVER target while still below its
+  // distinct-node floor: prior replacements piled surplus voters whose drain
+  // is spread-gated, and the over-creation cap used to wipe the only
+  // floor-restoring ADD (the ec-postfix cure-starvation stall: 40 wipes on
+  // control_plane_publications-p1 at 4 voters / 2-of-3 distinct nodes).
+  // Retain the serial spread ADD onto nodes not already hosting the
+  // partition — capped at the open gap — and keep refusing everything else.
+  PRIORITY_OVER_TARGET_SPREAD_CURE: 'priority_over_target_spread_cure',
   // The partition is at target count but a source replica should be walked
   // off its node (priority-recovery follow-up).
   UNHEALTHY_SOURCE_AT_TARGET: 'unhealthy_source_at_target',
@@ -151,6 +159,13 @@ const PLACEMENT_CURE_BY_CONDITION = Object.freeze(
       PLACEMENT_CURE_CONDITION.PRIORITY_DRAIN_SPREAD_SURPLUS,
       Object.freeze({
         moveType: REBALANCER_MOVE_TYPE.REMOVE,
+        moveReason: MOVE_REASON.SPREAD_REPLICAS,
+      }),
+    ],
+    [
+      PLACEMENT_CURE_CONDITION.PRIORITY_OVER_TARGET_SPREAD_CURE,
+      Object.freeze({
+        moveType: REBALANCER_MOVE_TYPE.ADD,
         moveReason: MOVE_REASON.SPREAD_REPLICAS,
       }),
     ],
@@ -272,12 +287,20 @@ function classifyPriorityExpandForSpreadCureCondition(evidence = {}) {
 /**
  * Classify the target-plus-one state after a non-ledger priority spread ADD.
  * The selected REMOVE must preserve the current distinct-node count so serial
- * expand/drain is monotonic before the final spread floor is reached.
+ * expand/drain is monotonic before the final spread floor is reached. The
+ * drain yields to an ACTIONABLE floor-restoring spread ADD while the
+ * distinct-node floor is unmet (the ledger sibling above already carries this
+ * floor conjunct): in the degraded-read window (no authoritative voter-ready
+ * rows) the remove-safety owner fails closed against exactly this drain, and
+ * even with authoritative rows expand-before-drain converges to the floor
+ * while drain-first burns a serial slot without closing the gap. With no
+ * actionable spread ADD the monotonic drain proceeds exactly as before.
  * @param {Object} evidence
  * @return {string|null} PRIORITY_DRAIN_SPREAD_SURPLUS or null.
  */
 function classifyPrioritySpreadSurplusDrainCureCondition(evidence = {}) {
   const targetReplicaCount = Number(evidence.targetReplicaCount);
+  const targetDistinctNodeCount = Number(evidence.targetDistinctNodeCount);
   const partitionId = evidence.partitionId;
   if (
     !isPriorityControlPlanePartition({partitionId}) ||
@@ -285,15 +308,65 @@ function classifyPrioritySpreadSurplusDrainCureCondition(evidence = {}) {
   ) {
     return null;
   }
+  const requiredDistinctNodeCount = Math.min(
+    targetReplicaCount,
+    targetDistinctNodeCount,
+  );
+  // Absent evidence means no actionable cure ADD is known — the drain
+  // proceeds exactly as before the yield conjunct existed.
+  const actionableSpreadCureAddCount =
+    Number(evidence.actionableSpreadCureAddCount) || 0;
   const exactDrainState = [
     targetReplicaCount > 0,
     evidence.occupiedReplicaCount > targetReplicaCount,
     evidence.voterReplicaCount > targetReplicaCount,
     evidence.activeReplicaCount > targetReplicaCount,
     evidence.monotonicSafeRemoveCount >= 1,
+    actionableSpreadCureAddCount === 0 ||
+      evidence.activeDistinctNodeCount >= requiredDistinctNodeCount,
   ].every(Boolean);
   return exactDrainState ?
     PLACEMENT_CURE_CONDITION.PRIORITY_DRAIN_SPREAD_SURPLUS :
+    null;
+}
+
+/**
+ * Classify the over-target non-ledger priority partition whose surplus
+ * cannot settle while its distinct-node floor is unmet. The over-creation
+ * cap must RETAIN (not wipe) the serial spread ADD onto a fresh node: the
+ * surplus drain is spread-gated in exactly this state, so wiping the only
+ * floor-restoring ADD starves the cure and stalls formation (drain waits
+ * for spread, spread ADD wiped because over target — the recorded
+ * circular-dependency-class-formation-vs-steady-state shape). Mirrors the
+ * at-target PRIORITY_EXPAND_FOR_SPREAD row one state earlier; the
+ * in-flight-REPLACE conjunct keeps the serialized-reconfiguration invariant.
+ * @param {Object} evidence
+ * @return {string|null} PRIORITY_OVER_TARGET_SPREAD_CURE or null.
+ */
+function classifyPriorityOverTargetSpreadCureCondition(evidence = {}) {
+  const targetReplicaCount = Number(evidence.targetReplicaCount);
+  const targetDistinctNodeCount = Number(evidence.targetDistinctNodeCount);
+  const partitionId = evidence.partitionId;
+  if (
+    !isPriorityControlPlanePartition({partitionId}) ||
+    isOperationLedgerPartition({partitionId})
+  ) {
+    return null;
+  }
+  const requiredDistinctNodeCount = Math.min(
+    targetReplicaCount,
+    targetDistinctNodeCount,
+  );
+  const exactRetentionState = [
+    targetReplicaCount > 0,
+    evidence.inFlightReplaceCount === 0,
+    evidence.addMoveCount >= 1,
+    evidence.voterReplicaCount > targetReplicaCount,
+    requiredDistinctNodeCount > 0,
+    evidence.activeDistinctNodeCount < requiredDistinctNodeCount,
+  ].every(Boolean);
+  return exactRetentionState ?
+    PLACEMENT_CURE_CONDITION.PRIORITY_OVER_TARGET_SPREAD_CURE :
     null;
 }
 
@@ -485,6 +558,7 @@ export {
   classifyLedgerExpandForSpreadCureCondition,
   classifyLedgerSpreadSurplusDrainCureCondition,
   classifyPriorityExpandForSpreadCureCondition,
+  classifyPriorityOverTargetSpreadCureCondition,
   classifyPriorityRecoveryAdmissionPartitionClass,
   classifyPriorityRecoveryFollowUpCureCondition,
   classifyPrioritySpreadSurplusDrainCureCondition,

@@ -83,8 +83,12 @@ const RATCHET_TARGETS = [
     // 2026-08-08: tightened 834/31824 -> 833/31738 (measured after
     // extracting the quorum-conditioned remove-safety tail fixture
     // builders; one-way-baseline rule).
-    baselineCloneGroupCount: 833,
-    baselineDuplicatedLineCount: 31738,
+    // 2026-08-10: tightened 833/31738 -> 832/31718 (measured after
+    // extracting the shared stall-repro stack builder in the
+    // over-target-cap-spread-cure-wipe test additions; one-way-baseline
+    // rule).
+    baselineCloneGroupCount: 832,
+    baselineDuplicatedLineCount: 31718,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

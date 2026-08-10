@@ -163,12 +163,37 @@ test('MovePlanner critical-partition REPLACE serialization cap', async (t) => {
         ...concentratedReplicas,
         active('r4', 'node-2'),
       ];
-      const drainOnePlanner = plannerFor(
+      const expandTowardFloorPlanner = plannerFor(
         PRIORITY_PARTITION_ID,
         createMoveStateProvider({currentReplicas: expandedOnce}),
       );
-      const drainOneMoves = drainOnePlanner.calculateMoves(
+      const expandTowardFloorMoves = expandTowardFloorPlanner.calculateMoves(
         expandedOnce,
+        TARGET_STATE,
+      );
+
+      // Quest over-target-cap-spread-cure-wipe: while the distinct-node
+      // floor is UNMET, the over-target state keeps expanding (the drain of
+      // a co-located source is spread-gated in exactly this state, so
+      // drain-first starves the only enforceable cure). Draining resumes
+      // once the floor is met (next pin).
+      t.matchOnly(expandTowardFloorMoves, [{
+        type: REBALANCER_MOVE_TYPE.ADD,
+        nodeId: 'node-3',
+        reason: 'spread_replicas',
+      }], 'target-plus-one below the floor expands onto the third node ' +
+        'instead of draining into the spread-gated removal');
+
+      const fullSpread = [
+        ...expandedOnce,
+        active('r5', 'node-3'),
+      ];
+      const drainOnePlanner = plannerFor(
+        PRIORITY_PARTITION_ID,
+        createMoveStateProvider({currentReplicas: fullSpread}),
+      );
+      const drainOneMoves = drainOnePlanner.calculateMoves(
+        fullSpread,
         TARGET_STATE,
       );
 
@@ -178,7 +203,7 @@ test('MovePlanner critical-partition REPLACE serialization cap', async (t) => {
         nodeId: 'node-1',
         reason: 'spread_replicas',
         standaloneSafe: true,
-      }], 'target-plus-one drains without reducing the two-node spread');
+      }], 'once the floor is met the surplus drains without reducing spread');
 
       const drainedOnce = [
         active('r2', 'node-1'),

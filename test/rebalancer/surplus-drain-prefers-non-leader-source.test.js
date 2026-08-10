@@ -238,8 +238,28 @@ test('serial priority spread expands without selecting a leader source, then ' +
       raft_role: 'follower',
     },
   ];
-  const drainMoves = rebalancer.calculateMoves(
+  // Quest over-target-cap-spread-cure-wipe: below the distinct-node floor
+  // the target-plus-one shape keeps expanding (drain of a co-located source
+  // is spread-gated there); the drain under test fires once the floor is
+  // met (three distinct nodes).
+  const secondExpandMoves = rebalancer.calculateMoves(
     postExpandReplicas,
+    targetState,
+  );
+  const postFullSpreadReplicas = [
+    ...postExpandReplicas,
+    {
+      service_id: `${COLOCATED_PARTITION_ID}-r5`,
+      replica_id: `${COLOCATED_PARTITION_ID}-r5`,
+      partition_id: COLOCATED_PARTITION_ID,
+      node_id: 'node-joiner-b',
+      service_type: 'partition',
+      status: ReplicaStatus.ACTIVE,
+      raft_role: 'follower',
+    },
+  ];
+  const drainMoves = rebalancer.calculateMoves(
+    postFullSpreadReplicas,
     targetState,
   );
   rebalancer.shutdown();
@@ -253,11 +273,16 @@ test('serial priority spread expands without selecting a leader source, then ' +
     false,
     'the expansion phase does not choose a leadership-bearing source',
   );
+  t.equal(
+    secondExpandMoves.some((move) => move.type === MoveType.ADD),
+    true,
+    'below the distinct-node floor the surplus keeps expanding, not draining',
+  );
   const removeMoves = drainMoves.filter(
     (move) => move.type === MoveType.REMOVE,
   );
   t.equal(removeMoves.length, 1,
-    'the target-plus-one shape drains one redundant voter');
+    'the floor-met surplus shape drains one redundant voter');
   t.equal(
     removeMoves[0].replicaId,
     COLOCATED_FOLLOWER_REPLICA_ID,
@@ -284,11 +309,22 @@ test('at-target spread retains node-level leadership fallback when the ' +
   rebalancer.initialize();
   rebalancer.setLeader(true);
 
+  // Floor-met surplus shape (quest over-target-cap-spread-cure-wipe: the
+  // drain fires only once the distinct-node floor is met, so both joiner
+  // nodes host a replica here).
   const moves = rebalancer.calculateMoves([...replicas, {
     service_id: `${COLOCATED_PARTITION_ID}-r4`,
     replica_id: `${COLOCATED_PARTITION_ID}-r4`,
     partition_id: COLOCATED_PARTITION_ID,
     node_id: 'node-joiner-a',
+    service_type: 'partition',
+    status: ReplicaStatus.ACTIVE,
+    raft_role: 'follower',
+  }, {
+    service_id: `${COLOCATED_PARTITION_ID}-r5`,
+    replica_id: `${COLOCATED_PARTITION_ID}-r5`,
+    partition_id: COLOCATED_PARTITION_ID,
+    node_id: 'node-joiner-b',
     service_type: 'partition',
     status: ReplicaStatus.ACTIVE,
     raft_role: 'follower',

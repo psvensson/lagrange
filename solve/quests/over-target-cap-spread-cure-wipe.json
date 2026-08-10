@@ -1,0 +1,52 @@
+{
+  "id": "over-target-cap-spread-cure-wipe",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The move planner's over-target ADD cap stops wiping an open priority-spread cure: when the same evaluation computes prioritySpreadGapOpen=true, the planner retains exactly the ADD moves that cure distinct-node spread (targets not already hosting a replica) while still refusing surplus growth, so formation can spread the six priority control-plane partitions instead of stalling at 2/3 distinct nodes. Verified at HEAD c002553ae (live 3-node runs + code trace): in ec-postfix-20260810T060111Z the cap at src/rebalancer/move-planner-move-calculation-methods.js:385-424 fired 40x on control_plane_publications-p1 with activeCount=4 targetReplicaCount=3 activeDistinctNodeCount=2 targetDistinctNodeCount=3 overCreationCap=true prioritySpreadGapOpen=true deferredAdds=1 and unconditionally did addMoves.length=0 at :423 (its own comment names the cure-starvation stall; the diagnostic exists, the guard does not act on it); the replaceSerializationCap wipe at :671-690 fired 58x on replica_operations-p1; net effect 2-3 CREATE_REPLICA per 135s boot, third node receives zero replicas, joiner formation barrier times out. The rebalancer leadership lifecycle and the flat [70,80)s background delay are correct and out of scope; the July drainPhaseReplacementCredit mechanism is wired but does not cover this shape. Fail-closed floor: surplus growth beyond target on an already-spread partition must remain refused, and the drain-phase credit semantics must be preserved.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "formation-barrier-spread-release-oscillation",
+    "planDoc": "solve/epics/latent-convergence-blocker-census.md",
+    "draftedAtCommit": "c002553ae8f51d40fe099bce14b6371fe0168b01"
+  },
+  "doneWhen": {
+    "probe": "test-receipt",
+    "args": {
+      "file": "solve/evidence/over-target-cap-spread-cure-wipe.receipt.json",
+      "requiredReceipts": [
+        "over-target-cap-preserves-open-spread-cure",
+        "surplus-growth-still-refused"
+      ]
+    }
+  },
+  "frontiers": [
+    {
+      "id": "over-target-cap-spread-cure-wipe-main",
+      "priority": 1,
+      "metric": {
+        "probe": "test-receipt",
+        "args": {
+          "file": "solve/evidence/over-target-cap-spread-cure-wipe.receipt.json",
+          "requiredReceipts": [
+            "over-target-cap-preserves-open-spread-cure",
+            "surplus-growth-still-refused"
+          ]
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "formation-circularity"
+  ]
+}

@@ -13,6 +13,7 @@ import {
   PLACEMENT_CURE_BY_CONDITION,
   PLACEMENT_CURE_CONDITION,
   classifyPriorityExpandForSpreadCureCondition,
+  classifyPriorityOverTargetSpreadCureCondition,
   classifyPriorityRecoveryAdmissionPartitionClass,
   classifyPriorityRecoveryFollowUpCureCondition,
   classifyPrioritySpreadSurplusDrainCureCondition,
@@ -89,6 +90,7 @@ test('the condition -> cure rows keep their sealed memberships', (t) => {
     [
       PLACEMENT_CURE_CONDITION.LEDGER_EXPAND_FOR_SPREAD,
       PLACEMENT_CURE_CONDITION.PRIORITY_EXPAND_FOR_SPREAD,
+      PLACEMENT_CURE_CONDITION.PRIORITY_OVER_TARGET_SPREAD_CURE,
       PLACEMENT_CURE_CONDITION.UNDER_REPRESENTATION,
     ].sort(),
     'only count recovery and declared serial spread expansion use ADD');
@@ -196,6 +198,78 @@ test('non-ledger priority spread owns serial expand/drain classifications', (t) 
     }),
     null,
     'a regressive removal never receives the drain cure');
+  t.equal(
+    classifyPrioritySpreadSurplusDrainCureCondition({
+      ...drainEvidence,
+      activeDistinctNodeCount: 2,
+      targetDistinctNodeCount: 3,
+      actionableSpreadCureAddCount: 1,
+    }),
+    null,
+    'the drain yields to an actionable spread-cure ADD while the ' +
+      'distinct-node floor is unmet (over-target-cap-spread-cure-wipe)');
+  t.equal(
+    classifyPrioritySpreadSurplusDrainCureCondition({
+      ...drainEvidence,
+      activeDistinctNodeCount: 3,
+      targetDistinctNodeCount: 3,
+      actionableSpreadCureAddCount: 1,
+    }),
+    PLACEMENT_CURE_CONDITION.PRIORITY_DRAIN_SPREAD_SURPLUS,
+    'once the floor is met the drain proceeds even alongside an ADD');
+
+  // Quest over-target-cap-spread-cure-wipe: the over-creation cap's
+  // retention row. Exact state: priority non-ledger, over target by the
+  // authoritative voter count, distinct-node floor unmet, an ADD candidate
+  // present, no in-flight REPLACE.
+  const overTargetCureEvidence = {
+    partitionId: expandEvidence.partitionId,
+    inFlightReplaceCount: 0,
+    addMoveCount: 1,
+    voterReplicaCount: 4,
+    targetReplicaCount: 3,
+    targetDistinctNodeCount: 3,
+    activeDistinctNodeCount: 2,
+  };
+  t.equal(
+    classifyPriorityOverTargetSpreadCureCondition(overTargetCureEvidence),
+    PLACEMENT_CURE_CONDITION.PRIORITY_OVER_TARGET_SPREAD_CURE,
+    'an over-target priority partition below its floor keeps its spread cure');
+  t.equal(
+    classifyPriorityOverTargetSpreadCureCondition({
+      ...overTargetCureEvidence,
+      activeDistinctNodeCount: 3,
+    }),
+    null,
+    'an already-spread over-target partition never retains an ADD');
+  t.equal(
+    classifyPriorityOverTargetSpreadCureCondition({
+      ...overTargetCureEvidence,
+      inFlightReplaceCount: 1,
+    }),
+    null,
+    'a serialized in-flight REPLACE keeps the cap fully closed');
+  t.equal(
+    classifyPriorityOverTargetSpreadCureCondition({
+      ...overTargetCureEvidence,
+      partitionId: LEDGER_PARTITION_ID,
+    }),
+    null,
+    'the ledger keeps its own serialized self-move spread ownership');
+  t.equal(
+    classifyPriorityOverTargetSpreadCureCondition({
+      ...overTargetCureEvidence,
+      partitionId: USER_PARTITION_ID,
+    }),
+    null,
+    'ordinary data partitions never enter the priority retention row');
+  t.equal(
+    classifyPriorityOverTargetSpreadCureCondition({
+      ...overTargetCureEvidence,
+      voterReplicaCount: 3,
+    }),
+    null,
+    'at-target states stay owned by the PRIORITY_EXPAND_FOR_SPREAD row');
 
   t.ok(
     isPrioritySpreadSatisfiedAtTarget({

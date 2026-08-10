@@ -67,6 +67,8 @@ const TEST_FREE_NODE_IDS = Object.freeze([
 const TEST_REPLICA_ID_1 = 'sql_write_operations-p1-r1';
 const TEST_REPLICA_ID_2 = 'sql_write_operations-p1-r2';
 const TEST_REPLICA_ID_3 = 'sql_write_operations-p1-r3';
+const TEST_REPLICA_ID_4 = 'sql_write_operations-p1-r4';
+const TEST_OVER_TARGET_ACTIVE_COUNT = 4;
 const TEST_PARTITION_SERVICE_TYPE = 'partition';
 const TEST_ADDRESS_PREFIX = 'local/partition/';
 const TEST_RAFT_ROLE_LEADER = 'leader';
@@ -156,6 +158,46 @@ function isSpreadRestoringOperationRow(operationRow) {
   );
 }
 
+// Shared coordinator + rebalancer wiring over a prepared cache: both stall
+// repros differ only in the seeded services topology.
+function createStallReproStack(cache) {
+  const readinessService = createMockControlPlaneReadinessService({
+    systemTableCache: cache,
+    defaultRepairEligible: true,
+  });
+  const storageAdmissionService = createAllowAllStorageAdmissionService();
+  const coordinator = createTestCoordinator({
+    nodeId: TEST_NODE_ID_A,
+    systemTableCache: cache,
+    controlPlaneReadinessService: readinessService,
+    storageAdmissionService,
+    // The live suppressor precondition: every authoritative read of the
+    // services owner fails while cache reads keep working.
+    sqlQueryResults: {
+      [TEST_SERVICES_SQL_PATTERN]:
+        TEST_AUTHORITATIVE_SERVICES_READ_UNAVAILABLE,
+    },
+  });
+  const rebalancer = createTestRebalancer({
+    entityId: TEST_PARTITION_ID,
+    entityType: EntityType.PARTITION,
+    nodeId: TEST_NODE_ID_A,
+    systemTableCache: cache,
+    rebalanceCoordinator: coordinator,
+    controlPlaneReadinessService: readinessService,
+    storageAdmissionService,
+    storageAccountingService: {estimateReplicaBytes: () => 1},
+  });
+  rebalancer.setLeader(true);
+  rebalancer.clusterReadinessConfirmed = true;
+  rebalancer.isStabilized = () => true;
+  rebalancer.getConfiguredRebalanceBudget = async () =>
+    TEST_REBALANCE_BUDGET;
+  rebalancer.getGlobalInFlightOperationCount = async () =>
+    TEST_NO_GLOBAL_IN_FLIGHT_OPERATIONS;
+  return {coordinator, rebalancer};
+}
+
 test('critical priority partition [A,A,B] with free active nodes gets a ' +
 'spread-restoring operation within one evaluation cycle even while the ' +
 'authoritative services read is unavailable', async (t) => {
@@ -189,41 +231,7 @@ test('critical priority partition [A,A,B] with free active nodes gets a ' +
     // rows in flight for this partition while the gate demanded creation.
     replicaOperations: [],
   });
-  const readinessService = createMockControlPlaneReadinessService({
-    systemTableCache: cache,
-    defaultRepairEligible: true,
-  });
-  const storageAdmissionService = createAllowAllStorageAdmissionService();
-  const coordinator = createTestCoordinator({
-    nodeId: TEST_NODE_ID_A,
-    systemTableCache: cache,
-    controlPlaneReadinessService: readinessService,
-    storageAdmissionService,
-    // The live suppressor precondition: every authoritative read of the
-    // services owner fails while cache reads keep working.
-    sqlQueryResults: {
-      [TEST_SERVICES_SQL_PATTERN]:
-        TEST_AUTHORITATIVE_SERVICES_READ_UNAVAILABLE,
-    },
-  });
-  const rebalancer = createTestRebalancer({
-    entityId: TEST_PARTITION_ID,
-    entityType: EntityType.PARTITION,
-    nodeId: TEST_NODE_ID_A,
-    systemTableCache: cache,
-    rebalanceCoordinator: coordinator,
-    controlPlaneReadinessService: readinessService,
-    storageAdmissionService,
-    storageAccountingService: {estimateReplicaBytes: () => 1},
-  });
-
-  rebalancer.setLeader(true);
-  rebalancer.clusterReadinessConfirmed = true;
-  rebalancer.isStabilized = () => true;
-  rebalancer.getConfiguredRebalanceBudget = async () =>
-    TEST_REBALANCE_BUDGET;
-  rebalancer.getGlobalInFlightOperationCount = async () =>
-    TEST_NO_GLOBAL_IN_FLIGHT_OPERATIONS;
+  const {coordinator, rebalancer} = createStallReproStack(cache);
 
   try {
     // Harness sanity: all 5 active nodes are visible, replicas read [A,A,B].
@@ -290,6 +298,117 @@ test('critical priority partition [A,A,B] with free active nodes gets a ' +
         JSON.stringify(
           cache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS),
         ),
+    );
+  } finally {
+    rebalancer.shutdown();
+    if (typeof coordinator.shutdown === 'function') {
+      coordinator.shutdown();
+    }
+  }
+});
+
+test('over-target [A,A,A,B] priority partition (the ec-postfix archived ' +
+'shape: activeCount=4, target=3, 2 of 3 distinct nodes) still gets a ' +
+'spread-restoring add-like move within one evaluation cycle — the ' +
+'over-creation cap retains the open spread cure instead of wiping it', async (
+  t,
+) => {
+  initializeTestEnvironment();
+
+  // Quest over-target-cap-spread-cure-wipe. Archived live shape from run
+  // ec-postfix-20260810T060111Z (control_plane_publications-p1): the seed
+  // bootstrapped three replicas onto itself, one replacement reached the
+  // second node, and the over-creation cap then wiped the ADD onto the
+  // third node 40x with prioritySpreadGapOpen:true in its own diagnostic —
+  // the third node never received a replica and joiner formation timed out.
+  // Sealed behavior: the planner retains exactly the floor-restoring ADD
+  // (spread cure row) and still refuses surplus growth.
+  const cache = createMockCache({
+    nodes: [
+      createNodeRow(TEST_NODE_ID_A),
+      createNodeRow(TEST_NODE_ID_B),
+      createNodeRow(TEST_NODE_ID_C),
+      createNodeRow(TEST_NODE_ID_D),
+      createNodeRow(TEST_NODE_ID_E),
+    ],
+    services: [
+      // THREE replicas co-located on node A plus one on node B — the
+      // archived over-target terminal topology (4 voters, distinct 2/3).
+      createReplicaRow(TEST_REPLICA_ID_1, TEST_NODE_ID_A,
+        TEST_RAFT_ROLE_LEADER),
+      createReplicaRow(TEST_REPLICA_ID_2, TEST_NODE_ID_A,
+        TEST_RAFT_ROLE_FOLLOWER),
+      createReplicaRow(TEST_REPLICA_ID_3, TEST_NODE_ID_A,
+        TEST_RAFT_ROLE_FOLLOWER),
+      createReplicaRow(TEST_REPLICA_ID_4, TEST_NODE_ID_B,
+        TEST_RAFT_ROLE_FOLLOWER),
+    ],
+    partitions: [
+      {
+        partition_id: TEST_PARTITION_ID,
+        table_id: TEST_TABLE_ID,
+      },
+    ],
+    // Zero in-flight operations: the archived stall window read
+    // inFlightAddCount:0 / inFlightReplaceInCreationCount:0 on every fire.
+    replicaOperations: [],
+  });
+  const {coordinator, rebalancer} = createStallReproStack(cache);
+
+  try {
+    t.equal(
+      rebalancer.getAvailableNodes().length,
+      5,
+      'all five active nodes must be available to placement (harness sanity)',
+    );
+    t.equal(
+      rebalancer.getCurrentReplicas().length,
+      TEST_OVER_TARGET_ACTIVE_COUNT,
+      'partition must observe its four ACTIVE replicas (harness sanity)',
+    );
+
+    const result = await rebalancer.rebalance(TriggerType.PERIODIC);
+
+    t.equal(result.success, true, 'rebalance cycle must complete');
+    const addLikeMoveResults = (result.moves || []).filter(
+      isAddLikeMoveResult,
+    );
+    const allMoveDiagnostics = (result.moves || []).map((moveResult) => ({
+      operation: moveResult.operation,
+      nodeId: moveResult.nodeId,
+      reason: moveResult.reason,
+      skipped: moveResult.skipped === true,
+      admissionReason: moveResult.admission?.reason || null,
+    }));
+    // RED on the pre-quest source: the over-creation cap wiped the only
+    // floor-restoring ADD (addMoves.length = 0) even though its own
+    // diagnostic computed prioritySpreadGapOpen:true, so no add-like move
+    // could ever reach the third node.
+    t.ok(
+      addLikeMoveResults.length >= 1,
+      'the over-target cap must retain the open spread cure: an add-like ' +
+        'move targeting a fresh node must be planned; moves: ' +
+        JSON.stringify(allMoveDiagnostics),
+    );
+
+    const admittedAddLikeMoveResults = addLikeMoveResults.filter(
+      (moveResult) =>
+        moveResult.skipped !== true && moveResult.success !== false,
+    );
+    t.ok(
+      admittedAddLikeMoveResults.length >= 1,
+      'the retained spread cure must be ADMITTED within the same ' +
+        'evaluation cycle; moves: ' + JSON.stringify(allMoveDiagnostics),
+    );
+
+    const spreadRestoringOperations = cache
+      .getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS)
+      .filter(isSpreadRestoringOperationRow);
+    t.ok(
+      spreadRestoringOperations.length >= 1,
+      'a spread-restoring operation row targeting a free node must be ' +
+        'persisted; found: ' +
+        JSON.stringify(cache.getAll(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS)),
     );
   } finally {
     rebalancer.shutdown();

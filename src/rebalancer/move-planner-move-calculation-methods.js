@@ -19,6 +19,7 @@ import {
   resolvePlacementCure,
 } from './replica-placement-cure-policy.js';
 import {
+  applyOverTargetCapAddRetention,
   applyPrioritySpreadDrainCure,
   applyPrioritySpreadExpandCure,
   evaluatePriorityStandaloneRemoveSafety,
@@ -382,12 +383,43 @@ class MovePlannerMoveCalculationMethods {
       inFlightAccounting.activeCount,
       inFlightAccounting.activeVoterCount,
     );
+    // Serialize REPLACE on critical control-plane partitions to one in-flight
+    // at a time (rationale at the replace-pairing block below). Counted here,
+    // before the over-creation cap, because the cap's spread-cure retention
+    // consults the SAME serialized-REPLACE state the pairing block enforces.
+    const serializeCriticalReplace = this.isControlPlanePriorityPartition();
+    const inFlightReplaceCount = serializeCriticalReplace ?
+      this.getEntityInFlightOperations().filter(
+        (operation) =>
+          String(
+            operation?.type ||
+              operation?.operation_type ||
+              operation?.operationType ||
+              '',
+          ).toLowerCase() === MoveType.REPLACE,
+      ).length :
+      0;
     if (
       !cleanupOnlyWhilePending &&
       addMoves.length > 0 &&
       this.isControlPlanePriorityPartition() &&
       surplusVoterCount > targetReplicaCount
     ) {
+      // Quest over-target-cap-spread-cure-wipe: the cap no longer wipes an
+      // open priority-spread cure. The retention owner emits one canonical
+      // outcome — an over-target partition BELOW its distinct-node floor
+      // keeps exactly the gap-capped ADDs onto non-hosting nodes (re-typed
+      // to the spread cure row); every other shape refuses every ADD, the
+      // pre-existing fail-closed floor.
+      const capAddRetention = applyOverTargetCapAddRetention({
+        partitionId: this.entityId,
+        activePlacementReplicas,
+        addMoves,
+        inFlightReplaceCount,
+        surplusVoterCount,
+        targetNodeIds,
+        targetReplicaCount,
+      });
       this.logger.info(REBALANCER_LOG_MSG.DEFER_ADD_OVER_TARGET, {
         entityId: this.entityId,
         targetReplicaCount,
@@ -404,14 +436,8 @@ class MovePlannerMoveCalculationMethods {
         inFlightReplaceInCreationCount:
           inFlightAccounting.inFlightReplaceInCreationCount,
         inFlightAddCount: inFlightAccounting.inFlightAddCount,
-        deferredAdds: addMoves.length,
+        deferredAdds: capAddRetention.refusedAddCount,
         overCreationCap: true,
-        // Composite-state evidence: when this cap wipes the deferred ADDs
-        // WHILE the distinct-node spread floor is unmet, the wiped move was
-        // the partition's spread cure — the state that stalled live run
-        // 2026-07-19 (over-target belief on one node, gapped topology). The
-        // diagnostic names both preconditions so a repeated fire in this
-        // shape reads as a cure-starvation stall, not routine cap pressure.
         activeDistinctNodeCount: countDistinctActiveReplicaNodes(
           activePlacementReplicas,
         ),
@@ -419,8 +445,10 @@ class MovePlannerMoveCalculationMethods {
         prioritySpreadGapOpen:
           countDistinctActiveReplicaNodes(activePlacementReplicas) <
           Math.min(targetReplicaCount, new Set(targetNodeIds).size),
+        overTargetCapAddDecision: capAddRetention.decision,
+        retainedSpreadCureAddCount:
+          capAddRetention.retainedSpreadCureAddCount,
       });
-      addMoves.length = 0;
     }
     const shouldDeferAddsInDegraded =
       isDegradedPlacement &&
@@ -610,20 +638,10 @@ class MovePlannerMoveCalculationMethods {
       // voter-ready, source removing) is the long window that builds the standoff
       // and is EXCLUDED from the topology-blocking accounting set, so the count is
       // read from getEntityInFlightOperations (all non-terminal, drain-inclusive),
-      // NOT inFlightAccounting (drain-excluded). Non-critical partitions and
-      // genuine provisioning (count-increasing ADD) are untouched.
-      const serializeCriticalReplace = this.isControlPlanePriorityPartition();
-      const inFlightReplaceCount = serializeCriticalReplace ?
-        this.getEntityInFlightOperations().filter(
-          (operation) =>
-            String(
-              operation?.type ||
-                operation?.operation_type ||
-                operation?.operationType ||
-                '',
-            ).toLowerCase() === MoveType.REPLACE,
-        ).length :
-        0;
+      // NOT inFlightAccounting (drain-excluded) — counted once above the
+      // over-creation cap, which consults the same serialized-REPLACE state.
+      // Non-critical partitions and genuine provisioning (count-increasing
+      // ADD) are untouched.
       let replaceCount = serializeCriticalReplace ?
         Math.min(
           naturalReplaceCount,

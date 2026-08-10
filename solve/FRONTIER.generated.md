@@ -63,7 +63,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | operation-ledger-quorum-authoritative-release | product | 3 | 0 | 2026-07-22 ⚠ stale | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 ⚠ stale | — |
 | priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 ⚠ stale | — |
-| public-path-multinode-baseline | product | 0 | 0 | 2026-08-09 | — |
+| public-path-multinode-baseline | product | 0 | 0 | 2026-08-10 | — |
 | publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 | — |
 | rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 ⚠ stale | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 ⚠ stale | — |

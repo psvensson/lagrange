@@ -9,19 +9,23 @@
  * replacements on hopping target nodes, driving the partition further over
  * target and dead-locking learner promotion (replica-count-limit).
  *
- * Policy under test: while activeCount > target (a surplus that has not drained),
- * a priority partition must NOT mint new add-like moves — only drain. At/under
- * target a priority partition may mint one serial spread ADD; the next pass
- * drains the resulting target-plus-one surplus without a REPLACE handoff.
- *
- * RED before the cap (emits an over-target ADD/REPLACE); GREEN after.
+ * Policy under test: while activeCount > target (a surplus that has not
+ * drained), a priority partition must NOT mint surplus-growing add-like moves.
+ * Quest over-target-cap-spread-cure-wipe refined the cap's decision table:
+ * when the distinct-node spread floor is UNMET (prioritySpreadGapOpen), the
+ * cap retains exactly the gap-capped spread-cure ADDs onto nodes not already
+ * hosting the partition (re-typed to the spread cure row) and refuses
+ * everything else; when the floor is met, every ADD stays refused and only
+ * drain proceeds — the pre-existing fail-closed floor. At/under target a
+ * priority partition may mint one serial spread ADD; the next pass drains
+ * the resulting target-plus-one surplus without a REPLACE handoff.
  */
 
 import {test} from '../../src/test-helpers/tap.js';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {MovePlanner} from '../../src/rebalancer/move-planner.js';
-import {REBALANCER_ENTITY_TYPE, REBALANCER_MOVE_TYPE} from '../../src/rebalancer/rebalancer-constants.js';
+import {MOVE_REASON, REBALANCER_ENTITY_TYPE, REBALANCER_MOVE_TYPE} from '../../src/rebalancer/rebalancer-constants.js';
 import {ReplicaStatus} from '../../src/rebalancer/replica-status.js';
 import {buildReplicaInventorySnapshot} from '../../src/rebalancer/replica-inventory.js';
 
@@ -39,7 +43,12 @@ function resetEnv() {
   LoggingService.resetInstance();
 }
 
-function createMoveStateProvider({currentReplicas = [], inFlightOperations = []} = {}) {
+function createMoveStateProvider({
+  currentReplicas = [],
+  inFlightOperations = [],
+  pendingMoveReplicaIds = [],
+} = {}) {
+  const pendingMoves = new Set(pendingMoveReplicaIds);
   return {
     getAvailableNodes: () => [],
     getCurrentReplicas: () => currentReplicas,
@@ -48,7 +57,7 @@ function createMoveStateProvider({currentReplicas = [], inFlightOperations = []}
     getInFlightOperations: () => inFlightOperations,
     getGlobalTopologyBlockingInFlightOperations: () => [],
     getTerminalFailedReplaceTargetReplicaIds: () => new Set(),
-    hasPendingMove: () => false,
+    hasPendingMove: (replicaId) => pendingMoves.has(replicaId),
     hasPendingAddForNode: () => false,
   };
 }
@@ -94,18 +103,91 @@ test('MovePlanner in-flight-aware over-creation cap', async (t) => {
   t.afterEach(resetEnv);
 
   await t.test(
-    'while OVER target (surplus voters not yet drained) no new add-like move ' +
-    'is minted — only drain',
+    'OVER target with the distinct-node floor UNMET retains exactly the ' +
+    'spread-cure ADD (quest over-target-cap-spread-cure-wipe)',
     async (t) => {
-      // 4 active for target 3 = a surplus already exists. node-3 is unoccupied,
-      // so without the cap the planner would over-create a replacement there
-      // (the r4->r5->r6 pile-up). The cap must block it and let the surplus on
-      // node-1 drain instead.
+      // The archived ec-postfix cure-starvation shape: activeCount=4 for
+      // target 3, all voters on 2 of 3 distinct target nodes ([S,S,S,J]).
+      // The cap used to wipe the only floor-restoring ADD onto node-3 while
+      // its own diagnostic logged prioritySpreadGapOpen:true. Sealed
+      // behavior: the ADD onto the non-hosting node survives, re-typed to
+      // the spread cure row; no surplus-growing move and no REPLACE
+      // handoff is minted alongside it.
       const currentReplicas = [
         active('r1', 'node-1'),
         active('r2', 'node-1'),
         active('r3', 'node-1'),
         active('r4', 'node-2'),
+      ];
+      const planner = plannerFor(createMoveStateProvider({currentReplicas}));
+
+      const moves = planner.calculateMoves(currentReplicas, TARGET_STATE);
+
+      const addMoves = moves.filter(
+        (m) => m.type === REBALANCER_MOVE_TYPE.ADD,
+      );
+      t.equal(addMoves.length, 1,
+        'exactly the one floor-restoring spread-cure ADD survives the cap');
+      t.equal(addMoves[0]?.nodeId, 'node-3',
+        'the retained ADD targets the node not already hosting the partition');
+      t.equal(addMoves[0]?.reason, MOVE_REASON.SPREAD_REPLICAS,
+        'the retained ADD carries the spread cure row reason, not a ' +
+        'count-increasing one');
+      t.equal(
+        moves.some((m) => m.type === REBALANCER_MOVE_TYPE.REPLACE),
+        false,
+        'the retained spread cure stays a serial ADD — no REPLACE handoff');
+    },
+  );
+
+  await t.test(
+    'OVER target with drains BLOCKED (pending moves on every replica) the ' +
+    'cap still retains exactly the spread-cure ADD — the live starved-drain ' +
+    'stall shape',
+    async (t) => {
+      // Live circle: the surplus sources cannot drain (their removals are
+      // pending, gated on voter-ready spread) while the spread ADD used to
+      // be wiped because the partition is over target. The retained ADD is
+      // the only enforceable cure in this state.
+      const currentReplicas = [
+        active('r1', 'node-1'),
+        active('r2', 'node-1'),
+        active('r3', 'node-1'),
+        active('r4', 'node-2'),
+      ];
+      const planner = plannerFor(createMoveStateProvider({
+        currentReplicas,
+        pendingMoveReplicaIds: ['r1', 'r2', 'r3', 'r4'],
+      }));
+
+      const moves = planner.calculateMoves(currentReplicas, TARGET_STATE);
+
+      t.same(
+        moves.map((m) => ({type: m.type, nodeId: m.nodeId, reason: m.reason})),
+        [{
+          type: REBALANCER_MOVE_TYPE.ADD,
+          nodeId: 'node-3',
+          reason: MOVE_REASON.SPREAD_REPLICAS,
+        }],
+        'exactly the spread-cure ADD onto the non-hosting node is emitted');
+    },
+  );
+
+  await t.test(
+    'OVER target with the distinct-node floor already MET refuses every ADD ' +
+    '(fail-closed floor) and drains the surplus',
+    async (t) => {
+      // Already-spread over-target partition: 4 active on 3 distinct nodes
+      // (node-4 hosts a stray replica outside the target set, so an ADD onto
+      // free node-3 is still minted upstream). The floor is met, so surplus
+      // growth stays refused even though the minted ADD targets a
+      // non-hosting node — retention requires the OPEN gap, not merely a
+      // fresh target node.
+      const currentReplicas = [
+        active('r1', 'node-1'),
+        active('r2', 'node-1'),
+        active('r3', 'node-2'),
+        active('r4', 'node-4'),
       ];
       const planner = plannerFor(createMoveStateProvider({currentReplicas}));
 
@@ -117,7 +199,50 @@ test('MovePlanner in-flight-aware over-creation cap', async (t) => {
           m.type === REBALANCER_MOVE_TYPE.REPLACE,
       );
       t.same(addLike, [],
-        'no new ADD/REPLACE while a surplus of committed voters has not drained');
+        'no ADD/REPLACE for an already-spread over-target partition');
+      t.equal(
+        moves.some((m) => m.type === REBALANCER_MOVE_TYPE.REMOVE),
+        true,
+        'surplus drain remains available once the floor is met');
+    },
+  );
+
+  await t.test(
+    'retention is gap-capped and refuses ADDs onto already-hosting nodes',
+    async (t) => {
+      // Gap arithmetic: target 4 over nodes [n1,n1,n2,n3] (distinct floor
+      // min(4,3)=3), actives on {n1,n4} -> open gap 1. Upstream mints ADDs
+      // onto n1 (already hosting), n2 and n3 (both fresh). The cap must
+      // refuse the hosting-node ADD, retain ONE fresh-node ADD (gap cap),
+      // and refuse the second fresh-node ADD as surplus growth beyond the
+      // cure. Drains are pending-blocked to isolate the cap decision.
+      const currentReplicas = [
+        active('r1', 'node-1'),
+        active('r2', 'node-4'),
+        active('r3', 'node-4'),
+        active('r4', 'node-4'),
+        active('r5', 'node-4'),
+      ];
+      const planner = plannerFor(createMoveStateProvider({
+        currentReplicas,
+        pendingMoveReplicaIds: ['r1', 'r2', 'r3', 'r4', 'r5'],
+      }));
+
+      const moves = planner.calculateMoves(currentReplicas, {
+        targetReplicaCount: 4,
+        targetNodes: ['node-1', 'node-1', 'node-2', 'node-3'],
+        degraded: false,
+      });
+
+      t.same(
+        moves.map((m) => ({type: m.type, nodeId: m.nodeId, reason: m.reason})),
+        [{
+          type: REBALANCER_MOVE_TYPE.ADD,
+          nodeId: 'node-2',
+          reason: MOVE_REASON.SPREAD_REPLICAS,
+        }],
+        'exactly one gap-capped spread-cure ADD onto a fresh node; the ' +
+        'already-hosting node-1 ADD and the beyond-gap node-3 ADD are refused');
     },
   );
 
@@ -187,10 +312,12 @@ test('MovePlanner in-flight-aware over-creation cap', async (t) => {
       // (r1/r2/r3 active + r4 just promoted: raft_role=follower, status=creating),
       // but status===ACTIVE counting sees only 3, so the status-only cap stayed
       // blind and kept minting the replacement onto empty node-3 — piling the
-      // group further over target until learner promotion dead-locked. node-3 is
-      // unoccupied, so without the raft_role read the planner emits an over-target
-      // add-like move. RED before the raft_role cap (activeCount=3, not >3 -> no
-      // cap); GREEN after (activeVoterCount=4 > 3 -> cap fires).
+      // group further over target until learner promotion dead-locked. The
+      // raft_role read must still trip the cap (activeVoterCount=4 > 3).
+      // Because the distinct-node floor is unmet (2 of 3), the cap retains
+      // the single gap-capped spread-cure ADD onto node-3 — bounded, and
+      // refused again once node-3 hosts (the pile-up cannot resume: an ADD
+      // onto an already-hosting node is never retained).
       const currentReplicas = [
         active('r1', 'node-1'),
         active('r2', 'node-2'),
@@ -206,9 +333,15 @@ test('MovePlanner in-flight-aware over-creation cap', async (t) => {
           m.type === REBALANCER_MOVE_TYPE.ADD ||
           m.type === REBALANCER_MOVE_TYPE.REPLACE,
       );
-      t.same(addLike, [],
-        'no new add-like move while the authoritative raft-voter count is over ' +
-        'target, even though status===ACTIVE reads at target');
+      t.same(
+        addLike.map((m) => ({type: m.type, nodeId: m.nodeId, reason: m.reason})),
+        [{
+          type: REBALANCER_MOVE_TYPE.ADD,
+          nodeId: 'node-3',
+          reason: MOVE_REASON.SPREAD_REPLICAS,
+        }],
+        'the raft-voter cap fires (no count-increasing or hosting-node move) ' +
+        'and retains only the bounded spread-cure ADD onto the fresh node');
     },
   );
 
