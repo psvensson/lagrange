@@ -257,12 +257,6 @@ class PartitionServiceCoreBase extends EventEmitter {
     this.raftTimingConfig = null;
     this.replicaStateMachine = options.replicaStateMachine || null;
     this.peerAddresses = options.peerAddresses || [];
-    this.learnerPromotionDelayMs =
-      options.learnerPromotionDelayMs ||
-      PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_DELAY_MS;
-    this.learnerPromotionPriorityRecoveryDelayMs =
-      options.learnerPromotionPriorityRecoveryDelayMs ||
-      PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_PRIORITY_RECOVERY_DELAY_MS;
     this.learnerCatchUpCheckIntervalMs =
       options.learnerCatchUpCheckIntervalMs ||
       PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;

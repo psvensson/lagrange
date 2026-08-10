@@ -6,6 +6,7 @@
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
+  checkLearnerPromotionWithGrantedProof,
   createLoopbackTransport,
   createTrafficReadinessState,
 } from './partition-service-test-support.js';
@@ -201,7 +202,7 @@ test('PartitionService - learner promotes one temporary replacement voter above 
   partition.leaderId = 'replica-1';
 
   // Manually trigger learner promotion check
-  partition.checkLearnerPromotion();
+  await checkLearnerPromotionWithGrantedProof(partition);
 
   // One temporary replacement learner above target is allowed so the
   // source voter can be removed after the replacement becomes ready.
@@ -290,7 +291,7 @@ test('PartitionService - learner promotes one temporary replacement voter above 
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'nodes-p1-r1';
 
-  partition.checkLearnerPromotion();
+  await checkLearnerPromotionWithGrantedProof(partition);
 
   t.equal(
     partition.role,
@@ -393,7 +394,7 @@ test('PartitionService - learner promotion discounts stale local voter row',
     partition.role = RaftRole.LEARNER;
     partition.leaderId = TEST_STALE_LOCAL_PROMOTION_LEADER_REPLICA_ID;
 
-    partition.checkLearnerPromotion();
+    await checkLearnerPromotionWithGrantedProof(partition);
 
     t.equal(
       partition.role,
@@ -458,7 +459,7 @@ test('PartitionService - learner promotes when voter count would be odd', async 
   partition.leaderId = 'replica-1';
 
   // Manually trigger learner promotion check
-  partition.checkLearnerPromotion();
+  await checkLearnerPromotionWithGrantedProof(partition);
 
   // Should promote because 2 + 1 = 3 voters (odd)
   t.equal(partition.role, RaftRole.FOLLOWER, 'Should promote to follower for odd voter count');
@@ -522,7 +523,7 @@ test('PartitionService - learner promotion deferred until leader is known', asyn
   partition.role = RaftRole.LEARNER;
   partition.leaderId = null;
 
-  partition.checkLearnerPromotion();
+  await partition.checkLearnerPromotion();
 
   t.equal(
     partition.role,
@@ -596,13 +597,12 @@ test(
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
       systemTableCache: mockCache,
-      learnerPromotionDelayMs: 30000,
       learnerCatchUpCheckIntervalMs: 1000,
     });
 
     partition.role = RaftRole.LEARNER;
     partition.leaderId = null;
-    partition.checkLearnerPromotion();
+    await partition.checkLearnerPromotion();
 
     t.equal(
       scheduledDelayMs[0],
@@ -614,8 +614,11 @@ test(
 );
 
 test(
-  'PartitionService - priority recovery expedites initial learner promotion check',
+  'PartitionService - initial learner promotion check uses the proof retry cadence',
   async (t) => {
+    // Promotion is progress-proven by the leader; elapsed time is only the
+    // retry cadence, so even the INITIAL check schedules at the catch-up
+    // interval — there is no 30s stability floor to expedite anymore.
     const scheduledDelayMs = [];
     const originalSetTimeout = global.setTimeout;
     global.setTimeout = (callback, delayMs) => {
@@ -641,8 +644,7 @@ test(
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
       bootstrapReadinessState: readinessState,
-      learnerPromotionDelayMs: 30000,
-      learnerPromotionPriorityRecoveryDelayMs: 5000,
+      learnerCatchUpCheckIntervalMs: 1000,
     });
 
     partition.scheduleLearnerPromotion(
@@ -651,8 +653,8 @@ test(
 
     t.equal(
       scheduledDelayMs[0],
-      5000,
-      'priority control-plane recovery should shorten initial promotion floor',
+      1000,
+      'initial promotion check should schedule at the proof retry cadence',
     );
     partition.learnerPromotionTimer = null;
   },
@@ -742,7 +744,7 @@ test(
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
 
-    partition.checkLearnerPromotion();
+    await checkLearnerPromotionWithGrantedProof(partition);
 
     t.equal(
       partition.role,
@@ -860,7 +862,7 @@ test(
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
 
-    partition.checkLearnerPromotion();
+    await checkLearnerPromotionWithGrantedProof(partition);
 
     t.equal(
       partition.role,
@@ -1001,7 +1003,7 @@ test(
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
 
-    partition.checkLearnerPromotion();
+    await checkLearnerPromotionWithGrantedProof(partition);
 
     t.equal(
       partition.role,
@@ -1122,7 +1124,7 @@ test(
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
 
-    partition.checkLearnerPromotion();
+    await checkLearnerPromotionWithGrantedProof(partition);
 
     t.equal(
       partition.role,
@@ -1192,7 +1194,7 @@ test(
       electionStarted = true;
     };
 
-    partition.checkLearnerPromotion();
+    await checkLearnerPromotionWithGrantedProof(partition);
 
     t.equal(
       partition.leaderId,

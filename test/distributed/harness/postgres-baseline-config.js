@@ -1,8 +1,13 @@
 import {ASSERTION_POLICY, BENCHMARK_DEFAULTS} from './constants.js';
-import {PARTITION_SERVICE_DEFAULT} from '../../../src/partition/partition-service-constants.js';
 
 const ZERO = 0;
 const ONE = 1;
+// Conservative learner catch-up budget floor for preload budgeting. Learner
+// promotion is progress-proven by the leader (quest
+// learner-promotion-progress-proof), so there is no fixed promotion delay
+// anymore; this keeps the historical 30s worst-case catch-up allowance as a
+// benchmark budget floor.
+const BENCHMARK_LEARNER_CATCHUP_BUDGET_MS = 30000;
 const MIN_REPLICATION_FACTOR = 1;
 const BENCHMARK_EVENT_TABLE_FALLBACK = 'benchmark_events';
 const BENCHMARK_STRICT_DISCOVERY_DEFAULT = false;
@@ -190,7 +195,7 @@ function resolveAuthoritativeFallbackThresholds(
 }
 
 function calculateMinimumPreloadBudgetMs(benchmarkConfig) {
-  return PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_DELAY_MS +
+  return BENCHMARK_LEARNER_CATCHUP_BUDGET_MS +
     benchmarkConfig.preloadRequiredStableMs +
     benchmarkConfig.quiescentPollIntervalMs;
 }

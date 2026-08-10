@@ -5,15 +5,9 @@
 
 import {NUM} from '../constants/numbers.js';
 import {STRING} from '../constants/strings.js';
-import {TIME_MS} from '../constants/time.js';
 
 const RAFT_REPLICA_BASE_DEFAULT = Object.freeze({
   NODE_ID: STRING.UNKNOWN,
-  // Learner phase: new replicas joining existing groups start as non-voting learners
-  // They receive log entries but don't vote until caught up
-  // This prevents new replicas from disrupting existing leadership
-  LEARNER_PROMOTION_DELAY_MS: TIME_MS.SECOND * 30, // Min time before promotion (30s for stability)
-  LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // How often to check catch-up
   // Raft timing: heartbeat should be much smaller than election timeout
   // Election timeout should be 5-10x heartbeat to avoid unnecessary elections
   HEARTBEAT_DEFAULT_MS: 150,
@@ -63,10 +57,6 @@ const RAFT_REPLICA_BASE_ADDRESS = Object.freeze({
 
 const RAFT_REPLICA_BASE_LOG_MSG = Object.freeze({
   DEFERRING_ELECTION_START: 'Deferring election start',
-  STARTING_AS_LEARNER: 'Starting as learner (non-voting) - will promote after catch-up',
-  LEARNER_PROMOTION_SCHEDULED: 'Learner promotion check scheduled',
-  LEARNER_PROMOTED_TO_FOLLOWER: 'Learner promoted to follower - now participating in elections',
-  LEARNER_PROMOTION_CHECK: 'Checking learner promotion eligibility',
   CLEARED_LIFERAFT_TIMERS: 'Cleared liferaft timers for deferred election',
   BECAME_LEADER: 'Became leader (liferaft)',
   LEADER_CHANGED: 'Leader changed',

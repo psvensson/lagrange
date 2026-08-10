@@ -7,6 +7,9 @@ import {
   getNextWorkflowStep,
   isTerminalStep,
 } from '../../src/rebalancer/replica-operation-progress.js';
+import {
+  stubGrantedLearnerPromotionProof,
+} from '../partition/partition-service-test-support.js';
 import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
 import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from '../../src/control-plane/control-plane-system-table-gateway.js';
 import {
@@ -236,7 +239,10 @@ function createLearnerPartitionService({
   // without depending on log transport (the message text is shared across causes).
   partition.logger = {
     info: (message, payload) => {
-      if (payload && payload.replicaId === replicaId) {
+      // Quorum-gate deferrals only: the progress-proof grant/refusal logs
+      // share the replicaId but never carry the ceiling field.
+      if (payload && payload.replicaId === replicaId &&
+          payload.maxAllowedVotersAfterPromotion !== undefined) {
         deferrals.push({
           reason: payload.reason,
           activeVoterCount: payload.activeVoterCount,
@@ -249,14 +255,18 @@ function createLearnerPartitionService({
     error: () => {},
     debug: () => {},
   };
+  // Promotion is progress-proven by the leader; this scenario exercises the
+  // quorum-shape guard, so only the proof's transport hop is stubbed (the
+  // real evaluator and validator still run).
+  stubGrantedLearnerPromotionProof(partition);
   return partition;
 }
 
 // One promotion-loop iteration (production: a 1s self-rescheduling native timer the
 // virtual clock cannot drive — plan limits row f — so the driver calls the REAL
 // guard once per tick and disarms the rescheduled timer).
-function drivePromotionCheck(partition) {
-  partition.checkLearnerPromotion();
+async function drivePromotionCheck(partition) {
+  await partition.checkLearnerPromotion();
   if (partition.learnerPromotionTimer) {
     clearTimeout(partition.learnerPromotionTimer);
     partition.learnerPromotionTimer = null;
@@ -615,12 +625,12 @@ async function attemptReplanGeneration(ctx, cycle) {
 }
 
 // The learner promotion loop (REAL guard, 1 Hz in production).
-function drivePromotionLoop(ctx, tick) {
+async function drivePromotionLoop(ctx, tick) {
   for (const generation of ctx.replaceGenerations) {
     if (generation.learner.role !== RaftRole.LEARNER) {
       continue;
     }
-    if (drivePromotionCheck(generation.learner)) {
+    if (await drivePromotionCheck(generation.learner)) {
       ctx.promotedByReplicaId.add(generation.replicaId);
       promoteServiceRow(ctx.serviceRows, generation.replicaId);
       ctx.events.push(`${tick} PROMOTED ${generation.replicaId}`);
@@ -767,7 +777,7 @@ async function runVoterSurplusScenario({lossMode}) {
     for (let cycle = 0; cycle < MAX_CYCLES; cycle++) {
       await attemptSurplusRemoves(ctx, cycle);
       await attemptReplanGeneration(ctx, cycle);
-      drivePromotionLoop(ctx, tick);
+      await drivePromotionLoop(ctx, tick);
       await driveWorkflowTick({scenario, events, tick});
       tick += 1;
       await reportVoterReadyTimeouts(ctx, tick);

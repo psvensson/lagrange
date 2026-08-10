@@ -432,14 +432,12 @@ test('RaftReplicaBase', async (t) => {
     replica.initialized = true;
     replica.roleUpdateRetryTimer = setTimeout(() => {}, 10000);
     replica.leaderNodeUpdateRetryTimer = setTimeout(() => {}, 10000);
-    replica.learnerPromotionTimer = setTimeout(() => {}, 10000);
 
     await replica.shutdown();
 
     t.equal(replica.initialized, false);
     t.equal(replica.roleUpdateRetryTimer, null);
     t.equal(replica.leaderNodeUpdateRetryTimer, null);
-    t.equal(replica.learnerPromotionTimer, null);
   });
 
   await t.test('handleSingleReplicaLeadership promotes single replica to leader', async (t) => {

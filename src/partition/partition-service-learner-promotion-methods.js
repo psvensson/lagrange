@@ -4,6 +4,9 @@ import {
   isBootstrapCriticalSystemPartitionId,
 } from '../bootstrap/system-partition-classification.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
+import {
+  validateLearnerPromotionProofResponse,
+} from '../raft/learner-promotion-progress.js';
 import {filterSharedRows} from '../cache/shared-row-read.js';
 
 const {
@@ -34,9 +37,10 @@ const {
 
 class PartitionServiceLearnerPromotionMethods {
   /**
-   * Schedule learner promotion check after minimum delay.
-   * Learners are promoted to followers after catching up with the leader's log.
-   * This prevents new replicas from disrupting existing leadership.
+   * Schedule the next learner promotion check. The check is progress-proven
+   * by the current leader; this cadence is ONLY the retry/backoff input —
+   * elapsed time never satisfies promotion (quest
+   * learner-promotion-progress-proof).
    * @private
    */
   scheduleLearnerPromotion(
@@ -55,7 +59,7 @@ class PartitionServiceLearnerPromotionMethods {
       );
       return;
     }
-    const delayMs = this.resolveLearnerPromotionDelayMs(scheduleReason);
+    const delayMs = this.learnerCatchUpCheckIntervalMs;
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_SCHEDULED, {
       replicaId: this.replicaId,
       partitionId: this.partitionId,
@@ -63,7 +67,21 @@ class PartitionServiceLearnerPromotionMethods {
       scheduleReason,
     });
     this.learnerPromotionTimer = setTimeout(() => {
-      this.checkLearnerPromotion();
+      Promise.resolve(this.checkLearnerPromotion()).catch((error) => {
+        this.logger.warn(
+          PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED,
+          {
+            replicaId: this.replicaId,
+            partitionId: this.partitionId,
+            reason: PARTITION_SERVICE_LITERAL.PROMOTION_CHECK_FAILED,
+            error: error.message,
+          },
+        );
+        this.scheduleLearnerPromotion(
+          PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
+            .DEFERRED_RECHECK,
+        );
+      });
     }, delayMs);
   }
   isPriorityRecoveryPendingForLearnerPromotion() {
@@ -83,51 +101,6 @@ class PartitionServiceLearnerPromotionMethods {
       [];
     return reasons.includes(
       LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
-    );
-  }
-  resolveLearnerPromotionDelayMs(scheduleReason) {
-    if (
-      scheduleReason ===
-      PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.INITIAL_DELAY
-    ) {
-      if (
-        this.isPriorityRecoveryPendingForLearnerPromotion() ||
-        this.isPriorityControlPlaneFormationLearnerPromotion()
-      ) {
-        return Math.min(
-          this.learnerPromotionDelayMs,
-          this.learnerPromotionPriorityRecoveryDelayMs,
-        );
-      }
-      return this.learnerPromotionDelayMs;
-    }
-    return this.learnerCatchUpCheckIntervalMs;
-  }
-  /**
-   * Fresh-formation analog of isPriorityRecoveryPendingForLearnerPromotion.
-   *
-   * The 30s INITIAL_DELAY stability budget is only survivable when the fast
-   * priority-recovery path fires, and that path keys on a
-   * PRIORITY_CONTROL_PLANE_RECOVERY_PENDING readiness reason that is present
-   * during restart recovery but NOT during initial multi-node formation. During
-   * formation a critical control-plane learner joining the existing group must
-   * reach voter-ready inside the replica-handler activation gate
-   * (syncTimeoutMs, ~10s); a 30s promotion delay is structurally too late
-   * (30s >> 10s), so the learner never promotes, the partition never reaches
-   * quorum, and 7-node formation deadlocks. Use the same fast delay the
-   * recovery path already deems safe for these exact partitions. The promotion
-   * itself still passes the quorum-membership safety gate in
-   * checkLearnerPromotion (odd-voter + target-count), so this only moves the
-   * first promotion check earlier, it does not relax any safety invariant.
-   *
-   * @return {boolean}
-   */
-  isPriorityControlPlaneFormationLearnerPromotion() {
-    return (
-      this.isJoiningExistingGroup === true &&
-      classifySystemPartition({
-        partitionId: this.partitionId,
-      }).priorityControlPlane
     );
   }
   getPriorityRecoveryPlanningSnapshotForLearnerPromotion() {
@@ -450,17 +423,23 @@ class PartitionServiceLearnerPromotionMethods {
   }
   /**
    * Check if learner can be promoted to follower.
-   * Promotion happens when:
-   * 1. Minimum delay has passed (already satisfied by timer)
-   * 2. A leader has been discovered for the group
-   * 3. Promoting would stay within the partition's configured replica count,
+   * Promotion happens only when ALL of the following hold:
+   * 1. A leader has been discovered for the group
+   * 2. Promoting would stay within the partition's configured replica count,
    *    allowing at most one temporary replacement voter above target
-   * 4. Promoting would not result in an even number of voters (prevents split votes)
+   * 3. Promoting would not result in an even number of voters (prevents split votes)
    *    unless this is the single temporary replacement voter or all pending
    *    learners together would reach an odd count within target
+   * 4. The CURRENT leader proves this learner has applied through the safe
+   *    promotion index (the leader's committed index at proof time) for the
+   *    current term and membership epoch, and that proof still matches the
+   *    local observation after the round trip (quest
+   *    learner-promotion-progress-proof). Elapsed time is only the retry
+   *    cadence; every refusal defers and reschedules.
+   * @return {Promise<void>}
    * @private
    */
-  checkLearnerPromotion() {
+  async checkLearnerPromotion() {
     this.learnerPromotionTimer = null;
     if (!isCatchupLearnerRaftRole(this.role)) {
       return;
@@ -567,6 +546,62 @@ class PartitionServiceLearnerPromotionMethods {
       );
       return;
     }
+    // Progress proof: the current leader must prove this learner applied
+    // through the safe promotion index for the current term and membership
+    // epoch. Runs LAST so the cheap local quorum-shape gates above never pay
+    // the round trip, and the proof is validated against the freshest local
+    // observation (leader identity, epoch, role) after it returns.
+    await this.applyLearnerPromotionProofGate();
+  }
+  /**
+   * The progress-proof gate itself: request the proof from the discovered
+   * leader, fail-closed validate it against the post-round-trip local
+   * observation, and only then promote. Every refusal defers with a typed
+   * reason on the retry cadence.
+   * @return {Promise<void>}
+   * @private
+   */
+  async applyLearnerPromotionProofGate() {
+    const requestedLeaderId = this.leaderId;
+    const requestedMembershipEpoch =
+      this.resolveLearnerPromotionMembershipEpoch();
+    const proof = await this.requestLearnerPromotionProofFromLeader({
+      leaderReplicaId: requestedLeaderId,
+      membershipEpoch: requestedMembershipEpoch,
+    });
+    const proofValidation = validateLearnerPromotionProofResponse({
+      proof,
+      isPromotableLearner:
+        isCatchupLearnerRaftRole(this.role) && this.isShutdown !== true,
+      requestedLeaderId,
+      currentLeaderId: this.leaderId,
+      requestedMembershipEpoch,
+      currentMembershipEpoch: this.resolveLearnerPromotionMembershipEpoch(),
+      localTerm: this.resolveCurrentTermSafe(),
+    });
+    if (!proofValidation.accepted) {
+      this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
+        replicaId: this.replicaId,
+        partitionId: this.partitionId,
+        reason: proofValidation.reason,
+        proofReason: proofValidation.proofReason,
+        leaderReplicaId: requestedLeaderId,
+        membershipEpoch: requestedMembershipEpoch,
+      });
+      this.scheduleLearnerPromotion(
+        PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.DEFERRED_RECHECK,
+      );
+      return;
+    }
+    this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROOF_GRANTED, {
+      replicaId: this.replicaId,
+      partitionId: this.partitionId,
+      leaderReplicaId: requestedLeaderId,
+      term: proof.term,
+      membershipEpoch: proof.membershipEpoch,
+      safePromotionIndex: proof.safePromotionIndex,
+      learnerMatchIndex: proof.learnerMatchIndex,
+    });
     this.becomeFollower();
   }
   getInFlightAddLikeOperationReplicaIds() {

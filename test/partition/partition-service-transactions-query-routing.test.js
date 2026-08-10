@@ -7,6 +7,7 @@
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import LifeRaft from '@markwylde/liferaft';
 import {
+  checkLearnerPromotionWithGrantedProof,
   createLoopbackTransport,
   waitForCondition,
 } from './partition-service-test-support.js';
@@ -113,7 +114,7 @@ test(
       dbPath: ':memory:',
       isJoiningExistingGroup: true,
       leaderAddress: 'node-1/partition/replica-1',
-      learnerPromotionDelayMs: 25,
+      learnerCatchUpCheckIntervalMs: 25,
     });
 
     try {
@@ -243,7 +244,7 @@ test(
       electionStarted = true;
     };
 
-    partition.checkLearnerPromotion();
+    await checkLearnerPromotionWithGrantedProof(partition);
 
     t.equal(
       partition.leaderId,
@@ -333,7 +334,7 @@ test('PartitionService - critical partition defers second learner when replaceme
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'replica-1';
 
-  partition.checkLearnerPromotion();
+  await partition.checkLearnerPromotion();
 
   t.equal(
     partition.role,
@@ -434,7 +435,7 @@ test('PartitionService - learner promotes when multiple learners reach odd count
   partition.leaderId = 'replica-1';
 
   // Manually trigger learner promotion check
-  partition.checkLearnerPromotion();
+  await checkLearnerPromotionWithGrantedProof(partition);
 
   // Should promote because 3 voters + 2 learners = 5 (odd)
   // Even though 3 + 1 = 4 (even), all learners promoting gives odd count
@@ -526,7 +527,7 @@ test('PartitionService - learner defers when multiple learners would exceed targ
   partition.role = RaftRole.LEARNER;
   partition.leaderId = 'replica-1';
 
-  partition.checkLearnerPromotion();
+  await partition.checkLearnerPromotion();
 
   t.equal(
     partition.role,
@@ -630,7 +631,7 @@ test('PartitionService - learner deferred when all learners would still be even'
   partition.leaderId = 'replica-1';
 
   // Manually trigger learner promotion check
-  partition.checkLearnerPromotion();
+  await partition.checkLearnerPromotion();
 
   // Should remain learner because 3 + 1 = 4 (even) and promoting all learners
   // would still leave the group at an even count of 6.
@@ -774,7 +775,7 @@ test(
       electionStarted = true;
     };
 
-    partition.checkLearnerPromotion();
+    await checkLearnerPromotionWithGrantedProof(partition);
 
     t.equal(
       partition.role,
@@ -910,7 +911,7 @@ test(
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
 
-    partition.checkLearnerPromotion();
+    await checkLearnerPromotionWithGrantedProof(partition);
 
     t.equal(
       partition.role,

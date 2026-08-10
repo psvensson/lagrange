@@ -201,6 +201,7 @@ const PARTITION_SERVICE_LITERAL = Object.freeze({
     'SELECT * FROM partitions WHERE partition_id = ?',
   LEARNERPROMOTIONTIMER: 'learnerPromotionTimer',
   LEADER_NOT_DISCOVERED: 'leader_not_discovered',
+  PROMOTION_CHECK_FAILED: 'promotion_check_failed',
   WOULD_EXCEED_TARGET_REPLICA_COUNT: 'would_exceed_target_replica_count',
   WOULD_CAUSE_EVEN_VOTER_COUNT: 'would_cause_even_voter_count',
   PARTITION_SERVICE_SHUTDOWN: 'Partition service shutdown',

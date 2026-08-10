@@ -26,12 +26,11 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
   KEY_RANGE_END: null,
   CDC_BUFFER_REPLAY_INITIAL_DELAY_MS: 50,
   CDC_BUFFER_REPLAY_MAX_DELAY_MS: TIME_MS.SECOND * NUM.TEN,
-  // Learner phase: new replicas joining existing groups start as non-voting learners
-  // They receive log entries but don't vote until caught up
-  // This prevents new replicas from disrupting existing leadership
-  LEARNER_PROMOTION_DELAY_MS: TIME_MS.SECOND * 30, // Min time before promotion (30s for stability)
-  LEARNER_PROMOTION_PRIORITY_RECOVERY_DELAY_MS: TIME_MS.SECOND * NUM.FIVE,
-  LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // How often to check catch-up
+  // Learner phase: new replicas joining existing groups start as non-voting
+  // learners. Promotion is progress-proven by the current leader (quest
+  // learner-promotion-progress-proof); elapsed time is ONLY the retry
+  // cadence below for re-requesting the proof, never a promotion condition.
+  LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // Proof retry cadence
   MAX_TRACKED_APPLIED_ENTRIES: NUM.THOUSAND * NUM.FIVE,
   MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
   PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,
@@ -104,6 +103,7 @@ const PARTITION_SERVICE_MESSAGE_TYPE = Object.freeze({
   TRANSACTION: 'TRANSACTION',
   START_SPLIT_REPLICATION: 'START_SPLIT_REPLICATION',
   START_MERGE_REPLICATION: 'START_MERGE_REPLICATION',
+  LEARNER_PROMOTION_PROOF: 'LEARNER_PROMOTION_PROOF',
 });
 
 const PARTITION_SERVICE_RESPONSE = Object.freeze({
@@ -281,11 +281,17 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
   INITIALIZING: 'Initializing partition service',
   CREATED_PARTITION_DIR: 'Created partition directory',
   DEFERRING_ELECTION_START: 'Deferring election start',
-  STARTING_AS_LEARNER: 'Starting as learner (non-voting) - will promote after catch-up',
+  STARTING_AS_LEARNER:
+    'Starting as learner (non-voting) - will promote once the leader ' +
+    'proves catch-up',
   LEARNER_PROMOTION_SCHEDULED: 'Learner promotion check scheduled',
   LEARNER_PROMOTED_TO_FOLLOWER: 'Learner promoted to follower - now participating in elections',
   LEARNER_PROMOTION_CHECK: 'Checking learner promotion eligibility',
-  LEARNER_PROMOTION_DEFERRED: 'Learner promotion deferred - would cause even voter count',
+  LEARNER_PROMOTION_DEFERRED: 'Learner promotion deferred',
+  LEARNER_PROMOTION_PROOF_GRANTED:
+    'Learner promotion proof granted by leader',
+  LEARNER_PROMOTION_PROGRESS_PROBE_FAILED:
+    'Learner promotion progress probe failed',
   LEADER_DURABILITY_UNFIT:
     'Replica local durability is unfit for leadership: writes are not ' +
     'reaching durable storage (stuck transaction or commit/durable ' +

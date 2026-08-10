@@ -1,0 +1,2574 @@
+diff --git a/scripts/run-learner-promotion-progress-proof-scenarios.js b/scripts/run-learner-promotion-progress-proof-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..05db0723e39a5c03b9b1abf76fe42be61c3ce0df
+--- /dev/null
++++ b/scripts/run-learner-promotion-progress-proof-scenarios.js
+@@ -0,0 +1,126 @@
++/**
++ * Scenario runner for the sealed doneWhen of quest
++ * learner-promotion-progress-proof: runs the committed deterministic guard
++ * file for scenario 'learner-promotion-progress-proof' (a five-node
++ * recovery scenario over the real promotion owners) and writes a
++ * scenario-harness report in the shape the Solver probe reads
++ * (`scripts/solve/probes/scenario-harness.js`).
++ *
++ * Verdict honesty: a run whose guard process never measured (timeout,
++ * spawn failure, TAP stream incomplete, zero assertions) emits
++ * verdictReason 'execution_incomplete_or_metrics_missing' — a
++ * NON_MEASURING_VERDICT_REASONS member — so the probe skips it as a
++ * non-measuring sample instead of reading a broken harness as red/green.
++ */
++
++import fs from 'node:fs';
++import path from 'node:path';
++import {fileURLToPath} from 'node:url';
++import {runTestFileSync} from './run-test-files.js';
++
++const SCENARIO = 'learner-promotion-progress-proof';
++const GUARD_FILES = [
++  'test/convergence/dt6-learner-promotion-progress-proof.test.js',
++];
++const REPORTS_DIRECTORY = 'test-output/reports';
++const GUARD_FILE_TIMEOUT_MS = 300000;
++const FIDELITY = 'deterministic-guard';
++const PRODUCER = 'learner-promotion-progress-proof-runner';
++const VERDICT_PASS = 'PASS';
++const VERDICT_FAIL = 'FAIL';
++const VERDICT_REASON_ALL_PASS = 'all_guard_files_green';
++const VERDICT_REASON_GUARD_FAILED = 'guard_test_failed';
++const VERDICT_REASON_NON_MEASURING = 'execution_incomplete_or_metrics_missing';
++// Reason substrings that mean the guard process never measured (see
++// FAILURE_REASON in run-test-files.js); a plain assertion failure is a
++// MEASURING red and must stay one.
++const NON_MEASURING_REASON_PATTERNS = [
++  'timed out',
++  'no assertions executed',
++  'TAP stream did not complete',
++  'received',
++  'spawn',
++];
++const EXIT_CODE_PASS = 0;
++const EXIT_CODE_FAIL = 1;
++const TAP_OK = 'ok';
++const TAP_NOT_OK = 'not ok';
++
++const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
++
++function isNonMeasuringResult(result) {
++  if (result.ok) {
++    return false;
++  }
++  const reasons = Array.isArray(result.reasons) ? result.reasons : [];
++  return NON_MEASURING_REASON_PATTERNS.some((pattern) =>
++    reasons.some((reason) => String(reason).includes(pattern)),
++  );
++}
++
++function runGuardFile(file) {
++  const result = runTestFileSync(file, {
++    print: false,
++    timeoutMs: GUARD_FILE_TIMEOUT_MS,
++  });
++  return {
++    file,
++    passed: result.ok,
++    nonMeasuring: isNonMeasuringResult(result),
++    assertions: result.assertions,
++    reasons: result.reasons,
++    elapsedMs: result.elapsedMs,
++  };
++}
++
++const results = GUARD_FILES.map(runGuardFile);
++const failing = results.filter((entry) => !entry.passed);
++const passed = failing.length === 0;
++const nonMeasuring = failing.some((entry) => entry.nonMeasuring);
++const verdictReason = passed ?
++  VERDICT_REASON_ALL_PASS :
++  nonMeasuring ?
++    VERDICT_REASON_NON_MEASURING :
++    VERDICT_REASON_GUARD_FAILED;
++
++const report = {
++  timestamp: new Date().toISOString(),
++  scenario: SCENARIO,
++  producer: PRODUCER,
++  fidelity: FIDELITY,
++  summary: {
++    total: results.length,
++    passed: results.length - failing.length,
++    failed: failing.length,
++  },
++  optimizationSummary: {totalPriorityItems: failing.length},
++  standardSummary: {
++    scenarios: [{
++      scenario: SCENARIO,
++      passed,
++      current: {
++        passed,
++        verdict: passed ? VERDICT_PASS : VERDICT_FAIL,
++        verdictReason,
++      },
++      detail: {guardTests: results},
++    }],
++  },
++};
++
++const reportDir = path.join(root, REPORTS_DIRECTORY);
++fs.mkdirSync(reportDir, {recursive: true});
++const reportPath = path.join(
++  reportDir,
++  `${SCENARIO}-${report.timestamp.replace(/[:.]/g, '-')}.report.json`,
++);
++fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
++
++console.log(`${passed ? VERDICT_PASS : VERDICT_FAIL} ${SCENARIO}: ` +
++  `${report.summary.passed}/${report.summary.total} guard files green`);
++for (const entry of results) {
++  console.log(`  ${entry.passed ? TAP_OK : TAP_NOT_OK} ${entry.file} - ` +
++    `${entry.assertions} assertions (${entry.elapsedMs}ms)`);
++}
++console.log(`report: ${path.relative(root, reportPath)}`);
++process.exitCode = passed ? EXIT_CODE_PASS : EXIT_CODE_FAIL;
+diff --git a/src/partition/partition-service-assembly.js b/src/partition/partition-service-assembly.js
+index cbd2cc48ddda8e1dfca9cec97f71c172f68c9003..0212fcda03fa185c461a9555250266e539d93190 100644
+--- a/src/partition/partition-service-assembly.js
++++ b/src/partition/partition-service-assembly.js
+@@ -1,6 +1,7 @@
+ import {createPartitionServiceRebalancerMethods} from './partition-service-rebalancer-methods.js';
+ import {createPartitionServiceMetadataDeliveryMethods} from './partition-service-metadata-delivery-methods.js';
+ import {createPartitionServiceLearnerPromotionMethods} from './partition-service-learner-promotion-methods.js';
++import {createPartitionServiceLearnerPromotionProofMethods} from './partition-service-learner-promotion-proof-methods.js';
+ import {createPartitionServiceDurabilityFitnessMethods} from './partition-service-durability-fitness.js';
+ import {createPartitionServiceLifecycleMethods} from './partition-service-lifecycle-methods.js';
+ import {createPartitionServiceMergeReplicationMethods} from './partition-service-merge-replication-methods.js';
+@@ -15,6 +16,7 @@ Object.assign(
+   createPartitionServiceRebalancerMethods(),
+   createPartitionServiceMetadataDeliveryMethods(),
+   createPartitionServiceLearnerPromotionMethods(),
++  createPartitionServiceLearnerPromotionProofMethods(),
+   createPartitionServiceDurabilityFitnessMethods(),
+   createPartitionServiceLifecycleMethods(),
+   createPartitionServiceMergeReplicationMethods(),
+diff --git a/src/partition/partition-service-constants.js b/src/partition/partition-service-constants.js
+index 9ffeda984eaed7d2df8d7c021ecde367f01961a2..489940d1f7fcc02d54ffac6bc9121b98391ae750 100644
+--- a/src/partition/partition-service-constants.js
++++ b/src/partition/partition-service-constants.js
+@@ -26,12 +26,11 @@ const PARTITION_SERVICE_DEFAULT = Object.freeze({
+   KEY_RANGE_END: null,
+   CDC_BUFFER_REPLAY_INITIAL_DELAY_MS: 50,
+   CDC_BUFFER_REPLAY_MAX_DELAY_MS: TIME_MS.SECOND * NUM.TEN,
+-  // Learner phase: new replicas joining existing groups start as non-voting learners
+-  // They receive log entries but don't vote until caught up
+-  // This prevents new replicas from disrupting existing leadership
+-  LEARNER_PROMOTION_DELAY_MS: TIME_MS.SECOND * 30, // Min time before promotion (30s for stability)
+-  LEARNER_PROMOTION_PRIORITY_RECOVERY_DELAY_MS: TIME_MS.SECOND * NUM.FIVE,
+-  LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // How often to check catch-up
++  // Learner phase: new replicas joining existing groups start as non-voting
++  // learners. Promotion is progress-proven by the current leader (quest
++  // learner-promotion-progress-proof); elapsed time is ONLY the retry
++  // cadence below for re-requesting the proof, never a promotion condition.
++  LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // Proof retry cadence
+   MAX_TRACKED_APPLIED_ENTRIES: NUM.THOUSAND * NUM.FIVE,
+   MAX_COMMITTED_WRITE_LOG_ENTRIES: NUM.THOUSAND,
+   PREPARED_STATE_HOLD_SWEEP_INTERVAL_MS: TIME_MS.SECOND,
+@@ -104,6 +103,7 @@ const PARTITION_SERVICE_MESSAGE_TYPE = Object.freeze({
+   TRANSACTION: 'TRANSACTION',
+   START_SPLIT_REPLICATION: 'START_SPLIT_REPLICATION',
+   START_MERGE_REPLICATION: 'START_MERGE_REPLICATION',
++  LEARNER_PROMOTION_PROOF: 'LEARNER_PROMOTION_PROOF',
+ });
+ 
+ const PARTITION_SERVICE_RESPONSE = Object.freeze({
+@@ -281,11 +281,17 @@ const PARTITION_SERVICE_LOG_MSG = Object.freeze({
+   INITIALIZING: 'Initializing partition service',
+   CREATED_PARTITION_DIR: 'Created partition directory',
+   DEFERRING_ELECTION_START: 'Deferring election start',
+-  STARTING_AS_LEARNER: 'Starting as learner (non-voting) - will promote after catch-up',
++  STARTING_AS_LEARNER:
++    'Starting as learner (non-voting) - will promote once the leader ' +
++    'proves catch-up',
+   LEARNER_PROMOTION_SCHEDULED: 'Learner promotion check scheduled',
+   LEARNER_PROMOTED_TO_FOLLOWER: 'Learner promoted to follower - now participating in elections',
+   LEARNER_PROMOTION_CHECK: 'Checking learner promotion eligibility',
+-  LEARNER_PROMOTION_DEFERRED: 'Learner promotion deferred - would cause even voter count',
++  LEARNER_PROMOTION_DEFERRED: 'Learner promotion deferred',
++  LEARNER_PROMOTION_PROOF_GRANTED:
++    'Learner promotion proof granted by leader',
++  LEARNER_PROMOTION_PROGRESS_PROBE_FAILED:
++    'Learner promotion progress probe failed',
+   LEADER_DURABILITY_UNFIT:
+     'Replica local durability is unfit for leadership: writes are not ' +
+     'reaching durable storage (stuck transaction or commit/durable ' +
+diff --git a/src/partition/partition-service-core-base.js b/src/partition/partition-service-core-base.js
+index 128fc0521c7d524d6bb18bffd6c6f09ca65d2e2b..52c4a70375415e0e6a05f57bb1b679c5ce5726d9 100644
+--- a/src/partition/partition-service-core-base.js
++++ b/src/partition/partition-service-core-base.js
+@@ -257,12 +257,6 @@ class PartitionServiceCoreBase extends EventEmitter {
+     this.raftTimingConfig = null;
+     this.replicaStateMachine = options.replicaStateMachine || null;
+     this.peerAddresses = options.peerAddresses || [];
+-    this.learnerPromotionDelayMs =
+-      options.learnerPromotionDelayMs ||
+-      PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_DELAY_MS;
+-    this.learnerPromotionPriorityRecoveryDelayMs =
+-      options.learnerPromotionPriorityRecoveryDelayMs ||
+-      PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_PRIORITY_RECOVERY_DELAY_MS;
+     this.learnerCatchUpCheckIntervalMs =
+       options.learnerCatchUpCheckIntervalMs ||
+       PARTITION_SERVICE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
+diff --git a/src/partition/partition-service-entry-apply-base.js b/src/partition/partition-service-entry-apply-base.js
+index 9e436880eea4670791558dddc2a86b09cbab08cc..30b0cf20cddec6f26f20f65e939af262463507a9 100644
+--- a/src/partition/partition-service-entry-apply-base.js
++++ b/src/partition/partition-service-entry-apply-base.js
+@@ -241,6 +241,8 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
+       return this.handleStartSplitReplication(payload);
+     case PARTITION_SERVICE_MESSAGE_TYPE.START_MERGE_REPLICATION:
+       return this.handleStartMergeReplication(payload);
++    case PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF:
++      return this.handleLearnerPromotionProofRequest(payload);
+     default:
+       this.logger.debug(PARTITION_SERVICE_LOG_MSG.UNKNOWN_MESSAGE_TYPE, {
+         type: payload.type,
+diff --git a/src/partition/partition-service-learner-promotion-methods.js b/src/partition/partition-service-learner-promotion-methods.js
+index b2ff8841d08502a7ebddc2d42233a239f52ae766..1ae2332991bde597364d7bb4a949350fb977ea1c 100644
+--- a/src/partition/partition-service-learner-promotion-methods.js
++++ b/src/partition/partition-service-learner-promotion-methods.js
+@@ -4,6 +4,9 @@ import {
+   isBootstrapCriticalSystemPartitionId,
+ } from '../bootstrap/system-partition-classification.js';
+ import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
++import {
++  validateLearnerPromotionProofResponse,
++} from '../raft/learner-promotion-progress.js';
+ import {filterSharedRows} from '../cache/shared-row-read.js';
+ 
+ const {
+@@ -34,9 +37,10 @@ const {
+ 
+ class PartitionServiceLearnerPromotionMethods {
+   /**
+-   * Schedule learner promotion check after minimum delay.
+-   * Learners are promoted to followers after catching up with the leader's log.
+-   * This prevents new replicas from disrupting existing leadership.
++   * Schedule the next learner promotion check. The check is progress-proven
++   * by the current leader; this cadence is ONLY the retry/backoff input —
++   * elapsed time never satisfies promotion (quest
++   * learner-promotion-progress-proof).
+    * @private
+    */
+   scheduleLearnerPromotion(
+@@ -55,7 +59,7 @@ class PartitionServiceLearnerPromotionMethods {
+       );
+       return;
+     }
+-    const delayMs = this.resolveLearnerPromotionDelayMs(scheduleReason);
++    const delayMs = this.learnerCatchUpCheckIntervalMs;
+     this.logger.debug(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_SCHEDULED, {
+       replicaId: this.replicaId,
+       partitionId: this.partitionId,
+@@ -63,7 +67,21 @@ class PartitionServiceLearnerPromotionMethods {
+       scheduleReason,
+     });
+     this.learnerPromotionTimer = setTimeout(() => {
+-      this.checkLearnerPromotion();
++      Promise.resolve(this.checkLearnerPromotion()).catch((error) => {
++        this.logger.warn(
++          PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED,
++          {
++            replicaId: this.replicaId,
++            partitionId: this.partitionId,
++            reason: PARTITION_SERVICE_LITERAL.PROMOTION_CHECK_FAILED,
++            error: error.message,
++          },
++        );
++        this.scheduleLearnerPromotion(
++          PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON
++            .DEFERRED_RECHECK,
++        );
++      });
+     }, delayMs);
+   }
+   isPriorityRecoveryPendingForLearnerPromotion() {
+@@ -85,51 +103,6 @@ class PartitionServiceLearnerPromotionMethods {
+       LIFECYCLE_REASON.PRIORITY_CONTROL_PLANE_RECOVERY_PENDING,
+     );
+   }
+-  resolveLearnerPromotionDelayMs(scheduleReason) {
+-    if (
+-      scheduleReason ===
+-      PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.INITIAL_DELAY
+-    ) {
+-      if (
+-        this.isPriorityRecoveryPendingForLearnerPromotion() ||
+-        this.isPriorityControlPlaneFormationLearnerPromotion()
+-      ) {
+-        return Math.min(
+-          this.learnerPromotionDelayMs,
+-          this.learnerPromotionPriorityRecoveryDelayMs,
+-        );
+-      }
+-      return this.learnerPromotionDelayMs;
+-    }
+-    return this.learnerCatchUpCheckIntervalMs;
+-  }
+-  /**
+-   * Fresh-formation analog of isPriorityRecoveryPendingForLearnerPromotion.
+-   *
+-   * The 30s INITIAL_DELAY stability budget is only survivable when the fast
+-   * priority-recovery path fires, and that path keys on a
+-   * PRIORITY_CONTROL_PLANE_RECOVERY_PENDING readiness reason that is present
+-   * during restart recovery but NOT during initial multi-node formation. During
+-   * formation a critical control-plane learner joining the existing group must
+-   * reach voter-ready inside the replica-handler activation gate
+-   * (syncTimeoutMs, ~10s); a 30s promotion delay is structurally too late
+-   * (30s >> 10s), so the learner never promotes, the partition never reaches
+-   * quorum, and 7-node formation deadlocks. Use the same fast delay the
+-   * recovery path already deems safe for these exact partitions. The promotion
+-   * itself still passes the quorum-membership safety gate in
+-   * checkLearnerPromotion (odd-voter + target-count), so this only moves the
+-   * first promotion check earlier, it does not relax any safety invariant.
+-   *
+-   * @return {boolean}
+-   */
+-  isPriorityControlPlaneFormationLearnerPromotion() {
+-    return (
+-      this.isJoiningExistingGroup === true &&
+-      classifySystemPartition({
+-        partitionId: this.partitionId,
+-      }).priorityControlPlane
+-    );
+-  }
+   getPriorityRecoveryPlanningSnapshotForLearnerPromotion() {
+     const readinessService = this.controlPlaneReadinessService;
+     if (!readinessService) {
+@@ -450,17 +423,23 @@ class PartitionServiceLearnerPromotionMethods {
+   }
+   /**
+    * Check if learner can be promoted to follower.
+-   * Promotion happens when:
+-   * 1. Minimum delay has passed (already satisfied by timer)
+-   * 2. A leader has been discovered for the group
+-   * 3. Promoting would stay within the partition's configured replica count,
++   * Promotion happens only when ALL of the following hold:
++   * 1. A leader has been discovered for the group
++   * 2. Promoting would stay within the partition's configured replica count,
+    *    allowing at most one temporary replacement voter above target
+-   * 4. Promoting would not result in an even number of voters (prevents split votes)
++   * 3. Promoting would not result in an even number of voters (prevents split votes)
+    *    unless this is the single temporary replacement voter or all pending
+    *    learners together would reach an odd count within target
++   * 4. The CURRENT leader proves this learner has applied through the safe
++   *    promotion index (the leader's committed index at proof time) for the
++   *    current term and membership epoch, and that proof still matches the
++   *    local observation after the round trip (quest
++   *    learner-promotion-progress-proof). Elapsed time is only the retry
++   *    cadence; every refusal defers and reschedules.
++   * @return {Promise<void>}
+    * @private
+    */
+-  checkLearnerPromotion() {
++  async checkLearnerPromotion() {
+     this.learnerPromotionTimer = null;
+     if (!isCatchupLearnerRaftRole(this.role)) {
+       return;
+@@ -567,6 +546,62 @@ class PartitionServiceLearnerPromotionMethods {
+       );
+       return;
+     }
++    // Progress proof: the current leader must prove this learner applied
++    // through the safe promotion index for the current term and membership
++    // epoch. Runs LAST so the cheap local quorum-shape gates above never pay
++    // the round trip, and the proof is validated against the freshest local
++    // observation (leader identity, epoch, role) after it returns.
++    await this.applyLearnerPromotionProofGate();
++  }
++  /**
++   * The progress-proof gate itself: request the proof from the discovered
++   * leader, fail-closed validate it against the post-round-trip local
++   * observation, and only then promote. Every refusal defers with a typed
++   * reason on the retry cadence.
++   * @return {Promise<void>}
++   * @private
++   */
++  async applyLearnerPromotionProofGate() {
++    const requestedLeaderId = this.leaderId;
++    const requestedMembershipEpoch =
++      this.resolveLearnerPromotionMembershipEpoch();
++    const proof = await this.requestLearnerPromotionProofFromLeader({
++      leaderReplicaId: requestedLeaderId,
++      membershipEpoch: requestedMembershipEpoch,
++    });
++    const proofValidation = validateLearnerPromotionProofResponse({
++      proof,
++      isPromotableLearner:
++        isCatchupLearnerRaftRole(this.role) && this.isShutdown !== true,
++      requestedLeaderId,
++      currentLeaderId: this.leaderId,
++      requestedMembershipEpoch,
++      currentMembershipEpoch: this.resolveLearnerPromotionMembershipEpoch(),
++      localTerm: this.resolveCurrentTermSafe(),
++    });
++    if (!proofValidation.accepted) {
++      this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED, {
++        replicaId: this.replicaId,
++        partitionId: this.partitionId,
++        reason: proofValidation.reason,
++        proofReason: proofValidation.proofReason,
++        leaderReplicaId: requestedLeaderId,
++        membershipEpoch: requestedMembershipEpoch,
++      });
++      this.scheduleLearnerPromotion(
++        PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.DEFERRED_RECHECK,
++      );
++      return;
++    }
++    this.logger.info(PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROOF_GRANTED, {
++      replicaId: this.replicaId,
++      partitionId: this.partitionId,
++      leaderReplicaId: requestedLeaderId,
++      term: proof.term,
++      membershipEpoch: proof.membershipEpoch,
++      safePromotionIndex: proof.safePromotionIndex,
++      learnerMatchIndex: proof.learnerMatchIndex,
++    });
+     this.becomeFollower();
+   }
+   getInFlightAddLikeOperationReplicaIds() {
+diff --git a/src/partition/partition-service-learner-promotion-proof-methods.js b/src/partition/partition-service-learner-promotion-proof-methods.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ed754155d00758f4717c5bf8e45e8aa38b856be5
+--- /dev/null
++++ b/src/partition/partition-service-learner-promotion-proof-methods.js
+@@ -0,0 +1,248 @@
++import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
++import {readFollowerMatchIndex} from '../raft/liferaft.js';
++import {
++  LEARNER_PROMOTION_PROOF_REASON,
++  evaluateLearnerPromotionProof,
++  refuseLearnerPromotionProof,
++} from '../raft/learner-promotion-progress.js';
++import {
++  buildSnapshotCatchupIdentityFromCache,
++} from '../raft/snapshot-catchup.js';
++
++const {
++  LifeRaft,
++  PARTITION_SERVICE_LITERAL,
++  PARTITION_SERVICE_LOG_MSG,
++  PARTITION_SERVICE_MESSAGE_TYPE,
++  STRING,
++} = PARTITION_SERVICE_SHARED;
++
++// An empty raft log reports no last index; the probe has nothing to re-send.
++const LEARNER_PROMOTION_PROBE_EMPTY_LOG_INDEX = 0;
++const PROTOTYPE_CONSTRUCTOR_NAME = 'constructor';
++
++/**
++ * Learner-promotion progress-proof plumbing (quest
++ * learner-promotion-progress-proof). The partition service stays the sole
++ * promotion owner; these methods carry the progress contract between the
++ * learner and the current leader over the existing application-message
++ * channel. The raft layer stays the replication-progress owner: the grant
++ * predicate is evaluated from the leader's own observed follower progress
++ * (`readFollowerMatchIndex`) — a learner-supplied index is never an input.
++ *
++ * Membership epoch authority is the snapshot-catchup identity epoch
++ * (latest PUBLISHED membership publication epoch from the cached
++ * control_plane_publications rows, 0 at bootstrap) — one epoch author for
++ * snapshots and promotion proofs.
++ */
++class PartitionServiceLearnerPromotionProofMethods {
++  /**
++   * The membership epoch the promotion proof binds to.
++   * @return {number} non-negative epoch (0 at bootstrap)
++   * @private
++   */
++  resolveLearnerPromotionMembershipEpoch() {
++    return buildSnapshotCatchupIdentityFromCache({
++      partitionId: this.partitionId,
++      tableName: this.tableName,
++      systemTableCache: this.systemTableCache,
++    }).membershipEpoch;
++  }
++  /**
++   * Leader-side handler for a learner's promotion-proof request. Gathers
++   * the facts (live leadership, current term, committed index as the safe
++   * promotion index, leader-observed learner match index, both membership
++   * epochs) and answers with the raft layer's typed proof outcome. Every
++   * refusal is typed; a malformed request refuses REQUEST_INVALID.
++   * @param {Object} payload request
++   *   ({partitionId, replicaId, membershipEpoch})
++   * @return {Object} {acknowledged, partitionId, learnerReplicaId, proof}
++   * @private
++   */
++  handleLearnerPromotionProofRequest(payload) {
++    const learnerReplicaId = String(
++      payload?.replicaId || STRING.EMPTY,
++    ).trim();
++    const requestShape = {
++      acknowledged: true,
++      partitionId: this.partitionId,
++      learnerReplicaId,
++    };
++    if (
++      payload?.partitionId !== this.partitionId ||
++      learnerReplicaId.length === 0
++    ) {
++      return {
++        ...requestShape,
++        proof: refuseLearnerPromotionProof(
++          LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
++        ),
++      };
++    }
++    let learnerAddress = null;
++    try {
++      learnerAddress = this.buildPeerAddress(learnerReplicaId);
++    } catch (_addressError) {
++      return {
++        ...requestShape,
++        proof: refuseLearnerPromotionProof(
++          LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
++        ),
++      };
++    }
++    const matchObservation = readFollowerMatchIndex(
++      this.raft,
++      learnerAddress,
++    );
++    const proof = evaluateLearnerPromotionProof({
++      raftIsLeader:
++        this.isLeader === true && this.raft?.state === LifeRaft.LEADER,
++      currentTerm: this.resolveCurrentTermSafe(),
++      committedIndex: this.raftProvider.getCommittedIndex(this.raft),
++      learnerMatchIndex: matchObservation.matchIndex,
++      leaderMembershipEpoch: this.resolveLearnerPromotionMembershipEpoch(),
++      learnerMembershipEpoch: payload?.membershipEpoch,
++    });
++    if (proof.reason === LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND) {
++      // Liveness: an exactly-caught-up idle learner (e.g. freshly
++      // snapshot-installed with no traffic) never acks on pure heartbeats,
++      // so the leader would hold zero progress evidence forever. Nudge
++      // replication once per refused proof (bounded by the learner's retry
++      // cadence): re-sending the last log entry either yields a
++      // same-identity save + ack (caught up) or an append-fail that engages
++      // the existing catch-up batching (behind). Fire-and-forget.
++      this.probeLearnerReplicationProgress(learnerAddress);
++    }
++    return {...requestShape, proof};
++  }
++  /**
++   * Send the leader's last log entry to one learner so progress evidence
++   * (an APPEND_ACK, or an append-fail engaging catch-up) materializes.
++   * Never throws; failures only defer the next proof retry.
++   * @param {string} learnerAddress learner unified address
++   * @return {Promise<void>}
++   * @private
++   */
++  async probeLearnerReplicationProgress(learnerAddress) {
++    const raft = this.raft;
++    if (!raft?.log) {
++      return;
++    }
++    try {
++      const lastInfo = await raft.log.getLastInfo();
++      const lastIndex = Number.isInteger(lastInfo?.index) ?
++        lastInfo.index :
++        LEARNER_PROMOTION_PROBE_EMPTY_LOG_INDEX;
++      if (lastIndex <= LEARNER_PROMOTION_PROBE_EMPTY_LOG_INDEX) {
++        return;
++      }
++      const lastEntry = await raft.log.get(lastIndex);
++      if (!lastEntry) {
++        return;
++      }
++      const probePacket = await raft.appendPacket(lastEntry);
++      raft.message(learnerAddress, probePacket);
++    } catch (probeError) {
++      this.logger.debug(
++        PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_PROGRESS_PROBE_FAILED,
++        {
++          partitionId: this.partitionId,
++          replicaId: this.replicaId,
++          learnerAddress,
++          error: probeError.message,
++        },
++      );
++    }
++  }
++  /**
++   * Learner-side proof request to the discovered leader. Any transport or
++   * response-shape failure returns a typed refused proof — fail-closed; the
++   * caller reschedules on its retry cadence.
++   * @param {Object} promotionObservation
++   * @param {string} promotionObservation.leaderReplicaId discovered leader
++   * @param {number} promotionObservation.membershipEpoch epoch observed at
++   *   request time
++   * @return {Promise<Object>} the leader's proof outcome (typed)
++   * @private
++   */
++  async requestLearnerPromotionProofFromLeader(promotionObservation) {
++    const leaderAddress = this.resolveLeaderAddressForPromotionProof();
++    if (!leaderAddress || !this.transport) {
++      return refuseLearnerPromotionProof(
++        LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
++      );
++    }
++    let response = null;
++    try {
++      response = await this.transport.deliver(leaderAddress, {
++        type: PARTITION_SERVICE_MESSAGE_TYPE.LEARNER_PROMOTION_PROOF,
++        partitionId: this.partitionId,
++        replicaId: this.replicaId,
++        membershipEpoch: promotionObservation.membershipEpoch,
++      });
++    } catch (deliverError) {
++      this.logger.debug(
++        PARTITION_SERVICE_LOG_MSG.LEARNER_PROMOTION_DEFERRED,
++        {
++          partitionId: this.partitionId,
++          replicaId: this.replicaId,
++          leaderReplicaId: promotionObservation.leaderReplicaId,
++          reason: LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
++          error: deliverError.message,
++        },
++      );
++      return refuseLearnerPromotionProof(
++        LEARNER_PROMOTION_PROOF_REASON.TRANSPORT_FAILED,
++      );
++    }
++    if (!this.learnerPromotionProofResponseBindsThisLearner(response)) {
++      return refuseLearnerPromotionProof(
++        LEARNER_PROMOTION_PROOF_REASON.REQUEST_INVALID,
++      );
++    }
++    return response.proof;
++  }
++  /**
++   * Resolve the discovered leader's unified address, or null when it cannot
++   * be resolved yet (fail-closed to a typed transport refusal upstream).
++   * @return {string|null}
++   * @private
++   */
++  resolveLeaderAddressForPromotionProof() {
++    try {
++      return this.resolveLeaderAddress();
++    } catch (_addressError) {
++      return null;
++    }
++  }
++  /**
++   * A proof response authorizes promotion only when it is acknowledged and
++   * bound to exactly this partition and this learner replica.
++   * @param {Object|null} response leader response envelope
++   * @return {boolean}
++   * @private
++   */
++  learnerPromotionProofResponseBindsThisLearner(response) {
++    return response?.acknowledged === true &&
++      response?.partitionId === this.partitionId &&
++      response?.learnerReplicaId === this.replicaId &&
++      Boolean(response?.proof) &&
++      typeof response.proof === PARTITION_SERVICE_LITERAL.OBJECT;
++  }
++}
++
++function createPartitionServiceLearnerPromotionProofMethods() {
++  const methods = {};
++  const prototypeNames = Object.getOwnPropertyNames(
++    PartitionServiceLearnerPromotionProofMethods.prototype,
++  );
++  for (const name of prototypeNames) {
++    if (name !== PROTOTYPE_CONSTRUCTOR_NAME) {
++      methods[name] =
++        PartitionServiceLearnerPromotionProofMethods.prototype[name];
++    }
++  }
++  return methods;
++}
++
++export {createPartitionServiceLearnerPromotionProofMethods};
+diff --git a/src/partition/partition-service-raft-init-base.js b/src/partition/partition-service-raft-init-base.js
+index 5e576da9276ed8e45244143590578c38501719fc..a8f52fba04b349ef47214d34e115f8cbde440b02 100644
+--- a/src/partition/partition-service-raft-init-base.js
++++ b/src/partition/partition-service-raft-init-base.js
+@@ -513,7 +513,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
+       this.logger.info(PARTITION_SERVICE_LOG_MSG.STARTING_AS_LEARNER, {
+         replicaId: this.replicaId,
+         partitionId: this.partitionId,
+-        promotionDelayMs: this.learnerPromotionDelayMs,
++        promotionCheckIntervalMs: this.learnerCatchUpCheckIntervalMs,
+       });
+       this.scheduleLearnerPromotion(
+         PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.INITIAL_DELAY,
+diff --git a/src/partition/partition-service-shared.js b/src/partition/partition-service-shared.js
+index 30f747d25d5704b9c3a9a9f72939782e06290e21..6b17fedfec5deb869ccd76ec747ce96c10e42271 100644
+--- a/src/partition/partition-service-shared.js
++++ b/src/partition/partition-service-shared.js
+@@ -201,6 +201,7 @@ const PARTITION_SERVICE_LITERAL = Object.freeze({
+     'SELECT * FROM partitions WHERE partition_id = ?',
+   LEARNERPROMOTIONTIMER: 'learnerPromotionTimer',
+   LEADER_NOT_DISCOVERED: 'leader_not_discovered',
++  PROMOTION_CHECK_FAILED: 'promotion_check_failed',
+   WOULD_EXCEED_TARGET_REPLICA_COUNT: 'would_exceed_target_replica_count',
+   WOULD_CAUSE_EVEN_VOTER_COUNT: 'would_cause_even_voter_count',
+   PARTITION_SERVICE_SHUTDOWN: 'Partition service shutdown',
+diff --git a/src/raft/learner-promotion-progress.js b/src/raft/learner-promotion-progress.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..aace1092ab75989f4e4d22c84c57ad9e38ff3356
+--- /dev/null
++++ b/src/raft/learner-promotion-progress.js
+@@ -0,0 +1,249 @@
++/**
++ * Learner-promotion progress proof (quest learner-promotion-progress-proof).
++ *
++ * A partition learner becomes a voter only after the CURRENT leader proves
++ * the learner has applied through a safe promotion index for the current
++ * term and membership epoch. This module is the raft-layer half of that
++ * contract: two pure decision functions over gathered facts.
++ *
++ * - `evaluateLearnerPromotionProof` runs on the LEADER: grant iff this node
++ *   is the live leader in a known term, both sides observe the same
++ *   membership epoch, and the leader-observed match index for the learner
++ *   (its acked replication progress this tenure — see
++ *   `readFollowerMatchIndex` in liferaft.js) has reached the safe promotion
++ *   index, defined as the leader's committedIndex at proof-evaluation time.
++ *   The committed prefix is exactly what a correct voter must hold so that
++ *   counting its vote can never roll back a committed entry (Raft election
++ *   restriction; the fixed-target-per-round shape of Raft §4.2.1 catch-up;
++ *   the same Match-vs-leader-progress predicate etcd uses for learner
++ *   promotion). The learner never self-reports an index into the grant
++ *   predicate — the leader's own observation is the only progress source.
++ *   Snapshot-installed learners satisfy the identical predicate through
++ *   their post-install acks: one progress contract.
++ *
++ * - `validateLearnerPromotionProofResponse` runs on the LEARNER after the
++ *   proof round trip: fail-closed refusal when the proof was not granted,
++ *   the discovered leader changed, the membership epoch moved, the proof
++ *   term is behind the learner's own term (stale leader), or the local
++ *   replica is no longer a promotable learner (shutdown/restart — proof
++ *   state is never persisted, so a restart re-derives from scratch).
++ *
++ * Time appears nowhere here: elapsed time is only the caller's retry
++ * cadence for re-requesting a proof.
++ */
++
++const PROGRESS_PROOF_NUMERIC_ZERO = 0;
++
++const LEARNER_PROMOTION_PROOF_DECISION = Object.freeze({
++  GRANTED: 'granted',
++  REFUSED: 'refused',
++});
++
++const LEARNER_PROMOTION_PROOF_REASON = Object.freeze({
++  // Leader-side refusals (evaluateLearnerPromotionProof)
++  NOT_LEADER: 'not_leader',
++  TERM_UNAVAILABLE: 'term_unavailable',
++  EPOCH_UNAVAILABLE: 'epoch_unavailable',
++  EPOCH_MISMATCH: 'epoch_mismatch',
++  PROGRESS_BEHIND: 'progress_behind',
++  PROGRESS_PROVEN: 'progress_proven',
++  // Channel-level refusals (minted by the promotion owner around the RPC)
++  REQUEST_INVALID: 'request_invalid',
++  TRANSPORT_FAILED: 'proof_transport_failed',
++  // Learner-side refusals (validateLearnerPromotionProofResponse)
++  ROLE_NOT_LEARNER: 'role_not_learner',
++  PROOF_NOT_GRANTED: 'proof_not_granted',
++  LEADER_CHANGED: 'leader_changed',
++  EPOCH_CHANGED: 'epoch_changed',
++  STALE_PROOF_TERM: 'stale_proof_term',
++  PROOF_ACCEPTED: 'proof_accepted',
++});
++
++function isNonNegativeInteger(value) {
++  return Number.isInteger(value) && value >= PROGRESS_PROOF_NUMERIC_ZERO;
++}
++
++function refusedProof(reason, facts = {}) {
++  return Object.freeze({
++    decision: LEARNER_PROMOTION_PROOF_DECISION.REFUSED,
++    reason,
++    term: isNonNegativeInteger(facts.currentTerm) ? facts.currentTerm : null,
++    membershipEpoch: isNonNegativeInteger(facts.leaderMembershipEpoch) ?
++      facts.leaderMembershipEpoch :
++      null,
++    safePromotionIndex: isNonNegativeInteger(facts.safePromotionIndex) ?
++      facts.safePromotionIndex :
++      null,
++    learnerMatchIndex: isNonNegativeInteger(facts.learnerMatchIndex) ?
++      facts.learnerMatchIndex :
++      null,
++  });
++}
++
++/**
++ * Mint a typed refused proof outside the fact-evaluation table (malformed
++ * request, transport failure). Same frozen shape as an evaluated refusal so
++ * every consumer sees one proof grammar.
++ * @param {string} reason LEARNER_PROMOTION_PROOF_REASON member
++ * @return {Object} frozen refused proof
++ */
++function refuseLearnerPromotionProof(reason) {
++  return refusedProof(reason);
++}
++
++/**
++ * Leader-side proof evaluation over gathered facts. Single decision table;
++ * every exit is a typed frozen outcome.
++ * @param {Object} facts
++ * @param {boolean} facts.raftIsLeader this node's live raft state is LEADER
++ * @param {number} facts.currentTerm leader's current term (positive int)
++ * @param {number} facts.committedIndex leader's committed index at proof
++ *   time (the safe promotion index)
++ * @param {number} facts.learnerMatchIndex leader-observed acked index for
++ *   the learner this tenure (0 when no ack observed — fail-closed)
++ * @param {number} facts.leaderMembershipEpoch leader-observed membership
++ *   epoch (non-negative int; 0 at bootstrap)
++ * @param {number} facts.learnerMembershipEpoch learner-observed membership
++ *   epoch carried on the request
++ * @return {Object} frozen proof outcome
++ */
++function evaluateLearnerPromotionProof(facts = {}) {
++  if (facts.raftIsLeader !== true) {
++    return refusedProof(LEARNER_PROMOTION_PROOF_REASON.NOT_LEADER, facts);
++  }
++  // Term 0 is a legitimate live term for a bootstrap leader that has never
++  // run an election (single-replica formation before expansion), so the
++  // binding is non-negative, not positive.
++  if (!isNonNegativeInteger(facts.currentTerm)) {
++    return refusedProof(LEARNER_PROMOTION_PROOF_REASON.TERM_UNAVAILABLE, facts);
++  }
++  if (
++    !isNonNegativeInteger(facts.leaderMembershipEpoch) ||
++    !isNonNegativeInteger(facts.learnerMembershipEpoch)
++  ) {
++    return refusedProof(
++      LEARNER_PROMOTION_PROOF_REASON.EPOCH_UNAVAILABLE,
++      facts,
++    );
++  }
++  if (facts.leaderMembershipEpoch !== facts.learnerMembershipEpoch) {
++    return refusedProof(LEARNER_PROMOTION_PROOF_REASON.EPOCH_MISMATCH, facts);
++  }
++  const safePromotionIndex = isNonNegativeInteger(facts.committedIndex) ?
++    facts.committedIndex :
++    PROGRESS_PROOF_NUMERIC_ZERO;
++  const learnerMatchIndex = isNonNegativeInteger(facts.learnerMatchIndex) ?
++    facts.learnerMatchIndex :
++    PROGRESS_PROOF_NUMERIC_ZERO;
++  if (learnerMatchIndex < safePromotionIndex) {
++    return refusedProof(LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND, {
++      ...facts,
++      safePromotionIndex,
++      learnerMatchIndex,
++    });
++  }
++  return Object.freeze({
++    decision: LEARNER_PROMOTION_PROOF_DECISION.GRANTED,
++    reason: LEARNER_PROMOTION_PROOF_REASON.PROGRESS_PROVEN,
++    term: facts.currentTerm,
++    membershipEpoch: facts.leaderMembershipEpoch,
++    safePromotionIndex,
++    learnerMatchIndex,
++  });
++}
++
++function validationOutcome(accepted, reason, proof) {
++  return Object.freeze({
++    accepted,
++    reason,
++    proofReason: proof && typeof proof.reason === 'string' ?
++      proof.reason :
++      null,
++  });
++}
++
++function normalizeLocalTerm(localTerm) {
++  return isNonNegativeInteger(localTerm) ?
++    localTerm :
++    PROGRESS_PROOF_NUMERIC_ZERO;
++}
++
++// Learner-side validation decision table, evaluated in order; the first
++// violated rule names the typed refusal. Rules after PROOF_NOT_GRANTED may
++// assume a granted proof object.
++const PROOF_RESPONSE_VALIDATION_RULES = Object.freeze([
++  Object.freeze({
++    reason: LEARNER_PROMOTION_PROOF_REASON.ROLE_NOT_LEARNER,
++    violated: (observation) => observation.isPromotableLearner !== true,
++  }),
++  Object.freeze({
++    reason: LEARNER_PROMOTION_PROOF_REASON.PROOF_NOT_GRANTED,
++    violated: (observation) =>
++      observation.proof?.decision !==
++        LEARNER_PROMOTION_PROOF_DECISION.GRANTED,
++  }),
++  Object.freeze({
++    reason: LEARNER_PROMOTION_PROOF_REASON.LEADER_CHANGED,
++    violated: (observation) =>
++      typeof observation.requestedLeaderId !== 'string' ||
++      observation.requestedLeaderId.length === PROGRESS_PROOF_NUMERIC_ZERO ||
++      observation.currentLeaderId !== observation.requestedLeaderId,
++  }),
++  Object.freeze({
++    reason: LEARNER_PROMOTION_PROOF_REASON.EPOCH_CHANGED,
++    violated: (observation) =>
++      !isNonNegativeInteger(observation.requestedMembershipEpoch) ||
++      observation.currentMembershipEpoch !==
++        observation.requestedMembershipEpoch ||
++      observation.proof.membershipEpoch !==
++        observation.currentMembershipEpoch,
++  }),
++  Object.freeze({
++    reason: LEARNER_PROMOTION_PROOF_REASON.STALE_PROOF_TERM,
++    violated: (observation) =>
++      !isNonNegativeInteger(observation.proof.term) ||
++      observation.proof.term < normalizeLocalTerm(observation.localTerm),
++  }),
++]);
++
++/**
++ * Learner-side fail-closed validation of a proof response after the round
++ * trip. Any drift between the observation the request was minted under and
++ * the observation at receipt refuses; the caller reschedules on its retry
++ * cadence.
++ * @param {Object} observation
++ * @param {Object|null} observation.proof the leader's response proof
++ * @param {boolean} observation.isPromotableLearner local role is still a
++ *   catch-up learner and the service is not shut down
++ * @param {string|null} observation.requestedLeaderId leader the proof was
++ *   requested from
++ * @param {string|null} observation.currentLeaderId leader observed at
++ *   receipt
++ * @param {number} observation.requestedMembershipEpoch epoch observed when
++ *   the request was minted
++ * @param {number} observation.currentMembershipEpoch epoch observed at
++ *   receipt
++ * @param {number} observation.localTerm learner's current raft term (0 when
++ *   unavailable)
++ * @return {Object} frozen {accepted, reason, proofReason}
++ */
++function validateLearnerPromotionProofResponse(observation = {}) {
++  const violatedRule = PROOF_RESPONSE_VALIDATION_RULES.find((rule) =>
++    rule.violated(observation),
++  );
++  return validationOutcome(
++    !violatedRule,
++    violatedRule ?
++      violatedRule.reason :
++      LEARNER_PROMOTION_PROOF_REASON.PROOF_ACCEPTED,
++    observation.proof,
++  );
++}
++
++export {
++  LEARNER_PROMOTION_PROOF_DECISION,
++  LEARNER_PROMOTION_PROOF_REASON,
++  evaluateLearnerPromotionProof,
++  refuseLearnerPromotionProof,
++  validateLearnerPromotionProofResponse,
++};
+diff --git a/src/raft/liferaft.js b/src/raft/liferaft.js
+index 3069449af18797f82cdd8ac07a513764bd68e7e5..1cb3564230688a7909203e12905e9d1d07c74204 100644
+--- a/src/raft/liferaft.js
++++ b/src/raft/liferaft.js
+@@ -15,6 +15,7 @@ import {
+ import {VirtualTick} from './virtual-tick.js';
+ 
+ const NUMERIC_ONE = 1;
++const NUMERIC_ZERO = 0;
+ 
+ const LOCAL_STR_NUMBER = 'number';
+ const LOCAL_STR_OBJECT = 'object';
+@@ -25,6 +26,51 @@ const RAFT_EVENT = Object.freeze({
+   DATA: 'data',
+ });
+ 
++// Leader-observed replication progress (quest learner-promotion-progress-
++// proof). Every follower acks each durably saved entry (base liferaft
++// index.js 'append ack' and the batch tail ack below), so the leader already
++// receives a complete per-follower progress signal; this map RETAINS it (the
++// dedupe map below deliberately discards it). Keyed by follower unified
++// address; value = highest acked index observed during the CURRENT
++// uninterrupted leadership tenure (cleared on every state change, so a stale
++// leader's observations die with its leadership — term-scoped by
++// construction). This is the raft layer's replication-progress truth that
++// the learner-promotion proof consumes.
++const FOLLOWER_MATCH_INDEX_MAP_PROPERTY = '_followerMatchIndexByAddress';
++
++const FOLLOWER_MATCH_INDEX_STATE = Object.freeze({
++  AVAILABLE: 'available',
++  UNAVAILABLE: 'unavailable',
++});
++
++const FOLLOWER_MATCH_INDEX_UNAVAILABLE = Object.freeze({
++  state: FOLLOWER_MATCH_INDEX_STATE.UNAVAILABLE,
++  matchIndex: NUMERIC_ZERO,
++});
++
++/**
++ * Read the leader-observed match index for one follower address.
++ * UNAVAILABLE (matchIndex 0) when this node has observed no ack from the
++ * follower during its current tenure — fail-closed for any non-empty
++ * committed prefix.
++ * @param {Object} raft live raft instance
++ * @param {string} followerAddress follower unified address
++ * @return {Object} frozen {state, matchIndex}
++ */
++function readFollowerMatchIndex(raft, followerAddress) {
++  const matchIndexByAddress = raft?.[FOLLOWER_MATCH_INDEX_MAP_PROPERTY];
++  const matchIndex = matchIndexByAddress instanceof Map ?
++    matchIndexByAddress.get(followerAddress) :
++    undefined;
++  if (!hasFiniteNumber(matchIndex)) {
++    return FOLLOWER_MATCH_INDEX_UNAVAILABLE;
++  }
++  return Object.freeze({
++    state: FOLLOWER_MATCH_INDEX_STATE.AVAILABLE,
++    matchIndex,
++  });
++}
++
+ function hasFiniteNumber(value) {
+   return typeof value === LOCAL_STR_NUMBER && Number.isFinite(value);
+ }
+@@ -43,8 +89,6 @@ function getCommittedIndex(raft) {
+     NUMERIC_ZERO;
+ }
+ 
+-const NUMERIC_ZERO = 0;
+-
+ // Catch-up batching (closure record: voter-ready residual). Base liferaft's
+ // catch-up is one entry per round trip AND a backward fail-walk: the
+ // follower's append-fail echoes the LEADER'S prevLog info, so the leader
+@@ -317,6 +361,31 @@ function patchIncomingDataListener(raft) {
+   // per-source lane that is already capping. Fails are self-regenerating,
+   // so suppression can never wedge — worst case is base-speed catch-up.
+   const inflightBatchByAddress = new Map();
++  const followerMatchIndexByAddress = new Map();
++  raft[FOLLOWER_MATCH_INDEX_MAP_PROPERTY] = followerMatchIndexByAddress;
++
++  const recordFollowerMatchIndex = (packet) => {
++    const followerAddress = packet?.address;
++    const ackedIndex = packet?.data?.index;
++    if (
++      typeof followerAddress !== 'string' ||
++      followerAddress.length === NUMERIC_ZERO ||
++      !hasFiniteNumber(ackedIndex) ||
++      // Tenure-precision guard (verifier finding): a delayed ack minted
++      // under a different term must never survive the state-change clear —
++      // only acks whose packet term matches this node's CURRENT term count
++      // as progress evidence for the current tenure.
++      packet?.term !== raft.term
++    ) {
++      return;
++    }
++    const knownMatchIndex =
++      followerMatchIndexByAddress.get(followerAddress) ?? NUMERIC_ZERO;
++    followerMatchIndexByAddress.set(
++      followerAddress,
++      Math.max(knownMatchIndex, ackedIndex),
++    );
++  };
+ 
+   const rejectCommittedEntryConflict = async (error, write) => {
+     surfaceCommittedPrefixDivergence(raft, error);
+@@ -614,6 +683,7 @@ function patchIncomingDataListener(raft) {
+     }
+ 
+     if (packet?.type === RAFT_PACKET_TYPE.APPEND_ACK) {
++      recordFollowerMatchIndex(packet);
+       const inflight = inflightBatchByAddress.get(packet?.address);
+       if (
+         inflight &&
+@@ -644,6 +714,7 @@ function patchIncomingDataListener(raft) {
+ 
+   raft.on(RAFT_STATE_CHANGE_EVENT, () => {
+     inflightBatchByAddress.clear();
++    followerMatchIndexByAddress.clear();
+   });
+ 
+   patchedListener.__lagrangePatched = true;
+@@ -777,3 +848,4 @@ class LifeRaft extends BaseLifeRaft {
+ }
+ 
+ export default LifeRaft;
++export {FOLLOWER_MATCH_INDEX_STATE, readFollowerMatchIndex};
+diff --git a/src/raft/raft-replica-base-constants.js b/src/raft/raft-replica-base-constants.js
+index 6ac3b78d1985b7dca939c91860950439951a8ec8..50c32425bb72ac5574ad123065cc9148a0cc4cfc 100644
+--- a/src/raft/raft-replica-base-constants.js
++++ b/src/raft/raft-replica-base-constants.js
+@@ -5,15 +5,9 @@
+ 
+ import {NUM} from '../constants/numbers.js';
+ import {STRING} from '../constants/strings.js';
+-import {TIME_MS} from '../constants/time.js';
+ 
+ const RAFT_REPLICA_BASE_DEFAULT = Object.freeze({
+   NODE_ID: STRING.UNKNOWN,
+-  // Learner phase: new replicas joining existing groups start as non-voting learners
+-  // They receive log entries but don't vote until caught up
+-  // This prevents new replicas from disrupting existing leadership
+-  LEARNER_PROMOTION_DELAY_MS: TIME_MS.SECOND * 30, // Min time before promotion (30s for stability)
+-  LEARNER_CATCH_UP_CHECK_INTERVAL_MS: TIME_MS.SECOND, // How often to check catch-up
+   // Raft timing: heartbeat should be much smaller than election timeout
+   // Election timeout should be 5-10x heartbeat to avoid unnecessary elections
+   HEARTBEAT_DEFAULT_MS: 150,
+@@ -63,10 +57,6 @@ const RAFT_REPLICA_BASE_ADDRESS = Object.freeze({
+ 
+ const RAFT_REPLICA_BASE_LOG_MSG = Object.freeze({
+   DEFERRING_ELECTION_START: 'Deferring election start',
+-  STARTING_AS_LEARNER: 'Starting as learner (non-voting) - will promote after catch-up',
+-  LEARNER_PROMOTION_SCHEDULED: 'Learner promotion check scheduled',
+-  LEARNER_PROMOTED_TO_FOLLOWER: 'Learner promoted to follower - now participating in elections',
+-  LEARNER_PROMOTION_CHECK: 'Checking learner promotion eligibility',
+   CLEARED_LIFERAFT_TIMERS: 'Cleared liferaft timers for deferred election',
+   BECAME_LEADER: 'Became leader (liferaft)',
+   LEADER_CHANGED: 'Leader changed',
+diff --git a/src/raft/raft-replica-base.js b/src/raft/raft-replica-base.js
+index 6a0118eb7861aeafbf2aee1cdceeb02b1db74e3e..602f84486a978a22559dd352928810db21dd5742 100644
+--- a/src/raft/raft-replica-base.js
++++ b/src/raft/raft-replica-base.js
+@@ -17,7 +17,6 @@ import {STRING} from '../constants/index.js';
+ import {assertRaftProviderContract} from './raft-provider-contract.js';
+ import {LiferaftProvider} from './liferaft-provider.js';
+ import {resolveRaftTransportDeliveryOptions} from './constants.js';
+-import {isCatchupLearnerRaftRole} from './replica-voter-readiness.js';
+ import {
+   applyReplicaDemotion,
+   clearReplicaLeaderUpdateState,
+@@ -152,13 +151,6 @@ class RaftReplicaBase extends EventEmitter {
+     this.electionStarted = false;
+     this.isJoiningExistingGroup = options.isJoiningExistingGroup || false;
+ 
+-    // Learner phase support
+-    this.learnerPromotionDelayMs = options.learnerPromotionDelayMs ||
+-      RAFT_REPLICA_BASE_DEFAULT.LEARNER_PROMOTION_DELAY_MS;
+-    this.learnerCatchUpCheckIntervalMs = options.learnerCatchUpCheckIntervalMs ||
+-      RAFT_REPLICA_BASE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
+-    this.learnerPromotionTimer = null;
+-
+     // Logging
+     const loggingService = LoggingService.getInstance();
+     this.logger = loggingService.isInitialized() ?
+@@ -395,52 +387,6 @@ class RaftReplicaBase extends EventEmitter {
+     return {acknowledged: true};
+   }
+ 
+-  /**
+-   * Schedule learner promotion check.
+-   * @protected
+-   */
+-  scheduleLearnerPromotion() {
+-    if (this.learnerPromotionTimer) {
+-      return;
+-    }
+-
+-    this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.LEARNER_PROMOTION_SCHEDULED, {
+-      replicaId: this.replicaId,
+-      delayMs: this.learnerPromotionDelayMs,
+-    });
+-
+-    this.learnerPromotionTimer = setTimeout(() => {
+-      this.checkLearnerPromotion();
+-    }, this.learnerPromotionDelayMs);
+-  }
+-
+-  /**
+-   * Check if learner can be promoted to follower.
+-   * @protected
+-   */
+-  checkLearnerPromotion() {
+-    this.learnerPromotionTimer = null;
+-
+-    if (!isCatchupLearnerRaftRole(this.role)) {
+-      return;
+-    }
+-
+-    this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.LEARNER_PROMOTION_CHECK, {
+-      replicaId: this.replicaId,
+-    });
+-
+-    // Promote to follower and start participating in elections
+-    this.role = RaftRole.FOLLOWER;
+-    this.isJoiningExistingGroup = false;
+-    this.deferElection = false;
+-
+-    this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.LEARNER_PROMOTED_TO_FOLLOWER, {
+-      replicaId: this.replicaId,
+-    });
+-
+-    this.startElection();
+-  }
+-
+   /**
+    * Queue a raft role update for persistence.
+    * @param {string} role - New raft role.
+@@ -776,10 +722,6 @@ class RaftReplicaBase extends EventEmitter {
+       clearTimeout(this.leaderNodeUpdateRetryTimer);
+       this.leaderNodeUpdateRetryTimer = null;
+     }
+-    if (this.learnerPromotionTimer) {
+-      clearTimeout(this.learnerPromotionTimer);
+-      this.learnerPromotionTimer = null;
+-    }
+     this.leaderActivationGate.shutdown();
+ 
+     this.initialized = false;
+diff --git a/test/convergence/dt6-learner-promotion-progress-proof.test.js b/test/convergence/dt6-learner-promotion-progress-proof.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b4aedcc8a123feb8aa658ff629c3176ace3d3510
+--- /dev/null
++++ b/test/convergence/dt6-learner-promotion-progress-proof.test.js
+@@ -0,0 +1,527 @@
++/**
++ * Scenario 'learner-promotion-progress-proof' (quest
++ * learner-promotion-progress-proof): a five-node recovery scenario over the
++ * REAL owners — live PartitionService leader + learner on a loopback
++ * transport with real liferaft replication, real proof RPC over the
++ * application-message channel, and the real promotion gate chain.
++ *
++ * FIDELITY: in-process deterministic guard (loopback transport, single
++ * process). The three passive voters are authoritative service rows (the
++ * quorum-shape gates read the cache, not live sockets); the leader and the
++ * learner are fully live. Replication lag is injected by dropping
++ * leader->learner deliveries — a one-way partition of the replication path.
++ *
++ * Sealed contract exercised end-to-end:
++ *  - a deliberately lagging learner is NEVER promoted, no matter how many
++ *    retry ticks elapse (refusals are typed progress_behind);
++ *  - once the partition heals and the leader OBSERVES the learner applied
++ *    through the safe promotion index, promotion happens within a couple of
++ *    retry ticks (never a 30s stability wait — reintroducing time-only
++ *    promotion fails this deterministically);
++ *  - a term change after proof collection invalidates the proof
++ *    (stale_proof_term), and promotion resumes when the term matches again;
++ *  - a membership-epoch divergence refuses (epoch_mismatch) until the
++ *    caches converge;
++ *  - an idle, exactly-caught-up learner (the snapshot-installed shape: full
++ *    log, no traffic, so no acks) still promotes through the SAME contract
++ *    via the leader's progress probe;
++ *  - the quorum-shape gates still refuse (would_exceed_target_replica_count)
++ *    even when the progress proof would grant.
++ */
++
++import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
++import {
++  createLoopbackTransport,
++} from '../partition/partition-service-test-support.js';
++import {
++  PartitionService,
++  RaftRole,
++  CDCOperation,
++} from '../../src/partition/partition-service.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++import {SystemTableCache} from '../../src/cache/system-table-cache.js';
++import {
++  SERVICE_TYPE,
++  SERVICE_STATUS,
++  TABLES,
++} from '../../src/constants/index.js';
++import {
++  LEARNER_PROMOTION_PROOF_DECISION,
++  LEARNER_PROMOTION_PROOF_REASON,
++} from '../../src/raft/learner-promotion-progress.js';
++import {
++  FOLLOWER_MATCH_INDEX_STATE,
++  readFollowerMatchIndex,
++} from '../../src/raft/liferaft.js';
++
++const PARTITION_ID = 'progress-proof-p1';
++const TABLE_NAME = 'progress_proof_table';
++const LEADER_REPLICA = 'replica-1';
++const LEADER_NODE = 'node-1';
++const LEADER_ADDRESS = `${LEADER_NODE}/partition/${LEADER_REPLICA}`;
++const LEARNER_REPLICA = 'replica-5';
++const LEARNER_NODE = 'node-5';
++const LEARNER_ADDRESS = `${LEARNER_NODE}/partition/${LEARNER_REPLICA}`;
++const PASSIVE_VOTERS = [
++  ['replica-2', 'node-2'],
++  ['replica-3', 'node-3'],
++  ['replica-4', 'node-4'],
++];
++const TARGET_REPLICA_COUNT = 5;
++const COMMITTED_ENTRY_COUNT = 3;
++const RETRY_INTERVAL_MS = 25;
++const LAG_OBSERVATION_MS = 300;
++const PROMOTION_BUDGET_MS = 5000;
++const POLL_MS = 10;
++const NOOP_COMMAND_TYPE = 'progress-proof-noop';
++const PUBLICATION_EPOCH_ONE = 1;
++
++beforeEach(() => {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++  const config = ConfigurationManager.getInstance();
++  config.initialize({
++    node: {id: 'test-node'},
++    raft: {
++      heartbeatIntervalMs: 20,
++      electionTimeoutMinMs: 150,
++      electionTimeoutMaxMs: 300,
++    },
++  });
++  const logger = LoggingService.getInstance();
++  logger.initialize({level: 'error'});
++});
++
++afterEach(() => {
++  ConfigurationManager.resetInstance();
++  LoggingService.resetInstance();
++});
++
++function waitFor(predicate, timeoutMs, pollMs = POLL_MS) {
++  return new Promise((resolve) => {
++    const startedAt = Date.now();
++    const poll = () => {
++      if (predicate()) {
++        resolve(true);
++        return;
++      }
++      if (Date.now() - startedAt >= timeoutMs) {
++        resolve(false);
++        return;
++      }
++      setTimeout(poll, pollMs);
++    };
++    poll();
++  });
++}
++
++function insertServiceRow(cache, replicaId, nodeId, raftRole) {
++  cache.applySystemTableChange(TABLES.SERVICES, CDCOperation.INSERT, {
++    service_id: replicaId,
++    replica_id: replicaId,
++    partition_id: PARTITION_ID,
++    service_type: SERVICE_TYPE.PARTITION,
++    node_id: nodeId,
++    status: SERVICE_STATUS.ACTIVE,
++    raft_role: raftRole,
++  });
++}
++
++// Seeded in two stages: the leader must initialize (and mint its committed
++// prefix) while its raft view is genuinely single-replica; joining the
++// passive voter rows earlier would make its own peer reconcile block the
++// single-replica commit quorum (the same order the proven stable-join
++// fixtures use).
++function seedBootstrapTopology(cache) {
++  cache.applySystemTableChange(TABLES.PARTITIONS, CDCOperation.INSERT, {
++    partition_id: PARTITION_ID,
++    replica_count: TARGET_REPLICA_COUNT,
++  });
++  insertServiceRow(cache, LEADER_REPLICA, LEADER_NODE, RaftRole.LEADER);
++}
++
++function seedRecoveryTopology(cache, options = {}) {
++  for (const [replicaId, nodeId] of PASSIVE_VOTERS) {
++    insertServiceRow(cache, replicaId, nodeId, RaftRole.FOLLOWER);
++  }
++  if (options.learnerRow !== false) {
++    insertServiceRow(cache, LEARNER_REPLICA, LEARNER_NODE, RaftRole.LEARNER);
++  }
++}
++
++function insertPublishedEpochRow(cache, epoch) {
++  cache.applySystemTableChange(
++    TABLES.CONTROL_PLANE_PUBLICATIONS,
++    CDCOperation.INSERT,
++    {
++      publication_id: `publication-epoch-${epoch}`,
++      status: 'PUBLISHED',
++      publication_epoch: epoch,
++    },
++  );
++}
++
++// One-way replication partition: while engaged, every leader->learner
++// delivery is dropped (append fan-out, catch-up batches, probes). The
++// learner->leader direction (proof RPC, acks it cannot send anyway) stays up.
++function createPartitionableTransport(inner) {
++  const state = {dropToLearner: false};
++  return {
++    state,
++    register: (address, handler) => inner.register(address, handler),
++    unregister: (address) => inner.unregister(address),
++    deliver: async (address, payload, options) => {
++      if (state.dropToLearner && address === LEARNER_ADDRESS) {
++        throw new Error('injected replication partition');
++      }
++      return inner.deliver(address, payload, options);
++    },
++  };
++}
++
++async function createLeader(transport, cache) {
++  const leader = new PartitionService({
++    partitionId: PARTITION_ID,
++    tableId: TABLE_NAME,
++    tableName: TABLE_NAME,
++    replicaId: LEADER_REPLICA,
++    replicaIds: [LEADER_REPLICA],
++    nodeId: LEADER_NODE,
++    transport,
++    systemTableCache: cache,
++    dbPath: ':memory:',
++  });
++  await leader.initialize();
++  for (let seq = 1; seq <= COMMITTED_ENTRY_COUNT; seq++) {
++    await leader.raftProvider.propose(leader.raft, {
++      type: NOOP_COMMAND_TYPE,
++      seq,
++    });
++  }
++  // Base liferaft only commits on follower acks; a single-replica leader is
++  // its own quorum, so commit the appended prefix explicitly (how the
++  // prefix became committed is a precondition here, not the mechanism under
++  // test — the proof consumes committedIndex however it advanced).
++  const uncommittedEntries = await leader.raft.log.getUncommittedEntriesUpToIndex(
++    COMMITTED_ENTRY_COUNT,
++    leader.raft.term,
++  );
++  await leader.raft.commitEntries(uncommittedEntries);
++  return leader;
++}
++
++async function createLearner(transport, cache) {
++  const learner = new PartitionService({
++    partitionId: PARTITION_ID,
++    tableId: TABLE_NAME,
++    tableName: TABLE_NAME,
++    replicaId: LEARNER_REPLICA,
++    replicaIds: [LEADER_REPLICA, LEARNER_REPLICA],
++    peerAddresses: [LEADER_ADDRESS, LEARNER_ADDRESS],
++    nodeId: LEARNER_NODE,
++    transport,
++    systemTableCache: cache,
++    dbPath: ':memory:',
++    isJoiningExistingGroup: true,
++    leaderAddress: LEADER_ADDRESS,
++    learnerCatchUpCheckIntervalMs: RETRY_INTERVAL_MS,
++  });
++  await learner.initialize();
++  return learner;
++}
++
++function recordPromotionDeferrals(learner) {
++  const deferrals = [];
++  const baseLogger = learner.logger;
++  learner.logger = {
++    info: (message, payload) => {
++      if (payload && payload.replicaId === LEARNER_REPLICA &&
++          typeof payload.reason === 'string') {
++        deferrals.push({
++          reason: payload.reason,
++          proofReason: payload.proofReason,
++        });
++      }
++      baseLogger.info(message, payload);
++    },
++    warn: (...args) => baseLogger.warn(...args),
++    error: (...args) => baseLogger.error(...args),
++    debug: (...args) => baseLogger.debug(...args),
++    trace: (...args) => baseLogger.trace(...args),
++    fatal: (...args) => baseLogger.fatal(...args),
++  };
++  return deferrals;
++}
++
++async function createFiveNodeFixture(options = {}) {
++  const loopback = createLoopbackTransport();
++  const leaderTransport = createPartitionableTransport(loopback);
++  const leaderCache = new SystemTableCache();
++  const learnerCache = options.splitCaches ?
++    new SystemTableCache() :
++    leaderCache;
++  seedBootstrapTopology(leaderCache);
++  if (options.splitCaches) {
++    seedBootstrapTopology(learnerCache);
++  }
++  leaderTransport.state.dropToLearner = options.startPartitioned === true;
++  const leader = await createLeader(leaderTransport, leaderCache);
++  seedRecoveryTopology(leaderCache, options);
++  if (options.splitCaches) {
++    seedRecoveryTopology(learnerCache, options);
++  }
++  const learner = await createLearner(loopback, learnerCache);
++  const deferrals = recordPromotionDeferrals(learner);
++  return {
++    leader,
++    learner,
++    leaderCache,
++    learnerCache,
++    leaderTransport,
++    deferrals,
++    async shutdown() {
++      await learner.shutdown();
++      await leader.shutdown();
++    },
++  };
++}
++
++test('lagging learner is never promoted by elapsed time; healing the ' +
++  'replication path promotes via the leader-observed applied index',
++async (t) => {
++  const fixture = await createFiveNodeFixture({startPartitioned: true});
++  const {leader, learner, leaderTransport, deferrals} = fixture;
++  try {
++    t.equal(
++      leader.raftProvider.getCommittedIndex(leader.raft),
++      COMMITTED_ENTRY_COUNT,
++      'recovery precondition: the leader holds a committed prefix the ' +
++        'learner does not have',
++    );
++
++    // Phase A: many retry ticks elapse while replication is partitioned.
++    await new Promise((resolve) => setTimeout(resolve, LAG_OBSERVATION_MS));
++    t.equal(
++      learner.role,
++      RaftRole.LEARNER,
++      'a lagging learner is never promoted no matter how much time passes',
++    );
++    const progressRefusals = deferrals.filter(
++      (d) => d.proofReason === LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND,
++    );
++    t.ok(
++      progressRefusals.length > 0,
++      'the refusing gate is the progress proof (typed progress_behind), ' +
++        'not leader discovery or quorum shape',
++    );
++    t.equal(
++      readFollowerMatchIndex(leader.raft, LEARNER_ADDRESS).state,
++      FOLLOWER_MATCH_INDEX_STATE.UNAVAILABLE,
++      'the leader holds no progress evidence for the partitioned learner',
++    );
++
++    // Phase B: heal the replication path; catch-up flows (append-fail ->
++    // batch), the leader observes the acks, and the very next proof retry
++    // grants. Budget is a few retry ticks — a 30s stability floor would
++    // fail this deterministically.
++    leaderTransport.state.dropToLearner = false;
++    const promoted = await waitFor(
++      () => learner.role === RaftRole.FOLLOWER,
++      PROMOTION_BUDGET_MS,
++    );
++    t.equal(
++      promoted,
++      true,
++      'the proven learner promotes within the retry cadence, not 30s',
++    );
++    const matchObservation = readFollowerMatchIndex(
++      leader.raft,
++      LEARNER_ADDRESS,
++    );
++    t.equal(
++      matchObservation.state,
++      FOLLOWER_MATCH_INDEX_STATE.AVAILABLE,
++      'promotion happened only after the leader observed learner progress',
++    );
++    t.ok(
++      matchObservation.matchIndex >= COMMITTED_ENTRY_COUNT,
++      'the leader-observed match index covers the safe promotion index',
++    );
++    t.equal(
++      learner.electionStarted,
++      true,
++      'the promoted voter participates in elections',
++    );
++  } finally {
++    await fixture.shutdown();
++  }
++});
++
++test('a term change after proof collection invalidates the proof ' +
++  '(stale leader); promotion resumes when the term matches again',
++async (t) => {
++  const fixture = await createFiveNodeFixture({startPartitioned: true});
++  const {learner, leaderTransport} = fixture;
++  try {
++    // Interleave: capture the REAL granted proof, then observe a newer term
++    // before the validation runs — the exact "leader change after proof
++    // collection" attack.
++    const realRequest =
++      learner.requestLearnerPromotionProofFromLeader.bind(learner);
++    let staleInjected = false;
++    let observedGrantTerm = null;
++    learner.requestLearnerPromotionProofFromLeader = async (observation) => {
++      const proof = await realRequest(observation);
++      if (
++        proof.decision === LEARNER_PROMOTION_PROOF_DECISION.GRANTED &&
++        !staleInjected
++      ) {
++        staleInjected = true;
++        observedGrantTerm = proof.term;
++        learner.raft.term = proof.term + 1;
++      }
++      return proof;
++    };
++
++    leaderTransport.state.dropToLearner = false;
++    const staleRefusalSeen = await waitFor(
++      () => fixture.deferrals.some(
++        (d) => d.reason ===
++          LEARNER_PROMOTION_PROOF_REASON.STALE_PROOF_TERM,
++      ),
++      PROMOTION_BUDGET_MS,
++    );
++    t.equal(
++      staleRefusalSeen,
++      true,
++      'a proof whose term is behind the learner is refused as stale',
++    );
++    t.equal(
++      learner.role,
++      RaftRole.LEARNER,
++      'the invalidated proof never promotes',
++    );
++
++    // Recovery: the learner observes the proof term again (the "new leader"
++    // proved it) — promotion completes through the same contract.
++    learner.raft.term = observedGrantTerm;
++    const promoted = await waitFor(
++      () => learner.role === RaftRole.FOLLOWER,
++      PROMOTION_BUDGET_MS,
++    );
++    t.equal(promoted, true, 'promotion resumes once the term matches');
++  } finally {
++    await fixture.shutdown();
++  }
++});
++
++test('a membership-epoch divergence refuses promotion until the caches ' +
++  'converge', async (t) => {
++  const fixture = await createFiveNodeFixture({
++    startPartitioned: true,
++    splitCaches: true,
++  });
++  const {learner, learnerCache, leaderCache, leaderTransport} = fixture;
++  try {
++    // The learner observes a published membership epoch the leader has not
++    // seen yet — the proof must refuse (epoch binding), fail-closed.
++    insertPublishedEpochRow(learnerCache, PUBLICATION_EPOCH_ONE);
++    leaderTransport.state.dropToLearner = false;
++
++    const epochRefusalSeen = await waitFor(
++      () => fixture.deferrals.some(
++        (d) => d.proofReason ===
++          LEARNER_PROMOTION_PROOF_REASON.EPOCH_MISMATCH,
++      ),
++      PROMOTION_BUDGET_MS,
++    );
++    t.equal(
++      epochRefusalSeen,
++      true,
++      'a membership-epoch mismatch refuses the proof (typed epoch_mismatch)',
++    );
++    t.equal(
++      learner.role,
++      RaftRole.LEARNER,
++      'no promotion across a membership-epoch divergence',
++    );
++
++    // Convergence: the leader observes the same published epoch.
++    insertPublishedEpochRow(leaderCache, PUBLICATION_EPOCH_ONE);
++    const promoted = await waitFor(
++      () => learner.role === RaftRole.FOLLOWER,
++      PROMOTION_BUDGET_MS,
++    );
++    t.equal(promoted, true, 'promotion completes once the epochs converge');
++  } finally {
++    await fixture.shutdown();
++  }
++});
++
++test('an idle exactly-caught-up learner (snapshot-installed shape) ' +
++  'promotes through the same progress contract via the leader probe',
++async (t) => {
++  const fixture = await createFiveNodeFixture({startPartitioned: true});
++  const {leader, learner, leaderTransport} = fixture;
++  try {
++    // Install-equivalent: seed the learner's log with the leader's full
++    // committed prefix out-of-band (the moral equivalent of a snapshot
++    // transfer), with NO further writes. Pure heartbeats carry no data, so
++    // the learner never acks on its own — the leader's progress probe must
++    // create the evidence.
++    for (let index = 1; index <= COMMITTED_ENTRY_COUNT; index++) {
++      const entry = await leader.raft.log.get(index);
++      await learner.raft.log.saveCommand(entry.command, entry.term, entry.index);
++    }
++    leaderTransport.state.dropToLearner = false;
++
++    const promoted = await waitFor(
++      () => learner.role === RaftRole.FOLLOWER,
++      PROMOTION_BUDGET_MS,
++    );
++    t.equal(
++      promoted,
++      true,
++      'snapshot-installed and log-caught-up learners share one progress ' +
++        'contract - the probe materializes ack evidence for the idle case',
++    );
++  } finally {
++    await fixture.shutdown();
++  }
++});
++
++test('quorum-shape gates still refuse even when the progress proof would ' +
++  'grant', async (t) => {
++  const fixture = await createFiveNodeFixture({startPartitioned: true});
++  const {learner, leaderCache, leaderTransport} = fixture;
++  try {
++    // Add two surplus ACTIVE voters while the learner still lags (target 5,
++    // 6 active): even the single-replacement-above-target allowance cannot
++    // admit a 7th voter, so promotion must defer on the replica-count
++    // ceiling regardless of replication progress.
++    insertServiceRow(leaderCache, 'replica-6', 'node-6', RaftRole.FOLLOWER);
++    insertServiceRow(leaderCache, 'replica-7', 'node-7', RaftRole.FOLLOWER);
++    leaderTransport.state.dropToLearner = false;
++
++    const ceilingDeferralSeen = await waitFor(
++      () => fixture.deferrals.some(
++        (d) => d.reason === 'would_exceed_target_replica_count',
++      ),
++      PROMOTION_BUDGET_MS,
++    );
++    t.equal(
++      ceilingDeferralSeen,
++      true,
++      'the target-replica-count gate still refuses with its typed reason',
++    );
++    t.equal(
++      learner.role,
++      RaftRole.LEARNER,
++      'the progress proof is an additional necessary condition - it never ' +
++        'weakens a quorum-shape gate',
++    );
++  } finally {
++    await fixture.shutdown();
++  }
++});
+diff --git a/test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js b/test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js
+index fbaa00cd39b18f054838ac167d85baa14a94d22e..571d06d45b460696d8175bf6226d444febe528e7 100644
+--- a/test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js
++++ b/test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js
+@@ -7,6 +7,9 @@ import {
+   getNextWorkflowStep,
+   isTerminalStep,
+ } from '../../src/rebalancer/replica-operation-progress.js';
++import {
++  stubGrantedLearnerPromotionProof,
++} from '../partition/partition-service-test-support.js';
+ import {SYSTEM_TABLE_NAME} from '../../src/bootstrap/system-table-schemas-constants.js';
+ import {CONTROL_PLANE_AUTHORITATIVE_READ_MODE} from '../../src/control-plane/control-plane-system-table-gateway.js';
+ import {
+@@ -236,7 +239,10 @@ function createLearnerPartitionService({
+   // without depending on log transport (the message text is shared across causes).
+   partition.logger = {
+     info: (message, payload) => {
+-      if (payload && payload.replicaId === replicaId) {
++      // Quorum-gate deferrals only: the progress-proof grant/refusal logs
++      // share the replicaId but never carry the ceiling field.
++      if (payload && payload.replicaId === replicaId &&
++          payload.maxAllowedVotersAfterPromotion !== undefined) {
+         deferrals.push({
+           reason: payload.reason,
+           activeVoterCount: payload.activeVoterCount,
+@@ -249,14 +255,18 @@ function createLearnerPartitionService({
+     error: () => {},
+     debug: () => {},
+   };
++  // Promotion is progress-proven by the leader; this scenario exercises the
++  // quorum-shape guard, so only the proof's transport hop is stubbed (the
++  // real evaluator and validator still run).
++  stubGrantedLearnerPromotionProof(partition);
+   return partition;
+ }
+ 
+ // One promotion-loop iteration (production: a 1s self-rescheduling native timer the
+ // virtual clock cannot drive — plan limits row f — so the driver calls the REAL
+ // guard once per tick and disarms the rescheduled timer).
+-function drivePromotionCheck(partition) {
+-  partition.checkLearnerPromotion();
++async function drivePromotionCheck(partition) {
++  await partition.checkLearnerPromotion();
+   if (partition.learnerPromotionTimer) {
+     clearTimeout(partition.learnerPromotionTimer);
+     partition.learnerPromotionTimer = null;
+@@ -615,12 +625,12 @@ async function attemptReplanGeneration(ctx, cycle) {
+ }
+ 
+ // The learner promotion loop (REAL guard, 1 Hz in production).
+-function drivePromotionLoop(ctx, tick) {
++async function drivePromotionLoop(ctx, tick) {
+   for (const generation of ctx.replaceGenerations) {
+     if (generation.learner.role !== RaftRole.LEARNER) {
+       continue;
+     }
+-    if (drivePromotionCheck(generation.learner)) {
++    if (await drivePromotionCheck(generation.learner)) {
+       ctx.promotedByReplicaId.add(generation.replicaId);
+       promoteServiceRow(ctx.serviceRows, generation.replicaId);
+       ctx.events.push(`${tick} PROMOTED ${generation.replicaId}`);
+@@ -767,7 +777,7 @@ async function runVoterSurplusScenario({lossMode}) {
+     for (let cycle = 0; cycle < MAX_CYCLES; cycle++) {
+       await attemptSurplusRemoves(ctx, cycle);
+       await attemptReplanGeneration(ctx, cycle);
+-      drivePromotionLoop(ctx, tick);
++      await drivePromotionLoop(ctx, tick);
+       await driveWorkflowTick({scenario, events, tick});
+       tick += 1;
+       await reportVoterReadyTimeouts(ctx, tick);
+diff --git a/test/distributed/harness/postgres-baseline-config.js b/test/distributed/harness/postgres-baseline-config.js
+index d1b75e86592a21daa3f3bae02781a60f8363dc41..8a8c076f29da0ff585542b99a47b9d53b5a73bc3 100644
+--- a/test/distributed/harness/postgres-baseline-config.js
++++ b/test/distributed/harness/postgres-baseline-config.js
+@@ -1,8 +1,13 @@
+ import {ASSERTION_POLICY, BENCHMARK_DEFAULTS} from './constants.js';
+-import {PARTITION_SERVICE_DEFAULT} from '../../../src/partition/partition-service-constants.js';
+ 
+ const ZERO = 0;
+ const ONE = 1;
++// Conservative learner catch-up budget floor for preload budgeting. Learner
++// promotion is progress-proven by the leader (quest
++// learner-promotion-progress-proof), so there is no fixed promotion delay
++// anymore; this keeps the historical 30s worst-case catch-up allowance as a
++// benchmark budget floor.
++const BENCHMARK_LEARNER_CATCHUP_BUDGET_MS = 30000;
+ const MIN_REPLICATION_FACTOR = 1;
+ const BENCHMARK_EVENT_TABLE_FALLBACK = 'benchmark_events';
+ const BENCHMARK_STRICT_DISCOVERY_DEFAULT = false;
+@@ -190,7 +195,7 @@ function resolveAuthoritativeFallbackThresholds(
+ }
+ 
+ function calculateMinimumPreloadBudgetMs(benchmarkConfig) {
+-  return PARTITION_SERVICE_DEFAULT.LEARNER_PROMOTION_DELAY_MS +
++  return BENCHMARK_LEARNER_CATCHUP_BUDGET_MS +
+     benchmarkConfig.preloadRequiredStableMs +
+     benchmarkConfig.quiescentPollIntervalMs;
+ }
+diff --git a/test/partition/partition-service-learner-promotion.test.js b/test/partition/partition-service-learner-promotion.test.js
+index b8166e2803a797c059170fa4117bc66705922a05..bae1d81c042a83a8e03ba10fe7c2d9b03b9e43b9 100644
+--- a/test/partition/partition-service-learner-promotion.test.js
++++ b/test/partition/partition-service-learner-promotion.test.js
+@@ -6,6 +6,7 @@
+ 
+ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
+ import {
++  checkLearnerPromotionWithGrantedProof,
+   createLoopbackTransport,
+   createTrafficReadinessState,
+ } from './partition-service-test-support.js';
+@@ -201,7 +202,7 @@ test('PartitionService - learner promotes one temporary replacement voter above
+   partition.leaderId = 'replica-1';
+ 
+   // Manually trigger learner promotion check
+-  partition.checkLearnerPromotion();
++  await checkLearnerPromotionWithGrantedProof(partition);
+ 
+   // One temporary replacement learner above target is allowed so the
+   // source voter can be removed after the replacement becomes ready.
+@@ -290,7 +291,7 @@ test('PartitionService - learner promotes one temporary replacement voter above
+   partition.role = RaftRole.LEARNER;
+   partition.leaderId = 'nodes-p1-r1';
+ 
+-  partition.checkLearnerPromotion();
++  await checkLearnerPromotionWithGrantedProof(partition);
+ 
+   t.equal(
+     partition.role,
+@@ -393,7 +394,7 @@ test('PartitionService - learner promotion discounts stale local voter row',
+     partition.role = RaftRole.LEARNER;
+     partition.leaderId = TEST_STALE_LOCAL_PROMOTION_LEADER_REPLICA_ID;
+ 
+-    partition.checkLearnerPromotion();
++    await checkLearnerPromotionWithGrantedProof(partition);
+ 
+     t.equal(
+       partition.role,
+@@ -458,7 +459,7 @@ test('PartitionService - learner promotes when voter count would be odd', async
+   partition.leaderId = 'replica-1';
+ 
+   // Manually trigger learner promotion check
+-  partition.checkLearnerPromotion();
++  await checkLearnerPromotionWithGrantedProof(partition);
+ 
+   // Should promote because 2 + 1 = 3 voters (odd)
+   t.equal(partition.role, RaftRole.FOLLOWER, 'Should promote to follower for odd voter count');
+@@ -522,7 +523,7 @@ test('PartitionService - learner promotion deferred until leader is known', asyn
+   partition.role = RaftRole.LEARNER;
+   partition.leaderId = null;
+ 
+-  partition.checkLearnerPromotion();
++  await partition.checkLearnerPromotion();
+ 
+   t.equal(
+     partition.role,
+@@ -596,13 +597,12 @@ test(
+       dbPath: ':memory:',
+       isJoiningExistingGroup: true,
+       systemTableCache: mockCache,
+-      learnerPromotionDelayMs: 30000,
+       learnerCatchUpCheckIntervalMs: 1000,
+     });
+ 
+     partition.role = RaftRole.LEARNER;
+     partition.leaderId = null;
+-    partition.checkLearnerPromotion();
++    await partition.checkLearnerPromotion();
+ 
+     t.equal(
+       scheduledDelayMs[0],
+@@ -614,8 +614,11 @@ test(
+ );
+ 
+ test(
+-  'PartitionService - priority recovery expedites initial learner promotion check',
++  'PartitionService - initial learner promotion check uses the proof retry cadence',
+   async (t) => {
++    // Promotion is progress-proven by the leader; elapsed time is only the
++    // retry cadence, so even the INITIAL check schedules at the catch-up
++    // interval — there is no 30s stability floor to expedite anymore.
+     const scheduledDelayMs = [];
+     const originalSetTimeout = global.setTimeout;
+     global.setTimeout = (callback, delayMs) => {
+@@ -641,8 +644,7 @@ test(
+       dbPath: ':memory:',
+       isJoiningExistingGroup: true,
+       bootstrapReadinessState: readinessState,
+-      learnerPromotionDelayMs: 30000,
+-      learnerPromotionPriorityRecoveryDelayMs: 5000,
++      learnerCatchUpCheckIntervalMs: 1000,
+     });
+ 
+     partition.scheduleLearnerPromotion(
+@@ -651,8 +653,8 @@ test(
+ 
+     t.equal(
+       scheduledDelayMs[0],
+-      5000,
+-      'priority control-plane recovery should shorten initial promotion floor',
++      1000,
++      'initial promotion check should schedule at the proof retry cadence',
+     );
+     partition.learnerPromotionTimer = null;
+   },
+@@ -742,7 +744,7 @@ test(
+     partition.role = RaftRole.LEARNER;
+     partition.leaderId = 'replica-1';
+ 
+-    partition.checkLearnerPromotion();
++    await checkLearnerPromotionWithGrantedProof(partition);
+ 
+     t.equal(
+       partition.role,
+@@ -860,7 +862,7 @@ test(
+     partition.role = RaftRole.LEARNER;
+     partition.leaderId = 'replica-1';
+ 
+-    partition.checkLearnerPromotion();
++    await checkLearnerPromotionWithGrantedProof(partition);
+ 
+     t.equal(
+       partition.role,
+@@ -1001,7 +1003,7 @@ test(
+     partition.role = RaftRole.LEARNER;
+     partition.leaderId = 'replica-1';
+ 
+-    partition.checkLearnerPromotion();
++    await checkLearnerPromotionWithGrantedProof(partition);
+ 
+     t.equal(
+       partition.role,
+@@ -1122,7 +1124,7 @@ test(
+     partition.role = RaftRole.LEARNER;
+     partition.leaderId = 'replica-1';
+ 
+-    partition.checkLearnerPromotion();
++    await checkLearnerPromotionWithGrantedProof(partition);
+ 
+     t.equal(
+       partition.role,
+@@ -1192,7 +1194,7 @@ test(
+       electionStarted = true;
+     };
+ 
+-    partition.checkLearnerPromotion();
++    await checkLearnerPromotionWithGrantedProof(partition);
+ 
+     t.equal(
+       partition.leaderId,
+diff --git a/test/partition/partition-service-role-metadata-publication.test.js b/test/partition/partition-service-role-metadata-publication.test.js
+index 61b98b46e7e5ad923b61cd594623c2879a17218e..31a9945afa5ec15e49f8a5c4d63c57bd88993a23 100644
+--- a/test/partition/partition-service-role-metadata-publication.test.js
++++ b/test/partition/partition-service-role-metadata-publication.test.js
+@@ -6,6 +6,7 @@
+ 
+ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
+ import {
++  checkLearnerPromotionWithGrantedProof,
+   createLoopbackTransport,
+   waitForCondition,
+   createTrafficReadinessState,
+@@ -477,7 +478,7 @@ test(
+     partition.role = RaftRole.LEARNER;
+     partition.leaderId = 'replica-1';
+ 
+-    partition.checkLearnerPromotion();
++    await checkLearnerPromotionWithGrantedProof(partition);
+     await new Promise((resolve) => setImmediate(resolve));
+ 
+     t.equal(partition.role, RaftRole.FOLLOWER,
+diff --git a/test/partition/partition-service-test-support.js b/test/partition/partition-service-test-support.js
+index dc3b2fcdb84e9e83252f4b6b5527aca91ddab162..0ee07e46b2d573c1e4643a247dc135382f362d7d 100644
+--- a/test/partition/partition-service-test-support.js
++++ b/test/partition/partition-service-test-support.js
+@@ -8,6 +8,41 @@
+ 
+ import {EventEmitter} from 'node:events';
+ import {LIFECYCLE_PHASE} from '../../src/bootstrap/lifecycle-controller-constants.js';
++import {
++  evaluateLearnerPromotionProof,
++} from '../../src/raft/learner-promotion-progress.js';
++
++const PROOF_STUB_TERM = 1;
++const PROOF_STUB_COMMITTED_INDEX = 0;
++const PROOF_STUB_MATCH_INDEX = 0;
++
++/**
++ * Stub ONLY the transport hop of the learner-promotion proof: the
++ * leader-side evaluator and the learner-side validator both run for real,
++ * so quorum-gate unit tests still exercise the full proof grammar with a
++ * trivially caught-up learner (empty committed prefix).
++ * @param {Object} partition service under test
++ * @return {Promise<void>} resolves when the promotion check completes
++ */
++export function stubGrantedLearnerPromotionProof(partition) {
++  partition.requestLearnerPromotionProofFromLeader = async () => {
++    const membershipEpoch =
++      partition.resolveLearnerPromotionMembershipEpoch();
++    return evaluateLearnerPromotionProof({
++      raftIsLeader: true,
++      currentTerm: PROOF_STUB_TERM,
++      committedIndex: PROOF_STUB_COMMITTED_INDEX,
++      learnerMatchIndex: PROOF_STUB_MATCH_INDEX,
++      leaderMembershipEpoch: membershipEpoch,
++      learnerMembershipEpoch: membershipEpoch,
++    });
++  };
++}
++
++export async function checkLearnerPromotionWithGrantedProof(partition) {
++  stubGrantedLearnerPromotionProof(partition);
++  await partition.checkLearnerPromotion();
++}
+ 
+ export function createLoopbackTransport() {
+   const handlers = new Map();
+diff --git a/test/partition/partition-service-transactions-query-routing.test.js b/test/partition/partition-service-transactions-query-routing.test.js
+index 5c6768a0fb0aec09a9a1de45d730d39162c2948d..09e40328c51c2fb43670bd90f79a43674ef09c1c 100644
+--- a/test/partition/partition-service-transactions-query-routing.test.js
++++ b/test/partition/partition-service-transactions-query-routing.test.js
+@@ -7,6 +7,7 @@
+ import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
+ import LifeRaft from '@markwylde/liferaft';
+ import {
++  checkLearnerPromotionWithGrantedProof,
+   createLoopbackTransport,
+   waitForCondition,
+ } from './partition-service-test-support.js';
+@@ -113,7 +114,7 @@ test(
+       dbPath: ':memory:',
+       isJoiningExistingGroup: true,
+       leaderAddress: 'node-1/partition/replica-1',
+-      learnerPromotionDelayMs: 25,
++      learnerCatchUpCheckIntervalMs: 25,
+     });
+ 
+     try {
+@@ -243,7 +244,7 @@ test(
+       electionStarted = true;
+     };
+ 
+-    partition.checkLearnerPromotion();
++    await checkLearnerPromotionWithGrantedProof(partition);
+ 
+     t.equal(
+       partition.leaderId,
+@@ -333,7 +334,7 @@ test('PartitionService - critical partition defers second learner when replaceme
+   partition.role = RaftRole.LEARNER;
+   partition.leaderId = 'replica-1';
+ 
+-  partition.checkLearnerPromotion();
++  await partition.checkLearnerPromotion();
+ 
+   t.equal(
+     partition.role,
+@@ -434,7 +435,7 @@ test('PartitionService - learner promotes when multiple learners reach odd count
+   partition.leaderId = 'replica-1';
+ 
+   // Manually trigger learner promotion check
+-  partition.checkLearnerPromotion();
++  await checkLearnerPromotionWithGrantedProof(partition);
+ 
+   // Should promote because 3 voters + 2 learners = 5 (odd)
+   // Even though 3 + 1 = 4 (even), all learners promoting gives odd count
+@@ -526,7 +527,7 @@ test('PartitionService - learner defers when multiple learners would exceed targ
+   partition.role = RaftRole.LEARNER;
+   partition.leaderId = 'replica-1';
+ 
+-  partition.checkLearnerPromotion();
++  await partition.checkLearnerPromotion();
+ 
+   t.equal(
+     partition.role,
+@@ -630,7 +631,7 @@ test('PartitionService - learner deferred when all learners would still be even'
+   partition.leaderId = 'replica-1';
+ 
+   // Manually trigger learner promotion check
+-  partition.checkLearnerPromotion();
++  await partition.checkLearnerPromotion();
+ 
+   // Should remain learner because 3 + 1 = 4 (even) and promoting all learners
+   // would still leave the group at an even count of 6.
+@@ -774,7 +775,7 @@ test(
+       electionStarted = true;
+     };
+ 
+-    partition.checkLearnerPromotion();
++    await checkLearnerPromotionWithGrantedProof(partition);
+ 
+     t.equal(
+       partition.role,
+@@ -910,7 +911,7 @@ test(
+     partition.role = RaftRole.LEARNER;
+     partition.leaderId = 'replica-1';
+ 
+-    partition.checkLearnerPromotion();
++    await checkLearnerPromotionWithGrantedProof(partition);
+ 
+     t.equal(
+       partition.role,
+diff --git a/test/raft/learner-promotion-progress-proof-contract.test.js b/test/raft/learner-promotion-progress-proof-contract.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e105d9a9957b6740a7e1634db7151e7033956cbf
+--- /dev/null
++++ b/test/raft/learner-promotion-progress-proof-contract.test.js
+@@ -0,0 +1,171 @@
++/**
++ * Learner-promotion progress-proof contract (quest
++ * learner-promotion-progress-proof): decision-table tests for the two pure
++ * halves of the proof — the leader-side evaluator and the learner-side
++ * response validator. Every refusal is typed; the proof is bound to
++ * (leader, term, membership epoch) and any drift fails closed.
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  LEARNER_PROMOTION_PROOF_DECISION,
++  LEARNER_PROMOTION_PROOF_REASON,
++  evaluateLearnerPromotionProof,
++  refuseLearnerPromotionProof,
++  validateLearnerPromotionProofResponse,
++} from '../../src/raft/learner-promotion-progress.js';
++
++const TERM = 3;
++const EPOCH = 2;
++const COMMITTED_INDEX = 10;
++const CAUGHT_UP_MATCH = 10;
++const LAGGING_MATCH = 9;
++const LEADER_ID = 'replica-1';
++const OTHER_LEADER_ID = 'replica-9';
++
++function leaderFacts(overrides = {}) {
++  return {
++    raftIsLeader: true,
++    currentTerm: TERM,
++    committedIndex: COMMITTED_INDEX,
++    learnerMatchIndex: CAUGHT_UP_MATCH,
++    leaderMembershipEpoch: EPOCH,
++    learnerMembershipEpoch: EPOCH,
++    ...overrides,
++  };
++}
++
++function grantedProof(overrides = {}) {
++  return evaluateLearnerPromotionProof(leaderFacts(overrides));
++}
++
++function learnerObservation(overrides = {}) {
++  return {
++    proof: grantedProof(),
++    isPromotableLearner: true,
++    requestedLeaderId: LEADER_ID,
++    currentLeaderId: LEADER_ID,
++    requestedMembershipEpoch: EPOCH,
++    currentMembershipEpoch: EPOCH,
++    localTerm: TERM,
++    ...overrides,
++  };
++}
++
++test('leader grants only a caught-up learner in a known term/epoch', async (t) => {
++  const granted = grantedProof();
++  t.equal(granted.decision, LEARNER_PROMOTION_PROOF_DECISION.GRANTED,
++    'caught-up learner is granted');
++  t.equal(granted.reason, LEARNER_PROMOTION_PROOF_REASON.PROGRESS_PROVEN,
++    'grant carries the typed reason');
++  t.equal(granted.safePromotionIndex, COMMITTED_INDEX,
++    'safe promotion index = leader committedIndex at proof time');
++  t.equal(granted.term, TERM, 'proof is bound to the leader term');
++  t.equal(granted.membershipEpoch, EPOCH, 'proof is bound to the epoch');
++});
++
++test('leader refusals are typed and fail-closed', async (t) => {
++  const cases = [
++    [{raftIsLeader: false}, LEARNER_PROMOTION_PROOF_REASON.NOT_LEADER,
++      'a non-leader can never prove promotion'],
++    [{currentTerm: null}, LEARNER_PROMOTION_PROOF_REASON.TERM_UNAVAILABLE,
++      'an unknown term refuses'],
++    [{leaderMembershipEpoch: null},
++      LEARNER_PROMOTION_PROOF_REASON.EPOCH_UNAVAILABLE,
++      'an unavailable leader epoch refuses'],
++    [{learnerMembershipEpoch: EPOCH + 1},
++      LEARNER_PROMOTION_PROOF_REASON.EPOCH_MISMATCH,
++      'a membership-epoch mismatch refuses (membership change invalidates)'],
++    [{learnerMatchIndex: LAGGING_MATCH},
++      LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND,
++      'a lagging learner is refused regardless of elapsed time'],
++    [{learnerMatchIndex: null},
++      LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND,
++      'absent progress evidence reads as 0 - fail-closed'],
++  ];
++  for (const [overrides, reason, message] of cases) {
++    const proof = grantedProof(overrides);
++    t.equal(proof.decision, LEARNER_PROMOTION_PROOF_DECISION.REFUSED, message);
++    t.equal(proof.reason, reason, `${message} (typed reason)`);
++  }
++});
++
++test('empty committed prefix grants trivially without ack evidence', async (t) => {
++  // Formation case: a learner joining a group with nothing committed has
++  // nothing to apply; the proof grants immediately (this is what lets a
++  // formation ADD promote in about one retry tick instead of 30s).
++  const proof = grantedProof({committedIndex: 0, learnerMatchIndex: null});
++  t.equal(proof.decision, LEARNER_PROMOTION_PROOF_DECISION.GRANTED,
++    'nothing committed means nothing to prove behind');
++  t.equal(proof.safePromotionIndex, 0, 'safe index is the empty prefix');
++});
++
++test('bootstrap leader at term 0 can still prove promotion', async (t) => {
++  const proof = grantedProof({currentTerm: 0, committedIndex: 0,
++    learnerMatchIndex: null});
++  t.equal(proof.decision, LEARNER_PROMOTION_PROOF_DECISION.GRANTED,
++    'term 0 is a legitimate live term for a never-elected bootstrap leader');
++});
++
++test('learner accepts only a fresh, matching grant', async (t) => {
++  const validation = validateLearnerPromotionProofResponse(
++    learnerObservation(),
++  );
++  t.equal(validation.accepted, true, 'matching grant is accepted');
++  t.equal(validation.reason,
++    LEARNER_PROMOTION_PROOF_REASON.PROOF_ACCEPTED,
++    'acceptance carries the typed reason');
++});
++
++test('learner-side validation refusals are typed and fail-closed', async (t) => {
++  const cases = [
++    [{isPromotableLearner: false},
++      LEARNER_PROMOTION_PROOF_REASON.ROLE_NOT_LEARNER,
++      'a replica that is no longer a learner (or shut down) never promotes'],
++    [{proof: refuseLearnerPromotionProof(
++      LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND)},
++    LEARNER_PROMOTION_PROOF_REASON.PROOF_NOT_GRANTED,
++    'a refused proof never promotes'],
++    [{proof: null}, LEARNER_PROMOTION_PROOF_REASON.PROOF_NOT_GRANTED,
++      'a missing response never promotes'],
++    [{currentLeaderId: OTHER_LEADER_ID},
++      LEARNER_PROMOTION_PROOF_REASON.LEADER_CHANGED,
++      'a leader change across the round trip invalidates the proof'],
++    [{requestedLeaderId: null, currentLeaderId: null},
++      LEARNER_PROMOTION_PROOF_REASON.LEADER_CHANGED,
++      'an unknown leader identity never promotes'],
++    [{currentMembershipEpoch: EPOCH + 1},
++      LEARNER_PROMOTION_PROOF_REASON.EPOCH_CHANGED,
++      'a membership-epoch change across the round trip invalidates'],
++    [{proof: grantedProof({leaderMembershipEpoch: EPOCH + 1,
++      learnerMembershipEpoch: EPOCH + 1})},
++    LEARNER_PROMOTION_PROOF_REASON.EPOCH_CHANGED,
++    'a proof minted for a different epoch than observed invalidates'],
++    [{localTerm: TERM + 1},
++      LEARNER_PROMOTION_PROOF_REASON.STALE_PROOF_TERM,
++      'a proof from a term behind the learner is a stale leader - refused'],
++  ];
++  for (const [overrides, reason, message] of cases) {
++    const validation = validateLearnerPromotionProofResponse(
++      learnerObservation(overrides),
++    );
++    t.equal(validation.accepted, false, message);
++    t.equal(validation.reason, reason, `${message} (typed reason)`);
++  }
++});
++
++test('a learner-supplied index is not part of the grant predicate', async (t) => {
++  // The request payload carries no index at all; the evaluator's only
++  // progress input is the leader's own observation. A learner claiming a
++  // future index has no seam to inject it — asserted here by contract: the
++  // evaluator grants/refuses purely on leader-observed learnerMatchIndex.
++  const lyingLearnerFacts = leaderFacts({learnerMatchIndex: LAGGING_MATCH});
++  const proof = evaluateLearnerPromotionProof({
++    ...lyingLearnerFacts,
++    selfReportedIndex: COMMITTED_INDEX + 100,
++  });
++  t.equal(proof.decision, LEARNER_PROMOTION_PROOF_DECISION.REFUSED,
++    'unknown request fields never influence the decision');
++  t.equal(proof.reason, LEARNER_PROMOTION_PROOF_REASON.PROGRESS_BEHIND,
++    'the leader-observed match index is the only progress input');
++});
+diff --git a/test/raft/liferaft-follower-match-index.test.js b/test/raft/liferaft-follower-match-index.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..b34f4a073d78f6eccff4a9807323cc7ed4ba201a
+--- /dev/null
++++ b/test/raft/liferaft-follower-match-index.test.js
+@@ -0,0 +1,177 @@
++/**
++ * Leader-observed follower replication progress (quest
++ * learner-promotion-progress-proof).
++ *
++ * Every follower acks each durably saved entry (base liferaft 'append ack'
++ * and the fork's batch tail ack). The fork RETAINS that signal per follower
++ * address as the leader-side match index — the replication-progress truth
++ * the learner-promotion proof consumes — and clears it on every raft state
++ * change so a stale leader's observations die with its tenure.
++ *
++ * Red-on-revert: without the retention (recordFollowerMatchIndex in
++ * liferaft.js), readFollowerMatchIndex stays UNAVAILABLE forever and every
++ * assertion below fails.
++ */
++
++import {test} from '../../src/test-helpers/tap.js';
++import LifeRaft, {
++  FOLLOWER_MATCH_INDEX_STATE,
++  readFollowerMatchIndex,
++} from '../../src/raft/liferaft.js';
++import {InMemoryLogAdapter} from '../../src/raft/in-memory-log-adapter.js';
++import {RAFT_PACKET_TYPE} from '../../src/raft/constants.js';
++
++const LEADER_ADDRESS = 'node-1/partition/p1-r1';
++const FOLLOWER_ADDRESS = 'node-2/partition/p1-r2';
++const OTHER_FOLLOWER_ADDRESS = 'node-3/partition/p1-r3';
++const TERM = 1;
++const ACK_INDEX_FOUR = 4;
++const ACK_INDEX_SEVEN = 7;
++const ACK_INDEX_TWO = 2;
++
++function createRaft() {
++  const raft = new LifeRaft(LEADER_ADDRESS, {Log: InMemoryLogAdapter});
++  // Acks only count for the CURRENT term; pin a known term so the test's
++  // ack packets (TERM) match the tenure under observation.
++  raft.term = TERM;
++  return raft;
++}
++
++function emitAppendAck(raft, followerAddress, index) {
++  raft.emit('data', {
++    type: RAFT_PACKET_TYPE.APPEND_ACK,
++    term: TERM,
++    address: followerAddress,
++    data: {term: TERM, index},
++  }, () => {});
++}
++
++function settle() {
++  return new Promise((resolve) => setImmediate(resolve));
++}
++
++test('follower match index is unavailable before any ack', async (t) => {
++  const raft = createRaft();
++  try {
++    const observation = readFollowerMatchIndex(raft, FOLLOWER_ADDRESS);
++    t.equal(
++      observation.state,
++      FOLLOWER_MATCH_INDEX_STATE.UNAVAILABLE,
++      'no ack observed yet - progress must read unavailable (fail-closed)',
++    );
++    t.equal(observation.matchIndex, 0, 'unavailable progress reads as 0');
++  } finally {
++    raft.end();
++  }
++});
++
++test('append acks record the highest acked index per follower', async (t) => {
++  const raft = createRaft();
++  try {
++    emitAppendAck(raft, FOLLOWER_ADDRESS, ACK_INDEX_FOUR);
++    await settle();
++    let observation = readFollowerMatchIndex(raft, FOLLOWER_ADDRESS);
++    t.equal(
++      observation.state,
++      FOLLOWER_MATCH_INDEX_STATE.AVAILABLE,
++      'an observed ack makes progress available',
++    );
++    t.equal(observation.matchIndex, ACK_INDEX_FOUR, 'match index = acked index');
++
++    emitAppendAck(raft, FOLLOWER_ADDRESS, ACK_INDEX_SEVEN);
++    await settle();
++    observation = readFollowerMatchIndex(raft, FOLLOWER_ADDRESS);
++    t.equal(observation.matchIndex, ACK_INDEX_SEVEN, 'match index advances');
++
++    // A late-arriving lower ack must never regress the observed progress.
++    emitAppendAck(raft, FOLLOWER_ADDRESS, ACK_INDEX_TWO);
++    await settle();
++    observation = readFollowerMatchIndex(raft, FOLLOWER_ADDRESS);
++    t.equal(
++      observation.matchIndex,
++      ACK_INDEX_SEVEN,
++      'stale lower ack does not regress the match index',
++    );
++
++    const other = readFollowerMatchIndex(raft, OTHER_FOLLOWER_ADDRESS);
++    t.equal(
++      other.state,
++      FOLLOWER_MATCH_INDEX_STATE.UNAVAILABLE,
++      'progress is tracked per follower address',
++    );
++  } finally {
++    raft.end();
++  }
++});
++
++test('state change clears all observed progress (tenure-scoped)', async (t) => {
++  const raft = createRaft();
++  try {
++    emitAppendAck(raft, FOLLOWER_ADDRESS, ACK_INDEX_SEVEN);
++    await settle();
++    t.equal(
++      readFollowerMatchIndex(raft, FOLLOWER_ADDRESS).state,
++      FOLLOWER_MATCH_INDEX_STATE.AVAILABLE,
++      'progress recorded before the state change',
++    );
++
++    raft.change({state: LifeRaft.CANDIDATE});
++
++    const observation = readFollowerMatchIndex(raft, FOLLOWER_ADDRESS);
++    t.equal(
++      observation.state,
++      FOLLOWER_MATCH_INDEX_STATE.UNAVAILABLE,
++      'a raft state change invalidates every observation - a stale ' +
++        'leader can never serve progress from a dead tenure',
++    );
++  } finally {
++    raft.end();
++  }
++});
++
++test('an ack from a different term is never recorded', async (t) => {
++  const raft = createRaft();
++  try {
++    raft.emit('data', {
++      type: RAFT_PACKET_TYPE.APPEND_ACK,
++      term: TERM + 1,
++      address: FOLLOWER_ADDRESS,
++      data: {term: TERM + 1, index: ACK_INDEX_FOUR},
++    }, () => {});
++    raft.emit('data', {
++      type: RAFT_PACKET_TYPE.APPEND_ACK,
++      term: TERM - 1,
++      address: FOLLOWER_ADDRESS,
++      data: {term: TERM - 1, index: ACK_INDEX_FOUR},
++    }, () => {});
++    await settle();
++    t.equal(
++      readFollowerMatchIndex(raft, FOLLOWER_ADDRESS).state,
++      FOLLOWER_MATCH_INDEX_STATE.UNAVAILABLE,
++      'a delayed cross-term ack is not progress evidence for this tenure',
++    );
++  } finally {
++    raft.end();
++  }
++});
++
++test('malformed acks are ignored', async (t) => {
++  const raft = createRaft();
++  try {
++    emitAppendAck(raft, FOLLOWER_ADDRESS, Number.NaN);
++    raft.emit('data', {
++      type: RAFT_PACKET_TYPE.APPEND_ACK,
++      term: TERM,
++      address: FOLLOWER_ADDRESS,
++      data: {},
++    }, () => {});
++    await settle();
++    t.equal(
++      readFollowerMatchIndex(raft, FOLLOWER_ADDRESS).state,
++      FOLLOWER_MATCH_INDEX_STATE.UNAVAILABLE,
++      'acks without a finite index never create progress evidence',
++    );
++  } finally {
++    raft.end();
++  }
++});
+diff --git a/test/raft/raft-replica-base.test.js b/test/raft/raft-replica-base.test.js
+index bcedc5c303b0020929b6138e27ad2d7dbb030221..95846873bd9b5d5551cb0ab39732e06aa1bbf757 100644
+--- a/test/raft/raft-replica-base.test.js
++++ b/test/raft/raft-replica-base.test.js
+@@ -432,14 +432,12 @@ test('RaftReplicaBase', async (t) => {
+     replica.initialized = true;
+     replica.roleUpdateRetryTimer = setTimeout(() => {}, 10000);
+     replica.leaderNodeUpdateRetryTimer = setTimeout(() => {}, 10000);
+-    replica.learnerPromotionTimer = setTimeout(() => {}, 10000);
+ 
+     await replica.shutdown();
+ 
+     t.equal(replica.initialized, false);
+     t.equal(replica.roleUpdateRetryTimer, null);
+     t.equal(replica.leaderNodeUpdateRetryTimer, null);
+-    t.equal(replica.learnerPromotionTimer, null);
+   });
+ 
+   await t.test('handleSingleReplicaLeadership promotes single replica to leader', async (t) => {
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 69ab608c5c99dfea78038d70bfcfd53c5ab72acc..eb597625c1738bb8cff417160288c7f1b08dcaae 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 1753,
++    "unit": 1756,
+     "integration": 73,
+     "bootstrap": 171,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2004,
+-  "digest": "fnv1a32-485424fd",
++  "censusSize": 2007,
++  "digest": "fnv1a32-4d38ed5c",
+   "classes": {
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+     "test/address/address-manager.test.js": "unit",
+@@ -603,6 +603,7 @@
+     "test/convergence/dt6-formation-ledger-quorum-spread-first.test.js": "unit",
+     "test/convergence/dt6-formation-ledger-spread-completion-self-move-interlock-deadlock.test.js": "unit",
+     "test/convergence/dt6-leadership-migration-network.test.js": "unit",
++    "test/convergence/dt6-learner-promotion-progress-proof.test.js": "unit",
+     "test/convergence/dt6-ledger-leader-durability-fitness.test.js": "unit",
+     "test/convergence/dt6-network-pct-search.test.js": "unit",
+     "test/convergence/dt6-operation-ledger-quorum-authoritative-release.test.js": "unit",
+@@ -1277,10 +1278,12 @@
+     "test/raft/leader-activation-gate.test.js": "unit",
+     "test/raft/leader-activation-scheduler.test.js": "unit",
+     "test/raft/leader-election-completion.property.test.js": "unit",
++    "test/raft/learner-promotion-progress-proof-contract.test.js": "unit",
+     "test/raft/liferaft-append-fail-recovery.test.js": "unit",
+     "test/raft/liferaft-catchup-batching.test.js": "unit",
+     "test/raft/liferaft-committed-entry-conflict.test.js": "unit",
+     "test/raft/liferaft-committed-prefix-conflict-livelock.test.js": "unit",
++    "test/raft/liferaft-follower-match-index.test.js": "unit",
+     "test/raft/log-truncation-correctness.property.test.js": "unit",
+     "test/raft/message-group-readiness-delivery-priority.test.js": "unit",
+     "test/raft/peer-address-resolver.property.test.js": "unit",

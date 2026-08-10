@@ -8,6 +8,41 @@
 
 import {EventEmitter} from 'node:events';
 import {LIFECYCLE_PHASE} from '../../src/bootstrap/lifecycle-controller-constants.js';
+import {
+  evaluateLearnerPromotionProof,
+} from '../../src/raft/learner-promotion-progress.js';
+
+const PROOF_STUB_TERM = 1;
+const PROOF_STUB_COMMITTED_INDEX = 0;
+const PROOF_STUB_MATCH_INDEX = 0;
+
+/**
+ * Stub ONLY the transport hop of the learner-promotion proof: the
+ * leader-side evaluator and the learner-side validator both run for real,
+ * so quorum-gate unit tests still exercise the full proof grammar with a
+ * trivially caught-up learner (empty committed prefix).
+ * @param {Object} partition service under test
+ * @return {Promise<void>} resolves when the promotion check completes
+ */
+export function stubGrantedLearnerPromotionProof(partition) {
+  partition.requestLearnerPromotionProofFromLeader = async () => {
+    const membershipEpoch =
+      partition.resolveLearnerPromotionMembershipEpoch();
+    return evaluateLearnerPromotionProof({
+      raftIsLeader: true,
+      currentTerm: PROOF_STUB_TERM,
+      committedIndex: PROOF_STUB_COMMITTED_INDEX,
+      learnerMatchIndex: PROOF_STUB_MATCH_INDEX,
+      leaderMembershipEpoch: membershipEpoch,
+      learnerMembershipEpoch: membershipEpoch,
+    });
+  };
+}
+
+export async function checkLearnerPromotionWithGrantedProof(partition) {
+  stubGrantedLearnerPromotionProof(partition);
+  await partition.checkLearnerPromotion();
+}
 
 export function createLoopbackTransport() {
   const handlers = new Map();

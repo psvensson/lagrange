@@ -17,7 +17,6 @@ import {STRING} from '../constants/index.js';
 import {assertRaftProviderContract} from './raft-provider-contract.js';
 import {LiferaftProvider} from './liferaft-provider.js';
 import {resolveRaftTransportDeliveryOptions} from './constants.js';
-import {isCatchupLearnerRaftRole} from './replica-voter-readiness.js';
 import {
   applyReplicaDemotion,
   clearReplicaLeaderUpdateState,
@@ -151,13 +150,6 @@ class RaftReplicaBase extends EventEmitter {
     this.deferElection = options.deferElection || options.isJoiningExistingGroup || false;
     this.electionStarted = false;
     this.isJoiningExistingGroup = options.isJoiningExistingGroup || false;
-
-    // Learner phase support
-    this.learnerPromotionDelayMs = options.learnerPromotionDelayMs ||
-      RAFT_REPLICA_BASE_DEFAULT.LEARNER_PROMOTION_DELAY_MS;
-    this.learnerCatchUpCheckIntervalMs = options.learnerCatchUpCheckIntervalMs ||
-      RAFT_REPLICA_BASE_DEFAULT.LEARNER_CATCH_UP_CHECK_INTERVAL_MS;
-    this.learnerPromotionTimer = null;
 
     // Logging
     const loggingService = LoggingService.getInstance();
@@ -393,52 +385,6 @@ class RaftReplicaBase extends EventEmitter {
       this.raft.emit(RAFT_REPLICA_BASE_EVENT.DATA, payload, write);
     }
     return {acknowledged: true};
-  }
-
-  /**
-   * Schedule learner promotion check.
-   * @protected
-   */
-  scheduleLearnerPromotion() {
-    if (this.learnerPromotionTimer) {
-      return;
-    }
-
-    this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.LEARNER_PROMOTION_SCHEDULED, {
-      replicaId: this.replicaId,
-      delayMs: this.learnerPromotionDelayMs,
-    });
-
-    this.learnerPromotionTimer = setTimeout(() => {
-      this.checkLearnerPromotion();
-    }, this.learnerPromotionDelayMs);
-  }
-
-  /**
-   * Check if learner can be promoted to follower.
-   * @protected
-   */
-  checkLearnerPromotion() {
-    this.learnerPromotionTimer = null;
-
-    if (!isCatchupLearnerRaftRole(this.role)) {
-      return;
-    }
-
-    this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.LEARNER_PROMOTION_CHECK, {
-      replicaId: this.replicaId,
-    });
-
-    // Promote to follower and start participating in elections
-    this.role = RaftRole.FOLLOWER;
-    this.isJoiningExistingGroup = false;
-    this.deferElection = false;
-
-    this.logger.info(RAFT_REPLICA_BASE_LOG_MSG.LEARNER_PROMOTED_TO_FOLLOWER, {
-      replicaId: this.replicaId,
-    });
-
-    this.startElection();
   }
 
   /**
@@ -775,10 +721,6 @@ class RaftReplicaBase extends EventEmitter {
     if (this.leaderNodeUpdateRetryTimer) {
       clearTimeout(this.leaderNodeUpdateRetryTimer);
       this.leaderNodeUpdateRetryTimer = null;
-    }
-    if (this.learnerPromotionTimer) {
-      clearTimeout(this.learnerPromotionTimer);
-      this.learnerPromotionTimer = null;
     }
     this.leaderActivationGate.shutdown();
 

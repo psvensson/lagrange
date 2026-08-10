@@ -6,6 +6,7 @@
 
 import {test, beforeEach, afterEach} from '../../src/test-helpers/tap.js';
 import {
+  checkLearnerPromotionWithGrantedProof,
   createLoopbackTransport,
   waitForCondition,
   createTrafficReadinessState,
@@ -477,7 +478,7 @@ test(
     partition.role = RaftRole.LEARNER;
     partition.leaderId = 'replica-1';
 
-    partition.checkLearnerPromotion();
+    await checkLearnerPromotionWithGrantedProof(partition);
     await new Promise((resolve) => setImmediate(resolve));
 
     t.equal(partition.role, RaftRole.FOLLOWER,

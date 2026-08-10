@@ -15,6 +15,7 @@ import {
 import {VirtualTick} from './virtual-tick.js';
 
 const NUMERIC_ONE = 1;
+const NUMERIC_ZERO = 0;
 
 const LOCAL_STR_NUMBER = 'number';
 const LOCAL_STR_OBJECT = 'object';
@@ -24,6 +25,51 @@ const LOCAL_STR_FUNCTION = 'function';
 const RAFT_EVENT = Object.freeze({
   DATA: 'data',
 });
+
+// Leader-observed replication progress (quest learner-promotion-progress-
+// proof). Every follower acks each durably saved entry (base liferaft
+// index.js 'append ack' and the batch tail ack below), so the leader already
+// receives a complete per-follower progress signal; this map RETAINS it (the
+// dedupe map below deliberately discards it). Keyed by follower unified
+// address; value = highest acked index observed during the CURRENT
+// uninterrupted leadership tenure (cleared on every state change, so a stale
+// leader's observations die with its leadership — term-scoped by
+// construction). This is the raft layer's replication-progress truth that
+// the learner-promotion proof consumes.
+const FOLLOWER_MATCH_INDEX_MAP_PROPERTY = '_followerMatchIndexByAddress';
+
+const FOLLOWER_MATCH_INDEX_STATE = Object.freeze({
+  AVAILABLE: 'available',
+  UNAVAILABLE: 'unavailable',
+});
+
+const FOLLOWER_MATCH_INDEX_UNAVAILABLE = Object.freeze({
+  state: FOLLOWER_MATCH_INDEX_STATE.UNAVAILABLE,
+  matchIndex: NUMERIC_ZERO,
+});
+
+/**
+ * Read the leader-observed match index for one follower address.
+ * UNAVAILABLE (matchIndex 0) when this node has observed no ack from the
+ * follower during its current tenure — fail-closed for any non-empty
+ * committed prefix.
+ * @param {Object} raft live raft instance
+ * @param {string} followerAddress follower unified address
+ * @return {Object} frozen {state, matchIndex}
+ */
+function readFollowerMatchIndex(raft, followerAddress) {
+  const matchIndexByAddress = raft?.[FOLLOWER_MATCH_INDEX_MAP_PROPERTY];
+  const matchIndex = matchIndexByAddress instanceof Map ?
+    matchIndexByAddress.get(followerAddress) :
+    undefined;
+  if (!hasFiniteNumber(matchIndex)) {
+    return FOLLOWER_MATCH_INDEX_UNAVAILABLE;
+  }
+  return Object.freeze({
+    state: FOLLOWER_MATCH_INDEX_STATE.AVAILABLE,
+    matchIndex,
+  });
+}
 
 function hasFiniteNumber(value) {
   return typeof value === LOCAL_STR_NUMBER && Number.isFinite(value);
@@ -42,8 +88,6 @@ function getCommittedIndex(raft) {
     raft.log.committedIndex :
     NUMERIC_ZERO;
 }
-
-const NUMERIC_ZERO = 0;
 
 // Catch-up batching (closure record: voter-ready residual). Base liferaft's
 // catch-up is one entry per round trip AND a backward fail-walk: the
@@ -317,6 +361,31 @@ function patchIncomingDataListener(raft) {
   // per-source lane that is already capping. Fails are self-regenerating,
   // so suppression can never wedge — worst case is base-speed catch-up.
   const inflightBatchByAddress = new Map();
+  const followerMatchIndexByAddress = new Map();
+  raft[FOLLOWER_MATCH_INDEX_MAP_PROPERTY] = followerMatchIndexByAddress;
+
+  const recordFollowerMatchIndex = (packet) => {
+    const followerAddress = packet?.address;
+    const ackedIndex = packet?.data?.index;
+    if (
+      typeof followerAddress !== 'string' ||
+      followerAddress.length === NUMERIC_ZERO ||
+      !hasFiniteNumber(ackedIndex) ||
+      // Tenure-precision guard (verifier finding): a delayed ack minted
+      // under a different term must never survive the state-change clear —
+      // only acks whose packet term matches this node's CURRENT term count
+      // as progress evidence for the current tenure.
+      packet?.term !== raft.term
+    ) {
+      return;
+    }
+    const knownMatchIndex =
+      followerMatchIndexByAddress.get(followerAddress) ?? NUMERIC_ZERO;
+    followerMatchIndexByAddress.set(
+      followerAddress,
+      Math.max(knownMatchIndex, ackedIndex),
+    );
+  };
 
   const rejectCommittedEntryConflict = async (error, write) => {
     surfaceCommittedPrefixDivergence(raft, error);
@@ -614,6 +683,7 @@ function patchIncomingDataListener(raft) {
     }
 
     if (packet?.type === RAFT_PACKET_TYPE.APPEND_ACK) {
+      recordFollowerMatchIndex(packet);
       const inflight = inflightBatchByAddress.get(packet?.address);
       if (
         inflight &&
@@ -644,6 +714,7 @@ function patchIncomingDataListener(raft) {
 
   raft.on(RAFT_STATE_CHANGE_EVENT, () => {
     inflightBatchByAddress.clear();
+    followerMatchIndexByAddress.clear();
   });
 
   patchedListener.__lagrangePatched = true;
@@ -777,3 +848,4 @@ class LifeRaft extends BaseLifeRaft {
 }
 
 export default LifeRaft;
+export {FOLLOWER_MATCH_INDEX_STATE, readFollowerMatchIndex};

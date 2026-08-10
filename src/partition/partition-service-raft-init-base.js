@@ -513,7 +513,7 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
       this.logger.info(PARTITION_SERVICE_LOG_MSG.STARTING_AS_LEARNER, {
         replicaId: this.replicaId,
         partitionId: this.partitionId,
-        promotionDelayMs: this.learnerPromotionDelayMs,
+        promotionCheckIntervalMs: this.learnerCatchUpCheckIntervalMs,
       });
       this.scheduleLearnerPromotion(
         PARTITION_SERVICE_LEARNER_PROMOTION_SCHEDULE_REASON.INITIAL_DELAY,
