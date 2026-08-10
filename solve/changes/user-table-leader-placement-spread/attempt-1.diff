@@ -1,0 +1,2365 @@
+diff --git a/scripts/check-duplication.js b/scripts/check-duplication.js
+index 7b063e71a..96cdbbfa5 100644
+--- a/scripts/check-duplication.js
++++ b/scripts/check-duplication.js
+@@ -87,8 +87,12 @@ const RATCHET_TARGETS = [
+     // extracting the shared stall-repro stack builder in the
+     // over-target-cap-spread-cure-wipe test additions; one-way-baseline
+     // rule).
+-    baselineCloneGroupCount: 832,
+-    baselineDuplicatedLineCount: 31718,
++    // 2026-08-10: tightened 832/31718 -> 828/31601 (measured after
++    // extracting the shared user-table topology helpers from the
++    // public-path baseline scenario for user-table-leader-placement-
++    // spread; one-way-baseline rule).
++    baselineCloneGroupCount: 828,
++    baselineDuplicatedLineCount: 31601,
+     reportOutputDirectory: 'test-output/analysis/jscpd-test',
+     strictEligible: false,
+   },
+diff --git a/scripts/check-scenario-policy-sql.js b/scripts/check-scenario-policy-sql.js
+index b09f43ace..0e2926743 100644
+--- a/scripts/check-scenario-policy-sql.js
++++ b/scripts/check-scenario-policy-sql.js
+@@ -14,9 +14,15 @@ const LOCAL_STR_SCENARIO_POLICY_SQL_GUARD_CRASHED = 'Scenario policy SQL guard c
+ const SCENARIOS_DIR = resolve('test/distributed/scenarios');
+ const UTF8_ENCODING = 'utf8';
+ const POLICY_SQL_PATTERN = /UPDATE\s+tables\s+SET\s+table_policies/ig;
++// Allowlist tracks the OWNER files that may build raw table_policies
++// mutation SQL. Both original owners were split; the SQL constants and
++// builder followed the split (table-distribution-helpers.js ->
++// -control-query.js, postgres-baseline-comparison.js ->
++// -constants-and-imports.js), so the allowlist names the split
++// descendants that actually hold the statements today.
+ const ALLOWED_POLICY_SQL_OWNERS = new Set([
+-  'test/distributed/scenarios/table-distribution-helpers.js',
+-  'test/distributed/scenarios/postgres-baseline-comparison.js',
++  'test/distributed/scenarios/table-distribution-helpers-control-query.js',
++  'test/distributed/scenarios/postgres-baseline-comparison-constants-and-imports.js',
+ ]);
+ 
+ async function listScenarioFiles(dir) {
+diff --git a/solve/changes/user-table-leader-placement-spread/DECISIONS.md b/solve/changes/user-table-leader-placement-spread/DECISIONS.md
+new file mode 100644
+index 000000000..028b80525
+--- /dev/null
++++ b/solve/changes/user-table-leader-placement-spread/DECISIONS.md
+@@ -0,0 +1,115 @@
++# user-table-leader-placement-spread — design decisions
++
++Scope: one runtime cure (src/rebalancer) + its deterministic tests + the
++doneWhen scenario substrate (scenario, shared topology helpers, registry,
++deterministic scenario test). Verified-before-build: every load-bearing
++claim below was checked against the code by an independent subagent.
++
++## D1 — Leaseholder-local decision, no cross-node coordinator
++
++Each partition's `UnifiedRebalancer` is constructed with
++`entityId = partitionId` and only plans while
++`resolveRebalancerLeadership()` is true
++(`src/partition/partition-service-rebalancer-methods.js:225-239`,
++`partition-service-core-base.js:462-484`) — the cure decision always runs
++on the partition's current raft leader (CockroachDB "leaseholder decides"
++precedent from the recorded prior-art trail). The only cross-node action
++is the dispatched step-down request; no new coordination state exists.
++
++## D2 — No fourth move type; the cure has its own output channel
++
++Verified: `resolveCoordinatorOperationType` throws on an unknown move
++type and the throw escapes `rebalance()` (aborting the pass);
++`applyPressureGating` would treat a non-REMOVE as storage-increasing; an
++unknown persisted operation type becomes a permanently undispatched
++ledger row. The cure therefore never enters `addMoves`/`removeMoves` and
++never creates a coordinator operation: it is evaluated on the quiescent
++path and dispatches the existing STEP_DOWN_REPLICA message directly.
++
++## D3 — Hook point: `advanceCheckCadence`, needsRebalance === false
++
++`rebalance()` is only invoked when `evaluateState()` returns true
++(critical/suboptimal), so a settled-but-leader-concentrated partition
++never reaches it — a cure inside `rebalance()` would be dormant exactly
++when needed (the half-wired-mechanism trap). The cure runs in
++`checkRebalance`'s quiescent branch (`advanceCheckCadence`, else path),
++which (a) inherits the stabilization + start-delay planning gates that
++already guarded the pass, and (b) makes the ordering structural: leader
++handoffs are only considered when replica-shape work found nothing to do,
++so `resolveLeaderRetentionNodeId` and the non-leader-first sorts
++(CL-038/CL-043 anti-churn levers) are inert by construction.
++
++## D4 — Trigger predicate is the sealed gap, not fair-share fine-tuning
++
++Fire only when
++`distinctLeaderHosts < min(settledPartitionCount, eligibleVoterHostCount)`
++for the table (the sealed doneWhen predicate; the CockroachDB "act only
++on clear imbalance, never fine-tune" precedent). Additional per-node
++conditions: my node holds >= 2 of the table's leaders (surplus host), and
++my partition is not the first (sorted) co-located partition on my node
++(the anchor stays, so a surplus host is never fully evacuated in one
++round).
++
++## D5 — Convergence by construction (the oscillation cures)
++
++- Target selection is restricted to hosts with ZERO leaders of this
++  table. While the gap predicate holds, such a host always exists
++  (pigeonhole: if every eligible host held a leader there would be no
++  gap), and every successful handoff strictly increases
++  distinctLeaderHosts. The actuator is one-directional — nothing ever
++  pulls leadership back toward concentration — so no limit cycle exists.
++- Census stability across passes: the decision requires the settled
++  partition/leader fingerprint to be identical to the previous
++  evaluation pass before dispatching (CDC-lagged sibling rows; the
++  recorded "you cannot build a deadband on a lying sensor" refutation).
++  The own partition's leader identity is overridden with the proven-local
++  signal (`isLeader`/`nodeId`), per spread-fence-proven-local-leadership-read.
++- Retry suppression reuses `PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE`
++  (5s retry / 60s stale) — no new timers; the evaluation cadence is the
++  existing periodic check with its stabilization window.
++- The cross-process cooldown refutation (eval-path-b) does not apply:
++  the suppression state is only an optimization; correctness never
++  depends on it because the trigger predicate itself goes false once
++  spread is reached, on every node's view.
++
++## D6 — Dispatch reuses the node-side machinery byte-unchanged
++
++Verified: `handleStepDownReplica` validates field presence only (no
++operation-ledger lookup; operationId is logging/echo), and
++`requestTrackedPartitionLeaderHandoff` with
++`REPLACE_TARGET_LEADER_ELECTION` is partition-class-agnostic: a
++voter-ready FOLLOWER campaigns via `requestElectionNow`; already-LEADER /
++mid-election races return COMPLETED without touching raft. The sender
++side does NOT reuse `dispatchRemoveSafetyHandoffRequest` (it hard-requires
++an operation row and fires three priority-recovery evidence recorders);
++the cure builds the minimal request (TYPE, OPERATION_ID synthetic
++`user-table-leader-spread:<partitionId>`, PARTITION_ID, REPLICA_ID,
++REASON) and delivers via the rebalancer's own `messageRouter`. The
++"never elect a stale-log replica" floor is triple-layered: the target
++must be a voter-ready (`isVoterRaftRole`) ACTIVE replica, raft's election
++restriction rejects behind-log candidates, and learner promotion is
++progress-proof-gated upstream.
++
++## D7 — Fence: ordinary user tables only
++
++`classifySystemPartition(...).systemTable === false` (verified: fencing
++on `!isControlPlanePriorityPartition()` alone would admit non-priority
++system tables). Priority control-plane partitions keep their dedicated
++publication-leader machinery untouched; the five-partition
++`REPLACE_SOURCE_LEADER_HANDOFF_REQUIRED_PARTITION_IDS` fence is not
++modified.
++
++## D8 — Scenario substrate
++
++The doneWhen scenario `user-table-leader-placement-spread` reuses the Q1
++public-path baseline's table/split/seed machinery, extracted into
++`test/distributed/scenarios/user-table-topology-helpers.js` (shared by
++both scenarios so the duplication ratchet stays green). Gates in order:
++managed split (sentinel trickle), replica-spread support (every settled
++child on >= 2 distinct hosts — a leader-spread timeout can never mask a
++replica-placement failure), platform-driven leader spread (>= 2 distinct
++leader hosts, stable fingerprint x2), then an anti-flap stability hold
++(any fingerprint change during the hold is red — the hysteresis guard
++observed end-to-end). The scenario fabricates no topology and exposes no
++admin transfer; red-on-revert is the pre-cure state witnessed live in
++run public-path-multinode-baseline-20260810T180137Z.
+diff --git a/src/rebalancer/rebalancer-planning-gate-methods.js b/src/rebalancer/rebalancer-planning-gate-methods.js
+index 37ce08b9f..900a40b52 100644
+--- a/src/rebalancer/rebalancer-planning-gate-methods.js
++++ b/src/rebalancer/rebalancer-planning-gate-methods.js
+@@ -1,4 +1,7 @@
+ import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
++import {
++  applyUserTableLeaderPlacementCure,
++} from './user-table-leader-placement-cure.js';
+ import {
+   REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS,
+ } from './rebalancer-priority-recovery-planning-gate-methods.js';
+@@ -708,6 +711,12 @@ const REBALANCER_PLANNING_GATE_METHODS = {
+       return forcePriorityRetry;
+     }
+ 
++    // Quiescent pass: replica-shape evaluation found nothing to do, the
++    // planning gates (stabilization, start delay) already passed, so the
++    // recorded anti-churn levers are structurally upstream — the one
++    // place the user-table leader-placement cure may act.
++    await applyUserTableLeaderPlacementCure(this);
++
+     if (this.isControlPlanePriorityPartition()) {
+       this.currentInterval = this.getPriorityRetryDelayMs();
+     } else {
+diff --git a/src/rebalancer/user-table-leader-placement-cure.js b/src/rebalancer/user-table-leader-placement-cure.js
+new file mode 100644
+index 000000000..ce709be57
+--- /dev/null
++++ b/src/rebalancer/user-table-leader-placement-cure.js
+@@ -0,0 +1,412 @@
++/**
++ * User-table leader-placement cure — the single owner of the
++ * "spread ordinary user-table partition leaders across data hosts"
++ * decision (quest user-table-leader-placement-spread).
++ *
++ * Each partition's rebalancer runs on that partition's raft leader, so
++ * the cure is a leaseholder-local decision: when the table's settled
++ * partitions have their leaders concentrated on fewer distinct hosts
++ * than the eligible voter-host capacity, a surplus host sheds one
++ * leadership per round by asking a voter-ready follower replica on a
++ * host with ZERO table leaders to campaign (the existing
++ * STEP_DOWN_REPLICA / tracked-replacement-election machinery; the node
++ * side is untouched). While the gap predicate holds such a host always
++ * exists (pigeonhole), every successful handoff strictly increases the
++ * distinct leader-host count, and nothing ever pulls leadership back —
++ * the actuator is one-directional, so no limit cycle exists.
++ *
++ * Hysteresis reuses recorded cures only: the stabilization/start-delay
++ * planning gates guard the evaluation pass, the census must be stable
++ * across two consecutive passes (sibling leader rows are CDC-lagged; the
++ * own partition's leader is overridden with the proven-local signal),
++ * and dispatch retries ride PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.
++ * No new timers.
++ */
++
++import {
++  classifySystemPartition,
++  getPartitionRowFromCache,
++  resolvePartitionTableId,
++} from '../bootstrap/system-partition-classification.js';
++import {normalizeServiceRow} from '../control-plane/system-row-normalizers.js';
++import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
++import {SERVICE_STATUS} from '../constants/service-status.js';
++import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
++import {
++  ReplicaOperationField,
++  ReplicaOperationMessageType,
++  ReplicaOperationReason,
++} from './replica-operation-constants.js';
++import {
++  OPERATION_WORKFLOW_OWNER_SHARED,
++} from './operation-workflow-owner-shared.js';
++
++const {EntityType, SYSTEM_TABLE_NAME} = UNIFIED_REBALANCER_SHARED;
++const {PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE} =
++  OPERATION_WORKFLOW_OWNER_SHARED;
++
++const CURE_LITERAL = Object.freeze({
++  ZERO: 0,
++  ONE: 1,
++  EMPTY: '',
++});
++
++// Minimum settled partitions for spread to be meaningful, and the
++// surplus floor: only a host holding at least two of the table's
++// leaders can shed one while remaining a distinct leader host.
++const MIN_SETTLED_PARTITION_COUNT = 2;
++const MIN_SURPLUS_LEADER_COUNT = 2;
++
++// Reuse of the recorded handoff retry cadence (no new timers): a
++// dispatched request is not re-sent within the retry window.
++const LEADER_HANDOFF_RETRY_AFTER_MS =
++  PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.REQUEST_RETRY_AFTER_MS;
++
++// Synthetic operation id prefix — handleStepDownReplica uses the id for
++// logging/echo only (verified: no ledger lookup); the prefix keeps the
++// cure's requests distinguishable from REPLACE-flow handoffs in logs.
++const CURE_OPERATION_ID_PREFIX = 'user-table-leader-spread';
++
++const REPLICA_HANDLER_TARGET_SUFFIX = '/service/replica-handler';
++
++// Partition rows in SPLITTING/MERGING survive until dissolution; acting
++// on them would bake a transient topology into the census.
++const TRANSITIONAL_PARTITION_STATES = Object.freeze(new Set([
++  'splitting',
++  'merging',
++]));
++
++// The typed decision vocabulary — one canonical outcome per evaluation.
++const USER_TABLE_LEADER_PLACEMENT_CURE_STATE = Object.freeze({
++  NOT_APPLICABLE: 'not_applicable',
++  BELOW_MIN_PARTITION_COUNT: 'below_min_partition_count',
++  SPREAD_SATISFIED: 'spread_satisfied',
++  NOT_SURPLUS_HOST: 'not_surplus_host',
++  ANCHOR_RETAINED: 'anchor_retained',
++  CENSUS_UNSTABLE: 'census_unstable',
++  RETRY_SUPPRESSED: 'retry_suppressed',
++  NO_ELIGIBLE_TARGET: 'no_eligible_target',
++  DISPATCH_HANDOFF: 'dispatch_handoff',
++});
++
++const CURE_LOG_MSG = Object.freeze({
++  DECISION: 'User-table leader placement cure decision',
++  DISPATCHED: 'User-table leader placement cure dispatched leader handoff',
++  DISPATCH_FAILED:
++    'User-table leader placement cure handoff dispatch failed',
++});
++
++function readText(value) {
++  return typeof value === 'string' && value.length > CURE_LITERAL.ZERO ?
++    value :
++    null;
++}
++
++function isTransitionalPartitionState(state) {
++  return TRANSITIONAL_PARTITION_STATES.has(
++    String(state || CURE_LITERAL.EMPTY).toLowerCase(),
++  );
++}
++
++function censusFingerprint(settledPartitions) {
++  return settledPartitions
++    .map((entry) => `${entry.partitionId}|${entry.leaderNodeId}`)
++    .sort()
++    .join(',');
++}
++
++/**
++ * Pure decision core. All evidence is pre-collected so the relation is
++ * testable without a rebalancer instance.
++ *
++ * @param {Object} evidence
++ * @param {string} evidence.partitionId Own partition id.
++ * @param {string} evidence.nodeId Own node id (proven-local leader host).
++ * @param {Array<Object>} evidence.settledPartitions Table census rows
++ *   `{partitionId, leaderNodeId}` with the own row already overridden by
++ *   the proven-local leader signal.
++ * @param {Set<string>} evidence.eligibleVoterHosts Distinct hosts holding
++ *   a voter-ready ACTIVE replica of any settled partition of the table.
++ * @param {Array<Object>} evidence.ownVoterFollowers Own partition's
++ *   voter-ready ACTIVE replicas on other nodes `{nodeId, replicaId}`.
++ * @param {string|null} evidence.previousCensusFingerprint
++ * @param {number|null} evidence.lastDispatchAtMs
++ * @param {number} evidence.nowMs
++ * @return {Object} Frozen typed decision.
++ */
++function evaluateUserTableLeaderPlacementCure(evidence) {
++  const settled = evidence.settledPartitions;
++  const fingerprint = censusFingerprint(settled);
++  const distinctLeaderHosts = new Set(
++    settled.map((entry) => entry.leaderNodeId).filter(Boolean),
++  );
++  const requiredLeaderHosts = Math.min(
++    settled.length,
++    evidence.eligibleVoterHosts.size,
++  );
++  const census = Object.freeze({
++    distinctLeaderHostCount: distinctLeaderHosts.size,
++    eligibleVoterHostCount: evidence.eligibleVoterHosts.size,
++    fingerprint,
++    requiredLeaderHostCount: requiredLeaderHosts,
++    settledPartitionCount: settled.length,
++  });
++  const decide = (state, extra = {}) =>
++    Object.freeze({census, state, ...extra});
++
++  if (settled.length < MIN_SETTLED_PARTITION_COUNT) {
++    return decide(
++      USER_TABLE_LEADER_PLACEMENT_CURE_STATE.BELOW_MIN_PARTITION_COUNT);
++  }
++  if (distinctLeaderHosts.size >= requiredLeaderHosts) {
++    return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.SPREAD_SATISFIED);
++  }
++  const coLocated = settled
++    .filter((entry) => entry.leaderNodeId === evidence.nodeId)
++    .map((entry) => entry.partitionId)
++    .sort();
++  if (coLocated.length < MIN_SURPLUS_LEADER_COUNT) {
++    return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NOT_SURPLUS_HOST);
++  }
++  const shedIndex = coLocated.indexOf(evidence.partitionId) -
++    CURE_LITERAL.ONE;
++  if (shedIndex < CURE_LITERAL.ZERO) {
++    return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.ANCHOR_RETAINED);
++  }
++  if (fingerprint !== evidence.previousCensusFingerprint) {
++    return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.CENSUS_UNSTABLE);
++  }
++  if (
++    Number.isFinite(evidence.lastDispatchAtMs) &&
++    evidence.nowMs - evidence.lastDispatchAtMs <
++      LEADER_HANDOFF_RETRY_AFTER_MS
++  ) {
++    return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.RETRY_SUPPRESSED);
++  }
++  // Targets are hosts with ZERO leaders of this table: every successful
++  // handoff then strictly increases the distinct leader-host count, and
++  // while the gap predicate holds such a host always exists among the
++  // eligible voter hosts (pigeonhole) — though not necessarily one
++  // holding a replica of THIS partition.
++  const zeroLeaderTargets = evidence.ownVoterFollowers
++    .filter((replica) => !distinctLeaderHosts.has(replica.nodeId))
++    .sort((left, right) => left.nodeId.localeCompare(right.nodeId));
++  if (zeroLeaderTargets.length === CURE_LITERAL.ZERO) {
++    return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET);
++  }
++  const target = zeroLeaderTargets[shedIndex % zeroLeaderTargets.length];
++  return decide(USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF, {
++    target: Object.freeze({
++      nodeId: target.nodeId,
++      replicaId: target.replicaId,
++    }),
++  });
++}
++
++function collectSettledTablePartitions(rebalancer, tableId) {
++  const rows = rebalancer.systemTableCache.filter(
++    SYSTEM_TABLE_NAME.PARTITIONS,
++    (row) => resolvePartitionTableId({partitionRow: row}) === tableId,
++  );
++  const settled = [];
++  for (const row of rows) {
++    if (isTransitionalPartitionState(row?.state)) {
++      continue;
++    }
++    const partitionId = readText(row?.partition_id) ||
++      readText(row?.partitionId);
++    if (!partitionId) {
++      continue;
++    }
++    // The own row's durable leader column lags; the proven-local signal
++    // is authoritative for the partition this rebalancer leads.
++    const leaderNodeId = partitionId === rebalancer.entityId ?
++      rebalancer.nodeId :
++      readText(row?.leader_node_id) || readText(row?.leaderNodeId);
++    settled.push({leaderNodeId, partitionId});
++  }
++  return settled;
++}
++
++function collectEligibleVoterHosts(rebalancer, settledPartitions) {
++  const partitionIds = new Set(
++    settledPartitions.map((entry) => entry.partitionId),
++  );
++  const rows = rebalancer.systemTableCache.filter(
++    SYSTEM_TABLE_NAME.SERVICES,
++    (row) => {
++      const service = normalizeServiceRow(row);
++      return service.serviceType === EntityType.PARTITION &&
++        partitionIds.has(service.partitionId);
++    },
++  );
++  const hosts = new Set();
++  for (const row of rows) {
++    const service = normalizeServiceRow(row);
++    if (
++      service.nodeId &&
++      service.status === SERVICE_STATUS.ACTIVE &&
++      isVoterRaftRole(service.raftRole)
++    ) {
++      hosts.add(service.nodeId);
++    }
++  }
++  return hosts;
++}
++
++function collectOwnVoterFollowers(rebalancer) {
++  const followers = [];
++  for (const row of rebalancer.getCurrentReplicas()) {
++    const service = normalizeServiceRow(row);
++    if (
++      service.nodeId &&
++      service.nodeId !== rebalancer.nodeId &&
++      service.status === SERVICE_STATUS.ACTIVE &&
++      isVoterRaftRole(service.raftRole)
++    ) {
++      const replicaId = service.serviceId || service.replicaId;
++      if (replicaId) {
++        followers.push({nodeId: service.nodeId, replicaId});
++      }
++    }
++  }
++  return followers;
++}
++
++function resolveCureState(rebalancer) {
++  if (!rebalancer.userTableLeaderPlacementCureState) {
++    rebalancer.userTableLeaderPlacementCureState = {
++      censusFingerprint: null,
++      lastDispatchAtMs: null,
++      lastLoggedState: null,
++    };
++  }
++  return rebalancer.userTableLeaderPlacementCureState;
++}
++
++function buildHandoffRequest(rebalancer, decision) {
++  return {
++    [ReplicaOperationField.TYPE]:
++      ReplicaOperationMessageType.STEP_DOWN_REPLICA,
++    [ReplicaOperationField.OPERATION_ID]:
++      `${CURE_OPERATION_ID_PREFIX}:${rebalancer.entityId}`,
++    [ReplicaOperationField.PARTITION_ID]: rebalancer.entityId,
++    [ReplicaOperationField.REPLICA_ID]: decision.target.replicaId,
++    [ReplicaOperationField.REASON]:
++      ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
++  };
++}
++
++async function dispatchLeaderHandoff(rebalancer, decision, nowMs) {
++  const cureState = resolveCureState(rebalancer);
++  cureState.lastDispatchAtMs = nowMs;
++  const target =
++    `${decision.target.nodeId}${REPLICA_HANDLER_TARGET_SUFFIX}`;
++  try {
++    const response = await rebalancer.messageRouter.deliver(
++      target,
++      buildHandoffRequest(rebalancer, decision),
++      {targetNodeId: decision.target.nodeId},
++    );
++    rebalancer.logger.info(CURE_LOG_MSG.DISPATCHED, {
++      entityId: rebalancer.entityId,
++      responseStatus: response?.status || null,
++      targetNodeId: decision.target.nodeId,
++      targetReplicaId: decision.target.replicaId,
++    });
++    return response || null;
++  } catch (error) {
++    rebalancer.logger.warn(CURE_LOG_MSG.DISPATCH_FAILED, {
++      entityId: rebalancer.entityId,
++      error: error?.message || String(error),
++      targetNodeId: decision.target.nodeId,
++    });
++    return null;
++  }
++}
++
++function isOrdinaryUserTablePartition(rebalancer, partitionRow) {
++  if (rebalancer.entityType !== EntityType.PARTITION) {
++    return false;
++  }
++  return classifySystemPartition({
++    partitionId: rebalancer.entityId,
++    partitionRow,
++  }).systemTable === false;
++}
++
++/**
++ * Evaluate and (when decided) dispatch the leader-placement cure for an
++ * ordinary user-table partition. Called from the quiescent branch of the
++ * periodic check — after the planning gates passed and replica-shape
++ * evaluation found no work — so the recorded stabilization and
++ * anti-churn levers stay structurally upstream of every handoff.
++ *
++ * @param {Object} rebalancer The UnifiedRebalancer instance.
++ * @param {Object} [options]
++ * @param {number} [options.nowMs]
++ * @return {Promise<Object|null>} The frozen decision, or null when the
++ *   partition is out of the cure's scope.
++ */
++async function applyUserTableLeaderPlacementCure(rebalancer, options = {}) {
++  if (
++    rebalancer.isShuttingDown ||
++    rebalancer.isLeader !== true ||
++    typeof rebalancer.isStabilized === 'function' &&
++      !rebalancer.isStabilized()
++  ) {
++    return null;
++  }
++  const partitionRow = getPartitionRowFromCache(
++    rebalancer.systemTableCache,
++    rebalancer.entityId,
++  );
++  if (!isOrdinaryUserTablePartition(rebalancer, partitionRow)) {
++    return null;
++  }
++  const nowMs = Number.isFinite(options.nowMs) ? options.nowMs : Date.now();
++  const tableId = resolvePartitionTableId({
++    partitionId: rebalancer.entityId,
++    partitionRow,
++  });
++  if (!tableId) {
++    return null;
++  }
++  const settledPartitions =
++    collectSettledTablePartitions(rebalancer, tableId);
++  const cureState = resolveCureState(rebalancer);
++  const decision = evaluateUserTableLeaderPlacementCure({
++    eligibleVoterHosts:
++      collectEligibleVoterHosts(rebalancer, settledPartitions),
++    lastDispatchAtMs: cureState.lastDispatchAtMs,
++    nodeId: rebalancer.nodeId,
++    nowMs,
++    ownVoterFollowers: collectOwnVoterFollowers(rebalancer),
++    partitionId: rebalancer.entityId,
++    previousCensusFingerprint: cureState.censusFingerprint,
++    settledPartitions,
++  });
++  cureState.censusFingerprint = decision.census.fingerprint;
++  if (decision.state !== cureState.lastLoggedState) {
++    cureState.lastLoggedState = decision.state;
++    rebalancer.logger.info(CURE_LOG_MSG.DECISION, {
++      census: decision.census,
++      entityId: rebalancer.entityId,
++      state: decision.state,
++    });
++  }
++  if (
++    decision.state ===
++      USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF
++  ) {
++    await dispatchLeaderHandoff(rebalancer, decision, nowMs);
++  }
++  return decision;
++}
++
++export {
++  LEADER_HANDOFF_RETRY_AFTER_MS,
++  USER_TABLE_LEADER_PLACEMENT_CURE_STATE,
++  applyUserTableLeaderPlacementCure,
++  evaluateUserTableLeaderPlacementCure,
++};
+diff --git a/test/distributed/README.local.md b/test/distributed/README.local.md
+index dad2692b0..9d36e63dc 100644
+--- a/test/distributed/README.local.md
++++ b/test/distributed/README.local.md
+@@ -268,10 +268,12 @@ Use these values with `--scenario`:
+ 2. `examples-catalog`
+ 3. `network-partition-split-brain`
+ 4. `node-failure-rebalance`
+-5. `rolling-restart`
+-6. `three-node-seed-rebalance`
+-7. `wasm-service-failover`
+-8. `write-ack-visibility`
++5. `public-path-multinode-baseline`
++6. `rolling-restart`
++7. `three-node-seed-rebalance`
++8. `user-table-leader-placement-spread`
++9. `wasm-service-failover`
++10. `write-ack-visibility`
+ 
+ ### Canonical 5-node matrix
+ 
+diff --git a/test/distributed/harness/__tests__/scenario-registry.test.js b/test/distributed/harness/__tests__/scenario-registry.test.js
+index 53005a282..959fa5752 100644
+--- a/test/distributed/harness/__tests__/scenario-registry.test.js
++++ b/test/distributed/harness/__tests__/scenario-registry.test.js
+@@ -52,8 +52,8 @@ const EXPECTED_LOCAL_THREE_NODE_EXECUTION_GATE_IDS = [
+   'stale-publication-durable-truth-ahead',
+ ];
+ 
+-test('scenario-registry tracks the canonical 22-scenario matrix', (t) => {
+-  assert.equal(CANONICAL_SCENARIO_MATRIX.length, 22);
++test('scenario-registry tracks the canonical 24-scenario matrix', (t) => {
++  assert.equal(CANONICAL_SCENARIO_MATRIX.length, 24);
+   t.end();
+ });
+ 
+@@ -89,7 +89,7 @@ test('scenario-registry normalizes config basenames from paths', (t) => {
+ test('scenario-registry lists canonical entries for a specific config', (t) => {
+   const entries = listCanonicalScenarioEntries('local-three-node.json');
+ 
+-  assert.equal(entries.length, 8);
++  assert.equal(entries.length, 10);
+   assert.deepEqual(
+     entries.map((entry) => entry.name),
+     [
+@@ -97,8 +97,10 @@ test('scenario-registry lists canonical entries for a specific config', (t) => {
+       'examples-catalog',
+       'network-partition-split-brain',
+       'node-failure-rebalance',
++      'public-path-multinode-baseline',
+       'rolling-restart',
+       'three-node-seed-rebalance',
++      'user-table-leader-placement-spread',
+       'wasm-service-failover',
+       'write-ack-visibility',
+     ],
+@@ -135,7 +137,7 @@ test('scenario-registry selects canonical scenarios in matrix order', (t) => {
+ test('scenario-registry formats canonical scenario matrix lines', (t) => {
+   const lines = formatCanonicalScenarioMatrixLines();
+ 
+-  assert.equal(lines.length, 22);
++  assert.equal(lines.length, 24);
+   assert.equal(lines[0], 'local-three-node.json|admin-query-smoke');
+   assert.equal(
+     lines[lines.length - 1],
+diff --git a/test/distributed/harness/__tests__/user-table-leader-placement-spread-scenario.test.js b/test/distributed/harness/__tests__/user-table-leader-placement-spread-scenario.test.js
+new file mode 100644
+index 000000000..05c6a8b95
+--- /dev/null
++++ b/test/distributed/harness/__tests__/user-table-leader-placement-spread-scenario.test.js
+@@ -0,0 +1,168 @@
++import {describe, it} from 'node:test';
++import assert from 'node:assert/strict';
++import {
++  run,
++} from '../../scenarios/user-table-leader-placement-spread.js';
++
++const SHORT_WAIT_TIMEOUT_MS = 50;
++const HOLD_POLLS = 3;
++const NODE_COUNT = 3;
++
++const SPREAD_PARTITION_ROWS = Object.freeze([
++  {leader_node_id: 'node-1', partition_id: 'p-1', state: 'active'},
++  {leader_node_id: 'node-2', partition_id: 'p-2', state: 'active'},
++]);
++const SINGLE_HOST_PARTITION_ROWS = Object.freeze([
++  {leader_node_id: 'node-1', partition_id: 'p-1', state: 'active'},
++  {leader_node_id: 'node-1', partition_id: 'p-2', state: 'active'},
++]);
++const SINGLE_PARTITION_ROWS = Object.freeze([
++  {leader_node_id: 'node-1', partition_id: 'p-1', state: 'active'},
++]);
++const SPREAD_SERVICE_ROWS = Object.freeze([
++  {node_id: 'node-1', partition_id: 'p-1', raft_role: 'leader',
++    status: 'active'},
++  {node_id: 'node-2', partition_id: 'p-1', raft_role: 'follower',
++    status: 'active'},
++  {node_id: 'node-3', partition_id: 'p-1', raft_role: 'follower',
++    status: 'active'},
++  {node_id: 'node-1', partition_id: 'p-2', raft_role: 'follower',
++    status: 'active'},
++  {node_id: 'node-2', partition_id: 'p-2', raft_role: 'leader',
++    status: 'active'},
++  {node_id: 'node-3', partition_id: 'p-2', raft_role: 'follower',
++    status: 'active'},
++]);
++const CO_LOCATED_SERVICE_ROWS = Object.freeze([
++  {node_id: 'node-1', partition_id: 'p-1', raft_role: 'leader',
++    status: 'active'},
++  {node_id: 'node-1', partition_id: 'p-2', raft_role: 'leader',
++    status: 'active'},
++]);
++
++function buildQueryHandler(state) {
++  return async (sql) => {
++    if (sql.startsWith('CREATE TABLE') || sql.startsWith('INSERT') ||
++        sql.startsWith('UPDATE tables')) {
++      return {rows: []};
++    }
++    if (sql.startsWith('SELECT table_id FROM tables')) {
++      return {rows: [{table_id: 'tbl-1'}]};
++    }
++    if (sql.startsWith('SELECT table_policies FROM tables')) {
++      return {rows: [{
++        table_policies: JSON.stringify({splitStorageThreshold: 16384}),
++      }]};
++    }
++    if (sql.startsWith('SELECT partition_id, leader_node_id')) {
++      state.partitionReads += 1;
++      const rows = typeof state.partitionRowsForRead === 'function' ?
++        state.partitionRowsForRead(state.partitionReads) :
++        state.partitionRows;
++      return {rows: [...rows]};
++    }
++    if (sql.startsWith('SELECT partition_id, node_id')) {
++      return {rows: [...state.serviceRows]};
++    }
++    throw new Error(`unexpected stub query: ${sql}`);
++  };
++}
++
++function buildStubCluster(state) {
++  const query = buildQueryHandler(state);
++  const nodes = [];
++  for (let index = 1; index <= NODE_COUNT; index += 1) {
++    nodes.push({
++      containerId: `container-${index}`,
++      id: `node-${index}`,
++      ip: `10.0.0.${index}`,
++      query,
++      role: index === 1 ? 'seed' : 'member',
++    });
++  }
++  return {
++    _scenarioOverrides: {
++      userTableLeaderPlacementSpread: {
++        leaderSpreadTimeoutMs: SHORT_WAIT_TIMEOUT_MS,
++        replicaSpreadTimeoutMs: SHORT_WAIT_TIMEOUT_MS,
++        sleep: async () => {},
++        splitWaitTimeoutMs: SHORT_WAIT_TIMEOUT_MS,
++        stabilityHoldPolls: HOLD_POLLS,
++      },
++    },
++    getNodes: () => nodes,
++  };
++}
++
++function greenState() {
++  return {
++    partitionReads: 0,
++    partitionRows: SPREAD_PARTITION_ROWS,
++    partitionRowsForRead: null,
++    serviceRows: SPREAD_SERVICE_ROWS,
++  };
++}
++
++describe('user-table-leader-placement-spread scenario', () => {
++  it('passes when the platform spreads and holds child leaders', async () => {
++    const detail = await run(buildStubCluster(greenState()));
++    assert.equal(detail.schemaVersion, 1);
++    assert.equal(detail.tableName, 'leader_spread_activity');
++    assert.equal(detail.topology.distinctLeaderHosts, 2);
++    assert.equal(detail.topology.partitions.length, 2);
++    assert.ok(detail.topology.partitions.every(
++      (partition) => partition.replicaHostCount === 3));
++  });
++
++  it('fails when every child leader stays on one host', async () => {
++    const state = greenState();
++    state.partitionRows = SINGLE_HOST_PARTITION_ROWS;
++    await assert.rejects(
++      run(buildStubCluster(state)),
++      /leader placement never spread across >= 2 hosts/u,
++    );
++  });
++
++  it('fails when the managed split never happens', async () => {
++    const state = greenState();
++    state.partitionRows = SINGLE_PARTITION_ROWS;
++    await assert.rejects(
++      run(buildStubCluster(state)),
++      /no managed split/u,
++    );
++  });
++
++  it('fails when replica placement cannot support spread', async () => {
++    const state = greenState();
++    state.serviceRows = CO_LOCATED_SERVICE_ROWS;
++    await assert.rejects(
++      run(buildStubCluster(state)),
++      /replica placement never supported leader spread/u,
++    );
++  });
++
++  it('fails when leadership flaps during the stability hold', async () => {
++    const state = greenState();
++    const flapped = [
++      {leader_node_id: 'node-3', partition_id: 'p-1', state: 'active'},
++      {leader_node_id: 'node-2', partition_id: 'p-2', state: 'active'},
++    ];
++    // Spread readbacks stay stable long enough to freeze the topology,
++    // then the leader set changes while the hold is polling.
++    state.partitionRowsForRead = (readCount) =>
++      readCount >= 8 ? flapped : SPREAD_PARTITION_ROWS;
++    await assert.rejects(
++      run(buildStubCluster(state)),
++      /flapped during the stability hold/u,
++    );
++  });
++
++  it('fails below three nodes', async () => {
++    const cluster = buildStubCluster(greenState());
++    const nodes = cluster.getNodes().slice(0, 2);
++    await assert.rejects(
++      run({...cluster, getNodes: () => nodes}),
++      /requires a 3-node cluster/u,
++    );
++  });
++});
+diff --git a/test/distributed/harness/scenario-registry.js b/test/distributed/harness/scenario-registry.js
+index fa3a42929..426bff8ab 100644
+--- a/test/distributed/harness/scenario-registry.js
++++ b/test/distributed/harness/scenario-registry.js
+@@ -28,6 +28,10 @@ const CANONICAL_SCENARIO_MATRIX = Object.freeze([
+     config: 'local-three-node.json',
+     name: 'node-failure-rebalance',
+   }),
++  Object.freeze({
++    config: 'local-three-node.json',
++    name: 'public-path-multinode-baseline',
++  }),
+   Object.freeze({
+     config: 'local-three-node.json',
+     name: 'rolling-restart',
+@@ -36,6 +40,10 @@ const CANONICAL_SCENARIO_MATRIX = Object.freeze([
+     config: 'local-three-node.json',
+     name: 'three-node-seed-rebalance',
+   }),
++  Object.freeze({
++    config: 'local-three-node.json',
++    name: 'user-table-leader-placement-spread',
++  }),
+   Object.freeze({
+     config: 'local-three-node.json',
+     name: 'wasm-service-failover',
+diff --git a/test/distributed/scenarios/public-path-multinode-baseline.js b/test/distributed/scenarios/public-path-multinode-baseline.js
+new file mode 100644
+index 000000000..8890b1346
+--- /dev/null
++++ b/test/distributed/scenarios/public-path-multinode-baseline.js
+@@ -0,0 +1,544 @@
++/**
++ * Scenario: public-path-multinode-baseline
++ *
++ * Deploys the code-first account-summary WASI service through the
++ * generated lifecycle records (the service pipeline owner), on a live
++ * multi-node cluster whose account_activity partitions must span at
++ * least two hosts, invokes it over authenticated HTTP, proves result
++ * parity against an independent oracle, proves per-host local shard
++ * reads from the nodes' own metrics logs plus durable reduce
++ * coordination rows, records container resource telemetry, and emits
++ * the stable schemaVersion-1 report detail.
++ *
++ * Red-on-revert: the scenario fails if the WASM path is replaced by
++ * native_js, if all partition leaders land on one host, if the local
++ * metrics evidence is missing, or if any response diverges from the
++ * recomputed oracle.
++ */
++
++import assert from 'node:assert/strict';
++import {copyFile, mkdir, readFile, rm, symlink} from 'node:fs/promises';
++import path from 'node:path';
++import {
++  runBuild,
++  runDeploy,
++  runGenerate,
++} from '../../../src/cli/service-pipeline-command.js';
++import {
++  ServiceLocalOciLayoutBuilder,
++} from '../../../src/service/service-local-oci-layout-builder.js';
++import {
++  createInvocationIdentity,
++} from '../../../src/service/request-cell-routing-contract.js';
++import {
++  PORTS,
++  REQUEST_CELL_AUTH,
++  SCENARIO_ARTIFACTS,
++} from '../harness/constants.js';
++import {
++  buildUserActivityTableSql,
++  createTableTopologyHelpers,
++  queryRows,
++  selectSettledPartitionRows,
++  topologyFingerprint,
++} from './user-table-topology-helpers.js';
++import {
++  DATASET_GENERATOR,
++  assertParity,
++  assertPartitionSpread,
++  assertWasmFidelity,
++  buildLocalReadProof,
++  buildNetworkPerNode,
++  buildResourcePerNode,
++  buildSentinelRow,
++  composeReportDetail,
++  computeDatasetDigest,
++  computeGeneratorDigest,
++  computeLatencySummary,
++  generateDatasetRows,
++  summarizeInvokerTelemetry,
++} from './public-path-baseline-helpers.js';
++
++const SCENARIO_NAME = 'public-path-multinode-baseline';
++const TABLE_NAME = 'account_activity';
++const SCENARIO_SUBDIR = 'public-path-baseline';
++// The service module is copied two levels below the artifacts root so its
++// relative `../../src/...` imports resolve through the src symlink placed
++// at the artifacts root (see defaultPrepareProject).
++const PROJECT_SUBDIR = 'project';
++const SOURCE_SYMLINK_NAME = 'src';
++const SERVICE_MODULE_FILE = 'lagrange.service.js';
++const SERVICE_MODULE_SOURCE = path.join(
++  'examples', 'call-binding-account-summary', SERVICE_MODULE_FILE);
++const MANIFEST_RELATIVE_PATH = path.join(
++  '.lagrange', 'deployment', 'manifest.json');
++const UTF8_ENCODING = 'utf8';
++
++const ZERO = 0;
++const ONE = 1;
++const MIN_PARTITION_COUNT = 2;
++const MIN_DISTINCT_LEADER_HOSTS = 2;
++const DEFAULT_INVOCATION_COUNT = 60;
++const TOPOLOGY_STABLE_READBACKS = 2;
++const SPLIT_WAIT_TIMEOUT_MS = 180_000;
++const SPLIT_WAIT_POLL_MS = 500;
++const MAX_SENTINEL_ROWS = 40;
++const READY_TIMEOUT_MS = 90_000;
++const READY_POLL_MS = 500;
++const HTTP_STATUS_OK = 200;
++const SUMMARY_PATH = '/accounts/summary';
++const HEALTH_PATH = '/accounts/health';
++const JSON_CONTENT_TYPE = 'application/json';
++const IDEMPOTENCY_HEADER = 'idempotency-key';
++const CHILD_CALL_SUFFIX = '#call-1';
++const BINDING_NAME_PREFIX = 'account-summary--';
++
++const SQL = Object.freeze({
++  ...buildUserActivityTableSql(TABLE_NAME),
++  SELECT_SERVICE_BINDINGS:
++    'SELECT binding_version_id, binding_name FROM service_bindings',
++  SELECT_SERVICE_DEFINITIONS:
++    'SELECT service_id, runtime_kind, binding_version_id ' +
++    'FROM service_definitions',
++  SELECT_REDUCE_SLOTS:
++    'SELECT invocation_id, slot_id, replica_id, partial_json ' +
++    'FROM call_cell_reduce_slots',
++  SELECT_REDUCE_RESULTS:
++    'SELECT result_id FROM call_cell_reduce_results',
++});
++
++const helpers = createTableTopologyHelpers({
++  scenarioName: SCENARIO_NAME,
++  sql: SQL,
++  tableName: TABLE_NAME,
++});
++
++function defaultSleep(ms) {
++  return new Promise((resolve) => setTimeout(resolve, ms));
++}
++
++function defaultResourceSnapshot(cluster) {
++  return async (node, nodeIndex) => {
++    const providerIndex =
++      Number.isInteger(cluster._hostAssignment?.[nodeIndex]) ?
++        cluster._hostAssignment[nodeIndex] :
++        ZERO;
++    const provider = cluster._providers?.[providerIndex] ||
++      cluster._providers?.[ZERO];
++    assert.ok(provider, `${SCENARIO_NAME}: no docker provider available`);
++    return provider.getContainerResourceSnapshot(node.containerId);
++  };
++}
++
++async function defaultPrepareProject() {
++  const artifactsRoot = path.resolve(
++    process.cwd(), SCENARIO_ARTIFACTS.HOST_RELATIVE_PATH);
++  const scenarioDirectory = path.join(artifactsRoot, SCENARIO_SUBDIR);
++  const projectDirectory = path.join(scenarioDirectory, PROJECT_SUBDIR);
++  await rm(scenarioDirectory, {force: true, recursive: true});
++  await mkdir(projectDirectory, {recursive: true});
++  // The service module imports ../../src/authoring/*; from
++  // <root>/public-path-baseline/project/ that resolves to <root>/src,
++  // the symlink to the repo source created here. The link target must be
++  // RELATIVE: ComponentizeJS resolves imports inside a WASI preopen that
++  // rejects absolute symlink targets as sandbox escapes (verified live).
++  // Recreated every run so a checkout move can never leave a stale link.
++  const sourceLink = path.join(artifactsRoot, SOURCE_SYMLINK_NAME);
++  await rm(sourceLink, {force: true});
++  await symlink(
++    path.relative(
++      artifactsRoot, path.resolve(process.cwd(), SOURCE_SYMLINK_NAME)),
++    sourceLink);
++  await copyFile(
++    path.resolve(process.cwd(), SERVICE_MODULE_SOURCE),
++    path.join(projectDirectory, SERVICE_MODULE_FILE),
++  );
++  return {artifactsRoot, projectDirectory};
++}
++
++async function defaultReadManifest(projectDirectory) {
++  return JSON.parse(await readFile(
++    path.join(projectDirectory, MANIFEST_RELATIVE_PATH), UTF8_ENCODING));
++}
++
++function resolveScenarioDependencies(cluster) {
++  const overrides =
++    cluster?._scenarioOverrides?.publicPathBaseline || {};
++  const noopOutput = async () => {};
++  return {
++    fetchImpl: overrides.fetchImpl || fetch,
++    invocationCount: Number.isInteger(overrides.invocationCount) ?
++      overrides.invocationCount :
++      DEFAULT_INVOCATION_COUNT,
++    logBuffer: overrides.logBuffer ||
++      (() => cluster.getLogCollector().getBuffer()),
++    pipeline: overrides.pipeline || {
++      runBuild: (options) => runBuild({
++        ...options,
++        createLocalOciLayoutBuilder:
++          () => new ServiceLocalOciLayoutBuilder(),
++      }),
++      runDeploy,
++      runGenerate,
++    },
++    prepareProject: overrides.prepareProject || defaultPrepareProject,
++    readManifest: overrides.readManifest || defaultReadManifest,
++    resourceSnapshot: overrides.resourceSnapshot ||
++      defaultResourceSnapshot(cluster),
++    runId: typeof overrides.runId === 'string' ?
++      overrides.runId :
++      `${SCENARIO_NAME}-${Date.now()}`,
++    sleep: overrides.sleep || defaultSleep,
++    splitWaitTimeoutMs: Number.isInteger(overrides.splitWaitTimeoutMs) ?
++      overrides.splitWaitTimeoutMs :
++      SPLIT_WAIT_TIMEOUT_MS,
++    writeOutput: noopOutput,
++  };
++}
++
++function partitionSpreadReached(partitionRows) {
++  const leaders = new Set(
++    partitionRows
++      .map((row) => row?.leader_node_id)
++      .filter((id) => typeof id === 'string' && id.length > ZERO),
++  );
++  return partitionRows.length >= MIN_PARTITION_COUNT &&
++    leaders.size >= MIN_DISTINCT_LEADER_HOSTS;
++}
++
++// Wait for the policy-driven split and cross-host leader spread. While
++// the table is still single-partition a bounded trickle of sentinel
++// rows keeps write-activity split evaluation firing. The spread must
++// hold with an identical partition/leader set across consecutive polls
++// so a mid-split window is never frozen into the measured topology.
++async function waitForSplitAndLeaderSpread(nodes, seedNode, deps) {
++  const deadline = Date.now() + deps.splitWaitTimeoutMs;
++  let sentinelCount = ZERO;
++  let lastRows = [];
++  let stableFingerprint = null;
++  let stableCount = ZERO;
++  while (Date.now() < deadline) {
++    const allRows =
++      await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS);
++    lastRows = selectSettledPartitionRows(allRows);
++    if (partitionSpreadReached(lastRows) &&
++        allRows.length === lastRows.length) {
++      const fingerprint = topologyFingerprint(lastRows);
++      stableCount = fingerprint === stableFingerprint ?
++        stableCount + ONE :
++        ONE;
++      stableFingerprint = fingerprint;
++      if (stableCount >= TOPOLOGY_STABLE_READBACKS) {
++        return {partitionRows: lastRows, sentinelCount};
++      }
++    } else {
++      stableFingerprint = null;
++      stableCount = ZERO;
++    }
++    if (lastRows.length < MIN_PARTITION_COUNT &&
++        sentinelCount < MAX_SENTINEL_ROWS) {
++      const sentinel = buildSentinelRow(sentinelCount);
++      await seedNode.query(SQL.INSERT_ROW, [
++        sentinel.id, sentinel.accountId, sentinel.amountCents,
++        sentinel.flagged, sentinel.pad,
++      ]);
++      sentinelCount += ONE;
++    }
++    await deps.sleep(SPLIT_WAIT_POLL_MS);
++  }
++  throw new Error(
++    `${SCENARIO_NAME}: no cross-host partition spread within ` +
++    `${deps.splitWaitTimeoutMs}ms: ` +
++    JSON.stringify(lastRows),
++  );
++}
++
++// Deploy replays the generated records through the pipeline owner; the
++// SQL client is the harness admin lane into the same grammar ingress.
++async function deployThroughPipeline(seedNode, deps, paths, layoutPath) {
++  const containerLayoutPath = path.posix.join(
++    SCENARIO_ARTIFACTS.CONTAINER_PATH,
++    path.relative(paths.artifactsRoot, layoutPath)
++      .split(path.sep).join(path.posix.sep),
++  );
++  const sqlClient = {
++    execute: async (statement, parameters) => ({
++      rows: await queryRows(seedNode, statement, parameters),
++    }),
++  };
++  return deps.pipeline.runDeploy({
++    createSqlClient: () => sqlClient,
++    idempotencyKey: deps.runId,
++    layoutPath: containerLayoutPath,
++    projectDirectory: paths.projectDirectory,
++    writeOutput: deps.writeOutput,
++  });
++}
++
++function basicAuthorizationHeader() {
++  const credentials =
++    `${REQUEST_CELL_AUTH.USER}:${REQUEST_CELL_AUTH.PASSWORD}`;
++  return `Basic ${Buffer.from(credentials).toString('base64')}`;
++}
++
++function nodeBaseUrl(node) {
++  return `http://${node.ip}:${PORTS.REST}`;
++}
++
++async function probeHealth(node, deps, headers) {
++  try {
++    const response = await deps.fetchImpl(
++      `${nodeBaseUrl(node)}${HEALTH_PATH}`, {headers, method: 'GET'});
++    return response.status === HTTP_STATUS_OK;
++  } catch (_error) {
++    return false;
++  }
++}
++
++// Wait until at least one node serves the deployed health route, and
++// prove the listener is fail-closed: the same route without credentials
++// must not answer 200.
++async function waitForServingNodes(nodes, deps) {
++  const headers = {authorization: basicAuthorizationHeader()};
++  const deadline = Date.now() + READY_TIMEOUT_MS;
++  for (;;) {
++    const serving = [];
++    for (const node of nodes) {
++      if (await probeHealth(node, deps, headers)) {
++        serving.push(node);
++      }
++    }
++    if (serving.length > ZERO) {
++      const unauthenticated = await probeHealth(serving[ZERO], deps, {});
++      if (unauthenticated) {
++        throw new Error(
++          `${SCENARIO_NAME}: unauthenticated HTTP invocation was ` +
++          'accepted; authenticated-only invocation is required',
++        );
++      }
++      return serving;
++    }
++    if (Date.now() >= deadline) {
++      throw new Error(
++        `${SCENARIO_NAME}: no node served ${HEALTH_PATH} within ` +
++        `${READY_TIMEOUT_MS}ms`,
++      );
++    }
++    await deps.sleep(READY_POLL_MS);
++  }
++}
++
++async function invokeSummary(node, deps, accountId, idempotencyKey) {
++  const startedAt = process.hrtime.bigint();
++  const response = await deps.fetchImpl(
++    `${nodeBaseUrl(node)}${SUMMARY_PATH}`,
++    {
++      body: JSON.stringify({accountId}),
++      headers: {
++        'authorization': basicAuthorizationHeader(),
++        'content-type': JSON_CONTENT_TYPE,
++        [IDEMPOTENCY_HEADER]: idempotencyKey,
++      },
++      method: 'POST',
++    },
++  );
++  const text = await response.text();
++  const durationMs =
++    Number(process.hrtime.bigint() - startedAt) / 1_000_000;
++  assert.equal(
++    response.status, HTTP_STATUS_OK,
++    `${SCENARIO_NAME}: POST ${SUMMARY_PATH} for account ${accountId} ` +
++    `returned ${response.status}: ${text}`,
++  );
++  return {
++    accountId,
++    body: JSON.parse(text),
++    bytes: Buffer.byteLength(text, UTF8_ENCODING),
++    durationMs,
++    idempotencyKey,
++  };
++}
++
++async function runMeasuredInvocations(servingNodes, deps) {
++  const accountIds = DATASET_GENERATOR.accountIds;
++  const invocations = [];
++  for (let index = ZERO; index < deps.invocationCount; index += ONE) {
++    const node = servingNodes[index % servingNodes.length];
++    const accountId = accountIds[index % accountIds.length];
++    const idempotencyKey = `${deps.runId}-inv-${index}`;
++    invocations.push(
++      await invokeSummary(node, deps, accountId, idempotencyKey));
++  }
++  return invocations;
++}
++
++function childInvocationId(idempotencyKey) {
++  return createInvocationIdentity(
++    REQUEST_CELL_AUTH.DATABASE, idempotencyKey) + CHILD_CALL_SUFFIX;
++}
++
++// Durable coordination evidence: exactly one published reduce result
++// per measured invocation and one reduce slot per shard; the slots'
++// partial_json byte lengths are the measured partial bytes.
++async function collectCoordinationEvidence(
++  nodes, invocations, partitionCount) {
++  const slotRows =
++    await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_REDUCE_SLOTS);
++  const resultRows =
++    await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_REDUCE_RESULTS);
++  let partialBytes = ZERO;
++  for (const invocation of invocations) {
++    const childId = childInvocationId(invocation.idempotencyKey);
++    const results = resultRows
++      .filter((row) => row?.result_id === childId);
++    assert.equal(
++      results.length, ONE,
++      `${SCENARIO_NAME}: expected exactly one reduce result for ` +
++      `${childId}, saw ${results.length}`,
++    );
++    const slots = slotRows
++      .filter((row) => row?.invocation_id === childId);
++    assert.equal(
++      slots.length, partitionCount,
++      `${SCENARIO_NAME}: expected ${partitionCount} reduce slot(s) ` +
++      `for ${childId}, saw ${slots.length}`,
++    );
++    const replicaIds = new Set(slots.map((row) => row?.replica_id));
++    assert.equal(
++      replicaIds.size, partitionCount,
++      `${SCENARIO_NAME}: reduce slots for ${childId} name ` +
++      `${replicaIds.size} distinct replica(s), expected ` +
++      String(partitionCount),
++    );
++    for (const slot of slots) {
++      partialBytes += Buffer.byteLength(
++        String(slot?.partial_json || ''), UTF8_ENCODING);
++    }
++  }
++  return {partialBytes};
++}
++
++async function collectRuntimeKindRows(nodes) {
++  const bindingRows =
++    await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_SERVICE_BINDINGS);
++  const bindingVersionIds = new Set(
++    bindingRows
++      .filter((row) =>
++        String(row?.binding_name || '').startsWith(BINDING_NAME_PREFIX))
++      .map((row) => row.binding_version_id),
++  );
++  const definitionRows =
++    await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_SERVICE_DEFINITIONS);
++  const matched = definitionRows.filter((row) =>
++    bindingVersionIds.has(row?.binding_version_id));
++  assert.ok(
++    matched.length > ZERO,
++    `${SCENARIO_NAME}: no service_definitions rows for ` +
++    `${BINDING_NAME_PREFIX}* bindings — fidelity check would be vacuous`,
++  );
++  return matched;
++}
++
++async function captureResourceSnapshots(nodes, deps) {
++  const snapshots = new Map();
++  for (let index = ZERO; index < nodes.length; index += ONE) {
++    snapshots.set(
++      nodes[index].id,
++      await deps.resourceSnapshot(nodes[index], index));
++  }
++  return snapshots;
++}
++
++export async function run(cluster) {
++  const nodes = cluster.getNodes();
++  assert.ok(
++    Array.isArray(nodes) && nodes.length >= MIN_DISTINCT_LEADER_HOSTS,
++    `${SCENARIO_NAME} requires a multi-node cluster`,
++  );
++  const deps = resolveScenarioDependencies(cluster);
++  const seedNode = nodes.find((node) => node.role === 'seed') ||
++    nodes[ZERO];
++
++  // Build the service through the pipeline owner (generate + build).
++  const paths = await deps.prepareProject();
++  await deps.pipeline.runGenerate({
++    projectDirectory: paths.projectDirectory,
++    writeOutput: deps.writeOutput,
++  });
++  const buildResult = await deps.pipeline.runBuild({
++    projectDirectory: paths.projectDirectory,
++    writeOutput: deps.writeOutput,
++  });
++  const manifest = await deps.readManifest(paths.projectDirectory);
++
++  // Data substrate: table, split policies, deterministic dataset.
++  // Setup writes retry transient post-boot settling; measured phases do not.
++  const rows = generateDatasetRows();
++  await helpers.retryTransientAdminQuery(deps, 'create-table',
++    () => seedNode.query(SQL.CREATE_TABLE));
++  const tableId = await helpers.retryTransientAdminQuery(deps, 'resolve-table-id',
++    () => helpers.resolveTableId(seedNode));
++  await helpers.applySplitPolicies(seedNode, tableId, deps);
++  await helpers.waitForTableWriteReadiness(nodes, deps);
++  await helpers.seedDataset(seedNode, rows, deps);
++  const spread =
++    await waitForSplitAndLeaderSpread(nodes, seedNode, deps);
++  const topology = assertPartitionSpread(spread.partitionRows);
++
++  // Deploy the generated records, then measure over authenticated HTTP.
++  await deployThroughPipeline(
++    seedNode, deps, paths, buildResult.layoutPath);
++  const servingNodes = await waitForServingNodes(nodes, deps);
++  const snapshotsBefore = await captureResourceSnapshots(nodes, deps);
++  const invocations = await runMeasuredInvocations(servingNodes, deps);
++  const snapshotsAfter = await captureResourceSnapshots(nodes, deps);
++
++  // Gates: stable topology, parity, fidelity, local reads,
++  // coordination evidence.
++  const finalPartitionRows = selectSettledPartitionRows(
++    await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS));
++  assert.equal(
++    finalPartitionRows.length, topology.partitions.length,
++    `${SCENARIO_NAME}: partition count changed during measurement`,
++  );
++  const partitionCount = topology.partitions.length;
++  const parity = assertParity({
++    partitionCount,
++    responses: invocations,
++    rows,
++  });
++  const fidelity = assertWasmFidelity({
++    buildDigest: buildResult.descriptor.digest,
++    manifest,
++    runtimeKindRows: await collectRuntimeKindRows(nodes),
++  });
++  const logEntries = deps.logBuffer();
++  const localReadProof = buildLocalReadProof({
++    invocationCount: invocations.length,
++    logEntries,
++    partitionIds: topology.partitions.map((entry) => entry.partitionId),
++  });
++  const coordination = await collectCoordinationEvidence(
++    nodes, invocations, partitionCount);
++
++  const nodeIds = nodes.map((node) => node.id);
++  return composeReportDetail({
++    datasetDigest: computeDatasetDigest(rows),
++    fidelity,
++    finalBytes: invocations
++      .reduce((sum, invocation) => sum + invocation.bytes, ZERO),
++    generatorDigest: computeGeneratorDigest(),
++    invokerTelemetry: summarizeInvokerTelemetry(logEntries),
++    latencyMs: computeLatencySummary(
++      invocations.map((invocation) => invocation.durationMs)),
++    localReadProof,
++    networkPerNode:
++      buildNetworkPerNode(nodeIds, snapshotsBefore, snapshotsAfter),
++    nodeCount: nodes.length,
++    parity,
++    partialBytes: coordination.partialBytes,
++    resourcePerNode: buildResourcePerNode(nodeIds, snapshotsAfter),
++    sentinelRowCount: spread.sentinelCount,
++    topology,
++  });
++}
+diff --git a/test/distributed/scenarios/user-table-leader-placement-spread.js b/test/distributed/scenarios/user-table-leader-placement-spread.js
+new file mode 100644
+index 000000000..92b5aae55
+--- /dev/null
++++ b/test/distributed/scenarios/user-table-leader-placement-spread.js
+@@ -0,0 +1,302 @@
++/**
++ * Scenario: user-table-leader-placement-spread
++ *
++ * Creates an ordinary user table on a live 3-node cluster, drives a
++ * managed split through split-friendly policies plus write activity,
++ * waits for the children's replicas to occupy at least two distinct
++ * hosts, and then requires the platform itself to spread the child
++ * partition RAFT LEADERS across more than one host: the rebalancer's
++ * user-table leader-placement cure must mint the leader handoffs — the
++ * scenario never fabricates topology and exposes no admin transfer.
++ *
++ * Red-on-revert: without the leader-placement cure every child leader
++ * stays on the seed and the leader-spread wait times out. The scenario
++ * also fails if the split never happens, if replica placement cannot
++ * support spread, or if leadership keeps churning after spread is
++ * reached (the hysteresis guard: spread must hold through a bounded
++ * stability hold with an unchanged leader fingerprint).
++ */
++
++import assert from 'node:assert/strict';
++import {
++  buildSentinelRow,
++  generateDatasetRows,
++} from './public-path-baseline-helpers.js';
++import {
++  buildUserActivityTableSql,
++  createTableTopologyHelpers,
++  selectSettledPartitionRows,
++  topologyFingerprint,
++} from './user-table-topology-helpers.js';
++
++const SCENARIO_NAME = 'user-table-leader-placement-spread';
++const TABLE_NAME = 'leader_spread_activity';
++
++const ZERO = 0;
++const ONE = 1;
++const MIN_NODE_COUNT = 3;
++const MIN_PARTITION_COUNT = 2;
++const MIN_DISTINCT_LEADER_HOSTS = 2;
++const MIN_DISTINCT_REPLICA_HOSTS = 2;
++const SPREAD_POLL_MS = 500;
++const SPLIT_WAIT_TIMEOUT_MS = 180_000;
++const REPLICA_SPREAD_TIMEOUT_MS = 120_000;
++const LEADER_SPREAD_TIMEOUT_MS = 180_000;
++const TOPOLOGY_STABLE_READBACKS = 2;
++// After spread is reached the leader set must hold: continued movement
++// is exactly the flapping the cure's hysteresis guard must prevent.
++const STABILITY_HOLD_POLLS = 20;
++const MAX_SENTINEL_ROWS = 40;
++const REPORT_DETAIL_SCHEMA_VERSION = 1;
++
++const SQL = Object.freeze({
++  ...buildUserActivityTableSql(TABLE_NAME),
++  SELECT_SERVICES:
++    'SELECT partition_id, node_id, status, raft_role FROM services',
++});
++
++const helpers = createTableTopologyHelpers({
++  scenarioName: SCENARIO_NAME,
++  sql: SQL,
++  tableName: TABLE_NAME,
++});
++
++function defaultSleep(ms) {
++  return new Promise((resolve) => setTimeout(resolve, ms));
++}
++
++function resolveScenarioDependencies(cluster) {
++  const overrides =
++    cluster?._scenarioOverrides?.userTableLeaderPlacementSpread || {};
++  return {
++    leaderSpreadTimeoutMs: Number.isInteger(overrides.leaderSpreadTimeoutMs) ?
++      overrides.leaderSpreadTimeoutMs :
++      LEADER_SPREAD_TIMEOUT_MS,
++    replicaSpreadTimeoutMs:
++      Number.isInteger(overrides.replicaSpreadTimeoutMs) ?
++        overrides.replicaSpreadTimeoutMs :
++        REPLICA_SPREAD_TIMEOUT_MS,
++    sleep: overrides.sleep || defaultSleep,
++    splitWaitTimeoutMs: Number.isInteger(overrides.splitWaitTimeoutMs) ?
++      overrides.splitWaitTimeoutMs :
++      SPLIT_WAIT_TIMEOUT_MS,
++    stabilityHoldPolls: Number.isInteger(overrides.stabilityHoldPolls) ?
++      overrides.stabilityHoldPolls :
++      STABILITY_HOLD_POLLS,
++  };
++}
++
++function distinctLeaderHosts(partitionRows) {
++  return new Set(
++    partitionRows
++      .map((row) => row?.leader_node_id)
++      .filter((id) => typeof id === 'string' && id.length > ZERO),
++  );
++}
++
++// Wait for the policy-driven split: at least MIN_PARTITION_COUNT settled
++// children with no transitional parent left. While the table is still
++// single-partition a bounded trickle of sentinel rows keeps
++// write-activity split evaluation firing.
++async function waitForManagedSplit(nodes, seedNode, deps) {
++  const deadline = Date.now() + deps.splitWaitTimeoutMs;
++  let sentinelCount = ZERO;
++  let lastRows = [];
++  while (Date.now() < deadline) {
++    const allRows =
++      await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS);
++    lastRows = selectSettledPartitionRows(allRows);
++    if (lastRows.length >= MIN_PARTITION_COUNT &&
++        allRows.length === lastRows.length) {
++      return {partitionRows: lastRows, sentinelCount};
++    }
++    if (lastRows.length < MIN_PARTITION_COUNT &&
++        sentinelCount < MAX_SENTINEL_ROWS) {
++      const sentinel = buildSentinelRow(sentinelCount);
++      await seedNode.query(SQL.INSERT_ROW, [
++        sentinel.id, sentinel.accountId, sentinel.amountCents,
++        sentinel.flagged, sentinel.pad,
++      ]);
++      sentinelCount += ONE;
++    }
++    await deps.sleep(SPREAD_POLL_MS);
++  }
++  throw new Error(
++    `${SCENARIO_NAME}: no managed split within ` +
++    `${deps.splitWaitTimeoutMs}ms: ` +
++    JSON.stringify(lastRows),
++  );
++}
++
++function replicaHostsByPartition(serviceRows, partitionIds) {
++  const hosts = new Map();
++  for (const partitionId of partitionIds) {
++    hosts.set(partitionId, new Set());
++  }
++  for (const row of serviceRows) {
++    const partitionId = row?.partition_id;
++    const nodeId = row?.node_id;
++    if (hosts.has(partitionId) &&
++        typeof nodeId === 'string' && nodeId.length > ZERO) {
++      hosts.get(partitionId).add(nodeId);
++    }
++  }
++  return hosts;
++}
++
++function replicaSpreadSupported(hostsByPartition) {
++  for (const hosts of hostsByPartition.values()) {
++    if (hosts.size < MIN_DISTINCT_REPLICA_HOSTS) {
++      return false;
++    }
++  }
++  return hostsByPartition.size > ZERO;
++}
++
++// Leader spread is only achievable once every settled child has
++// replicas on at least two distinct hosts; gate on that first so a
++// leader-spread timeout can never mask a replica-placement failure.
++async function waitForReplicaSpreadSupport(nodes, deps) {
++  const deadline = Date.now() + deps.replicaSpreadTimeoutMs;
++  let lastHosts = new Map();
++  while (Date.now() < deadline) {
++    const partitionRows = selectSettledPartitionRows(
++      await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS));
++    const partitionIds = partitionRows
++      .map((row) => row?.partition_id)
++      .filter((id) => typeof id === 'string' && id.length > ZERO);
++    const serviceRows =
++      await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_SERVICES);
++    lastHosts = replicaHostsByPartition(serviceRows, partitionIds);
++    if (partitionRows.length >= MIN_PARTITION_COUNT &&
++        replicaSpreadSupported(lastHosts)) {
++      return lastHosts;
++    }
++    await deps.sleep(SPREAD_POLL_MS);
++  }
++  const summary = [...lastHosts.entries()]
++    .map(([partitionId, hosts]) => `${partitionId}:${hosts.size}`)
++    .join(',');
++  throw new Error(
++    `${SCENARIO_NAME}: replica placement never supported leader ` +
++    `spread within ${deps.replicaSpreadTimeoutMs}ms ` +
++    `(distinct replica hosts per partition: ${summary})`,
++  );
++}
++
++// The measured gate: the PLATFORM must move child leaders apart. The
++// spread must hold with an identical partition/leader fingerprint
++// across consecutive polls so a mid-handoff window is never frozen into
++// the measured topology.
++async function waitForLeaderSpread(nodes, deps) {
++  const deadline = Date.now() + deps.leaderSpreadTimeoutMs;
++  let lastRows = [];
++  let stableFingerprint = null;
++  let stableCount = ZERO;
++  while (Date.now() < deadline) {
++    const allRows =
++      await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS);
++    lastRows = selectSettledPartitionRows(allRows);
++    if (lastRows.length >= MIN_PARTITION_COUNT &&
++        allRows.length === lastRows.length &&
++        distinctLeaderHosts(lastRows).size >= MIN_DISTINCT_LEADER_HOSTS) {
++      const fingerprint = topologyFingerprint(lastRows);
++      stableCount = fingerprint === stableFingerprint ?
++        stableCount + ONE :
++        ONE;
++      stableFingerprint = fingerprint;
++      if (stableCount >= TOPOLOGY_STABLE_READBACKS) {
++        return {fingerprint, partitionRows: lastRows};
++      }
++    } else {
++      stableFingerprint = null;
++      stableCount = ZERO;
++    }
++    await deps.sleep(SPREAD_POLL_MS);
++  }
++  throw new Error(
++    `${SCENARIO_NAME}: user-table leader placement never spread ` +
++    `across >= ${MIN_DISTINCT_LEADER_HOSTS} hosts within ` +
++    `${deps.leaderSpreadTimeoutMs}ms (leaders on ` +
++    `${distinctLeaderHosts(lastRows).size} host(s)): ` +
++    JSON.stringify(lastRows),
++  );
++}
++
++// The hysteresis gate: once spread is reached the leader set must stop
++// moving. Any fingerprint change during the hold is flapping — exactly
++// what the cure's deadband and one-directional bound must prevent.
++async function assertLeaderSpreadHolds(nodes, frozen, deps) {
++  for (let poll = ZERO; poll < deps.stabilityHoldPolls; poll += ONE) {
++    await deps.sleep(SPREAD_POLL_MS);
++    const rows = selectSettledPartitionRows(
++      await helpers.queryRowsAcrossNodes(nodes, SQL.SELECT_PARTITIONS));
++    const fingerprint = topologyFingerprint(rows);
++    if (fingerprint !== frozen.fingerprint) {
++      throw new Error(
++        `${SCENARIO_NAME}: leader placement flapped during the ` +
++        `stability hold (poll ${poll + ONE}/` +
++        `${deps.stabilityHoldPolls}): ` +
++        `${frozen.fingerprint} -> ${fingerprint}`,
++      );
++    }
++  }
++}
++
++function composeTopologyDetail(partitionRows, hostsByPartition) {
++  const partitions = partitionRows.map((row) => ({
++    leaderNodeId: row?.leader_node_id,
++    partitionId: row?.partition_id,
++    replicaHostCount:
++      hostsByPartition.get(row?.partition_id)?.size ?? ZERO,
++  }));
++  return {
++    distinctLeaderHosts: distinctLeaderHosts(partitionRows).size,
++    partitions,
++  };
++}
++
++export async function run(cluster) {
++  const nodes = cluster.getNodes();
++  assert.ok(
++    Array.isArray(nodes) && nodes.length >= MIN_NODE_COUNT,
++    `${SCENARIO_NAME} requires a ${MIN_NODE_COUNT}-node cluster`,
++  );
++  const deps = resolveScenarioDependencies(cluster);
++  const seedNode = nodes.find((node) => node.role === 'seed') ||
++    nodes[ZERO];
++
++  // Data substrate: table, split-friendly policies, deterministic
++  // dataset sized for exactly one managed split. Setup writes retry
++  // transient post-boot settling; measured phases do not.
++  const rows = generateDatasetRows();
++  await helpers.retryTransientAdminQuery(deps, 'create-table',
++    () => seedNode.query(SQL.CREATE_TABLE));
++  const tableId = await helpers.retryTransientAdminQuery(
++    deps, 'resolve-table-id', () => helpers.resolveTableId(seedNode));
++  await helpers.applySplitPolicies(seedNode, tableId, deps);
++  await helpers.waitForTableWriteReadiness(nodes, deps);
++  await helpers.seedDataset(seedNode, rows, deps);
++
++  // Measured phases: split, replica-spread support, then the platform
++  // spreading the child leaders — and holding them spread.
++  const split = await waitForManagedSplit(nodes, seedNode, deps);
++  const hostsByPartition = await waitForReplicaSpreadSupport(nodes, deps);
++  const spread = await waitForLeaderSpread(nodes, deps);
++  await assertLeaderSpreadHolds(nodes, spread, deps);
++
++  const topology =
++    composeTopologyDetail(spread.partitionRows, hostsByPartition);
++  assert.ok(
++    topology.distinctLeaderHosts >= MIN_DISTINCT_LEADER_HOSTS,
++    `${SCENARIO_NAME}: final topology lost leader spread`,
++  );
++  return {
++    leaderFingerprint: spread.fingerprint,
++    schemaVersion: REPORT_DETAIL_SCHEMA_VERSION,
++    sentinelRowCount: split.sentinelCount,
++    stabilityHoldPolls: deps.stabilityHoldPolls,
++    tableName: TABLE_NAME,
++    topology,
++  };
++}
+diff --git a/test/distributed/scenarios/user-table-topology-helpers.js b/test/distributed/scenarios/user-table-topology-helpers.js
+new file mode 100644
+index 000000000..66e17ca3c
+--- /dev/null
++++ b/test/distributed/scenarios/user-table-topology-helpers.js
+@@ -0,0 +1,277 @@
++/**
++ * Shared user-table topology helpers for scenarios that create an
++ * activity-shaped user table, drive a managed split, and observe the
++ * settled partition topology: transient-admin retry, cross-node
++ * metadata reads, split-policy application with stable read-back,
++ * write-readiness and seeding, and the settled-row / fingerprint
++ * primitives.
++ *
++ * This is a helper module, not a runnable scenario: it must never
++ * export a `run` function (scenario discovery schedules any module
++ * that does).
++ */
++
++import assert from 'node:assert/strict';
++import {escapeSql, rowsFromResult} from './table-distribution-helpers.js';
++import {
++  TABLE_DISTRIBUTION_CONTROL_QUERY_HELPERS,
++} from './table-distribution-helpers-control-query.js';
++
++// Policy-mutation SQL comes from the canonical owner
++// (table-distribution-helpers-control-query.js) — the scenario policy
++// SQL guard forbids raw table_policies updates outside that owner.
++const {
++  DEFAULT_TABLE_SPLIT_POLICIES,
++  SQL_UPDATE_TABLE_POLICIES_MID,
++  SQL_UPDATE_TABLE_POLICIES_PREFIX,
++  SQL_UPDATE_TABLE_POLICIES_SUFFIX,
++} = TABLE_DISTRIBUTION_CONTROL_QUERY_HELPERS;
++
++const ZERO = 0;
++const ONE = 1;
++
++// Bounded retry for a scenario's own setup traffic: the first admin
++// queries after all-active can hit a still-settling write path (typed
++// retryable participant/pressure failures). Retrying transients here is
++// infra robustness for a scenario's PRECONDITION phase only — measured
++// phases must never retry through this.
++const TRANSIENT_ADMIN_RETRY_LIMIT = 20;
++const TRANSIENT_ADMIN_RETRY_BASE_DELAY_MS = 500;
++const TRANSIENT_ADMIN_ERROR_PATTERN =
++  /participant failures|pressure|degraded|reconnecting|not ready|service shutdown|shutting down|no active leader|leader.*unavailable|timed out|timeout/i;
++const IDEMPOTENT_REPLAY_ERROR_PATTERN =
++  /duplicate|unique constraint|already exists/i;
++
++const POLICY_STABLE_READBACKS = 2;
++const POLICY_APPLY_MAX_ATTEMPTS = 40;
++const POLICY_APPLY_POLL_MS = 500;
++
++// A freshly created table's partition needs replica placement and a raft
++// leader before writes land; the first INSERT otherwise fails with
++// retryable participant failures for longer than any per-query retry
++// should paper over.
++const TABLE_WRITE_READY_TIMEOUT_MS = 90000;
++const TABLE_WRITE_READY_POLL_MS = 1000;
++
++// A SPLITTING/MERGING parent row survives in the partitions table until
++// dissolution; counting it would bake a transient topology into
++// downstream gates. Exclude known-transitional states and pass unknown
++// vocabularies through.
++const TRANSITIONAL_PARTITION_STATES = Object.freeze(new Set([
++  'splitting',
++  'merging',
++]));
++
++/**
++ * The activity-shaped user-table SQL surface shared by the public-path
++ * baseline and leader-placement scenarios. Scenario-specific statements
++ * stay in the scenario; only the shared table lifecycle lives here.
++ * @param {string} tableName
++ * @return {Object} Frozen SQL statement map for the table.
++ */
++function buildUserActivityTableSql(tableName) {
++  return Object.freeze({
++    CREATE_TABLE:
++      `CREATE TABLE ${tableName} (id INTEGER PRIMARY KEY, ` +
++      'account_id INTEGER, amount_cents INTEGER, flagged INTEGER, ' +
++      'pad TEXT)',
++    INSERT_ROW:
++      `INSERT INTO ${tableName} ` +
++      '(id, account_id, amount_cents, flagged, pad) ' +
++      'VALUES (?, ?, ?, ?, ?)',
++    SELECT_PARTITIONS:
++      'SELECT partition_id, leader_node_id, state FROM partitions ' +
++      `WHERE table_name = '${tableName}'`,
++    SELECT_TABLE_ID:
++      `SELECT table_id FROM tables WHERE table_name = '${tableName}'`,
++    SELECT_TABLE_POLICIES_PREFIX:
++      'SELECT table_policies FROM tables WHERE table_id = \'',
++    UPDATE_TABLE_POLICIES_PREFIX: SQL_UPDATE_TABLE_POLICIES_PREFIX,
++    UPDATE_TABLE_POLICIES_MID: SQL_UPDATE_TABLE_POLICIES_MID,
++    UPDATE_TABLE_POLICIES_SUFFIX: SQL_UPDATE_TABLE_POLICIES_SUFFIX,
++    QUOTE_SUFFIX: '\'',
++  });
++}
++
++async function queryRows(node, sql, params = []) {
++  return rowsFromResult(await node.query(sql, params));
++}
++
++function isTransientAdminError(error) {
++  return error?.deferRetry === true ||
++    TRANSIENT_ADMIN_ERROR_PATTERN.test(String(error?.message || error || ''));
++}
++
++function selectSettledPartitionRows(partitionRows) {
++  return partitionRows.filter((row) =>
++    !TRANSITIONAL_PARTITION_STATES.has(
++      String(row?.state || '').toLowerCase(),
++    ),
++  );
++}
++
++function topologyFingerprint(partitionRows) {
++  return partitionRows
++    .map((row) => `${row?.partition_id}|${row?.leader_node_id}`)
++    .sort()
++    .join(',');
++}
++
++function policyReadBackMatches(rows) {
++  const raw = rows.find((row) => row?.table_policies)?.table_policies;
++  if (typeof raw !== 'string' || raw.length === ZERO) {
++    return false;
++  }
++  try {
++    const parsed = JSON.parse(raw);
++    return parsed?.splitStorageThreshold ===
++      DEFAULT_TABLE_SPLIT_POLICIES.splitStorageThreshold;
++  } catch (_error) {
++    return false;
++  }
++}
++
++/**
++ * Bind the shared table-lifecycle helpers to one scenario's identity.
++ * @param {Object} options
++ * @param {string} options.scenarioName Used in every failure message.
++ * @param {string} options.tableName
++ * @param {Object} options.sql Statement map from buildUserActivityTableSql.
++ * @return {Object} The bound helper functions.
++ */
++function createTableTopologyHelpers({scenarioName, tableName, sql}) {
++  async function retryTransientAdminQuery(deps, label, attemptFn) {
++    let lastError = null;
++    for (let attempt = 0; attempt < TRANSIENT_ADMIN_RETRY_LIMIT;
++      attempt += 1) {
++      try {
++        return await attemptFn();
++      } catch (error) {
++        if (attempt > ZERO &&
++          IDEMPOTENT_REPLAY_ERROR_PATTERN.test(
++            String(error?.message || ''))) {
++          // A retried idempotent write whose first attempt landed
++          // ambiguously replays as a duplicate — that is success.
++          return null;
++        }
++        if (!isTransientAdminError(error)) {
++          throw error;
++        }
++        lastError = error;
++        await deps.sleep(
++          TRANSIENT_ADMIN_RETRY_BASE_DELAY_MS * (attempt + 1),
++        );
++      }
++    }
++    throw new Error(
++      `${scenarioName}: ${label} still failing after ` +
++      `${TRANSIENT_ADMIN_RETRY_LIMIT} transient retries: ` +
++      `${lastError?.message || lastError}`,
++    );
++  }
++
++  // First node that answers wins; partition metadata is control-plane
++  // replicated so any live node can serve it.
++  async function queryRowsAcrossNodes(nodes, sqlText) {
++    let lastError = null;
++    for (const node of nodes) {
++      try {
++        return await queryRows(node, sqlText);
++      } catch (error) {
++        lastError = error;
++      }
++    }
++    throw lastError ||
++      new Error(`${scenarioName}: no node answered: ${sqlText}`);
++  }
++
++  async function resolveTableId(seedNode) {
++    const rows = await queryRows(seedNode, sql.SELECT_TABLE_ID);
++    const tableId = rows.find((row) =>
++      typeof row?.table_id === 'string' && row.table_id.length > ZERO,
++    )?.table_id;
++    assert.ok(tableId, `${scenarioName}: ${tableName} table_id missing`);
++    return tableId;
++  }
++
++  // Split-friendly table policies with merge disabled (thresholds of 1),
++  // re-applied until the read-back is stable — the benchmark
++  // partitioning precedent.
++  async function applySplitPolicies(seedNode, tableId, deps) {
++    const updateSql = sql.UPDATE_TABLE_POLICIES_PREFIX +
++      escapeSql(JSON.stringify(DEFAULT_TABLE_SPLIT_POLICIES)) +
++      sql.UPDATE_TABLE_POLICIES_MID +
++      escapeSql(tableId) +
++      sql.UPDATE_TABLE_POLICIES_SUFFIX;
++    const readBackSql = sql.SELECT_TABLE_POLICIES_PREFIX +
++      escapeSql(tableId) + sql.QUOTE_SUFFIX;
++    let stableCount = ZERO;
++    for (let attempt = ZERO; attempt < POLICY_APPLY_MAX_ATTEMPTS;
++      attempt += ONE) {
++      await retryTransientAdminQuery(deps, 'apply-split-policies',
++        () => seedNode.query(updateSql));
++      const rows = await retryTransientAdminQuery(deps, 'read-back-policies',
++        () => queryRows(seedNode, readBackSql));
++      stableCount = policyReadBackMatches(rows) ? stableCount + ONE : ZERO;
++      if (stableCount >= POLICY_STABLE_READBACKS) {
++        return;
++      }
++      await deps.sleep(POLICY_APPLY_POLL_MS);
++    }
++    throw new Error(
++      `${scenarioName}: split policies never became stable on ` +
++      tableName,
++    );
++  }
++
++  // Wait for at least one settled partition row with a live leader
++  // before seeding.
++  async function waitForTableWriteReadiness(nodes, deps) {
++    const deadline = Date.now() + TABLE_WRITE_READY_TIMEOUT_MS;
++    let lastRows = [];
++    while (Date.now() < deadline) {
++      lastRows = selectSettledPartitionRows(
++        await queryRowsAcrossNodes(nodes, sql.SELECT_PARTITIONS));
++      const led = lastRows.filter((row) =>
++        typeof row?.leader_node_id === 'string' &&
++        row.leader_node_id.length > ZERO);
++      if (led.length > ZERO) {
++        return led;
++      }
++      await deps.sleep(TABLE_WRITE_READY_POLL_MS);
++    }
++    throw new Error(
++      `${scenarioName}: ${tableName} never became write-ready ` +
++      `(settled+led partitions: ${lastRows.length})`,
++    );
++  }
++
++  async function seedDataset(seedNode, rows, deps) {
++    for (const row of rows) {
++      // Per-row retry keeps a mid-seed transient from replaying earlier
++      // rows: a duplicate on retry is the row's own ambiguous first
++      // attempt having landed, and seeding continues with the next row.
++      await retryTransientAdminQuery(deps, `seed-row-${row.id}`,
++        () => seedNode.query(sql.INSERT_ROW, [
++          row.id, row.accountId, row.amountCents, row.flagged, row.pad,
++        ]));
++    }
++  }
++
++  return {
++    applySplitPolicies,
++    queryRowsAcrossNodes,
++    resolveTableId,
++    retryTransientAdminQuery,
++    seedDataset,
++    waitForTableWriteReadiness,
++  };
++}
++
++export {
++  buildUserActivityTableSql,
++  createTableTopologyHelpers,
++  queryRows,
++  selectSettledPartitionRows,
++  topologyFingerprint,
++};
+diff --git a/test/rebalancer/user-table-leader-placement-cure.test.js b/test/rebalancer/user-table-leader-placement-cure.test.js
+new file mode 100644
+index 000000000..eb5efdcc4
+--- /dev/null
++++ b/test/rebalancer/user-table-leader-placement-cure.test.js
+@@ -0,0 +1,348 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  LEADER_HANDOFF_RETRY_AFTER_MS,
++  USER_TABLE_LEADER_PLACEMENT_CURE_STATE,
++  applyUserTableLeaderPlacementCure,
++  evaluateUserTableLeaderPlacementCure,
++} from '../../src/rebalancer/user-table-leader-placement-cure.js';
++import {
++  REBALANCER_PLANNING_GATE_METHODS,
++} from '../../src/rebalancer/rebalancer-planning-gate-methods.js';
++import {
++  ReplicaOperationField,
++  ReplicaOperationMessageType,
++  ReplicaOperationReason,
++} from '../../src/rebalancer/replica-operation-constants.js';
++
++// Deterministic red-on-revert suite for the user-table leader-placement
++// cure (quest user-table-leader-placement-spread): leaders concentrated
++// on one host must mint exactly one bounded, hysteresis-guarded
++// STEP_DOWN_REPLICA / tracked-replacement-election handoff per surplus
++// partition, and every guard (census stability, retry suppression,
++// anchor retention, zero-leader targeting, user-table fence) must hold.
++
++const NOW_MS = 1_000_000;
++const TABLE_ID = 'orders';
++const P1 = 'orders-p1';
++const P2 = 'orders-p2';
++const NODE_1 = 'node-1';
++const NODE_2 = 'node-2';
++const NODE_3 = 'node-3';
++
++function settledRow(partitionId, leaderNodeId) {
++  return {leaderNodeId, partitionId};
++}
++
++function baseEvidence(overrides = {}) {
++  return {
++    eligibleVoterHosts: new Set([NODE_1, NODE_2, NODE_3]),
++    lastDispatchAtMs: null,
++    nodeId: NODE_1,
++    nowMs: NOW_MS,
++    ownVoterFollowers: [
++      {nodeId: NODE_2, replicaId: `${P2}-r2`},
++      {nodeId: NODE_3, replicaId: `${P2}-r3`},
++    ],
++    partitionId: P2,
++    previousCensusFingerprint:
++      `${P1}|${NODE_1},${P2}|${NODE_1}`,
++    settledPartitions: [
++      settledRow(P1, NODE_1),
++      settledRow(P2, NODE_1),
++    ],
++    ...overrides,
++  };
++}
++
++test('concentrated leaders with stable census dispatch a handoff', (t) => {
++  const decision = evaluateUserTableLeaderPlacementCure(baseEvidence());
++  t.equal(
++    decision.state,
++    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF,
++  );
++  t.equal(decision.target.nodeId, NODE_2);
++  t.equal(decision.target.replicaId, `${P2}-r2`);
++  t.equal(decision.census.distinctLeaderHostCount, 1);
++  t.equal(decision.census.requiredLeaderHostCount, 2);
++  t.end();
++});
++
++test('spread at distinct-host capacity is quiescent', (t) => {
++  const decision = evaluateUserTableLeaderPlacementCure(baseEvidence({
++    settledPartitions: [
++      settledRow(P1, NODE_1),
++      settledRow(P2, NODE_2),
++    ],
++  }));
++  t.equal(
++    decision.state,
++    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.SPREAD_SATISFIED,
++  );
++  t.end();
++});
++
++test('the first co-located partition anchors its host', (t) => {
++  const decision = evaluateUserTableLeaderPlacementCure(baseEvidence({
++    partitionId: P1,
++  }));
++  t.equal(
++    decision.state,
++    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.ANCHOR_RETAINED,
++  );
++  t.end();
++});
++
++test('a changed census defers the dispatch one pass', (t) => {
++  const decision = evaluateUserTableLeaderPlacementCure(baseEvidence({
++    previousCensusFingerprint: null,
++  }));
++  t.equal(
++    decision.state,
++    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.CENSUS_UNSTABLE,
++  );
++  t.end();
++});
++
++test('a recent dispatch suppresses the retry', (t) => {
++  const decision = evaluateUserTableLeaderPlacementCure(baseEvidence({
++    lastDispatchAtMs: NOW_MS - LEADER_HANDOFF_RETRY_AFTER_MS + 1,
++  }));
++  t.equal(
++    decision.state,
++    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.RETRY_SUPPRESSED,
++  );
++  t.end();
++});
++
++test('a single settled partition never cures', (t) => {
++  const decision = evaluateUserTableLeaderPlacementCure(baseEvidence({
++    settledPartitions: [settledRow(P1, NODE_1)],
++  }));
++  t.equal(
++    decision.state,
++    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.BELOW_MIN_PARTITION_COUNT,
++  );
++  t.end();
++});
++
++test('a host holding one leader is never a shed source', (t) => {
++  const decision = evaluateUserTableLeaderPlacementCure(baseEvidence({
++    partitionId: 'orders-p3',
++    previousCensusFingerprint:
++      `${P1}|${NODE_2},${P2}|${NODE_2},orders-p3|${NODE_1}`,
++    settledPartitions: [
++      settledRow(P1, NODE_2),
++      settledRow(P2, NODE_2),
++      settledRow('orders-p3', NODE_1),
++    ],
++  }));
++  t.equal(
++    decision.state,
++    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NOT_SURPLUS_HOST,
++  );
++  t.end();
++});
++
++test('targets are restricted to voter hosts with zero table leaders', (t) => {
++  const decision = evaluateUserTableLeaderPlacementCure(baseEvidence({
++    ownVoterFollowers: [],
++  }));
++  t.equal(
++    decision.state,
++    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET,
++  );
++  const ownFollowerOnLeaderHost = evaluateUserTableLeaderPlacementCure(
++    baseEvidence({
++      ownVoterFollowers: [{nodeId: NODE_1, replicaId: `${P2}-r1`}],
++    }),
++  );
++  t.equal(
++    ownFollowerOnLeaderHost.state,
++    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET,
++  );
++  t.end();
++});
++
++function partitionRows() {
++  return [
++    {
++      leader_node_id: NODE_1,
++      partition_id: P1,
++      state: 'normal',
++      table_id: TABLE_ID,
++    },
++    {
++      leader_node_id: NODE_1,
++      partition_id: P2,
++      state: 'normal',
++      table_id: TABLE_ID,
++    },
++  ];
++}
++
++function serviceRows() {
++  const rows = [];
++  for (const partitionId of [P1, P2]) {
++    for (const [index, nodeId] of [NODE_1, NODE_2, NODE_3].entries()) {
++      rows.push({
++        node_id: nodeId,
++        partition_id: partitionId,
++        raft_role: nodeId === NODE_1 ? 'leader' : 'follower',
++        service_id: `${partitionId}-r${index + 1}`,
++        service_type: 'partition',
++        status: 'active',
++      });
++    }
++  }
++  return rows;
++}
++
++function buildStubRebalancer(state) {
++  const deliveries = [];
++  const stub = {
++    deliveries,
++    entityId: P2,
++    entityType: 'partition',
++    getCurrentReplicas: () =>
++      state.serviceRows.filter((row) => row.partition_id === P2),
++    isLeader: true,
++    isShuttingDown: false,
++    isStabilized: () => state.stabilized,
++    logger: {
++      debug: () => {},
++      error: () => {},
++      info: () => {},
++      warn: () => {},
++    },
++    messageRouter: {
++      deliver: async (target, request, options) => {
++        deliveries.push({options, request, target});
++        return {status: 'completed'};
++      },
++    },
++    nodeId: NODE_1,
++    systemTableCache: {
++      filter: (tableName, predicate) => {
++        const rows = tableName === 'partitions' ?
++          state.partitionRows :
++          tableName === 'services' ?
++            state.serviceRows :
++            [];
++        return rows.filter(predicate);
++      },
++      get: (tableName, key) => {
++        if (tableName !== 'partitions') {
++          return null;
++        }
++        return state.partitionRows
++          .find((row) => row.partition_id === key) || null;
++      },
++    },
++  };
++  return stub;
++}
++
++function greenStubState() {
++  return {
++    partitionRows: partitionRows(),
++    serviceRows: serviceRows(),
++    stabilized: true,
++  };
++}
++
++test('the orchestrator dispatches after one stable census pass', async (t) => {
++  const stub = buildStubRebalancer(greenStubState());
++  const first = await applyUserTableLeaderPlacementCure(
++    stub, {nowMs: NOW_MS});
++  t.equal(
++    first.state,
++    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.CENSUS_UNSTABLE,
++  );
++  t.equal(stub.deliveries.length, 0);
++  const second = await applyUserTableLeaderPlacementCure(
++    stub, {nowMs: NOW_MS + 1},
++  );
++  t.equal(
++    second.state,
++    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF,
++  );
++  t.equal(stub.deliveries.length, 1);
++  const {request, target, options} = stub.deliveries[0];
++  t.equal(target, `${NODE_2}/service/replica-handler`);
++  t.equal(options.targetNodeId, NODE_2);
++  t.equal(
++    request[ReplicaOperationField.TYPE],
++    ReplicaOperationMessageType.STEP_DOWN_REPLICA,
++  );
++  t.equal(
++    request[ReplicaOperationField.REASON],
++    ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
++  );
++  t.equal(request[ReplicaOperationField.PARTITION_ID], P2);
++  t.equal(request[ReplicaOperationField.REPLICA_ID], `${P2}-r2`);
++  t.match(
++    request[ReplicaOperationField.OPERATION_ID],
++    /^user-table-leader-spread:/u,
++  );
++  t.end();
++});
++
++test('system-table partitions are outside the cure fence', async (t) => {
++  const state = greenStubState();
++  for (const row of state.partitionRows) {
++    row.table_id = 'control_plane_publications';
++  }
++  const stub = buildStubRebalancer(state);
++  const decision = await applyUserTableLeaderPlacementCure(
++    stub, {nowMs: NOW_MS});
++  t.equal(decision, null);
++  t.equal(stub.deliveries.length, 0);
++  t.end();
++});
++
++test('the cure never runs without leadership or stabilization', async (t) => {
++  const notLeader = buildStubRebalancer(greenStubState());
++  notLeader.isLeader = false;
++  t.equal(
++    await applyUserTableLeaderPlacementCure(notLeader, {nowMs: NOW_MS}),
++    null,
++  );
++  const unstable = buildStubRebalancer({
++    ...greenStubState(),
++    stabilized: false,
++  });
++  t.equal(
++    await applyUserTableLeaderPlacementCure(unstable, {nowMs: NOW_MS}),
++    null,
++  );
++  t.end();
++});
++
++test('transitional sibling rows are excluded from the census', async (t) => {
++  const state = greenStubState();
++  state.partitionRows.push({
++    leader_node_id: NODE_1,
++    partition_id: 'orders-p0',
++    state: 'splitting',
++    table_id: TABLE_ID,
++  });
++  const stub = buildStubRebalancer(state);
++  const first = await applyUserTableLeaderPlacementCure(
++    stub, {nowMs: NOW_MS});
++  t.equal(first.census.settledPartitionCount, 2);
++  t.end();
++});
++
++test('the quiescent cadence pass drives the cure (red-on-revert)', async (t) => {
++  const stub = buildStubRebalancer(greenStubState());
++  Object.assign(stub, {
++    advanceCheckCadence: REBALANCER_PLANNING_GATE_METHODS.advanceCheckCadence,
++    currentInterval: 1000,
++    increaseCurrentInterval: () => {},
++    isControlPlanePriorityPartition: () => false,
++  });
++  await stub.advanceCheckCadence(false);
++  await stub.advanceCheckCadence(false);
++  t.equal(stub.deliveries.length, 1);
++  t.end();
++});

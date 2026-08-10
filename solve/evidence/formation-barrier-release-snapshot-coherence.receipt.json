@@ -1,0 +1,20 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "formation-barrier-release-snapshot-coherence",
+  "status": "pass",
+  "generatedAt": "2026-08-10T17:23:14.520Z",
+  "receipts": [
+    {
+      "id": "engaged-barrier-releases-from-one-coherent-snapshot",
+      "passed": true,
+      "command": "npm run test:file -- test/convergence/dt-formation-barrier-spread-release-oscillation.test.js",
+      "detail": "the busy-healthy live shape (runs public-path-multinode-baseline-20260810T154716Z/155045Z) reproduced deterministically: the ledger genuinely spread over three distinct ACTIVE voters with a terminal ghost REMOVING services row (its REMOVE completed but the row DELETE lagged), the joiner cache stale-concentrated, the owner-RPC placement lane shedding on alternate iterations, and the real coordinator holding in-flight operations on OTHER partitions — the engaged REAL barrier loop releases a genuine SATISFIED within a few polls because every release leg is evaluated from one coherent per-iteration evidence unit: the settled (ACTIVE-only) spread verdict and the conservative completeness projection come from the SAME owner rows, the self-scoped drain observation proves the self-operations terminal in the same pass, an unavailable leg is a typed defer instead of a stale-cache verdict, and other-partition churn never defers release (red-on-revert: on the incoherent snapshot builder the ghost row vetoes spread forever while the drain leg is never attempted, and the barrier starves past its 120s budget exactly like the live oscillation)"
+    },
+    {
+      "id": "fail-closed-guards-and-timeout-preserved",
+      "passed": true,
+      "command": "npm run test:file -- test/convergence/dt-formation-priority-placement-before-active.test.js",
+      "detail": "the fail-closed floor keeps exact semantics under the coherent snapshot: the 120s engaged-barrier timeout still throws OPERATION_LEDGER_FORMATION_BARRIER_TIMEOUT when spread is genuinely incomplete (retryable + deferRetry preserved), the engagement latch, BYPASSED_INSUFFICIENT_COHORT two-node and sequential-growth bypasses, durable-rejoin and snapshot-absent guards are untouched, the authoritative-placement matrix still refuses partial/concentrated/non-owner-lane evidence with the operation drain never queried before placement is proven, and the oscillation DT pins the tightened floor: an in-flight ledger self-operation holds the barrier at the drain leg to timeout, and a spread-looking joiner cache can no longer release an engaged barrier while the authoritative placement lane stays unavailable (the pre-fix cache-only release hole is closed fail-closed)"
+    }
+  ]
+}
