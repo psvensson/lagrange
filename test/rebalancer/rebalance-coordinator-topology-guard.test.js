@@ -812,6 +812,124 @@ test('count-keyed lane HOLDS a REPLACE churn create when the surplus is a draini
   coordinator.shutdown();
 });
 
+// --- count-keyed lane: priority-spread cure ADD exemption ---
+// The planner refuses to drain the surplus while its one retained spread-cure
+// ADD is outstanding, so an unconditional over-target hold on that ADD is a
+// static deadlock (live witness public-path-multinode-baseline-20260811T135503Z:
+// 4 alive over 2 distinct nodes, target 3x3, 700 held cycles, spread pinned at
+// 2/3 all run). The hold must admit exactly the cure shape and nothing else.
+
+test('count-keyed lane EXEMPTS the priority-spread cure ADD: over target on alive ' +
+  'replicas but below distinct-node coverage, an ADD typed spread_replicas to an ' +
+  'unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks ' +
+  'the planner-yielded drain)', async (t) => {
+  initializeTestEnvironment();
+  // Witnessed deadlock topology: 4 alive replicas over 2 distinct nodes.
+  const rows = [
+    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r2', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r3', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
+  ];
+  const {coordinator, sqlEngine} = createCoordinator({
+    cacheServices: rows,
+    authoritativeServices: rows,
+  });
+  await coordinator.createOperation({
+    type: TEST_ADD_OPERATION_TYPE,
+    partitionId: CRIT_PARTITION_ID,
+    nodeId: 'node-3',
+    moveReason: 'spread_replicas',
+    emitOperationCreated: false,
+    enforceConcurrentOperationBudget: true,
+  });
+  t.equal(
+    sqlEngine.getOperations().length,
+    1,
+    'the planner-retained spread-cure ADD is admitted despite the over-target surplus',
+  );
+  coordinator.shutdown();
+});
+
+test('count-keyed lane STILL HOLDS an over-target ADD without the spread-cure ' +
+  'typing (the exemption admits only the planner-retained cure shape)', async (t) => {
+  initializeTestEnvironment();
+  const rows = [
+    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r2', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r3', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
+  ];
+  const {coordinator, sqlEngine} = createCoordinator({
+    cacheServices: rows,
+    authoritativeServices: rows,
+  });
+  const error = await captureOperationCreateError(() => coordinator.createOperation({
+    type: TEST_ADD_OPERATION_TYPE,
+    partitionId: CRIT_PARTITION_ID,
+    nodeId: 'node-3',
+    emitOperationCreated: false,
+    enforceConcurrentOperationBudget: true,
+  }));
+  t.ok(error, 'an untyped over-target ADD stays held');
+  t.equal(sqlEngine.getOperations().length, 0, 'no operation persists');
+  coordinator.shutdown();
+});
+
+test('count-keyed lane STILL HOLDS a spread-typed over-target ADD once distinct-node ' +
+  'coverage meets the target (spread satisfied -> the surplus must drain, not grow)',
+async (t) => {
+  initializeTestEnvironment();
+  // 4 alive over 4 distinct nodes, target 3: over target with spread satisfied.
+  const rows = [
+    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r2', 'node-2'),
+    critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
+    critRow(CRIT_PARTITION_ID + '-r4', 'node-4'),
+  ];
+  const {coordinator, sqlEngine} = createCoordinator({
+    cacheServices: rows,
+    authoritativeServices: rows,
+  });
+  const error = await captureOperationCreateError(() => coordinator.createOperation({
+    type: TEST_ADD_OPERATION_TYPE,
+    partitionId: CRIT_PARTITION_ID,
+    nodeId: 'node-5',
+    moveReason: 'spread_replicas',
+    emitOperationCreated: false,
+    enforceConcurrentOperationBudget: true,
+  }));
+  t.ok(error, 'a spread-typed ADD with coverage at target stays held');
+  t.equal(sqlEngine.getOperations().length, 0, 'no operation persists');
+  coordinator.shutdown();
+});
+
+test('count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target node ' +
+  'already hosts a replica (no coverage gain -> not the cure shape)', async (t) => {
+  initializeTestEnvironment();
+  const rows = [
+    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r2', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r3', 'node-1'),
+    critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
+  ];
+  const {coordinator, sqlEngine} = createCoordinator({
+    cacheServices: rows,
+    authoritativeServices: rows,
+  });
+  const error = await captureOperationCreateError(() => coordinator.createOperation({
+    type: TEST_ADD_OPERATION_TYPE,
+    partitionId: CRIT_PARTITION_ID,
+    nodeId: 'node-2',
+    moveReason: 'spread_replicas',
+    emitOperationCreated: false,
+    enforceConcurrentOperationBudget: true,
+  }));
+  t.ok(error, 'a spread-typed ADD to an already-hosting node stays held');
+  t.equal(sqlEngine.getOperations().length, 0, 'no operation persists');
+  coordinator.shutdown();
+});
+
 // --- s14: orphaned-row census (topology-guard raft_role awareness) ---
 // An orphan = status=active, NON-voter raft_role, no live in-flight ADD-like op:
 // the phantom a lost promotion-to-voter write-back leaves (its REPLACE completed

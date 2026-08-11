@@ -1,4 +1,8 @@
 import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
+import {MOVE_REASON} from './rebalancer-constants.js';
+import {
+  isOperationLedgerPartition,
+} from '../bootstrap/system-partition-classification.js';
 import {
   getConcurrentAddBudgetLimit,
   getLatestMembershipPublicationRow,
@@ -37,6 +41,9 @@ const {
 
 const LOCAL_STR_CRITICAL_LANE_HELD_OVER_TARGET =
   'critical-partition create lane held: over target on alive replicas';
+const LOCAL_STR_CRITICAL_LANE_SPREAD_CURE_ADMITTED =
+  'critical-partition create lane over-target hold exempted: ' +
+  'planner-retained priority-spread cure ADD';
 
 // Statuses that PHYSICALLY occupy a partition slot: a live replica (active) OR a
 // source still draining (removing) -- the latter is the over-replication surplus
@@ -192,8 +199,10 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
    * Alive-guard: a replica on a not-ready node is not counted, so (a) a legitimate
    * REPLACE draining a replica off a restarting node still admits (occupied <=
    * target) and (b) a dead replica's slot frees for re-placement. REMOVE never
-   * reaches this lane, so the surplus-draining removal always proceeds and the
-   * count falls back to target -- the hold is transient, never a deadlock. Fails
+   * reaches this lane, so the surplus-draining removal proceeds and the count
+   * falls back to target -- EXCEPT when the planner is yielding that removal to
+   * its one retained priority-spread cure ADD, which this hold would refuse:
+   * that pair is a static deadlock, so the cure ADD is exempted below. Fails
    * OPEN if the authoritative row read is unavailable (never blocks on a read gap).
    *
    * @param {Object} context
@@ -234,6 +243,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
       },
     });
     let occupiedAliveCount = 0;
+    const occupiedAliveNodeIds = new Set();
     for (const replica of inventory.replicas) {
       const status = replica.status;
       if (!LANE_OCCUPANCY_STATUSES.has(status)) {
@@ -244,9 +254,44 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
         continue;
       }
       occupiedAliveCount += 1;
+      occupiedAliveNodeIds.add(nodeId);
     }
     if (occupiedAliveCount <= targetReplicaCount) {
       return;
+    }
+    // The planner refuses to drain the surplus while its one retained
+    // priority-spread cure ADD is outstanding (replica-placement-cure-policy
+    // yield + retain_spread_cure_adds), so holding that exact ADD here is a
+    // static deadlock, not a transient hold (live witness: run
+    // public-path-multinode-baseline-20260811T135503Z, 700 held cycles while
+    // priority spread stayed 2/3 all run). Admit the one cure ADD — the same
+    // conjunct isEngagedPrioritySpreadCureMove already encodes one step later
+    // — computed on this hold's own alive-guarded inventory: ADD-only (the
+    // REPLACE-churn hold this lane exists for is untouched), spread-cure
+    // typed, non-ledger priority partition, target node not already hosting,
+    // and alive-distinct coverage still below target. Bound: one in-flight
+    // add-like op per partition (conflict gate + intent dedupe +
+    // TARGET_NODE_ALREADY_OCCUPIED downstream), transient alive = current+1,
+    // and the post-ADD drain path never re-enters this lane (REMOVE lane).
+    if (
+      context?.normalizedMoveType === OperationType.ADD &&
+      (context?.move?.moveReason ?? context?.move?.reason) ===
+        MOVE_REASON.SPREAD_REPLICAS &&
+      !isOperationLedgerPartition({partitionId: context?.partitionId}) &&
+      this.isPriorityControlPlanePartition(context?.partitionId) &&
+      occupiedAliveNodeIds.size < targetReplicaCount
+    ) {
+      const targetNodeId = String(context?.move?.nodeId || '').trim();
+      if (targetNodeId.length > 0 && !occupiedAliveNodeIds.has(targetNodeId)) {
+        this.logger?.info?.(LOCAL_STR_CRITICAL_LANE_SPREAD_CURE_ADMITTED, {
+          partitionId: context?.partitionId || null,
+          occupiedAliveCount,
+          occupiedAliveDistinctNodeCount: occupiedAliveNodeIds.size,
+          targetReplicaCount,
+          targetNodeId,
+        });
+        return;
+      }
     }
     this.logger?.info?.(LOCAL_STR_CRITICAL_LANE_HELD_OVER_TARGET, {
       partitionId: context?.partitionId || null,

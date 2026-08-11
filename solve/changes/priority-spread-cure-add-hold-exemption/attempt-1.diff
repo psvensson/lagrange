@@ -1,0 +1,597 @@
+diff --git a/scripts/checks/run-priority-spread-cure-add-hold-exemption-scenarios.js b/scripts/checks/run-priority-spread-cure-add-hold-exemption-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..687a6fc7b41445c9321b5487befc33dce7aad004
+--- /dev/null
++++ b/scripts/checks/run-priority-spread-cure-add-hold-exemption-scenarios.js
+@@ -0,0 +1,22 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++// Priority-spread cure-ADD hold-exemption guard: the critical-partition
++// create-lane over-target hold must admit exactly the planner-retained
++// spread-cure ADD (ADD-only, spread_replicas typed, non-ledger priority
++// partition, unoccupied target node, alive-distinct coverage below
++// target) and keep holding every other over-target add-like shape —
++// otherwise planner and admission encode contradictory policies at one
++// knob and priority spread deadlocks at 2/3 on a cold boot (live
++// witness public-path-multinode-baseline-20260811T135503Z: 700 held
++// cycles alternating with retain_spread_cure_adds, all run).
++const SCENARIOS = {
++  'priority-spread-cure-add-hold-exemption': [
++    'test/rebalancer/rebalance-coordinator-topology-guard.test.js',
++    'test/rebalancer/replica-placement-cure-policy.test.js',
++    'test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/rebalancer/rebalance-coordinator-priority-budget-admission.js b/src/rebalancer/rebalance-coordinator-priority-budget-admission.js
+index 23df9f7588aabe7b336c5b5dcb93b8681c6f744e..8d21bfba36e9e82f7a568fba3e25d2db22b67b56 100644
+--- a/src/rebalancer/rebalance-coordinator-priority-budget-admission.js
++++ b/src/rebalancer/rebalance-coordinator-priority-budget-admission.js
+@@ -1,4 +1,8 @@
+ import {REBALANCE_COORDINATOR_SHARED} from './rebalance-coordinator-shared.js';
++import {MOVE_REASON} from './rebalancer-constants.js';
++import {
++  isOperationLedgerPartition,
++} from '../bootstrap/system-partition-classification.js';
+ import {
+   getConcurrentAddBudgetLimit,
+   getLatestMembershipPublicationRow,
+@@ -37,6 +41,9 @@ const {
+ 
+ const LOCAL_STR_CRITICAL_LANE_HELD_OVER_TARGET =
+   'critical-partition create lane held: over target on alive replicas';
++const LOCAL_STR_CRITICAL_LANE_SPREAD_CURE_ADMITTED =
++  'critical-partition create lane over-target hold exempted: ' +
++  'planner-retained priority-spread cure ADD';
+ 
+ // Statuses that PHYSICALLY occupy a partition slot: a live replica (active) OR a
+ // source still draining (removing) -- the latter is the over-replication surplus
+@@ -192,8 +199,10 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
+    * Alive-guard: a replica on a not-ready node is not counted, so (a) a legitimate
+    * REPLACE draining a replica off a restarting node still admits (occupied <=
+    * target) and (b) a dead replica's slot frees for re-placement. REMOVE never
+-   * reaches this lane, so the surplus-draining removal always proceeds and the
+-   * count falls back to target -- the hold is transient, never a deadlock. Fails
++   * reaches this lane, so the surplus-draining removal proceeds and the count
++   * falls back to target -- EXCEPT when the planner is yielding that removal to
++   * its one retained priority-spread cure ADD, which this hold would refuse:
++   * that pair is a static deadlock, so the cure ADD is exempted below. Fails
+    * OPEN if the authoritative row read is unavailable (never blocks on a read gap).
+    *
+    * @param {Object} context
+@@ -234,6 +243,7 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
+       },
+     });
+     let occupiedAliveCount = 0;
++    const occupiedAliveNodeIds = new Set();
+     for (const replica of inventory.replicas) {
+       const status = replica.status;
+       if (!LANE_OCCUPANCY_STATUSES.has(status)) {
+@@ -244,10 +254,45 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
+         continue;
+       }
+       occupiedAliveCount += 1;
++      occupiedAliveNodeIds.add(nodeId);
+     }
+     if (occupiedAliveCount <= targetReplicaCount) {
+       return;
+     }
++    // The planner refuses to drain the surplus while its one retained
++    // priority-spread cure ADD is outstanding (replica-placement-cure-policy
++    // yield + retain_spread_cure_adds), so holding that exact ADD here is a
++    // static deadlock, not a transient hold (live witness: run
++    // public-path-multinode-baseline-20260811T135503Z, 700 held cycles while
++    // priority spread stayed 2/3 all run). Admit the one cure ADD — the same
++    // conjunct isEngagedPrioritySpreadCureMove already encodes one step later
++    // — computed on this hold's own alive-guarded inventory: ADD-only (the
++    // REPLACE-churn hold this lane exists for is untouched), spread-cure
++    // typed, non-ledger priority partition, target node not already hosting,
++    // and alive-distinct coverage still below target. Bound: one in-flight
++    // add-like op per partition (conflict gate + intent dedupe +
++    // TARGET_NODE_ALREADY_OCCUPIED downstream), transient alive = current+1,
++    // and the post-ADD drain path never re-enters this lane (REMOVE lane).
++    if (
++      context?.normalizedMoveType === OperationType.ADD &&
++      (context?.move?.moveReason ?? context?.move?.reason) ===
++        MOVE_REASON.SPREAD_REPLICAS &&
++      !isOperationLedgerPartition({partitionId: context?.partitionId}) &&
++      this.isPriorityControlPlanePartition(context?.partitionId) &&
++      occupiedAliveNodeIds.size < targetReplicaCount
++    ) {
++      const targetNodeId = String(context?.move?.nodeId || '').trim();
++      if (targetNodeId.length > 0 && !occupiedAliveNodeIds.has(targetNodeId)) {
++        this.logger?.info?.(LOCAL_STR_CRITICAL_LANE_SPREAD_CURE_ADMITTED, {
++          partitionId: context?.partitionId || null,
++          occupiedAliveCount,
++          occupiedAliveDistinctNodeCount: occupiedAliveNodeIds.size,
++          targetReplicaCount,
++          targetNodeId,
++        });
++        return;
++      }
++    }
+     this.logger?.info?.(LOCAL_STR_CRITICAL_LANE_HELD_OVER_TARGET, {
+       partitionId: context?.partitionId || null,
+       occupiedAliveCount,
+diff --git a/test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js b/test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js
+index 2ddab40076b8ef913b326cc36f9ff3ef25bb88ef..c838e4b617a3f4201e64dd16f216dd3ae1353893 100644
+--- a/test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js
++++ b/test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js
+@@ -61,6 +61,22 @@ function buildQueryHandler(state) {
+         table_policies: JSON.stringify({splitStorageThreshold: 16384}),
+       }]};
+     }
++    if (stringStartsWith(sql, 'UPDATE service_definitions')) {
++      return {rows: []};
++    }
++    if (stringStartsWith(sql, 'SELECT replica_count, runtime_config')) {
++      return {rows: [{
++        replica_count: 1,
++        runtime_config: JSON.stringify({
++          authMode: 'trust', host: '0.0.0.0', tlsMode: 'disable'}),
++      }]};
++    }
++    if (stringStartsWith(sql, 'SELECT node_id, address, port')) {
++      return {rows: [{
++        address: '10.0.0.1', health_status: 'healthy',
++        node_id: 'node-1', port: 5432,
++      }]};
++    }
+     if (stringStartsWith(sql, 'SELECT partition_id, leader_node_id')) {
+       return {rows: [...state.partitionRows]};
+     }
+@@ -153,6 +169,10 @@ function buildStubCluster(state) {
+   return {
+     _scenarioOverrides: {
+       publicPathBaseline: {
++        createLifecycleSqlClient: async () => ({
++          execute: async () => ({rows: []}),
++        }),
++        probeTcpEndpoint: async () => true,
+         fetchImpl: buildFetchHandler(state),
+         invocationCount: INVOCATION_COUNT,
+         logBuffer: () => buildLogEntries(state.localReadNodeIds),
+diff --git a/test/distributed/scenarios/public-path-multinode-baseline.js b/test/distributed/scenarios/public-path-multinode-baseline.js
+index 8890b13465a6eaf278ce8d6e95d12e53cb3d3efc..0d39a6a18bb74a84c1d9d75d6de4b9ba1b95d34a 100644
+--- a/test/distributed/scenarios/public-path-multinode-baseline.js
++++ b/test/distributed/scenarios/public-path-multinode-baseline.js
+@@ -18,6 +18,7 @@
+ 
+ import assert from 'node:assert/strict';
+ import {copyFile, mkdir, readFile, rm, symlink} from 'node:fs/promises';
++import net from 'node:net';
+ import path from 'node:path';
+ import {
+   runBuild,
+@@ -36,6 +37,7 @@ import {
+   SCENARIO_ARTIFACTS,
+ } from '../harness/constants.js';
+ import {
++  STABLE_APPLY_POLICY,
+   buildUserActivityTableSql,
+   createTableTopologyHelpers,
+   queryRows,
+@@ -80,7 +82,12 @@ const MIN_PARTITION_COUNT = 2;
+ const MIN_DISTINCT_LEADER_HOSTS = 2;
+ const DEFAULT_INVOCATION_COUNT = 60;
+ const TOPOLOGY_STABLE_READBACKS = 2;
+-const SPLIT_WAIT_TIMEOUT_MS = 180_000;
++// A cold 3-node boot legitimately holds non-system rebalancing (and so
++// the user-table leader-placement cure) behind the priority-spread
++// deferral for minutes; the split+leader-spread window must outlast
++// that formation tail, not race it (the user-table-leader-placement-
++// spread quest's measured cure, run 20260810T185440Z).
++const SPLIT_WAIT_TIMEOUT_MS = 420_000;
+ const SPLIT_WAIT_POLL_MS = 500;
+ const MAX_SENTINEL_ROWS = 40;
+ const READY_TIMEOUT_MS = 90_000;
+@@ -181,6 +188,14 @@ function resolveScenarioDependencies(cluster) {
+       runDeploy,
+       runGenerate,
+     },
++    createLifecycleSqlClient: overrides.createLifecycleSqlClient ||
++      defaultCreateLifecycleSqlClient,
++    probeTcpEndpoint: overrides.probeTcpEndpoint ||
++      defaultProbeTcpEndpoint,
++    pgwireEndpointTimeoutMs:
++      Number.isInteger(overrides.pgwireEndpointTimeoutMs) ?
++        overrides.pgwireEndpointTimeoutMs :
++        PGWIRE_ENDPOINT_TIMEOUT_MS,
+     prepareProject: overrides.prepareProject || defaultPrepareProject,
+     readManifest: overrides.readManifest || defaultReadManifest,
+     resourceSnapshot: overrides.resourceSnapshot ||
+@@ -253,19 +268,228 @@ async function waitForSplitAndLeaderSpread(nodes, seedNode, deps) {
+   );
+ }
+ 
+-// Deploy replays the generated records through the pipeline owner; the
+-// SQL client is the harness admin lane into the same grammar ingress.
+-async function deployThroughPipeline(seedNode, deps, paths, layoutPath) {
++// The deploy channel is REAL authenticated PG-wire: service lifecycle
++// SQL requires a canonical server-derived security context (the landed
++// service-lifecycle-pgwire-sql-transport gate), which the admin-WS lane
++// deliberately never carries. The scenario therefore scales the shipped
++// sys-postgres-wire meta service from its deliberate replica_count 0
++// through the admin system-table UPDATE surface (the split-policy
++// precedent), rebinds it for cross-container reach, waits for a healthy
++// endpoint, and deploys through a plain pg client against it -
++// trust-mode authentication still yields the server-derived identity.
++const PGWIRE_SERVICE_ID = 'sys-postgres-wire';
++const PGWIRE_TARGET_REPLICA_COUNT = 1;
++// Trust auth is fail-closed to loopback binds
++// (pgwire-runtime-module.js TRUST_REQUIRES_LOOPBACK, witnessed live as a
++// silent non-listening endpoint in run 20260810T213808Z); a cross-
++// container bind therefore uses password auth against the same
++// PGWIRE_AUTH_* credentials the harness already injects on every node.
++const PGWIRE_REACHABLE_RUNTIME_CONFIG = Object.freeze({
++  host: '0.0.0.0',
++  authMode: 'password',
++  tlsMode: 'disable',
++});
++const PGWIRE_ENDPOINT_TIMEOUT_MS = 300_000;
++const PGWIRE_TCP_PROBE_TIMEOUT_MS = 3_000;
++const PGWIRE_ENDPOINT_POLL_MS = 2_000;
++const PGWIRE_HEALTHY_STATUS = 'healthy';
++const PGWIRE_SQL = Object.freeze({
++  SCALE_UP:
++    'UPDATE service_definitions SET replica_count = ' +
++    `${PGWIRE_TARGET_REPLICA_COUNT} ` +
++    `WHERE service_id = '${PGWIRE_SERVICE_ID}'`,
++  REBIND:
++    'UPDATE service_definitions SET runtime_config = \'' +
++    JSON.stringify(PGWIRE_REACHABLE_RUNTIME_CONFIG) +
++    `' WHERE service_id = '${PGWIRE_SERVICE_ID}'`,
++  READ_BACK:
++    'SELECT replica_count, runtime_config FROM service_definitions ' +
++    `WHERE service_id = '${PGWIRE_SERVICE_ID}'`,
++  SELECT_ENDPOINTS:
++    'SELECT node_id, address, port, health_status ' +
++    'FROM service_endpoints ' +
++    `WHERE service_id = '${PGWIRE_SERVICE_ID}'`,
++});
++
++function pgwireRebindApplied(rows) {
++  try {
++    return rows.some((row) =>
++      JSON.parse(row?.runtime_config)?.host ===
++        PGWIRE_REACHABLE_RUNTIME_CONFIG.host);
++  } catch (_error) {
++    return false;
++  }
++}
++
++function pgwireDefinitionApplied(rows) {
++  const row = rows.find((entry) =>
++    Number(entry?.replica_count) === PGWIRE_TARGET_REPLICA_COUNT);
++  if (!row) {
++    return false;
++  }
++  try {
++    return JSON.parse(row.runtime_config)?.host ===
++      PGWIRE_REACHABLE_RUNTIME_CONFIG.host;
++  } catch (_error) {
++    return false;
++  }
++}
++
++// Request the pgwire listener early: the scale-up ADD is (correctly)
++// deferred behind the priority-spread gate during the formation tail, so
++// the request is fired right after boot and the placement overlaps the
++// scenario's own multi-minute dataset/split/spread phases (witnessed
++// live: run 20260810T215233Z deferred sys-postgres-wire placement for
++// the entire 120s endpoint window when requested late).
++async function requestPgwireListener(seedNode, deps) {
++  let stableCount = ZERO;
++  for (let attempt = ZERO; attempt < STABLE_APPLY_POLICY.MAX_ATTEMPTS;
++    attempt += ONE) {
++    await helpers.retryTransientAdminQuery(deps, 'pgwire-rebind',
++      () => seedNode.query(PGWIRE_SQL.REBIND));
++    const readBack = await helpers.retryTransientAdminQuery(
++      deps, 'pgwire-rebind-read-back',
++      () => queryRows(seedNode, PGWIRE_SQL.READ_BACK));
++    if (!pgwireRebindApplied(readBack)) {
++      await deps.sleep(STABLE_APPLY_POLICY.POLL_MS);
++      continue;
++    }
++    await helpers.retryTransientAdminQuery(deps, 'pgwire-scale-up',
++      () => seedNode.query(PGWIRE_SQL.SCALE_UP));
++    const rows = await helpers.retryTransientAdminQuery(
++      deps, 'pgwire-read-back',
++      () => queryRows(seedNode, PGWIRE_SQL.READ_BACK));
++    stableCount = pgwireDefinitionApplied(rows) ? stableCount + ONE : ZERO;
++    if (stableCount >= STABLE_APPLY_POLICY.STABLE_READBACKS) {
++      return;
++    }
++    await deps.sleep(STABLE_APPLY_POLICY.POLL_MS);
++  }
++  throw new Error(
++    `${SCENARIO_NAME}: pgwire scale-up never became stable`,
++  );
++}
++
++function defaultProbeTcpEndpoint(endpoint) {
++  return new Promise((resolvePromise) => {
++    const socket = net.createConnection({
++      host: endpoint.address,
++      port: Number(endpoint.port),
++      timeout: PGWIRE_TCP_PROBE_TIMEOUT_MS,
++    });
++    const finish = (reachable) => {
++      socket.destroy();
++      resolvePromise(reachable);
++    };
++    socket.once('connect', () => finish(true));
++    socket.once('error', () => finish(false));
++    socket.once('timeout', () => finish(false));
++  });
++}
++
++// A registered endpoint row is placement INTENT; only the placed replica
++// binds the socket. The deploy gate therefore requires a real TCP
++// connect, never row presence (witnessed live: healthy rows with
++// ECONNREFUSED while placement sat behind the formation-tail deferral).
++async function waitForReachablePgwireEndpoint(nodes, deps) {
++  const deadline = Date.now() + deps.pgwireEndpointTimeoutMs;
++  let lastRows = [];
++  while (Date.now() < deadline) {
++    lastRows = await helpers.queryRowsAcrossNodes(
++      nodes, PGWIRE_SQL.SELECT_ENDPOINTS);
++    for (const row of lastRows) {
++      if (row?.health_status === PGWIRE_HEALTHY_STATUS &&
++          typeof row?.address === 'string' && row.address.length > ZERO &&
++          await deps.probeTcpEndpoint(row)) {
++        return row;
++      }
++    }
++    await deps.sleep(PGWIRE_ENDPOINT_POLL_MS);
++  }
++  throw new Error(
++    `${SCENARIO_NAME}: no REACHABLE pgwire endpoint within ` +
++    `${deps.pgwireEndpointTimeoutMs}ms: ${JSON.stringify(lastRows)}`,
++  );
++}
++
++// A freshly placed listener can register its endpoint slightly before
++// the socket binds; a refused connect inside that window retries
++// bounded, everything else fails loud.
++const PGWIRE_CONNECT_RETRY_LIMIT = 15;
++const PGWIRE_CONNECT_RETRY_DELAY_MS = 2_000;
++const PGWIRE_CONNECT_REFUSED_CODE = 'ECONNREFUSED';
++// Lifecycle statements are idempotency-keyed, so a transient
++// authoritative-owner read failure during the formation tail (witnessed
++// live: 'authoritative operation lookup failed' on the INSTALL
++// idempotency check in run 20260810T220044Z) retries safely bounded.
++// The budget must outlast the control-plane's OWN replica-rebalancing
++// tail, which continues after the user-table leader spread completes
++// and starves the service_installations authoritative read for longer
++// than a formation pause: run 20260811T083529Z exhausted a 30s budget
++// while service_installations-p1 replicas were still being replaced,
++// with the identical error on all 11 attempts. Sized like the split
++// wait: minutes, not seconds, still bounded and loud on exhaustion.
++const PGWIRE_LIFECYCLE_TRANSIENT_PATTERN =
++  /authoritative operation lookup failed|command owner is unavailable|participant failures|not ready|timed out|timeout/i;
++const PGWIRE_LIFECYCLE_RETRY_LIMIT = 60;
++const PGWIRE_LIFECYCLE_RETRY_DELAY_MS = 3_000;
++
++async function defaultCreateLifecycleSqlClient(endpoint, deps) {
++  const pg = await import('pg');
++  const Client = pg.Client || pg.default?.Client;
++  const connect = async () => {
++    for (let attempt = ZERO; ; attempt += ONE) {
++      const client = new Client({
++        database: REQUEST_CELL_AUTH.DATABASE,
++        host: endpoint.address,
++        password: REQUEST_CELL_AUTH.PASSWORD,
++        port: Number(endpoint.port),
++        user: REQUEST_CELL_AUTH.USER,
++      });
++      try {
++        await client.connect();
++        return client;
++      } catch (error) {
++        if (error?.code !== PGWIRE_CONNECT_REFUSED_CODE ||
++            attempt >= PGWIRE_CONNECT_RETRY_LIMIT) {
++          throw error;
++        }
++        await deps.sleep(PGWIRE_CONNECT_RETRY_DELAY_MS);
++      }
++    }
++  };
++  return {
++    execute: async (statement, parameters) => {
++      for (let attempt = ZERO; ; attempt += ONE) {
++        const client = await connect();
++        try {
++          const result = await client.query(
++            {text: statement, values: parameters});
++          return {rows: result?.rows};
++        } catch (error) {
++          if (attempt >= PGWIRE_LIFECYCLE_RETRY_LIMIT ||
++              !PGWIRE_LIFECYCLE_TRANSIENT_PATTERN.test(
++                String(error?.message || ''))) {
++            throw error;
++          }
++          await deps.sleep(PGWIRE_LIFECYCLE_RETRY_DELAY_MS);
++        } finally {
++          await client.end();
++        }
++      }
++    },
++  };
++}
++
++// Deploy replays the generated records through the pipeline owner over
++// the authenticated PG-wire listener.
++async function deployThroughPipeline(deps, paths, layoutPath, endpoint) {
+   const containerLayoutPath = path.posix.join(
+     SCENARIO_ARTIFACTS.CONTAINER_PATH,
+     path.relative(paths.artifactsRoot, layoutPath)
+       .split(path.sep).join(path.posix.sep),
+   );
+-  const sqlClient = {
+-    execute: async (statement, parameters) => ({
+-      rows: await queryRows(seedNode, statement, parameters),
+-    }),
+-  };
++  const sqlClient = await deps.createLifecycleSqlClient(endpoint, deps);
+   return deps.pipeline.runDeploy({
+     createSqlClient: () => sqlClient,
+     idempotencyKey: deps.runId,
+@@ -471,6 +695,10 @@ export async function run(cluster) {
+   });
+   const manifest = await deps.readManifest(paths.projectDirectory);
+ 
++  // Request the pgwire lifecycle listener FIRST: its placement rides
++  // out the formation-tail deferral while the data phases run.
++  await requestPgwireListener(seedNode, deps);
++
+   // Data substrate: table, split policies, deterministic dataset.
+   // Setup writes retry transient post-boot settling; measured phases do not.
+   const rows = generateDatasetRows();
+@@ -485,9 +713,12 @@ export async function run(cluster) {
+     await waitForSplitAndLeaderSpread(nodes, seedNode, deps);
+   const topology = assertPartitionSpread(spread.partitionRows);
+ 
+-  // Deploy the generated records, then measure over authenticated HTTP.
++  // Deploy the generated records through the authenticated PG-wire
++  // listener (requested at boot; must be REACHABLE, not just registered),
++  // then measure over authenticated HTTP.
++  const pgwireEndpoint = await waitForReachablePgwireEndpoint(nodes, deps);
+   await deployThroughPipeline(
+-    seedNode, deps, paths, buildResult.layoutPath);
++    deps, paths, buildResult.layoutPath, pgwireEndpoint);
+   const servingNodes = await waitForServingNodes(nodes, deps);
+   const snapshotsBefore = await captureResourceSnapshots(nodes, deps);
+   const invocations = await runMeasuredInvocations(servingNodes, deps);
+diff --git a/test/rebalancer/rebalance-coordinator-topology-guard.test.js b/test/rebalancer/rebalance-coordinator-topology-guard.test.js
+index d210f4068cc59b8087f93dff6ae8c9541e74d1e8..7233cd7ab7fb993a4479d4958a4a1b04ac6263ce 100644
+--- a/test/rebalancer/rebalance-coordinator-topology-guard.test.js
++++ b/test/rebalancer/rebalance-coordinator-topology-guard.test.js
+@@ -812,6 +812,124 @@ test('count-keyed lane HOLDS a REPLACE churn create when the surplus is a draini
+   coordinator.shutdown();
+ });
+ 
++// --- count-keyed lane: priority-spread cure ADD exemption ---
++// The planner refuses to drain the surplus while its one retained spread-cure
++// ADD is outstanding, so an unconditional over-target hold on that ADD is a
++// static deadlock (live witness public-path-multinode-baseline-20260811T135503Z:
++// 4 alive over 2 distinct nodes, target 3x3, 700 held cycles, spread pinned at
++// 2/3 all run). The hold must admit exactly the cure shape and nothing else.
++
++test('count-keyed lane EXEMPTS the priority-spread cure ADD: over target on alive ' +
++  'replicas but below distinct-node coverage, an ADD typed spread_replicas to an ' +
++  'unoccupied node is ADMITTED (red-on-revert: the unconditional hold deadlocks ' +
++  'the planner-yielded drain)', async (t) => {
++  initializeTestEnvironment();
++  // Witnessed deadlock topology: 4 alive replicas over 2 distinct nodes.
++  const rows = [
++    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
++    critRow(CRIT_PARTITION_ID + '-r2', 'node-1'),
++    critRow(CRIT_PARTITION_ID + '-r3', 'node-1'),
++    critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
++  ];
++  const {coordinator, sqlEngine} = createCoordinator({
++    cacheServices: rows,
++    authoritativeServices: rows,
++  });
++  await coordinator.createOperation({
++    type: TEST_ADD_OPERATION_TYPE,
++    partitionId: CRIT_PARTITION_ID,
++    nodeId: 'node-3',
++    moveReason: 'spread_replicas',
++    emitOperationCreated: false,
++    enforceConcurrentOperationBudget: true,
++  });
++  t.equal(
++    sqlEngine.getOperations().length,
++    1,
++    'the planner-retained spread-cure ADD is admitted despite the over-target surplus',
++  );
++  coordinator.shutdown();
++});
++
++test('count-keyed lane STILL HOLDS an over-target ADD without the spread-cure ' +
++  'typing (the exemption admits only the planner-retained cure shape)', async (t) => {
++  initializeTestEnvironment();
++  const rows = [
++    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
++    critRow(CRIT_PARTITION_ID + '-r2', 'node-1'),
++    critRow(CRIT_PARTITION_ID + '-r3', 'node-1'),
++    critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
++  ];
++  const {coordinator, sqlEngine} = createCoordinator({
++    cacheServices: rows,
++    authoritativeServices: rows,
++  });
++  const error = await captureOperationCreateError(() => coordinator.createOperation({
++    type: TEST_ADD_OPERATION_TYPE,
++    partitionId: CRIT_PARTITION_ID,
++    nodeId: 'node-3',
++    emitOperationCreated: false,
++    enforceConcurrentOperationBudget: true,
++  }));
++  t.ok(error, 'an untyped over-target ADD stays held');
++  t.equal(sqlEngine.getOperations().length, 0, 'no operation persists');
++  coordinator.shutdown();
++});
++
++test('count-keyed lane STILL HOLDS a spread-typed over-target ADD once distinct-node ' +
++  'coverage meets the target (spread satisfied -> the surplus must drain, not grow)',
++async (t) => {
++  initializeTestEnvironment();
++  // 4 alive over 4 distinct nodes, target 3: over target with spread satisfied.
++  const rows = [
++    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
++    critRow(CRIT_PARTITION_ID + '-r2', 'node-2'),
++    critRow(CRIT_PARTITION_ID + '-r3', 'node-3'),
++    critRow(CRIT_PARTITION_ID + '-r4', 'node-4'),
++  ];
++  const {coordinator, sqlEngine} = createCoordinator({
++    cacheServices: rows,
++    authoritativeServices: rows,
++  });
++  const error = await captureOperationCreateError(() => coordinator.createOperation({
++    type: TEST_ADD_OPERATION_TYPE,
++    partitionId: CRIT_PARTITION_ID,
++    nodeId: 'node-5',
++    moveReason: 'spread_replicas',
++    emitOperationCreated: false,
++    enforceConcurrentOperationBudget: true,
++  }));
++  t.ok(error, 'a spread-typed ADD with coverage at target stays held');
++  t.equal(sqlEngine.getOperations().length, 0, 'no operation persists');
++  coordinator.shutdown();
++});
++
++test('count-keyed lane STILL HOLDS a spread-typed over-target ADD whose target node ' +
++  'already hosts a replica (no coverage gain -> not the cure shape)', async (t) => {
++  initializeTestEnvironment();
++  const rows = [
++    critRow(CRIT_PARTITION_ID + '-r1', 'node-1'),
++    critRow(CRIT_PARTITION_ID + '-r2', 'node-1'),
++    critRow(CRIT_PARTITION_ID + '-r3', 'node-1'),
++    critRow(CRIT_PARTITION_ID + '-r4', 'node-2'),
++  ];
++  const {coordinator, sqlEngine} = createCoordinator({
++    cacheServices: rows,
++    authoritativeServices: rows,
++  });
++  const error = await captureOperationCreateError(() => coordinator.createOperation({
++    type: TEST_ADD_OPERATION_TYPE,
++    partitionId: CRIT_PARTITION_ID,
++    nodeId: 'node-2',
++    moveReason: 'spread_replicas',
++    emitOperationCreated: false,
++    enforceConcurrentOperationBudget: true,
++  }));
++  t.ok(error, 'a spread-typed ADD to an already-hosting node stays held');
++  t.equal(sqlEngine.getOperations().length, 0, 'no operation persists');
++  coordinator.shutdown();
++});
++
+ // --- s14: orphaned-row census (topology-guard raft_role awareness) ---
+ // An orphan = status=active, NON-voter raft_role, no live in-flight ADD-like op:
+ // the phantom a lost promotion-to-voter write-back leaves (its REPLACE completed

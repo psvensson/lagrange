@@ -64,12 +64,12 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 ⚠ stale | — |
 | priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 ⚠ stale | — |
 | public-path-multinode-baseline | product | 0 | 0 | 2026-08-11 | — |
-| publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 | — |
+| publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 ⚠ stale | — |
 | rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 ⚠ stale | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 ⚠ stale | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 ⚠ stale | — |
 | solver-low-ceremony-correction-loop | process | 8 | 0 | 2026-08-05 | — |
 
-> 15 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
+> 16 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 
