@@ -1,0 +1,36 @@
+diff --git a/architecture/contracts/evidence/active-gate-tlc-route.model.report.json b/architecture/contracts/evidence/active-gate-tlc-route.model.report.json
+index aa6b0c3577589dc3274fe9e512da84eb781d3925..f6952840ed69a5db94528c9a7f5e6fd98d65f829 100644
+--- a/architecture/contracts/evidence/active-gate-tlc-route.model.report.json
++++ b/architecture/contracts/evidence/active-gate-tlc-route.model.report.json
+@@ -18,5 +18,5 @@
+   "expectationMet": true,
+   "temporalViolated": false,
+   "exitCode": 0,
+-  "outputTail": "Finished computing initial states: 1 distinct state generated at 2026-08-11 19:17:45.\nProgress(7) at 2026-08-11 19:17:45: 26 states generated, 16 distinct states found, 0 states left on queue.\nChecking temporal properties for the complete state space with 16 total distinct states at (2026-08-11 19:17:45)\nFinished checking temporal properties in 00s at 2026-08-11 19:17:45\nModel checking completed. No error has been found.\n  Estimates of the probability that TLC did not check all reachable states\n  because two distinct states had the same fingerprint:\n  calculated (optimistic):  val = 8.7E-18\n26 states generated, 16 distinct states found, 0 states left on queue.\nThe depth of the complete state graph search is 7.\nThe average outdegree of the complete state graph is 1 (minimum is 0, the maximum 2 and the 95th percentile is 2).\nFinished in 00s at (2026-08-11 19:17:45)"
++  "outputTail": "Finished computing initial states: 1 distinct state generated at 2026-08-11 20:44:49.\nProgress(7) at 2026-08-11 20:44:49: 26 states generated, 16 distinct states found, 0 states left on queue.\nChecking temporal properties for the complete state space with 16 total distinct states at (2026-08-11 20:44:49)\nFinished checking temporal properties in 00s at 2026-08-11 20:44:49\nModel checking completed. No error has been found.\n  Estimates of the probability that TLC did not check all reachable states\n  because two distinct states had the same fingerprint:\n  calculated (optimistic):  val = 8.7E-18\n26 states generated, 16 distinct states found, 0 states left on queue.\nThe depth of the complete state graph search is 7.\nThe average outdegree of the complete state graph is 1 (minimum is 0, the maximum 2 and the 95th percentile is 2).\nFinished in 00s at (2026-08-11 20:44:49)"
+ }
+diff --git a/scripts/checks/run-control-plane-mutation-apply-classifier-scenarios.js b/scripts/checks/run-control-plane-mutation-apply-classifier-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f28ec2ec9a50165fa85f365144333814c18de276
+--- /dev/null
++++ b/scripts/checks/run-control-plane-mutation-apply-classifier-scenarios.js
+@@ -0,0 +1,19 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const TEST_FILES = Object.freeze([
++  'test/control-plane/control-plane-mutation-outcome-classifier.test.js',
++  'test/node/replica-local-only-row-convergence.test.js',
++  'test/config/dynamic-config-service.test.js',
++  'test/bootstrap/node-registration-owner.test.js',
++  'test/raft/authoritative-row-mutation-outcome-classifier.test.js',
++  'test/raft/authoritative-row-mutation-helper.test.js',
++]);
++
++const SCENARIOS = {
++  'control-plane-mutation-apply-classifier': TEST_FILES,
++  'control-plane-mutation-aggregate-guard': TEST_FILES,
++};
++
++runGuardTestScenarios(SCENARIOS);
