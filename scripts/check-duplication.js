@@ -95,8 +95,10 @@ const RATCHET_TARGETS = [
     // spread; one-way-baseline rule).
     // 2026-08-11: tightened 828/31601 -> 827/31572 after the available-read
     // fixture guard extracted the shared over-target cache setup.
-    baselineCloneGroupCount: 827,
-    baselineDuplicatedLineCount: 31572,
+    // 2026-08-11: tightened 827/31572 -> 826/31551 after the join mutation-
+    // outcome matrix consolidated duplicated cases.
+    baselineCloneGroupCount: 826,
+    baselineDuplicatedLineCount: 31551,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
