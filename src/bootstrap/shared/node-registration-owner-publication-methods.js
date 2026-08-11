@@ -11,8 +11,9 @@ import {createControlPlaneRuntimeBundle} from
   '../../control-plane/control-plane-runtime-bundle.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_MUTATION_OUTCOME,
 } from '../../control-plane/control-plane-system-table-gateway.js';
+import {classifyControlPlaneMutationResult} from
+  '../../control-plane/control-plane-mutation-outcome-classifier.js';
 import {
   OWNER_CONTRACT_NEXT_ACTION,
   OWNER_CONTRACT_STATE,
@@ -52,38 +53,100 @@ const JOIN_ADMISSION_WITHDRAWAL_TARGET = Object.freeze({
 const LOG_FAILED_JOIN_ENDPOINT_WITHDRAWAL_FAILED =
   'Failed join endpoint withdrawal failed after node membership withdrawal';
 const SERVICE_ENDPOINT_HEALTH_STATUS_COLUMN = 'health_status';
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const objectIs = Object.is;
+const numberIsFinite = Number.isFinite;
+const numberIsSafeInteger = Number.isSafeInteger;
+const reflectApply = Reflect.apply;
+const stringPrototypeTrim = String.prototype.trim;
+const DATA_DESCRIPTOR_VALUE_PROPERTY = 'value';
+const NULL_VALUE = null;
 
-const ACCEPTED_JOIN_ADMISSION_MUTATION_OUTCOMES = new Set([
-  CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
-  CONTROL_PLANE_MUTATION_OUTCOME.NO_OP,
-  CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
-  CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
-]);
+function readOwnDataProperty(target, property) {
+  let descriptor;
+  try {
+    descriptor = objectGetOwnPropertyDescriptor(target, property);
+  } catch {
+    return {present: true, valid: false, value: undefined};
+  }
+  if (!descriptor) {
+    return {present: false, valid: true, value: undefined};
+  }
+  if (!objectHasOwn(descriptor, DATA_DESCRIPTOR_VALUE_PROPERTY)) {
+    return {present: true, valid: false, value: undefined};
+  }
+  return {present: true, valid: true, value: descriptor.value};
+}
 
-const DEFERRED_JOIN_ADMISSION_MUTATION_OUTCOMES = new Set([
-  CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED,
-  CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
-  CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
-]);
+function normalizeOwnString(property) {
+  return property.valid && typeof property.value === 'string' ?
+    reflectApply(stringPrototypeTrim, property.value, []) :
+    '';
+}
+
+function normalizeOwnRetryAfterMs(primary, pressure) {
+  for (const property of [primary, pressure]) {
+    if (property.valid && property.present &&
+      numberIsFinite(property.value) &&
+      numberIsSafeInteger(property.value) &&
+      property.value >= 0 && !objectIs(property.value, -0)) {
+      return property.value;
+    }
+  }
+  return NULL_VALUE;
+}
+
+function buildRejectedJoinAdmissionMutationAcceptance({
+  contractState,
+  nextAction,
+  outcome,
+  retryAfterMs,
+}) {
+  return {
+    accepted: false,
+    success: false,
+    withdrawalDeferred: false,
+    contractState,
+    nextAction,
+    outcome,
+    retryAfterMs,
+  };
+}
 
 function classifyJoinAdmissionMutationAcceptance(result) {
-  const contractState = normalizeString(result?.contractState);
-  const nextAction = normalizeString(result?.nextAction);
-  const outcome = normalizeString(result?.outcome);
+  const mutation = classifyControlPlaneMutationResult(result);
+  if (!mutation.valid) {
+    return buildRejectedJoinAdmissionMutationAcceptance({
+      contractState: '',
+      nextAction: '',
+      outcome: mutation.outcome,
+      retryAfterMs: NULL_VALUE,
+    });
+  }
+
+  const contractState = normalizeOwnString(
+    readOwnDataProperty(result, 'contractState'),
+  );
+  const nextAction = normalizeOwnString(
+    readOwnDataProperty(result, 'nextAction'),
+  );
+  const retryAfterMs = normalizeOwnRetryAfterMs(
+    readOwnDataProperty(result, 'retryAfterMs'),
+    readOwnDataProperty(result, 'pressureRetryAfterMs'),
+  );
   const terminal =
     contractState === OWNER_CONTRACT_STATE.BLOCKED ||
     contractState === OWNER_CONTRACT_STATE.FAILED ||
     nextAction === OWNER_CONTRACT_NEXT_ACTION.STOP ||
-    outcome === CONTROL_PLANE_MUTATION_OUTCOME.REJECTED;
-  if (terminal || result === false) {
-    return {
-      accepted: false,
-      success: false,
-      withdrawalDeferred: false,
+    mutation.terminal;
+  if (terminal) {
+    return buildRejectedJoinAdmissionMutationAcceptance({
       contractState,
       nextAction,
-      outcome,
-    };
+      outcome: mutation.outcome,
+      retryAfterMs,
+    });
   }
 
   const pendingContract =
@@ -95,15 +158,11 @@ function classifyJoinAdmissionMutationAcceptance(result) {
   const deferredContract =
     contractState === OWNER_CONTRACT_STATE.DEFERRED &&
     nextAction === OWNER_CONTRACT_NEXT_ACTION.RETRY;
-  const acceptedOutcome =
-    ACCEPTED_JOIN_ADMISSION_MUTATION_OUTCOMES.has(outcome);
-  const deferredOutcome =
-    DEFERRED_JOIN_ADMISSION_MUTATION_OUTCOMES.has(outcome);
-  const applied = result?.success !== false;
+  const applied = mutation.applied;
   const accepted =
     applied ||
-    acceptedOutcome ||
-    deferredOutcome ||
+    mutation.accepted ||
+    mutation.deferred ||
     pendingContract ||
     deferredContract;
 
@@ -114,14 +173,14 @@ function classifyJoinAdmissionMutationAcceptance(result) {
       accepted &&
       (
         applied !== true ||
-        deferredOutcome ||
+        mutation.deferred ||
         pendingContract ||
         deferredContract
       ),
     contractState,
     nextAction,
-    outcome,
-    retryAfterMs: result?.retryAfterMs ?? result?.pressureRetryAfterMs ?? null,
+    outcome: mutation.outcome,
+    retryAfterMs,
   };
 }
 

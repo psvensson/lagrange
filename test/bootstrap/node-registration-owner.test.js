@@ -122,6 +122,32 @@ function createDelegates() {
   };
 }
 
+function createFailedJoinWithdrawalOwner(nodeMutationResult) {
+  const owner = new NodeRegistrationOwner({
+    nodeId: TEST_NODE_ID,
+    nodeAddress: TEST_NODE_ADDRESS,
+    delegates: createDelegates(),
+  });
+  owner.getJoinAdmissionWriteRetryTimeoutMs = () => 0;
+  owner.getJoinAdmissionControlPlaneSystemTableGateway = () => ({
+    updateSystemTableRow: async (tableName) =>
+      tableName === TABLES.NODES ?
+        nodeMutationResult :
+        {success: true},
+  });
+  owner.readAuthoritativeMetaEndpointRowsOutcome = async () => ({
+    state: AUTHORITATIVE_ROW_READ_STATE.READABLE,
+    tableName: TABLES.SERVICE_ENDPOINTS,
+    rows: [],
+  });
+  return owner;
+}
+
+async function withdrawWithNodeMutationResult(nodeMutationResult) {
+  return createFailedJoinWithdrawalOwner(nodeMutationResult)
+    .withdrawFailedJoinAdmission({registeredNodeId: TEST_NODE_ID});
+}
+
 test(
   'NodeRegistrationOwner routes join admission rows through ' +
   'membership publication runtime owner',
@@ -539,7 +565,6 @@ test(
         updateCalls.push({tableName, whereClause, data, options});
         if (tableName === TABLES.NODES) {
           return {
-            success: false,
             outcome: CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
             contractState: 'deferred',
             nextAction: 'retry',
@@ -556,7 +581,7 @@ test(
     });
 
     t.equal(result.success, false,
-      'deferred withdrawal should preserve raw mutation success');
+      'deferred outcome should not default missing success to applied');
     t.equal(result.accepted, true,
       'deferred owner contract should still be accepted');
     t.equal(result.withdrawalDeferred, true,
@@ -567,6 +592,308 @@ test(
     t.equal(result.retryAfterMs, TIME_MS.SECOND);
     t.equal(updateCalls.length, 2,
       'best-effort endpoint withdrawal can still run after deferred node write');
+  },
+);
+
+test(
+  'NodeRegistrationOwner failed-join withdrawal consumes every canonical ' +
+  'mutation outcome without success defaults',
+  async (t) => {
+    const expectedByOutcome = Object.freeze({
+      [CONTROL_PLANE_MUTATION_OUTCOME.APPLIED]:
+        {success: true, accepted: true, withdrawalDeferred: false},
+      [CONTROL_PLANE_MUTATION_OUTCOME.NO_OP]:
+        {success: false, accepted: true, withdrawalDeferred: true},
+      [CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY]:
+        {success: true, accepted: true, withdrawalDeferred: true},
+      [CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED]:
+        {success: false, accepted: true, withdrawalDeferred: true},
+      [CONTROL_PLANE_MUTATION_OUTCOME.REJECTED]:
+        {success: false, accepted: false, withdrawalDeferred: false},
+      [CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY]:
+        {success: false, accepted: true, withdrawalDeferred: true},
+      [CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED]:
+        {success: false, accepted: true, withdrawalDeferred: true},
+    });
+    t.same(
+      Object.keys(expectedByOutcome).sort(),
+      Object.values(CONTROL_PLANE_MUTATION_OUTCOME).sort(),
+      'withdrawal coverage must exhaust the frozen gateway enum',
+    );
+
+    for (const outcome of Object.values(CONTROL_PLANE_MUTATION_OUTCOME)) {
+      const result = await withdrawWithNodeMutationResult({outcome});
+      t.match(result, expectedByOutcome[outcome],
+        `${outcome} should use the canonical effect tuple`);
+      t.equal(result.outcome, outcome,
+        `${outcome} should remain visible to withdrawal diagnostics`);
+    }
+  },
+);
+
+test(
+  'NodeRegistrationOwner failed-join withdrawal preserves valid legacy ' +
+  'and explicit owner-contract fallback semantics',
+  async (t) => {
+    const cases = [
+      {
+        label: 'legacy positive rows',
+        value: {success: true, partitionResult: {affectedRows: 1}},
+        expected: {success: true, accepted: true, withdrawalDeferred: false},
+      },
+      {
+        label: 'legacy zero rows',
+        value: {success: true, partitionResult: {affectedRows: 0}},
+        expected: {success: false, accepted: false, withdrawalDeferred: false},
+      },
+      {
+        label: 'legacy failure',
+        value: {success: false},
+        expected: {success: false, accepted: false, withdrawalDeferred: false},
+      },
+      {
+        label: 'unknown typed success',
+        value: {outcome: 'future_outcome', success: true, affectedRows: 1},
+        expected: {success: false, accepted: false, withdrawalDeferred: false},
+      },
+      {
+        label: 'safe pending fallback',
+        value: {success: false, contractState: 'pending', nextAction: 'wait'},
+        expected: {success: false, accepted: true, withdrawalDeferred: true},
+      },
+      {
+        label: 'safe deferred fallback',
+        value: {success: false, contractState: 'deferred', nextAction: 'retry'},
+        expected: {success: false, accepted: true, withdrawalDeferred: true},
+      },
+      {
+        label: 'explicit terminal owner contract',
+        value: {success: true, contractState: 'blocked', nextAction: 'stop'},
+        expected: {success: false, accepted: false, withdrawalDeferred: false},
+      },
+    ];
+
+    for (const entry of cases) {
+      const result = await withdrawWithNodeMutationResult(entry.value);
+      t.match(result, entry.expected, entry.label);
+    }
+
+    const primaryHint = await withdrawWithNodeMutationResult({
+      success: false,
+      contractState: 'pending',
+      nextAction: 'retry',
+      retryAfterMs: 250,
+      pressureRetryAfterMs: 500,
+    });
+    t.equal(primaryHint.retryAfterMs, 250,
+      'safe primary retry hint has precedence');
+    const pressureHint = await withdrawWithNodeMutationResult({
+      success: false,
+      contractState: 'pending',
+      nextAction: 'retry',
+      retryAfterMs: 'invalid',
+      pressureRetryAfterMs: 500,
+    });
+    t.equal(pressureHint.retryAfterMs, 500,
+      'safe pressure retry hint is the fallback');
+
+    for (const invalidPrimary of [
+      Number.NaN,
+      -0,
+      1.5,
+      Number.MAX_SAFE_INTEGER + 1,
+      Number.POSITIVE_INFINITY,
+    ]) {
+      const result = await withdrawWithNodeMutationResult({
+        success: false,
+        contractState: 'pending',
+        nextAction: 'retry',
+        retryAfterMs: invalidPrimary,
+        pressureRetryAfterMs: 500,
+      });
+      t.equal(result.retryAfterMs, 500,
+        'invalid numeric primary retry hint falls back to safe pressure hint');
+    }
+    const zeroHint = await withdrawWithNodeMutationResult({
+      success: false,
+      contractState: 'pending',
+      nextAction: 'retry',
+      retryAfterMs: 0,
+      pressureRetryAfterMs: 500,
+    });
+    t.equal(zeroHint.retryAfterMs, 0,
+      'positive zero is a safe immediate primary retry hint');
+  },
+);
+
+test(
+  'NodeRegistrationOwner failed-join withdrawal rejects inherited and ' +
+  'hostile mutation metadata without executing it',
+  async (t) => {
+    const inherited = Object.create({
+      success: false,
+      contractState: 'pending',
+      nextAction: 'retry',
+      retryAfterMs: 900,
+    });
+    const inheritedResult = await withdrawWithNodeMutationResult(inherited);
+    t.match(inheritedResult, {
+      success: false,
+      accepted: false,
+      withdrawalDeferred: false,
+    }, 'custom-prototype inherited fallback must fail closed');
+
+    const pollutedFields = {
+      contractState: 'pending',
+      nextAction: 'retry',
+      retryAfterMs: 900,
+    };
+    const savedDescriptors = {};
+    try {
+      for (const [property, value] of Object.entries(pollutedFields)) {
+        savedDescriptors[property] = Object.getOwnPropertyDescriptor(
+          Object.prototype,
+          property,
+        );
+        Reflect.defineProperty(Object.prototype, property, {
+          configurable: true,
+          value,
+        });
+      }
+      const pollutedResult =
+        await withdrawWithNodeMutationResult({success: false});
+      t.match(pollutedResult, {
+        success: false,
+        accepted: false,
+        withdrawalDeferred: false,
+        retryAfterMs: null,
+      }, 'Object.prototype owner-contract pollution cannot activate fallback');
+    } finally {
+      for (const property of Object.keys(pollutedFields)) {
+        const savedDescriptor = savedDescriptors[property];
+        if (savedDescriptor) {
+          Reflect.defineProperty(Object.prototype, property, savedDescriptor);
+        } else {
+          Reflect.deleteProperty(Object.prototype, property);
+        }
+      }
+    }
+
+    const nullPrototype = Object.create(null);
+    nullPrototype.success = false;
+    nullPrototype.contractState = 'pending';
+    nullPrototype.nextAction = 'wait';
+    nullPrototype.retryAfterMs = 300;
+    const nullPrototypeResult =
+      await withdrawWithNodeMutationResult(nullPrototype);
+    t.match(nullPrototypeResult, {
+      success: false,
+      accepted: true,
+      withdrawalDeferred: true,
+      retryAfterMs: 300,
+    }, 'own null-prototype metadata remains valid');
+
+    let accessorCalls = 0;
+    const appliedWithAccessors = {
+      outcome: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
+    };
+    for (const property of [
+      'contractState',
+      'nextAction',
+      'retryAfterMs',
+      'pressureRetryAfterMs',
+    ]) {
+      Object.defineProperty(appliedWithAccessors, property, {
+        get() {
+          accessorCalls += 1;
+          throw new Error(`must not read ${property}`);
+        },
+      });
+    }
+    const accessorResult =
+      await withdrawWithNodeMutationResult(appliedWithAccessors);
+    t.match(accessorResult, {
+      success: true,
+      accepted: true,
+      withdrawalDeferred: false,
+      contractState: '',
+      nextAction: '',
+      retryAfterMs: null,
+    }, 'adapter accessors are neutral and cannot override a canonical apply');
+    t.equal(accessorCalls, 0, 'adapter metadata accessors never execute');
+
+    let coercionCalls = 0;
+    const coerciveRetry = {
+      valueOf() {
+        coercionCalls += 1;
+        return 700;
+      },
+    };
+    const coerciveResult = await withdrawWithNodeMutationResult({
+      success: false,
+      contractState: 'pending',
+      nextAction: 'retry',
+      retryAfterMs: coerciveRetry,
+    });
+    t.equal(coerciveResult.retryAfterMs, null,
+      'coercive retry hints are ignored');
+    t.equal(coercionCalls, 0, 'retry hints are never coerced');
+
+    const originalTrim = String.prototype.trim;
+    let poisonedTrimCalls = 0;
+    let trimSafeResult;
+    try {
+      Reflect.defineProperty(String.prototype, 'trim', {
+        configurable: true,
+        value: function poisonedTrim() {
+          poisonedTrimCalls += 1;
+          return 'blocked';
+        },
+      });
+      const trimSafeOwner = createFailedJoinWithdrawalOwner({
+        success: false,
+        contractState: ' pending ',
+        nextAction: ' wait ',
+      });
+      trimSafeResult = await trimSafeOwner.withdrawFailedJoinAdmission({});
+    } finally {
+      Reflect.defineProperty(String.prototype, 'trim', {
+        configurable: true,
+        value: originalTrim,
+      });
+    }
+    t.match(trimSafeResult, {
+      success: false,
+      accepted: true,
+      withdrawalDeferred: true,
+      contractState: 'pending',
+      nextAction: 'wait',
+    }, 'captured trim preserves safe fallback after intrinsic replacement');
+    t.equal(poisonedTrimCalls, 0,
+      'post-import String.prototype.trim replacement never executes');
+
+    const proxyReads = [];
+    const proxy = new Proxy({}, {
+      get(_target, property) {
+        proxyReads.push(String(property));
+        return property === 'then' ? undefined : 'pending';
+      },
+      getOwnPropertyDescriptor(_target, property) {
+        proxyReads.push(`descriptor:${String(property)}`);
+        return {configurable: true, value: 'pending'};
+      },
+    });
+    const proxyResult = await withdrawWithNodeMutationResult(proxy);
+    t.match(proxyResult, {
+      success: false,
+      accepted: false,
+      withdrawalDeferred: false,
+    }, 'proxy mutation envelopes fail closed');
+    t.notOk(proxyReads.some((property) =>
+      property === 'contractState' || property === 'nextAction' ||
+      property === 'retryAfterMs' || property === 'pressureRetryAfterMs' ||
+      property.startsWith('descriptor:')),
+    'classification and adapter normalization add no proxy metadata traps');
   },
 );
 

@@ -1,0 +1,43 @@
+{
+  "id": "bootstrap-join-admission-mutation-outcome-consumer",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Failed-join withdrawal consumes classifyControlPlaneMutationResult as its sole mutation-effect owner and reads adapter-owned contract/retry metadata as own data exactly once without invoking accessors or traps: all seven canonical outcomes retain their explicit acceptance, apply, terminal, and deferred semantics; valid legacy envelopes and explicit safe pending/deferred owner-contract fallback remain compatible; invalid, unknown, custom-prototype, inherited, accessor, proxy, and coercive results never report applied or activate fallback; and the focused real-owner guard passes for three consecutive runs.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/golden-capability-gold-plating.md#tier-0-immediate-structural-guards",
+    "closesCL": [],
+    "parentQuest": "control-plane-mutation-apply-classifier",
+    "planDoc": null,
+    "draftedAtCommit": "0f868f692d519d5a207df895bd6e1fb80aac8c30"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "bootstrap-join-admission-mutation-outcome-consumer",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "bootstrap-join-admission-mutation-outcome-consumer-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "bootstrap-join-admission-mutation-outcome-consumer",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
