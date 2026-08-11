@@ -3,8 +3,10 @@ import LifeRaft from '../../src/raft/liferaft.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
 import {ReplicaOperationReason} from
   '../../src/rebalancer/replica-operation-constants.js';
-import {assignReplicaHandlerLeaderHandoffMethods} from
-  '../../src/node/replica-handler-leader-handoff-methods.js';
+import {
+  REPLICA_HANDLER_LEADER_HANDOFF_BRANCH,
+  assignReplicaHandlerLeaderHandoffMethods,
+} from '../../src/node/replica-handler-leader-handoff-methods.js';
 
 // Quest formation-ledger-self-move-blocks-cluster-ops: a
 // `replace_target_leader_election` STEP_DOWN names the replica that SHOULD
@@ -66,11 +68,17 @@ t.test(
     'demoting it',
   (t) => {
     const {handler, calls} = buildHandlerHost(RAFT_ROLE.LEADER);
-    const state = handler.requestTrackedPartitionLeaderHandoff(
+    const result = handler.requestTrackedPartitionLeaderHandoff(
       TEST_REPLICA_ID,
       ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
     );
-    t.equal(state, 'completed', 'handoff reports completed');
+    t.equal(result.state, 'completed', 'handoff reports completed');
+    t.equal(
+      result.branch,
+      REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TARGET_ELECTION_ROLE_NO_OP,
+      'the no-op is NAMED in the typed result, not silent',
+    );
+    t.equal(result.trackedRole, RAFT_ROLE.LEADER, 'judged role echoed');
     t.strictSame(
       calls.change,
       [],
@@ -95,11 +103,16 @@ t.test(
   'replacement election on a follower replica still requests the election',
   (t) => {
     const {handler, calls} = buildHandlerHost(RAFT_ROLE.FOLLOWER);
-    const state = handler.requestTrackedPartitionLeaderHandoff(
+    const result = handler.requestTrackedPartitionLeaderHandoff(
       TEST_REPLICA_ID,
       ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
     );
-    t.equal(state, 'completed', 'handoff reports completed');
+    t.equal(result.state, 'completed', 'handoff reports completed');
+    t.equal(
+      result.branch,
+      REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.ARMED_DIRECTED_ELECTION,
+      'the armed election is distinguishable from a role no-op',
+    );
     t.equal(calls.requestElectionNow, 1, 'election requested exactly once');
     t.strictSame(calls.change, [], 'no demotion on the follower path');
     t.end();
@@ -111,11 +124,16 @@ t.test(
     'interference',
   (t) => {
     const {handler, calls} = buildHandlerHost(RAFT_ROLE.CANDIDATE);
-    const state = handler.requestTrackedPartitionLeaderHandoff(
+    const result = handler.requestTrackedPartitionLeaderHandoff(
       TEST_REPLICA_ID,
       ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
     );
-    t.equal(state, 'completed', 'handoff reports completed');
+    t.equal(result.state, 'completed', 'handoff reports completed');
+    t.equal(
+      result.branch,
+      REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TARGET_ELECTION_ROLE_NO_OP,
+      'the mid-election no-op is named',
+    );
     t.strictSame(calls.change, [], 'the candidate is not stepped down');
     t.equal(calls.requestElectionNow, 0, 'its own election is not preempted');
     t.end();
@@ -126,11 +144,16 @@ t.test(
   'source-side demotion of a tracked leader is unchanged',
   (t) => {
     const {handler, calls} = buildHandlerHost(RAFT_ROLE.LEADER);
-    const state = handler.requestTrackedPartitionLeaderHandoff(
+    const result = handler.requestTrackedPartitionLeaderHandoff(
       TEST_REPLICA_ID,
       ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
     );
-    t.equal(state, 'completed', 'handoff reports completed');
+    t.equal(result.state, 'completed', 'handoff reports completed');
+    t.equal(
+      result.branch,
+      REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.DEMOTED_LEADER,
+      'the executed demotion is named',
+    );
     t.equal(calls.change.length, 1, 'the source leader steps down once');
     t.equal(
       calls.change[0]?.state,

@@ -5,6 +5,7 @@ import {
   applyUserTableLeaderPlacementCure,
   evaluateLeaderPlacementCureBehindPrioritySpreadGate,
   evaluateUserTableLeaderPlacementCure,
+  isUserTableLeaderCureGapActionable,
 } from '../../src/rebalancer/user-table-leader-placement-cure.js';
 import {
   REBALANCER_PLANNING_GATE_METHODS,
@@ -222,6 +223,7 @@ function buildStubRebalancer(state) {
       },
     },
     nodeId: NODE_1,
+    replicaId: `${P2}-r1`,
     systemTableCache: {
       filter: (tableName, predicate) => {
         const rows = tableName === 'partitions' ?
@@ -267,8 +269,31 @@ test('the orchestrator dispatches after one stable census pass', async (t) => {
     second.state,
     USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF,
   );
-  t.equal(stub.deliveries.length, 1);
-  const {request, target, options} = stub.deliveries[0];
+  // The handoff is a PAIR, demote-first: leg 0 demotes the own (source)
+  // leader locally so its heartbeats stop; leg 1 arms the target's
+  // directed election with nothing left to clobber the 1ms draw (quest
+  // user-table-leader-handoff-demotion-pairing, red-on-revert: dropping
+  // the demotion leg leaves the election a silent no-op against a
+  // stable leader).
+  t.equal(stub.deliveries.length, 2);
+  const demotion = stub.deliveries[0];
+  t.equal(demotion.target, `${NODE_1}/service/replica-handler`);
+  t.equal(demotion.options.targetNodeId, NODE_1);
+  t.equal(
+    demotion.request[ReplicaOperationField.TYPE],
+    ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+  );
+  t.equal(
+    demotion.request[ReplicaOperationField.REASON],
+    ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
+  );
+  t.equal(demotion.request[ReplicaOperationField.PARTITION_ID], P2);
+  t.equal(demotion.request[ReplicaOperationField.REPLICA_ID], `${P2}-r1`);
+  t.match(
+    demotion.request[ReplicaOperationField.OPERATION_ID],
+    /^user-table-leader-spread:.*:demote$/u,
+  );
+  const {request, target, options} = stub.deliveries[1];
   t.equal(target, `${NODE_2}/service/replica-handler`);
   t.equal(options.targetNodeId, NODE_2);
   t.equal(
@@ -284,6 +309,45 @@ test('the orchestrator dispatches after one stable census pass', async (t) => {
   t.match(
     request[ReplicaOperationField.OPERATION_ID],
     /^user-table-leader-spread:/u,
+  );
+  t.end();
+});
+
+test('a missing own replicaId skips the demotion leg but still ' +
+  'dispatches the election', async (t) => {
+  const stub = buildStubRebalancer(greenStubState());
+  delete stub.replicaId;
+  await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS});
+  await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS + 1});
+  t.equal(stub.deliveries.length, 1);
+  t.equal(
+    stub.deliveries[0].request[ReplicaOperationField.REASON],
+    ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
+  );
+  t.end();
+});
+
+test('a failed demotion leg never blocks the election leg', async (t) => {
+  const stub = buildStubRebalancer(greenStubState());
+  const delivered = [];
+  stub.messageRouter = {
+    deliver: async (target, request, options) => {
+      if (
+        request[ReplicaOperationField.REASON] ===
+          ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF
+      ) {
+        throw new Error('local handler unavailable');
+      }
+      delivered.push({options, request, target});
+      return {status: 'completed'};
+    },
+  };
+  await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS});
+  await applyUserTableLeaderPlacementCure(stub, {nowMs: NOW_MS + 1});
+  t.equal(delivered.length, 1);
+  t.equal(
+    delivered[0].request[ReplicaOperationField.REASON],
+    ReplicaOperationReason.REPLACE_TARGET_LEADER_ELECTION,
   );
   t.end();
 });
@@ -341,10 +405,77 @@ test('the quiescent cadence pass drives the cure (red-on-revert)', async (t) => 
     currentInterval: 1000,
     increaseCurrentInterval: () => {},
     isControlPlanePriorityPartition: () => false,
+    periodicCheckIntervalMs: 60_000,
   });
   await stub.advanceCheckCadence(false);
   await stub.advanceCheckCadence(false);
-  t.equal(stub.deliveries.length, 1);
+  t.equal(stub.deliveries.length, 2);
+  t.end();
+});
+
+test('an open actionable gap holds the quiescent cadence flat; a ' +
+  'satisfied spread backs off (red-on-revert)', async (t) => {
+  const openGap = buildStubRebalancer(greenStubState());
+  let openBackoffCalls = 0;
+  Object.assign(openGap, {
+    advanceCheckCadence: REBALANCER_PLANNING_GATE_METHODS.advanceCheckCadence,
+    currentInterval: 90_000,
+    increaseCurrentInterval: () => {
+      openBackoffCalls += 1;
+    },
+    isControlPlanePriorityPartition: () => false,
+    periodicCheckIntervalMs: 60_000,
+  });
+  await openGap.advanceCheckCadence(false);
+  t.equal(openGap.currentInterval, 60_000,
+    'census-unstable pass resets to the base interval');
+  t.equal(openBackoffCalls, 0, 'no backoff while the gap is actionable');
+
+  const satisfied = buildStubRebalancer({
+    ...greenStubState(),
+    partitionRows: partitionRows().map((row) =>
+      row.partition_id === P1 ?
+        {...row, leader_node_id: NODE_2} :
+        row),
+  });
+  let satisfiedBackoffCalls = 0;
+  Object.assign(satisfied, {
+    advanceCheckCadence: REBALANCER_PLANNING_GATE_METHODS.advanceCheckCadence,
+    currentInterval: 60_000,
+    increaseCurrentInterval: () => {
+      satisfiedBackoffCalls += 1;
+    },
+    isControlPlanePriorityPartition: () => false,
+    periodicCheckIntervalMs: 60_000,
+  });
+  await satisfied.advanceCheckCadence(false);
+  t.equal(satisfiedBackoffCalls, 1,
+    'a satisfied spread keeps the normal quiescent backoff');
+  t.equal(satisfied.deliveries.length, 0);
+  t.end();
+});
+
+test('gap-actionable classification covers exactly the acting states', (t) => {
+  const actionable = [
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.CENSUS_UNSTABLE,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.RETRY_SUPPRESSED,
+  ];
+  for (const state of actionable) {
+    t.equal(isUserTableLeaderCureGapActionable({state}), true, state);
+  }
+  const passive = [
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.ANCHOR_RETAINED,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.BELOW_MIN_PARTITION_COUNT,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NOT_SURPLUS_HOST,
+    USER_TABLE_LEADER_PLACEMENT_CURE_STATE.SPREAD_SATISFIED,
+  ];
+  for (const state of passive) {
+    t.equal(isUserTableLeaderCureGapActionable({state}), false, state);
+  }
+  t.equal(isUserTableLeaderCureGapActionable(null), false,
+    'out-of-scope (null) decisions never hold the cadence');
   t.end();
 });
 
@@ -362,7 +493,7 @@ test('the priority-spread deferral does not starve the cure', async (t) => {
     buildGatedStub('control_plane_priority_spread', false);
   await evaluateLeaderPlacementCureBehindPrioritySpreadGate(stub, blocker);
   await evaluateLeaderPlacementCureBehindPrioritySpreadGate(stub, blocker);
-  t.equal(stub.deliveries.length, 1);
+  t.equal(stub.deliveries.length, 2);
   t.end();
 });
 

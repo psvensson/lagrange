@@ -15,6 +15,14 @@
  * support spread, or if leadership keeps churning after spread is
  * reached (the hysteresis guard: spread must hold through a bounded
  * stability hold with an unchanged leader fingerprint).
+ *
+ * The measured phases start only after a cluster-wide leader-quiescence
+ * hold: the cure must move leadership away from a HEALTHY stable leader
+ * (quest user-table-leader-handoff-demotion-pairing). Runs that split
+ * during the formation tail let ambient election churn hand the
+ * directed election a free win, masking the paired-demotion mechanism
+ * this scenario is sealed to certify (run 20260810T221340Z: a stable
+ * seed absorbed two completed handoff dispatches with zero campaigns).
  */
 
 import assert from 'node:assert/strict';
@@ -54,10 +62,24 @@ const TOPOLOGY_STABLE_READBACKS = 2;
 // is exactly the flapping the cure's hysteresis guard must prevent.
 const STABILITY_HOLD_POLLS = 20;
 const MAX_SENTINEL_ROWS = 40;
-const REPORT_DETAIL_SCHEMA_VERSION = 1;
+// Pre-phase leader quiescence: the WHOLE cluster's partition-leader
+// fingerprint must hold unchanged this many consecutive polls before
+// the data substrate is even created, so the cure later fires against
+// healthy stable leaders instead of riding formation-tail churn. The
+// timeout mirrors the leader-spread budget: a cold boot legitimately
+// churns for minutes before settling.
+const QUIESCENCE_POLL_MS = 1000;
+const QUIESCENCE_STABLE_POLLS = 30;
+const QUIESCENCE_TIMEOUT_MS = 420_000;
+const REPORT_DETAIL_SCHEMA_VERSION = 2;
 
 const SQL = Object.freeze({
   ...buildUserActivityTableSql(TABLE_NAME),
+  // Cluster-wide leader census for the pre-phase quiescence hold: the
+  // formation tail lives in SYSTEM partitions, so the hold must sweep
+  // every partition, not the (not-yet-existing) scenario table's.
+  SELECT_ALL_PARTITIONS:
+    'SELECT partition_id, leader_node_id, state FROM partitions',
   SELECT_SERVICES:
     'SELECT partition_id, node_id, status, raft_role FROM services',
 });
@@ -90,7 +112,46 @@ function resolveScenarioDependencies(cluster) {
     stabilityHoldPolls: Number.isInteger(overrides.stabilityHoldPolls) ?
       overrides.stabilityHoldPolls :
       STABILITY_HOLD_POLLS,
+    quiescenceStablePolls: Number.isInteger(overrides.quiescenceStablePolls) ?
+      overrides.quiescenceStablePolls :
+      QUIESCENCE_STABLE_POLLS,
+    quiescenceTimeoutMs: Number.isInteger(overrides.quiescenceTimeoutMs) ?
+      overrides.quiescenceTimeoutMs :
+      QUIESCENCE_TIMEOUT_MS,
   };
+}
+
+// Cluster-wide leader quiescence: every partition's leader assignment
+// (system partitions included — they are the formation tail) must hold
+// an identical fingerprint across consecutive polls. Returns the held
+// fingerprint and how long the hold took, for the report detail.
+async function waitForClusterLeaderQuiescence(nodes, deps) {
+  const startedAtMs = Date.now();
+  const deadline = startedAtMs + deps.quiescenceTimeoutMs;
+  let fingerprint = null;
+  let stableCount = ZERO;
+  while (Date.now() < deadline) {
+    const rows = await helpers.queryRowsAcrossNodes(
+      nodes, SQL.SELECT_ALL_PARTITIONS);
+    const current = topologyFingerprint(rows);
+    stableCount = rows.length > ZERO && current === fingerprint ?
+      stableCount + ONE :
+      ONE;
+    fingerprint = current;
+    if (rows.length > ZERO && stableCount >= deps.quiescenceStablePolls) {
+      return {
+        fingerprint,
+        holdMs: Date.now() - startedAtMs,
+        stablePolls: stableCount,
+      };
+    }
+    await deps.sleep(QUIESCENCE_POLL_MS);
+  }
+  throw new Error(
+    `${SCENARIO_NAME}: cluster leaders never went quiescent for ` +
+    `${deps.quiescenceStablePolls} consecutive polls within ` +
+    `${deps.quiescenceTimeoutMs}ms (last fingerprint: ${fingerprint})`,
+  );
 }
 
 function distinctLeaderHosts(partitionRows) {
@@ -298,6 +359,11 @@ export async function run(cluster) {
   const seedNode = nodes.find((node) => node.role === 'seed') ||
     nodes[ZERO];
 
+  // The stable-leader precondition: no data substrate exists until the
+  // cluster's leader topology has held still — the cure's later target
+  // is a healthy, heartbeating leader, never formation churn.
+  const quiescence = await waitForClusterLeaderQuiescence(nodes, deps);
+
   // Data substrate: table, split-friendly policies, deterministic
   // dataset sized for exactly one managed split. Setup writes retry
   // transient post-boot settling; measured phases do not.
@@ -325,6 +391,8 @@ export async function run(cluster) {
   );
   return {
     leaderFingerprint: spread.fingerprint,
+    preQuiescenceHoldMs: quiescence.holdMs,
+    preQuiescenceStablePolls: quiescence.stablePolls,
     schemaVersion: REPORT_DETAIL_SCHEMA_VERSION,
     sentinelRowCount: split.sentinelCount,
     stabilityHoldPolls: deps.stabilityHoldPolls,

@@ -268,7 +268,14 @@ function createTableTopologyHelpers({scenarioName, tableName, sql}) {
   };
 }
 
+const STABLE_APPLY_POLICY = Object.freeze({
+  MAX_ATTEMPTS: POLICY_APPLY_MAX_ATTEMPTS,
+  POLL_MS: POLICY_APPLY_POLL_MS,
+  STABLE_READBACKS: POLICY_STABLE_READBACKS,
+});
+
 export {
+  STABLE_APPLY_POLICY,
   buildUserActivityTableSql,
   createTableTopologyHelpers,
   queryRows,

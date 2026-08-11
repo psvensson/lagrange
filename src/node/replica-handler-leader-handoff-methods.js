@@ -4,6 +4,12 @@
  * Owns demotion of a tracked leader replica before safe source removal and
  * the explicit replacement-leader election request path.
  *
+ * Every handoff resolves to a typed result naming the branch taken and the
+ * tracked role it judged, so a role-gated no-op (COMPLETED without arming
+ * anything) is observable at the caller and in the step-down response —
+ * run 20260810T221340Z proved a silent no-op is otherwise indistinguishable
+ * from an armed election (quest user-table-leader-handoff-demotion-pairing).
+ *
  * Requirements: 10.2, 3.1
  */
 import {RAFT_ROLE} from '../raft/constants.js';
@@ -17,6 +23,24 @@ const REPLICA_HANDLER_LEADER_HANDOFF_STATE = Object.freeze({
   NOT_APPLICABLE: 'not_applicable',
   NOT_SUPPORTED: 'not_supported',
 });
+const REPLICA_HANDLER_LEADER_HANDOFF_BRANCH = Object.freeze({
+  ARMED_DIRECTED_ELECTION: 'armed_directed_election',
+  ARMED_ELECTION_TIMER: 'armed_election_timer',
+  DEMOTED_LEADER: 'demoted_leader',
+  PROVIDER_UNSUPPORTED: 'provider_unsupported',
+  REPLICA_NOT_TRACKED: 'replica_not_tracked',
+  SOURCE_DEMOTION_ROLE_NO_OP: 'source_demotion_role_no_op',
+  TARGET_ELECTION_ROLE_NO_OP: 'target_election_role_no_op',
+});
+
+function buildLeaderHandoffResult(state, branch, trackedRole) {
+  return Object.freeze({
+    branch,
+    state,
+    trackedRole: typeof trackedRole === 'string' ? trackedRole : null,
+  });
+}
+
 function assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler) {
   class ReplicaHandlerLeaderHandoffMethods {
     /**
@@ -25,40 +49,61 @@ function assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler) {
      * providers must expose requestElectionNow via the Raft provider contract.
      * @param {Object|null} raftProvider
      * @param {Object|null} raft
-     * @return {string} Canonical leader handoff state.
+     * @param {string|null} trackedRole
+     * @return {Object} Frozen typed leader-handoff result.
      * @private
      */
-    requestTrackedReplacementLeaderElection(raftProvider, raft) {
+    requestTrackedReplacementLeaderElection(raftProvider, raft, trackedRole) {
       if (!raftProvider || !raft) {
-        return REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED;
+        return buildLeaderHandoffResult(
+          REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED,
+          REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.PROVIDER_UNSUPPORTED,
+          trackedRole,
+        );
       }
       if (
         typeof raftProvider.requestElectionNow ===
         REPLICA_HANDLER_TYPEOF.FUNCTION
       ) {
         raftProvider.requestElectionNow(raft);
-        return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
+        return buildLeaderHandoffResult(
+          REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED,
+          REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.ARMED_DIRECTED_ELECTION,
+          trackedRole,
+        );
       }
       if (
         typeof raftProvider.startElectionTimer !==
         REPLICA_HANDLER_TYPEOF.FUNCTION
       ) {
-        return REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED;
+        return buildLeaderHandoffResult(
+          REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED,
+          REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.PROVIDER_UNSUPPORTED,
+          trackedRole,
+        );
       }
       raftProvider.startElectionTimer(raft);
-      return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
+      return buildLeaderHandoffResult(
+        REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED,
+        REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.ARMED_ELECTION_TIMER,
+        trackedRole,
+      );
     }
 
     /**
      * Demote a tracked leader replica before safe source removal.
      * @param {string} replicaId - Replica ID to demote.
-     * @return {string} Canonical leader handoff state.
+     * @return {Object} Frozen typed leader-handoff result.
      * @private
      */
     requestTrackedPartitionLeaderHandoff(replicaId, reason = null) {
       const service = this.getTrackedService(replicaId);
       if (!service) {
-        return REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_APPLICABLE;
+        return buildLeaderHandoffResult(
+          REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_APPLICABLE,
+          REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.REPLICA_NOT_TRACKED,
+          null,
+        );
       }
       const trackedRole = this.getTrackedReplicaRole(replicaId);
       const raft = service.raft || null;
@@ -77,12 +122,21 @@ function assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler) {
           return this.requestTrackedReplacementLeaderElection(
             raftProvider,
             raft,
+            trackedRole,
           );
         }
-        return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
+        return buildLeaderHandoffResult(
+          REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED,
+          REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.TARGET_ELECTION_ROLE_NO_OP,
+          trackedRole,
+        );
       }
       if (trackedRole !== RAFT_ROLE.LEADER) {
-        return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
+        return buildLeaderHandoffResult(
+          REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED,
+          REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.SOURCE_DEMOTION_ROLE_NO_OP,
+          trackedRole,
+        );
       }
       if (
         !raft ||
@@ -91,13 +145,21 @@ function assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler) {
         typeof raftProvider.startElectionTimer !==
           REPLICA_HANDLER_TYPEOF.FUNCTION
       ) {
-        return REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED;
+        return buildLeaderHandoffResult(
+          REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED,
+          REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.PROVIDER_UNSUPPORTED,
+          trackedRole,
+        );
       }
       // The demotion sequence itself is shared with the partition-level
       // durability-fitness detector (src/raft/tracked-leader-demotion.js) —
       // one owner for the flap-safe ordering.
       performTrackedLeaderDemotion(service);
-      return REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED;
+      return buildLeaderHandoffResult(
+        REPLICA_HANDLER_LEADER_HANDOFF_STATE.COMPLETED,
+        REPLICA_HANDLER_LEADER_HANDOFF_BRANCH.DEMOTED_LEADER,
+        trackedRole,
+      );
     }
   }
   for (const methodName of Object.getOwnPropertyNames(
@@ -117,4 +179,8 @@ function assignReplicaHandlerLeaderHandoffMethods(ReplicaHandler) {
   }
 }
 
-export {assignReplicaHandlerLeaderHandoffMethods};
+export {
+  REPLICA_HANDLER_LEADER_HANDOFF_BRANCH,
+  REPLICA_HANDLER_LEADER_HANDOFF_STATE,
+  assignReplicaHandlerLeaderHandoffMethods,
+};

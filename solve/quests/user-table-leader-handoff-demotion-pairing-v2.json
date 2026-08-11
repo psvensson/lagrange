@@ -1,0 +1,43 @@
+{
+  "id": "user-table-leader-handoff-demotion-pairing-v2",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Landing successor for user-table-leader-handoff-demotion-pairing: its mechanism is complete, deterministically proven, and live-proven (paired demote-first handoff engaged correctly in 8/8 measured runs; doneWhen streak green in the most recent 3), but its terminal-frozen candidate cannot satisfy the landing gate's import closure - the strengthened scenario imports test/distributed/scenarios/user-table-topology-helpers.js, which carries an additive-only 8-line STABLE_APPLY_POLICY export from parent quest public-path-multinode-baseline's in-flight substrate, and the parent quest's replacement attempts to widen the candidate were recorded after its terminal (bookkeeping order defect, same class as partition-leader-row-publication-integrity-v2's). This quest lands the identical mechanism over the correct 10-path candidate (helpers file carried; nothing in the candidate consumes the new export; Q1's later landing shrinks by exactly those lines): (1) every user-table leader-placement cure handoff pairs flap-safe local source demotion (STEP_DOWN_REPLICA/REPLACE_SOURCE_LEADER_HANDOFF to the own replica-handler) BEFORE the target's directed election, so the 1ms arm has no heartbeat stream left to clobber it (DT dt6-directed-election-heartbeat-clobber.test.js: livelock reproduced exactly, named-target takeover 10/10 seeds, straggler worst case convergent with zero source re-wins); (2) requestTrackedPartitionLeaderHandoff returns a typed {state, branch, trackedRole} and handleStepDownReplica logs/echoes handoffBranch+handoffTrackedRole so role-gated no-ops are named; (3) the quiescent check cadence holds flat at base while the cure reports an actionable gap; (4) the user-table-leader-placement-spread scenario gains the pre-phase cluster-wide leader-quiescence hold (schema v2) so the cure is certified against a healthy stable leader. Live witnesses: runs 20260811T050840Z/051930Z (pre-pause), 063336Z/064049Z/064728Z (streak, with the landed publication-integrity fix), engagement excerpts archived per-run. Fail-closed floor inherited verbatim from the landed cure: never elect a stale-log replica, quorum safety untouched, priority control-plane machinery untouched, one-directional actuator preserved.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/pilot-readiness-and-public-proof/requirements.md#public-path-baseline",
+    "closesCL": [],
+    "parentQuest": "user-table-leader-handoff-demotion-pairing",
+    "planDoc": "solve/epics/pilot-readiness-and-public-proof.md",
+    "draftedAtCommit": "226d538a91a3f147f3e252f39192ae452e742bd5"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "user-table-leader-placement-spread",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "user-table-leader-handoff-demotion-pairing-v2-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "user-table-leader-placement-spread",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

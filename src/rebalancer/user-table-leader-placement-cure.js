@@ -21,6 +21,20 @@
  * own partition's leader is overridden with the proven-local signal),
  * and dispatch retries ride PRIORITY_PUBLICATION_LEADER_HANDOFF_EVIDENCE.
  * No new timers.
+ *
+ * Every handoff PAIRS local source demotion with the target election
+ * (quest user-table-leader-handoff-demotion-pairing): the directed
+ * election alone is a race — requestElectionNow arms a 1ms draw on the
+ * same timer every packet from a healthy leader re-arms with a fresh
+ * >=1s draw, and once clobbered the [election-min, election-max] window
+ * never beats the leader's heartbeat cadence again (run
+ * 20260810T221340Z: two completed dispatches, zero campaigns in 420s).
+ * Demoting the own leader replica FIRST (through the replica-handler's
+ * flap-safe tracked demotion: candidacy deferred, heartbeats stopped)
+ * removes the re-arm source, so the target's 1ms arm wins
+ * near-deterministically; a lost election dispatch falls back to the
+ * bounded ordinal-staggered election and census re-shed keeps the
+ * actuator convergent.
  */
 
 import {
@@ -70,6 +84,9 @@ const LEADER_HANDOFF_RETRY_AFTER_MS =
 // logging/echo only (verified: no ledger lookup); the prefix keeps the
 // cure's requests distinguishable from REPLACE-flow handoffs in logs.
 const CURE_OPERATION_ID_PREFIX = 'user-table-leader-spread';
+// The paired local demotion leg carries its own suffix so the two legs
+// of one handoff are separable in receiver logs.
+const CURE_DEMOTION_OPERATION_SUFFIX = 'demote';
 
 const REPLICA_HANDLER_TARGET_SUFFIX = '/service/replica-handler';
 
@@ -93,8 +110,38 @@ const USER_TABLE_LEADER_PLACEMENT_CURE_STATE = Object.freeze({
   DISPATCH_HANDOFF: 'dispatch_handoff',
 });
 
+// States in which the gap predicate held AND this rebalancer is the
+// acting surplus host (or is one census pass away from acting): the
+// quiescent check cadence must hold flat at the base interval here —
+// backing off 1.5x per pass starves the very re-check that completes
+// the two-pass census stability or re-dispatches after the retry
+// window (witnessed live: delays reached the 2x cap while the gap
+// persisted). Non-acting states (satisfied, anchor, not-surplus) keep
+// the normal backoff.
+const CURE_GAP_ACTIONABLE_STATES = Object.freeze(new Set([
+  USER_TABLE_LEADER_PLACEMENT_CURE_STATE.CENSUS_UNSTABLE,
+  USER_TABLE_LEADER_PLACEMENT_CURE_STATE.DISPATCH_HANDOFF,
+  USER_TABLE_LEADER_PLACEMENT_CURE_STATE.NO_ELIGIBLE_TARGET,
+  USER_TABLE_LEADER_PLACEMENT_CURE_STATE.RETRY_SUPPRESSED,
+]));
+
+function isUserTableLeaderCureGapActionable(decision) {
+  return Boolean(decision) &&
+    CURE_GAP_ACTIONABLE_STATES.has(decision.state);
+}
+
+const CURE_DEMOTION_SKIP_REASON = Object.freeze({
+  NO_OWN_REPLICA_ID: 'own replicaId unavailable',
+});
+
 const CURE_LOG_MSG = Object.freeze({
   DECISION: 'User-table leader placement cure decision',
+  DEMOTION_COMPLETED:
+    'User-table leader placement cure demoted local source leader',
+  DEMOTION_FAILED:
+    'User-table leader placement cure local demotion dispatch failed',
+  DEMOTION_SKIPPED:
+    'User-table leader placement cure skipped local demotion',
   DISPATCHED: 'User-table leader placement cure dispatched leader handoff',
   DISPATCH_FAILED:
     'User-table leader placement cure handoff dispatch failed',
@@ -301,9 +348,84 @@ function buildHandoffRequest(rebalancer, decision) {
   };
 }
 
+function buildSourceDemotionRequest(rebalancer) {
+  return {
+    [ReplicaOperationField.TYPE]:
+      ReplicaOperationMessageType.STEP_DOWN_REPLICA,
+    [ReplicaOperationField.OPERATION_ID]:
+      `${CURE_OPERATION_ID_PREFIX}:${rebalancer.entityId}:` +
+      CURE_DEMOTION_OPERATION_SUFFIX,
+    [ReplicaOperationField.PARTITION_ID]: rebalancer.entityId,
+    [ReplicaOperationField.REPLICA_ID]: rebalancer.replicaId,
+    [ReplicaOperationField.REASON]:
+      ReplicaOperationReason.REPLACE_SOURCE_LEADER_HANDOFF,
+  };
+}
+
+function resolveOwnSourceReplicaId(rebalancer) {
+  return typeof rebalancer.replicaId === 'string' &&
+    rebalancer.replicaId.length > CURE_LITERAL.ZERO ?
+    rebalancer.replicaId :
+    null;
+}
+
+function buildHandoffResponseLogContext(rebalancer, response, extra) {
+  return {
+    entityId: rebalancer.entityId,
+    handoffBranch: response?.handoffBranch || null,
+    handoffTrackedRole: response?.handoffTrackedRole || null,
+    responseStatus: response?.status || null,
+    ...extra,
+  };
+}
+
+// Demote the own (source) leader replica through the local
+// replica-handler — the same tracked, flap-safe demotion the REPLACE
+// flow uses (candidacy deferred before the timer re-arms, so the
+// demoted host cannot immediately re-win). A failed demotion leg is
+// logged and the election leg still dispatches: that is exactly the
+// pre-pairing behavior, never worse.
+async function demoteLocalSourceLeader(rebalancer) {
+  const sourceReplicaId = resolveOwnSourceReplicaId(rebalancer);
+  if (sourceReplicaId === null) {
+    rebalancer.logger.warn(CURE_LOG_MSG.DEMOTION_SKIPPED, {
+      entityId: rebalancer.entityId,
+      reason: CURE_DEMOTION_SKIP_REASON.NO_OWN_REPLICA_ID,
+    });
+    return null;
+  }
+  const target = `${rebalancer.nodeId}${REPLICA_HANDLER_TARGET_SUFFIX}`;
+  try {
+    const response = await rebalancer.messageRouter.deliver(
+      target,
+      buildSourceDemotionRequest(rebalancer),
+      {targetNodeId: rebalancer.nodeId},
+    );
+    rebalancer.logger.info(
+      CURE_LOG_MSG.DEMOTION_COMPLETED,
+      buildHandoffResponseLogContext(rebalancer, response, {sourceReplicaId}),
+    );
+    return response || null;
+  } catch (error) {
+    rebalancer.logger.warn(CURE_LOG_MSG.DEMOTION_FAILED, {
+      entityId: rebalancer.entityId,
+      error: error?.message || String(error),
+      sourceReplicaId,
+    });
+    return null;
+  }
+}
+
+// Ordering is load-bearing: demote FIRST so the leader's heartbeat
+// stream stops, THEN arm the target's directed election — nothing is
+// left to clobber the 1ms draw. After demotion this rebalancer loses
+// leadership (and with it the retry cadence), so both legs run in this
+// one pass; a lost election leg is accepted fallback (staggered
+// election), not something the demoted instance retries.
 async function dispatchLeaderHandoff(rebalancer, decision, nowMs) {
   const cureState = resolveCureState(rebalancer);
   cureState.lastDispatchAtMs = nowMs;
+  await demoteLocalSourceLeader(rebalancer);
   const target =
     `${decision.target.nodeId}${REPLICA_HANDLER_TARGET_SUFFIX}`;
   try {
@@ -312,12 +434,13 @@ async function dispatchLeaderHandoff(rebalancer, decision, nowMs) {
       buildHandoffRequest(rebalancer, decision),
       {targetNodeId: decision.target.nodeId},
     );
-    rebalancer.logger.info(CURE_LOG_MSG.DISPATCHED, {
-      entityId: rebalancer.entityId,
-      responseStatus: response?.status || null,
-      targetNodeId: decision.target.nodeId,
-      targetReplicaId: decision.target.replicaId,
-    });
+    rebalancer.logger.info(
+      CURE_LOG_MSG.DISPATCHED,
+      buildHandoffResponseLogContext(rebalancer, response, {
+        targetNodeId: decision.target.nodeId,
+        targetReplicaId: decision.target.replicaId,
+      }),
+    );
     return response || null;
   } catch (error) {
     rebalancer.logger.warn(CURE_LOG_MSG.DISPATCH_FAILED, {
@@ -440,4 +563,5 @@ export {
   applyUserTableLeaderPlacementCure,
   evaluateLeaderPlacementCureBehindPrioritySpreadGate,
   evaluateUserTableLeaderPlacementCure,
+  isUserTableLeaderCureGapActionable,
 };

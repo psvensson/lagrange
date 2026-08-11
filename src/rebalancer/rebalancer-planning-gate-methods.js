@@ -2,6 +2,7 @@ import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {
   applyUserTableLeaderPlacementCure,
   evaluateLeaderPlacementCureBehindPrioritySpreadGate,
+  isUserTableLeaderCureGapActionable,
 } from './user-table-leader-placement-cure.js';
 import {
   REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS,
@@ -680,10 +681,15 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     // planning gates (stabilization, start delay) already passed, so the
     // recorded anti-churn levers are structurally upstream — the one
     // place the user-table leader-placement cure may act.
-    await applyUserTableLeaderPlacementCure(this);
+    const cureDecision = await applyUserTableLeaderPlacementCure(this);
 
     if (this.isControlPlanePriorityPartition()) {
       this.currentInterval = this.getPriorityRetryDelayMs();
+    } else if (isUserTableLeaderCureGapActionable(cureDecision)) {
+      // An open actionable leader-placement gap holds the cadence flat:
+      // the 1.5x backoff otherwise spaces out exactly the passes that
+      // complete census stability or re-dispatch after the retry window.
+      this.currentInterval = this.periodicCheckIntervalMs;
     } else {
       this.increaseCurrentInterval(UNIFIED_REBALANCER_LITERAL.ONE_POINT_FIVE);
     }

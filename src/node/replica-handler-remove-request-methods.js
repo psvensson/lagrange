@@ -8,13 +8,11 @@ import {
   REPLICA_HANDLER_ERROR_MSG,
   REPLICA_HANDLER_LOG_MSG,
 } from './replica-handler-constants.js';
+import {
+  REPLICA_HANDLER_LEADER_HANDOFF_STATE,
+} from './replica-handler-leader-handoff-methods.js';
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
-const REPLICA_HANDLER_LEADER_HANDOFF_STATE = Object.freeze({
-  COMPLETED: 'completed',
-  NOT_APPLICABLE: 'not_applicable',
-  NOT_SUPPORTED: 'not_supported',
-});
 
 function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
   class ReplicaHandlerRemoveRequestMethods {
@@ -312,12 +310,13 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
         );
       }
       try {
-        const handoffState = this.requestTrackedPartitionLeaderHandoff(
+        const handoffResult = this.requestTrackedPartitionLeaderHandoff(
           replicaId,
           reason,
         );
         if (
-          handoffState === REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_APPLICABLE
+          handoffResult.state ===
+            REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_APPLICABLE
         ) {
           this.logger.warn(REPLICA_HANDLER_LOG_MSG.STEP_DOWN_NOT_FOUND, {
             operationId,
@@ -335,7 +334,8 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           );
         }
         if (
-          handoffState === REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED
+          handoffResult.state ===
+            REPLICA_HANDLER_LEADER_HANDOFF_STATE.NOT_SUPPORTED
         ) {
           this.logger.error(REPLICA_HANDLER_LOG_MSG.STEP_DOWN_FAILED, {
             operationId,
@@ -358,6 +358,8 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           operationId,
           partitionId,
           replicaId,
+          handoffBranch: handoffResult.branch,
+          handoffTrackedRole: handoffResult.trackedRole,
           nodeId: this.nodeId,
         });
         return this.buildReplicaOperationResponse(
@@ -365,6 +367,8 @@ function assignReplicaHandlerRemoveRequestMethods(ReplicaHandler) {
           {
             operationId,
             replicaId,
+            handoffBranch: handoffResult.branch,
+            handoffTrackedRole: handoffResult.trackedRole,
             nodeId: this.nodeId,
           },
         );

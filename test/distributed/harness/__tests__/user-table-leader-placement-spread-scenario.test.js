@@ -11,6 +11,10 @@ const arrayEvery = Function.call.bind(Array.prototype.every);
 const SHORT_WAIT_TIMEOUT_MS = 50;
 const HOLD_POLLS = 3;
 const NODE_COUNT = 3;
+// The pre-phase quiescence hold consumes exactly this many partition
+// reads when the stubbed topology is constant; read-count thresholds
+// below account for them.
+const QUIESCENCE_POLLS = 2;
 
 const SPREAD_PARTITION_ROWS = Object.freeze([
   {leader_node_id: 'node-1', partition_id: 'p-1', state: 'active'},
@@ -89,6 +93,8 @@ function buildStubCluster(state) {
     _scenarioOverrides: {
       userTableLeaderPlacementSpread: {
         leaderSpreadTimeoutMs: SHORT_WAIT_TIMEOUT_MS,
+        quiescenceStablePolls: QUIESCENCE_POLLS,
+        quiescenceTimeoutMs: SHORT_WAIT_TIMEOUT_MS,
         replicaSpreadTimeoutMs: SHORT_WAIT_TIMEOUT_MS,
         sleep: async () => {},
         splitWaitTimeoutMs: SHORT_WAIT_TIMEOUT_MS,
@@ -111,12 +117,29 @@ function greenState() {
 describe('user-table-leader-placement-spread scenario', () => {
   it('passes when the platform spreads and holds child leaders', async () => {
     const detail = await run(buildStubCluster(greenState()));
-    assert.equal(detail.schemaVersion, 1);
+    assert.equal(detail.schemaVersion, 2);
     assert.equal(detail.tableName, 'leader_spread_activity');
+    assert.equal(detail.preQuiescenceStablePolls, QUIESCENCE_POLLS);
+    assert.ok(detail.preQuiescenceHoldMs >= 0);
     assert.equal(detail.topology.distinctLeaderHosts, 2);
     assert.equal(detail.topology.partitions.length, 2);
     assert.ok(arrayEvery(detail.topology.partitions,
       (partition) => partition.replicaHostCount === 3));
+  });
+
+  it('fails when cluster leaders never go quiescent', async () => {
+    const state = greenState();
+    // Every read swings the leader assignment: no fingerprint can ever
+    // repeat across consecutive polls.
+    state.partitionRowsForRead = (readCount) => [{
+      leader_node_id: `node-${(readCount % 2) + 1}`,
+      partition_id: 'p-1',
+      state: 'active',
+    }];
+    await assert.rejects(
+      run(buildStubCluster(state)),
+      /never went quiescent/u,
+    );
   });
 
   it('fails when every child leader stays on one host', async () => {
@@ -155,7 +178,7 @@ describe('user-table-leader-placement-spread scenario', () => {
     // Spread readbacks stay stable long enough to freeze the topology,
     // then the leader set changes while the hold is polling.
     state.partitionRowsForRead = (readCount) =>
-      readCount >= 8 ? flapped : SPREAD_PARTITION_ROWS;
+      readCount >= 8 + QUIESCENCE_POLLS ? flapped : SPREAD_PARTITION_ROWS;
     await assert.rejects(
       run(buildStubCluster(state)),
       /flapped during the stability hold/u,
@@ -171,7 +194,7 @@ describe('user-table-leader-placement-spread scenario', () => {
     // The parent row reads settled through the freeze, then dissolves
     // mid-hold; the surviving children's leaders never move.
     state.partitionRowsForRead = (readCount) =>
-      readCount >= 8 ? SPREAD_PARTITION_ROWS : withParent;
+      readCount >= 8 + QUIESCENCE_POLLS ? SPREAD_PARTITION_ROWS : withParent;
     const detail = await run(buildStubCluster(state));
     assert.equal(detail.topology.partitions.length, 2);
     assert.equal(detail.topology.distinctLeaderHosts, 2);
@@ -183,7 +206,7 @@ describe('user-table-leader-placement-spread scenario', () => {
       {leader_node_id: 'node-2', partition_id: 'p-2', state: 'active'},
     ];
     state.partitionRowsForRead = (readCount) =>
-      readCount >= 8 ? collapsed : SPREAD_PARTITION_ROWS;
+      readCount >= 8 + QUIESCENCE_POLLS ? collapsed : SPREAD_PARTITION_ROWS;
     await assert.rejects(
       run(buildStubCluster(state)),
       /leader spread was lost during the stability hold/u,
