@@ -49,8 +49,10 @@ const RATCHET_TARGETS = [
     // loop extracted into quest-evidence-harness-runtime.js; measured).
     // 2026-08-07: tightened 65/2063 -> 63/2003 (measured after the V2a/V4
     // proof-cone landings; one-way-baseline rule).
-    baselineCloneGroupCount: 63,
-    baselineDuplicatedLineCount: 2003,
+    // 2026-08-11: tightened 63/2003 -> 62/1970 after the available-read
+    // fixture guard removed the duplicated over-target cache setup.
+    baselineCloneGroupCount: 62,
+    baselineDuplicatedLineCount: 1970,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },
@@ -91,8 +93,10 @@ const RATCHET_TARGETS = [
     // extracting the shared user-table topology helpers from the
     // public-path baseline scenario for user-table-leader-placement-
     // spread; one-way-baseline rule).
-    baselineCloneGroupCount: 828,
-    baselineDuplicatedLineCount: 31601,
+    // 2026-08-11: tightened 828/31601 -> 827/31572 after the available-read
+    // fixture guard extracted the shared over-target cache setup.
+    baselineCloneGroupCount: 827,
+    baselineDuplicatedLineCount: 31572,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
