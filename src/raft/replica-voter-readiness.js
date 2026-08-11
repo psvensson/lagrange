@@ -26,6 +26,9 @@
  */
 import {RAFT_ROLE} from './constants.js';
 
+const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+const setHas = Function.call.bind(Set.prototype.has);
+
 const VOTER_READINESS_SEMANTIC = Object.freeze({
   QUORUM_VOTER: 'quorum_voter',
   LOAD_ROUTABLE: 'load_routable',
@@ -82,7 +85,7 @@ const REPAIR_ONLY_RAFT_ROLES =
   );
 
 function normalizeRaftRoleInput(role) {
-  return typeof role === 'string' ? role.toLowerCase() : null;
+  return typeof role === 'string' ? stringToLowerCase(role) : null;
 }
 
 /**
@@ -93,17 +96,17 @@ function normalizeRaftRoleInput(role) {
  */
 function isVoterRaftRole(role) {
   const normalized = normalizeRaftRoleInput(role);
-  return normalized !== null && VOTER_RAFT_ROLES.has(normalized);
+  return normalized !== null && setHas(VOTER_RAFT_ROLES, normalized);
 }
 
 function isLoadRoutableRaftRole(role) {
   const normalized = normalizeRaftRoleInput(role);
-  return normalized !== null && LOAD_ROUTABLE_RAFT_ROLES.has(normalized);
+  return normalized !== null && setHas(LOAD_ROUTABLE_RAFT_ROLES, normalized);
 }
 
 function isRepairOnlyRaftRole(role) {
   const normalized = normalizeRaftRoleInput(role);
-  return normalized !== null && REPAIR_ONLY_RAFT_ROLES.has(normalized);
+  return normalized !== null && setHas(REPAIR_ONLY_RAFT_ROLES, normalized);
 }
 
 function isCatchupLearnerRaftRole(role) {

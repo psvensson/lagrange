@@ -1,5 +1,7 @@
 import {ADDRESS, ENTITY_TYPE} from '../constants/index.js';
+import {types} from 'node:util';
 import {OUTBOUND_DELIVERY_PRIORITY} from '../constants/transport.js';
+import {copyDenseOwnDataRecordArray} from '../utils/strict-own-data.js';
 import {
   INITIAL_MESSAGE_GROUP_ID,
   INITIAL_PARTITION_IDS,
@@ -7,6 +9,28 @@ import {
 } from './system-table-schemas-constants.js';
 
 const LOCAL_NUM_THREE = 3;
+const DESCRIPTOR_VALUE_FIELD = 'value';
+const arrayIsArray = Array.isArray;
+const arrayPush = Function.call.bind(Array.prototype.push);
+const sortArray = Function.call.bind(Array.prototype.sort);
+const MapConstructor = Map;
+const mapGet = Function.call.bind(Map.prototype.get);
+const mapHas = Function.call.bind(Map.prototype.has);
+const mapSet = Function.call.bind(Map.prototype.set);
+const isProxy = types.isProxy.bind(types);
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const SetConstructor = Set;
+const setAdd = Function.call.bind(Set.prototype.add);
+const setHas = Function.call.bind(Set.prototype.has);
+const setValues = Function.call.bind(Set.prototype.values);
+const setIteratorNext = Function.call.bind(
+  Object.getPrototypeOf(setValues(new SetConstructor())).next,
+);
+const regexpExec = Function.call.bind(RegExp.prototype.exec);
+const stringIndexOf = Function.call.bind(String.prototype.indexOf);
+const stringSlice = Function.call.bind(String.prototype.slice);
+const stringTrim = Function.call.bind(String.prototype.trim);
 
 const PARTITION_ID_CANONICAL_PATTERN = /^(.+)-p\d+$/;
 const PARTITION_ID_SPLIT_SEPARATOR = '_p_';
@@ -24,7 +48,7 @@ const CRITICAL_SYSTEM_PARTITION_IDS = new Set(
   Object.values(SYSTEM_TABLE_NAME).map((tableName) => `${tableName}-p1`),
 );
 
-const PRIORITY_CONTROL_PLANE_TABLE_IDS = new Set([
+const PRIORITY_CONTROL_PLANE_TABLE_ID_LIST = Object.freeze([
   SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
   SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
   SYSTEM_TABLE_NAME.SQL_TRANSACTIONS,
@@ -32,6 +56,9 @@ const PRIORITY_CONTROL_PLANE_TABLE_IDS = new Set([
   SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS,
   SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS,
 ]);
+const PRIORITY_CONTROL_PLANE_TABLE_IDS = new SetConstructor(
+  PRIORITY_CONTROL_PLANE_TABLE_ID_LIST,
+);
 
 // Exact formation dependency whose durable liveness rows are stored through
 // the partition it must spread. This is intentionally NOT a priority
@@ -62,7 +89,7 @@ const SYSTEM_TABLE_MUTATION_TRANSPORT_REASON = Object.freeze({
   NON_CRITICAL_SYSTEM_TABLE: 'non_critical_system_table',
 });
 
-const INITIAL_PARTITION_TABLE_ID_BY_PARTITION_ID = new Map(
+const INITIAL_PARTITION_TABLE_ID_BY_PARTITION_ID = new MapConstructor(
   Object.entries(INITIAL_PARTITION_IDS).map(([tableId, partitionId]) => [
     partitionId,
     tableId,
@@ -73,26 +100,40 @@ function normalizeNonEmptyString(value) {
   if (typeof value !== 'string') {
     return null;
   }
-  const normalized = value.trim();
+  const normalized = stringTrim(value);
   return normalized.length > 0 ? normalized : null;
 }
 
-function getPartitionIdFromPartitionRow(partitionRow = null) {
-  if (!partitionRow || typeof partitionRow !== 'object') {
-    return null;
+function readOwnDataValue(record, propertyNames) {
+  if (!record || typeof record !== 'object' || isProxy(record)) {
+    return {found: false, valid: false, value: null};
   }
-  return normalizeNonEmptyString(
-    partitionRow.partition_id ?? partitionRow.partitionId,
+  for (let index = 0; index < propertyNames.length; index += 1) {
+    const descriptor = objectGetOwnPropertyDescriptor(
+      record,
+      propertyNames[index],
+    );
+    if (!descriptor) {
+      continue;
+    }
+    return objectHasOwn(descriptor, DESCRIPTOR_VALUE_FIELD) ?
+      {found: true, valid: true, value: descriptor.value} :
+      {found: true, valid: false, value: null};
+  }
+  return {found: false, valid: true, value: null};
+}
+
+function getPartitionIdFromPartitionRow(partitionRow = null) {
+  const entry = readOwnDataValue(
+    partitionRow,
+    ['partition_id', 'partitionId'],
   );
+  return entry.valid ? normalizeNonEmptyString(entry.value) : null;
 }
 
 function getTableIdFromPartitionRow(partitionRow = null) {
-  if (!partitionRow || typeof partitionRow !== 'object') {
-    return null;
-  }
-  return normalizeNonEmptyString(
-    partitionRow.table_id ?? partitionRow.tableId,
-  );
+  const entry = readOwnDataValue(partitionRow, ['table_id', 'tableId']);
+  return entry.valid ? normalizeNonEmptyString(entry.value) : null;
 }
 
 function resolvePartitionTableIdFromPartitionId(partitionId) {
@@ -101,22 +142,24 @@ function resolvePartitionTableIdFromPartitionId(partitionId) {
     return null;
   }
 
-  if (INITIAL_PARTITION_TABLE_ID_BY_PARTITION_ID.has(normalizedPartitionId)) {
-    return INITIAL_PARTITION_TABLE_ID_BY_PARTITION_ID.get(normalizedPartitionId);
+  if (mapHas(INITIAL_PARTITION_TABLE_ID_BY_PARTITION_ID, normalizedPartitionId)) {
+    return mapGet(INITIAL_PARTITION_TABLE_ID_BY_PARTITION_ID, normalizedPartitionId);
   }
 
-  const canonicalMatch = normalizedPartitionId.match(
+  const canonicalMatch = regexpExec(
     PARTITION_ID_CANONICAL_PATTERN,
+    normalizedPartitionId,
   );
   if (canonicalMatch && canonicalMatch[1]) {
     return canonicalMatch[1];
   }
 
-  const splitSeparatorIndex = normalizedPartitionId.indexOf(
+  const splitSeparatorIndex = stringIndexOf(
+    normalizedPartitionId,
     PARTITION_ID_SPLIT_SEPARATOR,
   );
   if (splitSeparatorIndex > 0) {
-    return normalizedPartitionId.slice(0, splitSeparatorIndex);
+    return stringSlice(normalizedPartitionId, 0, splitSeparatorIndex);
   }
 
   return null;
@@ -150,12 +193,12 @@ const SYSTEM_PARTITION_CLASS_ROWS = Object.freeze([
   Object.freeze({
     partitionClass: SYSTEM_PARTITION_CLASS.BOOTSTRAP_CRITICAL,
     matches: ({partitionId}) =>
-      CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId),
+      setHas(CRITICAL_SYSTEM_PARTITION_IDS, partitionId),
   }),
   Object.freeze({
     partitionClass: SYSTEM_PARTITION_CLASS.PRIORITY_CONTROL_PLANE,
     matches: ({tableId}) =>
-      PRIORITY_CONTROL_PLANE_TABLE_IDS.has(tableId),
+      setHas(PRIORITY_CONTROL_PLANE_TABLE_IDS, tableId),
   }),
   Object.freeze({
     partitionClass: SYSTEM_PARTITION_CLASS.DEFAULT,
@@ -173,16 +216,16 @@ function classifySystemPartition(options = {}) {
     candidate.matches(context));
   return Object.freeze({
     partitionClass: row.partitionClass,
-    bootstrapCritical: CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId),
+    bootstrapCritical: setHas(CRITICAL_SYSTEM_PARTITION_IDS, partitionId),
     formationLivenessDependency:
-      FORMATION_LIVENESS_DEPENDENCY_PARTITION_IDS.has(partitionId),
-    priorityControlPlane: PRIORITY_CONTROL_PLANE_TABLE_IDS.has(tableId),
-    systemTable: SYSTEM_TABLE_IDS.has(tableId),
+      setHas(FORMATION_LIVENESS_DEPENDENCY_PARTITION_IDS, partitionId),
+    priorityControlPlane: setHas(PRIORITY_CONTROL_PLANE_TABLE_IDS, tableId),
+    systemTable: setHas(SYSTEM_TABLE_IDS, tableId),
   });
 }
 
 function isBootstrapCriticalSystemPartitionId(partitionId) {
-  return CRITICAL_SYSTEM_PARTITION_IDS.has(partitionId);
+  return setHas(CRITICAL_SYSTEM_PARTITION_IDS, partitionId);
 }
 
 function isSystemTablePartition(options = {}) {
@@ -204,7 +247,7 @@ function isOperationLedgerPartition(options = {}) {
 function isCriticalTransportControlPlanePartition(options = {}) {
   const tableId = resolvePartitionTableId(options);
   return tableId !== null &&
-    CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS.has(tableId);
+    setHas(CRITICAL_TRANSPORT_CONTROL_PLANE_TABLE_IDS, tableId);
 }
 
 function isInitialMessageGroupEntityId(entityId) {
@@ -290,7 +333,7 @@ function isCriticalTransportTargetAddress(options = {}) {
 
 function resolveSystemTableMutationTransportSnapshot(options = {}) {
   const tableName = normalizeNonEmptyString(options.tableName);
-  if (!tableName || !SYSTEM_TABLE_IDS.has(tableName)) {
+  if (!tableName || !setHas(SYSTEM_TABLE_IDS, tableName)) {
     return Object.freeze({
       criticalTransport: false,
       deliveryPriority: OUTBOUND_DELIVERY_PRIORITY.BACKGROUND,
@@ -350,50 +393,166 @@ function getPartitionRowFromCache(systemTableCache, partitionId) {
         normalizedPartitionId;
     },
   );
-  return Array.isArray(matchingRows) ?
+  return arrayIsArray(matchingRows) ?
     matchingRows[0] || null :
     null;
 }
 
 function buildPartitionRowByPartitionId(partitionRows = []) {
-  const partitionRowByPartitionId = new Map();
-  const rows = Array.isArray(partitionRows) ? partitionRows : [];
-  for (const partitionRow of rows) {
+  const partitionRowByPartitionId = new MapConstructor();
+  const rows = copyDenseOwnDataRecordArray(partitionRows) || [];
+  for (let index = 0; index < rows.length; index += 1) {
+    const partitionRow = rows[index];
     const partitionId = getPartitionIdFromPartitionRow(partitionRow);
     if (!partitionId) {
       continue;
     }
-    partitionRowByPartitionId.set(partitionId, partitionRow);
+    mapSet(partitionRowByPartitionId, partitionId, partitionRow);
   }
   return partitionRowByPartitionId;
+}
+
+function buildInitialPriorityPartitionIds() {
+  const partitionIds = [];
+  for (let index = 0;
+    index < PRIORITY_CONTROL_PLANE_TABLE_ID_LIST.length;
+    index += 1) {
+    const partitionId = normalizeNonEmptyString(
+      INITIAL_PARTITION_IDS[PRIORITY_CONTROL_PLANE_TABLE_ID_LIST[index]],
+    );
+    if (partitionId) {
+      arrayPush(partitionIds, partitionId);
+    }
+  }
+  sortArray(partitionIds);
+  return partitionIds;
+}
+
+function readPriorityPartitionResolutionOptionEntries(options) {
+  const partitionRowsEntry = readOwnDataValue(options, ['partitionRows']);
+  const serviceRowsEntry = readOwnDataValue(options, ['serviceRows']);
+  const includeInitialEntry = readOwnDataValue(
+    options,
+    ['includeInitialWhenMissing'],
+  );
+  const partitionMapEntry = readOwnDataValue(
+    options,
+    ['partitionRowByPartitionId'],
+  );
+  if (!partitionRowsEntry.valid ||
+      !serviceRowsEntry.valid ||
+      !includeInitialEntry.valid ||
+      !partitionMapEntry.valid) {
+    return null;
+  }
+  return {
+    includeInitialEntry,
+    partitionMapEntry,
+    partitionRowsEntry,
+    serviceRowsEntry,
+  };
+}
+
+function copyPriorityResolutionRows(entry) {
+  return copyDenseOwnDataRecordArray(entry.found ? entry.value : []);
+}
+
+function resolvePriorityPartitionRowMap(partitionMapEntry, partitionRows) {
+  const candidatePartitionMap = partitionMapEntry.value;
+  return partitionMapEntry.found &&
+    !isProxy(candidatePartitionMap) &&
+    candidatePartitionMap instanceof MapConstructor ?
+    candidatePartitionMap :
+    buildPartitionRowByPartitionId(partitionRows);
+}
+
+function normalizePriorityPartitionResolutionOptions(options) {
+  const entries = readPriorityPartitionResolutionOptionEntries(options);
+  if (entries === null) {
+    return null;
+  }
+  const partitionRows = copyPriorityResolutionRows(
+    entries.partitionRowsEntry,
+  );
+  const serviceRows = copyPriorityResolutionRows(entries.serviceRowsEntry);
+  if (partitionRows === null || serviceRows === null) {
+    return null;
+  }
+  return {
+    includeInitialWhenMissing:
+      !entries.includeInitialEntry.found ||
+      entries.includeInitialEntry.value !== false,
+    partitionRowByPartitionId: resolvePriorityPartitionRowMap(
+      entries.partitionMapEntry,
+      partitionRows,
+    ),
+    partitionRows,
+    serviceRows,
+  };
 }
 
 function addPriorityPartitionId(priorityPartitionIdsByTableId, tableId, partitionId) {
   if (!tableId ||
       !partitionId ||
-      !PRIORITY_CONTROL_PLANE_TABLE_IDS.has(tableId)) {
+      !setHas(PRIORITY_CONTROL_PLANE_TABLE_IDS, tableId)) {
     return;
   }
-  if (!priorityPartitionIdsByTableId.has(tableId)) {
-    priorityPartitionIdsByTableId.set(tableId, new Set());
+  if (!mapHas(priorityPartitionIdsByTableId, tableId)) {
+    mapSet(
+      priorityPartitionIdsByTableId,
+      tableId,
+      new SetConstructor(),
+    );
   }
-  priorityPartitionIdsByTableId.get(tableId).add(partitionId);
+  setAdd(mapGet(priorityPartitionIdsByTableId, tableId), partitionId);
+}
+
+function buildDeterministicPriorityPartitionIds(
+  priorityPartitionIdsByTableId,
+) {
+  // Preserve the frozen table order and captured collection intrinsics before
+  // the final lexical sort; ambient prototype mutation must not change output.
+  const partitionIds = [];
+  const seenPartitionIds = new SetConstructor();
+  for (let index = 0;
+    index < PRIORITY_CONTROL_PLANE_TABLE_ID_LIST.length;
+    index += 1) {
+    const tableId = PRIORITY_CONTROL_PLANE_TABLE_ID_LIST[index];
+    const partitionIdSet = mapGet(priorityPartitionIdsByTableId, tableId);
+    if (!partitionIdSet) {
+      continue;
+    }
+    const iterator = setValues(partitionIdSet);
+    for (let step = setIteratorNext(iterator);
+      !step.done;
+      step = setIteratorNext(iterator)) {
+      if (!setHas(seenPartitionIds, step.value)) {
+        setAdd(seenPartitionIds, step.value);
+        arrayPush(partitionIds, step.value);
+      }
+    }
+  }
+  sortArray(partitionIds);
+  return partitionIds;
 }
 
 function resolvePriorityControlPlanePartitionIds(options = {}) {
-  const partitionRows = Array.isArray(options.partitionRows) ?
-    options.partitionRows :
-    [];
-  const serviceRows = Array.isArray(options.serviceRows) ?
-    options.serviceRows :
-    [];
-  const includeInitialWhenMissing = options.includeInitialWhenMissing !== false;
-  const partitionRowByPartitionId = options.partitionRowByPartitionId instanceof Map ?
-    options.partitionRowByPartitionId :
-    buildPartitionRowByPartitionId(partitionRows);
-  const priorityPartitionIdsByTableId = new Map();
+  const normalizedOptions = normalizePriorityPartitionResolutionOptions(
+    options,
+  );
+  if (normalizedOptions === null) {
+    return buildInitialPriorityPartitionIds();
+  }
+  const {
+    includeInitialWhenMissing,
+    partitionRowByPartitionId,
+    partitionRows,
+    serviceRows,
+  } = normalizedOptions;
+  const priorityPartitionIdsByTableId = new MapConstructor();
 
-  for (const partitionRow of partitionRows) {
+  for (let index = 0; index < partitionRows.length; index += 1) {
+    const partitionRow = partitionRows[index];
     const partitionId = getPartitionIdFromPartitionRow(partitionRow);
     const tableId = resolvePartitionTableId({
       partitionId,
@@ -402,17 +561,19 @@ function resolvePriorityControlPlanePartitionIds(options = {}) {
     addPriorityPartitionId(priorityPartitionIdsByTableId, tableId, partitionId);
   }
 
-  for (const serviceRow of serviceRows) {
-    if (!serviceRow || typeof serviceRow !== 'object') {
-      continue;
-    }
-    const partitionId = normalizeNonEmptyString(
-      serviceRow.partition_id ?? serviceRow.partitionId,
+  for (let index = 0; index < serviceRows.length; index += 1) {
+    const serviceRow = serviceRows[index];
+    const partitionIdEntry = readOwnDataValue(
+      serviceRow,
+      ['partition_id', 'partitionId'],
     );
+    const partitionId = partitionIdEntry.valid ?
+      normalizeNonEmptyString(partitionIdEntry.value) :
+      null;
     if (!partitionId) {
       continue;
     }
-    const partitionRow = partitionRowByPartitionId.get(partitionId) || null;
+    const partitionRow = mapGet(partitionRowByPartitionId, partitionId) || null;
     const tableId = resolvePartitionTableId({
       partitionId,
       partitionRow,
@@ -420,8 +581,11 @@ function resolvePriorityControlPlanePartitionIds(options = {}) {
     addPriorityPartitionId(priorityPartitionIdsByTableId, tableId, partitionId);
   }
 
-  for (const tableId of PRIORITY_CONTROL_PLANE_TABLE_IDS) {
-    if (priorityPartitionIdsByTableId.has(tableId)) {
+  for (let index = 0;
+    index < PRIORITY_CONTROL_PLANE_TABLE_ID_LIST.length;
+    index += 1) {
+    const tableId = PRIORITY_CONTROL_PLANE_TABLE_ID_LIST[index];
+    if (mapHas(priorityPartitionIdsByTableId, tableId)) {
       continue;
     }
     if (!includeInitialWhenMissing) {
@@ -440,14 +604,8 @@ function resolvePriorityControlPlanePartitionIds(options = {}) {
     );
   }
 
-  const partitionIds = [];
-  for (const partitionIdSet of priorityPartitionIdsByTableId.values()) {
-    for (const partitionId of partitionIdSet) {
-      partitionIds.push(partitionId);
-    }
-  }
-  return [...new Set(partitionIds)].sort((left, right) =>
-    left.localeCompare(right),
+  return buildDeterministicPriorityPartitionIds(
+    priorityPartitionIdsByTableId,
   );
 }
 

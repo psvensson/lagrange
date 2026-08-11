@@ -1,107 +1,294 @@
-import {SERVICE_STATUS, SERVICE_TYPE} from '../constants/index.js';
+import {COLUMN, SERVICE_STATUS, SERVICE_TYPE} from '../constants/index.js';
 import {
   PRIORITY_CONTROL_PLANE_TABLE_IDS,
   buildPartitionRowByPartitionId,
-  classifySystemPartition,
-  resolvePriorityControlPlanePartitionIds,
+  resolvePartitionTableId,
 } from '../bootstrap/system-partition-classification.js';
+import {INITIAL_PARTITION_IDS} from '../bootstrap/system-table-schemas-constants.js';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
-  CONTROL_PLANE_READINESS_DIMENSION,
-} from './control-plane-readiness-constants.js';
-import {normalizeServiceRow} from './system-row-normalizers.js';
+  addExactNonNegativeInteger,
+  appendOwnArrayValue,
+  buildStringSet,
+  compareExactValues,
+  copyDenseOwnDataArray,
+  copyDenseOwnDataRecordArray,
+  copyExclusionCounts,
+  copyStrictOwnDataRecord,
+  createNullRecord as objectCreate,
+  DATA_PROPERTY_STATE,
+  defineOwnDataProperty as objectDefineProperty,
+  exactNonNegativeZero,
+  inspectOwnDataProperty,
+  MapConstructor,
+  mapGet,
+  mapHas,
+  mapIteratorNext,
+  mapSet,
+  mapValues,
+  normalizeExclusionReasonCount,
+  normalizeExpectedReplicaCount,
+  normalizeNonNegativeSafeInteger,
+  normalizePrimitiveStringList,
+  normalizedPriorityPartitionSummariesEqual,
+  priorityPartitionDiagnosticsEqual,
+  readOwnDataProperty,
+  readOwnLowerPrimitiveString,
+  readOwnPrimitiveString,
+  setAdd,
+  setHas,
+  setIteratorNext,
+  setSize,
+  setValues,
+  sortArray as arraySort,
+} from './membership-publication-priority-partition-canonical-data.js';
 import {
-  normalizeMembershipPublicationStringList,
-} from './membership-publication-normalizers.js';
-
+  buildPrioritySpreadEligibleNodeSnapshot,
+  isReadinessPromotable,
+} from './membership-publication-priority-partition-readiness-data.js';
 const PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT = 3;
+const INVALID_NORMALIZED_BLOCKED_PARTITION = null;
+const EXPECTED_REPLICA_COUNT_FIELD = 'expectedReplicaCount';
+const ROW_ABSENT_REASON = 'row_absent';
+const SERVICE_ADDRESS_FIELDS = Object.freeze([COLUMN.ADDRESS, 'address']);
+const SERVICE_ID_FIELDS = Object.freeze([
+  COLUMN.SERVICE_ID,
+  'service_id',
+  'serviceId',
+]);
+const SERVICE_NODE_ID_FIELDS = Object.freeze([
+  COLUMN.NODE_ID,
+  'node_id',
+  'nodeId',
+]);
+const SERVICE_PARTITION_ID_FIELDS = Object.freeze([
+  COLUMN.PARTITION_ID,
+  'partition_id',
+  'partitionId',
+]);
+const SERVICE_RAFT_ROLE_FIELDS = Object.freeze([
+  COLUMN.RAFT_ROLE,
+  'raft_role',
+  'raftRole',
+]);
+const SERVICE_STATUS_FIELDS = Object.freeze([COLUMN.STATUS, 'status']);
+const SERVICE_TYPE_FIELDS = Object.freeze([
+  COLUMN.SERVICE_TYPE,
+  'service_type',
+  'serviceType',
+]);
+const mathMax = Math.max;
+const mathMin = Math.min;
+
+function readCanonicalNonNegativeInteger(
+  record,
+  propertyNames,
+  fallback,
+) {
+  const entry = inspectOwnDataProperty(record, propertyNames);
+  if (entry.state === DATA_PROPERTY_STATE.ABSENT) {
+    return {valid: true, value: fallback};
+  }
+  if (entry.state !== DATA_PROPERTY_STATE.VALID) {
+    return {valid: false, value: null};
+  }
+  const value = normalizeNonNegativeSafeInteger(entry.value, null);
+  return {valid: value !== null, value};
+}
 
 function normalizeBlockedPriorityPartition(
   entry,
   requiredDistinctNodeCount = 0,
-  helperFns = {},
 ) {
-  if (!entry || typeof entry !== 'object') {
-    return null;
+  const entrySnapshot = copyStrictOwnDataRecord(entry);
+  if (entrySnapshot === null) {
+    return INVALID_NORMALIZED_BLOCKED_PARTITION;
   }
-  const partitionId = String(entry.partitionId || entry.partition_id || '').trim();
+  const partitionId = readOwnPrimitiveString(
+    entrySnapshot,
+    ['partitionId', 'partition_id'],
+  );
   if (!partitionId) {
-    return null;
+    return INVALID_NORMALIZED_BLOCKED_PARTITION;
   }
-  const normalizedRequiredDistinctNodeCount = helperFns.normalizePositiveInteger(
-    entry.requiredDistinctNodeCount ?? entry.required_distinct_node_count,
+  const requiredDistinctNodeCountEntry = readCanonicalNonNegativeInteger(
+    entrySnapshot,
+    ['requiredDistinctNodeCount', 'required_distinct_node_count'],
     requiredDistinctNodeCount,
   );
-  const readyDistinctNodeCount = helperFns.normalizePositiveInteger(
-    entry.readyDistinctNodeCount ?? entry.ready_distinct_node_count,
+  const readyDistinctNodeCountEntry = readCanonicalNonNegativeInteger(
+    entrySnapshot,
+    ['readyDistinctNodeCount', 'ready_distinct_node_count'],
     0,
   );
-  const readyReplicaCount = helperFns.normalizePositiveInteger(
-    entry.readyReplicaCount ?? entry.ready_replica_count,
-    readyDistinctNodeCount,
+  const readyReplicaCountEntry = readCanonicalNonNegativeInteger(
+    entrySnapshot,
+    ['readyReplicaCount', 'ready_replica_count'],
+    readyDistinctNodeCountEntry.value,
   );
-  const spreadGap = helperFns.normalizePositiveInteger(
-    entry.spreadGap ?? entry.spread_gap,
-    Math.max(0, normalizedRequiredDistinctNodeCount - readyDistinctNodeCount),
+  if (!requiredDistinctNodeCountEntry.valid ||
+      !readyDistinctNodeCountEntry.valid ||
+      !readyReplicaCountEntry.valid) {
+    return INVALID_NORMALIZED_BLOCKED_PARTITION;
+  }
+  const normalizedRequiredDistinctNodeCount =
+    requiredDistinctNodeCountEntry.value;
+  const readyDistinctNodeCount = readyDistinctNodeCountEntry.value;
+  const readyReplicaCount = readyReplicaCountEntry.value;
+  const expectedReplicaCountEntry = inspectOwnDataProperty(
+    entrySnapshot,
+    [EXPECTED_REPLICA_COUNT_FIELD, 'expected_replica_count'],
   );
-  const exclusionReasonCounts =
-    entry.exclusionReasonCounts &&
-    typeof entry.exclusionReasonCounts === 'object' ?
-      {...entry.exclusionReasonCounts} :
+  if (expectedReplicaCountEntry.state === DATA_PROPERTY_STATE.INVALID) {
+    return INVALID_NORMALIZED_BLOCKED_PARTITION;
+  }
+  const expectedReplicaCount =
+    expectedReplicaCountEntry.state === DATA_PROPERTY_STATE.VALID ?
+      normalizeExpectedReplicaCount(expectedReplicaCountEntry.value) :
       null;
+  const spreadGapEntry = readCanonicalNonNegativeInteger(
+    entrySnapshot,
+    ['spreadGap', 'spread_gap'],
+    mathMax(0, normalizedRequiredDistinctNodeCount - readyDistinctNodeCount),
+  );
+  if (!spreadGapEntry.valid) {
+    return INVALID_NORMALIZED_BLOCKED_PARTITION;
+  }
+  const spreadGap = spreadGapEntry.value;
+  const exclusionReasonCountsEntry = inspectOwnDataProperty(
+    entrySnapshot,
+    ['exclusionReasonCounts', 'exclusion_reason_counts'],
+  );
+  if (exclusionReasonCountsEntry.state === DATA_PROPERTY_STATE.INVALID) {
+    return INVALID_NORMALIZED_BLOCKED_PARTITION;
+  }
+  const exclusionReasonCounts =
+    exclusionReasonCountsEntry.state === DATA_PROPERTY_STATE.VALID ?
+      copyExclusionCounts(exclusionReasonCountsEntry.value) :
+      null;
+  if (exclusionReasonCountsEntry.state === DATA_PROPERTY_STATE.VALID &&
+      exclusionReasonCounts === null) {
+    return INVALID_NORMALIZED_BLOCKED_PARTITION;
+  }
   return {
     partitionId,
     requiredDistinctNodeCount: normalizedRequiredDistinctNodeCount,
     readyDistinctNodeCount,
     readyReplicaCount,
+    ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
     spreadGap,
     ...(exclusionReasonCounts ? {exclusionReasonCounts} : {}),
   };
 }
 
-function normalizePriorityPartitionSummary(summary, options = {}, helperFns = {}) {
-  if (!summary || typeof summary !== 'object') {
+function normalizePriorityPartitionSummary(summary, options = {}, _helperFns = {}) {
+  const summarySnapshot = copyStrictOwnDataRecord(summary);
+  const optionsSnapshot = copyStrictOwnDataRecord(options);
+  if (summarySnapshot === null || optionsSnapshot === null) {
     return null;
   }
-  const fallbackRequiredDistinctNodeCount = helperFns.normalizePositiveInteger(
-    options.requiredDistinctNodeCount,
+  const fallbackRequiredDistinctNodeCountEntry = readCanonicalNonNegativeInteger(
+    optionsSnapshot,
+    ['requiredDistinctNodeCount'],
     0,
   );
-  const requiredDistinctNodeCount = helperFns.normalizePositiveInteger(
-    summary.requiredDistinctNodeCount ?? summary.required_distinct_node_count,
-    fallbackRequiredDistinctNodeCount,
+  if (!fallbackRequiredDistinctNodeCountEntry.valid) {
+    return null;
+  }
+  const requiredDistinctNodeCountEntry = readCanonicalNonNegativeInteger(
+    summarySnapshot,
+    ['requiredDistinctNodeCount', 'required_distinct_node_count'],
+    fallbackRequiredDistinctNodeCountEntry.value,
   );
-  const blockedPartitions = (
-    Array.isArray(summary.blockedPartitions) ? summary.blockedPartitions : []
-  )
-    .map((entry) =>
-      normalizeBlockedPriorityPartition(entry, requiredDistinctNodeCount, helperFns),
-    )
-    .filter(Boolean)
-    .sort((left, right) => left.partitionId.localeCompare(right.partitionId));
-  const missingPartitionIds = normalizeMembershipPublicationStringList([
-    ...(Array.isArray(summary.missingPartitionIds) ? summary.missingPartitionIds : []),
-    ...blockedPartitions.map((entry) => entry.partitionId),
-  ]);
-  const readyEligibleNodeCount = helperFns.normalizePositiveInteger(
-    summary.readyEligibleNodeCount ?? summary.ready_eligible_node_count,
-    helperFns.normalizePositiveInteger(options.readyEligibleNodeCount, 0),
+  if (!requiredDistinctNodeCountEntry.valid) {
+    return null;
+  }
+  const requiredDistinctNodeCount = requiredDistinctNodeCountEntry.value;
+  const blockedPartitionsEntry = inspectOwnDataProperty(
+    summarySnapshot,
+    ['blockedPartitions', 'blocked_partitions'],
   );
-  const totalPriorityPartitionCount = helperFns.normalizePositiveInteger(
-    summary.totalPriorityPartitionCount ?? summary.total_priority_partition_count,
-    PRIORITY_CONTROL_PLANE_TABLE_IDS.size,
+  if (blockedPartitionsEntry.state === DATA_PROPERTY_STATE.INVALID) {
+    return null;
+  }
+  const partitionRowsSnapshot =
+    blockedPartitionsEntry.state === DATA_PROPERTY_STATE.VALID ?
+      copyDenseOwnDataArray(blockedPartitionsEntry.value) :
+      [];
+  if (partitionRowsSnapshot === null) {
+    return null;
+  }
+  const normalizedPartitions = [];
+  for (let index = 0; index < partitionRowsSnapshot.length; index += 1) {
+    const normalized = normalizeBlockedPriorityPartition(
+      partitionRowsSnapshot[index],
+      requiredDistinctNodeCount,
+    );
+    if (normalized === null) {
+      return null;
+    }
+    appendOwnArrayValue(normalizedPartitions, normalized);
+  }
+  arraySort(normalizedPartitions, (left, right) =>
+    left.partitionId < right.partitionId ? -1 :
+      left.partitionId > right.partitionId ? 1 : 0);
+  const missingPartitionIdsEntry = inspectOwnDataProperty(
+    summarySnapshot,
+    ['missingPartitionIds', 'missing_partition_ids'],
   );
+  if (missingPartitionIdsEntry.state === DATA_PROPERTY_STATE.INVALID) {
+    return null;
+  }
+  const missingPartitionIdRows =
+    missingPartitionIdsEntry.state === DATA_PROPERTY_STATE.VALID ?
+      copyDenseOwnDataArray(missingPartitionIdsEntry.value) :
+      [];
+  if (missingPartitionIdRows === null) {
+    return null;
+  }
+  const missingPartitionIds = normalizePrimitiveStringList(
+    missingPartitionIdRows,
+    normalizedPartitions,
+  );
+  if (missingPartitionIds === null) {
+    return null;
+  }
+  const fallbackReadyEligibleNodeCountEntry = readCanonicalNonNegativeInteger(
+    optionsSnapshot,
+    ['readyEligibleNodeCount'],
+    0,
+  );
+  if (!fallbackReadyEligibleNodeCountEntry.valid) {
+    return null;
+  }
+  const readyEligibleNodeCountEntry = readCanonicalNonNegativeInteger(
+    summarySnapshot,
+    ['readyEligibleNodeCount', 'ready_eligible_node_count'],
+    fallbackReadyEligibleNodeCountEntry.value,
+  );
+  const totalPriorityPartitionCountEntry = readCanonicalNonNegativeInteger(
+    summarySnapshot,
+    ['totalPriorityPartitionCount', 'total_priority_partition_count'],
+    setSize(PRIORITY_CONTROL_PLANE_TABLE_IDS),
+  );
+  if (!readyEligibleNodeCountEntry.valid ||
+      !totalPriorityPartitionCountEntry.valid) {
+    return null;
+  }
+  const readyEligibleNodeCount = readyEligibleNodeCountEntry.value;
+  const totalPriorityPartitionCount = totalPriorityPartitionCountEntry.value;
+  const satisfiedEntry = readOwnDataProperty(summarySnapshot, ['satisfied']);
   const satisfied =
-    summary.satisfied === true &&
+    satisfiedEntry.found && satisfiedEntry.value === true &&
     missingPartitionIds.length === 0 &&
-    blockedPartitions.length === 0;
+    normalizedPartitions.length === 0;
   return {
     satisfied,
     requiredDistinctNodeCount,
     readyEligibleNodeCount,
     totalPriorityPartitionCount,
     missingPartitionIds,
-    blockedPartitions,
+    blockedPartitions: normalizedPartitions,
   };
 }
 
@@ -110,17 +297,44 @@ function buildPriorityPartitionSummaryAdvancement(summary, helperFns = {}) {
   if (normalizedSummary === null) {
     return null;
   }
-  let blockedPartitionSpreadGap = 0;
-  let blockedPartitionReadyDistinctNodeCount = 0;
-  for (const blockedPartition of normalizedSummary.blockedPartitions) {
-    blockedPartitionSpreadGap += helperFns.normalizePositiveInteger(
-      blockedPartition.spreadGap,
-      0,
+  let blockedPartitionSpreadGap = exactNonNegativeZero();
+  let blockedPartitionReadyDistinctNodeCount = exactNonNegativeZero();
+  let diagnosticCompletenessRank = 0;
+  for (let index = 0;
+    index < normalizedSummary.blockedPartitions.length;
+    index += 1) {
+    const blockedPartition = normalizedSummary.blockedPartitions[index];
+    blockedPartitionSpreadGap = addExactNonNegativeInteger(
+      blockedPartitionSpreadGap,
+      normalizeNonNegativeSafeInteger(blockedPartition.spreadGap, 0),
     );
-    blockedPartitionReadyDistinctNodeCount += helperFns.normalizePositiveInteger(
-      blockedPartition.readyDistinctNodeCount,
-      0,
+    blockedPartitionReadyDistinctNodeCount = addExactNonNegativeInteger(
+      blockedPartitionReadyDistinctNodeCount,
+      normalizeNonNegativeSafeInteger(
+        blockedPartition.readyDistinctNodeCount,
+        0,
+      ),
     );
+    const expectedReplicaCountEntry = readOwnDataProperty(
+      blockedPartition,
+      [EXPECTED_REPLICA_COUNT_FIELD],
+    );
+    if (expectedReplicaCountEntry.found && normalizeExpectedReplicaCount(
+      expectedReplicaCountEntry.value,
+    ) !== null) {
+      diagnosticCompletenessRank += 1;
+    }
+    const exclusionReasonCountsEntry = readOwnDataProperty(
+      blockedPartition,
+      ['exclusionReasonCounts'],
+    );
+    const rowAbsentEntry = exclusionReasonCountsEntry.found ?
+      readOwnDataProperty(exclusionReasonCountsEntry.value, ['row_absent']) :
+      {found: false, value: null};
+    if (rowAbsentEntry.found &&
+      normalizeExclusionReasonCount(rowAbsentEntry.value) > 0) {
+      diagnosticCompletenessRank += 1;
+    }
   }
   return {
     normalizedSummary,
@@ -129,6 +343,7 @@ function buildPriorityPartitionSummaryAdvancement(summary, helperFns = {}) {
     blockedPartitionCount: normalizedSummary.blockedPartitions.length,
     blockedPartitionSpreadGap,
     blockedPartitionReadyDistinctNodeCount,
+    diagnosticCompletenessRank,
   };
 }
 
@@ -138,17 +353,41 @@ function comparePriorityPartitionSummaryAdvancement(leftSummary, rightSummary, h
   if (leftAdvancement === null || rightAdvancement === null) {
     return 0;
   }
-  const decisiveDelta = [
-    leftAdvancement.satisfiedRank - rightAdvancement.satisfiedRank,
-    rightAdvancement.missingPartitionCount - leftAdvancement.missingPartitionCount,
-    rightAdvancement.blockedPartitionCount - leftAdvancement.blockedPartitionCount,
-    rightAdvancement.blockedPartitionSpreadGap - leftAdvancement.blockedPartitionSpreadGap,
-    leftAdvancement.blockedPartitionReadyDistinctNodeCount -
+  const comparisons = [
+    compareExactValues(leftAdvancement.satisfiedRank, rightAdvancement.satisfiedRank),
+    compareExactValues(
+      rightAdvancement.missingPartitionCount,
+      leftAdvancement.missingPartitionCount,
+    ),
+    compareExactValues(
+      rightAdvancement.blockedPartitionCount,
+      leftAdvancement.blockedPartitionCount,
+    ),
+    compareExactValues(
+      rightAdvancement.blockedPartitionSpreadGap,
+      leftAdvancement.blockedPartitionSpreadGap,
+    ),
+    compareExactValues(
+      leftAdvancement.blockedPartitionReadyDistinctNodeCount,
       rightAdvancement.blockedPartitionReadyDistinctNodeCount,
-    leftAdvancement.normalizedSummary.readyEligibleNodeCount -
+    ),
+    compareExactValues(
+      leftAdvancement.normalizedSummary.readyEligibleNodeCount,
       rightAdvancement.normalizedSummary.readyEligibleNodeCount,
-  ].find((delta) => delta !== 0);
-  return typeof decisiveDelta === 'number' ? decisiveDelta : 0;
+    ),
+    compareExactValues(
+      leftAdvancement.diagnosticCompletenessRank,
+      rightAdvancement.diagnosticCompletenessRank,
+    ),
+  ];
+  let decisiveComparison = 0;
+  for (let index = 0; index < comparisons.length; index += 1) {
+    if (comparisons[index] !== 0) {
+      decisiveComparison = comparisons[index];
+      break;
+    }
+  }
+  return decisiveComparison;
 }
 
 function chooseMoreAdvancedPriorityPartitionSummary(
@@ -172,13 +411,21 @@ function chooseMoreAdvancedPriorityPartitionSummary(
   if (normalizedCandidateSummary === null) {
     return normalizedBaselineSummary;
   }
-  return comparePriorityPartitionSummaryAdvancement(
+  const advancement = comparePriorityPartitionSummaryAdvancement(
     normalizedCandidateSummary,
     normalizedBaselineSummary,
     helperFns,
-  ) > 0 ?
-    normalizedCandidateSummary :
-    normalizedBaselineSummary;
+  );
+  if (advancement > 0) {
+    return normalizedCandidateSummary;
+  }
+  if (advancement < 0 || priorityPartitionDiagnosticsEqual(
+    normalizedCandidateSummary,
+    normalizedBaselineSummary,
+  )) {
+    return normalizedBaselineSummary;
+  }
+  return normalizedCandidateSummary;
 }
 
 function arePriorityPartitionSummariesEqual(leftSummary, rightSummary, helperFns = {}) {
@@ -187,60 +434,73 @@ function arePriorityPartitionSummariesEqual(leftSummary, rightSummary, helperFns
   if (left === null || right === null) {
     return left === right;
   }
-  return JSON.stringify(left) === JSON.stringify(right);
+  return normalizedPriorityPartitionSummariesEqual(left, right);
 }
 
-function isReadinessPromotable(readinessEntry = null) {
-  const dimensions =
-    readinessEntry?.dimensions && typeof readinessEntry.dimensions === 'object' ?
-      readinessEntry.dimensions :
-      null;
-  if (!dimensions) {
-    return true;
-  }
-  const hasPublicationSignal =
-    Object.hasOwn(dimensions, CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED) ||
-    Object.hasOwn(dimensions, CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE);
-  if (!hasPublicationSignal) {
-    return (
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY] === true &&
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE] !== false &&
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] !== false &&
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] !== false
-    );
-  }
-  if (dimensions[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED] === true) {
-    return (
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY] === true &&
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE] !== false &&
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE] !== false &&
-      dimensions[CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE] !== false
-    );
-  }
-  return dimensions[CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE] === true;
+function normalizeCensusServiceRow(row) {
+  return {
+    serviceId: readOwnPrimitiveString(row, SERVICE_ID_FIELDS),
+    serviceType: readOwnLowerPrimitiveString(row, SERVICE_TYPE_FIELDS),
+    nodeId: readOwnPrimitiveString(row, SERVICE_NODE_ID_FIELDS),
+    partitionId: readOwnPrimitiveString(row, SERVICE_PARTITION_ID_FIELDS),
+    raftRole: readOwnLowerPrimitiveString(row, SERVICE_RAFT_ROLE_FIELDS),
+    status: readOwnLowerPrimitiveString(row, SERVICE_STATUS_FIELDS),
+    address: readOwnPrimitiveString(row, SERVICE_ADDRESS_FIELDS),
+  };
 }
 
-function buildPrioritySpreadEligibleNodeIdSet(options = {}, helperFns = {}) {
-  const preferredNodeIds = helperFns.normalizeNodeIdList(
-    options.locallyEligibleNodeIds?.length > 0 ?
-      options.locallyEligibleNodeIds :
-      options.projectedServingNodeIds?.length > 0 ?
-        options.projectedServingNodeIds :
-        options.publishedActiveNodeIds,
-  );
-  if (preferredNodeIds.length > 0) {
-    return new Set(preferredNodeIds);
+function addPriorityPartitionId(byTableId, tableId, partitionId) {
+  if (!setHas(PRIORITY_CONTROL_PLANE_TABLE_IDS, tableId) ||
+      typeof partitionId !== 'string' || partitionId.length === 0) {
+    return;
   }
-  const readinessByNodeId =
-    options.readinessByNodeId && typeof options.readinessByNodeId === 'object' ?
-      options.readinessByNodeId :
-      {};
-  const promotableNodeIds = helperFns.normalizeNodeIdList(
-    Object.keys(readinessByNodeId).filter((nodeId) =>
-      isReadinessPromotable(readinessByNodeId[nodeId]),
-    ),
-  );
-  return new Set(promotableNodeIds);
+  if (!mapHas(byTableId, tableId)) {
+    mapSet(byTableId, tableId, buildStringSet([]));
+  }
+  setAdd(mapGet(byTableId, tableId), partitionId);
+}
+
+function resolveCensusPriorityPartitionIds(
+  partitionRows,
+  serviceRows,
+  partitionRowByPartitionId,
+) {
+  const byTableId = new MapConstructor();
+  for (let index = 0; index < partitionRows.length; index += 1) {
+    const partitionRow = partitionRows[index];
+    const partitionId = readOwnPrimitiveString(
+      partitionRow,
+      ['partition_id', 'partitionId'],
+    );
+    const tableId = resolvePartitionTableId({partitionId, partitionRow});
+    addPriorityPartitionId(byTableId, tableId, partitionId);
+  }
+  for (let index = 0; index < serviceRows.length; index += 1) {
+    const partitionId = normalizeCensusServiceRow(serviceRows[index]).partitionId;
+    const partitionRow = mapGet(partitionRowByPartitionId, partitionId) || null;
+    const tableId = resolvePartitionTableId({partitionId, partitionRow});
+    addPriorityPartitionId(byTableId, tableId, partitionId);
+  }
+  const priorityTableIterator = setValues(PRIORITY_CONTROL_PLANE_TABLE_IDS);
+  for (let next = setIteratorNext(priorityTableIterator); !next.done;
+    next = setIteratorNext(priorityTableIterator)) {
+    const tableId = next.value;
+    if (!mapHas(byTableId, tableId)) {
+      addPriorityPartitionId(byTableId, tableId, INITIAL_PARTITION_IDS[tableId]);
+    }
+  }
+  const result = [];
+  const partitionSetIterator = mapValues(byTableId);
+  for (let nextSet = mapIteratorNext(partitionSetIterator); !nextSet.done;
+    nextSet = mapIteratorNext(partitionSetIterator)) {
+    const partitionIdIterator = setValues(nextSet.value);
+    for (let nextId = setIteratorNext(partitionIdIterator); !nextId.done;
+      nextId = setIteratorNext(partitionIdIterator)) {
+      appendOwnArrayValue(result, nextId.value);
+    }
+  }
+  arraySort(result, (left, right) => left < right ? -1 : left > right ? 1 : 0);
+  return result;
 }
 
 /**
@@ -276,7 +536,12 @@ function resolvePrioritySpreadReplicaExclusionReason(
   }
   if (
     isCatchupLearnerRaftRole(normalizedService.raftRole) &&
-    !isReadinessPromotable(readinessByNodeId[normalizedService.nodeId] || null)
+    !isReadinessPromotable(
+      readOwnDataProperty(
+        readinessByNodeId,
+        [normalizedService.nodeId],
+      ).value,
+    )
   ) {
     return 'learner_not_promotable';
   }
@@ -284,109 +549,185 @@ function resolvePrioritySpreadReplicaExclusionReason(
 }
 
 function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
-  const serviceRows = Array.isArray(options.serviceRows) ? options.serviceRows : [];
-  if (serviceRows.length === 0) {
+  const optionsSnapshot = copyStrictOwnDataRecord(options);
+  if (optionsSnapshot === null) {
     return null;
   }
-  const partitionRows = Array.isArray(options.partitionRows) ? options.partitionRows : [];
-  const readinessByNodeId =
-    options.readinessByNodeId && typeof options.readinessByNodeId === 'object' ?
-      options.readinessByNodeId :
-      {};
+  const serviceRowsEntry = inspectOwnDataProperty(
+    optionsSnapshot,
+    ['serviceRows'],
+  );
+  const serviceRows = serviceRowsEntry.state === DATA_PROPERTY_STATE.VALID ?
+    copyDenseOwnDataRecordArray(serviceRowsEntry.value) : null;
+  if (serviceRows === null) {
+    return null;
+  }
+  const partitionRowsEntry = inspectOwnDataProperty(
+    optionsSnapshot,
+    ['partitionRows'],
+  );
+  if (partitionRowsEntry.state === DATA_PROPERTY_STATE.INVALID) {
+    return null;
+  }
+  const partitionRows = partitionRowsEntry.state === DATA_PROPERTY_STATE.VALID ?
+    copyDenseOwnDataRecordArray(partitionRowsEntry.value) : [];
+  if (partitionRows === null) {
+    return null;
+  }
+  const priorityNodeSnapshot = buildPrioritySpreadEligibleNodeSnapshot(
+    optionsSnapshot,
+  );
+  if (priorityNodeSnapshot === null) {
+    return null;
+  }
+  const {eligibleNodeIds, readinessByNodeId} = priorityNodeSnapshot;
   const partitionRowByPartitionId = buildPartitionRowByPartitionId(partitionRows);
-  const readyReplicaStatsByPartitionId = new Map();
+  const readyReplicaStatsByPartitionId = new MapConstructor();
   let observedPriorityServiceRow = false;
-  const eligibleNodeIds = buildPrioritySpreadEligibleNodeIdSet(options, helperFns);
-  for (const serviceRow of serviceRows) {
-    const normalizedService = normalizeServiceRow(serviceRow);
+  for (let serviceRowIndex = 0;
+    serviceRowIndex < serviceRows.length;
+    serviceRowIndex += 1) {
+    const serviceRow = serviceRows[serviceRowIndex];
+    const normalizedService = normalizeCensusServiceRow(serviceRow);
     const partitionId = normalizedService.partitionId;
-    const partitionRow = partitionRowByPartitionId.get(partitionId) || null;
-    if (!classifySystemPartition({partitionId, partitionRow})
-      .priorityControlPlane) {
+    const partitionRow = mapGet(partitionRowByPartitionId, partitionId) || null;
+    const tableId = resolvePartitionTableId({partitionId, partitionRow});
+    if (!setHas(PRIORITY_CONTROL_PLANE_TABLE_IDS, tableId)) {
       continue;
     }
     observedPriorityServiceRow = true;
-    if (!readyReplicaStatsByPartitionId.has(partitionId)) {
-      readyReplicaStatsByPartitionId.set(partitionId, {
+    if (!mapHas(readyReplicaStatsByPartitionId, partitionId)) {
+      mapSet(readyReplicaStatsByPartitionId, partitionId, {
+        observedReplicaRowCount: 0,
         readyReplicaCount: 0,
-        nodeIds: new Set(),
-        exclusionReasonCounts: {},
+        nodeIds: buildStringSet([]),
+        exclusionReasonCounts: objectCreate(null),
       });
     }
-    const stats = readyReplicaStatsByPartitionId.get(partitionId);
+    const stats = mapGet(readyReplicaStatsByPartitionId, partitionId);
+    if (normalizedService.serviceType === SERVICE_TYPE.PARTITION) {
+      stats.observedReplicaRowCount += 1;
+    }
     const exclusionReason = resolvePrioritySpreadReplicaExclusionReason(
       normalizedService,
       readinessByNodeId,
     ) || (
-      eligibleNodeIds.size > 0 &&
-      !eligibleNodeIds.has(normalizedService.nodeId) ?
+      setSize(eligibleNodeIds) > 0 &&
+      !setHas(eligibleNodeIds, normalizedService.nodeId) ?
         'node_not_eligible' :
         null
     );
     if (exclusionReason !== null) {
-      stats.exclusionReasonCounts[exclusionReason] =
-        (stats.exclusionReasonCounts[exclusionReason] || 0) + 1;
+      const currentCountEntry = readOwnDataProperty(
+        stats.exclusionReasonCounts,
+        [exclusionReason],
+      );
+      objectDefineProperty(stats.exclusionReasonCounts, exclusionReason, {
+        value: (currentCountEntry.found ? currentCountEntry.value : 0) + 1,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
       continue;
     }
     stats.readyReplicaCount += 1;
-    stats.nodeIds.add(normalizedService.nodeId);
+    setAdd(stats.nodeIds, normalizedService.nodeId);
   }
-  const observedPriorityPartitionRow = partitionRows.some((partitionRow) =>
-    classifySystemPartition({partitionRow}).priorityControlPlane,
-  );
+  let observedPriorityPartitionRow = false;
+  for (let index = 0; index < partitionRows.length; index += 1) {
+    if (setHas(PRIORITY_CONTROL_PLANE_TABLE_IDS, resolvePartitionTableId({
+      partitionRow: partitionRows[index],
+    }))) {
+      observedPriorityPartitionRow = true;
+      break;
+    }
+  }
   if (!observedPriorityServiceRow && !observedPriorityPartitionRow) {
     return null;
   }
-  const priorityPartitionIds = resolvePriorityControlPlanePartitionIds({
+  const priorityPartitionIds = resolveCensusPriorityPartitionIds(
     partitionRows,
     serviceRows,
     partitionRowByPartitionId,
-    includeInitialWhenMissing: true,
-  });
-  if (eligibleNodeIds.size === 0) {
-    for (const stats of readyReplicaStatsByPartitionId.values()) {
-      for (const nodeId of stats.nodeIds) {
-        eligibleNodeIds.add(nodeId);
+  );
+  if (setSize(eligibleNodeIds) === 0) {
+    const statsIterator = mapValues(readyReplicaStatsByPartitionId);
+    for (let nextStats = mapIteratorNext(statsIterator); !nextStats.done;
+      nextStats = mapIteratorNext(statsIterator)) {
+      const nodeIterator = setValues(nextStats.value.nodeIds);
+      for (let nextNode = setIteratorNext(nodeIterator); !nextNode.done;
+        nextNode = setIteratorNext(nodeIterator)) {
+        setAdd(eligibleNodeIds, nextNode.value);
       }
     }
   }
-  const requiredDistinctNodeCount = Math.min(
+  const requiredDistinctNodeCount = mathMin(
     PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT,
-    eligibleNodeIds.size,
+    setSize(eligibleNodeIds),
   );
   const blockedPartitions = [];
-  for (const partitionId of priorityPartitionIds) {
-    const stats = readyReplicaStatsByPartitionId.get(partitionId) || {
+  for (let index = 0; index < priorityPartitionIds.length; index += 1) {
+    const partitionId = priorityPartitionIds[index];
+    const stats = mapGet(readyReplicaStatsByPartitionId, partitionId) || {
+      observedReplicaRowCount: 0,
       readyReplicaCount: 0,
-      nodeIds: new Set(),
-      exclusionReasonCounts: {},
+      nodeIds: buildStringSet([]),
+      exclusionReasonCounts: objectCreate(null),
     };
-    const readyDistinctNodeCount = stats.nodeIds.size;
-    const spreadGap = Math.max(0, requiredDistinctNodeCount - readyDistinctNodeCount);
+    const readyDistinctNodeCount = setSize(stats.nodeIds);
+    const spreadGap = mathMax(0, requiredDistinctNodeCount - readyDistinctNodeCount);
     if (requiredDistinctNodeCount <= 1 || spreadGap <= 0) {
       continue;
     }
-    blockedPartitions.push({
+    const partitionRow = mapGet(partitionRowByPartitionId, partitionId) || null;
+    const expectedReplicaCountEntry = readOwnDataProperty(
+      partitionRow,
+      ['replica_count', 'replicaCount'],
+    );
+    const expectedReplicaCount = expectedReplicaCountEntry.found ?
+      normalizeExpectedReplicaCount(expectedReplicaCountEntry.value) :
+      null;
+    const rowAbsentCount = expectedReplicaCount === null ? 0 : mathMax(
+      0,
+      expectedReplicaCount - stats.observedReplicaRowCount,
+    );
+    const exclusionReasonCounts = copyExclusionCounts(
+      stats.exclusionReasonCounts,
+    ) || objectCreate(null);
+    if (rowAbsentCount > 0) {
+      objectDefineProperty(exclusionReasonCounts, ROW_ABSENT_REASON, {
+        value: rowAbsentCount,
+        enumerable: true,
+        configurable: true,
+        writable: true,
+      });
+    }
+    appendOwnArrayValue(blockedPartitions, {
       partitionId,
       requiredDistinctNodeCount,
       readyDistinctNodeCount,
-      exclusionReasonCounts: {...stats.exclusionReasonCounts},
+      exclusionReasonCounts,
       readyReplicaCount: stats.readyReplicaCount,
+      ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
       spreadGap,
     });
+  }
+  const missingPartitionIds = [];
+  for (let index = 0; index < blockedPartitions.length; index += 1) {
+    appendOwnArrayValue(missingPartitionIds, blockedPartitions[index].partitionId);
   }
   return normalizePriorityPartitionSummary(
     {
       satisfied: blockedPartitions.length === 0,
       requiredDistinctNodeCount,
-      readyEligibleNodeCount: eligibleNodeIds.size,
+      readyEligibleNodeCount: setSize(eligibleNodeIds),
       totalPriorityPartitionCount: priorityPartitionIds.length,
-      missingPartitionIds: blockedPartitions.map((entry) => entry.partitionId),
+      missingPartitionIds,
       blockedPartitions,
     },
     {
       requiredDistinctNodeCount,
-      readyEligibleNodeCount: eligibleNodeIds.size,
+      readyEligibleNodeCount: setSize(eligibleNodeIds),
     },
     helperFns,
   );
