@@ -1,0 +1,256 @@
+diff --git a/scripts/checks/run-control-plane-mutation-outcome-classifier-core-scenarios.js b/scripts/checks/run-control-plane-mutation-outcome-classifier-core-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..72ed2b04ee3fafa12427d5a23310c0b78f23f1cd
+--- /dev/null
++++ b/scripts/checks/run-control-plane-mutation-outcome-classifier-core-scenarios.js
+@@ -0,0 +1,11 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'control-plane-mutation-outcome-classifier-core': [
++    'test/control-plane/control-plane-mutation-outcome-classifier.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/solve/quests/control-plane-mutation-outcome-classifier-core.json b/solve/quests/control-plane-mutation-outcome-classifier-core.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..5616649a7becb89b95a5f49614fe16bda2b572d1
+--- /dev/null
++++ b/solve/quests/control-plane-mutation-outcome-classifier-core.json
+@@ -0,0 +1,43 @@
++{
++  "id": "control-plane-mutation-outcome-classifier-core",
++  "authoringContractVersion": 1,
++  "verificationContractVersion": 2,
++  "statement": "Every value of the frozen seven-value CONTROL_PLANE_MUTATION_OUTCOME enum has exactly one immutable effect classification; the canonical result API treats NO_OP and DEFERRED without success:false as non-applied, preserves PENDING_VISIBILITY and legacy-envelope semantics, and an enum-exhaustiveness guard passes for three consecutive runs.",
++  "priority": 1,
++  "class": "product",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "solve/epics/golden-capability-gold-plating.md#tier-0-immediate-structural-guards",
++    "closesCL": [],
++    "parentQuest": "control-plane-mutation-apply-classifier",
++    "planDoc": null,
++    "draftedAtCommit": "e8de34c0db8a84d6b18975e98ae5ca929f7be3f5"
++  },
++  "doneWhen": {
++    "probe": "scenario-harness",
++    "args": {
++      "scenario": "control-plane-mutation-outcome-classifier-core",
++      "consecutive": 3,
++      "metric": "priority"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "control-plane-mutation-outcome-classifier-core-main",
++      "priority": 1,
++      "metric": {
++        "probe": "scenario-harness",
++        "args": {
++          "scenario": "control-plane-mutation-outcome-classifier-core",
++          "metric": "priority"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
+diff --git a/src/control-plane/control-plane-mutation-outcome-classifier.js b/src/control-plane/control-plane-mutation-outcome-classifier.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d1ea5edd286c4c789f6691ff5d56d1b1c0e68a1e
+--- /dev/null
++++ b/src/control-plane/control-plane-mutation-outcome-classifier.js
+@@ -0,0 +1,104 @@
++import {
++  CONTROL_PLANE_MUTATION_OUTCOME,
++} from './control-plane-system-table-gateway-constants.js';
++
++function freezeClassification(outcome, options) {
++  return Object.freeze({
++    outcome,
++    known: true,
++    applied: options.applied === true,
++    accepted: options.accepted === true,
++    deferred: options.deferred === true,
++    retryable: options.retryable === true,
++    terminal: options.terminal === true,
++  });
++}
++
++const CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION = Object.freeze({
++  [CONTROL_PLANE_MUTATION_OUTCOME.APPLIED]: freezeClassification(
++    CONTROL_PLANE_MUTATION_OUTCOME.APPLIED,
++    {applied: true, accepted: true},
++  ),
++  [CONTROL_PLANE_MUTATION_OUTCOME.NO_OP]: freezeClassification(
++    CONTROL_PLANE_MUTATION_OUTCOME.NO_OP,
++    {accepted: true, retryable: true},
++  ),
++  [CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY]: freezeClassification(
++    CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
++    {applied: true, accepted: true, deferred: true, retryable: true},
++  ),
++  [CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED]: freezeClassification(
++    CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED,
++    {accepted: true, deferred: true, retryable: true},
++  ),
++  [CONTROL_PLANE_MUTATION_OUTCOME.REJECTED]: freezeClassification(
++    CONTROL_PLANE_MUTATION_OUTCOME.REJECTED,
++    {terminal: true},
++  ),
++  [CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY]: freezeClassification(
++    CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
++    {accepted: true, deferred: true, retryable: true},
++  ),
++  [CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED]: freezeClassification(
++    CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
++    {accepted: true, retryable: true},
++  ),
++});
++
++const UNKNOWN_CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION = Object.freeze({
++  outcome: null,
++  known: false,
++  applied: false,
++  accepted: false,
++  deferred: false,
++  retryable: false,
++  terminal: false,
++});
++
++function classifyControlPlaneMutationOutcome(outcome) {
++  return CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION[outcome] ||
++    UNKNOWN_CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION;
++}
++
++function extractControlPlaneMutationAffectedRows(result) {
++  const affectedRows = Number(
++    result?.partitionResult?.affectedRows ?? result?.affectedRows,
++  );
++  return Number.isFinite(affectedRows) ? affectedRows : null;
++}
++
++function classifyControlPlaneMutationResult(result) {
++  const outcomeClassification = classifyControlPlaneMutationOutcome(
++    result?.outcome,
++  );
++  const affectedRows = extractControlPlaneMutationAffectedRows(result);
++  const explicitlyFailed = result === false || result?.success === false;
++  let applied = outcomeClassification.applied;
++  if (!outcomeClassification.known) {
++    applied = affectedRows === null ? !explicitlyFailed : affectedRows > 0;
++  } else if (affectedRows !== null) {
++    applied = applied && affectedRows > 0;
++  }
++  if (explicitlyFailed) {
++    applied = false;
++  }
++
++  return Object.freeze({
++    ...outcomeClassification,
++    applied,
++    affectedRows,
++  });
++}
++
++function didControlPlaneMutationApply(result) {
++  return classifyControlPlaneMutationResult(result).applied;
++}
++
++export {
++  CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION,
++  UNKNOWN_CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION,
++  classifyControlPlaneMutationOutcome,
++  classifyControlPlaneMutationResult,
++  didControlPlaneMutationApply,
++  extractControlPlaneMutationAffectedRows,
++};
+diff --git a/test/control-plane/control-plane-mutation-outcome-classifier.test.js b/test/control-plane/control-plane-mutation-outcome-classifier.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..0982d52cf04869690f950522d90a471be97ed7f6
+--- /dev/null
++++ b/test/control-plane/control-plane-mutation-outcome-classifier.test.js
+@@ -0,0 +1,74 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  CONTROL_PLANE_MUTATION_OUTCOME,
++} from '../../src/control-plane/control-plane-system-table-gateway.js';
++import {
++  CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION,
++  classifyControlPlaneMutationResult,
++  didControlPlaneMutationApply,
++} from '../../src/control-plane/control-plane-mutation-outcome-classifier.js';
++
++const EXPECTED_APPLIED_BY_OUTCOME = Object.freeze({
++  [CONTROL_PLANE_MUTATION_OUTCOME.APPLIED]: true,
++  [CONTROL_PLANE_MUTATION_OUTCOME.NO_OP]: false,
++  [CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY]: true,
++  [CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED]: false,
++  [CONTROL_PLANE_MUTATION_OUTCOME.REJECTED]: false,
++  [CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY]: false,
++  [CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED]: false,
++});
++
++test('control-plane mutation classification exhaustively owns every gateway outcome',
++  (t) => {
++    const outcomes = Object.values(CONTROL_PLANE_MUTATION_OUTCOME).sort();
++    t.same(
++      Object.keys(CONTROL_PLANE_MUTATION_OUTCOME_CLASSIFICATION).sort(),
++      outcomes,
++      'the classification table must change with the frozen gateway enum',
++    );
++    t.same(
++      Object.keys(EXPECTED_APPLIED_BY_OUTCOME).sort(),
++      outcomes,
++      'the apply-effect oracle must cover every gateway outcome',
++    );
++
++    for (const outcome of outcomes) {
++      const classification = classifyControlPlaneMutationResult({outcome});
++      t.equal(classification.known, true, `${outcome} should be recognized`);
++      t.equal(
++        classification.applied,
++        EXPECTED_APPLIED_BY_OUTCOME[outcome],
++        `${outcome} should have one canonical apply effect`,
++      );
++    }
++    t.end();
++  });
++
++test('control-plane mutation apply classification rejects non-apply envelopes ' +
++  'without relying on success:false', (t) => {
++  t.equal(
++    didControlPlaneMutationApply({
++      outcome: CONTROL_PLANE_MUTATION_OUTCOME.NO_OP,
++    }),
++    false,
++    'no_op is not a durable apply when success is absent',
++  );
++  t.equal(
++    didControlPlaneMutationApply({
++      outcome: CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED,
++    }),
++    false,
++    'deferred is not a durable apply when success is absent',
++  );
++  t.equal(
++    didControlPlaneMutationApply({success: true, affectedRows: 0}),
++    false,
++    'legacy zero-row envelopes remain non-applies',
++  );
++  t.equal(
++    didControlPlaneMutationApply({success: true}),
++    true,
++    'legacy successful envelopes without typed outcomes remain compatible',
++  );
++  t.end();
++});
