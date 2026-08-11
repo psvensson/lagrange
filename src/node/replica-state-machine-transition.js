@@ -5,6 +5,7 @@ import {
 } from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
+  CONTROL_PLANE_MUTATION_OUTCOME,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
@@ -191,6 +192,31 @@ function applyTransition(stateMachine, replicaId, newState, context = {}, option
   });
 }
 
+// CL-016/CL-021: the local-only marker may clear ONLY on a CONFIRMED
+// durable apply. A returned readiness deferral (success:false — the
+// gateway defers background-workClass writes while the joiner's
+// control-plane readiness converges) or a zero-row UPDATE (finite
+// affectedRows <= 0, outcome observed_state_changed — reported success
+// with no CDC event) proves the durable row still does not exist;
+// clearing on those strands the row forever, because the CL-021
+// reconcile owner only retries rows still carrying the marker (live
+// witness: run public-path-multinode-baseline-20260811T095750Z, 63x
+// 'No row found for CDC update' on the services-p1 leader). Unknown
+// result shapes count as applied (didConfigSeedInsertApply precedent).
+function didDurableServiceRowWriteApply(result) {
+  if (result?.success === false) {
+    return false;
+  }
+  const affectedRows = Number(
+    result?.partitionResult?.affectedRows ?? result?.affectedRows,
+  );
+  if (Number.isFinite(affectedRows)) {
+    return affectedRows > REPLICA_STATE_MACHINE_NUM.ZERO;
+  }
+  return result?.outcome !==
+    CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED;
+}
+
 /**
  * Create the initial services row for a newly tracked replica.
  * @param {ReplicaStateMachine} stateMachine - Owning state machine instance.
@@ -303,11 +329,15 @@ async function updateReplicaStateInCdc(
         whereClause: {service_id: serviceId},
         data: stateMachine._buildUpdateCdcData(replicaState, previousState),
       };
-    await stateMachine.getControlPlaneSystemTableGateway().submitMutation(
-      mutation,
-      persistenceOptions,
-    );
-    if (typeof stateMachine.clearServiceRowLocalOnly === 'function') {
+    const mutationResult = await stateMachine
+      .getControlPlaneSystemTableGateway()
+      .submitMutation(mutation, persistenceOptions);
+    const durableApplyConfirmed =
+      didDurableServiceRowWriteApply(mutationResult);
+    if (
+      durableApplyConfirmed &&
+      typeof stateMachine.clearServiceRowLocalOnly === 'function'
+    ) {
       // Durable write committed — remote existence confirmed (CL-016).
       stateMachine.clearServiceRowLocalOnly(serviceId);
     }
@@ -319,7 +349,7 @@ async function updateReplicaStateInCdc(
       nodeId: stateMachine.nodeId,
     });
 
-    return true;
+    return durableApplyConfirmed;
   } catch (error) {
     stateMachine.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSIST_FAILED, {
       replicaId: replicaState.replicaId,

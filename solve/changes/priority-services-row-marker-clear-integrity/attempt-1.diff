@@ -1,0 +1,646 @@
+diff --git a/scripts/checks/run-priority-services-row-marker-clear-integrity-scenarios.js b/scripts/checks/run-priority-services-row-marker-clear-integrity-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..deff5f4d4a7e0146571928b1f4f9deee4755164f
+--- /dev/null
++++ b/scripts/checks/run-priority-services-row-marker-clear-integrity-scenarios.js
+@@ -0,0 +1,20 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++// CL-016/CL-021 marker-clear integrity guard: the replica lifecycle
++// persistence owner clears the local-only services-row marker ONLY on a
++// confirmed durable apply. A returned readiness deferral (success:false)
++// or a zero-row apply (observed_state_changed) must retain the marker so
++// the CL-021 reconcile owner keeps retrying the idempotent UPSERT —
++// otherwise a joiner's priority replica stays invisible to the
++// priority-spread census forever (live witness
++// public-path-multinode-baseline-20260811T095750Z: 63x 'No row found
++// for CDC update', readyDistinctNodeCount pinned at 2/3 all run).
++const SCENARIOS = {
++  'priority-services-row-marker-clear-integrity': [
++    'test/node/replica-local-only-row-convergence.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/node/replica-state-machine-transition.js b/src/node/replica-state-machine-transition.js
+index 8c44c83616e6548da13259369c564f4c2701546f..74ac65e1f2d0c5057f408d4354444dc5f401569a 100644
+--- a/src/node/replica-state-machine-transition.js
++++ b/src/node/replica-state-machine-transition.js
+@@ -5,6 +5,7 @@ import {
+ } from '../constants/index.js';
+ import {
+   CONTROL_PLANE_MUTATION_OPERATION,
++  CONTROL_PLANE_MUTATION_OUTCOME,
+ } from '../control-plane/control-plane-system-table-gateway.js';
+ import {createControlPlaneRuntimeBundle} from
+   '../control-plane/control-plane-runtime-bundle.js';
+@@ -191,6 +192,31 @@ function applyTransition(stateMachine, replicaId, newState, context = {}, option
+   });
+ }
+ 
++// CL-016/CL-021: the local-only marker may clear ONLY on a CONFIRMED
++// durable apply. A returned readiness deferral (success:false — the
++// gateway defers background-workClass writes while the joiner's
++// control-plane readiness converges) or a zero-row UPDATE (finite
++// affectedRows <= 0, outcome observed_state_changed — reported success
++// with no CDC event) proves the durable row still does not exist;
++// clearing on those strands the row forever, because the CL-021
++// reconcile owner only retries rows still carrying the marker (live
++// witness: run public-path-multinode-baseline-20260811T095750Z, 63x
++// 'No row found for CDC update' on the services-p1 leader). Unknown
++// result shapes count as applied (didConfigSeedInsertApply precedent).
++function didDurableServiceRowWriteApply(result) {
++  if (result?.success === false) {
++    return false;
++  }
++  const affectedRows = Number(
++    result?.partitionResult?.affectedRows ?? result?.affectedRows,
++  );
++  if (Number.isFinite(affectedRows)) {
++    return affectedRows > REPLICA_STATE_MACHINE_NUM.ZERO;
++  }
++  return result?.outcome !==
++    CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED;
++}
++
+ /**
+  * Create the initial services row for a newly tracked replica.
+  * @param {ReplicaStateMachine} stateMachine - Owning state machine instance.
+@@ -303,11 +329,15 @@ async function updateReplicaStateInCdc(
+         whereClause: {service_id: serviceId},
+         data: stateMachine._buildUpdateCdcData(replicaState, previousState),
+       };
+-    await stateMachine.getControlPlaneSystemTableGateway().submitMutation(
+-      mutation,
+-      persistenceOptions,
+-    );
+-    if (typeof stateMachine.clearServiceRowLocalOnly === 'function') {
++    const mutationResult = await stateMachine
++      .getControlPlaneSystemTableGateway()
++      .submitMutation(mutation, persistenceOptions);
++    const durableApplyConfirmed =
++      didDurableServiceRowWriteApply(mutationResult);
++    if (
++      durableApplyConfirmed &&
++      typeof stateMachine.clearServiceRowLocalOnly === 'function'
++    ) {
+       // Durable write committed — remote existence confirmed (CL-016).
+       stateMachine.clearServiceRowLocalOnly(serviceId);
+     }
+@@ -319,7 +349,7 @@ async function updateReplicaStateInCdc(
+       nodeId: stateMachine.nodeId,
+     });
+ 
+-    return true;
++    return durableApplyConfirmed;
+   } catch (error) {
+     stateMachine.logger.error(REPLICA_STATE_MACHINE_LOG_MSG.STATE_PERSIST_FAILED, {
+       replicaId: replicaState.replicaId,
+diff --git a/src/node/replica-state-machine.js b/src/node/replica-state-machine.js
+index 5e28476d558df4bff3d493c1bb0d137f12f6ec18..72c026c9298c693edf55e08fc10ef15b61379e61 100644
+--- a/src/node/replica-state-machine.js
++++ b/src/node/replica-state-machine.js
+@@ -398,6 +398,28 @@ class ReplicaStateMachine extends EventEmitter {
+     this.localOnlyServiceRowRetryStateByServiceId.delete(serviceId);
+   }
+ 
++  /**
++   * Arm (or extend) the per-row exponential backoff after a reconcile
++   * pass that did not confirm a durable apply — thrown or returned
++   * (CL-021: retained marker means retry, never silent convergence).
++   * @param {string} serviceId
++   * @param {?{delayMs: number, notBeforeMs: number}} retryState
++   * @param {number} nowMs
++   * @return {void}
++   */
++  _armLocalOnlyServiceRowRetry(serviceId, retryState, nowMs) {
++    const previousDelayMs =
++      retryState?.delayMs ?? this.timeoutCheckIntervalMs;
++    const delayMs = Math.min(
++      previousDelayMs * REPLICA_STATE_MACHINE_NUM.TWO,
++      REPLICA_STATE_MACHINE_LOCAL_ONLY_ROW_RETRY_MAX_DELAY_MS,
++    );
++    this.localOnlyServiceRowRetryStateByServiceId.set(serviceId, {
++      delayMs,
++      notBeforeMs: nowMs + delayMs,
++    });
++  }
++
+   /**
+    * CL-021: converge deferred durable services rows. A priority replica
+    * activated via the local-commit fallback (CL-016) defers its durable
+@@ -485,8 +507,14 @@ class ReplicaStateMachine extends EventEmitter {
+         );
+         try {
+           await reconcilePromise;
+-          // The persistence helper cleared the marker (and this row's
+-          // retry state) on commit.
++          // The persistence helper clears the marker only on a CONFIRMED
++          // durable apply; a non-throwing deferred or zero-row result
++          // retains it, and this pass must count as not-converged so the
++          // backoff arms and the next tick retries (CL-021).
++          if (this.localOnlyServiceRowIds.has(serviceId)) {
++            this._armLocalOnlyServiceRowRetry(serviceId, retryState, nowMs);
++            continue;
++          }
+           persisted += REPLICA_STATE_MACHINE_NUM.ONE;
+           this.logger.info(
+             REPLICA_STATE_MACHINE_LOG_MSG.LOCAL_ONLY_ROW_CONVERGED,
+@@ -498,16 +526,7 @@ class ReplicaStateMachine extends EventEmitter {
+             },
+           );
+         } catch (_error) {
+-          const previousDelayMs =
+-            retryState?.delayMs ?? this.timeoutCheckIntervalMs;
+-          const delayMs = Math.min(
+-            previousDelayMs * REPLICA_STATE_MACHINE_NUM.TWO,
+-            REPLICA_STATE_MACHINE_LOCAL_ONLY_ROW_RETRY_MAX_DELAY_MS,
+-          );
+-          this.localOnlyServiceRowRetryStateByServiceId.set(serviceId, {
+-            delayMs,
+-            notBeforeMs: nowMs + delayMs,
+-          });
++          this._armLocalOnlyServiceRowRetry(serviceId, retryState, nowMs);
+         } finally {
+           if (
+             this.serviceRowPersistInFlightByServiceId.get(serviceId) ===
+diff --git a/test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js b/test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js
+index 2ddab40076b8ef913b326cc36f9ff3ef25bb88ef..c838e4b617a3f4201e64dd16f216dd3ae1353893 100644
+--- a/test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js
++++ b/test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js
+@@ -61,6 +61,22 @@ function buildQueryHandler(state) {
+         table_policies: JSON.stringify({splitStorageThreshold: 16384}),
+       }]};
+     }
++    if (stringStartsWith(sql, 'UPDATE service_definitions')) {
++      return {rows: []};
++    }
++    if (stringStartsWith(sql, 'SELECT replica_count, runtime_config')) {
++      return {rows: [{
++        replica_count: 1,
++        runtime_config: JSON.stringify({
++          authMode: 'trust', host: '0.0.0.0', tlsMode: 'disable'}),
++      }]};
++    }
++    if (stringStartsWith(sql, 'SELECT node_id, address, port')) {
++      return {rows: [{
++        address: '10.0.0.1', health_status: 'healthy',
++        node_id: 'node-1', port: 5432,
++      }]};
++    }
+     if (stringStartsWith(sql, 'SELECT partition_id, leader_node_id')) {
+       return {rows: [...state.partitionRows]};
+     }
+@@ -153,6 +169,10 @@ function buildStubCluster(state) {
+   return {
+     _scenarioOverrides: {
+       publicPathBaseline: {
++        createLifecycleSqlClient: async () => ({
++          execute: async () => ({rows: []}),
++        }),
++        probeTcpEndpoint: async () => true,
+         fetchImpl: buildFetchHandler(state),
+         invocationCount: INVOCATION_COUNT,
+         logBuffer: () => buildLogEntries(state.localReadNodeIds),
+diff --git a/test/distributed/scenarios/public-path-multinode-baseline.js b/test/distributed/scenarios/public-path-multinode-baseline.js
+index 8890b13465a6eaf278ce8d6e95d12e53cb3d3efc..0d39a6a18bb74a84c1d9d75d6de4b9ba1b95d34a 100644
+--- a/test/distributed/scenarios/public-path-multinode-baseline.js
++++ b/test/distributed/scenarios/public-path-multinode-baseline.js
+@@ -18,6 +18,7 @@
+ 
+ import assert from 'node:assert/strict';
+ import {copyFile, mkdir, readFile, rm, symlink} from 'node:fs/promises';
++import net from 'node:net';
+ import path from 'node:path';
+ import {
+   runBuild,
+@@ -36,6 +37,7 @@ import {
+   SCENARIO_ARTIFACTS,
+ } from '../harness/constants.js';
+ import {
++  STABLE_APPLY_POLICY,
+   buildUserActivityTableSql,
+   createTableTopologyHelpers,
+   queryRows,
+@@ -80,7 +82,12 @@ const MIN_PARTITION_COUNT = 2;
+ const MIN_DISTINCT_LEADER_HOSTS = 2;
+ const DEFAULT_INVOCATION_COUNT = 60;
+ const TOPOLOGY_STABLE_READBACKS = 2;
+-const SPLIT_WAIT_TIMEOUT_MS = 180_000;
++// A cold 3-node boot legitimately holds non-system rebalancing (and so
++// the user-table leader-placement cure) behind the priority-spread
++// deferral for minutes; the split+leader-spread window must outlast
++// that formation tail, not race it (the user-table-leader-placement-
++// spread quest's measured cure, run 20260810T185440Z).
++const SPLIT_WAIT_TIMEOUT_MS = 420_000;
+ const SPLIT_WAIT_POLL_MS = 500;
+ const MAX_SENTINEL_ROWS = 40;
+ const READY_TIMEOUT_MS = 90_000;
+@@ -181,6 +188,14 @@ function resolveScenarioDependencies(cluster) {
+       runDeploy,
+       runGenerate,
+     },
++    createLifecycleSqlClient: overrides.createLifecycleSqlClient ||
++      defaultCreateLifecycleSqlClient,
++    probeTcpEndpoint: overrides.probeTcpEndpoint ||
++      defaultProbeTcpEndpoint,
++    pgwireEndpointTimeoutMs:
++      Number.isInteger(overrides.pgwireEndpointTimeoutMs) ?
++        overrides.pgwireEndpointTimeoutMs :
++        PGWIRE_ENDPOINT_TIMEOUT_MS,
+     prepareProject: overrides.prepareProject || defaultPrepareProject,
+     readManifest: overrides.readManifest || defaultReadManifest,
+     resourceSnapshot: overrides.resourceSnapshot ||
+@@ -253,19 +268,228 @@ async function waitForSplitAndLeaderSpread(nodes, seedNode, deps) {
+   );
+ }
+ 
+-// Deploy replays the generated records through the pipeline owner; the
+-// SQL client is the harness admin lane into the same grammar ingress.
+-async function deployThroughPipeline(seedNode, deps, paths, layoutPath) {
++// The deploy channel is REAL authenticated PG-wire: service lifecycle
++// SQL requires a canonical server-derived security context (the landed
++// service-lifecycle-pgwire-sql-transport gate), which the admin-WS lane
++// deliberately never carries. The scenario therefore scales the shipped
++// sys-postgres-wire meta service from its deliberate replica_count 0
++// through the admin system-table UPDATE surface (the split-policy
++// precedent), rebinds it for cross-container reach, waits for a healthy
++// endpoint, and deploys through a plain pg client against it -
++// trust-mode authentication still yields the server-derived identity.
++const PGWIRE_SERVICE_ID = 'sys-postgres-wire';
++const PGWIRE_TARGET_REPLICA_COUNT = 1;
++// Trust auth is fail-closed to loopback binds
++// (pgwire-runtime-module.js TRUST_REQUIRES_LOOPBACK, witnessed live as a
++// silent non-listening endpoint in run 20260810T213808Z); a cross-
++// container bind therefore uses password auth against the same
++// PGWIRE_AUTH_* credentials the harness already injects on every node.
++const PGWIRE_REACHABLE_RUNTIME_CONFIG = Object.freeze({
++  host: '0.0.0.0',
++  authMode: 'password',
++  tlsMode: 'disable',
++});
++const PGWIRE_ENDPOINT_TIMEOUT_MS = 300_000;
++const PGWIRE_TCP_PROBE_TIMEOUT_MS = 3_000;
++const PGWIRE_ENDPOINT_POLL_MS = 2_000;
++const PGWIRE_HEALTHY_STATUS = 'healthy';
++const PGWIRE_SQL = Object.freeze({
++  SCALE_UP:
++    'UPDATE service_definitions SET replica_count = ' +
++    `${PGWIRE_TARGET_REPLICA_COUNT} ` +
++    `WHERE service_id = '${PGWIRE_SERVICE_ID}'`,
++  REBIND:
++    'UPDATE service_definitions SET runtime_config = \'' +
++    JSON.stringify(PGWIRE_REACHABLE_RUNTIME_CONFIG) +
++    `' WHERE service_id = '${PGWIRE_SERVICE_ID}'`,
++  READ_BACK:
++    'SELECT replica_count, runtime_config FROM service_definitions ' +
++    `WHERE service_id = '${PGWIRE_SERVICE_ID}'`,
++  SELECT_ENDPOINTS:
++    'SELECT node_id, address, port, health_status ' +
++    'FROM service_endpoints ' +
++    `WHERE service_id = '${PGWIRE_SERVICE_ID}'`,
++});
++
++function pgwireRebindApplied(rows) {
++  try {
++    return rows.some((row) =>
++      JSON.parse(row?.runtime_config)?.host ===
++        PGWIRE_REACHABLE_RUNTIME_CONFIG.host);
++  } catch (_error) {
++    return false;
++  }
++}
++
++function pgwireDefinitionApplied(rows) {
++  const row = rows.find((entry) =>
++    Number(entry?.replica_count) === PGWIRE_TARGET_REPLICA_COUNT);
++  if (!row) {
++    return false;
++  }
++  try {
++    return JSON.parse(row.runtime_config)?.host ===
++      PGWIRE_REACHABLE_RUNTIME_CONFIG.host;
++  } catch (_error) {
++    return false;
++  }
++}
++
++// Request the pgwire listener early: the scale-up ADD is (correctly)
++// deferred behind the priority-spread gate during the formation tail, so
++// the request is fired right after boot and the placement overlaps the
++// scenario's own multi-minute dataset/split/spread phases (witnessed
++// live: run 20260810T215233Z deferred sys-postgres-wire placement for
++// the entire 120s endpoint window when requested late).
++async function requestPgwireListener(seedNode, deps) {
++  let stableCount = ZERO;
++  for (let attempt = ZERO; attempt < STABLE_APPLY_POLICY.MAX_ATTEMPTS;
++    attempt += ONE) {
++    await helpers.retryTransientAdminQuery(deps, 'pgwire-rebind',
++      () => seedNode.query(PGWIRE_SQL.REBIND));
++    const readBack = await helpers.retryTransientAdminQuery(
++      deps, 'pgwire-rebind-read-back',
++      () => queryRows(seedNode, PGWIRE_SQL.READ_BACK));
++    if (!pgwireRebindApplied(readBack)) {
++      await deps.sleep(STABLE_APPLY_POLICY.POLL_MS);
++      continue;
++    }
++    await helpers.retryTransientAdminQuery(deps, 'pgwire-scale-up',
++      () => seedNode.query(PGWIRE_SQL.SCALE_UP));
++    const rows = await helpers.retryTransientAdminQuery(
++      deps, 'pgwire-read-back',
++      () => queryRows(seedNode, PGWIRE_SQL.READ_BACK));
++    stableCount = pgwireDefinitionApplied(rows) ? stableCount + ONE : ZERO;
++    if (stableCount >= STABLE_APPLY_POLICY.STABLE_READBACKS) {
++      return;
++    }
++    await deps.sleep(STABLE_APPLY_POLICY.POLL_MS);
++  }
++  throw new Error(
++    `${SCENARIO_NAME}: pgwire scale-up never became stable`,
++  );
++}
++
++function defaultProbeTcpEndpoint(endpoint) {
++  return new Promise((resolvePromise) => {
++    const socket = net.createConnection({
++      host: endpoint.address,
++      port: Number(endpoint.port),
++      timeout: PGWIRE_TCP_PROBE_TIMEOUT_MS,
++    });
++    const finish = (reachable) => {
++      socket.destroy();
++      resolvePromise(reachable);
++    };
++    socket.once('connect', () => finish(true));
++    socket.once('error', () => finish(false));
++    socket.once('timeout', () => finish(false));
++  });
++}
++
++// A registered endpoint row is placement INTENT; only the placed replica
++// binds the socket. The deploy gate therefore requires a real TCP
++// connect, never row presence (witnessed live: healthy rows with
++// ECONNREFUSED while placement sat behind the formation-tail deferral).
++async function waitForReachablePgwireEndpoint(nodes, deps) {
++  const deadline = Date.now() + deps.pgwireEndpointTimeoutMs;
++  let lastRows = [];
++  while (Date.now() < deadline) {
++    lastRows = await helpers.queryRowsAcrossNodes(
++      nodes, PGWIRE_SQL.SELECT_ENDPOINTS);
++    for (const row of lastRows) {
++      if (row?.health_status === PGWIRE_HEALTHY_STATUS &&
++          typeof row?.address === 'string' && row.address.length > ZERO &&
++          await deps.probeTcpEndpoint(row)) {
++        return row;
++      }
++    }
++    await deps.sleep(PGWIRE_ENDPOINT_POLL_MS);
++  }
++  throw new Error(
++    `${SCENARIO_NAME}: no REACHABLE pgwire endpoint within ` +
++    `${deps.pgwireEndpointTimeoutMs}ms: ${JSON.stringify(lastRows)}`,
++  );
++}
++
++// A freshly placed listener can register its endpoint slightly before
++// the socket binds; a refused connect inside that window retries
++// bounded, everything else fails loud.
++const PGWIRE_CONNECT_RETRY_LIMIT = 15;
++const PGWIRE_CONNECT_RETRY_DELAY_MS = 2_000;
++const PGWIRE_CONNECT_REFUSED_CODE = 'ECONNREFUSED';
++// Lifecycle statements are idempotency-keyed, so a transient
++// authoritative-owner read failure during the formation tail (witnessed
++// live: 'authoritative operation lookup failed' on the INSTALL
++// idempotency check in run 20260810T220044Z) retries safely bounded.
++// The budget must outlast the control-plane's OWN replica-rebalancing
++// tail, which continues after the user-table leader spread completes
++// and starves the service_installations authoritative read for longer
++// than a formation pause: run 20260811T083529Z exhausted a 30s budget
++// while service_installations-p1 replicas were still being replaced,
++// with the identical error on all 11 attempts. Sized like the split
++// wait: minutes, not seconds, still bounded and loud on exhaustion.
++const PGWIRE_LIFECYCLE_TRANSIENT_PATTERN =
++  /authoritative operation lookup failed|command owner is unavailable|participant failures|not ready|timed out|timeout/i;
++const PGWIRE_LIFECYCLE_RETRY_LIMIT = 60;
++const PGWIRE_LIFECYCLE_RETRY_DELAY_MS = 3_000;
++
++async function defaultCreateLifecycleSqlClient(endpoint, deps) {
++  const pg = await import('pg');
++  const Client = pg.Client || pg.default?.Client;
++  const connect = async () => {
++    for (let attempt = ZERO; ; attempt += ONE) {
++      const client = new Client({
++        database: REQUEST_CELL_AUTH.DATABASE,
++        host: endpoint.address,
++        password: REQUEST_CELL_AUTH.PASSWORD,
++        port: Number(endpoint.port),
++        user: REQUEST_CELL_AUTH.USER,
++      });
++      try {
++        await client.connect();
++        return client;
++      } catch (error) {
++        if (error?.code !== PGWIRE_CONNECT_REFUSED_CODE ||
++            attempt >= PGWIRE_CONNECT_RETRY_LIMIT) {
++          throw error;
++        }
++        await deps.sleep(PGWIRE_CONNECT_RETRY_DELAY_MS);
++      }
++    }
++  };
++  return {
++    execute: async (statement, parameters) => {
++      for (let attempt = ZERO; ; attempt += ONE) {
++        const client = await connect();
++        try {
++          const result = await client.query(
++            {text: statement, values: parameters});
++          return {rows: result?.rows};
++        } catch (error) {
++          if (attempt >= PGWIRE_LIFECYCLE_RETRY_LIMIT ||
++              !PGWIRE_LIFECYCLE_TRANSIENT_PATTERN.test(
++                String(error?.message || ''))) {
++            throw error;
++          }
++          await deps.sleep(PGWIRE_LIFECYCLE_RETRY_DELAY_MS);
++        } finally {
++          await client.end();
++        }
++      }
++    },
++  };
++}
++
++// Deploy replays the generated records through the pipeline owner over
++// the authenticated PG-wire listener.
++async function deployThroughPipeline(deps, paths, layoutPath, endpoint) {
+   const containerLayoutPath = path.posix.join(
+     SCENARIO_ARTIFACTS.CONTAINER_PATH,
+     path.relative(paths.artifactsRoot, layoutPath)
+       .split(path.sep).join(path.posix.sep),
+   );
+-  const sqlClient = {
+-    execute: async (statement, parameters) => ({
+-      rows: await queryRows(seedNode, statement, parameters),
+-    }),
+-  };
++  const sqlClient = await deps.createLifecycleSqlClient(endpoint, deps);
+   return deps.pipeline.runDeploy({
+     createSqlClient: () => sqlClient,
+     idempotencyKey: deps.runId,
+@@ -471,6 +695,10 @@ export async function run(cluster) {
+   });
+   const manifest = await deps.readManifest(paths.projectDirectory);
+ 
++  // Request the pgwire lifecycle listener FIRST: its placement rides
++  // out the formation-tail deferral while the data phases run.
++  await requestPgwireListener(seedNode, deps);
++
+   // Data substrate: table, split policies, deterministic dataset.
+   // Setup writes retry transient post-boot settling; measured phases do not.
+   const rows = generateDatasetRows();
+@@ -485,9 +713,12 @@ export async function run(cluster) {
+     await waitForSplitAndLeaderSpread(nodes, seedNode, deps);
+   const topology = assertPartitionSpread(spread.partitionRows);
+ 
+-  // Deploy the generated records, then measure over authenticated HTTP.
++  // Deploy the generated records through the authenticated PG-wire
++  // listener (requested at boot; must be REACHABLE, not just registered),
++  // then measure over authenticated HTTP.
++  const pgwireEndpoint = await waitForReachablePgwireEndpoint(nodes, deps);
+   await deployThroughPipeline(
+-    seedNode, deps, paths, buildResult.layoutPath);
++    deps, paths, buildResult.layoutPath, pgwireEndpoint);
+   const servingNodes = await waitForServingNodes(nodes, deps);
+   const snapshotsBefore = await captureResourceSnapshots(nodes, deps);
+   const invocations = await runMeasuredInvocations(servingNodes, deps);
+diff --git a/test/node/replica-local-only-row-convergence.test.js b/test/node/replica-local-only-row-convergence.test.js
+index ee6d9ad81c5dbee85f7e7e73ed1435effbc95cc6..5b3365c2de5e56d216212daa1c836b49fb773d1c 100644
+--- a/test/node/replica-local-only-row-convergence.test.js
++++ b/test/node/replica-local-only-row-convergence.test.js
+@@ -25,6 +25,9 @@
+ 
+ import {test} from '../../src/test-helpers/tap.js';
+ import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
++import {
++  CONTROL_PLANE_MUTATION_OUTCOME,
++} from '../../src/control-plane/control-plane-system-table-gateway.js';
+ 
+ const NODE_ID = 'node-a';
+ const REPLICA_ID = 'control_plane_publications-p1-r5';
+@@ -44,6 +47,7 @@ function createGateway() {
+   const calls = {mutations: []};
+   const gateway = {
+     failNext: true,
++    returnNext: null,
+     async submitMutation(mutation, _options) {
+       calls.mutations.push(mutation);
+       if (gateway.failNext) {
+@@ -51,6 +55,9 @@ function createGateway() {
+         error.retryable = true;
+         throw error;
+       }
++      if (gateway.returnNext) {
++        return gateway.returnNext;
++      }
+       return {success: true};
+     },
+   };
+@@ -131,6 +138,95 @@ test('CL-021: deferred durable services rows converge', async (t) => {
+     },
+   );
+ 
++  await t.test(
++    'a RETURNED readiness deferral retains the marker (non-throwing ' +
++      'success:false must not count as a durable commit)',
++    async (t) => {
++      // Live witness (public-path-multinode-baseline-20260811T095750Z):
++      // the gateway defers background-workClass lifecycle writes while
++      // the joiner's control-plane readiness converges — it RETURNS
++      // {success:false} rather than throwing. Clearing the marker on
++      // that resolution stranded the durable row forever (63x 'No row
++      // found for CDC update' on the services-p1 leader).
++      const nowRef = {value: 1_760_000_000_000};
++      const {gateway, calls} = createGateway();
++      gateway.failNext = false;
++      gateway.returnNext = {
++        success: false,
++        error: 'query_admission_deferred',
++        deferRetry: true,
++      };
++      const stateMachine = createStateMachine({gateway, nowRef});
++      await seedLocalOnlyReplica(stateMachine);
++
++      const persisted = await stateMachine._reconcileLocalOnlyServiceRows();
++
++      t.equal(persisted, 0, 'deferred pass counts as not-converged');
++      t.equal(calls.mutations.length, 1, 'one durable attempt made');
++      t.equal(
++        stateMachine.isServiceRowLocalOnly(REPLICA_ID),
++        true,
++        'returned deferral keeps the marker',
++      );
++
++      // Backoff armed: an immediate next pass skips the row.
++      await stateMachine._reconcileLocalOnlyServiceRows();
++      t.equal(calls.mutations.length, 1, 'backoff after a returned deferral');
++
++      // Gateway accepts writes again; the row converges after the window.
++      gateway.returnNext = null;
++      nowRef.value += 60_000;
++      const converged = await stateMachine._reconcileLocalOnlyServiceRows();
++      t.equal(converged, 1, 'row durably converged after recovery');
++      t.equal(
++        stateMachine.isServiceRowLocalOnly(REPLICA_ID),
++        false,
++        'marker cleared only on the confirmed apply',
++      );
++      stateMachine.shutdown?.();
++    },
++  );
++
++  await t.test(
++    'a zero-row apply (observed_state_changed) retains the marker',
++    async (t) => {
++      // A zero-row UPDATE/UPSERT resolves {success:true} with outcome
++      // observed_state_changed and emits no CDC event — the durable row
++      // still does not exist, so the marker must survive.
++      const nowRef = {value: 1_760_000_000_000};
++      const {gateway, calls} = createGateway();
++      gateway.failNext = false;
++      gateway.returnNext = {
++        success: true,
++        outcome: CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
++        partitionResult: {affectedRows: 0},
++      };
++      const stateMachine = createStateMachine({gateway, nowRef});
++      await seedLocalOnlyReplica(stateMachine);
++
++      const persisted = await stateMachine._reconcileLocalOnlyServiceRows();
++
++      t.equal(persisted, 0, 'zero-row apply counts as not-converged');
++      t.equal(calls.mutations.length, 1, 'one durable attempt made');
++      t.equal(
++        stateMachine.isServiceRowLocalOnly(REPLICA_ID),
++        true,
++        'zero-row apply keeps the marker',
++      );
++
++      gateway.returnNext = null;
++      nowRef.value += 60_000;
++      const converged = await stateMachine._reconcileLocalOnlyServiceRows();
++      t.equal(converged, 1, 'row durably converged after recovery');
++      t.equal(
++        stateMachine.isServiceRowLocalOnly(REPLICA_ID),
++        false,
++        'marker cleared only on the confirmed apply',
++      );
++      stateMachine.shutdown?.();
++    },
++  );
++
+   await t.test('untracked replicas drop their marker', async (t) => {
+     const nowRef = {value: 1_760_000_000_000};
+     const {gateway, calls} = createGateway();

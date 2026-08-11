@@ -399,6 +399,28 @@ class ReplicaStateMachine extends EventEmitter {
   }
 
   /**
+   * Arm (or extend) the per-row exponential backoff after a reconcile
+   * pass that did not confirm a durable apply — thrown or returned
+   * (CL-021: retained marker means retry, never silent convergence).
+   * @param {string} serviceId
+   * @param {?{delayMs: number, notBeforeMs: number}} retryState
+   * @param {number} nowMs
+   * @return {void}
+   */
+  _armLocalOnlyServiceRowRetry(serviceId, retryState, nowMs) {
+    const previousDelayMs =
+      retryState?.delayMs ?? this.timeoutCheckIntervalMs;
+    const delayMs = Math.min(
+      previousDelayMs * REPLICA_STATE_MACHINE_NUM.TWO,
+      REPLICA_STATE_MACHINE_LOCAL_ONLY_ROW_RETRY_MAX_DELAY_MS,
+    );
+    this.localOnlyServiceRowRetryStateByServiceId.set(serviceId, {
+      delayMs,
+      notBeforeMs: nowMs + delayMs,
+    });
+  }
+
+  /**
    * CL-021: converge deferred durable services rows. A priority replica
    * activated via the local-commit fallback (CL-016) defers its durable
    * services-row write because that write goes through the very control
@@ -485,8 +507,14 @@ class ReplicaStateMachine extends EventEmitter {
         );
         try {
           await reconcilePromise;
-          // The persistence helper cleared the marker (and this row's
-          // retry state) on commit.
+          // The persistence helper clears the marker only on a CONFIRMED
+          // durable apply; a non-throwing deferred or zero-row result
+          // retains it, and this pass must count as not-converged so the
+          // backoff arms and the next tick retries (CL-021).
+          if (this.localOnlyServiceRowIds.has(serviceId)) {
+            this._armLocalOnlyServiceRowRetry(serviceId, retryState, nowMs);
+            continue;
+          }
           persisted += REPLICA_STATE_MACHINE_NUM.ONE;
           this.logger.info(
             REPLICA_STATE_MACHINE_LOG_MSG.LOCAL_ONLY_ROW_CONVERGED,
@@ -498,16 +526,7 @@ class ReplicaStateMachine extends EventEmitter {
             },
           );
         } catch (_error) {
-          const previousDelayMs =
-            retryState?.delayMs ?? this.timeoutCheckIntervalMs;
-          const delayMs = Math.min(
-            previousDelayMs * REPLICA_STATE_MACHINE_NUM.TWO,
-            REPLICA_STATE_MACHINE_LOCAL_ONLY_ROW_RETRY_MAX_DELAY_MS,
-          );
-          this.localOnlyServiceRowRetryStateByServiceId.set(serviceId, {
-            delayMs,
-            notBeforeMs: nowMs + delayMs,
-          });
+          this._armLocalOnlyServiceRowRetry(serviceId, retryState, nowMs);
         } finally {
           if (
             this.serviceRowPersistInFlightByServiceId.get(serviceId) ===

@@ -25,6 +25,9 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import {ReplicaStateMachine} from '../../src/node/replica-state-machine.js';
+import {
+  CONTROL_PLANE_MUTATION_OUTCOME,
+} from '../../src/control-plane/control-plane-system-table-gateway.js';
 
 const NODE_ID = 'node-a';
 const REPLICA_ID = 'control_plane_publications-p1-r5';
@@ -44,12 +47,16 @@ function createGateway() {
   const calls = {mutations: []};
   const gateway = {
     failNext: true,
+    returnNext: null,
     async submitMutation(mutation, _options) {
       calls.mutations.push(mutation);
       if (gateway.failNext) {
         const error = new Error('control plane not writable');
         error.retryable = true;
         throw error;
+      }
+      if (gateway.returnNext) {
+        return gateway.returnNext;
       }
       return {success: true};
     },
@@ -127,6 +134,95 @@ test('CL-021: deferred durable services rows converge', async (t) => {
         'retry state cleared with the marker',
       );
 
+      stateMachine.shutdown?.();
+    },
+  );
+
+  await t.test(
+    'a RETURNED readiness deferral retains the marker (non-throwing ' +
+      'success:false must not count as a durable commit)',
+    async (t) => {
+      // Live witness (public-path-multinode-baseline-20260811T095750Z):
+      // the gateway defers background-workClass lifecycle writes while
+      // the joiner's control-plane readiness converges — it RETURNS
+      // {success:false} rather than throwing. Clearing the marker on
+      // that resolution stranded the durable row forever (63x 'No row
+      // found for CDC update' on the services-p1 leader).
+      const nowRef = {value: 1_760_000_000_000};
+      const {gateway, calls} = createGateway();
+      gateway.failNext = false;
+      gateway.returnNext = {
+        success: false,
+        error: 'query_admission_deferred',
+        deferRetry: true,
+      };
+      const stateMachine = createStateMachine({gateway, nowRef});
+      await seedLocalOnlyReplica(stateMachine);
+
+      const persisted = await stateMachine._reconcileLocalOnlyServiceRows();
+
+      t.equal(persisted, 0, 'deferred pass counts as not-converged');
+      t.equal(calls.mutations.length, 1, 'one durable attempt made');
+      t.equal(
+        stateMachine.isServiceRowLocalOnly(REPLICA_ID),
+        true,
+        'returned deferral keeps the marker',
+      );
+
+      // Backoff armed: an immediate next pass skips the row.
+      await stateMachine._reconcileLocalOnlyServiceRows();
+      t.equal(calls.mutations.length, 1, 'backoff after a returned deferral');
+
+      // Gateway accepts writes again; the row converges after the window.
+      gateway.returnNext = null;
+      nowRef.value += 60_000;
+      const converged = await stateMachine._reconcileLocalOnlyServiceRows();
+      t.equal(converged, 1, 'row durably converged after recovery');
+      t.equal(
+        stateMachine.isServiceRowLocalOnly(REPLICA_ID),
+        false,
+        'marker cleared only on the confirmed apply',
+      );
+      stateMachine.shutdown?.();
+    },
+  );
+
+  await t.test(
+    'a zero-row apply (observed_state_changed) retains the marker',
+    async (t) => {
+      // A zero-row UPDATE/UPSERT resolves {success:true} with outcome
+      // observed_state_changed and emits no CDC event — the durable row
+      // still does not exist, so the marker must survive.
+      const nowRef = {value: 1_760_000_000_000};
+      const {gateway, calls} = createGateway();
+      gateway.failNext = false;
+      gateway.returnNext = {
+        success: true,
+        outcome: CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
+        partitionResult: {affectedRows: 0},
+      };
+      const stateMachine = createStateMachine({gateway, nowRef});
+      await seedLocalOnlyReplica(stateMachine);
+
+      const persisted = await stateMachine._reconcileLocalOnlyServiceRows();
+
+      t.equal(persisted, 0, 'zero-row apply counts as not-converged');
+      t.equal(calls.mutations.length, 1, 'one durable attempt made');
+      t.equal(
+        stateMachine.isServiceRowLocalOnly(REPLICA_ID),
+        true,
+        'zero-row apply keeps the marker',
+      );
+
+      gateway.returnNext = null;
+      nowRef.value += 60_000;
+      const converged = await stateMachine._reconcileLocalOnlyServiceRows();
+      t.equal(converged, 1, 'row durably converged after recovery');
+      t.equal(
+        stateMachine.isServiceRowLocalOnly(REPLICA_ID),
+        false,
+        'marker cleared only on the confirmed apply',
+      );
       stateMachine.shutdown?.();
     },
   );
