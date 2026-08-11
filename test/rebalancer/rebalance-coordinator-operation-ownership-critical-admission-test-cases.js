@@ -22,27 +22,19 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
       nodeId: 'node-local',
       transactionCoordinator: createTransactionCoordinator(),
       systemTableCache: {
-        get() {
-          return null;
-        },
+        get: () => null,
       },
       cdcIntegrationService: {
-        async waitForCacheUpdate() {},
+        waitForCacheUpdate: async () => {},
       },
       tablePolicyService: {
-        async getPolicyForPartition() {
-          return {minReplicaCount: 1};
-        },
+        getPolicyForPartition: async () => ({minReplicaCount: 1}),
       },
       messageRouter: {
-        async deliver() {
-          return {acknowledged: true, status: 'completed'};
-        },
+        deliver: async () => ({acknowledged: true, status: 'completed'}),
       },
       sqlQueryEngine: {
-        async executeQuery() {
-          return {success: true, rows: [], changes: 0};
-        },
+        executeQuery: async () => ({success: true, rows: [], changes: 0}),
       },
       ...createStorageOwners(),
       enableTimeouts: false,
