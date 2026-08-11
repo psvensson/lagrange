@@ -2,6 +2,9 @@ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
 import {
   classifySystemPartition,
 } from '../bootstrap/system-partition-classification.js';
+import {
+  isCriticalLeaderPublication,
+} from './partition-leader-publication-criticality.js';
 
 const {
   AuthoritativeRowMutationHelper,
@@ -12,6 +15,14 @@ const {
   SYSTEM_TABLE_NAME,
   TABLES,
 } = PARTITION_SERVICE_SHARED;
+
+// Loudness terminal for the leader-row publication (quest
+// partition-leader-row-publication-integrity): after this many scheduled
+// retries (~2 minutes at the 1s..30s capped backoff — the exact horizon
+// run user-table-leader-placement-spread-20260811T052645Z starved
+// through silently) the typed budget-exhausted event fires once; retry
+// ownership continues at the capped cadence.
+const LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS = 8;
 
 function hasAuthoritativeReadOwner(gateway) {
   if (
@@ -116,24 +127,47 @@ function buildRoleMutationReadOptions(owner) {
   );
 }
 
+// The authoritative point read that gates the CAS write shares the fate
+// of the write lane: a divergence-suspected publication whose read rides
+// the shed BACKGROUND lane parks forever without ever attempting the
+// write. The cached row is the only observation available before the
+// read, so the criticality owner judges it.
 function buildLeaderNodeMutationReadOptions(owner) {
+  const cachedRow = owner.systemTableCache?.get?.(
+    TABLES.PARTITIONS,
+    owner.partitionId,
+  ) || null;
+  const critical = isCriticalLeaderPublication({
+    observedLeaderNodeId: cachedRow?.[COLUMN.LEADER_NODE_ID] ?? null,
+    partitionId: owner.partitionId,
+    publishingNodeId: owner.nodeId,
+  });
   return buildMetadataMutationReadOptions(owner, {
-    deliveryPriority: owner.getMetadataPublicationDeliveryPriority(),
-    workClass: owner.getMetadataPublicationWorkClass(),
+    deliveryPriority: critical ?
+      PARTITION_SERVICE_LITERAL.CRITICAL :
+      owner.getMetadataPublicationDeliveryPriority(),
+    workClass: critical ?
+      PRESSURE_WORK_CLASS.CRITICAL :
+      owner.getMetadataPublicationWorkClass(),
   });
 }
 
-function buildLeaderNodeMutationDeliveryOptions(owner, context = {}) {
+function buildLeaderNodeMutationDeliveryOptions(
+  owner,
+  context = {},
+  publishingNodeId = null,
+) {
   const observedRow = context.authoritativeRow || context.cachedRow;
-  const observedLeaderNodeId = observedRow?.[COLUMN.LEADER_NODE_ID];
-  const initialLeaderPublication =
-    typeof observedLeaderNodeId !== 'string' ||
-    observedLeaderNodeId.length === 0;
+  const critical = isCriticalLeaderPublication({
+    observedLeaderNodeId: observedRow?.[COLUMN.LEADER_NODE_ID] ?? null,
+    partitionId: owner.partitionId,
+    publishingNodeId: publishingNodeId ?? owner.nodeId,
+  });
   return {
-    deliveryPriority: initialLeaderPublication ?
+    deliveryPriority: critical ?
       PARTITION_SERVICE_LITERAL.CRITICAL :
       owner.getMetadataPublicationDeliveryPriority(),
-    workClass: initialLeaderPublication ?
+    workClass: critical ?
       PRESSURE_WORK_CLASS.CRITICAL :
       owner.getMetadataPublicationWorkClass(),
     routingReadinessDimension:
@@ -239,8 +273,8 @@ function createLeaderNodeMutationHelper(owner) {
       [COLUMN.LEADER_NODE_ID]: leaderNodeId,
       [COLUMN.UPDATED_AT]: updatedAt,
     }),
-    buildUpdateOptions: (_leaderNodeId, _updateData, context) =>
-      buildLeaderNodeMutationDeliveryOptions(owner, context),
+    buildUpdateOptions: (leaderNodeId, _updateData, context) =>
+      buildLeaderNodeMutationDeliveryOptions(owner, context, leaderNodeId),
     buildExpectedCacheFields: (leaderNodeId) => ({
       [COLUMN.LEADER_NODE_ID]: leaderNodeId,
     }),
@@ -297,7 +331,53 @@ function createLeaderNodeMutationHelper(owner) {
         },
       );
     },
+    // Silent-drop and silent-defer paths become typed events; the budget
+    // hook is the loud terminal while retry ownership continues (quest
+    // partition-leader-row-publication-integrity).
+    onPendingDropped: (context = {}) => {
+      owner.logger.warn(
+        PARTITION_SERVICE_ERROR_MSG.LEADER_PUBLICATION_PENDING_DROPPED,
+        {
+          partitionId: owner.partitionId,
+          replicaId: owner.replicaId,
+          leaderNodeId: context.value,
+          reason: context.reason,
+          retryAttemptCount: context.retryAttemptCount,
+        },
+      );
+    },
+    onAuthoritativeProbeDeferred: (context = {}) => {
+      owner.logger.warn(
+        PARTITION_SERVICE_ERROR_MSG.LEADER_PUBLICATION_PROBE_DEFERRED,
+        {
+          partitionId: owner.partitionId,
+          replicaId: owner.replicaId,
+          leaderNodeId: context.value,
+          cause: context.cause,
+          error: context.error?.message || null,
+          retryAttemptCount: context.retryAttemptCount,
+        },
+      );
+    },
+    onRetryBudgetExhausted: (context = {}) => {
+      owner.logger.error(
+        PARTITION_SERVICE_ERROR_MSG.LEADER_PUBLICATION_RETRY_BUDGET_EXHAUSTED,
+        {
+          partitionId: owner.partitionId,
+          replicaId: owner.replicaId,
+          leaderNodeId: context.value,
+          attempts: context.attempts,
+          nextDelayMs: context.nextDelayMs,
+        },
+      );
+    },
+    retryBudgetAttempts: LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS,
   });
 }
 
-export {createLeaderNodeMutationHelper, createRoleMutationHelper};
+export {
+  LEADER_PUBLICATION_RETRY_BUDGET_ATTEMPTS,
+  buildLeaderNodeMutationDeliveryOptions,
+  createLeaderNodeMutationHelper,
+  createRoleMutationHelper,
+};

@@ -1,114 +1,23 @@
 import {TIME_MS} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_MUTATION_OUTCOME,
 } from '../control-plane/control-plane-system-table-gateway.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
+import {
+  AUTHORITATIVE_PROBE_DEFER_CAUSE,
+  AUTHORITATIVE_ROW_MUTATION_REASON,
+  AUTHORITATIVE_ROW_MUTATION_RETRY,
+  classifyGatewayMutationOutcome,
+  classifyMutationFailure,
+  extractAffectedRows,
+  normalizeMaxRetryDelayMs,
+  normalizeRetryBackoffMultiplier,
+  optionalFunction,
+  validateMutationHelperOptions,
+  withDefault,
+} from './authoritative-row-mutation-vocabulary.js';
 
-
-const CACHE_VISIBILITY_ERROR_FRAGMENT = 'Cache update not observed';
-const AUTHORITATIVE_ROW_MUTATION_REASON = Object.freeze({
-  APPLIED: 'applied',
-  AUTHORITATIVE_CONFIRM_UNAVAILABLE: 'authoritative-confirm-unavailable',
-  AUTHORITATIVE_WRITE_FAILED: 'authoritative-write-failed',
-  CACHE_VISIBILITY_GAP_RECOVERED: 'cache-visibility-gap-recovered',
-  CACHE_VISIBILITY_GAP_UNRECOVERED: 'cache-visibility-gap-unrecovered',
-  DEFERRED: 'deferred',
-  IN_FLIGHT: 'in-flight',
-  NOOP: 'noop',
-  OBSERVED_STATE_CHANGED: 'observed-state-changed',
-  OWNER_NOT_READY: 'owner-not-ready',
-  REJECTED: 'rejected',
-  SKIPPED: 'skipped',
-});
-const AUTHORITATIVE_ROW_MUTATION_ERROR_MSG = Object.freeze({
-  MISSING_BUILD_UPDATE_DATA:
-    'AuthoritativeRowMutationHelper requires buildUpdateData',
-  MISSING_BUILD_WHERE_CLAUSE:
-    'AuthoritativeRowMutationHelper requires buildWhereClause',
-  MISSING_READ_VALUE_FROM_CACHE:
-    'AuthoritativeRowMutationHelper requires readValueFromCache',
-  MISSING_TABLE_NAME: 'AuthoritativeRowMutationHelper requires tableName',
-});
-const AUTHORITATIVE_ROW_MUTATION_RETRY = Object.freeze({
-  BACKOFF_MULTIPLIER: 2,
-  MAX_DELAY_MS: TIME_MS.SECOND * 30,
-});
-
-function extractAffectedRows(result) {
-  const candidate = Number(
-    result?.partitionResult?.affectedRows ?? result?.affectedRows,
-  );
-  return Number.isFinite(candidate) ? candidate : null;
-}
-
-function classifyMutationFailure(error) {
-  const message = error?.message || '';
-  if (message.includes(CACHE_VISIBILITY_ERROR_FRAGMENT)) {
-    return AUTHORITATIVE_ROW_MUTATION_REASON.CACHE_VISIBILITY_GAP_UNRECOVERED;
-  }
-  return AUTHORITATIVE_ROW_MUTATION_REASON.AUTHORITATIVE_WRITE_FAILED;
-}
-
-function classifyGatewayMutationOutcome(result) {
-  if (result?.outcome === CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED) {
-    return AUTHORITATIVE_ROW_MUTATION_REASON.DEFERRED;
-  }
-  if (result?.outcome === CONTROL_PLANE_MUTATION_OUTCOME.REJECTED) {
-    return AUTHORITATIVE_ROW_MUTATION_REASON.REJECTED;
-  }
-  if (result?.outcome === CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY) {
-    return AUTHORITATIVE_ROW_MUTATION_REASON.OWNER_NOT_READY;
-  }
-  if (result?.outcome === CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED) {
-    return AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED;
-  }
-  return null;
-}
-
-function validateMutationHelperOptions(options) {
-  if (!options.tableName) {
-    throw new Error(AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_TABLE_NAME);
-  }
-  if (typeof options.buildWhereClause !== 'function') {
-    throw new Error(
-      AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_BUILD_WHERE_CLAUSE,
-    );
-  }
-  if (typeof options.buildUpdateData !== 'function') {
-    throw new Error(
-      AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_BUILD_UPDATE_DATA,
-    );
-  }
-  if (typeof options.readValueFromCache !== 'function') {
-    throw new Error(
-      AUTHORITATIVE_ROW_MUTATION_ERROR_MSG.MISSING_READ_VALUE_FROM_CACHE,
-    );
-  }
-}
-
-function normalizeRetryBackoffMultiplier(value) {
-  if (Number.isFinite(value) && value >= 1) {
-    return value;
-  }
-  return AUTHORITATIVE_ROW_MUTATION_RETRY.BACKOFF_MULTIPLIER;
-}
-
-function normalizeMaxRetryDelayMs(value) {
-  if (Number.isFinite(value) && value > 0) {
-    return Math.floor(value);
-  }
-  return AUTHORITATIVE_ROW_MUTATION_RETRY.MAX_DELAY_MS;
-}
-
-function optionalFunction(value) {
-  return typeof value === 'function' ? value : null;
-}
-
-function withDefault(value, fallback) {
-  return value === undefined ? fallback : value;
-}
 
 class AuthoritativeRowMutationHelper {
   constructor(options = {}) {
@@ -134,6 +43,10 @@ class AuthoritativeRowMutationHelper {
       readAuthoritativeRow,
       onObservedStateChanged,
       onAsyncError,
+      onAuthoritativeProbeDeferred,
+      onPendingDropped,
+      onRetryBudgetExhausted,
+      retryBudgetAttempts,
       now,
       setTimeoutFn,
       clearTimeoutFn,
@@ -183,6 +96,17 @@ class AuthoritativeRowMutationHelper {
       () => {},
     );
     this.onAsyncError = withDefault(onAsyncError, () => {});
+    // Loudness/budget hooks (quest
+    // partition-leader-row-publication-integrity). All optional; absent
+    // hooks preserve the legacy silent behavior for other consumers.
+    this.onAuthoritativeProbeDeferred =
+      optionalFunction(onAuthoritativeProbeDeferred);
+    this.onPendingDropped = optionalFunction(onPendingDropped);
+    this.onRetryBudgetExhausted = optionalFunction(onRetryBudgetExhausted);
+    this.retryBudgetAttempts =
+      Number.isInteger(retryBudgetAttempts) && retryBudgetAttempts > 0 ?
+        retryBudgetAttempts :
+        null;
     this.now = withDefault(now, () => Date.now());
     this.setTimeoutFn = withDefault(setTimeoutFn, setTimeout);
     this.clearTimeoutFn = withDefault(clearTimeoutFn, clearTimeout);
@@ -298,6 +222,7 @@ class AuthoritativeRowMutationHelper {
     }) || {skip: false};
 
     if (prepareResult.clearPending) {
+      this.reportPendingDropped(prepareResult.reason);
       this.pendingValue = null;
     }
 
@@ -398,6 +323,7 @@ class AuthoritativeRowMutationHelper {
       phase: 'pre-mutation',
     }) || {skip: false};
     if (preMutationResult.clearPending && this.pendingValue === value) {
+      this.reportPendingDropped(preMutationResult.reason);
       this.pendingValue = null;
     }
     if (!preMutationResult.skip) {
@@ -553,7 +479,12 @@ class AuthoritativeRowMutationHelper {
     let probe = null;
     try {
       probe = await this.readAuthoritativeRow(value);
-    } catch (_readError) {
+    } catch (readError) {
+      this.reportProbeDeferred(
+        value,
+        AUTHORITATIVE_PROBE_DEFER_CAUSE.READ_FAILED,
+        readError,
+      );
       this.scheduleRetry();
       return {
         settled: true,
@@ -570,6 +501,11 @@ class AuthoritativeRowMutationHelper {
         {settled: false, row: null};
     }
     if (!probe || probe.available === false || !probe.row) {
+      this.reportProbeDeferred(
+        value,
+        AUTHORITATIVE_PROBE_DEFER_CAUSE.ROW_UNAVAILABLE,
+        null,
+      );
       this.scheduleRetry();
       return {
         settled: true,
@@ -673,6 +609,29 @@ class AuthoritativeRowMutationHelper {
 
     const boundedDelayMs = this.resolveRetryDelayMs(delayMs);
     this.retryAttemptCount += 1;
+    // The budget is a loudness terminal, not an abandonment: crossing it
+    // fires the typed hook exactly once per exhaustion episode while the
+    // retry ownership continues at the capped cadence — dropping the
+    // publication would strand the durable row stale forever, the worse
+    // defect (quest partition-leader-row-publication-integrity).
+    if (
+      this.onRetryBudgetExhausted &&
+      this.retryBudgetAttempts !== null &&
+      this.retryAttemptCount === this.retryBudgetAttempts
+    ) {
+      try {
+        this.onRetryBudgetExhausted({
+          attempts: this.retryAttemptCount,
+          nextDelayMs: boundedDelayMs,
+          value: this.pendingValue,
+        });
+      } catch (callbackError) {
+        this.onAsyncError(callbackError, {
+          retry: true,
+          value: this.pendingValue,
+        });
+      }
+    }
     this.retryTimer = this.setTimeoutFn(async () => {
       this.retryTimer = null;
       await this.flush().catch((error) => {
@@ -700,6 +659,40 @@ class AuthoritativeRowMutationHelper {
       this.maxRetryDelayMs,
       Math.max(backoffDelayMs, explicitDelayMs),
     );
+  }
+
+  reportPendingDropped(reason) {
+    if (!this.onPendingDropped || this.pendingValue === null) {
+      return;
+    }
+    try {
+      this.onPendingDropped({
+        reason: reason || AUTHORITATIVE_ROW_MUTATION_REASON.SKIPPED,
+        retryAttemptCount: this.retryAttemptCount,
+        value: this.pendingValue,
+      });
+    } catch (callbackError) {
+      this.onAsyncError(callbackError, {
+        retry: false,
+        value: this.pendingValue,
+      });
+    }
+  }
+
+  reportProbeDeferred(value, cause, error) {
+    if (!this.onAuthoritativeProbeDeferred) {
+      return;
+    }
+    try {
+      this.onAuthoritativeProbeDeferred({
+        cause,
+        error: error || null,
+        retryAttemptCount: this.retryAttemptCount,
+        value,
+      });
+    } catch (callbackError) {
+      this.onAsyncError(callbackError, {retry: false, value});
+    }
   }
 
   scheduleFollowUpFlush() {
@@ -765,6 +758,7 @@ class AuthoritativeRowMutationHelper {
 }
 
 export {
+  AUTHORITATIVE_PROBE_DEFER_CAUSE,
   AuthoritativeRowMutationHelper,
   classifyMutationFailure,
 };

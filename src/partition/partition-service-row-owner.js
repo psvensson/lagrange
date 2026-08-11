@@ -4,6 +4,9 @@ import {
   isBootstrapCriticalSystemPartitionId,
 } from '../bootstrap/system-partition-classification.js';
 import {
+  isCriticalLeaderPublication,
+} from './partition-leader-publication-criticality.js';
+import {
   ENTITY_TYPE,
   SERVICE_STATUS,
   SERVICE_TYPE,
@@ -125,9 +128,19 @@ class PartitionServiceRowOwner {
     };
   }
 
-  buildPartitionLeaderUpdateOptions(partitionId) {
+  // This path publishes from a registered leader service row with no
+  // observation of the durable partitions row; the shared criticality
+  // owner (quest partition-leader-row-publication-integrity) treats the
+  // absent observation as unruled-out divergence, so registration-time
+  // leader publications ride the critical lane.
+  buildPartitionLeaderUpdateOptions(partitionId, publishingNodeId = null) {
+    const critical = isCriticalLeaderPublication({
+      observedLeaderNodeId: null,
+      partitionId,
+      publishingNodeId,
+    });
     return {
-      ...(this.isBootstrapCriticalPartitionId(partitionId) ?
+      ...(critical ?
         CRITICAL_SERVICE_ROW_UPDATE_OPTION :
         SERVICE_ROW_UPDATE_OPTION),
       coalescingKey: `partitions:leader:${partitionId}`,
@@ -151,7 +164,7 @@ class PartitionServiceRowOwner {
         leader_node_id: row.node_id,
         updated_at: row.updated_at,
       },
-      this.buildPartitionLeaderUpdateOptions(row.partition_id),
+      this.buildPartitionLeaderUpdateOptions(row.partition_id, row.node_id),
     );
   }
 

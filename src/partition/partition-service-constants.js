@@ -555,6 +555,13 @@ const PARTITION_SERVICE_ERROR_MSG = Object.freeze({
   PERSIST_LEADER_AFTER_CDC_FAILED:
     'Failed to persist partition leader after CDC service set',
   PERSIST_PARTITION_LEADER_FAILED: 'Failed to persist partition leader update',
+  LEADER_PUBLICATION_PENDING_DROPPED:
+    'Pending leader-row publication dropped without landing',
+  LEADER_PUBLICATION_PROBE_DEFERRED:
+    'Leader-row publication deferred: authoritative row unreadable',
+  LEADER_PUBLICATION_RETRY_BUDGET_EXHAUSTED:
+    'Leader-row publication retry budget exhausted; ownership continues ' +
+    'at capped cadence',
   METADATA_PUBLICATION_GUARD_STALE:
     'Metadata publication CAS missed observed state; refreshing guard row ' +
     'from authority',
