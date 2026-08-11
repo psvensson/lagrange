@@ -74,6 +74,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:guideline:silent-catch` — `node scripts/check-guideline-silent-catch.js`
 - `audit:guidelines` — `npm run audit:guideline:literals && npm run audit:guideline:decision-boundaries && npm run audit:guideline:boundary-mode-contracts && npm run audit:guideline:hot-path-diagnostics && npm run audit:guideline:deferred-outcomes && npm run audit:guideline:silent-catch && npm run audit:guideline:ambient-intrinsics && npm run audit:style-terminal-vocabulary`
 - `audit:hold-engagement-owner` — `node scripts/check-hold-engagement-owner.js`
+- `audit:impact-contracts` — `node scripts/checks/impact-contract-registry.js`
 - `audit:no-kiro` — `node scripts/check-no-kiro-refs.js`
 - `audit:no-legacy-naming` — `node scripts/check-no-legacy-naming.js`
 - `audit:no-ordinal-files` — `node scripts/check-no-ordinal-files.js`
@@ -291,7 +292,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:sharded:all` — `npm run test:fast && bash scripts/run-sharded-lanes-concurrent.sh`
 - `test:sharded:serial` — `npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2`
 - `test:smoke` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/developer-smoke-proof-manifest.json --receipt-dir test-output/acceptance/developer-smoke`
-- `test:static` — `npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint`
+- `test:static` — `npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:impact-contracts && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint`
 - `test:static:postpush` — `node scripts/checks/run-static-audits.js`
 - `test:task27:ci` — `npm run test:task27:invariant-suite && npm run test:task27:distributed-stall-gate`
 - `test:task27:distributed-stall-gate` — Run the Task 27 distributed stall gate.
@@ -315,4 +316,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-210 scripts indexed; 33 have a curated description, 177 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+211 scripts indexed; 33 have a curated description, 178 fall back to their raw command. Improve coverage in the two sources named in the header comment.

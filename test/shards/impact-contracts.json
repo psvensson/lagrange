@@ -1,5 +1,5 @@
 {
-  "schemaVersion": 1,
+  "schemaVersion": 2,
   "id": "impact-contracts",
   "description": "Semantic contract edges for the impact proof-cone selector (developer-velocity epic V4a). Production paths declare the contracts they own; tests declare the contracts they exercise. Changing a contract-owning path selects every test claiming that contract. Unknown or undeclared contracts fail closed. This manifest is EXPLICIT and hand-curated; static dependency and coverage relationships are generated and live elsewhere. Every owner/test path must exist in the tree (directory prefix or file); dead edges are a contract defect.",
   "contracts": {
@@ -92,6 +92,146 @@
       ],
       "tests": [
         "test/solve/"
+      ]
+    },
+    "priority-spread-planner-admission": {
+      "description": "Priority spread-cure retention and coordinator admission remain mutually compatible.",
+      "owners": [
+        "src/rebalancer/move-planner-priority-spread-cure.js",
+        "src/rebalancer/move-planner-move-calculation-methods.js",
+        "src/rebalancer/rebalance-coordinator-priority-budget-admission.js"
+      ],
+      "tests": [
+        "test/rebalancer/critical-spread-terminal-stall-repro.test.js",
+        "test/rebalancer/spread-cure-at-target-minting-gap.test.js"
+      ]
+    },
+    "priority-services-publication-census": {
+      "description": "Priority SERVICES-row publication supplies every field required by the membership census.",
+      "owners": [
+        "src/node/replica-handler-create-status-methods.js",
+        "src/node/replica-handler-voter-readiness-methods.js",
+        "src/node/replica-state-machine-transition.js",
+        "src/control-plane/membership-publication-priority-partition-summary.js"
+      ],
+      "tests": [
+        "test/control-plane/priority-services-row-publication-census-contract.test.js"
+      ]
+    },
+    "priority-services-marker-reconcile": {
+      "description": "Local-only SERVICES-row marker clearing and reconciliation converge as one retry contract.",
+      "owners": [
+        "src/node/replica-state-machine-transition.js",
+        "src/node/replica-state-machine.js",
+        "src/node/replica-state-machine-timeouts.js"
+      ],
+      "tests": [
+        "test/node/replica-local-only-row-convergence.test.js"
+      ]
+    },
+    "critical-create-admission-topology-ordering": {
+      "description": "Critical create admission runs before the downstream topology guard on createOperation.",
+      "owners": [
+        "src/rebalancer/rebalance-coordinator-operation-creation.js",
+        "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
+        "src/rebalancer/rebalance-coordinator-topology-guard-methods.js"
+      ],
+      "tests": [
+        "test/rebalancer/rebalance-coordinator-operation-ownership.test.js",
+        "test/control-plane/replica-dispatch-atomic-claim.integration.test.js"
+      ]
+    }
+  },
+  "coupledPairs": {
+    "priority-spread-planner-retention-admission-hold": {
+      "description": "The planner must retain the same over-target spread cure that coordinator admission permits.",
+      "endpoints": [
+        {
+          "id": "planner-retention",
+          "owners": [
+            "src/rebalancer/move-planner-priority-spread-cure.js",
+            "src/rebalancer/move-planner-move-calculation-methods.js"
+          ]
+        },
+        {
+          "id": "admission-hold",
+          "owners": [
+            "src/rebalancer/rebalance-coordinator-priority-budget-admission.js"
+          ]
+        }
+      ],
+      "contract": "priority-spread-planner-admission",
+      "witnessTests": [
+        "test/rebalancer/critical-spread-terminal-stall-repro.test.js",
+        "test/rebalancer/spread-cure-at-target-minting-gap.test.js"
+      ]
+    },
+    "priority-services-row-publication-census": {
+      "description": "Published priority SERVICES rows must satisfy the census field and readiness vocabulary.",
+      "endpoints": [
+        {
+          "id": "row-publication",
+          "owners": [
+            "src/node/replica-handler-create-status-methods.js",
+            "src/node/replica-handler-voter-readiness-methods.js",
+            "src/node/replica-state-machine-transition.js"
+          ]
+        },
+        {
+          "id": "census",
+          "owners": [
+            "src/control-plane/membership-publication-priority-partition-summary.js"
+          ]
+        }
+      ],
+      "contract": "priority-services-publication-census",
+      "witnessTests": [
+        "test/control-plane/priority-services-row-publication-census-contract.test.js"
+      ]
+    },
+    "priority-services-marker-reconcile": {
+      "description": "The durable-apply marker decision and retry reconciliation must preserve eventual SERVICES-row publication.",
+      "endpoints": [
+        {
+          "id": "marker-clear",
+          "owners": [
+            "src/node/replica-state-machine-transition.js"
+          ]
+        },
+        {
+          "id": "reconcile",
+          "owners": [
+            "src/node/replica-state-machine.js",
+            "src/node/replica-state-machine-timeouts.js"
+          ]
+        }
+      ],
+      "contract": "priority-services-marker-reconcile",
+      "witnessTests": [
+        "test/node/replica-local-only-row-convergence.test.js"
+      ]
+    },
+    "critical-create-hold-topology-guard-order": {
+      "description": "Critical create admission must run before downstream topology checks consume its safety premise.",
+      "endpoints": [
+        {
+          "id": "admission-hold",
+          "owners": [
+            "src/rebalancer/rebalance-coordinator-priority-budget-admission.js"
+          ]
+        },
+        {
+          "id": "topology-guard-ordering",
+          "owners": [
+            "src/rebalancer/rebalance-coordinator-operation-creation.js",
+            "src/rebalancer/rebalance-coordinator-topology-guard-methods.js"
+          ]
+        }
+      ],
+      "contract": "critical-create-admission-topology-ordering",
+      "witnessTests": [
+        "test/rebalancer/rebalance-coordinator-operation-ownership.test.js",
+        "test/control-plane/replica-dispatch-atomic-claim.integration.test.js"
       ]
     }
   }

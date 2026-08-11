@@ -69,7 +69,7 @@ export const DOCUMENTATION_PREFIXES = Object.freeze([
   'README',
 ]);
 
-export const CONTRACT_SCHEMA_VERSION = 1;
+export const CONTRACT_SCHEMA_VERSION = 2;
 export const COVERAGE_SCHEMA_VERSION = 1;
 
 // Observed-coverage freshness bound: a snapshot older than this many source
