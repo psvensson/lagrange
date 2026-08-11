@@ -10,8 +10,9 @@ import {CDC_OPERATION, STRING} from '../constants/index.js';
 import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_MUTATION_OUTCOME,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {classifyControlPlaneMutationResult} from
+  '../control-plane/control-plane-mutation-outcome-classifier.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {PRESSURE_WORK_CLASS} from '../control-plane/pressure-governor.js';
@@ -193,18 +194,7 @@ class DynamicConfigService extends EventEmitter {
    * @private
    */
   didConfigSeedInsertApply(mutationResult) {
-    const affectedRows = Number(
-      mutationResult?.partitionResult?.affectedRows ??
-      mutationResult?.affectedRows,
-    );
-    if (Number.isFinite(affectedRows)) {
-      return affectedRows > 0;
-    }
-
-    return mutationResult?.outcome !== CONTROL_PLANE_MUTATION_OUTCOME.NO_OP &&
-      mutationResult?.outcome !==
-        CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED &&
-      mutationResult?.success !== false;
+    return classifyControlPlaneMutationResult(mutationResult).applied;
   }
 
 

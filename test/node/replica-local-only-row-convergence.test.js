@@ -140,19 +140,19 @@ test('CL-021: deferred durable services rows converge', async (t) => {
 
   await t.test(
     'a RETURNED readiness deferral retains the marker (non-throwing ' +
-      'success:false must not count as a durable commit)',
+      'typed outcome must not depend on success:false)',
     async (t) => {
       // Live witness (public-path-multinode-baseline-20260811T095750Z):
       // the gateway defers background-workClass lifecycle writes while
       // the joiner's control-plane readiness converges — it RETURNS
-      // {success:false} rather than throwing. Clearing the marker on
+      // a typed deferred outcome rather than throwing. Clearing the marker on
       // that resolution stranded the durable row forever (63x 'No row
       // found for CDC update' on the services-p1 leader).
       const nowRef = {value: 1_760_000_000_000};
       const {gateway, calls} = createGateway();
       gateway.failNext = false;
       gateway.returnNext = {
-        success: false,
+        outcome: CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED,
         error: 'query_admission_deferred',
         deferRetry: true,
       };
@@ -226,6 +226,53 @@ test('CL-021: deferred durable services rows converge', async (t) => {
       stateMachine.shutdown?.();
     },
   );
+
+  await t.test('canonical apply effects own replica marker clearance',
+    async (t) => {
+      const cases = [
+        ['applied', {outcome: CONTROL_PLANE_MUTATION_OUTCOME.APPLIED}, true],
+        ['pending visibility', {
+          outcome: CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
+        }, true],
+        ['no-op', {outcome: CONTROL_PLANE_MUTATION_OUTCOME.NO_OP}, false],
+        ['deferred', {outcome: CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED}, false],
+        ['rejected', {outcome: CONTROL_PLANE_MUTATION_OUTCOME.REJECTED}, false],
+        ['owner not ready', {
+          outcome: CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
+        }, false],
+        ['observed state changed', {
+          outcome: CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
+        }, false],
+        ['failed legacy', {success: false}, false],
+        ['zero-row legacy', {affectedRows: 0}, false],
+        ['positive-row legacy', {affectedRows: 1}, true],
+        ['empty legacy success', {}, true],
+        ['null partition fallback', {
+          partitionResult: null,
+          affectedRows: 1,
+        }, true],
+        ['invalid typed outcome', {outcome: 'future_outcome'}, false],
+      ];
+      for (const [label, result, applied] of cases) {
+        const nowRef = {value: 1_760_000_000_000};
+        const {gateway, calls} = createGateway();
+        gateway.failNext = false;
+        gateway.returnNext = result;
+        const stateMachine = createStateMachine({gateway, nowRef});
+        await seedLocalOnlyReplica(stateMachine);
+
+        const persisted = await stateMachine._reconcileLocalOnlyServiceRows();
+
+        t.equal(calls.mutations.length, 1, `${label}: one mutation submitted`);
+        t.equal(persisted, applied ? 1 : 0, `${label}: persisted count`);
+        t.equal(
+          stateMachine.isServiceRowLocalOnly(REPLICA_ID),
+          !applied,
+          `${label}: marker clearance follows canonical applied effect`,
+        );
+        stateMachine.shutdown?.();
+      }
+    });
 
   await t.test('untracked replicas drop their marker', async (t) => {
     const nowRef = {value: 1_760_000_000_000};

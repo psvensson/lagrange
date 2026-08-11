@@ -5,8 +5,9 @@ import {
 } from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OPERATION,
-  CONTROL_PLANE_MUTATION_OUTCOME,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {classifyControlPlaneMutationResult} from
+  '../control-plane/control-plane-mutation-outcome-classifier.js';
 import {createControlPlaneRuntimeBundle} from
   '../control-plane/control-plane-runtime-bundle.js';
 import {
@@ -202,19 +203,9 @@ function applyTransition(stateMachine, replicaId, newState, context = {}, option
 // reconcile owner only retries rows still carrying the marker (live
 // witness: run public-path-multinode-baseline-20260811T095750Z, 63x
 // 'No row found for CDC update' on the services-p1 leader). Unknown
-// result shapes count as applied (didConfigSeedInsertApply precedent).
+// Legacy successful result shapes remain applied; invalid typed shapes fail closed.
 function didDurableServiceRowWriteApply(result) {
-  if (result?.success === false) {
-    return false;
-  }
-  const affectedRows = Number(
-    result?.partitionResult?.affectedRows ?? result?.affectedRows,
-  );
-  if (Number.isFinite(affectedRows)) {
-    return affectedRows > REPLICA_STATE_MACHINE_NUM.ZERO;
-  }
-  return result?.outcome !==
-    CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED;
+  return classifyControlPlaneMutationResult(result).applied;
 }
 
 /**

@@ -11,6 +11,8 @@ import {
   CONFIG_DEFINITIONS,
 } from '../../src/config/dynamic-config-service.js';
 import {CONFIG_KEY} from '../../src/config/config-constants.js';
+import {CONTROL_PLANE_MUTATION_OUTCOME} from
+  '../../src/control-plane/control-plane-system-table-gateway.js';
 
 const GATEWAY_ONLY_NODE_ID = 'gateway-only-node';
 const GATEWAY_ONLY_UPDATED_BY = 'gateway-only-user';
@@ -24,6 +26,37 @@ const GATEWAY_ONLY_MUTATION_RESULT = Object.freeze({
   success: true,
   affectedRows: GATEWAY_ONLY_AFFECTED_ROWS,
 });
+
+test('DynamicConfigService config seed apply uses canonical mutation outcomes',
+  (t) => {
+    const service = new DynamicConfigService();
+    const cases = [
+      [CONTROL_PLANE_MUTATION_OUTCOME.APPLIED, true],
+      [CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY, true],
+      [CONTROL_PLANE_MUTATION_OUTCOME.NO_OP, false],
+      [CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED, false],
+      [CONTROL_PLANE_MUTATION_OUTCOME.REJECTED, false],
+      [CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY, false],
+      [CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED, false],
+    ];
+    for (const [outcome, applied] of cases) {
+      t.equal(
+        service.didConfigSeedInsertApply({outcome}),
+        applied,
+        `${outcome} uses the canonical mutation apply effect`,
+      );
+    }
+    t.equal(service.didConfigSeedInsertApply({success: false}), false);
+    t.equal(service.didConfigSeedInsertApply({affectedRows: 0}), false);
+    t.equal(service.didConfigSeedInsertApply({affectedRows: 1}), true);
+    t.equal(service.didConfigSeedInsertApply({}), true);
+    t.equal(
+      service.didConfigSeedInsertApply({outcome: 'future_outcome'}),
+      false,
+      'unknown typed outcomes fail closed',
+    );
+    t.end();
+  });
 
 /**
  * Create a mock CDC integration service.
