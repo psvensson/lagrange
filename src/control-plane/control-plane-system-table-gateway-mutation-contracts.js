@@ -26,39 +26,45 @@ import {
   CONTROL_PLANE_GATEWAY_OWNER_OUTCOME,
   CONTROL_PLANE_MUTATION_OPERATION,
   CONTROL_PLANE_MUTATION_OUTCOME,
-  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL,
 } from './control-plane-system-table-gateway-constants.js';
 import {
   normalizeDistinctStringArray,
 } from './control-plane-system-table-gateway-normalizers.js';
+import {classifyControlPlaneMutationResult} from
+  './control-plane-mutation-outcome-classifier.js';
 
-function resolveMutationCompletionState(result = {}) {
-  if (
-    typeof result?.completionState === 'string' &&
-    result.completionState.length > 0
-  ) {
-    return result.completionState;
+const objectFreeze = Object.freeze;
+
+function resolveFailedMutationOutcome(classification) {
+  return classification.pressureAction === PRESSURE_GOVERNOR_ACTION.DEFER ?
+    CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED :
+    classification.pressureAction === PRESSURE_GOVERNOR_ACTION.REJECT ?
+      CONTROL_PLANE_MUTATION_OUTCOME.REJECTED :
+      CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY;
+}
+
+function resolveMutationCompletionStateFromClassification(classification) {
+  if (!classification.valid) {
+    return CONTROL_PLANE_MUTATION_OUTCOME.REJECTED;
   }
-  if (
-    typeof result?.visibilityState === 'string' &&
-    result.visibilityState !==
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.VISIBLE
-  ) {
+  if (classification.completionStatePresent) {
+    return classification.completionState;
+  }
+  if (classification.visibilityPending) {
     return CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY;
   }
-  if (result?.success === false) {
-    return result?.pressureAction === PRESSURE_GOVERNOR_ACTION.DEFER ?
-      CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED :
-      result?.pressureAction === PRESSURE_GOVERNOR_ACTION.REJECT ?
-        CONTROL_PLANE_MUTATION_OUTCOME.REJECTED :
-        CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY;
+  if (classification.failed) {
+    return resolveFailedMutationOutcome(classification);
   }
-  const affectedRows = Number(
-    result?.partitionResult?.affectedRows ?? result?.affectedRows,
-  );
-  return Number.isFinite(affectedRows) && affectedRows <= 0 ?
+  return classification.zeroAffectedRows ?
     CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED :
     CONTROL_PLANE_MUTATION_OUTCOME.APPLIED;
+}
+
+function resolveMutationCompletionState(result = {}) {
+  return resolveMutationCompletionStateFromClassification(
+    classifyControlPlaneMutationResult(result),
+  );
 }
 
 function buildControlPlaneMutationIntent(
@@ -153,44 +159,42 @@ function canonicalizeControlPlaneMutation(
 }
 
 function buildControlPlaneMutationOutcomeSnapshot(outcome, completionState) {
-  return {
+  return objectFreeze({
     outcome,
     completionState,
-  };
+  });
 }
 
 function resolveControlPlaneMutationOutcomeSnapshot(result = {}) {
-  const completionState = resolveMutationCompletionState(result);
-  const affectedRows = Number(
-    result?.partitionResult?.affectedRows ?? result?.affectedRows,
+  const classification = classifyControlPlaneMutationResult(result);
+  const completionState = resolveMutationCompletionStateFromClassification(
+    classification,
   );
-  if (result?.outcome) {
+  if (!classification.valid) {
     return buildControlPlaneMutationOutcomeSnapshot(
-      result.outcome,
+      CONTROL_PLANE_MUTATION_OUTCOME.REJECTED,
       completionState,
     );
   }
-  if (result?.success === false) {
+  if (classification.known) {
     return buildControlPlaneMutationOutcomeSnapshot(
-      result?.pressureAction === PRESSURE_GOVERNOR_ACTION.DEFER ?
-        CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED :
-        result?.pressureAction === PRESSURE_GOVERNOR_ACTION.REJECT ?
-          CONTROL_PLANE_MUTATION_OUTCOME.REJECTED :
-          CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
+      classification.outcome,
       completionState,
     );
   }
-  if (
-    typeof result?.visibilityState === 'string' &&
-    result.visibilityState !==
-      CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_LITERAL.VISIBLE
-  ) {
+  if (classification.failed) {
+    return buildControlPlaneMutationOutcomeSnapshot(
+      resolveFailedMutationOutcome(classification),
+      completionState,
+    );
+  }
+  if (classification.visibilityPending) {
     return buildControlPlaneMutationOutcomeSnapshot(
       CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY,
       completionState,
     );
   }
-  if (Number.isFinite(affectedRows) && affectedRows <= 0) {
+  if (classification.zeroAffectedRows) {
     return buildControlPlaneMutationOutcomeSnapshot(
       CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
       completionState,
