@@ -273,6 +273,10 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
     // add-like op per partition (conflict gate + intent dedupe +
     // TARGET_NODE_ALREADY_OCCUPIED downstream), transient alive = current+1,
     // and the post-ADD drain path never re-enters this lane (REMOVE lane).
+    // Target readiness is deliberately not re-adjudicated here:
+    // ReplicaDispatchService.captureDispatchReadiness is its canonical owner.
+    // It leaves the operation pending with TARGET_NODE_NOT_READY and retries
+    // it after the target publishes an eligible readiness transition.
     if (
       context?.normalizedMoveType === OperationType.ADD &&
       (context?.move?.moveReason ?? context?.move?.reason) ===

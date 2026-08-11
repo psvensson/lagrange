@@ -16,6 +16,77 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
   createCoordinator,
   disablePersistenceConfirmation,
 }) {
+  test('RebalanceCoordinator createOperation checks the critical create lane ' +
+    'before the topology guard', async (_t) => {
+    const coordinator = createCoordinator({
+      nodeId: 'node-local',
+      transactionCoordinator: createTransactionCoordinator(),
+      systemTableCache: {
+        get() {
+          return null;
+        },
+      },
+      cdcIntegrationService: {
+        async waitForCacheUpdate() {},
+      },
+      tablePolicyService: {
+        async getPolicyForPartition() {
+          return {minReplicaCount: 1};
+        },
+      },
+      messageRouter: {
+        async deliver() {
+          return {acknowledged: true, status: 'completed'};
+        },
+      },
+      sqlQueryEngine: {
+        async executeQuery() {
+          return {success: true, rows: [], changes: 0};
+        },
+      },
+      ...createStorageOwners(),
+      enableTimeouts: false,
+    });
+    coordinator.initialize();
+
+    const invocationOrder = [];
+    const topologyGuardSentinel = new Error('topology-guard-sentinel');
+    coordinator.ensureOperationLedgerSelfMoveSerialized = async () => {};
+    coordinator.ensureNoConflictingInFlightReplaceForRemove = async () => {};
+    coordinator.ensurePriorityControlPlaneRemoveLaneAvailable = async () => {};
+    coordinator.ensurePrioritySurplusRemovePlacementFenceAllowed =
+      async () => {};
+    coordinator.ensureEntityAddLikeCreateLaneAvailable = async () => {};
+    coordinator.ensureCriticalPartitionCreateLaneAvailable = async () => {
+      invocationOrder.push('critical-create-lane');
+    };
+    coordinator.ensureCreateTopologyGuardAllowed = async () => {
+      invocationOrder.push('topology-guard');
+      throw topologyGuardSentinel;
+    };
+
+    try {
+      await assert.rejects(
+        coordinator.createOperation({
+          type: OperationType.ADD,
+          partitionId: 'config-p1',
+          entityType: 'partition',
+          entityId: 'config-p1',
+          nodeId: 'node-remote',
+          enforceConcurrentOperationBudget: true,
+        }),
+        (error) => error === topologyGuardSentinel,
+      );
+      assert.deepEqual(
+        invocationOrder,
+        ['critical-create-lane', 'topology-guard'],
+        'spread-cure admission must run before downstream topology checks',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
+  });
+
   test('RebalanceCoordinator limits critical partitions to one add-like operation in flight',
     async (t) => {
       const coordinator = new RebalanceCoordinator({

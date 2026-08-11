@@ -1,0 +1,168 @@
+diff --git a/scripts/checks/run-priority-spread-cure-guard-ordering-contract-scenarios.js b/scripts/checks/run-priority-spread-cure-guard-ordering-contract-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d622d52ef81d0adcea37f2d2f13b5c7fd1c269a6
+--- /dev/null
++++ b/scripts/checks/run-priority-spread-cure-guard-ordering-contract-scenarios.js
+@@ -0,0 +1,16 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++// Coupled-order guard for the spread-cure exemption. The coordinator test
++// reaches the real createOperation path and records both admission calls; the
++// dispatch test proves the named downstream readiness owner leaves a not-ready
++// operation pending and wakes it when the target becomes ready.
++const SCENARIOS = {
++  'priority-spread-cure-guard-ordering-contract': [
++    'test/rebalancer/rebalance-coordinator-operation-ownership.test.js',
++    'test/control-plane/replica-dispatch-atomic-claim.integration.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/solve/quests/priority-spread-cure-guard-ordering-contract.json b/solve/quests/priority-spread-cure-guard-ordering-contract.json
+new file mode 100644
+index 0000000000000000000000000000000000000000..efcc4e5f027293aa233859626f02ca3ca2222646
+--- /dev/null
++++ b/solve/quests/priority-spread-cure-guard-ordering-contract.json
+@@ -0,0 +1,43 @@
++{
++  "id": "priority-spread-cure-guard-ordering-contract",
++  "authoringContractVersion": 1,
++  "verificationContractVersion": 2,
++  "statement": "The real RebalanceCoordinator.createOperation path invokes critical create-lane admission before the topology guard, while the spread-cure exemption deliberately delegates target readiness to ReplicaDispatchService, which keeps a not-ready target undispatched and retryable until it becomes eligible; a focused guard proves both ownership premises for three consecutive runs.",
++  "priority": 1,
++  "class": "product",
++  "links": {
++    "roadmapRow": null,
++    "specRef": "solve/epics/golden-capability-gold-plating.md#tier-0-immediate-structural-guards",
++    "closesCL": [],
++    "parentQuest": null,
++    "planDoc": null,
++    "draftedAtCommit": "6bdd0a08d28c73f98b809200e24fd6e28fb6b189"
++  },
++  "doneWhen": {
++    "probe": "scenario-harness",
++    "args": {
++      "scenario": "priority-spread-cure-guard-ordering-contract",
++      "consecutive": 3,
++      "metric": "priority"
++    }
++  },
++  "frontiers": [
++    {
++      "id": "priority-spread-cure-guard-ordering-contract-main",
++      "priority": 1,
++      "metric": {
++        "probe": "scenario-harness",
++        "args": {
++          "scenario": "priority-spread-cure-guard-ordering-contract",
++          "metric": "priority"
++        }
++      }
++    }
++  ],
++  "constraints": [
++    {
++      "id": "source-change-subagent-verification",
++      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
++    }
++  ]
++}
+diff --git a/src/rebalancer/rebalance-coordinator-priority-budget-admission.js b/src/rebalancer/rebalance-coordinator-priority-budget-admission.js
+index 8d21bfba36e9e82f7a568fba3e25d2db22b67b56..63c9edff3cda356bdf2d65673bb57ec380d5a65f 100644
+--- a/src/rebalancer/rebalance-coordinator-priority-budget-admission.js
++++ b/src/rebalancer/rebalance-coordinator-priority-budget-admission.js
+@@ -273,6 +273,10 @@ class RebalanceCoordinatorPriorityBudgetAdmissionMethods {
+     // add-like op per partition (conflict gate + intent dedupe +
+     // TARGET_NODE_ALREADY_OCCUPIED downstream), transient alive = current+1,
+     // and the post-ADD drain path never re-enters this lane (REMOVE lane).
++    // Target readiness is deliberately not re-adjudicated here:
++    // ReplicaDispatchService.captureDispatchReadiness is its canonical owner.
++    // It leaves the operation pending with TARGET_NODE_NOT_READY and retries
++    // it after the target publishes an eligible readiness transition.
+     if (
+       context?.normalizedMoveType === OperationType.ADD &&
+       (context?.move?.moveReason ?? context?.move?.reason) ===
+diff --git a/test/rebalancer/rebalance-coordinator-operation-ownership-critical-admission-test-cases.js b/test/rebalancer/rebalance-coordinator-operation-ownership-critical-admission-test-cases.js
+index 5c7166e3e47a70216de38b0a739f1036f65dd695..54e2d54de60e57e276464645e5fcb4f5563f8f6a 100644
+--- a/test/rebalancer/rebalance-coordinator-operation-ownership-critical-admission-test-cases.js
++++ b/test/rebalancer/rebalance-coordinator-operation-ownership-critical-admission-test-cases.js
+@@ -16,6 +16,77 @@ export function registerRebalanceCoordinatorOperationOwnershipCriticalAdmissionT
+   createCoordinator,
+   disablePersistenceConfirmation,
+ }) {
++  test('RebalanceCoordinator createOperation checks the critical create lane ' +
++    'before the topology guard', async (_t) => {
++    const coordinator = createCoordinator({
++      nodeId: 'node-local',
++      transactionCoordinator: createTransactionCoordinator(),
++      systemTableCache: {
++        get() {
++          return null;
++        },
++      },
++      cdcIntegrationService: {
++        async waitForCacheUpdate() {},
++      },
++      tablePolicyService: {
++        async getPolicyForPartition() {
++          return {minReplicaCount: 1};
++        },
++      },
++      messageRouter: {
++        async deliver() {
++          return {acknowledged: true, status: 'completed'};
++        },
++      },
++      sqlQueryEngine: {
++        async executeQuery() {
++          return {success: true, rows: [], changes: 0};
++        },
++      },
++      ...createStorageOwners(),
++      enableTimeouts: false,
++    });
++    coordinator.initialize();
++
++    const invocationOrder = [];
++    const topologyGuardSentinel = new Error('topology-guard-sentinel');
++    coordinator.ensureOperationLedgerSelfMoveSerialized = async () => {};
++    coordinator.ensureNoConflictingInFlightReplaceForRemove = async () => {};
++    coordinator.ensurePriorityControlPlaneRemoveLaneAvailable = async () => {};
++    coordinator.ensurePrioritySurplusRemovePlacementFenceAllowed =
++      async () => {};
++    coordinator.ensureEntityAddLikeCreateLaneAvailable = async () => {};
++    coordinator.ensureCriticalPartitionCreateLaneAvailable = async () => {
++      invocationOrder.push('critical-create-lane');
++    };
++    coordinator.ensureCreateTopologyGuardAllowed = async () => {
++      invocationOrder.push('topology-guard');
++      throw topologyGuardSentinel;
++    };
++
++    try {
++      await assert.rejects(
++        coordinator.createOperation({
++          type: OperationType.ADD,
++          partitionId: 'config-p1',
++          entityType: 'partition',
++          entityId: 'config-p1',
++          nodeId: 'node-remote',
++          enforceConcurrentOperationBudget: true,
++        }),
++        (error) => error === topologyGuardSentinel,
++      );
++      assert.deepEqual(
++        invocationOrder,
++        ['critical-create-lane', 'topology-guard'],
++        'spread-cure admission must run before downstream topology checks',
++      );
++    } finally {
++      await coordinator.shutdown();
++    }
++  });
++
+   test('RebalanceCoordinator limits critical partitions to one add-like operation in flight',
+     async (t) => {
+       const coordinator = new RebalanceCoordinator({
