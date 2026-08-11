@@ -1,0 +1,16 @@
+diff --git a/scripts/checks/run-control-plane-mutation-apply-classifier-scenarios.js b/scripts/checks/run-control-plane-mutation-apply-classifier-scenarios.js
+index f28ec2ec9a50165fa85f365144333814c18de276..eec8645f6657ae5952ee8d0bc55cb89bc45ce42a 100644
+--- a/scripts/checks/run-control-plane-mutation-apply-classifier-scenarios.js
++++ b/scripts/checks/run-control-plane-mutation-apply-classifier-scenarios.js
+@@ -11,9 +11,9 @@ const TEST_FILES = Object.freeze([
+   'test/raft/authoritative-row-mutation-helper.test.js',
+ ]);
+ 
+-const SCENARIOS = {
++const SCENARIOS = Object.freeze({
+   'control-plane-mutation-apply-classifier': TEST_FILES,
+   'control-plane-mutation-aggregate-guard': TEST_FILES,
+-};
++});
+ 
+ runGuardTestScenarios(SCENARIOS);

@@ -11,9 +11,9 @@ const TEST_FILES = Object.freeze([
   'test/raft/authoritative-row-mutation-helper.test.js',
 ]);
 
-const SCENARIOS = {
+const SCENARIOS = Object.freeze({
   'control-plane-mutation-apply-classifier': TEST_FILES,
   'control-plane-mutation-aggregate-guard': TEST_FILES,
-};
+});
 
 runGuardTestScenarios(SCENARIOS);
