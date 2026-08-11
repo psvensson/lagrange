@@ -10,7 +10,6 @@ import {
   AUTHORITATIVE_ROW_MUTATION_RETRY,
   classifyGatewayMutationOutcome,
   classifyMutationFailure,
-  extractAffectedRows,
   normalizeMaxRetryDelayMs,
   normalizeRetryBackoffMultiplier,
   optionalFunction,
@@ -379,39 +378,22 @@ class AuthoritativeRowMutationHelper {
   }
 
   async resolveMutationFailure(value, partitionResult) {
-    const gatewayFailureReason = classifyGatewayMutationOutcome(
+    const gatewayDisposition = classifyGatewayMutationOutcome(
       partitionResult,
     );
-    if (partitionResult?.success === false && gatewayFailureReason) {
-      return this.resolveGatewayFailure(
-        value,
-        partitionResult,
-        gatewayFailureReason,
-      );
-    }
-    const affectedRows = extractAffectedRows(partitionResult);
-    const observedStateChanged =
-      gatewayFailureReason ===
-        AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED ||
-      (affectedRows !== null && affectedRows <= 0);
-    if (!observedStateChanged) {
+    if (gatewayDisposition.applied) {
       return null;
     }
-    await this.recoverFromObservedStateChanged(value, partitionResult);
-    this.scheduleRetry();
+    if (gatewayDisposition.reason ===
+      AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED) {
+      await this.recoverFromObservedStateChanged(value, partitionResult);
+    }
+    this.scheduleRetry(gatewayDisposition.retryAfterMs);
     return this.buildResult({
       attempts: 1,
       partitionResult,
-      reason: AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED,
+      reason: gatewayDisposition.reason,
     });
-  }
-
-  async resolveGatewayFailure(value, partitionResult, reason) {
-    if (reason === AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED) {
-      await this.recoverFromObservedStateChanged(value, partitionResult);
-    }
-    this.scheduleRetry(partitionResult?.retryAfterMs);
-    return this.buildResult({attempts: 1, partitionResult, reason});
   }
 
   recordAppliedMutation(value, partitionResult) {

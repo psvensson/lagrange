@@ -9,6 +9,16 @@ import {TIME_MS} from '../constants/index.js';
 import {
   CONTROL_PLANE_MUTATION_OUTCOME,
 } from '../control-plane/control-plane-system-table-gateway.js';
+import {classifyControlPlaneMutationResult} from
+  '../control-plane/control-plane-mutation-outcome-classifier.js';
+
+const objectCreate = Object.create;
+const objectFreeze = Object.freeze;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const numberIsFinite = Number.isFinite;
+const DATA_DESCRIPTOR_VALUE_PROPERTY = 'value';
+const RETRY_AFTER_MS_PROPERTY = 'retryAfterMs';
 
 const CACHE_VISIBILITY_ERROR_FRAGMENT = 'Cache update not observed';
 const AUTHORITATIVE_ROW_MUTATION_REASON = Object.freeze({
@@ -46,13 +56,6 @@ const AUTHORITATIVE_PROBE_DEFER_CAUSE = Object.freeze({
   ROW_UNAVAILABLE: 'row-unavailable',
 });
 
-function extractAffectedRows(result) {
-  const candidate = Number(
-    result?.partitionResult?.affectedRows ?? result?.affectedRows,
-  );
-  return Number.isFinite(candidate) ? candidate : null;
-}
-
 function classifyMutationFailure(error) {
   const message = error?.message || '';
   if (message.includes(CACHE_VISIBILITY_ERROR_FRAGMENT)) {
@@ -61,21 +64,66 @@ function classifyMutationFailure(error) {
   return AUTHORITATIVE_ROW_MUTATION_REASON.AUTHORITATIVE_WRITE_FAILED;
 }
 
-// One canonical outcome per gateway verdict — a decision table, not an
-// independent branch pile.
-const GATEWAY_OUTCOME_MUTATION_REASON = Object.freeze(new Map([
-  [CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED,
-    AUTHORITATIVE_ROW_MUTATION_REASON.DEFERRED],
-  [CONTROL_PLANE_MUTATION_OUTCOME.REJECTED,
-    AUTHORITATIVE_ROW_MUTATION_REASON.REJECTED],
-  [CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY,
-    AUTHORITATIVE_ROW_MUTATION_REASON.OWNER_NOT_READY],
-  [CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED,
-    AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED],
-]));
+// Every frozen gateway outcome has one explicit Raft disposition. Apply and
+// zero-row truth remain owned by classifyControlPlaneMutationResult; this
+// table is consulted only after canonical apply is false, so APPLIED and
+// PENDING_VISIBILITY represent contradictory failed envelopes here.
+const GATEWAY_OUTCOME_MUTATION_REASON = objectCreate(null);
+GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.APPLIED] =
+  AUTHORITATIVE_ROW_MUTATION_REASON.REJECTED;
+GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.NO_OP] =
+  AUTHORITATIVE_ROW_MUTATION_REASON.NOOP;
+GATEWAY_OUTCOME_MUTATION_REASON[
+  CONTROL_PLANE_MUTATION_OUTCOME.PENDING_VISIBILITY
+] = AUTHORITATIVE_ROW_MUTATION_REASON.REJECTED;
+GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.DEFERRED] =
+  AUTHORITATIVE_ROW_MUTATION_REASON.DEFERRED;
+GATEWAY_OUTCOME_MUTATION_REASON[CONTROL_PLANE_MUTATION_OUTCOME.REJECTED] =
+  AUTHORITATIVE_ROW_MUTATION_REASON.REJECTED;
+GATEWAY_OUTCOME_MUTATION_REASON[
+  CONTROL_PLANE_MUTATION_OUTCOME.OWNER_NOT_READY
+] = AUTHORITATIVE_ROW_MUTATION_REASON.OWNER_NOT_READY;
+GATEWAY_OUTCOME_MUTATION_REASON[
+  CONTROL_PLANE_MUTATION_OUTCOME.OBSERVED_STATE_CHANGED
+] = AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED;
+objectFreeze(GATEWAY_OUTCOME_MUTATION_REASON);
+
+function readOwnRetryAfterMs(result, valid) {
+  if (!valid) return 0;
+  let descriptor;
+  try {
+    descriptor = objectGetOwnPropertyDescriptor(result, RETRY_AFTER_MS_PROPERTY);
+  } catch {
+    return 0;
+  }
+  if (!descriptor ||
+    !objectHasOwn(descriptor, DATA_DESCRIPTOR_VALUE_PROPERTY) ||
+    !numberIsFinite(descriptor.value) || descriptor.value <= 0) {
+    return 0;
+  }
+  return descriptor.value;
+}
 
 function classifyGatewayMutationOutcome(result) {
-  return GATEWAY_OUTCOME_MUTATION_REASON.get(result?.outcome) ?? null;
+  const classification = classifyControlPlaneMutationResult(result);
+  let reason = AUTHORITATIVE_ROW_MUTATION_REASON.REJECTED;
+  if (classification.zeroAffectedRows) {
+    reason = AUTHORITATIVE_ROW_MUTATION_REASON.OBSERVED_STATE_CHANGED;
+  } else if (classification.applied) {
+    reason = AUTHORITATIVE_ROW_MUTATION_REASON.APPLIED;
+  } else if (classification.known) {
+    reason = GATEWAY_OUTCOME_MUTATION_REASON[
+      classification.outcome
+    ];
+  }
+  const resultDisposition = objectCreate(null);
+  resultDisposition.applied = classification.applied;
+  resultDisposition.reason = reason;
+  resultDisposition.retryAfterMs = readOwnRetryAfterMs(
+    result,
+    classification.valid,
+  );
+  return objectFreeze(resultDisposition);
 }
 
 function validateMutationHelperOptions(options) {
@@ -127,7 +175,6 @@ export {
   AUTHORITATIVE_ROW_MUTATION_RETRY,
   classifyGatewayMutationOutcome,
   classifyMutationFailure,
-  extractAffectedRows,
   normalizeMaxRetryDelayMs,
   normalizeRetryBackoffMultiplier,
   optionalFunction,
