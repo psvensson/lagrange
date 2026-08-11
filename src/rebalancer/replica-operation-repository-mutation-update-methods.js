@@ -398,7 +398,7 @@ function assignReplicaOperationRepositoryMutationUpdateMethods(
 
     // A terminal write is idempotent against its own durable state and must
     // yield only to a DIFFERENT durable terminal state (a concurrent owner
-    // already terminalized this operation another way). Returns the winning
+    // already terminated this operation another way). Returns the winning
     // terminal operation when the authority row is a different durable
     // terminal, null otherwise (idempotent replay, lagging non-terminal row,
     // or missing row — the zero-change divergence arm re-inserts).

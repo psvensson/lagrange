@@ -42,12 +42,12 @@ const RECEIPTS = Object.freeze([
       '{committed, disposition} transition outcome and the priority ' +
       'recovery drain propagates truthful progress from all three of ' +
       'its settle arms (complete, superseded-target fail, stale-drain ' +
-      'fail): a REFUSED terminalization reports progressed:false so ' +
+      'fail): a REFUSED termination reports progressed:false so ' +
       'level-triggered machinery keeps re-driving instead of believing ' +
       'a settle that never landed, while committed and release-gated ' +
       'proven-terminal outcomes still report progressed:true ' +
       '(red-on-revert: the drain returned true unconditionally after a ' +
-      'void completeOperation — 175-249 terminalization decisions per ' +
+      'void completeOperation — 175-249 termination decisions per ' +
       'run with zero durable terminals and zero escalation)',
   }),
 ]);

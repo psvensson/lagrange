@@ -1617,7 +1617,7 @@ test(
       async (t) => {
         const operation = buildReplaceOperation();
         // The drain/reaper-side shape: the REPLACE is at REMOVING when a
-        // level-triggered path decides to terminalize it while the
+        // level-triggered path decides to terminate it while the
         // executor-outcome visibility retry is still armed and backing
         // off.
         operation.workflowStep = WORKFLOW_STEP.REMOVING;
@@ -1691,7 +1691,7 @@ test(
             ),
             retainedPayload,
             'the retained executor-outcome payload SURVIVED the refused ' +
-            'terminalization',
+            'termination',
           );
           t.equal(
             owner.executorOutcomeRetryTimerByOperationId.get(
@@ -1699,7 +1699,7 @@ test(
             ),
             armedTimerHandle,
             'the armed executor-outcome retry timer SURVIVED the refused ' +
-            'terminalization',
+            'termination',
           );
           t.equal(
             harness.clearedRetainedPayloads.some(

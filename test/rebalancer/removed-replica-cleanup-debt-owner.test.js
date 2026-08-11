@@ -5,7 +5,7 @@
  * A replica removal deletes the authoritative services row BEFORE local
  * runtime cleanup; when cleanupRemovedReplicaLocalRuntime then fails (or
  * the process crashes in between) the replica's DB/WAL files are stranded:
- * the coordinator terminalizes the operation on the REPLICA_REMOVE_COMPLETED
+ * the coordinator terminates the operation on the REPLICA_REMOVE_COMPLETED
  * outcome and nothing ever re-sends the idempotent REMOVE request, so
  * reconcileRemovedReplicaCleanup is unreachable and the orphan sits on
  * disk indefinitely.
@@ -182,7 +182,7 @@ test('removed-replica cleanup debt owner', async (t) => {
 
   await t.test(
     'cleanup-retry-reachable-after-failure: a removal whose local cleanup ' +
-    'fails terminalizes the operation, and the next startup sweep retries ' +
+    'fails terminates the operation, and the next startup sweep retries ' +
     'the reconcile path and deletes the stranded DB/WAL files',
     async (t) => {
       const dataDir = makeTempDataDir(t);
@@ -204,7 +204,7 @@ test('removed-replica cleanup debt owner', async (t) => {
       handler.localServices.set(TEST_REPLICA_ID, liveService);
 
       // Force the removal-cleanup failure AFTER the durable row delete so
-      // the operation terminalizes with stranded files (finding 12).
+      // the operation terminates with stranded files (finding 12).
       handler.cleanupReplicaResources = async () => {
         throw new Error('disk busy: unlink failed');
       };
@@ -239,7 +239,7 @@ test('removed-replica cleanup debt owner', async (t) => {
       t.equal(
         handler.getLocalReplica(TEST_REPLICA_ID)?.status,
         ReplicaStatus.REMOVED,
-        'the operation terminalizes as REMOVED despite the failed cleanup',
+        'the operation terminates as REMOVED despite the failed cleanup',
       );
 
       // Stranded by the failed cleanup, invisible to any future REMOVE

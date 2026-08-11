@@ -4,7 +4,7 @@
  *
  * A replica removal deletes the authoritative services row BEFORE local
  * runtime cleanup; a failed cleanup (or a crash in between) strands the
- * replica's DB/WAL/SHM files while the coordinator terminalizes the
+ * replica's DB/WAL/SHM files while the coordinator terminates the
  * operation on the completion outcome, so nothing ever retries the
  * idempotent reconcileRemovedReplicaCleanup path and the orphan sits on
  * disk indefinitely. The pre-existing startup reconciliation sweep only

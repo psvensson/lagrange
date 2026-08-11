@@ -599,7 +599,7 @@ class OperationWorkflowRecoveryDrain extends OperationWorkflowRecoveryTimeout {
         resolvedDrainSnapshot,
       );
       // Truthful progress (quest terminal-write-refusal-retry-ownership):
-      // a terminalization whose durable write was refused did NOT drain —
+      // a termination whose durable write was refused did NOT drain —
       // reporting it progressed would let level-triggered machinery
       // believe a settle that never landed.
       return isTerminalTransitionOutcomeSettled(

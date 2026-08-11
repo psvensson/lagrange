@@ -42,7 +42,7 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED} from
 import {createMockCache} from './test-helpers.js';
 
 // completeOperation/failOperation report a typed transition outcome
-// ({committed, disposition}); the terminalization stubs return the
+// ({committed, disposition}); the termination stubs return the
 // committed shape so the drain's truthful-progress propagation sees a
 // settled terminal (quest terminal-write-refusal-retry-ownership).
 const TEST_COMMITTED_TRANSITION_OUTCOME = Object.freeze({
@@ -50,7 +50,7 @@ const TEST_COMMITTED_TRANSITION_OUTCOME = Object.freeze({
   disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.UPDATED,
 });
 // The refused shape: the terminal write changed zero rows against a live
-// non-terminal authority row — the terminalization did NOT settle.
+// non-terminal authority row — the termination did NOT settle.
 const TEST_REFUSED_TRANSITION_OUTCOME = Object.freeze({
   committed: false,
   disposition: REPLICA_OPERATION_UPDATE_DISPOSITION.REFUSED,
@@ -2547,7 +2547,7 @@ test('event-driven rebalancer handoff waits resolve retry contract fields', asyn
 
 test(
   'priority recovery drain reports truthful progress from the typed ' +
-    'terminalization outcome (quest terminal-write-refusal-retry-ownership)',
+    'termination outcome (quest terminal-write-refusal-retry-ownership)',
   async (t) => {
     const deliveries = [];
     const deferredTimers = [];
@@ -2561,9 +2561,9 @@ test(
     try {
       coordinator.initialize();
       const owner = coordinator.workflowOwner;
-      let terminalizationOutcome = TEST_REFUSED_TRANSITION_OUTCOME;
-      owner.completeOperation = async () => terminalizationOutcome;
-      owner.failOperation = async () => terminalizationOutcome;
+      let terminationOutcome = TEST_REFUSED_TRANSITION_OUTCOME;
+      owner.completeOperation = async () => terminationOutcome;
+      owner.failOperation = async () => terminationOutcome;
 
       const settleSnapshots = [
         {
@@ -2594,12 +2594,12 @@ test(
       t.same(
         refusedProgress,
         [false, false, false],
-        'a REFUSED terminalization is NOT drain progress in any settle ' +
+        'a REFUSED termination is NOT drain progress in any settle ' +
           'arm — level-triggered machinery must not believe a settle ' +
           'that never landed',
       );
 
-      terminalizationOutcome = TEST_COMMITTED_TRANSITION_OUTCOME;
+      terminationOutcome = TEST_COMMITTED_TRANSITION_OUTCOME;
       const committedProgress = [];
       for (const drainSnapshot of settleSnapshots) {
         committedProgress.push(
@@ -2612,7 +2612,7 @@ test(
       t.same(
         committedProgress,
         [true, true, true],
-        'a committed terminalization IS drain progress in every settle arm',
+        'a committed termination IS drain progress in every settle arm',
       );
     } finally {
       await coordinator.shutdown();

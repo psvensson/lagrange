@@ -676,7 +676,7 @@ test(
     t.equal(
       isTerminalTransitionOutcomeSettled(refusedOutcome),
       false,
-      'REFUSED is not drain progress — the terminalization did not settle',
+      'REFUSED is not drain progress — the termination did not settle',
     );
 
     // Release-gated floor (fail-closed): the proven-terminal outcomes

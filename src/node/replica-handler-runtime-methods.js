@@ -36,7 +36,7 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
     /**
      * Durable owner for removal-cleanup debt (audit finding 12): sweep the
      * partitions directory at startup for replica files whose cleanup was
-     * stranded (failed cleanup before terminalization, or a crash between
+     * stranded (failed cleanup before termination, or a crash between
      * the services-row DELETE and the file unlink) and delete them via the
      * canonical reconcile cleanup path. Runs once at startup; a failed
      * deletion stays on disk and is retried on the next startup, so orphan

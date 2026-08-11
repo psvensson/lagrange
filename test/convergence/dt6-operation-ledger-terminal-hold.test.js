@@ -310,7 +310,7 @@ t.test(
         return originalExecuteQuery(sql, params, queryOptions);
       };
 
-      // The reaper decides to terminalize past the step timeout — and the
+      // The reaper decides to terminate past the step timeout — and the
       // terminal write is refused. reconcileTimeoutOperation is the
       // checkTimeouts per-operation body (the real timeout-reaper
       // decision); driving it directly keeps the priority-ledger

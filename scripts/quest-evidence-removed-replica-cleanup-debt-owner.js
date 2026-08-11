@@ -14,7 +14,7 @@ const RECEIPTS = Object.freeze([
     id: 'cleanup-retry-reachable-after-failure',
     testFile: 'test/rebalancer/removed-replica-cleanup-debt-owner.test.js',
     detail: 'a replica removal whose local cleanup fails AFTER the ' +
-      'authoritative services-row delete still terminalizes the operation ' +
+      'authoritative services-row delete still terminates the operation ' +
       '(REPLICA_REMOVE_COMPLETED), and the next startup sweep drives the ' +
       'idempotent reconcileRemovedReplicaCleanup retry against the ' +
       'stranded files and deletes the DB/WAL set — the retry now has a ' +

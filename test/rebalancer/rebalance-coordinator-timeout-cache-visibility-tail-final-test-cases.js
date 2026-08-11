@@ -2,7 +2,7 @@ import {REPLICA_OPERATION_UPDATE_DISPOSITION} from
   '../../src/rebalancer/replica-operation-update-disposition.js';
 
 // completeOperation/failOperation report a typed transition outcome
-// ({committed, disposition}); terminalization stubs return the committed
+// ({committed, disposition}); termination stubs return the committed
 // shape so the drain's truthful-progress propagation sees a settled
 // terminal (quest terminal-write-refusal-retry-ownership).
 const TEST_COMMITTED_TRANSITION_OUTCOME = Object.freeze({
