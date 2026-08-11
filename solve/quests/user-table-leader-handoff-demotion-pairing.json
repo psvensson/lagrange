@@ -1,0 +1,43 @@
+{
+  "id": "user-table-leader-handoff-demotion-pairing",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Every user-table leader-placement cure handoff is paired with flap-safe local source-leader demotion so a dispatched shed provably moves leadership off the surplus host against a stable healthy leader: on DISPATCH_HANDOFF the cure first demotes its own leader replica through the existing tracked-leader-demotion owner (cancel leader-owned activation, defer candidacy, step to follower, re-arm election timer - the recorded flap-safe ordering), then dispatches the existing STEP_DOWN_REPLICA/REPLACE_TARGET_LEADER_ELECTION request whose 1ms directed arm now wins near-deterministically because no leader heartbeat can re-arm it; a lost target dispatch falls back to the bounded ordinal-staggered election and stays convergent via census re-shed. The receiver's step-down path becomes observable: handleStepDownReplica's completion log names the branch taken and the tracked role so a role-gated no-op (returns COMPLETED without arming anything, mechanism candidate from run 20260810T221340Z) is never again indistinguishable from an armed election. The quiescent check cadence holds flat at the base interval while the cure reports an open actionable gap (census-unstable, retry-suppressed, no-eligible-target, dispatch) instead of backing off 1.5x while the gap persists. Proof: the user-table-leader-placement-spread scenario gains a pre-phase stable-leader quiescence hold so the cure fires against a healthy stable seed (red-first on HEAD: run 20260810T221340Z showed two completed dispatches and zero campaigns in 420s), then doneWhen is three consecutive green runs. Fail-closed floor inherited verbatim from the landed cure: never elect a stale-log replica, quorum safety untouched, priority control-plane machinery untouched, one-directional actuator preserved.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/specs/pilot-readiness-and-public-proof/requirements.md#public-path-baseline",
+    "closesCL": [],
+    "parentQuest": "user-table-leader-placement-spread-v2",
+    "planDoc": "solve/epics/pilot-readiness-and-public-proof.md",
+    "draftedAtCommit": "40e9734429ceebf7b256c78f0482e3eb00f4eeff"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "user-table-leader-placement-spread",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "user-table-leader-handoff-demotion-pairing-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "user-table-leader-placement-spread",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
