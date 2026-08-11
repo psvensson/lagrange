@@ -25,6 +25,7 @@ import {
   STORAGE_ADMISSION_DECISION_TYPE,
   STORAGE_ADMISSION_REASON,
 } from './storage-admission-constants.js';
+import {normalizeEntitySizeBytes} from './entity-size-resolution.js';
 import {OperationType} from './replica-status.js';
 
 const LOCAL_STR_FUNCTION = 'function';
@@ -99,18 +100,19 @@ class ProvisioningAdmissionPolicy {
 
   /**
    * Resolve the entity's real size_bytes through the coordinator
-   * delegate (reads the partitions system-table row); null when the
-   * delegate is not wired so estimates fall back to the floor.
+   * delegate (reads the partitions system-table row); unresolved values
+   * normalize to zero so the accounting owner applies its minimum floor.
    * @param {Object} options
-   * @return {number|null}
+   * @return {number}
    * @private
    */
   resolveAdmissionEntitySizeBytes(options = {}) {
     if (typeof this.delegates.resolveEntitySizeBytes === LOCAL_STR_FUNCTION) {
-      const resolved = Number(this.delegates.resolveEntitySizeBytes(options));
-      return Number.isFinite(resolved) ? resolved : null;
+      return normalizeEntitySizeBytes(
+        this.delegates.resolveEntitySizeBytes(options),
+      );
     }
-    return null;
+    return normalizeEntitySizeBytes();
   }
 
   /**

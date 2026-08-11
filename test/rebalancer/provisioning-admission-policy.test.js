@@ -37,6 +37,10 @@ function createPolicy(options = {}) {
       typeof options.classifySystemPartition === 'function' ?
         options.classifySystemPartition :
         () => ({systemTable: false}),
+    resolveEntitySizeBytes:
+      typeof options.resolveEntitySizeBytes === 'function' ?
+        options.resolveEntitySizeBytes :
+        null,
   };
 
   const policy = new ProvisioningAdmissionPolicy({
@@ -54,6 +58,7 @@ function createPolicy(options = {}) {
         state.storageAccountingService,
       classifySystemPartition: (classificationOptions) =>
         state.classifySystemPartition(classificationOptions),
+      resolveEntitySizeBytes: state.resolveEntitySizeBytes,
       normalizeMoveType: (moveType) => {
         if (typeof moveType !== 'string') {
           return null;
@@ -507,6 +512,35 @@ test('checkProvisioningAdmission resolves the entity size through the ' +
     estimateCalls[0].sizeBytes,
     777,
     'probe admission must size on the delegate-resolved real size_bytes',
+  );
+  t.end();
+});
+
+test('checkProvisioningAdmission normalizes an unresolved entity size to ' +
+  'the accounting floor', async (t) => {
+  const estimateCalls = [];
+  const {policy} = createPolicy({
+    resolveEntitySizeBytes: () => Number.NaN,
+    storageAccountingService: {
+      estimateReplicaBytes(options = {}) {
+        estimateCalls.push(options);
+        return 64;
+      },
+    },
+  });
+
+  const probe = await policy.checkProvisioningAdmission({
+    type: 'ADD',
+    partitionId: 'partition-unresolved',
+    nodeId: 'node-remote',
+  });
+
+  t.equal(probe.allowed, true);
+  t.equal(estimateCalls.length, 1);
+  t.equal(
+    estimateCalls[0].sizeBytes,
+    0,
+    'unresolved size must use the accounting minimum instead of raw state',
   );
   t.end();
 });
