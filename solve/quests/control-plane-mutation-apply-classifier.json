@@ -1,0 +1,43 @@
+{
+  "id": "control-plane-mutation-apply-classifier",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Every value of the frozen seven-outcome CONTROL_PLANE_MUTATION_OUTCOME enum has one exhaustive effect classification, and replica-row persistence, config seeding, join-withdrawal admission, and authoritative-row mutation all consume it so NO_OP and DEFERRED results cannot masquerade as applied when success:false is absent; focused caller regressions and an enum-exhaustiveness guard pass for three consecutive runs.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/golden-capability-gold-plating.md#tier-0-immediate-structural-guards",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "e8de34c0db8a84d6b18975e98ae5ca929f7be3f5"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "control-plane-mutation-apply-classifier",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "control-plane-mutation-apply-classifier-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "control-plane-mutation-apply-classifier",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
