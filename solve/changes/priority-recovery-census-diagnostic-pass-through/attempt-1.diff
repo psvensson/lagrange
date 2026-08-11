@@ -1,0 +1,477 @@
+diff --git a/scripts/checks/run-priority-recovery-census-diagnostic-pass-through-scenarios.js b/scripts/checks/run-priority-recovery-census-diagnostic-pass-through-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..fd28d907c4fe57049b588a525a910ff757074baa
+--- /dev/null
++++ b/scripts/checks/run-priority-recovery-census-diagnostic-pass-through-scenarios.js
+@@ -0,0 +1,14 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const PRIORITY_RECOVERY_CENSUS_DIAGNOSTIC_GUARD_FILES = Object.freeze([
++  'test/control-plane/priority-recovery-census-diagnostic-pass-through.test.js',
++  'test/rebalancer/unified-rebalancer-replica-state-management-node-state-change.test.js',
++  'test/rebalancer/blocked-spread-release-event-wake.test.js',
++]);
++
++runGuardTestScenarios({
++  'priority-recovery-census-diagnostic-pass-through':
++    PRIORITY_RECOVERY_CENSUS_DIAGNOSTIC_GUARD_FILES,
++});
+diff --git a/src/control-plane/membership-publication-priority-partition-canonical-data.js b/src/control-plane/membership-publication-priority-partition-canonical-data.js
+index ee5391fb42bba27778361874b46023832f6c4a57..27cd66afe56260c2232a31d546d76836108fd0a7 100644
+--- a/src/control-plane/membership-publication-priority-partition-canonical-data.js
++++ b/src/control-plane/membership-publication-priority-partition-canonical-data.js
+@@ -12,6 +12,10 @@ const DATA_PROPERTY_STATE = Object.freeze({
+   VALID: 'valid',
+ });
+ const EXPECTED_REPLICA_COUNT_FIELD = 'expectedReplicaCount';
++const EXPECTED_REPLICA_COUNT_PROPERTY_NAMES = Object.freeze([
++  EXPECTED_REPLICA_COUNT_FIELD,
++  'expected_replica_count',
++]);
+ const numberToExactInteger = BigInt;
+ const isProxy = types.isProxy.bind(types);
+ const numberIsSafeInteger = Number.isSafeInteger;
+@@ -90,6 +94,16 @@ function normalizeExpectedReplicaCount(value) {
+     null;
+ }
+ 
++function readExpectedReplicaCount(record) {
++  const entry = inspectOwnDataProperty(
++    record,
++    EXPECTED_REPLICA_COUNT_PROPERTY_NAMES,
++  );
++  return entry.state === DATA_PROPERTY_STATE.VALID ?
++    normalizeExpectedReplicaCount(entry.value) :
++    null;
++}
++
+ function normalizeNonNegativeSafeInteger(value, fallback = null) {
+   return typeof value === 'number' &&
+     numberIsSafeInteger(value) &&
+@@ -340,6 +354,7 @@ export {
+   priorityPartitionDiagnosticsEqual,
+   compareExactValues,
+   readOwnDataProperty,
++  readExpectedReplicaCount,
+   readOwnLowerPrimitiveString,
+   readOwnPrimitiveString,
+   setAdd,
+diff --git a/src/control-plane/priority-recovery-observation-normalization.js b/src/control-plane/priority-recovery-observation-normalization.js
+index a13fdaa7be0181a11fc3fcef564346a367174606..9cfc9d1ab11f2a96481602f16dc2dc718aa6afb9 100644
+--- a/src/control-plane/priority-recovery-observation-normalization.js
++++ b/src/control-plane/priority-recovery-observation-normalization.js
+@@ -12,6 +12,9 @@ import {
+   normalizePriorityRecoveryInteger,
+   normalizePriorityRecoveryStringList,
+ } from './priority-recovery-helpers.js';
++import {
++  readExpectedReplicaCount,
++} from './membership-publication-priority-partition-canonical-data.js';
+ 
+ const LOCAL_STR_EMPTY = '';
+ 
+@@ -397,6 +400,7 @@ function normalizePriorityRecoveryBlockedPartitions(blockedPartitions = []) {
+       blockedPartition.readyReplicaCount ??
+         blockedPartition.ready_replica_count,
+     );
++    const expectedReplicaCount = readExpectedReplicaCount(blockedPartition);
+     // CL-021 witness pass-through (see
+     // resolvePrioritySpreadReplicaExclusionReason): per-row exclusion
+     // attribution must survive summary normalization.
+@@ -415,6 +419,7 @@ function normalizePriorityRecoveryBlockedPartitions(blockedPartitions = []) {
+       ...(requiredDistinctNodeCount !== null ? {requiredDistinctNodeCount} : {}),
+       ...(readyDistinctNodeCount !== null ? {readyDistinctNodeCount} : {}),
+       ...(readyReplicaCount !== null ? {readyReplicaCount} : {}),
++      ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
+       ...(exclusionReasonCounts ? {exclusionReasonCounts} : {}),
+       blockerReasonCodes: Object.freeze(
+         normalizeDistinctStringArray(
+diff --git a/src/control-plane/priority-recovery-planning-intent.js b/src/control-plane/priority-recovery-planning-intent.js
+index 76a6305615c2d4cf77fa30418098a6b0247563c6..ccd2d21343763ab68a7bbeb880d2693e7844b42c 100644
+--- a/src/control-plane/priority-recovery-planning-intent.js
++++ b/src/control-plane/priority-recovery-planning-intent.js
+@@ -6,6 +6,9 @@ import {
+   normalizePriorityRecoveryInteger,
+   normalizePriorityRecoveryStringList,
+ } from './priority-recovery-helpers.js';
++import {
++  readExpectedReplicaCount,
++} from './membership-publication-priority-partition-canonical-data.js';
+ 
+ const PRIORITY_RECOVERY_PLANNER_FIELD_UNAVAILABLE = null;
+ const PRIORITY_RECOVERY_PLANNER_EMPTY_REASON_COLLECTION = Object.freeze([]);
+@@ -32,8 +35,10 @@ function buildPriorityRecoveryBlockedPartitionPlanner(partition) {
+     0,
+     normalizePriorityRecoveryInteger(partition?.spreadGap) || 0,
+   );
++  const expectedReplicaCount = readExpectedReplicaCount(partition);
+   return {
+     partitionId,
++    ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
+     requiredDistinctNodeCount: normalizePriorityRecoveryInteger(
+       partition?.requiredDistinctNodeCount,
+     ),
+diff --git a/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js b/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js
+index 1e56036c934fddaa6991a05816d7760aea1b186d..ac9530aef57af34bbc0df190d94680e4a73ecbc3 100644
+--- a/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js
++++ b/src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js
+@@ -21,6 +21,9 @@ import {
+   registerBackgroundPrioritySpreadReleaseWake,
+   resolveBackgroundPrioritySpreadStableRelease,
+ } from './background-priority-spread-release-tracker.js';
++import {
++  readExpectedReplicaCount,
++} from '../control-plane/membership-publication-priority-partition-canonical-data.js';
+ 
+ const {
+   CONTROL_PLANE_PUBLICATION_STATUS,
+@@ -33,6 +36,21 @@ const {
+ const REBALANCE_PLANNING_GATE_DIAGNOSTIC_NO_GATE = 'none';
+ const REBALANCE_PLANNING_GATE_NOT_APPLICABLE = null;
+ 
++function buildBlockedPartitionLogContext(partition) {
++  const expectedReplicaCount = readExpectedReplicaCount(partition);
++  return {
++    partitionId: partition.partitionId,
++    ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
++    readyReplicaCount: partition.readyReplicaCount,
++    readyDistinctNodeCount: partition.readyDistinctNodeCount,
++    spreadGap: partition.spreadGap,
++    missingActiveLeader: partition.missingActiveLeader === true,
++    // CL-021 witness: WHY rows were excluded from the ready count
++    // (e.g. raft_role_missing) — the planner-blindness attribution.
++    exclusionReasonCounts: partition.exclusionReasonCounts || null,
++  };
++}
++
+ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+   /**
+    * Return true when topology settling is already tracking in-flight work for
+@@ -229,16 +247,9 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
+           controlPlanePriorityBlocker.requiredDistinctNodeCount,
+         blockedPartitionCount: blockedPartitions.length,
+         largestSpreadGap,
+-        blockedPartitions: blockedPartitions.map((partition) => ({
+-          partitionId: partition.partitionId,
+-          readyReplicaCount: partition.readyReplicaCount,
+-          readyDistinctNodeCount: partition.readyDistinctNodeCount,
+-          spreadGap: partition.spreadGap,
+-          missingActiveLeader: partition.missingActiveLeader === true,
+-          // CL-021 witness: WHY rows were excluded from the ready count
+-          // (e.g. raft_role_missing) — the planner-blindness attribution.
+-          exclusionReasonCounts: partition.exclusionReasonCounts || null,
+-        })),
++        blockedPartitions: blockedPartitions.map(
++          buildBlockedPartitionLogContext,
++        ),
+       },
+       scheduleDelayMs,
+     });
+diff --git a/src/rebalancer/unified-rebalancer-priority-readiness.js b/src/rebalancer/unified-rebalancer-priority-readiness.js
+index aebe377160f093814c3fbc45294c411cc4837cdd..fe9e48e6a93113d0391c868578a251e71f875134 100644
+--- a/src/rebalancer/unified-rebalancer-priority-readiness.js
++++ b/src/rebalancer/unified-rebalancer-priority-readiness.js
+@@ -5,6 +5,9 @@ import {
+ } from '../control-plane/current-priority-placement-observation.js';
+ import {isCatchupLearnerRaftRole} from
+   '../raft/replica-voter-readiness.js';
++import {
++  readExpectedReplicaCount,
++} from '../control-plane/membership-publication-priority-partition-canonical-data.js';
+ 
+ const {
+   LIFECYCLE_PHASE,
+@@ -51,8 +54,10 @@ function freezeRecordOrNull(value) {
+   return copy ? Object.freeze(copy) : null;
+ }
+ function buildPriorityPartitionBlocker(partition = {}) {
++  const expectedReplicaCount = readExpectedReplicaCount(partition);
+   return {
+     partitionId: String(partition.partitionId || ''),
++    ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
+     readyReplicaCount: finiteNumberOrNull(partition.readyReplicaCount),
+     readyDistinctNodeCount:
+       finiteNumberOrNull(partition.readyDistinctNodeCount),
+diff --git a/test/control-plane/priority-recovery-census-diagnostic-pass-through.test.js b/test/control-plane/priority-recovery-census-diagnostic-pass-through.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..7da0c70b758f7a36b9c4fabf2bb740c7a728f7ca
+--- /dev/null
++++ b/test/control-plane/priority-recovery-census-diagnostic-pass-through.test.js
+@@ -0,0 +1,133 @@
++import test from 'node:test';
++import assert from 'node:assert/strict';
++
++import {
++  normalizePriorityPartitionSummary,
++} from '../../src/control-plane/priority-recovery-observation-normalization.js';
++import {
++  buildPriorityRecoveryBlockedPartitions,
++} from '../../src/control-plane/priority-recovery-planning-intent.js';
++import {
++  normalizePriorityPartitionSummaryForDiagnostics,
++} from '../distributed/harness/priority-recovery-summary-normalization.js';
++
++const PARTITION_ID = 'replica_operations-p1';
++const VALID_EXPECTED_REPLICA_COUNT = 3;
++const READY_REPLICA_COUNT = 1;
++const ROW_ABSENT_COUNT = 2;
++
++function buildSummary(expectedReplicaCount) {
++  return {
++    satisfied: false,
++    blockedPartitions: [{
++      partitionId: PARTITION_ID,
++      expectedReplicaCount,
++      readyReplicaCount: READY_REPLICA_COUNT,
++      readyDistinctNodeCount: 1,
++      requiredDistinctNodeCount: 3,
++      spreadGap: 2,
++      exclusionReasonCounts: {row_absent: ROW_ABSENT_COUNT},
++      reasons: ['priority_spread_gap'],
++    }],
++  };
++}
++
++function assertDiagnosticFields(partition) {
++  assert.equal(
++    partition.expectedReplicaCount,
++    VALID_EXPECTED_REPLICA_COUNT,
++  );
++  assert.equal(partition.readyReplicaCount, READY_REPLICA_COUNT);
++  assert.deepEqual(
++    partition.exclusionReasonCounts,
++    {row_absent: ROW_ABSENT_COUNT},
++  );
++}
++
++function assertExpectedReplicaCountOmitted(partition) {
++  assert.equal(Object.hasOwn(partition, 'expectedReplicaCount'), false);
++}
++
++test('census diagnostics survive observation, planning, and harness projections',
++  () => {
++    const observation = normalizePriorityPartitionSummary(
++      buildSummary(VALID_EXPECTED_REPLICA_COUNT),
++    );
++    const planner = buildPriorityRecoveryBlockedPartitions(observation)[0];
++    const harness = normalizePriorityPartitionSummaryForDiagnostics(
++      observation,
++    );
++
++    assertDiagnosticFields(observation.blockedPartitions[0]);
++    assertDiagnosticFields(planner);
++    assertDiagnosticFields(harness.blockedPartitions[0]);
++    assert.equal(planner.ready, false);
++    assert.deepEqual(planner.reasons, ['priority_spread_gap']);
++    assert.equal(harness.totalSpreadGap, 2);
++  });
++
++test('legacy and invalid expected counts are omitted without changing decisions',
++  () => {
++    const invalidExpectedReplicaCounts = [
++      undefined,
++      null,
++      0,
++      -1,
++      1.5,
++      Number.POSITIVE_INFINITY,
++      '3',
++      Number.MAX_SAFE_INTEGER + 1,
++    ];
++
++    for (const expectedReplicaCount of invalidExpectedReplicaCounts) {
++      const observation = normalizePriorityPartitionSummary(
++        buildSummary(expectedReplicaCount),
++      );
++      const planner = buildPriorityRecoveryBlockedPartitions(observation)[0];
++      const harness = normalizePriorityPartitionSummaryForDiagnostics(
++        observation,
++      );
++
++      assertExpectedReplicaCountOmitted(observation.blockedPartitions[0]);
++      assertExpectedReplicaCountOmitted(planner);
++      assertExpectedReplicaCountOmitted(harness.blockedPartitions[0]);
++      assert.equal(planner.ready, false);
++      assert.deepEqual(planner.reasons, ['priority_spread_gap']);
++    }
++  });
++
++test('inherited and accessor-backed expected counts are never authoritative',
++  () => {
++    const inheritedPartition = buildSummary(null).blockedPartitions[0];
++    delete inheritedPartition.expectedReplicaCount;
++    Object.setPrototypeOf(inheritedPartition, {expectedReplicaCount: 3});
++
++    let getterReads = 0;
++    const accessorPartition = buildSummary(null).blockedPartitions[0];
++    Object.defineProperty(accessorPartition, 'expectedReplicaCount', {
++      enumerable: true,
++      get() {
++        getterReads += 1;
++        return 3;
++      },
++    });
++
++    for (const blockedPartition of [inheritedPartition, accessorPartition]) {
++      const rawSummary = {
++        satisfied: false,
++        blockedPartitions: [blockedPartition],
++      };
++      const observation = normalizePriorityPartitionSummary(rawSummary);
++      const planner = buildPriorityRecoveryBlockedPartitions(rawSummary)[0];
++      const harness = normalizePriorityPartitionSummaryForDiagnostics(
++        rawSummary,
++      );
++
++      assertExpectedReplicaCountOmitted(observation.blockedPartitions[0]);
++      assertExpectedReplicaCountOmitted(planner);
++      assertExpectedReplicaCountOmitted(harness.blockedPartitions[0]);
++      assert.equal(planner.ready, false);
++      assert.deepEqual(planner.reasons, ['priority_spread_gap']);
++    }
++    assert.equal(getterReads, 0);
++  });
+diff --git a/test/distributed/harness/priority-recovery-summary-normalization.js b/test/distributed/harness/priority-recovery-summary-normalization.js
+index f6604e1a03ec7e6646259d8baa5000ccdb48f6b7..a0be38263a2c833d9a93349fb4a0eccfd80c9a76 100644
+--- a/test/distributed/harness/priority-recovery-summary-normalization.js
++++ b/test/distributed/harness/priority-recovery-summary-normalization.js
+@@ -9,6 +9,9 @@ import {
+   PRIORITY_RECOVERY_WAIT_MODE,
+   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
+ } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
++import {
++  readExpectedReplicaCount,
++} from '../../../src/control-plane/membership-publication-priority-partition-canonical-data.js';
+ 
+ const ZERO = 0;
+ const ONE = 1;
+@@ -253,13 +256,29 @@ function normalizePriorityRecoveryBlockedPartitions(blockedPartitions) {
+           blockedPartition.readyDistinctNodeCount :
+           blockedPartition?.ready_distinct_node_count,
+       );
++      const readyReplicaCount = normalizeNonNegativeInteger(
++        Number.isFinite(blockedPartition?.readyReplicaCount) ?
++          blockedPartition.readyReplicaCount :
++          blockedPartition?.ready_replica_count,
++      );
++      const expectedReplicaCount = readExpectedReplicaCount(blockedPartition);
++      const exclusionReasonCounts = isRecord(
++        blockedPartition?.exclusionReasonCounts ??
++          blockedPartition?.exclusion_reason_counts,
++      ) ? cloneJsonValue(
++          blockedPartition.exclusionReasonCounts ??
++            blockedPartition.exclusion_reason_counts,
++        ) : null;
+       return {
+         partitionId,
++        ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
++        ...(readyReplicaCount !== null ? {readyReplicaCount} : {}),
+         ...(spreadGap !== null ? {spreadGap} : {}),
+         ...(requiredDistinctNodeCount !== null ?
+           {requiredDistinctNodeCount} :
+           {}),
+         ...(readyDistinctNodeCount !== null ? {readyDistinctNodeCount} : {}),
++        ...(exclusionReasonCounts ? {exclusionReasonCounts} : {}),
+         reasons: normalizeDistinctStringArray(
+           blockedPartition?.reasons || blockedPartition?.reason_codes,
+         ),
+diff --git a/test/rebalancer/blocked-spread-release-event-wake.test.js b/test/rebalancer/blocked-spread-release-event-wake.test.js
+index 6e3de2106ac550d1bbfbd1dba21185abac49e256..52796c59b5074b69edf077ff8607e5f7065728b7 100644
+--- a/test/rebalancer/blocked-spread-release-event-wake.test.js
++++ b/test/rebalancer/blocked-spread-release-event-wake.test.js
+@@ -39,6 +39,7 @@ const PARKED_BACKGROUND_ENTITY_ID = 'nodes-p1';
+ const STABILIZING_BACKGROUND_ENTITY_ID = 'logs-p1';
+ const PRIORITY_RESOLVER_ENTITY_ID = 'replica_operations-p1';
+ const REQUIRED_DISTINCT_NODE_COUNT = 3;
++const EXPECTED_REPLICA_COUNT = 3;
+ const BLOCKED_READY_REPLICA_COUNT = 3;
+ const BLOCKED_READY_DISTINCT_NODE_COUNT = 1;
+ const BLOCKED_SPREAD_GAP = 2;
+@@ -110,9 +111,11 @@ function buildPrioritySpreadBlocker() {
+     requiredDistinctNodeCount: REQUIRED_DISTINCT_NODE_COUNT,
+     blockedPartitions: [{
+       partitionId: PRIORITY_RESOLVER_ENTITY_ID,
++      expectedReplicaCount: EXPECTED_REPLICA_COUNT,
+       readyReplicaCount: BLOCKED_READY_REPLICA_COUNT,
+       readyDistinctNodeCount: BLOCKED_READY_DISTINCT_NODE_COUNT,
+       spreadGap: BLOCKED_SPREAD_GAP,
++      exclusionReasonCounts: {row_absent: 2},
+     }],
+   };
+ }
+@@ -165,6 +168,45 @@ async (t) => {
+       REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
+       'the background entity parks on the priority-spread gate',
+     );
++    t.match(
++      blockedDecision?.logContext?.blockedPartitions?.[0],
++      {
++        expectedReplicaCount: EXPECTED_REPLICA_COUNT,
++        readyReplicaCount: BLOCKED_READY_REPLICA_COUNT,
++        exclusionReasonCounts: {row_absent: 2},
++      },
++      'planning-gate diagnostics retain the authoritative census counts',
++    );
++    const invalidExpectedBlocker = buildPrioritySpreadBlocker();
++    let invalidExpectedGetterReads = 0;
++    Object.defineProperty(
++      invalidExpectedBlocker.blockedPartitions[0],
++      'expectedReplicaCount',
++      {
++        enumerable: true,
++        get() {
++          invalidExpectedGetterReads += 1;
++          return EXPECTED_REPLICA_COUNT;
++        },
++      },
++    );
++    sharedBlocker = invalidExpectedBlocker;
++    const invalidExpectedDecision =
++      parked.resolvePrioritySpreadPlanningGateDecision();
++    t.equal(
++      Object.hasOwn(
++        invalidExpectedDecision?.logContext?.blockedPartitions?.[0] || {},
++        'expectedReplicaCount',
++      ),
++      false,
++      'planning-gate diagnostics omit invalid expected counts',
++    );
++    t.equal(
++      invalidExpectedGetterReads,
++      0,
++      'planning-gate diagnostics never invoke expected-count accessors',
++    );
++    sharedBlocker = buildPrioritySpreadBlocker();
+     t.equal(
+       blockedDecision?.scheduleDelayMs,
+       expectedFallbackDelayMs,
+diff --git a/test/rebalancer/unified-rebalancer-replica-state-management-node-state-change.test.js b/test/rebalancer/unified-rebalancer-replica-state-management-node-state-change.test.js
+index 2739696329ed8d5b30632fdbb35ea9a20bb13083..1fe7adc381b554f6e370ffafca11d5712dfb73e6 100644
+--- a/test/rebalancer/unified-rebalancer-replica-state-management-node-state-change.test.js
++++ b/test/rebalancer/unified-rebalancer-replica-state-management-node-state-change.test.js
+@@ -510,6 +510,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
+           {node_id: 'node-2', status: NodeStatus.ACTIVE},
+           {node_id: 'node-3', status: NodeStatus.ACTIVE},
+         ],
++        partitions: [{
++          partition_id: 'replica_operations-p1',
++          table_id: 'replica_operations',
++          replica_count: 3,
++        }],
+         services: [
+           {
+             service_id: 'priority-r1',
+@@ -544,9 +549,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
+       );
+       t.match(ledgerBlocker, {
+         partitionId: 'replica_operations-p1',
++        expectedReplicaCount: 3,
+         readyReplicaCount: 2,
+         readyDistinctNodeCount: 1,
+         spreadGap: 2,
++        exclusionReasonCounts: {row_absent: 1},
+       });
+       t.same(
+         readinessCalls.sort(),

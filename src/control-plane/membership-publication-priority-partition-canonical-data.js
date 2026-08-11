@@ -12,6 +12,10 @@ const DATA_PROPERTY_STATE = Object.freeze({
   VALID: 'valid',
 });
 const EXPECTED_REPLICA_COUNT_FIELD = 'expectedReplicaCount';
+const EXPECTED_REPLICA_COUNT_PROPERTY_NAMES = Object.freeze([
+  EXPECTED_REPLICA_COUNT_FIELD,
+  'expected_replica_count',
+]);
 const numberToExactInteger = BigInt;
 const isProxy = types.isProxy.bind(types);
 const numberIsSafeInteger = Number.isSafeInteger;
@@ -87,6 +91,16 @@ function normalizeExpectedReplicaCount(value) {
     numberIsSafeInteger(value) &&
     value > 0 ?
     value :
+    null;
+}
+
+function readExpectedReplicaCount(record) {
+  const entry = inspectOwnDataProperty(
+    record,
+    EXPECTED_REPLICA_COUNT_PROPERTY_NAMES,
+  );
+  return entry.state === DATA_PROPERTY_STATE.VALID ?
+    normalizeExpectedReplicaCount(entry.value) :
     null;
 }
 
@@ -340,6 +354,7 @@ export {
   priorityPartitionDiagnosticsEqual,
   compareExactValues,
   readOwnDataProperty,
+  readExpectedReplicaCount,
   readOwnLowerPrimitiveString,
   readOwnPrimitiveString,
   setAdd,

@@ -510,6 +510,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
           {node_id: 'node-2', status: NodeStatus.ACTIVE},
           {node_id: 'node-3', status: NodeStatus.ACTIVE},
         ],
+        partitions: [{
+          partition_id: 'replica_operations-p1',
+          table_id: 'replica_operations',
+          replica_count: 3,
+        }],
         services: [
           {
             service_id: 'priority-r1',
@@ -544,9 +549,11 @@ test('UnifiedRebalancer - Replica State Management', async (t) => {
       );
       t.match(ledgerBlocker, {
         partitionId: 'replica_operations-p1',
+        expectedReplicaCount: 3,
         readyReplicaCount: 2,
         readyDistinctNodeCount: 1,
         spreadGap: 2,
+        exclusionReasonCounts: {row_absent: 1},
       });
       t.same(
         readinessCalls.sort(),

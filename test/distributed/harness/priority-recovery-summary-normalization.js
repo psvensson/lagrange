@@ -9,6 +9,9 @@ import {
   PRIORITY_RECOVERY_WAIT_MODE,
   PRIORITY_RECOVERY_WORKFLOW_PROGRESS_PHASE,
 } from '../../../src/control-plane/priority-recovery-diagnostics-constants.js';
+import {
+  readExpectedReplicaCount,
+} from '../../../src/control-plane/membership-publication-priority-partition-canonical-data.js';
 
 const ZERO = 0;
 const ONE = 1;
@@ -253,13 +256,29 @@ function normalizePriorityRecoveryBlockedPartitions(blockedPartitions) {
           blockedPartition.readyDistinctNodeCount :
           blockedPartition?.ready_distinct_node_count,
       );
+      const readyReplicaCount = normalizeNonNegativeInteger(
+        Number.isFinite(blockedPartition?.readyReplicaCount) ?
+          blockedPartition.readyReplicaCount :
+          blockedPartition?.ready_replica_count,
+      );
+      const expectedReplicaCount = readExpectedReplicaCount(blockedPartition);
+      const exclusionReasonCounts = isRecord(
+        blockedPartition?.exclusionReasonCounts ??
+          blockedPartition?.exclusion_reason_counts,
+      ) ? cloneJsonValue(
+          blockedPartition.exclusionReasonCounts ??
+            blockedPartition.exclusion_reason_counts,
+        ) : null;
       return {
         partitionId,
+        ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
+        ...(readyReplicaCount !== null ? {readyReplicaCount} : {}),
         ...(spreadGap !== null ? {spreadGap} : {}),
         ...(requiredDistinctNodeCount !== null ?
           {requiredDistinctNodeCount} :
           {}),
         ...(readyDistinctNodeCount !== null ? {readyDistinctNodeCount} : {}),
+        ...(exclusionReasonCounts ? {exclusionReasonCounts} : {}),
         reasons: normalizeDistinctStringArray(
           blockedPartition?.reasons || blockedPartition?.reason_codes,
         ),

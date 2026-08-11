@@ -12,6 +12,9 @@ import {
   normalizePriorityRecoveryInteger,
   normalizePriorityRecoveryStringList,
 } from './priority-recovery-helpers.js';
+import {
+  readExpectedReplicaCount,
+} from './membership-publication-priority-partition-canonical-data.js';
 
 const LOCAL_STR_EMPTY = '';
 
@@ -397,6 +400,7 @@ function normalizePriorityRecoveryBlockedPartitions(blockedPartitions = []) {
       blockedPartition.readyReplicaCount ??
         blockedPartition.ready_replica_count,
     );
+    const expectedReplicaCount = readExpectedReplicaCount(blockedPartition);
     // CL-021 witness pass-through (see
     // resolvePrioritySpreadReplicaExclusionReason): per-row exclusion
     // attribution must survive summary normalization.
@@ -415,6 +419,7 @@ function normalizePriorityRecoveryBlockedPartitions(blockedPartitions = []) {
       ...(requiredDistinctNodeCount !== null ? {requiredDistinctNodeCount} : {}),
       ...(readyDistinctNodeCount !== null ? {readyDistinctNodeCount} : {}),
       ...(readyReplicaCount !== null ? {readyReplicaCount} : {}),
+      ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
       ...(exclusionReasonCounts ? {exclusionReasonCounts} : {}),
       blockerReasonCodes: Object.freeze(
         normalizeDistinctStringArray(

@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "ebeb53a86f4c395804fb53eaf6e56348d794a538e18aa9976f1afc5489095fef"
+    "sourceSha256": "836b037e8985f0de9c03be0a9cb3adc07757f93807e6c8f2b499757e639d61a9"
   },
   "layerDirection": [
     "raw_observation",
@@ -19,7 +19,7 @@
   "metrics": {
     "moduleCount": 65,
     "publicExportCount": 740,
-    "importEdgeCount": 301,
+    "importEdgeCount": 304,
     "crossLayerEdgeCount": 92,
     "layerDirectionViolationCount": 44,
     "largestStronglyConnectedComponent": 1,
@@ -2488,6 +2488,16 @@
     },
     {
       "from": "src/control-plane/priority-recovery-observation-normalization.js",
+      "specifier": "./membership-publication-priority-partition-canonical-data.js",
+      "to": "src/control-plane/membership-publication-priority-partition-canonical-data.js",
+      "targetModule": false,
+      "sourceLayer": "raw_observation",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/control-plane/priority-recovery-observation-normalization.js",
       "specifier": "./priority-recovery-diagnostics-constants.js",
       "to": "src/control-plane/priority-recovery-diagnostics-constants.js",
       "targetModule": true,
@@ -2785,6 +2795,16 @@
       "targetLayer": "raw_observation",
       "crossLayer": true,
       "conformsToLayerDirection": true
+    },
+    {
+      "from": "src/control-plane/priority-recovery-planning-intent.js",
+      "specifier": "./membership-publication-priority-partition-canonical-data.js",
+      "to": "src/control-plane/membership-publication-priority-partition-canonical-data.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
     },
     {
       "from": "src/control-plane/priority-recovery-planning-intent.js",
@@ -4870,6 +4890,16 @@
       "from": "src/rebalancer/priority-recovery-visibility-decision.js",
       "specifier": "./unified-rebalancer-shared.js",
       "to": "src/rebalancer/unified-rebalancer-shared.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
+    },
+    {
+      "from": "src/rebalancer/rebalancer-priority-recovery-planning-gate-methods.js",
+      "specifier": "../control-plane/membership-publication-priority-partition-canonical-data.js",
+      "to": "src/control-plane/membership-publication-priority-partition-canonical-data.js",
       "targetModule": false,
       "sourceLayer": "owner_decision",
       "targetLayer": null,

@@ -21,6 +21,9 @@ import {
   registerBackgroundPrioritySpreadReleaseWake,
   resolveBackgroundPrioritySpreadStableRelease,
 } from './background-priority-spread-release-tracker.js';
+import {
+  readExpectedReplicaCount,
+} from '../control-plane/membership-publication-priority-partition-canonical-data.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -32,6 +35,21 @@ const {
 
 const REBALANCE_PLANNING_GATE_DIAGNOSTIC_NO_GATE = 'none';
 const REBALANCE_PLANNING_GATE_NOT_APPLICABLE = null;
+
+function buildBlockedPartitionLogContext(partition) {
+  const expectedReplicaCount = readExpectedReplicaCount(partition);
+  return {
+    partitionId: partition.partitionId,
+    ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
+    readyReplicaCount: partition.readyReplicaCount,
+    readyDistinctNodeCount: partition.readyDistinctNodeCount,
+    spreadGap: partition.spreadGap,
+    missingActiveLeader: partition.missingActiveLeader === true,
+    // CL-021 witness: WHY rows were excluded from the ready count
+    // (e.g. raft_role_missing) — the planner-blindness attribution.
+    exclusionReasonCounts: partition.exclusionReasonCounts || null,
+  };
+}
 
 const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
   /**
@@ -229,16 +247,9 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
           controlPlanePriorityBlocker.requiredDistinctNodeCount,
         blockedPartitionCount: blockedPartitions.length,
         largestSpreadGap,
-        blockedPartitions: blockedPartitions.map((partition) => ({
-          partitionId: partition.partitionId,
-          readyReplicaCount: partition.readyReplicaCount,
-          readyDistinctNodeCount: partition.readyDistinctNodeCount,
-          spreadGap: partition.spreadGap,
-          missingActiveLeader: partition.missingActiveLeader === true,
-          // CL-021 witness: WHY rows were excluded from the ready count
-          // (e.g. raft_role_missing) — the planner-blindness attribution.
-          exclusionReasonCounts: partition.exclusionReasonCounts || null,
-        })),
+        blockedPartitions: blockedPartitions.map(
+          buildBlockedPartitionLogContext,
+        ),
       },
       scheduleDelayMs,
     });

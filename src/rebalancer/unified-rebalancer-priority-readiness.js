@@ -1,10 +1,11 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
 import {readAllSharedRows} from '../cache/shared-row-read.js';
-import {
-  buildCurrentPriorityPlacementObservation,
-} from '../control-plane/current-priority-placement-observation.js';
+import {buildCurrentPriorityPlacementObservation} from
+  '../control-plane/current-priority-placement-observation.js';
 import {isCatchupLearnerRaftRole} from
   '../raft/replica-voter-readiness.js';
+import {readExpectedReplicaCount} from
+  '../control-plane/membership-publication-priority-partition-canonical-data.js';
 
 const {
   LIFECYCLE_PHASE,
@@ -51,8 +52,10 @@ function freezeRecordOrNull(value) {
   return copy ? Object.freeze(copy) : null;
 }
 function buildPriorityPartitionBlocker(partition = {}) {
+  const expectedReplicaCount = readExpectedReplicaCount(partition);
   return {
     partitionId: String(partition.partitionId || ''),
+    ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
     readyReplicaCount: finiteNumberOrNull(partition.readyReplicaCount),
     readyDistinctNodeCount:
       finiteNumberOrNull(partition.readyDistinctNodeCount),

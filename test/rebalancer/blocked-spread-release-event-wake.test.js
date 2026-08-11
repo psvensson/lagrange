@@ -39,6 +39,7 @@ const PARKED_BACKGROUND_ENTITY_ID = 'nodes-p1';
 const STABILIZING_BACKGROUND_ENTITY_ID = 'logs-p1';
 const PRIORITY_RESOLVER_ENTITY_ID = 'replica_operations-p1';
 const REQUIRED_DISTINCT_NODE_COUNT = 3;
+const EXPECTED_REPLICA_COUNT = 3;
 const BLOCKED_READY_REPLICA_COUNT = 3;
 const BLOCKED_READY_DISTINCT_NODE_COUNT = 1;
 const BLOCKED_SPREAD_GAP = 2;
@@ -110,9 +111,11 @@ function buildPrioritySpreadBlocker() {
     requiredDistinctNodeCount: REQUIRED_DISTINCT_NODE_COUNT,
     blockedPartitions: [{
       partitionId: PRIORITY_RESOLVER_ENTITY_ID,
+      expectedReplicaCount: EXPECTED_REPLICA_COUNT,
       readyReplicaCount: BLOCKED_READY_REPLICA_COUNT,
       readyDistinctNodeCount: BLOCKED_READY_DISTINCT_NODE_COUNT,
       spreadGap: BLOCKED_SPREAD_GAP,
+      exclusionReasonCounts: {row_absent: 2},
     }],
   };
 }
@@ -165,6 +168,45 @@ async (t) => {
       REBALANCE_PLANNING_GATE.CONTROL_PLANE_PRIORITY_SPREAD,
       'the background entity parks on the priority-spread gate',
     );
+    t.match(
+      blockedDecision?.logContext?.blockedPartitions?.[0],
+      {
+        expectedReplicaCount: EXPECTED_REPLICA_COUNT,
+        readyReplicaCount: BLOCKED_READY_REPLICA_COUNT,
+        exclusionReasonCounts: {row_absent: 2},
+      },
+      'planning-gate diagnostics retain the authoritative census counts',
+    );
+    const invalidExpectedBlocker = buildPrioritySpreadBlocker();
+    let invalidExpectedGetterReads = 0;
+    Object.defineProperty(
+      invalidExpectedBlocker.blockedPartitions[0],
+      'expectedReplicaCount',
+      {
+        enumerable: true,
+        get() {
+          invalidExpectedGetterReads += 1;
+          return EXPECTED_REPLICA_COUNT;
+        },
+      },
+    );
+    sharedBlocker = invalidExpectedBlocker;
+    const invalidExpectedDecision =
+      parked.resolvePrioritySpreadPlanningGateDecision();
+    t.equal(
+      Object.hasOwn(
+        invalidExpectedDecision?.logContext?.blockedPartitions?.[0] || {},
+        'expectedReplicaCount',
+      ),
+      false,
+      'planning-gate diagnostics omit invalid expected counts',
+    );
+    t.equal(
+      invalidExpectedGetterReads,
+      0,
+      'planning-gate diagnostics never invoke expected-count accessors',
+    );
+    sharedBlocker = buildPrioritySpreadBlocker();
     t.equal(
       blockedDecision?.scheduleDelayMs,
       expectedFallbackDelayMs,

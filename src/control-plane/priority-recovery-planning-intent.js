@@ -6,6 +6,9 @@ import {
   normalizePriorityRecoveryInteger,
   normalizePriorityRecoveryStringList,
 } from './priority-recovery-helpers.js';
+import {
+  readExpectedReplicaCount,
+} from './membership-publication-priority-partition-canonical-data.js';
 
 const PRIORITY_RECOVERY_PLANNER_FIELD_UNAVAILABLE = null;
 const PRIORITY_RECOVERY_PLANNER_EMPTY_REASON_COLLECTION = Object.freeze([]);
@@ -32,8 +35,10 @@ function buildPriorityRecoveryBlockedPartitionPlanner(partition) {
     0,
     normalizePriorityRecoveryInteger(partition?.spreadGap) || 0,
   );
+  const expectedReplicaCount = readExpectedReplicaCount(partition);
   return {
     partitionId,
+    ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
     requiredDistinctNodeCount: normalizePriorityRecoveryInteger(
       partition?.requiredDistinctNodeCount,
     ),
