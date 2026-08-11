@@ -17,7 +17,7 @@
  */
 
 import {createHash} from 'node:crypto';
-import {mkdir, writeFile} from 'node:fs/promises';
+import {mkdir, readFile, writeFile} from 'node:fs/promises';
 import path from 'node:path';
 
 import {
@@ -170,6 +170,32 @@ function manifestDigestOf(manifest) {
   return DIGEST_PREFIX + createHash(HASH_ALGORITHM)
     .update(canonicalJson(manifest))
     .digest(HASH_ENCODING);
+}
+
+// The single re-stamp owner for binding targets after the build stage
+// finalizes the manifest's artifact descriptor: every generated binding
+// pins the digest of the manifest that will actually be installed, so
+// the digest must be recomputed — with the same canonical digest
+// semantics the records were generated with — once the real artifact
+// fields exist. Reads and rewrites the tree's bindings file in the
+// tree's own deterministic serialization; callers pass the
+// validator-normalized stamped manifest.
+async function restampDeploymentBindings(outputRoot, manifest) {
+  const filePath = path.join(
+    outputRoot, ...DEPLOYMENT_TREE_DIRECTORY_SEGMENTS,
+    DEPLOYMENT_TREE_FILE_BY_RECORD.bindings);
+  const bindings = JSON.parse(await readFile(filePath, RECORD_FILE_ENCODING));
+  const manifestDigest = manifestDigestOf(manifest);
+  const restamped = bindings.map((binding) => ({
+    ...binding,
+    target: {...binding.target, manifest_digest: manifestDigest},
+  }));
+  await writeFile(
+    filePath,
+    canonicalJson(restamped) + RECORD_TRAILING_NEWLINE,
+    RECORD_FILE_ENCODING,
+  );
+  return deepFreeze(restamped);
 }
 
 function buildManifestInput(ir, artifact) {
@@ -422,5 +448,6 @@ export {
   DEPLOYMENT_RECORD_ERROR_CODE,
   DEPLOYMENT_RECORD_STATUS,
   buildDeploymentRecords,
+  restampDeploymentBindings,
   writeDeploymentTree,
 };

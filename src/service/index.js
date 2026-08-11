@@ -110,6 +110,7 @@ export {
   DEPLOYMENT_RECORD_ERROR_CODE,
   DEPLOYMENT_RECORD_STATUS,
   buildDeploymentRecords,
+  restampDeploymentBindings,
   writeDeploymentTree,
 } from './service-deployment-record-generator.js';
 

@@ -27,6 +27,7 @@ import {
   buildDeploymentRecords,
   normalizeExternalServiceManifest,
   normalizeServiceDefinition,
+  restampDeploymentBindings,
   writeDeploymentTree,
 } from '../../src/service/index.js';
 
@@ -140,6 +141,50 @@ describe('service deployment record generator', () => {
         path.join(deploymentDirectory(outputRoot), fileName), 'utf8');
       assert.equal(text, `${canonicalJson(record)}\n`);
     }
+  });
+
+  it('restamps every binding target digest to the stamped manifest and ' +
+    'rewrites the bindings file canonically', async () => {
+    const outputRoot = await mkdtemp(path.join(tmpdir(), 'lagrange-tree-'));
+    const {records} = buildAccepted();
+    await writeDeploymentTree(records, outputRoot);
+    const generateDigest = records.bindings[0].target.manifest_digest;
+    // The build stage finalizes the artifact descriptor; the bindings
+    // pin the manifest digest, so the tree's bindings file must follow.
+    const stamped = {
+      ...records.manifest,
+      artifact: {
+        ...records.manifest.artifact,
+        digest: `sha256:${'b'.repeat(64)}`,
+        size_bytes: 553,
+      },
+    };
+    const normalized = normalizeExternalServiceManifest(stamped);
+    assert.equal(normalized.status, 'accepted');
+    const restamped =
+      await restampDeploymentBindings(outputRoot, normalized.manifest);
+    const stampedDigest = `sha256:${createHash('sha256')
+      .update(canonicalJson(normalized.manifest))
+      .digest('hex')}`;
+    assert.notEqual(stampedDigest, generateDigest);
+    assert.equal(restamped.length, records.bindings.length);
+    for (const binding of restamped) {
+      assert.equal(binding.target.manifest_digest, stampedDigest);
+    }
+    // Only the pinned digest changes; every other binding byte is kept.
+    assert.deepEqual(
+      restamped.map((binding) => ({
+        ...binding,
+        target: {...binding.target, manifest_digest: generateDigest},
+      })),
+      records.bindings.map((binding) => ({
+        ...binding,
+        target: {...binding.target},
+      })),
+    );
+    const text = await readFile(
+      path.join(deploymentDirectory(outputRoot), 'bindings.json'), 'utf8');
+    assert.equal(text, `${canonicalJson(restamped)}\n`);
   });
 
   it('emits only records the owning contracts accept, unchanged', () => {

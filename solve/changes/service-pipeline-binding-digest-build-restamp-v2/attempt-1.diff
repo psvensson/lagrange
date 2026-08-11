@@ -1,0 +1,580 @@
+diff --git a/scripts/checks/run-service-pipeline-binding-digest-build-restamp-v2-scenarios.js b/scripts/checks/run-service-pipeline-binding-digest-build-restamp-v2-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..699f29e886ee6aced21089e51fd4bd5066b04b8f
+--- /dev/null
++++ b/scripts/checks/run-service-pipeline-binding-digest-build-restamp-v2-scenarios.js
+@@ -0,0 +1,23 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++// Build-stage binding digest restamp guard: after runBuild stamps the
++// real artifact descriptor into manifest.json, the generated bindings
++// file must pin the canonical digest of that stamped normalized
++// manifest (the binding contract's package_id + manifest_digest
++// identity), or CREATE BINDING deterministically rejects every
++// genuinely built component (PACKAGE_STATE_CORRUPT, live witness
++// public-path-multinode-baseline-20260811T090119Z). The generator test
++// proves the restamp owner's digest and byte-canonical rewrite; the
++// pipeline CLI test proves the real-componentize build path leaves the
++// tree's bindings pinned to the stamped manifest digest (red on
++// revert).
++const SCENARIOS = {
++  'service-pipeline-binding-digest-build-restamp-v2': [
++    'test/service/service-deployment-record-generator.test.js',
++    'test/cli/service-pipeline-command.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/cli/service-pipeline-command.js b/src/cli/service-pipeline-command.js
+index 1415efffbebadffe4e84941be7eb5de543b4be3a..b3e380635d0f10bc9efc4efbb948d712f0a60a26 100644
+--- a/src/cli/service-pipeline-command.js
++++ b/src/cli/service-pipeline-command.js
+@@ -39,6 +39,7 @@ import {
+ } from '../service/service-typings-generator.js';
+ import {
+   buildDeploymentRecords,
++  restampDeploymentBindings,
+   writeDeploymentTree,
+ } from '../service/service-deployment-record-generator.js';
+ import {
+@@ -206,7 +207,12 @@ async function runGenerate({projectDirectory, writeOutput}) {
+ // Stamping the build's real artifact descriptor back into manifest.json
+ // binds the deployed records to the exact bytes that were validated;
+ // the manifest validator re-admits the stamped record before it is
+-// written.
++// written. The generated bindings pin the digest of that manifest
++// (the binding contract's package_id + manifest_digest identity), and
++// generate computed them over the pre-build placeholder artifact, so
++// the stamp must also restamp every binding target's manifest_digest —
++// otherwise CREATE BINDING deterministically rejects the deploy with
++// PACKAGE_STATE_CORRUPT for every genuinely built component.
+ async function stampArtifactDescriptor(projectDirectory, descriptor) {
+   const manifestPath = deploymentFile(projectDirectory, MANIFEST_FILE);
+   const manifest = await readJsonFile(
+@@ -228,6 +234,12 @@ async function stampArtifactDescriptor(projectDirectory, descriptor) {
+   await writeFile(
+     manifestPath, `${JSON.stringify(manifest, null, JSON_INDENT)}\n`,
+     TEXT_ENCODING);
++  await restampDeploymentBindings(projectDirectory, validation.manifest)
++    .catch((error) => {
++      throw pipelineFailure(
++        SERVICE_PIPELINE_STAGE.BUILD,
++        `binding restamp failed: ${error.message}`, error);
++    });
+   return manifest;
+ }
+ 
+diff --git a/src/service/index.js b/src/service/index.js
+index e04ea17c8661441a79b1b70f45fc20d971b83481..ec80fb3c9776ed8c72a47bfd2af47e3797f04837 100644
+--- a/src/service/index.js
++++ b/src/service/index.js
+@@ -110,6 +110,7 @@ export {
+   DEPLOYMENT_RECORD_ERROR_CODE,
+   DEPLOYMENT_RECORD_STATUS,
+   buildDeploymentRecords,
++  restampDeploymentBindings,
+   writeDeploymentTree,
+ } from './service-deployment-record-generator.js';
+ 
+diff --git a/src/service/service-deployment-record-generator.js b/src/service/service-deployment-record-generator.js
+index 804a907dc71c0c9a847f12b78df63e9bb55e52e1..e0fbec073d8d1762818dd780bb6c2d85e9ac8fec 100644
+--- a/src/service/service-deployment-record-generator.js
++++ b/src/service/service-deployment-record-generator.js
+@@ -17,7 +17,7 @@
+  */
+ 
+ import {createHash} from 'node:crypto';
+-import {mkdir, writeFile} from 'node:fs/promises';
++import {mkdir, readFile, writeFile} from 'node:fs/promises';
+ import path from 'node:path';
+ 
+ import {
+@@ -172,6 +172,32 @@ function manifestDigestOf(manifest) {
+     .digest(HASH_ENCODING);
+ }
+ 
++// The single re-stamp owner for binding targets after the build stage
++// finalizes the manifest's artifact descriptor: every generated binding
++// pins the digest of the manifest that will actually be installed, so
++// the digest must be recomputed — with the same canonical digest
++// semantics the records were generated with — once the real artifact
++// fields exist. Reads and rewrites the tree's bindings file in the
++// tree's own deterministic serialization; callers pass the
++// validator-normalized stamped manifest.
++async function restampDeploymentBindings(outputRoot, manifest) {
++  const filePath = path.join(
++    outputRoot, ...DEPLOYMENT_TREE_DIRECTORY_SEGMENTS,
++    DEPLOYMENT_TREE_FILE_BY_RECORD.bindings);
++  const bindings = JSON.parse(await readFile(filePath, RECORD_FILE_ENCODING));
++  const manifestDigest = manifestDigestOf(manifest);
++  const restamped = bindings.map((binding) => ({
++    ...binding,
++    target: {...binding.target, manifest_digest: manifestDigest},
++  }));
++  await writeFile(
++    filePath,
++    canonicalJson(restamped) + RECORD_TRAILING_NEWLINE,
++    RECORD_FILE_ENCODING,
++  );
++  return deepFreeze(restamped);
++}
++
+ function buildManifestInput(ir, artifact) {
+   const isV2Target = ir.target === IR_TARGET.SERVICE_CELL_V2;
+   const exportDeclarations = [];
+@@ -422,5 +448,6 @@ export {
+   DEPLOYMENT_RECORD_ERROR_CODE,
+   DEPLOYMENT_RECORD_STATUS,
+   buildDeploymentRecords,
++  restampDeploymentBindings,
+   writeDeploymentTree,
+ };
+diff --git a/test/cli/service-pipeline-command.test.js b/test/cli/service-pipeline-command.test.js
+index 25ab4ff5a261d4f2f70afdae9e5d986a15183add..6c23de65f60434250c5c668ac17c88a834b4ce8c 100644
+--- a/test/cli/service-pipeline-command.test.js
++++ b/test/cli/service-pipeline-command.test.js
+@@ -447,6 +447,29 @@ async () => withProject(async (project) => {
+   assert.notEqual(manifest.artifact.digest.includes('0000'), true,
+     'no placeholder digest survives the stamp');
+ 
++  // Every generated binding pins package_id + manifest_digest as its
++  // artifact identity, and the install catalog stores the digest of the
++  // STAMPED normalized manifest — so after build, the bindings file must
++  // carry exactly that digest, not the generate-time placeholder-era
++  // digest, or CREATE BINDING rejects every genuinely built component.
++  const {validateExternalServiceManifest} = await import(
++    '../../src/service/index.js');
++  const {canonicalJson} = await import(
++    '../../src/control-plane/owners/deployment-binding-contract.js');
++  const stampedValidation = validateExternalServiceManifest(manifest);
++  assert.equal(stampedValidation.valid, true);
++  const stampedDigest = 'sha256:' +
++    (await import('node:crypto')).createHash('sha256')
++      .update(canonicalJson(stampedValidation.manifest)).digest('hex');
++  const stampedBindings = JSON.parse(await readFile(
++    path.join(project, '.lagrange', 'deployment', 'bindings.json'),
++    'utf8'));
++  assert.ok(stampedBindings.length > 0, 'bindings survive the restamp');
++  for (const binding of stampedBindings) {
++    assert.equal(binding.target.manifest_digest, stampedDigest,
++      `${binding.name} pins the stamped manifest digest`);
++  }
++
+   // The component is a valid WASM component the runtime path can parse:
+   // the service-cell world's three exports surface through jco.
+   const {transpileBytes} = await import('@bytecodealliance/jco-transpile');
+diff --git a/test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js b/test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js
+index 2ddab40076b8ef913b326cc36f9ff3ef25bb88ef..c838e4b617a3f4201e64dd16f216dd3ae1353893 100644
+--- a/test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js
++++ b/test/distributed/harness/__tests__/public-path-multinode-baseline-scenario.test.js
+@@ -61,6 +61,22 @@ function buildQueryHandler(state) {
+         table_policies: JSON.stringify({splitStorageThreshold: 16384}),
+       }]};
+     }
++    if (stringStartsWith(sql, 'UPDATE service_definitions')) {
++      return {rows: []};
++    }
++    if (stringStartsWith(sql, 'SELECT replica_count, runtime_config')) {
++      return {rows: [{
++        replica_count: 1,
++        runtime_config: JSON.stringify({
++          authMode: 'trust', host: '0.0.0.0', tlsMode: 'disable'}),
++      }]};
++    }
++    if (stringStartsWith(sql, 'SELECT node_id, address, port')) {
++      return {rows: [{
++        address: '10.0.0.1', health_status: 'healthy',
++        node_id: 'node-1', port: 5432,
++      }]};
++    }
+     if (stringStartsWith(sql, 'SELECT partition_id, leader_node_id')) {
+       return {rows: [...state.partitionRows]};
+     }
+@@ -153,6 +169,10 @@ function buildStubCluster(state) {
+   return {
+     _scenarioOverrides: {
+       publicPathBaseline: {
++        createLifecycleSqlClient: async () => ({
++          execute: async () => ({rows: []}),
++        }),
++        probeTcpEndpoint: async () => true,
+         fetchImpl: buildFetchHandler(state),
+         invocationCount: INVOCATION_COUNT,
+         logBuffer: () => buildLogEntries(state.localReadNodeIds),
+diff --git a/test/distributed/scenarios/public-path-multinode-baseline.js b/test/distributed/scenarios/public-path-multinode-baseline.js
+index 8890b13465a6eaf278ce8d6e95d12e53cb3d3efc..0d39a6a18bb74a84c1d9d75d6de4b9ba1b95d34a 100644
+--- a/test/distributed/scenarios/public-path-multinode-baseline.js
++++ b/test/distributed/scenarios/public-path-multinode-baseline.js
+@@ -18,6 +18,7 @@
+ 
+ import assert from 'node:assert/strict';
+ import {copyFile, mkdir, readFile, rm, symlink} from 'node:fs/promises';
++import net from 'node:net';
+ import path from 'node:path';
+ import {
+   runBuild,
+@@ -36,6 +37,7 @@ import {
+   SCENARIO_ARTIFACTS,
+ } from '../harness/constants.js';
+ import {
++  STABLE_APPLY_POLICY,
+   buildUserActivityTableSql,
+   createTableTopologyHelpers,
+   queryRows,
+@@ -80,7 +82,12 @@ const MIN_PARTITION_COUNT = 2;
+ const MIN_DISTINCT_LEADER_HOSTS = 2;
+ const DEFAULT_INVOCATION_COUNT = 60;
+ const TOPOLOGY_STABLE_READBACKS = 2;
+-const SPLIT_WAIT_TIMEOUT_MS = 180_000;
++// A cold 3-node boot legitimately holds non-system rebalancing (and so
++// the user-table leader-placement cure) behind the priority-spread
++// deferral for minutes; the split+leader-spread window must outlast
++// that formation tail, not race it (the user-table-leader-placement-
++// spread quest's measured cure, run 20260810T185440Z).
++const SPLIT_WAIT_TIMEOUT_MS = 420_000;
+ const SPLIT_WAIT_POLL_MS = 500;
+ const MAX_SENTINEL_ROWS = 40;
+ const READY_TIMEOUT_MS = 90_000;
+@@ -181,6 +188,14 @@ function resolveScenarioDependencies(cluster) {
+       runDeploy,
+       runGenerate,
+     },
++    createLifecycleSqlClient: overrides.createLifecycleSqlClient ||
++      defaultCreateLifecycleSqlClient,
++    probeTcpEndpoint: overrides.probeTcpEndpoint ||
++      defaultProbeTcpEndpoint,
++    pgwireEndpointTimeoutMs:
++      Number.isInteger(overrides.pgwireEndpointTimeoutMs) ?
++        overrides.pgwireEndpointTimeoutMs :
++        PGWIRE_ENDPOINT_TIMEOUT_MS,
+     prepareProject: overrides.prepareProject || defaultPrepareProject,
+     readManifest: overrides.readManifest || defaultReadManifest,
+     resourceSnapshot: overrides.resourceSnapshot ||
+@@ -253,19 +268,228 @@ async function waitForSplitAndLeaderSpread(nodes, seedNode, deps) {
+   );
+ }
+ 
+-// Deploy replays the generated records through the pipeline owner; the
+-// SQL client is the harness admin lane into the same grammar ingress.
+-async function deployThroughPipeline(seedNode, deps, paths, layoutPath) {
++// The deploy channel is REAL authenticated PG-wire: service lifecycle
++// SQL requires a canonical server-derived security context (the landed
++// service-lifecycle-pgwire-sql-transport gate), which the admin-WS lane
++// deliberately never carries. The scenario therefore scales the shipped
++// sys-postgres-wire meta service from its deliberate replica_count 0
++// through the admin system-table UPDATE surface (the split-policy
++// precedent), rebinds it for cross-container reach, waits for a healthy
++// endpoint, and deploys through a plain pg client against it -
++// trust-mode authentication still yields the server-derived identity.
++const PGWIRE_SERVICE_ID = 'sys-postgres-wire';
++const PGWIRE_TARGET_REPLICA_COUNT = 1;
++// Trust auth is fail-closed to loopback binds
++// (pgwire-runtime-module.js TRUST_REQUIRES_LOOPBACK, witnessed live as a
++// silent non-listening endpoint in run 20260810T213808Z); a cross-
++// container bind therefore uses password auth against the same
++// PGWIRE_AUTH_* credentials the harness already injects on every node.
++const PGWIRE_REACHABLE_RUNTIME_CONFIG = Object.freeze({
++  host: '0.0.0.0',
++  authMode: 'password',
++  tlsMode: 'disable',
++});
++const PGWIRE_ENDPOINT_TIMEOUT_MS = 300_000;
++const PGWIRE_TCP_PROBE_TIMEOUT_MS = 3_000;
++const PGWIRE_ENDPOINT_POLL_MS = 2_000;
++const PGWIRE_HEALTHY_STATUS = 'healthy';
++const PGWIRE_SQL = Object.freeze({
++  SCALE_UP:
++    'UPDATE service_definitions SET replica_count = ' +
++    `${PGWIRE_TARGET_REPLICA_COUNT} ` +
++    `WHERE service_id = '${PGWIRE_SERVICE_ID}'`,
++  REBIND:
++    'UPDATE service_definitions SET runtime_config = \'' +
++    JSON.stringify(PGWIRE_REACHABLE_RUNTIME_CONFIG) +
++    `' WHERE service_id = '${PGWIRE_SERVICE_ID}'`,
++  READ_BACK:
++    'SELECT replica_count, runtime_config FROM service_definitions ' +
++    `WHERE service_id = '${PGWIRE_SERVICE_ID}'`,
++  SELECT_ENDPOINTS:
++    'SELECT node_id, address, port, health_status ' +
++    'FROM service_endpoints ' +
++    `WHERE service_id = '${PGWIRE_SERVICE_ID}'`,
++});
++
++function pgwireRebindApplied(rows) {
++  try {
++    return rows.some((row) =>
++      JSON.parse(row?.runtime_config)?.host ===
++        PGWIRE_REACHABLE_RUNTIME_CONFIG.host);
++  } catch (_error) {
++    return false;
++  }
++}
++
++function pgwireDefinitionApplied(rows) {
++  const row = rows.find((entry) =>
++    Number(entry?.replica_count) === PGWIRE_TARGET_REPLICA_COUNT);
++  if (!row) {
++    return false;
++  }
++  try {
++    return JSON.parse(row.runtime_config)?.host ===
++      PGWIRE_REACHABLE_RUNTIME_CONFIG.host;
++  } catch (_error) {
++    return false;
++  }
++}
++
++// Request the pgwire listener early: the scale-up ADD is (correctly)
++// deferred behind the priority-spread gate during the formation tail, so
++// the request is fired right after boot and the placement overlaps the
++// scenario's own multi-minute dataset/split/spread phases (witnessed
++// live: run 20260810T215233Z deferred sys-postgres-wire placement for
++// the entire 120s endpoint window when requested late).
++async function requestPgwireListener(seedNode, deps) {
++  let stableCount = ZERO;
++  for (let attempt = ZERO; attempt < STABLE_APPLY_POLICY.MAX_ATTEMPTS;
++    attempt += ONE) {
++    await helpers.retryTransientAdminQuery(deps, 'pgwire-rebind',
++      () => seedNode.query(PGWIRE_SQL.REBIND));
++    const readBack = await helpers.retryTransientAdminQuery(
++      deps, 'pgwire-rebind-read-back',
++      () => queryRows(seedNode, PGWIRE_SQL.READ_BACK));
++    if (!pgwireRebindApplied(readBack)) {
++      await deps.sleep(STABLE_APPLY_POLICY.POLL_MS);
++      continue;
++    }
++    await helpers.retryTransientAdminQuery(deps, 'pgwire-scale-up',
++      () => seedNode.query(PGWIRE_SQL.SCALE_UP));
++    const rows = await helpers.retryTransientAdminQuery(
++      deps, 'pgwire-read-back',
++      () => queryRows(seedNode, PGWIRE_SQL.READ_BACK));
++    stableCount = pgwireDefinitionApplied(rows) ? stableCount + ONE : ZERO;
++    if (stableCount >= STABLE_APPLY_POLICY.STABLE_READBACKS) {
++      return;
++    }
++    await deps.sleep(STABLE_APPLY_POLICY.POLL_MS);
++  }
++  throw new Error(
++    `${SCENARIO_NAME}: pgwire scale-up never became stable`,
++  );
++}
++
++function defaultProbeTcpEndpoint(endpoint) {
++  return new Promise((resolvePromise) => {
++    const socket = net.createConnection({
++      host: endpoint.address,
++      port: Number(endpoint.port),
++      timeout: PGWIRE_TCP_PROBE_TIMEOUT_MS,
++    });
++    const finish = (reachable) => {
++      socket.destroy();
++      resolvePromise(reachable);
++    };
++    socket.once('connect', () => finish(true));
++    socket.once('error', () => finish(false));
++    socket.once('timeout', () => finish(false));
++  });
++}
++
++// A registered endpoint row is placement INTENT; only the placed replica
++// binds the socket. The deploy gate therefore requires a real TCP
++// connect, never row presence (witnessed live: healthy rows with
++// ECONNREFUSED while placement sat behind the formation-tail deferral).
++async function waitForReachablePgwireEndpoint(nodes, deps) {
++  const deadline = Date.now() + deps.pgwireEndpointTimeoutMs;
++  let lastRows = [];
++  while (Date.now() < deadline) {
++    lastRows = await helpers.queryRowsAcrossNodes(
++      nodes, PGWIRE_SQL.SELECT_ENDPOINTS);
++    for (const row of lastRows) {
++      if (row?.health_status === PGWIRE_HEALTHY_STATUS &&
++          typeof row?.address === 'string' && row.address.length > ZERO &&
++          await deps.probeTcpEndpoint(row)) {
++        return row;
++      }
++    }
++    await deps.sleep(PGWIRE_ENDPOINT_POLL_MS);
++  }
++  throw new Error(
++    `${SCENARIO_NAME}: no REACHABLE pgwire endpoint within ` +
++    `${deps.pgwireEndpointTimeoutMs}ms: ${JSON.stringify(lastRows)}`,
++  );
++}
++
++// A freshly placed listener can register its endpoint slightly before
++// the socket binds; a refused connect inside that window retries
++// bounded, everything else fails loud.
++const PGWIRE_CONNECT_RETRY_LIMIT = 15;
++const PGWIRE_CONNECT_RETRY_DELAY_MS = 2_000;
++const PGWIRE_CONNECT_REFUSED_CODE = 'ECONNREFUSED';
++// Lifecycle statements are idempotency-keyed, so a transient
++// authoritative-owner read failure during the formation tail (witnessed
++// live: 'authoritative operation lookup failed' on the INSTALL
++// idempotency check in run 20260810T220044Z) retries safely bounded.
++// The budget must outlast the control-plane's OWN replica-rebalancing
++// tail, which continues after the user-table leader spread completes
++// and starves the service_installations authoritative read for longer
++// than a formation pause: run 20260811T083529Z exhausted a 30s budget
++// while service_installations-p1 replicas were still being replaced,
++// with the identical error on all 11 attempts. Sized like the split
++// wait: minutes, not seconds, still bounded and loud on exhaustion.
++const PGWIRE_LIFECYCLE_TRANSIENT_PATTERN =
++  /authoritative operation lookup failed|command owner is unavailable|participant failures|not ready|timed out|timeout/i;
++const PGWIRE_LIFECYCLE_RETRY_LIMIT = 60;
++const PGWIRE_LIFECYCLE_RETRY_DELAY_MS = 3_000;
++
++async function defaultCreateLifecycleSqlClient(endpoint, deps) {
++  const pg = await import('pg');
++  const Client = pg.Client || pg.default?.Client;
++  const connect = async () => {
++    for (let attempt = ZERO; ; attempt += ONE) {
++      const client = new Client({
++        database: REQUEST_CELL_AUTH.DATABASE,
++        host: endpoint.address,
++        password: REQUEST_CELL_AUTH.PASSWORD,
++        port: Number(endpoint.port),
++        user: REQUEST_CELL_AUTH.USER,
++      });
++      try {
++        await client.connect();
++        return client;
++      } catch (error) {
++        if (error?.code !== PGWIRE_CONNECT_REFUSED_CODE ||
++            attempt >= PGWIRE_CONNECT_RETRY_LIMIT) {
++          throw error;
++        }
++        await deps.sleep(PGWIRE_CONNECT_RETRY_DELAY_MS);
++      }
++    }
++  };
++  return {
++    execute: async (statement, parameters) => {
++      for (let attempt = ZERO; ; attempt += ONE) {
++        const client = await connect();
++        try {
++          const result = await client.query(
++            {text: statement, values: parameters});
++          return {rows: result?.rows};
++        } catch (error) {
++          if (attempt >= PGWIRE_LIFECYCLE_RETRY_LIMIT ||
++              !PGWIRE_LIFECYCLE_TRANSIENT_PATTERN.test(
++                String(error?.message || ''))) {
++            throw error;
++          }
++          await deps.sleep(PGWIRE_LIFECYCLE_RETRY_DELAY_MS);
++        } finally {
++          await client.end();
++        }
++      }
++    },
++  };
++}
++
++// Deploy replays the generated records through the pipeline owner over
++// the authenticated PG-wire listener.
++async function deployThroughPipeline(deps, paths, layoutPath, endpoint) {
+   const containerLayoutPath = path.posix.join(
+     SCENARIO_ARTIFACTS.CONTAINER_PATH,
+     path.relative(paths.artifactsRoot, layoutPath)
+       .split(path.sep).join(path.posix.sep),
+   );
+-  const sqlClient = {
+-    execute: async (statement, parameters) => ({
+-      rows: await queryRows(seedNode, statement, parameters),
+-    }),
+-  };
++  const sqlClient = await deps.createLifecycleSqlClient(endpoint, deps);
+   return deps.pipeline.runDeploy({
+     createSqlClient: () => sqlClient,
+     idempotencyKey: deps.runId,
+@@ -471,6 +695,10 @@ export async function run(cluster) {
+   });
+   const manifest = await deps.readManifest(paths.projectDirectory);
+ 
++  // Request the pgwire lifecycle listener FIRST: its placement rides
++  // out the formation-tail deferral while the data phases run.
++  await requestPgwireListener(seedNode, deps);
++
+   // Data substrate: table, split policies, deterministic dataset.
+   // Setup writes retry transient post-boot settling; measured phases do not.
+   const rows = generateDatasetRows();
+@@ -485,9 +713,12 @@ export async function run(cluster) {
+     await waitForSplitAndLeaderSpread(nodes, seedNode, deps);
+   const topology = assertPartitionSpread(spread.partitionRows);
+ 
+-  // Deploy the generated records, then measure over authenticated HTTP.
++  // Deploy the generated records through the authenticated PG-wire
++  // listener (requested at boot; must be REACHABLE, not just registered),
++  // then measure over authenticated HTTP.
++  const pgwireEndpoint = await waitForReachablePgwireEndpoint(nodes, deps);
+   await deployThroughPipeline(
+-    seedNode, deps, paths, buildResult.layoutPath);
++    deps, paths, buildResult.layoutPath, pgwireEndpoint);
+   const servingNodes = await waitForServingNodes(nodes, deps);
+   const snapshotsBefore = await captureResourceSnapshots(nodes, deps);
+   const invocations = await runMeasuredInvocations(servingNodes, deps);
+diff --git a/test/service/service-deployment-record-generator.test.js b/test/service/service-deployment-record-generator.test.js
+index 51339eaf4f86795ebe380ddad01e26a744c73c9a..063726fb42414618587f43f7c65bab1907fdec3b 100644
+--- a/test/service/service-deployment-record-generator.test.js
++++ b/test/service/service-deployment-record-generator.test.js
+@@ -27,6 +27,7 @@ import {
+   buildDeploymentRecords,
+   normalizeExternalServiceManifest,
+   normalizeServiceDefinition,
++  restampDeploymentBindings,
+   writeDeploymentTree,
+ } from '../../src/service/index.js';
+ 
+@@ -142,6 +143,50 @@ describe('service deployment record generator', () => {
+     }
+   });
+ 
++  it('restamps every binding target digest to the stamped manifest and ' +
++    'rewrites the bindings file canonically', async () => {
++    const outputRoot = await mkdtemp(path.join(tmpdir(), 'lagrange-tree-'));
++    const {records} = buildAccepted();
++    await writeDeploymentTree(records, outputRoot);
++    const generateDigest = records.bindings[0].target.manifest_digest;
++    // The build stage finalizes the artifact descriptor; the bindings
++    // pin the manifest digest, so the tree's bindings file must follow.
++    const stamped = {
++      ...records.manifest,
++      artifact: {
++        ...records.manifest.artifact,
++        digest: `sha256:${'b'.repeat(64)}`,
++        size_bytes: 553,
++      },
++    };
++    const normalized = normalizeExternalServiceManifest(stamped);
++    assert.equal(normalized.status, 'accepted');
++    const restamped =
++      await restampDeploymentBindings(outputRoot, normalized.manifest);
++    const stampedDigest = `sha256:${createHash('sha256')
++      .update(canonicalJson(normalized.manifest))
++      .digest('hex')}`;
++    assert.notEqual(stampedDigest, generateDigest);
++    assert.equal(restamped.length, records.bindings.length);
++    for (const binding of restamped) {
++      assert.equal(binding.target.manifest_digest, stampedDigest);
++    }
++    // Only the pinned digest changes; every other binding byte is kept.
++    assert.deepEqual(
++      restamped.map((binding) => ({
++        ...binding,
++        target: {...binding.target, manifest_digest: generateDigest},
++      })),
++      records.bindings.map((binding) => ({
++        ...binding,
++        target: {...binding.target},
++      })),
++    );
++    const text = await readFile(
++      path.join(deploymentDirectory(outputRoot), 'bindings.json'), 'utf8');
++    assert.equal(text, `${canonicalJson(restamped)}\n`);
++  });
++
+   it('emits only records the owning contracts accept, unchanged', () => {
+     const {records} = buildAccepted();
+     const manifestResult = normalizeExternalServiceManifest(records.manifest);

@@ -447,6 +447,29 @@ async () => withProject(async (project) => {
   assert.notEqual(manifest.artifact.digest.includes('0000'), true,
     'no placeholder digest survives the stamp');
 
+  // Every generated binding pins package_id + manifest_digest as its
+  // artifact identity, and the install catalog stores the digest of the
+  // STAMPED normalized manifest — so after build, the bindings file must
+  // carry exactly that digest, not the generate-time placeholder-era
+  // digest, or CREATE BINDING rejects every genuinely built component.
+  const {validateExternalServiceManifest} = await import(
+    '../../src/service/index.js');
+  const {canonicalJson} = await import(
+    '../../src/control-plane/owners/deployment-binding-contract.js');
+  const stampedValidation = validateExternalServiceManifest(manifest);
+  assert.equal(stampedValidation.valid, true);
+  const stampedDigest = 'sha256:' +
+    (await import('node:crypto')).createHash('sha256')
+      .update(canonicalJson(stampedValidation.manifest)).digest('hex');
+  const stampedBindings = JSON.parse(await readFile(
+    path.join(project, '.lagrange', 'deployment', 'bindings.json'),
+    'utf8'));
+  assert.ok(stampedBindings.length > 0, 'bindings survive the restamp');
+  for (const binding of stampedBindings) {
+    assert.equal(binding.target.manifest_digest, stampedDigest,
+      `${binding.name} pins the stamped manifest digest`);
+  }
+
   // The component is a valid WASM component the runtime path can parse:
   // the service-cell world's three exports surface through jco.
   const {transpileBytes} = await import('@bytecodealliance/jco-transpile');

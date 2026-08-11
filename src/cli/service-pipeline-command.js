@@ -39,6 +39,7 @@ import {
 } from '../service/service-typings-generator.js';
 import {
   buildDeploymentRecords,
+  restampDeploymentBindings,
   writeDeploymentTree,
 } from '../service/service-deployment-record-generator.js';
 import {
@@ -206,7 +207,12 @@ async function runGenerate({projectDirectory, writeOutput}) {
 // Stamping the build's real artifact descriptor back into manifest.json
 // binds the deployed records to the exact bytes that were validated;
 // the manifest validator re-admits the stamped record before it is
-// written.
+// written. The generated bindings pin the digest of that manifest
+// (the binding contract's package_id + manifest_digest identity), and
+// generate computed them over the pre-build placeholder artifact, so
+// the stamp must also restamp every binding target's manifest_digest —
+// otherwise CREATE BINDING deterministically rejects the deploy with
+// PACKAGE_STATE_CORRUPT for every genuinely built component.
 async function stampArtifactDescriptor(projectDirectory, descriptor) {
   const manifestPath = deploymentFile(projectDirectory, MANIFEST_FILE);
   const manifest = await readJsonFile(
@@ -228,6 +234,12 @@ async function stampArtifactDescriptor(projectDirectory, descriptor) {
   await writeFile(
     manifestPath, `${JSON.stringify(manifest, null, JSON_INDENT)}\n`,
     TEXT_ENCODING);
+  await restampDeploymentBindings(projectDirectory, validation.manifest)
+    .catch((error) => {
+      throw pipelineFailure(
+        SERVICE_PIPELINE_STAGE.BUILD,
+        `binding restamp failed: ${error.message}`, error);
+    });
   return manifest;
 }
 
