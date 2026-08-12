@@ -1,0 +1,322 @@
+diff --git a/architecture/contracts/invariants.json b/architecture/contracts/invariants.json
+index f366373a047e66b051c72fc1f703cc3d555fdcdf..9e52eafc6451375f7564cac767a94e495d4760cc 100644
+--- a/architecture/contracts/invariants.json
++++ b/architecture/contracts/invariants.json
+@@ -93,6 +93,7 @@
+       "kind": "safety",
+       "statement": "Degraded or cross-plane evidence can explain, defer, or block, but cannot upgrade readiness or admission.",
+       "formalPredicate": "DegradedEvidence => nextAction # proceed",
++      "coupledWith": ["failed-authoritative-read-admission-verdict"],
+       "modelRef": "architecture/models/alloy/core-system-logic.als",
+       "contractRef": "architecture/contracts/core-system-logic.md"
+     },
+@@ -345,6 +346,27 @@
+         "trigger": {"policy": "on-quest-closure", "scope": "owner:message_group_raft_owner", "cost": "cheap"},
+         "restoration": {"autoSpawn": true}
+       }
++    },
++    {
++      "id": "failed-authoritative-read-admission-verdict",
++      "owner": "replica_lifecycle_owner",
++      "boundary": "rebalancer_handoff",
++      "kind": "safety",
++      "statement": "A failed or unavailable authoritative read never concludes the positive premise of a safety gate: admission gates fail closed into a typed defer/deny (the conflict-lane deferred-visibility throw; the topology guard's replica_inventory_unusable denial; the surplus REMOVE commit fence; the ledger quorum-spread confirmation). A hold may fail OPEN on a read gap only where blocking on the gap would itself deadlock convergence, and each fail-open hold names its deadlock witness: the over-target count-keyed create-lane hold (G1; fail-closing it would strand the surplus drain it exists to release) and the routine-direction ledger self-move serialization (a disruptive IDLE_ONLY self-move still fails closed). Advisory probes fail open only where a fail-closed enforcer remains downstream (the provisioning ledger-interlock probe defers to operation creation as the enforcing seam).",
++      "formalPredicate": "AuthoritativeReadFailed(gate) => Verdict(gate) \\in {defer, deny}; FailOpen(hold) => NamedDeadlockWitness(hold)",
++      "coupledWith": ["degraded-evidence-never-upgrades-readiness"],
++      "contractRef": "solve/epics/golden-capability-gold-plating.md",
++      "liveEvidence": {
++        "tier": 2,
++        "holdsWhen": "the verdict-matrix test drives every enumerated admission predicate with a failed authoritative read and asserts its documented verdict — fail-closed gates throw or deny, the two named fail-open holds admit with their deadlock witness, and each fail-open carries a red-on-revert witness; exits 0",
++        "evidence": {
++          "kind": "repro",
++          "ref": "node --test test/rebalancer/failed-authoritative-read-admission-verdict.test.js",
++          "test": "test/rebalancer/failed-authoritative-read-admission-verdict.test.js"
++        },
++        "trigger": {"policy": "on-quest-closure", "scope": "owner:replica_lifecycle_owner", "cost": "cheap"},
++        "restoration": {"autoSpawn": true}
++      }
+     }
+   ]
+ }
+diff --git a/scripts/checks/run-failed-authoritative-read-admission-scenarios.js b/scripts/checks/run-failed-authoritative-read-admission-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..7673e98986cd033b6295ae67ecf305b770e5f69f
+--- /dev/null
++++ b/scripts/checks/run-failed-authoritative-read-admission-scenarios.js
+@@ -0,0 +1,11 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'failed-authoritative-read-admission-invariant': [
++    'test/rebalancer/failed-authoritative-read-admission-verdict.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/test/rebalancer/failed-authoritative-read-admission-verdict.test.js b/test/rebalancer/failed-authoritative-read-admission-verdict.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4e4ce4f6c540ed16c2c983ae931c73ef19ea5d1a
+--- /dev/null
++++ b/test/rebalancer/failed-authoritative-read-admission-verdict.test.js
+@@ -0,0 +1,213 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {ConfigurationManager} from '../../src/config/configuration-manager.js';
++import {LoggingService} from '../../src/logging/logging-service.js';
++import {
++  OperationType,
++  ReplicaStatus,
++} from '../../src/rebalancer/replica-status.js';
++import {
++  createTestCoordinator,
++} from './test-helpers.js';
++
++// Verdict matrix for the failed-authoritative-read-admission-verdict
++// invariant (architecture/contracts/invariants.json; GP-8 of the
++// golden-capability-gold-plating epic). Each case drives one admission
++// predicate with a FAILED authoritative read and asserts the documented
++// verdict: safety gates fail CLOSED (typed throw), and the two named
++// fail-open holds admit with their deadlock witness. The fail-open rows
++// double as the red-on-revert witness: they go red if the hold ever
++// silently flips polarity or changes its read-gap semantics.
++
++const TEST_PARTITION_ID = 'sql_write_operations-p1';
++const TEST_NODE_ID = 'node-verdict-a';
++const TEST_REPLICA_ID = `${TEST_PARTITION_ID}-r1`;
++const READ_GAP_ERROR = 'authoritative owner unavailable (verdict matrix)';
++const TARGET_REPLICA_COUNT = 3;
++const OVER_TARGET_ROW_COUNT = 4;
++const AT_TARGET_ROW_COUNT = 3;
++
++function initializeTestEnvironment() {
++  ConfigurationManager.resetInstance();
++  const config = ConfigurationManager.getInstance();
++  if (!config.isInitialized()) {
++    config.initialize({
++      node: {id: TEST_NODE_ID},
++      logging: {level: 'error'},
++    });
++  }
++  const logging = LoggingService.getInstance();
++  if (!logging.isInitialized()) {
++    logging.initialize({level: 'error'});
++  }
++}
++
++function createServiceRow(replicaId, nodeId, raftRole) {
++  return {
++    service_id: replicaId,
++    replica_id: replicaId,
++    service_type: 'partition',
++    partition_id: TEST_PARTITION_ID,
++    node_id: nodeId,
++    address: `local/partition/${replicaId}`,
++    raft_role: raftRole,
++    status: ReplicaStatus.ACTIVE,
++  };
++}
++
++function overTargetServiceRows() {
++  return [
++    createServiceRow(TEST_REPLICA_ID, TEST_NODE_ID, 'leader'),
++    createServiceRow(`${TEST_PARTITION_ID}-r2`, TEST_NODE_ID, 'follower'),
++    createServiceRow(`${TEST_PARTITION_ID}-r3`, TEST_NODE_ID, 'follower'),
++    createServiceRow(`${TEST_PARTITION_ID}-r4`, 'node-verdict-b', 'follower'),
++  ];
++}
++
++async function createVerdictCoordinator(t, overrides) {
++  const coordinator = createTestCoordinator({
++    nodeId: TEST_NODE_ID,
++    enableTimeouts: false,
++  });
++  coordinator.initialize();
++  t.teardown(async () => coordinator.shutdown());
++  for (const [method, replacement] of Object.entries(overrides)) {
++    coordinator[method] = replacement;
++  }
++  return coordinator;
++}
++
++function addLikeContext() {
++  return {
++    move: {enforceConcurrentOperationBudget: true},
++    normalizedMoveType: OperationType.ADD,
++    partitionId: TEST_PARTITION_ID,
++    entityType: 'partition',
++    entityId: TEST_PARTITION_ID,
++  };
++}
++
++test(
++  'fail-open hold with deadlock witness: the over-target count-keyed ' +
++    'create-lane hold admits on a failed authoritative read (blocking on ' +
++    'the gap would strand the surplus drain it exists to release)',
++  async (t) => {
++    initializeTestEnvironment();
++    const coordinator = await createVerdictCoordinator(t, {
++      // Read gap: the authoritative services owner is unavailable — the
++      // production wrapper (rebalance-coordinator-operation-read-methods.js
++      // :429-442) discards availability and returns the empty rows of the
++      // failed observation, which is exactly what the hold's :226-228
++      // empty-read return consumes. Returning [] here IS the failed read.
++      getAuthoritativeEntityServiceRows: async () => [],
++      // The op-observation lane reports no conflict so the call reaches the
++      // over-target hold itself.
++      getEntityAuthoritativeOperationObservation: async () => ({
++        state: 'empty',
++        operationCount: 0,
++        operations: [],
++        deferredOutcome: null,
++        retryAfterMs: null,
++      }),
++      resolveTopologyGuardTargetReplicaCount: async () =>
++        TARGET_REPLICA_COUNT,
++    });
++
++    await coordinator.ensureCriticalPartitionCreateLaneAvailable(
++      addLikeContext(),
++    );
++    t.pass(
++      'the over-target hold returned without throwing on the read gap ' +
++        '(documented fail-open: never blocks on a read gap)',
++    );
++  },
++);
++
++test(
++  'red witness: the same hold DOES engage when the authoritative read ' +
++    'succeeds and shows the partition strictly over target',
++  async (t) => {
++    initializeTestEnvironment();
++    const rows = overTargetServiceRows();
++    t.equal(rows.length, OVER_TARGET_ROW_COUNT, 'fixture is over target');
++    const coordinator = await createVerdictCoordinator(t, {
++      getAuthoritativeEntityServiceRows: async () => rows,
++      getEntityAuthoritativeOperationObservation: async () => ({
++        state: 'empty',
++        operationCount: 0,
++        operations: [],
++        deferredOutcome: null,
++        retryAfterMs: null,
++      }),
++      resolveTopologyGuardTargetReplicaCount: async () =>
++        TARGET_REPLICA_COUNT,
++    });
++
++    await t.rejects(
++      coordinator.ensureCriticalPartitionCreateLaneAvailable(
++        addLikeContext(),
++      ),
++      /over|target|hold|budget|lane/iu,
++      'a readable over-target inventory must engage the hold (proves the ' +
++        'fail-open case above is the read-gap path, not a dead hold)',
++    );
++  },
++);
++
++test(
++  'fail-open boundary: the same hold stays open at exactly target even ' +
++    'with a readable inventory (no over-target, no hold)',
++  async (t) => {
++    initializeTestEnvironment();
++    const coordinator = await createVerdictCoordinator(t, {
++      getAuthoritativeEntityServiceRows: async () =>
++        overTargetServiceRows().slice(0, AT_TARGET_ROW_COUNT),
++      getEntityAuthoritativeOperationObservation: async () => ({
++        state: 'empty',
++        operationCount: 0,
++        operations: [],
++        deferredOutcome: null,
++        retryAfterMs: null,
++      }),
++      resolveTopologyGuardTargetReplicaCount: async () =>
++        TARGET_REPLICA_COUNT,
++    });
++
++    await coordinator.ensureCriticalPartitionCreateLaneAvailable(
++      addLikeContext(),
++    );
++    t.pass('an at-target inventory never engages the over-target hold');
++  },
++);
++
++test(
++  'fail-closed gate: the conflict lane fails CLOSED on a deferred ' +
++    'authoritative operation observation (typed deferred-visibility throw)',
++  async (t) => {
++    initializeTestEnvironment();
++    const coordinator = await createVerdictCoordinator(t, {
++      getEntityAuthoritativeOperationObservation: async () => ({
++        state: 'deferred',
++        operationCount: null,
++        operations: [],
++        deferredOutcome: {
++          reason: 'authoritative_observation_deferred',
++          detail: READ_GAP_ERROR,
++        },
++        retryAfterMs: 50,
++      }),
++      shouldAllowPriorityRecoveryDeferredObservation: () => false,
++      getCacheVisibleEntityOperations: () => [],
++      resolveTopologyGuardTargetReplicaCount: async () =>
++        TARGET_REPLICA_COUNT,
++    });
++
++    await t.rejects(
++      coordinator.ensureCriticalPartitionCreateLaneAvailable(
++        addLikeContext(),
++      ),
++      /deferred|visibility|authoritative/iu,
++      'a deferred authoritative observation must throw the typed ' +
++        'deferred-visibility error, never admit',
++    );
++  },
++);
+diff --git a/test/shards/impact-graph-seal.json b/test/shards/impact-graph-seal.json
+index 54ad6424c762559b708d85dad56d36b4fab5e70e..6a5cf81791fa644cf3487ed69d44b5172db7f77d 100644
+--- a/test/shards/impact-graph-seal.json
++++ b/test/shards/impact-graph-seal.json
+@@ -1,8 +1,8 @@
+ {
+   "schemaVersion": 1,
+   "importGraphSchemaVersion": "global-owner-debt-import-graph-v2",
+-  "sourceDigest": "92a124ef35f3c8760176eddbfc2e6f08b97171d72910eef60f8907524581cdd5",
+-  "producerInputDigest": "13c4fbc07881a9099ecf69a8276c58f4afd55545bc2237ccc2f10419bff45585",
++  "sourceDigest": "52eb822a8f0ece07b15057b8c72e0588a08409e9a185fdee0ac0fd8417dcbc96",
++  "producerInputDigest": "ac30a0c7236d05625214f817ea3b9cacefaccf607bfbee35154d7cc849f2634b",
+   "resolverStateDigest": "3c8d2d7ecd599c96d71edd0323e52a8a1eb2130e93fb8de389b179537920a29b",
+-  "snapshotDigest": "99d851682f932c5c1d5e62d5190143afccc69a5d99a3cccaaded8022446e42ad"
++  "snapshotDigest": "a3c94708be2360790b1fac2f7b5a829c12d9a104ee83f717aa7f2b9c7a6849cf"
+ }
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 9b08d29c61f7fef2ccf724bf30080f91a03405aa..2ec1915d98a014c86da7af38ad4d7a084f39ade8 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 1778,
++    "unit": 1779,
+     "integration": 73,
+     "bootstrap": 171,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2029,
+-  "digest": "fnv1a32-cc02d4a1",
++  "censusSize": 2030,
++  "digest": "fnv1a32-833f75ab",
+   "classes": {
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+     "test/address/address-manager.test.js": "unit",
+@@ -1390,6 +1390,7 @@
+     "test/rebalancer/executor-outcome-emitter.test.js": "unit",
+     "test/rebalancer/executor-outcome-redrive-untouched-payload-retry-owner.test.js": "unit",
+     "test/rebalancer/existing-group-add-topology-guard.test.js": "unit",
++    "test/rebalancer/failed-authoritative-read-admission-verdict.test.js": "unit",
+     "test/rebalancer/formation-liveness-dependency-serial-planner.test.js": "unit",
+     "test/rebalancer/formation-runtime-service-create-lane-budget-starvation.test.js": "unit",
+     "test/rebalancer/in-flight-aware-drain-phase-replace-credit.test.js": "unit",

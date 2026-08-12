@@ -93,6 +93,7 @@
       "kind": "safety",
       "statement": "Degraded or cross-plane evidence can explain, defer, or block, but cannot upgrade readiness or admission.",
       "formalPredicate": "DegradedEvidence => nextAction # proceed",
+      "coupledWith": ["failed-authoritative-read-admission-verdict"],
       "modelRef": "architecture/models/alloy/core-system-logic.als",
       "contractRef": "architecture/contracts/core-system-logic.md"
     },
@@ -343,6 +344,27 @@
           "test": "test/closure/CL-042.repro.test.js"
         },
         "trigger": {"policy": "on-quest-closure", "scope": "owner:message_group_raft_owner", "cost": "cheap"},
+        "restoration": {"autoSpawn": true}
+      }
+    },
+    {
+      "id": "failed-authoritative-read-admission-verdict",
+      "owner": "replica_lifecycle_owner",
+      "boundary": "rebalancer_handoff",
+      "kind": "safety",
+      "statement": "A failed or unavailable authoritative read never concludes the positive premise of a safety gate: admission gates fail closed into a typed defer/deny (the conflict-lane deferred-visibility throw; the topology guard's replica_inventory_unusable denial; the surplus REMOVE commit fence; the ledger quorum-spread confirmation). A hold may fail OPEN on a read gap only where blocking on the gap would itself deadlock convergence, and each fail-open hold names its deadlock witness: the over-target count-keyed create-lane hold (G1; fail-closing it would strand the surplus drain it exists to release) and the routine-direction ledger self-move serialization (a disruptive IDLE_ONLY self-move still fails closed). Advisory probes fail open only where a fail-closed enforcer remains downstream (the provisioning ledger-interlock probe defers to operation creation as the enforcing seam).",
+      "formalPredicate": "AuthoritativeReadFailed(gate) => Verdict(gate) \\in {defer, deny}; FailOpen(hold) => NamedDeadlockWitness(hold)",
+      "coupledWith": ["degraded-evidence-never-upgrades-readiness"],
+      "contractRef": "solve/epics/golden-capability-gold-plating.md",
+      "liveEvidence": {
+        "tier": 2,
+        "holdsWhen": "the verdict-matrix test drives every enumerated admission predicate with a failed authoritative read and asserts its documented verdict — fail-closed gates throw or deny, the two named fail-open holds admit with their deadlock witness, and each fail-open carries a red-on-revert witness; exits 0",
+        "evidence": {
+          "kind": "repro",
+          "ref": "node --test test/rebalancer/failed-authoritative-read-admission-verdict.test.js",
+          "test": "test/rebalancer/failed-authoritative-read-admission-verdict.test.js"
+        },
+        "trigger": {"policy": "on-quest-closure", "scope": "owner:replica_lifecycle_owner", "cost": "cheap"},
         "restoration": {"autoSpawn": true}
       }
     }
