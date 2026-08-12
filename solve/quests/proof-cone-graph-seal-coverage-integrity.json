@@ -1,0 +1,43 @@
+{
+  "id": "proof-cone-graph-seal-coverage-integrity",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The proof-cone import graph is schema-v2 content-bound to the complete live producer input closure and a tracked producer seal, canonical dependency-cruiser reproduction hard-blocks landing before cache reuse, and coverage snapshots admit only unique normalized regular-file edges from the canonical producer surface with total digest reads; selection remains below the unit duration ceiling.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/golden-capability-gold-plating.md#tier-1-enforcement-machinery-make-steering-machine-checked",
+    "closesCL": [],
+    "parentQuest": "coupled-pair-proof-cone-input-integrity-closure",
+    "planDoc": null,
+    "draftedAtCommit": "8af20e575d166cf5b4c348b9398b8c77aafdec1d"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "coupled-pair-proof-cone-input-integrity-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "proof-cone-graph-seal-coverage-integrity-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "coupled-pair-proof-cone-input-integrity-closure",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
