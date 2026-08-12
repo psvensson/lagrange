@@ -29,9 +29,16 @@ import {
 import {detectUnrecordedEvidence} from './evidence-detection.js';
 import {eventEvidenceFingerprint} from './evidence-identity.js';
 import {
+  changedPathsFromDiffContent,
   inspectChangeArtifact,
   requiresModelEvidence,
 } from './change-artifact.js';
+import {
+  contractsForChangedPath,
+  evaluateCoupledPairGuards,
+  loadImpactContractRegistry,
+} from '../checks/impact-contract-registry.js';
+import {PROOF_CONE_CONTRACTS_PATH} from '../checks/impact-proof-cone-constants.js';
 import {loadQuest, projectState, readLog} from './store.js';
 import {questClass, closureKind, isDecisionClosure} from './closure-kind.js';
 import {analyzeQuestHealth} from './health.js';
@@ -52,6 +59,9 @@ import {
 
 const LOCAL_STR_OWNED_001 = 'product quest has no planning link (links.roadmapRow / specRef / planDoc / ';
 const LOCAL_STR_OWNED_002 = 'parentQuest / closesCL all empty); it will not appear in planning joins';
+const LOCAL_STR_PROBLEM_JOIN_SEPARATOR = '; ';
+const LOCAL_STR_TRIGGERED_PAIR_PREFIX = 'coupled pair ';
+const LOCAL_STR_INCOMPLETE_EDGE = ' is triggered without a complete contract edge: ';
 
 const BLOCKED_THEORY_STATUSES = Object.freeze([
   THEORY_RESULT_AVOIDED,
@@ -178,6 +188,63 @@ function auditMetricZeroNeedsTheoryResult(log, startIndex) {
 
 function auditSourceChangeVerification(root, quest, log, startIndex) {
   return verificationState(root, quest, log, {startIndex}).attemptProblems;
+}
+
+function pairProjectionIsReviewable(projection) {
+  if (!projection) return false;
+  if (!projection.ok) return false;
+  if (!projection.fingerprint) return false;
+  return typeof projection.content === 'string';
+}
+
+function coupledPairAuditEvent(state, projection, terminal) {
+  const selectedAttempts = terminal ?
+    state.attempts.filter((attempt) => attempt.contracted) :
+    projection.attempts;
+  return selectedAttempts?.at(-1)?.event || null;
+}
+
+function coupledPairMessages(loaded, changedPaths, registryChanged) {
+  if (!loaded.registry) {
+    const loadProblems = loaded.problems?.length > 0 ? loaded.problems :
+      ['coupled-pair registry could not be loaded'];
+    return [loadProblems.join(LOCAL_STR_PROBLEM_JOIN_SEPARATOR)];
+  }
+  if (registryChanged && loaded.problems.length > 0) {
+    return [loaded.problems.join(LOCAL_STR_PROBLEM_JOIN_SEPARATOR)];
+  }
+  const evaluated = evaluateCoupledPairGuards(loaded.registry, changedPaths);
+  const triggeredPrefixes = evaluated.triggeredPairs.map((pair) =>
+    `${LOCAL_STR_TRIGGERED_PAIR_PREFIX}${pair.id} is triggered `);
+  const messages = evaluated.problems.filter((message) =>
+    triggeredPrefixes.some((prefix) => message.startsWith(prefix)));
+  for (const pair of loaded.registry.coupledPairs) {
+    if (pair.problems.length === 0 || triggeredPrefixes.some((prefix) =>
+      prefix.startsWith(`${LOCAL_STR_TRIGGERED_PAIR_PREFIX}${pair.id} `))) continue;
+    const contractedPaths = changedPaths.filter((changedPath) =>
+      contractsForChangedPath(loaded.registry, changedPath).includes(pair.contract));
+    if (contractedPaths.length < 2) continue;
+    messages.push(
+      `${LOCAL_STR_TRIGGERED_PAIR_PREFIX}${pair.id}${LOCAL_STR_INCOMPLETE_EDGE}` +
+      pair.problems.join(LOCAL_STR_PROBLEM_JOIN_SEPARATOR),
+    );
+  }
+  return messages;
+}
+
+function auditCoupledPairGuards(root, quest, log, startIndex, terminal) {
+  const state = verificationState(root, quest, log, {startIndex});
+  const projection = terminal ? state.aggregate : state.candidate;
+  if (!pairProjectionIsReviewable(projection)) return [];
+
+  const changedPaths = changedPathsFromDiffContent(projection.content);
+  const registryChanged = changedPaths.includes(PROOF_CONE_CONTRACTS_PATH);
+  if (changedPaths.length < 2 && !registryChanged) return [];
+
+  const loaded = loadImpactContractRegistry(root);
+  const event = coupledPairAuditEvent(state, projection, terminal);
+  const messages = coupledPairMessages(loaded, changedPaths, registryChanged);
+  return [...new Set(messages)].map((message) => problem(message, event));
 }
 
 function isModelEvidenceFinding(event, frontier) {
@@ -353,9 +420,8 @@ const COMMIT_GATE_TERMINAL_STATUSES = Object.freeze([
 
 export function commitGate(root, quest) {
   const log = readLog(root, quest.id);
-  const finished = log.some((event) =>
-    event.type === EVENT_QUEST &&
-    COMMIT_GATE_TERMINAL_STATUSES.includes(event.status));
+  const state = projectState(quest, log);
+  const finished = COMMIT_GATE_TERMINAL_STATUSES.includes(state.questStatus);
   const problems = [];
   if (!finished) {
     problems.push(problem(
@@ -402,8 +468,7 @@ export function auditQuest(root, quest) {
   const log = readLog(root, quest.id);
   const state = projectState(quest, log);
   const startIndex = strictAuditStartIndex(log);
-  const terminal = log.some((event) => event.type === EVENT_QUEST &&
-    COMMIT_GATE_TERMINAL_STATUSES.includes(event.status));
+  const terminal = COMMIT_GATE_TERMINAL_STATUSES.includes(state.questStatus);
   const verificationProblems = terminal ?
     terminalVerificationProblems(root, quest, log, {startIndex}) :
     auditSourceChangeVerification(root, quest, log, startIndex);
@@ -413,6 +478,7 @@ export function auditQuest(root, quest) {
     ...auditEvidenceIdentity(log, startIndex),
     ...auditTheoryUse(log, startIndex),
     ...verificationProblems,
+    ...auditCoupledPairGuards(root, quest, log, startIndex, terminal),
     ...auditModelEvidence(root, quest, log, startIndex),
     ...auditMetricZeroNeedsTheoryResult(log, startIndex),
     ...auditUnmeasuredTheoryPromotion(log, startIndex),

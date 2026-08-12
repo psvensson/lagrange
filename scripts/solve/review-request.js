@@ -7,11 +7,12 @@ import crypto from 'node:crypto';
 import fs from 'node:fs';
 import path from 'node:path';
 
+import {loadImpactContractRegistry} from '../checks/impact-contract-registry.js';
 import {landingReviewPreflight} from './landing-preflight.js';
 
 const REVIEW_DIRECTORY = 'solve/state/reviews';
 const REVIEW_ID_PATTERN = /^review-[0-9a-f]{24}$/u;
-const SCHEMA_VERSION = 1;
+const SCHEMA_VERSION = 2;
 const REVIEW_ID_DIGEST_LENGTH = 24;
 const TEXT_ENCODING = 'utf8';
 const MISSING_CANDIDATE_FINGERPRINT = 'missing candidate fingerprint';
@@ -21,6 +22,8 @@ const SOURCE_ATTEMPT_REQUIRED_PROBLEM =
 const INVALID_REVIEW_ID_PROBLEM =
   'land: --review must be a Solver-issued review id';
 const FRESH_REVIEW_ACTION = 'run land again to issue a fresh review';
+const REGISTRY_UNAVAILABLE_DIGEST = 'impact-contract-registry:unavailable';
+const REVIEW_DRIFT_REGISTRY_SUFFIX = 'or coupled-pair registry; ';
 const CANDIDATE_NOT_REVIEWABLE_PREFIX =
   'land: current landing candidate is not reviewable: ';
 const AGGREGATE_NOT_REVIEWABLE_PREFIX =
@@ -51,7 +54,13 @@ function receipt(projection) {
   };
 }
 
-function currentReviewManifest(quest, state) {
+function coupledPairRegistryDigest(root) {
+  const loaded = loadImpactContractRegistry(root);
+  if (loaded.digest) return loaded.digest;
+  return REGISTRY_UNAVAILABLE_DIGEST;
+}
+
+function currentReviewManifest(root, quest, state) {
   if (!state.candidate?.ok || !state.candidate.fingerprint) {
     throw new Error(
       CANDIDATE_NOT_REVIEWABLE_PREFIX +
@@ -74,6 +83,7 @@ function currentReviewManifest(quest, state) {
   return {
     schemaVersion: SCHEMA_VERSION,
     questId: quest.id,
+    coupledPairRegistryDigest: coupledPairRegistryDigest(root),
     candidate: receipt(state.candidate),
     aggregate: receipt({
       ...state.aggregate,
@@ -99,7 +109,7 @@ function reviewFile(root, reviewId) {
 }
 
 export function createReviewRequest(root, quest, state) {
-  const manifest = currentReviewManifest(quest, state);
+  const manifest = currentReviewManifest(root, quest, state);
   const preflight = landingReviewPreflight(root, manifest);
   const id = reviewIdFor(manifest);
   const file = reviewFile(root, id);
@@ -138,10 +148,11 @@ export function assertReviewCurrent(root, quest, state, reviewId) {
   if (request.manifest.questId !== quest.id) {
     throw new Error(`land: review ${reviewId} belongs to another Quest`);
   }
-  const current = currentReviewManifest(quest, state);
+  const current = currentReviewManifest(root, quest, state);
   if (jsonStringify(current) !== jsonStringify(request.manifest)) {
     throw new Error(
-      `land: review ${reviewId} no longer matches current candidate bytes; ` +
+      `land: review ${reviewId} no longer matches current candidate bytes ` +
+      REVIEW_DRIFT_REGISTRY_SUFFIX +
       FRESH_REVIEW_ACTION,
     );
   }

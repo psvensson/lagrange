@@ -1,0 +1,43 @@
+{
+  "id": "coupled-pair-solver-landing-enforcement",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Solver terminal audit evaluates the canonical coupled-pair registry against the current schema-v2 aggregate source delta across attempts and hard-blocks land before review when a crossed pair is invalid, dead, incomplete, or lacks exact witness coverage; split attempts are caught, one-endpoint edits do not false-positive, immutable schema-v2 reviews bind the registry digest and become stale on semantic registry drift, and deliberate missing-edge mutations prove the refusal.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/golden-capability-gold-plating.md#tier-1-enforcement-machinery-make-steering-machine-checked",
+    "closesCL": [],
+    "parentQuest": "coupled-pair-landing-guard",
+    "planDoc": null,
+    "draftedAtCommit": "ec543322c4b4f5d743f459fc0fef7f3d2e8f214e"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "coupled-pair-solver-landing-enforcement",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "coupled-pair-solver-landing-enforcement-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "coupled-pair-solver-landing-enforcement",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

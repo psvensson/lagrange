@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1774,
+    "unit": 1776,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2025,
-  "digest": "fnv1a32-e8b5f152",
+  "censusSize": 2027,
+  "digest": "fnv1a32-908154a7",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -1784,6 +1784,8 @@
     "test/solve/continuation.test.js": "unit",
     "test/solve/convergence-guards.test.js": "unit",
     "test/solve/cost.test.js": "unit",
+    "test/solve/coupled-pair-landing-guard.test.js": "unit",
+    "test/solve/coupled-pair-review-binding.test.js": "unit",
     "test/solve/current-blocker.test.js": "unit",
     "test/solve/doctor.test.js": "unit",
     "test/solve/dossier-budget.test.js": "unit",
