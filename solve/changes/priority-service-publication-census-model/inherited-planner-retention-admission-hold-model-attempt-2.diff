@@ -1,0 +1,459 @@
+diff --git a/models/CL-INDEX.md b/models/CL-INDEX.md
+index 15e4725a15757094cd9d0e35fc6929bfc30fccea..7f709f741e550e12e73025dc58f844946de97a29 100644
+--- a/models/CL-INDEX.md
++++ b/models/CL-INDEX.md
+@@ -27,13 +27,14 @@ via `npm run model:check` in `test:ci`.
+ | Terminal operation entity observation | `terminal-operation-entity-observation/TerminalOperationEntityObservation.tla` | `ConfirmedTerminalNeverReentersCreating`, `FormationReadyRequiresTerminalDrain`, `EventuallyFormationReady` | require the existing operation-ledger owner/leader for entity-scoped recovery observation, defer while authority is unavailable, and reuse the existing surplus REMOVE after terminal evidence returns; a stale-SQL fallback mutant re-admits `CREATING` after terminal confirmation |
+ | Node authority dispatch fallback | `node-authority-dispatch-fallback/NodeAuthorityDispatchFallback.tla` | `MissingMeansSuccessfulEmpty`, `SuccessfulEmptyNeverDispatches`, `NonRetryableFailureNeverDispatches`, `FallbackRequiresCanonicalRecoveryEvidence`, `EventuallyPriorityRecoveryDispatch` | preserve failed authoritative node reads as typed failures so the existing recovery-eligible sync dispatch fallback can advance priority recovery; a failure-as-missing mutant bypasses the fallback and stalls |
+ | Authoritative observation watermark | `authoritative-observation-watermark/AuthoritativeObservationWatermark.tla` | `ObservationDoesNotFabricateMutation`, `SelectedFreshnessIsNewestEvidence`, `FreshnessClassificationMatchesAge`, `EventuallySchemaAdmitted` | publish successful unchanged/confirmed-empty authoritative reads as per-table observation evidence distinct from CDC mutation time, then select and age the newest mutation-or-observation timestamp; a mutation-only freshness mutant cannot admit schema after a successful no-op repair, and an exact-equality reconcile mutant wedges admission whenever CDC churn interleaves with the repair (the live nodes heartbeat case) |
++| FF-1 planner retention ↔ over-target admission hold | `planner-retention-admission-hold/PlannerRetentionAdmissionHold.tla` | `OnlyRetainedCureCanGrowSurplus`, `DistinctNodeSpreadNeverRegresses`, `SettlementIsExact`, `EventuallySettled` | admit exactly the retained spread-cure ADD, restore three-node spread, then reuse monotonic surplus drain; an unconditional hold strands the witnessed 4-replica/2-node state |
+ 
+ ## Adding a spec for a design-class CL
+ 
+ 1. Author `models/<area>/<Spec>.tla` with a fix toggle CONSTANT, a liveness PROPERTY,
+    and `_bug.cfg` (fix off → property fails) + `_fixed.cfg` (fix on → property holds).
+    Liveness models with an intentional terminal stutter need `CHECK_DEADLOCK FALSE`.
+-2. Add two CONFIGS entries to `scripts/model-tlc.js` (`expectConverged: true` for
++2. Add two CONFIGS entries to `scripts/model-tlc-configs.js` (`expectConverged: true` for
+    fixed; `false` + `expectedFailurePattern` for bug).
+ 3. Run `npm run model:tlc` — every config must report `met=true`.
+ 4. Add the row above and cite the spec from the CL record's `reproducedBy`.
+diff --git a/models/planner-retention-admission-hold/PlannerRetentionAdmissionHold.tla b/models/planner-retention-admission-hold/PlannerRetentionAdmissionHold.tla
+new file mode 100644
+index 0000000000000000000000000000000000000000..70d966c4208846397e66280677a92a79258d296d
+--- /dev/null
++++ b/models/planner-retention-admission-hold/PlannerRetentionAdmissionHold.tla
+@@ -0,0 +1,168 @@
++---------------- MODULE PlannerRetentionAdmissionHold ----------------
++(***************************************************************************)
++(* Planner retention -> over-target admission-hold contract.              *)
++(*                                                                         *)
++(* The witnessed cold-formation state has four replicas concentrated on   *)
++(* two distinct nodes while the published target is three replicas on     *)
++(* three nodes. The planner retains exactly one bounded spread-cure ADD.   *)
++(* Admission must exempt that retained cure from the ordinary over-target  *)
++(* hold. Its completion temporarily reaches five replicas on three nodes;  *)
++(* the surplus drain can then remove two replicas and settle at three on   *)
++(* three nodes.                                                            *)
++(*                                                                         *)
++(* HoldRetainedCureWhenOverTarget is the sole policy toggle. FALSE models  *)
++(* the exact exemption. TRUE models the historical unconditional hold,    *)
++(* which strands the retained cure at the witnessed initial state.        *)
++(***************************************************************************)
++EXTENDS Naturals
++
++CONSTANT HoldRetainedCureWhenOverTarget
++
++TargetReplicaCount == 3
++TargetDistinctNodeCount == 3
++InitialReplicaCount == 4
++InitialDistinctNodeCount == 2
++MaximumCureReplicaCount == 5
++
++Retained == "retained"
++Admitted == "admitted"
++SpreadComplete == "spread_complete"
++Draining == "draining"
++Settled == "settled"
++Phases == {Retained, Admitted, SpreadComplete, Draining, Settled}
++
++NoAdmission == "none"
++SpreadCureAdmission == "spread_cure"
++AdmissionKinds == {NoAdmission, SpreadCureAdmission}
++
++VARIABLES replicaCount,
++          distinctNodeCount,
++          previousDistinctNodeCount,
++          phase,
++          admittedKind,
++          completedCureAdds
++
++vars == << replicaCount,
++           distinctNodeCount,
++           previousDistinctNodeCount,
++           phase,
++           admittedKind,
++           completedCureAdds >>
++
++TypeOK ==
++  /\ HoldRetainedCureWhenOverTarget \in BOOLEAN
++  /\ replicaCount \in TargetReplicaCount..MaximumCureReplicaCount
++  /\ distinctNodeCount \in InitialDistinctNodeCount..TargetDistinctNodeCount
++  /\ previousDistinctNodeCount \in
++       InitialDistinctNodeCount..TargetDistinctNodeCount
++  /\ phase \in Phases
++  /\ admittedKind \in AdmissionKinds
++  /\ completedCureAdds \in 0..1
++
++Init ==
++  /\ replicaCount = InitialReplicaCount
++  /\ distinctNodeCount = InitialDistinctNodeCount
++  /\ previousDistinctNodeCount = InitialDistinctNodeCount
++  /\ phase = Retained
++  /\ admittedKind = NoAdmission
++  /\ completedCureAdds = 0
++
++OverTarget == replicaCount > TargetReplicaCount
++SpreadGapOpen == distinctNodeCount < TargetDistinctNodeCount
++PlannerRetainedSpreadCure ==
++  /\ phase = Retained
++  /\ OverTarget
++  /\ SpreadGapOpen
++  /\ completedCureAdds = 0
++
++(* The production contract's exact exemption: ordinary surplus additions  *)
++(* remain held; only the already-retained spread cure is admitted.         *)
++AdmissionAllowsRetainedSpreadCure ==
++  /\ PlannerRetainedSpreadCure
++  /\ ~HoldRetainedCureWhenOverTarget
++
++AdmitRetainedSpreadCure ==
++  /\ AdmissionAllowsRetainedSpreadCure
++  /\ phase' = Admitted
++  /\ admittedKind' = SpreadCureAdmission
++  /\ UNCHANGED << replicaCount,
++                  distinctNodeCount,
++                  previousDistinctNodeCount,
++                  completedCureAdds >>
++
++CompleteRetainedSpreadCure ==
++  /\ phase = Admitted
++  /\ admittedKind = SpreadCureAdmission
++  /\ replicaCount = InitialReplicaCount
++  /\ distinctNodeCount = InitialDistinctNodeCount
++  /\ replicaCount' = MaximumCureReplicaCount
++  /\ previousDistinctNodeCount' = distinctNodeCount
++  /\ distinctNodeCount' = TargetDistinctNodeCount
++  /\ phase' = SpreadComplete
++  /\ admittedKind' = NoAdmission
++  /\ completedCureAdds' = 1
++
++DrainSurplusReplica ==
++  /\ phase \in {SpreadComplete, Draining}
++  /\ completedCureAdds = 1
++  /\ replicaCount > TargetReplicaCount
++  /\ replicaCount' = replicaCount - 1
++  /\ previousDistinctNodeCount' = distinctNodeCount
++  /\ phase' =
++       IF replicaCount' = TargetReplicaCount THEN Settled ELSE Draining
++  /\ UNCHANGED << distinctNodeCount, admittedKind, completedCureAdds >>
++
++(* Stable mutant witness. CHECK_DEADLOCK is disabled in both configs, so   *)
++(* the bug is proved by a fair temporal counterexample rather than by TLC  *)
++(* interpreting the held state as an accidental deadlock.                 *)
++WaitOnUnconditionalOverTargetHold ==
++  /\ PlannerRetainedSpreadCure
++  /\ HoldRetainedCureWhenOverTarget
++  /\ UNCHANGED vars
++
++TerminalStutter ==
++  /\ phase = Settled
++  /\ UNCHANGED vars
++
++Next ==
++  \/ AdmitRetainedSpreadCure
++  \/ CompleteRetainedSpreadCure
++  \/ DrainSurplusReplica
++  \/ WaitOnUnconditionalOverTargetHold
++  \/ TerminalStutter
++
++Fairness ==
++  /\ WF_vars(AdmitRetainedSpreadCure)
++  /\ WF_vars(CompleteRetainedSpreadCure)
++  /\ WF_vars(DrainSurplusReplica)
++
++Spec == Init /\ [][Next]_vars /\ Fairness
++
++(* Safety: no path removes below target, loses spread, or manufactures a   *)
++(* second/non-cure surplus addition while closing the spread gap.          *)
++ReplicaFloorPreserved == replicaCount >= TargetReplicaCount
++
++DistinctNodeSpreadNeverRegresses ==
++  distinctNodeCount >= previousDistinctNodeCount
++
++OnlyRetainedCureCanGrowSurplus ==
++  /\ completedCureAdds <= 1
++  /\ (replicaCount > InitialReplicaCount =>
++        /\ completedCureAdds = 1
++        /\ distinctNodeCount = TargetDistinctNodeCount)
++
++AdmissionIsExactlyTheRetainedCure ==
++  admittedKind # SpreadCureAdmission \/ phase = Admitted
++
++SettlementIsExact ==
++  (phase = Settled) =>
++    /\ replicaCount = TargetReplicaCount
++    /\ distinctNodeCount = TargetDistinctNodeCount
++    /\ completedCureAdds = 1
++
++EventuallySettled ==
++  <>(/\ phase = Settled
++     /\ replicaCount = TargetReplicaCount
++     /\ distinctNodeCount = TargetDistinctNodeCount)
++
++=============================================================================
+diff --git a/models/planner-retention-admission-hold/PlannerRetentionAdmissionHold_fixed.cfg b/models/planner-retention-admission-hold/PlannerRetentionAdmissionHold_fixed.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..845f93a893128dd72825c5c0ed68fa946173f4e6
+--- /dev/null
++++ b/models/planner-retention-admission-hold/PlannerRetentionAdmissionHold_fixed.cfg
+@@ -0,0 +1,10 @@
++CONSTANT HoldRetainedCureWhenOverTarget = FALSE
++CHECK_DEADLOCK FALSE
++SPECIFICATION Spec
++INVARIANT TypeOK
++INVARIANT ReplicaFloorPreserved
++INVARIANT DistinctNodeSpreadNeverRegresses
++INVARIANT OnlyRetainedCureCanGrowSurplus
++INVARIANT AdmissionIsExactlyTheRetainedCure
++INVARIANT SettlementIsExact
++PROPERTY EventuallySettled
+diff --git a/models/planner-retention-admission-hold/PlannerRetentionAdmissionHold_unconditional_hold_bug.cfg b/models/planner-retention-admission-hold/PlannerRetentionAdmissionHold_unconditional_hold_bug.cfg
+new file mode 100644
+index 0000000000000000000000000000000000000000..08ccc455f1dce54f94353b2c4a2bb2eff0127f81
+--- /dev/null
++++ b/models/planner-retention-admission-hold/PlannerRetentionAdmissionHold_unconditional_hold_bug.cfg
+@@ -0,0 +1,10 @@
++CONSTANT HoldRetainedCureWhenOverTarget = TRUE
++CHECK_DEADLOCK FALSE
++SPECIFICATION Spec
++INVARIANT TypeOK
++INVARIANT ReplicaFloorPreserved
++INVARIANT DistinctNodeSpreadNeverRegresses
++INVARIANT OnlyRetainedCureCanGrowSurplus
++INVARIANT AdmissionIsExactlyTheRetainedCure
++INVARIANT SettlementIsExact
++PROPERTY EventuallySettled
+diff --git a/scripts/checks/run-golden-capability-tlc-model-scenarios.js b/scripts/checks/run-golden-capability-tlc-model-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..85941e3ae8ac841ecac3042ff0158d8c7cd3dc13
+--- /dev/null
++++ b/scripts/checks/run-golden-capability-tlc-model-scenarios.js
+@@ -0,0 +1,144 @@
++#!/usr/bin/env node
++
++// Scenario-harness runner for the golden-capability TLC model Quests. Unlike
++// the guard-test runners, these scenarios are proven by executing the model
++// configurations registered in scripts/model-tlc-configs.js through the
++// canonical runner's exact --mode selector (scripts/model-tlc.js) with the
++// real tla2tools.jar, then translating the runner's per-mode verdict into the
++// scenario-harness report shape the Solver probe reads
++// (scripts/solve/probes/scenario-harness.js): one passing "guard file" per
++// registered mode whose expectation was met.
++//
++// A scenario goes green only when EVERY registered mode — the converging
++// fixed configuration and each expected-failure mutant — meets its sealed
++// expectation, so a mutant that silently stops reproducing flips the
++// scenario red exactly like a regressed fix.
++
++import fs from 'node:fs';
++import path from 'node:path';
++import {spawnSync} from 'node:child_process';
++
++import {CONFIGS} from '../model-tlc-configs.js';
++
++const REPORT_DIR = 'test-output/reports';
++const MODEL_REPORTS_DIR = 'test-output/reports';
++const RUNNER_SCRIPT = 'scripts/model-tlc.js';
++const MODE_ARGUMENT = '--mode';
++const SCENARIOS = Object.freeze([
++  'planner-retention-admission-hold-model',
++  'priority-service-publication-census-model',
++]);
++const UTF8_ENCODING = 'utf8';
++const arrayFilter = Function.call.bind(Array.prototype.filter);
++const arrayMap = Function.call.bind(Array.prototype.map);
++const arrayIncludes = Function.call.bind(Array.prototype.includes);
++const stringReplace = Function.call.bind(String.prototype.replace);
++const REPORT_TIMESTAMP_PATTERN = /[:.]/g;
++const REPORT_TIMESTAMP_REPLACEMENT = '-';
++const PRODUCER_NAME = 'golden-capability-model-scenarios';
++const FIDELITY_STAMP = 'tlc-model-check';
++const VERDICT_PASS = 'PASS';
++const VERDICT_FAIL = 'FAIL';
++const EXPECTATION_MET_LABEL = 'met';
++const EXPECTATION_UNMET_LABEL = 'UNMET';
++const DETAIL_SEPARATOR = ' ';
++
++function configsForScenario(scenario) {
++  return arrayFilter(CONFIGS, (config) => config.scenario === scenario);
++}
++
++function runMode(config) {
++  const result = spawnSync(
++    process.execPath,
++    [RUNNER_SCRIPT, MODE_ARGUMENT, config.mode],
++    {encoding: UTF8_ENCODING},
++  );
++  const modelReportPath = path.join(MODEL_REPORTS_DIR, config.report);
++  let modelReport = null;
++  try {
++    modelReport = JSON.parse(fs.readFileSync(modelReportPath, UTF8_ENCODING));
++  } catch (_error) {
++    modelReport = null;
++  }
++  const expectationMet =
++    result.status === 0 && modelReport?.expectationMet === true;
++  return {
++    file: `${config.mode} (${path.basename(config.cfg)})`,
++    passed: expectationMet,
++    assertions: 1,
++    assertionsPassed: expectationMet ? 1 : 0,
++  };
++}
++
++function buildReport(scenario, results, timestamp) {
++  const failing = arrayFilter(results, (result) => !result.passed);
++  const passed = failing.length === 0;
++  return {
++    timestamp,
++    scenario,
++    producer: PRODUCER_NAME,
++    fidelity: FIDELITY_STAMP,
++    summary: {
++      total: results.length,
++      passed: results.length - failing.length,
++      failed: failing.length,
++    },
++    optimizationSummary: {
++      totalPriorityItems: failing.length,
++    },
++    standardSummary: {
++      scenarios: [
++        {
++          scenario,
++          passed,
++          current: {
++            passed,
++            verdict: passed ? VERDICT_PASS : VERDICT_FAIL,
++          },
++          detail: {
++            guardTests: results,
++          },
++        },
++      ],
++    },
++  };
++}
++
++function runScenario(scenario) {
++  const configs = configsForScenario(scenario);
++  if (configs.length === 0) {
++    process.stderr.write(`unknown scenario: ${scenario}\n`);
++    process.exitCode = 2;
++    return false;
++  }
++  const results = arrayMap(configs, runMode);
++  const timestamp = new Date().toISOString();
++  const report = buildReport(scenario, results, timestamp);
++  fs.mkdirSync(REPORT_DIR, {recursive: true});
++  const reportPath = path.join(
++    REPORT_DIR,
++    `${scenario}-${stringReplace(timestamp, REPORT_TIMESTAMP_PATTERN, REPORT_TIMESTAMP_REPLACEMENT)}.report.json`,
++  );
++  fs.writeFileSync(reportPath, JSON.stringify(report, null, 2));
++  const passed = report.summary.failed === 0;
++  process.stdout.write(
++    `${scenario}: ${passed ? VERDICT_PASS : VERDICT_FAIL} — ` +
++    `${report.summary.passed}/${report.summary.total} modes met ` +
++    `(${arrayMap(results, (r) => `${r.file}=${r.passed ? EXPECTATION_MET_LABEL : EXPECTATION_UNMET_LABEL}`).join(DETAIL_SEPARATOR)})\n` +
++    `report: ${reportPath}\n`,
++  );
++  return passed;
++}
++
++const only = process.argv[2];
++const names = only ? [only] : SCENARIOS;
++let allPassed = true;
++for (const name of names) {
++  if (!arrayIncludes(SCENARIOS, name)) {
++    process.stderr.write(`unknown scenario: ${name}\n`);
++    process.exitCode = 2;
++    process.exit();
++  }
++  if (!runScenario(name)) allPassed = false;
++}
++if (!allPassed) process.exitCode = 1;
+diff --git a/scripts/model-tlc-configs.js b/scripts/model-tlc-configs.js
+index 6cda4693a54edd398fd449208a4272e3cdbe21cd..1ef5fd34809b26a09d14731ee2f92ce8eb16ca27 100644
+--- a/scripts/model-tlc-configs.js
++++ b/scripts/model-tlc-configs.js
+@@ -762,6 +762,78 @@ const CONFIGS = [
+     expectedFailurePattern:
+       'Invariant AcknowledgedRequiresDurability is violated',
+   },
++  {
++    id: 'planner-retention-admission-hold-cure-exemption',
++    mode: 'planner-retention-admission-hold-cure-exemption',
++    module: path.resolve(
++      'models', 'planner-retention-admission-hold',
++      'PlannerRetentionAdmissionHold.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'planner-retention-admission-hold',
++      'PlannerRetentionAdmissionHold_fixed.cfg',
++    ),
++    expectConverged: true,
++    report: 'planner-retention-admission-hold-cure-exemption.model.report.json',
++    scenario: 'planner-retention-admission-hold-model',
++    owner: 'priority_recovery_admission_owner',
++    boundary: 'planner_retention_over_target_admission_composition',
++  },
++  {
++    id: 'planner-retention-admission-hold-unconditional-hold',
++    mode: 'planner-retention-admission-hold-unconditional-hold',
++    module: path.resolve(
++      'models', 'planner-retention-admission-hold',
++      'PlannerRetentionAdmissionHold.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'planner-retention-admission-hold',
++      'PlannerRetentionAdmissionHold_unconditional_hold_bug.cfg',
++    ),
++    expectConverged: false,
++    report:
++      'planner-retention-admission-hold-unconditional-hold.model.report.json',
++    scenario: 'planner-retention-admission-hold-model',
++    owner: 'priority_recovery_admission_owner',
++    boundary: 'planner_retention_over_target_admission_composition',
++    expectedFailurePattern: 'Temporal property EventuallySettled was violated',
++  },
++  {
++    id: 'priority-service-publication-census-fixed',
++    mode: 'priority-service-publication-census-fixed',
++    module: path.resolve(
++      'models', 'priority-service-publication-census',
++      'PriorityServicePublicationCensus.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'priority-service-publication-census',
++      'PriorityServicePublicationCensus_fixed.cfg',
++    ),
++    expectConverged: true,
++    report: 'priority-service-publication-census-fixed.model.report.json',
++    scenario: 'priority-service-publication-census-model',
++    owner: 'priority_service_publication_census_contract_owner',
++    boundary: 'services_row_lifecycle_publication_to_priority_census',
++  },
++  {
++    id: 'priority-service-publication-census-role-wipe',
++    mode: 'priority-service-publication-census-role-wipe',
++    module: path.resolve(
++      'models', 'priority-service-publication-census',
++      'PriorityServicePublicationCensus.tla',
++    ),
++    cfg: path.resolve(
++      'models', 'priority-service-publication-census',
++      'PriorityServicePublicationCensus_role_wipe_bug.cfg',
++    ),
++    expectConverged: false,
++    report: 'priority-service-publication-census-role-wipe.model.report.json',
++    scenario: 'priority-service-publication-census-model',
++    owner: 'priority_service_publication_census_contract_owner',
++    boundary: 'services_row_lifecycle_publication_to_priority_census',
++    expectedFailurePattern:
++      'Temporal property EventuallyStableCensusSatisfied was violated',
++  },
+ ];
+ 
+ export {CONFIGS};

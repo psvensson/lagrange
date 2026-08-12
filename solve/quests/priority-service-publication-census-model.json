@@ -1,0 +1,43 @@
+{
+  "id": "priority-service-publication-census-model",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A bounded TLA+ model proves that priority SERVICES-row lifecycle publication preserves the independently published voter role so the derived census keeps authoritative expected replica count, distinguishes row_absent from raft_role_missing, and becomes stably satisfied; the historical role-wipe mutant violates stable census liveness.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/golden-capability-gold-plating.md",
+    "draftedAtCommit": "88047032f662bc0df08fead4fa7bac5faca9d3b7"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "priority-service-publication-census-model",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "priority-service-publication-census-model-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "priority-service-publication-census-model",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}
