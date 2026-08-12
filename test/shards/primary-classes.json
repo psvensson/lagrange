@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1777,
+    "unit": 1778,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2028,
-  "digest": "fnv1a32-1554eb18",
+  "censusSize": 2029,
+  "digest": "fnv1a32-cc02d4a1",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -594,6 +594,7 @@
     "test/convergence/dt-placement-affinity-real-kernel.test.js": "unit",
     "test/convergence/dt-placement-affinity-sim.test.js": "unit",
     "test/convergence/dt-placement-affinity-tier1b-kernel.test.js": "unit",
+    "test/convergence/dt-priority-partition-spread-cold-boot-network.test.js": "unit",
     "test/convergence/dt-priority-recovery-followup-stabilization-phi.test.js": "unit",
     "test/convergence/dt4-freeze-leadership-scenario.test.js": "unit",
     "test/convergence/dt4-full-chain-scenario.test.js": "unit",
