@@ -48,11 +48,13 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 20
+## Open quests — 23
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
 | coupled-pair-landing-guard | process | 0 | 0 | 2026-08-11 | — |
+| coupled-pair-proof-cone-input-integrity-closure | process | 2 | 0 | 2026-08-12 | — |
+| coupled-pair-proof-cone-selection | process | 2 | 0 | 2026-08-11 | — |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 ⚠ stale | — |
 | github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 ⚠ stale | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
@@ -65,6 +67,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 ⚠ stale | — |
 | priority-partition-census-adapter-authority-closure | product | 3 | 0 | 2026-08-11 | — |
 | priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 ⚠ stale | — |
+| proof-cone-graph-seal-coverage-integrity | process | 3 | 0 | 2026-08-12 | — |
 | public-path-multinode-baseline | product | 0 | 0 | 2026-08-11 | — |
 | publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 ⚠ stale | — |
 | rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 ⚠ stale | — |

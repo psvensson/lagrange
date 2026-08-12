@@ -1,7 +1,7 @@
 export const OWNER_DEBT = Object.freeze({
   output: 'solve/changes/global-owner-debt-inventory/inventory.json',
   schemaVersion: 'global-owner-debt-inventory-v1',
-  importGraphSchemaVersion: 'global-owner-debt-import-graph-v1',
+  importGraphSchemaVersion: 'global-owner-debt-import-graph-v2',
   hashAlgorithm: 'sha256',
   hashEncoding: 'hex',
   pathSeparator: '/',
@@ -108,9 +108,23 @@ export const OWNER_DEBT_SOURCE_DIRECTORIES = Object.freeze([
   'scripts',
   'test',
 ]);
+export const OWNER_DEBT_IMPORT_GRAPH_INPUT_DIRECTORIES = Object.freeze([
+  ...OWNER_DEBT_SOURCE_DIRECTORIES,
+  'examples',
+]);
+export const OWNER_DEBT_IMPORT_GRAPH_INPUT_AUTHORITIES = Object.freeze([
+  'package.json',
+  'package-lock.json',
+  'dependency-cruiser.config.cjs',
+]);
 
 export const OWNER_DEBT_JAVASCRIPT_EXTENSIONS = new Set([
   '.js',
   '.cjs',
   '.mjs',
 ]);
+
+export const OWNER_DEBT_RESOLVER_STATE = Object.freeze({
+  resolved: 'resolved',
+  unresolved: 'unresolved',
+});

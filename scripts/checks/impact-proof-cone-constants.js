@@ -10,6 +10,7 @@ export const PROOF_CONE_COVERAGE_PATH = 'test/shards/impact-coverage.json';
 export const PROOF_CONE_RECEIPT_DIR = 'test-output/proof-cone';
 export const IMPORT_GRAPH_PATH =
   'test-output/analysis/global-owner-debt-import-graph.json';
+export const IMPORT_GRAPH_SEAL_PATH = 'test/shards/impact-graph-seal.json';
 
 export const SAFETY_FLOOR_SHARD_PATH = 'test/shards/safety-pregate.txt';
 
@@ -55,9 +56,12 @@ export const SELECTOR_SELF_PATHS = Object.freeze([
   'scripts/checks/test-primary-classification-constants.js',
   'scripts/checks/impact-proof-cone.js',
   'scripts/checks/impact-proof-cone-constants.js',
+  'scripts/checks/impact-proof-cone-inputs.js',
+  'scripts/checks/impact-contract-registry.js',
   'scripts/checks/impact-coverage-collect.js',
   'test/shards/impact-contracts.json',
   'test/shards/impact-coverage.json',
+  IMPORT_GRAPH_SEAL_PATH,
   'test/shards/primary-classes.json',
 ]);
 
@@ -100,6 +104,7 @@ export const REASON_ESCALATION = 'escalation';
 // selector cannot prove escalates to full.
 export const MODE_SELECTED = 'selected';
 export const MODE_FULL = 'full';
+export const MODE_FATAL = 'fatal';
 
 // Escalation rules (the machine-readable "why" for a full-mode decision).
 export const ESCALATION_RULE_UNCLASSIFIED_PATH = 'unclassified_changed_path';
@@ -122,14 +127,16 @@ export const PROOF_CONE_SCENARIO = 'impact-graph-proof-cone-owner';
 export const REPORTS_DIRECTORY = 'test-output/reports';
 
 // Selector problem/detail literals (named per system-guidelines §4).
-export const PROBLEM_CONTRACTS_SCHEMA = 'contracts manifest lacks a contracts object';
 export const PROBLEM_EMPTY_CHANGE_SET =
   'empty changed-path set; failing closed to full suite';
 export const PROBLEM_ZERO_SELECTED =
   'proof cone selected zero tests outside documentation tier';
+export const PROBLEM_EMPTY_LIVE_CENSUS =
+  'primary classification produced an empty live test census';
+export const PROBLEM_PROOF_SELECTION_NOT_RUNNABLE =
+  'proof-cone decision is not runnable';
 export const COVERAGE_STATE_STALE = 'stale';
 export const COVERAGE_STATE_ABSENT = 'absent';
-export const DIRECTORY_PREFIX_SUFFIX = '/';
 export const LIST_JOIN_SEPARATOR = ', ';
 export const NEWLINE_SEPARATOR = '\n';
 export const JSON_FILE_SUFFIX = '.json';

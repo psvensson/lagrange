@@ -26,11 +26,9 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {
-  CONTRACT_SCHEMA_VERSION,
   COVERAGE_STATE_ABSENT,
   COVERAGE_STATE_INSUFFICIENT,
   COVERAGE_STATE_STALE,
-  DIRECTORY_PREFIX_SUFFIX,
   ESCALATION_RULE_CORE_METADATA,
   ESCALATION_RULE_DEAD_CONTRACT,
   ESCALATION_RULE_EMPTY_CHANGE_SET,
@@ -40,10 +38,13 @@ import {
   ESCALATION_RULE_UNCLASSIFIED_PATH,
   LIST_JOIN_SEPARATOR,
   MODE_FULL,
+  MODE_FATAL,
   MODE_SELECTED,
-  PROBLEM_CONTRACTS_SCHEMA,
+  PROBLEM_EMPTY_LIVE_CENSUS,
   PROBLEM_EMPTY_CHANGE_SET,
+  PROBLEM_JOIN_SEPARATOR,
   PROBLEM_ZERO_SELECTED,
+  PROBLEM_PROOF_SELECTION_NOT_RUNNABLE,
   REASON_CHANGED_TEST,
   REASON_ESCALATION,
   REASON_OBSERVED_COVERAGE,
@@ -74,6 +75,11 @@ import {
   TIER_UNKNOWN,
 } from './impact-proof-cone-constants.js';
 import {
+  buildImpactContractRegistry,
+  contractsForChangedPath,
+  expandContractTests,
+} from './impact-contract-registry.js';
+import {
   coverageEscalationRule,
   evaluateCoverage,
   fullCensusEscalation,
@@ -90,6 +96,7 @@ const stringSplit = Function.call.bind(String.prototype.split);
 const stringTrim = Function.call.bind(String.prototype.trim);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayMap = Function.call.bind(Array.prototype.map);
+const objectHasOwn = Function.call.bind(Object.prototype.hasOwnProperty);
 
 const UTF8_ENCODING = 'utf8';
 const NEWLINE_SEPARATOR = '\n';
@@ -101,6 +108,7 @@ const WIT_SUFFIX = '.wit';
 const PROTO_SUFFIX = '.proto';
 const INDEX_FILE_SUFFIX = '/index.js';
 const PUBLIC_API_PATH = 'src/public-api.js';
+const SELECTOR_CLI_PATH = 'scripts/select-proof-cone.js';
 
 function readShardList(root, relPath) {
   const absolute = path.join(root, relPath);
@@ -174,88 +182,6 @@ function tierRank(tier) {
   return rank === -1 ? order.length : rank;
 }
 
-// A contract owner/test entry is live when it names an existing directory
-// prefix or an existing file. Dead edges fail closed (a contract defect
-// widens the cone) rather than decaying into silent under-selection.
-function contractEntryExists(root, entry) {
-  const absolute = path.join(root, entry);
-  if (fs.existsSync(absolute)) return true;
-  if (!stringEndsWith(entry, DIRECTORY_PREFIX_SUFFIX) &&
-      fs.existsSync(path.join(root, path.dirname(entry)))) {
-    // Prefix-style entries (e.g. src/rebalancer/replica-operation-) match any
-    // sibling whose name starts with the entry's basename.
-    const base = path.basename(entry);
-    const dir = path.join(root, path.dirname(entry));
-    return arraySome(fs.readdirSync(dir), (name) => stringStartsWith(name, base));
-  }
-  return false;
-}
-
-function validateContractEntry(root, name, entry, problems,
-  contractOwners, contractTests) {
-  if (!entry || !Array.isArray(entry.owners) || !Array.isArray(entry.tests)) {
-    problems.push(`contract ${name} lacks owners/tests arrays`);
-    return;
-  }
-  for (const owner of entry.owners) {
-    if (!contractEntryExists(root, owner)) {
-      problems.push(`contract ${name} has a dead owner path: ${owner}`);
-    }
-    if (!contractOwners.has(owner)) contractOwners.set(owner, []);
-    contractOwners.get(owner).push(name);
-  }
-  for (const testEntry of entry.tests) {
-    if (!contractEntryExists(root, testEntry)) {
-      problems.push(`contract ${name} has a dead test path: ${testEntry}`);
-    }
-  }
-  contractTests.set(name, entry.tests);
-}
-
-function buildContractIndexes(root, contractsManifest) {
-  const problems = [];
-  const contractOwners = new Map();
-  const contractTests = new Map();
-  if (contractsManifest.schemaVersion !== CONTRACT_SCHEMA_VERSION) {
-    problems.push(`unsupported contracts schemaVersion: ${contractsManifest.schemaVersion}`);
-  }
-  const contracts = contractsManifest.contracts;
-  if (!contracts || typeof contracts !== 'object' || Array.isArray(contracts)) {
-    problems.push(PROBLEM_CONTRACTS_SCHEMA);
-    return {problems, contractOwners, contractTests};
-  }
-  for (const [name, entry] of Object.entries(contracts)) {
-    validateContractEntry(root, name, entry, problems, contractOwners, contractTests);
-  }
-  return {problems, contractOwners, contractTests};
-}
-
-// Resolve the contracts a changed path owns. Owner entries ending in '/' are
-// directory prefixes; anything else is an exact path.
-function contractOwnersByPath(contractIndexes) {
-  const exactOwners = new Map();
-  const prefixOwners = [];
-  for (const [owner, names] of contractIndexes.contractOwners.entries()) {
-    if (stringEndsWith(owner, DIRECTORY_PREFIX_SUFFIX)) {
-      prefixOwners.push([owner, names]);
-    } else {
-      exactOwners.set(owner, names);
-    }
-  }
-  return {exactOwners, prefixOwners};
-}
-
-function contractsForPath(changedPath, resolved) {
-  const exact = resolved.exactOwners.get(changedPath);
-  const names = new Set(exact || []);
-  for (const [prefix, prefixNames] of resolved.prefixOwners) {
-    if (pathMatchesPrefix(changedPath, prefix)) {
-      for (const name of prefixNames) names.add(name);
-    }
-  }
-  return [...names].sort();
-}
-
 function reverseStaticClosure(changedPaths, importers) {
   const seen = new Set();
   const stack = [...changedPaths];
@@ -263,7 +189,8 @@ function reverseStaticClosure(changedPaths, importers) {
     const module = stack.pop();
     if (seen.has(module)) continue;
     seen.add(module);
-    for (const importer of importers[module] || []) {
+    const moduleImporters = objectHasOwn(importers, module) ? importers[module] : [];
+    for (const importer of moduleImporters) {
       if (!seen.has(importer)) stack.push(importer);
     }
   }
@@ -286,28 +213,16 @@ function coverageEdgesFor(coverageSnapshot, changedPaths) {
   return selected;
 }
 
-function expandContractTests(contractTests, contractNames, classifiedTests) {
-  const selected = new Set();
-  for (const name of contractNames) {
-    const entries = contractTests.get(name) || [];
-    for (const entry of entries) {
-      if (stringEndsWith(entry, TEST_FILE_SUFFIX)) {
-        selected.add(entry);
-      } else {
-        for (const testPath of classifiedTests) {
-          if (pathMatchesPrefix(testPath, entry)) selected.add(testPath);
-        }
-      }
-    }
-  }
-  return selected;
-}
-
 export function selectProofCone(root, changedPaths) {
   const receipt = emptyReceipt(changedPaths);
   const sortedChanged = [...changedPaths].sort();
-  const inputs = loadSelectorInputs(root);
-  const censusTests = inputs.ok ? Object.keys(inputs.primary.classes) : [];
+  const inputs = loadSelectorInputs(root, sortedChanged);
+  const censusTests = inputs.primary?.classes ?
+    Object.keys(inputs.primary.classes) : [];
+
+  if (censusTests.length === 0) {
+    return fatalSelection(receipt, inputs, PROBLEM_EMPTY_LIVE_CENSUS);
+  }
 
   // Empty change set or missing input is unknown impact: escalate to the
   // full census (never an empty-tests "probably safe" mode).
@@ -320,9 +235,11 @@ export function selectProofCone(root, changedPaths) {
   receipt.inputs.importGraphDigest = inputs.importGraphDigest;
   receipt.counts.totalTests = censusTests.length;
 
-  const contractIndexes = buildContractIndexes(root, inputs.contracts);
-  if (contractIndexes.problems.length > 0) {
-    receipt.problems.push(...contractIndexes.problems);
+  const registryResult = buildImpactContractRegistry(root, inputs.contracts);
+  const contractIndexes = registryResult.registry;
+  receipt.inputs.contractRegistryDigest = registryResult.digest;
+  if (registryResult.problems.length > 0) {
+    receipt.problems.push(...registryResult.problems);
     receipt.escalation = TIER_UNKNOWN;
     fullCensusEscalation(receipt, censusTests, ESCALATION_RULE_DEAD_CONTRACT);
     return {selection: receipt, problems: receipt.problems};
@@ -368,6 +285,7 @@ function emptyReceipt(changedPaths) {
     tiers: {},
     escalation: TIER_DOCUMENTATION,
     fullSuite: false,
+    runnable: true,
     counts: {
       [SELECTION_STATIC]: 0,
       [SELECTION_COVERAGE]: 0,
@@ -383,7 +301,21 @@ function emptyReceipt(changedPaths) {
   };
 }
 
+function fatalSelection(receipt, inputs, problem) {
+  receipt.runnable = false;
+  receipt.escalation = TIER_UNKNOWN;
+  receipt.problems.push(...(inputs.problems || []), problem);
+  return {selection: receipt, problems: receipt.problems};
+}
+
 function escalateUnknown(receipt, sortedChanged, inputs, censusTests) {
+  if (!inputs.primary) {
+    return fatalSelection(
+      receipt,
+      inputs,
+      PROBLEM_PROOF_SELECTION_NOT_RUNNABLE,
+    );
+  }
   if (sortedChanged.length === 0) {
     receipt.problems.push(PROBLEM_EMPTY_CHANGE_SET);
     fullCensusEscalation(receipt, censusTests, ESCALATION_RULE_EMPTY_CHANGE_SET);
@@ -405,12 +337,11 @@ function recordCoverageInputs(receipt, coverageEval) {
 }
 
 function classifyChangedPaths(sortedChanged, contractIndexes, receipt) {
-  const resolvedOwners = contractOwnersByPath(contractIndexes);
   const changedContracts = new Set();
   const unknownPaths = [];
   let escalation = TIER_DOCUMENTATION;
   for (const changedPath of sortedChanged) {
-    const owned = contractsForPath(changedPath, resolvedOwners);
+    const owned = contractsForChangedPath(contractIndexes, changedPath);
     const tier = classifyChangedPath(changedPath, owned);
     receipt.tiers[changedPath] = tier;
     for (const name of owned) changedContracts.add(name);
@@ -534,13 +465,17 @@ function collectCoverageEdges(coverageSnapshot, sortedChanged, classified,
 
 function collectContractEdges(contractIndexes, changedContracts, classified,
   classifiedTests, selected, rationale, addReason) {
-  const contractTests = expandContractTests(
-    contractIndexes.contractTests, changedContracts, classifiedTests);
-  for (const testPath of contractTests) {
-    if (classified[testPath]) {
-      selected.add(testPath);
-      rationale[SELECTION_CONTRACT].push(testPath);
-      for (const contract of changedContracts) {
+  const attributedTests = new Set();
+  for (const contract of changedContracts) {
+    const contractTests = expandContractTests(
+      contractIndexes, [contract], classifiedTests);
+    for (const testPath of contractTests) {
+      if (classified[testPath]) {
+        selected.add(testPath);
+        if (!attributedTests.has(testPath)) {
+          attributedTests.add(testPath);
+          rationale[SELECTION_CONTRACT].push(testPath);
+        }
         addReason(testPath, `${REASON_SEMANTIC_CONTRACT}:${contract}`);
       }
     }
@@ -596,7 +531,7 @@ export function writeReceipt(root, receipt) {
 // Test-only export: the shadow validator replays contract indexes without
 // going through a full selection.
 export function buildContractIndexesForTest(root, contractsManifest) {
-  return buildContractIndexes(root, contractsManifest);
+  return buildImpactContractRegistry(root, contractsManifest).registry;
 }
 
 // The canonical TestImpactDecision projection (developer-velocity epic):
@@ -605,7 +540,12 @@ export function buildContractIndexesForTest(root, contractsManifest) {
 // affected tests. mode is `selected` (bounded cone) or `full` (escalated);
 // there is deliberately no empty-tests "probably safe" mode. Every selected
 // test carries at least one machine-readable reason; every full-mode
-// decision names the escalation rule.
+// decision names the escalation rule; fatal mode is never runnable.
+function impactDecisionMode(receipt) {
+  if (receipt.runnable === false) return MODE_FATAL;
+  return receipt.fullSuite ? MODE_FULL : MODE_SELECTED;
+}
+
 export function testImpactDecision(receipt) {
   const tests = arrayMap(receipt.selectedTests || [], (testPath) => ({
     path: testPath,
@@ -613,7 +553,7 @@ export function testImpactDecision(receipt) {
       (receipt.fullSuite ? [REASON_ESCALATION] : []),
   }));
   return {
-    mode: receipt.fullSuite ? MODE_FULL : MODE_SELECTED,
+    mode: impactDecisionMode(receipt),
     changedPaths: receipt.changedPaths || [],
     impactedContracts: receipt.changedContracts || [],
     escalation: receipt.fullSuite ? {
@@ -628,4 +568,20 @@ export function testImpactDecision(receipt) {
     counts: receipt.counts || {},
     problems: receipt.problems || [],
   };
+}
+
+export function assertRunnableProofSelection(receipt) {
+  if (receipt.runnable === false ||
+      receipt.counts?.totalTests === 0 ||
+      (receipt.selectedTests || []).length === 0) {
+    const detail = (receipt.problems || []).join(PROBLEM_JOIN_SEPARATOR);
+    throw new Error(`${PROBLEM_PROOF_SELECTION_NOT_RUNNABLE}: ${detail}`);
+  }
+  return receipt;
+}
+
+export function selectRunnableFullProofCensus(root) {
+  const {selection} = selectProofCone(root, [SELECTOR_CLI_PATH]);
+  assertRunnableProofSelection(selection);
+  return selection;
 }

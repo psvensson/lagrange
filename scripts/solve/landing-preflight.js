@@ -10,7 +10,20 @@ import path from 'node:path';
 
 import {importClosureGaps} from './import-closure.js';
 import {staticQualityProblems} from './static-gate.js';
-import {selectProofCone} from '../checks/impact-proof-cone.js';
+import {
+  assertRunnableProofSelection,
+  selectProofCone,
+} from '../checks/impact-proof-cone.js';
+import {
+  IMPORT_GRAPH_PATH,
+  IMPORT_GRAPH_SEAL_PATH,
+} from '../checks/impact-proof-cone-constants.js';
+import {
+  importGraphResolverStateDigest,
+  javascriptSourceDigest,
+  listImportGraphInputFiles,
+  listJavaScriptFiles,
+} from '../global-owner-debt-inventory/helpers.js';
 
 const CACHE_DIRECTORY = 'solve/state/landing-preflight';
 const CACHE_SCHEMA_VERSION = 1;
@@ -24,7 +37,21 @@ const SILENT_CATCH_LABEL = 'silent-catch audit';
 const IMPORT_CLOSURE_SEPARATOR = '; ';
 const IMPORT_CLOSURE_PROBLEM_PREFIX =
   'land: review preflight found import-closure gaps: ';
+const IMPORT_GRAPH_PROBLEM_PREFIX =
+  'land: canonical import-graph verification failed: ';
+const IMPORT_GRAPH_PROBLEM_MATCH_PREFIX = 'import graph';
 const SPAWN_MAX_BUFFER_BYTES = 16 * 1024 * 1024;
+const IMPORT_GRAPH_PRODUCER_PATH =
+  'scripts/generate-global-owner-debt-inventory.js';
+const IMPORT_GRAPH_VERIFY_ARGUMENT = '--verify-import-graph';
+const IMPORT_GRAPH_VERIFY_TIMEOUT_MS = 30_000;
+const IMPORT_GRAPH_VERIFY_KILL_SIGNAL = 'SIGKILL';
+const CANONICAL_DIGEST_PATTERN = /^[a-f0-9]{64}$/u;
+const IMPORT_GRAPH_REQUIRED_INPUTS = Object.freeze([
+  IMPORT_GRAPH_PRODUCER_PATH,
+  IMPORT_GRAPH_PATH,
+  IMPORT_GRAPH_SEAL_PATH,
+]);
 const CHECKER_INPUTS = Object.freeze([
   'scripts/solve/static-gate.js',
   'scripts/check-guideline-literals.js',
@@ -41,13 +68,16 @@ const CHECKER_INPUTS = Object.freeze([
   'package-lock.json',
 ]);
 const arrayForEach = Function.call.bind(Array.prototype.forEach);
+const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
 const arrayJoin = Function.call.bind(Array.prototype.join);
 const arrayMap = Function.call.bind(Array.prototype.map);
 const arrayPush = Function.call.bind(Array.prototype.push);
 const arraySort = Function.call.bind(Array.prototype.sort);
+const arraySome = Function.call.bind(Array.prototype.some);
 const jsonParse = JSON.parse;
 const jsonStringify = JSON.stringify;
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
 
 function sha256(value) {
   return crypto.createHash(HASH_ALGORITHM).update(value).digest(HASH_ENCODING);
@@ -108,6 +138,78 @@ function silentCatchProblems(root, paths) {
   return [];
 }
 
+function requiredImportGraphProblem(root) {
+  for (const relativePath of IMPORT_GRAPH_REQUIRED_INPUTS) {
+    const requiredPath = path.join(root, relativePath);
+    try {
+      if (!fs.lstatSync(requiredPath).isFile()) {
+        return `${IMPORT_GRAPH_PROBLEM_PREFIX}${relativePath} is not a regular file`;
+      }
+    } catch {
+      return `${IMPORT_GRAPH_PROBLEM_PREFIX}${relativePath} is missing`;
+    }
+  }
+  return null;
+}
+
+function canonicalReceiptProblem(root, stdout) {
+  try {
+    const receipt = jsonParse(stdout);
+    const graphBytes = fs.readFileSync(path.join(root, IMPORT_GRAPH_PATH));
+    const sealBytes = fs.readFileSync(path.join(root, IMPORT_GRAPH_SEAL_PATH));
+    const graph = jsonParse(graphBytes);
+    const seal = jsonParse(sealBytes);
+    const digestFields = [
+      receipt.snapshotDigest,
+      receipt.graphByteDigest,
+      receipt.sealByteDigest,
+    ];
+    const invalidBytes = arraySome(digestFields, (digest) =>
+      typeof digest !== 'string' || !CANONICAL_DIGEST_PATTERN.test(digest)) ||
+      receipt.graphByteDigest !== sha256(graphBytes) ||
+      receipt.sealByteDigest !== sha256(sealBytes) ||
+      graph.snapshotDigest !== receipt.snapshotDigest ||
+      seal.snapshotDigest !== receipt.snapshotDigest;
+    if (invalidBytes) {
+      return `${IMPORT_GRAPH_PROBLEM_PREFIX}verified bytes changed before use`;
+    }
+    const files = listJavaScriptFiles(root);
+    const staleInputs = graph.sourceDigest !== javascriptSourceDigest(root, files) ||
+      graph.producerInputDigest !== javascriptSourceDigest(
+        root, listImportGraphInputFiles(root)) ||
+      graph.resolverStateDigest !== importGraphResolverStateDigest(
+        root, graph.resolverInputs);
+    return staleInputs ?
+      `${IMPORT_GRAPH_PROBLEM_PREFIX}live producer inputs changed before use` : null;
+  } catch (error) {
+    return `${IMPORT_GRAPH_PROBLEM_PREFIX}verified inputs became unreadable: ` +
+      error.message;
+  }
+}
+
+export function canonicalImportGraphProblem(
+  root, timeout = IMPORT_GRAPH_VERIFY_TIMEOUT_MS) {
+  const requiredProblem = requiredImportGraphProblem(root);
+  if (requiredProblem) return requiredProblem;
+  const producer = path.join(root, IMPORT_GRAPH_PRODUCER_PATH);
+  const result = spawnSync(
+    process.execPath,
+    [producer, IMPORT_GRAPH_VERIFY_ARGUMENT],
+    {
+      cwd: root,
+      encoding: TEXT_ENCODING,
+      maxBuffer: SPAWN_MAX_BUFFER_BYTES,
+      timeout,
+      killSignal: IMPORT_GRAPH_VERIFY_KILL_SIGNAL,
+    },
+  );
+  if (result.status !== 0) {
+    return `${IMPORT_GRAPH_PROBLEM_PREFIX}` +
+      `${result.stderr || result.error?.message}`;
+  }
+  return canonicalReceiptProblem(root, result.stdout);
+}
+
 export function landingReviewPreflight(root, manifest) {
   const importClosure = importClosureGaps(root, manifest.candidate);
   if (importClosure.importGaps.length > 0) {
@@ -124,6 +226,8 @@ export function landingReviewPreflight(root, manifest) {
   const sourceDigest = manifest.aggregate.fingerprint;
   const key = preflightKey(root, manifest, paths);
   const file = path.join(root, CACHE_DIRECTORY, `${key}.json`);
+  const importGraphProblem = canonicalImportGraphProblem(root);
+  if (importGraphProblem) throw new Error(importGraphProblem);
   const proofCone = landingProofCone(root, paths, sourceDigest);
   if (readPassingCache(file, key)) {
     return {schemaVersion: CACHE_SCHEMA_VERSION, sourceDigest, paths,
@@ -160,7 +264,17 @@ export function landingReviewPreflight(root, manifest) {
 // selector inputs, so it is attached to the preflight result rather than
 // hashed into the manifest itself.
 function landingProofCone(root, paths, sourceDigest) {
-  const {selection} = selectProofCone(root, paths);
+  const {selection, problems} = selectProofCone(root, paths);
+  const graphProblem = arrayFind(problems, (problem) =>
+    stringStartsWith(problem, IMPORT_GRAPH_PROBLEM_MATCH_PREFIX));
+  if (graphProblem) {
+    throw new Error(`${IMPORT_GRAPH_PROBLEM_PREFIX}${graphProblem}`);
+  }
+  return landingProofConeFromSelection(selection, sourceDigest);
+}
+
+export function landingProofConeFromSelection(selection, sourceDigest) {
+  assertRunnableProofSelection(selection);
   return {
     selectorVersion: selection.selectorVersion,
     sourceDigest,

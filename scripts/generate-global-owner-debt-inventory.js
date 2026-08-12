@@ -19,6 +19,7 @@ import {
   OWNER_DEBT_CHILD_LIMITS as CHILD_LIMITS,
   OWNER_DEBT_REFRESH_COMMANDS as REFRESH_COMMANDS,
   OWNER_DEBT_REPORTS as REPORTS,
+  OWNER_DEBT_RESOLVER_STATE,
   OWNER_DEBT_SIGNAL_KIND as SIGNAL_KIND,
   OWNER_DEBT_SIGNAL_WEIGHTS as SIGNAL_WEIGHTS,
   OWNER_DEBT_SOURCE_DIRECTORIES as SOURCE_DIRECTORIES,
@@ -28,7 +29,10 @@ import {
   duplicationReportIdentity,
   fileIdentity,
   globPatternToRegex,
+  importGraphResolverStateDigest,
+  isBarePackageSpecifier,
   javascriptSourceDigest,
+  listImportGraphInputFiles,
   listJavaScriptFiles,
   logicalJsonIdentity,
   normalizePath,
@@ -38,10 +42,19 @@ import {
   sha256,
   signalId,
 } from './global-owner-debt-inventory/helpers.js';
+import {IMPORT_GRAPH_SEAL_PATH} from './checks/impact-proof-cone-constants.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const OUTPUT = OWNER_DEBT.output;
-const IMPORT_GRAPH_EXCLUDED_PATHS = 'node_modules|^@pulumi/';
+const NODE_MODULES_PREFIX = 'node_modules/';
+const VERIFY_IMPORT_GRAPH_FLAG = '--verify-import-graph';
+const IMPORT_GRAPH_PRODUCER_MISMATCH_ERROR =
+  'import graph does not match the canonical live producer';
+const IMPORT_GRAPH_SEAL_SCHEMA_VERSION = 1;
+const FILE_NOT_FOUND_ERROR_CODE = 'ENOENT';
+const PATH_COMPONENT_NOT_DIRECTORY_ERROR_CODE = 'ENOTDIR';
+const SYMBOLIC_LINK_LOOP_ERROR_CODE = 'ELOOP';
+const PARENT_PATH_SEGMENT = '..';
 
 function emptyFileDebt(filePath, importDegrees) {
   return {
@@ -504,15 +517,55 @@ async function loadLintExclusions(root, files) {
   return {patterns, matches};
 }
 
+function shouldCaptureResolvedProbe(dependency, target) {
+  if (dependency.coreModule) return false;
+  return target.startsWith(NODE_MODULES_PREFIX) ||
+    isBarePackageSpecifier(dependency.module);
+}
+
+function canonicalFollowedFilePath(rootReal, moduleSource) {
+  const absolute = path.isAbsolute(moduleSource) ? moduleSource :
+    path.resolve(rootReal, moduleSource);
+  let realTarget;
+  try {
+    realTarget = fs.realpathSync(absolute);
+    if (!fs.statSync(realTarget).isFile()) return null;
+  } catch (error) {
+    if (error.code === FILE_NOT_FOUND_ERROR_CODE ||
+        error.code === PATH_COMPONENT_NOT_DIRECTORY_ERROR_CODE ||
+        error.code === SYMBOLIC_LINK_LOOP_ERROR_CODE) return null;
+    throw error;
+  }
+  const relative = path.relative(rootReal, realTarget);
+  if (!relative || path.isAbsolute(relative) || relative === PARENT_PATH_SEGMENT ||
+      relative.startsWith(`..${path.sep}`)) return null;
+  return relative.replaceAll(path.sep, OWNER_DEBT.pathSeparator);
+}
+
+function followedFileDigests(root, modules, primaryFileDigests) {
+  const rootReal = fs.realpathSync(root);
+  const followed = new Set();
+  for (const module of modules) {
+    const filePath = canonicalFollowedFilePath(rootReal, module.source);
+    if (filePath && !Object.hasOwn(primaryFileDigests, filePath)) {
+      followed.add(filePath);
+    }
+  }
+  return Object.fromEntries([...followed].sort().map((filePath) => [
+    filePath,
+    fileIdentity(rootReal, filePath).sha256,
+  ]));
+}
+
 async function buildImportGraph(root, files) {
   const result = await cruise(SOURCE_DIRECTORIES.map((directory) =>
     path.join(root, directory)), {
     baseDir: root,
-    exclude: IMPORT_GRAPH_EXCLUDED_PATHS,
     doNotFollow: {path: 'node_modules'},
   });
   const degrees = new Map(files.map((file) => [file, {in: 0, out: 0}]));
   const importers = new Map();
+  const resolverInputs = new Map();
   let edgeCount = 0;
   let unresolvedCount = result.output.summary?.error || 0;
   for (const module of result.output.modules) {
@@ -522,18 +575,47 @@ async function buildImportGraph(root, files) {
       edgeCount += 1;
       degrees.get(source).out += 1;
       if (dependency.couldNotResolve || !dependency.resolved) {
+        const key = JSON.stringify([source, dependency.module]);
+        resolverInputs.set(key, {
+          from: source,
+          specifier: dependency.module,
+          state: OWNER_DEBT_RESOLVER_STATE.unresolved,
+        });
         unresolvedCount += 1;
         continue;
       }
       const target = normalizePath(root, dependency.resolved);
+      if (shouldCaptureResolvedProbe(dependency, target)) {
+        const key = JSON.stringify([source, dependency.module]);
+        resolverInputs.set(key, {
+          from: source,
+          specifier: dependency.module,
+          state: OWNER_DEBT_RESOLVER_STATE.resolved,
+          target,
+        });
+      }
       if (!degrees.has(target)) degrees.set(target, {in: 0, out: 0});
       degrees.get(target).in += 1;
       if (!importers.has(target)) importers.set(target, []);
       importers.get(target).push(source);
     }
   }
+  const sortedResolverInputs = [...resolverInputs.values()].sort((left, right) =>
+    left.from.localeCompare(right.from) ||
+    left.specifier.localeCompare(right.specifier));
+  const fileDigests = Object.fromEntries(files.map((file) => [
+    file,
+    fileIdentity(root, file).sha256,
+  ]));
   return {
     sourceDigest: javascriptSourceDigest(root, files),
+    producerInputDigest: javascriptSourceDigest(
+      root, listImportGraphInputFiles(root)),
+    fileDigests,
+    followedFileDigests: followedFileDigests(
+      root, result.output.modules, fileDigests),
+    resolverInputs: sortedResolverInputs,
+    resolverStateDigest: importGraphResolverStateDigest(root, sortedResolverInputs),
     moduleCount: result.output.modules.length,
     edgeCount,
     unresolvedCount,
@@ -543,9 +625,14 @@ async function buildImportGraph(root, files) {
 }
 
 function serializeImportGraph(importGraph) {
-  return {
+  const report = {
     schemaVersion: OWNER_DEBT.importGraphSchemaVersion,
     sourceDigest: importGraph.sourceDigest,
+    producerInputDigest: importGraph.producerInputDigest,
+    fileDigests: importGraph.fileDigests,
+    followedFileDigests: importGraph.followedFileDigests,
+    resolverInputs: importGraph.resolverInputs,
+    resolverStateDigest: importGraph.resolverStateDigest,
     moduleCount: importGraph.moduleCount,
     edgeCount: importGraph.edgeCount,
     unresolvedCount: importGraph.unresolvedCount,
@@ -554,6 +641,24 @@ function serializeImportGraph(importGraph) {
       .sort(([left], [right]) => left.localeCompare(right))
       .map(([target, importers]) => [target, [...new Set(importers)].sort()])),
   };
+  return {...report, snapshotDigest: sha256(JSON.stringify(report))};
+}
+
+function importGraphSeal(report) {
+  return {
+    schemaVersion: IMPORT_GRAPH_SEAL_SCHEMA_VERSION,
+    importGraphSchemaVersion: report.schemaVersion,
+    sourceDigest: report.sourceDigest,
+    producerInputDigest: report.producerInputDigest,
+    resolverStateDigest: report.resolverStateDigest,
+    snapshotDigest: report.snapshotDigest,
+  };
+}
+
+function writeImportGraphSeal(root, report) {
+  const destination = path.join(root, IMPORT_GRAPH_SEAL_PATH);
+  fs.mkdirSync(path.dirname(destination), {recursive: true});
+  fs.writeFileSync(destination, `${JSON.stringify(importGraphSeal(report), null, 2)}\n`);
 }
 
 async function refreshImportGraphReport(root, files) {
@@ -561,7 +666,26 @@ async function refreshImportGraphReport(root, files) {
   const destination = path.join(root, REPORTS.importGraph);
   fs.mkdirSync(path.dirname(destination), {recursive: true});
   fs.writeFileSync(destination, `${JSON.stringify(report)}\n`);
+  writeImportGraphSeal(root, report);
   return report;
+}
+
+async function verifyImportGraphReport(root) {
+  const files = listJavaScriptFiles(root);
+  const expected = serializeImportGraph(await buildImportGraph(root, files));
+  const graphBytes = fs.readFileSync(path.join(root, REPORTS.importGraph));
+  const sealBytes = fs.readFileSync(path.join(root, IMPORT_GRAPH_SEAL_PATH));
+  const actual = JSON.parse(graphBytes);
+  const seal = JSON.parse(sealBytes);
+  if (JSON.stringify(actual) !== JSON.stringify(expected) ||
+      JSON.stringify(seal) !== JSON.stringify(importGraphSeal(expected))) {
+    throw new Error(IMPORT_GRAPH_PRODUCER_MISMATCH_ERROR);
+  }
+  return {
+    snapshotDigest: actual.snapshotDigest,
+    graphByteDigest: sha256(graphBytes),
+    sealByteDigest: sha256(sealBytes),
+  };
 }
 
 function readImportGraphReport(root, files) {
@@ -645,6 +769,11 @@ function writeInventory(root, inventory, output = OUTPUT) {
 }
 
 async function runCli(args = process.argv.slice(2)) {
+  if (args.includes(VERIFY_IMPORT_GRAPH_FLAG)) {
+    const receipt = await verifyImportGraphReport(process.cwd());
+    process.stdout.write(`${JSON.stringify(receipt)}\n`);
+    return;
+  }
   const outputIndex = args.indexOf('--output');
   const output = outputIndex >= 0 ? args[outputIndex + 1] : OUTPUT;
   const inventory = await buildInventory(process.cwd(), {
@@ -672,6 +801,8 @@ export {
   globPatternToRegex,
   logicalJsonIdentity,
   reconcileAssignments,
+  refreshImportGraphReport,
   validateInventory,
+  verifyImportGraphReport,
   writeInventory,
 };

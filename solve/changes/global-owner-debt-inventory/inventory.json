@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 1618366,
-        "sha256": "1f43d16ae7f3b6c98fd64f1dece963d2eec6612047e5a58737bd9778ac8d0c71"
+        "bytes": 2373963,
+        "sha256": "b4222150a8586aeb1f6821111ff353433e01859a12e5ecc1daa563aa1ebd5b86"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "6998704a7edb91c89a983d6fbc8ed515ecc4ea7f74fffd9f34b1063a3578e2ad"
+        "sha256": "5f94666dd92dafa88715e16edcb65be998aaf8e488171a11aa4954eacb645aab"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "4dd14fd52920c1920181bd3d88a56db3c58789c1a781ecff7632b8c2f399e949"
+        "sha256": "4c3c198131d6313134f487f694f16fcedf2c6abd591833dab68977864d40b494"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "fdfef4854ef157246b060aef51ef44ea0f44ef2ab0adb2818fbc1aa31279e08c"
+    "inputDigest": "0ea57bd36ec225c21221febb6b2547cb13c59c20ee72a0fede1f61080afe1653"
   },
   "reconciliation": {
     "complexity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "6998704a7edb91c89a983d6fbc8ed515ecc4ea7f74fffd9f34b1063a3578e2ad"
+          "sha256": "5f94666dd92dafa88715e16edcb65be998aaf8e488171a11aa4954eacb645aab"
         },
         "cloneGroups": 62,
         "duplicatedLines": 1970,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "4dd14fd52920c1920181bd3d88a56db3c58789c1a781ecff7632b8c2f399e949"
+          "sha256": "4c3c198131d6313134f487f694f16fcedf2c6abd591833dab68977864d40b494"
         },
         "cloneGroups": 826,
         "duplicatedLines": 31551,
@@ -166,17 +166,17 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 1618366,
-        "sha256": "1f43d16ae7f3b6c98fd64f1dece963d2eec6612047e5a58737bd9778ac8d0c71"
+        "bytes": 2373963,
+        "sha256": "b4222150a8586aeb1f6821111ff353433e01859a12e5ecc1daa563aa1ebd5b86"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "f9ac3cb8c0ec0169eda24194c4a61d3cdeb112e1b3094903ff8d4dbca66f6c16",
-      "moduleCount": 4765,
-      "edgeCount": 20456,
+      "sourceDigest": "efa417ce1cfe11e51ea51e5d5f186835dcb88660be5b48383ea06c5ea2dc8ce4",
+      "moduleCount": 4801,
+      "edgeCount": 21261,
       "unresolvedCount": 32
     }
   },
@@ -219,7 +219,7 @@
       "cycleGroups": 0,
       "lintExclusions": 10,
       "importIn": 345,
-      "importOut": 599,
+      "importOut": 605,
       "score": 2962.9,
       "topPaths": [
         "test/distributed/harness/__tests__/seven-node-read-write-load-transaction-recovery-tail-test-cases.js",
@@ -247,7 +247,7 @@
       "cycleGroups": 0,
       "lintExclusions": 15,
       "importIn": 155,
-      "importOut": 661,
+      "importOut": 685,
       "score": 1681.4,
       "topPaths": [
         "test/rebalancer/unified-rebalancer-triggers-priority-cohort.test.js",
@@ -275,7 +275,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 611,
-      "importOut": 374,
+      "importOut": 375,
       "score": 1240.7,
       "topPaths": [
         "src/control-plane/control-plane-kernel-ingress.js",
@@ -303,7 +303,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 332,
-      "importOut": 427,
+      "importOut": 430,
       "score": 693.6,
       "topPaths": [
         "src/bootstrap/node-joining-backfill-merge-and-status.js",
@@ -331,7 +331,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 239,
-      "importOut": 231,
+      "importOut": 232,
       "score": 678.2,
       "topPaths": [
         "src/rebalancer/operation-workflow-dispatch-response-reconcile.js",
@@ -359,7 +359,7 @@
       "cycleGroups": 0,
       "lintExclusions": 5,
       "importIn": 60,
-      "importOut": 287,
+      "importOut": 289,
       "score": 677.3,
       "topPaths": [
         "test/control-plane/replica-dispatch-atomic-claim-ready-trigger.integration.test.js",
@@ -387,7 +387,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 69,
-      "importOut": 133,
+      "importOut": 134,
       "score": 557.4,
       "topPaths": [
         "test/distributed/scenarios/postgres-baseline-comparison-discovery-readiness.js",
@@ -415,7 +415,7 @@
       "cycleGroups": 0,
       "lintExclusions": 1,
       "importIn": 4,
-      "importOut": 334,
+      "importOut": 350,
       "score": 482.4,
       "topPaths": [
         "test/bootstrap/connect-websocket-phase-mesh-test-cases.js",
@@ -443,7 +443,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 37,
-      "importOut": 378,
+      "importOut": 382,
       "score": 412,
       "topPaths": [
         "test/integration/move-replica-handoff.integration.test.js",
@@ -471,7 +471,7 @@
       "cycleGroups": 0,
       "lintExclusions": 2,
       "importIn": 8,
-      "importOut": 205,
+      "importOut": 227,
       "score": 323,
       "topPaths": [
         "test/node/replica-handler-create-topology-test-cases.js",
@@ -499,7 +499,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 2,
-      "importOut": 241,
+      "importOut": 259,
       "score": 307.5,
       "topPaths": [
         "test/query/query-executor-recovery-owned-routing.test.js",
@@ -555,7 +555,7 @@
       "cycleGroups": 0,
       "lintExclusions": 3,
       "importIn": 5,
-      "importOut": 116,
+      "importOut": 130,
       "score": 273.8,
       "topPaths": [
         "test/transport/websocket-provider-backward-compatibility.property.test.js",
@@ -639,7 +639,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 80,
+      "importOut": 99,
       "score": 231.7,
       "topPaths": [
         "test/worker/raft-transport-worker-integration.test.js",
@@ -751,7 +751,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 15,
-      "importOut": 131,
+      "importOut": 150,
       "score": 184.9,
       "topPaths": [
         "test/partition/cdc-generation.property.test.js",
@@ -807,7 +807,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 51,
-      "importOut": 71,
+      "importOut": 72,
       "score": 179.6,
       "topPaths": [
         "src/admin/admin-websocket-message-dispatch-methods.js",
@@ -835,7 +835,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 78,
-      "importOut": 41,
+      "importOut": 43,
       "score": 156.4,
       "topPaths": [
         "src/transport/message-router-outbound-queue-admission.js",
@@ -863,7 +863,7 @@
       "cycleGroups": 0,
       "lintExclusions": 2,
       "importIn": 9,
-      "importOut": 115,
+      "importOut": 128,
       "score": 139.4,
       "topPaths": [
         "test/message-group/cdc-non-leader-propagation-tail-test-cases.js",
@@ -919,7 +919,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 50,
-      "importOut": 92,
+      "importOut": 93,
       "score": 133,
       "topPaths": [
         "src/partition/partition-sql-parser.js",
@@ -947,7 +947,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 85,
+      "importOut": 101,
       "score": 129.8,
       "topPaths": [
         "test/cache/system-cache-proxy-removal-reselection.property.test.js",
@@ -975,7 +975,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 88,
-      "importOut": 59,
+      "importOut": 60,
       "score": 115.9,
       "topPaths": [
         "src/cdc/cdc-integration-service-authoritative-read-flow.js",
@@ -1003,7 +1003,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 85,
-      "importOut": 51,
+      "importOut": 55,
       "score": 115.4,
       "topPaths": [
         "src/cli/views/services-view.js",
@@ -1087,7 +1087,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 31,
-      "importOut": 36,
+      "importOut": 37,
       "score": 100,
       "topPaths": [
         "src/message-group/message-group-forwarding-owner-delivery-methods.js",
@@ -1171,7 +1171,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 60,
+      "importOut": 65,
       "score": 92,
       "topPaths": [
         "test/topology/cdc-group-propagation-closure-preservation.property.test.js",
@@ -1199,7 +1199,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 215,
-      "importOut": 45,
+      "importOut": 47,
       "score": 80,
       "topPaths": [
         "src/raft/liferaft.js",
@@ -1255,7 +1255,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 172,
-      "importOut": 87,
+      "importOut": 88,
       "score": 72,
       "topPaths": [
         "src/node/runtime-service-handler.js",
@@ -1338,7 +1338,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 556,
-      "importOut": 41,
+      "importOut": 43,
       "score": 56,
       "topPaths": [
         "src/logging/logs-table-service.js",
@@ -1366,7 +1366,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 56,
+      "importOut": 64,
       "score": 55,
       "topPaths": [
         "test/cdc/websocket-address-derivation.property.test.js",
@@ -1421,7 +1421,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 12,
+      "importOut": 15,
       "score": 52.5,
       "topPaths": [
         "test/transaction/cross-partition-rejection.property.test.js",
@@ -1448,7 +1448,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 54,
+      "importOut": 59,
       "score": 50.2,
       "topPaths": [
         "test/runtime/runtime-monotonic-transitions.test.js",
@@ -1476,7 +1476,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 48,
-      "importOut": 51,
+      "importOut": 52,
       "score": 48,
       "topPaths": [
         "src/runtime/service-runtime-lifecycle-operation-methods.js",
@@ -1532,7 +1532,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 75,
+      "importOut": 83,
       "score": 47.2,
       "topPaths": [
         "test/convergence/dt6-publication-quorum-failback-network.test.js",
@@ -1696,7 +1696,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 45,
+      "importOut": 54,
       "score": 37.5,
       "topPaths": [
         "test/raft/liferaft-append-fail-recovery.test.js",
@@ -1778,7 +1778,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 25,
+      "importOut": 31,
       "score": 33.1,
       "topPaths": [
         "test/cli/core/sort-correctness.property.test.js",
@@ -1830,7 +1830,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 19,
-      "importOut": 14,
+      "importOut": 18,
       "score": 31.8,
       "topPaths": [
         "src/transport/router-message-handler.js",
@@ -1857,7 +1857,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 32,
+      "importOut": 35,
       "score": 31.8,
       "topPaths": [
         "test/config/latency-topology-ownership-guardrails.test.js",
@@ -1910,7 +1910,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 24,
-      "importOut": 19,
+      "importOut": 20,
       "score": 28,
       "topPaths": [
         "src/debug-runtime/vscode-dwarf-parser-backend.js",
@@ -1938,7 +1938,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 7,
-      "importOut": 14,
+      "importOut": 16,
       "score": 28,
       "topPaths": [
         "src/live-query/live-query-startup-wiring.js",
@@ -1964,7 +1964,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 13,
+      "importOut": 15,
       "score": 27.1,
       "topPaths": [
         "test/solve/evidence.test.js",
@@ -1989,7 +1989,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 1,
-      "importOut": 11,
+      "importOut": 14,
       "score": 22.6,
       "topPaths": [
         "test/migration/migration-coordinator-core-harness.js",
@@ -2015,7 +2015,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 3,
-      "importOut": 54,
+      "importOut": 57,
       "score": 22.6,
       "topPaths": [
         "test/wasm-service/service-endpoint-builder.property.test.js",
@@ -2093,7 +2093,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 1,
-      "importOut": 46,
+      "importOut": 47,
       "score": 18.7,
       "topPaths": [
         "test/service/service-reconciler.test.js",
@@ -2121,7 +2121,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 15,
+      "importOut": 18,
       "score": 16.4,
       "topPaths": [
         "test/function/context-cdc-consistency.property.test.js",
@@ -2269,7 +2269,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 18,
+      "importOut": 21,
       "score": 13.5,
       "topPaths": [
         "test/scripts/quest-context.test.js",
@@ -2295,7 +2295,7 @@
       "cloneTouches": 2,
       "cycleGroups": 0,
       "lintExclusions": 0,
-      "importIn": 10,
+      "importIn": 12,
       "importOut": 11,
       "score": 12.8,
       "topPaths": [
@@ -2514,7 +2514,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 1,
-      "importOut": 1,
+      "importOut": 2,
       "score": 8,
       "topPaths": [
         "scripts/check-guideline-decision-boundaries.js"
@@ -2804,7 +2804,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 11,
+      "importOut": 13,
       "score": 8,
       "topPaths": [
         "test/policy/table-policy-service.test.js",
@@ -2830,7 +2830,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 13,
-      "importOut": 36,
+      "importOut": 38,
       "score": 8,
       "topPaths": [
         "src/admin/admin-websocket-api-base.js",
@@ -2951,7 +2951,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 15,
+      "importOut": 16,
       "score": 6.1,
       "topPaths": [
         "test/index-management/index-service.test.js",
@@ -2977,7 +2977,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 14,
+      "importOut": 15,
       "score": 5.8,
       "topPaths": [
         "test/storage/data-directory-manager.test.js",
@@ -3026,7 +3026,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 4,
+      "importOut": 5,
       "score": 4.4,
       "topPaths": [
         "test/live-query/partition-aware-subscription.property.test.js"
@@ -3074,7 +3074,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 2,
-      "importOut": 3,
+      "importOut": 4,
       "score": 4,
       "topPaths": [
         "src/function/function-query-executor.js"
@@ -3266,7 +3266,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 7,
-      "importOut": 3,
+      "importOut": 4,
       "score": 4,
       "topPaths": [
         "src/transport/message-router-shared-vocabulary.js"
@@ -3338,7 +3338,7 @@
       "cycleGroups": 0,
       "lintExclusions": 0,
       "importIn": 0,
-      "importOut": 2,
+      "importOut": 3,
       "score": 2.1,
       "topPaths": [
         "scripts/check-cognitive-complexity.js"
