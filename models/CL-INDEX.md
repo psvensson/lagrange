@@ -27,13 +27,15 @@ via `npm run model:check` in `test:ci`.
 | Terminal operation entity observation | `terminal-operation-entity-observation/TerminalOperationEntityObservation.tla` | `ConfirmedTerminalNeverReentersCreating`, `FormationReadyRequiresTerminalDrain`, `EventuallyFormationReady` | require the existing operation-ledger owner/leader for entity-scoped recovery observation, defer while authority is unavailable, and reuse the existing surplus REMOVE after terminal evidence returns; a stale-SQL fallback mutant re-admits `CREATING` after terminal confirmation |
 | Node authority dispatch fallback | `node-authority-dispatch-fallback/NodeAuthorityDispatchFallback.tla` | `MissingMeansSuccessfulEmpty`, `SuccessfulEmptyNeverDispatches`, `NonRetryableFailureNeverDispatches`, `FallbackRequiresCanonicalRecoveryEvidence`, `EventuallyPriorityRecoveryDispatch` | preserve failed authoritative node reads as typed failures so the existing recovery-eligible sync dispatch fallback can advance priority recovery; a failure-as-missing mutant bypasses the fallback and stalls |
 | Authoritative observation watermark | `authoritative-observation-watermark/AuthoritativeObservationWatermark.tla` | `ObservationDoesNotFabricateMutation`, `SelectedFreshnessIsNewestEvidence`, `FreshnessClassificationMatchesAge`, `EventuallySchemaAdmitted` | publish successful unchanged/confirmed-empty authoritative reads as per-table observation evidence distinct from CDC mutation time, then select and age the newest mutation-or-observation timestamp; a mutation-only freshness mutant cannot admit schema after a successful no-op repair, and an exact-equality reconcile mutant wedges admission whenever CDC churn interleaves with the repair (the live nodes heartbeat case) |
+| FF-1 planner retention ↔ over-target admission hold | `planner-retention-admission-hold/PlannerRetentionAdmissionHold.tla` | `OnlyRetainedCureCanGrowSurplus`, `DistinctNodeSpreadNeverRegresses`, `SettlementIsExact`, `EventuallySettled` | admit exactly the retained spread-cure ADD, restore three-node spread, then reuse monotonic surplus drain; an unconditional hold strands the witnessed 4-replica/2-node state |
+| CL-021 priority SERVICES-row publication ↔ census | `priority-service-publication-census/PriorityServicePublicationCensus.tla` | `CensusAccountingComplete`, `AbsentAndExcludedAreDisjoint`, `CensusSatisfiedRequiresCompleteReadyPublication`, `EventuallyStableCensusSatisfied` | preserve the voter-role field across the final lifecycle-row replacement so the census progresses from `row_absent` through `raft_role_missing` to stable ready; the historical role-wipe mutant regresses the census after transient readiness |
 
 ## Adding a spec for a design-class CL
 
 1. Author `models/<area>/<Spec>.tla` with a fix toggle CONSTANT, a liveness PROPERTY,
    and `_bug.cfg` (fix off → property fails) + `_fixed.cfg` (fix on → property holds).
    Liveness models with an intentional terminal stutter need `CHECK_DEADLOCK FALSE`.
-2. Add two CONFIGS entries to `scripts/model-tlc.js` (`expectConverged: true` for
+2. Add two CONFIGS entries to `scripts/model-tlc-configs.js` (`expectConverged: true` for
    fixed; `false` + `expectedFailurePattern` for bug).
 3. Run `npm run model:tlc` — every config must report `met=true`.
 4. Add the row above and cite the spec from the CL record's `reproducedBy`.

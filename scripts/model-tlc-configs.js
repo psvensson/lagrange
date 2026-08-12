@@ -762,6 +762,78 @@ const CONFIGS = [
     expectedFailurePattern:
       'Invariant AcknowledgedRequiresDurability is violated',
   },
+  {
+    id: 'planner-retention-admission-hold-cure-exemption',
+    mode: 'planner-retention-admission-hold-cure-exemption',
+    module: path.resolve(
+      'models', 'planner-retention-admission-hold',
+      'PlannerRetentionAdmissionHold.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'planner-retention-admission-hold',
+      'PlannerRetentionAdmissionHold_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'planner-retention-admission-hold-cure-exemption.model.report.json',
+    scenario: 'planner-retention-admission-hold-model',
+    owner: 'priority_recovery_admission_owner',
+    boundary: 'planner_retention_over_target_admission_composition',
+  },
+  {
+    id: 'planner-retention-admission-hold-unconditional-hold',
+    mode: 'planner-retention-admission-hold-unconditional-hold',
+    module: path.resolve(
+      'models', 'planner-retention-admission-hold',
+      'PlannerRetentionAdmissionHold.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'planner-retention-admission-hold',
+      'PlannerRetentionAdmissionHold_unconditional_hold_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'planner-retention-admission-hold-unconditional-hold.model.report.json',
+    scenario: 'planner-retention-admission-hold-model',
+    owner: 'priority_recovery_admission_owner',
+    boundary: 'planner_retention_over_target_admission_composition',
+    expectedFailurePattern: 'Temporal property EventuallySettled was violated',
+  },
+  {
+    id: 'priority-service-publication-census-fixed',
+    mode: 'priority-service-publication-census-fixed',
+    module: path.resolve(
+      'models', 'priority-service-publication-census',
+      'PriorityServicePublicationCensus.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'priority-service-publication-census',
+      'PriorityServicePublicationCensus_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'priority-service-publication-census-fixed.model.report.json',
+    scenario: 'priority-service-publication-census-model',
+    owner: 'priority_service_publication_census_contract_owner',
+    boundary: 'services_row_lifecycle_publication_to_priority_census',
+  },
+  {
+    id: 'priority-service-publication-census-role-wipe',
+    mode: 'priority-service-publication-census-role-wipe',
+    module: path.resolve(
+      'models', 'priority-service-publication-census',
+      'PriorityServicePublicationCensus.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'priority-service-publication-census',
+      'PriorityServicePublicationCensus_role_wipe_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'priority-service-publication-census-role-wipe.model.report.json',
+    scenario: 'priority-service-publication-census-model',
+    owner: 'priority_service_publication_census_contract_owner',
+    boundary: 'services_row_lifecycle_publication_to_priority_census',
+    expectedFailurePattern:
+      'Temporal property EventuallyStableCensusSatisfied was violated',
+  },
 ];
 
 export {CONFIGS};
