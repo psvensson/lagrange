@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1776,
+    "unit": 1777,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2027,
-  "digest": "fnv1a32-908154a7",
+  "censusSize": 2028,
+  "digest": "fnv1a32-1554eb18",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -1713,6 +1713,7 @@
     "test/scripts/lookup-rule.test.js": "unit",
     "test/scripts/model-contract-tools.test.js": "unit",
     "test/scripts/model-invariants.test.js": "unit",
+    "test/scripts/model-tlc-mode-selection.test.js": "unit",
     "test/scripts/no-external-llm-guards.test.js": "unit",
     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "unit",
     "test/scripts/prune-test-output.test.js": "unit",

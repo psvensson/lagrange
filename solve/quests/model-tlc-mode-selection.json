@@ -1,0 +1,43 @@
+{
+  "id": "model-tlc-mode-selection",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The canonical TLC runner honors an exact --mode selector, runs only the named registered configuration, rejects unknown or duplicate mode selectors, preserves the no-selector full-corpus behavior, and exposes a bounded test seam so model Quests do not silently execute the entire corpus.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/golden-capability-gold-plating.md",
+    "draftedAtCommit": "88047032f662bc0df08fead4fa7bac5faca9d3b7"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "model-tlc-mode-selection",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "model-tlc-mode-selection-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "model-tlc-mode-selection",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

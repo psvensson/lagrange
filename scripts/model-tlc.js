@@ -17,6 +17,7 @@ import path from 'node:path';
 import process from 'node:process';
 import {spawnSync} from 'node:child_process';
 import https from 'node:https';
+import {pathToFileURL} from 'node:url';
 import {CONFIGS} from './model-tlc-configs.js';
 
 const JAR_PATH = process.env.TLA_TOOLS_JAR ||
@@ -27,6 +28,55 @@ const REPORTS_DIR = path.resolve('test-output', 'reports');
 const META_ROOT = path.resolve('test-output', 'tlc');
 const CONTRACT_EVIDENCE_DIR =
   path.resolve('architecture', 'contracts', 'evidence');
+const MODE_ARGUMENT = '--mode';
+const DUPLICATE_MODE_PROBLEM =
+  'model-tlc: --mode may be provided exactly once';
+const MISSING_MODE_PROBLEM =
+  'model-tlc: --mode requires one registered mode value';
+const UNEXPECTED_ARGUMENT_PREFIX = 'model-tlc: unexpected argument: ';
+const UNKNOWN_MODE_PREFIX = 'model-tlc: unknown registered mode: ';
+const OPTION_PREFIX = '--';
+
+function modeArgumentIndexes(argv) {
+  const indexes = [];
+  for (let index = 0; index < argv.length; index += 1) {
+    if (argv[index] === MODE_ARGUMENT) indexes.push(index);
+  }
+  return indexes;
+}
+
+function selectedModeValue(argv, modeIndex) {
+  const mode = argv[modeIndex + 1];
+  if (typeof mode !== 'string' || mode.length === 0 ||
+      mode.startsWith(OPTION_PREFIX)) {
+    throw new Error(MISSING_MODE_PROBLEM);
+  }
+  return mode;
+}
+
+export function selectTlcConfigs(argv, configs = CONFIGS) {
+  const modeIndexes = modeArgumentIndexes(argv);
+  if (modeIndexes.length === 0) {
+    if (argv.length > 0) {
+      throw new Error(`${UNEXPECTED_ARGUMENT_PREFIX}${argv[0]}`);
+    }
+    return configs;
+  }
+  if (modeIndexes.length > 1) throw new Error(DUPLICATE_MODE_PROBLEM);
+
+  const modeIndex = modeIndexes[0];
+  const mode = selectedModeValue(argv, modeIndex);
+  if (modeIndex !== 0 || argv.length !== 2) {
+    const unexpected = modeIndex === 0 ? argv[2] : argv[0];
+    throw new Error(`${UNEXPECTED_ARGUMENT_PREFIX}${unexpected}`);
+  }
+
+  const selected = configs.filter((config) => config.mode === mode);
+  if (selected.length !== 1) {
+    throw new Error(`${UNKNOWN_MODE_PREFIX}${mode}`);
+  }
+  return selected;
+}
 
 function download(url, dest) {
   return new Promise((resolve, reject) => {
@@ -133,12 +183,13 @@ function buildTlcReport(config, run, verdict) {
   };
 }
 
-async function main() {
+async function main(argv = process.argv.slice(2)) {
+  const selectedConfigs = selectTlcConfigs(argv);
   await ensureJar();
   fs.mkdirSync(REPORTS_DIR, {recursive: true});
 
   let allMet = true;
-  for (const config of CONFIGS) {
+  for (const config of selectedConfigs) {
     const run = runTlc(config);
     cleanTraceArtifacts(config.module);
     const verdict = interpret(config, run);
@@ -167,7 +218,14 @@ async function main() {
   console.log('TLC confirms expected route and forbidden-shape outcomes.');
 }
 
-main().catch((err) => {
-  console.error(err.stack || String(err));
-  process.exit(1);
-});
+function isDirectRun() {
+  if (!process.argv[1]) return false;
+  return import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
+}
+
+if (isDirectRun()) {
+  main().catch((err) => {
+    console.error(err.stack || String(err));
+    process.exit(1);
+  });
+}

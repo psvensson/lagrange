@@ -1,0 +1,323 @@
+diff --git a/scripts/checks/run-golden-capability-model-scenarios.js b/scripts/checks/run-golden-capability-model-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..58e77cafd034f81e4ff19d80f29112ccc286312e
+--- /dev/null
++++ b/scripts/checks/run-golden-capability-model-scenarios.js
+@@ -0,0 +1,12 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const MODEL_TLC_MODE_SELECTION_TESTS = [
++  'test/scripts/model-tlc-mode-selection.test.js',
++];
++const SCENARIOS = {
++  'model-tlc-mode-selection': MODEL_TLC_MODE_SELECTION_TESTS,
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/scripts/model-tlc.js b/scripts/model-tlc.js
+index 8ad41cac072f140a1fde722cbd5d8674a899f36c..09151213faa09ead7d519c57697b5e44c70b7b4e 100644
+--- a/scripts/model-tlc.js
++++ b/scripts/model-tlc.js
+@@ -17,6 +17,7 @@ import path from 'node:path';
+ import process from 'node:process';
+ import {spawnSync} from 'node:child_process';
+ import https from 'node:https';
++import {pathToFileURL} from 'node:url';
+ import {CONFIGS} from './model-tlc-configs.js';
+ 
+ const JAR_PATH = process.env.TLA_TOOLS_JAR ||
+@@ -27,6 +28,55 @@ const REPORTS_DIR = path.resolve('test-output', 'reports');
+ const META_ROOT = path.resolve('test-output', 'tlc');
+ const CONTRACT_EVIDENCE_DIR =
+   path.resolve('architecture', 'contracts', 'evidence');
++const MODE_ARGUMENT = '--mode';
++const DUPLICATE_MODE_PROBLEM =
++  'model-tlc: --mode may be provided exactly once';
++const MISSING_MODE_PROBLEM =
++  'model-tlc: --mode requires one registered mode value';
++const UNEXPECTED_ARGUMENT_PREFIX = 'model-tlc: unexpected argument: ';
++const UNKNOWN_MODE_PREFIX = 'model-tlc: unknown registered mode: ';
++const OPTION_PREFIX = '--';
++
++function modeArgumentIndexes(argv) {
++  const indexes = [];
++  for (let index = 0; index < argv.length; index += 1) {
++    if (argv[index] === MODE_ARGUMENT) indexes.push(index);
++  }
++  return indexes;
++}
++
++function selectedModeValue(argv, modeIndex) {
++  const mode = argv[modeIndex + 1];
++  if (typeof mode !== 'string' || mode.length === 0 ||
++      mode.startsWith(OPTION_PREFIX)) {
++    throw new Error(MISSING_MODE_PROBLEM);
++  }
++  return mode;
++}
++
++export function selectTlcConfigs(argv, configs = CONFIGS) {
++  const modeIndexes = modeArgumentIndexes(argv);
++  if (modeIndexes.length === 0) {
++    if (argv.length > 0) {
++      throw new Error(`${UNEXPECTED_ARGUMENT_PREFIX}${argv[0]}`);
++    }
++    return configs;
++  }
++  if (modeIndexes.length > 1) throw new Error(DUPLICATE_MODE_PROBLEM);
++
++  const modeIndex = modeIndexes[0];
++  const mode = selectedModeValue(argv, modeIndex);
++  if (modeIndex !== 0 || argv.length !== 2) {
++    const unexpected = modeIndex === 0 ? argv[2] : argv[0];
++    throw new Error(`${UNEXPECTED_ARGUMENT_PREFIX}${unexpected}`);
++  }
++
++  const selected = configs.filter((config) => config.mode === mode);
++  if (selected.length !== 1) {
++    throw new Error(`${UNKNOWN_MODE_PREFIX}${mode}`);
++  }
++  return selected;
++}
+ 
+ function download(url, dest) {
+   return new Promise((resolve, reject) => {
+@@ -133,12 +183,13 @@ function buildTlcReport(config, run, verdict) {
+   };
+ }
+ 
+-async function main() {
++async function main(argv = process.argv.slice(2)) {
++  const selectedConfigs = selectTlcConfigs(argv);
+   await ensureJar();
+   fs.mkdirSync(REPORTS_DIR, {recursive: true});
+ 
+   let allMet = true;
+-  for (const config of CONFIGS) {
++  for (const config of selectedConfigs) {
+     const run = runTlc(config);
+     cleanTraceArtifacts(config.module);
+     const verdict = interpret(config, run);
+@@ -167,7 +218,14 @@ async function main() {
+   console.log('TLC confirms expected route and forbidden-shape outcomes.');
+ }
+ 
+-main().catch((err) => {
+-  console.error(err.stack || String(err));
+-  process.exit(1);
+-});
++function isDirectRun() {
++  if (!process.argv[1]) return false;
++  return import.meta.url === pathToFileURL(path.resolve(process.argv[1])).href;
++}
++
++if (isDirectRun()) {
++  main().catch((err) => {
++    console.error(err.stack || String(err));
++    process.exit(1);
++  });
++}
+diff --git a/test/scripts/model-tlc-mode-selection.test.js b/test/scripts/model-tlc-mode-selection.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a028271750f380994edcd2c724ee4bc05e924f5e
+--- /dev/null
++++ b/test/scripts/model-tlc-mode-selection.test.js
+@@ -0,0 +1,149 @@
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import {spawnSync} from 'node:child_process';
++
++import tap from 'tap';
++
++import {CONFIGS} from '../../scripts/model-tlc-configs.js';
++import {selectTlcConfigs} from '../../scripts/model-tlc.js';
++
++const RUNNER_PATH = 'scripts/model-tlc.js';
++const MODE_ARGUMENT = '--mode';
++const TLC_CONFIG_ARGUMENT = '-config';
++const WILDCARD_MODE = '*';
++const DUPLICATE_MODE_PATTERN = /--mode may be provided exactly once/u;
++const MISSING_MODE_PATTERN = /--mode requires one registered mode value/u;
++const UNKNOWN_MODE_PATTERN = /unknown registered mode/u;
++const NO_ERROR_OUTPUT = 'No error has been found';
++const UTF8_ENCODING = 'utf8';
++const FAKE_JAVA_NAME = 'java';
++const FAKE_JAR_NAME = 'tla2tools.jar';
++const INVOCATION_LOG_NAME = 'java-invocations.ndjson';
++const INVOCATION_LOG_ENV = 'MODEL_TLC_INVOCATION_LOG';
++const EXPECTED_OUTCOMES_ENV = 'MODEL_TLC_EXPECTED_OUTCOMES';
++const EXECUTABLE_MODE = 0o755;
++const FIXTURE_JAR_BYTES = 'fixture';
++const LINE_SEPARATOR = '\n';
++const JAVA_SOURCE =
++  '#!/usr/bin/env node\n' +
++  'const fs = require(\'node:fs\');\n' +
++  'const args = process.argv.slice(2);\n' +
++  `fs.appendFileSync(process.env.${INVOCATION_LOG_ENV}, ` +
++    'JSON.stringify(args) + \'\\n\');\n' +
++  `const outcomes = JSON.parse(process.env.${EXPECTED_OUTCOMES_ENV});\n` +
++  `const config = args[args.indexOf('${TLC_CONFIG_ARGUMENT}') + 1];\n` +
++  'const failure = outcomes[config];\n' +
++  `process.stdout.write((failure || '${NO_ERROR_OUTPUT}') + '\\n');\n`;
++const TEST_NAME = Object.freeze({
++  exact: 'exact mode selection returns only the registered configuration',
++  all: 'no mode selector preserves the complete registered corpus',
++  cli: 'CLI runs only the exact selected configuration',
++  cliAll: 'CLI without a selector runs every registered configuration',
++  invalid: 'CLI rejects malformed and non-exact mode selectors before TLC',
++});
++const ASSERTION = Object.freeze({
++  oneInvocation: 'exact selection launches TLC once',
++  selectedConfig: 'the TLC invocation names only the selected config',
++  allInvocations: 'the no-selector route launches every TLC configuration',
++  allConfigs: 'the no-selector route preserves registered configuration order',
++  noTlc: 'invalid selectors are rejected before Java starts',
++});
++
++function createCliFixture(t) {
++  const root = fs.mkdtempSync(path.join(os.tmpdir(), 'model-tlc-mode-'));
++  const bin = path.join(root, 'bin');
++  const java = path.join(bin, FAKE_JAVA_NAME);
++  const jar = path.join(root, FAKE_JAR_NAME);
++  const log = path.join(root, INVOCATION_LOG_NAME);
++  fs.mkdirSync(bin, {recursive: true});
++  fs.writeFileSync(java, JAVA_SOURCE);
++  fs.chmodSync(java, EXECUTABLE_MODE);
++  fs.writeFileSync(jar, FIXTURE_JAR_BYTES);
++  t.teardown(() => fs.rmSync(root, {recursive: true, force: true}));
++  return {bin, jar, log};
++}
++
++function runCli(fixture, argv) {
++  const outcomes = Object.fromEntries(CONFIGS.map((config) => [
++    config.cfg,
++    config.expectedFailurePattern || '',
++  ]));
++  return spawnSync(process.execPath, [RUNNER_PATH, ...argv], {
++    cwd: process.cwd(),
++    encoding: UTF8_ENCODING,
++    env: {
++      ...process.env,
++      TLA_TOOLS_JAR: fixture.jar,
++      [INVOCATION_LOG_ENV]: fixture.log,
++      [EXPECTED_OUTCOMES_ENV]: JSON.stringify(outcomes),
++      PATH: `${fixture.bin}${path.delimiter}${process.env.PATH}`,
++    },
++  });
++}
++
++function readInvocations(fixture) {
++  if (!fs.existsSync(fixture.log)) return [];
++  return fs.readFileSync(fixture.log, UTF8_ENCODING).trim().split(LINE_SEPARATOR)
++    .filter(Boolean).map((line) => JSON.parse(line));
++}
++
++tap.test(TEST_NAME.exact, (t) => {
++  const expected = CONFIGS.find((config) => config.expectConverged);
++  t.same(selectTlcConfigs([MODE_ARGUMENT, expected.mode]), [expected]);
++  t.end();
++});
++
++tap.test(TEST_NAME.all, (t) => {
++  t.equal(selectTlcConfigs([]), CONFIGS);
++  t.same(selectTlcConfigs([]).map((config) => config.mode),
++    CONFIGS.map((config) => config.mode));
++  t.end();
++});
++
++tap.test(TEST_NAME.cli, (t) => {
++  const fixture = createCliFixture(t);
++  const selected = CONFIGS.find((config) => config.expectConverged);
++  const result = runCli(fixture, [MODE_ARGUMENT, selected.mode]);
++  const invocations = readInvocations(fixture);
++
++  t.equal(result.status, 0, result.stderr || result.stdout);
++  t.equal(invocations.length, 1, ASSERTION.oneInvocation);
++  t.ok(invocations[0].includes(selected.cfg), ASSERTION.selectedConfig);
++  t.end();
++});
++
++tap.test(TEST_NAME.cliAll, (t) => {
++  const fixture = createCliFixture(t);
++  const result = runCli(fixture, []);
++  const invocations = readInvocations(fixture);
++  const invokedConfigs = invocations.map((argv) =>
++    argv[argv.indexOf(TLC_CONFIG_ARGUMENT) + 1]);
++
++  t.equal(result.status, 0, result.stderr || result.stdout);
++  t.equal(invocations.length, CONFIGS.length, ASSERTION.allInvocations);
++  t.same(invokedConfigs, CONFIGS.map((config) => config.cfg),
++    ASSERTION.allConfigs);
++  t.end();
++});
++
++tap.test(TEST_NAME.invalid, (t) => {
++  const fixture = createCliFixture(t);
++  const selected = CONFIGS.find((config) => config.expectConverged);
++  const cases = [
++    {argv: [MODE_ARGUMENT], pattern: MISSING_MODE_PATTERN},
++    {
++      argv: [MODE_ARGUMENT, selected.mode, MODE_ARGUMENT, selected.mode],
++      pattern: DUPLICATE_MODE_PATTERN,
++    },
++    {argv: [MODE_ARGUMENT, 'not-registered'], pattern: UNKNOWN_MODE_PATTERN},
++    {argv: [MODE_ARGUMENT, WILDCARD_MODE], pattern: UNKNOWN_MODE_PATTERN},
++  ];
++  for (const item of cases) {
++    const result = runCli(fixture, item.argv);
++    t.equal(result.status, 1);
++    t.match(result.stderr, item.pattern);
++  }
++  t.same(readInvocations(fixture), [], ASSERTION.noTlc);
++  t.end();
++});
+diff --git a/test/shards/impact-graph-seal.json b/test/shards/impact-graph-seal.json
+index 6befbfb0b932a26450920e68a48cf4b7edfefc11..b1bd044232df740a318e9fda25ffb3c8b0adb030 100644
+--- a/test/shards/impact-graph-seal.json
++++ b/test/shards/impact-graph-seal.json
+@@ -1,8 +1,8 @@
+ {
+   "schemaVersion": 1,
+   "importGraphSchemaVersion": "global-owner-debt-import-graph-v2",
+-  "sourceDigest": "957fa005d64df2691ec5622dbfa14ca38d2a9b38e7c0fe07c54dacc40882777b",
+-  "producerInputDigest": "dcff2fd8fa0defe5311ad54ac9afea6840cbd85a015f6b673b548ffebbeacb76",
+-  "resolverStateDigest": "9bd4c4fd9aeb1308437427d82a98e4b138d31f33c6c3b51b9e8533f1b5d7af3d",
+-  "snapshotDigest": "e2325f9192ff60a1a51090d6bc0b7496b7047f087fb8be2f04f692bedddffbb8"
++  "sourceDigest": "cb090759ada930b7ca12b68da9fcafd6f97a19a2816b73a490d2f14cd50cc4c8",
++  "producerInputDigest": "accd81b71b4060b8cec3477b5ce340e89c5d9db6fa04622813f2f21d515b474d",
++  "resolverStateDigest": "a24efd5424a4225d1d5e48cf514bd5a52ac6b7e07d46be31258cf2b09bfdaa4d",
++  "snapshotDigest": "3d1b0f7ea4df5bd39567b58414cb183b5cec51a6d768a1f38b6d1231cec845c8"
+ }
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 4cbed7e2a07bce0274fa88d4ac01c2357f921dce..a99e6fa929919b9a20493e4b72f3e4ba1ad722a3 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 1776,
++    "unit": 1777,
+     "integration": 73,
+     "bootstrap": 171,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2027,
+-  "digest": "fnv1a32-908154a7",
++  "censusSize": 2028,
++  "digest": "fnv1a32-1554eb18",
+   "classes": {
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+     "test/address/address-manager.test.js": "unit",
+@@ -1713,6 +1713,7 @@
+     "test/scripts/lookup-rule.test.js": "unit",
+     "test/scripts/model-contract-tools.test.js": "unit",
+     "test/scripts/model-invariants.test.js": "unit",
++    "test/scripts/model-tlc-mode-selection.test.js": "unit",
+     "test/scripts/no-external-llm-guards.test.js": "unit",
+     "test/scripts/priority-recovery-current-artifact-fixture.test.js": "unit",
+     "test/scripts/prune-test-output.test.js": "unit",
