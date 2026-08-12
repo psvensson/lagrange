@@ -10,7 +10,7 @@
 // non-zero when the selector fails closed with problems; --full-suite prints
 // the entire census instead (the caller then runs the normal lanes).
 
-import {execSync} from 'node:child_process';
+import {execFileSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
@@ -20,13 +20,11 @@ import {
   SELECTION_SAFETY_FLOOR,
 } from './checks/impact-proof-cone-constants.js';
 import {
+  assertRunnableProofSelection,
   selectProofCone,
+  selectRunnableFullProofCensus,
   writeReceipt,
 } from './checks/impact-proof-cone.js';
-import {
-  PRIMARY_CLASS_MANIFEST_PATH,
-  loadManifest,
-} from './checks/test-primary-classification.js';
 
 const CHANGED_FLAG = '--changed';
 const DIFF_BASE_FLAG = '--diff-base';
@@ -34,6 +32,9 @@ const RECEIPT_FLAG = '--receipt';
 const FULL_SUITE_FLAG = '--full-suite';
 const JSON_FLAG = '--json';
 const UTF8_ENCODING = 'utf8';
+const GIT_EXECUTABLE = 'git';
+const GIT_DIFF_NAME_ONLY_ARGS = ['diff', '--name-only', '--end-of-options'];
+const GIT_HEAD_REF = 'HEAD';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -61,7 +62,11 @@ for (let index = 0; index < args.length; index += 1) {
 }
 
 if (diffBase) {
-  const output = execSync(`git diff --name-only ${diffBase} HEAD`, {
+  const output = execFileSync(GIT_EXECUTABLE, [
+    ...GIT_DIFF_NAME_ONLY_ARGS,
+    diffBase,
+    GIT_HEAD_REF,
+  ], {
     cwd: root, encoding: UTF8_ENCODING});
   for (const line of output.split(NEWLINE_SEPARATOR)) {
     const trimmed = line.trim();
@@ -70,12 +75,14 @@ if (diffBase) {
 }
 
 if (forceFullSuite) {
-  const primary = loadManifest(root, PRIMARY_CLASS_MANIFEST_PATH);
-  if (!primary.ok) {
-    console.error(primary.problems.join(NEWLINE_SEPARATOR));
+  let selection;
+  try {
+    selection = selectRunnableFullProofCensus(root);
+  } catch (error) {
+    console.error(`FAIL ${error.message}`);
     process.exit(1);
   }
-  for (const testPath of Object.keys(primary.manifest.classes).sort()) {
+  for (const testPath of selection.selectedTests) {
     console.log(testPath);
   }
   process.exit(0);
@@ -87,6 +94,12 @@ if (changed.length === 0) {
 }
 
 const {selection, problems} = selectProofCone(root, changed);
+try {
+  assertRunnableProofSelection(selection);
+} catch (error) {
+  console.error(`FAIL ${error.message}`);
+  process.exit(1);
+}
 const written = writeReceipt(root, selection);
 if (receiptPath) {
   const fs = await import('node:fs');

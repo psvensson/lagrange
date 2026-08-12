@@ -10,12 +10,12 @@
 //   node scripts/run-quest-proof.js --diff-base <git-ref>
 //   node scripts/run-quest-proof.js --dry-run ...   (print selection, do not run)
 
-import {spawnSync} from 'node:child_process';
-import {execSync} from 'node:child_process';
+import {execFileSync, spawnSync} from 'node:child_process';
 import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 
 import {
+  assertRunnableProofSelection,
   selectProofCone,
   writeReceipt,
 } from './checks/impact-proof-cone.js';
@@ -36,6 +36,9 @@ const DEFAULT_JOBS = '4';
 const TEST_RUNNER = 'scripts/run-test-files.js';
 const UTF8_ENCODING = 'utf8';
 const FILES_PER_INVOCATION = 100;
+const GIT_EXECUTABLE = 'git';
+const GIT_DIFF_NAME_ONLY_ARGS = ['diff', '--name-only', '--end-of-options'];
+const GIT_HEAD_REF = 'HEAD';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -60,7 +63,11 @@ for (let index = 0; index < args.length; index += 1) {
 }
 
 if (diffBase) {
-  const output = execSync(`git diff --name-only ${diffBase} HEAD`, {
+  const output = execFileSync(GIT_EXECUTABLE, [
+    ...GIT_DIFF_NAME_ONLY_ARGS,
+    diffBase,
+    GIT_HEAD_REF,
+  ], {
     cwd: root, encoding: UTF8_ENCODING});
   for (const line of output.split(NEWLINE_SEPARATOR)) {
     const trimmed = line.trim();
@@ -74,6 +81,12 @@ if (changed.length === 0) {
 }
 
 const {selection} = selectProofCone(root, changed);
+try {
+  assertRunnableProofSelection(selection);
+} catch (error) {
+  console.error(`${OUTCOME_FAIL} quest-proof: ${error.message}`);
+  process.exit(1);
+}
 const receiptPath = writeReceipt(root, selection);
 console.error(
   `quest-proof: tier=${selection.escalation} fullSuite=${selection.fullSuite} ` +

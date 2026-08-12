@@ -1,0 +1,303 @@
+diff --git a/scripts/checks/run-coupled-pair-landing-guard-scenarios.js b/scripts/checks/run-coupled-pair-landing-guard-scenarios.js
+index 8b7e310828c2c8de3ee583c0af66a8ec193f64f7..f32e4783fabec9622a520fe8fff8f40c71746596 100644
+--- a/scripts/checks/run-coupled-pair-landing-guard-scenarios.js
++++ b/scripts/checks/run-coupled-pair-landing-guard-scenarios.js
+@@ -6,9 +6,22 @@ const REGISTRY_WITNESS_TESTS = [
+   'test/control-plane/priority-services-row-publication-census-contract.test.js',
+   'test/scripts/impact-contract-registry.test.js',
+ ];
++const PROOF_CONE_SELECTION_TESTS = [
++  'test/scripts/impact-proof-cone.test.js',
++  'test/scripts/impact-proof-cone-policy.test.js',
++  'test/scripts/impact-proof-cone-receipt.test.js',
++  'test/scripts/impact-proof-cone-producer.test.js',
++  'test/scripts/impact-proof-cone-followed-file-races.test.js',
++];
++const PROOF_CONE_INPUT_INTEGRITY_TESTS = [
++  ...PROOF_CONE_SELECTION_TESTS,
++];
+ const SCENARIOS = {
+   'coupled-pair-registry-witness-foundation': REGISTRY_WITNESS_TESTS,
+   'coupled-pair-registry-witness-domain-closure': REGISTRY_WITNESS_TESTS,
++  'coupled-pair-proof-cone-selection': PROOF_CONE_SELECTION_TESTS,
++  'coupled-pair-proof-cone-input-integrity-closure':
++    PROOF_CONE_INPUT_INTEGRITY_TESTS,
+ };
+ 
+ runGuardTestScenarios(SCENARIOS);
+diff --git a/scripts/run-quest-proof.js b/scripts/run-quest-proof.js
+index 24208769175497ae34ac0f335a69241faa98ce3d..1930784571012b4b0c56b779c0758b4fd9f3d1b6 100644
+--- a/scripts/run-quest-proof.js
++++ b/scripts/run-quest-proof.js
+@@ -16,6 +16,7 @@ import path from 'node:path';
+ import {fileURLToPath} from 'node:url';
+ 
+ import {
++  assertRunnableProofSelection,
+   selectProofCone,
+   writeReceipt,
+ } from './checks/impact-proof-cone.js';
+@@ -74,6 +75,12 @@ if (changed.length === 0) {
+ }
+ 
+ const {selection} = selectProofCone(root, changed);
++try {
++  assertRunnableProofSelection(selection);
++} catch (error) {
++  console.error(`${OUTCOME_FAIL} quest-proof: ${error.message}`);
++  process.exit(1);
++}
+ const receiptPath = writeReceipt(root, selection);
+ console.error(
+   `quest-proof: tier=${selection.escalation} fullSuite=${selection.fullSuite} ` +
+diff --git a/scripts/select-proof-cone.js b/scripts/select-proof-cone.js
+index ec0af99e53ddb5cf09b7d086202719491898377e..88288cdd66a297af36faacea82038fcf9b2a0aa8 100644
+--- a/scripts/select-proof-cone.js
++++ b/scripts/select-proof-cone.js
+@@ -20,13 +20,11 @@ import {
+   SELECTION_SAFETY_FLOOR,
+ } from './checks/impact-proof-cone-constants.js';
+ import {
++  assertRunnableProofSelection,
+   selectProofCone,
++  selectRunnableFullProofCensus,
+   writeReceipt,
+ } from './checks/impact-proof-cone.js';
+-import {
+-  PRIMARY_CLASS_MANIFEST_PATH,
+-  loadManifest,
+-} from './checks/test-primary-classification.js';
+ 
+ const CHANGED_FLAG = '--changed';
+ const DIFF_BASE_FLAG = '--diff-base';
+@@ -70,12 +68,14 @@ if (diffBase) {
+ }
+ 
+ if (forceFullSuite) {
+-  const primary = loadManifest(root, PRIMARY_CLASS_MANIFEST_PATH);
+-  if (!primary.ok) {
+-    console.error(primary.problems.join(NEWLINE_SEPARATOR));
++  let selection;
++  try {
++    selection = selectRunnableFullProofCensus(root);
++  } catch (error) {
++    console.error(`FAIL ${error.message}`);
+     process.exit(1);
+   }
+-  for (const testPath of Object.keys(primary.manifest.classes).sort()) {
++  for (const testPath of selection.selectedTests) {
+     console.log(testPath);
+   }
+   process.exit(0);
+@@ -87,6 +87,12 @@ if (changed.length === 0) {
+ }
+ 
+ const {selection, problems} = selectProofCone(root, changed);
++try {
++  assertRunnableProofSelection(selection);
++} catch (error) {
++  console.error(`FAIL ${error.message}`);
++  process.exit(1);
++}
+ const written = writeReceipt(root, selection);
+ if (receiptPath) {
+   const fs = await import('node:fs');
+diff --git a/test/scripts/impact-proof-cone-consumers.test.js b/test/scripts/impact-proof-cone-consumers.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..6667afa464e5f56f2d6dc95b71b4beeff26ff1c7
+--- /dev/null
++++ b/test/scripts/impact-proof-cone-consumers.test.js
+@@ -0,0 +1,147 @@
++import assert from 'node:assert/strict';
++import {spawnSync} from 'node:child_process';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import {test} from 'node:test';
++
++import {
++  assertRunnableProofSelection,
++  selectProofCone,
++  testImpactDecision,
++} from '../../scripts/checks/impact-proof-cone.js';
++import {MODE_FATAL} from
++  '../../scripts/checks/impact-proof-cone-constants.js';
++import {buildManifest as buildPrimaryManifest} from
++  '../../scripts/checks/test-primary-classification.js';
++
++const root = process.cwd();
++const SELECTOR_ENTRY = 'scripts/select-proof-cone.js';
++const QUEST_PROOF_ENTRY = 'scripts/run-quest-proof.js';
++const CHANGED_ARGS = ['--changed', 'src/runtime/call-cell-value-mapping.js'];
++const EMPTY_CENSUS = 'empty';
++const UNAVAILABLE_CENSUS = 'unavailable';
++
++function createCensusRoot(kind) {
++  const fixtureRoot = fs.mkdtempSync(path.join(os.tmpdir(), 'proof-consumer-'));
++  fs.mkdirSync(path.join(fixtureRoot, 'src'), {recursive: true});
++  if (kind === UNAVAILABLE_CENSUS) {
++    fs.writeFileSync(path.join(fixtureRoot, 'test'), 'not-a-directory');
++  } else {
++    fs.mkdirSync(path.join(fixtureRoot, 'scripts'), {recursive: true});
++    fs.mkdirSync(path.join(fixtureRoot, 'test'), {recursive: true});
++    fs.mkdirSync(path.join(fixtureRoot, 'test/shards'), {recursive: true});
++    fs.writeFileSync(
++      path.join(fixtureRoot, 'test/shards/primary-classes.json'),
++      JSON.stringify(buildPrimaryManifest(fixtureRoot)),
++    );
++  }
++  return fixtureRoot;
++}
++
++function runWithCensusState(entryPath, args, censusState) {
++  const entry = path.join(root, entryPath);
++  const source = `
++    import fs from 'node:fs';
++    import path from 'node:path';
++    import {syncBuiltinESMExports} from 'node:module';
++    import {pathToFileURL} from 'node:url';
++    const repoRoot = ${JSON.stringify(root)};
++    const primaryPath = path.join(repoRoot, 'test/shards/primary-classes.json');
++    const testRoot = path.join(repoRoot, 'test');
++    const censusState = ${JSON.stringify(censusState)};
++    const originalRead = fs.readFileSync;
++    const originalReaddir = fs.readdirSync;
++    fs.readFileSync = (file, ...readArgs) => {
++      if (path.resolve(String(file)) === primaryPath) {
++        const manifest = JSON.parse(originalRead(file, 'utf8'));
++        manifest.classes = {'test/ghost.test.js': 'unit'};
++        return JSON.stringify(manifest);
++      }
++      return originalRead(file, ...readArgs);
++    };
++    if (censusState !== 'live') {
++      fs.readdirSync = (directory, ...readArgs) => {
++        const absolute = path.resolve(String(directory));
++        if (absolute === testRoot || absolute.startsWith(testRoot + path.sep)) {
++          if (censusState === 'unavailable') {
++            throw new Error('fixture live census unavailable');
++          }
++          return [];
++        }
++        return originalReaddir(directory, ...readArgs);
++      };
++    }
++    syncBuiltinESMExports();
++    const entry = ${JSON.stringify(entry)};
++    process.argv = [process.execPath, entry, ...${JSON.stringify(args)}];
++    await import(pathToFileURL(entry).href + '?census=' + Date.now());
++  `;
++  return spawnSync(process.execPath, ['--input-type=module', '--eval', source], {
++    cwd: root,
++    encoding: 'utf8',
++  });
++}
++
++function assertFatalSelection(selection, detailPattern) {
++  assert.equal(selection.runnable, false);
++  assert.equal(testImpactDecision(selection).mode, MODE_FATAL);
++  assert.throws(
++    () => assertRunnableProofSelection(selection), detailPattern);
++}
++
++function assertCliRefusal(entry, args, censusState, prefix) {
++  const result = runWithCensusState(entry, args, censusState);
++  assert.equal(result.status, 1, result.stderr);
++  assert.equal(result.stdout, '');
++  assert.match(result.stderr, prefix);
++  assert.match(result.stderr, censusState === EMPTY_CENSUS ?
++    /empty live test census/iu : /live census unavailable/iu);
++}
++
++test('unavailable and empty live censuses are typed fatal decisions', () => {
++  for (const [kind, detailPattern] of [
++    [UNAVAILABLE_CENSUS,
++      /not runnable.*fallback could not derive the live census/iu],
++    [EMPTY_CENSUS, /not runnable.*empty live test census/iu],
++  ]) {
++    const fixtureRoot = createCensusRoot(kind);
++    try {
++      const selection = selectProofCone(
++        fixtureRoot, ['src/owner.js']).selection;
++      assertFatalSelection(selection, detailPattern);
++    } finally {
++      fs.rmSync(fixtureRoot, {recursive: true, force: true});
++    }
++  }
++});
++
++test('selector and Quest-proof CLIs refuse fatal census decisions', () => {
++  for (const censusState of [UNAVAILABLE_CENSUS, EMPTY_CENSUS]) {
++    assertCliRefusal(
++      SELECTOR_ENTRY,
++      CHANGED_ARGS,
++      censusState,
++      /^FAIL proof-cone decision is not runnable:/u,
++    );
++    assertCliRefusal(
++      QUEST_PROOF_ENTRY,
++      ['--dry-run', ...CHANGED_ARGS],
++      censusState,
++      /^FAIL quest-proof: proof-cone decision is not runnable:/u,
++    );
++  }
++});
++
++test('selector --full-suite derives the live census, never stored classes', () => {
++  const result = runWithCensusState(
++    SELECTOR_ENTRY, ['--full-suite'], 'live');
++  assert.equal(result.status, 0, result.stderr);
++  assert.equal(result.stderr, '');
++  const selected = result.stdout.trim().split('\n').filter(Boolean).sort();
++  const expected = Object.keys(buildPrimaryManifest(root).classes).sort();
++  assert.deepEqual(selected, expected);
++  assert.ok(selected.includes(
++    'test/scripts/impact-proof-cone-consumers.test.js'));
++  assert.ok(!selected.includes('test/ghost.test.js'));
++});
+diff --git a/test/shards/impact-graph-seal.json b/test/shards/impact-graph-seal.json
+index bd918ce3eb956816e852e985a0397f22f878b48d..6f5989764538892a8c9ee3412fbefbcf1fd8b101 100644
+--- a/test/shards/impact-graph-seal.json
++++ b/test/shards/impact-graph-seal.json
+@@ -1,8 +1,8 @@
+ {
+   "schemaVersion": 1,
+   "importGraphSchemaVersion": "global-owner-debt-import-graph-v2",
+-  "sourceDigest": "efa417ce1cfe11e51ea51e5d5f186835dcb88660be5b48383ea06c5ea2dc8ce4",
+-  "producerInputDigest": "6a52b3b83fe166b1045db8effca02e8973812f50a36838d4957e5e8facc04bf1",
++  "sourceDigest": "ac4addc9fad5043975c6cf1e649d0244cda42a75faf1b7e7326599bc156f4581",
++  "producerInputDigest": "af94223053abd088deddfb2650ac80eb6878d3546aa9cd29f4f9bfcc7a101b63",
+   "resolverStateDigest": "6511e66602147d4ba1e02665739d20d77e999bb79c74e085871232c2ac4bb7f5",
+-  "snapshotDigest": "59dde989b1d490c3b25c11d17bda91afb86d3ae54504d486a103b8a715b02632"
++  "snapshotDigest": "9de2b59b64d8f49b241ca9abc85c686095c97d87dcca30701b9c79b7e44f9fb4"
+ }
+diff --git a/test/shards/primary-classes.json b/test/shards/primary-classes.json
+index 3ee0e8aaa7b59258c1ea3db7b0e617bd1a1a9914..080eab80f2226ed8a7e9d5aaeabd5cc4b6b9a92a 100644
+--- a/test/shards/primary-classes.json
++++ b/test/shards/primary-classes.json
+@@ -2,14 +2,14 @@
+   "schemaVersion": 1,
+   "id": "test-primary-classification",
+   "counts": {
+-    "unit": 1773,
++    "unit": 1774,
+     "integration": 73,
+     "bootstrap": 171,
+     "convergence-probe": 3,
+     "packaging": 4
+   },
+-  "censusSize": 2024,
+-  "digest": "fnv1a32-e3bf1a4c",
++  "censusSize": 2025,
++  "digest": "fnv1a32-e8b5f152",
+   "classes": {
+     "test/address/address-malformed-rejection.property.test.js": "unit",
+     "test/address/address-manager.test.js": "unit",
+@@ -1701,6 +1701,7 @@
+     "test/scripts/gen-solve-commands-index.test.js": "unit",
+     "test/scripts/generate-steering-llm-pack.test.js": "unit",
+     "test/scripts/impact-contract-registry.test.js": "unit",
++    "test/scripts/impact-proof-cone-consumers.test.js": "unit",
+     "test/scripts/impact-proof-cone-followed-file-races.test.js": "unit",
+     "test/scripts/impact-proof-cone-policy.test.js": "unit",
+     "test/scripts/impact-proof-cone-producer.test.js": "unit",
