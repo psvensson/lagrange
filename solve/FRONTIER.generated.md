@@ -48,7 +48,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 23
+## Open quests — 22
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -66,7 +66,6 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | operation-ledger-quorum-authoritative-release | product | 3 | 0 | 2026-07-22 ⚠ stale | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 ⚠ stale | — |
 | priority-partition-census-adapter-authority-closure | product | 3 | 0 | 2026-08-11 | — |
-| priority-service-publication-census-model | product | 0 | 0 | 2026-08-12 | — |
 | priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 ⚠ stale | — |
 | public-path-multinode-baseline | product | 0 | 0 | 2026-08-11 | — |
 | publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 ⚠ stale | — |
