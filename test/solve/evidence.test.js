@@ -11,6 +11,7 @@ import {
 } from '../../scripts/solve/evidence.js';
 import {distanceMetricFromReport}
   from '../../scripts/solve/probes/scenario-harness.js';
+import {runStep} from '../../scripts/solve/step.js';
 import {
   EVENT_EVIDENCE_INGESTED,
   EVENT_FINDING,
@@ -582,6 +583,65 @@ tap.test('evidence ingestion (P2)', async (t) => {
       'projection keeps the latest measured metric');
     t.equal(state.questStatus, STATUS_OPEN,
       'fresh failed doneWhen evidence reopens the Quest for a corrective attempt');
+
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('supervised step begin re-closes a recovered-reopen quest on green doneWhen', (t) => {
+    // Regression: a stale done=false doneWhen ingestion (recorded before enough
+    // consecutive green runs existed) reopens the projected quest, and the
+    // projection only re-closes on a quest-type event — never on done=true
+    // evidence. The change-gated commit path cannot re-close when the work is
+    // already done and the tree is clean, so the supervised begin-step must
+    // evaluate the live doneWhen and close through the accepted-integrity gate.
+    const root = tmp();
+    const goal = getGoal(root);
+    saveQuest(root, goal);
+    const reportDir = path.join(root, 'test-output', 'reports');
+    fs.mkdirSync(reportDir, {recursive: true});
+    const id = 'evidence-quest-test-main';
+
+    // A measured failing doneWhen sample (valid metric, scenario failed) reopens
+    // the quest, exactly as the parent/v2 quests were poisoned.
+    const failPath = path.join(reportDir, 'fail.report.json');
+    fs.writeFileSync(failPath, JSON.stringify({
+      timestamp: '2026-06-01T03:00:00.000Z',
+      summary: {total: 1, passed: 0, failed: 1},
+      optimizationSummary: {totalPriorityItems: 1},
+      standardSummary: {scenarios: [{
+        scenario: 'rolling-restart',
+        current: {passed: false, verdict: 'BLOCK_TOPOLOGY_CONVERGENCE'},
+      }]},
+    }));
+    appendEvent(root, goal.id, {type: EVENT_SOLVED, frontier: id, evidence: 'pass.json'});
+    appendEvent(root, goal.id, {type: EVENT_QUEST, status: STATUS_SOLVED, evidence: 'pass.json'});
+    ingestEvidence(root, {questId: goal.id, frontierId: id, evidencePath: failPath, probeScope: 'doneWhen'});
+    t.equal(projectState(goal, readLog(root, goal.id)).questStatus, STATUS_OPEN,
+      'stale done=false doneWhen evidence holds the quest open');
+
+    // Fresh green runs satisfy the consecutive-3 doneWhen. Newer timestamps win.
+    const passReport = (ts) => ({
+      timestamp: ts,
+      summary: {total: 1, passed: 1, failed: 0},
+      optimizationSummary: {totalPriorityItems: 0},
+      standardSummary: {scenarios: [{
+        scenario: 'rolling-restart',
+        current: {passed: true, verdict: 'PASS'},
+      }]},
+    });
+    fs.writeFileSync(path.join(reportDir, 'p1.report.json'),
+      JSON.stringify(passReport('2026-06-02T01:00:00.000Z')));
+    fs.writeFileSync(path.join(reportDir, 'p2.report.json'),
+      JSON.stringify(passReport('2026-06-02T02:00:00.000Z')));
+    fs.writeFileSync(path.join(reportDir, 'p3.report.json'),
+      JSON.stringify(passReport('2026-06-02T03:00:00.000Z')));
+
+    const result = runStep(root, goal);
+    t.equal(result.terminal, 'solved',
+      'step begin re-closes the quest without requiring a change');
+    t.equal(projectState(goal, readLog(root, goal.id)).questStatus, STATUS_SOLVED,
+      'the projection is solved after the recovered-reopen re-close');
 
     fs.rmSync(root, {recursive: true, force: true});
     t.end();

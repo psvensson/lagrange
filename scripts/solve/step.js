@@ -19,6 +19,7 @@ import {
 import {
   appendGuardOverride,
   assertSafeQuestId,
+  boundVerifierRejectionEvents,
   projectState,
   readLog,
   scopeSignatureNeedsReauthorization,
@@ -410,6 +411,26 @@ function stepBegin(root, quest, options = {}) {
   ({log, state} = ingested);
   if (state.questStatus === STATUS_SOLVED) {
     return {terminal: 'solved', evidence: state.questEvidence};
+  }
+
+  // Recovered-reopen re-close: a stale done=false doneWhen ingestion holds the
+  // quest open even after fresh green runs satisfy the sealed doneWhen (the
+  // projection only re-closes on a quest-type event, never on done=true
+  // evidence). The change-gated commit path cannot re-close when the work is
+  // already done and the tree is clean (auto-diff is empty), so evaluate the
+  // live doneWhen here and close through the same accepted-integrity gate the
+  // commit path uses. No-op unless the quest is genuinely done.
+  //
+  // A bound verifier rejection is a different reopen: it demands a corrective
+  // attempt (the verifier ruled the recorded candidate insufficient), so the
+  // begin-step must proceed to pin that attempt rather than re-close. Only a
+  // stale done=false EVIDENCE reopen with already-green live doneWhen re-closes.
+  if (boundVerifierRejectionEvents(log).size === 0) {
+    const recovered = recordQuestSolvedIfDone(root, quest, ctx, {accepted: true});
+    if (recovered.done) {
+      state = projectState(quest, readLog(root, quest.id));
+      return {terminal: STATUS_SOLVED, evidence: state.questEvidence};
+    }
   }
 
   const pick = pickFrontier(quest, state, ctx.scoreFn);

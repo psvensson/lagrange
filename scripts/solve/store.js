@@ -83,7 +83,7 @@ function isStructuredVerifierRejection(event) {
     VERIFIER_EVIDENCE_PATTERN.test(String(event.evidence || ''));
 }
 
-function boundVerifierRejectionEvents(log) {
+export function boundVerifierRejectionEvents(log) {
   const contractedAttemptKeys = new Set();
   const boundRejections = new Set();
   for (const [index, event] of log.entries()) {
