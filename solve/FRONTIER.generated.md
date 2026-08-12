@@ -48,11 +48,10 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 22
+## Open quests — 21
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
-| coupled-pair-landing-guard | process | 0 | 0 | 2026-08-11 | — |
 | coupled-pair-proof-cone-input-integrity-closure | process | 2 | 0 | 2026-08-12 | — |
 | coupled-pair-proof-cone-selection | process | 2 | 0 | 2026-08-11 | — |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 ⚠ stale | — |

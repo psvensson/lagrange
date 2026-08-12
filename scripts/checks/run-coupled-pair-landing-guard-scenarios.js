@@ -28,6 +28,7 @@ const SCENARIOS = {
   'coupled-pair-proof-cone-input-integrity-closure':
     PROOF_CONE_INPUT_INTEGRITY_TESTS,
   'coupled-pair-solver-landing-enforcement': SOLVER_LANDING_TESTS,
+  'coupled-pair-landing-guard': SOLVER_LANDING_TESTS,
 };
 
 runGuardTestScenarios(SCENARIOS);
