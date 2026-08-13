@@ -10,11 +10,11 @@
 import assert from 'node:assert/strict';
 import {
   CONVERGENCE_DEFAULTS,
+  LOAD_DEFAULTS,
   SCENARIO_TIMING_DEFAULTS,
 } from '../harness/constants.js';
 
 const LOAD_OPS_PER_SEC = 100;
-const LOAD_DURATION = '120s';
 const MIN_SUCCESS_RATE = 0.58;
 const MIN_OPS_PER_SEC = 10;
 const MAX_P99_LATENCY_MS = 12000;
@@ -47,6 +47,15 @@ function sleep(delayMs) {
  * @param {Object} cluster - Cluster handle from the harness.
  */
 async function run(cluster) {
+  // Honor the configured load duration (e.g. local-memory-soak.json
+  // "1800s") so the configured warmup plus analysis window can complete;
+  // fall back to the harness default when the config does not override it.
+  const configuredDuration = cluster?._config?.load?.defaultDuration;
+  const loadDuration = typeof configuredDuration === 'string' &&
+    configuredDuration.length > 0 ?
+    configuredDuration :
+    LOAD_DEFAULTS.defaultDuration;
+
   if (typeof cluster.waitForLoadReadinessStability === 'function') {
     try {
       await cluster.waitForLoadReadinessStability({
@@ -56,13 +65,17 @@ async function run(cluster) {
     } catch (_error) {
       // Keep warmup best-effort so throughput assertions can measure
       // sustained behavior even when one node starts in transient degradation.
+      process.stderr.write(
+        'sustained-write-throughput: load readiness warmup skipped ' +
+        '(best-effort): ' + String(_error?.message || _error) + '\n',
+      );
     }
   }
 
   // 1. Start sustained write load at target rate.
   const loadRun = cluster.startLoad({
     opsPerSec: LOAD_OPS_PER_SEC,
-    duration: LOAD_DURATION,
+    duration: loadDuration,
   });
 
   // 2. Wait for the full load duration to complete.
