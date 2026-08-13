@@ -548,7 +548,7 @@ test('Property 80: Pending Move Tracking', async (t) => {
           replica_id: 'schema-operations-p1-r3',
           service_type: EntityType.PARTITION,
           partition_id: partitionId,
-          node_id: 'node-source',
+          node_id: 'node-spread',
           status: ReplicaStatus.ACTIVE,
           raft_role: 'follower',
         },

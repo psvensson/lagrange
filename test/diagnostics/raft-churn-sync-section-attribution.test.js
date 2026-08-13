@@ -223,6 +223,12 @@ async (t) => {
     emit(eventName, payload) {
       this.events.push([eventName, payload]);
     }
+    async queryOperationById() {
+      return null;
+    }
+    isOperationTerminal() {
+      return false;
+    }
   }
   applyRebalanceCoordinatorReservationLifecycleMethods(TestCoordinator);
   const coordinator = new TestCoordinator();
