@@ -1,0 +1,66 @@
+{
+  "id": "release-0-2-snapshot-integration",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "For one frozen release-content digest, compacted-follower snapshot catch-up is integrated through the current production wiring and live safety path, with the complete S1-S6 lineage independently reviewed and no broader recovery claim.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-snapshot-integration",
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "555db075a71d0a00eb5b3bda83d8857c75227ccf"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "release-0-2-snapshot-integration",
+      "consecutive": 1,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "release-0-2-snapshot-compacted-follower-catchup",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "release-0-2-snapshot-compacted-follower-catchup",
+          "metric": "priority"
+        }
+      }
+    },
+    {
+      "id": "release-0-2-snapshot-production-wiring-live-safety",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "release-0-2-snapshot-production-wiring-live-safety",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "frozen-release-content-digest",
+      "statement": "Terminal replay and aggregate review must bind to the exact frozen release-content digest; any shipped snapshot or release-content change invalidates approval."
+    },
+    {
+      "id": "s1-s6-lineage",
+      "statement": "Closure must trace and independently review the complete S1-S6 lineage, then replay compacted-follower catch-up guards plus current production wiring and live safety evidence."
+    },
+    {
+      "id": "narrow-snapshot-claim",
+      "statement": "Do not claim backup, PITR, complete snapshot recovery, or an unrestricted recovery envelope; this Quest covers integrated compacted-follower catch-up only."
+    }
+  ]
+}
