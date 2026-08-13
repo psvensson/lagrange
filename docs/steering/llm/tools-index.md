@@ -295,8 +295,6 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:smoke` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/developer-smoke-proof-manifest.json --receipt-dir test-output/acceptance/developer-smoke`
 - `test:static` — `npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:impact-contracts && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint`
 - `test:static:postpush` — `node scripts/checks/run-static-audits.js`
-- `test:task27:ci` — `npm run test:task27:invariant-suite && npm run test:task27:distributed-stall-gate`
-- `test:task27:distributed-stall-gate` — Run the Task 27 distributed stall gate.
 - `test:task27:invariant-suite` — `bash scripts/run-task27-deterministic-invariant-suite.sh`
 - `test:topology-failure-gates` — Run the topology failure gates.
 - `test:unit` — `find test -type f -name '*.test.js' ! -name '*.integration.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -n 100 node scripts/run-test-files.js`
@@ -317,4 +315,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-212 scripts indexed; 33 have a curated description, 179 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+210 scripts indexed; 32 have a curated description, 178 fall back to their raw command. Improve coverage in the two sources named in the header comment.

@@ -62,10 +62,11 @@ If the exact push repairs the current red main, attribute that exception:
 npm run publish -- --fixes-red <origin-main-sha> --reason "<why this fixes red>"
 ```
 
-GitHub-hosted routing requires `[ci:github]` in the already-reviewed HEAD commit
-message and `--runner github`; publish validates the marker and never amends.
-The default runner is self-hosted. Direct `git push` remains an advanced escape
-hatch. If the exact tree already passed `test:gate:postpush`,
+The default runner is GitHub-hosted. Self-hosted routing requires
+`[ci:self-hosted]` in the already-reviewed HEAD commit message and
+`--runner self-hosted`; publish validates the marker and never amends. Direct
+`git push` remains an advanced escape hatch. If the exact tree already passed
+`test:gate:postpush`,
 `LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only the repeated test stage; static
 checks still run. `--no-verify` skips every gate and is emergencies-only.
 

@@ -130,8 +130,6 @@
     "distributed:rerun-failed": "bash scripts/rerun-failed-distributed-scenarios.sh --verbose",
     "distributed:stop-containers": "node scripts/stop-distributed-harness-containers.js",
     "test:task27:invariant-suite": "bash scripts/run-task27-deterministic-invariant-suite.sh",
-    "test:task27:distributed-stall-gate": "bash scripts/run-task27-distributed-stall-gate.sh --verbose",
-    "test:task27:ci": "npm run test:task27:invariant-suite && npm run test:task27:distributed-stall-gate",
     "test:topology-failure-gates": "node scripts/run-topology-failure-gates.js",
     "analyze:leadership-flap": "node scripts/analyze-leadership-flap.js",
     "analyze:pg-baseline": "node scripts/analyze-pg-baseline-report.js",

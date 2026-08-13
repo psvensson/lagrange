@@ -12,11 +12,10 @@
 # as a successful skipped check. Any code, configuration, workflow, test,
 # chart, or package change still runs the full gate.
 #
-# Runner selection for pushes: the gate job runs on the maintainer's
-# self-hosted box by default; put '[ci:github]' in the head commit message
-# to route that push to ephemeral GitHub-hosted runners instead
-# ('[ci:self-hosted]' pins the default). Pull requests always run
-# GitHub-hosted regardless of any flag.
+# Runner selection for pushes: the gate job runs on ephemeral GitHub-hosted
+# runners by default; put '[ci:self-hosted]' in the head commit message to
+# route that push to the maintainer's self-hosted box. Pull requests always
+# run GitHub-hosted regardless of any flag.
 #
 # The statistical rolling-restart convergence gate is deliberately not run
 # here: its pass rate is variance-bounded and is promoted only through the
@@ -39,9 +38,8 @@ jobs:
     outputs:
       run_gate: ${{ steps.classify.outputs.run_gate }}
       # Runner selector for push events, driven by a commit-message flag:
-      # '[ci:github]' routes the gate to ephemeral GitHub-hosted runners,
-      # '[ci:self-hosted]' (or no flag) keeps the fast local box. Pull
-      # requests ignore the flag and always run GitHub-hosted (fork code
+      # '[ci:self-hosted]' routes a push gate to the fast local box. With no
+      # flag, and for every pull request, use GitHub-hosted runners (fork code
       # on a public repo must never reach the self-hosted runner).
       runner: ${{ steps.classify.outputs.runner }}
     steps:
@@ -104,11 +102,7 @@ jobs:
           runner="ubuntu-24.04"
           if [ "$EVENT_NAME" = "push" ]; then
             head_message="$(git log -1 --format=%B "$head")"
-            if grep -qF '[ci:github]' <<<"$head_message"; then
-              runner="ubuntu-24.04"
-            else
-              # Default and explicit '[ci:self-hosted]' both keep the
-              # maintainer's fast local box.
+            if grep -qF '[ci:self-hosted]' <<<"$head_message"; then
               runner="self-hosted"
             fi
           fi
@@ -117,12 +111,11 @@ jobs:
   gate:
     needs: changes
     if: needs.changes.outputs.run_gate == 'true'
-    # Push events default to the maintainer's fast self-hosted box; a
-    # '[ci:github]' flag in the head commit message routes the run to
-    # ephemeral GitHub-hosted runners instead ('[ci:self-hosted]' pins the
-    # default explicitly). pull_request events (which can carry fork code
-    # on a public repo) stay GitHub-hosted regardless of any flag and must
-    # never be routed to self-hosted.
+    # Push events default to ephemeral GitHub-hosted runners; a
+    # '[ci:self-hosted]' flag in the head commit message explicitly routes
+    # the run to the maintainer's local box. pull_request events (which can
+    # carry fork code on a public repo) stay GitHub-hosted regardless of any
+    # flag and must never be routed to self-hosted.
     runs-on: ${{ needs.changes.outputs.runner }}
     timeout-minutes: 120
     steps:
