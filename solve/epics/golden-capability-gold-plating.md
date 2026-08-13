@@ -1,6 +1,13 @@
+---
+id: golden-capability-gold-plating
+status: resolved
+roadmapRow: null
+graduatesTo: null
+---
+
 # Epic: gold-plate the once-achieved capabilities (stop the flip-flop tax)
 
-Status: OPEN decision memo (2026-08-11). Source: full-history archaeology sweep
+Status: CLOSED (2026-08-13). Opened as a decision memo on 2026-08-11. Source: full-history archaeology sweep
 after the three 2026-08-11 landings (`ed0ad3643` binding-digest restamp,
 `60b8d0b6b` marker-clear integrity, `d999ca2d4` spread-cure hold exemption),
 prompted by the maintainer's question: "have these symptoms been fixed before;
@@ -86,7 +93,42 @@ rule is the precedent).
   conclude from a failed authoritative read (fail-open holds are the common
   denominator under this family).
 
-## Decision needed
+## Decision and closure (2026-08-13)
 
-Sequencing vs the public-path streak (Q1) and the pilot-readiness epic; whether
-GP-6 becomes a Solver-enforced landing precondition (governance change).
+The maintainer authorized this epic ahead of the public-path streak. All eight
+gold-plating outcomes are now represented by terminal Quest evidence:
+
+- **GP-1:** `priority-spread-cure-available-read-guard` is SOLVED.
+- **GP-2:** `priority-spread-cure-guard-ordering-contract` is SOLVED.
+- **GP-3:** the mutation-outcome owner and consumer chain is SOLVED, including
+  `raft-authoritative-row-mutation-outcome-classifier`,
+  `bootstrap-join-admission-mutation-outcome-consumer`,
+  `control-plane-mutation-apply-classifier`, and
+  `control-plane-mutation-aggregate-guard`. Superseded broad parent frames are
+  EXHAUSTED rather than falsely landed.
+- **GP-4:** the census self-diagnosis work is present at the exact, independently
+  approved 11-path fingerprint landed by
+  `priority-partition-census-artifact-identity-closure`. Its rejected and
+  superseded parent frames are EXHAUSTED with decomposition provenance.
+- **GP-5:** `priority-spread-cold-boot-dt` is SOLVED and its deterministic guard
+  is part of the push-gate corpus.
+- **GP-6:** the governance choice is **yes**: coupled safety premises are
+  registered and enforced at Solver landing by the solved coupled-pair registry,
+  witness, proof-cone, and landing-enforcement chain. Narrow superseded proof-cone
+  parent frames are EXHAUSTED; the runnable consumer and emitted-module successor
+  closures are SOLVED.
+- **GP-7:** `golden-capability-guard-scenario-gate-wiring` is SOLVED. Its single
+  runner covers the named CL-016/021/035/038/043 and `814f547e0` witnesses and is
+  wired into both project-hardening proof manifests.
+- **GP-8:** `failed-authoritative-read-admission-invariant` is SOLVED with the
+  machine-readable availability verdict contract and red-on-revert witnesses.
+
+Two incidental pre-push drafts were also resolved: the reservation reconcile
+and monotonic-drain fixtures were repaired under
+`reservation-reconcile-query-operation-binding`, while
+`service-init-cli-scaffold-contract-repair` closed without a patch because three
+fresh runs proved its sealed mismatch absent on current HEAD.
+
+No product work remains in this epic. Future regressions belong in a new Quest
+linked to the specific guard or owner contract that failed, not by reopening a
+superseded parent frame.
