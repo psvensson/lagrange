@@ -1,0 +1,153 @@
+diff --git a/scripts/checks/run-golden-capability-guard-scenarios.js b/scripts/checks/run-golden-capability-guard-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..a143cdbf714f8421f6bd642d2d76e7eaea9e095c
+--- /dev/null
++++ b/scripts/checks/run-golden-capability-guard-scenarios.js
+@@ -0,0 +1,30 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++// CI-owned regression tier for the historical flip-flop contracts named by
++// the golden-capability epic. These are deliberately the real owning tests,
++// not copied assertions: the tier makes every push re-execute the guard that
++// originally proved each capability and emits scenario-harness receipts.
++const SCENARIOS = {
++  'golden-capability-guard-scenario-gate-wiring': [
++    // Gate ownership: removing the command from either acceptance manifest
++    // makes the first guard red before the historical contracts execute.
++    'test/release/project-hardening-contracts.test.js',
++    // CL-016 / CL-021: durable priority-row publication and retry ownership.
++    'test/node/replica-local-only-row-convergence.test.js',
++    // CL-035: voter-ready role publication.
++    'test/control-plane/cl-035-voter-ready-row-seed.test.js',
++    // CL-038: removed-source handoff termination.
++    'test/rebalancer/cl-038-source-removed-handoff-terminalizes.test.js',
++    // CL-043: stale-operation and completed-election escape shapes.
++    'test/rebalancer/operation-workflow-remove-safety-concurrent-stale-phantom.test.js',
++    'test/rebalancer/cl-043-surplus-drain-completed-election-terminalizes.test.js',
++    // 814f547e0: over-target hold and spread-cure admission premise.
++    'test/rebalancer/rebalance-coordinator-topology-guard.test.js',
++    'test/rebalancer/replica-placement-cure-policy.test.js',
++    'test/rebalancer/critical-spread-terminal-stall-repro.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/test/manifests/project-hardening-proof-manifest.json b/test/manifests/project-hardening-proof-manifest.json
+index 3bdd988688dc0e3df5a041e22058b90095ed829c..1d8f522186b6d594728a3acacc7503f39634e415 100644
+--- a/test/manifests/project-hardening-proof-manifest.json
++++ b/test/manifests/project-hardening-proof-manifest.json
+@@ -67,6 +67,17 @@
+         "path": "test-output/acceptance/project-hardening/owner-debt-report-inputs.json"
+       }
+     },
++    {
++      "id": "golden-capability-guard-scenarios",
++      "executable": "node",
++      "argv": ["scripts/checks/run-golden-capability-guard-scenarios.js"],
++      "timeoutMs": 600000,
++      "acceptableExitCodes": [0],
++      "requiredArtifact": {
++        "mode": "captured-output",
++        "path": "test-output/acceptance/project-hardening/golden-capability-guard-scenarios.json"
++      }
++    },
+     {
+       "id": "fast-tests",
+       "executable": "npm",
+diff --git a/test/manifests/project-hardening-proof-postpush-manifest.json b/test/manifests/project-hardening-proof-postpush-manifest.json
+index e85f9011c0d3637d9930f6f0fc6f238ef672dd89..2cbeb579b1c98351c4de88357f2009407c0ca5d7 100644
+--- a/test/manifests/project-hardening-proof-postpush-manifest.json
++++ b/test/manifests/project-hardening-proof-postpush-manifest.json
+@@ -67,6 +67,17 @@
+         "path": "test-output/acceptance/project-hardening-postpush/owner-debt-report-inputs.json"
+       }
+     },
++    {
++      "id": "golden-capability-guard-scenarios",
++      "executable": "node",
++      "argv": ["scripts/checks/run-golden-capability-guard-scenarios.js"],
++      "timeoutMs": 600000,
++      "acceptableExitCodes": [0],
++      "requiredArtifact": {
++        "mode": "captured-output",
++        "path": "test-output/acceptance/project-hardening-postpush/golden-capability-guard-scenarios.json"
++      }
++    },
+     {
+       "id": "fast-tests",
+       "executable": "npm",
+diff --git a/test/release/project-hardening-contracts.test.js b/test/release/project-hardening-contracts.test.js
+index b8af986359a1c7b8f4e09e4a3b2df99145ed31b6..98bd564cce0f20388e6a090ad65a33f5670f5067 100644
+--- a/test/release/project-hardening-contracts.test.js
++++ b/test/release/project-hardening-contracts.test.js
+@@ -17,6 +17,14 @@ import {PGWIRE_DEFAULT} from '../../src/runtime/pgwire-runtime-module.js';
+ const UTF8 = 'utf8';
+ const PINNED_ACTION_PATTERN = /^[^@\s]+@[a-f0-9]{40}$/u;
+ const ACTION_REFERENCE_PATTERN = /^\s*uses:\s*(\S+)/gmu;
++const GOLDEN_CAPABILITY_GATE_COMMAND_ID =
++  'golden-capability-guard-scenarios';
++const GOLDEN_CAPABILITY_GATE_RUNNER =
++  'scripts/checks/run-golden-capability-guard-scenarios.js';
++const ACCEPTANCE_MANIFEST_PATHS = [
++  'test/manifests/project-hardening-proof-manifest.json',
++  'test/manifests/project-hardening-proof-postpush-manifest.json',
++];
+ const RETIRED_RELEASE_PATHS = [
+   '.forgejo/workflows/ci.yml',
+   '.forgejo/workflows/full-gate.yml',
+@@ -89,6 +97,25 @@ describe('project hardening contracts', () => {
+     assert.match(releaseText, /npm run test:gate/u);
+   });
+ 
++  it('runs the golden-capability guard-scenario tier in every push gate',
++    async () => {
++      const manifests = await Promise.all(
++        ACCEPTANCE_MANIFEST_PATHS.map(async (manifestPath) =>
++          JSON.parse(await readFile(manifestPath, UTF8))),
++      );
++      for (const manifest of manifests) {
++        const command = manifest.commands.find(
++          (entry) => entry.id === GOLDEN_CAPABILITY_GATE_COMMAND_ID,
++        );
++        assert.ok(command, `${manifest.id} must retain the guard tier`);
++        assert.equal(command.executable, 'node');
++        assert.deepEqual(command.argv, [GOLDEN_CAPABILITY_GATE_RUNNER]);
++        assert.deepEqual(command.acceptableExitCodes, [0]);
++        assert.equal(command.requiredArtifact.mode, 'captured-output');
++      }
++      await access(GOLDEN_CAPABILITY_GATE_RUNNER);
++    });
++
+   it('owns CI and release publication through GitHub Actions only', async () => {
+     const [ciText, fullGateText, releaseText, ...surfaceTexts] =
+       await Promise.all([
+diff --git a/test/scripts/acceptance-proof-manifest-runner.test.js b/test/scripts/acceptance-proof-manifest-runner.test.js
+index 403d7ced7672764208265f3703a0e3584280f2c1..51b589ab382985fc5f2c993ee24cc0eac2a6df75 100644
+--- a/test/scripts/acceptance-proof-manifest-runner.test.js
++++ b/test/scripts/acceptance-proof-manifest-runner.test.js
+@@ -280,6 +280,7 @@ describe('acceptance proof manifest runner', () => {
+       'static-analysis',
+       'model-contracts',
+       'owner-debt-report-inputs',
++      'golden-capability-guard-scenarios',
+       'fast-tests',
+     ]);
+     const focused = actual.commands[0].argv;
+diff --git a/test/shards/impact-graph-seal.json b/test/shards/impact-graph-seal.json
+index 331091968c3b837bccae2556999dcf926c77d1c6..ea80cd965ef6883391dd2c284bc59cda131ccd8a 100644
+--- a/test/shards/impact-graph-seal.json
++++ b/test/shards/impact-graph-seal.json
+@@ -1,8 +1,8 @@
+ {
+   "schemaVersion": 1,
+   "importGraphSchemaVersion": "global-owner-debt-import-graph-v2",
+-  "sourceDigest": "1513698fb1396fe6a9178f4dff8a52f6b38ff394494d6272b7b5148f80784e0d",
+-  "producerInputDigest": "630040022f466014cd16d03d2ff3b00ea2cd29db2165fe5f99546c1ec6a6da2c",
++  "sourceDigest": "dbf36244a8ee553fa3e166b056c630e4a67b06f75d9b2d5c6893c112d1e40099",
++  "producerInputDigest": "218af29a8caca01bb4dfdd0806fab38c2ef61ba64a3fcfcc1da827cb5af2e0af",
+   "resolverStateDigest": "3c8d2d7ecd599c96d71edd0323e52a8a1eb2130e93fb8de389b179537920a29b",
+-  "snapshotDigest": "96f893fa30d2c0620c24ccff69ce7695cb7860681170a64e123153fd2bc30eea"
++  "snapshotDigest": "911f915c46034379fd9a3ad97e45f69981d3bdd007918f636a29c6309d55255a"
+ }

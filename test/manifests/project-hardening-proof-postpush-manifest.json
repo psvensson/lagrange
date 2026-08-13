@@ -68,6 +68,17 @@
       }
     },
     {
+      "id": "golden-capability-guard-scenarios",
+      "executable": "node",
+      "argv": ["scripts/checks/run-golden-capability-guard-scenarios.js"],
+      "timeoutMs": 600000,
+      "acceptableExitCodes": [0],
+      "requiredArtifact": {
+        "mode": "captured-output",
+        "path": "test-output/acceptance/project-hardening-postpush/golden-capability-guard-scenarios.json"
+      }
+    },
+    {
       "id": "fast-tests",
       "executable": "npm",
       "argv": ["run", "test:fast"],

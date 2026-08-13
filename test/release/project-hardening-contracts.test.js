@@ -17,6 +17,14 @@ import {PGWIRE_DEFAULT} from '../../src/runtime/pgwire-runtime-module.js';
 const UTF8 = 'utf8';
 const PINNED_ACTION_PATTERN = /^[^@\s]+@[a-f0-9]{40}$/u;
 const ACTION_REFERENCE_PATTERN = /^\s*uses:\s*(\S+)/gmu;
+const GOLDEN_CAPABILITY_GATE_COMMAND_ID =
+  'golden-capability-guard-scenarios';
+const GOLDEN_CAPABILITY_GATE_RUNNER =
+  'scripts/checks/run-golden-capability-guard-scenarios.js';
+const ACCEPTANCE_MANIFEST_PATHS = [
+  'test/manifests/project-hardening-proof-manifest.json',
+  'test/manifests/project-hardening-proof-postpush-manifest.json',
+];
 const RETIRED_RELEASE_PATHS = [
   '.forgejo/workflows/ci.yml',
   '.forgejo/workflows/full-gate.yml',
@@ -88,6 +96,25 @@ describe('project hardening contracts', () => {
     assert.match(ciText, /postgresql-client/u);
     assert.match(releaseText, /npm run test:gate/u);
   });
+
+  it('runs the golden-capability guard-scenario tier in every push gate',
+    async () => {
+      const manifests = await Promise.all(
+        ACCEPTANCE_MANIFEST_PATHS.map(async (manifestPath) =>
+          JSON.parse(await readFile(manifestPath, UTF8))),
+      );
+      for (const manifest of manifests) {
+        const command = manifest.commands.find(
+          (entry) => entry.id === GOLDEN_CAPABILITY_GATE_COMMAND_ID,
+        );
+        assert.ok(command, `${manifest.id} must retain the guard tier`);
+        assert.equal(command.executable, 'node');
+        assert.deepEqual(command.argv, [GOLDEN_CAPABILITY_GATE_RUNNER]);
+        assert.deepEqual(command.acceptableExitCodes, [0]);
+        assert.equal(command.requiredArtifact.mode, 'captured-output');
+      }
+      await access(GOLDEN_CAPABILITY_GATE_RUNNER);
+    });
 
   it('owns CI and release publication through GitHub Actions only', async () => {
     const [ciText, fullGateText, releaseText, ...surfaceTexts] =
