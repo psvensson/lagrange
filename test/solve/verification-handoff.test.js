@@ -58,6 +58,20 @@ function fixture() {
   fs.mkdirSync(path.join(root, 'src'), {recursive: true});
   fs.writeFileSync(path.join(root, 'src', 'a.js'), 'export const retry = 1;\n');
   fs.writeFileSync(path.join(root, 'src', 'b.js'), 'export const b = 1;\n');
+  const impactRegistry = path.join(
+    root,
+    'test',
+    'shards',
+    'impact-contracts.json',
+  );
+  fs.mkdirSync(path.dirname(impactRegistry), {recursive: true});
+  fs.writeFileSync(impactRegistry, `${JSON.stringify({
+    schemaVersion: 2,
+    id: 'impact-contracts',
+    description: 'verification handoff fixture registry',
+    contracts: {},
+    coupledPairs: {},
+  }, null, 2)}\n`);
   const templateDir = path.join(
     root, 'docs', 'steering', 'verification-templates');
   fs.mkdirSync(templateDir, {recursive: true});
@@ -951,7 +965,12 @@ tap.test('content-bound verification and explicit handoff', async (t) => {
       'multi-attempt aggregate is distinct from the latest attempt receipt');
     approve(fx.root, fx.quest, 'aggregate', aggregate.fingerprint);
     writeReport(fx.root, fx.quest.id);
-    t.equal(auditQuest(fx.root, fx.quest).status, 'pass');
+    const audit = auditQuest(fx.root, fx.quest);
+    t.equal(
+      audit.status,
+      'pass',
+      audit.problems.map((problem) => problem.message || problem).join('\n'),
+    );
     t.ok(buildHandoff(fx.root, fx.quest).ok,
       'aggregate approval covers the complete final source scope');
     fs.rmSync(fx.root, {recursive: true, force: true});
