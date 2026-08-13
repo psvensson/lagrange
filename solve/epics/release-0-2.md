@@ -40,6 +40,10 @@ outside the release.
 
 ### G0 — Create release truth and candidate identity
 
+First reduce active product WIP to its cap by finishing and landing genuinely
+terminal Quests, or recording justified exhaustion after the required reflection;
+never park, rewrite, or sweep unrelated Quests merely to lower the count.
+
 Author four release-gate Quests with direct `links.roadmapRow` values:
 
 1. `release-0-2-topology-safety`
