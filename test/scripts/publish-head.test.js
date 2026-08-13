@@ -70,6 +70,24 @@ tap.test('publish gates and pushes only the exact committed HEAD', (t) => {
   t.end();
 });
 
+tap.test('publish exposes installed dependencies only while gating', (t) => {
+  const {parent, root, remote} = fixture(
+    'cat >/dev/null\ntest ! -f .git || ' +
+      'test "${LAGRANGE_PUSH_SKIP_TESTS:-}" = 1 || ' +
+      'test -f node_modules/.publish-marker',
+  );
+  fs.mkdirSync(path.join(root, 'node_modules'));
+  fs.writeFileSync(path.join(root, 'node_modules', '.publish-marker'), 'ready\n');
+  const head = git(root, ['rev-parse', 'HEAD']);
+  publishExactHead(root, {}, {queryCi: false});
+  t.equal(git(remote, ['rev-parse', 'refs/heads/main']), head,
+    'the exact-HEAD gate resolves the workspace installation');
+  t.notOk(fs.lstatSync(path.join(root, 'node_modules')).isSymbolicLink(),
+    'the publisher never replaces the workspace installation');
+  fs.rmSync(parent, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('publish fails closed when the gate mutates tracked content', (t) => {
   const {parent, root, remote} = fixture(
     'cat >/dev/null\necho gate-mutated >> tracked.txt\nexit 0',

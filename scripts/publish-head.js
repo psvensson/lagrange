@@ -44,6 +44,10 @@ const PORCELAIN_ARGUMENT = '--porcelain';
 const DIRTY_GATE_ERROR =
   'publish: pre-push gate mutated the exact-HEAD worktree';
 const MISSING_VALUE_ERROR = 'publish: option requires a value: ';
+const DEPENDENCY_DIRECTORY = 'node_modules';
+const DEPENDENCY_LINK_ERROR =
+  'publish: pre-push gate mutated the temporary dependency link';
+const DIRECTORY_LINK_TYPE = 'dir';
 
 function checked(run, command, args, options = {}) {
   const result = run(command, args, {
@@ -117,6 +121,60 @@ function receiptPath(run, root, head) {
   return path.join(commonDir, RECEIPT_DIRECTORY, `${head}.json`);
 }
 
+function linkWorkspaceDependencies(root, worktree) {
+  const source = path.join(root, DEPENDENCY_DIRECTORY);
+  if (!fs.existsSync(source)) return null;
+  const link = path.join(worktree, DEPENDENCY_DIRECTORY);
+  fs.symlinkSync(source, link, DIRECTORY_LINK_TYPE);
+  return {link, source: fs.realpathSync(source)};
+}
+
+function removeWorkspaceDependencyLink(dependencyLink) {
+  if (!dependencyLink) return;
+  let valid = false;
+  try {
+    valid = fs.lstatSync(dependencyLink.link).isSymbolicLink() &&
+      fs.realpathSync(dependencyLink.link) === dependencyLink.source;
+  } catch {
+    valid = false;
+  }
+  if (!valid) throw new Error(DEPENDENCY_LINK_ERROR);
+  fs.unlinkSync(dependencyLink.link);
+}
+
+function gateExactHead(run, root, worktree, head, remoteBefore, args) {
+  const dependencyLink = linkWorkspaceDependencies(root, worktree);
+  const gateEnv = {...process.env};
+  if (args.fixesRed) gateEnv.LAGRANGE_PUSH_ON_RED = ENABLED_ENV_VALUE;
+  const refLine = `HEAD ${head} refs/heads/main ${remoteBefore}\n`;
+  checked(run, BASH_COMMAND, [PRE_PUSH_HOOK], {
+    cwd: worktree,
+    env: gateEnv,
+    input: refLine,
+  });
+  removeWorkspaceDependencyLink(dependencyLink);
+  const gateStatus = git(run, worktree, [
+    STATUS_COMMAND, PORCELAIN_ARGUMENT,
+  ]);
+  if (gateStatus) throw new Error(DIRTY_GATE_ERROR);
+  return gateEnv;
+}
+
+function pushGatedHead(run, root, worktree, head, gateEnv, queryCi) {
+  checked(run, GIT_COMMAND, [PUSH_COMMAND, ORIGIN_REMOTE, HEAD_TO_MAIN_REFSPEC], {
+    cwd: worktree,
+    env: {...gateEnv, LAGRANGE_PUSH_SKIP_TESTS: ENABLED_ENV_VALUE},
+  });
+  const remoteAfter = remoteMainSha(run, root);
+  if (remoteAfter !== head) {
+    throw new Error(
+      `publish: remote verification failed (expected ${head}, got ${remoteAfter})`,
+    );
+  }
+  const ciUrl = queryCi === false ? '' : ciRunUrl(run, root, head);
+  return {ciUrl, remoteAfter};
+}
+
 export function publishExactHead(root, args = {}, options = {}) {
   const run = options.run || spawnSync;
   const head = git(run, root, ['rev-parse', 'HEAD']);
@@ -141,29 +199,10 @@ export function publishExactHead(root, args = {}, options = {}) {
     ],
     {cwd: root});
     added = true;
-    const gateEnv = {...process.env};
-    if (args.fixesRed) gateEnv.LAGRANGE_PUSH_ON_RED = ENABLED_ENV_VALUE;
-    const refLine = `HEAD ${head} refs/heads/main ${remoteBefore}\n`;
-    checked(run, BASH_COMMAND, [PRE_PUSH_HOOK], {
-      cwd: worktree,
-      env: gateEnv,
-      input: refLine,
-    });
-    const gateStatus = git(run, worktree, [
-      STATUS_COMMAND, PORCELAIN_ARGUMENT,
-    ]);
-    if (gateStatus) throw new Error(DIRTY_GATE_ERROR);
-    checked(run, GIT_COMMAND, [PUSH_COMMAND, ORIGIN_REMOTE, HEAD_TO_MAIN_REFSPEC], {
-      cwd: worktree,
-      env: {...gateEnv, LAGRANGE_PUSH_SKIP_TESTS: ENABLED_ENV_VALUE},
-    });
-    const remoteAfter = remoteMainSha(run, root);
-    if (remoteAfter !== head) {
-      throw new Error(
-        `publish: remote verification failed (expected ${head}, got ${remoteAfter})`,
-      );
-    }
-    const ciUrl = options.queryCi === false ? '' : ciRunUrl(run, root, head);
+    const gateEnv = gateExactHead(
+      run, root, worktree, head, remoteBefore, args);
+    const {ciUrl, remoteAfter} = pushGatedHead(
+      run, root, worktree, head, gateEnv, options.queryCi);
     const receipt = {
       schemaVersion: 1,
       head,
