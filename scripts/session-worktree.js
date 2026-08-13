@@ -15,6 +15,13 @@ import {fileURLToPath} from 'node:url';
 const DEFAULT_ENCODING = 'utf8';
 const BUFFER_ENCODING = 'buffer';
 const WORKTREE_PREFIX = 'session-worktree-';
+const DEPENDENCY_DIRECTORY = 'node_modules';
+const CLEANUP_WARNING_PREFIX = '[session-worktree] cleanup warning: ';
+
+function reportCleanupWarning(error) {
+  process.stderr.write(
+    `${CLEANUP_WARNING_PREFIX}${error instanceof Error ? error.message : error}\n`);
+}
 
 function git(root, args, options = {}) {
   return execFileSync('git', ['-C', root, ...args], {
@@ -69,7 +76,10 @@ function createSnapshotWorktree(root, worktreePath = uniqueWorktreePath()) {
     copyUntrackedInto(root, worktreePath, listUntrackedFiles(root));
     // Share the host node_modules so test runners resolve their binaries and deps;
     // it is gitignored (absent from the worktree) and identical at this HEAD.
-    fs.symlinkSync(path.join(root, 'node_modules'), path.join(worktreePath, 'node_modules'));
+    const dependencyLink = path.join(worktreePath, DEPENDENCY_DIRECTORY);
+    if (!fs.existsSync(dependencyLink)) {
+      fs.symlinkSync(path.join(root, DEPENDENCY_DIRECTORY), dependencyLink);
+    }
   } catch (error) {
     removeWorktree(root, worktreePath);
     throw error;
@@ -85,20 +95,21 @@ function cleanupTempParent(worktreePath) {
   }
   try {
     fs.rmSync(path.dirname(worktreePath), {recursive: true, force: true});
-  } catch (_error) {
-    // Best-effort temp cleanup; nothing more we can safely do.
+  } catch (error) {
+    reportCleanupWarning(error);
   }
 }
 
 function removeWorktree(root, worktreePath) {
   try {
     git(root, ['worktree', 'remove', '--force', worktreePath]);
-  } catch (_error) {
+  } catch (error) {
+    reportCleanupWarning(error);
     // Fall back to pruning so a partial add never strands worktree metadata.
     try {
       git(root, ['worktree', 'prune']);
-    } catch (_pruneError) {
-      // Nothing more we can safely do; the live tree was never mutated.
+    } catch (pruneError) {
+      reportCleanupWarning(pruneError);
     }
   }
   cleanupTempParent(worktreePath);
