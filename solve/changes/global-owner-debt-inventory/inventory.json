@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "726476ac5a154254ddc9b0b8034ebd181ce9e18abfa6a7d28ab2655991e6ab0a"
+        "sha256": "de8fe90af54120043b0ec257ea7acb29aef2cf34e7a716f3ceba75b886f4a7e0"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "031c6b7455aa45525e9824858b51ee200f90770b7e4c3127664b4348e4c8a00b"
+        "sha256": "6f04b2c8668ed40145e31d013ffe0bb548e33836762b42e4dcd55539ffe41bc7"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,7 +62,7 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "eca7faf3f827b77066822bc49ccb77a1b54c764a37032a14440e9b68f99a22b1"
+    "inputDigest": "5916a69ee56795dbeb8a1d833e22eafb273a1dbb76f88e5f4fd0b7caf7b319c4"
   },
   "reconciliation": {
     "complexity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "726476ac5a154254ddc9b0b8034ebd181ce9e18abfa6a7d28ab2655991e6ab0a"
+          "sha256": "de8fe90af54120043b0ec257ea7acb29aef2cf34e7a716f3ceba75b886f4a7e0"
         },
         "cloneGroups": 62,
         "duplicatedLines": 1970,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "031c6b7455aa45525e9824858b51ee200f90770b7e4c3127664b4348e4c8a00b"
+          "sha256": "6f04b2c8668ed40145e31d013ffe0bb548e33836762b42e4dcd55539ffe41bc7"
         },
         "cloneGroups": 826,
         "duplicatedLines": 31551,
