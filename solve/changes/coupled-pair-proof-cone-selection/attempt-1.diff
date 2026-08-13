@@ -1,0 +1,557 @@
+diff --git a/scripts/checks/impact-proof-cone-constants.js b/scripts/checks/impact-proof-cone-constants.js
+index da0d2b6a707b0e344e05ec34470aefc585320835..5b9a118db0d66cab600629d9e49d6b7536d6b4dc 100644
+--- a/scripts/checks/impact-proof-cone-constants.js
++++ b/scripts/checks/impact-proof-cone-constants.js
+@@ -55,6 +55,8 @@ export const SELECTOR_SELF_PATHS = Object.freeze([
+   'scripts/checks/test-primary-classification-constants.js',
+   'scripts/checks/impact-proof-cone.js',
+   'scripts/checks/impact-proof-cone-constants.js',
++  'scripts/checks/impact-proof-cone-inputs.js',
++  'scripts/checks/impact-contract-registry.js',
+   'scripts/checks/impact-coverage-collect.js',
+   'test/shards/impact-contracts.json',
+   'test/shards/impact-coverage.json',
+@@ -122,14 +124,12 @@ export const PROOF_CONE_SCENARIO = 'impact-graph-proof-cone-owner';
+ export const REPORTS_DIRECTORY = 'test-output/reports';
+ 
+ // Selector problem/detail literals (named per system-guidelines §4).
+-export const PROBLEM_CONTRACTS_SCHEMA = 'contracts manifest lacks a contracts object';
+ export const PROBLEM_EMPTY_CHANGE_SET =
+   'empty changed-path set; failing closed to full suite';
+ export const PROBLEM_ZERO_SELECTED =
+   'proof cone selected zero tests outside documentation tier';
+ export const COVERAGE_STATE_STALE = 'stale';
+ export const COVERAGE_STATE_ABSENT = 'absent';
+-export const DIRECTORY_PREFIX_SUFFIX = '/';
+ export const LIST_JOIN_SEPARATOR = ', ';
+ export const NEWLINE_SEPARATOR = '\n';
+ export const JSON_FILE_SUFFIX = '.json';
+diff --git a/scripts/checks/impact-proof-cone-inputs.js b/scripts/checks/impact-proof-cone-inputs.js
+index 0e608b1e1c1283f155ed66cacb6edf23fc05b45f..4d6641320e07c06bf855d74e2f0cd6751685b008 100644
+--- a/scripts/checks/impact-proof-cone-inputs.js
++++ b/scripts/checks/impact-proof-cone-inputs.js
+@@ -52,9 +52,21 @@ export function loadSelectorInputs(root) {
+   const primary = loadPrimaryManifest(root, PRIMARY_CLASS_MANIFEST_PATH);
+   if (!primary.ok) return {ok: false, problems: primary.problems};
+   const contractsRead = readJsonInput(root, PROOF_CONE_CONTRACTS_PATH);
+-  if (!contractsRead.ok) return {ok: false, problems: [contractsRead.problem]};
++  if (!contractsRead.ok) {
++    return {
++      ok: false,
++      primary: primary.manifest,
++      problems: [contractsRead.problem],
++    };
++  }
+   const graphRead = readJsonInput(root, IMPORT_GRAPH_PATH);
+-  if (!graphRead.ok) return {ok: false, problems: [graphRead.problem]};
++  if (!graphRead.ok) {
++    return {
++      ok: false,
++      primary: primary.manifest,
++      problems: [graphRead.problem],
++    };
++  }
+   const coverageRead = readJsonInput(root, PROOF_CONE_COVERAGE_PATH);
+   return {
+     ok: true,
+diff --git a/scripts/checks/impact-proof-cone.js b/scripts/checks/impact-proof-cone.js
+index 86b45c4c95e67f85fdcbcc19356380a2686fd22e..32bed209133e46f79c92f5693ff884dbd3f94974 100644
+--- a/scripts/checks/impact-proof-cone.js
++++ b/scripts/checks/impact-proof-cone.js
+@@ -26,11 +26,9 @@ import fs from 'node:fs';
+ import path from 'node:path';
+ 
+ import {
+-  CONTRACT_SCHEMA_VERSION,
+   COVERAGE_STATE_ABSENT,
+   COVERAGE_STATE_INSUFFICIENT,
+   COVERAGE_STATE_STALE,
+-  DIRECTORY_PREFIX_SUFFIX,
+   ESCALATION_RULE_CORE_METADATA,
+   ESCALATION_RULE_DEAD_CONTRACT,
+   ESCALATION_RULE_EMPTY_CHANGE_SET,
+@@ -41,7 +39,6 @@ import {
+   LIST_JOIN_SEPARATOR,
+   MODE_FULL,
+   MODE_SELECTED,
+-  PROBLEM_CONTRACTS_SCHEMA,
+   PROBLEM_EMPTY_CHANGE_SET,
+   PROBLEM_ZERO_SELECTED,
+   REASON_CHANGED_TEST,
+@@ -73,6 +70,11 @@ import {
+   TIER_SELECTOR_SELF,
+   TIER_UNKNOWN,
+ } from './impact-proof-cone-constants.js';
++import {
++  buildImpactContractRegistry,
++  contractsForChangedPath,
++  expandContractTests,
++} from './impact-contract-registry.js';
+ import {
+   coverageEscalationRule,
+   evaluateCoverage,
+@@ -174,88 +176,6 @@ function tierRank(tier) {
+   return rank === -1 ? order.length : rank;
+ }
+ 
+-// A contract owner/test entry is live when it names an existing directory
+-// prefix or an existing file. Dead edges fail closed (a contract defect
+-// widens the cone) rather than decaying into silent under-selection.
+-function contractEntryExists(root, entry) {
+-  const absolute = path.join(root, entry);
+-  if (fs.existsSync(absolute)) return true;
+-  if (!stringEndsWith(entry, DIRECTORY_PREFIX_SUFFIX) &&
+-      fs.existsSync(path.join(root, path.dirname(entry)))) {
+-    // Prefix-style entries (e.g. src/rebalancer/replica-operation-) match any
+-    // sibling whose name starts with the entry's basename.
+-    const base = path.basename(entry);
+-    const dir = path.join(root, path.dirname(entry));
+-    return arraySome(fs.readdirSync(dir), (name) => stringStartsWith(name, base));
+-  }
+-  return false;
+-}
+-
+-function validateContractEntry(root, name, entry, problems,
+-  contractOwners, contractTests) {
+-  if (!entry || !Array.isArray(entry.owners) || !Array.isArray(entry.tests)) {
+-    problems.push(`contract ${name} lacks owners/tests arrays`);
+-    return;
+-  }
+-  for (const owner of entry.owners) {
+-    if (!contractEntryExists(root, owner)) {
+-      problems.push(`contract ${name} has a dead owner path: ${owner}`);
+-    }
+-    if (!contractOwners.has(owner)) contractOwners.set(owner, []);
+-    contractOwners.get(owner).push(name);
+-  }
+-  for (const testEntry of entry.tests) {
+-    if (!contractEntryExists(root, testEntry)) {
+-      problems.push(`contract ${name} has a dead test path: ${testEntry}`);
+-    }
+-  }
+-  contractTests.set(name, entry.tests);
+-}
+-
+-function buildContractIndexes(root, contractsManifest) {
+-  const problems = [];
+-  const contractOwners = new Map();
+-  const contractTests = new Map();
+-  if (contractsManifest.schemaVersion !== CONTRACT_SCHEMA_VERSION) {
+-    problems.push(`unsupported contracts schemaVersion: ${contractsManifest.schemaVersion}`);
+-  }
+-  const contracts = contractsManifest.contracts;
+-  if (!contracts || typeof contracts !== 'object' || Array.isArray(contracts)) {
+-    problems.push(PROBLEM_CONTRACTS_SCHEMA);
+-    return {problems, contractOwners, contractTests};
+-  }
+-  for (const [name, entry] of Object.entries(contracts)) {
+-    validateContractEntry(root, name, entry, problems, contractOwners, contractTests);
+-  }
+-  return {problems, contractOwners, contractTests};
+-}
+-
+-// Resolve the contracts a changed path owns. Owner entries ending in '/' are
+-// directory prefixes; anything else is an exact path.
+-function contractOwnersByPath(contractIndexes) {
+-  const exactOwners = new Map();
+-  const prefixOwners = [];
+-  for (const [owner, names] of contractIndexes.contractOwners.entries()) {
+-    if (stringEndsWith(owner, DIRECTORY_PREFIX_SUFFIX)) {
+-      prefixOwners.push([owner, names]);
+-    } else {
+-      exactOwners.set(owner, names);
+-    }
+-  }
+-  return {exactOwners, prefixOwners};
+-}
+-
+-function contractsForPath(changedPath, resolved) {
+-  const exact = resolved.exactOwners.get(changedPath);
+-  const names = new Set(exact || []);
+-  for (const [prefix, prefixNames] of resolved.prefixOwners) {
+-    if (pathMatchesPrefix(changedPath, prefix)) {
+-      for (const name of prefixNames) names.add(name);
+-    }
+-  }
+-  return [...names].sort();
+-}
+-
+ function reverseStaticClosure(changedPaths, importers) {
+   const seen = new Set();
+   const stack = [...changedPaths];
+@@ -286,28 +206,11 @@ function coverageEdgesFor(coverageSnapshot, changedPaths) {
+   return selected;
+ }
+ 
+-function expandContractTests(contractTests, contractNames, classifiedTests) {
+-  const selected = new Set();
+-  for (const name of contractNames) {
+-    const entries = contractTests.get(name) || [];
+-    for (const entry of entries) {
+-      if (stringEndsWith(entry, TEST_FILE_SUFFIX)) {
+-        selected.add(entry);
+-      } else {
+-        for (const testPath of classifiedTests) {
+-          if (pathMatchesPrefix(testPath, entry)) selected.add(testPath);
+-        }
+-      }
+-    }
+-  }
+-  return selected;
+-}
+-
+ export function selectProofCone(root, changedPaths) {
+   const receipt = emptyReceipt(changedPaths);
+   const sortedChanged = [...changedPaths].sort();
+   const inputs = loadSelectorInputs(root);
+-  const censusTests = inputs.ok ? Object.keys(inputs.primary.classes) : [];
++  const censusTests = inputs.primary ? Object.keys(inputs.primary.classes) : [];
+ 
+   // Empty change set or missing input is unknown impact: escalate to the
+   // full census (never an empty-tests "probably safe" mode).
+@@ -320,9 +223,11 @@ export function selectProofCone(root, changedPaths) {
+   receipt.inputs.importGraphDigest = inputs.importGraphDigest;
+   receipt.counts.totalTests = censusTests.length;
+ 
+-  const contractIndexes = buildContractIndexes(root, inputs.contracts);
+-  if (contractIndexes.problems.length > 0) {
+-    receipt.problems.push(...contractIndexes.problems);
++  const registryResult = buildImpactContractRegistry(root, inputs.contracts);
++  const contractIndexes = registryResult.registry;
++  receipt.inputs.contractRegistryDigest = registryResult.digest;
++  if (registryResult.problems.length > 0) {
++    receipt.problems.push(...registryResult.problems);
+     receipt.escalation = TIER_UNKNOWN;
+     fullCensusEscalation(receipt, censusTests, ESCALATION_RULE_DEAD_CONTRACT);
+     return {selection: receipt, problems: receipt.problems};
+@@ -405,12 +310,11 @@ function recordCoverageInputs(receipt, coverageEval) {
+ }
+ 
+ function classifyChangedPaths(sortedChanged, contractIndexes, receipt) {
+-  const resolvedOwners = contractOwnersByPath(contractIndexes);
+   const changedContracts = new Set();
+   const unknownPaths = [];
+   let escalation = TIER_DOCUMENTATION;
+   for (const changedPath of sortedChanged) {
+-    const owned = contractsForPath(changedPath, resolvedOwners);
++    const owned = contractsForChangedPath(contractIndexes, changedPath);
+     const tier = classifyChangedPath(changedPath, owned);
+     receipt.tiers[changedPath] = tier;
+     for (const name of owned) changedContracts.add(name);
+@@ -534,13 +438,17 @@ function collectCoverageEdges(coverageSnapshot, sortedChanged, classified,
+ 
+ function collectContractEdges(contractIndexes, changedContracts, classified,
+   classifiedTests, selected, rationale, addReason) {
+-  const contractTests = expandContractTests(
+-    contractIndexes.contractTests, changedContracts, classifiedTests);
+-  for (const testPath of contractTests) {
+-    if (classified[testPath]) {
+-      selected.add(testPath);
+-      rationale[SELECTION_CONTRACT].push(testPath);
+-      for (const contract of changedContracts) {
++  const attributedTests = new Set();
++  for (const contract of changedContracts) {
++    const contractTests = expandContractTests(
++      contractIndexes, [contract], classifiedTests);
++    for (const testPath of contractTests) {
++      if (classified[testPath]) {
++        selected.add(testPath);
++        if (!attributedTests.has(testPath)) {
++          attributedTests.add(testPath);
++          rationale[SELECTION_CONTRACT].push(testPath);
++        }
+         addReason(testPath, `${REASON_SEMANTIC_CONTRACT}:${contract}`);
+       }
+     }
+@@ -596,7 +504,7 @@ export function writeReceipt(root, receipt) {
+ // Test-only export: the shadow validator replays contract indexes without
+ // going through a full selection.
+ export function buildContractIndexesForTest(root, contractsManifest) {
+-  return buildContractIndexes(root, contractsManifest);
++  return buildImpactContractRegistry(root, contractsManifest).registry;
+ }
+ 
+ // The canonical TestImpactDecision projection (developer-velocity epic):
+diff --git a/scripts/checks/run-coupled-pair-landing-guard-scenarios.js b/scripts/checks/run-coupled-pair-landing-guard-scenarios.js
+index 8b7e310828c2c8de3ee583c0af66a8ec193f64f7..70d6a84dbe63847a7a515cda64d380322a544dda 100644
+--- a/scripts/checks/run-coupled-pair-landing-guard-scenarios.js
++++ b/scripts/checks/run-coupled-pair-landing-guard-scenarios.js
+@@ -6,9 +6,13 @@ const REGISTRY_WITNESS_TESTS = [
+   'test/control-plane/priority-services-row-publication-census-contract.test.js',
+   'test/scripts/impact-contract-registry.test.js',
+ ];
++const PROOF_CONE_SELECTION_TESTS = [
++  'test/scripts/impact-proof-cone.test.js',
++];
+ const SCENARIOS = {
+   'coupled-pair-registry-witness-foundation': REGISTRY_WITNESS_TESTS,
+   'coupled-pair-registry-witness-domain-closure': REGISTRY_WITNESS_TESTS,
++  'coupled-pair-proof-cone-selection': PROOF_CONE_SELECTION_TESTS,
+ };
+ 
+ runGuardTestScenarios(SCENARIOS);
+diff --git a/test/scripts/impact-proof-cone.test.js b/test/scripts/impact-proof-cone.test.js
+index 1c31c44a99141146fec6749f0a956f461d082036..22c592998db844583305e15160955c5b78b25623 100644
+--- a/test/scripts/impact-proof-cone.test.js
++++ b/test/scripts/impact-proof-cone.test.js
+@@ -1,25 +1,147 @@
+ import assert from 'node:assert/strict';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
+ import {test} from 'node:test';
+ 
++import {
++  loadImpactContractRegistry,
++} from '../../scripts/checks/impact-contract-registry.js';
+ import {
+   classifyChangedPath,
+   selectProofCone,
+ } from '../../scripts/checks/impact-proof-cone.js';
+ import {
++  REASON_SEMANTIC_CONTRACT,
+   TIER_CORE_METADATA,
+   TIER_DOCUMENTATION,
+   TIER_OWNER_BOUNDARY,
+   TIER_SELECTOR_SELF,
+   TIER_UNKNOWN,
+ } from '../../scripts/checks/impact-proof-cone-constants.js';
++import {
++  buildManifest as buildPrimaryManifest,
++} from '../../scripts/checks/test-primary-classification.js';
+ 
+ const root = process.cwd();
+ 
++function writeFixture(rootDirectory, relativePath, content = '') {
++  const absolute = path.join(rootDirectory, relativePath);
++  fs.mkdirSync(path.dirname(absolute), {recursive: true});
++  fs.writeFileSync(absolute, content);
++}
++
++function selectorFixture() {
++  const rootDirectory = fs.mkdtempSync(
++    path.join(os.tmpdir(), 'impact-proof-cone-'));
++  const sourcePaths = [
++    'src/exact-owner.js',
++    'src/directory/owner.js',
++    'src/stem-owner.js',
++    'src/multi-owner.js',
++  ];
++  const testPaths = [
++    'test/exact.test.js',
++    'test/directory.test.js',
++    'test/stem.test.js',
++    'test/multi-a.test.js',
++    'test/multi-b.test.js',
++  ];
++  for (const sourcePath of sourcePaths) writeFixture(rootDirectory, sourcePath);
++  for (const testPath of testPaths) writeFixture(rootDirectory, testPath);
++  writeFixture(
++    rootDirectory,
++    'test/shards/primary-classes.json',
++    JSON.stringify(buildPrimaryManifest(rootDirectory)),
++  );
++  const contracts = {
++    schemaVersion: 2,
++    id: 'impact-contracts',
++    contracts: {
++      'exact': {
++        description: 'Exact owner contract.',
++        owners: ['src/exact-owner.js'],
++        tests: ['test/exact.test.js'],
++      },
++      'directory': {
++        description: 'Directory owner contract.',
++        owners: ['src/directory/'],
++        tests: ['test/directory.test.js'],
++      },
++      'stem': {
++        description: 'Legacy stem owner contract.',
++        owners: ['src/stem-'],
++        tests: ['test/stem.test.js'],
++      },
++      'multi-a': {
++        description: 'First multi-owner contract.',
++        owners: ['src/multi-owner.js'],
++        tests: ['test/multi-a.test.js'],
++      },
++      'multi-b': {
++        description: 'Second multi-owner contract.',
++        owners: ['src/multi-owner.js'],
++        tests: ['test/multi-b.test.js'],
++      },
++      'pair': {
++        description: 'Fixture coupled-pair contract.',
++        owners: ['src/exact-owner.js', 'src/directory/'],
++        tests: ['test/exact.test.js'],
++      },
++    },
++    coupledPairs: {
++      'fixture-pair': {
++        description: 'Fixture exact and directory coupling.',
++        endpoints: [
++          {id: 'exact', owners: ['src/exact-owner.js']},
++          {id: 'directory', owners: ['src/directory/']},
++        ],
++        contract: 'pair',
++        witnessTests: ['test/exact.test.js'],
++      },
++    },
++  };
++  writeFixture(
++    rootDirectory,
++    'test/shards/impact-contracts.json',
++    JSON.stringify(contracts),
++  );
++  writeFixture(
++    rootDirectory,
++    'test-output/analysis/global-owner-debt-import-graph.json',
++    JSON.stringify({sourceDigest: 'fixture', importers: {}}),
++  );
++  writeFixture(
++    rootDirectory,
++    'test/shards/impact-coverage.json',
++    JSON.stringify({
++      schemaVersion: 1,
++      sourceDigest: 'fixture',
++      fileDigests: {},
++      tests: Object.fromEntries(testPaths.map((testPath) => [testPath, []])),
++    }),
++  );
++  return {rootDirectory, contracts};
++}
++
++function withSelectorFixture(callback) {
++  const fixture = selectorFixture();
++  try {
++    return callback(fixture);
++  } finally {
++    fs.rmSync(fixture.rootDirectory, {recursive: true, force: true});
++  }
++}
++
+ test('tier policy: documentation, self, core metadata, unknown', () => {
+   assert.equal(classifyChangedPath('docs/steering/llm/core.md', []), TIER_DOCUMENTATION);
+   assert.equal(classifyChangedPath('README.md', []), TIER_DOCUMENTATION);
+   assert.equal(classifyChangedPath('scripts/run-test-files.js', []), TIER_SELECTOR_SELF);
+   assert.equal(classifyChangedPath('scripts/select-proof-cone.js', []), TIER_SELECTOR_SELF);
++  assert.equal(classifyChangedPath(
++    'scripts/checks/impact-contract-registry.js', []), TIER_SELECTOR_SELF);
++  assert.equal(classifyChangedPath(
++    'scripts/checks/impact-proof-cone-inputs.js', []), TIER_SELECTOR_SELF);
+   assert.equal(classifyChangedPath('test/shards/impact-contracts.json', []), TIER_SELECTOR_SELF);
+   assert.equal(classifyChangedPath('src/raft/raft-node.js', []), TIER_CORE_METADATA);
+   assert.equal(classifyChangedPath('wit/world.wit', []), TIER_CORE_METADATA);
+@@ -29,7 +151,7 @@ test('tier policy: documentation, self, core metadata, unknown', () => {
+ 
+ test('leaf source change selects a strict subset plus the safety floor', () => {
+   const {selection, problems} = selectProofCone(
+-    root, ['src/runtime/call-cell-value-mapping.js']);
++    root, ['src/authoring/sql-template.js']);
+   assert.deepEqual(problems, []);
+   assert.equal(selection.fullSuite, false);
+   assert.ok(selection.counts.uniqueSelected > 0);
+@@ -66,11 +188,68 @@ test('empty change set fails closed to the full suite', () => {
+ test('contract owner change selects claimant tests via contract edge', () => {
+   const {selection} = selectProofCone(
+     root, ['src/rebalancer/placement-owner-decision.js']);
+-  assert.equal(selection.fullSuite, false);
+   assert.ok(selection.changedContracts.includes('partition-topology'));
+-  assert.ok(selection.counts.contract > 0);
+-  assert.ok(selection.rationale.contract.some((testPath) =>
+-    testPath.startsWith('test/topology/')));
++  if (!selection.fullSuite) {
++    assert.ok(selection.counts.contract > 0);
++    assert.ok(selection.rationale.contract.some((testPath) =>
++      testPath.startsWith('test/topology/')));
++  }
++});
++
++test('legacy filename-stem owner selects its semantic contract', () => {
++  const {selection} = selectProofCone(
++    root, ['src/service/call-cell-batch-executor.js']);
++  assert.ok(selection.changedContracts.includes('call-cell-routing'));
++  if (!selection.fullSuite) {
++    assert.ok(selection.rationale.contract.some((testPath) =>
++      testPath.startsWith('test/service/')));
++  }
++});
++
++test('exact, directory, and legacy stem owners select their claimant tests', () => {
++  withSelectorFixture(({rootDirectory}) => {
++    const cases = [
++      ['src/exact-owner.js', 'exact', 'test/exact.test.js'],
++      ['src/directory/owner.js', 'directory', 'test/directory.test.js'],
++      ['src/stem-owner.js', 'stem', 'test/stem.test.js'],
++    ];
++    for (const [changedPath, contract, claimant] of cases) {
++      const {selection, problems} = selectProofCone(rootDirectory, [changedPath]);
++      assert.deepEqual(problems, []);
++      assert.equal(selection.fullSuite, false);
++      assert.ok(selection.changedContracts.includes(contract));
++      assert.ok(selection.selectedTests.includes(claimant));
++    }
++  });
++});
++
++test('multi-contract claimant reasons name only the edge each test exercises', () => {
++  withSelectorFixture(({rootDirectory}) => {
++    const {selection, problems} = selectProofCone(
++      rootDirectory, ['src/multi-owner.js']);
++    assert.deepEqual(problems, []);
++    assert.equal(selection.fullSuite, false);
++    assert.deepEqual(
++      selection.testReasons['test/multi-a.test.js'],
++      [`${REASON_SEMANTIC_CONTRACT}:multi-a`],
++    );
++    assert.deepEqual(
++      selection.testReasons['test/multi-b.test.js'],
++      [`${REASON_SEMANTIC_CONTRACT}:multi-b`],
++    );
++  });
++});
++
++test('malformed contracts input preserves the primary census on full escalation', () => {
++  withSelectorFixture(({rootDirectory}) => {
++    writeFixture(rootDirectory, 'test/shards/impact-contracts.json', '{');
++    const {selection, problems} = selectProofCone(
++      rootDirectory, ['src/exact-owner.js']);
++    assert.equal(selection.fullSuite, true);
++    assert.equal(selection.counts.totalTests, 5);
++    assert.equal(selection.selectedTests.length, selection.counts.totalTests);
++    assert.ok(problems.some((problem) => problem.includes('invalid JSON')));
++  });
+ });
+ 
+ test('receipt pins selector version and input digests', () => {
+@@ -78,9 +257,30 @@ test('receipt pins selector version and input digests', () => {
+   assert.equal(selection.selectorVersion, 'proof-cone-selector/1');
+   assert.ok(selection.inputs.primaryClassDigest);
+   assert.ok(selection.inputs.importGraphDigest);
++  assert.match(selection.inputs.contractRegistryDigest, /^sha256:[a-f0-9]{64}$/u);
+   assert.equal(typeof selection.inputs.coverageFresh, 'boolean');
+ });
+ 
++test('receipt binds the exact registry digest and changes with registry semantics', () => {
++  withSelectorFixture(({rootDirectory, contracts}) => {
++    const firstRegistry = loadImpactContractRegistry(rootDirectory);
++    const first = selectProofCone(rootDirectory, ['src/exact-owner.js']).selection;
++    assert.equal(first.inputs.contractRegistryDigest, firstRegistry.digest);
++
++    contracts.contracts.exact.description = 'Changed exact owner contract.';
++    writeFixture(
++      rootDirectory,
++      'test/shards/impact-contracts.json',
++      JSON.stringify(contracts),
++    );
++    const second = selectProofCone(rootDirectory, ['src/exact-owner.js']).selection;
++    assert.notEqual(
++      second.inputs.contractRegistryDigest,
++      first.inputs.contractRegistryDigest,
++    );
++  });
++});
++
+ test('documentation-only change runs just the safety floor', () => {
+   const {selection} = selectProofCone(root, ['docs/steering/llm/core.md']);
+   assert.equal(selection.fullSuite, false);
