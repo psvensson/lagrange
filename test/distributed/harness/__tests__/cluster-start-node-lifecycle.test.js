@@ -42,6 +42,8 @@ const LEGACY_REUSE_START_COMMAND =
   'exec node --max-old-space-size=1536 /app/src/index.js';
 const REUSE_INSPECT_FAILURE_MESSAGE =
   'reusable container inspect unavailable';
+const arrayMap = Function.call.bind(Array.prototype.map);
+const objectEntries = Object.entries;
 
 function buildReuseDataDir(containerName) {
   return resolvePath('.tmp', 'reuse-data', containerName);
@@ -314,16 +316,15 @@ test('Unit: _startNode reuses existing local container when reuse is enabled', a
       Id: 'existing-container-id',
       State: {Status: 'running'},
       Config: {
-        Env: [
-          `NODE_ID=${reuseNodeId}`,
-          'DATA_DIR=/data',
-          'NODE_ADDRESS=ddb-test-reuse-1-1:8080',
-          'TRANSPORT_WS_HOST=0.0.0.0',
-          'ADMIN_WS_HOST=0.0.0.0',
-          'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true',
-          ...REQUEST_CELL_AUTH_ENV_LINES,
-          `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
-        ],
+        Env: arrayMap(
+          objectEntries(cluster._buildNodeEnv(
+            reuseNodeId,
+            reuseContainerName,
+            null,
+            0,
+          )),
+          ([key, value]) => `${key}=${value}`,
+        ),
         Labels: buildReuseLabels(),
         Entrypoint: REUSE_IMAGE_ENTRYPOINT,
         Cmd: REUSE_IMAGE_CMD,
@@ -803,29 +804,17 @@ test('Unit: Cluster.start quiesces reusable containers before startup sequence',
       if (!containerStateByName.has(name)) {
         return null;
       }
-      const env = [
-        `NODE_ID=${
-          name === seedContainerName ?
-            seedNodeId :
-            name === joinerContainerName ?
-              joinerNodeId :
-              cluster._buildNodeId(2)
-        }`,
-        'DATA_DIR=/data',
-        `NODE_ADDRESS=${name}:8080`,
-        'TRANSPORT_WS_HOST=0.0.0.0',
-        'ADMIN_WS_HOST=0.0.0.0',
-        'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true',
-        ...REQUEST_CELL_AUTH_ENV_LINES,
-        `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
-      ];
-      if (name === joinerContainerName) {
-        env.push(
-          `${CONTAINER_ENV_KEYS.SEED_NODE_ADDRESS}=10.0.2.1:8080`,
-          `${ENTRYPOINT_ENV.JOINING_HTTP_TIMEOUT_MS}=30000`,
-          `${ENTRYPOINT_ENV.JOINING_LEADERSHIP_WAIT_TIMEOUT_MS}=120000`,
-        );
-      }
+      const nodeIndex = name === seedContainerName ? 0 :
+        name === joinerContainerName ? 1 : 2;
+      const nodeId = nodeIndex === 0 ? seedNodeId :
+        nodeIndex === 1 ? joinerNodeId : cluster._buildNodeId(nodeIndex);
+      const seedIp = nodeIndex === 0 ? null : '10.0.2.1';
+      const env = arrayMap(
+        objectEntries(
+          cluster._buildNodeEnv(nodeId, name, seedIp, nodeIndex),
+        ),
+        ([key, value]) => `${key}=${value}`,
+      );
       return {
         Id: name === seedContainerName ?
           seedContainerId :
@@ -1122,16 +1111,15 @@ test('Unit: _startNode reconnects reusable container with hostname alias',
       Id: 'existing-container-id',
       State: {Status: 'exited'},
       Config: {
-        Env: [
-          `NODE_ID=${reuseNodeId}`,
-          'DATA_DIR=/data',
-          'NODE_ADDRESS=ddb-test-reuse-1-1:8080',
-          'TRANSPORT_WS_HOST=0.0.0.0',
-          'ADMIN_WS_HOST=0.0.0.0',
-          'ADMIN_ALLOW_INSECURE_EXTERNAL_BIND=true',
-          ...REQUEST_CELL_AUTH_ENV_LINES,
-          `${RAFT_PROVIDER_DEFAULTS.envKey}=${RAFT_PROVIDER_DEFAULTS.provider}`,
-        ],
+        Env: arrayMap(
+          objectEntries(cluster._buildNodeEnv(
+            reuseNodeId,
+            reuseContainerName,
+            null,
+            0,
+          )),
+          ([key, value]) => `${key}=${value}`,
+        ),
         Labels: buildReuseLabels(),
         Entrypoint: REUSE_IMAGE_ENTRYPOINT,
         Cmd: REUSE_IMAGE_CMD,

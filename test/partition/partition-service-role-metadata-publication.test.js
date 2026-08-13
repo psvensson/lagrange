@@ -867,13 +867,13 @@ test('PartitionService - persists leader node updates to partitions table', asyn
   );
   t.equal(
     leaderUpdate?.options?.deliveryPriority,
-    'background',
-    'non-control-plane partition leader publication should not consume the critical lane',
+    'critical',
+    'a stale authoritative leader must be corrected on the critical lane',
   );
   t.equal(
     leaderUpdate?.options?.workClass,
-    PRESSURE_WORK_CLASS.BACKGROUND,
-    'non-control-plane partition leader publication should stay in the background work class',
+    PRESSURE_WORK_CLASS.CRITICAL,
+    'a genuine leader divergence is critical even for a user partition',
   );
 
   await partition.shutdown();

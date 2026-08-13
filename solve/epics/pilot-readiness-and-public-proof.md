@@ -24,67 +24,17 @@ companion work unless `edition-matrix.md` is changed first.
 
 HEAD at audit: `761dc17c7facd847843f7e68c39d253bca256a62`.
 
-- **Fixed selector, confirmed gap.** The account-summary example declares one
-  untyped `accountId` argument and filters rows inside the shard-local `run`
-  (`examples/call-binding-account-summary/lagrange.service.js`); no typed
-  selector-parameter mechanism exists in the call path. The invoker plans
-  shards only from the Binding's static WHERE clause
-  (`src/service/call-cell-batch-executor.js` `planShards`).
-- **One-batch bound, confirmed gap.** Shard inputs above the 4096-row bound
-  (`BATCH_ROW_BOUND`, `src/bootstrap/shared/call-cell-invocation-setup.js`)
-  fail closed with `BATCH_BOUND_EXCEEDED`; no page identity, cursor, or
-  continuation exists in `src/service/call-cell-batch-executor.js` or
-  `src/service/call-cell-invoker.js`.
-- **Numeric-only partials, confirmed gap.** Partial values must parse to
-  finite numbers, enforced at two fail-closed gates
-  (`src/service/call-cell-routing-contract.js` `normalizeEmittedPartialEntries`,
-  `src/runtime/call-cell-reduce-coordinator.js`); group keys must be disjoint
-  across shards (`SHARD_OVERLAP` refusal).
-- **One-distributed-operation limit: mechanism landed, default cutover not
-  done.** `service-cell-v2`, Binding schema v3, and handler-aware runtime
-  invocation are landed and their Quests SOLVED
-  (`binding-schema-v3-handler-interfaces`, `handler-aware-runtime-invocation`,
-  `service-cell-v2-generic-dispatch-world`). The restriction lifts only for an
-  explicit v2 target (`src/service/service-source-contract.js`); the CLI
-  generate/build/deploy pipeline never passes `multiOperationTarget: true`
-  (`src/cli/service-pipeline-command.js`), so the default still emits the
-  single-operation v1 world and no multi-operation example exists. Q5 is
-  default-cutover plus compatibility work, not new mechanism work.
-- **Time-based learner promotion, confirmed gap.** Both the raft layer
-  (`src/raft/raft-replica-base.js` `checkLearnerPromotion`, 30s default) and
-  the production partition-service owner
-  (`src/partition/partition-service-learner-promotion-methods.js`) promote on
-  elapsed time plus leader-identity discovery and quorum-shape gates; no
-  applied-index progress proof exists, and snapshot-installed learners reuse
-  the same timer path.
-- **Unauthenticated, unencrypted node transport, confirmed gap.** The message
-  router is a plain `ws` `WebSocketServer`
-  (`src/transport/message-router-server-lifecycle.js`); the IDENTIFY handshake
-  accepts self-declared node identity guarded only by admission toggles and a
-  boot-incarnation fence. TLS exists only for pgwire. The gap is explicitly
-  admitted in `src/raft/snapshot-catchup-constants.js`.
-- **No bulk load / migration tooling, confirmed gap.** `docs/migration.md`
-  states there is no supported PostgreSQL-to-Lagrange migration or CDC
-  surface; "bulk" in `src/` is only the internal raft snapshot channel.
-- **PostgreSQL compatibility, partially implemented.** Real-client tests
-  (`test/compatibility/pgwire-client-compat.test.js`, pg + psql, postgres:16
-  baselines) and a test-coverage index exist, but no machine-readable
-  supported/unsupported feature matrix is generated from test receipts.
-  Edition matrix maps PostgreSQL compatibility to the Community/AGPL repo.
-- **No upgrade/recovery envelope, confirmed gap.** `support-envelope` has zero
-  matches; no mixed-version or cluster-upgrade machinery or Quests exist.
-- **Scale certification, partially covered elsewhere.** The
-  `large-scale-data-plane-certification` epic owns internal data-plane scale
-  (its profile ladder is undrafted); `comparative-workload-efficiency-evidence`
-  owns cost-efficiency comparison. Public-path (WASM service over HTTP)
-  scale-and-failure certification is not covered by either — Q11 fills that
-  and links rather than duplicates.
-- **Scenario substrate, partially implemented.** The `scenario-harness` probe
-  and registry are landed (`scripts/solve/probes/scenario-harness.js`,
-  `test/distributed/harness/scenario-registry.js`), and `examples-catalog`
-  runs the examples against a live 7-node cluster, but no named public-path
-  multi-node baseline scenario with local-read proof, parity oracle, and
-  resource telemetry exists. Q1 must build that evidence substrate first.
+- Confirmed gaps: typed selector narrowing; inputs beyond the 4096-row batch;
+  bounded structured partials; progress-proven learner promotion;
+  authenticated/encrypted node transport; bulk migration/cutover; and an
+  executable upgrade/recovery envelope.
+- Service Cell v2, Binding v3, and handler-aware invocation are landed, but the
+  CLI default and examples still emit the single-operation v1 target.
+- PostgreSQL has real-client tests but no generated support matrix.
+- Internal data-plane scale and cost comparisons have separate owners; Q11
+  owns only public WASM-over-HTTP scale/failure certification.
+- The scenario harness and seven-node examples are landed, but Q1 still needs
+  a named public-path baseline with local-read proof, parity, and telemetry.
 
 ## Binding design decisions
 
@@ -164,27 +114,10 @@ log rather than being routed around by weakening the statement.
 
 ## Commercial companion work (external, not landed here)
 
-Per `edition-matrix.md`, these live in the external commercial repository and
-are explicitly out of scope for this AGPL epic (placeholders until that
-repository is ready):
-
-- **Pro companion epic: backup, restore, and PITR** — cluster-consistent
-  backup manifest, object-store sink and encryption, retention/deletion
-  policy, restore into an empty cluster, PITR replay cutoff, corruption and
-  missing-object attacks, measured RPO/RTO, restore certification as a
-  release gate. The SQLite replica snapshot protocol may be reused as a
-  lower-level primitive but is not itself a user backup product.
-- **Enterprise companion epic: identity, policy, and secrets** — OIDC/SAML
-  identity adapter, customer-managed RBAC and service accounts,
-  policy-provider boundary, secrets/KMS integration and rotation, audit
-  export and retention, tenant resource and isolation contract, penetration
-  and cross-tenant attack evidence. Cryptographic node transport is NOT moved
-  out of the core epic; nodes need to trust peers even in the Community
-  product.
-- **Enterprise companion epic: cross-region durability** — topology and
-  latency-group policy, region failure semantics, write-latency and quorum
-  choices, data residency constraints, failover/failback workflow,
-  split-brain prevention, named RPO/RTO certification.
+Per `edition-matrix.md`, backup/restore/PITR, enterprise identity/policy/secrets,
+and cross-region durability stay in the external commercial repository.
+Cryptographic node transport remains core because every edition must establish
+peer trust. Replica snapshots are primitives, not a user backup product.
 
 ## Epic completion criteria
 
@@ -206,39 +139,10 @@ guarantees.
 
 ## Decision log
 
-- 2026-08-07 — **Initial audit and ladder drafting.** HEAD used for the
-  audit: `761dc17c7facd847843f7e68c39d253bca256a62`. Gap dispositions:
-  confirmed gaps — typed selector narrowing (Q2), paged shard execution (Q3),
-  structured partials (Q4), progress-proven learner promotion (Q6),
-  authenticated/encrypted node transport (Q7), resumable bulk load (Q8),
-  cutover/rollback receipts (Q9), upgrade/recovery envelope (Q12), public-path
-  scale/failure certification (Q11, service-plane axis). Reclassified — Q5 is
-  default-cutover work, not new mechanism work, because
-  `service-cell-v2`/Binding-v3/handler-aware invocation landed under the
-  code-first-service-compiler epic (four Quests SOLVED); only the CLI default
-  and the example catalog still emit/declare the v1 single-operation shape.
-  Partially solved — scenario-harness probe and live 7-node examples
-  substrate exist, so Q1 is an evidence-substrate Quest (new named scenario
-  with local-read proof, parity oracle, telemetry, report schema) rather than
-  new harness machinery; PostgreSQL compatibility has real-client tests, so
-  Q10 generates the machine-readable matrix from receipts rather than
-  starting from zero. Implementation home: all twelve Quests land in this
-  AGPL repository; commercial companion epics (backup/PITR; enterprise
-  identity/policy/secrets; cross-region durability) are external placeholders
-  per `edition-matrix.md` and decision 9. `roadmapRow` left `null`: the
-  feature map has no row for pilot readiness / public-path proof (closest is
-  `RM-0.2-release-verification`, scoped to the 0.2 core release gate, and the
-  un-id'd Phase 1.0 Production Guarantees rows); assigning or minting a row
-  is a governance decision deferred to the first gate review rather than
-  invented at draft time. Node transport security is core (decision 8)
-  because the cluster cannot enforce its own trust boundary without it —
-  unknown nodes must fail before MessageRouter adoption in every edition —
-  while enterprise identity concerns (SSO, customer RBAC, tenancy, KMS) are
-  about *tenant/operator-facing* policy and stay external. Baseline workload
-  criteria for Q1/Q11: a pilot-relevant data-intensive workload (account
-  summary is the standing candidate; event/observability/fraud/IoT acceptable
-  substitutes) that exercises typed selector narrowing, inputs above one old
-  batch, structured partials, more than one service operation, multiple
-  partition hosts, and the public HTTP path, with result parity against an
-  independent oracle and sealed dataset/generator digests. Gate relationships
-  per the ladder above; Q1, Q2, Q3, Q7, Q11 are gates.
+- 2026-08-07 — Audited HEAD `761dc17c7`. Drafted the twelve-Quest ladder and
+  kept Q1, Q2, Q3, Q7, and Q11 as real gates. Q5 is default cutover rather than
+  new mechanism; Q1 and Q10 extend landed harness and compatibility substrates.
+  All twelve Quests remain AGPL work; commercial companions stay external.
+  `roadmapRow` remains null pending governance. The Q1/Q11 workload must cross
+  the public HTTP path, multiple partition hosts, old bounds, multi-operation
+  dispatch, and an independent parity oracle with sealed inputs.

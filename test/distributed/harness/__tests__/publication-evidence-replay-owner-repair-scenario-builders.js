@@ -726,7 +726,7 @@ export function buildPublicationEvidenceReplayOwnerRepairScenarioBuilders(contex
       // CL-021 witness pass-through (source commit 89147e21): per-row
       // exclusion attribution now survives summary normalization; this
       // snapshot has no excluded replicas so every partition reports {}.
-      exclusionReasonCounts: {},
+      exclusionReasonCounts: Object.create(null),
     }));
   }
 

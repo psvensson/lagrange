@@ -383,7 +383,7 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
       spreadGap: REPLAY_TEST_140646Z_REPLAY_SPREAD_GAP_LOW,
       // CL-021 witness pass-through (source commit 89147e21): no replica
       // excluded for this partition, so the attribution map is empty.
-      exclusionReasonCounts: {},
+      exclusionReasonCounts: Object.create(null),
     };
   }
 
@@ -398,7 +398,7 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
       spreadGap: REPLAY_TEST_140646Z_REPLAY_SPREAD_GAP_HIGH,
       // CL-021 witness pass-through (source commit 89147e21): no replica
       // excluded for this partition, so the attribution map is empty.
-      exclusionReasonCounts: {},
+      exclusionReasonCounts: Object.create(null),
     };
   }
 
@@ -747,10 +747,12 @@ export function buildPublicationEvidenceReplayPublicationPendingScenarioBuilders
     // build145246ZServiceRows) — which source attributes as `status_syncing`
     // (membership-publication-priority-partition-summary.js:266). Every other
     // partition has no excluded replica, so the attribution map is empty.
-    const exclusionReasonCounts =
-      partitionId === REPLAY_TEST_145246Z_REPLICA_OPERATIONS_PARTITION_ID ?
-        {[`status_${REPLAY_TEST_145246Z_SERVICE_STATUS_SYNCING}`]: 1} :
-        {};
+    const exclusionReasonCounts = Object.create(null);
+    if (partitionId === REPLAY_TEST_145246Z_REPLICA_OPERATIONS_PARTITION_ID) {
+      exclusionReasonCounts[
+        `status_${REPLAY_TEST_145246Z_SERVICE_STATUS_SYNCING}`
+      ] = 1;
+    }
     return {
       partitionId,
       requiredDistinctNodeCount: replayRequiredDistinctNodeCount,

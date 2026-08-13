@@ -81,80 +81,14 @@ as separate roadmap scope rather than widening that row:
 
 ## Decision log
 
-- 2026-08-06 — The verified 2026-08-06 adversarial audit opened a hardening
-  batch against the landed call/reduce surface: `cell-invocation-backpressure`
-  (contention must never destroy healthy Cells), `call-partial-overflow-fail-closed`
-  (no silent partial truncation), `call-cell-reduce-coordination-integrity` and
-  `call-partial-validity-slot-generations` (coordination contract integrity and
-  accepted-partial validity), `invocation-journal-owner-recovery`,
-  `call-coordination-linear-cost`, `invocation-result-retention-owner`, and
-  `runtime-memory-admission-reservation`. The activation dead-end (Finding 1)
-  went to `data-local-call-partition-activation-v3` under the new cross-Quest
-  memo `solve/epics/cell-execution-ownership-vs-replica-topology.md`, which
-  decides whether the Option-B interim repair is final or a stopgap before
-  splitting ephemeral slot ownership from durable replica topology. Audit
-  product-scope limitations (rolling cutover, narrow reduce algebra) remain
-  roadmap items for the AGPL feature map, not code quests.
-- 2026-08-03 — Call/pushdown invocation COMPLETE: data-local activation
-  landed (9c60dc142, quest `data-local-call-partition-activation-v2`),
-  followed by the hardening batch, the pin-loop engagement witness, and
-  the reduce-coordination expiry quest
-  (`call-cell-reduce-coordination-expiry`). Detail lives in the quest
-  logs and `solve/changes/HANDOFF-call-cell-invocation.md`.
-- 2026-08-02 — Selected data-local call activation as an explicit successor to
-  production call wiring rather than widening the current call Quest. Quest
-  [`data-local-call-partition-activation`](../quests/data-local-call-partition-activation.json)
-  owns the missing case where a selected partition replica has no pre-existing
-  Binding Cell: the pinned Component must execute on that replica node before
-  shard rows leave it, using existing Artifact, placement, and runtime lifecycle
-  owners without caller replica control or a parallel scheduler.
-- 2026-07-25 — Selected keyed invocation, generic Cell continuity, and
-  non-request source invocation as separate follow-ons. Request routing work
-  targets `solve/specs/request-invocation-partitioning/`; source cutovers retain
-  the existing Cell and dispatch owners. The completed minimal-deployment row
-  remains unchanged.
-- 2026-07-22 — Selected Artifact / Binding / Cell and seven typed Binding
-  sources. Bindings pin installed `package_id`, canonical `manifest_digest`, and
-  export name. All sources compile through the existing desired-service owner.
-- 2026-07-23 — Fixed Cell as a ready/running Binding-derived actual on the
-  existing replica substrate. Request placement, genuine Component readiness,
-  and canonical request routing landed as separate closure-gated slices.
-- 2026-07-23 — Application-owner correction removed Artifact/Binding table
-  authorization and caller-owned replica shape. Direct runtime policy owns
-  authorization; existing runtime-service policy owns capacity and placement.
-- 2026-07-24 — Activated change lineage through the shared Cell owner chain;
-  CDC subscription and event dispatch remain deferred.
-- 2026-07-24 — Activated time lineage through the shared Cell owner chain;
-  timer scheduling and invocation remain deferred.
-- 2026-07-24 — Selected once as the next placement slice because its kind-only
-  declaration makes activation/readiness independently provable without adding
-  an invocation owner.
-- 2026-07-24 — Quest `minimal-deployment-once-cell-placement` landed. Selected
-  `minimal-deployment-boot-cell-placement` next because boot has the same
-  kind-only declaration while bootstrap invocation remains a separate concern.
-- 2026-07-24 — Quest `minimal-deployment-boot-cell-placement-migration` landed
-  the exact boot Cell candidate after its predecessor's malformed proof history.
-  Selected `minimal-deployment-call-cell-placement` next because the durable
-  named registration can be placed independently of statement invocation.
-- 2026-07-24 — Quest `minimal-deployment-call-cell-placement` landed. Selected
-  `minimal-deployment-pushdown-cell-placement` next because the durable named
-  registration can be placed independently of query execution.
-- 2026-07-24 — Quest `minimal-deployment-pushdown-cell-placement` landed after
-  exact-candidate review caught and repaired a stale architecture paragraph.
-  All seven sources now share the selected Cell owner chain.
-- 2026-07-24 — Residual audit exhausted three superseded predecessor records in
-  favor of their landed migration or stricter replacement Quests. The Solver
-  overview now derives `linked-terminal`; source-specific invocation and
-  optional actor-key routing remain separate follow-on choices with no selected
-  target from this epic.
-- 2026-07-24 — Owner reconciled the service-portability claims surface with
-  this epic's landed evidence: `docs/service-portability-capabilities.json`
-  and its gate now state the `wasm_component` axes separately — SQL
-  `INSTALL SERVICE` installation and genuine WASI component execution on the
-  Binding/Cell readiness path (evidence:
-  `minimal-deployment-request-cell-runtime-readiness`), while the callback
-  path remains a JavaScript-envelope rehearsal and managed OCI container
-  execution remains unimplemented. This satisfies service-portability R1
-  ("distinguish current behavior, internal rehearsal machinery, and
-  production-supported external service behavior") without weakening its
-  callback or OCI constraints.
+- 2026-07-22..24 — Selected Artifact / Binding / Cell, immutable Binding
+  identity, policy-owned capacity, and one shared activation chain. All seven
+  typed sources reached placement/readiness; source dispatch remained separate.
+- 2026-07-25 — Kept keyed routing, generic continuity, and source invocation as
+  follow-on scope so the completed deployment row remained terminal.
+- 2026-08-02..03 — Landed data-local call activation and the call/pushdown
+  hardening sequence. Detailed history remains in Quest logs and
+  `solve/changes/HANDOFF-call-cell-invocation.md`.
+- 2026-08-06 — The adversarial audit routed remaining coordination, retention,
+  memory-admission, and topology-ownership findings to bounded Quests and the
+  cell-execution/topology epic; product limitations remain roadmap scope.
