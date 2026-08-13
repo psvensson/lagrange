@@ -241,7 +241,7 @@
         "evidence": {
           "kind": "repro",
           "ref": "npm run repro -- CL-038",
-          "test": "test/rebalancer/cl-038-source-removed-handoff-terminalizes.test.js"
+          "test": "test/rebalancer/cl-038-source-removed-handoff-terminates.test.js"
         },
         "trigger": {"policy": "on-quest-closure", "scope": "owner:operation_workflow_owner", "cost": "cheap"},
         "restoration": {"autoSpawn": true}

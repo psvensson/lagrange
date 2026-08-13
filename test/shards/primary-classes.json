@@ -9,7 +9,7 @@
     "packaging": 4
   },
   "censusSize": 2030,
-  "digest": "fnv1a32-833f75ab",
+  "digest": "fnv1a32-3167263b",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -1359,9 +1359,9 @@
     "test/rebalancer/canonical-replica-inventory-cutover-guard.test.js": "unit",
     "test/rebalancer/cl-029-target-completion-evidence-retry-owner.test.js": "unit",
     "test/rebalancer/cl-036-publications-quorum-escape.test.js": "unit",
-    "test/rebalancer/cl-038-source-removed-handoff-terminalizes.test.js": "unit",
+    "test/rebalancer/cl-038-source-removed-handoff-terminates.test.js": "unit",
     "test/rebalancer/cl-038-surplus-drain-retains-leader-node.test.js": "unit",
-    "test/rebalancer/cl-043-surplus-drain-completed-election-terminalizes.test.js": "unit",
+    "test/rebalancer/cl-043-surplus-drain-completed-election-terminates.test.js": "unit",
     "test/rebalancer/cleanup-moves-failed-replicas.property.test.js": "unit",
     "test/rebalancer/cluster-readiness-gate.test.js": "unit",
     "test/rebalancer/cluster-readiness-signal.property.test.js": "unit",

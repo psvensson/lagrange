@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-07-20T08:50:11.188Z",
-  "rawViolationCount": 28,
+  "generatedAt": "2026-08-13T05:23:11.446Z",
+  "rawViolationCount": 25,
   "violations": [
     {
       "filePath": "scripts/analyze-replace-ghost-retirements.js",
@@ -23,7 +23,7 @@
     },
     {
       "filePath": "scripts/solve/constants.js",
-      "line": 423,
+      "line": 476,
       "column": 0,
       "functionName": null,
       "kind": "terminalize_vocabulary",
@@ -32,7 +32,7 @@
     },
     {
       "filePath": "scripts/solve/store.js",
-      "line": 249,
+      "line": 289,
       "column": 0,
       "functionName": null,
       "kind": "terminalize_vocabulary",
@@ -41,7 +41,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
-      "line": 256,
+      "line": 261,
       "column": 0,
       "functionName": null,
       "kind": "terminalize_vocabulary",
@@ -50,16 +50,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
-      "line": 184,
-      "column": 0,
-      "functionName": null,
-      "kind": "terminalize_vocabulary",
-      "reason": "uses terminaliz*/terminalis* vocabulary; say terminate/termination instead",
-      "ruleReference": "STYLE-0012: terminalize is not a word — an operation/handoff terminates; the terminal state is reached by terminating. Use terminate/termination in new or newly edited identifiers, comments, strings, and prose."
-    },
-    {
-      "filePath": "src/rebalancer/replica-operation-repository-mutation-persistence-methods.js",
-      "line": 383,
+      "line": 191,
       "column": 0,
       "functionName": null,
       "kind": "terminalize_vocabulary",
@@ -131,7 +122,7 @@
     },
     {
       "filePath": "test/control-plane/replica-dispatch-runtime-target-progress-wake.test.js",
-      "line": 450,
+      "line": 454,
       "column": 0,
       "functionName": null,
       "kind": "terminalize_vocabulary",
@@ -158,7 +149,7 @@
     },
     {
       "filePath": "test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js",
-      "line": 602,
+      "line": 645,
       "column": 0,
       "functionName": null,
       "kind": "terminalize_vocabulary",
@@ -167,25 +158,7 @@
     },
     {
       "filePath": "test/convergence/dt6-voter-surplus-promotion-drain-livelock.test.js",
-      "line": 900,
-      "column": 0,
-      "functionName": null,
-      "kind": "terminalize_vocabulary",
-      "reason": "uses terminaliz*/terminalis* vocabulary; say terminate/termination instead",
-      "ruleReference": "STYLE-0012: terminalize is not a word — an operation/handoff terminates; the terminal state is reached by terminating. Use terminate/termination in new or newly edited identifiers, comments, strings, and prose."
-    },
-    {
-      "filePath": "test/rebalancer/cl-038-source-removed-handoff-terminalizes.test.js",
-      "line": 18,
-      "column": 0,
-      "functionName": null,
-      "kind": "terminalize_vocabulary",
-      "reason": "uses terminaliz*/terminalis* vocabulary; say terminate/termination instead",
-      "ruleReference": "STYLE-0012: terminalize is not a word — an operation/handoff terminates; the terminal state is reached by terminating. Use terminate/termination in new or newly edited identifiers, comments, strings, and prose."
-    },
-    {
-      "filePath": "test/rebalancer/cl-038-source-removed-handoff-terminalizes.test.js",
-      "line": 92,
+      "line": 944,
       "column": 0,
       "functionName": null,
       "kind": "terminalize_vocabulary",
@@ -221,7 +194,7 @@
     },
     {
       "filePath": "test/rebalancer/rebalance-coordinator-timeout-cache-visibility-tail-more-test-cases.js",
-      "line": 896,
+      "line": 904,
       "column": 0,
       "functionName": null,
       "kind": "terminalize_vocabulary",
@@ -239,7 +212,7 @@
     },
     {
       "filePath": "test/rebalancer/spread-cure-at-target-minting-gap.test.js",
-      "line": 85,
+      "line": 86,
       "column": 0,
       "functionName": null,
       "kind": "terminalize_vocabulary",
@@ -248,7 +221,7 @@
     },
     {
       "filePath": "test/solve/evidence.test.js",
-      "line": 612,
+      "line": 672,
       "column": 0,
       "functionName": null,
       "kind": "terminalize_vocabulary",

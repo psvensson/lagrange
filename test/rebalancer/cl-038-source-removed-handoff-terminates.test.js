@@ -15,7 +15,7 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from '../../s
 // leadership cycles" symptom). The fix: when the source replica row is ABSENT from the
 // authoritative-merged critical rows, the source is already removed (a removed replica
 // cannot be a raft leader), so source removal is leadership-safe → SAFE → the existing
-// REMOVE->NOT_FOUND->stop-phase machinery terminalizes the op.
+// REMOVE->NOT_FOUND->stop-phase machinery terminates the op.
 
 const {
   OperationType,
@@ -89,7 +89,7 @@ const replacementFollower = {
 // successor has been elected/published — this is what poisons the role resolution.
 const stalePartitionRow = {leader_node_id: SEED};
 
-test('CL-038 source-removed REPLACE reaches SAFE (terminalizes) instead of re-dispatching a dead handoff', async (t) => {
+test('CL-038 source-removed REPLACE reaches SAFE (terminates) instead of re-dispatching a dead handoff', async (t) => {
   const safety = makeSafety();
 
   const snapshot = safety.buildPriorityPublicationLeaderRemoveSafetySnapshot(

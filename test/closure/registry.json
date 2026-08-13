@@ -5,6 +5,6 @@
     "CL-033": "test/control-plane/cl-033-planning-projection-memo.test.js",
     "CL-034": "test/control-plane/cl-034-planning-snapshot-merge-memo.test.js",
     "CL-035": "test/control-plane/cl-035-voter-ready-row-seed.test.js",
-    "CL-038": "test/rebalancer/cl-038-source-removed-handoff-terminalizes.test.js"
+    "CL-038": "test/rebalancer/cl-038-source-removed-handoff-terminates.test.js"
   }
 }
