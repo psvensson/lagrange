@@ -129,7 +129,7 @@ function linkWorkspaceDependencies(root, worktree) {
   return {link, source: fs.realpathSync(source)};
 }
 
-function removeWorkspaceDependencyLink(dependencyLink) {
+function assertWorkspaceDependencyLink(dependencyLink) {
   if (!dependencyLink) return;
   let valid = false;
   try {
@@ -139,7 +139,6 @@ function removeWorkspaceDependencyLink(dependencyLink) {
     valid = false;
   }
   if (!valid) throw new Error(DEPENDENCY_LINK_ERROR);
-  fs.unlinkSync(dependencyLink.link);
 }
 
 function gateExactHead(run, root, worktree, head, remoteBefore, args) {
@@ -152,11 +151,13 @@ function gateExactHead(run, root, worktree, head, remoteBefore, args) {
     env: gateEnv,
     input: refLine,
   });
-  removeWorkspaceDependencyLink(dependencyLink);
+  assertWorkspaceDependencyLink(dependencyLink);
+  if (dependencyLink) fs.unlinkSync(dependencyLink.link);
   const gateStatus = git(run, worktree, [
     STATUS_COMMAND, PORCELAIN_ARGUMENT,
   ]);
   if (gateStatus) throw new Error(DIRTY_GATE_ERROR);
+  linkWorkspaceDependencies(root, worktree);
   return gateEnv;
 }
 
