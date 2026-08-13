@@ -6,16 +6,18 @@ import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
 const ZERO_SHA = '0'.repeat(40);
-const GITHUB_RUNNER_MARKER = '[ci:github]';
+const SELF_HOSTED_RUNNER_MARKER = '[ci:self-hosted]';
 const ARG_SEPARATOR = ' ';
 const GIT_COMMAND = 'git';
 const RUNNER_GITHUB = 'github';
 const RUNNER_SELF_HOSTED = 'self-hosted';
 const INVALID_RUNNER_ERROR = 'publish: --runner must be github|self-hosted';
-const GITHUB_MARKER_ERROR =
-  'publish: --runner github requires [ci:github] in the HEAD commit message; ';
-const GITHUB_MARKER_REPAIR =
+const SELF_HOSTED_MARKER_ERROR =
+  'publish: --runner self-hosted requires [ci:self-hosted] in the HEAD commit message; ';
+const RUNNER_MARKER_REPAIR =
   'create a new commit with that marker (do not amend a published commit)';
+const RUNNER_MISMATCH_ERROR =
+  'publish: --runner conflicts with the HEAD commit CI routing marker';
 const FIXES_RED_SHA_ERROR =
   'publish: --fixes-red must name the current origin/main SHA';
 const FIXES_RED_REASON_ERROR =
@@ -78,20 +80,35 @@ function remoteMainSha(run, root) {
   return line ? line.split(/\s+/u)[0] : ZERO_SHA;
 }
 
-export function validatePublishRequest({headMessage, runner, fixesRed, reason,
-  remoteSha}) {
+function resolvePublishRunner(headMessage, runner) {
   if (runner && runner !== RUNNER_GITHUB && runner !== RUNNER_SELF_HOSTED) {
     throw new Error(INVALID_RUNNER_ERROR);
   }
-  if (runner === RUNNER_GITHUB && !headMessage.includes(GITHUB_RUNNER_MARKER)) {
-    throw new Error(GITHUB_MARKER_ERROR + GITHUB_MARKER_REPAIR);
+  if (runner === RUNNER_SELF_HOSTED &&
+    !headMessage.includes(SELF_HOSTED_RUNNER_MARKER)) {
+    throw new Error(SELF_HOSTED_MARKER_ERROR + RUNNER_MARKER_REPAIR);
   }
+  const routedRunner = headMessage.includes(SELF_HOSTED_RUNNER_MARKER) ?
+    RUNNER_SELF_HOSTED : RUNNER_GITHUB;
+  if (routedRunner === RUNNER_SELF_HOSTED && runner !== RUNNER_SELF_HOSTED) {
+    throw new Error(RUNNER_MISMATCH_ERROR);
+  }
+  if (runner && runner !== routedRunner) {
+    throw new Error(RUNNER_MISMATCH_ERROR);
+  }
+  return routedRunner;
+}
+
+export function validatePublishRequest({headMessage, runner, fixesRed, reason,
+  remoteSha}) {
+  const routedRunner = resolvePublishRunner(headMessage, runner);
   if (fixesRed && fixesRed !== remoteSha) {
     throw new Error(FIXES_RED_SHA_ERROR);
   }
   if (fixesRed && !String(reason || '').trim()) {
     throw new Error(FIXES_RED_REASON_ERROR);
   }
+  return routedRunner;
 }
 
 function assertFastForward(run, root, remoteSha, head) {
@@ -181,7 +198,7 @@ export function publishExactHead(root, args = {}, options = {}) {
   const head = git(run, root, ['rev-parse', 'HEAD']);
   const headMessage = git(run, root, ['log', '-1', '--format=%B', head]);
   const remoteBefore = remoteMainSha(run, root);
-  validatePublishRequest({
+  const runner = validatePublishRequest({
     headMessage,
     runner: args.runner || null,
     fixesRed: args.fixesRed || null,
@@ -212,7 +229,7 @@ export function publishExactHead(root, args = {}, options = {}) {
       remoteBefore,
       remoteAfter,
       gate: 'bash .githooks/pre-push',
-      runner: args.runner || 'self-hosted',
+      runner,
       fixesRed: args.fixesRed || null,
       reason: args.reason || null,
       ciUrl: ciUrl || null,

@@ -40,10 +40,26 @@ function fixture(hookBody = 'cat >/dev/null\nexit 0') {
 }
 
 tap.test('publish validates runner and red-main attribution without mutation', (t) => {
-  t.throws(() => validatePublishRequest({
-    headMessage: 'plain commit', runner: 'github', fixesRed: null,
+  t.equal(validatePublishRequest({
+    headMessage: 'plain commit', runner: null, fixesRed: null,
     reason: null, remoteSha: 'a'.repeat(40),
-  }), /requires \[ci:github\]/u);
+  }), 'github', 'GitHub-hosted is the default push runner');
+  t.throws(() => validatePublishRequest({
+    headMessage: 'plain commit', runner: 'self-hosted', fixesRed: null,
+    reason: null, remoteSha: 'a'.repeat(40),
+  }), /requires \[ci:self-hosted\]/u);
+  t.equal(validatePublishRequest({
+    headMessage: 'local gate [ci:self-hosted]', runner: 'self-hosted',
+    fixesRed: null, reason: null, remoteSha: 'a'.repeat(40),
+  }), 'self-hosted', 'the marker enables the explicit self-hosted route');
+  t.throws(() => validatePublishRequest({
+    headMessage: 'local gate [ci:self-hosted]', runner: null, fixesRed: null,
+    reason: null, remoteSha: 'a'.repeat(40),
+  }), /conflicts with the HEAD commit CI routing marker/u);
+  t.throws(() => validatePublishRequest({
+    headMessage: 'local gate [ci:self-hosted]', runner: 'github', fixesRed: null,
+    reason: null, remoteSha: 'a'.repeat(40),
+  }), /conflicts with the HEAD commit CI routing marker/u);
   t.throws(() => validatePublishRequest({
     headMessage: 'plain commit', runner: null, fixesRed: 'a'.repeat(40),
     reason: 'fix', remoteSha: 'b'.repeat(40),
@@ -60,6 +76,8 @@ tap.test('publish gates and pushes only the exact committed HEAD', (t) => {
   const head = git(root, ['rev-parse', 'HEAD']);
   const receipt = publishExactHead(root, {}, {queryCi: false});
   t.equal(receipt.head, head);
+  t.equal(receipt.runner, 'github',
+    'the default publication receipt records GitHub-hosted routing');
   t.equal(git(root, ['status', '--porcelain']), beforeStatus,
     'publisher does not stage, commit, amend, or sweep the working tree');
   t.equal(git(remote, ['rev-parse', 'refs/heads/main']), head,

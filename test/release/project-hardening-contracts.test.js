@@ -116,6 +116,16 @@ describe('project hardening contracts', () => {
       await access(GOLDEN_CAPABILITY_GATE_RUNNER);
     });
 
+  it('does not expose the retired Task 27 live-rerun gate', async () => {
+    const packageJson = JSON.parse(await readFile('package.json', UTF8));
+    assert.equal(packageJson.scripts['test:task27:distributed-stall-gate'], undefined);
+    assert.equal(packageJson.scripts['test:task27:ci'], undefined);
+    await assert.rejects(
+      access('scripts/run-task27-distributed-stall-gate.sh'),
+      {code: 'ENOENT'},
+    );
+  });
+
   it('owns CI and release publication through GitHub Actions only', async () => {
     const [ciText, fullGateText, releaseText, ...surfaceTexts] =
       await Promise.all([
@@ -130,6 +140,13 @@ describe('project hardening contracts', () => {
 
     assert.deepEqual(ci.on.push.branches, ['main']);
     assert.deepEqual(ci.on.pull_request.branches, ['main']);
+    const classifyStep = ci.jobs.changes.steps.find(
+      (step) => step.id === 'classify',
+    );
+    assert.ok(classifyStep, 'CI must retain the runner classifier');
+    assert.match(classifyStep.run, /runner="ubuntu-24\.04"/u);
+    assert.match(classifyStep.run, /grep -qF '\[ci:self-hosted\]'/u);
+    assert.doesNotMatch(classifyStep.run, /grep -qF '\[ci:github\]'/u);
     assert.deepEqual(fullGate.on.workflow_dispatch, {});
     assert.deepEqual(release.on.push.tags, ['v*']);
     assert.equal(release.permissions.contents, 'read');
