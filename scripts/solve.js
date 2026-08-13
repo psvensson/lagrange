@@ -92,6 +92,7 @@ import {
   landQuestWorkflow,
   startQuestWorkflow,
 } from './solve/operator-workflow.js';
+import {workflowFailure, workflowSuccess} from './solve/workflow-envelope.js';
 
 const LOCAL_STR_OWNED_001 = 'new: Quest ID has append-only history but no Quest file; restore it or author a successor';
 const LOCAL_STR_OWNED_002 = 'new: --force cannot overwrite a Quest with append-only history; author a successor';
@@ -355,7 +356,8 @@ function renderFacadeResult(command, result) {
 
 function writeFacadeResult(command, args, result) {
   process.stdout.write(args.json === true ?
-    `${JSON.stringify(result, null, 2)}\n` : renderFacadeResult(command, result));
+    `${JSON.stringify(workflowSuccess(result), null, 2)}\n` :
+    renderFacadeResult(command, result));
 }
 
 // Quest lease + scope advisory (parallel-session-architecture epic, items
@@ -816,6 +818,11 @@ const OVERRIDE_CHARGED_LINE =
 // record no signature, which charges the override exactly as before.
 function authorizedScopeSignature(root, quest) {
   try {
+    const pending = stepPending(root, quest.id);
+    if (Array.isArray(pending?.scopeCandidate) &&
+      pending.scopeCandidate.length > 0) {
+      return pending.scopeCandidate;
+    }
     return analyzeScopePressure(root, quest, readLog(root, quest.id),
       {ignoreBaselines: true}).changedPaths || null;
   } catch {
@@ -1355,7 +1362,11 @@ function main() {
   try {
     handler(root, args);
   } catch (error) {
-    process.stderr.write(`error: ${error.message}\n`);
+    if (PRIMARY_COMMANDS.includes(command) && args.json === true) {
+      process.stderr.write(`${JSON.stringify(workflowFailure(error), null, 2)}\n`);
+    } else {
+      process.stderr.write(`error: ${error.message}\n`);
+    }
     process.exit(1);
   }
 }

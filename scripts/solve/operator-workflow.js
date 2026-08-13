@@ -12,7 +12,10 @@ import {
 import {buildDoctorReport} from './doctor.js';
 import {lintQuestCorpus} from './quest-lint.js';
 import {buildNextProjection} from './next.js';
-import {NEXT_ACTION_CODE} from './next-action.js';
+import {
+  isAttemptRecordActionCode,
+  NEXT_ACTION_CODE,
+} from './next-action.js';
 import {runStep} from './step.js';
 import {
   buildVerificationFinding,
@@ -76,6 +79,12 @@ function explicitCommitOptions(args) {
     changeRef: changeRef || undefined,
     autoDiff,
     summary,
+    theoryRef: typeof args.theoryRef === 'string' ? args.theoryRef :
+      (typeof args.theory === 'string' ? args.theory : undefined),
+    expectedMovement: typeof args.expectedMovement === 'string' ?
+      args.expectedMovement : undefined,
+    negativeResultMeans: typeof args.negativeResultMeans === 'string' ?
+      args.negativeResultMeans : undefined,
     modelRef: typeof args.modelRef === 'string' ? args.modelRef : undefined,
     modelNotApplicable: typeof args.modelNotApplicable === 'string' ?
       args.modelNotApplicable : undefined,
@@ -89,10 +98,10 @@ function executeStructuredContinuation(root, quest, action, args) {
     }
     return {executed: true, operation: 'begin-step', result: runStep(root, quest)};
   }
-  if (action.code === NEXT_ACTION_CODE.COMMIT_STEP) {
+  if (isAttemptRecordActionCode(action.code)) {
     return {
       executed: true,
-      operation: 'commit-step',
+      operation: NEXT_ACTION_CODE.RECORD_ATTEMPT,
       result: runStep(root, quest, explicitCommitOptions(args)),
     };
   }

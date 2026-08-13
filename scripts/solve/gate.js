@@ -130,7 +130,15 @@ function softAdvisoriesSpent(log, frontierId, code) {
 // recorded override pins a specific `problem` substring it only authorizes matching
 // problems, and a co-occurring residual problem keeps the combined continuation gated;
 // an untargeted override matches every problem in a block of the same code.
-function activeOverride(log, frontierId, code, problems = []) {
+function signatureCovers(candidate, authorized) {
+  if (!Array.isArray(candidate) || !Array.isArray(authorized)) return false;
+  for (let index = 0; index < candidate.length; index += 1) {
+    if (!authorized.includes(candidate[index])) return false;
+  }
+  return true;
+}
+
+function activeOverride(log, frontierId, code, problems = [], scopeSignature = null) {
   const since = lastProgressIndex(log, frontierId);
   const overrides = [];
   let consumed = 0;
@@ -138,6 +146,8 @@ function activeOverride(log, frontierId, code, problems = []) {
     const event = log[i];
     if (event.frontier !== frontierId) continue;
     if (event.type === EVENT_GUARD_OVERRIDE && event.code === code) {
+      if (scopeSignature && event.scopeSignature &&
+        !signatureCovers(scopeSignature, event.scopeSignature)) continue;
       if (!event.problem ||
         problems.some((problem) => String(problem).includes(event.problem))) {
         overrides.push(event);
@@ -274,7 +284,8 @@ export function latestAttemptAdmissionWasOverridden(log, code, problem) {
 // truth callers convert into a run/step result.
 export function resolveGateDecision(root, quest, continuation, context = {}) {
   if (continuationIsAllowed(continuation)) return null;
-  const {log = [], frontier = null, rungIndex = null, softFirst = false} = context;
+  const {log = [], frontier = null, rungIndex = null, softFirst = false,
+    scopeSignature = null} = context;
   const decided = continuationDisposition(continuation, {
     questId: quest.id,
     frontier,
@@ -300,7 +311,7 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
   // in BOTH the autonomous and supervised paths — it is an explicit, recorded decision, not a
   // soft-first delay — so it does not depend on context.softFirst.
   if (continuationOverridable(continuation)) {
-    const override = activeOverride(log, frontier, code, problems);
+    const override = activeOverride(log, frontier, code, problems, scopeSignature);
     if (override?.coversAllProblems) {
       appendEvent(root, quest.id, {
         type: EVENT_GATE_DECISION,
@@ -311,6 +322,7 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
         outcome: OUTCOME_CONTINUE,
         override: override.reason,
         problems: override.problems,
+        scopeSignature,
         nextCommand: null,
       });
       return {
@@ -319,6 +331,7 @@ export function resolveGateDecision(root, quest, continuation, context = {}) {
         outcome: OUTCOME_CONTINUE,
         override: override.reason,
         problems: override.problems,
+        scopeSignature,
         nextCommand: null,
         frontier,
         rungIndex,

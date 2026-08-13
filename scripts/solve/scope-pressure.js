@@ -20,6 +20,7 @@ const BROAD_OWNER_AREA_LIMIT = 2;
 const LARGE_DIFF_FILE_LIMIT = 10;
 const SPLIT_GROUP_FILE_LIMIT = 20;
 const GIT_COMMIT_PATTERN = /^[0-9a-f]{40}$/u;
+const SUCCESSOR_SUGGESTION_ACTION = 'suggest-successor';
 const GENERATED_PROJECTION_PATHS = new Set([
   'docs/steering/llm/architecture.md',
   'docs/steering/llm/governance.md',
@@ -294,21 +295,31 @@ export function analyzeScopePressureCandidate(
   inspection,
   options = {},
 ) {
-  const inspections = attemptInspections(
-    root,
-    quest,
-    log,
-    {ignoreBaselines: true},
-  );
-  inspections.push({
+  // Admission is one decision about the net candidate being recorded now.
+  // Historical attempts remain available through analyzeScopePressure for
+  // retrospectives, but must not make a narrow correction look cumulative.
+  const inspections = [{
     event: {workspaceBaseCommit: options.workspaceBaseCommit || null},
     inspection: {
       ...inspection,
       changedPaths: (inspection.changedPaths || []).filter((filePath) =>
         !isVerificationBookkeeping(filePath, quest.id)),
     },
-  });
-  return summarizeScopePressure(root, inspections);
+  }];
+  const pressure = summarizeScopePressure(root, inspections);
+  const introducedPaths = Array.isArray(options.introducedPaths) ?
+    options.introducedPaths : pressure.admission.changedPaths;
+  const candidateSplitPlan = splitPlanFor(introducedPaths);
+  return {
+    ...pressure,
+    splitPlan: candidateSplitPlan,
+    introducedPaths,
+    successorSuggestion: pressure.signals.length > 0 ? {
+      action: SUCCESSOR_SUGGESTION_ACTION,
+      sealed: false,
+      groups: candidateSplitPlan,
+    } : null,
+  };
 }
 
 export function renderScopePressure(scopePressure) {

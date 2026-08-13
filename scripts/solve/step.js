@@ -17,12 +17,12 @@ import {
   recordQuestSolvedIfDone,
 } from './loop.js';
 import {
-  appendGuardOverride,
   assertSafeQuestId,
   boundVerifierRejectionEvents,
+  introducedScopePaths,
   projectState,
   readLog,
-  scopeSignatureNeedsReauthorization,
+  scopeSignatureHasAuthorization,
 } from './store.js';
 import {evaluate} from './probe.js';
 import {pickFrontier} from './scheduler.js';
@@ -91,8 +91,6 @@ const AUTO_DIFF_REPORT_DELETION_DISCOVERY_ERROR =
   'auto-diff: report deletion path discovery failed: ';
 const SCOPE_PRESSURE_BLOCKED_PREFIX =
   'scope-pressure precommit blocked: split into bounded Quest declarations ';
-const AUTOMATIC_SCOPE_REAUTHORIZATION_REASON =
-  'automatic reauthorization of previously covered scope';
 
 // Solver-owned GENERATED bookkeeping the step/loop machinery itself writes
 // between step begin and commit: the pending file (solve/state, stepBegin),
@@ -540,6 +538,13 @@ function assertScopeAdmission(
   const scopePressure = analyzeScopePressureCandidate(
     root, quest, log, changeInspection, {
       workspaceBaseCommit: sourceBaseCommit || null,
+      introducedPaths: introducedScopePaths(
+        log,
+        pending.frontier,
+        CONTINUATION_BLOCKED_SCOPE,
+        (changeInspection.changedPaths || []).filter((filePath) =>
+          requiresSourceVerification(filePath)),
+      ),
     });
   const scopeAdmission = scopeTerminalStatus(scopePressure);
   if (!scopeAdmission.terminal) return;
@@ -548,21 +553,19 @@ function assertScopeAdmission(
     `bytes=${scopeAdmission.changeBytes})`;
   const admittedScopePaths = scopePressure.admission?.changedPaths ||
     scopePressure.changedPaths;
-  if (scopeSignatureNeedsReauthorization(
+  if (scopeSignatureHasAuthorization(
     log,
     pending.frontier,
     CONTINUATION_BLOCKED_SCOPE,
     admittedScopePaths,
-    scopeProblem,
   )) {
-    log.push(appendGuardOverride(root, quest.id, {
-      frontier: pending.frontier,
-      code: CONTINUATION_BLOCKED_SCOPE,
-      problem: scopeProblem,
-      reason: AUTOMATIC_SCOPE_REAUTHORIZATION_REASON,
-      scopeSignature: admittedScopePaths,
-    }));
+    return;
   }
+  savePending(root, quest.id, {
+    ...pending,
+    scopeCandidate: admittedScopePaths,
+    scopeSplitPlan: scopePressure.splitPlan || [],
+  });
   const decision = resolveGateDecision(root, quest, {
     status: CONTINUATION_BLOCKED_SCOPE,
     code: CONTINUATION_BLOCKED_SCOPE,
@@ -571,8 +574,14 @@ function assertScopeAdmission(
     log,
     frontier: pending.frontier,
     rungIndex: pending.rungIndex,
+    scopeSignature: admittedScopePaths,
   });
-  if (!decisionContinues(decision)) throw new Error(scopeProblem);
+  if (!decisionContinues(decision)) {
+    const error = new Error(scopeProblem);
+    error.scopePaths = scopePressure.introducedPaths;
+    error.scopeSplitPlan = scopePressure.splitPlan || [];
+    throw error;
+  }
 }
 
 function commitPendingAttempt(root, quest, pending, changeRef, options = {}) {

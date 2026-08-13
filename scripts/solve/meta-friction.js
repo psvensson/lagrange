@@ -21,8 +21,11 @@ import path from 'node:path';
 
 import {
   EVENT_GUARD_OVERRIDE,
+  EVENT_GATE_DECISION,
   EVENT_PARK,
   EVENT_VIOLATION,
+  DISPOSITION_ADVISORY,
+  OUTCOME_CONTINUE,
   SOLVE_DATA_DIR,
 } from './constants.js';
 
@@ -72,6 +75,8 @@ function overrideKey(event) {
 export function tallyFrictionEvents(entries) {
   const rows = new Map();
   const parks = [];
+  const advisories = [];
+  const operatorStops = [];
   const add = (kind, key, questId, wastedMs) => {
     if (!key) return;
     const id = `${kind}${ROW_KEY_SEPARATOR}${key}`;
@@ -108,11 +113,25 @@ export function tallyFrictionEvents(entries) {
         reason: typeof event.reason === 'string' ? event.reason : '',
       });
     }
+    if (event.type === EVENT_GATE_DECISION &&
+      event.disposition === DISPOSITION_ADVISORY &&
+      event.outcome === OUTCOME_CONTINUE && !event.override) {
+      advisories.push({questId, code: event.code || event.status || UNSCOPED});
+    }
+    if (event.type === EVENT_GATE_DECISION && event.outcome !== OUTCOME_CONTINUE &&
+      event.disposition !== DISPOSITION_ADVISORY) {
+      operatorStops.push({questId, code: event.code || event.status || UNSCOPED});
+    }
   }
   const ranked = [...rows.values()]
     .map((row) => ({...row, quests: [...row.quests].sort()}))
     .sort((a, b) => b.count - a.count || a.key.localeCompare(b.key));
-  return {rows: ranked, parks};
+  return {
+    rows: ranked,
+    parks,
+    operatorStops,
+    advisories,
+  };
 }
 
 function logFiles(root) {
@@ -147,9 +166,9 @@ export function readFrictionWindow(root, {days, now}) {
 
 export function buildMetaFriction(root, {days = DEFAULT_WINDOW_DAYS, now} = {}) {
   const entries = readFrictionWindow(root, {days, now: now ?? Date.now()});
-  const {rows, parks} = tallyFrictionEvents(entries);
+  const {rows, parks, operatorStops, advisories} = tallyFrictionEvents(entries);
   const total = rows.reduce((sum, row) => sum + row.count, 0);
-  return {days, total, rows, parks};
+  return {days, total, rows, parks, operatorStops, advisories};
 }
 
 function excerpt(text) {
@@ -171,9 +190,11 @@ function wastedColumn(row) {
 }
 
 export function renderMetaFriction(friction) {
-  const {days, total, rows, parks} = friction;
+  const {days, total, rows, parks, operatorStops = [],
+    advisories = []} = friction;
   const lines = [
     `# Workflow friction — last ${days} day(s), ${total} recorded event(s)`,
+    `Operator stops: ${operatorStops.length}; automatic advisories: ${advisories.length}`,
     '',
   ];
   if (rows.length === 0) {

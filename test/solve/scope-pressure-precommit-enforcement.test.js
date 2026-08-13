@@ -24,6 +24,7 @@ import {runStep, stepPending} from '../../scripts/solve/step.js';
 import {
   appendEvent,
   appendGuardOverride,
+  introducedScopePaths,
   readLog,
   saveQuest,
 } from '../../scripts/solve/store.js';
@@ -98,7 +99,7 @@ tap.test('real step rejects one-above path bound before attempt recording', (t) 
   t.end();
 });
 
-tap.test('one recorded scope override authorizes one over-bound step', (t) => {
+tap.test('a consumed scope override durably authorizes its exact scope', (t) => {
   const {root, quest} = setup();
   const paths = Array.from({length: SCOPE_PRESSURE_FILE_LIMIT + 1}, (_, index) =>
     `scripts/solve/case-${index}.js`);
@@ -120,14 +121,16 @@ tap.test('one recorded scope override authorizes one over-bound step', (t) => {
   const second = runStep(root, quest);
   t.equal(second.terminal, null,
     'begin does not duplicate exact candidate admission');
-  t.throws(() => commit(root, quest, makeDiff(root, paths, 0, 'second')),
-    /scope-pressure precommit blocked.*files=26/iu,
-    'the consumed override cannot authorize a second candidate');
+  t.doesNotThrow(() => commit(root, quest, makeDiff(root, paths, 0, 'second')),
+    'the derived exact signature authorizes a replacement candidate');
+  t.equal(readLog(root, quest.id).filter((event) =>
+    event.type === EVENT_ATTEMPT).length, 2,
+  'durable authorization adds no second override ceremony');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });
 
-tap.test('covered scope is reauthorized automatically on replacement', (t) => {
+tap.test('covered scope stays authorized without another override event', (t) => {
   const {root, quest} = setup();
   const paths = Array.from({length: SCOPE_PRESSURE_FILE_LIMIT + 1}, (_, index) =>
     `scripts/solve/case-${index}.js`);
@@ -145,11 +148,15 @@ tap.test('covered scope is reauthorized automatically on replacement', (t) => {
     commit(root, quest, makeDiff(root, changedPaths, 0, 'replacement')),
   'a same admitted scope needs no override when raw projections are present');
   const log = readLog(root, quest.id);
-  const automatic = log.filter((event) =>
+  const reauthorizations = log.filter((event) =>
     event.type === 'guard-override' && event.scopeReauthorization === true);
-  t.equal(automatic.length, 1);
-  t.match(automatic[0].reason, /automatic.*covered scope/iu);
+  t.equal(reauthorizations.length, 0,
+    'durable exact/subset authorization adds no bookkeeping event');
   t.equal(log.filter((event) => event.type === EVENT_ATTEMPT).length, 2);
+  const handoff = buildHandoff(root, quest, {dirtyFiles: []});
+  t.notMatch(handoff.gate.problems.map((item) => item.message).join(' '),
+    /scope-pressure precommit blocked/iu,
+    'terminal handoff honors durable authorization after a replacement attempt');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });
@@ -167,6 +174,10 @@ tap.test('ambient collection changes cannot authorize grown scope', (t) => {
     reason: 'the initial atomic migration scope was reviewed explicitly',
     scopeSignature: authorized,
   });
+  t.same(introducedScopePaths(
+    readLog(root, quest.id), quest.frontiers[0].id, 'blocked-scope', grown),
+  ['scripts/solve/unreviewed-growth.js'],
+  'repair payload can name only the path beyond durable authorization');
   commit(root, quest, makeDiff(root, authorized, 0, 'first'));
   runStep(root, quest);
   const grownRef = makeDiff(root, grown, 0, 'grown');
@@ -186,6 +197,29 @@ tap.test('ambient collection changes cannot authorize grown scope', (t) => {
   const attempts = readLog(root, quest.id).filter((event) =>
     event.type === EVENT_ATTEMPT);
   t.equal(attempts.length, 1, 'the grown candidate was not recorded');
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('derived exact authorization reports only later scope growth', (t) => {
+  const {root, quest} = setup();
+  const authorized = Array.from(
+    {length: SCOPE_PRESSURE_FILE_LIMIT + 1},
+    (_, index) => `scripts/solve/case-${index}.js`,
+  );
+  appendEvent(root, quest.id, {
+    type: 'gate-decision',
+    frontier: quest.frontiers[0].id,
+    code: 'blocked-scope',
+    outcome: 'continue',
+    override: 'pre-artifact authorization consumed at exact admission',
+    scopeSignature: authorized,
+  });
+  const grown = [...authorized, 'scripts/solve/unreviewed-growth.js'];
+  t.same(introducedScopePaths(
+    readLog(root, quest.id), quest.frontiers[0].id, 'blocked-scope', grown),
+  ['scripts/solve/unreviewed-growth.js'],
+  'repair paths exclude the exact scope derived at override consumption');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });
@@ -319,7 +353,7 @@ tap.test('handoff rejects historical over-threshold attempt', (t) => {
   t.end();
 });
 
-tap.test('cumulative attempts cannot each stay small while crossing the bound', (t) => {
+tap.test('bounded current attempts are not charged as cumulative history', (t) => {
   const {root, quest} = setup();
   const firstPaths = Array.from({length: 13}, (_, index) =>
     `scripts/solve/first-${index}.js`);
@@ -327,16 +361,16 @@ tap.test('cumulative attempts cannot each stay small while crossing the bound', 
   runStep(root, quest);
   const secondPaths = Array.from({length: 13}, (_, index) =>
     `scripts/solve/second-${index}.js`);
-  t.throws(() => commit(root, quest, makeDiff(root, secondPaths, 0, 'second')),
-    /scope-pressure precommit blocked.*files=26/iu);
+  t.doesNotThrow(() =>
+    commit(root, quest, makeDiff(root, secondPaths, 0, 'second')));
   t.equal(readLog(root, quest.id).filter((event) =>
-    event.type === EVENT_ATTEMPT).length, 1,
-  'only the bounded first attempt is recorded');
+    event.type === EVENT_ATTEMPT).length, 2,
+  'both independently bounded current candidates are recorded');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });
 
-tap.test('same-base full snapshots replace overlapping byte charges only', (t) => {
+tap.test('candidate byte admission charges only the current snapshot', (t) => {
   const {root, quest} = setup();
   const baseCommit = '1'.repeat(40);
   const firstRef = makeDiff(
@@ -400,10 +434,10 @@ tap.test('same-base full snapshots replace overlapping byte charges only', (t) =
   );
   t.equal(
     smallerReplacement.changedBytes,
-    SCOPE_PRESSURE_BYTE_LIMIT + 1,
-    'a covering replacement cannot hide an oversized snapshot',
+    1_000,
+    'a bounded current snapshot is not charged for historical oversized bytes',
   );
-  t.equal(scopeTerminalStatus(smallerReplacement).terminal, true);
+  t.equal(scopeTerminalStatus(smallerReplacement).terminal, false);
 
   const disjointRef = makeDiff(
     root,
@@ -420,10 +454,10 @@ tap.test('same-base full snapshots replace overlapping byte charges only', (t) =
   );
   t.equal(
     disjoint.changedBytes,
-    (SCOPE_PRESSURE_BYTE_LIMIT - 1) * 2,
-    'disjoint same-base scope remains cumulative',
+    SCOPE_PRESSURE_BYTE_LIMIT - 1,
+    'disjoint history is not charged to the current candidate',
   );
-  t.equal(scopeTerminalStatus(disjoint).terminal, true);
+  t.equal(scopeTerminalStatus(disjoint).terminal, false);
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });

@@ -643,10 +643,29 @@ export function scopeSignatureHasAuthorization(
   const candidate = scopeSignatureOf(changedPaths);
   if (!candidate) return false;
   return arraySome(log, (event) =>
-    event.type === EVENT_GUARD_OVERRIDE &&
+    (event.type === EVENT_GUARD_OVERRIDE ||
+      (event.type === EVENT_GATE_DECISION && Boolean(event.override))) &&
     (event.frontier || null) === (frontier || null) &&
     event.code === code &&
     signatureIsCoveredBy(candidate, event.scopeSignature));
+}
+
+export function introducedScopePaths(log, frontier, code, changedPaths) {
+  const candidate = scopeSignatureOf(changedPaths) || [];
+  const authorized = [];
+  for (let index = 0; index < log.length; index += 1) {
+    const event = log[index];
+    const authorizesScope = event.type === EVENT_GUARD_OVERRIDE ||
+      (event.type === EVENT_GATE_DECISION && Boolean(event.override));
+    if (!authorizesScope ||
+      (event.frontier || null) !== (frontier || null) ||
+      event.code !== code || !arrayIsArray(event.scopeSignature)) continue;
+    for (let pathIndex = 0; pathIndex < event.scopeSignature.length; pathIndex += 1) {
+      const filePath = event.scopeSignature[pathIndex];
+      if (!arrayIncludes(authorized, filePath)) arrayPush(authorized, filePath);
+    }
+  }
+  return arrayFilter(candidate, (filePath) => !arrayIncludes(authorized, filePath));
 }
 
 function scopeAuthorizationWindow(log) {

@@ -1,119 +1,77 @@
 # AGENTS
 
-Welcome, developer or AI agent. This repository uses the **Quest** workflow for
-problem solving and feature implementation.
+This repository uses the **Quest** workflow. This file is the single steering
+entry point and the only document that prescribes a load order.
 
-This file is the **single entry point** for steering. It is the only document
-that prescribes a load order. Other steering files describe their own scope;
-none of them re-declare the boot sequence.
+## Choose The Work Unit
 
-## Routing Decision
+Create a Quest for work likely to need more than one measured attempt, or for a
+change to an owner-boundary contract. A single-sitting fix, documentation edit,
+or mechanical change with an obvious proof may be done and committed directly.
+The binding threshold is in
+[`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md).
 
-The unit of non-trivial work is a **Quest**. A Quest is a sealed, declarative
-goal under `solve/quests/<id>.json`; attempts, findings, state, and reports are
-derived from the Solver event log.
+## Quest Happy Path
 
-**Quest or not?** Author a Quest when the work will likely need more than one
-measured attempt with evidence, or when it changes an owner-boundary contract.
-Below that — a single-sitting fix, doc edit, or mechanical change with an
-obvious proof — just do the work and commit it. Authoritative statement:
-solver-quests.md "Operating Contract".
+```sh
+node scripts/solve.js start --id <id>
+node scripts/solve.js continue --id <id>
+# make and test the bounded change
+node scripts/solve.js continue --id <id> --summary "<what changed>"
+node scripts/solve.js land --id <id>
+```
 
-For a Quest, use [`boot.md`](docs/steering/llm/boot.md) as the executable
-quickstart. The primary operator surface is three verbs: `solve start`,
-`solve continue`, and `solve land`. Component commands remain available for
-diagnostics and exceptional operations; the entry point does not duplicate them.
+`continue` executes only a trusted structured action. Automation dispatches on
+`action.code` and validated `action.payload`, never rendered command text. Stop
+for exactly four owner decisions: judgment, independent verification, audit
+repair, or terminal landing. Source changes require an independent verifier.
+Solver commits only reviewed Quest scope and never pushes.
 
-## Where Do I Look?
+After every intended Quest commit has landed, publish the exact committed HEAD:
 
-| If you need... | Read / Run |
-| --- | --- |
-| First executable action | [`docs/steering/llm/boot.md`](docs/steering/llm/boot.md) |
-| Start or resume a Quest | `node scripts/solve.js start --id <id>` |
-| Execute its safe next step | `node scripts/solve.js continue --id <id>` |
-| Record a verdict and land | `node scripts/solve.js land --id <id> ...` |
-| Quest process and guardrails | [`docs/steering/workflow-guidelines/solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md) |
-| Solver operator quickstart | [`docs/development/solver-runbook.md`](docs/development/solver-runbook.md) |
-| Always-active core operating contract | [`docs/steering/llm/core.md`](docs/steering/llm/core.md) |
-| Boot, authority, and first commands | [`docs/steering/llm/boot.md`](docs/steering/llm/boot.md) |
-| Architecture / owner boundaries / runtime contracts | [`docs/steering/llm/architecture.md`](docs/steering/llm/architecture.md) |
-| Test policy / regression / harness rules | [`docs/steering/llm/testing.md`](docs/steering/llm/testing.md) |
-| Lint, style, naming policy | [`docs/steering/llm/style.md`](docs/steering/llm/style.md) |
-| Roadmap, scope, governance | [`docs/steering/llm/governance.md`](docs/steering/llm/governance.md) |
-| Detailed AGPL feature scope and sequence | [`docs/steering/agpl-feature-map.md`](docs/steering/agpl-feature-map.md) — direct-load when changing scope or resolving a `roadmapRow` |
-| Optional early-stage planning | [`solve/epics/`](solve/epics/) — bounded decision memos only when unresolved cross-Quest options need durable discussion |
-| Cross-layer planning trace | `node scripts/solve.js trace --row\|--cl\|--spec\|--quest <id>` (joins quests via their `links` block) |
-| Rule IDs and source citations | `npm run rule -- --id <ID>` (also `--tag`/`--domain`/free-text); browse [`docs/steering/llm/rules-index.md`](docs/steering/llm/rules-index.md). `rules.json` is generator output, too large to Read whole. |
-| Architecture document tree | [`architecture/INDEX.md`](architecture/INDEX.md) |
-| An npm tool for a task (before any ad-hoc command) | `npm run commands` (curated quickstart) or [`docs/steering/llm/tools-index.md`](docs/steering/llm/tools-index.md) (generated full index of every script) |
-| Attack checklists for adversarial verification (by change category) | [`docs/steering/verification-templates/`](docs/steering/verification-templates/INDEX.md) |
+```sh
+npm run publish
+```
 
-## Operational Ground Truth (distributed work — don't get fooled)
-
-The distributed-work traps that repeatedly cost agents large amounts of time
-(stale-code runs, absence-proves-nothing, deterministic-first/gate-last, use the
-analyzers, one-invariant-at-a-time closure, research-first, subagent-verify) have a
-single canonical home: **[`docs/steering/operational-ground-truth.md`](docs/steering/operational-ground-truth.md)**.
-Read it before any distributed-harness or convergence work. The deterministic
-in-process substrate (virtual clock, seeded RNG, fault injection) is mapped in
-[`docs/deterministic-directed-testing-plan.md`](docs/deterministic-directed-testing-plan.md).
-It is not restated here so the two copies cannot drift; see
-[`docs/steering/memory-boundary.md`](docs/steering/memory-boundary.md) for the
-in-repo-steering vs external-memory split and
-[`docs/steering/audience-boundary.md`](docs/steering/audience-boundary.md) for
-the human/development/agent documentation zones.
-
-## Before Any `git push` (every agent, no exceptions)
-
-The pre-push hook is fast-fail ordered: the cheap static corpus first
-(unused-files, tracked-file lint, duplication and file-size ratchets,
-circular-deps, unused-exports), then — only once those are green — the
-long-running `test:gate:postpush` corpus as its final stage. A push that
-passes the hook should not turn main red; the remote CI gate re-runs the
-tests after the push.
-
-1. After sweeping code changes, `bash .githooks/pre-push` (manual
-   invocation gates the working tree) gives early feedback; at push time
-   the hook gates the committed tree for the static corpus, so a late
-   discovery costs follow-up commits. Fix ratchet failures proactively,
-   not by letting repeated pushes reveal them one check at a time.
-2. If the exact working tree already passed `test:gate:postpush` this
-   session, `LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only the test
-   stage (the static corpus always runs). `--no-verify` skips everything
-   and remains emergencies-only.
-3. The push-triggered `ci / gate` job runs on the maintainer's
-   self-hosted box by default. Put `[ci:github]` in the head commit
-   message to route that push to ephemeral GitHub-hosted runners instead
-   (`[ci:self-hosted]` pins the default). Pull requests always run
-   GitHub-hosted; the flag never routes fork code to self-hosted.
-
-Ratchet baselines (duplication, unused-exports, complexity) are one-way:
-fix the code (extract, de-export, simplify) rather than raising a
-baseline, and tighten a baseline when the checker prints the hint.
+The publisher gates a clean temporary worktree, writes a HEAD-bound receipt,
+checks fast-forward eligibility and the remote SHA, and never stages, commits,
+amends, force-pushes, or sweeps the caller's worktree. Red-main repair, runner
+routing, direct Git escape hatches, and recovery commands live in the
+[`Solver operator runbook`](docs/development/solver-runbook.md).
 
 ## Steering Load Order
 
-1. Read this file (`AGENTS.md`).
-2. Read [`docs/steering/llm/core.md`](docs/steering/llm/core.md).
-3. Read [`docs/steering/llm/boot.md`](docs/steering/llm/boot.md).
-4. Load the smallest relevant domain pack(s): architecture, testing, style, or
-   governance. Cross-cutting work loads each relevant pack, not just one.
-5. Follow `boot.md` for the first executable action; let the Solver own Quest
-   attempts, findings, verification, and terminal handoff. Reports are optional
-   on-demand projections of that durable state.
-6. Consult source steering under [`docs/steering/`](docs/steering/) only for
-   cited detail behind a compact-pack rule, or when repairing pack drift and
-   regenerating the packs.
+1. Read this file.
+2. Read [`core.md`](docs/steering/llm/core.md).
+3. Read [`boot.md`](docs/steering/llm/boot.md).
+4. Load only the relevant complete domain pack(s):
+   [`architecture`](docs/steering/llm/architecture.md),
+   [`testing`](docs/steering/llm/testing.md),
+   [`style`](docs/steering/llm/style.md), or
+   [`governance`](docs/steering/llm/governance.md). Cross-cutting work loads
+   each intersecting pack.
+5. Let Solver own attempts, findings, evidence, verification, and handoff.
+6. Consult source steering only for cited detail or pack repair. After editing a
+   configured steering source, run `npm run steering:llm:pack`.
 
-The four generated domain packs under [`docs/steering/llm/`](docs/steering/llm/)
-are complete selective surfaces: load only the relevant domains, knowing every
-packed rule for that domain is present. The pack manifest assigns every configured
-source an explicit `packed`, `direct-load`, or `reference-only` role. Source
-steering adds cited detail; it is not a separate runtime override path.
+For distributed-harness or convergence work, first read the canonical
+[`operational ground truth`](docs/steering/operational-ground-truth.md).
+For roadmap scope or a `roadmapRow`, directly load the
+[`AGPL feature map`](docs/steering/agpl-feature-map.md).
+The domain packs are complete selective surfaces. Optional early-stage planning
+under `solve/epics/` is for bounded decision memos, never a mandatory waypoint.
 
-## Generated Surfaces
+## Find The Right Surface
 
-The generated full command reference is
-[`solve-commands.md`](docs/steering/llm/solve-commands.md). Run
-`npm run steering:llm:pack` after editing a configured steering source; the
-generator checks source roles, complete domain coverage, and command drift.
+| Need | Read / run |
+| --- | --- |
+| Quest rules and guardrails | [`solver-quests.md`](docs/steering/workflow-guidelines/solver-quests.md) |
+| Examples, Git, recovery, component commands | [`solver-runbook.md`](docs/development/solver-runbook.md) |
+| Available project commands | `npm run commands` |
+| Rule lookup | `npm run rule -- --id <ID>` |
+| Architecture tree | [`architecture/INDEX.md`](architecture/INDEX.md) |
+| Adversarial verification templates | [`verification-templates`](docs/steering/verification-templates/INDEX.md) |
+| Cross-layer trace | `node scripts/solve.js trace --quest <id>` |
+
+Ratchet baselines are one-way: fix, de-export, extract, or simplify instead of
+raising them; tighten a baseline when its checker prints the hint.

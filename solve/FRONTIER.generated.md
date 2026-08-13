@@ -48,30 +48,27 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 20
+## Open quests — 17
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 ⚠ stale | — |
 | github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 ⚠ stale | — |
-| harness-runtime-environment-allowlist | process | 1 | 0 | 2026-08-13 | — |
-| harness-runtime-environment-allowlist-v2 | process | 1 | 0 | 2026-08-13 | — |
 | movielens-create-budget-intent-serialization | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-local-leader-row-visibility | product | 3 | 0 | 2026-07-20 ⚠ stale | — |
 | movielens-operation-ledger-terminal-hold | product | 1 | 0 | 2026-07-25 ⚠ stale | — |
 | movielens-parallel-reduce-result-chronology | product | 7 | 0 | 2026-07-22 ⚠ stale | — |
 | movielens-replace-bootstrap-cohort-authority | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
-| oci-container-driver-live-activation | product | 12 | 0 | 2026-07-31 ⚠ stale | — |
+| oci-container-driver-live-activation | product | 12 | 0 | 2026-07-31 | — |
 | operation-ledger-quorum-authoritative-release | product | 3 | 0 | 2026-07-22 ⚠ stale | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 ⚠ stale | — |
 | priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 ⚠ stale | — |
-| public-path-multinode-baseline | product | 0 | 0 | 2026-08-11 | — |
-| publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 ⚠ stale | — |
-| rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 ⚠ stale | — |
-| runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 ⚠ stale | — |
+| publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 | — |
+| rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 | — |
+| runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 ⚠ stale | — |
-| solver-low-ceremony-correction-loop | process | 8 | 0 | 2026-08-05 ⚠ stale | — |
+| solver-low-ceremony-correction-loop | process | 8 | 0 | 2026-08-05 | — |
 
-> 17 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
+> 12 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 

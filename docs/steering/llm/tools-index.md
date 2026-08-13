@@ -20,6 +20,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `overview` — Top-down walk of the planning stack: roadmap -> epic -> spec -> quest -> closure ledger (solve.js overview).
 - `prepare` — `node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"`
 - `pretest` — `npm run audit:state-machine-pressure`
+- `publish` — `node scripts/publish-head.js`
 - `repro` — Run a closure-ledger reproduction case (npm run repro -- CL-0NN).
 - `rule` — `node scripts/lookup-rule.js`
 - `session-worktree` — `node scripts/session-worktree.js`
@@ -316,4 +317,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-211 scripts indexed; 33 have a curated description, 178 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+212 scripts indexed; 33 have a curated description, 179 fall back to their raw command. Improve coverage in the two sources named in the header comment.

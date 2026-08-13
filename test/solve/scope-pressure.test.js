@@ -3,7 +3,10 @@ import fs from 'node:fs';
 import path from 'node:path';
 import os from 'node:os';
 
-import {analyzeScopePressure} from '../../scripts/solve/scope-pressure.js';
+import {
+  analyzeScopePressure,
+  analyzeScopePressureCandidate,
+} from '../../scripts/solve/scope-pressure.js';
 import {appendEvent, saveQuest, readLog} from '../../scripts/solve/store.js';
 
 function tmp() {
@@ -120,6 +123,39 @@ tap.test('scope pressure baseline ignores historical attempts but counts new att
   t.equal(pressure.attempts.length, 1, 'only post-baseline attempts are counted');
   t.same(pressure.ownerAreas.sort(), ['src/transport', 'test/transport']);
 
+  fs.rmSync(root, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('candidate admission charges only the current net source scope', (t) => {
+  const root = tmp();
+  const quest = makeQuest(root);
+  appendEvent(root, quest.id, {
+    type: 'attempt',
+    frontier: 'scope-demo-main',
+    workspaceBaseCommit: 'a'.repeat(40),
+    changeRef: makeDiff(root, quest.id, 'historical-wide', [
+      'src/admin/a.js',
+      'src/bootstrap/b.js',
+      'src/query/c.js',
+      'src/runtime/d.js',
+    ]),
+  });
+  const current = {
+    content: '',
+    payloadBytes: 12,
+    categories: ['runtime'],
+    changedPaths: ['src/transport/router.js'],
+  };
+  const pressure = analyzeScopePressureCandidate(
+    root, quest, readLog(root, quest.id), current,
+    {workspaceBaseCommit: 'b'.repeat(40)},
+  );
+  t.same(pressure.changedPaths, ['src/transport/router.js']);
+  t.same(pressure.introducedPaths, ['src/transport/router.js']);
+  t.equal(pressure.attempts.length, 1, 'historical attempts are not charged');
+  t.equal(pressure.successorSuggestion, null,
+    'a bounded candidate does not manufacture a successor');
   fs.rmSync(root, {recursive: true, force: true});
   t.end();
 });

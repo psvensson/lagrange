@@ -234,7 +234,7 @@ function nextAction({questId, state, pending, gateStop, blocker,
   }
   if (pending) {
     return typedNextAction(pendingCommitCommand(questId, pending), {
-      code: NEXT_ACTION_CODE.COMMIT_STEP,
+      code: NEXT_ACTION_CODE.RECORD_ATTEMPT,
       payload: {questId},
     });
   }

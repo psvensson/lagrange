@@ -32,7 +32,7 @@ node scripts/solve.js land --id my-quest --review review-<hex> \
   --verifier <stable-id> --verdict approve --receipt <ref>
 ```
 
-`continue` executes only trusted structured begin/commit, replacement, and
+`continue` executes only trusted structured begin/record-attempt, replacement, and
 ready-checkpoint codes. It never runs
 the rendered command text, captures against the active source epoch only when a
 commit summary is supplied, and stops on verification, repair, or judgment
@@ -42,6 +42,36 @@ existing full audit and scope-safe commit, and neither path pushes.
 
 The remaining sections document component commands for diagnostics, explicit
 durability boundaries, and exceptional operations.
+
+## Publish And Git Exceptions
+
+Normal publication is one command after Solver has landed every intended commit:
+
+```sh
+npm run publish
+```
+
+It runs the pre-push gate against the exact committed `HEAD` in a clean temporary
+worktree, checks that the gate did not mutate tracked content, pushes without
+force, verifies the remote SHA, prints the CI URL when available, and stores a
+HEAD-bound receipt below the Git common directory.
+
+If the exact push repairs the current red main, attribute that exception:
+
+```sh
+npm run publish -- --fixes-red <origin-main-sha> --reason "<why this fixes red>"
+```
+
+GitHub-hosted routing requires `[ci:github]` in the already-reviewed HEAD commit
+message and `--runner github`; publish validates the marker and never amends.
+The default runner is self-hosted. Direct `git push` remains an advanced escape
+hatch. If the exact tree already passed `test:gate:postpush`,
+`LAGRANGE_PUSH_SKIP_TESTS=1 git push` skips only the repeated test stage; static
+checks still run. `--no-verify` skips every gate and is emergencies-only.
+
+The pre-push hook is fast-fail ordered: unused files, tracked-file lint,
+duplication/file-size ratchets, cycles, unused exports, then the long post-push
+test corpus. Fix one-way ratchets rather than raising their baselines.
 
 ## Orient Without Mutation
 

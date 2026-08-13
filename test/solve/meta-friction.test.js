@@ -63,6 +63,23 @@ tap.test('workflow friction ranking', async (t) => {
     t.end();
   });
 
+  t.test('operator stops and automatic advisories are separate totals', (t) => {
+    const friction = tallyFrictionEvents([
+      entry('q1', {type: 'guard-override', code: 'blocked-scope'}),
+      entry('q1', {type: 'gate-decision', outcome: 'continue',
+        disposition: 'advisory', code: 'reflection-due'}),
+      entry('q2', {type: 'gate-decision', outcome: 'blocked',
+        disposition: 'reroute', code: 'blocked-scope'}),
+      entry('q3', {type: 'gate-decision', outcome: 'continue',
+        disposition: 'advisory', override: 'reviewed', code: 'blocked-scope'}),
+    ]);
+    t.equal(friction.operatorStops.length, 1);
+    t.equal(friction.operatorStops[0].code, 'blocked-scope');
+    t.equal(friction.advisories.length, 1);
+    t.equal(friction.advisories[0].code, 'reflection-due');
+    t.end();
+  });
+
   t.test('parks are listed, not histogrammed', (t) => {
     // `exhausted` is ~97% of all parks, so a kind histogram carries no signal —
     // which quest exhausted, and why, is the part a reader needs.

@@ -70,16 +70,19 @@ The normal Quest workflow has three verbs:
    authoring flags are present, lints it, and returns the stable structured next
    action. It is read-only for an existing Quest and never seals or begins work.
 2. `solve continue --id <id>` executes only structured `begin-step`,
-   `commit-step`, replacement, or ready-checkpoint equivalents. Here
-   `commit-step` means record
+   `record-attempt`, replacement, or ready-checkpoint equivalents. Here
+   `record-attempt` means record
    the measured attempt in the event log; it does not create a Git commit. An
    attempt-record action requires `--summary`; absent an exceptional explicit
    `--changeRef`, it captures the canonical working-tree delta automatically.
    After a verifier rejection, the same summarized call both begins and
    captures the replacement; no oracle edit, evidence-ingestion command, or
    separate begin call is part of the routine correction loop. A previously
-   authorized scope is reauthorized automatically while unchanged or narrower;
-   any new path still stops at the scope gate.
+   authorized scope remains durable while unchanged or narrower, without a new
+   override event; any introduced source path still stops for one scope decision.
+   Scope admission charges the net current source candidate, not historical
+   attempts or generated bookkeeping, and any split is returned as a deterministic
+   suggestion rather than auto-authoring or sealing a successor.
    It MUST NOT parse or execute the
    human-rendered action value, and it stops on every judgment, verification,
    audit-repair, or terminal action.
@@ -95,7 +98,10 @@ The normal Quest workflow has three verbs:
 The stable `next` projection carries both the display `type`/`value` and machine
 `code`/`payload`; normal display values name only `continue` or `land`.
 Automation MUST dispatch only on `code` and validated
-payload. `new`, `lint`, `next`, `step`, `finding`, `audit`, `checkpoint`, and
+payload. JSON failures use `{ok:false,error:{code,category,message,
+requiresJudgment,repair}}`; `repair` is an automation code and payload, never a
+shell command. Persisted `commit-step` actions remain accepted as a compatibility
+alias but are never emitted. `new`, `lint`, `next`, `step`, `finding`, `audit`, `checkpoint`, and
 `handoff` remain component commands for diagnostics and exceptional workflows;
 their availability does not add required routine steps.
 

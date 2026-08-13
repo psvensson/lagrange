@@ -29,6 +29,7 @@ import {
   questFilePath,
   logFilePath,
   stateFilePath,
+  scopeSignatureHasAuthorization,
 } from './store.js';
 import {STATUS_SOLVED} from './constants.js';
 import {auditQuest, commitGate, checkpointGate} from './audit.js';
@@ -47,7 +48,6 @@ import {
 } from './checkpoint-preflight.js';
 import {verificationState} from './verification.js';
 import {CONTINUATION_BLOCKED_SCOPE} from './continuation.js';
-import {latestAttemptAdmissionWasOverridden} from './gate.js';
 import {
   refreshSpecLadderForCommit,
   specLadderPathFromRef,
@@ -255,24 +255,25 @@ export function buildHandoff(root, quest, options = {}) {
   const audit = auditQuest(root, quest);
   const baseGate = checkpoint ? checkpointGate(root, quest) : commitGate(root, quest);
   const log = readLog(root, quest.id);
-  const scopeStatus = scopeTerminalStatus(
-    analyzeScopePressure(
-      root,
-      quest,
-      log,
-      {ignoreBaselines: true},
-    ),
-  );
+  const scopePressure = analyzeScopePressure(
+    root, quest, log, {ignoreBaselines: true});
+  const scopeStatus = scopeTerminalStatus(scopePressure);
   const scopeProblemMessage =
     'scope-pressure precommit blocked: split into bounded Quest declarations ' +
     `(files=${scopeStatus.fileCount}, owners=${scopeStatus.ownerCount}, ` +
     `bytes=${scopeStatus.changeBytes})`;
+  const latestAttempt = [...log].reverse().find((event) =>
+    event.type === 'attempt');
+  const exactAggregateWasApproved = Boolean(
+    verificationState(root, quest, log).aggregateApproval);
   const scopeWasAuthorized = scopeStatus.terminal &&
-    latestAttemptAdmissionWasOverridden(
-      log,
-      CONTINUATION_BLOCKED_SCOPE,
-      scopeProblemMessage,
-    );
+    (exactAggregateWasApproved ||
+      scopeSignatureHasAuthorization(
+        log,
+        latestAttempt?.frontier || null,
+        CONTINUATION_BLOCKED_SCOPE,
+        scopePressure.admission?.changedPaths || scopePressure.changedPaths,
+      ));
   const scopeProblem = scopeStatus.terminal && !scopeWasAuthorized ? [{
     message: scopeProblemMessage,
   }] : [];

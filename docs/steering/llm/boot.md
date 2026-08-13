@@ -65,8 +65,9 @@ node scripts/solve.js start --id <id> --statement "<sealed result>" \
 ```
 
 Drive routine supervised work with one verb. It executes structured
-`begin-step`, `commit-step`, replacement, and ready-checkpoint actions;
-judgment, verification, and repair actions stop for the operator. `commit-step` records a measured attempt
+`begin-step`, `record-attempt`, replacement, and ready-checkpoint actions;
+judgment, verification, audit-repair, and terminal actions stop for the operator.
+`record-attempt` records a measured attempt
 in the Solver event log; it does not create a Git commit. Recording that attempt
 requires a summary. When no exceptional `--changeRef` is supplied, the Solver
 captures the working-tree delta automatically against the active source epoch:
@@ -79,8 +80,10 @@ node scripts/solve.js continue --id <id> --summary "<what changed>"
 
 After `land` records a categorized verifier rejection, make the bounded repair
 and run only the summarized form: it both begins and captures the replacement.
-The rejection itself reopens the Quest, and unchanged or narrower previously
-authorized scope is reauthorized automatically.
+The rejection itself reopens the Quest. Unchanged or narrower previously
+authorized scope remains authorized without another override event; any introduced
+source path stops for one new decision. Generated collateral is refreshed by its
+owner and does not broaden admission.
 
 `start` writes a versioned draft and stamps `links.draftedAtCommit` when the
 Quest is new; it does not seal the goal. The first safe continuation lints and
@@ -118,6 +121,18 @@ node scripts/solve.js land --id <id> --review review-<hex> \
 # repair and capture in one call:
 node scripts/solve.js continue --id <id> --summary "<what changed>"
 ```
+
+After all intended Quest commits are landed, publish exactly the committed HEAD:
+
+```sh
+npm run publish
+# if this exact push repairs the current red main:
+npm run publish -- --fixes-red <origin-main-sha> --reason "<why>"
+```
+
+The publisher uses a clean temporary worktree, reuses the pre-push gate, verifies
+the remote SHA, and writes a HEAD-bound receipt. It never stages, commits, amends,
+force-pushes, or sweeps the caller's working tree.
 
 ## Before Verification Or Checkpoint
 

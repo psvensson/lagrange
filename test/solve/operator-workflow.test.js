@@ -10,6 +10,10 @@ import {
   landQuestWorkflow,
   startQuestWorkflow,
 } from '../../scripts/solve/operator-workflow.js';
+import {
+  isAttemptRecordActionCode,
+} from '../../scripts/solve/next-action.js';
+import {workflowFailure} from '../../scripts/solve/workflow-envelope.js';
 import {buildNextProjection} from '../../scripts/solve/next.js';
 import {assertReviewCurrent} from '../../scripts/solve/review-request.js';
 import {landingReviewPreflight} from '../../scripts/solve/landing-preflight.js';
@@ -327,7 +331,7 @@ tap.test('next exposes stable action codes and continue dispatches only those co
     const begun = continueQuestWorkflow(root, {id: quest.id});
     t.equal(begun.executed, true);
     t.equal(begun.operation, 'begin-step');
-    t.equal(begun.next.action.code, 'commit-step');
+    t.equal(begun.next.action.code, 'record-attempt');
     t.throws(() => continueQuestWorkflow(root, {id: quest.id}),
       /requires --summary/iu);
     const committed = continueQuestWorkflow(root, {
@@ -335,11 +339,34 @@ tap.test('next exposes stable action codes and continue dispatches only those co
       changeRef: simpleDiff(root, quest.id),
       summary: 'record the explicit fixture change',
     });
-    t.equal(committed.operation, 'commit-step');
+    t.equal(committed.operation, 'record-attempt');
     t.equal(readLog(root, quest.id).filter((event) => event.type === 'attempt').length, 1);
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
+
+tap.test('attempt recording has one current term and accepts the legacy code', (t) => {
+  t.equal(isAttemptRecordActionCode('record-attempt'), true);
+  t.equal(isAttemptRecordActionCode('commit-step'), true,
+    'persisted legacy projections remain executable');
+  t.equal(isAttemptRecordActionCode('git-commit'), false);
+  t.same(
+    workflowFailure(new Error(
+      'scope-pressure precommit blocked: split into bounded Quest declarations')),
+    {
+      ok: false,
+      error: {
+        code: 'scope-grew',
+        category: 'scope',
+        message: 'scope-pressure precommit blocked: split into bounded Quest declarations',
+        requiresJudgment: false,
+        repair: {code: 'record-covered-scope', payload: {paths: [], splitPlan: []}},
+      },
+    },
+    'automation receives a code and payload, not a shell command',
+  );
+  t.end();
+});
 
 tap.test('continue treats a commit summary as implicit auto-diff capture', (t) => {
   const root = tmp();
@@ -361,7 +388,7 @@ tap.test('continue treats a commit summary as implicit auto-diff capture', (t) =
     summary: 'capture the changed source automatically',
   });
 
-  t.equal(committed.operation, 'commit-step');
+  t.equal(committed.operation, 'record-attempt');
   t.match(committed.result.changeRef,
     /^diff:solve\/changes\/demo\/attempt-1\.diff(?:\.json)?$/u);
   fs.rmSync(root, {recursive: true, force: true});
