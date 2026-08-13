@@ -113,10 +113,22 @@ function buildPartitionServicesMap() {
  * fast-check happened to generate (that table, 'update').
  */
 const NON_PK_COLUMNS_BY_TABLE = new Map(
-  SYSTEM_TABLE_SCHEMAS.map((schema) => [
-    schema.tableName,
-    schema.columns.filter((column) => !column.primaryKey),
-  ]),
+  SYSTEM_TABLE_SCHEMAS.map((schema) => {
+    // Composite primary keys declare their components at the schema level
+    // (primaryKey: [...]) with no column-level flag, so a key component such as
+    // `namespace` would otherwise be misread as updatable and the generator
+    // would emit an unroutable key-changing UPDATE — generator self-sabotage,
+    // not routing enforcement. Exclude both flagged and composite-key columns.
+    const compositeKey = new Set(
+      Array.isArray(schema.primaryKey) ? schema.primaryKey : [],
+    );
+    return [
+      schema.tableName,
+      schema.columns.filter(
+        (column) => !column.primaryKey && !compositeKey.has(column.name),
+      ),
+    ];
+  }),
 );
 
 /**
