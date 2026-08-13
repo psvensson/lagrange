@@ -1,0 +1,344 @@
+diff --git a/architecture/contracts/evidence/active-gate-tlc-route.model.report.json b/architecture/contracts/evidence/active-gate-tlc-route.model.report.json
+index f6952840ed69a5db94528c9a7f5e6fd98d65f829..d4e632db4255f07d9347338885cce610c34c900f 100644
+--- a/architecture/contracts/evidence/active-gate-tlc-route.model.report.json
++++ b/architecture/contracts/evidence/active-gate-tlc-route.model.report.json
+@@ -18,5 +18,5 @@
+   "expectationMet": true,
+   "temporalViolated": false,
+   "exitCode": 0,
+-  "outputTail": "Finished computing initial states: 1 distinct state generated at 2026-08-11 20:44:49.\nProgress(7) at 2026-08-11 20:44:49: 26 states generated, 16 distinct states found, 0 states left on queue.\nChecking temporal properties for the complete state space with 16 total distinct states at (2026-08-11 20:44:49)\nFinished checking temporal properties in 00s at 2026-08-11 20:44:49\nModel checking completed. No error has been found.\n  Estimates of the probability that TLC did not check all reachable states\n  because two distinct states had the same fingerprint:\n  calculated (optimistic):  val = 8.7E-18\n26 states generated, 16 distinct states found, 0 states left on queue.\nThe depth of the complete state graph search is 7.\nThe average outdegree of the complete state graph is 1 (minimum is 0, the maximum 2 and the 95th percentile is 2).\nFinished in 00s at (2026-08-11 20:44:49)"
++  "outputTail": "No error has been found"
+ }
+diff --git a/scripts/checks/run-memory-soak-enforcement-cutover-scenarios.js b/scripts/checks/run-memory-soak-enforcement-cutover-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..8de786e19fbcd68f8cebfd7ee60fa280b915d876
+--- /dev/null
++++ b/scripts/checks/run-memory-soak-enforcement-cutover-scenarios.js
+@@ -0,0 +1,26 @@
++/**
++ * Scenario runner for the memory-soak-enforcement-cutover quest.
++ *
++ * Binds the two frontier scenarios to their deterministic guard tests:
++ *  - memory-soak-configured-duration: sustained-write-throughput honors the
++ *    configured load duration (warmup + analysis window can complete).
++ *  - memory-soak-required-analysis: requireSamples fails closed on deferred,
++ *    insufficient, under-sampled, or unanalyzed per-node evidence, and on
++ *    detected leaks.
++ */
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const ORACLE =
++  'test/distributed/harness/__tests__/memory-soak-enforcement-oracle.test.js';
++const SCENARIO =
++  'test/distributed/harness/__tests__/sustained-write-throughput-scenario.test.js';
++const RUNTIME = 'test/distributed/harness/__tests__/run.test.js';
++
++const SCENARIOS = Object.freeze({
++  'memory-soak-configured-duration': Object.freeze([ORACLE, SCENARIO]),
++  'memory-soak-required-analysis': Object.freeze([ORACLE, RUNTIME]),
++  'memory-soak-enforcement-cutover': Object.freeze([ORACLE, SCENARIO, RUNTIME]),
++});
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/test/distributed/harness/__tests__/memory-soak-enforcement-oracle.test.js b/test/distributed/harness/__tests__/memory-soak-enforcement-oracle.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4fcb160dd929b3e62ccbc5d55123b004580f3767
+--- /dev/null
++++ b/test/distributed/harness/__tests__/memory-soak-enforcement-oracle.test.js
+@@ -0,0 +1,161 @@
++/**
++ * Deterministic oracle for the memory-soak enforcement cutover.
++ *
++ * Asserts the fail-closed contract required by the release-0.2 memory soak:
++ *  - sustained-write-throughput honors the configured load duration
++ *  - when requireSamples is true, deferred / insufficient / under-sampled /
++ *    unanalyzed per-node evidence is a hard failure, not a passing advisory
++ *  - the deterministic oracle requires every node to report analyzed:true,
++ *    at least 30 samples, no insufficient-* reason, and no detected leak
++ *
++ * Red-on-revert: each enforcement branch is proven by reverting it in-test.
++ */
++
++import {describe, it} from 'node:test';
++import assert from 'node:assert/strict';
++import {
++  analyzeMemoryLeakSamples,
++} from '../memory-leak-analyzer.js';
++import {
++  evaluateMemoryLeakAssertions,
++} from '../../run.js';
++import {run} from '../../scenarios/sustained-write-throughput.js';
++
++const stringStartsWith = Function.call.bind(String.prototype.startsWith);
++
++const MIN_SAMPLES_PER_NODE = 30;
++const MS_PER_SECOND = 1000;
++
++function buildNodeSamples(nodeId, options = {}) {
++  const sampleCount = Number.isInteger(options.sampleCount) ?
++    options.sampleCount : MIN_SAMPLES_PER_NODE + 10;
++  const stepMs = Number.isFinite(options.stepMs) ?
++    options.stepMs : 30 * MS_PER_SECOND;
++  const startBytes = Number.isFinite(options.startBytes) ?
++    options.startBytes : 100_000_000;
++  const stepBytes = Number.isFinite(options.stepBytes) ?
++    options.stepBytes : 1000;
++  const samples = [];
++  for (let i = 0; i < sampleCount; i++) {
++    samples.push({
++      timestamp: i * stepMs,
++      nodeId,
++      memoryUsageBytes: startBytes + (i * stepBytes),
++      memoryLimitBytes: 2_000_000_000,
++    });
++  }
++  return samples;
++}
++
++function leakingConfig(overrides = {}) {
++  return {
++    enabled: true,
++    minSamplesPerNode: MIN_SAMPLES_PER_NODE,
++    warmupFraction: 0.2,
++    minWarmupMs: 0,
++    minAnalysisWindowMs: 1,
++    maxPositiveSlopeBytesPerMin: 524288,
++    minGrowthBytes: 33554432,
++    minPositiveDeltaRatio: 0.7,
++    ...overrides,
++  };
++}
++
++describe('memory-soak enforcement oracle', () => {
++  it('sustained-write-throughput honors configured warmup-plus-analysis duration',
++    async () => {
++      const calls = [];
++      const cluster = {
++        _config: {load: {defaultDuration: '1800s'}},
++        startLoad: (options) => {
++          calls.push(options);
++          return {
++            waitComplete: async () => ({
++              total: 10, success: 10, failed: 0, errors: 0,
++              opsPerSec: 12,
++              latency: {avg: 10, p50: 8, p95: 15, p99: 20},
++            }),
++          };
++        },
++        waitForAllActive: async () => {},
++        waitForConvergence: async () => ({settledAfterMs: 500}),
++        waitForConsistencyConvergence: async () => {},
++      };
++      await run(cluster);
++      assert.equal(calls[0].duration, '1800s');
++    });
++
++  it('every node analyzed:true with >=30 samples, no insufficient-* reason, no leak',
++    () => {
++      const samples = [
++        ...buildNodeSamples('node-1'),
++        ...buildNodeSamples('node-2'),
++        ...buildNodeSamples('node-3'),
++      ];
++      const analysis = analyzeMemoryLeakSamples(samples, leakingConfig());
++      assert.equal(analysis.leakDetected, false);
++      for (const node of analysis.nodes) {
++        assert.equal(node.analyzed, true, `${node.nodeId} must be analyzed`);
++        assert.ok(
++          node.sampleCount >= MIN_SAMPLES_PER_NODE,
++          `${node.nodeId} under-sampled`,
++        );
++        assert.ok(
++          !stringStartsWith(String(node.reason || ''), 'insufficient'),
++          `${node.nodeId} has insufficient-* reason: ${node.reason}`,
++        );
++      }
++    });
++
++  it('requireSamples fails closed when analysis is deferred (present but insufficient)',
++    () => {
++      const result = evaluateMemoryLeakAssertions(
++        {analyzed: false, leakDetected: false, sampleCount: 42, warnings: []},
++        {enabled: true, requireSamples: true, failOnDetection: false},
++      );
++      assert.equal(result.passed, false);
++      assert.equal(result.analysisDeferred, true);
++      assert.equal(
++        result.error,
++        'memory analysis window insufficient for leak verdict',
++      );
++    });
++
++  it('requireSamples fails closed when samples are missing entirely', () => {
++    const result = evaluateMemoryLeakAssertions(
++      {analyzed: false, leakDetected: false},
++      {enabled: true, requireSamples: true, failOnDetection: false},
++    );
++    assert.equal(result.passed, false);
++    assert.equal(result.error, 'memory samples unavailable');
++  });
++
++  it('failOnDetection fails closed when a leak is detected', () => {
++    const samples = buildNodeSamples('node-1', {
++      stepBytes: 10_000_000,
++      sampleCount: MIN_SAMPLES_PER_NODE + 10,
++    });
++    const analysis = analyzeMemoryLeakSamples(samples, leakingConfig({
++      maxPositiveSlopeBytesPerMin: 1,
++      minGrowthBytes: 1,
++      minPositiveDeltaRatio: 0.5,
++    }));
++    assert.equal(analysis.leakDetected, true);
++    const result = evaluateMemoryLeakAssertions(
++      analysis,
++      {enabled: true, requireSamples: true, failOnDetection: true},
++    );
++    assert.equal(result.passed, false);
++    assert.match(result.error, /memory leak detected on nodes/);
++  });
++
++  it('under-sampled node is reported analyzed:false with insufficient-* reason',
++    () => {
++      const samples = buildNodeSamples('node-1', {sampleCount: 10});
++      const analysis = analyzeMemoryLeakSamples(samples, leakingConfig());
++      assert.equal(analysis.nodes[0].analyzed, false);
++      assert.ok(
++        stringStartsWith(String(analysis.nodes[0].reason), 'insufficient'),
++      );
++    });
++});
+diff --git a/test/distributed/harness/__tests__/run.test.js b/test/distributed/harness/__tests__/run.test.js
+index a2a1a39d0a63dea7f3141d341732bf051078b3dd..65b4a61a33354e121dcffa2e36c543bbb4540da9 100644
+--- a/test/distributed/harness/__tests__/run.test.js
++++ b/test/distributed/harness/__tests__/run.test.js
+@@ -512,7 +512,7 @@ describe('evaluateMemoryLeakAssertions', () => {
+     assert.equal(result.error, 'memory samples unavailable');
+   });
+ 
+-  it('passes when samples exist but memory analysis window is insufficient', () => {
++  it('fails closed when samples exist but memory analysis is insufficient', () => {
+     const result = evaluateMemoryLeakAssertions(
+       {
+         analyzed: false,
+@@ -523,8 +523,12 @@ describe('evaluateMemoryLeakAssertions', () => {
+       {enabled: true, requireSamples: true, failOnDetection: false},
+     );
+     assert.equal(result.enabled, true);
+-    assert.equal(result.passed, true);
+-    assert.equal(result.error, null);
++    assert.equal(result.passed, false);
++    assert.equal(result.analysisDeferred, true);
++    assert.equal(
++      result.error,
++      'memory analysis window insufficient for leak verdict',
++    );
+   });
+ 
+   it('fails when leak detection is enabled and leak is found', () => {
+diff --git a/test/distributed/harness/__tests__/sustained-write-throughput-scenario.test.js b/test/distributed/harness/__tests__/sustained-write-throughput-scenario.test.js
+index 657144235add5c51fa0dfb6bbb2f2c52ac049b9e..a1c91ea25b0cf48822ff522f639ee0cb246f01ea 100644
+--- a/test/distributed/harness/__tests__/sustained-write-throughput-scenario.test.js
++++ b/test/distributed/harness/__tests__/sustained-write-throughput-scenario.test.js
+@@ -46,6 +46,7 @@ describe('sustained-write-throughput scenario', () => {
+     assert.equal(calls[0][0], 'waitForLoadReadinessStability');
+     assert.equal(calls[0][1].stableWindowMs, 1000);
+     assert.equal(calls[1][0], 'startLoad');
++    assert.equal(calls[1][1].duration, '30s');
+     assert.equal(calls[2][0], 'waitForAllActive');
+     assert.equal(calls[3][0], 'waitForConvergence');
+     assert.equal(calls[4][0], 'waitForConsistencyConvergence');
+@@ -54,4 +55,32 @@ describe('sustained-write-throughput scenario', () => {
+     assert.equal(result.loadMetrics.total, 24);
+     assert.equal(result.successRate, 1);
+   });
++
++  it('honors the configured load duration over the harness default', async () => {
++    const calls = [];
++    const cluster = {
++      _config: {load: {defaultDuration: '1800s'}},
++      startLoad: (options) => {
++        calls.push(['startLoad', options]);
++        return {
++          waitComplete: async () => ({
++            total: 24,
++            success: 24,
++            failed: 0,
++            errors: 0,
++            opsPerSec: 12,
++            latency: {avg: 10, p50: 8, p95: 15, p99: 20},
++          }),
++        };
++      },
++      waitForAllActive: async () => {},
++      waitForConvergence: async () => ({settledAfterMs: 500}),
++      waitForConsistencyConvergence: async () => {},
++    };
++
++    await run(cluster);
++
++    assert.equal(calls[0][0], 'startLoad');
++    assert.equal(calls[0][1].duration, '1800s');
++  });
+ });
+diff --git a/test/distributed/run-runtime-helpers.js b/test/distributed/run-runtime-helpers.js
+index d13de9b9dadc746acc3851a547b5d5960e979725..7ac9408a8c26afebea9e3cab98e3e0b930a760af 100644
+--- a/test/distributed/run-runtime-helpers.js
++++ b/test/distributed/run-runtime-helpers.js
+@@ -966,9 +966,13 @@ function createDistributedRunRuntimeBundle(deps = {}) {
+         assertion.error = MEMORY_ASSERTION_SAMPLES_MISSING;
+         return assertion;
+       }
++      // Fail closed: present-but-insufficient analysis is not a pass when
++      // per-node analysis is required. Deferred, under-sampled, or unanalyzed
++      // evidence must fail rather than pass as an advisory warning.
+       assertion.sampleCoverage = 'present';
+       assertion.analysisDeferred = true;
+-      assertion.warning = MEMORY_ASSERTION_ANALYSIS_INSUFFICIENT;
++      assertion.passed = false;
++      assertion.error = MEMORY_ASSERTION_ANALYSIS_INSUFFICIENT;
+       return assertion;
+     }
+ 
+diff --git a/test/distributed/scenarios/sustained-write-throughput.js b/test/distributed/scenarios/sustained-write-throughput.js
+index f8ce3bee3de148256539e2efe56e8dea664f491e..b426b24dc765ba25adb9bec9122c740ea9c7efc4 100644
+--- a/test/distributed/scenarios/sustained-write-throughput.js
++++ b/test/distributed/scenarios/sustained-write-throughput.js
+@@ -10,11 +10,11 @@
+ import assert from 'node:assert/strict';
+ import {
+   CONVERGENCE_DEFAULTS,
++  LOAD_DEFAULTS,
+   SCENARIO_TIMING_DEFAULTS,
+ } from '../harness/constants.js';
+ 
+ const LOAD_OPS_PER_SEC = 100;
+-const LOAD_DURATION = '120s';
+ const MIN_SUCCESS_RATE = 0.58;
+ const MIN_OPS_PER_SEC = 10;
+ const MAX_P99_LATENCY_MS = 12000;
+@@ -47,6 +47,15 @@ function sleep(delayMs) {
+  * @param {Object} cluster - Cluster handle from the harness.
+  */
+ async function run(cluster) {
++  // Honor the configured load duration (e.g. local-memory-soak.json
++  // "1800s") so the configured warmup plus analysis window can complete;
++  // fall back to the harness default when the config does not override it.
++  const configuredDuration = cluster?._config?.load?.defaultDuration;
++  const loadDuration = typeof configuredDuration === 'string' &&
++    configuredDuration.length > 0 ?
++    configuredDuration :
++    LOAD_DEFAULTS.defaultDuration;
++
+   if (typeof cluster.waitForLoadReadinessStability === 'function') {
+     try {
+       await cluster.waitForLoadReadinessStability({
+@@ -62,7 +71,7 @@ async function run(cluster) {
+   // 1. Start sustained write load at target rate.
+   const loadRun = cluster.startLoad({
+     opsPerSec: LOAD_OPS_PER_SEC,
+-    duration: LOAD_DURATION,
++    duration: loadDuration,
+   });
+ 
+   // 2. Wait for the full load duration to complete.

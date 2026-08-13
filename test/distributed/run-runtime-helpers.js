@@ -509,6 +509,10 @@ function createDistributedRunRuntimeBundle(deps = {}) {
           );
         } catch (_analysisErr) {
           // Analysis is best-effort
+          process.stderr.write(
+            'run: scenario log analysis skipped (best-effort): ' +
+            String(_analysisErr?.message || _analysisErr) + '\n',
+          );
         }
 
         const duration = Date.now() - startMs;
@@ -587,6 +591,10 @@ function createDistributedRunRuntimeBundle(deps = {}) {
             );
           } catch (_fallbackErr) {
             // Best-effort fallback
+            process.stderr.write(
+              'run: fallback log collection skipped (best-effort): ' +
+              String(_fallbackErr?.message || _fallbackErr) + '\n',
+            );
           }
         }
 
@@ -966,9 +974,13 @@ function createDistributedRunRuntimeBundle(deps = {}) {
         assertion.error = MEMORY_ASSERTION_SAMPLES_MISSING;
         return assertion;
       }
+      // Fail closed: present-but-insufficient analysis is not a pass when
+      // per-node analysis is required. Deferred, under-sampled, or unanalyzed
+      // evidence must fail rather than pass as an advisory warning.
       assertion.sampleCoverage = 'present';
       assertion.analysisDeferred = true;
-      assertion.warning = MEMORY_ASSERTION_ANALYSIS_INSUFFICIENT;
+      assertion.passed = false;
+      assertion.error = MEMORY_ASSERTION_ANALYSIS_INSUFFICIENT;
       return assertion;
     }
 
