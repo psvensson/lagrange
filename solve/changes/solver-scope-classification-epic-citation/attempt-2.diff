@@ -1,0 +1,105 @@
+diff --git a/scripts/checks/run-solver-scope-classification-scenarios.js b/scripts/checks/run-solver-scope-classification-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4e6650cbf81ca2d465549160c4f215bdf956c9e1
+--- /dev/null
++++ b/scripts/checks/run-solver-scope-classification-scenarios.js
+@@ -0,0 +1,14 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  // Guards the owner-scope classification fix: a solve/epics/*.md planning
++  // memo must classify as documentation, not workflow tooling, so a runtime
++  // process Quest that cites it in links.planDoc is not mis-scoped.
++  'solver-scope-classification-epic-citation': [
++    'test/solve/audit.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/scripts/solve/change-artifact.js b/scripts/solve/change-artifact.js
+index f935db42632a77fb028e6ca1a075698e4981024f..9b47cbba219b1b3005832f5c539a7b41be5ac32e 100644
+--- a/scripts/solve/change-artifact.js
++++ b/scripts/solve/change-artifact.js
+@@ -126,6 +126,7 @@ const DIFF_EXTENSION = '.diff';
+ const DESCRIPTOR_EXTENSION = '.diff.json';
+ const GZIP_EXTENSION = '.diff.gz';
+ const MARKDOWN_EXTENSION = '.md';
++const SOLVE_EPICS_PREFIX = 'solve/epics/';
+ const CONTENT_ADDRESSED_STORAGE_KIND = 'content-addressed';
+ const ROOT_PACKAGE_LOCK_PATH = 'package-lock.json';
+ const QUEST_SCOPE_RUNTIME = 'runtime';
+@@ -384,7 +385,17 @@ export function isVerificationBookkeeping(filePath, questId) {
+ 
+ export function classifyPath(filePath) {
+   const normalized = normalizeSlash(filePath);
+-  if (WORKFLOW_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
++  // Epic / planning memos under solve/ are decision documents, not Solver
++  // tooling: the bare `solve/` workflow prefix must not stamp them workflow,
++  // or every runtime Quest that cites one in links.planDoc/specRef inherits
++  // workflow scope and the changeRef gate then refuses its runtime guard files
++  // (the gold-plating epic poisoned three runtime process Quests this way).
++  // Fall through to the docs rule for these; every other solve/ subpath
++  // (quests, logs, oracle, state, changes) stays workflow.
++  const isEpicMemo = normalized.startsWith(SOLVE_EPICS_PREFIX) &&
++    normalized.endsWith(MARKDOWN_EXTENSION);
++  if (!isEpicMemo &&
++      WORKFLOW_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
+     return QUEST_SCOPE_WORKFLOW;
+   }
+   if (normalized.endsWith(MARKDOWN_EXTENSION)) return 'docs';
+diff --git a/test/shards/impact-graph-seal.json b/test/shards/impact-graph-seal.json
+index f50350c5b8a058d6b5f3d6bf622d5d925c634427..9a4426ea6ab09ab7888c73887533372aa786ba55 100644
+--- a/test/shards/impact-graph-seal.json
++++ b/test/shards/impact-graph-seal.json
+@@ -1,8 +1,8 @@
+ {
+   "schemaVersion": 1,
+   "importGraphSchemaVersion": "global-owner-debt-import-graph-v2",
+-  "sourceDigest": "015ceb90b7345fb200b56fc3397ec1808e8ab70d13dae577f4ec7b37306d9890",
+-  "producerInputDigest": "9143d2d1a152e5d8ad489082a2b3ac5cb7c816a72371f4e8e00a328855fb73de",
++  "sourceDigest": "41ade18e0333cf705e368c5e2824d2886d145a7fb35b1466a9b2dcef95ce2978",
++  "producerInputDigest": "a4b96fa51429894ab885b1b1e09e030d58cb3a9afb332500437a18a8b20cefd8",
+   "resolverStateDigest": "3c8d2d7ecd599c96d71edd0323e52a8a1eb2130e93fb8de389b179537920a29b",
+-  "snapshotDigest": "fd254f4d33310608ca62333dbce71bf5f4209f4b9e79b0410317f6ff41716193"
++  "snapshotDigest": "9096445cf2a012b82f46efb054150aa1af8243906cb1335ce0cb924cd0510619"
+ }
+diff --git a/test/solve/audit.test.js b/test/solve/audit.test.js
+index e889216d8df553898add2c8aba1120347de5b772..491081fd341c8ace16c7f1f93c5bbdf8ee98942a 100644
+--- a/test/solve/audit.test.js
++++ b/test/solve/audit.test.js
+@@ -76,6 +76,33 @@ tap.test('Quest audit', async (t) => {
+         'distributed source remains runtime');
+       t.equal(classifyPath('docs/development/solver-runbook.md'), 'workflow',
+         'workflow-owned Markdown keeps workflow scope');
++      t.equal(classifyPath('solve/epics/golden-capability-gold-plating.md'), 'docs',
++        'an epic planning memo under solve/ is documentation, not workflow tooling');
++      t.equal(classifyPath('solve/epics/example.js'), 'workflow',
++        'non-Markdown source under solve/epics keeps workflow scope');
++      t.equal(classifyPath('solve/epics/example.json'), 'workflow',
++        'non-Markdown data under solve/epics keeps workflow scope');
++      t.equal(classifyPath('solve/quests/some-quest.json'), 'workflow',
++        'a solve/ bookkeeping file keeps workflow scope');
++      t.end();
++    });
++
++  t.test('an epic planDoc citation does not stamp a runtime process Quest workflow',
++    (t) => {
++      // Regression: classifyPath('solve/epics/*.md') returned workflow (the bare
++      // solve/ prefix was checked before the Markdown rule), so a runtime
++      // process Quest citing the gold-plating epic in links.planDoc inherited
++      // workflow scope and the changeRef gate refused its runtime guard files.
++      const epicLinkedRuntimeQuest = {
++        id: 'bootstrap-mode-routing-property-repair',
++        class: 'process',
++        statement: 'The CDC bootstrap-mode-routing property respects the ' +
++          'primary-key re-home refusal.',
++        links: {planDoc: 'solve/epics/golden-capability-gold-plating.md'},
++        frontiers: [{id: 'bootstrap-mode-routing-property-repair-main'}],
++      };
++      t.equal(classifyQuestScope(epicLinkedRuntimeQuest), 'runtime',
++        'the epic citation is documentation and yields to runtime classification');
+       t.end();
+     });
+ 

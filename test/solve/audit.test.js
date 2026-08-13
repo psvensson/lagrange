@@ -76,6 +76,33 @@ tap.test('Quest audit', async (t) => {
         'distributed source remains runtime');
       t.equal(classifyPath('docs/development/solver-runbook.md'), 'workflow',
         'workflow-owned Markdown keeps workflow scope');
+      t.equal(classifyPath('solve/epics/golden-capability-gold-plating.md'), 'docs',
+        'an epic planning memo under solve/ is documentation, not workflow tooling');
+      t.equal(classifyPath('solve/epics/example.js'), 'workflow',
+        'non-Markdown source under solve/epics keeps workflow scope');
+      t.equal(classifyPath('solve/epics/example.json'), 'workflow',
+        'non-Markdown data under solve/epics keeps workflow scope');
+      t.equal(classifyPath('solve/quests/some-quest.json'), 'workflow',
+        'a solve/ bookkeeping file keeps workflow scope');
+      t.end();
+    });
+
+  t.test('an epic planDoc citation does not stamp a runtime process Quest workflow',
+    (t) => {
+      // Regression: classifyPath('solve/epics/*.md') returned workflow (the bare
+      // solve/ prefix was checked before the Markdown rule), so a runtime
+      // process Quest citing the gold-plating epic in links.planDoc inherited
+      // workflow scope and the changeRef gate refused its runtime guard files.
+      const epicLinkedRuntimeQuest = {
+        id: 'bootstrap-mode-routing-property-repair',
+        class: 'process',
+        statement: 'The CDC bootstrap-mode-routing property respects the ' +
+          'primary-key re-home refusal.',
+        links: {planDoc: 'solve/epics/golden-capability-gold-plating.md'},
+        frontiers: [{id: 'bootstrap-mode-routing-property-repair-main'}],
+      };
+      t.equal(classifyQuestScope(epicLinkedRuntimeQuest), 'runtime',
+        'the epic citation is documentation and yields to runtime classification');
       t.end();
     });
 

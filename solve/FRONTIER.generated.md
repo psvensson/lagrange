@@ -48,10 +48,11 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 21
+## Open quests — 22
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
+| bootstrap-mode-routing-property-repair | process | 0 | 0 | 2026-08-12 | — |
 | coupled-pair-proof-cone-input-integrity-closure | process | 2 | 0 | 2026-08-12 | — |
 | coupled-pair-proof-cone-selection | process | 2 | 0 | 2026-08-11 | — |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 ⚠ stale | — |
@@ -72,7 +73,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 ⚠ stale | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
 | service-data-affinity-parallel-reduce-demo-live | product | 1 | 0 | 2026-07-25 ⚠ stale | — |
-| solver-low-ceremony-correction-loop | process | 8 | 0 | 2026-08-05 | — |
+| solver-low-ceremony-correction-loop | process | 8 | 0 | 2026-08-05 ⚠ stale | — |
 
-> 16 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
+> 17 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.
 

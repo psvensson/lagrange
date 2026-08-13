@@ -126,6 +126,7 @@ const DIFF_EXTENSION = '.diff';
 const DESCRIPTOR_EXTENSION = '.diff.json';
 const GZIP_EXTENSION = '.diff.gz';
 const MARKDOWN_EXTENSION = '.md';
+const SOLVE_EPICS_PREFIX = 'solve/epics/';
 const CONTENT_ADDRESSED_STORAGE_KIND = 'content-addressed';
 const ROOT_PACKAGE_LOCK_PATH = 'package-lock.json';
 const QUEST_SCOPE_RUNTIME = 'runtime';
@@ -384,7 +385,17 @@ export function isVerificationBookkeeping(filePath, questId) {
 
 export function classifyPath(filePath) {
   const normalized = normalizeSlash(filePath);
-  if (WORKFLOW_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
+  // Epic / planning memos under solve/ are decision documents, not Solver
+  // tooling: the bare `solve/` workflow prefix must not stamp them workflow,
+  // or every runtime Quest that cites one in links.planDoc/specRef inherits
+  // workflow scope and the changeRef gate then refuses its runtime guard files
+  // (the gold-plating epic poisoned three runtime process Quests this way).
+  // Fall through to the docs rule for these; every other solve/ subpath
+  // (quests, logs, oracle, state, changes) stays workflow.
+  const isEpicMemo = normalized.startsWith(SOLVE_EPICS_PREFIX) &&
+    normalized.endsWith(MARKDOWN_EXTENSION);
+  if (!isEpicMemo &&
+      WORKFLOW_PATH_PREFIXES.some((prefix) => normalized.startsWith(prefix))) {
     return QUEST_SCOPE_WORKFLOW;
   }
   if (normalized.endsWith(MARKDOWN_EXTENSION)) return 'docs';
