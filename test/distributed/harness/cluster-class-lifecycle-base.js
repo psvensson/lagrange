@@ -47,6 +47,57 @@ const ADMIN_ALLOW_INSECURE_EXTERNAL_BIND_ENV_KEY =
 const PGWIRE_AUTH_USER_ENV_KEY = 'PGWIRE_AUTH_USER';
 const PGWIRE_AUTH_PASSWORD_ENV_KEY = 'PGWIRE_AUTH_PASSWORD';
 const PGWIRE_AUTH_DATABASE_ENV_KEY = 'PGWIRE_AUTH_DATABASE';
+// Host controls are not a node-runtime namespace. Only these explicitly
+// owned runtime controls cross the container boundary. Publish-gate controls
+// also use the LAGRANGE_ prefix and must never alter the system under test.
+const FORWARDED_HOST_ENV_KEYS = Object.freeze([
+  'LAGRANGE_DEBUG_LOGS',
+  'LAGRANGE_CAPTURE_LOGS',
+  'LAGRANGE_RAFT_SNAPSHOT_THRESHOLD',
+]);
+const LAGRANGE_ENV_PREFIX = 'LAGRANGE_';
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const arrayIsArray = Array.isArray;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Function.call.bind(Object.prototype.hasOwnProperty);
+const stringIndexOf = Function.call.bind(String.prototype.indexOf);
+const stringSlice = Function.call.bind(String.prototype.slice);
+const stringStartsWith = Function.call.bind(String.prototype.startsWith);
+
+function ownDataDescriptor(object, key) {
+  if (!object || typeof object !== 'object') return undefined;
+  const descriptor = objectGetOwnPropertyDescriptor(object, key);
+  return descriptor && objectHasOwn(descriptor, 'value') ? descriptor : undefined;
+}
+
+function ownDataValue(object, key) {
+  return ownDataDescriptor(object, key)?.value;
+}
+
+function canonicalContainerEnv(inspect) {
+  const config = ownDataValue(inspect, 'Config');
+  const currentEnv = ownDataValue(config, 'Env');
+  if (!arrayIsArray(currentEnv)) return null;
+  const length = ownDataValue(currentEnv, 'length');
+  if (!Number.isSafeInteger(length)) return null;
+  const values = Object.create(null);
+  for (let index = ZERO; index < length; index += 1) {
+    const descriptor = ownDataDescriptor(currentEnv, index);
+    if (!descriptor || typeof descriptor.value !== 'string') return null;
+    const entry = descriptor.value;
+    const separator = stringIndexOf(entry, '=');
+    if (separator <= ZERO) return null;
+    const key = separator > ZERO ? stringSlice(entry, ZERO, separator) : '';
+    const value = stringSlice(entry, separator + 1);
+    if (objectHasOwn(values, key)) return null;
+    values[key] = value;
+    if (stringStartsWith(key, LAGRANGE_ENV_PREFIX) &&
+      !arrayIncludes(FORWARDED_HOST_ENV_KEYS, key)) {
+      return null;
+    }
+  }
+  return values;
+}
 const DOCKER_BIND_SEPARATOR = ':';
 const LEGACY_REUSE_SHELL_ENTRYPOINTS = Object.freeze(['sh', 'bash']);
 const LEGACY_REUSE_SHELL_ARG = '-lc';
@@ -199,7 +250,6 @@ const {
   httpGet,
   httpRequest,
   isIgnorableContainerStopError,
-  readContainerInspectEnvValue,
   resolvePath,
   resolvePositiveTimeoutMs,
   uuidv4,
@@ -577,16 +627,9 @@ class ClusterLifecycleBase {
         partitionConfig.evaluationIntervalMs,
       );
     }
-    // Forward opt-in LAGRANGE_* feature-flag env vars from the host so per-run
-    // flag experiments (e.g. LAGRANGE_JOIN_DISTRIBUTION_ADMISSION) reach the node
-    // containers. Scoped to the LAGRANGE_ prefix; changing these recreates the
-    // reusable container via _shouldRecreateReusableContainer.
-    for (const [key, value] of Object.entries(process.env)) {
-      if (
-        key.startsWith('LAGRANGE_') &&
-        typeof value === 'string' &&
-        value.length > ZERO
-      ) {
+    for (const key of FORWARDED_HOST_ENV_KEYS) {
+      const value = process.env[key];
+      if (typeof value === 'string' && value.length > ZERO) {
         env[key] = value;
       }
     }
@@ -663,9 +706,16 @@ class ClusterLifecycleBase {
     if (!inspect || typeof inspect !== 'object') {
       return true;
     }
+    const currentEnv = canonicalContainerEnv(inspect);
+    if (!currentEnv) return true;
     for (const [key, value] of Object.entries(expectedEnv)) {
-      const currentValue = readContainerInspectEnvValue(inspect, key);
+      const currentValue = currentEnv[key];
       if (String(currentValue || '') !== String(value)) {
+        return true;
+      }
+    }
+    for (const key of FORWARDED_HOST_ENV_KEYS) {
+      if (objectHasOwn(currentEnv, key) && !objectHasOwn(expectedEnv, key)) {
         return true;
       }
     }

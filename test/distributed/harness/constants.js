@@ -777,9 +777,9 @@ const ARG_NO_FAST_LOCAL = '--no-fast-local';
 const ARG_DETERMINISTIC_DEBUG = '--deterministic-debug';
 const ARG_NO_DETERMINISTIC_DEBUG = '--no-deterministic-debug';
 const ARG_DEBUG_LOGS = '--debug-logs';
-// Env var forwarded to node containers (LAGRANGE_ prefix → auto-forwarded by the
-// cluster) telling them to raise the console log level to debug for full stdout
-// capture while keeping logs-table persistence at the configured level.
+// Harness-owned env var explicitly forwarded to node containers, telling them
+// to raise the console log level for full stdout capture while keeping
+// logs-table persistence at the configured level.
 const DEBUG_LOGS_ENV_VAR = 'LAGRANGE_DEBUG_LOGS';
 // Enable file-based (non-perturbing) log capture WITHOUT raising the log level —
 // i.e. capture at the normal info volume. Orthogonal to --debug-logs (which is the

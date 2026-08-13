@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1779,
+    "unit": 1780,
     "integration": 73,
     "bootstrap": 171,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2030,
-  "digest": "fnv1a32-3167263b",
+  "censusSize": 2031,
+  "digest": "fnv1a32-c6b19d29",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -716,6 +716,7 @@
     "test/distributed/harness/__tests__/cluster-publication-membership-count.test.js": "unit",
     "test/distributed/harness/__tests__/cluster-quiescence-observer-cohort.test.js": "unit",
     "test/distributed/harness/__tests__/cluster-restart-recovery-held.test.js": "unit",
+    "test/distributed/harness/__tests__/cluster-runtime-environment-allowlist.test.js": "unit",
     "test/distributed/harness/__tests__/cluster-start-node-lifecycle.test.js": "unit",
     "test/distributed/harness/__tests__/cluster-stop-load-config-readiness.test.js": "unit",
     "test/distributed/harness/__tests__/cluster.test.js": "unit",
