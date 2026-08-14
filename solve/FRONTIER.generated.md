@@ -64,7 +64,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | oci-container-driver-live-activation | product | 12 | 0 | 2026-07-31 ⚠ stale | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-08-14 | — |
 | public-path-multinode-baseline | product | 0 | 0 | 2026-08-11 | — |
-| publication-recovery-snapshot-starvation-relief | product | 0 | 1 | 2026-08-14 | — |
+| raft-follower-append-sqlite-starvation-relief | product | 8 | 0 | 2026-08-14 | — |
 | rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 ⚠ stale | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 ⚠ stale | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |

@@ -135,6 +135,21 @@ class PartitionRaftStorage {
     }
   }
 
+  readAppliedWatermarkFromStore() {
+    const appliedRow = this.db.prepare(
+      PARTITION_SERVICE_SQL.SELECT_RAFT_STATE_VALUE,
+    ).get(RAFT_CHECKPOINT_APPLIED_STATE_KEY.LAST_APPLIED_INDEX);
+    return appliedRow ?
+      parseInt(appliedRow.value, NUM.TEN) :
+      this.logAdapter.getCommittedIndex();
+  }
+
+  /** Re-anchor the in-memory applied watermark after a sliced transaction rolls back. */
+  refreshAppliedWatermarkCacheFromStore() {
+    this.lastAppliedIndexCache = this.readAppliedWatermarkFromStore();
+    return this.lastAppliedIndexCache;
+  }
+
   get commitIndex() {
     return this.logAdapter.refreshCommittedIndexCacheFromStore();
   }

@@ -1,4 +1,7 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {
+  RAFT_COMMIT_APPLY_ROLLBACK_EVENT,
+} from '../raft/liferaft-commit-scheduler.js';
 
 const {
   ERRORS,
@@ -9,6 +12,12 @@ const {
   RaftRole,
   wireReplicaLifecycleEvents,
 } = PARTITION_SERVICE_SHARED;
+
+function wireCommitApplyRollbackRecovery(service) {
+  service.raft.on(RAFT_COMMIT_APPLY_ROLLBACK_EVENT, () => {
+    service.storage.refreshAppliedWatermarkCacheFromStore();
+  });
+}
 
 function wirePartitionRaftLifecycleEvents(
   service,
@@ -112,6 +121,7 @@ function wirePartitionRaftLifecycleEvents(
       service.storage.currentTerm = term;
     },
   });
+  wireCommitApplyRollbackRecovery(service);
 }
 
 export {wirePartitionRaftLifecycleEvents};

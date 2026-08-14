@@ -7,6 +7,13 @@ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import LifeRaft from '../../src/raft/liferaft.js';
 import {PartitionService} from '../../src/partition/partition-service.js';
+import {
+  PARTITION_SERVICE_EVENT,
+  PARTITION_SERVICE_OPERATION,
+} from '../../src/partition/partition-service-constants.js';
+
+const RAFT_COMMIT_APPLY_EFFECT_FAILURE_EVENT =
+  'commit apply effect failure';
 
 beforeEach(() => {
   ConfigurationManager.resetInstance();
@@ -237,6 +244,174 @@ test(
       partition.clearPendingCommittedWrites('test cleanup');
       await writeOutcomePromise;
     }
+    await partition.shutdown();
+  },
+);
+
+test(
+  'PartitionService publishes no apply effects when a later transactional ' +
+    'entry rolls back',
+  async (t) => {
+    const partition = createPartition('commit-rollback', [
+      'commit-rollback-r1',
+      'commit-rollback-r2',
+      'commit-rollback-r3',
+    ]);
+    await partition.initialize();
+    const firstCommand = {
+      type: 'INSERT',
+      entryId: 'rollback-entry-1',
+      sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)',
+      params: ['rollback-row-1', 'value-1'],
+    };
+    const failingCommand = {
+      type: 'INSERT',
+      entryId: 'rollback-entry-2',
+      sql: 'INSERT INTO missing_table (id) VALUES (?)',
+      params: ['rollback-row-2'],
+    };
+    const entries = [firstCommand, failingCommand].map((command, offset) => ({
+      index: offset + 1,
+      term: 2,
+      committed: false,
+      responses: [],
+      command,
+    }));
+    partition.raft.log.saveCommands(entries);
+    const committedEvents = [];
+    partition.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, (event) => {
+      committedEvents.push(event.command.entryId);
+    });
+
+    await t.rejects(
+      partition.raft.commitEntries(entries),
+      /missing_table/,
+      'the failing state-machine entry rejects the batch',
+    );
+    t.equal(partition.raft.log.getCommittedIndex(), 0,
+      'the Raft committed watermark rolls back');
+    t.equal(partition.storage.lastApplied, 0,
+      'the applied watermark cache refreshes from rolled-back storage');
+    t.equal(
+      partition.db.prepare('SELECT COUNT(*) AS count FROM test_table').get()
+        .count,
+      0,
+      'the earlier SQL application rolls back',
+    );
+    t.same(committedEvents, [],
+      'no committed event escapes the failed transaction');
+    t.equal(
+      partition.recentlyAppliedEntryKeys.has(
+        partition.getCommittedEntryKey(firstCommand),
+      ),
+      false,
+      'the replay marker is not published for rolled-back SQL',
+    );
+
+    const repairedCommand = {
+      ...failingCommand,
+      sql: 'INSERT INTO test_table (id, value) VALUES (?, ?)',
+      params: ['rollback-row-2', 'value-2'],
+    };
+    entries[1] = {...entries[1], command: repairedCommand};
+    partition.raft.log.saveCommand(repairedCommand, 2, 2);
+    let postCommitEffectFailureCount = 0;
+    partition.raft.on(RAFT_COMMIT_APPLY_EFFECT_FAILURE_EVENT, () => {
+      postCommitEffectFailureCount += 1;
+    });
+    partition.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, () => {
+      throw new Error('injected post-commit observer failure');
+    });
+    await partition.raft.commitEntries(entries);
+
+    t.equal(partition.raft.log.getCommittedIndex(), 2,
+      'retry durably commits the repaired prefix');
+    t.equal(partition.storage.lastApplied, 2,
+      'retry durably applies the repaired prefix');
+    t.equal(
+      partition.db.prepare('SELECT COUNT(*) AS count FROM test_table').get()
+        .count,
+      2,
+      'retry applies both rows exactly once',
+    );
+    t.same(committedEvents, ['rollback-entry-1', 'rollback-entry-2'],
+      'observable commit effects publish only after durable success');
+    t.equal(postCommitEffectFailureCount, 2,
+      'post-commit observer failures cannot reclassify durable apply');
+
+    await partition.shutdown();
+  },
+);
+
+test(
+  'PartitionService transaction outcome rolls back with its Raft watermark',
+  async (t) => {
+    const partition = createPartition('commit-outcome-rollback', [
+      'commit-outcome-rollback-r1',
+      'commit-outcome-rollback-r2',
+      'commit-outcome-rollback-r3',
+    ]);
+    await partition.initialize();
+    const command = {
+      type: PARTITION_SERVICE_OPERATION.TRANSACTION_COMMIT,
+      entryId: 'transaction-outcome-entry',
+      sessionId: 'transaction-outcome-session',
+      transactionEpoch: 7,
+      operations: [],
+    };
+    const entry = {
+      index: 1,
+      term: 2,
+      committed: false,
+      responses: [],
+      command,
+    };
+    partition.raft.log.saveCommands([entry]);
+    const committedEvents = [];
+    partition.on(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, (event) => {
+      committedEvents.push(event.command.entryId);
+    });
+    const recordOutcome = partition.recordTransactionCommitOutcome;
+    partition.recordTransactionCommitOutcome = () => {
+      throw new Error('injected transaction outcome failure');
+    };
+
+    await t.rejects(
+      partition.raft.commitEntries([entry]),
+      /injected transaction outcome failure/,
+      'a durable outcome failure rejects the Raft apply',
+    );
+    t.equal(partition.raft.log.getCommittedIndex(), 0,
+      'the committed watermark rolls back with the outcome');
+    t.equal(partition.storage.lastApplied, 0,
+      'the applied watermark rolls back with the outcome');
+    t.equal(
+      partition.db.prepare(
+        'SELECT COUNT(*) AS count FROM _transaction_outcomes',
+      ).get().count,
+      0,
+      'no transaction outcome survives the failed apply',
+    );
+    t.same(committedEvents, [],
+      'no observable commit event escapes the failed outcome write');
+
+    partition.recordTransactionCommitOutcome = recordOutcome;
+    await partition.raft.commitEntries([entry]);
+    t.equal(partition.raft.log.getCommittedIndex(), 1,
+      'retry commits the Raft entry');
+    t.equal(partition.storage.lastApplied, 1,
+      'retry advances the applied watermark');
+    t.same(
+      partition.db.prepare(
+        'SELECT outcome, transaction_epoch AS transactionEpoch ' +
+        'FROM _transaction_outcomes WHERE session_id = ?',
+      ).get(command.sessionId),
+      {outcome: 'COMMITTED', transactionEpoch: command.transactionEpoch},
+      'retry durably records the matching transaction outcome',
+    );
+    t.same(committedEvents, [command.entryId],
+      'observable commit publishes only after the outcome is durable');
+
     await partition.shutdown();
   },
 );
