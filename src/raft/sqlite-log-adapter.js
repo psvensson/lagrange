@@ -26,6 +26,9 @@ import {
   SQLITE_RAFT_STATE_KEY,
   SQLITE_RAFT_STATE_UPSERT_SQL,
 } from './sqlite-log-adapter-callback-api.js';
+import {
+  installSQLiteLogAdapterBatchApi,
+} from './sqlite-log-adapter-batch-api.js';
 
 const LOCAL_STR_DATABASE_INSTANCE_IS_REQUIRED = 'Database instance is required';
 const LOCAL_STR_LEGACY_RAFT_LOG_SCHEMA_DETECTED_MANUAL_M = 'Legacy raft log schema detected; manual migration required';
@@ -783,6 +786,7 @@ class SQLiteLogAdapter {
 }
 
 installSQLiteLogAdapterCallbackApi(SQLiteLogAdapter);
+installSQLiteLogAdapterBatchApi(SQLiteLogAdapter);
 installSnapshotCompactionApi(SQLiteLogAdapter);
 
 export {SQLiteLogAdapter};

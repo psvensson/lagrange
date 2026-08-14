@@ -15,6 +15,10 @@ const READ_AUTHORITY_WITNESS_STATE = Object.freeze({
   NOT_APPLICABLE: 'not_applicable',
   OBSERVED: 'observed',
 });
+const COMMIT_APPLY_EFFECT_PHASE = Object.freeze({
+  COMMIT: 'afterCommit',
+  ROLLBACK: 'afterRollback',
+});
 
 const {
   ERRORS,
@@ -837,16 +841,25 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
    * Requirements: 10.5
    * @param {Object} command - The committed command
    */
-  applyCommittedEntry(command) {
+  applyCommittedEntry(command, effects = null) {
     if (!command) {
       return;
     }
+    const scheduleEffect = (phase, effect) => {
+      if (effects) {
+        effects[phase].push(effect);
+      } else {
+        effect();
+      }
+    };
     // Witness the committed entry's HLC on EVERY replica (leader and follower),
     // before any branch/early-return, so this clock advances past every entry it
     // applies. Without this, a new leader whose wall clock lags the old leader
     // could stamp a later write (e.g. a DELETE) with a LOWER HLC than an earlier
     // committed write, breaking cross-leader monotonicity used as an LWW fence.
-    this.witnessCommandHlc(command);
+    scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () =>
+      this.witnessCommandHlc(command),
+    );
     this.logger.debug(PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY, {
       partitionId: this.partitionId,
       commandType: command.type,
@@ -864,7 +877,9 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         if (
           command.type === PARTITION_SERVICE_OPERATION.MIGRATION_ALTER_TABLE
         ) {
-          this.registerMigrationDefaultFromAlterSql(command.sql);
+          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () =>
+            this.registerMigrationDefaultFromAlterSql(command.sql),
+          );
         }
         const entryKey = this.getCommittedEntryKey(command);
         if (entryKey && this.recentlyAppliedEntryKeys.has(entryKey)) {
@@ -876,64 +891,72 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
               skippedReplay: true,
             },
           );
-          this.resolveCommittedWrite(command.entryId);
-          this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
-            partitionId: this.partitionId,
-            command,
+          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () => {
+            this.resolveCommittedWrite(command.entryId);
+            this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
+              partitionId: this.partitionId,
+              command,
+            });
           });
           return;
         }
         try {
           const stmt = this.db.prepare(command.sql);
           const info = stmt.run(...(command.params || []));
-          this.trackAppliedEntryKey(entryKey);
-          this.resolveCommittedWrite(command.entryId, {
-            success: true,
-            changes: info.changes,
-            lastInsertRowid: info.lastInsertRowid,
-            partitionId: this.partitionId,
-          });
-          if (this.isLeader) {
-            this.trackPendingCDCEvent(
-              this.generateCDCEvent({
-                ...command,
-                changes: info.changes,
-              }).catch((err) => {
-                if (this.isShutdown) {
-                  return;
-                }
-                this.logger.error(
-                  PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED,
-                  {partitionId: this.partitionId, error: err.message},
-                );
-              }),
-            );
-          }
-        } catch (error) {
-          if (this.isIdempotentInsertReplayConstraint(error, command)) {
+          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () => {
             this.trackAppliedEntryKey(entryKey);
-            this.logger.warn(
-              PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY,
-              {
-                partitionId: this.partitionId,
-                commandType: command.type,
-                skippedReplay: true,
-                replayConstraintSuppressed: true,
-                error: error.message,
-              },
-            );
             this.resolveCommittedWrite(command.entryId, {
               success: true,
-              changes: 0,
+              changes: info.changes,
+              lastInsertRowid: info.lastInsertRowid,
               partitionId: this.partitionId,
             });
-            this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
-              partitionId: this.partitionId,
-              command,
+            if (this.isLeader) {
+              this.trackPendingCDCEvent(
+                this.generateCDCEvent({
+                  ...command,
+                  changes: info.changes,
+                }).catch((err) => {
+                  if (this.isShutdown) {
+                    return;
+                  }
+                  this.logger.error(
+                    PARTITION_SERVICE_ERROR_MSG.CDC_EVENT_FAILED,
+                    {partitionId: this.partitionId, error: err.message},
+                  );
+                }),
+              );
+            }
+          });
+        } catch (error) {
+          if (this.isIdempotentInsertReplayConstraint(error, command)) {
+            scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () => {
+              this.trackAppliedEntryKey(entryKey);
+              this.logger.warn(
+                PARTITION_SERVICE_LOG_MSG.APPLYING_COMMITTED_ENTRY,
+                {
+                  partitionId: this.partitionId,
+                  commandType: command.type,
+                  skippedReplay: true,
+                  replayConstraintSuppressed: true,
+                  error: error.message,
+                },
+              );
+              this.resolveCommittedWrite(command.entryId, {
+                success: true,
+                changes: 0,
+                partitionId: this.partitionId,
+              });
+              this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
+                partitionId: this.partitionId,
+                command,
+              });
             });
             return;
           }
-          this.rejectCommittedWrite(command.entryId, error);
+          scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.ROLLBACK, () =>
+            this.rejectCommittedWrite(command.entryId, error),
+          );
           this.logger.error(
             PARTITION_SERVICE_ERROR_MSG.APPLY_COMMITTED_FAILED,
             {
@@ -958,19 +981,23 @@ class PartitionServiceEntryApplyBase extends PartitionServiceSchemaMigrationBase
         command.sessionId,
         command.transactionEpoch,
       );
-      this.logger.debug(PARTITION_SERVICE_LOG_MSG.TRANSACTION_COMMIT_APPLIED, {
-        partitionId: this.partitionId,
-        operationCount: command.operations?.length || 0,
-      });
-      this.resolveCommittedWrite(command.entryId, {
-        success: true,
-        partitionId: this.partitionId,
+      scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () => {
+        this.logger.debug(PARTITION_SERVICE_LOG_MSG.TRANSACTION_COMMIT_APPLIED, {
+          partitionId: this.partitionId,
+          operationCount: command.operations?.length || 0,
+        });
+        this.resolveCommittedWrite(command.entryId, {
+          success: true,
+          partitionId: this.partitionId,
+        });
       });
     }
-    this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
-      partitionId: this.partitionId,
-      command,
-    });
+    scheduleEffect(COMMIT_APPLY_EFFECT_PHASE.COMMIT, () =>
+      this.emit(PARTITION_SERVICE_EVENT.ENTRY_COMMITTED, {
+        partitionId: this.partitionId,
+        command,
+      }),
+    );
   }
 }
 Object.assign(

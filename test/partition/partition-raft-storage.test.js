@@ -75,6 +75,18 @@ describe('PartitionRaftStorage', () => {
     });
   });
 
+  describe('applied watermark rollback recovery', () => {
+    it('should re-anchor the cache to the durable applied index', () => {
+      db.prepare(
+        'INSERT OR REPLACE INTO _raft_state (key, value) VALUES (?, ?)',
+      ).run('lastAppliedIndex', '2');
+      storage.lastAppliedIndexCache = 9;
+
+      assert.strictEqual(storage.refreshAppliedWatermarkCacheFromStore(), 2);
+      assert.strictEqual(storage.lastAppliedIndexCache, 2);
+    });
+  });
+
   describe('votedFor persistence', () => {
     it('should persist and restore votedFor', () => {
       storage.votedFor = 'candidate-1';

@@ -397,6 +397,10 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
           if (callback) callback();
         }
       }
+      prepareCommitApply(command, effects) {
+        self.applyCommittedEntry(command, effects);
+        self.storage.recordAppliedAdvance();
+      }
       /**
        * Write method for sending Raft messages to peers.
        * Called by liferaft when it needs to communicate with other nodes.

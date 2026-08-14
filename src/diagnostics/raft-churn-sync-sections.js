@@ -36,6 +36,9 @@ const RAFT_CHURN_SYNC_SECTION = Object.freeze({
   // PartitionServiceTransactionBase.enforcePreparedStateHoldTimeouts sweep
   // (stuck-transaction heal / heal-deferred path; continuous on the seed).
   STUCK_TRANSACTION_HEAL: 'stuck_transaction_heal',
+  // One SQLite follower commit+state-machine-apply transaction slice. The
+  // slice owner has a wall-time budget and yields before starting another.
+  RAFT_FOLLOWER_COMMIT_APPLY_SLICE: 'raft_follower_commit_apply_slice',
 });
 
 function trackControlPlaneRebindSweep(fn) {
@@ -91,6 +94,13 @@ function trackStuckTransactionHeal(fn) {
   return trackSyncSection(RAFT_CHURN_SYNC_SECTION.STUCK_TRANSACTION_HEAL, fn);
 }
 
+function trackRaftFollowerCommitApplySlice(fn) {
+  return trackSyncSection(
+    RAFT_CHURN_SYNC_SECTION.RAFT_FOLLOWER_COMMIT_APPLY_SLICE,
+    fn,
+  );
+}
+
 export {
   RAFT_CHURN_SYNC_SECTION,
   trackControlPlaneRebindSweep,
@@ -99,4 +109,5 @@ export {
   trackLeaderActivation,
   trackStorageReservationReconcile,
   trackStuckTransactionHeal,
+  trackRaftFollowerCommitApplySlice,
 };

@@ -13,6 +13,16 @@ import {
   buildSnapshotCatchupDecision,
 } from './snapshot-catchup-constants.js';
 import {VirtualTick} from './virtual-tick.js';
+import {
+  commitEntriesCooperatively,
+} from './liferaft-commit-scheduler.js';
+import {handleFollowerAppendBatch} from './liferaft-follower-batch.js';
+import {
+  deferRaftCandidacy,
+  heartbeatWithEndGuard,
+  resolveElectionTimeout,
+  resolveRaftNowMs,
+} from './liferaft-timing-api.js';
 
 const NUMERIC_ONE = 1;
 const NUMERIC_ZERO = 0;
@@ -103,11 +113,6 @@ function getCommittedIndex(raft) {
 // broken).
 const CATCHUP_BATCH_SIZE = 64;
 const CATCHUP_BATCH_INFLIGHT_TTL_MS = 400;
-// Benign election delay returned by timeout() when `this.election` is missing
-// (i.e. the node is mid/post-end()). Mirrors base liferaft's default election
-// ceiling so any in-flight scheduling stays in-range; the in-flight end() clears
-// the Tick immediately after, so this value is never actually awaited to fire.
-const DEFAULT_ELECTION_TIMEOUT_MS = 300;
 // Candidacy reluctance (quest raft-candidacy-reluctance-drain-source): a
 // replica deliberately stepped down for drain kept out-racing caught-up peers
 // for the successor election and re-winning leadership the rebalancer was
@@ -120,8 +125,6 @@ const DEFAULT_ELECTION_TIMEOUT_MS = 300;
 // and the deliberate replacement-election path is unaffected —
 // requestElectionNow passes an explicit 1ms duration that never consults
 // timeout().
-const CANDIDACY_RELUCTANCE_MULTIPLIER = 4;
-const CANDIDACY_RELUCTANCE_WINDOW_MS = 10000;
 const RAFT_STATE_CHANGE_EVENT = 'state change';
 
 function resolveFollowerLastIndex(packet) {
@@ -540,74 +543,6 @@ function patchIncomingDataListener(raft) {
     return true;
   };
 
-  const handleFollowerAppendBatch = async (packet, write) => {
-    const committedIndex = getCommittedIndex(raft);
-    // Validate the complete committed portion before either ACKing the first
-    // item or applying the stale-batch drop. saveCommand is non-mutating for
-    // same-identity committed replays and throws the shared typed conflict for
-    // every other replacement.
-    await validateCommittedBatchEntries(
-      raft.log,
-      packet.data,
-      committedIndex,
-    );
-    // Stale-batch guard: a delayed batch whose precondition precedes our
-    // committed prefix must never truncate committed entries (the base
-    // single-entry path has a narrower pre-existing exposure; a 64-wide
-    // version of it is not acceptable).
-    if (packet.last.index < getCommittedIndex(raft)) {
-      write();
-      return undefined;
-    }
-    // Pre-compute whether the base handler will accept this packet. Sound
-    // because both log adapters complete synchronously under the hood, so
-    // no other packet interleaves between this check and the apply below;
-    // revisit if a log adapter ever becomes truly asynchronous.
-    const localLastInfo = await raft.log.getLastInfo();
-    const willAccept =
-      packet.last.index === localLastInfo.index ||
-      packet.last.index === 0 ||
-      (await raft.log.has(packet.last.index));
-    // The original handler performs the canonical preamble, consistency
-    // check, truncation, first-entry save + ack, and commit catch-up.
-    const result = await originalListener(packet, write);
-    if (!willAccept) {
-      return result;
-    }
-    let lastAppliedEntry = null;
-    for (const entry of packet.data.slice(1)) {
-      if (!isRecoverableAppendEntry(entry)) {
-        break;
-      }
-      // saveCommand rebuilds follower-local bookkeeping
-      // ({committed:false, responses:[self]}) exactly like the base
-      // handler; the adapter's bulk append() must NOT be used here (it
-      // would persist the leader's committed flags and break commit
-      // emission on the follower).
-      await raft.log.saveCommand(entry.command, entry.term, entry.index);
-      if (entry.index > committedIndex) {
-        lastAppliedEntry = entry;
-      }
-    }
-    if (lastAppliedEntry) {
-      raft.message(
-        BaseLifeRaft.LEADER,
-        await raft.packet(RAFT_PACKET_TYPE.APPEND_ACK, {
-          term: lastAppliedEntry.term,
-          index: lastAppliedEntry.index,
-        }),
-      );
-      if (getCommittedIndex(raft) < packet.last.committedIndex) {
-        const uncommitted = await raft.log.getUncommittedEntriesUpToIndex(
-          packet.last.committedIndex,
-          packet.last.term,
-        );
-        raft.commitEntries(uncommitted);
-      }
-    }
-    return result;
-  };
-
   const patchedListener = async (packet, write = () => {}) => {
     // Teardown-race guard. base liferaft's end() (index.js) sets state=STOPPED
     // and nulls raft.timers/election/Log/beat. A packet still in flight on the
@@ -675,7 +610,15 @@ function patchIncomingDataListener(raft) {
       }
       if (hasEntries && packet.data.length > 1) {
         return runAppendWithConflictRejection(
-          () => handleFollowerAppendBatch(packet, write),
+          () => handleFollowerAppendBatch({
+            raft,
+            packet,
+            write,
+            originalListener,
+            getCommittedIndex,
+            isRecoverableAppendEntry,
+            validateCommittedBatchEntries,
+          }),
           write,
           packet,
         );
@@ -761,6 +704,14 @@ class LifeRaft extends BaseLifeRaft {
     }
   }
 
+  commitEntries(entries) {
+    return commitEntriesCooperatively(
+      this,
+      entries,
+      (pending) => super.commitEntries(pending),
+    );
+  }
+
   /**
    * Randomized election timeout. Mirrors base liferaft's formula but draws from
    * the injected DT5 RandomSource when present (deterministic), else defers to the
@@ -768,35 +719,7 @@ class LifeRaft extends BaseLifeRaft {
    * @return {number} milliseconds in [election.min, election.max].
    */
   timeout() {
-    // Teardown-race guard. Base liferaft arms an election Tick at construction
-    // and clears it in end(). If that timer fires once more inside the end()
-    // window, `this.election` has already been nulled — so both this override
-    // and base timeout() would dereference `times.max` and throw. Because the
-    // Tick invokes timeout() asynchronously, that TypeError surfaces as an
-    // unhandledRejection (crashing the test process) while the still-armed Tick
-    // leaks the event loop and hangs it. Return a benign in-range delay instead;
-    // the in-flight end() clears the Tick right after, so it never fires.
-    const times = this.election;
-    if (!times) {
-      return DEFAULT_ELECTION_TIMEOUT_MS;
-    }
-    const base = !this._electionRandomSource ?
-      super.timeout() :
-      Math.floor(
-        this._electionRandomSource.random() *
-          (times.max - times.min + NUMERIC_ONE) +
-        times.min,
-      );
-    if (
-      this._candidacyReluctantUntilMs != null &&
-      this._nowMs() < this._candidacyReluctantUntilMs
-    ) {
-      // A draw armed just before the window lapses keeps its inflated
-      // duration when it fires after expiry — bounded (one draw) and
-      // deferential in the right direction.
-      return base * CANDIDACY_RELUCTANCE_MULTIPLIER;
-    }
-    return base;
+    return resolveElectionTimeout(this, () => super.timeout());
   }
 
   /**
@@ -807,9 +730,7 @@ class LifeRaft extends BaseLifeRaft {
    * @return {number} current time in ms.
    */
   _nowMs() {
-    return this._catchupTimeSource ?
-      this._catchupTimeSource.now() :
-      Date.now();
+    return resolveRaftNowMs(this);
   }
 
   /**
@@ -822,9 +743,8 @@ class LifeRaft extends BaseLifeRaft {
    *   CANDIDACY_RELUCTANCE_WINDOW_MS.
    * @return {LifeRaft} this
    */
-  deferCandidacy(windowMs = CANDIDACY_RELUCTANCE_WINDOW_MS) {
-    this._candidacyReluctantUntilMs = this._nowMs() + windowMs;
-    return this;
+  deferCandidacy(windowMs) {
+    return deferRaftCandidacy(this, windowMs);
   }
 
   /**
@@ -840,10 +760,11 @@ class LifeRaft extends BaseLifeRaft {
    * @return {LifeRaft} this
    */
   heartbeat(duration) {
-    if (!this.timers) {
-      return this;
-    }
-    return super.heartbeat(duration);
+    return heartbeatWithEndGuard(
+      this,
+      duration,
+      (nextDuration) => super.heartbeat(nextDuration),
+    );
   }
 }
 
