@@ -1,0 +1,231 @@
+diff --git a/scripts/examples/admin-ws-client.js b/scripts/examples/admin-ws-client.js
+index 0019fdfed5c780bf0e52f3c6d642a90cc3351e8d..6e81f945a53803abcdc302406d5b6cb9ccc7f1c2 100644
+--- a/scripts/examples/admin-ws-client.js
++++ b/scripts/examples/admin-ws-client.js
+@@ -13,9 +13,21 @@ const LOCAL_STR_ADMIN_EXAMPLES_SOCKET_CLOSED = 'Admin examples socket closed';
+ const LOCAL_STR_MESSAGE = 'message';
+ const LOCAL_STR_CLOSE = 'close';
+ const ADMIN_EXAMPLES_ERROR_CODE = Object.freeze({
++  CONNECT_TIMEOUT: 'ADMIN_CONNECT_TIMEOUT',
+   RESPONSE_TIMEOUT: 'ADMIN_RESPONSE_TIMEOUT',
+ });
+ 
++function buildAdminConnectTimeoutError(target, timeoutMs) {
++  const error = new Error(
++    `Timed out opening admin websocket: ${target}`,
++  );
++  error.code = ADMIN_EXAMPLES_ERROR_CODE.CONNECT_TIMEOUT;
++  error.deferRetry = true;
++  error.target = target;
++  error.timeoutMs = timeoutMs;
++  return error;
++}
++
+ function buildAdminResponseTimeoutError(queryId, timeoutMs) {
+   const error = new Error(
+     `Timed out waiting for admin response: ${queryId}`,
+@@ -38,6 +50,7 @@ class AdminWsClient {
+     this.target = options.target || DEFAULT_TARGET;
+     this.timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
+     this.socket = null;
++    this.openingSocket = null;
+     this.socketReady = null;
+     this.pending = new Map();
+   }
+@@ -55,27 +68,57 @@ class AdminWsClient {
+       return this.socketReady;
+     }
+ 
+-    this.socketReady = new Promise((resolve, reject) => {
+-      const socket = new WebSocket(this.target);
++    const socket = new WebSocket(this.target);
++    this.openingSocket = socket;
++    let openingPromise = null;
++    openingPromise = new Promise((resolve, reject) => {
++      let timeout = null;
++
++      const releaseOpening = () => {
++        if (this.openingSocket === socket) {
++          this.openingSocket = null;
++        }
++        if (this.socketReady === openingPromise) {
++          this.socketReady = null;
++        }
++      };
++
++      const clearOpening = () => {
++        if (timeout !== null) {
++          clearTimeout(timeout);
++          timeout = null;
++        }
++        socket.off(LOCAL_STR_OPEN, onOpen);
++        socket.off(LOCAL_STR_ERROR, onOpenError);
++      };
+ 
+       const onOpen = () => {
+-        socket.off('error', onOpenError);
++        clearOpening();
++        releaseOpening();
+         this._bindSocket(socket);
+         this.socket = socket;
+         resolve(socket);
+       };
+ 
+       const onOpenError = (error) => {
+-        socket.off('open', onOpen);
+-        this._resetSocket();
++        clearOpening();
++        releaseOpening();
+         reject(error);
+       };
+ 
+       socket.once(LOCAL_STR_OPEN, onOpen);
+       socket.once(LOCAL_STR_ERROR, onOpenError);
++      timeout = setTimeout(() => {
++        clearOpening();
++        releaseOpening();
++        socket.once(LOCAL_STR_ERROR, () => undefined);
++        socket.terminate();
++        reject(buildAdminConnectTimeoutError(this.target, this.timeoutMs));
++      }, this.timeoutMs);
+     });
++    this.socketReady = openingPromise;
+ 
+-    return this.socketReady;
++    return openingPromise;
+   }
+ 
+   /**
+@@ -85,14 +128,16 @@ class AdminWsClient {
+    */
+   async close() {
+     this._rejectPending(LOCAL_STR_ADMIN_EXAMPLES_SOCKET_CLOSED);
+-    if (this.socket) {
+-      try {
++    try {
++      if (this.socket) {
+         this.socket.close();
+-      } catch {
+-        // Best effort.
+       }
++      if (this.openingSocket) {
++        this.openingSocket.terminate();
++      }
++    } finally {
++      this._resetSocket();
+     }
+-    this._resetSocket();
+   }
+ 
+   /**
+@@ -236,6 +281,7 @@ class AdminWsClient {
+    */
+   _resetSocket() {
+     this.socket = null;
++    this.openingSocket = null;
+     this.socketReady = null;
+   }
+ }
+diff --git a/scripts/run-admin-ws-client-open-timeout-scenarios.js b/scripts/run-admin-ws-client-open-timeout-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3213eaa13aa0a8c25f07fc8166462a78a89c5f5e
+--- /dev/null
++++ b/scripts/run-admin-ws-client-open-timeout-scenarios.js
+@@ -0,0 +1,14 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from
++  './checks/guard-test-scenario-runner.js';
++
++const SCENARIO = 'admin-ws-client-open-timeout';
++const REPORT_DIR = 'test-output/reports';
++const TEST_FILES = Object.freeze([
++  'test/runtime/movielens-three-way-affinity-demo.test.js',
++]);
++
++runGuardTestScenarios({
++  [SCENARIO]: TEST_FILES,
++}, {reportDir: REPORT_DIR});
+diff --git a/test/runtime/movielens-three-way-affinity-demo.test.js b/test/runtime/movielens-three-way-affinity-demo.test.js
+index 855ba929bafbf40b1c0bee525cf9864a3b7f3ea6..3e7f905fd15288286ba99bb20b11acc6e59f9588 100644
+--- a/test/runtime/movielens-three-way-affinity-demo.test.js
++++ b/test/runtime/movielens-three-way-affinity-demo.test.js
+@@ -1,5 +1,6 @@
+ import {existsSync} from 'node:fs';
+ import {once} from 'node:events';
++import net from 'node:net';
+ import {WebSocketServer} from 'ws';
+ import {test} from '../../src/test-helpers/tap.js';
+ import {
+@@ -279,6 +280,7 @@ test('MovieLens durable CREATE retries a typed ambiguous admin timeout on ' +
+   const requestReceived = new Promise((resolve) => {
+     resolveRequest = resolve;
+   });
++
+   let serverSocket = null;
+   server.on('connection', (socket) => {
+     serverSocket = socket;
+@@ -388,6 +390,63 @@ test('MovieLens durable CREATE retries a typed ambiguous admin timeout on ' +
+   t.end();
+ });
+ 
++test('AdminWsClient bounds a stalled websocket opening and releases it',
++  async (t) => {
++    const sockets = new Set();
++    let connections = 0;
++    const server = net.createServer((socket) => {
++      connections += 1;
++      sockets.add(socket);
++      socket.once('close', () => sockets.delete(socket));
++    });
++    server.listen(0, '127.0.0.1');
++    await once(server, 'listening');
++    const serverAddress = server.address();
++    const target = `ws://127.0.0.1:${serverAddress.port}`;
++    const client = new AdminWsClient({target, timeoutMs: 100});
++    const startedAt = Date.now();
++    let firstError = null;
++    let secondError = null;
++    try {
++      try {
++        await client.connect();
++      } catch (error) {
++        firstError = error;
++      }
++      const firstElapsedMs = Date.now() - startedAt;
++      t.equal(firstError?.code, 'ADMIN_CONNECT_TIMEOUT');
++      t.equal(firstError?.deferRetry, true);
++      t.equal(firstError?.target, target);
++      t.equal(firstError?.timeoutMs, 100);
++      t.equal(isRetryableControlPlaneError(firstError), true,
++        'the canonical retry owner accepts the typed opening timeout');
++      t.ok(firstElapsedMs >= 100 && firstElapsedMs < 1000,
++        'the stalled opening rejects inside a bounded real deadline');
++      t.equal(client.socket, null, 'no opened socket is retained');
++      t.equal(client.openingSocket, null, 'the opening socket is released');
++      t.equal(client.socketReady, null, 'the opening promise is released');
++
++      try {
++        await client.connect();
++      } catch (error) {
++        secondError = error;
++      }
++      t.equal(secondError?.code, 'ADMIN_CONNECT_TIMEOUT');
++      t.not(secondError, firstError, 'a later attempt owns a fresh timeout');
++      t.equal(connections, 2, 'a later attempt opens a fresh TCP session');
++      t.equal(client.openingSocket, null,
++        'the repeated timeout also releases socket ownership');
++    } finally {
++      await client.close();
++      for (const socket of sockets) {
++        socket.destroy();
++      }
++      await new Promise((resolve, reject) => {
++        server.close((error) => error ? reject(error) : resolve());
++      });
++    }
++  });
++
+ test('MovieLens durable CREATE does not replay a hard validation error',
+   async (t) => {
+     let clientsCreated = 0;
