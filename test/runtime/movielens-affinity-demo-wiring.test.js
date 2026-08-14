@@ -22,7 +22,11 @@
 
 import {test} from '../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
-import {readFile} from 'node:fs/promises';
+import {gzip as gzipCallback} from 'node:zlib';
+import {mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
+import {promisify} from 'node:util';
 import {ConfigurationManager} from '../../src/config/configuration-manager.js';
 import {LoggingService} from '../../src/logging/logging-service.js';
 import {COLUMN, NODE_STATE, TABLES} from '../../src/constants/index.js';
@@ -58,6 +62,13 @@ import {
   summarizePhase,
 } from '../../examples/service-data-affinity/run-affinity-demo.js';
 import {
+  GCP_DEMO_SCENARIO_NAME,
+  stopGcpAffinityCluster,
+} from '../../examples/service-data-affinity/gcp-cluster-provider.js';
+import {
+  fullLogDestPath,
+} from '../../test/distributed/harness/full-node-log-capture.js';
+import {
   PREPARE_STATUS,
   START_STATUS,
   HEALTH_STATUS,
@@ -68,6 +79,54 @@ const LOOP_SQL = 'SELECT movie_id, rating FROM ratings';
 const FAST_INTERVAL_MS = 5;
 const WAIT_TIMEOUT_MS = 1500;
 const WAIT_POLL_MS = 5;
+const gzip = promisify(gzipCallback);
+
+test('MovieLens GCP cleanup preserves full node logs before VM destruction',
+  async (t) => {
+    const outputDir = await mkdtemp(join(tmpdir(), 'affinity-gcp-logs-'));
+    const nodeIds = ['seed-node', 'joiner-node'];
+    const events = [];
+    try {
+      await Promise.all(nodeIds.map(async (nodeId, index) => {
+        const fullLogPath = fullLogDestPath(
+          outputDir,
+          GCP_DEMO_SCENARIO_NAME,
+          nodeId,
+        );
+        await mkdir(join(fullLogPath, '..'), {recursive: true});
+        await writeFile(
+          fullLogPath,
+          await gzip(`node-${index}-complete\nprofile-window-${index}\n`),
+        );
+      }));
+      const cluster = {
+        getNodes: () => nodeIds.map((id) => ({id})),
+        stop: async () => events.push('cluster-stopped'),
+      };
+      const provisioner = {
+        destroy: async () => {
+          events.push('vms-destroyed');
+          assert.equal(
+            await readFile(join(outputDir, 'node-0.log'), 'utf8'),
+            'node-0-complete\nprofile-window-0\n',
+            'full seed log exists before VM destruction',
+          );
+        },
+      };
+
+      await stopGcpAffinityCluster({cluster, provisioner, outputDir});
+
+      assert.deepEqual(events, ['cluster-stopped', 'vms-destroyed']);
+      assert.equal(
+        await readFile(join(outputDir, 'node-1.log'), 'utf8'),
+        'node-1-complete\nprofile-window-1\n',
+        'full joiner log is materialized by cluster index',
+      );
+    } finally {
+      await rm(outputDir, {recursive: true, force: true});
+    }
+    t.end();
+  });
 
 test('MovieLens admits schema after formation and before ratings CREATE',
   async (t) => {

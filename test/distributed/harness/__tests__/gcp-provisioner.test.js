@@ -13,7 +13,23 @@
 
 import {test} from '../../../../src/test-helpers/tap.js';
 import assert from 'node:assert/strict';
-import {GCPProvisioner} from '../gcp-provisioner.js';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import {
+  GCP_HARNESS_IMAGE_FAMILY,
+  GCPProvisioner,
+  harnessImageSource,
+} from '../gcp-provisioner.js';
+
+test('GCP provisioner selects the project-local reusable image family', (t) => {
+  assert.equal(GCP_HARNESS_IMAGE_FAMILY, 'lagrange-distributed-harness');
+  assert.equal(
+    harnessImageSource('project-a'),
+    'projects/project-a/global/images/family/lagrange-distributed-harness',
+  );
+  t.end();
+});
 
 // --- Constructor / preemptible configuration (Req 8.4) ---
 
@@ -111,13 +127,64 @@ test('estimateCost falls back for unknown machine type', (t) => {
 
 // --- installImage precondition ---
 
-test('installImage throws when provision() has not run', (t) => {
+test('installImage throws when provision() has not run', async (t) => {
   const p = new GCPProvisioner({project: 'proj'});
-  assert.throws(
+  await assert.rejects(
     () => p.installImage('distributed-db:test'),
     /requires provision\(\) to have completed first/,
   );
   t.end();
+});
+
+test('certificate distribution fans out across image-backed VMs', async () => {
+  const certDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gcp-provision-test-'));
+  const provisioner = new GCPProvisioner({project: 'proj'});
+  provisioner._certDir = certDir;
+  provisioner._vmNames = ['vm-a', 'vm-b'];
+  let activeReadinessChecks = 0;
+  let maximumReadinessChecks = 0;
+  provisioner._generateSignedCert = (prefix) => {
+    const keyPath = path.join(certDir, `${prefix}-key.pem`);
+    const certPath = path.join(certDir, `${prefix}-cert.pem`);
+    fs.writeFileSync(keyPath, `${prefix}-key`);
+    fs.writeFileSync(certPath, `${prefix}-cert`);
+    if (prefix === 'client') {
+      fs.writeFileSync(path.join(certDir, 'ca.pem'), 'test-ca');
+    }
+    return {keyPath, certPath};
+  };
+  provisioner._waitForVmReady = async () => {
+    activeReadinessChecks += 1;
+    maximumReadinessChecks = Math.max(
+      maximumReadinessChecks,
+      activeReadinessChecks,
+    );
+    await Promise.resolve();
+    activeReadinessChecks -= 1;
+  };
+  const sshCommands = [];
+  provisioner._gcloudSshAsync = async (_vmName, command) => {
+    sshCommands.push(command);
+    return '';
+  };
+  provisioner._gcloudScpAsync = async () => '';
+
+  try {
+    const tls = await provisioner._distributeCertificates(['1.2.3.4', '5.6.7.8']);
+    assert.equal(maximumReadinessChecks, 2);
+    assert.equal(tls.ca, 'test-ca');
+    assert.equal(tls.cert, 'client-cert');
+    assert.equal(tls.key, 'client-key');
+    let tlsVerifyCommandCount = 0;
+    for (const command of sshCommands) {
+      if (/--tlsverify/u.test(command)) {
+        tlsVerifyCommandCount += 1;
+      }
+    }
+    assert.equal(tlsVerifyCommandCount, 2);
+  } finally {
+    fs.rmSync(certDir, {recursive: true, force: true});
+  }
 });
 
 // --- Address format validation (Req 8.6) ---

@@ -1237,7 +1237,7 @@ async function main() {
     // Distribute the freshly-built image to any provisioned GCP hosts so the
     // per-host daemons can start containers without pulling from a registry.
     try {
-      installGcpImage(gcpProvisioner, runConfig.image, args.verbose);
+      await installGcpImage(gcpProvisioner, runConfig.image, args.verbose);
     } catch (err) {
       runStatusContext.milestones.failedAt = new Date().toISOString();
       await writeRunnerStatus(RUN_STATUS_STATE_FATAL_ERROR, {

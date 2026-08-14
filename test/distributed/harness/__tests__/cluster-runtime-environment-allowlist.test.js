@@ -6,6 +6,7 @@ import {createCluster} from './cluster-test-helpers.js';
 const DEBUG_LOGS_ENV_KEY = 'LAGRANGE_DEBUG_LOGS';
 const CAPTURE_LOGS_ENV_KEY = 'LAGRANGE_CAPTURE_LOGS';
 const RAFT_SNAPSHOT_THRESHOLD_ENV_KEY = 'LAGRANGE_RAFT_SNAPSHOT_THRESHOLD';
+const LOOP_GAP_PROFILE_ENV_KEY = 'LAGRANGE_LOOP_GAP_PROFILE';
 const PUSH_ON_RED_ENV_KEY = 'LAGRANGE_PUSH_ON_RED';
 const PUSH_SKIP_TESTS_ENV_KEY = 'LAGRANGE_PUSH_SKIP_TESTS';
 const ARBITRARY_HOST_ENV_KEY = 'LAGRANGE_UNOWNED_TEST_CONTROL';
@@ -22,13 +23,14 @@ function createTestCluster() {
 
 test('node env forwards only explicitly owned LAGRANGE controls', async () => {
   const keys = [DEBUG_LOGS_ENV_KEY, CAPTURE_LOGS_ENV_KEY,
-    RAFT_SNAPSHOT_THRESHOLD_ENV_KEY, PUSH_ON_RED_ENV_KEY,
-    PUSH_SKIP_TESTS_ENV_KEY, ARBITRARY_HOST_ENV_KEY];
+    RAFT_SNAPSHOT_THRESHOLD_ENV_KEY, LOOP_GAP_PROFILE_ENV_KEY,
+    PUSH_ON_RED_ENV_KEY, PUSH_SKIP_TESTS_ENV_KEY, ARBITRARY_HOST_ENV_KEY];
   const original = new Map(arrayMap(keys, (key) => [key, process.env[key]]));
   try {
     process.env[DEBUG_LOGS_ENV_KEY] = 'true';
     process.env[CAPTURE_LOGS_ENV_KEY] = 'true';
     process.env[RAFT_SNAPSHOT_THRESHOLD_ENV_KEY] = '100';
+    process.env[LOOP_GAP_PROFILE_ENV_KEY] = '1';
     process.env[PUSH_ON_RED_ENV_KEY] = '1';
     process.env[PUSH_SKIP_TESTS_ENV_KEY] = '1';
     process.env[ARBITRARY_HOST_ENV_KEY] = 'must-not-cross';
@@ -36,6 +38,7 @@ test('node env forwards only explicitly owned LAGRANGE controls', async () => {
     assert.strictEqual(env[DEBUG_LOGS_ENV_KEY], 'true');
     assert.strictEqual(env[CAPTURE_LOGS_ENV_KEY], 'true');
     assert.strictEqual(env[RAFT_SNAPSHOT_THRESHOLD_ENV_KEY], '100');
+    assert.strictEqual(env[LOOP_GAP_PROFILE_ENV_KEY], '1');
     assert.strictEqual(env[PUSH_ON_RED_ENV_KEY], undefined);
     assert.strictEqual(env[PUSH_SKIP_TESTS_ENV_KEY], undefined);
     assert.strictEqual(env[ARBITRARY_HOST_ENV_KEY], undefined);

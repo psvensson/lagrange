@@ -55,7 +55,7 @@ async function provisionGcpDockerHosts(runConfig, verbose) {
 // Distribute the freshly-built image to every provisioned GCP host so the
 // per-host daemons can start containers without pulling from a registry.
 // No-op when the run did not provision GCP hosts.
-function installGcpImage(provisioner, image, verbose) {
+async function installGcpImage(provisioner, image, verbose) {
   if (!provisioner) {
     return;
   }
@@ -64,7 +64,7 @@ function installGcpImage(provisioner, image, verbose) {
       GCP_IMAGE_INSTALL_LOG_PREFIX + image + GCP_IMAGE_INSTALL_LOG_SUFFIX,
     );
   }
-  provisioner.installImage(image);
+  await provisioner.installImage(image);
 }
 
 // Tear down provisioned GCP infra. Called on both success and failure paths
