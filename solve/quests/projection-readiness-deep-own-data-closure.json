@@ -1,0 +1,70 @@
+{
+  "id": "projection-readiness-deep-own-data-closure",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The exact same-base readiness candidate closes all standing parent rejections by applying one recursive strict-own-data contract to the complete production projection-evidence boundary, so malformed owner-stream, boundary-outcome, priority-recovery, revision, and diagnostic graphs deny without throwing, admitting, or retaining hostile values; all nine sealed categories are independently approved before one profiled plus three natural source-bound five-node GCP MovieLens runs meet the existing convergence limits.",
+  "priority": 1,
+  "class": "product",
+  "verificationTemplates": [
+    "admission-gating",
+    "adversarial-js-intrinsics",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity",
+    "recovery-replay",
+    "retry-loops",
+    "sweep-timer",
+    "transport-delivery"
+  ],
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "readiness-planning-own-data-consumer-closure",
+    "planDoc": "solve/epics/publication-readiness-churn-liveness-closure.md",
+    "draftedAtCommit": "5a4720f780a93fa75674447e47398475d4029b5a"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "readiness-planning-owner-boundary-atomic-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "projection-readiness-deep-own-data-closure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "readiness-planning-owner-boundary-atomic-closure",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-independent-approval",
+      "statement": "The same-base path-superset candidate requires category-complete independent approval before GCP, audit, checkpoint, or landing."
+    },
+    {
+      "id": "complete-deep-own-data-boundary",
+      "statement": "Every projection input record and array is recursively copied from canonical own data to a bounded frozen graph before consumption or return; accessors, proxies, functions, symbols, cycles, sparse arrays, and excessive depth fail closed."
+    },
+    {
+      "id": "parent-rejection-coverage",
+      "statement": "The approved changed fingerprint covers all standing parent source paths and every recorded admission, intrinsic, harness, retry, recovery, formation, timer, and transport finding."
+    },
+    {
+      "id": "production-and-formal-proof",
+      "statement": "Production composition, expanded atomicity guards, red-on-revert, global static ratchets, and the fixed plus five-mutant planning discriminator all pass without budget or baseline rollback."
+    },
+    {
+      "id": "live-proof-identity",
+      "statement": "Terminal proof is one profiled plus three natural five-node GCP runs with matching source identity, complete evidence, natural teardown, ACTIVE and publication 5/5, timer progress, and no named gap above 3000ms."
+    }
+  ]
+}

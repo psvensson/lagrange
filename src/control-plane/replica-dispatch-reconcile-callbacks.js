@@ -22,6 +22,8 @@ const {
 
 const READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD = Object.freeze({
   FORCE_READY_WATERMARK: 'forceReadyWatermark',
+  READINESS_PLANNING_SNAPSHOT_TOKEN_KEY:
+    'readinessPlanningSnapshotTokenKey',
 });
 
 const REPLICA_OPERATION_IDENTITY_FIELDS = Object.freeze([
@@ -312,6 +314,22 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
           READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD.FORCE_READY_WATERMARK
         ] === true,
     });
+    const readinessPlanningSnapshotTokenKey = context?.[
+      READY_NODE_DISPATCH_RETRY_CONTEXT_FIELD
+        .READINESS_PLANNING_SNAPSHOT_TOKEN_KEY
+    ];
+    if (typeof readinessPlanningSnapshotTokenKey === 'string') {
+      this.readinessPlanningSnapshotTokenByOwnerKey.set(
+        nodeId,
+        readinessPlanningSnapshotTokenKey,
+      );
+      if (
+        this.readinessPlanningSnapshotPendingTokenByOwnerKey.get(nodeId) ===
+        readinessPlanningSnapshotTokenKey
+      ) {
+        this.readinessPlanningSnapshotPendingTokenByOwnerKey.delete(nodeId);
+      }
+    }
   },
 
   /**

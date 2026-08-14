@@ -8,6 +8,7 @@ import {
 
 const {
   COLUMN,
+  CONTROL_PLANE_READ_PURPOSE,
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
   ERRORS,
   NUM,
@@ -338,7 +339,10 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
    * @private
    */
   shouldAllowRoutingAuthoritativeRefresh(options = {}) {
-    return options?.allowReadinessAuthoritativeRefresh !== false;
+    const readPurpose =
+      options?.readAuthority?.purpose || options?.readPurpose || null;
+    return readPurpose !== CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL &&
+      options?.allowReadinessAuthoritativeRefresh !== false;
   }
 
   /**

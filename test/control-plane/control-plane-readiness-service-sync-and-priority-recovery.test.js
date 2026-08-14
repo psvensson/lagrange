@@ -9,6 +9,7 @@ import {
 } from './control-plane-readiness-service-test-support.js';
 import {
   COLUMN,
+  NODE_STATE,
   STATE,
   SERVICE_STATUS,
   TABLES,
@@ -19,17 +20,24 @@ import {
   CONTROL_PLANE_READINESS_REASON,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 import {
-} from '../../src/control-plane/control-plane-constants.js';
-import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
-import {
-} from '../../src/control-plane/control-plane-system-table-gateway.js';
-import {
-} from '../../src/cdc/cdc-integration-service.js';
-import {
-} from '../../src/control-plane/priority-recovery-snapshot.js';
+import {OwnerKeyReconcileQueue} from '../../src/workflow/owner-key-reconcile-queue.js';
 
+const READINESS_CHURN_NOW_MS = 1_780_000_000_000;
+const READINESS_CHURN_NODE_COUNT = 5;
+const OPTION_VARIANT_LIMIT = 16;
+const OPTION_VARIANT_PRESSURE_COUNT = 80;
+const FORMATION_STORM_REVISION = 200;
+
+function createReadinessChurnCache() {
+  return createCache({
+    nodes: Array.from(
+      {length: READINESS_CHURN_NODE_COUNT},
+      (_, index) => createActiveNode(`node-${index}`),
+    ),
+  });
+}
 
 test('sync snapshot uses synchronous publication and capacity accessors ' +
   'for recovery admission', async (t) => {
@@ -222,6 +230,16 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
     requireFreshOnIneligible: true,
     decisionDimension: CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
   };
+  const repairedSnapshotPublished = new Promise((resolve) => {
+    const unsubscribe = readinessService.subscribeReadinessPlanningSnapshots(
+      (event) => {
+        if (event.ownerKey === nodeId) {
+          unsubscribe();
+          resolve();
+        }
+      },
+    );
+  });
 
   const initial = readinessService.getNodeReadinessSync(nodeId, options);
   const repeated = readinessService.getNodeReadinessSync(nodeId, options);
@@ -230,7 +248,7 @@ test('sync readiness starts one deduped authoritative refresh for stale ' +
     'stale local evidence should remain ineligible on the first sync read');
   t.equal(repeated.dimensions.serveEligible, false,
     'repeated sync reads should stay fail-closed until the owner refresh lands');
-  await new Promise((resolve) => setImmediate(resolve));
+  await repairedSnapshotPublished;
 
   t.same(authoritativeReads, [TABLES.NODES, TABLES.SERVICES],
     'sync reads should trigger one deduped authoritative node/service refresh');
@@ -1191,3 +1209,285 @@ async (t) => {
     'transport-disconnected node must not be serve-eligible');
   t.end();
 });
+
+test('continuous formation churn cannot repeatedly jump the fair owner queue',
+  async (t) => {
+    const cache = createReadinessChurnCache();
+    cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+      [COLUMN.NODE_ID]: 'node-4',
+      [COLUMN.STATUS]: NODE_STATE.JOINING,
+    });
+    const scheduled = [];
+    const readiness = new ControlPlaneReadinessService({
+      nodeId: 'node-0',
+      systemTableCache: cache,
+      now: () => READINESS_CHURN_NOW_MS,
+      readinessPlanningScheduleDrainFn: (callback) => scheduled.push(callback),
+      messageRouter: {
+        getConnectionState: () => STATE.CONNECTED,
+        getConnectedNodes: () => new Set(['node-0', 'node-4']),
+      },
+    });
+    readiness.getNodeReadinessSync('node-0');
+    const buildsBeforeStorm =
+      readiness.getReadinessPlanningDiagnostics().buildOwnerKeys.length;
+    cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+      [COLUMN.NODE_ID]: 'node-0',
+      revision: 90,
+    });
+    const buildsByTurn = [];
+    for (let turn = 0;
+      turn < READINESS_CHURN_NODE_COUNT && scheduled.length > 0;
+      turn++) {
+      cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+        [COLUMN.NODE_ID]: 'node-4',
+        [COLUMN.STATUS]: NODE_STATE.JOINING,
+        revision: 100 + turn,
+      });
+      const before = readiness.getReadinessPlanningDiagnostics().buildCount;
+      scheduled.shift()();
+      await Promise.resolve();
+      await Promise.resolve();
+      buildsByTurn.push(
+        readiness.getReadinessPlanningDiagnostics().buildCount - before,
+      );
+    }
+    const stormOwners = readiness.getReadinessPlanningDiagnostics()
+      .buildOwnerKeys.slice(buildsBeforeStorm);
+    t.equal(stormOwners[0], 'node-4',
+      'formation receives one initial priority turn');
+    t.ok(stormOwners.includes('node-0') && stormOwners.includes('node-1'),
+      'background owners progress while formation remains continuously dirty');
+    t.ok(buildsByTurn.every((count) => count <= 1),
+      'continuous formation churn still performs one heavy build per turn');
+    readiness.shutdownReadinessPlanningOwner();
+  });
+
+test('readiness planning bounds queued option variants and their registry',
+  async (t) => {
+    const scheduled = [];
+    const readiness = new ControlPlaneReadinessService({
+      nodeId: 'node-0',
+      systemTableCache: createReadinessChurnCache(),
+      now: () => READINESS_CHURN_NOW_MS,
+      readinessPlanningScheduleDrainFn: (callback) => scheduled.push(callback),
+      messageRouter: {
+        getConnectedNodes: () => new Set(['node-0']),
+      },
+    });
+    const owner = readiness.readinessPlanningSnapshotOwner;
+    const token = owner.captureToken();
+    for (let index = 0; index < OPTION_VARIANT_PRESSURE_COUNT; index++) {
+      owner.enqueueBuild(
+        'node-0',
+        'variant_pressure',
+        {decisionDimension: `variant-${index}`},
+        token,
+      );
+    }
+    t.equal(owner.buildOptionsByOwnerAndBuildKey.get('node-0').size,
+      OPTION_VARIANT_LIMIT, 'the remembered per-owner option set remains capped');
+    t.equal(owner.queue.size, OPTION_VARIANT_LIMIT,
+      'evicted variants cannot remain as queued heavy work');
+    t.equal(owner.logicalOwnerKeyByQueueOwnerKey.size, OPTION_VARIANT_LIMIT,
+      'evicted variants cannot remain in the logical queue registry');
+    const originalMapDescriptors = Object.getOwnPropertyDescriptors(
+      Map.prototype,
+    );
+    const definePrototypeProperty = (target, property, descriptor) =>
+      Reflect.defineProperty(target, property, descriptor);
+    const restorePrototypeProperties = (target, descriptors) =>
+      Object.defineProperties(target, descriptors);
+    let hostileMapIntrinsicError = null;
+    try {
+      for (const method of [
+        'clear',
+        'delete',
+        'entries',
+        'forEach',
+        'get',
+        'has',
+        'keys',
+        'set',
+        'values',
+      ]) {
+        definePrototypeProperty(Map.prototype, method, {
+          configurable: true,
+          value: () => {
+            throw new Error(`hostile Map.${method}`);
+          },
+          writable: true,
+        });
+      }
+      definePrototypeProperty(Map.prototype, 'size', {
+        configurable: true,
+        get: () => 0,
+      });
+      for (let index = 0; index < OPTION_VARIANT_PRESSURE_COUNT; index++) {
+        owner.enqueueBuild(
+          'node-0',
+          'hostile_variant_pressure',
+          {decisionDimension: `hostile-variant-${index}`},
+          token,
+        );
+      }
+    } catch (error) {
+      hostileMapIntrinsicError = error;
+    } finally {
+      restorePrototypeProperties(Map.prototype, originalMapDescriptors);
+    }
+    t.equal(hostileMapIntrinsicError, null,
+      'post-import Map method mutation cannot escape the queue owner');
+    t.equal(owner.buildOptionsByOwnerAndBuildKey.get('node-0').size,
+      OPTION_VARIANT_LIMIT,
+      'post-import Map size mutation cannot bypass the option cap');
+    t.equal(owner.queue.size, OPTION_VARIANT_LIMIT,
+      'post-import Map size mutation cannot leave unbounded queued work');
+    t.equal(owner.logicalOwnerKeyByQueueOwnerKey.size, OPTION_VARIANT_LIMIT,
+      'post-import Map size mutation cannot grow the logical registry');
+    readiness.shutdownReadinessPlanningOwner();
+  });
+
+test('retry sampling ignores numeric and named Array prototype pollution',
+  async (t) => {
+    for (const property of ['0', 'push']) {
+      let retryTimer = null;
+      const queue = new OwnerKeyReconcileQueue({
+        reconcileFn: async () => {},
+        setTimeoutFn: (callback) => {
+          retryTimer = callback;
+          return {unref() {}};
+        },
+        clearTimeoutFn: () => {},
+        retryPolicy: {isRetryableError: () => true, maxAttempts: 3},
+      });
+      queue.logger = {debug() {}, error() {}, warn() {}};
+      const original = Object.getOwnPropertyDescriptor(Array.prototype, property);
+      const definePrototypeProperty = (target, key, descriptor) =>
+        Reflect.defineProperty(target, key, descriptor);
+      let escaped = null;
+      try {
+        const descriptor = property === '0' ?
+          {configurable: true, enumerable: true, value: 'hostile'} :
+          {configurable: true, get: () => {
+            throw new Error('hostile push');
+          }};
+        definePrototypeProperty(Array.prototype, property, descriptor);
+        queue._deferRetryableDrainFailure(
+          'owner-a',
+          {context: null, reasons: new Set(['source_changed'])},
+          ['source_changed'],
+          new Error('retryable'),
+        );
+      } catch (error) {
+        escaped = error;
+      } finally {
+        if (original) {
+          definePrototypeProperty(Array.prototype, property, original);
+        } else {
+          delete Array.prototype[property];
+        }
+      }
+      t.equal(escaped, null, `${property} pollution cannot escape retry`);
+      t.equal(typeof retryTimer, 'function',
+        `${property} pollution cannot leave retry state without a timer`);
+      t.same(queue.getDiagnostics().retryingKeys, ['owner-a'],
+        `${property} pollution preserves diagnosable retry work`);
+      queue.shutdown();
+    }
+  });
+
+test('positive readiness veto signatures distinguish delimiter-bearing ' +
+  'metadata states', async (t) => {
+  let metadataState = {currentMode: 'a:b', reasonCode: 'c'};
+  const readiness = new ControlPlaneReadinessService({
+    nodeId: 'node-0',
+    systemTableCache: createReadinessChurnCache(),
+    now: () => READINESS_CHURN_NOW_MS,
+    cdcGroupPropagationService: {
+      getPublicationModeDiagnostics: () => metadataState,
+    },
+    messageRouter: {
+      getConnectedNodes: () => new Set(['node-0']),
+    },
+  });
+  const owner = readiness.readinessPlanningSnapshotOwner;
+  const snapshot = {
+    dimensions: {serveEligible: true},
+    nodeEvidence: {
+      lastHeartbeat: READINESS_CHURN_NOW_MS,
+      readyLeaseExpiresAt: READINESS_CHURN_NOW_MS + 10_000,
+    },
+  };
+  const firstSignature = owner.capturePositiveDecisionLiveVeto(
+    'node-0', snapshot, READINESS_CHURN_NOW_MS,
+  );
+  const completed = {
+    snapshot,
+    completedAtMs: READINESS_CHURN_NOW_MS,
+    positiveDecisionLiveVeto: firstSignature,
+  };
+  metadataState = {currentMode: 'a', reasonCode: 'b:c'};
+  const secondSignature = owner.capturePositiveDecisionLiveVeto(
+    'node-0', snapshot, READINESS_CHURN_NOW_MS,
+  );
+  t.not(firstSignature, secondSignature,
+    'distinct metadata tuples have injective veto signatures');
+  t.equal(owner.isCompletedSnapshotLive('node-0', completed), false,
+    'a delimiter-bearing metadata change invalidates the prior positive');
+  readiness.shutdownReadinessPlanningOwner();
+});
+
+test('alternating formation owners cannot repeatedly jump the fair owner queue',
+  async (t) => {
+    const cache = createReadinessChurnCache();
+    for (const nodeId of ['node-3', 'node-4']) {
+      cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+        [COLUMN.NODE_ID]: nodeId,
+        [COLUMN.STATUS]: NODE_STATE.JOINING,
+      });
+    }
+    const scheduled = [];
+    let connectedFormationOwner = 'node-3';
+    const readiness = new ControlPlaneReadinessService({
+      nodeId: 'node-0',
+      systemTableCache: cache,
+      now: () => READINESS_CHURN_NOW_MS,
+      readinessPlanningScheduleDrainFn: (callback) => scheduled.push(callback),
+      messageRouter: {
+        getConnectionState: (nodeId) =>
+          nodeId === connectedFormationOwner || nodeId === 'node-0' ?
+            STATE.CONNECTED : STATE.DISCONNECTED,
+        getConnectedNodes: () =>
+          new Set(['node-0', connectedFormationOwner]),
+      },
+    });
+    readiness.getNodeReadinessSync('node-0');
+    const buildsBeforeStorm =
+      readiness.getReadinessPlanningDiagnostics().buildOwnerKeys.length;
+    cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+      [COLUMN.NODE_ID]: 'node-0',
+      revision: FORMATION_STORM_REVISION - 10,
+    });
+    for (let turn = 0;
+      turn < READINESS_CHURN_NODE_COUNT && scheduled.length > 0;
+      turn++) {
+      connectedFormationOwner = turn % 2 === 0 ? 'node-3' : 'node-4';
+      cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
+        [COLUMN.NODE_ID]: connectedFormationOwner,
+        [COLUMN.STATUS]: NODE_STATE.JOINING,
+        revision: FORMATION_STORM_REVISION + turn,
+      });
+      scheduled.shift()();
+      await Promise.resolve();
+      await Promise.resolve();
+    }
+    const stormOwners = readiness.getReadinessPlanningDiagnostics()
+      .buildOwnerKeys.slice(buildsBeforeStorm);
+    t.ok(stormOwners.includes('node-1'),
+      'an unrelated dirty owner progresses despite alternating formation owners');
+    t.ok(stormOwners.filter((ownerKey) =>
+      ownerKey === 'node-3' || ownerKey === 'node-4').length <= 2,
+    'each formation owner receives at most one priority turn per epoch');
+    readiness.shutdownReadinessPlanningOwner();
+  });

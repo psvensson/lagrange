@@ -140,6 +140,31 @@
         "test/rebalancer/rebalance-coordinator-operation-ownership.test.js",
         "test/control-plane/replica-dispatch-atomic-claim.integration.test.js"
       ]
+    },
+    "readiness-versioned-planning-liveness": {
+      "description": "Complete-token readiness freshness, macrotask-bounded planning, and non-recursive readiness-internal owner reads form one convergence contract.",
+      "owners": [
+        "src/control-plane/readiness-planning-snapshot-owner.js",
+        "src/control-plane/authoritative-node-evidence-reconciler.js",
+        "src/control-plane/control-plane-readiness-participation-base.js",
+        "src/control-plane/control-plane-readiness-evidence-reasons.js",
+        "src/control-plane/control-plane-readiness-service-node-methods.js",
+        "src/control-plane/control-plane-readiness-stored-snapshot-reuse.js",
+        "src/control-plane/control-plane-readiness-snapshot-store.js",
+        "src/workflow/owner-key-reconcile-queue.js",
+        "src/rebalancer/unified-rebalancer-available-nodes.js",
+        "src/query/query-executor-partition-delivery.js",
+        "src/query/query-executor-partition-service-resolution.js",
+        "src/control-plane/control-plane-system-table-gateway-read-contracts.js"
+      ],
+      "tests": [
+        "test/control-plane/publication-readiness-churn-liveness.test.js",
+        "test/control-plane/control-plane-read-authority-token.test.js",
+        "test/control-plane/control-plane-readiness-service-sync-and-priority-recovery.test.js",
+        "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js",
+        "test/rebalancer/startup-authority-available-node-contract.test.js",
+        "test/workflow/owner-key-reconcile-queue.test.js"
+      ]
     }
   },
   "coupledPairs": {
@@ -232,6 +257,32 @@
       "witnessTests": [
         "test/rebalancer/rebalance-coordinator-operation-ownership.test.js",
         "test/control-plane/replica-dispatch-atomic-claim.integration.test.js"
+      ]
+    },
+    "readiness-freshness-macrotask-bound": {
+      "description": "The readiness owner may reflect every final semantic token only through a globally macrotask-bounded heavy-work scheduler.",
+      "endpoints": [
+        {
+          "id": "semantic-token-freshness",
+          "owners": [
+            "src/control-plane/readiness-planning-snapshot-owner.js",
+            "src/control-plane/control-plane-readiness-service-node-methods.js",
+            "src/control-plane/control-plane-readiness-snapshot-store.js",
+            "src/rebalancer/unified-rebalancer-available-nodes.js"
+          ]
+        },
+        {
+          "id": "macrotask-heavy-work-bound",
+          "owners": [
+            "src/workflow/owner-key-reconcile-queue.js"
+          ]
+        }
+      ],
+      "contract": "readiness-versioned-planning-liveness",
+      "witnessTests": [
+        "test/control-plane/publication-readiness-churn-liveness.test.js",
+        "test/rebalancer/startup-authority-available-node-contract.test.js",
+        "test/workflow/owner-key-reconcile-queue.test.js"
       ]
     }
   }

@@ -13,6 +13,7 @@ const {
   ControlPlaneMessageType,
   ControlPlaneReadinessService,
   DEFAULT_READY_LEASE_MS,
+  DISPATCH_DEFAULT,
   DISPATCH_ERROR_MSG,
   DISPATCH_LOG_MSG,
   DISPATCH_QUEUE_NAME,
@@ -33,6 +34,27 @@ const {
   getControlPlaneMessageRequiredTables,
   wasNodeRecordReadyWhenWritten,
 } = REPLICA_DISPATCH_SERVICE_SHARED;
+
+const READINESS_PLANNING_SNAPSHOT_TOKEN_CONTEXT_FIELD =
+  'readinessPlanningSnapshotTokenKey';
+
+function isNodeReadyRetryErrorRetryable() {
+  return true;
+}
+
+function getNodeReadyRetryAfterMs() {
+  return DISPATCH_DEFAULT.NODE_READY_RETRY_AFTER_MS;
+}
+
+function shouldResetNodeReadyRetryAttempts(previousContext, nextContext) {
+  const previousToken = previousContext?.[
+    READINESS_PLANNING_SNAPSHOT_TOKEN_CONTEXT_FIELD
+  ];
+  const nextToken = nextContext?.[
+    READINESS_PLANNING_SNAPSHOT_TOKEN_CONTEXT_FIELD
+  ];
+  return typeof nextToken === 'string' && nextToken !== previousToken;
+}
 
 class ReplicaDispatchServiceLifecycle extends EventEmitter {
   constructor(options = {}) {
@@ -94,6 +116,8 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     // (and its boot_incarnation column) is not yet visible to this receiver.
     this.nodeBootIncarnationWatermarks = new Map();
     this.nodeReadyRetryWatermarks = new Map();
+    this.readinessPlanningSnapshotTokenByOwnerKey = new Map();
+    this.readinessPlanningSnapshotPendingTokenByOwnerKey = new Map();
     this.dispatchFailureSignaturesByOperationId = new Map();
     this.operationDispatchDeferredRetries = new Map();
     this.directDispatchWakeupsInFlight = new Map();
@@ -103,6 +127,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
     this.nodeStateUpdateQueueAssignments = new Map();
     this.nextNodeStateUpdateQueueIndex = 0;
     this.cacheChangeListener = null;
+    this.readinessPlanningSnapshotUnsubscribe = null;
     this.coordinatorOperationCreatedListener = null;
     this.state = DISPATCH_STATE.CREATED;
     this.setTimeoutFn =
@@ -182,9 +207,62 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
 
     this.nodeReadyRetryQueue = new OwnerKeyReconcileQueue({
       name: DISPATCH_QUEUE_NAME.NODE_READY,
+      setTimeoutFn: this.setTimeoutFn,
+      clearTimeoutFn: this.clearTimeoutFn,
+      retryPolicy: {
+        isRetryableError: isNodeReadyRetryErrorRetryable,
+        getRetryAfterMs: getNodeReadyRetryAfterMs,
+        shouldResetAttempts: shouldResetNodeReadyRetryAttempts,
+        maxAttempts: DISPATCH_DEFAULT.NODE_READY_RETRY_MAX_ATTEMPTS,
+      },
       reconcileFn: (ownerKey, _reasons, context) =>
         this.reconcileNodeReadyRetry(ownerKey, context),
     });
+  }
+
+  subscribeToReadinessPlanningSnapshots() {
+    if (
+      typeof this.controlPlaneReadinessService
+        ?.subscribeReadinessPlanningSnapshots !== 'function'
+    ) {
+      return;
+    }
+    this.readinessPlanningSnapshotUnsubscribe =
+      this.controlPlaneReadinessService.subscribeReadinessPlanningSnapshots(
+        (event) => this.handleReadinessPlanningSnapshotPublished(event),
+      );
+  }
+
+  handleReadinessPlanningSnapshotPublished(event = {}) {
+    const nodeId = event?.ownerKey;
+    if (!nodeId) {
+      return;
+    }
+    const tokenKey = typeof event?.capturedToken?.tokenKey === 'string' ?
+      event.capturedToken.tokenKey :
+      null;
+    if (
+      tokenKey &&
+      (this.readinessPlanningSnapshotTokenByOwnerKey.get(nodeId) === tokenKey ||
+      this.readinessPlanningSnapshotPendingTokenByOwnerKey.get(nodeId) ===
+        tokenKey)
+    ) {
+      return;
+    }
+    this.nodeReadyRetryQueue.enqueue(
+      nodeId,
+      RECONCILE_REASON.READINESS_PLANNING_SNAPSHOT_PUBLISHED,
+      {
+        source: RECONCILE_REASON.READINESS_PLANNING_SNAPSHOT_PUBLISHED,
+        [READINESS_PLANNING_SNAPSHOT_TOKEN_CONTEXT_FIELD]: tokenKey,
+      },
+    );
+    if (tokenKey) {
+      this.readinessPlanningSnapshotPendingTokenByOwnerKey.set(
+        nodeId,
+        tokenKey,
+      );
+    }
   }
 
   /**
@@ -223,6 +301,7 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       };
       this.systemTableCache.onCacheChange(this.cacheChangeListener);
     }
+    this.subscribeToReadinessPlanningSnapshots();
 
     if (
       this.messageRouter &&

@@ -30,6 +30,7 @@ import {
   CONTROL_PLANE_READINESS_DEFAULT,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_OWNER,
+  CONTROL_PLANE_READ_PURPOSE,
   CONTROL_PLANE_READINESS_REASON,
   CONTROL_PLANE_READINESS_SUBSYSTEM,
   PROJECTION_READINESS_CONTRACT_STATE,
@@ -182,6 +183,7 @@ function resolveMembershipPublicationReadOptions({
       null;
   return Object.freeze({
     ...baseOptions,
+    readPurpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
     queryTimeoutMs: normalizedQueryTimeoutMs,
   });
 }

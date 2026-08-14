@@ -15,7 +15,10 @@ import {
   resolvePublicationOwnerStreamOutcome,
 } from './publication-owner-decision.js';
 
-const PUBLICATION_OWNER_PENDING_STREAM_OUTCOMES = Object.freeze([
+const arrayIncludes = Function.call.bind(Array.prototype.includes);
+const objectFreeze = Object.freeze;
+
+const PUBLICATION_OWNER_PENDING_STREAM_OUTCOMES = objectFreeze([
   PUBLICATION_OWNER_STREAM_OUTCOME.NOT_STARTED,
   PUBLICATION_OWNER_STREAM_OUTCOME.PUBLISHING,
   PUBLICATION_OWNER_STREAM_OUTCOME.WAITING_FOR_ACK,
@@ -23,7 +26,7 @@ const PUBLICATION_OWNER_PENDING_STREAM_OUTCOMES = Object.freeze([
 ]);
 
 function buildPublicationOwnerRevisionSnapshot(evidence, revisionState) {
-  return Object.freeze({
+  return objectFreeze({
     state: revisionState,
     desired: evidence.desiredRevision,
     committed: evidence.committedRevision,
@@ -53,7 +56,7 @@ function buildPublicationOwnerStreamState(options = {}) {
     freshnessFence,
     recoveryOutcome,
   });
-  const decisionSnapshot = Object.freeze({
+  const decisionSnapshot = objectFreeze({
     evidence,
     ackState,
     revisionState,
@@ -62,7 +65,7 @@ function buildPublicationOwnerStreamState(options = {}) {
     streamOutcome,
   });
 
-  return Object.freeze({
+  return objectFreeze({
     semanticOwner: PUBLICATION_OWNER_SEMANTIC_OWNER,
     revision: buildPublicationOwnerRevisionSnapshot(evidence, revisionState),
     ackState,
@@ -99,7 +102,8 @@ function isPublicationOwnerStreamAckWaiting(publicationOwnerStream = {}) {
 function isPublicationOwnerStreamPublicationPending(
   publicationOwnerStream = {},
 ) {
-  return PUBLICATION_OWNER_PENDING_STREAM_OUTCOMES.includes(
+  return arrayIncludes(
+    PUBLICATION_OWNER_PENDING_STREAM_OUTCOMES,
     publicationOwnerStream.streamOutcome,
   );
 }

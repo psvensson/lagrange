@@ -1076,3 +1076,420 @@ test('OwnerKeyReconcileQueue - retryable drain failure preserves ' +
 
   queue.shutdown();
 });
+
+test('OwnerKeyReconcileQueue - injectable scheduler bounds each drain turn',
+  async (t) => {
+    const scheduled = [];
+    const reconciled = [];
+    const queue = new OwnerKeyReconcileQueue({
+      name: 'macrotask-bounded-queue',
+      maxItemsPerDrain: 1,
+      scheduleDrainFn: (callback) => scheduled.push(callback),
+      reconcileFn: async (ownerKey, _reasons, context) => {
+        reconciled.push({ownerKey, context});
+      },
+    });
+
+    for (let index = 0; index < 5; index++) {
+      queue.enqueue(`key-${index}`, 'source_changed', {revision: index});
+    }
+    t.equal(scheduled.length, 1, 'a burst creates one scheduled drain');
+
+    while (scheduled.length > 0) {
+      const runTurn = scheduled.shift();
+      const before = reconciled.length;
+      runTurn();
+      await Promise.resolve();
+      await Promise.resolve();
+      t.ok(
+        reconciled.length - before <= 1,
+        'each scheduled turn starts at most one heavy item',
+      );
+    }
+    t.same(
+      reconciled.map(({ownerKey}) => ownerKey),
+      ['key-0', 'key-1', 'key-2', 'key-3', 'key-4'],
+      'dirty owner keys retain round-robin insertion order',
+    );
+    queue.shutdown();
+  });
+
+test('OwnerKeyReconcileQueue - pending promotion preserves coalesced work',
+  async (t) => {
+    const scheduled = [];
+    const reconciled = [];
+    const queue = new OwnerKeyReconcileQueue({
+      name: 'priority-promotion-queue',
+      maxItemsPerDrain: 1,
+      scheduleDrainFn: (callback) => scheduled.push(callback),
+      reconcileFn: async (ownerKey, reasons, context) => {
+        reconciled.push({ownerKey, reasons: [...reasons], context});
+      },
+    });
+    queue.enqueue('background-a', 'source_changed', {revision: 1});
+    queue.enqueue('formation', 'source_changed', {revision: 2});
+    queue.enqueue('background-b', 'source_changed', {revision: 3});
+    queue.enqueue('formation', 'completion_wake', {revision: 4});
+
+    t.equal(queue.promotePending('formation'), true,
+      'a pending owner can be promoted');
+    while (scheduled.length > 0) {
+      for (let turn = 0; turn < 6; turn++) {
+        if (scheduled.length > 0) scheduled.shift()();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+        await Promise.resolve();
+      }
+    }
+    t.same(
+      reconciled.map(({ownerKey}) => ownerKey),
+      ['formation', 'background-a', 'background-b'],
+      'promotion changes order without dropping the remaining owners',
+    );
+    t.same(
+      reconciled[0],
+      {
+        ownerKey: 'formation',
+        reasons: ['source_changed', 'completion_wake'],
+        context: {revision: 4},
+      },
+      'promotion preserves merged reasons and the newest context',
+    );
+    t.equal(queue.promotePending('missing'), false,
+      'promotion reports absent pending work without mutation');
+    queue.shutdown();
+  });
+
+test('OwnerKeyReconcileQueue - retry exhaustion is loud and only a new ' +
+  'semantic generation resets attempts', async (t) => {
+  let callCount = 0;
+  let shouldSucceed = false;
+  const exhausted = [];
+  const queue = new OwnerKeyReconcileQueue({
+    name: 'bounded-retry-queue',
+    reconcileFn: async () => {
+      callCount++;
+      if (!shouldSucceed) {
+        throw new Error('repeatable failure');
+      }
+    },
+    retryPolicy: {
+      isRetryableError: () => true,
+      getRetryAfterMs: () => 1,
+      getFailureReason: () => 'bounded_failure',
+      maxAttempts: 3,
+      shouldResetAttempts: (previous, next) =>
+        previous?.generation !== next?.generation,
+    },
+  });
+  queue.on('retryable_drain_exhausted', (event) => exhausted.push(event));
+  queue.enqueue('owner-a', 'source_changed', {generation: 1});
+  await new Promise((resolve) => setTimeout(resolve, 30));
+  t.equal(callCount, 3, 'retryable work stops at the configured attempt bound');
+  t.equal(exhausted.length, 1, 'exhaustion emits one typed loud event');
+  t.match(queue.getDiagnostics(), {
+    exhaustedRetryKeys: ['owner-a'],
+    retryableDrainExhaustedCount: 1,
+  }, 'the terminal failed vector remains diagnosable without a live timer');
+
+  queue.enqueue('owner-a', 'live_veto', {generation: 1});
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  t.equal(callCount, 3,
+    'same-generation nudges cannot reset an exhausted retry forever');
+
+  shouldSucceed = true;
+  queue.enqueue('owner-a', 'source_changed', {generation: 2});
+  await new Promise((resolve) => setTimeout(resolve, 5));
+  t.equal(callCount, 4, 'a new semantic generation receives a fresh attempt');
+  t.same(queue.getDiagnostics().exhaustedRetryKeys, [],
+    'successful replacement generation clears exhaustion state');
+  queue.shutdown();
+});
+
+test('OwnerKeyReconcileQueue - retry clock is injected and unsafe timer ' +
+  'delays fail closed', async (t) => {
+  const scheduled = [];
+  const timers = [];
+  const cleared = [];
+  let now = 4_242;
+  let callCount = 0;
+  const queue = new OwnerKeyReconcileQueue({
+    name: 'deterministic-retry-queue',
+    now: () => now,
+    scheduleDrainFn: (callback) => scheduled.push(callback),
+    setTimeoutFn: (callback, delayMs) => {
+      const timer = {callback, delayMs, unref: () => {}};
+      timers.push(timer);
+      return timer;
+    },
+    clearTimeoutFn: (timer) => cleared.push(timer),
+    reconcileFn: async () => {
+      callCount++;
+      throw new Error('deterministic failure');
+    },
+    retryPolicy: {
+      isRetryableError: () => true,
+      getRetryAfterMs: () => Number.MAX_SAFE_INTEGER,
+      maxAttempts: 2,
+    },
+  });
+  queue.enqueue('owner-a', 'source_changed');
+  scheduled.shift()();
+  await Promise.resolve();
+  await Promise.resolve();
+  t.equal(timers[0].delayMs, 1_000,
+    'an unsafe platform timer delay uses the bounded fallback');
+  t.match(queue.getDiagnostics().retryStates['owner-a'], {
+    timestamp: 4_242,
+    nextAttemptAt: 5_242,
+  }, 'retry diagnostics use the injected clock');
+  now = 5_242;
+  timers[0].callback();
+  scheduled.shift()();
+  await Promise.resolve();
+  await Promise.resolve();
+  t.equal(callCount, 2, 'the injected timer drives the bounded second attempt');
+  queue.shutdown();
+  t.ok(cleared.length <= 1,
+    'shutdown and timer wake clear only the injected timer handle');
+});
+
+test('OwnerKeyReconcileQueue - same-owner in-flight enqueue cannot evade ' +
+  'retry exhaustion', async (t) => {
+  const scheduled = [];
+  const timers = [];
+  let callCount = 0;
+  const queue = new OwnerKeyReconcileQueue({
+    name: 'self-enqueue-bounded-retry-queue',
+    scheduleDrainFn: (callback) => scheduled.push(callback),
+    setTimeoutFn: (callback, delayMs) => {
+      const timer = {callback, delayMs, unref() {}};
+      timers.push(timer);
+      return timer;
+    },
+    clearTimeoutFn: () => {},
+    retryPolicy: {
+      isRetryableError: () => true,
+      getRetryAfterMs: () => 1,
+      maxAttempts: 3,
+      shouldResetAttempts: (previous, next) =>
+        previous?.generation !== next?.generation,
+    },
+    reconcileFn: async () => {
+      callCount++;
+      queue.enqueue('owner-a', 'same_generation_wake', {generation: 1});
+      throw new Error('self-enqueued retryable failure');
+    },
+  });
+  queue.enqueue('owner-a', 'source_changed', {generation: 1});
+  for (let turn = 0; turn < 8; turn++) {
+    if (scheduled.length > 0) scheduled.shift()();
+    await Promise.resolve();
+    await Promise.resolve();
+    if (timers.length > 0) timers.shift().callback();
+  }
+  const diagnostics = queue.getDiagnostics();
+  t.equal(callCount, 3,
+    'same-generation self-enqueue stops at the configured attempt bound');
+  t.equal(diagnostics.retryableDrainExhaustedCount, 1,
+    'self-enqueue exhaustion remains loud and typed');
+  t.same(diagnostics.exhaustedRetryKeys, ['owner-a'],
+    'the exhausted owner remains diagnosable rather than pending forever');
+  t.equal(queue.size, 0, 'no live retry work survives exhaustion');
+  queue.shutdown();
+});
+
+test('OwnerKeyReconcileQueue - retry normalization uses captured numeric ' +
+  'intrinsics', async (t) => {
+  const scheduled = [];
+  const timers = [];
+  const queue = new OwnerKeyReconcileQueue({
+    scheduleDrainFn: (callback) => scheduled.push(callback),
+    setTimeoutFn: (callback, delayMs) => {
+      const timer = {callback, delayMs, unref() {}};
+      timers.push(timer);
+      return timer;
+    },
+    clearTimeoutFn: () => {},
+    retryPolicy: {
+      isRetryableError: () => true,
+      getRetryAfterMs: () => 7,
+      maxAttempts: 2,
+    },
+    reconcileFn: async () => {
+      throw new Error('retry through captured intrinsics');
+    },
+  });
+  const originalIsSafeInteger = Number.isSafeInteger;
+  const originalIsFinite = Number.isFinite;
+  let observedDelay;
+  try {
+    Number.isSafeInteger = () => false;
+    Number.isFinite = () => false;
+    queue.enqueue('owner-a', 'source_changed');
+    scheduled.shift()();
+    await Promise.resolve();
+    await Promise.resolve();
+    observedDelay = timers[0]?.delayMs;
+  } finally {
+    Number.isSafeInteger = originalIsSafeInteger;
+    Number.isFinite = originalIsFinite;
+    queue.shutdown();
+  }
+  t.equal(observedDelay, 7,
+    'post-import Number mutation cannot rewrite a valid retry delay');
+});
+
+test('OwnerKeyReconcileQueue - collection iterator prototypes cannot stop ' +
+  'or strand owner progress', async (t) => {
+  const mapIteratorPrototype = Object.getPrototypeOf(new Map().entries());
+  const setIteratorPrototype = Object.getPrototypeOf(new Set().values());
+  const sharedIteratorPrototype = Object.getPrototypeOf(mapIteratorPrototype);
+
+  const drainWithHostileDescriptor = async (prototype, property, message) => {
+    const scheduled = [];
+    const reconciled = [];
+    const queue = new OwnerKeyReconcileQueue({
+      maxConcurrency: 2,
+      scheduleDrainFn: (callback) => scheduled.push(callback),
+      reconcileFn: async (ownerKey) => reconciled.push(ownerKey),
+    });
+    queue.enqueue('owner-a', 'source_changed');
+    queue.enqueue('owner-b', 'source_changed');
+    const originalDescriptor = Object.getOwnPropertyDescriptor(
+      prototype,
+      property,
+    );
+    let escaped = null;
+    try {
+      Object.defineProperty(prototype, property, {
+        configurable: true,
+        value: () => {
+          throw new Error(message);
+        },
+        writable: true,
+      });
+      scheduled.shift()();
+      await Promise.resolve();
+      await Promise.resolve();
+    } catch (error) {
+      escaped = error;
+    } finally {
+      Object.defineProperty(prototype, property, originalDescriptor);
+    }
+    const diagnostics = queue.getDiagnostics();
+    queue.shutdown();
+    return {diagnostics, escaped, reconciled};
+  };
+
+  const hostileMapNext = await drainWithHostileDescriptor(
+    mapIteratorPrototype,
+    'next',
+    'hostile MapIterator.next',
+  );
+  t.equal(hostileMapNext.escaped, null,
+    'Map iterator next mutation cannot escape drain');
+  t.same(hostileMapNext.reconciled.sort(), ['owner-a', 'owner-b'],
+    'Map iterator next mutation cannot stop unrelated owners');
+  t.same(hostileMapNext.diagnostics.pendingKeys, [],
+    'Map iterator next mutation leaves no stranded pending work');
+
+  const hostileSharedIterator = await drainWithHostileDescriptor(
+    sharedIteratorPrototype,
+    Symbol.iterator,
+    'hostile Iterator.iterator',
+  );
+  t.equal(hostileSharedIterator.escaped, null,
+    'shared iterator mutation cannot escape drain');
+  t.same(hostileSharedIterator.reconciled.sort(), ['owner-a', 'owner-b'],
+    'shared iterator mutation cannot stop owner progress');
+
+  const reconciled = [];
+  const queue = new OwnerKeyReconcileQueue({
+    reconcileFn: async (ownerKey) => reconciled.push(ownerKey),
+  });
+  const originalSetNext = Object.getOwnPropertyDescriptor(
+    setIteratorPrototype,
+    'next',
+  );
+  let setIteratorError = null;
+  try {
+    Object.defineProperty(setIteratorPrototype, 'next', {
+      configurable: true,
+      value: () => {
+        throw new Error('hostile SetIterator.next');
+      },
+      writable: true,
+    });
+    await queue._startReconcile('owner-c', {
+      context: null,
+      reasons: new Set(['source_changed']),
+    });
+  } catch (error) {
+    setIteratorError = error;
+  } finally {
+    Object.defineProperty(setIteratorPrototype, 'next', originalSetNext);
+  }
+  t.equal(setIteratorError, null,
+    'Set iterator next mutation cannot escape before retry ownership');
+  t.same(reconciled, ['owner-c'],
+    'Set iterator mutation cannot lose the claimed owner work');
+  t.notOk(queue.isInFlight('owner-c'),
+    'Set iterator mutation cannot strand an owner in flight');
+  queue.shutdown();
+});
+
+test('OwnerKeyReconcileQueue - inherited Array setters cannot swallow ' +
+  'collection snapshots', async (t) => {
+  const scheduled = [];
+  const reconciled = Object.create(null);
+  const queue = new OwnerKeyReconcileQueue({
+    maxConcurrency: 2,
+    scheduleDrainFn: (callback) => scheduled.push(callback),
+    reconcileFn: async (ownerKey) => {
+      reconciled[ownerKey] = true;
+    },
+  });
+  queue.logger = {debug() {}, error() {}, warn() {}};
+  queue.enqueue('owner-a', 'source_changed');
+  queue.enqueue('owner-b', 'source_changed');
+  const originalDescriptor = Object.getOwnPropertyDescriptor(
+    Array.prototype,
+    '0',
+  );
+  const definePrototypeProperty = (target, property, descriptor) =>
+    Reflect.defineProperty(target, property, descriptor);
+  let escaped = null;
+  try {
+    definePrototypeProperty(Array.prototype, '0', {
+      configurable: true,
+      enumerable: true,
+      get: () => undefined,
+      set: () => {},
+    });
+    scheduled.shift()();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+    await Promise.resolve();
+  } catch (error) {
+    escaped = error;
+  } finally {
+    if (originalDescriptor) {
+      definePrototypeProperty(Array.prototype, '0', originalDescriptor);
+    } else {
+      delete Array.prototype[0];
+    }
+  }
+  const diagnostics = queue.getDiagnostics();
+  t.equal(escaped, null,
+    'an inherited Array index setter cannot escape drain');
+  t.same(Object.keys(reconciled).sort(), ['owner-a', 'owner-b'],
+    'an inherited Array index setter cannot swallow owner progress');
+  t.same(diagnostics.pendingKeys, [],
+    'an inherited Array index setter leaves no stranded pending work');
+  t.same(diagnostics.inFlightKeys, [],
+    'an inherited Array index setter leaves no stranded in-flight owner');
+  queue.shutdown();
+});

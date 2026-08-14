@@ -7,9 +7,25 @@ import {
   PUBLICATION_OWNER_TEXT,
 } from './publication-owner-constants.js';
 
-const PUBLICATION_OWNER_EVIDENCE_EMPTY_LIST = Object.freeze([]);
+const ArrayConstructor = Array;
+const arrayIsArray = Array.isArray;
+const arraySort = Function.call.bind(Array.prototype.sort);
+const mathFloor = Math.floor;
+const mathMax = Math.max;
+const numberConstructor = Number;
+const numberIsFinite = Number.isFinite;
+const objectDefineProperty = Object.defineProperty;
+const objectFreeze = Object.freeze;
+const objectValues = Object.values;
+const setAdd = Function.call.bind(Set.prototype.add);
+const setHas = Function.call.bind(Set.prototype.has);
+const SetConstructor = Set;
+const stringToUpperCase = Function.call.bind(String.prototype.toUpperCase);
+const stringTrim = Function.call.bind(String.prototype.trim);
 
-const PUBLICATION_OWNER_REVISION_INPUT_FIELD = Object.freeze({
+const PUBLICATION_OWNER_EVIDENCE_EMPTY_LIST = objectFreeze([]);
+
+const PUBLICATION_OWNER_REVISION_INPUT_FIELD = objectFreeze({
   COMMITTED_PUBLICATION_REVISION: 'committedPublicationRevision',
   COMMITTED_REVISION: 'committedRevision',
   DESIRED_PUBLICATION_REVISION: 'desiredPublicationRevision',
@@ -21,7 +37,7 @@ const PUBLICATION_OWNER_REVISION_INPUT_FIELD = Object.freeze({
   PUBLISHED_PUBLICATION_REVISION: 'publishedPublicationRevision',
 });
 
-const PUBLICATION_OWNER_PRESSURE_INPUT_FIELD = Object.freeze({
+const PUBLICATION_OWNER_PRESSURE_INPUT_FIELD = objectFreeze({
   PRESSURE_COALESCED: 'pressureCoalesced',
   PRESSURE_DEFERRED: 'pressureDeferred',
   PRESSURE_REASON_CODES: 'pressureReasonCodes',
@@ -35,41 +51,59 @@ const PUBLICATION_OWNER_PRESSURE_INPUT_FIELD = Object.freeze({
 function isPublicationOwnerRecord(value) {
   return Boolean(value) &&
     typeof value === 'object' &&
-    !Array.isArray(value);
+    !arrayIsArray(value);
 }
 
 function normalizePublicationOwnerString(value) {
-  return typeof value === 'string' && value.trim().length > 0 ?
-    value.trim() :
+  const normalized = typeof value === 'string' ? stringTrim(value) : '';
+  return normalized.length > 0 ?
+    normalized :
     PUBLICATION_OWNER_TEXT.EMPTY;
 }
 
 function normalizePublicationOwnerStatus(value) {
-  const normalizedStatus = normalizePublicationOwnerString(value).toUpperCase();
+  const normalizedStatus = stringToUpperCase(
+    normalizePublicationOwnerString(value),
+  );
   return normalizedStatus.length > 0 ?
     normalizedStatus :
     PUBLICATION_OWNER_TEXT.UNKNOWN;
 }
 
 function normalizePublicationOwnerNodeIds(values = []) {
-  return Object.freeze(
-    [...new Set(
-      (Array.isArray(values) ? values : PUBLICATION_OWNER_EVIDENCE_EMPTY_LIST)
-        .map((value) => normalizePublicationOwnerString(value))
-        .filter((value) => value.length > 0),
-    )].sort(),
-  );
+  const candidates = arrayIsArray(values) ?
+    values :
+    PUBLICATION_OWNER_EVIDENCE_EMPTY_LIST;
+  const normalized = new ArrayConstructor();
+  const seen = new SetConstructor();
+  for (let index = 0; index < candidates.length; index++) {
+    const nodeId = normalizePublicationOwnerString(candidates[index]);
+    if (nodeId.length === 0 || setHas(seen, nodeId)) continue;
+    setAdd(seen, nodeId);
+    objectDefineProperty(normalized, normalized.length, {
+      configurable: true,
+      enumerable: true,
+      value: nodeId,
+      writable: true,
+    });
+  }
+  arraySort(normalized);
+  return objectFreeze(normalized);
 }
 
 function normalizePublicationOwnerNonNegativeInteger(value) {
-  const numericValue = Number(value);
-  return Number.isFinite(numericValue) && numericValue >= 0 ?
-    Math.floor(numericValue) :
+  const numericValue = numberConstructor(value);
+  return numberIsFinite(numericValue) && numericValue >= 0 ?
+    mathFloor(numericValue) :
     0;
 }
 
 function isKnownPublicationOwnerPressureState(value) {
-  return Object.values(PUBLICATION_OWNER_PRESSURE_STATE).includes(value);
+  const states = objectValues(PUBLICATION_OWNER_PRESSURE_STATE);
+  for (let index = 0; index < states.length; index++) {
+    if (states[index] === value) return true;
+  }
+  return false;
 }
 
 function normalizePublicationOwnerPressureState(value) {
@@ -100,7 +134,7 @@ function resolvePublicationOwnerPressureEvidence(options = {}) {
     deferred ?
       PUBLICATION_OWNER_PRESSURE_STATE.DEFERRED :
       PUBLICATION_OWNER_PRESSURE_STATE.NONE;
-  return Object.freeze({
+  return objectFreeze({
     state,
     deferred,
     coalesced,
@@ -119,24 +153,27 @@ function resolvePublicationOwnerPressureEvidence(options = {}) {
 }
 
 function normalizePublicationOwnerRevision(value) {
-  const numericValue = Number(value);
+  const numericValue = numberConstructor(value);
   const revisionAvailable =
-    Number.isFinite(numericValue) &&
+    numberIsFinite(numericValue) &&
     numericValue >= PUBLICATION_OWNER_REVISION_NUMBER.MINIMUM_AVAILABLE;
-  return Object.freeze({
+  return objectFreeze({
     state: revisionAvailable ?
       PUBLICATION_OWNER_REVISION_STATE.CURRENT :
       PUBLICATION_OWNER_REVISION_STATE.UNAVAILABLE,
     value: revisionAvailable ?
-      Math.floor(numericValue) :
+      mathFloor(numericValue) :
       PUBLICATION_OWNER_REVISION_NUMBER.UNAVAILABLE,
   });
 }
 
 function readFirstPublicationOwnerValue(values = []) {
-  return values.find((value) =>
-    value !== null && typeof value !== 'undefined',
-  );
+  for (let index = 0; index < values.length; index++) {
+    if (values[index] !== null && typeof values[index] !== 'undefined') {
+      return values[index];
+    }
+  }
+  return PUBLICATION_OWNER_REVISION_NUMBER.UNAVAILABLE;
 }
 
 function normalizePublicationOwnerRevisionInputs(options = {}) {
@@ -168,7 +205,7 @@ function normalizePublicationOwnerRevisionInputs(options = {}) {
     committedFallbackValue,
   ]);
 
-  return Object.freeze({
+  return objectFreeze({
     observedRevision: normalizePublicationOwnerRevision(observedRevisionValue),
     desiredRevision: normalizePublicationOwnerRevision(desiredRevisionValue),
     committedRevision:
@@ -180,10 +217,22 @@ function resolvePublicationOwnerPendingAckNodeIds(
   requiredAckNodeIds,
   acknowledgedNodeIds,
 ) {
-  const acknowledgedNodeIdSet = new Set(acknowledgedNodeIds);
-  return Object.freeze(
-    requiredAckNodeIds.filter((nodeId) => !acknowledgedNodeIdSet.has(nodeId)),
-  );
+  const acknowledgedNodeIdSet = new SetConstructor();
+  for (let index = 0; index < acknowledgedNodeIds.length; index++) {
+    setAdd(acknowledgedNodeIdSet, acknowledgedNodeIds[index]);
+  }
+  const pending = new ArrayConstructor();
+  for (let index = 0; index < requiredAckNodeIds.length; index++) {
+    const nodeId = requiredAckNodeIds[index];
+    if (setHas(acknowledgedNodeIdSet, nodeId)) continue;
+    objectDefineProperty(pending, pending.length, {
+      configurable: true,
+      enumerable: true,
+      value: nodeId,
+      writable: true,
+    });
+  }
+  return objectFreeze(pending);
 }
 
 function hasPublishedPublicationOwnerClosedPendingAckList(options = {}) {
@@ -192,7 +241,7 @@ function hasPublishedPublicationOwnerClosedPendingAckList(options = {}) {
   );
   return options.publicationStatus ===
       CONTROL_PLANE_PUBLICATION_STATUS.PUBLISHED &&
-    Array.isArray(options.pendingAckNodeIds) &&
+    arrayIsArray(options.pendingAckNodeIds) &&
     explicitPendingAckNodeIds.length === 0;
 }
 
@@ -201,7 +250,7 @@ function hasOpenPublicationOwnerCountOnlyPendingAckList(options = {}) {
     options.pendingAckNodeIds,
   );
   return options.publicationStatus === CONTROL_PLANE_PUBLICATION_STATUS.OPEN &&
-    Array.isArray(options.pendingAckNodeIds) &&
+    arrayIsArray(options.pendingAckNodeIds) &&
     explicitPendingAckNodeIds.length === 0;
 }
 
@@ -209,8 +258,10 @@ function resolvePublicationOwnerAckEvidenceState(options = {}) {
   const explicitPendingAckNodeIds = normalizePublicationOwnerNodeIds(
     options.pendingAckNodeIds,
   );
-  const pendingAckCount = Number.isFinite(Number(options.pendingAckCount)) ?
-    Number(options.pendingAckCount) :
+  const pendingAckCount = numberIsFinite(
+    numberConstructor(options.pendingAckCount),
+  ) ?
+    numberConstructor(options.pendingAckCount) :
     0;
   // Count-only debt only applies when the CALLER explicitly declares the
   // COUNT_ONLY evidence state. An empty pending-ack list with a stale positive
@@ -241,7 +292,7 @@ function resolvePublicationOwnerAckEvidenceState(options = {}) {
   const requiredAckNodeIds = normalizePublicationOwnerNodeIds(
     options.requiredAckNodeIds,
   );
-  return Array.isArray(options.requiredAckNodeIds) &&
+  return arrayIsArray(options.requiredAckNodeIds) &&
     (
       requiredAckNodeIds.length > 0 ||
       explicitPendingAckNodeIds.length === 0
@@ -280,18 +331,18 @@ function buildPublicationOwnerAckEvidence(options = {}) {
   const countOnlyPendingAckCount =
     hasOpenPublicationOwnerCountOnlyPendingAckList(options) ?
       0 :
-      Math.max(
+      mathMax(
         pendingAckNodeIds.length,
         normalizePublicationOwnerNonNegativeInteger(options.pendingAckCount),
       );
-  const pendingAckCountByEvidenceState = Object.freeze({
+  const pendingAckCountByEvidenceState = objectFreeze({
     [PUBLICATION_OWNER_ACK_EVIDENCE_STATE.COUNT_ONLY]:
       countOnlyPendingAckCount,
     [PUBLICATION_OWNER_ACK_EVIDENCE_STATE.REQUIRED_ACK_NODE_LIST]:
       pendingAckNodeIds.length,
   });
 
-  return Object.freeze({
+  return objectFreeze({
     evidenceState,
     requiredAckNodeIds,
     acknowledgedNodeIds,
@@ -315,7 +366,7 @@ function buildPublicationOwnerEvidence(options = {}) {
   );
   const pressureEvidence = resolvePublicationOwnerPressureEvidence(options);
 
-  return Object.freeze({
+  return objectFreeze({
     ...revisionEvidence,
     publicationStatus,
     publicationObservationState: normalizePublicationOwnerString(
@@ -340,7 +391,7 @@ function buildPublicationOwnerEvidence(options = {}) {
     pendingAckCount: ackEvidence.pendingAckCount,
     pendingAckEvidenceState: ackEvidence.evidenceState,
     missingPublishedNodeIds,
-    missingPublishedCount: Math.max(
+    missingPublishedCount: mathMax(
       missingPublishedNodeIds.length,
       normalizePublicationOwnerNonNegativeInteger(
         options.missingPublishedCount,
@@ -350,8 +401,8 @@ function buildPublicationOwnerEvidence(options = {}) {
       options.priorityRecoveryReasonCodes ?? options.reasonCodes,
     ),
     source: isPublicationOwnerRecord(options.source) ?
-      Object.freeze({...options.source}) :
-      Object.freeze({}),
+      objectFreeze({...options.source}) :
+      objectFreeze({}),
   });
 }
 

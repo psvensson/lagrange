@@ -674,6 +674,114 @@ test('ReplicaDispatchService initialize replays already-ready cached nodes ' +
   }
 });
 
+test('ReplicaDispatchService consumes readiness-owner completion wakes through ' +
+  'nodeReadyRetryQueue', async (t) => {
+  initEnv();
+  let completionListener = null;
+  let unsubscribeCount = 0;
+  const downstreamProgress = [];
+  let failuresRemaining = 0;
+  const service = new ReplicaDispatchService({
+    nodeId: 'node-1',
+    messageRouter: {},
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      subscribeReadinessPlanningSnapshots(listener) {
+        completionListener = listener;
+        return () => {
+          unsubscribeCount++;
+        };
+      },
+    },
+    systemTableCache: {
+      get() {
+        return null;
+      },
+      getAll() {
+        return [];
+      },
+      onCacheChange() {},
+      offCacheChange() {},
+    },
+    rebalanceCoordinator: {},
+    setTimeoutFn(callback) {
+      Promise.resolve().then(callback);
+      return {unref() {}};
+    },
+    clearTimeoutFn() {},
+  });
+  service.retryPendingDispatchesForReadyNode = async (options) => {
+    downstreamProgress.push(options);
+    if (failuresRemaining > 0) {
+      failuresRemaining--;
+      throw new Error('transient completion wake failure');
+    }
+    return true;
+  };
+
+  try {
+    service.initialize();
+    t.type(completionListener, 'function',
+      'initialize attaches the runtime completion subscriber');
+    const originalEnqueue = service.nodeReadyRetryQueue.enqueue.bind(
+      service.nodeReadyRetryQueue,
+    );
+    let enqueueFailuresRemaining = 1;
+    service.nodeReadyRetryQueue.enqueue = (...args) => {
+      if (enqueueFailuresRemaining > 0) {
+        enqueueFailuresRemaining--;
+        throw new Error('transient completion enqueue failure');
+      }
+      return originalEnqueue(...args);
+    };
+    t.throws(() => completionListener({
+      ownerKey: 'node-2',
+      capturedToken: {tokenKey: 'semantic-token-1'},
+    }), 'the transient enqueue failure is visible to its publication caller');
+    completionListener({
+      ownerKey: 'node-2',
+      capturedToken: {tokenKey: 'semantic-token-1'},
+    });
+    completionListener({
+      ownerKey: 'node-2',
+      capturedToken: {tokenKey: 'semantic-token-1'},
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    t.equal(downstreamProgress.length, 1,
+      'one semantic completion reaches downstream dispatch progress once');
+    t.match(downstreamProgress[0], {
+      nodeId: 'node-2',
+      source: RECONCILE_REASON.READINESS_PLANNING_SNAPSHOT_PUBLISHED,
+    }, 'completion wakes re-enter the canonical dispatch owner queue');
+    failuresRemaining = 1;
+    completionListener({
+      ownerKey: 'node-2',
+      capturedToken: {tokenKey: 'semantic-token-2'},
+    });
+    for (let turn = 0; turn < 8 && downstreamProgress.length < 3; turn++) {
+      await Promise.resolve();
+    }
+    t.equal(downstreamProgress.length, 3,
+      'a transient downstream failure retries the same semantic wake once');
+    completionListener({
+      ownerKey: 'node-2',
+      capturedToken: {tokenKey: 'semantic-token-2'},
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    t.equal(downstreamProgress.length, 3,
+      'a successfully consumed semantic token suppresses later duplicates');
+  } finally {
+    service.stop();
+  }
+  t.equal(unsubscribeCount, 1,
+    'shutdown releases the runtime completion subscriber exactly once');
+});
+
 test('ReplicaDispatchService shards operation dispatch reconcile so one ' +
   'blocked operation id does not head-of-line block another',
 async (t) => {

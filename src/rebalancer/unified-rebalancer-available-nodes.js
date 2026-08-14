@@ -291,8 +291,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
         nodeOrId?.node_id || nodeOrId?.nodeId || null;
     if (
       typeof nodeId !== 'string' ||
-      nodeId.length === 0 ||
-      nodeId === this.nodeId
+      nodeId.length === 0
     ) {
       return false;
     }
@@ -312,7 +311,7 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
       startupAuthorityNodeIds,
       messageRouter: this.messageRouter,
       localNodeId: this.nodeId,
-      includeSelf: false,
+      includeSelf: true,
     });
   }
 

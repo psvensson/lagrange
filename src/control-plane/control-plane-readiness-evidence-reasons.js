@@ -1,6 +1,32 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {ControlPlaneReadinessPublicationDiagnostics} from './control-plane-readiness-publication-diagnostics.js';
 import {installControlPlaneReadinessRuntimeAuthorityMethods} from './control-plane-readiness-runtime-authority-methods.js';
+
+function normalizeOptionalEvidenceValue(value) {
+  return value || null;
+}
+
+function buildMissingSelfLocalQueryTransportEvidence(localQueryTransport) {
+  return {
+    localQueryTransportState:
+      normalizeOptionalEvidenceValue(localQueryTransport?.state),
+    localQueryTransportReady:
+      typeof localQueryTransport?.ready === LOCAL_STR_BOOLEAN ?
+        localQueryTransport.ready :
+        null,
+    localQueryTransportReason:
+      normalizeOptionalEvidenceValue(localQueryTransport?.reason),
+    localQueryTransportReasonCode:
+      normalizeOptionalEvidenceValue(localQueryTransport?.reasonCode),
+    localQueryTransportErrorCode:
+      normalizeOptionalEvidenceValue(localQueryTransport?.errorCode),
+    localQueryTransportRetryAfterMs: Number.isFinite(
+      localQueryTransport?.retryAfterMs,
+    ) ?
+      localQueryTransport.retryAfterMs :
+      null,
+  };
+}
 import {summarizeProjectionReadinessContractForHistory} from './projection-readiness-state.js';
 
 const LOCAL_STR_BOOLEAN = 'boolean';
@@ -367,6 +393,12 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
         Number.isFinite(context.buildStartedAtMs) ?
           context.buildStartedAtMs :
           null,
+        {
+          readinessPlanningOwnerBuild:
+            context.readinessPlanningOwnerBuild === true,
+          readinessPlanningColdBootstrapBuild:
+            context.readinessPlanningColdBootstrapBuild === true,
+        },
       );
     }
     return snapshot;
@@ -460,19 +492,7 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
       rowConnectionState: transportState.rowState,
       routerConnectionState: transportState.routerState,
       transportConnected: transportState.connected,
-      localQueryTransportState: localQueryTransport?.state || null,
-      localQueryTransportReady:
-        typeof localQueryTransport?.ready === LOCAL_STR_BOOLEAN ?
-          localQueryTransport.ready :
-          null,
-      localQueryTransportReason: localQueryTransport?.reason || null,
-      localQueryTransportReasonCode: localQueryTransport?.reasonCode || null,
-      localQueryTransportErrorCode: localQueryTransport?.errorCode || null,
-      localQueryTransportRetryAfterMs: Number.isFinite(
-        localQueryTransport?.retryAfterMs,
-      ) ?
-        localQueryTransport.retryAfterMs :
-        null,
+      ...buildMissingSelfLocalQueryTransportEvidence(localQueryTransport),
     });
   }
 

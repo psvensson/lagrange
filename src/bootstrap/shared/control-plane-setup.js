@@ -450,18 +450,15 @@ class ControlPlaneSetup {
     // Start the SWIM probe loop; stopped by the coordinator's
     // stopOwnerMembershipDriver.
     membershipSwimRuntime.start();
-    if (!controlPlaneReadinessService.nodesOwner) {
-      controlPlaneReadinessService.nodesOwner = systemMetadataOwners.nodesOwner;
-    }
-    if (!controlPlaneReadinessService.servicesOwner) {
-      controlPlaneReadinessService.servicesOwner =
-        systemMetadataOwners.servicesOwner;
-    }
     if (typeof controlPlaneReadinessService.syncOwnerDependencies ===
       TYPEOF_FUNCTION) {
       controlPlaneReadinessService.syncOwnerDependencies({
         systemTableCache,
         cacheMutationTarget: systemTableCache,
+        ...(!controlPlaneReadinessService.nodesOwner ?
+          {nodesOwner: systemMetadataOwners.nodesOwner} : {}),
+        ...(!controlPlaneReadinessService.servicesOwner ?
+          {servicesOwner: systemMetadataOwners.servicesOwner} : {}),
         messageRouter,
         cdcIntegrationService,
         membershipPublicationService,
@@ -489,7 +486,7 @@ class ControlPlaneSetup {
       },
     });
     heartbeatService.initialize();
-    controlPlaneReadinessService.heartbeatService = heartbeatService;
+    controlPlaneReadinessService.syncOwnerDependencies({heartbeatService});
 
     const leaseService = new LeaseService({
       nodeId,

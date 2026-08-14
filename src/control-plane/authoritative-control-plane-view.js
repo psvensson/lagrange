@@ -22,6 +22,9 @@ import {
   resolveReadProfileOptions,
 } from './control-plane-system-table-gateway.js';
 import {
+  buildControlPlaneReadAuthority,
+} from './control-plane-system-table-gateway-read-contracts.js';
+import {
   buildControlPlaneWorkloadProfile,
   resolveControlPlaneWorkloadClass,
 } from './control-plane-workload-profile.js';
@@ -176,6 +179,7 @@ function buildAuthoritativeReadKey(tableName, sql, params, options, queryTimeout
     tableName,
     resolvedOptions,
   );
+  const readAuthority = buildControlPlaneReadAuthority(resolvedOptions);
   return JSON.stringify({
     tableName: tableName || null,
     sql: sql || null,
@@ -198,6 +202,7 @@ function buildAuthoritativeReadKey(tableName, sql, params, options, queryTimeout
       queryOptions.routingReadinessDimension ||
       resolvedOptions?.routingReadinessDimension ||
       CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
+    readPurpose: readAuthority.purpose,
     timeoutMs: queryTimeoutMs,
   });
 }
@@ -403,6 +408,7 @@ class AuthoritativeControlPlaneView {
           `control-plane:table:${tableName || 'unknown'}`,
         ],
       );
+      const readAuthority = buildControlPlaneReadAuthority(resolvedOptions);
       const pressureDecision = await this.getPressureGovernor().admit({
         workClass:
           workloadProfile.workClass || PRESSURE_WORK_CLASS.INTERACTIVE,
@@ -437,6 +443,8 @@ class AuthoritativeControlPlaneView {
         // Authoritative repair reads must not recurse back into readiness
         // refresh through routed owner-RPC fallback.
         allowReadinessAuthoritativeRefresh: false,
+        readAuthority,
+        readPurpose: readAuthority.purpose,
       };
       const deliverySource = resolveControlPlaneSystemTableDeliverySource({
         deliverySource: queryOptions.deliverySource || null,
@@ -505,6 +513,8 @@ class AuthoritativeControlPlaneView {
             allowSqlFallback:
               authoritativeReadModeContract.allowSqlFallback,
             cacheFallbackPredicate: resolvedOptions?.cacheFallbackPredicate,
+            readAuthority,
+            readPurpose: readAuthority.purpose,
             queryOptions,
           },
         );
@@ -531,6 +541,8 @@ class AuthoritativeControlPlaneView {
               allowSqlFallback:
                 authoritativeReadModeContract.allowSqlFallback,
               cacheFallbackPredicate: resolvedOptions?.cacheFallbackPredicate,
+              readAuthority,
+              readPurpose: readAuthority.purpose,
               queryOptions: {
                 ...queryOptions,
                 sessionId: `${queryOptions.sessionId}:owner-rpc-recovery`,
