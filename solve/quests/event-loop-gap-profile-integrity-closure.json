@@ -1,0 +1,43 @@
+{
+  "id": "event-loop-gap-profile-integrity-closure",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Event-loop gap profile aggregation emits bounded, deterministic caller and inclusive-frame attribution from one canonicalized V8 profile read, remains cycle-safe, and fails closed under hostile accessors, exotic values, and mutation of JavaScript intrinsics.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "5a4720f780a93fa75674447e47398475d4029b5a"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "event-loop-gap-profile-integrity-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "event-loop-gap-profile-integrity-closure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "event-loop-gap-profile-integrity-closure",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

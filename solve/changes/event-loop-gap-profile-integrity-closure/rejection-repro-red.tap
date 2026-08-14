@@ -1,0 +1,549 @@
+
+> lagrange-server@0.1.0 test:file
+> node scripts/run-test-files.js test/diagnostics/event-loop-gap-watchdog.test.js
+
+not ok test/diagnostics/event-loop-gap-watchdog.test.js (49 assertions, 1548ms)
+# TAP assertions failed; test process exited 1
+TAP version 14
+# Subtest: event loop gap watchdog
+    # Subtest: registry accrues exclusive time across nested sections
+        ok 1 - outer inclusive total covers nested time (44.16689799999995ms)
+        ok 2 - inner section measured
+        ok 3 - exclusive total is the union, not the sum (44.16689799999995ms)
+        ok 4 - outer counted once
+        1..4
+    ok 1 - registry accrues exclusive time across nested sections # time=46.411ms
+
+    # Subtest: detects a blockage, attributes tagged work, reports remainder
+        ok 1 - gap reported (1)
+        ok 2 - gap magnitude captured (100ms)
+        ok 3 - tagged site appears in the report
+        ok 4 - tagged time attributed (59ms)
+        ok 5 - untagged remainder quantified (41ms)
+        ok 6 - cumulative gap stats carried
+        1..6
+    ok 2 - detects a blockage, attributes tagged work, reports remainder # time=183.812ms
+
+    # Subtest: silent while healthy; thresholdMs=0 disables
+        ok 1 - no reports on a healthy loop
+        ok 2 - thresholdMs=0 never starts
+        1..2
+    ok 3 - silent while healthy; thresholdMs=0 disables # time=102.391ms
+
+    # Subtest: sampling profiler names the blocking function
+        ok 1 - window report produced
+        ok 2 - samples collected (140)
+        ok 3 - blocking function appears in top frames (got profilerTargetBusyLoop, (anonymous), (garbage collector))
+        ok 4 - blocking function dominates the window (share=0.979)
+        ok 5 - blocking function ranks by inclusive time (share=0.979)
+        1..5
+    ok 4 - sampling profiler names the blocking function # time=226.431ms
+
+    # Subtest: sampling profiler aggregates caller edges and call paths for readiness targets
+        ok 1 - direct readiness-to-owner-RPC edge carries descendant samples
+        ok 2 - full application caller path names the outer routing caller
+        1..2
+    ok 5 - sampling profiler aggregates caller edges and call paths for readiness targets # time=1.636ms
+
+    # Subtest: sampling profiler rejects cyclic hostile child graphs
+        not ok 1 - cyclic graphs fail closed instead of emitting corrupt attribution
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,4 +1,132 @@
+             Object {
+            -  "topCallerEdges": Array [],
+            -  "topCallPaths": Array [],
+            +  "topCallerEdges": Array [
+            +    Object {
+            +      "caller": Object {
+            +        "fn": "executeAuthoritativeOwnerRpcRead",
+            +        "url": "src/cdc/owner-rpc.js",
+            +        "line": 21,
+            +      },
+            +      "callee": Object {
+            +        "fn": "getNodeReadinessSync",
+            +        "url": "src/control-plane/readiness.js",
+            +        "line": 11,
+            +      },
+            +      "inclusiveHits": 5,
+            +      "inclusiveMs": 5,
+            +      "inclusiveShare": 1,
+            +    },
+            +    Object {
+            +      "caller": Object {
+            +        "fn": "getNodeReadinessSync",
+            +        "url": "src/control-plane/readiness.js",
+            +        "line": 11,
+            +      },
+            +      "callee": Object {
+            +        "fn": "executeAuthoritativeOwnerRpcRead",
+            +        "url": "src/cdc/owner-rpc.js",
+            +        "line": 21,
+            +      },
+            +      "inclusiveHits": 3,
+            +      "inclusiveMs": 3,
+            +      "inclusiveShare": 0.6,
+            +    },
+            +  ],
+            +  "topCallPaths": Array [
+            +    Object {
+            +      "targetFn": "getNodeReadinessSync",
+            +      "frames": Array [
+            +        Object {
+            +          "fn": "executeAuthoritativeOwnerRpcRead",
+            +          "url": "src/cdc/owner-rpc.js",
+            +          "line": 21,
+            +        },
+            +        Object {
+            +          "fn": "getNodeReadinessSync",
+            +          "url": "src/control-plane/readiness.js",
+            +          "line": 11,
+            +        },
+            +        Object {
+            +          "fn": "executeAuthoritativeOwnerRpcRead",
+            +          "url": "src/cdc/owner-rpc.js",
+            +          "line": 21,
+            +        },
+            +        Object {
+            +          "fn": "getNodeReadinessSync",
+            +          "url": "src/control-plane/readiness.js",
+            +          "line": 11,
+            +        },
+            +        Object {
+            +          "fn": "executeAuthoritativeOwnerRpcRead",
+            +          "url": "src/cdc/owner-rpc.js",
+            +          "line": 21,
+            +        },
+            +        Object {
+            +          "fn": "getNodeReadinessSync",
+            +          "url": "src/control-plane/readiness.js",
+            +          "line": 11,
+            +        },
+            +        Object {
+            +          "fn": "executeAuthoritativeOwnerRpcRead",
+            +          "url": "src/cdc/owner-rpc.js",
+            +          "line": 21,
+            +        },
+            +        Object {
+            +          "fn": "getNodeReadinessSync",
+            +          "url": "src/control-plane/readiness.js",
+            +          "line": 11,
+            +        },
+            +      ],
+            +      "inclusiveHits": 5,
+            +      "inclusiveMs": 5,
+            +      "inclusiveShare": 1,
+            +    },
+            +    Object {
+            +      "targetFn": "executeAuthoritativeOwnerRpcRead",
+            +      "frames": Array [
+            +        Object {
+            +          "fn": "getNodeReadinessSync",
+            +          "url": "src/control-plane/readiness.js",
+            +          "line": 11,
+            +        },
+            +        Object {
+            +          "fn": "executeAuthoritativeOwnerRpcRead",
+            +          "url": "src/cdc/owner-rpc.js",
+            +          "line": 21,
+            +        },
+            +        Object {
+            +          "fn": "getNodeReadinessSync",
+            +          "url": "src/control-plane/readiness.js",
+            +          "line": 11,
+            +        },
+            +        Object {
+            +          "fn": "executeAuthoritativeOwnerRpcRead",
+            +          "url": "src/cdc/owner-rpc.js",
+            +          "line": 21,
+            +        },
+            +        Object {
+            +          "fn": "getNodeReadinessSync",
+            +          "url": "src/control-plane/readiness.js",
+            +          "line": 11,
+            +        },
+            +        Object {
+            +          "fn": "executeAuthoritativeOwnerRpcRead",
+            +          "url": "src/cdc/owner-rpc.js",
+            +          "line": 21,
+            +        },
+            +        Object {
+            +          "fn": "getNodeReadinessSync",
+            +          "url": "src/control-plane/readiness.js",
+            +          "line": 11,
+            +        },
+            +        Object {
+            +          "fn": "executeAuthoritativeOwnerRpcRead",
+            +          "url": "src/cdc/owner-rpc.js",
+            +          "line": 21,
+            +        },
+            +      ],
+            +      "inclusiveHits": 3,
+            +      "inclusiveMs": 3,
+            +      "inclusiveShare": 0.6,
+            +    },
+            +  ],
+             }
+          at:
+            fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+            lineNumber: 278
+            columnNumber: 9
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:278:9)
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:243:11)
+          source: |2
+
+                  const attribution = profiler.aggregateCallerAttribution(cyclicProfile);
+                  t.same(attribution, {topCallerEdges: [], topCallPaths: []},
+            --------^
+                    'cyclic graphs fail closed instead of emitting corrupt attribution');
+                });
+          ...
+
+        1..1
+    not ok 6 - sampling profiler rejects cyclic hostile child graphs # time=11.888ms
+      ---
+      at:
+        fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+        lineNumber: 243
+        columnNumber: 11
+        typeName: Test
+      source: |2
+          });
+
+          await t.test('sampling profiler rejects cyclic hostile child graphs',
+        ----------^
+            async (t) => {
+              const profiler = new GapSamplingProfiler({samplingIntervalUs: 1000});
+      ...
+
+    # Subtest: profile canonicalization reads accessors once and ignores mutable intrinsics and exotic primitives
+        ok 1 - each caller-owned field is captured exactly once per aggregation
+        ok 2 - canonical records preserve valid profile timing
+        ok 3 - boxed, coercive, and string numeric inputs fail closed
+        ok 4 - captured intrinsics produce stable finite numeric diagnostics
+        1..4
+    ok 7 - profile canonicalization reads accessors once and ignores mutable intrinsics and exotic primitives # time=0.876ms
+
+    # Subtest: production profile window canonicalizes changing input once
+        not ok 1 - one production window reads profile nodes once
+          ---
+          compare: ===
+          at:
+            fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+            lineNumber: 397
+            columnNumber: 9
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:397:9)
+          source: >2
+                  const window = await profiler.rotateWindow();
+
+                  t.equal(nodesReads, 1, 'one production window reads profile nodes once');
+            --------^
+                  t.equal(window.totalSamples, 1,
+                    'every projection shares the same canonical sample count');
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,1 @@
+            -1
+            +3
+          ...
+
+        ok 2 - every projection shares the same canonical sample count
+        not ok 3 - inclusive attribution comes from the same canonical profile
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,6 +1,10 @@
+             Array [
+               Object {
+            -    "fn": "frame1",
+            -    "inclusiveHits": 1,
+            +    "fn": "frame2",
+            +    "url": "src/changing.js",
+            +    "line": 3,
+            +    "inclusiveHits": 2,
+            +    "inclusiveMs": 2,
+            +    "inclusiveShare": 1,
+               },
+             ]
+          at:
+            fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+            lineNumber: 400
+            columnNumber: 9
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:400:9)
+          source: |2
+                  t.equal(window.totalSamples, 1,
+                    'every projection shares the same canonical sample count');
+                  t.match(window.topInclusiveFrames, [{fn: 'frame1', inclusiveHits: 1}],
+            --------^
+                    'inclusive attribution comes from the same canonical profile');
+                });
+          ...
+
+        1..3
+    not ok 8 - production profile window canonicalizes changing input once # time=4.696ms
+      ---
+      at:
+        fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+        lineNumber: 371
+        columnNumber: 11
+        typeName: Test
+      source: |2
+          });
+
+          await t.test('production profile window canonicalizes changing input once',
+        ----------^
+            async (t) => {
+              let nodesReads = 0;
+      ...
+
+    # Subtest: malformed profile identities and parentage fail closed
+        not ok 1 - duplicate identity, edge, or parent emits no attribution
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,18 @@
+            -Array []
+            +Array [
+            +  Object {
+            +    "fn": "root",
+            +    "url": "src/malformed.js",
+            +    "line": 2,
+            +    "inclusiveHits": 6,
+            +    "inclusiveMs": 6,
+            +    "inclusiveShare": 2,
+            +  },
+            +  Object {
+            +    "fn": "leaf",
+            +    "url": "src/malformed.js",
+            +    "line": 2,
+            +    "inclusiveHits": 3,
+            +    "inclusiveMs": 3,
+            +    "inclusiveShare": 1,
+            +  },
+            +]
+          at:
+            fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+            lineNumber: 435
+            columnNumber: 11
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:435:11)
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:404:11)
+          source: |2
+
+                  for (const profile of malformedProfiles) {
+                    t.same(aggregateTopInclusiveProfileFrames(profile, {
+            ----------^
+                      samplingIntervalUs: 1000,
+                      topFrames: 5,
+          ...
+
+        not ok 2 - duplicate identity, edge, or parent emits no attribution
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,18 @@
+            -Array []
+            +Array [
+            +  Object {
+            +    "fn": "first",
+            +    "url": "src/malformed.js",
+            +    "line": 2,
+            +    "inclusiveHits": 2,
+            +    "inclusiveMs": 2,
+            +    "inclusiveShare": 0.667,
+            +  },
+            +  Object {
+            +    "fn": "second",
+            +    "url": "src/malformed.js",
+            +    "line": 2,
+            +    "inclusiveHits": 2,
+            +    "inclusiveMs": 2,
+            +    "inclusiveShare": 0.667,
+            +  },
+            +]
+          at:
+            fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+            lineNumber: 435
+            columnNumber: 11
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:435:11)
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:404:11)
+          source: |2
+
+                  for (const profile of malformedProfiles) {
+                    t.same(aggregateTopInclusiveProfileFrames(profile, {
+            ----------^
+                      samplingIntervalUs: 1000,
+                      topFrames: 5,
+          ...
+
+        not ok 3 - duplicate identity, edge, or parent emits no attribution
+          ---
+          diff: |
+            --- expected
+            +++ actual
+            @@ -1,1 +1,26 @@
+            -Array []
+            +Array [
+            +  Object {
+            +    "fn": "callerA",
+            +    "url": "src/malformed.js",
+            +    "line": 2,
+            +    "inclusiveHits": 1,
+            +    "inclusiveMs": 1,
+            +    "inclusiveShare": 1,
+            +  },
+            +  Object {
+            +    "fn": "callerB",
+            +    "url": "src/malformed.js",
+            +    "line": 2,
+            +    "inclusiveHits": 1,
+            +    "inclusiveMs": 1,
+            +    "inclusiveShare": 1,
+            +  },
+            +  Object {
+            +    "fn": "getNodeReadinessSync",
+            +    "url": "src/malformed.js",
+            +    "line": 2,
+            +    "inclusiveHits": 1,
+            +    "inclusiveMs": 1,
+            +    "inclusiveShare": 1,
+            +  },
+            +]
+          at:
+            fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+            lineNumber: 435
+            columnNumber: 11
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:435:11)
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:404:11)
+          source: |2
+
+                  for (const profile of malformedProfiles) {
+                    t.same(aggregateTopInclusiveProfileFrames(profile, {
+            ----------^
+                      samplingIntervalUs: 1000,
+                      topFrames: 5,
+          ...
+
+        1..3
+    not ok 9 - malformed profile identities and parentage fail closed # time=6.285ms
+      ---
+      at:
+        fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+        lineNumber: 404
+        columnNumber: 11
+        typeName: Test
+      source: |2
+            });
+
+          await t.test('malformed profile identities and parentage fail closed',
+        ----------^
+            async (t) => {
+              const frame = (functionName) => ({
+      ...
+
+    # Subtest: profile aggregation bounds path depth and hostile descriptors
+        not ok 1 - configured call-path depth has a hard ceiling
+          ---
+          at:
+            fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+            lineNumber: 461
+            columnNumber: 9
+            typeName: Test
+          stack: |
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:461:9)
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:442:11)
+          source: |2
+                    maxCallPathDepth: Number.MAX_SAFE_INTEGER,
+                  });
+                  t.ok(deep.topCallPaths.every((path) => path.frames.length <= 64),
+            --------^
+                    'configured call-path depth has a hard ceiling');
+          ...
+
+        not ok 2 - hostile String
+          ---
+          stack: |
+            test/diagnostics/event-loop-gap-watchdog.test.js:472:17
+            Array.map (<anonymous>)
+            Test.<anonymous> (test/diagnostics/event-loop-gap-watchdog.test.js:474:11)
+          at:
+            fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+            lineNumber: 472
+            columnNumber: 17
+          tapCaught: returnedPromiseRejection
+          source: >2
+                  try {
+                    Reflect.set(globalThis, 'String', () => {
+                      throw new Error('hostile String');
+            ----------------^
+                    });
+                    t.doesNotThrow(() => aggregateTopProfileFrames({nodes: hostileNodes}, {
+          ...
+
+        1..2
+    not ok 10 - profile aggregation bounds path depth and hostile descriptors # time=4.827ms
+      ---
+      at:
+        fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+        lineNumber: 442
+        columnNumber: 11
+        typeName: Test
+      source: >2
+            });
+
+          await t.test('profile aggregation bounds path depth and hostile descriptors',
+        ----------^
+            async (t) => {
+              const chainLength = 70;
+      ...
+
+    # Subtest: profile window remains silent when it contains no gap
+        ok 1 - elapsed profile window still rotates
+        ok 2 - gap-free profile payload is discarded
+        1..2
+    ok 11 - profile window remains silent when it contains no gap # time=0.428ms
+
+    # Subtest: trackSyncSection records into the shared registry and propagates return values and exceptions
+        ok 1 - return value propagated
+        ok 2 - exception propagated
+        1..2
+    ok 12 - trackSyncSection records into the shared registry and propagates return values and exceptions # time=0.295ms
+
+    1..12
+not ok 1 - event loop gap watchdog # time=603.121ms
+  ---
+  at:
+    fileName: test/diagnostics/event-loop-gap-watchdog.test.js
+    lineNumber: 37
+    columnNumber: 1
+    isToplevel: true
+  source: |
+    }
+
+    test('event loop gap watchdog', async (t) => {
+    ^
+      await t.test('registry accrues exclusive time across nested sections',
+        async (t) => {
+  ...
+
+1..1
+# { total: 36, pass: 28, fail: 8 }
+# time=608.298ms
+# test-files total=1 pass=0 fail=1 assertions=49

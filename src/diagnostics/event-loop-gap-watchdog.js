@@ -24,6 +24,13 @@ import {performance} from 'node:perf_hooks';
 import {Session} from 'node:inspector';
 import {LoggingService} from '../logging/logging-service.js';
 import {SUBSYSTEM} from '../constants/index.js';
+import {
+  aggregateProfileCallerAttribution,
+  aggregateProfileWindow,
+  aggregateTopInclusiveProfileFrames,
+  aggregateTopProfileFrames,
+  compactProfileUrl,
+} from './event-loop-gap-profile-aggregation.js';
 
 const WATCHDOG_DEFAULT = Object.freeze({
   THRESHOLD_MS: 1000,
@@ -301,8 +308,10 @@ class GapSamplingProfiler {
       this.windowStartedAtMs = Date.now();
       return {
         windowMs,
-        ...this.aggregateTopFrames(profile),
-        topInclusiveFrames: this.aggregateTopInclusiveFrames(profile),
+        ...aggregateProfileWindow(profile, {
+          samplingIntervalUs: this.samplingIntervalUs,
+          topFrames: this.topFrames,
+        }),
       };
     } finally {
       this.rotating = false;
@@ -320,63 +329,10 @@ class GapSamplingProfiler {
    * @private
    */
   aggregateTopInclusiveFrames(profile) {
-    const nodes = Array.isArray(profile?.nodes) ? profile.nodes : [];
-    if (nodes.length === 0) {
-      return [];
-    }
-    const nodeById = new Map(nodes.map((node) => [node.id, node]));
-    const subtreeHitsById = new Map();
-    const computeSubtreeHits = (nodeId) => {
-      if (subtreeHitsById.has(nodeId)) {
-        return subtreeHitsById.get(nodeId);
-      }
-      const node = nodeById.get(nodeId);
-      if (!node) {
-        return 0;
-      }
-      let total = Number.isFinite(node.hitCount) ? node.hitCount : 0;
-      for (const childId of node.children || []) {
-        total += computeSubtreeHits(childId);
-      }
-      subtreeHitsById.set(nodeId, total);
-      return total;
-    };
-    let totalSamples = 0;
-    for (const node of nodes) {
-      totalSamples += Number.isFinite(node.hitCount) ? node.hitCount : 0;
-    }
-    const META_FRAMES = new Set([
-      '(root)', '(program)', '(idle)', '(garbage collector)',
-    ]);
-    const inclusiveByKey = new Map();
-    for (const node of nodes) {
-      const callFrame = node.callFrame || {};
-      const fn = callFrame.functionName || '(anonymous)';
-      if (META_FRAMES.has(fn)) {
-        continue;
-      }
-      const url = this.compactUrl(callFrame.url);
-      const line = Number.isFinite(callFrame.lineNumber) ?
-        callFrame.lineNumber + 1 :
-        null;
-      const key = `${fn}@${url}:${line}`;
-      const frame = inclusiveByKey.get(key) ||
-        {fn, url, line, inclusiveHits: 0};
-      frame.inclusiveHits += computeSubtreeHits(node.id);
-      inclusiveByKey.set(key, frame);
-    }
-    return [...inclusiveByKey.values()]
-      .sort((left, right) => right.inclusiveHits - left.inclusiveHits)
-      .slice(0, this.topFrames)
-      .map((frame) => ({
-        ...frame,
-        inclusiveMs: Math.round(
-          (frame.inclusiveHits * this.samplingIntervalUs) / 1000,
-        ),
-        inclusiveShare: totalSamples > 0 ?
-          Number((frame.inclusiveHits / totalSamples).toFixed(3)) :
-          0,
-      }));
+    return aggregateTopInclusiveProfileFrames(profile, {
+      samplingIntervalUs: this.samplingIntervalUs,
+      topFrames: this.topFrames,
+    });
   }
 
   /**
@@ -390,39 +346,23 @@ class GapSamplingProfiler {
    * @private
    */
   aggregateTopFrames(profile) {
-    const nodes = Array.isArray(profile?.nodes) ? profile.nodes : [];
-    let totalSamples = 0;
-    const frameByKey = new Map();
-    for (const node of nodes) {
-      const hitCount = Number.isFinite(node.hitCount) ? node.hitCount : 0;
-      if (hitCount <= 0) {
-        continue;
-      }
-      totalSamples += hitCount;
-      const callFrame = node.callFrame || {};
-      const fn = callFrame.functionName || '(anonymous)';
-      const url = this.compactUrl(callFrame.url);
-      const line = Number.isFinite(callFrame.lineNumber) ?
-        callFrame.lineNumber + 1 :
-        null;
-      const key = `${fn}@${url}:${line}`;
-      const frame = frameByKey.get(key) ||
-        {fn, url, line, hits: 0, stackNodes: 0};
-      frame.hits += hitCount;
-      frame.stackNodes += 1;
-      frameByKey.set(key, frame);
-    }
-    const topFrames = [...frameByKey.values()]
-      .sort((left, right) => right.hits - left.hits)
-      .slice(0, this.topFrames)
-      .map((frame) => ({
-        ...frame,
-        selfMs: Math.round((frame.hits * this.samplingIntervalUs) / 1000),
-        share: totalSamples > 0 ?
-          Number((frame.hits / totalSamples).toFixed(3)) :
-          0,
-      }));
-    return {totalSamples, topFrames};
+    return aggregateTopProfileFrames(profile, {
+      samplingIntervalUs: this.samplingIntervalUs,
+      topFrames: this.topFrames,
+    });
+  }
+
+  /**
+   * Aggregate direct caller edges and application call paths for the readiness
+   * and authoritative-read functions that dominate retained gap windows.
+   * @param {Object} profile - V8 CPU profile.
+   * @return {{topCallerEdges: Array<Object>, topCallPaths: Array<Object>}}
+   */
+  aggregateCallerAttribution(profile) {
+    return aggregateProfileCallerAttribution(profile, {
+      samplingIntervalUs: this.samplingIntervalUs,
+      topFrames: this.topFrames,
+    });
   }
 
   /**
@@ -431,16 +371,7 @@ class GapSamplingProfiler {
    * @private
    */
   compactUrl(url) {
-    const normalized = String(url || '');
-    const sourceIndex = normalized.lastIndexOf('/src/');
-    if (sourceIndex >= 0) {
-      return normalized.slice(sourceIndex + 1);
-    }
-    const nodeModulesIndex = normalized.lastIndexOf('/node_modules/');
-    if (nodeModulesIndex >= 0) {
-      return normalized.slice(nodeModulesIndex + 1);
-    }
-    return normalized;
+    return compactProfileUrl(url);
   }
 
   stop() {
@@ -650,6 +581,8 @@ class EventLoopGapWatchdog {
           totalSamples: windowReport.totalSamples,
           topFrames: windowReport.topFrames,
           topInclusiveFrames: windowReport.topInclusiveFrames,
+          topCallerEdges: windowReport.topCallerEdges,
+          topCallPaths: windowReport.topCallPaths,
         },
       );
     }).catch((error) => {
