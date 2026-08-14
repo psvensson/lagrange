@@ -1,0 +1,26 @@
+{
+  "schema": "test-receipt/1",
+  "quest": "gcp-harness-custom-image-provisioning-v2",
+  "status": "pass",
+  "generatedAt": "2026-08-14T07:40:00.000Z",
+  "receipts": [
+    {
+      "id": "custom-image-ready-and-reusable",
+      "passed": true,
+      "command": "node scripts/build-gcp-harness-image.js --project something-2e584",
+      "detail": "The command reused READY image lagrange-harness-20260814-620ceb29 in family lagrange-distributed-harness with definition 620ceb29 and left no image-builder instance behind."
+    },
+    {
+      "id": "five-vm-fresh-tls-containers-started",
+      "passed": true,
+      "command": "LAGRANGE_AFFINITY_DEMO_GCP=1 LAGRANGE_LOOP_GAP_PROFILE=1 node examples/service-data-affinity/run-affinity-demo.js --gcp",
+      "detail": "The profiled live run provisioned five image-backed VMs, injected per-run Docker TLS credentials, loaded the current application image, and started all five node containers before the later pre-existing formation timeout; evidence is test-output/reports/movielens-lagrange-service-affinity-live-2026-08-14T07-28-19-993Z.report.json plus the matching compressed full-node logs."
+    },
+    {
+      "id": "focused-contract-tests",
+      "passed": true,
+      "command": "npm run test:file -- test/scripts/build-gcp-harness-image.test.js test/distributed/harness/__tests__/gcp-provisioner.test.js test/runtime/movielens-affinity-demo-wiring.test.js test/distributed/harness/__tests__/cluster-runtime-environment-allowlist.test.js",
+      "detail": "The independently rerun focused suite passed 124 assertions covering image lifecycle, image-backed provisioning, fresh TLS setup, parallel fanout, async callers, GCP demo wiring, full-log recovery, and profiler environment forwarding."
+    }
+  ]
+}

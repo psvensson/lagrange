@@ -1,0 +1,1592 @@
+diff --git a/examples/service-data-affinity/gcp-cluster-provider.js b/examples/service-data-affinity/gcp-cluster-provider.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e6c48b721c8fbe28b1522f0c0d30e83b36f0b1d1
+--- /dev/null
++++ b/examples/service-data-affinity/gcp-cluster-provider.js
+@@ -0,0 +1,173 @@
++/**
++ * GCP execution mode for the service-data-affinity demo.
++ *
++ * Provisions Compute Engine Docker hosts through the distributed harness's
++ * GCPProvisioner, ships the baked cluster image to them, and starts the
++ * five-node cluster through the same createCluster the distributed runner
++ * uses (host-network, one node per VM). The demo's workload body is
++ * unchanged: it keeps driving the seed admin WebSocket, which in host-network
++ * mode is node 0's admin port (8081) on the seed host's external IP.
++ *
++ * Dedicated, freshly-provisioned VMs are quiet by construction, so the
++ * event-loop-gap host-scheduling budget that the local machine keeps tripping
++ * is not expected to fire; node logs are still harvested for the report.
++ */
++
++import {
++  GCPProvisioner,
++} from '../../test/distributed/harness/gcp-provisioner.js';
++import {
++  fullLogDestPath,
++} from '../../test/distributed/harness/full-node-log-capture.js';
++import {
++  installGcpImage,
++} from '../../test/distributed/gcp-run-orchestration.js';
++import {
++  mergeWithDefaults,
++} from '../../test/distributed/harness/config-parser.js';
++import {
++  CLUSTER_FACTORY_LAYER,
++} from '../../test/distributed/harness/cluster-factory-layer.js';
++import {buildImage} from '../../test/distributed/build-image.js';
++import {createReadStream, createWriteStream} from 'node:fs';
++import {resolve} from 'node:path';
++import {pipeline} from 'node:stream/promises';
++import {createGunzip} from 'node:zlib';
++
++const {createCluster} = CLUSTER_FACTORY_LAYER;
++
++// One node per VM: five quiet e2-standard-4 hosts, matching gcp-default.json.
++const GCP_DEMO_CONFIG = Object.freeze({
++  project: 'something-2e584',
++  zone: 'us-central1-a',
++  machineType: 'e2-standard-4',
++  vmCount: 5,
++  preemptible: false,
++});
++const DEMO_NODE_COUNT = 5;
++const ADMIN_STREAM_PATH = '/api/admin/stream';
++const SEED_ADMIN_PORT = 8081;
++const GCP_DEMO_SCENARIO_NAME = 'movielens-service-data-affinity-demo';
++
++async function materializeGcpFullNodeLogs(cluster, outputDir) {
++  if (!outputDir) {
++    return;
++  }
++  await Promise.all(cluster.getNodes().map(async (node, index) => {
++    await pipeline(
++      createReadStream(fullLogDestPath(
++        outputDir,
++        GCP_DEMO_SCENARIO_NAME,
++        node.id,
++      )),
++      createGunzip(),
++      createWriteStream(resolve(outputDir, `node-${index}.log`)),
++    );
++  }));
++}
++
++async function stopGcpAffinityCluster({cluster, provisioner, outputDir}) {
++  let clusterStopError = null;
++  let logMaterializationError = null;
++  let provisionerDestroyError = null;
++  try {
++    await cluster.stop();
++  } catch (error) {
++    clusterStopError = error;
++  }
++  try {
++    await materializeGcpFullNodeLogs(cluster, outputDir);
++  } catch (error) {
++    logMaterializationError = error;
++  }
++  try {
++    await provisioner.destroy();
++  } catch (error) {
++    provisionerDestroyError = error;
++  }
++  if (clusterStopError) {
++    throw clusterStopError;
++  }
++  if (logMaterializationError) {
++    throw logMaterializationError;
++  }
++  if (provisionerDestroyError) {
++    throw provisionerDestroyError;
++  }
++}
++
++/**
++ * Provision GCP hosts and start the demo cluster on them.
++ * @param {Object} options
++ * @param {boolean} [options.verbose]
++ * @param {string} [options.outputDir]
++ * @return {Promise<{cluster: Object, provisioner: Object, target: string,
++ *   seedExternalIp: string, stop: Function}>}
++ */
++async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
++  const provisioner = new GCPProvisioner(GCP_DEMO_CONFIG);
++  let provisioned = false;
++  let cluster = null;
++  try {
++    const {hosts, hostInfo, tls} = await provisioner.provision();
++    provisioned = true;
++
++    // Build (or reuse) the git-labelled image locally, then ship it to every
++    // provisioned host so the remote daemons run the exact current bytes.
++    const config = mergeWithDefaults({size: DEMO_NODE_COUNT});
++    await buildImage(config, false);
++    await installGcpImage(provisioner, config.image, verbose);
++
++    cluster = createCluster({
++      ...config,
++      ...(outputDir ? {outputDir} : {}),
++      docker: {...config.docker, hosts, hostInfo, tls},
++    });
++    if (typeof cluster.setScenarioName === 'function') {
++      cluster.setScenarioName(GCP_DEMO_SCENARIO_NAME);
++    }
++    await cluster.start();
++
++    const seed = cluster.getNodes()[0];
++    const seedExternalIp = hostInfo[0]?.externalIp || seed.ip;
++    const target = `ws://${seedExternalIp}:${SEED_ADMIN_PORT}${ADMIN_STREAM_PATH}`;
++    return {
++      cluster,
++      provisioner,
++      target,
++      seedExternalIp,
++      stop: () => stopGcpAffinityCluster({cluster, provisioner, outputDir}),
++    };
++  } catch (error) {
++    // Never leak billable VMs on a partial failure.
++    if (cluster && provisioned) {
++      try {
++        await stopGcpAffinityCluster({cluster, provisioner, outputDir});
++      } catch (teardownError) {
++        // The original provisioning/start error takes precedence; surface the
++        // teardown failure rather than swallowing it silently.
++        process.stderr.write(
++          'gcp-cluster-provider: best-effort teardown failed (infra may ' +
++          'leak): ' + String(teardownError?.message || teardownError) + '\n',
++        );
++      }
++    } else if (provisioned) {
++      try {
++        await provisioner.destroy();
++      } catch (teardownError) {
++        process.stderr.write(
++          'gcp-cluster-provider: best-effort teardown failed (infra may ' +
++          'leak): ' + String(teardownError?.message || teardownError) + '\n',
++        );
++      }
++    }
++    throw error;
++  }
++}
++
++export {
++  startGcpAffinityCluster,
++  stopGcpAffinityCluster,
++  GCP_DEMO_CONFIG,
++  GCP_DEMO_SCENARIO_NAME,
++};
+diff --git a/examples/service-data-affinity/run-affinity-demo.js b/examples/service-data-affinity/run-affinity-demo.js
+index 2c9afdd6193106637e217cf3245dac88a2bcf89f..771b157e34301a50f6c3315e36953149a35ed3c2 100644
+--- a/examples/service-data-affinity/run-affinity-demo.js
++++ b/examples/service-data-affinity/run-affinity-demo.js
+@@ -51,7 +51,7 @@
+ 
+ import {execFile, spawn} from 'node:child_process';
+ import {createWriteStream, existsSync} from 'node:fs';
+-import {mkdir, readdir, rm, stat} from 'node:fs/promises';
++import {mkdir, readdir, rm, stat, writeFile} from 'node:fs/promises';
+ import {promisify} from 'node:util';
+ import {resolve} from 'node:path';
+ import {setTimeout as sleep} from 'node:timers/promises';
+@@ -70,6 +70,9 @@ import {
+ import {
+   collectHostSchedulingEvidence,
+ } from './host-scheduling-evidence.js';
++import {
++  startGcpAffinityCluster,
++} from './gcp-cluster-provider.js';
+ import {
+   assessAffinityDemoCompletion,
+   buildWeightedLocalitySnapshot,
+@@ -90,8 +93,12 @@ const BASE_REST_PORT = 8080;
+ const BASE_ADMIN_PORT = 8081;
+ const PORT_STRIDE = 4;
+ const CLUSTER_DATA_ROOT = 'data/examples/service-data-affinity-demo';
+-const TARGET = `ws://127.0.0.1:${BASE_ADMIN_PORT}/api/admin/stream`;
+-const LOAD_TARGET = `${TARGET}?lane=load`;
++// The admin target is normally the local seed (127.0.0.1); a GCP-mode run
++// rebinds it to the provisioned seed host's external IP before any use.
++let TARGET = `ws://127.0.0.1:${BASE_ADMIN_PORT}/api/admin/stream`;
++let LOAD_TARGET = `${TARGET}?lane=load`;
++const GCP_MODE_ENV = 'LAGRANGE_AFFINITY_DEMO_GCP';
++const GCP_MODE_FLAG = '--gcp';
+ const CLUSTER_FORM_TIMEOUT_MS = 180000;
+ const POLL_INTERVAL_MS = 2000;
+ const OBSERVE_INTERVAL_MS = 10000;
+@@ -218,6 +225,17 @@ async function waitForAdmin() {
+ 
+ const MAX_JOIN_RESTARTS = 5;
+ 
++// GCP mode: the harness's createCluster already started and formed every
++// node; here we only confirm the membership view reports them active. The
++// remote VMs are dedicated and quiet, so there is no per-node respawn loop.
++async function waitForActiveNodesGcp(expectedCount) {
++  await waitFor(`${expectedCount} active nodes`, async () => {
++    const rows = await queryRows('SELECT node_id, status FROM nodes');
++    const active = rows.filter((r) => r.status === NODE_STATUS_ACTIVE);
++    return active.length >= expectedCount ? true : null;
++  }, CLUSTER_FORM_TIMEOUT_MS);
++}
++
+ // Node processes are supervised like an orchestrator would: a joiner
+ // that exhausts its (deliberately impatient) join retry budget and
+ // exits - e.g. because the seed's leader-metadata view is briefly
+@@ -652,15 +670,56 @@ async function archivePreviousRun() {
+   }
+ }
+ 
++// Resolve the requested cluster mode: default local node processes, or a
++// GCP-provisioned remote Docker cluster when --gcp / the env opt-in is set.
++function resolveClusterMode() {
++  return process.argv.includes(GCP_MODE_FLAG) ||
++    process.env[GCP_MODE_ENV] === '1' ?
++    'gcp' :
++    'local';
++}
++
++// Start the seed + joiners and wait for the full active cluster. Returns a
++// handle {stop, harvestLogs}. In local mode this is the existing per-node
++// process supervision; in GCP mode the harness's createCluster owns the
++// node lifecycle and the seed admin target is rebound to the external IP.
++async function startClusterNodes(mode, nodes, dataRoot) {
++  if (mode === 'gcp') {
++    console.log('      Provisioning GCP Docker hosts and starting the ' +
++      'cluster remotely (one node per VM)...');
++    const gcp = await startGcpAffinityCluster({
++      verbose: true,
++      outputDir: dataRoot,
++    });
++    TARGET = gcp.target;
++    LOAD_TARGET = `${gcp.target}?lane=load`;
++    return {
++      cluster: gcp.cluster,
++      provisioner: gcp.provisioner,
++      stop: gcp.stop,
++    };
++  }
++  // Local mode: unchanged per-node process supervision.
++  return {
++    stop: () => stopNodes(nodes),
++    harvestLogs: async () => null,
++  };
++}
++
+ async function runAffinityDemo({phaseEvidence = {}} = {}) {
++  const mode = resolveClusterMode();
+   const nodes = [];
+   await archivePreviousRun();
+   await rm(CLUSTER_DATA_ROOT, {recursive: true, force: true});
+   await mkdir(CLUSTER_DATA_ROOT, {recursive: true});
++  let clusterHandle = null;
+ 
+   try {
+     console.log('[1/5] Bootstrapping the MovieLens schema on the seed...');
+-    nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
++    clusterHandle = await startClusterNodes(mode, nodes, CLUSTER_DATA_ROOT);
++    if (mode !== 'gcp') {
++      nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
++    }
+     await waitForAdmin();
+     // Bootstrap the two small coordination tables on the seed too. Their
+     // schemas then scale out with the cluster instead of exercising unrelated
+@@ -671,10 +730,15 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
+     console.log(
+       `[2/5] Expanding to ${NODE_COUNT} nodes (single zone) and spreading ` +
+       'the existing data...');
+-    for (let i = 1; i < NODE_COUNT; i += 1) {
+-      nodes.push(await startNode(i, CLUSTER_DATA_ROOT));
++    if (mode !== 'gcp') {
++      for (let i = 1; i < NODE_COUNT; i += 1) {
++        nodes.push(await startNode(i, CLUSTER_DATA_ROOT));
++      }
++      await waitForActiveNodes(NODE_COUNT, nodes, CLUSTER_DATA_ROOT);
++    } else {
++      // createCluster already started and formed all nodes.
++      await waitForActiveNodesGcp(NODE_COUNT);
+     }
+-    await waitForActiveNodes(NODE_COUNT, nodes, CLUSTER_DATA_ROOT);
+     console.log('      Cluster formed.');
+     console.log(SCHEMA_ADMISSION_WAIT_MESSAGE);
+     const schemaAdmission = await waitForAffinityDemoSchemaAdmission({
+@@ -856,9 +920,29 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
+     };
+   } finally {
+     console.log('Stopping cluster...');
+-    await stopNodes(nodes);
++    let remoteLogs = null;
++    if (clusterHandle) {
++      if (typeof clusterHandle.harvestLogs === 'function') {
++        remoteLogs = await clusterHandle.harvestLogs();
++      }
++      await clusterHandle.stop();
++    } else {
++      await stopNodes(nodes);
++    }
+     // Harvest after stop so each node's log is fully flushed. Over-budget host
+-    // scheduling marks the report non-measuring rather than red.
++    // scheduling marks the report non-measuring rather than red. In GCP mode
++    // the node logs are written into the local data root so the same budget
++    // evaluator reads them; dedicated VMs are not expected to trip it.
++    if (remoteLogs) {
++      // Host-scheduling evidence reads node-0..node-(N-1).log; harness node
++      // IDs are UUIDs, so write the logs by cluster index instead.
++      for (let index = 0; index < remoteLogs.length; index += 1) {
++        await writeFile(
++          resolve(CLUSTER_DATA_ROOT, `node-${index}.log`),
++          remoteLogs[index].text || '',
++        );
++      }
++    }
+     phaseEvidence.hostScheduling =
+       await collectHostSchedulingEvidence(CLUSTER_DATA_ROOT, NODE_COUNT);
+   }
+diff --git a/scripts/build-gcp-harness-image.js b/scripts/build-gcp-harness-image.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..2a841599d5b1ad78c30c62264abac65f189d3183
+--- /dev/null
++++ b/scripts/build-gcp-harness-image.js
+@@ -0,0 +1,368 @@
++#!/usr/bin/env node
++
++import fs from 'node:fs';
++import path from 'node:path';
++import process from 'node:process';
++import {createHash} from 'node:crypto';
++import {execFileSync} from 'node:child_process';
++import {fileURLToPath} from 'node:url';
++
++const DEFAULT_ZONE = 'us-central1-a';
++const DEFAULT_MACHINE_TYPE = 'e2-standard-2';
++const DEFAULT_SOURCE_IMAGE_FAMILY = 'ubuntu-2204-lts';
++const DEFAULT_SOURCE_IMAGE_PROJECT = 'ubuntu-os-cloud';
++const IMAGE_FAMILY = 'lagrange-distributed-harness';
++const IMAGE_NAME_PREFIX = 'lagrange-harness';
++const BUILDER_SUFFIX = '-builder';
++const BUILDER_PURPOSE = 'lagrange-harness-image-builder';
++const IMAGE_PURPOSE = 'lagrange-distributed-harness';
++const READY_MARKER = 'LAGRANGE_GCP_HARNESS_IMAGE_READY';
++const POLL_INTERVAL_MS = 10000;
++const BUILD_TIMEOUT_MS = 900000;
++const COMMAND_TIMEOUT_MS = 180000;
++const HASH_LENGTH = 8;
++const DATE_LENGTH = 8;
++const LINE_SEPARATOR = '\n';
++const OPTION_PREFIX = '--';
++const FLAG_HELP = '--help';
++const FLAG_PROJECT = '--project';
++const FLAG_ZONE = '--zone';
++const FLAG_MACHINE_TYPE = '--machine-type';
++const FLAG_IMAGE_NAME = '--image-name';
++const HASH_ALGORITHM = 'sha256';
++const HASH_ENCODING = 'hex';
++const TEXT_ENCODING = 'utf8';
++const IMAGE_STATUS_READY = 'READY';
++const GCLOUD = Object.freeze({
++  binary: 'gcloud',
++  compute: 'compute',
++  images: 'images',
++  instances: 'instances',
++  describe: 'describe',
++  create: 'create',
++  stop: 'stop',
++  delete: 'delete',
++  projectFlag: '--project',
++  zoneFlag: '--zone',
++  machineTypeFlag: '--machine-type',
++  imageFamilyFlag: '--image-family',
++  imageProjectFlag: '--image-project',
++  sourceDiskFlag: '--source-disk',
++  sourceDiskZoneFlag: '--source-disk-zone',
++  familyFlag: '--family',
++  bootDiskSize: '--boot-disk-size=20GB',
++  bootDiskType: '--boot-disk-type=pd-standard',
++  deleteDisks: '--delete-disks=all',
++  quiet: '--quiet',
++  imageFormat: '--format=json(name,family,status,labels)',
++  builderFormat: '--format=json(name,labels)',
++});
++const IMAGE_DESCRIPTION =
++  '--description=Ubuntu 22.04 with Docker preinstalled for the Lagrange ' +
++  'distributed harness; TLS credentials are injected per run.';
++const USAGE_LINES = Object.freeze([
++  'Usage:',
++  '  node scripts/build-gcp-harness-image.js --project <gcp-project>',
++  '',
++  'Options:',
++  `  --zone <zone>                  default: ${DEFAULT_ZONE}`,
++  '  --image-name <name>            default: date + definition hash',
++  `  --machine-type <type>          default: ${DEFAULT_MACHINE_TYPE}`,
++  '  --help',
++]);
++const SCRIPT_DIR = path.dirname(fileURLToPath(import.meta.url));
++const STARTUP_SCRIPT_PATH = path.join(
++  SCRIPT_DIR,
++  'gcp-harness-image-startup.sh',
++);
++
++function usage() {
++  return USAGE_LINES.join(LINE_SEPARATOR);
++}
++
++function optionValue(argv, index, flag) {
++  const value = argv[index + 1];
++  if (!value || value.startsWith(OPTION_PREFIX)) {
++    throw new Error(`${flag} requires a value`);
++  }
++  return value;
++}
++
++function parseArgs(argv = []) {
++  const parsed = {
++    project: null,
++    zone: DEFAULT_ZONE,
++    machineType: DEFAULT_MACHINE_TYPE,
++    imageName: null,
++    help: false,
++  };
++  for (let index = 0; index < argv.length; index += 1) {
++    const flag = argv[index];
++    if (flag === FLAG_HELP) {
++      parsed.help = true;
++    } else if (flag === FLAG_PROJECT) {
++      parsed.project = optionValue(argv, index, flag);
++      index += 1;
++    } else if (flag === FLAG_ZONE) {
++      parsed.zone = optionValue(argv, index, flag);
++      index += 1;
++    } else if (flag === FLAG_MACHINE_TYPE) {
++      parsed.machineType = optionValue(argv, index, flag);
++      index += 1;
++    } else if (flag === FLAG_IMAGE_NAME) {
++      parsed.imageName = optionValue(argv, index, flag);
++      index += 1;
++    } else {
++      throw new Error(`Unknown argument: ${flag}`);
++    }
++  }
++  if (!parsed.help && !parsed.project) {
++    throw new Error(`${FLAG_PROJECT} is required`);
++  }
++  return parsed;
++}
++
++function definitionHash(startupScript) {
++  return createHash(HASH_ALGORITHM)
++    .update(startupScript)
++    .digest(HASH_ENCODING)
++    .slice(0, HASH_LENGTH);
++}
++
++function defaultImageName(startupScript, now = new Date()) {
++  const date = now.toISOString().slice(0, DATE_LENGTH + 2).replaceAll('-', '');
++  return `${IMAGE_NAME_PREFIX}-${date}-${definitionHash(startupScript)}`;
++}
++
++function runGcloud(args, options = {}) {
++  return execFileSync(GCLOUD.binary, args, {
++    encoding: TEXT_ENCODING,
++    timeout: COMMAND_TIMEOUT_MS,
++    ...options,
++  });
++}
++
++function isNotFoundError(error) {
++  return /(?:was )?not found/iu.test(
++    `${error?.message || ''}\n${error?.stderr || ''}`,
++  );
++}
++
++function describeOptional(args, runCommand) {
++  try {
++    return JSON.parse(runCommand(args));
++  } catch (error) {
++    if (isNotFoundError(error)) {
++      return null;
++    }
++    throw error;
++  }
++}
++
++function describeImage(project, imageName, runCommand) {
++  return describeOptional([
++    GCLOUD.compute, GCLOUD.images, GCLOUD.describe, imageName,
++    GCLOUD.projectFlag, project,
++    GCLOUD.imageFormat,
++  ], runCommand);
++}
++
++function describeBuilder(options, runCommand) {
++  return describeOptional([
++    GCLOUD.compute, GCLOUD.instances, GCLOUD.describe, options.builderName,
++    GCLOUD.projectFlag, options.project,
++    GCLOUD.zoneFlag, options.zone,
++    GCLOUD.builderFormat,
++  ], runCommand);
++}
++
++function assertOwnedBuilder(builder, builderName) {
++  if (builder?.labels?.purpose !== BUILDER_PURPOSE) {
++    throw new Error(
++      `Refusing to delete existing instance ${builderName}: ` +
++      `missing purpose=${BUILDER_PURPOSE} label`,
++    );
++  }
++}
++
++function assertReusableImage(image, imageName, hash) {
++  if (image.family !== IMAGE_FAMILY ||
++      image.status !== IMAGE_STATUS_READY ||
++      image.labels?.purpose !== IMAGE_PURPOSE ||
++      image.labels?.definition !== hash) {
++    throw new Error(
++      `Image ${imageName} exists but does not match family ` +
++      `${IMAGE_FAMILY}, READY status, and definition ${hash}`,
++    );
++  }
++}
++
++function delay(durationMs) {
++  return new Promise((resolvePromise) => {
++    setTimeout(resolvePromise, durationMs);
++  });
++}
++
++async function waitForImageReady(options, hooks) {
++  const deadline = hooks.now() + BUILD_TIMEOUT_MS;
++  let lastError = null;
++  while (hooks.now() < deadline) {
++    try {
++      const serialOutput = hooks.runCommand([
++        'compute', 'instances', 'get-serial-port-output', options.builderName,
++        '--project', options.project,
++        '--zone', options.zone,
++        '--port=1',
++      ]);
++      if (serialOutput.includes(READY_MARKER)) {
++        return;
++      }
++      lastError = null;
++    } catch (error) {
++      lastError = error;
++    }
++    await hooks.sleep(POLL_INTERVAL_MS);
++  }
++  throw new Error(
++    `Builder ${options.builderName} did not report ${READY_MARKER} within ` +
++    `${BUILD_TIMEOUT_MS}ms` +
++    (lastError ? `: ${lastError.message}` : ''),
++  );
++}
++
++function createBuilder(options, startupScriptPath, runCommand) {
++  runCommand([
++    GCLOUD.compute, GCLOUD.instances, GCLOUD.create, options.builderName,
++    GCLOUD.projectFlag, options.project,
++    GCLOUD.zoneFlag, options.zone,
++    GCLOUD.machineTypeFlag, options.machineType,
++    GCLOUD.imageFamilyFlag, DEFAULT_SOURCE_IMAGE_FAMILY,
++    GCLOUD.imageProjectFlag, DEFAULT_SOURCE_IMAGE_PROJECT,
++    GCLOUD.bootDiskSize,
++    GCLOUD.bootDiskType,
++    `--metadata-from-file=startup-script=${startupScriptPath}`,
++    `--labels=purpose=${BUILDER_PURPOSE}`,
++    GCLOUD.quiet,
++  ]);
++}
++
++function createImage(options, hash, runCommand) {
++  runCommand([
++    GCLOUD.compute, GCLOUD.instances, GCLOUD.stop, options.builderName,
++    GCLOUD.projectFlag, options.project,
++    GCLOUD.zoneFlag, options.zone,
++    GCLOUD.quiet,
++  ]);
++  runCommand([
++    GCLOUD.compute, GCLOUD.images, GCLOUD.create, options.imageName,
++    GCLOUD.projectFlag, options.project,
++    GCLOUD.sourceDiskFlag, options.builderName,
++    GCLOUD.sourceDiskZoneFlag, options.zone,
++    GCLOUD.familyFlag, IMAGE_FAMILY,
++    `--labels=purpose=${IMAGE_PURPOSE},definition=${hash}`,
++    IMAGE_DESCRIPTION,
++    GCLOUD.quiet,
++  ]);
++}
++
++function deleteBuilder(options, runCommand) {
++  runCommand([
++    GCLOUD.compute, GCLOUD.instances, GCLOUD.delete, options.builderName,
++    GCLOUD.projectFlag, options.project,
++    GCLOUD.zoneFlag, options.zone,
++    GCLOUD.deleteDisks,
++    GCLOUD.quiet,
++  ]);
++}
++
++function removeOwnedBuilderIfPresent(options, runCommand) {
++  const builder = describeBuilder(options, runCommand);
++  if (!builder) {
++    return false;
++  }
++  assertOwnedBuilder(builder, options.builderName);
++  deleteBuilder(options, runCommand);
++  return true;
++}
++
++async function buildHarnessImage(args, hooks = {}) {
++  const startupScript = fs.readFileSync(STARTUP_SCRIPT_PATH, 'utf8');
++  const runCommand = hooks.runCommand || runGcloud;
++  const runtime = {
++    runCommand,
++    sleep: hooks.sleep || delay,
++    now: hooks.now || Date.now,
++  };
++  const imageName = args.imageName || defaultImageName(startupScript);
++  const options = {
++    ...args,
++    imageName,
++    builderName: `${imageName}${BUILDER_SUFFIX}`,
++  };
++  const hash = definitionHash(startupScript);
++
++  const existingImage = describeImage(options.project, imageName, runCommand);
++  if (existingImage) {
++    assertReusableImage(existingImage, imageName, hash);
++    removeOwnedBuilderIfPresent(options, runCommand);
++    return {imageName, imageFamily: IMAGE_FAMILY, reused: true};
++  }
++
++  removeOwnedBuilderIfPresent(options, runCommand);
++  let primaryError = null;
++  try {
++    createBuilder(options, STARTUP_SCRIPT_PATH, runCommand);
++    await waitForImageReady(options, runtime);
++    createImage(options, hash, runCommand);
++  } catch (error) {
++    primaryError = error;
++  }
++  let cleanupError = null;
++  try {
++    // Re-describe even when create reported failure: GCP might have accepted
++    // a request whose local command timed out. The ownership label prevents
++    // cleanup from deleting an unrelated same-name instance.
++    removeOwnedBuilderIfPresent(options, runCommand);
++  } catch (error) {
++    cleanupError = error;
++  }
++  if (primaryError) {
++    if (cleanupError) {
++      process.stderr.write(
++        `GCP harness image builder cleanup failed: ${cleanupError.message}\n`,
++      );
++    }
++    throw primaryError;
++  }
++  if (cleanupError) {
++    throw cleanupError;
++  }
++  return {imageName, imageFamily: IMAGE_FAMILY, reused: false};
++}
++
++async function main(argv = process.argv.slice(2)) {
++  const args = parseArgs(argv);
++  if (args.help) {
++    process.stdout.write(`${usage()}\n`);
++    return;
++  }
++  const result = await buildHarnessImage(args);
++  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
++}
++
++if (process.argv[1] === fileURLToPath(import.meta.url)) {
++  main().catch((error) => {
++    process.stderr.write(`GCP harness image build failed: ${error.message}\n`);
++    process.exitCode = 1;
++  });
++}
++
++export {
++  IMAGE_FAMILY,
++  READY_MARKER,
++  STARTUP_SCRIPT_PATH,
++  buildHarnessImage,
++  defaultImageName,
++  definitionHash,
++  parseArgs,
++};
+diff --git a/scripts/gcp-harness-image-startup.sh b/scripts/gcp-harness-image-startup.sh
+new file mode 100644
+index 0000000000000000000000000000000000000000..95e2ad08e2c96fc3350a055086d70eb0bb73dd90
+--- /dev/null
++++ b/scripts/gcp-harness-image-startup.sh
+@@ -0,0 +1,33 @@
++#!/usr/bin/env bash
++
++set -euo pipefail
++
++readonly docker_tls_dir='/etc/docker/tls'
++readonly ready_marker='LAGRANGE_GCP_HARNESS_IMAGE_READY'
++
++export DEBIAN_FRONTEND=noninteractive
++
++apt-get update -y
++apt-get install -y docker.io
++
++mkdir -p "${docker_tls_dir}"
++rm -f "${docker_tls_dir}"/*.pem
++systemctl enable docker.service
++# The reusable image contains no credentials or remote-listener override. The
++# provisioner installs both together for each run before restarting Docker.
++systemctl stop docker.service docker.socket || true
++
++apt-get clean
++rm -rf /var/lib/apt/lists/*
++
++# Remove instance identity and access artifacts before imaging. Compute
++# Engine's guest environment regenerates SSH host keys on each clone's first
++# boot and repopulates authorized keys from that clone's metadata.
++rm -f /etc/ssh/ssh_host_*_key /etc/ssh/ssh_host_*_key.pub
++find /home /root -path '*/.ssh/authorized_keys' -type f -delete
++rm -rf /var/lib/google/*
++truncate -s 0 /etc/machine-id
++rm -f /var/lib/dbus/machine-id
++sync
++
++echo "${ready_marker}" | tee /dev/ttyS0
+diff --git a/test/distributed/gcp-run-orchestration.js b/test/distributed/gcp-run-orchestration.js
+index 607075c9e6a716d5860e1e45270860dd385356f7..00deeaf3d8c67c13a308f69efd15eb960f0d6e24 100644
+--- a/test/distributed/gcp-run-orchestration.js
++++ b/test/distributed/gcp-run-orchestration.js
+@@ -55,7 +55,7 @@ async function provisionGcpDockerHosts(runConfig, verbose) {
+ // Distribute the freshly-built image to every provisioned GCP host so the
+ // per-host daemons can start containers without pulling from a registry.
+ // No-op when the run did not provision GCP hosts.
+-function installGcpImage(provisioner, image, verbose) {
++async function installGcpImage(provisioner, image, verbose) {
+   if (!provisioner) {
+     return;
+   }
+@@ -64,7 +64,7 @@ function installGcpImage(provisioner, image, verbose) {
+       GCP_IMAGE_INSTALL_LOG_PREFIX + image + GCP_IMAGE_INSTALL_LOG_SUFFIX,
+     );
+   }
+-  provisioner.installImage(image);
++  await provisioner.installImage(image);
+ }
+ 
+ // Tear down provisioned GCP infra. Called on both success and failure paths
+diff --git a/test/distributed/harness/__tests__/cluster-runtime-environment-allowlist.test.js b/test/distributed/harness/__tests__/cluster-runtime-environment-allowlist.test.js
+index 59173d8d8fab45b37481e6bc9d9362ffae920139..b15fa7151c6dfa38ac5b22743df27e60725b1c29 100644
+--- a/test/distributed/harness/__tests__/cluster-runtime-environment-allowlist.test.js
++++ b/test/distributed/harness/__tests__/cluster-runtime-environment-allowlist.test.js
+@@ -6,6 +6,7 @@ import {createCluster} from './cluster-test-helpers.js';
+ const DEBUG_LOGS_ENV_KEY = 'LAGRANGE_DEBUG_LOGS';
+ const CAPTURE_LOGS_ENV_KEY = 'LAGRANGE_CAPTURE_LOGS';
+ const RAFT_SNAPSHOT_THRESHOLD_ENV_KEY = 'LAGRANGE_RAFT_SNAPSHOT_THRESHOLD';
++const LOOP_GAP_PROFILE_ENV_KEY = 'LAGRANGE_LOOP_GAP_PROFILE';
+ const PUSH_ON_RED_ENV_KEY = 'LAGRANGE_PUSH_ON_RED';
+ const PUSH_SKIP_TESTS_ENV_KEY = 'LAGRANGE_PUSH_SKIP_TESTS';
+ const ARBITRARY_HOST_ENV_KEY = 'LAGRANGE_UNOWNED_TEST_CONTROL';
+@@ -22,13 +23,14 @@ function createTestCluster() {
+ 
+ test('node env forwards only explicitly owned LAGRANGE controls', async () => {
+   const keys = [DEBUG_LOGS_ENV_KEY, CAPTURE_LOGS_ENV_KEY,
+-    RAFT_SNAPSHOT_THRESHOLD_ENV_KEY, PUSH_ON_RED_ENV_KEY,
+-    PUSH_SKIP_TESTS_ENV_KEY, ARBITRARY_HOST_ENV_KEY];
++    RAFT_SNAPSHOT_THRESHOLD_ENV_KEY, LOOP_GAP_PROFILE_ENV_KEY,
++    PUSH_ON_RED_ENV_KEY, PUSH_SKIP_TESTS_ENV_KEY, ARBITRARY_HOST_ENV_KEY];
+   const original = new Map(arrayMap(keys, (key) => [key, process.env[key]]));
+   try {
+     process.env[DEBUG_LOGS_ENV_KEY] = 'true';
+     process.env[CAPTURE_LOGS_ENV_KEY] = 'true';
+     process.env[RAFT_SNAPSHOT_THRESHOLD_ENV_KEY] = '100';
++    process.env[LOOP_GAP_PROFILE_ENV_KEY] = '1';
+     process.env[PUSH_ON_RED_ENV_KEY] = '1';
+     process.env[PUSH_SKIP_TESTS_ENV_KEY] = '1';
+     process.env[ARBITRARY_HOST_ENV_KEY] = 'must-not-cross';
+@@ -36,6 +38,7 @@ test('node env forwards only explicitly owned LAGRANGE controls', async () => {
+     assert.strictEqual(env[DEBUG_LOGS_ENV_KEY], 'true');
+     assert.strictEqual(env[CAPTURE_LOGS_ENV_KEY], 'true');
+     assert.strictEqual(env[RAFT_SNAPSHOT_THRESHOLD_ENV_KEY], '100');
++    assert.strictEqual(env[LOOP_GAP_PROFILE_ENV_KEY], '1');
+     assert.strictEqual(env[PUSH_ON_RED_ENV_KEY], undefined);
+     assert.strictEqual(env[PUSH_SKIP_TESTS_ENV_KEY], undefined);
+     assert.strictEqual(env[ARBITRARY_HOST_ENV_KEY], undefined);
+diff --git a/test/distributed/harness/__tests__/gcp-provisioner.test.js b/test/distributed/harness/__tests__/gcp-provisioner.test.js
+index 6f4a8c54765cb0ee9f9f4e7c1b04b81b3193f325..c76d984d0abeaa747a4ca1de945453919eb7efa0 100644
+--- a/test/distributed/harness/__tests__/gcp-provisioner.test.js
++++ b/test/distributed/harness/__tests__/gcp-provisioner.test.js
+@@ -13,7 +13,23 @@
+ 
+ import {test} from '../../../../src/test-helpers/tap.js';
+ import assert from 'node:assert/strict';
+-import {GCPProvisioner} from '../gcp-provisioner.js';
++import fs from 'node:fs';
++import os from 'node:os';
++import path from 'node:path';
++import {
++  GCP_HARNESS_IMAGE_FAMILY,
++  GCPProvisioner,
++  harnessImageSource,
++} from '../gcp-provisioner.js';
++
++test('GCP provisioner selects the project-local reusable image family', (t) => {
++  assert.equal(GCP_HARNESS_IMAGE_FAMILY, 'lagrange-distributed-harness');
++  assert.equal(
++    harnessImageSource('project-a'),
++    'projects/project-a/global/images/family/lagrange-distributed-harness',
++  );
++  t.end();
++});
+ 
+ // --- Constructor / preemptible configuration (Req 8.4) ---
+ 
+@@ -111,15 +127,66 @@ test('estimateCost falls back for unknown machine type', (t) => {
+ 
+ // --- installImage precondition ---
+ 
+-test('installImage throws when provision() has not run', (t) => {
++test('installImage throws when provision() has not run', async (t) => {
+   const p = new GCPProvisioner({project: 'proj'});
+-  assert.throws(
++  await assert.rejects(
+     () => p.installImage('distributed-db:test'),
+     /requires provision\(\) to have completed first/,
+   );
+   t.end();
+ });
+ 
++test('certificate distribution fans out across image-backed VMs', async () => {
++  const certDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gcp-provision-test-'));
++  const provisioner = new GCPProvisioner({project: 'proj'});
++  provisioner._certDir = certDir;
++  provisioner._vmNames = ['vm-a', 'vm-b'];
++  let activeReadinessChecks = 0;
++  let maximumReadinessChecks = 0;
++  provisioner._generateSignedCert = (prefix) => {
++    const keyPath = path.join(certDir, `${prefix}-key.pem`);
++    const certPath = path.join(certDir, `${prefix}-cert.pem`);
++    fs.writeFileSync(keyPath, `${prefix}-key`);
++    fs.writeFileSync(certPath, `${prefix}-cert`);
++    if (prefix === 'client') {
++      fs.writeFileSync(path.join(certDir, 'ca.pem'), 'test-ca');
++    }
++    return {keyPath, certPath};
++  };
++  provisioner._waitForVmReady = async () => {
++    activeReadinessChecks += 1;
++    maximumReadinessChecks = Math.max(
++      maximumReadinessChecks,
++      activeReadinessChecks,
++    );
++    await Promise.resolve();
++    activeReadinessChecks -= 1;
++  };
++  const sshCommands = [];
++  provisioner._gcloudSshAsync = async (_vmName, command) => {
++    sshCommands.push(command);
++    return '';
++  };
++  provisioner._gcloudScpAsync = async () => '';
++
++  try {
++    const tls = await provisioner._distributeCertificates(['1.2.3.4', '5.6.7.8']);
++    assert.equal(maximumReadinessChecks, 2);
++    assert.equal(tls.ca, 'test-ca');
++    assert.equal(tls.cert, 'client-cert');
++    assert.equal(tls.key, 'client-key');
++    let tlsVerifyCommandCount = 0;
++    for (const command of sshCommands) {
++      if (/--tlsverify/u.test(command)) {
++        tlsVerifyCommandCount += 1;
++      }
++    }
++    assert.equal(tlsVerifyCommandCount, 2);
++  } finally {
++    fs.rmSync(certDir, {recursive: true, force: true});
++  }
++});
++
+ // --- Address format validation (Req 8.6) ---
+ 
+ test('expected address format matches tcp://{ip}:{port} pattern', (t) => {
+diff --git a/test/distributed/harness/cluster-class-lifecycle-base.js b/test/distributed/harness/cluster-class-lifecycle-base.js
+index e26b883c2468b9a4773595fbe7be12415a787075..080f4f362979d0c5c9b8169200b0b0fd727da35f 100644
+--- a/test/distributed/harness/cluster-class-lifecycle-base.js
++++ b/test/distributed/harness/cluster-class-lifecycle-base.js
+@@ -54,6 +54,7 @@ const FORWARDED_HOST_ENV_KEYS = Object.freeze([
+   'LAGRANGE_DEBUG_LOGS',
+   'LAGRANGE_CAPTURE_LOGS',
+   'LAGRANGE_RAFT_SNAPSHOT_THRESHOLD',
++  'LAGRANGE_LOOP_GAP_PROFILE',
+ ]);
+ const LAGRANGE_ENV_PREFIX = 'LAGRANGE_';
+ const arrayIncludes = Function.call.bind(Array.prototype.includes);
+diff --git a/test/distributed/harness/gcp-provisioner.js b/test/distributed/harness/gcp-provisioner.js
+index 034f63656cd1a2f23462ad9f6c8b208c277b7b1a..db8c134ea9e44f660ec43c16cb69705eecf28975 100644
+--- a/test/distributed/harness/gcp-provisioner.js
++++ b/test/distributed/harness/gcp-provisioner.js
+@@ -20,7 +20,7 @@
+ import fs from 'node:fs';
+ import os from 'node:os';
+ import path from 'node:path';
+-import {execFileSync} from 'node:child_process';
++import {execFile, execFileSync} from 'node:child_process';
+ 
+ import {DOCKER_DEFAULTS} from './constants.js';
+ 
+@@ -48,8 +48,7 @@ const DOCKER_PORT_PROTOCOL = 'tcp';
+ const NODE_COMM_PORT_START = 8080;
+ const NODE_COMM_PORT_END = 9090;
+ const VPC_INTERNAL_RANGE = '10.128.0.0/9';
+-const UBUNTU_IMAGE_FAMILY = 'ubuntu-2204-lts';
+-const UBUNTU_IMAGE_PROJECT = 'ubuntu-os-cloud';
++const GCP_HARNESS_IMAGE_FAMILY = 'lagrange-distributed-harness';
+ const DISK_SIZE_GB = 50;
+ const DISK_TYPE = 'pd-standard';
+ const NETWORK_TAG = 'ddb-test-node';
+@@ -59,6 +58,7 @@ const CA_SUBJECT = '/CN=lagrange-distributed-test-ca';
+ const SERVER_SUBJECT = '/CN=docker-server';
+ const CLIENT_SUBJECT = '/CN=docker-client';
+ const VM_CERT_DIR = '/etc/docker/tls';
++const VM_DOCKER_OVERRIDE_DIR = '/etc/systemd/system/docker.service.d';
+ const RUNNER_IP_LOOKUP_URL = 'https://checkip.amazonaws.com';
+ const GCLOUD_TIMEOUT_MS = 180000;
+ 
+@@ -96,30 +96,10 @@ const PULUMI_CONFIG_PASSPHRASE_ENV = 'PULUMI_CONFIG_PASSPHRASE';
+ const PULUMI_LOCAL_BACKEND_DIRNAME = '.pulumi-local-backend';
+ const PULUMI_LOCAL_SECRETS_PASSPHRASE = 'lagrange-distributed-local';
+ 
+-// dockerd installs with TLS enforced; certs land in VM_CERT_DIR via scp after
+-// boot, then docker is restarted to pick them up.
+-const STARTUP_SCRIPT_DOCKER_INSTALL = [
+-  '#!/bin/bash',
+-  'set -e',
+-  'apt-get update -y',
+-  'apt-get install -y docker.io',
+-  `mkdir -p ${VM_CERT_DIR}`,
+-  'mkdir -p /etc/systemd/system/docker.service.d',
+-  'cat > /etc/systemd/system/docker.service.d/override.conf << EOF',
+-  '[Service]',
+-  'ExecStart=',
+-  'ExecStart=/usr/bin/dockerd -H fd:// ' +
+-  `-H tcp://0.0.0.0:${DOCKER_DEFAULTS.remotePort} ` +
+-  '--tlsverify ' +
+-  `--tlscacert=${VM_CERT_DIR}/ca.pem ` +
+-  `--tlscert=${VM_CERT_DIR}/server-cert.pem ` +
+-  `--tlskey=${VM_CERT_DIR}/server-key.pem`,
+-  'EOF',
+-  'systemctl daemon-reload',
+-  'systemctl enable docker',
+-  // Do NOT start docker yet: it has no certs. The provisioner restarts it
+-  // after pushing certificates.
+-].join('\n');
++function harnessImageSource(project) {
++  return `projects/${project}/global/images/family/` +
++    GCP_HARNESS_IMAGE_FAMILY;
++}
+ 
+ function run(cmd, args, options = {}) {
+   return execFileSync(cmd, args, {
+@@ -129,6 +109,32 @@ function run(cmd, args, options = {}) {
+   });
+ }
+ 
++// Async variant for the image-distribution fan-out: scp/load to every VM
++// concurrently instead of serially, which dominates provisioning wall-time.
++function runAsync(cmd, args, options = {}) {
++  return new Promise((resolvePromise, rejectPromise) => {
++    execFile(
++      cmd,
++      args,
++      {encoding: 'utf8', timeout: GCLOUD_TIMEOUT_MS, ...options},
++      (error, stdout, stderr) => {
++        if (error) {
++          error.stderr = stderr;
++          rejectPromise(error);
++          return;
++        }
++        resolvePromise(stdout);
++      },
++    );
++  });
++}
++
++function wait(durationMs) {
++  return new Promise((resolvePromise) => {
++    setTimeout(resolvePromise, durationMs);
++  });
++}
++
+ function openssl(args) {
+   return run('openssl', args);
+ }
+@@ -224,6 +230,9 @@ class GCPProvisioner {
+       }
+     } catch (_err) {
+       // fall through to internal-only
++      process.stderr.write(
++        'GCP provisioner: runner public IP lookup failed: ' +
++        String(_err?.message || _err) + '\n');
+     }
+     process.stderr.write(
+       'GCP provisioner: could not determine runner public IP; restricting ' +
+@@ -332,7 +341,7 @@ class GCPProvisioner {
+           tags: [NETWORK_TAG],
+           bootDisk: {
+             initializeParams: {
+-              image: `projects/${UBUNTU_IMAGE_PROJECT}/global/images/family/${UBUNTU_IMAGE_FAMILY}`,
++              image: harnessImageSource(project),
+               size: DISK_SIZE_GB,
+               type: DISK_TYPE,
+             },
+@@ -341,7 +350,6 @@ class GCPProvisioner {
+             network: network.selfLink,
+             accessConfigs: [{}],
+           }],
+-          metadataStartupScript: STARTUP_SCRIPT_DOCKER_INSTALL,
+           scheduling: {
+             preemptible,
+             automaticRestart: !preemptible,
+@@ -388,7 +396,7 @@ class GCPProvisioner {
+     this._vmNames = result.outputs.instanceNames.value;
+     this._provisionedAtMs = Date.now();
+     try {
+-      const clientTls = this._distributeCertificates(ips);
++      const clientTls = await this._distributeCertificates(ips);
+       return {
+         hosts: arrayMap(
+           ips,
+@@ -425,19 +433,26 @@ class GCPProvisioner {
+       }
+     } catch (_err) {
+       // Swallow: the original provisioning error takes precedence.
++      process.stderr.write(
++        'GCP provisioner: best-effort stack destroy after provisioning ' +
++        'failure also failed (infra may leak): ' +
++        String(_err?.message || _err) + '\n');
+     }
+     if (this._certDir) {
+       try {
+         fs.rmSync(this._certDir, {recursive: true, force: true});
+       } catch (_err) {
+         // Best-effort.
++        process.stderr.write(
++          'GCP provisioner: cert dir cleanup failed: ' +
++          String(_err?.message || _err) + '\n');
+       }
+       this._certDir = null;
+     }
+   }
+ 
+-  _gcloudScp(vmName, local, remote) {
+-    return run('gcloud', [
++  _gcloudScpAsync(vmName, local, remote) {
++    return runAsync('gcloud', [
+       'compute', 'scp',
+       '--project', this._project,
+       '--zone', this._zone,
+@@ -447,8 +462,8 @@ class GCPProvisioner {
+     ]);
+   }
+ 
+-  _gcloudSsh(vmName, remoteCmd) {
+-    return run('gcloud', [
++  _gcloudSshAsync(vmName, remoteCmd) {
++    return runAsync('gcloud', [
+       'compute', 'ssh',
+       '--project', this._project,
+       '--zone', this._zone,
+@@ -458,37 +473,22 @@ class GCPProvisioner {
+     ]);
+   }
+ 
+-  // Wait until the VM's guest agent answers SSH AND the startup script has
+-  // actually installed the docker.service unit. stack.up() returns as soon as
+-  // the instance exists — well before apt finishes — so without this the cert
+-  // push races the package install (docker.service not found) and aborts the
+-  // run. A single SSH attempt does both: it loops on the VM until the unit
+-  // exists (bounded), and the gcloud call itself fails until SSH keys/agent
+-  // are ready, which the retry loop absorbs.
+-  _waitForVmReady(vmName) {
++  // stack.up() returns as soon as the image-backed instance exists, before its
++  // guest agent necessarily accepts SSH. Probe both SSH and the baked Docker
++  // unit. All VMs run this wait concurrently during certificate distribution.
++  async _waitForVmReady(vmName) {
+     const deadline = Date.now() + VM_READY_TIMEOUT_MS;
+-    // Wait for the dpkg lock to clear AND the docker unit to be installed,
+-    // bounded per-attempt so a stuck apt mirror can't hang the gcloud call.
+     const probe =
+-      'ok=0; ' +
+-      'for i in $(seq 1 25); do ' +
+-      '  if ! sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && ' +
+-      '     systemctl list-unit-files docker.service >/dev/null 2>&1 && ' +
+-      '     systemctl cat docker.service >/dev/null 2>&1; then ok=1; break; ' +
+-      '  fi; sleep 5; done; ' +
+-      '[ "$ok" = 1 ] && echo ready';
++      'systemctl list-unit-files docker.service >/dev/null 2>&1 && ' +
++      'systemctl cat docker.service >/dev/null 2>&1 && echo ready';
+     let lastErr = null;
+     while (Date.now() < deadline) {
+       try {
+-        this._gcloudSsh(vmName, probe);
++        await this._gcloudSshAsync(vmName, probe);
+         return;
+       } catch (err) {
+         lastErr = err;
+-        const end = Date.now() + VM_READY_POLL_MS;
+-        while (Date.now() < end) {
+-          // busy-wait keeps this method synchronous like the rest of the
+-          // provisioning path (execFileSync-based).
+-        }
++        await wait(VM_READY_POLL_MS);
+       }
+     }
+     throw new Error(
+@@ -501,21 +501,27 @@ class GCPProvisioner {
+   // VM, then start docker and verify it is serving. Returns the client TLS
+   // material for the harness. Any per-VM failure throws so provisioning fails
+   // loudly at the point of cause rather than as an opaque TLS error later.
+-  _distributeCertificates(externalIps) {
++  async _distributeCertificates(externalIps) {
+     const dir = this._certDir;
+     const client = this._generateSignedCert('client', CLIENT_SUBJECT, null);
+-    externalIps.forEach((ip, i) => {
++    const serverCertificates = arrayMap(externalIps, (ip, i) =>
++      this._generateSignedCert(
++        `server-${i}`, SERVER_SUBJECT, [ip, '127.0.0.1']),
++    );
++    await Promise.all(arrayMap(externalIps, async (_ip, i) => {
+       const vmName = this._vmNames[i];
+-      const server = this._generateSignedCert(
+-        `server-${i}`, SERVER_SUBJECT, [ip, '127.0.0.1']);
+-      this._waitForVmReady(vmName);
+-      this._gcloudSsh(
++      const server = serverCertificates[i];
++      await this._waitForVmReady(vmName);
++      await this._gcloudSshAsync(
+         vmName, `sudo mkdir -p ${VM_CERT_DIR} && sudo chmod 755 ${VM_CERT_DIR}`,
+       );
+-      this._gcloudScp(vmName, path.join(dir, 'ca.pem'), '/tmp/ca.pem');
+-      this._gcloudScp(vmName, server.certPath, '/tmp/server-cert.pem');
+-      this._gcloudScp(vmName, server.keyPath, '/tmp/server-key.pem');
+-      this._gcloudSsh(
++      await this._gcloudScpAsync(
++        vmName, path.join(dir, 'ca.pem'), '/tmp/ca.pem');
++      await this._gcloudScpAsync(
++        vmName, server.certPath, '/tmp/server-cert.pem');
++      await this._gcloudScpAsync(
++        vmName, server.keyPath, '/tmp/server-key.pem');
++      await this._gcloudSshAsync(
+         vmName,
+         'sudo mv /tmp/ca.pem /tmp/server-cert.pem /tmp/server-key.pem ' +
+         `${VM_CERT_DIR}/ && ` +
+@@ -524,12 +530,23 @@ class GCPProvisioner {
+         `${VM_CERT_DIR}/server-cert.pem && ` +
+         `sudo test -s ${VM_CERT_DIR}/server-key.pem && ` +
+         `sudo test -s ${VM_CERT_DIR}/ca.pem && ` +
+-        'sudo systemctl restart docker && ' +
++        `sudo mkdir -p ${VM_DOCKER_OVERRIDE_DIR} && ` +
++        'printf \'%s\\n\' \'[Service]\' \'ExecStart=\' ' +
++        '\'ExecStart=/usr/bin/dockerd -H fd:// ' +
++        `-H tcp://0.0.0.0:${DOCKER_PORT} --tlsverify ` +
++        `--tlscacert=${VM_CERT_DIR}/ca.pem ` +
++        `--tlscert=${VM_CERT_DIR}/server-cert.pem ` +
++        `--tlskey=${VM_CERT_DIR}/server-key.pem' | ` +
++        `sudo tee ${VM_DOCKER_OVERRIDE_DIR}/override.conf >/dev/null && ` +
++        'sudo systemctl daemon-reload && ' +
++        'sudo systemctl restart docker || { ' +
++        'sudo systemctl status docker --no-pager; ' +
++        'sudo journalctl -u docker --no-pager -n 80; exit 1; }; ' +
+         // Verify the daemon is actually serving before we hand its address
+         // back; surfaces a broken cert/config here instead of downstream.
+         'sudo systemctl is-active --quiet docker',
+       );
+-    });
++    }));
+     return {
+       ca: fs.readFileSync(path.join(dir, 'ca.pem'), 'utf8'),
+       cert: fs.readFileSync(client.certPath, 'utf8'),
+@@ -545,39 +562,42 @@ class GCPProvisioner {
+    * Must be called after provision().
+    * @param {string} image - Image tag as it exists in the local daemon
+    */
+-  installImage(image) {
++  // Compress the image tarball and fan out scp/load to every VM concurrently.
++  // The uncompressed docker-save tarball for distributed-db:test is ~341MB but
++  // gzips to ~114MB (the Docker-Hub compressed size is ~68MB); shipping gzip
++  // and loading in parallel cuts per-run distribution from ~30min to ~2min.
++  async installImage(image) {
+     if (this._vmNames.length === 0) {
+       throw new Error(
+         'installImage requires provision() to have completed first',
+       );
+     }
+-    const tarball = path.join(
+-      fs.mkdtempSync(path.join(os.tmpdir(), 'lagrange-image-')),
+-      'image.tar',
+-    );
++    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lagrange-image-'));
++    const rawTarball = path.join(tempDir, 'image.tar');
++    const tarball = `${rawTarball}.gz`;
+     try {
+-      // docker save streams the tarball to stdout; redirect to a file.
+-      const fd = fs.openSync(tarball, 'w');
+-      try {
+-        run('docker', ['save', image], {stdio: ['ignore', fd, 'inherit']});
+-      } finally {
+-        fs.closeSync(fd);
+-      }
+-      for (const vmName of this._vmNames) {
+-        this._gcloudScp(vmName, tarball, '/tmp/lagrange-image.tar');
++      // Separate argv-safe commands preserve docker-save failures and avoid
++      // interpreting the image name or temporary path as shell syntax.
++      run('docker', ['save', '--output', rawTarball, image]);
++      run('gzip', ['-1', rawTarball]);
++      await Promise.all(arrayMap(this._vmNames, async (vmName) => {
++        await this._gcloudScpAsync(vmName, tarball, '/tmp/lagrange-image.tar.gz');
+         // Always remove the remote tarball, even if docker load fails, so a
+-        // multi-GB artifact is never orphaned on the VM's disk.
+-        this._gcloudSsh(
++        // multi-hundred-MB artifact is never orphaned on the VM's disk.
++        await this._gcloudSshAsync(
+           vmName,
+-          'sudo docker load -i /tmp/lagrange-image.tar; ' +
+-          'rc=$?; rm -f /tmp/lagrange-image.tar; exit $rc',
++          'sudo docker load -i /tmp/lagrange-image.tar.gz; ' +
++          'rc=$?; rm -f /tmp/lagrange-image.tar.gz; exit $rc',
+         );
+-      }
++      }));
+     } finally {
+       try {
+-        fs.rmSync(path.dirname(tarball), {recursive: true, force: true});
++        fs.rmSync(tempDir, {recursive: true, force: true});
+       } catch (_err) {
+         // Best-effort tarball cleanup.
++        process.stderr.write(
++          'GCP provisioner: local image tarball cleanup failed: ' +
++          String(_err?.message || _err) + '\n');
+       }
+     }
+   }
+@@ -604,6 +624,9 @@ class GCPProvisioner {
+         fs.rmSync(this._certDir, {recursive: true, force: true});
+       } catch (_err) {
+         // Best-effort cert cleanup.
++        process.stderr.write(
++          'GCP provisioner: cert dir cleanup failed: ' +
++          String(_err?.message || _err) + '\n');
+       }
+       this._certDir = null;
+     }
+@@ -651,4 +674,4 @@ class GCPProvisioner {
+   }
+ }
+ 
+-export {GCPProvisioner};
++export {GCP_HARNESS_IMAGE_FAMILY, GCPProvisioner, harnessImageSource};
+diff --git a/test/distributed/run.js b/test/distributed/run.js
+index fa819d53b8b4b52d2d49e77ff983de33d8c1d112..d4c8b28da5ff87928c5221dec5ed9b4887c95159 100644
+--- a/test/distributed/run.js
++++ b/test/distributed/run.js
+@@ -1237,7 +1237,7 @@ async function main() {
+     // Distribute the freshly-built image to any provisioned GCP hosts so the
+     // per-host daemons can start containers without pulling from a registry.
+     try {
+-      installGcpImage(gcpProvisioner, runConfig.image, args.verbose);
++      await installGcpImage(gcpProvisioner, runConfig.image, args.verbose);
+     } catch (err) {
+       runStatusContext.milestones.failedAt = new Date().toISOString();
+       await writeRunnerStatus(RUN_STATUS_STATE_FATAL_ERROR, {
+diff --git a/test/runtime/movielens-affinity-demo-wiring.test.js b/test/runtime/movielens-affinity-demo-wiring.test.js
+index 6a1b8f18cb69d0b48abe95d1e68d6530d52563c6..f3e85c99a9bd87c43a7974876b92a9a05fd341a9 100644
+--- a/test/runtime/movielens-affinity-demo-wiring.test.js
++++ b/test/runtime/movielens-affinity-demo-wiring.test.js
+@@ -22,7 +22,11 @@
+ 
+ import {test} from '../../src/test-helpers/tap.js';
+ import assert from 'node:assert/strict';
+-import {readFile} from 'node:fs/promises';
++import {gzip as gzipCallback} from 'node:zlib';
++import {mkdtemp, mkdir, readFile, rm, writeFile} from 'node:fs/promises';
++import {tmpdir} from 'node:os';
++import {join} from 'node:path';
++import {promisify} from 'node:util';
+ import {ConfigurationManager} from '../../src/config/configuration-manager.js';
+ import {LoggingService} from '../../src/logging/logging-service.js';
+ import {COLUMN, NODE_STATE, TABLES} from '../../src/constants/index.js';
+@@ -57,6 +61,13 @@ import {
+ import {
+   summarizePhase,
+ } from '../../examples/service-data-affinity/run-affinity-demo.js';
++import {
++  GCP_DEMO_SCENARIO_NAME,
++  stopGcpAffinityCluster,
++} from '../../examples/service-data-affinity/gcp-cluster-provider.js';
++import {
++  fullLogDestPath,
++} from '../../test/distributed/harness/full-node-log-capture.js';
+ import {
+   PREPARE_STATUS,
+   START_STATUS,
+@@ -68,6 +79,54 @@ const LOOP_SQL = 'SELECT movie_id, rating FROM ratings';
+ const FAST_INTERVAL_MS = 5;
+ const WAIT_TIMEOUT_MS = 1500;
+ const WAIT_POLL_MS = 5;
++const gzip = promisify(gzipCallback);
++
++test('MovieLens GCP cleanup preserves full node logs before VM destruction',
++  async (t) => {
++    const outputDir = await mkdtemp(join(tmpdir(), 'affinity-gcp-logs-'));
++    const nodeIds = ['seed-node', 'joiner-node'];
++    const events = [];
++    try {
++      await Promise.all(nodeIds.map(async (nodeId, index) => {
++        const fullLogPath = fullLogDestPath(
++          outputDir,
++          GCP_DEMO_SCENARIO_NAME,
++          nodeId,
++        );
++        await mkdir(join(fullLogPath, '..'), {recursive: true});
++        await writeFile(
++          fullLogPath,
++          await gzip(`node-${index}-complete\nprofile-window-${index}\n`),
++        );
++      }));
++      const cluster = {
++        getNodes: () => nodeIds.map((id) => ({id})),
++        stop: async () => events.push('cluster-stopped'),
++      };
++      const provisioner = {
++        destroy: async () => {
++          events.push('vms-destroyed');
++          assert.equal(
++            await readFile(join(outputDir, 'node-0.log'), 'utf8'),
++            'node-0-complete\nprofile-window-0\n',
++            'full seed log exists before VM destruction',
++          );
++        },
++      };
++
++      await stopGcpAffinityCluster({cluster, provisioner, outputDir});
++
++      assert.deepEqual(events, ['cluster-stopped', 'vms-destroyed']);
++      assert.equal(
++        await readFile(join(outputDir, 'node-1.log'), 'utf8'),
++        'node-1-complete\nprofile-window-1\n',
++        'full joiner log is materialized by cluster index',
++      );
++    } finally {
++      await rm(outputDir, {recursive: true, force: true});
++    }
++    t.end();
++  });
+ 
+ test('MovieLens admits schema after formation and before ratings CREATE',
+   async (t) => {
+diff --git a/test/scripts/build-gcp-harness-image.test.js b/test/scripts/build-gcp-harness-image.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f2a805d47d4b5b1602fe8a69b8fe5f50942631d8
+--- /dev/null
++++ b/test/scripts/build-gcp-harness-image.test.js
+@@ -0,0 +1,197 @@
++import assert from 'node:assert/strict';
++import fs from 'node:fs';
++
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  IMAGE_FAMILY,
++  READY_MARKER,
++  STARTUP_SCRIPT_PATH,
++  buildHarnessImage,
++  defaultImageName,
++  definitionHash,
++  parseArgs,
++} from '../../scripts/build-gcp-harness-image.js';
++
++function notFound() {
++  return new Error('resource was not found');
++}
++
++function imageDescription(startupScript) {
++  return JSON.stringify({
++    name: 'lagrange-harness-v1',
++    family: IMAGE_FAMILY,
++    status: 'READY',
++    labels: {
++      purpose: 'lagrange-distributed-harness',
++      definition: definitionHash(startupScript),
++    },
++  });
++}
++
++test('GCP harness image builder parses its bounded cloud target', (t) => {
++  assert.deepEqual(
++    parseArgs([
++      '--project', 'project-a',
++      '--zone', 'europe-north1-a',
++      '--machine-type', 'e2-standard-4',
++      '--image-name', 'lagrange-harness-v1',
++    ]),
++    {
++      project: 'project-a',
++      zone: 'europe-north1-a',
++      machineType: 'e2-standard-4',
++      imageName: 'lagrange-harness-v1',
++      help: false,
++    },
++  );
++  assert.throws(() => parseArgs([]), /--project is required/u);
++  t.end();
++});
++
++test('GCP harness image definition has no baked credentials', (t) => {
++  const startupScript = fs.readFileSync(STARTUP_SCRIPT_PATH, 'utf8');
++  assert.match(startupScript, /apt-get install -y docker\.io/u);
++  assert.doesNotMatch(startupScript, /--tlsverify/u);
++  assert.match(startupScript, /systemctl stop docker\.service/u);
++  assert.match(startupScript, /ssh_host_\*_key/u);
++  assert.match(startupScript, /rm -rf \/var\/lib\/google/u);
++  assert.doesNotMatch(startupScript, /BEGIN (?:RSA )?PRIVATE KEY/u);
++  assert.match(
++    defaultImageName(startupScript, new Date('2026-08-14T00:00:00Z')),
++    /^lagrange-harness-20260814-[a-f0-9]{8}$/u,
++  );
++  t.end();
++});
++
++test('GCP harness image build versions the family and deletes its builder',
++  async () => {
++    const calls = [];
++    let builderExists = false;
++    const runCommand = (args) => {
++      calls.push(args);
++      if (args[2] === 'describe' && args[1] === 'images') {
++        throw notFound();
++      }
++      if (args[2] === 'describe' && args[1] === 'instances') {
++        if (!builderExists) {
++          throw notFound();
++        }
++        return JSON.stringify({
++          name: 'lagrange-harness-v1-builder',
++          labels: {purpose: 'lagrange-harness-image-builder'},
++        });
++      }
++      if (args[2] === 'create' && args[1] === 'instances') {
++        builderExists = true;
++      }
++      if (args.includes('get-serial-port-output')) {
++        return READY_MARKER;
++      }
++      if (args[2] === 'delete' && args[1] === 'instances') {
++        builderExists = false;
++      }
++      return '';
++    };
++    const result = await buildHarnessImage({
++      project: 'project-a',
++      zone: 'us-central1-a',
++      machineType: 'e2-standard-2',
++      imageName: 'lagrange-harness-v1',
++    }, {runCommand});
++
++    assert.deepEqual(result, {
++      imageName: 'lagrange-harness-v1',
++      imageFamily: IMAGE_FAMILY,
++      reused: false,
++    });
++    assert.ok(calls.some((args) =>
++      args[0] === 'compute' && args[1] === 'instances' &&
++      args[2] === 'create'));
++    assert.ok(calls.some((args) =>
++      args[0] === 'compute' && args[1] === 'images' &&
++      args[2] === 'create' && args.includes('--family') &&
++      args.includes(IMAGE_FAMILY)));
++    assert.ok(calls.some((args) =>
++      args[0] === 'compute' && args[1] === 'instances' &&
++      args[2] === 'delete' && args.includes('--delete-disks=all')));
++  });
++
++test('GCP harness image build reuses an existing immutable version',
++  async () => {
++    const calls = [];
++    const startupScript = fs.readFileSync(STARTUP_SCRIPT_PATH, 'utf8');
++    const result = await buildHarnessImage({
++      project: 'project-a',
++      zone: 'us-central1-a',
++      machineType: 'e2-standard-2',
++      imageName: 'lagrange-harness-v1',
++    }, {
++      runCommand: (args) => {
++        calls.push(args);
++        if (args[1] === 'images') {
++          return imageDescription(startupScript);
++        }
++        throw notFound();
++      },
++    });
++
++    assert.equal(result.reused, true);
++    assert.equal(calls.length, 2);
++  });
++
++test('GCP harness image build cleans an uncertain accepted create',
++  async () => {
++    let builderExists = false;
++    let builderDeleted = false;
++    const runCommand = (args) => {
++      if (args[2] === 'describe' && args[1] === 'images') {
++        throw notFound();
++      }
++      if (args[2] === 'describe' && args[1] === 'instances') {
++        if (!builderExists) {
++          throw notFound();
++        }
++        return JSON.stringify({
++          labels: {purpose: 'lagrange-harness-image-builder'},
++        });
++      }
++      if (args[2] === 'create' && args[1] === 'instances') {
++        builderExists = true;
++        throw new Error('create command timed out');
++      }
++      if (args[2] === 'delete' && args[1] === 'instances') {
++        builderExists = false;
++        builderDeleted = true;
++      }
++      return '';
++    };
++
++    await assert.rejects(
++      () => buildHarnessImage({
++        project: 'project-a',
++        zone: 'us-central1-a',
++        machineType: 'e2-standard-2',
++        imageName: 'lagrange-harness-v1',
++      }, {runCommand}),
++      /create command timed out/u,
++    );
++    assert.equal(builderDeleted, true);
++  });
++
++test('GCP harness image build rejects a mismatched existing version',
++  async () => {
++    await assert.rejects(
++      () => buildHarnessImage({
++        project: 'project-a',
++        zone: 'us-central1-a',
++        machineType: 'e2-standard-2',
++        imageName: 'lagrange-harness-v1',
++      }, {
++        runCommand: () => JSON.stringify({
++          family: 'unrelated-family',
++          labels: {},
++        }),
++      }),
++      /does not match family/u,
++    );
++  });
