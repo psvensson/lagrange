@@ -13,8 +13,20 @@ const LOCAL_STR_ADMIN_EXAMPLES_SOCKET_CLOSED = 'Admin examples socket closed';
 const LOCAL_STR_MESSAGE = 'message';
 const LOCAL_STR_CLOSE = 'close';
 const ADMIN_EXAMPLES_ERROR_CODE = Object.freeze({
+  CONNECT_TIMEOUT: 'ADMIN_CONNECT_TIMEOUT',
   RESPONSE_TIMEOUT: 'ADMIN_RESPONSE_TIMEOUT',
 });
+
+function buildAdminConnectTimeoutError(target, timeoutMs) {
+  const error = new Error(
+    `Timed out opening admin websocket: ${target}`,
+  );
+  error.code = ADMIN_EXAMPLES_ERROR_CODE.CONNECT_TIMEOUT;
+  error.deferRetry = true;
+  error.target = target;
+  error.timeoutMs = timeoutMs;
+  return error;
+}
 
 function buildAdminResponseTimeoutError(queryId, timeoutMs) {
   const error = new Error(
@@ -38,6 +50,7 @@ class AdminWsClient {
     this.target = options.target || DEFAULT_TARGET;
     this.timeoutMs = options.timeoutMs || DEFAULT_TIMEOUT_MS;
     this.socket = null;
+    this.openingSocket = null;
     this.socketReady = null;
     this.pending = new Map();
   }
@@ -55,27 +68,57 @@ class AdminWsClient {
       return this.socketReady;
     }
 
-    this.socketReady = new Promise((resolve, reject) => {
-      const socket = new WebSocket(this.target);
+    const socket = new WebSocket(this.target);
+    this.openingSocket = socket;
+    let openingPromise = null;
+    openingPromise = new Promise((resolve, reject) => {
+      let timeout = null;
+
+      const releaseOpening = () => {
+        if (this.openingSocket === socket) {
+          this.openingSocket = null;
+        }
+        if (this.socketReady === openingPromise) {
+          this.socketReady = null;
+        }
+      };
+
+      const clearOpening = () => {
+        if (timeout !== null) {
+          clearTimeout(timeout);
+          timeout = null;
+        }
+        socket.off(LOCAL_STR_OPEN, onOpen);
+        socket.off(LOCAL_STR_ERROR, onOpenError);
+      };
 
       const onOpen = () => {
-        socket.off('error', onOpenError);
+        clearOpening();
+        releaseOpening();
         this._bindSocket(socket);
         this.socket = socket;
         resolve(socket);
       };
 
       const onOpenError = (error) => {
-        socket.off('open', onOpen);
-        this._resetSocket();
+        clearOpening();
+        releaseOpening();
         reject(error);
       };
 
       socket.once(LOCAL_STR_OPEN, onOpen);
       socket.once(LOCAL_STR_ERROR, onOpenError);
+      timeout = setTimeout(() => {
+        clearOpening();
+        releaseOpening();
+        socket.once(LOCAL_STR_ERROR, () => undefined);
+        socket.terminate();
+        reject(buildAdminConnectTimeoutError(this.target, this.timeoutMs));
+      }, this.timeoutMs);
     });
+    this.socketReady = openingPromise;
 
-    return this.socketReady;
+    return openingPromise;
   }
 
   /**
@@ -85,14 +128,16 @@ class AdminWsClient {
    */
   async close() {
     this._rejectPending(LOCAL_STR_ADMIN_EXAMPLES_SOCKET_CLOSED);
-    if (this.socket) {
-      try {
+    try {
+      if (this.socket) {
         this.socket.close();
-      } catch {
-        // Best effort.
       }
+      if (this.openingSocket) {
+        this.openingSocket.terminate();
+      }
+    } finally {
+      this._resetSocket();
     }
-    this._resetSocket();
   }
 
   /**
@@ -236,6 +281,7 @@ class AdminWsClient {
    */
   _resetSocket() {
     this.socket = null;
+    this.openingSocket = null;
     this.socketReady = null;
   }
 }

@@ -1,5 +1,6 @@
 import {existsSync} from 'node:fs';
 import {once} from 'node:events';
+import net from 'node:net';
 import {WebSocketServer} from 'ws';
 import {test} from '../../src/test-helpers/tap.js';
 import {
@@ -279,6 +280,7 @@ test('MovieLens durable CREATE retries a typed ambiguous admin timeout on ' +
   const requestReceived = new Promise((resolve) => {
     resolveRequest = resolve;
   });
+
   let serverSocket = null;
   server.on('connection', (socket) => {
     serverSocket = socket;
@@ -387,6 +389,63 @@ test('MovieLens durable CREATE retries a typed ambiguous admin timeout on ' +
     'typed timeout replay and confirmations remain inside the outer budget');
   t.end();
 });
+
+test('AdminWsClient bounds a stalled websocket opening and releases it',
+  async (t) => {
+    const sockets = new Set();
+    let connections = 0;
+    const server = net.createServer((socket) => {
+      connections += 1;
+      sockets.add(socket);
+      socket.once('close', () => sockets.delete(socket));
+    });
+    server.listen(0, '127.0.0.1');
+    await once(server, 'listening');
+    const serverAddress = server.address();
+    const target = `ws://127.0.0.1:${serverAddress.port}`;
+    const client = new AdminWsClient({target, timeoutMs: 100});
+    const startedAt = Date.now();
+    let firstError = null;
+    let secondError = null;
+    try {
+      try {
+        await client.connect();
+      } catch (error) {
+        firstError = error;
+      }
+      const firstElapsedMs = Date.now() - startedAt;
+      t.equal(firstError?.code, 'ADMIN_CONNECT_TIMEOUT');
+      t.equal(firstError?.deferRetry, true);
+      t.equal(firstError?.target, target);
+      t.equal(firstError?.timeoutMs, 100);
+      t.equal(isRetryableControlPlaneError(firstError), true,
+        'the canonical retry owner accepts the typed opening timeout');
+      t.ok(firstElapsedMs >= 100 && firstElapsedMs < 1000,
+        'the stalled opening rejects inside a bounded real deadline');
+      t.equal(client.socket, null, 'no opened socket is retained');
+      t.equal(client.openingSocket, null, 'the opening socket is released');
+      t.equal(client.socketReady, null, 'the opening promise is released');
+
+      try {
+        await client.connect();
+      } catch (error) {
+        secondError = error;
+      }
+      t.equal(secondError?.code, 'ADMIN_CONNECT_TIMEOUT');
+      t.not(secondError, firstError, 'a later attempt owns a fresh timeout');
+      t.equal(connections, 2, 'a later attempt opens a fresh TCP session');
+      t.equal(client.openingSocket, null,
+        'the repeated timeout also releases socket ownership');
+    } finally {
+      await client.close();
+      for (const socket of sockets) {
+        socket.destroy();
+      }
+      await new Promise((resolve, reject) => {
+        server.close((error) => error ? reject(error) : resolve());
+      });
+    }
+  });
 
 test('MovieLens durable CREATE does not replay a hard validation error',
   async (t) => {

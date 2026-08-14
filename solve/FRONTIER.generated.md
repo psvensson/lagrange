@@ -48,10 +48,11 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 17
+## Open quests — 18
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
+| admin-ws-client-open-timeout | product | 1 | 0 | 2026-08-14 | — |
 | gcp-harness-custom-image-provisioning | product | 0 | 0 | 2026-08-14 | — |
 | github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 ⚠ stale | — |
 | harness-runtime-environment-allowlist | process | 1 | 0 | 2026-08-13 | — |
