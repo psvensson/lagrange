@@ -20,7 +20,7 @@
 import fs from 'node:fs';
 import os from 'node:os';
 import path from 'node:path';
-import {execFileSync} from 'node:child_process';
+import {execFile, execFileSync} from 'node:child_process';
 
 import {DOCKER_DEFAULTS} from './constants.js';
 
@@ -48,8 +48,7 @@ const DOCKER_PORT_PROTOCOL = 'tcp';
 const NODE_COMM_PORT_START = 8080;
 const NODE_COMM_PORT_END = 9090;
 const VPC_INTERNAL_RANGE = '10.128.0.0/9';
-const UBUNTU_IMAGE_FAMILY = 'ubuntu-2204-lts';
-const UBUNTU_IMAGE_PROJECT = 'ubuntu-os-cloud';
+const GCP_HARNESS_IMAGE_FAMILY = 'lagrange-distributed-harness';
 const DISK_SIZE_GB = 50;
 const DISK_TYPE = 'pd-standard';
 const NETWORK_TAG = 'ddb-test-node';
@@ -59,6 +58,7 @@ const CA_SUBJECT = '/CN=lagrange-distributed-test-ca';
 const SERVER_SUBJECT = '/CN=docker-server';
 const CLIENT_SUBJECT = '/CN=docker-client';
 const VM_CERT_DIR = '/etc/docker/tls';
+const VM_DOCKER_OVERRIDE_DIR = '/etc/systemd/system/docker.service.d';
 const RUNNER_IP_LOOKUP_URL = 'https://checkip.amazonaws.com';
 const GCLOUD_TIMEOUT_MS = 180000;
 
@@ -96,36 +96,42 @@ const PULUMI_CONFIG_PASSPHRASE_ENV = 'PULUMI_CONFIG_PASSPHRASE';
 const PULUMI_LOCAL_BACKEND_DIRNAME = '.pulumi-local-backend';
 const PULUMI_LOCAL_SECRETS_PASSPHRASE = 'lagrange-distributed-local';
 
-// dockerd installs with TLS enforced; certs land in VM_CERT_DIR via scp after
-// boot, then docker is restarted to pick them up.
-const STARTUP_SCRIPT_DOCKER_INSTALL = [
-  '#!/bin/bash',
-  'set -e',
-  'apt-get update -y',
-  'apt-get install -y docker.io',
-  `mkdir -p ${VM_CERT_DIR}`,
-  'mkdir -p /etc/systemd/system/docker.service.d',
-  'cat > /etc/systemd/system/docker.service.d/override.conf << EOF',
-  '[Service]',
-  'ExecStart=',
-  'ExecStart=/usr/bin/dockerd -H fd:// ' +
-  `-H tcp://0.0.0.0:${DOCKER_DEFAULTS.remotePort} ` +
-  '--tlsverify ' +
-  `--tlscacert=${VM_CERT_DIR}/ca.pem ` +
-  `--tlscert=${VM_CERT_DIR}/server-cert.pem ` +
-  `--tlskey=${VM_CERT_DIR}/server-key.pem`,
-  'EOF',
-  'systemctl daemon-reload',
-  'systemctl enable docker',
-  // Do NOT start docker yet: it has no certs. The provisioner restarts it
-  // after pushing certificates.
-].join('\n');
+function harnessImageSource(project) {
+  return `projects/${project}/global/images/family/` +
+    GCP_HARNESS_IMAGE_FAMILY;
+}
 
 function run(cmd, args, options = {}) {
   return execFileSync(cmd, args, {
     encoding: 'utf8',
     timeout: GCLOUD_TIMEOUT_MS,
     ...options,
+  });
+}
+
+// Async variant for the image-distribution fan-out: scp/load to every VM
+// concurrently instead of serially, which dominates provisioning wall-time.
+function runAsync(cmd, args, options = {}) {
+  return new Promise((resolvePromise, rejectPromise) => {
+    execFile(
+      cmd,
+      args,
+      {encoding: 'utf8', timeout: GCLOUD_TIMEOUT_MS, ...options},
+      (error, stdout, stderr) => {
+        if (error) {
+          error.stderr = stderr;
+          rejectPromise(error);
+          return;
+        }
+        resolvePromise(stdout);
+      },
+    );
+  });
+}
+
+function wait(durationMs) {
+  return new Promise((resolvePromise) => {
+    setTimeout(resolvePromise, durationMs);
   });
 }
 
@@ -224,6 +230,9 @@ class GCPProvisioner {
       }
     } catch (_err) {
       // fall through to internal-only
+      process.stderr.write(
+        'GCP provisioner: runner public IP lookup failed: ' +
+        String(_err?.message || _err) + '\n');
     }
     process.stderr.write(
       'GCP provisioner: could not determine runner public IP; restricting ' +
@@ -332,7 +341,7 @@ class GCPProvisioner {
           tags: [NETWORK_TAG],
           bootDisk: {
             initializeParams: {
-              image: `projects/${UBUNTU_IMAGE_PROJECT}/global/images/family/${UBUNTU_IMAGE_FAMILY}`,
+              image: harnessImageSource(project),
               size: DISK_SIZE_GB,
               type: DISK_TYPE,
             },
@@ -341,7 +350,6 @@ class GCPProvisioner {
             network: network.selfLink,
             accessConfigs: [{}],
           }],
-          metadataStartupScript: STARTUP_SCRIPT_DOCKER_INSTALL,
           scheduling: {
             preemptible,
             automaticRestart: !preemptible,
@@ -388,7 +396,7 @@ class GCPProvisioner {
     this._vmNames = result.outputs.instanceNames.value;
     this._provisionedAtMs = Date.now();
     try {
-      const clientTls = this._distributeCertificates(ips);
+      const clientTls = await this._distributeCertificates(ips);
       return {
         hosts: arrayMap(
           ips,
@@ -425,19 +433,26 @@ class GCPProvisioner {
       }
     } catch (_err) {
       // Swallow: the original provisioning error takes precedence.
+      process.stderr.write(
+        'GCP provisioner: best-effort stack destroy after provisioning ' +
+        'failure also failed (infra may leak): ' +
+        String(_err?.message || _err) + '\n');
     }
     if (this._certDir) {
       try {
         fs.rmSync(this._certDir, {recursive: true, force: true});
       } catch (_err) {
         // Best-effort.
+        process.stderr.write(
+          'GCP provisioner: cert dir cleanup failed: ' +
+          String(_err?.message || _err) + '\n');
       }
       this._certDir = null;
     }
   }
 
-  _gcloudScp(vmName, local, remote) {
-    return run('gcloud', [
+  _gcloudScpAsync(vmName, local, remote) {
+    return runAsync('gcloud', [
       'compute', 'scp',
       '--project', this._project,
       '--zone', this._zone,
@@ -447,8 +462,8 @@ class GCPProvisioner {
     ]);
   }
 
-  _gcloudSsh(vmName, remoteCmd) {
-    return run('gcloud', [
+  _gcloudSshAsync(vmName, remoteCmd) {
+    return runAsync('gcloud', [
       'compute', 'ssh',
       '--project', this._project,
       '--zone', this._zone,
@@ -458,37 +473,22 @@ class GCPProvisioner {
     ]);
   }
 
-  // Wait until the VM's guest agent answers SSH AND the startup script has
-  // actually installed the docker.service unit. stack.up() returns as soon as
-  // the instance exists — well before apt finishes — so without this the cert
-  // push races the package install (docker.service not found) and aborts the
-  // run. A single SSH attempt does both: it loops on the VM until the unit
-  // exists (bounded), and the gcloud call itself fails until SSH keys/agent
-  // are ready, which the retry loop absorbs.
-  _waitForVmReady(vmName) {
+  // stack.up() returns as soon as the image-backed instance exists, before its
+  // guest agent necessarily accepts SSH. Probe both SSH and the baked Docker
+  // unit. All VMs run this wait concurrently during certificate distribution.
+  async _waitForVmReady(vmName) {
     const deadline = Date.now() + VM_READY_TIMEOUT_MS;
-    // Wait for the dpkg lock to clear AND the docker unit to be installed,
-    // bounded per-attempt so a stuck apt mirror can't hang the gcloud call.
     const probe =
-      'ok=0; ' +
-      'for i in $(seq 1 25); do ' +
-      '  if ! sudo fuser /var/lib/dpkg/lock-frontend >/dev/null 2>&1 && ' +
-      '     systemctl list-unit-files docker.service >/dev/null 2>&1 && ' +
-      '     systemctl cat docker.service >/dev/null 2>&1; then ok=1; break; ' +
-      '  fi; sleep 5; done; ' +
-      '[ "$ok" = 1 ] && echo ready';
+      'systemctl list-unit-files docker.service >/dev/null 2>&1 && ' +
+      'systemctl cat docker.service >/dev/null 2>&1 && echo ready';
     let lastErr = null;
     while (Date.now() < deadline) {
       try {
-        this._gcloudSsh(vmName, probe);
+        await this._gcloudSshAsync(vmName, probe);
         return;
       } catch (err) {
         lastErr = err;
-        const end = Date.now() + VM_READY_POLL_MS;
-        while (Date.now() < end) {
-          // busy-wait keeps this method synchronous like the rest of the
-          // provisioning path (execFileSync-based).
-        }
+        await wait(VM_READY_POLL_MS);
       }
     }
     throw new Error(
@@ -501,21 +501,27 @@ class GCPProvisioner {
   // VM, then start docker and verify it is serving. Returns the client TLS
   // material for the harness. Any per-VM failure throws so provisioning fails
   // loudly at the point of cause rather than as an opaque TLS error later.
-  _distributeCertificates(externalIps) {
+  async _distributeCertificates(externalIps) {
     const dir = this._certDir;
     const client = this._generateSignedCert('client', CLIENT_SUBJECT, null);
-    externalIps.forEach((ip, i) => {
+    const serverCertificates = arrayMap(externalIps, (ip, i) =>
+      this._generateSignedCert(
+        `server-${i}`, SERVER_SUBJECT, [ip, '127.0.0.1']),
+    );
+    await Promise.all(arrayMap(externalIps, async (_ip, i) => {
       const vmName = this._vmNames[i];
-      const server = this._generateSignedCert(
-        `server-${i}`, SERVER_SUBJECT, [ip, '127.0.0.1']);
-      this._waitForVmReady(vmName);
-      this._gcloudSsh(
+      const server = serverCertificates[i];
+      await this._waitForVmReady(vmName);
+      await this._gcloudSshAsync(
         vmName, `sudo mkdir -p ${VM_CERT_DIR} && sudo chmod 755 ${VM_CERT_DIR}`,
       );
-      this._gcloudScp(vmName, path.join(dir, 'ca.pem'), '/tmp/ca.pem');
-      this._gcloudScp(vmName, server.certPath, '/tmp/server-cert.pem');
-      this._gcloudScp(vmName, server.keyPath, '/tmp/server-key.pem');
-      this._gcloudSsh(
+      await this._gcloudScpAsync(
+        vmName, path.join(dir, 'ca.pem'), '/tmp/ca.pem');
+      await this._gcloudScpAsync(
+        vmName, server.certPath, '/tmp/server-cert.pem');
+      await this._gcloudScpAsync(
+        vmName, server.keyPath, '/tmp/server-key.pem');
+      await this._gcloudSshAsync(
         vmName,
         'sudo mv /tmp/ca.pem /tmp/server-cert.pem /tmp/server-key.pem ' +
         `${VM_CERT_DIR}/ && ` +
@@ -524,12 +530,23 @@ class GCPProvisioner {
         `${VM_CERT_DIR}/server-cert.pem && ` +
         `sudo test -s ${VM_CERT_DIR}/server-key.pem && ` +
         `sudo test -s ${VM_CERT_DIR}/ca.pem && ` +
-        'sudo systemctl restart docker && ' +
+        `sudo mkdir -p ${VM_DOCKER_OVERRIDE_DIR} && ` +
+        'printf \'%s\\n\' \'[Service]\' \'ExecStart=\' ' +
+        '\'ExecStart=/usr/bin/dockerd -H fd:// ' +
+        `-H tcp://0.0.0.0:${DOCKER_PORT} --tlsverify ` +
+        `--tlscacert=${VM_CERT_DIR}/ca.pem ` +
+        `--tlscert=${VM_CERT_DIR}/server-cert.pem ` +
+        `--tlskey=${VM_CERT_DIR}/server-key.pem' | ` +
+        `sudo tee ${VM_DOCKER_OVERRIDE_DIR}/override.conf >/dev/null && ` +
+        'sudo systemctl daemon-reload && ' +
+        'sudo systemctl restart docker || { ' +
+        'sudo systemctl status docker --no-pager; ' +
+        'sudo journalctl -u docker --no-pager -n 80; exit 1; }; ' +
         // Verify the daemon is actually serving before we hand its address
         // back; surfaces a broken cert/config here instead of downstream.
         'sudo systemctl is-active --quiet docker',
       );
-    });
+    }));
     return {
       ca: fs.readFileSync(path.join(dir, 'ca.pem'), 'utf8'),
       cert: fs.readFileSync(client.certPath, 'utf8'),
@@ -545,39 +562,42 @@ class GCPProvisioner {
    * Must be called after provision().
    * @param {string} image - Image tag as it exists in the local daemon
    */
-  installImage(image) {
+  // Compress the image tarball and fan out scp/load to every VM concurrently.
+  // The uncompressed docker-save tarball for distributed-db:test is ~341MB but
+  // gzips to ~114MB (the Docker-Hub compressed size is ~68MB); shipping gzip
+  // and loading in parallel cuts per-run distribution from ~30min to ~2min.
+  async installImage(image) {
     if (this._vmNames.length === 0) {
       throw new Error(
         'installImage requires provision() to have completed first',
       );
     }
-    const tarball = path.join(
-      fs.mkdtempSync(path.join(os.tmpdir(), 'lagrange-image-')),
-      'image.tar',
-    );
+    const tempDir = fs.mkdtempSync(path.join(os.tmpdir(), 'lagrange-image-'));
+    const rawTarball = path.join(tempDir, 'image.tar');
+    const tarball = `${rawTarball}.gz`;
     try {
-      // docker save streams the tarball to stdout; redirect to a file.
-      const fd = fs.openSync(tarball, 'w');
-      try {
-        run('docker', ['save', image], {stdio: ['ignore', fd, 'inherit']});
-      } finally {
-        fs.closeSync(fd);
-      }
-      for (const vmName of this._vmNames) {
-        this._gcloudScp(vmName, tarball, '/tmp/lagrange-image.tar');
+      // Separate argv-safe commands preserve docker-save failures and avoid
+      // interpreting the image name or temporary path as shell syntax.
+      run('docker', ['save', '--output', rawTarball, image]);
+      run('gzip', ['-1', rawTarball]);
+      await Promise.all(arrayMap(this._vmNames, async (vmName) => {
+        await this._gcloudScpAsync(vmName, tarball, '/tmp/lagrange-image.tar.gz');
         // Always remove the remote tarball, even if docker load fails, so a
-        // multi-GB artifact is never orphaned on the VM's disk.
-        this._gcloudSsh(
+        // multi-hundred-MB artifact is never orphaned on the VM's disk.
+        await this._gcloudSshAsync(
           vmName,
-          'sudo docker load -i /tmp/lagrange-image.tar; ' +
-          'rc=$?; rm -f /tmp/lagrange-image.tar; exit $rc',
+          'sudo docker load -i /tmp/lagrange-image.tar.gz; ' +
+          'rc=$?; rm -f /tmp/lagrange-image.tar.gz; exit $rc',
         );
-      }
+      }));
     } finally {
       try {
-        fs.rmSync(path.dirname(tarball), {recursive: true, force: true});
+        fs.rmSync(tempDir, {recursive: true, force: true});
       } catch (_err) {
         // Best-effort tarball cleanup.
+        process.stderr.write(
+          'GCP provisioner: local image tarball cleanup failed: ' +
+          String(_err?.message || _err) + '\n');
       }
     }
   }
@@ -604,6 +624,9 @@ class GCPProvisioner {
         fs.rmSync(this._certDir, {recursive: true, force: true});
       } catch (_err) {
         // Best-effort cert cleanup.
+        process.stderr.write(
+          'GCP provisioner: cert dir cleanup failed: ' +
+          String(_err?.message || _err) + '\n');
       }
       this._certDir = null;
     }
@@ -651,4 +674,4 @@ class GCPProvisioner {
   }
 }
 
-export {GCPProvisioner};
+export {GCP_HARNESS_IMAGE_FAMILY, GCPProvisioner, harnessImageSource};

@@ -54,6 +54,7 @@ const FORWARDED_HOST_ENV_KEYS = Object.freeze([
   'LAGRANGE_DEBUG_LOGS',
   'LAGRANGE_CAPTURE_LOGS',
   'LAGRANGE_RAFT_SNAPSHOT_THRESHOLD',
+  'LAGRANGE_LOOP_GAP_PROFILE',
 ]);
 const LAGRANGE_ENV_PREFIX = 'LAGRANGE_';
 const arrayIncludes = Function.call.bind(Array.prototype.includes);

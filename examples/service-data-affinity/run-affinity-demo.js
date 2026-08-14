@@ -51,7 +51,7 @@
 
 import {execFile, spawn} from 'node:child_process';
 import {createWriteStream, existsSync} from 'node:fs';
-import {mkdir, readdir, rm, stat} from 'node:fs/promises';
+import {mkdir, readdir, rm, stat, writeFile} from 'node:fs/promises';
 import {promisify} from 'node:util';
 import {resolve} from 'node:path';
 import {setTimeout as sleep} from 'node:timers/promises';
@@ -70,6 +70,9 @@ import {
 import {
   collectHostSchedulingEvidence,
 } from './host-scheduling-evidence.js';
+import {
+  startGcpAffinityCluster,
+} from './gcp-cluster-provider.js';
 import {
   assessAffinityDemoCompletion,
   buildWeightedLocalitySnapshot,
@@ -90,8 +93,12 @@ const BASE_REST_PORT = 8080;
 const BASE_ADMIN_PORT = 8081;
 const PORT_STRIDE = 4;
 const CLUSTER_DATA_ROOT = 'data/examples/service-data-affinity-demo';
-const TARGET = `ws://127.0.0.1:${BASE_ADMIN_PORT}/api/admin/stream`;
-const LOAD_TARGET = `${TARGET}?lane=load`;
+// The admin target is normally the local seed (127.0.0.1); a GCP-mode run
+// rebinds it to the provisioned seed host's external IP before any use.
+let TARGET = `ws://127.0.0.1:${BASE_ADMIN_PORT}/api/admin/stream`;
+let LOAD_TARGET = `${TARGET}?lane=load`;
+const GCP_MODE_ENV = 'LAGRANGE_AFFINITY_DEMO_GCP';
+const GCP_MODE_FLAG = '--gcp';
 const CLUSTER_FORM_TIMEOUT_MS = 180000;
 const POLL_INTERVAL_MS = 2000;
 const OBSERVE_INTERVAL_MS = 10000;
@@ -108,6 +115,82 @@ const SCHEMA_ADMISSION_WAIT_MESSAGE =
   '      Waiting for production schema admission...';
 const SCHEMA_ADMISSION_SUCCESS_PREFIX =
   '      Schema mutation admitted after stable control snapshots ';
+const DEMO_CONSTANTS = Object.freeze({
+  SEED_FLAG: '--seed',
+  ADMIN_QUERY_TIMEOUT_MS: 15000,
+  ADMIN_WAIT_LABEL: 'seed admin endpoint',
+  ADMIN_HEALTH_QUERY: 'SELECT 1',
+  SQL_ESCAPED_SINGLE_QUOTE: '\'\'',
+  CONFIG_INSERT_PREFIX:
+    'INSERT INTO config (config_key, config_value, value_type, ' +
+    'requires_restart, description, default_value, updated_by, ' +
+    'updated_at, created_at) VALUES (',
+  CONFIG_VALUE_TYPE: 'json',
+  SQL_FALSE: '0',
+  ACCESS_POLICY_DESCRIPTION: 'Runtime service data access policy',
+  EMPTY_JSON_OBJECT: '{}',
+  ACCESS_POLICY_UPDATED_BY: 'affinity-demo',
+  SQL_LIST_SEPARATOR: ', ',
+  SQL_CLOSE_PAREN: ')',
+  SERVICE_INSERT_PREFIX: 'INSERT INTO service_definitions (',
+  PARTITION_SERVICE_TYPE: 'partition',
+  REDUCE_SLOT_QUERY:
+    'SELECT slot_id, replica_id, lease_expires_at, partial_json, ',
+  NODES_QUERY: 'SELECT node_id, latency_group_id FROM nodes',
+  PARTITIONS_QUERY: 'SELECT partition_id, leader_node_id FROM partitions',
+  SERVICES_QUERY:
+    'SELECT partition_id, node_id, service_type, status FROM services',
+  MILLISECONDS_PER_SECOND: 1000,
+  LOCALITY_DECIMAL_PLACES: 3,
+  INITIAL_PLACEMENT_ERROR: 'service replicas were not initially placed',
+  NODE_STOP_POLL_MS: 250,
+  FORCE_STOP_SIGNAL: 'SIGKILL',
+  GRACEFUL_STOP_SIGNAL: 'SIGTERM',
+  ARCHIVE_COMMAND: 'tar',
+  ARCHIVE_CREATE_FLAG: '-czf',
+  ARCHIVE_DIRECTORY_FLAG: '-C',
+  PARENT_DIRECTORY: '..',
+  PATH_SEPARATOR: '/',
+  ENABLED_VALUE: '1',
+  GCP_MODE: 'gcp',
+  LOCAL_MODE: 'local',
+  GCP_START_MESSAGE:
+    '      Provisioning GCP Docker hosts and starting the cluster remotely ' +
+    '(one node per VM)...',
+  BOOTSTRAP_MESSAGE: '[1/5] Bootstrapping the MovieLens schema on the seed...',
+  EXPANSION_SUFFIX: 'the existing data...',
+  CLUSTER_FORMED_MESSAGE: '      Cluster formed.',
+  PRELOAD_WAIT_MESSAGE:
+    '      Waiting for production ratings-load admission...',
+  PRELOAD_SUCCESS_PREFIX: '      Ratings load admitted (snapshot=',
+  LOAD_MESSAGE: '      Loading 100,000 ratings into the routable source...',
+  SPLIT_WAIT_MESSAGE:
+    '      Waiting for ratings partitions to split and spread...',
+  DISTRIBUTED_SQL_MESSAGE:
+    '[3/5] Running Lagrange distributed grouped SQL...',
+  SERVICE_START_SUFFIX:
+    'harness, intrinsic data affinity): disjoint movie-id shards compute a ' +
+    'confidence-adjusted Bayesian ranking, publish 10 candidates each, and ' +
+    'slot 1 merges them)...',
+  COORDINATION_INSERT_COLUMNS:
+    '(slot_id, replica_id, lease_expires_at, partial_json, computed_at) ',
+  COORDINATION_INSERT_VALUES:
+    'VALUES (1, \'\', 0, \'[]\', 0), (2, \'\', 0, \'[]\', 0)',
+  AFFINITY_WAIT_MESSAGE:
+    '[5/5] Waiting for access attribution to teach placement where the ' +
+    'service data is (no affinity switch)...',
+  CONVERGED_PREFIX:
+    '\n      CONVERGED: intrinsic affinity reached the best production-',
+  REPLICAS_MOVED: 'replicas moved',
+  INITIAL_PLACEMENT_OPTIMAL: 'initial placement was already optimal',
+  EXCHANGE_PREFIX: '      Cross-replica exchange was bounded to ',
+  RANKING_SUFFIX: 'The confidence-adjusted top-10 is identical:\n',
+  SCORE_DECIMAL_PLACES: 4,
+  STOP_MESSAGE: 'Stopping cluster...',
+  SCRIPT_NAME: 'run-affinity-demo.js',
+  RESULT_MESSAGE: 'Affinity demo result:',
+  EMPTY_STRING: '',
+});
 
 // Config floor: partition.evaluationIntervalMs must be >= 60000.
 const PARTITION_EVAL_INTERVAL_MS = 60000;
@@ -166,7 +249,7 @@ async function startNode(index, dataRoot) {
   const args = ['src/index.js', '--data-dir', dataDir];
   if (index > 0) {
     env.SEED_NODE_ADDRESS = `localhost:${BASE_REST_PORT}`;
-    args.push('--seed', `localhost:${BASE_REST_PORT}`);
+    args.push(DEMO_CONSTANTS.SEED_FLAG, `localhost:${BASE_REST_PORT}`);
   }
   const child = spawn('node', args, {env, stdio: ['ignore', 'pipe', 'pipe']});
   child.stdout.pipe(logStream);
@@ -174,10 +257,14 @@ async function startNode(index, dataRoot) {
   return {index, process: child};
 }
 
-async function queryAdmin(sql, target = TARGET, timeoutMs = 15000) {
+async function queryAdmin(
+  sql,
+  target = TARGET,
+  timeoutMs = DEMO_CONSTANTS.ADMIN_QUERY_TIMEOUT_MS,
+) {
   const boundedTimeoutMs = Math.max(
     1,
-    Math.min(15000, Math.floor(timeoutMs)),
+    Math.min(DEMO_CONSTANTS.ADMIN_QUERY_TIMEOUT_MS, Math.floor(timeoutMs)),
   );
   const client = new AdminWsClient({target, timeoutMs: boundedTimeoutMs});
   try {
@@ -210,13 +297,24 @@ async function waitFor(label, predicate, timeoutMs) {
 }
 
 async function waitForAdmin() {
-  await waitFor('seed admin endpoint', async () => {
-    await queryRows('SELECT 1');
+  await waitFor(DEMO_CONSTANTS.ADMIN_WAIT_LABEL, async () => {
+    await queryRows(DEMO_CONSTANTS.ADMIN_HEALTH_QUERY);
     return true;
   }, CLUSTER_FORM_TIMEOUT_MS);
 }
 
 const MAX_JOIN_RESTARTS = 5;
+
+// GCP mode: the harness's createCluster already started and formed every
+// node; here we only confirm the membership view reports them active. The
+// remote VMs are dedicated and quiet, so there is no per-node respawn loop.
+async function waitForActiveNodesGcp(expectedCount) {
+  await waitFor(`${expectedCount} active nodes`, async () => {
+    const rows = await queryRows('SELECT node_id, status FROM nodes');
+    const active = rows.filter((r) => r.status === NODE_STATUS_ACTIVE);
+    return active.length >= expectedCount ? true : null;
+  }, CLUSTER_FORM_TIMEOUT_MS);
+}
 
 // Node processes are supervised like an orchestrator would: a joiner
 // that exhausts its (deliberately impatient) join retry budget and
@@ -253,7 +351,10 @@ async function waitForActiveNodes(expectedCount, nodes, dataRoot) {
 }
 
 function sqlQuote(value) {
-  return `'${String(value).replace(/'/g, '\'\'')}'`;
+  return `'${String(value).replace(
+    /'/g,
+    DEMO_CONSTANTS.SQL_ESCAPED_SINGLE_QUOTE,
+  )}'`;
 }
 
 async function deployQueryLoopService() {
@@ -286,19 +387,17 @@ async function deployQueryLoopService() {
     tenant_id: 'demo',
   });
   await queryRows(
-    'INSERT INTO config (config_key, config_value, value_type, ' +
-    'requires_restart, description, default_value, updated_by, ' +
-    'updated_at, created_at) VALUES (' + [
+    DEMO_CONSTANTS.CONFIG_INSERT_PREFIX + [
       sqlQuote(`runtime.access.service.${SERVICE_ID}`),
       sqlQuote(accessPolicy),
-      sqlQuote('json'),
-      '0',
-      sqlQuote('Runtime service data access policy'),
-      sqlQuote('{}'),
-      sqlQuote('affinity-demo'),
+      sqlQuote(DEMO_CONSTANTS.CONFIG_VALUE_TYPE),
+      DEMO_CONSTANTS.SQL_FALSE,
+      sqlQuote(DEMO_CONSTANTS.ACCESS_POLICY_DESCRIPTION),
+      sqlQuote(DEMO_CONSTANTS.EMPTY_JSON_OBJECT),
+      sqlQuote(DEMO_CONSTANTS.ACCESS_POLICY_UPDATED_BY),
       String(now),
       String(now),
-    ].join(', ') + ')',
+    ].join(DEMO_CONSTANTS.SQL_LIST_SEPARATOR) + DEMO_CONSTANTS.SQL_CLOSE_PAREN,
   );
   const runtimeConfig = JSON.stringify({
     sql: SCAN_SQL,
@@ -329,8 +428,9 @@ async function deployQueryLoopService() {
     sqlQuote(runtimeConfig), sqlQuote('active'), String(now), String(now),
   ];
   await queryRows(
-    `INSERT INTO service_definitions (${columns.join(', ')}) ` +
-    `VALUES (${values.join(', ')})`,
+    DEMO_CONSTANTS.SERVICE_INSERT_PREFIX +
+    `${columns.join(DEMO_CONSTANTS.SQL_LIST_SEPARATOR)}) VALUES (` +
+    `${values.join(DEMO_CONSTANTS.SQL_LIST_SEPARATOR)})`,
   );
 }
 
@@ -352,7 +452,7 @@ async function describeDataNodes(accessedPartitionIds = null) {
   );
   const holderNodeIds = new Set();
   for (const row of services) {
-    if (row.service_type === 'partition' &&
+    if (row.service_type === DEMO_CONSTANTS.PARTITION_SERVICE_TYPE &&
         row.status === NODE_STATUS_ACTIVE &&
         ratingsPartitionIds.has(row.partition_id) &&
         row.node_id) {
@@ -390,7 +490,7 @@ async function describeAttribution() {
 async function describeReduceSlots() {
   try {
     return await queryRows(
-      'SELECT slot_id, replica_id, lease_expires_at, partial_json, ' +
+      DEMO_CONSTANTS.REDUCE_SLOT_QUERY +
       `computed_at FROM ${COORDINATION_TABLE}`,
     );
   } catch {
@@ -420,11 +520,9 @@ async function describeTopN() {
 
 async function describeWeightedLocality(placements, attributionRows) {
   const [nodes, partitions, services] = await Promise.all([
-    queryRows('SELECT node_id, latency_group_id FROM nodes'),
-    queryRows('SELECT partition_id, leader_node_id FROM partitions'),
-    queryRows(
-      'SELECT partition_id, node_id, service_type, status FROM services',
-    ),
+    queryRows(DEMO_CONSTANTS.NODES_QUERY),
+    queryRows(DEMO_CONSTANTS.PARTITIONS_QUERY),
+    queryRows(DEMO_CONSTANTS.SERVICES_QUERY),
   ]);
   return buildWeightedLocalitySnapshot({
     serviceId: SERVICE_ID,
@@ -492,9 +590,13 @@ async function observeDemoPhase(
     const placementLabel = state.placements.map((placement) =>
       placement.nodeId.slice(0, 8));
     console.log(
-      `      ${label} t+${Math.round((Date.now() - start) / 1000)}s ` +
+      `      ${label} t+${Math.round(
+        (Date.now() - start) / DEMO_CONSTANTS.MILLISECONDS_PER_SECOND,
+      )}s ` +
       `replicas=${state.placements.length} ` +
-      `weightedLocality=${state.weightedLocality.localityRatio.toFixed(3)} ` +
+      `weightedLocality=${state.weightedLocality.localityRatio.toFixed(
+        DEMO_CONSTANTS.LOCALITY_DECIMAL_PLACES,
+      )} ` +
       `attributionRows=${state.attributionRows.length} ` +
       `partialReplicas=${state.assessment.partialReplicaCount} ` +
       `mergeCandidates=${state.assessment.mergeCandidateCount} ` +
@@ -517,7 +619,9 @@ async function observeDemoPhase(
     } else if (Date.now() - lastProgressAtMs > STALL_TIMEOUT_MS) {
       throw new Error(
         `${label} stalled with no observable progress for ` +
-        `${Math.round(STALL_TIMEOUT_MS / 1000)}s`,
+        `${Math.round(
+          STALL_TIMEOUT_MS / DEMO_CONSTANTS.MILLISECONDS_PER_SECOND,
+        )}s`,
       );
     }
   }
@@ -533,7 +637,7 @@ async function observeInitialPlacement() {
     }
     await sleep(OBSERVE_INTERVAL_MS);
   }
-  throw new Error('service replicas were not initially placed');
+  throw new Error(DEMO_CONSTANTS.INITIAL_PLACEMENT_ERROR);
 }
 
 function summarizeReduceSlots(reduceSlots) {
@@ -590,20 +694,20 @@ function isNodeProcessRunning(node) {
 
 async function awaitNodeProcessStop(node, deadline) {
   while (isNodeProcessRunning(node) && Date.now() < deadline) {
-    await sleep(250);
+    await sleep(DEMO_CONSTANTS.NODE_STOP_POLL_MS);
   }
   if (isNodeProcessRunning(node)) {
-    node.process.kill('SIGKILL');
+    node.process.kill(DEMO_CONSTANTS.FORCE_STOP_SIGNAL);
   }
 }
 
 async function stopNodes(nodes) {
   for (const node of nodes) {
     if (isNodeProcessRunning(node)) {
-      node.process.kill('SIGTERM');
+      node.process.kill(DEMO_CONSTANTS.GRACEFUL_STOP_SIGNAL);
     }
   }
-  const deadline = Date.now() + 15000;
+  const deadline = Date.now() + DEMO_CONSTANTS.ADMIN_QUERY_TIMEOUT_MS;
   for (const node of nodes) {
     await awaitNodeProcessStop(node, deadline);
   }
@@ -628,10 +732,11 @@ async function archivePreviousRun() {
   const stamp = new Date().toISOString().replace(/[:.]/g, '-');
   const archivePath = resolve(ARCHIVE_ROOT, `run-${stamp}.tar.gz`);
   try {
-    await execFileAsync('tar', [
-      '-czf', archivePath,
-      '-C', resolve(CLUSTER_DATA_ROOT, '..'),
-      CLUSTER_DATA_ROOT.split('/').pop(),
+    await execFileAsync(DEMO_CONSTANTS.ARCHIVE_COMMAND, [
+      DEMO_CONSTANTS.ARCHIVE_CREATE_FLAG, archivePath,
+      DEMO_CONSTANTS.ARCHIVE_DIRECTORY_FLAG,
+      resolve(CLUSTER_DATA_ROOT, DEMO_CONSTANTS.PARENT_DIRECTORY),
+      CLUSTER_DATA_ROOT.split(DEMO_CONSTANTS.PATH_SEPARATOR).pop(),
     ]);
     console.log(`      Archived previous run state to ${archivePath}`);
   } catch (error) {
@@ -652,15 +757,55 @@ async function archivePreviousRun() {
   }
 }
 
+// Resolve the requested cluster mode: default local node processes, or a
+// GCP-provisioned remote Docker cluster when --gcp / the env opt-in is set.
+function resolveClusterMode() {
+  return process.argv.includes(GCP_MODE_FLAG) ||
+    process.env[GCP_MODE_ENV] === DEMO_CONSTANTS.ENABLED_VALUE ?
+    DEMO_CONSTANTS.GCP_MODE :
+    DEMO_CONSTANTS.LOCAL_MODE;
+}
+
+// Start the seed + joiners and wait for the full active cluster. Returns a
+// handle {stop, harvestLogs}. In local mode this is the existing per-node
+// process supervision; in GCP mode the harness's createCluster owns the
+// node lifecycle and the seed admin target is rebound to the external IP.
+async function startClusterNodes(mode, nodes, dataRoot) {
+  if (mode === DEMO_CONSTANTS.GCP_MODE) {
+    console.log(DEMO_CONSTANTS.GCP_START_MESSAGE);
+    const gcp = await startGcpAffinityCluster({
+      verbose: true,
+      outputDir: dataRoot,
+    });
+    TARGET = gcp.target;
+    LOAD_TARGET = `${gcp.target}?lane=load`;
+    return {
+      cluster: gcp.cluster,
+      provisioner: gcp.provisioner,
+      stop: gcp.stop,
+    };
+  }
+  // Local mode: unchanged per-node process supervision.
+  return {
+    stop: () => stopNodes(nodes),
+    harvestLogs: async () => null,
+  };
+}
+
 async function runAffinityDemo({phaseEvidence = {}} = {}) {
+  const mode = resolveClusterMode();
   const nodes = [];
   await archivePreviousRun();
   await rm(CLUSTER_DATA_ROOT, {recursive: true, force: true});
   await mkdir(CLUSTER_DATA_ROOT, {recursive: true});
+  let clusterHandle = null;
 
   try {
-    console.log('[1/5] Bootstrapping the MovieLens schema on the seed...');
-    nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
+    console.log(DEMO_CONSTANTS.BOOTSTRAP_MESSAGE);
+    clusterHandle = await startClusterNodes(mode, nodes, CLUSTER_DATA_ROOT);
+    if (mode !== DEMO_CONSTANTS.GCP_MODE) {
+      nodes.push(await startNode(0, CLUSTER_DATA_ROOT));
+    }
     await waitForAdmin();
     // Bootstrap the two small coordination tables on the seed too. Their
     // schemas then scale out with the cluster instead of exercising unrelated
@@ -670,12 +815,17 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
 
     console.log(
       `[2/5] Expanding to ${NODE_COUNT} nodes (single zone) and spreading ` +
-      'the existing data...');
-    for (let i = 1; i < NODE_COUNT; i += 1) {
-      nodes.push(await startNode(i, CLUSTER_DATA_ROOT));
+      DEMO_CONSTANTS.EXPANSION_SUFFIX);
+    if (mode !== DEMO_CONSTANTS.GCP_MODE) {
+      for (let i = 1; i < NODE_COUNT; i += 1) {
+        nodes.push(await startNode(i, CLUSTER_DATA_ROOT));
+      }
+      await waitForActiveNodes(NODE_COUNT, nodes, CLUSTER_DATA_ROOT);
+    } else {
+      // createCluster already started and formed all nodes.
+      await waitForActiveNodesGcp(NODE_COUNT);
     }
-    await waitForActiveNodes(NODE_COUNT, nodes, CLUSTER_DATA_ROOT);
-    console.log('      Cluster formed.');
+    console.log(DEMO_CONSTANTS.CLUSTER_FORMED_MESSAGE);
     console.log(SCHEMA_ADMISSION_WAIT_MESSAGE);
     const schemaAdmission = await waitForAffinityDemoSchemaAdmission({
       target: TARGET,
@@ -698,7 +848,7 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     // enough nodes exist to satisfy its durable replica contract. The
     // production-wide 10 GiB default remains intact, so formation logs cannot
     // inherit the teaching threshold and become an unrelated preload blocker.
-    console.log('      Waiting for production ratings-load admission...');
+    console.log(DEMO_CONSTANTS.PRELOAD_WAIT_MESSAGE);
     const preloadAdmission = await waitForAffinityDemoPreloadAdmission({
       target: TARGET,
       query: ({target, sql, timeoutMs}) =>
@@ -710,15 +860,15 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     });
     phaseEvidence.preloadAdmission = preloadAdmission;
     console.log(
-      '      Ratings load admitted (snapshot=' +
+      DEMO_CONSTANTS.PRELOAD_SUCCESS_PREFIX +
       `${preloadAdmission.snapshot.state}, loadLane=` +
       `${preloadAdmission.loadLaneAdmission.state}).`,
     );
-    console.log('      Loading 100,000 ratings into the routable source...');
+    console.log(DEMO_CONSTANTS.LOAD_MESSAGE);
     const totalRows = await loadRatingsIntoLagrange({target: LOAD_TARGET});
     console.log(`      Loaded ${totalRows} ratings.`);
 
-    console.log('      Waiting for ratings partitions to split and spread...');
+    console.log(DEMO_CONSTANTS.SPLIT_WAIT_MESSAGE);
     const dataNodes = await waitFor(
       'ratings partitions on at least two nodes',
       async () => {
@@ -731,7 +881,7 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     console.log(
       `      Ratings partitions: ${dataNodes.partitionCount}, ` +
       `data on nodes: ${JSON.stringify([...dataNodes.holderNodeIds])}`);
-    console.log('[3/5] Running Lagrange distributed grouped SQL...');
+    console.log(DEMO_CONSTANTS.DISTRIBUTED_SQL_MESSAGE);
     const distributedSqlStart = Date.now();
     const aggregateRows = await queryRows(RATINGS_AGGREGATE_SQL);
     const referenceTopN = rankMovieQuality(aggregateRows).map((row, index) => ({
@@ -747,9 +897,7 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     console.log(
       `[4/5] Starting the ${SERVICE_ID} runtime service on the internal ` +
       `substrate (${SERVICE_REPLICA_COUNT} replicas pinned by the demo ` +
-      'harness, intrinsic data affinity): ' +
-      'disjoint movie-id shards compute a confidence-adjusted Bayesian ' +
-      'ranking, publish 10 candidates each, and slot 1 merges them)...');
+      DEMO_CONSTANTS.SERVICE_START_SUFFIX);
     await queryRows(CREATE_RESULT_TABLE_SQL);
     await queryRows(CREATE_COORDINATION_TABLE_SQL);
     await queryRows(
@@ -759,16 +907,15 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     );
     await queryRows(
       `INSERT INTO ${COORDINATION_TABLE} ` +
-      '(slot_id, replica_id, lease_expires_at, partial_json, computed_at) ' +
-      'VALUES (1, \'\', 0, \'[]\', 0), (2, \'\', 0, \'[]\', 0)',
+      DEMO_CONSTANTS.COORDINATION_INSERT_COLUMNS +
+      DEMO_CONSTANTS.COORDINATION_INSERT_VALUES,
     );
     const learnedPhaseStartedAt = Date.now();
     await deployQueryLoopService();
     const initial = await observeInitialPlacement();
 
     console.log(
-      '[5/5] Waiting for access attribution to teach placement where the ' +
-      'service data is (no affinity switch)...');
+      DEMO_CONSTANTS.AFFINITY_WAIT_MESSAGE);
     const learned = await observeDemoPhase(
       'learned-affinity', referenceTopN, learnedPhaseStartedAt,
       (state) => state.assessment.complete,
@@ -807,20 +954,22 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     const placementChanged = initialNodes.size !== learnedNodes.size ||
       [...initialNodes].some((nodeId) => !learnedNodes.has(nodeId));
     console.log(
-      '\n      CONVERGED: intrinsic affinity reached the best production-' +
-      `weighted placement (${placementChanged ? 'replicas moved' :
-        'initial placement was already optimal'}).`);
+      DEMO_CONSTANTS.CONVERGED_PREFIX +
+      `weighted placement (${placementChanged ? DEMO_CONSTANTS.REPLICAS_MOVED :
+        DEMO_CONSTANTS.INITIAL_PLACEMENT_OPTIMAL}).`);
     console.log(
-      '      Cross-replica exchange was bounded to ' +
+      DEMO_CONSTANTS.EXCHANGE_PREFIX +
       `${learned.assessment.mergeCandidateCount} partial candidates; ` +
       `distributed SQL returned ${aggregateRows.length} movie aggregates. ` +
-      'The confidence-adjusted top-10 is identical:\n');
+      DEMO_CONSTANTS.RANKING_SUFFIX);
     for (const row of learned.serviceTopN) {
       console.log(
         `        #${row.rank} movie ${row.group_key} ` +
-        `score=${Number(row.agg_value).toFixed(4)}`);
+        `score=${Number(row.agg_value).toFixed(
+          DEMO_CONSTANTS.SCORE_DECIMAL_PLACES,
+        )}`);
     }
-    console.log('');
+    console.log(DEMO_CONSTANTS.EMPTY_STRING);
     return {
       converged: learned.assessment.complete,
       schemaAdmission,
@@ -852,24 +1001,44 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
       })),
       top10: learned.serviceTopN.map((r) =>
         `#${r.rank} movie ${r.group_key} score=` +
-        Number(r.agg_value).toFixed(4)),
+        Number(r.agg_value).toFixed(DEMO_CONSTANTS.SCORE_DECIMAL_PLACES)),
     };
   } finally {
-    console.log('Stopping cluster...');
-    await stopNodes(nodes);
+    console.log(DEMO_CONSTANTS.STOP_MESSAGE);
+    let remoteLogs = null;
+    if (clusterHandle) {
+      if (typeof clusterHandle.harvestLogs === 'function') {
+        remoteLogs = await clusterHandle.harvestLogs();
+      }
+      await clusterHandle.stop();
+    } else {
+      await stopNodes(nodes);
+    }
     // Harvest after stop so each node's log is fully flushed. Over-budget host
-    // scheduling marks the report non-measuring rather than red.
+    // scheduling marks the report non-measuring rather than red. In GCP mode
+    // the node logs are written into the local data root so the same budget
+    // evaluator reads them; dedicated VMs are not expected to trip it.
+    if (remoteLogs) {
+      // Host-scheduling evidence reads node-0..node-(N-1).log; harness node
+      // IDs are UUIDs, so write the logs by cluster index instead.
+      for (let index = 0; index < remoteLogs.length; index += 1) {
+        await writeFile(
+          resolve(CLUSTER_DATA_ROOT, `node-${index}.log`),
+          remoteLogs[index].text || DEMO_CONSTANTS.EMPTY_STRING,
+        );
+      }
+    }
     phaseEvidence.hostScheduling =
       await collectHostSchedulingEvidence(CLUSTER_DATA_ROOT, NODE_COUNT);
   }
 }
 
-if (process.argv[1]?.includes('run-affinity-demo.js')) {
+if (process.argv[1]?.includes(DEMO_CONSTANTS.SCRIPT_NAME)) {
   const phaseEvidence = {};
   runAffinityDemo({phaseEvidence})
     .then(async (result) => {
       await writeAffinityDemoLiveReport(result, null, phaseEvidence);
-      console.log('Affinity demo result:');
+      console.log(DEMO_CONSTANTS.RESULT_MESSAGE);
       console.log(JSON.stringify(result, null, 2));
       process.exitCode = result.converged ? 0 : 1;
     })
