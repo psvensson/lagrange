@@ -48,11 +48,11 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 27
+## Open quests — 29
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
-| formation-ledger-spread-voter-ready-readiness-closure | product | 3 | 0 | 2026-08-15 | — |
+| formation-ledger-spread-voter-ready-readiness-closure | product | 12 | 0 | 2026-08-15 | — |
 | formation-release-priority-observation-owner | product | 2 | 0 | 2026-07-22 ⚠ stale | — |
 | gcp-harness-custom-image-provisioning | product | 0 | 0 | 2026-08-14 | — |
 | github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 ⚠ stale | — |
@@ -69,6 +69,8 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | projection-readiness-producer-copy-closure | product | 1 | 0 | 2026-08-15 | — |
 | publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 ⚠ stale | — |
 | raft-follower-append-sqlite-starvation-relief | product | 8 | 0 | 2026-08-14 | — |
+| readiness-evaluation-generation-floor-closure | product | 1 | 0 | 2026-08-15 | — |
+| readiness-evaluation-generation-floor-closure-v2 | product | 0 | 0 | 2026-08-15 | — |
 | readiness-formation-liveness-circularity-closure | product | 1 | 0 | 2026-08-15 | — |
 | readiness-planning-hostile-iterator-and-contract-closure | product | 4 | 0 | 2026-08-14 | — |
 | readiness-planning-own-data-consumer-closure | product | 3 | 0 | 2026-08-14 | — |

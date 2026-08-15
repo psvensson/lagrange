@@ -444,11 +444,38 @@ class ReadinessPlanningSnapshotOwner {
     return !formationOwnerKey || formationOwnerKey === ownerKey;
   }
 
+  // The floored planning generation from the service (null when the service
+  // or its cache cannot version tables — sealed stubs keep exact token
+  // semantics). Every source-table write reaches this key within one 250ms
+  // latch window, the same bound every planning-layer memo below already
+  // accepts; token-only inputs (transport fingerprint, owner-dependency
+  // generations) stay exact via the token comparison and the per-read
+  // live-veto check.
+  readCompletedSourceGeneration() {
+    return typeof this.service?.readPlanningProjectionSourceGeneration ===
+      'function' ?
+      this.service.readPlanningProjectionSourceGeneration(this.now()) :
+      null;
+  }
+
+  matchesCompletedSourceGeneration(completed) {
+    return completed.sourceGeneration !== null &&
+      completed.sourceGeneration !== undefined &&
+      completed.sourceGeneration === this.readCompletedSourceGeneration();
+  }
+
   canReuseCompletedSnapshot(ownerKey, completed, token, buildOptionsKey) {
     return !token.generationSaturated &&
       completed.tokenStatus === TOKEN_STATUS.CURRENT &&
       completed.buildOptionsKey === buildOptionsKey &&
-      this.tokensEqual(completed.capturedToken, token) &&
+      (this.tokensEqual(completed.capturedToken, token) ||
+        // Floored reuse: under formation-rate churn the exact token rotates
+        // between consecutive reads (live: every readiness evaluation
+        // rebuilt its snapshot plus a full projection-evidence
+        // normalization — the 31.4% inclusive residual in the archived
+        // profiled run 20-55-51-160Z). One completed snapshot per floored
+        // generation caps that at one rebuild per window.
+        this.matchesCompletedSourceGeneration(completed)) &&
       this.isCompletedSnapshotLive(ownerKey, completed);
   }
 
@@ -569,6 +596,7 @@ class ReadinessPlanningSnapshotOwner {
       snapshot,
       capturedToken,
       buildOptionsKey,
+      sourceGeneration: this.readCompletedSourceGeneration(),
       tokenStatus: current ? TOKEN_STATUS.CURRENT : TOKEN_STATUS.STALE,
       completedAtMs,
       positiveDecisionLiveVeto: this.capturePositiveDecisionLiveVeto(

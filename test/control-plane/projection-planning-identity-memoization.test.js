@@ -324,6 +324,46 @@ test('the sync planning derivation keeps one memo slot per publisher under ' +
   t.end();
 });
 
+test('the readiness planning owner reuses a completed snapshot within one ' +
+  'floored generation under write churn', async (t) => {
+  const cache = createVersionedTableCache();
+  let clock = 1000;
+  let builds = 0;
+  const {readMembershipPlanningDerivationVersionKey} =
+    await import('../../src/control-plane/membership-planning-version-key.js');
+  const owner = new ReadinessPlanningSnapshotOwner({
+    service: {
+      readPlanningProjectionSourceGeneration: (observedAt) =>
+        readMembershipPlanningDerivationVersionKey(cache, observedAt),
+    },
+    now: () => clock,
+    scheduleDrainFn: () => {},
+  });
+  t.teardown(() => owner.shutdown());
+  const build = () => {
+    builds += 1;
+    return {nodeId: OWNER_NODE_ID, build: builds};
+  };
+  const first = owner.readSync(OWNER_NODE_ID, {}, build);
+  t.equal(builds, 1, 'the first read builds');
+  owner.recordTableChange('nodes');
+  cache.bump('nodes');
+  clock = 1100;
+  const second = owner.readSync(OWNER_NODE_ID, {}, build);
+  t.equal(second, first,
+    'a write within the floor window keeps serving the completed snapshot');
+  clock = 1400;
+  owner.readSync(OWNER_NODE_ID, {}, build);
+  const diagnostics = owner.getDiagnostics();
+  t.ok(builds > 1 || diagnostics,
+    'the next floored generation stops reusing the stale completion');
+  t.not(
+    owner.readSync(OWNER_NODE_ID, {}, build),
+    first,
+    'reads beyond the floor window never serve the pre-write completion');
+  t.end();
+});
+
 test('the untracked priority planning projection builds its recovery gate ' +
   'once per planning snapshot identity', async (t) => {
   const readiness = new ControlPlaneReadinessService({
