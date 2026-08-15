@@ -25,9 +25,26 @@ const LISTENER_PORT_OVERRIDE_PATH = Object.freeze({
   ADMIN_WEBSOCKET: Object.freeze(['admin', 'websocketPort']),
   TRANSPORT_WEBSOCKET: Object.freeze(['node', 'wsPort']),
 });
+const LOCAL_STR_VALUE = 'value';
+const arrayIsArray = Array.isArray;
+const objectEntries = Object.entries;
+const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
+const objectHasOwn = Object.hasOwn;
+const objectKeys = Object.keys;
+const DANGEROUS_CONFIGURATION_KEY = Object.freeze({
+  CONSTRUCTOR: 'constructor',
+  PROTOTYPE: 'prototype',
+  PROTO_SETTER: '__proto__',
+});
+
+function isDangerousConfigurationKey(key) {
+  return key === DANGEROUS_CONFIGURATION_KEY.PROTO_SETTER ||
+    key === DANGEROUS_CONFIGURATION_KEY.CONSTRUCTOR ||
+    key === DANGEROUS_CONFIGURATION_KEY.PROTOTYPE;
+}
 
 const LEGACY_ENV_NAME_BY_CANONICAL = Object.freeze(Object.fromEntries(
-  Object.entries(LEGACY_ENV_ALIASES)
+  objectEntries(LEGACY_ENV_ALIASES)
     .map(([legacy, canonical]) => [canonical, legacy]),
 ));
 
@@ -38,13 +55,13 @@ const LEGACY_ENV_NAME_BY_CANONICAL = Object.freeze(Object.fromEntries(
  * @return {{value: (string|undefined), legacyName: (string|null)}}
  *   The resolved value, and the legacy name iff it supplied the value.
  */
-function resolveEnvironmentValue(canonicalName) {
-  const canonical = process.env[canonicalName];
+function resolveEnvironmentValue(canonicalName, environment = process.env) {
+  const canonical = environment[canonicalName];
   if (canonical !== undefined) {
     return {value: canonical, legacyName: null};
   }
   const legacyName = LEGACY_ENV_NAME_BY_CANONICAL[canonicalName] ?? null;
-  const legacy = legacyName === null ? undefined : process.env[legacyName];
+  const legacy = legacyName === null ? undefined : environment[legacyName];
   return legacy === undefined ?
     {value: undefined, legacyName: null} :
     {value: legacy, legacyName};
@@ -52,9 +69,10 @@ function resolveEnvironmentValue(canonicalName) {
 
 function hasOwnPath(value, pathParts) {
   let current = value;
-  for (const part of pathParts) {
+  for (let index = 0; index < pathParts.length; index++) {
+    const part = pathParts[index];
     if (!current || typeof current !== 'object' ||
-        !Object.hasOwn(current, part)) {
+        !objectHasOwn(current, part)) {
       return false;
     }
     current = current[part];
@@ -103,19 +121,29 @@ class ConfigurationManager {
    * Initialize the configuration manager.
    * Loads environment variables and validates configuration.
    * @param {Object} overrides - Optional configuration overrides.
+   * @param {Object} options - Initialization options.
+   * @param {Object} options.environment - Explicit environment snapshot.
+   * @param {Object} options.finalOverrides - Highest-precedence overrides.
    * @throws {Error} If configuration validation fails.
    */
-  initialize(overrides = {}) {
+  initialize(overrides = {}, options = {}) {
+    const environment = options.environment || process.env;
     const listenerPortOverrides = {
       adminWebSocketPort:
-        resolveEnvironmentValue(LISTENER_PORT_ENV.ADMIN_WEBSOCKET).value !==
+        resolveEnvironmentValue(
+          LISTENER_PORT_ENV.ADMIN_WEBSOCKET,
+          environment,
+        ).value !==
           undefined ||
         hasOwnPath(
           overrides,
           LISTENER_PORT_OVERRIDE_PATH.ADMIN_WEBSOCKET,
         ),
       transportWebSocketPort:
-        resolveEnvironmentValue(LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET)
+        resolveEnvironmentValue(
+          LISTENER_PORT_ENV.TRANSPORT_WEBSOCKET,
+          environment,
+        )
           .value !== undefined ||
         hasOwnPath(
           overrides,
@@ -123,10 +151,11 @@ class ConfigurationManager {
         ),
     };
     // Load environment variables
-    this.loadEnvironmentVariables();
+    this.loadEnvironmentVariables(environment);
 
     // Apply overrides
     this.applyOverrides(overrides);
+    this.applyOverrides(options.finalOverrides || {});
 
     this.applyListenerPortModel(listenerPortOverrides);
 
@@ -172,9 +201,11 @@ class ConfigurationManager {
    * Load configuration from environment variables.
    * @private
    */
-  loadEnvironmentVariables() {
-    for (const [envVar, configPath] of Object.entries(ENV_MAPPINGS)) {
-      const {value, legacyName} = resolveEnvironmentValue(envVar);
+  loadEnvironmentVariables(environment = process.env) {
+    const mappings = objectEntries(ENV_MAPPINGS);
+    for (let index = 0; index < mappings.length; index++) {
+      const [envVar, configPath] = mappings[index];
+      const {value, legacyName} = resolveEnvironmentValue(envVar, environment);
       if (value === undefined) {
         continue;
       }
@@ -247,7 +278,8 @@ class ConfigurationManager {
     const parts = path.split(CONFIG_SEPARATOR.DOT);
     let current = obj;
 
-    for (const part of parts) {
+    for (let index = 0; index < parts.length; index++) {
+      const part = parts[index];
       if (current === undefined || current === null) {
         return undefined;
       }
@@ -308,7 +340,7 @@ class ConfigurationManager {
    * @return {string[]} Array of category names.
    */
   getCategories() {
-    return Object.keys(this.config);
+    return objectKeys(this.config);
   }
 
   /**
@@ -337,18 +369,28 @@ class ConfigurationManager {
    * @private
    */
   deepMerge(target, source) {
-    for (const key of Object.keys(source)) {
+    const keys = objectKeys(source);
+    for (let index = 0; index < keys.length; index++) {
+      const key = keys[index];
+      if (isDangerousConfigurationKey(key)) {
+        throw new Error(`Unsafe configuration key: ${key}`);
+      }
+      const descriptor = objectGetOwnPropertyDescriptor(source, key);
+      if (!descriptor || !objectHasOwn(descriptor, LOCAL_STR_VALUE)) {
+        throw new Error(`Configuration property must be data: ${key}`);
+      }
+      const sourceValue = descriptor.value;
       if (
-        source[key] !== null &&
-        typeof source[key] === 'object' &&
-        !Array.isArray(source[key])
+        sourceValue !== null &&
+        typeof sourceValue === 'object' &&
+        !arrayIsArray(sourceValue)
       ) {
-        if (!(key in target)) {
+        if (!objectHasOwn(target, key)) {
           target[key] = {};
         }
-        this.deepMerge(target[key], source[key]);
+        this.deepMerge(target[key], sourceValue);
       } else {
-        target[key] = source[key];
+        target[key] = sourceValue;
       }
     }
   }

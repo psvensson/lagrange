@@ -4,6 +4,8 @@ import {
 } from './sql-query-engine-service-lifecycle-execution.js';
 import {RUNTIME_ACCESS_POLICY_DECISION} from
   '../control-plane/owners/runtime-access-policy-owner.js';
+import {enforceApplicationDatabaseStatementPolicy} from
+  './application-database-statement-policy.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_STRING = 'string';
@@ -392,6 +394,12 @@ class SQLQueryEngineStatementExecution extends
 
     const parseEndMs = Date.now();
     cancellationToken?.throwIfCancelled?.();
+
+    const applicationStatementDecision =
+      enforceApplicationDatabaseStatementPolicy(ast, options);
+    if (applicationStatementDecision.allowed !== true) {
+      return applicationStatementDecision.failure;
+    }
 
     try {
       const accessFailure = await this.authorizeRuntimeServiceStatement(

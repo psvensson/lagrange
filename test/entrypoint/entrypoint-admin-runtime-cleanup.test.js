@@ -37,9 +37,9 @@ test('shutdownAdminRuntimeComposition tolerates absent early runtime', async (t)
 });
 
 test('join failure path has no provisional full-admin runtime to release', (t) => {
-  const source = readFileSync('src/index.js', 'utf8');
+  const source = readFileSync('src/lagrange-runtime-startup.js', 'utf8');
   const joinFailureBlockMatch = source.match(
-    /if \(!joinResult\.success\) \{[\s\S]*?const reattemptAllowed/,
+    /if \(!joinResult\.success\) \{[\s\S]*?return startJoinNode\([\s\S]*?\n {2}\}/,
   );
 
   t.ok(joinFailureBlockMatch, 'entrypoint should retain a join failure branch');

@@ -274,26 +274,24 @@ async function timeBoxBestEffortShutdownStep(logger, signal, step, timeoutMs, ru
   }
 }
 
-/**
- * Build one shared shutdown signal handler for seed and join branches.
- * @param {Object} options
- * @return {(signal: string) => Promise<void>}
- */
-function createShutdownSignalHandler(options) {
-  let shutdownSignalCount = 0;
-  return async (signal) => {
-    shutdownSignalCount++;
-    if (shutdownSignalCount > 1) {
-      options.logger.warn(LOCAL_STR_SHUTDOWN_ALREADY_IN_PROGRESS_FORCING_PRO, {
-        signal,
-      });
-      process.exit(1);
-      return;
-    }
+const LOCAL_STR_EMBEDDED = 'embedded';
+const LOCAL_STR_CLOSEAPPLICATIONDATABASES = 'closeApplicationDatabases';
 
-    options.logger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
-    const shutdownStartedAt = Date.now();
-    try {
+function createRuntimeShutdown(options) {
+  let shutdownPromise = null;
+  return (signal = LOCAL_STR_EMBEDDED) => {
+    if (shutdownPromise) return shutdownPromise;
+    shutdownPromise = (async () => {
+      options.logger.info(ENTRYPOINT_LOG_MSG.SHUTDOWN, {signal});
+      const shutdownStartedAt = Date.now();
+      if (typeof options.closeApplicationDatabases === LOCAL_STR_FUNCTION) {
+        await timeShutdownStep(
+          options.logger,
+          signal,
+          LOCAL_STR_CLOSEAPPLICATIONDATABASES,
+          () => options.closeApplicationDatabases(),
+        );
+      }
       const drainDeadlineMs =
         Date.now() + ENTRYPOINT_DEFAULT.READINESS_DRAIN_DEADLINE_MS;
       const drainingSnapshot = await timeShutdownStep(
@@ -366,6 +364,31 @@ function createShutdownSignalHandler(options) {
         step: 'total_clean_drain',
         elapsedMs: Date.now() - shutdownStartedAt,
       });
+    })();
+    return shutdownPromise;
+  };
+}
+
+/**
+ * Build one daemon-only shutdown signal handler for seed and join branches.
+ * @param {Object} options
+ * @return {(signal: string) => Promise<void>}
+ */
+function createShutdownSignalHandler(options) {
+  let shutdownSignalCount = 0;
+  const shutdownRuntime = options.shutdownRuntime ||
+    createRuntimeShutdown(options);
+  return async (signal) => {
+    shutdownSignalCount++;
+    if (shutdownSignalCount > 1) {
+      options.logger.warn(LOCAL_STR_SHUTDOWN_ALREADY_IN_PROGRESS_FORCING_PRO, {
+        signal,
+      });
+      process.exit(1);
+      return;
+    }
+    try {
+      await shutdownRuntime(signal);
       process.exit(0);
     } catch (error) {
       options.logger.error(options.failureMessage, {
@@ -482,6 +505,7 @@ function scheduleStartupLivenessPulse(options) {
 }
 
 export {
+  createRuntimeShutdown,
   createShutdownSignalHandler,
   registerProcessLifecycleDiagnostics,
   registerShutdownSignalHandlers,

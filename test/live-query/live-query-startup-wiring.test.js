@@ -137,7 +137,7 @@ describe('live query startup wiring', () => {
   });
 
   it('entrypoint wires live query manager in both startup branches', () => {
-    const indexSource = readFileSync('src/index.js', 'utf8');
+    const indexSource = readFileSync('src/lagrange-runtime-startup.js', 'utf8');
     const compositionSource = readFileSync(
       'src/entrypoint-runtime-admin-composition.js',
       'utf8',

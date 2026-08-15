@@ -26,6 +26,7 @@ export {
 } from './entrypoint-runtime-admin-composition.js';
 
 export {
+  createRuntimeShutdown,
   createShutdownSignalHandler,
   registerProcessLifecycleDiagnostics,
   registerShutdownSignalHandlers,

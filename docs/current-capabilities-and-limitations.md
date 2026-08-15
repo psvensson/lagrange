@@ -76,6 +76,17 @@ Supported lifecycle SQL:
 The callback column is a legacy/internal execution axis, not an alternative
 public service model. Managed OCI activation remains unsupported.
 
+## Embedded application sessions
+
+The package exports a side-effect-free `createEmbeddedLagrange` factory. A
+started handle opens application sessions over the runtime's canonical SQL
+engine and supports callback transactions with serialized statements, typed
+failures, rollback before commit, and expired callback handles. Application
+identifiers isolate transaction session identity; they are not table, tenant,
+schema, or authorization boundaries. Transaction-control SQL is reserved for
+the callback API. The current lifecycle permits one runtime start per process
+lifetime.
+
 ## Replication and recovery
 
 | Capability | Current state |

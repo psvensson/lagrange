@@ -56,6 +56,9 @@ export {
 export {LineageTracker} from './lineage-tracker.js';
 export {DedupeRegistry, buildDedupeKey} from './dedupe-registry.js';
 export {CancellationToken} from './cancellation-token.js';
+export {ApplicationDatabaseError} from './application-database-error.js';
+export {APPLICATION_DATABASE_ERROR_CODE} from
+  './application-database-constants.js';
 export {
   GUARDRAIL_FIELD,
   GUARDRAIL_ERROR_MSG,
