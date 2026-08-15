@@ -13,11 +13,31 @@ import {ControlPlaneReadinessDiagnosticsEligibility} from './control-plane-readi
 const {
   MEMBERSHIP_PUBLICATION_READ_LANE,
   MEMBERSHIP_PUBLICATION_READ_SCOPE,
+  TABLES,
   buildControlPlanePublicationStory,
   resolveMembershipPublicationReadLane,
   resolveMembershipPublicationReadOptions,
   resolveMembershipPublicationReadScope,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
+
+// Every system table the synchronous membership-planning candidate
+// derivation reads; the derivation memo below is keyed on their mutation
+// versions so any relevant write invalidates it while a synchronous
+// planning sweep (hundreds of identical derivations in one burst) shares
+// one derivation. Non-table inputs (readiness entries, recovery-epoch
+// history, router connectivity) are derived from these tables or reach
+// the key within one heartbeat interval via the NODES bump — the same
+// bound the sealed CL-033 planning-source revision accepts.
+const MEMBERSHIP_PLANNING_VERSION_KEY_FIELD_SEPARATOR = ':';
+const MEMBERSHIP_PLANNING_VERSION_KEY_ENTRY_SEPARATOR = '|';
+const MEMBERSHIP_PLANNING_DERIVATION_SOURCE_TABLES = Object.freeze([
+  TABLES.NODES,
+  TABLES.NODE_ENDPOINTS,
+  TABLES.SERVICES,
+  TABLES.PARTITIONS,
+  TABLES.CONTROL_PLANE_PUBLICATIONS,
+  TABLES.REPLICA_OPERATIONS,
+]);
 
 class ControlPlaneReadinessPublicationDiagnostics
   extends ControlPlaneReadinessDiagnosticsEligibility {
@@ -149,19 +169,63 @@ class ControlPlaneReadinessPublicationDiagnostics
     });
   }
 
+  // The full candidate derivation re-reads five system tables, rebuilds the
+  // priority-partition summary over every partition, and rebuilds recovery
+  // closure evidence — profiled at half of all seed CPU during formation
+  // planning sweeps that call it once per entity plus dozens of times per
+  // priority entity in one synchronous burst. Memoized on the source-table
+  // mutation versions (heartbeat writes bound staleness at the heartbeat
+  // interval, the same bound the CL-019 diagnostics memo accepted); any
+  // relevant table write invalidates.
+  readMembershipPlanningDerivationVersionKey() {
+    const cache = this.systemTableCache;
+    if (!cache || typeof cache.getTableMutationVersion !== 'function') {
+      return null;
+    }
+    let key = '';
+    for (const tableName of MEMBERSHIP_PLANNING_DERIVATION_SOURCE_TABLES) {
+      key += tableName +
+        MEMBERSHIP_PLANNING_VERSION_KEY_FIELD_SEPARATOR +
+        cache.getTableMutationVersion(tableName) +
+        MEMBERSHIP_PLANNING_VERSION_KEY_ENTRY_SEPARATOR;
+    }
+    return key;
+  }
+
   getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt) {
     const service = this.membershipPublicationService;
     if (
       service &&
       typeof service.deriveClusterMembershipCandidateSync === 'function'
     ) {
+      const publisherNodeId = nodeId || this.nodeId;
+      const versionKey = this.readMembershipPlanningDerivationVersionKey();
+      const memo = this.membershipPlanningSnapshotSyncMemo;
+      if (
+        versionKey !== null &&
+        memo &&
+        memo.versionKey === versionKey &&
+        memo.publisherNodeId === publisherNodeId
+      ) {
+        return memo.snapshot;
+      }
       const candidate = service.deriveClusterMembershipCandidateSync({
         deferNestedPriorityRecoveryPlanning: true,
-        publisherNodeId: nodeId || this.nodeId,
+        publisherNodeId,
         nowMs: observedAt,
       });
       if (candidate && typeof candidate === 'object') {
-        return this.normalizeMembershipPublicationPlanningSnapshot(candidate);
+        const snapshot = Object.freeze(
+          this.normalizeMembershipPublicationPlanningSnapshot(candidate),
+        );
+        if (versionKey !== null) {
+          this.membershipPlanningSnapshotSyncMemo = {
+            versionKey,
+            publisherNodeId,
+            snapshot,
+          };
+        }
+        return snapshot;
       }
     }
     const membershipPublication = this.getMembershipPublicationDiagnosticsSync(

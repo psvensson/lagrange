@@ -721,7 +721,22 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
    * @return {Array<Object>}
    */
   getGlobalTopologyBlockingInFlightOperations() {
-    return this.systemTableCache.filter(
+    // Memoized on the replica_operations mutation version: planning sweeps
+    // evaluated this global view dozens of times per entity in one
+    // synchronous burst, each running a full-table scan with a per-row
+    // progress-snapshot rebuild (profiled at ~16 percent of seed CPU during
+    // formation). Any ledger write invalidates; the frozen result keeps a
+    // hidden mutator loud.
+    const cache = this.systemTableCache;
+    const version =
+      cache && typeof cache.getTableMutationVersion === 'function' ?
+        cache.getTableMutationVersion(SYSTEM_TABLE_NAME.REPLICA_OPERATIONS) :
+        null;
+    const memo = this.globalTopologyBlockingInFlightOperationsMemo;
+    if (version !== null && memo && memo.version === version) {
+      return memo.operations;
+    }
+    const operations = cache.filter(
       SYSTEM_TABLE_NAME.REPLICA_OPERATIONS,
       (operation) => {
         if (!this.isTrackedInFlightOperation(operation)) {
@@ -730,6 +745,14 @@ class UnifiedRebalancerReplicaState extends UnifiedRebalancerAvailableNodes {
         return this.isTopologyBlockingInFlightOperation(operation);
       },
     );
+    if (version !== null) {
+      this.globalTopologyBlockingInFlightOperationsMemo = {
+        version,
+        operations: Object.freeze(operations),
+      };
+      return this.globalTopologyBlockingInFlightOperationsMemo.operations;
+    }
+    return operations;
   }
 
   /**
