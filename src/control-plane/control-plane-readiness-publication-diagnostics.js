@@ -149,7 +149,10 @@ class ControlPlaneReadinessPublicationDiagnostics
       typeof service.deriveClusterMembershipCandidate === 'function'
     ) {
       const publisherNodeId = nodeId || this.nodeId;
-      const versionKey = readPlanningVersionKeyForCache(this.systemTableCache);
+      const versionKey = readPlanningVersionKeyForCache(
+        this.systemTableCache,
+        observedAt,
+      );
       const memo = this.membershipPlanningSnapshotAsyncMemo;
       let derivation;
       if (
@@ -208,8 +211,8 @@ class ControlPlaneReadinessPublicationDiagnostics
   // mutation versions (heartbeat writes bound staleness at the heartbeat
   // interval, the same bound the CL-019 diagnostics memo accepted); any
   // relevant table write invalidates.
-  readMembershipPlanningDerivationVersionKey() {
-    return readPlanningVersionKeyForCache(this.systemTableCache);
+  readMembershipPlanningDerivationVersionKey(observedAt) {
+    return readPlanningVersionKeyForCache(this.systemTableCache, observedAt);
   }
 
   getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt) {
@@ -219,7 +222,8 @@ class ControlPlaneReadinessPublicationDiagnostics
       typeof service.deriveClusterMembershipCandidateSync === 'function'
     ) {
       const publisherNodeId = nodeId || this.nodeId;
-      const versionKey = this.readMembershipPlanningDerivationVersionKey();
+      const versionKey =
+        this.readMembershipPlanningDerivationVersionKey(observedAt);
       const memo = this.membershipPlanningSnapshotSyncMemo;
       if (
         versionKey !== null &&

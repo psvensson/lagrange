@@ -64,8 +64,10 @@ function buildObservationVariantKey({
  */
 function resolvePlacementObservationMemoContext(options) {
   const {systemTableCache, readinessService} = options;
-  const versionKey =
-    readMembershipPlanningDerivationVersionKey(systemTableCache);
+  const versionKey = readMembershipPlanningDerivationVersionKey(
+    systemTableCache,
+    options.observedAt,
+  );
   if (versionKey === null) {
     return null;
   }
@@ -151,6 +153,7 @@ function buildCurrentPriorityPlacementFromRebalancerCache({
     cohortNodeIds,
     normalizedCurrentPartitionId,
     currentPartitionServiceRows,
+    observedAt,
   });
   const memoized = readMemoizedPlacementObservation(memoContext);
   if (memoized) {

@@ -16,6 +16,9 @@ import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
 import {
+  readMembershipPlanningDerivationVersionKey,
+} from '../../src/control-plane/membership-planning-version-key.js';
+import {
   getSharedSyncSectionRegistry,
 } from '../../src/diagnostics/event-loop-gap-watchdog.js';
 import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
@@ -217,6 +220,58 @@ test('the current-priority-placement observation builds once per ' +
   );
   t.equal(getAllCallsByTable.get('services') - before, 3,
     'a different ready-node view never reuses another variant’s memo');
+  t.end();
+});
+
+test('the shared planning version key floors generation refreshes to one ' +
+  'per interval', async (t) => {
+  const cache = createVersionedCacheStub();
+  const first = readMembershipPlanningDerivationVersionKey(cache, 1000);
+  t.ok(typeof first === 'string' && first.length > 0,
+    'a versioned cache yields a key');
+  cache.bump('nodes');
+  t.equal(readMembershipPlanningDerivationVersionKey(cache, 1100), first,
+    'a write within the floor window keeps the latched generation');
+  const second = readMembershipPlanningDerivationVersionKey(cache, 1300);
+  t.not(second, first,
+    'the next window observes the write');
+  cache.bump('services');
+  t.equal(readMembershipPlanningDerivationVersionKey(cache, 1400), second,
+    'the fresh window re-latches until its own floor expires');
+  t.not(readMembershipPlanningDerivationVersionKey(cache, 1600), second,
+    'the following window observes the second write');
+  t.equal(readMembershipPlanningDerivationVersionKey({}, 1000), null,
+    'a cache that cannot version its tables still disables memoization');
+  t.end();
+});
+
+test('the sync membership-planning derivation inherits the version-key ' +
+  'floor under write churn', async (t) => {
+  const cache = createVersionedCacheStub();
+  let derivations = 0;
+  const readiness = new ControlPlaneReadinessService({
+    nodeId: SWEEP_NODE_ID,
+    systemTableCache: cache,
+    membershipPublicationService: {
+      deriveClusterMembershipCandidateSync() {
+        derivations += 1;
+        return {
+          publicationEpoch: 1,
+          status: 'PUBLISHED',
+          publishedActiveNodeIds: [SWEEP_NODE_ID],
+        };
+      },
+    },
+  });
+  readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 1000);
+  t.equal(derivations, 1, 'the first read derives');
+  cache.bump('nodes');
+  readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 1100);
+  t.equal(derivations, 1,
+    'a write within the floor window keeps serving the latched derivation');
+  readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 1400);
+  t.equal(derivations, 2,
+    'the next window derives against the written generation');
   t.end();
 });
 
