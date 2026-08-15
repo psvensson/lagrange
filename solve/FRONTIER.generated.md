@@ -48,7 +48,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 29
+## Open quests — 30
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -70,7 +70,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 ⚠ stale | — |
 | raft-follower-append-sqlite-starvation-relief | product | 8 | 0 | 2026-08-14 | — |
 | readiness-evaluation-generation-floor-closure | product | 1 | 0 | 2026-08-15 | — |
-| readiness-evaluation-generation-floor-closure-v2 | product | 0 | 0 | 2026-08-15 | — |
+| readiness-evaluation-generation-floor-closure-v2 | product | 2 | 0 | 2026-08-15 | — |
 | readiness-formation-liveness-circularity-closure | product | 1 | 0 | 2026-08-15 | — |
 | readiness-planning-hostile-iterator-and-contract-closure | product | 4 | 0 | 2026-08-14 | — |
 | readiness-planning-own-data-consumer-closure | product | 3 | 0 | 2026-08-14 | — |
@@ -80,6 +80,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 ⚠ stale | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 ⚠ stale | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
+| schema-provisioning-collision-retry-closure | product | 0 | 0 | 2026-08-15 | — |
 | solver-low-ceremony-correction-loop | process | 8 | 0 | 2026-08-05 ⚠ stale | — |
 
 > 16 open quest(s) are ⚠ stale (last event more than 7 days behind the newest open-quest event): each needs an explicit decision — park it, reseal it narrower, or record on the quest why it stays open.

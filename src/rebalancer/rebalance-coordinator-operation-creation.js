@@ -792,7 +792,16 @@ class RebalanceCoordinatorOperationCreation {
     const persistResult = normalizeOperationPersistResult(
       await this.persistNewOperation(
         operation,
-        context.replaceIntentIdentity || operation.targetClaimKey ?
+        // Deterministic-intent creators (move.operationIntentId — the
+        // schema-provisioning jobs mint one id per (job, target)) are
+        // idempotent re-creates by construction: a zero-change collision
+        // whose leader row carries the SAME operation id is the prior
+        // attempt's durable row, so take the EXISTING disposition instead
+        // of demanding fresh-timestamp visibility the advanced row can
+        // never satisfy (round-7 root cause; the strict fail-closed
+        // contract stays for non-intent creators).
+        context.replaceIntentIdentity || operation.targetClaimKey ||
+          move.operationIntentId ?
           {returnDisposition: true} :
           undefined,
       ),

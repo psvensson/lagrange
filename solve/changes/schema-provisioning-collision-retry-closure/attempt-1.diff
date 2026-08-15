@@ -1,0 +1,104 @@
+diff --git a/src/query/schema-provisioning-job-owner.js b/src/query/schema-provisioning-job-owner.js
+index 6b3ac50ab52ad25e329799f02f0a944697cafead..728d4b7036dac7b11db55f73e8162e2f6f98869a 100644
+--- a/src/query/schema-provisioning-job-owner.js
++++ b/src/query/schema-provisioning-job-owner.js
+@@ -27,6 +27,13 @@ import {rowToWorkflow, serializeWorkflow} from
+ const TRANSIENT_ERROR_FRAGMENT = Object.freeze({
+   CANCEL_CODE: 'CANCEL',
+   CANCEL_MESSAGE: 'cancel',
++  // A zero-change idempotent re-create whose leader read-back cannot yet
++  // prove visibility is a timing outcome, not a semantic failure: the
++  // durable row exists (often already COMPLETED from the prior attempt) and
++  // the job's next retry attaches to it. Terminal-failing it poisoned every
++  // later CREATE of the same table via the schema_operations short-circuit
++  // (round-7 root cause; local repro + archived run 22-15-08).
++  NOT_CONFIRMED_MESSAGE: 'authoritative replica operation not confirmed',
+   STALE_FENCE_MESSAGE: 'stale fence',
+   TIMEOUT_CODE: 'TIMEOUT',
+   TIMEOUT_MESSAGE: 'timeout',
+@@ -102,7 +109,7 @@ function buildInitialRow(intent, workflow) {
+   };
+ }
+ 
+-function isTransientProvisioningError(error) {
++export function isTransientProvisioningError(error) {
+   const code = String(error?.code || error?.errorCode || '').toUpperCase();
+   const message = String(error?.message || '').toLowerCase();
+   return code.includes(TRANSIENT_ERROR_FRAGMENT.TIMEOUT_CODE) ||
+@@ -112,6 +119,7 @@ function isTransientProvisioningError(error) {
+     message.includes(TRANSIENT_ERROR_FRAGMENT.TIMED_OUT_MESSAGE) ||
+     message.includes(TRANSIENT_ERROR_FRAGMENT.CANCEL_MESSAGE) ||
+     message.includes(TRANSIENT_ERROR_FRAGMENT.STALE_FENCE_MESSAGE) ||
++    message.includes(TRANSIENT_ERROR_FRAGMENT.NOT_CONFIRMED_MESSAGE) ||
+     code === SCHEMA_PROVISIONING_ERROR_CODE.STALE_OWNER;
+ }
+ 
+@@ -461,18 +469,36 @@ class SchemaProvisioningJobOwner {
+ 
+   async execute(ast, options = {}, executor) {
+     const intent = canonicalizeSchemaProvisioningIntent(ast, options);
+-    const {row} = await this.insertOrAttach(intent);
+-    const workflow = this.refreshWorkflowFromRow(row);
+-    if (SCHEMA_PROVISIONING_JOB_TERMINAL_STATUSES.has(workflow.status)) {
++    // The deadline race is armed BEFORE the first await: insertOrAttach's
++    // schema_operations gateway read/insert has no deadline of its own, and
++    // on a lone bootstrapping seed that partition's routability can hold
++    // the await past the admin client's cap with no response at all
++    // (round-7 root cause of the phase-1 admin-response timeouts; local
++    // baseline repro plus archived run 21-34-12). A slow prologue now
++    // yields a PENDING/RETRY outcome instead of client-side silence.
++    const prologueWorkflow = {
++      workflowId: intent.workflowId,
++      status: SCHEMA_PROVISIONING_JOB_STATUS.PENDING,
++      retryAfterMs: this.retryAfterMs,
++    };
++    const execution = (async () => {
++      const {row} = await this.insertOrAttach(intent);
++      const workflow = this.refreshWorkflowFromRow(row);
++      if (SCHEMA_PROVISIONING_JOB_TERMINAL_STATUSES.has(workflow.status)) {
++        this.clearScheduledRetry(intent.workflowId);
++        return this.buildOutcome(workflow);
++      }
+       this.clearScheduledRetry(intent.workflowId);
+-      return this.buildOutcome(workflow);
+-    }
+-    this.clearScheduledRetry(intent.workflowId);
+-    const execution = this.workflowCoordinator.runExclusive(
+-      intent.ownerKey,
+-      () => this.runJob(intent, executor),
++      return this.workflowCoordinator.runExclusive(
++        intent.ownerKey,
++        () => this.runJob(intent, executor),
++      );
++    })();
++    return this.waitForRequest(
++      execution,
++      prologueWorkflow,
++      options.timeoutBudget,
+     );
+-    return this.waitForRequest(execution, workflow, options.timeoutBudget);
+   }
+ 
+   async resumeNonterminal(executor) {
+diff --git a/src/rebalancer/rebalance-coordinator-operation-creation.js b/src/rebalancer/rebalance-coordinator-operation-creation.js
+index c52845f8e049ac1da4006f764c266aedbc0c7884..7ae3166f88449a53a6e2a9375f0e26d8815a11de 100644
+--- a/src/rebalancer/rebalance-coordinator-operation-creation.js
++++ b/src/rebalancer/rebalance-coordinator-operation-creation.js
+@@ -792,7 +792,16 @@ class RebalanceCoordinatorOperationCreation {
+     const persistResult = normalizeOperationPersistResult(
+       await this.persistNewOperation(
+         operation,
+-        context.replaceIntentIdentity || operation.targetClaimKey ?
++        // Deterministic-intent creators (move.operationIntentId — the
++        // schema-provisioning jobs mint one id per (job, target)) are
++        // idempotent re-creates by construction: a zero-change collision
++        // whose leader row carries the SAME operation id is the prior
++        // attempt's durable row, so take the EXISTING disposition instead
++        // of demanding fresh-timestamp visibility the advanced row can
++        // never satisfy (round-7 root cause; the strict fail-closed
++        // contract stays for non-intent creators).
++        context.replaceIntentIdentity || operation.targetClaimKey ||
++          move.operationIntentId ?
+           {returnDisposition: true} :
+           undefined,
+       ),
