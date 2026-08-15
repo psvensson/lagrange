@@ -329,6 +329,12 @@ test('deferred projection reconstruction uses only captured intrinsics',
       ['Set.prototype.add', Set.prototype, 'add'],
       ['Set.prototype.has', Set.prototype, 'has'],
       ['Set iterator next', setIteratorPrototype, 'next'],
+      ['WeakMap.prototype.get', WeakMap.prototype, 'get'],
+      ['WeakMap.prototype.set', WeakMap.prototype, 'set'],
+      ['global WeakMap', globalThis, 'WeakMap'],
+      ['WeakSet.prototype.add', WeakSet.prototype, 'add'],
+      ['WeakSet.prototype.has', WeakSet.prototype, 'has'],
+      ['global WeakSet', globalThis, 'WeakSet'],
       ['String.prototype.trim', String.prototype, 'trim'],
       ['String.prototype.toUpperCase', String.prototype, 'toUpperCase'],
       ['global String', globalThis, 'String'],
@@ -548,6 +554,90 @@ test('deferred projection reconstruction uses only captured intrinsics',
       }
     }
     owner.shutdown();
+  });
+
+test('projection normalization reuses only recursively immutable evidence',
+  async (t) => {
+    const immutableSource = Object.freeze({
+      dimensions: Object.freeze({
+        [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
+        [CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED]: true,
+      }),
+      runtimeAuthority: Object.freeze({
+        clusterMemberHealthy: true,
+        processAlive: true,
+      }),
+      publicationOwnerStreamSource: Object.freeze({
+        publicationEpoch: 1,
+        publicationStatus: 'PUBLISHED',
+        requiredAckNodeIds: Object.freeze(['owner-a']),
+        acknowledgedNodeIds: Object.freeze(['owner-a']),
+      }),
+    });
+    const first = buildProjectionReadinessState(immutableSource);
+    const second = buildProjectionReadinessState(immutableSource);
+
+    t.equal(second.evidence.raw, first.evidence.raw,
+      'a recursively frozen source reuses its normalized graph');
+    t.equal(first.evidence.dimensions, first.evidence.raw.dimensions,
+      'one reconstruction shares its normalized dimensions');
+    t.equal(first.evidence.runtimeAuthority,
+      first.evidence.raw.runtimeAuthority,
+      'one reconstruction shares its normalized runtime authority');
+
+    const mutableSource = {
+      dimensions: {
+        [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
+      },
+    };
+    const beforeMutation = buildProjectionReadinessState(mutableSource);
+    mutableSource.dimensions[
+      CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE
+    ] = false;
+    const afterMutation = buildProjectionReadinessState(mutableSource);
+    t.not(afterMutation.evidence.raw, beforeMutation.evidence.raw,
+      'a mutable source is normalized again');
+    t.equal(afterMutation.evidence.processAlive, false,
+      'mutable evidence changes are observed instead of cached');
+
+    const buildFrozenChain = (length) => {
+      let chain = Object.freeze({leaf: true});
+      for (let index = 1; index < length; index++) {
+        chain = Object.freeze({next: chain});
+      }
+      return chain;
+    };
+    const wrapFrozenChain = (tail, length) => {
+      let chain = tail;
+      for (let index = 0; index < length; index++) {
+        chain = Object.freeze({next: chain});
+      }
+      return chain;
+    };
+    const buildReadySourceWithExtra = (extra) => Object.freeze({
+      ...immutableSource,
+      extra,
+    });
+    const uncachedOverDepth = buildProjectionReadinessState(
+      buildReadySourceWithExtra(
+        wrapFrozenChain(buildFrozenChain(8), 9),
+      ),
+    );
+    t.equal(uncachedOverDepth.state,
+      PROJECTION_READINESS_CONTRACT_STATE.BLOCKED,
+      'an uncached over-depth graph fails closed');
+
+    const primedTail = buildFrozenChain(8);
+    buildProjectionReadinessState(primedTail);
+    const cachedOverDepth = buildProjectionReadinessState(
+      buildReadySourceWithExtra(wrapFrozenChain(primedTail, 9)),
+    );
+    t.equal(cachedOverDepth.state,
+      PROJECTION_READINESS_CONTRACT_STATE.BLOCKED,
+      'cached subtree identity cannot bypass the depth limit');
+    t.equal(cachedOverDepth.publication.ready, false,
+      'a cached over-depth graph cannot retain positive publication');
   });
 
 test('all projection evidence records share the deep own-data boundary',

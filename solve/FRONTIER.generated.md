@@ -64,7 +64,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | operation-ledger-quorum-authoritative-release | product | 3 | 0 | 2026-07-22 ⚠ stale | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-07-19 ⚠ stale | — |
 | priority-surplus-remove-authoritative-placement-fence | product | 5 | 0 | 2026-07-22 ⚠ stale | — |
-| projection-readiness-deep-own-data-closure | product | 3 | 0 | 2026-08-14 | — |
+| projection-readiness-deep-own-data-closure | product | 5 | 0 | 2026-08-15 | — |
 | publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 ⚠ stale | — |
 | raft-follower-append-sqlite-starvation-relief | product | 8 | 0 | 2026-08-14 | — |
 | readiness-planning-hostile-iterator-and-contract-closure | product | 4 | 0 | 2026-08-14 | — |

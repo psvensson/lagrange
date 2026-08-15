@@ -32,12 +32,19 @@ const objectCreate = Object.create;
 const objectDefineProperty = Object.defineProperty;
 const objectFreeze = Object.freeze;
 const objectHasOwn = Object.hasOwn;
+const objectIsFrozen = Object.isFrozen;
 const objectKeys = Object.keys;
 const setAdd = Function.call.bind(Set.prototype.add);
 const setHas = Function.call.bind(Set.prototype.has);
 const SetConstructor = Set;
 const stringConstructor = String;
 const stringTrim = Function.call.bind(String.prototype.trim);
+const weakMapGet = Function.call.bind(WeakMap.prototype.get);
+const weakMapSet = Function.call.bind(WeakMap.prototype.set);
+const WeakMapConstructor = WeakMap;
+const weakSetAdd = Function.call.bind(WeakSet.prototype.add);
+const weakSetHas = Function.call.bind(WeakSet.prototype.has);
+const WeakSetConstructor = WeakSet;
 
 const PROJECTION_READINESS_EMPTY = objectFreeze({
   LIST: objectFreeze(new ArrayConstructor()),
@@ -56,6 +63,10 @@ const PROJECTION_READINESS_INVALID = objectFreeze({
   PUBLICATION_OWNER_STREAM: objectFreeze({}),
 });
 const PROJECTION_READINESS_MAX_OWN_DATA_DEPTH = 16;
+const projectionReadinessDeepFrozenInputs = new WeakSetConstructor();
+const projectionReadinessFrozenInputCache = new WeakMapConstructor();
+const projectionReadinessNormalizedGraphDepths = new WeakMapConstructor();
+const projectionReadinessNormalizedGraphs = new WeakSetConstructor();
 
 function appendProjectionReadinessValue(values, value) {
   objectDefineProperty(values, values.length, {
@@ -95,10 +106,36 @@ function isProjectionReadinessOwnDataPrimitive(value) {
     typeof value === 'boolean' || typeof value === 'bigint';
 }
 
-function normalizeProjectionReadinessOwnDataArray(values, depth) {
+function isProjectionReadinessStableGraphValue(value) {
+  return isProjectionReadinessOwnDataPrimitive(value) ||
+    weakSetHas(projectionReadinessDeepFrozenInputs, value) ||
+    weakSetHas(projectionReadinessNormalizedGraphs, value);
+}
+
+function retainProjectionReadinessNormalizedGraph(
+  source,
+  normalized,
+  recursivelyFrozen,
+  maxRelativeDepth,
+) {
+  const frozen = objectFreeze(normalized);
+  weakSetAdd(projectionReadinessNormalizedGraphs, frozen);
+  weakMapSet(projectionReadinessNormalizedGraphDepths, frozen,
+    maxRelativeDepth);
+  if (recursivelyFrozen) {
+    weakSetAdd(projectionReadinessDeepFrozenInputs, source);
+    weakMapSet(projectionReadinessFrozenInputCache, source, frozen);
+  }
+  return frozen;
+}
+
+function normalizeProjectionReadinessOwnDataArray(source, values, depth) {
+  let recursivelyFrozen = objectIsFrozen(source);
+  let maxRelativeDepth = 0;
   for (let index = 0; index < values.length; index++) {
+    const sourceValue = values[index];
     const normalized = normalizeProjectionReadinessOwnDataGraph(
-      values[index],
+      sourceValue,
       depth + 1,
     );
     if (normalized === PROJECTION_READINESS_INVALID.OWN_DATA_GRAPH) {
@@ -110,16 +147,36 @@ function normalizeProjectionReadinessOwnDataArray(values, depth) {
       value: normalized,
       writable: true,
     });
+    recursivelyFrozen = recursivelyFrozen &&
+      isProjectionReadinessStableGraphValue(sourceValue);
+    if (normalized && typeof normalized === 'object') {
+      const childDepth = weakMapGet(
+        projectionReadinessNormalizedGraphDepths,
+        normalized,
+      );
+      const relativeDepth = childDepth + 1;
+      if (relativeDepth > maxRelativeDepth) {
+        maxRelativeDepth = relativeDepth;
+      }
+    }
   }
-  return objectFreeze(values);
+  return retainProjectionReadinessNormalizedGraph(
+    source,
+    values,
+    recursivelyFrozen,
+    maxRelativeDepth,
+  );
 }
 
-function normalizeProjectionReadinessOwnDataRecord(record, depth) {
+function normalizeProjectionReadinessOwnDataRecord(source, record, depth) {
+  let recursivelyFrozen = objectIsFrozen(source);
+  let maxRelativeDepth = 0;
   const keys = objectKeys(record);
   for (let index = 0; index < keys.length; index++) {
     const key = keys[index];
+    const sourceValue = record[key];
     const normalized = normalizeProjectionReadinessOwnDataGraph(
-      record[key],
+      sourceValue,
       depth + 1,
     );
     if (normalized === PROJECTION_READINESS_INVALID.OWN_DATA_GRAPH) {
@@ -131,8 +188,34 @@ function normalizeProjectionReadinessOwnDataRecord(record, depth) {
       value: normalized,
       writable: true,
     });
+    recursivelyFrozen = recursivelyFrozen &&
+      isProjectionReadinessStableGraphValue(sourceValue);
+    if (normalized && typeof normalized === 'object') {
+      const childDepth = weakMapGet(
+        projectionReadinessNormalizedGraphDepths,
+        normalized,
+      );
+      const relativeDepth = childDepth + 1;
+      if (relativeDepth > maxRelativeDepth) {
+        maxRelativeDepth = relativeDepth;
+      }
+    }
   }
-  return objectFreeze(record);
+  return retainProjectionReadinessNormalizedGraph(
+    source,
+    record,
+    recursivelyFrozen,
+    maxRelativeDepth,
+  );
+}
+
+function canReuseProjectionReadinessNormalizedGraph(value, depth) {
+  const maxRelativeDepth = weakMapGet(
+    projectionReadinessNormalizedGraphDepths,
+    value,
+  );
+  return typeof maxRelativeDepth === 'number' &&
+    depth + maxRelativeDepth < PROJECTION_READINESS_MAX_OWN_DATA_DEPTH;
 }
 
 function normalizeProjectionReadinessOwnDataGraph(value, depth = 0) {
@@ -141,14 +224,25 @@ function normalizeProjectionReadinessOwnDataGraph(value, depth = 0) {
       depth >= PROJECTION_READINESS_MAX_OWN_DATA_DEPTH) {
     return PROJECTION_READINESS_INVALID.OWN_DATA_GRAPH;
   }
+  if (weakSetHas(projectionReadinessNormalizedGraphs, value)) {
+    return canReuseProjectionReadinessNormalizedGraph(value, depth) ?
+      value :
+      PROJECTION_READINESS_INVALID.OWN_DATA_GRAPH;
+  }
+  const cached = weakMapGet(projectionReadinessFrozenInputCache, value);
+  if (cached) {
+    return canReuseProjectionReadinessNormalizedGraph(cached, depth) ?
+      cached :
+      PROJECTION_READINESS_INVALID.OWN_DATA_GRAPH;
+  }
   const values = copyDenseOwnDataArray(value);
   if (values !== null) {
-    return normalizeProjectionReadinessOwnDataArray(values, depth);
+    return normalizeProjectionReadinessOwnDataArray(value, values, depth);
   }
   const record = copyStrictOwnDataRecord(value);
   return record === null ?
     PROJECTION_READINESS_INVALID.OWN_DATA_GRAPH :
-    normalizeProjectionReadinessOwnDataRecord(record, depth);
+    normalizeProjectionReadinessOwnDataRecord(value, record, depth);
 }
 
 function normalizeProjectionReadinessPublicationOwnerStream(value) {
