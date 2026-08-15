@@ -153,14 +153,20 @@ class ControlPlaneReadinessPublicationDiagnostics
         this.systemTableCache,
         observedAt,
       );
-      const memo = this.membershipPlanningSnapshotAsyncMemo;
+      // Per-publisher slots: the live seed alternates planning reads across
+      // all five nodes (per-node readiness evaluations), and a single slot
+      // thrashed on every alternation — each miss minting a fresh snapshot
+      // identity that defeated every downstream identity memo (round-6
+      // census). Bounded by cluster node count.
+      if (!this.membershipPlanningSnapshotAsyncMemoByPublisher) {
+        this.membershipPlanningSnapshotAsyncMemoByPublisher = new Map();
+      }
+      const memo =
+        this.membershipPlanningSnapshotAsyncMemoByPublisher.get(
+          publisherNodeId,
+        );
       let derivation;
-      if (
-        versionKey !== null &&
-        memo &&
-        memo.versionKey === versionKey &&
-        memo.publisherNodeId === publisherNodeId
-      ) {
+      if (versionKey !== null && memo && memo.versionKey === versionKey) {
         derivation = memo.promise;
       } else {
         derivation = (async () => {
@@ -177,11 +183,19 @@ class ControlPlaneReadinessPublicationDiagnostics
           return ASYNC_PLANNING_DERIVATION_UNAVAILABLE;
         })();
         if (versionKey !== null) {
-          const entry = {versionKey, publisherNodeId, promise: derivation};
-          this.membershipPlanningSnapshotAsyncMemo = entry;
+          const entry = {versionKey, promise: derivation};
+          this.membershipPlanningSnapshotAsyncMemoByPublisher.set(
+            publisherNodeId,
+            entry,
+          );
           derivation.catch(() => {
-            if (this.membershipPlanningSnapshotAsyncMemo === entry) {
-              this.membershipPlanningSnapshotAsyncMemo = null;
+            if (
+              this.membershipPlanningSnapshotAsyncMemoByPublisher
+                .get(publisherNodeId) === entry
+            ) {
+              this.membershipPlanningSnapshotAsyncMemoByPublisher.delete(
+                publisherNodeId,
+              );
             }
           });
         }
@@ -224,13 +238,14 @@ class ControlPlaneReadinessPublicationDiagnostics
       const publisherNodeId = nodeId || this.nodeId;
       const versionKey =
         this.readMembershipPlanningDerivationVersionKey(observedAt);
-      const memo = this.membershipPlanningSnapshotSyncMemo;
-      if (
-        versionKey !== null &&
-        memo &&
-        memo.versionKey === versionKey &&
-        memo.publisherNodeId === publisherNodeId
-      ) {
+      if (!this.membershipPlanningSnapshotSyncMemoByPublisher) {
+        this.membershipPlanningSnapshotSyncMemoByPublisher = new Map();
+      }
+      const memo =
+        this.membershipPlanningSnapshotSyncMemoByPublisher.get(
+          publisherNodeId,
+        );
+      if (versionKey !== null && memo && memo.versionKey === versionKey) {
         return memo.snapshot;
       }
       const candidate = service.deriveClusterMembershipCandidateSync({
@@ -243,11 +258,10 @@ class ControlPlaneReadinessPublicationDiagnostics
           this.normalizeMembershipPublicationPlanningSnapshot(candidate),
         );
         if (versionKey !== null) {
-          this.membershipPlanningSnapshotSyncMemo = {
-            versionKey,
+          this.membershipPlanningSnapshotSyncMemoByPublisher.set(
             publisherNodeId,
-            snapshot,
-          };
+            {versionKey, snapshot},
+          );
         }
         return snapshot;
       }

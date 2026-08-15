@@ -426,6 +426,8 @@ class ControlPlaneReadinessParticipationBase {
         // this service's reads.
         this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
         this.membershipPublicationPlanningSnapshotMemoByNodeId?.clear();
+        this.membershipPlanningSnapshotSyncMemoByPublisher?.clear();
+        this.membershipPlanningSnapshotAsyncMemoByPublisher?.clear();
         // membershipPublicationPlanningSnapshotContextMemo is a WeakMap keyed by
         // per-build snapshot objects — it needs no explicit clear (entries GC with
         // their build).
@@ -485,6 +487,8 @@ class ControlPlaneReadinessParticipationBase {
       this.membershipPublicationDiagnosticsMemo = null;
       this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
       this.membershipPublicationPlanningSnapshotMemoByNodeId?.clear();
+      this.membershipPlanningSnapshotSyncMemoByPublisher?.clear();
+      this.membershipPlanningSnapshotAsyncMemoByPublisher?.clear();
       this.subscribeToCacheChanges();
       this.readinessPlanningSnapshotOwner?.recordCacheReplacement();
     }

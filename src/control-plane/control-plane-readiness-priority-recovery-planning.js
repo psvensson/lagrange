@@ -72,7 +72,110 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
     });
   }
 
+  // One answer per (input-snapshot identity, node, floored generation).
+  // The projection-entry memo cannot stabilize the retained-merge tail: it
+  // spreads a fresh merge input per call whenever an active retained
+  // snapshot overlays an incomplete resolution — the exact shape the live
+  // per-node readiness evaluations drive at storm rates (round-6 census:
+  // 228/228 fresh answers per cycle; live gap windows carried 98k gate and
+  // 203k projection builds on a run that still passed both sealed bars on
+  // VM speed alone). Store/clear side-effects are idempotent and their
+  // grace timestamps tolerate the 250ms window by the same sealed bound.
   resolvePriorityRecoveryPlanningAnswer(
+    nodeId,
+    observedAt,
+    planningSnapshot = null,
+  ) {
+    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
+      return this.resolvePriorityRecoveryPlanningAnswerUncached(
+        nodeId,
+        observedAt,
+        planningSnapshot,
+      );
+    }
+    if (!this.planningAnswerMemoByInputSnapshot) {
+      this.planningAnswerMemoByInputSnapshot = new WeakMap();
+    }
+    const generation =
+      typeof this.readPlanningProjectionSourceGeneration === 'function' ?
+        this.readPlanningProjectionSourceGeneration(
+          observedAt ??
+            (typeof this.now === 'function' ? this.now() : undefined),
+        ) :
+        null;
+    // The answer also depends on the retained active snapshot, which other
+    // paths (the async best-effort flow) mutate between calls — key on its
+    // identity at entry so a fresher retained witness always re-merges.
+    const retainedAtEntry = this.getActivePriorityRecoveryPlanningSnapshot(
+      nodeId,
+      observedAt,
+    );
+    const cached = this.readMemoizedPlanningAnswer(
+      planningSnapshot,
+      nodeId,
+      generation,
+      retainedAtEntry,
+    );
+    if (cached) {
+      return cached.answer;
+    }
+    const answer = this.resolvePriorityRecoveryPlanningAnswerUncached(
+      nodeId,
+      observedAt,
+      planningSnapshot,
+    );
+    this.storeMemoizedPlanningAnswer(
+      planningSnapshot,
+      nodeId,
+      generation,
+      retainedAtEntry,
+      answer,
+    );
+    return answer;
+  }
+
+  readMemoizedPlanningAnswer(
+    planningSnapshot,
+    nodeId,
+    generation,
+    retainedAtEntry,
+  ) {
+    if (generation === null) {
+      return null;
+    }
+    const byNode = this.planningAnswerMemoByInputSnapshot.get(
+      planningSnapshot,
+    );
+    const cached = byNode ? byNode.get(nodeId) : undefined;
+    if (
+      cached &&
+      cached.generation === generation &&
+      cached.retainedAtEntry === retainedAtEntry
+    ) {
+      return cached;
+    }
+    return null;
+  }
+
+  storeMemoizedPlanningAnswer(
+    planningSnapshot,
+    nodeId,
+    generation,
+    retainedAtEntry,
+    answer,
+  ) {
+    if (generation === null) {
+      return;
+    }
+    let byNode = this.planningAnswerMemoByInputSnapshot.get(planningSnapshot);
+    if (!byNode) {
+      byNode = new Map();
+      this.planningAnswerMemoByInputSnapshot.set(planningSnapshot, byNode);
+    }
+    byNode.set(nodeId, {generation, retainedAtEntry, answer});
+  }
+
+  resolvePriorityRecoveryPlanningAnswerUncached(
     nodeId,
     observedAt,
     planningSnapshot = null,
