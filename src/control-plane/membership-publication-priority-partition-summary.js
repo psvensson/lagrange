@@ -12,7 +12,7 @@ import {
   buildStringSet,
   compareExactValues,
   copyDenseOwnDataArray,
-  copyDenseOwnDataRecordArray,
+  copyCanonicalDenseOwnDataRecordArray,
   copyExclusionCounts,
   copyStrictOwnDataRecord,
   createNullRecord as objectCreate,
@@ -558,7 +558,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
     ['serviceRows'],
   );
   const serviceRows = serviceRowsEntry.state === DATA_PROPERTY_STATE.VALID ?
-    copyDenseOwnDataRecordArray(serviceRowsEntry.value) : null;
+    copyCanonicalDenseOwnDataRecordArray(serviceRowsEntry.value) : null;
   if (serviceRows === null) {
     return null;
   }
@@ -570,7 +570,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
     return null;
   }
   const partitionRows = partitionRowsEntry.state === DATA_PROPERTY_STATE.VALID ?
-    copyDenseOwnDataRecordArray(partitionRowsEntry.value) : [];
+    copyCanonicalDenseOwnDataRecordArray(partitionRowsEntry.value) : [];
   if (partitionRows === null) {
     return null;
   }

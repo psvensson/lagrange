@@ -1,0 +1,279 @@
+diff --git a/src/control-plane/current-priority-placement-observation.js b/src/control-plane/current-priority-placement-observation.js
+index 9c8d39d7151e3b07090166d29f94cf3edc3904b2..550778fabd1f8c36553d098ccbba30583439cfe9 100644
+--- a/src/control-plane/current-priority-placement-observation.js
++++ b/src/control-plane/current-priority-placement-observation.js
+@@ -8,8 +8,8 @@ import {
+ } from './membership-publication-priority-partition-summary.js';
+ import {
+   appendOwnArrayValue,
++  copyCanonicalDenseOwnDataRecordArray,
+   copyDenseOwnDataArray,
+-  copyDenseOwnDataRecordArray,
+   copyStrictOwnDataRecord,
+   createNullRecord,
+   MapConstructor,
+@@ -63,7 +63,7 @@ function copyOptionalRecordArray(options, fieldName) {
+   if (!objectHasOwn(options, fieldName) || options[fieldName] == null) {
+     return validCanonicalValue([]);
+   }
+-  const rows = copyDenseOwnDataRecordArray(options[fieldName]);
++  const rows = copyCanonicalDenseOwnDataRecordArray(options[fieldName]);
+   return rows === null ?
+     invalidCanonicalValue() :
+     validCanonicalValue(rows);
+diff --git a/src/control-plane/membership-publication-priority-partition-canonical-data.js b/src/control-plane/membership-publication-priority-partition-canonical-data.js
+index 27cd66afe56260c2232a31d546d76836108fd0a7..53d7fd1f0449e1bc9b2ba20fba3b0d1d49b81cca 100644
+--- a/src/control-plane/membership-publication-priority-partition-canonical-data.js
++++ b/src/control-plane/membership-publication-priority-partition-canonical-data.js
+@@ -46,7 +46,35 @@ const setIteratorNext = Function.call.bind(
+ const sortArray = Function.call.bind(Array.prototype.sort);
+ const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+ const stringTrim = Function.call.bind(String.prototype.trim);
++const WeakSetConstructor = WeakSet;
++const weakSetAdd = Function.call.bind(WeakSet.prototype.add);
++const weakSetHas = Function.call.bind(WeakSet.prototype.has);
++const objectFreeze = Object.freeze;
+ const EXACT_NON_NEGATIVE_ZERO = numberToExactInteger(0);
++const canonicalDenseRecordArrays = new WeakSetConstructor();
++
++// One canonical strict copy per boundary crossing: a dense record array this
++// module has already copied and frozen is trusted by identity (the WeakSet is
++// module-private, so membership cannot be forged), and sibling canonical
++// consumers reuse it by reference instead of re-copying the full
++// service/partition tables on every placement observation. Anything not in
++// the registry — hostile, mutable, or foreign — takes the full strict copy.
++function copyCanonicalDenseOwnDataRecordArray(value) {
++  if (value !== null && typeof value === 'object' &&
++      weakSetHas(canonicalDenseRecordArrays, value)) {
++    return value;
++  }
++  const rows = copyDenseOwnDataRecordArray(value);
++  if (rows === null) {
++    return null;
++  }
++  for (let index = 0; index < rows.length; index += 1) {
++    objectFreeze(rows[index]);
++  }
++  objectFreeze(rows);
++  weakSetAdd(canonicalDenseRecordArrays, rows);
++  return rows;
++}
+ 
+ function appendOwnArrayValue(array, value) {
+   objectDefineProperty(array, array.length, {
+@@ -331,6 +359,7 @@ export {
+   appendOwnArrayValue,
+   addExactNonNegativeInteger,
+   buildStringSet,
++  copyCanonicalDenseOwnDataRecordArray,
+   copyDenseOwnDataArray,
+   copyDenseOwnDataRecordArray,
+   copyStrictOwnDataRecord,
+diff --git a/src/control-plane/membership-publication-priority-partition-summary.js b/src/control-plane/membership-publication-priority-partition-summary.js
+index 5fd55f9fd2287b66c570fa4b96d3f79d828202d1..b5613f919888b9e53f269c4bbee8315ec20652f5 100644
+--- a/src/control-plane/membership-publication-priority-partition-summary.js
++++ b/src/control-plane/membership-publication-priority-partition-summary.js
+@@ -12,7 +12,7 @@ import {
+   buildStringSet,
+   compareExactValues,
+   copyDenseOwnDataArray,
+-  copyDenseOwnDataRecordArray,
++  copyCanonicalDenseOwnDataRecordArray,
+   copyExclusionCounts,
+   copyStrictOwnDataRecord,
+   createNullRecord as objectCreate,
+@@ -558,7 +558,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
+     ['serviceRows'],
+   );
+   const serviceRows = serviceRowsEntry.state === DATA_PROPERTY_STATE.VALID ?
+-    copyDenseOwnDataRecordArray(serviceRowsEntry.value) : null;
++    copyCanonicalDenseOwnDataRecordArray(serviceRowsEntry.value) : null;
+   if (serviceRows === null) {
+     return null;
+   }
+@@ -570,7 +570,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
+     return null;
+   }
+   const partitionRows = partitionRowsEntry.state === DATA_PROPERTY_STATE.VALID ?
+-    copyDenseOwnDataRecordArray(partitionRowsEntry.value) : [];
++    copyCanonicalDenseOwnDataRecordArray(partitionRowsEntry.value) : [];
+   if (partitionRows === null) {
+     return null;
+   }
+diff --git a/src/control-plane/recovery-protocol-snapshot.js b/src/control-plane/recovery-protocol-snapshot.js
+index 55bf191752eff45a9c7a96405d10e9350b15c847..1982aaadec08e10030b553ca833ed077e2300906 100644
+--- a/src/control-plane/recovery-protocol-snapshot.js
++++ b/src/control-plane/recovery-protocol-snapshot.js
+@@ -29,6 +29,7 @@ import {
+   PUBLICATION_PROJECTION_BOUNDARY_ROW_STATE,
+   buildPublicationProjectionBoundaryOutcome,
+ } from './recovery-protocol-publication-boundary.js';
++import {deepFreeze} from '../utils/deep-freeze.js';
+ 
+ 
+ const PARTICIPATION_REASON = Object.freeze({
+@@ -89,9 +90,19 @@ function normalizeStringMap(values = {}) {
+ }
+ 
+ function freezeRecord(record) {
+-  return record && typeof record === 'object' ?
+-    Object.freeze({...record}) :
+-    null;
++  if (!record || typeof record !== 'object') {
++    return null;
++  }
++  // Deep, not shallow: the readiness projection consumes these records under
++  // a recursive strict-own-data contract, and its frozen-input cache reuses a
++  // subtree by identity only when every reachable value is frozen. A single
++  // unfrozen descendant forces a fresh deep copy of the whole publication
++  // graph on every readiness build (profiled seed cost).
++  const copy = {...record};
++  for (const key of Object.keys(copy)) {
++    deepFreeze(copy[key]);
++  }
++  return Object.freeze(copy);
+ }
+ 
+ function normalizeClusterIncarnationFence(value) {
+diff --git a/test/control-plane/readiness-single-contract-build.test.js b/test/control-plane/readiness-single-contract-build.test.js
+index 68e020192c4b1170423cd6a7f0bcf2431faa2ce0..ad3e83da9edf083225b67f91a575a41228908fe0 100644
+--- a/test/control-plane/readiness-single-contract-build.test.js
++++ b/test/control-plane/readiness-single-contract-build.test.js
+@@ -11,6 +11,9 @@ import {
+ import {
+   ControlPlaneReadinessService,
+ } from '../../src/control-plane/control-plane-readiness-service.js';
++import {
++  buildProjectionReadinessState,
++} from '../../src/control-plane/projection-readiness-state.js';
+ 
+ const READINESS_BUILD_NOW_MS = 620000;
+ 
+@@ -68,3 +71,127 @@ test('one readiness build constructs one projection contract shared with ' +
+   );
+   t.end();
+ });
++
++function collectUnfrozenPaths(value, pathLabel, unfrozen, seen) {
++  if (value === null || typeof value !== 'object' || seen.has(value)) {
++    return;
++  }
++  seen.add(value);
++  if (!Object.isFrozen(value)) {
++    unfrozen.push(pathLabel);
++  }
++  for (const key of Object.keys(value)) {
++    collectUnfrozenPaths(value[key], `${pathLabel}.${key}`, unfrozen, seen);
++  }
++}
++
++test('membership publication diagnostics are recursively frozen and reused ' +
++  'by the projection normalization cache', async (t) => {
++  const nodeId = 'node-frozen-publication-diagnostics';
++  const peerNodeId = 'node-frozen-publication-peer';
++  const readinessService = new ControlPlaneReadinessService({
++    nodeId,
++    systemTableCache: createCache({
++      nodes: [createActiveNode(nodeId)],
++      services: [createMessageGroupService(nodeId)],
++    }),
++    cdcGroupPropagationService: createPublicationService({
++      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
++      reasonCode: null,
++      enteredAt: '2026-03-04T00:00:00.000Z',
++      recentTransitions: [],
++    }),
++    now: () => READINESS_BUILD_NOW_MS,
++  });
++  const diagnostics = readinessService.buildMembershipPublicationDiagnostics(
++    {
++      publicationEpoch: 7,
++      status: 'PUBLISHED',
++      publishedActiveNodeIds: [nodeId, peerNodeId],
++      requiredAckNodeIds: [nodeId, peerNodeId],
++      acknowledgedNodeIds: [nodeId, peerNodeId],
++      priorityPartitionSummary: {
++        totalPriorityPartitions: 2,
++        partitions: [
++          {partitionId: 'p-0', ready: true, ownerNodeId: nodeId},
++          {partitionId: 'p-1', ready: false, ownerNodeId: peerNodeId},
++        ],
++      },
++      membershipLifecycleSummary: {
++        memberStatesByNodeId: {
++          [nodeId]: 'ACTIVE',
++          [peerNodeId]: 'ACTIVE',
++        },
++        recoveryEpochByNodeId: {
++          [nodeId]: '3',
++        },
++        participationByNodeId: {
++          [nodeId]: {state: 'published_active', admissionState: 'admitted'},
++          [peerNodeId]: {state: 'published_active', admissionState: 'admitted'},
++        },
++      },
++    },
++    '2026-03-04T00:00:01.000Z',
++  );
++  t.ok(diagnostics, 'the producer emits publication diagnostics');
++
++  const unfrozen = [];
++  collectUnfrozenPaths(diagnostics, 'diagnostics', unfrozen, new Set());
++  t.same(unfrozen, [],
++    'every reachable publication diagnostics record is frozen');
++
++  const firstBuild = buildProjectionReadinessState({
++    membershipPublication: diagnostics,
++  });
++  const secondBuild = buildProjectionReadinessState({
++    membershipPublication: diagnostics,
++  });
++  t.equal(
++    secondBuild.evidence.raw.membershipPublication,
++    firstBuild.evidence.raw.membershipPublication,
++    'repeat readiness builds reuse the normalized publication diagnostics ' +
++      'by reference instead of re-copying the graph',
++  );
++  t.end();
++});
++
++test('canonical dense record arrays are strict-copied once and reused by ' +
++  'identity', async (t) => {
++  const {copyCanonicalDenseOwnDataRecordArray} = await import(
++    '../../src/control-plane/' +
++      'membership-publication-priority-partition-canonical-data.js'
++  );
++  const sourceRows = [
++    {partition_id: 'p-0', node_id: 'n1', status: 'active'},
++    {partition_id: 'p-1', node_id: 'n2', status: 'active'},
++  ];
++  const canonical = copyCanonicalDenseOwnDataRecordArray(sourceRows);
++  t.ok(Array.isArray(canonical), 'a plain record array is copied');
++  t.not(canonical, sourceRows, 'the first crossing produces a fresh copy');
++  t.ok(Object.isFrozen(canonical) && Object.isFrozen(canonical[0]),
++    'the canonical copy and its rows are frozen');
++
++  const reused = copyCanonicalDenseOwnDataRecordArray(canonical);
++  t.equal(reused, canonical,
++    'a canonical copy re-crossing the boundary is reused by identity');
++
++  const recopied = copyCanonicalDenseOwnDataRecordArray(sourceRows);
++  t.not(recopied, canonical,
++    'the unregistered source array is strict-copied again, never trusted');
++
++  const hostileRows = [{}];
++  Object.defineProperty(hostileRows[0], 'status', {
++    get() {
++      return 'active';
++    },
++    enumerable: true,
++    configurable: true,
++  });
++  t.equal(copyCanonicalDenseOwnDataRecordArray(hostileRows), null,
++    'a record with an accessor property is denied');
++  const sparseRows = [];
++  sparseRows[1] = {partition_id: 'p-1'};
++  t.equal(copyCanonicalDenseOwnDataRecordArray(sparseRows), null,
++    'a sparse array is denied');
++  t.end();
++});
