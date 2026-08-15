@@ -83,14 +83,14 @@ describe('seed and joining startup integration', () => {
   });
 
   it('entrypoint initializes bootstrap readiness API for seed and joining nodes', () => {
-    const source = readFileSync('src/index.js', 'utf8');
+    const source = readFileSync('src/lagrange-runtime-startup.js', 'utf8');
     const bootstrapApiCreates = source.match(/new BootstrapAPI\(/g) || [];
     const bootstrapApiInitializations =
-      source.match(/await bootstrapAPI\.initialize\(\)/g) || [];
+      source.match(/bootstrapAPI\.initialize\(\)/g) || [];
     const bootstrapApiSqlEngineHandoffs =
       source.match(/bootstrapAPI\.setSqlQueryEngine\(sqlQueryEngine\)/g) || [];
     const bootstrapApiShutdowns =
-      source.match(/await bootstrapAPI\.shutdown\(\)/g) || [];
+      source.match(/bootstrapAPI\.shutdown\(\)/g) || [];
     const shutdownHandlerUses =
       source.match(/createShutdownSignalHandler\(/g) || [];
 

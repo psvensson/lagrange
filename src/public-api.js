@@ -22,5 +22,6 @@ export * from './service/index.js';
 export * from './threading/index.js';
 export * from './transport/index.js';
 export * from './storage/index.js';
+export {createEmbeddedLagrange} from './embedded-lagrange.js';
 
 export {ENTRYPOINT_VERSION as VERSION} from './constants/entrypoint.js';

@@ -393,7 +393,11 @@ test('durable rejoin outer reattempt hands the canonical lifecycle owner to ' +
 
 test('entrypoint outer reattempt carries the exact lifecycle predecessor',
   (t) => {
-    const source = readFileSync('src/index.js', 'utf8');
+    const source = readFileSync('src/lagrange-runtime-startup.js', 'utf8');
+    const policySource = readFileSync(
+      'src/entrypoint-runtime-join-startup-policy.js',
+      'utf8',
+    );
 
     t.match(
       source,
@@ -402,8 +406,13 @@ test('entrypoint outer reattempt carries the exact lifecycle predecessor',
     );
     t.match(
       source,
-      /_previousLifecycleStateMachine:\s*nodeJoiningService\.getLifecycleStateMachine\(\)/,
+      /_previousLifecycleStateMachine:\s*retry\.previousLifecycleStateMachine/,
       'recursive reattempt should pass the exact exhausted join owner',
+    );
+    t.match(
+      policySource,
+      /nodeJoiningService\.getLifecycleStateMachine\(\)/,
+      'reattempt policy should capture the exact exhausted join owner',
     );
     t.end();
   });

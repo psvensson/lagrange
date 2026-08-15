@@ -23,13 +23,24 @@ import {STABILIZATION_RESET_TRIGGER} from
 import {assertCritical} from './utils/assert.js';
 import {ModuleMirror} from './wasm-service/module-mirror.js';
 import {WasmExecutor} from './wasm-service/wasm-executor.js';
+import {createBoundApplicationDatabaseRuntime} from
+  './query/application-database.js';
+import {
+  APPLICATION_DATABASE_ERROR_CODE,
+  APPLICATION_DATABASE_ERROR_MSG,
+} from './query/application-database-constants.js';
+import {createApplicationDatabaseError} from
+  './query/application-database-error.js';
 import {
   ENTRYPOINT_ERROR_MSG,
   ENTRYPOINT_LOG_MSG,
 } from './constants/entrypoint.js';
 
 const LOCAL_STR_FUNCTION = 'function';
+const LOCAL_STR_STARTUP = 'startup';
 const LOCAL_STR_STARTUPRECOVERYCOORDINATOR = 'startupRecoveryCoordinator';
+const SQL_RUNTIME_CLEANUP_FAILURE =
+  'SQL runtime partial-acquisition cleanup failed';
 
 // A still-joining (or still-bootstrapping) node builds a cache-backed SQL engine
 // for the EARLY admin runtime (the `onLocalAdminRuntimeReady` surface that
@@ -329,101 +340,129 @@ function wireSplitCompletionStabilizationReset(options) {
  */
 async function createSqlRuntimeComposition(options) {
   if (!options.messageRouter) {
-    return {
-      sqlQueryEngine: null,
-      detachMigrationRecovery: () => {},
-    };
+    throw createApplicationDatabaseError(
+      APPLICATION_DATABASE_ERROR_CODE.SQL_CORE_UNAVAILABLE,
+      APPLICATION_DATABASE_ERROR_MSG.SQL_CORE_UNAVAILABLE,
+      {operation: LOCAL_STR_STARTUP},
+    );
   }
 
+  let sqlQueryEngine = null;
+  let detachMigrationRecovery = () => {};
+  try {
   // Literal specifier so esbuild bundles this into the SEA build; a
-  // const-variable specifier is left as a runtime lookup that cannot resolve
-  // inside the single executable (see src/sea-entry.js).
-  const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
-  const wasmExecutor = createSqlCallbackWasmExecutor();
-  const sqlQueryEngine = new SQLQueryEngine({
-    systemCache: options.systemTableCache,
-    messageRouter: options.messageRouter,
-    cdcIntegrationService: options.owner.cdcIntegrationService,
-    nodeId: options.nodeId,
-    rebalanceCoordinator: options.owner.rebalanceCoordinator,
-    controlPlaneReadinessService:
+    // const-variable specifier is left as a runtime lookup that cannot resolve
+    // inside the single executable (see src/sea-entry.js).
+    const {SQLQueryEngine} = await import('./query/sql-query-engine.js');
+    const wasmExecutor = createSqlCallbackWasmExecutor();
+    sqlQueryEngine = new SQLQueryEngine({
+      systemCache: options.systemTableCache,
+      messageRouter: options.messageRouter,
+      cdcIntegrationService: options.owner.cdcIntegrationService,
+      nodeId: options.nodeId,
+      rebalanceCoordinator: options.owner.rebalanceCoordinator,
+      controlPlaneReadinessService:
       resolveOwnerControlPlaneReadinessService(options.owner),
-    partitionServicesProvider: () => options.partitionServices,
-    runtimeDriverRegistry: options.owner.runtimeDriverRegistry,
-    serviceRuntimeLifecycle: options.owner.serviceRuntimeLifecycle,
-    wasmExecutor,
-    migrationAutoWire: false,
-    autoStartDistributedTransactionRecovery: false,
-  });
+      partitionServicesProvider: () => options.partitionServices,
+      runtimeDriverRegistry: options.owner.runtimeDriverRegistry,
+      serviceRuntimeLifecycle: options.owner.serviceRuntimeLifecycle,
+      wasmExecutor,
+      migrationAutoWire: false,
+      autoStartDistributedTransactionRecovery: false,
+    });
 
-  wireMigrationWorkflowOwners({
-    sqlCore: sqlQueryEngine,
-    systemTableCache: options.systemTableCache,
-    transactionCoordinator: sqlQueryEngine.transactionCoordinator,
-    logger: options.logger,
-    now: () => Date.now(),
-  });
+    wireMigrationWorkflowOwners({
+      sqlCore: sqlQueryEngine,
+      systemTableCache: options.systemTableCache,
+      transactionCoordinator: sqlQueryEngine.transactionCoordinator,
+      logger: options.logger,
+      now: () => Date.now(),
+    });
 
-  // Literal specifier so esbuild bundles this into the SEA build (see above).
-  const {PartitionSplitMergeManager} =
+    // Literal specifier so esbuild bundles this into the SEA build (see above).
+    const {PartitionSplitMergeManager} =
     await import('./partition/partition-split-merge-manager.js');
-  const managedMergeWorkflow = new ManagedMergeWorkflow({
-    nodeId: options.nodeId,
-    topologyAdapter: new ManagedMergeTopologyAdapter({
-      sqlQueryEngine,
-    }),
-  });
-  // Source-partition merge executors reach the workflow owner through the
-  // engine handle, mirroring engine.managedSplitWorkflow.
-  sqlQueryEngine.managedMergeWorkflow = managedMergeWorkflow;
-  const partitionSplitMergeManager = new PartitionSplitMergeManager({
-    nodeId: options.nodeId,
-    messageRouter: options.messageRouter,
-    tablePolicyService: options.owner.tablePolicyService,
-    listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),
-    getPartitionMetrics: createManagedSplitMetricsProvider({
-      partitionServices: options.partitionServices,
-    }),
-    executeSplitCandidate: (partitionId) =>
-      sqlQueryEngine.executeManagedSplit(partitionId),
-    executeMergeCandidate: (candidate, executionOptions) =>
-      managedMergeWorkflow.execute(candidate, executionOptions),
-    storageAdmissionService:
+    const managedMergeWorkflow = new ManagedMergeWorkflow({
+      nodeId: options.nodeId,
+      topologyAdapter: new ManagedMergeTopologyAdapter({
+        sqlQueryEngine,
+      }),
+    });
+    // Source-partition merge executors reach the workflow owner through the
+    // engine handle, mirroring engine.managedSplitWorkflow.
+    sqlQueryEngine.managedMergeWorkflow = managedMergeWorkflow;
+    const partitionSplitMergeManager = new PartitionSplitMergeManager({
+      nodeId: options.nodeId,
+      messageRouter: options.messageRouter,
+      tablePolicyService: options.owner.tablePolicyService,
+      listPartitions: () => sqlQueryEngine.listManagedSplitPartitions(),
+      getPartitionMetrics: createManagedSplitMetricsProvider({
+        partitionServices: options.partitionServices,
+      }),
+      executeSplitCandidate: (partitionId) =>
+        sqlQueryEngine.executeManagedSplit(partitionId),
+      executeMergeCandidate: (candidate, executionOptions) =>
+        managedMergeWorkflow.execute(candidate, executionOptions),
+      storageAdmissionService:
       options.owner.rebalanceCoordinator?.storageAdmissionService ||
       null,
-    storageAccountingService:
+      storageAccountingService:
       options.owner.rebalanceCoordinator?.storageAccountingService ||
       null,
-  });
-  sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
-  // SPLIT_COMPLETED is a terminal signal: the workflow owner emits it
-  // after the durable transition clears, and the manager re-emits it so
-  // the stabilization reset (and any other listener) observes exactly
-  // one completion per landed split.
-  if (sqlQueryEngine.managedSplitWorkflow) {
-    sqlQueryEngine.managedSplitWorkflow.splitCompletionListener =
+    });
+    sqlQueryEngine.setPartitionSplitMergeManager(partitionSplitMergeManager);
+    // SPLIT_COMPLETED is a terminal signal: the workflow owner emits it
+    // after the durable transition clears, and the manager re-emits it so
+    // the stabilization reset (and any other listener) observes exactly
+    // one completion per landed split.
+    if (sqlQueryEngine.managedSplitWorkflow) {
+      sqlQueryEngine.managedSplitWorkflow.splitCompletionListener =
       (result) => {
         partitionSplitMergeManager.emit(
           SPLIT_MERGE_EVENT.SPLIT_COMPLETED,
           result,
         );
       };
+    }
+    wireSplitCompletionStabilizationReset({
+      partitionSplitMergeManager,
+      partitionServices: options.partitionServices,
+    });
+
+    detachMigrationRecovery = wireMigrationRecoveryOnLeaderElection({
+      sqlQueryEngine,
+      partitionServices: options.partitionServices,
+      logger: options.logger,
+    });
+    const applicationDatabaseRuntime =
+    createBoundApplicationDatabaseRuntime(sqlQueryEngine);
+
+    return {
+      applicationDatabaseRuntime,
+      sqlQueryEngine,
+      detachMigrationRecovery,
+    };
+  } catch (error) {
+    const cleanupErrors = [];
+    try {
+      detachMigrationRecovery();
+    } catch (cleanupError) {
+      cleanupErrors.push(cleanupError);
+    }
+    try {
+      await sqlQueryEngine?.shutdown?.();
+    } catch (cleanupError) {
+      cleanupErrors.push(cleanupError);
+    }
+    if (cleanupErrors.length > 0) {
+      options.logger?.warn?.(SQL_RUNTIME_CLEANUP_FAILURE, {
+        acquisitionError: error.message,
+        cleanupErrors: cleanupErrors.map((cleanupError) =>
+          cleanupError.message),
+      });
+    }
+    throw error;
   }
-  wireSplitCompletionStabilizationReset({
-    partitionSplitMergeManager,
-    partitionServices: options.partitionServices,
-  });
-
-  const detachMigrationRecovery = wireMigrationRecoveryOnLeaderElection({
-    sqlQueryEngine,
-    partitionServices: options.partitionServices,
-    logger: options.logger,
-  });
-
-  return {
-    sqlQueryEngine,
-    detachMigrationRecovery,
-  };
 }
 
 /**
@@ -546,10 +585,16 @@ async function startAdminRuntimeComposition(options) {
   const allowInsecureExternalBind =
     configurationManager.get(CONFIG_KEY.ADMIN_ALLOW_INSECURE_EXTERNAL_BIND) ===
     true;
-  await adminAPI.initialize(adminPort, {
-    host: adminHost,
-    allowInsecureExternalBind,
-  });
+  try {
+    await adminAPI.initialize(adminPort, {
+      host: adminHost,
+      allowInsecureExternalBind,
+    });
+  } catch (error) {
+    await shutdownAdminRuntimeComposition({adminAPI, liveQueryWiring})
+      .catch(() => undefined);
+    throw error;
+  }
   const logger = options.owner?.logger;
   if (logger && typeof logger.info === LOCAL_STR_FUNCTION) {
     logger.info(ENTRYPOINT_LOG_MSG.ADMIN_RUNTIME_STARTED, {

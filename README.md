@@ -216,6 +216,41 @@ Deployment needs a running cluster and authenticated PostgreSQL-wire lifecycle
 configuration. The generated project README contains the exact `deploy`
 command.
 
+### Embed Lagrange in an application
+
+The package also exposes a side-effect-free embedded-runtime factory. Starting
+the handle creates the same canonical SQL engine used by the daemon; it does
+not create a second storage or query path.
+
+```js
+import {createEmbeddedLagrange} from 'lagrange-server';
+
+const lagrange = createEmbeddedLagrange({
+  configuration: {
+    storage: {dataDir: './data/lagrange-images'},
+  },
+});
+
+await lagrange.start();
+const db = lagrange.openApplicationDatabase({applicationId: 'lagrange-images'});
+
+await db.query('CREATE TABLE images (id TEXT PRIMARY KEY, url TEXT)');
+await db.transaction(async (tx) => {
+  await tx.query(
+    'INSERT INTO images (id, url) VALUES (?, ?)',
+    ['hero', 'https://example.test/hero.png'],
+  );
+});
+
+await lagrange.stop();
+```
+
+Application sessions isolate transaction identity, not tables or tenant data.
+Use table-level ownership and authorization for security boundaries. Direct
+`BEGIN`, `COMMIT`, and `ROLLBACK` statements are reserved; use
+`db.transaction(callback)`. The current embedded lifecycle permits one runtime
+start per process lifetime.
+
 ## Current envelope
 
 Lagrange is experimental alpha software. The current public data-local path has
