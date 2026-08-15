@@ -3,11 +3,8 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './prior
 import {TIME_MS} from '../constants/time.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
 import {
-  CONTROL_PLANE_READINESS_REASON,
-} from '../control-plane/control-plane-readiness-constants.js';
-import {
-  PROJECTION_READINESS_REASON,
-} from '../control-plane/projection-readiness-constants.js';
+  isEvidenceAbsentReadinessDenialSnapshot,
+} from '../control-plane/readiness-denial-classification.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {UNIFIED_SERVICE_TYPE} from
   '../constants/unified-service-lifecycle.js';
@@ -34,30 +31,6 @@ const {
 
 // R3: TTL for the source-leader-handoff stall anchor (2 min) — above the escalation floor
 // and the evidence STALE_AFTER_MS so the anchor doesn't race the escalation window.
-const EVIDENCE_ABSENT_READINESS_REASON_CODES = new Set([
-  CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING,
-  PROJECTION_READINESS_REASON.OWNER_EVIDENCE_MISSING,
-]);
-
-function collectReadinessDenialReasonCodes(readiness) {
-  const codes = [];
-  const append = (value) => {
-    const code = typeof value === 'string' ?
-      value :
-      typeof value?.code === 'string' ? value.code : '';
-    if (code.length > 0 && !codes.includes(code)) {
-      codes.push(code);
-    }
-  };
-  if (Array.isArray(readiness?.reasonCodes)) {
-    readiness.reasonCodes.forEach(append);
-  }
-  if (Array.isArray(readiness?.reasons)) {
-    readiness.reasons.forEach(append);
-  }
-  return codes;
-}
-
 const PRIORITY_PUBLICATION_SOURCE_LEADER_HANDOFF_STALL_TTL_MS =
   TIME_MS.MINUTE * 2;
 
@@ -187,9 +160,7 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
             ),
       },
     );
-    const reasonCodes = collectReadinessDenialReasonCodes(readiness);
-    return reasonCodes.length > 0 && reasonCodes.every((code) =>
-      EVIDENCE_ABSENT_READINESS_REASON_CODES.has(code));
+    return isEvidenceAbsentReadinessDenialSnapshot(readiness);
   }
 
   // Floor accounting for critical-partition remove safety ONLY: a replica

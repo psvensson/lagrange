@@ -8,6 +8,9 @@ import {
   isStartupAuthorityPlacementEligibleNode,
   resolveStartupAuthorityNodeIdSet,
 } from '../control-plane/startup-authority-placement-eligibility.js';
+import {
+  isEvidenceAbsentReadinessDenialSnapshot,
+} from '../control-plane/readiness-denial-classification.js';
 
 const {
   CONTROL_PLANE_PUBLICATION_STATUS,
@@ -239,7 +242,21 @@ class UnifiedRebalancerAvailableNodes extends UnifiedRebalancerLifecycleBase {
           readinessDecisionDimension,
         )
       ) {
-        return false;
+        // Formation placement carve-out: for the control-plane priority
+        // ledger family and the formation-liveness nodes partition — the
+        // partitions whose spread the join barrier waits on — a node whose
+        // readiness denial is exclusively evidence-absent (a barrier-held
+        // joiner whose planning snapshot has not converged) stays
+        // placement-eligible. Cold formation otherwise deadlocks: the
+        // ledger spread needs a target, targets need readiness, and joiner
+        // readiness waits on the barrier the spread releases. Substantive
+        // denials and every other partition class keep the strict filter;
+        // downstream drain and promotion safety gates (peer-ping, quorum
+        // floor, promotion guard) still apply.
+        return (
+          this.isControlPlanePriorityPartition() ||
+          this.isFormationLivenessDependencyPartition()
+        ) && isEvidenceAbsentReadinessDenialSnapshot(readiness);
       }
       return readinessDecisionDimension !==
         CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE ||
