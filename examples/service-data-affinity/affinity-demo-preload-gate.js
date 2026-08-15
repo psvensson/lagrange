@@ -46,6 +46,13 @@ const PRELOAD_BLOCKING_SNAPSHOT_STATES = new Set([
 ]);
 const RATINGS_TABLE_NAME = 'ratings';
 const DEFAULT_TIMEOUT_MS = 180_000;
+// Schema admission waits behind the full formation-time table spread: at
+// five-node GCP scale the ~45 bootstrap tables' replicas drain through the
+// admission-controlled operation ledger in ~5-6 minutes (archived run
+// 2026-08-15T19-50-14-276Z reached zero in-flight seconds after the shared
+// 180s deadline fired), so the schema gate carries its own deadline; the
+// 60s stable-window robustness property is unchanged.
+const DEFAULT_SCHEMA_ADMISSION_TIMEOUT_MS = 480_000;
 const DEFAULT_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_SCHEMA_ADMISSION_STABLE_WINDOW_MS = 60_000;
 const SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT = 2;
@@ -380,6 +387,12 @@ function normalizePollIntervalMs(value) {
     DEFAULT_POLL_INTERVAL_MS;
 }
 
+function normalizeSchemaAdmissionTimeoutMs(value) {
+  return Number.isFinite(value) && value >= ZERO ?
+    Math.floor(value) :
+    DEFAULT_SCHEMA_ADMISSION_TIMEOUT_MS;
+}
+
 function normalizeSchemaStableWindowMs(value) {
   return Number.isFinite(value) && value >= ZERO ?
     Math.floor(value) :
@@ -547,7 +560,7 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
     options.sleep :
     (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
   const normalizedOptions = {...options, now, sleep};
-  const timeoutMs = normalizeTimeoutMs(options.timeoutMs);
+  const timeoutMs = normalizeSchemaAdmissionTimeoutMs(options.timeoutMs);
   const pollIntervalMs = normalizePollIntervalMs(options.pollIntervalMs);
   const stableWindowMs = normalizeSchemaStableWindowMs(
     options.stableWindowMs,

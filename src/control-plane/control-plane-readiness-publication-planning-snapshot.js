@@ -251,11 +251,10 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       typeof service.getLatestMembershipPublicationEpochStatusForNodeSync !==
         'function'
     ) {
-      // No cheap probe surface (legacy stubs): the floored generation alone
-      // governs invalidation at store time, and the hit-path falls back to
-      // the legacy full-read comparison. A full-row read here would add an
-      // unprofiled publication-lane read to every memo store, breaking the
-      // sealed lane-separation contract those stubs assert.
+      // No probe surface on this service: freshness is governed entirely
+      // by the floored planning generation. A full-row read here would add
+      // an unprofiled publication-lane read to every memo store, breaking
+      // the sealed lane-separation contract.
       return PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE;
     }
     const latestPub =
