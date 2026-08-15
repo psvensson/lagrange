@@ -452,6 +452,32 @@ class ReadinessPlanningSnapshotOwner {
       this.isCompletedSnapshotLive(ownerKey, completed);
   }
 
+  // Live profiling of the archived run
+  // run-2026-08-15T16-36-59-912Z-profiled-manual measured every deferred
+  // read minting a fresh frozen evidence graph, so the identity-keyed
+  // retention in projection-readiness-evidence could never hit for
+  // evidence-absent joiners (9x per-build cost against a same-identity
+  // read). The deferred snapshot is a pure derivation of (source snapshot,
+  // token generation, ownerKey); any source change rotates the token key
+  // and rebuilds.
+  buildMemoizedDeferredSnapshot(snapshot, token, ownerKey) {
+    if (!this.deferredSnapshotMemoByOwnerKey) {
+      this.deferredSnapshotMemoByOwnerKey = new Map();
+    }
+    const entry = this.deferredSnapshotMemoByOwnerKey.get(ownerKey);
+    if (entry && entry.sourceSnapshot === snapshot &&
+      entry.tokenKey === token?.tokenKey) {
+      return entry.deferred;
+    }
+    const deferred = buildDeferredSnapshot(snapshot, token, ownerKey);
+    this.deferredSnapshotMemoByOwnerKey.set(ownerKey, {
+      sourceSnapshot: snapshot,
+      tokenKey: token?.tokenKey,
+      deferred,
+    });
+    return deferred;
+  }
+
   readSync(ownerKey, options, buildSnapshot) {
     const currentToken = this.captureToken();
     const buildOptionsKey = this.captureBuildOptionsKey(ownerKey, options);
@@ -478,7 +504,7 @@ class ReadinessPlanningSnapshotOwner {
         options,
         currentToken,
       );
-      return buildDeferredSnapshot(null, currentToken, ownerKey);
+      return this.buildMemoizedDeferredSnapshot(null, currentToken, ownerKey);
     }
     if (this.canReuseCompletedSnapshot(
       ownerKey,
@@ -515,7 +541,11 @@ class ReadinessPlanningSnapshotOwner {
       options,
       currentToken,
     );
-    return buildDeferredSnapshot(completed.snapshot, currentToken, ownerKey);
+    return this.buildMemoizedDeferredSnapshot(
+      completed.snapshot,
+      currentToken,
+      ownerKey,
+    );
   }
 
   publishCompleted(
@@ -557,7 +587,7 @@ class ReadinessPlanningSnapshotOwner {
         buildOptions,
         currentToken,
       );
-      return buildDeferredSnapshot(snapshot, currentToken, ownerKey);
+      return this.buildMemoizedDeferredSnapshot(snapshot, currentToken, ownerKey);
     }
     if (notifyListeners) {
       this.notifySnapshotPublished(ownerKey, snapshot, capturedToken);

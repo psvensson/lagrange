@@ -485,90 +485,110 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
     }
     const localPlanningAdmission =
       this.resolveLocalPlanningAdmissionEvidence(planningSnapshot);
-    const providedPublicationRecoveryGate =
-      this.getMembershipPublicationRecoveryGate(planningSnapshot);
-    const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
-      ...(providedPublicationRecoveryGate || {}),
-      publicationEpoch:
-        Number.isFinite(planningSnapshot.publicationEpoch) ?
-          Math.floor(planningSnapshot.publicationEpoch) :
-          providedPublicationRecoveryGate?.publicationEpoch ??
-          null,
-      publicationStatus:
-        typeof planningSnapshot.publicationStatus === 'string' &&
-          planningSnapshot.publicationStatus.length > 0 ?
-          planningSnapshot.publicationStatus :
-          typeof planningSnapshot.status === 'string' &&
-            planningSnapshot.status.length > 0 ?
-            planningSnapshot.status :
-            providedPublicationRecoveryGate?.publicationStatus ??
+    // The gate is a pure derivation of the planning snapshot (the provided
+    // gate is read off the snapshot itself), and the shipped
+    // planning-derivation memo returns the same frozen snapshot until a
+    // source-table write rotates the version key — snapshot identity is an
+    // exact memo key. Live profiling counted thousands of these rebuilds
+    // per freeze burst, each minting fresh spread-copied records that
+    // defeated the projection-evidence identity retention downstream.
+    // Inline (not extracted) so the sealed complexity ratchet keeps one
+    // over-threshold function here instead of two.
+    if (!this.planningPublicationRecoveryGateMemo) {
+      this.planningPublicationRecoveryGateMemo = new WeakMap();
+    }
+    let publicationRecoveryGate =
+      this.planningPublicationRecoveryGateMemo.get(planningSnapshot);
+    if (!publicationRecoveryGate) {
+      const providedPublicationRecoveryGate =
+        this.getMembershipPublicationRecoveryGate(planningSnapshot);
+      publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
+        ...(providedPublicationRecoveryGate || {}),
+        publicationEpoch:
+          Number.isFinite(planningSnapshot.publicationEpoch) ?
+            Math.floor(planningSnapshot.publicationEpoch) :
+            providedPublicationRecoveryGate?.publicationEpoch ??
             null,
-      publicationObservationState:
-        typeof planningSnapshot.publicationObservationState === 'string' &&
-          planningSnapshot.publicationObservationState.length > 0 ?
-          planningSnapshot.publicationObservationState :
-          providedPublicationRecoveryGate?.publicationObservationState ??
-          null,
-      recoveryProtocolState:
-        typeof planningSnapshot.recoveryProtocolState === 'string' &&
-          planningSnapshot.recoveryProtocolState.length > 0 ?
-          planningSnapshot.recoveryProtocolState :
-          providedPublicationRecoveryGate?.recoveryProtocolState ??
-          null,
-      priorityRecoveryReasonCodes:
-        Array.isArray(planningSnapshot.priorityRecoveryReasonCodes) ?
-          planningSnapshot.priorityRecoveryReasonCodes :
-          providedPublicationRecoveryGate?.reasonCodes,
-      priorityPartitionSummary:
-        planningSnapshot.priorityPartitionSummary &&
-          typeof planningSnapshot.priorityPartitionSummary === 'object' ?
-          planningSnapshot.priorityPartitionSummary :
-          providedPublicationRecoveryGate?.priorityPartitionSummary ??
-          null,
-      priorityRecoveryClosureWitness:
-        planningSnapshot.priorityRecoveryClosureWitness &&
-          typeof planningSnapshot.priorityRecoveryClosureWitness ===
-            'object' ?
-          planningSnapshot.priorityRecoveryClosureWitness :
-          providedPublicationRecoveryGate?.priorityRecoveryClosureWitness ??
-          null,
-      requiredAckNodeIds:
-        Array.isArray(planningSnapshot.requiredAckNodeIds) ?
-          planningSnapshot.requiredAckNodeIds :
-          providedPublicationRecoveryGate?.requiredAckNodeIds ??
-          [],
-      acknowledgedNodeIds:
-        Array.isArray(planningSnapshot.acknowledgedNodeIds) ?
-          planningSnapshot.acknowledgedNodeIds :
-          providedPublicationRecoveryGate?.acknowledgedNodeIds ??
-          [],
-      pendingAckNodeIds:
-        Array.isArray(planningSnapshot.pendingAckNodeIds) ?
-          planningSnapshot.pendingAckNodeIds :
-          providedPublicationRecoveryGate?.pendingAckNodeIds ??
-          [],
-      pendingAckCount:
-        planningSnapshot.pendingAckCount ??
-        providedPublicationRecoveryGate?.pendingAckCount ??
-        0,
-      pendingAckEvidenceState: this.resolvePlanningPendingAckEvidenceState(
-        planningSnapshot,
-        providedPublicationRecoveryGate,
-      ),
-      missingPublishedNodeIds:
-        Array.isArray(planningSnapshot.missingPublishedNodeIds) ?
-          planningSnapshot.missingPublishedNodeIds :
-          Array.isArray(
-            planningSnapshot.missingPublishedRecoveryActiveNodeIds,
-          ) ?
-            planningSnapshot.missingPublishedRecoveryActiveNodeIds :
-            providedPublicationRecoveryGate?.missingPublishedNodeIds ??
+        publicationStatus:
+          typeof planningSnapshot.publicationStatus === 'string' &&
+            planningSnapshot.publicationStatus.length > 0 ?
+            planningSnapshot.publicationStatus :
+            typeof planningSnapshot.status === 'string' &&
+              planningSnapshot.status.length > 0 ?
+              planningSnapshot.status :
+              providedPublicationRecoveryGate?.publicationStatus ??
+              null,
+        publicationObservationState:
+          typeof planningSnapshot.publicationObservationState === 'string' &&
+            planningSnapshot.publicationObservationState.length > 0 ?
+            planningSnapshot.publicationObservationState :
+            providedPublicationRecoveryGate?.publicationObservationState ??
+            null,
+        recoveryProtocolState:
+          typeof planningSnapshot.recoveryProtocolState === 'string' &&
+            planningSnapshot.recoveryProtocolState.length > 0 ?
+            planningSnapshot.recoveryProtocolState :
+            providedPublicationRecoveryGate?.recoveryProtocolState ??
+            null,
+        priorityRecoveryReasonCodes:
+          Array.isArray(planningSnapshot.priorityRecoveryReasonCodes) ?
+            planningSnapshot.priorityRecoveryReasonCodes :
+            providedPublicationRecoveryGate?.reasonCodes,
+        priorityPartitionSummary:
+          planningSnapshot.priorityPartitionSummary &&
+            typeof planningSnapshot.priorityPartitionSummary === 'object' ?
+            planningSnapshot.priorityPartitionSummary :
+            providedPublicationRecoveryGate?.priorityPartitionSummary ??
+            null,
+        priorityRecoveryClosureWitness:
+          planningSnapshot.priorityRecoveryClosureWitness &&
+            typeof planningSnapshot.priorityRecoveryClosureWitness ===
+              'object' ?
+            planningSnapshot.priorityRecoveryClosureWitness :
+            providedPublicationRecoveryGate?.priorityRecoveryClosureWitness ??
+            null,
+        requiredAckNodeIds:
+          Array.isArray(planningSnapshot.requiredAckNodeIds) ?
+            planningSnapshot.requiredAckNodeIds :
+            providedPublicationRecoveryGate?.requiredAckNodeIds ??
             [],
-      publicationExcludesTargetNode:
-        typeof planningSnapshot.publicationExcludesTargetNode === 'boolean' ?
-          planningSnapshot.publicationExcludesTargetNode :
-          providedPublicationRecoveryGate?.publicationExcludesTargetNode === true,
-    });
+        acknowledgedNodeIds:
+          Array.isArray(planningSnapshot.acknowledgedNodeIds) ?
+            planningSnapshot.acknowledgedNodeIds :
+            providedPublicationRecoveryGate?.acknowledgedNodeIds ??
+            [],
+        pendingAckNodeIds:
+          Array.isArray(planningSnapshot.pendingAckNodeIds) ?
+            planningSnapshot.pendingAckNodeIds :
+            providedPublicationRecoveryGate?.pendingAckNodeIds ??
+            [],
+        pendingAckCount:
+          planningSnapshot.pendingAckCount ??
+          providedPublicationRecoveryGate?.pendingAckCount ??
+          0,
+        pendingAckEvidenceState: this.resolvePlanningPendingAckEvidenceState(
+          planningSnapshot,
+          providedPublicationRecoveryGate,
+        ),
+        missingPublishedNodeIds:
+          Array.isArray(planningSnapshot.missingPublishedNodeIds) ?
+            planningSnapshot.missingPublishedNodeIds :
+            Array.isArray(
+              planningSnapshot.missingPublishedRecoveryActiveNodeIds,
+            ) ?
+              planningSnapshot.missingPublishedRecoveryActiveNodeIds :
+              providedPublicationRecoveryGate?.missingPublishedNodeIds ??
+              [],
+        publicationExcludesTargetNode:
+          typeof planningSnapshot.publicationExcludesTargetNode === 'boolean' ?
+            planningSnapshot.publicationExcludesTargetNode :
+            providedPublicationRecoveryGate?.publicationExcludesTargetNode === true,
+      });
+      this.planningPublicationRecoveryGateMemo.set(
+        planningSnapshot,
+        publicationRecoveryGate,
+      );
+    }
     const priorityRecoveryReasonCodes =
       this.filterPriorityRecoveryReasonCodesForPublicationGate(
         [

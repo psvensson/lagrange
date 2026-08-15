@@ -16,7 +16,7 @@ import {
   normalizeServiceRow,
 } from './system-row-normalizers.js';
 import {
-  buildProjectionReadinessState,
+  resolveProjectionReadinessStateForEntry,
 } from './projection-readiness-state.js';
 import {
   ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE,
@@ -234,11 +234,7 @@ function evaluateProjectionReadinessDimensions(
   const projectionReadiness =
     readinessEntry?.lanes && typeof readinessEntry.lanes === 'object' ?
       readinessEntry :
-      buildProjectionReadinessState(
-        readinessEntry && typeof readinessEntry === 'object' ?
-          readinessEntry :
-          {},
-      );
+      resolveProjectionReadinessStateForEntry(readinessEntry);
   const authoritySource = resolveProjectionReadinessAuthoritySource(
     projectionReadiness,
     options,

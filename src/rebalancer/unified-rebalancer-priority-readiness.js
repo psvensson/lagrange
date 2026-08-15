@@ -127,7 +127,26 @@ function readRecordField(record, fieldName, fallback) {
     valueOrFallback(record[fieldName], fallback) :
     fallback;
 }
+// The gate is a pure derivation of the planning snapshot, and the shipped
+// planning-derivation memo returns the same frozen snapshot until a
+// source-table write rotates the version key — so snapshot identity is an
+// exact memo key. Live profiling counted 10123 gate rebuilds inside one
+// 18.3s synchronous burst (per entity per tick, upstream of the
+// placement-observation memo).
+const PLANNING_PUBLICATION_RECOVERY_GATE_MEMO = new WeakMap();
+
 function buildPlanningPublicationRecoveryGate(planningSnapshot) {
+  const memoized =
+    PLANNING_PUBLICATION_RECOVERY_GATE_MEMO.get(planningSnapshot);
+  if (memoized) {
+    return memoized;
+  }
+  const gate = buildPlanningPublicationRecoveryGateUncached(planningSnapshot);
+  PLANNING_PUBLICATION_RECOVERY_GATE_MEMO.set(planningSnapshot, gate);
+  return gate;
+}
+
+function buildPlanningPublicationRecoveryGateUncached(planningSnapshot) {
   const providedGate = selectPlanningObject([
     planningSnapshot.publicationRecoveryGate,
   ]);

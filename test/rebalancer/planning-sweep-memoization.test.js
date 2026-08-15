@@ -15,6 +15,9 @@ import {test} from '../../src/test-helpers/tap.js';
 import {
   ControlPlaneReadinessService,
 } from '../../src/control-plane/control-plane-readiness-service.js';
+import {
+  getSharedSyncSectionRegistry,
+} from '../../src/diagnostics/event-loop-gap-watchdog.js';
 import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
 import {
   createMockCache,
@@ -214,6 +217,38 @@ test('the current-priority-placement observation builds once per ' +
   );
   t.equal(getAllCallsByTable.get('services') - before, 3,
     'a different ready-node view never reuses another variant’s memo');
+  t.end();
+});
+
+test('the spread-blocker recovery gate builds once per planning snapshot ' +
+  'identity', async (t) => {
+  const stack = createVersionedRebalancerStack('p-sweep-1');
+  t.teardown(() => stack.shutdown());
+  const planningSnapshot = Object.freeze({
+    publishedActiveNodeIds: Object.freeze([SWEEP_NODE_ID]),
+    priorityPartitionSummary: Object.freeze({satisfied: false}),
+  });
+  stack.rebalancer.controlPlaneReadinessService
+    .getMembershipPublicationPlanningAnswerSync = () => planningSnapshot;
+  const readGateBuilds = () => {
+    const site = getSharedSyncSectionRegistry()
+      .sites.get('publication_recovery_gate_snapshot_build');
+    return site ? site.count : 0;
+  };
+  const before = readGateBuilds();
+  for (let index = 0; index < SWEEP_CALL_COUNT; index++) {
+    stack.rebalancer.getControlPlanePrioritySpreadBlocker();
+  }
+  t.equal(readGateBuilds() - before, 1,
+    'repeated spread-blocker evaluations of one snapshot share one gate ' +
+      'build');
+
+  stack.rebalancer.controlPlaneReadinessService
+    .getMembershipPublicationPlanningAnswerSync =
+      () => Object.freeze({...planningSnapshot});
+  stack.rebalancer.getControlPlanePrioritySpreadBlocker();
+  t.equal(readGateBuilds() - before, 2,
+    'a new snapshot identity rebuilds the gate');
   t.end();
 });
 

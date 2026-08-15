@@ -66,6 +66,29 @@ function buildProjectionReadinessContract(source = {}) {
   return buildProjectionReadinessState(source);
 }
 
+// Per-node projection state is rebuilt twice per candidate-derivation pass
+// (active-node selection plus the isCanonicallyActiveNode re-check) and once
+// more per readiness evaluation — live-profiled at half the residual seed
+// freeze cost (archived run run-2026-08-15T16-36-59-912Z-profiled-manual).
+// The state is a pure frozen derivation of the readiness entry, so entry
+// identity is an exact memo key; readiness entries are frozen snapshots in
+// production, and a caller that mints fresh entries per read simply misses.
+const PROJECTION_READINESS_STATE_BY_ENTRY = new WeakMap();
+const EMPTY_PROJECTION_READINESS_SOURCE = objectFreeze({});
+
+function resolveProjectionReadinessStateForEntry(readinessEntry) {
+  const source = readinessEntry && typeof readinessEntry === 'object' ?
+    readinessEntry :
+    EMPTY_PROJECTION_READINESS_SOURCE;
+  const memoized = PROJECTION_READINESS_STATE_BY_ENTRY.get(source);
+  if (memoized) {
+    return memoized;
+  }
+  const state = buildProjectionReadinessState(source);
+  PROJECTION_READINESS_STATE_BY_ENTRY.set(source, state);
+  return state;
+}
+
 function normalizeSummaryReasonCodes(reasonCodes) {
   const normalized = new ArrayConstructor();
   const source = arrayIsArray(reasonCodes) ? reasonCodes : normalized;
@@ -128,5 +151,6 @@ function summarizeProjectionReadinessContractForHistory(contract) {
 export {
   buildProjectionReadinessContract,
   buildProjectionReadinessState,
+  resolveProjectionReadinessStateForEntry,
   summarizeProjectionReadinessContractForHistory,
 };
