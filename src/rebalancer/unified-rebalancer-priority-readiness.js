@@ -1,9 +1,6 @@
 import {UNIFIED_REBALANCER_SHARED} from './unified-rebalancer-shared.js';
-import {readAllSharedRows} from '../cache/shared-row-read.js';
-import {buildCurrentPriorityPlacementObservation} from
-  '../control-plane/current-priority-placement-observation.js';
-import {isCatchupLearnerRaftRole} from
-  '../raft/replica-voter-readiness.js';
+import {buildCurrentPriorityPlacementFromRebalancerCache} from
+  './priority-placement-observation-memo.js';
 import {readExpectedReplicaCount} from
   '../control-plane/membership-publication-priority-partition-canonical-data.js';
 
@@ -19,7 +16,6 @@ const {
   classifySystemPartition,
   getLocalControlPlaneMutationReadinessBlocker,
   isBackgroundWorkLifecycleReadySnapshot,
-  normalizeServiceRow,
   resolvePriorityRecoveryActiveNodeCohort,
   shouldPriorityRecoveryOperationBlockPlanning,
 } = UNIFIED_REBALANCER_SHARED;
@@ -261,89 +257,6 @@ function collectNonBlockingPriorityOperationIds(
       operationIds.add(operationId);
     }
   }
-}
-
-function resolvePriorityLearnerNodeIds(serviceRows) {
-  const nodeIds = new Set();
-  for (const serviceRow of serviceRows) {
-    const service = normalizeServiceRow(serviceRow);
-    if (
-      service.nodeId &&
-      isCatchupLearnerRaftRole(service.raftRole) &&
-      classifySystemPartition({partitionId: service.partitionId})
-        .priorityControlPlane
-    ) {
-      nodeIds.add(service.nodeId);
-    }
-  }
-  return nodeIds;
-}
-
-function buildCurrentPriorityPlacementFromRebalancerCache({
-  systemTableCache,
-  readinessService,
-  planningSnapshot,
-  planningPublishedActiveNodeIds,
-  readyNodeIds,
-  cohortNodeIds,
-  observedAt,
-  currentPartitionId = null,
-  currentPartitionServiceRows = null,
-}) {
-  const locallyEligibleNodeIds = [
-    ...new Set([...readyNodeIds, ...cohortNodeIds]),
-  ];
-  const partitionRows = readAllSharedRows(
-    systemTableCache,
-    TABLES.PARTITIONS,
-  );
-  const cachedServiceRows = readAllSharedRows(
-    systemTableCache,
-    TABLES.SERVICES,
-  );
-  const normalizedCurrentPartitionId = String(
-    currentPartitionId || UNIFIED_REBALANCER_LITERAL.EMPTY_STRING,
-  ).trim();
-  const serviceRows =
-    normalizedCurrentPartitionId.length > 0 &&
-    Array.isArray(currentPartitionServiceRows) ?
-      [
-        ...cachedServiceRows.filter(
-          (serviceRow) =>
-            normalizeServiceRow(serviceRow).partitionId !==
-              normalizedCurrentPartitionId,
-        ),
-        ...currentPartitionServiceRows,
-      ] :
-      cachedServiceRows;
-  const locallyEligibleNodeIdSet = new Set(locallyEligibleNodeIds);
-  const priorityLearnerNodeIds =
-    resolvePriorityLearnerNodeIds(serviceRows);
-  const readinessByNodeId =
-    typeof readinessService?.getNodeReadinessSync === 'function' ?
-      Object.fromEntries(
-        [...priorityLearnerNodeIds]
-          .filter((nodeId) => locallyEligibleNodeIdSet.has(nodeId))
-          .map((nodeId) => [
-            nodeId,
-            readinessService.getNodeReadinessSync(nodeId, {
-              allowStaleOnCacheChange: false,
-            }),
-          ]),
-      ) :
-      {};
-  return buildCurrentPriorityPlacementObservation({
-    capturedAt: observedAt,
-    partitionRows,
-    serviceRows,
-    readinessByNodeId,
-    activeNodeViews: {
-      locallyEligibleNodeIds,
-      projectedServingNodeIds:
-        planningSnapshot?.projectedServingNodeIds || [],
-      publishedActiveNodeIds: [...planningPublishedActiveNodeIds],
-    },
-  });
 }
 
 function appendPrioritySummaryBlockers(

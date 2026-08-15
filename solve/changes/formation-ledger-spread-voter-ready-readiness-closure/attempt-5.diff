@@ -1,8 +1,8 @@
 diff --git a/src/control-plane/control-plane-readiness-publication-diagnostics.js b/src/control-plane/control-plane-readiness-publication-diagnostics.js
-index 2022d463325f43ded9d7218a88702b64e2e469a9..9ab2a0399adf258b2a9427d44e75082c2c2942d1 100644
+index 2022d463325f43ded9d7218a88702b64e2e469a9..00da193d696c2e7c79330f22fdbeff1825c586da 100644
 --- a/src/control-plane/control-plane-readiness-publication-diagnostics.js
 +++ b/src/control-plane/control-plane-readiness-publication-diagnostics.js
-@@ -9,36 +9,20 @@
+@@ -9,35 +9,26 @@
   */
  import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
  import {ControlPlaneReadinessDiagnosticsEligibility} from './control-plane-readiness-diagnostics-eligibility.js';
@@ -39,11 +39,16 @@ index 2022d463325f43ded9d7218a88702b64e2e469a9..9ab2a0399adf258b2a9427d44e75082c
 -  TABLES.CONTROL_PLANE_PUBLICATIONS,
 -  TABLES.REPLICA_OPERATIONS,
 -]);
--
++// Named empty-state for the memoized async candidate derivation: the
++// service produced no usable candidate, so the caller must fall through to
++// the diagnostics-derived planning snapshot instead of trusting the memo.
++const ASYNC_PLANNING_DERIVATION_UNAVAILABLE = Object.freeze({
++  planningCandidateUnavailable: true,
++});
+ 
  class ControlPlaneReadinessPublicationDiagnostics
    extends ControlPlaneReadinessDiagnosticsEligibility {
-   async getMembershipPublicationDiagnostics(
-@@ -142,19 +126,59 @@ class ControlPlaneReadinessPublicationDiagnostics
+@@ -142,19 +133,59 @@ class ControlPlaneReadinessPublicationDiagnostics
      });
    }
  
@@ -92,7 +97,7 @@ index 2022d463325f43ded9d7218a88702b64e2e469a9..9ab2a0399adf258b2a9427d44e75082c
 +              this.normalizeMembershipPublicationPlanningSnapshot(candidate),
 +            );
 +          }
-+          return null;
++          return ASYNC_PLANNING_DERIVATION_UNAVAILABLE;
 +        })();
 +        if (versionKey !== null) {
 +          const entry = {versionKey, publisherNodeId, promise: derivation};
@@ -105,12 +110,12 @@ index 2022d463325f43ded9d7218a88702b64e2e469a9..9ab2a0399adf258b2a9427d44e75082c
 +        }
 +      }
 +      const snapshot = await derivation;
-+      if (snapshot) {
++      if (snapshot !== ASYNC_PLANNING_DERIVATION_UNAVAILABLE) {
 +        return snapshot;
        }
      }
      const membershipPublication =
-@@ -178,18 +202,7 @@ class ControlPlaneReadinessPublicationDiagnostics
+@@ -178,18 +209,7 @@ class ControlPlaneReadinessPublicationDiagnostics
    // interval, the same bound the CL-019 diagnostics memo accepted); any
    // relevant table write invalidates.
    readMembershipPlanningDerivationVersionKey() {
@@ -132,10 +137,10 @@ index 2022d463325f43ded9d7218a88702b64e2e469a9..9ab2a0399adf258b2a9427d44e75082c
    getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt) {
 diff --git a/src/control-plane/membership-planning-version-key.js b/src/control-plane/membership-planning-version-key.js
 new file mode 100644
-index 0000000000000000000000000000000000000000..dbca628e1d11ad35d677f93dec21d7c527dca3dd
+index 0000000000000000000000000000000000000000..df8d9d0731f591780db5aab129210b21fee0844e
 --- /dev/null
 +++ b/src/control-plane/membership-planning-version-key.js
-@@ -0,0 +1,48 @@
+@@ -0,0 +1,47 @@
 +import {TABLES} from '../constants/index.js';
 +
 +// Every system table the membership-planning candidate derivation (and the
@@ -181,7 +186,6 @@ index 0000000000000000000000000000000000000000..dbca628e1d11ad35d677f93dec21d7c5
 +}
 +
 +export {
-+  MEMBERSHIP_PLANNING_DERIVATION_SOURCE_TABLES,
 +  readMembershipPlanningDerivationVersionKey,
 +};
 diff --git a/src/rebalancer/priority-placement-observation-memo.js b/src/rebalancer/priority-placement-observation-memo.js
@@ -518,30 +522,37 @@ index 8aba08014065846ac98040e43b85ec639e2cb2ae..e10e8a6e061ad6d1a803de6baed06be2
    blockedPartitionById,
    priorityPartitionSummary,
 diff --git a/test/rebalancer/planning-sweep-memoization.test.js b/test/rebalancer/planning-sweep-memoization.test.js
-index 9a7633c2b5537c21fff2aa68da69ada2b3b835d7..d5b1c57d6ca129dabead191956e32968f2e63002 100644
+index 9a7633c2b5537c21fff2aa68da69ada2b3b835d7..19bdcf178545d9571642245cf14eaadfa0ea10c5 100644
 --- a/test/rebalancer/planning-sweep-memoization.test.js
 +++ b/test/rebalancer/planning-sweep-memoization.test.js
-@@ -149,3 +149,143 @@ test('the global topology-blocking in-flight view scans once per ledger ' +
-     'a ledger write invalidates the scan memo');
+@@ -92,17 +92,19 @@ test('the sync membership-planning snapshot derives once per source-table ' +
    t.end();
  });
-+
-+test('the current-priority-placement observation builds once per ' +
-+  'source-table generation', async (t) => {
-+  const nodeCache = createMockCache({
-+    nodes: [{node_id: SWEEP_NODE_ID, status: 'active',
-+      connection_state: 'ready'}],
-+    services: [],
-+    partitions: [{partition_id: 'p-sweep-1', table_id: 'p-sweep'}],
-+    replicaOperations: [],
-+  });
-+  const versioned = createVersionedCacheStub();
+ 
+-test('the global topology-blocking in-flight view scans once per ledger ' +
+-  'generation', async (t) => {
++// One instrumented stack for the sweep-memo tests: a version-aware bridge
++// over the mock cache counting both filter and getAll reads, wired through
++// readiness, coordinator, and rebalancer.
++function createVersionedRebalancerStack(entityId) {
+   const nodeCache = createMockCache({
+     nodes: [{node_id: SWEEP_NODE_ID, status: 'active',
+       connection_state: 'ready'}],
+     services: [],
+-    partitions: [{partition_id: 'p-sweep-1', table_id: 'p-sweep'}],
++    partitions: [{partition_id: entityId, table_id: 'p-sweep'}],
+     replicaOperations: [],
+   });
+   const versioned = createVersionedCacheStub();
+-  // Bridge: version-aware filter over the mock cache's data surface.
 +  const getAllCallsByTable = new Map();
-+  const cache = {
-+    ...nodeCache,
-+    getTableMutationVersion:
-+      versioned.getTableMutationVersion.bind(versioned),
-+    bump: versioned.bump.bind(versioned),
+   const cache = {
+     ...nodeCache,
+     getTableMutationVersion:
+@@ -112,6 +114,13 @@ test('the global topology-blocking in-flight view scans once per ledger ' +
+       versioned.filter(tableName);
+       return nodeCache.filter(tableName, predicate);
+     },
 +    getAll(tableName) {
 +      getAllCallsByTable.set(
 +        tableName,
@@ -549,29 +560,71 @@ index 9a7633c2b5537c21fff2aa68da69ada2b3b835d7..d5b1c57d6ca129dabead191956e32968
 +      );
 +      return nodeCache.getAll(tableName);
 +    },
+   };
+   const readinessService = createMockControlPlaneReadinessService({
+     systemTableCache: cache,
+@@ -122,30 +131,141 @@ test('the global topology-blocking in-flight view scans once per ledger ' +
+     controlPlaneReadinessService: readinessService,
+   });
+   const rebalancer = createTestRebalancer({
+-    entityId: 'p-sweep-1',
++    entityId,
+     entityType: EntityType.PARTITION,
+     nodeId: SWEEP_NODE_ID,
+     systemTableCache: cache,
+     rebalanceCoordinator: coordinator,
+     controlPlaneReadinessService: readinessService,
+   });
+-  t.teardown(() => {
+-    rebalancer.shutdown();
+-    if (typeof coordinator.shutdown === 'function') {
+-      coordinator.shutdown();
+-    }
+-  });
++  return {
++    cache,
++    rebalancer,
++    getAllCallsByTable,
++    filterCallCount: () => versioned.filterCallCount,
++    shutdown() {
++      rebalancer.shutdown();
++      if (typeof coordinator.shutdown === 'function') {
++        coordinator.shutdown();
++      }
++    },
 +  };
-+  const readinessService = createMockControlPlaneReadinessService({
-+    systemTableCache: cache,
-+  });
-+  const coordinator = createTestCoordinator({
-+    nodeId: SWEEP_NODE_ID,
-+    systemTableCache: cache,
-+    controlPlaneReadinessService: readinessService,
-+  });
-+  const rebalancer = createTestRebalancer({
-+    entityId: 'p-sweep-1',
-+    entityType: EntityType.PARTITION,
-+    nodeId: SWEEP_NODE_ID,
-+    systemTableCache: cache,
-+    rebalanceCoordinator: coordinator,
-+    controlPlaneReadinessService: readinessService,
-+  });
-+  t.teardown(() => {
-+    rebalancer.shutdown();
-+    if (typeof coordinator.shutdown === 'function') {
-+      coordinator.shutdown();
-+    }
-+  });
++}
++
++test('the global topology-blocking in-flight view scans once per ledger ' +
++  'generation', async (t) => {
++  const stack = createVersionedRebalancerStack('p-sweep-1');
++  t.teardown(() => stack.shutdown());
+ 
+-  const before = versioned.filterCallCount;
++  const before = stack.filterCallCount();
+   for (let index = 0; index < SWEEP_CALL_COUNT; index++) {
+-    rebalancer.getGlobalTopologyBlockingInFlightOperations();
++    stack.rebalancer.getGlobalTopologyBlockingInFlightOperations();
+   }
+-  t.equal(versioned.filterCallCount - before, 1,
++  t.equal(stack.filterCallCount() - before, 1,
+     'repeated global topology-blocking reads share one ledger scan');
+ 
+-  cache.bump('replica_operations');
+-  rebalancer.getGlobalTopologyBlockingInFlightOperations();
+-  t.equal(versioned.filterCallCount - before, 2,
++  stack.cache.bump('replica_operations');
++  stack.rebalancer.getGlobalTopologyBlockingInFlightOperations();
++  t.equal(stack.filterCallCount() - before, 2,
+     'a ledger write invalidates the scan memo');
+   t.end();
+ });
++
++test('the current-priority-placement observation builds once per ' +
++  'source-table generation', async (t) => {
++  const stack = createVersionedRebalancerStack('p-sweep-1');
++  t.teardown(() => stack.shutdown());
++  const {cache, rebalancer, getAllCallsByTable} = stack;
 +
 +  const planningSnapshot = Object.freeze({
 +    publishedActiveNodeIds: [SWEEP_NODE_ID],

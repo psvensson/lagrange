@@ -92,17 +92,19 @@ test('the sync membership-planning snapshot derives once per source-table ' +
   t.end();
 });
 
-test('the global topology-blocking in-flight view scans once per ledger ' +
-  'generation', async (t) => {
+// One instrumented stack for the sweep-memo tests: a version-aware bridge
+// over the mock cache counting both filter and getAll reads, wired through
+// readiness, coordinator, and rebalancer.
+function createVersionedRebalancerStack(entityId) {
   const nodeCache = createMockCache({
     nodes: [{node_id: SWEEP_NODE_ID, status: 'active',
       connection_state: 'ready'}],
     services: [],
-    partitions: [{partition_id: 'p-sweep-1', table_id: 'p-sweep'}],
+    partitions: [{partition_id: entityId, table_id: 'p-sweep'}],
     replicaOperations: [],
   });
   const versioned = createVersionedCacheStub();
-  // Bridge: version-aware filter over the mock cache's data surface.
+  const getAllCallsByTable = new Map();
   const cache = {
     ...nodeCache,
     getTableMutationVersion:
@@ -111,6 +113,13 @@ test('the global topology-blocking in-flight view scans once per ledger ' +
     filter(tableName, predicate) {
       versioned.filter(tableName);
       return nodeCache.filter(tableName, predicate);
+    },
+    getAll(tableName) {
+      getAllCallsByTable.set(
+        tableName,
+        (getAllCallsByTable.get(tableName) || 0) + 1,
+      );
+      return nodeCache.getAll(tableName);
     },
   };
   const readinessService = createMockControlPlaneReadinessService({
@@ -122,30 +131,141 @@ test('the global topology-blocking in-flight view scans once per ledger ' +
     controlPlaneReadinessService: readinessService,
   });
   const rebalancer = createTestRebalancer({
-    entityId: 'p-sweep-1',
+    entityId,
     entityType: EntityType.PARTITION,
     nodeId: SWEEP_NODE_ID,
     systemTableCache: cache,
     rebalanceCoordinator: coordinator,
     controlPlaneReadinessService: readinessService,
   });
-  t.teardown(() => {
-    rebalancer.shutdown();
-    if (typeof coordinator.shutdown === 'function') {
-      coordinator.shutdown();
-    }
-  });
+  return {
+    cache,
+    rebalancer,
+    getAllCallsByTable,
+    filterCallCount: () => versioned.filterCallCount,
+    shutdown() {
+      rebalancer.shutdown();
+      if (typeof coordinator.shutdown === 'function') {
+        coordinator.shutdown();
+      }
+    },
+  };
+}
 
-  const before = versioned.filterCallCount;
+test('the global topology-blocking in-flight view scans once per ledger ' +
+  'generation', async (t) => {
+  const stack = createVersionedRebalancerStack('p-sweep-1');
+  t.teardown(() => stack.shutdown());
+
+  const before = stack.filterCallCount();
   for (let index = 0; index < SWEEP_CALL_COUNT; index++) {
-    rebalancer.getGlobalTopologyBlockingInFlightOperations();
+    stack.rebalancer.getGlobalTopologyBlockingInFlightOperations();
   }
-  t.equal(versioned.filterCallCount - before, 1,
+  t.equal(stack.filterCallCount() - before, 1,
     'repeated global topology-blocking reads share one ledger scan');
 
-  cache.bump('replica_operations');
-  rebalancer.getGlobalTopologyBlockingInFlightOperations();
-  t.equal(versioned.filterCallCount - before, 2,
+  stack.cache.bump('replica_operations');
+  stack.rebalancer.getGlobalTopologyBlockingInFlightOperations();
+  t.equal(stack.filterCallCount() - before, 2,
     'a ledger write invalidates the scan memo');
+  t.end();
+});
+
+test('the current-priority-placement observation builds once per ' +
+  'source-table generation', async (t) => {
+  const stack = createVersionedRebalancerStack('p-sweep-1');
+  t.teardown(() => stack.shutdown());
+  const {cache, rebalancer, getAllCallsByTable} = stack;
+
+  const planningSnapshot = Object.freeze({
+    publishedActiveNodeIds: [SWEEP_NODE_ID],
+  });
+  const readyNodeIds = new Set([SWEEP_NODE_ID]);
+  const before = getAllCallsByTable.get('services') || 0;
+  const observations = [];
+  for (let index = 0; index < SWEEP_CALL_COUNT; index++) {
+    observations.push(
+      rebalancer.buildCurrentPriorityPlacementPlanningObservation(
+        planningSnapshot,
+        {readyNodeIds, observedAt: 1000 + index},
+      ),
+    );
+  }
+  t.equal(getAllCallsByTable.get('services') - before, 1,
+    'a synchronous sweep of identical observation builds shares one ' +
+      'full-table read');
+  t.equal(observations[0], observations[SWEEP_CALL_COUNT - 1],
+    'the sweep shares one frozen observation object');
+
+  cache.bump('services');
+  const afterWrite =
+    rebalancer.buildCurrentPriorityPlacementPlanningObservation(
+      planningSnapshot,
+      {readyNodeIds, observedAt: 2000},
+    );
+  t.equal(getAllCallsByTable.get('services') - before, 2,
+    'a source-table write invalidates the observation memo');
+  t.not(afterWrite, observations[0],
+    'the invalidated memo yields a fresh observation');
+
+  rebalancer.buildCurrentPriorityPlacementPlanningObservation(
+    planningSnapshot,
+    {readyNodeIds: new Set(), observedAt: 3000},
+  );
+  t.equal(getAllCallsByTable.get('services') - before, 3,
+    'a different ready-node view never reuses another variant’s memo');
+  t.end();
+});
+
+test('the async membership-planning snapshot derives once per source-table ' +
+  'generation across concurrent callers', async (t) => {
+  const cache = createVersionedCacheStub();
+  let derivations = 0;
+  const readiness = new ControlPlaneReadinessService({
+    nodeId: SWEEP_NODE_ID,
+    systemTableCache: cache,
+    membershipPublicationService: {
+      async deriveClusterMembershipCandidate() {
+        derivations += 1;
+        return {
+          publicationEpoch: 1,
+          status: 'PUBLISHED',
+          publishedActiveNodeIds: [SWEEP_NODE_ID],
+        };
+      },
+    },
+  });
+
+  await Promise.all(
+    Array.from({length: SWEEP_CALL_COUNT}, () =>
+      readiness.getMembershipPublicationPlanningSnapshot(
+        SWEEP_NODE_ID,
+        1000,
+      )),
+  );
+  t.equal(derivations, 1,
+    'concurrent in-flight reads share one async derivation');
+
+  await readiness.getMembershipPublicationPlanningSnapshot(
+    SWEEP_NODE_ID,
+    2000,
+  );
+  t.equal(derivations, 1,
+    'a settled derivation keeps serving its generation');
+
+  cache.bump('nodes');
+  await readiness.getMembershipPublicationPlanningSnapshot(
+    SWEEP_NODE_ID,
+    3000,
+  );
+  t.equal(derivations, 2,
+    'a source-table write invalidates the async derivation memo');
+
+  await readiness.getMembershipPublicationPlanningSnapshot(
+    'node-other',
+    4000,
+  );
+  t.equal(derivations, 3,
+    'a different publisher never reuses another publisher’s memo');
   t.end();
 });
