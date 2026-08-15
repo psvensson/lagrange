@@ -1,0 +1,555 @@
+diff --git a/src/control-plane/readiness-planning-publication-contract.js b/src/control-plane/readiness-planning-publication-contract.js
+index 5fc209b8a1fa45cdfa282214fba280dc1dded7bc..99416949056df9805d7f156c95858c9b44f36dbf 100644
+--- a/src/control-plane/readiness-planning-publication-contract.js
++++ b/src/control-plane/readiness-planning-publication-contract.js
+@@ -107,12 +107,21 @@ function captureHeartbeatPublicationState(service) {
+       typeof owner.getHeartbeatPublicationDiagnostics === 'function' ?
+         owner.getHeartbeatPublicationDiagnostics() || {} :
+         {};
+-    const decision = owner.lastHeartbeatPublicationDecision || {};
++    // Semantic publication state only — never per-attempt clocks. Embedding
++    // lastAttemptAt/lastSuccessAt/lastFailureAt/consecutiveFailures made this
++    // signature change on EVERY heartbeat publication attempt, so on a
++    // bootstrap seed (whose heartbeat publication fails until the cluster
++    // forms) every completed planning snapshot was declared not-live before
++    // it could be read, readiness served the all-false deferred contract,
++    // query routing denied every candidate, and the cluster could never form
++    // — a formation-vs-steady-state liveness circularity. Staleness of live
++    // evidence is enforced separately by the expiry checks in
++    // capturePositiveDecisionLiveVeto; a genuine semantic transition (mode,
++    // path, target identity, failure kind) still invalidates.
++    // The steady/maintenance publication-mode decision also oscillates as
++    // routine cadence policy, so mode fields stay out of the signature too;
++    // the guard pins only durable publication identity and failure kind.
+     return encodeSignatureValues([
+-      decision.publicationMode,
+-      diagnostics.lastAttemptAt,
+-      diagnostics.lastSuccessAt,
+-      diagnostics.lastFailureAt,
+       diagnostics.lastFailureStage,
+       diagnostics.lastFailureReason,
+       diagnostics.publicationPath,
+@@ -120,8 +129,6 @@ function captureHeartbeatPublicationState(service) {
+       diagnostics.targetNodeId,
+       diagnostics.targetServiceType,
+       diagnostics.targetServiceId,
+-      diagnostics.consecutiveFailures,
+-      diagnostics.publicationMode,
+     ]);
+   } catch {
+     return CAPTURE_UNAVAILABLE;
+@@ -322,26 +329,40 @@ function buildDeferredNodeEvidence() {
+   });
+ }
+ 
+-function buildDeferredSnapshot(snapshot, token, ownerKey = null) {
+-  const dimensions = objectCreate(null);
+-  const dimensionNames = resolveDeferredDimensionNames(snapshot);
+-  for (let index = 0; index < dimensionNames.length; index++) {
+-    defineRecordValue(dimensions, dimensionNames[index], false);
+-  }
++function collectDeferredReasonCodeSet(snapshot) {
+   const reasons = new SetConstructor();
+   const snapshotReasons = copyDenseOwnDataArray(snapshot?.reasons);
+   if (snapshotReasons !== null) {
+     for (let index = 0; index < snapshotReasons.length; index++) {
+-      if (typeof snapshotReasons[index] === 'string') {
+-        setAdd(reasons, snapshotReasons[index]);
++      const reason = snapshotReasons[index];
++      if (typeof reason === 'string') {
++        setAdd(reasons, reason);
++      } else if (typeof reason?.code === 'string' && reason.code.length > 0) {
++        setAdd(reasons, reason.code);
+       }
+     }
+   }
+   setAdd(reasons,
+     CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING);
++  return reasons;
++}
++
++function buildDeferredSnapshot(snapshot, token, ownerKey = null) {
++  const dimensions = objectCreate(null);
++  const dimensionNames = resolveDeferredDimensionNames(snapshot);
++  for (let index = 0; index < dimensionNames.length; index++) {
++    defineRecordValue(dimensions, dimensionNames[index], false);
++  }
++  const reasons = collectDeferredReasonCodeSet(snapshot);
+   const deferredReasonCodes = new ArrayConstructor();
+-  setForEach(reasons,
+-    (reason) => appendArrayValue(deferredReasonCodes, reason));
++  // Canonical reason shape: consumers (collectReasonCodes, routing denial
++  // summaries) read reason.code records; bare strings silently vanished from
++  // every diagnostic downstream.
++  const deferredReasons = new ArrayConstructor();
++  setForEach(reasons, (reason) => {
++    appendArrayValue(deferredReasonCodes, reason);
++    appendArrayValue(deferredReasons, freezeDeferredRecord({code: reason}));
++  });
+   return freezeDeferredRecord({
+     nodeId: snapshot?.nodeId || ownerKey,
+     lifecycleState: null,
+@@ -360,7 +381,7 @@ function buildDeferredSnapshot(snapshot, token, ownerKey = null) {
+     recentTransitions: objectFreeze(new ArrayConstructor()),
+     dimensions: objectFreeze(dimensions),
+     ...dimensions,
+-    reasons: objectFreeze(deferredReasonCodes),
++    reasons: objectFreeze(deferredReasons),
+     readinessPlanningToken: token,
+     readinessPlanningTokenStatus: TOKEN_STATUS.STALE,
+     ...buildDeferredProjectionContract(
+diff --git a/src/query/query-constants.js b/src/query/query-constants.js
+index 50503b4bb57a8d4776d204b9d9698e6f99c3c232..ad7f01cf57221369f87c40c845d460579ef1dd51 100644
+--- a/src/query/query-constants.js
++++ b/src/query/query-constants.js
+@@ -321,6 +321,8 @@ const QUERY_ROUTING_DIAGNOSTIC_REASON = Object.freeze({
+   NO_ACTIVE_ADDRESSED_SERVICES: 'no_active_addressed_services',
+   ALL_SERVICES_FILTERED_BY_READINESS:
+     'all_services_filtered_by_readiness',
++  SYSTEM_TABLE_LEADER_FAIL_OPEN:
++    'system_table_leader_readiness_fail_open',
+   SERVICE_INACTIVE: 'service_inactive',
+   SERVICE_ADDRESS_MISSING: 'service_address_missing',
+   READINESS_UNAVAILABLE: 'readiness_unavailable',
+diff --git a/src/query/query-executor-partition-routing-snapshot.js b/src/query/query-executor-partition-routing-snapshot.js
+index 5d01b3fe3f71aebe57977f7df16c5ebafcfaf88c..08fcc36dc98d5152586a24f492735b1d96195462 100644
+--- a/src/query/query-executor-partition-routing-snapshot.js
++++ b/src/query/query-executor-partition-routing-snapshot.js
+@@ -56,9 +56,62 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
+         );
+       })
+       .map((entry) => entry.service);
+-    const routableServices = evaluatedServices
++    const readinessRoutableServices = evaluatedServices
+       .filter((entry) => entry.routing.routable === true)
+       .map((entry) => entry.service);
++    // System-table leader fail-open (user-approved liveness carve-out): raft
++    // leadership is the OWNER of system-table routing; the readiness
++    // projection is an observer. When the projection denies EVERY active
++    // addressed candidate — including the known canonical leader — honoring
++    // it would starve the control-plane write lane that renews heartbeats
++    // and ready leases, and readiness can then never converge (the formation
++    // deadlock a lone bootstrap seed hits by construction). For system-table
++    // partitions only, admit the canonical leader's active addressed
++    // services under an explicit typed reason; ordinary tables and
++    // non-leader candidates stay strictly readiness-filtered, and the
++    // fail-open goes dormant the moment any candidate is readiness-routable
++    // again.
++    // The fail-open engages only for EVIDENCE-ABSENT denial (the planning
++    // snapshot has not converged yet, so readiness has no verdict at all):
++    // planning_snapshot_refresh_pending / owner_evidence_missing / an empty
++    // reason list. A leader denied for a substantive reason — priority
++    // recovery pending, unhealthy membership, transport loss — stays denied
++    // for reads and keeps only the pre-existing candidate-layer write grace.
++    const evidenceAbsentReasonCodes = new Set([
++      'planning_snapshot_refresh_pending',
++      'owner_evidence_missing',
++    ]);
++    const canonicalLeaderDenialEvidenceAbsent = evaluatedServices
++      .filter((entry) =>
++        entry?.service?.node_id === canonicalLeaderNodeId &&
++        entry?.routing?.routable !== true)
++      .every((entry) => {
++        const reasonCodes = Array.isArray(
++          entry?.routing?.readinessSummary?.reasonCodes,
++        ) ?
++          entry.routing.readinessSummary.reasonCodes :
++          [];
++        // An empty reason list is ambiguous, so it fails closed: only an
++        // explicit evidence-absent reason engages the fail-open.
++        return reasonCodes.length > 0 && reasonCodes.every(
++          (code) => evidenceAbsentReasonCodes.has(String(code?.code ?? code)),
++        );
++      });
++    const systemTableLeaderFailOpenServices =
++      readinessRoutableServices.length === 0 &&
++      activeAddressedServices.length > 0 &&
++      canonicalLeaderNodeId !== null &&
++      canonicalLeaderDenialEvidenceAbsent &&
++      classifySystemPartition({partitionId}).systemTable ?
++        activeAddressedServices.filter(
++          (service) => service?.node_id === canonicalLeaderNodeId,
++        ) :
++        [];
++    const systemTableLeaderFailOpenEngaged =
++      systemTableLeaderFailOpenServices.length > 0;
++    const routableServices = systemTableLeaderFailOpenEngaged ?
++      systemTableLeaderFailOpenServices :
++      readinessRoutableServices;
+     const canonicalLeaderServiceCount = canonicalLeaderNodeId ?
+       serviceRows.filter(
+         (service) => service?.node_id === canonicalLeaderNodeId,
+@@ -74,11 +127,13 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
+     return Object.freeze({
+       partitionId,
+       routingReadinessDimension,
+-      reasonCode: this.resolvePartitionRoutingReasonCode(
+-        serviceRows,
+-        activeAddressedServices,
+-        routableServices,
+-      ),
++      reasonCode: systemTableLeaderFailOpenEngaged ?
++        QUERY_ROUTING_DIAGNOSTIC_REASON.SYSTEM_TABLE_LEADER_FAIL_OPEN :
++        this.resolvePartitionRoutingReasonCode(
++          serviceRows,
++          activeAddressedServices,
++          routableServices,
++        ),
+       canonicalLeaderIdentityState:
+         canonicalLeaderIdentity?.state || null,
+       canonicalLeaderIdentitySource:
+diff --git a/test/control-plane/publication-readiness-churn-liveness.test.js b/test/control-plane/publication-readiness-churn-liveness.test.js
+index d11a67b60b3a8fd24001ec4acb5f011819eb2d7c..ae69efd8f9cbae8cebe5451001ce6c5a1e87cb07 100644
+--- a/test/control-plane/publication-readiness-churn-liveness.test.js
++++ b/test/control-plane/publication-readiness-churn-liveness.test.js
+@@ -589,7 +589,8 @@ test('versioned readiness owner is latest-wins, fair, and macrotask bounded',
+       'clock-derived expiry is a live veto against stale-positive readiness',
+     );
+     t.ok(
+-      expired.reasons.includes('planning_snapshot_refresh_pending'),
++      expired.reasons.some((reason) =>
++        reason?.code === 'planning_snapshot_refresh_pending'),
+       'the stale result carries an explicit refresh-pending reason',
+     );
+     unsubscribe();
+@@ -1177,10 +1178,11 @@ test('mutable lifecycle, capacity, CDC, and heartbeat inputs veto completed ' +
+       reasonCode: publicationMode === 'grouped' ? 'healthy' : 'degraded',
+     }),
+   };
++  let heartbeatPublicationPath = 'node_state_reporter';
+   const heartbeatService = {
+     lastHeartbeatPublicationDecision: {publicationMode: 'grouped'},
+     getHeartbeatPublicationDiagnostics: () => ({
+-      publicationPath: 'node_state_reporter',
++      publicationPath: heartbeatPublicationPath,
+       lastSuccessAt: heartbeatSuccessAt,
+       consecutiveFailures: 0,
+     }),
+@@ -1228,8 +1230,22 @@ test('mutable lifecycle, capacity, CDC, and heartbeat inputs veto completed ' +
+   assertLiveVeto('CDC publication-mode drift fails closed synchronously');
+   await drain();
+ 
++  // Heartbeat attempt clocks are routine activity, not semantic readiness
++  // input: on a bootstrap seed they change on every (failing) publication
++  // attempt, and vetoing on them starved query routing into a formation
++  // deadlock. Only a semantic heartbeat transition (path/target/failure
++  // kind) still vetoes.
++  const beforeClockDrift = readiness.getNodeReadinessSync('node-0')
++    .readinessPlanningTokenStatus;
+   heartbeatSuccessAt = new Date(NOW_MS - 1).toISOString();
+-  assertLiveVeto('heartbeat publication drift fails closed synchronously');
++  const clockDrift = readiness.getNodeReadinessSync('node-0');
++  t.equal(clockDrift.readinessPlanningTokenStatus, beforeClockDrift,
++    'heartbeat attempt-clock drift alone never changes snapshot liveness ' +
++      '(the capture-level contract is pinned in ' +
++      'readiness-planning-liveness-veto.test.js)');
++
++  heartbeatPublicationPath = 'transport_relay';
++  assertLiveVeto('heartbeat publication-path drift fails closed synchronously');
+   await drain();
+   readiness.shutdownReadinessPlanningOwner();
+ });
+@@ -1445,7 +1461,8 @@ test('formation work is priority-ordered and shutdown cancels pending builds',
+     );
+     const formation = readiness.getNodeReadinessSync('node-4');
+     t.notOk(
+-      formation.reasons.includes('planning_snapshot_refresh_pending'),
++      formation.reasons.some((reason) =>
++        reason?.code === 'planning_snapshot_refresh_pending'),
+       'the connected JOINING owner consumes the single cold build',
+     );
+     cache.applySystemTableChange(
+diff --git a/test/control-plane/readiness-planning-liveness-veto.test.js b/test/control-plane/readiness-planning-liveness-veto.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..dd39720a6aa269fbc4ddfaaa948a163162528eed
+--- /dev/null
++++ b/test/control-plane/readiness-planning-liveness-veto.test.js
+@@ -0,0 +1,129 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  capturePositiveDecisionLiveVeto,
++} from '../../src/control-plane/readiness-planning-publication-contract.js';
++
++const VETO_NOW_MS = 1_700_000_000_000;
++const OWNER_KEY = 'node-veto-owner';
++
++function createVetoService(overrides = {}) {
++  const heartbeatDiagnostics = {
++    lastAttemptAt: VETO_NOW_MS - 1000,
++    lastSuccessAt: VETO_NOW_MS - 2000,
++    lastFailureAt: null,
++    lastFailureStage: null,
++    lastFailureReason: null,
++    publicationPath: 'sql_direct',
++    targetAddress: 'seed/partition/nodes-p1',
++    targetNodeId: OWNER_KEY,
++    targetServiceType: 'partition',
++    targetServiceId: 'nodes-p1-r1',
++    consecutiveFailures: 0,
++    publicationMode: 'heartbeat_steady',
++    ...overrides.heartbeatDiagnostics,
++  };
++  return {
++    clusterMemberStaleHeartbeatMaxAgeMs: 30000,
++    heartbeatService: {
++      getHeartbeatPublicationDiagnostics: () => heartbeatDiagnostics,
++      lastHeartbeatPublicationDecision: {
++        publicationMode: overrides.decisionMode || 'heartbeat_steady',
++      },
++    },
++    nodeLifecycleStateMachine: {getState: () => 'active'},
++    storageAccountingService: {
++      softPressurePercent: 70,
++      hardPressurePercent: 85,
++      minimumReplicaBytes: 1048576,
++      partitionReplicaOverheadBytes: 10485760,
++      messageGroupReplicaOverheadBytes: 1048576,
++      serviceReplicaOverheadBytes: 5242880,
++    },
++    cdcGroupPropagationService: {
++      getPublicationModeDiagnostics: () => ({
++        currentMode: 'grouped',
++        reasonCode: null,
++      }),
++    },
++    getNodeTransportState: () => ({
++      connected: true,
++      rowState: 'ready',
++      routerState: 'connected',
++    }),
++    getNodeRow: () => null,
++    heartbeatDiagnostics,
++  };
++}
++
++const SNAPSHOT = Object.freeze({
++  nodeEvidence: Object.freeze({
++    readyLeaseExpiresAt: VETO_NOW_MS + 60000,
++    lastHeartbeat: VETO_NOW_MS - 1000,
++  }),
++});
++
++function captureVeto(service) {
++  return capturePositiveDecisionLiveVeto(
++    service,
++    OWNER_KEY,
++    SNAPSHOT,
++    VETO_NOW_MS - 500,
++    VETO_NOW_MS,
++  );
++}
++
++test('the positive-decision live veto ignores heartbeat attempt clocks and ' +
++  'cadence-mode oscillation', async (t) => {
++  const service = createVetoService();
++  const before = captureVeto(service);
++
++  // Routine heartbeat activity: attempt/success clocks advance, the failure
++  // clock records a transient, the counter moves, and the cadence decision
++  // oscillates steady <-> maintenance. None of this is a semantic readiness
++  // transition, and each of these invalidating the completed planning
++  // snapshot is exactly the formation livelock that starved a bootstrap
++  // seed's query routing.
++  service.heartbeatDiagnostics.lastAttemptAt = VETO_NOW_MS + 5000;
++  service.heartbeatDiagnostics.lastSuccessAt = VETO_NOW_MS + 5000;
++  service.heartbeatDiagnostics.lastFailureAt = VETO_NOW_MS + 4000;
++  service.heartbeatDiagnostics.consecutiveFailures = 3;
++  service.heartbeatDiagnostics.publicationMode = 'heartbeat_maintenance';
++  service.heartbeatService.lastHeartbeatPublicationDecision.publicationMode =
++    'heartbeat_maintenance';
++
++  t.equal(captureVeto(service), before,
++    'attempt clocks, failure counters, and cadence-mode flips never ' +
++      'invalidate a completed planning snapshot');
++  t.end();
++});
++
++test('the positive-decision live veto still trips on semantic transitions ' +
++  'and expiry', async (t) => {
++  const service = createVetoService();
++  const before = captureVeto(service);
++
++  service.heartbeatDiagnostics.publicationPath = 'transport_relay';
++  const pathChanged = captureVeto(service);
++  t.not(pathChanged, before,
++    'a publication path change is a semantic transition and invalidates');
++  service.heartbeatDiagnostics.publicationPath = 'sql_direct';
++
++  service.heartbeatDiagnostics.lastFailureStage = 'ack';
++  service.heartbeatDiagnostics.lastFailureReason = 'timeout';
++  t.not(captureVeto(service), before,
++    'a new failure kind is a semantic transition and invalidates');
++  service.heartbeatDiagnostics.lastFailureStage = null;
++  service.heartbeatDiagnostics.lastFailureReason = null;
++
++  const expiredLease = capturePositiveDecisionLiveVeto(
++    service,
++    OWNER_KEY,
++    {nodeEvidence: {readyLeaseExpiresAt: VETO_NOW_MS - 1,
++      lastHeartbeat: VETO_NOW_MS - 1000}},
++    VETO_NOW_MS - 500,
++    VETO_NOW_MS,
++  );
++  t.not(expiredLease, before,
++    'an expired ready lease still vetoes the positive decision');
++  t.end();
++});
+diff --git a/test/control-plane/readiness-planning-publication-atomicity.test.js b/test/control-plane/readiness-planning-publication-atomicity.test.js
+index b202677272fb079bc252e4bd0a4a5c9ff94b7fdc..5e22bb14038ebf06c8975e6ab13c6cc71a01efdd 100644
+--- a/test/control-plane/readiness-planning-publication-atomicity.test.js
++++ b/test/control-plane/readiness-planning-publication-atomicity.test.js
+@@ -236,8 +236,9 @@ test('a live veto change during build cannot publish or become reusable',
+ 
+     t.equal(first.readinessPlanningTokenStatus, 'stale',
+       'the mid-build veto change makes the completion non-publishable');
+-    t.ok(first.reasons.includes(
+-      CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING,
++    t.ok(first.reasons.some((reason) =>
++      reason?.code ===
++        CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING,
+     ), 'the first caller receives an explicit deferred snapshot');
+     t.equal(second.readinessPlanningTokenStatus, 'stale',
+       'the disconnected caller cannot reuse the built positive snapshot');
+diff --git a/test/query/query-executor-system-table-leader-fail-open.test.js b/test/query/query-executor-system-table-leader-fail-open.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f7e6ab0232e26f3a3ffb16de0998af69be452356
+--- /dev/null
++++ b/test/query/query-executor-system-table-leader-fail-open.test.js
+@@ -0,0 +1,137 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {QueryExecutor} from '../../src/query/query-executor.js';
++import {SERVICE_STATUS, SERVICE_TYPE, TABLES} from '../../src/constants/index.js';
++import {
++  QUERY_ROUTING_DIAGNOSTIC_REASON,
++} from '../../src/query/query-constants.js';
++import {createMockMessageRouter} from './query-executor-mock-message-router.js';
++
++const LEADER_NODE_ID = 'node-leader-fail-open';
++const FOLLOWER_NODE_ID = 'node-follower-fail-open';
++
++function createDenyingReadinessService() {
++  return {
++    getNodeReadinessSync() {
++      return {
++        observedAt: '2026-03-11T00:00:00.000Z',
++        lifecycleState: SERVICE_STATUS.ACTIVE,
++        dimensions: {
++          serveEligible: false,
++          repairEligible: false,
++          controlPlaneRecoveryEligible: false,
++        },
++        reasons: [{code: 'planning_snapshot_refresh_pending'}],
++      };
++    },
++  };
++}
++
++function createCache(partitionId) {
++  return {
++    partitions: [
++      {partition_id: partitionId, leader_node_id: LEADER_NODE_ID},
++    ],
++    services: [
++      {
++        service_id: `${partitionId}-r1`,
++        service_type: SERVICE_TYPE.PARTITION,
++        partition_id: partitionId,
++        node_id: LEADER_NODE_ID,
++        raft_role: 'leader',
++        address: `${LEADER_NODE_ID}/partition/${partitionId}`,
++        status: SERVICE_STATUS.ACTIVE,
++      },
++      {
++        service_id: `${partitionId}-r2`,
++        service_type: SERVICE_TYPE.PARTITION,
++        partition_id: partitionId,
++        node_id: FOLLOWER_NODE_ID,
++        raft_role: 'follower',
++        address: `${FOLLOWER_NODE_ID}/partition/${partitionId}`,
++        status: SERVICE_STATUS.ACTIVE,
++      },
++    ],
++    get(type, key) {
++      if (type === TABLES.PARTITIONS) {
++        return this.partitions.find((p) => p.partition_id === key) || null;
++      }
++      return null;
++    },
++    filter(type, predicate) {
++      if (type === 'services') return this.services.filter(predicate);
++      if (type === 'partitions') return this.partitions.filter(predicate);
++      return [];
++    },
++  };
++}
++
++function createExecutor(partitionId) {
++  return new QueryExecutor({
++    messageRouter: createMockMessageRouter(),
++    systemCache: createCache(partitionId),
++    controlPlaneReadinessService: createDenyingReadinessService(),
++  });
++}
++
++test('an all-readiness-denied system-table partition fails open to the ' +
++  'canonical raft leader only', async (t) => {
++  const partitionId = 'nodes-p1';
++  const executor = createExecutor(partitionId);
++  const snapshot = executor.getPartitionRoutingSnapshot(partitionId);
++  t.equal(
++    snapshot.reasonCode,
++    QUERY_ROUTING_DIAGNOSTIC_REASON.SYSTEM_TABLE_LEADER_FAIL_OPEN,
++    'the routing snapshot names the fail-open with a typed reason',
++  );
++  t.equal(snapshot.routableServiceCount, 1,
++    'exactly the canonical leader service is admitted');
++  t.equal(snapshot.routableServices[0].node_id, LEADER_NODE_ID,
++    'the admitted candidate is the canonical raft leader');
++  t.ok(snapshot.deniedByNodeId[LEADER_NODE_ID],
++    'the readiness denial stays visible in diagnostics');
++  t.end();
++});
++
++test('an all-readiness-denied ordinary partition stays fully filtered',
++  async (t) => {
++    const partitionId = 'p-user-table-1';
++    const executor = createExecutor(partitionId);
++    const snapshot = executor.getPartitionRoutingSnapshot(partitionId);
++    t.equal(
++      snapshot.reasonCode,
++      QUERY_ROUTING_DIAGNOSTIC_REASON.ALL_SERVICES_FILTERED_BY_READINESS,
++      'ordinary tables keep the strict readiness filter',
++    );
++    t.equal(snapshot.routableServiceCount, 0,
++      'no candidate is admitted for an ordinary table');
++    t.end();
++  });
++
++test('the fail-open goes dormant when any candidate is readiness-routable',
++  async (t) => {
++    const partitionId = 'nodes-p1';
++    const executor = new QueryExecutor({
++      messageRouter: createMockMessageRouter(),
++      systemCache: createCache(partitionId),
++      controlPlaneReadinessService: {
++        getNodeReadinessSync() {
++          return {
++            observedAt: '2026-03-11T00:00:00.000Z',
++            lifecycleState: SERVICE_STATUS.ACTIVE,
++            dimensions: {
++              serveEligible: true,
++              repairEligible: true,
++              controlPlaneRecoveryEligible: true,
++            },
++            reasons: [],
++          };
++        },
++      },
++    });
++    const snapshot = executor.getPartitionRoutingSnapshot(partitionId);
++    t.equal(snapshot.reasonCode, QUERY_ROUTING_DIAGNOSTIC_REASON.OK,
++      'normal readiness routing resumes untouched');
++    t.equal(snapshot.routableServiceCount, 2,
++      'every readiness-routable candidate is served, not only the leader');
++    t.end();
++  });

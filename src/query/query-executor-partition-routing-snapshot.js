@@ -56,9 +56,62 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
         );
       })
       .map((entry) => entry.service);
-    const routableServices = evaluatedServices
+    const readinessRoutableServices = evaluatedServices
       .filter((entry) => entry.routing.routable === true)
       .map((entry) => entry.service);
+    // System-table leader fail-open (user-approved liveness carve-out): raft
+    // leadership is the OWNER of system-table routing; the readiness
+    // projection is an observer. When the projection denies EVERY active
+    // addressed candidate — including the known canonical leader — honoring
+    // it would starve the control-plane write lane that renews heartbeats
+    // and ready leases, and readiness can then never converge (the formation
+    // deadlock a lone bootstrap seed hits by construction). For system-table
+    // partitions only, admit the canonical leader's active addressed
+    // services under an explicit typed reason; ordinary tables and
+    // non-leader candidates stay strictly readiness-filtered, and the
+    // fail-open goes dormant the moment any candidate is readiness-routable
+    // again.
+    // The fail-open engages only for EVIDENCE-ABSENT denial (the planning
+    // snapshot has not converged yet, so readiness has no verdict at all):
+    // planning_snapshot_refresh_pending / owner_evidence_missing / an empty
+    // reason list. A leader denied for a substantive reason — priority
+    // recovery pending, unhealthy membership, transport loss — stays denied
+    // for reads and keeps only the pre-existing candidate-layer write grace.
+    const evidenceAbsentReasonCodes = new Set([
+      'planning_snapshot_refresh_pending',
+      'owner_evidence_missing',
+    ]);
+    const canonicalLeaderDenialEvidenceAbsent = evaluatedServices
+      .filter((entry) =>
+        entry?.service?.node_id === canonicalLeaderNodeId &&
+        entry?.routing?.routable !== true)
+      .every((entry) => {
+        const reasonCodes = Array.isArray(
+          entry?.routing?.readinessSummary?.reasonCodes,
+        ) ?
+          entry.routing.readinessSummary.reasonCodes :
+          [];
+        // An empty reason list is ambiguous, so it fails closed: only an
+        // explicit evidence-absent reason engages the fail-open.
+        return reasonCodes.length > 0 && reasonCodes.every(
+          (code) => evidenceAbsentReasonCodes.has(String(code?.code ?? code)),
+        );
+      });
+    const systemTableLeaderFailOpenServices =
+      readinessRoutableServices.length === 0 &&
+      activeAddressedServices.length > 0 &&
+      canonicalLeaderNodeId !== null &&
+      canonicalLeaderDenialEvidenceAbsent &&
+      classifySystemPartition({partitionId}).systemTable ?
+        activeAddressedServices.filter(
+          (service) => service?.node_id === canonicalLeaderNodeId,
+        ) :
+        [];
+    const systemTableLeaderFailOpenEngaged =
+      systemTableLeaderFailOpenServices.length > 0;
+    const routableServices = systemTableLeaderFailOpenEngaged ?
+      systemTableLeaderFailOpenServices :
+      readinessRoutableServices;
     const canonicalLeaderServiceCount = canonicalLeaderNodeId ?
       serviceRows.filter(
         (service) => service?.node_id === canonicalLeaderNodeId,
@@ -74,11 +127,13 @@ const queryExecutorPartitionRoutingSnapshotMethods = {
     return Object.freeze({
       partitionId,
       routingReadinessDimension,
-      reasonCode: this.resolvePartitionRoutingReasonCode(
-        serviceRows,
-        activeAddressedServices,
-        routableServices,
-      ),
+      reasonCode: systemTableLeaderFailOpenEngaged ?
+        QUERY_ROUTING_DIAGNOSTIC_REASON.SYSTEM_TABLE_LEADER_FAIL_OPEN :
+        this.resolvePartitionRoutingReasonCode(
+          serviceRows,
+          activeAddressedServices,
+          routableServices,
+        ),
       canonicalLeaderIdentityState:
         canonicalLeaderIdentity?.state || null,
       canonicalLeaderIdentitySource:

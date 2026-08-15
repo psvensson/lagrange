@@ -321,6 +321,8 @@ const QUERY_ROUTING_DIAGNOSTIC_REASON = Object.freeze({
   NO_ACTIVE_ADDRESSED_SERVICES: 'no_active_addressed_services',
   ALL_SERVICES_FILTERED_BY_READINESS:
     'all_services_filtered_by_readiness',
+  SYSTEM_TABLE_LEADER_FAIL_OPEN:
+    'system_table_leader_readiness_fail_open',
   SERVICE_INACTIVE: 'service_inactive',
   SERVICE_ADDRESS_MISSING: 'service_address_missing',
   READINESS_UNAVAILABLE: 'readiness_unavailable',

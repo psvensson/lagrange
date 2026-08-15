@@ -589,7 +589,8 @@ test('versioned readiness owner is latest-wins, fair, and macrotask bounded',
       'clock-derived expiry is a live veto against stale-positive readiness',
     );
     t.ok(
-      expired.reasons.includes('planning_snapshot_refresh_pending'),
+      expired.reasons.some((reason) =>
+        reason?.code === 'planning_snapshot_refresh_pending'),
       'the stale result carries an explicit refresh-pending reason',
     );
     unsubscribe();
@@ -1177,10 +1178,11 @@ test('mutable lifecycle, capacity, CDC, and heartbeat inputs veto completed ' +
       reasonCode: publicationMode === 'grouped' ? 'healthy' : 'degraded',
     }),
   };
+  let heartbeatPublicationPath = 'node_state_reporter';
   const heartbeatService = {
     lastHeartbeatPublicationDecision: {publicationMode: 'grouped'},
     getHeartbeatPublicationDiagnostics: () => ({
-      publicationPath: 'node_state_reporter',
+      publicationPath: heartbeatPublicationPath,
       lastSuccessAt: heartbeatSuccessAt,
       consecutiveFailures: 0,
     }),
@@ -1228,8 +1230,22 @@ test('mutable lifecycle, capacity, CDC, and heartbeat inputs veto completed ' +
   assertLiveVeto('CDC publication-mode drift fails closed synchronously');
   await drain();
 
+  // Heartbeat attempt clocks are routine activity, not semantic readiness
+  // input: on a bootstrap seed they change on every (failing) publication
+  // attempt, and vetoing on them starved query routing into a formation
+  // deadlock. Only a semantic heartbeat transition (path/target/failure
+  // kind) still vetoes.
+  const beforeClockDrift = readiness.getNodeReadinessSync('node-0')
+    .readinessPlanningTokenStatus;
   heartbeatSuccessAt = new Date(NOW_MS - 1).toISOString();
-  assertLiveVeto('heartbeat publication drift fails closed synchronously');
+  const clockDrift = readiness.getNodeReadinessSync('node-0');
+  t.equal(clockDrift.readinessPlanningTokenStatus, beforeClockDrift,
+    'heartbeat attempt-clock drift alone never changes snapshot liveness ' +
+      '(the capture-level contract is pinned in ' +
+      'readiness-planning-liveness-veto.test.js)');
+
+  heartbeatPublicationPath = 'transport_relay';
+  assertLiveVeto('heartbeat publication-path drift fails closed synchronously');
   await drain();
   readiness.shutdownReadinessPlanningOwner();
 });
@@ -1445,7 +1461,8 @@ test('formation work is priority-ordered and shutdown cancels pending builds',
     );
     const formation = readiness.getNodeReadinessSync('node-4');
     t.notOk(
-      formation.reasons.includes('planning_snapshot_refresh_pending'),
+      formation.reasons.some((reason) =>
+        reason?.code === 'planning_snapshot_refresh_pending'),
       'the connected JOINING owner consumes the single cold build',
     );
     cache.applySystemTableChange(

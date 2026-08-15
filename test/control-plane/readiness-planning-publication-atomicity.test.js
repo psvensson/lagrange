@@ -236,8 +236,9 @@ test('a live veto change during build cannot publish or become reusable',
 
     t.equal(first.readinessPlanningTokenStatus, 'stale',
       'the mid-build veto change makes the completion non-publishable');
-    t.ok(first.reasons.includes(
-      CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING,
+    t.ok(first.reasons.some((reason) =>
+      reason?.code ===
+        CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING,
     ), 'the first caller receives an explicit deferred snapshot');
     t.equal(second.readinessPlanningTokenStatus, 'stale',
       'the disconnected caller cannot reuse the built positive snapshot');

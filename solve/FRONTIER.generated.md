@@ -48,7 +48,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 25
+## Open quests — 26
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -68,6 +68,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | projection-readiness-producer-copy-closure | product | 1 | 0 | 2026-08-15 | — |
 | publication-recovery-snapshot-starvation-relief | product | 0 | 0 | 2026-08-04 ⚠ stale | — |
 | raft-follower-append-sqlite-starvation-relief | product | 8 | 0 | 2026-08-14 | — |
+| readiness-formation-liveness-circularity-closure | product | 1 | 0 | 2026-08-15 | — |
 | readiness-planning-hostile-iterator-and-contract-closure | product | 4 | 0 | 2026-08-14 | — |
 | readiness-planning-own-data-consumer-closure | product | 3 | 0 | 2026-08-14 | — |
 | readiness-planning-owner-boundary-atomic-closure | product | 5 | 0 | 2026-08-14 | — |

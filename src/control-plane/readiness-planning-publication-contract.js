@@ -107,12 +107,21 @@ function captureHeartbeatPublicationState(service) {
       typeof owner.getHeartbeatPublicationDiagnostics === 'function' ?
         owner.getHeartbeatPublicationDiagnostics() || {} :
         {};
-    const decision = owner.lastHeartbeatPublicationDecision || {};
+    // Semantic publication state only — never per-attempt clocks. Embedding
+    // lastAttemptAt/lastSuccessAt/lastFailureAt/consecutiveFailures made this
+    // signature change on EVERY heartbeat publication attempt, so on a
+    // bootstrap seed (whose heartbeat publication fails until the cluster
+    // forms) every completed planning snapshot was declared not-live before
+    // it could be read, readiness served the all-false deferred contract,
+    // query routing denied every candidate, and the cluster could never form
+    // — a formation-vs-steady-state liveness circularity. Staleness of live
+    // evidence is enforced separately by the expiry checks in
+    // capturePositiveDecisionLiveVeto; a genuine semantic transition (mode,
+    // path, target identity, failure kind) still invalidates.
+    // The steady/maintenance publication-mode decision also oscillates as
+    // routine cadence policy, so mode fields stay out of the signature too;
+    // the guard pins only durable publication identity and failure kind.
     return encodeSignatureValues([
-      decision.publicationMode,
-      diagnostics.lastAttemptAt,
-      diagnostics.lastSuccessAt,
-      diagnostics.lastFailureAt,
       diagnostics.lastFailureStage,
       diagnostics.lastFailureReason,
       diagnostics.publicationPath,
@@ -120,8 +129,6 @@ function captureHeartbeatPublicationState(service) {
       diagnostics.targetNodeId,
       diagnostics.targetServiceType,
       diagnostics.targetServiceId,
-      diagnostics.consecutiveFailures,
-      diagnostics.publicationMode,
     ]);
   } catch {
     return CAPTURE_UNAVAILABLE;
@@ -322,26 +329,40 @@ function buildDeferredNodeEvidence() {
   });
 }
 
+function collectDeferredReasonCodeSet(snapshot) {
+  const reasons = new SetConstructor();
+  const snapshotReasons = copyDenseOwnDataArray(snapshot?.reasons);
+  if (snapshotReasons !== null) {
+    for (let index = 0; index < snapshotReasons.length; index++) {
+      const reason = snapshotReasons[index];
+      if (typeof reason === 'string') {
+        setAdd(reasons, reason);
+      } else if (typeof reason?.code === 'string' && reason.code.length > 0) {
+        setAdd(reasons, reason.code);
+      }
+    }
+  }
+  setAdd(reasons,
+    CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING);
+  return reasons;
+}
+
 function buildDeferredSnapshot(snapshot, token, ownerKey = null) {
   const dimensions = objectCreate(null);
   const dimensionNames = resolveDeferredDimensionNames(snapshot);
   for (let index = 0; index < dimensionNames.length; index++) {
     defineRecordValue(dimensions, dimensionNames[index], false);
   }
-  const reasons = new SetConstructor();
-  const snapshotReasons = copyDenseOwnDataArray(snapshot?.reasons);
-  if (snapshotReasons !== null) {
-    for (let index = 0; index < snapshotReasons.length; index++) {
-      if (typeof snapshotReasons[index] === 'string') {
-        setAdd(reasons, snapshotReasons[index]);
-      }
-    }
-  }
-  setAdd(reasons,
-    CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING);
+  const reasons = collectDeferredReasonCodeSet(snapshot);
   const deferredReasonCodes = new ArrayConstructor();
-  setForEach(reasons,
-    (reason) => appendArrayValue(deferredReasonCodes, reason));
+  // Canonical reason shape: consumers (collectReasonCodes, routing denial
+  // summaries) read reason.code records; bare strings silently vanished from
+  // every diagnostic downstream.
+  const deferredReasons = new ArrayConstructor();
+  setForEach(reasons, (reason) => {
+    appendArrayValue(deferredReasonCodes, reason);
+    appendArrayValue(deferredReasons, freezeDeferredRecord({code: reason}));
+  });
   return freezeDeferredRecord({
     nodeId: snapshot?.nodeId || ownerKey,
     lifecycleState: null,
@@ -360,7 +381,7 @@ function buildDeferredSnapshot(snapshot, token, ownerKey = null) {
     recentTransitions: objectFreeze(new ArrayConstructor()),
     dimensions: objectFreeze(dimensions),
     ...dimensions,
-    reasons: objectFreeze(deferredReasonCodes),
+    reasons: objectFreeze(deferredReasons),
     readinessPlanningToken: token,
     readinessPlanningTokenStatus: TOKEN_STATUS.STALE,
     ...buildDeferredProjectionContract(
