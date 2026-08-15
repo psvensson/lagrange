@@ -72,13 +72,53 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
     });
   }
 
+  // One projection per (input-snapshot identity, floored generation): the
+  // answer's recovery-INACTIVE path reprojects on every read, so during the
+  // post-convergence wait phase (spread ready, recovery closed) each call
+  // minted a fresh identity that defeated every downstream identity memo —
+  // live-measured as gate builds x13843 inside one 20.5s seed gap (archived
+  // run 18-29-01-296Z-natural-manual). The projection derives from the
+  // snapshot plus cache-backed local admission evidence, both covered by
+  // the floored generation; unversioned caches fall back to the raw
+  // revision via readPlanningProjectionSourceGeneration.
+  resolveMemoizedPlanningAnswerProjection(planningSnapshot, observedAt) {
+    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
+      return this.buildPriorityRecoveryPlanningProjection(planningSnapshot);
+    }
+    if (!this.planningAnswerProjectionBySnapshot) {
+      this.planningAnswerProjectionBySnapshot = new WeakMap();
+    }
+    const generation =
+      typeof this.readPlanningProjectionSourceGeneration === 'function' ?
+        this.readPlanningProjectionSourceGeneration(observedAt) :
+        null;
+    const cached = this.planningAnswerProjectionBySnapshot.get(
+      planningSnapshot,
+    );
+    if (cached && generation !== null && cached.generation === generation) {
+      return cached.projection;
+    }
+    const projection =
+      this.buildPriorityRecoveryPlanningProjection(planningSnapshot);
+    if (generation !== null) {
+      this.planningAnswerProjectionBySnapshot.set(planningSnapshot, {
+        generation,
+        projection,
+      });
+    }
+    return projection;
+  }
+
   resolvePriorityRecoveryPlanningAnswer(
     nodeId,
     observedAt,
     planningSnapshot = null,
   ) {
     const resolvedPlanningSnapshot =
-      this.buildPriorityRecoveryPlanningProjection(planningSnapshot);
+      this.resolveMemoizedPlanningAnswerProjection(
+        planningSnapshot,
+        observedAt,
+      );
     if (this.isPriorityControlPlaneRecoveryActive(resolvedPlanningSnapshot)) {
       this.storeActivePriorityRecoveryPlanningSnapshot(
         nodeId,

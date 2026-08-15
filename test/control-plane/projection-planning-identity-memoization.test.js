@@ -30,6 +30,28 @@ const JOINER_OWNER_KEY = 'node-identity-joiner';
 const GATE_BUILD_SECTION = 'publication_recovery_gate_snapshot_build';
 const REPEAT_READS = 10;
 
+function createVersionedTableCache() {
+  const versions = new Map();
+  return {
+    bump(tableName) {
+      versions.set(tableName, (versions.get(tableName) || 0) + 1);
+    },
+    getTableMutationVersion(tableName) {
+      return versions.get(tableName) || 0;
+    },
+    get() {
+      return null;
+    },
+    getAll() {
+      return [];
+    },
+    filter() {
+      return [];
+    },
+    addListener() {},
+  };
+}
+
 function readGateBuildCount() {
   const site = getSharedSyncSectionRegistry().sites.get(GATE_BUILD_SECTION);
   return site ? site.count : 0;
@@ -88,25 +110,7 @@ test('per-entry projection readiness state resolves to one frozen build ' +
 
 test('the planning answer serves one projection identity per floored ' +
   'generation under write churn', async (t) => {
-  const versions = new Map();
-  const cache = {
-    bump(tableName) {
-      versions.set(tableName, (versions.get(tableName) || 0) + 1);
-    },
-    getTableMutationVersion(tableName) {
-      return versions.get(tableName) || 0;
-    },
-    get() {
-      return null;
-    },
-    getAll() {
-      return [];
-    },
-    filter() {
-      return [];
-    },
-    addListener() {},
-  };
+  const cache = createVersionedTableCache();
   const readiness = new ControlPlaneReadinessService({
     nodeId: OWNER_NODE_ID,
     systemTableCache: cache,
@@ -129,6 +133,34 @@ test('the planning answer serves one projection identity per floored ' +
     readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1400);
   t.not(third, first,
     'the next window observes the write with a fresh projection');
+  t.end();
+});
+
+test('the planning answer projection keeps one identity per input snapshot ' +
+  'and floored generation on the recovery-inactive path', async (t) => {
+  const cache = createVersionedTableCache();
+  const readiness = new ControlPlaneReadinessService({
+    nodeId: OWNER_NODE_ID,
+    systemTableCache: cache,
+    now: () => 1000,
+  });
+  const inputSnapshot = Object.freeze({
+    publicationEpoch: 2,
+    publicationStatus: 'PUBLISHED',
+    publishedActiveNodeIds: Object.freeze([OWNER_NODE_ID]),
+  });
+  const first = readiness.resolvePriorityRecoveryPlanningAnswer(
+    OWNER_NODE_ID, 1000, inputSnapshot);
+  const second = readiness.resolvePriorityRecoveryPlanningAnswer(
+    OWNER_NODE_ID, 1100, inputSnapshot);
+  t.equal(second, first,
+    'the same input snapshot within one floor window resolves to one ' +
+      'projection identity');
+  cache.bump('nodes');
+  const third = readiness.resolvePriorityRecoveryPlanningAnswer(
+    OWNER_NODE_ID, 1400, inputSnapshot);
+  t.not(third, first,
+    'the next floored generation reprojects');
   t.end();
 });
 
