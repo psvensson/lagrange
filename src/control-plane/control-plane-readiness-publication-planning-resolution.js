@@ -457,7 +457,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
         if (
           !this.isMemoizedMembershipPublicationPlanningProjectionEpochStale(
             memoKey,
-            cached.projection,
+            cached.publicationProbe,
           )
         ) {
           return cached.projection;
@@ -476,6 +476,8 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
         projection,
         capturedAtMs,
         sourceGeneration,
+        publicationProbe:
+          this.readLatestMembershipPublicationEpochStatusProbe(memoKey),
         fn: this.resolveMembershipPublicationPlanningSnapshot,
       });
     }

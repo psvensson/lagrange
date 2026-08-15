@@ -42,6 +42,9 @@ function memoCtx({nodeId = 'seed'} = {}) {
     isReadinessPlanningMemoWithinStaleGrace:
       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
         .isReadinessPlanningMemoWithinStaleGrace,
+    readLatestMembershipPublicationEpochStatusProbe:
+      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+        .readLatestMembershipPublicationEpochStatusProbe,
     isMemoizedMembershipPublicationPlanningProjectionEpochStale:
       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
         .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
@@ -49,7 +52,7 @@ function memoCtx({nodeId = 'seed'} = {}) {
     getMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
     // The parse/clone-heavy projection — counted; returns a fresh frozen object
     // per build so identity distinguishes a memo hit from a rebuild.
-    buildPriorityRecoveryPlanningProjection: (snapshot) => {
+    buildTrackedPriorityRecoveryPlanningProjection: (snapshot) => {
       builds.push(snapshot?.read ?? null);
       return Object.freeze({projectionFor: snapshot?.read ?? null, build: builds.length});
     },

@@ -252,6 +252,9 @@ test('the sync membership-planning derivation inherits the version-key ' +
   const readiness = new ControlPlaneReadinessService({
     nodeId: SWEEP_NODE_ID,
     systemTableCache: cache,
+    // One clock domain: internal reads share the logical test clock so the
+    // shared floor latch is never touched with wall time mid-test.
+    now: () => 1000,
     membershipPublicationService: {
       deriveClusterMembershipCandidateSync() {
         derivations += 1;

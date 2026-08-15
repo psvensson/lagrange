@@ -164,6 +164,68 @@ test('the planning answer projection keeps one identity per input snapshot ' +
   t.end();
 });
 
+test('the planning answer memo survives a candidate that proposes the next ' +
+  'publication epoch', async (t) => {
+  const cache = createVersionedTableCache();
+  const readiness = new ControlPlaneReadinessService({
+    nodeId: OWNER_NODE_ID,
+    systemTableCache: cache,
+    now: () => 1000,
+    membershipPublicationService: {
+      // The derived candidate proposes the NEXT epoch by construction while
+      // the live row still shows the current one — the memo freshness probe
+      // must compare row-vs-row, never row-vs-candidate.
+      deriveClusterMembershipCandidateSync() {
+        return {
+          publicationEpoch: 4,
+          status: 'OPEN',
+          publishedActiveNodeIds: [OWNER_NODE_ID],
+        };
+      },
+      latestRow: {publicationEpoch: 3, status: 'PUBLISHED'},
+      getLatestMembershipPublicationEpochStatusForNodeSync() {
+        return this.latestRow;
+      },
+    },
+  });
+  const first =
+    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1000);
+  const second =
+    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1100);
+  t.equal(second, first,
+    'a stable publication row keeps the memoized answer despite the ' +
+      'next-epoch candidate');
+  readiness.membershipPublicationService.latestRow =
+    {publicationEpoch: 4, status: 'PUBLISHED'};
+  const third =
+    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1150);
+  t.not(third, first,
+    'a genuine publication-row advance still rebuilds immediately');
+  t.end();
+});
+
+test('the startup-authority snapshot resolves to one identity per planning ' +
+  'answer', async (t) => {
+  const {buildStartupAuthoritySnapshotFromPlanningAnswer} =
+    await import(
+      '../../src/control-plane/startup-authority-snapshot-owner.js');
+  const answer = Object.freeze({
+    publicationEpoch: 2,
+    publicationStatus: 'PUBLISHED',
+    publishedActiveNodeIds: Object.freeze([OWNER_NODE_ID]),
+  });
+  const first = buildStartupAuthoritySnapshotFromPlanningAnswer(answer);
+  const second = buildStartupAuthoritySnapshotFromPlanningAnswer(answer);
+  t.equal(first, second,
+    'the same planning answer shares one startup-authority snapshot');
+  const other = buildStartupAuthoritySnapshotFromPlanningAnswer(
+    Object.freeze({...answer, publicationEpoch: 3}),
+  );
+  t.not(other, first,
+    'a different answer identity builds its own snapshot');
+  t.end();
+});
+
 test('the untracked priority planning projection builds its recovery gate ' +
   'once per planning snapshot identity', async (t) => {
   const readiness = new ControlPlaneReadinessService({

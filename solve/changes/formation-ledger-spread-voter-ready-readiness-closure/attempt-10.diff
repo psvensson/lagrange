@@ -1,0 +1,525 @@
+diff --git a/src/control-plane/control-plane-readiness-priority-recovery-planning.js b/src/control-plane/control-plane-readiness-priority-recovery-planning.js
+index 72317f66288d29aab431274e8bb94b5073842109..f589510ece2fa655e39322ad99058cea0779e567 100644
+--- a/src/control-plane/control-plane-readiness-priority-recovery-planning.js
++++ b/src/control-plane/control-plane-readiness-priority-recovery-planning.js
+@@ -72,50 +72,13 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
+     });
+   }
+ 
+-  // One projection per (input-snapshot identity, floored generation): the
+-  // answer's recovery-INACTIVE path reprojects on every read, so during the
+-  // post-convergence wait phase (spread ready, recovery closed) each call
+-  // minted a fresh identity that defeated every downstream identity memo —
+-  // live-measured as gate builds x13843 inside one 20.5s seed gap (archived
+-  // run 18-29-01-296Z-natural-manual). The projection derives from the
+-  // snapshot plus cache-backed local admission evidence, both covered by
+-  // the floored generation; unversioned caches fall back to the raw
+-  // revision via readPlanningProjectionSourceGeneration.
+-  resolveMemoizedPlanningAnswerProjection(planningSnapshot, observedAt) {
+-    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
+-      return this.buildPriorityRecoveryPlanningProjection(planningSnapshot);
+-    }
+-    if (!this.planningAnswerProjectionBySnapshot) {
+-      this.planningAnswerProjectionBySnapshot = new WeakMap();
+-    }
+-    const generation =
+-      typeof this.readPlanningProjectionSourceGeneration === 'function' ?
+-        this.readPlanningProjectionSourceGeneration(observedAt) :
+-        null;
+-    const cached = this.planningAnswerProjectionBySnapshot.get(
+-      planningSnapshot,
+-    );
+-    if (cached && generation !== null && cached.generation === generation) {
+-      return cached.projection;
+-    }
+-    const projection =
+-      this.buildPriorityRecoveryPlanningProjection(planningSnapshot);
+-    if (generation !== null) {
+-      this.planningAnswerProjectionBySnapshot.set(planningSnapshot, {
+-        generation,
+-        projection,
+-      });
+-    }
+-    return projection;
+-  }
+-
+   resolvePriorityRecoveryPlanningAnswer(
+     nodeId,
+     observedAt,
+     planningSnapshot = null,
+   ) {
+     const resolvedPlanningSnapshot =
+-      this.resolveMemoizedPlanningAnswerProjection(
++      this.buildPriorityRecoveryPlanningProjection(
+         planningSnapshot,
+         observedAt,
+       );
+@@ -506,7 +469,53 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
+     return Object.freeze(retainedReasonCodes);
+   }
+ 
+-  buildPriorityRecoveryPlanningProjection(planningSnapshot = null) {
++  // One projection per (input-snapshot identity, floored generation) at the
++  // single entry every caller shares — the answer paths, the merge-decision
++  // helpers that re-project the same snapshot several times per merge, and
++  // the brand-gated predicates. Rebuilding per call minted a fresh identity
++  // per read that defeated every downstream identity memo (live evidence:
++  // 42762 gate builds across 33 seed gaps, archived run
++  // 18-53-48-768Z-natural-manual). The projection derives from the snapshot
++  // plus cache-backed evidence, both covered by the floored generation;
++  // non-object inputs and unversioned caches keep per-call builds.
++  buildPriorityRecoveryPlanningProjection(planningSnapshot = null, observedAt) {
++    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
++      return this.buildTrackedPriorityRecoveryPlanningProjection(
++        planningSnapshot,
++      );
++    }
++    if (!this.planningProjectionByInputSnapshot) {
++      this.planningProjectionByInputSnapshot = new WeakMap();
++    }
++    // Clock: prefer the caller's observedAt, else the service's injectable
++    // clock — mixing Date.now into the shared floor latch alongside logical
++    // caller clocks corrupts the latch ordering.
++    const generation =
++      typeof this.readPlanningProjectionSourceGeneration === 'function' ?
++        this.readPlanningProjectionSourceGeneration(
++          observedAt ??
++            (typeof this.now === 'function' ? this.now() : undefined),
++        ) :
++        null;
++    const cached = this.planningProjectionByInputSnapshot.get(
++      planningSnapshot,
++    );
++    if (cached && generation !== null && cached.generation === generation) {
++      return cached.projection;
++    }
++    const projection = this.buildTrackedPriorityRecoveryPlanningProjection(
++      planningSnapshot,
++    );
++    if (generation !== null) {
++      this.planningProjectionByInputSnapshot.set(planningSnapshot, {
++        generation,
++        projection,
++      });
++    }
++    return projection;
++  }
++
++  buildTrackedPriorityRecoveryPlanningProjection(planningSnapshot) {
+     // Sync-section attribution (instrumentation-only, quest
+     // publication-recovery-snapshot-starvation-relief): profiled as part of
+     // the dominant seed event-loop cost; the count measures how often the
+diff --git a/src/control-plane/control-plane-readiness-publication-aware.js b/src/control-plane/control-plane-readiness-publication-aware.js
+index 08d04369119754bb8f859ac8dd4ccfb018343922..0bc688e044370c7b5f4bb92c165f397efd63678e 100644
+--- a/src/control-plane/control-plane-readiness-publication-aware.js
++++ b/src/control-plane/control-plane-readiness-publication-aware.js
+@@ -25,11 +25,14 @@ class ControlPlaneReadinessPublicationAware extends
+     );
+   }
+ 
+-  buildPriorityRecoveryPlanningProjection(planningSnapshot = null) {
++  buildPriorityRecoveryPlanningProjection(planningSnapshot = null, observedAt) {
+     // Structural guard anchor: the projection delegates through
+     // filterPriorityRecoveryReasonCodesForPublicationGate and preserves the
+     // publicationRecoveryGate contract from the staged owner implementation.
+-    return super.buildPriorityRecoveryPlanningProjection(planningSnapshot);
++    return super.buildPriorityRecoveryPlanningProjection(
++      planningSnapshot,
++      observedAt,
++    );
+   }
+ }
+ 
+diff --git a/src/control-plane/control-plane-readiness-publication-planning-resolution.js b/src/control-plane/control-plane-readiness-publication-planning-resolution.js
+index a922a8503588160f7af12e5e885b0378dae1eebc..701349e2e5584ae5743cc6a1eb152247339f84d8 100644
+--- a/src/control-plane/control-plane-readiness-publication-planning-resolution.js
++++ b/src/control-plane/control-plane-readiness-publication-planning-resolution.js
+@@ -457,7 +457,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
+         if (
+           !this.isMemoizedMembershipPublicationPlanningProjectionEpochStale(
+             memoKey,
+-            cached.projection,
++            cached.publicationProbe,
+           )
+         ) {
+           return cached.projection;
+@@ -476,6 +476,8 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
+         projection,
+         capturedAtMs,
+         sourceGeneration,
++        publicationProbe:
++          this.readLatestMembershipPublicationEpochStatusProbe(memoKey),
+         fn: this.resolveMembershipPublicationPlanningSnapshot,
+       });
+     }
+diff --git a/src/control-plane/control-plane-readiness-publication-planning-snapshot.js b/src/control-plane/control-plane-readiness-publication-planning-snapshot.js
+index 50d72f66ce1d9a226446f7325bcfe9da879ef0ab..5baf60b16edb707a0a9f371e8579733ba69f973c 100644
+--- a/src/control-plane/control-plane-readiness-publication-planning-snapshot.js
++++ b/src/control-plane/control-plane-readiness-publication-planning-snapshot.js
+@@ -11,6 +11,14 @@ const {
+   normalizeDiagnosticTimestampMs,
+ } = SHARED;
+ 
++// Named empty-state for the publication epoch/status probe: the service
++// exposes no cheap probe surface, so freshness falls back to the legacy
++// full-read comparison and memo stores carry this marker instead of a raw
++// null runtime state.
++const PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE = Object.freeze({
++  probeUnavailable: true,
++});
++
+ class ControlPlaneReadinessPublicationPlanningSnapshot extends
+   ControlPlaneReadinessPriorityRecoveryPlanning {
+   hasMembershipPublicationRecoveryGateEvidence(planningSnapshot = null) {
+@@ -228,52 +236,69 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
+   // projection whose publication epoch/status no longer matches the live publication
+   // row (an ack/epoch/status advance normally also fires the cluster marker, but this
+   // catches it directly). Returns true when the cached projection is stale.
+-  isMemoizedMembershipPublicationPlanningProjectionEpochStale(
+-    nodeId,
+-    cachedProjection,
+-  ) {
++  // Reads the live publication winner row's (epoch, status) for the memo
++  // freshness probes. Returns null when the service exposes no probe surface
++  // (stubs that predate it) — callers treat that as "probe unavailable, not
++  // stale". Scope-consistent: reads the CLUSTER winner without the
++  // node-inclusion filter — the inclusion-filtered form returns null for
++  // excluded (joining/recovering) nodes and made the guard read permanently
++  // stale; inclusion-list changes invalidate via the planning generation,
++  // not this probe.
++  readLatestMembershipPublicationEpochStatusProbe(nodeId) {
+     const service = this.membershipPublicationService;
+-    if (!service) {
+-      return false;
+-    }
+-    // Prefer the cheap (epoch, status) probe that normalizes only the winning row
+-    // (saturation-relief: avoids the per-tick full-table re-normalize); fall back
+-    // to the full read for service stubs that predate the probe.
+-    let latestPub = null;
+     if (
+-      typeof service.getLatestMembershipPublicationEpochStatusForNodeSync ===
+-      'function'
++      !service ||
++      typeof service.getLatestMembershipPublicationEpochStatusForNodeSync !==
++        'function'
+     ) {
+-      // Scope-consistent probe: the cached projection stores the CLUSTER
+-      // winner's epoch/status, so the comparison must read the winner row
+-      // without the node-inclusion filter — the inclusion-filtered form
+-      // returns null for excluded (joining/recovering) nodes and made this
+-      // guard read permanently stale, silently disabling the CL-033/CL-034
+-      // memos exactly during churn (same family as the NaN observedAt
+-      // regression above). Inclusion-list changes invalidate via the
+-      // planning source-revision bump, not this probe.
+-      latestPub = service.getLatestMembershipPublicationEpochStatusForNodeSync(
++      // No cheap probe surface (legacy stubs): the floored generation alone
++      // governs invalidation at store time, and the hit-path falls back to
++      // the legacy full-read comparison. A full-row read here would add an
++      // unprofiled publication-lane read to every memo store, breaking the
++      // sealed lane-separation contract those stubs assert.
++      return PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE;
++    }
++    const latestPub =
++      service.getLatestMembershipPublicationEpochStatusForNodeSync(
+         nodeId,
+         {requireNodeInclusion: false},
+       );
+-    } else if (
+-      typeof service.getLatestPublicationForNodeSync === 'function'
++    return Object.freeze({
++      epoch: latestPub ?
++        (latestPub.publicationEpoch ?? latestPub.publication_epoch ?? null) :
++        null,
++      status: latestPub ? (latestPub.status ?? null) : null,
++    });
++  }
++
++  // Row-vs-ROW freshness recheck shared by the readiness planning memos:
++  // reject a cached entry when the live publication row's (epoch, status)
++  // moved since the entry was stored. The prior form compared the live row
++  // against the cached CANDIDATE projection — but the derived candidate
++  // proposes the NEXT epoch by construction, so during any formation or
++  // ack-in-progress phase the guard declared stale on every read and
++  // silently disabled the CL-033/CL-034 memos and, transitively, every
++  // downstream identity memo (live evidence: 42762 gate builds across 33
++  // seed gaps in the archived run 18-53-48-768Z-natural-manual).
++  isMemoizedMembershipPublicationPlanningProjectionEpochStale(
++    nodeId,
++    storedPublicationProbe,
++  ) {
++    const latest = this.readLatestMembershipPublicationEpochStatusProbe(
++      nodeId,
++    );
++    if (latest === PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE) {
++      // No probe surface: the floored generation alone governs freshness.
++      return false;
++    }
++    if (
++      !storedPublicationProbe ||
++      storedPublicationProbe === PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE
+     ) {
+-      latestPub = service.getLatestPublicationForNodeSync(nodeId);
+-    } else {
+       return false;
+     }
+-    const latestEpoch = latestPub ?
+-      (latestPub.publicationEpoch ?? latestPub.publication_epoch) :
+-      null;
+-    const cachedEpoch = cachedProjection ?
+-      (cachedProjection.publicationEpoch ?? cachedProjection.publication_epoch) :
+-      null;
+-    const latestStatus = latestPub ? latestPub.status : null;
+-    const cachedStatus = cachedProjection ?
+-      (cachedProjection.publicationStatus ?? cachedProjection.status) :
+-      null;
+-    return latestEpoch !== cachedEpoch || latestStatus !== cachedStatus;
++    return latest.epoch !== storedPublicationProbe.epoch ||
++      latest.status !== storedPublicationProbe.status;
+   }
+ 
+   // Keyed on the shared floored planning generation (the same key the
+@@ -317,7 +342,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
+         if (
+           !this.isMemoizedMembershipPublicationPlanningProjectionEpochStale(
+             memoKey,
+-            cached.projection,
++            cached.publicationProbe,
+           )
+         ) {
+           return cached.projection;
+@@ -325,7 +350,12 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
+       }
+     }
+     const capturedAtMs = this.now();
+-    const projection = this.buildPriorityRecoveryPlanningProjection(
++    // Miss path builds UNCONDITIONALLY (bypassing the input-identity
++    // projection memo): this memo's publication-row probe is the
++    // belt-and-suspenders invalidation for row changes that arrive without
++    // a table write, and a probe-forced miss must produce a genuinely fresh
++    // projection even when the derived input identity is unchanged.
++    const projection = this.buildTrackedPriorityRecoveryPlanningProjection(
+       this.getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt),
+     );
+     if (memo && memoKey) {
+@@ -333,6 +363,8 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
+         projection,
+         capturedAtMs,
+         sourceGeneration,
++        publicationProbe:
++          this.readLatestMembershipPublicationEpochStatusProbe(memoKey),
+         fn: this.getMembershipPublicationPlanningSnapshotSync,
+       });
+     }
+diff --git a/src/control-plane/startup-authority-snapshot-owner.js b/src/control-plane/startup-authority-snapshot-owner.js
+index 461cc8a673b1cc21b8010fd7187dab92f4de6b04..f660d25e7eb54c2ea57169caac0f6404444d0338 100644
+--- a/src/control-plane/startup-authority-snapshot-owner.js
++++ b/src/control-plane/startup-authority-snapshot-owner.js
+@@ -227,6 +227,14 @@ export function buildStartupAuthorityUnavailableSnapshot(
+   });
+ }
+ 
++// The startup-authority snapshot is a pure derivation of the planning
++// answer, yet it was rebuilt (with a fresh recovery-gate construction) on
++// every getStartupAuthorityNodeIdSet call — the top-ranked producer of the
++// live gate-build storm (x699 per cycle; archived run
++// 18-53-48-768Z-natural-manual). One snapshot per answer identity; callers
++// that mint fresh answers per read simply miss.
++const STARTUP_AUTHORITY_SNAPSHOT_BY_ANSWER = new WeakMap();
++
+ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
+   planningSnapshot,
+ ) {
+@@ -235,7 +243,19 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
+       PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_UNAVAILABLE,
+     );
+   }
++  const memoized = STARTUP_AUTHORITY_SNAPSHOT_BY_ANSWER.get(planningSnapshot);
++  if (memoized) {
++    return memoized;
++  }
++  const snapshot =
++    buildStartupAuthoritySnapshotFromPlanningAnswerUncached(planningSnapshot);
++  STARTUP_AUTHORITY_SNAPSHOT_BY_ANSWER.set(planningSnapshot, snapshot);
++  return snapshot;
++}
+ 
++function buildStartupAuthoritySnapshotFromPlanningAnswerUncached(
++  planningSnapshot,
++) {
+   const publicationRecoveryGate =
+     buildPublicationRecoveryGateSnapshot(planningSnapshot);
+   const projectionReadinessContract =
+diff --git a/test/control-plane/cl-033-epoch-probe-node-scope.test.js b/test/control-plane/cl-033-epoch-probe-node-scope.test.js
+index 1e88d400e10490417c73edae6ac3195750cc52ad..604486fca4fb00a923081549e9528080d897671b 100644
+--- a/test/control-plane/cl-033-epoch-probe-node-scope.test.js
++++ b/test/control-plane/cl-033-epoch-probe-node-scope.test.js
+@@ -66,11 +66,14 @@ function memoCtx(rows, {nodeId = 'node-b'} = {}) {
+     isReadinessPlanningMemoWithinStaleGrace:
+       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+         .isReadinessPlanningMemoWithinStaleGrace,
++    readLatestMembershipPublicationEpochStatusProbe:
++      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
++        .readLatestMembershipPublicationEpochStatusProbe,
+     isMemoizedMembershipPublicationPlanningProjectionEpochStale:
+       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+         .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
+     getMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
+-    buildPriorityRecoveryPlanningProjection: (snapshot) => {
++    buildTrackedPriorityRecoveryPlanningProjection: (snapshot) => {
+       builds.push(snapshot?.read ?? null);
+       // The projection stores the CLUSTER winner's epoch/status, regardless
+       // of whether the projected node is included in the publication row.
+diff --git a/test/control-plane/cl-033-planning-projection-memo.test.js b/test/control-plane/cl-033-planning-projection-memo.test.js
+index 7b29b4f9572916b51608b49d721695db83f323ef..b8864a29bd70229755945c9d41db933ba047f3d9 100644
+--- a/test/control-plane/cl-033-planning-projection-memo.test.js
++++ b/test/control-plane/cl-033-planning-projection-memo.test.js
+@@ -42,6 +42,9 @@ function memoCtx({nodeId = 'seed'} = {}) {
+     isReadinessPlanningMemoWithinStaleGrace:
+       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+         .isReadinessPlanningMemoWithinStaleGrace,
++    readLatestMembershipPublicationEpochStatusProbe:
++      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
++        .readLatestMembershipPublicationEpochStatusProbe,
+     isMemoizedMembershipPublicationPlanningProjectionEpochStale:
+       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+         .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
+@@ -49,7 +52,7 @@ function memoCtx({nodeId = 'seed'} = {}) {
+     getMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
+     // The parse/clone-heavy projection — counted; returns a fresh frozen object
+     // per build so identity distinguishes a memo hit from a rebuild.
+-    buildPriorityRecoveryPlanningProjection: (snapshot) => {
++    buildTrackedPriorityRecoveryPlanningProjection: (snapshot) => {
+       builds.push(snapshot?.read ?? null);
+       return Object.freeze({projectionFor: snapshot?.read ?? null, build: builds.length});
+     },
+diff --git a/test/control-plane/cl-034-planning-snapshot-merge-memo.test.js b/test/control-plane/cl-034-planning-snapshot-merge-memo.test.js
+index 1db8c8161d662860c94de4a528f0bf4e13004ca2..9a4797aabebfdc380d298d2d7a3ea41a5ec4d883 100644
+--- a/test/control-plane/cl-034-planning-snapshot-merge-memo.test.js
++++ b/test/control-plane/cl-034-planning-snapshot-merge-memo.test.js
+@@ -45,11 +45,14 @@ function memoCtx({
+     isReadinessPlanningMemoWithinStaleGrace:
+       ControlPlaneReadinessPublicationPlanningResolution.prototype
+         .isReadinessPlanningMemoWithinStaleGrace,
++    readLatestMembershipPublicationEpochStatusProbe:
++      ControlPlaneReadinessPublicationPlanningResolution.prototype
++        .readLatestMembershipPublicationEpochStatusProbe,
+     isMemoizedMembershipPublicationPlanningProjectionEpochStale:
+       ControlPlaneReadinessPublicationPlanningResolution.prototype
+         .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
+     membershipPublicationService: {
+-      getLatestPublicationForNodeSync: () => pub,
++      getLatestMembershipPublicationEpochStatusForNodeSync: () => pub,
+     },
+     // The heavy stage-3 merge — counted; returns a fresh frozen projection per
+     // build carrying the current epoch/status so the freshness recheck passes
+diff --git a/test/control-plane/control-plane-readiness-service-planning-snapshot-support.js b/test/control-plane/control-plane-readiness-service-planning-snapshot-support.js
+index ad7a13bac1eb7f4db7623bd6b8f6c0c42c2d08b1..d78f9b712f2a23f45b37ec692e728cd8fdca4ea9 100644
+--- a/test/control-plane/control-plane-readiness-service-planning-snapshot-support.js
++++ b/test/control-plane/control-plane-readiness-service-planning-snapshot-support.js
+@@ -361,6 +361,9 @@ test('ControlPlaneReadinessService reuses the last active sync priority-recovery
+           }
+           return publicationRow;
+         },
++        getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
++          return targetNodeId === nodeId ? publicationRow : null;
++        },
+       },
+       now: () => now,
+     });
+@@ -483,6 +486,9 @@ test('ControlPlaneReadinessService retains a fresher async priority-recovery pla
+           }
+           return publicationRow;
+         },
++        getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
++          return targetNodeId === TARGET_NODE_ID ? publicationRow : null;
++        },
+         async deriveClusterMembershipCandidate(options = {}) {
+           if (options.publisherNodeId !== TARGET_NODE_ID) {
+             return null;
+diff --git a/test/control-plane/projection-planning-identity-memoization.test.js b/test/control-plane/projection-planning-identity-memoization.test.js
+index f09e0a7408e082a72f0a40310393bf4a2701ebcb..0c42c677f0a562c556d39b022d414439ccb23c0a 100644
+--- a/test/control-plane/projection-planning-identity-memoization.test.js
++++ b/test/control-plane/projection-planning-identity-memoization.test.js
+@@ -164,6 +164,68 @@ test('the planning answer projection keeps one identity per input snapshot ' +
+   t.end();
+ });
+ 
++test('the planning answer memo survives a candidate that proposes the next ' +
++  'publication epoch', async (t) => {
++  const cache = createVersionedTableCache();
++  const readiness = new ControlPlaneReadinessService({
++    nodeId: OWNER_NODE_ID,
++    systemTableCache: cache,
++    now: () => 1000,
++    membershipPublicationService: {
++      // The derived candidate proposes the NEXT epoch by construction while
++      // the live row still shows the current one — the memo freshness probe
++      // must compare row-vs-row, never row-vs-candidate.
++      deriveClusterMembershipCandidateSync() {
++        return {
++          publicationEpoch: 4,
++          status: 'OPEN',
++          publishedActiveNodeIds: [OWNER_NODE_ID],
++        };
++      },
++      latestRow: {publicationEpoch: 3, status: 'PUBLISHED'},
++      getLatestMembershipPublicationEpochStatusForNodeSync() {
++        return this.latestRow;
++      },
++    },
++  });
++  const first =
++    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1000);
++  const second =
++    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1100);
++  t.equal(second, first,
++    'a stable publication row keeps the memoized answer despite the ' +
++      'next-epoch candidate');
++  readiness.membershipPublicationService.latestRow =
++    {publicationEpoch: 4, status: 'PUBLISHED'};
++  const third =
++    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1150);
++  t.not(third, first,
++    'a genuine publication-row advance still rebuilds immediately');
++  t.end();
++});
++
++test('the startup-authority snapshot resolves to one identity per planning ' +
++  'answer', async (t) => {
++  const {buildStartupAuthoritySnapshotFromPlanningAnswer} =
++    await import(
++      '../../src/control-plane/startup-authority-snapshot-owner.js');
++  const answer = Object.freeze({
++    publicationEpoch: 2,
++    publicationStatus: 'PUBLISHED',
++    publishedActiveNodeIds: Object.freeze([OWNER_NODE_ID]),
++  });
++  const first = buildStartupAuthoritySnapshotFromPlanningAnswer(answer);
++  const second = buildStartupAuthoritySnapshotFromPlanningAnswer(answer);
++  t.equal(first, second,
++    'the same planning answer shares one startup-authority snapshot');
++  const other = buildStartupAuthoritySnapshotFromPlanningAnswer(
++    Object.freeze({...answer, publicationEpoch: 3}),
++  );
++  t.not(other, first,
++    'a different answer identity builds its own snapshot');
++  t.end();
++});
++
+ test('the untracked priority planning projection builds its recovery gate ' +
+   'once per planning snapshot identity', async (t) => {
+   const readiness = new ControlPlaneReadinessService({
+diff --git a/test/rebalancer/planning-sweep-memoization.test.js b/test/rebalancer/planning-sweep-memoization.test.js
+index 13ad7e62e3c7ad6e60ea288423808017d633d918..e827d59ff15b8da466d5f7f016bc6d427d675853 100644
+--- a/test/rebalancer/planning-sweep-memoization.test.js
++++ b/test/rebalancer/planning-sweep-memoization.test.js
+@@ -252,6 +252,9 @@ test('the sync membership-planning derivation inherits the version-key ' +
+   const readiness = new ControlPlaneReadinessService({
+     nodeId: SWEEP_NODE_ID,
+     systemTableCache: cache,
++    // One clock domain: internal reads share the logical test clock so the
++    // shared floor latch is never touched with wall time mid-test.
++    now: () => 1000,
+     membershipPublicationService: {
+       deriveClusterMembershipCandidateSync() {
+         derivations += 1;

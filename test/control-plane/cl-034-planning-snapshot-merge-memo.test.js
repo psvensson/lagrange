@@ -45,11 +45,14 @@ function memoCtx({
     isReadinessPlanningMemoWithinStaleGrace:
       ControlPlaneReadinessPublicationPlanningResolution.prototype
         .isReadinessPlanningMemoWithinStaleGrace,
+    readLatestMembershipPublicationEpochStatusProbe:
+      ControlPlaneReadinessPublicationPlanningResolution.prototype
+        .readLatestMembershipPublicationEpochStatusProbe,
     isMemoizedMembershipPublicationPlanningProjectionEpochStale:
       ControlPlaneReadinessPublicationPlanningResolution.prototype
         .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
     membershipPublicationService: {
-      getLatestPublicationForNodeSync: () => pub,
+      getLatestMembershipPublicationEpochStatusForNodeSync: () => pub,
     },
     // The heavy stage-3 merge — counted; returns a fresh frozen projection per
     // build carrying the current epoch/status so the freshness recheck passes

@@ -66,11 +66,14 @@ function memoCtx(rows, {nodeId = 'node-b'} = {}) {
     isReadinessPlanningMemoWithinStaleGrace:
       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
         .isReadinessPlanningMemoWithinStaleGrace,
+    readLatestMembershipPublicationEpochStatusProbe:
+      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+        .readLatestMembershipPublicationEpochStatusProbe,
     isMemoizedMembershipPublicationPlanningProjectionEpochStale:
       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
         .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
     getMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
-    buildPriorityRecoveryPlanningProjection: (snapshot) => {
+    buildTrackedPriorityRecoveryPlanningProjection: (snapshot) => {
       builds.push(snapshot?.read ?? null);
       // The projection stores the CLUSTER winner's epoch/status, regardless
       // of whether the projected node is included in the publication row.

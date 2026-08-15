@@ -361,6 +361,9 @@ test('ControlPlaneReadinessService reuses the last active sync priority-recovery
           }
           return publicationRow;
         },
+        getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
+          return targetNodeId === nodeId ? publicationRow : null;
+        },
       },
       now: () => now,
     });
@@ -482,6 +485,9 @@ test('ControlPlaneReadinessService retains a fresher async priority-recovery pla
             return null;
           }
           return publicationRow;
+        },
+        getLatestMembershipPublicationEpochStatusForNodeSync(targetNodeId) {
+          return targetNodeId === TARGET_NODE_ID ? publicationRow : null;
         },
         async deriveClusterMembershipCandidate(options = {}) {
           if (options.publisherNodeId !== TARGET_NODE_ID) {
