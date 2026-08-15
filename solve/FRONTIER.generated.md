@@ -48,7 +48,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 24
+## Open quests — 25
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -72,6 +72,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | readiness-planning-own-data-consumer-closure | product | 3 | 0 | 2026-08-14 | — |
 | readiness-planning-owner-boundary-atomic-closure | product | 5 | 0 | 2026-08-14 | — |
 | readiness-planning-publication-retry-atomicity-closure | product | 5 | 0 | 2026-08-14 | — |
+| readiness-planning-read-amplification-closure | product | 3 | 0 | 2026-08-15 | — |
 | rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 ⚠ stale | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 ⚠ stale | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |

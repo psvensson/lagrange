@@ -361,7 +361,6 @@ export {
   buildStringSet,
   copyCanonicalDenseOwnDataRecordArray,
   copyDenseOwnDataArray,
-  copyDenseOwnDataRecordArray,
   copyStrictOwnDataRecord,
   copyExclusionCounts,
   DATA_PROPERTY_STATE,
