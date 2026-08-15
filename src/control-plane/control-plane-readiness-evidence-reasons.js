@@ -323,32 +323,14 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
   buildEvaluatedNodeReadinessSnapshot(context = {}) {
     const persistSnapshot = context.persistSnapshot !== false;
     const runtimeAuthority = this.buildRuntimeAuthoritySnapshot(context);
-    const dimensions = this.buildDimensions({
+    const {
+      dimensions,
+      priorityControlPlaneRecovery,
+      projectionReadinessContract,
+    } = this.buildDimensionsEvaluation({
       ...context,
       runtimeAuthority,
     });
-    const runtimeServeAdmission = this.buildRuntimeServeAdmissionSnapshot(
-      context,
-      runtimeAuthority,
-    );
-    const priorityControlPlaneRecovery =
-      this.getPriorityControlPlaneRecoveryState({
-        nodeId: context.nodeId,
-        observedAt: context.observedAt,
-        publication: context.publication,
-        membershipPublication: context.membershipPublication,
-        membershipPublicationPlanningSnapshot:
-          context.membershipPublicationPlanningSnapshot,
-        dimensions,
-      });
-    const projectionReadinessContract =
-      this.buildProjectionReadinessContract({
-        ...context,
-        dimensions,
-        priorityControlPlaneRecovery,
-        runtimeAuthority,
-        runtimeServeEligible: runtimeServeAdmission.eligible,
-      });
     const reasons = this.buildReasons({
       ...context,
       dimensions,
@@ -634,7 +616,10 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
   buildReadinessTransitionState(context) {
     const ownerState = buildReadinessTransitionOwnerState(context, this.now());
     const projectionReadinessContract =
-      this.buildProjectionReadinessContract(context);
+      context.projectionReadinessContract &&
+      typeof context.projectionReadinessContract === 'object' ?
+        context.projectionReadinessContract :
+        this.buildProjectionReadinessContract(context);
     return Object.freeze({
       ...ownerState,
       projectionReadinessContract,

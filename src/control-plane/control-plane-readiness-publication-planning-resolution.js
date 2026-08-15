@@ -479,8 +479,8 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
   }
 
   // CL-034 follow-up: the readiness-build sub-builders re-run the SAME merge ~6 times
-  // per getNodeReadinessSync — getPriorityControlPlaneRecoveryState (twice:
-  // buildEvaluatedNodeReadinessSnapshot + buildDimensions), its segment-2 wrapper,
+  // per getNodeReadinessSync — getPriorityControlPlaneRecoveryState (once, from
+  // buildDimensionsEvaluation), its segment-2 wrapper,
   // buildRuntimeAuthoritySnapshot, isControlPlaneRecoveryEligible, and
   // buildPriorityControlPlaneRecoveryProjection — all calling
   // resolveMembershipPublicationPlanningSnapshot(context) with the SAME already-RESOLVED

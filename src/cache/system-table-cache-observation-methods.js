@@ -293,6 +293,12 @@ class SystemTableCacheObservationMethods {
     return record ? this.deepClone(record) : undefined;
   }
 
+  getShared(tableName, key) {
+    this.validateTableName(tableName);
+    const record = this.tables.get(tableName).get(key);
+    return record ? this.readView(record) : undefined;
+  }
+
   find(tableName, predicate) {
     this.validateTableName(tableName);
     for (const record of this.tables.get(tableName).values()) {

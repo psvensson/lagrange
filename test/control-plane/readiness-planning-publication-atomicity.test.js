@@ -638,6 +638,20 @@ test('projection normalization reuses only recursively immutable evidence',
       'cached subtree identity cannot bypass the depth limit');
     t.equal(cachedOverDepth.publication.ready, false,
       'a cached over-depth graph cannot retain positive publication');
+
+    const atLimitTail = buildFrozenChain(8);
+    const primed = buildProjectionReadinessState(atLimitTail);
+    const cachedAtLimit = buildProjectionReadinessState(
+      buildReadySourceWithExtra(wrapFrozenChain(atLimitTail, 6)),
+    );
+    t.equal(cachedAtLimit.state, first.state,
+      'a cached subtree within the depth bound stays admitted');
+    let atLimitCursor = cachedAtLimit.evidence.raw.extra;
+    for (let index = 0; index < 6; index++) {
+      atLimitCursor = atLimitCursor.next;
+    }
+    t.equal(atLimitCursor, primed.evidence.raw,
+      'a cached subtree within the depth bound is reused by reference');
   });
 
 test('all projection evidence records share the deep own-data boundary',

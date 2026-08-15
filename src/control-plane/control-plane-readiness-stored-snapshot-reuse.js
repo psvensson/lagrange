@@ -137,6 +137,8 @@ const controlPlaneReadinessStoredSnapshotReuseMethods = {
         runtimeAuthority: missingReadiness.runtimeAuthority,
         priorityControlPlaneRecovery:
           missingReadiness.priorityControlPlaneRecovery,
+        projectionReadinessContract:
+          missingReadiness.projectionReadinessContract,
       }) :
       this.getReadinessTransitionHistory(nodeId);
     const snapshot = Object.freeze({...missingReadiness, recentTransitions});
