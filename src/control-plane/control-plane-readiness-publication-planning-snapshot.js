@@ -276,16 +276,39 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
     return latestEpoch !== cachedEpoch || latestStatus !== cachedStatus;
   }
 
+  // Keyed on the shared floored planning generation (the same key the
+  // derivation memo uses) rather than the raw per-write source revision:
+  // during formation data load the revision rotated between consecutive
+  // reads, this memo missed on every call, and each rebuilt projection was
+  // a fresh identity that defeated every downstream identity memo (gate,
+  // placement observation, projection retention) — live-measured as the
+  // dominant content of the residual 3s seed gaps (archived run
+  // 17-51-37-407Z-natural-manual). Inclusion-list changes now invalidate
+  // via the floored generation (same tables, latched up to 250ms — well
+  // inside the CL-033 grace its consumers accept); direct publication
+  // epoch/status changes still invalidate immediately via the epoch probe
+  // below. Caches that cannot version their tables keep the exact
+  // revision-counter key.
+  readPlanningProjectionSourceGeneration(observedAt) {
+    const flooredGeneration =
+      typeof this.readMembershipPlanningDerivationVersionKey === 'function' ?
+        this.readMembershipPlanningDerivationVersionKey(observedAt) :
+        null;
+    return flooredGeneration ??
+      this.membershipPublicationPlanningSourceRevision;
+  }
+
   resolveMemoizedPriorityRecoveryPlanningProjectionSync(nodeId, observedAt) {
     const memoKey = nodeId || this.nodeId;
     const memo = this.priorityRecoveryPlanningProjectionMemoByNodeId;
+    const sourceGeneration =
+      this.readPlanningProjectionSourceGeneration(observedAt);
     if (memo && memoKey) {
       const cached = memo.get(memoKey);
       if (
         cached &&
         cached.fn === this.getMembershipPublicationPlanningSnapshotSync &&
-        cached.sourceRevision ===
-          this.membershipPublicationPlanningSourceRevision &&
+        cached.sourceGeneration === sourceGeneration &&
         this.isReadinessPlanningMemoWithinStaleGrace(
           observedAt,
           cached.capturedAtMs,
@@ -309,7 +332,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       memo.set(memoKey, {
         projection,
         capturedAtMs,
-        sourceRevision: this.membershipPublicationPlanningSourceRevision,
+        sourceGeneration,
         fn: this.getMembershipPublicationPlanningSnapshotSync,
       });
     }

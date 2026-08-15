@@ -1,0 +1,187 @@
+diff --git a/src/control-plane/control-plane-readiness-publication-planning-resolution.js b/src/control-plane/control-plane-readiness-publication-planning-resolution.js
+index 822d43b0f69f7cc4494b24a7bde0e748ef1281cd..a922a8503588160f7af12e5e885b0378dae1eebc 100644
+--- a/src/control-plane/control-plane-readiness-publication-planning-resolution.js
++++ b/src/control-plane/control-plane-readiness-publication-planning-resolution.js
+@@ -438,13 +438,17 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
+   ) {
+     const memoKey = nodeId || this.nodeId;
+     const memo = this.membershipPublicationPlanningSnapshotMemoByNodeId;
++    // Same floored-generation key as the projection memo: the raw per-write
++    // revision rotated between consecutive reads under formation churn and
++    // made this memo miss per call, minting fresh merge identities.
++    const sourceGeneration =
++      this.readPlanningProjectionSourceGeneration(observedAt);
+     if (memo && memoKey) {
+       const cached = memo.get(memoKey);
+       if (
+         cached &&
+         cached.fn === this.resolveMembershipPublicationPlanningSnapshot &&
+-        cached.sourceRevision ===
+-          this.membershipPublicationPlanningSourceRevision &&
++        cached.sourceGeneration === sourceGeneration &&
+         this.isReadinessPlanningMemoWithinStaleGrace(
+           observedAt,
+           cached.capturedAtMs,
+@@ -471,7 +475,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
+       memo.set(memoKey, {
+         projection,
+         capturedAtMs,
+-        sourceRevision: this.membershipPublicationPlanningSourceRevision,
++        sourceGeneration,
+         fn: this.resolveMembershipPublicationPlanningSnapshot,
+       });
+     }
+diff --git a/src/control-plane/control-plane-readiness-publication-planning-snapshot.js b/src/control-plane/control-plane-readiness-publication-planning-snapshot.js
+index c5146af6c64bdfc32c63e6ae730092ce1ff50345..50d72f66ce1d9a226446f7325bcfe9da879ef0ab 100644
+--- a/src/control-plane/control-plane-readiness-publication-planning-snapshot.js
++++ b/src/control-plane/control-plane-readiness-publication-planning-snapshot.js
+@@ -276,16 +276,39 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
+     return latestEpoch !== cachedEpoch || latestStatus !== cachedStatus;
+   }
+ 
++  // Keyed on the shared floored planning generation (the same key the
++  // derivation memo uses) rather than the raw per-write source revision:
++  // during formation data load the revision rotated between consecutive
++  // reads, this memo missed on every call, and each rebuilt projection was
++  // a fresh identity that defeated every downstream identity memo (gate,
++  // placement observation, projection retention) — live-measured as the
++  // dominant content of the residual 3s seed gaps (archived run
++  // 17-51-37-407Z-natural-manual). Inclusion-list changes now invalidate
++  // via the floored generation (same tables, latched up to 250ms — well
++  // inside the CL-033 grace its consumers accept); direct publication
++  // epoch/status changes still invalidate immediately via the epoch probe
++  // below. Caches that cannot version their tables keep the exact
++  // revision-counter key.
++  readPlanningProjectionSourceGeneration(observedAt) {
++    const flooredGeneration =
++      typeof this.readMembershipPlanningDerivationVersionKey === 'function' ?
++        this.readMembershipPlanningDerivationVersionKey(observedAt) :
++        null;
++    return flooredGeneration ??
++      this.membershipPublicationPlanningSourceRevision;
++  }
++
+   resolveMemoizedPriorityRecoveryPlanningProjectionSync(nodeId, observedAt) {
+     const memoKey = nodeId || this.nodeId;
+     const memo = this.priorityRecoveryPlanningProjectionMemoByNodeId;
++    const sourceGeneration =
++      this.readPlanningProjectionSourceGeneration(observedAt);
+     if (memo && memoKey) {
+       const cached = memo.get(memoKey);
+       if (
+         cached &&
+         cached.fn === this.getMembershipPublicationPlanningSnapshotSync &&
+-        cached.sourceRevision ===
+-          this.membershipPublicationPlanningSourceRevision &&
++        cached.sourceGeneration === sourceGeneration &&
+         this.isReadinessPlanningMemoWithinStaleGrace(
+           observedAt,
+           cached.capturedAtMs,
+@@ -309,7 +332,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
+       memo.set(memoKey, {
+         projection,
+         capturedAtMs,
+-        sourceRevision: this.membershipPublicationPlanningSourceRevision,
++        sourceGeneration,
+         fn: this.getMembershipPublicationPlanningSnapshotSync,
+       });
+     }
+diff --git a/test/control-plane/cl-033-epoch-probe-node-scope.test.js b/test/control-plane/cl-033-epoch-probe-node-scope.test.js
+index 3912fa81799f10957fa12097f3a1f9ae32ad806f..1e88d400e10490417c73edae6ac3195750cc52ad 100644
+--- a/test/control-plane/cl-033-epoch-probe-node-scope.test.js
++++ b/test/control-plane/cl-033-epoch-probe-node-scope.test.js
+@@ -60,6 +60,9 @@ function memoCtx(rows, {nodeId = 'node-b'} = {}) {
+     membershipPublicationPlanningSourceRevision: 0,
+     priorityRecoveryPlanningProjectionMemoByNodeId: new Map(),
+     membershipPublicationService: coordinatorService(rows),
++    readPlanningProjectionSourceGeneration:
++      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
++        .readPlanningProjectionSourceGeneration,
+     isReadinessPlanningMemoWithinStaleGrace:
+       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+         .isReadinessPlanningMemoWithinStaleGrace,
+diff --git a/test/control-plane/cl-033-planning-projection-memo.test.js b/test/control-plane/cl-033-planning-projection-memo.test.js
+index d60bc4bffc783f4d2aec9a3b2675a9895c6cbf48..7b29b4f9572916b51608b49d721695db83f323ef 100644
+--- a/test/control-plane/cl-033-planning-projection-memo.test.js
++++ b/test/control-plane/cl-033-planning-projection-memo.test.js
+@@ -36,6 +36,9 @@ function memoCtx({nodeId = 'seed'} = {}) {
+     // CL-033/CL-034 regression repair: the real wall-time grace gate. With an ISO
+     // observedAt this must parse to ms (not collapse to a NaN comparison that
+     // silently disables the memo — the 54db83b9 regression these tests catch).
++    readPlanningProjectionSourceGeneration:
++      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
++        .readPlanningProjectionSourceGeneration,
+     isReadinessPlanningMemoWithinStaleGrace:
+       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+         .isReadinessPlanningMemoWithinStaleGrace,
+diff --git a/test/control-plane/cl-034-planning-snapshot-merge-memo.test.js b/test/control-plane/cl-034-planning-snapshot-merge-memo.test.js
+index d8d23e0ccd6c53da07221222534b9eaae2a268e6..1db8c8161d662860c94de4a528f0bf4e13004ca2 100644
+--- a/test/control-plane/cl-034-planning-snapshot-merge-memo.test.js
++++ b/test/control-plane/cl-034-planning-snapshot-merge-memo.test.js
+@@ -39,6 +39,9 @@ function memoCtx({
+     membershipPublicationPlanningActiveStaleGraceMs: 15000,
+     membershipPublicationPlanningSourceRevision: 0,
+     membershipPublicationPlanningSnapshotMemoByNodeId: new Map(),
++    readPlanningProjectionSourceGeneration:
++      ControlPlaneReadinessPublicationPlanningResolution.prototype
++        .readPlanningProjectionSourceGeneration,
+     isReadinessPlanningMemoWithinStaleGrace:
+       ControlPlaneReadinessPublicationPlanningResolution.prototype
+         .isReadinessPlanningMemoWithinStaleGrace,
+diff --git a/test/control-plane/projection-planning-identity-memoization.test.js b/test/control-plane/projection-planning-identity-memoization.test.js
+index 4547228b79dd5fc66bb3a78d8f0eee784b6698fe..32efea243f695c6266626bb98a9a0c7d7b50eb13 100644
+--- a/test/control-plane/projection-planning-identity-memoization.test.js
++++ b/test/control-plane/projection-planning-identity-memoization.test.js
+@@ -86,6 +86,52 @@ test('per-entry projection readiness state resolves to one frozen build ' +
+   t.end();
+ });
+ 
++test('the planning answer serves one projection identity per floored ' +
++  'generation under write churn', async (t) => {
++  const versions = new Map();
++  const cache = {
++    bump(tableName) {
++      versions.set(tableName, (versions.get(tableName) || 0) + 1);
++    },
++    getTableMutationVersion(tableName) {
++      return versions.get(tableName) || 0;
++    },
++    get() {
++      return null;
++    },
++    getAll() {
++      return [];
++    },
++    filter() {
++      return [];
++    },
++    addListener() {},
++  };
++  const readiness = new ControlPlaneReadinessService({
++    nodeId: OWNER_NODE_ID,
++    systemTableCache: cache,
++    now: () => 1000,
++    membershipPublicationService: {
++      deriveClusterMembershipCandidateSync() {
++        return {publishedActiveNodeIds: [OWNER_NODE_ID]};
++      },
++    },
++  });
++  const first =
++    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1000);
++  cache.bump('nodes');
++  readiness.membershipPublicationPlanningSourceRevision += 1;
++  const second =
++    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1100);
++  t.equal(second, first,
++    'a write within the floor window serves the same projection identity');
++  const third =
++    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1400);
++  t.not(third, first,
++    'the next window observes the write with a fresh projection');
++  t.end();
++});
++
+ test('the untracked priority planning projection builds its recovery gate ' +
+   'once per planning snapshot identity', async (t) => {
+   const readiness = new ControlPlaneReadinessService({

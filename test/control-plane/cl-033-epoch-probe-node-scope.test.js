@@ -60,6 +60,9 @@ function memoCtx(rows, {nodeId = 'node-b'} = {}) {
     membershipPublicationPlanningSourceRevision: 0,
     priorityRecoveryPlanningProjectionMemoByNodeId: new Map(),
     membershipPublicationService: coordinatorService(rows),
+    readPlanningProjectionSourceGeneration:
+      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+        .readPlanningProjectionSourceGeneration,
     isReadinessPlanningMemoWithinStaleGrace:
       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
         .isReadinessPlanningMemoWithinStaleGrace,

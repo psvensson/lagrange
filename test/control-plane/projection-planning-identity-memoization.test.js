@@ -86,6 +86,52 @@ test('per-entry projection readiness state resolves to one frozen build ' +
   t.end();
 });
 
+test('the planning answer serves one projection identity per floored ' +
+  'generation under write churn', async (t) => {
+  const versions = new Map();
+  const cache = {
+    bump(tableName) {
+      versions.set(tableName, (versions.get(tableName) || 0) + 1);
+    },
+    getTableMutationVersion(tableName) {
+      return versions.get(tableName) || 0;
+    },
+    get() {
+      return null;
+    },
+    getAll() {
+      return [];
+    },
+    filter() {
+      return [];
+    },
+    addListener() {},
+  };
+  const readiness = new ControlPlaneReadinessService({
+    nodeId: OWNER_NODE_ID,
+    systemTableCache: cache,
+    now: () => 1000,
+    membershipPublicationService: {
+      deriveClusterMembershipCandidateSync() {
+        return {publishedActiveNodeIds: [OWNER_NODE_ID]};
+      },
+    },
+  });
+  const first =
+    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1000);
+  cache.bump('nodes');
+  readiness.membershipPublicationPlanningSourceRevision += 1;
+  const second =
+    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1100);
+  t.equal(second, first,
+    'a write within the floor window serves the same projection identity');
+  const third =
+    readiness.getPriorityRecoveryPlanningAnswerSync(OWNER_NODE_ID, 1400);
+  t.not(third, first,
+    'the next window observes the write with a fresh projection');
+  t.end();
+});
+
 test('the untracked priority planning projection builds its recovery gate ' +
   'once per planning snapshot identity', async (t) => {
   const readiness = new ControlPlaneReadinessService({

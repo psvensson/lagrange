@@ -438,13 +438,17 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
   ) {
     const memoKey = nodeId || this.nodeId;
     const memo = this.membershipPublicationPlanningSnapshotMemoByNodeId;
+    // Same floored-generation key as the projection memo: the raw per-write
+    // revision rotated between consecutive reads under formation churn and
+    // made this memo miss per call, minting fresh merge identities.
+    const sourceGeneration =
+      this.readPlanningProjectionSourceGeneration(observedAt);
     if (memo && memoKey) {
       const cached = memo.get(memoKey);
       if (
         cached &&
         cached.fn === this.resolveMembershipPublicationPlanningSnapshot &&
-        cached.sourceRevision ===
-          this.membershipPublicationPlanningSourceRevision &&
+        cached.sourceGeneration === sourceGeneration &&
         this.isReadinessPlanningMemoWithinStaleGrace(
           observedAt,
           cached.capturedAtMs,
@@ -471,7 +475,7 @@ class ControlPlaneReadinessPublicationPlanningResolution extends
       memo.set(memoKey, {
         projection,
         capturedAtMs,
-        sourceRevision: this.membershipPublicationPlanningSourceRevision,
+        sourceGeneration,
         fn: this.resolveMembershipPublicationPlanningSnapshot,
       });
     }

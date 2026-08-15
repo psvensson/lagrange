@@ -39,6 +39,9 @@ function memoCtx({
     membershipPublicationPlanningActiveStaleGraceMs: 15000,
     membershipPublicationPlanningSourceRevision: 0,
     membershipPublicationPlanningSnapshotMemoByNodeId: new Map(),
+    readPlanningProjectionSourceGeneration:
+      ControlPlaneReadinessPublicationPlanningResolution.prototype
+        .readPlanningProjectionSourceGeneration,
     isReadinessPlanningMemoWithinStaleGrace:
       ControlPlaneReadinessPublicationPlanningResolution.prototype
         .isReadinessPlanningMemoWithinStaleGrace,

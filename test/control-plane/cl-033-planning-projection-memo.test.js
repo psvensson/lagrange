@@ -36,6 +36,9 @@ function memoCtx({nodeId = 'seed'} = {}) {
     // CL-033/CL-034 regression repair: the real wall-time grace gate. With an ISO
     // observedAt this must parse to ms (not collapse to a NaN comparison that
     // silently disables the memo — the 54db83b9 regression these tests catch).
+    readPlanningProjectionSourceGeneration:
+      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+        .readPlanningProjectionSourceGeneration,
     isReadinessPlanningMemoWithinStaleGrace:
       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
         .isReadinessPlanningMemoWithinStaleGrace,
