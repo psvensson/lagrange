@@ -62,6 +62,7 @@ function buildContext({rows, minReplicaCount}) {
     resolveTimeoutCheckNowMs: () => Date.now(),
     getCriticalReplicaRowsForSafety: async () => rows,
     isVoterReadyRoutableReplica: () => true,
+    isVoterReadyFloorCountableReplica: () => true,
     isOperationReplicaRow: (row, op) =>
       row.replica_id === op.replicaId || row.service_id === op.replicaId,
     isReplaceSourceLeaderHandoffRequiredPartition: () => false,

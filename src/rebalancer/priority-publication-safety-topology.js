@@ -2,6 +2,12 @@ import {OperationWorkflowDispatchExecution} from './operation-workflow-dispatch-
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_5_STAGE_SHARED as SHARED} from './priority-publication-safety-shared.js';
 import {TIME_MS} from '../constants/time.js';
 import {isVoterRaftRole} from '../raft/replica-voter-readiness.js';
+import {
+  CONTROL_PLANE_READINESS_REASON,
+} from '../control-plane/control-plane-readiness-constants.js';
+import {
+  PROJECTION_READINESS_REASON,
+} from '../control-plane/projection-readiness-constants.js';
 import {classifySystemPartition} from '../bootstrap/system-partition-classification.js';
 import {UNIFIED_SERVICE_TYPE} from
   '../constants/unified-service-lifecycle.js';
@@ -28,6 +34,30 @@ const {
 
 // R3: TTL for the source-leader-handoff stall anchor (2 min) — above the escalation floor
 // and the evidence STALE_AFTER_MS so the anchor doesn't race the escalation window.
+const EVIDENCE_ABSENT_READINESS_REASON_CODES = new Set([
+  CONTROL_PLANE_READINESS_REASON.PLANNING_SNAPSHOT_REFRESH_PENDING,
+  PROJECTION_READINESS_REASON.OWNER_EVIDENCE_MISSING,
+]);
+
+function collectReadinessDenialReasonCodes(readiness) {
+  const codes = [];
+  const append = (value) => {
+    const code = typeof value === 'string' ?
+      value :
+      typeof value?.code === 'string' ? value.code : '';
+    if (code.length > 0 && !codes.includes(code)) {
+      codes.push(code);
+    }
+  };
+  if (Array.isArray(readiness?.reasonCodes)) {
+    readiness.reasonCodes.forEach(append);
+  }
+  if (Array.isArray(readiness?.reasons)) {
+    readiness.reasons.forEach(append);
+  }
+  return codes;
+}
+
 const PRIORITY_PUBLICATION_SOURCE_LEADER_HANDOFF_STALL_TTL_MS =
   TIME_MS.MINUTE * 2;
 
@@ -128,6 +158,57 @@ class PriorityPublicationSafetyTopology extends OperationWorkflowDispatchExecuti
       return false;
     }
     return isVoterRaftRole(replicaRow.raft_role);
+  }
+
+  // Evidence-absent readiness denial: the planning snapshot has not
+  // converged for this node, so readiness has no verdict at all — the
+  // denial consists exclusively of planning_snapshot_refresh_pending /
+  // owner_evidence_missing; an empty reason list stays ambiguous and fails
+  // closed. Mirrors the approved routing fail-open discipline: any
+  // substantive denial keeps every guard closed.
+  isEvidenceAbsentReadinessDenial(nodeId, options = {}) {
+    if (
+      !nodeId ||
+      !this.controlPlaneReadinessService ||
+      typeof this.controlPlaneReadinessService.getNodeReadinessSync !==
+        'function'
+    ) {
+      return false;
+    }
+    const readiness = this.controlPlaneReadinessService.getNodeReadinessSync(
+      nodeId,
+      {
+        decisionDimension:
+          typeof options?.decisionDimension === 'string' &&
+          options.decisionDimension.length > 0 ?
+            options.decisionDimension :
+            this.resolveOperationReadinessDecisionDimension(
+              options?.partitionId || null,
+            ),
+      },
+    );
+    const reasonCodes = collectReadinessDenialReasonCodes(readiness);
+    return reasonCodes.length > 0 && reasonCodes.every((code) =>
+      EVIDENCE_ABSENT_READINESS_REASON_CODES.has(code));
+  }
+
+  // Floor accounting for critical-partition remove safety ONLY: a replica
+  // whose raft topology is voter-ready counts toward the quorum floor when
+  // its node's readiness denial is evidence-absent (a barrier-held joiner
+  // whose planning snapshot has not converged). Without this, cold
+  // formation deadlocks: the barrier withholds the joiner's READY lease,
+  // the joiner's healthy promoted voters are invisible to the floor, the
+  // surplus drain is refused, and the spread the barrier waits for can
+  // never happen. Routing, planning, promotion, and every substantive
+  // denial keep using the strict isVoterReadyRoutableReplica.
+  isVoterReadyFloorCountableReplica(replicaRow, options = {}) {
+    if (this.isVoterReadyRoutableReplica(replicaRow, options)) {
+      return true;
+    }
+    if (!this.isVoterReadyReplicaTopology(replicaRow)) {
+      return false;
+    }
+    return this.isEvidenceAbsentReadinessDenial(replicaRow.node_id, options);
   }
 
   isVoterReadyRoutableReplica(replicaRow, options = {}) {

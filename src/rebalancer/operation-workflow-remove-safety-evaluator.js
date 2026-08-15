@@ -501,7 +501,7 @@ async function evaluateRemoveSafety(context, operation) {
     participationKind: REMOVE_SAFETY_OWNER_PARTICIPATION_KIND,
   };
   const currentVoterReadyRows = criticalReplicaRows.filter((row) =>
-    context.isVoterReadyRoutableReplica(row, removeSafetyReadiness),
+    context.isVoterReadyFloorCountableReplica(row, removeSafetyReadiness),
   );
 
   const operationReplicaId =
