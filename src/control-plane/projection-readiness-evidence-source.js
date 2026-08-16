@@ -95,6 +95,5 @@ function pickProjectionReadinessEvidenceSource(source) {
 }
 
 export {
-  PROJECTION_READINESS_EVIDENCE_SOURCE_FIELDS,
   pickProjectionReadinessEvidenceSource,
 };
