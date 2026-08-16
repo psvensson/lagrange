@@ -23,6 +23,7 @@ const {
   buildProjectionReadinessContract,
   buildPublicationRecoveryGateSnapshot,
   normalizeDiagnosticTimestampMs,
+  pickProjectionReadinessEvidenceSource,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
 const SERVE_ADMISSION_STATE = Object.freeze({
@@ -390,8 +391,14 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
         dimensions: baseDimensions,
         runtimeAuthority,
       });
+    // Pass ONLY the fields the evidence builder reads: the sealed
+    // whole-source own-data rule fails the ENTIRE contract closed if any
+    // reachable value anywhere in the source is non-plain, so spreading
+    // the kitchen-sink context (raw cache rows, publication diagnostics,
+    // lifecycle records) silently collapsed the serve lane into its
+    // everything-false degenerate state on the lone seed (round-13).
     const projectionReadinessContract = buildProjectionReadinessContract({
-      ...context,
+      ...pickProjectionReadinessEvidenceSource(context),
       dimensions: baseDimensions,
       priorityControlPlaneRecovery,
       runtimeAuthority,

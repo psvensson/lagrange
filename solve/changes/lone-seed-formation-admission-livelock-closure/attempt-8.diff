@@ -1,0 +1,1750 @@
+diff --git a/examples/service-data-affinity/affinity-demo-preload-gate.js b/examples/service-data-affinity/affinity-demo-preload-gate.js
+index 3fa6b904c8c77811ebedb47e7cd88c918a7b3863..d2d54107f4af8a2b48a7d8d1869b242f4dcee5ab 100644
+--- a/examples/service-data-affinity/affinity-demo-preload-gate.js
++++ b/examples/service-data-affinity/affinity-demo-preload-gate.js
+@@ -393,6 +393,34 @@ function normalizeSchemaAdmissionTimeoutMs(value) {
+     DEFAULT_SCHEMA_ADMISSION_TIMEOUT_MS;
+ }
+ 
++// The admission bar is untouched: a stable window x confirmations of a
++// genuinely drained control plane. The wall-clock budget covers the
++// SPREAD; when the final topology drain lands near the budget edge the
++// stable window cannot finish inside it (round-15: drained at T+439s of
++// 480s, window needs 60s x 2 - the system genuinely quiesced and the
++// budget expired anyway). While the last observed snapshot is genuinely
++// quiescent (ready, no in-flight work) the deadline extends to the window
++// the bar itself requires, measured from the LAST topology drain; any new
++// operation flips ready off and the base deadline applies again, so the
++// extension is bounded and cannot mask a live churn loop.
++function resolveSchemaAdmissionDrainGraceDeadlineMs(
++  evidence,
++  stableWindowMs,
++  pollIntervalMs,
++) {
++  const snapshot = evidence?.snapshot;
++  if (!snapshot || snapshot.ready !== true) {
++    return ZERO;
++  }
++  const drainAtMs = Number(snapshot.latestTopologyDrainAtMs);
++  if (!Number.isFinite(drainAtMs) || drainAtMs <= ZERO) {
++    return ZERO;
++  }
++  return drainAtMs +
++    stableWindowMs * (SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT + 1) +
++    pollIntervalMs * SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT;
++}
++
+ function normalizeSchemaStableWindowMs(value) {
+   return Number.isFinite(value) && value >= ZERO ?
+     Math.floor(value) :
+@@ -576,13 +604,21 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
+   let lastEvidence = null;
+ 
+   while (true) {
+-    if (lastEvidence && now() >= deadlineMs) {
++    const effectiveDeadlineMs = Math.max(
++      deadlineMs,
++      resolveSchemaAdmissionDrainGraceDeadlineMs(
++        lastEvidence,
++        stableWindowMs,
++        pollIntervalMs,
++      ),
++    );
++    if (lastEvidence && now() >= effectiveDeadlineMs) {
+       throw buildSchemaAdmissionTimeoutError(lastEvidence);
+     }
+     const observedSnapshot = await observeSchemaAdmissionSnapshot(
+       normalizedOptions,
+       target,
+-      deadlineMs,
++      effectiveDeadlineMs,
+     );
+     const observedAtMs = now();
+     const previousStabilityWindow = stabilityWindow;
+@@ -615,7 +651,15 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
+     if (evidence.admitted) {
+       return evidence;
+     }
+-    const remainingMs = remainingBudgetMs(now, deadlineMs);
++    const drainGraceDeadlineMs = resolveSchemaAdmissionDrainGraceDeadlineMs(
++      evidence,
++      stableWindowMs,
++      pollIntervalMs,
++    );
++    const remainingMs = remainingBudgetMs(
++      now,
++      Math.max(deadlineMs, drainGraceDeadlineMs),
++    );
+     if (remainingMs <= ZERO) {
+       throw buildSchemaAdmissionTimeoutError(evidence);
+     }
+diff --git a/examples/service-data-affinity/run-affinity-demo.js b/examples/service-data-affinity/run-affinity-demo.js
+index cb1464b5c713a6100456e87e38b454b2c1a9d35d..5e42a80622761714773507b8ef7ef3cc9bed1f2f 100644
+--- a/examples/service-data-affinity/run-affinity-demo.js
++++ b/examples/service-data-affinity/run-affinity-demo.js
+@@ -290,8 +290,31 @@ const BOOTSTRAP_DDL_TIMEOUT_MS = 90_000;
+ const BOOTSTRAP_DDL_WAIT_LABEL = 'bootstrap DDL admission';
+ const ADMIN_RESPONSE_TIMEOUT_FRAGMENT = 'Timed out waiting for admin response';
+ const PENDING_CONTRACT_STATE = 'pending';
++const REPLICA_BACKFILL_PENDING_REASON = 'schema_replica_convergence_pending';
++
++// A pending outcome whose ONLY reason is replica-count backfill is the
++// quorum-minimum completion shape: the table is durable and routable at
++// the minimum replica count, and filling the remaining replicas is the
++// rebalancer's obligation once more nodes join (round-14). On a lone seed
++// the full-count READY bar is arithmetically unreachable, so retrying on
++// this shape waits forever; every other pending shape (prologue,
++// visibility, deadline) keeps polling.
++function isQuorumMetBackfillPendingOutcome(result) {
++  if (result?.contractState !== PENDING_CONTRACT_STATE) {
++    return false;
++  }
++  const reasonCodes = Array.isArray(result?.reasonCodes) ?
++    result.reasonCodes :
++    [];
++  return reasonCodes.length > 0 && reasonCodes.every(
++    (code) => code === REPLICA_BACKFILL_PENDING_REASON,
++  );
++}
+ 
+ function isRetryableBootstrapDdlOutcome(result) {
++  if (isQuorumMetBackfillPendingOutcome(result)) {
++    return false;
++  }
+   return result?.provisioningDeadlineExpired === true ||
+     result?.deferRetry === true ||
+     result?.contractState === PENDING_CONTRACT_STATE;
+diff --git a/scripts/run-lone-seed-formation-admission-livelock-closure-scenarios.js b/scripts/run-lone-seed-formation-admission-livelock-closure-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..d00e9d283f4446efae517017d201d178e136b012
+--- /dev/null
++++ b/scripts/run-lone-seed-formation-admission-livelock-closure-scenarios.js
+@@ -0,0 +1,44 @@
++#!/usr/bin/env node
++
++import path from 'node:path';
++import {fileURLToPath} from 'node:url';
++import {runTestFileSync} from './run-test-files.js';
++import {emitDeterministicGuardReport} from './deterministic-guard-report.js';
++
++// Deterministic guard for the lone-seed formation-admission livelock quest:
++// the red-first deterministic-intent terminal-collision contract plus the
++// sealed collision/retry and repository suites it must not regress.
++const SCENARIO = 'lone-seed-formation-admission-livelock-closure';
++const PRODUCER = 'lone-seed-formation-admission-livelock-closure-proof';
++const PARENT_DIR = '..';
++const GUARD_TIMEOUT_MS = 300000;
++const GUARD_FILES = Object.freeze([
++  'test/rebalancer/rebalance-coordinator-terminal-intent-collision.test.js',
++  'test/partition/partition-service-row-absence-heal.test.js',
++  'test/partition/partition-service-row-owner.test.js',
++  'test/query/schema-provisioning-transient-collision.test.js',
++  'test/query/durable-provisioning-job-owner-guard.test.js',
++  'test/rebalancer/replica-operation-repository.test.js',
++  'test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js',
++]);
++
++const root = path.resolve(
++  path.dirname(fileURLToPath(import.meta.url)),
++  PARENT_DIR,
++);
++
++function main() {
++  const guards = GUARD_FILES.map((file) => ({
++    file,
++    ...runTestFileSync(file, {print: false, timeoutMs: GUARD_TIMEOUT_MS}),
++  }));
++  emitDeterministicGuardReport({
++    root,
++    scenario: SCENARIO,
++    producer: PRODUCER,
++    guards,
++    deterministicPassed: guards.every((guard) => guard.ok === true),
++  });
++}
++
++main();
+diff --git a/src/cdc/cdc-constants.js b/src/cdc/cdc-constants.js
+index c7ddbb0931e24d2dc44a4d41190e9591d8228a1e..75628338096a0c0083be06ba32c92395187f911c 100644
+--- a/src/cdc/cdc-constants.js
++++ b/src/cdc/cdc-constants.js
+@@ -123,6 +123,9 @@ const CDC_LOG_MSG = Object.freeze({
+     'Bootstrap mode disabled - writes will route through SQL engine',
+   BOOTSTRAP_MODE_REQUIRED_FOR_DIRECT_SQL:
+     'executeSQLDirectToLocalPartition can only be called in bootstrap mode',
++  BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK:
++    'Bootstrap raft write lane unavailable - falling back to direct ' +
++    'per-replica write',
+   NEW_NODE_DETECTED: 'New node detected via CDC, establishing connection',
+   NEW_NODE_CONNECTED: 'Connected to new node via CDC event',
+   NEW_NODE_CONNECT_FAILED: 'Failed to connect to new node via CDC event',
+diff --git a/src/cdc/cdc-routed-mutation-readiness.js b/src/cdc/cdc-routed-mutation-readiness.js
+index 4906a5dd05145fca45e5a9c2a019b4309f8624c6..cf13aa97bcba4372c62ae185618d6810c3bc6c42 100644
+--- a/src/cdc/cdc-routed-mutation-readiness.js
++++ b/src/cdc/cdc-routed-mutation-readiness.js
+@@ -247,6 +247,40 @@ class CDCRoutedMutationReadiness {
+       }
+       return result;
+     }
++    // Writes ride raft whenever any candidate can carry the append: the
++    // per-replica direct loop lands only on the replica instances present
++    // in this map at this instant (ONE per partition), OUTSIDE the raft
++    // log, so every replica absent from the map diverges durably and
++    // nothing ever heals it (round-11: the registration-era services rows
++    // missing from the raft leader's db wedged serve-eligibility
++    // permanently). proposeWrite on a follower forwards to the known
++    // leader, and registration waits for partition leadership before
++    // writing, so the raft lane is the normal path; the direct fan-out
++    // remains only for the genuinely leaderless earliest-bootstrap window
++    // where the raft lane itself fails.
++    const raftLaneService =
++      leaderService || initializedCandidates.find(
++        (service) => typeof service.executeQuery === 'function',
++      ) || null;
++    if (raftLaneService && typeof raftLaneService.executeQuery === 'function') {
++      try {
++        const result = await raftLaneService.executeQuery(sql, params);
++        if (result && result.success !== false) {
++          return result;
++        }
++        this.logger.warn(CDC_LOG_MSG.BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK, {
++          tableName,
++          partitionId: raftLaneService.partitionId,
++          error: result?.error || null,
++        });
++      } catch (error) {
++        this.logger.warn(CDC_LOG_MSG.BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK, {
++          tableName,
++          partitionId: raftLaneService.partitionId,
++          error: error?.message || String(error),
++        });
++      }
++    }
+     const targets = initializedCandidates;
+     const results = [];
+     for (const service of targets) {
+diff --git a/src/control-plane/control-plane-readiness-diagnostics-eligibility.js b/src/control-plane/control-plane-readiness-diagnostics-eligibility.js
+index ad6ba3b8d8dfeb12bd07053996d14f5414c2522e..f6dff301143c8f5bd87b415c63f27c8e16c2a136 100644
+--- a/src/control-plane/control-plane-readiness-diagnostics-eligibility.js
++++ b/src/control-plane/control-plane-readiness-diagnostics-eligibility.js
+@@ -23,6 +23,7 @@ const {
+   buildProjectionReadinessContract,
+   buildPublicationRecoveryGateSnapshot,
+   normalizeDiagnosticTimestampMs,
++  pickProjectionReadinessEvidenceSource,
+ } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
+ 
+ const SERVE_ADMISSION_STATE = Object.freeze({
+@@ -390,8 +391,14 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
+         dimensions: baseDimensions,
+         runtimeAuthority,
+       });
++    // Pass ONLY the fields the evidence builder reads: the sealed
++    // whole-source own-data rule fails the ENTIRE contract closed if any
++    // reachable value anywhere in the source is non-plain, so spreading
++    // the kitchen-sink context (raw cache rows, publication diagnostics,
++    // lifecycle records) silently collapsed the serve lane into its
++    // everything-false degenerate state on the lone seed (round-13).
+     const projectionReadinessContract = buildProjectionReadinessContract({
+-      ...context,
++      ...pickProjectionReadinessEvidenceSource(context),
+       dimensions: baseDimensions,
+       priorityControlPlaneRecovery,
+       runtimeAuthority,
+diff --git a/src/control-plane/control-plane-readiness-evidence-reasons.js b/src/control-plane/control-plane-readiness-evidence-reasons.js
+index 7b104bb4fbfabd300eceed072d90f2849c0ee0e3..41c134dcd2f54566a0ed2c9fa99a44ff45ed96e1 100644
+--- a/src/control-plane/control-plane-readiness-evidence-reasons.js
++++ b/src/control-plane/control-plane-readiness-evidence-reasons.js
+@@ -44,6 +44,7 @@ const {
+   buildReadinessTransitionOwnerState,
+   buildReason,
+   createEligibilitySnapshot,
++  pickProjectionReadinessEvidenceSource,
+ } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
+ 
+ const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
+@@ -317,7 +318,13 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
+   }
+ 
+   buildProjectionReadinessContract(context = {}) {
+-    return buildProjectionReadinessContract(context);
++    // Only the fields the evidence builder reads may reach the sealed
++    // whole-source own-data validation — any non-plain value in a
++    // never-read context field otherwise fails the whole contract closed
++    // (round-13 lone-seed serve-lane collapse).
++    return buildProjectionReadinessContract(
++      pickProjectionReadinessEvidenceSource(context),
++    );
+   }
+ 
+   buildEvaluatedNodeReadinessSnapshot(context = {}) {
+diff --git a/src/control-plane/control-plane-readiness-service-shared.js b/src/control-plane/control-plane-readiness-service-shared.js
+index 2ca0f9880d9b07aae294b6381caa832e93d46dc5..e1955ad2210e756cc945f88ba010c88daeb796cf 100644
+--- a/src/control-plane/control-plane-readiness-service-shared.js
++++ b/src/control-plane/control-plane-readiness-service-shared.js
+@@ -47,6 +47,7 @@ import {
+ } from './eligibility-snapshot.js';
+ import {
+   buildProjectionReadinessContract,
++  pickProjectionReadinessEvidenceSource,
+ } from './projection-readiness-state.js';
+ import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
+ import {
+@@ -435,6 +436,7 @@ export const CONTROL_PLANE_READINESS_SERVICE_SHARED = {
+   assertCritical,
+   buildControlPlanePublicationStory,
+   buildProjectionReadinessContract,
++  pickProjectionReadinessEvidenceSource,
+   buildParticipationErrorCode,
+   buildParticipationErrorMessage,
+   buildPublicationRecoveryGateSnapshot,
+diff --git a/src/control-plane/node-trust-state.js b/src/control-plane/node-trust-state.js
+index 23fcb876925ea7524f98f96a620bc0afccf52880..f82609ab5365e03afb0e7201ca16480e573fa484 100644
+--- a/src/control-plane/node-trust-state.js
++++ b/src/control-plane/node-trust-state.js
+@@ -222,11 +222,17 @@ function buildReadinessRevision(readiness) {
+       NODE_TRUST_EVIDENCE_STATE.KNOWN :
+       NODE_TRUST_EVIDENCE_STATE.UNKNOWN,
+     observedAtMs,
++    // The evidence record carries {localProjectionRevision,
++    // requiredPublicationRevision} (each {available, value}) — the old
++    // localRevision/requiredRevision names never existed on it, so this
++    // diagnostic was structurally null in every run (round-12).
+     localProjectionRevision: firstPresentValue(
++      projectionRevision.localProjectionRevision?.value,
+       projectionRevision.localRevision,
+       projectionRevision.observedRevision,
+     ),
+     requiredProjectionRevision: firstPresentValue(
++      projectionRevision.requiredPublicationRevision?.value,
+       projectionRevision.requiredRevision,
+       projectionRevision.desiredRevision,
+     ),
+@@ -329,6 +335,22 @@ function buildTrustReasonCodes(readiness, context) {
+   if (!context.canonicalRepair) {
+     reasonCodeSet.add(NODE_TRUST_REASON.READINESS_NOT_REPAIR_ELIGIBLE);
+   }
++  // The serve lane computes its blocking reason codes on every build and
++  // they are otherwise never logged anywhere — a repair_only verdict with
++  // empty reasonCodes is undiagnosable from a captured run (round-12 cost
++  // a full attribution round to establish exactly that). Surface them,
++  // prefixed, whenever the canonical serve dimension is the blocker.
++  if (!context.canonicalServe) {
++    const serveLaneReasonCodes =
++      readiness?.projectionReadinessContract?.lanes?.serve?.reasonCodes;
++    if (Array.isArray(serveLaneReasonCodes)) {
++      for (const code of serveLaneReasonCodes) {
++        if (typeof code === 'string' && code.length > 0) {
++          reasonCodeSet.add(`serve_lane_${code}`);
++        }
++      }
++    }
++  }
+   return normalizeReasonCodes(readiness, reasonCodeSet);
+ }
+ 
+diff --git a/src/control-plane/projection-readiness-constants.js b/src/control-plane/projection-readiness-constants.js
+index e8b9910258f800110bbc2c67c504f06c786de5d0..6db5ec7b65f506ca06081c4be46e26b3da4ec7cc 100644
+--- a/src/control-plane/projection-readiness-constants.js
++++ b/src/control-plane/projection-readiness-constants.js
+@@ -31,6 +31,7 @@ const PROJECTION_READINESS_ACTIVE_GATE_STATE = Object.freeze({
+ 
+ const PROJECTION_READINESS_REASON = Object.freeze({
+   OWNER_EVIDENCE_MISSING: 'owner_evidence_missing',
++  PROJECTION_CONTRACT_SOURCE_INVALID: 'projection_contract_source_invalid',
+   PROCESS_NOT_ALIVE: 'process_not_alive',
+   CLUSTER_MEMBER_UNHEALTHY: 'cluster_member_unhealthy',
+   PROJECTION_REVISION_STALE: 'projection_revision_stale',
+diff --git a/src/control-plane/projection-readiness-evidence-source.js b/src/control-plane/projection-readiness-evidence-source.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..bf39f9daf498104ed63b86e2eda9707401d74a5f
+--- /dev/null
++++ b/src/control-plane/projection-readiness-evidence-source.js
+@@ -0,0 +1,100 @@
++// The allowlisted source pick for the projection evidence builder. The
++// live call sites spread whole evaluation contexts into the builder, and
++// the sealed strict own-data normalization walks EVERY reachable value -
++// so junk in a never-read context field (a raw cache row, a Date, a
++// function) silently replaced the entire record with the empty one,
++// collapsing the serve lane into its everything-false degenerate state
++// disguised as owner_evidence_missing (round-13). Producers pick exactly
++// what the builder reads before handing evidence to the sealed
++// whole-source validation.
++import {types as nodeUtilTypes} from 'node:util';
++
++const isProxyValue = nodeUtilTypes.isProxy.bind(nodeUtilTypes);
++const objectDefineProperty = Object.defineProperty;
++const objectFreeze = Object.freeze;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const DESCRIPTOR_VALUE_FIELD = 'value';
++
++// The only source fields buildProjectionReadinessEvidence reads.
++const PROJECTION_READINESS_EVIDENCE_SOURCE_FIELDS = objectFreeze([
++  'acknowledgedNodeIds',
++  'committedPublicationRevision',
++  'deleted',
++  'deletionOutcome',
++  'desiredPublicationRevision',
++  'dimensions',
++  'localProjectionRevision',
++  'membershipPublication',
++  'missingPublishedCount',
++  'missingPublishedNodeIds',
++  'missingPublishedRecoveryActiveNodeIds',
++  'nodeEvidence',
++  'pendingAckCount',
++  'pendingAckEvidenceState',
++  'pendingAckNodeIds',
++  'priorityControlPlaneRecovery',
++  'prioritySpreadEvidenceUnavailable',
++  'prioritySpreadPending',
++  'projectionReadinessContract',
++  'projectionRevision',
++  'publicationBoundaryOutcome',
++  'publicationEpoch',
++  'publicationObservationState',
++  'publicationOwnerStream',
++  'publicationOwnerStreamSource',
++  'publicationRecoveryGate',
++  'publicationRevision',
++  'publicationStatus',
++  'publicationStream',
++  'publishedPlanningEpoch',
++  'publishedPublicationRevision',
++  'recoveryProtocolState',
++  'repairEligible',
++  'requiredAckNodeIds',
++  'requiredProjectionRevision',
++  'requiredPublicationRevision',
++  'runtimeAuthority',
++  'runtimeServeEligible',
++  'status',
++]);
++
++// Hostile-input hardened: own data properties only (inherited properties
++// and getters are never read - prototype pollution and live accessors are
++// in this module's threat model; an own accessor field is skipped
++// unexecuted and simply absent from the picked record), indexed iteration
++// only (the live Array iterator is not trusted), captured intrinsics
++// only. A proxy root passes through untouched for the sealed whole-source
++// validation to reject loudly.
++function pickProjectionReadinessEvidenceSource(source) {
++  if (!source || typeof source !== 'object' || isProxyValue(source)) {
++    return source;
++  }
++  const picked = {};
++  for (
++    let index = 0;
++    index < PROJECTION_READINESS_EVIDENCE_SOURCE_FIELDS.length;
++    index++
++  ) {
++    const field = PROJECTION_READINESS_EVIDENCE_SOURCE_FIELDS[index];
++    const descriptor = objectGetOwnPropertyDescriptor(source, field);
++    if (
++      descriptor &&
++      objectHasOwn(descriptor, DESCRIPTOR_VALUE_FIELD) &&
++      descriptor.value !== undefined
++    ) {
++      objectDefineProperty(picked, field, {
++        configurable: true,
++        enumerable: true,
++        value: descriptor.value,
++        writable: true,
++      });
++    }
++  }
++  return picked;
++}
++
++export {
++  PROJECTION_READINESS_EVIDENCE_SOURCE_FIELDS,
++  pickProjectionReadinessEvidenceSource,
++};
+diff --git a/src/control-plane/projection-readiness-evidence.js b/src/control-plane/projection-readiness-evidence.js
+index 64915d3690675d233759682ccde0b3bdc7393390..a9ca1a7101367a76379aa15dfe2ba86335227d05 100644
+--- a/src/control-plane/projection-readiness-evidence.js
++++ b/src/control-plane/projection-readiness-evidence.js
+@@ -22,6 +22,9 @@ import {
+   copyDenseOwnDataArray,
+   copyStrictOwnDataRecord,
+ } from '../utils/strict-own-data.js';
++import {
++  pickProjectionReadinessEvidenceSource,
++} from './projection-readiness-evidence-source.js';
+ 
+ const ArrayConstructor = Array;
+ const arrayIsArray = Array.isArray;
+@@ -616,8 +619,16 @@ function resolveProjectionReadinessRevisionEvidence(
+ }
+ 
+ function buildProjectionReadinessEvidence(source = {}) {
+-  source = freezeProjectionReadinessRecord(source) ||
+-    PROJECTION_READINESS_EMPTY.RECORD;
++  // Sealed whole-source rule (round-13): producers pass only the read
++  // fields (evidence-source pick); a rejected source surfaces loudly.
++  const normalizedSource = normalizeProjectionReadinessOwnDataGraph(source);
++  const sourceInvalid =
++    normalizedSource === PROJECTION_READINESS_INVALID.OWN_DATA_GRAPH;
++  source = sourceInvalid || !normalizedSource ||
++    arrayIsArray(normalizedSource) ||
++    typeof normalizedSource !== 'object' ?
++    PROJECTION_READINESS_EMPTY.RECORD :
++    normalizedSource;
+   const dimensions = normalizeProjectionReadinessDimensions(source.dimensions);
+   const runtimeAuthority =
+     normalizeProjectionReadinessRuntimeAuthority(source.runtimeAuthority);
+@@ -760,9 +771,13 @@ function buildProjectionReadinessEvidence(source = {}) {
+     ),
+     priorityRecovery,
+     projectionRevision,
+-    reasonSeed: ownerEvidenceAvailable ?
+-      PROJECTION_READINESS_EMPTY.LIST :
+-      objectFreeze([PROJECTION_READINESS_REASON.OWNER_EVIDENCE_MISSING]),
++    sourceInvalid,
++    reasonSeed: sourceInvalid ?
++      objectFreeze(
++        [PROJECTION_READINESS_REASON.PROJECTION_CONTRACT_SOURCE_INVALID]) :
++      ownerEvidenceAvailable ?
++        PROJECTION_READINESS_EMPTY.LIST :
++        objectFreeze([PROJECTION_READINESS_REASON.OWNER_EVIDENCE_MISSING]),
+     pendingAckCount: normalizeProjectionReadinessNonNegativeInteger(
+       publicationOwnerStream?.pendingAckCount,
+     ),
+@@ -782,4 +797,5 @@ export {
+   buildProjectionReadinessEvidence,
+   freezeProjectionReadinessRecord,
+   normalizeProjectionReadinessReasonCodes,
++  pickProjectionReadinessEvidenceSource,
+ };
+diff --git a/src/control-plane/projection-readiness-state.js b/src/control-plane/projection-readiness-state.js
+index 1463f49a6df64ab028b7bf57a3ca640dacc13de7..f9fd8ecc5778255f86b39fc8ac9d0e098296cc96 100644
+--- a/src/control-plane/projection-readiness-state.js
++++ b/src/control-plane/projection-readiness-state.js
+@@ -6,6 +6,7 @@ import {
+ } from './projection-readiness-decision.js';
+ import {
+   buildProjectionReadinessEvidence,
++  pickProjectionReadinessEvidenceSource,
+ } from './projection-readiness-evidence.js';
+ 
+ const ArrayConstructor = Array;
+@@ -151,6 +152,7 @@ function summarizeProjectionReadinessContractForHistory(contract) {
+ export {
+   buildProjectionReadinessContract,
+   buildProjectionReadinessState,
++  pickProjectionReadinessEvidenceSource,
+   resolveProjectionReadinessStateForEntry,
+   summarizeProjectionReadinessContractForHistory,
+ };
+diff --git a/src/message-group/message-group-service-row-owner.js b/src/message-group/message-group-service-row-owner.js
+index ce9ff7575916946981d0f9f927adfc6b6ef07c86..9238399b0f48ac773554f27e7b1707cbfeea0314 100644
+--- a/src/message-group/message-group-service-row-owner.js
++++ b/src/message-group/message-group-service-row-owner.js
+@@ -165,7 +165,7 @@ class MessageGroupServiceRowOwner {
+       created_at: _createdAt,
+       ...updates
+     } = row;
+-    await this.systemTableWriter.updateSystemTableRow(
++    const updateResult = await this.systemTableWriter.updateSystemTableRow(
+       SYSTEM_TABLE_NAME.SERVICES,
+       {
+         service_id: row.service_id,
+@@ -174,6 +174,21 @@ class MessageGroupServiceRowOwner {
+       updates,
+       this.buildDeferredUpdateOptions(row.service_id),
+     );
++    // Absence-proven heal (round-11): serve-eligibility requires an ACTIVE
++    // addressed MESSAGE_GROUP services row, and a registration write that
++    // missed the durable db leaves every later UPDATE a zero-row no-op
++    // with no CDC — the cached row never leaves stopped. A zero
++    // affected-row count on the primary-key-pinned WHERE proves durable
++    // absence; the full canonical row is in hand, so re-issue the
++    // registration upsert. An unwitnessed count keeps the update-only
++    // contract.
++    if (updateResult?.partitionResult?.affectedRows === 0) {
++      await this.systemTableWriter.upsertSystemTableRow(
++        SYSTEM_TABLE_NAME.SERVICES,
++        row,
++        this.buildDeferredUpdateOptions(row.service_id),
++      );
++    }
+     return row;
+   }
+ 
+diff --git a/src/partition/partition-service-raft-init-base.js b/src/partition/partition-service-raft-init-base.js
+index 32e9f38af6e1d6253b1fc18ba7edcc92b1ad2af9..6288fa1ba4cab27550b1d36433507ac09cdb272f 100644
+--- a/src/partition/partition-service-raft-init-base.js
++++ b/src/partition/partition-service-raft-init-base.js
+@@ -1,4 +1,9 @@
+ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
++import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
++
++// Watchdog sync-section site for the closed-handle partition replica boot
++// block (round-10 bootstrap-batch stall attribution).
++const PARTITION_REPLICA_INIT_SYNC_SECTION_SITE = 'partition_replica_init';
+ import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
+ import {
+   reconcileRaftPeersFromCacheForService,
+@@ -299,49 +304,56 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
+         dbPath: this.dbPath,
+       });
+     }
+-    if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
+-      const dbDir = path.dirname(this.dbPath);
+-      if (!fs.existsSync(dbDir)) {
+-        fs.mkdirSync(dbDir, {recursive: true});
+-        this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_PARTITION_DIR, {
+-          path: dbDir,
++    // The whole closed-handle boot block (dir/snapshot fs work, db open +
++    // pragmas, raft storage, schema DDL) is synchronous by design; tag it
++    // so bootstrap-batch stalls attribute in the watchdog's siteDeltas
++    // instead of reporting as unexplained gaps (round-10).
++    trackSyncSection(PARTITION_REPLICA_INIT_SYNC_SECTION_SITE, () => {
++      if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
++        const dbDir = path.dirname(this.dbPath);
++        if (!fs.existsSync(dbDir)) {
++          fs.mkdirSync(dbDir, {recursive: true});
++          this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_PARTITION_DIR, {
++            path: dbDir,
++          });
++        }
++      }
++      // Snapshot-install boot boundary: resolve pending install remnants
++      // while NO handle is open; a nonce conflict fails the boot closed.
++      if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
++        const installResolution = resolvePendingSnapshotInstall({
++          replicaDbPath: this.dbPath,
+         });
++        if (installResolution.outcome ===
++            RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT) {
++          throw new Error(
++            `${PARTITION_SERVICE_ERROR_MSG.SNAPSHOT_INSTALL_STATE_CONFLICT}: ` +
++            `${installResolution.detail}`,
++          );
++        }
++        // Recorded-gap closure (S4): sweep stale transfer staging at the
++        // same closed-handle boot boundary — no transfer is in flight
++        // during init, so every staged transfer directory here is a
++        // leftover.
++        cleanupStaleTransferStaging(
++          resolveReplicaCheckpointsRoot(this.dbPath));
+       }
+-    }
+-    // Snapshot-install boot boundary: resolve pending install remnants while
+-    // NO handle is open; a nonce conflict fails the boot closed.
+-    if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
+-      const installResolution = resolvePendingSnapshotInstall({
+-        replicaDbPath: this.dbPath,
++      this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.OPENING_DB, {
++        dbPath: this.dbPath,
+       });
+-      if (installResolution.outcome ===
+-          RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT) {
+-        throw new Error(
+-          `${PARTITION_SERVICE_ERROR_MSG.SNAPSHOT_INSTALL_STATE_CONFLICT}: ` +
+-          `${installResolution.detail}`,
+-        );
++      this.db = new Database(this.dbPath);
++      this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_JOURNAL_MODE);
++      this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
++      this.logAdapter = new SQLiteLogAdapter(this.db, null, this.logger);
++      this.storage = new PartitionRaftStorage(
++        this.db,
++        this.partitionId,
++        this.logAdapter,
++      );
++      if (this.schema) {
++        this.createTable();
+       }
+-      // Recorded-gap closure (S4): sweep stale transfer staging at the same
+-      // closed-handle boot boundary — no transfer is in flight during init,
+-      // so every staged transfer directory here is a leftover.
+-      cleanupStaleTransferStaging(
+-        resolveReplicaCheckpointsRoot(this.dbPath));
+-    }
+-    this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.OPENING_DB, {
+-      dbPath: this.dbPath,
+     });
+-    this.db = new Database(this.dbPath);
+-    this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_JOURNAL_MODE);
+-    this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
+-    this.logAdapter = new SQLiteLogAdapter(this.db, null, this.logger);
+-    this.storage = new PartitionRaftStorage(
+-      this.db,
+-      this.partitionId,
+-      this.logAdapter,
+-    );
+-    if (this.schema) {
+-      this.createTable();
+-    }
+     if (this.transport) {
+       this.transport.register(
+         this.unifiedAddress,
+diff --git a/src/partition/partition-service-row-owner.js b/src/partition/partition-service-row-owner.js
+index 39dac7977eebcd42727ae00f356c0feb0136f33f..cd9b4f18c3a53abc73111c1cb7f1328c2bc44068 100644
+--- a/src/partition/partition-service-row-owner.js
++++ b/src/partition/partition-service-row-owner.js
+@@ -227,7 +227,7 @@ class PartitionServiceRowOwner {
+       created_at: _createdAt,
+       ...updates
+     } = row;
+-    await this.systemTableWriter.updateSystemTableRow(
++    const updateResult = await this.systemTableWriter.updateSystemTableRow(
+       SYSTEM_TABLE_NAME.SERVICES,
+       {
+         service_id: row.service_id,
+@@ -236,6 +236,21 @@ class PartitionServiceRowOwner {
+       updates,
+       this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
+     );
++    // Absence-proven heal: the registration write of this row is a one-shot
++    // direct write outside raft; when it misses a replica db, every later
++    // UPDATE zero-row no-ops with no CDC and the cached row never leaves
++    // stopped, wedging serve-eligibility permanently (round-11). A zero
++    // affected-row count on a primary-key-pinned WHERE proves durable
++    // absence, and the full canonical row is already in hand — re-issue the
++    // registration upsert. An unwitnessed count keeps the update-only
++    // contract (absence must be proven, not assumed).
++    if (updateResult?.partitionResult?.affectedRows === 0) {
++      await this.systemTableWriter.upsertSystemTableRow(
++        SYSTEM_TABLE_NAME.SERVICES,
++        row,
++        this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
++      );
++    }
+     await this.publishCanonicalLeaderNodeId(row);
+     return row;
+   }
+diff --git a/src/query/provisioning-completion-summary.js b/src/query/provisioning-completion-summary.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..3babf3676d582bcb4861d448ed63da312a266dbf
+--- /dev/null
++++ b/src/query/provisioning-completion-summary.js
+@@ -0,0 +1,79 @@
++// Pure provisioning-completion summary shared by the initial-partition
++// provisioning flow: normalizes the requested/resolved/minimum/routable
++// replica counts and derives the completion contract outcome, forcing
++// PENDING while the full requested replica count has not converged (the
++// quorum-minimum create itself proceeds; full convergence is the
++// rebalancer's post-join obligation - round-14).
++import {SQL_QUERY_ENGINE_SHARED} from './sql-query-engine-shared.js';
++
++const {
++  OWNER_CONTRACT_NEXT_ACTION,
++  OWNER_CONTRACT_STATE,
++  buildOwnerContractOutcome,
++} = SQL_QUERY_ENGINE_SHARED;
++
++function buildProvisioningCompletionSummary(options = {}) {
++  const requestedReplicaCount =
++    Number.isInteger(options?.requestedReplicaCount) &&
++    options.requestedReplicaCount > 0 ?
++      options.requestedReplicaCount :
++      null;
++  const resolvedReplicaCount =
++    Number.isInteger(options?.resolvedReplicaCount) &&
++    options.resolvedReplicaCount > 0 ?
++      options.resolvedReplicaCount :
++      requestedReplicaCount;
++  const minimumRoutableReplicaCount =
++    Number.isInteger(options?.minimumRoutableReplicaCount) &&
++    options.minimumRoutableReplicaCount > 0 ?
++      options.minimumRoutableReplicaCount :
++      resolvedReplicaCount;
++  const routableReplicaCount =
++    Number.isInteger(options?.routableReplicaCount) &&
++    options.routableReplicaCount >= 0 ?
++      options.routableReplicaCount :
++      0;
++  const fullReplicaCountConverged =
++    !Number.isInteger(requestedReplicaCount) ||
++    requestedReplicaCount <= 0 ||
++    routableReplicaCount >= requestedReplicaCount;
++  const defaultContractOutcome = buildOwnerContractOutcome({
++    contractState: fullReplicaCountConverged ?
++      OWNER_CONTRACT_STATE.READY :
++      OWNER_CONTRACT_STATE.PENDING,
++    nextAction: fullReplicaCountConverged ?
++      OWNER_CONTRACT_NEXT_ACTION.PROCEED :
++      OWNER_CONTRACT_NEXT_ACTION.WAIT,
++  });
++  const requestedContractOutcome = buildOwnerContractOutcome({
++    contractState:
++      options?.contractState || defaultContractOutcome.contractState,
++    nextAction: options?.nextAction || defaultContractOutcome.nextAction,
++  });
++  const contractOutcome =
++    fullReplicaCountConverged === false &&
++    requestedContractOutcome.contractState === OWNER_CONTRACT_STATE.READY &&
++    requestedContractOutcome.nextAction === OWNER_CONTRACT_NEXT_ACTION.PROCEED ?
++      defaultContractOutcome :
++      requestedContractOutcome;
++
++  return {
++    requestedReplicaCount,
++    resolvedReplicaCount,
++    minimumRoutableReplicaCount,
++    routableReplicaCount,
++    fullReplicaCountConverged,
++    contractState: contractOutcome.contractState,
++    nextAction: contractOutcome.nextAction,
++    reasonCodes: Array.isArray(options?.reasonCodes) ?
++      [...options.reasonCodes] :
++      [],
++    retryAfterMs:
++      Number.isFinite(options?.retryAfterMs) &&
++      options.retryAfterMs > 0 ?
++        Math.floor(options.retryAfterMs) :
++        0,
++  };
++}
++
++export {buildProvisioningCompletionSummary};
+diff --git a/src/query/sql-query-engine-initial-partition-provisioning.js b/src/query/sql-query-engine-initial-partition-provisioning.js
+index a61d73b2c746c6fcd71a85cbccf40280e7c281a1..2c1a911b6d6980b5789bad5ac324dd1e0751574d 100644
+--- a/src/query/sql-query-engine-initial-partition-provisioning.js
++++ b/src/query/sql-query-engine-initial-partition-provisioning.js
+@@ -11,6 +11,12 @@ import {
+   throwIfCancellationRequested,
+ } from './query-cancellation.js';
+ import {OPERATION_OWNER_TURN_POLICY} from '../rebalancer/operation-owner-turn-policy.js';
++import {
++  isTerminalSuccessfulCreateOperation,
++} from '../rebalancer/replica-operation-progress.js';
++import {
++  buildProvisioningCompletionSummary,
++} from './provisioning-completion-summary.js';
+ 
+ const LOCAL_STR_FUNCTION = 'function';
+ const LOCAL_STR_OBJECT = 'object';
+@@ -37,7 +43,6 @@ const {
+   QUERY_LOG_MSG,
+   ReplicaOperationField,
+   SERVICE_TYPE,
+-  buildOwnerContractOutcome,
+   getRemainingBudgetMs,
+ } = SQL_QUERY_ENGINE_SHARED;
+ 
+@@ -576,6 +581,22 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
+     const metadataWaitReplicaIds = [];
+     for (const operation of plannedOperations) {
+       throwIfCancellationRequested(cancellationToken);
++      // A deterministic-intent retry can hand back the prior attempt's
++      // durably terminal-successful operation (collision terminal arm).
++      // The replica already exists: re-stamping and re-executing it is the
++      // round-10 livelock. Keep it in the plan for counting, wait on its
++      // routability like any other create, but never re-dispatch it.
++      if (isTerminalSuccessfulCreateOperation(operation)) {
++        const terminalReplicaId =
++          operation?.replicaId || operation?.replica_id || null;
++        if (
++          typeof terminalReplicaId === LOCAL_STR_STRING &&
++          terminalReplicaId.length > 0
++        ) {
++          metadataWaitReplicaIds.push(terminalReplicaId);
++        }
++        continue;
++      }
+       operation[ReplicaOperationField.REPLICA_IDS] =
+         bootstrapTopology.replicaIds;
+       operation[ReplicaOperationField.PEER_ADDRESSES] =
+@@ -719,67 +740,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
+   }
+ 
+   buildProvisioningCompletionSummary(options = {}) {
+-    const requestedReplicaCount =
+-      Number.isInteger(options?.requestedReplicaCount) &&
+-      options.requestedReplicaCount > 0 ?
+-        options.requestedReplicaCount :
+-        null;
+-    const resolvedReplicaCount =
+-      Number.isInteger(options?.resolvedReplicaCount) &&
+-      options.resolvedReplicaCount > 0 ?
+-        options.resolvedReplicaCount :
+-        requestedReplicaCount;
+-    const minimumRoutableReplicaCount =
+-      Number.isInteger(options?.minimumRoutableReplicaCount) &&
+-      options.minimumRoutableReplicaCount > 0 ?
+-        options.minimumRoutableReplicaCount :
+-        resolvedReplicaCount;
+-    const routableReplicaCount =
+-      Number.isInteger(options?.routableReplicaCount) &&
+-      options.routableReplicaCount >= 0 ?
+-        options.routableReplicaCount :
+-        0;
+-    const fullReplicaCountConverged =
+-      !Number.isInteger(requestedReplicaCount) ||
+-      requestedReplicaCount <= 0 ||
+-      routableReplicaCount >= requestedReplicaCount;
+-    const defaultContractOutcome = buildOwnerContractOutcome({
+-      contractState: fullReplicaCountConverged ?
+-        OWNER_CONTRACT_STATE.READY :
+-        OWNER_CONTRACT_STATE.PENDING,
+-      nextAction: fullReplicaCountConverged ?
+-        OWNER_CONTRACT_NEXT_ACTION.PROCEED :
+-        OWNER_CONTRACT_NEXT_ACTION.WAIT,
+-    });
+-    const requestedContractOutcome = buildOwnerContractOutcome({
+-      contractState:
+-        options?.contractState || defaultContractOutcome.contractState,
+-      nextAction: options?.nextAction || defaultContractOutcome.nextAction,
+-    });
+-    const contractOutcome =
+-      fullReplicaCountConverged === false &&
+-      requestedContractOutcome.contractState === OWNER_CONTRACT_STATE.READY &&
+-      requestedContractOutcome.nextAction === OWNER_CONTRACT_NEXT_ACTION.PROCEED ?
+-        defaultContractOutcome :
+-        requestedContractOutcome;
+-
+-    return {
+-      requestedReplicaCount,
+-      resolvedReplicaCount,
+-      minimumRoutableReplicaCount,
+-      routableReplicaCount,
+-      fullReplicaCountConverged,
+-      contractState: contractOutcome.contractState,
+-      nextAction: contractOutcome.nextAction,
+-      reasonCodes: Array.isArray(options?.reasonCodes) ?
+-        [...options.reasonCodes] :
+-        [],
+-      retryAfterMs:
+-        Number.isFinite(options?.retryAfterMs) &&
+-        options.retryAfterMs > 0 ?
+-          Math.floor(options.retryAfterMs) :
+-          0,
+-    };
++    return buildProvisioningCompletionSummary(options);
+   }
+ 
+   /**
+diff --git a/src/rebalancer/rebalance-coordinator-operation-persistence-collision.js b/src/rebalancer/rebalance-coordinator-operation-persistence-collision.js
+index 09aa27f270f981b538e94294ced89a10f8f76ec9..ae5ead648d9d01a95577b94f6aebef5de002af0f 100644
+--- a/src/rebalancer/rebalance-coordinator-operation-persistence-collision.js
++++ b/src/rebalancer/rebalance-coordinator-operation-persistence-collision.js
+@@ -3,8 +3,14 @@ import {
+   buildSuccessorReplaceIntentIdentity,
+   replaceIntentCollisionMatches,
+ } from './rebalance-replace-intent-identity.js';
++import {
++  isTerminalSuccessfulCreateOperation,
++} from './replica-operation-progress.js';
+ 
+ const LOCAL_STR_CONSTRUCTOR = 'constructor';
++const TERMINAL_INTENT_COLLISION_ERROR_PREFIX =
++  'Operation persistence collision winner is durably terminal for ' +
++  'deterministic intent';
+ 
+ class RebalanceCoordinatorOperationPersistenceCollision {
+   /**
+@@ -39,6 +45,26 @@ class RebalanceCoordinatorOperationPersistenceCollision {
+     ) {
+       return this.createSuccessorReplaceOperation(context, existing);
+     }
++    // Deterministic-intent creators retry the SAME operation id, so a
++    // durable terminal winner is the prior attempt's outcome, not an
++    // in-flight operation. Rearming it re-drives an idempotent create
++    // against a completed replica and livelocks the terminal-transition
++    // repair (round-10: local lone-seed phase-1 DDL admission). A
++    // terminal-successful winner IS the create result; a terminal-failed
++    // winner cannot be cured under the same intent id and must surface.
++    if (
++      context.move?.operationIntentId &&
++      this.isRecentOperationIntentTerminal(existing)
++    ) {
++      if (isTerminalSuccessfulCreateOperation(existing)) {
++        return existing;
++      }
++      throw new Error(
++        `${TERMINAL_INTENT_COLLISION_ERROR_PREFIX} ` +
++          `${context.move.operationIntentId}: ` +
++          `${existing.status || existing.workflowStep}`,
++      );
++    }
+     if (context.replaceIntentIdentity) {
+       await this.ensureReservationForOperation(existing);
+     }
+diff --git a/src/service/service-reconciler.js b/src/service/service-reconciler.js
+index 900ece5530e199908bd379aebe8ac40962c60243..1c30326b564e55713cc10ed1eb01d229a3566f2e 100644
+--- a/src/service/service-reconciler.js
++++ b/src/service/service-reconciler.js
+@@ -454,6 +454,15 @@ class ServiceReconciler extends EventEmitter {
+               actionEntry.action,
+               context,
+             );
++            // One real event-loop turn per action. Replica-create actions
++            // are 130-250ms of synchronous work whose awaits resolve as
++            // microtasks; without a macrotask boundary the bootstrap
++            // system-table batch drains 16 workers' continuations
++            // back-to-back, starving timers (heartbeats, the gap watchdog)
++            // for the whole batch — round-10: 7-8s unexplained ELU-1.0
++            // gaps wedging the lone seed out of serve eligibility. Per-
++            // queue action order is unchanged.
++            await new Promise((resolve) => setImmediate(resolve));
+           }
+         }
+       })());
+diff --git a/test/cdc/bootstrap-direct-write-raft-routing.test.js b/test/cdc/bootstrap-direct-write-raft-routing.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4c6e7c46e737c6aff34f2a2545201915919a699b
+--- /dev/null
++++ b/test/cdc/bootstrap-direct-write-raft-routing.test.js
+@@ -0,0 +1,133 @@
++/**
++ * Bootstrap-mode direct SQL: writes ride raft when a leader exists.
++ *
++ * The direct per-replica fan-out writes only to the replicas present and
++ * usable at that instant, outside the raft log — a replica missing from
++ * the set at write time diverges durably and nothing ever heals it
++ * (round-11: the registration-era services rows missing from the leader
++ * db, the 43-row "No row found for CDC update" wave, serve-eligibility
++ * wedged, phase-1 routable-partition timeouts). Registration waits for
++ * partition leadership before writing, so when a leader replica is
++ * present the write goes through its raft append (executeQuery →
++ * proposeWrite) and replicates to every replica; the per-replica direct
++ * loop remains only for the genuinely leaderless earliest-bootstrap
++ * window. Reads keep the local lane.
++ */
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  CDCRoutedMutationReadiness,
++} from '../../src/cdc/cdc-routed-mutation-readiness.js';
++
++const INSERT_SQL =
++  'INSERT OR REPLACE INTO services (service_id) VALUES (?)';
++const SELECT_SQL = 'SELECT * FROM services';
++
++function buildReplica({partitionId, isLeader, calls, name, raftLaneFails}) {
++  return {
++    partitionId,
++    isLeader,
++    initialized: true,
++    async executeQuery(sql, params) {
++      calls.raft.push({name, sql, params});
++      if (raftLaneFails) {
++        throw new Error('no leader available for write');
++      }
++      return {success: true, partitionId, raft: true};
++    },
++    async executeLocalQuery(sql, params) {
++      calls.local.push({name, sql, params});
++      return {success: true, partitionId, rows: [], count: 0};
++    },
++  };
++}
++
++function buildHost({withLeader, raftLaneFails = false}) {
++  const calls = {raft: [], local: []};
++  const host = Object.create(CDCRoutedMutationReadiness.prototype);
++  host.bootstrapMode = true;
++  host.logger = {
++    debug: () => {},
++    info: () => {},
++    warn: () => {},
++    error: () => {},
++  };
++  host.localPartitionServices = new Map([
++    ['services-p1-r1', buildReplica({
++      partitionId: 'services-p1',
++      isLeader: withLeader,
++      calls,
++      name: 'r1',
++      raftLaneFails,
++    })],
++    ['services-p1-r2', buildReplica({
++      partitionId: 'services-p1',
++      isLeader: false,
++      calls,
++      name: 'r2',
++      raftLaneFails,
++    })],
++    ['services-p1-r3', buildReplica({
++      partitionId: 'services-p1',
++      isLeader: false,
++      calls,
++      name: 'r3',
++      raftLaneFails,
++    })],
++  ]);
++  return {host, calls};
++}
++
++test('a bootstrap-mode write with a local leader rides the raft append, ' +
++  'not the per-replica direct loop', async (t) => {
++  const {host, calls} = buildHost({withLeader: true});
++  const result = await host.executeSQLDirectToLocalPartition(
++    INSERT_SQL,
++    ['mg-1-r1'],
++  );
++  t.equal(result.success, true);
++  t.equal(calls.raft.length, 1,
++    'the write goes through the leader raft lane exactly once');
++  t.equal(calls.raft[0].name, 'r1', 'the leader replica carries the append');
++  t.equal(calls.local.length, 0,
++    'no per-replica direct write when a leader exists');
++  t.end();
++});
++
++test('a bootstrap-mode write with only followers still rides the raft ' +
++  'lane (proposeWrite forwards to the known leader)', async (t) => {
++  const {host, calls} = buildHost({withLeader: false});
++  const result = await host.executeSQLDirectToLocalPartition(
++    INSERT_SQL,
++    ['mg-1-r1'],
++  );
++  t.equal(result.success, true);
++  t.equal(calls.raft.length, 1,
++    'a follower candidate carries the append via leader forwarding');
++  t.equal(calls.local.length, 0,
++    'no per-replica direct write while the raft lane works');
++  t.end();
++});
++
++test('a bootstrap-mode write falls back to the per-replica direct fan-out ' +
++  'only when the raft lane itself fails (leaderless window)', async (t) => {
++  const {host, calls} = buildHost({withLeader: false, raftLaneFails: true});
++  const result = await host.executeSQLDirectToLocalPartition(
++    INSERT_SQL,
++    ['mg-1-r1'],
++  );
++  t.equal(result.success, true);
++  t.equal(calls.raft.length, 1, 'the raft lane was attempted first');
++  t.equal(calls.local.length, 3,
++    'the leaderless window keeps the direct fan-out to every replica');
++  t.end();
++});
++
++test('a bootstrap-mode read keeps the local lane even with a leader',
++  async (t) => {
++    const {host, calls} = buildHost({withLeader: true});
++    const result = await host.executeSQLDirectToLocalPartition(SELECT_SQL);
++    t.equal(result.success, true);
++    t.equal(calls.raft.length, 0, 'reads never ride the raft append');
++    t.equal(calls.local.length, 1, 'reads stay on one local replica');
++    t.end();
++  });
+diff --git a/test/control-plane/node-trust-serve-lane-observability.test.js b/test/control-plane/node-trust-serve-lane-observability.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..6008bec5d3f0d31f03d831df2f0dc5d7687d4374
+--- /dev/null
++++ b/test/control-plane/node-trust-serve-lane-observability.test.js
+@@ -0,0 +1,128 @@
++/**
++ * Serve-lane observability in the trust state.
++ *
++ * The serve lane computes blocking reason codes on every readiness build
++ * and they were never logged anywhere: a repair_only trust verdict with
++ * empty reasonCodes is undiagnosable from a captured run (round-12 spent
++ * a full attribution round proving every observable conjunct green while
++ * the discriminating signal stayed invisible). The trust state now
++ * surfaces the serve lane's reason codes, prefixed serve_lane_, whenever
++ * the canonical serve dimension is the blocker — and the readiness
++ * revision diagnostic maps the evidence record's REAL field names
++ * (localProjectionRevision/requiredPublicationRevision, each
++ * {available, value}), which the old localRevision/requiredRevision
++ * lookups never matched, leaving the diagnostic structurally null in
++ * every run.
++ */
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  CONTROL_PLANE_READINESS_DIMENSION,
++} from '../../src/control-plane/control-plane-readiness-constants.js';
++import {
++  buildNodeTrustState,
++} from '../../src/control-plane/node-trust-state.js';
++
++const NODE_ID = 'node-a';
++
++function buildReadiness(options = {}) {
++  return {
++    nodeId: NODE_ID,
++    observedAt: new Date(1000).toISOString(),
++    membershipPublication: {
++      publicationEpoch: 7,
++      sourceSnapshotVersion: 17,
++      status: 'PUBLISHED',
++      publishedActiveNodeIdsPresent: true,
++      publishedActiveNodeIds: [NODE_ID],
++    },
++    nodeEvidence: {
++      status: 'active',
++      lastHeartbeat: 100,
++      heartbeatAgeMs: 400,
++      staleHeartbeatLimitMs: 30000,
++      routerConnectionState: 'connected',
++      transportConnected: true,
++    },
++    dimensions: {
++      [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
++      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
++      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
++        options.serveEligible === true,
++    },
++    projectionReadinessContract: options.projectionReadinessContract || null,
++    reasons: [],
++  };
++}
++
++function buildTrust(readiness) {
++  return buildNodeTrustState(readiness, {
++    observerNodeId: 'observer-a',
++    cacheWatermark: {
++      state: 'known',
++      nodesVersion: 11,
++      servicesVersion: 12,
++      nodesAppliedAtMs: 900,
++      servicesAppliedAtMs: 901,
++    },
++    transport: {state: 'connected', observedAtMs: 1000},
++  });
++}
++
++test('a serve-ineligible trust state surfaces the serve lane reason codes',
++  (t) => {
++    const trust = buildTrust(buildReadiness({
++      serveEligible: false,
++      projectionReadinessContract: {
++        lanes: {
++          serve: {
++            ready: false,
++            reasonCodes: ['serve_not_eligible', 'publication_stream_not_ready'],
++          },
++        },
++      },
++    }));
++    t.equal(trust.serveEligible, false);
++    t.ok(trust.reasonCodes.includes('serve_lane_serve_not_eligible'),
++      'the serve lane blocker is named in the trust reason codes');
++    t.ok(
++      trust.reasonCodes.includes('serve_lane_publication_stream_not_ready'),
++      'every serve lane code is surfaced');
++    t.end();
++  });
++
++test('a serve-eligible trust state adds no serve lane codes', (t) => {
++  const trust = buildTrust(buildReadiness({
++    serveEligible: true,
++    projectionReadinessContract: {
++      lanes: {serve: {ready: true, reasonCodes: []}},
++    },
++  }));
++  t.equal(trust.serveEligible, true);
++  t.equal(
++    trust.reasonCodes.filter((code) => code.startsWith('serve_lane_')).length,
++    0,
++    'no serve lane codes when the serve dimension passes');
++  t.end();
++});
++
++test('the readiness revision diagnostic maps the evidence record field ' +
++  'names', (t) => {
++  const trust = buildTrust(buildReadiness({
++    serveEligible: true,
++    projectionReadinessContract: {
++      lanes: {serve: {ready: true, reasonCodes: []}},
++      evidence: {
++        projectionRevision: {
++          localProjectionRevision: {available: true, value: 5},
++          requiredPublicationRevision: {available: true, value: 7},
++          stale: true,
++        },
++      },
++    },
++  }));
++  t.equal(trust.readinessRevision.localProjectionRevision, 5,
++    'localProjectionRevision.value reaches the trust diagnostic');
++  t.equal(trust.readinessRevision.requiredProjectionRevision, 7,
++    'requiredPublicationRevision.value reaches the trust diagnostic');
++  t.end();
++});
+diff --git a/test/control-plane/projection-contract-source-allowlist.test.js b/test/control-plane/projection-contract-source-allowlist.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..f93ae8aab74856210ec515eb2344d29fdc053b20
+--- /dev/null
++++ b/test/control-plane/projection-contract-source-allowlist.test.js
+@@ -0,0 +1,131 @@
++/**
++ * Projection-evidence source allowlist and loud source rejection.
++ *
++ * The live readiness call sites spread their ENTIRE evaluation context
++ * into buildProjectionReadinessEvidence, whose strict own-data
++ * normalization silently replaced the whole record with the empty one
++ * when ANY reachable value — including fields the builder never reads,
++ * like raw cache rows — violated the plain-data rules. The result was
++ * the serve lane's everything-false degenerate state masquerading as
++ * owner_evidence_missing, wedging the lone seed out of serve
++ * eligibility with no diagnosable signal (round-13; runs 08-18-24 and
++ * predecessors on 2026-08-16). The evidence builder now (a) picks only
++ * the fields it actually reads before validating, so never-read context
++ * fields cannot veto the contract, and (b) when the picked source
++ * itself fails validation, reports it loudly as a distinct
++ * projection_contract_source_invalid reason instead of cosplaying as
++ * missing evidence.
++ */
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  buildProjectionReadinessEvidence,
++  pickProjectionReadinessEvidenceSource,
++} from '../../src/control-plane/projection-readiness-evidence.js';
++import {
++  CONTROL_PLANE_READINESS_DIMENSION,
++} from '../../src/control-plane/control-plane-readiness-constants.js';
++
++function buildCleanSource() {
++  return {
++    dimensions: {
++      [CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE]: true,
++      [CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY]: true,
++      [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
++    },
++    runtimeAuthority: {
++      processAlive: true,
++      clusterMemberHealthy: true,
++      repairEligible: true,
++      writeEligible: true,
++    },
++    runtimeServeEligible: true,
++  };
++}
++
++test('the producer pick strips never-read fields so their junk cannot ' +
++  'veto the sealed whole-source validation', (t) => {
++  const evidence = buildProjectionReadinessEvidence(
++    pickProjectionReadinessEvidenceSource({
++      ...buildCleanSource(),
++      serviceRows: new Map([['a', 1]]),
++      nodeRow: new Date(0),
++      capacity: () => {},
++    }),
++  );
++  t.equal(evidence.ownerEvidenceAvailable, true,
++    'the evidence stays available despite non-plain never-read fields');
++  t.equal(evidence.processAlive, true,
++    'the clean allowlisted fields evaluate normally');
++  t.equal(evidence.sourceInvalid, false,
++    'a stripped never-read field is not a source rejection');
++  t.end();
++});
++
++test('the sealed builder still fails the whole record closed when junk ' +
++  'reaches it unpicked', (t) => {
++  const evidence = buildProjectionReadinessEvidence({
++    ...buildCleanSource(),
++    serviceRows: new Map([['a', 1]]),
++  });
++  t.equal(evidence.ownerEvidenceAvailable, false,
++    'the sealed whole-source own-data rule is unchanged');
++  t.equal(evidence.sourceInvalid, true,
++    'and the rejection is now loudly flagged');
++  t.end();
++});
++
++test('the pick skips an own accessor without executing it', (t) => {
++  const source = {runtimeServeEligible: true};
++  let executed = false;
++  Object.defineProperty(source, 'dimensions', {
++    configurable: true,
++    enumerable: true,
++    get() {
++      executed = true;
++      return {};
++    },
++  });
++  const picked = pickProjectionReadinessEvidenceSource(source);
++  const evidence = buildProjectionReadinessEvidence(picked);
++  t.equal(executed, false, 'the own getter is never executed');
++  t.equal(Object.hasOwn(picked, 'dimensions'), false,
++    'the accessor field is absent from the picked record');
++  t.equal(evidence.sourceInvalid, false,
++    'a skipped accessor is missing evidence, not a rejection');
++  t.end();
++});
++
++test('junk inside an allowlisted field is a loud, distinct rejection',
++  (t) => {
++    const evidence = buildProjectionReadinessEvidence({
++      ...buildCleanSource(),
++      dimensions: {poisoned: new Map()},
++    });
++    t.equal(evidence.sourceInvalid, true,
++      'the rejected source is flagged');
++    t.ok(
++      evidence.reasonSeed.includes('projection_contract_source_invalid'),
++      'the rejection carries its own reason code, not owner_evidence_missing');
++    t.equal(evidence.ownerEvidenceAvailable, false,
++      'a rejected source still fails closed');
++    t.end();
++  });
++
++test('a clean source keeps its sealed behavior', (t) => {
++  const evidence = buildProjectionReadinessEvidence(buildCleanSource());
++  t.equal(evidence.ownerEvidenceAvailable, true);
++  t.equal(evidence.sourceInvalid, false);
++  t.equal(evidence.reasonSeed.length, 0, 'no seeded reasons when healthy');
++  t.end();
++});
++
++test('an absent source still reports owner evidence missing, not source ' +
++  'invalid', (t) => {
++  const evidence = buildProjectionReadinessEvidence({});
++  t.equal(evidence.ownerEvidenceAvailable, false);
++  t.equal(evidence.sourceInvalid, false,
++    'an empty source is honestly missing, not invalid');
++  t.ok(evidence.reasonSeed.includes('owner_evidence_missing'),
++    'missing evidence keeps its sealed reason');
++  t.end();
++});
+diff --git a/test/message-group/message-group-service-row-absence-heal.test.js b/test/message-group/message-group-service-row-absence-heal.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..5112579365fe973f09389179c9baba7cf35061e6
+--- /dev/null
++++ b/test/message-group/message-group-service-row-absence-heal.test.js
+@@ -0,0 +1,83 @@
++/**
++ * Absence-proven services-row heal for message-group replicas.
++ *
++ * Serve-eligibility requires an ACTIVE addressed MESSAGE_GROUP services
++ * row; the registration write of that row is a one-shot direct write
++ * outside raft, and when it misses the durable db every later status
++ * UPDATE zero-row no-ops with no CDC, so the cached mg row never leaves
++ * stopped and the node is wedged out of serve-eligibility permanently
++ * (round-11 attribution, runs 06-27-35/06-31-11/07-07-37/07-39-14 on
++ * 2026-08-16 — the partition-owner heal alone did not cover this owner).
++ * Same contract as the partition owner: a zero affected-row count on the
++ * primary-key-pinned WHERE proves durable absence and re-issues the
++ * canonical registration upsert; matched or unwitnessed counts keep the
++ * update-only contract.
++ */
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  MessageGroupServiceRowOwner,
++} from '../../src/message-group/message-group-service-row-owner.js';
++
++function buildOwner({affectedRows}) {
++  const calls = {updates: [], upserts: []};
++  const owner = new MessageGroupServiceRowOwner({
++    now: () => 1234,
++    systemTableWriter: {
++      async updateSystemTableRow(tableName, whereClause, updateData, options) {
++        calls.updates.push({tableName, whereClause, updateData, options});
++        return {
++          success: true,
++          partitionResult: affectedRows === undefined ?
++            {} :
++            {affectedRows},
++        };
++      },
++      async upsertSystemTableRow(tableName, row, options) {
++        calls.upserts.push({tableName, row, options});
++        return {success: true};
++      },
++    },
++  });
++  return {owner, calls};
++}
++
++const REPLICA_OPTIONS = Object.freeze({
++  groupId: 'mg-1',
++  replicaId: 'mg-1-r1',
++  nodeId: 'node-a',
++  service: {isLeaderReplica: () => false},
++});
++
++test('a zero-row message-group status update proves durable absence and ' +
++  're-issues the canonical registration upsert', async (t) => {
++  const {owner, calls} = buildOwner({affectedRows: 0});
++  const row = await owner.activateReplica(REPLICA_OPTIONS);
++  t.equal(calls.upserts.length, 1,
++    'the absent mg services row is healed with the canonical upsert');
++  t.equal(calls.upserts[0].row.service_id, 'mg-1-r1');
++  t.equal(calls.upserts[0].row.service_type, 'message_group');
++  t.equal(calls.upserts[0].row.status, 'active',
++    'the healed row carries the intended status');
++  t.equal(calls.upserts[0].row.created_at, 1234,
++    'the healed row is the full canonical registration shape');
++  t.equal(row.status, 'active', 'activation still projects active status');
++  t.end();
++});
++
++test('a matched message-group status update never escalates to upsert',
++  async (t) => {
++    const {owner, calls} = buildOwner({affectedRows: 1});
++    await owner.activateReplica(REPLICA_OPTIONS);
++    t.equal(calls.upserts.length, 0,
++      'a matched update keeps the update-only contract');
++    t.end();
++  });
++
++test('an unwitnessed message-group affected-row count never escalates to ' +
++  'upsert', async (t) => {
++  const {owner, calls} = buildOwner({affectedRows: undefined});
++  await owner.activateReplica(REPLICA_OPTIONS);
++  t.equal(calls.upserts.length, 0,
++    'absence must be proven by an explicit zero count, not assumed');
++  t.end();
++});
+diff --git a/test/partition/partition-service-row-absence-heal.test.js b/test/partition/partition-service-row-absence-heal.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4029fb947678d1cb3802fe8872b8656ab91fe470
+--- /dev/null
++++ b/test/partition/partition-service-row-absence-heal.test.js
+@@ -0,0 +1,82 @@
++/**
++ * Absence-proven services-row heal on zero-row status updates.
++ *
++ * The bootstrap registration write of a system replica's services row is a
++ * one-shot direct write outside raft; when it misses a replica db, every
++ * later writer is a plain UPDATE that zero-row no-ops, a zero-change
++ * UPDATE emits no CDC, and the cached row never leaves stopped — wedging
++ * serve-eligibility permanently (round-11 attribution: local lone-seed
++ * phase-1 routable-partition timeouts, the 43-row "No row found for CDC
++ * update" wave in archived runs 06-27-35/06-31-11/07-07-37 on
++ * 2026-08-16). An UPDATE whose primary-key-pinned WHERE matched zero rows
++ * is proof of durable absence: the owner already holds the full canonical
++ * row, so it re-issues the registration upsert instead of leaving the
++ * divergence permanent. A matched update (affectedRows >= 1) and an
++ * unwitnessed count (affectedRows absent) keep the update-only contract.
++ */
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  PartitionServiceRowOwner,
++} from '../../src/partition/partition-service-row-owner.js';
++
++function buildOwner({affectedRows}) {
++  const calls = {updates: [], upserts: []};
++  const owner = new PartitionServiceRowOwner({
++    now: () => 1234,
++    systemTableWriter: {
++      async updateSystemTableRow(tableName, whereClause, updateData, options) {
++        calls.updates.push({tableName, whereClause, updateData, options});
++        return {
++          success: true,
++          partitionResult: affectedRows === undefined ?
++            {} :
++            {affectedRows},
++        };
++      },
++      async upsertSystemTableRow(tableName, row, options) {
++        calls.upserts.push({tableName, row, options});
++        return {success: true};
++      },
++    },
++  });
++  return {owner, calls};
++}
++
++const REPLICA_OPTIONS = Object.freeze({
++  partitionId: 'services-p1',
++  replicaId: 'mg-1-r1',
++  nodeId: 'node-a',
++  service: {isLeaderReplica: () => false},
++});
++
++test('a zero-row status update proves durable absence and re-issues the ' +
++  'canonical registration upsert', async (t) => {
++  const {owner, calls} = buildOwner({affectedRows: 0});
++  const row = await owner.activateReplica(REPLICA_OPTIONS);
++  t.equal(calls.upserts.length, 1,
++    'the absent services row is healed with the canonical upsert');
++  t.equal(calls.upserts[0].tableName, 'services');
++  t.equal(calls.upserts[0].row.service_id, 'mg-1-r1');
++  t.equal(calls.upserts[0].row.status, 'active',
++    'the healed row carries the intended status');
++  t.equal(calls.upserts[0].row.created_at, 1234,
++    'the healed row is the full canonical registration shape');
++  t.equal(row.status, 'active', 'activation still projects active status');
++  t.end();
++});
++
++test('a matched status update never escalates to upsert', async (t) => {
++  const {owner, calls} = buildOwner({affectedRows: 1});
++  await owner.activateReplica(REPLICA_OPTIONS);
++  t.equal(calls.upserts.length, 0,
++    'a matched update keeps the update-only contract');
++  t.end();
++});
++
++test('an unwitnessed affected-row count never escalates to upsert', async (t) => {
++  const {owner, calls} = buildOwner({affectedRows: undefined});
++  await owner.activateReplica(REPLICA_OPTIONS);
++  t.equal(calls.upserts.length, 0,
++    'absence must be proven by an explicit zero count, not assumed');
++  t.end();
++});
+diff --git a/test/rebalancer/rebalance-coordinator-terminal-intent-collision.test.js b/test/rebalancer/rebalance-coordinator-terminal-intent-collision.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..14baa32b4288a0990c7bf33f566bbf7922f081cd
+--- /dev/null
++++ b/test/rebalancer/rebalance-coordinator-terminal-intent-collision.test.js
+@@ -0,0 +1,171 @@
++/**
++ * Deterministic-intent insert-collision terminal arm.
++ *
++ * A schema-provisioning creator retries the SAME deterministic
++ * move.operationIntentId every attempt. When the durable winner of the
++ * insert collision is already terminal, reusing it as an in-flight
++ * operation re-drives CREATE_REPLICA against a completed create, misfires
++ * completeOperation through the stale cache lane, and loops the terminal
++ * transition repair forever while the schema job answers pending (round-10
++ * attribution: local lone-seed phase-1 DDL admission livelock, archived
++ * runs 06-20-48/06-27-35/06-31-11 on 2026-08-16). A terminal-successful
++ * winner IS the create outcome: hand it back untouched, never rearm it,
++ * never remember it as an in-flight intent. A terminal-failed winner can
++ * never be cured by the same intent id: surface it, do not reuse the
++ * corpse. Non-terminal winners keep the CL-008 reuse decision verbatim,
++ * as do REPLACE-identity creators (successor generation).
++ */
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  applyRebalanceCoordinatorOperationPersistenceCollisionMethods,
++} from
++  '../../src/rebalancer/rebalance-coordinator-operation-persistence-collision.js';
++import {
++  isTerminalReplicaOperationRecord,
++} from '../../src/rebalancer/replica-operation-progress.js';
++
++const PARTITION_ID = 'tbl-deadbeef-p1';
++const INTENT_ID = 'schema-job-deadbeef:operation:node-a';
++
++class CollisionHost {}
++applyRebalanceCoordinatorOperationPersistenceCollisionMethods(CollisionHost);
++
++function buildHost() {
++  const host = new CollisionHost();
++  host.calls = {
++    rearm: [],
++    remember: [],
++    successor: [],
++    reservation: [],
++  };
++  host.isRecentOperationIntentTerminal =
++    (operation) => isTerminalReplicaOperationRecord(operation);
++  host.rememberOperationIntents = (keys, operation) => {
++    host.calls.remember.push({keys, operation});
++  };
++  host.maybeRearmReusedPendingOperation = async (operation) => {
++    host.calls.rearm.push(operation);
++    return operation;
++  };
++  host.createSuccessorReplaceOperation = async (context, existing) => {
++    host.calls.successor.push({context, existing});
++    return {successorOf: existing.operationId};
++  };
++  host.ensureReservationForOperation = async (operation) => {
++    host.calls.reservation.push(operation);
++  };
++  host.queryExistingOperationAfterInsertConflict = async () => null;
++  return host;
++}
++
++function buildContext(existing, overrides = {}) {
++  return {
++    operation: {operationId: INTENT_ID},
++    persistResult: {operation: existing},
++    move: {operationIntentId: INTENT_ID, nodeId: 'node-a'},
++    partitionId: PARTITION_ID,
++    entityType: 'partition',
++    entityId: PARTITION_ID,
++    normalizedMove: {},
++    dedupeKey: 'dedupe-key',
++    criticalAddLikeIntentKey: null,
++    replaceIntentIdentity: null,
++    shouldEmitOperationCreated: false,
++    ...overrides,
++  };
++}
++
++test('a terminal-successful deterministic-intent winner is returned as the ' +
++  'create outcome, never rearmed or remembered in-flight', async (t) => {
++  const host = buildHost();
++  const existing = {
++    operationId: INTENT_ID,
++    partitionId: PARTITION_ID,
++    type: 'ADD',
++    status: 'active',
++    workflowStep: 'ACTIVE',
++    completedAt: 1700000000000,
++  };
++  const resolved = await host.resolveCreatedOperationPersistenceCollision(
++    buildContext(existing),
++  );
++  t.equal(resolved, existing,
++    'the durable terminal-successful winner is the returned operation');
++  t.equal(host.calls.rearm.length, 0,
++    'a terminal winner is never rearmed as an in-flight operation');
++  t.equal(host.calls.remember.length, 0,
++    'a terminal winner is never remembered as a reusable in-flight intent');
++  t.equal(host.calls.successor.length, 0,
++    'no successor generation for a deterministic-intent create');
++  t.end();
++});
++
++test('a terminal-failed deterministic-intent winner is surfaced, not ' +
++  'reused as in-flight', async (t) => {
++  const host = buildHost();
++  const existing = {
++    operationId: INTENT_ID,
++    partitionId: PARTITION_ID,
++    type: 'ADD',
++    status: 'failed',
++    workflowStep: 'FAILED',
++    completedAt: 1700000000000,
++    errorMessage: 'creation failed terminally',
++  };
++  await t.rejects(
++    host.resolveCreatedOperationPersistenceCollision(buildContext(existing)),
++    /terminal/i,
++    'a terminal-failed winner for the same intent id is a surfaced error, ' +
++      'not a reusable in-flight operation',
++  );
++  t.equal(host.calls.rearm.length, 0,
++    'the failed corpse is never rearmed');
++  t.equal(host.calls.remember.length, 0,
++    'the failed corpse is never remembered as an in-flight intent');
++  t.end();
++});
++
++test('a non-terminal deterministic-intent winner keeps the CL-008 reuse ' +
++  'decision verbatim', async (t) => {
++  const host = buildHost();
++  const existing = {
++    operationId: INTENT_ID,
++    partitionId: PARTITION_ID,
++    type: 'ADD',
++    status: 'pending',
++    workflowStep: 'PENDING',
++  };
++  const resolved = await host.resolveCreatedOperationPersistenceCollision(
++    buildContext(existing),
++  );
++  t.equal(resolved, existing, 'the in-flight winner is reused');
++  t.equal(host.calls.rearm.length, 1,
++    'the reused pending winner rides the existing rearm decision');
++  t.equal(host.calls.remember.length, 1,
++    'the reused pending winner is remembered under its intent keys');
++  t.end();
++});
++
++test('a REPLACE-identity terminal winner still advances the successor ' +
++  'generation', async (t) => {
++  const host = buildHost();
++  host.assertReplaceIntentCollisionMatches = () => {};
++  const existing = {
++    operationId: 'replace-op-1',
++    partitionId: PARTITION_ID,
++    type: 'REPLACE',
++    status: 'removed',
++    workflowStep: 'REMOVED',
++    completedAt: 1700000000000,
++  };
++  const resolved = await host.resolveCreatedOperationPersistenceCollision(
++    buildContext(existing, {
++      move: {nodeId: 'node-a'},
++      replaceIntentIdentity: {intent: 'replace-intent'},
++    }),
++  );
++  t.same(resolved, {successorOf: 'replace-op-1'},
++    'REPLACE terminal winners keep successor-generation behavior');
++  t.equal(host.calls.successor.length, 1, 'successor path invoked once');
++  t.end();
++});

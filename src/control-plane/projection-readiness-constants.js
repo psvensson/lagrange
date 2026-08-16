@@ -31,6 +31,7 @@ const PROJECTION_READINESS_ACTIVE_GATE_STATE = Object.freeze({
 
 const PROJECTION_READINESS_REASON = Object.freeze({
   OWNER_EVIDENCE_MISSING: 'owner_evidence_missing',
+  PROJECTION_CONTRACT_SOURCE_INVALID: 'projection_contract_source_invalid',
   PROCESS_NOT_ALIVE: 'process_not_alive',
   CLUSTER_MEMBER_UNHEALTHY: 'cluster_member_unhealthy',
   PROJECTION_REVISION_STALE: 'projection_revision_stale',

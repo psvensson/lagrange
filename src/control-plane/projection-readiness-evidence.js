@@ -22,6 +22,9 @@ import {
   copyDenseOwnDataArray,
   copyStrictOwnDataRecord,
 } from '../utils/strict-own-data.js';
+import {
+  pickProjectionReadinessEvidenceSource,
+} from './projection-readiness-evidence-source.js';
 
 const ArrayConstructor = Array;
 const arrayIsArray = Array.isArray;
@@ -616,8 +619,16 @@ function resolveProjectionReadinessRevisionEvidence(
 }
 
 function buildProjectionReadinessEvidence(source = {}) {
-  source = freezeProjectionReadinessRecord(source) ||
-    PROJECTION_READINESS_EMPTY.RECORD;
+  // Sealed whole-source rule (round-13): producers pass only the read
+  // fields (evidence-source pick); a rejected source surfaces loudly.
+  const normalizedSource = normalizeProjectionReadinessOwnDataGraph(source);
+  const sourceInvalid =
+    normalizedSource === PROJECTION_READINESS_INVALID.OWN_DATA_GRAPH;
+  source = sourceInvalid || !normalizedSource ||
+    arrayIsArray(normalizedSource) ||
+    typeof normalizedSource !== 'object' ?
+    PROJECTION_READINESS_EMPTY.RECORD :
+    normalizedSource;
   const dimensions = normalizeProjectionReadinessDimensions(source.dimensions);
   const runtimeAuthority =
     normalizeProjectionReadinessRuntimeAuthority(source.runtimeAuthority);
@@ -760,9 +771,13 @@ function buildProjectionReadinessEvidence(source = {}) {
     ),
     priorityRecovery,
     projectionRevision,
-    reasonSeed: ownerEvidenceAvailable ?
-      PROJECTION_READINESS_EMPTY.LIST :
-      objectFreeze([PROJECTION_READINESS_REASON.OWNER_EVIDENCE_MISSING]),
+    sourceInvalid,
+    reasonSeed: sourceInvalid ?
+      objectFreeze(
+        [PROJECTION_READINESS_REASON.PROJECTION_CONTRACT_SOURCE_INVALID]) :
+      ownerEvidenceAvailable ?
+        PROJECTION_READINESS_EMPTY.LIST :
+        objectFreeze([PROJECTION_READINESS_REASON.OWNER_EVIDENCE_MISSING]),
     pendingAckCount: normalizeProjectionReadinessNonNegativeInteger(
       publicationOwnerStream?.pendingAckCount,
     ),
@@ -782,4 +797,5 @@ export {
   buildProjectionReadinessEvidence,
   freezeProjectionReadinessRecord,
   normalizeProjectionReadinessReasonCodes,
+  pickProjectionReadinessEvidenceSource,
 };

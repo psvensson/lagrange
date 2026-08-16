@@ -123,6 +123,9 @@ const CDC_LOG_MSG = Object.freeze({
     'Bootstrap mode disabled - writes will route through SQL engine',
   BOOTSTRAP_MODE_REQUIRED_FOR_DIRECT_SQL:
     'executeSQLDirectToLocalPartition can only be called in bootstrap mode',
+  BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK:
+    'Bootstrap raft write lane unavailable - falling back to direct ' +
+    'per-replica write',
   NEW_NODE_DETECTED: 'New node detected via CDC, establishing connection',
   NEW_NODE_CONNECTED: 'Connected to new node via CDC event',
   NEW_NODE_CONNECT_FAILED: 'Failed to connect to new node via CDC event',

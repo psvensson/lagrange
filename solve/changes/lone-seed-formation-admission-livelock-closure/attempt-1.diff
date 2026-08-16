@@ -1,0 +1,437 @@
+diff --git a/scripts/run-lone-seed-formation-admission-livelock-closure-scenarios.js b/scripts/run-lone-seed-formation-admission-livelock-closure-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..54dc7385b1869a6de7ff99f450edd87bc02e8b53
+--- /dev/null
++++ b/scripts/run-lone-seed-formation-admission-livelock-closure-scenarios.js
+@@ -0,0 +1,42 @@
++#!/usr/bin/env node
++
++import path from 'node:path';
++import {fileURLToPath} from 'node:url';
++import {runTestFileSync} from './run-test-files.js';
++import {emitDeterministicGuardReport} from './deterministic-guard-report.js';
++
++// Deterministic guard for the lone-seed formation-admission livelock quest:
++// the red-first deterministic-intent terminal-collision contract plus the
++// sealed collision/retry and repository suites it must not regress.
++const SCENARIO = 'lone-seed-formation-admission-livelock-closure';
++const PRODUCER = 'lone-seed-formation-admission-livelock-closure-proof';
++const PARENT_DIR = '..';
++const GUARD_TIMEOUT_MS = 300000;
++const GUARD_FILES = Object.freeze([
++  'test/rebalancer/rebalance-coordinator-terminal-intent-collision.test.js',
++  'test/query/schema-provisioning-transient-collision.test.js',
++  'test/query/durable-provisioning-job-owner-guard.test.js',
++  'test/rebalancer/replica-operation-repository.test.js',
++  'test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js',
++]);
++
++const root = path.resolve(
++  path.dirname(fileURLToPath(import.meta.url)),
++  PARENT_DIR,
++);
++
++function main() {
++  const guards = GUARD_FILES.map((file) => ({
++    file,
++    ...runTestFileSync(file, {print: false, timeoutMs: GUARD_TIMEOUT_MS}),
++  }));
++  emitDeterministicGuardReport({
++    root,
++    scenario: SCENARIO,
++    producer: PRODUCER,
++    guards,
++    deterministicPassed: guards.every((guard) => guard.ok === true),
++  });
++}
++
++main();
+diff --git a/src/partition/partition-service-raft-init-base.js b/src/partition/partition-service-raft-init-base.js
+index 32e9f38af6e1d6253b1fc18ba7edcc92b1ad2af9..6288fa1ba4cab27550b1d36433507ac09cdb272f 100644
+--- a/src/partition/partition-service-raft-init-base.js
++++ b/src/partition/partition-service-raft-init-base.js
+@@ -1,4 +1,9 @@
+ import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
++import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
++
++// Watchdog sync-section site for the closed-handle partition replica boot
++// block (round-10 bootstrap-batch stall attribution).
++const PARTITION_REPLICA_INIT_SYNC_SECTION_SITE = 'partition_replica_init';
+ import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
+ import {
+   reconcileRaftPeersFromCacheForService,
+@@ -299,49 +304,56 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
+         dbPath: this.dbPath,
+       });
+     }
+-    if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
+-      const dbDir = path.dirname(this.dbPath);
+-      if (!fs.existsSync(dbDir)) {
+-        fs.mkdirSync(dbDir, {recursive: true});
+-        this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_PARTITION_DIR, {
+-          path: dbDir,
++    // The whole closed-handle boot block (dir/snapshot fs work, db open +
++    // pragmas, raft storage, schema DDL) is synchronous by design; tag it
++    // so bootstrap-batch stalls attribute in the watchdog's siteDeltas
++    // instead of reporting as unexplained gaps (round-10).
++    trackSyncSection(PARTITION_REPLICA_INIT_SYNC_SECTION_SITE, () => {
++      if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
++        const dbDir = path.dirname(this.dbPath);
++        if (!fs.existsSync(dbDir)) {
++          fs.mkdirSync(dbDir, {recursive: true});
++          this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_PARTITION_DIR, {
++            path: dbDir,
++          });
++        }
++      }
++      // Snapshot-install boot boundary: resolve pending install remnants
++      // while NO handle is open; a nonce conflict fails the boot closed.
++      if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
++        const installResolution = resolvePendingSnapshotInstall({
++          replicaDbPath: this.dbPath,
+         });
++        if (installResolution.outcome ===
++            RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT) {
++          throw new Error(
++            `${PARTITION_SERVICE_ERROR_MSG.SNAPSHOT_INSTALL_STATE_CONFLICT}: ` +
++            `${installResolution.detail}`,
++          );
++        }
++        // Recorded-gap closure (S4): sweep stale transfer staging at the
++        // same closed-handle boot boundary — no transfer is in flight
++        // during init, so every staged transfer directory here is a
++        // leftover.
++        cleanupStaleTransferStaging(
++          resolveReplicaCheckpointsRoot(this.dbPath));
+       }
+-    }
+-    // Snapshot-install boot boundary: resolve pending install remnants while
+-    // NO handle is open; a nonce conflict fails the boot closed.
+-    if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
+-      const installResolution = resolvePendingSnapshotInstall({
+-        replicaDbPath: this.dbPath,
++      this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.OPENING_DB, {
++        dbPath: this.dbPath,
+       });
+-      if (installResolution.outcome ===
+-          RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT) {
+-        throw new Error(
+-          `${PARTITION_SERVICE_ERROR_MSG.SNAPSHOT_INSTALL_STATE_CONFLICT}: ` +
+-          `${installResolution.detail}`,
+-        );
++      this.db = new Database(this.dbPath);
++      this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_JOURNAL_MODE);
++      this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
++      this.logAdapter = new SQLiteLogAdapter(this.db, null, this.logger);
++      this.storage = new PartitionRaftStorage(
++        this.db,
++        this.partitionId,
++        this.logAdapter,
++      );
++      if (this.schema) {
++        this.createTable();
+       }
+-      // Recorded-gap closure (S4): sweep stale transfer staging at the same
+-      // closed-handle boot boundary — no transfer is in flight during init,
+-      // so every staged transfer directory here is a leftover.
+-      cleanupStaleTransferStaging(
+-        resolveReplicaCheckpointsRoot(this.dbPath));
+-    }
+-    this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.OPENING_DB, {
+-      dbPath: this.dbPath,
+     });
+-    this.db = new Database(this.dbPath);
+-    this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_JOURNAL_MODE);
+-    this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
+-    this.logAdapter = new SQLiteLogAdapter(this.db, null, this.logger);
+-    this.storage = new PartitionRaftStorage(
+-      this.db,
+-      this.partitionId,
+-      this.logAdapter,
+-    );
+-    if (this.schema) {
+-      this.createTable();
+-    }
+     if (this.transport) {
+       this.transport.register(
+         this.unifiedAddress,
+diff --git a/src/query/sql-query-engine-initial-partition-provisioning.js b/src/query/sql-query-engine-initial-partition-provisioning.js
+index a61d73b2c746c6fcd71a85cbccf40280e7c281a1..e799dae240647b8419ceaaea41ec8e8723cfbe8d 100644
+--- a/src/query/sql-query-engine-initial-partition-provisioning.js
++++ b/src/query/sql-query-engine-initial-partition-provisioning.js
+@@ -11,6 +11,9 @@ import {
+   throwIfCancellationRequested,
+ } from './query-cancellation.js';
+ import {OPERATION_OWNER_TURN_POLICY} from '../rebalancer/operation-owner-turn-policy.js';
++import {
++  isTerminalSuccessfulCreateOperation,
++} from '../rebalancer/replica-operation-progress.js';
+ 
+ const LOCAL_STR_FUNCTION = 'function';
+ const LOCAL_STR_OBJECT = 'object';
+@@ -576,6 +579,22 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
+     const metadataWaitReplicaIds = [];
+     for (const operation of plannedOperations) {
+       throwIfCancellationRequested(cancellationToken);
++      // A deterministic-intent retry can hand back the prior attempt's
++      // durably terminal-successful operation (collision terminal arm).
++      // The replica already exists: re-stamping and re-executing it is the
++      // round-10 livelock. Keep it in the plan for counting, wait on its
++      // routability like any other create, but never re-dispatch it.
++      if (isTerminalSuccessfulCreateOperation(operation)) {
++        const terminalReplicaId =
++          operation?.replicaId || operation?.replica_id || null;
++        if (
++          typeof terminalReplicaId === LOCAL_STR_STRING &&
++          terminalReplicaId.length > 0
++        ) {
++          metadataWaitReplicaIds.push(terminalReplicaId);
++        }
++        continue;
++      }
+       operation[ReplicaOperationField.REPLICA_IDS] =
+         bootstrapTopology.replicaIds;
+       operation[ReplicaOperationField.PEER_ADDRESSES] =
+diff --git a/src/rebalancer/rebalance-coordinator-operation-persistence-collision.js b/src/rebalancer/rebalance-coordinator-operation-persistence-collision.js
+index 09aa27f270f981b538e94294ced89a10f8f76ec9..ae5ead648d9d01a95577b94f6aebef5de002af0f 100644
+--- a/src/rebalancer/rebalance-coordinator-operation-persistence-collision.js
++++ b/src/rebalancer/rebalance-coordinator-operation-persistence-collision.js
+@@ -3,8 +3,14 @@ import {
+   buildSuccessorReplaceIntentIdentity,
+   replaceIntentCollisionMatches,
+ } from './rebalance-replace-intent-identity.js';
++import {
++  isTerminalSuccessfulCreateOperation,
++} from './replica-operation-progress.js';
+ 
+ const LOCAL_STR_CONSTRUCTOR = 'constructor';
++const TERMINAL_INTENT_COLLISION_ERROR_PREFIX =
++  'Operation persistence collision winner is durably terminal for ' +
++  'deterministic intent';
+ 
+ class RebalanceCoordinatorOperationPersistenceCollision {
+   /**
+@@ -39,6 +45,26 @@ class RebalanceCoordinatorOperationPersistenceCollision {
+     ) {
+       return this.createSuccessorReplaceOperation(context, existing);
+     }
++    // Deterministic-intent creators retry the SAME operation id, so a
++    // durable terminal winner is the prior attempt's outcome, not an
++    // in-flight operation. Rearming it re-drives an idempotent create
++    // against a completed replica and livelocks the terminal-transition
++    // repair (round-10: local lone-seed phase-1 DDL admission). A
++    // terminal-successful winner IS the create result; a terminal-failed
++    // winner cannot be cured under the same intent id and must surface.
++    if (
++      context.move?.operationIntentId &&
++      this.isRecentOperationIntentTerminal(existing)
++    ) {
++      if (isTerminalSuccessfulCreateOperation(existing)) {
++        return existing;
++      }
++      throw new Error(
++        `${TERMINAL_INTENT_COLLISION_ERROR_PREFIX} ` +
++          `${context.move.operationIntentId}: ` +
++          `${existing.status || existing.workflowStep}`,
++      );
++    }
+     if (context.replaceIntentIdentity) {
+       await this.ensureReservationForOperation(existing);
+     }
+diff --git a/src/service/service-reconciler.js b/src/service/service-reconciler.js
+index 900ece5530e199908bd379aebe8ac40962c60243..1c30326b564e55713cc10ed1eb01d229a3566f2e 100644
+--- a/src/service/service-reconciler.js
++++ b/src/service/service-reconciler.js
+@@ -454,6 +454,15 @@ class ServiceReconciler extends EventEmitter {
+               actionEntry.action,
+               context,
+             );
++            // One real event-loop turn per action. Replica-create actions
++            // are 130-250ms of synchronous work whose awaits resolve as
++            // microtasks; without a macrotask boundary the bootstrap
++            // system-table batch drains 16 workers' continuations
++            // back-to-back, starving timers (heartbeats, the gap watchdog)
++            // for the whole batch — round-10: 7-8s unexplained ELU-1.0
++            // gaps wedging the lone seed out of serve eligibility. Per-
++            // queue action order is unchanged.
++            await new Promise((resolve) => setImmediate(resolve));
+           }
+         }
+       })());
+diff --git a/test/rebalancer/rebalance-coordinator-terminal-intent-collision.test.js b/test/rebalancer/rebalance-coordinator-terminal-intent-collision.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..14baa32b4288a0990c7bf33f566bbf7922f081cd
+--- /dev/null
++++ b/test/rebalancer/rebalance-coordinator-terminal-intent-collision.test.js
+@@ -0,0 +1,171 @@
++/**
++ * Deterministic-intent insert-collision terminal arm.
++ *
++ * A schema-provisioning creator retries the SAME deterministic
++ * move.operationIntentId every attempt. When the durable winner of the
++ * insert collision is already terminal, reusing it as an in-flight
++ * operation re-drives CREATE_REPLICA against a completed create, misfires
++ * completeOperation through the stale cache lane, and loops the terminal
++ * transition repair forever while the schema job answers pending (round-10
++ * attribution: local lone-seed phase-1 DDL admission livelock, archived
++ * runs 06-20-48/06-27-35/06-31-11 on 2026-08-16). A terminal-successful
++ * winner IS the create outcome: hand it back untouched, never rearm it,
++ * never remember it as an in-flight intent. A terminal-failed winner can
++ * never be cured by the same intent id: surface it, do not reuse the
++ * corpse. Non-terminal winners keep the CL-008 reuse decision verbatim,
++ * as do REPLACE-identity creators (successor generation).
++ */
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  applyRebalanceCoordinatorOperationPersistenceCollisionMethods,
++} from
++  '../../src/rebalancer/rebalance-coordinator-operation-persistence-collision.js';
++import {
++  isTerminalReplicaOperationRecord,
++} from '../../src/rebalancer/replica-operation-progress.js';
++
++const PARTITION_ID = 'tbl-deadbeef-p1';
++const INTENT_ID = 'schema-job-deadbeef:operation:node-a';
++
++class CollisionHost {}
++applyRebalanceCoordinatorOperationPersistenceCollisionMethods(CollisionHost);
++
++function buildHost() {
++  const host = new CollisionHost();
++  host.calls = {
++    rearm: [],
++    remember: [],
++    successor: [],
++    reservation: [],
++  };
++  host.isRecentOperationIntentTerminal =
++    (operation) => isTerminalReplicaOperationRecord(operation);
++  host.rememberOperationIntents = (keys, operation) => {
++    host.calls.remember.push({keys, operation});
++  };
++  host.maybeRearmReusedPendingOperation = async (operation) => {
++    host.calls.rearm.push(operation);
++    return operation;
++  };
++  host.createSuccessorReplaceOperation = async (context, existing) => {
++    host.calls.successor.push({context, existing});
++    return {successorOf: existing.operationId};
++  };
++  host.ensureReservationForOperation = async (operation) => {
++    host.calls.reservation.push(operation);
++  };
++  host.queryExistingOperationAfterInsertConflict = async () => null;
++  return host;
++}
++
++function buildContext(existing, overrides = {}) {
++  return {
++    operation: {operationId: INTENT_ID},
++    persistResult: {operation: existing},
++    move: {operationIntentId: INTENT_ID, nodeId: 'node-a'},
++    partitionId: PARTITION_ID,
++    entityType: 'partition',
++    entityId: PARTITION_ID,
++    normalizedMove: {},
++    dedupeKey: 'dedupe-key',
++    criticalAddLikeIntentKey: null,
++    replaceIntentIdentity: null,
++    shouldEmitOperationCreated: false,
++    ...overrides,
++  };
++}
++
++test('a terminal-successful deterministic-intent winner is returned as the ' +
++  'create outcome, never rearmed or remembered in-flight', async (t) => {
++  const host = buildHost();
++  const existing = {
++    operationId: INTENT_ID,
++    partitionId: PARTITION_ID,
++    type: 'ADD',
++    status: 'active',
++    workflowStep: 'ACTIVE',
++    completedAt: 1700000000000,
++  };
++  const resolved = await host.resolveCreatedOperationPersistenceCollision(
++    buildContext(existing),
++  );
++  t.equal(resolved, existing,
++    'the durable terminal-successful winner is the returned operation');
++  t.equal(host.calls.rearm.length, 0,
++    'a terminal winner is never rearmed as an in-flight operation');
++  t.equal(host.calls.remember.length, 0,
++    'a terminal winner is never remembered as a reusable in-flight intent');
++  t.equal(host.calls.successor.length, 0,
++    'no successor generation for a deterministic-intent create');
++  t.end();
++});
++
++test('a terminal-failed deterministic-intent winner is surfaced, not ' +
++  'reused as in-flight', async (t) => {
++  const host = buildHost();
++  const existing = {
++    operationId: INTENT_ID,
++    partitionId: PARTITION_ID,
++    type: 'ADD',
++    status: 'failed',
++    workflowStep: 'FAILED',
++    completedAt: 1700000000000,
++    errorMessage: 'creation failed terminally',
++  };
++  await t.rejects(
++    host.resolveCreatedOperationPersistenceCollision(buildContext(existing)),
++    /terminal/i,
++    'a terminal-failed winner for the same intent id is a surfaced error, ' +
++      'not a reusable in-flight operation',
++  );
++  t.equal(host.calls.rearm.length, 0,
++    'the failed corpse is never rearmed');
++  t.equal(host.calls.remember.length, 0,
++    'the failed corpse is never remembered as an in-flight intent');
++  t.end();
++});
++
++test('a non-terminal deterministic-intent winner keeps the CL-008 reuse ' +
++  'decision verbatim', async (t) => {
++  const host = buildHost();
++  const existing = {
++    operationId: INTENT_ID,
++    partitionId: PARTITION_ID,
++    type: 'ADD',
++    status: 'pending',
++    workflowStep: 'PENDING',
++  };
++  const resolved = await host.resolveCreatedOperationPersistenceCollision(
++    buildContext(existing),
++  );
++  t.equal(resolved, existing, 'the in-flight winner is reused');
++  t.equal(host.calls.rearm.length, 1,
++    'the reused pending winner rides the existing rearm decision');
++  t.equal(host.calls.remember.length, 1,
++    'the reused pending winner is remembered under its intent keys');
++  t.end();
++});
++
++test('a REPLACE-identity terminal winner still advances the successor ' +
++  'generation', async (t) => {
++  const host = buildHost();
++  host.assertReplaceIntentCollisionMatches = () => {};
++  const existing = {
++    operationId: 'replace-op-1',
++    partitionId: PARTITION_ID,
++    type: 'REPLACE',
++    status: 'removed',
++    workflowStep: 'REMOVED',
++    completedAt: 1700000000000,
++  };
++  const resolved = await host.resolveCreatedOperationPersistenceCollision(
++    buildContext(existing, {
++      move: {nodeId: 'node-a'},
++      replaceIntentIdentity: {intent: 'replace-intent'},
++    }),
++  );
++  t.same(resolved, {successorOf: 'replace-op-1'},
++    'REPLACE terminal winners keep successor-generation behavior');
++  t.equal(host.calls.successor.length, 1, 'successor path invoked once');
++  t.end();
++});

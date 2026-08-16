@@ -1,4 +1,9 @@
 import {PARTITION_SERVICE_SHARED} from './partition-service-shared.js';
+import {trackSyncSection} from '../diagnostics/event-loop-gap-watchdog.js';
+
+// Watchdog sync-section site for the closed-handle partition replica boot
+// block (round-10 bootstrap-batch stall attribution).
+const PARTITION_REPLICA_INIT_SYNC_SECTION_SITE = 'partition_replica_init';
 import {isCatchupLearnerRaftRole} from '../raft/replica-voter-readiness.js';
 import {
   reconcileRaftPeersFromCacheForService,
@@ -299,49 +304,56 @@ class PartitionServiceRaftInitBase extends PartitionServiceCoreBase {
         dbPath: this.dbPath,
       });
     }
-    if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
-      const dbDir = path.dirname(this.dbPath);
-      if (!fs.existsSync(dbDir)) {
-        fs.mkdirSync(dbDir, {recursive: true});
-        this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_PARTITION_DIR, {
-          path: dbDir,
+    // The whole closed-handle boot block (dir/snapshot fs work, db open +
+    // pragmas, raft storage, schema DDL) is synchronous by design; tag it
+    // so bootstrap-batch stalls attribute in the watchdog's siteDeltas
+    // instead of reporting as unexplained gaps (round-10).
+    trackSyncSection(PARTITION_REPLICA_INIT_SYNC_SECTION_SITE, () => {
+      if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
+        const dbDir = path.dirname(this.dbPath);
+        if (!fs.existsSync(dbDir)) {
+          fs.mkdirSync(dbDir, {recursive: true});
+          this.logger.debug(PARTITION_SERVICE_LOG_MSG.CREATED_PARTITION_DIR, {
+            path: dbDir,
+          });
+        }
+      }
+      // Snapshot-install boot boundary: resolve pending install remnants
+      // while NO handle is open; a nonce conflict fails the boot closed.
+      if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
+        const installResolution = resolvePendingSnapshotInstall({
+          replicaDbPath: this.dbPath,
         });
+        if (installResolution.outcome ===
+            RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT) {
+          throw new Error(
+            `${PARTITION_SERVICE_ERROR_MSG.SNAPSHOT_INSTALL_STATE_CONFLICT}: ` +
+            `${installResolution.detail}`,
+          );
+        }
+        // Recorded-gap closure (S4): sweep stale transfer staging at the
+        // same closed-handle boot boundary — no transfer is in flight
+        // during init, so every staged transfer directory here is a
+        // leftover.
+        cleanupStaleTransferStaging(
+          resolveReplicaCheckpointsRoot(this.dbPath));
       }
-    }
-    // Snapshot-install boot boundary: resolve pending install remnants while
-    // NO handle is open; a nonce conflict fails the boot closed.
-    if (this.dbPath !== PARTITION_SERVICE_DEFAULT.MEMORY_DB_PATH) {
-      const installResolution = resolvePendingSnapshotInstall({
-        replicaDbPath: this.dbPath,
+      this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.OPENING_DB, {
+        dbPath: this.dbPath,
       });
-      if (installResolution.outcome ===
-          RAFT_SNAPSHOT_INSTALL_OUTCOME.INSTALL_STATE_CONFLICT) {
-        throw new Error(
-          `${PARTITION_SERVICE_ERROR_MSG.SNAPSHOT_INSTALL_STATE_CONFLICT}: ` +
-          `${installResolution.detail}`,
-        );
+      this.db = new Database(this.dbPath);
+      this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_JOURNAL_MODE);
+      this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
+      this.logAdapter = new SQLiteLogAdapter(this.db, null, this.logger);
+      this.storage = new PartitionRaftStorage(
+        this.db,
+        this.partitionId,
+        this.logAdapter,
+      );
+      if (this.schema) {
+        this.createTable();
       }
-      // Recorded-gap closure (S4): sweep stale transfer staging at the same
-      // closed-handle boot boundary — no transfer is in flight during init,
-      // so every staged transfer directory here is a leftover.
-      cleanupStaleTransferStaging(
-        resolveReplicaCheckpointsRoot(this.dbPath));
-    }
-    this.reportInitializationStage(PARTITION_SERVICE_INIT_STAGE.OPENING_DB, {
-      dbPath: this.dbPath,
     });
-    this.db = new Database(this.dbPath);
-    this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_JOURNAL_MODE);
-    this.db.pragma(PARTITION_SERVICE_DB.PRAGMA_SYNCHRONOUS);
-    this.logAdapter = new SQLiteLogAdapter(this.db, null, this.logger);
-    this.storage = new PartitionRaftStorage(
-      this.db,
-      this.partitionId,
-      this.logAdapter,
-    );
-    if (this.schema) {
-      this.createTable();
-    }
     if (this.transport) {
       this.transport.register(
         this.unifiedAddress,

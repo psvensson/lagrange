@@ -6,6 +6,7 @@ import {
 } from './projection-readiness-decision.js';
 import {
   buildProjectionReadinessEvidence,
+  pickProjectionReadinessEvidenceSource,
 } from './projection-readiness-evidence.js';
 
 const ArrayConstructor = Array;
@@ -151,6 +152,7 @@ function summarizeProjectionReadinessContractForHistory(contract) {
 export {
   buildProjectionReadinessContract,
   buildProjectionReadinessState,
+  pickProjectionReadinessEvidenceSource,
   resolveProjectionReadinessStateForEntry,
   summarizeProjectionReadinessContractForHistory,
 };

@@ -11,6 +11,12 @@ import {
   throwIfCancellationRequested,
 } from './query-cancellation.js';
 import {OPERATION_OWNER_TURN_POLICY} from '../rebalancer/operation-owner-turn-policy.js';
+import {
+  isTerminalSuccessfulCreateOperation,
+} from '../rebalancer/replica-operation-progress.js';
+import {
+  buildProvisioningCompletionSummary,
+} from './provisioning-completion-summary.js';
 
 const LOCAL_STR_FUNCTION = 'function';
 const LOCAL_STR_OBJECT = 'object';
@@ -37,7 +43,6 @@ const {
   QUERY_LOG_MSG,
   ReplicaOperationField,
   SERVICE_TYPE,
-  buildOwnerContractOutcome,
   getRemainingBudgetMs,
 } = SQL_QUERY_ENGINE_SHARED;
 
@@ -576,6 +581,22 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
     const metadataWaitReplicaIds = [];
     for (const operation of plannedOperations) {
       throwIfCancellationRequested(cancellationToken);
+      // A deterministic-intent retry can hand back the prior attempt's
+      // durably terminal-successful operation (collision terminal arm).
+      // The replica already exists: re-stamping and re-executing it is the
+      // round-10 livelock. Keep it in the plan for counting, wait on its
+      // routability like any other create, but never re-dispatch it.
+      if (isTerminalSuccessfulCreateOperation(operation)) {
+        const terminalReplicaId =
+          operation?.replicaId || operation?.replica_id || null;
+        if (
+          typeof terminalReplicaId === LOCAL_STR_STRING &&
+          terminalReplicaId.length > 0
+        ) {
+          metadataWaitReplicaIds.push(terminalReplicaId);
+        }
+        continue;
+      }
       operation[ReplicaOperationField.REPLICA_IDS] =
         bootstrapTopology.replicaIds;
       operation[ReplicaOperationField.PEER_ADDRESSES] =
@@ -719,67 +740,7 @@ class SQLQueryEngineInitialPartitionProvisioning extends SQLQueryEngineStatement
   }
 
   buildProvisioningCompletionSummary(options = {}) {
-    const requestedReplicaCount =
-      Number.isInteger(options?.requestedReplicaCount) &&
-      options.requestedReplicaCount > 0 ?
-        options.requestedReplicaCount :
-        null;
-    const resolvedReplicaCount =
-      Number.isInteger(options?.resolvedReplicaCount) &&
-      options.resolvedReplicaCount > 0 ?
-        options.resolvedReplicaCount :
-        requestedReplicaCount;
-    const minimumRoutableReplicaCount =
-      Number.isInteger(options?.minimumRoutableReplicaCount) &&
-      options.minimumRoutableReplicaCount > 0 ?
-        options.minimumRoutableReplicaCount :
-        resolvedReplicaCount;
-    const routableReplicaCount =
-      Number.isInteger(options?.routableReplicaCount) &&
-      options.routableReplicaCount >= 0 ?
-        options.routableReplicaCount :
-        0;
-    const fullReplicaCountConverged =
-      !Number.isInteger(requestedReplicaCount) ||
-      requestedReplicaCount <= 0 ||
-      routableReplicaCount >= requestedReplicaCount;
-    const defaultContractOutcome = buildOwnerContractOutcome({
-      contractState: fullReplicaCountConverged ?
-        OWNER_CONTRACT_STATE.READY :
-        OWNER_CONTRACT_STATE.PENDING,
-      nextAction: fullReplicaCountConverged ?
-        OWNER_CONTRACT_NEXT_ACTION.PROCEED :
-        OWNER_CONTRACT_NEXT_ACTION.WAIT,
-    });
-    const requestedContractOutcome = buildOwnerContractOutcome({
-      contractState:
-        options?.contractState || defaultContractOutcome.contractState,
-      nextAction: options?.nextAction || defaultContractOutcome.nextAction,
-    });
-    const contractOutcome =
-      fullReplicaCountConverged === false &&
-      requestedContractOutcome.contractState === OWNER_CONTRACT_STATE.READY &&
-      requestedContractOutcome.nextAction === OWNER_CONTRACT_NEXT_ACTION.PROCEED ?
-        defaultContractOutcome :
-        requestedContractOutcome;
-
-    return {
-      requestedReplicaCount,
-      resolvedReplicaCount,
-      minimumRoutableReplicaCount,
-      routableReplicaCount,
-      fullReplicaCountConverged,
-      contractState: contractOutcome.contractState,
-      nextAction: contractOutcome.nextAction,
-      reasonCodes: Array.isArray(options?.reasonCodes) ?
-        [...options.reasonCodes] :
-        [],
-      retryAfterMs:
-        Number.isFinite(options?.retryAfterMs) &&
-        options.retryAfterMs > 0 ?
-          Math.floor(options.retryAfterMs) :
-          0,
-    };
+    return buildProvisioningCompletionSummary(options);
   }
 
   /**

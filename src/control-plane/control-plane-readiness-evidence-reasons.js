@@ -44,6 +44,7 @@ const {
   buildReadinessTransitionOwnerState,
   buildReason,
   createEligibilitySnapshot,
+  pickProjectionReadinessEvidenceSource,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
 const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
@@ -317,7 +318,13 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
   }
 
   buildProjectionReadinessContract(context = {}) {
-    return buildProjectionReadinessContract(context);
+    // Only the fields the evidence builder reads may reach the sealed
+    // whole-source own-data validation — any non-plain value in a
+    // never-read context field otherwise fails the whole contract closed
+    // (round-13 lone-seed serve-lane collapse).
+    return buildProjectionReadinessContract(
+      pickProjectionReadinessEvidenceSource(context),
+    );
   }
 
   buildEvaluatedNodeReadinessSnapshot(context = {}) {

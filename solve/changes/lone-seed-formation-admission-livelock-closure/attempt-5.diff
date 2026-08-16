@@ -1,0 +1,80 @@
+diff --git a/examples/service-data-affinity/affinity-demo-preload-gate.js b/examples/service-data-affinity/affinity-demo-preload-gate.js
+index 3fa6b904c8c77811ebedb47e7cd88c918a7b3863..d2d54107f4af8a2b48a7d8d1869b242f4dcee5ab 100644
+--- a/examples/service-data-affinity/affinity-demo-preload-gate.js
++++ b/examples/service-data-affinity/affinity-demo-preload-gate.js
+@@ -393,6 +393,34 @@ function normalizeSchemaAdmissionTimeoutMs(value) {
+     DEFAULT_SCHEMA_ADMISSION_TIMEOUT_MS;
+ }
+ 
++// The admission bar is untouched: a stable window x confirmations of a
++// genuinely drained control plane. The wall-clock budget covers the
++// SPREAD; when the final topology drain lands near the budget edge the
++// stable window cannot finish inside it (round-15: drained at T+439s of
++// 480s, window needs 60s x 2 - the system genuinely quiesced and the
++// budget expired anyway). While the last observed snapshot is genuinely
++// quiescent (ready, no in-flight work) the deadline extends to the window
++// the bar itself requires, measured from the LAST topology drain; any new
++// operation flips ready off and the base deadline applies again, so the
++// extension is bounded and cannot mask a live churn loop.
++function resolveSchemaAdmissionDrainGraceDeadlineMs(
++  evidence,
++  stableWindowMs,
++  pollIntervalMs,
++) {
++  const snapshot = evidence?.snapshot;
++  if (!snapshot || snapshot.ready !== true) {
++    return ZERO;
++  }
++  const drainAtMs = Number(snapshot.latestTopologyDrainAtMs);
++  if (!Number.isFinite(drainAtMs) || drainAtMs <= ZERO) {
++    return ZERO;
++  }
++  return drainAtMs +
++    stableWindowMs * (SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT + 1) +
++    pollIntervalMs * SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT;
++}
++
+ function normalizeSchemaStableWindowMs(value) {
+   return Number.isFinite(value) && value >= ZERO ?
+     Math.floor(value) :
+@@ -576,13 +604,21 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
+   let lastEvidence = null;
+ 
+   while (true) {
+-    if (lastEvidence && now() >= deadlineMs) {
++    const effectiveDeadlineMs = Math.max(
++      deadlineMs,
++      resolveSchemaAdmissionDrainGraceDeadlineMs(
++        lastEvidence,
++        stableWindowMs,
++        pollIntervalMs,
++      ),
++    );
++    if (lastEvidence && now() >= effectiveDeadlineMs) {
+       throw buildSchemaAdmissionTimeoutError(lastEvidence);
+     }
+     const observedSnapshot = await observeSchemaAdmissionSnapshot(
+       normalizedOptions,
+       target,
+-      deadlineMs,
++      effectiveDeadlineMs,
+     );
+     const observedAtMs = now();
+     const previousStabilityWindow = stabilityWindow;
+@@ -615,7 +651,15 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
+     if (evidence.admitted) {
+       return evidence;
+     }
+-    const remainingMs = remainingBudgetMs(now, deadlineMs);
++    const drainGraceDeadlineMs = resolveSchemaAdmissionDrainGraceDeadlineMs(
++      evidence,
++      stableWindowMs,
++      pollIntervalMs,
++    );
++    const remainingMs = remainingBudgetMs(
++      now,
++      Math.max(deadlineMs, drainGraceDeadlineMs),
++    );
+     if (remainingMs <= ZERO) {
+       throw buildSchemaAdmissionTimeoutError(evidence);
+     }

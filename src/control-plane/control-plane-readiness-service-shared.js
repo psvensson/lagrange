@@ -47,6 +47,7 @@ import {
 } from './eligibility-snapshot.js';
 import {
   buildProjectionReadinessContract,
+  pickProjectionReadinessEvidenceSource,
 } from './projection-readiness-state.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
 import {
@@ -435,6 +436,7 @@ export const CONTROL_PLANE_READINESS_SERVICE_SHARED = {
   assertCritical,
   buildControlPlanePublicationStory,
   buildProjectionReadinessContract,
+  pickProjectionReadinessEvidenceSource,
   buildParticipationErrorCode,
   buildParticipationErrorMessage,
   buildPublicationRecoveryGateSnapshot,
