@@ -34,8 +34,16 @@ async function doesPacketPrefixStillMatch(log, packet) {
   if (packet.last.index === NUMERIC_ZERO) {
     return true;
   }
+  // The batch anchor can sit exactly at an installed snapshot boundary:
+  // the index is durably applied lineage whose bytes are compacted away,
+  // so get() misses while has() answers true (snapshot-atomic-install
+  // contract). Use has() for presence — like the willAccept pre-check
+  // above — and get() only for the term comparison when bytes exist.
+  if (typeof log.has === LOCAL_STR_FUNCTION && !(await log.has(packet.last.index))) {
+    return false;
+  }
   const entry = await log.get(packet.last.index);
-  return entry?.term === packet.last.term;
+  return entry === null || entry === undefined || entry.term === packet.last.term;
 }
 
 async function saveRecoverableTail(
