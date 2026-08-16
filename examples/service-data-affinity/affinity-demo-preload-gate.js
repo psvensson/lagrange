@@ -529,19 +529,24 @@ function resolveDrainBasedSchemaAdmissionDeadline(
   stableWindowMs,
   pollIntervalMs,
   effectiveDeadlineMs,
+  observedAtMs,
+  initialDeadlineMs,
 ) {
   if (
-    snapshot?.ready !== true ||
-    snapshot?.effectiveInFlightCount !== ZERO ||
-    typeof snapshot?.latestTopologyDrainAtMs !== 'number'
+    snapshot?.state !== CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ||
+    snapshot?.ready !== true
   ) {
     return effectiveDeadlineMs;
   }
   const graceMs =
     (stableWindowMs + pollIntervalMs) *
     SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT;
-  const drainBasedDeadlineMs = snapshot.latestTopologyDrainAtMs + graceMs;
-  return Math.max(effectiveDeadlineMs, drainBasedDeadlineMs);
+  const maxAllowedDeadlineMs = initialDeadlineMs + graceMs;
+  const targetDeadlineMs = observedAtMs + graceMs;
+  return Math.min(
+    maxAllowedDeadlineMs,
+    Math.max(effectiveDeadlineMs, targetDeadlineMs),
+  );
 }
 
 /**
@@ -572,7 +577,8 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
   const stableWindowMs = normalizeSchemaStableWindowMs(
     options.stableWindowMs,
   );
-  let effectiveDeadlineMs = now() + timeoutMs;
+  const initialDeadlineMs = now() + timeoutMs;
+  let effectiveDeadlineMs = initialDeadlineMs;
   const target = buildAdminLaneTarget(
     options.target,
     ADMIN_STREAM_LANE.SNAPSHOT,
@@ -608,6 +614,8 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
       stableWindowMs,
       pollIntervalMs,
       effectiveDeadlineMs,
+      observedAtMs,
+      initialDeadlineMs,
     );
 
     transitionHistory = advanceSchemaAdmissionTransitionHistory(

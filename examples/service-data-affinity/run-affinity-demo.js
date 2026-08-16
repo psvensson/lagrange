@@ -50,10 +50,11 @@
  */
 
 import {execFile, spawn} from 'node:child_process';
-import {createWriteStream, existsSync} from 'node:fs';
+import {createWriteStream, existsSync, realpathSync} from 'node:fs';
 import {mkdir, readdir, rm, stat, writeFile} from 'node:fs/promises';
 import {promisify} from 'node:util';
 import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {setTimeout as sleep} from 'node:timers/promises';
 import {AdminWsClient} from '../../scripts/examples/admin-ws-client.js';
 import {
@@ -1033,7 +1034,14 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
   }
 }
 
-if (process.argv[1]?.includes(DEMO_CONSTANTS.SCRIPT_NAME)) {
+const isMainModule = Boolean(
+  process.argv[1] &&
+    existsSync(process.argv[1]) &&
+    realpathSync(resolve(process.argv[1])) ===
+      realpathSync(fileURLToPath(import.meta.url)),
+);
+
+if (isMainModule) {
   const phaseEvidence = {};
   runAffinityDemo({phaseEvidence})
     .then(async (result) => {

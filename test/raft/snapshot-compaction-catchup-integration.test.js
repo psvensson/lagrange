@@ -260,7 +260,7 @@ test('a compacted leader completes the S4 loop and resumes at K+1',
         HEAD_ENTRY_COUNT, 'the batch runs to the leader head');
 
       await followerRaft.listeners('data')[0](batchWrites[0], () => {});
-      await new Promise((resolve) => setImmediate(resolve));
+      await new Promise((resolve) => setTimeout(resolve, 20));
       t.equal(followerAdapter.getLastInfo().index, HEAD_ENTRY_COUNT,
         'the follower log resumes through the leader head');
       t.equal(followerDb.prepare(

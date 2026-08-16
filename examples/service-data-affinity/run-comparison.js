@@ -1,5 +1,7 @@
+import {existsSync, realpathSync} from 'node:fs';
 import {mkdir, writeFile} from 'node:fs/promises';
 import {resolve} from 'node:path';
+import {fileURLToPath} from 'node:url';
 import {downloadRatings} from './download-movielens.js';
 import {runAffinityDemo} from './run-affinity-demo.js';
 import {runPostgresBaseline} from './run-postgres-baseline.js';
@@ -100,7 +102,14 @@ async function runComparison() {
   return comparison;
 }
 
-if (process.argv[1]?.includes('run-comparison.js')) {
+const isMainModule = Boolean(
+  process.argv[1] &&
+    existsSync(process.argv[1]) &&
+    realpathSync(resolve(process.argv[1])) ===
+      realpathSync(fileURLToPath(import.meta.url)),
+);
+
+if (isMainModule) {
   runComparison()
     .then(async (comparison) => {
       const reportPath = await writeComparisonReport(comparison);

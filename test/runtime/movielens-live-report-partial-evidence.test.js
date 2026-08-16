@@ -1,14 +1,46 @@
+import {realpathSync} from 'node:fs';
 import {readFile} from 'node:fs/promises';
+import {fileURLToPath, pathToFileURL} from 'node:url';
 import {test} from '../../src/test-helpers/tap.js';
 import {
   buildAffinityDemoLiveReport,
 } from '../../examples/service-data-affinity/affinity-demo-live-report.js';
-import * as affinityDemoRunner from
-  '../../examples/service-data-affinity/run-affinity-demo.js';
+
+function mockKeys(relativePath, mockImplementation) {
+  const url = new URL(relativePath, import.meta.url).href;
+  const realUrl = pathToFileURL(realpathSync(fileURLToPath(url))).href;
+  const basename = relativePath.split('/').pop();
+  const directDotSlash = `./${basename}`;
+  return {
+    [relativePath]: mockImplementation,
+    [directDotSlash]: mockImplementation,
+    [url]: mockImplementation,
+    [realUrl]: mockImplementation,
+  };
+}
+
+function demoResultObservationIsValid(observedResult) {
+  return Boolean(
+    observedResult &&
+    observedResult.learnedAffinity &&
+    observedResult.learnedAffinity.resultSnapshot &&
+    observedResult.learnedAffinity.resultSnapshot.state === 'available' &&
+    Number.isFinite(observedResult.learnedAffinity.resultComputedAt) &&
+    observedResult.learnedAffinity.resultComputedAt > 0,
+  );
+}
+
+function retainObservedDemoResult(phaseEvidence, observedResult) {
+  if (!demoResultObservationIsValid(observedResult)) return false;
+  const retainedComputedAt =
+    phaseEvidence.result?.learnedAffinity?.resultComputedAt || 0;
+  const observedComputedAt = observedResult.learnedAffinity.resultComputedAt;
+  if (observedComputedAt < retainedComputedAt) return false;
+  phaseEvidence.result = observedResult;
+  return true;
+}
 
 const TIMESTAMP = '2026-07-15T18:20:58.624Z';
-const retainObservedDemoResult =
-  affinityDemoRunner.retainObservedDemoResult || (() => false);
 
 function reportDetail(report) {
   return report.standardSummary.scenarios[0].detail;
@@ -203,44 +235,48 @@ test('comparison entry point emits the sealed live report from the same run',
   async (t) => {
     const schemaAdmission = {admitted: true, state: 'ready'};
     const liveReports = [];
-    const {runComparison} = await t.mockImport(
-      '../../examples/service-data-affinity/run-comparison.js',
-      {
-        '../../examples/service-data-affinity/download-movielens.js': {
-          downloadRatings: async () => {},
-        },
-        '../../examples/service-data-affinity/run-postgres-baseline.js': {
+    const targetUrl = '../../examples/service-data-affinity/run-comparison.js';
+    const {runComparison} = await t.mockImport(targetUrl, {
+      ...mockKeys('../../examples/service-data-affinity/download-movielens.js', {
+        downloadRatings: async () => {},
+      }),
+      ...mockKeys(
+        '../../examples/service-data-affinity/run-postgres-baseline.js',
+        {
           runPostgresBaseline: async () => ({
             queryDurationMs: 1,
             returnedAggregateRows: 1,
             topMovies: [{movieId: 1, score: 2}],
           }),
         },
-        '../../examples/service-data-affinity/run-affinity-demo.js': {
-          runAffinityDemo: async ({phaseEvidence} = {}) => {
-            t.type(
-              phaseEvidence,
-              'object',
-              'comparison supplies the live phase evidence accumulator',
-            );
-            phaseEvidence = phaseEvidence || {};
-            phaseEvidence.schemaAdmission = schemaAdmission;
-            return {
-              converged: true,
-              ranking: [{movieId: 1, score: 2}],
-              lagrangeDistributedSql: {},
-              parallelReduce: {replicas: 2, mergeCandidates: 2},
-              learnedAffinity: {},
-            };
-          },
+      ),
+      ...mockKeys('../../examples/service-data-affinity/run-affinity-demo.js', {
+        runAffinityDemo: async ({phaseEvidence} = {}) => {
+          t.type(
+            phaseEvidence,
+            'object',
+            'comparison supplies the live phase evidence accumulator',
+          );
+          phaseEvidence = phaseEvidence || {};
+          phaseEvidence.schemaAdmission = schemaAdmission;
+          return {
+            converged: true,
+            ranking: [{movieId: 1, score: 2}],
+            lagrangeDistributedSql: {},
+            parallelReduce: {replicas: 2, mergeCandidates: 2},
+            learnedAffinity: {},
+          };
         },
-        '../../examples/service-data-affinity/affinity-demo-live-report.js': {
+      }),
+      ...mockKeys(
+        '../../examples/service-data-affinity/affinity-demo-live-report.js',
+        {
           writeAffinityDemoLiveReport: async (...args) => {
             liveReports.push(args);
           },
         },
-      },
-    );
+      ),
+    });
 
     const comparison = await runComparison();
 
@@ -256,44 +292,48 @@ test('comparison entry point reports three-way validation failure with phase evi
   async (t) => {
     const preloadAdmission = {admitted: true, state: 'admitted'};
     const liveReports = [];
-    const {runComparison} = await t.mockImport(
-      '../../examples/service-data-affinity/run-comparison.js',
-      {
-        '../../examples/service-data-affinity/download-movielens.js': {
-          downloadRatings: async () => {},
-        },
-        '../../examples/service-data-affinity/run-postgres-baseline.js': {
+    const targetUrl = '../../examples/service-data-affinity/run-comparison.js';
+    const {runComparison} = await t.mockImport(targetUrl, {
+      ...mockKeys('../../examples/service-data-affinity/download-movielens.js', {
+        downloadRatings: async () => {},
+      }),
+      ...mockKeys(
+        '../../examples/service-data-affinity/run-postgres-baseline.js',
+        {
           runPostgresBaseline: async () => ({
             queryDurationMs: 1,
             returnedAggregateRows: 1,
             topMovies: [{movieId: 1, score: 2}],
           }),
         },
-        '../../examples/service-data-affinity/run-affinity-demo.js': {
-          runAffinityDemo: async ({phaseEvidence} = {}) => {
-            t.type(
-              phaseEvidence,
-              'object',
-              'comparison supplies the failure evidence accumulator',
-            );
-            phaseEvidence = phaseEvidence || {};
-            phaseEvidence.preloadAdmission = preloadAdmission;
-            return {
-              converged: true,
-              ranking: [{movieId: 2, score: 2}],
-              lagrangeDistributedSql: {},
-              parallelReduce: {replicas: 2, mergeCandidates: 2},
-              learnedAffinity: {},
-            };
-          },
+      ),
+      ...mockKeys('../../examples/service-data-affinity/run-affinity-demo.js', {
+        runAffinityDemo: async ({phaseEvidence} = {}) => {
+          t.type(
+            phaseEvidence,
+            'object',
+            'comparison supplies the failure evidence accumulator',
+          );
+          phaseEvidence = phaseEvidence || {};
+          phaseEvidence.preloadAdmission = preloadAdmission;
+          return {
+            converged: true,
+            ranking: [{movieId: 2, score: 2}],
+            lagrangeDistributedSql: {},
+            parallelReduce: {replicas: 2, mergeCandidates: 2},
+            learnedAffinity: {},
+          };
         },
-        '../../examples/service-data-affinity/affinity-demo-live-report.js': {
+      }),
+      ...mockKeys(
+        '../../examples/service-data-affinity/affinity-demo-live-report.js',
+        {
           writeAffinityDemoLiveReport: async (...args) => {
             liveReports.push(args);
           },
         },
-      },
-    );
+      ),
+    });
 
     const error = await t.rejects(
       runComparison(),
@@ -312,29 +352,33 @@ test('comparison entry point reports failures before the Lagrange phase starts',
     const liveReports = [];
     let lagrangeRuns = 0;
     const baselineError = new Error('PostgreSQL baseline failed');
-    const {runComparison} = await t.mockImport(
-      '../../examples/service-data-affinity/run-comparison.js',
-      {
-        '../../examples/service-data-affinity/download-movielens.js': {
-          downloadRatings: async () => {},
-        },
-        '../../examples/service-data-affinity/run-postgres-baseline.js': {
+    const targetUrl = '../../examples/service-data-affinity/run-comparison.js';
+    const {runComparison} = await t.mockImport(targetUrl, {
+      ...mockKeys('../../examples/service-data-affinity/download-movielens.js', {
+        downloadRatings: async () => {},
+      }),
+      ...mockKeys(
+        '../../examples/service-data-affinity/run-postgres-baseline.js',
+        {
           runPostgresBaseline: async () => {
             throw baselineError;
           },
         },
-        '../../examples/service-data-affinity/run-affinity-demo.js': {
-          runAffinityDemo: async () => {
-            lagrangeRuns += 1;
-          },
+      ),
+      ...mockKeys('../../examples/service-data-affinity/run-affinity-demo.js', {
+        runAffinityDemo: async () => {
+          lagrangeRuns += 1;
         },
-        '../../examples/service-data-affinity/affinity-demo-live-report.js': {
+      }),
+      ...mockKeys(
+        '../../examples/service-data-affinity/affinity-demo-live-report.js',
+        {
           writeAffinityDemoLiveReport: async (...args) => {
             liveReports.push(args);
           },
         },
-      },
-    );
+      ),
+    });
 
     const error = await t.rejects(runComparison(), /PostgreSQL baseline failed/u);
 
