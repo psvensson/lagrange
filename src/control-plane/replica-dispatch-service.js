@@ -43,6 +43,11 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
     }
     this.cacheChangeListener = null;
 
+    if (typeof this.readinessPlanningSnapshotUnsubscribe === 'function') {
+      this.readinessPlanningSnapshotUnsubscribe();
+    }
+    this.readinessPlanningSnapshotUnsubscribe = null;
+
     for (const [mgService, handlers] of this.messageGroupHandlers) {
       mgService.off(
         CONTROL_PLANE_EVENT.MESSAGE_RECEIVED,
@@ -62,6 +67,8 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
     this.nodeStateUpdateWatermarks.clear();
     this.nodeBootIncarnationWatermarks.clear();
     this.nodeReadyRetryWatermarks.clear();
+    this.readinessPlanningSnapshotTokenByOwnerKey.clear();
+    this.readinessPlanningSnapshotPendingTokenByOwnerKey.clear();
     for (const operationId of this.operationDispatchDeferredRetries.keys()) {
       this.clearDeferredOperationDispatchRetry(operationId);
     }

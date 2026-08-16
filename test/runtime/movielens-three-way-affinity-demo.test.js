@@ -223,47 +223,53 @@ test('Lagrange loader confirms one atomic ratings policy through durable CREATE'
     t.end();
   });
 
+async function runCreateConfirmationResetScenario({outcomes, queryFor}) {
+  const state = {clientsCreated: 0, clientsClosed: 0, nowMs: 0};
+  const retryAttempts = Array.of();
+  const result = await createRatingsTableWithRetry({
+    target: 'ws://demo',
+    clientFactory: () => {
+      const outcome = outcomes[state.clientsCreated];
+      state.clientsCreated += 1;
+      return {
+        query: async () => queryFor(outcome),
+        close: async () => {
+          state.clientsClosed += 1;
+        },
+      };
+    },
+    timeoutMs: 20000,
+    now: () => state.nowMs,
+    sleep: async (delayMs) => {
+      state.nowMs += delayMs;
+    },
+    onRetry: ({attempt}) => {
+      retryAttempts.push(attempt);
+    },
+  });
+  return {result, retryAttempts, state};
+}
+
 test('MovieLens durable CREATE confirmation resets after a transport failure',
   async (t) => {
-    const outcomes = ['success', 'closed', 'success', 'success'];
-    let clientsCreated = 0;
-    let clientsClosed = 0;
-    let nowMs = 0;
-    const retryAttempts = Array.of();
-    const result = await createRatingsTableWithRetry({
-      target: 'ws://demo',
-      clientFactory: () => {
-        const outcome = outcomes[clientsCreated];
-        clientsCreated += 1;
-        return {
-          query: async () => {
-            if (outcome === 'closed') {
-              throw new Error('admin websocket closed during durable replay');
-            }
-            return READY_CREATE_RESULT;
-          },
-          close: async () => {
-            clientsClosed += 1;
-          },
-        };
-      },
-      timeoutMs: 20000,
-      now: () => nowMs,
-      sleep: async (delayMs) => {
-        nowMs += delayMs;
-      },
-      onRetry: ({attempt}) => {
-        retryAttempts.push(attempt);
-      },
-    });
+    const {result, retryAttempts, state} =
+      await runCreateConfirmationResetScenario({
+        outcomes: ['success', 'closed', 'success', 'success'],
+        queryFor: (outcome) => {
+          if (outcome === 'closed') {
+            throw new Error('admin websocket closed during durable replay');
+          }
+          return READY_CREATE_RESULT;
+        },
+      });
 
     t.same(result, {
       attempts: 4,
       confirmations: 2,
       policy: RATINGS_TABLE_SPLIT_POLICY,
     });
-    t.equal(clientsCreated, 4);
-    t.equal(clientsClosed, 4,
+    t.equal(state.clientsCreated, 4);
+    t.equal(state.clientsClosed, 4,
       'the failed durable replay also closes its client');
     t.same(retryAttempts, [1, 2, 3],
       'a failure between successes resets stable confirmation');
@@ -480,45 +486,24 @@ test('MovieLens durable CREATE does not replay a hard validation error',
 
 test('MovieLens durable CREATE confirmation resets after typed pending',
   async (t) => {
-    const outcomes = [
-      READY_CREATE_RESULT,
-      PENDING_CREATE_RESULT,
-      READY_CREATE_RESULT,
-      READY_CREATE_RESULT,
-    ];
-    let clientsCreated = 0;
-    let clientsClosed = 0;
-    let nowMs = 0;
-    const retryAttempts = Array.of();
-    const result = await createRatingsTableWithRetry({
-      target: 'ws://demo',
-      clientFactory: () => {
-        const outcome = outcomes[clientsCreated];
-        clientsCreated += 1;
-        return {
-          query: async () => outcome,
-          close: async () => {
-            clientsClosed += 1;
-          },
-        };
-      },
-      timeoutMs: 20000,
-      now: () => nowMs,
-      sleep: async (delayMs) => {
-        nowMs += delayMs;
-      },
-      onRetry: ({attempt}) => {
-        retryAttempts.push(attempt);
-      },
-    });
+    const {result, retryAttempts, state} =
+      await runCreateConfirmationResetScenario({
+        outcomes: [
+          READY_CREATE_RESULT,
+          PENDING_CREATE_RESULT,
+          READY_CREATE_RESULT,
+          READY_CREATE_RESULT,
+        ],
+        queryFor: (outcome) => outcome,
+      });
 
     t.same(result, {
       attempts: 4,
       confirmations: 2,
       policy: RATINGS_TABLE_SPLIT_POLICY,
     });
-    t.equal(clientsCreated, 4);
-    t.equal(clientsClosed, 4);
+    t.equal(state.clientsCreated, 4);
+    t.equal(state.clientsClosed, 4);
     t.same(retryAttempts, [1, 2, 3],
       'pending resets the streak before two new ready outcomes');
     t.end();

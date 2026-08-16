@@ -227,7 +227,7 @@ class PartitionServiceRowOwner {
       created_at: _createdAt,
       ...updates
     } = row;
-    await this.systemTableWriter.updateSystemTableRow(
+    const updateResult = await this.systemTableWriter.updateSystemTableRow(
       SYSTEM_TABLE_NAME.SERVICES,
       {
         service_id: row.service_id,
@@ -236,6 +236,21 @@ class PartitionServiceRowOwner {
       updates,
       this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
     );
+    // Absence-proven heal: the registration write of this row is a one-shot
+    // direct write outside raft; when it misses a replica db, every later
+    // UPDATE zero-row no-ops with no CDC and the cached row never leaves
+    // stopped, wedging serve-eligibility permanently (round-11). A zero
+    // affected-row count on a primary-key-pinned WHERE proves durable
+    // absence, and the full canonical row is already in hand — re-issue the
+    // registration upsert. An unwitnessed count keeps the update-only
+    // contract (absence must be proven, not assumed).
+    if (updateResult?.partitionResult?.affectedRows === 0) {
+      await this.systemTableWriter.upsertSystemTableRow(
+        SYSTEM_TABLE_NAME.SERVICES,
+        row,
+        this.buildDeferredUpdateOptions(row.service_id, row.partition_id),
+      );
+    }
     await this.publishCanonicalLeaderNodeId(row);
     return row;
   }

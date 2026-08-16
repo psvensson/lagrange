@@ -11,6 +11,14 @@ const {
   normalizeDiagnosticTimestampMs,
 } = SHARED;
 
+// Named empty-state for the publication epoch/status probe: the service
+// exposes no cheap probe surface, so freshness falls back to the legacy
+// full-read comparison and memo stores carry this marker instead of a raw
+// null runtime state.
+const PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE = Object.freeze({
+  probeUnavailable: true,
+});
+
 class ControlPlaneReadinessPublicationPlanningSnapshot extends
   ControlPlaneReadinessPriorityRecoveryPlanning {
   hasMembershipPublicationRecoveryGateEvidence(planningSnapshot = null) {
@@ -228,64 +236,103 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
   // projection whose publication epoch/status no longer matches the live publication
   // row (an ack/epoch/status advance normally also fires the cluster marker, but this
   // catches it directly). Returns true when the cached projection is stale.
-  isMemoizedMembershipPublicationPlanningProjectionEpochStale(
-    nodeId,
-    cachedProjection,
-  ) {
+  // Reads the live publication winner row's (epoch, status) for the memo
+  // freshness probes. Returns null when the service exposes no probe surface
+  // (stubs that predate it) — callers treat that as "probe unavailable, not
+  // stale". Scope-consistent: reads the CLUSTER winner without the
+  // node-inclusion filter — the inclusion-filtered form returns null for
+  // excluded (joining/recovering) nodes and made the guard read permanently
+  // stale; inclusion-list changes invalidate via the planning generation,
+  // not this probe.
+  readLatestMembershipPublicationEpochStatusProbe(nodeId) {
     const service = this.membershipPublicationService;
-    if (!service) {
-      return false;
-    }
-    // Prefer the cheap (epoch, status) probe that normalizes only the winning row
-    // (saturation-relief: avoids the per-tick full-table re-normalize); fall back
-    // to the full read for service stubs that predate the probe.
-    let latestPub = null;
     if (
-      typeof service.getLatestMembershipPublicationEpochStatusForNodeSync ===
-      'function'
+      !service ||
+      typeof service.getLatestMembershipPublicationEpochStatusForNodeSync !==
+        'function'
     ) {
-      // Scope-consistent probe: the cached projection stores the CLUSTER
-      // winner's epoch/status, so the comparison must read the winner row
-      // without the node-inclusion filter — the inclusion-filtered form
-      // returns null for excluded (joining/recovering) nodes and made this
-      // guard read permanently stale, silently disabling the CL-033/CL-034
-      // memos exactly during churn (same family as the NaN observedAt
-      // regression above). Inclusion-list changes invalidate via the
-      // planning source-revision bump, not this probe.
-      latestPub = service.getLatestMembershipPublicationEpochStatusForNodeSync(
+      // No probe surface on this service: freshness is governed entirely
+      // by the floored planning generation. A full-row read here would add
+      // an unprofiled publication-lane read to every memo store, breaking
+      // the sealed lane-separation contract.
+      return PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE;
+    }
+    const latestPub =
+      service.getLatestMembershipPublicationEpochStatusForNodeSync(
         nodeId,
         {requireNodeInclusion: false},
       );
-    } else if (
-      typeof service.getLatestPublicationForNodeSync === 'function'
-    ) {
-      latestPub = service.getLatestPublicationForNodeSync(nodeId);
-    } else {
+    return Object.freeze({
+      epoch: latestPub ?
+        (latestPub.publicationEpoch ?? latestPub.publication_epoch ?? null) :
+        null,
+      status: latestPub ? (latestPub.status ?? null) : null,
+    });
+  }
+
+  // Row-vs-ROW freshness recheck shared by the readiness planning memos:
+  // reject a cached entry when the live publication row's (epoch, status)
+  // moved since the entry was stored. The prior form compared the live row
+  // against the cached CANDIDATE projection — but the derived candidate
+  // proposes the NEXT epoch by construction, so during any formation or
+  // ack-in-progress phase the guard declared stale on every read and
+  // silently disabled the CL-033/CL-034 memos and, transitively, every
+  // downstream identity memo (live evidence: 42762 gate builds across 33
+  // seed gaps in the archived run 18-53-48-768Z-natural-manual).
+  isMemoizedMembershipPublicationPlanningProjectionEpochStale(
+    nodeId,
+    storedPublicationProbe,
+  ) {
+    const latest = this.readLatestMembershipPublicationEpochStatusProbe(
+      nodeId,
+    );
+    if (latest === PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE) {
+      // No probe surface: the floored generation alone governs freshness.
       return false;
     }
-    const latestEpoch = latestPub ?
-      (latestPub.publicationEpoch ?? latestPub.publication_epoch) :
-      null;
-    const cachedEpoch = cachedProjection ?
-      (cachedProjection.publicationEpoch ?? cachedProjection.publication_epoch) :
-      null;
-    const latestStatus = latestPub ? latestPub.status : null;
-    const cachedStatus = cachedProjection ?
-      (cachedProjection.publicationStatus ?? cachedProjection.status) :
-      null;
-    return latestEpoch !== cachedEpoch || latestStatus !== cachedStatus;
+    if (
+      !storedPublicationProbe ||
+      storedPublicationProbe === PUBLICATION_EPOCH_STATUS_PROBE_UNAVAILABLE
+    ) {
+      return false;
+    }
+    return latest.epoch !== storedPublicationProbe.epoch ||
+      latest.status !== storedPublicationProbe.status;
+  }
+
+  // Keyed on the shared floored planning generation (the same key the
+  // derivation memo uses) rather than the raw per-write source revision:
+  // during formation data load the revision rotated between consecutive
+  // reads, this memo missed on every call, and each rebuilt projection was
+  // a fresh identity that defeated every downstream identity memo (gate,
+  // placement observation, projection retention) — live-measured as the
+  // dominant content of the residual 3s seed gaps (archived run
+  // 17-51-37-407Z-natural-manual). Inclusion-list changes now invalidate
+  // via the floored generation (same tables, latched up to 250ms — well
+  // inside the CL-033 grace its consumers accept); direct publication
+  // epoch/status changes still invalidate immediately via the epoch probe
+  // below. Caches that cannot version their tables keep the exact
+  // revision-counter key.
+  readPlanningProjectionSourceGeneration(observedAt) {
+    const flooredGeneration =
+      typeof this.readMembershipPlanningDerivationVersionKey === 'function' ?
+        this.readMembershipPlanningDerivationVersionKey(observedAt) :
+        null;
+    return flooredGeneration ??
+      this.membershipPublicationPlanningSourceRevision;
   }
 
   resolveMemoizedPriorityRecoveryPlanningProjectionSync(nodeId, observedAt) {
     const memoKey = nodeId || this.nodeId;
     const memo = this.priorityRecoveryPlanningProjectionMemoByNodeId;
+    const sourceGeneration =
+      this.readPlanningProjectionSourceGeneration(observedAt);
     if (memo && memoKey) {
       const cached = memo.get(memoKey);
       if (
         cached &&
         cached.fn === this.getMembershipPublicationPlanningSnapshotSync &&
-        cached.sourceRevision ===
-          this.membershipPublicationPlanningSourceRevision &&
+        cached.sourceGeneration === sourceGeneration &&
         this.isReadinessPlanningMemoWithinStaleGrace(
           observedAt,
           cached.capturedAtMs,
@@ -294,7 +341,7 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
         if (
           !this.isMemoizedMembershipPublicationPlanningProjectionEpochStale(
             memoKey,
-            cached.projection,
+            cached.publicationProbe,
           )
         ) {
           return cached.projection;
@@ -302,14 +349,21 @@ class ControlPlaneReadinessPublicationPlanningSnapshot extends
       }
     }
     const capturedAtMs = this.now();
-    const projection = this.buildPriorityRecoveryPlanningProjection(
+    // Miss path builds UNCONDITIONALLY (bypassing the input-identity
+    // projection memo): this memo's publication-row probe is the
+    // belt-and-suspenders invalidation for row changes that arrive without
+    // a table write, and a probe-forced miss must produce a genuinely fresh
+    // projection even when the derived input identity is unchanged.
+    const projection = this.buildTrackedPriorityRecoveryPlanningProjection(
       this.getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt),
     );
     if (memo && memoKey) {
       memo.set(memoKey, {
         projection,
         capturedAtMs,
-        sourceRevision: this.membershipPublicationPlanningSourceRevision,
+        sourceGeneration,
+        publicationProbe:
+          this.readLatestMembershipPublicationEpochStatusProbe(memoKey),
         fn: this.getMembershipPublicationPlanningSnapshotSync,
       });
     }

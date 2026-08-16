@@ -1,0 +1,342 @@
+diff --git a/src/control-plane/control-plane-readiness-participation-base.js b/src/control-plane/control-plane-readiness-participation-base.js
+index f9c52360866ceb344bba4d630d934fe470b73492..010fca7ee5e5287b0a18b9ffbb32572faee8fa4b 100644
+--- a/src/control-plane/control-plane-readiness-participation-base.js
++++ b/src/control-plane/control-plane-readiness-participation-base.js
+@@ -426,6 +426,8 @@ class ControlPlaneReadinessParticipationBase {
+         // this service's reads.
+         this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
+         this.membershipPublicationPlanningSnapshotMemoByNodeId?.clear();
++        this.membershipPlanningSnapshotSyncMemoByPublisher?.clear();
++        this.membershipPlanningSnapshotAsyncMemoByPublisher?.clear();
+         // membershipPublicationPlanningSnapshotContextMemo is a WeakMap keyed by
+         // per-build snapshot objects — it needs no explicit clear (entries GC with
+         // their build).
+@@ -485,6 +487,8 @@ class ControlPlaneReadinessParticipationBase {
+       this.membershipPublicationDiagnosticsMemo = null;
+       this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
+       this.membershipPublicationPlanningSnapshotMemoByNodeId?.clear();
++      this.membershipPlanningSnapshotSyncMemoByPublisher?.clear();
++      this.membershipPlanningSnapshotAsyncMemoByPublisher?.clear();
+       this.subscribeToCacheChanges();
+       this.readinessPlanningSnapshotOwner?.recordCacheReplacement();
+     }
+diff --git a/src/control-plane/control-plane-readiness-priority-recovery-planning.js b/src/control-plane/control-plane-readiness-priority-recovery-planning.js
+index f589510ece2fa655e39322ad99058cea0779e567..b219a3aab1f455627e432a8e44a035024185fdf8 100644
+--- a/src/control-plane/control-plane-readiness-priority-recovery-planning.js
++++ b/src/control-plane/control-plane-readiness-priority-recovery-planning.js
+@@ -72,10 +72,113 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
+     });
+   }
+ 
++  // One answer per (input-snapshot identity, node, floored generation).
++  // The projection-entry memo cannot stabilize the retained-merge tail: it
++  // spreads a fresh merge input per call whenever an active retained
++  // snapshot overlays an incomplete resolution — the exact shape the live
++  // per-node readiness evaluations drive at storm rates (round-6 census:
++  // 228/228 fresh answers per cycle; live gap windows carried 98k gate and
++  // 203k projection builds on a run that still passed both sealed bars on
++  // VM speed alone). Store/clear side-effects are idempotent and their
++  // grace timestamps tolerate the 250ms window by the same sealed bound.
+   resolvePriorityRecoveryPlanningAnswer(
+     nodeId,
+     observedAt,
+     planningSnapshot = null,
++  ) {
++    if (!planningSnapshot || typeof planningSnapshot !== 'object') {
++      return this.resolvePriorityRecoveryPlanningAnswerUncached(
++        nodeId,
++        observedAt,
++        planningSnapshot,
++      );
++    }
++    if (!this.planningAnswerMemoByInputSnapshot) {
++      this.planningAnswerMemoByInputSnapshot = new WeakMap();
++    }
++    const generation =
++      typeof this.readPlanningProjectionSourceGeneration === 'function' ?
++        this.readPlanningProjectionSourceGeneration(
++          observedAt ??
++            (typeof this.now === 'function' ? this.now() : undefined),
++        ) :
++        null;
++    // The answer also depends on the retained active snapshot, which other
++    // paths (the async best-effort flow) mutate between calls — key on its
++    // identity at entry so a fresher retained witness always re-merges.
++    const retainedAtEntry = this.getActivePriorityRecoveryPlanningSnapshot(
++      nodeId,
++      observedAt,
++    );
++    const cached = this.readMemoizedPlanningAnswer(
++      planningSnapshot,
++      nodeId,
++      generation,
++      retainedAtEntry,
++    );
++    if (cached) {
++      return cached.answer;
++    }
++    const answer = this.resolvePriorityRecoveryPlanningAnswerUncached(
++      nodeId,
++      observedAt,
++      planningSnapshot,
++    );
++    this.storeMemoizedPlanningAnswer(
++      planningSnapshot,
++      nodeId,
++      generation,
++      retainedAtEntry,
++      answer,
++    );
++    return answer;
++  }
++
++  readMemoizedPlanningAnswer(
++    planningSnapshot,
++    nodeId,
++    generation,
++    retainedAtEntry,
++  ) {
++    if (generation === null) {
++      return null;
++    }
++    const byNode = this.planningAnswerMemoByInputSnapshot.get(
++      planningSnapshot,
++    );
++    const cached = byNode ? byNode.get(nodeId) : undefined;
++    if (
++      cached &&
++      cached.generation === generation &&
++      cached.retainedAtEntry === retainedAtEntry
++    ) {
++      return cached;
++    }
++    return null;
++  }
++
++  storeMemoizedPlanningAnswer(
++    planningSnapshot,
++    nodeId,
++    generation,
++    retainedAtEntry,
++    answer,
++  ) {
++    if (generation === null) {
++      return;
++    }
++    let byNode = this.planningAnswerMemoByInputSnapshot.get(planningSnapshot);
++    if (!byNode) {
++      byNode = new Map();
++      this.planningAnswerMemoByInputSnapshot.set(planningSnapshot, byNode);
++    }
++    byNode.set(nodeId, {generation, retainedAtEntry, answer});
++  }
++
++  resolvePriorityRecoveryPlanningAnswerUncached(
++    nodeId,
++    observedAt,
++    planningSnapshot = null,
+   ) {
+     const resolvedPlanningSnapshot =
+       this.buildPriorityRecoveryPlanningProjection(
+diff --git a/src/control-plane/control-plane-readiness-publication-diagnostics.js b/src/control-plane/control-plane-readiness-publication-diagnostics.js
+index a3ac4691644351a4e077b8fcf80e217a7073f3e9..24002ef272ed3463d3a8834a13920722cdc66b10 100644
+--- a/src/control-plane/control-plane-readiness-publication-diagnostics.js
++++ b/src/control-plane/control-plane-readiness-publication-diagnostics.js
+@@ -153,14 +153,20 @@ class ControlPlaneReadinessPublicationDiagnostics
+         this.systemTableCache,
+         observedAt,
+       );
+-      const memo = this.membershipPlanningSnapshotAsyncMemo;
++      // Per-publisher slots: the live seed alternates planning reads across
++      // all five nodes (per-node readiness evaluations), and a single slot
++      // thrashed on every alternation — each miss minting a fresh snapshot
++      // identity that defeated every downstream identity memo (round-6
++      // census). Bounded by cluster node count.
++      if (!this.membershipPlanningSnapshotAsyncMemoByPublisher) {
++        this.membershipPlanningSnapshotAsyncMemoByPublisher = new Map();
++      }
++      const memo =
++        this.membershipPlanningSnapshotAsyncMemoByPublisher.get(
++          publisherNodeId,
++        );
+       let derivation;
+-      if (
+-        versionKey !== null &&
+-        memo &&
+-        memo.versionKey === versionKey &&
+-        memo.publisherNodeId === publisherNodeId
+-      ) {
++      if (versionKey !== null && memo && memo.versionKey === versionKey) {
+         derivation = memo.promise;
+       } else {
+         derivation = (async () => {
+@@ -177,11 +183,19 @@ class ControlPlaneReadinessPublicationDiagnostics
+           return ASYNC_PLANNING_DERIVATION_UNAVAILABLE;
+         })();
+         if (versionKey !== null) {
+-          const entry = {versionKey, publisherNodeId, promise: derivation};
+-          this.membershipPlanningSnapshotAsyncMemo = entry;
++          const entry = {versionKey, promise: derivation};
++          this.membershipPlanningSnapshotAsyncMemoByPublisher.set(
++            publisherNodeId,
++            entry,
++          );
+           derivation.catch(() => {
+-            if (this.membershipPlanningSnapshotAsyncMemo === entry) {
+-              this.membershipPlanningSnapshotAsyncMemo = null;
++            if (
++              this.membershipPlanningSnapshotAsyncMemoByPublisher
++                .get(publisherNodeId) === entry
++            ) {
++              this.membershipPlanningSnapshotAsyncMemoByPublisher.delete(
++                publisherNodeId,
++              );
+             }
+           });
+         }
+@@ -224,13 +238,14 @@ class ControlPlaneReadinessPublicationDiagnostics
+       const publisherNodeId = nodeId || this.nodeId;
+       const versionKey =
+         this.readMembershipPlanningDerivationVersionKey(observedAt);
+-      const memo = this.membershipPlanningSnapshotSyncMemo;
+-      if (
+-        versionKey !== null &&
+-        memo &&
+-        memo.versionKey === versionKey &&
+-        memo.publisherNodeId === publisherNodeId
+-      ) {
++      if (!this.membershipPlanningSnapshotSyncMemoByPublisher) {
++        this.membershipPlanningSnapshotSyncMemoByPublisher = new Map();
++      }
++      const memo =
++        this.membershipPlanningSnapshotSyncMemoByPublisher.get(
++          publisherNodeId,
++        );
++      if (versionKey !== null && memo && memo.versionKey === versionKey) {
+         return memo.snapshot;
+       }
+       const candidate = service.deriveClusterMembershipCandidateSync({
+@@ -243,11 +258,10 @@ class ControlPlaneReadinessPublicationDiagnostics
+           this.normalizeMembershipPublicationPlanningSnapshot(candidate),
+         );
+         if (versionKey !== null) {
+-          this.membershipPlanningSnapshotSyncMemo = {
+-            versionKey,
++          this.membershipPlanningSnapshotSyncMemoByPublisher.set(
+             publisherNodeId,
+-            snapshot,
+-          };
++            {versionKey, snapshot},
++          );
+         }
+         return snapshot;
+       }
+diff --git a/test/control-plane/projection-planning-identity-memoization.test.js b/test/control-plane/projection-planning-identity-memoization.test.js
+index 0c42c677f0a562c556d39b022d414439ccb23c0a..c6f68ce5e7f97ff2c83e55ee0e04024739c5a23c 100644
+--- a/test/control-plane/projection-planning-identity-memoization.test.js
++++ b/test/control-plane/projection-planning-identity-memoization.test.js
+@@ -226,6 +226,104 @@ test('the startup-authority snapshot resolves to one identity per planning ' +
+   t.end();
+ });
+ 
++test('the per-node async planning answer resolves once per node and floored ' +
++  'generation across concurrent evaluations', async (t) => {
++  const cache = createVersionedTableCache();
++  const readiness = new ControlPlaneReadinessService({
++    nodeId: OWNER_NODE_ID,
++    systemTableCache: cache,
++    now: () => 1000,
++    membershipPublicationService: {
++      async deriveClusterMembershipCandidate(options = {}) {
++        return {
++          publicationEpoch: 2,
++          status: 'PUBLISHED',
++          publishedActiveNodeIds: [options.publisherNodeId],
++        };
++      },
++      getLatestMembershipPublicationEpochStatusForNodeSync() {
++        return {publicationEpoch: 2, status: 'PUBLISHED'};
++      },
++    },
++  });
++  const answers = await Promise.all(
++    Array.from({length: REPEAT_READS}, () =>
++      readiness.resolveNodeMembershipPublicationPlanningAnswer(
++        OWNER_NODE_ID, 1000, null)),
++  );
++  t.equal(answers[0], answers[REPEAT_READS - 1],
++    'concurrent evaluations of one node share one resolved answer identity');
++  const again = await readiness.resolveNodeMembershipPublicationPlanningAnswer(
++    OWNER_NODE_ID, 1100, null);
++  t.equal(again, answers[0],
++    'a later read within the floor window serves the same answer');
++  const other = await readiness.resolveNodeMembershipPublicationPlanningAnswer(
++    'node-identity-other', 1150, null);
++  t.not(other, answers[0],
++    'a different node resolves its own answer');
++  cache.bump('nodes');
++  const next = await readiness.resolveNodeMembershipPublicationPlanningAnswer(
++    OWNER_NODE_ID, 1400, null);
++  t.not(next, answers[0],
++    'the next floored generation resolves fresh');
++  t.end();
++});
++
++test('the planning answer keeps one identity through the retained-merge ' +
++  'tail within a floored generation', async (t) => {
++  const cache = createVersionedTableCache();
++  const readiness = new ControlPlaneReadinessService({
++    nodeId: OWNER_NODE_ID,
++    systemTableCache: cache,
++    now: () => 1000,
++  });
++  const activeSnapshot = Object.freeze({
++    publishedActiveNodeIds: Object.freeze([OWNER_NODE_ID]),
++  });
++  const stored = readiness.resolvePriorityRecoveryPlanningAnswer(
++    OWNER_NODE_ID, 1000, activeSnapshot);
++  t.ok(stored, 'the active answer stores a retained snapshot');
++  const incomplete = Object.freeze({publicationEpoch: 5});
++  const first = readiness.resolvePriorityRecoveryPlanningAnswer(
++    OWNER_NODE_ID, 1050, incomplete);
++  const second = readiness.resolvePriorityRecoveryPlanningAnswer(
++    OWNER_NODE_ID, 1100, incomplete);
++  t.equal(second, first,
++    'repeated retained-merge answers within one floor window share one ' +
++      'identity');
++  cache.bump('nodes');
++  const third = readiness.resolvePriorityRecoveryPlanningAnswer(
++    OWNER_NODE_ID, 1400, incomplete);
++  t.not(third, first,
++    'the next floored generation re-merges');
++  t.end();
++});
++
++test('the sync planning derivation keeps one memo slot per publisher under ' +
++  'alternating reads', async (t) => {
++  const cache = createVersionedTableCache();
++  let derivations = 0;
++  const readiness = new ControlPlaneReadinessService({
++    nodeId: OWNER_NODE_ID,
++    systemTableCache: cache,
++    now: () => 1000,
++    membershipPublicationService: {
++      deriveClusterMembershipCandidateSync(options = {}) {
++        derivations += 1;
++        return {publishedActiveNodeIds: [options.publisherNodeId]};
++      },
++    },
++  });
++  readiness.getPriorityRecoveryPlanningSnapshotSync(OWNER_NODE_ID, 1000);
++  readiness.getPriorityRecoveryPlanningSnapshotSync('node-identity-b', 1010);
++  readiness.getPriorityRecoveryPlanningSnapshotSync(OWNER_NODE_ID, 1020);
++  readiness.getPriorityRecoveryPlanningSnapshotSync('node-identity-b', 1030);
++  t.equal(derivations, 2,
++    'alternating publishers keep one derivation per publisher, not one ' +
++      'per alternation');
++  t.end();
++});
++
+ test('the untracked priority planning projection builds its recovery gate ' +
+   'once per planning snapshot identity', async (t) => {
+   const readiness = new ControlPlaneReadinessService({

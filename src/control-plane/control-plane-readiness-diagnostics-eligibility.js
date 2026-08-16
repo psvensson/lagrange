@@ -23,6 +23,7 @@ const {
   buildProjectionReadinessContract,
   buildPublicationRecoveryGateSnapshot,
   normalizeDiagnosticTimestampMs,
+  pickProjectionReadinessEvidenceSource,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
 const SERVE_ADMISSION_STATE = Object.freeze({
@@ -326,41 +327,19 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
   }
 
   /**
-   * Resolve the raw runtime serve lane from transport, load, and service
-   * evidence before projection readiness folds in publication and recovery
-   * owners.
-   * @param {Object} context
-   * @param {Object|null} runtimeAuthority
-   * @return {Object}
-   * @private
-   */
-  buildRuntimeServeAdmissionSnapshot(context = {}, runtimeAuthority = null) {
-    const resolvedRuntimeAuthority =
-      runtimeAuthority && typeof runtimeAuthority === 'object' ?
-        runtimeAuthority :
-        this.buildRuntimeAuthoritySnapshot(context);
-    const transportState = this.getNodeTransportState(
-      context.nodeId,
-      context.nodeRow,
-    );
-    return this.buildServeAdmissionSnapshot({
-      ...context,
-      runtimeAuthority: resolvedRuntimeAuthority,
-      loadReady: this.isLoadReady(context.nodeRow),
-      transportNotExplicitlyNegative:
-        transportState.routerState !== STATE.DISCONNECTED,
-      serveEligibleControlPlaneService:
-        this.hasServeEligibleControlPlaneService(context.serviceRows),
-    });
-  }
-
-  /**
-   * Build the readiness dimensions.
+   * Build the readiness dimensions together with the single per-build
+   * projection-contract evaluation they derive from. One readiness build
+   * performs exactly one runtime serve admission, one priority-recovery
+   * projection, and one projection-contract construction; the returned
+   * SERVE_ELIGIBLE dimension carries the contract's serve-lane decision
+   * while the contract's own runtime serve input stays the runtime
+   * admission value (the serve lane is the contract's output, never its
+   * own input).
    * @param {Object} context
    * @return {Object}
    * @private
    */
-  buildDimensions(context) {
+  buildDimensionsEvaluation(context) {
     const runtimeAuthority =
       context?.runtimeAuthority &&
       typeof context.runtimeAuthority === 'object' ?
@@ -412,8 +391,14 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
         dimensions: baseDimensions,
         runtimeAuthority,
       });
+    // Pass ONLY the fields the evidence builder reads: the sealed
+    // whole-source own-data rule fails the ENTIRE contract closed if any
+    // reachable value anywhere in the source is non-plain, so spreading
+    // the kitchen-sink context (raw cache rows, publication diagnostics,
+    // lifecycle records) silently collapsed the serve lane into its
+    // everything-false degenerate state on the lone seed (round-13).
     const projectionReadinessContract = buildProjectionReadinessContract({
-      ...context,
+      ...pickProjectionReadinessEvidenceSource(context),
       dimensions: baseDimensions,
       priorityControlPlaneRecovery,
       runtimeAuthority,
@@ -421,9 +406,15 @@ class ControlPlaneReadinessDiagnosticsEligibility extends ControlPlaneReadinessP
     });
 
     return Object.freeze({
-      ...baseDimensions,
-      [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
-        projectionReadinessContract.lanes.serve.ready === true,
+      dimensions: Object.freeze({
+        ...baseDimensions,
+        [CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE]:
+          projectionReadinessContract.lanes.serve.ready === true,
+      }),
+      priorityControlPlaneRecovery,
+      projectionReadinessContract,
+      runtimeAuthority,
+      serveAdmission,
     });
   }
 

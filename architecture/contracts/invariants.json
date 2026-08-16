@@ -367,6 +367,71 @@
         "trigger": {"policy": "on-quest-closure", "scope": "owner:replica_lifecycle_owner", "cost": "cheap"},
         "restoration": {"autoSpawn": true}
       }
+    },
+    {
+      "id": "readiness-source-freshness-eventually-reflected",
+      "owner": "control_plane_readiness_owner",
+      "boundary": "versioned_planning_snapshot",
+      "kind": "liveness",
+      "statement": "After semantic-input quiescence the final complete token is published; during continuous churn completed tokens advance monotonically, dirty owners receive bounded round-robin service, and stale evidence never promotes readiness.",
+      "formalPredicate": "Quiescent => <>CompletedToken = InputToken; StaleToken => ~PositiveDecision",
+      "coupledWith": ["readiness-heavy-work-turn-bounded"],
+      "modelRef": "models/readiness-starvation/VersionedReadinessPlanning.tla",
+      "contractRef": "solve/epics/publication-readiness-churn-liveness-closure.md",
+      "liveEvidence": {
+        "tier": 2,
+        "holdsWhen": "the production-composition churn regression proves final-token completion, stale-negative admission, owner-generation fencing, and fresh one-shot decision equivalence; exits 0",
+        "evidence": {
+          "kind": "repro",
+          "ref": "node scripts/run-test-files.js test/control-plane/publication-readiness-churn-liveness.test.js",
+          "test": "test/control-plane/publication-readiness-churn-liveness.test.js"
+        },
+        "trigger": {"policy": "on-quest-closure", "scope": "owner:control_plane_readiness_owner", "cost": "cheap"},
+        "restoration": {"autoSpawn": true}
+      }
+    },
+    {
+      "id": "readiness-heavy-work-turn-bounded",
+      "owner": "control_plane_planning_scheduler_owner",
+      "boundary": "macrotask_bounded_drain",
+      "kind": "liveness",
+      "statement": "Continuous readiness source churn starts at most one heavy planning build globally per macrotask turn and permits a timer or heartbeat sentinel between every pair of heavy items.",
+      "formalPredicate": "HeavyBuildsPerMacrotask \\leq 1 /\\ AlwaysEventually(TimerTick)",
+      "coupledWith": ["readiness-source-freshness-eventually-reflected"],
+      "modelRef": "models/readiness-starvation/VersionedReadinessPlanning.tla",
+      "contractRef": "solve/epics/publication-readiness-churn-liveness-closure.md",
+      "liveEvidence": {
+        "tier": 2,
+        "holdsWhen": "the production-composition churn regression and owner-key queue scheduler test prove one heavy item per injected macrotask with timer progress and round-robin service; exit 0",
+        "evidence": {
+          "kind": "repro",
+          "ref": "node scripts/run-test-files.js test/control-plane/publication-readiness-churn-liveness.test.js test/workflow/owner-key-reconcile-queue.test.js",
+          "test": "test/control-plane/publication-readiness-churn-liveness.test.js"
+        },
+        "trigger": {"policy": "on-quest-closure", "scope": "owner:control_plane_planning_scheduler_owner", "cost": "cheap"},
+        "restoration": {"autoSpawn": true}
+      }
+    },
+    {
+      "id": "readiness-owner-read-non-amplifying",
+      "owner": "control_plane_read_authority_owner",
+      "boundary": "readiness_internal_owner_read",
+      "kind": "safety",
+      "statement": "A readiness-internal authoritative owner read uses a structural purpose and completes through a local or minimal owner/transport route with full-readiness recursion depth zero.",
+      "formalPredicate": "ReadPurpose = readiness_internal => ReadinessRecursionDepth = 0",
+      "modelRef": "models/readiness-starvation/VersionedReadinessPlanning.tla",
+      "contractRef": "solve/epics/publication-readiness-churn-liveness-closure.md",
+      "liveEvidence": {
+        "tier": 2,
+        "holdsWhen": "the structural read-authority regression threads readiness_internal through CDC owner-RPC and production query routing and asserts recursion depth zero while ordinary reads retain readiness policy; exits 0",
+        "evidence": {
+          "kind": "repro",
+          "ref": "node scripts/run-test-files.js test/control-plane/control-plane-read-authority-token.test.js",
+          "test": "test/control-plane/control-plane-read-authority-token.test.js"
+        },
+        "trigger": {"policy": "on-quest-closure", "scope": "owner:control_plane_read_authority_owner", "cost": "cheap"},
+        "restoration": {"autoSpawn": true}
+      }
     }
   ]
 }

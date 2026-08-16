@@ -46,6 +46,7 @@ import {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
+  CONTROL_PLANE_READ_PURPOSE,
   READINESS_SNAPSHOT_KEY,
 } from '../control-plane/control-plane-readiness-constants.js';
 import {
@@ -155,6 +156,7 @@ const CONTROL_PLANE_WRITE_RETRY_DECISION_STATE = Object.freeze({
 const QUERY_EXECUTOR_ROUTING_OPTION_FIELD = Object.freeze({
   ALLOW_PRIORITY_RECOVERY_BOOTSTRAP: 'allowPriorityRecoveryBootstrap',
   FOR_READ: 'forRead',
+  READ_PURPOSE: 'readPurpose',
 });
 function buildPartitionServiceWitnessFingerprint(service) {
   if (!service || typeof service !== QUERY_EXECUTOR_LITERAL.STRING_OBJECT) {
@@ -266,6 +268,7 @@ export const QUERY_EXECUTOR_SHARED = {
   CONTROL_PLANE_PRIORITY_RECOVERY_REASON,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_REASON,
+  CONTROL_PLANE_READ_PURPOSE,
   CONTROL_PLANE_WRITE_RETRY_DECISION_STATE,
   ConfigurationManager,
   DistributedMergeEngine,

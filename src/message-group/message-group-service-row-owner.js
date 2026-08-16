@@ -165,7 +165,7 @@ class MessageGroupServiceRowOwner {
       created_at: _createdAt,
       ...updates
     } = row;
-    await this.systemTableWriter.updateSystemTableRow(
+    const updateResult = await this.systemTableWriter.updateSystemTableRow(
       SYSTEM_TABLE_NAME.SERVICES,
       {
         service_id: row.service_id,
@@ -174,6 +174,21 @@ class MessageGroupServiceRowOwner {
       updates,
       this.buildDeferredUpdateOptions(row.service_id),
     );
+    // Absence-proven heal (round-11): serve-eligibility requires an ACTIVE
+    // addressed MESSAGE_GROUP services row, and a registration write that
+    // missed the durable db leaves every later UPDATE a zero-row no-op
+    // with no CDC — the cached row never leaves stopped. A zero
+    // affected-row count on the primary-key-pinned WHERE proves durable
+    // absence; the full canonical row is in hand, so re-issue the
+    // registration upsert. An unwitnessed count keeps the update-only
+    // contract.
+    if (updateResult?.partitionResult?.affectedRows === 0) {
+      await this.systemTableWriter.upsertSystemTableRow(
+        SYSTEM_TABLE_NAME.SERVICES,
+        row,
+        this.buildDeferredUpdateOptions(row.service_id),
+      );
+    }
     return row;
   }
 

@@ -14,7 +14,6 @@ import {
   ControlPlaneMessageType,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
-  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -93,9 +92,6 @@ const READY_RETRY_ASSERT_OWNER_DEFERRED_RETRY_ARMED =
   'owner-deferred dispatch should keep the direct wake-up row in the retry lane';
 const READY_RETRY_ASSERT_OWNER_DEFERRED_REENTRY =
   'owner-deferred dispatch retry should re-enter with the original wake-up row';
-const SERVICE_CACHE_READY_BURST_COUNT = 8;
-const SERVICE_CACHE_READY_NODE_ID = 'node-service-cache-ready';
-const PUBLICATION_CACHE_READY_BURST_COUNT = 8;
 
 async function waitForOperationDispatchQueueDrain(service = null) {
   for (
@@ -678,111 +674,112 @@ test('ReplicaDispatchService initialize replays already-ready cached nodes ' +
   }
 });
 
-test('ReplicaDispatchService service cache changes enqueue readiness owner ' +
-  'work and coalesce before evaluating readiness', async (t) => {
+test('ReplicaDispatchService consumes readiness-owner completion wakes through ' +
+  'nodeReadyRetryQueue', async (t) => {
   initEnv();
-
-  let readinessCalls = 0;
-  let reconcileCalls = 0;
-  const service = createService({
+  let completionListener = null;
+  let unsubscribeCount = 0;
+  const downstreamProgress = [];
+  let failuresRemaining = 0;
+  const service = new ReplicaDispatchService({
+    nodeId: 'node-1',
+    messageRouter: {},
     cdcIntegrationService: {
       updateSystemTableRow: async () => ({success: true}),
       upsertSystemTableRow: async () => ({success: true}),
     },
     controlPlaneReadinessService: {
-      getNodeReadinessSync(nodeId) {
-        readinessCalls++;
-        return {
-          nodeId,
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-          },
+      subscribeReadinessPlanningSnapshots(listener) {
+        completionListener = listener;
+        return () => {
+          unsubscribeCount++;
         };
       },
     },
-  });
-  service.retryPendingDispatchesForReadyNode = async ({nodeId}) => {
-    reconcileCalls++;
-    return service.isNodeReady(nodeId);
-  };
-
-  for (let index = 0; index < SERVICE_CACHE_READY_BURST_COUNT; index++) {
-    service.handleCacheNodeChange(
-      SYSTEM_TABLE_NAME.SERVICES,
-      'UPDATE',
-      {
-        node_id: SERVICE_CACHE_READY_NODE_ID,
-        service_id: `service-cache-ready-${index}`,
-        status: SERVICE_STATUS.ACTIVE,
+    systemTableCache: {
+      get() {
+        return null;
       },
-    );
-  }
-
-  t.equal(
-    readinessCalls,
-    0,
-    'cache listeners must enqueue without running readiness synchronously',
-  );
-  await service.nodeReadyRetryQueue.drain();
-  t.equal(reconcileCalls, 1, 'one owner-key reconcile consumes the burst');
-  t.equal(readinessCalls, 1, 'readiness is evaluated once inside reconcile');
-
-  service.stop();
-});
-
-test('ReplicaDispatchService publication cache changes coalesce before ' +
-  'evaluating local readiness', async (t) => {
-  initEnv();
-
-  let readinessCalls = 0;
-  let publicationAdvanceCalls = 0;
-  const service = createService({
-    cdcIntegrationService: {
-      updateSystemTableRow: async () => ({success: true}),
-      upsertSystemTableRow: async () => ({success: true}),
-    },
-    controlPlaneReadinessService: {
-      getNodeReadinessSync(nodeId) {
-        readinessCalls++;
-        return {
-          nodeId,
-          dimensions: {
-            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
-          },
-        };
+      getAll() {
+        return [];
       },
+      onCacheChange() {},
+      offCacheChange() {},
     },
+    rebalanceCoordinator: {},
+    setTimeoutFn(callback) {
+      Promise.resolve().then(callback);
+      return {unref() {}};
+    },
+    clearTimeoutFn() {},
   });
-  service.maybeAdvanceReadyNodeMembershipPublication = async () => {
-    publicationAdvanceCalls++;
+  service.retryPendingDispatchesForReadyNode = async (options) => {
+    downstreamProgress.push(options);
+    if (failuresRemaining > 0) {
+      failuresRemaining--;
+      throw new Error('transient completion wake failure');
+    }
     return true;
   };
 
-  for (let index = 0; index < PUBLICATION_CACHE_READY_BURST_COUNT; index++) {
-    service.handleCacheNodeChange(
-      SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
-      'UPDATE',
-      {
-        publication_id: `publication-cache-ready-${index}`,
-        status: READY_RETRY_PUBLICATION_STATUS,
-      },
+  try {
+    service.initialize();
+    t.type(completionListener, 'function',
+      'initialize attaches the runtime completion subscriber');
+    const originalEnqueue = service.nodeReadyRetryQueue.enqueue.bind(
+      service.nodeReadyRetryQueue,
     );
+    let enqueueFailuresRemaining = 1;
+    service.nodeReadyRetryQueue.enqueue = (...args) => {
+      if (enqueueFailuresRemaining > 0) {
+        enqueueFailuresRemaining--;
+        throw new Error('transient completion enqueue failure');
+      }
+      return originalEnqueue(...args);
+    };
+    t.throws(() => completionListener({
+      ownerKey: 'node-2',
+      capturedToken: {tokenKey: 'semantic-token-1'},
+    }), 'the transient enqueue failure is visible to its publication caller');
+    completionListener({
+      ownerKey: 'node-2',
+      capturedToken: {tokenKey: 'semantic-token-1'},
+    });
+    completionListener({
+      ownerKey: 'node-2',
+      capturedToken: {tokenKey: 'semantic-token-1'},
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    t.equal(downstreamProgress.length, 1,
+      'one semantic completion reaches downstream dispatch progress once');
+    t.match(downstreamProgress[0], {
+      nodeId: 'node-2',
+      source: RECONCILE_REASON.READINESS_PLANNING_SNAPSHOT_PUBLISHED,
+    }, 'completion wakes re-enter the canonical dispatch owner queue');
+    failuresRemaining = 1;
+    completionListener({
+      ownerKey: 'node-2',
+      capturedToken: {tokenKey: 'semantic-token-2'},
+    });
+    for (let turn = 0; turn < 8 && downstreamProgress.length < 3; turn++) {
+      await Promise.resolve();
+    }
+    t.equal(downstreamProgress.length, 3,
+      'a transient downstream failure retries the same semantic wake once');
+    completionListener({
+      ownerKey: 'node-2',
+      capturedToken: {tokenKey: 'semantic-token-2'},
+    });
+    await Promise.resolve();
+    await Promise.resolve();
+    t.equal(downstreamProgress.length, 3,
+      'a successfully consumed semantic token suppresses later duplicates');
+  } finally {
+    service.stop();
   }
-
-  t.equal(
-    readinessCalls,
-    0,
-    'publication cache listeners must enqueue without evaluating readiness',
-  );
-  await service.membershipPublicationAdvanceQueue.drain();
-  t.equal(readinessCalls, 1, 'one queued reconcile evaluates readiness');
-  t.equal(
-    publicationAdvanceCalls,
-    1,
-    'one queued reconcile advances the latest publication evidence',
-  );
-
-  service.stop();
+  t.equal(unsubscribeCount, 1,
+    'shutdown releases the runtime completion subscriber exactly once');
 });
 
 test('ReplicaDispatchService shards operation dispatch reconcile so one ' +

@@ -1,130 +1,34 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {summarizeProjectionReadinessContractForHistory} from './projection-readiness-state.js';
+import {installControlPlaneReadinessStoredSnapshotReuseMethods} from
+  './control-plane-readiness-stored-snapshot-reuse.js';
 
 const LOCAL_STR_REFRESH = '::refresh=';
 const LOCAL_STR_STALE = '::stale=';
 const LOCAL_STR_PLANNING = '::planning=';
+const LOCAL_STR_REQUIRE_FRESH = '::requireFresh=';
+const LOCAL_STR_BACKGROUND = '::background=';
+const LOCAL_STR_DIMENSION = '::dimension=';
 const LOCAL_STR_ONE = '1';
 const LOCAL_STR_ZERO = '0';
 const LOCAL_STR_SIGNATURE_FIELD_SEPARATOR = '|';
 const LOCAL_STR_SIGNATURE_LIST_SEPARATOR = ',';
+const stringConstructor = String;
+
+function isPlanningOwnerProducedSnapshot(options = {}) {
+  return options.readinessPlanningOwnerBuild === true ||
+    options.readinessPlanningColdBootstrapBuild === true;
+}
 
 const {
   COLUMN,
   CONTROL_PLANE_READINESS_DIMENSION,
   PROJECTION_READINESS_CONTRACT_STATE,
   TABLES,
-  compareNodeHeartbeatWatermarks,
   normalizeIsoTimestamp,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
 const controlPlaneReadinessSnapshotStoreMethods = {
-  /**
-   * Reuse one previously-computed readiness snapshot while it still reflects
-   * the visible cache row (CL-019: per-change, not per-call). Reuse holds on
-   * watermark EQUALITY — the steady state between heartbeats — and rebuild is
-   * forced when the row advanced past the snapshot, when any nodes/services/
-   * publication cache change invalidated it, or when the snapshot's own
-   * evidence aged past the health thresholds.
-   * @param {string} nodeId
-   * @param {Object|null} nodeRow
-   * @param {Object|null} publication
-   * @param {Object|null} membershipPublication
-   * @return {Object|null}
-   * @private
-   */
-  getFresherStoredReadinessSnapshot(
-    nodeId,
-    nodeRow,
-    publication,
-    membershipPublication,
-  ) {
-    const storedSnapshot =
-      this.lastReadinessSnapshotByNodeId.get(nodeId) || null;
-    const capturedAtMs =
-      this.lastReadinessSnapshotAtMsByNodeId.get(nodeId) || null;
-    if (
-      !storedSnapshot ||
-      !this.isStoredReadinessSnapshotFresh(storedSnapshot, capturedAtMs)
-    ) {
-      return null;
-    }
-
-    // A services-table apply after this snapshot was stored invalidates
-    // reuse outright: the per-table mutation version cannot be masked by
-    // node-heartbeat watermark arbitration, which is how a fresher service
-    // repair failed to rebuild repairEligible while node-row CDC lagged
-    // (2026-07-18 mixed-revision incident). Version unavailable (older cache,
-    // pre-feature snapshot) falls through to the marker machinery below.
-    const storedServicesVersion =
-      this.lastReadinessSnapshotServicesVersionByNodeId?.get(nodeId);
-    if (
-      Number.isFinite(storedServicesVersion) &&
-      storedServicesVersion !==
-        this.getServicesTableMutationVersionForSnapshotReuse()
-    ) {
-      return null;
-    }
-
-    // Local query-transport readiness is LIVE router evidence: it flips
-    // without any node-row heartbeat advance or cache-change marker, so the
-    // watermark/marker checks below cannot see the change. Owner-read
-    // participation depends on observing the flip immediately (DEFER with a
-    // retry hint while the local transport is down, recover as soon as it is
-    // back), so a stored snapshot whose captured transport verdict drifted
-    // from the live one must be rebuilt, not reused.
-    if (
-      this.hasStoredSnapshotLocalQueryTransportDrift(nodeId, storedSnapshot)
-    ) {
-      return null;
-    }
-
-    const storedWatermark =
-      this.buildStoredReadinessSnapshotWatermark(storedSnapshot);
-    if (!storedWatermark) {
-      return null;
-    }
-
-    if (nodeRow) {
-      const watermarkComparison = compareNodeHeartbeatWatermarks(
-        nodeRow,
-        storedWatermark,
-      );
-      // Rebuild on a fresher row; equality reuses unless a cache-change marker
-      // landed. A lagged row bridges only while no independent service or
-      // publication input advanced after capture.
-      if (watermarkComparison < 0) {
-        return null;
-      }
-      const invalidation = this.lastReadinessSnapshotInvalidatedAtMsByNodeId
-        .get(nodeId);
-      const independentInvalidatedAtMs = Math.max(
-        Number(invalidation?.independentAtMs) || 0,
-        Number(this.lastReadinessSnapshotClusterInvalidatedAtMs) || 0,
-      );
-      if (
-        (watermarkComparison === 0 ||
-          independentInvalidatedAtMs >= capturedAtMs) &&
-        this.isReadinessSnapshotInvalidated(nodeId, capturedAtMs)
-      ) {
-        return null;
-      }
-    }
-
-    return Object.freeze({
-      ...storedSnapshot,
-      publication:
-        publication && typeof publication === 'object' ?
-          Object.freeze({...publication}) :
-          storedSnapshot.publication ?? null,
-      membershipPublication:
-        membershipPublication && typeof membershipPublication === 'object' ?
-          Object.freeze({...membershipPublication}) :
-          storedSnapshot.membershipPublication ?? null,
-      recentTransitions: this.getReadinessTransitionHistory(nodeId),
-    });
-  },
-
   /**
    * Best-effort services-table mutation version for snapshot reuse
    * arbitration. Null when the cache does not expose versions, which keeps
@@ -350,7 +254,12 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    *   omitted = legacy behavior (stamped at store time).
    * @private
    */
-  storeReadinessSnapshot(nodeId, snapshot, buildStartedAtMs = null) {
+  storeReadinessSnapshot(
+    nodeId,
+    snapshot,
+    buildStartedAtMs = null,
+    options = {},
+  ) {
     if (!nodeId || !snapshot) {
       return;
     }
@@ -359,6 +268,10 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       Number.isFinite(buildStartedAtMs) && buildStartedAtMs <= nowMs ?
         buildStartedAtMs :
         nowMs;
+    const previousSnapshot = this.lastReadinessSnapshotByNodeId.get(nodeId);
+    const snapshotChanged = !previousSnapshot ||
+      this.buildRecoveryEpochSignature(nodeId, previousSnapshot) !==
+        this.buildRecoveryEpochSignature(nodeId, snapshot);
     this.lastReadinessSnapshotByNodeId.set(nodeId, snapshot);
     this.lastReadinessSnapshotAtMsByNodeId.set(nodeId, capturedAtMs);
     if (!this.lastReadinessSnapshotServicesVersionByNodeId) {
@@ -377,7 +290,13 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       // forces one more rebuild — slower, never wrong.
       this.lastReadinessSnapshotInvalidatedAtMsByNodeId.delete(nodeId);
     }
-    this.recordRecoveryEpochObservation(nodeId, snapshot, nowMs);
+    this.recordRecoveryEpochObservation(nodeId, snapshot, nowMs, options);
+    if (
+      snapshotChanged &&
+      !isPlanningOwnerProducedSnapshot(options)
+    ) {
+      this.recordReadinessPlanningSnapshotChange?.(nodeId);
+    }
   },
 
   /**
@@ -390,7 +309,12 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @return {void}
    * @private
    */
-  recordRecoveryEpochObservation(nodeId, snapshot, observedAtMs) {
+  recordRecoveryEpochObservation(
+    nodeId,
+    snapshot,
+    observedAtMs,
+    options = {},
+  ) {
     // This sits on the getNodeReadinessSync hot path (dispatch, admission,
     // planning). The change check must therefore be allocation-light and
     // EXCLUDE observation timestamps: the previous full-summary
@@ -423,6 +347,9 @@ const controlPlaneReadinessSnapshotStoreMethods = {
         lastEventSignature: signature,
       };
       this.currentRecoveryEpochByNodeId.set(nodeId, epoch);
+      if (!isPlanningOwnerProducedSnapshot(options)) {
+        this.recordReadinessPlanningRecoveryEpochChange?.(nodeId);
+      }
       return;
     }
 
@@ -472,6 +399,9 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       }
       this.recoveryEpochHistoryByNodeId.set(nodeId, history);
     }
+    if (!isPlanningOwnerProducedSnapshot(options)) {
+      this.recordReadinessPlanningRecoveryEpochChange?.(nodeId);
+    }
   },
 
   /**
@@ -511,7 +441,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
         null;
     const reasonCodes = Array.isArray(snapshot?.reasons) ?
       snapshot.reasons
-        .map((reason) => String(reason?.code || ''))
+        .map((reason) => stringConstructor(reason?.code || ''))
         .filter(Boolean)
         .join(LOCAL_STR_SIGNATURE_LIST_SEPARATOR) :
       '';
@@ -522,15 +452,11 @@ const controlPlaneReadinessSnapshotStoreMethods = {
         LOCAL_STR_SIGNATURE_LIST_SEPARATOR,
       ) :
       '';
-    const dimensionBits = [
-      CONTROL_PLANE_READINESS_DIMENSION.PROCESS_ALIVE,
-      CONTROL_PLANE_READINESS_DIMENSION.CLUSTER_MEMBER_HEALTHY,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_WRITABLE,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_PUBLISHED,
-      CONTROL_PLANE_READINESS_DIMENSION.CONTROL_PLANE_RECOVERY_ELIGIBLE,
-      CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
-      CONTROL_PLANE_READINESS_DIMENSION.SERVE_ELIGIBLE,
-    ]
+    // Sign every owner-produced dimension directly. Several dimensions are
+    // currently derivable from signed reasons, but keeping the semantic vector
+    // complete prevents a future derivation change from becoming a stale-positive
+    // token hole.
+    const dimensionBits = Object.values(CONTROL_PLANE_READINESS_DIMENSION)
       .map((dimension) =>
         dimensions[dimension] === true ? LOCAL_STR_ONE : LOCAL_STR_ZERO,
       )
@@ -568,7 +494,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
       [
         ...new Set(
           snapshot.reasons
-            .map((reason) => String(reason?.code || ''))
+            .map((reason) => stringConstructor(reason?.code || ''))
             .filter(Boolean),
         ),
       ] :
@@ -677,13 +603,19 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    */
   buildReadinessEvaluationKey(nodeId, options = {}) {
     return (
-      String(nodeId || '') +
+      stringConstructor(nodeId || '') +
       LOCAL_STR_REFRESH +
-      String(options.allowAuthoritativeRefresh === true) +
+      stringConstructor(options.allowAuthoritativeRefresh === true) +
       LOCAL_STR_STALE +
-      String(options.allowStaleOnCacheChange === true) +
+      stringConstructor(options.allowStaleOnCacheChange === true) +
       LOCAL_STR_PLANNING +
-      this.resolveMembershipPublicationPlanningSource(options)
+      this.resolveMembershipPublicationPlanningSource(options) +
+      LOCAL_STR_REQUIRE_FRESH +
+      stringConstructor(options.requireFreshOnIneligible === true) +
+      LOCAL_STR_BACKGROUND +
+      stringConstructor(options.preferBackgroundRefreshOnIneligible === true) +
+      LOCAL_STR_DIMENSION +
+      this.resolveReadinessDecisionDimension(options)
     );
   },
 
@@ -712,6 +644,7 @@ const controlPlaneReadinessSnapshotStoreMethods = {
    * @private
    */
   handleCacheChange(tableName, record) {
+    this.readinessPlanningSnapshotOwner?.recordTableChange(tableName, record);
     if (
       tableName === TABLES.CONTROL_PLANE_PUBLICATIONS ||
       tableName === TABLES.NODES ||
@@ -732,7 +665,9 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     if (tableName !== TABLES.NODES && tableName !== TABLES.SERVICES) {
       return;
     }
-    const nodeId = String(record?.[COLUMN.NODE_ID] ?? record?.node_id ?? '');
+    const nodeId = stringConstructor(
+      record?.[COLUMN.NODE_ID] ?? record?.node_id ?? '',
+    );
     if (!nodeId) {
       return;
     }
@@ -815,9 +750,19 @@ const controlPlaneReadinessSnapshotStoreMethods = {
     if (!this.shouldBypassCachedSnapshot(context.snapshot, options)) {
       return;
     }
-    this.authoritativeNodeEvidenceReconciler
+    const refresh = this.authoritativeNodeEvidenceReconciler
       .maybeRepairNodeEvidence(context, options)
       .catch((_error) => null);
+    if (options.readinessPlanningOwnerBuild !== true) {
+      refresh.then((repaired) => {
+        if (repaired === true) {
+          this.readinessPlanningSnapshotOwner?.requestRefresh(
+            context.nodeId,
+            options,
+          );
+        }
+      });
+    }
   },
 };
 
@@ -837,6 +782,7 @@ function installControlPlaneReadinessSnapshotStoreMethods(prototype) {
       ),
     ),
   );
+  installControlPlaneReadinessStoredSnapshotReuseMethods(prototype);
 }
 
 export {installControlPlaneReadinessSnapshotStoreMethods};

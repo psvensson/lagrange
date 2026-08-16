@@ -46,7 +46,35 @@ const setIteratorNext = Function.call.bind(
 const sortArray = Function.call.bind(Array.prototype.sort);
 const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
 const stringTrim = Function.call.bind(String.prototype.trim);
+const WeakSetConstructor = WeakSet;
+const weakSetAdd = Function.call.bind(WeakSet.prototype.add);
+const weakSetHas = Function.call.bind(WeakSet.prototype.has);
+const objectFreeze = Object.freeze;
 const EXACT_NON_NEGATIVE_ZERO = numberToExactInteger(0);
+const canonicalDenseRecordArrays = new WeakSetConstructor();
+
+// One canonical strict copy per boundary crossing: a dense record array this
+// module has already copied and frozen is trusted by identity (the WeakSet is
+// module-private, so membership cannot be forged), and sibling canonical
+// consumers reuse it by reference instead of re-copying the full
+// service/partition tables on every placement observation. Anything not in
+// the registry — hostile, mutable, or foreign — takes the full strict copy.
+function copyCanonicalDenseOwnDataRecordArray(value) {
+  if (value !== null && typeof value === 'object' &&
+      weakSetHas(canonicalDenseRecordArrays, value)) {
+    return value;
+  }
+  const rows = copyDenseOwnDataRecordArray(value);
+  if (rows === null) {
+    return null;
+  }
+  for (let index = 0; index < rows.length; index += 1) {
+    objectFreeze(rows[index]);
+  }
+  objectFreeze(rows);
+  weakSetAdd(canonicalDenseRecordArrays, rows);
+  return rows;
+}
 
 function appendOwnArrayValue(array, value) {
   objectDefineProperty(array, array.length, {
@@ -331,8 +359,8 @@ export {
   appendOwnArrayValue,
   addExactNonNegativeInteger,
   buildStringSet,
+  copyCanonicalDenseOwnDataRecordArray,
   copyDenseOwnDataArray,
-  copyDenseOwnDataRecordArray,
   copyStrictOwnDataRecord,
   copyExclusionCounts,
   DATA_PROPERTY_STATE,

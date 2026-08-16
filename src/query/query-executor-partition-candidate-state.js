@@ -32,6 +32,7 @@ function createPartitionCandidateDeliveryState({
   let deferPartitionRetryOnNextAttempt = false;
 
   const getRecoveryCandidateSelectionOptions = () => ({
+    readPurpose: executionOptions?.readAuthority?.purpose,
     recoveryCandidateSelectionKey:
       executionOptions.recoveryCandidateSelectionKey,
   });
@@ -44,6 +45,7 @@ function createPartitionCandidateDeliveryState({
       routingReadinessDimension,
       {
         allowReadinessAuthoritativeRefresh,
+        readPurpose: executionOptions?.readAuthority?.purpose,
         recoveryCandidateSelectionKey:
           executionOptions.recoveryCandidateSelectionKey,
       },

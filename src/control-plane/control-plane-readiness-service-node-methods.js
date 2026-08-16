@@ -1,6 +1,5 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {buildNodeTrustState} from './node-trust-state.js';
-
 const {
   COLUMN,
   MEMBERSHIP_PUBLICATION_PLANNING_SOURCE,
@@ -460,20 +459,14 @@ const controlPlaneReadinessNodeMethods = {
     let nodeRow = await this.readNodeRow(nodeId, options);
     let serviceRows = await this.readNodeServiceRows(nodeId, options);
 
-    if (options.allowAuthoritativeRefresh === true) {
-      const repaired =
-        await this.authoritativeNodeEvidenceReconciler.maybeRepairNodeEvidence(
-          {
-            nodeId,
-            nodeRow,
-            serviceRows,
-          },
-          options,
-        );
-      if (repaired) {
-        nodeRow = await this.readNodeRow(nodeId, options);
-        serviceRows = await this.readNodeServiceRows(nodeId, options);
-      }
+    const repaired =
+      await this.authoritativeNodeEvidenceReconciler.maybeRepairNodeEvidence(
+        {nodeId, nodeRow, serviceRows},
+        options,
+      );
+    if (repaired) {
+      nodeRow = await this.readNodeRow(nodeId, options);
+      serviceRows = await this.readNodeServiceRows(nodeId, options);
     }
 
     const lifecycleState = nodeRow ?
@@ -510,6 +503,10 @@ const controlPlaneReadinessNodeMethods = {
           persistSnapshot,
           observedAt,
           buildStartedAtMs,
+          readinessPlanningOwnerBuild:
+            options.readinessPlanningOwnerBuild === true,
+          readinessPlanningColdBootstrapBuild:
+            options.readinessPlanningColdBootstrapBuild === true,
         });
       }
       const fresherStoredSnapshot = this.getFresherStoredReadinessSnapshot(
@@ -521,34 +518,15 @@ const controlPlaneReadinessNodeMethods = {
       if (fresherStoredSnapshot) {
         return fresherStoredSnapshot;
       }
-      const missingReadiness = this.buildMissingNodeReadiness(
+      return this.buildAndStoreMissingNodeReadinessSnapshot({
         nodeId,
         observedAt,
         publication,
         membershipPublication,
-      );
-      const recentTransitions = persistSnapshot ?
-        this.recordReadinessTransition({
-          nodeId,
-          observedAt,
-          publication,
-          membershipPublication,
-          nodeEvidence: null,
-          dimensions: missingReadiness.dimensions,
-          reasons: missingReadiness.reasons,
-          runtimeAuthority: missingReadiness.runtimeAuthority,
-          priorityControlPlaneRecovery:
-              missingReadiness.priorityControlPlaneRecovery,
-        }) :
-        this.getReadinessTransitionHistory(nodeId);
-      const snapshot = Object.freeze({
-        ...missingReadiness,
-        recentTransitions,
+        persistSnapshot,
+        buildStartedAtMs,
+        options,
       });
-      if (persistSnapshot) {
-        this.storeReadinessSnapshot(nodeId, snapshot, buildStartedAtMs);
-      }
-      return snapshot;
     }
 
     const capacity = await this.getCapacitySnapshot(nodeId, nodeRow);
@@ -565,6 +543,10 @@ const controlPlaneReadinessNodeMethods = {
       persistSnapshot,
       observedAt,
       buildStartedAtMs,
+      readinessPlanningOwnerBuild:
+        options.readinessPlanningOwnerBuild === true,
+      readinessPlanningColdBootstrapBuild:
+        options.readinessPlanningColdBootstrapBuild === true,
     });
   },
 
@@ -580,6 +562,31 @@ const controlPlaneReadinessNodeMethods = {
    * @return {Object|null} Frozen readiness snapshot or null.
    */
   getNodeReadinessSync(nodeId, options = {}) {
+    if (
+      options.readinessPlanningOwnerBuild === true ||
+      !this.readinessPlanningSnapshotOwner
+    ) {
+      return this.buildNodeReadinessSyncCurrent(nodeId, options);
+    }
+    return this.readinessPlanningSnapshotOwner.readSync(
+      nodeId,
+      options,
+      () => this.buildNodeReadinessSyncCurrent(nodeId, {
+        ...options,
+        readinessPlanningColdBootstrapBuild: true,
+      }),
+    );
+  },
+
+  /**
+   * Build a synchronous snapshot from the currently visible production inputs.
+   * The versioned planning owner is the only hot-path caller of this method.
+   * @param {string} nodeId
+   * @param {Object} [options]
+   * @return {Object|null}
+   * @private
+   */
+  buildNodeReadinessSyncCurrent(nodeId, options = {}) {
     const buildStartedAtMs = this.now();
     const observedAt = normalizeIsoTimestamp(buildStartedAtMs);
     const nodeRow = this.getNodeRow(nodeId);
@@ -590,14 +597,8 @@ const controlPlaneReadinessNodeMethods = {
     );
     const persistSnapshot = this.shouldPersistReadinessSnapshot(options);
 
-    // CL-012: consult the stored-snapshot reuse BEFORE the heavy evidence
-    // prelude. This is the query-routing hot path (a routing snapshot
-    // evaluates every service row of a partition, and routing snapshots are
-    // built per query, per ingress admission, and per mutation-readiness
-    // check); the planning-snapshot resolution, service-row scan, lifecycle
-    // and evidence builds below are only needed when a fresh snapshot is
-    // NOT reusable. serviceRows is provided lazily because the background
-    // refresh consumes it only on its doubly-gated repair path.
+    // CL-012: reuse before the heavy query-routing evidence prelude. Keep
+    // serviceRows lazy for the doubly-gated background repair path.
     const usesDirectPublicationPlanning =
       options.membershipPublicationPlanningSource ===
         MEMBERSHIP_PUBLICATION_PLANNING_SOURCE.DIRECT_PUBLICATION_ROW;
@@ -668,35 +669,21 @@ const controlPlaneReadinessNodeMethods = {
           persistSnapshot,
           observedAt,
           buildStartedAtMs,
+          readinessPlanningOwnerBuild:
+            options.readinessPlanningOwnerBuild === true,
+          readinessPlanningColdBootstrapBuild:
+            options.readinessPlanningColdBootstrapBuild === true,
         });
       }
-      const missingReadiness = this.buildMissingNodeReadiness(
+      const snapshot = this.buildAndStoreMissingNodeReadinessSnapshot({
         nodeId,
         observedAt,
         publication,
         membershipPublication,
-      );
-      const recentTransitions = persistSnapshot ?
-        this.recordReadinessTransition({
-          nodeId,
-          observedAt,
-          publication,
-          membershipPublication,
-          nodeEvidence: null,
-          dimensions: missingReadiness.dimensions,
-          reasons: missingReadiness.reasons,
-          runtimeAuthority: missingReadiness.runtimeAuthority,
-          priorityControlPlaneRecovery:
-              missingReadiness.priorityControlPlaneRecovery,
-        }) :
-        this.getReadinessTransitionHistory(nodeId);
-      const snapshot = Object.freeze({
-        ...missingReadiness,
-        recentTransitions,
+        persistSnapshot,
+        buildStartedAtMs,
+        options,
       });
-      if (persistSnapshot) {
-        this.storeReadinessSnapshot(nodeId, snapshot, buildStartedAtMs);
-      }
       this.maybeStartBackgroundSyncReadinessRefresh(
         {
           nodeId,
@@ -723,6 +710,10 @@ const controlPlaneReadinessNodeMethods = {
       persistSnapshot,
       observedAt,
       buildStartedAtMs,
+      readinessPlanningOwnerBuild:
+        options.readinessPlanningOwnerBuild === true,
+      readinessPlanningColdBootstrapBuild:
+        options.readinessPlanningColdBootstrapBuild === true,
     });
     this.maybeStartBackgroundSyncReadinessRefresh(
       {

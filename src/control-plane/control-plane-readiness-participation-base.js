@@ -1,6 +1,8 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {installControlPlaneReadinessNodeMethods} from './control-plane-readiness-service-node-methods.js';
 import {resolveTimeSource} from '../time/time-source.js';
+import {ReadinessPlanningSnapshotOwner} from
+  './readiness-planning-snapshot-owner.js';
 
 const LOCAL_STR_CONTROL_PLANE_READINESS_EVALUATION = 'control-plane-readiness-evaluation';
 const LOCAL_STR_MESSAGEROUTER = 'messageRouter';
@@ -8,6 +10,21 @@ const LOCAL_STR_CDCINTEGRATIONSERVICE = 'cdcIntegrationService';
 const LOCAL_STR_STORAGEACCOUNTINGSERVICE = 'storageAccountingService';
 const LOCAL_STR_CDCGROUPPROPAGATIONSERVICE = 'cdcGroupPropagationService';
 const LOCAL_STR_MEMBERSHIPPUBLICATIONSERVICE = 'membershipPublicationService';
+const LOCAL_STR_NODELIFECYCLESTATEMACHINE = 'nodeLifecycleStateMachine';
+const LOCAL_STR_HEARTBEATSERVICE = 'heartbeatService';
+const LOCAL_STR_NODESOWNER = 'nodesOwner';
+const LOCAL_STR_SERVICESOWNER = 'servicesOwner';
+const LOCAL_STR_CACHEMUTATIONTARGET = 'cacheMutationTarget';
+const LOCAL_STR_CONTROLPLANESYSTEMTABLEGATEWAY =
+  'controlPlaneSystemTableGateway';
+const LOCAL_STR_AUTHORITATIVECONTROLPLANEVIEW =
+  'authoritativeControlPlaneView';
+const LOCAL_STR_LOCALCLUSTERINCARNATIONFENCEPROVIDER =
+  'localClusterIncarnationFenceProvider';
+const numberIsFinite = Number.isFinite;
+const objectEntries = Object.entries;
+const objectFreeze = Object.freeze;
+const objectHasOwn = Object.hasOwn;
 
 const {
   AUTHORITATIVE_READINESS_REPAIR,
@@ -37,6 +54,29 @@ const {
   shouldAllowLocalExecutionForParticipation,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
+function recordChangedReadinessOwnerDependencies(
+  readinessPlanningSnapshotOwner,
+  service,
+  previousOwnerDependencies,
+) {
+  for (const [ownerName, previousOwner] of objectEntries(
+    previousOwnerDependencies,
+  )) {
+    if (previousOwner === service[ownerName]) {
+      continue;
+    }
+    readinessPlanningSnapshotOwner?.recordOwnerDependencyReplacement(
+      ownerName,
+    );
+  }
+}
+
+function syncNullableOwnerDependency(service, options, ownerName) {
+  if (objectHasOwn(options, ownerName)) {
+    service[ownerName] = options[ownerName] || null;
+  }
+}
+
 class ControlPlaneReadinessParticipationBase {
   constructor(options = {}) {
     this.nodeId = options.nodeId || null;
@@ -56,43 +96,43 @@ class ControlPlaneReadinessParticipationBase {
       options.membershipPublicationService || null;
     this.strictOwnerDependencies = options.strictOwnerDependencies === true;
     this.clusterMemberStaleHeartbeatMaxAgeMs =
-      Number.isFinite(options.clusterMemberStaleHeartbeatMaxAgeMs) &&
+      numberIsFinite(options.clusterMemberStaleHeartbeatMaxAgeMs) &&
       options.clusterMemberStaleHeartbeatMaxAgeMs > 0 ?
         Math.floor(options.clusterMemberStaleHeartbeatMaxAgeMs) :
         CONTROL_PLANE_READINESS_DEFAULT.CLUSTER_MEMBER_STALE_HEARTBEAT_MAX_AGE_MS;
     this.authoritativeReadinessRepairCooldownMs =
-      Number.isFinite(options.authoritativeReadinessRepairCooldownMs) &&
+      numberIsFinite(options.authoritativeReadinessRepairCooldownMs) &&
       options.authoritativeReadinessRepairCooldownMs > 0 ?
         Math.floor(options.authoritativeReadinessRepairCooldownMs) :
         AUTHORITATIVE_READINESS_REPAIR.COOLDOWN_MS;
     this.authoritativeReadinessRepairFailureCooldownMs =
-      Number.isFinite(options.authoritativeReadinessRepairFailureCooldownMs) &&
+      numberIsFinite(options.authoritativeReadinessRepairFailureCooldownMs) &&
       options.authoritativeReadinessRepairFailureCooldownMs > 0 ?
         Math.floor(options.authoritativeReadinessRepairFailureCooldownMs) :
         AUTHORITATIVE_READINESS_REPAIR.FAILURE_COOLDOWN_MS;
     this.authoritativeReadinessRepairNoChangeCooldownMs =
-      Number.isFinite(options.authoritativeReadinessRepairNoChangeCooldownMs) &&
+      numberIsFinite(options.authoritativeReadinessRepairNoChangeCooldownMs) &&
       options.authoritativeReadinessRepairNoChangeCooldownMs > 0 ?
         Math.floor(options.authoritativeReadinessRepairNoChangeCooldownMs) :
         AUTHORITATIVE_READINESS_REPAIR.NO_CHANGE_COOLDOWN_MS;
     this.authoritativeReadinessRepairQueryTimeoutMs =
-      Number.isFinite(options.authoritativeReadinessRepairQueryTimeoutMs) &&
+      numberIsFinite(options.authoritativeReadinessRepairQueryTimeoutMs) &&
       options.authoritativeReadinessRepairQueryTimeoutMs > 0 ?
         Math.floor(options.authoritativeReadinessRepairQueryTimeoutMs) :
         AUTHORITATIVE_READINESS_REPAIR.QUERY_TIMEOUT_MS;
     this.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs =
-      Number.isFinite(
+      numberIsFinite(
         options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs,
       ) && options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs > 0 ?
         Math.floor(options.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs) :
         AUTHORITATIVE_READINESS_REPAIR.STALE_HEARTBEAT_MAX_AGE_MS;
     this.membershipPublicationDiagnosticsQueryTimeoutMs =
-      Number.isFinite(options.membershipPublicationDiagnosticsQueryTimeoutMs) &&
+      numberIsFinite(options.membershipPublicationDiagnosticsQueryTimeoutMs) &&
       options.membershipPublicationDiagnosticsQueryTimeoutMs > 0 ?
         Math.floor(options.membershipPublicationDiagnosticsQueryTimeoutMs) :
         CONTROL_PLANE_READINESS_DEFAULT.MEMBERSHIP_PUBLICATION_DIAGNOSTICS_QUERY_TIMEOUT_MS;
     this.membershipPublicationPlanningSnapshotRefreshTimeoutMs =
-      Number.isFinite(
+      numberIsFinite(
         options.membershipPublicationPlanningSnapshotRefreshTimeoutMs,
       ) &&
       options.membershipPublicationPlanningSnapshotRefreshTimeoutMs > 0 ?
@@ -101,12 +141,12 @@ class ControlPlaneReadinessParticipationBase {
         ) :
         MEMBERSHIP_PUBLICATION_PLANNING.REFRESH_TIMEOUT_MS;
     this.membershipPublicationPlanningActiveStaleGraceMs =
-      Number.isFinite(
+      numberIsFinite(
         options.membershipPublicationPlanningActiveStaleGraceMs,
       ) && options.membershipPublicationPlanningActiveStaleGraceMs > 0 ?
         Math.floor(options.membershipPublicationPlanningActiveStaleGraceMs) :
         MEMBERSHIP_PUBLICATION_PLANNING.ACTIVE_STALE_GRACE_MS;
-    this.membershipPublicationReadOptions = Object.freeze({
+    this.membershipPublicationReadOptions = objectFreeze({
       ...MEMBERSHIP_PUBLICATION_READ_OPTIONS,
       queryTimeoutMs: this.membershipPublicationDiagnosticsQueryTimeoutMs,
     });
@@ -288,6 +328,13 @@ class ControlPlaneReadinessParticipationBase {
         authoritativeReadinessRepairStaleHeartbeatMaxAgeMs:
           this.authoritativeReadinessRepairStaleHeartbeatMaxAgeMs,
       });
+    this.readinessPlanningSnapshotOwner =
+      options.readinessPlanningSnapshotOwner ||
+      new ReadinessPlanningSnapshotOwner({
+        service: this,
+        now: this.now,
+        scheduleDrainFn: options.readinessPlanningScheduleDrainFn,
+      });
     this.subscribeToCacheChanges();
   }
 
@@ -322,34 +369,54 @@ class ControlPlaneReadinessParticipationBase {
    */
   syncOwnerDependencies(options = {}) {
     const previousSystemTableCache = this.systemTableCache;
-    const systemTableCacheProvided = Object.hasOwn(options, 'systemTableCache');
-    const cacheMutationTargetProvided = Object.hasOwn(
+    const previousOwnerDependencies = {
+      nodesOwner: this.nodesOwner,
+      servicesOwner: this.servicesOwner,
+      messageRouter: this.messageRouter,
+      nodeLifecycleStateMachine: this.nodeLifecycleStateMachine,
+      storageAccountingService: this.storageAccountingService,
+      cdcIntegrationService: this.cdcIntegrationService,
+      cacheMutationTarget: this.cacheMutationTarget,
+      cdcGroupPropagationService: this.cdcGroupPropagationService,
+      heartbeatService: this.heartbeatService,
+      controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
+      authoritativeControlPlaneView: this.authoritativeControlPlaneView,
+      localClusterIncarnationFenceProvider:
+        this.localClusterIncarnationFenceProvider,
+    };
+    const systemTableCacheProvided = objectHasOwn(options, 'systemTableCache');
+    const cacheMutationTargetProvided = objectHasOwn(
       options,
-      'cacheMutationTarget',
+      LOCAL_STR_CACHEMUTATIONTARGET,
     );
 
     if (systemTableCacheProvided) {
       this.systemTableCache = options.systemTableCache || null;
     }
     if (cacheMutationTargetProvided) {
-      this.cacheMutationTarget = options.cacheMutationTarget || null;
+      this.cacheMutationTarget = options[LOCAL_STR_CACHEMUTATIONTARGET] || null;
     } else if (systemTableCacheProvided) {
       this.cacheMutationTarget = this.systemTableCache;
     }
-    if (Object.hasOwn(options, LOCAL_STR_MESSAGEROUTER)) {
-      this.messageRouter = options.messageRouter || null;
+    const nullableOwnerDependencies = [
+      LOCAL_STR_MESSAGEROUTER,
+      LOCAL_STR_NODELIFECYCLESTATEMACHINE,
+      LOCAL_STR_CDCINTEGRATIONSERVICE,
+      LOCAL_STR_STORAGEACCOUNTINGSERVICE,
+      LOCAL_STR_CDCGROUPPROPAGATIONSERVICE,
+      LOCAL_STR_HEARTBEATSERVICE,
+      LOCAL_STR_NODESOWNER,
+      LOCAL_STR_SERVICESOWNER,
+      LOCAL_STR_CONTROLPLANESYSTEMTABLEGATEWAY,
+      LOCAL_STR_AUTHORITATIVECONTROLPLANEVIEW,
+      LOCAL_STR_LOCALCLUSTERINCARNATIONFENCEPROVIDER,
+    ];
+    for (const ownerName of nullableOwnerDependencies) {
+      syncNullableOwnerDependency(this, options, ownerName);
     }
-    if (Object.hasOwn(options, LOCAL_STR_CDCINTEGRATIONSERVICE)) {
-      this.cdcIntegrationService = options.cdcIntegrationService || null;
-    }
-    if (Object.hasOwn(options, LOCAL_STR_STORAGEACCOUNTINGSERVICE)) {
-      this.storageAccountingService = options.storageAccountingService || null;
-    }
-    if (Object.hasOwn(options, LOCAL_STR_CDCGROUPPROPAGATIONSERVICE)) {
-      this.cdcGroupPropagationService =
-        options.cdcGroupPropagationService || null;
-    }
-    if (Object.hasOwn(options, LOCAL_STR_MEMBERSHIPPUBLICATIONSERVICE)) {
+    if (objectHasOwn(options, LOCAL_STR_MEMBERSHIPPUBLICATIONSERVICE)) {
+      const previousMembershipPublicationService =
+        this.membershipPublicationService;
       if (
         this.membershipPublicationService !==
         (options.membershipPublicationService || null)
@@ -359,12 +426,21 @@ class ControlPlaneReadinessParticipationBase {
         // this service's reads.
         this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
         this.membershipPublicationPlanningSnapshotMemoByNodeId?.clear();
+        this.membershipPlanningSnapshotSyncMemoByPublisher?.clear();
+        this.membershipPlanningSnapshotAsyncMemoByPublisher?.clear();
         // membershipPublicationPlanningSnapshotContextMemo is a WeakMap keyed by
         // per-build snapshot objects — it needs no explicit clear (entries GC with
         // their build).
       }
       this.membershipPublicationService =
         options.membershipPublicationService || null;
+      if (
+        previousMembershipPublicationService !==
+        this.membershipPublicationService
+      ) {
+        this.readinessPlanningSnapshotOwner
+          ?.recordMembershipOwnerReplacement();
+      }
     }
     if (
       this.authoritativeControlPlaneView &&
@@ -374,6 +450,18 @@ class ControlPlaneReadinessParticipationBase {
       this.authoritativeControlPlaneView.syncOwnerDependencies({
         cdcIntegrationService: this.cdcIntegrationService,
         messageRouter: this.messageRouter,
+      });
+    }
+    if (
+      this.authoritativeNodeEvidenceReconciler &&
+      typeof this.authoritativeNodeEvidenceReconciler.syncOwnerDependencies ===
+        'function'
+    ) {
+      this.authoritativeNodeEvidenceReconciler.syncOwnerDependencies({
+        cdcIntegrationService: this.cdcIntegrationService,
+        cacheMutationTarget: this.cacheMutationTarget,
+        systemTableCache: this.systemTableCache,
+        controlPlaneSystemTableGateway: this.controlPlaneSystemTableGateway,
       });
     }
 
@@ -399,8 +487,37 @@ class ControlPlaneReadinessParticipationBase {
       this.membershipPublicationDiagnosticsMemo = null;
       this.priorityRecoveryPlanningProjectionMemoByNodeId?.clear();
       this.membershipPublicationPlanningSnapshotMemoByNodeId?.clear();
+      this.membershipPlanningSnapshotSyncMemoByPublisher?.clear();
+      this.membershipPlanningSnapshotAsyncMemoByPublisher?.clear();
       this.subscribeToCacheChanges();
+      this.readinessPlanningSnapshotOwner?.recordCacheReplacement();
     }
+    recordChangedReadinessOwnerDependencies(
+      this.readinessPlanningSnapshotOwner,
+      this,
+      previousOwnerDependencies,
+    );
+  }
+
+  getReadinessPlanningDiagnostics() {
+    return this.readinessPlanningSnapshotOwner?.getDiagnostics() || null;
+  }
+
+  subscribeReadinessPlanningSnapshots(listener) {
+    return this.readinessPlanningSnapshotOwner?.subscribe(listener) ||
+      (() => {});
+  }
+
+  recordReadinessPlanningSnapshotChange(nodeId) {
+    this.readinessPlanningSnapshotOwner?.recordReadinessSnapshotChange(nodeId);
+  }
+
+  recordReadinessPlanningRecoveryEpochChange(nodeId) {
+    this.readinessPlanningSnapshotOwner?.recordRecoveryEpochChange(nodeId);
+  }
+
+  shutdownReadinessPlanningOwner() {
+    this.readinessPlanningSnapshotOwner?.shutdown();
   }
 
   /**
@@ -479,19 +596,19 @@ class ControlPlaneReadinessParticipationBase {
     const decision =
       snapshot?.dimensions && typeof snapshot.dimensions === 'object' ?
         evaluateEligibilityDecision(snapshot, decisionDimension) :
-        Object.freeze({
+        objectFreeze({
           nodeId: context?.nodeId || null,
           decisionDimension,
           eligible: false,
-          failedDimensions: Object.freeze([decisionDimension]),
-          reasonCodes: Object.freeze([]),
+          failedDimensions: objectFreeze([decisionDimension]),
+          reasonCodes: objectFreeze([]),
         });
     const compactSummary = compactEligibilitySnapshot(
       snapshot,
       decisionDimension,
     );
     const summary = compactSummary ?
-      Object.freeze({
+      objectFreeze({
         ...compactSummary,
         ...(snapshot?.projectionReadinessContract &&
           typeof snapshot.projectionReadinessContract === 'object' ?
@@ -504,7 +621,7 @@ class ControlPlaneReadinessParticipationBase {
       null;
     const cacheWatermark = this.buildStoredReadinessSnapshotWatermark(snapshot);
     const localQueryTransport = snapshot?.nodeEvidence ?
-      Object.freeze({
+      objectFreeze({
         state: snapshot.nodeEvidence.localQueryTransportState || null,
         ready:
             typeof snapshot.nodeEvidence.localQueryTransportReady === 'boolean' ?
@@ -514,7 +631,7 @@ class ControlPlaneReadinessParticipationBase {
         reasonCode:
             snapshot.nodeEvidence.localQueryTransportReasonCode || null,
         errorCode: snapshot.nodeEvidence.localQueryTransportErrorCode || null,
-        retryAfterMs: Number.isFinite(
+        retryAfterMs: numberIsFinite(
           snapshot.nodeEvidence.localQueryTransportRetryAfterMs,
         ) ?
           snapshot.nodeEvidence.localQueryTransportRetryAfterMs :
@@ -522,7 +639,7 @@ class ControlPlaneReadinessParticipationBase {
       }) :
       null;
     const transportState = snapshot?.nodeEvidence ?
-      Object.freeze({
+      objectFreeze({
         connected: snapshot.nodeEvidence.transportConnected === true,
         rowState: snapshot.nodeEvidence.rowConnectionState || null,
         routerState: snapshot.nodeEvidence.routerConnectionState || null,
@@ -538,7 +655,7 @@ class ControlPlaneReadinessParticipationBase {
             snapshot.nodeEvidence.localQueryTransportReasonCode || null,
         localQueryTransportErrorCode:
             snapshot.nodeEvidence.localQueryTransportErrorCode || null,
-        localQueryTransportRetryAfterMs: Number.isFinite(
+        localQueryTransportRetryAfterMs: numberIsFinite(
           snapshot.nodeEvidence.localQueryTransportRetryAfterMs,
         ) ?
           snapshot.nodeEvidence.localQueryTransportRetryAfterMs :
@@ -550,7 +667,7 @@ class ControlPlaneReadinessParticipationBase {
     );
     const reasonCodes = Array.isArray(decision?.reasonCodes) ?
       decision.reasonCodes :
-      Object.freeze([]);
+      objectFreeze([]);
     const localExecutionAllowed = shouldAllowLocalExecutionForParticipation({
       localNodeId: this.nodeId,
       targetNodeId: context?.nodeId || null,
@@ -564,7 +681,7 @@ class ControlPlaneReadinessParticipationBase {
     const deferRetry =
       reasonCode ===
         CONTROL_PLANE_READINESS_REASON.LOCAL_QUERY_TRANSPORT_NOT_READY &&
-      Number.isFinite(localQueryTransport?.retryAfterMs) &&
+      numberIsFinite(localQueryTransport?.retryAfterMs) &&
       localQueryTransport.retryAfterMs > 0;
     const participation = {
       nodeId: context?.nodeId || null,
@@ -592,7 +709,7 @@ class ControlPlaneReadinessParticipationBase {
       reasonCode,
       reasonCodes,
       retryAfterMs:
-        Number.isFinite(localQueryTransport?.retryAfterMs) &&
+        numberIsFinite(localQueryTransport?.retryAfterMs) &&
         localQueryTransport.retryAfterMs > 0 ?
           localQueryTransport.retryAfterMs :
           null,
@@ -612,20 +729,20 @@ class ControlPlaneReadinessParticipationBase {
       snapshot,
       failedDimensions: Array.isArray(decision?.failedDimensions) ?
         decision.failedDimensions :
-        Object.freeze([]),
+        objectFreeze([]),
       summary: summary ?
-        Object.freeze({
+        objectFreeze({
           decisionDimension: summary.decisionDimension || decisionDimension,
           observedAt: summary.observedAt || null,
           lifecycleState: summary.lifecycleState || null,
-          reasonCodes: summary.reasonCodes || Object.freeze([]),
+          reasonCodes: summary.reasonCodes || objectFreeze([]),
           projectionReadinessContract:
             summary.projectionReadinessContract || null,
           projectionReadinessState:
             summary.projectionReadinessContract?.state || null,
           failedDimensions: Array.isArray(decision?.failedDimensions) ?
             decision.failedDimensions :
-            Object.freeze([]),
+            objectFreeze([]),
         }) :
         null,
     };
@@ -635,7 +752,7 @@ class ControlPlaneReadinessParticipationBase {
       participation.error = buildParticipationErrorMessage(participation);
     }
 
-    const frozenParticipation = Object.freeze(participation);
+    const frozenParticipation = objectFreeze(participation);
     this.recordParticipationDecision(frozenParticipation);
     return frozenParticipation;
   }

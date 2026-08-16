@@ -30,6 +30,7 @@ import {
   CONTROL_PLANE_READINESS_DEFAULT,
   CONTROL_PLANE_READINESS_DIMENSION,
   CONTROL_PLANE_READINESS_OWNER,
+  CONTROL_PLANE_READ_PURPOSE,
   CONTROL_PLANE_READINESS_REASON,
   CONTROL_PLANE_READINESS_SUBSYSTEM,
   PROJECTION_READINESS_CONTRACT_STATE,
@@ -46,6 +47,7 @@ import {
 } from './eligibility-snapshot.js';
 import {
   buildProjectionReadinessContract,
+  pickProjectionReadinessEvidenceSource,
 } from './projection-readiness-state.js';
 import {CONTROL_PLANE_PUBLICATION_STATUS} from './control-plane-publication-merge.js';
 import {
@@ -182,6 +184,7 @@ function resolveMembershipPublicationReadOptions({
       null;
   return Object.freeze({
     ...baseOptions,
+    readPurpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
     queryTimeoutMs: normalizedQueryTimeoutMs,
   });
 }
@@ -433,6 +436,7 @@ export const CONTROL_PLANE_READINESS_SERVICE_SHARED = {
   assertCritical,
   buildControlPlanePublicationStory,
   buildProjectionReadinessContract,
+  pickProjectionReadinessEvidenceSource,
   buildParticipationErrorCode,
   buildParticipationErrorMessage,
   buildPublicationRecoveryGateSnapshot,

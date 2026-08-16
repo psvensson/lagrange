@@ -1,0 +1,66 @@
+{
+  "id": "projection-readiness-producer-copy-closure",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The exact five-file producer-copy closure candidate (single per-build projection contract reuse already checkpointed at f9a964880, deep-frozen publication producers, and the module-private canonical dense-record-array registry) eliminates producer-boundary strict-copy amplification so the frozen-input and canonical identity regimes absorb the projection-evidence copy volume; the candidate is independently approved category-complete before one profiled plus three consecutive natural source-bound five-node GCP MovieLens runs reach ACTIVE 5/5 and publication 5/5 within 60 seconds with no named gap above 3000ms and natural teardown.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "projection-readiness-deep-own-data-closure",
+    "planDoc": "solve/epics/publication-readiness-churn-liveness-closure.md",
+    "draftedAtCommit": "f9a96488095cbd40d37888a4f2760f149437b2ef"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "readiness-planning-owner-boundary-atomic-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "projection-readiness-producer-copy-closure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "readiness-planning-owner-boundary-atomic-closure",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "exact-independent-approval",
+      "statement": "The exact five-file candidate requires category-complete independent approval binding its content fingerprint before GCP, audit, checkpoint, or landing."
+    },
+    {
+      "id": "bounded-producer-copy-scope",
+      "statement": "Source scope is bounded to the producer-copy closure: recovery-protocol-snapshot deep freezeRecord, the canonical dense-record-array registry and its two consumers, and their regressions; no budget raises, no cohort reduction, no new readiness cache, scheduler, or call-site throttle."
+    },
+    {
+      "id": "live-proof-identity",
+      "statement": "Terminal proof is one profiled plus three consecutive natural five-node GCP MovieLens runs with matching booted source fingerprint, complete evidence, natural teardown, ACTIVE and publication 5/5 within 60 seconds, and no named gap above 3000ms."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "adversarial-js-intrinsics",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity",
+    "recovery-replay",
+    "retry-loops",
+    "sweep-timer",
+    "transport-delivery"
+  ]
+}

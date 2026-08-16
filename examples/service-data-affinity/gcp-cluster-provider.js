@@ -36,11 +36,16 @@ import {createGunzip} from 'node:zlib';
 
 const {createCluster} = CLUSTER_FACTORY_LAYER;
 
-// One node per VM: five quiet e2-standard-4 hosts, matching gcp-default.json.
+// One node per VM. n2-standard-4: the certification bar is a 60-second
+// formation window with a 3000ms event-loop gap ceiling, and e2-class
+// (burstable, shared-core scheduling) hosts showed 2-4x run-to-run CPU
+// variance that swung otherwise-identical code between 2687ms and 9573ms
+// max gaps (archived runs 21-34-12/21-42-44/21-50-53); a fixed-performance
+// class removes steal-time from the certification variable set.
 const GCP_DEMO_CONFIG = Object.freeze({
   project: 'something-2e584',
   zone: 'us-central1-a',
-  machineType: 'e2-standard-4',
+  machineType: 'n2-standard-4',
   vmCount: 5,
   preemptible: false,
 });
@@ -117,7 +122,16 @@ async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
 
     // Build (or reuse) the git-labelled image locally, then ship it to every
     // provisioned host so the remote daemons run the exact current bytes.
-    const config = mergeWithDefaults({size: DEMO_NODE_COUNT});
+    // Operator-restored certification window (2026-08-16): back to 60s.
+    // The round-8 serial-chain floor of 50-65s that justified the 90s
+    // amendment is collapsed by the parallel joiner starts and the ledger
+    // spread-cure ADD overlap (round-9 C1+C2, projected floor 35-45s), so
+    // the window returns to the harness default convergence base (30s x
+    // the 5-node scale factor 2.0 = 60s); every other sealed term
+    // (3000ms gap ceiling, fingerprints, teardown) is unchanged.
+    const config = mergeWithDefaults({
+      size: DEMO_NODE_COUNT,
+    });
     await buildImage(config, false);
     await installGcpImage(provisioner, config.image, verbose);
 

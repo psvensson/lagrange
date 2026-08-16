@@ -454,6 +454,15 @@ class ServiceReconciler extends EventEmitter {
               actionEntry.action,
               context,
             );
+            // One real event-loop turn per action. Replica-create actions
+            // are 130-250ms of synchronous work whose awaits resolve as
+            // microtasks; without a macrotask boundary the bootstrap
+            // system-table batch drains 16 workers' continuations
+            // back-to-back, starving timers (heartbeats, the gap watchdog)
+            // for the whole batch — round-10: 7-8s unexplained ELU-1.0
+            // gaps wedging the lone seed out of serve eligibility. Per-
+            // queue action order is unchanged.
+            await new Promise((resolve) => setImmediate(resolve));
           }
         }
       })());

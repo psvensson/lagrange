@@ -6,19 +6,35 @@ import {
 } from './projection-readiness-decision.js';
 import {
   buildProjectionReadinessEvidence,
+  pickProjectionReadinessEvidenceSource,
 } from './projection-readiness-evidence.js';
+
+const ArrayConstructor = Array;
+const arrayIsArray = Array.isArray;
+const objectDefineProperty = Object.defineProperty;
+const objectFreeze = Object.freeze;
+const stringConstructor = String;
+
+function appendProjectionReadinessStateValue(values, value) {
+  objectDefineProperty(values, values.length, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
+  });
+}
 
 function buildProjectionReadinessState(source = {}) {
   const evidence = buildProjectionReadinessEvidence(source);
   const decision = buildProjectionReadinessDecision(evidence);
-  return Object.freeze({
+  return objectFreeze({
     semanticOwner: PROJECTION_READINESS_SEMANTIC_OWNER,
     state: decision.state,
     ready: decision.ready,
     recoveryOpen: decision.recoveryOpen,
     activeGate: decision.activeGate,
     lanes: decision.lanes,
-    publication: Object.freeze({
+    publication: objectFreeze({
       ready: evidence.publicationReady,
       ownerStream: evidence.publicationOwnerStream,
       streamOutcome: evidence.publicationStreamOutcome,
@@ -27,7 +43,7 @@ function buildProjectionReadinessState(source = {}) {
       revisionState: evidence.publicationRevisionState,
       boundaryOutcome: evidence.publicationBoundaryOutcome,
     }),
-    readiness: Object.freeze({
+    readiness: objectFreeze({
       internalReady: decision.lanes.internal.ready === true,
       repairEligible: evidence.repairEligible,
       recoveryEligible: evidence.recoveryEligible,
@@ -35,7 +51,7 @@ function buildProjectionReadinessState(source = {}) {
       runtimeServeEligible: evidence.runtimeServeEligible,
       operatorReady: decision.lanes.operator.ready === true,
     }),
-    priorityRecovery: Object.freeze({
+    priorityRecovery: objectFreeze({
       active: evidence.priorityRecoveryActive,
       durableSpreadPending: evidence.durablePrioritySpreadPending,
       reasonCodes: evidence.priorityRecoveryReasonCodes,
@@ -51,12 +67,37 @@ function buildProjectionReadinessContract(source = {}) {
   return buildProjectionReadinessState(source);
 }
 
+// Per-node projection state is rebuilt twice per candidate-derivation pass
+// (active-node selection plus the isCanonicallyActiveNode re-check) and once
+// more per readiness evaluation — live-profiled at half the residual seed
+// freeze cost (archived run run-2026-08-15T16-36-59-912Z-profiled-manual).
+// The state is a pure frozen derivation of the readiness entry, so entry
+// identity is an exact memo key; readiness entries are frozen snapshots in
+// production, and a caller that mints fresh entries per read simply misses.
+const PROJECTION_READINESS_STATE_BY_ENTRY = new WeakMap();
+const EMPTY_PROJECTION_READINESS_SOURCE = objectFreeze({});
+
+function resolveProjectionReadinessStateForEntry(readinessEntry) {
+  const source = readinessEntry && typeof readinessEntry === 'object' ?
+    readinessEntry :
+    EMPTY_PROJECTION_READINESS_SOURCE;
+  const memoized = PROJECTION_READINESS_STATE_BY_ENTRY.get(source);
+  if (memoized) {
+    return memoized;
+  }
+  const state = buildProjectionReadinessState(source);
+  PROJECTION_READINESS_STATE_BY_ENTRY.set(source, state);
+  return state;
+}
+
 function normalizeSummaryReasonCodes(reasonCodes) {
-  return Object.freeze(
-    Array.isArray(reasonCodes) ?
-      reasonCodes.map((code) => String(code)).filter(Boolean) :
-      [],
-  );
+  const normalized = new ArrayConstructor();
+  const source = arrayIsArray(reasonCodes) ? reasonCodes : normalized;
+  for (let index = 0; index < source.length; index++) {
+    const code = stringConstructor(source[index]);
+    if (code) appendProjectionReadinessStateValue(normalized, code);
+  }
+  return objectFreeze(normalized);
 }
 
 /**
@@ -77,24 +118,24 @@ function summarizeProjectionReadinessContractForHistory(contract) {
   if (!contract || typeof contract !== 'object') {
     return null;
   }
-  return Object.freeze({
+  return objectFreeze({
     semanticOwner: contract.semanticOwner ?? null,
     state: contract.state ?? null,
     ready: contract.ready === true,
     recoveryOpen: contract.recoveryOpen === true,
-    activeGate: Object.freeze({
+    activeGate: objectFreeze({
       state: contract.activeGate?.state ?? null,
     }),
-    publication: Object.freeze({
+    publication: objectFreeze({
       ready: contract.publication?.ready === true,
       revisionState: contract.publication?.revisionState ?? null,
     }),
-    readiness: Object.freeze({
+    readiness: objectFreeze({
       serveEligible: contract.readiness?.serveEligible === true,
       repairEligible: contract.readiness?.repairEligible === true,
       recoveryEligible: contract.readiness?.recoveryEligible === true,
     }),
-    priorityRecovery: Object.freeze({
+    priorityRecovery: objectFreeze({
       active: contract.priorityRecovery?.active === true,
       durableSpreadPending:
         contract.priorityRecovery?.durableSpreadPending === true,
@@ -111,5 +152,7 @@ function summarizeProjectionReadinessContractForHistory(contract) {
 export {
   buildProjectionReadinessContract,
   buildProjectionReadinessState,
+  pickProjectionReadinessEvidenceSource,
+  resolveProjectionReadinessStateForEntry,
   summarizeProjectionReadinessContractForHistory,
 };

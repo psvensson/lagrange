@@ -222,11 +222,17 @@ function buildReadinessRevision(readiness) {
       NODE_TRUST_EVIDENCE_STATE.KNOWN :
       NODE_TRUST_EVIDENCE_STATE.UNKNOWN,
     observedAtMs,
+    // The evidence record carries {localProjectionRevision,
+    // requiredPublicationRevision} (each {available, value}) — the old
+    // localRevision/requiredRevision names never existed on it, so this
+    // diagnostic was structurally null in every run (round-12).
     localProjectionRevision: firstPresentValue(
+      projectionRevision.localProjectionRevision?.value,
       projectionRevision.localRevision,
       projectionRevision.observedRevision,
     ),
     requiredProjectionRevision: firstPresentValue(
+      projectionRevision.requiredPublicationRevision?.value,
       projectionRevision.requiredRevision,
       projectionRevision.desiredRevision,
     ),
@@ -328,6 +334,22 @@ function buildTrustReasonCodes(readiness, context) {
   }
   if (!context.canonicalRepair) {
     reasonCodeSet.add(NODE_TRUST_REASON.READINESS_NOT_REPAIR_ELIGIBLE);
+  }
+  // The serve lane computes its blocking reason codes on every build and
+  // they are otherwise never logged anywhere — a repair_only verdict with
+  // empty reasonCodes is undiagnosable from a captured run (round-12 cost
+  // a full attribution round to establish exactly that). Surface them,
+  // prefixed, whenever the canonical serve dimension is the blocker.
+  if (!context.canonicalServe) {
+    const serveLaneReasonCodes =
+      readiness?.projectionReadinessContract?.lanes?.serve?.reasonCodes;
+    if (Array.isArray(serveLaneReasonCodes)) {
+      for (const code of serveLaneReasonCodes) {
+        if (typeof code === 'string' && code.length > 0) {
+          reasonCodeSet.add(`serve_lane_${code}`);
+        }
+      }
+    }
   }
   return normalizeReasonCodes(readiness, reasonCodeSet);
 }

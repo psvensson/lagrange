@@ -1,6 +1,32 @@
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {ControlPlaneReadinessPublicationDiagnostics} from './control-plane-readiness-publication-diagnostics.js';
 import {installControlPlaneReadinessRuntimeAuthorityMethods} from './control-plane-readiness-runtime-authority-methods.js';
+
+function normalizeOptionalEvidenceValue(value) {
+  return value || null;
+}
+
+function buildMissingSelfLocalQueryTransportEvidence(localQueryTransport) {
+  return {
+    localQueryTransportState:
+      normalizeOptionalEvidenceValue(localQueryTransport?.state),
+    localQueryTransportReady:
+      typeof localQueryTransport?.ready === LOCAL_STR_BOOLEAN ?
+        localQueryTransport.ready :
+        null,
+    localQueryTransportReason:
+      normalizeOptionalEvidenceValue(localQueryTransport?.reason),
+    localQueryTransportReasonCode:
+      normalizeOptionalEvidenceValue(localQueryTransport?.reasonCode),
+    localQueryTransportErrorCode:
+      normalizeOptionalEvidenceValue(localQueryTransport?.errorCode),
+    localQueryTransportRetryAfterMs: Number.isFinite(
+      localQueryTransport?.retryAfterMs,
+    ) ?
+      localQueryTransport.retryAfterMs :
+      null,
+  };
+}
 import {summarizeProjectionReadinessContractForHistory} from './projection-readiness-state.js';
 
 const LOCAL_STR_BOOLEAN = 'boolean';
@@ -18,6 +44,7 @@ const {
   buildReadinessTransitionOwnerState,
   buildReason,
   createEligibilitySnapshot,
+  pickProjectionReadinessEvidenceSource,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
 
 const PRIORITY_CONTROL_PLANE_RECOVERY_DIAGNOSTICS_UNAVAILABLE =
@@ -291,38 +318,26 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
   }
 
   buildProjectionReadinessContract(context = {}) {
-    return buildProjectionReadinessContract(context);
+    // Only the fields the evidence builder reads may reach the sealed
+    // whole-source own-data validation — any non-plain value in a
+    // never-read context field otherwise fails the whole contract closed
+    // (round-13 lone-seed serve-lane collapse).
+    return buildProjectionReadinessContract(
+      pickProjectionReadinessEvidenceSource(context),
+    );
   }
 
   buildEvaluatedNodeReadinessSnapshot(context = {}) {
     const persistSnapshot = context.persistSnapshot !== false;
     const runtimeAuthority = this.buildRuntimeAuthoritySnapshot(context);
-    const dimensions = this.buildDimensions({
+    const {
+      dimensions,
+      priorityControlPlaneRecovery,
+      projectionReadinessContract,
+    } = this.buildDimensionsEvaluation({
       ...context,
       runtimeAuthority,
     });
-    const runtimeServeAdmission = this.buildRuntimeServeAdmissionSnapshot(
-      context,
-      runtimeAuthority,
-    );
-    const priorityControlPlaneRecovery =
-      this.getPriorityControlPlaneRecoveryState({
-        nodeId: context.nodeId,
-        observedAt: context.observedAt,
-        publication: context.publication,
-        membershipPublication: context.membershipPublication,
-        membershipPublicationPlanningSnapshot:
-          context.membershipPublicationPlanningSnapshot,
-        dimensions,
-      });
-    const projectionReadinessContract =
-      this.buildProjectionReadinessContract({
-        ...context,
-        dimensions,
-        priorityControlPlaneRecovery,
-        runtimeAuthority,
-        runtimeServeEligible: runtimeServeAdmission.eligible,
-      });
     const reasons = this.buildReasons({
       ...context,
       dimensions,
@@ -367,6 +382,12 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
         Number.isFinite(context.buildStartedAtMs) ?
           context.buildStartedAtMs :
           null,
+        {
+          readinessPlanningOwnerBuild:
+            context.readinessPlanningOwnerBuild === true,
+          readinessPlanningColdBootstrapBuild:
+            context.readinessPlanningColdBootstrapBuild === true,
+        },
       );
     }
     return snapshot;
@@ -460,19 +481,7 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
       rowConnectionState: transportState.rowState,
       routerConnectionState: transportState.routerState,
       transportConnected: transportState.connected,
-      localQueryTransportState: localQueryTransport?.state || null,
-      localQueryTransportReady:
-        typeof localQueryTransport?.ready === LOCAL_STR_BOOLEAN ?
-          localQueryTransport.ready :
-          null,
-      localQueryTransportReason: localQueryTransport?.reason || null,
-      localQueryTransportReasonCode: localQueryTransport?.reasonCode || null,
-      localQueryTransportErrorCode: localQueryTransport?.errorCode || null,
-      localQueryTransportRetryAfterMs: Number.isFinite(
-        localQueryTransport?.retryAfterMs,
-      ) ?
-        localQueryTransport.retryAfterMs :
-        null,
+      ...buildMissingSelfLocalQueryTransportEvidence(localQueryTransport),
     });
   }
 
@@ -614,7 +623,10 @@ class ControlPlaneReadinessEvidenceReasons extends ControlPlaneReadinessPublicat
   buildReadinessTransitionState(context) {
     const ownerState = buildReadinessTransitionOwnerState(context, this.now());
     const projectionReadinessContract =
-      this.buildProjectionReadinessContract(context);
+      context.projectionReadinessContract &&
+      typeof context.projectionReadinessContract === 'object' ?
+        context.projectionReadinessContract :
+        this.buildProjectionReadinessContract(context);
     return Object.freeze({
       ...ownerState,
       projectionReadinessContract,

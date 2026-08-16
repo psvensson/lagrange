@@ -247,6 +247,40 @@ class CDCRoutedMutationReadiness {
       }
       return result;
     }
+    // Writes ride raft whenever any candidate can carry the append: the
+    // per-replica direct loop lands only on the replica instances present
+    // in this map at this instant (ONE per partition), OUTSIDE the raft
+    // log, so every replica absent from the map diverges durably and
+    // nothing ever heals it (round-11: the registration-era services rows
+    // missing from the raft leader's db wedged serve-eligibility
+    // permanently). proposeWrite on a follower forwards to the known
+    // leader, and registration waits for partition leadership before
+    // writing, so the raft lane is the normal path; the direct fan-out
+    // remains only for the genuinely leaderless earliest-bootstrap window
+    // where the raft lane itself fails.
+    const raftLaneService =
+      leaderService || initializedCandidates.find(
+        (service) => typeof service.executeQuery === 'function',
+      ) || null;
+    if (raftLaneService && typeof raftLaneService.executeQuery === 'function') {
+      try {
+        const result = await raftLaneService.executeQuery(sql, params);
+        if (result && result.success !== false) {
+          return result;
+        }
+        this.logger.warn(CDC_LOG_MSG.BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK, {
+          tableName,
+          partitionId: raftLaneService.partitionId,
+          error: result?.error || null,
+        });
+      } catch (error) {
+        this.logger.warn(CDC_LOG_MSG.BOOTSTRAP_RAFT_WRITE_LANE_FELL_BACK, {
+          tableName,
+          partitionId: raftLaneService.partitionId,
+          error: error?.message || String(error),
+        });
+      }
+    }
     const targets = initializedCandidates;
     const results = [];
     for (const service of targets) {

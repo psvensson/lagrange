@@ -1,0 +1,271 @@
+diff --git a/src/control-plane/membership-publication-priority-partition-canonical-data.js b/src/control-plane/membership-publication-priority-partition-canonical-data.js
+index 53d7fd1f0449e1bc9b2ba20fba3b0d1d49b81cca..711fd30adf472fdd3d0cb57988399d834026255a 100644
+--- a/src/control-plane/membership-publication-priority-partition-canonical-data.js
++++ b/src/control-plane/membership-publication-priority-partition-canonical-data.js
+@@ -361,7 +361,6 @@ export {
+   buildStringSet,
+   copyCanonicalDenseOwnDataRecordArray,
+   copyDenseOwnDataArray,
+-  copyDenseOwnDataRecordArray,
+   copyStrictOwnDataRecord,
+   copyExclusionCounts,
+   DATA_PROPERTY_STATE,
+diff --git a/src/control-plane/readiness-planning-formation-source.js b/src/control-plane/readiness-planning-formation-source.js
+index 6a5fe7b25a9ba5bbd093a4c322b514bd03114e47..6f6d544369949b28e7f58d078a05457a602bf2eb 100644
+--- a/src/control-plane/readiness-planning-formation-source.js
++++ b/src/control-plane/readiness-planning-formation-source.js
+@@ -1,11 +1,11 @@
+ import {NODE_STATE, TABLES} from '../constants/index.js';
+-import {copyDenseOwnDataRecordArray} from '../utils/strict-own-data.js';
+ import {
+   appendArrayValue,
+   encodeSignatureValues,
+   readOwnDataValue,
+ } from './readiness-planning-version-contract.js';
+ 
++const arrayIsArray = Array.isArray;
+ const arraySort = Function.call.bind(Array.prototype.sort);
+ const stringToLowerCase = Function.call.bind(String.prototype.toLowerCase);
+ const READINESS_PLANNING_CONNECTED_STATE = 'connected';
+@@ -28,18 +28,28 @@ function hasReadinessLiveTransportEvidence(nodeId, messageRouter) {
+   }
+ }
+ 
+-function readCachedNodeRows(service) {
++function readSharedNodeRows(service) {
+   if (typeof service?.systemTableCache?.getAll !== 'function') return [];
+   try {
+     const rows = service.systemTableCache.getAll(TABLES.NODES);
+-    return copyDenseOwnDataRecordArray(rows) || [];
++    // The cache is the trusted row owner: getAll serves its own sanitized
++    // (fastJsonClone, own enumerable data only) deep-frozen shared rows, and
++    // every consumer here reads single fields through descriptor-based
++    // readOwnDataValue/readOwnerKey. Re-running the full strict record-array
++    // copy on each call re-validated the owner's own frozen output on every
++    // planning enqueue and read — the dominant walk-count amplifier on the
++    // live seed — while adding no admission the per-field reads need. A
++    // non-array (hostile or absent) source still fails closed to [].
++    return arrayIsArray(rows) ? rows : [];
+   } catch {
+     return [];
+   }
+ }
+ 
+-function readFormationBootstrapOwnerKey(service) {
+-  const rows = readCachedNodeRows(service);
++function readFormationBootstrapOwnerKey(service, cachedRows = null) {
++  const rows = arrayIsArray(cachedRows) ?
++    cachedRows :
++    readSharedNodeRows(service);
+   for (let index = 0; index < rows.length; index++) {
+     const status = readOwnDataValue(rows[index], 'status');
+     const ownerKey = readOwnerKey(rows[index]);
+@@ -52,8 +62,10 @@ function readFormationBootstrapOwnerKey(service) {
+   return '';
+ }
+ 
+-function readFormationEpochKey(service) {
+-  const rows = readCachedNodeRows(service);
++function readFormationEpochKey(service, cachedRows = null) {
++  const rows = arrayIsArray(cachedRows) ?
++    cachedRows :
++    readSharedNodeRows(service);
+   const formationOwnerKeys = [];
+   for (let index = 0; index < rows.length; index++) {
+     const status = readOwnDataValue(rows[index], 'status');
+@@ -68,7 +80,7 @@ function readFormationEpochKey(service) {
+ }
+ 
+ export {
+-  readCachedNodeRows,
++  readSharedNodeRows,
+   readFormationBootstrapOwnerKey,
+   readFormationEpochKey,
+   readOwnerKey,
+diff --git a/src/control-plane/readiness-planning-snapshot-owner.js b/src/control-plane/readiness-planning-snapshot-owner.js
+index 4a705b3ed39deaab4be460542af4f27f39d497cf..bdcb51938bef9c0a96935321aa6ec0d03352c281 100644
+--- a/src/control-plane/readiness-planning-snapshot-owner.js
++++ b/src/control-plane/readiness-planning-snapshot-owner.js
+@@ -25,7 +25,7 @@ import {
+   defineRecordValue,
+ } from './readiness-planning-publication-contract.js';
+ import {
+-  readCachedNodeRows,
++  readSharedNodeRows,
+   readFormationBootstrapOwnerKey,
+   readFormationEpochKey,
+   readOwnerKey,
+@@ -243,7 +243,7 @@ class ReadinessPlanningSnapshotOwner {
+     mapSet(this.completedSnapshotsByOwnerKey, ownerKey, completed);
+   }
+ 
+-  listOwnerKeys(record = null) {
++  listOwnerKeys(record = null, sharedNodeRows = null) {
+     const ownerKeys = [];
+     const appendUniqueOwnerKey = (ownerKey) => {
+       if (ownerKey && !arrayIncludes(ownerKeys, ownerKey)) {
+@@ -252,14 +252,17 @@ class ReadinessPlanningSnapshotOwner {
+     };
+     const changedNodeId = readOwnerKey(record);
+     appendUniqueOwnerKey(changedNodeId);
+-    const rows = readCachedNodeRows(this.service);
++    const rows = Array.isArray(sharedNodeRows) ?
++      sharedNodeRows :
++      readSharedNodeRows(this.service);
+     for (let index = 0; index < rows.length; index++) {
+       appendUniqueOwnerKey(readOwnerKey(rows[index]));
+     }
+     if (ownerKeys.length === 0 && typeof this.service?.nodeId === 'string') {
+       appendUniqueOwnerKey(this.service.nodeId);
+     }
+-    const formationOwnerKey = readFormationBootstrapOwnerKey(this.service);
++    const formationOwnerKey =
++      readFormationBootstrapOwnerKey(this.service, rows);
+     if (!formationOwnerKey || !arrayIncludes(ownerKeys, formationOwnerKey)) {
+       return ownerKeys;
+     }
+@@ -274,7 +277,11 @@ class ReadinessPlanningSnapshotOwner {
+ 
+   enqueueOwnerKeys(reason, record = null) {
+     const token = this.captureToken();
+-    const ownerKeys = this.listOwnerKeys(record);
++    // One shared frozen node-row read serves the owner list and both
++    // formation keys below; per-callee re-reads amplified full-table reads
++    // several times per enqueue on the live seed.
++    const sharedNodeRows = readSharedNodeRows(this.service);
++    const ownerKeys = this.listOwnerKeys(record, sharedNodeRows);
+     for (let index = 0; index < ownerKeys.length; index++) {
+       const ownerKey = ownerKeys[index];
+       const optionsByBuildKey = mapGet(
+@@ -302,8 +309,10 @@ class ReadinessPlanningSnapshotOwner {
+         this.enqueueBuild(ownerKey, reason, variants[variantIndex], token);
+       }
+     }
+-    const formationOwnerKey = readFormationBootstrapOwnerKey(this.service);
+-    const formationEpochKey = readFormationEpochKey(this.service);
++    const formationOwnerKey =
++      readFormationBootstrapOwnerKey(this.service, sharedNodeRows);
++    const formationEpochKey =
++      readFormationEpochKey(this.service, sharedNodeRows);
+     if (formationEpochKey !== this.formationEpochKey) {
+       this.formationEpochKey = formationEpochKey;
+       setClear(this.prioritizedFormationOwnerKeys);
+@@ -425,9 +434,14 @@ class ReadinessPlanningSnapshotOwner {
+   }
+ 
+   canConsumeInitialBootstrap(ownerKey) {
++    // Short-circuit before the node-table scan: once the initial bootstrap
++    // is consumed the answer is unconditionally false, and this sits on the
++    // readSync miss path where the scan ran on every read.
++    if (this.initialBootstrapConsumed) {
++      return false;
++    }
+     const formationOwnerKey = readFormationBootstrapOwnerKey(this.service);
+-    return !this.initialBootstrapConsumed &&
+-      (!formationOwnerKey || formationOwnerKey === ownerKey);
++    return !formationOwnerKey || formationOwnerKey === ownerKey;
+   }
+ 
+   canReuseCompletedSnapshot(ownerKey, completed, token, buildOptionsKey) {
+diff --git a/test/control-plane/readiness-planning-read-amplification.test.js b/test/control-plane/readiness-planning-read-amplification.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..ea3bd84fb8b50716b65375471bf46dc55bacc7c6
+--- /dev/null
++++ b/test/control-plane/readiness-planning-read-amplification.test.js
+@@ -0,0 +1,96 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  createActiveNode,
++  createCache,
++  createMessageGroupService,
++  createPublicationService,
++} from './control-plane-readiness-service-test-support.js';
++import {
++  CONTROL_PLANE_PUBLICATION_MODE,
++} from '../../src/control-plane/control-plane-readiness-constants.js';
++import {
++  ControlPlaneReadinessService,
++} from '../../src/control-plane/control-plane-readiness-service.js';
++import {
++  readSharedNodeRows,
++} from '../../src/control-plane/readiness-planning-formation-source.js';
++import {COLUMN, TABLES} from '../../src/constants/index.js';
++
++const READ_AMPLIFICATION_NOW_MS = 620000;
++const NODE_COUNT = 3;
++
++function createCountingService() {
++  const nodeIds = Array.from(
++    {length: NODE_COUNT},
++    (_, index) => `node-${index}`,
++  );
++  const cache = createCache({
++    nodes: nodeIds.map((id) => createActiveNode(id)),
++    services: [createMessageGroupService(nodeIds[0])],
++  });
++  const counters = {getAllNodeReads: 0};
++  const originalGetAll = cache.getAll.bind(cache);
++  cache.getAll = (tableName) => {
++    if (tableName === TABLES.NODES) {
++      counters.getAllNodeReads += 1;
++    }
++    return originalGetAll(tableName);
++  };
++  const service = new ControlPlaneReadinessService({
++    nodeId: nodeIds[0],
++    systemTableCache: cache,
++    cdcGroupPropagationService: createPublicationService({
++      currentMode: CONTROL_PLANE_PUBLICATION_MODE.GROUPED,
++      reasonCode: null,
++      enteredAt: '2026-03-04T00:00:00.000Z',
++      recentTransitions: [],
++    }),
++    now: () => READ_AMPLIFICATION_NOW_MS,
++  });
++  return {service, cache, counters, nodeIds};
++}
++
++test('planning reads share one frozen node-row view instead of strict ' +
++  'copies', async (t) => {
++  const {service, cache} = createCountingService();
++  const shared = cache.getAll(TABLES.NODES);
++  const rows = readSharedNodeRows(service);
++  t.equal(rows.length, NODE_COUNT, 'every cached node row is served');
++  t.equal(rows[0], shared[0],
++    'the planning read serves the cache’s own shared rows by reference ' +
++      'instead of strict-copying the table per call (the production cache ' +
++      'deep-freezes these rows via readView; the test stub does not)');
++  t.end();
++});
++
++test('one planning enqueue performs one node-table read and the consumed ' +
++  'bootstrap never rescans', async (t) => {
++  const {service, cache, counters, nodeIds} = createCountingService();
++  const owner = service.readinessPlanningSnapshotOwner;
++  t.ok(owner, 'the readiness planning snapshot owner is installed');
++
++  counters.getAllNodeReads = 0;
++  owner.enqueueOwnerKeys('read-amplification-regression');
++  t.equal(counters.getAllNodeReads, 1,
++    'one enqueue reads the node table exactly once for the owner list and ' +
++      'both formation keys');
++
++  owner.initialBootstrapConsumed = true;
++  counters.getAllNodeReads = 0;
++  t.equal(owner.canConsumeInitialBootstrap(nodeIds[0]), false,
++    'a consumed bootstrap answers false');
++  t.equal(counters.getAllNodeReads, 0,
++    'a consumed bootstrap short-circuits before any node-table scan');
++
++  counters.getAllNodeReads = 0;
++  cache.applySystemTableChange(TABLES.NODES, 'UPDATE', {
++    [COLUMN.NODE_ID]: nodeIds[1],
++    status: 'active',
++    revision: 2,
++  });
++  service.getNodeReadinessSync(nodeIds[1]);
++  t.ok(counters.getAllNodeReads <= 3,
++    'one cache change plus one readiness read stay within three node-table ' +
++      `reads (observed ${counters.getAllNodeReads})`);
++  t.end();
++});

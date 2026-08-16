@@ -9,11 +9,12 @@ import {
   isPriorityRecoveryWriteRouting,
   shouldAllowPriorityRecoveryBootstrapRoutingGrace,
 } from './query-executor-priority-recovery-bootstrap-routing.js';
-
-
+import {isReadinessInternalRouteStructurallyReady} from
+  './query-executor-bootstrap-deferred-routing.js';
 const {
   COLUMN,
   CONTROL_PLANE_PARTICIPATION_KIND,
+  CONTROL_PLANE_READ_PURPOSE,
   CONTROL_PLANE_READINESS_DIMENSION,
   LEADER_GAP_REASON_OWNER_MISSING,
   LEADER_GAP_REASON_SERVICE_MISSING,
@@ -136,6 +137,11 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
         reasonCode: QUERY_ROUTING_DIAGNOSTIC_REASON.SERVICE_ADDRESS_MISSING,
         readinessSummary: null,
       };
+    } else if (
+      routingOptions?.[QUERY_EXECUTOR_ROUTING_OPTION_FIELD.READ_PURPOSE] ===
+        CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL
+    ) {
+      routabilityResult = this.evaluateReadinessInternalRoutability(service);
     }
     if (routabilityResult) {
       return routabilityResult;
@@ -321,6 +327,28 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
             ] || null,
         } :
         null,
+    };
+  }
+
+  /**
+   * Evaluate the structural route used by readiness-owned authoritative reads.
+   * This deliberately checks addressing and transport only; calling full
+   * readiness here would recreate the formation dependency cycle.
+   * @param {Object} service
+   * @return {Object}
+   * @private
+   */
+  evaluateReadinessInternalRoutability(service) {
+    const structurallyReady = isReadinessInternalRouteStructurallyReady({
+      service,
+      readinessService: this.controlPlaneReadinessService,
+    });
+    return {
+      routable: structurallyReady,
+      reasonCode: structurallyReady ?
+        QUERY_ROUTING_DIAGNOSTIC_REASON.OK :
+        QUERY_ROUTING_DIAGNOSTIC_REASON.NODE_NOT_ELIGIBLE,
+      readinessSummary: null,
     };
   }
 

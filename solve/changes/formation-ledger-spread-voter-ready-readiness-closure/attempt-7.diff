@@ -1,0 +1,195 @@
+diff --git a/src/control-plane/control-plane-readiness-publication-diagnostics.js b/src/control-plane/control-plane-readiness-publication-diagnostics.js
+index 00da193d696c2e7c79330f22fdbeff1825c586da..a3ac4691644351a4e077b8fcf80e217a7073f3e9 100644
+--- a/src/control-plane/control-plane-readiness-publication-diagnostics.js
++++ b/src/control-plane/control-plane-readiness-publication-diagnostics.js
+@@ -149,7 +149,10 @@ class ControlPlaneReadinessPublicationDiagnostics
+       typeof service.deriveClusterMembershipCandidate === 'function'
+     ) {
+       const publisherNodeId = nodeId || this.nodeId;
+-      const versionKey = readPlanningVersionKeyForCache(this.systemTableCache);
++      const versionKey = readPlanningVersionKeyForCache(
++        this.systemTableCache,
++        observedAt,
++      );
+       const memo = this.membershipPlanningSnapshotAsyncMemo;
+       let derivation;
+       if (
+@@ -208,8 +211,8 @@ class ControlPlaneReadinessPublicationDiagnostics
+   // mutation versions (heartbeat writes bound staleness at the heartbeat
+   // interval, the same bound the CL-019 diagnostics memo accepted); any
+   // relevant table write invalidates.
+-  readMembershipPlanningDerivationVersionKey() {
+-    return readPlanningVersionKeyForCache(this.systemTableCache);
++  readMembershipPlanningDerivationVersionKey(observedAt) {
++    return readPlanningVersionKeyForCache(this.systemTableCache, observedAt);
+   }
+ 
+   getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt) {
+@@ -219,7 +222,8 @@ class ControlPlaneReadinessPublicationDiagnostics
+       typeof service.deriveClusterMembershipCandidateSync === 'function'
+     ) {
+       const publisherNodeId = nodeId || this.nodeId;
+-      const versionKey = this.readMembershipPlanningDerivationVersionKey();
++      const versionKey =
++        this.readMembershipPlanningDerivationVersionKey(observedAt);
+       const memo = this.membershipPlanningSnapshotSyncMemo;
+       if (
+         versionKey !== null &&
+diff --git a/src/control-plane/membership-planning-version-key.js b/src/control-plane/membership-planning-version-key.js
+index df8d9d0731f591780db5aab129210b21fee0844e..136705bb300dc3b775df6f60e7db40be7da2e7ad 100644
+--- a/src/control-plane/membership-planning-version-key.js
++++ b/src/control-plane/membership-planning-version-key.js
+@@ -19,19 +19,43 @@ const MEMBERSHIP_PLANNING_DERIVATION_SOURCE_TABLES = Object.freeze([
+   TABLES.REPLICA_OPERATIONS,
+ ]);
+ 
++// Generation-refresh floor: during formation data load the source tables
++// mutate faster than one planning sweep completes, so an exact per-write
++// key rotates between consecutive reads, every derivation re-runs, and
++// every downstream identity memo misses per call — measured live as the
++// dominant residual seed freeze (archived runs 16-36-59-912Z-profiled and
++// 17-19-53-698Z-natural) and reproduced deterministically at ~70 write
++// rounds per sweep. Latching the observed generations for up to 250ms
++// restored the zero-churn sweep baseline (5.2x) while staying 20x inside
++// the sealed CL-033/heartbeat 5s staleness bound that every consumer of
++// this key already accepts.
++const MEMBERSHIP_PLANNING_VERSION_KEY_REFRESH_FLOOR_MS = 250;
++const VERSION_KEY_LATCH_BY_CACHE = new WeakMap();
++
+ /**
+  * @param {Object|null} systemTableCache - Cache exposing
+  *   getTableMutationVersion, or any stub without it.
++ * @param {number} [nowMs] - Caller clock for the refresh floor; defaults to
++ *   Date.now().
+  * @return {string|null} Concatenated per-table mutation-version key, or null
+  *   when the cache cannot version its tables (memoization must disable).
+  */
+-function readMembershipPlanningDerivationVersionKey(systemTableCache) {
++function readMembershipPlanningDerivationVersionKey(systemTableCache, nowMs) {
+   if (
+     !systemTableCache ||
+     typeof systemTableCache.getTableMutationVersion !== 'function'
+   ) {
+     return null;
+   }
++  const now = Number.isFinite(nowMs) ? nowMs : Date.now();
++  const latch = VERSION_KEY_LATCH_BY_CACHE.get(systemTableCache);
++  if (latch) {
++    const sinceRefreshMs = now - latch.refreshedAtMs;
++    if (sinceRefreshMs >= 0 &&
++      sinceRefreshMs < MEMBERSHIP_PLANNING_VERSION_KEY_REFRESH_FLOOR_MS) {
++      return latch.key;
++    }
++  }
+   let key = '';
+   for (const tableName of MEMBERSHIP_PLANNING_DERIVATION_SOURCE_TABLES) {
+     key += tableName +
+@@ -39,6 +63,10 @@ function readMembershipPlanningDerivationVersionKey(systemTableCache) {
+       systemTableCache.getTableMutationVersion(tableName) +
+       MEMBERSHIP_PLANNING_VERSION_KEY_ENTRY_SEPARATOR;
+   }
++  VERSION_KEY_LATCH_BY_CACHE.set(systemTableCache, {
++    key,
++    refreshedAtMs: now,
++  });
+   return key;
+ }
+ 
+diff --git a/src/rebalancer/priority-placement-observation-memo.js b/src/rebalancer/priority-placement-observation-memo.js
+index e1bdb8ffa77d1d8aadd814676e8b44a1fc3643fc..3360f7c1405c5016b7a5e2e639453a7e49dd1526 100644
+--- a/src/rebalancer/priority-placement-observation-memo.js
++++ b/src/rebalancer/priority-placement-observation-memo.js
+@@ -64,8 +64,10 @@ function buildObservationVariantKey({
+  */
+ function resolvePlacementObservationMemoContext(options) {
+   const {systemTableCache, readinessService} = options;
+-  const versionKey =
+-    readMembershipPlanningDerivationVersionKey(systemTableCache);
++  const versionKey = readMembershipPlanningDerivationVersionKey(
++    systemTableCache,
++    options.observedAt,
++  );
+   if (versionKey === null) {
+     return null;
+   }
+@@ -151,6 +153,7 @@ function buildCurrentPriorityPlacementFromRebalancerCache({
+     cohortNodeIds,
+     normalizedCurrentPartitionId,
+     currentPartitionServiceRows,
++    observedAt,
+   });
+   const memoized = readMemoizedPlacementObservation(memoContext);
+   if (memoized) {
+diff --git a/test/rebalancer/planning-sweep-memoization.test.js b/test/rebalancer/planning-sweep-memoization.test.js
+index 0c768acdc6b9753ac67347a485d17418231aa69e..13ad7e62e3c7ad6e60ea288423808017d633d918 100644
+--- a/test/rebalancer/planning-sweep-memoization.test.js
++++ b/test/rebalancer/planning-sweep-memoization.test.js
+@@ -15,6 +15,9 @@ import {test} from '../../src/test-helpers/tap.js';
+ import {
+   ControlPlaneReadinessService,
+ } from '../../src/control-plane/control-plane-readiness-service.js';
++import {
++  readMembershipPlanningDerivationVersionKey,
++} from '../../src/control-plane/membership-planning-version-key.js';
+ import {
+   getSharedSyncSectionRegistry,
+ } from '../../src/diagnostics/event-loop-gap-watchdog.js';
+@@ -220,6 +223,58 @@ test('the current-priority-placement observation builds once per ' +
+   t.end();
+ });
+ 
++test('the shared planning version key floors generation refreshes to one ' +
++  'per interval', async (t) => {
++  const cache = createVersionedCacheStub();
++  const first = readMembershipPlanningDerivationVersionKey(cache, 1000);
++  t.ok(typeof first === 'string' && first.length > 0,
++    'a versioned cache yields a key');
++  cache.bump('nodes');
++  t.equal(readMembershipPlanningDerivationVersionKey(cache, 1100), first,
++    'a write within the floor window keeps the latched generation');
++  const second = readMembershipPlanningDerivationVersionKey(cache, 1300);
++  t.not(second, first,
++    'the next window observes the write');
++  cache.bump('services');
++  t.equal(readMembershipPlanningDerivationVersionKey(cache, 1400), second,
++    'the fresh window re-latches until its own floor expires');
++  t.not(readMembershipPlanningDerivationVersionKey(cache, 1600), second,
++    'the following window observes the second write');
++  t.equal(readMembershipPlanningDerivationVersionKey({}, 1000), null,
++    'a cache that cannot version its tables still disables memoization');
++  t.end();
++});
++
++test('the sync membership-planning derivation inherits the version-key ' +
++  'floor under write churn', async (t) => {
++  const cache = createVersionedCacheStub();
++  let derivations = 0;
++  const readiness = new ControlPlaneReadinessService({
++    nodeId: SWEEP_NODE_ID,
++    systemTableCache: cache,
++    membershipPublicationService: {
++      deriveClusterMembershipCandidateSync() {
++        derivations += 1;
++        return {
++          publicationEpoch: 1,
++          status: 'PUBLISHED',
++          publishedActiveNodeIds: [SWEEP_NODE_ID],
++        };
++      },
++    },
++  });
++  readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 1000);
++  t.equal(derivations, 1, 'the first read derives');
++  cache.bump('nodes');
++  readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 1100);
++  t.equal(derivations, 1,
++    'a write within the floor window keeps serving the latched derivation');
++  readiness.getPriorityRecoveryPlanningSnapshotSync(SWEEP_NODE_ID, 1400);
++  t.equal(derivations, 2,
++    'the next window derives against the written generation');
++  t.end();
++});
++
+ test('the spread-blocker recovery gate builds once per planning snapshot ' +
+   'identity', async (t) => {
+   const stack = createVersionedRebalancerStack('p-sweep-1');

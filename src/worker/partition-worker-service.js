@@ -4,7 +4,6 @@
  * Uses composable building blocks: RaftGroup, SQLiteStore, CDCEmitter,
  * and PeerAddressResolver. Extends ReplicaWorkerBase for lifecycle
  * management and IPC communication.
- *
  * @module worker/partition-worker-service
  * @see Requirements 1.1, 1.5, 1.9, 5.6 - Worker Process Isolation
  */

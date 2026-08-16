@@ -46,6 +46,13 @@ const PRELOAD_BLOCKING_SNAPSHOT_STATES = new Set([
 ]);
 const RATINGS_TABLE_NAME = 'ratings';
 const DEFAULT_TIMEOUT_MS = 180_000;
+// Schema admission waits behind the full formation-time table spread: at
+// five-node GCP scale the ~45 bootstrap tables' replicas drain through the
+// admission-controlled operation ledger in ~5-6 minutes (archived run
+// 2026-08-15T19-50-14-276Z reached zero in-flight seconds after the shared
+// 180s deadline fired), so the schema gate carries its own deadline; the
+// 60s stable-window robustness property is unchanged.
+const DEFAULT_SCHEMA_ADMISSION_TIMEOUT_MS = 480_000;
 const DEFAULT_POLL_INTERVAL_MS = 2_000;
 const DEFAULT_SCHEMA_ADMISSION_STABLE_WINDOW_MS = 60_000;
 const SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT = 2;
@@ -380,6 +387,40 @@ function normalizePollIntervalMs(value) {
     DEFAULT_POLL_INTERVAL_MS;
 }
 
+function normalizeSchemaAdmissionTimeoutMs(value) {
+  return Number.isFinite(value) && value >= ZERO ?
+    Math.floor(value) :
+    DEFAULT_SCHEMA_ADMISSION_TIMEOUT_MS;
+}
+
+// The admission bar is untouched: a stable window x confirmations of a
+// genuinely drained control plane. The wall-clock budget covers the
+// SPREAD; when the final topology drain lands near the budget edge the
+// stable window cannot finish inside it (round-15: drained at T+439s of
+// 480s, window needs 60s x 2 - the system genuinely quiesced and the
+// budget expired anyway). While the last observed snapshot is genuinely
+// quiescent (ready, no in-flight work) the deadline extends to the window
+// the bar itself requires, measured from the LAST topology drain; any new
+// operation flips ready off and the base deadline applies again, so the
+// extension is bounded and cannot mask a live churn loop.
+function resolveSchemaAdmissionDrainGraceDeadlineMs(
+  evidence,
+  stableWindowMs,
+  pollIntervalMs,
+) {
+  const snapshot = evidence?.snapshot;
+  if (!snapshot || snapshot.ready !== true) {
+    return ZERO;
+  }
+  const drainAtMs = Number(snapshot.latestTopologyDrainAtMs);
+  if (!Number.isFinite(drainAtMs) || drainAtMs <= ZERO) {
+    return ZERO;
+  }
+  return drainAtMs +
+    stableWindowMs * (SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT + 1) +
+    pollIntervalMs * SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT;
+}
+
 function normalizeSchemaStableWindowMs(value) {
   return Number.isFinite(value) && value >= ZERO ?
     Math.floor(value) :
@@ -524,31 +565,6 @@ async function observePreloadAdmission(options, targets, probeSql, deadlineMs) {
   }
 }
 
-function resolveDrainBasedSchemaAdmissionDeadline(
-  snapshot,
-  stableWindowMs,
-  pollIntervalMs,
-  effectiveDeadlineMs,
-  observedAtMs,
-  initialDeadlineMs,
-) {
-  if (
-    snapshot?.state !== CONTROL_PLANE_QUIESCENCE_STATE.QUIESCENT ||
-    snapshot?.ready !== true
-  ) {
-    return effectiveDeadlineMs;
-  }
-  const graceMs =
-    (stableWindowMs + pollIntervalMs) *
-    SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT;
-  const maxAllowedDeadlineMs = initialDeadlineMs + graceMs;
-  const targetDeadlineMs = observedAtMs + graceMs;
-  return Math.min(
-    maxAllowedDeadlineMs,
-    Math.max(effectiveDeadlineMs, targetDeadlineMs),
-  );
-}
-
 /**
  * Wait until the authoritative control snapshot is quiet enough to admit the
  * policy-bearing ratings schema mutation. This phase intentionally performs no
@@ -572,13 +588,12 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
     options.sleep :
     (delayMs) => new Promise((resolve) => setTimeout(resolve, delayMs));
   const normalizedOptions = {...options, now, sleep};
-  const timeoutMs = normalizeTimeoutMs(options.timeoutMs);
+  const timeoutMs = normalizeSchemaAdmissionTimeoutMs(options.timeoutMs);
   const pollIntervalMs = normalizePollIntervalMs(options.pollIntervalMs);
   const stableWindowMs = normalizeSchemaStableWindowMs(
     options.stableWindowMs,
   );
-  const initialDeadlineMs = now() + timeoutMs;
-  let effectiveDeadlineMs = initialDeadlineMs;
+  const deadlineMs = now() + timeoutMs;
   const target = buildAdminLaneTarget(
     options.target,
     ADMIN_STREAM_LANE.SNAPSHOT,
@@ -589,6 +604,14 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
   let lastEvidence = null;
 
   while (true) {
+    const effectiveDeadlineMs = Math.max(
+      deadlineMs,
+      resolveSchemaAdmissionDrainGraceDeadlineMs(
+        lastEvidence,
+        stableWindowMs,
+        pollIntervalMs,
+      ),
+    );
     if (lastEvidence && now() >= effectiveDeadlineMs) {
       throw buildSchemaAdmissionTimeoutError(lastEvidence);
     }
@@ -608,16 +631,6 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
     );
     stabilityWindow = stabilityObservation.stabilityWindow;
     stableConfirmationCount = stabilityObservation.stableConfirmationCount;
-
-    effectiveDeadlineMs = resolveDrainBasedSchemaAdmissionDeadline(
-      stabilityObservation.snapshot,
-      stableWindowMs,
-      pollIntervalMs,
-      effectiveDeadlineMs,
-      observedAtMs,
-      initialDeadlineMs,
-    );
-
     transitionHistory = advanceSchemaAdmissionTransitionHistory(
       transitionHistory,
       {
@@ -638,7 +651,15 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
     if (evidence.admitted) {
       return evidence;
     }
-    const remainingMs = remainingBudgetMs(now, effectiveDeadlineMs);
+    const drainGraceDeadlineMs = resolveSchemaAdmissionDrainGraceDeadlineMs(
+      evidence,
+      stableWindowMs,
+      pollIntervalMs,
+    );
+    const remainingMs = remainingBudgetMs(
+      now,
+      Math.max(deadlineMs, drainGraceDeadlineMs),
+    );
     if (remainingMs <= ZERO) {
       throw buildSchemaAdmissionTimeoutError(evidence);
     }

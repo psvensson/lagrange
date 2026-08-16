@@ -106,6 +106,14 @@ class ControlPlaneReadinessNodeServiceRows extends
     if (!this.systemTableCache) {
       return null;
     }
+    // Readiness consumes the node row as immutable evidence: the shared
+    // deep-frozen row keeps a stable object identity across builds so the
+    // projection-readiness normalization cache can reuse it, where a fresh
+    // deepClone per call defeated that cache and re-walked the largest
+    // per-build input graph every cycle.
+    if (typeof this.systemTableCache.getShared === 'function') {
+      return this.systemTableCache.getShared(TABLES.NODES, nodeId) || null;
+    }
     if (typeof this.systemTableCache.get === 'function') {
       return this.systemTableCache.get(TABLES.NODES, nodeId) || null;
     }

@@ -36,9 +36,15 @@ function memoCtx({nodeId = 'seed'} = {}) {
     // CL-033/CL-034 regression repair: the real wall-time grace gate. With an ISO
     // observedAt this must parse to ms (not collapse to a NaN comparison that
     // silently disables the memo — the 54db83b9 regression these tests catch).
+    readPlanningProjectionSourceGeneration:
+      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+        .readPlanningProjectionSourceGeneration,
     isReadinessPlanningMemoWithinStaleGrace:
       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
         .isReadinessPlanningMemoWithinStaleGrace,
+    readLatestMembershipPublicationEpochStatusProbe:
+      ControlPlaneReadinessPublicationPlanningSnapshot.prototype
+        .readLatestMembershipPublicationEpochStatusProbe,
     isMemoizedMembershipPublicationPlanningProjectionEpochStale:
       ControlPlaneReadinessPublicationPlanningSnapshot.prototype
         .isMemoizedMembershipPublicationPlanningProjectionEpochStale,
@@ -46,7 +52,7 @@ function memoCtx({nodeId = 'seed'} = {}) {
     getMembershipPublicationPlanningSnapshotSync: (id) => ({read: id}),
     // The parse/clone-heavy projection — counted; returns a fresh frozen object
     // per build so identity distinguishes a memo hit from a rebuild.
-    buildPriorityRecoveryPlanningProjection: (snapshot) => {
+    buildTrackedPriorityRecoveryPlanningProjection: (snapshot) => {
       builds.push(snapshot?.read ?? null);
       return Object.freeze({projectionFor: snapshot?.read ?? null, build: builds.length});
     },

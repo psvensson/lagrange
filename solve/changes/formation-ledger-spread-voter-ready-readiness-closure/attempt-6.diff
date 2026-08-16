@@ -1,0 +1,555 @@
+diff --git a/src/control-plane/active-node-projection.js b/src/control-plane/active-node-projection.js
+index 2f41c278799c6537f742711db1bdfbc8632dcb18..f1f90b48c57bb6d6ebc3901b2bb1b54f72fda4d8 100644
+--- a/src/control-plane/active-node-projection.js
++++ b/src/control-plane/active-node-projection.js
+@@ -16,7 +16,7 @@ import {
+   normalizeServiceRow,
+ } from './system-row-normalizers.js';
+ import {
+-  buildProjectionReadinessState,
++  resolveProjectionReadinessStateForEntry,
+ } from './projection-readiness-state.js';
+ import {
+   ACTIVE_MEMBERSHIP_SNAPSHOT_SOURCE,
+@@ -234,11 +234,7 @@ function evaluateProjectionReadinessDimensions(
+   const projectionReadiness =
+     readinessEntry?.lanes && typeof readinessEntry.lanes === 'object' ?
+       readinessEntry :
+-      buildProjectionReadinessState(
+-        readinessEntry && typeof readinessEntry === 'object' ?
+-          readinessEntry :
+-          {},
+-      );
++      resolveProjectionReadinessStateForEntry(readinessEntry);
+   const authoritySource = resolveProjectionReadinessAuthoritySource(
+     projectionReadiness,
+     options,
+diff --git a/src/control-plane/control-plane-readiness-priority-recovery-planning.js b/src/control-plane/control-plane-readiness-priority-recovery-planning.js
+index 9822849cd7718532e318a9161aaadb08c0779c7d..bd554a8d6bd8d0d0a1be548bd3c8f5cabccf975b 100644
+--- a/src/control-plane/control-plane-readiness-priority-recovery-planning.js
++++ b/src/control-plane/control-plane-readiness-priority-recovery-planning.js
+@@ -485,90 +485,110 @@ class ControlPlaneReadinessPriorityRecoveryPlanning extends ControlPlaneReadines
+     }
+     const localPlanningAdmission =
+       this.resolveLocalPlanningAdmissionEvidence(planningSnapshot);
+-    const providedPublicationRecoveryGate =
+-      this.getMembershipPublicationRecoveryGate(planningSnapshot);
+-    const publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
+-      ...(providedPublicationRecoveryGate || {}),
+-      publicationEpoch:
+-        Number.isFinite(planningSnapshot.publicationEpoch) ?
+-          Math.floor(planningSnapshot.publicationEpoch) :
+-          providedPublicationRecoveryGate?.publicationEpoch ??
+-          null,
+-      publicationStatus:
+-        typeof planningSnapshot.publicationStatus === 'string' &&
+-          planningSnapshot.publicationStatus.length > 0 ?
+-          planningSnapshot.publicationStatus :
+-          typeof planningSnapshot.status === 'string' &&
+-            planningSnapshot.status.length > 0 ?
+-            planningSnapshot.status :
+-            providedPublicationRecoveryGate?.publicationStatus ??
++    // The gate is a pure derivation of the planning snapshot (the provided
++    // gate is read off the snapshot itself), and the shipped
++    // planning-derivation memo returns the same frozen snapshot until a
++    // source-table write rotates the version key — snapshot identity is an
++    // exact memo key. Live profiling counted thousands of these rebuilds
++    // per freeze burst, each minting fresh spread-copied records that
++    // defeated the projection-evidence identity retention downstream.
++    // Inline (not extracted) so the sealed complexity ratchet keeps one
++    // over-threshold function here instead of two.
++    if (!this.planningPublicationRecoveryGateMemo) {
++      this.planningPublicationRecoveryGateMemo = new WeakMap();
++    }
++    let publicationRecoveryGate =
++      this.planningPublicationRecoveryGateMemo.get(planningSnapshot);
++    if (!publicationRecoveryGate) {
++      const providedPublicationRecoveryGate =
++        this.getMembershipPublicationRecoveryGate(planningSnapshot);
++      publicationRecoveryGate = buildPublicationRecoveryGateSnapshot({
++        ...(providedPublicationRecoveryGate || {}),
++        publicationEpoch:
++          Number.isFinite(planningSnapshot.publicationEpoch) ?
++            Math.floor(planningSnapshot.publicationEpoch) :
++            providedPublicationRecoveryGate?.publicationEpoch ??
+             null,
+-      publicationObservationState:
+-        typeof planningSnapshot.publicationObservationState === 'string' &&
+-          planningSnapshot.publicationObservationState.length > 0 ?
+-          planningSnapshot.publicationObservationState :
+-          providedPublicationRecoveryGate?.publicationObservationState ??
+-          null,
+-      recoveryProtocolState:
+-        typeof planningSnapshot.recoveryProtocolState === 'string' &&
+-          planningSnapshot.recoveryProtocolState.length > 0 ?
+-          planningSnapshot.recoveryProtocolState :
+-          providedPublicationRecoveryGate?.recoveryProtocolState ??
+-          null,
+-      priorityRecoveryReasonCodes:
+-        Array.isArray(planningSnapshot.priorityRecoveryReasonCodes) ?
+-          planningSnapshot.priorityRecoveryReasonCodes :
+-          providedPublicationRecoveryGate?.reasonCodes,
+-      priorityPartitionSummary:
+-        planningSnapshot.priorityPartitionSummary &&
+-          typeof planningSnapshot.priorityPartitionSummary === 'object' ?
+-          planningSnapshot.priorityPartitionSummary :
+-          providedPublicationRecoveryGate?.priorityPartitionSummary ??
+-          null,
+-      priorityRecoveryClosureWitness:
+-        planningSnapshot.priorityRecoveryClosureWitness &&
+-          typeof planningSnapshot.priorityRecoveryClosureWitness ===
+-            'object' ?
+-          planningSnapshot.priorityRecoveryClosureWitness :
+-          providedPublicationRecoveryGate?.priorityRecoveryClosureWitness ??
+-          null,
+-      requiredAckNodeIds:
+-        Array.isArray(planningSnapshot.requiredAckNodeIds) ?
+-          planningSnapshot.requiredAckNodeIds :
+-          providedPublicationRecoveryGate?.requiredAckNodeIds ??
+-          [],
+-      acknowledgedNodeIds:
+-        Array.isArray(planningSnapshot.acknowledgedNodeIds) ?
+-          planningSnapshot.acknowledgedNodeIds :
+-          providedPublicationRecoveryGate?.acknowledgedNodeIds ??
+-          [],
+-      pendingAckNodeIds:
+-        Array.isArray(planningSnapshot.pendingAckNodeIds) ?
+-          planningSnapshot.pendingAckNodeIds :
+-          providedPublicationRecoveryGate?.pendingAckNodeIds ??
+-          [],
+-      pendingAckCount:
+-        planningSnapshot.pendingAckCount ??
+-        providedPublicationRecoveryGate?.pendingAckCount ??
+-        0,
+-      pendingAckEvidenceState: this.resolvePlanningPendingAckEvidenceState(
+-        planningSnapshot,
+-        providedPublicationRecoveryGate,
+-      ),
+-      missingPublishedNodeIds:
+-        Array.isArray(planningSnapshot.missingPublishedNodeIds) ?
+-          planningSnapshot.missingPublishedNodeIds :
+-          Array.isArray(
+-            planningSnapshot.missingPublishedRecoveryActiveNodeIds,
+-          ) ?
+-            planningSnapshot.missingPublishedRecoveryActiveNodeIds :
+-            providedPublicationRecoveryGate?.missingPublishedNodeIds ??
++        publicationStatus:
++          typeof planningSnapshot.publicationStatus === 'string' &&
++            planningSnapshot.publicationStatus.length > 0 ?
++            planningSnapshot.publicationStatus :
++            typeof planningSnapshot.status === 'string' &&
++              planningSnapshot.status.length > 0 ?
++              planningSnapshot.status :
++              providedPublicationRecoveryGate?.publicationStatus ??
++              null,
++        publicationObservationState:
++          typeof planningSnapshot.publicationObservationState === 'string' &&
++            planningSnapshot.publicationObservationState.length > 0 ?
++            planningSnapshot.publicationObservationState :
++            providedPublicationRecoveryGate?.publicationObservationState ??
++            null,
++        recoveryProtocolState:
++          typeof planningSnapshot.recoveryProtocolState === 'string' &&
++            planningSnapshot.recoveryProtocolState.length > 0 ?
++            planningSnapshot.recoveryProtocolState :
++            providedPublicationRecoveryGate?.recoveryProtocolState ??
++            null,
++        priorityRecoveryReasonCodes:
++          Array.isArray(planningSnapshot.priorityRecoveryReasonCodes) ?
++            planningSnapshot.priorityRecoveryReasonCodes :
++            providedPublicationRecoveryGate?.reasonCodes,
++        priorityPartitionSummary:
++          planningSnapshot.priorityPartitionSummary &&
++            typeof planningSnapshot.priorityPartitionSummary === 'object' ?
++            planningSnapshot.priorityPartitionSummary :
++            providedPublicationRecoveryGate?.priorityPartitionSummary ??
++            null,
++        priorityRecoveryClosureWitness:
++          planningSnapshot.priorityRecoveryClosureWitness &&
++            typeof planningSnapshot.priorityRecoveryClosureWitness ===
++              'object' ?
++            planningSnapshot.priorityRecoveryClosureWitness :
++            providedPublicationRecoveryGate?.priorityRecoveryClosureWitness ??
++            null,
++        requiredAckNodeIds:
++          Array.isArray(planningSnapshot.requiredAckNodeIds) ?
++            planningSnapshot.requiredAckNodeIds :
++            providedPublicationRecoveryGate?.requiredAckNodeIds ??
+             [],
+-      publicationExcludesTargetNode:
+-        typeof planningSnapshot.publicationExcludesTargetNode === 'boolean' ?
+-          planningSnapshot.publicationExcludesTargetNode :
+-          providedPublicationRecoveryGate?.publicationExcludesTargetNode === true,
+-    });
++        acknowledgedNodeIds:
++          Array.isArray(planningSnapshot.acknowledgedNodeIds) ?
++            planningSnapshot.acknowledgedNodeIds :
++            providedPublicationRecoveryGate?.acknowledgedNodeIds ??
++            [],
++        pendingAckNodeIds:
++          Array.isArray(planningSnapshot.pendingAckNodeIds) ?
++            planningSnapshot.pendingAckNodeIds :
++            providedPublicationRecoveryGate?.pendingAckNodeIds ??
++            [],
++        pendingAckCount:
++          planningSnapshot.pendingAckCount ??
++          providedPublicationRecoveryGate?.pendingAckCount ??
++          0,
++        pendingAckEvidenceState: this.resolvePlanningPendingAckEvidenceState(
++          planningSnapshot,
++          providedPublicationRecoveryGate,
++        ),
++        missingPublishedNodeIds:
++          Array.isArray(planningSnapshot.missingPublishedNodeIds) ?
++            planningSnapshot.missingPublishedNodeIds :
++            Array.isArray(
++              planningSnapshot.missingPublishedRecoveryActiveNodeIds,
++            ) ?
++              planningSnapshot.missingPublishedRecoveryActiveNodeIds :
++              providedPublicationRecoveryGate?.missingPublishedNodeIds ??
++              [],
++        publicationExcludesTargetNode:
++          typeof planningSnapshot.publicationExcludesTargetNode === 'boolean' ?
++            planningSnapshot.publicationExcludesTargetNode :
++            providedPublicationRecoveryGate?.publicationExcludesTargetNode === true,
++      });
++      this.planningPublicationRecoveryGateMemo.set(
++        planningSnapshot,
++        publicationRecoveryGate,
++      );
++    }
+     const priorityRecoveryReasonCodes =
+       this.filterPriorityRecoveryReasonCodesForPublicationGate(
+         [
+diff --git a/src/control-plane/projection-readiness-state.js b/src/control-plane/projection-readiness-state.js
+index 48a0b9e6da7780f1b0df9f33b5dec122485ce4e7..1463f49a6df64ab028b7bf57a3ca640dacc13de7 100644
+--- a/src/control-plane/projection-readiness-state.js
++++ b/src/control-plane/projection-readiness-state.js
+@@ -66,6 +66,29 @@ function buildProjectionReadinessContract(source = {}) {
+   return buildProjectionReadinessState(source);
+ }
+ 
++// Per-node projection state is rebuilt twice per candidate-derivation pass
++// (active-node selection plus the isCanonicallyActiveNode re-check) and once
++// more per readiness evaluation — live-profiled at half the residual seed
++// freeze cost (archived run run-2026-08-15T16-36-59-912Z-profiled-manual).
++// The state is a pure frozen derivation of the readiness entry, so entry
++// identity is an exact memo key; readiness entries are frozen snapshots in
++// production, and a caller that mints fresh entries per read simply misses.
++const PROJECTION_READINESS_STATE_BY_ENTRY = new WeakMap();
++const EMPTY_PROJECTION_READINESS_SOURCE = objectFreeze({});
++
++function resolveProjectionReadinessStateForEntry(readinessEntry) {
++  const source = readinessEntry && typeof readinessEntry === 'object' ?
++    readinessEntry :
++    EMPTY_PROJECTION_READINESS_SOURCE;
++  const memoized = PROJECTION_READINESS_STATE_BY_ENTRY.get(source);
++  if (memoized) {
++    return memoized;
++  }
++  const state = buildProjectionReadinessState(source);
++  PROJECTION_READINESS_STATE_BY_ENTRY.set(source, state);
++  return state;
++}
++
+ function normalizeSummaryReasonCodes(reasonCodes) {
+   const normalized = new ArrayConstructor();
+   const source = arrayIsArray(reasonCodes) ? reasonCodes : normalized;
+@@ -128,5 +151,6 @@ function summarizeProjectionReadinessContractForHistory(contract) {
+ export {
+   buildProjectionReadinessContract,
+   buildProjectionReadinessState,
++  resolveProjectionReadinessStateForEntry,
+   summarizeProjectionReadinessContractForHistory,
+ };
+diff --git a/src/control-plane/readiness-planning-snapshot-owner.js b/src/control-plane/readiness-planning-snapshot-owner.js
+index bdcb51938bef9c0a96935321aa6ec0d03352c281..2549061ef0c0d41aa8ec23cc0d2c32fe9dd41610 100644
+--- a/src/control-plane/readiness-planning-snapshot-owner.js
++++ b/src/control-plane/readiness-planning-snapshot-owner.js
+@@ -452,6 +452,32 @@ class ReadinessPlanningSnapshotOwner {
+       this.isCompletedSnapshotLive(ownerKey, completed);
+   }
+ 
++  // Live profiling of the archived run
++  // run-2026-08-15T16-36-59-912Z-profiled-manual measured every deferred
++  // read minting a fresh frozen evidence graph, so the identity-keyed
++  // retention in projection-readiness-evidence could never hit for
++  // evidence-absent joiners (9x per-build cost against a same-identity
++  // read). The deferred snapshot is a pure derivation of (source snapshot,
++  // token generation, ownerKey); any source change rotates the token key
++  // and rebuilds.
++  buildMemoizedDeferredSnapshot(snapshot, token, ownerKey) {
++    if (!this.deferredSnapshotMemoByOwnerKey) {
++      this.deferredSnapshotMemoByOwnerKey = new Map();
++    }
++    const entry = this.deferredSnapshotMemoByOwnerKey.get(ownerKey);
++    if (entry && entry.sourceSnapshot === snapshot &&
++      entry.tokenKey === token?.tokenKey) {
++      return entry.deferred;
++    }
++    const deferred = buildDeferredSnapshot(snapshot, token, ownerKey);
++    this.deferredSnapshotMemoByOwnerKey.set(ownerKey, {
++      sourceSnapshot: snapshot,
++      tokenKey: token?.tokenKey,
++      deferred,
++    });
++    return deferred;
++  }
++
+   readSync(ownerKey, options, buildSnapshot) {
+     const currentToken = this.captureToken();
+     const buildOptionsKey = this.captureBuildOptionsKey(ownerKey, options);
+@@ -478,7 +504,7 @@ class ReadinessPlanningSnapshotOwner {
+         options,
+         currentToken,
+       );
+-      return buildDeferredSnapshot(null, currentToken, ownerKey);
++      return this.buildMemoizedDeferredSnapshot(null, currentToken, ownerKey);
+     }
+     if (this.canReuseCompletedSnapshot(
+       ownerKey,
+@@ -515,7 +541,11 @@ class ReadinessPlanningSnapshotOwner {
+       options,
+       currentToken,
+     );
+-    return buildDeferredSnapshot(completed.snapshot, currentToken, ownerKey);
++    return this.buildMemoizedDeferredSnapshot(
++      completed.snapshot,
++      currentToken,
++      ownerKey,
++    );
+   }
+ 
+   publishCompleted(
+@@ -557,7 +587,7 @@ class ReadinessPlanningSnapshotOwner {
+         buildOptions,
+         currentToken,
+       );
+-      return buildDeferredSnapshot(snapshot, currentToken, ownerKey);
++      return this.buildMemoizedDeferredSnapshot(snapshot, currentToken, ownerKey);
+     }
+     if (notifyListeners) {
+       this.notifySnapshotPublished(ownerKey, snapshot, capturedToken);
+diff --git a/src/rebalancer/unified-rebalancer-priority-readiness.js b/src/rebalancer/unified-rebalancer-priority-readiness.js
+index e10e8a6e061ad6d1a803de6baed06be287a4688e..c319e3b57f67e51af13ac32bc1032f536bb181df 100644
+--- a/src/rebalancer/unified-rebalancer-priority-readiness.js
++++ b/src/rebalancer/unified-rebalancer-priority-readiness.js
+@@ -127,7 +127,26 @@ function readRecordField(record, fieldName, fallback) {
+     valueOrFallback(record[fieldName], fallback) :
+     fallback;
+ }
++// The gate is a pure derivation of the planning snapshot, and the shipped
++// planning-derivation memo returns the same frozen snapshot until a
++// source-table write rotates the version key — so snapshot identity is an
++// exact memo key. Live profiling counted 10123 gate rebuilds inside one
++// 18.3s synchronous burst (per entity per tick, upstream of the
++// placement-observation memo).
++const PLANNING_PUBLICATION_RECOVERY_GATE_MEMO = new WeakMap();
++
+ function buildPlanningPublicationRecoveryGate(planningSnapshot) {
++  const memoized =
++    PLANNING_PUBLICATION_RECOVERY_GATE_MEMO.get(planningSnapshot);
++  if (memoized) {
++    return memoized;
++  }
++  const gate = buildPlanningPublicationRecoveryGateUncached(planningSnapshot);
++  PLANNING_PUBLICATION_RECOVERY_GATE_MEMO.set(planningSnapshot, gate);
++  return gate;
++}
++
++function buildPlanningPublicationRecoveryGateUncached(planningSnapshot) {
+   const providedGate = selectPlanningObject([
+     planningSnapshot.publicationRecoveryGate,
+   ]);
+diff --git a/test/control-plane/projection-planning-identity-memoization.test.js b/test/control-plane/projection-planning-identity-memoization.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4547228b79dd5fc66bb3a78d8f0eee784b6698fe
+--- /dev/null
++++ b/test/control-plane/projection-planning-identity-memoization.test.js
+@@ -0,0 +1,133 @@
++/**
++ * Identity memoization across the projection-evidence planning path.
++ *
++ * The profiled GCP run archived as
++ * run-2026-08-15T16-36-59-912Z-profiled-manual captured the residual seed
++ * freeze (18.3s max gap) inside normalizeProjectionReadinessOwnDataGraph:
++ * every deferred planning read minted a fresh evidence graph (so the
++ * identity-keyed retention could never hit for evidence-absent joiners),
++ * per-node projection state was rebuilt per derivation pass, and the
++ * publication recovery gate was rebuilt thousands of times per burst from
++ * the same memoized frozen planning snapshot. Each build is a pure frozen
++ * derivation of its source, so one build per source identity is exact.
++ */
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  ReadinessPlanningSnapshotOwner,
++} from '../../src/control-plane/readiness-planning-snapshot-owner.js';
++import {
++  resolveProjectionReadinessStateForEntry,
++} from '../../src/control-plane/projection-readiness-state.js';
++import {
++  ControlPlaneReadinessService,
++} from '../../src/control-plane/control-plane-readiness-service.js';
++import {
++  getSharedSyncSectionRegistry,
++} from '../../src/diagnostics/event-loop-gap-watchdog.js';
++
++const OWNER_NODE_ID = 'node-identity-memo';
++const JOINER_OWNER_KEY = 'node-identity-joiner';
++const GATE_BUILD_SECTION = 'publication_recovery_gate_snapshot_build';
++const REPEAT_READS = 10;
++
++function readGateBuildCount() {
++  const site = getSharedSyncSectionRegistry().sites.get(GATE_BUILD_SECTION);
++  return site ? site.count : 0;
++}
++
++test('a deferred planning snapshot keeps one identity per owner and token ' +
++  'generation', async (t) => {
++  const owner = new ReadinessPlanningSnapshotOwner({
++    service: {},
++    now: () => 1000,
++    scheduleDrainFn: () => {},
++  });
++  t.teardown(() => owner.shutdown());
++  // Consume the initial-bootstrap shortcut on a different owner so joiner
++  // reads take the deferred path.
++  owner.readSync(OWNER_NODE_ID, {}, () => ({nodeId: OWNER_NODE_ID}));
++
++  const reads = [];
++  for (let index = 0; index < REPEAT_READS; index++) {
++    reads.push(owner.readSync(JOINER_OWNER_KEY, {}, () => {
++      throw new Error('deferred read must not build');
++    }));
++  }
++  t.ok(reads[0] && reads[0].readinessPlanningTokenStatus === 'stale',
++    'the joiner read defers');
++  t.equal(reads[0], reads[REPEAT_READS - 1],
++    'repeated deferred reads share one frozen snapshot identity');
++
++  owner.recordTableChange('nodes');
++  const afterWrite = owner.readSync(JOINER_OWNER_KEY, {}, () => {
++    throw new Error('deferred read must not build');
++  });
++  t.not(afterWrite, reads[0],
++    'a source-table write rotates the deferred snapshot identity');
++  t.end();
++});
++
++test('per-entry projection readiness state resolves to one frozen build ' +
++  'per entry identity', async (t) => {
++  const entry = Object.freeze({nodeId: OWNER_NODE_ID, dimensions: {}});
++  const first = resolveProjectionReadinessStateForEntry(entry);
++  const second = resolveProjectionReadinessStateForEntry(entry);
++  t.equal(first, second,
++    'the same readiness entry shares one projection state');
++  const other = resolveProjectionReadinessStateForEntry(
++    Object.freeze({nodeId: 'node-identity-other', dimensions: {}}),
++  );
++  t.not(other, first,
++    'a different entry never reuses another entry’s state');
++  t.equal(
++    resolveProjectionReadinessStateForEntry(null),
++    resolveProjectionReadinessStateForEntry(null),
++    'entry-less resolution shares the empty-source state');
++  t.end();
++});
++
++test('the untracked priority planning projection builds its recovery gate ' +
++  'once per planning snapshot identity', async (t) => {
++  const readiness = new ControlPlaneReadinessService({
++    nodeId: OWNER_NODE_ID,
++    systemTableCache: {
++      get() {
++        return null;
++      },
++      getAll() {
++        return [];
++      },
++      filter() {
++        return [];
++      },
++      addListener() {},
++    },
++  });
++  const planningSnapshot = Object.freeze({
++    publicationEpoch: 3,
++    publicationStatus: 'PUBLISHED',
++    publishedActiveNodeIds: Object.freeze([OWNER_NODE_ID]),
++  });
++  const before = readGateBuildCount();
++  const projections = [];
++  for (let index = 0; index < REPEAT_READS; index++) {
++    projections.push(
++      readiness.buildPriorityRecoveryPlanningProjectionUntracked(
++        planningSnapshot,
++      ),
++    );
++  }
++  t.equal(readGateBuildCount() - before, 1,
++    'repeated projections of one snapshot share one gate build');
++  t.ok(projections[0],
++    'the projection is produced');
++
++  const rotated = Object.freeze({
++    ...planningSnapshot,
++    publicationEpoch: 4,
++  });
++  readiness.buildPriorityRecoveryPlanningProjectionUntracked(rotated);
++  t.equal(readGateBuildCount() - before, 2,
++    'a new snapshot identity rebuilds the gate');
++  t.end();
++});
+diff --git a/test/rebalancer/planning-sweep-memoization.test.js b/test/rebalancer/planning-sweep-memoization.test.js
+index 19bdcf178545d9571642245cf14eaadfa0ea10c5..0c768acdc6b9753ac67347a485d17418231aa69e 100644
+--- a/test/rebalancer/planning-sweep-memoization.test.js
++++ b/test/rebalancer/planning-sweep-memoization.test.js
+@@ -15,6 +15,9 @@ import {test} from '../../src/test-helpers/tap.js';
+ import {
+   ControlPlaneReadinessService,
+ } from '../../src/control-plane/control-plane-readiness-service.js';
++import {
++  getSharedSyncSectionRegistry,
++} from '../../src/diagnostics/event-loop-gap-watchdog.js';
+ import {EntityType} from '../../src/rebalancer/unified-rebalancer.js';
+ import {
+   createMockCache,
+@@ -217,6 +220,38 @@ test('the current-priority-placement observation builds once per ' +
+   t.end();
+ });
+ 
++test('the spread-blocker recovery gate builds once per planning snapshot ' +
++  'identity', async (t) => {
++  const stack = createVersionedRebalancerStack('p-sweep-1');
++  t.teardown(() => stack.shutdown());
++  const planningSnapshot = Object.freeze({
++    publishedActiveNodeIds: Object.freeze([SWEEP_NODE_ID]),
++    priorityPartitionSummary: Object.freeze({satisfied: false}),
++  });
++  stack.rebalancer.controlPlaneReadinessService
++    .getMembershipPublicationPlanningAnswerSync = () => planningSnapshot;
++  const readGateBuilds = () => {
++    const site = getSharedSyncSectionRegistry()
++      .sites.get('publication_recovery_gate_snapshot_build');
++    return site ? site.count : 0;
++  };
++  const before = readGateBuilds();
++  for (let index = 0; index < SWEEP_CALL_COUNT; index++) {
++    stack.rebalancer.getControlPlanePrioritySpreadBlocker();
++  }
++  t.equal(readGateBuilds() - before, 1,
++    'repeated spread-blocker evaluations of one snapshot share one gate ' +
++      'build');
++
++  stack.rebalancer.controlPlaneReadinessService
++    .getMembershipPublicationPlanningAnswerSync =
++      () => Object.freeze({...planningSnapshot});
++  stack.rebalancer.getControlPlanePrioritySpreadBlocker();
++  t.equal(readGateBuilds() - before, 2,
++    'a new snapshot identity rebuilds the gate');
++  t.end();
++});
++
+ test('the async membership-planning snapshot derives once per source-table ' +
+   'generation across concurrent callers', async (t) => {
+   const cache = createVersionedCacheStub();

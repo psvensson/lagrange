@@ -29,6 +29,7 @@ import {
   PUBLICATION_PROJECTION_BOUNDARY_ROW_STATE,
   buildPublicationProjectionBoundaryOutcome,
 } from './recovery-protocol-publication-boundary.js';
+import {deepFreeze} from '../utils/deep-freeze.js';
 
 
 const PARTICIPATION_REASON = Object.freeze({
@@ -89,9 +90,19 @@ function normalizeStringMap(values = {}) {
 }
 
 function freezeRecord(record) {
-  return record && typeof record === 'object' ?
-    Object.freeze({...record}) :
-    null;
+  if (!record || typeof record !== 'object') {
+    return null;
+  }
+  // Deep, not shallow: the readiness projection consumes these records under
+  // a recursive strict-own-data contract, and its frozen-input cache reuses a
+  // subtree by identity only when every reachable value is frozen. A single
+  // unfrozen descendant forces a fresh deep copy of the whole publication
+  // graph on every readiness build (profiled seed cost).
+  const copy = {...record};
+  for (const key of Object.keys(copy)) {
+    deepFreeze(copy[key]);
+  }
+  return Object.freeze(copy);
 }
 
 function normalizeClusterIncarnationFence(value) {

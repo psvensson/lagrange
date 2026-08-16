@@ -135,6 +135,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           routingReadinessDimension,
           {
             allowReadinessAuthoritativeRefresh,
+            readPurpose: executionOptions?.readAuthority?.purpose,
             recoveryCandidateSelectionKey:
                 executionOptions.recoveryCandidateSelectionKey,
           },
@@ -157,6 +158,7 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             routingReadinessDimension,
             {
               allowReadinessAuthoritativeRefresh,
+              readPurpose: executionOptions?.readAuthority?.purpose,
               recoveryCandidateSelectionKey:
                   executionOptions.recoveryCandidateSelectionKey,
             },

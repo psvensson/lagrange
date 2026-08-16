@@ -66,8 +66,15 @@ const REPAIR_REQUIRED_DEPENDENCY_ERROR_PREFIX =
   'AuthoritativeNodeEvidenceReconciler requires ';
 const CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_DEPENDENCY =
   'controlPlaneSystemTableGateway';
+const OWNER_DEPENDENCY_NAMES = Object.freeze([
+  'cdcIntegrationService',
+  'cacheMutationTarget',
+  'systemTableCache',
+  CONTROL_PLANE_SYSTEM_TABLE_GATEWAY_DEPENDENCY,
+]);
 const UNKNOWN_AUTHORITATIVE_REPAIR_STATE_ERROR_PREFIX =
   'Unknown authoritative node repair state: ';
+const objectHasOwn = Object.hasOwn;
 
 function normalizePositiveInteger(value, fallback = 0) {
   return Number.isFinite(value) && value > 0 ?
@@ -246,6 +253,14 @@ class AuthoritativeNodeEvidenceReconciler {
       });
   }
 
+  syncOwnerDependencies(options = {}) {
+    for (const ownerName of OWNER_DEPENDENCY_NAMES) {
+      if (objectHasOwn(options, ownerName)) {
+        this[ownerName] = options[ownerName] || null;
+      }
+    }
+  }
+
   canRepairNodeEvidence() {
     return Boolean(
       this.cdcIntegrationService &&
@@ -330,7 +345,11 @@ class AuthoritativeNodeEvidenceReconciler {
   }
 
   shouldRepairNodeEvidence(context = {}, options = {}) {
-    if (!this.canRepairNodeEvidence()) {
+    if (
+      !this.canRepairNodeEvidence() ||
+      (options.allowAuthoritativeRefresh !== true &&
+        options.forceAuthoritativeRefresh !== true)
+    ) {
       return false;
     }
 

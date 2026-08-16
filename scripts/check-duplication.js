@@ -49,10 +49,10 @@ const RATCHET_TARGETS = [
     // loop extracted into quest-evidence-harness-runtime.js; measured).
     // 2026-08-07: tightened 65/2063 -> 63/2003 (measured after the V2a/V4
     // proof-cone landings; one-way-baseline rule).
-    // 2026-08-11: tightened 63/2003 -> 62/1970 after the available-read
-    // fixture guard removed the duplicated over-target cache setup.
-    baselineCloneGroupCount: 62,
-    baselineDuplicatedLineCount: 1970,
+    // 2026-08-14: tightened 62/1970 -> 61/1941 after stored-readiness snapshot
+    // construction was consolidated behind its owner method.
+    baselineCloneGroupCount: 61,
+    baselineDuplicatedLineCount: 1941,
     reportOutputDirectory: 'test-output/analysis/jscpd-src-scripts',
     strictEligible: true,
   },

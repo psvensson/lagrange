@@ -23,6 +23,8 @@ const RECONCILE_REASON = Object.freeze({
   // Dispatch: node-ready retry reasons
   NODE_STATE_UPDATE_READY: 'node_state_update_ready',
   NODE_READY_DISPATCH_RETRY: 'node_ready_dispatch_retry',
+  READINESS_PLANNING_SNAPSHOT_PUBLISHED:
+    'readiness_planning_snapshot_published',
   NODES_CDC_READY: 'nodes_cdc_ready',
   NODES_CACHE_READY: 'nodes_cache_ready',
   SERVICES_CACHE_ACTIVE: 'services_cache_active',

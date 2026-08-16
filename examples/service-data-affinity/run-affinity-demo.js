@@ -280,6 +280,68 @@ async function queryRows(sql, target = TARGET) {
   return result?.results || result?.rows || [];
 }
 
+// Bootstrap DDL on a lone forming seed is retryable BY CONTRACT: the schema
+// job owner answers with explicit pending/retry outcomes when its prologue
+// or a replica-operation visibility read is still converging (the round-7
+// race closures), and the admin client's response cap can also fire while
+// the seed's schema_operations partition is still routing. Poll through the
+// demo's canonical waitFor primitive - semantic failures escape on the
+// first attempt; only the two contract-retryable shapes keep polling.
+const BOOTSTRAP_DDL_TIMEOUT_MS = 90_000;
+const BOOTSTRAP_DDL_WAIT_LABEL = 'bootstrap DDL admission';
+const ADMIN_RESPONSE_TIMEOUT_FRAGMENT = 'Timed out waiting for admin response';
+const PENDING_CONTRACT_STATE = 'pending';
+const REPLICA_BACKFILL_PENDING_REASON = 'schema_replica_convergence_pending';
+
+// A pending outcome whose ONLY reason is replica-count backfill is the
+// quorum-minimum completion shape: the table is durable and routable at
+// the minimum replica count, and filling the remaining replicas is the
+// rebalancer's obligation once more nodes join (round-14). On a lone seed
+// the full-count READY bar is arithmetically unreachable, so retrying on
+// this shape waits forever; every other pending shape (prologue,
+// visibility, deadline) keeps polling.
+function isQuorumMetBackfillPendingOutcome(result) {
+  if (result?.contractState !== PENDING_CONTRACT_STATE) {
+    return false;
+  }
+  const reasonCodes = Array.isArray(result?.reasonCodes) ?
+    result.reasonCodes :
+    [];
+  return reasonCodes.length > 0 && reasonCodes.every(
+    (code) => code === REPLICA_BACKFILL_PENDING_REASON,
+  );
+}
+
+function isRetryableBootstrapDdlOutcome(result) {
+  if (isQuorumMetBackfillPendingOutcome(result)) {
+    return false;
+  }
+  return result?.provisioningDeadlineExpired === true ||
+    result?.deferRetry === true ||
+    result?.contractState === PENDING_CONTRACT_STATE;
+}
+
+async function runBootstrapDdl(sql, target = TARGET) {
+  let semanticError = null;
+  const outcome = await waitFor(BOOTSTRAP_DDL_WAIT_LABEL, async () => {
+    try {
+      const result = await queryAdmin(sql, target);
+      return isRetryableBootstrapDdlOutcome(result) ? null : {result};
+    } catch (error) {
+      const message = String(error?.message || '');
+      if (!message.includes(ADMIN_RESPONSE_TIMEOUT_FRAGMENT)) {
+        semanticError = error;
+        return {failed: true};
+      }
+      return null;
+    }
+  }, BOOTSTRAP_DDL_TIMEOUT_MS);
+  if (semanticError) {
+    throw semanticError;
+  }
+  return outcome.result;
+}
+
 async function waitFor(label, predicate, timeoutMs) {
   const start = Date.now();
   while (Date.now() - start < timeoutMs) {
@@ -811,8 +873,8 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
     // Bootstrap the two small coordination tables on the seed too. Their
     // schemas then scale out with the cluster instead of exercising unrelated
     // cold multi-node DDL while the example is teaching service affinity.
-    await queryRows(CREATE_RESULT_TABLE_SQL);
-    await queryRows(CREATE_COORDINATION_TABLE_SQL);
+    await runBootstrapDdl(CREATE_RESULT_TABLE_SQL);
+    await runBootstrapDdl(CREATE_COORDINATION_TABLE_SQL);
 
     console.log(
       `[2/5] Expanding to ${NODE_COUNT} nodes (single zone) and spreading ` +
@@ -899,8 +961,8 @@ async function runAffinityDemo({phaseEvidence = {}} = {}) {
       `[4/5] Starting the ${SERVICE_ID} runtime service on the internal ` +
       `substrate (${SERVICE_REPLICA_COUNT} replicas pinned by the demo ` +
       DEMO_CONSTANTS.SERVICE_START_SUFFIX);
-    await queryRows(CREATE_RESULT_TABLE_SQL);
-    await queryRows(CREATE_COORDINATION_TABLE_SQL);
+    await runBootstrapDdl(CREATE_RESULT_TABLE_SQL);
+    await runBootstrapDdl(CREATE_COORDINATION_TABLE_SQL);
     await queryRows(
       `INSERT INTO ${RESULT_TABLE} (result_id, result_json, computed_at, ` +
       `${RESULT_SNAPSHOT_COLUMN}) VALUES (` +

@@ -1,4 +1,7 @@
-import {CONTROL_PLANE_READINESS_DIMENSION} from './control-plane-readiness-constants.js';
+import {
+  CONTROL_PLANE_READINESS_DIMENSION,
+  CONTROL_PLANE_READ_PURPOSE,
+} from './control-plane-readiness-constants.js';
 import {CONTROL_PLANE_CACHE_RECONCILE_INTENT} from './control-plane-cache-reconcile-constants.js';
 import {
   PRESSURE_WORK_CLASS,
@@ -285,6 +288,10 @@ function buildControlPlaneReadAuthority(options = {}) {
     return options.readAuthority;
   }
   return Object.freeze({
+    purpose:
+      options?.readPurpose === CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL ?
+        CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL :
+        CONTROL_PLANE_READ_PURPOSE.ORDINARY,
     strategy: normalizeReadStrategy(
       options?.strategy || options?.readStrategy,
     ),

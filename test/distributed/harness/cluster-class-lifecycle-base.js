@@ -949,7 +949,14 @@ class ClusterLifecycleBase {
       (this._nodeHostIps(0).internal || seedNode.ip) :
       seedNode.ip;
 
-    for (let i = 1; i < this._config.size; i++) {
+    // Joiners start CONCURRENTLY: the serial await here cost ~4s of remote
+    // container-create RTT per joiner (~12s of pure harness serialization to
+    // the last of four joiners, round-9 timeline attribution on the archived
+    // certification runs), while the join protocol itself is contention-ready
+    // by design (formation-cohort barrier, budgeted join retries). Seed-first
+    // ordering and the cluster-active gate below are unchanged; per-node
+    // bookkeeping runs as each start settles.
+    const startJoiner = async (i) => {
       const joinerId = this._buildNodeId(i);
       this._recordClusterStage(CLUSTER_STAGE_SETUP_JOINER_STARTING, {
         nodeId: joinerId,
@@ -986,7 +993,12 @@ class ClusterLifecycleBase {
         nodeId: joinerId,
         ordinal: i,
       });
+    };
+    const joinerStartPromises = [];
+    for (let i = 1; i < this._config.size; i++) {
+      joinerStartPromises.push(startJoiner(i));
     }
+    await Promise.all(joinerStartPromises);
 
     await startupGate.waitForClusterActive(this._config.size);
     this._started = true;

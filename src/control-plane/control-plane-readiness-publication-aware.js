@@ -25,11 +25,14 @@ class ControlPlaneReadinessPublicationAware extends
     );
   }
 
-  buildPriorityRecoveryPlanningProjection(planningSnapshot = null) {
+  buildPriorityRecoveryPlanningProjection(planningSnapshot = null, observedAt) {
     // Structural guard anchor: the projection delegates through
     // filterPriorityRecoveryReasonCodesForPublicationGate and preserves the
     // publicationRecoveryGate contract from the staged owner implementation.
-    return super.buildPriorityRecoveryPlanningProjection(planningSnapshot);
+    return super.buildPriorityRecoveryPlanningProjection(
+      planningSnapshot,
+      observedAt,
+    );
   }
 }
 

@@ -1,0 +1,70 @@
+{
+  "id": "formation-ledger-spread-voter-ready-readiness-closure",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Cold-formation operation-ledger spread converges under readiness-gated voter-readiness: a five-node local MovieLens formation reaches ledger_spread_satisfied on every joiner within one barrier window (no 120s timeout-and-restart), reproduced deterministically first at the live blocking check (the DT must confirm which voter-ready or spread-progress consumer wedges when replica topology is healthy but node readiness denial is evidence-absent on barrier-held joiners), fixed by extending the evidence-absent carve-out class to that confirmed consumer without weakening any substantive readiness denial, quorum floor, or promotion guard; the full local five-node demo then reaches ACTIVE 5/5 before one profiled plus three consecutive natural five-node GCP runs meet the sealed 60-second bar.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "readiness-formation-liveness-circularity-closure",
+    "planDoc": "solve/epics/publication-readiness-churn-liveness-closure.md",
+    "draftedAtCommit": "334bbca2d70ff2ff352f8fc80c7bf9f8b7059018"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "readiness-planning-owner-boundary-atomic-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "formation-ledger-spread-voter-ready-readiness-closure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "readiness-planning-owner-boundary-atomic-closure",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "dt-first-live-check-confirmation",
+      "statement": "Rung 1 is a deterministic reproduction at the real blocking check confirming which consumer wedges; no fix is sealed before that confirmation, and discovery never runs on live demos."
+    },
+    {
+      "id": "exact-independent-approval",
+      "statement": "The exact candidate requires category-complete independent approval binding its content fingerprint before GCP, audit, checkpoint, or landing."
+    },
+    {
+      "id": "no-guard-weakening",
+      "statement": "Substantive readiness denials, the voter-ready quorum floor, the promotion guard, and the refuted CL-045 concurrent-op relaxation stay untouched; only the evidence-absent denial class may be carved out, mirroring the approved routing fail-open pattern."
+    },
+    {
+      "id": "live-proof-identity",
+      "statement": "Terminal proof is the full local five-node demo reaching ACTIVE 5/5, then one profiled plus three consecutive natural five-node GCP MovieLens runs with matching booted source fingerprint, ACTIVE and publication 5/5 within 60 seconds, no named gap above 3000ms, natural teardown."
+    },
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "verificationTemplates": [
+    "admission-gating",
+    "adversarial-js-intrinsics",
+    "concurrency-serialization",
+    "formation-circularity",
+    "harness-fidelity",
+    "recovery-replay",
+    "retry-loops",
+    "sweep-timer",
+    "transport-delivery"
+  ]
+}

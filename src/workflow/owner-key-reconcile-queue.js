@@ -24,88 +24,108 @@ import {
   RECONCILE_QUEUE_EVENT,
   STALE_FENCE_SAMPLE_CAPACITY,
 } from './reconcile-queue-constants.js';
+import {
+  clearRetryState,
+  clearRetryTimer,
+  deferRetryableDrainFailure,
+  normalizeReconcileQueueRetryPolicy,
+  wakeRetryWorkItem,
+} from './reconcile-queue-retry-ownership.js';
 
 const LOCAL_STR_FUNCTION = 'function';
-const LOCAL_STR_OBJECT = 'object';
-const LOCAL_STR_STRING = 'string';
-const LOCAL_NUM_THOUSAND = 1000;
+const MapConstructor = Map;
+const mapClear = Function.call.bind(Map.prototype.clear);
+const mapDelete = Function.call.bind(Map.prototype.delete);
+const mapForEach = Function.call.bind(Map.prototype.forEach);
+const mapGet = Function.call.bind(Map.prototype.get);
+const mapHas = Function.call.bind(Map.prototype.has);
+const mapSet = Function.call.bind(Map.prototype.set);
+const mapSize = Function.call.bind(
+  Object.getOwnPropertyDescriptor(Map.prototype, 'size').get,
+);
+const numberIsSafeInteger = Number.isSafeInteger;
+const objectDefineProperty = Object.defineProperty;
+const SetConstructor = Set;
+const setAdd = Function.call.bind(Set.prototype.add);
+const setClear = Function.call.bind(Set.prototype.clear);
+const setDelete = Function.call.bind(Set.prototype.delete);
+const setForEach = Function.call.bind(Set.prototype.forEach);
+const setHas = Function.call.bind(Set.prototype.has);
+const setSize = Function.call.bind(
+  Object.getOwnPropertyDescriptor(Set.prototype, 'size').get,
+);
 const DEFAULT_MAX_CONCURRENCY = 1;
-const RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE =
-  'retryable_drain_failure';
-const RECONCILE_QUEUE_RETRYABLE_DRAIN_DEFERRED =
-  'retryable_drain_deferred';
-const RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE_LOG_MSG =
-  'Reconcile queue item deferred after retryable drain failure';
+const DEFAULT_MAX_ITEMS_PER_DRAIN = Number.POSITIVE_INFINITY;
 
-function defaultRetryableDrainFailureClassifier() {
-  return false;
-}
-
-function defaultRetryableDrainFailureRetryAfterMs(error) {
-  return Number.isFinite(error?.retryAfterMs) &&
-    error.retryAfterMs > 0 ?
-    Math.floor(error.retryAfterMs) :
-    LOCAL_NUM_THOUSAND;
-}
-
-function defaultRetryableDrainFailureReason() {
-  return RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE;
-}
-
-function normalizeReconcileQueueRetryPolicy(policy = {}) {
-  const source = policy && typeof policy === LOCAL_STR_OBJECT ? policy : {};
-  return Object.freeze({
-    isRetryableError:
-      typeof source.isRetryableError === LOCAL_STR_FUNCTION ?
-        source.isRetryableError :
-        defaultRetryableDrainFailureClassifier,
-    getRetryAfterMs:
-      typeof source.getRetryAfterMs === LOCAL_STR_FUNCTION ?
-        source.getRetryAfterMs :
-        defaultRetryableDrainFailureRetryAfterMs,
-    getFailureReason:
-      typeof source.getFailureReason === LOCAL_STR_FUNCTION ?
-        source.getFailureReason :
-        defaultRetryableDrainFailureReason,
+function defineSnapshotValue(snapshot, index, value) {
+  objectDefineProperty(snapshot, index, {
+    configurable: true,
+    enumerable: true,
+    value,
+    writable: true,
   });
 }
 
-function normalizeRetryAfterMs(value) {
-  return Number.isFinite(value) && value > 0 ?
-    Math.floor(value) :
-    LOCAL_NUM_THOUSAND;
+function appendSnapshotValue(snapshot, value) {
+  defineSnapshotValue(snapshot, snapshot.length, value);
+}
+
+function copySnapshotValues(source) {
+  const copy = [];
+  for (let index = 0; index < source.length; index++) {
+    defineSnapshotValue(copy, index, source[index]);
+  }
+  return copy;
+}
+
+// Capturing an iterator-producing method is not enough: `for...of` and
+// `Array.from` still resolve the mutable iterator prototype's `next` and
+// `@@iterator` after module import. Materialize collection snapshots through
+// captured `forEach` instead, then consume only indexed arrays.
+function snapshotMapEntries(map) {
+  const entries = [];
+  let index = 0;
+  mapForEach(map, (value, key) => {
+    defineSnapshotValue(entries, index, [key, value]);
+    index++;
+  });
+  return entries;
+}
+
+function snapshotMapKeys(map) {
+  const keys = [];
+  let index = 0;
+  mapForEach(map, (_value, key) => {
+    defineSnapshotValue(keys, index, key);
+    index++;
+  });
+  return keys;
+}
+
+function snapshotSetValues(set) {
+  const values = [];
+  let index = 0;
+  setForEach(set, (value) => {
+    defineSnapshotValue(values, index, value);
+    index++;
+  });
+  return values;
 }
 
 function normalizeMaxConcurrency(value) {
-  return Number.isSafeInteger(value) && value > 0 ?
+  return numberIsSafeInteger(value) && value > 0 ?
     value :
     DEFAULT_MAX_CONCURRENCY;
 }
 
-function getRetryableDrainFailureMessage(error) {
-  if (typeof error === LOCAL_STR_STRING) {
-    return error;
-  }
-  if (typeof error?.message === LOCAL_STR_STRING) {
-    return error.message;
-  }
-  return RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE;
+function normalizeMaxItemsPerDrain(value) {
+  return numberIsSafeInteger(value) && value > 0 ?
+    value :
+    DEFAULT_MAX_ITEMS_PER_DRAIN;
 }
 
-function getRetryableDrainFailureCode(error) {
-  if (typeof error?.code === LOCAL_STR_STRING) {
-    return error.code;
-  }
-  if (typeof error?.errorCode === LOCAL_STR_STRING) {
-    return error.errorCode;
-  }
-  return '';
-}
-
-function maybeUnrefTimer(timer) {
-  if (typeof timer?.unref === LOCAL_STR_FUNCTION) {
-    timer.unref();
-  }
+function defaultDrainScheduler(callback) {
+  Promise.resolve().then(callback);
 }
 
 /**
@@ -136,16 +156,33 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     this.reconcileFn = options.reconcileFn;
     this.name = options.name || RECONCILE_QUEUE_SUBSYSTEM;
     this.maxConcurrency = normalizeMaxConcurrency(options.maxConcurrency);
+    this.maxItemsPerDrain = normalizeMaxItemsPerDrain(
+      options.maxItemsPerDrain,
+    );
+    this.scheduleDrainFn =
+      typeof options.scheduleDrainFn === LOCAL_STR_FUNCTION ?
+        options.scheduleDrainFn :
+        defaultDrainScheduler;
+    this.now = typeof options.now === LOCAL_STR_FUNCTION ?
+      options.now :
+      Date.now;
+    this.setTimeoutFn = typeof options.setTimeoutFn === LOCAL_STR_FUNCTION ?
+      options.setTimeoutFn :
+      setTimeout;
+    this.clearTimeoutFn =
+      typeof options.clearTimeoutFn === LOCAL_STR_FUNCTION ?
+        options.clearTimeoutFn :
+        clearTimeout;
 
     /** @type {Map<string, ReconcileWorkItem>} */
-    this.pending = new Map();
+    this.pending = new MapConstructor();
     /** @type {Set<string>} Owner keys with an active reconcile. */
-    this.inFlight = new Set();
+    this.inFlight = new SetConstructor();
     /**
      * Current fence token (owner epoch) per owner key.
      * @type {Map<string, number>}
      */
-    this.fenceTokens = new Map();
+    this.fenceTokens = new MapConstructor();
     /** @type {Array<Object>} Recent stale-claim diagnostic entries. */
     this.staleClaims = [];
     this.draining = false;
@@ -162,14 +199,20 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       options.retryPolicy || options,
     );
     /** @type {Map<string, ReconcileWorkItem>} */
-    this.retryWorkItems = new Map();
+    this.retryWorkItems = new MapConstructor();
     /** @type {Map<string, Object>} */
-    this.retryStates = new Map();
+    this.retryStates = new MapConstructor();
+    /** @type {Map<string, ReconcileWorkItem>} */
+    this.exhaustedWorkItems = new MapConstructor();
+    /** @type {Map<string, Object>} */
+    this.exhaustedRetryStates = new MapConstructor();
     /** @type {Map<string, NodeJS.Timeout>} */
-    this.retryTimers = new Map();
+    this.retryTimers = new MapConstructor();
     this._retryableDrainFailureCount = 0;
+    this._retryableDrainExhaustedCount = 0;
     this._retryableDrainFailureSamples = [];
     this._retryableDrainFailureSampleIndex = 0;
+    this.retrySampleCapacity = STALE_FENCE_SAMPLE_CAPACITY;
 
     const loggingService = LoggingService.getInstance();
     this.logger = loggingService.isInitialized() ?
@@ -204,74 +247,23 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     }
 
     const fenceToken = options?.fenceToken;
-    if (fenceToken !== undefined && fenceToken !== null) {
-      const currentFence = this.fenceTokens.get(ownerKey);
-      if (currentFence !== undefined && fenceToken < currentFence) {
-        const diagnostic = {
-          type: RECONCILE_QUEUE_DIAGNOSTIC.STALE_FENCE_TOKEN,
-          queue: this.name,
-          ownerKey,
-          reason,
-          providedToken: fenceToken,
-          currentToken: currentFence,
-          timestamp: Date.now(),
-        };
-        this.staleClaims.push(diagnostic);
-        this._staleFenceRejectionCount++;
-        this._pushStaleFenceSample(diagnostic);
-        this.emit(
-          RECONCILE_QUEUE_EVENT.STALE_FENCE_REJECTED_ENQUEUE,
-          diagnostic,
-        );
-        this.logger.debug(
-          RECONCILE_QUEUE_LOG_MSG.STALE_FENCE_REJECTED, {
-            ...diagnostic,
-          });
-        return false;
-      }
-      this.fenceTokens.set(ownerKey, fenceToken);
+    if (!this._acceptEnqueueFence(ownerKey, reason, fenceToken)) {
+      return false;
     }
 
-    const existing = this.pending.get(ownerKey);
+    const existing = mapGet(this.pending, ownerKey);
     if (existing) {
-      existing.reasons.add(reason);
-      if (context !== undefined) {
-        existing.context = context;
-      }
-      if (fenceToken !== undefined && fenceToken !== null) {
-        existing.fenceToken = fenceToken;
-      }
-      this.logger.debug(RECONCILE_QUEUE_LOG_MSG.DEDUP_MERGED, {
-        queue: this.name,
-        ownerKey,
-        reason,
-        pendingReasons: Array.from(existing.reasons),
-      });
+      this._mergeEnqueuedWork(existing, reason, context, fenceToken);
       this.scheduleDrain();
       return false;
     }
 
-    const retrying = this.retryWorkItems.get(ownerKey);
-    if (retrying) {
-      retrying.reasons.add(reason);
-      if (context !== undefined) {
-        retrying.context = context;
-      }
-      if (fenceToken !== undefined && fenceToken !== null) {
-        retrying.fenceToken = fenceToken;
-      }
-      this.logger.debug(RECONCILE_QUEUE_LOG_MSG.DEDUP_MERGED, {
-        queue: this.name,
-        ownerKey,
-        reason,
-        pendingReasons: Array.from(retrying.reasons),
-      });
-      this._wakeRetryWorkItem(ownerKey);
+    if (this._mergeDeferredWork(ownerKey, reason, context, fenceToken)) {
       return false;
     }
 
-    const reasons = new Set();
-    reasons.add(reason);
+    const reasons = new SetConstructor();
+    setAdd(reasons, reason);
     const item = {
       ownerKey,
       reasons,
@@ -280,7 +272,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     if (fenceToken !== undefined && fenceToken !== null) {
       item.fenceToken = fenceToken;
     }
-    this.pending.set(ownerKey, item);
+    mapSet(this.pending, ownerKey, item);
 
     this.logger.debug(RECONCILE_QUEUE_LOG_MSG.ENQUEUED, {
       queue: this.name,
@@ -289,6 +281,94 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     });
 
     this.scheduleDrain();
+    return true;
+  }
+
+  _mergeDeferredWork(ownerKey, reason, context, fenceToken) {
+    const retrying = mapGet(this.retryWorkItems, ownerKey);
+    if (retrying) {
+      const reset = this._maybeResetRetryAttempts(
+        ownerKey, retrying, reason, context,
+      );
+      this._mergeEnqueuedWork(retrying, reason, context, fenceToken);
+      if (reset) {
+        mapSet(this.pending, ownerKey, retrying);
+        this.scheduleDrain();
+      } else {
+        this._wakeRetryWorkItem(ownerKey);
+      }
+      return true;
+    }
+    const exhausted = mapGet(this.exhaustedWorkItems, ownerKey);
+    if (!exhausted) {
+      return false;
+    }
+    if (this._maybeResetRetryAttempts(
+      ownerKey, exhausted, reason, context,
+    )) {
+      return false;
+    }
+    this._mergeEnqueuedWork(exhausted, reason, context, fenceToken);
+    return true;
+  }
+
+  _acceptEnqueueFence(ownerKey, reason, fenceToken) {
+    if (fenceToken === undefined || fenceToken === null) {
+      return true;
+    }
+    const currentFence = mapGet(this.fenceTokens, ownerKey);
+    if (currentFence === undefined || fenceToken >= currentFence) {
+      mapSet(this.fenceTokens, ownerKey, fenceToken);
+      return true;
+    }
+    const diagnostic = {
+      type: RECONCILE_QUEUE_DIAGNOSTIC.STALE_FENCE_TOKEN,
+      queue: this.name,
+      ownerKey,
+      reason,
+      providedToken: fenceToken,
+      currentToken: currentFence,
+      timestamp: this.now(),
+    };
+    appendSnapshotValue(this.staleClaims, diagnostic);
+    this._staleFenceRejectionCount++;
+    this._pushStaleFenceSample(diagnostic);
+    this.emit(RECONCILE_QUEUE_EVENT.STALE_FENCE_REJECTED_ENQUEUE, diagnostic);
+    this.logger.debug(RECONCILE_QUEUE_LOG_MSG.STALE_FENCE_REJECTED, diagnostic);
+    return false;
+  }
+
+  _mergeEnqueuedWork(item, reason, context, fenceToken) {
+    setAdd(item.reasons, reason);
+    if (context !== undefined) {
+      item.context = context;
+    }
+    if (fenceToken !== undefined && fenceToken !== null) {
+      item.fenceToken = fenceToken;
+    }
+    this.logger.debug(RECONCILE_QUEUE_LOG_MSG.DEDUP_MERGED, {
+      queue: this.name,
+      ownerKey: item.ownerKey,
+      reason,
+      pendingReasons: snapshotSetValues(item.reasons),
+    });
+  }
+
+  _maybeResetRetryAttempts(ownerKey, item, reason, context) {
+    let shouldReset = false;
+    try {
+      shouldReset = this.retryPolicy.shouldResetAttempts(
+        item.context,
+        context,
+        {ownerKey, queue: this.name, reason},
+      ) === true;
+    } catch (_resetClassifierError) {
+      shouldReset = false;
+    }
+    if (!shouldReset) {
+      return false;
+    }
+    this._clearRetryState(ownerKey);
     return true;
   }
 
@@ -302,7 +382,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       return;
     }
     this.draining = true;
-    Promise.resolve().then(() => this.drain());
+    this.scheduleDrainFn(() => this.drain());
   }
 
   /**
@@ -317,13 +397,20 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    */
   drain() {
     try {
-      const entries = Array.from(this.pending.entries());
+      const entries = snapshotMapEntries(this.pending);
 
-      for (const [ownerKey, item] of entries) {
-        this.pending.delete(ownerKey);
+      let claimed = 0;
+      for (let index = 0; index < entries.length; index++) {
+        if (claimed >= this.maxItemsPerDrain) {
+          break;
+        }
+        const ownerKey = entries[index][0];
+        const item = entries[index][1];
+        mapDelete(this.pending, ownerKey);
         if (!this._claimPendingItem(ownerKey, item)) {
           break;
         }
+        claimed++;
       }
     } finally {
       this.draining = false;
@@ -335,18 +422,18 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     if (this.stopped) {
       return false;
     }
-    if (this.inFlight.has(ownerKey)) {
+    if (setHas(this.inFlight, ownerKey)) {
       this._deferInFlightItem(ownerKey, item);
       return true;
     }
-    if (this.inFlight.size >= this.maxConcurrency) {
-      this.pending.set(ownerKey, item);
+    if (setSize(this.inFlight) >= this.maxConcurrency) {
+      mapSet(this.pending, ownerKey, item);
       return false;
     }
 
     const itemFence = item.fenceToken;
     if (itemFence !== undefined && itemFence !== null) {
-      const currentFence = this.fenceTokens.get(ownerKey);
+      const currentFence = mapGet(this.fenceTokens, ownerKey);
       if (currentFence !== undefined &&
           itemFence < currentFence) {
         this._recordStaleFenceDiagnostic(
@@ -361,23 +448,23 @@ class OwnerKeyReconcileQueue extends EventEmitter {
   }
 
   async _startReconcile(ownerKey, item) {
-    this.inFlight.add(ownerKey);
+    setAdd(this.inFlight, ownerKey);
     this.logger.debug(
       RECONCILE_QUEUE_LOG_MSG.IN_FLIGHT_CLAIMED, {
         queue: this.name,
         ownerKey,
       });
 
-    const reasons = Array.from(item.reasons);
+    const reasons = snapshotSetValues(item.reasons);
     try {
       await this.reconcileFn(
         ownerKey, reasons, item.context,
       );
       this._clearRetryState(ownerKey);
     } catch (error) {
-      const retryDeferred =
+      const retryHandled =
         this._deferRetryableDrainFailure(ownerKey, item, reasons, error);
-      if (!retryDeferred) {
+      if (!retryHandled) {
         this._clearRetryState(ownerKey);
         this.logger.warn(RECONCILE_QUEUE_LOG_MSG.DRAIN_ERROR, {
           queue: this.name,
@@ -387,7 +474,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
         });
       }
     } finally {
-      this.inFlight.delete(ownerKey);
+      setDelete(this.inFlight, ownerKey);
       this.logger.debug(
         RECONCILE_QUEUE_LOG_MSG.IN_FLIGHT_RELEASED, {
           queue: this.name,
@@ -400,17 +487,16 @@ class OwnerKeyReconcileQueue extends EventEmitter {
   _schedulePendingDrainIfAvailable() {
     if (
       this.stopped ||
-      this.pending.size === 0 ||
-      this.inFlight.size >= this.maxConcurrency
+      mapSize(this.pending) === 0 ||
+      setSize(this.inFlight) >= this.maxConcurrency
     ) {
       return;
     }
-    for (const ownerKey of this.pending.keys()) {
-      if (!this.inFlight.has(ownerKey)) {
-        this.scheduleDrain();
-        return;
-      }
-    }
+    let available = false;
+    mapForEach(this.pending, (_item, ownerKey) => {
+      if (!setHas(this.inFlight, ownerKey)) available = true;
+    });
+    if (available) this.scheduleDrain();
   }
 
   /**
@@ -425,26 +511,24 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    * @private
    */
   _deferInFlightItem(ownerKey, item) {
-    const existing = this.pending.get(ownerKey);
+    const existing = mapGet(this.pending, ownerKey);
     if (existing) {
-      for (const r of item.reasons) {
-        existing.reasons.add(r);
-      }
+      setForEach(item.reasons, (reason) => setAdd(existing.reasons, reason));
       if (item.context !== null && item.context !== undefined) {
         existing.context = item.context;
       }
     } else {
-      this.pending.set(ownerKey, item);
+      mapSet(this.pending, ownerKey, item);
     }
 
     const diagnostic = {
       type: RECONCILE_QUEUE_DIAGNOSTIC.STALE_CLAIM_IN_FLIGHT,
       queue: this.name,
       ownerKey,
-      reasons: Array.from(item.reasons),
-      timestamp: Date.now(),
+      reasons: snapshotSetValues(item.reasons),
+      timestamp: this.now(),
     };
-    this.staleClaims.push(diagnostic);
+    appendSnapshotValue(this.staleClaims, diagnostic);
     this._staleInFlightDeferralCount++;
     this._pushStaleFenceSample(diagnostic);
     this.emit(
@@ -458,158 +542,30 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       });
   }
 
-  _shouldRetryDrainFailure(ownerKey, item, error) {
-    try {
-      return this.retryPolicy.isRetryableError(
-        error,
-        item.context,
-        {ownerKey, queue: this.name},
-      ) === true;
-    } catch (_classifierError) {
-      return false;
-    }
-  }
-
-  _resolveRetryAfterMs(ownerKey, item, error) {
-    try {
-      return normalizeRetryAfterMs(
-        this.retryPolicy.getRetryAfterMs(
-          error,
-          item.context,
-          {ownerKey, queue: this.name},
-        ),
-      );
-    } catch (_retryAfterError) {
-      return LOCAL_NUM_THOUSAND;
-    }
-  }
-
-  _resolveFailureReason(ownerKey, item, error) {
-    try {
-      const reason = this.retryPolicy.getFailureReason(
-        error,
-        item.context,
-        {ownerKey, queue: this.name},
-      );
-      return typeof reason === LOCAL_STR_STRING &&
-        reason.length > 0 ?
-        reason :
-        RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE;
-    } catch (_reasonError) {
-      return RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE;
-    }
-  }
-
   _deferRetryableDrainFailure(ownerKey, item, reasons, error) {
-    if (
-      this.stopped ||
-      this.pending.has(ownerKey) ||
-      !this._shouldRetryDrainFailure(ownerKey, item, error)
-    ) {
-      return false;
-    }
-    const baseRetryAfterMs = this._resolveRetryAfterMs(ownerKey, item, error);
-    const timestamp = Date.now();
-    const previousState = this.retryStates.get(ownerKey);
-    const failureCount =
-      Number.isFinite(previousState?.failureCount) ?
-        previousState.failureCount + 1 :
-        1;
-    const retryAfterMs = baseRetryAfterMs;
-    const errorCode = getRetryableDrainFailureCode(error);
-    const retryState = {
-      type: RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE,
-      queue: this.name,
+    return deferRetryableDrainFailure(
+      this,
       ownerKey,
+      item,
       reasons,
-      failureReason: this._resolveFailureReason(ownerKey, item, error),
-      retryAfterMs,
-      baseRetryAfterMs,
-      nextAttemptAt: timestamp + retryAfterMs,
-      failureCount,
-      errorMessage: getRetryableDrainFailureMessage(error),
-      ...(errorCode.length > 0 ? {errorCode} : {}),
-      timestamp,
-    };
-    item.retryState = retryState;
-    this.retryStates.set(ownerKey, retryState);
-    this.retryWorkItems.set(ownerKey, item);
-    this._retryableDrainFailureCount++;
-    this._pushRetryableDrainFailureSample(retryState);
-    this.emit(RECONCILE_QUEUE_RETRYABLE_DRAIN_DEFERRED, retryState);
-    this._scheduleRetryDrain(ownerKey, retryAfterMs);
-    this.logger.warn(RECONCILE_QUEUE_RETRYABLE_DRAIN_FAILURE_LOG_MSG, {
-      ...retryState,
-    });
-    return true;
-  }
-
-  _scheduleRetryDrain(ownerKey, retryAfterMs) {
-    this._clearRetryTimer(ownerKey);
-    const timer = setTimeout(() => {
-      this.retryTimers.delete(ownerKey);
-      this._wakeRetryWorkItem(ownerKey);
-    }, retryAfterMs);
-    maybeUnrefTimer(timer);
-    this.retryTimers.set(ownerKey, timer);
+      error,
+    );
   }
 
   _wakeRetryWorkItem(ownerKey) {
-    if (this.stopped) {
-      return false;
-    }
-    const item = this.retryWorkItems.get(ownerKey);
-    if (!item) {
-      return false;
-    }
-    this._clearRetryTimer(ownerKey);
-    this.retryWorkItems.delete(ownerKey);
-    const existing = this.pending.get(ownerKey);
-    if (existing) {
-      for (const reason of item.reasons) {
-        existing.reasons.add(reason);
-      }
-      if (item.context !== null && item.context !== undefined) {
-        existing.context = item.context;
-      }
-      if (item.fenceToken !== undefined && item.fenceToken !== null) {
-        existing.fenceToken = item.fenceToken;
-      }
-    } else {
-      this.pending.set(ownerKey, item);
-    }
-    this.scheduleDrain();
-    return true;
+    return wakeRetryWorkItem(this, ownerKey);
   }
 
   _clearRetryTimer(ownerKey) {
-    const retryTimer = this.retryTimers.get(ownerKey);
-    if (retryTimer) {
-      clearTimeout(retryTimer);
-      this.retryTimers.delete(ownerKey);
-    }
+    clearRetryTimer(this, ownerKey);
   }
 
   _clearRetryState(ownerKey) {
-    this._clearRetryTimer(ownerKey);
-    this.retryStates.delete(ownerKey);
-    this.retryWorkItems.delete(ownerKey);
+    clearRetryState(this, ownerKey);
   }
 
-  _pushRetryableDrainFailureSample(sample) {
-    if (
-      this._retryableDrainFailureSamples.length <
-      STALE_FENCE_SAMPLE_CAPACITY
-    ) {
-      this._retryableDrainFailureSamples.push(sample);
-    } else {
-      this._retryableDrainFailureSamples[
-        this._retryableDrainFailureSampleIndex
-      ] = sample;
-    }
-    this._retryableDrainFailureSampleIndex =
-      (this._retryableDrainFailureSampleIndex + 1) %
-      STALE_FENCE_SAMPLE_CAPACITY;
+  snapshotReasons(reasons) {
+    return snapshotSetValues(reasons);
   }
 
   /**
@@ -629,12 +585,12 @@ class OwnerKeyReconcileQueue extends EventEmitter {
       type: RECONCILE_QUEUE_DIAGNOSTIC.STALE_FENCE_TOKEN,
       queue: this.name,
       ownerKey,
-      reasons: Array.from(item.reasons),
+      reasons: snapshotSetValues(item.reasons),
       providedToken,
       currentToken,
-      timestamp: Date.now(),
+      timestamp: this.now(),
     };
-    this.staleClaims.push(diagnostic);
+    appendSnapshotValue(this.staleClaims, diagnostic);
     this._staleFenceRejectionCount++;
     this._pushStaleFenceSample(diagnostic);
     this.emit(
@@ -658,9 +614,13 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    */
   _pushStaleFenceSample(sample) {
     if (this._staleFenceSamples.length < STALE_FENCE_SAMPLE_CAPACITY) {
-      this._staleFenceSamples.push(sample);
+      appendSnapshotValue(this._staleFenceSamples, sample);
     } else {
-      this._staleFenceSamples[this._staleFenceSampleIndex] = sample;
+      defineSnapshotValue(
+        this._staleFenceSamples,
+        this._staleFenceSampleIndex,
+        sample,
+      );
     }
     this._staleFenceSampleIndex =
       (this._staleFenceSampleIndex + 1) % STALE_FENCE_SAMPLE_CAPACITY;
@@ -673,7 +633,7 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    * @return {boolean}
    */
   isInFlight(ownerKey) {
-    return this.inFlight.has(ownerKey);
+    return setHas(this.inFlight, ownerKey);
   }
 
   configureRetryPolicy(policy = {}) {
@@ -683,16 +643,46 @@ class OwnerKeyReconcileQueue extends EventEmitter {
     });
   }
 
+  promotePending(ownerKey) {
+    const item = mapGet(this.pending, ownerKey);
+    if (!item) {
+      return false;
+    }
+    mapDelete(this.pending, ownerKey);
+    const promoted = new MapConstructor();
+    mapSet(promoted, ownerKey, item);
+    mapForEach(this.pending, (pendingItem, pendingOwnerKey) => {
+      mapSet(promoted, pendingOwnerKey, pendingItem);
+    });
+    this.pending = promoted;
+    return true;
+  }
+
+  /**
+   * Discard queued or deferred work for one exact owner key. Active work is
+   * allowed to finish, but cannot leave a retry or pending successor behind.
+   * @param {string} ownerKey
+   * @return {boolean} Whether queued or deferred state was removed.
+   */
+  discard(ownerKey) {
+    const removed = mapDelete(this.pending, ownerKey) ||
+      mapHas(this.retryWorkItems, ownerKey) ||
+      mapHas(this.exhaustedWorkItems, ownerKey);
+    this._clearRetryState(ownerKey);
+    return removed;
+  }
+
   /**
    * Return the number of pending (not yet drained) items.
    * @return {number}
    */
   get size() {
-    const pendingKeys = new Set(this.pending.keys());
-    for (const ownerKey of this.retryWorkItems.keys()) {
-      pendingKeys.add(ownerKey);
-    }
-    return pendingKeys.size;
+    const pendingKeys = new SetConstructor();
+    mapForEach(this.pending,
+      (_item, ownerKey) => setAdd(pendingKeys, ownerKey));
+    mapForEach(this.retryWorkItems,
+      (_item, ownerKey) => setAdd(pendingKeys, ownerKey));
+    return setSize(pendingKeys);
   }
 
   /**
@@ -701,7 +691,8 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    * @return {boolean}
    */
   has(ownerKey) {
-    return this.pending.has(ownerKey) || this.retryWorkItems.has(ownerKey);
+    return mapHas(this.pending, ownerKey) ||
+      mapHas(this.retryWorkItems, ownerKey);
   }
 
   /**
@@ -711,28 +702,36 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    */
   getDiagnostics() {
     const fenceEntries = {};
-    for (const [key, token] of this.fenceTokens) {
-      fenceEntries[key] = token;
-    }
+    mapForEach(this.fenceTokens, (token, key) => {
+      defineSnapshotValue(fenceEntries, key, token);
+    });
     const retryStates = {};
-    for (const [key, retryState] of this.retryStates) {
-      retryStates[key] = {...retryState};
-    }
+    mapForEach(this.retryStates, (retryState, key) => {
+      defineSnapshotValue(retryStates, key, {...retryState});
+    });
+    const exhaustedRetryStates = {};
+    mapForEach(this.exhaustedRetryStates, (retryState, key) => {
+      defineSnapshotValue(exhaustedRetryStates, key, {...retryState});
+    });
     return {
       queue: this.name,
       maxConcurrency: this.maxConcurrency,
-      pendingKeys: Array.from(this.pending.keys()),
-      retryingKeys: Array.from(this.retryWorkItems.keys()),
-      inFlightKeys: Array.from(this.inFlight),
+      maxItemsPerDrain: this.maxItemsPerDrain,
+      pendingKeys: snapshotMapKeys(this.pending),
+      retryingKeys: snapshotMapKeys(this.retryWorkItems),
+      exhaustedRetryKeys: snapshotMapKeys(this.exhaustedWorkItems),
+      inFlightKeys: snapshotSetValues(this.inFlight),
       fenceTokens: fenceEntries,
-      staleClaims: this.staleClaims.slice(),
+      staleClaims: copySnapshotValues(this.staleClaims),
       staleFenceRejectionCount: this._staleFenceRejectionCount,
       staleInFlightDeferralCount: this._staleInFlightDeferralCount,
-      recentStaleFenceSamples: this._staleFenceSamples.slice(),
+      recentStaleFenceSamples: copySnapshotValues(this._staleFenceSamples),
       retryStates,
+      exhaustedRetryStates,
       retryableDrainFailureCount: this._retryableDrainFailureCount,
+      retryableDrainExhaustedCount: this._retryableDrainExhaustedCount,
       recentRetryableDrainFailureSamples:
-        this._retryableDrainFailureSamples.slice(),
+        copySnapshotValues(this._retryableDrainFailureSamples),
       draining: this.draining,
       stopped: this.stopped,
     };
@@ -743,15 +742,17 @@ class OwnerKeyReconcileQueue extends EventEmitter {
    */
   shutdown() {
     this.stopped = true;
-    this.pending.clear();
-    this.retryWorkItems.clear();
-    this.retryStates.clear();
-    for (const retryTimer of this.retryTimers.values()) {
-      clearTimeout(retryTimer);
-    }
-    this.retryTimers.clear();
-    this.inFlight.clear();
-    this.fenceTokens.clear();
+    mapClear(this.pending);
+    mapClear(this.retryWorkItems);
+    mapClear(this.retryStates);
+    mapClear(this.exhaustedWorkItems);
+    mapClear(this.exhaustedRetryStates);
+    mapForEach(this.retryTimers, (retryTimer) => {
+      this.clearTimeoutFn(retryTimer);
+    });
+    mapClear(this.retryTimers);
+    setClear(this.inFlight);
+    mapClear(this.fenceTokens);
     this.logger.debug(RECONCILE_QUEUE_LOG_MSG.SHUTDOWN, {
       queue: this.name,
     });

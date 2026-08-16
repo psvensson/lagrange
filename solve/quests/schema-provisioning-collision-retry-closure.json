@@ -1,0 +1,43 @@
+{
+  "id": "schema-provisioning-collision-retry-closure",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Schema provisioning survives its own idempotent retries during formation: a deterministic-intent replica-operation re-create whose zero-change collision lands on the prior attempt's durable row takes the idempotent EXISTING disposition instead of failing visibility it can never satisfy, an authoritative-not-confirmed collision outcome is classified transient (retry, never terminal FAILED poisoning later CREATEs of the same table), and the schema-job prologue honors the request deadline so a slow schema_operations partition yields an explicit pending/retry outcome instead of client-side silence \u2014 each proven red-first at the named race sites from the round-7 deterministic reproduction (local baseline repro plus archived runs 21-34-12 and 22-15-08), with the strict fail-closed collision contract preserved for non-intent creators in the sealed repository suites",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": null,
+    "closesCL": [],
+    "parentQuest": "readiness-evaluation-generation-floor-closure-v2",
+    "planDoc": "solve/epics/publication-readiness-churn-liveness-closure.md",
+    "draftedAtCommit": "7dcf10bc0"
+  },
+  "frontiers": [
+    {
+      "id": "schema-provisioning-collision-retry-closure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "schema-provisioning-collision-retry-closure",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "schema-provisioning-collision-retry-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  }
+}

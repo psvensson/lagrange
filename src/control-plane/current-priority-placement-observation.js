@@ -8,8 +8,8 @@ import {
 } from './membership-publication-priority-partition-summary.js';
 import {
   appendOwnArrayValue,
+  copyCanonicalDenseOwnDataRecordArray,
   copyDenseOwnDataArray,
-  copyDenseOwnDataRecordArray,
   copyStrictOwnDataRecord,
   createNullRecord,
   MapConstructor,
@@ -63,7 +63,7 @@ function copyOptionalRecordArray(options, fieldName) {
   if (!objectHasOwn(options, fieldName) || options[fieldName] == null) {
     return validCanonicalValue([]);
   }
-  const rows = copyDenseOwnDataRecordArray(options[fieldName]);
+  const rows = copyCanonicalDenseOwnDataRecordArray(options[fieldName]);
   return rows === null ?
     invalidCanonicalValue() :
     validCanonicalValue(rows);

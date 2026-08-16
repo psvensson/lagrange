@@ -227,6 +227,14 @@ export function buildStartupAuthorityUnavailableSnapshot(
   });
 }
 
+// The startup-authority snapshot is a pure derivation of the planning
+// answer, yet it was rebuilt (with a fresh recovery-gate construction) on
+// every getStartupAuthorityNodeIdSet call — the top-ranked producer of the
+// live gate-build storm (x699 per cycle; archived run
+// 18-53-48-768Z-natural-manual). One snapshot per answer identity; callers
+// that mint fresh answers per read simply miss.
+const STARTUP_AUTHORITY_SNAPSHOT_BY_ANSWER = new WeakMap();
+
 export function buildStartupAuthoritySnapshotFromPlanningAnswer(
   planningSnapshot,
 ) {
@@ -235,7 +243,19 @@ export function buildStartupAuthoritySnapshotFromPlanningAnswer(
       PRIORITY_CONTROL_PLANE_RECOVERY_HEALTH_FAILURE.PLANNING_UNAVAILABLE,
     );
   }
+  const memoized = STARTUP_AUTHORITY_SNAPSHOT_BY_ANSWER.get(planningSnapshot);
+  if (memoized) {
+    return memoized;
+  }
+  const snapshot =
+    buildStartupAuthoritySnapshotFromPlanningAnswerUncached(planningSnapshot);
+  STARTUP_AUTHORITY_SNAPSHOT_BY_ANSWER.set(planningSnapshot, snapshot);
+  return snapshot;
+}
 
+function buildStartupAuthoritySnapshotFromPlanningAnswerUncached(
+  planningSnapshot,
+) {
   const publicationRecoveryGate =
     buildPublicationRecoveryGateSnapshot(planningSnapshot);
   const projectionReadinessContract =

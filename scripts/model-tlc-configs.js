@@ -2,6 +2,112 @@ import path from 'node:path';
 
 const CONFIGS = [
   {
+    id: 'versioned-readiness-planning-fixed',
+    mode: 'versioned-readiness-planning-fixed',
+    module: path.resolve(
+      'models', 'readiness-starvation', 'VersionedReadinessPlanning.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'readiness-starvation',
+      'VersionedReadinessPlanning_fixed.cfg',
+    ),
+    expectConverged: true,
+    report: 'versioned-readiness-planning-fixed.model.report.json',
+    scenario: 'publication-readiness-churn-liveness-closure',
+    owner: 'control_plane_readiness_owner',
+    boundary: 'versioned_planning_snapshot',
+  },
+  {
+    id: 'versioned-readiness-planning-raw-event-mutant',
+    mode: 'versioned-readiness-planning-raw-event-mutant',
+    module: path.resolve(
+      'models', 'readiness-starvation', 'VersionedReadinessPlanning.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'readiness-starvation',
+      'VersionedReadinessPlanning_raw_event_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'versioned-readiness-planning-raw-event-mutant.model.report.json',
+    scenario: 'publication-readiness-churn-liveness-closure',
+    owner: 'control_plane_readiness_owner',
+    boundary: 'versioned_planning_snapshot',
+    expectedFailurePattern: 'Invariant HeavyWorkTurnBounded is violated',
+  },
+  {
+    id: 'versioned-readiness-planning-recursion-mutant',
+    mode: 'versioned-readiness-planning-recursion-mutant',
+    module: path.resolve(
+      'models', 'readiness-starvation', 'VersionedReadinessPlanning.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'readiness-starvation',
+      'VersionedReadinessPlanning_recursion_bug.cfg',
+    ),
+    expectConverged: false,
+    report: 'versioned-readiness-planning-recursion-mutant.model.report.json',
+    scenario: 'publication-readiness-churn-liveness-closure',
+    owner: 'control_plane_readiness_owner',
+    boundary: 'readiness_internal_owner_read',
+    expectedFailurePattern: 'Invariant OwnerReadNonAmplifying is violated',
+  },
+  {
+    id: 'versioned-readiness-planning-stale-positive-mutant',
+    mode: 'versioned-readiness-planning-stale-positive-mutant',
+    module: path.resolve(
+      'models', 'readiness-starvation', 'VersionedReadinessPlanning.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'readiness-starvation',
+      'VersionedReadinessPlanning_stale_positive_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'versioned-readiness-planning-stale-positive-mutant.model.report.json',
+    scenario: 'publication-readiness-churn-liveness-closure',
+    owner: 'control_plane_readiness_owner',
+    boundary: 'versioned_planning_snapshot',
+    expectedFailurePattern: 'Invariant NoStalePositive is violated',
+  },
+  {
+    id: 'versioned-readiness-planning-undeclared-dependency-mutant',
+    mode: 'versioned-readiness-planning-undeclared-dependency-mutant',
+    module: path.resolve(
+      'models', 'readiness-starvation', 'VersionedReadinessPlanning.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'readiness-starvation',
+      'VersionedReadinessPlanning_undeclared_dependency_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'versioned-readiness-planning-undeclared-dependency-mutant.model.report.json',
+    scenario: 'publication-readiness-churn-liveness-closure',
+    owner: 'control_plane_readiness_owner',
+    boundary: 'versioned_planning_snapshot',
+    expectedFailurePattern: 'Invariant NoStalePositive is violated',
+  },
+  {
+    id: 'versioned-readiness-planning-formation-priority-starvation-mutant',
+    mode: 'versioned-readiness-planning-formation-priority-starvation-mutant',
+    module: path.resolve(
+      'models', 'readiness-starvation', 'VersionedReadinessPlanning.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'readiness-starvation',
+      'VersionedReadinessPlanning_formation_priority_starvation_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'versioned-readiness-planning-formation-priority-starvation-mutant.' +
+      'model.report.json',
+    scenario: 'publication-readiness-churn-liveness-closure',
+    owner: 'control_plane_planning_scheduler_owner',
+    boundary: 'macrotask_bounded_round_robin',
+    expectedFailurePattern:
+      'Temporal property EventuallyAllOwnersServed was violated',
+  },
+  {
     id: 'active-gate-route',
     mode: 'route',
     module: path.resolve('models', 'active-gate', 'ActiveGate.tla'),

@@ -9,6 +9,10 @@
  */
 import {CONTROL_PLANE_READINESS_SERVICE_SHARED} from './control-plane-readiness-service-shared.js';
 import {ControlPlaneReadinessDiagnosticsEligibility} from './control-plane-readiness-diagnostics-eligibility.js';
+import {
+  readMembershipPlanningDerivationVersionKey as
+  readPlanningVersionKeyForCache,
+} from './membership-planning-version-key.js';
 
 const {
   MEMBERSHIP_PUBLICATION_READ_LANE,
@@ -18,6 +22,13 @@ const {
   resolveMembershipPublicationReadOptions,
   resolveMembershipPublicationReadScope,
 } = CONTROL_PLANE_READINESS_SERVICE_SHARED;
+
+// Named empty-state for the memoized async candidate derivation: the
+// service produced no usable candidate, so the caller must fall through to
+// the diagnostics-derived planning snapshot instead of trusting the memo.
+const ASYNC_PLANNING_DERIVATION_UNAVAILABLE = Object.freeze({
+  planningCandidateUnavailable: true,
+});
 
 class ControlPlaneReadinessPublicationDiagnostics
   extends ControlPlaneReadinessDiagnosticsEligibility {
@@ -122,19 +133,76 @@ class ControlPlaneReadinessPublicationDiagnostics
     });
   }
 
+  // The async candidate derivation is called once per owner read during
+  // formation planning — call count scales with the in-flight operation
+  // ledger, profiled at ~8 percent of seed CPU alongside the synchronous
+  // sweep. Memoized on the same source-table version key as the sync
+  // derivation (separate memo slot: the async derivation may take owner
+  // read paths the sync variant cannot, so the two never cross-serve); the
+  // in-flight promise is shared so concurrent callers in one sweep collapse
+  // to one derivation, and a rejected derivation clears the slot so the
+  // next caller retries.
   async getMembershipPublicationPlanningSnapshot(nodeId, observedAt) {
     const service = this.membershipPublicationService;
     if (
       service &&
       typeof service.deriveClusterMembershipCandidate === 'function'
     ) {
-      const candidate = await service.deriveClusterMembershipCandidate({
-        deferNestedPriorityRecoveryPlanning: true,
-        publisherNodeId: nodeId || this.nodeId,
-        nowMs: observedAt,
-      });
-      if (candidate && typeof candidate === 'object') {
-        return this.normalizeMembershipPublicationPlanningSnapshot(candidate);
+      const publisherNodeId = nodeId || this.nodeId;
+      const versionKey = readPlanningVersionKeyForCache(
+        this.systemTableCache,
+        observedAt,
+      );
+      // Per-publisher slots: the live seed alternates planning reads across
+      // all five nodes (per-node readiness evaluations), and a single slot
+      // thrashed on every alternation — each miss minting a fresh snapshot
+      // identity that defeated every downstream identity memo (round-6
+      // census). Bounded by cluster node count.
+      if (!this.membershipPlanningSnapshotAsyncMemoByPublisher) {
+        this.membershipPlanningSnapshotAsyncMemoByPublisher = new Map();
+      }
+      const memo =
+        this.membershipPlanningSnapshotAsyncMemoByPublisher.get(
+          publisherNodeId,
+        );
+      let derivation;
+      if (versionKey !== null && memo && memo.versionKey === versionKey) {
+        derivation = memo.promise;
+      } else {
+        derivation = (async () => {
+          const candidate = await service.deriveClusterMembershipCandidate({
+            deferNestedPriorityRecoveryPlanning: true,
+            publisherNodeId,
+            nowMs: observedAt,
+          });
+          if (candidate && typeof candidate === 'object') {
+            return Object.freeze(
+              this.normalizeMembershipPublicationPlanningSnapshot(candidate),
+            );
+          }
+          return ASYNC_PLANNING_DERIVATION_UNAVAILABLE;
+        })();
+        if (versionKey !== null) {
+          const entry = {versionKey, promise: derivation};
+          this.membershipPlanningSnapshotAsyncMemoByPublisher.set(
+            publisherNodeId,
+            entry,
+          );
+          derivation.catch(() => {
+            if (
+              this.membershipPlanningSnapshotAsyncMemoByPublisher
+                .get(publisherNodeId) === entry
+            ) {
+              this.membershipPlanningSnapshotAsyncMemoByPublisher.delete(
+                publisherNodeId,
+              );
+            }
+          });
+        }
+      }
+      const snapshot = await derivation;
+      if (snapshot !== ASYNC_PLANNING_DERIVATION_UNAVAILABLE) {
+        return snapshot;
       }
     }
     const membershipPublication =
@@ -149,19 +217,53 @@ class ControlPlaneReadinessPublicationDiagnostics
     });
   }
 
+  // The full candidate derivation re-reads five system tables, rebuilds the
+  // priority-partition summary over every partition, and rebuilds recovery
+  // closure evidence — profiled at half of all seed CPU during formation
+  // planning sweeps that call it once per entity plus dozens of times per
+  // priority entity in one synchronous burst. Memoized on the source-table
+  // mutation versions (heartbeat writes bound staleness at the heartbeat
+  // interval, the same bound the CL-019 diagnostics memo accepted); any
+  // relevant table write invalidates.
+  readMembershipPlanningDerivationVersionKey(observedAt) {
+    return readPlanningVersionKeyForCache(this.systemTableCache, observedAt);
+  }
+
   getMembershipPublicationPlanningSnapshotSync(nodeId, observedAt) {
     const service = this.membershipPublicationService;
     if (
       service &&
       typeof service.deriveClusterMembershipCandidateSync === 'function'
     ) {
+      const publisherNodeId = nodeId || this.nodeId;
+      const versionKey =
+        this.readMembershipPlanningDerivationVersionKey(observedAt);
+      if (!this.membershipPlanningSnapshotSyncMemoByPublisher) {
+        this.membershipPlanningSnapshotSyncMemoByPublisher = new Map();
+      }
+      const memo =
+        this.membershipPlanningSnapshotSyncMemoByPublisher.get(
+          publisherNodeId,
+        );
+      if (versionKey !== null && memo && memo.versionKey === versionKey) {
+        return memo.snapshot;
+      }
       const candidate = service.deriveClusterMembershipCandidateSync({
         deferNestedPriorityRecoveryPlanning: true,
-        publisherNodeId: nodeId || this.nodeId,
+        publisherNodeId,
         nowMs: observedAt,
       });
       if (candidate && typeof candidate === 'object') {
-        return this.normalizeMembershipPublicationPlanningSnapshot(candidate);
+        const snapshot = Object.freeze(
+          this.normalizeMembershipPublicationPlanningSnapshot(candidate),
+        );
+        if (versionKey !== null) {
+          this.membershipPlanningSnapshotSyncMemoByPublisher.set(
+            publisherNodeId,
+            {versionKey, snapshot},
+          );
+        }
+        return snapshot;
       }
     }
     const membershipPublication = this.getMembershipPublicationDiagnosticsSync(
