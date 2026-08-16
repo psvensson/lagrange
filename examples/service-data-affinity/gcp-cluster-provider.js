@@ -122,15 +122,15 @@ async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
 
     // Build (or reuse) the git-labelled image locally, then ship it to every
     // provisioned host so the remote daemons run the exact current bytes.
-    // Operator-amended certification window (2026-08-15): the joiner ACTIVE
-    // chain is inherently serial with a best-case floor of 50-65s on this
-    // topology (round-8 timeline proof), so the formation window is 90s.
-    // timeouts.convergence feeds only the harness's active-wait base
-    // (45s x the 5-node scale factor 2.0 = 90s); every other sealed term
+    // Operator-restored certification window (2026-08-16): back to 60s.
+    // The round-8 serial-chain floor of 50-65s that justified the 90s
+    // amendment is collapsed by the parallel joiner starts and the ledger
+    // spread-cure ADD overlap (round-9 C1+C2, projected floor 35-45s), so
+    // the window returns to the harness default convergence base (30s x
+    // the 5-node scale factor 2.0 = 60s); every other sealed term
     // (3000ms gap ceiling, fingerprints, teardown) is unchanged.
     const config = mergeWithDefaults({
       size: DEMO_NODE_COUNT,
-      timeouts: {convergence: 45_000},
     });
     await buildImage(config, false);
     await installGcpImage(provisioner, config.image, verbose);

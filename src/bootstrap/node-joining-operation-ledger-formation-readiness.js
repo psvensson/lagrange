@@ -151,8 +151,60 @@ function resolveOperationLedgerFormationBarrierState({
     OPERATION_LEDGER_FORMATION_BARRIER_STATE.SATISFIED;
 }
 
+// Bounded retention for the settled placement observation across transient
+// owner-read unavailability (leadership-transition class, same 15s bound as
+// the readiness planning grace).
+const OPERATION_LEDGER_FORMATION_PLACEMENT_GRACE_MS = 15000;
+
 class NodeJoiningOperationLedgerFormationReadiness
   extends NodeJoiningOwnerConstruction {
+  // A transiently unavailable or failed owner-RPC read is evidence-absent,
+  // not evidence of regression: the post-REPLACE raft leadership transition
+  // made this read fail for seconds, the barrier regressed to
+  // waiting_for_ledger_observation discarding already-settled spread
+  // evidence, and every joiner sat inside the barrier past any window
+  // (archived runs 23-32-47 and the 90s-window profiled run 06-11-02).
+  // The last COMPLETE observation is retained per partition for a bounded
+  // grace window; a fresh AVAILABLE read always replaces it immediately,
+  // and past the grace the unavailable answer is honest again.
+  retainCompleteFormationPlacementObservation(partitionId, evidence) {
+    if (!this.completeFormationPlacementByPartition) {
+      this.completeFormationPlacementByPartition = new Map();
+    }
+    if (evidence.complete === true) {
+      this.completeFormationPlacementByPartition.set(partitionId, {
+        evidence,
+        retainedAtMs: this.now(),
+      });
+    }
+    return evidence;
+  }
+
+  readRetainedFormationPlacementObservation(partitionId) {
+    const retained =
+      this.completeFormationPlacementByPartition?.get(partitionId);
+    if (
+      retained &&
+      this.now() - retained.retainedAtMs <=
+        OPERATION_LEDGER_FORMATION_PLACEMENT_GRACE_MS
+    ) {
+      return retained.evidence;
+    }
+    return null;
+  }
+
+  buildUnavailableFormationPlacementObservation(
+    partitionId,
+    targetReplicaCount,
+  ) {
+    return this.readRetainedFormationPlacementObservation(partitionId) ||
+      buildOperationLedgerFormationPlacementEvidence({
+        ...UNAVAILABLE_FORMATION_PLACEMENT_EVIDENCE_INPUT,
+        partitionId,
+        targetReplicaCount,
+      });
+  }
+
   async getOperationLedgerFormationPlacementObservation(
     partitionId,
     targetReplicaCount,
@@ -170,11 +222,10 @@ class NodeJoiningOperationLedgerFormationReadiness
       authoritativeView.canRead() !== true ||
       typeof authoritativeView.readRows !== 'function'
     ) {
-      return buildOperationLedgerFormationPlacementEvidence({
-        ...UNAVAILABLE_FORMATION_PLACEMENT_EVIDENCE_INPUT,
+      return this.buildUnavailableFormationPlacementObservation(
         partitionId,
         targetReplicaCount,
-      });
+      );
     }
     try {
       const result = await authoritativeView.readRows(
@@ -189,20 +240,28 @@ class NodeJoiningOperationLedgerFormationReadiness
           preferOwnerRpcReadLeader: true,
         },
       );
-      return buildOperationLedgerFormationPlacementEvidence({
-        available: result?.success === true,
-        rows: result?.rows,
-        source: result?.source,
+      if (result?.success !== true) {
+        return this.buildUnavailableFormationPlacementObservation(
+          partitionId,
+          targetReplicaCount,
+        );
+      }
+      return this.retainCompleteFormationPlacementObservation(
         partitionId,
-        targetReplicaCount,
-        snapshotVersion: result?.snapshotVersion ?? null,
-      });
+        buildOperationLedgerFormationPlacementEvidence({
+          available: true,
+          rows: result?.rows,
+          source: result?.source,
+          partitionId,
+          targetReplicaCount,
+          snapshotVersion: result?.snapshotVersion ?? null,
+        }),
+      );
     } catch {
-      return buildOperationLedgerFormationPlacementEvidence({
-        ...UNAVAILABLE_FORMATION_PLACEMENT_EVIDENCE_INPUT,
+      return this.buildUnavailableFormationPlacementObservation(
         partitionId,
         targetReplicaCount,
-      });
+      );
     }
   }
   /**

@@ -1,0 +1,354 @@
+diff --git a/examples/service-data-affinity/gcp-cluster-provider.js b/examples/service-data-affinity/gcp-cluster-provider.js
+index b3b26e3391718ac89264a08819b523edf41ea071..befaf2294782daf6536293935a1c329cb0ab735c 100644
+--- a/examples/service-data-affinity/gcp-cluster-provider.js
++++ b/examples/service-data-affinity/gcp-cluster-provider.js
+@@ -122,15 +122,15 @@ async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
+ 
+     // Build (or reuse) the git-labelled image locally, then ship it to every
+     // provisioned host so the remote daemons run the exact current bytes.
+-    // Operator-amended certification window (2026-08-15): the joiner ACTIVE
+-    // chain is inherently serial with a best-case floor of 50-65s on this
+-    // topology (round-8 timeline proof), so the formation window is 90s.
+-    // timeouts.convergence feeds only the harness's active-wait base
+-    // (45s x the 5-node scale factor 2.0 = 90s); every other sealed term
++    // Operator-restored certification window (2026-08-16): back to 60s.
++    // The round-8 serial-chain floor of 50-65s that justified the 90s
++    // amendment is collapsed by the parallel joiner starts and the ledger
++    // spread-cure ADD overlap (round-9 C1+C2, projected floor 35-45s), so
++    // the window returns to the harness default convergence base (30s x
++    // the 5-node scale factor 2.0 = 60s); every other sealed term
+     // (3000ms gap ceiling, fingerprints, teardown) is unchanged.
+     const config = mergeWithDefaults({
+       size: DEMO_NODE_COUNT,
+-      timeouts: {convergence: 45_000},
+     });
+     await buildImage(config, false);
+     await installGcpImage(provisioner, config.image, verbose);
+diff --git a/scripts/run-formation-grace-parallel-start-hardening-scenarios.js b/scripts/run-formation-grace-parallel-start-hardening-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..2a6b98fa17e6a732b4969301c381d22fab8eda2b
+--- /dev/null
++++ b/scripts/run-formation-grace-parallel-start-hardening-scenarios.js
+@@ -0,0 +1,44 @@
++#!/usr/bin/env node
++
++import path from 'node:path';
++import {fileURLToPath} from 'node:url';
++import {runTestFileSync} from './run-test-files.js';
++import {emitDeterministicGuardReport} from './deterministic-guard-report.js';
++
++// Deterministic guard for the formation grace + parallel-start hardening
++// quest: the red-first placement-observation grace contract plus the
++// sealed formation interlock and the node-joining suites the parallelized
++// harness starts must not regress.
++const SCENARIO = 'formation-grace-parallel-start-hardening';
++const PRODUCER = 'formation-grace-parallel-start-hardening-proof';
++const PARENT_DIR = '..';
++const GUARD_TIMEOUT_MS = 300000;
++const GUARD_FILES = Object.freeze([
++  'test/bootstrap/formation-placement-observation-grace.test.js',
++  'test/bootstrap/node-joining-service.test.js',
++  'test/bootstrap/node-joining-service-join-lifecycle-resume.test.js',
++  'test/rebalancer/formation-ledger-spread-voter-ready-readiness.test.js',
++  'test/convergence/dt6-rebalancer-formation-self-move-interlock.test.js',
++  'test/convergence/dt6-formation-ledger-quorum-spread-first.test.js',
++]);
++
++const root = path.resolve(
++  path.dirname(fileURLToPath(import.meta.url)),
++  PARENT_DIR,
++);
++
++function main() {
++  const guards = GUARD_FILES.map((file) => ({
++    file,
++    ...runTestFileSync(file, {print: false, timeoutMs: GUARD_TIMEOUT_MS}),
++  }));
++  emitDeterministicGuardReport({
++    root,
++    scenario: SCENARIO,
++    producer: PRODUCER,
++    guards,
++    deterministicPassed: guards.every((guard) => guard.ok === true),
++  });
++}
++
++main();
+diff --git a/src/bootstrap/node-joining-operation-ledger-formation-readiness.js b/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
+index da91b7bbfc7d38ca43b9efd893be7092df1becb6..8a5222cf3dec54aada4bc3941e7a386704436825 100644
+--- a/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
++++ b/src/bootstrap/node-joining-operation-ledger-formation-readiness.js
+@@ -151,8 +151,60 @@ function resolveOperationLedgerFormationBarrierState({
+     OPERATION_LEDGER_FORMATION_BARRIER_STATE.SATISFIED;
+ }
+ 
++// Bounded retention for the settled placement observation across transient
++// owner-read unavailability (leadership-transition class, same 15s bound as
++// the readiness planning grace).
++const OPERATION_LEDGER_FORMATION_PLACEMENT_GRACE_MS = 15000;
++
+ class NodeJoiningOperationLedgerFormationReadiness
+   extends NodeJoiningOwnerConstruction {
++  // A transiently unavailable or failed owner-RPC read is evidence-absent,
++  // not evidence of regression: the post-REPLACE raft leadership transition
++  // made this read fail for seconds, the barrier regressed to
++  // waiting_for_ledger_observation discarding already-settled spread
++  // evidence, and every joiner sat inside the barrier past any window
++  // (archived runs 23-32-47 and the 90s-window profiled run 06-11-02).
++  // The last COMPLETE observation is retained per partition for a bounded
++  // grace window; a fresh AVAILABLE read always replaces it immediately,
++  // and past the grace the unavailable answer is honest again.
++  retainCompleteFormationPlacementObservation(partitionId, evidence) {
++    if (!this.completeFormationPlacementByPartition) {
++      this.completeFormationPlacementByPartition = new Map();
++    }
++    if (evidence.complete === true) {
++      this.completeFormationPlacementByPartition.set(partitionId, {
++        evidence,
++        retainedAtMs: this.now(),
++      });
++    }
++    return evidence;
++  }
++
++  readRetainedFormationPlacementObservation(partitionId) {
++    const retained =
++      this.completeFormationPlacementByPartition?.get(partitionId);
++    if (
++      retained &&
++      this.now() - retained.retainedAtMs <=
++        OPERATION_LEDGER_FORMATION_PLACEMENT_GRACE_MS
++    ) {
++      return retained.evidence;
++    }
++    return null;
++  }
++
++  buildUnavailableFormationPlacementObservation(
++    partitionId,
++    targetReplicaCount,
++  ) {
++    return this.readRetainedFormationPlacementObservation(partitionId) ||
++      buildOperationLedgerFormationPlacementEvidence({
++        ...UNAVAILABLE_FORMATION_PLACEMENT_EVIDENCE_INPUT,
++        partitionId,
++        targetReplicaCount,
++      });
++  }
++
+   async getOperationLedgerFormationPlacementObservation(
+     partitionId,
+     targetReplicaCount,
+@@ -170,11 +222,10 @@ class NodeJoiningOperationLedgerFormationReadiness
+       authoritativeView.canRead() !== true ||
+       typeof authoritativeView.readRows !== 'function'
+     ) {
+-      return buildOperationLedgerFormationPlacementEvidence({
+-        ...UNAVAILABLE_FORMATION_PLACEMENT_EVIDENCE_INPUT,
++      return this.buildUnavailableFormationPlacementObservation(
+         partitionId,
+         targetReplicaCount,
+-      });
++      );
+     }
+     try {
+       const result = await authoritativeView.readRows(
+@@ -189,20 +240,28 @@ class NodeJoiningOperationLedgerFormationReadiness
+           preferOwnerRpcReadLeader: true,
+         },
+       );
+-      return buildOperationLedgerFormationPlacementEvidence({
+-        available: result?.success === true,
+-        rows: result?.rows,
+-        source: result?.source,
++      if (result?.success !== true) {
++        return this.buildUnavailableFormationPlacementObservation(
++          partitionId,
++          targetReplicaCount,
++        );
++      }
++      return this.retainCompleteFormationPlacementObservation(
+         partitionId,
+-        targetReplicaCount,
+-        snapshotVersion: result?.snapshotVersion ?? null,
+-      });
++        buildOperationLedgerFormationPlacementEvidence({
++          available: true,
++          rows: result?.rows,
++          source: result?.source,
++          partitionId,
++          targetReplicaCount,
++          snapshotVersion: result?.snapshotVersion ?? null,
++        }),
++      );
+     } catch {
+-      return buildOperationLedgerFormationPlacementEvidence({
+-        ...UNAVAILABLE_FORMATION_PLACEMENT_EVIDENCE_INPUT,
++      return this.buildUnavailableFormationPlacementObservation(
+         partitionId,
+         targetReplicaCount,
+-      });
++      );
+     }
+   }
+   /**
+diff --git a/test/bootstrap/formation-placement-observation-grace.test.js b/test/bootstrap/formation-placement-observation-grace.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..e3513607b4871f31551c5885d25c65810c272f07
+--- /dev/null
++++ b/test/bootstrap/formation-placement-observation-grace.test.js
+@@ -0,0 +1,121 @@
++/**
++ * Formation-barrier placement-observation grace.
++ *
++ * The joiner barrier's authoritative placement read rides the owner-RPC
++ * lane; during the post-REPLACE raft leadership transition that read goes
++ * transiently unavailable, and the barrier REGRESSED to
++ * waiting_for_ledger_observation, discarding already-settled spread
++ * evidence — an effectively unbounded tail that held all joiners inside
++ * the barrier past every window (archived runs 23-32-47 at T+105 and the
++ * 90s-window profiled run 06-11-02, where all three stuck joiners carried
++ * the signature). A transient read failure is evidence-absent, not
++ * evidence of regression: the last COMPLETE observation is retained for a
++ * bounded grace window; any fresh available read replaces it immediately.
++ */
++import {test} from '../../src/test-helpers/tap.js';
++import {
++  NodeJoiningOperationLedgerFormationReadiness,
++} from '../../src/bootstrap/node-joining-operation-ledger-formation-readiness.js';
++
++const PARTITION_ID = 'replica_operations-p1';
++const TARGET_REPLICAS = 3;
++
++function serviceRow(nodeId, replicaId) {
++  return {
++    partition_id: PARTITION_ID,
++    node_id: nodeId,
++    replica_id: replicaId,
++    service_type: 'partition',
++    raft_role: 'follower',
++    status: 'active',
++    state: 'active',
++  };
++}
++
++function buildHost({readResults, clock}) {
++  let readIndex = 0;
++  const host = Object.create(
++    NodeJoiningOperationLedgerFormationReadiness.prototype,
++  );
++  host.now = () => clock.value;
++  host.rebalanceCoordinator = {
++    controlPlaneReadinessService: {
++      getAuthoritativeControlPlaneView: () => ({
++        canRead: () => true,
++        readRows: async () => {
++          const result = readResults[
++            Math.min(readIndex, readResults.length - 1)];
++          readIndex += 1;
++          return result;
++        },
++      }),
++    },
++  };
++  return host;
++}
++
++test('a transient authoritative-read failure retains the last complete ' +
++  'placement observation within the grace window', async (t) => {
++  const clock = {value: 1000};
++  const completeRows = [
++    serviceRow('n1', 'r1'),
++    serviceRow('n2', 'r2'),
++    serviceRow('n3', 'r3'),
++  ];
++  const host = buildHost({
++    clock,
++    readResults: [
++      {success: true, rows: completeRows, source: 'owner_rpc_lane'},
++      {success: false, rows: []},
++      {success: false, rows: []},
++    ],
++  });
++  const first = await host.getOperationLedgerFormationPlacementObservation(
++    PARTITION_ID, TARGET_REPLICAS);
++  t.equal(first.complete, true, 'the settled read is complete');
++
++  clock.value = 6000;
++  const duringTransition =
++    await host.getOperationLedgerFormationPlacementObservation(
++      PARTITION_ID, TARGET_REPLICAS);
++  t.equal(duringTransition.complete, true,
++    'a transient read failure within the grace window keeps the settled ' +
++      'observation instead of regressing the barrier');
++
++  clock.value = 60000;
++  const pastGrace =
++    await host.getOperationLedgerFormationPlacementObservation(
++      PARTITION_ID, TARGET_REPLICAS);
++  t.equal(pastGrace.complete, false,
++    'a read failure past the grace window honestly reports unavailable');
++  t.end();
++});
++
++test('a fresh available read always replaces the retained observation', async (t) => {
++  const clock = {value: 1000};
++  const completeRows = [
++    serviceRow('n1', 'r1'),
++    serviceRow('n2', 'r2'),
++    serviceRow('n3', 'r3'),
++  ];
++  const concentratedRows = [
++    serviceRow('n1', 'r1'),
++    serviceRow('n1', 'r2'),
++    serviceRow('n1', 'r3'),
++  ];
++  const host = buildHost({
++    clock,
++    readResults: [
++      {success: true, rows: completeRows, source: 'owner_rpc_lane'},
++      {success: true, rows: concentratedRows, source: 'owner_rpc_lane'},
++    ],
++  });
++  await host.getOperationLedgerFormationPlacementObservation(
++    PARTITION_ID, TARGET_REPLICAS);
++  clock.value = 2000;
++  const fresh = await host.getOperationLedgerFormationPlacementObservation(
++    PARTITION_ID, TARGET_REPLICAS);
++  t.equal(fresh.distinctNodeCount, 1,
++    'a fresh available read wins over the retained observation');
++  t.end();
++});
+diff --git a/test/distributed/harness/cluster-class-lifecycle-base.js b/test/distributed/harness/cluster-class-lifecycle-base.js
+index 080f4f362979d0c5c9b8169200b0b0fd727da35f..5285e279bf94eb38af07d51052c80ae1d77346ae 100644
+--- a/test/distributed/harness/cluster-class-lifecycle-base.js
++++ b/test/distributed/harness/cluster-class-lifecycle-base.js
+@@ -949,7 +949,14 @@ class ClusterLifecycleBase {
+       (this._nodeHostIps(0).internal || seedNode.ip) :
+       seedNode.ip;
+ 
+-    for (let i = 1; i < this._config.size; i++) {
++    // Joiners start CONCURRENTLY: the serial await here cost ~4s of remote
++    // container-create RTT per joiner (~12s of pure harness serialization to
++    // the last of four joiners, round-9 timeline attribution on the archived
++    // certification runs), while the join protocol itself is contention-ready
++    // by design (formation-cohort barrier, budgeted join retries). Seed-first
++    // ordering and the cluster-active gate below are unchanged; per-node
++    // bookkeeping runs as each start settles.
++    const startJoiner = async (i) => {
+       const joinerId = this._buildNodeId(i);
+       this._recordClusterStage(CLUSTER_STAGE_SETUP_JOINER_STARTING, {
+         nodeId: joinerId,
+@@ -986,7 +993,12 @@ class ClusterLifecycleBase {
+         nodeId: joinerId,
+         ordinal: i,
+       });
++    };
++    const joinerStartPromises = [];
++    for (let i = 1; i < this._config.size; i++) {
++      joinerStartPromises.push(startJoiner(i));
+     }
++    await Promise.all(joinerStartPromises);
+ 
+     await startupGate.waitForClusterActive(this._config.size);
+     this._started = true;
