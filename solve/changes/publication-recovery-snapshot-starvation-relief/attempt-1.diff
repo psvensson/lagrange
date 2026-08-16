@@ -1,0 +1,16 @@
+diff --git a/test/shards/impact-graph-seal.json b/test/shards/impact-graph-seal.json
+index 1c2aeb5ba34aba33efd52dc1fca08a5e16c3d8a2..7717745f371b0a5806d03ec02bebd9f51317eccc 100644
+--- a/test/shards/impact-graph-seal.json
++++ b/test/shards/impact-graph-seal.json
+@@ -1,8 +1,8 @@
+ {
+   "schemaVersion": 1,
+   "importGraphSchemaVersion": "global-owner-debt-import-graph-v2",
+-  "sourceDigest": "8f65c25c2d3d120416f0d977f874ed6ce9b3c71c8291c9f04ba99d6bd28e189f",
+-  "producerInputDigest": "ae36bf7ecb0b2a3e2cbdd70f4fa16938bf7117c68b587e04a619295e1ad897c4",
++  "sourceDigest": "7ff340b01116bd54978873f20656e2323a95675a6e59fc08e7a8ade74eb986c2",
++  "producerInputDigest": "059a1b3ee8eb5168ed213732c71ec01451e3653eec3e51accfc9601fd15398fc",
+   "resolverStateDigest": "ddcc654be6afa17404c6eedcabc7e00cea51ec7c1b9169d511ee7ca38b22fe24",
+-  "snapshotDigest": "90d2dd3d63af35906d3e310748a560e31aeca90b40de65226c8a86e095570755"
++  "snapshotDigest": "05b3744708fe9973974983a7bb18e23fde34a954cc50986327de167cd5fb3b22"
+ }

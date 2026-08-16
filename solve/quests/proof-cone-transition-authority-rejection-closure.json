@@ -1,0 +1,43 @@
+{
+  "id": "proof-cone-transition-authority-rejection-closure",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "The proof-cone graph seal invalidates every dependency-cruiser target transition including higher-priority sibling appearance, coverage authority rejects symlinks in every descendant path component while accepting a symlinked repository root, canonical producer verification is SIGKILL-bounded, exact graph and seal bytes remain bound before cache reuse, and every focused unit file stays below two seconds across five consecutive runs.",
+  "priority": 1,
+  "class": "process",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/golden-capability-gold-plating.md#tier-1-enforcement-machinery-make-steering-machine-checked",
+    "closesCL": [],
+    "parentQuest": "proof-cone-graph-seal-coverage-integrity",
+    "planDoc": null,
+    "draftedAtCommit": "8af20e575d166cf5b4c348b9398b8c77aafdec1d"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "proof-cone-transition-authority-rejection-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "proof-cone-transition-authority-rejection-closure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "proof-cone-transition-authority-rejection-closure",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

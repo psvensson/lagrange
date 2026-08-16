@@ -185,6 +185,14 @@ class ReplicaDispatchServiceLifecycle extends EventEmitter {
       reconcileFn: (ownerKey, _reasons, context) =>
         this.reconcileNodeReadyRetry(ownerKey, context),
     });
+    this.membershipPublicationAdvanceQueue = new OwnerKeyReconcileQueue({
+      name: DISPATCH_QUEUE_NAME.MEMBERSHIP_PUBLICATION_ADVANCE,
+      reconcileFn: (ownerKey, _reasons, context) =>
+        this.reconcileLocalReadyNodeMembershipPublicationAdvance(
+          ownerKey,
+          context,
+        ),
+    });
   }
 
   /**

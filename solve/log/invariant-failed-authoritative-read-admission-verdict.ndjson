@@ -1,0 +1,1 @@
+{"ts":"2026-08-12T04:32:49.791Z","type":"invariant.evaluated","invariant":"failed-authoritative-read-admission-verdict","verdict":"pass","exitCode":0,"evidenceRef":"node --test test/rebalancer/failed-authoritative-read-admission-verdict.test.js"}

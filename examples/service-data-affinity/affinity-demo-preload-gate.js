@@ -524,6 +524,26 @@ async function observePreloadAdmission(options, targets, probeSql, deadlineMs) {
   }
 }
 
+function resolveDrainBasedSchemaAdmissionDeadline(
+  snapshot,
+  stableWindowMs,
+  pollIntervalMs,
+  effectiveDeadlineMs,
+) {
+  if (
+    snapshot?.ready !== true ||
+    snapshot?.effectiveInFlightCount !== ZERO ||
+    typeof snapshot?.latestTopologyDrainAtMs !== 'number'
+  ) {
+    return effectiveDeadlineMs;
+  }
+  const graceMs =
+    (stableWindowMs + pollIntervalMs) *
+    SCHEMA_ADMISSION_STABLE_CONFIRMATION_COUNT;
+  const drainBasedDeadlineMs = snapshot.latestTopologyDrainAtMs + graceMs;
+  return Math.max(effectiveDeadlineMs, drainBasedDeadlineMs);
+}
+
 /**
  * Wait until the authoritative control snapshot is quiet enough to admit the
  * policy-bearing ratings schema mutation. This phase intentionally performs no
@@ -552,7 +572,7 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
   const stableWindowMs = normalizeSchemaStableWindowMs(
     options.stableWindowMs,
   );
-  const deadlineMs = now() + timeoutMs;
+  let effectiveDeadlineMs = now() + timeoutMs;
   const target = buildAdminLaneTarget(
     options.target,
     ADMIN_STREAM_LANE.SNAPSHOT,
@@ -563,13 +583,13 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
   let lastEvidence = null;
 
   while (true) {
-    if (lastEvidence && now() >= deadlineMs) {
+    if (lastEvidence && now() >= effectiveDeadlineMs) {
       throw buildSchemaAdmissionTimeoutError(lastEvidence);
     }
     const observedSnapshot = await observeSchemaAdmissionSnapshot(
       normalizedOptions,
       target,
-      deadlineMs,
+      effectiveDeadlineMs,
     );
     const observedAtMs = now();
     const previousStabilityWindow = stabilityWindow;
@@ -582,6 +602,14 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
     );
     stabilityWindow = stabilityObservation.stabilityWindow;
     stableConfirmationCount = stabilityObservation.stableConfirmationCount;
+
+    effectiveDeadlineMs = resolveDrainBasedSchemaAdmissionDeadline(
+      stabilityObservation.snapshot,
+      stableWindowMs,
+      pollIntervalMs,
+      effectiveDeadlineMs,
+    );
+
     transitionHistory = advanceSchemaAdmissionTransitionHistory(
       transitionHistory,
       {
@@ -602,7 +630,7 @@ async function waitForAffinityDemoSchemaAdmission(options = {}) {
     if (evidence.admitted) {
       return evidence;
     }
-    const remainingMs = remainingBudgetMs(now, deadlineMs);
+    const remainingMs = remainingBudgetMs(now, effectiveDeadlineMs);
     if (remainingMs <= ZERO) {
       throw buildSchemaAdmissionTimeoutError(evidence);
     }

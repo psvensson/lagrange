@@ -1,0 +1,48 @@
+{
+  "id": "priority-partition-census-canonical-record-closure",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Priority-partition census authority admits only plain enumerable own-data records through import-time captured collection, array, and string primitives; malformed nested values return unavailable without throwing, valid target diagnostics and normal nullable caller availability remain unchanged, and the deterministic census guard passes three consecutive runs.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/golden-capability-gold-plating.md#tier-0-immediate-structural-guards",
+    "closesCL": [],
+    "parentQuest": "priority-partition-census-authority-canonicalization",
+    "planDoc": null,
+    "draftedAtCommit": "27450077b7c6760ba639e603630f679beb80acdc"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "priority-partition-census-canonical-record-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "priority-partition-census-canonical-record-closure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "priority-partition-census-canonical-record-closure",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ],
+  "verificationTemplates": [
+    "adversarial-js-intrinsics",
+    "harness-fidelity",
+    "admission-gating"
+  ]
+}

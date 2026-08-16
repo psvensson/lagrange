@@ -1,0 +1,83 @@
+{
+  "id": "publication-readiness-churn-liveness-closure",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Production-shaped readiness churn converges through one versioned planning owner under the sealed contract. Complete-token validation prevents stale-positive decisions. Readiness-internal reads remain recursion-free. Global heavy builds stay at one per macrotask. Three consecutive source-bound natural five-node GCP MovieLens runs reach ACTIVE 5/5 within 60 seconds. Publication coverage is 5/5. Every named frame and seed gap is at most 3000ms.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "solve/epics/publication-readiness-churn-liveness-closure.md",
+    "closesCL": [],
+    "parentQuest": "publication-readiness-hotpath-starvation-relief",
+    "planDoc": "solve/epics/publication-readiness-churn-liveness-closure.md",
+    "draftedAtCommit": "5a4720f780a93fa75674447e47398475d4029b5a"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "publication-readiness-churn-liveness-closure",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "publication-readiness-churn-liveness-closure-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "publication-readiness-churn-liveness-closure",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-independent-verification",
+      "statement": "Every exact source candidate requires an independent subagent verifier before audit, live GCP proof, and landing. The verifier must answer all nine questions in the linked plan and record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "caller-edge-and-red-systemic-proof-first",
+      "statement": "Before a runtime lever, extend low-overhead V8 caller-edge attribution and produce a red production-composition mutation-storm proof naming the outer caller, heavy builds per source vector and event-loop turn, readiness-internal recursion depth, timer progress, and final fresh-reference decision equivalence."
+    },
+    {
+      "id": "freshness-and-liveness-coupled",
+      "statement": "Do not trade correctness for speed. The semantic token includes cache and owner generation, all builder table revisions including NODES, NODE_ENDPOINTS, SERVICES, PARTITIONS, REPLICA_OPERATIONS, and CONTROL_PLANE_PUBLICATIONS, readiness-snapshot and recovery-epoch revisions, and transport-topology generation; all other builder inputs require registered positive-decision live vetoes. Validate the token before snapshot publication and every positive decision. After quiescence the final token is published; under continuous churn completed tokens advance monotonically and dirty keys receive bounded-round-robin service. At most one heavy build runs globally per macrotask turn. Register and enforce the freshness/liveness coupled pair before landing the runtime fix."
+    },
+    {
+      "id": "readiness-owner-read-non-amplifying",
+      "statement": "A readiness-internal authoritative read must use an explicit structural read purpose and have full-readiness recursion depth zero. Every cold-build dependency requires either a readiness-independent authoritative route or a readiness-independent wake-up that makes that route available; indefinite readiness-driven deferral is forbidden. The route may not bypass ownership, synthesize readiness, or weaken ordinary owner-read routing."
+    },
+    {
+      "id": "macrotask-yield-required",
+      "statement": "Queueing alone is insufficient. An injectable setImmediate-class scheduler and global one-heavy-item drain budget must yield between items, including with five or more dirty owner keys; round-robin arbitration prevents key starvation. Timer and Raft heartbeat sentinels advance, and work never self-perpetuates through Promise or queueMicrotask drains. Existing queue consumers retain their default scheduling unless independently proven otherwise."
+    },
+    {
+      "id": "decision-semantics-preserved",
+      "statement": "For the same completed source vector and cheap live veto evidence, readiness, participation, publication-recovery, priority-recovery, routing, and mutation decisions and reason codes remain byte-identical. Stale or absent heavy evidence may only produce an explicit conservative deferred or negative result, never a fresh-positive result."
+    },
+    {
+      "id": "cold-and-mid-build-safety",
+      "statement": "Deterministic proof must cover cold start with no completed projection, a semantic input change during a build, continuous dirty input, multiple dirty keys, identical-counter cache and membership-owner swaps, heartbeat expiry, transport drift, shutdown, retry, and remote replica transitions without losing the final quiescent token, admitting stale-positive evidence, or spinning."
+    },
+    {
+      "id": "clean-successor-baseline",
+      "statement": "Preserve predecessor source changes as a verified content-addressed binary-diff artifact, then start and record the Phase-1 successor baseline in a separate clean worktree at committed source HEAD 5a4720f780a93fa75674447e47398475d4029b5a with only reviewed planning metadata present. Do not import predecessor source paths until the systemic guard is red, and attribute that import to a new successor attempt."
+    },
+    {
+      "id": "inherited-local-changes-requalified",
+      "statement": "The uncommitted service-event queueing, publication-advance queueing, and pass-scoped rebalancer gate reuse are inherited candidate evidence, not assumed solution scope. Keep each only after an independent revert comparison proves distinct post-owner value and no microtask-chain regression."
+    },
+    {
+      "id": "no-budget-workload-or-freshness-rollback",
+      "statement": "Do not raise election, readiness, admin, or scenario budgets; reduce workload or the five-node publication cohort; revert cluster-wide authoritative inventory freshness; suppress profiler/gap evidence; or accept incomplete, stale-source, operator-terminated, or non-source-bound live artifacts."
+    },
+    {
+      "id": "live-proof-identity",
+      "statement": "Terminal live proof is one profiled discriminator followed by three consecutive natural source-bound five-node GCP runs, all with five matching boot fingerprints, complete manifest/event/log node sets, natural termination, ACTIVE 5/5 within 60 seconds, publication coverage 5/5, no readiness/publication/owner-read frame or seed gap above 3000ms, timer progress, and zero corrupt, stale-source, node-exit, or oracle-blind outcomes."
+    }
+  ]
+}

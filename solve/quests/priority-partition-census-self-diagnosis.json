@@ -1,0 +1,43 @@
+{
+  "id": "priority-partition-census-self-diagnosis",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "Every blocked priority partition with an authoritative positive replica target reports expectedReplicaCount and attributes max(0, expected minus observed service rows) to exclusionReasonCounts.row_absent, while present-but-unready rows retain their own reasons, legacy summaries remain compatible, diagnostic enrichment wins exact semantic ties, and no spread or planning decision changes; the focused guard passes three consecutive runs.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": null,
+    "specRef": "solve/epics/golden-capability-gold-plating.md#tier-0-immediate-structural-guards",
+    "closesCL": [],
+    "parentQuest": null,
+    "planDoc": null,
+    "draftedAtCommit": "27450077b7c6760ba639e603630f679beb80acdc"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "priority-partition-census-self-diagnosis",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "priority-partition-census-self-diagnosis-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "priority-partition-census-self-diagnosis",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    }
+  ]
+}

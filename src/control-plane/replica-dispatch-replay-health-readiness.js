@@ -644,16 +644,33 @@ class ReplicaDispatchReplayHealthReadiness extends ReplicaDispatchOperationExecu
     publicationRow = READY_NODE_PUBLICATION_ADVANCEMENT_NODE_ROW_UNAVAILABLE,
   ) {
     const nodeId = this.nodeId;
-    if (!nodeId || !this.isNodeReady(nodeId)) {
+    if (!nodeId) {
       return false;
     }
-    this.scheduleReadyNodeMembershipPublicationAdvance(
+    this.membershipPublicationAdvanceQueue.enqueue(
       nodeId,
-      READY_NODE_PUBLICATION_ADVANCEMENT_NODE_ROW_UNAVAILABLE,
       reason,
-      this.buildReadyNodePublicationAdvancementOptions(publicationRow),
+      {publicationRow, reason},
     );
     return true;
+  }
+
+  async reconcileLocalReadyNodeMembershipPublicationAdvance(
+    nodeId,
+    context = {},
+  ) {
+    if (!nodeId || nodeId !== this.nodeId || !this.isNodeReady(nodeId)) {
+      return false;
+    }
+    return this.maybeAdvanceReadyNodeMembershipPublication(
+      nodeId,
+      READY_NODE_PUBLICATION_ADVANCEMENT_NODE_ROW_UNAVAILABLE,
+      context.reason ||
+        RECONCILE_REASON.CONTROL_PLANE_PUBLICATION_CACHE_UPDATE,
+      this.buildReadyNodePublicationAdvancementOptions(
+        context.publicationRow,
+      ),
+    );
   }
 
   resolveMembershipPublicationAckRetryAfterMs(error) {

@@ -195,7 +195,7 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     });
   },
 
-  resolvePrioritySpreadPlanningGateDecision() {
+  resolvePrioritySpreadPlanningGateDecision(evaluationContext = null) {
     const priorityPartition = this.isControlPlanePriorityPartition();
     const controlPlanePriorityBlocker =
       this.getControlPlanePrioritySpreadBlocker();
@@ -219,8 +219,8 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
         (partition) => partition?.partitionId === this.entityId,
       );
     const operationCreationGate =
-      this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
-        this.entityId,
+      this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
+        evaluationContext,
       );
     if (
       currentPriorityPartitionStillBlocked ||
@@ -460,11 +460,45 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
    * @return {Object}
    * @private
    */
-  buildPriorityRecoveryPlanningGateBypassSnapshot() {
+  createRebalancePlanningGateEvaluationContext() {
+    let operationCreationGateResolved = false;
+    let operationCreationGate = null;
+    return Object.freeze({
+      resolvePriorityRecoveryOperationCreationGate: () => {
+        if (!operationCreationGateResolved) {
+          operationCreationGate =
+            this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+              this.entityId,
+            );
+          operationCreationGateResolved = true;
+        }
+        return operationCreationGate;
+      },
+    });
+  },
+
+  resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
+    evaluationContext = null,
+  ) {
+    if (
+      evaluationContext &&
+      typeof evaluationContext
+        .resolvePriorityRecoveryOperationCreationGate === 'function'
+    ) {
+      return evaluationContext.resolvePriorityRecoveryOperationCreationGate();
+    }
+    return this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
+      this.entityId,
+    );
+  },
+
+  buildPriorityRecoveryPlanningGateBypassSnapshot(
+    evaluationContext = null,
+  ) {
     const isPriorityPartition = this.isControlPlanePriorityPartition();
     const operationCreationGate = isPriorityPartition ?
-      this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
-        this.entityId,
+      this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
+        evaluationContext,
       ) :
       null;
     const evidence = Object.freeze({

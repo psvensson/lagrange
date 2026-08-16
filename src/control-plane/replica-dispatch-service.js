@@ -93,6 +93,7 @@ class ReplicaDispatchService extends ReplicaDispatchReadinessCapture {
       nodeStateUpdateQueue.shutdown();
     }
     this.nodeReadyRetryQueue.shutdown();
+    this.membershipPublicationAdvanceQueue.shutdown();
 
     this.state = DISPATCH_STATE.STOPPED;
     this.logger.info(DISPATCH_LOG_MSG.STOPPED, {nodeId: this.nodeId});

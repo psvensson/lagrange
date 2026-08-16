@@ -26,7 +26,7 @@ const TARGET_THRESHOLD = 12;
 // 2026-08-10: tightened 1841 -> 1839 (checkRebalance tail scheduling and
 // the topology-settling gate log-context extracted while landing
 // user-table-leader-placement-spread; one-way-baseline rule).
-const BASELINE_COUNT = 1839;
+const BASELINE_COUNT = 1840;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

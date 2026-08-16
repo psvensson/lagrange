@@ -53,7 +53,7 @@ const REBALANCER_TRANSPORT_PRESSURE_METHODS = {
     });
   },
 
-  buildTransportBackpressurePlanningGateSnapshot() {
+  buildTransportBackpressurePlanningGateSnapshot(evaluationContext = null) {
     const transportPressure = this.getTransportPressureSummary();
     const isPriorityPartition = this.isControlPlanePriorityPartition();
     const priorityRecoveryAdmissionPlan = isPriorityPartition ?
@@ -64,8 +64,8 @@ const REBALANCER_TRANSPORT_PRESSURE_METHODS = {
         'function' &&
       priorityRecoveryAdmissionPlan.hasBlockedPartition(this.entityId) === true;
     const operationCreationGate = isPriorityPartition ?
-      this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
-        this.entityId,
+      this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
+        evaluationContext,
       ) :
       null;
     const priorityRecoveryOperationCreationRequired =
@@ -133,8 +133,10 @@ const REBALANCER_TRANSPORT_PRESSURE_METHODS = {
       TRANSPORT_BACKPRESSURE_PLANNING_STATE.GENERAL_BACKPRESSURE;
   },
 
-  resolveTransportBackpressurePlanningGateDecision() {
-    const gateSnapshot = this.buildTransportBackpressurePlanningGateSnapshot();
+  resolveTransportBackpressurePlanningGateDecision(evaluationContext = null) {
+    const gateSnapshot = this.buildTransportBackpressurePlanningGateSnapshot(
+      evaluationContext,
+    );
     if (gateSnapshot.shouldDefer !== true) {
       return null;
     }

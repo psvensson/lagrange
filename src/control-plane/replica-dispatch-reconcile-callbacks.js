@@ -452,8 +452,7 @@ const REPLICA_DISPATCH_RECONCILE_CALLBACK_METHODS = {
     const status = record?.[COLUMN.STATUS] || record?.status || null;
     if (
       !nodeId ||
-      status !== SERVICE_STATUS.ACTIVE ||
-      !this.isNodeReady(nodeId)
+      status !== SERVICE_STATUS.ACTIVE
     ) {
       return;
     }

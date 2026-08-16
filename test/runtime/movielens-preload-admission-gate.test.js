@@ -870,7 +870,7 @@ test('MovieLens demo retires the raw global-operation gate and test imports',
     t.match(runnerSource, /waitForAffinityDemoPreloadAdmission/);
     t.match(
       runnerSource,
-      /const LOAD_TARGET = `\$\{TARGET\}\?lane=load`/,
+      /(?:const|let) LOAD_TARGET = `\$\{TARGET\}\?lane=load`/,
       'the loader lane is derived from the same production admin target',
     );
     t.match(
@@ -1031,3 +1031,56 @@ test('schema admission transition evidence is change-only and bounded',
     );
     t.end();
   });
+
+test('schema admission grants drain-aware grace extension when control plane quiesces late in budget',
+  async (t) => {
+    let currentNowMs = 95000;
+    const stableWindowMs = 60000;
+    const pollIntervalMs = 2000;
+    const initialTimeoutMs = 10000; // 10s budget remaining at start
+    const latestTopologyDrainAtMs = 90000;
+    const initialDeadlineMs = currentNowMs + initialTimeoutMs; // 105,000ms
+
+    const result = await waitForAffinityDemoSchemaAdmission({
+      target: BASE_TARGET,
+      now: () => currentNowMs,
+      sleep: async (delay) => {
+        currentNowMs += delay;
+      },
+      timeoutMs: initialTimeoutMs,
+      pollIntervalMs,
+      stableWindowMs,
+      query: async () => {
+        return {
+          rows: [
+            buildControlSnapshot({
+              replicaOperations: {
+                inFlightCount: 0,
+                staleInFlightCount: 0,
+                rows: [
+                  {
+                    operation_id: 'op-final-drain',
+                    type: 'REMOVE',
+                    operation_type: 'REMOVE',
+                    status: 'removed',
+                    workflow_step: 'REMOVED',
+                    completed_at: latestTopologyDrainAtMs,
+                    drained_at: latestTopologyDrainAtMs,
+                    target_partition_id: 'schema_operations-p1',
+                  },
+                ],
+              },
+            }),
+          ],
+        };
+      },
+    });
+
+    t.ok(result.admitted, 'schema admission should succeed with drain grace extension');
+    t.ok(
+      currentNowMs > initialDeadlineMs,
+      'polling was extended beyond initial wall clock budget to confirm quiescence',
+    );
+    t.end();
+  });
+

@@ -58,6 +58,8 @@ const DISPATCH_LOG_MSG = Object.freeze({
 });
 
 const DISPATCH_QUEUE_NAME = Object.freeze({
+  MEMBERSHIP_PUBLICATION_ADVANCE:
+    'dispatch-membership-publication-advance-reconcile',
   OPERATION: 'dispatch-operation-reconcile',
   NODE_STATE_UPDATE: 'dispatch-node-state-update-reconcile',
   NODE_READY: 'dispatch-node-ready-reconcile',

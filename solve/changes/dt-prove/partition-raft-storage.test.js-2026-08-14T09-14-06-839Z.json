@@ -1,0 +1,16 @@
+{
+  "test": "test/partition/partition-raft-storage.test.js",
+  "src": [
+    "src/partition/partition-raft-storage.js"
+  ],
+  "runs": {
+    "fixRunExit": 0,
+    "revertRunExit": 1,
+    "restoreRunExit": 0
+  },
+  "srcChanged": true,
+  "verdict": "red-on-revert-proven",
+  "ok": true,
+  "detail": "GREEN with fix, RED on revert, GREEN on restore",
+  "timestamp": "2026-08-14T09:14:06.709Z"
+}

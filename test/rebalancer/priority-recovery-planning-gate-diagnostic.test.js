@@ -222,3 +222,43 @@ test('priority-recovery planning-gate decision diagnostic', async (t) => {
     },
   );
 });
+
+test('one planning pass shares its priority operation-creation gate',
+  async (t) => {
+    initializeTestEnvironment();
+
+    const rebalancer = createRebalancer();
+    let operationCreationGateBuilds = 0;
+    rebalancer.buildPriorityRecoveryOperationCreationPlanningGateSnapshot =
+      () => {
+        operationCreationGateBuilds++;
+        return Object.freeze({operationCreationRequired: false});
+      };
+    const consumeGate = (evaluationContext) => {
+      rebalancer.buildPriorityRecoveryPlanningGateBypassSnapshot(
+        evaluationContext,
+      );
+      return null;
+    };
+    rebalancer.evaluateClusterReadinessGateDecision = consumeGate;
+    rebalancer.resolveStartDelayPlanningGateDecision = consumeGate;
+    rebalancer.resolveStabilizationPlanningGateDecision = consumeGate;
+    rebalancer.resolveTopologySettlingPlanningGateDecision = async (
+      evaluationContext,
+    ) => consumeGate(evaluationContext);
+    rebalancer.resolveTrafficReadinessPlanningGateDecision = consumeGate;
+    rebalancer.resolveLocalServePlanningGateDecision = consumeGate;
+    rebalancer.resolveLocalMutationPlanningGateDecision = consumeGate;
+    rebalancer.resolvePrioritySpreadPlanningGateDecision = consumeGate;
+    rebalancer.resolveTransportBackpressurePlanningGateDecision = consumeGate;
+
+    await rebalancer.collectRebalancePlanningGateDecisions();
+
+    t.equal(
+      operationCreationGateBuilds,
+      1,
+      'all gates in one pass reuse one current operation-creation decision',
+    );
+    rebalancer.shutdown();
+  },
+);

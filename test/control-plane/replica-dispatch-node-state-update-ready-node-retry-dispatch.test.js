@@ -14,6 +14,7 @@ import {
   ControlPlaneMessageType,
 } from '../../src/control-plane/control-plane-constants.js';
 import {
+  SYSTEM_TABLE_NAME,
 } from '../../src/bootstrap/system-table-schemas-constants.js';
 import {
   CONTROL_PLANE_READINESS_DIMENSION,
@@ -92,6 +93,9 @@ const READY_RETRY_ASSERT_OWNER_DEFERRED_RETRY_ARMED =
   'owner-deferred dispatch should keep the direct wake-up row in the retry lane';
 const READY_RETRY_ASSERT_OWNER_DEFERRED_REENTRY =
   'owner-deferred dispatch retry should re-enter with the original wake-up row';
+const SERVICE_CACHE_READY_BURST_COUNT = 8;
+const SERVICE_CACHE_READY_NODE_ID = 'node-service-cache-ready';
+const PUBLICATION_CACHE_READY_BURST_COUNT = 8;
 
 async function waitForOperationDispatchQueueDrain(service = null) {
   for (
@@ -672,6 +676,113 @@ test('ReplicaDispatchService initialize replays already-ready cached nodes ' +
     service.nodeReadyRetryQueue.enqueue = originalNodeReadyRetryEnqueue;
     service.stop();
   }
+});
+
+test('ReplicaDispatchService service cache changes enqueue readiness owner ' +
+  'work and coalesce before evaluating readiness', async (t) => {
+  initEnv();
+
+  let readinessCalls = 0;
+  let reconcileCalls = 0;
+  const service = createService({
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        readinessCalls++;
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+          },
+        };
+      },
+    },
+  });
+  service.retryPendingDispatchesForReadyNode = async ({nodeId}) => {
+    reconcileCalls++;
+    return service.isNodeReady(nodeId);
+  };
+
+  for (let index = 0; index < SERVICE_CACHE_READY_BURST_COUNT; index++) {
+    service.handleCacheNodeChange(
+      SYSTEM_TABLE_NAME.SERVICES,
+      'UPDATE',
+      {
+        node_id: SERVICE_CACHE_READY_NODE_ID,
+        service_id: `service-cache-ready-${index}`,
+        status: SERVICE_STATUS.ACTIVE,
+      },
+    );
+  }
+
+  t.equal(
+    readinessCalls,
+    0,
+    'cache listeners must enqueue without running readiness synchronously',
+  );
+  await service.nodeReadyRetryQueue.drain();
+  t.equal(reconcileCalls, 1, 'one owner-key reconcile consumes the burst');
+  t.equal(readinessCalls, 1, 'readiness is evaluated once inside reconcile');
+
+  service.stop();
+});
+
+test('ReplicaDispatchService publication cache changes coalesce before ' +
+  'evaluating local readiness', async (t) => {
+  initEnv();
+
+  let readinessCalls = 0;
+  let publicationAdvanceCalls = 0;
+  const service = createService({
+    cdcIntegrationService: {
+      updateSystemTableRow: async () => ({success: true}),
+      upsertSystemTableRow: async () => ({success: true}),
+    },
+    controlPlaneReadinessService: {
+      getNodeReadinessSync(nodeId) {
+        readinessCalls++;
+        return {
+          nodeId,
+          dimensions: {
+            [CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE]: true,
+          },
+        };
+      },
+    },
+  });
+  service.maybeAdvanceReadyNodeMembershipPublication = async () => {
+    publicationAdvanceCalls++;
+    return true;
+  };
+
+  for (let index = 0; index < PUBLICATION_CACHE_READY_BURST_COUNT; index++) {
+    service.handleCacheNodeChange(
+      SYSTEM_TABLE_NAME.CONTROL_PLANE_PUBLICATIONS,
+      'UPDATE',
+      {
+        publication_id: `publication-cache-ready-${index}`,
+        status: READY_RETRY_PUBLICATION_STATUS,
+      },
+    );
+  }
+
+  t.equal(
+    readinessCalls,
+    0,
+    'publication cache listeners must enqueue without evaluating readiness',
+  );
+  await service.membershipPublicationAdvanceQueue.drain();
+  t.equal(readinessCalls, 1, 'one queued reconcile evaluates readiness');
+  t.equal(
+    publicationAdvanceCalls,
+    1,
+    'one queued reconcile advances the latest publication evidence',
+  );
+
+  service.stop();
 });
 
 test('ReplicaDispatchService shards operation dispatch reconcile so one ' +

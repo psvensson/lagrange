@@ -1,0 +1,831 @@
+diff --git a/scripts/checks/run-priority-partition-census-self-diagnosis-scenarios.js b/scripts/checks/run-priority-partition-census-self-diagnosis-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..4b487fa7fc475a2c432bb5d74b7fe4d549b6c98b
+--- /dev/null
++++ b/scripts/checks/run-priority-partition-census-self-diagnosis-scenarios.js
+@@ -0,0 +1,11 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './guard-test-scenario-runner.js';
++
++const SCENARIOS = Object.freeze({
++  'priority-partition-census-self-diagnosis': Object.freeze([
++    'test/control-plane/priority-partition-census-self-diagnosis.test.js',
++  ]),
++});
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/control-plane/membership-publication-priority-partition-summary.js b/src/control-plane/membership-publication-priority-partition-summary.js
+index 0d9c5dc4305a1bea2ffe52472689c7e7a5f7ff62..57c5de2c68a5c5d26f399a0f31776f49a3244351 100644
+--- a/src/control-plane/membership-publication-priority-partition-summary.js
++++ b/src/control-plane/membership-publication-priority-partition-summary.js
+@@ -15,6 +15,149 @@ import {
+ } from './membership-publication-normalizers.js';
+ 
+ const PRIORITY_SPREAD_REQUIRED_DISTINCT_NODE_COUNT = 3;
++const DESCRIPTOR_VALUE_FIELD = 'value';
++const EXPECTED_REPLICA_COUNT_FIELD = 'expectedReplicaCount';
++const arrayIsArray = Array.isArray;
++const arraySort = Function.call.bind(Array.prototype.sort);
++const mathMax = Math.max;
++const numberIsSafeInteger = Number.isSafeInteger;
++const objectCreate = Object.create;
++const objectDefineProperty = Object.defineProperty;
++const objectGetOwnPropertyDescriptor = Object.getOwnPropertyDescriptor;
++const objectHasOwn = Object.hasOwn;
++const objectKeys = Object.keys;
++
++function readOwnDataProperty(record, propertyNames) {
++  if (!record || typeof record !== 'object') {
++    return {found: false, value: null};
++  }
++  try {
++    for (const propertyName of propertyNames) {
++      const descriptor = objectGetOwnPropertyDescriptor(record, propertyName);
++      if (descriptor && objectHasOwn(descriptor, DESCRIPTOR_VALUE_FIELD)) {
++        return {found: true, value: descriptor.value};
++      }
++    }
++  } catch {
++    return {found: false, value: null};
++  }
++  return {found: false, value: null};
++}
++
++function normalizeExpectedReplicaCount(value) {
++  return typeof value === 'number' &&
++    numberIsSafeInteger(value) &&
++    value > 0 ?
++    value :
++    null;
++}
++
++function normalizeExclusionReasonCount(value) {
++  return typeof value === 'number' &&
++    numberIsSafeInteger(value) &&
++    value >= 0 ?
++    value :
++    null;
++}
++
++function copyExclusionReasonCounts(value) {
++  if (!value || typeof value !== 'object') {
++    return null;
++  }
++  let keys;
++  try {
++    keys = objectKeys(value);
++  } catch {
++    return null;
++  }
++  const copy = objectCreate(null);
++  for (const key of keys) {
++    const entry = readOwnDataProperty(value, [key]);
++    const count = entry.found ? normalizeExclusionReasonCount(entry.value) : null;
++    if (count === null) {
++      continue;
++    }
++    objectDefineProperty(copy, key, {
++      value: count,
++      enumerable: true,
++      configurable: true,
++      writable: true,
++    });
++  }
++  return copy;
++}
++
++function exclusionReasonCountsEqual(left, right) {
++  const leftRecord = left && typeof left === 'object' ? left : null;
++  const rightRecord = right && typeof right === 'object' ? right : null;
++  if (leftRecord === null || rightRecord === null) {
++    return leftRecord === rightRecord;
++  }
++  const leftKeys = arraySort(objectKeys(leftRecord));
++  const rightKeys = arraySort(objectKeys(rightRecord));
++  if (leftKeys.length !== rightKeys.length) {
++    return false;
++  }
++  return leftKeys.every((key, index) =>
++    key === rightKeys[index] &&
++    readOwnDataProperty(leftRecord, [key]).value ===
++      readOwnDataProperty(rightRecord, [key]).value,
++  );
++}
++
++function normalizedBlockedPartitionsEqual(left, right) {
++  if (left.length !== right.length) {
++    return false;
++  }
++  return left.every((leftPartition, index) => {
++    const rightPartition = right[index];
++    return leftPartition.partitionId === rightPartition.partitionId &&
++      leftPartition.requiredDistinctNodeCount ===
++        rightPartition.requiredDistinctNodeCount &&
++      leftPartition.readyDistinctNodeCount ===
++        rightPartition.readyDistinctNodeCount &&
++      leftPartition.readyReplicaCount === rightPartition.readyReplicaCount &&
++      leftPartition.spreadGap === rightPartition.spreadGap &&
++      objectHasOwn(leftPartition, EXPECTED_REPLICA_COUNT_FIELD) ===
++        objectHasOwn(rightPartition, EXPECTED_REPLICA_COUNT_FIELD) &&
++      leftPartition.expectedReplicaCount === rightPartition.expectedReplicaCount &&
++      exclusionReasonCountsEqual(
++        leftPartition.exclusionReasonCounts,
++        rightPartition.exclusionReasonCounts,
++      );
++  });
++}
++
++function normalizedStringListsEqual(left, right) {
++  return left.length === right.length &&
++    left.every((value, index) => value === right[index]);
++}
++
++function normalizedPriorityPartitionSummariesEqual(left, right) {
++  return left.satisfied === right.satisfied &&
++    left.requiredDistinctNodeCount === right.requiredDistinctNodeCount &&
++    left.readyEligibleNodeCount === right.readyEligibleNodeCount &&
++    left.totalPriorityPartitionCount === right.totalPriorityPartitionCount &&
++    normalizedStringListsEqual(left.missingPartitionIds, right.missingPartitionIds) &&
++    normalizedBlockedPartitionsEqual(left.blockedPartitions, right.blockedPartitions);
++}
++
++function priorityPartitionDiagnosticsEqual(left, right) {
++  if (left.blockedPartitions.length !== right.blockedPartitions.length) {
++    return false;
++  }
++  return left.blockedPartitions.every((leftPartition, index) => {
++    const rightPartition = right.blockedPartitions[index];
++    return leftPartition.partitionId === rightPartition.partitionId &&
++      objectHasOwn(leftPartition, EXPECTED_REPLICA_COUNT_FIELD) ===
++        objectHasOwn(rightPartition, EXPECTED_REPLICA_COUNT_FIELD) &&
++      leftPartition.expectedReplicaCount === rightPartition.expectedReplicaCount &&
++      exclusionReasonCountsEqual(
++        leftPartition.exclusionReasonCounts,
++        rightPartition.exclusionReasonCounts,
++      );
++  });
++}
+ 
+ function normalizeBlockedPriorityPartition(
+   entry,
+@@ -40,20 +183,30 @@ function normalizeBlockedPriorityPartition(
+     entry.readyReplicaCount ?? entry.ready_replica_count,
+     readyDistinctNodeCount,
+   );
++  const expectedReplicaCountEntry = readOwnDataProperty(
++    entry,
++    [EXPECTED_REPLICA_COUNT_FIELD, 'expected_replica_count'],
++  );
++  const expectedReplicaCount = expectedReplicaCountEntry.found ?
++    normalizeExpectedReplicaCount(expectedReplicaCountEntry.value) :
++    null;
+   const spreadGap = helperFns.normalizePositiveInteger(
+     entry.spreadGap ?? entry.spread_gap,
+     Math.max(0, normalizedRequiredDistinctNodeCount - readyDistinctNodeCount),
+   );
+-  const exclusionReasonCounts =
+-    entry.exclusionReasonCounts &&
+-    typeof entry.exclusionReasonCounts === 'object' ?
+-      {...entry.exclusionReasonCounts} :
+-      null;
++  const exclusionReasonCountsEntry = readOwnDataProperty(
++    entry,
++    ['exclusionReasonCounts', 'exclusion_reason_counts'],
++  );
++  const exclusionReasonCounts = exclusionReasonCountsEntry.found ?
++    copyExclusionReasonCounts(exclusionReasonCountsEntry.value) :
++    null;
+   return {
+     partitionId,
+     requiredDistinctNodeCount: normalizedRequiredDistinctNodeCount,
+     readyDistinctNodeCount,
+     readyReplicaCount,
++    ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
+     spreadGap,
+     ...(exclusionReasonCounts ? {exclusionReasonCounts} : {}),
+   };
+@@ -72,7 +225,7 @@ function normalizePriorityPartitionSummary(summary, options = {}, helperFns = {}
+     fallbackRequiredDistinctNodeCount,
+   );
+   const blockedPartitions = (
+-    Array.isArray(summary.blockedPartitions) ? summary.blockedPartitions : []
++    arrayIsArray(summary.blockedPartitions) ? summary.blockedPartitions : []
+   )
+     .map((entry) =>
+       normalizeBlockedPriorityPartition(entry, requiredDistinctNodeCount, helperFns),
+@@ -112,6 +265,7 @@ function buildPriorityPartitionSummaryAdvancement(summary, helperFns = {}) {
+   }
+   let blockedPartitionSpreadGap = 0;
+   let blockedPartitionReadyDistinctNodeCount = 0;
++  let diagnosticCompletenessRank = 0;
+   for (const blockedPartition of normalizedSummary.blockedPartitions) {
+     blockedPartitionSpreadGap += helperFns.normalizePositiveInteger(
+       blockedPartition.spreadGap,
+@@ -121,6 +275,19 @@ function buildPriorityPartitionSummaryAdvancement(summary, helperFns = {}) {
+       blockedPartition.readyDistinctNodeCount,
+       0,
+     );
++    if (normalizeExpectedReplicaCount(
++      blockedPartition.expectedReplicaCount,
++    ) !== null) {
++      diagnosticCompletenessRank += 1;
++    }
++    const rowAbsentEntry = readOwnDataProperty(
++      blockedPartition.exclusionReasonCounts,
++      ['row_absent'],
++    );
++    if (rowAbsentEntry.found &&
++      normalizeExclusionReasonCount(rowAbsentEntry.value) > 0) {
++      diagnosticCompletenessRank += 1;
++    }
+   }
+   return {
+     normalizedSummary,
+@@ -129,6 +296,7 @@ function buildPriorityPartitionSummaryAdvancement(summary, helperFns = {}) {
+     blockedPartitionCount: normalizedSummary.blockedPartitions.length,
+     blockedPartitionSpreadGap,
+     blockedPartitionReadyDistinctNodeCount,
++    diagnosticCompletenessRank,
+   };
+ }
+ 
+@@ -147,6 +315,8 @@ function comparePriorityPartitionSummaryAdvancement(leftSummary, rightSummary, h
+       rightAdvancement.blockedPartitionReadyDistinctNodeCount,
+     leftAdvancement.normalizedSummary.readyEligibleNodeCount -
+       rightAdvancement.normalizedSummary.readyEligibleNodeCount,
++    leftAdvancement.diagnosticCompletenessRank -
++      rightAdvancement.diagnosticCompletenessRank,
+   ].find((delta) => delta !== 0);
+   return typeof decisiveDelta === 'number' ? decisiveDelta : 0;
+ }
+@@ -172,13 +342,21 @@ function chooseMoreAdvancedPriorityPartitionSummary(
+   if (normalizedCandidateSummary === null) {
+     return normalizedBaselineSummary;
+   }
+-  return comparePriorityPartitionSummaryAdvancement(
++  const advancement = comparePriorityPartitionSummaryAdvancement(
+     normalizedCandidateSummary,
+     normalizedBaselineSummary,
+     helperFns,
+-  ) > 0 ?
+-    normalizedCandidateSummary :
+-    normalizedBaselineSummary;
++  );
++  if (advancement > 0) {
++    return normalizedCandidateSummary;
++  }
++  if (advancement < 0 || priorityPartitionDiagnosticsEqual(
++    normalizedCandidateSummary,
++    normalizedBaselineSummary,
++  )) {
++    return normalizedBaselineSummary;
++  }
++  return normalizedCandidateSummary;
+ }
+ 
+ function arePriorityPartitionSummariesEqual(leftSummary, rightSummary, helperFns = {}) {
+@@ -187,7 +365,7 @@ function arePriorityPartitionSummariesEqual(leftSummary, rightSummary, helperFns
+   if (left === null || right === null) {
+     return left === right;
+   }
+-  return JSON.stringify(left) === JSON.stringify(right);
++  return normalizedPriorityPartitionSummariesEqual(left, right);
+ }
+ 
+ function isReadinessPromotable(readinessEntry = null) {
+@@ -284,11 +462,12 @@ function resolvePrioritySpreadReplicaExclusionReason(
+ }
+ 
+ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
+-  const serviceRows = Array.isArray(options.serviceRows) ? options.serviceRows : [];
+-  if (serviceRows.length === 0) {
++  const serviceRowsEntry = readOwnDataProperty(options, ['serviceRows']);
++  if (!serviceRowsEntry.found || !arrayIsArray(serviceRowsEntry.value)) {
+     return null;
+   }
+-  const partitionRows = Array.isArray(options.partitionRows) ? options.partitionRows : [];
++  const serviceRows = serviceRowsEntry.value;
++  const partitionRows = arrayIsArray(options.partitionRows) ? options.partitionRows : [];
+   const readinessByNodeId =
+     options.readinessByNodeId && typeof options.readinessByNodeId === 'object' ?
+       options.readinessByNodeId :
+@@ -297,7 +476,10 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
+   const readyReplicaStatsByPartitionId = new Map();
+   let observedPriorityServiceRow = false;
+   const eligibleNodeIds = buildPrioritySpreadEligibleNodeIdSet(options, helperFns);
+-  for (const serviceRow of serviceRows) {
++  for (let serviceRowIndex = 0;
++    serviceRowIndex < serviceRows.length;
++    serviceRowIndex += 1) {
++    const serviceRow = serviceRows[serviceRowIndex];
+     const normalizedService = normalizeServiceRow(serviceRow);
+     const partitionId = normalizedService.partitionId;
+     const partitionRow = partitionRowByPartitionId.get(partitionId) || null;
+@@ -308,12 +490,16 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
+     observedPriorityServiceRow = true;
+     if (!readyReplicaStatsByPartitionId.has(partitionId)) {
+       readyReplicaStatsByPartitionId.set(partitionId, {
++        observedReplicaRowCount: 0,
+         readyReplicaCount: 0,
+         nodeIds: new Set(),
+         exclusionReasonCounts: {},
+       });
+     }
+     const stats = readyReplicaStatsByPartitionId.get(partitionId);
++    if (normalizedService.serviceType === SERVICE_TYPE.PARTITION) {
++      stats.observedReplicaRowCount += 1;
++    }
+     const exclusionReason = resolvePrioritySpreadReplicaExclusionReason(
+       normalizedService,
+       readinessByNodeId,
+@@ -357,6 +543,7 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
+   const blockedPartitions = [];
+   for (const partitionId of priorityPartitionIds) {
+     const stats = readyReplicaStatsByPartitionId.get(partitionId) || {
++      observedReplicaRowCount: 0,
+       readyReplicaCount: 0,
+       nodeIds: new Set(),
+       exclusionReasonCounts: {},
+@@ -366,12 +553,28 @@ function buildDerivedPriorityPartitionSummary(options = {}, helperFns = {}) {
+     if (requiredDistinctNodeCount <= 1 || spreadGap <= 0) {
+       continue;
+     }
++    const partitionRow = partitionRowByPartitionId.get(partitionId) || null;
++    const expectedReplicaCountEntry = readOwnDataProperty(
++      partitionRow,
++      ['replica_count', 'replicaCount'],
++    );
++    const expectedReplicaCount = expectedReplicaCountEntry.found ?
++      normalizeExpectedReplicaCount(expectedReplicaCountEntry.value) :
++      null;
++    const rowAbsentCount = expectedReplicaCount === null ? 0 : mathMax(
++      0,
++      expectedReplicaCount - stats.observedReplicaRowCount,
++    );
+     blockedPartitions.push({
+       partitionId,
+       requiredDistinctNodeCount,
+       readyDistinctNodeCount,
+-      exclusionReasonCounts: {...stats.exclusionReasonCounts},
++      exclusionReasonCounts: {
++        ...stats.exclusionReasonCounts,
++        ...(rowAbsentCount > 0 ? {row_absent: rowAbsentCount} : {}),
++      },
+       readyReplicaCount: stats.readyReplicaCount,
++      ...(expectedReplicaCount !== null ? {expectedReplicaCount} : {}),
+       spreadGap,
+     });
+   }
+diff --git a/test/control-plane/priority-partition-census-self-diagnosis.test.js b/test/control-plane/priority-partition-census-self-diagnosis.test.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..9a4695506eaf83c1a5e96903127b1d83e95f5afb
+--- /dev/null
++++ b/test/control-plane/priority-partition-census-self-diagnosis.test.js
+@@ -0,0 +1,446 @@
++import {test} from '../../src/test-helpers/tap.js';
++import {SERVICE_STATUS, SERVICE_TYPE} from '../../src/constants/index.js';
++import {
++  INITIAL_PARTITION_IDS,
++  SYSTEM_TABLE_NAME,
++} from '../../src/bootstrap/system-table-schemas-constants.js';
++import {
++  arePriorityPartitionSummariesEqual,
++  buildDerivedPriorityPartitionSummary,
++  chooseMoreAdvancedPriorityPartitionSummary,
++  normalizePriorityPartitionSummary,
++} from '../../src/control-plane/membership-publication-priority-partition-summary.js';
++import {
++  normalizeNodeIdList,
++  normalizePositiveInteger,
++} from '../../src/control-plane/membership-publication-row-helpers.js';
++
++const PARTITION_ID =
++  INITIAL_PARTITION_IDS[SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS];
++const ELIGIBLE_NODE_IDS = Object.freeze(['node-1', 'node-2', 'node-3']);
++const SUMMARY_HELPERS = Object.freeze({
++  normalizeNodeIdList,
++  normalizePositiveInteger,
++});
++
++function createServiceRow(nodeId, index, options = {}) {
++  return {
++    service_id: `${PARTITION_ID}-r${index}`,
++    node_id: nodeId,
++    partition_id: PARTITION_ID,
++    service_type: options.serviceType || SERVICE_TYPE.PARTITION,
++    status: SERVICE_STATUS.ACTIVE,
++    raft_role: options.raftRole === undefined ? 'follower' : options.raftRole,
++    address: `${nodeId}/partition/${PARTITION_ID}/${index}`,
++  };
++}
++
++function deriveSummary(serviceRows, replicaCount = 3) {
++  const partitionRow = {
++    partition_id: PARTITION_ID,
++    ...(replicaCount === null ? {} : {replica_count: replicaCount}),
++  };
++  return buildDerivedPriorityPartitionSummary(
++    {
++      partitionRows: [partitionRow],
++      serviceRows,
++      locallyEligibleNodeIds: ELIGIBLE_NODE_IDS,
++    },
++    SUMMARY_HELPERS,
++  );
++}
++
++function partitionBlock(summary) {
++  return summary?.blockedPartitions?.find(
++    (entry) => entry.partitionId === PARTITION_ID,
++  ) || null;
++}
++
++function semanticBlock(overrides = {}) {
++  return {
++    partitionId: PARTITION_ID,
++    requiredDistinctNodeCount: 3,
++    readyDistinctNodeCount: 2,
++    readyReplicaCount: 2,
++    spreadGap: 1,
++    exclusionReasonCounts: {},
++    ...overrides,
++  };
++}
++
++function semanticSummary(blockedPartition) {
++  return {
++    satisfied: false,
++    requiredDistinctNodeCount: 3,
++    readyEligibleNodeCount: 3,
++    totalPriorityPartitionCount: 1,
++    missingPartitionIds: [PARTITION_ID],
++    blockedPartitions: [blockedPartition],
++  };
++}
++
++test('priority census distinguishes absent rows from ready replicas', (t) => {
++  const summary = deriveSummary([
++    createServiceRow('node-1', 1),
++    createServiceRow('node-2', 2),
++  ]);
++  const blocked = partitionBlock(summary);
++
++  t.match(blocked, {
++    expectedReplicaCount: 3,
++    readyReplicaCount: 2,
++    readyDistinctNodeCount: 2,
++    spreadGap: 1,
++    exclusionReasonCounts: {row_absent: 1},
++  });
++  t.end();
++});
++
++test('row_absent counts missing rows, not present-but-excluded rows', (t) => {
++  const completeCensus = partitionBlock(deriveSummary([
++    createServiceRow('node-1', 1),
++    createServiceRow('node-2', 2),
++    createServiceRow('node-3', 3, {raftRole: null}),
++  ]));
++  t.equal(completeCensus.readyReplicaCount, 2);
++  t.equal(completeCensus.exclusionReasonCounts.raft_role_missing, 1);
++  t.equal(
++    Object.hasOwn(completeCensus.exclusionReasonCounts, 'row_absent'),
++    false,
++  );
++
++  const mixedCensus = partitionBlock(deriveSummary([
++    createServiceRow('node-1', 1),
++    createServiceRow('node-2', 2, {raftRole: null}),
++  ]));
++  t.match(mixedCensus.exclusionReasonCounts, {
++    raft_role_missing: 1,
++    row_absent: 1,
++  });
++  t.end();
++});
++
++test('non-partition rows cannot satisfy the replica-row census', (t) => {
++  const blocked = partitionBlock(deriveSummary([
++    createServiceRow('node-1', 1),
++    createServiceRow('node-2', 2),
++    createServiceRow('node-3', 3, {serviceType: 'compute'}),
++  ]));
++
++  t.equal(blocked.readyReplicaCount, 2);
++  t.equal(blocked.exclusionReasonCounts.not_partition_service, 1);
++  t.equal(blocked.exclusionReasonCounts.row_absent, 1);
++  t.end();
++});
++
++test('row_absent is non-negative and omitted without target authority', (t) => {
++  const overTarget = partitionBlock(deriveSummary([
++    createServiceRow('node-1', 1),
++    createServiceRow('node-1', 2),
++    createServiceRow('node-2', 3),
++    createServiceRow('node-2', 4),
++  ]));
++  t.equal(overTarget.expectedReplicaCount, 3);
++  t.equal(overTarget.readyReplicaCount, 4);
++  t.equal(Object.hasOwn(overTarget.exclusionReasonCounts, 'row_absent'), false);
++
++  const unknownTarget = partitionBlock(deriveSummary([
++    createServiceRow('node-1', 1),
++    createServiceRow('node-2', 2),
++  ], null));
++  t.equal(Object.hasOwn(unknownTarget, 'expectedReplicaCount'), false);
++  t.equal(
++    Object.hasOwn(unknownTarget.exclusionReasonCounts, 'row_absent'),
++    false,
++  );
++  t.end();
++});
++
++test('partition rows diagnose a fully absent service-row census', (t) => {
++  const blocked = partitionBlock(deriveSummary([]));
++  t.match(blocked, {
++    expectedReplicaCount: 3,
++    readyReplicaCount: 0,
++    readyDistinctNodeCount: 0,
++    exclusionReasonCounts: {row_absent: 3},
++  });
++  t.end();
++});
++
++test('only an explicit service-row snapshot can diagnose authoritative absence',
++  (t) => {
++    const options = {
++      partitionRows: [{partition_id: PARTITION_ID, replica_count: 3}],
++      locallyEligibleNodeIds: ELIGIBLE_NODE_IDS,
++    };
++    t.equal(
++      buildDerivedPriorityPartitionSummary(options, SUMMARY_HELPERS),
++      null,
++      'an omitted serviceRows field is read-unavailable, not empty',
++    );
++    t.equal(
++      buildDerivedPriorityPartitionSummary(
++        {...options, serviceRows: {}},
++        SUMMARY_HELPERS,
++      ),
++      null,
++      'a malformed serviceRows value is read-unavailable, not empty',
++    );
++    t.equal(
++      partitionBlock(buildDerivedPriorityPartitionSummary(
++        {...options, serviceRows: []},
++        SUMMARY_HELPERS,
++      )).exclusionReasonCounts.row_absent,
++      3,
++      'an explicit empty snapshot is authoritative absence',
++    );
++    t.end();
++  });
++
++test('normalization keeps the additive field optional and accepts snake case', (t) => {
++  const legacy = normalizePriorityPartitionSummary(
++    semanticSummary(semanticBlock()),
++    {},
++    SUMMARY_HELPERS,
++  );
++  t.equal(
++    Object.hasOwn(legacy.blockedPartitions[0], 'expectedReplicaCount'),
++    false,
++  );
++
++  const enriched = normalizePriorityPartitionSummary(
++    semanticSummary(semanticBlock({expected_replica_count: 3})),
++    {},
++    SUMMARY_HELPERS,
++  );
++  t.equal(enriched.blockedPartitions[0].expectedReplicaCount, 3);
++  t.end();
++});
++
++test('diagnostic enrichment wins semantic ties and current values replace stale ones',
++  (t) => {
++    const legacy = semanticSummary(semanticBlock());
++    const enriched = semanticSummary(semanticBlock({
++      expectedReplicaCount: 3,
++      exclusionReasonCounts: {row_absent: 1},
++    }));
++    const enrichedWithDifferentTarget = semanticSummary(semanticBlock({
++      expectedReplicaCount: 5,
++      exclusionReasonCounts: {row_absent: 3},
++    }));
++
++    t.same(
++      chooseMoreAdvancedPriorityPartitionSummary(
++        legacy,
++        enriched,
++        SUMMARY_HELPERS,
++      ),
++      normalizePriorityPartitionSummary(enriched, {}, SUMMARY_HELPERS),
++    );
++    t.same(
++      chooseMoreAdvancedPriorityPartitionSummary(
++        enriched,
++        legacy,
++        SUMMARY_HELPERS,
++      ),
++      normalizePriorityPartitionSummary(enriched, {}, SUMMARY_HELPERS),
++    );
++    t.same(
++      chooseMoreAdvancedPriorityPartitionSummary(
++        enriched,
++        enrichedWithDifferentTarget,
++        SUMMARY_HELPERS,
++      ),
++      normalizePriorityPartitionSummary(
++        enrichedWithDifferentTarget,
++        {},
++        SUMMARY_HELPERS,
++      ),
++      'equally complete current diagnostics replace stale values without ' +
++      'changing semantic advancement ranks',
++    );
++    t.equal(
++      arePriorityPartitionSummariesEqual(legacy, enriched, SUMMARY_HELPERS),
++      false,
++      'the additive enrichment triggers one durable summary refresh',
++    );
++    t.equal(
++      arePriorityPartitionSummariesEqual(enriched, enriched, SUMMARY_HELPERS),
++      true,
++      'equal enriched summaries stabilize without publication churn',
++    );
++    t.end();
++  });
++
++test('expected targets require own primitive safe positive integers', (t) => {
++  const rows = [
++    createServiceRow('node-1', 1),
++    createServiceRow('node-2', 2),
++  ];
++  const invalidTargets = [
++    '3',
++    Object(3),
++    3.5,
++    Number.MAX_SAFE_INTEGER + 1,
++    3n,
++    Symbol('3'),
++    Infinity,
++  ];
++  for (const invalidTarget of invalidTargets) {
++    const blocked = partitionBlock(deriveSummary(rows, invalidTarget));
++    t.equal(Object.hasOwn(blocked, 'expectedReplicaCount'), false);
++    t.equal(Object.hasOwn(blocked.exclusionReasonCounts, 'row_absent'), false);
++  }
++
++  const inheritedPartitionRow = Object.assign(
++    Object.create({replica_count: 3}),
++    {partition_id: PARTITION_ID},
++  );
++  const inheritedTarget = partitionBlock(buildDerivedPriorityPartitionSummary(
++    {
++      partitionRows: [inheritedPartitionRow],
++      serviceRows: rows,
++      locallyEligibleNodeIds: ELIGIBLE_NODE_IDS,
++    },
++    SUMMARY_HELPERS,
++  ));
++  t.equal(Object.hasOwn(inheritedTarget, 'expectedReplicaCount'), false);
++
++  let accessorReads = 0;
++  const accessorPartitionRow = {partition_id: PARTITION_ID};
++  Object.defineProperty(accessorPartitionRow, 'replica_count', {
++    enumerable: true,
++    get() {
++      accessorReads += 1;
++      return 3;
++    },
++  });
++  const accessorTarget = partitionBlock(buildDerivedPriorityPartitionSummary(
++    {
++      partitionRows: [accessorPartitionRow],
++      serviceRows: rows,
++      locallyEligibleNodeIds: ELIGIBLE_NODE_IDS,
++    },
++    SUMMARY_HELPERS,
++  ));
++  t.equal(accessorReads, 0);
++  t.equal(Object.hasOwn(accessorTarget, 'expectedReplicaCount'), false);
++
++  const originalIsSafeInteger = Number.isSafeInteger;
++  try {
++    Number.isSafeInteger = () => true;
++    const blocked = partitionBlock(deriveSummary(rows, Infinity));
++    t.equal(Object.hasOwn(blocked, 'expectedReplicaCount'), false);
++  } finally {
++    Number.isSafeInteger = originalIsSafeInteger;
++  }
++  t.end();
++});
++
++test('diagnostic normalization ignores pollution, accessors, and toJSON', (t) => {
++  const inheritedExpectedBlock = Object.assign(
++    Object.create({expectedReplicaCount: 3}),
++    semanticBlock(),
++  );
++  const inheritedExpected = normalizePriorityPartitionSummary(
++    semanticSummary(inheritedExpectedBlock),
++    {},
++    SUMMARY_HELPERS,
++  );
++  t.equal(
++    Object.hasOwn(inheritedExpected.blockedPartitions[0], 'expectedReplicaCount'),
++    false,
++  );
++
++  let exclusionAccessorReads = 0;
++  const accessorBlock = semanticBlock();
++  Object.defineProperty(accessorBlock, 'exclusionReasonCounts', {
++    enumerable: true,
++    get() {
++      exclusionAccessorReads += 1;
++      return {row_absent: 99};
++    },
++  });
++  const accessorSummary = normalizePriorityPartitionSummary(
++    semanticSummary(accessorBlock),
++    {},
++    SUMMARY_HELPERS,
++  );
++  t.equal(exclusionAccessorReads, 0);
++  t.equal(
++    Object.hasOwn(
++      accessorSummary.blockedPartitions[0],
++      'exclusionReasonCounts',
++    ),
++    false,
++  );
++
++  const toJsonSummary = semanticSummary(semanticBlock({
++    expectedReplicaCount: 3,
++    exclusionReasonCounts: {
++      row_absent: 1,
++      toJSON() {
++        throw new Error('ambient JSON serialization must not execute');
++      },
++    },
++  }));
++  t.equal(
++    arePriorityPartitionSummariesEqual(
++      toJsonSummary,
++      semanticSummary(semanticBlock({
++        expectedReplicaCount: 3,
++        exclusionReasonCounts: {row_absent: 1},
++      })),
++      SUMMARY_HELPERS,
++    ),
++    true,
++  );
++
++  const originalPollution = Object.getOwnPropertyDescriptor(
++    Object.prototype,
++    'row_absent',
++  );
++  try {
++    Reflect.defineProperty(Object.prototype, 'row_absent', {
++      value: 99,
++      configurable: true,
++      enumerable: true,
++    });
++    const baseline = semanticSummary(semanticBlock({expectedReplicaCount: 3}));
++    const candidate = semanticSummary(semanticBlock({
++      expectedReplicaCount: 3,
++      exclusionReasonCounts: {row_absent: 1},
++    }));
++    const selected = chooseMoreAdvancedPriorityPartitionSummary(
++      baseline,
++      candidate,
++      SUMMARY_HELPERS,
++    );
++    t.equal(selected.blockedPartitions[0].exclusionReasonCounts.row_absent, 1);
++  } finally {
++    if (originalPollution) {
++      Reflect.defineProperty(Object.prototype, 'row_absent', originalPollution);
++    } else {
++      Reflect.deleteProperty(Object.prototype, 'row_absent');
++    }
++  }
++  t.end();
++});
++
++test('service-row census ignores an array iterator override', (t) => {
++  const rows = [
++    createServiceRow('node-1', 1),
++    createServiceRow('node-2', 2),
++  ];
++  rows[Symbol.iterator] = function* hideRows() {
++    yield createServiceRow('node-3', 99, {serviceType: 'compute'});
++  };
++  const blocked = partitionBlock(deriveSummary(rows));
++  t.equal(blocked.readyReplicaCount, 2);
++  t.equal(blocked.exclusionReasonCounts.row_absent, 1);
++  t.equal(
++    Object.hasOwn(blocked.exclusionReasonCounts, 'not_partition_service'),
++    false,
++  );
++  t.end();
++});

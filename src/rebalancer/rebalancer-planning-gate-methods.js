@@ -249,7 +249,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    * @return {Object|null}
    * @private
    */
-  evaluateClusterReadinessGateDecision() {
+  evaluateClusterReadinessGateDecision(evaluationContext = null) {
     if (this.clusterReadinessConfirmed) {
       return null;
     }
@@ -288,7 +288,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     }
 
     const priorityRecoveryGateBypass =
-      this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+      this.buildPriorityRecoveryPlanningGateBypassSnapshot(evaluationContext);
     if (priorityRecoveryGateBypass.shouldBypass === true) {
       return null;
     }
@@ -310,14 +310,14 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    * @return {Promise<Object|null>}
    * @private
    */
-  resolveStartDelayPlanningGateDecision() {
+  resolveStartDelayPlanningGateDecision(evaluationContext = null) {
     const timeUntilRebalanceEligibleMs =
       this.getTimeUntilRebalanceStartEligible();
     if (timeUntilRebalanceEligibleMs <= UNIFIED_REBALANCER_LITERAL.ZERO) {
       return null;
     }
     const priorityRecoveryGateBypass =
-      this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+      this.buildPriorityRecoveryPlanningGateBypassSnapshot(evaluationContext);
     if (priorityRecoveryGateBypass.shouldBypass === true) {
       return null;
     }
@@ -337,12 +337,12 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     });
   },
 
-  resolveStabilizationPlanningGateDecision() {
+  resolveStabilizationPlanningGateDecision(evaluationContext = null) {
     if (this.isStabilized()) {
       return null;
     }
     const priorityRecoveryGateBypass =
-      this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+      this.buildPriorityRecoveryPlanningGateBypassSnapshot(evaluationContext);
     if (priorityRecoveryGateBypass.shouldBypass === true) {
       return null;
     }
@@ -368,9 +368,12 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    * @return {Object}
    * @private
    */
-  buildTopologySettlingPlanningGateSnapshot(topologySettlingBlocker) {
+  buildTopologySettlingPlanningGateSnapshot(
+    topologySettlingBlocker,
+    evaluationContext = null,
+  ) {
     const priorityRecoveryGateBypass =
-      this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+      this.buildPriorityRecoveryPlanningGateBypassSnapshot(evaluationContext);
     const priorityRecoveryOperationCreationRequired =
       priorityRecoveryGateBypass.operationCreationGate
         ?.operationCreationRequired === true;
@@ -403,7 +406,9 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     });
   },
 
-  async resolveTopologySettlingPlanningGateDecision() {
+  async resolveTopologySettlingPlanningGateDecision(
+    evaluationContext = null,
+  ) {
     const topologySettlingBlocker =
       await this.revalidateCriticalSystemTopologySettlingBlocker(
         this.getCriticalSystemTopologySettlingBlocker(),
@@ -414,6 +419,7 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     const gateSnapshot =
       this.buildTopologySettlingPlanningGateSnapshot(
         topologySettlingBlocker,
+        evaluationContext,
       );
     if (gateSnapshot.shouldDefer !== true) {
       return null;
@@ -437,14 +443,14 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     });
   },
 
-  resolveTrafficReadinessPlanningGateDecision() {
+  resolveTrafficReadinessPlanningGateDecision(evaluationContext = null) {
     const trafficReadinessBlocker =
       this.getCriticalSystemTrafficReadinessBlocker();
     if (!trafficReadinessBlocker) {
       return null;
     }
     const priorityRecoveryGateBypass =
-      this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+      this.buildPriorityRecoveryPlanningGateBypassSnapshot(evaluationContext);
     if (priorityRecoveryGateBypass.shouldBypass === true) {
       return null;
     }
@@ -477,14 +483,14 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     });
   },
 
-  resolveLocalServePlanningGateDecision() {
+  resolveLocalServePlanningGateDecision(evaluationContext = null) {
     const localServeReadinessBlocker =
       this.getCriticalSystemLocalServeReadinessBlocker();
     if (!localServeReadinessBlocker) {
       return null;
     }
     const priorityRecoveryGateBypass =
-      this.buildPriorityRecoveryPlanningGateBypassSnapshot();
+      this.buildPriorityRecoveryPlanningGateBypassSnapshot(evaluationContext);
     if (priorityRecoveryGateBypass.shouldBypass === true) {
       return null;
     }
@@ -519,13 +525,13 @@ const REBALANCER_PLANNING_GATE_METHODS = {
    * @return {Object}
    * @private
    */
-  buildLocalMutationReadinessPlanningGateSnapshot() {
+  buildLocalMutationReadinessPlanningGateSnapshot(evaluationContext = null) {
     const localMutationReadinessBlocker =
       this.getLocalControlPlaneMutationReadinessBlocker();
     const isPriorityPartition = this.isControlPlanePriorityPartition();
     const operationCreationGate = isPriorityPartition ?
-      this.buildPriorityRecoveryOperationCreationPlanningGateSnapshot(
-        this.entityId,
+      this.resolvePriorityRecoveryOperationCreationPlanningGateForEvaluation(
+        evaluationContext,
       ) :
       null;
     const priorityRecoveryOperationCreationRequired =
@@ -561,9 +567,9 @@ const REBALANCER_PLANNING_GATE_METHODS = {
     });
   },
 
-  resolveLocalMutationPlanningGateDecision() {
+  resolveLocalMutationPlanningGateDecision(evaluationContext = null) {
     const gateSnapshot =
-      this.buildLocalMutationReadinessPlanningGateSnapshot();
+      this.buildLocalMutationReadinessPlanningGateSnapshot(evaluationContext);
     const localMutationReadinessBlocker =
       gateSnapshot.localMutationReadinessBlocker;
     if (gateSnapshot.shouldDefer !== true) {
@@ -605,16 +611,20 @@ const REBALANCER_PLANNING_GATE_METHODS = {
   ...REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS,
 
   async collectRebalancePlanningGateDecisions() {
+    const evaluationContext =
+      this.createRebalancePlanningGateEvaluationContext();
     return [
-      this.evaluateClusterReadinessGateDecision(),
-      this.resolveStartDelayPlanningGateDecision(),
-      this.resolveStabilizationPlanningGateDecision(),
-      await this.resolveTopologySettlingPlanningGateDecision(),
-      this.resolveTrafficReadinessPlanningGateDecision(),
-      this.resolveLocalServePlanningGateDecision(),
-      this.resolveLocalMutationPlanningGateDecision(),
-      this.resolvePrioritySpreadPlanningGateDecision(),
-      this.resolveTransportBackpressurePlanningGateDecision(),
+      this.evaluateClusterReadinessGateDecision(evaluationContext),
+      this.resolveStartDelayPlanningGateDecision(evaluationContext),
+      this.resolveStabilizationPlanningGateDecision(evaluationContext),
+      await this.resolveTopologySettlingPlanningGateDecision(
+        evaluationContext,
+      ),
+      this.resolveTrafficReadinessPlanningGateDecision(evaluationContext),
+      this.resolveLocalServePlanningGateDecision(evaluationContext),
+      this.resolveLocalMutationPlanningGateDecision(evaluationContext),
+      this.resolvePrioritySpreadPlanningGateDecision(evaluationContext),
+      this.resolveTransportBackpressurePlanningGateDecision(evaluationContext),
     ].filter(Boolean);
   },
 
