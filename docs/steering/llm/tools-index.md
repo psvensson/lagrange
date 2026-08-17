@@ -86,7 +86,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:runtime-grammar` — Check runtime grammar contracts plus state-machine pressure preflight.
 - `audit:runtime-grammar:file` — `node scripts/check-runtime-grammar-contracts.js`
 - `audit:service-portability-claims` — `node scripts/check-service-portability-claims.js`
-- `audit:shards` — `node scripts/generate-test-shards.js --check && node scripts/generate-test-primary-classes.js --check`
+- `audit:shards` — `node scripts/generate-test-shards.js --check && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check`
 - `audit:state-machine-pressure` — `node scripts/check-state-machine-pressure-preflight.js`
 - `audit:static-gate` — `node scripts/solve/static-gate.js`
 - `audit:step-coverage-owner` — `node scripts/check-step-coverage-owner.js`
@@ -268,7 +268,8 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:documentation-onboarding` — `node scripts/run-documentation-audience-safe-onboarding-scenario.js documentation-audience-safe-onboarding`
 - `test:duplication` — `node scripts/check-duplication.js`
 - `test:duplication:strict` — `node scripts/check-duplication.js --strict`
-- `test:fast` — `npm run test:fast:ordinary && npm run test:fast:toolchain`
+- `test:fast` — `npm run test:fast:ordinary && npm run test:fast:toolchain && npm run test:fast:integration`
+- `test:fast:integration` — `node scripts/plan-test-lane.js --primary integration --exclude-prefix test/integration/,test/bootstrap/ | xargs -d '\n' node scripts/run-test-files.js --jobs=1`
 - `test:fast:ordinary` — `node scripts/plan-test-lane.js --primary unit,packaging --resource ordinary --exclude test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js | xargs -d '\n' -n 100 node scripts/run-test-files.js --jobs=4`
 - `test:fast:toolchain` — `node scripts/plan-test-lane.js --primary unit,packaging --resource external-toolchain | xargs -d '\n' node scripts/run-test-files.js --jobs=1`
 - `test:file` — `node scripts/run-test-files.js`
@@ -317,4 +318,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-212 scripts indexed; 32 have a curated description, 180 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+213 scripts indexed; 32 have a curated description, 181 fall back to their raw command. Improve coverage in the two sources named in the header comment.
