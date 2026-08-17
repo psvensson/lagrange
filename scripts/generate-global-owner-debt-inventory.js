@@ -36,6 +36,7 @@ import {
   listJavaScriptFiles,
   logicalJsonIdentity,
   normalizePath,
+  normalizePathThroughSymlinkedRoot,
   ownerAreaForPath,
   readJson,
   reconcileAssignments,
@@ -584,7 +585,7 @@ async function buildImportGraph(root, files) {
         unresolvedCount += 1;
         continue;
       }
-      const target = normalizePath(root, dependency.resolved);
+      const target = normalizePathThroughSymlinkedRoot(root, dependency.resolved);
       if (shouldCaptureResolvedProbe(dependency, target)) {
         const key = JSON.stringify([source, dependency.module]);
         resolverInputs.set(key, {

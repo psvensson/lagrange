@@ -50,6 +50,43 @@ function normalizePath(root, filePath) {
   return path.relative(root, resolved).replaceAll(path.sep, OWNER_DEBT.pathSeparator);
 }
 
+// A dependency reached through a symlinked directory under root (the publish
+// gate links node_modules into a temporary worktree) resolves to the
+// symlink target's realpath, which escapes root and yields a `../` path.
+// Map that realpath back onto the logical symlinked location so the
+// resolver probe sees the canonical worktree-relative form.
+function normalizePathThroughSymlinkedRoot(root, filePath) {
+  const relative = normalizePath(root, filePath);
+  if (!relative.startsWith(RESOLVER_PARENT_PREFIX) &&
+      relative !== RESOLVER_PARENT_PATH) {
+    return relative;
+  }
+  const resolved = path.isAbsolute(filePath) ?
+    filePath :
+    path.resolve(root, filePath);
+  let entries;
+  try {
+    entries = fs.readdirSync(root, {withFileTypes: true});
+  } catch {
+    return relative;
+  }
+  for (const entry of entries) {
+    if (!entry.isSymbolicLink()) continue;
+    let targetReal;
+    try {
+      targetReal = fs.realpathSync(path.join(root, entry.name));
+    } catch {
+      continue;
+    }
+    if (resolved === targetReal ||
+        resolved.startsWith(`${targetReal}${path.sep}`)) {
+      const suffix = resolved.slice(targetReal.length);
+      return normalizePath(root, path.join(root, entry.name, suffix));
+    }
+  }
+  return relative;
+}
+
 function sha256(value) {
   return crypto.createHash(OWNER_DEBT.hashAlgorithm).update(value)
     .digest(OWNER_DEBT.hashEncoding);
@@ -546,6 +583,7 @@ export {
   listJavaScriptFiles,
   logicalJsonIdentity,
   normalizePath,
+  normalizePathThroughSymlinkedRoot,
   ownerAreaForPath,
   readJson,
   reconcileAssignments,
