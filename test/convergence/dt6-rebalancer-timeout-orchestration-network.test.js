@@ -6,6 +6,8 @@ import {OperationWorkflowOwner} from '../../src/rebalancer/operation-workflow-ow
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from
   '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
 
+const SCENARIO_TIMEOUT_MS = 90000;
+
 const {INCOMPLETE_OPERATION_OBSERVATION_STATE} = SHARED;
 
 // DT6 step 11 — drive the REAL checkTimeouts ORCHESTRATION on the virtual clock. Step 10 drove the
@@ -108,17 +110,27 @@ async function runBackoff(backoffMs) {
   return host.counters;
 }
 
-t.test('the real empty-query backoff throttles repository queries by VIRTUAL time', async (t) => {
-  const c = await runBackoff(100);
-  // ~26 loop ticks over 520ms at a 20ms interval; the real backoff lets the repository be queried
-  // only about once per 100ms window.
-  t.ok(c.checks >= 20, 'the real checkTimeouts loop body ran on the virtual clock every tick');
-  t.ok(c.visibilityQueries > 0, 'the repository was queried at least once');
-  t.ok(c.visibilityQueries * 2 < c.checks,
-    'queries are far fewer than ticks — the real empty-query backoff throttled them on virtual time');
-});
+// Harness watchdogs, not latency contracts. tap silently caps every test at
+// its 30s default and only TAP_TIMEOUT lifts it, which run-test-files.js
+// derives from the largest declaration in this file; declaring nothing left
+// these scenarios on the bare 30s cap. Healthy execution measures 9.5s for the
+// whole file, so a contended 2-vCPU runner reached 33.0s and reported
+// "timeout!". 90000 keeps a genuine hang detectable with room for a slow
+// machine. The throttling SEMANTICS under test are asserted on the virtual
+// clock below, so they do not depend on wall-clock speed at all.
+t.test('the real empty-query backoff throttles repository queries by VIRTUAL time',
+  {timeout: SCENARIO_TIMEOUT_MS}, async (t) => {
+    const c = await runBackoff(100);
+    // ~26 loop ticks over 520ms at a 20ms interval; the real backoff lets the repository be queried
+    // only about once per 100ms window.
+    t.ok(c.checks >= 20, 'the real checkTimeouts loop body ran on the virtual clock every tick');
+    t.ok(c.visibilityQueries > 0, 'the repository was queried at least once');
+    t.ok(c.visibilityQueries * 2 < c.checks,
+      'queries are far fewer than ticks — the real empty-query backoff throttled them on virtual time');
+  });
 
 t.test('the backoff window scales with VIRTUAL time (double the backoff -> ~half the queries)',
+  {timeout: SCENARIO_TIMEOUT_MS},
   async (t) => {
     const fast = await runBackoff(100);
     const slow = await runBackoff(200);
@@ -129,8 +141,9 @@ t.test('the backoff window scales with VIRTUAL time (double the backoff -> ~half
     t.equal(fast.checks, slow.checks, 'identical loop-tick count regardless of backoff');
   });
 
-t.test('the hosted orchestration backoff is deterministic across runs', async (t) => {
-  const a = await runBackoff(100);
-  const b = await runBackoff(100);
-  t.same(a, b, 'identical virtual drive -> identical tick + query counts');
-});
+t.test('the hosted orchestration backoff is deterministic across runs',
+  {timeout: SCENARIO_TIMEOUT_MS}, async (t) => {
+    const a = await runBackoff(100);
+    const b = await runBackoff(100);
+    t.same(a, b, 'identical virtual drive -> identical tick + query counts');
+  });

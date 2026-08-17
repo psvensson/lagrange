@@ -1,0 +1,53 @@
+# resource class: external-toolchain
+#
+# Tests that drive the real WASM toolchain (wasm-tools / wizer / componentize /
+# jco) or start real component cells. They are listed here because they were
+# MEASURED to consume multiple CPU cores each, not because their name or their
+# directory mentions wasm — a grep-based rule over-classifies (see the two
+# excluded files at the bottom).
+#
+# The gate planner runs this class at jobs=1 on the 2-vCPU hosted runner: a
+# single entry here can itself consume ~3.7 cores, so a nominal per-file job
+# count understates real CPU demand and even jobs=2 can co-schedule two
+# internally-parallel workloads.
+#
+# Measured 2026-08-17 at --jobs=1 on a 20-core box (real / user CPU / implied
+# cores). Re-measure before adding or removing an entry.
+#
+#   34.20s /  67.94s / 2.0x  service-cell-bridge-roundtrip
+#   30.14s /  59.88s / 2.0x  service-cell-worker-modes
+#   28.83s /  82.27s / 2.9x  service-compiler-account-summary-parity
+#   27.44s /  73.58s / 2.7x  service-cell-world-abi
+#   24.14s /  72.94s / 3.0x  service-cell-v2-world-abi
+#   22.35s /  67.92s / 3.0x  service-compiler-module-shape-spike
+#   21.55s /  69.77s / 3.2x  service-pipeline-command
+#   19.63s /  46.84s / 2.4x  call-cell-worker
+#   19.17s /  63.99s / 3.3x  call-cell-world-abi
+#   17.77s /  65.12s / 3.7x  service-init-wasm-scaffold
+#   17.02s /  52.23s / 3.1x  handler-aware-runtime-invocation
+#   11.76s /  16.03s / 1.4x  minimal-deployment-request-cell-runtime-readiness
+#    9.82s /  14.55s / 1.5x  movielens-public-request-component-validation
+#    6.52s /  12.64s / 1.9x  service-compiler-editor-typings
+#
+# Measured and deliberately EXCLUDED as ordinary despite matching the toolchain
+# grep — they reference the toolchain without driving it:
+#    1.10s /   0.94s / 0.9x  test/runtime/node-shutdown-cell-worker-teardown.test.js
+#    0.62s /   0.85s / 1.4x  test/examples/js-request-binding-example.test.js
+#
+# Tests under test/integration/ are NOT listed here: their primary class
+# already routes them to a serial lane.
+
+test/cli/service-init-wasm-scaffold.test.js
+test/cli/service-pipeline-command.test.js
+test/examples/service-compiler-account-summary-parity.test.js
+test/runtime/call-cell-worker.test.js
+test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js
+test/runtime/movielens-public-request-component-validation.test.js
+test/runtime/service-cell-bridge-roundtrip.test.js
+test/runtime/service-cell-worker-modes.test.js
+test/service/handler-aware-runtime-invocation.test.js
+test/service/service-compiler-editor-typings.test.js
+test/wasm-service/call-cell-world-abi.test.js
+test/wasm-service/service-cell-v2-world-abi.test.js
+test/wasm-service/service-cell-world-abi.test.js
+test/wasm-service/service-compiler-module-shape-spike.test.js

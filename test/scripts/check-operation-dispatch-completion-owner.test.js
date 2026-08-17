@@ -13,6 +13,8 @@ const RECOVERY_PATH =
 const TRANSITION_PATH =
   'src/rebalancer/operation-workflow-transition-persistence.js';
 
+const CENSUS_TIMEOUT_MS = 90000;
+
 function mutateSource(sourceByPath, filePath, mutate) {
   const mutated = new Map(sourceByPath);
   const source = mutated.get(filePath);
@@ -31,7 +33,19 @@ function violationKinds(sourceByPath) {
   );
 }
 
+// Harness watchdog, not a latency contract, and it applies to every test in
+// this file: run-test-files.js lifts TAP_TIMEOUT to the largest {timeout: ...}
+// declared anywhere in the file, and TAP_TIMEOUT is the only thing that raises
+// tap's silent 30s per-test cap. Declaring nothing left all ten census tests on
+// that cap while this file's healthy execution is ~10s, so a contended 2-vCPU
+// runner reached 34.9-47.1s and the cap expired mid-file. Because the cap kills
+// whichever subtest is merely in flight at that instant, the reported failure
+// moved between runs ("missing REPLACE target-active cleanup", "weak REPLACE
+// target-active cleanup", "a parallel delivered-create registry") and looked
+// like nondeterminism; it is not. These are pure AST/source censuses over fixed
+// inputs, so 90000 leaves a genuine hang detectable with ample slow-machine room.
 test('operation dispatch completion owner census is green on source',
+  {timeout: CENSUS_TIMEOUT_MS},
   async (t) => {
     const sourceByPath = await loadSourceByPath();
     t.same(

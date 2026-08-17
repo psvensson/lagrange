@@ -39,6 +39,14 @@ import {readdirSync, readFileSync, writeFileSync, existsSync} from 'node:fs';
 import {join} from 'node:path';
 import {fileURLToPath} from 'node:url';
 
+import {
+  PRIMARY_CLASS_BOOTSTRAP,
+  PRIMARY_CLASS_INTEGRATION,
+  derivePrimaryClasses,
+} from './checks/test-primary-classification.js';
+
+const REPO_ROOT = '.';
+
 const EXIT_SUCCESS = 0;
 const EXIT_FAILURE = 1;
 const NEWLINE = '\n';
@@ -51,6 +59,14 @@ const PER_FILE_OVERHEAD_MS = 1000;
 // Weight for a file absent from the committed snapshot (new/renamed tests).
 const DEFAULT_BODY_MS = 500;
 
+// Discovery is by PRIMARY CLASS, never by directory. Walking `test/integration`
+// re-created the very drift this generator exists to prevent: 14 files named
+// `*.integration.test.js` living outside that directory (test/cdc, test/query,
+// test/debug-runtime, test/control-plane, test/rebalancer) are classified
+// `integration` by the classification owner, yet no directory walk could find
+// them, so they were in no lane here and ran only inside the parallel
+// `test:fast` glob. Asking the classifier makes the two surfaces agree by
+// construction.
 const GENERATED_SHARD_GROUPS = [
   // `exclude` re-homes files OUT of the blocking lanes into a curated shard
   // (they stay existence-checked via CURATED_SHARDS below, so they cannot
@@ -61,7 +77,7 @@ const GENERATED_SHARD_GROUPS = [
   // over N runs, not a per-run guarantee, so these cannot be deterministic
   // gate tests. They run on demand via `npm run test:convergence-probes`.
   {
-    root: 'test/integration',
+    primaryClass: PRIMARY_CLASS_INTEGRATION,
     prefix: 'integration',
     lanes: 3,
     exclude: [
@@ -70,7 +86,7 @@ const GENERATED_SHARD_GROUPS = [
       'test/integration/user-table-metadata-fanout.integration.test.js',
     ],
   },
-  {root: 'test/bootstrap', prefix: 'bootstrap', lanes: 2},
+  {primaryClass: PRIMARY_CLASS_BOOTSTRAP, prefix: 'bootstrap', lanes: 2},
 ];
 
 const CURATED_SHARDS = [
@@ -155,12 +171,25 @@ function buildGroupShards(group, files, timings) {
   return shards;
 }
 
+// Pure: the group's candidate files. `primaryClass` asks the classification
+// owner (which sees suffix-classified files anywhere in the tree); `root`
+// remains for any group that is genuinely directory-shaped.
+function collectGroupFiles(group) {
+  if (group.primaryClass) {
+    const {classes} = derivePrimaryClasses(REPO_ROOT);
+    return Object.keys(classes)
+      .filter((file) => classes[file] === group.primaryClass)
+      .sort();
+  }
+  return collectTestFiles(group.root);
+}
+
 function buildExpectedShards() {
   const timings = loadTimings();
   const expected = {};
   for (const group of GENERATED_SHARD_GROUPS) {
     const excluded = new Set(group.exclude || []);
-    const files = collectTestFiles(group.root)
+    const files = collectGroupFiles(group)
       .filter((file) => !excluded.has(file));
     Object.assign(expected, buildGroupShards(group, files, timings));
   }

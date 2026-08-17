@@ -268,7 +268,9 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:documentation-onboarding` — `node scripts/run-documentation-audience-safe-onboarding-scenario.js documentation-audience-safe-onboarding`
 - `test:duplication` — `node scripts/check-duplication.js`
 - `test:duplication:strict` — `node scripts/check-duplication.js --strict`
-- `test:fast` — `find test -type f -name '*.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' ! -path 'test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js' -print0 | sort -z | xargs -0 -n 100 node scripts/run-test-files.js --jobs=4`
+- `test:fast` — `npm run test:fast:ordinary && npm run test:fast:toolchain`
+- `test:fast:ordinary` — `node scripts/plan-test-lane.js --primary unit,packaging --resource ordinary --exclude test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js | xargs -d '\n' -n 100 node scripts/run-test-files.js --jobs=4`
+- `test:fast:toolchain` — `node scripts/plan-test-lane.js --primary unit,packaging --resource external-toolchain | xargs -d '\n' node scripts/run-test-files.js --jobs=1`
 - `test:file` — `node scripts/run-test-files.js`
 - `test:gate` — `node scripts/run-project-hardening-acceptance.js`
 - `test:gate:postpush` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/project-hardening-proof-postpush-manifest.json`
@@ -315,4 +317,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-210 scripts indexed; 32 have a curated description, 178 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+212 scripts indexed; 32 have a curated description, 180 fall back to their raw command. Improve coverage in the two sources named in the header comment.

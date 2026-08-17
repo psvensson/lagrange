@@ -114,9 +114,20 @@ test(TEST_NAME.AGGREGATE_BUDGET, (t) => {
   const sensitivePregate =
     packageJson.scripts['test:aggregate-sensitive-pregate'];
 
-  t.ok(fastLane.includes(FAST_LANE_WORKER_BUDGET));
-  t.notOk(fastLane.includes(UNSAFE_FAST_LANE_WORKER_BUDGET));
-  t.ok(fastLane.includes(`! -path '${AGGREGATE_SENSITIVE_TEST}'`));
+  // test:fast now dispatches to one lane per resource class, so the worker
+  // budget lives on the lanes: ordinary keeps the aggregate-proven --jobs=4,
+  // while external-toolchain is pinned to --jobs=1 because a single toolchain
+  // test can consume ~3.7 cores and oversubscribes a 2-vCPU runner. The
+  // aggregate-sensitive file is still kept out of the parallel lane, now by
+  // explicit --exclude rather than by a shell `! -path` glob.
+  const ordinaryLane = packageJson.scripts['test:fast:ordinary'];
+  const toolchainLane = packageJson.scripts['test:fast:toolchain'];
+  t.ok(fastLane.includes('test:fast:ordinary'));
+  t.ok(fastLane.includes('test:fast:toolchain'));
+  t.ok(ordinaryLane.includes(FAST_LANE_WORKER_BUDGET));
+  t.notOk(ordinaryLane.includes(UNSAFE_FAST_LANE_WORKER_BUDGET));
+  t.ok(toolchainLane.includes(SERIAL_WORKER_BUDGET));
+  t.ok(ordinaryLane.includes(`--exclude ${AGGREGATE_SENSITIVE_TEST}`));
   t.ok(sensitivePregate.includes(SERIAL_WORKER_BUDGET));
   t.ok(sensitivePregate.includes(AGGREGATE_SENSITIVE_TIMEOUT));
   t.ok(sensitivePregate.includes(AGGREGATE_SENSITIVE_TEST));

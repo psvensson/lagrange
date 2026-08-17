@@ -14,6 +14,10 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {Parser} from 'tap-parser';
 
+import {
+  extractTimeoutDeclarations,
+} from './checks/test-timeout-declarations.js';
+
 const DEFAULT_JOBS = 4;
 const DEFAULT_TIMEOUT_MS = 600000;
 const FAILURE_EXIT_CODE = 1;
@@ -224,10 +228,18 @@ function prepareTestRun(file, options) {
   };
 }
 
-const TIMEOUT_OPTION_PATTERN = /\{[^{}]*\btimeout:\s*(\d{4,})/gu;
 const MILLISECONDS_PER_SECOND = 1000;
 const TAP_DEFAULT_TIMEOUT_SECONDS = 30;
+const PROBLEM_INDENT = '\n  ';
+const UNRESOLVED_TIMEOUT_ERROR =
+  'run-test-files: unresolved timeout declaration — refusing to fall back to ' +
+  `tap's ${TAP_DEFAULT_TIMEOUT_SECONDS}s default, which would silently cap ` +
+  'the test:';
 
+// Declarations are parsed, not pattern-matched, and an unresolvable one is a
+// hard error. Falling back to the default cap is exactly how 18 files came to
+// declare 45s-300s and run at 30s anyway; a refactor to
+// `const T = BASE * MULTIPLIER;` must fail loudly instead of re-creating that.
 function largestDeclaredTimeoutSeconds(absoluteFile) {
   let source;
   try {
@@ -235,14 +247,14 @@ function largestDeclaredTimeoutSeconds(absoluteFile) {
   } catch {
     return null;
   }
-  let largestMs = 0;
-  for (const match of source.matchAll(TIMEOUT_OPTION_PATTERN)) {
-    const value = Number(match[1]);
-    if (Number.isFinite(value) && value > largestMs) {
-      largestMs = value;
-    }
+  const {milliseconds, problems} =
+    extractTimeoutDeclarations(source, absoluteFile);
+  if (problems.length > 0) {
+    throw new Error(
+      `${UNRESOLVED_TIMEOUT_ERROR}${PROBLEM_INDENT}` +
+      `${problems.join(PROBLEM_INDENT)}`);
   }
-  const seconds = Math.ceil(largestMs / MILLISECONDS_PER_SECOND);
+  const seconds = Math.ceil(milliseconds / MILLISECONDS_PER_SECOND);
   return seconds > TAP_DEFAULT_TIMEOUT_SECONDS ? seconds : null;
 }
 

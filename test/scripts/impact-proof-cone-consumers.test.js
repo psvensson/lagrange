@@ -247,6 +247,43 @@ test(DIFF_BASE_ATTACK_TEST_NAME, () => {
   }
 });
 
+// `selected` is a census walked in the CHILD process; `expected` is a second
+// walk performed here in the parent a moment later. Two walks of a live tree at
+// two different instants agree only while the tree is still. This assertion
+// failed once on a hosted runner (2026-08-17, b8cd88bd5, 5181ms — far under any
+// timeout) and has never reproduced locally, so the cause is still unknown. The
+// diagnosis below exists to make the NEXT remote failure conclusive rather than
+// opaque: it reports both census sizes, the exact symmetric difference, and a
+// third re-walk that distinguishes "the tree changed under us" from "the
+// selector disagrees with the classifier". Deliberately NO retry: a retry would
+// destroy the very evidence needed to explain it.
+function censusDiagnosis(selected, expected) {
+  const selectedSet = new Set(selected);
+  const expectedSet = new Set(expected);
+  const missing = expected.filter((file) => !selectedSet.has(file));
+  const unexpected = selected.filter((file) => !expectedSet.has(file));
+  const rewalk = Object.keys(buildPrimaryManifest(root).classes).sort();
+  const rewalkSet = new Set(rewalk);
+  const treeMoved = rewalk.length !== expected.length ||
+    expected.some((file) => !rewalkSet.has(file));
+  const duplicates = selected.filter(
+    (file, index) => index > 0 && selected[index - 1] === file);
+  return [
+    `child-selected census: ${selected.length} file(s)`,
+    `parent-expected census: ${expected.length} file(s)`,
+    `parent re-walk census: ${rewalk.length} file(s)`,
+    `tree changed between parent walks: ${treeMoved}`,
+    `missing from child selection (${missing.length}): ` +
+      `${JSON.stringify(missing)}`,
+    `unexpected in child selection (${unexpected.length}): ` +
+      `${JSON.stringify(unexpected)}`,
+    `duplicate entries in child selection (${duplicates.length}): ` +
+      `${JSON.stringify(duplicates)}`,
+    `forged path present: ${selectedSet.has(FORGED_TEST_PATH)}`,
+    `test root walked: ${JSON.stringify(path.join(root, TEST_DIRECTORY))}`,
+  ].join('\n  ');
+}
+
 test(FULL_SUITE_CENSUS_TEST_NAME, () => {
   const result = runWithCensusState(
     SELECTOR_ENTRY, FULL_SUITE_ARGS, LIVE_CENSUS);
@@ -254,7 +291,16 @@ test(FULL_SUITE_CENSUS_TEST_NAME, () => {
   assert.equal(result.stderr, EMPTY_OUTPUT);
   const selected = result.stdout.trim().split('\n').filter(Boolean).sort();
   const expected = Object.keys(buildPrimaryManifest(root).classes).sort();
-  assert.deepEqual(selected, expected);
+  // Computed ONLY on mismatch: assert's message argument is evaluated eagerly,
+  // so passing censusDiagnosis(...) directly would run a third full census walk
+  // of every test file on each green run.
+  try {
+    assert.deepEqual(selected, expected);
+  } catch (mismatch) {
+    mismatch.message =
+      `${mismatch.message}\n  ${censusDiagnosis(selected, expected)}`;
+    throw mismatch;
+  }
   assert.ok(selected.includes(CONSUMER_TEST_PATH));
   assert.ok(!selected.includes(FORGED_TEST_PATH));
 });

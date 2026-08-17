@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1804,
+    "unit": 1806,
     "integration": 73,
     "bootstrap": 172,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2056,
-  "digest": "fnv1a32-91177fdb",
+  "censusSize": 2058,
+  "digest": "fnv1a32-5e15cfa5",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -1761,6 +1761,8 @@
     "test/scripts/summarize-representative-evidence.test.js": "unit",
     "test/scripts/systemd-capacity-adapter-controller.test.js": "unit",
     "test/scripts/test-primary-classification.test.js": "unit",
+    "test/scripts/test-resource-classification.test.js": "unit",
+    "test/scripts/test-timeout-declarations.test.js": "unit",
     "test/sea/runtime-file-resolution.test.js": "unit",
     "test/service/adapters/adapter-conformance.test.js": "unit",
     "test/service/artifact-payload-internalization.test.js": "unit",

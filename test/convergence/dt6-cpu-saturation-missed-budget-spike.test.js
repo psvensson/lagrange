@@ -8,7 +8,14 @@ import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from
   '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
 
 const {INCOMPLETE_OPERATION_OBSERVATION_STATE, WORKFLOW_STEP} = SHARED;
-const TEST_FILE_TIMEOUT_MS = 60_000;
+// Kept equal to the per-test {timeout: ...} declarations below. This value was
+// previously 60_000 and inert: tap caps everything at its 30s default and
+// t.setTimeout() cannot extend past it (run-test-files.js:198-213). Now that
+// the per-test declarations lift TAP_TIMEOUT to 180s, a stale 60s file-level
+// timeout would silently become the new binding limit — below the 77.6s this
+// file reached on a contended runner. Underscores are deliberate: the harness
+// scans for `{timeout: NNNN}` digits, so this constant is not a declaration.
+const TEST_FILE_TIMEOUT_MS = 180_000;
 
 t.setTimeout(TEST_FILE_TIMEOUT_MS);
 
@@ -271,9 +278,17 @@ async function runDrainUnderBudget({charge}) {
 //    per-restart budget — in-flight replica_operations do NOT clear within the
 //    budget window. This is the docker `load` discriminating signal.
 // ============================================================================
+// Harness watchdogs, not latency contracts. tap silently caps every test at
+// its 30s default and only TAP_TIMEOUT lifts it, which run-test-files.js
+// derives from the largest declaration in this file; declaring nothing left
+// these scenarios on the bare 30s cap. Healthy execution measures 22.1s for
+// the whole file — the heaviest of the dt6 set — so a contended 2-vCPU runner
+// reached 77.6s and reported "timeout!". 180000 keeps a genuine hang
+// detectable with room for a slow machine. The budget SEMANTICS under test are
+// asserted on the virtual clock below, not on wall-clock duration.
 t.test('CPU-saturation WEDGE (cost charge present): the saturated drain node ' +
   'misses the per-restart budget — in-flight replica_operations > 0 at the ' +
-  'deadline (the docker `load` signal)', async (t) => {
+  'deadline (the docker `load` signal)', {timeout: TEST_FILE_TIMEOUT_MS}, async (t) => {
   const m = await runDrainUnderBudget({charge: true});
 
   t.ok(m.checks > 0, 'the REAL checkTimeouts drain loop ran on the virtual clock');
@@ -302,7 +317,8 @@ t.test('CPU-saturation WEDGE (cost charge present): the saturated drain node ' +
 //    before the deadline => converged. The cost charge is the SOLE cause.
 // ============================================================================
 t.test('RED-ON-REVERT (cost charge removed): the SAME drain loop clears ALL ' +
-  'in-flight replica_operations within the budget window => converged', async (t) => {
+  'in-flight replica_operations within the budget window => converged',
+{timeout: TEST_FILE_TIMEOUT_MS}, async (t) => {
   const m = await runDrainUnderBudget({charge: false});
 
   t.ok(m.checks > 0, 'the REAL checkTimeouts drain loop ran on the virtual clock');
@@ -328,7 +344,8 @@ t.test('RED-ON-REVERT (cost charge removed): the SAME drain loop clears ALL ' +
 // ============================================================================
 t.test('red-on-revert pin: the ONLY change is the cost charge — charged MISSES ' +
   'the budget (in-flight > 0), un-charged MEETS it (in-flight == 0); the cost ' +
-  'charge is provably the cause of the missed budget', async (t) => {
+  'charge is provably the cause of the missed budget',
+{timeout: TEST_FILE_TIMEOUT_MS}, async (t) => {
   const charged = await runDrainUnderBudget({charge: true});
   const uncharged = await runDrainUnderBudget({charge: false});
 
@@ -351,6 +368,7 @@ t.test('red-on-revert pin: the ONLY change is the cost charge — charged MISSES
 //    pure function of the virtual clock + seeded drive).
 // ============================================================================
 t.test('determinism: the same charged run twice yields the identical outcome',
+  {timeout: TEST_FILE_TIMEOUT_MS},
   async (t) => {
     const a = await runDrainUnderBudget({charge: true});
     const b = await runDrainUnderBudget({charge: true});

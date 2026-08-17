@@ -81,8 +81,21 @@ describe('project hardening contracts', () => {
     const packageJson = JSON.parse(packageText);
 
     assert.equal(packageJson.main, 'src/public-api.js');
-    assert.match(packageJson.scripts['test:fast'], /run-test-files\.js/u);
-    assert.doesNotMatch(packageJson.scripts['test:fast'], /xargs[^|]*\s-r(?:\s|$)/u);
+    // test:fast now dispatches to one lane per resource class (ordinary runs
+    // parallel, external-toolchain runs serially because a single toolchain
+    // test can consume ~3.7 cores). The contract follows the delegation: every
+    // lane must really invoke the harness, and no lane may use `xargs -r`,
+    // which silently runs NOTHING when its input is empty and would turn a
+    // broken lane selection into a green gate.
+    const fastLanes = ['test:fast:ordinary', 'test:fast:toolchain'];
+    for (const lane of fastLanes) {
+      assert.match(packageJson.scripts['test:fast'], new RegExp(lane, 'u'));
+      assert.match(packageJson.scripts[lane], /run-test-files\.js/u);
+      assert.match(packageJson.scripts[lane], /plan-test-lane\.js/u);
+      assert.doesNotMatch(packageJson.scripts[lane], /xargs[^|]*\s-r(?:\s|$)/u);
+    }
+    assert.match(
+      packageJson.scripts['test:fast:toolchain'], /--jobs=1(?:\s|$)/u);
     assert.doesNotMatch(packageJson.scripts['test:deps'], /ignore-known/u);
     assert.equal(
       packageJson.scripts['test:gate'],

@@ -7,6 +7,8 @@ import {OperationWorkflowRecoveryTimeout} from
 import {OPERATION_WORKFLOW_OWNER_SEGMENT_7_STAGE_SHARED as SHARED} from
   '../../src/rebalancer/operation-workflow-recovery-reconcile-shared.js';
 
+const SCENARIO_TIMEOUT_MS = 90000;
+
 const {WORKFLOW_STEP} = SHARED;
 
 // DT6 step 10 — drive the REAL rebalancer timeout DETECTION on the per-node virtual clock. Step 9
@@ -147,7 +149,16 @@ async function runFreezeUnderDetection() {
   };
 }
 
+// Harness watchdogs, not latency contracts. tap silently caps every test at
+// its 30s default and only TAP_TIMEOUT lifts it, which run-test-files.js
+// derives from the largest declaration in this file; declaring nothing left
+// these scenarios on the bare 30s cap. Healthy execution measures 11.7s for
+// the whole file, so a contended 2-vCPU runner reached 44.4s and reported
+// "timeout!". 90000 keeps a genuine hang detectable with room for a slow
+// machine. The timing SEMANTICS under test are the virtual clock assertions
+// below (detection at exactly T0+200ms), which are unaffected by wall clock.
 t.test('BOUNDARY: the real detection fires at exactly T0 + step timeout on the virtual clock',
+  {timeout: SCENARIO_TIMEOUT_MS},
   async (t) => {
     const d = await runBoundary();
     t.ok(d.checks > 0, 'the hosted loop ran the real detection body on the virtual clock');
@@ -157,6 +168,7 @@ t.test('BOUNDARY: the real detection fires at exactly T0 + step timeout on the v
   });
 
 t.test('CL-039 UNDER-DETECTION: a frozen owner never times out its own operation; a peer does',
+  {timeout: SCENARIO_TIMEOUT_MS},
   async (t) => {
     const m = await runFreezeUnderDetection();
     t.equal(m.running.detectedAtNow, START_MS + TIMEOUT_MS,
@@ -170,12 +182,13 @@ t.test('CL-039 UNDER-DETECTION: a frozen owner never times out its own operation
       '(the CL-039 stalled-owner liveness hazard)');
   });
 
-t.test('the hosted real-detection scenarios are deterministic across runs', async (t) => {
-  const a = await runFreezeUnderDetection();
-  const b = await runFreezeUnderDetection();
-  t.same(
-    {rA: a.running.detectedAtNow, fA: a.frozen.detectedAtNow, nA: a.frozenNow},
-    {rA: b.running.detectedAtNow, fA: b.frozen.detectedAtNow, nA: b.frozenNow},
-    'identical topology + drive -> identical detection instants and frozen clocks',
-  );
-});
+t.test('the hosted real-detection scenarios are deterministic across runs',
+  {timeout: SCENARIO_TIMEOUT_MS}, async (t) => {
+    const a = await runFreezeUnderDetection();
+    const b = await runFreezeUnderDetection();
+    t.same(
+      {rA: a.running.detectedAtNow, fA: a.frozen.detectedAtNow, nA: a.frozenNow},
+      {rA: b.running.detectedAtNow, fA: b.frozen.detectedAtNow, nA: b.frozenNow},
+      'identical topology + drive -> identical detection instants and frozen clocks',
+    );
+  });

@@ -115,6 +115,15 @@ function manifestDigest(value) {
     .digest('hex')}`;
 }
 
+// The shared happy-path budgets must never sit close to host scheduler noise:
+// wall_time_ms is enforced as a plain setTimeout around the guest round trip,
+// so a 100ms shared budget made every ordinary invocation in this file a race
+// against the machine (observed on a contended 2-vCPU runner as
+// "wall_time_ms budget exhausted (101 > 100)", where the 101 is synthetic —
+// WALL_BUDGET_EXHAUSTED_ACTUAL_OFFSET_MS, i.e. limit + 1 — and means only
+// that the timer fired). Exhaustion is proved deterministically instead, by
+// tests that declare their own tight budget through definitionWithBudgets and
+// force the overrun with controlled input or a controlled host-call delay.
 function definition(overrides = {}) {
   const componentManifest = manifest();
   const digest = manifestDigest(componentManifest);
@@ -125,7 +134,7 @@ function definition(overrides = {}) {
       input_bytes: 64,
       memory_bytes: 64 * 1024 * 1024,
       output_bytes: 1024,
-      wall_time_ms: 100,
+      wall_time_ms: 300000,
     },
     capabilities: ['clock.read'],
     name: 'request-cell-binding',
