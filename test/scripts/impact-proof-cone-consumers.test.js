@@ -297,8 +297,13 @@ test(FULL_SUITE_CENSUS_TEST_NAME, () => {
   try {
     assert.deepEqual(selected, expected);
   } catch (mismatch) {
+    // Diagnosis FIRST: the gate's failure dump pipes the artifact through
+    // `grep -A 60 '^not ok' | head -200`, so anything printed after assert's
+    // own actual/expected diff is truncated away before it reaches the log.
+    // That is exactly what happened on the first hosted run of this repair -
+    // the instrumentation existed and was cut off.
     mismatch.message =
-      `${mismatch.message}\n  ${censusDiagnosis(selected, expected)}`;
+      `${censusDiagnosis(selected, expected)}\n${mismatch.message}`;
     throw mismatch;
   }
   assert.ok(selected.includes(CONSUMER_TEST_PATH));

@@ -1122,6 +1122,19 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
   );
 });
 
+// The claim under test is ORDERING: both CREATE_REPLICA dispatches happen
+// before per-replica cache waits consume the provisioning budget. It was
+// expressed with a 30ms budget against a 28ms mock delay - a 2ms margin,
+// smaller than ordinary scheduler jitter, so on a contended 2-vCPU runner the
+// elapsed time between operations ate the budget and the mock refused with
+// 'cache wait budget too small'. Scaled 10x: the RATIO the assertion depends
+// on is identical, the margin is 200ms instead of 2ms, and both assertions
+// below are unchanged. (A fully deterministic form would inject the clock;
+// that is a larger redesign than this repair warrants.)
+const PROVISIONING_BUDGET_MS = 300;
+const SLOW_REPLICA_WAIT_MS = 280;
+const FAST_REPLICA_WAIT_MS = 80;
+
 test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' +
   'replica set before per-replica cache waits consume timeout budget', async (t) => {
   const partitionId = 'tbl-provision-dispatch-order-p1';
@@ -1204,7 +1217,9 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
         return;
       }
 
-      const requiredDelayMs = key === replicaIdByNodeId['node-a'] ? 28 : 8;
+      const requiredDelayMs =
+        key === replicaIdByNodeId['node-a'] ?
+          SLOW_REPLICA_WAIT_MS : FAST_REPLICA_WAIT_MS;
       if (!Number.isFinite(options.timeoutMs) ||
           options.timeoutMs < requiredDelayMs) {
         throw new Error(
@@ -1234,7 +1249,7 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
     messageRouter: createMockMessageRouter(),
     rebalanceCoordinator,
     cdcIntegrationService,
-    tablePartitionProvisioningTimeoutMs: 30,
+    tablePartitionProvisioningTimeoutMs: PROVISIONING_BUDGET_MS,
     tablePartitionProvisioningPollIntervalMs: 1,
   });
   engine.waitForRoutablePartitionServiceCount = async () => {};

@@ -74,85 +74,96 @@ function normalizeOutput(output) {
     .trim();
 }
 
-test('Single Executable Behavioral Equivalence - Property Test', async (t) => {
+// Harness watchdog, not a latency contract. tap silently caps every test
+// at its 30s default and only TAP_TIMEOUT lifts it, which run-test-files.js
+// derives from a {timeout: ...} declared on a test call. Declaring nothing
+// left this property test on the bare cap: healthy execution measures 13.0s,
+// and on a contended 2-vCPU runner it reached 42.3s and was killed mid-run.
+// 120s keeps a genuine hang detectable with ample slow-machine room; the
+// properties asserted below are unchanged.
+const PROPERTY_TIMEOUT_MS = 120000;
+
+test('Single Executable Behavioral Equivalence - Property Test',
+  {timeout: PROPERTY_TIMEOUT_MS},
+  async (t) => {
   // This test previously spawned SEA executables and `npm run cli`. In some CI
   // environments, child process spawning is blocked which caused SKIPs and a
   // non-zero `tap` exit. Instead, we assert "entrypoint vs library" equivalence
   // in-process (bin wrapper vs direct AdminCLI invocation).
 
-  // Feature: single-executable-packaging
-  // Property 40: Single Executable Behavioral Equivalence
-  // Validates: Requirements 18.6
+    // Feature: single-executable-packaging
+    // Property 40: Single Executable Behavioral Equivalence
+    // Validates: Requirements 18.6
 
-  // Version output matches between entry wrapper and direct class invocation.
-  for (const flag of ['--version', '-v']) {
-    const entryResult = await runEntrypoint(cliEntry, {args: [flag], timeoutMs: 15000});
-    const directResult = await runWorkerScript(adminCliDirectWorker, {args: [flag]}, 15000);
+    // Version output matches between entry wrapper and direct class invocation.
+    for (const flag of ['--version', '-v']) {
+      const entryResult = await runEntrypoint(cliEntry, {args: [flag], timeoutMs: 15000});
+      const directResult = await runWorkerScript(adminCliDirectWorker, {args: [flag]}, 15000);
 
-    t.equal(entryResult.exitCode, 0, `cli entry exitCode is 0 for ${flag}`);
-    t.equal(directResult.exitCode, 0, `cli direct exitCode is 0 for ${flag}`);
+      t.equal(entryResult.exitCode, 0, `cli entry exitCode is 0 for ${flag}`);
+      t.equal(directResult.exitCode, 0, `cli direct exitCode is 0 for ${flag}`);
 
-    const entryVersion = entryResult.stdout.match(/\d+\.\d+\.\d+/);
-    const directVersion = directResult.stdout.match(/\d+\.\d+\.\d+/);
-    t.ok(entryVersion, `cli entry prints a semver for ${flag}`);
-    t.ok(directVersion, `cli direct prints a semver for ${flag}`);
-    t.equal(entryVersion?.[0], directVersion?.[0], `cli versions match for ${flag}`);
-  }
-  t.pass('CLI version output is equivalent');
-
-  // Help output has consistent structure.
-  for (const flag of ['--help', '-h']) {
-    const entryResult = await runEntrypoint(cliEntry, {args: [flag], timeoutMs: 15000});
-    const directResult = await runWorkerScript(adminCliDirectWorker, {args: [flag]}, 15000);
-
-    t.equal(entryResult.exitCode, 0, `cli entry exitCode is 0 for ${flag}`);
-    t.equal(directResult.exitCode, 0, `cli direct exitCode is 0 for ${flag}`);
-
-    const entryOutput = normalizeOutput(entryResult.stdout);
-    const directOutput = normalizeOutput(directResult.stdout);
-    for (const section of ['Usage', 'Options']) {
-      t.ok(entryOutput.includes(section), `cli entry help includes ${section}`);
-      t.ok(directOutput.includes(section), `cli direct help includes ${section}`);
+      const entryVersion = entryResult.stdout.match(/\d+\.\d+\.\d+/);
+      const directVersion = directResult.stdout.match(/\d+\.\d+\.\d+/);
+      t.ok(entryVersion, `cli entry prints a semver for ${flag}`);
+      t.ok(directVersion, `cli direct prints a semver for ${flag}`);
+      t.equal(entryVersion?.[0], directVersion?.[0], `cli versions match for ${flag}`);
     }
-  }
-  t.pass('CLI help output structure is equivalent');
+    t.pass('CLI version output is equivalent');
 
-  // Output format sanity (text and non-empty).
-  for (const flag of ['--help', '--version']) {
-    const entryResult = await runEntrypoint(cliEntry, {args: [flag], timeoutMs: 15000});
-    const directResult = await runWorkerScript(adminCliDirectWorker, {args: [flag]}, 15000);
-    t.ok(entryResult.stdout.length > 0, `cli entry output non-empty for ${flag}`);
-    t.ok(directResult.stdout.length > 0, `cli direct output non-empty for ${flag}`);
-    t.ok(
-      /^[\x20-\x7E\n\r\t]+$/.test(entryResult.stdout),
-      `cli entry output is text for ${flag}`,
-    );
-    t.ok(
-      /^[\x20-\x7E\n\r\t]+$/.test(normalizeOutput(directResult.stdout)),
-      `cli direct output is text for ${flag}`,
-    );
-  }
-  t.pass('Output format is consistent');
+    // Help output has consistent structure.
+    for (const flag of ['--help', '-h']) {
+      const entryResult = await runEntrypoint(cliEntry, {args: [flag], timeoutMs: 15000});
+      const directResult = await runWorkerScript(adminCliDirectWorker, {args: [flag]}, 15000);
 
-  // Main entrypoint responds to help/version.
-  for (const flag of ['--help', '-h', '--version', '-v']) {
-    const res = await runEntrypoint(mainEntry, {args: [flag], timeoutMs: 15000});
-    t.equal(res.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
-    const out = normalizeOutput(res.stdout);
-    t.ok(out.length > 0, `main entry output non-empty for ${flag}`);
-    if (flag === '--version' || flag === '-v') {
-      t.ok(
-        out.includes(ENTRYPOINT_APP.PACKAGE_NAME),
-        `main version output includes name for ${flag}`,
-      );
-      t.ok(/\d+\.\d+\.\d+/.test(out), `main version output includes semver for ${flag}`);
-    } else {
-      t.ok(
-        out.includes('Usage: lagrange'),
-        `main help output includes Usage for ${flag}`,
-      );
-      t.ok(out.includes('Options'), `main help output includes Options for ${flag}`);
+      t.equal(entryResult.exitCode, 0, `cli entry exitCode is 0 for ${flag}`);
+      t.equal(directResult.exitCode, 0, `cli direct exitCode is 0 for ${flag}`);
+
+      const entryOutput = normalizeOutput(entryResult.stdout);
+      const directOutput = normalizeOutput(directResult.stdout);
+      for (const section of ['Usage', 'Options']) {
+        t.ok(entryOutput.includes(section), `cli entry help includes ${section}`);
+        t.ok(directOutput.includes(section), `cli direct help includes ${section}`);
+      }
     }
-  }
-  t.pass('Main help/version output is stable');
-});
+    t.pass('CLI help output structure is equivalent');
+
+    // Output format sanity (text and non-empty).
+    for (const flag of ['--help', '--version']) {
+      const entryResult = await runEntrypoint(cliEntry, {args: [flag], timeoutMs: 15000});
+      const directResult = await runWorkerScript(adminCliDirectWorker, {args: [flag]}, 15000);
+      t.ok(entryResult.stdout.length > 0, `cli entry output non-empty for ${flag}`);
+      t.ok(directResult.stdout.length > 0, `cli direct output non-empty for ${flag}`);
+      t.ok(
+        /^[\x20-\x7E\n\r\t]+$/.test(entryResult.stdout),
+        `cli entry output is text for ${flag}`,
+      );
+      t.ok(
+        /^[\x20-\x7E\n\r\t]+$/.test(normalizeOutput(directResult.stdout)),
+        `cli direct output is text for ${flag}`,
+      );
+    }
+    t.pass('Output format is consistent');
+
+    // Main entrypoint responds to help/version.
+    for (const flag of ['--help', '-h', '--version', '-v']) {
+      const res = await runEntrypoint(mainEntry, {args: [flag], timeoutMs: 15000});
+      t.equal(res.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
+      const out = normalizeOutput(res.stdout);
+      t.ok(out.length > 0, `main entry output non-empty for ${flag}`);
+      if (flag === '--version' || flag === '-v') {
+        t.ok(
+          out.includes(ENTRYPOINT_APP.PACKAGE_NAME),
+          `main version output includes name for ${flag}`,
+        );
+        t.ok(/\d+\.\d+\.\d+/.test(out), `main version output includes semver for ${flag}`);
+      } else {
+        t.ok(
+          out.includes('Usage: lagrange'),
+          `main help output includes Usage for ${flag}`,
+        );
+        t.ok(out.includes('Options'), `main help output includes Options for ${flag}`);
+      }
+    }
+    t.pass('Main help/version output is stable');
+  });

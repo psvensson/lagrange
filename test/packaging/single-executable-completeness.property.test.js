@@ -30,7 +30,18 @@ const pkgVersion = JSON.parse(
 const cliEntry = join(projectRoot, 'src/cli/bin/lagrange-admin.js');
 const mainEntry = join(projectRoot, 'src/index.js');
 
-test('Single Executable Completeness - Property Test', async (t) => {
+// Harness watchdog, not a latency contract. tap silently caps every test
+// at its 30s default and only TAP_TIMEOUT lifts it, which run-test-files.js
+// derives from a {timeout: ...} declared on a test call. Declaring nothing
+// left this property test on the bare cap: healthy execution measures 9.6s,
+// and on a contended 2-vCPU runner it reached 34.1s and was killed mid-run.
+// 120s keeps a genuine hang detectable with ample slow-machine room; the
+// properties asserted below are unchanged.
+const PROPERTY_TIMEOUT_MS = 120000;
+
+test('Single Executable Completeness - Property Test',
+  {timeout: PROPERTY_TIMEOUT_MS},
+  async (t) => {
   // This test previously executed built SEA binaries with `PATH=""` to ensure
   // Node.js wasn't required. In CI environments where spawning is blocked and
   // executables are not built, that resulted in SKIPs (and a failing `npm test`).
@@ -38,43 +49,43 @@ test('Single Executable Completeness - Property Test', async (t) => {
   // Here we validate the *entrypoints* are self-contained enough to respond to
   // `--help` / `--version` without connecting to a cluster or starting servers.
 
-  // Feature: single-executable-packaging
-  // Property 39: Single Executable Completeness
-  // Validates: Requirements 18.1, 18.2, 18.4
+    // Feature: single-executable-packaging
+    // Property 39: Single Executable Completeness
+    // Validates: Requirements 18.1, 18.2, 18.4
 
-  for (const flag of ['--help', '-h', '--version', '-v']) {
-    const result = await runEntrypoint(cliEntry, {args: [flag], timeoutMs: 15000});
-    t.equal(result.exitCode, 0, `cli entry exitCode is 0 for ${flag}`);
-    t.ok(result.stdout.length > 0, `cli entry produces output for ${flag}`);
-    if (flag === '--version' || flag === '-v') {
-      t.ok(
-        result.stdout.includes(pkgVersion),
-        `cli entry version includes ${pkgVersion} for ${flag}`,
-      );
-    } else {
-      t.ok(
-        result.stdout.includes('Usage') || result.stdout.includes('Options'),
-        `cli entry help includes usage/options for ${flag}`,
-      );
+    for (const flag of ['--help', '-h', '--version', '-v']) {
+      const result = await runEntrypoint(cliEntry, {args: [flag], timeoutMs: 15000});
+      t.equal(result.exitCode, 0, `cli entry exitCode is 0 for ${flag}`);
+      t.ok(result.stdout.length > 0, `cli entry produces output for ${flag}`);
+      if (flag === '--version' || flag === '-v') {
+        t.ok(
+          result.stdout.includes(pkgVersion),
+          `cli entry version includes ${pkgVersion} for ${flag}`,
+        );
+      } else {
+        t.ok(
+          result.stdout.includes('Usage') || result.stdout.includes('Options'),
+          `cli entry help includes usage/options for ${flag}`,
+        );
+      }
     }
-  }
-  t.pass('CLI responds correctly to help/version flags');
+    t.pass('CLI responds correctly to help/version flags');
 
-  for (const flag of ['--help', '-h', '--version', '-v']) {
-    const result = await runEntrypoint(mainEntry, {args: [flag], timeoutMs: 15000});
-    t.equal(result.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
-    t.ok(result.stdout.length > 0, `main entry produces output for ${flag}`);
-    if (flag === '--version' || flag === '-v') {
-      t.ok(
-        result.stdout.includes(pkgVersion),
-        `main entry version includes ${pkgVersion} for ${flag}`,
-      );
-    } else {
-      t.ok(
-        result.stdout.includes('Usage') || result.stdout.includes('Options'),
-        `main entry help includes usage/options for ${flag}`,
-      );
+    for (const flag of ['--help', '-h', '--version', '-v']) {
+      const result = await runEntrypoint(mainEntry, {args: [flag], timeoutMs: 15000});
+      t.equal(result.exitCode, 0, `main entry exitCode is 0 for ${flag}`);
+      t.ok(result.stdout.length > 0, `main entry produces output for ${flag}`);
+      if (flag === '--version' || flag === '-v') {
+        t.ok(
+          result.stdout.includes(pkgVersion),
+          `main entry version includes ${pkgVersion} for ${flag}`,
+        );
+      } else {
+        t.ok(
+          result.stdout.includes('Usage') || result.stdout.includes('Options'),
+          `main entry help includes usage/options for ${flag}`,
+        );
+      }
     }
-  }
-  t.pass('Main system responds correctly to help/version flags');
-});
+    t.pass('Main system responds correctly to help/version flags');
+  });
