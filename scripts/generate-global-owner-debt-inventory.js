@@ -56,6 +56,7 @@ const FILE_NOT_FOUND_ERROR_CODE = 'ENOENT';
 const PATH_COMPONENT_NOT_DIRECTORY_ERROR_CODE = 'ENOTDIR';
 const SYMBOLIC_LINK_LOOP_ERROR_CODE = 'ELOOP';
 const PARENT_PATH_SEGMENT = '..';
+const PARENT_PATH_PREFIX = `..${path.sep}`;
 
 function emptyFileDebt(filePath, importDegrees) {
   return {
@@ -524,30 +525,49 @@ function shouldCaptureResolvedProbe(dependency, target) {
     isBarePackageSpecifier(dependency.module);
 }
 
-function canonicalFollowedFilePath(rootReal, moduleSource) {
+function realFollowedFileTarget(rootReal, moduleSource) {
   const absolute = path.isAbsolute(moduleSource) ? moduleSource :
     path.resolve(rootReal, moduleSource);
-  let realTarget;
   try {
-    realTarget = fs.realpathSync(absolute);
-    if (!fs.statSync(realTarget).isFile()) return null;
+    const realTarget = fs.realpathSync(absolute);
+    return fs.statSync(realTarget).isFile() ? realTarget : null;
   } catch (error) {
     if (error.code === FILE_NOT_FOUND_ERROR_CODE ||
         error.code === PATH_COMPONENT_NOT_DIRECTORY_ERROR_CODE ||
         error.code === SYMBOLIC_LINK_LOOP_ERROR_CODE) return null;
     throw error;
   }
-  const relative = path.relative(rootReal, realTarget);
-  if (!relative || path.isAbsolute(relative) || relative === PARENT_PATH_SEGMENT ||
-      relative.startsWith(`..${path.sep}`)) return null;
-  return relative.replaceAll(path.sep, OWNER_DEBT.pathSeparator);
+}
+
+// A followed file reached through a symlinked directory under root (the
+// publish gate links node_modules into a temporary worktree) realpaths to
+// the symlink target outside root; map it back to the canonical logical
+// location so the digest matches a same-source tree without the symlink.
+function remapEscapingFollowedPath(root, relative, realTarget) {
+  if (relative && !path.isAbsolute(relative) &&
+      relative !== PARENT_PATH_SEGMENT &&
+      !relative.startsWith(PARENT_PATH_PREFIX)) {
+    return relative.replaceAll(path.sep, OWNER_DEBT.pathSeparator);
+  }
+  const remapped = normalizePathThroughSymlinkedRoot(root, realTarget);
+  return remapped.startsWith(PARENT_PATH_PREFIX) ||
+    remapped === PARENT_PATH_SEGMENT || path.isAbsolute(remapped) ?
+    null :
+    remapped;
+}
+
+function canonicalFollowedFilePath(root, rootReal, moduleSource) {
+  const realTarget = realFollowedFileTarget(rootReal, moduleSource);
+  if (realTarget === null) return null;
+  return remapEscapingFollowedPath(
+    root, path.relative(rootReal, realTarget), realTarget);
 }
 
 function followedFileDigests(root, modules, primaryFileDigests) {
   const rootReal = fs.realpathSync(root);
   const followed = new Set();
   for (const module of modules) {
-    const filePath = canonicalFollowedFilePath(rootReal, module.source);
+    const filePath = canonicalFollowedFilePath(root, rootReal, module.source);
     if (filePath && !Object.hasOwn(primaryFileDigests, filePath)) {
       followed.add(filePath);
     }
@@ -570,7 +590,7 @@ async function buildImportGraph(root, files) {
   let edgeCount = 0;
   let unresolvedCount = result.output.summary?.error || 0;
   for (const module of result.output.modules) {
-    const source = normalizePath(root, module.source);
+    const source = normalizePathThroughSymlinkedRoot(root, module.source);
     if (!degrees.has(source)) degrees.set(source, {in: 0, out: 0});
     for (const dependency of module.dependencies) {
       edgeCount += 1;

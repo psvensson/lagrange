@@ -17,6 +17,7 @@ import {
   javascriptSourceDigest,
   listImportGraphInputFiles,
   listJavaScriptFiles,
+  normalizePathThroughSymlinkedRoot,
 } from '../global-owner-debt-inventory/helpers.js';
 import {
   COVERAGE_MINIMUM_TEST_SHARE,
@@ -301,7 +302,7 @@ function isCanonicalGraphPath(filePath) {
     !stringIncludes(filePath, BACKSLASH);
 }
 
-function canonicalFollowedFilePath(rootReal, modulePath) {
+function canonicalFollowedFilePath(root, rootReal, modulePath) {
   if (!isCanonicalGraphPath(modulePath)) {
     return {problem: `${FOLLOWED_FILE_PROBLEM_PREFIX} module path is noncanonical: ` +
       modulePath};
@@ -322,7 +323,15 @@ function canonicalFollowedFilePath(rootReal, modulePath) {
   if (!stat.isFile()) return {path: null};
   const relative = stringReplaceAll(
     path.relative(rootReal, realTarget), path.sep, OWNER_DEBT.pathSeparator);
-  return isCanonicalGraphPath(relative) ? {path: relative} : {path: null};
+  if (isCanonicalGraphPath(relative)) {
+    return {path: relative};
+  }
+  // A followed file reached through a symlinked directory under root (the
+  // publish gate links node_modules into a temporary worktree) realpaths to
+  // the symlink target outside root; remap it to the canonical logical
+  // location so the validator agrees with the producer's census.
+  const remapped = normalizePathThroughSymlinkedRoot(root, realTarget);
+  return isCanonicalGraphPath(remapped) ? {path: remapped} : {path: null};
 }
 
 function expectedFollowedFilePaths(root, value) {
@@ -335,7 +344,7 @@ function expectedFollowedFilePaths(root, value) {
   }
   const paths = new Set();
   for (const modulePath of objectKeys(value.degrees)) {
-    const canonical = canonicalFollowedFilePath(rootReal, modulePath);
+    const canonical = canonicalFollowedFilePath(root, rootReal, modulePath);
     if (canonical.problem) return {ok: false, problem: canonical.problem};
     if (canonical.path && !objectHasOwn(value.fileDigests, canonical.path)) {
       paths.add(canonical.path);
@@ -601,8 +610,40 @@ function captureCoveragePathIdentity(root, coveredPath) {
     relative = relative ?
       `${relative}${OWNER_DEBT.pathSeparator}${segments[index]}` :
       segments[index];
-    const identity = fs.lstatSync(absolute, {bigint: true});
-    if (identity.isSymbolicLink()) return {ok: false};
+    let identity = fs.lstatSync(absolute, {bigint: true});
+    if (identity.isSymbolicLink()) {
+      // A symlinked intermediate directory whose target maps back to a
+      // canonical in-root location (the publish gate links node_modules
+      // into a temporary worktree) is a legitimate path to a live file:
+      // follow it so the liveness capture reads the same inode the
+      // producer hashed. A symlinked final component, or an ancestor whose
+      // target escapes the repository, is still rejected so coverage
+      // cannot smuggle a changing or foreign target through a stable
+      // logical name.
+      const isFinalComponent = index === segments.length - 1;
+      if (isFinalComponent) return {ok: false};
+      // The target must stay within the repository: a symlinked ancestor
+      // pointing outside (for example a coverage fixture linking to a temp
+      // directory) escapes and is rejected, while the publish worktree's
+      // node_modules link remaps back to its own canonical location.
+      let targetReal;
+      try {
+        targetReal = fs.realpathSync(absolute);
+      } catch {
+        return {ok: false};
+      }
+      const targetRelative = normalizePathThroughSymlinkedRoot(
+        root, targetReal);
+      if (!isCanonicalGraphPath(targetRelative)) return {ok: false};
+      let followed;
+      try {
+        followed = fs.statSync(absolute, {bigint: true});
+      } catch {
+        return {ok: false};
+      }
+      if (!followed.isDirectory()) return {ok: false};
+      identity = followed;
+    }
     const isFinalComponent = index === segments.length - 1;
     if (isFinalComponent ? !identity.isFile() : !identity.isDirectory()) {
       return {ok: false};

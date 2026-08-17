@@ -122,6 +122,13 @@ async function measureTargetDuplication(target) {
     reporters: ['json'],
     output: target.reportOutputDirectory,
     silent: true,
+    // The publish gate runs inside a worktree whose node_modules is a
+    // symlink into the main tree; jscpd's default cache lives under
+    // node_modules/.cache and would be shared across the two trees,
+    // producing a duplication report that diverges from the checked-in
+    // deterministic projection. Scanning uncached keeps the report a pure
+    // function of the checked-out source.
+    cache: false,
   });
   const reportRelativePath =
     `${target.reportOutputDirectory}/${REPORT_FILE_NAME}`;
