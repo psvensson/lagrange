@@ -1,0 +1,92 @@
+{
+  "generatedAt": "2026-08-17T15:20:55.729Z",
+  "quest": "restore-deterministic-cloud-gate",
+  "receipts": [
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/scripts/check-operation-dispatch-completion-owner.test.js",
+      "detail": "the shifting subtest identity was the tap cap expiring mid-file, not a race",
+      "id": "check-operation-dispatch-completion-owner-determinism",
+      "passed": true
+    },
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/scripts/impact-proof-cone-consumers.test.js",
+      "detail": "the live-census selector agrees with the classifier under repeated runs",
+      "id": "impact-proof-cone-consumers-determinism",
+      "passed": true
+    },
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/cdc/current-epoch-propagation.integration.test.js",
+      "detail": "the integration-classified cdc test passes in its serial lane",
+      "id": "cdc-current-epoch-propagation",
+      "passed": true
+    },
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/cli/service-init-wasm-scaffold.test.js",
+      "detail": "the wizer missing-directory cascade is gone once the 300s declaration is honoured",
+      "id": "cli-service-init-wasm-scaffold",
+      "passed": true
+    },
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/convergence/dt6-cpu-saturation-missed-budget-spike.test.js",
+      "detail": "the heaviest dt6 scenario completes within its declared watchdog",
+      "id": "dt6-cpu-saturation-missed-budget-spike",
+      "passed": true
+    },
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/convergence/dt6-rebalancer-timeout-detection-network.test.js",
+      "detail": "virtual-clock detection assertions hold with an honest wall-clock watchdog",
+      "id": "dt6-rebalancer-timeout-detection-network",
+      "passed": true
+    },
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/convergence/dt6-rebalancer-timeout-orchestration-network.test.js",
+      "detail": "virtual-time backoff assertions hold with an honest wall-clock watchdog",
+      "id": "dt6-rebalancer-timeout-orchestration-network",
+      "passed": true
+    },
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/runtime/minimal-deployment-request-cell-runtime-readiness.test.js",
+      "detail": "happy-path invocation no longer races a 100ms shared wall budget, while wall exhaustion is still proved by controlled delay",
+      "id": "minimal-deployment-request-cell-runtime-readiness",
+      "passed": true
+    },
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/runtime/service-cell-bridge-roundtrip.test.js",
+      "detail": "component startup succeeds inside the serial toolchain lane",
+      "id": "service-cell-bridge-roundtrip",
+      "passed": true
+    },
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/runtime/service-cell-worker-modes.test.js",
+      "detail": "request and call mode cells start within the product startup timeout",
+      "id": "service-cell-worker-modes",
+      "passed": true
+    },
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/wasm-service/service-cell-world-abi.test.js",
+      "detail": "the world ABI suite completes under its own declared timeout",
+      "id": "service-cell-world-abi",
+      "passed": true
+    },
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/service/service-compiler-editor-typings.test.js",
+      "detail": "the folded TOOLCHAIN_TIMEOUT_MS * 2 declaration is honoured",
+      "id": "service-compiler-editor-typings",
+      "passed": true
+    },
+    {
+      "command": "node scripts/run-test-files.js --jobs=1 test/wasm-service/service-compiler-module-shape-spike.test.js",
+      "detail": "the module-shape spike completes under its own declared timeout",
+      "id": "service-compiler-module-shape-spike",
+      "passed": true
+    },
+    {
+      "command": "node scripts/checks/hosted-gate-repeatability.js",
+      "detail": "hosted-gate-repeatability: 0/3 passing, 0 failing on e74e117ae",
+      "id": "hosted-gate-repeatability",
+      "passed": false
+    }
+  ],
+  "schema": "test-receipt/1",
+  "status": "fail"
+}
