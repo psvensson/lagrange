@@ -107,5 +107,6 @@ jobs:
             test-output/acceptance/
             test-output/reports/
             test-output/analysis/
+            .tap/test-results/
           retention-days: 14
           if-no-files-found: ignore

@@ -204,3 +204,22 @@ jobs:
             echo "=== tail of $artifact ==="
             jq -r '.stdout // .output // .' "$artifact" 2>/dev/null | tail -200 || tail -c 20000 "$artifact"
           done
+
+      # The console dump above is deliberately bounded, so it truncates: its
+      # `grep -E` keeps only lines matching a narrow pattern and `head` caps the
+      # rest. That destroyed real evidence — a test that printed a purpose-built
+      # census diagnosis on failure had it cut away before it reached the log,
+      # leaving only the fragment whose filenames happened to contain "error".
+      # Keep the bounded summary for quick reading, but upload the COMPLETE
+      # artifacts so diagnosing a failure never depends on the diagnostic being
+      # arranged to survive `grep | head`.
+      - name: Upload gate failure evidence
+        if: failure()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
+        with:
+          name: gate-failure-evidence
+          path: |
+            test-output/acceptance/
+            .tap/test-results/
+          retention-days: 14
+          if-no-files-found: warn

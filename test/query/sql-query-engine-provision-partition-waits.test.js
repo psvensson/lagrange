@@ -1123,17 +1123,22 @@ test('SQLQueryEngine - provisionInitialTablePartition only waits for service ' +
 });
 
 // The claim under test is ORDERING: both CREATE_REPLICA dispatches happen
-// before per-replica cache waits consume the provisioning budget. It was
-// expressed with a 30ms budget against a 28ms mock delay - a 2ms margin,
-// smaller than ordinary scheduler jitter, so on a contended 2-vCPU runner the
-// elapsed time between operations ate the budget and the mock refused with
-// 'cache wait budget too small'. Scaled 10x: the RATIO the assertion depends
-// on is identical, the margin is 200ms instead of 2ms, and both assertions
-// below are unchanged. (A fully deterministic form would inject the clock;
-// that is a larger redesign than this repair warrants.)
-const PROVISIONING_BUDGET_MS = 300;
-const SLOW_REPLICA_WAIT_MS = 280;
-const FAST_REPLICA_WAIT_MS = 80;
+// before per-replica cache waits consume the provisioning budget. It used to
+// prove that by racing two real setTimeout delays against a wall-clock budget
+// (28ms and 8ms against 30ms), so a contended runner could invert the result -
+// the OS scheduler, not the code, decided whether the assertion held. Widening
+// the numbers only widens the window; it keeps exactly the nondeterminism this
+// work exists to remove.
+//
+// It is now proved by construction, with no timers at all. Each service cache
+// wait blocks on a barrier the TEST releases. When both waits are pending
+// simultaneously, the test inspects what has already been dispatched: if the
+// engine batched the dispatches first, both node ids are present at that exact
+// moment. Concurrency is proved by both waits being pending at once, and
+// budget-consumption is proved by neither wait having completed. Timeout
+// EXPIRY semantics are covered separately by the budget tests above.
+const PROVISIONING_BUDGET_MS = 5000;
+const REPLICA_COUNT = 2;
 
 test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' +
   'replica set before per-replica cache waits consume timeout budget', async (t) => {
@@ -1160,6 +1165,12 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
   const services = [];
   const executedTargetNodeIds = [];
   const cacheWaitCalls = [];
+  const dispatchedWhenWaitBegan = [];
+  const releaseWait = [];
+  let bothWaitsPending;
+  const bothWaitsArrived = new Promise((resolve) => {
+    bothWaitsPending = resolve;
+  });
 
   const cache = {
     onCacheChange() {},
@@ -1217,17 +1228,20 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
         return;
       }
 
-      const requiredDelayMs =
-        key === replicaIdByNodeId['node-a'] ?
-          SLOW_REPLICA_WAIT_MS : FAST_REPLICA_WAIT_MS;
-      if (!Number.isFinite(options.timeoutMs) ||
-          options.timeoutMs < requiredDelayMs) {
+      if (!Number.isFinite(options.timeoutMs) || options.timeoutMs <= 0) {
         throw new Error(
-          `cache wait budget ${String(options.timeoutMs)}ms too small for ${key}`,
+          `cache wait budget ${String(options.timeoutMs)}ms is not usable ` +
+          `for ${key}`,
         );
       }
 
-      await new Promise((resolve) => setTimeout(resolve, requiredDelayMs));
+      // Block until the test releases this replica, recording what had already
+      // been dispatched at the instant the wait began.
+      dispatchedWhenWaitBegan.push([...executedTargetNodeIds]);
+      await new Promise((resolve) => {
+        releaseWait.push(resolve);
+        if (releaseWait.length === REPLICA_COUNT) bothWaitsPending();
+      });
       if (!services.some((row) => row.service_id === key)) {
         services.push({
           service_id: key,
@@ -1255,19 +1269,34 @@ test('SQLQueryEngine - provisionInitialTablePartition dispatches full initial ' 
   engine.waitForRoutablePartitionServiceCount = async () => {};
   engine.waitForPartitionLeaderService = async () => {};
 
-  await engine.provisionInitialTablePartition({
+  const provisioning = engine.provisionInitialTablePartition({
     partitionId,
-    replicaCount: 2,
+    replicaCount: REPLICA_COUNT,
   });
 
+  // Both replicas are now blocked in their cache wait at the same time, which
+  // is itself the concurrency proof: a sequential implementation could never
+  // have two waits outstanding.
+  await bothWaitsArrived;
+
+  t.same(
+    dispatchedWhenWaitBegan[0],
+    ['node-a', 'node-b'],
+    'both CREATE_REPLICA dispatches must already have happened when the first ' +
+    'per-replica cache wait began',
+  );
   t.same(
     executedTargetNodeIds,
     ['node-a', 'node-b'],
     'both CREATE_REPLICA dispatches should happen before timeout budget is consumed by waits',
   );
+
+  for (const release of releaseWait) release();
+  await provisioning;
+
   t.equal(
     cacheWaitCalls.length,
-    2,
+    REPLICA_COUNT,
     'each replica should still wait for authoritative service-row visibility',
   );
 });

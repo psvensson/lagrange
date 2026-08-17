@@ -310,7 +310,17 @@ function nonSourceLandingFixture() {
   return {root, id};
 }
 
+// Harness watchdog, not a latency contract, and it lifts the cap for every
+// test in this file: run-test-files.js derives TAP_TIMEOUT from the largest
+// {timeout: ...} declared here, and TAP_TIMEOUT is the only thing that raises
+// tap's silent 30s per-test cap. This file spawns real Solver CLI processes;
+// healthy execution measures ~25s, so it sat barely under the cap and tipped
+// over intermittently under suite load (observed 36.9s). 120s keeps a genuine
+// hang detectable without changing a single assertion.
+const WORKFLOW_TIMEOUT_MS = 120000;
+
 tap.test('next exposes stable action codes and continue dispatches only those codes',
+  {timeout: WORKFLOW_TIMEOUT_MS},
   (t) => {
     const root = tmp();
     const {quest} = makeOracleQuest(root);

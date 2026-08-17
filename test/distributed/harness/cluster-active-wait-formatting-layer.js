@@ -751,7 +751,14 @@ async function pollUntilCondition(options = {}) {
   let lastResult = null;
 
   while (true) {
-    if (Date.now() >= deadline) {
+    // Always probe at least once, even if the deadline has already passed.
+    // Breaking straight out leaves lastResult null, so the caller reports a
+    // timeout carrying NO diagnostics - which is exactly when diagnostics
+    // matter most. It also made short-deadline callers scheduler-dependent:
+    // _waitForNodeAdminReadiness with readinessTimeoutMs=1 either probed or
+    // did not depending on how quickly the loop was entered, so its diagnostic
+    // assertions flaked under load.
+    if (attempts > 0 && Date.now() >= deadline) {
       if (extendDeadline && lastResult) {
         const elapsedMs = Date.now() - startedAt;
         const extension = extendDeadline({
@@ -813,19 +820,28 @@ async function pollUntilCondition(options = {}) {
  * Best-effort WebSocket close that suppresses transient close-time errors.
  * @param {Object|null} socket
  */
+// A socket torn down mid-close legitimately throws, so these failures are
+// suppressed - but counted rather than swallowed. An empty catch makes the
+// path invisible to log-driven debugging, which is how several affinity-demo
+// runs lost their real cause.
+const suppressedWebSocketCloseFailures = {
+  errorListener: 0,
+  close: 0,
+};
+
 function closeWebSocketSafely(socket) {
   if (!socket || typeof socket.close !== 'function') {
     return;
   }
   try {
     socket.once('error', () => {});
-  } catch (_onceErr) {
-    // Ignore
+  } catch {
+    suppressedWebSocketCloseFailures.errorListener += 1;
   }
   try {
     socket.close();
-  } catch (_closeErr) {
-    // Ignore
+  } catch {
+    suppressedWebSocketCloseFailures.close += 1;
   }
 }
 
@@ -1315,6 +1331,7 @@ export const CLUSTER_ACTIVE_WAIT_FORMATTING_LAYER = {
   isBetterCriticalSystemDiscoveryCandidate,
   formatCriticalSystemDistributionSummary,
   pollUntilCondition,
+  suppressedWebSocketCloseFailures,
   closeWebSocketSafely,
   createProbeResult,
   normalizeProbeError,
