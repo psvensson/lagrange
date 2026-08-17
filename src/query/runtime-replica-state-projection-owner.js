@@ -79,6 +79,14 @@ class RuntimeReplicaStateProjectionOwner extends EventEmitter {
           getRetryAfterMs: getControlPlaneRetryAfterMs,
           getFailureReason: (error) =>
             getControlPlaneErrorCode(error) || PROJECTION_FAILURE_REASON,
+          // A pending projection carrying a different replica status is a
+          // newer lifecycle submission: the older failed projection is
+          // superseded and must not retry over it (a retained CREATED
+          // retry can never overwrite a later ACTIVE).
+          shouldResetAttempts: (retryContext, pendingContext) =>
+            retryContext?.stateRow?.status !== undefined &&
+            pendingContext?.stateRow?.status !== undefined &&
+            retryContext.stateRow.status !== pendingContext.stateRow.status,
         },
       });
   }

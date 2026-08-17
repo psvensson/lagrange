@@ -1107,7 +1107,7 @@ test('QueryExecutor - fresh bootstrap fallback still fails closed when leader ' 
 });
 
 test('QueryExecutor - fresh bootstrap routing admits transport-connected ' +
-  'services while node heartbeat publication lags', (t) => {
+  'services while node heartbeat publication lags', async (t) => {
   const now = 140000;
   const nodeIds = ['node1', 'node2', 'node3'];
   const partitionId = 'p-bootstrap-lag';
@@ -1207,6 +1207,25 @@ test('QueryExecutor - fresh bootstrap routing admits transport-connected ' +
     systemCache,
     controlPlaneReadinessService: readinessService,
   });
+
+  // Production warms the versioned planning owner's completed snapshots
+  // through its bounded background reconcile before sync routing reads; a
+  // cold sync read otherwise receives the owner's DEFERRED snapshot by
+  // design ('routing never rebuilds'). Drive the same reconcile directly
+  // for each node so the sync routing assertions read completed snapshots.
+  const planningOwner = readinessService.readinessPlanningSnapshotOwner;
+  for (const nodeId of nodeIds) {
+    planningOwner.reconcile(nodeId, {
+      options: {
+        allowAuthoritativeRefresh: true,
+        requireFreshOnIneligible: true,
+        participationKind: 'routed_read',
+        decisionDimension: 'serveEligible',
+        partitionId,
+        tableName: null,
+      },
+    });
+  }
 
   const services = executor.getRoutablePartitionServices(partitionId);
   const address = executor.findPartitionLeaderAddress(partitionId);

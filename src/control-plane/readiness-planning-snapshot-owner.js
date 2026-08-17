@@ -102,7 +102,10 @@ class ReadinessPlanningSnapshotOwner {
     this.buildsByToken = new MapConstructor();
     this.snapshotListeners = new SetConstructor();
     this.snapshotListenerFailureCount = 0;
-    this.formationEpochKey = readFormationEpochKey(this.service);
+    // Lazily baselined on the first enqueue: an eager read here performs a
+    // full-table cache scan at service construction, which the async
+    // owner-path contract forbids before any planning consumer exists.
+    this.formationEpochKey = null;
     this.prioritizedFormationOwnerKeys = new SetConstructor();
     this.queue = new OwnerKeyReconcileQueue({
       name: READINESS_PLANNING_QUEUE_NAME,
@@ -464,6 +467,14 @@ class ReadinessPlanningSnapshotOwner {
       completed.sourceGeneration === this.readCompletedSourceGeneration();
   }
 
+  isNodeRowStillPresent(ownerKey) {
+    if (typeof this.service?.getNodeRow !== 'function') {
+      return true;
+    }
+    const nodeRow = this.service.getNodeRow(ownerKey);
+    return nodeRow !== null && nodeRow !== undefined;
+  }
+
   canReuseCompletedSnapshot(ownerKey, completed, token, buildOptionsKey) {
     return !token.generationSaturated &&
       completed.tokenStatus === TOKEN_STATUS.CURRENT &&
@@ -541,7 +552,13 @@ class ReadinessPlanningSnapshotOwner {
     )) {
       return completed.snapshot;
     }
+    // A node-table-only token advance may rebase stored evidence forward,
+    // but only while the node row still exists: a DELETE is a real removal,
+    // not lag, and rebasing the old positive snapshot current would let a
+    // deleted node keep serving. A removed node falls through to the
+    // fail-closed LIVE_VETO replan.
     if (
+      this.isNodeRowStillPresent(ownerKey) &&
       canRebaseStoredSnapshot(completed.capturedToken, currentToken) &&
       completed.buildOptionsKey === buildOptionsKey &&
       typeof this.service?.getReusableNodeReadinessSnapshotSync === 'function'

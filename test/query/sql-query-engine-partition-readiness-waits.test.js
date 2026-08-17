@@ -805,6 +805,25 @@ async (t) => {
     throw new Error('bootstrap-routable services should satisfy the count wait without polling');
   };
 
+  // Production warms the versioned planning owner's completed snapshots
+  // through its bounded background reconcile before sync routing reads; a
+  // cold sync read otherwise receives the owner's DEFERRED snapshot by
+  // design. Drive the same reconcile directly for each node so the count
+  // wait reads completed routing snapshots without polling.
+  const planningOwner = readinessService.readinessPlanningSnapshotOwner;
+  for (const nodeId of nodeIds) {
+    planningOwner.reconcile(nodeId, {
+      options: {
+        allowAuthoritativeRefresh: true,
+        requireFreshOnIneligible: true,
+        participationKind: 'routed_read',
+        decisionDimension: 'serveEligible',
+        partitionId,
+        tableName: 'tbl-bootstrap-routable',
+      },
+    });
+  }
+
   await t.resolves(
     engine.waitForRoutablePartitionServiceCount(partitionId, 3),
     'fresh bootstrap services should count as routable while transport stays connected',

@@ -25,7 +25,6 @@ const controlPlaneReadinessStoredSnapshotReuseMethods = {
   ) {
     const candidate = this.getStoredReadinessSnapshotReuseCandidate(
       nodeId,
-      nodeRow,
     );
     if (!candidate) {
       return null;
@@ -59,12 +58,17 @@ const controlPlaneReadinessStoredSnapshotReuseMethods = {
     });
   },
 
-  getStoredReadinessSnapshotReuseCandidate(nodeId, nodeRow) {
+  getStoredReadinessSnapshotReuseCandidate(nodeId) {
     const snapshot = this.lastReadinessSnapshotByNodeId.get(nodeId) || null;
     const capturedAtMs =
       this.lastReadinessSnapshotAtMsByNodeId.get(nodeId) || null;
+    // A missing node row must not forbid reuse: the sealed pre-cutover
+    // contract bridges a lagged or deleted row from the stored snapshot
+    // while freshness, services-version, transport, and independent
+    // invalidation witnesses still hold (the bulk-readiness lagged-row
+    // reuse case). Watermark arbitration below is row-relative and runs
+    // only when a row exists.
     return snapshot &&
-      nodeRow &&
       this.isStoredReadinessSnapshotFresh(snapshot, capturedAtMs) ?
       {snapshot, capturedAtMs} :
       null;
@@ -77,21 +81,53 @@ const controlPlaneReadinessStoredSnapshotReuseMethods = {
       storedVersion === this.getServicesTableMutationVersionForSnapshotReuse();
   },
 
+  // A cluster-wide invalidation is a real semantic change (for example a
+  // genuine node removal or option drift): it must fail closed even when
+  // the node row is missing, because the missing row is itself part of
+  // that change. Only a per-node cache-lag invalidation may be bridged
+  // from the stored snapshot while its independent witness still holds.
+  isClusterInvalidatedMissingRowReuse(
+    nodeId,
+    nodeRow,
+    candidate,
+    clusterInvalidatedAtMs,
+  ) {
+    return !nodeRow &&
+      clusterInvalidatedAtMs >= candidate.capturedAtMs &&
+      this.isReadinessSnapshotInvalidated(nodeId, candidate.capturedAtMs);
+  },
+
   isStoredReadinessWatermarkReusable(nodeId, nodeRow, candidate) {
     const storedWatermark =
       this.buildStoredReadinessSnapshotWatermark(candidate.snapshot);
     if (!storedWatermark) {
       return false;
     }
-    const comparison = compareNodeHeartbeatWatermarks(nodeRow, storedWatermark);
-    if (comparison < 0) {
+    // Row-relative watermark arbitration runs only when a row exists; a
+    // lagged or deleted row cannot refute the stored snapshot (sealed
+    // pre-cutover contract), and independent invalidation is still checked
+    // below either way.
+    const comparison = nodeRow ?
+      compareNodeHeartbeatWatermarks(nodeRow, storedWatermark) :
+      null;
+    if (comparison !== null && comparison < 0) {
       return false;
     }
     const invalidation = this.lastReadinessSnapshotInvalidatedAtMsByNodeId
       .get(nodeId);
+    const clusterInvalidatedAtMs =
+      Number(this.lastReadinessSnapshotClusterInvalidatedAtMs) || 0;
+    if (this.isClusterInvalidatedMissingRowReuse(
+      nodeId,
+      nodeRow,
+      candidate,
+      clusterInvalidatedAtMs,
+    )) {
+      return false;
+    }
     const independentInvalidatedAtMs = Math.max(
       Number(invalidation?.independentAtMs) || 0,
-      Number(this.lastReadinessSnapshotClusterInvalidatedAtMs) || 0,
+      clusterInvalidatedAtMs,
     );
     const invalidationApplies = comparison === 0 ||
       independentInvalidatedAtMs >= candidate.capturedAtMs;
