@@ -1,0 +1,171 @@
+diff --git a/scripts/check-duplication.js b/scripts/check-duplication.js
+index 7c6136f69e5ce60b3cad4d8485899872380e4947..94b2715e604c22ce17758d8b677f57ca05349211 100644
+--- a/scripts/check-duplication.js
++++ b/scripts/check-duplication.js
+@@ -122,6 +122,13 @@ async function measureTargetDuplication(target) {
+     reporters: ['json'],
+     output: target.reportOutputDirectory,
+     silent: true,
++    // The publish gate runs inside a worktree whose node_modules is a
++    // symlink into the main tree; jscpd's default cache lives under
++    // node_modules/.cache and would be shared across the two trees,
++    // producing a duplication report that diverges from the checked-in
++    // deterministic projection. Scanning uncached keeps the report a pure
++    // function of the checked-out source.
++    cache: false,
+   });
+   const reportRelativePath =
+     `${target.reportOutputDirectory}/${REPORT_FILE_NAME}`;
+diff --git a/scripts/checks/impact-proof-cone-inputs.js b/scripts/checks/impact-proof-cone-inputs.js
+index 86cb476f1674234c02eafeb15eaddb79f2fcacf1..67dd73a759a60a1307f9e6f5f490a0fe48e6f11e 100644
+--- a/scripts/checks/impact-proof-cone-inputs.js
++++ b/scripts/checks/impact-proof-cone-inputs.js
+@@ -17,6 +17,7 @@ import {
+   javascriptSourceDigest,
+   listImportGraphInputFiles,
+   listJavaScriptFiles,
++  normalizePathThroughSymlinkedRoot,
+ } from '../global-owner-debt-inventory/helpers.js';
+ import {
+   COVERAGE_MINIMUM_TEST_SHARE,
+@@ -301,7 +302,7 @@ function isCanonicalGraphPath(filePath) {
+     !stringIncludes(filePath, BACKSLASH);
+ }
+ 
+-function canonicalFollowedFilePath(rootReal, modulePath) {
++function canonicalFollowedFilePath(root, rootReal, modulePath) {
+   if (!isCanonicalGraphPath(modulePath)) {
+     return {problem: `${FOLLOWED_FILE_PROBLEM_PREFIX} module path is noncanonical: ` +
+       modulePath};
+@@ -322,7 +323,15 @@ function canonicalFollowedFilePath(rootReal, modulePath) {
+   if (!stat.isFile()) return {path: null};
+   const relative = stringReplaceAll(
+     path.relative(rootReal, realTarget), path.sep, OWNER_DEBT.pathSeparator);
+-  return isCanonicalGraphPath(relative) ? {path: relative} : {path: null};
++  if (isCanonicalGraphPath(relative)) {
++    return {path: relative};
++  }
++  // A followed file reached through a symlinked directory under root (the
++  // publish gate links node_modules into a temporary worktree) realpaths to
++  // the symlink target outside root; remap it to the canonical logical
++  // location so the validator agrees with the producer's census.
++  const remapped = normalizePathThroughSymlinkedRoot(root, realTarget);
++  return isCanonicalGraphPath(remapped) ? {path: remapped} : {path: null};
+ }
+ 
+ function expectedFollowedFilePaths(root, value) {
+@@ -335,7 +344,7 @@ function expectedFollowedFilePaths(root, value) {
+   }
+   const paths = new Set();
+   for (const modulePath of objectKeys(value.degrees)) {
+-    const canonical = canonicalFollowedFilePath(rootReal, modulePath);
++    const canonical = canonicalFollowedFilePath(root, rootReal, modulePath);
+     if (canonical.problem) return {ok: false, problem: canonical.problem};
+     if (canonical.path && !objectHasOwn(value.fileDigests, canonical.path)) {
+       paths.add(canonical.path);
+@@ -601,8 +610,25 @@ function captureCoveragePathIdentity(root, coveredPath) {
+     relative = relative ?
+       `${relative}${OWNER_DEBT.pathSeparator}${segments[index]}` :
+       segments[index];
+-    const identity = fs.lstatSync(absolute, {bigint: true});
+-    if (identity.isSymbolicLink()) return {ok: false};
++    let identity = fs.lstatSync(absolute, {bigint: true});
++    if (identity.isSymbolicLink()) {
++      // A symlinked intermediate directory (the publish gate links
++      // node_modules into a temporary worktree) is a legitimate path to a
++      // live file: follow it so the liveness capture reads the same inode
++      // the producer hashed. A symlinked final component (a file that is
++      // itself a link) is still rejected so coverage cannot smuggle a
++      // changing target through a stable logical name.
++      const isFinalComponent = index === segments.length - 1;
++      if (isFinalComponent) return {ok: false};
++      let followed;
++      try {
++        followed = fs.statSync(absolute, {bigint: true});
++      } catch {
++        return {ok: false};
++      }
++      if (!followed.isDirectory()) return {ok: false};
++      identity = followed;
++    }
+     const isFinalComponent = index === segments.length - 1;
+     if (isFinalComponent ? !identity.isFile() : !identity.isDirectory()) {
+       return {ok: false};
+diff --git a/scripts/generate-global-owner-debt-inventory.js b/scripts/generate-global-owner-debt-inventory.js
+index e9411aeb0e7858d356b680562943ad4fd3735644..60a08c903f500544cae52b5c8b04ad2bce15700a 100644
+--- a/scripts/generate-global-owner-debt-inventory.js
++++ b/scripts/generate-global-owner-debt-inventory.js
+@@ -56,6 +56,7 @@ const FILE_NOT_FOUND_ERROR_CODE = 'ENOENT';
+ const PATH_COMPONENT_NOT_DIRECTORY_ERROR_CODE = 'ENOTDIR';
+ const SYMBOLIC_LINK_LOOP_ERROR_CODE = 'ELOOP';
+ const PARENT_PATH_SEGMENT = '..';
++const PARENT_PATH_PREFIX = `..${path.sep}`;
+ 
+ function emptyFileDebt(filePath, importDegrees) {
+   return {
+@@ -524,7 +525,7 @@ function shouldCaptureResolvedProbe(dependency, target) {
+     isBarePackageSpecifier(dependency.module);
+ }
+ 
+-function canonicalFollowedFilePath(rootReal, moduleSource) {
++function canonicalFollowedFilePath(root, rootReal, moduleSource) {
+   const absolute = path.isAbsolute(moduleSource) ? moduleSource :
+     path.resolve(rootReal, moduleSource);
+   let realTarget;
+@@ -538,16 +539,27 @@ function canonicalFollowedFilePath(rootReal, moduleSource) {
+     throw error;
+   }
+   const relative = path.relative(rootReal, realTarget);
+-  if (!relative || path.isAbsolute(relative) || relative === PARENT_PATH_SEGMENT ||
+-      relative.startsWith(`..${path.sep}`)) return null;
+-  return relative.replaceAll(path.sep, OWNER_DEBT.pathSeparator);
++  if (relative && !path.isAbsolute(relative) &&
++      relative !== PARENT_PATH_SEGMENT &&
++      !relative.startsWith(PARENT_PATH_PREFIX)) {
++    return relative.replaceAll(path.sep, OWNER_DEBT.pathSeparator);
++  }
++  // A followed file reached through a symlinked directory under root (the
++  // publish gate links node_modules into a temporary worktree) realpaths to
++  // the symlink target outside root; map it back to the canonical logical
++  // location so the digest matches a same-source tree without the symlink.
++  const remapped = normalizePathThroughSymlinkedRoot(root, realTarget);
++  return remapped.startsWith(PARENT_PATH_PREFIX) ||
++    remapped === PARENT_PATH_SEGMENT || path.isAbsolute(remapped) ?
++    null :
++    remapped;
+ }
+ 
+ function followedFileDigests(root, modules, primaryFileDigests) {
+   const rootReal = fs.realpathSync(root);
+   const followed = new Set();
+   for (const module of modules) {
+-    const filePath = canonicalFollowedFilePath(rootReal, module.source);
++    const filePath = canonicalFollowedFilePath(root, rootReal, module.source);
+     if (filePath && !Object.hasOwn(primaryFileDigests, filePath)) {
+       followed.add(filePath);
+     }
+@@ -570,7 +582,7 @@ async function buildImportGraph(root, files) {
+   let edgeCount = 0;
+   let unresolvedCount = result.output.summary?.error || 0;
+   for (const module of result.output.modules) {
+-    const source = normalizePath(root, module.source);
++    const source = normalizePathThroughSymlinkedRoot(root, module.source);
+     if (!degrees.has(source)) degrees.set(source, {in: 0, out: 0});
+     for (const dependency of module.dependencies) {
+       edgeCount += 1;
+diff --git a/test/shards/impact-graph-seal.json b/test/shards/impact-graph-seal.json
+index 49be12f63594f718d8777d741c8a78787454cd35..8d331e0f2dd1f954ffc0ffce6d0ba07ffe879364 100644
+--- a/test/shards/impact-graph-seal.json
++++ b/test/shards/impact-graph-seal.json
+@@ -1,8 +1,8 @@
+ {
+   "schemaVersion": 1,
+   "importGraphSchemaVersion": "global-owner-debt-import-graph-v2",
+-  "sourceDigest": "a969f7deb0e83d86dff6140f0b8c7f928dd5d4834656592bbe69f3ce5906b165",
+-  "producerInputDigest": "13a6b56be9f0e9a26a65ad4f954161b79e13103a02062423018110e036772777",
++  "sourceDigest": "4b333b25e8193a127b13575cbc961cd931752d94f57e19d3109e5ea1a8c289b6",
++  "producerInputDigest": "9beb2764c9aff73d16022f1ce789f205a8fa5e473237566d971ed1dd7217dc80",
+   "resolverStateDigest": "b2a7d7b10c764ce96ab0a5e242c9f6db7461a8a0529412343c12367e369a5ddc",
+-  "snapshotDigest": "dab98e28b6c68de2a6fc0cd947c114410ce165ae475ffbcada386f7d1463c18b"
++  "snapshotDigest": "b3a51a6427ea2674df0e5f2980fda21fc75c9e44957304f52aa3b76a72f854b4"
+ }
