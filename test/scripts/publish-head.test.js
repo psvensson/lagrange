@@ -106,6 +106,25 @@ tap.test('publish exposes installed dependencies only while gating', (t) => {
   t.end();
 });
 
+tap.test('publish exposes the gitignored dataset tree only while gating', (t) => {
+  const {parent, root, remote} = fixture(
+    'cat >/dev/null\ntest ! -f .git || ' +
+      'test "${LAGRANGE_PUSH_SKIP_TESTS:-}" = 1 || ' +
+      'test -f data/examples/movielens-100k/u.data',
+  );
+  const dataset = path.join(root, 'data', 'examples', 'movielens-100k');
+  fs.mkdirSync(dataset, {recursive: true});
+  fs.writeFileSync(path.join(dataset, 'u.data'), '1\t1\t5\t0\n');
+  const head = git(root, ['rev-parse', 'HEAD']);
+  publishExactHead(root, {}, {queryCi: false});
+  t.equal(git(remote, ['rev-parse', 'refs/heads/main']), head,
+    'the exact-HEAD gate reads the gitignored dataset the worktree lacks');
+  t.notOk(fs.lstatSync(path.join(root, 'data')).isSymbolicLink(),
+    'the publisher never replaces the workspace dataset tree');
+  fs.rmSync(parent, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('publish fails closed when the gate mutates tracked content', (t) => {
   const {parent, root, remote} = fixture(
     'cat >/dev/null\necho gate-mutated >> tracked.txt\nexit 0',

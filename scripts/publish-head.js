@@ -46,7 +46,11 @@ const PORCELAIN_ARGUMENT = '--porcelain';
 const DIRTY_GATE_ERROR =
   'publish: pre-push gate mutated the exact-HEAD worktree';
 const MISSING_VALUE_ERROR = 'publish: option requires a value: ';
-const DEPENDENCY_DIRECTORY = 'node_modules';
+// A fresh `git worktree` carries no gitignored content, so the gate would miss
+// both the workspace installation and the digest-pinned MovieLens dataset that
+// CI fetches before its own gate. Expose each read-only tree for the gate run
+// and withdraw it before the mutation check.
+const GATE_WORKSPACE_DIRECTORIES = ['node_modules', 'data'];
 const DEPENDENCY_LINK_ERROR =
   'publish: pre-push gate mutated the temporary dependency link';
 const DIRECTORY_LINK_TYPE = 'dir';
@@ -139,27 +143,32 @@ function receiptPath(run, root, head) {
 }
 
 function linkWorkspaceDependencies(root, worktree) {
-  const source = path.join(root, DEPENDENCY_DIRECTORY);
-  if (!fs.existsSync(source)) return null;
-  const link = path.join(worktree, DEPENDENCY_DIRECTORY);
-  fs.symlinkSync(source, link, DIRECTORY_LINK_TYPE);
-  return {link, source: fs.realpathSync(source)};
+  const links = [];
+  for (const directory of GATE_WORKSPACE_DIRECTORIES) {
+    const source = path.join(root, directory);
+    if (!fs.existsSync(source)) continue;
+    const link = path.join(worktree, directory);
+    fs.symlinkSync(source, link, DIRECTORY_LINK_TYPE);
+    links.push({link, source: fs.realpathSync(source)});
+  }
+  return links;
 }
 
-function assertWorkspaceDependencyLink(dependencyLink) {
-  if (!dependencyLink) return;
-  let valid = false;
-  try {
-    valid = fs.lstatSync(dependencyLink.link).isSymbolicLink() &&
-      fs.realpathSync(dependencyLink.link) === dependencyLink.source;
-  } catch {
-    valid = false;
+function assertWorkspaceDependencyLinks(dependencyLinks) {
+  for (const dependencyLink of dependencyLinks) {
+    let valid = false;
+    try {
+      valid = fs.lstatSync(dependencyLink.link).isSymbolicLink() &&
+        fs.realpathSync(dependencyLink.link) === dependencyLink.source;
+    } catch {
+      valid = false;
+    }
+    if (!valid) throw new Error(DEPENDENCY_LINK_ERROR);
   }
-  if (!valid) throw new Error(DEPENDENCY_LINK_ERROR);
 }
 
 function gateExactHead(run, root, worktree, head, remoteBefore, args) {
-  const dependencyLink = linkWorkspaceDependencies(root, worktree);
+  const dependencyLinks = linkWorkspaceDependencies(root, worktree);
   const gateEnv = {...process.env};
   if (args.fixesRed) gateEnv.LAGRANGE_PUSH_ON_RED = ENABLED_ENV_VALUE;
   const refLine = `HEAD ${head} refs/heads/main ${remoteBefore}\n`;
@@ -168,8 +177,8 @@ function gateExactHead(run, root, worktree, head, remoteBefore, args) {
     env: gateEnv,
     input: refLine,
   });
-  assertWorkspaceDependencyLink(dependencyLink);
-  if (dependencyLink) fs.unlinkSync(dependencyLink.link);
+  assertWorkspaceDependencyLinks(dependencyLinks);
+  for (const dependencyLink of dependencyLinks) fs.unlinkSync(dependencyLink.link);
   const gateStatus = git(run, worktree, [
     STATUS_COMMAND, PORCELAIN_ARGUMENT,
   ]);
