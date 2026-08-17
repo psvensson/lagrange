@@ -48,7 +48,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 29
+## Open quests — 28
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -67,7 +67,6 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | movielens-replace-bootstrap-cohort-authority | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | oci-container-driver-live-activation | product | 12 | 0 | 2026-07-31 ⚠ stale | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-08-14 | — |
-| postpush-worktree-artifact-freshness | process | 0 | 0 | 2026-08-17 | — |
 | projection-readiness-deep-own-data-closure | product | 6 | 0 | 2026-08-15 | — |
 | projection-readiness-producer-copy-closure | product | 1 | 0 | 2026-08-15 | — |
 | public-path-multinode-baseline | product | 0 | 0 | 2026-08-11 | — |
