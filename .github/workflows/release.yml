@@ -85,6 +85,19 @@ jobs:
           tar -xzf "$HELM_ARCHIVE"
           sudo install linux-amd64/helm /usr/local/bin/helm
           helm version --short
+          # Component tests spawn a bare `wasm-tools`; on the maintainer's box
+          # that is a cargo install, so a GitHub-hosted runner has no way to
+          # get it and the spawn fails ENOENT. Upstream publishes no checksum
+          # file for the release asset, so pin the digest inline and fail
+          # closed on drift, exactly as the MovieLens dataset step does.
+          WASM_TOOLS_VERSION=1.236.0
+          WASM_TOOLS_DIR="wasm-tools-${WASM_TOOLS_VERSION}-x86_64-linux"
+          WASM_TOOLS_ARCHIVE="${WASM_TOOLS_DIR}.tar.gz"
+          curl -fsSLO "https://github.com/bytecodealliance/wasm-tools/releases/download/v${WASM_TOOLS_VERSION}/${WASM_TOOLS_ARCHIVE}"
+          echo "a4fe8101d98f4efeb4854fde05d7c6a36a9a61e8249d4c72afcda4a4944723fb  ${WASM_TOOLS_ARCHIVE}" | sha256sum --check
+          tar -xzf "$WASM_TOOLS_ARCHIVE"
+          sudo install "${WASM_TOOLS_DIR}/wasm-tools" /usr/local/bin/wasm-tools
+          wasm-tools --version
 
       - name: Install dependencies
         run: |
