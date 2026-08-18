@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1812,
+    "unit": 1813,
     "integration": 73,
     "bootstrap": 172,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2064,
-  "digest": "fnv1a32-53af52cb",
+  "censusSize": 2065,
+  "digest": "fnv1a32-493734f6",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -1716,6 +1716,7 @@
     "test/scripts/check-roadmap-authority.test.js": "unit",
     "test/scripts/check-runtime-grammar-contracts.test.js": "unit",
     "test/scripts/check-staged-constant-names.test.js": "unit",
+    "test/scripts/check-subsystem.test.js": "unit",
     "test/scripts/check-unified-system-metadata-gateway.test.js": "unit",
     "test/scripts/closure-ledger-state.test.js": "unit",
     "test/scripts/compare-latest-baseline-runs.test.js": "unit",
