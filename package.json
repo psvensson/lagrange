@@ -99,7 +99,7 @@
     "audit:cli-docs": "node scripts/check-cli-docs.js",
     "docs:capabilities:generate": "node scripts/generate-current-capabilities-doc.js",
     "audit:impact-contracts": "node scripts/checks/impact-contract-registry.js",
-    "audit:shards": "node scripts/generate-test-shards.js --check && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check",
+    "audit:shards": "node scripts/generate-test-shards.js --check && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check",
     "shards:generate": "node scripts/generate-test-shards.js",
     "audit:architecture-slices": "node scripts/check-architecture-slices.js",
     "test:metadata-gateway:audit": "node scripts/check-unified-system-metadata-gateway.js",

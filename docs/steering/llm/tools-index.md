@@ -86,7 +86,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:runtime-grammar` — Check runtime grammar contracts plus state-machine pressure preflight.
 - `audit:runtime-grammar:file` — `node scripts/check-runtime-grammar-contracts.js`
 - `audit:service-portability-claims` — `node scripts/check-service-portability-claims.js`
-- `audit:shards` — `node scripts/generate-test-shards.js --check && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check`
+- `audit:shards` — `node scripts/generate-test-shards.js --check && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check`
 - `audit:state-machine-pressure` — `node scripts/check-state-machine-pressure-preflight.js`
 - `audit:static-gate` — `node scripts/solve/static-gate.js`
 - `audit:step-coverage-owner` — `node scripts/check-step-coverage-owner.js`
