@@ -75,7 +75,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | readiness-evaluation-generation-floor-closure-v2 | product | 2 | 0 | 2026-08-15 | — |
 | readiness-formation-liveness-circularity-closure | product | 1 | 0 | 2026-08-15 | — |
 | readiness-planning-read-amplification-closure | product | 3 | 0 | 2026-08-15 | — |
-| restore-deterministic-cloud-gate | process | 2 | 0 | 2026-08-17 | — |
+| restore-deterministic-cloud-gate | process | 2 | 0 | 2026-08-18 | — |
 | rolling-restart-representative-certification | product | 1 | 0 | 2026-08-02 ⚠ stale | — |
 | runtime-service-add-creating-owner-rearm | product | 3 | 0 | 2026-07-30 ⚠ stale | — |
 | runtime-service-affinity-observer-intent-parity | product | 1 | 0 | 2026-07-22 ⚠ stale | — |
