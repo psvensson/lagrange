@@ -427,6 +427,11 @@ function updateProbeSurface(hash, context, probe) {
   updateResolverField(hash, probe.from);
   updateResolverField(hash, probe.specifier);
   updateResolverField(hash, probe.state);
+  // An optional external contributes only its declaration, never a filesystem
+  // probe. Hashing lookup roots here would reintroduce the exact defect the
+  // state exists to remove: the digest would still move depending on whether
+  // the package happened to be installed on the machine generating it.
+  if (probe.state === OWNER_DEBT_RESOLVER_STATE.optionalExternal) return;
   if (probe.state === OWNER_DEBT_RESOLVER_STATE.resolved) {
     updatePortableSurface(hash, context, probe.target, false);
     updatePortableSurface(hash, context, path.posix.dirname(probe.target), false);

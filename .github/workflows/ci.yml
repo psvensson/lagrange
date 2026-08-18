@@ -220,6 +220,7 @@ jobs:
           name: gate-failure-evidence
           path: |
             test-output/acceptance/
+            test-output/analysis/
             test-output/proof-cone/
             .tap/test-results/
           retention-days: 14

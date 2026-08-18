@@ -112,10 +112,30 @@ export const OWNER_DEBT_IMPORT_GRAPH_INPUT_DIRECTORIES = Object.freeze([
   ...OWNER_DEBT_SOURCE_DIRECTORIES,
   'examples',
 ]);
+export const OWNER_DEBT_DEPENDENCY_POLICY_PATH = 'dependency-policy.json';
+// How a bare specifier is allowed to reach the graph. Meaning comes from these
+// declarations, never from what happens to be installed.
+export const OWNER_DEBT_DEPENDENCY_CLASS = Object.freeze({
+  declared: 'declared',
+  optionalExternal: 'optional-external',
+  scheme: 'scheme',
+  selfReference: 'self-reference',
+  undeclared: 'undeclared',
+});
+export const OWNER_DEBT_PACKAGE_SECTIONS = Object.freeze([
+  'dependencies',
+  'devDependencies',
+  'optionalDependencies',
+  'peerDependencies',
+]);
+export const OWNER_DEBT_PACKAGE_PATH_SEPARATOR = '/';
+export const OWNER_DEBT_PACKAGE_SCOPE_PREFIX = '@';
+export const OWNER_DEBT_PROBLEM_LIST_SEPARATOR = ', ';
 export const OWNER_DEBT_IMPORT_GRAPH_INPUT_AUTHORITIES = Object.freeze([
   'package.json',
   'package-lock.json',
   'dependency-cruiser.config.cjs',
+  OWNER_DEBT_DEPENDENCY_POLICY_PATH,
 ]);
 
 export const OWNER_DEBT_JAVASCRIPT_EXTENSIONS = new Set([
@@ -127,4 +147,8 @@ export const OWNER_DEBT_JAVASCRIPT_EXTENSIONS = new Set([
 export const OWNER_DEBT_RESOLVER_STATE = Object.freeze({
   resolved: 'resolved',
   unresolved: 'unresolved',
+  // A package the repository deliberately does not install. The edge is real
+  // and is recorded, but the target is never followed, so the canonical graph
+  // is identical whether or not the package happens to sit in node_modules.
+  optionalExternal: 'optional-external',
 });

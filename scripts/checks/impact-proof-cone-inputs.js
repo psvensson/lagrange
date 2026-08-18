@@ -266,8 +266,17 @@ function resolverProbeProblem(value, probe) {
       !objectHasOwn(value.degrees, probe.target) ?
       `${IMPORT_GRAPH_INPUT_NAME} contains an invalid resolver probe` : null;
   }
-  if (probe.state !== OWNER_DEBT_RESOLVER_STATE.unresolved ||
-      objectHasOwn(probe, RESOLVER_TARGET_FIELD)) {
+  // Semantic edge state is three-valued; the aggregate ACCOUNTING stays
+  // two-valued. An optional external is structurally identical to an
+  // unresolved probe - it carries no target, because it is deliberately never
+  // followed - so it validates the same way here and projects into the same
+  // unresolved term. Only the state name distinguishes an intentional absence
+  // from an ordinary failed resolution, and nothing downstream has to learn a
+  // third arithmetic category to reconcile the graph.
+  const carriesNoTarget =
+    probe.state === OWNER_DEBT_RESOLVER_STATE.unresolved ||
+    probe.state === OWNER_DEBT_RESOLVER_STATE.optionalExternal;
+  if (!carriesNoTarget || objectHasOwn(probe, RESOLVER_TARGET_FIELD)) {
     return `${IMPORT_GRAPH_INPUT_NAME} contains an invalid resolver probe`;
   }
   return null;

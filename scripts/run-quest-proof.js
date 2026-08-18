@@ -96,25 +96,46 @@ console.error(
   `changed=${selection.counts[SELECTION_CHANGED_TEST]}) ` +
   `receipt=${path.relative(root, receiptPath)}`);
 
+const SELECTION_LINE_SEPARATOR = '\n';
+
+// Emit the selection completely before exiting. fs.writeSync is not an option:
+// Node opens a piped stdout non-blocking, so it partial-writes and then raises
+// EAGAIN once the pipe buffer fills.
+function writeSelection(selectedTests) {
+  if (selectedTests.length === 0) return Promise.resolve();
+  const payload =
+    `${selectedTests.join(SELECTION_LINE_SEPARATOR)}${SELECTION_LINE_SEPARATOR}`;
+  return new Promise((resolve, reject) => {
+    process.stdout.write(payload, (error) => {
+      if (error) reject(error); else resolve();
+    });
+  });
+}
+
 if (dryRun) {
-  for (const testPath of selection.selectedTests) console.log(testPath);
-  process.exit(0);
+  // Same output-loss hazard as select-proof-cone.js: a console.log loop leaves
+  // data in an asynchronous pipe buffer that process.exit() discards, so a
+  // large selection was delivered truncated with a zero exit status. Await the
+  // write and let the process end naturally rather than exiting here.
+  await writeSelection(selection.selectedTests);
 }
 
-// Run the selected tests in batches through the existing runner, matching
-// how package.json lanes feed it (xargs -n 100 style).
-const runner = path.join(root, TEST_RUNNER);
-let failedBatches = 0;
-for (let offset = 0; offset < selection.selectedTests.length; offset += FILES_PER_INVOCATION) {
-  const batch = selection.selectedTests.slice(offset, offset + FILES_PER_INVOCATION);
-  const result = spawnSync(
-    process.execPath,
-    [runner, `--jobs=${jobs}`, ...batch],
-    {cwd: root, stdio: 'inherit'});
-  if (result.status !== 0) failedBatches += 1;
-}
+if (!dryRun) {
+  // Run the selected tests in batches through the existing runner, matching
+  // how package.json lanes feed it (xargs -n 100 style).
+  const runner = path.join(root, TEST_RUNNER);
+  let failedBatches = 0;
+  for (let offset = 0; offset < selection.selectedTests.length; offset += FILES_PER_INVOCATION) {
+    const batch = selection.selectedTests.slice(offset, offset + FILES_PER_INVOCATION);
+    const result = spawnSync(
+      process.execPath,
+      [runner, `--jobs=${jobs}`, ...batch],
+      {cwd: root, stdio: 'inherit'});
+    if (result.status !== 0) failedBatches += 1;
+  }
 
-console.error(failedBatches === 0 ?
-  `${OUTCOME_PASS} quest-proof: ${selection.counts.uniqueSelected} tests passed` :
-  `${OUTCOME_FAIL} quest-proof: ${failedBatches} batch(es) failed`);
-process.exit(failedBatches === 0 ? 0 : 1);
+  console.error(failedBatches === 0 ?
+    `${OUTCOME_PASS} quest-proof: ${selection.counts.uniqueSelected} tests passed` :
+    `${OUTCOME_FAIL} quest-proof: ${failedBatches} batch(es) failed`);
+  process.exitCode = failedBatches === 0 ? 0 : 1;
+}

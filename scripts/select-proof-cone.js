@@ -30,11 +30,34 @@ const CHANGED_FLAG = '--changed';
 const DIFF_BASE_FLAG = '--diff-base';
 const RECEIPT_FLAG = '--receipt';
 const FULL_SUITE_FLAG = '--full-suite';
+const LINE_SEPARATOR = '\n';
+const FAILURE_EXIT_CODE = 1;
 const JSON_FLAG = '--json';
 const UTF8_ENCODING = 'utf8';
 const GIT_EXECUTABLE = 'git';
 const GIT_DIFF_NAME_ONLY_ARGS = ['diff', '--name-only', '--end-of-options'];
 const GIT_HEAD_REF = 'HEAD';
+
+// The selection is the CLI's output contract, so it must be delivered in full
+// before the process exits. Two hazards had to be closed, and the obvious fix
+// for each causes the other:
+//   - a console.log loop leaves data in an asynchronous buffer that
+//     process.exit() discards (measured on hosted CI as 607/339/219/348 of
+//     2058 lines, each an exact alphabetical prefix);
+//   - fs.writeSync cannot replace it, because Node opens a piped stdout in
+//     non-blocking mode: one call performs a PARTIAL write (1097 of 2058) and
+//     looping on the offset raises EAGAIN once the pipe buffer fills.
+// So write once and let Node drain it, resolving only when the data has been
+// handed over. Callers must AWAIT this and must not call process.exit().
+function writeSelection(selectedTests) {
+  if (selectedTests.length === 0) return Promise.resolve();
+  const payload = `${selectedTests.join(LINE_SEPARATOR)}${LINE_SEPARATOR}`;
+  return new Promise((resolve, reject) => {
+    process.stdout.write(payload, (error) => {
+      if (error) reject(error); else resolve();
+    });
+  });
+}
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
 const args = process.argv.slice(2);
@@ -80,46 +103,48 @@ if (forceFullSuite) {
     selection = selectRunnableFullProofCensus(root);
   } catch (error) {
     console.error(`FAIL ${error.message}`);
+    process.exitCode = FAILURE_EXIT_CODE;
+  }
+  // No process.exit() on the success path. Node documents that exit() can
+  // terminate with pending stdout I/O, and a piped stdout is asynchronous, so
+  // exiting is the hazard rather than the fix. Await the write and let the
+  // process end naturally; the remaining branches are guarded below instead of
+  // being skipped by an early exit.
+  if (selection) await writeSelection(selection.selectedTests);
+}
+
+if (!forceFullSuite) {
+  if (changed.length === 0) {
+    console.error(ERR_SELECT_USAGE);
     process.exit(1);
   }
-  for (const testPath of selection.selectedTests) {
-    console.log(testPath);
+
+  const {selection, problems} = selectProofCone(root, changed);
+  try {
+    assertRunnableProofSelection(selection);
+  } catch (error) {
+    console.error(`FAIL ${error.message}`);
+    process.exit(1);
   }
-  process.exit(0);
-}
-
-if (changed.length === 0) {
-  console.error(ERR_SELECT_USAGE);
-  process.exit(1);
-}
-
-const {selection, problems} = selectProofCone(root, changed);
-try {
-  assertRunnableProofSelection(selection);
-} catch (error) {
-  console.error(`FAIL ${error.message}`);
-  process.exit(1);
-}
-const written = writeReceipt(root, selection);
-if (receiptPath) {
-  const fs = await import('node:fs');
-  fs.copyFileSync(written, path.join(root, receiptPath));
-}
-
-if (jsonOutput) {
-  console.log(JSON.stringify({selection, receipt: path.relative(root, written)}, null, 2));
-} else {
-  for (const testPath of selection.selectedTests) {
-    console.log(testPath);
+  const written = writeReceipt(root, selection);
+  if (receiptPath) {
+    const fs = await import('node:fs');
+    fs.copyFileSync(written, path.join(root, receiptPath));
   }
-  console.error(
-    `proof-cone: tier=${selection.escalation} fullSuite=${selection.fullSuite} ` +
-    `selected=${selection.counts.uniqueSelected}/${selection.counts.totalTests} ` +
-    `(static=${selection.counts.static} coverage=${selection.counts.coverage} ` +
-    `contract=${selection.counts.contract} floor=${selection.counts[SELECTION_SAFETY_FLOOR]}) ` +
-    `receipt=${path.relative(root, written)}`);
-}
-if (problems.length > 0 && !selection.fullSuite) {
-  for (const problem of problems) console.error(`FAIL ${problem}`);
-  process.exit(1);
+
+  if (jsonOutput) {
+    console.log(JSON.stringify({selection, receipt: path.relative(root, written)}, null, 2));
+  } else {
+    await writeSelection(selection.selectedTests);
+    console.error(
+      `proof-cone: tier=${selection.escalation} fullSuite=${selection.fullSuite} ` +
+      `selected=${selection.counts.uniqueSelected}/${selection.counts.totalTests} ` +
+      `(static=${selection.counts.static} coverage=${selection.counts.coverage} ` +
+      `contract=${selection.counts.contract} floor=${selection.counts[SELECTION_SAFETY_FLOOR]}) ` +
+      `receipt=${path.relative(root, written)}`);
+  }
+  if (problems.length > 0 && !selection.fullSuite) {
+    for (const problem of problems) console.error(`FAIL ${problem}`);
+    process.exit(1);
+  }
 }

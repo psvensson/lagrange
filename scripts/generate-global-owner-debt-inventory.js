@@ -19,6 +19,10 @@ import {
   OWNER_DEBT_CHILD_LIMITS as CHILD_LIMITS,
   OWNER_DEBT_REFRESH_COMMANDS as REFRESH_COMMANDS,
   OWNER_DEBT_REPORTS as REPORTS,
+  OWNER_DEBT_DEPENDENCY_POLICY_PATH,
+  OWNER_DEBT_PACKAGE_PATH_SEPARATOR,
+  OWNER_DEBT_PACKAGE_SECTIONS,
+  OWNER_DEBT_PROBLEM_LIST_SEPARATOR,
   OWNER_DEBT_RESOLVER_STATE,
   OWNER_DEBT_SIGNAL_KIND as SIGNAL_KIND,
   OWNER_DEBT_SIGNAL_WEIGHTS as SIGNAL_WEIGHTS,
@@ -43,6 +47,11 @@ import {
   sha256,
   signalId,
 } from './global-owner-debt-inventory/helpers.js';
+import {
+  classifyDependencySpecifier,
+  DEPENDENCY_CLASS,
+  packageNameOf,
+} from './global-owner-debt-inventory/dependency-policy.js';
 import {IMPORT_GRAPH_SEAL_PATH} from './checks/impact-proof-cone-constants.js';
 
 const ROOT = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -519,6 +528,90 @@ async function loadLintExclusions(root, files) {
   return {patterns, matches};
 }
 
+
+// Dependency-policy classification for bare package specifiers. The canonical
+// graph must be a function of repository-declared state, never of whatever a
+// developer happens to have installed: an undeclared @pulumi/* sitting in one
+// machine's node_modules silently changed the committed import-graph digest,
+// so CI and every clean checkout disagreed with it identically.
+//
+//   declared in package.json / lockfile -> resolve canonically
+//   declared optional-external          -> record the edge, never follow it
+//   neither, yet ambient resolution     -> fail closed
+const PACKAGE_MANIFEST_FILE = 'package.json';
+const PACKAGE_LOCKFILE = 'package-lock.json';
+const UNREFERENCED_OPTIONAL_EXTERNAL_PROBLEM =
+  'stale optional-external policy entry';
+const EDGE_ACCOUNTING_PROBLEM = 'import graph edge accounting does not balance';
+const EDGE_ACCOUNTING_PROJECTION =
+  '(optional externals project into the unresolved term)';
+const UNDECLARED_AMBIENT_DEPENDENCY_PROBLEM =
+  'ambient undeclared dependency would alter the canonical import graph';
+const UNDECLARED_AMBIENT_DEPENDENCY_REMEDY =
+  'is in neither package.json/package-lock.json nor the optionalExternals ' +
+  'policy in';
+
+// Returns null when the root carries no manifest. Such a root is a synthetic
+// fixture rather than a repository, so there is no declared dependency state to
+// judge against and the policy does not apply; applying it anyway would fail
+// every fixture that imports a bare package.
+//
+// The verdict itself lives in ./global-owner-debt-inventory/dependency-policy.js
+// so that the classification the tests exercise is the same code the canonical
+// graph runs. This loader only gathers the declared state it judges against.
+function loadDependencyPolicy(root) {
+  const manifestPath = path.join(root, PACKAGE_MANIFEST_FILE);
+  if (!fs.existsSync(manifestPath)) return null;
+  const manifest = JSON.parse(fs.readFileSync(manifestPath, 'utf8'));
+  const declaredPackages = new Set();
+  for (const section of OWNER_DEBT_PACKAGE_SECTIONS) {
+    for (const name of Object.keys(manifest[section] || {})) {
+      declaredPackages.add(name);
+    }
+  }
+  const lockPath = path.join(root, PACKAGE_LOCKFILE);
+  if (fs.existsSync(lockPath)) {
+    const lock = JSON.parse(fs.readFileSync(lockPath, 'utf8'));
+    for (const entry of Object.keys(lock.packages || {})) {
+      const index = entry.lastIndexOf(NODE_MODULES_PREFIX);
+      if (index !== -1) {
+        declaredPackages.add(entry.slice(index + NODE_MODULES_PREFIX.length));
+      }
+    }
+  }
+  const policyPath = path.join(root, OWNER_DEBT_DEPENDENCY_POLICY_PATH);
+  const optionalExternals = fs.existsSync(policyPath) ?
+    new Set(Object.keys(JSON.parse(
+      fs.readFileSync(policyPath, 'utf8')).optionalExternals || {})) :
+    new Set();
+  // The repository may import itself by name through its own exports map.
+  return {declaredPackages, optionalExternals, selfName: manifest.name};
+}
+
+// A module belonging to an optional-external package is not part of the
+// canonical graph at all. It has to be recognised under BOTH spellings,
+// because which one appears is precisely the environment difference this
+// policy exists to erase:
+//
+//   installed    -> cruised as a real file: node_modules/@scope/name/index.js
+//   not installed -> cruised as the bare unresolvable specifier: @scope/name
+//
+// Matching only the first spelling silently readmits the second, which is how
+// the pristine graph grew two nodes the polluted graph did not have. The
+// predicate is purely lexical - it asks which package a path belongs to, never
+// whether anything exists on disk.
+function optionalExternalModulePath(modulePath, optionalExternals) {
+  const relative = modulePath.startsWith(NODE_MODULES_PREFIX) ?
+    modulePath.slice(NODE_MODULES_PREFIX.length) : modulePath;
+  for (const name of optionalExternals) {
+    if (relative === name ||
+        relative.startsWith(`${name}${OWNER_DEBT_PACKAGE_PATH_SEPARATOR}`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function shouldCaptureResolvedProbe(dependency, target) {
   if (dependency.coreModule) return false;
   return target.startsWith(NODE_MODULES_PREFIX) ||
@@ -578,49 +671,138 @@ function followedFileDigests(root, modules, primaryFileDigests) {
   ]));
 }
 
+
+function recordUnresolvedEdge(resolverInputs, source, specifier) {
+  resolverInputs.set(JSON.stringify([source, specifier]), {
+    from: source,
+    specifier,
+    state: OWNER_DEBT_RESOLVER_STATE.unresolved,
+  });
+}
+
+// Applies the dependency policy to one edge. Returns true when the edge is an
+// optional external and has been fully recorded, so the caller must not follow
+// it; throws when the import is undeclared. Extracted from buildImportGraph to
+// keep that function under the cognitive-complexity ratchet.
+function applyDependencyPolicy(dependency, source, context) {
+  const {policy} = context;
+  if (policy === null || dependency.coreModule) return false;
+  const verdict = classifyDependencySpecifier(dependency.module, policy);
+  if (verdict === DEPENDENCY_CLASS.optionalExternal) {
+    context.referencedOptionalExternals.add(packageNameOf(dependency.module));
+    // Record the dependency truthfully, but stop here: following it would make
+    // the graph depend on whether the package happens to be installed.
+    context.resolverInputs.set(JSON.stringify([source, dependency.module]), {
+      from: source,
+      specifier: dependency.module,
+      state: OWNER_DEBT_RESOLVER_STATE.optionalExternal,
+    });
+    return true;
+  }
+  // Legality does not depend on resolution succeeding: otherwise the same
+  // illegal import would mean different things on two machines purely because
+  // one of them has the package installed. An intentionally absent dependency
+  // is exactly what an optional-external declaration expresses.
+  if (verdict === DEPENDENCY_CLASS.undeclared) {
+    throw new Error(
+      `${UNDECLARED_AMBIENT_DEPENDENCY_PROBLEM}: ` +
+      `${packageNameOf(dependency.module)} imported by ${source} ` +
+      `${UNDECLARED_AMBIENT_DEPENDENCY_REMEDY} ` +
+      `${OWNER_DEBT_DEPENDENCY_POLICY_PATH}`);
+  }
+  return false;
+}
+
+// Records one dependency edge and returns how many unresolved probes it added.
+// Extracted from buildImportGraph so that function stays within the cognitive
+// complexity ratchet rather than the ratchet being raised for it.
+function recordDependencyEdge(root, source, dependency, graph) {
+  const {degrees, importers, policyContext, resolverInputs} = graph;
+  // An optional external is recorded with its own state, but for counting it is
+  // an edge with no target node - exactly what `unresolvedCount` means - so it
+  // needs no bucket of its own and no consumer invariant has to change.
+  if (applyDependencyPolicy(dependency, source, policyContext)) return 1;
+  if (dependency.couldNotResolve || !dependency.resolved) {
+    recordUnresolvedEdge(resolverInputs, source, dependency.module);
+    return 1;
+  }
+  const target = normalizePathThroughSymlinkedRoot(root, dependency.resolved);
+  if (shouldCaptureResolvedProbe(dependency, target)) {
+    resolverInputs.set(JSON.stringify([source, dependency.module]), {
+      from: source,
+      specifier: dependency.module,
+      state: OWNER_DEBT_RESOLVER_STATE.resolved,
+      target,
+    });
+  }
+  if (!degrees.has(target)) degrees.set(target, {in: 0, out: 0});
+  degrees.get(target).in += 1;
+  if (!importers.has(target)) importers.set(target, []);
+  importers.get(target).push(source);
+  return 0;
+}
+
+// The one accounting identity for the graph, asserted where the graph is
+// PRODUCED rather than only where it is consumed.
+//
+// An optional external keeps its own semantic state and its importer's
+// out-degree, because the source genuinely depends on it - but it has no target
+// node, which is exactly what `unresolvedCount` already means. Projecting it
+// there keeps the arithmetic binary: every edge either reaches a node or it
+// does not. Giving it a third count instead forces every consumer to learn the
+// policy distinction just to balance the same equation, which is precisely the
+// invariant cascade this projection exists to prevent.
+function assertEdgeAccounting(degrees, edgeCount, unresolvedCount) {
+  const resolvedCount = [...degrees.values()]
+    .reduce((total, degree) => total + degree.in, 0);
+  if (edgeCount !== resolvedCount + unresolvedCount) {
+    throw new Error(
+      `${EDGE_ACCOUNTING_PROBLEM}: ${edgeCount} edge(s) is not ` +
+      `${resolvedCount} resolved + ${unresolvedCount} unresolved ` +
+      EDGE_ACCOUNTING_PROJECTION);
+  }
+}
+
 async function buildImportGraph(root, files) {
   const result = await cruise(SOURCE_DIRECTORIES.map((directory) =>
     path.join(root, directory)), {
     baseDir: root,
     doNotFollow: {path: 'node_modules'},
   });
+  const policy = loadDependencyPolicy(root);
+  const optionalExternals = policy === null ?
+    new Set() : policy.optionalExternals;
+  const referencedOptionalExternals = new Set();
+  const modules = result.output.modules.filter((module) =>
+    !optionalExternalModulePath(
+      normalizePathThroughSymlinkedRoot(root, module.source),
+      optionalExternals));
   const degrees = new Map(files.map((file) => [file, {in: 0, out: 0}]));
   const importers = new Map();
   const resolverInputs = new Map();
+  const policyContext = {policy, referencedOptionalExternals, resolverInputs};
+  const graph = {degrees, importers, policyContext, resolverInputs};
   let edgeCount = 0;
   let unresolvedCount = result.output.summary?.error || 0;
-  for (const module of result.output.modules) {
+  for (const module of modules) {
     const source = normalizePathThroughSymlinkedRoot(root, module.source);
     if (!degrees.has(source)) degrees.set(source, {in: 0, out: 0});
     for (const dependency of module.dependencies) {
       edgeCount += 1;
       degrees.get(source).out += 1;
-      if (dependency.couldNotResolve || !dependency.resolved) {
-        const key = JSON.stringify([source, dependency.module]);
-        resolverInputs.set(key, {
-          from: source,
-          specifier: dependency.module,
-          state: OWNER_DEBT_RESOLVER_STATE.unresolved,
-        });
-        unresolvedCount += 1;
-        continue;
-      }
-      const target = normalizePathThroughSymlinkedRoot(root, dependency.resolved);
-      if (shouldCaptureResolvedProbe(dependency, target)) {
-        const key = JSON.stringify([source, dependency.module]);
-        resolverInputs.set(key, {
-          from: source,
-          specifier: dependency.module,
-          state: OWNER_DEBT_RESOLVER_STATE.resolved,
-          target,
-        });
-      }
-      if (!degrees.has(target)) degrees.set(target, {in: 0, out: 0});
-      degrees.get(target).in += 1;
-      if (!importers.has(target)) importers.set(target, []);
-      importers.get(target).push(source);
+      unresolvedCount += recordDependencyEdge(root, source, dependency, graph);
     }
   }
+  // Bidirectional check: an exemption nobody uses is stale policy, and stale
+  // exemptions are how a fail-closed list quietly stops being fail-closed.
+  const unreferenced = policy === null ? [] : [...optionalExternals]
+    .filter((name) => !referencedOptionalExternals.has(name)).sort();
+  if (unreferenced.length > 0) {
+    throw new Error(
+      `${UNREFERENCED_OPTIONAL_EXTERNAL_PROBLEM}: ${unreferenced.join(OWNER_DEBT_PROBLEM_LIST_SEPARATOR)} ` +
+      `declared in ${OWNER_DEBT_DEPENDENCY_POLICY_PATH} but imported nowhere`);
+  }
+  assertEdgeAccounting(degrees, edgeCount, unresolvedCount);
   const sortedResolverInputs = [...resolverInputs.values()].sort((left, right) =>
     left.from.localeCompare(right.from) ||
     left.specifier.localeCompare(right.specifier));
@@ -633,11 +815,10 @@ async function buildImportGraph(root, files) {
     producerInputDigest: javascriptSourceDigest(
       root, listImportGraphInputFiles(root)),
     fileDigests,
-    followedFileDigests: followedFileDigests(
-      root, result.output.modules, fileDigests),
+    followedFileDigests: followedFileDigests(root, modules, fileDigests),
     resolverInputs: sortedResolverInputs,
     resolverStateDigest: importGraphResolverStateDigest(root, sortedResolverInputs),
-    moduleCount: result.output.modules.length,
+    moduleCount: modules.length,
     edgeCount,
     unresolvedCount,
     degrees,

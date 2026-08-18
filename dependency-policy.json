@@ -1,0 +1,13 @@
+{
+  "$comment": "Repository-owned dependency policy. An authority for the canonical owner-debt import graph, hashed into its producer-input identity alongside package.json, package-lock.json and dependency-cruiser.config.cjs. Its purpose is to make an existing architectural fact machine-readable: some packages are deliberately NOT installed by an ordinary `npm ci`, are loaded dynamically at the point of use, and must therefore never be followed from ambient node_modules. Without this file the graph generator cannot distinguish an intentional optional external from an accidental undeclared import, so whether a developer happened to run `npm install` decided the identity of a committed artifact.",
+  "optionalExternals": {
+    "@pulumi/gcp": {
+      "owner": "test/distributed/harness/gcp-provisioner.js",
+      "reason": "GCP distributed-test provisioning; loaded dynamically only when provision() runs, so an ordinary checkout imports the provisioner without it"
+    },
+    "@pulumi/pulumi": {
+      "owner": "test/distributed/harness/gcp-provisioner.js",
+      "reason": "GCP distributed-test provisioning; loaded dynamically only when provision() runs, so an ordinary checkout imports the provisioner without it"
+    }
+  }
+}

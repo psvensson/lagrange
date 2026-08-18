@@ -528,7 +528,7 @@ export function registerClusterActiveWaitTerminalStartupBlockerTests(context) {
   ' terminal snapshot coverage regresses without publication improvement',
   async () => {
     const TERMINAL_COVERAGE_REGRESSION_CLUSTER_SIZE = 3;
-    const TERMINAL_COVERAGE_REGRESSION_TIMEOUT_MS = 5;
+    const TERMINAL_COVERAGE_REGRESSION_TIMEOUT_MS = 200;
     const TERMINAL_COVERAGE_REGRESSION_DOCKER_SOCKET_PATH =
     '/var/run/docker.sock';
     const TERMINAL_COVERAGE_REGRESSION_IMAGE = 'distributed-db:test';
@@ -680,6 +680,30 @@ export function registerClusterActiveWaitTerminalStartupBlockerTests(context) {
         meaningfulProgressProbe :
         regressedCurrentProbe;
     };
+    // Terminate on the PROBE SEQUENCE rather than on the wall clock.
+    //
+    // This test is about RETENTION: a strong snapshot must survive a later
+    // regressed one. Expressing it needs both probes to be observed, but the
+    // deadline decided how many actually were. Measured on one machine, the
+    // same code ran anywhere from 1 to 39 probes inside the old 5ms budget,
+    // and a 1-probe run failed with exactly the hosted signature
+    // ('joiner-strong' == 'seed-1'). The retained value was correct in every
+    // single run, so the contract was never at fault - only the observation.
+    //
+    // Worse, a 1-probe run could also PASS while proving nothing, because
+    // nothing had regressed yet. So the deadline is widened only so it cannot
+    // pre-empt the sequence, termination is triggered explicitly once both
+    // probes are in, and the assertion below proves the sequence really was
+    // consumed. Widening alone would have left this probabilistic; it is the
+    // combination that makes the outcome deterministic and non-vacuous.
+    cluster._sleep = async () => {
+      if (probeCallCount < TERMINAL_COVERAGE_REGRESSION_DOUBLE_COUNT) return;
+      const terminateAt = Date.now() + TERMINAL_COVERAGE_REGRESSION_TIMEOUT_MS;
+      while (Date.now() < terminateAt) {
+        // Deliberate spin: cross the deadline now that the sequence under test
+        // has been observed, so the clock never decides the semantic result.
+      }
+    };
 
     let timeoutError = null;
     await assert.rejects(
@@ -693,6 +717,11 @@ export function registerClusterActiveWaitTerminalStartupBlockerTests(context) {
       },
     );
 
+    assert.ok(
+      probeCallCount >= TERMINAL_COVERAGE_REGRESSION_DOUBLE_COUNT,
+      'the regression must actually have been observed: a single-probe run ' +
+      'retains the meaningful snapshot trivially and proves nothing',
+    );
     assert.equal(
       timeoutError?.diagnostics?.activeGate?.progress?.selectedSnapshotNodeId,
       TERMINAL_COVERAGE_REGRESSION_STRONG_NODE_ID,
