@@ -58,10 +58,14 @@ jobs:
       # Only what the structural analyses actually need. The wasm and Helm
       # toolchains belong to behavioural tests, which do not run here.
       - name: Install analysis CLI tools
+        # Bounded like every other network-facing step: apt must fail in
+        # minutes rather than consume the job budget if a mirror stops
+        # responding.
+        timeout-minutes: 5
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=2 update
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=2 install -y --no-install-recommends \
             ripgrep jq default-jre-headless
 
       - name: Install dependencies

@@ -247,6 +247,33 @@ describe('project hardening contracts', () => {
     assert.equal(release.concurrency.group, 'release-publish');
     assert.equal(release.concurrency['cancel-in-progress'], false);
 
+    // Every network-facing install step must fail in minutes. On 2026-08-19 a
+    // step that normally takes 115s hung for 62 minutes on a hosted runner:
+    // `curl -fsSLO` has no default timeout and the step had none either, so
+    // only the job's 120-minute backstop would have stopped it. This bounds
+    // the failure, not the normal duration.
+    const healthText = await readFile(
+      '.github/workflows/repository-health.yml', UTF8);
+    for (const workflowText of
+      [ciText, fullGateText, releaseText, healthText]) {
+      const workflow = parse(workflowText);
+      for (const job of Object.values(workflow.jobs)) {
+        for (const step of job.steps) {
+          if (!/^Install .*CLI tools$/u.test(step.name || '')) continue;
+          assert.ok(Number.isFinite(step['timeout-minutes']),
+            `${step.name} must bound how long a hung install may run`);
+          for (const line of step.run.split('\n')) {
+            // An INVOCATION, not the apt package named curl in the install
+            // list - matching the bare word flagged that as a download.
+            if (!/^\s*curl\s/u.test(line)) continue;
+            assert.match(line, /--max-time \d+/u,
+              'a download must not wait forever for a stalled connection');
+            assert.match(line, /--connect-timeout \d+/u);
+          }
+        }
+      }
+    }
+
     for (const workflowText of [ciText, fullGateText, releaseText]) {
       for (const match of workflowText.matchAll(ACTION_REFERENCE_PATTERN)) {
         assert.match(match[1], PINNED_ACTION_PATTERN);

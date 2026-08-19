@@ -47,16 +47,19 @@ jobs:
           cache: npm
 
       - name: Install gate CLI tools
+        # A hung download must fail in minutes, not consume the job budget:
+        # this step normally takes ~115s and once hung for 62 minutes.
+        timeout-minutes: 10
         run: |
           set -euo pipefail
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends \
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=2 update
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=2 install -y --no-install-recommends \
             ripgrep jq default-jre-headless postgresql-client curl
           HELM_VERSION=v3.16.3
           HELM_ARCHIVE="helm-${HELM_VERSION}-linux-amd64.tar.gz"
           cd "$RUNNER_TEMP"
-          curl -fsSLO "https://get.helm.sh/${HELM_ARCHIVE}"
-          curl -fsSLO "https://get.helm.sh/${HELM_ARCHIVE}.sha256sum"
+          curl -fsSLO --connect-timeout 20 --max-time 300 --retry 2 --retry-max-time 120 "https://get.helm.sh/${HELM_ARCHIVE}"
+          curl -fsSLO --connect-timeout 20 --max-time 300 --retry 2 --retry-max-time 120 "https://get.helm.sh/${HELM_ARCHIVE}.sha256sum"
           sha256sum --check "${HELM_ARCHIVE}.sha256sum"
           tar -xzf "$HELM_ARCHIVE"
           sudo install linux-amd64/helm /usr/local/bin/helm
@@ -69,7 +72,7 @@ jobs:
           WASM_TOOLS_VERSION=1.236.0
           WASM_TOOLS_DIR="wasm-tools-${WASM_TOOLS_VERSION}-x86_64-linux"
           WASM_TOOLS_ARCHIVE="${WASM_TOOLS_DIR}.tar.gz"
-          curl -fsSLO "https://github.com/bytecodealliance/wasm-tools/releases/download/v${WASM_TOOLS_VERSION}/${WASM_TOOLS_ARCHIVE}"
+          curl -fsSLO --connect-timeout 20 --max-time 300 --retry 2 --retry-max-time 120 "https://github.com/bytecodealliance/wasm-tools/releases/download/v${WASM_TOOLS_VERSION}/${WASM_TOOLS_ARCHIVE}"
           echo "a4fe8101d98f4efeb4854fde05d7c6a36a9a61e8249d4c72afcda4a4944723fb  ${WASM_TOOLS_ARCHIVE}" | sha256sum --check
           tar -xzf "$WASM_TOOLS_ARCHIVE"
           sudo install "${WASM_TOOLS_DIR}/wasm-tools" /usr/local/bin/wasm-tools
