@@ -25,7 +25,9 @@ const FAIL_CLOSED_COMMAND_SUFFIX = ' || exit 1';
 const ANALYSIS_LANE_COMMAND = 'nice -n 10 bash -c';
 const MOVIELENS_DOWNLOAD_COMMAND =
   'node examples/service-data-affinity/download-movielens.js';
-const FULL_RELEASE_GATE_COMMAND = 'run: npm run test:ci';
+// The release proof is now the canonical check:release, the same command the
+// manual full gate runs, so the two cannot drift into different meanings.
+const FULL_RELEASE_GATE_COMMAND = 'run: npm run check:release';
 const AGGREGATE_SENSITIVE_TEST =
   'test/distributed/harness/__tests__/' +
   'comparative-efficiency-claim-projection.test.js';

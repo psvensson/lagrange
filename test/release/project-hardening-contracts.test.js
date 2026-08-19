@@ -40,6 +40,7 @@ const ACTIVE_RELEASE_SURFACES = [
   '.github/workflows/ci.yml',
   '.github/workflows/full-gate.yml',
   '.github/workflows/release.yml',
+  '.github/workflows/repository-health.yml',
   'CHANGELOG.md',
   'Dockerfile',
   'README.md',
@@ -112,7 +113,9 @@ describe('project hardening contracts', () => {
     assert.match(ciText, /npm run check/u);
     assert.doesNotMatch(ciText, /npm run test:gate/u);
     assert.match(ciText, /postgresql-client/u);
-    assert.match(releaseText, /npm run test:gate/u);
+    // RELEASE.md must document the CANONICAL whole-system command, not one of
+    // the two commands that used to compete for the meaning of "complete".
+    assert.match(releaseText, /npm run check:release/u);
   });
 
   it('runs the golden-capability guard-scenario tier in every push gate',
@@ -186,7 +189,58 @@ describe('project hardening contracts', () => {
       'a pull request proves base..head, not just its tip');
     assert.match(rangeStep.run, /PUSH_BEFORE_SHA/u,
       'a push proves the range the remote did not have');
+    // ONE definition of complete. The repository used to carry two - the
+    // nightly ran test:gate while releases ran test:ci - so "prove everything"
+    // meant different things depending on who asked. check:release is now the
+    // only answer, and both callers invoke it and nothing else.
+    const packageJson = JSON.parse(await readFile('package.json', UTF8));
+    const releaseProof = packageJson.scripts['check:release'];
+    assert.match(releaseProof, /npm run test:ci/u);
+    assert.match(releaseProof, /npm run test:gate/u,
+      'check:release must contain BOTH prior notions of complete');
+
+    const fullGateSteps = fullGate.jobs.gate.steps;
+    const fullGateProof = fullGateSteps.filter(
+      (step) => typeof step.run === 'string' &&
+        /npm run (check|test):/u.test(step.run));
+    assert.deepEqual(
+      fullGateProof.map((step) => step.run.trim()), ['npm run check:release'],
+      'the manual full gate proves via check:release and nothing else');
+
+    const releaseProofSteps = release.jobs.release.steps.filter(
+      (step) => typeof step.run === 'string' &&
+        /npm run (check:release|test:ci|test:gate)/u.test(step.run));
+    assert.deepEqual(
+      releaseProofSteps.map((step) => step.run.trim()),
+      ['npm run check:release'],
+      'the tagged release proves via the same command as the full gate');
+
+    // Manual only. A nightly whole-system proof is a standing veto: an
+    // unrelated marginal test failing overnight made every unrelated change
+    // unlandable, and an unchanged tree cannot grow new behavioural debt.
     assert.deepEqual(fullGate.on.workflow_dispatch, {});
+    assert.equal(fullGate.on.schedule, undefined,
+      'the whole-system proof must not run on a timer');
+
+    // Repository health is a separate lane, never a change gate: structural
+    // debt on main must not make unrelated development unlandable.
+    const health = parse(await readFile(
+      '.github/workflows/repository-health.yml', UTF8));
+    assert.deepEqual(health.on.push.branches, ['main']);
+    assert.equal(health.on.pull_request, undefined,
+      'repository health must not gate pull requests');
+    assert.equal(health.on.schedule, undefined);
+    const healthRuns = health.jobs.health.steps
+      .filter((step) => typeof step.run === 'string' &&
+        /npm run /u.test(step.run))
+      .map((step) => step.run.trim());
+    assert.ok(healthRuns.includes('npm run test:owner-debt:prepare'),
+      'inventory inputs are prepared before the analyses that read them');
+    assert.ok(healthRuns.includes('npm run test:static'));
+    assert.ok(healthRuns.includes('npm run model:contracts'));
+    assert.ok(!healthRuns.some((run) => /test:sharded|test:fast|test:ci/u
+      .test(run)),
+    'repository health must not become a behavioural gate under another name');
     assert.deepEqual(release.on.push.tags, ['v*']);
     assert.equal(release.permissions.contents, 'read');
     assert.equal(release.jobs.release.permissions.contents, 'write');
@@ -199,7 +253,11 @@ describe('project hardening contracts', () => {
       }
     }
 
-    assert.match(releaseText, /npm run test:ci/u);
+    // Was `npm run test:ci`: the release pipeline used to carry its own notion
+    // of a complete proof, different from the one the full gate used. It now
+    // defers to check:release like every other caller.
+    assert.match(releaseText, /npm run check:release/u);
+    assert.doesNotMatch(releaseText, /npm run test:ci/u);
     assert.match(releaseText, /git cat-file -t/u);
     assert.match(releaseText, /git merge-base --is-ancestor/u);
     assert.match(releaseText, /refs\/remotes\/origin\/main/u);

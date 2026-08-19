@@ -1,12 +1,27 @@
-# GitHub Actions nightly + on-demand full gate.
+# GitHub Actions on-demand full proof - the "prove everything now" button.
 #
-# A red nightly points at a day's push range rather than one commit; use
-# `git bisect run npm run test:gate` locally to recover attribution.
+# MANUAL ONLY, deliberately. This used to run nightly, and a nightly whole-system
+# proof is a standing veto: an unrelated marginal test failing at 02:30 made
+# every unrelated change unlandable the next morning, which is most of what the
+# modular-proof migration set out to stop. The repository also cannot develop
+# new behavioural debt while nobody is changing it, so rerunning an unchanged
+# tree on a timer buys nothing.
+#
+# What replaced it:
+#
+#   every change      npm run check           (ci.yml, required)
+#   every main push   repository-health.yml   (expensive global analysis)
+#   on demand         this workflow           (the whole system)
+#   every release     release.yml             (the same command as this one)
+#
+# It invokes npm run check:release and nothing else. There is deliberately no
+# workflow-level opinion here about what "complete" means: that lives in the
+# package manifest, so this workflow and the release pipeline cannot drift into
+# two different definitions - which is exactly what had happened, with the
+# nightly running test:gate while releases ran test:ci.
 name: full-gate
 
 on:
-  schedule:
-    - cron: "30 2 * * *"
   workflow_dispatch: {}
 
 permissions:
@@ -71,14 +86,14 @@ jobs:
           node examples/service-data-affinity/download-movielens.js
           echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
 
-      - name: Full gate
-        run: npm run test:gate
+      - name: Full release proof
+        run: npm run check:release
 
       # The acceptance runner captures per-command outcomes into the receipt,
-      # not the job log; without this step a red nightly says only "N/5
-      # commands passed" and the receipt dies with the runner. Mirrors the
-      # ci.yml post-push dump: verdicts first, then each failing command's
-      # failure lines before a bounded tail.
+      # not the job log, so without this step a red run says only that some
+      # commands failed. The summary now reports PASS/FAIL/NOT_RUN explicitly
+      # and names the first failing command; this dump adds the per-test detail
+      # behind it.
       - name: Name the failing gate commands
         if: failure()
         run: |

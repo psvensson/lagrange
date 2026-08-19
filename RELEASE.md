@@ -16,9 +16,10 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 
 | Trigger | Workflow | What runs |
 | --- | --- | --- |
-| PR / push to `main` | `.github/workflows/ci.yml` | `npm ci` → `npm run test:gate` (fast tests + static analysis + model contracts). The statistical rolling-restart convergence gate is **not** blocking here — it is a variance-bounded property, tracked as a trend, not a pass/fail gate on every push. |
-| Nightly / manual | `.github/workflows/full-gate.yml` | Re-runs `npm run test:gate` against the current default branch without path exclusions. |
-| Push of a `v*` tag | `.github/workflows/release.yml` | Fail-fast release-notes gate (`node scripts/release-notes.js --mode check`: the tag must match `package.json` and have a non-empty `CHANGELOG.md` section) → `npm ci` → `npm run test:ci` → `npm run build:all` (bundle + SEA) → `helm package charts/lagrange-node` → checksum every release asset → build and smoke-test the distroless `linux/amd64` image with OCI provenance labels → build and clean-install one commit-bound `lagrange-server` tarball → publish that exact tarball to npm → push `<x.y.z>` + `latest` to `docker.io/psvensson/lagrange` → update the Docker Hub overview (best-effort) → publish the chart, SEA binaries, npm tarball, and `SHA256SUMS` to the GitHub Release with notes from the tagged changelog section. |
+| PR / push to `main` | `.github/workflows/ci.yml` | `npm ci` → `npm run check`: fast static analysis over the changed paths, then the safety spine plus the subsystems this change obliges. It proves the change, not the corpus, and fails closed — an unclassifiable change refuses with `MODULAR PROOF NOT SAFE` rather than proving a convenient subset. The statistical rolling-restart convergence gate is **not** blocking here — it is a variance-bounded property, tracked as a trend, not a pass/fail gate on every push. |
+| Push to `main` | `.github/workflows/repository-health.yml` | Whole-repository structural analysis (`test:owner-debt:prepare` → `test:static` → `model:contracts`). **Not** a required check: structural debt on `main` is work to schedule, not a reason unrelated changes cannot land. |
+| Manual | `.github/workflows/full-gate.yml` | `npm run check:release` — the whole system, on demand. No longer nightly: a scheduled whole-system proof is a standing veto, and an unchanged tree cannot grow new behavioural debt. |
+| Push of a `v*` tag | `.github/workflows/release.yml` | Fail-fast release-notes gate (`node scripts/release-notes.js --mode check`: the tag must match `package.json` and have a non-empty `CHANGELOG.md` section) → `npm ci` → `npm run check:release` → `npm run build:all` (bundle + SEA) → `helm package charts/lagrange-node` → checksum every release asset → build and smoke-test the distroless `linux/amd64` image with OCI provenance labels → build and clean-install one commit-bound `lagrange-server` tarball → publish that exact tarball to npm → push `<x.y.z>` + `latest` to `docker.io/psvensson/lagrange` → update the Docker Hub overview (best-effort) → publish the chart, SEA binaries, npm tarball, and `SHA256SUMS` to the GitHub Release with notes from the tagged changelog section. |
 
 ## Cutting a release
 
@@ -42,7 +43,7 @@ no backward-compatibility guarantee (see `CHANGELOG.md`).
 4. **Verify on a clean checkout** (the release Quest's `doneWhen`):
    ```sh
    npm ci
-   npm run test:ci                       # full gate
+   npm run check:release                 # the whole system
    npm run package:npm                   # pack + clean install/import/CLI smoke
    docker build -t lagrange:rc .         # image builds
    docker run --rm -p 8080:8080 lagrange:rc &   # boots, opens 8080/8081/8082
@@ -133,5 +134,6 @@ developer artifact is required to release.
 
 The release job requests `contents: write` for GitHub's short-lived
 `GITHUB_TOKEN` and `id-token: write` for npm trusted publishing. Repository or
-organization policy must allow those permissions. Ordinary CI and nightly jobs
-retain `contents: read` and receive no Docker Hub or npm publishing credentials.
+organization policy must allow those permissions. Ordinary CI, repository
+health, and the manual full gate retain `contents: read` and receive no Docker
+Hub or npm publishing credentials.

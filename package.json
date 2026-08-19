@@ -46,7 +46,7 @@
     "test": "node scripts/select-change-tests.js",
     "check": "node scripts/check-fast-static.js && npm test",
     "check:subsystem": "node scripts/check-subsystem.js",
-    "check:release": "npm run test:gate",
+    "check:release": "npm run test:ci && npm run test:gate",
     "test:smoke": "node scripts/run-project-hardening-acceptance.js --manifest test/manifests/developer-smoke-proof-manifest.json --receipt-dir test-output/acceptance/developer-smoke",
     "test:quest-proof": "node scripts/run-quest-proof.js",
     "test:safety-pregate": "node scripts/run-test-files.js $(cat test/shards/safety-pregate.txt)",

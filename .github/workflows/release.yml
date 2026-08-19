@@ -112,8 +112,10 @@ jobs:
           node examples/service-data-affinity/download-movielens.js
           echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
 
-      - name: Full pre-release gate
-        run: npm run test:ci
+      # The same command the manual full-gate workflow runs. A release and an
+      # on-demand whole-system proof must not be able to mean different things.
+      - name: Full pre-release proof
+        run: npm run check:release
 
       - name: Build bundle and SEA binaries
         run: npm run build:all

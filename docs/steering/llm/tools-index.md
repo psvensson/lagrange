@@ -102,7 +102,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## check
 
 - `check:memory-index` — `node scripts/check-memory-index.js`
-- `check:release` — `npm run test:gate`
+- `check:release` — `npm run test:ci && npm run test:gate`
 - `check:stale-untracked` — `node scripts/check-stale-untracked.js`
 - `check:subsystem` — `node scripts/check-subsystem.js`
 
