@@ -189,6 +189,24 @@ export function semanticPaths(records) {
   return [...paths].sort();
 }
 
+// Paths this change made VANISH: the old side of a deletion or rename, unless
+// some other record still puts that same path in the tree. A vanished test
+// cannot be run and cannot be under-tested, so it must not be mistaken for an
+// unclassified one - deleting a test would otherwise refuse the whole proof.
+export function vanishedPaths(records) {
+  const present = new Set();
+  for (const record of records || []) {
+    if (record.path) present.add(record.path);
+  }
+  const vanished = new Set();
+  for (const record of records || []) {
+    if (record.oldPath && !present.has(record.oldPath)) {
+      vanished.add(record.oldPath);
+    }
+  }
+  return vanished;
+}
+
 // Paths that still exist, which is all a static checker can open.
 export function existingPaths(records) {
   return [...new Set(arrayMap(

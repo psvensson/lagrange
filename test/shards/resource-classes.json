@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2059,
+    "ordinary": 2057,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 0
   },
-  "censusSize": 2073,
-  "digest": "fnv1a32-a226d468",
+  "censusSize": 2071,
+  "digest": "fnv1a32-c814e2a2",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
     "test/address/address-manager.test.js": "ordinary",
@@ -1738,9 +1738,7 @@
     "test/scripts/impact-contract-registry.test.js": "ordinary",
     "test/scripts/impact-proof-cone-consumers.test.js": "ordinary",
     "test/scripts/impact-proof-cone-followed-file-races.test.js": "ordinary",
-    "test/scripts/impact-proof-cone-policy.test.js": "ordinary",
     "test/scripts/impact-proof-cone-producer.test.js": "ordinary",
-    "test/scripts/impact-proof-cone-receipt.test.js": "ordinary",
     "test/scripts/impact-proof-cone.test.js": "ordinary",
     "test/scripts/inventory-ordinal-segments.test.js": "ordinary",
     "test/scripts/list-commands.test.js": "ordinary",

@@ -36,6 +36,7 @@ import {
   changedRecords,
   resolvedCheckBase,
   semanticPaths,
+  vanishedPaths,
 } from './checks/changed-paths.js';
 import {
   PACKAGE_MANIFEST_PATH,
@@ -85,6 +86,14 @@ export function changedPathsBetween(base, head, gitRoot = root) {
   return records === null ? null : semanticPaths(records);
 }
 
+// Which of those paths this change REMOVED. Kept separate from the path list
+// because the selector needs both: a vanished test is not unclassified, while
+// a vanished source file must still prove its former owner.
+export function vanishedPathsBetween(base, head, gitRoot = root) {
+  const records = changedRecords({root: gitRoot, base, head});
+  return records === null ? new Set() : vanishedPaths(records);
+}
+
 // Which top-level package.json keys differ between the two states. Computed
 // here because it needs both; the selector stays a pure function of what it is
 // told, and refuses when this cannot be determined.
@@ -128,6 +137,7 @@ export function changedPackageFields(base, head, gitRoot = root) {
 export function buildExecutionPlan({
   changedPaths,
   packageFields,
+  vanished = new Set(),
   planRoot = root,
   selector = selectChangedTests,
   spine = loadSafetySpine,
@@ -136,6 +146,7 @@ export function buildExecutionPlan({
     root: planRoot,
     changedPaths,
     changedPackageFields: packageFields,
+    vanishedPaths: vanished,
   });
   const selected = selection.tests || [];
   const spineTests = spine(planRoot);
@@ -239,6 +250,7 @@ function main() {
   const plan = buildExecutionPlan({
     changedPaths,
     packageFields: changedPackageFields(invocation.base, invocation.head),
+    vanished: vanishedPathsBetween(invocation.base, invocation.headRevision),
   });
 
   if (invocation.explain) {

@@ -119,6 +119,36 @@ test('a changed test without classification refuses', () => {
   assert.equal(selection.kind, SELECTION_REFUSED);
 });
 
+test('DELETING a test does not refuse the whole proof', () => {
+  // A deleted test is absent from the classification manifest for the correct
+  // reason: it no longer exists. Reading that as "unclassified" would make
+  // removing any test demand a full release proof. It cannot be run and cannot
+  // be silently skipped, so there is nothing to refuse about - and the deletion
+  // still widens through test/shards, which audit:shards forces to be
+  // regenerated.
+  const deleted = 'test/scripts/retired-by-this-change.test.js';
+  const selection = selectChangedTests({
+    root,
+    changedPaths: [deleted],
+    vanishedPaths: new Set([deleted]),
+  });
+  assert.notEqual(selection.kind, SELECTION_REFUSED,
+    'removing a test must not require the whole system to be proved');
+  assert.ok(!selection.tests.some((entry) => entry.path === deleted),
+    'a deleted test must never be scheduled to run');
+});
+
+test('a still-present unclassified test refuses, deletion notwithstanding', () => {
+  // The exemption is for VANISHED paths only. A test that exists and is
+  // unclassified is the original hazard and must still refuse.
+  const selection = selectChangedTests({
+    root,
+    changedPaths: ['test/brand-new-area/unclassified.test.js'],
+    vanishedPaths: new Set(),
+  });
+  assert.equal(selection.kind, SELECTION_REFUSED);
+});
+
 test('unknown precise cover widens to the subsystem, never to everything', () => {
   const selection = selectChangedTests({
     root,

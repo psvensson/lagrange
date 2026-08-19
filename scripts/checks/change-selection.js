@@ -289,7 +289,12 @@ function refusedSelection(refusalCode, refusals, subsystems) {
 
 // A changed test proves itself. An UNCLASSIFIED one refuses: it would otherwise
 // be the one test guaranteed to be skipped by its own change.
-function admitChangedTest(evidence, changedPath, classes) {
+function admitChangedTest(evidence, changedPath, classes, vanished) {
+  // A DELETED test is not an unclassified test. It cannot run and cannot be
+  // silently skipped, and its removal still widens through the classification
+  // manifest, which audit:shards forces to be regenerated. Refusing here would
+  // make deleting any test demand a full release proof.
+  if (vanished.has(changedPath)) return;
   if (!classes[changedPath]) {
     evidence.refusals.push(
       `${REFUSED_UNCLASSIFIED_TEST_PROBLEM}: ${changedPath}`);
@@ -334,7 +339,7 @@ function admitChangedSource(evidence, changedPath, classes, contracts) {
 
 // One pass over the changed paths, gathering what they oblige. It decides
 // nothing: the outcome is chosen once, by the caller, from this evidence.
-function collectChangeEvidence({changedPaths, classes, contracts}) {
+function collectChangeEvidence({changedPaths, classes, contracts, vanished}) {
   const evidence = {
     plan: new Map(),
     subsystems: new Set(),
@@ -345,7 +350,7 @@ function collectChangeEvidence({changedPaths, classes, contracts}) {
   for (const changedPath of changedPaths) {
     if (isInertPath(changedPath)) continue;
     if (stringEndsWith(changedPath, TEST_SUFFIX)) {
-      admitChangedTest(evidence, changedPath, classes);
+      admitChangedTest(evidence, changedPath, classes, vanished);
       continue;
     }
     admitChangedSource(evidence, changedPath, classes, contracts);
@@ -359,7 +364,12 @@ function collectChangeEvidence({changedPaths, classes, contracts}) {
 // deliberately conservative for version 1: narrowing an individual owner later
 // requires independent evidence that the smaller set is complete, and there is
 // no reason to spend that complexity on a subsystem that already runs quickly.
-export function selectChangedTests({root, changedPaths, changedPackageFields}) {
+export function selectChangedTests({
+  root,
+  changedPaths,
+  changedPackageFields,
+  vanishedPaths = new Set(),
+}) {
   const releaseProblem = packageChangeRequiresRelease(
     changedPaths, changedPackageFields);
   if (releaseProblem) {
@@ -373,6 +383,7 @@ export function selectChangedTests({root, changedPaths, changedPackageFields}) {
     changedPaths,
     classes,
     contracts: readJson(root, IMPACT_CONTRACTS_PATH),
+    vanished: vanishedPaths,
   });
   if (evidence.refusals.length > 0) {
     return refusedSelection(REFUSAL_UNKNOWN_SCOPE, evidence.refusals,
