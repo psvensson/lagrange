@@ -12,7 +12,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## top-level
 
-- `check` — Fast static over the changed paths, then the change proof. The ordinary development gate.
+- `check` — `node scripts/check-fast-static.js && npm test`
 - `cli` — `node src/cli/bin/lagrange-admin.js`
 - `commands` — Print the curated Quest-first command quickstart.
 - `frontier` — Print the Solver frontier board.
@@ -102,9 +102,9 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## check
 
 - `check:memory-index` — `node scripts/check-memory-index.js`
-- `check:release` — Prove everything. Expensive; required when the change proof refuses with RELEASE_PROOF_REQUIRED.
+- `check:release` — `npm run test:gate`
 - `check:stale-untracked` — `node scripts/check-stale-untracked.js`
-- `check:subsystem` — Prove one whole product subsystem explicitly.
+- `check:subsystem` — `node scripts/check-subsystem.js`
 
 ## debug
 
@@ -320,4 +320,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-215 scripts indexed; 35 have a curated description, 180 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+215 scripts indexed; 32 have a curated description, 183 fall back to their raw command. Improve coverage in the two sources named in the header comment.

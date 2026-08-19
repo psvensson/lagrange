@@ -287,27 +287,6 @@ const ADVANCED_COMMAND_GROUPS = Object.freeze([
 
 const COMMAND_GROUPS = Object.freeze([
   Object.freeze({
-    title: 'Proof',
-    commands: Object.freeze([
-      Object.freeze({
-        command: 'npm test',
-        description: 'Prove this change: the safety spine plus the changed subsystem(s); refuses rather than under-testing.',
-      }),
-      Object.freeze({
-        command: 'npm run check',
-        description: 'Fast static over the changed paths, then the change proof. The ordinary development gate.',
-      }),
-      Object.freeze({
-        command: 'npm run check:subsystem -- <id>',
-        description: 'Prove one whole product subsystem explicitly.',
-      }),
-      Object.freeze({
-        command: 'npm run check:release',
-        description: 'Prove everything. Expensive; required when the change proof refuses with RELEASE_PROOF_REQUIRED.',
-      }),
-    ]),
-  }),
-  Object.freeze({
     title: 'Quest Workflow',
     commands: Object.freeze([
       Object.freeze({
