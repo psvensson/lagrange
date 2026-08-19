@@ -83,13 +83,13 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 61. [TEST-0142] Slow-dependency resilience — inject artificial latency into a dependency (mock that resolves after a delay) and prove the component does not fail, corrupt state, or drop work. It may be slower, but it must remain correct. _(see testing-guidelines/regression-policy.md:332)_
 62. [TEST-0148] The failure message should match the reported error _(see testing-guidelines/regression-policy.md:27)_
 63. [TEST-0150] Is the current problem a repeated pattern? If so, is there a shared abstraction that should exist but does not? _(see testing-guidelines/regression-policy.md:82)_
-64. [TEST-0154] No other tests should break _(see testing-guidelines/regression-policy.md:32)_
-65. [TEST-0155] All non-trivial implementation work should have validation owned by its active Quest. _(see testing-guidelines/proof-ladders.md:17)_
-66. [TEST-0157] These tests should be small and targeted. _(see testing-guidelines/regression-policy.md:168)_
-67. [TEST-0158] The review should produce candidate findings or risks; the Solver still owns terminal status. _(see testing-guidelines/release-gate.md:114)_
-68. [TEST-0159] A convergence bug MUST be reproduced deterministically in-process BEFORE changing code; the non-deterministic docker statistical gate is last-resort certification of a landed fix, and MUST NOT be used as the iteration loop. _(see findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md:5)_
-69. [TEST-0161] Runner Stability Boundary Policy — Required workflow: Only return to suite-local fixes after the shared runner boundary is shown stable. _(see testing-guidelines/harness.md:27)_
-70. [TEST-0163] Are multiple recent bugs clustering around the same boundary or component? That may indicate a design-level issue worth addressing instead of patching each symptom individually. _(see testing-guidelines/regression-policy.md:86)_
+64. [TEST-0155] No other tests should break _(see testing-guidelines/regression-policy.md:32)_
+65. [TEST-0156] All non-trivial implementation work should have validation owned by its active Quest. _(see testing-guidelines/proof-ladders.md:17)_
+66. [TEST-0158] These tests should be small and targeted. _(see testing-guidelines/regression-policy.md:168)_
+67. [TEST-0159] The review should produce candidate findings or risks; the Solver still owns terminal status. _(see testing-guidelines/release-gate.md:114)_
+68. [TEST-0160] A convergence bug MUST be reproduced deterministically in-process BEFORE changing code; the non-deterministic docker statistical gate is last-resort certification of a landed fix, and MUST NOT be used as the iteration loop. _(see findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md:5)_
+69. [TEST-0162] Runner Stability Boundary Policy — Required workflow: Only return to suite-local fixes after the shared runner boundary is shown stable. _(see testing-guidelines/harness.md:27)_
+70. [TEST-0164] Are multiple recent bugs clustering around the same boundary or component? That may indicate a design-level issue worth addressing instead of patching each symptom individually. _(see testing-guidelines/regression-policy.md:86)_
 71. [TEST-0166] System guideline §9 (Load May Slow The System, Not Break It) requires that all subsystems remain correct under load. _(see testing-guidelines/regression-policy.md:316)_
 
 ### Ownership & Authority Policies
@@ -127,8 +127,8 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 102. [TEST-0136] Reference Scenario Policy — Required workflow: A scenario-driven Quest that changes runtime meaning, decision meaning, or shared reporting must prove the direct owner path and the consuming status, diagnostics, admin, harness, or report surface. _(see testing-guidelines/release-gate.md:36)_
 103. [TEST-0138] Structured Deferred-Outcome Regression Policy — Required coverage: Assert the canonical deferred vocabulary for the boundary, such as outcome, completionState, reasonCodes, retryAfterMs, runtimeAuthority, visibilityState, or other owner-defined fields. _(see testing-guidelines/regression-policy.md:281)_
 104. [TEST-0141] Read-Side Repair Separation Regression Policy — Required coverage: If the same boundary also carries critical convergence traffic, add coverage proving that diagnostics or repair deferral does not block the critical owner path. _(see testing-guidelines/regression-policy.md:310)_
-105. [TEST-0153] System Guideline Conformance Gate for New and Behavior-Meaningful Tests — Required workflow: In test descriptions, name the owner path being verified (for example "uses storageAdmissionService.checkSplit" or "refreshes via setRebalanceCoordinator"). _(see testing-guidelines/fixtures.md:126)_
-106. [TEST-0156] Runtime Quests that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary. _(see testing-guidelines/proof-ladders.md:123)_
+105. [TEST-0154] System Guideline Conformance Gate for New and Behavior-Meaningful Tests — Required workflow: In test descriptions, name the owner path being verified (for example "uses storageAdmissionService.checkSplit" or "refreshes via setRebalanceCoordinator"). _(see testing-guidelines/fixtures.md:126)_
+106. [TEST-0157] Runtime Quests that touch already oversized files should record whether they are adding local size debt or extracting a smaller owner/helper boundary. _(see testing-guidelines/proof-ladders.md:123)_
 
 ### Lifecycle & State Machine Rules
 
@@ -140,11 +140,11 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 
 110. [TEST-0113] When a change touches startup, readiness, admin snapshot, service discovery, or another shared control-plane truth surface, tests must prove readers observe and schedule repair instead of repairing inline. _(see testing-guidelines/regression-policy.md:297)_
 111. [TEST-0134] Deterministic Control-Loop Regression Policy — Required coverage: Readiness-dimension verification - For topology changes, assert that internal consumers use repairEligible and that routing/benchmark paths use serveEligible. _(see testing-guidelines/regression-policy.md:208)_
-112. [TEST-0160] A convergence-bug repro MUST exercise the layer where the invariant is produced or violated (the owner write, commit edge, or election), and MUST NOT assert only a downstream projection such as a readiness snapshot or settled cache — a green repro at the wrong altitude never exercises the broken mechanism and is a primary cause of land-correct-but-recur. _(see findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md:5)_
+112. [TEST-0161] A convergence-bug repro MUST exercise the layer where the invariant is produced or violated (the owner write, commit edge, or election), and MUST NOT assert only a downstream projection such as a readiness snapshot or settled cache — a green repro at the wrong altitude never exercises the broken mechanism and is a primary cause of land-correct-but-recur. _(see findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md:5)_
 
 ### Caching & Observation Rules
 
-113. [TEST-0152] When a bug depends on stale cache truth, stale routing, delayed authoritative visibility, no-handler witnesses, or other cross-time evidence races, the regression must replay the witness order that triggered the bug rather than asserting only the final steady state. _(see testing-guidelines/regression-policy.md:217)_
+113. [TEST-0153] When a bug depends on stale cache truth, stale routing, delayed authoritative visibility, no-handler witnesses, or other cross-time evidence races, the regression must replay the witness order that triggered the bug rather than asserting only the final steady state. _(see testing-guidelines/regression-policy.md:217)_
 
 ### Routing & Message Dissemination
 
@@ -160,7 +160,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 120. [TEST-0041] Timeout Budget and Classification Policy — Required behavior: Include timeout class and budget context in integration or harness failure artifacts used for diagnosis. _(see testing-guidelines/harness.md:115)_
 121. [TEST-0116] Timeout Budget and Classification Policy — Required behavior: Treat exact-boundary timeout clusters (for example exactly 4s/6s/30s/60s) as hard failures requiring deterministic regression coverage before closure. _(see testing-guidelines/harness.md:113)_
 122. [TEST-0139] Structured Deferred-Outcome Regression Policy — Required coverage: Assert that callers preserve or consume that contract instead of silently converting it into: - []; - null; - timeout-only failure text; - generic fallback success _(see testing-guidelines/regression-policy.md:284)_
-123. [TEST-0162] Runner Parallelism Budget Policy — Required workflow: Only restore higher parallelism after the aggregate gate is proven stable at the new boundary. _(see testing-guidelines/harness.md:46)_
+123. [TEST-0163] Runner Parallelism Budget Policy — Required workflow: Only restore higher parallelism after the aggregate gate is proven stable at the new boundary. _(see testing-guidelines/harness.md:46)_
 
 ### Testing & Harness Guidelines
 
@@ -180,7 +180,7 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 137. [TEST-0072] Temporal Witness Replay Policy — Required coverage: Prefer focused unit or integration replays over broad scenario-only proof, but keep the original scenario or representative blocker probe in the validation surface. _(see testing-guidelines/regression-policy.md:233)_
 138. [TEST-0089] A test MUST assert the real, unconditional production behavior, and MUST NEVER set, branch on, or pin a feature flag to make an assertion pass. A green test that only holds while a flag is in one position proves the flag, not the behavior. _(see testing-guidelines/fixtures.md:87)_
 139. [TEST-0090] Production feature flags are within-session scaffolds only — NO flag survives the session that lands it (user directive 2026-06-26, re-affirmed 2026-07-02). By the end of the session a flag MUST be either baked in unconditionally (the flag deleted and the new behavior made the only path) or removed together with the functionality it gated; a flag MUST NOT linger as a production toggle, owned or otherwise — there is no enrolled multi-session regime. Flags inherited from before this rule are recorded debt, not license (see roadmap.md "Feature Flag Lifecycle" for how they are retired). Whichever way the flag resolves, the tests assert the real production behavior — bake the chosen behavior in first, then update the test to assert that unconditional behavior; a test never pins a flag either way. _(see testing-guidelines/fixtures.md:91)_
-140. [TEST-0092] Invoke targeted tests via the committed runner or tap directly - npm run test:file -- <test-file...> (the committed scripts/run-test-files.js fail-closed runner: empty TAP streams, skips, and todos all fail; --filter <substring> narrows the provided file list by path substring and fails closed when nothing matches). npx tap <test-file...> is the equivalent direct invocation (tap is the suite runner; the sharded test:* scripts shell out to it). Do NOT use npm test -- <file> or npm test -- --grep "pattern": the test script is the full sharded suite and silently ignores extra arguments, so those forms run everything while appearing filtered. _(see testing-guidelines/harness.md:125)_
+140. [TEST-0092] Invoke targeted tests via the committed runner or tap directly - npm run test:file -- <test-file...> (the committed scripts/run-test-files.js fail-closed runner: empty TAP streams, skips, and todos all fail; --filter <substring> narrows the provided file list by path substring and fails closed when nothing matches). npx tap <test-file...> is the equivalent direct invocation (tap is the suite runner; the sharded test:* scripts shell out to it). Do NOT use npm test -- <file> or npm test -- --grep "pattern": the test script is the change-proof orchestrator and silently ignores extra arguments, so those forms prove the change rather than the file you named. _(see testing-guidelines/harness.md:125)_
 141. [TEST-0095] Fix Failing Tests Immediately — When you discover failing or timing-out tests you must address each failure with this remediation sequence rather than ignoring or deferring it: Do not ignore a failing test. A failing test indicates broken functionality and must be treated as a stop-the-line signal for the touched area. _(see testing-guidelines/regression-policy.md:376)_
 142. [TEST-0097] Every test selected by the relevant targeted or suite command must run and pass; no selected test may be hidden by a skip mechanism. _(see testing-guidelines/fixtures.md:33)_
 143. [TEST-0099] The test suite must prove that production code works — not that a test-friendly fork of it works. _(see testing-guidelines/fixtures.md:77)_
@@ -197,8 +197,8 @@ Rule count, token estimate, and domain coverage live in `manifest.json` (regener
 154. [TEST-0147] The test should capture the exact failure scenario from the bug report _(see testing-guidelines/regression-policy.md:23)_
 155. [TEST-0149] The fix should make the failing test pass _(see testing-guidelines/regression-policy.md:31)_
 156. [TEST-0151] When adding a new test file, or making a behavior-meaningful change to an existing test — new or changed assertions about production behavior — you must also audit the code under test for System Guidelines violations and fix them as part of the same change. _(see testing-guidelines/fixtures.md:105)_
-157. [TEST-0164] The test-only-paths rule and this flag-coupling rule together close the loop — neither tests nor production may smuggle a flag into the proof. _(see testing-guidelines/fixtures.md:82)_
-158. [TEST-0165] Only run the complete test suite (npm test) at: - Checkpoint tasks explicitly marked in the active Quest's doneWhen or frontier list; - Final integration verification; - When explicitly requested by the user _(see testing-guidelines/harness.md:143)_
+157. [TEST-0152] Only run the complete suite (npm run check:release) at: - Checkpoint tasks explicitly marked in the active Quest's doneWhen or frontier list; - Final integration verification; - When explicitly requested by the user; - When npm test refuses with RELEASE_PROOF_REQUIRED _(see testing-guidelines/harness.md:155)_
+158. [TEST-0165] The test-only-paths rule and this flag-coupling rule together close the loop — neither tests nor production may smuggle a flag into the proof. _(see testing-guidelines/fixtures.md:82)_
 
 ### Code Style & Formatting Guidelines
 

@@ -637,10 +637,11 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | ARCH-0297 | must | architecture | doctrine/state-encoding.md:124 [packed] | — | 10. Normalize Evidence Before Adjudicating Decisions — Every input to a liveness or safet… |
 | GOV-0122 | must | governance | workflow-guidelines/solver-quests.md:1172 [packed] | — | EXHAUST-and-pivot to a higher-altitude Quest/epic is a legitimate, encouraged outcome of … |
 | TEST-0151 | must | testing | testing-guidelines/fixtures.md:105 [packed] | — | When adding a new test file, or making a behavior-meaningful change to an existing test —… |
-| TEST-0152 | must | testing | testing-guidelines/regression-policy.md:217 [packed] | — | When a bug depends on stale cache truth, stale routing, delayed authoritative visibility,… |
+| TEST-0152 | must | testing | testing-guidelines/harness.md:155 [packed] | — | Only run the complete suite (npm run check:release) at: - Checkpoint tasks explicitly mar… |
+| TEST-0153 | must | testing | testing-guidelines/regression-policy.md:217 [packed] | — | When a bug depends on stale cache truth, stale routing, delayed authoritative visibility,… |
 | GOV-0123 | must | governance | workflow-guidelines/solver-quests.md:1281 [packed] | — | A projection-retention migration MUST classify exact paths before removal, record base co… |
 | GOV-0124 | must | governance | memory-boundary.md:20 [packed] | — | A lesson that should bind future work for everyone MUST be promoted into in-repo steering… |
-| TEST-0153 | must | testing | testing-guidelines/fixtures.md:126 [packed] | — | System Guideline Conformance Gate for New and Behavior-Meaningful Tests — Required workfl… |
+| TEST-0154 | must | testing | testing-guidelines/fixtures.md:126 [packed] | — | System Guideline Conformance Gate for New and Behavior-Meaningful Tests — Required workfl… |
 | GOV-0125 | must_not | governance | workflow-guidelines/solver-quests.md:254 [packed] | — | Climbing a rung is a response to a measured stall — a trustworthy observation that the cu… |
 | GOV-0126 | must_not | governance | workflow-guidelines/solver-quests.md:267 [packed] | — | The reopen is evidence-gated: it is refused unless at least one contributing attempt re-c… |
 | GOV-0127 | must_not | governance | workflow-guidelines/solver-quests.md:292 [packed] | — | A later regression-resolution finding with resolution explained may discharge the restore… |
@@ -653,13 +654,13 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0133 | must_not | governance | workflow-guidelines/solver-quests.md:1025 [packed] | — | Provenance honesty (mirroring CLOSURE_MEASURED vs CLOSURE_DECISION): a ladder park is a M… |
 | GOV-0134 | must_not | governance | workflow-guidelines/solver-quests.md:1179 [packed] | — | The production reflection path runs only when the executor exposes a reflect() method (th… |
 | GOV-0135 | must_not | governance | workflow-guidelines/solver-quests.md:1196 [packed] | — | A supervised driver — a human, or any agent that drives the Solver through individual sub… |
-| TEST-0154 | should | testing | testing-guidelines/regression-policy.md:32 [packed] | — | No other tests should break |
+| TEST-0155 | should | testing | testing-guidelines/regression-policy.md:32 [packed] | — | No other tests should break |
 | ARCH-0299 | should | architecture | doctrine/decision-experiments.md:88 [packed] | — | Active implementation should target one executable concern per Quest. |
 | ARCH-0300 | should | architecture | doctrine/decision-experiments.md:89 [packed] | — | Quest status should live in the Solver event log and report rather than in parallel track… |
-| TEST-0155 | should | testing | testing-guidelines/proof-ladders.md:17 [packed] | — | All non-trivial implementation work should have validation owned by its active Quest. |
-| TEST-0156 | should | testing | testing-guidelines/proof-ladders.md:123 [packed] | — | Runtime Quests that touch already oversized files should record whether they are adding l… |
-| TEST-0157 | should | testing | testing-guidelines/regression-policy.md:168 [packed] | — | These tests should be small and targeted. |
-| TEST-0158 | should | testing | testing-guidelines/release-gate.md:114 [packed] | — | The review should produce candidate findings or risks; the Solver still owns terminal sta… |
+| TEST-0156 | should | testing | testing-guidelines/proof-ladders.md:17 [packed] | — | All non-trivial implementation work should have validation owned by its active Quest. |
+| TEST-0157 | should | testing | testing-guidelines/proof-ladders.md:123 [packed] | — | Runtime Quests that touch already oversized files should record whether they are adding l… |
+| TEST-0158 | should | testing | testing-guidelines/regression-policy.md:168 [packed] | — | These tests should be small and targeted. |
+| TEST-0159 | should | testing | testing-guidelines/release-gate.md:114 [packed] | — | The review should produce candidate findings or risks; the Solver still owns terminal sta… |
 | ARCH-0301 | may | architecture | runtime-contracts.md:37 [packed] | — | Owner And Path Detail — Required runtime patterns: A shared row may have multiple owners … |
 | GOV-0136 | must | governance | roadmap.md:154 [packed] | — | Before the landing session ends, the flag MUST be resolved: validate the change (determin… |
 | GOV-0137 | must | governance | roadmap.md:161 [packed] | — | Flags inherited from before this rule are recorded debt, not license: retire or promote e… |
@@ -668,8 +669,8 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0140 | must | governance | workflow-guidelines/solver-quests.md:477 [packed] | — | Regression-restore gate: once a measured run records an invariant regression, the very ne… |
 | GOV-0141 | must_not | governance | findings/2026-06-17-workflow-linking-and-memory-loop-promoted-findings-must-be-normative.md:5 [packed] | — | Findings promoted into steering MUST be written as a normative sentence containing a reco… |
 | GOV-0142 | must_not | governance | findings/2026-06-30-plan-requests-stay-plan-only.md:5 [packed] | — | When the user asks for a plan, design, or review with no implementation-truth change requ… |
-| TEST-0159 | must_not | testing | findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md:5 [packed] | — | A convergence bug MUST be reproduced deterministically in-process BEFORE changing code; t… |
-| TEST-0160 | must_not | testing | findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md:5 [packed] | — | A convergence-bug repro MUST exercise the layer where the invariant is produced or violat… |
+| TEST-0160 | must_not | testing | findings/2026-06-17-steering-doc-clarity-deterministic-first-repro.md:5 [packed] | — | A convergence bug MUST be reproduced deterministically in-process BEFORE changing code; t… |
+| TEST-0161 | must_not | testing | findings/2026-06-17-steering-doc-clarity-repro-at-correct-altitude.md:5 [packed] | — | A convergence-bug repro MUST exercise the layer where the invariant is produced or violat… |
 | GOV-0143 | should | governance | workflow-guidelines/subagents.md:26 [packed] | — | Worker Dossier — Every delegated worker should receive: Quest id and statement; |
 | GOV-0144 | should | governance | workflow-guidelines/subagents.md:27 [packed] | — | Worker Dossier — Every delegated worker should receive: selected frontier; |
 | GOV-0145 | should | governance | workflow-guidelines/subagents.md:28 [packed] | — | Worker Dossier — Every delegated worker should receive: current strategy rung; |
@@ -677,9 +678,9 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | GOV-0147 | should | governance | workflow-guidelines/subagents.md:30 [packed] | — | Worker Dossier — Every delegated worker should receive: evidence paths from prior attempt… |
 | GOV-0148 | should | governance | workflow-guidelines/subagents.md:31 [packed] | — | Worker Dossier — Every delegated worker should receive: durable findings and ruled-out ap… |
 | GOV-0149 | should | governance | workflow-guidelines/subagents.md:32 [packed] | — | Worker Dossier — Every delegated worker should receive: hard constraints. |
-| TEST-0161 | may | testing | testing-guidelines/harness.md:27 [packed] | — | Runner Stability Boundary Policy — Required workflow: Only return to suite-local fixes af… |
-| TEST-0162 | may | testing | testing-guidelines/harness.md:46 [packed] | — | Runner Parallelism Budget Policy — Required workflow: Only restore higher parallelism aft… |
-| TEST-0163 | may | testing | testing-guidelines/regression-policy.md:86 [packed] | — | Are multiple recent bugs clustering around the same boundary or component? That may indic… |
+| TEST-0162 | may | testing | testing-guidelines/harness.md:27 [packed] | — | Runner Stability Boundary Policy — Required workflow: Only return to suite-local fixes af… |
+| TEST-0163 | may | testing | testing-guidelines/harness.md:46 [packed] | — | Runner Parallelism Budget Policy — Required workflow: Only restore higher parallelism aft… |
+| TEST-0164 | may | testing | testing-guidelines/regression-policy.md:86 [packed] | — | Are multiple recent bugs clustering around the same boundary or component? That may indic… |
 | GOV-0150 | must | governance | workflow-guidelines/subagents.md:60 [packed] | — | Adversarial verification prompts (design vets, implementation verifiers) MUST include eve… |
 | ARCH-0302 | should | architecture | doctrine/decision-experiments.md:49 [packed] | — | Runtime Quests that follow such a model should cite it as their scope basis and proof sur… |
 | ARCH-0303 | should | architecture | doctrine/decision-experiments.md:80 [packed] | — | Implementation work should be as explicit and bounded as the runtime design. |
@@ -698,8 +699,7 @@ are read under their load condition; `reference-only` sources are nonbinding.
 | ARCH-0305 | may | architecture | doctrine/state-encoding.md:98 [packed] | — | Authoritative — owned by the same semantic owner and plane; may directly admit or reject. |
 | ARCH-0306 | may | architecture | doctrine/state-encoding.md:100 [packed] | — | Equivalent — another access path to the same owner and plane; may confirm or refute only … |
 | GOV-0162 | may | governance | roadmap.md:125 [packed] | — | A row may move to active implementation only when the intended behavior is sharp enough t… |
-| TEST-0164 | may | testing | testing-guidelines/fixtures.md:82 [packed] | — | The test-only-paths rule and this flag-coupling rule together close the loop — neither te… |
-| TEST-0165 | may | testing | testing-guidelines/harness.md:143 [packed] | — | Only run the complete test suite (npm test) at: - Checkpoint tasks explicitly marked in t… |
+| TEST-0165 | may | testing | testing-guidelines/fixtures.md:82 [packed] | — | The test-only-paths rule and this flag-coupling rule together close the loop — neither te… |
 | TEST-0166 | may | testing | testing-guidelines/regression-policy.md:316 [packed] | — | System guideline §9 (Load May Slow The System, Not Break It) requires that all subsystems… |
 | GOV-0163 | should | governance | workflow-guidelines/solver-quests.md:336 [packed] | — | Record a separate explicit finding only when an operator or agent learned a durable concl… |
 | GOV-0164 | should | governance | workflow-guidelines/solver-quests.md:376 [packed] | — | Scope pressure is advisory rather than terminal, but a high-severity signal should usuall… |

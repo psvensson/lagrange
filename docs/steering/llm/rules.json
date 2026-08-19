@@ -311,7 +311,7 @@
     "aliasRuleCount": 4,
     "masterRuleCount": 679,
     "emittedMasterRuleCount": 679,
-    "estimatedAllRulesTokens": 32182
+    "estimatedAllRulesTokens": 32201
   },
   "rules": [
     {
@@ -6547,7 +6547,7 @@
       "tags": [
         "testing"
       ],
-      "rule": "Invoke targeted tests via the committed runner or tap directly - npm run test:file -- <test-file...> (the committed scripts/run-test-files.js fail-closed runner: empty TAP streams, skips, and todos all fail; --filter <substring> narrows the provided file list by path substring and fails closed when nothing matches). npx tap <test-file...> is the equivalent direct invocation (tap is the suite runner; the sharded test:* scripts shell out to it). Do NOT use npm test -- <file> or npm test -- --grep \"pattern\": the test script is the full sharded suite and silently ignores extra arguments, so those forms run everything while appearing filtered.",
+      "rule": "Invoke targeted tests via the committed runner or tap directly - npm run test:file -- <test-file...> (the committed scripts/run-test-files.js fail-closed runner: empty TAP streams, skips, and todos all fail; --filter <substring> narrows the provided file list by path substring and fails closed when nothing matches). npx tap <test-file...> is the equivalent direct invocation (tap is the suite runner; the sharded test:* scripts shell out to it). Do NOT use npm test -- <file> or npm test -- --grep \"pattern\": the test script is the change-proof orchestrator and silently ignores extra arguments, so those forms prove the change rather than the file you named.",
       "score": 212,
       "sources": [
         {
@@ -10376,6 +10376,24 @@
       "domain": "testing",
       "strength": "must",
       "tags": [
+        "testing"
+      ],
+      "rule": "Only run the complete suite (npm run check:release) at: - Checkpoint tasks explicitly marked in the active Quest's doneWhen or frontier list; - Final integration verification; - When explicitly requested by the user; - When npm test refuses with RELEASE_PROOF_REQUIRED",
+      "score": 184,
+      "sources": [
+        {
+          "file": "testing-guidelines/harness.md",
+          "line": 155,
+          "section": "Testing — Harness & Execution > What The Four Commands Prove",
+          "role": "packed"
+        }
+      ]
+    },
+    {
+      "id": "TEST-0153",
+      "domain": "testing",
+      "strength": "must",
+      "tags": [
         "cache",
         "routing"
       ],
@@ -10423,7 +10441,7 @@
       ]
     },
     {
-      "id": "TEST-0153",
+      "id": "TEST-0154",
       "domain": "testing",
       "strength": "must",
       "tags": [
@@ -10639,7 +10657,7 @@
       ]
     },
     {
-      "id": "TEST-0154",
+      "id": "TEST-0155",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -10687,7 +10705,7 @@
       ]
     },
     {
-      "id": "TEST-0155",
+      "id": "TEST-0156",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -10703,7 +10721,7 @@
       ]
     },
     {
-      "id": "TEST-0156",
+      "id": "TEST-0157",
       "domain": "testing",
       "strength": "should",
       "tags": [
@@ -10721,7 +10739,7 @@
       ]
     },
     {
-      "id": "TEST-0157",
+      "id": "TEST-0158",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -10737,7 +10755,7 @@
       ]
     },
     {
-      "id": "TEST-0158",
+      "id": "TEST-0159",
       "domain": "testing",
       "strength": "should",
       "tags": [],
@@ -10887,7 +10905,7 @@
       ]
     },
     {
-      "id": "TEST-0159",
+      "id": "TEST-0160",
       "domain": "testing",
       "strength": "must_not",
       "tags": [],
@@ -10903,7 +10921,7 @@
       ]
     },
     {
-      "id": "TEST-0160",
+      "id": "TEST-0161",
       "domain": "testing",
       "strength": "must_not",
       "tags": [
@@ -11034,7 +11052,7 @@
       ]
     },
     {
-      "id": "TEST-0161",
+      "id": "TEST-0162",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -11050,7 +11068,7 @@
       ]
     },
     {
-      "id": "TEST-0162",
+      "id": "TEST-0163",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -11068,7 +11086,7 @@
       ]
     },
     {
-      "id": "TEST-0163",
+      "id": "TEST-0164",
       "domain": "testing",
       "strength": "may",
       "tags": [],
@@ -11386,7 +11404,7 @@
       ]
     },
     {
-      "id": "TEST-0164",
+      "id": "TEST-0165",
       "domain": "testing",
       "strength": "may",
       "tags": [
@@ -11399,24 +11417,6 @@
           "file": "testing-guidelines/fixtures.md",
           "line": 82,
           "section": "Testing — Fixtures & Mutation Requirements > No Flag-Coupled Tests",
-          "role": "packed"
-        }
-      ]
-    },
-    {
-      "id": "TEST-0165",
-      "domain": "testing",
-      "strength": "may",
-      "tags": [
-        "testing"
-      ],
-      "rule": "Only run the complete test suite (npm test) at: - Checkpoint tasks explicitly marked in the active Quest's doneWhen or frontier list; - Final integration verification; - When explicitly requested by the user",
-      "score": 160,
-      "sources": [
-        {
-          "file": "testing-guidelines/harness.md",
-          "line": 143,
-          "section": "Testing — Harness & Execution > When to Run Full Test Suite",
           "role": "packed"
         }
       ]
@@ -12025,5 +12025,5 @@
       ]
     }
   ],
-  "generatedAt": "2026-08-13T16:34:05.063Z"
+  "generatedAt": "2026-08-19T05:08:20.072Z"
 }

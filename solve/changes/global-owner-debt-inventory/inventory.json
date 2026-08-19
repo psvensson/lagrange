@@ -5,8 +5,8 @@
     "inputs": [
       {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 433765,
-        "sha256": "bfbc7f7a1020980954f8bc8120e6df882778e272994466b73eb167df8fa3152a"
+        "bytes": 433963,
+        "sha256": "e7d252c3ea22f04c123992d90c7a7d9bb9ee9aee675ff4089b5c35b2885674c4"
       },
       {
         "path": "test-output/analysis/cognitive-complexity-src-scripts.json",
@@ -20,8 +20,8 @@
       },
       {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2421685,
-        "sha256": "c73074eebdcc012016a27ca2def762b0797ce0600734cd5d21f9a34e262ca244"
+        "bytes": 2426617,
+        "sha256": "07b60fc914ad19a784ca2ca57569053ebc48b3008d7bcfb9120cfe3134b761c3"
       },
       {
         "path": "test-output/analysis/jscpd-src-scripts/jscpd-report.json",
@@ -30,7 +30,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "53d0ea1cacfed9a0588076d2cc60ab6ab9df52b04c56f835ef8ab80631ab81ea"
+        "sha256": "f3cf2c21b5f3f63a807be116131e426f59ce4ea8f64a29f743507192e720199b"
       },
       {
         "path": "test-output/analysis/jscpd-test/jscpd-report.json",
@@ -39,7 +39,7 @@
           "duplicates",
           "statistics.detectionDate"
         ],
-        "sha256": "fd293a904ca2682a69a45a13d50c1bdf02e83e3221e46aa1366a8ff744ea6488"
+        "sha256": "a99b14a06378cc07e53e75a71c1cba87c6c5d8462a4def0d6e6582be8efba968"
       },
       {
         "path": "scripts/check-file-size-thresholds.js",
@@ -62,18 +62,18 @@
         "sha256": "22430e3b8414261751b9b67dbc6249dfec175aa6036fc4af2f9cb965b7c0e805"
       }
     ],
-    "inputDigest": "8b980629381d06e4a929788e0f34a4cec44b51e4cf079d8a463b8ff192cc9f65"
+    "inputDigest": "21d8e779aafd8974eadd65421e882d3edb4ad682fa090134940aa3924715f6cc"
   },
   "reconciliation": {
     "complexity": {
       "identity": {
         "path": "test-output/analysis/complexity-src-test.json",
-        "bytes": 433765,
-        "sha256": "bfbc7f7a1020980954f8bc8120e6df882778e272994466b73eb167df8fa3152a"
+        "bytes": 433963,
+        "sha256": "e7d252c3ea22f04c123992d90c7a7d9bb9ee9aee675ff4089b5c35b2885674c4"
       },
-      "declaredCount": 1838,
-      "observedCount": 1838,
-      "assignedCount": 1838
+      "declaredCount": 1839,
+      "observedCount": 1839,
+      "assignedCount": 1839
     },
     "cognitive": {
       "identity": {
@@ -112,7 +112,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "53d0ea1cacfed9a0588076d2cc60ab6ab9df52b04c56f835ef8ab80631ab81ea"
+          "sha256": "f3cf2c21b5f3f63a807be116131e426f59ce4ea8f64a29f743507192e720199b"
         },
         "cloneGroups": 61,
         "duplicatedLines": 1941,
@@ -130,7 +130,7 @@
             "duplicates",
             "statistics.detectionDate"
           ],
-          "sha256": "fd293a904ca2682a69a45a13d50c1bdf02e83e3221e46aa1366a8ff744ea6488"
+          "sha256": "a99b14a06378cc07e53e75a71c1cba87c6c5d8462a4def0d6e6582be8efba968"
         },
         "cloneGroups": 826,
         "duplicatedLines": 31551,
@@ -166,35 +166,35 @@
     "importGraph": {
       "identity": {
         "path": "test-output/analysis/global-owner-debt-import-graph.json",
-        "bytes": 2421685,
-        "sha256": "c73074eebdcc012016a27ca2def762b0797ce0600734cd5d21f9a34e262ca244"
+        "bytes": 2426617,
+        "sha256": "07b60fc914ad19a784ca2ca57569053ebc48b3008d7bcfb9120cfe3134b761c3"
       },
       "authority": {
         "path": "dependency-cruiser.config.cjs",
         "bytes": 1761,
         "sha256": "5be5993a0bcab2119fb355ebcf757392b3fb07b6e9934deeffa4a13570fba229"
       },
-      "sourceDigest": "29c86a54d3873b206ff6d53396415e6cff5afbfbd0304310347e5488dba6aa69",
-      "moduleCount": 4907,
-      "edgeCount": 21716,
+      "sourceDigest": "90d298214a6ea1058e2f85fa8502100f764d6946424a4f839302360fd441ada3",
+      "moduleCount": 4919,
+      "edgeCount": 21785,
       "unresolvedCount": 34
     }
   },
   "assignment": {
-    "sourceSignalCount": 2697,
-    "assignedSignalCount": 2697,
-    "uniqueAssignmentCount": 2697,
-    "digest": "eb32da73c8ad379a6b242d547ae78207ea2dd239858d50bc6dc712bbed005b1e"
+    "sourceSignalCount": 2698,
+    "assignedSignalCount": 2698,
+    "uniqueAssignmentCount": 2698,
+    "digest": "5fad26bae9a4ae300ffaeda73fe4ec1b3c80ed8ef2f67bb990494f99bcc2e774"
   },
   "signalCounts": {
     "cognitive": 179,
-    "complexity": 1838,
+    "complexity": 1839,
     "duplication": 593,
     "fileSize": 48,
     "lintExclusion": 39
   },
   "summary": {
-    "filesWithDebt": 1377,
+    "filesWithDebt": 1378,
     "rankedBoundaryCount": 123,
     "semanticBoundaryCount": 21,
     "fallbackBoundaryCount": 102,
@@ -2104,6 +2104,34 @@
       ]
     },
     {
+      "key": "area:test/scripts",
+      "owner": null,
+      "boundary": "test/scripts",
+      "classification": "test-owner-area",
+      "ownerAreas": [
+        "test/scripts"
+      ],
+      "fileCount": 5,
+      "signalCount": 5,
+      "complexity": 2,
+      "cognitive": 0,
+      "oversizedFiles": 0,
+      "duplicatedLines": 95,
+      "cloneTouches": 3,
+      "cycleGroups": 0,
+      "lintExclusions": 0,
+      "importIn": 0,
+      "importOut": 27,
+      "score": 17.5,
+      "topPaths": [
+        "test/scripts/quest-context.test.js",
+        "test/scripts/compare-latest-baseline-runs.test.js",
+        "test/scripts/selection-golden-corpus.test.js",
+        "test/scripts/exact-election-evidence-same-turn-model-contract.test.js",
+        "test/scripts/local-leader-row-visibility-model-contract.test.js"
+      ]
+    },
+    {
       "key": "area:test/function",
       "owner": null,
       "boundary": "test/function",
@@ -2273,33 +2301,6 @@
       "score": 14.2,
       "topPaths": [
         "scripts/check-cure-typing-owner.js"
-      ]
-    },
-    {
-      "key": "area:test/scripts",
-      "owner": null,
-      "boundary": "test/scripts",
-      "classification": "test-owner-area",
-      "ownerAreas": [
-        "test/scripts"
-      ],
-      "fileCount": 4,
-      "signalCount": 4,
-      "complexity": 1,
-      "cognitive": 0,
-      "oversizedFiles": 0,
-      "duplicatedLines": 95,
-      "cloneTouches": 3,
-      "cycleGroups": 0,
-      "lintExclusions": 0,
-      "importIn": 0,
-      "importOut": 21,
-      "score": 13.5,
-      "topPaths": [
-        "test/scripts/quest-context.test.js",
-        "test/scripts/compare-latest-baseline-runs.test.js",
-        "test/scripts/exact-election-evidence-same-turn-model-contract.test.js",
-        "test/scripts/local-leader-row-visibility-model-contract.test.js"
       ]
     },
     {

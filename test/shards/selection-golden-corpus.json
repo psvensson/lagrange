@@ -1,0 +1,165 @@
+{
+  "schemaVersion": 1,
+  "id": "selection-golden-corpus",
+  "description": "Independently justified proof obligations for change-scoped selection. Each fixture records what a change MUST prove for reasons established OUTSIDE the selector - a real fix and the test that shipped with it, a declared impact contract, or a policy decision - never a recording of what some earlier version of the selector happened to choose. Freezing a selector's own output as its oracle would prove only that the mechanism still agrees with itself.",
+  "contract": "The selector may become narrower or smarter over time. It may NEVER omit an obligation listed here.",
+  "fixtures": [
+    {
+      "id": "raft-follower-batch-fix",
+      "provenance": "commit 5d48920f0 fix(raft): boundary-aware prefix revalidation in follower batch tail",
+      "changed": [
+        "src/raft/liferaft-follower-batch.js"
+      ],
+      "mustIncludeSubsystems": [
+        "storage-raft"
+      ],
+      "why": "a consensus log-tail fix; storage-raft is the semantic home and its proof must run"
+    },
+    {
+      "id": "schema-admission-drain-grace-fix",
+      "provenance": "commit 555e4b4f5 fix(schema-admission): drain-aware grace deadline for quiescence gate",
+      "changed": [
+        "src/control-plane/replica-dispatch-service.js",
+        "src/rebalancer/rebalancer-planning-gate-methods.js"
+      ],
+      "mustIncludeSubsystems": [
+        "control-plane",
+        "placement-rebalance"
+      ],
+      "mustIncludeTests": [
+        "test/control-plane/replica-dispatch-node-state-update-ready-node-retry-dispatch.test.js",
+        "test/rebalancer/priority-recovery-planning-gate-diagnostic.test.js"
+      ],
+      "why": "the two tests shipped WITH this fix, so they are independently known to be the witnesses for it; the change spans two owners, so both subsystems are obligations"
+    },
+    {
+      "id": "wit-world-interface",
+      "provenance": "impact-contracts.json contract 'wit-world-interface' declares wit/ owners with wasm-service witnesses",
+      "changed": [
+        "wit/world.wit"
+      ],
+      "mustIncludeSubsystems": [
+        "wasm-toolchain"
+      ],
+      "mustIncludeImpactContracts": [
+        "wit-world-interface"
+      ],
+      "why": "the registry independently declares that every WASM consumer depends on this interface"
+    },
+    {
+      "id": "message-envelope-contract",
+      "provenance": "impact-contracts.json contract 'message-envelope'",
+      "changed": [
+        "src/transport/message-router.js"
+      ],
+      "mustIncludeSubsystems": [
+        "transport-messaging"
+      ],
+      "why": "routing envelope changes are declared cross-boundary in the registry"
+    },
+    {
+      "id": "bootstrap-join-change",
+      "provenance": "bootstrap-contract in impact-contracts.json; join is the highest-coupling lifecycle path",
+      "changed": [
+        "src/bootstrap/shared/control-plane-setup.js"
+      ],
+      "mustIncludeSubsystems": [
+        "bootstrap-membership"
+      ],
+      "why": "node join affects membership, and the bootstrap contract declares its consumers"
+    },
+    {
+      "id": "selector-self-change",
+      "provenance": "policy: the selector cannot be trusted to scope proof of its own change",
+      "changed": [
+        "scripts/checks/change-selection.js"
+      ],
+      "mustIncludeSubsystems": [
+        "test-infrastructure"
+      ],
+      "mustIncludeTests": [
+        "test/scripts/select-change-tests.test.js",
+        "test/scripts/test-subsystem-classification.test.js"
+      ],
+      "why": "a change to selection must prove the selection machinery; these also sit in the unconditional spine, so this fixture additionally pins the bootstrap"
+    },
+    {
+      "id": "documentation-only",
+      "provenance": "policy: documentation cannot change behaviour",
+      "changed": [
+        "docs/steering/llm/core.md"
+      ],
+      "mustIncludeSubsystems": [],
+      "expectSpineOnly": true,
+      "why": "the case the old gate paid 2065 tests for"
+    },
+    {
+      "id": "unknown-source-area",
+      "provenance": "policy: fail closed on unclassifiable change",
+      "changed": [
+        "src/brand-new-unmapped-area/thing.js"
+      ],
+      "expectRefusal": "UNKNOWN_SCOPE",
+      "why": "silent under-selection is indistinguishable from correct selection"
+    },
+    {
+      "id": "lockfile-dependency-change",
+      "provenance": "policy: the installed dependency graph is broader than any subsystem",
+      "changed": [
+        "package-lock.json"
+      ],
+      "expectRefusal": "RELEASE_PROOF_REQUIRED",
+      "why": "proven the hard way on 2026-08-18: an undeclared dependency made the committed import graph unreproducible on any clean checkout"
+    },
+    {
+      "id": "package-runtime-surface-change",
+      "provenance": "policy: exports/bin/files define what consumers install and execute",
+      "changed": [
+        "package.json"
+      ],
+      "changedPackageFields": [
+        "exports"
+      ],
+      "expectRefusal": "RELEASE_PROOF_REQUIRED",
+      "why": "no subsystem proof covers the published package surface"
+    },
+    {
+      "id": "package-scripts-only-change",
+      "provenance": "policy: developer command wiring is not the runtime surface",
+      "changed": [
+        "package.json"
+      ],
+      "changedPackageFields": [
+        "scripts"
+      ],
+      "mustIncludeSubsystems": [
+        "release-packaging"
+      ],
+      "why": "scripts edits must stay modular, or every command tweak forces a release proof"
+    },
+    {
+      "id": "coupled-pair-opposite-endpoint",
+      "provenance": "impact-contracts.json coupledPairs 'priority-services-row-publication-census'; the registry independently declares these two owners must stay consistent",
+      "changed": [
+        "src/node/replica-handler-create-status-methods.js"
+      ],
+      "mustIncludeSubsystems": [
+        "bootstrap-membership",
+        "control-plane"
+      ],
+      "why": "changing the row-publication endpoint must also prove the census endpoint's subsystem, exactly one hop and no further"
+    },
+    {
+      "id": "readiness-macrotask-coupled-pair",
+      "provenance": "impact-contracts.json coupledPairs 'readiness-freshness-macrotask-bound'",
+      "changed": [
+        "src/control-plane/readiness-planning-snapshot-owner.js"
+      ],
+      "mustIncludeSubsystems": [
+        "control-plane",
+        "transactions"
+      ],
+      "why": "the opposite endpoint lives in src/workflow, a different subsystem, so this fixture proves cross-subsystem coupling rather than same-subsystem coupling"
+    }
+  ]
+}

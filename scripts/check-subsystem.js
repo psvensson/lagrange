@@ -58,9 +58,9 @@ function verifyClassificationFresh() {
   return result.status === 0;
 }
 
-function testsForSubsystem(subsystem) {
+export function testsForSubsystem(subsystem, manifestRoot = root) {
   const manifest = JSON.parse(fs.readFileSync(
-    path.join(root, SUBSYSTEM_MANIFEST_PATH), UTF8));
+    path.join(manifestRoot, SUBSYSTEM_MANIFEST_PATH), UTF8));
   return Object.keys(manifest.classes).sort()
     .filter((testPath) => manifest.classes[testPath] === subsystem);
 }
@@ -102,4 +102,4 @@ function main() {
   process.exitCode = result.status === null ? 1 : result.status;
 }
 
-main();
+if (process.argv[1] === fileURLToPath(import.meta.url)) main();

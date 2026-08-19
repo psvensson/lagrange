@@ -1,0 +1,52 @@
+{
+  "schemaVersion": 1,
+  "id": "safety-spine",
+  "description": "The always-run spine: tests whose breakage can invalidate the meaning of every other test. Hand-curated on purpose. Unlike the subsystem taxonomy, completeness is NOT this list's contract - stability and breadth of fundamental mechanisms are. It must stay small enough that every ordinary change can afford it, so a test belongs here only if its failure would make other green results untrustworthy.",
+  "rationale": {
+    "test-machinery": "if the runner, the classifier or the change selector is wrong, every other result is meaningless - once ordinary development runs a SELECTED proof, the selector decides what every other green result covers, so its own contracts are unconditional",
+    "public-surface": "package and API boundaries break consumers without breaking any subsystem test",
+    "core-mechanisms": "storage, consensus, routing, bootstrap, query and service invocation underpin nearly every higher-level proof",
+    "identity-primitives": "correlation and canonical encoding silently corrupt evidence everywhere when broken"
+  },
+  "tests": [
+    "test/scripts/run-test-files.test.js",
+    "test/scripts/test-subsystem-classification.test.js",
+    "test/scripts/check-subsystem.test.js",
+    "test/scripts/acceptance-proof-manifest-runner.test.js",
+    "test/scripts/select-change-tests.test.js",
+    "test/scripts/selection-golden-corpus.test.js",
+    "test/scripts/change-proof-boundary.test.js",
+
+    "test/release/public-api-side-effect-boundary.test.js",
+    "test/release/project-hardening-contracts.test.js",
+
+    "test/invariants/invariant-catalog.test.js",
+    "test/contract/message-router-contract.test.js",
+
+    "test/raft/raft-replica-base.test.js",
+    "test/raft/raft-log-write-owner.test.js",
+
+    "test/partition/partition-transition-projection.test.js",
+    "test/worker/sqlite-system-cache.test.js",
+
+    "test/query/pg-translate.test.js",
+    "test/query/sql-query-engine-create-table-quorum.test.js",
+
+    "test/runtime/pgwire-protocol-handler.test.js",
+    "test/runtime/pgwire-session.test.js",
+
+    "test/bootstrap/bootstrap-api-readiness-gating.test.js",
+    "test/bootstrap/bootstrap-api-readiness-publication.test.js",
+
+    "test/control-plane/readiness-single-contract-build.test.js",
+    "test/control-plane/failure-class-registry.test.js",
+
+    "test/transport/message-router-api.property.test.js",
+    "test/worker/worker-message-bridge.test.js",
+
+    "test/service/request-cell-call-bridge.test.js",
+
+    "test/utils/correlation.test.js",
+    "test/utils/canonical-json-data.test.js"
+  ]
+}

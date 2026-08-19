@@ -11,6 +11,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 import {test} from 'node:test';
 
+import {testsForSubsystem} from '../../scripts/check-subsystem.js';
 import {
   SUBSYSTEM_MANIFEST_PATH,
   SUBSYSTEMS,
@@ -45,15 +46,21 @@ test('a missing subsystem argument fails with usage', () => {
   assert.match(result.stderr, /usage:/);
 });
 
+test('the CLI and the library select identically', () => {
+  // One CLI spawn, not 66: the bulk properties below call the library, so this
+  // pins the two together. This test lives in the safety spine, so it must stay
+  // cheap - it ran 13s when every property spawned a subprocess.
+  const subsystem = 'transactions';
+  const viaCli = run([subsystem, '--list'])
+    .stdout.trim().split('\n').filter(Boolean);
+  assert.deepEqual(viaCli, testsForSubsystem(subsystem));
+});
+
 test('every declared subsystem selects at least one test', () => {
-  // A subsystem that selects nothing would report success while proving
-  // nothing. The classifier already forbids empty subsystems; this asserts the
-  // selector agrees, because the two could drift apart.
+  // A subsystem selecting nothing would report success while proving nothing.
   for (const subsystem of SUBSYSTEMS) {
-    const result = run([subsystem, '--list']);
-    assert.equal(result.status, 0, `${subsystem}: ${result.stderr}`);
-    const selected = result.stdout.trim().split('\n').filter(Boolean);
-    assert.ok(selected.length > 0, `${subsystem} selected no tests`);
+    assert.ok(testsForSubsystem(subsystem).length > 0,
+      `${subsystem} selected no tests`);
   }
 });
 
@@ -63,20 +70,18 @@ test('selection matches the committed classification exactly', () => {
   for (const subsystem of SUBSYSTEMS) {
     const expected = Object.keys(manifest.classes).sort()
       .filter((testPath) => manifest.classes[testPath] === subsystem);
-    const selected = run([subsystem, '--list'])
-      .stdout.trim().split('\n').filter(Boolean);
-    assert.deepEqual(selected, expected, `${subsystem} selection drifted`);
+    assert.deepEqual(testsForSubsystem(subsystem), expected,
+      `${subsystem} selection drifted`);
   }
 });
 
 test('every live test is reachable through exactly one subsystem', () => {
   // The union of all subsystem selections must be the whole census, with no
-  // test reachable twice. This is the property that lets a release suite be
-  // assembled from subsystems without losing or double-running anything.
+  // test reachable twice. This is what lets a release suite be assembled from
+  // subsystems without losing or double-running anything.
   const seen = new Map();
   for (const subsystem of SUBSYSTEMS) {
-    for (const testPath of run([subsystem, '--list'])
-      .stdout.trim().split('\n').filter(Boolean)) {
+    for (const testPath of testsForSubsystem(subsystem)) {
       assert.ok(!seen.has(testPath),
         `${testPath} reachable via ${seen.get(testPath)} and ${subsystem}`);
       seen.set(testPath, subsystem);

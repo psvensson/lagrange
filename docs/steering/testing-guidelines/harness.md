@@ -130,20 +130,33 @@ When running tests during task execution:
    <test-file...>` is the equivalent direct invocation (tap is the suite
    runner; the sharded `test:*` scripts shell out to it). Do NOT use
    `npm test -- <file>` or `npm test -- --grep "pattern"`: the `test` script is
-   the full sharded suite and silently ignores extra arguments, so those forms
-   run everything while appearing filtered.
+   the change-proof orchestrator and silently ignores extra arguments, so those
+   forms prove the change rather than the file you named.
 
 This targeted-run guidance governs *iteration*. It does NOT relax the closure bar:
 before closing a Quest or task, the static-guardrail and owner-boundary audits in
 [`proof-ladders.md`](proof-ladders.md) remain mandatory even when the focused unit
 and integration tests pass.
 
-## When to Run Full Test Suite
+## What The Four Commands Prove
 
-Only run the complete test suite (`npm test`) at:
+`npm test` is NOT the complete suite. It is the change-proof orchestrator: the
+unconditional safety spine plus whatever this change requires, and it FAILS
+CLOSED - an unclassifiable change refuses with `MODULAR PROOF NOT SAFE` and a
+reason code rather than proving a convenient subset.
+
+| Command | Proves |
+| --- | --- |
+| `npm test` | safety spine + the changed subsystem(s) and their witnesses |
+| `npm run check` | fast static over the changed paths, then `npm test` |
+| `npm run check:subsystem -- <id>` | one whole subsystem, explicitly |
+| `npm run check:release` | everything |
+
+Only run the complete suite (`npm run check:release`) at:
 - Checkpoint tasks explicitly marked in the active Quest's `doneWhen` or frontier list
 - Final integration verification
 - When explicitly requested by the user
+- When `npm test` refuses with `RELEASE_PROOF_REQUIRED`
 
 ## Before Any Commit
 

@@ -12,6 +12,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## top-level
 
+- `check` — Fast static over the changed paths, then the change proof. The ordinary development gate.
 - `cli` — `node src/cli/bin/lagrange-admin.js`
 - `commands` — Print the curated Quest-first command quickstart.
 - `frontier` — Print the Solver frontier board.
@@ -19,14 +20,13 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `lint` — `eslint src/ test/ --ignore-pattern 'test/.gitkeep'`
 - `overview` — Top-down walk of the planning stack: roadmap -> epic -> spec -> quest -> closure ledger (solve.js overview).
 - `prepare` — `node -e "import('node:fs').then(({existsSync}) => existsSync('scripts/install-git-hooks.js') && import('./scripts/install-git-hooks.js'))"`
-- `pretest` — `npm run audit:state-machine-pressure`
 - `publish` — `node scripts/publish-head.js`
 - `repro` — Run a closure-ledger reproduction case (npm run repro -- CL-0NN).
 - `rule` — `node scripts/lookup-rule.js`
 - `session-worktree` — `node scripts/session-worktree.js`
 - `solve` — `node scripts/solve.js`
 - `start` — `node src/index.js`
-- `test` — `npm run test:sharded:all`
+- `test` — `node scripts/select-change-tests.js`
 - `trace` — Join quests/specs/CLs across planning layers (solve.js trace).
 - `triage` — `node scripts/triage-distributed-failure.js`
 
@@ -102,7 +102,9 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 ## check
 
 - `check:memory-index` — `node scripts/check-memory-index.js`
+- `check:release` — Prove everything. Expensive; required when the change proof refuses with RELEASE_PROOF_REQUIRED.
 - `check:stale-untracked` — `node scripts/check-stale-untracked.js`
+- `check:subsystem` — Prove one whole product subsystem explicitly.
 
 ## debug
 
@@ -318,4 +320,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-213 scripts indexed; 32 have a curated description, 181 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+215 scripts indexed; 35 have a curated description, 180 fall back to their raw command. Improve coverage in the two sources named in the header comment.
