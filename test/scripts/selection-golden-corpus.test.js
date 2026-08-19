@@ -58,42 +58,52 @@ test('the corpus is a live oracle, not an abandoned fixture file', () => {
   }
 });
 
-test('every fixture obligation is met by the current selector', () => {
+// One fixture's obligations, per kind. Split out so the test body reads as
+// "every fixture, every obligation" rather than as one long branch tree.
+function refusalFailures(fixture, plan) {
+  if (plan.kind !== SELECTION_REFUSED) {
+    return [`${fixture.id}: expected REFUSED, got ${plan.kind}`];
+  }
+  if (plan.refusalCode !== fixture.expectRefusal) {
+    return [
+      `${fixture.id}: refusal ${plan.refusalCode} != ${fixture.expectRefusal}`,
+    ];
+  }
+  return [];
+}
+
+function obligationFailures(fixture, plan) {
+  const selected = new Set(plan.tests.map((entry) => entry.path));
   const failures = [];
-  for (const fixture of corpus.fixtures) {
-    const plan = planFor(fixture);
-    const selected = new Set(plan.tests.map((entry) => entry.path));
-
-    if (fixture.expectRefusal) {
-      if (plan.kind !== SELECTION_REFUSED) {
-        failures.push(`${fixture.id}: expected REFUSED, got ${plan.kind}`);
-      } else if (plan.refusalCode !== fixture.expectRefusal) {
-        failures.push(
-          `${fixture.id}: refusal ${plan.refusalCode} != ${fixture.expectRefusal}`);
-      }
-      continue;
-    }
-
-    if (plan.kind === SELECTION_REFUSED) {
-      failures.push(`${fixture.id}: unexpected refusal ${plan.refusals[0]}`);
-      continue;
-    }
-    for (const subsystem of fixture.mustIncludeSubsystems || []) {
-      if (!plan.subsystems.includes(subsystem)) {
-        failures.push(`${fixture.id}: missing subsystem ${subsystem}`);
-      }
-    }
-    for (const testPath of fixture.mustIncludeTests || []) {
-      if (!selected.has(testPath)) {
-        failures.push(`${fixture.id}: MISSING OBLIGATION ${testPath}`);
-      }
-    }
-    if (fixture.expectSpineOnly && plan.tests.length !== spine.length) {
-      failures.push(
-        `${fixture.id}: expected spine-only, got ${plan.tests.length}`);
+  for (const subsystem of fixture.mustIncludeSubsystems || []) {
+    if (!plan.subsystems.includes(subsystem)) {
+      failures.push(`${fixture.id}: missing subsystem ${subsystem}`);
     }
   }
-  assert.deepEqual(failures, []);
+  for (const testPath of fixture.mustIncludeTests || []) {
+    if (!selected.has(testPath)) {
+      failures.push(`${fixture.id}: MISSING OBLIGATION ${testPath}`);
+    }
+  }
+  if (fixture.expectSpineOnly && plan.tests.length !== spine.length) {
+    failures.push(
+      `${fixture.id}: expected spine-only, got ${plan.tests.length}`);
+  }
+  return failures;
+}
+
+function fixtureFailures(fixture) {
+  const plan = planFor(fixture);
+  if (fixture.expectRefusal) return refusalFailures(fixture, plan);
+  if (plan.kind === SELECTION_REFUSED) {
+    return [`${fixture.id}: unexpected refusal ${plan.refusals[0]}`];
+  }
+  return obligationFailures(fixture, plan);
+}
+
+test('every fixture obligation is met by the current selector', () => {
+  assert.deepEqual(corpus.fixtures.flatMap(
+    (fixture) => fixtureFailures(fixture)), []);
 });
 
 test('a refusal never smuggles a partial selection through', () => {
