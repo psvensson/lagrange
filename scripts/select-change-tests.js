@@ -32,7 +32,11 @@ import process from 'node:process';
 import {fileURLToPath} from 'node:url';
 
 import {selectChangedTests} from './checks/change-selection.js';
-import {changedRecords, semanticPaths} from './checks/changed-paths.js';
+import {
+  changedRecords,
+  resolvedCheckBase,
+  semanticPaths,
+} from './checks/changed-paths.js';
 import {
   PACKAGE_MANIFEST_PATH,
   REASON_SAFETY_SPINE,
@@ -209,7 +213,7 @@ function parseInvocation(argv) {
   const head = flagValue(argv, HEAD_FLAG);
   return {
     valid: !(base.present && !base.value) && !(head.present && !head.value),
-    base: base.value,
+    base: resolvedCheckBase(base.value),
     head: head.value,
     headRevision: head.value || DEFAULT_HEAD,
     explain: argv.includes(EXPLAIN_FLAG),

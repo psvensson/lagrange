@@ -37,6 +37,7 @@ import {fileURLToPath} from 'node:url';
 import {
   changedCandidatePaths,
   javaScriptPaths,
+  resolvedCheckBase,
 } from './checks/changed-paths.js';
 
 const root = path.resolve(path.dirname(fileURLToPath(import.meta.url)), '..');
@@ -132,8 +133,8 @@ export function runFastStatic({base = null, explain = false} = {}) {
 
 function main() {
   const argv = process.argv.slice(2);
-  const base = argv.includes(BASE_FLAG) ?
-    argv[argv.indexOf(BASE_FLAG) + 1] : null;
+  const base = resolvedCheckBase(argv.includes(BASE_FLAG) ?
+    argv[argv.indexOf(BASE_FLAG) + 1] : null);
   const outcome = runFastStatic({base, explain: argv.includes(EXPLAIN_FLAG)});
   for (const failure of outcome.failures) {
     process.stderr.write(`${FAIL_MARK} ${failure.script}${NEWLINE}`);

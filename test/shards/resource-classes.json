@@ -2,13 +2,13 @@
   "schemaVersion": 1,
   "id": "test-resource-classification",
   "counts": {
-    "ordinary": 2058,
+    "ordinary": 2059,
     "cpu-heavy": 0,
     "external-toolchain": 14,
     "exclusive": 0
   },
-  "censusSize": 2072,
-  "digest": "fnv1a32-a4b2d699",
+  "censusSize": 2073,
+  "digest": "fnv1a32-a226d468",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "ordinary",
     "test/address/address-manager.test.js": "ordinary",
@@ -1699,6 +1699,7 @@
     "test/scripts/change-selection-taxonomy.test.js": "ordinary",
     "test/scripts/changed-paths.test.js": "ordinary",
     "test/scripts/check-architecture-slices.test.js": "ordinary",
+    "test/scripts/check-base-range.test.js": "ordinary",
     "test/scripts/check-cli-docs.test.js": "ordinary",
     "test/scripts/check-current-capabilities.test.js": "ordinary",
     "test/scripts/check-doc-audience.test.js": "ordinary",

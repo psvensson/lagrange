@@ -105,7 +105,12 @@ describe('project hardening contracts', () => {
       packageJson.scripts['test:gate'],
       /run-project-hardening-acceptance\.js/u,
     );
-    assert.match(ciText, /npm run test:gate/u);
+    // Ordinary CI proves the CHANGE, not the corpus: the whole-system gate
+    // moved to release and manual dispatch. `test:gate` must still exist and
+    // still be the acceptance manifest - check:release depends on it - but it
+    // is no longer what a pull request pays for.
+    assert.match(ciText, /npm run check/u);
+    assert.doesNotMatch(ciText, /npm run test:gate/u);
     assert.match(ciText, /postgresql-client/u);
     assert.match(releaseText, /npm run test:gate/u);
   });
@@ -153,13 +158,34 @@ describe('project hardening contracts', () => {
 
     assert.deepEqual(ci.on.push.branches, ['main']);
     assert.deepEqual(ci.on.pull_request.branches, ['main']);
-    const classifyStep = ci.jobs.changes.steps.find(
-      (step) => step.id === 'classify',
-    );
-    assert.ok(classifyStep, 'CI must retain the runner classifier');
-    assert.match(classifyStep.run, /runner="ubuntu-24\.04"/u);
-    assert.match(classifyStep.run, /grep -qF '\[ci:self-hosted\]'/u);
-    assert.doesNotMatch(classifyStep.run, /grep -qF '\[ci:github\]'/u);
+    // Runner routing survives; the PATH CLASSIFIER does not. Deciding what a
+    // change means belonged to two authorities - a YAML case statement here
+    // and the source taxonomy in the repository - and two authorities on one
+    // question eventually disagree. Routing is not that question: it is
+    // identity and environment, which is the workflow's job.
+    assert.equal(ci.jobs.changes, undefined,
+      'CI must not carry a second authority on what a change means');
+    const runsOn = ci.jobs.gate['runs-on'];
+    assert.match(runsOn, /ubuntu-24\.04/u,
+      'GitHub-hosted is the default runner');
+    assert.match(runsOn, /\[ci:self-hosted\]/u,
+      'a head-commit marker still routes a push to the local box');
+    assert.doesNotMatch(runsOn, /\[ci:github\]/u,
+      'there is no opt-in marker: hosted is the default, not a choice');
+    assert.match(runsOn, /github\.event_name == 'push'/u,
+      'pull requests can carry fork code and must never reach self-hosted');
+
+    // The proof range is supplied by the workflow and consumed by repository
+    // code through one variable, so the static layer and the change proof
+    // cannot prove different ranges under a single `npm run check`.
+    const rangeStep = ci.jobs.gate.steps.find(
+      (step) => step.name === 'Resolve the proof range');
+    assert.ok(rangeStep, 'CI must resolve the committed range it proves');
+    assert.match(rangeStep.run, /LAGRANGE_CHECK_BASE=/u);
+    assert.match(rangeStep.run, /PR_BASE_SHA/u,
+      'a pull request proves base..head, not just its tip');
+    assert.match(rangeStep.run, /PUSH_BEFORE_SHA/u,
+      'a push proves the range the remote did not have');
     assert.deepEqual(fullGate.on.workflow_dispatch, {});
     assert.deepEqual(release.on.push.tags, ['v*']);
     assert.equal(release.permissions.contents, 'read');

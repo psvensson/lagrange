@@ -1,21 +1,27 @@
-# GitHub Actions CI — the required pull-request and main-branch gate.
+# GitHub Actions CI - the required pull-request and main-branch gate.
 #
-# Runs the post-push gate manifest: the full gate minus the checks the
-# pre-push hook (.githooks/pre-push) already ran moments earlier on the
-# pushing machine (unused files, unused-exports ratchet, duplication,
-# circular deps, eslint). The nightly full-gate workflow still runs the
-# complete manifest, so those checks keep a binding remote signal.
+# The workflow supplies IDENTITY AND ENVIRONMENT; repository code decides what
+# must be proved. That is the whole design:
 #
-# The workflow always starts so a required `ci / gate` check can resolve.
-# A small GitHub-hosted classifier identifies documentation-only changes;
-# for those changes the expensive gate job is skipped, which GitHub reports
-# as a successful skipped check. Any code, configuration, workflow, test,
-# chart, or package change still runs the full gate.
+#   this workflow        which commits are in this change, and a machine to run on
+#   npm run check        what that change obliges us to prove
 #
-# Runner selection for pushes: the gate job runs on ephemeral GitHub-hosted
-# runners by default; put '[ci:self-hosted]' in the head commit message to
-# route that push to the maintainer's self-hosted box. Pull requests always
-# run GitHub-hosted regardless of any flag.
+# There is deliberately no path classifier here any more. One used to live in a
+# `changes` job that decided whether the gate should run at all, with special
+# cases for Markdown, docs/, architecture/ and Solver output. It was a SECOND
+# AUTHORITY on what a change means, competing with the source taxonomy in
+# scripts/checks/change-selection-constants.js, and two authorities on the same
+# question eventually disagree. The taxonomy is exhaustive and fails closed; a
+# YAML case statement cannot be either.
+#
+# Skipping the job for documentation is no longer worth its own semantics: a
+# docs-only change now resolves to the safety spine, which is seconds of
+# behavioural proof, so the job simply always runs and the selector decides.
+#
+# Runner selection for pushes: GitHub-hosted by default; '[ci:self-hosted]' in
+# the head commit message routes that push to the maintainer's box. Pull
+# requests always run GitHub-hosted regardless of any marker, because fork code
+# on a public repo must never reach a self-hosted runner.
 #
 # The statistical rolling-restart convergence gate is deliberately not run
 # here: its pass rate is variance-bounded and is promoted only through the
@@ -32,100 +38,58 @@ permissions:
   contents: read
 
 jobs:
-  changes:
-    name: classify changes
-    runs-on: ubuntu-24.04
-    outputs:
-      run_gate: ${{ steps.classify.outputs.run_gate }}
-      # Runner selector for push events, driven by a commit-message flag:
-      # '[ci:self-hosted]' routes a push gate to the fast local box. With no
-      # flag, and for every pull request, use GitHub-hosted runners (fork code
-      # on a public repo must never reach the self-hosted runner).
-      runner: ${{ steps.classify.outputs.runner }}
-    steps:
-      - name: Checkout
-        uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
-        with:
-          persist-credentials: false
-          fetch-depth: 0
-
-      - name: Classify changed paths
-        id: classify
-        shell: bash
-        env:
-          EVENT_NAME: ${{ github.event_name }}
-          PUSH_BEFORE_SHA: ${{ github.event.before }}
-          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
-          PR_HEAD_SHA: ${{ github.event.pull_request.head.sha }}
-          EVENT_SHA: ${{ github.sha }}
-        run: |
-          set -euo pipefail
-
-          if [ "$EVENT_NAME" = "pull_request" ]; then
-            base="$PR_BASE_SHA"
-            head="$PR_HEAD_SHA"
-          else
-            base="$PUSH_BEFORE_SHA"
-            head="$EVENT_SHA"
-          fi
-
-          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] || ! git cat-file -e "$base^{commit}" 2>/dev/null; then
-            base="$(git rev-parse "$head^")"
-          fi
-
-          mapfile -t changed_paths < <(git diff --name-only "$base" "$head")
-          run_gate=false
-
-          for path in "${changed_paths[@]}"; do
-            case "$path" in
-              *.md|docs/*|architecture/*)
-                continue
-                ;;
-            esac
-
-            if [ "$EVENT_NAME" = "push" ]; then
-              case "$path" in
-                solve/changes/*|solve/log/*|solve/report/*|solve/autonomous/*)
-                  continue
-                  ;;
-              esac
-            fi
-
-            run_gate=true
-            break
-          done
-
-          printf 'Changed paths:\n'
-          printf '  %s\n' "${changed_paths[@]}"
-          echo "run_gate=$run_gate" | tee -a "$GITHUB_OUTPUT"
-
-          runner="ubuntu-24.04"
-          if [ "$EVENT_NAME" = "push" ]; then
-            head_message="$(git log -1 --format=%B "$head")"
-            if grep -qF '[ci:self-hosted]' <<<"$head_message"; then
-              runner="self-hosted"
-            fi
-          fi
-          echo "runner=$runner" | tee -a "$GITHUB_OUTPUT"
-
   gate:
-    needs: changes
-    if: needs.changes.outputs.run_gate == 'true'
-    # Push events default to ephemeral GitHub-hosted runners; a
-    # '[ci:self-hosted]' flag in the head commit message explicitly routes
-    # the run to the maintainer's local box. pull_request events (which can
-    # carry fork code on a public repo) stay GitHub-hosted regardless of any
-    # flag and must never be routed to self-hosted.
-    runs-on: ${{ needs.changes.outputs.runner }}
+    name: gate
+    # Expression rather than a preceding job: routing needs only the head
+    # commit message, which is already on the event, so a whole extra job and
+    # checkout would buy nothing. `github.event.head_commit` exists for push
+    # events only, which is exactly the restriction we want.
+    runs-on: ${{ (github.event_name == 'push' && contains(github.event.head_commit.message, '[ci:self-hosted]')) && 'self-hosted' || 'ubuntu-24.04' }}
     timeout-minutes: 120
     steps:
       - name: Checkout
         uses: actions/checkout@de0fac2e4500dabe0009e67214ff5f5447ce83dd # v6.0.2
         with:
           persist-credentials: false
-          # Full history: solver historical-artifact tests read files from
-          # older commits via git show, which a shallow clone cannot serve.
+          # The PR HEAD, not the synthetic merge commit: the proof range is
+          # base.sha..head.sha, and diffing a merge commit would attribute
+          # base-branch commits to this change.
+          ref: ${{ github.event.pull_request.head.sha || github.sha }}
+          # Full history: the proof range reaches back to the base SHA, and
+          # solver historical-artifact tests read older commits via git show,
+          # which a shallow clone cannot serve.
           fetch-depth: 0
+
+      - name: Resolve the proof range
+        shell: bash
+        env:
+          EVENT_NAME: ${{ github.event_name }}
+          PUSH_BEFORE_SHA: ${{ github.event.before }}
+          PR_BASE_SHA: ${{ github.event.pull_request.base.sha }}
+        run: |
+          set -euo pipefail
+
+          # A pull request proves base..head, so every commit on the branch
+          # participates - not merely the tip. A push proves the range the
+          # remote did not have, which is `before`..HEAD.
+          if [ "$EVENT_NAME" = "pull_request" ]; then
+            base="$PR_BASE_SHA"
+          else
+            base="$PUSH_BEFORE_SHA"
+          fi
+
+          # A new branch reports the zero SHA, and a force-push or an expired
+          # object can leave `before` unreachable. Fall back to the single
+          # preceding commit and SAY SO, rather than resolving to an empty base
+          # that would quietly prove the working tree alone.
+          if [ -z "$base" ] || [[ "$base" =~ ^0+$ ]] ||
+            ! git cat-file -e "$base^{commit}" 2>/dev/null; then
+            echo "proof range: base '$base' unavailable, falling back to HEAD^"
+            base="$(git rev-parse HEAD^)"
+          fi
+
+          echo "proof range: $base..$(git rev-parse HEAD)"
+          echo "LAGRANGE_CHECK_BASE=$base" >> "$GITHUB_ENV"
 
       - name: Set up Node 22
         uses: actions/setup-node@48b55a011bda9f5d6aeb4c2d9c7362e8dae4041e # v6.4.0
@@ -174,54 +138,23 @@ jobs:
           node examples/service-data-affinity/download-movielens.js
           echo "06416e597f82b7342361e41163890c81036900f418ad91315590814211dca490  data/examples/movielens-100k/u.data" | sha256sum --check
 
-      - name: Post-push gate
-        run: npm run test:gate:postpush
+      # The ordinary proof: fast static over the changed paths, then the
+      # safety spine plus whatever this change's subsystems oblige. It fails
+      # closed - an unclassifiable change refuses with MODULAR PROOF NOT SAFE
+      # and a reason code rather than proving a convenient subset.
+      - name: Ordinary proof
+        run: npm run check
 
-      # The gate captures each manifest command's output to a file, so on
-      # failure the job log alone cannot say which command broke. Print the
-      # receipt's verdicts, then every failing command's failure lines (the
-      # runner prints `not ok <file>` plus failing shard summaries) BEFORE a
-      # bounded tail — a bare tail can truncate away the exact lines that
-      # name the failing test.
-      - name: Dump gate receipt on failure
-        if: failure()
-        run: |
-          set -uo pipefail
-          receipt=$(ls -t test-output/acceptance/*.report.json 2>/dev/null | head -1)
-          [ -n "$receipt" ] || { echo "no receipt found"; exit 0; }
-          echo "=== $receipt ==="
-          jq '[.commands[] | {id, status, exitCode, reasons}]' "$receipt"
-          jq -r '.commands[] | select(.status == "FAIL") | (.artifactIdentity.path // .requiredArtifact.path // empty)' "$receipt" |
-          while read -r artifact; do
-            [ -f "$artifact" ] || continue
-            echo "=== failures in $artifact ==="
-            jq -r '.stdout // .output // empty' "$artifact" 2>/dev/null |
-              grep -E '^(not ok|# test-files.*fail=[1-9]|FAIL|.*[Ee]rror)' |
-              head -100 || true
-            echo "=== failing shard details in $artifact ==="
-            jq -r '.stdout // .output // empty' "$artifact" 2>/dev/null |
-              grep -A 60 '^not ok' | head -200 || true
-            echo "=== tail of $artifact ==="
-            jq -r '.stdout // .output // .' "$artifact" 2>/dev/null | tail -200 || tail -c 20000 "$artifact"
-          done
-
-      # The console dump above is deliberately bounded, so it truncates: its
-      # `grep -E` keeps only lines matching a narrow pattern and `head` caps the
-      # rest. That destroyed real evidence — a test that printed a purpose-built
-      # census diagnosis on failure had it cut away before it reached the log,
-      # leaving only the fragment whose filenames happened to contain "error".
-      # Keep the bounded summary for quick reading, but upload the COMPLETE
-      # artifacts so diagnosing a failure never depends on the diagnostic being
-      # arranged to survive `grep | head`.
-      - name: Upload gate failure evidence
+      # `npm run check` prints its failures directly, so there is no receipt to
+      # decode here. The artifacts still carry per-test detail that a bounded
+      # console log cannot.
+      - name: Upload proof failure evidence
         if: failure()
         uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4.6.2
         with:
-          name: gate-failure-evidence
+          name: proof-failure-evidence
           path: |
-            test-output/acceptance/
-            test-output/analysis/
-            test-output/proof-cone/
+            test-output/
             .tap/test-results/
           retention-days: 14
           if-no-files-found: warn

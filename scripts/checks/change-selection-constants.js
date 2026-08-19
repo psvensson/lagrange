@@ -52,6 +52,16 @@ export const REASON_SAFETY_SPINE = 'safety-spine';
 // the one failure mode indistinguishable from success.
 export const WORKSPACE_INJECTION_ENV = 'LAGRANGE_WORKSPACE_INJECTIONS';
 
+// The ONE way a caller says which committed range this proof must cover.
+//
+// CI knows the identity of a change - a pull request's base and head, a push's
+// before and after - and nothing else about what it means. Repository code
+// decides what must be proved from that. One variable, consumed by both the
+// static layer and the change proof through the same changed-path derivation,
+// so `npm run check` cannot end up proving two different ranges in its two
+// halves.
+export const CHECK_BASE_ENV = 'LAGRANGE_CHECK_BASE';
+
 export const SAFETY_SPINE_PATH = 'test/shards/safety-spine.json';
 export const IMPACT_CONTRACTS_PATH = 'test/shards/impact-contracts.json';
 

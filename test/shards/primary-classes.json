@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1820,
+    "unit": 1821,
     "integration": 73,
     "bootstrap": 172,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2072,
-  "digest": "fnv1a32-743f60c3",
+  "censusSize": 2073,
+  "digest": "fnv1a32-6d0fd5fa",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -1700,6 +1700,7 @@
     "test/scripts/change-selection-taxonomy.test.js": "unit",
     "test/scripts/changed-paths.test.js": "unit",
     "test/scripts/check-architecture-slices.test.js": "unit",
+    "test/scripts/check-base-range.test.js": "unit",
     "test/scripts/check-cli-docs.test.js": "unit",
     "test/scripts/check-current-capabilities.test.js": "unit",
     "test/scripts/check-doc-audience.test.js": "unit",

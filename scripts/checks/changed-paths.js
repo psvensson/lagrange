@@ -32,6 +32,7 @@ import {
   CHANGE_DELETED,
   CHANGE_MODIFIED,
   CHANGE_RENAMED,
+  CHECK_BASE_ENV,
   WORKSPACE_INJECTION_ENV,
 } from './change-selection-constants.js';
 
@@ -111,6 +112,14 @@ function dedupe(records) {
   }
   return [...seen.values()].sort((left, right) =>
     (left.path || left.oldPath).localeCompare(right.path || right.oldPath));
+}
+
+// An explicit flag wins; otherwise the environment supplies the range. Resolved
+// HERE so the static layer and the change proof cannot disagree: `npm run check`
+// runs them as two processes, and a base that reached only one of them would
+// silently prove a narrower range on one side.
+export function resolvedCheckBase(explicitBase = null, env = process.env) {
+  return explicitBase || env[CHECK_BASE_ENV] || null;
 }
 
 // What the assembling layer declared it injected into this worktree. Empty in
