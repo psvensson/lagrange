@@ -2,14 +2,14 @@
   "schemaVersion": 1,
   "id": "test-primary-classification",
   "counts": {
-    "unit": 1819,
+    "unit": 1820,
     "integration": 73,
     "bootstrap": 172,
     "convergence-probe": 3,
     "packaging": 4
   },
-  "censusSize": 2071,
-  "digest": "fnv1a32-4f5d00fa",
+  "censusSize": 2072,
+  "digest": "fnv1a32-743f60c3",
   "classes": {
     "test/address/address-malformed-rejection.property.test.js": "unit",
     "test/address/address-manager.test.js": "unit",
@@ -1776,6 +1776,7 @@
     "test/scripts/test-resource-classification.test.js": "unit",
     "test/scripts/test-subsystem-classification.test.js": "unit",
     "test/scripts/test-timeout-declarations.test.js": "unit",
+    "test/scripts/workspace-injection-candidates.test.js": "unit",
     "test/sea/runtime-file-resolution.test.js": "unit",
     "test/service/adapters/adapter-conformance.test.js": "unit",
     "test/service/artifact-payload-internalization.test.js": "unit",

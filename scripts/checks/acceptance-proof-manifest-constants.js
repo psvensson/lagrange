@@ -29,6 +29,13 @@ export const ACCEPTANCE_PROOF = Object.freeze({
   FIDELITY: 'deterministic-acceptance-manifest',
   FALLBACK_MANIFEST_ID: 'acceptance-manifest',
   INVALID_MANIFEST_ID: 'invalid-acceptance-manifest',
+  // Explicit per-state counts. A bare `N/6` reads as "6 minus N failed", but
+  // the manifest FAILS FAST: everything after the first failure is NOT_RUN, so
+  // `1/6` meant one failure and four unexecuted commands. That misreading cost
+  // a diagnosis cycle on 2026-08-19.
+  SUMMARY_INDENT: '  ',
+  SUMMARY_LABEL_WIDTH: 8,
+  FIRST_FAILURE_LABEL: 'first failure: ',
   FLAG_MANIFEST: '--manifest',
   FLAG_SCENARIO: '--scenario',
   FLAG_RECEIPT_DIR: '--receipt-dir',

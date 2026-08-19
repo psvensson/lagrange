@@ -34,6 +34,7 @@ import fs from 'node:fs';
 import path from 'node:path';
 
 import {testsForSubsystem} from '../check-subsystem.js';
+import {withoutWorkspaceInjections} from './changed-paths.js';
 import {
   IMPACT_CONTRACTS_PATH,
   INERT_PATH_RULES,
@@ -202,7 +203,11 @@ export function candidatePaths(root) {
   const list = (args) => arrayFilter(stringSplit(execFileSync(GIT, args,
     {cwd: root, encoding: UTF8, maxBuffer: MAX_GIT_BUFFER}), NEWLINE), Boolean);
   const tracked = list([LS_FILES]);
-  const untracked = list([LS_FILES, OTHERS, EXCLUDE_STANDARD]);
+  // Workspace injections are dropped HERE, at the one place the candidate
+  // universe is defined, so the census and the selector cannot disagree about
+  // what counts as repository content.
+  const untracked = withoutWorkspaceInjections(
+    list([LS_FILES, OTHERS, EXCLUDE_STANDARD]));
   return {
     tracked,
     untracked,

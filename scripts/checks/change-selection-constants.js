@@ -37,6 +37,21 @@ export const REASON_IMPACT_WITNESS = 'impact-witness';
 export const REASON_COUPLED_WITNESS = 'coupled-pair-witness';
 export const REASON_SAFETY_SPINE = 'safety-spine';
 
+// How the layer that ASSEMBLES a worktree declares what it injected into it.
+//
+// The push gate materialises the pushed tree into a throwaway worktree and
+// links node_modules and data in. Those are infrastructure, not repository
+// content - but git reports a symlink as an untracked file whenever the ignore
+// pattern is directory-only, which silently promoted them to semantic source
+// and made the exhaustive taxonomy refuse (2026-08-19).
+//
+// The declaration is an environment variable because the workflow supplies
+// identity and environment while repository code decides what must be proved.
+// Deliberately NOT "exclude every untracked symlink": a newly added symlink can
+// be real product content, and dropping it would be silent under-selection -
+// the one failure mode indistinguishable from success.
+export const WORKSPACE_INJECTION_ENV = 'LAGRANGE_WORKSPACE_INJECTIONS';
+
 export const SAFETY_SPINE_PATH = 'test/shards/safety-spine.json';
 export const IMPACT_CONTRACTS_PATH = 'test/shards/impact-contracts.json';
 

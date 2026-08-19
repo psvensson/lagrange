@@ -150,6 +150,57 @@ tap.test('publish fails closed when the gate creates untracked content', (t) => 
   t.end();
 });
 
+tap.test('a failed gate retains its receipt outside the worktree', (t) => {
+  // The gate runs inside a throwaway worktree and writes its acceptance
+  // receipt there, so cleanup used to destroy the only artifact naming the
+  // failing command. Three consecutive ~17-minute publish attempts on
+  // 2026-08-19 were spent rediscovering what that receipt already said.
+  const hook = [
+    'cat >/dev/null',
+    // The fixture's own setup push runs this hook against the FIRST commit;
+    // only the published commit should fail, or the fixture cannot be built.
+    'grep -q two tracked.txt || exit 0',
+    'mkdir -p test-output/acceptance/demo',
+    'printf \'%s\' \'{"commands":[{"id":"first","status":"PASS"},' +
+      '{"id":"second","status":"FAIL","artifactIdentity":' +
+      '{"path":"test-output/acceptance/demo/second.json"}}]}\'' +
+      ' > test-output/acceptance/gate.report.json',
+    'printf \'%s\' \'{"stdout":"the real failure detail"}\'' +
+      ' > test-output/acceptance/demo/second.json',
+    'exit 1',
+  ].join('\n');
+  const {parent, root, remote} = fixture(hook);
+  const head = git(root, ['rev-parse', 'HEAD']);
+  const remoteBefore = git(remote, ['rev-parse', 'refs/heads/main']);
+
+  t.throws(() => publishExactHead(root, {}, {queryCi: false}));
+  t.equal(git(remote, ['rev-parse', 'refs/heads/main']), remoteBefore,
+    'a failed gate still publishes nothing');
+
+  const retained = path.join(root, 'test-output', 'push-gate', head);
+  t.ok(fs.existsSync(path.join(retained, 'gate.report.json')),
+    'the acceptance receipt survives worktree cleanup');
+  t.ok(fs.existsSync(path.join(retained, 'second.json')),
+    'the FIRST failing command artifact survives too');
+  t.match(
+    fs.readFileSync(path.join(retained, 'second.json'), 'utf8'),
+    /the real failure detail/u,
+    'the retained artifact carries the detail, not just a filename');
+  fs.rmSync(parent, {recursive: true, force: true});
+  t.end();
+});
+
+tap.test('a successful publish retains no gate diagnostics', (t) => {
+  const {parent, root} = fixture();
+  const head = git(root, ['rev-parse', 'HEAD']);
+  publishExactHead(root, {}, {queryCi: false});
+  t.notOk(
+    fs.existsSync(path.join(root, 'test-output', 'push-gate', head)),
+    'retention is a failure path, not clutter on every push');
+  fs.rmSync(parent, {recursive: true, force: true});
+  t.end();
+});
+
 tap.test('publish rejects a non-fast-forward HEAD', (t) => {
   const {parent, root, remote} = fixture();
   const sibling = path.join(parent, 'sibling');

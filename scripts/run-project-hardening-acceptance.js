@@ -11,6 +11,7 @@ import {
 } from './checks/acceptance-proof-manifest-runner.js';
 import {ACCEPTANCE_PROOF} from './checks/acceptance-proof-manifest-constants.js';
 
+const NEWLINE = '\n';
 const RECEIPT_DIR = 'test-output/acceptance';
 const SCENARIO_REPORT_DIR = 'test-output/reports';
 
@@ -51,6 +52,33 @@ function scenarioReport(run, scenario, receiptIdentity) {
   };
 }
 
+// Per-state counts, never a fraction. The manifest fails fast, so every command
+// after the first failure is NOT_RUN rather than failed; `1/6 commands passed`
+// invited the reading "five broke" when one did. The first failing command is
+// named because it is the only one worth diagnosing - the NOT_RUN entries carry
+// no verdict at all.
+export function renderRunSummary(run) {
+  const label = (text) =>
+    `${ACCEPTANCE_PROOF.SUMMARY_INDENT}` +
+    `${text.padEnd(ACCEPTANCE_PROOF.SUMMARY_LABEL_WIDTH)}`;
+  const firstFailure = (run.commands || []).find(
+    (command) => command.status === ACCEPTANCE_PROOF.STATUS_FAIL);
+  const lines = [
+    `${run.manifest.id || ACCEPTANCE_PROOF.FALLBACK_MANIFEST_ID}: ` +
+    `${run.passed ?
+      ACCEPTANCE_PROOF.STATUS_PASS : ACCEPTANCE_PROOF.STATUS_FAIL}`,
+    `${label(ACCEPTANCE_PROOF.STATUS_PASS)}${run.summary.passed}`,
+    `${label(ACCEPTANCE_PROOF.STATUS_FAIL)}${run.summary.failed}`,
+    `${label(ACCEPTANCE_PROOF.STATUS_NOT_RUN)}${run.summary.notRun}`,
+  ];
+  if (firstFailure) {
+    lines.push(
+      `${ACCEPTANCE_PROOF.SUMMARY_INDENT}` +
+      `${ACCEPTANCE_PROOF.FIRST_FAILURE_LABEL}${firstFailure.id}`);
+  }
+  return `${lines.join(NEWLINE)}${NEWLINE}`;
+}
+
 export function runProjectHardeningAcceptance(options = {}) {
   const root = path.resolve(options.root || process.cwd());
   const run = runAcceptanceManifest({
@@ -75,10 +103,7 @@ export function runProjectHardeningAcceptance(options = {}) {
     );
   }
   process.stdout.write(
-    `${run.manifest.id || ACCEPTANCE_PROOF.FALLBACK_MANIFEST_ID}: ` +
-    `${run.passed ? ACCEPTANCE_PROOF.STATUS_PASS : ACCEPTANCE_PROOF.STATUS_FAIL} — ` +
-    `${run.summary.passed}/` +
-    `${run.summary.total} commands passed\nreceipt: ${receiptPath}\n` +
+    renderRunSummary(run) + `receipt: ${receiptPath}\n` +
     (scenarioPath ? `report: ${scenarioPath}\n` : ''),
   );
   return {run, receiptPath, scenarioPath};

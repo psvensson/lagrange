@@ -5,6 +5,13 @@ import path from 'node:path';
 import {spawnSync} from 'node:child_process';
 import {fileURLToPath} from 'node:url';
 
+import {
+  ACCEPTANCE_PROOF,
+} from './checks/acceptance-proof-manifest-constants.js';
+import {
+  WORKSPACE_INJECTION_ENV,
+} from './checks/change-selection-constants.js';
+
 const ZERO_SHA = '0'.repeat(40);
 const SELF_HOSTED_RUNNER_MARKER = '[ci:self-hosted]';
 const ARG_SEPARATOR = ' ';
@@ -51,6 +58,22 @@ const MISSING_VALUE_ERROR = 'publish: option requires a value: ';
 // CI fetches before its own gate. Expose each read-only tree for the gate run
 // and withdraw it before the mutation check.
 const GATE_WORKSPACE_DIRECTORIES = ['node_modules', 'data'];
+const INJECTION_SEPARATOR = ',';
+// Where a failed gate's diagnosis is kept. The gate runs inside a throwaway
+// worktree and writes its acceptance receipt there, so cleanup destroyed the
+// one artifact naming the failing command - three ~17-minute runs on
+// 2026-08-19 were spent rediscovering what a retained receipt would have said.
+const GATE_DIAGNOSTIC_DIR = path.join('test-output', 'push-gate');
+const ACCEPTANCE_OUTPUT_DIR = path.join('test-output', 'acceptance');
+const REPORT_SUFFIX = '.report.json';
+const UTF8 = 'utf8';
+const REMOTE_MAIN_REF = 'refs/heads/main';
+const GATE_DESCRIPTION = `${BASH_COMMAND} ${PRE_PUSH_HOOK}`;
+const RETAINED_PREFIX = 'publish: gate diagnostics retained in ';
+const arrayFilter = Function.call.bind(Array.prototype.filter);
+const arraySort = Function.call.bind(Array.prototype.sort);
+const arrayFind = Function.call.bind(Array.prototype.find);
+const stringEndsWith = Function.call.bind(String.prototype.endsWith);
 const DEPENDENCY_LINK_ERROR =
   'publish: pre-push gate mutated the temporary dependency link';
 const DIRECTORY_LINK_TYPE = 'dir';
@@ -167,9 +190,45 @@ function assertWorkspaceDependencyLinks(dependencyLinks) {
   }
 }
 
+// Copy the failing gate's receipt, and the artifact of its FIRST failing
+// command, out of the worktree before cleanup removes them. Best-effort by
+// design: a diagnostic that throws would replace the real gate error with its
+// own, which is exactly the failure this function exists to prevent.
+function retainGateDiagnostics(root, worktree, head) {
+  try {
+    const source = path.join(worktree, ACCEPTANCE_OUTPUT_DIR);
+    const reports = arrayFilter(fs.readdirSync(source),
+      (name) => stringEndsWith(name, REPORT_SUFFIX));
+    if (reports.length === 0) return null;
+    const newest = arraySort(reports)[reports.length - 1];
+    const destination = path.join(root, GATE_DIAGNOSTIC_DIR, head);
+    fs.mkdirSync(destination, {recursive: true});
+    fs.copyFileSync(
+      path.join(source, newest), path.join(destination, newest));
+    const report = JSON.parse(
+      fs.readFileSync(path.join(source, newest), UTF8));
+    const failing = arrayFind(report.commands || [],
+      (command) => command.status === ACCEPTANCE_PROOF.STATUS_FAIL);
+    const artifact = failing &&
+      (failing.artifactIdentity || failing.requiredArtifact || {}).path;
+    if (artifact) {
+      const target = path.join(destination, path.basename(artifact));
+      fs.copyFileSync(path.join(worktree, artifact), target);
+    }
+    return destination;
+  } catch {
+    return null;
+  }
+}
+
 function gateExactHead(run, root, worktree, head, remoteBefore, args) {
   const dependencyLinks = linkWorkspaceDependencies(root, worktree);
   const gateEnv = {...process.env};
+  // Declare what this layer injected. Repository code decides what must be
+  // proved; the workspace only says which paths it put there that git will
+  // otherwise report as untracked repository content.
+  gateEnv[WORKSPACE_INJECTION_ENV] =
+    GATE_WORKSPACE_DIRECTORIES.join(INJECTION_SEPARATOR);
   if (args.fixesRed) gateEnv.LAGRANGE_PUSH_ON_RED = ENABLED_ENV_VALUE;
   const refLine = `HEAD ${head} refs/heads/main ${remoteBefore}\n`;
   checked(run, BASH_COMMAND, [PRE_PUSH_HOOK], {
@@ -202,6 +261,23 @@ function pushGatedHead(run, root, worktree, head, gateEnv, queryCi) {
   return {ciUrl, remoteAfter};
 }
 
+function buildPublishReceipt(observed, args) {
+  return {
+    schemaVersion: 1,
+    head: observed.head,
+    remote: ORIGIN_REMOTE,
+    remoteRef: REMOTE_MAIN_REF,
+    remoteBefore: observed.remoteBefore,
+    remoteAfter: observed.remoteAfter,
+    gate: GATE_DESCRIPTION,
+    runner: observed.runner,
+    fixesRed: args.fixesRed || null,
+    reason: args.reason || null,
+    ciUrl: observed.ciUrl || null,
+    publishedAt: new Date().toISOString(),
+  };
+}
+
 export function publishExactHead(root, args = {}, options = {}) {
   const run = options.run || spawnSync;
   const head = git(run, root, ['rev-parse', 'HEAD']);
@@ -220,6 +296,7 @@ export function publishExactHead(root, args = {}, options = {}) {
   fs.mkdirSync(parent, {recursive: true});
   const worktree = fs.mkdtempSync(path.join(parent, 'head-'));
   let added = false;
+  let retained = null;
   try {
     checked(run, GIT_COMMAND, [
       WORKTREE_COMMAND, WORKTREE_ADD, QUIET_ARGUMENT, DETACH_ARGUMENT, worktree, head,
@@ -230,25 +307,18 @@ export function publishExactHead(root, args = {}, options = {}) {
       run, root, worktree, head, remoteBefore, args);
     const {ciUrl, remoteAfter} = pushGatedHead(
       run, root, worktree, head, gateEnv, options.queryCi);
-    const receipt = {
-      schemaVersion: 1,
-      head,
-      remote: 'origin',
-      remoteRef: 'refs/heads/main',
-      remoteBefore,
-      remoteAfter,
-      gate: 'bash .githooks/pre-push',
-      runner,
-      fixesRed: args.fixesRed || null,
-      reason: args.reason || null,
-      ciUrl: ciUrl || null,
-      publishedAt: new Date().toISOString(),
-    };
+    retained = null;
+    const receipt = buildPublishReceipt(
+      {head, remoteBefore, remoteAfter, runner, ciUrl}, args);
     const file = receiptPath(run, root, head);
     fs.mkdirSync(path.dirname(file), {recursive: true});
     fs.writeFileSync(file, `${JSON.stringify(receipt, null, 2)}\n`);
     return {...receipt, receipt: file};
+  } catch (error) {
+    retained = retainGateDiagnostics(root, worktree, head);
+    throw error;
   } finally {
+    if (retained) process.stderr.write(`${RETAINED_PREFIX}${retained}\n`);
     if (added) {
       checked(run, GIT_COMMAND,
         [WORKTREE_COMMAND, WORKTREE_REMOVE, FORCE_ARGUMENT, worktree],

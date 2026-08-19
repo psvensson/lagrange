@@ -32,6 +32,7 @@ import {
   CHANGE_DELETED,
   CHANGE_MODIFIED,
   CHANGE_RENAMED,
+  WORKSPACE_INJECTION_ENV,
 } from './change-selection-constants.js';
 
 // Intrinsics captured at module load. Every string below arrives from `git`,
@@ -61,6 +62,8 @@ const EXCLUDE_STANDARD = '--exclude-standard';
 const STATUS_RENAMED_PREFIX = 'R';
 const STATUS_DELETED_PREFIX = 'D';
 const STATUS_ADDED_PREFIX = 'A';
+const INJECTION_SEPARATOR = ',';
+const PATH_SEPARATOR = '/';
 
 function git(root, args) {
   try {
@@ -110,6 +113,38 @@ function dedupe(records) {
     (left.path || left.oldPath).localeCompare(right.path || right.oldPath));
 }
 
+// What the assembling layer declared it injected into this worktree. Empty in
+// an ordinary checkout, which is why local development still sees every
+// nonignored untracked file: the workspace contents differ, the policy does
+// not.
+export function declaredWorkspaceInjections(env = process.env) {
+  const declared = env[WORKSPACE_INJECTION_ENV];
+  if (!declared) return new Set();
+  return new Set(
+    arrayFilter(stringSplit(declared, INJECTION_SEPARATOR), Boolean));
+}
+
+// A declared injection, or anything beneath one. Matching by DECLARED PATH
+// rather than by file kind is the point: a symlink nobody declared is still
+// repository content and must reach the taxonomy.
+export function isWorkspaceInjection(candidate, injections) {
+  if (!candidate || injections.size === 0) return false;
+  if (injections.has(candidate)) return true;
+  for (const injection of injections) {
+    if (stringStartsWith(candidate, `${injection}${PATH_SEPARATOR}`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+export function withoutWorkspaceInjections(paths, env = process.env) {
+  const injections = declaredWorkspaceInjections(env);
+  if (injections.size === 0) return paths;
+  return arrayFilter(paths,
+    (candidate) => !isWorkspaceInjection(candidate, injections));
+}
+
 // `base` optional: without it only the working tree is considered, which is the
 // ordinary inner-loop case.
 export function changedRecords({root, base = null, head = DEFAULT_HEAD}) {
@@ -128,7 +163,10 @@ export function changedRecords({root, base = null, head = DEFAULT_HEAD}) {
     [LS_FILES, OTHERS, EXCLUDE_STANDARD]) || []) {
     records.push({status: CHANGE_ADDED, oldPath: null, path: untracked});
   }
-  return dedupe(records);
+  const injections = declaredWorkspaceInjections();
+  return dedupe(arrayFilter(records, (record) =>
+    !isWorkspaceInjection(record.path, injections) &&
+    !isWorkspaceInjection(record.oldPath, injections)));
 }
 
 // Every path a change touches SEMANTICALLY, including the vanished side of a
