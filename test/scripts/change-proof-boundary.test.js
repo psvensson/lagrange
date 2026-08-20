@@ -27,6 +27,10 @@ import os from 'node:os';
 import path from 'node:path';
 import {test} from 'node:test';
 
+import {
+  CHECK_BASE_ENV,
+  WORKSPACE_INJECTION_ENV,
+} from '../../scripts/checks/change-selection-constants.js';
 import {testsForSubsystem} from '../../scripts/check-subsystem.js';
 import {loadSafetySpine} from '../../scripts/select-change-tests.js';
 
@@ -38,6 +42,18 @@ const BANNER = 'MODULAR PROOF NOT SAFE';
 const RELEASE_COMMAND = 'npm run check:release';
 // Any word a reader could mistake for a behavioural result.
 const SUCCESS_WORDS = /\b(pass|passed|passing|ok \d+|# pass)\b/i;
+
+// The fixture is a DIFFERENT repository, so it must not inherit the surrounding
+// job's proof range or workspace declarations. CI exports LAGRANGE_CHECK_BASE;
+// a child inheriting it tried to diff a SHA that does not exist in the fixture
+// and failed with "cannot diff" instead of refusing. Locally the variable is
+// unset, so only a hosted run could expose this.
+function fixtureEnv() {
+  const env = {...process.env};
+  delete env[CHECK_BASE_ENV];
+  delete env[WORKSPACE_INJECTION_ENV];
+  return env;
+}
 
 const workspace = fs.mkdtempSync(path.join(os.tmpdir(), 'change-proof-'));
 const repo = path.join(workspace, 'repo');
@@ -84,7 +100,7 @@ function proofFor(changes) {
     fs.writeFileSync(absolute, contents, UTF8);
   }
   const result = spawnSync(process.execPath, [ORCHESTRATOR],
-    {cwd: repo, encoding: UTF8});
+    {cwd: repo, encoding: UTF8, env: fixtureEnv()});
   const invocation = fs.existsSync(sentinel) ?
     JSON.parse(fs.readFileSync(sentinel, UTF8)) : null;
   git(['reset', '--hard', '--quiet']);

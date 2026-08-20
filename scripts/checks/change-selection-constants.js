@@ -85,6 +85,21 @@ export const PACKAGE_RELEASE_SURFACE_FIELDS = Object.freeze([
   'optionalDependencies',
   'peerDependencies',
 ]);
+// package.json fields that are DEVELOPMENT TOOLING and nothing else. Editing
+// them changes how the repository is built and tested, never what a consumer
+// installs or executes, so they belong to test-infrastructure rather than to
+// the packaging surface.
+//
+// Without this the policy above contradicted itself: it declared that editing
+// `scripts` is dev tooling, and then the path taxonomy mapped ALL of
+// package.json to release-packaging, so a scripts-only edit widened into the
+// packaging subsystem and dragged the npm distribution proof into ordinary CI.
+export const PACKAGE_DEV_TOOLING_FIELDS = Object.freeze([
+  'scripts',
+  'devDependencies',
+]);
+export const SUBSYSTEM_TEST_INFRASTRUCTURE = 'test-infrastructure';
+
 // Paths that change what consumers RECEIVE or EXECUTE, across every subsystem
 // boundary. They are closer to package.json.exports than to an implementation
 // owner: an .npmignore edit can silently add or remove shipped content without

@@ -99,13 +99,16 @@ jobs:
 
       - name: Install gate CLI tools
         if: runner.environment == 'github-hosted'
-        # A hung download must fail in minutes, not consume the job budget:
-        # this step normally takes ~115s and once hung for 62 minutes.
-        timeout-minutes: 10
+        # Bounds a HANG, not the normal duration. Measured on hosted runners:
+        # 115s, and 1252s on a run that succeeded, and once 62 minutes hung
+        # until cancelled by hand. The spread is wide, so this sits well above
+        # the slowest success and well below the 120-minute job backstop; the
+        # per-download --max-time values are the tighter bound.
+        timeout-minutes: 30
         run: |
           set -euo pipefail
-          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=2 update
-          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=2 install -y --no-install-recommends \
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 update
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 install -y --no-install-recommends \
             ripgrep jq default-jre-headless postgresql-client curl
           HELM_VERSION=v3.16.3
           HELM_ARCHIVE="helm-${HELM_VERSION}-linux-amd64.tar.gz"

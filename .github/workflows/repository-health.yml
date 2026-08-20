@@ -61,11 +61,11 @@ jobs:
         # Bounded like every other network-facing step: apt must fail in
         # minutes rather than consume the job budget if a mirror stops
         # responding.
-        timeout-minutes: 5
+        timeout-minutes: 15
         run: |
           set -euo pipefail
-          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=2 update
-          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::Retries=2 install -y --no-install-recommends \
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 update
+          sudo apt-get -o Acquire::http::Timeout=30 -o Acquire::https::Timeout=30 -o Acquire::Retries=2 install -y --no-install-recommends \
             ripgrep jq default-jre-headless
 
       - name: Install dependencies

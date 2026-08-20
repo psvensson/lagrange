@@ -125,7 +125,7 @@
     },
     {
       "id": "package-scripts-only-change",
-      "provenance": "policy: developer command wiring is not the runtime surface",
+      "provenance": "policy: developer command wiring is not the runtime surface. The obligation is that a scripts edit stays MODULAR; it originally recorded release-packaging because that was the modular answer at the time, which is the corpus recording a mechanism output rather than its obligation.",
       "changed": [
         "package.json"
       ],
@@ -133,9 +133,9 @@
         "scripts"
       ],
       "mustIncludeSubsystems": [
-        "release-packaging"
+        "test-infrastructure"
       ],
-      "why": "scripts edits must stay modular, or every command tweak forces a release proof"
+      "why": "scripts edits must stay modular, or every command tweak forces a release proof. They prove the development loop, not the packaging surface: routing them to release-packaging dragged the npm distribution proof into ordinary CI."
     },
     {
       "id": "coupled-pair-opposite-endpoint",

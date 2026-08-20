@@ -119,6 +119,51 @@ test('a changed test without classification refuses', () => {
   assert.equal(selection.kind, SELECTION_REFUSED);
 });
 
+// package.json is not one semantic subsystem, so its owner depends on WHICH
+// fields moved. Before this was field-sensitive, a scripts-only edit widened
+// into release-packaging and dragged the npm distribution proof into ordinary
+// CI - which is how a test the old gate never ran on a push turned up red.
+const packageSelection = (fields) => selectChangedTests({
+  root,
+  changedPaths: ['package.json'],
+  changedPackageFields: fields,
+});
+
+for (const fields of [['scripts'], ['devDependencies'],
+  ['devDependencies', 'scripts']]) {
+  test(`package.json ${fields.join('+')} is development tooling`, () => {
+    const selection = packageSelection(fields);
+    assert.notEqual(selection.kind, SELECTION_REFUSED);
+    assert.ok(selection.subsystems.includes('test-infrastructure'),
+      'a dev-tooling edit proves the development loop');
+    assert.ok(!selection.subsystems.includes('release-packaging'),
+      'it changes nothing a consumer installs or executes');
+  });
+}
+
+test('package.json metadata still proves the packaging subsystem', () => {
+  // Unchanged behaviour for version and publication metadata: the fix narrows
+  // dev tooling, it does not broaden the exemption.
+  const selection = packageSelection(['version']);
+  assert.ok(selection.subsystems.includes('release-packaging'));
+  assert.ok(!selection.subsystems.includes('test-infrastructure'));
+});
+
+for (const field of ['exports', 'dependencies']) {
+  test(`package.json ${field} still demands a release proof`, () => {
+    const selection = packageSelection([field]);
+    assert.equal(selection.kind, SELECTION_REFUSED);
+    assert.equal(selection.refusalCode, 'RELEASE_PROOF_REQUIRED');
+  });
+}
+
+test('a dev-tooling field mixed with a surface field still refuses', () => {
+  // The exemption is all-or-nothing: one release-surface field in the set is
+  // enough, or an edit could hide a dependency change behind a scripts change.
+  const selection = packageSelection(['scripts', 'dependencies']);
+  assert.equal(selection.kind, SELECTION_REFUSED);
+});
+
 test('DELETING a test does not refuse the whole proof', () => {
   // A deleted test is absent from the classification manifest for the correct
   // reason: it no longer exists. Reading that as "unclassified" would make

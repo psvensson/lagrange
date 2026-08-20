@@ -50,7 +50,9 @@ import {
   CATEGORY_TEST,
   PACKAGE_LOCKFILE_PATH,
   PACKAGE_MANIFEST_PATH,
+  PACKAGE_DEV_TOOLING_FIELDS,
   PACKAGE_RELEASE_SURFACE_FIELDS,
+  SUBSYSTEM_TEST_INFRASTRUCTURE,
   PACKAGE_SURFACE_RELEASE_PROBLEM,
   RELEASE_SURFACE_PATHS,
   RELEASE_SURFACE_PROBLEM,
@@ -71,6 +73,7 @@ import {
 // external data by the adversarial-intrinsics rule, and this module decides
 // what CI proves: a replaced String.prototype.startsWith could drop a contract
 // owner from the plan while every count still looked healthy.
+const arrayEvery = Function.call.bind(Array.prototype.every);
 const arrayFilter = Function.call.bind(Array.prototype.filter);
 const arrayFind = Function.call.bind(Array.prototype.find);
 const arrayIncludes = Function.call.bind(Array.prototype.includes);
@@ -337,9 +340,34 @@ function admitChangedSource(evidence, changedPath, classes, contracts) {
   }
 }
 
+// package.json is not one semantic subsystem, so its OWNER depends on which
+// fields moved. The runtime surface and the dependency set are broader than any
+// subsystem and have already refused above; a dev-tooling-only edit is the
+// development loop and belongs to test-infrastructure; anything else stays
+// packaging metadata.
+//
+// Deliberately decided HERE and not in the path taxonomy: that table's job is
+// classifying PATHS, and teaching it to read JSON fields would give it a second
+// kind of authority. This is the boundary where changedPackageFields exists.
+export function packageDevToolingSubsystem(changedPackageFields) {
+  if (!Array.isArray(changedPackageFields) ||
+    changedPackageFields.length === 0) {
+    return null;
+  }
+  return arrayEvery(changedPackageFields,
+    (field) => arrayIncludes(PACKAGE_DEV_TOOLING_FIELDS, field)) ?
+    SUBSYSTEM_TEST_INFRASTRUCTURE : null;
+}
+
 // One pass over the changed paths, gathering what they oblige. It decides
 // nothing: the outcome is chosen once, by the caller, from this evidence.
-function collectChangeEvidence({changedPaths, classes, contracts, vanished}) {
+function collectChangeEvidence({
+  changedPaths,
+  classes,
+  contracts,
+  vanished,
+  packageSubsystem,
+}) {
   const evidence = {
     plan: new Map(),
     subsystems: new Set(),
@@ -351,6 +379,11 @@ function collectChangeEvidence({changedPaths, classes, contracts, vanished}) {
     if (isInertPath(changedPath)) continue;
     if (stringEndsWith(changedPath, TEST_SUFFIX)) {
       admitChangedTest(evidence, changedPath, classes, vanished);
+      continue;
+    }
+    if (changedPath === PACKAGE_MANIFEST_PATH && packageSubsystem) {
+      evidence.sourceChanged = true;
+      evidence.subsystems.add(packageSubsystem);
       continue;
     }
     admitChangedSource(evidence, changedPath, classes, contracts);
@@ -384,6 +417,7 @@ export function selectChangedTests({
     classes,
     contracts: readJson(root, IMPACT_CONTRACTS_PATH),
     vanished: vanishedPaths,
+    packageSubsystem: packageDevToolingSubsystem(changedPackageFields),
   });
   if (evidence.refusals.length > 0) {
     return refusedSelection(REFUSAL_UNKNOWN_SCOPE, evidence.refusals,
