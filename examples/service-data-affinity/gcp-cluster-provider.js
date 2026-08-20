@@ -49,6 +49,7 @@ const GCP_DEMO_CONFIG = Object.freeze({
   vmCount: 5,
   preemptible: false,
 });
+const GCP_DEMO_ZONE_ENV = 'LAGRANGE_AFFINITY_DEMO_GCP_ZONE';
 const DEMO_NODE_COUNT = 5;
 const ADMIN_STREAM_PATH = '/api/admin/stream';
 const SEED_ADMIN_PORT = 8081;
@@ -56,6 +57,13 @@ const GCP_DEMO_SCENARIO_NAME = 'movielens-service-data-affinity-demo';
 const TEARDOWN_FAILURE_PREFIX =
   'gcp-cluster-provider: best-effort teardown failed (infra may leak): ';
 const LINE_SEPARATOR = '\n';
+
+function resolveGcpDemoConfig(environment = process.env) {
+  const requestedZone = String(environment?.[GCP_DEMO_ZONE_ENV] || '').trim();
+  return requestedZone ?
+    {...GCP_DEMO_CONFIG, zone: requestedZone} :
+    {...GCP_DEMO_CONFIG};
+}
 
 async function materializeGcpFullNodeLogs(nodes, outputDir) {
   if (!outputDir) {
@@ -124,7 +132,7 @@ async function stopGcpAffinityCluster({cluster, provisioner, outputDir}) {
  *   seedExternalIp: string, stop: Function}>}
  */
 async function startGcpAffinityCluster({verbose = false, outputDir} = {}) {
-  const provisioner = new GCPProvisioner(GCP_DEMO_CONFIG);
+  const provisioner = new GCPProvisioner(resolveGcpDemoConfig());
   let provisioned = false;
   let cluster = null;
   try {
@@ -198,4 +206,5 @@ export {
   stopGcpAffinityCluster,
   GCP_DEMO_CONFIG,
   GCP_DEMO_SCENARIO_NAME,
+  resolveGcpDemoConfig,
 };

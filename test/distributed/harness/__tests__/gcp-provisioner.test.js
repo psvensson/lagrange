@@ -68,6 +68,39 @@ test('destroy throws when no stack is active', async (t) => {
   t.end();
 });
 
+test('stack update failure destroys partially-created resources', async (t) => {
+  const certDir = fs.mkdtempSync(path.join(os.tmpdir(), 'gcp-stack-failure-'));
+  const p = new GCPProvisioner({project: 'proj'});
+  const calls = [];
+  p._certDir = certDir;
+  const stack = {
+    async setConfig(key) {
+      calls.push(`config:${key}`);
+    },
+    async up() {
+      calls.push('up');
+      throw new Error('injected zonal stockout');
+    },
+    async destroy() {
+      calls.push('destroy');
+    },
+  };
+
+  await assert.rejects(
+    () => p._updateStack(stack, 'proj', 'us-central1-a'),
+    /injected zonal stockout/,
+  );
+  assert.deepEqual(calls, [
+    'config:gcp:project',
+    'config:gcp:zone',
+    'up',
+    'destroy',
+  ]);
+  assert.equal(p._stack, null, 'the failed stack is no longer tracked');
+  assert.equal(fs.existsSync(certDir), false, 'ephemeral certificates are removed');
+  t.end();
+});
+
 // --- Cost estimation ---
 
 test('estimateCost returns null before provision()', (t) => {

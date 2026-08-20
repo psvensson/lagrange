@@ -62,7 +62,9 @@ import {
   summarizePhase,
 } from '../../examples/service-data-affinity/run-affinity-demo.js';
 import {
+  GCP_DEMO_CONFIG,
   GCP_DEMO_SCENARIO_NAME,
+  resolveGcpDemoConfig,
   stopGcpAffinityCluster,
 } from '../../examples/service-data-affinity/gcp-cluster-provider.js';
 import {
@@ -80,6 +82,15 @@ const FAST_INTERVAL_MS = 5;
 const WAIT_TIMEOUT_MS = 1500;
 const WAIT_POLL_MS = 5;
 const gzip = promisify(gzipCallback);
+
+test('MovieLens GCP config accepts an explicit same-region capacity zone', (t) => {
+  assert.equal(resolveGcpDemoConfig({}).zone, GCP_DEMO_CONFIG.zone);
+  assert.equal(
+    resolveGcpDemoConfig({LAGRANGE_AFFINITY_DEMO_GCP_ZONE: 'us-central1-f'}).zone,
+    'us-central1-f',
+  );
+  t.end();
+});
 
 test('MovieLens GCP cleanup preserves full node logs before VM destruction',
   async (t) => {

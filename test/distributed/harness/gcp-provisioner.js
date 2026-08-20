@@ -264,6 +264,21 @@ class GCPProvisioner {
     return process.env[PULUMI_BACKEND_URL_ENV];
   }
 
+  async _updateStack(stack, project, zone) {
+    // Track the stack before any operation that can partially create cloud
+    // resources. Pulumi can persist a partial update when a subset of VMs is
+    // created before a zonal stockout; cleanup must still own that stack.
+    this._stack = stack;
+    try {
+      await stack.setConfig('gcp:project', {value: project});
+      await stack.setConfig('gcp:zone', {value: zone});
+      return await stack.up({onOutput: () => {}});
+    } catch (error) {
+      await this._destroyQuietly();
+      throw error;
+    }
+  }
+
   async provision() {
     this._pulumiDeps = await loadPulumiDeps();
     const {pulumi, gcp} = this._pulumiDeps;
@@ -385,11 +400,7 @@ class GCPProvisioner {
       program,
     });
 
-    await stack.setConfig('gcp:project', {value: project});
-    await stack.setConfig('gcp:zone', {value: zone});
-
-    const result = await stack.up({onOutput: () => {}});
-    this._stack = stack;
+    const result = await this._updateStack(stack, project, zone);
 
     const ips = result.outputs.externalIps.value;
     const internalIps = result.outputs.internalIps.value;
