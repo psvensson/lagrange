@@ -419,8 +419,8 @@ test('AuthoritativeControlPlaneView keeps in-flight reads distinct when ' +
   );
 });
 
-test('AuthoritativeControlPlaneView keeps leader-pinned owner reads distinct ' +
-  'from ordinary in-flight owner reads', async (t) => {
+test('AuthoritativeControlPlaneView keeps preferred and required leader ' +
+  'owner reads distinct from ordinary in-flight owner reads', async (t) => {
   const calls = [];
   let releaseRead = null;
   const readBlocked = new Promise((resolve) => {
@@ -465,20 +465,35 @@ test('AuthoritativeControlPlaneView keeps leader-pinned owner reads distinct ' +
       preferOwnerRpcReadLeader: true,
     },
   );
+  const leaderRequiredRead = view.readRows(
+    TABLES.NODES,
+    `SELECT * FROM ${TABLES.NODES} WHERE node_id = ?`,
+    [FIXTURE_NODE_ID],
+    {
+      ...readOptions,
+      preferOwnerRpcReadLeader: true,
+      requireOwnerRpcReadLeader: true,
+    },
+  );
   await Promise.resolve();
 
   t.equal(
     calls.length,
-    2,
-    'a strict leader-pinned read must not coalesce with an unpinned owner read',
+    3,
+    'preferred, required, and ordinary leader contracts cannot coalesce',
   );
 
   releaseRead();
-  await Promise.all([ordinaryRead, leaderPinnedRead]);
+  await Promise.all([ordinaryRead, leaderPinnedRead, leaderRequiredRead]);
   t.same(
     calls.map((call) => call.options?.preferOwnerRpcReadLeader),
-    [false, true],
-    'each in-flight read preserves its owner-RPC leader contract',
+    [false, true, true],
+    'each in-flight read preserves its leader preference',
+  );
+  t.same(
+    calls.map((call) => call.options?.requireOwnerRpcReadLeader),
+    [false, false, true],
+    'leader authority strength is part of the in-flight identity',
   );
 });
 

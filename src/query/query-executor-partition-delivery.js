@@ -23,6 +23,7 @@ const {
   LOG_MSG,
   QUERY_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
+  QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   QUERY_LOG_MSG,
   QUERY_RESPONSE_TYPE,
   normalizeParticipantFailureString,
@@ -48,6 +49,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
       this.defaultRoutingReadinessDimension;
     const allowReadinessAuthoritativeRefresh =
       this.shouldAllowRoutingAuthoritativeRefresh(executionOptions);
+    const requireCanonicalLeader =
+      executionOptions?.readAuthority?.requireOwnerRpcReadLeader === true;
     const attemptBudget = createPartitionAttemptBudget({
       executor: this,
       partitionId,
@@ -136,6 +139,8 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
           {
             allowReadinessAuthoritativeRefresh,
             readPurpose: executionOptions?.readAuthority?.purpose,
+            [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.REQUIRE_CANONICAL_LEADER]:
+              requireCanonicalLeader,
             recoveryCandidateSelectionKey:
                 executionOptions.recoveryCandidateSelectionKey,
           },
@@ -159,17 +164,21 @@ class QueryExecutorPartitionDelivery extends QueryExecutorBase {
             {
               allowReadinessAuthoritativeRefresh,
               readPurpose: executionOptions?.readAuthority?.purpose,
+              [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.REQUIRE_CANONICAL_LEADER]:
+                requireCanonicalLeader,
               recoveryCandidateSelectionKey:
                   executionOptions.recoveryCandidateSelectionKey,
             },
           ));
       }
-      serviceCandidates = this.prioritizeSessionPartitionAddress(
-        serviceCandidates,
-        routingSnapshot,
-        executionOptions.sessionId,
-        partitionId,
-      );
+      if (!requireCanonicalLeader) {
+        serviceCandidates = this.prioritizeSessionPartitionAddress(
+          serviceCandidates,
+          routingSnapshot,
+          executionOptions.sessionId,
+          partitionId,
+        );
+      }
       if (serviceCandidates.length === 0) {
         const hasRoutableService =
           routingSnapshot.routableServiceCount > 0;

@@ -7,6 +7,7 @@ import {
   LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY,
 } from '../cdc/cdc-integration-service.js';
 import {
+  CONTROL_PLANE_READ_PURPOSE,
   CONTROL_PLANE_READINESS_DIMENSION,
 } from './control-plane-readiness-constants.js';
 import {
@@ -193,6 +194,8 @@ function buildAuthoritativeReadKey(tableName, sql, params, options, queryTimeout
       authoritativeReadModeContract.authoritativeReadMode,
     preferOwnerRpcReadLeader:
       resolvedOptions?.preferOwnerRpcReadLeader === true,
+    requireOwnerRpcReadLeader:
+      resolvedOptions?.requireOwnerRpcReadLeader === true,
     localReadConsistency:
       resolvedOptions?.localReadConsistency ||
       AUTHORITATIVE_CONTROL_PLANE_LOCAL_READ_CONSISTENCY,
@@ -506,6 +509,8 @@ class AuthoritativeControlPlaneView {
               authoritativeReadModeContract.preferOwnerRpcRead,
             preferOwnerRpcReadLeader:
               resolvedOptions?.preferOwnerRpcReadLeader === true,
+            requireOwnerRpcReadLeader:
+              resolvedOptions?.requireOwnerRpcReadLeader === true,
             requireOwnerRpcRead:
               authoritativeReadModeContract.requireOwnerRpcRead,
             confirmEmptyLocalReadWithOwnerRpc:
@@ -588,6 +593,37 @@ class AuthoritativeControlPlaneView {
 
     this.inFlightReadsByKey.set(readKey, inFlightRead);
     return inFlightRead;
+  }
+
+  /**
+   * Read canonical owner rows needed to make a readiness decision.
+   *
+   * This named interaction owns the whole cross-subsystem contract. Callers
+   * cannot accidentally route readiness evidence through ordinary readiness,
+   * fall back to a stale SQL projection, or accept a non-leader owner replica.
+   * Optional workload/timeout fields remain caller-owned; authority fields do
+   * not.
+   *
+   * @param {string} tableName
+   * @param {string} sql
+   * @param {Array<*>} params
+   * @param {Object} [options]
+   * @return {Promise<Object>}
+   */
+  async readReadinessOwnerRows(tableName, sql, params = [], options = {}) {
+    return this.readRows(tableName, sql, params, {
+      ...options,
+      authoritativeReadMode:
+        CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
+      allowSqlFallback: false,
+      preferOwnerRpcReadLeader: true,
+      requireOwnerRpcReadLeader: true,
+      readPurpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL,
+      // A prebuilt token normally outranks scalar fields. This named operation
+      // owns the token itself, so a caller cannot smuggle a weaker nested
+      // authority contract past the protected fields above.
+      readAuthority: null,
+    });
   }
 
   /**

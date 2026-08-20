@@ -157,6 +157,7 @@ const QUERY_EXECUTOR_ROUTING_OPTION_FIELD = Object.freeze({
   ALLOW_PRIORITY_RECOVERY_BOOTSTRAP: 'allowPriorityRecoveryBootstrap',
   FOR_READ: 'forRead',
   READ_PURPOSE: 'readPurpose',
+  REQUIRE_CANONICAL_LEADER: 'requireCanonicalLeader',
 });
 function buildPartitionServiceWitnessFingerprint(service) {
   if (!service || typeof service !== QUERY_EXECUTOR_LITERAL.STRING_OBJECT) {

@@ -366,17 +366,10 @@ test('readiness churn never performs heavy builds from routing callers',
     readiness.shutdownReadinessPlanningOwner();
   });
 
-test('bootstrap routing consumes deferred readiness only with structural ' +
-  'row and transport witnesses', async (t) => {
+test('bootstrap routing consumes deferred readiness only with owner-service ' +
+  'and live-transport witnesses', async (t) => {
   const partitionId = 'nodes-bootstrap-p1';
   const nodeId = 'node-bootstrap';
-  const nodeRow = {
-    [COLUMN.NODE_ID]: nodeId,
-    [COLUMN.STATUS]: NODE_STATE.ACTIVE,
-    [COLUMN.LAST_HEARTBEAT]: NOW_MS,
-    [COLUMN.READY_LEASE_EXPIRES_AT]: NOW_MS + 60_000,
-    connection_state: 'ready',
-  };
   const partitionRow = {
     partition_id: partitionId,
     table_name: TABLES.NODES,
@@ -394,7 +387,6 @@ test('bootstrap routing consumes deferred readiness only with structural ' +
     raft_role: 'leader',
   };
   let connected = true;
-  let visibleNodeRow = nodeRow;
   const systemCache = {
     get(table, key) {
       return table === TABLES.PARTITIONS && key === partitionId ?
@@ -407,6 +399,9 @@ test('bootstrap routing consumes deferred readiness only with structural ' +
     },
   };
   const readinessService = {
+    getNodeRow() {
+      throw new Error('downstream node projection must not be consulted');
+    },
     getNodeReadinessSync() {
       return {
         nodeId,
@@ -416,18 +411,14 @@ test('bootstrap routing consumes deferred readiness only with structural ' +
         ],
       };
     },
-    getNodeRow() {
-      return visibleNodeRow;
-    },
-    getNodeTransportState() {
-      return {connected};
-    },
   };
   const executor = new QueryExecutor({
     nodeId: 'node-local',
     systemCache,
     controlPlaneReadinessService: readinessService,
-    messageRouter: {getConnectionState: () => 'connected'},
+    messageRouter: {
+      getConnectionState: () => connected ? 'connected' : 'disconnected',
+    },
   });
   const ordinaryCandidates = () => executor.getPartitionServiceCandidates(
     partitionId,
@@ -449,14 +440,13 @@ test('bootstrap routing consumes deferred readiness only with structural ' +
   t.equal(ordinaryCandidates().length, 0,
     'ordinary reads cannot bypass a stale readiness decision');
   t.equal(internalCandidates().length, 1,
-    'only readiness-internal reads use the structural route');
+    'readiness-internal reads reach the pre-ready canonical owner');
   connected = false;
   t.equal(internalCandidates().length, 0,
     'transport loss closes the deferred bootstrap route');
   connected = true;
-  visibleNodeRow = null;
-  t.equal(internalCandidates().length, 0,
-    'node deletion closes the deferred bootstrap route');
+  t.equal(internalCandidates().length, 1,
+    'an incomplete downstream node projection cannot veto its data owner');
 });
 
 test('versioned readiness owner is latest-wins, fair, and macrotask bounded',

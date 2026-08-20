@@ -1,9 +1,6 @@
 import {NODE_JOINING_SERVICE_SHARED} from './node-joining-service-shared.js';
 import {NodeJoiningOwnerConstruction} from './node-joining-owner-construction.js';
 import {
-  CONTROL_PLANE_AUTHORITATIVE_READ_MODE,
-} from '../control-plane/control-plane-system-table-gateway.js';
-import {
   CONTROL_PLANE_NODE_STATE_PUBLICATION_MODE,
 } from '../control-plane/control-plane-constants.js';
 import {
@@ -220,7 +217,7 @@ class NodeJoiningOperationLedgerFormationReadiness
       !authoritativeView ||
       typeof authoritativeView.canRead !== 'function' ||
       authoritativeView.canRead() !== true ||
-      typeof authoritativeView.readRows !== 'function'
+      typeof authoritativeView.readReadinessOwnerRows !== 'function'
     ) {
       return this.buildUnavailableFormationPlacementObservation(
         partitionId,
@@ -228,17 +225,11 @@ class NodeJoiningOperationLedgerFormationReadiness
       );
     }
     try {
-      const result = await authoritativeView.readRows(
+      const result = await authoritativeView.readReadinessOwnerRows(
         TABLES.SERVICES,
         `SELECT * FROM ${TABLES.SERVICES} ` +
           `WHERE ${COLUMN.PARTITION_ID} = ?`,
         [partitionId],
-        {
-          authoritativeReadMode:
-            CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-          allowSqlFallback: false,
-          preferOwnerRpcReadLeader: true,
-        },
       );
       if (result?.success !== true) {
         return this.buildUnavailableFormationPlacementObservation(

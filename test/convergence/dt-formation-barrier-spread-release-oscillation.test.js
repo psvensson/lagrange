@@ -237,7 +237,7 @@ function buildScenario(options = {}) {
   coordinator.controlPlaneReadinessService.getAuthoritativeControlPlaneView =
     () => ({
       canRead: () => true,
-      readRows: async (tableName, sql, params) => {
+      readReadinessOwnerRows: async (tableName, sql, params) => {
         placementLaneCalls++;
         if (stormActive() && placementLaneCalls % 2 === 1) {
           return {...PRESSURE_READ_FAILURE};
@@ -703,7 +703,7 @@ async function buildBusyHealthyScenario(options = {}) {
   coordinator.controlPlaneReadinessService.getAuthoritativeControlPlaneView =
     () => ({
       canRead: () => true,
-      readRows: async () => {
+      readReadinessOwnerRows: async () => {
         placementLaneCalls++;
         const shedThisCall = options.placementLaneAvailable === false ||
           placementLaneCalls % 2 === 1;

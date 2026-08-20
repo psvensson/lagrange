@@ -14,6 +14,7 @@ const {
   NUM,
   PARTITION_SERVICE_ERROR_MSG,
   QUERY_EXECUTOR_LITERAL,
+  QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   QUERY_ROUTING_REPAIR_REASON,
   SYSTEM_TABLE_NAMES,
   TRANSPORT_ERROR_MSG,
@@ -38,6 +39,13 @@ class QueryExecutorWriteRetryRouting extends QueryExecutorCanonicalLeaderRouting
     preferSameLatencyGroup = false,
     routingOptions = {},
   ) {
+    if (
+      routingOptions?.[
+        QUERY_EXECUTOR_ROUTING_OPTION_FIELD.REQUIRE_CANONICAL_LEADER
+      ] === true
+    ) {
+      return [];
+    }
     const routableServices = Array.isArray(routingSnapshot?.routableServices) ?
       routingSnapshot.routableServices :
       [];

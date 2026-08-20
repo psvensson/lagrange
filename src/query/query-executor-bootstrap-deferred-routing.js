@@ -1,36 +1,16 @@
-import {wasNodeRecordReadyWhenWritten} from
-  '../node/node-readiness-policy.js';
-
-const UNAVAILABLE_TRANSPORT_STATE = Object.freeze({connected: false});
-
-function readNodeRow(readinessService, nodeId) {
-  if (!nodeId || typeof readinessService?.getNodeRow !== 'function') {
-    return null;
-  }
-  return readinessService.getNodeRow(nodeId);
-}
-
-function readNodeTransportState(readinessService, nodeId, nodeRow) {
-  if (
-    !nodeId ||
-    typeof readinessService?.getNodeTransportState !== 'function'
-  ) {
-    return UNAVAILABLE_TRANSPORT_STATE;
-  }
-  return readinessService.getNodeTransportState(nodeId, nodeRow);
-}
+import {hasLiveTransportEvidence} from
+  '../control-plane/live-transport-evidence.js';
 
 function isReadinessInternalRouteStructurallyReady(options = {}) {
   const nodeId = options.service?.node_id || options.service?.nodeId || null;
-  const nodeRow = readNodeRow(options.readinessService, nodeId);
-  if (!wasNodeRecordReadyWhenWritten(nodeRow, {requireActiveStatus: true})) {
-    return false;
-  }
-  return readNodeTransportState(
-    options.readinessService,
-    nodeId,
-    nodeRow,
-  )?.connected === true;
+  // Service status/address are checked by the caller. The canonical owner
+  // response supplies data authority, and the shared live-router atom supplies
+  // reachability. A local nodes projection is deliberately not an input: a
+  // joiner cannot require its still-forming downstream cache to contact the
+  // owner that produces the evidence needed to finish that formation.
+  return hasLiveTransportEvidence(nodeId, {
+    messageRouter: options.messageRouter,
+  });
 }
 
 export {

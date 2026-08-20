@@ -11,8 +11,10 @@
  */
 
 import {test} from '../../src/test-helpers/tap.js';
-import {readFile} from 'node:fs/promises';
+import {mkdtemp, readFile, rm} from 'node:fs/promises';
 import {createRequire} from 'node:module';
+import {tmpdir} from 'node:os';
+import {join} from 'node:path';
 import {
   queryRows,
   startCluster,
@@ -57,6 +59,74 @@ test('demo module exports the cluster-start helpers the probe reuses ' +
   }
   t.end();
 });
+
+test('local cluster startup retains rollback ownership until handle return',
+  async (t) => {
+    const dataRoot = await mkdtemp(join(tmpdir(), 'lagrange-owned-cluster-'));
+    t.teardown(() => rm(dataRoot, {recursive: true, force: true}));
+    const acquired = [];
+    const stoppedBatches = [];
+    const formationFailure = new Error('injected formation failure');
+
+    const startPromise = startLocalCluster(
+      3,
+      dataRoot,
+      'ws://formation-owner.invalid',
+      {
+        startNode: async (index) => {
+          const node = {index, process: {exitCode: null}};
+          acquired.push(node);
+          return node;
+        },
+        waitForAdmin: async () => {},
+        waitForClusterSize: async () => {
+          throw formationFailure;
+        },
+        stopNodes: async (nodes) => {
+          stoppedBatches.push([...nodes]);
+        },
+      },
+    );
+
+    await t.rejects(startPromise, formationFailure,
+      'the original formation failure remains the surfaced cause');
+    t.equal(acquired.length, 3, 'the failure occurs after all children exist');
+    t.equal(stoppedBatches.length, 1, 'rollback runs exactly once');
+    t.same(stoppedBatches[0], acquired,
+      'the acquisition owner reclaims every child before throwing');
+    t.end();
+  });
+
+test('local cluster rollback cannot replace an immutable startup failure',
+  async (t) => {
+    const dataRoot = await mkdtemp(join(tmpdir(), 'lagrange-owned-cluster-'));
+    t.teardown(() => rm(dataRoot, {recursive: true, force: true}));
+    const startupFailure = Object.freeze(new Error('immutable startup failure'));
+    let observedFailure = null;
+
+    try {
+      await startLocalCluster(
+        1,
+        dataRoot,
+        'ws://formation-owner.invalid',
+        {
+          startNode: async () => ({process: {exitCode: null}}),
+          waitForAdmin: async () => {
+            throw startupFailure;
+          },
+          stopNodes: async () => {
+            throw new Error('injected rollback failure');
+          },
+        },
+      );
+    } catch (error) {
+      observedFailure = error;
+    }
+
+    t.equal(observedFailure, startupFailure,
+      'rollback failure cannot replace or wrap the immutable primary cause');
+    t.end();
+  });
 
 test('probe arg parsing matches the demo mode selection (--local, ' +
   'plus the --mode local|docker alias)', (t) => {

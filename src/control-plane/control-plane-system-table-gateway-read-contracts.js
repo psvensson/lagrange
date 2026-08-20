@@ -300,6 +300,8 @@ function buildControlPlaneReadAuthority(options = {}) {
     ),
     authoritativeReadMode: resolveAuthoritativeReadMode(options),
     preferOwnerRpcReadLeader: options?.preferOwnerRpcReadLeader === true,
+    requireOwnerRpcReadLeader:
+      options?.requireOwnerRpcReadLeader === true,
     preferLeader:
       typeof options?.preferLeader === 'boolean' ?
         options.preferLeader :
@@ -335,6 +337,8 @@ function buildAuthoritativeControlPlaneReadRequestOptions(
       preferOwnerRpcRead: authoritativeReadModeContract.preferOwnerRpcRead,
       preferOwnerRpcReadLeader:
         options?.preferOwnerRpcReadLeader === true,
+      requireOwnerRpcReadLeader:
+        options?.requireOwnerRpcReadLeader === true,
       requireOwnerRpcRead: authoritativeReadModeContract.requireOwnerRpcRead,
       allowOwnerRpcFallback:
         authoritativeReadModeContract.allowOwnerRpcFallback,

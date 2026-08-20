@@ -198,12 +198,14 @@ test('membership publication threads purpose through view, CDC, owner RPC, ' +
 });
 
 test('read coalescing identity distinguishes every authority field, ' +
-  'including leader pin and observation scope, in both key forms',
+  'including preferred/required leader authority and observation scope, ' +
+  'in both key forms',
 async (t) => {
   const gateway = createGateway();
   const base = {};
   const variants = [
     {preferOwnerRpcReadLeader: true},
+    {requireOwnerRpcReadLeader: true},
     {readPurpose: CONTROL_PLANE_READ_PURPOSE.READINESS_INTERNAL},
     {
       authoritativeReadMode:

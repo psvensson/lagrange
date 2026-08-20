@@ -173,6 +173,31 @@ const queryExecutorPartitionRoutingCandidateMethods = {
         (service) => service.node_id === canonicalLeaderNodeId,
       ) :
       [];
+    const requireCanonicalLeader =
+      forRead &&
+      resolvedRoutingOptions?.[
+        QUERY_EXECUTOR_ROUTING_OPTION_FIELD.REQUIRE_CANONICAL_LEADER
+      ] === true;
+    if (requireCanonicalLeader) {
+      if (!canonicalLeaderNodeId) {
+        this.logCanonicalLeaderRoutingGap(partitionId, {
+          reason: LEADER_GAP_REASON_OWNER_MISSING,
+          services: orderedServices,
+          routingSnapshot,
+        });
+        return {candidates, routingSnapshot};
+      }
+      canonicalLeaderServices.forEach(addService);
+      if (candidates.length === 0) {
+        this.logCanonicalLeaderRoutingGap(partitionId, {
+          reason: LEADER_GAP_REASON_SERVICE_MISSING,
+          canonicalLeaderNodeId,
+          services: orderedServices,
+          routingSnapshot,
+        });
+      }
+      return {candidates, routingSnapshot};
+    }
     if (!forRead) {
       if (!canonicalLeaderNodeId) {
         if (bootstrapLeaderServices.length > 0) {

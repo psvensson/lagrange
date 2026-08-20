@@ -17,6 +17,8 @@ const CLUSTER_DATA_ROOT = 'data/examples/movielens-lagrange-cluster';
 const CLUSTER_FORM_TIMEOUT_MS = 180000;
 const CLUSTER_POLL_INTERVAL_MS = 2000;
 const NODE_STATUS_ACTIVE = 'active';
+const LOCAL_CLUSTER_ROLLBACK_FAILURE_NOTICE =
+  'Local cluster rollback also failed; preserving the startup failure.\n';
 
 function nodePorts(index) {
   return {
@@ -126,30 +128,56 @@ async function stopLocalNodes(nodes) {
   }
 }
 
-async function startLocalCluster(nodeCount, dataRoot, target) {
+async function startLocalCluster(
+  nodeCount,
+  dataRoot,
+  target,
+  dependencies = {},
+) {
+  const startNode = dependencies.startNode || startLocalNode;
+  const awaitAdmin = dependencies.waitForAdmin || waitForAdmin;
+  const awaitClusterSize =
+    dependencies.waitForClusterSize || waitForClusterSize;
+  const stopNodes = dependencies.stopNodes || stopLocalNodes;
   console.log(`Starting ${nodeCount}-node local Lagrange cluster...`);
   await rm(dataRoot, {recursive: true, force: true});
   await mkdir(dataRoot, {recursive: true});
 
   const nodes = [];
-  nodes.push(await startLocalNode(0, dataRoot));
-  console.log('Waiting for seed admin endpoint...');
-  await waitForAdmin(target);
+  try {
+    nodes.push(await startNode(0, dataRoot));
+    console.log('Waiting for seed admin endpoint...');
+    await awaitAdmin(target);
 
-  for (let i = 1; i < nodeCount; i += 1) {
-    nodes.push(await startLocalNode(i, dataRoot));
+    for (let i = 1; i < nodeCount; i += 1) {
+      nodes.push(await startNode(i, dataRoot));
+    }
+    console.log('Waiting for cluster formation...');
+    const clusterFormationMs = await awaitClusterSize(target, nodeCount);
+    console.log(`Cluster formed in ${clusterFormationMs}ms.`);
+
+    return {
+      mode: 'local-processes',
+      target,
+      clusterFormationMs,
+      getNodeLogs: () => readLocalNodeLogs(nodes, dataRoot),
+      stop: () => stopNodes(nodes),
+    };
+  } catch (error) {
+    // This function owns every child until it returns the cluster handle.
+    // Formation failure cannot transfer that ownership to a caller, so the
+    // acquisition owner must roll back every child before surfacing the cause.
+    try {
+      await stopNodes(nodes);
+    } catch {
+      // Never decorate the primary failure here. It may be frozen, sealed, a
+      // hostile proxy, or even a primitive; attempting to mutate it can replace
+      // the acquisition cause with a TypeError. Cleanup remains best-effort and
+      // the ownership boundary always rethrows the original value unchanged.
+      process.stderr.write(LOCAL_CLUSTER_ROLLBACK_FAILURE_NOTICE);
+    }
+    throw error;
   }
-  console.log('Waiting for cluster formation...');
-  const clusterFormationMs = await waitForClusterSize(target, nodeCount);
-  console.log(`Cluster formed in ${clusterFormationMs}ms.`);
-
-  return {
-    mode: 'local-processes',
-    target,
-    clusterFormationMs,
-    getNodeLogs: () => readLocalNodeLogs(nodes, dataRoot),
-    stop: () => stopLocalNodes(nodes),
-  };
 }
 
 /**

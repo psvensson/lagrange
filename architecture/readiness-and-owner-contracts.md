@@ -76,6 +76,25 @@ hints, visibility state, runtime-authority evidence, and durable protocol phase
 remain attached as evidence instead of widening the caller-facing branch
 surface.
 
+## Readiness-Owner Read Interaction
+
+`AuthoritativeControlPlaneView.readReadinessOwnerRows(...)` owns the complete
+cross-subsystem contract for reads whose result is an input to readiness or
+formation. It fixes owner-RPC-required delivery, canonical-leader requirement,
+served-by-leader witness validation, SQL-fallback denial, and the
+readiness-internal authority purpose in one named operation;
+callers own only query shape, workload, and timeout.
+
+Query routing for that operation admits an active addressed owner service only
+when the shared live-transport owner reports the peer connected. A follower,
+stale session pin, missing leader, or unwitnessed ACK cannot satisfy it. It deliberately
+does not consult node readiness, ready leases, or a joiner's local nodes
+projection: those are downstream consumers of the very owner answer being
+requested. Ordinary reads keep the full readiness gate. This is the interaction
+form of single ownership: each subsystem may have one owner internally, but the
+edge between them must also have one owner and cannot be reconstructed from
+caller-local flags or projections.
+
 ## Control-Plane Mutation Defer Contract
 
 Background gateway-owned metadata writes and retryable routed system-table SQL

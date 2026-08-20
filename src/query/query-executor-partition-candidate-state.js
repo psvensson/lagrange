@@ -2,6 +2,7 @@ import {QUERY_EXECUTOR_SHARED} from './query-executor-shared.js';
 
 const {
   QUERY_EXECUTOR_LITERAL,
+  QUERY_EXECUTOR_ROUTING_OPTION_FIELD,
   QUERY_LOG_MSG,
   QUERY_ROUTING_REPAIR_REASON,
 } = QUERY_EXECUTOR_SHARED;
@@ -33,6 +34,8 @@ function createPartitionCandidateDeliveryState({
 
   const getRecoveryCandidateSelectionOptions = () => ({
     readPurpose: executionOptions?.readAuthority?.purpose,
+    [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.REQUIRE_CANONICAL_LEADER]:
+      executionOptions?.readAuthority?.requireOwnerRpcReadLeader === true,
     recoveryCandidateSelectionKey:
       executionOptions.recoveryCandidateSelectionKey,
   });
@@ -46,6 +49,8 @@ function createPartitionCandidateDeliveryState({
       {
         allowReadinessAuthoritativeRefresh,
         readPurpose: executionOptions?.readAuthority?.purpose,
+        [QUERY_EXECUTOR_ROUTING_OPTION_FIELD.REQUIRE_CANONICAL_LEADER]:
+          executionOptions?.readAuthority?.requireOwnerRpcReadLeader === true,
         recoveryCandidateSelectionKey:
           executionOptions.recoveryCandidateSelectionKey,
       },

@@ -1,5 +1,6 @@
 import {CDC_INTEGRATION_SERVICE_SHARED} from './cdc-integration-service-shared.js';
 import {resolveControlPlaneSystemTableDeliverySource} from '../control-plane/control-plane-system-table-gateway-shared.js';
+import {RAFT_ROLE} from '../raft/constants.js';
 
 const {
   ADDRESS,
@@ -28,6 +29,45 @@ const AUTHORITATIVE_SQL_FALLBACK_QUERY_TIMEOUT_ERROR_MESSAGES = Object.freeze([
   QUERY_ERROR_MSG.QUERY_TIMEOUT,
 ]);
 const AUTHORITATIVE_OWNER_RPC_READ_PREFER_LEADER = false;
+const AUTHORITATIVE_LEADER_WITNESS_STATE = 'observed';
+const AUTHORITATIVE_LEADER_WITNESS_FAILURE =
+  'authoritative_owner_leader_witness_required';
+
+function isRequiredLeaderReadSuccess(queryResult, readAuthority) {
+  return queryResult?.success === true &&
+    readAuthority?.requireOwnerRpcReadLeader === true;
+}
+
+function isValidLeaderReadAuthorityWitness(witness, partitionId) {
+  return witness?.state === AUTHORITATIVE_LEADER_WITNESS_STATE &&
+    witness?.partitionId === partitionId &&
+    witness?.role === RAFT_ROLE.LEADER &&
+    typeof witness?.servingNodeId === 'string' &&
+    witness.servingNodeId.length > 0 &&
+    typeof witness?.servingReplicaId === 'string' &&
+    witness.servingReplicaId.length > 0;
+}
+
+function enforceRequiredLeaderReadAuthority(
+  queryResult,
+  partitionId,
+  readAuthority,
+) {
+  if (!isRequiredLeaderReadSuccess(queryResult, readAuthority)) {
+    return queryResult;
+  }
+  const witness = queryResult?.readAuthorityWitness;
+  if (isValidLeaderReadAuthorityWitness(witness, partitionId)) {
+    return queryResult;
+  }
+  return {
+    ...queryResult,
+    success: false,
+    rows: [],
+    error: CDC_INTEGRATION_SERVICE_LITERAL.AUTHORITATIVE_QUERY_FAILED,
+    authorityFailureReason: AUTHORITATIVE_LEADER_WITNESS_FAILURE,
+  };
+}
 
 function isAuthoritativeSqlFallbackQueryTimeoutMessage(errorMessage) {
   if (typeof errorMessage !== 'string') {
@@ -363,13 +403,15 @@ async function executeAuthoritativeOwnerRpcRead(
   };
 
   // Default owner-RPC reads route to "an owner" replica (preferLeader=false),
-  // which can be served by the caller's OWN local replica. A caller that must
-  // escape a self-stale replica (the variant-D publications catch-up) sets
-  // preferOwnerRpcReadLeader so the read is pinned to the partition leader,
-  // which holds the authoritative epoch. The routing readiness dimension is
-  // CONTROL_PLANE_RECOVERY_ELIGIBLE, so a recovery-pending leader still serves.
+  // which can be served by the caller's OWN local replica. Leader preference
+  // changes ordering for compatibility callers. A required-leader token is
+  // stronger: query routing excludes followers and this owner boundary rejects
+  // a success without the serving replica's current leader witness. The routing
+  // readiness dimension remains CONTROL_PLANE_RECOVERY_ELIGIBLE, so a
+  // recovery-pending leader can still serve the readiness-owned interaction.
   const preferLeader =
     (readAuthority ?
+      readAuthority.requireOwnerRpcReadLeader === true ||
       readAuthority.preferOwnerRpcReadLeader === true :
       options?.preferOwnerRpcReadLeader === true) ?
       true :
@@ -412,8 +454,11 @@ async function executeAuthoritativeOwnerRpcRead(
       return buildOwnerRpcReadResult({
         baseDiagnostics,
         localQueryTransportReadiness,
-        queryResult: retryResult?.success ? retryResult : retryResult ||
-          queryResult,
+        queryResult: enforceRequiredLeaderReadAuthority(
+          retryResult?.success ? retryResult : retryResult || queryResult,
+          partitionId,
+          readAuthority,
+        ),
       });
     }
   }
@@ -421,7 +466,11 @@ async function executeAuthoritativeOwnerRpcRead(
   return buildOwnerRpcReadResult({
     baseDiagnostics,
     localQueryTransportReadiness,
-    queryResult,
+    queryResult: enforceRequiredLeaderReadAuthority(
+      queryResult,
+      partitionId,
+      readAuthority,
+    ),
   });
 }
 

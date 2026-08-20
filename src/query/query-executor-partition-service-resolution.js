@@ -341,7 +341,7 @@ class QueryExecutorPartitionServiceResolution extends QueryExecutorCancellationR
   evaluateReadinessInternalRoutability(service) {
     const structurallyReady = isReadinessInternalRouteStructurallyReady({
       service,
-      readinessService: this.controlPlaneReadinessService,
+      messageRouter: this.messageRouter,
     });
     return {
       routable: structurallyReady,

@@ -398,7 +398,7 @@ t.test(
     fixture.coordinator.controlPlaneReadinessService
       .getAuthoritativeControlPlaneView = () => ({
         canRead: () => true,
-        readRows: async () => ({
+        readReadinessOwnerRows: async () => ({
           success: true,
           source: 'owner_rpc_lane',
           rows: currentLedgerReplicas(cache).map((row) => ({...row})),
@@ -791,7 +791,6 @@ for (const authoritativePlacementCase of [
       }
       let operationReadCount = 0;
       let placementReadCount = 0;
-      const placementReadOptions = [];
       const authoritativeRows = authoritativePlacementCase.rows.map(
         ([index, nodeId]) => ({
           service_id: `${LEDGER_PARTITION_ID}-r${index}`,
@@ -807,9 +806,13 @@ for (const authoritativePlacementCase of [
         controlPlaneReadinessService: {
           getAuthoritativeControlPlaneView: () => ({
             canRead: () => true,
-            readRows: async (_tableName, _sql, _params, options) => {
+            readRows: async () => {
+              throw new Error(
+                'formation must use the named readiness-owner interaction',
+              );
+            },
+            readReadinessOwnerRows: async () => {
               placementReadCount++;
-              placementReadOptions.push(options);
               return {
                 success: true,
                 source: authoritativePlacementCase.source,
@@ -861,15 +864,10 @@ for (const authoritativePlacementCase of [
           placementReadCount >= 1,
           'the lagging cache consumes the authoritative services owner',
         );
-        t.match(
-          placementReadOptions[0],
-          {
-            authoritativeReadMode:
-              CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_RPC_REQUIRED,
-            allowSqlFallback: false,
-            preferOwnerRpcReadLeader: true,
-          },
-          'placement recovery is leader-pinned and cannot use SQL fallback',
+        t.equal(
+          placementReadCount > 0,
+          true,
+          'placement recovery uses the non-downgradable readiness-owner API',
         );
         if (authoritativePlacementCase.releases) {
           t.equal(error, null, 'full distinct owner placement releases');
