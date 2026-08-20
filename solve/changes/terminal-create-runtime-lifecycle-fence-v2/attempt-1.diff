@@ -1,0 +1,240 @@
+diff --git a/scripts/check-duplication.js b/scripts/check-duplication.js
+index 94b2715e604c22ce17758d8b677f57ca05349211..08e5728344b3c6354e65b79d89b34df624cb0c3f 100644
+--- a/scripts/check-duplication.js
++++ b/scripts/check-duplication.js
+@@ -97,8 +97,10 @@ const RATCHET_TARGETS = [
+     // fixture guard extracted the shared over-target cache setup.
+     // 2026-08-11: tightened 827/31572 -> 826/31551 after the join mutation-
+     // outcome matrix consolidated duplicated cases.
+-    baselineCloneGroupCount: 826,
+-    baselineDuplicatedLineCount: 31551,
++    // 2026-08-20: tightened 826/31551 -> 824/31498 after measuring the
++    // terminal-create lifecycle fence regression additions.
++    baselineCloneGroupCount: 824,
++    baselineDuplicatedLineCount: 31498,
+     reportOutputDirectory: 'test-output/analysis/jscpd-test',
+     strictEligible: false,
+   },
+diff --git a/scripts/run-terminal-create-runtime-lifecycle-fence-v2-scenarios.js b/scripts/run-terminal-create-runtime-lifecycle-fence-v2-scenarios.js
+new file mode 100644
+index 0000000000000000000000000000000000000000..472e610e174acc6b9ed226518063d9fac022e262
+--- /dev/null
++++ b/scripts/run-terminal-create-runtime-lifecycle-fence-v2-scenarios.js
+@@ -0,0 +1,11 @@
++#!/usr/bin/env node
++
++import {runGuardTestScenarios} from './checks/guard-test-scenario-runner.js';
++
++const SCENARIOS = {
++  'terminal-create-runtime-lifecycle-fence-v2': [
++    'test/node/replica-handler-owner-path-bypass.test.js',
++  ],
++};
++
++runGuardTestScenarios(SCENARIOS);
+diff --git a/src/node/replica-handler-create-methods.js b/src/node/replica-handler-create-methods.js
+index 33b5c192f061378c0eb5ff4df08b5db6a63f3325..bba86136007b811407a0a7f282e82379f42fac6d 100644
+--- a/src/node/replica-handler-create-methods.js
++++ b/src/node/replica-handler-create-methods.js
+@@ -589,6 +589,11 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
+           this.localReplicas.delete(replicaId);
+           return;
+         }
++        await this.fenceFailedReplicaCreateRuntime(
++          replicaId,
++          partitionId,
++          partitionService,
++        );
+         this.failReplicaCreationProgress(progress, error);
+         this.logger.error(REPLICA_HANDLER_LOG_MSG.CREATE_FAILED, {
+           operationId,
+diff --git a/src/node/replica-handler-runtime-methods.js b/src/node/replica-handler-runtime-methods.js
+index a700293a1d79047851e0248396f15d00a2b2e9cc..8116f4245e74b490565389e88da9dcaa7272a4c6 100644
+--- a/src/node/replica-handler-runtime-methods.js
++++ b/src/node/replica-handler-runtime-methods.js
+@@ -26,6 +26,56 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
+     path,
+   } = options;
+   class ReplicaHandlerRuntimeMethods {
++    /**
++     * Fence a PartitionService created by a failed CREATE before the failure
++     * becomes visible to the operation owner. PartitionService.shutdown marks
++     * the runtime shutdown and cancels learner promotion synchronously before
++     * awaiting its remaining quiescence work, so even a later cleanup error
++     * cannot leave a promotable service behind the terminal observation.
++     *
++     * Resource deletion deliberately remains owned by the canonical REMOVE
++     * path and startup cleanup-debt sweep. This boundary owns only runtime
++     * death and local routability, and compare-before-delete avoids removing a
++     * different service if ownership ever changes before this async fence.
++     * @param {string} replicaId - Replica ID.
++     * @param {string} partitionId - Partition ID.
++     * @param {Object|null} service - Failed create's PartitionService.
++     * @return {Promise<boolean>} Whether a created runtime was fenced.
++     * @private
++     */
++    async fenceFailedReplicaCreateRuntime(
++      replicaId,
++      partitionId,
++      service = null,
++    ) {
++      if (!service) {
++        return false;
++      }
++      try {
++        if (typeof service.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION) {
++          await service.shutdown();
++        }
++      } catch (error) {
++        this.logger.warn(
++          REPLICA_HANDLER_LOG_MSG.LOCAL_CLEANUP_RETRY_REQUIRED,
++          {
++            replicaId,
++            partitionId,
++            nodeId: this.nodeId,
++            error: error.message,
++          },
++        );
++      }
++      if (this.localServices.get(replicaId) === service) {
++        this.localServices.delete(replicaId);
++      }
++      const localReplica = this.localReplicas.get(replicaId);
++      if (localReplica?.service === service) {
++        this.setLocalReplica(replicaId, {service: null});
++      }
++      return true;
++    }
++
+     /**
+      * Clean up local resources for a replica.
+      * @param {string} partitionId - Partition ID.
+diff --git a/test/node/replica-handler-owner-path-bypass.test.js b/test/node/replica-handler-owner-path-bypass.test.js
+index 006e7dd687cb92ffbc1594eb959577030cba41d9..b8a1a70c15e83d64e16a58325ceb5d452082eed1 100644
+--- a/test/node/replica-handler-owner-path-bypass.test.js
++++ b/test/node/replica-handler-owner-path-bypass.test.js
+@@ -713,6 +713,124 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
+     },
+   );
+ 
++  await t.test(
++    'CREATE failure fences a started learner before publishing failure',
++    async (t) => {
++      const partitionId = 'schema_operations-p1';
++      const cases = [
++        {label: 'terminal', deferRetry: false},
++        {label: 'retryable', deferRetry: true},
++        {label: 'cleanup-error', deferRetry: false, shutdownThrows: true},
++      ];
++
++      for (const failureCase of cases) {
++        const replicaId = `schema-learner-${failureCase.label}`;
++        const operationId = `op-create-${failureCase.label}`;
++        const timeline = [];
++        const emittedOutcomes = [];
++        let promotionCount = 0;
++        let partitionService = null;
++        const emitter = new ExecutorOutcomeEmitter({logger: console});
++        emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
++          emittedOutcomes.push(outcome);
++          if (
++            outcome.outcomeType ===
++              EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED
++          ) {
++            timeline.push('failure-published');
++          }
++        });
++        const cache = createSeededCache({partitionId});
++        const cdcService = createMockCDCService(cache);
++        const handler = new ReplicaHandler({
++          nodeId: TEST_NODE_ID,
++          systemTableCache: cache,
++          cdcIntegrationService: cdcService,
++          createPartitionService: async () => {
++            partitionService = {
++              isShutdown: false,
++              role: 'learner',
++              async shutdown() {
++                this.isShutdown = true;
++                timeline.push('runtime-fenced');
++                if (failureCase.shutdownThrows) {
++                  throw new Error('injected post-fence cleanup failure');
++                }
++              },
++              async syncFromLeader() {},
++              async checkLearnerPromotion() {
++                if (!this.isShutdown) {
++                  promotionCount += 1;
++                }
++              },
++            };
++            return partitionService;
++          },
++          executorOutcomeEmitter: emitter,
++        });
++        handler.waitForVoterReadyActivation = async () => {
++          const error = new Error(
++            `${failureCase.label} voter-ready failure`,
++          );
++          if (failureCase.deferRetry) {
++            error.deferRetry = true;
++          }
++          throw error;
++        };
++        handler.initialize();
++
++        const failed = new Promise((resolve) => {
++          handler.once(REPLICA_HANDLER_EVENT.CREATION_FAILED, resolve);
++        });
++        const response = await handler.handleMessage(buildEnvelope(
++          ReplicaOperationMessageType.CREATE_REPLICA,
++          {
++            operationId,
++            operationType: OperationType.ADD,
++            partitionId,
++            replicaId,
++          },
++        ));
++        t.equal(
++          response.status,
++          ReplicaOperationResponseStatus.INITIATED,
++          `${failureCase.label} create reaches the real async owner path`,
++        );
++        await failed;
++        await partitionService.checkLearnerPromotion();
++
++        const failedOutcome = emittedOutcomes.find(
++          (outcome) =>
++            outcome.outcomeType ===
++              EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
++        );
++        t.same(
++          timeline.slice(0, 2),
++          ['runtime-fenced', 'failure-published'],
++          `${failureCase.label} failure is published only after its ` +
++            'runtime is non-promotable',
++        );
++        t.equal(
++          handler.getTrackedService(replicaId),
++          null,
++          `${failureCase.label} failed runtime is absent from local routing`,
++        );
++        t.equal(
++          promotionCount,
++          0,
++          `${failureCase.label} failed learner cannot promote after failure`,
++        );
++        t.equal(
++          failedOutcome?.deferRetry === true,
++          failureCase.deferRetry,
++          `${failureCase.label} failure preserves its owner retry type`,
++        );
++
++        await handler.shutdown();
++      }
++    },
++  );
++
+   await t.test(
+     'create failure emits REPLICA_CREATE_FAILED through emitter, ' +
+     'not direct replica_operations writes ' +

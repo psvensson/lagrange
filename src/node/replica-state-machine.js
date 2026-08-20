@@ -16,6 +16,7 @@ import {
   REPLICA_STATE_MACHINE_LOG_MSG,
   REPLICA_STATE_MACHINE_NOW,
   REPLICA_STATE_MACHINE_NUM,
+  REPLICA_STATE_MACHINE_REASON,
   REPLICA_STATE_MACHINE_STATE,
   REPLICA_STATE_MACHINE_SUBSYSTEM,
   REPLICA_STATE_MACHINE_VALID_TRANSITIONS,
@@ -212,6 +213,38 @@ class ReplicaStateMachine extends EventEmitter {
       persist: true,
       validate: true,
     });
+  }
+
+  /**
+   * Re-enter CREATE after the durable operation owner explicitly re-dispatches
+   * a replica whose previous participant attempt reached FAILED.
+   *
+   * This is deliberately not a global FAILED -> CREATING transition. FAILED
+   * remains terminal for ordinary lifecycle transitions and canonical REMOVE
+   * retains deletion authority. The explicit CREATE command is the replay
+   * authority, and the handler must first prove that no runtime is tracked.
+   * @param {string} replicaId - Replica identifier.
+   * @param {Object} context - Additional transition context.
+   * @param {Object} options - Persistence options.
+   * @return {boolean|Promise<boolean>} True when replay was admitted.
+   */
+  restartFailedCreate(replicaId, context = {}, options = {}) {
+    const existingState = this.replicas.get(replicaId);
+    if (existingState?.state !== ReplicaState.FAILED) {
+      return false;
+    }
+    return this._applyTransition(
+      replicaId,
+      ReplicaState.CREATING,
+      {
+        ...context,
+        reason: REPLICA_STATE_MACHINE_REASON.CREATE_REDRIVE,
+      },
+      {
+        persist: options.persist !== false,
+        validate: false,
+      },
+    );
   }
 
   /**

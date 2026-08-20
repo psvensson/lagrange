@@ -589,6 +589,11 @@ function assignReplicaHandlerCreateMethods(ReplicaHandler) {
           this.localReplicas.delete(replicaId);
           return;
         }
+        await this.fenceFailedReplicaCreateRuntime(
+          replicaId,
+          partitionId,
+          partitionService,
+        );
         this.failReplicaCreationProgress(progress, error);
         this.logger.error(REPLICA_HANDLER_LOG_MSG.CREATE_FAILED, {
           operationId,

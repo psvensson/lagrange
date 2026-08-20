@@ -24,6 +24,97 @@ import {
 
 const LOCAL_STR_CONSTRUCTOR = 'constructor';
 const LOCAL_STR_UPSERT = 'UPSERT';
+const MISSING_TRACKED_REPLICA_OBSERVATION = Object.freeze({
+  available: false,
+  trackedState: null,
+});
+
+function registerCachedFailedCreateSnapshot(
+  handler,
+  replicaId,
+  partitionId,
+  cachedService,
+) {
+  handler.replicaStateMachine.registerReplicaSnapshot(replicaId, {
+    partitionId,
+    nodeId: cachedService.node_id || handler.nodeId,
+    state: ReplicaStatus.FAILED,
+    serviceId: cachedService.service_id || replicaId,
+    serviceType:
+      cachedService.service_type || REPLICA_HANDLER_SERVICE.TYPE,
+    serviceAddress:
+      cachedService.address || handler.buildTrackedServiceAddress(replicaId),
+  });
+}
+
+function observeTrackedReplicaState(handler, replicaId) {
+  if (typeof handler.replicaStateMachine?.getState !==
+    REPLICA_HANDLER_TYPEOF.FUNCTION) {
+    return MISSING_TRACKED_REPLICA_OBSERVATION;
+  }
+  return {
+    available: true,
+    trackedState: handler.replicaStateMachine.getState(replicaId),
+  };
+}
+
+function getCachedService(handler, replicaId) {
+  if (typeof handler.systemTableCache?.get !==
+    REPLICA_HANDLER_TYPEOF.FUNCTION) {
+    return null;
+  }
+  return handler.systemTableCache.get(
+    SYSTEM_TABLE_NAME.SERVICES,
+    replicaId,
+  );
+}
+
+function canRestoreFailedCreateSnapshot(handler, trackedState, cachedService) {
+  return !trackedState &&
+    cachedService?.status === ReplicaStatus.FAILED &&
+    typeof handler.replicaStateMachine?.registerReplicaSnapshot ===
+      REPLICA_HANDLER_TYPEOF.FUNCTION;
+}
+
+function resolveFailedCreateReplay(handler, replicaId, partitionId) {
+  let trackedState = observeTrackedReplicaState(
+    handler,
+    replicaId,
+  ).trackedState;
+  const cachedService = getCachedService(handler, replicaId);
+  if (canRestoreFailedCreateSnapshot(handler, trackedState, cachedService)) {
+    registerCachedFailedCreateSnapshot(
+      handler,
+      replicaId,
+      partitionId,
+      cachedService,
+    );
+    trackedState = observeTrackedReplicaState(
+      handler,
+      replicaId,
+    ).trackedState;
+  }
+  return trackedState?.state === ReplicaStatus.FAILED ?
+    {cachedService} :
+    null;
+}
+
+function buildFailedCreateReplayContext(
+  handler,
+  replicaId,
+  partitionId,
+  cachedService,
+) {
+  return {
+    partitionId,
+    nodeId: cachedService?.node_id || handler.nodeId,
+    serviceId: cachedService?.service_id || replicaId,
+    serviceType:
+      cachedService?.service_type || REPLICA_HANDLER_SERVICE.TYPE,
+    serviceAddress:
+      cachedService?.address || handler.buildTrackedServiceAddress(replicaId),
+  };
+}
 
 function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
   class ReplicaHandlerCreateStatusMethods {
@@ -63,6 +154,9 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
      */
     async persistReplicaCreateInitialStatus(options = {}) {
       const {operationId, partitionId, replicaId} = options;
+      if (await this.restartFailedReplicaCreateStatus(options)) {
+        return true;
+      }
       if (this.shouldUsePriorityReplicaCreateStatusFallback(partitionId)) {
         await this.commitPriorityReplicaCreateStatusLocally({
           operationId,
@@ -92,6 +186,72 @@ function assignReplicaHandlerCreateStatusMethods(ReplicaHandler) {
         });
         return false;
       }
+    }
+
+    /**
+     * A durable CREATE owner may re-dispatch after a typed retryable failure.
+     * Admit that command through one narrow state-machine replay seam only
+     * after the failed runtime has disappeared from routing. This keeps the
+     * ordinary FAILED transition table terminal and leaves resource deletion
+     * with canonical REMOVE/startup cleanup.
+     * @param {Object} options
+     * @param {string} options.partitionId
+     * @param {string} options.replicaId
+     * @return {Promise<boolean>} Whether a FAILED create was restarted.
+     * @private
+     */
+    async restartFailedReplicaCreateStatus(options = {}) {
+      const {partitionId, replicaId} = options;
+      const replay = resolveFailedCreateReplay(
+        this,
+        replicaId,
+        partitionId,
+      );
+      if (!replay) {
+        return false;
+      }
+      const staleRuntime = this.getTrackedService(replicaId);
+      await this.fenceFailedReplicaCreateRuntime(
+        replicaId,
+        partitionId,
+        staleRuntime,
+      );
+      if (this.getTrackedService(replicaId)) {
+        throw new Error(
+          `Cannot redrive failed replica ${replicaId} while its runtime is tracked`,
+        );
+      }
+      const priorityFallback =
+        this.shouldUsePriorityReplicaCreateStatusFallback(partitionId);
+      const restarted = await Promise.resolve(
+        this.replicaStateMachine.restartFailedCreate(
+          replicaId,
+          buildFailedCreateReplayContext(
+            this,
+            replicaId,
+            partitionId,
+            replay.cachedService,
+          ),
+          {persist: !priorityFallback},
+        ),
+      );
+      if (restarted !== true) {
+        return false;
+      }
+      this.setLocalReplica(replicaId, {
+        replicaId,
+        partitionId,
+        status: ReplicaStatus.CREATING,
+        service: null,
+      });
+      if (priorityFallback) {
+        this.seedLocalPriorityServiceRow(
+          replicaId,
+          partitionId,
+          ReplicaStatus.CREATING,
+        );
+      }
+      return true;
     }
 
     /**

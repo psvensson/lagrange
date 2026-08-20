@@ -714,6 +714,207 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
   );
 
   await t.test(
+    'CREATE failure fences a started learner before publishing failure',
+    async (t) => {
+      const partitionId = 'schema_operations-p1';
+      const cases = [
+        {label: 'terminal', deferRetry: false},
+        {label: 'retryable', deferRetry: true},
+        {label: 'cleanup-error', deferRetry: false, shutdownThrows: true},
+      ];
+
+      for (const failureCase of cases) {
+        const replicaId = `schema-learner-${failureCase.label}`;
+        const operationId = `op-create-${failureCase.label}`;
+        const timeline = [];
+        const emittedOutcomes = [];
+        let promotionCount = 0;
+        let partitionService = null;
+        let factoryCount = 0;
+        let liveRuntimeCount = 0;
+        let maxLiveRuntimeCount = 0;
+        const emitter = new ExecutorOutcomeEmitter({logger: console});
+        emitter.on(OUTCOME_EVENT_NAME, (outcome) => {
+          emittedOutcomes.push(outcome);
+          if (
+            outcome.outcomeType ===
+              EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED
+          ) {
+            timeline.push('failure-published');
+          }
+        });
+        const cache = createSeededCache({partitionId});
+        const cdcService = createMockCDCService(cache);
+        const handler = new ReplicaHandler({
+          nodeId: TEST_NODE_ID,
+          systemTableCache: cache,
+          cdcIntegrationService: cdcService,
+          createPartitionService: async () => {
+            factoryCount += 1;
+            liveRuntimeCount += 1;
+            maxLiveRuntimeCount = Math.max(
+              maxLiveRuntimeCount,
+              liveRuntimeCount,
+            );
+            partitionService = {
+              isShutdown: false,
+              role: 'learner',
+              async shutdown() {
+                if (!this.isShutdown) {
+                  liveRuntimeCount -= 1;
+                }
+                this.isShutdown = true;
+                timeline.push('runtime-fenced');
+                if (failureCase.shutdownThrows) {
+                  throw new Error('injected post-fence cleanup failure');
+                }
+              },
+              async syncFromLeader() {},
+              async checkLearnerPromotion() {
+                if (!this.isShutdown) {
+                  promotionCount += 1;
+                }
+              },
+            };
+            return partitionService;
+          },
+          executorOutcomeEmitter: emitter,
+        });
+        let voterReadyAttempt = 0;
+        handler.waitForVoterReadyActivation = async () => {
+          voterReadyAttempt += 1;
+          if (failureCase.deferRetry && voterReadyAttempt > 1) {
+            return;
+          }
+          const error = new Error(
+            `${failureCase.label} voter-ready failure`,
+          );
+          if (failureCase.deferRetry) {
+            error.deferRetry = true;
+          }
+          throw error;
+        };
+        handler.initialize();
+
+        const failed = new Promise((resolve) => {
+          handler.once(REPLICA_HANDLER_EVENT.CREATION_FAILED, resolve);
+        });
+        const response = await handler.handleMessage(buildEnvelope(
+          ReplicaOperationMessageType.CREATE_REPLICA,
+          {
+            operationId,
+            operationType: OperationType.ADD,
+            partitionId,
+            replicaId,
+          },
+        ));
+        t.equal(
+          response.status,
+          ReplicaOperationResponseStatus.INITIATED,
+          `${failureCase.label} create reaches the real async owner path`,
+        );
+        await failed;
+        await partitionService.checkLearnerPromotion();
+
+        const failedOutcome = emittedOutcomes.find(
+          (outcome) =>
+            outcome.outcomeType ===
+              EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+        );
+        t.same(
+          timeline.slice(0, 2),
+          ['runtime-fenced', 'failure-published'],
+          `${failureCase.label} failure is published only after its ` +
+            'runtime is non-promotable',
+        );
+        t.equal(
+          handler.getTrackedService(replicaId),
+          null,
+          `${failureCase.label} failed runtime is absent from local routing`,
+        );
+        t.equal(
+          promotionCount,
+          0,
+          `${failureCase.label} failed learner cannot promote after failure`,
+        );
+        t.equal(
+          failedOutcome?.deferRetry === true,
+          failureCase.deferRetry,
+          `${failureCase.label} failure preserves its owner retry type`,
+        );
+
+        if (failureCase.deferRetry) {
+          handler.replicaStateMachine.clear();
+          handler.localReplicas.clear();
+          t.equal(
+            handler.replicaStateMachine.getState(replicaId),
+            null,
+            'redrive can reconstruct participant lifecycle after restart',
+          );
+          const redriveSettled = new Promise((resolve) => {
+            const onOutcome = (outcome) => {
+              if (
+                outcome.operationId !== operationId ||
+                ![
+                  EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE,
+                  EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_FAILED,
+                ].includes(outcome.outcomeType)
+              ) {
+                return;
+              }
+              emitter.off(OUTCOME_EVENT_NAME, onOutcome);
+              resolve(
+                outcome.outcomeType ===
+                  EXECUTOR_OUTCOME_TYPE.REPLICA_CREATE_ACTIVE ?
+                  'created' :
+                  'failed',
+              );
+            };
+            emitter.on(OUTCOME_EVENT_NAME, onOutcome);
+          });
+          const redriveResponse = await handler.handleMessage(buildEnvelope(
+            ReplicaOperationMessageType.CREATE_REPLICA,
+            {
+              operationId,
+              operationType: OperationType.ADD,
+              partitionId,
+              replicaId,
+            },
+          ));
+          t.equal(
+            redriveResponse.status,
+            ReplicaOperationResponseStatus.INITIATED,
+            'the durable owner can re-dispatch the same retryable CREATE',
+          );
+          t.equal(
+            await redriveSettled,
+            'created',
+            'the retryable CREATE redrive reaches success from participant ' +
+              'lifecycle state',
+          );
+          t.equal(
+            factoryCount,
+            2,
+            'redrive creates exactly one clean replacement runtime',
+          );
+          t.equal(
+            maxLiveRuntimeCount,
+            1,
+            'redrive never overlaps the failed and replacement runtimes',
+          );
+          t.equal(
+            handler.getTrackedService(replicaId),
+            partitionService,
+            'successful redrive tracks only the replacement runtime',
+          );
+        }
+
+        await handler.shutdown();
+      }
+    },
+  );
+
+  await t.test(
     'create failure emits REPLICA_CREATE_FAILED through emitter, ' +
     'not direct replica_operations writes ' +
     '(uses executorOutcomeEmitter.emitOutcome)',
@@ -784,6 +985,106 @@ test('ReplicaHandler owner-path bypass regressions', async (t) => {
         'replica_operations directly',
       );
 
+      await handler.shutdown();
+    },
+  );
+
+  await t.test(
+    'non-priority retryable CREATE replays from durable FAILED state',
+    async (t) => {
+      const cache = createSeededCache();
+      const cdcService = createMockCDCService(cache);
+      const emitter = new ExecutorOutcomeEmitter({logger: console});
+      let factoryCount = 0;
+      const handler = new ReplicaHandler({
+        nodeId: TEST_NODE_ID,
+        systemTableCache: cache,
+        cdcIntegrationService: cdcService,
+        createPartitionService: async (options) => {
+          factoryCount += 1;
+          if (factoryCount === 1) {
+            const error = new Error('injected retryable factory failure');
+            error.deferRetry = true;
+            throw error;
+          }
+          return createMockPartitionServiceFactory()(options);
+        },
+        executorOutcomeEmitter: emitter,
+      });
+      handler.initialize();
+      let staleRuntimeShutdownCount = 0;
+      const envelope = buildEnvelope(
+        ReplicaOperationMessageType.CREATE_REPLICA,
+        {
+          operationId: TEST_OPERATION_ID,
+          operationType: OperationType.ADD,
+          partitionId: TEST_PARTITION_ID,
+          replicaId: TEST_REPLICA_ID,
+        },
+      );
+      const failed = new Promise((resolve) => {
+        handler.once(REPLICA_HANDLER_EVENT.CREATION_FAILED, resolve);
+      });
+      await handler.handleMessage(envelope);
+      await failed;
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID)?.status,
+        ReplicaStatus.FAILED,
+        'first attempt leaves durable participant failure evidence',
+      );
+
+      handler.replicaStateMachine.clear();
+      handler.localReplicas.clear();
+      const staleRuntime = {
+        async shutdown() {
+          staleRuntimeShutdownCount += 1;
+        },
+      };
+      handler.localServices.set(TEST_REPLICA_ID, staleRuntime);
+      handler.setLocalReplica(TEST_REPLICA_ID, {
+        replicaId: TEST_REPLICA_ID,
+        partitionId: TEST_PARTITION_ID,
+        status: ReplicaStatus.FAILED,
+        service: staleRuntime,
+      });
+      const created = new Promise((resolve) => {
+        handler.once(REPLICA_HANDLER_EVENT.CREATED, resolve);
+      });
+      const response = await handler.handleMessage(envelope);
+      t.equal(
+        response.status,
+        ReplicaOperationResponseStatus.INITIATED,
+        'owner redrive is admitted after participant restart',
+      );
+      await created;
+      t.equal(
+        factoryCount,
+        2,
+        'non-priority redrive creates one replacement runtime',
+      );
+      t.equal(
+        staleRuntimeShutdownCount,
+        1,
+        'redrive fences a stale runtime left by historical failure ordering',
+      );
+      t.not(
+        handler.getTrackedService(TEST_REPLICA_ID),
+        staleRuntime,
+        'historical stale runtime is replaced rather than overwritten',
+      );
+      t.equal(
+        cache.get(SYSTEM_TABLE_NAME.SERVICES, TEST_REPLICA_ID)?.status,
+        ReplicaStatus.ACTIVE,
+        'successful redrive supersedes durable FAILED participant state',
+      );
+      t.equal(
+        handler.replicaStateMachine.isValidTransition(
+          ReplicaStatus.FAILED,
+          ReplicaStatus.CREATING,
+        ),
+        false,
+        'ordinary FAILED lifecycle transitions remain terminal',
+      );
       await handler.shutdown();
     },
   );

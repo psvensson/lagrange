@@ -27,6 +27,56 @@ function assignReplicaHandlerRuntimeMethods(ReplicaHandler, options = {}) {
   } = options;
   class ReplicaHandlerRuntimeMethods {
     /**
+     * Fence a PartitionService created by a failed CREATE before the failure
+     * becomes visible to the operation owner. PartitionService.shutdown marks
+     * the runtime shutdown and cancels learner promotion synchronously before
+     * awaiting its remaining quiescence work, so even a later cleanup error
+     * cannot leave a promotable service behind the terminal observation.
+     *
+     * Resource deletion deliberately remains owned by the canonical REMOVE
+     * path and startup cleanup-debt sweep. This boundary owns only runtime
+     * death and local routability, and compare-before-delete avoids removing a
+     * different service if ownership ever changes before this async fence.
+     * @param {string} replicaId - Replica ID.
+     * @param {string} partitionId - Partition ID.
+     * @param {Object|null} service - Failed create's PartitionService.
+     * @return {Promise<boolean>} Whether a created runtime was fenced.
+     * @private
+     */
+    async fenceFailedReplicaCreateRuntime(
+      replicaId,
+      partitionId,
+      service = null,
+    ) {
+      if (!service) {
+        return false;
+      }
+      try {
+        if (typeof service.shutdown === REPLICA_HANDLER_TYPEOF.FUNCTION) {
+          await service.shutdown();
+        }
+      } catch (error) {
+        this.logger.warn(
+          REPLICA_HANDLER_LOG_MSG.LOCAL_CLEANUP_RETRY_REQUIRED,
+          {
+            replicaId,
+            partitionId,
+            nodeId: this.nodeId,
+            error: error.message,
+          },
+        );
+      }
+      if (this.localServices.get(replicaId) === service) {
+        this.localServices.delete(replicaId);
+      }
+      const localReplica = this.localReplicas.get(replicaId);
+      if (localReplica?.service === service) {
+        this.setLocalReplica(replicaId, {service: null});
+      }
+      return true;
+    }
+
+    /**
      * Clean up local resources for a replica.
      * @param {string} partitionId - Partition ID.
      * @param {string} replicaId - Replica ID.

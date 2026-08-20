@@ -87,6 +87,7 @@ const REPLICA_STATE_MACHINE_DIAGNOSTIC_CODE = Object.freeze({
 
 const REPLICA_STATE_MACHINE_REASON = Object.freeze({
   UNKNOWN: 'unknown',
+  CREATE_REDRIVE: 'authoritative_create_redrive',
   RECOVERY_REGISTRATION: 'recovery_registration',
   RECOVERY_INCOMPLETE: 'Node recovery - incomplete operation',
   RECOVERY_COMPLETE_REMOVAL: 'Node recovery - completing removal',

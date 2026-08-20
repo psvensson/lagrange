@@ -97,8 +97,10 @@ const RATCHET_TARGETS = [
     // fixture guard extracted the shared over-target cache setup.
     // 2026-08-11: tightened 827/31572 -> 826/31551 after the join mutation-
     // outcome matrix consolidated duplicated cases.
-    baselineCloneGroupCount: 826,
-    baselineDuplicatedLineCount: 31551,
+    // 2026-08-20: tightened 826/31551 -> 824/31498 after measuring the
+    // terminal-create lifecycle fence regression additions.
+    baselineCloneGroupCount: 824,
+    baselineDuplicatedLineCount: 31498,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },
