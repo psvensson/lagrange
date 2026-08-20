@@ -25,15 +25,18 @@
  * which row covers it, and why does that row's engagement stop where it
  * stops?
  */
-import {OperationType} from './replica-status.js';
+import {
+  OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES,
+  OperationType,
+  isDisruptiveOperationLedgerSelfMove,
+  normalizeOperationLedgerMoveType,
+} from './replica-status.js';
 import {isOperationLedgerPartition} from '../bootstrap/system-partition-classification.js';
 import {isPriorityRecoveryEmergencyPartition} from '../control-plane/priority-recovery-admission-constants.js';
 import {
   evaluateOperationLedgerQuorumConcentration,
   isConcentratedOperationLedgerPartition,
 } from './operation-ledger-quorum-concentration.js';
-
-const LOCAL_STR_STRING = 'string';
 
 // The two operation-ledger admission holds. SELF_MOVE_SERIALIZATION is the
 // run-20 interlock (a ledger self-move runs exclusively); QUORUM_SPREAD is
@@ -100,16 +103,6 @@ const OPERATION_LEDGER_HOLD_MOVE_CLASS = Object.freeze({
   DEPENDENT: 'dependent',
 });
 
-// Named row: which move types DISRUPT the ledger when self-moving
-// (REPLACE/REMOVE reconfigure the raft group every operation writes progress
-// through). ADD is deliberately absent — the CL-013 lane: ledger spread
-// recovery must stay admissible through the hold it cures, so an ADD of a
-// ledger partition is never a disruptive self-move. Extending or narrowing
-// this row is an incident-class decision, never a drive-by edit.
-const OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES = Object.freeze(
-  new Set([OperationType.REPLACE, OperationType.REMOVE]),
-);
-
 // Named row: the quorum-spread CURE move types. REPLACE performs the first
 // count-neutral move off a fully concentrated ledger. Once that leaves a 2-1
 // three-voter placement, ADD expands onto the missing third node without
@@ -169,36 +162,6 @@ const OPERATION_LEDGER_HOLD_ENGAGEMENT_BY_MOVE_CLASS = Object.freeze(
     ],
   ]),
 );
-
-/**
- * Ingress normalization for both consumer domains (coordinator-normalized
- * OperationType values and planner MoveType values differ only by case; the
- * CL-013 verification already treated case-sensitive comparison here as
- * fail-open and normalized it).
- * @param {*} moveType
- * @return {string|null}
- * @private
- */
-function normalizeOperationLedgerMoveType(moveType) {
-  if (typeof moveType !== LOCAL_STR_STRING) {
-    return null;
-  }
-  const normalized = moveType.toUpperCase();
-  return normalized.length === 0 ? null : normalized;
-}
-
-/**
- * @param {*} moveType
- * @param {*} partitionId
- * @return {boolean}
- */
-function isDisruptiveOperationLedgerSelfMove(moveType, partitionId) {
-  return (
-    OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES.has(
-      normalizeOperationLedgerMoveType(moveType),
-    ) && isOperationLedgerPartition({partitionId})
-  );
-}
 
 /**
  * Classify a candidate move for the hold-engagement relation.

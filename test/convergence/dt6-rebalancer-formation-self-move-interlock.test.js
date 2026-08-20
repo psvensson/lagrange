@@ -152,6 +152,19 @@ function driveTick({trackedOperations, timeSource, events, tick, labels}) {
       continue;
     }
     const contenders = nonTerminalOperations(trackedOperations, labels);
+    if (
+      op.workflow_step === WORKFLOW_STEP.PENDING &&
+      (op.type === OperationType.REPLACE || op.type === OperationType.REMOVE) &&
+      String(op.partition_id).startsWith(
+        `${SYSTEM_TABLE_NAME.REPLICA_OPERATIONS}-`,
+      ) &&
+      contenders.some((candidate) => candidate.operation_id !== op.operation_id)
+    ) {
+      events.push(
+        `${tick} ${labels.labelOf(op.operation_id)} PARKED_FOR_IDLE_LEDGER`,
+      );
+      continue;
+    }
     if (ledgerProgressWriteFails(contenders)) {
       events.push(
         `${tick} ${labels.labelOf(op.operation_id)} WRITE_FAIL ${op.workflow_step}`,
@@ -484,6 +497,137 @@ t.test(
     );
     t.equal(m.completions, buildFormationStormMoves().length + 1,
       'serialization yields full completion under the identical ledger fault model');
+  },
+);
+
+t.test(
+  'durable PENDING self-move waiter cannot be overtaken by continuous newcomers',
+  async (t) => {
+    const timeSource = new VirtualTimeSource({startMs: START_MS});
+    const fixture = createTimeoutTestCoordinator({
+      timeSource,
+      nodeId: COORDINATOR_NODE_ID,
+    });
+    const {coordinator, trackedOperations} = fixture;
+    try {
+      const incumbent = await coordinator.createOperation(
+        buildMove(
+          OperationType.ADD,
+          `${SYSTEM_TABLE_NAME.SQL_TRANSACTIONS}-p1`,
+        ),
+      );
+      let selfMove = null;
+      try {
+        selfMove = await coordinator.createOperation(
+          buildMove(OperationType.REPLACE, LEDGER_PARTITION_ID),
+        );
+      } catch (error) {
+        t.match(
+          error,
+          {
+            admissionResult: {
+              reason: 'operation_ledger_self_move_waiting_for_idle_ledger',
+            },
+          },
+          'the reverted reader-preference path refuses to register the waiting writer',
+        );
+      }
+
+      const newcomerPartitionIds = [
+        `${SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS}-p1`,
+        `${SYSTEM_TABLE_NAME.SQL_TRANSACTION_PARTICIPANTS}-p1`,
+        `${SYSTEM_TABLE_NAME.SQL_WRITE_OPERATIONS}-p1`,
+      ];
+      const overtakingNewcomers = [];
+      for (const partitionId of newcomerPartitionIds) {
+        if (!selfMove) {
+          overtakingNewcomers.push(
+            await coordinator.createOperation(
+              buildMove(OperationType.ADD, partitionId),
+            ),
+          );
+          continue;
+        }
+        await t.rejects(
+          coordinator.createOperation(buildMove(OperationType.ADD, partitionId)),
+          {
+            admissionResult: {
+              reason: 'operation_ledger_self_move_in_flight',
+            },
+          },
+          `newcomer ${partitionId} cannot overtake the durable waiter`,
+        );
+      }
+      t.equal(
+        overtakingNewcomers.length,
+        0,
+        'later newcomers cannot overtake the waiting self-move turn',
+      );
+      if (!selfMove) {
+        return;
+      }
+      t.equal(
+        selfMove.workflowStep,
+        WORKFLOW_STEP.PENDING,
+        'the self-move publishes one durable PENDING intent behind the incumbent',
+      );
+
+      const parked =
+        await coordinator.workflowOwner.advanceDispatchCandidateStep(
+          selfMove,
+          selfMove,
+        );
+      t.match(
+        parked,
+        {
+          skipped: true,
+          reason: 'deferred_retry_pending',
+          error: /operation-ledger self-move waiting for incumbent operation/,
+        },
+        'physical dispatch remains parked while the incumbent is live',
+      );
+      t.equal(
+        trackedOperations.get(selfMove.operationId)?.workflow_step,
+        WORKFLOW_STEP.PENDING,
+        'the parked waiter never claims SENDING before the idle proof',
+      );
+
+      const incumbentRow = trackedOperations.get(incumbent.operationId);
+      incumbentRow.workflow_step = WORKFLOW_STEP.ACTIVE;
+      incumbentRow.status = WORKFLOW_STEP_TO_STATUS[WORKFLOW_STEP.ACTIVE];
+      incumbentRow.completed_at = timeSource.now();
+
+      const repository = coordinator.workflowOwner.repository;
+      const executeReplicaOperationsRead =
+        repository.executeReplicaOperationsRead.bind(repository);
+      repository.executeReplicaOperationsRead = async () => ({
+        success: false,
+        error: 'injected authoritative operation-ledger read failure',
+      });
+      const unreadable =
+        await coordinator.workflowOwner
+          .ensureOperationLedgerSelfMoveDispatchIdleOrSkip(selfMove);
+      t.equal(
+        unreadable?.deferReason,
+        'operation_ledger_self_move_idle_visibility_deferred',
+        'an unreadable authoritative ledger parks dispatch instead of treating it as empty',
+      );
+      t.equal(
+        trackedOperations.get(selfMove.operationId)?.workflow_step,
+        WORKFLOW_STEP.PENDING,
+        'an unreadable idle proof cannot claim the waiter into SENDING',
+      );
+      repository.executeReplicaOperationsRead = executeReplicaOperationsRead;
+
+      t.equal(
+        await coordinator.workflowOwner
+          .ensureOperationLedgerSelfMoveDispatchIdleOrSkip(selfMove),
+        null,
+        'authoritative empty observation releases the waiter after incumbents drain',
+      );
+    } finally {
+      await coordinator.shutdown();
+    }
   },
 );
 

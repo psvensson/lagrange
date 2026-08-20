@@ -48,7 +48,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 30
+## Open quests — 31
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -67,6 +67,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | movielens-parallel-reduce-result-chronology | product | 7 | 0 | 2026-07-22 ⚠ stale | — |
 | movielens-replace-bootstrap-cohort-authority | product | 1 | 0 | 2026-07-20 ⚠ stale | — |
 | oci-container-driver-live-activation | product | 12 | 0 | 2026-07-31 ⚠ stale | — |
+| operation-ledger-self-move-waiter-fairness | product | 4 | 0 | 2026-08-20 | — |
 | ordinary-placement-ready-lease-candidate-admission | product | 1 | 0 | 2026-08-14 | — |
 | projection-readiness-deep-own-data-closure | product | 6 | 0 | 2026-08-15 | — |
 | projection-readiness-producer-copy-closure | product | 1 | 0 | 2026-08-15 | — |

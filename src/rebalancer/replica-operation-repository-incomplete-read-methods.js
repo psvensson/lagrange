@@ -293,6 +293,8 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
    */
     async queryIncompleteOperations(options = {}) {
       const visibilityReadMode = resolveReplicaOperationVisibilityReadMode(options);
+      const requireAuthoritativeOutcome =
+        options.requireAuthoritativeOutcome === true;
       const authoritativeReadOptions =
         buildReplicaOperationVisibilityReadOptions(visibilityReadMode);
       const cachedOperations = this.queryCachedIncompleteOperations();
@@ -339,14 +341,16 @@ function assignReplicaOperationRepositoryIncompleteReadMethods(
         const fallbackOperations =
         this.resolveDeferredIncompleteOperationReadFallback(cachedOperations);
         const deferredOutcome = this.buildDeferredIncompleteOperationReadOutcome({
-          priorityRecoveryActive: this.shouldDeferIncompleteOperationReadFailure(
-            result,
-            planningSnapshot,
-            {
-              cachedOperations,
-              fallbackOperations,
-            },
-          ),
+          priorityRecoveryActive:
+            requireAuthoritativeOutcome ||
+            this.shouldDeferIncompleteOperationReadFailure(
+              result,
+              planningSnapshot,
+              {
+                cachedOperations,
+                fallbackOperations,
+              },
+            ),
           retryAfterMs: this.getRetryableIncompleteOperationReadBackoffMs(result),
           cachedOperations,
           fallbackOperations,

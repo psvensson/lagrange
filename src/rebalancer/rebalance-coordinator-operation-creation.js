@@ -248,7 +248,13 @@ class RebalanceCoordinatorOperationCreation {
   async resolveProvisioningLedgerInterlockDeferral(move) {
     try {
       await this.ensureOperationLedgerSelfMoveSerialized(
-        buildLedgerInterlockProbeContext(move, this.normalizeMoveType(move?.type)),
+        {
+          ...buildLedgerInterlockProbeContext(
+            move,
+            this.normalizeMoveType(move?.type),
+          ),
+          registerDurableSelfMoveIntent: true,
+        },
       );
     } catch (error) {
       const admissionResult = error?.admissionResult;
@@ -364,6 +370,7 @@ class RebalanceCoordinatorOperationCreation {
       entityType,
       entityId,
       partitionId,
+      registerDurableSelfMoveIntent: true,
     });
     await this.ensureNoConflictingInFlightReplaceForRemove({
       move,

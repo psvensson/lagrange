@@ -1,0 +1,75 @@
+{
+  "id": "operation-ledger-self-move-waiter-fairness-v3",
+  "authoringContractVersion": 1,
+  "verificationContractVersion": 2,
+  "statement": "A disruptive operation-ledger self-move that observes incumbents publishes one durable PENDING intent before waiting, preventing later dependent admissions from overtaking it; physical dispatch remains parked until typed authoritative owner visibility proves the ledger idle, and unreadable visibility canonically retries. Existing operation-owner recovery, run-20 exclusivity, run-22 quorum spread, emergency ADD, remove safety, topology fences, numeric budgets, and the 60-second five-node bar remain unchanged. Red-on-revert explicitly observes the legacy refusal, admits later newcomers while the writer is unregistered, and fails the named no-overtake assertion; fixed bytes pass that proof and the fairness model.",
+  "priority": 1,
+  "class": "product",
+  "links": {
+    "roadmapRow": "RM-0.2-five-node-convergence",
+    "specRef": "solve/epics/release-0-2.md",
+    "closesCL": [],
+    "parentQuest": "operation-ledger-self-move-waiter-fairness-v2",
+    "planDoc": "solve/epics/release-0-2.md",
+    "draftedAtCommit": "03b4924f481e0a269bedcbdfabe1621f5228bd9b"
+  },
+  "doneWhen": {
+    "probe": "scenario-harness",
+    "args": {
+      "scenario": "operation-ledger-self-move-waiter-fairness-v3",
+      "consecutive": 3,
+      "metric": "priority"
+    }
+  },
+  "frontiers": [
+    {
+      "id": "operation-ledger-self-move-waiter-fairness-v3-main",
+      "priority": 1,
+      "metric": {
+        "probe": "scenario-harness",
+        "args": {
+          "scenario": "operation-ledger-self-move-waiter-fairness-v3",
+          "metric": "priority"
+        }
+      }
+    }
+  ],
+  "constraints": [
+    {
+      "id": "source-change-subagent-verification",
+      "statement": "If this Quest changes source code, spawn a subagent verifier before audit and git handoff, then record a Solver finding with evidence subagent:<id>."
+    },
+    {
+      "id": "durable-owner-visible-intent",
+      "statement": "The waiting turn remains the existing durable replica-operation intent under the canonical operation-owner lifecycle; no coordinator-local waiter, TTL, secondary queue, or new metadata authority is allowed."
+    },
+    {
+      "id": "dispatch-time-idle-proof",
+      "statement": "Physical self-move dispatch remains fail-closed until an authoritative incomplete-operation observation proves no other live conflict; unreadable or deferred visibility keeps the PENDING intent parked on canonical retry."
+    },
+    {
+      "id": "no-interlock-weakening",
+      "statement": "Keep run-20 exclusive physical serialization, later-dependent deferral, run-22 quorum-spread ordering, and the emergency ADD exemption unchanged."
+    },
+    {
+      "id": "lifecycle-owned-abandonment",
+      "statement": "Cancellation, transfer, retry, timeout, and cleanup reuse canonical operation-owner lease and reaper transitions; no raw age check deletes or bypasses a waiter."
+    },
+    {
+      "id": "fairness-model",
+      "statement": "The fixed TLA+ contract must distinguish the durable waiting-writer turn from the admission-only starvation mutant, and npm run model:contracts must pass."
+    },
+    {
+      "id": "behavioral-red-on-revert",
+      "statement": "On base bytes the focused test must explicitly observe legacy writer refusal, successfully admit later newcomers while no waiter is registered, and fail the named no-overtake assertion; fixed bytes must reject the same newcomers and retain incumbent, unreadable-visibility, and idle-release checks."
+    },
+    {
+      "id": "no-live-workaround",
+      "statement": "Do not alter formation timeouts, polling or retry cadence, numeric budgets, workload, cluster size, activation predicates, remove safety, topology fences, or GCP ordering."
+    },
+    {
+      "id": "ordered-live-gate",
+      "statement": "After deterministic proof, exact source verification, and checkpoint, run the unchanged dedicated five-node GCP formation/profile gate once and stop on its first red boundary."
+    }
+  ]
+}

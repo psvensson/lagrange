@@ -2,6 +2,45 @@ import path from 'node:path';
 
 const CONFIGS = [
   {
+    id: 'operation-ledger-self-move-waiter-fairness-fixed',
+    mode: 'operation-ledger-self-move-waiter-fairness-fixed',
+    module: path.resolve(
+      'models', 'operation-ledger-self-move-waiter-fairness',
+      'OperationLedgerSelfMoveWaiterFairness.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'operation-ledger-self-move-waiter-fairness',
+      'OperationLedgerSelfMoveWaiterFairness_fixed.cfg',
+    ),
+    expectConverged: true,
+    report:
+      'operation-ledger-self-move-waiter-fairness-fixed.model.report.json',
+    scenario: 'operation-ledger-self-move-waiter-fairness',
+    owner: 'operation_ledger_self_move_workflow_owner',
+    boundary: 'durable_waiter_to_authoritative_idle_dispatch',
+  },
+  {
+    id: 'operation-ledger-self-move-waiter-fairness-admission-only',
+    mode: 'operation-ledger-self-move-waiter-fairness-admission-only',
+    module: path.resolve(
+      'models', 'operation-ledger-self-move-waiter-fairness',
+      'OperationLedgerSelfMoveWaiterFairness.tla',
+    ),
+    cfg: path.resolve(
+      'models', 'operation-ledger-self-move-waiter-fairness',
+      'OperationLedgerSelfMoveWaiterFairness_admission_only_bug.cfg',
+    ),
+    expectConverged: false,
+    report:
+      'operation-ledger-self-move-waiter-fairness-admission-only.' +
+      'model.report.json',
+    scenario: 'operation-ledger-self-move-waiter-fairness',
+    owner: 'operation_ledger_self_move_workflow_owner',
+    boundary: 'admission_only_writer_starvation_counterexample',
+    expectedFailurePattern:
+      'Temporal property EventuallySelfMoveCompletes was violated',
+  },
+  {
     id: 'versioned-readiness-planning-fixed',
     mode: 'versioned-readiness-planning-fixed',
     module: path.resolve(

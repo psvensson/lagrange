@@ -8,6 +8,8 @@
  */
 
 import {WORKFLOW_STEP} from '../constants/index.js';
+import {SYSTEM_TABLE_NAME} from '../bootstrap/system-table-schemas-constants.js';
+import {resolvePartitionTableId} from '../bootstrap/system-partition-classification.js';
 import {
   OPERATION_METADATA_KEY,
   OperationType,
@@ -17,6 +19,31 @@ import {
 
 const LOCAL_STR_STRING = 'string';
 const LOCAL_STR_OBJECT = 'object';
+
+// Cycle-free single source of truth for the disruptive operation-ledger
+// self-move class. Admission policy and workflow dispatch consume the same
+// predicate without either owner importing the other.
+const OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES = Object.freeze(
+  new Set([OperationType.REPLACE, OperationType.REMOVE]),
+);
+
+function normalizeOperationLedgerMoveType(moveType) {
+  if (typeof moveType !== LOCAL_STR_STRING) {
+    return null;
+  }
+  const normalized = moveType.toUpperCase();
+  return normalized.length === 0 ? null : normalized;
+}
+
+function isDisruptiveOperationLedgerSelfMove(moveType, partitionId) {
+  return (
+    OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES.has(
+      normalizeOperationLedgerMoveType(moveType),
+    ) &&
+    resolvePartitionTableId({partitionId}) ===
+      SYSTEM_TABLE_NAME.REPLICA_OPERATIONS
+  );
+}
 
 function getOperationMetadataValue(stepsHistory, metadataKey) {
   if (!Array.isArray(stepsHistory) ||
@@ -202,4 +229,7 @@ export {
   getOperationMetadataString,
   getOperationMetadataStringArray,
   getOperationMetadataObject,
+  OPERATION_LEDGER_DISRUPTIVE_SELF_MOVE_TYPES,
+  isDisruptiveOperationLedgerSelfMove,
+  normalizeOperationLedgerMoveType,
 };

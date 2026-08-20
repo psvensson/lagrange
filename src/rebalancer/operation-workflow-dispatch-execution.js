@@ -14,12 +14,17 @@ import {
 import {
   OPERATION_OWNER_TURN_POLICY,
 } from './operation-owner-turn-policy.js';
+import {
+  isDisruptiveOperationLedgerSelfMove,
+} from './replica-status.js';
 
 const {
   OPERATION_OWNER_ACTION,
   OPERATION_TRANSITION_REASON,
   OPERATION_WORKFLOW_OWNER_LITERAL,
   OPERATION_WORKFLOW_OWNER_REASON,
+  DISPATCH_RETRY_DELAY_MS,
+  REPLICA_OPERATION_VISIBILITY_READ_MODE,
   REBALANCER_SKIP_REASON,
   REBALANCE_COORDINATOR_LOG_MSG,
   REMOVE_SAFETY_HANDOFF_FAILURE_POLICY,
@@ -28,7 +33,164 @@ const {
   isCoordinatorOwnedOperationType,
 } = OPERATION_WORKFLOW_OWNER_SHARED;
 
+const OPERATION_LEDGER_SELF_MOVE_IDLE_VISIBILITY_DEFER_REASON =
+  'operation_ledger_self_move_idle_visibility_deferred';
+const OPERATION_LEDGER_SELF_MOVE_WAITING_DEFER_REASON =
+  'operation_ledger_self_move_waiting_for_idle_ledger';
+
 class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPersistence {
+  /**
+   * Keep a durable operation-ledger self-move intent parked in PENDING until
+   * an authoritative owner read proves every incumbent ledger writer has
+   * drained. The PENDING row is itself the fairness waiter: admission sees it
+   * and prevents newer dependent operations from overtaking it, while the
+   * existing owner lease/reaper and dispatch-retry lifecycle owns recovery.
+   *
+   * @param {Object} operation
+   * @return {Promise<Object|null>} Typed skip while parked, otherwise null.
+   * @private
+   */
+  async ensureOperationLedgerSelfMoveDispatchIdleOrSkip(operation) {
+    if (!this.isPendingOperationLedgerSelfMove(operation)) {
+      return null;
+    }
+
+    const idleObservation =
+      await this.readOperationLedgerSelfMoveDispatchIdleObservation(
+        operation,
+      );
+    if (idleObservation.skip) {
+      return idleObservation.skip;
+    }
+
+    if (idleObservation.observation?.deferredOutcome) {
+      const deferredError = this.buildOperationLedgerSelfMoveRetryError(
+        'authoritative operation-ledger visibility deferred while waiting for idle',
+        idleObservation.observation.retryAfterMs,
+      );
+      return this.parkOperationLedgerSelfMoveDispatch(
+        operation,
+        OPERATION_LEDGER_SELF_MOVE_IDLE_VISIBILITY_DEFER_REASON,
+        deferredError.message,
+        deferredError,
+      );
+    }
+
+    const conflictingOperation = this.findOperationLedgerSelfMoveConflict(
+      operation,
+      idleObservation.incompleteOperations,
+    );
+    if (!conflictingOperation) {
+      return null;
+    }
+
+    const waitError = this.buildOperationLedgerSelfMoveRetryError(
+      'operation-ledger self-move waiting for incumbent operation ' +
+        String(conflictingOperation.operationId),
+    );
+    return this.parkOperationLedgerSelfMoveDispatch(
+      operation,
+      OPERATION_LEDGER_SELF_MOVE_WAITING_DEFER_REASON,
+      waitError.message,
+      waitError,
+    );
+  }
+
+  isPendingOperationLedgerSelfMove(operation) {
+    return (
+      operation?.workflowStep === WORKFLOW_STEP.PENDING &&
+      isDisruptiveOperationLedgerSelfMove(
+        operation?.type,
+        operation?.partitionId,
+      )
+    );
+  }
+
+  buildOperationLedgerSelfMoveRetryError(message, retryAfterMs = null) {
+    const error = new Error(message);
+    error.retryAfterMs = retryAfterMs || DISPATCH_RETRY_DELAY_MS;
+    error.deferRetry = true;
+    return error;
+  }
+
+  async readOperationLedgerSelfMoveDispatchIdleObservation(operation) {
+    try {
+      const incompleteOperations =
+        await this.repository.queryIncompleteOperations({
+          visibilityReadMode:
+            REPLICA_OPERATION_VISIBILITY_READ_MODE.OWNER_RPC_REQUIRED,
+          requireAuthoritativeOutcome: true,
+        });
+      return {
+        incompleteOperations,
+        observation: this.repository.resolveIncompleteOperationObservation(
+          incompleteOperations,
+        ),
+        skip: null,
+      };
+    } catch (error) {
+      const retryError = this.buildOperationLedgerSelfMoveRetryError(
+        error?.message ||
+          'authoritative operation-ledger visibility unavailable',
+      );
+      return {
+        incompleteOperations: [],
+        observation: null,
+        skip: this.parkOperationLedgerSelfMoveDispatch(
+          operation,
+          OPERATION_LEDGER_SELF_MOVE_IDLE_VISIBILITY_DEFER_REASON,
+          retryError.message,
+          retryError,
+        ),
+      };
+    }
+  }
+
+  findOperationLedgerSelfMoveConflict(operation, incompleteOperations) {
+    const nowMs = this.timeSource?.now?.() ?? Date.now();
+    return (Array.isArray(incompleteOperations) ?
+      incompleteOperations : []).find((candidate) => {
+      if (
+        !candidate ||
+        candidate.operationId === operation.operationId ||
+        this.repository.isOperationTerminal(candidate)
+      ) {
+        return false;
+      }
+      if (
+        isDisruptiveOperationLedgerSelfMove(
+          candidate.type,
+          candidate.partitionId,
+        )
+      ) {
+        return true;
+      }
+      return !this.isConcurrentOperationStalePastStepTimeout(
+        candidate,
+        nowMs,
+      );
+    });
+  }
+
+  /**
+   * Re-arm a parked PENDING self-move through the canonical dispatch retry
+   * lane. No local timer/flag owns fairness or abandonment.
+   * @param {Object} operation
+   * @param {string} reason
+   * @param {string} errorMessage
+   * @param {Error} error
+   * @return {Object}
+   * @private
+   */
+  parkOperationLedgerSelfMoveDispatch(operation, reason, errorMessage, error) {
+    this.deferDispatchRetry(operation, error);
+    return this.buildSkippedOperationResult(
+      REBALANCER_SKIP_REASON.DEFERRED_RETRY_PENDING,
+      operation.operationId,
+      {error: errorMessage, deferReason: reason},
+    );
+  }
+
   shouldFailRemoveSafetyHandoffResponse(removeSafetyEvaluation, response) {
     return (
       removeSafetyEvaluation?.handoffFailurePolicy ===
@@ -301,6 +463,16 @@ class OperationWorkflowDispatchExecution extends OperationWorkflowTransitionPers
       await this.reconcileDispatchWakeOperationProgress(operation)
     ) {
       return this.buildSuccessfulOperationResult(operation.operationId);
+    }
+
+    // The durable waiter is registered at creation, but physical dispatch is
+    // forbidden until this last responsible moment proves the ledger idle.
+    // This runs before every reservation/epoch gate and before PENDING is
+    // claimed into SENDING.
+    const ledgerSelfMoveIdleSkip =
+      await this.ensureOperationLedgerSelfMoveDispatchIdleOrSkip(operation);
+    if (ledgerSelfMoveIdleSkip) {
+      return ledgerSelfMoveIdleSkip;
     }
 
     // Fail-closed reservation gate (audit findings 3+11): after the

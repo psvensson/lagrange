@@ -181,6 +181,39 @@ class RebalanceCoordinatorLedgerInterlockAdmissionMethods {
     });
 
     if (isDisruptiveSelfMove) {
+      // Fairness lane: creation may register one durable PENDING self-move
+      // intent behind incumbent ledger writers. That row is the owner-visible
+      // writer waiter which prevents later dependent admissions from
+      // overtaking it. Physical dispatch is independently fail-closed in the
+      // workflow owner until an authoritative read proves the incumbents have
+      // drained. A second self-move still cannot register alongside it.
+      if (context?.registerDurableSelfMoveIntent === true) {
+        const heldSelfMove = await this.resolveHeldLedgerSelfMove(
+          liveOperations,
+        );
+        if (heldSelfMove) {
+          throw this.createOperationLedgerInterlockError(
+            normalizedMoveType,
+            OPERATION_LEDGER_SELF_MOVE_MESSAGE_PREFIX +
+              String(partitionId) +
+              OPERATION_LEDGER_SELF_MOVE_WAITING_MESSAGE_SUFFIX,
+            OPERATION_LEDGER_SELF_MOVE_WAITING_REASON_CODE,
+            heldSelfMove.operationId,
+          );
+        }
+        if (observation?.deferredOutcome) {
+          throw this.createDeferredOperationVisibilityError(
+            normalizedMoveType,
+            observation,
+            {
+              partitionId: partitionId || null,
+              entityType: context?.entityType || SERVICE_TYPE.PARTITION,
+              entityId: context?.entityId || partitionId || null,
+            },
+          );
+        }
+        return;
+      }
       const conflictingOperation = await this.resolveDisruptiveSelfMoveConflict(
         liveOperations,
         partitionId,
