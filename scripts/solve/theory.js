@@ -50,7 +50,6 @@ import {analyzeQuestHealth} from './health.js';
 import {
   CONTINUATION_BLOCKED_METRIC_PROJECTION,
   CONTINUATION_BLOCKED_REGRESSION,
-  CONTINUATION_BLOCKED_SCOPE,
   continuationErrorMessage,
   continuationIsAllowed,
 } from './continuation.js';
@@ -645,7 +644,6 @@ function cmdSelect(root, args) {
   const hardBlocks = [
     CONTINUATION_BLOCKED_METRIC_PROJECTION,
     CONTINUATION_BLOCKED_REGRESSION,
-    CONTINUATION_BLOCKED_SCOPE,
   ];
   if (!continuationIsAllowed(health.continuation) &&
     hardBlocks.includes(health.continuation.status)) {

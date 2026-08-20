@@ -7,7 +7,13 @@ import {fileURLToPath} from 'node:url';
 
 import {appendTheoryResultForAttempt, runTheoryCommand}
   from '../../scripts/solve/theory.js';
-import {readLog, projectState, saveQuest} from '../../scripts/solve/store.js';
+import {SCOPE_PRESSURE_FILE_LIMIT} from '../../scripts/solve/constants.js';
+import {CONTINUATION_BLOCKED_SCOPE}
+  from '../../scripts/solve/continuation.js';
+import {analyzeQuestHealth} from '../../scripts/solve/health.js';
+import {evaluate} from '../../scripts/solve/probe.js';
+import {appendEvent, readLog, projectState, saveQuest}
+  from '../../scripts/solve/store.js';
 
 const CLI = path.resolve(
   path.dirname(fileURLToPath(import.meta.url)), '../../scripts/solve.js');
@@ -64,6 +70,24 @@ function optionArgs(id, frontier) {
     'rejection': 'fresh evidence does not move metric',
     'evidence': 'evidence.json',
   };
+}
+
+function scopePressureDiff(root, questId) {
+  const diffPath = path.join(root, 'solve', 'changes', questId, 'wide.diff');
+  fs.mkdirSync(path.dirname(diffPath), {recursive: true});
+  const paths = Array.from(
+    {length: SCOPE_PRESSURE_FILE_LIMIT + 1},
+    (_, index) => `src/admin/scope-${index}.js`,
+  );
+  fs.writeFileSync(diffPath, paths.flatMap((changedPath) => [
+    `diff --git a/${changedPath} b/${changedPath}`,
+    `--- a/${changedPath}`,
+    `+++ b/${changedPath}`,
+    '@@ -1 +1 @@',
+    '-before',
+    '+after',
+  ]).join('\n'));
+  return `diff:${diffPath}`;
 }
 
 tap.test('Quest theory events', async (t) => {
@@ -164,6 +188,40 @@ tap.test('Quest theory events', async (t) => {
       frontier: 'demo-main',
       theory: 'theory-frontier',
     }), /non-selectable status falsified/);
+    fs.rmSync(root, {recursive: true, force: true});
+    t.end();
+  });
+
+  t.test('scope pressure still blocks source admission but not theory selection', (t) => {
+    const root = tmp();
+    const quest = questFor(root);
+    saveQuest(root, quest);
+    runTheoryCommand(root, optionArgs(quest.id, 'demo-main'));
+    const probe = evaluate(quest.frontiers[0].metric, {root});
+    appendEvent(root, quest.id, {
+      type: 'attempt',
+      frontier: 'demo-main',
+      changeRef: scopePressureDiff(root, quest.id),
+      metricBefore: 2,
+      metricAfter: 2,
+      evidence: probe.evidence,
+      evidenceIdentity: probe.evidenceIdentity,
+      evidenceFingerprint: probe.evidenceFingerprint,
+    });
+
+    const health = analyzeQuestHealth(root, quest);
+    t.equal(health.continuation.status, CONTINUATION_BLOCKED_SCOPE,
+      'the source-admission signal remains fail-closed');
+    t.match(runTheoryCommand(root, {
+      _: ['select'],
+      id: quest.id,
+      frontier: 'demo-main',
+      theory: 'theory-frontier',
+    }), /selected theory-frontier/,
+    'planning-only theory selection remains available under historical scope pressure');
+
+    const state = projectState(quest, readLog(root, quest.id));
+    t.equal(state.theories.selectedByFrontier['demo-main'], 'theory-frontier');
     fs.rmSync(root, {recursive: true, force: true});
     t.end();
   });
