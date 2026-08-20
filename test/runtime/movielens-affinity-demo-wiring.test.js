@@ -99,9 +99,13 @@ test('MovieLens GCP cleanup preserves full node logs before VM destruction',
           await gzip(`node-${index}-complete\nprofile-window-${index}\n`),
         );
       }));
+      const clusterNodes = nodeIds.map((id) => ({id}));
       const cluster = {
-        getNodes: () => nodeIds.map((id) => ({id})),
-        stop: async () => events.push('cluster-stopped'),
+        getNodes: () => [...clusterNodes],
+        stop: async () => {
+          events.push('cluster-stopped');
+          clusterNodes.length = 0;
+        },
       };
       const provisioner = {
         destroy: async () => {
@@ -121,6 +125,67 @@ test('MovieLens GCP cleanup preserves full node logs before VM destruction',
         await readFile(join(outputDir, 'node-1.log'), 'utf8'),
         'node-1-complete\nprofile-window-1\n',
         'full joiner log is materialized by cluster index',
+      );
+    } finally {
+      await rm(outputDir, {recursive: true, force: true});
+    }
+    t.end();
+  });
+
+test('MovieLens GCP cleanup keeps teardown best-effort error precedence',
+  async (t) => {
+    const clusterStopError = new Error('cluster stop failed');
+    const snapshotError = new Error('node snapshot failed');
+    const destroyError = new Error('provisioner destroy failed');
+    const stopFirstEvents = [];
+    await assert.rejects(
+      stopGcpAffinityCluster({
+        cluster: {
+          getNodes: () => {
+            throw snapshotError;
+          },
+          stop: async () => {
+            stopFirstEvents.push('cluster-stopped');
+            throw clusterStopError;
+          },
+        },
+        provisioner: {
+          destroy: async () => {
+            stopFirstEvents.push('vms-destroyed');
+            throw destroyError;
+          },
+        },
+        outputDir: '/unused',
+      }),
+      (error) => error === clusterStopError,
+      'cluster-stop failure remains primary while later teardown still runs',
+    );
+    assert.deepEqual(stopFirstEvents, ['cluster-stopped', 'vms-destroyed']);
+
+    const outputDir = await mkdtemp(join(tmpdir(), 'affinity-gcp-errors-'));
+    const materializeFirstEvents = [];
+    try {
+      await assert.rejects(
+        stopGcpAffinityCluster({
+          cluster: {
+            getNodes: () => [{id: 'missing-capture'}],
+            stop: async () => materializeFirstEvents.push('cluster-stopped'),
+          },
+          provisioner: {
+            destroy: async () => {
+              materializeFirstEvents.push('vms-destroyed');
+              throw destroyError;
+            },
+          },
+          outputDir,
+        }),
+        (error) => error?.code === 'ENOENT',
+        'materialization failure remains primary over VM-destroy failure',
+      );
+      assert.deepEqual(
+        materializeFirstEvents,
+        ['cluster-stopped', 'vms-destroyed'],
+        'VM destruction is attempted after materialization failure',
       );
     } finally {
       await rm(outputDir, {recursive: true, force: true});

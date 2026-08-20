@@ -57,11 +57,11 @@ const TEARDOWN_FAILURE_PREFIX =
   'gcp-cluster-provider: best-effort teardown failed (infra may leak): ';
 const LINE_SEPARATOR = '\n';
 
-async function materializeGcpFullNodeLogs(cluster, outputDir) {
+async function materializeGcpFullNodeLogs(nodes, outputDir) {
   if (!outputDir) {
     return;
   }
-  await Promise.all(cluster.getNodes().map(async (node, index) => {
+  await Promise.all(nodes.map(async (node, index) => {
     await pipeline(
       createReadStream(fullLogDestPath(
         outputDir,
@@ -78,15 +78,26 @@ async function stopGcpAffinityCluster({cluster, provisioner, outputDir}) {
   let clusterStopError = null;
   let logMaterializationError = null;
   let provisionerDestroyError = null;
+  let teardownNodes = null;
+  try {
+    // Cluster.stop() finalizes the full-log streams and then clears its node
+    // registry. Retain only the immutable handles needed to map those
+    // finalized captures to the canonical node-N.log evidence paths.
+    teardownNodes = cluster.getNodes();
+  } catch (error) {
+    logMaterializationError = error;
+  }
   try {
     await cluster.stop();
   } catch (error) {
     clusterStopError = error;
   }
-  try {
-    await materializeGcpFullNodeLogs(cluster, outputDir);
-  } catch (error) {
-    logMaterializationError = error;
+  if (!logMaterializationError) {
+    try {
+      await materializeGcpFullNodeLogs(teardownNodes, outputDir);
+    } catch (error) {
+      logMaterializationError = error;
+    }
   }
   try {
     await provisioner.destroy();
