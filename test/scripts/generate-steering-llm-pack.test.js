@@ -661,6 +661,41 @@ test('applyRuleAliases marks aliases with canonical_of and master with aliases l
   t.end();
 });
 
+test('applyRuleAliases follows stable rule text when navigation lines move',
+  (t) => {
+    const allRules = [
+      {
+        id: 'ARCH-0001',
+        domain: 'architecture',
+        text: 'canonical producer interaction rule',
+        sources: [{file: 'runtime-contracts.md', line: 110}],
+      },
+      {
+        id: 'ARCH-0002',
+        domain: 'architecture',
+        text: 'consumer restatement of the interaction rule',
+        sources: [{file: 'runtime-contracts.md', line: 140}],
+      },
+    ];
+    const stats = applyRuleAliases(allRules, [{
+      canonical: {
+        file: 'runtime-contracts.md',
+        line: 100,
+        match: 'canonical producer interaction rule',
+      },
+      aliases: [{
+        file: 'runtime-contracts.md',
+        line: 130,
+        match: 'consumer restatement of the interaction rule',
+      }],
+    }]);
+
+    t.equal(stats.pairs, 1, 'line drift does not create manual repair work');
+    t.equal(stats.missing.length, 0);
+    t.equal(allRules[1].canonical_of, 'ARCH-0001');
+    t.end();
+  });
+
 test('applyRuleAliases records missing references without crashing', (t) => {
   const allRules = [
     {

@@ -55,9 +55,9 @@ const LOCAL_STR_ALIAS = 'alias';
 const LOCAL_STR_FRONTMATTER_DELIMITER = '---';
 const LOCAL_STR_ALIAS_MATCH_REQUIREMENT =
   'Every ruleAliases ref must carry a match substring of the rule text ' +
-  'so a shifted line anchor fails loudly instead of silently repointing.';
+  'so the reference remains stable when source lines move.';
 const LOCAL_STR_ALIAS_ANCHOR_DRIFT =
-  're-locate the rule in the source file and update llm-pack.config.json.';
+  'update the match when rule text changes or make it unique within the file.';
 const LOCAL_STR_PIN_MATCH_UPDATE =
   'to the current rule text in that source file.';
 const LOCAL_STR_SOURCE_CONTRIBUTION_HEADER =
@@ -1117,20 +1117,34 @@ function ruleSourceKey(sourceRef = {}) {
 
 function locateRuleBySourceRef(rules = [], target = {}) {
   const targetKey = ruleSourceKey(target);
+  let lineMatch = null;
   for (const rule of rules) {
     for (const source of rule.sources || []) {
       if (ruleSourceKey(source) === targetKey) {
-        return rule;
+        lineMatch = rule;
+        if (
+          typeof target.match !== 'string' ||
+          rule.text.includes(target.match)
+        ) {
+          return rule;
+        }
       }
     }
   }
-  return null;
+  if (typeof target.match !== 'string' || target.match.length === 0) {
+    return lineMatch;
+  }
+  const textMatches = rules.filter((rule) => {
+    return rule.text.includes(target.match) &&
+      (rule.sources || []).some((source) => source.file === target.file);
+  });
+  return textMatches.length === 1 ? textMatches[0] : lineMatch;
 }
 
-// Line anchors rot silently when a source doc gains or loses lines above the
-// anchored rule (a doc edit once repointed the "synonyms ban" alias at an
-// unrelated rule). Every alias ref therefore carries a REQUIRED `match`
-// substring of the rule text, asserted here at generation time.
+// The text match is the stable identity; the line is a human navigation hint.
+// A doc edit once repointed the "synonyms ban" alias at an unrelated rule, so
+// every alias ref carries a REQUIRED match and relocation succeeds only when
+// that text identifies exactly one extracted rule in the same source file.
 function assertAliasMatch(rule, ref = {}, role, note) {
   const where = `${ref.file || '<no file>'}:${ref.line ?? '<no line>'}`;
   const label = note ? ` ("${note}")` : '';
@@ -1144,7 +1158,7 @@ function assertAliasMatch(rule, ref = {}, role, note) {
     throw new Error(
       `ruleAliases ${role} ref ${where}${label} resolved to a rule that does ` +
       `not contain its \`match\` substring.\n  expected match: "${ref.match}"` +
-      `\n  actual rule text: "${rule.text}"\n  The line anchor has drifted — ` +
+      `\n  actual rule text: "${rule.text}"\n  The alias text is ambiguous or stale — ` +
       LOCAL_STR_ALIAS_ANCHOR_DRIFT,
     );
   }
