@@ -5,7 +5,7 @@ import path from 'node:path';
 import {fileURLToPath} from 'node:url';
 import {runTestFileSync} from './run-test-files.js';
 
-const SCENARIO = 'gcp-affinity-full-log-materialization';
+const SCENARIO = 'gcp-affinity-full-log-materialization-v2';
 const REPORT_DIRECTORY = 'test-output/reports';
 const GUARD_FILE = 'test/runtime/movielens-affinity-demo-wiring.test.js';
 const VERDICT_PASS = 'PASS';

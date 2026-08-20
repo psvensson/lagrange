@@ -1,0 +1,13 @@
+diff --git a/scripts/run-gcp-affinity-full-log-materialization-scenarios.js b/scripts/run-gcp-affinity-full-log-materialization-scenarios.js
+index 416709c312147f5fe94e341ead331ccc43c5a065..df9136baf2ce243ac5c24b3f9f1bd199cf137b1e 100644
+--- a/scripts/run-gcp-affinity-full-log-materialization-scenarios.js
++++ b/scripts/run-gcp-affinity-full-log-materialization-scenarios.js
+@@ -5,7 +5,7 @@ import path from 'node:path';
+ import {fileURLToPath} from 'node:url';
+ import {runTestFileSync} from './run-test-files.js';
+ 
+-const SCENARIO = 'gcp-affinity-full-log-materialization';
++const SCENARIO = 'gcp-affinity-full-log-materialization-v2';
+ const REPORT_DIRECTORY = 'test-output/reports';
+ const GUARD_FILE = 'test/runtime/movielens-affinity-demo-wiring.test.js';
+ const VERDICT_PASS = 'PASS';

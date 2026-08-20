@@ -48,7 +48,7 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | --- | --- | --- | --- |
 | CL-024 | narrowed | — | restart-rejoin-identity |
 
-## Open quests — 31
+## Open quests — 30
 
 | id | class | attempts | reopens | last event | closes |
 | --- | --- | --- | --- | --- | --- |
@@ -56,7 +56,6 @@ Areas: harness-control-snapshot (2) · membership-publication (2) · placement-p
 | formation-grace-parallel-start-hardening | product | 1 | 0 | 2026-08-16 | — |
 | formation-ledger-spread-voter-ready-readiness-closure | product | 12 | 0 | 2026-08-20 | — |
 | gcp-affinity-full-log-materialization | product | 1 | 0 | 2026-08-20 | — |
-| gcp-affinity-full-log-materialization-v2 | product | 1 | 0 | 2026-08-20 | — |
 | gcp-harness-custom-image-provisioning | product | 0 | 0 | 2026-08-14 | — |
 | github-release-workflow-cutover | process | 2 | 0 | 2026-07-26 ⚠ stale | — |
 | harness-runtime-environment-allowlist | process | 1 | 0 | 2026-08-13 | — |
