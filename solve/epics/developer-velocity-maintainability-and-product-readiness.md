@@ -87,8 +87,8 @@ these numbers establish direction, not a movable closure predicate.
 
 ### Reused
 
-- `scripts/run-test-files.js`, `scripts/generate-test-shards.js`, curated shard
-  checks, `test/shards/timings.json`, and `scripts/list-commands.js`.
+- `scripts/run-test-files.js`, curated semantic subset checks,
+  `test/shards/timings.json`, and `scripts/list-commands.js`.
 - The versioned acceptance-manifest schema and fail-closed executor in
   `scripts/checks/acceptance-proof-manifest-runner.js`. The developer smoke
   proof is a new manifest instance, not a new manifest schema or runner.
@@ -103,8 +103,8 @@ these numbers establish direction, not a movable closure predicate.
 
 ### Extended
 
-- The test-classification/shard owner gains an explicit primary-class manifest
-  and executable duration-budget validation. The acceptance-manifest owner
+- The test-classification owner gains explicit primary/resource manifests and
+  one executable scheduling policy. The acceptance-manifest owner
   gains the developer-smoke manifest instance.
 - The classification owner later gains an impact-graph / proof-cone capability
   (V4): static dependency edges (generated), observed coverage edges

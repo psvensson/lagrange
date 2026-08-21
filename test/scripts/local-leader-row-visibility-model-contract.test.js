@@ -1,8 +1,7 @@
-import fs from 'node:fs';
-import {spawnSync} from 'node:child_process';
 import t from 'tap';
 
-const REPORT_DIR = 'test-output/reports';
+import {assertFreshModelTlcCases} from '../test-helpers/model-tlc-contract.js';
+
 const CASES = Object.freeze([
   Object.freeze({
     report: 'local-leader-row-visibility-fixed.model.report.json',
@@ -37,33 +36,6 @@ const CASES = Object.freeze([
 // spawn keeps its own 60s bound.
 t.setTimeout(120000);
 t.test('focused local leader-row TLC route and mutants meet their declared outcomes', {timeout: 120000}, (t) => {
-  const result = spawnSync(
-    process.execPath,
-    ['scripts/model-tlc.js', '--mode', 'local-leader-row-visibility-fixed'],
-    {
-      cwd: process.cwd(),
-      encoding: 'utf8',
-      timeout: 60000,
-    },
-  );
-  t.equal(result.status, 0, result.stderr || result.stdout);
-
-  for (const expected of CASES) {
-    const report = JSON.parse(fs.readFileSync(
-      `${REPORT_DIR}/${expected.report}`,
-      'utf8',
-    ));
-    t.equal(report.mode, expected.mode, `${expected.mode} report is current`);
-    t.equal(
-      report.expectationMet,
-      true,
-      `${expected.mode} meets its declared TLC expectation`,
-    );
-    t.equal(
-      report.converged,
-      expected.converged,
-      `${expected.mode} has the declared convergence outcome`,
-    );
-  }
+  assertFreshModelTlcCases(t, CASES);
   t.end();
 });

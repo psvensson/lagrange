@@ -176,7 +176,7 @@ test('an unparseable file is reported rather than treated as undeclared', () => 
 });
 
 // End-to-end: the runner must export the derived TAP_TIMEOUT, and an explicit
-// caller value must still win (test:aggregate-sensitive-pregate relies on it).
+// caller value must still win (the classified exclusive lane relies on it).
 // The fixture must live INSIDE the working directory (the runner refuses
 // outside paths) but OUTSIDE test/ (a *.test.js file there would join the live
 // census and show up as manifest drift). test-output/ is gitignored and is not
@@ -210,7 +210,7 @@ function runFixture(declaredMs, expectedSeconds, env) {
   }
 }
 
-test('the runner exports the derived cap and honours an explicit one', () => {
+test('the runner exports the derived cap and honours a lane-owned one', () => {
   assert.equal(runFixture(90000, '90', {}), true,
     'a 90000ms declaration must reach the child as TAP_TIMEOUT=90');
   assert.equal(runFixture(90000, '120', {TAP_TIMEOUT: '120'}), true,

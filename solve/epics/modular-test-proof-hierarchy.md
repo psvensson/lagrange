@@ -98,11 +98,11 @@ cannot lose tests.
    contract changes trigger broader levels.
 4. Move the complete gate to releases; rotate subsystem and soak work nightly.
 
-Stage 2 also builds timing observations. `timings.json` initially covered 201
-of 2,064 tests and no unit tests. Ordinary runs should record sample count,
-recent median, conservative duration, last duration, and canonical class IDs.
-Timing evidence is observational; it never becomes a second classification
-authority.
+Stage 2 may build timing observations. The existing snapshot covers only a
+small historical subset and does not schedule tests. Any future observations
+record sample count, recent median, conservative duration, last duration, and
+canonical class IDs. Timing evidence remains observational; it never becomes
+a second classification or execution authority.
 
 ## Command contract
 

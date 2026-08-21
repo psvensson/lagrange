@@ -8,9 +8,13 @@
 
 import assert from 'node:assert/strict';
 import {execFileSync} from 'node:child_process';
+import fs from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
 import {test} from 'node:test';
 
 import {
+  candidatePaths,
   isInertPath,
   selectChangedTests,
   taxonomyCensus,
@@ -120,4 +124,21 @@ test('an unmapped source path refuses rather than resolving to nothing', () => {
   });
   assert.equal(selection.kind, SELECTION_REFUSED);
   assert.equal(selection.tests.length, 0);
+});
+
+test('the current taxonomy census excludes tracked worktree deletions', () => {
+  const fixture = fs.mkdtempSync(path.join(os.tmpdir(), 'taxonomy-deletion-'));
+  const deletedPath = 'test/deleted.test.js';
+  try {
+    execFileSync('git', ['init', '--quiet'], {cwd: fixture});
+    fs.mkdirSync(path.join(fixture, 'test'));
+    fs.writeFileSync(path.join(fixture, deletedPath), 'export {};\n');
+    execFileSync('git', ['add', deletedPath], {cwd: fixture});
+    fs.rmSync(path.join(fixture, deletedPath));
+    const census = candidatePaths(fixture);
+    assert.ok(!census.tracked.includes(deletedPath));
+    assert.ok(!census.candidates.includes(deletedPath));
+  } finally {
+    fs.rmSync(fixture, {recursive: true, force: true});
+  }
 });

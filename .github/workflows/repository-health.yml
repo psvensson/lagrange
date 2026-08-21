@@ -20,7 +20,7 @@
 # wants to know. An unchanged tree cannot grow new complexity overnight, so a
 # cron would only rerun the same analysis over the same bytes.
 #
-# Deliberately NOT here: test:sharded:all or any other behavioural corpus.
+# Deliberately NOT here: test:all or any other behavioural corpus.
 # Repository health is about structure. A behavioural suite hiding in this
 # workflow would quietly restore the full-system gate under a friendlier name,
 # and the whole-system proof already has an explicit home in full-gate.yml and

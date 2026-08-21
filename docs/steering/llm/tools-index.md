@@ -86,7 +86,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `audit:runtime-grammar` — Check runtime grammar contracts plus state-machine pressure preflight.
 - `audit:runtime-grammar:file` — `node scripts/check-runtime-grammar-contracts.js`
 - `audit:service-portability-claims` — `node scripts/check-service-portability-claims.js`
-- `audit:shards` — `node scripts/generate-test-shards.js --check && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check`
+- `audit:shards` — `node scripts/check-curated-test-shards.js && node scripts/generate-test-primary-classes.js --check && node scripts/generate-test-resource-classes.js --check && node scripts/generate-test-subsystem-classes.js --check`
 - `audit:state-machine-pressure` — `node scripts/check-state-machine-pressure-preflight.js`
 - `audit:static-gate` — `node scripts/solve/static-gate.js`
 - `audit:step-coverage-owner` — `node scripts/check-step-coverage-owner.js`
@@ -195,10 +195,6 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 - `release:notes` — Render per-release notes from CHANGELOG.md (--mode check|notes|overview --version x.y.z): the release.yml fail-fast changelog gate, GitHub release-page body, and Docker Hub overview renderer.
 
-## shards
-
-- `shards:generate` — `node scripts/generate-test-shards.js`
-
 ## solve
 
 - `solve:attempt` — `node scripts/solve.js attempt`
@@ -245,13 +241,11 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ## test
 
-- `test:aggregate-sensitive-pregate` — `TAP_TIMEOUT=120 node scripts/run-test-files.js --jobs=1 test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js`
+- `test:all` — `node scripts/run-classified-test-files.js --primary unit,packaging,integration,bootstrap`
 - `test:analysis` — `npm run test:unused && npm run test:deps && npm run test:complexity && npm run test:metrics`
-- `test:bootstrap:1` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/bootstrap-1.txt)`
-- `test:bootstrap:2` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/bootstrap-2.txt)`
 - `test:chart:endpoint-sync` — `node scripts/check-endpoint-sync-chart.js`
-- `test:ci` — `npm run test:safety-pregate && bash scripts/run-test-ci-overlapped.sh`
-- `test:cli` — `find test/cli -type f -name '*.test.js' -print0 | sort -z | xargs -0 node scripts/run-test-files.js`
+- `test:ci` — `bash scripts/run-test-ci.sh`
+- `test:cli` — `find test/cli -type f -name '*.test.js' -print | sort | node scripts/run-classified-test-files.js --stdin`
 - `test:complexity` — `node scripts/check-complexity.js`
 - `test:complexity:cognitive` — `node scripts/check-cognitive-complexity.js`
 - `test:complexity:cognitive:scoped` — `node scripts/check-cognitive-complexity.js --scoped`
@@ -260,7 +254,7 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:complexity:scoped` — `node scripts/check-complexity.js --scoped`
 - `test:complexity:scoped:strict` — `node scripts/check-complexity.js --scoped --strict`
 - `test:complexity:strict` — `node scripts/check-complexity.js --strict`
-- `test:convergence-probes` — `node scripts/run-test-files.js $(cat test/shards/convergence-probes.txt)`
+- `test:convergence-probes` — `node scripts/run-classified-test-files.js $(cat test/shards/convergence-probes.txt)`
 - `test:cycles` — `node scripts/check-circular-dependencies.js`
 - `test:cycles:strict` — `node scripts/check-circular-dependencies.js --strict`
 - `test:deps` — `depcruise --config dependency-cruiser.config.cjs src scripts test`
@@ -270,16 +264,10 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:documentation-onboarding` — `node scripts/run-documentation-audience-safe-onboarding-scenario.js documentation-audience-safe-onboarding`
 - `test:duplication` — `node scripts/check-duplication.js`
 - `test:duplication:strict` — `node scripts/check-duplication.js --strict`
-- `test:fast` — `npm run test:fast:ordinary && npm run test:fast:toolchain && npm run test:fast:integration`
-- `test:fast:integration` — `node scripts/plan-test-lane.js --primary integration --exclude-prefix test/integration/,test/bootstrap/ | xargs -d '\n' node scripts/run-test-files.js --jobs=1`
-- `test:fast:ordinary` — `node scripts/plan-test-lane.js --primary unit,packaging --resource ordinary --exclude test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js | xargs -d '\n' -n 100 node scripts/run-test-files.js --jobs=4`
-- `test:fast:toolchain` — `node scripts/plan-test-lane.js --primary unit,packaging --resource external-toolchain | xargs -d '\n' node scripts/run-test-files.js --jobs=1`
-- `test:file` — `node scripts/run-test-files.js`
+- `test:fast` — `node scripts/run-classified-test-files.js --primary unit,packaging,integration --exclude-prefix test/integration/,test/bootstrap/`
+- `test:file` — `node scripts/run-classified-test-files.js`
 - `test:gate` — `node scripts/run-project-hardening-acceptance.js`
 - `test:gate:postpush` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/project-hardening-proof-postpush-manifest.json`
-- `test:integration:1` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-1.txt)`
-- `test:integration:2` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-2.txt)`
-- `test:integration:3` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/integration-3.txt)`
 - `test:llm-steering-usability` — `node scripts/run-llm-steering-usability-scenarios.js`
 - `test:metadata-gateway:audit` — `node scripts/check-unified-system-metadata-gateway.js`
 - `test:metrics` — `npm run test:complexity:cognitive && npm run test:cycles && npm run test:duplication`
@@ -287,22 +275,20 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 - `test:metrics:scoped:strict` — `node scripts/check-scoped-ratchets.js --strict`
 - `test:mutation` — `stryker run`
 - `test:owner-debt:prepare` — `node scripts/generate-global-owner-debt-inventory.js --refresh --output test-output/analysis/global-owner-debt-inventory.json`
-- `test:pgwire` — `node scripts/run-test-files.js $(cat test/shards/pgwire-unit.txt test/shards/pgwire-integration.txt)`
-- `test:pgwire:integration` — `node scripts/run-test-files.js --jobs=1 $(cat test/shards/pgwire-integration.txt)`
-- `test:pgwire:unit` — `node scripts/run-test-files.js $(cat test/shards/pgwire-unit.txt)`
+- `test:pgwire` — `node scripts/run-classified-test-files.js $(cat test/shards/pgwire-unit.txt test/shards/pgwire-integration.txt)`
+- `test:pgwire:integration` — `node scripts/run-classified-test-files.js $(cat test/shards/pgwire-integration.txt)`
+- `test:pgwire:unit` — `node scripts/run-classified-test-files.js $(cat test/shards/pgwire-unit.txt)`
 - `test:project-hardening` — `node scripts/run-project-hardening-acceptance.js`
 - `test:quality` — `npm run test:static && npm run test:mutation`
 - `test:quest-proof` — `node scripts/run-quest-proof.js`
 - `test:roadmap-authority` — `node scripts/run-documentation-current-state-scenario.js roadmap-audience-authority-cutover`
-- `test:safety-pregate` — `node scripts/run-test-files.js $(cat test/shards/safety-pregate.txt)`
-- `test:sharded:all` — `npm run test:fast && bash scripts/run-sharded-lanes-concurrent.sh`
-- `test:sharded:serial` — `npm run test:fast && npm run test:integration:1 && npm run test:integration:2 && npm run test:integration:3 && npm run test:bootstrap:1 && npm run test:bootstrap:2`
+- `test:safety-pregate` — `node scripts/run-classified-test-files.js $(cat test/shards/safety-pregate.txt)`
 - `test:smoke` — `node scripts/run-project-hardening-acceptance.js --manifest test/manifests/developer-smoke-proof-manifest.json --receipt-dir test-output/acceptance/developer-smoke`
 - `test:static` — `npm run test:unused && npm run test:unused:prod && npm run test:unused:ratchet && npm run test:deps && npm run audit:file-size && npm run test:complexity && npm run test:metrics && npm run test:metadata-gateway:audit && npm run audit:runtime-grammar && npm run audit:operation-progress-authority && npm run audit:service-portability-claims && npm run audit:current-capabilities && npm run audit:cli-docs && npm run audit:closure-ledger && npm run audit:no-kiro && npm run audit:no-legacy-naming && npm run audit:impact-contracts && npm run audit:shards && npm run audit:guidelines && npm run audit:doc-audience && npm run audit:doc-ascii && npm run audit:documentation-current && npm run audit:roadmap-authority && npm run steering:check && npm run lint:scripts && npm run lint`
 - `test:static:postpush` — `node scripts/checks/run-static-audits.js`
 - `test:task27:invariant-suite` — `bash scripts/run-task27-deterministic-invariant-suite.sh`
 - `test:topology-failure-gates` — Run the topology failure gates.
-- `test:unit` — `find test -type f -name '*.test.js' ! -name '*.integration.test.js' ! -path 'test/integration/*' ! -path 'test/bootstrap/*' -print0 | sort -z | xargs -0 -n 100 node scripts/run-test-files.js`
+- `test:unit` — `node scripts/run-classified-test-files.js --primary unit,packaging`
 - `test:unused` — `knip --exclude exports,duplicates`
 - `test:unused:exports` — `knip --include exports`
 - `test:unused:prod` — `knip --production --include dependencies`
@@ -320,4 +306,4 @@ Invoke any entry with `npm run <name>` (pass flags after `--`).
 
 ---
 
-215 scripts indexed; 32 have a curated description, 183 fall back to their raw command. Improve coverage in the two sources named in the header comment.
+204 scripts indexed; 32 have a curated description, 172 fall back to their raw command. Improve coverage in the two sources named in the header comment.

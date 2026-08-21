@@ -107,9 +107,10 @@ const RATCHET_TARGETS = [
     // test-only QueryRouter implementation and its duplicate routing suites.
     // 2026-08-21: tightened 818/31275 -> 818/31252 after replacing ambient
     // MovieLens module mocks with the comparison runner's owned test seam.
-    // 2026-08-21: tightened after consolidating recovery-state properties.
-    baselineCloneGroupCount: 817,
-    baselineDuplicatedLineCount: 31236,
+    // 2026-08-21: tightened 817/31236 -> 816/31209 after the model-contract
+    // tests moved fresh-report execution behind one shared test helper.
+    baselineCloneGroupCount: 816,
+    baselineDuplicatedLineCount: 31209,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

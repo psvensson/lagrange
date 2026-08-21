@@ -1,0 +1,7 @@
+# Shared-output and aggregate-sensitive tests. These tests own process-global
+# evidence paths or consume enough of the host that co-scheduling changes their
+# meaning. The classified runner executes the complete set serially.
+
+test/distributed/harness/__tests__/comparative-efficiency-claim-projection.test.js
+test/scripts/exact-election-evidence-same-turn-model-contract.test.js
+test/scripts/local-leader-row-visibility-model-contract.test.js

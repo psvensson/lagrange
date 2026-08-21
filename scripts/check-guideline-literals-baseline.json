@@ -1,7 +1,7 @@
 {
   "version": 1,
-  "generatedAt": "2026-08-16T18:37:52.596Z",
-  "rawViolationCount": 2473,
+  "generatedAt": "2026-08-21T20:55:37.144Z",
+  "rawViolationCount": 2440,
   "violations": [
     {
       "filePath": "scripts/analyze-cl039-link-rate.js",
@@ -4046,7 +4046,7 @@
     },
     {
       "filePath": "scripts/check-complexity.js",
-      "line": 69,
+      "line": 74,
       "column": 5,
       "value": "'Usage: npm run test:complexity:scoped -- <file-or-directory> [...]'",
       "kind": "free_floating_string_literal",
@@ -4361,7 +4361,7 @@
     },
     {
       "filePath": "scripts/check-duplication.js",
-      "line": 121,
+      "line": 133,
       "column": 14,
       "value": "'javascript'",
       "kind": "free_floating_string_literal",
@@ -4370,7 +4370,7 @@
     },
     {
       "filePath": "scripts/check-duplication.js",
-      "line": 122,
+      "line": 134,
       "column": 17,
       "value": "'json'",
       "kind": "free_floating_string_literal",
@@ -4379,7 +4379,7 @@
     },
     {
       "filePath": "scripts/check-duplication.js",
-      "line": 197,
+      "line": 216,
       "column": 7,
       "value": "'duplicated line(s).\\n'",
       "kind": "free_floating_string_literal",
@@ -5828,7 +5828,7 @@
     },
     {
       "filePath": "scripts/check-operation-progress-authority.js",
-      "line": 130,
+      "line": 219,
       "column": 21,
       "value": "'-methods.js'",
       "kind": "free_floating_string_literal",
@@ -8168,7 +8168,7 @@
     },
     {
       "filePath": "scripts/generate-steering-llm-pack.js",
-      "line": 1158,
+      "line": 1172,
       "column": 38,
       "value": "'canonical'",
       "kind": "free_floating_string_literal",
@@ -8177,7 +8177,7 @@
     },
     {
       "filePath": "scripts/generate-steering-llm-pack.js",
-      "line": 1170,
+      "line": 1184,
       "column": 40,
       "value": "'alias'",
       "kind": "free_floating_string_literal",
@@ -8186,7 +8186,7 @@
     },
     {
       "filePath": "scripts/generate-steering-llm-pack.js",
-      "line": 1358,
+      "line": 1372,
       "column": 11,
       "value": "'Rephrase the source paragraph so the rule names its trigger condition '",
       "kind": "free_floating_string_literal",
@@ -8195,7 +8195,7 @@
     },
     {
       "filePath": "scripts/generate-steering-llm-pack.js",
-      "line": 1359,
+      "line": 1373,
       "column": 11,
       "value": "'or subject (avoid bare admonition markers and dangling pronouns).'",
       "kind": "free_floating_string_literal",
@@ -8204,7 +8204,7 @@
     },
     {
       "filePath": "scripts/generate-steering-llm-pack.js",
-      "line": 1366,
+      "line": 1380,
       "column": 11,
       "value": "'at least one {file, line} entry in rules.json sources.'",
       "kind": "free_floating_string_literal",
@@ -8213,7 +8213,7 @@
     },
     {
       "filePath": "scripts/generate-steering-llm-pack.js",
-      "line": 1373,
+      "line": 1387,
       "column": 23,
       "value": "'\\n  - '",
       "kind": "free_floating_string_literal",
@@ -8222,7 +8222,7 @@
     },
     {
       "filePath": "scripts/generate-steering-llm-pack.js",
-      "line": 1396,
+      "line": 1410,
       "column": 14,
       "value": "'general'",
       "kind": "free_floating_string_literal",
@@ -8231,7 +8231,7 @@
     },
     {
       "filePath": "scripts/generate-steering-llm-pack.js",
-      "line": 1406,
+      "line": 1420,
       "column": 18,
       "value": "'general'",
       "kind": "free_floating_string_literal",
@@ -8240,7 +8240,7 @@
     },
     {
       "filePath": "scripts/generate-steering-llm-pack.js",
-      "line": 1631,
+      "line": 1645,
       "column": 24,
       "value": "'ENOENT'",
       "kind": "free_floating_string_literal",
@@ -8249,117 +8249,9 @@
     },
     {
       "filePath": "scripts/generate-steering-llm-pack.js",
-      "line": 1642,
+      "line": 1656,
       "column": 24,
       "value": "'ENOENT'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/generate-test-shards.js",
-      "line": 104,
-      "column": 48,
-      "value": "'utf8'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/generate-test-shards.js",
-      "line": 126,
-      "column": 7,
-      "value": "'file would make its npm script run the full default tap discovery'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/generate-test-shards.js",
-      "line": 172,
-      "column": 48,
-      "value": "'utf8'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/generate-test-shards.js",
-      "line": 224,
-      "column": 50,
-      "value": "'s'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/generate-test-shards.js",
-      "line": 224,
-      "column": 56,
-      "value": "1000",
-      "kind": "free_floating_number_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/generate-test-shards.js",
-      "line": 246,
-      "column": 27,
-      "value": "50",
-      "kind": "free_floating_number_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/generate-test-shards.js",
-      "line": 246,
-      "column": 75,
-      "value": "'utf8'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/generate-test-shards.js",
-      "line": 267,
-      "column": 29,
-      "value": "'--update-timings'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/generate-test-shards.js",
-      "line": 285,
-      "column": 11,
-      "value": "'Shard drift detected — the sharded lanes would not run the full tree:'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/generate-test-shards.js",
-      "line": 288,
-      "column": 11,
-      "value": "'Regenerate with: node scripts/generate-test-shards.js'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/generate-test-shards.js",
-      "line": 289,
-      "column": 11,
-      "value": "'(curated shards safety-pregate/pgwire-* are hand-maintained; fix those by hand)'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "scripts/generate-test-shards.js",
-      "line": 297,
-      "column": 62,
-      "value": "', '",
       "kind": "free_floating_string_literal",
       "reason": "raw literal outside a named constant owner",
       "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
@@ -10121,7 +10013,7 @@
     },
     {
       "filePath": "scripts/run-test-harness-improvement-batch-scenario.js",
-      "line": 168,
+      "line": 167,
       "column": 30,
       "value": "'PASS'",
       "kind": "free_floating_string_literal",
@@ -10130,7 +10022,7 @@
     },
     {
       "filePath": "scripts/run-test-harness-improvement-batch-scenario.js",
-      "line": 168,
+      "line": 167,
       "column": 39,
       "value": "'FAIL'",
       "kind": "free_floating_string_literal",
@@ -10139,7 +10031,7 @@
     },
     {
       "filePath": "scripts/run-test-harness-improvement-batch-scenario.js",
-      "line": 170,
+      "line": 169,
       "column": 69,
       "value": "', '",
       "kind": "free_floating_string_literal",
@@ -18014,7 +17906,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 118,
+      "line": 117,
       "column": 18,
       "value": "'quest-theory'",
       "kind": "free_floating_string_literal",
@@ -18023,7 +17915,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 122,
+      "line": 121,
       "column": 71,
       "value": "'-'",
       "kind": "free_floating_string_literal",
@@ -18032,7 +17924,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 145,
+      "line": 144,
       "column": 74,
       "value": "', '",
       "kind": "free_floating_string_literal",
@@ -18041,7 +17933,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 151,
+      "line": 150,
       "column": 76,
       "value": "', '",
       "kind": "free_floating_string_literal",
@@ -18050,7 +17942,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 175,
+      "line": 174,
       "column": 20,
       "value": "'attempt'",
       "kind": "free_floating_string_literal",
@@ -18059,7 +17951,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 185,
+      "line": 184,
       "column": 20,
       "value": "'attempt'",
       "kind": "free_floating_string_literal",
@@ -18068,7 +17960,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 209,
+      "line": 208,
       "column": 64,
       "value": "', '",
       "kind": "free_floating_string_literal",
@@ -18077,7 +17969,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 238,
+      "line": 237,
       "column": 11,
       "value": "'commit'",
       "kind": "free_floating_string_literal",
@@ -18086,7 +17978,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 256,
+      "line": 255,
       "column": 7,
       "value": "'select a fresh frontier theory'",
       "kind": "free_floating_string_literal",
@@ -18095,7 +17987,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 267,
+      "line": 266,
       "column": 7,
       "value": "'record or select a fresh frontier theory'",
       "kind": "free_floating_string_literal",
@@ -18104,7 +17996,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 310,
+      "line": 309,
       "column": 7,
       "value": "'coupled-invariant oscillation: record a system theory that reconciles the '",
       "kind": "free_floating_string_literal",
@@ -18113,7 +18005,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 311,
+      "line": 310,
       "column": 9,
       "value": "'coupled invariant families before the next attempt'",
       "kind": "free_floating_string_literal",
@@ -18122,7 +18014,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 312,
+      "line": 311,
       "column": 7,
       "value": "'system theory required after repeated same-frontier stalls'",
       "kind": "free_floating_string_literal",
@@ -18131,7 +18023,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 320,
+      "line": 319,
       "column": 61,
       "value": "'begin'",
       "kind": "free_floating_string_literal",
@@ -18140,7 +18032,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 324,
+      "line": 323,
       "column": 73,
       "value": "', '",
       "kind": "free_floating_string_literal",
@@ -18149,7 +18041,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 325,
+      "line": 324,
       "column": 9,
       "value": "'or record a finding explaining why they were abandoned'",
       "kind": "free_floating_string_literal",
@@ -18158,7 +18050,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 337,
+      "line": 336,
       "column": 57,
       "value": "'begin'",
       "kind": "free_floating_string_literal",
@@ -18167,7 +18059,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 341,
+      "line": 340,
       "column": 9,
       "value": "'coupled-invariant oscillation unreconciled: reconcile coupled invariant '",
       "kind": "free_floating_string_literal",
@@ -18176,7 +18068,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 342,
+      "line": 341,
       "column": 53,
       "value": "', '",
       "kind": "free_floating_string_literal",
@@ -18185,7 +18077,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 343,
+      "line": 342,
       "column": 9,
       "value": "'cross-owner move (leave them green together in one measured run) or record a '",
       "kind": "free_floating_string_literal",
@@ -18194,7 +18086,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 344,
+      "line": 343,
       "column": 9,
       "value": "'finding explaining the accepted coupling — a single-owner local fix does not '",
       "kind": "free_floating_string_literal",
@@ -18203,7 +18095,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 345,
+      "line": 344,
       "column": 9,
       "value": "'discharge this'",
       "kind": "free_floating_string_literal",
@@ -18212,7 +18104,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 353,
+      "line": 352,
       "column": 53,
       "value": "'begin'",
       "kind": "free_floating_string_literal",
@@ -18221,7 +18113,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 355,
+      "line": 354,
       "column": 7,
       "value": "'scope pressure terminal: changed-file count exceeds the limit; reduce scope '",
       "kind": "free_floating_string_literal",
@@ -18230,7 +18122,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 356,
+      "line": 355,
       "column": 7,
       "value": "'(land or split the current changes) before the next attempt'",
       "kind": "free_floating_string_literal",
@@ -18239,7 +18131,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 370,
+      "line": 369,
       "column": 9,
       "value": "'fresh theory selection required after repeated diagnostic movement '",
       "kind": "free_floating_string_literal",
@@ -18248,7 +18140,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 371,
+      "line": 370,
       "column": 9,
       "value": "'without metric movement'",
       "kind": "free_floating_string_literal",
@@ -18257,7 +18149,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 389,
+      "line": 388,
       "column": 23,
       "value": "'theory result required when metric is 0 but done is false'",
       "kind": "free_floating_string_literal",
@@ -18266,7 +18158,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 446,
+      "line": 445,
       "column": 19,
       "value": "'model evidence or modelNotApplicable is required at model rung'",
       "kind": "free_floating_string_literal",
@@ -18275,7 +18167,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 447,
+      "line": 446,
       "column": 24,
       "value": "'commit'",
       "kind": "free_floating_string_literal",
@@ -18284,7 +18176,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 448,
+      "line": 447,
       "column": 19,
       "value": "'model reference is required when repeated evidence has lifecycle language'",
       "kind": "free_floating_string_literal",
@@ -18293,7 +18185,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 567,
+      "line": 566,
       "column": 7,
       "value": "'the corrected candidate is re-verified and approved on the same frontier'",
       "kind": "free_floating_string_literal",
@@ -18302,7 +18194,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 569,
+      "line": 568,
       "column": 7,
       "value": "'the rejection cause was misdiagnosed; re-read the finding before '",
       "kind": "free_floating_string_literal",
@@ -18311,7 +18203,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 570,
+      "line": 569,
       "column": 7,
       "value": "'another attempt'",
       "kind": "free_floating_string_literal",
@@ -18320,7 +18212,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 572,
+      "line": 571,
       "column": 7,
       "value": "'the check named in the rejection passes on the corrected candidate'",
       "kind": "free_floating_string_literal",
@@ -18329,7 +18221,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 574,
+      "line": 573,
       "column": 7,
       "value": "'an independent verifier approves the corrected candidate fingerprint'",
       "kind": "free_floating_string_literal",
@@ -18338,7 +18230,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 575,
+      "line": 574,
       "column": 18,
       "value": "'the same finding fires again on the corrected candidate'",
       "kind": "free_floating_string_literal",
@@ -18347,7 +18239,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 584,
+      "line": 583,
       "column": 7,
       "value": "'theory: --from-rejection matched no verifier-rejection finding'",
       "kind": "free_floating_string_literal",
@@ -18356,7 +18248,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 676,
+      "line": 674,
       "column": 41,
       "value": "'scenario-outcome'",
       "kind": "free_floating_string_literal",
@@ -18365,7 +18257,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 677,
+      "line": 675,
       "column": 39,
       "value": "'theory-outcome'",
       "kind": "free_floating_string_literal",
@@ -18374,7 +18266,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 678,
+      "line": 676,
       "column": 41,
       "value": "'blocker-movement'",
       "kind": "free_floating_string_literal",
@@ -18383,7 +18275,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 679,
+      "line": 677,
       "column": 44,
       "value": "'diagnostic-movement'",
       "kind": "free_floating_string_literal",
@@ -18392,7 +18284,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 694,
+      "line": 692,
       "column": 27,
       "value": "'by'",
       "kind": "free_floating_string_literal",
@@ -18401,7 +18293,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 711,
+      "line": 709,
       "column": 64,
       "value": "'unknown'",
       "kind": "free_floating_string_literal",
@@ -18410,7 +18302,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 715,
+      "line": 713,
       "column": 18,
       "value": "'## Selected'",
       "kind": "free_floating_string_literal",
@@ -18419,7 +18311,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 718,
+      "line": 716,
       "column": 16,
       "value": "'- none'",
       "kind": "free_floating_string_literal",
@@ -18428,7 +18320,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 724,
+      "line": 722,
       "column": 24,
       "value": "'\\n'",
       "kind": "free_floating_string_literal",
@@ -18437,7 +18329,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 738,
+      "line": 736,
       "column": 5,
       "value": "'# Mechanism Card'",
       "kind": "free_floating_string_literal",
@@ -18446,7 +18338,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 741,
+      "line": 739,
       "column": 45,
       "value": "'; '",
       "kind": "free_floating_string_literal",
@@ -18455,7 +18347,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 742,
+      "line": 740,
       "column": 47,
       "value": "'; '",
       "kind": "free_floating_string_literal",
@@ -18464,7 +18356,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 743,
+      "line": 741,
       "column": 63,
       "value": "', '",
       "kind": "free_floating_string_literal",
@@ -18473,7 +18365,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 748,
+      "line": 746,
       "column": 10,
       "value": "'\\n'",
       "kind": "free_floating_string_literal",
@@ -18482,7 +18374,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 779,
+      "line": 777,
       "column": 18,
       "value": "'archive'",
       "kind": "free_floating_string_literal",
@@ -18491,7 +18383,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 786,
+      "line": 784,
       "column": 77,
       "value": "'y'",
       "kind": "free_floating_string_literal",
@@ -18500,7 +18392,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 786,
+      "line": 784,
       "column": 83,
       "value": "'ies'",
       "kind": "free_floating_string_literal",
@@ -18509,7 +18401,7 @@
     },
     {
       "filePath": "scripts/solve/theory.js",
-      "line": 805,
+      "line": 803,
       "column": 61,
       "value": "'|'",
       "kind": "free_floating_string_literal",
@@ -20408,7 +20300,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-delegate-bundles.js",
-      "line": 468,
+      "line": 461,
       "column": 29,
       "value": "'NodeRegistrationOwner withdrawal delegate unavailable'",
       "kind": "free_floating_string_literal",
@@ -20417,7 +20309,7 @@
     },
     {
       "filePath": "src/bootstrap/node-joining-operation-ledger-formation-readiness.js",
-      "line": 480,
+      "line": 156,
       "column": 15,
       "value": "'operation_ledger_formation'",
       "kind": "free_floating_string_literal",
@@ -20452,197 +20344,8 @@
       "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
     },
     {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 48,
-      "column": 35,
-      "value": "'operation_id'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 48,
-      "column": 51,
-      "value": "'operationId'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 49,
-      "column": 34,
-      "value": "'entity_type'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 49,
-      "column": 49,
-      "value": "'entityType'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 50,
-      "column": 32,
-      "value": "'entity_id'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 50,
-      "column": 45,
-      "value": "'entityId'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 51,
-      "column": 35,
-      "value": "'partition_id'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 51,
-      "column": 51,
-      "value": "'partitionId'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 52,
-      "column": 33,
-      "value": "'replica_id'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 52,
-      "column": 47,
-      "value": "'replicaId'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 53,
-      "column": 36,
-      "value": "'target_node_id'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 53,
-      "column": 54,
-      "value": "'targetNodeId'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 54,
-      "column": 36,
-      "value": "'workflow_step'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 54,
-      "column": 53,
-      "value": "'workflowStep'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 112,
-      "column": 35,
-      "value": "'COMPLETED'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 113,
-      "column": 35,
-      "value": "'FAILED'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 199,
-      "column": 11,
-      "value": "'Legacy runtime-service target cleanup retry budget exhausted'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 284,
-      "column": 36,
-      "value": "'node_id'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 284,
-      "column": 47,
-      "value": "'nodeId'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 294,
-      "column": 25,
-      "value": "'SENDING'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
-      "filePath": "src/bootstrap/shared/runtime-service-legacy-target-reconciler.js",
-      "line": 298,
-      "column": 11,
-      "value": "'Legacy runtime-service target cleanup reconciliation failed'",
-      "kind": "free_floating_string_literal",
-      "reason": "raw literal outside a named constant owner",
-      "ruleReference": "system-guidelines.md §4 Scalars, State, And Naming Have Owners"
-    },
-    {
       "filePath": "src/cdc/cdc-integration-service-authoritative-catchup.js",
-      "line": 168,
+      "line": 165,
       "column": 42,
       "value": "'authoritative read unavailable'",
       "kind": "free_floating_string_literal",
@@ -20750,7 +20453,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service-lifecycle-methods.js",
-      "line": 397,
+      "line": 391,
       "column": 25,
       "value": "'Error in scheduled membership publication reconcile tick'",
       "kind": "free_floating_string_literal",
@@ -20759,7 +20462,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service-publication-methods.js",
-      "line": 67,
+      "line": 68,
       "column": 41,
       "value": "'deferred'",
       "kind": "free_floating_string_literal",
@@ -20768,7 +20471,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service-publication-methods.js",
-      "line": 68,
+      "line": 69,
       "column": 35,
       "value": "'deferred'",
       "kind": "free_floating_string_literal",
@@ -20777,7 +20480,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service-publication-methods.js",
-      "line": 69,
+      "line": 70,
       "column": 38,
       "value": "'retry'",
       "kind": "free_floating_string_literal",
@@ -20786,7 +20489,7 @@
     },
     {
       "filePath": "src/control-plane/heartbeat-service-publication-methods.js",
-      "line": 233,
+      "line": 242,
       "column": 15,
       "value": "'node endpoint heartbeat upsert failed'",
       "kind": "free_floating_string_literal",
@@ -20867,7 +20570,7 @@
     },
     {
       "filePath": "src/control-plane/replica-dispatch-service-dispatch-observation-methods.js",
-      "line": 559,
+      "line": 557,
       "column": 36,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -21587,7 +21290,7 @@
     },
     {
       "filePath": "src/query/sql-query-engine-routing-metadata-methods.js",
-      "line": 628,
+      "line": 636,
       "column": 36,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -21893,7 +21596,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-executor-outcome-reconcile-methods.js",
-      "line": 823,
+      "line": 822,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -21902,7 +21605,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-recovery-status-reconcile.js",
-      "line": 71,
+      "line": 74,
       "column": 9,
       "value": "'Runtime-service replacement target has non-canonical identity'",
       "kind": "free_floating_string_literal",
@@ -21911,7 +21614,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
-      "line": 146,
+      "line": 153,
       "column": 23,
       "value": "'below-min'",
       "kind": "free_floating_string_literal",
@@ -21920,7 +21623,7 @@
     },
     {
       "filePath": "src/rebalancer/operation-workflow-remove-safety-evaluator.js",
-      "line": 151,
+      "line": 158,
       "column": 23,
       "value": "'below-min'",
       "kind": "free_floating_string_literal",
@@ -21929,7 +21632,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-concurrent-budget-gate.js",
-      "line": 246,
+      "line": 247,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -21938,7 +21641,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-ledger-interlock-admission.js",
-      "line": 750,
+      "line": 783,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -21947,7 +21650,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-lifecycle.js",
-      "line": 677,
+      "line": 678,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -21956,7 +21659,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 525,
+      "line": 542,
       "column": 21,
       "value": "'no_service_rows'",
       "kind": "free_floating_string_literal",
@@ -21965,7 +21668,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 557,
+      "line": 574,
       "column": 21,
       "value": "'incomplete_topology'",
       "kind": "free_floating_string_literal",
@@ -21974,7 +21677,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-creation.js",
-      "line": 917,
+      "line": 934,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -21983,7 +21686,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-intent-methods.js",
-      "line": 687,
+      "line": 677,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -21992,7 +21695,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-operation-read-methods.js",
-      "line": 550,
+      "line": 537,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -22019,7 +21722,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-priority-budget-admission.js",
-      "line": 897,
+      "line": 895,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -22037,7 +21740,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-replica-identity-methods.js",
-      "line": 472,
+      "line": 471,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -22046,7 +21749,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-reservation-lifecycle-methods.js",
-      "line": 682,
+      "line": 685,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -22055,7 +21758,7 @@
     },
     {
       "filePath": "src/rebalancer/rebalance-coordinator-topology-guard-methods.js",
-      "line": 782,
+      "line": 781,
       "column": 24,
       "value": "'constructor'",
       "kind": "free_floating_string_literal",
@@ -22073,7 +21776,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 263,
+      "line": 268,
       "column": 64,
       "value": "'pending'",
       "kind": "free_floating_string_literal",
@@ -22082,7 +21785,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 263,
+      "line": 268,
       "column": 76,
       "value": "'intentionally_relaxed'",
       "kind": "free_floating_string_literal",
@@ -22091,7 +21794,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 401,
+      "line": 406,
       "column": 32,
       "value": "'partitionServices'",
       "kind": "free_floating_string_literal",
@@ -22100,7 +21803,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 404,
+      "line": 409,
       "column": 32,
       "value": "'messageGroupServices'",
       "kind": "free_floating_string_literal",
@@ -22109,7 +21812,7 @@
     },
     {
       "filePath": "src/rebalancer/unified-rebalancer-lifecycle-base.js",
-      "line": 407,
+      "line": 412,
       "column": 32,
       "value": "'requirePropagationLeader'",
       "kind": "free_floating_string_literal",

@@ -205,7 +205,19 @@ export function packageChangeRequiresRelease(changedPaths, changedPackageFields)
 export function candidatePaths(root) {
   const list = (args) => arrayFilter(stringSplit(execFileSync(GIT, args,
     {cwd: root, encoding: UTF8, maxBuffer: MAX_GIT_BUFFER}), NEWLINE), Boolean);
-  const tracked = list([LS_FILES]);
+  // `git ls-files` includes an index entry whose worktree file has been
+  // deleted. That path matters to changed-path selection (which carries an
+  // explicit vanished set), but it is not part of the CURRENT taxonomy
+  // universe and cannot have a current manifest assignment. lstat preserves
+  // tracked symlinks, including broken ones, while excluding true deletions.
+  const tracked = arrayFilter(list([LS_FILES]), (candidatePath) => {
+    try {
+      fs.lstatSync(path.join(root, candidatePath));
+      return true;
+    } catch {
+      return false;
+    }
+  });
   // Workspace injections are dropped HERE, at the one place the candidate
   // universe is defined, so the census and the selector cannot disagree about
   // what counts as repository content.

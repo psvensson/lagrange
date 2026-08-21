@@ -49,7 +49,8 @@ export const CORE_METADATA_PREFIXES = Object.freeze([
 // full suite.
 export const SELECTOR_SELF_PATHS = Object.freeze([
   'scripts/run-test-files.js',
-  'scripts/generate-test-shards.js',
+  'scripts/run-classified-test-files.js',
+  'scripts/check-curated-test-shards.js',
   'scripts/generate-test-primary-classes.js',
   'scripts/select-proof-cone.js',
   'scripts/checks/test-primary-classification.js',

@@ -47,13 +47,13 @@ import {
   SAFETY_SPINE_PATH,
   SELECTION_REFUSED,
 } from './checks/change-selection-constants.js';
+import {runClassifiedTestFiles} from './run-classified-test-files.js';
 
 const UTF8 = 'utf8';
 const BASE_FLAG = '--base';
 const HEAD_FLAG = '--head';
 const EXPLAIN_FLAG = '--explain';
 const LIST_FLAG = '--list';
-const RUNNER = 'scripts/run-test-files.js';
 const DEFAULT_HEAD = 'HEAD';
 const NEWLINE = '\n';
 const INDENT = '  ';
@@ -271,10 +271,8 @@ function main() {
   process.stdout.write(
     `${plan.kind}: ${plan.tests.length}${TESTS_SUFFIX} ` +
     `(${plan.spineCount} spine, ${plan.selectedCount} selected)${NEWLINE}`);
-  const result = spawnSync(process.execPath,
-    [RUNNER, ...plan.tests.map((entry) => entry.path)],
-    {cwd: root, stdio: 'inherit'});
-  process.exitCode = result.status === null ? 1 : result.status;
+  process.exitCode = runClassifiedTestFiles(
+    plan.tests.map((entry) => entry.path), {root});
 }
 
 if (process.argv[1] === fileURLToPath(import.meta.url)) main();

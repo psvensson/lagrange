@@ -48,9 +48,9 @@ function fileContains(file, needle) {
 const CHECKS = [
   {
     id: 'shard-completeness-gate',
-    ok: () => hasScript('audit:shards') && hasScript('shards:generate') &&
+    ok: () => hasScript('audit:shards') &&
       scriptIncludes('test:static', 'audit:shards') &&
-      fs.existsSync('scripts/generate-test-shards.js'),
+      fs.existsSync('scripts/run-classified-test-files.js'),
   },
   {
     id: 'middle-tier-gate-and-runnable-test-ci',
@@ -90,8 +90,7 @@ const CHECKS = [
   {
     id: 'model-contracts-validators-in-a-gate',
     ok: () => hasScript('model:contracts') &&
-      (scriptIncludes('test:gate', 'model:contracts') ||
-       scriptIncludes('test:ci', 'model:contracts')),
+      fileContains('scripts/run-test-ci.sh', 'npm run model:contracts'),
   },
   {
     id: 'bounded-auto-retention-history-floor',

@@ -206,7 +206,7 @@ function prepareTestRun(file, options) {
   // options and passed only while faster than 30s, then flaked on the
   // slower CI runner). Only the TAP_TIMEOUT env genuinely extends the
   // cap, so lift it to the LARGEST option declared in the file. An
-  // explicit caller TAP_TIMEOUT (e.g. test:aggregate-sensitive-pregate)
+  // explicit caller TAP_TIMEOUT (for example the classified exclusive lane)
   // still wins; the per-file kill (--timeout-ms, default 600s) still
   // bounds the whole process.
   if (env.TAP_TIMEOUT === undefined) {

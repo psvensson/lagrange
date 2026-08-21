@@ -8,7 +8,8 @@
 //   zero test spawns   a refusal must not half-run a suite and then give up
 //   printed words      the caller has to be able to READ why it refused
 //
-// Proved against a DISPOSABLE repository whose runner is a tripwire. The
+// Proved against a DISPOSABLE repository whose classified scheduler is a
+// tripwire. The
 // tripwire is what makes "invoked zero behavioural tests" an observation rather
 // than an inference: it records the argv it was called with, so an unexpected
 // execution leaves evidence instead of merely costing time. It also turns the
@@ -37,7 +38,7 @@ import {loadSafetySpine} from '../../scripts/select-change-tests.js';
 const root = process.cwd();
 const UTF8 = 'utf8';
 const ORCHESTRATOR = 'scripts/select-change-tests.js';
-const RUNNER = 'scripts/run-test-files.js';
+const RUNNER = 'scripts/run-classified-test-files.js';
 const BANNER = 'MODULAR PROOF NOT SAFE';
 const RELEASE_COMMAND = 'npm run check:release';
 // Any word a reader could mistake for a behavioural result.
@@ -77,8 +78,10 @@ function buildFixtureRepo() {
     path.join(repo, 'package.json'));
   fs.writeFileSync(path.join(repo, RUNNER),
     'import fs from \'node:fs\';\n' +
-    `fs.writeFileSync(${JSON.stringify(sentinel)}, ` +
-    'JSON.stringify(process.argv.slice(2)));\n', UTF8);
+    'export function runClassifiedTestFiles(files) {\n' +
+    `  fs.writeFileSync(${JSON.stringify(sentinel)}, JSON.stringify(files));\n` +
+    '  return 0;\n' +
+    '}\n', UTF8);
   git(['init', '--quiet']);
   git(['config', 'user.email', 'fixture@example.invalid']);
   git(['config', 'user.name', 'fixture']);
