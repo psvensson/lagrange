@@ -5,7 +5,7 @@ import {
   CONTROL_PLANE_READINESS_DIMENSION,
 } from '../../src/control-plane/control-plane-readiness-constants.js';
 
-test('AdminControlSnapshot queues repair without an inline authoritative membership read',
+test('AdminControlSnapshot does not invent a repair target without a canonical handoff',
   async (t) => {
     let authoritativeLatestPublicationReadOptions = null;
     let acknowledgePublicationRow = null;
@@ -78,8 +78,8 @@ test('AdminControlSnapshot queues repair without an inline authoritative members
     );
     t.equal(
       authoritativeRepairQueueEvents.length,
-      1,
-      'ordinary control snapshots should hand repair work to the owner queue',
+      0,
+      'an evaluator signal alone must not bypass the canonical handoff target',
     );
     t.equal(
       acknowledgePublicationRow,

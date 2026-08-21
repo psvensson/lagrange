@@ -34,10 +34,14 @@ function createMockMessageRouter() {
 }
 
 function createMockSystemCache(tables, partitions) {
+  const canonicalPartitions = partitions.map((partition) => ({
+    ...partition,
+    leader_node_id: partition.leader_node_id || 'test-node',
+  }));
   return {
     tables,
-    partitions,
-    services: partitions.map((p) => ({
+    partitions: canonicalPartitions,
+    services: canonicalPartitions.map((p) => ({
       service_id: p.partition_id,
       service_type: 'partition',
       partition_id: p.partition_id,

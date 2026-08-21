@@ -31,6 +31,8 @@ function createOperation(data) {
     operation_id: data.operationId,
     type: data.type || 'ADD',
     partition_id: data.partitionId,
+    entity_type: EntityType.PARTITION,
+    entity_id: data.partitionId,
     replica_id: data.replicaId,
     sourceReplicaId: data.sourceReplicaId,
     target_node_id: data.targetNodeId,

@@ -54,6 +54,8 @@ function buildOperation({operationId, partitionId, replicaId, step}) {
     sourceNodeId: TEST_NODE_ID,
     targetNodeId: TEST_NODE_ID,
   });
+  operation.entityType = 'partition';
+  operation.entityId = partitionId;
   if (step !== WORKFLOW_STEP.PENDING) {
     operation.workflowStep = step;
     operation.status = ReplicaStatus.SYNCING;

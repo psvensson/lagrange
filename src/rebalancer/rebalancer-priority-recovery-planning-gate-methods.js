@@ -311,12 +311,16 @@ const REBALANCER_PRIORITY_RECOVERY_PLANNING_GATE_METHODS = {
     // evidence the cure is never planned and the hold never releases
     // (quest formation-ledger-quorum-spread-first, verifier-traced wedge).
     // The coordinator owns the placement actuals; the planner only asks.
-    if (
-      this.rebalanceCoordinator
-        ?.getOperationLedgerQuorumConcentrationForPartition?.(
+    const getLedgerConcentration = this.rebalanceCoordinator
+      ?.getOperationLedgerQuorumConcentrationForPartition;
+    const ledgerConcentration =
+      typeof getLedgerConcentration === 'function' ?
+        getLedgerConcentration.call(
+          this.rebalanceCoordinator,
           normalizedPartitionId,
-        ) !== null
-    ) {
+        ) :
+        null;
+    if (ledgerConcentration !== null) {
       return true;
     }
     const publishedPlanningSnapshot =

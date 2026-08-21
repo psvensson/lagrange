@@ -352,7 +352,7 @@ test(
 );
 
 test(
-  'normalizeReplicaOperationRecord infers priority recovery identity from replicaId and steps history',
+  'normalizeReplicaOperationRecord keeps malformed priority recovery ownership non-authoritative',
   async (t) => {
     const record = normalizeReplicaOperationRecord({
       operation_id: 'op-sql-transactions-r4',
@@ -391,8 +391,8 @@ test(
     );
     t.equal(
       record.entityId,
-      'sql_transactions-p1',
-      'normalization should keep entity ownership aligned with the inferred partition id',
+      'unknown',
+      'normalization must not synthesize authoritative entity ownership from a replica id',
     );
     t.equal(
       record.type,

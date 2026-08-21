@@ -68,6 +68,17 @@ const TEST_PRIORITY_TABLE_IDS = Object.freeze([
   SYSTEM_TABLE_NAME.SCHEMA_OPERATIONS,
 ]);
 
+function expectedPlanningGateSnapshot({required, partitionId = null}) {
+  return Object.freeze({
+    operationCreationRequired: required,
+    operationCreationPartitionId: partitionId,
+    operationCreationScope: required ?
+      TEST_PRIORITY_RECOVERY_OPERATION_CREATION_SCOPE_CURRENT_PARTITION :
+      null,
+    noReadyNodePlanningCapability: null,
+  });
+}
+
 function initializeTestEnvironment() {
   ConfigurationManager.resetInstance();
   const config = ConfigurationManager.getInstance();
@@ -389,11 +400,9 @@ test(
     );
     t.same(
       planningGateSnapshot,
-      Object.freeze({
-        operationCreationRequired: true,
-        operationCreationPartitionId: TEST_PARTITION_ID,
-        operationCreationScope:
-          TEST_PRIORITY_RECOVERY_OPERATION_CREATION_SCOPE_CURRENT_PARTITION,
+      expectedPlanningGateSnapshot({
+        required: true,
+        partitionId: TEST_PARTITION_ID,
       }),
       'current physical spread debt should reopen operation creation for its priority owner',
     );
@@ -504,11 +513,7 @@ test(
 
     t.same(
       planningGateSnapshot,
-      Object.freeze({
-        operationCreationRequired: false,
-        operationCreationPartitionId: null,
-        operationCreationScope: null,
-      }),
+      expectedPlanningGateSnapshot({required: false}),
       'current actuals should not re-mint recovery work once every priority partition is physically spread',
     );
   },
@@ -767,11 +772,7 @@ test(
 
     t.same(
       planningGateSnapshot,
-      Object.freeze({
-        operationCreationRequired: false,
-        operationCreationPartitionId: null,
-        operationCreationScope: null,
-      }),
+      expectedPlanningGateSnapshot({required: false}),
       'the sync planning gate should not recreate eligible_but_no_operation_created after move execution has already advanced the same partition',
     );
   },
@@ -794,11 +795,9 @@ test(
 
     t.same(
       planningGateSnapshot,
-      Object.freeze({
-        operationCreationRequired: true,
-        operationCreationPartitionId: TEST_PARTITION_ID,
-        operationCreationScope:
-          TEST_PRIORITY_RECOVERY_OPERATION_CREATION_SCOPE_CURRENT_PARTITION,
+      expectedPlanningGateSnapshot({
+        required: true,
+        partitionId: TEST_PARTITION_ID,
       }),
       'stale in-flight progress should not suppress a fresh priority recovery operation while spread is still open',
     );
@@ -822,11 +821,9 @@ test(
 
     t.same(
       planningGateSnapshot,
-      Object.freeze({
-        operationCreationRequired: true,
-        operationCreationPartitionId: TEST_PARTITION_ID,
-        operationCreationScope:
-          TEST_PRIORITY_RECOVERY_OPERATION_CREATION_SCOPE_CURRENT_PARTITION,
+      expectedPlanningGateSnapshot({
+        required: true,
+        partitionId: TEST_PARTITION_ID,
       }),
       'very old cache-visible progress should not remain a live context that suppresses fresh priority recovery',
     );

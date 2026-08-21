@@ -11,8 +11,13 @@ import {
   SYSTEM_TABLE_NAME,
   WORKFLOW_STEP,
   createTestCoordinator,
+  installActualReplicaObservationResolver,
   test,
 } from './rebalance-coordinator-stopping-reconcile-fixtures.js';
+
+function installRemovedReplicaObservation(coordinator) {
+  installActualReplicaObservationResolver(coordinator, ReplicaStatus.REMOVED);
+}
 
 test('RebalanceCoordinator reconciles REPLACE STOPPING when source ' +
   'replica is already removed and completion outcome is missing',
@@ -307,7 +312,7 @@ test('RebalanceCoordinator completes non-ADD target REMOVED status during ' +
   });
 
   try {
-    coordinator.repository.getActualReplicaStatus = async () => ReplicaStatus.REMOVED;
+    installRemovedReplicaObservation(coordinator);
 
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =
@@ -378,7 +383,7 @@ test('RebalanceCoordinator fails ADD target REMOVED status during ' +
   });
 
   try {
-    coordinator.repository.getActualReplicaStatus = async () => ReplicaStatus.REMOVED;
+    installRemovedReplicaObservation(coordinator);
 
     const operation = await coordinator.getOperation(TEST_OPERATION_ID);
     const reconcileResult =

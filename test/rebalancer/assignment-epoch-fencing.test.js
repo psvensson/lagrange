@@ -46,6 +46,7 @@ const {MoveType, EntityType, NodeStatus} = UNIFIED_REBALANCER_SHARED;
 import {
   createMockCache,
   createMockCdcService,
+  createMockControlPlaneSystemTableGateway,
   createMockPolicyService,
   createMockMessageRouter,
   createMockTransactionCoordinator,
@@ -74,14 +75,19 @@ function initializeConfig() {
  */
 function createEpochCoordinator({currentEpoch}) {
   let persistedRows = 0;
+  const sqlQueryEngine = {
+    async executeQuery(sql) {
+      if (typeof sql === 'string' &&
+          sql.includes('INSERT INTO replica_operations')) {
+        persistedRows += 1;
+      }
+      return {success: true, rows: [], changes: 1};
+    },
+  };
   const coordinator = new RebalanceCoordinator({
     nodeId: TEST_NODE_ID,
     transactionCoordinator: createMockTransactionCoordinator(),
-    systemTableCache: {
-      get() {
-        return null;
-      },
-    },
+    systemTableCache: createMockCache(),
     cdcIntegrationService: {async waitForCacheUpdate() {}},
     controlPlaneReadinessService: {
       getCurrentPublishedMembershipEpochSync() {
@@ -93,15 +99,9 @@ function createEpochCoordinator({currentEpoch}) {
     },
     tablePolicyService: createMockPolicyService(),
     messageRouter: createMockMessageRouter(),
-    sqlQueryEngine: {
-      async executeQuery(sql) {
-        if (typeof sql === 'string' &&
-            sql.includes('INSERT INTO replica_operations')) {
-          persistedRows += 1;
-        }
-        return {success: true, rows: [], changes: 1};
-      },
-    },
+    sqlQueryEngine,
+    controlPlaneSystemTableGateway:
+      createMockControlPlaneSystemTableGateway(sqlQueryEngine),
     enableTimeouts: false,
   });
   coordinator.initialize();

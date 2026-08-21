@@ -362,7 +362,7 @@ const TEST_MESSAGE = Object.freeze({
   CURRENT_REPLICA_PREPENDED_BEFORE_NON_LOCAL_MOVE:
     'current replica_operations needs_operation should run before the non-local calculated move',
   ENTITY_SCOPED_CACHE_INFERRED_OWNERSHIP:
-    'entity-scoped cache reads should infer partition ownership instead of dropping malformed syncing rows',
+    'entity-scoped cache reads should reject malformed syncing rows without canonical ownership',
   FALLBACK_PERSISTS_ONE_RECOVERY_OPERATION:
     'fallback should persist one recovery operation',
   FALLBACK_RETARGETS_CURRENT_BLOCKED_PARTITION:
@@ -472,7 +472,7 @@ test(TEST_NAME.SUITE, async (t) => {
   await t.test(
     TEST_NAME.SHORT_RETRY_NO_ACTIONABLE_MOVES,
     async (t) => {
-      const inferredOwnershipRebalancer = createTestRebalancer({
+      const malformedOwnershipRebalancer = createTestRebalancer({
         entityId: 'sql_transactions-p1',
         entityType: EntityType.PARTITION,
         nodeId: 'node-1',
@@ -505,9 +505,9 @@ test(TEST_NAME.SUITE, async (t) => {
       });
 
       t.equal(
-        inferredOwnershipRebalancer.getInFlightOperations().length,
-        TEST_NUMBER.ONE,
-        TEST_MESSAGE.ENTITY_SCOPED_CACHE_INFERRED_OWNERSHIP,
+        malformedOwnershipRebalancer.getInFlightOperations().length,
+        TEST_NUMBER.ZERO,
+        'malformed operation rows must not acquire inferred ownership',
       );
 
       const rebalancer = createTestRebalancer({

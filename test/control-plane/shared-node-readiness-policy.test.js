@@ -213,6 +213,8 @@ test('dispatch reads use cache-backed owner state only', async (t) => {
     operation_id: 'op-cache-first-1',
     type: 'ADD',
     partition_id: 'tables-p1',
+    entity_type: 'partition',
+    entity_id: 'tables-p1',
     replica_id: 'tables-p1-r4',
     source_node_id: 'seed-node',
     target_node_id: 'node-a',

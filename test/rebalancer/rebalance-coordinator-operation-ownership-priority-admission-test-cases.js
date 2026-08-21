@@ -105,6 +105,8 @@ export function registerRebalanceCoordinatorOperationOwnershipPriorityAdmissionT
               operation_id: 'op-non-priority',
               type: 'REPLACE',
               partition_id: 'users-p1',
+              entity_type: 'partition',
+              entity_id: 'users-p1',
               source_node_id: 'node-local',
               target_node_id: 'node-remote',
               replica_id: 'users-p1-r2',

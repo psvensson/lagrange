@@ -117,6 +117,8 @@ function createOperationRow({
     operation_id: operationId,
     type,
     partition_id: partitionId,
+    entity_type: EntityType.PARTITION,
+    entity_id: partitionId,
     replica_id: replicaId,
     target_node_id: targetNodeId,
     status: rowState?.status || ReplicaStatus.PENDING,

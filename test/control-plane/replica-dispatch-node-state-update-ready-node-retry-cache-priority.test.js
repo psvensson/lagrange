@@ -722,6 +722,10 @@ async (t) => {
   };
   const remoteOwnedPendingRow = {
     operation_id: 'op-ready-retry-remote',
+    partition_id: READY_RETRY_PARTITION_ID,
+    entity_type: 'partition',
+    entity_id: READY_RETRY_PARTITION_ID,
+    replica_id: `${READY_RETRY_PARTITION_ID}-r4`,
     source_node_id: 'node-remote-owner',
     target_node_id: 'node-2',
     workflow_step: WORKFLOW_STEP.PENDING,
@@ -785,8 +789,8 @@ async (t) => {
         [ControlPlaneField.OPERATION_ROW]: {
           operation_id: 'op-ready-retry-remote',
           type: 'ADD',
-          partition_id: undefined,
-          replica_id: undefined,
+          partition_id: READY_RETRY_PARTITION_ID,
+          replica_id: `${READY_RETRY_PARTITION_ID}-r4`,
           source_node_id: 'node-remote-owner',
           target_node_id: 'node-2',
           status: undefined,
@@ -797,7 +801,7 @@ async (t) => {
           error_message: undefined,
           steps_history: '[]',
           entity_type: 'partition',
-          entity_id: undefined,
+          entity_id: READY_RETRY_PARTITION_ID,
         },
       },
     }],

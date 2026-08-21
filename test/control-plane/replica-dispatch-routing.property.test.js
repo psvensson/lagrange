@@ -69,7 +69,11 @@ const operationArb = fc.record({
   workflow_step: fc.constant(WORKFLOW_STEP.PENDING),
   created_at: fc.integer({min: 1000000000000, max: 2000000000000}),
   updated_at: fc.integer({min: 1000000000000, max: 2000000000000}),
-});
+}).map((row) => ({
+  ...row,
+  entity_type: 'partition',
+  entity_id: row.partition_id,
+}));
 
 test('Property 16: Replica dispatch forwards to correct leader',
   async (t) => {

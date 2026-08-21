@@ -77,15 +77,17 @@ function registerSqlQueryEngineExecutionTestCases({
       'system-table SELECT should use one authoritative local read',
     );
     t.equal(
-      authoritativeReads[0]?.options?.replicaFallbackConsistency,
+      authoritativeReads[0]?.options?.readAuthority
+        ?.replicaFallbackConsistency,
       'any_replica',
       'system-table SELECT should allow bounded local replica fallback before owner RPC',
     );
     t.equal(
       authoritativeReads[0]?.options?.readAuthority
         ?.authoritativeReadMode,
-      CONTROL_PLANE_AUTHORITATIVE_READ_MODE.OWNER_LOCAL_ONLY,
-      'system-table SELECT should keep routed SQL disabled during the authoritative preflight',
+      CONTROL_PLANE_AUTHORITATIVE_READ_MODE
+        .OWNER_LOCAL_CONFIRM_EMPTY_WITH_OWNER_RPC,
+      'bounded primary-key SELECT should confirm an empty local read with the owner',
     );
   });
 

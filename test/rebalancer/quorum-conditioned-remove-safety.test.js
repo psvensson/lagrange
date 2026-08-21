@@ -301,6 +301,8 @@ test('RebalanceCoordinator - lower-case remove preflight respects safety policy'
     const safetyError = await coordinator.getMoveSafetyError({
       type: 'remove',
       partitionId: 'nodes-p1',
+      entityType: 'partition',
+      entityId: 'nodes-p1',
       nodeId: 'node-a',
       replicaId: 'nodes-p1-r1',
     });

@@ -80,25 +80,30 @@ async function writeComparisonReport(comparison, error = null) {
   return path;
 }
 
-async function runComparison() {
+async function runComparison({
+  downloadRatingsFn = downloadRatings,
+  runAffinityDemoFn = runAffinityDemo,
+  runPostgresBaselineFn = runPostgresBaseline,
+  writeLiveReportFn = writeAffinityDemoLiveReport,
+} = {}) {
   const phaseEvidence = {};
   let lagrange;
   let comparison;
   try {
-    await downloadRatings();
+    await downloadRatingsFn();
     console.log('[A/3] PostgreSQL grouped-SQL baseline...');
-    const postgres = await runPostgresBaseline();
+    const postgres = await runPostgresBaselineFn();
     console.log('[B+C/3] Lagrange distributed SQL and replicated service...');
-    lagrange = await runAffinityDemo({phaseEvidence});
+    lagrange = await runAffinityDemoFn({phaseEvidence});
     comparison = buildComparison(postgres, lagrange);
     if (!comparison.resultsIdentical) {
       throw new Error('PostgreSQL and Lagrange rankings differ');
     }
   } catch (error) {
-    await writeAffinityDemoLiveReport(null, error, phaseEvidence);
+    await writeLiveReportFn(null, error, phaseEvidence);
     throw error;
   }
-  await writeAffinityDemoLiveReport(lagrange, null, phaseEvidence);
+  await writeLiveReportFn(lagrange, null, phaseEvidence);
   return comparison;
 }
 

@@ -29,6 +29,8 @@ function buildPriorityOperationRow(operationId) {
     operation_id: operationId,
     type: OperationType.ADD,
     partition_id: PRIORITY_PARTITION_ID,
+    entity_type: 'partition',
+    entity_id: PRIORITY_PARTITION_ID,
     replica_id: 'replica_operations-p1-r4',
     source_node_id: 'node-1',
     target_node_id: 'node-2',

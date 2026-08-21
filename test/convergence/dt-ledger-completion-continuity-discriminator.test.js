@@ -452,6 +452,8 @@ t.test(
       operation_id: 'op-local-1',
       type: OperationType.ADD,
       partition_id: 'latency_groups-p1',
+      entity_type: 'partition',
+      entity_id: 'latency_groups-p1',
       replica_id: 'replica-local-1',
       source_node_id: 'test-node-1',
       target_node_id: 'test-node-1',

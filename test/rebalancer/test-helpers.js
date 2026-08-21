@@ -758,6 +758,42 @@ function createTestCoordinator(options = {}) {
         return {success: true, rows: filteredOps};
       }
 
+      if (sql.includes('FROM services')) {
+        let serviceRows = typeof mockCache.getAll === 'function' ?
+          mockCache.getAll(SYSTEM_TABLE_NAME.SERVICES) :
+          [];
+        let paramIndex = 0;
+        if (sql.includes('service_id = ?')) {
+          const serviceId = params[paramIndex++];
+          serviceRows = serviceRows.filter((row) =>
+            row.service_id === serviceId);
+        }
+        if (sql.includes('service_type = ?')) {
+          const serviceType = params[paramIndex++];
+          serviceRows = serviceRows.filter((row) =>
+            row.service_type === serviceType);
+        }
+        if (sql.includes('partition_id = ?')) {
+          const partitionId = params[paramIndex++];
+          serviceRows = serviceRows.filter((row) =>
+            row.partition_id === partitionId);
+        }
+        if (sql.includes('group_id = ?')) {
+          const groupId = params[paramIndex++];
+          serviceRows = serviceRows.filter((row) =>
+            row.group_id === groupId);
+        }
+        if (sql.includes('service_id LIKE ?')) {
+          const serviceIdPattern = String(params[paramIndex++] || '');
+          const serviceIdPrefix = serviceIdPattern.endsWith('%') ?
+            serviceIdPattern.slice(0, -1) :
+            serviceIdPattern;
+          serviceRows = serviceRows.filter((row) =>
+            String(row.service_id || '').startsWith(serviceIdPrefix));
+        }
+        return {success: true, rows: serviceRows};
+      }
+
       return {success: true, rows: []};
     },
   };
@@ -998,6 +1034,28 @@ function isAddLikeMoveResult(moveResult) {
   );
 }
 
+function installActualReplicaObservationResolver(coordinator, resolver) {
+  const repository = coordinator.repository;
+  const originalObservation =
+    repository.getActualReplicaObservation.bind(repository);
+  const resolveStatus = typeof resolver === 'function' ?
+    resolver :
+    async () => resolver;
+  repository.getActualReplicaObservation = async (...args) => {
+    const lifecycleStatus = await resolveStatus(...args);
+    if (lifecycleStatus === undefined) {
+      return originalObservation(...args);
+    }
+    return lifecycleStatus === null ?
+      Object.freeze({state: 'absent', source: 'authoritative'}) :
+      Object.freeze({
+        state: 'observed',
+        source: 'authoritative',
+        lifecycleStatus,
+      });
+  };
+}
+
 export {
   buildSpreadScenarioHelpers,
   createAllowAllStorageAdmissionService,
@@ -1015,5 +1073,6 @@ export {
   createTestCoordinator,
   createTestRebalancer,
   initializeSpreadTestEnvironment,
+  installActualReplicaObservationResolver,
   isAddLikeMoveResult,
 };

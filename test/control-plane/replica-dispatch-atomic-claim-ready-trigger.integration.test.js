@@ -6,9 +6,6 @@
 import {test} from '../../src/test-helpers/tap.js';
 import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
-import {ConfigurationManager} from
-  '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {ControlPlaneField} from
@@ -20,49 +17,11 @@ import {
   STATE,
   WORKFLOW_STEP,
 } from '../../src/constants/index.js';
-
-function initEnv() {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  if (!config.isInitialized()) {
-    config.initialize({});
-  }
-  const logging = LoggingService.getInstance();
-  if (!logging.isInitialized()) {
-    logging.initialize({level: 'error'});
-  }
-}
-
-function claimPendingOperation(operation, operationId) {
-  const currentOperationId =
-    operation?.operation_id ||
-    operation?.operationId ||
-    null;
-  const currentStep =
-    operation?.workflow_step ||
-    operation?.workflowStep ||
-    null;
-  if (!currentOperationId ||
-      currentOperationId !== operationId ||
-      currentStep !== WORKFLOW_STEP.PENDING) {
-    return null;
-  }
-
-  const updatedAt = Date.now();
-  if (Object.prototype.hasOwnProperty.call(operation, 'workflow_step') ||
-      Object.prototype.hasOwnProperty.call(operation, 'operation_id')) {
-    operation.workflow_step = WORKFLOW_STEP.SENDING;
-    operation.updated_at = updatedAt;
-  }
-  if (Object.prototype.hasOwnProperty.call(operation, 'workflowStep') ||
-      Object.prototype.hasOwnProperty.call(operation, 'operationId')) {
-    operation.workflowStep = WORKFLOW_STEP.SENDING;
-    operation.updatedAt = updatedAt;
-  }
-
-  return {operationId};
-}
+import {
+  claimPendingOperation,
+  createCanonicalPartitionOperationRow,
+  initializeAtomicClaimTestEnvironment as initEnv,
+} from './replica-dispatch-atomic-claim-test-support.js';
 
 async function waitForRetryDrain(service) {
   while (service.retryInFlightNodes.size > 0) {
@@ -77,7 +36,7 @@ test(
     initEnv();
 
     const now = Date.now();
-    const operationRow = {
+    const operationRow = createCanonicalPartitionOperationRow({
       operation_id: 'op-ready-trigger-coalesce-1',
       type: 'ADD',
       partition_id: 'tables-p1',
@@ -89,7 +48,7 @@ test(
       created_at: now,
       updated_at: now,
       steps_history: '[]',
-    };
+    });
     const readyNodeRow = {
       node_id: 'node-2',
       status: SERVICE_STATUS.ACTIVE,
@@ -249,7 +208,7 @@ test(
     initEnv();
 
     const now = Date.now();
-    const operationRow = {
+    const operationRow = createCanonicalPartitionOperationRow({
       operation_id: 'op-ready-trigger-newer-watermark-1',
       type: 'ADD',
       partition_id: 'tables-p1',
@@ -261,7 +220,7 @@ test(
       created_at: now,
       updated_at: now,
       steps_history: '[]',
-    };
+    });
     const readyNodeRow = {
       node_id: 'node-2',
       status: SERVICE_STATUS.ACTIVE,
@@ -432,7 +391,7 @@ test(
     initEnv();
 
     const now = Date.now();
-    const operationRow = {
+    const operationRow = createCanonicalPartitionOperationRow({
       operation_id: 'op-ready-timeout-loop-1',
       type: 'ADD',
       partition_id: 'tables-p1',
@@ -444,7 +403,7 @@ test(
       created_at: now,
       updated_at: now,
       steps_history: '[]',
-    };
+    });
     const nodeStore = new Map();
     nodeStore.set('node-2', {
       node_id: 'node-2',
@@ -626,7 +585,7 @@ test(
     initEnv();
 
     const now = Date.now();
-    const operationRow = {
+    const operationRow = createCanonicalPartitionOperationRow({
       operation_id: 'op-handler-activation-retry-1',
       type: 'REMOVE',
       partition_id: 'tables-p1',
@@ -638,7 +597,7 @@ test(
       created_at: now,
       updated_at: now,
       steps_history: '[]',
-    };
+    });
     const nodeRow = {
       node_id: 'node-2',
       status: SERVICE_STATUS.ACTIVE,

@@ -586,11 +586,14 @@ test('QueryExecutor can route bootstrap-owned work via repair-eligible readiness
     );
 
     const serviceRow = {
-      service_id: 'partition-service-3',
-      replica_id: 'partition-service-3',
+      service_id: `${FIXTURE_PARTITION_ID}-r1`,
+      replica_id: `${FIXTURE_PARTITION_ID}-r1`,
       service_type: 'partition',
+      entity_type: 'partition',
+      entity_id: FIXTURE_PARTITION_ID,
       partition_id: FIXTURE_PARTITION_ID,
       node_id: FIXTURE_NODE_ID,
+      raft_role: 'leader',
       status: SERVICE_STATUS.ACTIVE,
       address: `${FIXTURE_NODE_ID}/partition/${FIXTURE_PARTITION_ID}`,
     };
@@ -638,6 +641,7 @@ test('QueryExecutor can route bootstrap-owned work via repair-eligible readiness
       false,
       false,
       false,
+      {timeoutMs: 50},
     );
     t.equal(
       blocked.success,
@@ -660,6 +664,7 @@ test('QueryExecutor can route bootstrap-owned work via repair-eligible readiness
       {
         routingReadinessDimension:
           CONTROL_PLANE_READINESS_DIMENSION.REPAIR_ELIGIBLE,
+        timeoutMs: 50,
       },
     );
     t.equal(

@@ -61,6 +61,8 @@ function replaceOperation(partitionId = PARTITION_ID) {
     operationId: 'replace-colocated-follower',
     type: OperationType.REPLACE,
     partitionId,
+    entityType: 'partition',
+    entityId: partitionId,
     sourceNodeId: SOURCE_NODE_ID,
     sourceReplicaId: SOURCE_REPLICA_ID,
     targetNodeId: TARGET_NODE_ID,

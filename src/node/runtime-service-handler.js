@@ -28,7 +28,7 @@ import {
   EXECUTOR_OUTCOME_TYPE} from
   '../rebalancer/executor-outcome-constants.js';
 import {
-  runtimeServiceReplicaBelongsToEntity,
+  buildRuntimeServiceTargetClaimKey,
 } from '../rebalancer/runtime-service-replica-identity.js';
 import {
   RUNTIME_SERVICE_HANDLER_ADDRESS,
@@ -246,10 +246,10 @@ class RuntimeServiceHandler extends EventEmitter {
         },
       );
     }
-    if (!runtimeServiceReplicaBelongsToEntity(
+    if (buildRuntimeServiceTargetClaimKey(
       replicaId,
       entityId,
-    )) {
+    ) === null) {
       this.logger.warn(
         RUNTIME_SERVICE_HANDLER_LOG_MSG.CREATE_INVALID_REPLICA_ID,
         {operationId, entityId, replicaId, nodeId: this.nodeId},

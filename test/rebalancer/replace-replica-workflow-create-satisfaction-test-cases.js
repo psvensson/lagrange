@@ -1,3 +1,7 @@
+import {
+  installActualReplicaObservationResolver,
+} from './test-helpers.js';
+
 export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
   t,
   WORKFLOW_STEP,
@@ -90,13 +94,15 @@ export async function registerReplaceReplicaWorkflowCreateSatisfactionTests({
           }
           return basePersistOperationUpdate(nextOperation, options);
         };
-      coordinator.workflowOwner.getActualReplicaStatus =
+      installActualReplicaObservationResolver(
+        coordinator,
         async (_replicaId, partitionId, targetNodeId) => {
           if (partitionId === 'nodes-p1' && targetNodeId === 'node-2') {
             return ReplicaStatus.ACTIVE;
           }
-          return null;
-        };
+          return undefined;
+        },
+      );
 
       try {
         const operation = await coordinator.createOperation({

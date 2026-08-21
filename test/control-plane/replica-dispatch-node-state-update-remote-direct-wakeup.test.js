@@ -597,6 +597,8 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
     await service.handleCoordinatorOperationCreated({
       operationId: DIRECT_WAKEUP_RETRY_OPERATION_ID,
       partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+      entityType: 'partition',
+      entityId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
       replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
       type: OperationType.REPLACE,
       workflowStep: WORKFLOW_STEP.PENDING,
@@ -633,8 +635,8 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
             completed_at: undefined,
             error_message: undefined,
             steps_history: DIRECT_WAKEUP_RETRY_STEPS_HISTORY_JSON,
-            entity_type: undefined,
-            entity_id: undefined,
+            entity_type: 'partition',
+            entity_id: DIRECT_WAKEUP_RETRY_PARTITION_ID,
           },
         },
         options: {
@@ -660,6 +662,8 @@ test(DIRECT_WAKEUP_RETRY_TEST_NAME, async (t) => {
     await service.handleCoordinatorOperationCreated({
       operationId: DIRECT_WAKEUP_RETRY_OPERATION_ID,
       partitionId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
+      entityType: 'partition',
+      entityId: DIRECT_WAKEUP_RETRY_PARTITION_ID,
       replicaId: DIRECT_WAKEUP_RETRY_REPLICA_ID,
       type: OperationType.REPLACE,
       workflowStep: WORKFLOW_STEP.PENDING,

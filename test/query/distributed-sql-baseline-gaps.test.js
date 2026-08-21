@@ -28,6 +28,13 @@ function createPartitionServiceRows(partitionIds) {
   }));
 }
 
+function createCanonicalPartitionRows(partitionIds) {
+  return partitionIds.map((partitionId) => ({
+    partition_id: partitionId,
+    leader_node_id: 'test-node',
+  }));
+}
+
 function createSystemCache({tables, partitions, services}) {
   const normalizedPartitions = (partitions || []).map((partition) => {
     const leaderService = (services || []).find((service) =>
@@ -246,6 +253,7 @@ test('baseline gap: distributed read should fail-closed on required participant 
   const executor = new QueryExecutor({
     messageRouter: failingRouter,
     systemCache: createSystemCache({
+      partitions: createCanonicalPartitionRows(['p1', 'p2']),
       services: createPartitionServiceRows(['p1', 'p2']),
     }),
   });
@@ -285,6 +293,7 @@ test('baseline gap: multi-partition UPDATE surfaces partial failure', async (t) 
   const executor = new QueryExecutor({
     messageRouter: failingRouter,
     systemCache: createSystemCache({
+      partitions: createCanonicalPartitionRows(['p1', 'p2']),
       services: createPartitionServiceRows(['p1', 'p2']),
     }),
   });

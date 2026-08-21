@@ -29,26 +29,8 @@ function buildControlSnapshotPublicationActiveGateHandoff(options = {}) {
   const snapshotCoverageNodeIds = normalizeControlSnapshotNodeIdList(
     options.activeNodeViews?.effectiveActiveNodeIds,
   );
-  const expectedNodeIds = normalizeControlSnapshotNodeIdList([
-    ...snapshotCoverageNodeIds,
-    ...normalizeControlSnapshotNodeIdList(
-      options.activeNodeViews?.projectedActiveNodeIds,
-    ),
-    ...normalizeControlSnapshotNodeIdList(
-      options.activeNodeViews?.projectedServingNodeIds,
-    ),
-    ...normalizeControlSnapshotNodeIdList(
-      options.activeNodeViews?.locallyEligibleNodeIds,
-    ),
-    ...normalizeControlSnapshotNodeIdList(
-      options.activeNodeViews?.suspectedOrTransitioningNodeIds,
-    ),
-    ...normalizeControlSnapshotNodeIdList(
-      options.activeNodeViews?.publishedActiveNodeIds,
-    ),
-  ]);
   const computedHandoff = buildPublicationActiveGateHandoffContract({
-    expectedNodeIds,
+    expectedNodeIds: snapshotCoverageNodeIds,
     nodeRows: options.nodeRows,
     snapshotCoverage: {nodeIds: snapshotCoverageNodeIds},
     publicationConvergence: options.publicationConvergence,

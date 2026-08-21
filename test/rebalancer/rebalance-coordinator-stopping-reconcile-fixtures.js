@@ -22,7 +22,10 @@ import {
   ReplicaOperationResponseStatus,
 } from '../../src/rebalancer/replica-operation-constants.js';
 import {RAFT_ROLE} from '../../src/raft/constants.js';
-import {createTestCoordinator} from './test-helpers.js';
+import {
+  createTestCoordinator,
+  installActualReplicaObservationResolver,
+} from './test-helpers.js';
 
 export const STOPPING_REPLICA_OBSERVATION_STATE = Object.freeze({
   OBSERVED: 'observed',
@@ -257,5 +260,6 @@ export {
   SYSTEM_TABLE_NAME,
   WORKFLOW_STEP,
   createTestCoordinator,
+  installActualReplicaObservationResolver,
   test,
 };

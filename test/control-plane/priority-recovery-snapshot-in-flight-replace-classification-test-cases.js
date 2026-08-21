@@ -709,7 +709,7 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
     },
   );
 
-  test('priority recovery decision snapshots infer operation identity from malformed syncing rows',
+  test('priority recovery decision snapshots reject malformed syncing identity',
     async (t) => {
       const decisionSnapshots = buildPriorityRecoveryDecisionSnapshots({
         capturedAt: 5000,
@@ -775,22 +775,19 @@ export function registerPriorityRecoverySnapshotInFlightReplaceClassificationTes
       const targetSnapshot = decisionSnapshots.snapshots.find((entry) =>
         entry.operationId === 'op-replace-syncing-missing-columns',
       );
-      t.ok(targetSnapshot, 'malformed syncing row should still produce one partition snapshot');
-      t.equal(
-        targetSnapshot.partitionId,
-        'sql_transactions-p1',
-        'priority recovery snapshots should recover the partition id from replica identity when the row omits it',
-      );
       t.notOk(
-        targetSnapshot.blockerReasons.includes(
+        targetSnapshot,
+        'a row without canonical entity identity cannot impersonate live work',
+      );
+      const partitionSnapshot = decisionSnapshots.snapshots.find((entry) =>
+        entry.partitionId === 'sql_transactions-p1',
+      );
+      t.ok(partitionSnapshot, 'the real blocked partition remains visible');
+      t.ok(
+        partitionSnapshot.blockerReasons.includes(
           'eligible_but_no_operation_created',
         ),
-        'live syncing work should not collapse back into the synthetic needs-operation state when persisted columns are missing',
-      );
-      t.equal(
-        targetSnapshot.semanticState,
-        'recovering_in_flight',
-        'malformed syncing rows should still remain visible as in-flight recovery work',
+        'malformed operation evidence fails closed at the identity boundary',
       );
     });
 

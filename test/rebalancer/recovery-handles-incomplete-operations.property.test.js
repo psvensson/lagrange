@@ -33,10 +33,13 @@ import {
  */
 function createOperationRow(params) {
   const now = Date.now();
+  const partitionId = params.partitionId || 'test-partition';
   return {
     operation_id: params.operationId || `op-${Math.random().toString(36).slice(2)}`,
     type: params.type || OperationType.ADD,
-    partition_id: params.partitionId || 'test-partition',
+    partition_id: partitionId,
+    entity_type: 'partition',
+    entity_id: partitionId,
     replica_id: params.replicaId || null,
     source_node_id: params.sourceNodeId || 'test-node-1',
     target_node_id: params.targetNodeId || 'test-node-1',
@@ -220,159 +223,52 @@ function createRecoveryTestCoordinator(options = {}) {
 }
 
 test('Property 8: Recovery Handles Incomplete Operations', async (t) => {
-  await t.test('operations in PENDING state are marked FAILED', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.record({
-          operationId: fc.uuid(),
-          partitionId: fc.uuid(),
-          targetNodeId: fc.uuid(),
-        }),
-        async (params) => {
-          const opRow = createOperationRow({
-            ...params,
-            workflowStep: 'PENDING',
-            status: ReplicaStatus.PENDING,
-          });
-
-          const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
-            operations: [opRow],
-          });
-
-          try {
-            const result = await coordinator.handleRecovery();
-
-            const operation = getTrackedOperation(params.operationId);
-            return operation !== null &&
-              operation.status === ReplicaStatus.FAILED &&
-              operation.workflow_step === 'FAILED' &&
-              result.markedFailed === 1;
-          } finally {
-            await coordinator.shutdown();
-          }
-        },
-      ),
-      {numRuns: 10},
+  const failureRecoveryCases = [
+    {workflowStep: 'PENDING', status: ReplicaStatus.PENDING},
+    {workflowStep: 'SENDING', status: ReplicaStatus.PENDING},
+    {workflowStep: 'CREATING', status: ReplicaStatus.CREATING},
+    {
+      workflowStep: 'STOPPING',
+      status: ReplicaStatus.REMOVING,
+      type: OperationType.REMOVE,
+    },
+  ];
+  for (const recoveryCase of failureRecoveryCases) {
+    await t.test(
+      `operations in ${recoveryCase.workflowStep} state are marked FAILED`,
+      async (t) => {
+        await fc.assert(
+          fc.asyncProperty(
+            fc.record({
+              operationId: fc.uuid(),
+              partitionId: fc.uuid(),
+              targetNodeId: fc.uuid(),
+              replicaId: fc.uuid(),
+            }),
+            async (params) => {
+              const opRow = createOperationRow({...params, ...recoveryCase});
+              const {coordinator, getTrackedOperation} =
+                createRecoveryTestCoordinator({operations: [opRow]});
+              try {
+                const result = await coordinator.handleRecovery();
+                const operation = getTrackedOperation(params.operationId);
+                return operation?.status === ReplicaStatus.FAILED &&
+                  operation.workflow_step === 'FAILED' &&
+                  result.markedFailed === 1;
+              } finally {
+                await coordinator.shutdown();
+              }
+            },
+          ),
+          {numRuns: 10},
+        );
+        t.pass(
+          `Operations in ${recoveryCase.workflowStep} state are marked ` +
+          'FAILED during recovery',
+        );
+      },
     );
-
-    t.pass('Operations in PENDING state are marked FAILED during recovery');
-  });
-
-  await t.test('operations in SENDING state are marked FAILED', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.record({
-          operationId: fc.uuid(),
-          partitionId: fc.uuid(),
-          targetNodeId: fc.uuid(),
-        }),
-        async (params) => {
-          const opRow = createOperationRow({
-            ...params,
-            workflowStep: 'SENDING',
-            status: ReplicaStatus.PENDING,
-          });
-
-          const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
-            operations: [opRow],
-          });
-
-          try {
-            const result = await coordinator.handleRecovery();
-
-            const operation = getTrackedOperation(params.operationId);
-            return operation !== null &&
-              operation.status === ReplicaStatus.FAILED &&
-              operation.workflow_step === 'FAILED' &&
-              result.markedFailed === 1;
-          } finally {
-            await coordinator.shutdown();
-          }
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('Operations in SENDING state are marked FAILED during recovery');
-  });
-
-  await t.test('operations in CREATING state are marked FAILED', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.record({
-          operationId: fc.uuid(),
-          partitionId: fc.uuid(),
-          targetNodeId: fc.uuid(),
-        }),
-        async (params) => {
-          const opRow = createOperationRow({
-            ...params,
-            workflowStep: 'CREATING',
-            status: ReplicaStatus.CREATING,
-          });
-
-          const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
-            operations: [opRow],
-          });
-
-          try {
-            const result = await coordinator.handleRecovery();
-
-            const operation = getTrackedOperation(params.operationId);
-            return operation !== null &&
-              operation.status === ReplicaStatus.FAILED &&
-              operation.workflow_step === 'FAILED' &&
-              result.markedFailed === 1;
-          } finally {
-            await coordinator.shutdown();
-          }
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('Operations in CREATING state are marked FAILED during recovery');
-  });
-
-  await t.test('operations in STOPPING state are marked FAILED', async (t) => {
-    await fc.assert(
-      fc.asyncProperty(
-        fc.record({
-          operationId: fc.uuid(),
-          partitionId: fc.uuid(),
-          targetNodeId: fc.uuid(),
-          replicaId: fc.uuid(),
-        }),
-        async (params) => {
-          const opRow = createOperationRow({
-            ...params,
-            type: OperationType.REMOVE,
-            workflowStep: 'STOPPING',
-            status: ReplicaStatus.REMOVING,
-          });
-
-          const {coordinator, getTrackedOperation} = createRecoveryTestCoordinator({
-            operations: [opRow],
-          });
-
-          try {
-            const result = await coordinator.handleRecovery();
-
-            const operation = getTrackedOperation(params.operationId);
-            return operation !== null &&
-              operation.status === ReplicaStatus.FAILED &&
-              operation.workflow_step === 'FAILED' &&
-              result.markedFailed === 1;
-          } finally {
-            await coordinator.shutdown();
-          }
-        },
-      ),
-      {numRuns: 10},
-    );
-
-    t.pass('Operations in STOPPING state are marked FAILED during recovery');
-  });
+  }
 
   await t.test('SYNCING operations with ACTIVE replica are completed', async (t) => {
     await fc.assert(

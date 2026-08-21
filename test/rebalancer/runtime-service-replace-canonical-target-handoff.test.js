@@ -110,27 +110,46 @@ function attachServiceDefinition(cache) {
 
 function waitForCompletedReplace(coordinator) {
   return new Promise((resolve, reject) => {
-    const timeout = setTimeout(() => {
+    const cleanup = () => {
       coordinator.removeListener(
         REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
-        listener,
+        completedListener,
       );
+      coordinator.removeListener(
+        REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+        failedListener,
+      );
+    };
+    const timeout = setTimeout(() => {
+      cleanup();
       reject(new Error('Timed out waiting for runtime-service REPLACE'));
     }, EVENT_WAIT_TIMEOUT_MS);
-    const listener = (event) => {
+    const completedListener = (event) => {
       if (event?.operation?.type !== OperationType.REPLACE) {
         return;
       }
       clearTimeout(timeout);
-      coordinator.removeListener(
-        REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
-        listener,
-      );
+      cleanup();
       resolve(event.operation);
+    };
+    const failedListener = (event) => {
+      if (event?.operation?.type !== OperationType.REPLACE) {
+        return;
+      }
+      clearTimeout(timeout);
+      cleanup();
+      reject(new Error(
+        `Runtime-service REPLACE failed: ${event?.error ||
+          event?.operation?.errorMessage || 'unknown_error'}`,
+      ));
     };
     coordinator.on(
       REBALANCE_COORDINATOR_EVENT.OPERATION_COMPLETED,
-      listener,
+      completedListener,
+    );
+    coordinator.on(
+      REBALANCE_COORDINATOR_EVENT.OPERATION_FAILED,
+      failedListener,
     );
   });
 }

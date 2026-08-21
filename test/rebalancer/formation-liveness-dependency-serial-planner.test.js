@@ -302,6 +302,8 @@ test('real checkRebalance fails closed on target and owner evidence gaps',
           replicaOperations: [{
             operation_id: 'existing-replace',
             partition_id: 'nodes-p1',
+            entity_type: 'partition',
+            entity_id: 'nodes-p1',
             operation_type: 'REPLACE',
             status: 'pending',
             workflow_step: 'creating',

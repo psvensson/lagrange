@@ -79,7 +79,14 @@ function createMockSqlQueryEngine(options = {}) {
   } = options;
 
   const operations = new Map(
-    existingOperations.map((op) => [op.operation_id, op]),
+    existingOperations.map((operation) => [
+      operation.operation_id,
+      {
+        entity_type: EntityType.PARTITION,
+        entity_id: operation.partition_id,
+        ...operation,
+      },
+    ]),
   );
 
   return {

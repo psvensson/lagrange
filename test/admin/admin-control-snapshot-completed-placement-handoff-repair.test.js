@@ -51,6 +51,7 @@ function buildTerminalOperationRow(overrides = {}) {
   return {
     operation_id: TEST_OPERATION_ID,
     partition_id: TEST_PARTITION_ID,
+    entity_type: 'partition',
     entity_id: TEST_PARTITION_ID,
     replica_id: TEST_REPLICA_ID,
     source_replica_id: TEST_SOURCE_REPLICA_ID,

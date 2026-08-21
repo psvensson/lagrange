@@ -194,7 +194,7 @@ function wakeRetryWorkItem(queue, ownerKey) {
     if (item.fenceToken !== undefined && item.fenceToken !== null) {
       existing.fenceToken = item.fenceToken;
     }
-    queue._mergeWorkItemCompletionWaiters(existing, item);
+    mergeWorkItemCompletionWaiters(existing, item);
   } else {
     mapSet(queue.pending, ownerKey, item);
   }
@@ -265,7 +265,7 @@ function recordExhausted(queue, ownerKey, item, retryState, overrides = {}) {
   mapSet(queue.exhaustedWorkItems, ownerKey, item);
   queue._retryableDrainFailureCount++;
   queue._retryableDrainExhaustedCount++;
-  queue._rejectWorkItemCompletionWaiters(
+  rejectWorkItemCompletionWaiters(
     item,
     error || new Error(exhaustedState.errorMessage),
   );
@@ -300,7 +300,7 @@ function mergeConcurrentEnqueue(queue, ownerKey, item, reasons) {
     setForEach(concurrentlyEnqueued.reasons,
       (reason) => setAdd(item.reasons, reason));
     mergeConcurrentItemContext(item, concurrentlyEnqueued);
-    queue._mergeWorkItemCompletionWaiters(item, concurrentlyEnqueued);
+    mergeWorkItemCompletionWaiters(item, concurrentlyEnqueued);
     mergedReasons = queue.snapshotReasons(item.reasons);
     state = CONCURRENT_MERGE_STATE.MERGED;
   }
@@ -385,3 +385,7 @@ export {
   normalizeReconcileQueueRetryPolicy,
   wakeRetryWorkItem,
 };
+import {
+  mergeWorkItemCompletionWaiters,
+  rejectWorkItemCompletionWaiters,
+} from './owner-key-reconcile-completion.js';

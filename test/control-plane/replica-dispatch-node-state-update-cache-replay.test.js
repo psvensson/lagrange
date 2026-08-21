@@ -145,6 +145,8 @@ async (t) => {
   const operationRow = {
     operation_id: 'replace-op-dispatch-sending-1',
     partition_id: 'control_plane_publications-p1',
+    entity_type: 'partition',
+    entity_id: 'control_plane_publications-p1',
     source_node_id: 'node-2',
     target_node_id: 'node-1',
     workflow_step: WORKFLOW_STEP.SENDING,
@@ -213,6 +215,8 @@ test('ReplicaDispatchService parks bootstrap operations until their durable ' +
   const operationRow = {
     operation_id: 'add-op-bootstrap-hold-1',
     partition_id: 'ratings-p1',
+    entity_type: 'partition',
+    entity_id: 'ratings-p1',
     replica_id: 'ratings-p1-r1',
     target_node_id: targetNodeId,
     status: 'pending',
@@ -326,6 +330,8 @@ test(CREATING_REARM_REPLAY_TEST_NAME, async (t) => {
   const operationRow = {
     operation_id: CREATING_REARM_REPLAY_OPERATION_ID,
     partition_id: CREATING_REARM_REPLAY_PARTITION_ID,
+    entity_type: 'partition',
+    entity_id: CREATING_REARM_REPLAY_PARTITION_ID,
     replica_id: CREATING_REARM_REPLAY_REPLICA_ID,
     source_node_id: CREATING_REARM_REPLAY_SOURCE_NODE_ID,
     target_node_id: CREATING_REARM_REPLAY_TARGET_NODE_ID,
@@ -389,6 +395,8 @@ test('ReplicaDispatchService enqueues CREATING system-table cache replay',
     const operationRow = {
       operation_id: CREATING_REARM_REPLAY_OPERATION_ID,
       partition_id: CREATING_REARM_REPLAY_PARTITION_ID,
+      entity_type: 'partition',
+      entity_id: CREATING_REARM_REPLAY_PARTITION_ID,
       replica_id: CREATING_REARM_REPLAY_REPLICA_ID,
       source_node_id: CREATING_REARM_REPLAY_SOURCE_NODE_ID,
       target_node_id: CREATING_REARM_REPLAY_TARGET_NODE_ID,
@@ -467,6 +475,8 @@ test(AUTHORITATIVE_CREATING_RETRY_TEST_NAME, async (t) => {
           return [{
             operationId: CREATING_REARM_REPLAY_OPERATION_ID,
             partitionId: CREATING_REARM_REPLAY_PARTITION_ID,
+            entityType: 'partition',
+            entityId: CREATING_REARM_REPLAY_PARTITION_ID,
             replicaId: CREATING_REARM_REPLAY_REPLICA_ID,
             sourceNodeId: CREATING_REARM_REPLAY_SOURCE_NODE_ID,
             targetNodeId: CREATING_REARM_REPLAY_TARGET_NODE_ID,
@@ -500,6 +510,8 @@ test(AUTHORITATIVE_CREATING_RETRY_TEST_NAME, async (t) => {
       [{
         operation_id: CREATING_REARM_REPLAY_OPERATION_ID,
         partition_id: CREATING_REARM_REPLAY_PARTITION_ID,
+        entity_type: 'partition',
+        entity_id: CREATING_REARM_REPLAY_PARTITION_ID,
         target_node_id: CREATING_REARM_REPLAY_TARGET_NODE_ID,
         workflow_step: WORKFLOW_STEP.CREATING,
       }],
@@ -521,6 +533,8 @@ test('ReplicaDispatchService ignores remote-owned dispatch rows before ' +
     operation_id: 'op-remote-owned-dispatch-1',
     type: OperationType.ADD,
     partition_id: 'replica_operations-p1',
+    entity_type: 'partition',
+    entity_id: 'replica_operations-p1',
     replica_id: 'replica_operations-p1-r4',
     source_node_id: 'node-remote-owner',
     target_node_id: 'node-2',

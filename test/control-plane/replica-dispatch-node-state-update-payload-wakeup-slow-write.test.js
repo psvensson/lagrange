@@ -75,6 +75,8 @@ test('ReplicaDispatchService dispatches direct wake-up payload rows before ' +
   const operationRow = {
     operation_id: 'op-direct-wakeup-payload-1',
     partition_id: 'control_plane_publications-p1',
+    entity_type: 'partition',
+    entity_id: 'control_plane_publications-p1',
     source_node_id: 'node-2',
     target_node_id: 'node-1',
     workflow_step: WORKFLOW_STEP.PENDING,
@@ -160,6 +162,8 @@ async (t) => {
   const operationRow = {
     operation_id: 'op-direct-wakeup-retry-payload-1',
     partition_id: 'control_plane_publications-p1',
+    entity_type: 'partition',
+    entity_id: 'control_plane_publications-p1',
     source_node_id: 'node-2',
     target_node_id: 'node-1',
     workflow_step: WORKFLOW_STEP.PENDING,
@@ -292,6 +296,8 @@ async (t) => {
   const operationRow = {
     operation_id: 'op-direct-wakeup-replace-source-replica-1',
     partition_id: 'control_plane_publications-p1',
+    entity_type: 'partition',
+    entity_id: 'control_plane_publications-p1',
     source_node_id: 'node-2',
     target_node_id: 'node-1',
     workflow_step: WORKFLOW_STEP.PENDING,

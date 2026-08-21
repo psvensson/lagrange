@@ -1048,7 +1048,7 @@ test('SQLQueryEngine - authoritative routing overlay refresh requests ' +
       async readRows(tableName, _sql, params, options) {
         authoritativeReads.push({tableName, params, options});
         if (
-          options?.replicaFallbackConsistency !==
+          options?.readAuthority?.replicaFallbackConsistency !==
           LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA
         ) {
           return {
@@ -1102,7 +1102,8 @@ test('SQLQueryEngine - authoritative routing overlay refresh requests ' +
   t.equal(authoritativeReads.length, 2,
     'routing repair should still read both partition and service metadata');
   t.same(
-    authoritativeReads.map((entry) => entry.options?.replicaFallbackConsistency),
+    authoritativeReads.map((entry) =>
+      entry.options?.readAuthority?.replicaFallbackConsistency),
     [
       LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,
       LOCAL_SYSTEM_TABLE_QUERY_CONSISTENCY.ANY_REPLICA,

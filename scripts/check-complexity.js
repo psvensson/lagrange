@@ -33,7 +33,7 @@ const TARGET_THRESHOLD = 12;
 // removing the duplicate heartbeat/reconcile ownership path.
 // 2026-08-21: tightened 1831 -> 1826 after retiring the bootstrap formation
 // placement/drain re-derivation and duplicate read-authority paths.
-const BASELINE_COUNT = 1826;
+const BASELINE_COUNT = 1824;
 const STRICT_FLAG = '--strict';
 const SCOPED_FLAG = '--scoped';
 const ARG_SEPARATOR = '--';

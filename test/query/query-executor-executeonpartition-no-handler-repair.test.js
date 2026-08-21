@@ -127,6 +127,9 @@ test('QueryExecutor - executeOnPartition fails closed when the canonical ' +
     'INSERT INTO users (id) VALUES (1)',
     [],
     false,
+    false,
+    false,
+    {timeoutMs: 50},
   );
 
   t.equal(result.success, false);

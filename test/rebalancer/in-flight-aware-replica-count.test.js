@@ -14,6 +14,8 @@ function op(type, replicaId, targetNodeId, workflowStep = 'creating') {
     operation_id: `op-${replicaId}-${targetNodeId}`,
     type,
     partition_id: PARTITION,
+    entity_type: 'partition',
+    entity_id: PARTITION,
     replica_id: replicaId,
     target_node_id: targetNodeId,
     workflow_step: workflowStep,
@@ -123,7 +125,11 @@ test('in-flight-aware replica accounting (single-owner count)', async (t) => {
     const acc = computeInFlightAwareReplicaAccounting({
       currentReplicas: [row('r1', 'n1')],
       inFlightOperations: [
-        {...op(MoveType.ADD, 'r2', 'n2'), partition_id: 'other-p1'},
+        {
+          ...op(MoveType.ADD, 'r2', 'n2'),
+          partition_id: 'other-p1',
+          entity_id: 'other-p1',
+        },
       ],
       partitionId: PARTITION,
     });

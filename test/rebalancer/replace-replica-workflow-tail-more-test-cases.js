@@ -2,6 +2,10 @@ import {registerReplaceReplicaWorkflowAddTopologyTests} from './replace-replica-
 
 const PARTITION_ENTITY_TYPE = 'partition';
 
+import {
+  installActualReplicaObservationResolver,
+} from './test-helpers.js';
+
 export async function registerReplaceReplicaWorkflowTailMoreTests({
   t,
   WORKFLOW_STEP,
@@ -67,7 +71,6 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         },
       });
       coordinator.initialize();
-      coordinator.getActualReplicaStatus = async () => ReplicaStatus.ACTIVE;
 
       try {
         const operation = await coordinator.createOperation({
@@ -79,6 +82,13 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
           sourceNodeId: 'seed-node',
           replicaId: 'mg-1-r1',
         });
+        installActualReplicaObservationResolver(
+          coordinator,
+          (replicaId, _partitionId, targetNodeId) =>
+            replicaId === operation.replicaId && targetNodeId === 'node-4' ?
+              ReplicaStatus.ACTIVE :
+              undefined,
+        );
 
         // The universal remove-safety floor (audit finding 1, lenient
         // REPLACE) evaluates the REPLACE source-removal against the
@@ -88,17 +98,18 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         coordinator.systemTableCache.upsert('services', {
           service_id: operation.replicaId,
           replica_id: operation.replicaId,
-          partition_id: 'mg-1',
+          group_id: 'mg-1',
           node_id: 'node-4',
-          service_type: 'partition',
+          service_type: 'message_group',
           status: 'active',
           raft_role: 'leader',
-          address: `node-4/partition/${operation.replicaId}`,
+          address: `node-4/message-group/${operation.replicaId}`,
         });
 
         await coordinator.executeOperation(operation);
         coordinator.workflowOwner.incompleteOperationQueryEmptyBackoffMs = 0;
         await coordinator.checkTimeouts();
+        coordinator.systemTableCache.delete('services', 'mg-1-r1');
         await coordinator.checkTimeouts();
         const persistedOperation =
           await coordinator.getOperation(operation.operationId);
@@ -191,7 +202,7 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         },
       });
       coordinator.initialize();
-      coordinator.getActualReplicaStatus = async () => null;
+      installActualReplicaObservationResolver(coordinator, null);
 
       try {
         const operation = await coordinator.createOperation({
@@ -328,7 +339,10 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         },
       });
       coordinator.initialize();
-      coordinator.getActualReplicaStatus = async () => ReplicaStatus.CREATING;
+      installActualReplicaObservationResolver(
+        coordinator,
+        ReplicaStatus.CREATING,
+      );
 
       try {
         const operation = await coordinator.createOperation({
@@ -465,7 +479,10 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         },
       });
       coordinator.initialize();
-      coordinator.getActualReplicaStatus = async () => ReplicaStatus.PENDING;
+      installActualReplicaObservationResolver(
+        coordinator,
+        ReplicaStatus.PENDING,
+      );
 
       try {
         const operation = await coordinator.createOperation({
@@ -585,12 +602,12 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         coordinator.systemTableCache.upsert('services', {
           service_id: operation.replicaId,
           replica_id: operation.replicaId,
-          partition_id: 'mg-1',
+          group_id: 'mg-1',
           node_id: 'node-4',
-          service_type: 'partition',
+          service_type: 'message_group',
           status: 'active',
           raft_role: 'leader',
-          address: `node-4/partition/${operation.replicaId}`,
+          address: `node-4/message-group/${operation.replicaId}`,
         });
 
         await coordinator.executeOperation(operation);
@@ -924,8 +941,10 @@ export async function registerReplaceReplicaWorkflowTailMoreTests({
         },
       });
       coordinator.initialize();
-      coordinator.workflowOwner.getActualReplicaStatus =
-        async () => ReplicaStatus.ACTIVE;
+      installActualReplicaObservationResolver(
+        coordinator,
+        ReplicaStatus.ACTIVE,
+      );
       const originalEvaluateRemoveSafety =
         coordinator.workflowOwner.evaluateRemoveSafety.bind(
           coordinator.workflowOwner,

@@ -2,7 +2,7 @@
   "schemaVersion": "priority-recovery-owner-inventory-v1",
   "generatedFrom": {
     "root": "src",
-    "sourceSha256": "bb8d9efe130a2426647479e47792ed03665842993d590d4d7872bebedb71eebc"
+    "sourceSha256": "1600258f502b7a64bfb16b84d0ff0e216382062a5bdfd22a66f97ee3e0c9f106"
   },
   "layerDirection": [
     "raw_observation",
@@ -19,7 +19,7 @@
   "metrics": {
     "moduleCount": 65,
     "publicExportCount": 740,
-    "importEdgeCount": 304,
+    "importEdgeCount": 305,
     "crossLayerEdgeCount": 92,
     "layerDirectionViolationCount": 44,
     "largestStronglyConnectedComponent": 1,
@@ -4885,6 +4885,16 @@
       "targetLayer": "raw_observation",
       "crossLayer": true,
       "conformsToLayerDirection": true
+    },
+    {
+      "from": "src/rebalancer/priority-recovery-superseded-target.js",
+      "specifier": "./rebalancer-entity-identity.js",
+      "to": "src/rebalancer/rebalancer-entity-identity.js",
+      "targetModule": false,
+      "sourceLayer": "owner_decision",
+      "targetLayer": null,
+      "crossLayer": false,
+      "conformsToLayerDirection": null
     },
     {
       "from": "src/rebalancer/priority-recovery-visibility-decision.js",

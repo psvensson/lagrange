@@ -1,4 +1,7 @@
 import {registerReplaceReplicaWorkflowTailMoreTests} from './replace-replica-workflow-tail-more-test-cases.js';
+import {
+  installActualReplicaObservationResolver,
+} from './test-helpers.js';
 
 export async function registerReplaceReplicaWorkflowTailTests({
   t,
@@ -68,23 +71,17 @@ export async function registerReplaceReplicaWorkflowTailTests({
           ],
         },
       });
-      const baseGetActualReplicaStatus =
-        coordinator.workflowOwner.getActualReplicaStatus.bind(
-          coordinator.workflowOwner,
-        );
-      coordinator.workflowOwner.getActualReplicaStatus =
+      installActualReplicaObservationResolver(
+        coordinator,
         async (replicaId, partitionId, targetNodeId) => {
           if (replicaId === addReplicaId &&
               partitionId === addPartitionId &&
               targetNodeId === addTargetNodeId) {
             return ReplicaStatus.ACTIVE;
           }
-          return baseGetActualReplicaStatus(
-            replicaId,
-            partitionId,
-            targetNodeId,
-          );
-        };
+          return undefined;
+        },
+      );
 
       const basePersistOperationUpdate =
         coordinator.repository.persistOperationUpdate.bind(

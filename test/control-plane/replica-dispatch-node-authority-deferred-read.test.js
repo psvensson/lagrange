@@ -20,6 +20,8 @@ function buildOperation(partitionId, operationId) {
     operation_id: operationId,
     type: OperationType.REMOVE,
     partition_id: partitionId,
+    entity_type: 'partition',
+    entity_id: partitionId,
     replica_id: `${partitionId}-r4`,
     source_node_id: TEST_NODE_ID,
     target_node_id: TEST_NODE_ID,

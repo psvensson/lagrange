@@ -34,10 +34,13 @@ import {RebalanceCoordinator} from '../../src/rebalancer/rebalance-coordinator.j
  */
 function createOperationRow(params) {
   const now = Date.now();
+  const partitionId = params.partitionId || 'test-partition';
   return {
     operation_id: params.operationId || `op-${Math.random().toString(36).slice(2)}`,
     type: params.type || OperationType.ADD,
-    partition_id: params.partitionId || 'test-partition',
+    partition_id: partitionId,
+    entity_type: 'partition',
+    entity_id: partitionId,
     replica_id: params.replicaId || null,
     source_node_id: params.sourceNodeId || 'test-node-1',
     target_node_id: params.targetNodeId || 'target-node',

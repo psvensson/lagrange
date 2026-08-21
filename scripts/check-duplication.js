@@ -105,8 +105,11 @@ const RATCHET_TARGETS = [
     // bootstrap formation barrier's legacy placement-source matrix.
     // 2026-08-21: tightened 820/31367 -> 818/31275 after deleting the
     // test-only QueryRouter implementation and its duplicate routing suites.
-    baselineCloneGroupCount: 818,
-    baselineDuplicatedLineCount: 31275,
+    // 2026-08-21: tightened 818/31275 -> 818/31252 after replacing ambient
+    // MovieLens module mocks with the comparison runner's owned test seam.
+    // 2026-08-21: tightened after consolidating recovery-state properties.
+    baselineCloneGroupCount: 817,
+    baselineDuplicatedLineCount: 31236,
     reportOutputDirectory: 'test-output/analysis/jscpd-test',
     strictEligible: false,
   },

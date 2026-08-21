@@ -118,6 +118,8 @@ test('orphan-reconcile re-drives an orphaned completed SYNCING op to ACTIVE', as
     operation_id: 'op-orphan-1',
     type: OperationType.ADD,
     partition_id: 'latency_groups-p1',
+    entity_type: 'partition',
+    entity_id: 'latency_groups-p1',
     replica_id: 'replica-orphan-1',
     source_node_id: 'test-node-1',
     target_node_id: 'test-node-1',
@@ -158,6 +160,8 @@ test('orphan-reconcile leaves a still-syncing op untouched (no premature advance
     operation_id: 'op-inprogress-1',
     type: OperationType.ADD,
     partition_id: 'latency_groups-p1',
+    entity_type: 'partition',
+    entity_id: 'latency_groups-p1',
     replica_id: 'replica-inprogress-1',
     source_node_id: 'test-node-1',
     target_node_id: 'test-node-1',
@@ -198,6 +202,8 @@ test('orphan-reconcile retires a SYNCING op whose replica diverged to FAILED und
     operation_id: 'op-diverge-1',
     type: OperationType.ADD,
     partition_id: 'latency_groups-p1',
+    entity_type: 'partition',
+    entity_id: 'latency_groups-p1',
     replica_id: 'replica-diverge-1',
     source_node_id: 'test-node-1',
     target_node_id: 'test-node-1',
@@ -240,7 +246,9 @@ test('gate: reconciler ACTS on an op whose replica reached actionable truth (ACT
   const now = Date.now();
   const {coordinator} = buildCoordinator({
     operationRow: {
-      operation_id: 'g1', type: OperationType.ADD, partition_id: 'latency_groups-p1',
+      operation_id: 'g1', type: OperationType.ADD,
+      partition_id: 'latency_groups-p1', entity_type: 'partition',
+      entity_id: 'latency_groups-p1',
       replica_id: 'g1r', source_node_id: 'test-node-1', target_node_id: 'test-node-1',
       status: ReplicaStatus.SYNCING, workflow_step: 'SYNCING',
       created_at: now, updated_at: now, completed_at: null, error_message: null,
@@ -268,7 +276,9 @@ test('gate: reconciler ACTS on a STALE never-dispatched surplus REMOVE (rank1 sh
   const stepStart = now - (10 * 60 * 1000); // 10 min ago >> pendingTimeoutMs (30s)
   const {coordinator} = buildCoordinator({
     operationRow: {
-      operation_id: 'g2', type: OperationType.REMOVE, partition_id: 'latency_groups-p1',
+      operation_id: 'g2', type: OperationType.REMOVE,
+      partition_id: 'latency_groups-p1', entity_type: 'partition',
+      entity_id: 'latency_groups-p1',
       replica_id: 'g2r', source_node_id: 'test-node-1', target_node_id: 'test-node-1',
       status: ReplicaStatus.PENDING, workflow_step: 'PENDING',
       created_at: stepStart, updated_at: now, completed_at: null, error_message: null,
@@ -292,7 +302,9 @@ test('gate: reconciler SKIPS a genuinely in-flight op still within its step budg
   const now = Date.now();
   const {coordinator} = buildCoordinator({
     operationRow: {
-      operation_id: 'g3', type: OperationType.ADD, partition_id: 'latency_groups-p1',
+      operation_id: 'g3', type: OperationType.ADD,
+      partition_id: 'latency_groups-p1', entity_type: 'partition',
+      entity_id: 'latency_groups-p1',
       replica_id: 'g3r', source_node_id: 'test-node-1', target_node_id: 'test-node-1',
       status: ReplicaStatus.CREATING, workflow_step: 'CREATING',
       created_at: now, updated_at: now, completed_at: null, error_message: null,

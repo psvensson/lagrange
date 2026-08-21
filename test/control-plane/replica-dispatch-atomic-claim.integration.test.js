@@ -7,9 +7,6 @@ import {test} from '../../src/test-helpers/tap.js';
 import {EventEmitter} from 'events';
 import {ReplicaDispatchService} from
   '../../src/control-plane/replica-dispatch-service.js';
-import {ConfigurationManager} from
-  '../../src/config/configuration-manager.js';
-import {LoggingService} from '../../src/logging/logging-service.js';
 import {SYSTEM_TABLE_NAME} from
   '../../src/bootstrap/system-table-schemas-constants.js';
 import {ControlPlaneField} from
@@ -31,49 +28,11 @@ import {
 } from '../../src/constants/index.js';
 import {REBALANCE_COORDINATOR_EVENT} from
   '../../src/rebalancer/rebalancer-constants.js';
-
-function initEnv() {
-  ConfigurationManager.resetInstance();
-  LoggingService.resetInstance();
-  const config = ConfigurationManager.getInstance();
-  if (!config.isInitialized()) {
-    config.initialize({});
-  }
-  const logging = LoggingService.getInstance();
-  if (!logging.isInitialized()) {
-    logging.initialize({level: 'error'});
-  }
-}
-
-function claimPendingOperation(operation, operationId) {
-  const currentOperationId =
-    operation?.operation_id ||
-    operation?.operationId ||
-    null;
-  const currentStep =
-    operation?.workflow_step ||
-    operation?.workflowStep ||
-    null;
-  if (!currentOperationId ||
-      currentOperationId !== operationId ||
-      currentStep !== WORKFLOW_STEP.PENDING) {
-    return null;
-  }
-
-  const updatedAt = Date.now();
-  if (Object.prototype.hasOwnProperty.call(operation, 'workflow_step') ||
-      Object.prototype.hasOwnProperty.call(operation, 'operation_id')) {
-    operation.workflow_step = WORKFLOW_STEP.SENDING;
-    operation.updated_at = updatedAt;
-  }
-  if (Object.prototype.hasOwnProperty.call(operation, 'workflowStep') ||
-      Object.prototype.hasOwnProperty.call(operation, 'operationId')) {
-    operation.workflowStep = WORKFLOW_STEP.SENDING;
-    operation.updatedAt = updatedAt;
-  }
-
-  return {operationId};
-}
+import {
+  claimPendingOperation,
+  createCanonicalPartitionOperationRow,
+  initializeAtomicClaimTestEnvironment as initEnv,
+} from './replica-dispatch-atomic-claim-test-support.js';
 
 test(
   'ReplicaDispatchService dispatches a pending operation once across triggers',
@@ -81,7 +40,7 @@ test(
     initEnv();
 
     const now = Date.now();
-    const operationRow = {
+    const operationRow = createCanonicalPartitionOperationRow({
       operation_id: 'op-atomic-claim-1',
       type: 'ADD',
       partition_id: 'tables-p1',
@@ -93,7 +52,7 @@ test(
       created_at: now,
       updated_at: now,
       steps_history: '[]',
-    };
+    });
 
     let executeCount = 0;
     const service = new ReplicaDispatchService({
@@ -224,7 +183,7 @@ test(
     const sourceNodeId = 'node-source';
     const staleCacheOperationId = 'op-stale-cache-retry-dispatch';
     const authoritativeOperationId = 'op-authoritative-priority-retry-dispatch';
-    const staleCacheRow = {
+    const staleCacheRow = createCanonicalPartitionOperationRow({
       operation_id: staleCacheOperationId,
       type: 'REPLACE',
       partition_id: 'sql_transactions-p1',
@@ -238,7 +197,7 @@ test(
       completed_at: null,
       error_message: null,
       steps_history: '[]',
-    };
+    });
     const authoritativeQueryOptions = [];
     const service = new ReplicaDispatchService({
       nodeId: targetNodeId,
@@ -453,7 +412,7 @@ test(
     initEnv();
 
     const now = Date.now();
-    const operationRow = {
+    const operationRow = createCanonicalPartitionOperationRow({
       operation_id: 'op-authoritative-only-1',
       type: 'ADD',
       partition_id: 'tables-p1',
@@ -467,7 +426,7 @@ test(
       completed_at: null,
       error_message: null,
       steps_history: '[]',
-    };
+    });
 
     let authoritativeReadCount = 0;
     let dispatchedOperation = null;
@@ -576,7 +535,7 @@ test(
     initEnv();
 
     const now = Date.now();
-    const operationRow = {
+    const operationRow = createCanonicalPartitionOperationRow({
       operation_id: 'op-cdc-non-leader-1',
       type: 'ADD',
       partition_id: 'tables-p1',
@@ -588,7 +547,7 @@ test(
       created_at: now,
       updated_at: now,
       steps_history: '[]',
-    };
+    });
 
     let executeCount = 0;
     const service = new ReplicaDispatchService({
@@ -717,7 +676,7 @@ test(
     initEnv();
 
     const now = Date.now();
-    const operationRow = {
+    const operationRow = createCanonicalPartitionOperationRow({
       operation_id: 'op-ready-retry-1',
       type: 'ADD',
       partition_id: 'tables-p1',
@@ -729,7 +688,7 @@ test(
       created_at: now,
       updated_at: now,
       steps_history: '[]',
-    };
+    });
 
     const nodeStore = new Map();
     nodeStore.set('node-2', {
@@ -884,7 +843,7 @@ test(
     initEnv();
 
     const now = Date.now();
-    const operationRow = {
+    const operationRow = createCanonicalPartitionOperationRow({
       operation_id: 'op-router-disconnected-ready-lease',
       type: 'ADD',
       partition_id: 'services-p1',
@@ -896,7 +855,7 @@ test(
       created_at: now,
       updated_at: now,
       steps_history: '[]',
-    };
+    });
 
     let executeCount = 0;
     const service = new ReplicaDispatchService({
@@ -1031,7 +990,7 @@ test(
     initEnv();
 
     const now = Date.now();
-    const operationRow = {
+    const operationRow = createCanonicalPartitionOperationRow({
       operation_id: 'op-ready-cdc-retry-1',
       type: 'ADD',
       partition_id: 'tables-p1',
@@ -1043,7 +1002,7 @@ test(
       created_at: now,
       updated_at: now,
       steps_history: '[]',
-    };
+    });
 
     const nodeStore = new Map();
     nodeStore.set('node-2', {
@@ -1211,7 +1170,7 @@ test(
     initEnv();
 
     const now = Date.now();
-    const operationRow = {
+    const operationRow = createCanonicalPartitionOperationRow({
       operation_id: 'op-ready-cache-retry-1',
       type: 'ADD',
       partition_id: 'tables-p1',
@@ -1223,7 +1182,7 @@ test(
       created_at: now,
       updated_at: now,
       steps_history: '[]',
-    };
+    });
 
     const nodeStore = new Map();
     nodeStore.set('node-2', {

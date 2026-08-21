@@ -182,6 +182,8 @@ function seedOperation(store, operationId, status, workflowStep) {
     operation_id: operationId,
     type: OperationType.ADD,
     partition_id: TEST_PARTITION_ID,
+    entity_type: SERVICE_TYPE.PARTITION,
+    entity_id: TEST_PARTITION_ID,
     target_node_id: TEST_TARGET_NODE_ID,
     status,
     workflow_step: workflowStep,

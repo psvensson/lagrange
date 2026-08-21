@@ -12,7 +12,6 @@ import {
 } from './replica-operation-insert-disposition.js';
 import {
   buildRuntimeServiceTargetClaimKey,
-  runtimeServiceReplicaBelongsToEntity,
 } from './runtime-service-replica-identity.js';
 import {
   UNIFIED_SERVICE_TYPE,
@@ -79,7 +78,7 @@ class RebalanceCoordinatorOperationCreation {
         operationType !== OperationType.ADD &&
         operationType !== OperationType.REPLACE
       ) ||
-      runtimeServiceReplicaBelongsToEntity(replicaId, entityId)
+      buildRuntimeServiceTargetClaimKey(replicaId, entityId) !== null
     ) {
       return;
     }
